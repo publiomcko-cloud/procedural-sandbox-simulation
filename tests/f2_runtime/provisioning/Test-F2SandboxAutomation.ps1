@@ -135,12 +135,75 @@ try {
     $startupCommand = [string]$startupConfig.Configuration.LogonCommand.Command
     Assert-True ($startupCommand.Contains('-NoExit') -and $startupCommand.Contains('-Command "Write-Host')) 'Reviewed startup command keeps PowerShell open and prints before bootstrap invocation'
     Assert-True ($startupCommand.IndexOf('F2 DIAGNOSTIC STARTING - visible startup wrapper') -lt $startupCommand.IndexOf("& 'C:\F2Input\Start-F2SandboxDiagnostics.ps1'")) 'Startup banner precedes bootstrap invocation'
+
+    $launcherPath = Join-Path $sourceRoot 'Start-F2SandboxReadiness.ps1'
+    $launcherText = Get-Content $launcherPath -Raw
     $sourcePreparerText = Get-Content (Join-Path $sourceRoot 'Prepare-F2SandboxInputs.ps1') -Raw
     $expectedBootstrapHash = [regex]::Match($sourcePreparerText, "(?m)^\`$expectedBootstrapSha256 = '([0-9a-f]{64})'").Groups[1].Value
     $expectedWsbHash = [regex]::Match($sourcePreparerText, "(?m)^\`$expectedWsbSha256 = '([0-9a-f]{64})'").Groups[1].Value
+    $launcherCommandMatch = [regex]::Match($launcherText, "(?m)^\s*\`$expectedCommand = '(.*)'$")
+    $preparerCommandMatch = [regex]::Match((Get-Content (Join-Path $sourceRoot 'Prepare-F2SandboxInputs.ps1') -Raw), "(?m)^\s*\`$logonCommand = '(.*)'$")
+    Assert-True ($launcherCommandMatch.Success -and $preparerCommandMatch.Success) 'Both production validators declare an exact LogonCommand'
+    if ($launcherCommandMatch.Success -and $preparerCommandMatch.Success) {
+        $launcherExpectedCommand = $launcherCommandMatch.Groups[1].Value.Replace("''", "'")
+        $preparerExpectedCommand = $preparerCommandMatch.Groups[1].Value.Replace("''", "'")
+        Assert-True ($launcherExpectedCommand -eq $startupCommand -and $preparerExpectedCommand -eq $startupCommand -and $launcherExpectedCommand -eq $preparerExpectedCommand) 'Host launcher and preparer allow exactly the parsed approved .wsb command'
+    }
+
+    $launcherAstTokens = $null
+    $launcherAstErrors = $null
+    $launcherAst = [Management.Automation.Language.Parser]::ParseFile($launcherPath, [ref]$launcherAstTokens, [ref]$launcherAstErrors)
+    $launcherValidatorAst = @($launcherAst.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Assert-LauncherAutomationConfiguration' }, $false))
+    $launcherHashAst = @($launcherAst.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Assert-LauncherTemplateHash' }, $false))
+    $launcherNormalizerAst = @($launcherAst.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-NormalizedScriptHash' }, $false))
+    $preparerAstTokens = $null
+    $preparerAstErrors = $null
+    $preparerAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path $sourceRoot 'Prepare-F2SandboxInputs.ps1'), [ref]$preparerAstTokens, [ref]$preparerAstErrors)
+    $preparerValidatorAst = @($preparerAst.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Assert-PreparerSandboxConfiguration' }, $false))
+    $preparerHashAst = @($preparerAst.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Assert-PreparerTemplateHash' }, $false))
+    Assert-True ($launcherValidatorAst.Count -eq 1 -and $preparerValidatorAst.Count -eq 1 -and $launcherHashAst.Count -eq 1 -and $preparerHashAst.Count -eq 1 -and $launcherNormalizerAst.Count -eq 1) 'Production launcher and preparer config/hash validators are source-addressable for fixture checks'
+    if ($launcherValidatorAst.Count -eq 1 -and $preparerValidatorAst.Count -eq 1 -and $launcherHashAst.Count -eq 1 -and $preparerHashAst.Count -eq 1 -and $launcherNormalizerAst.Count -eq 1 -and $launcherCommandMatch.Success -and $preparerCommandMatch.Success) {
+        Invoke-Expression $launcherNormalizerAst[0].Extent.Text
+        Invoke-Expression $launcherHashAst[0].Extent.Text
+        Invoke-Expression $preparerHashAst[0].Extent.Text
+        Invoke-Expression $launcherValidatorAst[0].Extent.Text
+        Invoke-Expression $preparerValidatorAst[0].Extent.Text
+        $validAcceptedByLauncher = $false
+        $validAcceptedByPreparer = $false
+        try { $validAcceptedByLauncher = Assert-LauncherAutomationConfiguration -Configuration $startupConfig -ExpectedCommand $launcherExpectedCommand -ApprovedHostFolder 'C:\F2-Approved-Inputs' } catch {}
+        try { $validAcceptedByPreparer = [bool](Assert-PreparerSandboxConfiguration -Configuration $startupConfig -Automation $true -ApprovedHostFolder 'C:\F2-Approved-Inputs' -SandboxInputFolder 'C:\F2Input' -ExpectedCommand $preparerExpectedCommand) } catch {}
+        Assert-True ($validAcceptedByLauncher -and $validAcceptedByPreparer) 'Actual host launcher and host preparer validators both accept the approved configuration'
+        $launcherHashAccepted = Assert-LauncherTemplateHash -LiteralPath $configPath -ExpectedSha256 $expectedWsbHash
+        $preparerHashAccepted = Assert-PreparerTemplateHash -LiteralPath $configPath -ExpectedSha256 $expectedWsbHash
+        Assert-True ($launcherHashAccepted -and $preparerHashAccepted) 'Actual host launcher and host preparer hash validators accept the approved configuration'
+
+        $modifiedConfigs = @(
+            @{ Name = 'writable mapping'; Xml = [xml]($startupConfig.OuterXml.Replace('<ReadOnly>true</ReadOnly>', '<ReadOnly>false</ReadOnly>')) }
+            @{ Name = 'unreviewed command'; Xml = [xml]($startupConfig.OuterXml.Replace('Start-F2SandboxDiagnostics.ps1', 'Unreviewed.ps1')) }
+            @{ Name = 'missing NoExit'; Xml = [xml]($startupConfig.OuterXml.Replace(' -NoExit', '')) }
+            @{ Name = 'modified startup banner'; Xml = [xml]($startupConfig.OuterXml.Replace('F2 DIAGNOSTIC STARTING - visible startup wrapper', 'OTHER STARTUP')) }
+            @{ Name = 'additional LogonCommand'; Xml = [xml]($startupConfig.OuterXml.Replace('</LogonCommand>', '<Command>unreviewed.exe</Command></LogonCommand>')) }
+        )
+        foreach ($modified in $modifiedConfigs) {
+            $launcherRejected = $false
+            $preparerRejected = $false
+            try { Assert-LauncherAutomationConfiguration -Configuration $modified.Xml -ExpectedCommand $launcherExpectedCommand -ApprovedHostFolder 'C:\F2-Approved-Inputs' | Out-Null } catch { $launcherRejected = $true }
+            try { Assert-PreparerSandboxConfiguration -Configuration $modified.Xml -Automation $true -ApprovedHostFolder 'C:\F2-Approved-Inputs' -SandboxInputFolder 'C:\F2Input' -ExpectedCommand $preparerExpectedCommand | Out-Null } catch { $preparerRejected = $true }
+            Assert-True ($launcherRejected -and $preparerRejected) ("Both production validators reject {0}" -f $modified.Name)
+        }
+
+        $approvedConfigText = [IO.File]::ReadAllText($configPath)
+        [IO.File]::AppendAllText($configPath, "`n<!-- source-only hash tamper -->")
+        $launcherHashRejected = $false
+        $preparerHashRejected = $false
+        try { Assert-LauncherTemplateHash -LiteralPath $configPath -ExpectedSha256 $expectedWsbHash | Out-Null } catch { $launcherHashRejected = $true }
+        try { Assert-PreparerTemplateHash -LiteralPath $configPath -ExpectedSha256 $expectedWsbHash | Out-Null } catch { $preparerHashRejected = $true }
+        Assert-True ($launcherHashRejected -and $preparerHashRejected) 'Both production hash validators reject a modified configuration hash'
+        [IO.File]::WriteAllText($configPath, $approvedConfigText, [Text.UTF8Encoding]::new($false))
+    }
+
     Assert-True ($expectedBootstrapHash -eq (Get-NormalizedSourceHash $bootstrapPath)) 'Preparer pin matches updated bootstrap source'
     Assert-True ($expectedWsbHash -eq (Get-NormalizedSourceHash $configPath)) 'Preparer pin matches updated startup configuration'
-    $launcherText = Get-Content (Join-Path $sourceRoot 'Start-F2SandboxReadiness.ps1') -Raw
     Assert-True ($launcherText.Contains($expectedBootstrapHash) -and $launcherText.Contains($expectedWsbHash)) 'Launcher pins updated bootstrap and startup configuration'
 
     Invoke-HostFixture -Description 'Reviewed offline automation template and pinned scripts' -ExpectedExitCode 0

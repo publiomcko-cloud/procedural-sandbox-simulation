@@ -42,6 +42,43 @@ function Assert-NoReparsePath {
     }
 }
 
+function Assert-LauncherTemplateHash {
+    param([Parameter(Mandatory)] [string] $LiteralPath, [Parameter(Mandatory)] [string] $ExpectedSha256)
+    if ((Get-NormalizedScriptHash $LiteralPath) -ne $ExpectedSha256) { throw 'Automation .wsb template hash does not match the reviewed file.' }
+    return $true
+}
+
+function Assert-LauncherAutomationConfiguration {
+    param(
+        [Parameter(Mandatory)] [xml] $Configuration,
+        [Parameter(Mandatory)] [string] $ExpectedCommand,
+        [Parameter(Mandatory)] [string] $ApprovedHostFolder
+    )
+    $settings = @($Configuration.Configuration.ChildNodes | Where-Object { $_.NodeType -eq [Xml.XmlNodeType]::Element } | ForEach-Object { $_.Name })
+    $mappedFolders = @($Configuration.Configuration.MappedFolders.MappedFolder)
+    $logonChildren = @($Configuration.Configuration.LogonCommand.ChildNodes | Where-Object { $_.NodeType -eq [Xml.XmlNodeType]::Element } | ForEach-Object { $_.Name })
+    if ($Configuration.Configuration.Networking -ne 'Disable' -or
+        $Configuration.Configuration.ClipboardRedirection -ne 'Disable' -or
+        $Configuration.Configuration.VGpu -ne 'Disable' -or
+        $Configuration.Configuration.ProtectedClient -ne 'Enable' -or
+        $Configuration.Configuration.AudioInput -ne 'Disable' -or
+        $Configuration.Configuration.VideoInput -ne 'Disable' -or
+        $Configuration.Configuration.PrinterRedirection -ne 'Disable' -or
+        $Configuration.Configuration.MemoryInMB -ne '8192' -or
+        $mappedFolders.Count -ne 1 -or
+        $mappedFolders[0].HostFolder -ne $ApprovedHostFolder -or
+        $mappedFolders[0].SandboxFolder -ne 'C:\F2Input' -or
+        $mappedFolders[0].ReadOnly -ne 'true' -or
+        $logonChildren.Count -ne 1 -or $logonChildren[0] -ne 'Command' -or
+        $Configuration.Configuration.LogonCommand.Command -ne $ExpectedCommand -or
+        $settings.Count -ne 10 -or
+        @($settings | Select-Object -Unique).Count -ne 10 -or
+        @($settings | Where-Object { $_ -notin @('VGpu', 'Networking', 'MappedFolders', 'AudioInput', 'VideoInput', 'ProtectedClient', 'PrinterRedirection', 'ClipboardRedirection', 'MemoryInMB', 'LogonCommand') }).Count -gt 0) {
+        throw 'The automation .wsb does not match the exact reviewed offline/read-only configuration and single diagnostic command.'
+    }
+    return $true
+}
+
 try {
     if (-not (Test-Path -LiteralPath $sandboxExe -PathType Leaf)) { throw 'WindowsSandbox.exe is unavailable; host settings were not changed.' }
     if (-not (Test-Path -LiteralPath $powershellPath -PathType Leaf)) { throw '64-bit Windows PowerShell is unavailable.' }
@@ -50,7 +87,7 @@ try {
     Assert-NoReparsePath -LiteralPath $approvedHostFolder
     Assert-NoReparsePath -LiteralPath $templatePath
     Assert-NoReparsePath -LiteralPath $preparerPath
-    if ((Get-NormalizedScriptHash $templatePath) -ne $expectedWsbSha256) { throw 'Automation .wsb template hash does not match the reviewed file.' }
+    Assert-LauncherTemplateHash -LiteralPath $templatePath -ExpectedSha256 $expectedWsbSha256 | Out-Null
 
     $preparerOutput = & $powershellPath -NoLogo -NoProfile -ExecutionPolicy Bypass -File $preparerPath -Automation -PrepareInputs 2>&1
     $preparerExit = $LASTEXITCODE
@@ -67,35 +104,15 @@ try {
     if ((Get-NormalizedScriptHash $bootstrapPath) -ne $expectedBootstrapSha256) { throw 'Staged bootstrap digest changed after the host checker.' }
 
     [xml] $wsb = Get-Content -LiteralPath $templatePath -Raw
-    $expectedCommand = 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File C:\F2Input\Start-F2SandboxDiagnostics.ps1'
-    $settings = @($wsb.Configuration.ChildNodes | Where-Object { $_.NodeType -eq [Xml.XmlNodeType]::Element } | ForEach-Object { $_.Name })
-    $logonChildren = @($wsb.Configuration.LogonCommand.ChildNodes | Where-Object { $_.NodeType -eq [Xml.XmlNodeType]::Element } | ForEach-Object { $_.Name })
-    if ($wsb.Configuration.Networking -ne 'Disable' -or
-        $wsb.Configuration.ClipboardRedirection -ne 'Disable' -or
-        $wsb.Configuration.VGpu -ne 'Disable' -or
-        $wsb.Configuration.ProtectedClient -ne 'Enable' -or
-        $wsb.Configuration.AudioInput -ne 'Disable' -or
-        $wsb.Configuration.VideoInput -ne 'Disable' -or
-        $wsb.Configuration.PrinterRedirection -ne 'Disable' -or
-        $wsb.Configuration.MemoryInMB -ne '8192' -or
-        @($wsb.Configuration.MappedFolders.MappedFolder).Count -ne 1 -or
-        $wsb.Configuration.MappedFolders.MappedFolder.HostFolder -ne $approvedHostFolder -or
-        $wsb.Configuration.MappedFolders.MappedFolder.SandboxFolder -ne 'C:\F2Input' -or
-        $wsb.Configuration.MappedFolders.MappedFolder.ReadOnly -ne 'true' -or
-        $logonChildren.Count -ne 1 -or $logonChildren[0] -ne 'Command' -or
-        $wsb.Configuration.LogonCommand.Command -ne $expectedCommand -or
-        $settings.Count -ne 10 -or
-        @($settings | Select-Object -Unique).Count -ne 10 -or
-        @($settings | Where-Object { $_ -notin @('VGpu', 'Networking', 'MappedFolders', 'AudioInput', 'VideoInput', 'ProtectedClient', 'PrinterRedirection', 'ClipboardRedirection', 'MemoryInMB', 'LogonCommand') }).Count -gt 0) {
-        throw 'The automation .wsb does not match the exact reviewed offline/read-only configuration and single diagnostic command.'
-    }
+    $expectedCommand = 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -NoExit -Command "Write-Host ''F2 DIAGNOSTIC STARTING - visible startup wrapper''; & ''C:\F2Input\Start-F2SandboxDiagnostics.ps1''"'
+    Assert-LauncherAutomationConfiguration -Configuration $wsb -ExpectedCommand $expectedCommand -ApprovedHostFolder $approvedHostFolder | Out-Null
 
     $runId = [guid]::NewGuid().ToString('N')
     $configPath = Join-Path $env:TEMP ("F2-Sandbox-Readiness-$runId.wsb")
     if (Test-Path -LiteralPath $configPath) { throw 'Generated .wsb path already exists; refusing overwrite.' }
     Copy-Item -LiteralPath $templatePath -Destination $configPath -ErrorAction Stop
     Assert-NoReparsePath -LiteralPath $configPath
-    if ((Get-NormalizedScriptHash $configPath) -ne $expectedWsbSha256) { throw 'Temporary .wsb changed during preparation; refusing launch.' }
+    Assert-LauncherTemplateHash -LiteralPath $configPath -ExpectedSha256 $expectedWsbSha256 | Out-Null
 
     $featureStatus = 'UNKNOWN (read-only optional-feature query was not run by this launcher; Sandbox launch will report availability)'
     try {
@@ -135,7 +152,7 @@ The guest will remain disposable. Canceling here leaves only the narrow approved
     }
 
     Assert-NoReparsePath -LiteralPath $configPath
-    if ((Get-NormalizedScriptHash $configPath) -ne $expectedWsbSha256 -or
+    if (-not (Assert-LauncherTemplateHash -LiteralPath $configPath -ExpectedSha256 $expectedWsbSha256) -or
         (Get-NormalizedScriptHash $diagnosticPath) -ne $expectedDiagnosticSha256 -or
         (Get-NormalizedScriptHash $bootstrapPath) -ne $expectedBootstrapSha256) {
         throw 'A reviewed .wsb or staged script changed after owner confirmation; refusing launch.'

@@ -47,6 +47,14 @@ function Get-NormalizedScriptHash {
     finally { $sha.Dispose() }
 }
 
+function Assert-PreparerTemplateHash {
+    param([Parameter(Mandatory)] [string] $LiteralPath, [Parameter(Mandatory)] [string] $ExpectedSha256)
+    if ((Get-NormalizedScriptHash -LiteralPath $LiteralPath) -ne $ExpectedSha256) {
+        throw 'Automation .wsb SHA-256 is not the reviewed pinned value.'
+    }
+    return $true
+}
+
 function Assert-NoReparseComponent {
     param([Parameter(Mandatory)] [string] $LiteralPath)
     $resolved = [System.IO.Path]::GetFullPath($LiteralPath)
@@ -62,6 +70,53 @@ function Assert-NoReparseComponent {
             }
         }
     }
+}
+
+function Assert-PreparerSandboxConfiguration {
+    param(
+        [Parameter(Mandatory)] [xml] $Configuration,
+        [Parameter(Mandatory)] [bool] $Automation,
+        [Parameter(Mandatory)] [string] $ApprovedHostFolder,
+        [Parameter(Mandatory)] [string] $SandboxInputFolder,
+        [Parameter(Mandatory)] [string] $ExpectedCommand
+    )
+    $mappedFolders = @($Configuration.Configuration.MappedFolders.MappedFolder)
+    $mappingElements = @($mappedFolders[0].ChildNodes | Where-Object { $_.NodeType -eq [Xml.XmlNodeType]::Element } | ForEach-Object { $_.Name })
+    $expectedMappingElements = @('HostFolder', 'SandboxFolder', 'ReadOnly')
+    $logonElements = @($Configuration.Configuration.LogonCommand.ChildNodes | Where-Object { $_.NodeType -eq [Xml.XmlNodeType]::Element } | ForEach-Object { $_.Name })
+    $logonSafe = if ($Automation) {
+        $logonElements.Count -eq 1 -and $logonElements[0] -eq 'Command' -and $Configuration.Configuration.LogonCommand.Command -eq $ExpectedCommand
+    } else {
+        $null -eq $Configuration.Configuration.LogonCommand
+    }
+    $safeConfig = $Configuration.Configuration.Networking -eq 'Disable' -and
+        $Configuration.Configuration.VGpu -eq 'Disable' -and
+        $Configuration.Configuration.ClipboardRedirection -eq 'Disable' -and
+        $Configuration.Configuration.ProtectedClient -eq 'Enable' -and
+        $Configuration.Configuration.AudioInput -eq 'Disable' -and
+        $Configuration.Configuration.VideoInput -eq 'Disable' -and
+        $Configuration.Configuration.PrinterRedirection -eq 'Disable' -and
+        $Configuration.Configuration.MemoryInMB -eq '8192' -and
+        $logonSafe -and
+        $mappedFolders.Count -eq 1 -and
+        (@($mappingElements | Where-Object { $_ -notin $expectedMappingElements }).Count -eq 0) -and
+        $mappingElements.Count -eq $expectedMappingElements.Count -and
+        $mappedFolders[0].HostFolder -eq $ApprovedHostFolder -and
+        $mappedFolders[0].SandboxFolder -eq $SandboxInputFolder -and
+        $mappedFolders[0].ReadOnly -eq 'true'
+    if (-not $safeConfig) { throw 'The .wsb template does not match the required network, clipboard, vGPU, ProtectedClient, and single read-only mapping settings.' }
+    $allowedElements = @('VGpu', 'Networking', 'MappedFolders', 'AudioInput', 'VideoInput', 'ProtectedClient', 'PrinterRedirection', 'ClipboardRedirection', 'MemoryInMB')
+    if ($Automation) { $allowedElements += 'LogonCommand' }
+    $actualElements = @($Configuration.Configuration.ChildNodes | Where-Object { $_.NodeType -eq [Xml.XmlNodeType]::Element } | ForEach-Object { $_.Name })
+    if ($actualElements.Count -ne $allowedElements.Count -or
+        @($actualElements | Where-Object { $_ -notin $allowedElements }).Count -gt 0 -or
+        @($actualElements | Select-Object -Unique).Count -ne $allowedElements.Count) {
+        throw 'The .wsb contains an unreviewed, missing, or duplicated setting.'
+    }
+    if ($Automation) {
+        return 'Offline; clipboard/audio/video/printer/vGPU off; ProtectedClient on; one exact pinned diagnostic-only LogonCommand; one read-only mapping.'
+    }
+    return 'Offline; clipboard/audio/video/printer/vGPU off; ProtectedClient on; no LogonCommand; one read-only mapping.'
 }
 
 try {
@@ -111,49 +166,14 @@ try {
     }
 
     [xml] $config = Get-Content -LiteralPath $wsbTemplate -Raw
-    $mapped = @($config.Configuration.MappedFolders.MappedFolder)
-    $mappingElements = @($mapped[0].ChildNodes | Where-Object { $_.NodeType -eq [Xml.XmlNodeType]::Element } | ForEach-Object { $_.Name })
-    $expectedMappingElements = @('HostFolder', 'SandboxFolder', 'ReadOnly')
     $logonCommand = 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -NoExit -Command "Write-Host ''F2 DIAGNOSTIC STARTING - visible startup wrapper''; & ''C:\F2Input\Start-F2SandboxDiagnostics.ps1''"'
-    $logonElements = @($config.Configuration.LogonCommand.ChildNodes | Where-Object { $_.NodeType -eq [Xml.XmlNodeType]::Element } | ForEach-Object { $_.Name })
-    $logonSafe = if ($Automation) {
-        $logonElements.Count -eq 1 -and $logonElements[0] -eq 'Command' -and $config.Configuration.LogonCommand.Command -eq $logonCommand
-    } else {
-        $null -eq $config.Configuration.LogonCommand
-    }
-    $safeConfig = $config.Configuration.Networking -eq 'Disable' -and
-        $config.Configuration.VGpu -eq 'Disable' -and
-        $config.Configuration.ClipboardRedirection -eq 'Disable' -and
-        $config.Configuration.ProtectedClient -eq 'Enable' -and
-        $config.Configuration.AudioInput -eq 'Disable' -and
-        $config.Configuration.VideoInput -eq 'Disable' -and
-        $config.Configuration.PrinterRedirection -eq 'Disable' -and
-        $config.Configuration.MemoryInMB -eq '8192' -and
-        $logonSafe -and
-        $mapped.Count -eq 1 -and
-        (@($mappingElements | Where-Object { $_ -notin $expectedMappingElements }).Count -eq 0) -and
-        $mappingElements.Count -eq $expectedMappingElements.Count -and
-        $mapped[0].HostFolder -eq $approvedHostFolder -and
-        $mapped[0].SandboxFolder -eq $sandboxInputFolder -and
-        $mapped[0].ReadOnly -eq 'true'
-    if (-not $safeConfig) { throw 'The .wsb template does not match the required network, clipboard, vGPU, ProtectedClient, and single read-only mapping settings.' }
-    $allowedElements = @('VGpu', 'Networking', 'MappedFolders', 'AudioInput', 'VideoInput', 'ProtectedClient', 'PrinterRedirection', 'ClipboardRedirection', 'MemoryInMB')
-    if ($Automation) { $allowedElements += 'LogonCommand' }
-    $actualElements = @($config.Configuration.ChildNodes | Where-Object { $_.NodeType -eq [Xml.XmlNodeType]::Element } | ForEach-Object { $_.Name })
-    if ($actualElements.Count -ne $allowedElements.Count -or
-        @($actualElements | Where-Object { $_ -notin $allowedElements }).Count -gt 0 -or
-        @($actualElements | Select-Object -Unique).Count -ne $allowedElements.Count) {
-        throw 'The .wsb contains an unreviewed, missing, or duplicated setting.'
-    }
+    $configDescription = Assert-PreparerSandboxConfiguration -Configuration $config -Automation ([bool]$Automation) -ApprovedHostFolder $approvedHostFolder -SandboxInputFolder $sandboxInputFolder -ExpectedCommand $logonCommand
     if ($Automation) {
         $wsbHash = Get-NormalizedScriptHash -LiteralPath $wsbTemplate
-        if ($wsbHash -ne $expectedWsbSha256) {
-            throw "Automation .wsb SHA-256 is not the reviewed pinned value. Observed: $wsbHash"
-        }
+        Assert-PreparerTemplateHash -LiteralPath $wsbTemplate -ExpectedSha256 $expectedWsbSha256 | Out-Null
         Add-Result 'automation_configuration_identity' PASS ("$wsbTemplate SHA256=$wsbHash")
-        $configDescription = 'Offline; clipboard/audio/video/printer/vGPU off; ProtectedClient on; one exact pinned diagnostic-only LogonCommand; one read-only mapping.'
     } else {
-        $configDescription = 'Offline; clipboard/audio/video/printer/vGPU off; ProtectedClient on; no LogonCommand; one read-only mapping.'
+        # Non-automation mappings intentionally have no LogonCommand.
     }
     Add-Result 'wsb_security_configuration' PASS $configDescription
     Add-Result 'resource_configuration' UNKNOWN 'MemoryInMB is a guest memory allocation only; this file does not enforce CPU, disk, or per-probe/session time limits.'
