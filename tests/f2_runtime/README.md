@@ -2,6 +2,8 @@
 
 **State: PREPARED, NOT EXECUTED.** This folder contains only a declarative analytic fixture and the ordered run protocol. It contains no vendor archive, DLL, Godot binary, imported addon, or production-project changes. It does not claim F2 runtime compatibility.
 
+For the Issue #34 **diagnostic-only Windows Sandbox startup** (one host `.cmd`, no guest-typed command), see [`docs/specs/P0.1-F2-SANDBOX-AUTOMATION.md`](../../docs/specs/P0.1-F2-SANDBOX-AUTOMATION.md). That readiness flow does not execute F2 probes or vendor code.
+
 ## Fixture
 
 `fixtures/analytic_sdf_v1.json` versions the F0 analytic plane/spherical-hill/tunnel field, domain-positive-solid convention, 16 m logical regions, 0.5 m initial sample pitch, one-sample seam halo, canonical tick rules, material IDs and sign probes. The sphere centered at `(0,-1,0)` with radius 5 reaches `y=4`, so it protrudes above the plane. These values define inputs; they do not define pass tolerances. Before each probe, log tolerances and acceptance criteria so that results cannot be tuned after observation.
