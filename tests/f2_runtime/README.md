@@ -4,13 +4,15 @@
 
 ## Fixture
 
-`fixtures/analytic_sdf_v1.json` versions the F0 analytic plane/sphere/tunnel field, domain-positive-solid convention, 16 m logical regions, 0.5 m initial sample pitch, one-sample seam halo, canonical tick rules, material IDs and sign probes. These values define inputs; they do not define pass tolerances. Before each probe, log tolerances and acceptance criteria so that results cannot be tuned after observation.
+`fixtures/analytic_sdf_v1.json` versions the F0 analytic plane/spherical-hill/tunnel field, domain-positive-solid convention, 16 m logical regions, 0.5 m initial sample pitch, one-sample seam halo, canonical tick rules, material IDs and sign probes. The sphere centered at `(0,-1,0)` with radius 5 reaches `y=4`, so it protrudes above the plane. These values define inputs; they do not define pass tolerances. Before each probe, log tolerances and acceptance criteria so that results cannot be tuned after observation.
 
-The field uses `density = min(max(-y, 5 - length(p - (0,-1,0))), -(1.25 - distance_to_segment(p, (-8,-4,0), (8,-4,0))))`. The tunnel is a subtractive cylinder segment inside the solid and crosses the x=0 region boundary. Vendor SDF sign, units, quantization, unloaded-query behavior and material mapping must be measured independently.
+The field uses `density = min(max(-y, 5 - length(p - (0,-1,0))), -(1.25 - distance_to_segment(p, (-8,-4,0), (8,-4,0))))`. At `(0,0,0)`, density is `+2.75` (solid, 11264 canonical ticks), not zero. `(0,4,0)` is an exact-zero spherical surface sample. The tunnel is a subtractive cylinder segment inside the solid and crosses the x=0 region boundary. Vendor SDF sign, units, quantization, unloaded-query behavior and material mapping must be measured independently.
+
+Run the deterministic source-only fixture check with `pwsh -NoProfile -File tests/f2_runtime/validate_fixture.ps1`. This evaluates the declared analytic field and canonical ticks from JSON; it does not execute Godot or vendor code and is not a runtime test.
 
 ## Isolation prerequisites (hard gate)
 
-Run only in a disposable Windows Sandbox or throwaway Windows VM provisioned separately by the owner. Start with networking disabled. Use an unprivileged guest account; do not mount secrets, profiles, cloud sessions, SSH keys, or writable host project directories. Stage only verified, read-only Godot and archive inputs. Keep project, Godot user data, caches and logs in a unique guest-local run root. Use a supervising controller for per-probe five-minute limits and a 30-minute total budget; record actual memory/disk/CPU controls and do not claim a limit that was not enforced. If any prerequisite cannot be demonstrated, stop with `BLOCKED_ENVIRONMENT`.
+Run only in a disposable Windows Sandbox or throwaway Windows VM provisioned separately by the owner. Acquire and verify the approved inputs on the host **before launching the guest**, then transfer them through a narrowly scoped, read-only input mount/copy. The host may download and hash the exact ZIP as data; it must not extract the ZIP, load any DLL, or run vendor code. Start the guest with networking disabled. Use an unprivileged guest account; do not mount secrets, profiles, cloud sessions, SSH keys, or writable host project directories. Keep project, Godot user data, caches and logs in a unique guest-local run root. Use a supervising controller for per-probe five-minute limits and a 30-minute total budget; record actual memory/disk/CPU controls and do not claim a limit that was not enforced. If any prerequisite cannot be demonstrated, stop with `BLOCKED_ENVIRONMENT`.
 
 Do not install Windows features, weaken host protections, run vendor code on the host, invoke vendor installers/build scripts, access the network from the guest, or add dependencies. Do not extract into a repository worktree. Use the accepted `scripts/inspect-zip.ps1` preflight/extractor only after confirming its canonical guest-local destination and exact archive identity. Do not commit the ZIP or DLLs.
 
@@ -18,12 +20,20 @@ Do not install Windows features, weaken host protections, run vendor code on the
 
 Create an evidence directory in the guest keyed by a fresh run UUID. Record operator/authorization issue, local time and UTC, guest type/settings, network state, user privilege, enforced limits, source and destination canonical paths, and SHA-256 for every executable, archive, fixture, and mapped DLL before launch. Preserve stdout/stderr, exit codes, timeout and process-tree cleanup evidence. Export only reviewed logs/screenshots through an explicitly controlled channel.
 
-Before any native load:
+### Host preparation, before guest launch
 
-1. Verify the exact official Godot file version `4.7.2.stable.official.ed1daf0bf`, Windows x86_64 identity and SHA-256, and select **GL Compatibility**. Stop if the version/build/renderer is wrong.
-2. Download only `https://github.com/Zylann/godot_voxel/releases/download/v1.7x/GodotVoxelExtension.zip` if the approved guest input is unavailable. Require exactly 54,457,774 bytes and SHA-256 `600737572a5e25541ba6f503e842a3717ba19afafa5474510a6ceff995a1d2d8`; rerun the full F1 synthetic suite and archive preflight in the guest before extraction. Do not proceed on any hash, size, archive, path, or descriptor mismatch.
-3. Copy only the required project assets and descriptor-mapped Windows DLLs into the guest-local throwaway project. Hash the editor and template-release DLLs and record all actual commands. Never place vendor files in this repository.
-4. Execute A–F in order. Stop at the first mandatory failure. Preserve failed logs; do not patch vendor code or reinterpret unsupported behavior as pass.
+1. Obtain only the owner-approved official Godot Windows x86_64 distribution and exact ZIP URL `https://github.com/Zylann/godot_voxel/releases/download/v1.7x/GodotVoxelExtension.zip`. The ZIP acquisition is a host-side data transfer only; do not extract it, open/dispatch it, execute its contents, or load any DLL on the host.
+2. Verify the official Godot file version `4.7.2.stable.official.ed1daf0bf`, Windows x86_64 identity and SHA-256. Verify the ZIP is exactly 54,457,774 bytes with SHA-256 `600737572a5e25541ba6f503e842a3717ba19afafa5474510a6ceff995a1d2d8`. Record commands, paths, timestamp and hashes. Stop on any mismatch.
+3. Configure a narrowly scoped read-only transfer for only these verified inputs. For Windows Sandbox, explicitly set networking to **Disable** in a custom `.wsb` configuration; do not accept the network-enabled default. Do not map secrets or writable project paths. The transfer mechanism is not authorization to run vendor code on the host.
+
+### Offline guest, before any native load
+
+1. Launch the disposable guest with networking disabled and the owner-approved resource, privilege, timeout, evidence and cleanup controls. Verify and record its effective settings before staging inputs.
+2. Copy the read-only inputs to a unique guest-local run root. Recompute and verify Godot identity/version/hash and the ZIP exact size/SHA-256 inside the guest. Stop on any mismatch.
+3. In the guest, run the F1 synthetic adversarial ZIP suite and the pinned archive preflight using a safe guest-local destination. Only then extract within the guest-local throwaway project. Never extract to the host or repository. Remove the input mount after the guest copy and hashes are verified, when the sandbox mechanism permits.
+4. Hash descriptor-mapped editor and template-release DLLs in the guest. Record hashes and actual commands. Execute A–F in order, stopping at the first mandatory failure. Preserve failed logs; do not patch vendor code or reinterpret unsupported behavior as pass.
+
+Guest networking must remain disabled throughout. Never enable it to fetch or update an input; if host-side acquisition and controlled read-only transfer are unavailable, stop with `BLOCKED_ENVIRONMENT`. Export only deliberately reviewed, sanitized evidence through a separately controlled channel.
 
 ## Ordered probe worksheet
 

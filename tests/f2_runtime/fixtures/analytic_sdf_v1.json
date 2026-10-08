@@ -16,12 +16,14 @@
   },
   "materials": [
     {"id": "terrain.test.base", "role": "plane and cave wall"},
-    {"id": "terrain.test.hill", "role": "buried sphere union"},
+    {"id": "terrain.test.hill", "role": "spherical hill union protruding above the plane"},
     {"id": null, "role": "void"}
   ],
   "field": {
     "plane": "-p.y",
     "hill": "5 - length(p - (0,-1,0))",
+    "sphere_center": [0.0, -1.0, 0.0],
+    "sphere_radius": 5.0,
     "base": "max(plane, hill)",
     "tunnel_radius": 1.25,
     "tunnel_segment_start": [-8.0, -4.0, 0.0],
@@ -37,12 +39,13 @@
     "probe_x": [-0.5, 0.0, 0.5]
   },
   "sign_probes": [
-    {"point": [0.0, 1.0, 0.0], "expectation": "solid; positive density"},
-    {"point": [0.0, -4.0, 0.0], "expectation": "tunnel void; negative density"},
-    {"point": [0.0, -4.0, 2.0], "expectation": "outside tunnel but below plane; positive density"},
-    {"point": [0.0, 0.0, 0.0], "expectation": "surface neighborhood; evaluate canonical tick"},
-    {"point": [-0.5, -4.0, 0.0], "expectation": "tunnel void, region -1"},
-    {"point": [0.5, -4.0, 0.0], "expectation": "tunnel void, region 0"}
+    {"point": [0.0, 1.0, 0.0], "expectation": "solid", "expected_density": 3.0, "expected_ticks": 12288},
+    {"point": [0.0, -4.0, 0.0], "expectation": "tunnel void", "expected_density": -1.25, "expected_ticks": -5120},
+    {"point": [0.0, -4.0, 2.0], "expectation": "solid outside tunnel below plane", "expected_density": 0.75, "expected_ticks": 3072},
+    {"point": [0.0, 0.0, 0.0], "expectation": "solid; not a surface sample", "expected_density": 2.75, "expected_ticks": 11264},
+    {"point": [0.0, 4.0, 0.0], "expectation": "exact spherical hill surface", "expected_density": 0.0, "expected_ticks": 0},
+    {"point": [-0.5, -4.0, 0.0], "expectation": "tunnel centerline void, region -1", "expected_density": -1.25, "expected_ticks": -5120},
+    {"point": [0.5, -4.0, 0.0], "expectation": "tunnel centerline void, region 0", "expected_density": -1.25, "expected_ticks": -5120}
   ],
   "comparison_policy": {
     "compare": ["canonical analytic ticks", "material ids", "surface distance", "cave connectivity", "region seam samples"],
