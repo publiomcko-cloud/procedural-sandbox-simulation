@@ -39,3 +39,12 @@ Outcome: PASS_RESEARCH_WITH_CONDITIONS. ADR-0002 remains PROPOSED/DEFERRED; no b
 - PR #20 passing corrected source/log provenance review, merged d6d4f05935b9165d336357ae787d1a641d08b455.
 - Historical Windows x64 release run 32419292967 editor/release jobs include exact link input objects and resolved godot-cpp SHA 9c8aeff0f58ad030f3d1030e8262de1322cd0ccd. Accepted as build-log evidence, not independently attested retained DLL code.
 - Owner authorized F1.6 document-only notice/provenance resolution per docs/specs/P0.1-F1.6-NOTICE-RESOLUTION.md. The ZIP contains the project MIT license but no separate third-party notices in the accepted F1 manifest; potential LZ4, meshoptimizer, FastNoiseLite and godot-cpp notice obligations require further reconciliation. No license clearance, F2 authorization, addon adoption, or backend selection.
+
+
+## 2026-10-08 — F1.6 notice draft accepted and F2 execution-design gate prepared
+- PR #22 corrected source-exact 5-component third-party notice draft and PowerShell pinned-text/local-link verifier, reviewed SHA cfa0b7cf6b4a59f40cf355245c4e44dc92299a5d, **merged** 2e9adf2cc93c26a7faa6c538c7f99de13c569d65.
+- PR #23 original independent F1.6 review (two FastNoiseLite transcription deviations and blank-line formatting), **merged** 7fb653ca892c5b5340a9f5d8c647a0681afd9cb2.
+- PR #24 passing SHA-specific independent F1.6 re-review with independent five-notice exact text comparisons, **merged** 6a3722edab09ea26f7bf477ec185180c020adb55.
+- Accepted F1.6 *documentation only*, notices explicitly **DRAFT — NOT SHIPPED — NOT LEGAL CLEARANCE**. Linker input evidence is not complete native DLL provenance; actual redistribution notices/terms remain under owner review.
+- Owner instructed integration followed by moving forward to a **restricted F2 test specification**. This authorized PREPARATION only, not third-party DLL execution, native archive download, addon staging, upstream contact, production redistribution, ADR-0002 approval or backend selection.
+- F2 G0/G1/G2 isolation, exact artifact/engine pin, functional fixtures and independent-review gates are planned in docs/specs/P0.1-F2-ISOLATED-RUNTIME-PROOF-PLAN.md. Any G1 native execution needs a *new express owner authorization*.
