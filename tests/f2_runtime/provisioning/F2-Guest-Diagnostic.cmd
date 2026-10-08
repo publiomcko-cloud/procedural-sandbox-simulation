@@ -1,5 +1,12 @@
 @echo off
 setlocal DisableDelayedExpansion
+rem LogonCommand may start in a hidden console. Create one NEW visible window.
+if /i "%~1"=="--f2-visible" goto :visible_diagnostic
+if not "%~1"=="" exit /b 2
+start "F2 Sandbox Diagnostic" "%SystemRoot%\System32\cmd.exe" /k C:\F2Input\F2-Guest-Diagnostic.cmd --f2-visible
+exit /b %ERRORLEVEL%
+
+:visible_diagnostic
 title F2 Sandbox Readiness - Diagnostic Only
 echo.
 echo =========================================================
@@ -33,5 +40,5 @@ goto :complete
 :complete
 echo.
 echo F2 native runtime: NOT RUN
-echo F2 WRAPPER FINISHED - cmd.exe /k must keep this console open.
+echo F2 WRAPPER FINISHED - separately launched cmd.exe /k console remains open.
 echo Capture this window; close Sandbox normally to discard guest-local state.
