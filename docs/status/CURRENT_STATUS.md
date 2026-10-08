@@ -1,27 +1,23 @@
-# Canonical project status — 2026-10-08 (P0.1 research integrated)
-Verify actual GitHub refs before relying on this snapshot.
-Repository: private publiomcko-cloud/procedural-sandbox-simulation.
-Architecture and product charter: docs/PROJECT_CHARTER.md and ADR-0001-BASELINE.md.
-Durable-review rules: docs/workflow/PROJECT_MEMORY_PROTOCOL.md.
+# Canonical project status — 2026-10-08 (P0.1-F0 accepted, F1 authorized)
+Check live GitHub refs before acting. Repository: private publiomcko-cloud/procedural-sandbox-simulation.
+Canonical architecture: docs/PROJECT_CHARTER.md, docs/decisions/ADR-0001-BASELINE.md; ADR-0002 remains PROPOSED/DEFERRED.
+Continuity: docs/workflow/PROJECT_MEMORY_PROTOCOL.md. Historical PR/merge list: docs/status/CHANGELOG.md.
 
-## Integrated and accepted
-P0.0 Godot 4.7.2 starter validation, deterministic 52-assertion pure-data fixture, 18-assertion scene/camera structural regression, and visible reference cube confirmed by owner after camera fix. Developer reported automated tests pass; ChatGPT independently reviewed source but did not execute Windows/Godot. Implementation PR #2 merge: b8bd49b325b9a33e320442211736cf8b85c23b12. P0.0 acceptance does NOT imply complete terrain or Phase 0.
-P0.1 desk research PASS_RESEARCH_WITH_CONDITIONS and integrated:
-- Research PR #7, reviewed HEAD c1c7a8a32a851e50e0e92a0e4c03e231b303e778, merge b27b4e90ca19d7e83f34003de488d063f00399eb.
-- Review PR #8, review document docs/reviews/2026-10-08-P0-1-RESEARCH-c1c7a8a.md, merge a1171450e4178399f3130790368dc093be176c65.
-- docs/research/P0.1-TERRAIN-BACKEND-COMPARISON.md, docs/architecture/TERRAIN_ADAPTER_PROPOSAL.md and docs/decisions/ADR-0002-TERRAIN-BACKEND-PROPOSED.md are integrated as research/proposals, NOT final design or vendor approval.
-- See docs/status/CHANGELOG.md for exact prior PRs/merge SHAs and retained failure/correction reports.
+## Accepted and integrated
+P0.0: Godot 4.7.2 bootstrap, seeded pure-data fixture and 52 developer-reported assertions, camera/scene regression and 18 developer-reported assertions; owner confirmed the F5 reference cube visible following correction. Source reviewed independently, evaluator did not run Godot on owner Windows hardware. Implementation merge PR #2 b8bd49b325b9a33e320442211736cf8b85c23b12.
 
-## Current owner authorization boundary
-On 2026-10-08 the owner authorized merging PR #7 and #8 and PREPARING a bounded P0.1 candidate compatibility experiment. Authorized now: F0 public-source and artifact-metadata inventory, conceptual API feasibility and reproducible isolated-test plan, independent review. NOT authorized: third-party binary/archive downloads, installation, GDExtension execution, custom engine substitution, native builds, adding dependencies, complete terrain adapter implementation, changing ADR-0001, approving ADR-0002 or backend production selection. See docs/specs/P0.1-COMPATIBILITY-GATE.md for full authorized F0 task.
+P0.1 research PR #7, comparative study, candidate-independent adapter proposal and PROPOSED ADR-0002: merge b27b4e90ca19d7e83f34003de488d063f00399eb. Review PR #8: a1171450e4178399f3130790368dc093be176c65.
 
-## Current risks and gaps
-- Voxel Tools 1.7 GDExtension exact 4.7.2 compatibility and Windows/export artifacts unverified; publisher says extension newer/less tested. FastNoise2 feature parity and domain-to-vendor async hooks must be audited.
-- Canonical density sign, units, precision, buffer conversion and stable ID/coordinate limits require gate tests before binding implementation.
-- Zero reliable terrain benchmark, no selected target performance budgets, no owner-approved binary; runtime feasibility undemonstrated.
-- P0.2 edit transactions/crash recovery, P0.3 mod registry, P0.4 simulation tiers, P0.5 Phase 0 gate and all V1/V2 releases incomplete.
-- No assurance of enforced remote branch rules or independent CI status checks.
-- Developer-reported uncommitted .vscode/extensions.json from P0.1 research worktree was left untouched; do not accidentally stage or discard without review.
+P0.1-F0 exact release/source/license/API inventory PR #10: final reviewed SHA e8af422c4c29fc86e1e3ba63fed766ffc69e9c95, merge 3c2c50f3b19f162711aee22dd3421a687064ba5c. First failed independent review PR #11 retained and merged as eef5d53fe9d14a97f324631e133441729ea728bb. Re-review PR #12 PASS_TECHNICAL (documentation only), merged as c39edf72e1ff8d660eb4b96ac305771f7f64daa8. All verified through GitHub merge results on 2026-10-08. No terrain code/vendor extension was added.
 
-## Next task / state for fresh agents
-Owner may assign Codex F0 evidence-only work on a fresh branch from updated origin/main. F0 should stop with SHA-specific draft PR, artifact/license inventory and proposed F1 approval request. ChatGPT independently reviews F0, owner explicitly decides if exactly identified native artifact may then be downloaded and tested. Do not treat this status update as permission to execute F1.
+## Authorization — F1 ONLY
+The owner explicitly approved merging PRs #10/#11/#12 and proceeding with a restricted F1 static artifact inspection on Windows x64: source tag v1.7x, source commit 75d3c6d996ed2331c80edcd8c3ebc947afc0f041, official download GodotVoxelExtension.zip (54,457,774 bytes; GitHub SHA-256 metadata 600737572a5e25541ba6f503e842a3717ba19afafa5474510a6ceff995a1d2d8).
+Authorized: implement and execute reviewed PowerShell/.NET ZIP preflight/extraction SAFETY TESTS with locally generated hostile archives; download the named asset into GUID-unique TEMP outside repository; independently hash bytes, require exact match; full zero-write preflight; bounded safe static extraction only on pass; read-only inventory of archive, license/notices and Windows binary mappings; clean evidence/handoff/draft PR. See docs/specs/P0.1-F1-STATIC-ARTIFACT-INSPECTION.md for test cases, limits and stop conditions. F1 has NOT yet been executed and is NOT proof of binary compatibility.
+
+Not authorized: loading DLLs, opening Godot with extension, installing plugins, changing Godot builds, full terrain candidate code, F2/F3/F4 or P0.2, selecting backend, accepting ADR-0002, merging future PRs without owner request.
+
+## Risks
+Actual archive content, compiled components and notices unknown until F1. Windows debug/release file availability and addon description unverified. Vendor async mesh/collision publication may lack public revision guards; this remains an F2 blocker to investigate. No terrain benchmark, production material/coordinate mapping, persistence crash recovery, simulation tiers or V1/V2 releases exist. Existing scene cube visibility is not evidence of terrain functionality.
+
+## Next agent task
+On owner Windows machine, use new feature branch and worktree from latest origin/main, execute only P0.1-F1 static inspection, keep vendor ZIP and binary outside repository, commit reviewed safety harness/test results + manifest/handoff, push DRAFT PR, stop for independent review. Human remains final merge authority. F2 runtime testing requires separate explicit approval. Do not repeat F0 work or confuse PASS_TECHNICAL research with tested native compatibility.

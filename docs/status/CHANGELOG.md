@@ -14,3 +14,11 @@ Outcome: P0.0 merged/accepted for basic bootstrap, deterministic fixture and own
 - PR #7 research, candidate-independent adapter proposal, benchmark plan, proposed ADR-0002: b27b4e90ca19d7e83f34003de488d063f00399eb
 - PR #8 independent research review with conditions: a1171450e4178399f3130790368dc093be176c65
 Outcome: PASS_RESEARCH_WITH_CONDITIONS. ADR-0002 remains PROPOSED/DEFERRED; no backend selected or package authorized. Owner authorized preparation and non-installing feasibility planning. See docs/specs/P0.1-COMPATIBILITY-GATE.md.
+
+
+## 2026-10-08 — P0.1-F0 compatibility inventory and reviews integrated
+- PR #10 corrected v1.7x release/adapter API/source inventory, reviewed head e8af422c4c29fc86e1e3ba63fed766ffc69e9c95, merged as 3c2c50f3b19f162711aee22dd3421a687064ba5c.
+- PR #11 first independent F0 review (SQLite inventory and safe ZIP extraction procedure missing), merged as eef5d53fe9d14a97f324631e133441729ea728bb.
+- PR #12 independent corrected F0 PASS_TECHNICAL (documentation only), merged as c39edf72e1ff8d660eb4b96ac305771f7f64daa8.
+- Owner then explicitly authorized F1 download/ZIP hash verification and safety-tested static inspection on Windows x64. F1 not executed by ChatGPT and no vendor binaries loaded.
+- The F1 authorization scope and executable test gate are specified in docs/specs/P0.1-F1-STATIC-ARTIFACT-INSPECTION.md. F2 Godot/DLL execution, dependencies in active game and final backend selection remain unauthorized. Original and correction reviews are retained.
