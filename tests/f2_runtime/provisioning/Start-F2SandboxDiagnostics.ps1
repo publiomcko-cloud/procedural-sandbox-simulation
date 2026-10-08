@@ -32,6 +32,12 @@ function Write-Report {
     Write-Output 'This report remains visible for 180 seconds; close the Sandbox at any time to discard guest-local state.'
 }
 
+function Assert-GuestDiagnosticUsername {
+    param([Parameter(Mandatory)] [string] $Name)
+    if ($Name.Length -gt 20) { throw 'The guest diagnostic username exceeds New-LocalUser -Name maximum length 20.' }
+    if ($Name -notmatch '^F2Diag_[0-9A-F]{12}$') { throw 'The guest diagnostic username does not match the bounded F2Diag_ plus 12 hexadecimal characters format.' }
+}
+
 try {
     if (-not (Test-Path -LiteralPath $diagnosticPath -PathType Leaf)) { throw 'Pinned guest diagnostic is missing from C:\F2Input.' }
     if (-not (Test-Path -LiteralPath $powershellPath -PathType Leaf)) { throw 'Windows PowerShell executable is unavailable in the guest.' }
@@ -40,11 +46,12 @@ try {
     }
 
     $finalStatus = 'BLOCKED_STANDARD_USER'
-    $randomBytes = New-Object byte[] 8
+    $randomBytes = New-Object byte[] 6
     $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
     try { $rng.GetBytes($randomBytes) } finally { $rng.Dispose() }
     $suffix = [BitConverter]::ToString($randomBytes).Replace('-', '')
     $username = "F2Diag_$suffix"
+    Assert-GuestDiagnosticUsername -Name $username
 
     $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!#$%+-_'
     $passwordChars = New-Object char[] 32

@@ -12,8 +12,11 @@ $sandboxInputFolder = 'C:\F2Input'
 $diagnosticName = 'Get-F2SandboxReadiness.ps1'
 $bootstrapName = 'Start-F2SandboxDiagnostics.ps1'
 $expectedDiagnosticSha256 = '78fa1dd2d0bc691cecdb5089ee409c71080d30fe0f0e928b2225c7d3bc745d9f'
-$expectedBootstrapSha256 = '4a28b6d8a6b56239da131204316f441ab3a486d9bcb9a7bb7e3b4c77e36800f3'
-$previousReviewedBootstrapSha256 = @('2bbb945e86274b98eda6b2c08eae156c0d2851f114c895f77505576991600093')
+$expectedBootstrapSha256 = '88cad4600e8417ab524728a27cd638b27b5f46fcf0c0495f7ff21e9cda80288e'
+$previousReviewedBootstrapSha256 = @(
+    '2bbb945e86274b98eda6b2c08eae156c0d2851f114c895f77505576991600093'
+    '4a28b6d8a6b56239da131204316f441ab3a486d9bcb9a7bb7e3b4c77e36800f3'
+)
 $previousReviewedDiagnosticSha256 = @(
     'd3c6883d7b70d218968caa74ec2e0916406a6eb31d2075b45ab40cf15c07df65'
     '0664b0adfb511bda16bec900e92aad568eb50cc1cdba2cd9bdd35729cb1c164b'

@@ -52,6 +52,28 @@ try {
         }
     }
 
+    $bootstrapPath = Join-Path $sourceRoot 'Start-F2SandboxDiagnostics.ps1'
+    $bootstrapText = Get-Content -LiteralPath $bootstrapPath -Raw
+    Assert-True ($bootstrapText -match '(?m)^\s*\$randomBytes\s*=\s*New-Object byte\[\]\s+6\s*$') 'Username suffix uses six cryptographic random bytes (12 hexadecimal characters)'
+    Assert-True ($bootstrapText -match '(?m)^\s*Assert-GuestDiagnosticUsername\s+-Name\s+\$username\s*$') 'Generated username is explicitly length-validated before account creation'
+    $bootstrapTokens = $null
+    $bootstrapParseErrors = $null
+    $bootstrapAst = [Management.Automation.Language.Parser]::ParseFile($bootstrapPath, [ref]$bootstrapTokens, [ref]$bootstrapParseErrors)
+    $usernameValidator = @($bootstrapAst.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Assert-GuestDiagnosticUsername' }, $false))
+    Assert-True ($usernameValidator.Count -eq 1) 'Username validator is uniquely defined in the source'
+    if ($usernameValidator.Count -eq 1) {
+        Invoke-Expression $usernameValidator[0].Extent.Text
+        $validUsernameAccepted = $false
+        try { Assert-GuestDiagnosticUsername -Name 'F2Diag_012345ABCDEF'; $validUsernameAccepted = $true } catch {}
+        Assert-True $validUsernameAccepted 'Accept bounded 19-character diagnostic username'
+        $oversizedUsernameRejected = $false
+        try { Assert-GuestDiagnosticUsername -Name 'F2Diag_0123456789ABCDEF' } catch { $oversizedUsernameRejected = $true }
+        Assert-True $oversizedUsernameRejected 'Reject 23-character diagnostic username'
+        $malformedUsernameRejected = $false
+        try { Assert-GuestDiagnosticUsername -Name 'F2Diag_not-hex' } catch { $malformedUsernameRejected = $true }
+        Assert-True $malformedUsernameRejected 'Reject malformed diagnostic username'
+    }
+
     Invoke-HostFixture -Description 'Reviewed offline automation template and pinned scripts' -ExpectedExitCode 0
 
     $diagnostic = Join-Path $fixtureProvisioning 'Get-F2SandboxReadiness.ps1'
