@@ -12,10 +12,12 @@ $sandboxInputFolder = 'C:\F2Input'
 $diagnosticName = 'Get-F2SandboxReadiness.ps1'
 $bootstrapName = 'Start-F2SandboxDiagnostics.ps1'
 $expectedDiagnosticSha256 = '78fa1dd2d0bc691cecdb5089ee409c71080d30fe0f0e928b2225c7d3bc745d9f'
-$expectedBootstrapSha256 = '88cad4600e8417ab524728a27cd638b27b5f46fcf0c0495f7ff21e9cda80288e'
+$expectedBootstrapSha256 = 'ac8f5952b4138c774a5193f1b5eba0abef6abca961a9573e208296812933ab0e'
+$expectedWsbSha256 = '0edaa9ab7363c902ea1a39badd5dc8f5b9e6870811cbb32421c7562e133de941'
 $previousReviewedBootstrapSha256 = @(
     '2bbb945e86274b98eda6b2c08eae156c0d2851f114c895f77505576991600093'
     '4a28b6d8a6b56239da131204316f441ab3a486d9bcb9a7bb7e3b4c77e36800f3'
+    '88cad4600e8417ab524728a27cd638b27b5f46fcf0c0495f7ff21e9cda80288e'
 )
 $previousReviewedDiagnosticSha256 = @(
     'd3c6883d7b70d218968caa74ec2e0916406a6eb31d2075b45ab40cf15c07df65'
@@ -112,7 +114,7 @@ try {
     $mapped = @($config.Configuration.MappedFolders.MappedFolder)
     $mappingElements = @($mapped[0].ChildNodes | Where-Object { $_.NodeType -eq [Xml.XmlNodeType]::Element } | ForEach-Object { $_.Name })
     $expectedMappingElements = @('HostFolder', 'SandboxFolder', 'ReadOnly')
-    $logonCommand = 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File C:\F2Input\Start-F2SandboxDiagnostics.ps1'
+    $logonCommand = 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -NoExit -Command "Write-Host ''F2 DIAGNOSTIC STARTING - visible startup wrapper''; & ''C:\F2Input\Start-F2SandboxDiagnostics.ps1''"'
     $logonElements = @($config.Configuration.LogonCommand.ChildNodes | Where-Object { $_.NodeType -eq [Xml.XmlNodeType]::Element } | ForEach-Object { $_.Name })
     $logonSafe = if ($Automation) {
         $logonElements.Count -eq 1 -and $logonElements[0] -eq 'Command' -and $config.Configuration.LogonCommand.Command -eq $logonCommand
@@ -144,6 +146,11 @@ try {
         throw 'The .wsb contains an unreviewed, missing, or duplicated setting.'
     }
     if ($Automation) {
+        $wsbHash = Get-NormalizedScriptHash -LiteralPath $wsbTemplate
+        if ($wsbHash -ne $expectedWsbSha256) {
+            throw "Automation .wsb SHA-256 is not the reviewed pinned value. Observed: $wsbHash"
+        }
+        Add-Result 'automation_configuration_identity' PASS ("$wsbTemplate SHA256=$wsbHash")
         $configDescription = 'Offline; clipboard/audio/video/printer/vGPU off; ProtectedClient on; one exact pinned diagnostic-only LogonCommand; one read-only mapping.'
     } else {
         $configDescription = 'Offline; clipboard/audio/video/printer/vGPU off; ProtectedClient on; no LogonCommand; one read-only mapping.'

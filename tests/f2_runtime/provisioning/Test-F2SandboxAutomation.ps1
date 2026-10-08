@@ -31,6 +31,28 @@ function Invoke-HostFixture {
     }
 }
 
+function Get-NormalizedSourceHash {
+    param([Parameter(Mandatory)] [string] $LiteralPath)
+    $text = [Text.UTF8Encoding]::new($false, $true).GetString([IO.File]::ReadAllBytes($LiteralPath))
+    $text = $text.Replace("`r`n", "`n").Replace("`r", "`n")
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { [BitConverter]::ToString($sha.ComputeHash([Text.UTF8Encoding]::new($false).GetBytes($text))).Replace('-', '').ToLowerInvariant() }
+    finally { $sha.Dispose() }
+}
+
+function Set-FixtureWsbPin {
+    $fixtureWsb = Join-Path $fixtureProvisioning 'F2-Isolated-Sandbox-automation.wsb.example'
+    $fixturePreparer = Join-Path $fixtureProvisioning 'Prepare-F2SandboxInputs.ps1'
+    $hash = Get-NormalizedSourceHash -LiteralPath $fixtureWsb
+    $preparerText = [IO.File]::ReadAllText($fixturePreparer)
+    $pattern = "(?m)^\`$expectedWsbSha256 = '[^']+'$"
+    $match = [regex]::Match($preparerText, $pattern)
+    if (-not $match.Success) { throw 'Fixture preparer SHA pin was not found.' }
+    $replacement = '$expectedWsbSha256 = ''{0}''' -f $hash
+    $preparerText = $preparerText.Substring(0, $match.Index) + $replacement + $preparerText.Substring($match.Index + $match.Length)
+    [IO.File]::WriteAllText($fixturePreparer, $preparerText, [Text.UTF8Encoding]::new($false))
+}
+
 try {
     New-Item -ItemType Directory -Path $fixtureProvisioning -ErrorAction Stop | Out-Null
     foreach ($name in @(
@@ -74,6 +96,53 @@ try {
         Assert-True $malformedUsernameRejected 'Reject malformed diagnostic username'
     }
 
+    $reportFunctions = @('Write-Report', 'Test-VerifiedStandardUserToken')
+    foreach ($functionName in $reportFunctions) {
+        $functionAst = @($bootstrapAst.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $functionName }, $false))
+        Assert-True ($functionAst.Count -eq 1) ("Source-only report helper exists exactly once: {0}" -f $functionName)
+        if ($functionAst.Count -eq 1) { Invoke-Expression $functionAst[0].Extent.Text }
+    }
+
+    $validToken = [pscustomobject]@{ identity = 'Sandbox\F2Diag_012345ABCDEF'; is_administrator = $false; token_status = 'PASS' }
+    $deniedToken = [pscustomobject]@{ identity = 'Sandbox\F2Diag_012345ABCDEF'; is_administrator = $true; token_status = 'FAIL' }
+    Assert-True (Test-VerifiedStandardUserToken -Result $validToken -ExpectedIdentity 'Sandbox\F2Diag_012345ABCDEF') 'Accept only exact verified standard-user token'
+    Assert-True (-not (Test-VerifiedStandardUserToken -Result $deniedToken -ExpectedIdentity 'Sandbox\F2Diag_012345ABCDEF')) 'Reject denied or administrator child token without fallback'
+    Assert-True ($bootstrapText -match '(?s)\$stage\s*=\s*''validate read-only mapped diagnostic''.*?Test-Path -LiteralPath \$diagnosticPath') 'Missing mapped diagnostic fails at a visible preflight stage'
+    Assert-True ($bootstrapText -notmatch '(?im)^\s*Start-Sleep\b') 'Bootstrap does not depend on a timed sleep to keep the report visible'
+    Assert-True ($bootstrapText -match '(?im)Start-Process\s+-FilePath\s+\$powershellPath\s+-Credential\s+\$credential') 'Only credential-bound standard-user child launch is present'
+    Assert-True ($bootstrapText -notmatch '(?i)Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|DownloadFile|Godot|Voxel.?Tools|GDExtension|GDNative') 'Bootstrap has no network or vendor-runtime path'
+
+    $reportCases = @(
+        @{ Name = 'early bootstrap failure'; Stage = 'validate read-only mapped diagnostic'; Status = 'BLOCKED_ENVIRONMENT'; Category = 'ObjectNotFound/ItemNotFoundException'; ExitCode = $null }
+        @{ Name = 'denied standard-user child'; Stage = 'launch readiness diagnostic under standard-user credential'; Status = 'BLOCKED_STANDARD_USER'; Category = 'SecurityError/StartProcessDenied'; ExitCode = $null }
+        @{ Name = 'standard-user child timeout'; Stage = 'wait for standard-user diagnostic (60-second timeout)'; Status = 'BLOCKED_STANDARD_USER'; Category = 'OperationTimeout'; ExitCode = $null }
+        @{ Name = 'malformed child JSON'; Stage = 'parse standard-user diagnostic result'; Status = 'BLOCKED_STANDARD_USER'; Category = 'InvalidData/ConvertFromJson'; ExitCode = 1 }
+        @{ Name = 'missing mapped input'; Stage = 'validate read-only mapped diagnostic'; Status = 'BLOCKED_ENVIRONMENT'; Category = 'ObjectNotFound/ItemNotFoundException'; ExitCode = $null }
+    )
+    foreach ($case in $reportCases) {
+        $stage = $case.Stage
+        $failureCategory = $case.Category
+        $diagnosticExitCode = $case.ExitCode
+        $summary = $null
+        $report = Write-Report -Status $case.Status -Message 'Startup or diagnostic stage failed.' | Out-String
+        Assert-True ($report.Contains($case.Status) -and $report.Contains($case.Stage) -and $report.Contains($case.Category)) ("Failure remains visible with stage/category: {0}" -f $case.Name)
+        Assert-True ($report.Contains('F2 native runtime: NOT RUN') -and $report.Contains('window remains open')) ("Failure report stays open and diagnostic-only: {0}" -f $case.Name)
+        if ($null -ne $case.ExitCode) { Assert-True ($report.Contains('exit code: 1')) 'Malformed/nonzero child failure reports exit code' }
+    }
+
+    $configPath = Join-Path $fixtureProvisioning 'F2-Isolated-Sandbox-automation.wsb.example'
+    [xml]$startupConfig = Get-Content -LiteralPath $configPath -Raw
+    $startupCommand = [string]$startupConfig.Configuration.LogonCommand.Command
+    Assert-True ($startupCommand.Contains('-NoExit') -and $startupCommand.Contains('-Command "Write-Host')) 'Reviewed startup command keeps PowerShell open and prints before bootstrap invocation'
+    Assert-True ($startupCommand.IndexOf('F2 DIAGNOSTIC STARTING - visible startup wrapper') -lt $startupCommand.IndexOf("& 'C:\F2Input\Start-F2SandboxDiagnostics.ps1'")) 'Startup banner precedes bootstrap invocation'
+    $sourcePreparerText = Get-Content (Join-Path $sourceRoot 'Prepare-F2SandboxInputs.ps1') -Raw
+    $expectedBootstrapHash = [regex]::Match($sourcePreparerText, "(?m)^\`$expectedBootstrapSha256 = '([0-9a-f]{64})'").Groups[1].Value
+    $expectedWsbHash = [regex]::Match($sourcePreparerText, "(?m)^\`$expectedWsbSha256 = '([0-9a-f]{64})'").Groups[1].Value
+    Assert-True ($expectedBootstrapHash -eq (Get-NormalizedSourceHash $bootstrapPath)) 'Preparer pin matches updated bootstrap source'
+    Assert-True ($expectedWsbHash -eq (Get-NormalizedSourceHash $configPath)) 'Preparer pin matches updated startup configuration'
+    $launcherText = Get-Content (Join-Path $sourceRoot 'Start-F2SandboxReadiness.ps1') -Raw
+    Assert-True ($launcherText.Contains($expectedBootstrapHash) -and $launcherText.Contains($expectedWsbHash)) 'Launcher pins updated bootstrap and startup configuration'
+
     Invoke-HostFixture -Description 'Reviewed offline automation template and pinned scripts' -ExpectedExitCode 0
 
     $diagnostic = Join-Path $fixtureProvisioning 'Get-F2SandboxReadiness.ps1'
@@ -81,14 +150,32 @@ try {
     Invoke-HostFixture -Description 'Reject altered diagnostic digest' -ExpectedExitCode 2
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'Get-F2SandboxReadiness.ps1') -Destination $diagnostic -Force
 
-    $configPath = Join-Path $fixtureProvisioning 'F2-Isolated-Sandbox-automation.wsb.example'
+    $bootstrapFixture = Join-Path $fixtureProvisioning 'Start-F2SandboxDiagnostics.ps1'
+    Add-Content -LiteralPath $bootstrapFixture -Value "`n# tampered bootstrap fixture" -Encoding utf8
+    Invoke-HostFixture -Description 'Reject altered bootstrap digest' -ExpectedExitCode 2
+    Copy-Item -LiteralPath $bootstrapPath -Destination $bootstrapFixture -Force
+
     $configText = Get-Content -LiteralPath $configPath -Raw
     Set-Content -LiteralPath $configPath -Value $configText.Replace('<ReadOnly>true</ReadOnly>', '<ReadOnly>false</ReadOnly>') -Encoding utf8
+    Set-FixtureWsbPin
     Invoke-HostFixture -Description 'Reject writable host mapping' -ExpectedExitCode 2
     Set-Content -LiteralPath $configPath -Value $configText -Encoding utf8
+    Set-FixtureWsbPin
 
-    Set-Content -LiteralPath $configPath -Value $configText.Replace(' -File C:\F2Input\Start-F2SandboxDiagnostics.ps1', ' -File C:\F2Input\Unreviewed.ps1') -Encoding utf8
+    Set-Content -LiteralPath $configPath -Value $configText.Replace('Start-F2SandboxDiagnostics.ps1', 'Unreviewed.ps1') -Encoding utf8
+    Set-FixtureWsbPin
     Invoke-HostFixture -Description 'Reject unreviewed LogonCommand' -ExpectedExitCode 2
+    Set-Content -LiteralPath $configPath -Value $configText -Encoding utf8
+    Set-FixtureWsbPin
+
+    Set-Content -LiteralPath $configPath -Value $configText.Replace(' -NoExit', '') -Encoding utf8
+    Set-FixtureWsbPin
+    Invoke-HostFixture -Description 'Reject startup command without fail-visible NoExit' -ExpectedExitCode 2
+    Set-Content -LiteralPath $configPath -Value $configText -Encoding utf8
+    Set-FixtureWsbPin
+
+    Set-Content -LiteralPath $configPath -Value ($configText + "`n<!-- tampered hash fixture -->") -Encoding utf8
+    Invoke-HostFixture -Description 'Reject startup configuration hash mismatch' -ExpectedExitCode 2
 
     Write-Output ("SUMMARY: {0} assertions, {1} failures" -f $assertions, $failures)
 } finally {

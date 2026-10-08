@@ -15,6 +15,6 @@
   <ClipboardRedirection>Disable</ClipboardRedirection>
   <MemoryInMB>8192</MemoryInMB>
   <LogonCommand>
-    <Command>powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File C:\F2Input\Start-F2SandboxDiagnostics.ps1</Command>
+    <Command>powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -NoExit -Command "Write-Host 'F2 DIAGNOSTIC STARTING - visible startup wrapper'; &amp; 'C:\F2Input\Start-F2SandboxDiagnostics.ps1'"</Command>
   </LogonCommand>
 </Configuration>
