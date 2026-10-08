@@ -2,22 +2,22 @@
 param(
     [Parameter(Mandatory)][string] $ZipPath,
     [Parameter(Mandatory)][string] $ExtractedRoot,
-    [Parameter(Mandatory)][string] $OutputPath,
-    [Parameter(Mandatory)][string] $ArchiveSha256
+    [Parameter(Mandatory)][string] $OutputPath
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $artifactZipPath = $ZipPath
 $artifactExtractedRoot = $ExtractedRoot
 $artifactOutputPath = $OutputPath
-$artifactArchiveSha256 = $ArchiveSha256
 . (Join-Path $PSScriptRoot 'inspect-zip.ps1')
 
+$expectedArchiveBytes = [long]54457774
+$expectedArchiveSha256 = '600737572a5e25541ba6f503e842a3717ba19afafa5474510a6ceff995a1d2d8'
 $root = [IO.Path]::GetFullPath($artifactExtractedRoot).TrimEnd('\')
 $zip = [IO.Path]::GetFullPath($artifactZipPath)
 if (-not (Test-Path -LiteralPath $root -PathType Container) -or -not (Test-Path -LiteralPath $zip -PathType Leaf)) { throw 'Archive and extracted root must exist.' }
 if (-not [string]::Equals((Assert-TempRoot $root), $root, [StringComparison]::OrdinalIgnoreCase)) { throw 'Extracted root is not canonical.' }
-if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -ne $artifactArchiveSha256.ToUpperInvariant()) { throw 'Archive SHA-256 does not match the supplied expected value.' }
+$observedArchiveSha256 = Assert-ArchiveIdentity $zip $expectedArchiveBytes $expectedArchiveSha256
 
 $zipStream = [IO.File]::Open($zip, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
 $archive = [IO.Compression.ZipArchive]::new($zipStream, [IO.Compression.ZipArchiveMode]::Read, $false)
@@ -71,10 +71,10 @@ $result = [ordered]@{
         source_commit = '75d3c6d996ed2331c80edcd8c3ebc947afc0f041'
         asset = 'GodotVoxelExtension.zip'
         official_url = 'https://github.com/Zylann/godot_voxel/releases/download/v1.7x/GodotVoxelExtension.zip'
-        expected_size_bytes = 54457774
+        expected_size_bytes = $expectedArchiveBytes
         observed_size_bytes = (Get-Item -LiteralPath $zip).Length
         github_reported_sha256 = '600737572a5e25541ba6f503e842a3717ba19afafa5474510a6ceff995a1d2d8'
-        observed_sha256 = $artifactArchiveSha256.ToLowerInvariant()
+        observed_sha256 = $observedArchiveSha256
         extracted_declared_bytes = [long](($files | Measure-Object -Property length -Sum).Sum)
     }
     archive_entries = @(@($directories | Sort-Object -CaseSensitive | ForEach-Object { [pscustomobject]@{path=$_;type='directory'} }) + @($files | Sort-Object path -CaseSensitive))
@@ -85,7 +85,7 @@ $result = [ordered]@{
         compatibility_minimum = ([regex]::Match($descriptorText, '(?m)^compatibility_minimum\s*=\s*"([^"]+)"').Groups[1].Value)
         mappings = @($mappings)
     }
-    extraction = [ordered]@{ file_count=$files.Count; directory_entry_count=$directories.Count; preflight_entry_count=($files.Count + $directories.Count); limits='P0.1-F1 enforced limits'; native_code_loaded=$false }
+    extraction = [ordered]@{ file_count=$files.Count; directory_entry_count=$directories.Count; preflight_entry_count=($files.Count + $directories.Count); limits='P0.1-F1 enforced limits' }
 }
 $parent = Split-Path -Parent $artifactOutputPath
 if (-not (Test-Path -LiteralPath $parent -PathType Container)) { [void][IO.Directory]::CreateDirectory($parent) }

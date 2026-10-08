@@ -6,6 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $script:Assertions = 0
 $script:Failures = [Collections.Generic.List[string]]::new()
+$script:TestCases = [Collections.Generic.List[string]]::new()
 $testBase = Join-Path ([IO.Path]::GetTempPath()) ('p0-1-f1-tests-' + [guid]::NewGuid().ToString())
 [void][IO.Directory]::CreateDirectory($testBase)
 
@@ -53,14 +54,38 @@ function Corrupt-CompressedPayload([string]$Path) {
     for ($i = 0; $i -lt $compressedLength; $i++) { $bytes[$payloadOffset + $i] = 0 }
     [IO.File]::WriteAllBytes($Path, $bytes)
 }
-function Expect-Reject([string]$Label, [string]$ZipPath, [scriptblock]$Extra = {}) {
+function Record-Test([string]$Label) {
+    $script:TestCases.Add($Label)
+}
+function Expect-Reject([string]$Label, [string]$ZipPath, [string]$ExpectedDiagnostic, [switch]$CheckDiskSpace) {
     $root = New-Root
-    $before = @(Get-ChildItem -LiteralPath $root -Force).Count
-    $rejected = $false
-    try { & $Extra; Get-ZipPreflight $ZipPath $root -SkipDiskSpaceCheck | Out-Null } catch { $rejected = $true }
-    Assert $rejected "$Label must fail preflight"
-    Assert (@(Get-ChildItem -LiteralPath $root -Force).Count -eq $before) "$Label must leave output root empty"
-    Remove-SafeInspectionRoot $root
+    try {
+        $before = @(Get-ChildItem -LiteralPath $root -Force).Count
+        $diagnostic = ''
+        try {
+            if ($CheckDiskSpace) { Get-ZipPreflight $ZipPath $root | Out-Null }
+            else { Get-ZipPreflight $ZipPath $root -SkipDiskSpaceCheck | Out-Null }
+        } catch { $diagnostic = $_.Exception.Message }
+        Assert ($diagnostic.IndexOf($ExpectedDiagnostic, [StringComparison]::OrdinalIgnoreCase) -ge 0) "$Label expected diagnostic '$ExpectedDiagnostic'; got '$diagnostic'"
+        Assert (@(Get-ChildItem -LiteralPath $root -Force).Count -eq $before) "$Label must leave output root empty"
+        Record-Test $Label
+    } finally { if (Test-Path -LiteralPath $root) { Remove-SafeInspectionRoot $root } }
+}
+function Expect-ExtractionReject([string]$Label, [string]$ZipPath, [string]$ExpectedPattern, [string]$TargetPath) {
+    $root = New-Root
+    try {
+        $diagnostic = ''
+        try { Invoke-SafeZipExtract $ZipPath $root -SkipDiskSpaceCheck | Out-Null } catch { $diagnostic = $_.Exception.Message }
+        Assert ($diagnostic -match $ExpectedPattern) "$Label expected rejection matching '$ExpectedPattern'; got '$diagnostic'"
+        Assert (-not (Test-Path -LiteralPath (Join-Path $root $TargetPath))) "$Label must not publish its final target"
+        Record-Test $Label
+    } finally { if (Test-Path -LiteralPath $root) { Remove-SafeInspectionRoot $root } }
+}
+function Expect-IdentityReject([string]$Label, [string]$Path, [long]$ExpectedBytes, [string]$ExpectedHash, [string]$ExpectedDiagnostic) {
+    $diagnostic = ''
+    try { Assert-ArchiveIdentity $Path $ExpectedBytes $ExpectedHash | Out-Null } catch { $diagnostic = $_.Exception.Message }
+    Assert ($diagnostic.IndexOf($ExpectedDiagnostic, [StringComparison]::OrdinalIgnoreCase) -ge 0) "$Label expected diagnostic '$ExpectedDiagnostic'; got '$diagnostic'"
+    Record-Test $Label
 }
 
 try {
@@ -70,7 +95,38 @@ try {
     Assert ($result.Entries.Count -eq 3) 'valid archive entry count'
     Assert ((Get-Content -Raw (Join-Path $goodRoot 'folder/readme.txt')) -eq 'safe payload') 'valid nested content'
     Assert ((Get-Content -Raw (Join-Path $goodRoot 'top.txt')) -eq 'ok') 'valid top-level content'
+    Record-Test 'valid files and directories extract'
     Remove-SafeInspectionRoot $goodRoot
+
+    $goodBytes = (Get-Item -LiteralPath $good).Length
+    $goodHash = (Get-FileHash -LiteralPath $good -Algorithm SHA256).Hash.ToLowerInvariant()
+    Assert ((Assert-ArchiveIdentity $good $goodBytes $goodHash) -eq $goodHash) 'pinned identity checker accepts exact size and SHA-256'
+    Record-Test 'archive identity accepts exact size and SHA-256'
+    Expect-IdentityReject 'archive identity rejects wrong size' $good ($goodBytes + 1) $goodHash 'Archive size mismatch'
+    Expect-IdentityReject 'archive identity rejects wrong SHA-256' $good $goodBytes ('0' * 64) 'Archive SHA-256 mismatch'
+    $manifestRoot = New-Root
+    $manifestOutput = Join-Path $testBase 'must-not-create-manifest.json'
+    try {
+        $manifestDiagnostic = ''
+        try { & (Join-Path $PSScriptRoot '..\write-artifact-manifest.ps1') -ZipPath $good -ExtractedRoot $manifestRoot -OutputPath $manifestOutput } catch { $manifestDiagnostic = $_.Exception.Message }
+        Assert ($manifestDiagnostic -like '*Archive size mismatch*') "manifest writer expected pinned-size rejection; got '$manifestDiagnostic'"
+        Assert (-not (Test-Path -LiteralPath $manifestOutput)) 'manifest writer must not produce success evidence for unpinned bytes'
+        Record-Test 'manifest writer refuses unpinned archive bytes'
+    } finally { if (Test-Path -LiteralPath $manifestRoot) { Remove-SafeInspectionRoot $manifestRoot } }
+
+    $oldArchiveLimit = $script:ZipLimits.MaxArchiveBytes
+    try {
+        $script:ZipLimits.MaxArchiveBytes = $goodBytes - 1
+        Expect-Reject 'archive ZIP-size cap' $good 'Archive exceeds configured maximum ZIP size'
+    } finally { $script:ZipLimits.MaxArchiveBytes = $oldArchiveLimit }
+
+    $diskRoot = New-Root
+    $diskDrive = [System.IO.DriveInfo]::new([System.IO.Path]::GetPathRoot($diskRoot))
+    $oldMinimumFree = $script:ZipLimits.MinFreeBytes
+    try {
+        $script:ZipLimits.MinFreeBytes = $diskDrive.AvailableFreeSpace + 1
+        Expect-Reject 'minimum free-disk-space gate' $good 'Insufficient free disk space' -CheckDiskSpace
+    } finally { $script:ZipLimits.MinFreeBytes = $oldMinimumFree; Remove-SafeInspectionRoot $diskRoot }
 
     foreach ($case in @(
         @{ Name='traversal'; Path='../escape.txt'; Content='bad' },
@@ -85,95 +141,106 @@ try {
         @{ Name='non-nfc'; Path="e$([char]0x0301).txt"; Content='bad' }
     )) {
         $archive = New-Zip ($case.Name + '.zip') { param($z) Add-Entry $z $case.Path $case.Content }
-        Expect-Reject $case.Name $archive
+        $expected = switch ($case.Name) {
+            'traversal' { 'Empty or traversal component rejected' }
+            'absolute' { 'Absolute or UNC path rejected' }
+            'backslash' { 'Backslash path separator rejected' }
+            'drive' { 'Drive-qualified path rejected' }
+            'unc' { 'Absolute or UNC path rejected' }
+            'ads' { 'Colon or alternate data stream rejected' }
+            'reserved' { 'Reserved Windows device name rejected' }
+            'trailing-dot' { 'Ambiguous trailing dot/space rejected' }
+            'empty-component' { 'Empty or traversal component rejected' }
+            'non-nfc' { 'Non-NFC Unicode component rejected' }
+        }
+        Expect-Reject $case.Name $archive $expected
     }
 
     $duplicate = New-Zip 'duplicate.zip' { param($z) Add-Entry $z 'same.txt' '1'; Add-Entry $z 'same.txt' '2' }
-    Expect-Reject 'duplicate names' $duplicate
+    Expect-Reject 'duplicate names' $duplicate 'Duplicate or case-insensitive path collision'
     $caseCollision = New-Zip 'case.zip' { param($z) Add-Entry $z 'Alpha.txt' '1'; Add-Entry $z 'alpha.TXT' '2' }
-    Expect-Reject 'case collision' $caseCollision
+    Expect-Reject 'case collision' $caseCollision 'Duplicate or case-insensitive path collision'
     $unicodeCollision = New-Zip 'unicode-collision.zip' { param($z) Add-Entry $z "é.txt" '1'; Add-Entry $z "e$([char]0x0301).txt" '2' }
-    Expect-Reject 'Unicode normalization collision' $unicodeCollision
+    Expect-Reject 'Unicode normalization collision' $unicodeCollision 'Non-NFC Unicode component rejected'
 
     $symlink = New-Zip 'symlink.zip' { param($z) $e=$z.CreateEntry('link'); $e.ExternalAttributes=([int](0xA000 -shl 16)); $w=[IO.StreamWriter]::new($e.Open()); $w.Write('../target'); $w.Dispose() }
-    Expect-Reject 'Unix symlink' $symlink
+    Expect-Reject 'Unix symlink' $symlink 'Link or special Unix file type rejected'
     $reparse = New-Zip 'reparse.zip' { param($z) $e=$z.CreateEntry('junction'); $e.ExternalAttributes=0x400; $w=[IO.StreamWriter]::new($e.Open()); $w.Write('x'); $w.Dispose() }
-    Expect-Reject 'DOS reparse point' $reparse
+    Expect-Reject 'DOS reparse point' $reparse 'Reparse-point attribute rejected'
     $device = New-Zip 'device.zip' { param($z) $e=$z.CreateEntry('device'); $e.ExternalAttributes=([int](0x6000 -shl 16)); $w=[IO.StreamWriter]::new($e.Open()); $w.Dispose() }
-    Expect-Reject 'Unix device' $device
+    Expect-Reject 'Unix device' $device 'Link or special Unix file type rejected'
 
     $prefixConflict = New-Zip 'prefix.zip' { param($z) Add-Entry $z 'node' 'file'; Add-Entry $z 'node/child.txt' 'child' }
-    Expect-Reject 'file/directory prefix conflict' $prefixConflict
+    Expect-Reject 'file/directory prefix conflict' $prefixConflict 'File/directory prefix conflict'
     $countZip = New-Zip 'count.zip' { param($z) Add-Entry $z 'one' '1'; Add-Entry $z 'two' '2'; Add-Entry $z 'three' '3' }
     $oldCount = $script:ZipLimits.MaxEntries
-    try { $script:ZipLimits.MaxEntries = 2; Expect-Reject 'entry count cap' $countZip } finally { $script:ZipLimits.MaxEntries = $oldCount }
+    try { $script:ZipLimits.MaxEntries = 2; Expect-Reject 'entry count cap' $countZip 'configured maximum entry count' } finally { $script:ZipLimits.MaxEntries = $oldCount }
     $sizeZip = New-Zip 'large.zip' { param($z) Add-Entry $z 'large.bin' ('x' * 512) }
     $oldSize = $script:ZipLimits.MaxFileBytes
-    try { $script:ZipLimits.MaxFileBytes = 128; Expect-Reject 'individual size cap' $sizeZip } finally { $script:ZipLimits.MaxFileBytes = $oldSize }
+    try { $script:ZipLimits.MaxFileBytes = 128; Expect-Reject 'individual size cap' $sizeZip 'per-file expanded-size limit' } finally { $script:ZipLimits.MaxFileBytes = $oldSize }
     $totalZip = New-Zip 'aggregate.zip' { param($z) Add-Entry $z 'a.bin' ('x' * 80); Add-Entry $z 'b.bin' ('y' * 80) }
     $oldTotal = $script:ZipLimits.MaxTotalBytes
-    try { $script:ZipLimits.MaxTotalBytes = 128; Expect-Reject 'aggregate size cap' $totalZip } finally { $script:ZipLimits.MaxTotalBytes = $oldTotal }
+    try { $script:ZipLimits.MaxTotalBytes = 128; Expect-Reject 'aggregate size cap' $totalZip 'aggregate expanded-size limit' } finally { $script:ZipLimits.MaxTotalBytes = $oldTotal }
     $ratioZip = New-Zip 'ratio.zip' { param($z) Add-Entry $z 'bomb.txt' ('a' * 10000) }
-    Expect-Reject 'expansion ratio cap' $ratioZip
+    Expect-Reject 'expansion ratio cap' $ratioZip 'expansion-ratio limit'
 
     $mismatchZip = New-Zip 'mismatch.zip' { param($z) Add-Entry $z 'mismatch.txt' 'claimed-size-mismatch' }
     Set-DeclaredUncompressedSize $mismatchZip 64
-    $mismatchRoot = New-Root
-    $rejected = $false
-    try { Invoke-SafeZipExtract $mismatchZip $mismatchRoot -SkipDiskSpaceCheck | Out-Null } catch { $rejected = $true }
-    Assert $rejected 'declared/actual size mismatch rejected during streaming'
-    Assert (-not (Test-Path -LiteralPath (Join-Path $mismatchRoot 'mismatch.txt'))) 'mismatched file never published'
-    Remove-SafeInspectionRoot $mismatchRoot
+    Expect-ExtractionReject 'declared/actual size mismatch' $mismatchZip 'Declared/actual size mismatch' 'mismatch.txt'
 
     $corruptZip = New-Zip 'corrupt.zip' { param($z) Add-Entry $z 'corrupt.txt' ('compressible data ' * 128) }
     Corrupt-CompressedPayload $corruptZip
-    $corruptRoot = New-Root
-    $rejected = $false
-    try { Invoke-SafeZipExtract $corruptZip $corruptRoot -SkipDiskSpaceCheck | Out-Null } catch { $rejected = $true }
-    Assert $rejected 'corrupted compressed stream rejected during extraction'
-    Assert (-not (Test-Path -LiteralPath (Join-Path $corruptRoot 'corrupt.txt'))) 'corrupt file never published'
-    Remove-SafeInspectionRoot $corruptRoot
+    Expect-ExtractionReject 'corrupted compressed stream' $corruptZip '(?i)(Safe extraction aborted.*(compressed|invalid|end of stream)|Declared/actual size mismatch)' 'corrupt.txt'
 
     $existing = New-Root
-    [IO.File]::WriteAllText((Join-Path $existing 'already.txt'), 'keep')
-    $rejected = $false
-    try { Get-ZipPreflight $good $existing -SkipDiskSpaceCheck | Out-Null } catch { $rejected = $true }
-    Assert $rejected 'pre-existing output rejected'
-    Assert ((Get-Content -Raw (Join-Path $existing 'already.txt')) -eq 'keep') 'pre-existing output preserved'
-    Remove-SafeInspectionRoot $existing
+    try {
+        [IO.File]::WriteAllText((Join-Path $existing 'already.txt'), 'keep')
+        $diagnostic = ''
+        try { Get-ZipPreflight $good $existing -SkipDiskSpaceCheck | Out-Null } catch { $diagnostic = $_.Exception.Message }
+        Assert ($diagnostic -like '*Destination root must be empty*') "pre-existing output expected empty-root rejection; got '$diagnostic'"
+        Assert ((Get-Content -Raw (Join-Path $existing 'already.txt')) -eq 'keep') 'pre-existing output preserved'
+        Record-Test 'pre-existing output rejected and preserved'
+    } finally { if (Test-Path -LiteralPath $existing) { Remove-SafeInspectionRoot $existing } }
 
     $outside = Join-Path $testBase ('not-temp-' + [guid]::NewGuid().ToString())
     [void][IO.Directory]::CreateDirectory($outside)
-    $rejected = $false
-    try { Remove-SafeInspectionRoot $outside } catch { $rejected = $true }
-    Assert $rejected 'cleanup refuses incorrect root'
-    Remove-Item -LiteralPath $outside -Force
+    try {
+        $diagnostic = ''
+        try { Remove-SafeInspectionRoot $outside } catch { $diagnostic = $_.Exception.Message }
+        Assert ($diagnostic -like '*Root must be a direct child*') "cleanup wrong-root expected direct-child rejection; got '$diagnostic'"
+        Record-Test 'cleanup refuses incorrect root'
+    } finally { if (Test-Path -LiteralPath $outside) { Remove-Item -LiteralPath $outside -Force } }
 
     $linkRoot = New-Root
     $linkTarget = Join-Path $testBase ('link-target-' + [guid]::NewGuid().ToString())
     [void][IO.Directory]::CreateDirectory($linkTarget)
-    $linkCreated = $false
-    try { New-Item -ItemType Junction -Path (Join-Path $linkRoot 'link') -Target $linkTarget | Out-Null; $linkCreated = $true } catch { }
-    if ($linkCreated) {
-        $rejected = $false
-        try { Remove-SafeInspectionRoot $linkRoot } catch { $rejected = $true }
-        Assert $rejected 'cleanup refuses reparse point'
-        Remove-Item -LiteralPath (Join-Path $linkRoot 'link') -Force
-        Remove-SafeInspectionRoot $linkRoot
-    } else {
-        $script:Failures.Add('cleanup reparse-point test unavailable: symbolic-link creation was denied')
+    try {
+        try { New-Item -ItemType Junction -Path (Join-Path $linkRoot 'link') -Target $linkTarget | Out-Null } catch { throw "Required cleanup reparse-point fixture unavailable: $($_.Exception.Message)" }
+        $diagnostic = ''
+        try { Remove-SafeInspectionRoot $linkRoot } catch { $diagnostic = $_.Exception.Message }
+        Assert ($diagnostic -like '*Cleanup refused because a reparse point exists*') "cleanup reparse fixture expected reparse-point refusal; got '$diagnostic'"
+        Assert (Test-Path -LiteralPath (Join-Path $linkRoot 'link')) 'cleanup refusal preserves the junction'
+        Record-Test 'cleanup refuses reparse point'
+    } finally {
+        $junction = Join-Path $linkRoot 'link'
+        if (Test-Path -LiteralPath $junction) { Remove-Item -LiteralPath $junction -Force }
+        if (Test-Path -LiteralPath $linkRoot) { Remove-SafeInspectionRoot $linkRoot }
+        if (Test-Path -LiteralPath $linkTarget) { Remove-Item -LiteralPath $linkTarget -Force }
     }
-    Remove-Item -LiteralPath $linkTarget -Force
 
     $escapeRoot = Join-Path $testBase 'not-a-guid-root'
     [void][IO.Directory]::CreateDirectory($escapeRoot)
-    $rejected = $false
-    try { Get-ZipPreflight $good $escapeRoot -SkipDiskSpaceCheck | Out-Null } catch { $rejected = $true }
-    Assert $rejected 'destination containment root validation'
-    Remove-Item -LiteralPath $escapeRoot -Force
+    try {
+        $diagnostic = ''
+        try { Get-ZipPreflight $good $escapeRoot -SkipDiskSpaceCheck | Out-Null } catch { $diagnostic = $_.Exception.Message }
+        Assert ($diagnostic -like '*Root must be a direct child*') "destination root expected containment rejection; got '$diagnostic'"
+        Record-Test 'destination root confinement'
+    } finally { if (Test-Path -LiteralPath $escapeRoot) { Remove-Item -LiteralPath $escapeRoot -Force } }
 
     "Assertions: $script:Assertions"
     "Failures: $($script:Failures.Count)"
+    "Test cases: $($script:TestCases.Count)"
+    $script:TestCases | ForEach-Object { "PASS: $_" }
     if ($script:Failures.Count -gt 0) { $script:Failures | ForEach-Object { "FAIL: $_" }; exit 1 }
     exit 0
 } catch {

@@ -23,6 +23,15 @@ function Get-CanonicalPath([string] $Path) {
     [System.IO.Path]::GetFullPath($Path).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 }
 
+function Assert-ArchiveIdentity([string] $Path, [long] $ExpectedBytes, [string] $ExpectedSha256) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Archive identity check failed: file not found: $Path" }
+    $observedBytes = (Get-Item -LiteralPath $Path).Length
+    if ($observedBytes -ne $ExpectedBytes) { throw "Archive size mismatch: expected $ExpectedBytes bytes, observed $observedBytes." }
+    $observedSha256 = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    if (-not [string]::Equals($observedSha256, $ExpectedSha256.ToLowerInvariant(), [StringComparison]::Ordinal)) { throw "Archive SHA-256 mismatch: expected $ExpectedSha256, observed $observedSha256." }
+    return $observedSha256
+}
+
 function Assert-TempRoot([string] $Root, [switch] $RequireEmpty) {
     if ([string]::IsNullOrWhiteSpace($Root)) { throw 'Destination root is required.' }
     $canonical = Get-CanonicalPath $Root
@@ -83,17 +92,17 @@ function ConvertTo-SafeZipPath([string] $Name) {
 function Get-ZipPreflight([string] $Zip, [string] $Root, [switch] $SkipDiskSpaceCheck, [switch] $KeepOpen) {
     if (-not (Test-Path -LiteralPath $Zip -PathType Leaf)) { throw "ZIP file does not exist: $Zip" }
     $zipItem = Get-Item -LiteralPath $Zip
-    if ($zipItem.Length -gt $script:ZipLimits.MaxArchiveBytes) { throw 'Archive exceeds 100 MiB limit.' }
+    if ($zipItem.Length -gt $script:ZipLimits.MaxArchiveBytes) { throw 'Archive exceeds configured maximum ZIP size.' }
     $canonicalRoot = Assert-TempRoot $Root -RequireEmpty
     $drive = [System.IO.DriveInfo]::new([System.IO.Path]::GetPathRoot($canonicalRoot))
-    if (-not $SkipDiskSpaceCheck -and $drive.AvailableFreeSpace -lt $script:ZipLimits.MinFreeBytes) { throw 'Less than 2.5 GiB free disk space.' }
+    if (-not $SkipDiskSpaceCheck -and $drive.AvailableFreeSpace -lt $script:ZipLimits.MinFreeBytes) { throw "Insufficient free disk space: available $($drive.AvailableFreeSpace) bytes, required $($script:ZipLimits.MinFreeBytes) bytes." }
 
     $stream = [System.IO.File]::Open($zipItem.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     $archive = $null
     $completed = $false
     try {
         $archive = [System.IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Read, $false)
-        if ($archive.Entries.Count -gt $script:ZipLimits.MaxEntries) { throw 'Archive exceeds 20,000 entry limit.' }
+        if ($archive.Entries.Count -gt $script:ZipLimits.MaxEntries) { throw 'Archive exceeds configured maximum entry count.' }
         $seen = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::OrdinalIgnoreCase)
         $entries = [Collections.Generic.List[object]]::new()
         [long]$total = 0
@@ -105,12 +114,12 @@ function Get-ZipPreflight([string] $Zip, [string] $Root, [switch] $SkipDiskSpace
             if ($seen.ContainsKey($path)) { throw "Duplicate or case-insensitive path collision: $path and $($seen[$path])" }
             $seen.Add($path, $entry.FullName)
             if (-not $isDir) {
-                if ($entry.Length -gt $script:ZipLimits.MaxFileBytes) { throw "File exceeds 512 MiB limit: $path" }
+                if ($entry.Length -gt $script:ZipLimits.MaxFileBytes) { throw "File exceeds configured per-file expanded-size limit: $path" }
                 if ([long]$entry.Length -gt ([long]::MaxValue - $total)) { throw 'Declared aggregate size overflow.' }
                 $total += [long]$entry.Length
-                if ($total -gt $script:ZipLimits.MaxTotalBytes) { throw 'Archive exceeds 2 GiB aggregate expanded size limit.' }
+                if ($total -gt $script:ZipLimits.MaxTotalBytes) { throw 'Archive exceeds configured aggregate expanded-size limit.' }
                 if ($entry.Length -gt 0) {
-                    if ($entry.CompressedLength -le 0 -or ($entry.Length / [double]$entry.CompressedLength) -gt $script:ZipLimits.MaxExpansionRatio) { throw "File exceeds 200:1 expansion ratio: $path" }
+                    if ($entry.CompressedLength -le 0 -or ($entry.Length / [double]$entry.CompressedLength) -gt $script:ZipLimits.MaxExpansionRatio) { throw "File exceeds configured expansion-ratio limit: $path" }
                 }
             }
             $target = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($canonicalRoot, ($path -replace '/', [System.IO.Path]::DirectorySeparatorChar)))

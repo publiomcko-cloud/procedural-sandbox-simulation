@@ -375,7 +375,6 @@
     "file_count": 34,
     "directory_entry_count": 0,
     "preflight_entry_count": 34,
-    "limits": "P0.1-F1 enforced limits",
-    "native_code_loaded": false
+    "limits": "P0.1-F1 enforced limits"
   }
 }
