@@ -15,8 +15,8 @@ $bootstrapName = 'Start-F2SandboxDiagnostics.ps1'
 $wrapperName = 'F2-Guest-Diagnostic.cmd'
 $expectedDiagnosticSha256 = '78fa1dd2d0bc691cecdb5089ee409c71080d30fe0f0e928b2225c7d3bc745d9f'
 $expectedBootstrapSha256 = 'ac8f5952b4138c774a5193f1b5eba0abef6abca961a9573e208296812933ab0e'
-$expectedWsbSha256 = 'ecbf5047d4c226fa250488b146da2f32253e461b892c13d86d17471485e18acd'
-$expectedWrapperSha256 = 'f93c0890d595093d25891b1a6dcaca105f46c2aec418c3f11bed3187e4c5b822'
+$expectedWsbSha256 = '368d5bed7093504e7cbfbae3fc830b536b5f8f42e12f363537b2ac8697ece652'
+$expectedWrapperSha256 = 'a53cbc9a0c5565bbf182c794f31d4ba24a8a94bd181e11e0bdf15e55aa75ca89'
 $previousReviewedBootstrapSha256 = @(
     '2bbb945e86274b98eda6b2c08eae156c0d2851f114c895f77505576991600093'
     '4a28b6d8a6b56239da131204316f441ab3a486d9bcb9a7bb7e3b4c77e36800f3'
@@ -183,7 +183,7 @@ try {
 
     [xml] $config = Get-Content -LiteralPath $wsbTemplate -Raw
 
-    $logonCommand = 'cmd.exe /k C:\F2Input\F2-Guest-Diagnostic.cmd'
+    $logonCommand = 'C:\F2Input\F2-Guest-Diagnostic.cmd'
     $configDescription = Assert-PreparerSandboxConfiguration -Configuration $config -Automation ([bool]$Automation) -ApprovedHostFolder $approvedHostFolder -SandboxInputFolder $sandboxInputFolder -ExpectedCommand $logonCommand
     if ($Automation) {
         $wsbHash = Get-NormalizedScriptHash -LiteralPath $wsbTemplate
