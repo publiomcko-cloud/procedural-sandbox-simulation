@@ -21,7 +21,7 @@ function Assert-True {
 
 function Invoke-HostFixture {
     param([string] $Description, [int] $ExpectedExitCode)
-    $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $fixtureProvisioning 'Prepare-F2SandboxInputs.ps1') -Automation 2>&1 | Out-String
+    $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $fixtureProvisioning 'Prepare-F2SandboxInputs.ps1') -Automation -SourceOnly 2>&1 | Out-String
     $actualExitCode = $LASTEXITCODE
     if ($actualExitCode -eq $ExpectedExitCode) {
         Assert-True $true ("{0}: exit {1}" -f $Description, $actualExitCode)
@@ -224,6 +224,8 @@ try {
     Assert-True ($expectedWsbHash -eq (Get-NormalizedSourceHash $configPath)) 'Preparer pin matches updated startup configuration'
     Assert-True ($launcherText.Contains($expectedBootstrapHash) -and $launcherText.Contains($expectedWsbHash)) 'Launcher pins updated bootstrap and startup configuration'
 
+    $sourceOnlyGuardOutput = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $fixtureProvisioning 'Prepare-F2SandboxInputs.ps1') -Automation -SourceOnly -PrepareInputs 2>&1 | Out-String
+    Assert-True ($LASTEXITCODE -eq 2 -and $sourceOnlyGuardOutput.Contains('SourceOnly is restricted')) 'SourceOnly fixture cannot stage mapped host inputs'
     Invoke-HostFixture -Description 'Reviewed offline automation template and pinned scripts' -ExpectedExitCode 0
 
     $diagnostic = Join-Path $fixtureProvisioning 'Get-F2SandboxReadiness.ps1'
