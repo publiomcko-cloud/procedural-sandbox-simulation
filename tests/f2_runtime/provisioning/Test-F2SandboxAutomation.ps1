@@ -45,7 +45,7 @@ function Set-FixtureWsbPin {
     $fixturePreparer = Join-Path $fixtureProvisioning 'Prepare-F2SandboxInputs.ps1'
     $hash = Get-NormalizedSourceHash -LiteralPath $fixtureWsb
     $preparerText = [IO.File]::ReadAllText($fixturePreparer)
-    $pattern = "(?m)^\`$expectedWsbSha256 = '[^']+'$"
+    $pattern = '(?m)^[ \t]*\$expectedWsbSha256[ \t]*=[ \t]*''[0-9a-f]{64}''[ \t]*$'
     $match = [regex]::Match($preparerText, $pattern)
     if (-not $match.Success) { throw 'Fixture preparer SHA pin was not found.' }
     $replacement = '$expectedWsbSha256 = ''{0}''' -f $hash
@@ -147,10 +147,13 @@ try {
     $launcherPath = Join-Path $sourceRoot 'Start-F2SandboxReadiness.ps1'
     $launcherText = Get-Content $launcherPath -Raw
     $sourcePreparerText = Get-Content (Join-Path $sourceRoot 'Prepare-F2SandboxInputs.ps1') -Raw
-    $expectedBootstrapHash = [regex]::Match($sourcePreparerText, "(?m)^\`$expectedBootstrapSha256 = '([0-9a-f]{64})'").Groups[1].Value
-    $expectedWsbHash = [regex]::Match($sourcePreparerText, "(?m)^\`$expectedWsbSha256 = '([0-9a-f]{64})'").Groups[1].Value
-    $launcherCommandMatch = [regex]::Match($launcherText, "(?m)^\s*\`$expectedCommand = '(.*)'$")
-    $preparerCommandMatch = [regex]::Match((Get-Content (Join-Path $sourceRoot 'Prepare-F2SandboxInputs.ps1') -Raw), "(?m)^\s*\`$logonCommand = '(.*)'$")
+    $bootstrapPinMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$expectedBootstrapSha256[ \t]*=[ \t]*''([0-9a-f]{64})''[ \t]*$')
+    $wsbPinMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$expectedWsbSha256[ \t]*=[ \t]*''([0-9a-f]{64})''[ \t]*$')
+    Assert-True ($bootstrapPinMatch.Success -and $wsbPinMatch.Success) 'Bootstrap and WSB SHA256 pins are declared and anchored in the production preparer'
+    $expectedBootstrapHash = $bootstrapPinMatch.Groups[1].Value
+    $expectedWsbHash = $wsbPinMatch.Groups[1].Value
+    $launcherCommandMatch = [regex]::Match($launcherText, '(?m)^[ \t]*\$expectedCommand[ \t]*=[ \t]*''([^']*)''[ \t]*$')
+    $preparerCommandMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$logonCommand[ \t]*=[ \t]*''([^']*)''[ \t]*$')
     Assert-True ($launcherCommandMatch.Success -and $preparerCommandMatch.Success) 'Both production validators declare an exact LogonCommand'
     if ($launcherCommandMatch.Success -and $preparerCommandMatch.Success) {
         $launcherExpectedCommand = $launcherCommandMatch.Groups[1].Value.Replace("''", "'")
@@ -187,12 +190,13 @@ try {
 
         $modifiedConfigs = @(
             @{ Name = 'writable mapping'; Xml = [xml]($startupConfig.OuterXml.Replace('<ReadOnly>true</ReadOnly>', '<ReadOnly>false</ReadOnly>')) }
-            @{ Name = 'unreviewed command'; Xml = [xml]($startupConfig.OuterXml.Replace('Start-F2SandboxDiagnostics.ps1', 'Unreviewed.ps1')) }
+            @{ Name = 'unreviewed command'; Xml = [xml]($startupConfig.OuterXml.Replace('F2-Guest-Diagnostic.cmd', 'Unreviewed.cmd')) }
             @{ Name = 'changed persistent CMD switch'; Xml = [xml]($startupConfig.OuterXml.Replace('cmd.exe /k', 'cmd.exe /c')) }
             @{ Name = 'modified CMD wrapper path'; Xml = [xml]($startupConfig.OuterXml.Replace('F2-Guest-Diagnostic.cmd', 'Unreviewed-Guest.cmd')) }
             @{ Name = 'additional LogonCommand'; Xml = [xml]($startupConfig.OuterXml.Replace('</LogonCommand>', '<Command>unreviewed.exe</Command></LogonCommand>')) }
         )
         foreach ($modified in $modifiedConfigs) {
+            Assert-True ($modified.Xml.OuterXml -ne $startupConfig.OuterXml) ("Negative fixture actually modifies approved XML: {0}" -f $modified.Name)
             $launcherRejected = $false
             $preparerRejected = $false
             try { Assert-LauncherAutomationConfiguration -Configuration $modified.Xml -ExpectedCommand $launcherExpectedCommand -ApprovedHostFolder 'C:\F2-Approved-Inputs' | Out-Null } catch { $launcherRejected = $true }
@@ -210,7 +214,9 @@ try {
         [IO.File]::WriteAllText($configPath, $approvedConfigText, [Text.UTF8Encoding]::new($false))
     }
 
-    $expectedWrapperHash = [regex]::Match($sourcePreparerText, "(?m)^\`$expectedWrapperSha256 = '([0-9a-f]{64})'").Groups[1].Value
+    $wrapperPinMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$expectedWrapperSha256[ \t]*=[ \t]*''([0-9a-f]{64})''[ \t]*$')
+    Assert-True $wrapperPinMatch.Success 'CMD wrapper SHA256 pin is declared and anchored in the production preparer'
+    $expectedWrapperHash = $wrapperPinMatch.Groups[1].Value
     Assert-True ($expectedWrapperHash -eq (Get-NormalizedSourceHash $wrapperPath)) 'Preparer pin matches approved guest CMD wrapper'
     Assert-True ($launcherText.Contains($expectedWrapperHash)) 'Launcher pins same approved guest CMD SHA256'
     Assert-True ($sourcePreparerText.Contains('@($diagnosticName, $bootstrapName, $wrapperName)') -and $launcherText.Contains('@($diagnosticName, $bootstrapName, $wrapperName)')) 'Both host validators require exactly three staged input names'
