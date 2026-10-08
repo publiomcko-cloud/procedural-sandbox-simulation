@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param()
+param(
+    [switch] $Summary
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -21,8 +23,11 @@ $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 $checks.Add((Add-Check -Name 'guest_identity' -Status PASS -Detail ("{0}\\{1}; OS={2}; build={3}; current_user_admin={4}" -f $machine.Domain, $identity.Name, $os.Caption, $os.BuildNumber, $isAdmin)))
 
-$whoami = & "$env:WINDIR\System32\whoami.exe" /all 2>&1 | Out-String
-$checks.Add((Add-Check -Name 'token_groups' -Status $(if ($isAdmin) { 'FAIL' } else { 'PASS' }) -Detail $whoami.Trim()))
+$whoamiGroups = & "$env:WINDIR\System32\whoami.exe" /groups /fo csv /nh 2>&1 | Out-String
+$whoamiExitCode = $LASTEXITCODE
+$adminGroupRow = ($whoamiGroups -split "`r?`n" | Where-Object { $_ -match 'S-1-5-32-544' } | Select-Object -First 1)
+$tokenStatus = if ($isAdmin) { 'FAIL' } elseif ($whoamiExitCode -ne 0) { 'UNKNOWN' } else { 'PASS' }
+$checks.Add((Add-Check -Name 'token_groups' -Status $tokenStatus -Detail ("WindowsPrincipal.IsInRole(Administrators)={0}; whoami_exit={1}; Administrators row={2}" -f $isAdmin, $whoamiExitCode, $(if ($adminGroupRow) { $adminGroupRow.Trim() } else { 'not present in token groups' }))))
 
 try {
     if (-not (Get-Command Get-NetAdapter -ErrorAction SilentlyContinue) -or -not (Get-Command Get-NetRoute -ErrorAction SilentlyContinue)) {
@@ -93,11 +98,44 @@ $result = [pscustomobject]@{
     diagnostic = 'F2 Windows Sandbox readiness; diagnostics only'
     timestamp_utc = [DateTime]::UtcNow.ToString('o')
     computer = $machine.Name
+    identity = $identity.Name
+    is_administrator = $isAdmin
     checks = @($checks)
     overall = if (@($checks | Where-Object { $_.status -eq 'FAIL' }).Count) { 'FAIL' } else { 'INCOMPLETE' }
     native_code_executed = $false
 }
-$result | ConvertTo-Json -Depth 8
+
+if ($Summary) {
+    $networkCheck = $checks | Where-Object { $_.name -eq 'effective_network_observation' } | Select-Object -First 1
+    $mappingCheck = $checks | Where-Object { $_.name -eq 'read_only_mapping' } | Select-Object -First 1
+    $graphicsCheck = $checks | Where-Object { $_.name -eq 'graphics_inventory' } | Select-Object -First 1
+    $resourceCheck = $checks | Where-Object { $_.name -eq 'resource_and_supervision_limits' } | Select-Object -First 1
+    $networkObservation = $networkCheck.detail | ConvertFrom-Json
+    $graphicsObservation = $graphicsCheck.detail | ConvertFrom-Json
+    $graphicsNames = @($graphicsObservation.adapters | ForEach-Object { $_.Name } | Where-Object { $_ })
+    $summaryLines = @(
+        ('Identity: {0}' -f $identity.Name),
+        ('Standard-user token: {0} (Administrators enabled: {1}); whoami group row: {2}' -f $checks[1].status, $isAdmin, $(if ($adminGroupRow) { $adminGroupRow.Trim() } else { 'Administrators SID not present' })),
+        ('Network: {0} (active adapters={1}; IPv4/IPv6 default routes={2})' -f $networkCheck.status, @($networkObservation.active_adapters).Count, @($networkObservation.default_routes).Count),
+        ('Read-only mapped input: {0}' -f $mappingCheck.status),
+        ('Graphics: {0} ({1}); Godot GL Compatibility: UNKNOWN' -f $graphicsCheck.status, $(if ($graphicsNames.Count) { $graphicsNames -join ', ' } else { 'no adapter identified' })),
+        ('CPU/disk/time supervision: {0}' -f $resourceCheck.status),
+        'Evidence export/discard: UNKNOWN (owner confirmation required)',
+        'F2 native runtime: NOT RUN'
+    )
+    [pscustomobject]@{
+        identity = $identity.Name
+        is_administrator = $isAdmin
+        token_status = $checks[1].status
+        network_status = $networkCheck.status
+        mapping_status = $mappingCheck.status
+        overall = $result.overall
+        summary = $summaryLines
+        native_code_executed = $false
+    } | ConvertTo-Json -Depth 4 -Compress
+} else {
+    $result | ConvertTo-Json -Depth 8
+}
 
 if ($result.overall -eq 'FAIL') { exit 2 }
 exit 0
