@@ -22,3 +22,12 @@ Outcome: PASS_RESEARCH_WITH_CONDITIONS. ADR-0002 remains PROPOSED/DEFERRED; no b
 - PR #12 independent corrected F0 PASS_TECHNICAL (documentation only), merged as c39edf72e1ff8d660eb4b96ac305771f7f64daa8.
 - Owner then explicitly authorized F1 download/ZIP hash verification and safety-tested static inspection on Windows x64. F1 not executed by ChatGPT and no vendor binaries loaded.
 - The F1 authorization scope and executable test gate are specified in docs/specs/P0.1-F1-STATIC-ARTIFACT-INSPECTION.md. F2 Godot/DLL execution, dependencies in active game and final backend selection remain unauthorized. Original and correction reviews are retained.
+
+
+## 2026-10-08 — P0.1-F1 static artifact inspection integrated
+- PR #14 reviewed head d86755e4623fa018db7c7096c74ac4316e961d00, archive/hash manifest and corrected PowerShell safety suite, merged a30329d6cac071bfa1b281aea3e6b297a4314fae.
+- PR #15 original F1 independent review with three corrections, merged 7161efb39cf8f47091c9ba4562f8c9f9666a1628.
+- PR #16 passing SHA-specific F1 re-review, merged 166de84a411cef9c7727653c6b5cdb3143374fce.
+- F1 acceptance covers static archive inspection and developer-reported 64 assertions/34 test cases; GitHub CI only covered static expected-file checks. Independent reviewer did not run Windows or load vendor code.
+- Archive digest, 34-file manifest and Windows x64 descriptor mappings recorded. Third-party binary linkage and license notices remain unresolved. No installed production backend.
+- Owner authorized **P0.1-F1.5 read-only public-source/release-build provenance and notices research**, detailed in docs/specs/P0.1-F1.5-BINARY-PROVENANCE.md. No native download, Godot/DLL execution, F2 or ADR-0002 approval authorized.
