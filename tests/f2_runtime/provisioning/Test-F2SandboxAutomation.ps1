@@ -59,6 +59,7 @@ try {
         'Prepare-F2SandboxInputs.ps1',
         'Get-F2SandboxReadiness.ps1',
         'Start-F2SandboxDiagnostics.ps1',
+        'F2-Guest-Diagnostic.cmd',
         'F2-Isolated-Sandbox-automation.wsb.example'
     )) {
         Copy-Item -LiteralPath (Join-Path $sourceRoot $name) -Destination (Join-Path $fixtureProvisioning $name) -ErrorAction Stop
@@ -133,8 +134,15 @@ try {
     $configPath = Join-Path $fixtureProvisioning 'F2-Isolated-Sandbox-automation.wsb.example'
     [xml]$startupConfig = Get-Content -LiteralPath $configPath -Raw
     $startupCommand = [string]$startupConfig.Configuration.LogonCommand.Command
-    Assert-True ($startupCommand.Contains('-NoExit') -and $startupCommand.Contains('-Command "Write-Host')) 'Reviewed startup command keeps PowerShell open and prints before bootstrap invocation'
-    Assert-True ($startupCommand.IndexOf('F2 DIAGNOSTIC STARTING - visible startup wrapper') -lt $startupCommand.IndexOf("& 'C:\F2Input\Start-F2SandboxDiagnostics.ps1'")) 'Startup banner precedes bootstrap invocation'
+    Assert-True ($startupCommand -eq 'cmd.exe /k C:\F2Input\F2-Guest-Diagnostic.cmd') 'WSB invokes only the reviewed persistent CMD /k guest wrapper'
+    $wrapperPath = Join-Path $sourceRoot 'F2-Guest-Diagnostic.cmd'
+    $wrapperText = Get-Content -LiteralPath $wrapperPath -Raw
+    Assert-True ($wrapperText.Contains('F2 GUEST WRAPPER STARTED') -and $wrapperText.Contains('F2 STAGE: CMD_ENTRY')) 'Immediate pre-PowerShell wrapper banner exists'
+    Assert-True ($wrapperText.IndexOf('F2 GUEST WRAPPER STARTED') -lt $wrapperText.IndexOf(' -ExecutionPolicy Bypass -File')) 'CMD banner executes before PowerShell call'
+    Assert-True ($wrapperText.Contains('if not exist "C:\F2Input\Start-F2SandboxDiagnostics.ps1" goto :missing_bootstrap')) 'Missing mapped bootstrap has visible fail-closed path'
+    Assert-True ($wrapperText.Contains('F2 PowerShell process exit code: %F2_PS_EXIT%')) 'Guest wrapper exposes PowerShell exit code without reporting readiness PASS'
+    Assert-True ($wrapperText -notmatch '(?i)Invoke-WebRequest|curl|wget|Godot|Voxel.?Tools|GDExtension|GDNative|net user') 'CMD wrapper contains no native/network/user mutation commands'
+
 
     $launcherPath = Join-Path $sourceRoot 'Start-F2SandboxReadiness.ps1'
     $launcherText = Get-Content $launcherPath -Raw
@@ -180,8 +188,8 @@ try {
         $modifiedConfigs = @(
             @{ Name = 'writable mapping'; Xml = [xml]($startupConfig.OuterXml.Replace('<ReadOnly>true</ReadOnly>', '<ReadOnly>false</ReadOnly>')) }
             @{ Name = 'unreviewed command'; Xml = [xml]($startupConfig.OuterXml.Replace('Start-F2SandboxDiagnostics.ps1', 'Unreviewed.ps1')) }
-            @{ Name = 'missing NoExit'; Xml = [xml]($startupConfig.OuterXml.Replace(' -NoExit', '')) }
-            @{ Name = 'modified startup banner'; Xml = [xml]($startupConfig.OuterXml.Replace('F2 DIAGNOSTIC STARTING - visible startup wrapper', 'OTHER STARTUP')) }
+            @{ Name = 'changed persistent CMD switch'; Xml = [xml]($startupConfig.OuterXml.Replace('cmd.exe /k', 'cmd.exe /c')) }
+            @{ Name = 'modified CMD wrapper path'; Xml = [xml]($startupConfig.OuterXml.Replace('F2-Guest-Diagnostic.cmd', 'Unreviewed-Guest.cmd')) }
             @{ Name = 'additional LogonCommand'; Xml = [xml]($startupConfig.OuterXml.Replace('</LogonCommand>', '<Command>unreviewed.exe</Command></LogonCommand>')) }
         )
         foreach ($modified in $modifiedConfigs) {
@@ -202,6 +210,10 @@ try {
         [IO.File]::WriteAllText($configPath, $approvedConfigText, [Text.UTF8Encoding]::new($false))
     }
 
+    $expectedWrapperHash = [regex]::Match($sourcePreparerText, "(?m)^\`$expectedWrapperSha256 = '([0-9a-f]{64})'").Groups[1].Value
+    Assert-True ($expectedWrapperHash -eq (Get-NormalizedSourceHash $wrapperPath)) 'Preparer pin matches approved guest CMD wrapper'
+    Assert-True ($launcherText.Contains($expectedWrapperHash)) 'Launcher pins same approved guest CMD SHA256'
+    Assert-True ($sourcePreparerText.Contains('@($diagnosticName, $bootstrapName, $wrapperName)') -and $launcherText.Contains('@($diagnosticName, $bootstrapName, $wrapperName)')) 'Both host validators require exactly three staged input names'
     Assert-True ($expectedBootstrapHash -eq (Get-NormalizedSourceHash $bootstrapPath)) 'Preparer pin matches updated bootstrap source'
     Assert-True ($expectedWsbHash -eq (Get-NormalizedSourceHash $configPath)) 'Preparer pin matches updated startup configuration'
     Assert-True ($launcherText.Contains($expectedBootstrapHash) -and $launcherText.Contains($expectedWsbHash)) 'Launcher pins updated bootstrap and startup configuration'
@@ -218,6 +230,11 @@ try {
     Invoke-HostFixture -Description 'Reject altered bootstrap digest' -ExpectedExitCode 2
     Copy-Item -LiteralPath $bootstrapPath -Destination $bootstrapFixture -Force
 
+    $wrapperFixture = Join-Path $fixtureProvisioning 'F2-Guest-Diagnostic.cmd'
+    Add-Content -LiteralPath $wrapperFixture -Value 'REM altered wrapper fixture' -Encoding ascii
+    Invoke-HostFixture -Description 'Reject altered CMD startup wrapper digest' -ExpectedExitCode 2
+    Copy-Item -LiteralPath $wrapperPath -Destination $wrapperFixture -Force
+
     $configText = Get-Content -LiteralPath $configPath -Raw
     Set-Content -LiteralPath $configPath -Value $configText.Replace('<ReadOnly>true</ReadOnly>', '<ReadOnly>false</ReadOnly>') -Encoding utf8
     Set-FixtureWsbPin
@@ -225,15 +242,15 @@ try {
     Set-Content -LiteralPath $configPath -Value $configText -Encoding utf8
     Set-FixtureWsbPin
 
-    Set-Content -LiteralPath $configPath -Value $configText.Replace('Start-F2SandboxDiagnostics.ps1', 'Unreviewed.ps1') -Encoding utf8
+    Set-Content -LiteralPath $configPath -Value $configText.Replace('F2-Guest-Diagnostic.cmd', 'Unreviewed.cmd') -Encoding utf8
     Set-FixtureWsbPin
     Invoke-HostFixture -Description 'Reject unreviewed LogonCommand' -ExpectedExitCode 2
     Set-Content -LiteralPath $configPath -Value $configText -Encoding utf8
     Set-FixtureWsbPin
 
-    Set-Content -LiteralPath $configPath -Value $configText.Replace(' -NoExit', '') -Encoding utf8
+    Set-Content -LiteralPath $configPath -Value $configText.Replace('cmd.exe /k', 'cmd.exe /c') -Encoding utf8
     Set-FixtureWsbPin
-    Invoke-HostFixture -Description 'Reject startup command without fail-visible NoExit' -ExpectedExitCode 2
+    Invoke-HostFixture -Description 'Reject startup command without persistent CMD /k' -ExpectedExitCode 2
     Set-Content -LiteralPath $configPath -Value $configText -Encoding utf8
     Set-FixtureWsbPin
 
