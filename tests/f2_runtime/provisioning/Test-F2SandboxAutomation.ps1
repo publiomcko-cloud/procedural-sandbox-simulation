@@ -152,8 +152,8 @@ try {
     Assert-True ($bootstrapPinMatch.Success -and $wsbPinMatch.Success) 'Bootstrap and WSB SHA256 pins are declared and anchored in the production preparer'
     $expectedBootstrapHash = $bootstrapPinMatch.Groups[1].Value
     $expectedWsbHash = $wsbPinMatch.Groups[1].Value
-    $launcherCommandMatch = [regex]::Match($launcherText, '(?m)^[ \t]*\$expectedCommand[ \t]*=[ \t]*''([^']*)''[ \t]*$')
-    $preparerCommandMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$logonCommand[ \t]*=[ \t]*''([^']*)''[ \t]*$')
+    $launcherCommandMatch = [regex]::Match($launcherText, '(?m)^[ \t]*\$expectedCommand[ \t]*=[ \t]*''(.*)''[ \t]*$')
+    $preparerCommandMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$logonCommand[ \t]*=[ \t]*''(.*)''[ \t]*$')
     Assert-True ($launcherCommandMatch.Success -and $preparerCommandMatch.Success) 'Both production validators declare an exact LogonCommand'
     if ($launcherCommandMatch.Success -and $preparerCommandMatch.Success) {
         $launcherExpectedCommand = $launcherCommandMatch.Groups[1].Value.Replace("''", "'")
