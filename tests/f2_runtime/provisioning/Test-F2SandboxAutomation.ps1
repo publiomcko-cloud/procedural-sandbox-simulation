@@ -134,10 +134,16 @@ try {
     $configPath = Join-Path $fixtureProvisioning 'F2-Isolated-Sandbox-automation.wsb.example'
     [xml]$startupConfig = Get-Content -LiteralPath $configPath -Raw
     $startupCommand = [string]$startupConfig.Configuration.LogonCommand.Command
-    Assert-True ($startupCommand -eq 'cmd.exe /k C:\F2Input\F2-Guest-Diagnostic.cmd') 'WSB invokes only the reviewed persistent CMD /k guest wrapper'
+    Assert-True ($startupCommand -eq 'C:\F2Input\F2-Guest-Diagnostic.cmd') 'WSB invokes only the pinned mapped CMD entrypoint without nested console quotation'
     $wrapperPath = Join-Path $sourceRoot 'F2-Guest-Diagnostic.cmd'
     $wrapperText = Get-Content -LiteralPath $wrapperPath -Raw
     Assert-True ($wrapperText.Contains('F2 GUEST WRAPPER STARTED') -and $wrapperText.Contains('F2 STAGE: CMD_ENTRY')) 'Immediate pre-PowerShell wrapper banner exists'
+    Assert-True ($wrapperText.Contains('if /i "%~1"=="--f2-visible" goto :visible_diagnostic')) 'Wrapper accepts only the explicitly designated visible child path'
+    Assert-True ($wrapperText.Contains('if not "%~1"=="" exit /b 2')) 'Wrapper refuses unexpected startup parameters'
+    Assert-True ($wrapperText.Contains('start "F2 Sandbox Diagnostic" "%SystemRoot%\System32\cmd.exe" /k C:\F2Input\F2-Guest-Diagnostic.cmd --f2-visible')) 'Original LogonCommand explicitly starts a distinct persistent visible console'
+    Assert-True ($wrapperText.Contains('exit /b %ERRORLEVEL%') -and $wrapperText.Contains(':visible_diagnostic')) 'Hidden LogonCommand returns without executing guest account bootstrap in the hidden parent'
+    Assert-True ($wrapperText.IndexOf(':visible_diagnostic') -lt $wrapperText.IndexOf('F2 GUEST WRAPPER STARTED')) 'Stage-zero banner executes only in separate visible child'
+    Assert-True ($wrapperText -notmatch '(?im)^\s*start\s+(/b|/min|/wait)\b') 'Startup does not suppress foreground window or wait for it to exit'
     Assert-True ($wrapperText.IndexOf('F2 GUEST WRAPPER STARTED') -lt $wrapperText.IndexOf(' -ExecutionPolicy Bypass -File')) 'CMD banner executes before PowerShell call'
     Assert-True ($wrapperText.Contains('if not exist "C:\F2Input\Start-F2SandboxDiagnostics.ps1" goto :missing_bootstrap')) 'Missing mapped bootstrap has visible fail-closed path'
     Assert-True ($wrapperText.Contains('F2 PowerShell process exit code: %F2_PS_EXIT%')) 'Guest wrapper exposes PowerShell exit code without reporting readiness PASS'
@@ -191,7 +197,7 @@ try {
         $modifiedConfigs = @(
             @{ Name = 'writable mapping'; Xml = [xml]($startupConfig.OuterXml.Replace('<ReadOnly>true</ReadOnly>', '<ReadOnly>false</ReadOnly>')) }
             @{ Name = 'unreviewed command'; Xml = [xml]($startupConfig.OuterXml.Replace('F2-Guest-Diagnostic.cmd', 'Unreviewed.cmd')) }
-            @{ Name = 'changed persistent CMD switch'; Xml = [xml]($startupConfig.OuterXml.Replace('cmd.exe /k', 'cmd.exe /c')) }
+            @{ Name = 'unexpected direct PowerShell startup'; Xml = [xml]($startupConfig.OuterXml.Replace('C:\F2Input\F2-Guest-Diagnostic.cmd', 'powershell.exe')) }
             @{ Name = 'modified CMD wrapper path'; Xml = [xml]($startupConfig.OuterXml.Replace('F2-Guest-Diagnostic.cmd', 'Unreviewed-Guest.cmd')) }
             @{ Name = 'additional LogonCommand'; Xml = [xml]($startupConfig.OuterXml.Replace('</LogonCommand>', '<Command>unreviewed.exe</Command></LogonCommand>')) }
         )
@@ -256,9 +262,9 @@ try {
     Set-Content -LiteralPath $configPath -Value $configText -Encoding utf8
     Set-FixtureWsbPin
 
-    Set-Content -LiteralPath $configPath -Value $configText.Replace('cmd.exe /k', 'cmd.exe /c') -Encoding utf8
+    Set-Content -LiteralPath $configPath -Value $configText.Replace('C:\F2Input\F2-Guest-Diagnostic.cmd', 'powershell.exe') -Encoding utf8
     Set-FixtureWsbPin
-    Invoke-HostFixture -Description 'Reject startup command without persistent CMD /k' -ExpectedExitCode 2
+    Invoke-HostFixture -Description 'Reject direct PowerShell startup instead of reviewed CMD entrypoint' -ExpectedExitCode 2
     Set-Content -LiteralPath $configPath -Value $configText -Encoding utf8
     Set-FixtureWsbPin
 
