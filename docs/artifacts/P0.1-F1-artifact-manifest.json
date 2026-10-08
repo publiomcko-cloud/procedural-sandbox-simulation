@@ -1,0 +1,380 @@
+{
+  "schema_version": 1,
+  "artifact": {
+    "upstream": "Zylann/godot_voxel",
+    "release_tag": "v1.7x",
+    "source_commit": "75d3c6d996ed2331c80edcd8c3ebc947afc0f041",
+    "asset": "GodotVoxelExtension.zip",
+    "official_url": "https://github.com/Zylann/godot_voxel/releases/download/v1.7x/GodotVoxelExtension.zip",
+    "expected_size_bytes": 54457774,
+    "observed_size_bytes": 54457774,
+    "github_reported_sha256": "600737572a5e25541ba6f503e842a3717ba19afafa5474510a6ceff995a1d2d8",
+    "observed_sha256": "600737572a5e25541ba6f503e842a3717ba19afafa5474510a6ceff995a1d2d8",
+    "extracted_declared_bytes": 134335779
+  },
+  "archive_entries": [
+    {
+      "path": "addons/zylann.voxel/bin/liblibvoxel.windows.editor.x86_64.a",
+      "type": "file",
+      "length": 1814,
+      "sha256": "50a8814bbe43fa4b361fb53f10d7ff58b4f737a70dddbf8592b5759ad83b5c2b"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/liblibvoxel.windows.template_release.x86_64.a",
+      "type": "file",
+      "length": 1916,
+      "sha256": "63fcd4587d2da25c7430afa561599a27775030d0bd170ea53b794dc11bfb9c29"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.android.editor.arm64.so",
+      "type": "file",
+      "length": 9031288,
+      "sha256": "641f87ad6e0402d47240a4d3344fead59f72537230abbc4d98ab7ef962dc225a"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.android.editor.x86_64.so",
+      "type": "file",
+      "length": 9177136,
+      "sha256": "1143c0f4aaa00db96d8d696cdfe9b39895651d8641a8966730875e03a6664dff"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.android.template_release.arm64.so",
+      "type": "file",
+      "length": 7301800,
+      "sha256": "09d696b76112fbd0445a07d0ccc08fede1dee606d827a98611e5f4c1e12e79ec"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.android.template_release.x86_64.so",
+      "type": "file",
+      "length": 7523376,
+      "sha256": "c2de6c79edbe34fb74702cac83804b2af6a1c902d39783e51590f41c6b4d4825"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.ios.editor.arm64.dylib",
+      "type": "file",
+      "length": 6074760,
+      "sha256": "e229db24a8aac94173f7b1aeddd14fc26dd170696a5869668e6f7ff77da21c04"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.ios.template_release.arm64.dylib",
+      "type": "file",
+      "length": 5207400,
+      "sha256": "8a7483f10375978d46301c1c29fb1d71ea9e9812577104c4b903d3d64595cc9e"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.linux.editor.arm64.so",
+      "type": "file",
+      "length": 12179248,
+      "sha256": "410af7575e17ca36502516c225a40fd168f9d794c12a906c2ddf6b4a80a3c0d7"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.linux.editor.x86_64.so",
+      "type": "file",
+      "length": 11788856,
+      "sha256": "09abf6e0979f8a8cdfb5abf448710ab49a3a4bed87cd2131759e12a522a9154c"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.linux.template_release.arm64.so",
+      "type": "file",
+      "length": 10101416,
+      "sha256": "a324578faf85d428c0756c843079828f535ce32118f322e4b6db61ab8035baf1"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.linux.template_release.x86_64.so",
+      "type": "file",
+      "length": 10366328,
+      "sha256": "080c58503114400aafb9c8d43583f72609a819def121052bd83f02ffe27bd245"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.macos.editor.universal.framework/libvoxel.macos.editor.universal",
+      "type": "file",
+      "length": 12899248,
+      "sha256": "8607ba5e6daeae23c0b4ddf78160b33e7cf6f81dea89abfbdab96f549bd07b01"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.macos.template_release.universal.framework/libvoxel.macos.template_release.universal",
+      "type": "file",
+      "length": 11142104,
+      "sha256": "3c3c13069e729bbbf3743a90564cdfdac3e2c6ff612b2341c88929492b2fe4cc"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.windows.editor.x86_64.dll",
+      "type": "file",
+      "length": 11337216,
+      "sha256": "e7191869989607805660de8f54c3aa2ab2e3ab08902bdd6976ac8aa6b3fe07ad"
+    },
+    {
+      "path": "addons/zylann.voxel/bin/libvoxel.windows.template_release.x86_64.dll",
+      "type": "file",
+      "length": 10173952,
+      "sha256": "cff4fdefa8d3348860bc241ed9eb86f96d31c2e6e7da8a304c890ec018115bf0"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/FastNoise2.svg",
+      "type": "file",
+      "length": 408,
+      "sha256": "1544bd25ce89a2563a4f827c8c0d560965ce45b29a86360b6add2b720db2dbbe"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/VoxelBlockyLibrary.svg",
+      "type": "file",
+      "length": 3204,
+      "sha256": "3f51eb273c452d165d38b4ce04886e092b4021b2f0484835980ebb72cd30f6aa"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/VoxelBlockyModel.svg",
+      "type": "file",
+      "length": 1711,
+      "sha256": "85d5e768c039c0e8d161fd99fb934655859088b46ce060a44c5c025a651279dc"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/VoxelInstanceLibrary.svg",
+      "type": "file",
+      "length": 2766,
+      "sha256": "00f23474cdf889a936d8962c5c2a4d21cced913a4aca8c7e173796b45950bfd6"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/VoxelInstanceLibraryItem.svg",
+      "type": "file",
+      "length": 1259,
+      "sha256": "be92931beff468eb71d79c98e7baad4408089393f8eaf3e5409c5d049a751ad1"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/VoxelInstanceLibraryMultiMeshItem.svg",
+      "type": "file",
+      "length": 1259,
+      "sha256": "be92931beff468eb71d79c98e7baad4408089393f8eaf3e5409c5d049a751ad1"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/VoxelInstanceLibrarySceneItem.svg",
+      "type": "file",
+      "length": 1259,
+      "sha256": "be92931beff468eb71d79c98e7baad4408089393f8eaf3e5409c5d049a751ad1"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/VoxelInstancer.svg",
+      "type": "file",
+      "length": 3271,
+      "sha256": "40b3effa68620a76ac80439f6251ec93d970fa2cc6a2d3e2cef4270a400b7333"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/VoxelLodTerrain.svg",
+      "type": "file",
+      "length": 351,
+      "sha256": "5b34e318060307911bf83447d8957ccf1f0e0501c696cb45d0bbffe7d1b18262"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/VoxelMesher.svg",
+      "type": "file",
+      "length": 4088,
+      "sha256": "2981db0e9db0900664a4919a8d996908946051505cd2068a26bad49070da15a2"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/VoxelNode.svg",
+      "type": "file",
+      "length": 351,
+      "sha256": "5b34e318060307911bf83447d8957ccf1f0e0501c696cb45d0bbffe7d1b18262"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/VoxelTerrain.svg",
+      "type": "file",
+      "length": 351,
+      "sha256": "5b34e318060307911bf83447d8957ccf1f0e0501c696cb45d0bbffe7d1b18262"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/VoxelTerrainLarge.svg",
+      "type": "file",
+      "length": 993,
+      "sha256": "1014aad59777a303b6b3d54b23cb7c9142356f821ad610ad5a0ed043e182829c"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/VoxelViewer.svg",
+      "type": "file",
+      "length": 2998,
+      "sha256": "df56b7190b9f1bc251f64f2f0c6a3e22faddfb3143dfbf5dedd1f93fccc2a150"
+    },
+    {
+      "path": "addons/zylann.voxel/editor/icons/ZN_FastNoiseLite.svg",
+      "type": "file",
+      "length": 408,
+      "sha256": "1544bd25ce89a2563a4f827c8c0d560965ce45b29a86360b6add2b720db2dbbe"
+    },
+    {
+      "path": "addons/zylann.voxel/LICENSE.md",
+      "type": "file",
+      "length": 1075,
+      "sha256": "3a1f742145830b5702fe9e7aa2566c5896012a88fb3f70a00d6fd64e9cc203ee"
+    },
+    {
+      "path": "addons/zylann.voxel/voxel.gdextension",
+      "type": "file",
+      "length": 2149,
+      "sha256": "353b33a3b5631803785a7fb28810c8dee2ff97bc0a1675d80e1b7b28b7101770"
+    },
+    {
+      "path": "addons/zylann.voxel/voxel.gdextension.uid",
+      "type": "file",
+      "length": 20,
+      "sha256": "a8e4b703888c739acb5e37f4a0819b8945b0245b7dee91c7190e921149af4f3a"
+    }
+  ],
+  "gdextension": {
+    "descriptor_path": "addons/zylann.voxel/voxel.gdextension",
+    "descriptor_sha256": "353b33a3b5631803785a7fb28810c8dee2ff97bc0a1675d80e1b7b28b7101770",
+    "entry_symbol": "voxel_library_init",
+    "compatibility_minimum": "4.4.1",
+    "mappings": [
+      {
+        "mapping": "macos.debug",
+        "path": "addons/zylann.voxel/bin/libvoxel.macos.editor.universal.framework/libvoxel.macos.editor.universal",
+        "present": true
+      },
+      {
+        "mapping": "macos.release",
+        "path": "addons/zylann.voxel/bin/libvoxel.macos.template_release.universal.framework/libvoxel.macos.template_release.universal",
+        "present": true
+      },
+      {
+        "mapping": "ios.debug",
+        "path": "addons/zylann.voxel/bin/libvoxel.ios.editor.arm64.dylib",
+        "present": true
+      },
+      {
+        "mapping": "ios.release",
+        "path": "addons/zylann.voxel/bin/libvoxel.ios.template_release.arm64.dylib",
+        "present": true
+      },
+      {
+        "mapping": "windows.debug.x86_64",
+        "path": "addons/zylann.voxel/bin/libvoxel.windows.editor.x86_64.dll",
+        "present": true
+      },
+      {
+        "mapping": "windows.release.x86_64",
+        "path": "addons/zylann.voxel/bin/libvoxel.windows.template_release.x86_64.dll",
+        "present": true
+      },
+      {
+        "mapping": "linux.debug.x86_64",
+        "path": "addons/zylann.voxel/bin/libvoxel.linux.editor.x86_64.so",
+        "present": true
+      },
+      {
+        "mapping": "linux.release.x86_64",
+        "path": "addons/zylann.voxel/bin/libvoxel.linux.template_release.x86_64.so",
+        "present": true
+      },
+      {
+        "mapping": "linux.debug.arm64",
+        "path": "addons/zylann.voxel/bin/libvoxel.linux.editor.arm64.so",
+        "present": true
+      },
+      {
+        "mapping": "linux.release.arm64",
+        "path": "addons/zylann.voxel/bin/libvoxel.linux.template_release.arm64.so",
+        "present": true
+      },
+      {
+        "mapping": "android.debug.x86_64",
+        "path": "addons/zylann.voxel/bin/libvoxel.android.editor.x86_64.so",
+        "present": true
+      },
+      {
+        "mapping": "android.release.x86_64",
+        "path": "addons/zylann.voxel/bin/libvoxel.android.template_release.x86_64.so",
+        "present": true
+      },
+      {
+        "mapping": "android.debug.arm64",
+        "path": "addons/zylann.voxel/bin/libvoxel.android.editor.arm64.so",
+        "present": true
+      },
+      {
+        "mapping": "android.release.arm64",
+        "path": "addons/zylann.voxel/bin/libvoxel.android.template_release.arm64.so",
+        "present": true
+      },
+      {
+        "mapping": "FastNoise2",
+        "path": "addons/zylann.voxel/editor/icons/FastNoise2.svg",
+        "present": true
+      },
+      {
+        "mapping": "VoxelBlockyLibrary",
+        "path": "addons/zylann.voxel/editor/icons/VoxelBlockyLibrary.svg",
+        "present": true
+      },
+      {
+        "mapping": "VoxelBlockyModel",
+        "path": "addons/zylann.voxel/editor/icons/VoxelBlockyModel.svg",
+        "present": true
+      },
+      {
+        "mapping": "VoxelInstanceLibrary",
+        "path": "addons/zylann.voxel/editor/icons/VoxelInstanceLibrary.svg",
+        "present": true
+      },
+      {
+        "mapping": "VoxelInstanceLibraryItem",
+        "path": "addons/zylann.voxel/editor/icons/VoxelInstanceLibraryItem.svg",
+        "present": true
+      },
+      {
+        "mapping": "VoxelInstanceLibraryMultiMeshItem",
+        "path": "addons/zylann.voxel/editor/icons/VoxelInstanceLibraryMultiMeshItem.svg",
+        "present": true
+      },
+      {
+        "mapping": "VoxelInstanceLibrarySceneItem",
+        "path": "addons/zylann.voxel/editor/icons/VoxelInstanceLibrarySceneItem.svg",
+        "present": true
+      },
+      {
+        "mapping": "VoxelInstancer",
+        "path": "addons/zylann.voxel/editor/icons/VoxelInstancer.svg",
+        "present": true
+      },
+      {
+        "mapping": "VoxelLodTerrain",
+        "path": "addons/zylann.voxel/editor/icons/VoxelLodTerrain.svg",
+        "present": true
+      },
+      {
+        "mapping": "VoxelMesher",
+        "path": "addons/zylann.voxel/editor/icons/VoxelMesher.svg",
+        "present": true
+      },
+      {
+        "mapping": "VoxelNode",
+        "path": "addons/zylann.voxel/editor/icons/VoxelNode.svg",
+        "present": true
+      },
+      {
+        "mapping": "VoxelTerrain",
+        "path": "addons/zylann.voxel/editor/icons/VoxelTerrain.svg",
+        "present": true
+      },
+      {
+        "mapping": "VoxelTerrainLarge",
+        "path": "addons/zylann.voxel/editor/icons/VoxelTerrainLarge.svg",
+        "present": true
+      },
+      {
+        "mapping": "VoxelViewer",
+        "path": "addons/zylann.voxel/editor/icons/VoxelViewer.svg",
+        "present": true
+      },
+      {
+        "mapping": "ZN_FastNoiseLite",
+        "path": "addons/zylann.voxel/editor/icons/ZN_FastNoiseLite.svg",
+        "present": true
+      }
+    ]
+  },
+  "extraction": {
+    "file_count": 34,
+    "directory_entry_count": 0,
+    "preflight_entry_count": 34,
+    "limits": "P0.1-F1 enforced limits"
+  }
+}
