@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "upstream": "Zylann/godot_voxel",
+  "release_tag": "v1.7x",
+  "source_commit": "75d3c6d996ed2331c80edcd8c3ebc947afc0f041",
+  "asset": "GodotVoxelExtension.zip",
+  "official_url": "https://github.com/Zylann/godot_voxel/releases/download/v1.7x/GodotVoxelExtension.zip",
+  "github_release_api": "https://api.github.com/repos/Zylann/godot_voxel/releases/tags/v1.7x",
+  "release_published_at_utc": "2026-08-20T21:52:49Z",
+  "github_asset_size_bytes": 54457774,
+  "downloaded_size_bytes": 54457774,
+  "github_asset_digest": "sha256:600737572a5e25541ba6f503e842a3717ba19afafa5474510a6ceff995a1d2d8",
+  "computed_sha256": "600737572a5e25541ba6f503e842a3717ba19afafa5474510a6ceff995a1d2d8",
+  "size_match": true,
+  "digest_match": true,
+  "meaning": "The independently computed bytes agree with GitHub release metadata; this is not an independent publisher signature or provenance attestation."
+}
