@@ -31,3 +31,11 @@ Outcome: PASS_RESEARCH_WITH_CONDITIONS. ADR-0002 remains PROPOSED/DEFERRED; no b
 - F1 acceptance covers static archive inspection and developer-reported 64 assertions/34 test cases; GitHub CI only covered static expected-file checks. Independent reviewer did not run Windows or load vendor code.
 - Archive digest, 34-file manifest and Windows x64 descriptor mappings recorded. Third-party binary linkage and license notices remain unresolved. No installed production backend.
 - Owner authorized **P0.1-F1.5 read-only public-source/release-build provenance and notices research**, detailed in docs/specs/P0.1-F1.5-BINARY-PROVENANCE.md. No native download, Godot/DLL execution, F2 or ADR-0002 approval authorized.
+
+
+## 2026-10-08 — P0.1-F1.5 source/release-build provenance integrated
+- PR #18 F1.5 corrected research and source/log evidence, reviewed head 3d675398e9ae86fa5e66ec5edece07b8b3bdb3bf, merged 42df9f0fdc333b932483c7af91a3b7ccf20fef6d.
+- PR #19 original independent provenance review and required link-log corrections, merged aa7cfa1d9405a4dffbd93ae58b7c892f6643d988.
+- PR #20 passing corrected source/log provenance review, merged d6d4f05935b9165d336357ae787d1a641d08b455.
+- Historical Windows x64 release run 32419292967 editor/release jobs include exact link input objects and resolved godot-cpp SHA 9c8aeff0f58ad030f3d1030e8262de1322cd0ccd. Accepted as build-log evidence, not independently attested retained DLL code.
+- Owner authorized F1.6 document-only notice/provenance resolution per docs/specs/P0.1-F1.6-NOTICE-RESOLUTION.md. The ZIP contains the project MIT license but no separate third-party notices in the accepted F1 manifest; potential LZ4, meshoptimizer, FastNoiseLite and godot-cpp notice obligations require further reconciliation. No license clearance, F2 authorization, addon adoption, or backend selection.
