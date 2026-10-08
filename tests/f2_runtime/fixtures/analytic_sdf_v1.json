@@ -1,0 +1,55 @@
+{
+  "fixture_id": "p0.1.f0.analytic_sdf.v1",
+  "fixture_revision": 1,
+  "units": "metres",
+  "region_extent": 16.0,
+  "sample_pitch": 0.5,
+  "domain_sign": "density > 0 is solid; density == 0 is surface",
+  "canonicalization": {
+    "evaluation": "binary64 analytic expression",
+    "density_tick_metres": 0.000244140625,
+    "tick_scale": 4096,
+    "rounding": "nearest-even",
+    "material_tie_rule": "terrain.test.base wins exact union ties",
+    "hash_order": "lexicographic(region_i64_xyz, local_sample_xyz)",
+    "cross_architecture_bitwise_guarantee": false
+  },
+  "materials": [
+    {"id": "terrain.test.base", "role": "plane and cave wall"},
+    {"id": "terrain.test.hill", "role": "spherical hill union protruding above the plane"},
+    {"id": null, "role": "void"}
+  ],
+  "field": {
+    "plane": "-p.y",
+    "hill": "5 - length(p - (0,-1,0))",
+    "sphere_center": [0.0, -1.0, 0.0],
+    "sphere_radius": 5.0,
+    "base": "max(plane, hill)",
+    "tunnel_radius": 1.25,
+    "tunnel_segment_start": [-8.0, -4.0, 0.0],
+    "tunnel_segment_end": [8.0, -4.0, 0.0],
+    "tunnel": "1.25 - distance_to_segment(p, start, end)",
+    "density": "min(base, -tunnel)"
+  },
+  "region_boundary": {
+    "axis": "x",
+    "boundary": 0.0,
+    "regions": [[-1, 0, 0], [0, 0, 0]],
+    "required_halo_samples": 1,
+    "probe_x": [-0.5, 0.0, 0.5]
+  },
+  "sign_probes": [
+    {"point": [0.0, 1.0, 0.0], "expectation": "solid", "expected_density": 3.0, "expected_ticks": 12288},
+    {"point": [0.0, -4.0, 0.0], "expectation": "tunnel void", "expected_density": -1.25, "expected_ticks": -5120},
+    {"point": [0.0, -4.0, 2.0], "expectation": "solid outside tunnel below plane", "expected_density": 0.75, "expected_ticks": 3072},
+    {"point": [0.0, 0.0, 0.0], "expectation": "solid; not a surface sample", "expected_density": 2.75, "expected_ticks": 11264},
+    {"point": [0.0, 4.0, 0.0], "expectation": "exact spherical hill surface", "expected_density": 0.0, "expected_ticks": 0},
+    {"point": [-0.5, -4.0, 0.0], "expectation": "tunnel centerline void, region -1", "expected_density": -1.25, "expected_ticks": -5120},
+    {"point": [0.5, -4.0, 0.0], "expectation": "tunnel centerline void, region 0", "expected_density": -1.25, "expected_ticks": -5120}
+  ],
+  "comparison_policy": {
+    "compare": ["canonical analytic ticks", "material ids", "surface distance", "cave connectivity", "region seam samples"],
+    "do_not_require_byte_identity": ["vendor voxel buffers", "generated meshes", "collision shapes"],
+    "thresholds": "must be predeclared in the run log before each probe; none are implied by this fixture"
+  }
+}
