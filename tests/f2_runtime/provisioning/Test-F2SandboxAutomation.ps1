@@ -45,7 +45,7 @@ function Set-FixtureWsbPin {
     $fixturePreparer = Join-Path $fixtureProvisioning 'Prepare-F2SandboxInputs.ps1'
     $hash = Get-NormalizedSourceHash -LiteralPath $fixtureWsb
     $preparerText = [IO.File]::ReadAllText($fixturePreparer)
-    $pattern = '(?m)^[ \t]*\$expectedWsbSha256[ \t]*=[ \t]*''[0-9a-f]{64}''[ \t]*$'
+    $pattern = '(?m)^[ \t]*\$expectedWsbSha256[ \t]*=[ \t]*''[0-9a-f]{64}''[ \t]*\r?
     $match = [regex]::Match($preparerText, $pattern)
     if (-not $match.Success) { throw 'Fixture preparer SHA pin was not found.' }
     $replacement = '$expectedWsbSha256 = ''{0}''' -f $hash
@@ -147,13 +147,13 @@ try {
     $launcherPath = Join-Path $sourceRoot 'Start-F2SandboxReadiness.ps1'
     $launcherText = Get-Content $launcherPath -Raw
     $sourcePreparerText = Get-Content (Join-Path $sourceRoot 'Prepare-F2SandboxInputs.ps1') -Raw
-    $bootstrapPinMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$expectedBootstrapSha256[ \t]*=[ \t]*''([0-9a-f]{64})''[ \t]*$')
-    $wsbPinMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$expectedWsbSha256[ \t]*=[ \t]*''([0-9a-f]{64})''[ \t]*$')
+    $bootstrapPinMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$expectedBootstrapSha256[ \t]*=[ \t]*''([0-9a-f]{64})''[ \t]*\r?))
+    $wsbPinMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$expectedWsbSha256[ \t]*=[ \t]*''([0-9a-f]{64})''[ \t]*\r?))
     Assert-True ($bootstrapPinMatch.Success -and $wsbPinMatch.Success) 'Bootstrap and WSB SHA256 pins are declared and anchored in the production preparer'
     $expectedBootstrapHash = $bootstrapPinMatch.Groups[1].Value
     $expectedWsbHash = $wsbPinMatch.Groups[1].Value
-    $launcherCommandMatch = [regex]::Match($launcherText, '(?m)^[ \t]*\$expectedCommand[ \t]*=[ \t]*''(.*)''[ \t]*$')
-    $preparerCommandMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$logonCommand[ \t]*=[ \t]*''(.*)''[ \t]*$')
+    $launcherCommandMatch = [regex]::Match($launcherText, '(?m)^[ \t]*\$expectedCommand[ \t]*=[ \t]*''(.*)''[ \t]*\r?))
+    $preparerCommandMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$logonCommand[ \t]*=[ \t]*''(.*)''[ \t]*\r?))
     Assert-True ($launcherCommandMatch.Success -and $preparerCommandMatch.Success) 'Both production validators declare an exact LogonCommand'
     if ($launcherCommandMatch.Success -and $preparerCommandMatch.Success) {
         $launcherExpectedCommand = $launcherCommandMatch.Groups[1].Value.Replace("''", "'")
@@ -214,7 +214,7 @@ try {
         [IO.File]::WriteAllText($configPath, $approvedConfigText, [Text.UTF8Encoding]::new($false))
     }
 
-    $wrapperPinMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$expectedWrapperSha256[ \t]*=[ \t]*''([0-9a-f]{64})''[ \t]*$')
+    $wrapperPinMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$expectedWrapperSha256[ \t]*=[ \t]*''([0-9a-f]{64})''[ \t]*\r?))
     Assert-True $wrapperPinMatch.Success 'CMD wrapper SHA256 pin is declared and anchored in the production preparer'
     $expectedWrapperHash = $wrapperPinMatch.Groups[1].Value
     Assert-True ($expectedWrapperHash -eq (Get-NormalizedSourceHash $wrapperPath)) 'Preparer pin matches approved guest CMD wrapper'
