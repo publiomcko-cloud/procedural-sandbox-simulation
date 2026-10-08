@@ -4,7 +4,7 @@ $project = Join-Path $root 'game'
 $godot = if ($env:GODOT_BIN) { $env:GODOT_BIN } else { 'godot' }
 $failures = [System.Collections.Generic.List[string]]::new()
 
-foreach ($file in @('project.godot', 'scenes/main.tscn', 'scripts/bootstrap.gd', 'scripts/region_generator.gd', 'tests/smoke.gd')) {
+foreach ($file in @('project.godot', 'scenes/main.tscn', 'scripts/bootstrap.gd', 'scripts/region_generator.gd', 'tests/smoke.gd', 'tests/bootstrap_visual_regression.gd')) {
     if (-not (Test-Path (Join-Path $project $file))) { $failures.Add("L0 FAIL: missing source $file") }
 }
 if ($failures.Count -eq 0) { Write-Host 'L0 PASS: all project source files exist' }
@@ -31,6 +31,12 @@ if ((Get-Command $godot -ErrorAction SilentlyContinue) -or (Test-Path $godot)) {
     $testExit = $LASTEXITCODE
     if ($testExit -eq 0) { Write-Host 'L2 PASS: deterministic generation and failure-path checks' }
     else { $failures.Add("L2 FAIL: headless tests exit code $testExit") }
+
+    Write-Host ('COMMAND: ' + $godot + ' --headless --path ' + $project + ' --script res://tests/bootstrap_visual_regression.gd')
+    & $godot --headless --path $project --script 'res://tests/bootstrap_visual_regression.gd'
+    $bootstrapExit = $LASTEXITCODE
+    if ($bootstrapExit -eq 0) { Write-Host 'L2 PASS: instantiated bootstrap structure (pixels are not assessed)' }
+    else { $failures.Add("L2 FAIL: bootstrap structure test exit code $bootstrapExit") }
 
     Write-Host "COMMAND: `"$godot`" --headless --path `"$project`" --quit-after 2"
     & $godot --headless --path $project --quit-after 2
