@@ -1,0 +1,21 @@
+# Roadmap with implementation gates
+
+**Gating:** Each phase needs developer evidence, independent evaluator ACCEPT, and human visual acceptance if interactive. Numeric budgets are provisional until Phase 0 benchmarking. Order can be split into tickets but dependencies must hold.
+
+| Phase | Core deliverable | Representative acceptance gate |
+|---|---|---|
+| P0 | Reproducible environment, terrain spike, mod prototype, sim spike and ADRs | Seed+version reproduces base region; edit/load cycle; sample mod extension; measured alternatives and headless smoke |
+| P1 | Infinite chunking, caves, materials, stable coordinate model, LOD | No seams at loaded chunk borders; fixed seed independent of visit order; bounded steady-state RAM under benchmark walk |
+| P2 | Procedural geometry recipe registry, entities, capabilities | Third-party content defines a deterministic object; stable persistent ID; batched static population |
+| P3 | Terrain/entity editing, placements, transformations, destruction | Across-boundary dig/save/restore; same commands via player/editor/mod; revisions reject stale edits; undo/redo |
+| P4 | Tick scheduler, tier transitions, materials, environmental state | Deterministic constrained replay; pause/step/catch-up; tier roundtrip conserves required invariants |
+| P5 | **V1 environment**: climate, temperature, rain, moisture, water accumulation/flow | Rain changes moisture and flow, digging influences runoff, state survives reload, bounded conservation drift |
+| P6 | **V1 release**: both modes, UX, diagnostics, packaging, regression/perf | End-to-end exploratory scenario and external mod smoke; no critical regressions; human signoff |
+| P7 | Organism components, geometry, metabolism, sensing and reproduction | Resource- and temperature-sensitive survival; repeatable growth/death; persistence after tier transitions |
+| P8 | **V2 ecosystem**: populations, trophic relationships, feedback | Measurable downstream impacts from removing species/resource; no unbounded growth; modded species coexist |
+
+## Milestone exit artifact
+For each phase: architecture change summary; exact commit and tests; result log and benchmark configuration; screenshots/video for visuals; known limitations; migration notes; independent evaluator judgment; owner acceptance record.
+
+## Initial non-goals
+Multiplayer synchronization, NPC civilizations, crafting/combat loops, photorealism, arbitrarily realistic CFD, full granular fracture physics, unrestricted safe untrusted code execution. Future extensibility is a design constraint, not a promise of implementing all these now.

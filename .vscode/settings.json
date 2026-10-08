@@ -1,0 +1,7 @@
+{
+  "files.exclude": {
+    "**/.godot": true
+  },
+  "editor.formatOnSave": false,
+  "files.eol": "\n"
+}

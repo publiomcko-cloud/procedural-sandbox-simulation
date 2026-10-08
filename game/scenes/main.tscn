@@ -1,0 +1,15 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/bootstrap.gd" id="1_boot"]
+
+[node name="Bootstrap" type="Node3D"]
+script = ExtResource("1_boot")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.866025, -0.5, 0, 0.5, 0.866025, 0, 4, 9)
+current = true
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-45, -20, 0)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]

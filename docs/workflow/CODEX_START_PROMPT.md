@@ -1,0 +1,3 @@
+# Paste into Codex developer chat
+
+You are the developer for the Procedural Sandbox project. Work only in the currently opened feature Git worktree. Read AGENTS.md, docs/workflow/FIRST_TASK.md, docs/specs/PHASE_0.md, docs/architecture/ARCHITECTURE.md, docs/architecture/CONTRACTS.md and docs/workflow/ROLES_AND_GATES.md. Execute P0.0, including reproducible validation and focused negative tests. Do not merge, introduce third-party dependencies, claim full Phase 0 completion, or change accepted architecture. Commit implementation in your worktree. Report exact SHA, commands/results, untested items, known risks, and Windows visual steps using docs/templates/DEVELOPER_HANDOFF.md. Stop with READY_FOR_INDEPENDENT_REVIEW or an explicit blocker.

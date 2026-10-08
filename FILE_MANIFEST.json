@@ -1,0 +1,170 @@
+{
+  "generated_on": "2026-10-08",
+  "files": [
+    {
+      "path": ".gitattributes",
+      "sha256": "b161e395d2a4d7da86260b4e6cb1b4a02abb78eb3636ef8a72f15c25de66ff6b",
+      "bytes": 85
+    },
+    {
+      "path": ".github/workflows/check.yml",
+      "sha256": "1291ccd86caac861347b6d35c21a0d4f4def2f99eb5441bd05fdbb6fd35ac3df",
+      "bytes": 405
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "b472a85738b5a680775d569c90f1ba19c1de53bb898e93c688f967ad925ee011",
+      "bytes": 160
+    },
+    {
+      "path": ".vscode/extensions.json",
+      "sha256": "53a1738f8564c4774dfc5a4e5ed02267d4f64b8b78dd3de02ce99bd8206f37c1",
+      "bytes": 58
+    },
+    {
+      "path": ".vscode/settings.json",
+      "sha256": "397decc19972a92118e2444e721a6a29ddc62b10fbe5afe267583f8fb2068e33",
+      "bytes": 104
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "a4e67083568e5693999308578923571a43c63b2bdfedfee8b18a6864251951cd",
+      "bytes": 1898
+    },
+    {
+      "path": "README.md",
+      "sha256": "ae91e3d17592d518ca0c19e999551b93343f7e4378b5cea1c2b6ab0f32abbed5",
+      "bytes": 1687
+    },
+    {
+      "path": "benchmarks/RESULT_TEMPLATE.md",
+      "sha256": "ed8716dc22e398df8658fdbdbe760e4edc85ac6420ffe73d681fb426ba1dda0e",
+      "bytes": 557
+    },
+    {
+      "path": "docs/architecture/ARCHITECTURE.md",
+      "sha256": "ab5e9f55cf85abc0d34e8c222f4784e84af65dab406cbee2295c394b2bb97f3b",
+      "bytes": 4002
+    },
+    {
+      "path": "docs/architecture/CONTRACTS.md",
+      "sha256": "cabe7497cbd4c5f9a3ce270254e411b97c05afc2e9a2f54b343f14fc5307fba0",
+      "bytes": 2744
+    },
+    {
+      "path": "docs/decisions/ADR-0001-BASELINE.md",
+      "sha256": "9e02ee8bcff136cd0e29755ae226fdbd95e64f3973e5ed04561cab742c2c7646",
+      "bytes": 1122
+    },
+    {
+      "path": "docs/research/SOURCES.md",
+      "sha256": "85c064ed93c6c121da4b210ab1bf3abe53750b141e32c3b62048b660ce431367",
+      "bytes": 1809
+    },
+    {
+      "path": "docs/roadmap/MILESTONES.md",
+      "sha256": "60e8988840237775d65fc49e07c096623deff956316fe01867506baaee58cb4f",
+      "bytes": 2596
+    },
+    {
+      "path": "docs/setup/DEVELOPMENT_ENVIRONMENT.md",
+      "sha256": "74afbb32af7d5529fdd5ef7fb71c0677e74d66e7dffbabed8a48cbfd52a58104",
+      "bytes": 1570
+    },
+    {
+      "path": "docs/setup/WINDOWS_SETUP.md",
+      "sha256": "c8988db834ae224289a4e8cf836e018ec273ce4ddae1088e55d2ee194360e52c",
+      "bytes": 3852
+    },
+    {
+      "path": "docs/specs/PHASE_0.md",
+      "sha256": "a5b5aafa751fbf01dd2dd24afb5220031bc382a6b72ed620c968eb43bfbff32c",
+      "bytes": 2999
+    },
+    {
+      "path": "docs/templates/DEVELOPER_HANDOFF.md",
+      "sha256": "6e2b77ea94ed434acbe8403965544b89114295128772bec7900c5e0b76cc77e1",
+      "bytes": 528
+    },
+    {
+      "path": "docs/templates/EVALUATOR_REVIEW.md",
+      "sha256": "1d7f591c3ceef694a4119a2972878c1a0fd256b64f1c26d48fb117684cd01f13",
+      "bytes": 593
+    },
+    {
+      "path": "docs/templates/TICKET.md",
+      "sha256": "8112e3c3fa1ab6e9544db3da0053258d37c173d9ed2e7d35ec13450ba732e880",
+      "bytes": 354
+    },
+    {
+      "path": "docs/templates/VISUAL_TEST.md",
+      "sha256": "c01899366f07542ead6eb1ccf26f241733e956085b66d4af90369f9c02bac02d",
+      "bytes": 363
+    },
+    {
+      "path": "docs/workflow/CHATGPT_EVALUATOR_PROMPT.md",
+      "sha256": "25e31ee0d6e57a0bb9000680d8b092925781c519d1ecba0b53751ae847cfd075",
+      "bytes": 712
+    },
+    {
+      "path": "docs/workflow/CODEX_START_PROMPT.md",
+      "sha256": "5ef0c91dca8d309b5e4d31a3f90cf16aaf147f95e65ff73e0040c8406ab115aa",
+      "bytes": 747
+    },
+    {
+      "path": "docs/workflow/FIRST_TASK.md",
+      "sha256": "972b9481f20aecedb75236e24b8cc7bd86d6927dab8f2704e985294b595f75d1",
+      "bytes": 1327
+    },
+    {
+      "path": "docs/workflow/ROLES_AND_GATES.md",
+      "sha256": "4b682a3b4b1c2a07625c869961141f1a5cc46a1d52f6e8f7d366b10ed31ca909",
+      "bytes": 2886
+    },
+    {
+      "path": "game/project.godot",
+      "sha256": "b481701d66100174218b61a4a9388440360e217c7504b8dde548ab1740c7c03f",
+      "bytes": 382
+    },
+    {
+      "path": "game/scenes/main.tscn",
+      "sha256": "d33f9e49c2616c8dbc4583d2b50d5b72023278aa8a3a6dc20ddfebea8b2c39af",
+      "bytes": 502
+    },
+    {
+      "path": "game/scripts/bootstrap.gd",
+      "sha256": "cf7fd548f3ccbcbfecc4c3ad2b056cae39fe870514d6e527582060540d91eafa",
+      "bytes": 320
+    },
+    {
+      "path": "game/tests/smoke.gd",
+      "sha256": "eee78557c773463ce4b14f6d7b91e70e8ff3b491e30e5a22bd186535e6ec676a",
+      "bytes": 593
+    },
+    {
+      "path": "mods/examples/procedural-rock/README.md",
+      "sha256": "756cda09d0b9b68af4437a5ca4d02b2d4dd3c48fd61ee3a177e9b7b87d557604",
+      "bytes": 249
+    },
+    {
+      "path": "mods/examples/procedural-rock/manifest.example.json",
+      "sha256": "23595d68f946990eb9d74897e8a0613f2610d9c7f954ca78ffc0861406a26b15",
+      "bytes": 217
+    },
+    {
+      "path": "scripts/check-env.ps1",
+      "sha256": "cb3de1064128d24cd04534e12ecf21f57df8bcf762ce6cb64a61853aedaffd84",
+      "bytes": 688
+    },
+    {
+      "path": "scripts/validate.ps1",
+      "sha256": "9cad1d2fe3cf848c7db46ae4c02cab2d78b18173e298ed5bed7ab7c3ff2bfc91",
+      "bytes": 847
+    },
+    {
+      "path": "scripts/validate.sh",
+      "sha256": "ae9c22b0a05781db9a0708d18c7a7b9e145bfdd93bdcfee8d96288ca0ee94e2f",
+      "bytes": 321
+    }
+  ]
+}
