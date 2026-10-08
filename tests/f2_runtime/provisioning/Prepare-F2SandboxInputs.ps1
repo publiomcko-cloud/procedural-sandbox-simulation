@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [switch] $PrepareInputs,
-    [switch] $Automation
+    [switch] $Automation,
+    [switch] $SourceOnly
 )
 
 Set-StrictMode -Version Latest
@@ -123,6 +124,7 @@ function Assert-PreparerSandboxConfiguration {
 }
 
 try {
+    if ($SourceOnly -and (-not $Automation -or $PrepareInputs)) { throw 'SourceOnly is restricted to diagnostic-only automation source validation without staging.' }
     if ([System.IO.Path]::GetFullPath($approvedHostFolder) -ne $approvedHostFolder) {
         throw "Approved folder is not the fixed canonical path: $approvedHostFolder"
     }
@@ -193,18 +195,23 @@ try {
     Add-Result 'wsb_security_configuration' PASS $configDescription
     Add-Result 'resource_configuration' UNKNOWN 'MemoryInMB is a guest memory allocation only; this file does not enforce CPU, disk, or per-probe/session time limits.'
 
-    $sandboxExe = Join-Path $env:WINDIR 'System32\WindowsSandbox.exe'
-    if ((Test-Path -LiteralPath $sandboxExe -PathType Leaf) -and (Get-Command WindowsSandbox.exe -ErrorAction SilentlyContinue)) {
-        Add-Result 'windows_sandbox_executable' PASS $sandboxExe
+    if ($SourceOnly) {
+        Add-Result 'windows_sandbox_executable' UNKNOWN 'SourceOnly fixture: OS Sandbox executable deliberately NOT CHECKED.'
+        Add-Result 'sandbox_optional_feature' UNKNOWN 'SourceOnly fixture: optional feature deliberately NOT CHECKED.'
     } else {
-        Add-Result 'windows_sandbox_executable' FAIL 'WindowsSandbox.exe was not found; do not alter Windows features from this script.'
-    }
+        $sandboxExe = Join-Path $env:WINDIR 'System32\WindowsSandbox.exe'
+        if ((Test-Path -LiteralPath $sandboxExe -PathType Leaf) -and (Get-Command WindowsSandbox.exe -ErrorAction SilentlyContinue)) {
+            Add-Result 'windows_sandbox_executable' PASS $sandboxExe
+        } else {
+            Add-Result 'windows_sandbox_executable' FAIL 'WindowsSandbox.exe was not found; do not alter Windows features from this script.'
+        }
 
-    try {
-        $feature = Get-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -ErrorAction Stop
-        Add-Result 'sandbox_optional_feature' $(if ($feature.State -eq 'Enabled') { 'PASS' } else { 'FAIL' }) ("Containers-DisposableClientVM state=$($feature.State); no feature change was requested.")
-    } catch {
-        Add-Result 'sandbox_optional_feature' UNKNOWN ("Could not read optional-feature state without elevation: $($_.Exception.Message)")
+        try {
+            $feature = Get-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -ErrorAction Stop
+            Add-Result 'sandbox_optional_feature' $(if ($feature.State -eq 'Enabled') { 'PASS' } else { 'FAIL' }) ("Containers-DisposableClientVM state=$($feature.State); no feature change was requested.")
+        } catch {
+            Add-Result 'sandbox_optional_feature' UNKNOWN ("Could not read optional-feature state without elevation: $($_.Exception.Message)")
+        }
     }
 
     Add-Result 'wsb_opened' 'NOT RUN' 'This script never launches Windows Sandbox. Owner must use the printed manual command and observe the guest window.'
