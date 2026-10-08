@@ -11,9 +11,11 @@ $approvedHostFolder = 'C:\F2-Approved-Inputs'
 $sandboxInputFolder = 'C:\F2Input'
 $diagnosticName = 'Get-F2SandboxReadiness.ps1'
 $bootstrapName = 'Start-F2SandboxDiagnostics.ps1'
+$wrapperName = 'F2-Guest-Diagnostic.cmd'
 $expectedDiagnosticSha256 = '78fa1dd2d0bc691cecdb5089ee409c71080d30fe0f0e928b2225c7d3bc745d9f'
 $expectedBootstrapSha256 = 'ac8f5952b4138c774a5193f1b5eba0abef6abca961a9573e208296812933ab0e'
-$expectedWsbSha256 = '0edaa9ab7363c902ea1a39badd5dc8f5b9e6870811cbb32421c7562e133de941'
+$expectedWsbSha256 = 'ecbf5047d4c226fa250488b146da2f32253e461b892c13d86d17471485e18acd'
+$expectedWrapperSha256 = 'f93c0890d595093d25891b1a6dcaca105f46c2aec418c3f11bed3187e4c5b822'
 $previousReviewedBootstrapSha256 = @(
     '2bbb945e86274b98eda6b2c08eae156c0d2851f114c895f77505576991600093'
     '4a28b6d8a6b56239da131204316f441ab3a486d9bcb9a7bb7e3b4c77e36800f3'
@@ -24,9 +26,10 @@ $previousReviewedDiagnosticSha256 = @(
     '0664b0adfb511bda16bec900e92aad568eb50cc1cdba2cd9bdd35729cb1c164b'
     '5677f096eb78c2db08f5630e53a74c932719130ca0f7842ee8dca2ac2c0ff300'
 )
-$inputNames = if ($Automation) { @($diagnosticName, $bootstrapName) } else { @($diagnosticName) }
+$inputNames = if ($Automation) { @($diagnosticName, $bootstrapName, $wrapperName) } else { @($diagnosticName) }
 $diagnosticSource = Join-Path $PSScriptRoot $diagnosticName
 $bootstrapSource = Join-Path $PSScriptRoot $bootstrapName
+$wrapperSource = Join-Path $PSScriptRoot $wrapperName
 $wsbTemplateName = if ($Automation) { 'F2-Isolated-Sandbox-automation.wsb.example' } else { 'F2-Isolated-Sandbox.wsb.example' }
 $wsbTemplate = Join-Path $PSScriptRoot $wsbTemplateName
 $results = [System.Collections.Generic.List[object]]::new()
@@ -163,10 +166,22 @@ try {
             throw "Startup bootstrap SHA-256 is not the reviewed pinned value. Observed: $bootstrapHash"
         }
         Add-Result 'bootstrap_source_identity' PASS ("$bootstrapSource SHA256=$bootstrapHash; UTF-8 plain text, $($bootstrapBytes.Length) bytes")
+        $wrapperItem = Get-Item -LiteralPath $wrapperSource -Force
+        if ($wrapperItem.PSIsContainer -or ($wrapperItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw 'Guest CMD startup wrapper must be a regular non-reparse file.'
+        }
+        $wrapperBytes = [IO.File]::ReadAllBytes($wrapperSource)
+        if ($wrapperBytes.Length -gt 16384 -or $wrapperBytes -contains 0 -or @($wrapperBytes | Where-Object { $_ -gt 127 }).Count -gt 0) {
+            throw 'Guest CMD startup wrapper must be ASCII plain text under 16 KiB without NUL.'
+        }
+        $wrapperHash = Get-NormalizedScriptHash -LiteralPath $wrapperSource
+        if ($wrapperHash -ne $expectedWrapperSha256) { throw "Guest CMD wrapper SHA-256 mismatch: $wrapperHash" }
+        Add-Result 'wrapper_source_identity' PASS ("$wrapperSource SHA256=$wrapperHash")
     }
 
     [xml] $config = Get-Content -LiteralPath $wsbTemplate -Raw
-    $logonCommand = 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -NoExit -Command "Write-Host ''F2 DIAGNOSTIC STARTING - visible startup wrapper''; & ''C:\F2Input\Start-F2SandboxDiagnostics.ps1''"'
+
+    $logonCommand = 'cmd.exe /k C:\F2Input\F2-Guest-Diagnostic.cmd'
     $configDescription = Assert-PreparerSandboxConfiguration -Configuration $config -Automation ([bool]$Automation) -ApprovedHostFolder $approvedHostFolder -SandboxInputFolder $sandboxInputFolder -ExpectedCommand $logonCommand
     if ($Automation) {
         $wsbHash = Get-NormalizedScriptHash -LiteralPath $wsbTemplate
@@ -208,14 +223,14 @@ try {
         foreach ($name in $inputNames) {
             $source = Join-Path $PSScriptRoot $name
             $destination = Join-Path $approvedHostFolder $name
-            $expectedHash = if ($name -eq $diagnosticName) { $expectedDiagnosticSha256 } else { $expectedBootstrapSha256 }
+            $expectedHash = if ($name -eq $diagnosticName) { $expectedDiagnosticSha256 } elseif ($name -eq $bootstrapName) { $expectedBootstrapSha256 } else { $expectedWrapperSha256 }
             if (Test-Path -LiteralPath $destination) {
                 $existingItem = Get-Item -LiteralPath $destination -Force
                 if ($existingItem.PSIsContainer -or ($existingItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
                     throw "Existing mapped input is not a regular file; refusing to follow or overwrite it: $name"
                 }
                 $existingHash = Get-NormalizedScriptHash -LiteralPath $destination
-                $knownPrevious = if ($name -eq $diagnosticName) { $existingHash -in $previousReviewedDiagnosticSha256 } else { $existingHash -in $previousReviewedBootstrapSha256 }
+                $knownPrevious = if ($name -eq $diagnosticName) { $existingHash -in $previousReviewedDiagnosticSha256 } elseif ($name -eq $bootstrapName) { $existingHash -in $previousReviewedBootstrapSha256 } else { $false }
                 if ($existingHash -ne $expectedHash -and -not $knownPrevious) {
                     throw "Existing mapped input differs from reviewed content; refusing overwrite: $name SHA256=$existingHash"
                 }
