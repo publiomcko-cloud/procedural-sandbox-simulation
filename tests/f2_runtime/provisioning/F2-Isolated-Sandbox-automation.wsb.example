@@ -15,6 +15,6 @@
   <ClipboardRedirection>Disable</ClipboardRedirection>
   <MemoryInMB>8192</MemoryInMB>
   <LogonCommand>
-    <Command>cmd.exe /k C:\F2Input\F2-Guest-Diagnostic.cmd</Command>
+    <Command>C:\F2Input\F2-Guest-Diagnostic.cmd</Command>
   </LogonCommand>
 </Configuration>
