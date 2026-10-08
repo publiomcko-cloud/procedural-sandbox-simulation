@@ -1,0 +1,231 @@
+{
+  "ticket": "P0.1-F1.5",
+  "research_date": "2026-10-08",
+  "repository": "https://github.com/Zylann/godot_voxel",
+  "source_commit": "75d3c6d996ed2331c80edcd8c3ebc947afc0f041",
+  "release_tag": "v1.7x",
+  "release_asset": {
+    "name": "GodotVoxelExtension.zip",
+    "published_size_bytes": 54457774,
+    "publisher_sha256": "600737572a5e25541ba6f503e842a3717ba19afafa5474510a6ceff995a1d2d8",
+    "digest_independently_recomputed_in_this_task": false
+  },
+  "evidence_classes": [
+    "verified_source_fact",
+    "verified_publisher_metadata",
+    "verified_release_build_log_input",
+    "build_path_inference",
+    "unknown_binary_fact"
+  ],
+  "binary_content_status": "Release compile/link inputs are verified from public job logs; exact machine code retained in each DLL and runtime imports remain unverified",
+  "release_jobs": {
+    "workflow_run_id": "32419292967",
+    "run_url": "https://github.com/Zylann/godot_voxel/actions/runs/32419292967",
+    "source_commit": "75d3c6d996ed2331c80edcd8c3ebc947afc0f041",
+    "editor": {
+      "job_id": "96587536545",
+      "job_url": "https://github.com/Zylann/godot_voxel/actions/runs/32419292967/job/96587536545",
+      "result": "success",
+      "target": "windows x86_64 editor single",
+      "scons_command": "scons target=editor platform=windows arch=x86_64 precision=single dev_build=no verbose=yes use_static_cpp=yes voxel_tests=no",
+      "godot_cpp_checkout_sha": "9c8aeff0f58ad030f3d1030e8262de1322cd0ccd",
+      "output_dll": "project\\addons\\zylann.voxel\\bin\\libvoxel.windows.editor.x86_64.dll",
+      "output_size_bytes_in_log_and_accepted_f1_manifest": 11337216,
+      "link_inputs": {
+        "sqlite": ["thirdparty\\sqlite\\sqlite3.o"],
+        "lz4": ["thirdparty\\lz4\\lz4.o"],
+        "meshoptimizer": [
+          "thirdparty\\meshoptimizer\\allocator.o",
+          "thirdparty\\meshoptimizer\\clusterizer.o",
+          "thirdparty\\meshoptimizer\\indexanalyzer.o",
+          "thirdparty\\meshoptimizer\\indexcodec.o",
+          "thirdparty\\meshoptimizer\\indexgenerator.o",
+          "thirdparty\\meshoptimizer\\overdrawoptimizer.o",
+          "thirdparty\\meshoptimizer\\partition.o",
+          "thirdparty\\meshoptimizer\\quantization.o",
+          "thirdparty\\meshoptimizer\\rasterizer.o",
+          "thirdparty\\meshoptimizer\\simplifier.o",
+          "thirdparty\\meshoptimizer\\spatialorder.o",
+          "thirdparty\\meshoptimizer\\stripifier.o",
+          "thirdparty\\meshoptimizer\\vcacheoptimizer.o",
+          "thirdparty\\meshoptimizer\\vertexcodec.o",
+          "thirdparty\\meshoptimizer\\vertexfilter.o",
+          "thirdparty\\meshoptimizer\\vfetchoptimizer.o"
+        ],
+        "fastnoiselite": [
+          "util\\noise\\fast_noise_lite\\fast_noise_lite.o",
+          "util\\noise\\fast_noise_lite\\fast_noise_lite_gradient.o",
+          "util\\noise\\fast_noise_lite\\fast_noise_lite_range.o"
+        ],
+        "godot_cpp_static_library": "thirdparty\\godot-cpp\\bin\\libgodot-cpp.windows.editor.x86_64.a",
+        "fastnoise2_inputs": []
+      }
+    },
+    "template_release": {
+      "job_id": "96587536763",
+      "job_url": "https://github.com/Zylann/godot_voxel/actions/runs/32419292967/job/96587536763",
+      "result": "success",
+      "target": "windows x86_64 template_release single",
+      "scons_command": "scons target=template_release platform=windows arch=x86_64 precision=single dev_build=no verbose=yes use_static_cpp=yes voxel_tests=no",
+      "godot_cpp_checkout_sha": "9c8aeff0f58ad030f3d1030e8262de1322cd0ccd",
+      "output_dll": "project\\addons\\zylann.voxel\\bin\\libvoxel.windows.template_release.x86_64.dll",
+      "output_size_bytes_in_log_and_accepted_f1_manifest": 10173952,
+      "link_inputs": {
+        "sqlite": ["thirdparty\\sqlite\\sqlite3.o"],
+        "lz4": ["thirdparty\\lz4\\lz4.o"],
+        "meshoptimizer": [
+          "thirdparty\\meshoptimizer\\allocator.o",
+          "thirdparty\\meshoptimizer\\clusterizer.o",
+          "thirdparty\\meshoptimizer\\indexanalyzer.o",
+          "thirdparty\\meshoptimizer\\indexcodec.o",
+          "thirdparty\\meshoptimizer\\indexgenerator.o",
+          "thirdparty\\meshoptimizer\\overdrawoptimizer.o",
+          "thirdparty\\meshoptimizer\\partition.o",
+          "thirdparty\\meshoptimizer\\quantization.o",
+          "thirdparty\\meshoptimizer\\rasterizer.o",
+          "thirdparty\\meshoptimizer\\simplifier.o",
+          "thirdparty\\meshoptimizer\\spatialorder.o",
+          "thirdparty\\meshoptimizer\\stripifier.o",
+          "thirdparty\\meshoptimizer\\vcacheoptimizer.o",
+          "thirdparty\\meshoptimizer\\vertexcodec.o",
+          "thirdparty\\meshoptimizer\\vertexfilter.o",
+          "thirdparty\\meshoptimizer\\vfetchoptimizer.o"
+        ],
+        "fastnoiselite": [
+          "util\\noise\\fast_noise_lite\\fast_noise_lite.o",
+          "util\\noise\\fast_noise_lite\\fast_noise_lite_gradient.o",
+          "util\\noise\\fast_noise_lite\\fast_noise_lite_range.o"
+        ],
+        "godot_cpp_static_library": "thirdparty\\godot-cpp\\bin\\libgodot-cpp.windows.template_release.x86_64.a",
+        "fastnoise2_inputs": []
+      }
+    },
+    "interpretation_limit": "Successful compile/link logs verify inputs passed to the linker, not exact code retained after optimization, a link map, runtime dependency closure, or legal compliance"
+  },
+  "components": [
+    {
+      "name": "SQLite",
+      "version": "3.51.0",
+      "upstream_source": "thirdparty/sqlite/sqlite3.c",
+      "license": "Public domain",
+      "copyright_or_origin": "SQLite authors; Fossil check-in fb2c931ae597f8d00a37574ff67aeed3eced",
+      "source_condition": "common.py defaults voxel_sqlite=True; SConstruct adds sqlite3.c when enabled",
+      "evidence_class": "verified_release_build_log_input",
+      "link_inputs": ["thirdparty\\sqlite\\sqlite3.o"],
+      "target_status": "Compile and final-link input recorded for both Windows jobs",
+      "retained_machine_code": "unknown_binary_fact",
+      "notice_question": "SQLite core public-domain code has no copyright/permission notice condition; preserve provenance and identify any non-core sources separately"
+    },
+    {
+      "name": "LZ4",
+      "version": "1.10.0",
+      "upstream_source": "thirdparty/lz4/lz4.c",
+      "license": "BSD-style two-condition license",
+      "copyright_or_origin": "Yann Collet, 2011-2020; upstream commit ebb370ca83af193212df4dcbadcc5d87bc0de2f0",
+      "source_condition": "common.py unconditionally selects thirdparty/lz4/*.c",
+      "evidence_class": "verified_release_build_log_input",
+      "link_inputs": ["thirdparty\\lz4\\lz4.o"],
+      "target_status": "Compile and final-link input recorded for both Windows jobs",
+      "retained_machine_code": "unknown_binary_fact",
+      "notice_question": "Binary redistribution conditions require copyright, conditions, and disclaimer in accompanying materials; F1 manifest reports no separate LZ4 notice"
+    },
+    {
+      "name": "meshoptimizer",
+      "version": "0.25",
+      "upstream_source": "thirdparty/meshoptimizer/*.cpp",
+      "license": "MIT",
+      "copyright_or_origin": "Arseny Kapoulkine, 2016-2025; upstream commit 6daea4695c48338363b08022d2fb15deaef6ac09",
+      "source_condition": "common.py defaults voxel_smooth_meshing=True",
+      "evidence_class": "verified_release_build_log_input",
+      "link_input_prefix": "thirdparty\\meshoptimizer\\",
+      "link_inputs_by_target": "Full 16-object list is recorded under release_jobs.editor.link_inputs.meshoptimizer and release_jobs.template_release.link_inputs.meshoptimizer",
+      "target_status": "16 meshoptimizer object files appear on both compile logs and final link commands",
+      "retained_machine_code": "unknown_binary_fact",
+      "notice_question": "MIT copyright and permission notice is implicated by explicit linker inputs; F1 manifest reports no separate meshoptimizer notice"
+    },
+    {
+      "name": "FastNoiseLite",
+      "version": "1.1.1",
+      "upstream_source": "thirdparty/fast_noise/FastNoiseLite.h and util/noise/fast_noise_lite/*.cpp",
+      "license": "MIT",
+      "copyright_or_origin": "Jordan Peck and contributors, 2023",
+      "source_condition": "common.py selects shared FastNoiseLite wrappers",
+      "evidence_class": "verified_release_build_log_input",
+      "link_inputs_by_target": "Three object files are recorded under release_jobs.editor.link_inputs.fastnoiselite and release_jobs.template_release.link_inputs.fastnoiselite",
+      "target_status": "Three FastNoiseLite object files appear on both final link commands",
+      "retained_machine_code": "unknown_binary_fact",
+      "notice_question": "MIT copyright and permission notice is implicated by explicit linker inputs; F1 manifest reports no separate FastNoiseLite notice"
+    },
+    {
+      "name": "FastNoise2",
+      "version": "0.10.0-alpha",
+      "upstream_source": "thirdparty/fast_noise_2/",
+      "license": "MIT",
+      "copyright_or_origin": "Jordan Peck, 2020",
+      "source_condition": "FastNoise2 SCons integration is module-only; GDExtension SConstruct uses extension mode",
+      "evidence_class": "verified_source_fact_and_release_log_absence",
+      "link_inputs": [],
+      "target_status": "No FastNoise2 object or archive identified in either final link command",
+      "retained_machine_code": "not identified by source path or logged final-link inputs; not binary scanned",
+      "notice_question": "No FastNoise2 notice obligation indicated for these targets by current evidence; confirm if future artifacts or transitive inputs change"
+    },
+    {
+      "name": "godot-cpp",
+      "version": "commit 9c8aeff0f58ad030f3d1030e8262de1322cd0ccd",
+      "upstream_source": "https://github.com/godotengine/godot-cpp/tree/9c8aeff0f58ad030f3d1030e8262de1322cd0ccd",
+      "license": "MIT",
+      "copyright_or_origin": "Godot Engine contributors, 2017-present; exact LICENSE.md at resolved commit",
+      "source_condition": "Release workflow asks for mutable master; both historical Windows job logs record this resolved checkout SHA",
+      "evidence_class": "verified_release_build_log_input",
+      "link_inputs": [
+        "thirdparty\\godot-cpp\\bin\\libgodot-cpp.windows.editor.x86_64.a",
+        "thirdparty\\godot-cpp\\bin\\libgodot-cpp.windows.template_release.x86_64.a"
+      ],
+      "target_status": "Target-specific static library is an input on each final link command",
+      "retained_machine_code": "unknown_binary_fact",
+      "notice_question": "MIT notice is implicated by the explicit archive input; F1 manifest reports no separate godot-cpp notice. Mutable workflow refs remain a future reproducibility risk"
+    },
+    {
+      "name": "Tracy profiler",
+      "version": "not present in pinned thirdparty tree",
+      "upstream_source": "No thirdparty/tracy directory at pinned source commit; SCsub conditionally references #thirdparty/tracy/public for module builds",
+      "license": "not assessed because no pinned source copy or GDExtension input was identified",
+      "copyright_or_origin": "not assessed",
+      "source_condition": "Module-only optional build-script reference; no Tracy input in either GDExtension link log",
+      "evidence_class": "verified_source_fact_and_release_log_absence",
+      "link_inputs": [],
+      "target_status": "No Tracy source directory or logged link input for either Windows target",
+      "retained_machine_code": "not identified by available source/log evidence; not binary scanned",
+      "notice_question": "No Tracy notice obligation indicated for these targets; re-audit if a future build supplies or enables the path"
+    },
+    {
+      "name": "Windows runtime/transitive libraries",
+      "version": "unknown",
+      "upstream_source": "Toolchain, OS runtime, and any unlisted/transitive linkage",
+      "license": "unknown",
+      "copyright_or_origin": "unknown",
+      "source_condition": "The final command shows static runtime flags but no complete runtime/import dependency report was inspected",
+      "evidence_class": "unknown_binary_fact",
+      "link_inputs": [],
+      "target_status": "unknown",
+      "retained_machine_code": "unknown_binary_fact",
+      "notice_question": "Need a complete runtime dependency inventory before distribution conclusions"
+    }
+  ],
+  "publisher_metadata": {
+    "release_asset_sha256": "600737572a5e25541ba6f503e842a3717ba19afafa5474510a6ceff995a1d2d8",
+    "workflow_package_artifact_sha256": "600737572a5e25541ba6f503e842a3717ba19afafa5474510a6ceff995a1d2d8",
+    "digest_matches_published_asset_metadata": true,
+    "digest_independently_recomputed_in_this_task": false,
+    "reusable_workflow_ref_in_release_source": "master",
+    "godot_cpp_ref_in_release_source": "master",
+    "historical_godot_cpp_checkout_sha_from_both_job_logs": "9c8aeff0f58ad030f3d1030e8262de1322cd0ccd"
+  },
+  "unresolved": [
+    "No per-DLL link map showing which input sections/code survived optimization",
+    "No independent inspection or hash of Windows DLL bytes in this task",
+    "No complete Windows runtime/transitive dependency inventory",
+    "No separate third-party notices appear in accepted F1 archive evidence despite explicit log inputs for LZ4, meshoptimizer, FastNoiseLite, and godot-cpp",
+    "Release workflow source uses mutable refs for future builds even though this historical run logs the resolved godot-cpp SHA"
+  ]
+}
