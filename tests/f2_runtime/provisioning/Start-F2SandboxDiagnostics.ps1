@@ -257,7 +257,7 @@ try {
     if ($credential) { $credential = $null }
     if ($securePassword) { $securePassword.Dispose() }
     if ($passwordChars) { [Array]::Clear($passwordChars, 0, $passwordChars.Length) }
-    if ($randomBytes) { [Array]::Clear($randomBytes, 0, $randomBytes.Length)     if ($process) { $process.Dispose() }
+    if ($randomBytes) { [Array]::Clear($randomBytes, 0, $randomBytes.Length) }
+    if ($process) { $process.Dispose() }
 }
 exit $bootstrapExitCode
-}
