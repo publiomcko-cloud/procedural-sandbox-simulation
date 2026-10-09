@@ -1,0 +1,48 @@
+name: F2 diagnostic source tests (Windows)
+on:
+  push:
+    branches:
+      - fix/f2-guest-cmd-wrapper-issue41
+  pull_request:
+    paths:
+      - 'tests/f2_runtime/provisioning/**'
+      - '.github/workflows/f2-diagnostic-source-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-only-windows:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run F2 PowerShell source-only regression suite
+        shell: pwsh
+        run: |
+          & pwsh -NoLogo -NoProfile -File tests/f2_runtime/provisioning/Test-F2SandboxAutomation.ps1
+          if ($LASTEXITCODE -ne 0) { throw "F2 PowerShell source-only regression failed: exit $LASTEXITCODE" }
+      - name: Verify all 5 PowerShell files parse
+        shell: pwsh
+        run: |
+          $paths = @(Get-ChildItem tests/f2_runtime/provisioning -Filter '*.ps1' -File)
+          if ($paths.Count -ne 5) { throw "Expected 5 PowerShell files; observed $($paths.Count)" }
+          foreach ($p in $paths) {
+            $tokens = $null
+            $parseErrors = $null
+            [Management.Automation.Language.Parser]::ParseFile($p.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count -ne 0) { throw "Parser errors in $($p.Name): $($parseErrors -join '; ')" }
+          }
+          Write-Host 'PowerShell parser PASS: 5 files, 0 errors'
+      - name: Git PR diff whitespace validation
+        shell: pwsh
+        run: |
+          git diff --check origin/feat/p0-1-f2-sandbox-readiness...HEAD
+          if ($LASTEXITCODE -ne 0) { throw "git diff --check failed: exit $LASTEXITCODE" }
+      - name: Clarify scope
+        shell: pwsh
+        run: |
+          Write-Host 'Source-only checks; no Windows Sandbox launch, staging, native binaries, Godot, or Voxel Tools.'

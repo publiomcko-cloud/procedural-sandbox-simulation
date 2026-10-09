@@ -54,3 +54,5 @@ For each executed probe, write command, start/end time, exit code, log path/hash
 ## Current host attempt
 
 The 2026-10-08 G1 attempt stopped before Probe A. The host had no discoverable `WindowsSandbox.exe`, no Hyper-V VM management cmdlet/module, and no installed VirtualBox or VMware control executable; querying Windows optional-feature state failed with an elevation-required error. No isolated guest could be controlled or verified. Therefore no archive download, Godot identity check, extraction, or native execution was attempted. During the subsequent source-only preparation correction, `validate_fixture.ps1` checked the analytic fixture; the existing synthetic ZIP safety suite also ran using generated archives only (see the F2 runtime report and handoff). Neither check involved Godot or vendor code.
+
+For the newer diagnostic-only stage-zero CMD startup (Issue #41), see [`P0.1-F2-GUEST-CMD-STARTUP.md`](../../docs/specs/P0.1-F2-GUEST-CMD-STARTUP.md). This replaces the earlier nested PowerShell startup command; guest execution remains unverified.

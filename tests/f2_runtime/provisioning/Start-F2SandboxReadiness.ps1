@@ -8,9 +8,11 @@ $ErrorActionPreference = 'Stop'
 $approvedHostFolder = 'C:\F2-Approved-Inputs'
 $diagnosticName = 'Get-F2SandboxReadiness.ps1'
 $bootstrapName = 'Start-F2SandboxDiagnostics.ps1'
+$wrapperName = 'F2-Guest-Diagnostic.cmd'
 $expectedDiagnosticSha256 = '78fa1dd2d0bc691cecdb5089ee409c71080d30fe0f0e928b2225c7d3bc745d9f'
-$expectedBootstrapSha256 = 'ac8f5952b4138c774a5193f1b5eba0abef6abca961a9573e208296812933ab0e'
-$expectedWsbSha256 = '0edaa9ab7363c902ea1a39badd5dc8f5b9e6870811cbb32421c7562e133de941'
+$expectedBootstrapSha256 = '62f758c3bdbbe53e92d7751f49d874a8c066d5bde0bd730e5c071fa18f02da74'
+$expectedWsbSha256 = '368d5bed7093504e7cbfbae3fc830b536b5f8f42e12f363537b2ac8697ece652'
+$expectedWrapperSha256 = 'a53cbc9a0c5565bbf182c794f31d4ba24a8a94bd181e11e0bdf15e55aa75ca89'
 $sandboxExe = Join-Path $env:WINDIR 'System32\WindowsSandbox.exe'
 $templatePath = Join-Path $PSScriptRoot 'F2-Isolated-Sandbox-automation.wsb.example'
 $preparerPath = Join-Path $PSScriptRoot 'Prepare-F2SandboxInputs.ps1'
@@ -94,17 +96,20 @@ try {
     if ($preparerExit -ne 0) { throw "Pinned host checks/input staging failed with exit code $preparerExit. $($preparerOutput -join ' ')" }
 
     $folderEntries = @(Get-ChildItem -LiteralPath $approvedHostFolder -Force)
-    $expectedNames = @($diagnosticName, $bootstrapName)
+    $expectedNames = @($diagnosticName, $bootstrapName, $wrapperName)
     if ($folderEntries.Count -ne $expectedNames.Count -or @($folderEntries | Where-Object { $_.Name -notin $expectedNames -or $_.PSIsContainer -or ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 }).Count -gt 0) {
-        throw 'The approved input folder does not contain exactly the two reviewed regular script files.'
+        throw 'The approved input folder does not contain exactly the three reviewed diagnostic input files.'
     }
     $diagnosticPath = Join-Path $approvedHostFolder $diagnosticName
     $bootstrapPath = Join-Path $approvedHostFolder $bootstrapName
+    $wrapperPath = Join-Path $approvedHostFolder $wrapperName
     if ((Get-NormalizedScriptHash $diagnosticPath) -ne $expectedDiagnosticSha256) { throw 'Staged diagnostic digest changed after the host checker.' }
     if ((Get-NormalizedScriptHash $bootstrapPath) -ne $expectedBootstrapSha256) { throw 'Staged bootstrap digest changed after the host checker.' }
+    if ((Get-NormalizedScriptHash $wrapperPath) -ne $expectedWrapperSha256) { throw 'Staged guest CMD wrapper digest changed after the host checker.' }
 
     [xml] $wsb = Get-Content -LiteralPath $templatePath -Raw
-    $expectedCommand = 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -NoExit -Command "Write-Host ''F2 DIAGNOSTIC STARTING - visible startup wrapper''; & ''C:\F2Input\Start-F2SandboxDiagnostics.ps1''"'
+
+    $expectedCommand = 'C:\F2Input\F2-Guest-Diagnostic.cmd'
     Assert-LauncherAutomationConfiguration -Configuration $wsb -ExpectedCommand $expectedCommand -ApprovedHostFolder $approvedHostFolder | Out-Null
 
     $runId = [guid]::NewGuid().ToString('N')
@@ -133,8 +138,8 @@ One disposable Windows Sandbox will start using:
 $configPath
 
 Host input mapping: $approvedHostFolder -> C:\F2Input (ReadOnly=true)
-Guest inputs: two hash-pinned PowerShell diagnostic scripts only
-Diagnostic SHA-256: $($expectedDiagnosticSha256.Substring(0, 16))…; bootstrap SHA-256: $($expectedBootstrapSha256.Substring(0, 16))…
+Guest inputs: two hash-pinned PowerShell scripts and one hash-pinned ASCII guest CMD wrapper
+Diagnostic SHA-256: $($expectedDiagnosticSha256.Substring(0, 16))…; bootstrap SHA-256: $($expectedBootstrapSha256.Substring(0, 16))…; CMD SHA-256: $($expectedWrapperSha256.Substring(0, 16))…
 Automatic guest action: create one random-password guest-local standard user, run the pinned diagnostic as that user, print a concise report
 Networking: disabled    Clipboard: disabled    vGPU: disabled
 ProtectedClient: enabled    Memory allocation: 8192 MiB
@@ -154,7 +159,8 @@ The guest will remain disposable. Canceling here leaves only the narrow approved
     Assert-NoReparsePath -LiteralPath $configPath
     if (-not (Assert-LauncherTemplateHash -LiteralPath $configPath -ExpectedSha256 $expectedWsbSha256) -or
         (Get-NormalizedScriptHash $diagnosticPath) -ne $expectedDiagnosticSha256 -or
-        (Get-NormalizedScriptHash $bootstrapPath) -ne $expectedBootstrapSha256) {
+        (Get-NormalizedScriptHash $bootstrapPath) -ne $expectedBootstrapSha256 -or
+        (Get-NormalizedScriptHash $wrapperPath) -ne $expectedWrapperSha256) {
         throw 'A reviewed .wsb or staged script changed after owner confirmation; refusing launch.'
     }
     $sandboxProcess = Start-Process -FilePath $sandboxExe -ArgumentList ('"{0}"' -f $configPath) -PassThru -ErrorAction Stop

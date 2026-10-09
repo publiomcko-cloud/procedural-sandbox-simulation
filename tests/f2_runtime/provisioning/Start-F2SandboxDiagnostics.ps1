@@ -18,6 +18,8 @@ $finalStatus = 'BLOCKED_ENVIRONMENT'
 $stage = 'bootstrap entry'
 $failureCategory = 'None'
 $diagnosticExitCode = $null
+$process = $null
+$bootstrapExitCode = 2
 
 Write-Host 'F2 DIAGNOSTIC STARTING — diagnostic-only startup; no native runtime will run.' -ForegroundColor Cyan
 Write-Host ('F2 STAGE: {0}' -f $stage) -ForegroundColor DarkGray
@@ -29,7 +31,7 @@ function Write-Report {
     Write-Output ('Standard-user setup: {0}' -f $Status)
     Write-Output ('Failure stage: {0}' -f $stage)
     Write-Output ('Failure category: {0}' -f $failureCategory)
-    if ($null -ne $diagnosticExitCode) { Write-Output ('Standard-user child exit code: {0}' -f $diagnosticExitCode) }
+    Write-Output ('Standard-user child exit code: {0}' -f $(if ($null -eq $diagnosticExitCode) { 'UNKNOWN (no reliable process exit code)' } else { $diagnosticExitCode }))
     if ($Message) { Write-Output $Message }
     if ($null -ne $summary) {
         $summaryLinesProperty = $summary.PSObject.Properties['summary']
@@ -61,6 +63,83 @@ function Test-VerifiedStandardUserToken {
         $identityProperty.Value -eq $ExpectedIdentity -and
         $adminProperty.Value -eq $false -and
         $tokenProperty.Value -eq 'PASS'
+}
+
+
+function Resolve-F2ChildDiagnosticResult {
+    param(
+        [AllowNull()] [object] $Result,
+        [Parameter(Mandatory)] [string] $ExpectedIdentity,
+        [AllowNull()] [object] $ExitCode
+    )
+
+    if (-not (Test-VerifiedStandardUserToken -Result $Result -ExpectedIdentity $ExpectedIdentity)) {
+        return [pscustomobject]@{
+            Status = 'BLOCKED_STANDARD_USER'
+            Category = 'StandardUserTokenNotVerified'
+            Message = 'Standard-user identity/token was not verified; no administrator fallback ran.'
+        }
+    }
+
+    $networkField = $Result.PSObject.Properties['network_status']
+    $mappingField = $Result.PSObject.Properties['mapping_status']
+    $overallField = $Result.PSObject.Properties['overall']
+    $nativeField = $Result.PSObject.Properties['native_code_executed']
+
+    if (($networkField -and $networkField.Value -eq 'FAIL') -or ($mappingField -and $mappingField.Value -eq 'FAIL')) {
+        return [pscustomobject]@{
+            Status = 'BLOCKED_ENVIRONMENT'
+            Category = 'NetworkOrMappingGateFailed'
+            Message = 'The standard-user diagnostic observed a network or read-only mapping failure.'
+        }
+    }
+    if (-not $networkField -or -not $mappingField -or $networkField.Value -ne 'PASS' -or $mappingField.Value -ne 'PASS') {
+        return [pscustomobject]@{
+            Status = 'BLOCKED_ENVIRONMENT'
+            Category = 'NetworkOrMappingGateUnverified'
+            Message = 'Network and read-only mapping must both be observed PASS; UNKNOWN is not PASS.'
+        }
+    }
+    if (-not $nativeField -or $nativeField.Value -isnot [bool] -or $nativeField.Value -ne $false) {
+        return [pscustomobject]@{
+            Status = 'BLOCKED_ENVIRONMENT'
+            Category = 'NativeExecutionAttestationMissing'
+            Message = 'Child must explicitly attest that no native code was executed.'
+        }
+    }
+    if ($overallField -and $overallField.Value -eq 'FAIL') {
+        return [pscustomobject]@{
+            Status = 'BLOCKED_ENVIRONMENT'
+            Category = 'OtherDiagnosticGateFailed'
+            Message = 'The standard-user child marked its overall diagnostic FAIL.'
+        }
+    }
+    if ($null -eq $ExitCode -or $ExitCode -isnot [int]) {
+        return [pscustomobject]@{
+            Status = 'BLOCKED_ENVIRONMENT'
+            Category = 'ChildExitCodeUnavailable'
+            Message = 'Network and read-only mapping reported PASS; the child process exit code is UNKNOWN, so readiness cannot be certified.'
+        }
+    }
+    if ($ExitCode -ne 0) {
+        return [pscustomobject]@{
+            Status = 'BLOCKED_ENVIRONMENT'
+            Category = 'ChildProcessFailed'
+            Message = ('The standard-user child process exited with code {0}; no isolation gate is falsely identified as its cause.' -f $ExitCode)
+        }
+    }
+    if (-not $overallField -or $overallField.Value -ne 'INCOMPLETE') {
+        return [pscustomobject]@{
+            Status = 'BLOCKED_ENVIRONMENT'
+            Category = 'UnexpectedChildDiagnosticStatus'
+            Message = 'Expected source-only guest diagnostic overall INCOMPLETE; missing or unexpected status blocks readiness.'
+        }
+    }
+    return [pscustomobject]@{
+        Status = 'INCOMPLETE'
+        Category = 'ReadinessGatesRemainUnknown'
+        Message = 'Standard-user child and isolation gates passed. Renderer, resource supervision, future Godot token, and evidence gates remain UNKNOWN.'
+    }
 }
 
 try {
@@ -129,6 +208,10 @@ try {
     $credential = [pscredential]::new(("{0}\{1}" -f $env:COMPUTERNAME, $username), $securePassword)
     $argumentLine = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\F2Input\Get-F2SandboxReadiness.ps1 -Summary'
     $process = Start-Process -FilePath $powershellPath -Credential $credential -LoadUserProfile -ArgumentList $argumentLine -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -ErrorAction Stop
+    # Cache the process handle while the credential-bound child is live. Some Windows PowerShell
+    # Start-Process -Credential combinations otherwise return an unavailable ExitCode.
+    # This attempt does not prove ExitCode will be present; missing remains fail-closed.
+    try { $null = $process.Handle } catch { }
     $stage = 'wait for standard-user diagnostic (60-second timeout)'
     Write-Host ('F2 STAGE: {0}' -f $stage) -ForegroundColor DarkGray
     if (-not $process.WaitForExit(60000)) {
@@ -137,7 +220,14 @@ try {
         throw 'Standard-user diagnostic exceeded its 60-second limit and was terminated.'
     }
 
-    $diagnosticExitCode = $process.ExitCode
+    try {
+        $process.Refresh()
+        $observedExitCode = $process.ExitCode
+        if ($null -ne $observedExitCode) { $diagnosticExitCode = [int] $observedExitCode }
+    } catch {
+        # Preserve UNKNOWN rather than inventing a successful child exit.
+        $diagnosticExitCode = $null
+    }
     $stage = 'parse standard-user diagnostic result'
     Write-Host ('F2 STAGE: {0}' -f $stage) -ForegroundColor DarkGray
     $json = Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction Stop
@@ -146,21 +236,13 @@ try {
 
     $stage = 'verify child standard-user token and readiness result'
     Write-Host ('F2 STAGE: {0}' -f $stage) -ForegroundColor DarkGray
-    if (-not (Test-VerifiedStandardUserToken -Result $summary -ExpectedIdentity $expectedIdentity)) {
-        $finalStatus = 'BLOCKED_STANDARD_USER'
-        $failureCategory = 'StandardUserTokenNotVerified'
-        Write-Report -Status $finalStatus -Message 'The child process did not prove the expected nonadministrator token; no fallback diagnostic ran as WDAGUtilityAccount.'
-    } elseif ($process.ExitCode -ne 0 -or $summary.overall -eq 'FAIL' -or $summary.network_status -eq 'FAIL' -or $summary.mapping_status -eq 'FAIL') {
-        $finalStatus = 'BLOCKED_ENVIRONMENT'
-        $failureCategory = 'DiagnosticGateFailed'
-        Write-Report -Status $finalStatus -Message 'A network or read-only mapping gate failed. Stop; do not stage or run native code.'
-    } else {
-        $finalStatus = 'INCOMPLETE'
-        $failureCategory = 'ReadinessGatesRemainUnknown'
-        $stage = 'display standard-user readiness report'
-        Write-Host ('F2 STAGE: {0}' -f $stage) -ForegroundColor DarkGray
-        Write-Report -Status $finalStatus -Message 'Standard-user diagnostic ran. Unknown renderer, resource-supervision, and evidence gates remain open.'
-    }
+    $decision = Resolve-F2ChildDiagnosticResult -Result $summary -ExpectedIdentity $expectedIdentity -ExitCode $diagnosticExitCode
+    $finalStatus = $decision.Status
+    $failureCategory = $decision.Category
+    $stage = 'display standard-user readiness report'
+    Write-Host ('F2 STAGE: {0}' -f $stage) -ForegroundColor DarkGray
+    Write-Report -Status $finalStatus -Message $decision.Message
+    if ($finalStatus -eq 'INCOMPLETE') { $bootstrapExitCode = 0 }
 } catch {
     $failureCategory = '{0}/{1}' -f $_.CategoryInfo.Category, $_.Exception.GetType().Name
     $failureCategory = $failureCategory -replace '[^A-Za-z0-9_./-]', '_'
@@ -176,4 +258,6 @@ try {
     if ($securePassword) { $securePassword.Dispose() }
     if ($passwordChars) { [Array]::Clear($passwordChars, 0, $passwordChars.Length) }
     if ($randomBytes) { [Array]::Clear($randomBytes, 0, $randomBytes.Length) }
+    if ($process) { $process.Dispose() }
 }
+exit $bootstrapExitCode

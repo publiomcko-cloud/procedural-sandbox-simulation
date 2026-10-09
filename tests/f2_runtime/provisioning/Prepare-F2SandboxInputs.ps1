@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [switch] $PrepareInputs,
-    [switch] $Automation
+    [switch] $Automation,
+    [switch] $SourceOnly
 )
 
 Set-StrictMode -Version Latest
@@ -11,22 +12,30 @@ $approvedHostFolder = 'C:\F2-Approved-Inputs'
 $sandboxInputFolder = 'C:\F2Input'
 $diagnosticName = 'Get-F2SandboxReadiness.ps1'
 $bootstrapName = 'Start-F2SandboxDiagnostics.ps1'
+$wrapperName = 'F2-Guest-Diagnostic.cmd'
 $expectedDiagnosticSha256 = '78fa1dd2d0bc691cecdb5089ee409c71080d30fe0f0e928b2225c7d3bc745d9f'
-$expectedBootstrapSha256 = 'ac8f5952b4138c774a5193f1b5eba0abef6abca961a9573e208296812933ab0e'
-$expectedWsbSha256 = '0edaa9ab7363c902ea1a39badd5dc8f5b9e6870811cbb32421c7562e133de941'
+$expectedBootstrapSha256 = '62f758c3bdbbe53e92d7751f49d874a8c066d5bde0bd730e5c071fa18f02da74'
+$expectedWsbSha256 = '368d5bed7093504e7cbfbae3fc830b536b5f8f42e12f363537b2ac8697ece652'
+$expectedWrapperSha256 = 'a53cbc9a0c5565bbf182c794f31d4ba24a8a94bd181e11e0bdf15e55aa75ca89'
 $previousReviewedBootstrapSha256 = @(
     '2bbb945e86274b98eda6b2c08eae156c0d2851f114c895f77505576991600093'
     '4a28b6d8a6b56239da131204316f441ab3a486d9bcb9a7bb7e3b4c77e36800f3'
     '88cad4600e8417ab524728a27cd638b27b5f46fcf0c0495f7ff21e9cda80288e'
+    'ac8f5952b4138c774a5193f1b5eba0abef6abca961a9573e208296812933ab0e'
 )
 $previousReviewedDiagnosticSha256 = @(
     'd3c6883d7b70d218968caa74ec2e0916406a6eb31d2075b45ab40cf15c07df65'
     '0664b0adfb511bda16bec900e92aad568eb50cc1cdba2cd9bdd35729cb1c164b'
     '5677f096eb78c2db08f5630e53a74c932719130ca0f7842ee8dca2ac2c0ff300'
 )
-$inputNames = if ($Automation) { @($diagnosticName, $bootstrapName) } else { @($diagnosticName) }
+# One exact, previously source-reviewed CMD revision may be replaced after active-guest checks.
+$previousReviewedWrapperSha256 = @(
+    'f93c0890d595093d25891b1a6dcaca105f46c2aec418c3f11bed3187e4c5b822'
+)
+$inputNames = if ($Automation) { @($diagnosticName, $bootstrapName, $wrapperName) } else { @($diagnosticName) }
 $diagnosticSource = Join-Path $PSScriptRoot $diagnosticName
 $bootstrapSource = Join-Path $PSScriptRoot $bootstrapName
+$wrapperSource = Join-Path $PSScriptRoot $wrapperName
 $wsbTemplateName = if ($Automation) { 'F2-Isolated-Sandbox-automation.wsb.example' } else { 'F2-Isolated-Sandbox.wsb.example' }
 $wsbTemplate = Join-Path $PSScriptRoot $wsbTemplateName
 $results = [System.Collections.Generic.List[object]]::new()
@@ -70,6 +79,17 @@ function Assert-NoReparseComponent {
             }
         }
     }
+}
+
+function Test-PreviouslyReviewedStagedInput {
+    param(
+        [Parameter(Mandatory)] [string] $Name,
+        [Parameter(Mandatory)] [string] $Sha256
+    )
+    if ($Name -eq $diagnosticName) { return ($Sha256 -in $previousReviewedDiagnosticSha256) }
+    if ($Name -eq $bootstrapName) { return ($Sha256 -in $previousReviewedBootstrapSha256) }
+    if ($Name -eq $wrapperName) { return ($Sha256 -in $previousReviewedWrapperSha256) }
+    return $false
 }
 
 function Assert-PreparerSandboxConfiguration {
@@ -120,6 +140,7 @@ function Assert-PreparerSandboxConfiguration {
 }
 
 try {
+    if ($SourceOnly -and (-not $Automation -or $PrepareInputs)) { throw 'SourceOnly is restricted to diagnostic-only automation source validation without staging.' }
     if ([System.IO.Path]::GetFullPath($approvedHostFolder) -ne $approvedHostFolder) {
         throw "Approved folder is not the fixed canonical path: $approvedHostFolder"
     }
@@ -163,10 +184,22 @@ try {
             throw "Startup bootstrap SHA-256 is not the reviewed pinned value. Observed: $bootstrapHash"
         }
         Add-Result 'bootstrap_source_identity' PASS ("$bootstrapSource SHA256=$bootstrapHash; UTF-8 plain text, $($bootstrapBytes.Length) bytes")
+        $wrapperItem = Get-Item -LiteralPath $wrapperSource -Force
+        if ($wrapperItem.PSIsContainer -or ($wrapperItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw 'Guest CMD startup wrapper must be a regular non-reparse file.'
+        }
+        $wrapperBytes = [IO.File]::ReadAllBytes($wrapperSource)
+        if ($wrapperBytes.Length -gt 16384 -or $wrapperBytes -contains 0 -or @($wrapperBytes | Where-Object { $_ -gt 127 }).Count -gt 0) {
+            throw 'Guest CMD startup wrapper must be ASCII plain text under 16 KiB without NUL.'
+        }
+        $wrapperHash = Get-NormalizedScriptHash -LiteralPath $wrapperSource
+        if ($wrapperHash -ne $expectedWrapperSha256) { throw "Guest CMD wrapper SHA-256 mismatch: $wrapperHash" }
+        Add-Result 'wrapper_source_identity' PASS ("$wrapperSource SHA256=$wrapperHash")
     }
 
     [xml] $config = Get-Content -LiteralPath $wsbTemplate -Raw
-    $logonCommand = 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -NoExit -Command "Write-Host ''F2 DIAGNOSTIC STARTING - visible startup wrapper''; & ''C:\F2Input\Start-F2SandboxDiagnostics.ps1''"'
+
+    $logonCommand = 'C:\F2Input\F2-Guest-Diagnostic.cmd'
     $configDescription = Assert-PreparerSandboxConfiguration -Configuration $config -Automation ([bool]$Automation) -ApprovedHostFolder $approvedHostFolder -SandboxInputFolder $sandboxInputFolder -ExpectedCommand $logonCommand
     if ($Automation) {
         $wsbHash = Get-NormalizedScriptHash -LiteralPath $wsbTemplate
@@ -178,18 +211,23 @@ try {
     Add-Result 'wsb_security_configuration' PASS $configDescription
     Add-Result 'resource_configuration' UNKNOWN 'MemoryInMB is a guest memory allocation only; this file does not enforce CPU, disk, or per-probe/session time limits.'
 
-    $sandboxExe = Join-Path $env:WINDIR 'System32\WindowsSandbox.exe'
-    if ((Test-Path -LiteralPath $sandboxExe -PathType Leaf) -and (Get-Command WindowsSandbox.exe -ErrorAction SilentlyContinue)) {
-        Add-Result 'windows_sandbox_executable' PASS $sandboxExe
+    if ($SourceOnly) {
+        Add-Result 'windows_sandbox_executable' UNKNOWN 'SourceOnly fixture: OS Sandbox executable deliberately NOT CHECKED.'
+        Add-Result 'sandbox_optional_feature' UNKNOWN 'SourceOnly fixture: optional feature deliberately NOT CHECKED.'
     } else {
-        Add-Result 'windows_sandbox_executable' FAIL 'WindowsSandbox.exe was not found; do not alter Windows features from this script.'
-    }
+        $sandboxExe = Join-Path $env:WINDIR 'System32\WindowsSandbox.exe'
+        if ((Test-Path -LiteralPath $sandboxExe -PathType Leaf) -and (Get-Command WindowsSandbox.exe -ErrorAction SilentlyContinue)) {
+            Add-Result 'windows_sandbox_executable' PASS $sandboxExe
+        } else {
+            Add-Result 'windows_sandbox_executable' FAIL 'WindowsSandbox.exe was not found; do not alter Windows features from this script.'
+        }
 
-    try {
-        $feature = Get-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -ErrorAction Stop
-        Add-Result 'sandbox_optional_feature' $(if ($feature.State -eq 'Enabled') { 'PASS' } else { 'FAIL' }) ("Containers-DisposableClientVM state=$($feature.State); no feature change was requested.")
-    } catch {
-        Add-Result 'sandbox_optional_feature' UNKNOWN ("Could not read optional-feature state without elevation: $($_.Exception.Message)")
+        try {
+            $feature = Get-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -ErrorAction Stop
+            Add-Result 'sandbox_optional_feature' $(if ($feature.State -eq 'Enabled') { 'PASS' } else { 'FAIL' }) ("Containers-DisposableClientVM state=$($feature.State); no feature change was requested.")
+        } catch {
+            Add-Result 'sandbox_optional_feature' UNKNOWN ("Could not read optional-feature state without elevation: $($_.Exception.Message)")
+        }
     }
 
     Add-Result 'wsb_opened' 'NOT RUN' 'This script never launches Windows Sandbox. Owner must use the printed manual command and observe the guest window.'
@@ -208,14 +246,14 @@ try {
         foreach ($name in $inputNames) {
             $source = Join-Path $PSScriptRoot $name
             $destination = Join-Path $approvedHostFolder $name
-            $expectedHash = if ($name -eq $diagnosticName) { $expectedDiagnosticSha256 } else { $expectedBootstrapSha256 }
+            $expectedHash = if ($name -eq $diagnosticName) { $expectedDiagnosticSha256 } elseif ($name -eq $bootstrapName) { $expectedBootstrapSha256 } else { $expectedWrapperSha256 }
             if (Test-Path -LiteralPath $destination) {
                 $existingItem = Get-Item -LiteralPath $destination -Force
                 if ($existingItem.PSIsContainer -or ($existingItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
                     throw "Existing mapped input is not a regular file; refusing to follow or overwrite it: $name"
                 }
                 $existingHash = Get-NormalizedScriptHash -LiteralPath $destination
-                $knownPrevious = if ($name -eq $diagnosticName) { $existingHash -in $previousReviewedDiagnosticSha256 } else { $existingHash -in $previousReviewedBootstrapSha256 }
+                $knownPrevious = Test-PreviouslyReviewedStagedInput -Name $name -Sha256 $existingHash
                 if ($existingHash -ne $expectedHash -and -not $knownPrevious) {
                     throw "Existing mapped input differs from reviewed content; refusing overwrite: $name SHA256=$existingHash"
                 }

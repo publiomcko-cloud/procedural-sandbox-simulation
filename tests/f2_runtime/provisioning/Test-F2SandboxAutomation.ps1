@@ -21,7 +21,7 @@ function Assert-True {
 
 function Invoke-HostFixture {
     param([string] $Description, [int] $ExpectedExitCode)
-    $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $fixtureProvisioning 'Prepare-F2SandboxInputs.ps1') -Automation 2>&1 | Out-String
+    $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $fixtureProvisioning 'Prepare-F2SandboxInputs.ps1') -Automation -SourceOnly 2>&1 | Out-String
     $actualExitCode = $LASTEXITCODE
     if ($actualExitCode -eq $ExpectedExitCode) {
         Assert-True $true ("{0}: exit {1}" -f $Description, $actualExitCode)
@@ -45,7 +45,7 @@ function Set-FixtureWsbPin {
     $fixturePreparer = Join-Path $fixtureProvisioning 'Prepare-F2SandboxInputs.ps1'
     $hash = Get-NormalizedSourceHash -LiteralPath $fixtureWsb
     $preparerText = [IO.File]::ReadAllText($fixturePreparer)
-    $pattern = "(?m)^\`$expectedWsbSha256 = '[^']+'$"
+    $pattern = '(?m)^[ \t]*\$expectedWsbSha256[ \t]*=[ \t]*''[0-9a-f]{64}''[ \t]*\r?$'
     $match = [regex]::Match($preparerText, $pattern)
     if (-not $match.Success) { throw 'Fixture preparer SHA pin was not found.' }
     $replacement = '$expectedWsbSha256 = ''{0}''' -f $hash
@@ -59,6 +59,7 @@ try {
         'Prepare-F2SandboxInputs.ps1',
         'Get-F2SandboxReadiness.ps1',
         'Start-F2SandboxDiagnostics.ps1',
+        'F2-Guest-Diagnostic.cmd',
         'F2-Isolated-Sandbox-automation.wsb.example'
     )) {
         Copy-Item -LiteralPath (Join-Path $sourceRoot $name) -Destination (Join-Path $fixtureProvisioning $name) -ErrorAction Stop
@@ -107,10 +108,65 @@ try {
     $deniedToken = [pscustomobject]@{ identity = 'Sandbox\F2Diag_012345ABCDEF'; is_administrator = $true; token_status = 'FAIL' }
     Assert-True (Test-VerifiedStandardUserToken -Result $validToken -ExpectedIdentity 'Sandbox\F2Diag_012345ABCDEF') 'Accept only exact verified standard-user token'
     Assert-True (-not (Test-VerifiedStandardUserToken -Result $deniedToken -ExpectedIdentity 'Sandbox\F2Diag_012345ABCDEF')) 'Reject denied or administrator child token without fallback'
+
+    # Exercise the actual bootstrap gate decision helper, not a test-side copy of its logic.
+    $gateDecisionAst = @($bootstrapAst.FindAll({ param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Resolve-F2ChildDiagnosticResult'
+    }, $false))
+    Assert-True ($gateDecisionAst.Count -eq 1) 'Guest diagnostic decision helper is uniquely present in production bootstrap'
+    if ($gateDecisionAst.Count -eq 1) {
+        Invoke-Expression $gateDecisionAst[0].Extent.Text
+        $expectedGuest = 'Sandbox\F2Diag_012345ABCDEF'
+        $validChildReport = [pscustomobject]@{
+            identity = $expectedGuest
+            is_administrator = $false
+            token_status = 'PASS'
+            network_status = 'PASS'
+            mapping_status = 'PASS'
+            overall = 'INCOMPLETE'
+            native_code_executed = $false
+            summary = @('Network: PASS', 'Read-only mapped input: PASS')
+        }
+        $gateCases = @(
+            @{ Name = 'missing exit code must never masquerade as network failure'; ExitCode = $null; Child = $validChildReport; Status = 'BLOCKED_ENVIRONMENT'; Category = 'ChildExitCodeUnavailable' }
+            @{ Name = 'string exit code is not a trustworthy numeric 0'; ExitCode = '0'; Child = $validChildReport; Status = 'BLOCKED_ENVIRONMENT'; Category = 'ChildExitCodeUnavailable' }
+            @{ Name = 'actual zero exit with valid isolation is incomplete, not ready'; ExitCode = 0; Child = $validChildReport; Status = 'INCOMPLETE'; Category = 'ReadinessGatesRemainUnknown' }
+            @{ Name = 'real nonzero child exit is reported separately'; ExitCode = 2; Child = $validChildReport; Status = 'BLOCKED_ENVIRONMENT'; Category = 'ChildProcessFailed' }
+            @{ Name = 'network FAIL overrides otherwise healthy child'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='FAIL'; mapping_status='PASS'; overall='FAIL'; native_code_executed=$false }); Status='BLOCKED_ENVIRONMENT'; Category='NetworkOrMappingGateFailed' }
+            @{ Name = 'read-only mapping FAIL overrides healthy network'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='PASS'; mapping_status='FAIL'; overall='FAIL'; native_code_executed=$false }); Status='BLOCKED_ENVIRONMENT'; Category='NetworkOrMappingGateFailed' }
+            @{ Name = 'network UNKNOWN is not a PASS'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='UNKNOWN'; mapping_status='PASS'; overall='INCOMPLETE'; native_code_executed=$false }); Status='BLOCKED_ENVIRONMENT'; Category='NetworkOrMappingGateUnverified' }
+            @{ Name = 'mapping missing cannot be a PASS'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='PASS'; overall='INCOMPLETE'; native_code_executed=$false }); Status='BLOCKED_ENVIRONMENT'; Category='NetworkOrMappingGateUnverified' }
+            @{ Name = 'other child FAIL remains blocked'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='PASS'; mapping_status='PASS'; overall='FAIL'; native_code_executed=$false }); Status='BLOCKED_ENVIRONMENT'; Category='OtherDiagnosticGateFailed' }
+            @{ Name = 'invalid administrator token has highest priority'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$true; token_status='FAIL'; network_status='PASS'; mapping_status='PASS'; overall='INCOMPLETE'; native_code_executed=$false }); Status='BLOCKED_STANDARD_USER'; Category='StandardUserTokenNotVerified' }
+            @{ Name = 'no child JSON remains blocked'; ExitCode = $null; Child = $null; Status='BLOCKED_STANDARD_USER'; Category='StandardUserTokenNotVerified' }
+            @{ Name = 'native execution true blocks diagnostics'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='PASS'; mapping_status='PASS'; overall='INCOMPLETE'; native_code_executed=$true }); Status='BLOCKED_ENVIRONMENT'; Category='NativeExecutionAttestationMissing' }
+            @{ Name = 'missing native execution attestation blocks'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='PASS'; mapping_status='PASS'; overall='INCOMPLETE' }); Status='BLOCKED_ENVIRONMENT'; Category='NativeExecutionAttestationMissing' }
+            @{ Name = 'unexpected overall status blocks'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='PASS'; mapping_status='PASS'; overall='OTHER'; native_code_executed=$false }); Status='BLOCKED_ENVIRONMENT'; Category='UnexpectedChildDiagnosticStatus' }
+        )
+        foreach ($gateCase in $gateCases) {
+            $decision = Resolve-F2ChildDiagnosticResult -Result $gateCase.Child -ExpectedIdentity $expectedGuest -ExitCode $gateCase.ExitCode
+            Assert-True ($decision.Status -eq $gateCase.Status -and $decision.Category -eq $gateCase.Category) ("Production gate decision: {0}" -f $gateCase.Name)
+        }
+        $summary = $validChildReport
+        $stage = 'verify child standard-user token and readiness result'
+        $failureCategory = 'ChildExitCodeUnavailable'
+        $diagnosticExitCode = $null
+        $unknownExitReport = Write-Report -Status 'BLOCKED_ENVIRONMENT' -Message 'Exit code unavailable' | Out-String
+        Assert-True ($unknownExitReport.Contains('Standard-user child exit code: UNKNOWN') -and $unknownExitReport.Contains('Network: PASS') -and $unknownExitReport.Contains('Read-only mapped input: PASS')) 'Missing child ExitCode is visible without changing reported isolation PASS'
+        $summary = $null
+        $diagnosticExitCode = $null
+    }
+    Assert-True ($bootstrapText.Contains('$null = $process.Handle') -and $bootstrapText.Contains('$process.Refresh()')) 'Bootstrap explicitly attempts live handle retention and post-wait exit status refresh'
+    Assert-True ($bootstrapText.Contains('Resolve-F2ChildDiagnosticResult -Result $summary -ExpectedIdentity $expectedIdentity -ExitCode $diagnosticExitCode')) 'Production bootstrap calls actual fail-closed decision helper'
+    Assert-True ($bootstrapText -notmatch '\$process\.ExitCode\s+-ne\s+0') 'Bootstrap no longer treats unavailable ExitCode as nonzero network failure'
+    Assert-True ($bootstrapText.Contains('exit $bootstrapExitCode') -and $bootstrapText.Contains('if ($finalStatus -eq ''INCOMPLETE'') { $bootstrapExitCode = 0 }')) 'Bootstrap propagates blocked results to CMD wrapper with nonzero exit; only INCOMPLETE returns zero'
     Assert-True ($bootstrapText -match '(?s)\$stage\s*=\s*''validate read-only mapped diagnostic''.*?Test-Path -LiteralPath \$diagnosticPath') 'Missing mapped diagnostic fails at a visible preflight stage'
     Assert-True ($bootstrapText -notmatch '(?im)^\s*Start-Sleep\b') 'Bootstrap does not depend on a timed sleep to keep the report visible'
     Assert-True ($bootstrapText -match '(?im)Start-Process\s+-FilePath\s+\$powershellPath\s+-Credential\s+\$credential') 'Only credential-bound standard-user child launch is present'
-    Assert-True ($bootstrapText -notmatch '(?i)Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|DownloadFile|Godot|Voxel.?Tools|GDExtension|GDNative') 'Bootstrap has no network or vendor-runtime path'
+    $forbiddenCommandNames = @('Invoke-WebRequest', 'Invoke-RestMethod', 'Start-BitsTransfer', 'Godot', 'godot.exe', 'VoxelTools', 'GDExtension', 'GDNative')
+    $bootstrapCommands = @($bootstrapAst.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] }, $true))
+    $badCommands = @($bootstrapCommands | Where-Object { $_.GetCommandName() -in $forbiddenCommandNames })
+    Assert-True ($badCommands.Count -eq 0) 'Bootstrap never invokes network or native runtime commands; text labels may refer to unknown native gates'
 
     $reportCases = @(
         @{ Name = 'early bootstrap failure'; Stage = 'validate read-only mapped diagnostic'; Status = 'BLOCKED_ENVIRONMENT'; Category = 'ObjectNotFound/ItemNotFoundException'; ExitCode = $null }
@@ -133,16 +189,32 @@ try {
     $configPath = Join-Path $fixtureProvisioning 'F2-Isolated-Sandbox-automation.wsb.example'
     [xml]$startupConfig = Get-Content -LiteralPath $configPath -Raw
     $startupCommand = [string]$startupConfig.Configuration.LogonCommand.Command
-    Assert-True ($startupCommand.Contains('-NoExit') -and $startupCommand.Contains('-Command "Write-Host')) 'Reviewed startup command keeps PowerShell open and prints before bootstrap invocation'
-    Assert-True ($startupCommand.IndexOf('F2 DIAGNOSTIC STARTING - visible startup wrapper') -lt $startupCommand.IndexOf("& 'C:\F2Input\Start-F2SandboxDiagnostics.ps1'")) 'Startup banner precedes bootstrap invocation'
+    Assert-True ($startupCommand -eq 'C:\F2Input\F2-Guest-Diagnostic.cmd') 'WSB invokes only the pinned mapped CMD entrypoint without nested console quotation'
+    $wrapperPath = Join-Path $sourceRoot 'F2-Guest-Diagnostic.cmd'
+    $wrapperText = Get-Content -LiteralPath $wrapperPath -Raw
+    Assert-True ($wrapperText.Contains('F2 GUEST WRAPPER STARTED') -and $wrapperText.Contains('F2 STAGE: CMD_ENTRY')) 'Immediate pre-PowerShell wrapper banner exists'
+    Assert-True ($wrapperText.Contains('if /i "%~1"=="--f2-visible" goto :visible_diagnostic')) 'Wrapper accepts only the explicitly designated visible child path'
+    Assert-True ($wrapperText.Contains('if not "%~1"=="" exit /b 2')) 'Wrapper refuses unexpected startup parameters'
+    Assert-True ($wrapperText.Contains('start "F2 Sandbox Diagnostic" "%SystemRoot%\System32\cmd.exe" /k C:\F2Input\F2-Guest-Diagnostic.cmd --f2-visible')) 'Original LogonCommand explicitly starts a distinct persistent visible console'
+    Assert-True ($wrapperText.Contains('exit /b %ERRORLEVEL%') -and $wrapperText.Contains(':visible_diagnostic')) 'Hidden LogonCommand returns without executing guest account bootstrap in the hidden parent'
+    Assert-True ($wrapperText.IndexOf(':visible_diagnostic') -lt $wrapperText.IndexOf('F2 GUEST WRAPPER STARTED')) 'Stage-zero banner executes only in separate visible child'
+    Assert-True ($wrapperText -notmatch '(?im)^\s*start\s+(/b|/min|/wait)\b') 'Startup does not suppress foreground window or wait for it to exit'
+    Assert-True ($wrapperText.IndexOf('F2 GUEST WRAPPER STARTED') -lt $wrapperText.IndexOf(' -ExecutionPolicy Bypass -File')) 'CMD banner executes before PowerShell call'
+    Assert-True ($wrapperText.Contains('if not exist "C:\F2Input\Start-F2SandboxDiagnostics.ps1" goto :missing_bootstrap')) 'Missing mapped bootstrap has visible fail-closed path'
+    Assert-True ($wrapperText.Contains('F2 PowerShell process exit code: %F2_PS_EXIT%')) 'Guest wrapper exposes PowerShell exit code without reporting readiness PASS'
+    Assert-True ($wrapperText -notmatch '(?i)Invoke-WebRequest|curl|wget|Godot|Voxel.?Tools|GDExtension|GDNative|net user') 'CMD wrapper contains no native/network/user mutation commands'
+
 
     $launcherPath = Join-Path $sourceRoot 'Start-F2SandboxReadiness.ps1'
     $launcherText = Get-Content $launcherPath -Raw
     $sourcePreparerText = Get-Content (Join-Path $sourceRoot 'Prepare-F2SandboxInputs.ps1') -Raw
-    $expectedBootstrapHash = [regex]::Match($sourcePreparerText, "(?m)^\`$expectedBootstrapSha256 = '([0-9a-f]{64})'").Groups[1].Value
-    $expectedWsbHash = [regex]::Match($sourcePreparerText, "(?m)^\`$expectedWsbSha256 = '([0-9a-f]{64})'").Groups[1].Value
-    $launcherCommandMatch = [regex]::Match($launcherText, "(?m)^\s*\`$expectedCommand = '(.*)'$")
-    $preparerCommandMatch = [regex]::Match((Get-Content (Join-Path $sourceRoot 'Prepare-F2SandboxInputs.ps1') -Raw), "(?m)^\s*\`$logonCommand = '(.*)'$")
+    $bootstrapPinMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$expectedBootstrapSha256[ \t]*=[ \t]*''([0-9a-f]{64})''[ \t]*\r?$')
+    $wsbPinMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$expectedWsbSha256[ \t]*=[ \t]*''([0-9a-f]{64})''[ \t]*\r?$')
+    Assert-True ($bootstrapPinMatch.Success -and $wsbPinMatch.Success) 'Bootstrap and WSB SHA256 pins are declared and anchored in the production preparer'
+    $expectedBootstrapHash = $bootstrapPinMatch.Groups[1].Value
+    $expectedWsbHash = $wsbPinMatch.Groups[1].Value
+    $launcherCommandMatch = [regex]::Match($launcherText, '(?m)^[ \t]*\$expectedCommand[ \t]*=[ \t]*''(.*)''[ \t]*\r?$')
+    $preparerCommandMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$logonCommand[ \t]*=[ \t]*''(.*)''[ \t]*\r?$')
     Assert-True ($launcherCommandMatch.Success -and $preparerCommandMatch.Success) 'Both production validators declare an exact LogonCommand'
     if ($launcherCommandMatch.Success -and $preparerCommandMatch.Success) {
         $launcherExpectedCommand = $launcherCommandMatch.Groups[1].Value.Replace("''", "'")
@@ -179,12 +251,13 @@ try {
 
         $modifiedConfigs = @(
             @{ Name = 'writable mapping'; Xml = [xml]($startupConfig.OuterXml.Replace('<ReadOnly>true</ReadOnly>', '<ReadOnly>false</ReadOnly>')) }
-            @{ Name = 'unreviewed command'; Xml = [xml]($startupConfig.OuterXml.Replace('Start-F2SandboxDiagnostics.ps1', 'Unreviewed.ps1')) }
-            @{ Name = 'missing NoExit'; Xml = [xml]($startupConfig.OuterXml.Replace(' -NoExit', '')) }
-            @{ Name = 'modified startup banner'; Xml = [xml]($startupConfig.OuterXml.Replace('F2 DIAGNOSTIC STARTING - visible startup wrapper', 'OTHER STARTUP')) }
+            @{ Name = 'unreviewed command'; Xml = [xml]($startupConfig.OuterXml.Replace('F2-Guest-Diagnostic.cmd', 'Unreviewed.cmd')) }
+            @{ Name = 'unexpected direct PowerShell startup'; Xml = [xml]($startupConfig.OuterXml.Replace('C:\F2Input\F2-Guest-Diagnostic.cmd', 'powershell.exe')) }
+            @{ Name = 'modified CMD wrapper path'; Xml = [xml]($startupConfig.OuterXml.Replace('F2-Guest-Diagnostic.cmd', 'Unreviewed-Guest.cmd')) }
             @{ Name = 'additional LogonCommand'; Xml = [xml]($startupConfig.OuterXml.Replace('</LogonCommand>', '<Command>unreviewed.exe</Command></LogonCommand>')) }
         )
         foreach ($modified in $modifiedConfigs) {
+            Assert-True ($modified.Xml.OuterXml -ne $startupConfig.OuterXml) ("Negative fixture actually modifies approved XML: {0}" -f $modified.Name)
             $launcherRejected = $false
             $preparerRejected = $false
             try { Assert-LauncherAutomationConfiguration -Configuration $modified.Xml -ExpectedCommand $launcherExpectedCommand -ApprovedHostFolder 'C:\F2-Approved-Inputs' | Out-Null } catch { $launcherRejected = $true }
@@ -202,10 +275,42 @@ try {
         [IO.File]::WriteAllText($configPath, $approvedConfigText, [Text.UTF8Encoding]::new($false))
     }
 
+    $wrapperPinMatch = [regex]::Match($sourcePreparerText, '(?m)^[ \t]*\$expectedWrapperSha256[ \t]*=[ \t]*''([0-9a-f]{64})''[ \t]*\r?$')
+    Assert-True $wrapperPinMatch.Success 'CMD wrapper SHA256 pin is declared and anchored in the production preparer'
+    $expectedWrapperHash = $wrapperPinMatch.Groups[1].Value
+    Assert-True ($expectedWrapperHash -eq (Get-NormalizedSourceHash $wrapperPath)) 'Preparer pin matches approved guest CMD wrapper'
+    Assert-True ($launcherText.Contains($expectedWrapperHash)) 'Launcher pins same approved guest CMD SHA256'
+
+    $previousWrapperReviewMatch = [regex]::Match($sourcePreparerText, '(?s)\$previousReviewedWrapperSha256\s*=\s*@\(\s*''([0-9a-f]{64})''\s*\)')
+    Assert-True ($previousWrapperReviewMatch.Success -and $previousWrapperReviewMatch.Groups[1].Value -eq 'f93c0890d595093d25891b1a6dcaca105f46c2aec418c3f11bed3187e4c5b822') 'Only the exact previously source-reviewed CMD wrapper hash is authorized for migration'
+    $previousVersionValidatorAst = @($preparerAst.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Test-PreviouslyReviewedStagedInput' }, $false))
+    Assert-True ($previousVersionValidatorAst.Count -eq 1) 'Production prior-version migration validator is source-addressable exactly once'
+    Assert-True ($sourcePreparerText.Contains('$knownPrevious = Test-PreviouslyReviewedStagedInput -Name $name -Sha256 $existingHash')) 'Production staging path actually calls reviewed prior-version validator'
+    Assert-True ($sourcePreparerText.IndexOf('Get-Process -Name WindowsSandbox') -ge 0 -and $sourcePreparerText.IndexOf('$knownPrevious = Test-PreviouslyReviewedStagedInput') -gt $sourcePreparerText.IndexOf('Get-Process -Name WindowsSandbox')) 'Active Sandbox process guard exists and executes before migration eligibility or staged writes'
+    if ($previousVersionValidatorAst.Count -eq 1 -and $previousWrapperReviewMatch.Success) {
+        Invoke-Expression $previousVersionValidatorAst[0].Extent.Text
+        $wrapperName = 'F2-Guest-Diagnostic.cmd'
+        $diagnosticName = 'Get-F2SandboxReadiness.ps1'
+        $bootstrapName = 'Start-F2SandboxDiagnostics.ps1'
+        $previousReviewedWrapperSha256 = @($previousWrapperReviewMatch.Groups[1].Value)
+        $previousReviewedBootstrapSha256 = @('ac8f5952b4138c774a5193f1b5eba0abef6abca961a9573e208296812933ab0e')
+        $previousReviewedDiagnosticSha256 = @()
+        Assert-True (Test-PreviouslyReviewedStagedInput -Name $wrapperName -Sha256 $previousReviewedWrapperSha256[0]) 'Production migration accepts the one approved older CMD wrapper'
+        Assert-True (Test-PreviouslyReviewedStagedInput -Name $bootstrapName -Sha256 $previousReviewedBootstrapSha256[0]) 'Production migration accepts exact prior source-reviewed bootstrap after guest guard'
+        Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name $bootstrapName -Sha256 ('0' * 64))) 'Production migration rejects unknown bootstrap digest'
+        Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name $wrapperName -Sha256 $previousReviewedBootstrapSha256[0])) 'Old bootstrap hash cannot authorize wrapper replacement'
+        Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name $wrapperName -Sha256 $expectedWrapperHash)) 'Current wrapper hash is not misclassified as an older version'
+        Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name $wrapperName -Sha256 ('0' * 64))) 'Production migration rejects unknown/tampered wrapper digest'
+        Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name 'Unreviewed.cmd' -Sha256 $previousReviewedWrapperSha256[0])) 'Production migration rejects an unreviewed input filename'
+        Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name $diagnosticName -Sha256 $previousReviewedWrapperSha256[0])) 'Old CMD wrapper digest cannot authorize overwriting the diagnostic'
+    }
+    Assert-True ($sourcePreparerText.Contains('@($diagnosticName, $bootstrapName, $wrapperName)') -and $launcherText.Contains('@($diagnosticName, $bootstrapName, $wrapperName)')) 'Both host validators require exactly three staged input names'
     Assert-True ($expectedBootstrapHash -eq (Get-NormalizedSourceHash $bootstrapPath)) 'Preparer pin matches updated bootstrap source'
     Assert-True ($expectedWsbHash -eq (Get-NormalizedSourceHash $configPath)) 'Preparer pin matches updated startup configuration'
     Assert-True ($launcherText.Contains($expectedBootstrapHash) -and $launcherText.Contains($expectedWsbHash)) 'Launcher pins updated bootstrap and startup configuration'
 
+    $sourceOnlyGuardOutput = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $fixtureProvisioning 'Prepare-F2SandboxInputs.ps1') -Automation -SourceOnly -PrepareInputs 2>&1 | Out-String
+    Assert-True ($LASTEXITCODE -eq 2 -and $sourceOnlyGuardOutput.Contains('SourceOnly is restricted')) 'SourceOnly fixture cannot stage mapped host inputs'
     Invoke-HostFixture -Description 'Reviewed offline automation template and pinned scripts' -ExpectedExitCode 0
 
     $diagnostic = Join-Path $fixtureProvisioning 'Get-F2SandboxReadiness.ps1'
@@ -218,6 +323,11 @@ try {
     Invoke-HostFixture -Description 'Reject altered bootstrap digest' -ExpectedExitCode 2
     Copy-Item -LiteralPath $bootstrapPath -Destination $bootstrapFixture -Force
 
+    $wrapperFixture = Join-Path $fixtureProvisioning 'F2-Guest-Diagnostic.cmd'
+    Add-Content -LiteralPath $wrapperFixture -Value 'REM altered wrapper fixture' -Encoding ascii
+    Invoke-HostFixture -Description 'Reject altered CMD startup wrapper digest' -ExpectedExitCode 2
+    Copy-Item -LiteralPath $wrapperPath -Destination $wrapperFixture -Force
+
     $configText = Get-Content -LiteralPath $configPath -Raw
     Set-Content -LiteralPath $configPath -Value $configText.Replace('<ReadOnly>true</ReadOnly>', '<ReadOnly>false</ReadOnly>') -Encoding utf8
     Set-FixtureWsbPin
@@ -225,15 +335,15 @@ try {
     Set-Content -LiteralPath $configPath -Value $configText -Encoding utf8
     Set-FixtureWsbPin
 
-    Set-Content -LiteralPath $configPath -Value $configText.Replace('Start-F2SandboxDiagnostics.ps1', 'Unreviewed.ps1') -Encoding utf8
+    Set-Content -LiteralPath $configPath -Value $configText.Replace('F2-Guest-Diagnostic.cmd', 'Unreviewed.cmd') -Encoding utf8
     Set-FixtureWsbPin
     Invoke-HostFixture -Description 'Reject unreviewed LogonCommand' -ExpectedExitCode 2
     Set-Content -LiteralPath $configPath -Value $configText -Encoding utf8
     Set-FixtureWsbPin
 
-    Set-Content -LiteralPath $configPath -Value $configText.Replace(' -NoExit', '') -Encoding utf8
+    Set-Content -LiteralPath $configPath -Value $configText.Replace('C:\F2Input\F2-Guest-Diagnostic.cmd', 'powershell.exe') -Encoding utf8
     Set-FixtureWsbPin
-    Invoke-HostFixture -Description 'Reject startup command without fail-visible NoExit' -ExpectedExitCode 2
+    Invoke-HostFixture -Description 'Reject direct PowerShell startup instead of reviewed CMD entrypoint' -ExpectedExitCode 2
     Set-Content -LiteralPath $configPath -Value $configText -Encoding utf8
     Set-FixtureWsbPin
 
