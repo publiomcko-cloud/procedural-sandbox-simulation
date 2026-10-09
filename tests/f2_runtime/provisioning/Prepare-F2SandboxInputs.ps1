@@ -14,13 +14,14 @@ $diagnosticName = 'Get-F2SandboxReadiness.ps1'
 $bootstrapName = 'Start-F2SandboxDiagnostics.ps1'
 $wrapperName = 'F2-Guest-Diagnostic.cmd'
 $expectedDiagnosticSha256 = '78fa1dd2d0bc691cecdb5089ee409c71080d30fe0f0e928b2225c7d3bc745d9f'
-$expectedBootstrapSha256 = 'ac8f5952b4138c774a5193f1b5eba0abef6abca961a9573e208296812933ab0e'
+$expectedBootstrapSha256 = '62f758c3bdbbe53e92d7751f49d874a8c066d5bde0bd730e5c071fa18f02da74'
 $expectedWsbSha256 = '368d5bed7093504e7cbfbae3fc830b536b5f8f42e12f363537b2ac8697ece652'
 $expectedWrapperSha256 = 'a53cbc9a0c5565bbf182c794f31d4ba24a8a94bd181e11e0bdf15e55aa75ca89'
 $previousReviewedBootstrapSha256 = @(
     '2bbb945e86274b98eda6b2c08eae156c0d2851f114c895f77505576991600093'
     '4a28b6d8a6b56239da131204316f441ab3a486d9bcb9a7bb7e3b4c77e36800f3'
     '88cad4600e8417ab524728a27cd638b27b5f46fcf0c0495f7ff21e9cda80288e'
+    'ac8f5952b4138c774a5193f1b5eba0abef6abca961a9573e208296812933ab0e'
 )
 $previousReviewedDiagnosticSha256 = @(
     'd3c6883d7b70d218968caa74ec2e0916406a6eb31d2075b45ab40cf15c07df65'
