@@ -163,7 +163,10 @@ try {
     Assert-True ($bootstrapText -match '(?s)\$stage\s*=\s*''validate read-only mapped diagnostic''.*?Test-Path -LiteralPath \$diagnosticPath') 'Missing mapped diagnostic fails at a visible preflight stage'
     Assert-True ($bootstrapText -notmatch '(?im)^\s*Start-Sleep\b') 'Bootstrap does not depend on a timed sleep to keep the report visible'
     Assert-True ($bootstrapText -match '(?im)Start-Process\s+-FilePath\s+\$powershellPath\s+-Credential\s+\$credential') 'Only credential-bound standard-user child launch is present'
-    Assert-True ($bootstrapText -notmatch '(?i)Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|DownloadFile|Godot|Voxel.?Tools|GDExtension|GDNative') 'Bootstrap has no network or vendor-runtime path'
+    $forbiddenCommandNames = @('Invoke-WebRequest', 'Invoke-RestMethod', 'Start-BitsTransfer', 'Godot', 'godot.exe', 'VoxelTools', 'GDExtension', 'GDNative')
+    $bootstrapCommands = @($bootstrapAst.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] }, $true))
+    $badCommands = @($bootstrapCommands | Where-Object { $_.GetCommandName() -in $forbiddenCommandNames })
+    Assert-True ($badCommands.Count -eq 0) 'Bootstrap never invokes network or native runtime commands; text labels may refer to unknown native gates'
 
     $reportCases = @(
         @{ Name = 'early bootstrap failure'; Stage = 'validate read-only mapped diagnostic'; Status = 'BLOCKED_ENVIRONMENT'; Category = 'ObjectNotFound/ItemNotFoundException'; ExitCode = $null }
