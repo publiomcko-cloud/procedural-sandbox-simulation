@@ -290,9 +290,12 @@ try {
         $diagnosticName = 'Get-F2SandboxReadiness.ps1'
         $bootstrapName = 'Start-F2SandboxDiagnostics.ps1'
         $previousReviewedWrapperSha256 = @($previousWrapperReviewMatch.Groups[1].Value)
-        $previousReviewedBootstrapSha256 = @()
+        $previousReviewedBootstrapSha256 = @('ac8f5952b4138c774a5193f1b5eba0abef6abca961a9573e208296812933ab0e')
         $previousReviewedDiagnosticSha256 = @()
         Assert-True (Test-PreviouslyReviewedStagedInput -Name $wrapperName -Sha256 $previousReviewedWrapperSha256[0]) 'Production migration accepts the one approved older CMD wrapper'
+        Assert-True (Test-PreviouslyReviewedStagedInput -Name $bootstrapName -Sha256 $previousReviewedBootstrapSha256[0]) 'Production migration accepts exact prior source-reviewed bootstrap after guest guard'
+        Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name $bootstrapName -Sha256 ('0' * 64))) 'Production migration rejects unknown bootstrap digest'
+        Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name $wrapperName -Sha256 $previousReviewedBootstrapSha256[0])) 'Old bootstrap hash cannot authorize wrapper replacement'
         Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name $wrapperName -Sha256 $expectedWrapperHash)) 'Current wrapper hash is not misclassified as an older version'
         Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name $wrapperName -Sha256 ('0' * 64))) 'Production migration rejects unknown/tampered wrapper digest'
         Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name 'Unreviewed.cmd' -Sha256 $previousReviewedWrapperSha256[0])) 'Production migration rejects an unreviewed input filename'
