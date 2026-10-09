@@ -159,7 +159,7 @@ try {
     Assert-True ($bootstrapText.Contains('$null = $process.Handle') -and $bootstrapText.Contains('$process.Refresh()')) 'Bootstrap explicitly attempts live handle retention and post-wait exit status refresh'
     Assert-True ($bootstrapText.Contains('Resolve-F2ChildDiagnosticResult -Result $summary -ExpectedIdentity $expectedIdentity -ExitCode $diagnosticExitCode')) 'Production bootstrap calls actual fail-closed decision helper'
     Assert-True ($bootstrapText -notmatch '\$process\.ExitCode\s+-ne\s+0') 'Bootstrap no longer treats unavailable ExitCode as nonzero network failure'
-    Assert-True ($bootstrapText.Contains('exit $bootstrapExitCode') -and $bootstrapText.Contains("if ($finalStatus -eq 'INCOMPLETE') { $bootstrapExitCode = 0 }")) 'Bootstrap propagates blocked results to CMD wrapper with nonzero exit; only INCOMPLETE returns zero'
+    Assert-True ($bootstrapText.Contains('exit $bootstrapExitCode') -and $bootstrapText.Contains('if ($finalStatus -eq ''INCOMPLETE'') { $bootstrapExitCode = 0 }')) 'Bootstrap propagates blocked results to CMD wrapper with nonzero exit; only INCOMPLETE returns zero'
     Assert-True ($bootstrapText -match '(?s)\$stage\s*=\s*''validate read-only mapped diagnostic''.*?Test-Path -LiteralPath \$diagnosticPath') 'Missing mapped diagnostic fails at a visible preflight stage'
     Assert-True ($bootstrapText -notmatch '(?im)^\s*Start-Sleep\b') 'Bootstrap does not depend on a timed sleep to keep the report visible'
     Assert-True ($bootstrapText -match '(?im)Start-Process\s+-FilePath\s+\$powershellPath\s+-Credential\s+\$credential') 'Only credential-bound standard-user child launch is present'
