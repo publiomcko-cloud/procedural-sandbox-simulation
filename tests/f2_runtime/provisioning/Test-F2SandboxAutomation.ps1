@@ -231,7 +231,7 @@ try {
     $previousVersionValidatorAst = @($preparerAst.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Test-PreviouslyReviewedStagedInput' }, $false))
     Assert-True ($previousVersionValidatorAst.Count -eq 1) 'Production prior-version migration validator is source-addressable exactly once'
     Assert-True ($sourcePreparerText.Contains('$knownPrevious = Test-PreviouslyReviewedStagedInput -Name $name -Sha256 $existingHash')) 'Production staging path actually calls reviewed prior-version validator'
-    Assert-True ($sourcePreparerText.IndexOf('Get-Process -Name WindowsSandbox') -lt $sourcePreparerText.IndexOf('$knownPrevious = Test-PreviouslyReviewedStagedInput')) 'Active Sandbox process guard executes before migration eligibility or staged writes'
+    Assert-True ($sourcePreparerText.IndexOf('Get-Process -Name WindowsSandbox') -ge 0 -and $sourcePreparerText.IndexOf('$knownPrevious = Test-PreviouslyReviewedStagedInput') -gt $sourcePreparerText.IndexOf('Get-Process -Name WindowsSandbox')) 'Active Sandbox process guard exists and executes before migration eligibility or staged writes'
     if ($previousVersionValidatorAst.Count -eq 1 -and $previousWrapperReviewMatch.Success) {
         Invoke-Expression $previousVersionValidatorAst[0].Extent.Text
         $wrapperName = 'F2-Guest-Diagnostic.cmd'
