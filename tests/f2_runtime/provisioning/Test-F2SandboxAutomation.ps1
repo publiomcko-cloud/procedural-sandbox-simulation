@@ -108,6 +108,58 @@ try {
     $deniedToken = [pscustomobject]@{ identity = 'Sandbox\F2Diag_012345ABCDEF'; is_administrator = $true; token_status = 'FAIL' }
     Assert-True (Test-VerifiedStandardUserToken -Result $validToken -ExpectedIdentity 'Sandbox\F2Diag_012345ABCDEF') 'Accept only exact verified standard-user token'
     Assert-True (-not (Test-VerifiedStandardUserToken -Result $deniedToken -ExpectedIdentity 'Sandbox\F2Diag_012345ABCDEF')) 'Reject denied or administrator child token without fallback'
+
+    # Exercise the actual bootstrap gate decision helper, not a test-side copy of its logic.
+    $gateDecisionAst = @($bootstrapAst.FindAll({ param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Resolve-F2ChildDiagnosticResult'
+    }, $false))
+    Assert-True ($gateDecisionAst.Count -eq 1) 'Guest diagnostic decision helper is uniquely present in production bootstrap'
+    if ($gateDecisionAst.Count -eq 1) {
+        Invoke-Expression $gateDecisionAst[0].Extent.Text
+        $expectedGuest = 'Sandbox\F2Diag_012345ABCDEF'
+        $validChildReport = [pscustomobject]@{
+            identity = $expectedGuest
+            is_administrator = $false
+            token_status = 'PASS'
+            network_status = 'PASS'
+            mapping_status = 'PASS'
+            overall = 'INCOMPLETE'
+            native_code_executed = $false
+            summary = @('Network: PASS', 'Read-only mapped input: PASS')
+        }
+        $gateCases = @(
+            @{ Name = 'missing exit code must never masquerade as network failure'; ExitCode = $null; Child = $validChildReport; Status = 'BLOCKED_ENVIRONMENT'; Category = 'ChildExitCodeUnavailable' }
+            @{ Name = 'string exit code is not a trustworthy numeric 0'; ExitCode = '0'; Child = $validChildReport; Status = 'BLOCKED_ENVIRONMENT'; Category = 'ChildExitCodeUnavailable' }
+            @{ Name = 'actual zero exit with valid isolation is incomplete, not ready'; ExitCode = 0; Child = $validChildReport; Status = 'INCOMPLETE'; Category = 'ReadinessGatesRemainUnknown' }
+            @{ Name = 'real nonzero child exit is reported separately'; ExitCode = 2; Child = $validChildReport; Status = 'BLOCKED_ENVIRONMENT'; Category = 'ChildProcessFailed' }
+            @{ Name = 'network FAIL overrides otherwise healthy child'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='FAIL'; mapping_status='PASS'; overall='FAIL'; native_code_executed=$false }); Status='BLOCKED_ENVIRONMENT'; Category='NetworkOrMappingGateFailed' }
+            @{ Name = 'read-only mapping FAIL overrides healthy network'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='PASS'; mapping_status='FAIL'; overall='FAIL'; native_code_executed=$false }); Status='BLOCKED_ENVIRONMENT'; Category='NetworkOrMappingGateFailed' }
+            @{ Name = 'network UNKNOWN is not a PASS'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='UNKNOWN'; mapping_status='PASS'; overall='INCOMPLETE'; native_code_executed=$false }); Status='BLOCKED_ENVIRONMENT'; Category='NetworkOrMappingGateUnverified' }
+            @{ Name = 'mapping missing cannot be a PASS'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='PASS'; overall='INCOMPLETE'; native_code_executed=$false }); Status='BLOCKED_ENVIRONMENT'; Category='NetworkOrMappingGateUnverified' }
+            @{ Name = 'other child FAIL remains blocked'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='PASS'; mapping_status='PASS'; overall='FAIL'; native_code_executed=$false }); Status='BLOCKED_ENVIRONMENT'; Category='OtherDiagnosticGateFailed' }
+            @{ Name = 'invalid administrator token has highest priority'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$true; token_status='FAIL'; network_status='PASS'; mapping_status='PASS'; overall='INCOMPLETE'; native_code_executed=$false }); Status='BLOCKED_STANDARD_USER'; Category='StandardUserTokenNotVerified' }
+            @{ Name = 'no child JSON remains blocked'; ExitCode = $null; Child = $null; Status='BLOCKED_STANDARD_USER'; Category='StandardUserTokenNotVerified' }
+            @{ Name = 'native execution true blocks diagnostics'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='PASS'; mapping_status='PASS'; overall='INCOMPLETE'; native_code_executed=$true }); Status='BLOCKED_ENVIRONMENT'; Category='NativeExecutionAttestationMissing' }
+            @{ Name = 'missing native execution attestation blocks'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='PASS'; mapping_status='PASS'; overall='INCOMPLETE' }); Status='BLOCKED_ENVIRONMENT'; Category='NativeExecutionAttestationMissing' }
+            @{ Name = 'unexpected overall status blocks'; ExitCode = 0; Child = ([pscustomobject]@{ identity=$expectedGuest; is_administrator=$false; token_status='PASS'; network_status='PASS'; mapping_status='PASS'; overall='OTHER'; native_code_executed=$false }); Status='BLOCKED_ENVIRONMENT'; Category='UnexpectedChildDiagnosticStatus' }
+        )
+        foreach ($gateCase in $gateCases) {
+            $decision = Resolve-F2ChildDiagnosticResult -Result $gateCase.Child -ExpectedIdentity $expectedGuest -ExitCode $gateCase.ExitCode
+            Assert-True ($decision.Status -eq $gateCase.Status -and $decision.Category -eq $gateCase.Category) ("Production gate decision: {0}" -f $gateCase.Name)
+        }
+        $summary = $validChildReport
+        $stage = 'verify child standard-user token and readiness result'
+        $failureCategory = 'ChildExitCodeUnavailable'
+        $diagnosticExitCode = $null
+        $unknownExitReport = Write-Report -Status 'BLOCKED_ENVIRONMENT' -Message 'Exit code unavailable' | Out-String
+        Assert-True ($unknownExitReport.Contains('Standard-user child exit code: UNKNOWN') -and $unknownExitReport.Contains('Network: PASS') -and $unknownExitReport.Contains('Read-only mapped input: PASS')) 'Missing child ExitCode is visible without changing reported isolation PASS'
+        $summary = $null
+        $diagnosticExitCode = $null
+    }
+    Assert-True ($bootstrapText.Contains('$null = $process.Handle') -and $bootstrapText.Contains('$process.Refresh()')) 'Bootstrap explicitly attempts live handle retention and post-wait exit status refresh'
+    Assert-True ($bootstrapText.Contains('Resolve-F2ChildDiagnosticResult -Result $summary -ExpectedIdentity $expectedIdentity -ExitCode $diagnosticExitCode')) 'Production bootstrap calls actual fail-closed decision helper'
+    Assert-True ($bootstrapText -notmatch '\$process\.ExitCode\s+-ne\s+0') 'Bootstrap no longer treats unavailable ExitCode as nonzero network failure'
+    Assert-True ($bootstrapText.Contains('exit $bootstrapExitCode') -and $bootstrapText.Contains("if ($finalStatus -eq 'INCOMPLETE') { $bootstrapExitCode = 0 }")) 'Bootstrap propagates blocked results to CMD wrapper with nonzero exit; only INCOMPLETE returns zero'
     Assert-True ($bootstrapText -match '(?s)\$stage\s*=\s*''validate read-only mapped diagnostic''.*?Test-Path -LiteralPath \$diagnosticPath') 'Missing mapped diagnostic fails at a visible preflight stage'
     Assert-True ($bootstrapText -notmatch '(?im)^\s*Start-Sleep\b') 'Bootstrap does not depend on a timed sleep to keep the report visible'
     Assert-True ($bootstrapText -match '(?im)Start-Process\s+-FilePath\s+\$powershellPath\s+-Credential\s+\$credential') 'Only credential-bound standard-user child launch is present'
