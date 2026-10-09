@@ -27,6 +27,10 @@ $previousReviewedDiagnosticSha256 = @(
     '0664b0adfb511bda16bec900e92aad568eb50cc1cdba2cd9bdd35729cb1c164b'
     '5677f096eb78c2db08f5630e53a74c932719130ca0f7842ee8dca2ac2c0ff300'
 )
+# One exact, previously source-reviewed CMD revision may be replaced after active-guest checks.
+$previousReviewedWrapperSha256 = @(
+    'f93c0890d595093d25891b1a6dcaca105f46c2aec418c3f11bed3187e4c5b822'
+)
 $inputNames = if ($Automation) { @($diagnosticName, $bootstrapName, $wrapperName) } else { @($diagnosticName) }
 $diagnosticSource = Join-Path $PSScriptRoot $diagnosticName
 $bootstrapSource = Join-Path $PSScriptRoot $bootstrapName
@@ -74,6 +78,17 @@ function Assert-NoReparseComponent {
             }
         }
     }
+}
+
+function Test-PreviouslyReviewedStagedInput {
+    param(
+        [Parameter(Mandatory)] [string] $Name,
+        [Parameter(Mandatory)] [string] $Sha256
+    )
+    if ($Name -eq $diagnosticName) { return ($Sha256 -in $previousReviewedDiagnosticSha256) }
+    if ($Name -eq $bootstrapName) { return ($Sha256 -in $previousReviewedBootstrapSha256) }
+    if ($Name -eq $wrapperName) { return ($Sha256 -in $previousReviewedWrapperSha256) }
+    return $false
 }
 
 function Assert-PreparerSandboxConfiguration {
@@ -237,7 +252,7 @@ try {
                     throw "Existing mapped input is not a regular file; refusing to follow or overwrite it: $name"
                 }
                 $existingHash = Get-NormalizedScriptHash -LiteralPath $destination
-                $knownPrevious = if ($name -eq $diagnosticName) { $existingHash -in $previousReviewedDiagnosticSha256 } elseif ($name -eq $bootstrapName) { $existingHash -in $previousReviewedBootstrapSha256 } else { $false }
+                $knownPrevious = Test-PreviouslyReviewedStagedInput -Name $name -Sha256 $existingHash
                 if ($existingHash -ne $expectedHash -and -not $knownPrevious) {
                     throw "Existing mapped input differs from reviewed content; refusing overwrite: $name SHA256=$existingHash"
                 }
