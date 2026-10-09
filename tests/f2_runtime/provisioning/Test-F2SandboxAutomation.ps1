@@ -225,6 +225,27 @@ try {
     $expectedWrapperHash = $wrapperPinMatch.Groups[1].Value
     Assert-True ($expectedWrapperHash -eq (Get-NormalizedSourceHash $wrapperPath)) 'Preparer pin matches approved guest CMD wrapper'
     Assert-True ($launcherText.Contains($expectedWrapperHash)) 'Launcher pins same approved guest CMD SHA256'
+
+    $previousWrapperReviewMatch = [regex]::Match($sourcePreparerText, '(?s)\$previousReviewedWrapperSha256\s*=\s*@\(\s*''([0-9a-f]{64})''\s*\)')
+    Assert-True ($previousWrapperReviewMatch.Success -and $previousWrapperReviewMatch.Groups[1].Value -eq 'f93c0890d595093d25891b1a6dcaca105f46c2aec418c3f11bed3187e4c5b822') 'Only the exact previously source-reviewed CMD wrapper hash is authorized for migration'
+    $previousVersionValidatorAst = @($preparerAst.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Test-PreviouslyReviewedStagedInput' }, $false))
+    Assert-True ($previousVersionValidatorAst.Count -eq 1) 'Production prior-version migration validator is source-addressable exactly once'
+    Assert-True ($sourcePreparerText.Contains('$knownPrevious = Test-PreviouslyReviewedStagedInput -Name $name -Sha256 $existingHash')) 'Production staging path actually calls reviewed prior-version validator'
+    Assert-True ($sourcePreparerText.IndexOf('Get-Process -Name WindowsSandbox') -lt $sourcePreparerText.IndexOf('$knownPrevious = Test-PreviouslyReviewedStagedInput')) 'Active Sandbox process guard executes before migration eligibility or staged writes'
+    if ($previousVersionValidatorAst.Count -eq 1 -and $previousWrapperReviewMatch.Success) {
+        Invoke-Expression $previousVersionValidatorAst[0].Extent.Text
+        $wrapperName = 'F2-Guest-Diagnostic.cmd'
+        $diagnosticName = 'Get-F2SandboxReadiness.ps1'
+        $bootstrapName = 'Start-F2SandboxDiagnostics.ps1'
+        $previousReviewedWrapperSha256 = @($previousWrapperReviewMatch.Groups[1].Value)
+        $previousReviewedBootstrapSha256 = @()
+        $previousReviewedDiagnosticSha256 = @()
+        Assert-True (Test-PreviouslyReviewedStagedInput -Name $wrapperName -Sha256 $previousReviewedWrapperSha256[0]) 'Production migration accepts the one approved older CMD wrapper'
+        Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name $wrapperName -Sha256 $expectedWrapperHash)) 'Current wrapper hash is not misclassified as an older version'
+        Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name $wrapperName -Sha256 ('0' * 64))) 'Production migration rejects unknown/tampered wrapper digest'
+        Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name 'Unreviewed.cmd' -Sha256 $previousReviewedWrapperSha256[0])) 'Production migration rejects an unreviewed input filename'
+        Assert-True (-not (Test-PreviouslyReviewedStagedInput -Name $diagnosticName -Sha256 $previousReviewedWrapperSha256[0])) 'Old CMD wrapper digest cannot authorize overwriting the diagnostic'
+    }
     Assert-True ($sourcePreparerText.Contains('@($diagnosticName, $bootstrapName, $wrapperName)') -and $launcherText.Contains('@($diagnosticName, $bootstrapName, $wrapperName)')) 'Both host validators require exactly three staged input names'
     Assert-True ($expectedBootstrapHash -eq (Get-NormalizedSourceHash $bootstrapPath)) 'Preparer pin matches updated bootstrap source'
     Assert-True ($expectedWsbHash -eq (Get-NormalizedSourceHash $configPath)) 'Preparer pin matches updated startup configuration'
