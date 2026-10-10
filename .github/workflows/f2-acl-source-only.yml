@@ -25,6 +25,13 @@ jobs:
           $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
           Write-Host "F2AclTestProcessExit=$($test.ExitCode)"
           if ($test.ExitCode -ne 0) { exit $test.ExitCode }
+      - name: Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1').Path
+          $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
+          Write-Host "F2IcaclsTestProcessExit=$($test.ExitCode)"
+          if ($test.ExitCode -ne 0) { exit $test.ExitCode }
       - name: Parse tracked PowerShell source
         shell: powershell
         run: |
@@ -42,5 +49,6 @@ jobs:
       - name: Check whitespace errors
         shell: powershell
         run: |
-          git diff --check origin/main...HEAD
+          if ([string]::IsNullOrWhiteSpace($env:GITHUB_BASE_REF)) { $base = 'origin/main' } else { $base = "origin/$env:GITHUB_BASE_REF" }
+          git diff --check "$base...HEAD"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
