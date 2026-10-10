@@ -150,6 +150,14 @@ Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @wrongPathSnapshotArgs).PathsPas
 Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @nicSnapshotArgs).NicPass) 'unexpected virtual NIC is rejected by the snapshot validator'
 Assert-F2Acl (Test-F2AclZeroNicCount 0) 'integer zero NIC count is accepted'
 foreach ($badNicCount in @($null, '', '0', 0.0, 1)) { Assert-F2Acl (-not (Test-F2AclZeroNicCount -Value $badNicCount)) ('null, empty, non-integer or nonzero NIC count is rejected: ' + [string]$badNicCount) }
+$nullNicCompletionMetadata = ConvertFrom-Json (ConvertTo-Json -InputObject (New-F2AclFixtureDocument -Paths $script:Paths).Metadata -Depth 20 -Compress)
+$nullNicCompletionMetadata.PostCollection.Paths.NicCount = $null
+$nullNicCompletion = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @($script:Paths | ForEach-Object { New-F2AclFixtureRecord $_ }) -Metadata $nullNicCompletionMetadata -VmState 'Off'
+Assert-F2Acl (-not $nullNicCompletion.Complete) 'null NIC count cannot set document Complete'
+$emptyNicCompletionMetadata = ConvertFrom-Json (ConvertTo-Json -InputObject (New-F2AclFixtureDocument -Paths $script:Paths).Metadata -Depth 20 -Compress)
+$emptyNicCompletionMetadata.PostCollection.Paths.NicCount = ''
+$emptyNicCompletion = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @($script:Paths | ForEach-Object { New-F2AclFixtureRecord $_ }) -Metadata $emptyNicCompletionMetadata -VmState 'Off'
+Assert-F2Acl (-not $emptyNicCompletion.Complete) 'empty NIC count cannot set document Complete'
 
 $validDocument = New-F2AclFixtureDocument -Paths $script:Paths
 $unknownStateDocument = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @($script:Paths | ForEach-Object { New-F2AclFixtureRecord $_ }) -Metadata $validDocument.Metadata -VmState 'Unknown'

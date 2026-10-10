@@ -28,7 +28,7 @@ jobs:
       - name: Parse tracked PowerShell source
         shell: powershell
         run: |
-          $files = @(git ls-files '*.ps1' '*.psm1')
+          $files = @(git ls-files 'scripts/f2-acl/*.ps1' 'scripts/f2-acl/*.psm1')
           $failures = @()
           foreach ($file in $files) {
             $tokens = $null
