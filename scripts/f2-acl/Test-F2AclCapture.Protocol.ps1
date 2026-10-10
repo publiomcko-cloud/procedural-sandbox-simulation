@@ -90,21 +90,21 @@ $script:VmId = '6f8d61ce-7c08-4c48-82d9-5fa7fe40a7b1'
 $script:VmName = 'F2-G1-Isolated-Disposable'
 $root = 'G:\F2-G1-Isolated-Disposable'
 $id = '6F8D61CE-7C08-4C48-82D9-5FA7FE40A7B1'
-$config = Join-Path $root 'F2-G1-Isolated-Disposable'
-$configVm = Join-Path $config 'Virtual Machines'
-$rootVm = Join-Path $root 'Virtual Machines'
+$config = [IO.Path]::Combine($root, 'F2-G1-Isolated-Disposable')
+$configVm = [IO.Path]::Combine($config, 'Virtual Machines')
+$rootVm = [IO.Path]::Combine($root, 'Virtual Machines')
 $script:Paths = @(
     $root,
     $config,
     $configVm,
-    (Join-Path $configVm $id),
-    (Join-Path $configVm ($id + '.vmcx')),
-    (Join-Path $configVm ($id + '.vmgs')),
-    (Join-Path $configVm ($id + '.VMRS')),
-    (Join-Path $root 'F2-G1-OS.vhdx'),
-    (Join-Path $root 'F2-G1-Scratch.vhdx'),
+    [IO.Path]::Combine($configVm, $id),
+    [IO.Path]::Combine($configVm, ($id + '.vmcx')),
+    [IO.Path]::Combine($configVm, ($id + '.vmgs')),
+    [IO.Path]::Combine($configVm, ($id + '.VMRS')),
+    [IO.Path]::Combine($root, 'F2-G1-OS.vhdx'),
+    [IO.Path]::Combine($root, 'F2-G1-Scratch.vhdx'),
     $rootVm,
-    (Join-Path $rootVm $id)
+    [IO.Path]::Combine($rootVm, $id)
 )
 Assert-F2Acl ($pinManifest.Schema -eq 'f2-acl-source-pins-v1' -and $pinManifest.ScriptSha256 -ceq $launcherDigest) 'committed source pin matches the launcher hash'
 Assert-F2Acl ($pinManifest.ModuleSha256 -ceq $moduleDigest) 'committed source pin matches the protocol module hash'
