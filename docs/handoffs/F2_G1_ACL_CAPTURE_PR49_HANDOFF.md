@@ -60,3 +60,17 @@ Revert this PR #49 source correction as an ordinary commit. Do not reset or forc
 - Verify no process/read-task wait is unbounded and all termination/disposal failures remain visible and fail closed.
 - Verify a zero worker exit plus incomplete output cannot pass the status validator.
 - Verify exact source pins, worker PID/exit/hash/stage diagnostics, Kingston and VM checks, protected mailbox controls, and 11-object scope are unchanged.
+
+## PR #49 correction — independent finding 6100778488
+
+- Finding reviewed: imported collector code called `Get-F2AclJsonBytes`, but the protocol module export list omitted it. The source-only correction exports that one required function; no other module API was added.
+- Correction commit: `b0e1a0cec2d26fac2b197fc96aed221b33122c7e`.
+- Parent/base SHA: `7ee2610fbd11b7f25e13e20f39a603f4b8f8f7e9`.
+- Branch: `security/f2-acl-capture-issue48`.
+- Changed source paths: `scripts/f2-acl/F2AclCapture.Protocol.psm1`, `scripts/f2-acl/Test-F2AclCapture.Protocol.ps1`, `scripts/f2-acl/F2_ACL_SOURCE_PINS.json`.
+- Regression additions: dynamically compare every F2 command dependency in the production launcher against the imported module export set; verify imported `Get-F2AclJsonBytes`; spawn a fresh Windows PowerShell 5.1 process that serializes UTF-8 JSON, writes and reads a synthetic integrity-framed payload, builds worker diagnostics, and publishes the same two diagnostic document names using the production module APIs. The test inspects the actual coordinator serialization/publication calls. No Hyper-V, UAC or live ACL path is invoked.
+- Windows PowerShell 5.1 test: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1` — 141 assertions, 0 failures, exit 0.
+- Parser sweep: 3 tracked PowerShell files, 0 errors. `git diff --check`: pass. Script SHA-256 remains `1319d92a55514a209cfbfdd4099845e4650a3b37a4c90887a8b7c24865d05579`; protocol module SHA-256 is `42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728`; committed manifest matches both.
+- GitHub Windows CI: pending publication/checks for the pushed correction.
+- Limits: synthetic fresh-process tests verify module import, serializer, frame and diagnostic publication boundaries; they do not perform UAC or live VM/ACL collection. Runtime acceptance remains NOT ESTABLISHED. PR #49 remains draft/unmerged. Independent review of the new pushed SHA is required before any fresh live collection authorization.
+- Status: READY_FOR_INDEPENDENT_REVIEW.
