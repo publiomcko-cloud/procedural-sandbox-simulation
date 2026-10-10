@@ -1,0 +1,46 @@
+name: F2 ACL source-only validation
+on:
+  push:
+    branches: [security/f2-acl-capture-issue48]
+    paths:
+      - 'scripts/f2-acl/**'
+      - 'docs/security/F2_G1_ACL_CAPTURE.md'
+      - '.github/workflows/f2-acl-source-only.yml'
+  pull_request:
+    paths:
+      - 'scripts/f2-acl/**'
+      - 'docs/security/F2_G1_ACL_CAPTURE.md'
+      - '.github/workflows/f2-acl-source-only.yml'
+jobs:
+  powershell-source-only:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run F2 ACL synthetic regression suite in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1').Path
+          $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
+          Write-Host "F2AclTestProcessExit=$($test.ExitCode)"
+          if ($test.ExitCode -ne 0) { exit $test.ExitCode }
+      - name: Parse tracked PowerShell source
+        shell: powershell
+        run: |
+          $files = @(git ls-files 'scripts/f2-acl/*.ps1' 'scripts/f2-acl/*.psm1')
+          $failures = @()
+          foreach ($file in $files) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$parseErrors)
+            foreach ($errorRecord in $parseErrors) { $failures += "${file}:$($errorRecord.Extent.StartLineNumber): $($errorRecord.Message)" }
+          }
+          Write-Host "ParserFiles=$($files.Count);ParserErrors=$($failures.Count)"
+          $failures | ForEach-Object { Write-Error $_ }
+          if ($failures.Count -gt 0) { exit 1 }
+      - name: Check whitespace errors
+        shell: powershell
+        run: |
+          git diff --check origin/main...HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

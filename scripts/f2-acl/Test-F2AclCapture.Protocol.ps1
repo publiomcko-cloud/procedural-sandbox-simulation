@@ -1,0 +1,865 @@
+[CmdletBinding()]
+param()
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1') -Force
+
+class F2AclThrowingDisposeStream {
+    [void] Dispose() { throw 'SyntheticDisposeFailure.' }
+}
+
+$pinManifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'F2_ACL_SOURCE_PINS.json') -Raw | ConvertFrom-Json
+$launcherDigest = Get-F2AclSha256 ([IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'Invoke-F2AclReadOnlyCapture.ps1')))
+$moduleDigest = Get-F2AclSha256 ([IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1')))
+
+$script:Assertions = 0
+$script:Failures = [Collections.Generic.List[string]]::new()
+
+function Assert-F2Acl {
+    param([bool]$Condition, [string]$Name)
+    $script:Assertions++
+    if (-not $Condition) { $script:Failures.Add($Name) }
+}
+
+function Assert-F2AclReject {
+    param([scriptblock]$Action, [string]$Name)
+    $rejected = $false
+    try { & $Action | Out-Null } catch { $rejected = $true }
+    Assert-F2Acl $rejected $Name
+}
+
+function New-F2AclFixtureRecord {
+    param([string]$Path)
+    $ace = [ordered]@{
+        Principal = 'NT AUTHORITY\SYSTEM'
+        Sid = 'S-1-5-18'
+        Type = 'Allow'
+        Rights = 'FullControl'
+        AccessMask = '0x001F01FF'
+        InheritanceFlags = 'ContainerInherit,ObjectInherit'
+        PropagationFlags = 'None'
+        Inherited = $false
+    }
+    return [ordered]@{
+        Path = $Path
+        Owner = 'BUILTIN\Administrators'
+        OwnerSid = 'S-1-5-32-544'
+        Sddl = 'O:BAD:AI(A;;FA;;;SY)'
+        DaclProtected = $true
+        Status = 'PASS'
+        Error = ''
+        AceCount = 1
+        Aces = @($ace)
+    }
+}
+
+function New-F2AclStorageObservation {
+    param([hashtable]$Changes = @{})
+    $value = [ordered]@{
+        Win32MatchCount=1;DiskMatchCount=1;PhysicalMatchCount=1
+        Win32Serial='152D20337A0C';DiskSerial='152D20337A0C';PhysicalSerial='152D20337A0C'
+        Win32Model='KINGSTON  SA400S37240G USB Device';DiskFriendlyName='KINGSTON SA400S37240G';DiskModel=' SA400S37240G   '
+        BusType='USB';DiskHealth='Healthy';DiskOperationalStatus=@('Online');PhysicalHealth='Healthy'
+        GPartitionCount=1;PartitionDiskNumber=2;DiskNumber=2;Win32Index=2;VolumeFileSystem='NTFS';VolumeHealth='Healthy'
+    }
+    foreach ($key in $Changes.Keys) { $value[$key] = $Changes[$key] }
+    return $value
+}
+
+function New-F2AclFixtureDocument {
+    param([string[]]$Paths)
+    $records = @($Paths | ForEach-Object { New-F2AclFixtureRecord $_ })
+    $disk = [ordered]@{SerialMatched=$true;Serial='152D20337A0C';Model='KINGSTON SA400S37240G';DriveLetter='G:';FileSystem='NTFS';BusType='USB';Health='Healthy';PhysicalHealth='Healthy';VolumeHealth='Healthy';DiskNumber=2;Win32Index=2;PartitionDisk=2}
+    $observation = New-F2AclStorageObservation
+    foreach ($key in $observation.Keys) { $disk[$key] = $observation[$key] }
+    $requiredGateNames = @('VmImmutableIdentityAndOff','KingstonSerialUniqueAcrossInterfaces','KingstonModelFieldsMatch','KingstonUSBTransport','KingstonDiskHealthAndOnline','GVolumeMapsToSerialSelectedDevice','ConfiguredStoragePathsExact','ZeroVirtualNetworkAdapters','ExactlyElevenUniqueKnownPaths','AllExpectedPathsExistWithoutReparsePoints','PostCollectionVmIdentityAndOff','PostCollectionStoragePathsUnchanged','PostCollectionZeroVirtualNetworkAdapters','PostCollectionKingstonStorageIdentityUnchanged','PostCollectionNoReparsePoints')
+    $gates = @($requiredGateNames | ForEach-Object { [ordered]@{Name=$_;Pass=$true;Detail='synthetic required gate passed'} })
+    $postPaths = [ordered]@{VmId=$script:VmId;VmName=$script:VmName;VmState='Off';Configuration=[IO.Path]::Combine($script:Paths[0], 'F2-G1-Isolated-Disposable');Checkpoints=$script:Paths[0];SmartPaging=$script:Paths[0];VhdPaths=@($script:Paths[7],$script:Paths[8]);NicCount=0}
+    $postPaths.Validation = Test-F2AclVmStorageSnapshot -VmId $script:VmId -VmName $script:VmName -VmState 'Off' -ExpectedVmId $script:VmId -ExpectedVmName $script:VmName -ExpectedConfiguration $postPaths.Configuration -ExpectedCheckpoints $postPaths.Checkpoints -ExpectedSmartPaging $postPaths.SmartPaging -ExpectedVhdPaths $postPaths.VhdPaths -Configuration $postPaths.Configuration -Checkpoints $postPaths.Checkpoints -SmartPaging $postPaths.SmartPaging -VhdPaths $postPaths.VhdPaths -NicCount 0
+    $postStorageValidation = Test-F2AclKingstonStorageIdentity -Observation $observation
+    $metadata = [ordered]@{
+        Gates = $gates
+        Disk = $disk
+        PostCollection = [ordered]@{VmId=$script:VmId;VmName=$script:VmName;VmState='Off';Paths=$postPaths;Storage=$observation;StorageValidation=$postStorageValidation}
+    }
+    return New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records $records -Metadata $metadata -VmState 'Off'
+}
+
+function Convert-F2AclFixtureToBytes {
+    param($Document)
+    return ConvertTo-F2AclUtf8Bytes (ConvertTo-Json -InputObject $Document -Depth 20 -Compress)
+}
+
+function Test-F2AclFixturePayload {
+    param([byte[]]$Payload, [string]$Sha256, [int]$ChildExitCode)
+    return Test-F2AclEvidenceDocument -Payload $Payload -PayloadSha256 $Sha256 -ChildExitCode $ChildExitCode -ExpectedVmId $script:VmId -ExpectedVmName $script:VmName -ExpectedDiskSerial '152D20337A0C' -ExpectedDiskModel 'KINGSTON SA400S37240G' -ExpectedPaths $script:Paths
+}
+
+$script:VmId = '6f8d61ce-7c08-4c48-82d9-5fa7fe40a7b1'
+$script:VmName = 'F2-G1-Isolated-Disposable'
+$root = 'G:\F2-G1-Isolated-Disposable'
+$id = '6F8D61CE-7C08-4C48-82D9-5FA7FE40A7B1'
+$config = [IO.Path]::Combine($root, 'F2-G1-Isolated-Disposable')
+$configVm = [IO.Path]::Combine($config, 'Virtual Machines')
+$rootVm = [IO.Path]::Combine($root, 'Virtual Machines')
+$script:Paths = @(
+    $root,
+    $config,
+    $configVm,
+    [IO.Path]::Combine($configVm, $id),
+    [IO.Path]::Combine($configVm, ($id + '.vmcx')),
+    [IO.Path]::Combine($configVm, ($id + '.vmgs')),
+    [IO.Path]::Combine($configVm, ($id + '.VMRS')),
+    [IO.Path]::Combine($root, 'F2-G1-OS.vhdx'),
+    [IO.Path]::Combine($root, 'F2-G1-Scratch.vhdx'),
+    $rootVm,
+    [IO.Path]::Combine($rootVm, $id)
+)
+Assert-F2Acl ($pinManifest.Schema -eq 'f2-acl-source-pins-v1' -and $pinManifest.ScriptSha256 -ceq $launcherDigest) 'committed source pin matches the launcher hash'
+Assert-F2Acl ($pinManifest.ModuleSha256 -ceq $moduleDigest) 'committed source pin matches the protocol module hash'
+$launcherSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Invoke-F2AclReadOnlyCapture.ps1'))
+$protocolSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1'))
+$protocolModule = Get-Module | Where-Object { $_.Path -eq (Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1') } | Select-Object -First 1
+$moduleFunctionNames = @($protocolModule.ExportedCommands.Keys)
+$launcherTokens = $null
+$launcherParseErrors = $null
+$launcherAst = [Management.Automation.Language.Parser]::ParseInput($launcherSource,[ref]$launcherTokens,[ref]$launcherParseErrors)
+$launcherLocalFunctions = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+foreach ($functionAst in $launcherAst.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst]},$true)) {
+    [void]$launcherLocalFunctions.Add($functionAst.Name)
+}
+$moduleCalls = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+foreach ($commandAst in $launcherAst.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst]},$true)) {
+    $commandName = $commandAst.GetCommandName()
+    if ($commandName -match '^(Get|Test|Assert|ConvertTo|ConvertFrom|Write|Read|New|Invoke|Wait|Add|Save)-F2Acl' -and -not $launcherLocalFunctions.Contains($commandName)) {
+        [void]$moduleCalls.Add($commandName)
+    }
+}
+$missingModuleCalls = @($moduleCalls | Where-Object { $_ -notin $moduleFunctionNames })
+Assert-F2Acl ($null -ne $protocolModule -and (Get-Command Get-F2AclJsonBytes -ErrorAction SilentlyContinue) -and $missingModuleCalls.Count -eq 0) ('all production launcher module dependencies are exported and imported, including: ' + ($missingModuleCalls -join ','))
+Assert-F2Acl ((Get-Command Get-F2AclJsonBytes -ErrorAction SilentlyContinue).ModuleName -eq $protocolModule.Name) 'Get-F2AclJsonBytes is available as an imported module function'
+$aclScriptAst = [Management.Automation.Language.Parser]::ParseInput($launcherSource,[ref]$launcherTokens,[ref]$launcherParseErrors)
+$aclParserNames = @('ConvertTo-F2AclAccessMaskHex','ConvertTo-F2AclRightsDescription','ConvertFrom-F2AclSddlRecord')
+$aclParserFunctions = @($aclScriptAst.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $aclParserNames},$true))
+Assert-F2Acl ($aclParserFunctions.Count -eq $aclParserNames.Count) 'production SDDL parser helpers are present in the actual collector script'
+if ($aclParserFunctions.Count -eq $aclParserNames.Count) {
+    $aclParserSource = ($aclParserFunctions | ForEach-Object { $_.Extent.Text }) -join [Environment]::NewLine
+    . ([scriptblock]::Create($aclParserSource))
+    $maskFixtures = @(
+        [pscustomobject]@{Hex='10000000';Rights='GENERIC_ALL (unmapped)'},
+        [pscustomobject]@{Hex='80000006';Rights='GENERIC_READ (unmapped); remainder=0x00000006 (not interpreted with generic bits)'},
+        [pscustomobject]@{Hex='80000000';Rights='GENERIC_READ (unmapped)'},
+        [pscustomobject]@{Hex='20000000';Rights='GENERIC_EXECUTE (unmapped)'},
+        [pscustomobject]@{Hex='40000000';Rights='GENERIC_WRITE (unmapped)'},
+        [pscustomobject]@{Hex='001F01FF';Rights='ReadData/ListDirectory'},
+        [pscustomobject]@{Hex='F00001FF';Rights='GENERIC_READ (unmapped)'},
+        [pscustomobject]@{Hex='FFFFFFFF';Rights='GENERIC_READ (unmapped)'}
+    )
+    foreach ($maskFixture in $maskFixtures) {
+        $maskUnsigned = [Convert]::ToUInt32($maskFixture.Hex,16)
+        $maskAce = if ($maskUnsigned -gt 0x7FFFFFFF) { [int]([long]$maskUnsigned - 0x100000000L) } else { [int]$maskUnsigned }
+        $maskRecord = ConvertFrom-F2AclSddlRecord -Path 'C:\F2Acl-Synthetic\mask' -Sddl ('O:BAD:PAI(A;OICI;0x' + $maskFixture.Hex + ';;;SY)')
+        $maskPass = $maskRecord.Status -eq 'PASS' -and $maskRecord.AceCount -eq 1 -and $maskRecord.Aces[0].AccessMask -ceq ('0x' + $maskFixture.Hex) -and (ConvertTo-F2AclAccessMaskHex -AccessMask $maskAce) -ceq ('0x' + $maskFixture.Hex) -and $maskRecord.Aces[0].Rights.Contains(($maskFixture.Rights -split ';')[0])
+        if ($maskFixture.Hex -eq '80000006') { $maskPass = $maskPass -and $maskRecord.Aces[0].Rights -ceq $maskFixture.Rights }
+        Assert-F2Acl $maskPass ('actual collector SDDL parser preserves unsigned ACE mask 0x' + $maskFixture.Hex + ' and reports conservative rights')
+    }
+    $integritySddl = 'O:BAD:PAI(A;OICI;0x10000000;;;SY)(A;CIIOID;0x80000006;;;BA)(D;;0x40000000;;;BA)'
+    $integrityRecord = ConvertFrom-F2AclSddlRecord -Path 'C:\F2Acl-Synthetic\integrity' -Sddl $integritySddl
+    Assert-F2Acl ($integrityRecord.Status -eq 'PASS' -and $integrityRecord.OwnerSid -eq 'S-1-5-32-544' -and $integrityRecord.DaclProtected -and $integrityRecord.AceCount -eq 3 -and $integrityRecord.Aces[0].Sid -eq 'S-1-5-18' -and $integrityRecord.Aces[0].InheritanceFlags -eq 'ObjectInherit,ContainerInherit' -and $integrityRecord.Aces[1].Sid -eq 'S-1-5-32-544' -and $integrityRecord.Aces[1].InheritanceFlags -eq 'ContainerInherit' -and $integrityRecord.Aces[1].PropagationFlags -eq 'InheritOnly' -and $integrityRecord.Aces[1].Inherited -and $integrityRecord.Aces[2].Type -eq 'Deny') 'actual collector SDDL parser preserves owner, DACL protection, ACE type, inheritance, propagation and inherited flag'
+    $unsupportedSddlRecord = ConvertFrom-F2AclSddlRecord -Path 'C:\F2Acl-Synthetic\unsupported' -Sddl 'O:BAD:P(OA;;0x00000001;00112233-4455-6677-8899-aabbccddeeff;;SY)'
+    Assert-F2Acl ($unsupportedSddlRecord.Status -eq 'FAIL' -and $unsupportedSddlRecord.AceCount -eq 0 -and $unsupportedSddlRecord.Error -match 'UnsupportedDaclAceClass') 'actual collector SDDL parser still fails closed on unsupported object ACEs'
+}
+$coordinatorStart = $launcherSource.IndexOf('function Invoke-F2AclElevatedCoordinator', [StringComparison]::Ordinal)
+$coordinatorEnd = if ($coordinatorStart -ge 0) { $launcherSource.IndexOf('function Test-F2AclSavedEvidencePackage', $coordinatorStart, [StringComparison]::Ordinal) } else { -1 }
+$coordinatorSource = if ($coordinatorStart -ge 0 -and $coordinatorEnd -gt $coordinatorStart) { $launcherSource.Substring($coordinatorStart,$coordinatorEnd-$coordinatorStart) } else { '' }
+Assert-F2Acl (([regex]::Matches($launcherSource,'-Verb RunAs')).Count -eq 1 -and $launcherSource.Contains('-ElevatedCoordinator')) 'only the standard launcher crosses UAC and starts the elevated coordinator'
+Assert-F2Acl (-not $launcherSource.Contains('CurrentUserOnly') -and -not $launcherSource.Contains('NamedPipe') -and $coordinatorSource.Contains('New-F2AclCoordinatorMailboxDirectory') -and $coordinatorSource.Contains('Write-F2AclAtomicCreateNewFile') -and -not $coordinatorSource.Contains('-Verb RunAs') -and -not $launcherSource.Contains('New-F2AclRestrictedDirectory')) 'UAC boundary uses admin-created mailbox and no named-pipe IPC'
+Assert-F2Acl ($coordinatorSource.Contains("Schema='f2-acl-elevated-coordinator-v1'") -and $coordinatorSource.Contains('WorkerExitCode=') -and $coordinatorSource.Contains('ExpectedProcessExitCode=')) 'production coordinator status emits the schema and fields required by the parent validator'
+Assert-F2Acl ($coordinatorSource.Contains('Invoke-F2AclCapturedPowerShell') -and -not $coordinatorSource.Contains('Start-Process -FilePath $powerShellExe') -and $launcherSource.Contains('WorkerExpectedFiles') -and $launcherSource.IndexOf('WorkerExpectedFiles') -lt $launcherSource.IndexOf('Read-F2AclBoundedFile -Path $framePath')) 'production coordinator captures worker diagnostics and inventories files before frame parsing'
+Assert-F2Acl ($coordinatorSource.Contains('$stdoutBytes = Get-F2AclJsonBytes $executionReport.Stdout') -and $coordinatorSource.Contains('$stderrBytes = Get-F2AclJsonBytes $executionReport.Stderr') -and $coordinatorSource.Contains("'worker-stdout.json'") -and $coordinatorSource.Contains("'worker-stderr.json'") -and $coordinatorSource.Contains('Write-F2AclAtomicCreateNewFile')) 'production coordinator serializes and create-new publishes both worker diagnostic documents through imported module APIs'
+Assert-F2Acl ($protocolSource.Contains('RedirectStandardOutput = $true') -and $protocolSource.Contains('RedirectStandardError = $true') -and $protocolSource.Contains('MaxBytesPerStream') -and $protocolSource.Contains('WorkerExecutionOrOutputDrainDeadlineExceeded.') -and $protocolSource.Contains('Diagnostics.Stopwatch')) 'production process reader redirects both streams with bounded retention and one monotonic execution/drain deadline'
+Assert-F2Acl (-not [regex]::IsMatch($protocolSource,'(?im)\.WaitForExit\(\s*\)') -and $launcherSource.Contains('$outerWaitSeconds = $WaitSeconds + 60') -and $launcherSource.Contains('StillRunningAtTimeout') -and $launcherSource.Contains('ConvertTo-Json -Depth 12 -Compress')) 'coordinator cleanup has no unbounded process wait and launcher has bounded actionable timeout status'
+$workerBranchStart = $launcherSource.IndexOf('if ($CollectorChild)',[StringComparison]::Ordinal)
+$workerBranchEnd = $launcherSource.IndexOf('if ($ElevatedCoordinator)',[StringComparison]::Ordinal)
+$workerBranchSource = if($workerBranchStart -ge 0 -and $workerBranchEnd -gt $workerBranchStart){$launcherSource.Substring($workerBranchStart,$workerBranchEnd-$workerBranchStart)}else{''}
+$workerFailureStart = $workerBranchSource.IndexOf('catch {',$workerBranchSource.IndexOf('} *>&1',[StringComparison]::Ordinal),[StringComparison]::Ordinal)
+$workerFailureEnd = $workerBranchSource.IndexOf('$logDocument =',[Math]::Max(0,$workerFailureStart),[StringComparison]::Ordinal)
+$workerFailureSource = if($workerFailureStart -ge 0 -and $workerFailureEnd -gt $workerFailureStart){$workerBranchSource.Substring($workerFailureStart,$workerFailureEnd-$workerFailureStart)}else{''}
+Assert-F2Acl ($workerFailureSource.Contains('F2ACL_FATAL:') -and $workerBranchSource.Contains('ConvertTo-Json') -and $workerBranchSource.Contains('Write-F2AclWorkerStreamLog') -and -not $workerFailureSource.Contains('Get-F2AclJsonBytes') -and -not $workerFailureSource.Contains('Add-F2AclBoundedStreamRecord')) 'worker early-failure diagnostic path does not depend on importing the protocol module'
+$requesterSidFixture = 'S-1-5-21-111111111-222222222-333333333-1001'
+$otherAdminSidFixture = 'S-1-5-21-111111111-222222222-333333333-1002'
+$sameAdminPair = Test-F2AclElevatedIdentityPair -RequesterSid $requesterSidFixture -CoordinatorSid $requesterSidFixture -CoordinatorIsAdministrator $true
+$otherAdminPair = Test-F2AclElevatedIdentityPair -RequesterSid $requesterSidFixture -CoordinatorSid $otherAdminSidFixture -CoordinatorIsAdministrator $true
+$filteredSameUserPair = Test-F2AclElevatedIdentityPair -RequesterSid $requesterSidFixture -CoordinatorSid $requesterSidFixture -CoordinatorIsAdministrator $false
+$nonAdminOtherPair = Test-F2AclElevatedIdentityPair -RequesterSid $requesterSidFixture -CoordinatorSid $otherAdminSidFixture -CoordinatorIsAdministrator $false
+$malformedIdentityPair = Test-F2AclElevatedIdentityPair -RequesterSid $requesterSidFixture -CoordinatorSid 'not-a-sid' -CoordinatorIsAdministrator $true
+Assert-F2Acl ($sameAdminPair.Pass -and $sameAdminPair.SameIdentity) 'same-account elevated coordinator token is accepted'
+Assert-F2Acl ($otherAdminPair.Pass -and -not $otherAdminPair.SameIdentity) 'credentialed different Administrator identity is accepted by policy'
+Assert-F2Acl (-not $filteredSameUserPair.Pass -and -not $nonAdminOtherPair.Pass -and -not $malformedIdentityPair.Pass) 'non-elevated and malformed coordinator identities fail closed'
+$mailboxSddl = Get-F2AclCoordinatorMailboxSddl -RequesterSid $requesterSidFixture
+$mailboxDescriptor = Test-F2AclCoordinatorMailboxSddl -Sddl $mailboxSddl -RequesterSid $requesterSidFixture
+Assert-F2Acl ($mailboxDescriptor.Protected -and $mailboxDescriptor.OwnerSid -eq 'S-1-5-32-544' -and $mailboxDescriptor.RequesterRights -eq 'ReadAndExecute' -and $mailboxDescriptor.AceCount -eq 4 -and $mailboxDescriptor.Sddl.Contains('0x1200a9;;;OW')) 'mailbox grants requester read/traverse only and blocks same-account owner implicit WRITE_DAC'
+$writableMailboxSddl = $mailboxSddl.Replace('0x1200a9','FA')
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $writableMailboxSddl -RequesterSid $requesterSidFixture } 'requester write/delete/WRITE_DAC ACE is rejected'
+$requesterOwnedMailboxSddl = $mailboxSddl.Replace('O:BA','O:' + $requesterSidFixture)
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $requesterOwnedMailboxSddl -RequesterSid $requesterSidFixture } 'requester ownership that could change mailbox DACL is rejected'
+$unprotectedMailboxSddl = $mailboxSddl.Replace('D:P','D:')
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $unprotectedMailboxSddl -RequesterSid $requesterSidFixture } 'unprotected mailbox DACL cannot inherit ProgramData grants'
+$extraWritableMailboxSddl = $mailboxSddl + '(A;OICI;0x120116;;;S-1-5-32-545)'
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $extraWritableMailboxSddl -RequesterSid $requesterSidFixture } 'unexpected Users create/write grant on mailbox is rejected'
+$observedProgramDataSddl = 'O:SYG:SYD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICIIO;GA;;;CO)(A;OICI;0x1200a9;;;BU)(A;CI;DCLCRPCR;;;BU)'
+$observedParentCheck = Test-F2AclCoordinatorMailboxParentSddl -Sddl $observedProgramDataSddl -RequireProtectedDacl -AllowBuiltinUsersCreateRights
+Assert-F2Acl ($observedParentCheck.Pass -and $observedParentCheck.OwnerSid -eq 'S-1-5-18' -and $observedParentCheck.Protected) 'exact observed protected ProgramData SDDL accepts BUILTIN Users 0x116 creation and metadata rights'
+$observedRawParent = [Security.AccessControl.RawSecurityDescriptor]::new($observedProgramDataSddl)
+$usersParentAce = @($observedRawParent.DiscretionaryAcl | Where-Object { $_.SecurityIdentifier.Value -eq 'S-1-5-32-545' -and $_.AccessMask -eq 0x116 })
+Assert-F2Acl ($usersParentAce.Count -eq 1 -and ($usersParentAce[0].AccessMask -band 0x40) -eq 0 -and ($usersParentAce[0].AccessMask -band 0x10000) -eq 0 -and ($usersParentAce[0].AccessMask -band 0x40000) -eq 0 -and ($usersParentAce[0].AccessMask -band 0x80000) -eq 0) 'observed 0x116 grants add-file/add-subdirectory/EA/attributes, not delete-child/delete/WRITE_DAC/WRITE_OWNER'
+foreach ($attack in @(
+    [pscustomobject]@{Name='DELETE_CHILD';Ace='(A;CI;0x00000040;;;BU)'},
+    [pscustomobject]@{Name='DELETE';Ace='(A;CI;0x00010000;;;BU)'},
+    [pscustomobject]@{Name='WRITE_DAC';Ace='(A;CI;0x00040000;;;BU)'},
+    [pscustomobject]@{Name='WRITE_OWNER';Ace='(A;CI;0x00080000;;;BU)'},
+    [pscustomobject]@{Name='GENERIC_WRITE';Ace='(A;CI;0x40000000;;;BU)'},
+    [pscustomobject]@{Name='GENERIC_ALL';Ace='(A;CI;0x10000000;;;BU)'}
+)) {
+    Assert-F2AclReject { Test-F2AclCoordinatorMailboxParentSddl -Sddl ($observedProgramDataSddl + $attack.Ace) -RequireProtectedDacl -AllowBuiltinUsersCreateRights } ('ProgramData ' + $attack.Name + ' attack fails closed')
+}
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxParentSddl -Sddl ($observedProgramDataSddl.Replace('D:PAI','D:AI')) -RequireProtectedDacl -AllowBuiltinUsersCreateRights } 'unprotected mailbox parent fails inherited-rights gate'
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxParentSddl -Sddl ($observedProgramDataSddl + '(A;CI;WD;;;S-1-5-11)') -RequireProtectedDacl -AllowBuiltinUsersCreateRights } 'dangerous inherited Authenticated Users grant is rejected'
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxParentSddl -Sddl ($observedProgramDataSddl + '(A;CI;0x00000002;;;S-1-5-11)') -RequireProtectedDacl -AllowBuiltinUsersCreateRights } 'unapproved broad-principal child-creation grant is rejected'
+$parentWriteRules = @([pscustomobject]@{IdentityReference=[Security.Principal.SecurityIdentifier]::new($requesterSidFixture);AccessControlType='Allow';FileSystemRights=[Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles})
+$parentUnexpectedWrite = @(Get-F2AclUnexpectedWritableSids -Rules $parentWriteRules -OwnerSid 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
+Assert-F2Acl ($parentUnexpectedWrite.Count -eq 1 -and $parentUnexpectedWrite[0] -eq $requesterSidFixture) 'requester delete-child permission on the protected parent is rejected'
+$validWorkerStages = @('WorkerLaunched','EntrypointReached','InvocationStarted','SourceVerified','MailboxVerified','CollectorEntered','FramePublished','StreamPublished','InvocationReturned','WorkerExited')
+$validWorkerDiagnostics = [ordered]@{Started=$true;ProcessId=1001;State='Exited';TimedOut=$false;ExitCode=0;ElapsedMilliseconds=10;OutputComplete=$true;CleanupComplete=$true;StdoutBytes=128;StdoutSha256=('c'*64);StdoutTruncated=$false;StderrBytes=0;StderrSha256=('d'*64);StderrTruncated=$false;FatalError=$null;Stages=$validWorkerStages;ReaderErrors=@()}
+$validWorkerExpectedFiles = @([pscustomobject]@{Name='acl-baseline.frame';Exists=$true;Length=64},[pscustomobject]@{Name='powershell-streams.json';Exists=$true;Length=64})
+$validWorkerDiagnosticFiles = @([pscustomobject]@{Name='worker-stdout.json';Bytes=200;Sha256=('e'*64)},[pscustomobject]@{Name='worker-stderr.json';Bytes=100;Sha256=('f'*64)})
+$validCoordinatorStatus = [pscustomobject]@{Schema='f2-acl-elevated-coordinator-v1';Outcome='COMPLETE_READ_ONLY_ACL_BASELINE';RequesterSid=$requesterSidFixture;CoordinatorSid=$otherAdminSidFixture;AdministratorRoleVerified=$true;WorkerExitCode=0;WorkerProcessId=1001;WorkerDiagnostics=$validWorkerDiagnostics;WorkerExpectedFiles=$validWorkerExpectedFiles;WorkerDiagnosticFiles=$validWorkerDiagnosticFiles;WorkerDiagnosticFallback=$null;ExpectedProcessExitCode=0;PayloadSha256=('a'*64);StreamsSha256=('b'*64);Errors=@()}
+$validCoordinatorStatusCheck = Test-F2AclCoordinatorStatus -Status $validCoordinatorStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture
+$wrongCoordinatorExitStatus = Test-F2AclCoordinatorStatus -Status $validCoordinatorStatus -ActualProcessExitCode 4 -ExpectedRequesterSid $requesterSidFixture
+$wrongCoordinatorRequester = Test-F2AclCoordinatorStatus -Status $validCoordinatorStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $otherAdminSidFixture
+$invalidCoordinatorStatus = $validCoordinatorStatus.PSObject.Copy(); $invalidCoordinatorStatus.AdministratorRoleVerified=$false
+$invalidCoordinatorStatusCheck = Test-F2AclCoordinatorStatus -Status $invalidCoordinatorStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture
+$missingWorkerExitStatus = $validCoordinatorStatus.PSObject.Copy(); $missingWorkerExitStatus.WorkerExitCode=$null
+$missingWorkerExitCheck = Test-F2AclCoordinatorStatus -Status $missingWorkerExitStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture
+$malformedAdminFlagStatus = $validCoordinatorStatus.PSObject.Copy(); $malformedAdminFlagStatus.AdministratorRoleVerified='true'
+$malformedAdminFlagCheck = Test-F2AclCoordinatorStatus -Status $malformedAdminFlagStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture
+$missingCoordinatorStatus = Test-F2AclCoordinatorStatus -Status $null -ActualProcessExitCode 1 -ExpectedRequesterSid $requesterSidFixture
+Assert-F2Acl ($validCoordinatorStatusCheck.Pass -and -not $validCoordinatorStatusCheck.SameIdentity) 'different-identity coordinator status is bound to the requesting SID and actual process exit'
+Assert-F2Acl (-not $wrongCoordinatorExitStatus.Pass -and -not $wrongCoordinatorRequester.Pass -and -not $invalidCoordinatorStatusCheck.Pass -and -not $missingWorkerExitCheck.Pass -and -not $malformedAdminFlagCheck.Pass -and -not $missingCoordinatorStatus.Pass) 'wrong coordinator exit, requester, malformed token/worker status or missing status fails closed'
+$fallbackStatus = $validCoordinatorStatus.PSObject.Copy(); $fallbackStatus.WorkerDiagnosticFallback = [pscustomobject]@{Schema='f2-acl-worker-diagnostic-fallback-v1'}
+Assert-F2Acl (-not (Test-F2AclCoordinatorStatus -Status $fallbackStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture).Pass) 'diagnostic publication fallback cannot be classified as a complete result'
+$missingStageStatus = $validCoordinatorStatus.PSObject.Copy(); $missingStageCopy = [ordered]@{}; foreach($key in $validWorkerDiagnostics.Keys){$missingStageCopy[$key]=$validWorkerDiagnostics[$key]}; $missingStageCopy.Stages = @('WorkerLaunched','EntrypointReached','InvocationStarted','SourceVerified','MailboxVerified','CollectorEntered','StreamPublished','InvocationReturned','WorkerExited'); $missingStageStatus.WorkerDiagnostics = $missingStageCopy
+$missingStreamStatus = $validCoordinatorStatus.PSObject.Copy(); $missingStreamStatus.WorkerExpectedFiles = @([pscustomobject]@{Name='acl-baseline.frame';Exists=$true;Length=64},[pscustomobject]@{Name='powershell-streams.json';Exists=$false;Length=$null})
+Assert-F2Acl (-not (Test-F2AclCoordinatorStatus -Status $missingStageStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture).Pass -and -not (Test-F2AclCoordinatorStatus -Status $missingStreamStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture).Pass) 'successful coordinator status requires all worker lifecycle stages and both exact expected artifacts'
+$observedStorage = New-F2AclStorageObservation
+$observedStorageResult = Test-F2AclKingstonStorageIdentity -Observation $observedStorage
+Assert-F2Acl ($observedStorageResult.Pass -and $observedStorageResult.CanonicalModel -ceq 'KINGSTON SA400S37240G' -and $observedStorageResult.NormalizedWin32Model -ceq 'KINGSTON SA400S37240G USB Device') 'observed USB bridge model strings pass the production identity validator'
+$wrongSerial = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{Win32Serial='000000000000'})
+Assert-F2Acl (-not $wrongSerial.Pass -and -not $wrongSerial.SerialPass) 'wrong serial is rejected by the production identity validator'
+$wrongWin32Model = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{Win32Model='KINGSTON SA400S37240G USB Device Extra'})
+Assert-F2Acl (-not $wrongWin32Model.Pass -and -not $wrongWin32Model.ModelPass) 'unapproved Win32 model suffix is rejected'
+$wrongFriendly = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{DiskFriendlyName='Generic USB Disk'})
+Assert-F2Acl (-not $wrongFriendly.Pass -and -not $wrongFriendly.ModelPass) 'unrelated USB device friendly name is rejected'
+$wrongDiskModel = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{DiskModel='SA400S37000G'})
+Assert-F2Acl (-not $wrongDiskModel.Pass -and -not $wrongDiskModel.ModelPass) 'mismatched Get-Disk model is rejected'
+$ambiguousStorage = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{PhysicalMatchCount=2})
+Assert-F2Acl (-not $ambiguousStorage.Pass -and -not $ambiguousStorage.SerialPass) 'ambiguous duplicate serial match is rejected'
+$unavailableStorage = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{DiskFriendlyName=$null})
+Assert-F2Acl (-not $unavailableStorage.Pass -and $unavailableStorage.Errors -contains 'StorageFieldUnavailable:DiskFriendlyName') 'unavailable storage field fails closed'
+$missingStorage = New-F2AclStorageObservation; [void]$missingStorage.Remove('DiskFriendlyName')
+$missingStorageResult = Test-F2AclKingstonStorageIdentity -Observation $missingStorage
+Assert-F2Acl (-not $missingStorageResult.Pass -and $missingStorageResult.Errors -contains 'StorageObservationFieldsMissing') 'unavailable storage property fails closed'
+$wrongTransport = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{BusType='SATA'})
+Assert-F2Acl (-not $wrongTransport.Pass -and -not $wrongTransport.TransportPass) 'non-USB transport is rejected'
+$wrongMapping = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{PartitionDiskNumber=3})
+Assert-F2Acl (-not $wrongMapping.Pass -and -not $wrongMapping.MappingPass) 'G partition on a different disk is rejected'
+
+$expectedVhds = @('G:\F2-G1-OS.vhdx','G:\F2-G1-Scratch.vhdx')
+$snapshotArgs = @{VmId=$script:VmId;VmName=$script:VmName;VmState='Off';ExpectedVmId=$script:VmId;ExpectedVmName=$script:VmName;ExpectedConfiguration='G:\F2-G1-Isolated-Disposable\F2-G1-Isolated-Disposable';ExpectedCheckpoints='G:\F2-G1-Isolated-Disposable';ExpectedSmartPaging='G:\F2-G1-Isolated-Disposable';ExpectedVhdPaths=$expectedVhds;Configuration='G:\F2-G1-Isolated-Disposable\F2-G1-Isolated-Disposable';Checkpoints='G:\F2-G1-Isolated-Disposable';SmartPaging='G:\F2-G1-Isolated-Disposable';VhdPaths=$expectedVhds;NicCount=0}
+Assert-F2Acl ((Test-F2AclVmStorageSnapshot @snapshotArgs).Pass) 'exact OFF VM and storage snapshot passes production invariant validator'
+$runningSnapshotArgs = $snapshotArgs.Clone(); $runningSnapshotArgs.VmState = 'Running'
+$wrongVmSnapshotArgs = $snapshotArgs.Clone(); $wrongVmSnapshotArgs.VmId = [guid]::NewGuid().ToString()
+$wrongPathSnapshotArgs = $snapshotArgs.Clone(); $wrongPathSnapshotArgs.Checkpoints = 'G:\OtherProject'
+$nicSnapshotArgs = $snapshotArgs.Clone(); $nicSnapshotArgs.NicCount = 1
+Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @runningSnapshotArgs).IdentityPass) 'post-collection VM start is rejected'
+Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @wrongVmSnapshotArgs).IdentityPass) 'different immutable VM identity is rejected'
+Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @wrongPathSnapshotArgs).PathsPass) 'post-collection path drift is rejected'
+Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @nicSnapshotArgs).NicPass) 'unexpected virtual NIC is rejected by the snapshot validator'
+Assert-F2Acl (Test-F2AclZeroNicCount 0) 'integer zero NIC count is accepted'
+foreach ($badNicCount in @($null, '', '0', 0.0, 1)) { Assert-F2Acl (-not (Test-F2AclZeroNicCount -Value $badNicCount)) ('null, empty, non-integer or nonzero NIC count is rejected: ' + [string]$badNicCount) }
+$nullNicCompletionMetadata = ConvertFrom-Json (ConvertTo-Json -InputObject (New-F2AclFixtureDocument -Paths $script:Paths).Metadata -Depth 20 -Compress)
+$nullNicCompletionMetadata.PostCollection.Paths.NicCount = $null
+$nullNicCompletion = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @($script:Paths | ForEach-Object { New-F2AclFixtureRecord $_ }) -Metadata $nullNicCompletionMetadata -VmState 'Off'
+Assert-F2Acl (-not $nullNicCompletion.Complete) 'null NIC count cannot set document Complete'
+$emptyNicCompletionMetadata = ConvertFrom-Json (ConvertTo-Json -InputObject (New-F2AclFixtureDocument -Paths $script:Paths).Metadata -Depth 20 -Compress)
+$emptyNicCompletionMetadata.PostCollection.Paths.NicCount = ''
+$emptyNicCompletion = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @($script:Paths | ForEach-Object { New-F2AclFixtureRecord $_ }) -Metadata $emptyNicCompletionMetadata -VmState 'Off'
+Assert-F2Acl (-not $emptyNicCompletion.Complete) 'empty NIC count cannot set document Complete'
+
+$validDocument = New-F2AclFixtureDocument -Paths $script:Paths
+$unknownStateDocument = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @($script:Paths | ForEach-Object { New-F2AclFixtureRecord $_ }) -Metadata $validDocument.Metadata -VmState 'Unknown'
+Assert-F2Acl (-not $unknownStateDocument.Complete -and $unknownStateDocument.VmState -eq 'Unknown') 'unknown final VM state cannot produce a complete evidence document'
+$missingCompleteGateMetadata = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument.Metadata -Depth 20 -Compress)
+$missingCompleteGateMetadata.Gates = @($missingCompleteGateMetadata.Gates | Where-Object { $_.Name -cne 'PostCollectionVmIdentityAndOff' })
+$missingCompleteGateDocument = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @($script:Paths | ForEach-Object { New-F2AclFixtureRecord $_ }) -Metadata $missingCompleteGateMetadata -VmState 'Off'
+Assert-F2Acl (-not $missingCompleteGateDocument.Complete) 'missing post-collection gate cannot set Complete'
+$missingCompletePostMetadata = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument.Metadata -Depth 20 -Compress)
+$missingCompletePostMetadata.PSObject.Properties.Remove('PostCollection')
+$missingCompletePostDocument = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @($script:Paths | ForEach-Object { New-F2AclFixtureRecord $_ }) -Metadata $missingCompletePostMetadata -VmState 'Off'
+Assert-F2Acl (-not $missingCompletePostDocument.Complete) 'missing post-collection snapshot cannot set Complete'
+$validBytes = Convert-F2AclFixtureToBytes $validDocument
+$validHash = Get-F2AclSha256 $validBytes
+$valid = Test-F2AclFixturePayload $validBytes $validHash 0
+if (-not $valid.Pass) { $valid.Errors | ForEach-Object { Write-Output ("VALID_FIXTURE_ERROR=" + $_) } }
+Assert-F2Acl ($valid.Pass -and $valid.Document.Manifest.RecordCount -eq 11) 'complete 11-path fixture accepted'
+$requiredPostGateNames = @('PostCollectionVmIdentityAndOff','PostCollectionStoragePathsUnchanged','PostCollectionZeroVirtualNetworkAdapters','PostCollectionKingstonStorageIdentityUnchanged','PostCollectionNoReparsePoints')
+foreach ($gateName in $requiredPostGateNames) {
+    $gateMissingDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+    $gateMissingDoc.Metadata.Gates = @($gateMissingDoc.Metadata.Gates | Where-Object { $_.Name -cne $gateName })
+    $gateMissingBytes = Convert-F2AclFixtureToBytes $gateMissingDoc
+    $gateMissingResult = Test-F2AclFixturePayload $gateMissingBytes (Get-F2AclSha256 $gateMissingBytes) 0
+    Assert-F2Acl (-not $gateMissingResult.Pass -and $gateMissingResult.Errors -contains ('RequiredGateMissing: ' + $gateName)) ('missing named post-collection gate rejected: ' + $gateName)
+}
+$missingPostCollection = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$missingPostCollection.Metadata.PSObject.Properties.Remove('PostCollection')
+$missingPostBytes = Convert-F2AclFixtureToBytes $missingPostCollection
+$missingPostResult = Test-F2AclFixturePayload $missingPostBytes (Get-F2AclSha256 $missingPostBytes) 0
+Assert-F2Acl (-not $missingPostResult.Pass -and $missingPostResult.Errors -contains 'RequiredMetadataFieldMissing') 'missing post-collection snapshot rejected'
+foreach ($field in @('VmId','VmName','VmState','Paths','Storage','StorageValidation')) {
+    $fieldMissingDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+    $fieldMissingDoc.Metadata.PostCollection.PSObject.Properties.Remove($field)
+    $fieldMissingBytes = Convert-F2AclFixtureToBytes $fieldMissingDoc
+    $fieldMissingResult = Test-F2AclFixturePayload $fieldMissingBytes (Get-F2AclSha256 $fieldMissingBytes) 0
+    Assert-F2Acl (-not $fieldMissingResult.Pass -and $fieldMissingResult.Errors -contains 'PostCollectionEvidenceMissing') ('missing post-collection field rejected: ' + $field)
+}
+$postRunningDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postRunningDoc.Metadata.PostCollection.VmState = 'Running'; $postRunningDoc.VmState = 'Running'
+$postRunningBytes = Convert-F2AclFixtureToBytes $postRunningDoc
+$postRunningResult = Test-F2AclFixturePayload $postRunningBytes (Get-F2AclSha256 $postRunningBytes) 0
+Assert-F2Acl (-not $postRunningResult.Pass -and $postRunningResult.Errors -contains 'PostCollectionVmIdentityOrStateMismatch') 'post-collection running state rejected'
+$postWrongIdDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postWrongIdDoc.Metadata.PostCollection.VmId = [guid]::NewGuid().ToString()
+$postWrongIdBytes = Convert-F2AclFixtureToBytes $postWrongIdDoc
+$postWrongIdResult = Test-F2AclFixturePayload $postWrongIdBytes (Get-F2AclSha256 $postWrongIdBytes) 0
+Assert-F2Acl (-not $postWrongIdResult.Pass -and $postWrongIdResult.Errors -contains 'PostCollectionVmIdentityOrStateMismatch') 'post-collection immutable VM ID drift rejected'
+$postWrongPathDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postWrongPathDoc.Metadata.PostCollection.Paths.Checkpoints = 'G:\OtherProject'
+$postWrongPathBytes = Convert-F2AclFixtureToBytes $postWrongPathDoc
+$postWrongPathResult = Test-F2AclFixturePayload $postWrongPathBytes (Get-F2AclSha256 $postWrongPathBytes) 0
+Assert-F2Acl (-not $postWrongPathResult.Pass -and $postWrongPathResult.Errors -contains 'PostCollectionStorageSnapshotMismatch') 'post-collection storage path drift rejected'
+$postWrongDiskDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postWrongDiskDoc.Metadata.PostCollection.Storage.Win32Serial = '000000000000'
+$postWrongDiskBytes = Convert-F2AclFixtureToBytes $postWrongDiskDoc
+$postWrongDiskResult = Test-F2AclFixturePayload $postWrongDiskBytes (Get-F2AclSha256 $postWrongDiskBytes) 0
+Assert-F2Acl (-not $postWrongDiskResult.Pass -and $postWrongDiskResult.Errors -contains 'PostCollectionStorageIdentityMismatch') 'post-collection disk identity drift rejected'
+$postFalseValidationDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postFalseValidationDoc.Metadata.PostCollection.StorageValidation.Pass = $false
+$postFalseValidationBytes = Convert-F2AclFixtureToBytes $postFalseValidationDoc
+$postFalseValidationResult = Test-F2AclFixturePayload $postFalseValidationBytes (Get-F2AclSha256 $postFalseValidationBytes) 0
+Assert-F2Acl (-not $postFalseValidationResult.Pass -and $postFalseValidationResult.Errors -contains 'PostCollectionStorageValidationMismatch') 'untrusted post-collection validation claim rejected'
+$postNullNicDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postNullNicDoc.Metadata.PostCollection.Paths.NicCount = $null
+$postNullNicBytes = Convert-F2AclFixtureToBytes $postNullNicDoc
+$postNullNicResult = Test-F2AclFixturePayload $postNullNicBytes (Get-F2AclSha256 $postNullNicBytes) 0
+Assert-F2Acl (-not $postNullNicResult.Pass -and $postNullNicResult.Errors -contains 'PostCollectionStorageSnapshotMismatch') 'null post-collection NIC count rejected by payload validation'
+$postEmptyNicDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postEmptyNicDoc.Metadata.PostCollection.Paths.NicCount = ''
+$postEmptyNicBytes = Convert-F2AclFixtureToBytes $postEmptyNicDoc
+$postEmptyNicResult = Test-F2AclFixturePayload $postEmptyNicBytes (Get-F2AclSha256 $postEmptyNicBytes) 0
+Assert-F2Acl (-not $postEmptyNicResult.Pass -and $postEmptyNicResult.Errors -contains 'PostCollectionStorageSnapshotMismatch') 'empty post-collection NIC count rejected by payload validation'
+Assert-F2Acl ((ConvertTo-F2AclWindowsArgument 'C:\Dev\Space Path\capture.ps1') -eq '"C:\Dev\Space Path\capture.ps1"') 'quoted child path preserves spaces'
+Assert-F2Acl ((ConvertTo-F2AclWindowsArgument 'C:\tail\') -eq '"C:\tail\\"') 'quoted child path doubles trailing slash'
+
+$frameStream = [IO.MemoryStream]::new()
+Write-F2AclFrame -Stream $frameStream -Payload $validBytes
+$frameStream.Position = 0
+$frame = Read-F2AclFrame -Stream $frameStream
+Assert-F2Acl ($frame.PayloadSha256 -eq $validHash -and $frame.PayloadLength -eq $validBytes.Length) 'valid bounded frame round-trips with digest'
+
+$openFrameName = 'f2acltest_' + [guid]::NewGuid().ToString('N')
+$openFrameServer = [IO.Pipes.NamedPipeServerStream]::new($openFrameName, [IO.Pipes.PipeDirection]::In, 1, [IO.Pipes.PipeTransmissionMode]::Byte, [IO.Pipes.PipeOptions]::Asynchronous)
+$base64Frame = [Convert]::ToBase64String($frameStream.ToArray())
+$openFrameCommand = '$c=[IO.Pipes.NamedPipeClientStream]::new(''.'',''' + $openFrameName + ''',[IO.Pipes.PipeDirection]::Out);$c.Connect(5000);$b=[Convert]::FromBase64String(''' + $base64Frame + ''');$c.Write($b,0,$b.Length);$c.Flush();Start-Sleep -Seconds 3;$c.Dispose()'
+$openFrameInfo = [Diagnostics.ProcessStartInfo]::new()
+$openFrameInfo.FileName = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+$openFrameInfo.Arguments = '-NoProfile -NonInteractive -Command ' + (ConvertTo-F2AclWindowsArgument $openFrameCommand)
+$openFrameInfo.UseShellExecute = $false; $openFrameInfo.CreateNoWindow = $true
+$openFrameChild = [Diagnostics.Process]::new(); $openFrameChild.StartInfo = $openFrameInfo
+try {
+    if (-not $openFrameChild.Start()) { throw 'Synthetic complete-frame child did not start.' }
+    $openFrameServer.WaitForConnection()
+    $openTimer = [Diagnostics.Stopwatch]::StartNew()
+    Assert-F2AclReject { Read-F2AclFrame -Stream $openFrameServer -TimeoutSeconds 1 } 'complete frame with child keeping pipe open is rejected by bounded EOF probe'
+    Assert-F2Acl ($openTimer.Elapsed.TotalSeconds -lt 3) 'bounded EOF probe returns while child pipe remains open'
+}
+finally {
+    if ($openFrameChild -and -not $openFrameChild.HasExited) { $openFrameChild.Kill() }
+    $openFrameServer.Dispose()
+    if ($openFrameChild) { $openFrameChild.Dispose() }
+}
+
+$aceSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
+$standardAce = [Security.AccessControl.CommonAce]::new([Security.AccessControl.AceFlags]::ContainerInherit, [Security.AccessControl.AceQualifier]::AccessAllowed, [int][Security.AccessControl.FileSystemRights]::Read, $aceSid, $false, $null)
+$callbackAce = [Security.AccessControl.CommonAce]::new([Security.AccessControl.AceFlags]::None, [Security.AccessControl.AceQualifier]::AccessAllowed, [int][Security.AccessControl.FileSystemRights]::Read, $aceSid, $true, [byte[]](1,2,3,4))
+$objectAce = [Security.AccessControl.ObjectAce]::new([Security.AccessControl.AceFlags]::None, [Security.AccessControl.AceQualifier]::AccessAllowed, [int][Security.AccessControl.FileSystemRights]::Read, $aceSid, [Security.AccessControl.ObjectAceFlags]::ObjectAceTypePresent, [guid]::NewGuid(), [guid]::Empty, $false, $null)
+$auditFlagAce = [Security.AccessControl.CommonAce]::new([Security.AccessControl.AceFlags]::SuccessfulAccess, [Security.AccessControl.AceQualifier]::AccessAllowed, [int][Security.AccessControl.FileSystemRights]::Read, $aceSid, $false, $null)
+Assert-F2Acl ([bool](Assert-F2AclSupportedAce $standardAce)) 'plain supported common allow ACE accepted'
+Assert-F2AclReject { Assert-F2AclSupportedAce $callbackAce } 'callback ACE rejected instead of dropping condition data'
+Assert-F2AclReject { Assert-F2AclSupportedAce $objectAce } 'object ACE rejected instead of dropping object GUIDs'
+Assert-F2AclReject { Assert-F2AclSupportedAce $auditFlagAce } 'unsupported ACE flag rejected'
+
+$oversizeWriter = [IO.MemoryStream]::new()
+Assert-F2AclReject { Write-F2AclFrame -Stream $oversizeWriter -Payload ([byte[]]::new(65)) -MaxPayloadBytes 64 } 'oversized frame rejected by writer'
+$oversizeReader = [IO.MemoryStream]::new()
+$bw = [IO.BinaryWriter]::new($oversizeReader)
+$bw.Write([byte[]](0x46, 0x32, 0x41, 0x43, 0x4C, 0x01, 0x0D, 0x0A)); $bw.Write([int]65); $bw.Flush(); $oversizeReader.Position = 0
+Assert-F2AclReject { Read-F2AclFrame -Stream $oversizeReader -MaxPayloadBytes 64 } 'oversized frame rejected by reader'
+
+$corruptStream = [IO.MemoryStream]::new()
+Write-F2AclFrame -Stream $corruptStream -Payload $validBytes
+$corruptBytes = $corruptStream.ToArray(); $corruptBytes[12] = $corruptBytes[12] -bxor 0x01
+$corruptInput = [IO.MemoryStream]::new($corruptBytes)
+Assert-F2AclReject { Read-F2AclFrame -Stream $corruptInput } 'corrupted payload rejected by frame hash'
+
+$partialFrame = [IO.MemoryStream]::new([byte[]](0x46, 0x32, 0x41, 0x43))
+Assert-F2AclReject { Read-F2AclFrame -Stream $partialFrame } 'partial frame rejected'
+
+$stalledName = 'f2acltest_' + [guid]::NewGuid().ToString('N')
+$stalledServer = [IO.Pipes.NamedPipeServerStream]::new($stalledName, [IO.Pipes.PipeDirection]::In, 1, [IO.Pipes.PipeTransmissionMode]::Byte, [IO.Pipes.PipeOptions]::Asynchronous)
+$pipeClientCommand = '$c=[IO.Pipes.NamedPipeClientStream]::new(''.'',''' + $stalledName + ''',[IO.Pipes.PipeDirection]::Out);$c.Connect(5000);$b=[byte[]](0x46,0x32,0x41,0x43);$c.Write($b,0,$b.Length);$c.Flush();Start-Sleep -Seconds 3;$c.Dispose()'
+$pipeClientInfo = [Diagnostics.ProcessStartInfo]::new()
+$pipeClientInfo.FileName = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+$pipeClientInfo.Arguments = '-NoProfile -NonInteractive -Command ' + (ConvertTo-F2AclWindowsArgument $pipeClientCommand)
+$pipeClientInfo.UseShellExecute = $false; $pipeClientInfo.CreateNoWindow = $true
+$pipeClient = [Diagnostics.Process]::new(); $pipeClient.StartInfo = $pipeClientInfo
+try {
+    Write-Host 'Stage=bounded_partial_pipe_read'
+    if (-not $pipeClient.Start()) { throw 'Synthetic partial-frame child did not start.' }
+    $stalledServer.WaitForConnection()
+    $stallTimer = [Diagnostics.Stopwatch]::StartNew()
+    Assert-F2AclReject { Read-F2AclFrame -Stream $stalledServer -TimeoutSeconds 1 } 'connected child that stalls after partial header is bounded by read timeout'
+    Assert-F2Acl ($stallTimer.Elapsed.TotalSeconds -lt 3) 'stalled frame timeout returns within bound'
+}
+finally {
+    $stalledServer.Dispose()
+    if ($pipeClient -and -not $pipeClient.HasExited) { $pipeClient.Kill() }
+    if ($pipeClient) { $pipeClient.Dispose() }
+}
+
+$missingDocument = New-F2AclFixtureDocument -Paths $script:Paths[0..9]
+$missingBytes = Convert-F2AclFixtureToBytes $missingDocument
+$missingResult = Test-F2AclFixturePayload $missingBytes (Get-F2AclSha256 $missingBytes) 0
+Assert-F2Acl (-not $missingResult.Pass -and $missingResult.Errors -contains 'DocumentIncomplete') 'missing record fails closed'
+
+$duplicatePaths = @($script:Paths[0..9]) + @($script:Paths[0])
+$duplicateDocument = New-F2AclFixtureDocument -Paths $duplicatePaths
+$duplicateBytes = Convert-F2AclFixtureToBytes $duplicateDocument
+$duplicateResult = Test-F2AclFixturePayload $duplicateBytes (Get-F2AclSha256 $duplicateBytes) 0
+Assert-F2Acl (-not $duplicateResult.Pass -and ($duplicateResult.Errors -match 'RecordCountOrDuplicatePath')) 'duplicate path fails closed'
+
+$malformedBytes = ConvertTo-F2AclUtf8Bytes '{bad json'
+$malformedResult = Test-F2AclFixturePayload $malformedBytes (Get-F2AclSha256 $malformedBytes) 0
+Assert-F2Acl (-not $malformedResult.Pass -and $malformedResult.Errors[0] -like 'MalformedJson:*') 'malformed JSON fails closed'
+$missingEnvelopeBytes = ConvertTo-F2AclUtf8Bytes '{}'
+$missingEnvelope = Test-F2AclFixturePayload $missingEnvelopeBytes (Get-F2AclSha256 $missingEnvelopeBytes) 0
+Assert-F2Acl (-not $missingEnvelope.Pass -and $missingEnvelope.Errors -contains 'RequiredTopLevelFieldMissing') 'missing envelope fields fail closed'
+
+$missingRecordText = [Text.Encoding]::UTF8.GetString($validBytes).Replace('"OwnerSid":"S-1-5-32-544",', '')
+$missingRecordBytes = ConvertTo-F2AclUtf8Bytes $missingRecordText
+$missingRecordResult = Test-F2AclFixturePayload $missingRecordBytes (Get-F2AclSha256 $missingRecordBytes) 0
+Assert-F2Acl (-not $missingRecordResult.Pass -and ($missingRecordResult.Errors -contains 'RequiredRecordFieldMissing')) 'missing ACL record field fails closed'
+
+$childFailure = Test-F2AclFixturePayload $validBytes $validHash 23
+Assert-F2Acl (-not $childFailure.Pass -and $childFailure.Errors -contains 'ChildExitCode=23') 'nonzero child exit fails closed'
+
+$badHash = Test-F2AclFixturePayload $validBytes ('0' * 64) 0
+Assert-F2Acl (-not $badHash.Pass -and $badHash.Errors -contains 'PayloadSha256Mismatch') 'payload digest mismatch fails closed'
+
+$badRecord = New-F2AclFixtureRecord $script:Paths[0]
+$badRecord.Sddl = ''
+$partialRecords = @((New-F2AclFixtureDocument -Paths $script:Paths).Records)
+$partialDocument = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records (@($badRecord) + @($partialRecords[1..10])) -Metadata $validDocument.Metadata
+$partialBytes = Convert-F2AclFixtureToBytes $partialDocument
+$partialResult = Test-F2AclFixturePayload $partialBytes (Get-F2AclSha256 $partialBytes) 0
+Assert-F2Acl (-not $partialResult.Pass -and ($partialResult.Errors -match 'RecordIncomplete:*')) 'partial ACL record fails closed'
+
+$emptyDocument = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @() -Metadata $validDocument.Metadata -Errors @('synthetic preflight stop')
+$emptyBytes = Convert-F2AclFixtureToBytes $emptyDocument
+$emptyResult = Test-F2AclFixturePayload $emptyBytes (Get-F2AclSha256 $emptyBytes) 1
+Assert-F2Acl (-not $emptyResult.Pass -and $emptyResult.Errors -contains 'DocumentIncomplete' -and $emptyResult.Document.Manifest.RecordCount -eq 0) 'preflight failure with no ACL rows remains structured and incomplete'
+
+$workerTestRoot = Join-Path $env:TEMP ('F2Acl-Worker-Launch-Test-' + [guid]::NewGuid().ToString('N'))
+[void][IO.Directory]::CreateDirectory($workerTestRoot)
+$workerFixturePath = Join-Path $workerTestRoot 'synthetic-worker.ps1'
+$workerFixture = @'
+param([string]$Scenario,[string]$Directory,[string]$Pin)
+if ([string]::IsNullOrWhiteSpace($Scenario)) { throw 'SyntheticRequiredArgumentMissing.' }
+if ($Scenario -eq 'PinMismatch' -and $Pin -cne 'pin-ok') { throw 'SyntheticSourcePinMismatch.' }
+[Console]::Out.WriteLine('F2ACL_STAGE:SourceVerified')
+if ($Scenario -eq 'BeforeFrame') { throw 'SyntheticFailureBeforeFrame.' }
+if ($Scenario -eq 'ExitOneBeforeFrame') { return 1 }
+if ($Scenario -eq 'MailboxWriteFailure') { [IO.File]::WriteAllText((Join-Path $Directory 'missing-parent\result.bin'),'x'); return 0 }
+if ($Scenario -eq 'Timeout') { Start-Sleep -Seconds 10; return 0 }
+[Console]::Out.WriteLine('F2ACL_STAGE:MailboxVerified')
+[Console]::Out.WriteLine('F2ACL_STAGE:CollectorEntered')
+$frame = Join-Path $Directory 'acl-baseline.frame'
+$streams = Join-Path $Directory 'powershell-streams.json'
+if ($Scenario -eq 'InterruptedPublication') { [IO.File]::WriteAllText((Join-Path $Directory 'acl-baseline.frame.pending'),'partial'); return 0 }
+if ($Scenario -in @('Complete','MissingStream','NonzeroPartial')) { [IO.File]::WriteAllText($frame,'synthetic-frame'); [Console]::Out.WriteLine('F2ACL_STAGE:FramePublished') }
+if ($Scenario -in @('Complete','NonzeroPartial')) { [IO.File]::WriteAllText($streams,'synthetic-stream'); [Console]::Out.WriteLine('F2ACL_STAGE:StreamPublished') }
+if ($Scenario -eq 'NonzeroPartial') { [Console]::Error.WriteLine('synthetic late failure'); return 17 }
+if ($Scenario -eq 'Complete') { return 0 }
+return 0
+'@
+[IO.File]::WriteAllText($workerFixturePath,$workerFixture,[Text.UTF8Encoding]::new($false))
+$powerShellExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+function Invoke-F2AclSyntheticWorker {
+    param([string]$Scenario,[string]$Directory,[string]$Pin='pin-ok',[switch]$OmitScenario,[switch]$BadParameter,[int]$TimeoutSeconds=10,[int]$MaxBytesPerStream=16384)
+    [void][IO.Directory]::CreateDirectory($Directory)
+    $invocation = '& ' + ("'" + $workerFixturePath.Replace("'","''") + "'")
+    if (-not $OmitScenario) { $invocation += ' -Scenario ' + ("'" + $Scenario.Replace("'","''") + "'") }
+    if ($BadParameter) { $invocation += ' -NotARealParameter value' }
+    else { $invocation += ' -Directory ' + ("'" + $Directory.Replace("'","''") + "'") + ' -Pin ' + ("'" + $Pin.Replace("'","''") + "'") }
+    $command = New-F2AclWorkerBootstrapCommand -Invocation $invocation
+    return Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText $command -TimeoutSeconds $TimeoutSeconds -MaxBytesPerStream $MaxBytesPerStream
+}
+function Get-F2AclSyntheticArtifactManifest {
+    param([string]$Directory)
+    return @(
+        [pscustomobject]@{Name='acl-baseline.frame';Exists=[IO.File]::Exists((Join-Path $Directory 'acl-baseline.frame'))},
+        [pscustomobject]@{Name='powershell-streams.json';Exists=[IO.File]::Exists((Join-Path $Directory 'powershell-streams.json'))}
+    )
+}
+function Invoke-F2AclOpenPipeWorker {
+    param([ValidateSet('Stdout','Stderr')][string]$HeldStream,[string]$RedirectionPath)
+    $inner = 'Start-Sleep -Seconds 3'
+    $innerEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($inner))
+    $escapedExe = $powerShellExe.Replace("'","''")
+    $escapedRedirect = $RedirectionPath.Replace("'","''")
+    $redirectSwitch = if ($HeldStream -eq 'Stdout') { '-RedirectStandardError' } else { '-RedirectStandardOutput' }
+    $pidStream = if ($HeldStream -eq 'Stdout') { 'Error' } else { 'Out' }
+    $command = "`$holder = Start-Process -FilePath '$escapedExe' -ArgumentList @('-NoProfile','-NonInteractive','-EncodedCommand','$innerEncoded') -NoNewWindow -PassThru $redirectSwitch '$escapedRedirect'; [Console]::$pidStream.WriteLine('HOLDER_PID:' + `$holder.Id); exit 0"
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    $capture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText $command -TimeoutSeconds 1 -PollMilliseconds 10
+    $timer.Stop()
+    $oppositeBytes = if ($HeldStream -eq 'Stdout') { $capture.StderrBytes } else { $capture.StdoutBytes }
+    $oppositeText = [Text.Encoding]::UTF8.GetString($oppositeBytes)
+    $holderMatch = [regex]::Match($oppositeText,'HOLDER_PID:(\d+)')
+    $holderId = if ($holderMatch.Success) { [int]$holderMatch.Groups[1].Value } else { $null }
+    return [pscustomobject]@{Capture=$capture;ElapsedMilliseconds=$timer.ElapsedMilliseconds;HolderId=$holderId}
+}
+try {
+    Write-Output 'Stage=fresh_process_imported_module_serialization_frame_and_worker_diagnostics'
+    $boundaryRoot = Join-Path $workerTestRoot 'module-boundary'
+    [void][IO.Directory]::CreateDirectory($boundaryRoot)
+    $boundaryScriptPath = Join-Path $boundaryRoot 'exercise-imported-module.ps1'
+    $boundaryResultPath = Join-Path $boundaryRoot 'result.json'
+    $boundaryScript = @'
+param([string]$ModulePath,[string]$OutputRoot,[string]$ResultPath)
+$ErrorActionPreference = 'Stop'
+Import-Module -Name $ModulePath -Force -ErrorAction Stop
+if (-not (Get-Command Get-F2AclJsonBytes -ErrorAction Stop)) { throw 'ImportedJsonSerializerUnavailable.' }
+$unicodeValue = 'snowman-' + [char]0x2603
+$serializedBytes = Get-F2AclJsonBytes -Value ([ordered]@{kind='module-boundary';value=$unicodeValue;sequence=31})
+$serializedPath = Join-Path $OutputRoot 'serialized.json'
+[void](Write-F2AclAtomicCreateNewFile -Path $serializedPath -Bytes $serializedBytes -MaxBytes 4096)
+$serialized = [Text.Encoding]::UTF8.GetString((Read-F2AclBoundedFile -Path $serializedPath -MaxBytes 4096)) | ConvertFrom-Json -ErrorAction Stop
+if ($serialized.kind -cne 'module-boundary' -or $serialized.value -cne $unicodeValue -or $serialized.sequence -ne 31) { throw 'ImportedJsonSerializationMismatch.' }
+$framePayload = Get-F2AclJsonBytes -Value ([ordered]@{kind='synthetic-frame';sequence=32})
+$frameStream = [IO.MemoryStream]::new()
+try {
+    Write-F2AclFrame -Stream $frameStream -Payload $framePayload
+    $frameBytes = $frameStream.ToArray()
+    [void](Write-F2AclAtomicCreateNewFile -Path (Join-Path $OutputRoot 'acl-baseline.frame') -Bytes $frameBytes -MaxBytes 8192)
+    $frameStream.Position = 0
+    $frame = Read-F2AclFrame -Stream $frameStream -TimeoutSeconds 2
+    if ((Get-F2AclSha256 -Bytes $frame.Payload) -cne $frame.PayloadSha256) { throw 'ImportedFrameHashMismatch.' }
+}
+finally { $frameStream.Dispose() }
+$streamDocument = [ordered]@{Schema='f2-acl-powershell-streams-v1';Complete=$true;ExitCode=0;Records=@()}
+$streamBytes = Get-F2AclJsonBytes -Value $streamDocument
+[void](Write-F2AclAtomicCreateNewFile -Path (Join-Path $OutputRoot 'powershell-streams.json') -Bytes $streamBytes -MaxBytes 4096)
+$stdoutText = @('F2ACL_STAGE:EntrypointReached','F2ACL_STAGE:InvocationStarted','F2ACL_STAGE:SourceVerified','F2ACL_STAGE:MailboxVerified','F2ACL_STAGE:CollectorEntered','F2ACL_STAGE:FramePublished','F2ACL_STAGE:StreamPublished','F2ACL_STAGE:InvocationReturned') -join [Environment]::NewLine
+$captured = [pscustomobject]@{Started=$true;ProcessId=$PID;State='Exited';TimedOut=$false;ExitCode=0;ElapsedMilliseconds=1;OutputComplete=$true;CleanupComplete=$true;StartError=$null;StdoutBytes=[Text.Encoding]::UTF8.GetBytes($stdoutText);StderrBytes=[byte[]]@();StdoutTruncated=$false;StderrTruncated=$false;ReaderErrors=@()}
+$expectedFiles = @(
+    [pscustomobject]@{Name='acl-baseline.frame';Exists=[IO.File]::Exists((Join-Path $OutputRoot 'acl-baseline.frame'));Length=(Get-Item (Join-Path $OutputRoot 'acl-baseline.frame')).Length},
+    [pscustomobject]@{Name='powershell-streams.json';Exists=[IO.File]::Exists((Join-Path $OutputRoot 'powershell-streams.json'));Length=(Get-Item (Join-Path $OutputRoot 'powershell-streams.json')).Length}
+)
+$report = New-F2AclWorkerExecutionReport -CapturedProcess $captured -ExpectedFiles $expectedFiles
+if (-not $report.Pass) { throw ('SyntheticWorkerReportRejected:' + ($report.Errors -join ';')) }
+# These are the same imported serialization and create-new publication operations
+# used by Invoke-F2AclElevatedCoordinator for worker-stdout.json/stderr.json.
+$stdoutBytes = Get-F2AclJsonBytes -Value $report.Stdout
+$stderrBytes = Get-F2AclJsonBytes -Value $report.Stderr
+[void](Write-F2AclAtomicCreateNewFile -Path (Join-Path $OutputRoot 'worker-stdout.json') -Bytes $stdoutBytes -MaxBytes 65536)
+[void](Write-F2AclAtomicCreateNewFile -Path (Join-Path $OutputRoot 'worker-stderr.json') -Bytes $stderrBytes -MaxBytes 65536)
+$result = [ordered]@{Serialized=$serialized;FramePayloadSha256=$frame.PayloadSha256;ReportPass=$report.Pass;Stdout=$report.Stdout;Stderr=$report.Stderr}
+[void](Write-F2AclAtomicCreateNewFile -Path $ResultPath -Bytes (Get-F2AclJsonBytes -Value $result) -MaxBytes 16384)
+'@
+    [IO.File]::WriteAllText($boundaryScriptPath,$boundaryScript,[Text.UTF8Encoding]::new($false))
+    $boundaryInvocation = '$(& ' + (ConvertTo-F2AclWindowsArgument $boundaryScriptPath) + ' -ModulePath ' + (ConvertTo-F2AclWindowsArgument (Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1')) + ' -OutputRoot ' + (ConvertTo-F2AclWindowsArgument $boundaryRoot) + ' -ResultPath ' + (ConvertTo-F2AclWindowsArgument $boundaryResultPath) + '; 0)'
+    $boundaryCommand = New-F2AclWorkerBootstrapCommand -Invocation $boundaryInvocation
+    $boundaryCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText $boundaryCommand -TimeoutSeconds 15
+    if (-not ($boundaryCapture.Started -and $boundaryCapture.ExitCode -eq 0 -and $boundaryCapture.OutputComplete -and [IO.File]::Exists($boundaryResultPath))) {
+        Write-Output ('ModuleBoundaryExit=' + [string]$boundaryCapture.ExitCode + ';State=' + $boundaryCapture.State + ';Stdout=' + [Text.Encoding]::UTF8.GetString($boundaryCapture.StdoutBytes) + ';Stderr=' + [Text.Encoding]::UTF8.GetString($boundaryCapture.StderrBytes))
+    }
+    Assert-F2Acl ($boundaryCapture.Started -and $boundaryCapture.ExitCode -eq 0 -and $boundaryCapture.OutputComplete -and [IO.File]::Exists($boundaryResultPath)) 'fresh Windows PowerShell process imports and invokes the actual protocol module without host or UAC collection'
+    if ([IO.File]::Exists($boundaryResultPath)) {
+        $boundaryResult = [Text.Encoding]::UTF8.GetString((Read-F2AclBoundedFile -Path $boundaryResultPath -MaxBytes 16384)) | ConvertFrom-Json -ErrorAction Stop
+        $publishedStdout = [Text.Encoding]::UTF8.GetString((Read-F2AclBoundedFile -Path (Join-Path $boundaryRoot 'worker-stdout.json') -MaxBytes 65536)) | ConvertFrom-Json -ErrorAction Stop
+        $publishedStderr = [Text.Encoding]::UTF8.GetString((Read-F2AclBoundedFile -Path (Join-Path $boundaryRoot 'worker-stderr.json') -MaxBytes 65536)) | ConvertFrom-Json -ErrorAction Stop
+        $publishedFrameStream = [IO.MemoryStream]::new((Read-F2AclBoundedFile -Path (Join-Path $boundaryRoot 'acl-baseline.frame') -MaxBytes 8192))
+        try { $publishedFrame = Read-F2AclFrame -Stream $publishedFrameStream -TimeoutSeconds 2 } finally { $publishedFrameStream.Dispose() }
+        Assert-F2Acl ($boundaryResult.ReportPass -eq $true -and $boundaryResult.Serialized.value -ceq ('snowman-' + [char]0x2603) -and $boundaryResult.FramePayloadSha256 -ceq $publishedFrame.PayloadSha256 -and $publishedStdout.Stream -ceq 'stdout' -and $publishedStdout.Stages.Count -eq 8 -and $publishedStderr.Stream -ceq 'stderr' -and $publishedStderr.ByteCount -eq 0) 'imported serializer, synthetic frame integrity and both worker diagnostic publications round-trip across the fresh-process module boundary'
+    }
+
+    Write-Output 'Stage=production_encoded_worker_success'
+    $successDir = Join-Path $workerTestRoot 'complete'
+    $successCapture = Invoke-F2AclSyntheticWorker -Scenario Complete -Directory $successDir
+    $successReport = New-F2AclWorkerExecutionReport -CapturedProcess $successCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest $successDir)
+    Assert-F2Acl ($successCapture.Started -and $successCapture.ExitCode -eq 0 -and $successCapture.OutputComplete -and $successReport.Pass) 'production encoded worker launch captures separate streams, actual exit, stages and expected artifacts on success'
+
+    Write-Output 'Stage=production_encoded_worker_preframe_failure'
+    $beforeDir = Join-Path $workerTestRoot 'before-frame'
+    $beforeCapture = Invoke-F2AclSyntheticWorker -Scenario BeforeFrame -Directory $beforeDir
+    $beforeReport = New-F2AclWorkerExecutionReport -CapturedProcess $beforeCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest $beforeDir)
+    Assert-F2Acl ($beforeCapture.ExitCode -eq 3 -and $beforeReport.Diagnostics.FatalError -eq 'SyntheticFailureBeforeFrame.' -and ($beforeReport.Errors -match '^WorkerFatal:').Count -eq 1 -and ($beforeReport.Errors -match '^WorkerExpectedFilesMissing:').Count -eq 1) 'pre-frame fatal survives and is not replaced by missing-artifact diagnosis'
+
+    Write-Output 'Stage=production_encoded_worker_exit_before_frame'
+    $exitOneDir = Join-Path $workerTestRoot 'exit-one'
+    $exitOneCapture = Invoke-F2AclSyntheticWorker -Scenario ExitOneBeforeFrame -Directory $exitOneDir
+    $exitOneReport = New-F2AclWorkerExecutionReport -CapturedProcess $exitOneCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest $exitOneDir)
+    Assert-F2Acl ($exitOneCapture.ExitCode -eq 1 -and ($exitOneReport.Errors -match '^WorkerExitedNonzero:1$').Count -eq 1 -and ($exitOneReport.Errors -match '^WorkerExpectedFilesMissing:').Count -eq 1) 'exit 1 before frame retains actual code plus missing frame and stream manifest'
+
+    Write-Output 'Stage=production_encoded_worker_arguments_and_pins'
+    $missingArgs = Invoke-F2AclSyntheticWorker -Scenario '' -Directory (Join-Path $workerTestRoot 'missing-args') -OmitScenario
+    $badArgs = Invoke-F2AclSyntheticWorker -Scenario Complete -Directory (Join-Path $workerTestRoot 'bad-args') -BadParameter
+    $badPin = Invoke-F2AclSyntheticWorker -Scenario PinMismatch -Directory (Join-Path $workerTestRoot 'bad-pin') -Pin wrong
+    $actualLauncherPath = Join-Path $PSScriptRoot 'Invoke-F2AclReadOnlyCapture.ps1'
+    $escapedActualLauncher = $actualLauncherPath.Replace("'","''")
+    $actualWorkerArgs = "' -CollectorChild -OutputDirectory '" + (Join-Path $workerTestRoot 'actual-pin-failure').Replace("'","''") + "' -RequesterSid '" + $requesterSidFixture + "' -CoordinatorSid '" + $requesterSidFixture + "' -ExpectedCommitSha '" + ('a'*40) + "' -ExpectedScriptSha256 '" + ('0'*64) + "' -ExpectedModuleSha256 '" + $pinManifest.ModuleSha256 + "'"
+    $actualWorkerCommand = New-F2AclWorkerBootstrapCommand -Invocation ("& '" + $escapedActualLauncher + $actualWorkerArgs)
+    $actualPinCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText $actualWorkerCommand -TimeoutSeconds 10
+    $actualPinReport = New-F2AclWorkerExecutionReport -CapturedProcess $actualPinCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest (Join-Path $workerTestRoot 'actual-pin-failure'))
+    Assert-F2Acl ($missingArgs.ExitCode -eq 3 -and $null -ne (ConvertTo-F2AclWorkerDiagnosticDocument $missingArgs stderr).FatalError -and $badArgs.ExitCode -eq 3 -and $badPin.ExitCode -eq 3 -and (ConvertTo-F2AclWorkerDiagnosticDocument $badPin stderr).FatalError -eq 'SyntheticSourcePinMismatch.' -and $actualPinCapture.ExitCode -eq 4 -and $actualPinReport.Diagnostics.FatalError -eq 'Elevated source hash mismatch; collector was not run.') 'missing or incorrect arguments and synthetic plus actual production source-pin mismatch report through encoded wrapper before host inspection'
+
+    Write-Output 'Stage=production_encoded_worker_publication_failures'
+    $missingStreamDir = Join-Path $workerTestRoot 'missing-stream'
+    $missingStreamCapture = Invoke-F2AclSyntheticWorker -Scenario MissingStream -Directory $missingStreamDir
+    $missingStreamReport = New-F2AclWorkerExecutionReport -CapturedProcess $missingStreamCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest $missingStreamDir)
+    $partialDir = Join-Path $workerTestRoot 'partial-publication'
+    $partialCapture = Invoke-F2AclSyntheticWorker -Scenario InterruptedPublication -Directory $partialDir
+    $partialReport = New-F2AclWorkerExecutionReport -CapturedProcess $partialCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest $partialDir)
+    Assert-F2Acl (-not $missingStreamReport.Pass -and $missingStreamReport.Errors -match 'WorkerExpectedFilesMissing:powershell-streams.json' -and -not $partialReport.Pass -and $partialReport.Errors -match 'WorkerExpectedFilesMissing:acl-baseline.frame,powershell-streams.json' -and -not (Test-Path -LiteralPath (Join-Path $partialDir 'acl-baseline.frame'))) 'missing stream and interrupted atomic publication remain incomplete despite a pending artifact'
+
+    $mailboxFail = Invoke-F2AclSyntheticWorker -Scenario MailboxWriteFailure -Directory (Join-Path $workerTestRoot 'mailbox-write-failure')
+    $partialExitDir = Join-Path $workerTestRoot 'partial-nonzero'
+    $partialExit = Invoke-F2AclSyntheticWorker -Scenario NonzeroPartial -Directory $partialExitDir
+    $partialExitReport = New-F2AclWorkerExecutionReport -CapturedProcess $partialExit -ExpectedFiles (Get-F2AclSyntheticArtifactManifest $partialExitDir)
+    $partialExitStderr = [Text.Encoding]::UTF8.GetString($partialExit.StderrBytes)
+    Assert-F2Acl ($mailboxFail.ExitCode -eq 3 -and ($partialExitReport.Errors -match '^WorkerExitedNonzero:17$').Count -eq 1 -and -not $partialExitReport.Pass -and $partialExitStderr.Contains('synthetic late failure') -and [Text.Encoding]::UTF8.GetString($partialExit.StdoutBytes).Contains('F2ACL_STAGE:FramePublished')) 'mailbox publication failure is captured and stderr remains separate after nonzero partial publication'
+
+    Write-Output 'Stage=production_encoded_worker_parse_start_timeout_and_oversize'
+    $parseCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText 'if (' -TimeoutSeconds 10
+    $parseReport = New-F2AclWorkerExecutionReport -CapturedProcess $parseCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest (Join-Path $workerTestRoot 'parse-failure'))
+    $badScriptPath = Join-Path $workerTestRoot 'bad-entrypoint.ps1'
+    [IO.File]::WriteAllText($badScriptPath,'if (',[Text.UTF8Encoding]::new($false))
+    $badScriptInvocation = '& ' + ("'" + $badScriptPath.Replace("'","''") + "'")
+    $badScriptCommand = New-F2AclWorkerBootstrapCommand -Invocation $badScriptInvocation
+    $badScriptCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText $badScriptCommand -TimeoutSeconds 10
+    $badScriptFatal = (ConvertTo-F2AclWorkerDiagnosticDocument -CapturedProcess $badScriptCapture -StreamName stderr).FatalError
+    $startFailure = Invoke-F2AclCapturedPowerShell -PowerShellExe (Join-Path $workerTestRoot 'not-a-powershell.exe') -CommandText 'exit 0' -TimeoutSeconds 2
+    $timeoutCapture = Invoke-F2AclSyntheticWorker -Scenario Timeout -Directory (Join-Path $workerTestRoot 'timeout') -TimeoutSeconds 1
+    $largeCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText "[Console]::Out.Write('x' * 50000); exit 0" -TimeoutSeconds 10 -MaxBytesPerStream 1024
+    $timeoutReport = New-F2AclWorkerExecutionReport -CapturedProcess $timeoutCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest (Join-Path $workerTestRoot 'timeout'))
+    Assert-F2Acl ($parseCapture.ExitCode -ne 0 -and $parseCapture.StderrBytes.Length -gt 0 -and $parseReport.Errors -match '^WorkerExitedNonzero:' -and $badScriptCapture.ExitCode -eq 3 -and -not [string]::IsNullOrWhiteSpace($badScriptFatal) -and -not $startFailure.Started -and $null -ne $startFailure.StartError -and $timeoutCapture.TimedOut -and $timeoutCapture.State -eq 'TimedOutTerminated' -and $timeoutReport.Errors -contains 'WorkerTimeout.' -and $largeCapture.StdoutTruncated -and $largeCapture.StdoutBytes.Length -eq 1024 -and $largeCapture.OutputComplete) 'encoded and invoked-script parser/start/timeout and oversized output failures are independently bounded and observable'
+
+    Write-Output 'Stage=absolute_worker_and_pipe_deadline'
+    $openStdout = Invoke-F2AclOpenPipeWorker -HeldStream Stdout -RedirectionPath (Join-Path $workerTestRoot 'stderr-redirect.txt')
+    $openStdoutReport = New-F2AclWorkerExecutionReport -CapturedProcess $openStdout.Capture -ExpectedFiles @()
+    $openStderr = Invoke-F2AclOpenPipeWorker -HeldStream Stderr -RedirectionPath (Join-Path $workerTestRoot 'stdout-redirect.txt')
+    $openStderrReport = New-F2AclWorkerExecutionReport -CapturedProcess $openStderr.Capture -ExpectedFiles @()
+    foreach ($holderId in @($openStdout.HolderId,$openStderr.HolderId)) {
+        if ($null -ne $holderId) { try { Stop-Process -Id $holderId -Force -ErrorAction SilentlyContinue } catch { } }
+    }
+    $openPipeBounded = $openStdout.ElapsedMilliseconds -lt 5000 -and $openStderr.ElapsedMilliseconds -lt 5000
+    Assert-F2Acl ($openStdout.Capture.Started -and $openStdout.Capture.ExitCode -eq 0 -and $openStdout.Capture.TimedOut -and $openStdout.Capture.State -eq 'TimedOutAfterWorkerExit' -and -not $openStdout.Capture.OutputComplete -and $openStdoutReport.Errors -contains 'WorkerTimeout.' -and $openPipeBounded) 'worker exit with inherited stdout writer is bounded by the absolute deadline and remains incomplete'
+    Assert-F2Acl ($openStderr.Capture.Started -and $openStderr.Capture.ExitCode -eq 0 -and $openStderr.Capture.TimedOut -and $openStderr.Capture.State -eq 'TimedOutAfterWorkerExit' -and -not $openStderr.Capture.OutputComplete -and $openStderrReport.Errors -contains 'WorkerTimeout.' -and $openPipeBounded) 'worker exit with inherited stderr writer is bounded by the absolute deadline and remains incomplete'
+    $openPipeStatus = $validCoordinatorStatus.PSObject.Copy()
+    $openPipeStatus.WorkerExitCode=0; $openPipeStatus.WorkerProcessId=$openStdout.Capture.ProcessId; $openPipeStatus.WorkerDiagnostics=$openStdoutReport.Diagnostics
+    Assert-F2Acl (-not (Test-F2AclCoordinatorStatus -Status $openPipeStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture).Pass) 'zero worker exit with an incomplete redirected stream is rejected by final completion validator'
+
+    $disposeState = [pscustomobject]@{Stream=[F2AclThrowingDisposeStream]::new();Closed=$false;Name='Stdout'}
+    $disposeErrors = & (Get-Module F2AclCapture.Protocol) { param($state) Close-F2AclCapturedStreamState -State $state } $disposeState
+    $cleanupFailureStatus = $validCoordinatorStatus.PSObject.Copy()
+    $cleanupFailureDiagnostics = [ordered]@{}; foreach ($key in $validWorkerDiagnostics.Keys) { $cleanupFailureDiagnostics[$key]=$validWorkerDiagnostics[$key] }
+    $cleanupFailureDiagnostics.CleanupComplete=$false
+    $cleanupFailureDiagnostics.ReaderErrors=@('StdoutStreamDispose:SyntheticDisposeFailure.')
+    $cleanupFailureStatus.WorkerDiagnostics=$cleanupFailureDiagnostics
+    $disposeErrorText = @($disposeErrors) -join ';'
+    Assert-F2Acl ($disposeErrorText.Contains('StdoutStreamDispose:')) 'stream disposal exceptions are captured as explicit reader cleanup errors'
+    Assert-F2Acl (-not (Test-F2AclCoordinatorStatus -Status $cleanupFailureStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture).Pass) 'cleanup failure cannot satisfy complete coordinator status'
+
+    $incompleteDiagnosticCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText 'while ($true) { [Console]::Out.Write("x"); Start-Sleep -Milliseconds 5 }' -TimeoutSeconds 1 -MaxBytesPerStream 1024
+    $incompleteDiagnosticReport = New-F2AclWorkerExecutionReport -CapturedProcess $incompleteDiagnosticCapture -ExpectedFiles @()
+    Assert-F2Acl ($incompleteDiagnosticCapture.TimedOut -and -not $incompleteDiagnosticCapture.OutputComplete -and $incompleteDiagnosticCapture.StdoutBytes.Length -gt 0 -and $incompleteDiagnosticCapture.StdoutBytes.Length -le 1024 -and -not $incompleteDiagnosticReport.Pass -and $incompleteDiagnosticReport.Errors -contains 'WorkerTimeout.') 'output-producing hung worker is terminated within the deadline and cannot publish complete diagnostics'
+}
+finally {
+    foreach ($item in @(Get-ChildItem -LiteralPath $workerTestRoot -Force -Recurse | Sort-Object FullName -Descending)) {
+        if ($item.PSIsContainer) { [IO.Directory]::Delete($item.FullName,$false) } else { [IO.File]::Delete($item.FullName) }
+    }
+    [IO.Directory]::Delete($workerTestRoot)
+}
+
+$testAclParent = [IO.Path]::GetFullPath($env:LOCALAPPDATA)
+Write-Output 'Stage=restricted_local_evidence_directory'
+$testEvidenceVolumeGuid = [F2Acl.NativeDirectory]::GetVolumeGuidForPath($testAclParent)
+$testProjectVolumePath = $null
+foreach ($driveInfo in [IO.DriveInfo]::GetDrives()) {
+    if (-not $driveInfo.IsReady) { continue }
+    try {
+        $candidateGuid = [F2Acl.NativeDirectory]::GetVolumeGuidForPath($driveInfo.RootDirectory.FullName)
+        if ($candidateGuid -cne $testEvidenceVolumeGuid) { $testProjectVolumePath = $driveInfo.RootDirectory.FullName; break }
+    }
+    catch { }
+}
+if ([string]::IsNullOrWhiteSpace($testProjectVolumePath)) { throw 'Synthetic DACL test requires two available local volumes; no target volume is written.' }
+$normalPath = Join-Path $testAclParent 'F2Acl-Nonexistent-Path-Check'
+try { Test-F2AclNoReparseAncestors -Path $normalPath; Assert-F2Acl $true 'ordinary evidence path ancestors accepted' }
+catch { Assert-F2Acl $false ('ordinary evidence path ancestor check: ' + $_.Exception.Message) }
+$junctionTarget = Join-Path $testAclParent ('F2Acl-Junction-Target-' + [guid]::NewGuid().ToString('N'))
+$junctionPath = Join-Path $testAclParent ('F2Acl-Junction-Test-' + [guid]::NewGuid().ToString('N'))
+[void][IO.Directory]::CreateDirectory($junctionTarget)
+try {
+    $mklinkOutput = & $env:ComSpec /d /c ('mklink /J "{0}" "{1}"' -f $junctionPath, $junctionTarget) 2>&1
+    if ($LASTEXITCODE -ne 0) { throw ('Could not create synthetic junction: ' + ($mklinkOutput -join ' ')) }
+    Assert-F2AclReject { Test-F2AclNoReparseAncestors -Path (Join-Path $junctionPath 'missing-child') } 'ancestor junction is rejected'
+    Assert-F2AclReject { Test-F2AclCoordinatorMailboxDirectory -Path $junctionPath -RequesterSid $requesterSidFixture } 'mailbox path that is itself a junction is rejected before ACL acceptance'
+}
+finally {
+    if (Test-Path -LiteralPath $junctionPath) {
+        $junctionItem = Get-Item -LiteralPath $junctionPath -Force
+        if (($junctionItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -or [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($junctionPath)) -ne $testAclParent) { throw 'Refusing to remove unexpected synthetic junction.' }
+        & $env:ComSpec /d /c ('rmdir "{0}"' -f $junctionPath) | Out-Null
+    }
+    if (Test-Path -LiteralPath $junctionTarget) {
+        if ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($junctionTarget)) -ne $testAclParent -or @(Get-ChildItem -LiteralPath $junctionTarget -Force).Count -ne 0) { throw 'Refusing to remove unexpected synthetic junction target.' }
+        Remove-Item -LiteralPath $junctionTarget -Force
+    }
+}
+$testAclPath = Join-Path $testAclParent ('F2Acl-Protocol-Test-' + [guid]::NewGuid().ToString('N'))
+try {
+    $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    [void](New-F2AclRestrictedDirectory -Path $testAclPath -OwnerSid $currentSid -ProjectVolumePath $testProjectVolumePath)
+    $aclCheck = Test-F2AclRestrictedDirectory -Path $testAclPath -OwnerSid $currentSid
+    Assert-F2Acl ($aclCheck.Protected -and $aclCheck.AceCount -eq 3 -and $aclCheck.AllowedSids -contains $currentSid) 'restricted evidence directory owner and DACL verified'
+}
+catch { Assert-F2Acl $false ('restricted evidence directory: ' + $_.Exception.Message) }
+finally {
+    if (Test-Path -LiteralPath $testAclPath) {
+        $testFull = [IO.Path]::GetFullPath($testAclPath)
+        $testItem = Get-Item -LiteralPath $testFull -Force
+        if ([IO.Path]::GetDirectoryName($testFull) -ne $testAclParent -or [IO.Path]::GetFileName($testFull) -notlike 'F2Acl-Protocol-Test-*' -or ($testItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Refusing to remove unexpected synthetic evidence directory.' }
+        if (@(Get-ChildItem -LiteralPath $testFull -Force).Count -ne 0) { throw 'Synthetic evidence directory is not empty; refusing cleanup.' }
+        Remove-Item -LiteralPath $testFull -Force
+    }
+}
+
+$badAclPath = Join-Path $testAclParent ('F2Acl-Bad-Dacl-Test-' + [guid]::NewGuid().ToString('N'))
+$badAclSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$badAclSddl = 'O:' + $badAclSid + 'D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;SY)(A;OICI;FA;;;' + $badAclSid + ')'
+try {
+    [F2Acl.NativeDirectory]::CreateWithSddl($badAclPath, $badAclSddl)
+    Assert-F2AclReject { Test-F2AclRestrictedDirectory -Path $badAclPath -OwnerSid $badAclSid } 'duplicate or missing restricted-directory principal fails closed'
+}
+finally {
+    if (Test-Path -LiteralPath $badAclPath) {
+        $badItem = Get-Item -LiteralPath $badAclPath -Force
+        if ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($badAclPath)) -ne $testAclParent -or [IO.Path]::GetFileName($badAclPath) -notlike 'F2Acl-Bad-Dacl-Test-*' -or ($badItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or @(Get-ChildItem -LiteralPath $badAclPath -Force).Count -ne 0) { throw 'Refusing to remove unexpected bad-DACL fixture.' }
+        Remove-Item -LiteralPath $badAclPath -Force
+    }
+}
+
+$otherSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-11')
+$readOnlyRule = [Security.AccessControl.FileSystemAccessRule]::new($otherSid, [Security.AccessControl.FileSystemRights]::ReadAndExecute, [Security.AccessControl.AccessControlType]::Allow)
+$writeRule = [Security.AccessControl.FileSystemAccessRule]::new($otherSid, [Security.AccessControl.FileSystemRights]::WriteData, [Security.AccessControl.AccessControlType]::Allow)
+$writeAttributesRule = [Security.AccessControl.FileSystemAccessRule]::new($otherSid, [Security.AccessControl.FileSystemRights]::WriteAttributes, [Security.AccessControl.AccessControlType]::Allow)
+$currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+Assert-F2Acl (@(Get-F2AclUnexpectedWritableSids -Rules @($readOnlyRule) -OwnerSid $currentSid).Count -eq 0) 'read-only parent ACE is allowed'
+Assert-F2Acl (@(Get-F2AclUnexpectedWritableSids -Rules @($writeRule) -OwnerSid $currentSid) -contains 'S-1-5-11') 'unexpected parent writer is rejected by SID'
+Assert-F2Acl (@(Get-F2AclUnexpectedWritableSids -Rules @($writeAttributesRule) -OwnerSid $currentSid) -contains 'S-1-5-11') 'write-attributes parent ACE is rejected'
+$boundedRecords = [Collections.Generic.List[object]]::new()
+$boundedState = [pscustomobject]@{Bytes=0}
+Add-F2AclBoundedStreamRecord -Records $boundedRecords -State $boundedState -Stream 'Warning' -Message 'synthetic warning'
+Assert-F2Acl ($boundedRecords.Count -eq 1 -and $boundedState.Bytes -gt 0 -and $boundedState.Bytes -le 65536) 'bounded stream collector accounts serialized records'
+$beforeOversizeCount = $boundedRecords.Count; $beforeOversizeBytes = $boundedState.Bytes
+Assert-F2AclReject { Add-F2AclBoundedStreamRecord -Records $boundedRecords -State $boundedState -Stream 'Error' -Message ('x' * 70000) } 'oversized PowerShell stream record rejected before append'
+Assert-F2Acl ($boundedRecords.Count -eq $beforeOversizeCount -and $boundedState.Bytes -eq $beforeOversizeBytes) 'oversized stream leaves bounded collection unchanged'
+
+$mailboxRoot = Join-Path $env:TEMP ('F2Acl-Mailbox-Protocol-Test-' + [guid]::NewGuid().ToString('N'))
+[void][IO.Directory]::CreateDirectory($mailboxRoot)
+try {
+    $collisionPath = Join-Path $mailboxRoot 'precreated-mailbox-name'
+    $testOwnerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $collisionSddl = 'O:' + $testOwnerSid + 'D:P(A;OICI;FA;;;' + $testOwnerSid + ')'
+    [F2Acl.NativeDirectory]::CreateWithSddl($collisionPath,$collisionSddl)
+    $collisionBefore = [F2Acl.NativeDirectory]::GetSddl($collisionPath)
+    Assert-F2AclReject { [F2Acl.NativeDirectory]::CreateWithSddl($collisionPath,$collisionSddl) } 'precreated mailbox directory-name collision is rejected atomically'
+    Assert-F2Acl (([F2Acl.NativeDirectory]::GetSddl($collisionPath) -ceq $collisionBefore) -and @(Get-ChildItem -LiteralPath $collisionPath -Force).Count -eq 0) 'collision leaves preexisting mailbox directory and ACL untouched'
+    $mailboxPath = Join-Path $mailboxRoot 'coordinator-result.bin'
+    $mailboxBytes = [Text.Encoding]::UTF8.GetBytes('synthetic-bounded-result')
+    [void](Write-F2AclAtomicCreateNewFile -Path $mailboxPath -Bytes $mailboxBytes -MaxBytes 1024)
+    $mailboxRead = Read-F2AclBoundedFile -Path $mailboxPath -MaxBytes 1024
+    Assert-F2Acl ([Text.Encoding]::UTF8.GetString($mailboxRead) -eq 'synthetic-bounded-result') 'bounded file mailbox exact bytes round-trip'
+    Assert-F2AclReject { Write-F2AclAtomicCreateNewFile -Path $mailboxPath -Bytes $mailboxBytes -MaxBytes 1024 } 'mailbox never overwrites an existing result'
+    Assert-F2AclReject { Write-F2AclAtomicCreateNewFile -Path (Join-Path $mailboxRoot 'oversized.bin') -Bytes ([byte[]]::new(1025)) -MaxBytes 1024 } 'mailbox writer rejects oversized result before creation'
+    Assert-F2AclReject { Read-F2AclBoundedFile -Path $mailboxPath -MaxBytes 4 } 'mailbox reader rejects oversized result'
+    Assert-F2AclReject { Read-F2AclBoundedFile -Path (Join-Path $mailboxRoot 'missing.bin') -MaxBytes 1024 } 'mailbox reader rejects missing result'
+    $childMailboxPath = Join-Path $mailboxRoot 'same-token-child-result.bin'
+    $escapedModule = (Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1').Replace("'","''")
+    $escapedOutput = $childMailboxPath.Replace("'","''")
+    $mailboxCommand = "Import-Module '$escapedModule' -Force; `$b=[Text.Encoding]::UTF8.GetBytes('child-result'); [void](Write-F2AclAtomicCreateNewFile -Path '$escapedOutput' -Bytes `$b -MaxBytes 1024); exit 0"
+    $mailboxInfo = [Diagnostics.ProcessStartInfo]::new()
+    $mailboxInfo.FileName = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $mailboxInfo.Arguments = '-NoProfile -NonInteractive -Command ' + (ConvertTo-F2AclWindowsArgument $mailboxCommand)
+    $mailboxInfo.UseShellExecute = $false; $mailboxInfo.CreateNoWindow = $true
+    $mailboxChild = [Diagnostics.Process]::new(); $mailboxChild.StartInfo = $mailboxInfo
+    if (-not $mailboxChild.Start()) { throw 'Synthetic file-mailbox worker process did not start.' }
+    $mailboxChild.WaitForExit()
+    $childMailboxExit = $mailboxChild.ExitCode
+    $mailboxChild.Dispose()
+    $childMailboxRead = Read-F2AclBoundedFile -Path $childMailboxPath -MaxBytes 1024
+    Assert-F2Acl ($childMailboxExit -eq 0 -and [Text.Encoding]::UTF8.GetString($childMailboxRead) -eq 'child-result') 'same-token worker process writes bounded mailbox and parent observes actual exit'
+    $failedWorkerInfo = [Diagnostics.ProcessStartInfo]::new()
+    $failedWorkerInfo.FileName = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $failedWorkerInfo.Arguments = '-NoProfile -NonInteractive -Command ' + (ConvertTo-F2AclWindowsArgument 'exit 7')
+    $failedWorkerInfo.UseShellExecute = $false; $failedWorkerInfo.CreateNoWindow = $true
+    $failedWorker = [Diagnostics.Process]::new(); $failedWorker.StartInfo = $failedWorkerInfo
+    if (-not $failedWorker.Start()) { throw 'Synthetic failing worker process did not start.' }
+    $failedWorker.WaitForExit()
+    $failedWorkerExit = $failedWorker.ExitCode
+    $failedWorker.Dispose()
+    Assert-F2Acl ($failedWorkerExit -eq 7) 'child-process failure preserves the actual nonzero exit code'
+}
+finally {
+    foreach ($fileName in @('coordinator-result.bin','same-token-child-result.bin','oversized.bin')) {
+        $cleanupFile = Join-Path $mailboxRoot $fileName
+        if ([IO.File]::Exists($cleanupFile)) { [IO.File]::Delete($cleanupFile) }
+    }
+    if ([IO.Directory]::Exists($collisionPath)) {
+        $collisionItem = Get-Item -LiteralPath $collisionPath -Force
+        if ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($collisionPath)) -ne [IO.Path]::GetFullPath($mailboxRoot) -or ($collisionItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or @(Get-ChildItem -LiteralPath $collisionPath -Force).Count -ne 0) { throw 'Synthetic collision fixture is unexpected; refusing cleanup.' }
+        [IO.Directory]::Delete($collisionPath)
+    }
+    if (@(Get-ChildItem -LiteralPath $mailboxRoot -Force).Count -ne 0) { throw 'Synthetic mailbox test left unexpected files; refusing directory cleanup.' }
+    [IO.Directory]::Delete($mailboxRoot)
+}
+
+Write-Output "Assertions=$script:Assertions;Failures=$($script:Failures.Count)"
+if ($script:Failures.Count -gt 0) {
+    $script:Failures | ForEach-Object { [Console]::Error.WriteLine('FAIL=' + $_) }
+    exit 1
+}
+Write-Output 'Cases=source_pins,uac_coordinator_same_and_different_admin_identity_policy,filtered_admin_rejection,requester_read_only_mailbox_acl_and_owner,requester_write_delete_dac_tamper_rejection,observed_programdata_sddl_0x116_acceptance,delete_child_delete_write_dac_write_owner_generic_write_generic_all_rejection,dangerous_inherited_parent_grant_rejection,protected_parent_required,unapproved_broad_create_rights_rejection,atomic_precreated_mailbox_collision,mailbox_junction_rejection,coordinator_status_exit_binding,no_cross_token_named_pipe_production,bounded_file_mailbox_same_token_worker_integration,mailbox_missing_duplicate_oversized,kingston_storage_valid_wrong_serial_wrong_model_ambiguous_missing_field_transport_mapping,post_collection_vm_identity_state_path_nic_storage,unknown_final_state_incomplete,complete,argument_quoting,frame_roundtrip,bounded_eof_probe,standard_ace,callback_ace_rejection,object_ace_rejection,unknown_ace_flag_rejection,ancestor_junction_rejection,oversized_writer,oversized_reader,corrupt,partial_frame,stalled_partial_header,missing,duplicate,malformed_json,missing_envelope,missing_record_field,child_exit,sha256,partial_record,empty_preflight_failure,stdout_stderr,timeout,absolute_monotonic_deadline,exited_worker_stdout_pipe_hold,exited_worker_stderr_pipe_hold,output_producing_hang,reader_disposal_failure,cleanup_failure_never_complete,restricted_evidence_directory,exact_acl_principals,read_only_parent_ace,write_parent_ace,write_attributes_parent_ace,bounded_stream_accounting,oversized_stream_rejection'
+[Environment]::Exit(0)
