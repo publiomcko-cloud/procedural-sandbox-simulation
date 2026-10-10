@@ -1,7 +1,7 @@
 {
   "Schema": "f2-icacls-corroboration-pins-v1",
   "ReviewedCollectorBaseSha": "a62773f0553dff4a05055b18fa10834f7488ae55",
-  "CorroborationModuleSha256": "7e588217416eeee5e32f03da6527769740790b96d57ff898429f14e51538eb7f",
+  "CorroborationModuleSha256": "a0e53c02996a23b8648528b172302e6273891bbe0c0f85672b4e87c40f7261e8",
   "CollectorScriptSha256": "bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b",
   "ProtocolModuleSha256": "42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728"
 }

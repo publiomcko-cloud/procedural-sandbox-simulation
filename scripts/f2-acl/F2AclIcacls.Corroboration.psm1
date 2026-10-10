@@ -8,6 +8,8 @@ $script:F2IcaclsReviewedCollectorBaseSha = 'a62773f0553dff4a05055b18fa10834f7488
 $script:F2IcaclsProjectRoot = 'G:\F2-G1-Isolated-Disposable'
 $script:F2IcaclsMaxOutputBytes = 262144
 $script:F2IcaclsVolumeResolver = $null
+$script:F2IcaclsMailboxPathResolver = $null
+$script:F2IcaclsMailboxDescriptorResolver = $null
 
 function Get-F2IcaclsVolumeGuid {
     [CmdletBinding()]
@@ -56,21 +58,48 @@ function Get-F2IcaclsFileSha256 {
     return $file.Hash.ToLowerInvariant()
 }
 
+function Get-F2IcaclsExpectedMailboxPath {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{32}$')][string]$CaptureId)
+    if ($null -ne $script:F2IcaclsMailboxPathResolver) { return [IO.Path]::GetFullPath([string](& $script:F2IcaclsMailboxPathResolver $CaptureId)) }
+    return [IO.Path]::GetFullPath((Get-F2AclCoordinatorMailboxPath -CaptureId $CaptureId))
+}
+
+function Test-F2IcaclsMailboxEvidenceDirectory {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{32}$')][string]$CaptureId,
+        [Parameter(Mandatory)][string]$RequesterSid
+    )
+    $full = [IO.Path]::GetFullPath($Path)
+    $expected = Get-F2IcaclsExpectedMailboxPath -CaptureId $CaptureId
+    if (-not [string]::Equals($full,$expected,[StringComparison]::OrdinalIgnoreCase)) { throw 'EvidenceMailboxPathDoesNotMatchCaptureId.' }
+    Test-F2AclNoReparseAncestors -Path $full | Out-Null
+    if ($null -ne $script:F2IcaclsMailboxDescriptorResolver) {
+        $sddl = [string](& $script:F2IcaclsMailboxDescriptorResolver $full $CaptureId)
+        $mailbox = Test-F2AclCoordinatorMailboxSddl -Sddl $sddl -RequesterSid $RequesterSid
+        $mailbox | Add-Member -NotePropertyName Path -NotePropertyValue $full
+    } else {
+        $mailbox = Test-F2AclCoordinatorMailboxDirectory -Path $full -RequesterSid $RequesterSid
+    }
+    if ($mailbox.AceCount -ne 4 -or $mailbox.OwnerSid -cne 'S-1-5-32-544' -or -not $mailbox.Protected) { throw 'EvidenceMailboxSecurityContractInvalid.' }
+    return $mailbox
+}
+
 function Read-F2IcaclsBaselineEvidence {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$EvidenceDirectory,[Parameter(Mandatory)][string]$ExpectedCaptureId,[Parameter(Mandatory)][string]$ExpectedOwnerSid)
+    param([Parameter(Mandatory)][string]$EvidenceDirectory,[Parameter(Mandatory)][string]$ExpectedCaptureId,[Parameter(Mandatory)][string]$ExpectedRequesterSid)
     try {
         $directory=[IO.Path]::GetFullPath($EvidenceDirectory)
-        Test-F2AclNoReparseAncestors -Path $directory | Out-Null
-        $secure=Test-F2AclRestrictedDirectory -Path $directory -OwnerSid $ExpectedOwnerSid
-        if(-not $secure.Protected){throw 'EvidenceDirectoryDaclInvalid.'}
+        [void](Test-F2IcaclsMailboxEvidenceDirectory -Path $directory -CaptureId $ExpectedCaptureId -RequesterSid $ExpectedRequesterSid)
         $integrityPath=Join-Path $directory 'integrity.json'
         $payloadPath=Join-Path $directory 'acl-baseline.json'
         foreach($path in @($integrityPath,$payloadPath)){
             $item=Get-Item -LiteralPath $path -Force -ErrorAction Stop
-            if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint)-ne 0 -or $item.PSIsContainer){throw 'EvidenceFileTypeInvalid.'}
+            if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint)-ne 0 -or $item.PSIsContainer -or $item.Length -lt 1 -or $item.Length -gt 1048576){throw 'EvidenceFileTypeOrSizeInvalid.'}
         }
-        $integrityBytes=[IO.File]::ReadAllBytes($integrityPath)
+    $integrityBytes=[IO.File]::ReadAllBytes($integrityPath)
         $integrity=[Text.Encoding]::UTF8.GetString($integrityBytes)|ConvertFrom-Json -ErrorAction Stop
         if($integrity.Schema -cne 'f2-acl-integrity-v1' -or $integrity.PayloadFile -cne 'acl-baseline.json' -or $integrity.ProjectVolumeGuid -notmatch '^\\\\\?\\Volume\{[0-9a-fA-F-]{36}\}\\?$' -or $integrity.EvidenceVolumeGuid -notmatch '^\\\\\?\\Volume\{[0-9a-fA-F-]{36}\}\\?$'){throw 'IntegrityManifestIdentityInvalid.'}
         $payload=[IO.File]::ReadAllBytes($payloadPath)
@@ -185,10 +214,10 @@ function Get-F2IcaclsRightMask {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string[]]$Rights)
     $map = @{
-        F=[uint32]0x001F01FF; M=[uint32]0x001301BF; RX=[uint32]0x001200A9; R=[uint32]0x00120089; W=[uint32]0x00120116; D=[uint32]0x00010000
-        AD=[uint32]0x00000002; AS=[uint32]0x00000004; WD=[uint32]0x00000002; DC=[uint32]0x00000040; X=[uint32]0x00000020
-        RA=[uint32]0x00000200; REA=[uint32]0x00000200; WA=[uint32]0x00000100; WEA=[uint32]0x00000010; EA=[uint32]0x00000008
-        RC=[uint32]0x00020000; WDAC=[uint32]0x00040000; WO=[uint32]0x00080000
+        N=[uint32]0x00000000; F=[uint32]0x001F01FF; M=[uint32]0x001301BF; RX=[uint32]0x001200A9; R=[uint32]0x00120089; W=[uint32]0x00120116; D=[uint32]0x00010000; DE=[uint32]0x00010000
+        AD=[uint32]0x00000004; AS=[uint32]0x01000000; WD=[uint32]0x00000002; RD=[uint32]0x00000001; REA=[uint32]0x00000008; WEA=[uint32]0x00000010; X=[uint32]0x00000020; DC=[uint32]0x00000040; RA=[uint32]0x00000080; WA=[uint32]0x00000100
+        RC=[uint32]0x00020000; WDAC=[uint32]0x00040000; WO=[uint32]0x00080000; S=[uint32]0x00100000
+        GR=[Convert]::ToUInt32('80000000',16); GW=[Convert]::ToUInt32('40000000',16); GE=[Convert]::ToUInt32('20000000',16); GA=[Convert]::ToUInt32('10000000',16); MA=[Convert]::ToUInt32('02000000',16)
     }
     [uint32]$mask=0
     foreach($right in $Rights){if(-not $map.ContainsKey($right)){return [pscustomobject]@{Supported=$false;Mask=$null;Unknown=$right}};$mask=$mask -bor [uint32]$map[$right]}
@@ -201,21 +230,47 @@ function ConvertFrom-F2IcaclsText {
     $lines=@($Text -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     $aces=New-Object 'System.Collections.Generic.List[object]'
     $unsupported=New-Object 'System.Collections.Generic.List[string]'
-    $pathSeen=$false
-    foreach($line in $lines){
-        if(-not $pathSeen){if([string]::Equals($line.TrimEnd(),$ExpectedPath,[StringComparison]::OrdinalIgnoreCase)){$pathSeen=$true;continue};if($line -match '^(Successfully processed|processed successfully|No mapping between account names and security IDs was done)'){continue};$pathSeen=$true}
-        if($line -match '^\s*(?<principal>.+?):(?<codes>(?:\([^)]+\))+?)\s*$'){
-            $principal=$Matches.principal.Trim();$codes=@([regex]::Matches($Matches.codes,'\((?<c>[^)]+)\)')|ForEach-Object{$_.Groups['c'].Value})
-            if($principal -match '^S-1-'){ $sid=$principal } else { try{$sid=([Security.Principal.NTAccount]::new($principal)).Translate([Security.Principal.SecurityIdentifier]).Value}catch{$unsupported.Add('UnresolvedPrincipal');continue} }
-            $aceType='Allow';$flags=New-Object 'System.Collections.Generic.List[string]';$rights=New-Object 'System.Collections.Generic.List[string]'
-            foreach($code in $codes){switch -CaseSensitive ($code){'I' {$flags.Add('Inherited')};'OI' {$flags.Add('ObjectInherit')};'CI' {$flags.Add('ContainerInherit')};'IO' {$flags.Add('InheritOnly')};'NP' {$flags.Add('NoPropagateInherit')};'DENY' {$aceType='Deny'};default {$rights.Add($code)}}}
-            $mask=Get-F2IcaclsRightMask -Rights $rights.ToArray()
-            if(-not $mask.Supported){$unsupported.Add('UnsupportedRight');continue}
-            $aces.Add([pscustomobject]@{Sid=$sid;Type=$aceType;Mask=$mask.Mask;Flags=@($flags.ToArray()|Sort-Object -Unique)})
-        } elseif($line -match 'Successfully processed|processed successfully|failed processing|failed to process'){continue}
-        else {$unsupported.Add('UnparsedAclLine')}
+    $pathMatched=$false
+    if($lines.Count -eq 0){return [pscustomobject]@{PathMatched=$false;Aces=@();Unsupported=@('MissingTargetPath')}}
+    $header=$lines[0]
+    if(-not $header.StartsWith($ExpectedPath,[StringComparison]::OrdinalIgnoreCase)) { return [pscustomobject]@{PathMatched=$false;Aces=@();Unsupported=@('TargetPathMismatch')} }
+    if($header.Length -gt $ExpectedPath.Length -and -not [char]::IsWhiteSpace($header[$ExpectedPath.Length])) { return [pscustomobject]@{PathMatched=$false;Aces=@();Unsupported=@('AmbiguousTargetPathPrefix')} }
+    $pathMatched=$true
+    $firstAce=$header.Substring($ExpectedPath.Length).Trim()
+    $aceLines=New-Object 'System.Collections.Generic.List[string]'
+    if($firstAce.Length -gt 0){$aceLines.Add($firstAce)}
+    for($i=1;$i -lt $lines.Count;$i++){$aceLines.Add($lines[$i])}
+    foreach($line in $aceLines){
+        if($line -match 'Successfully processed|processed successfully|failed processing|failed to process'){continue}
+        if($line -notmatch '^\s*(?<principal>.+?):(?<codes>(?:\([^)]+\))+?)\s*$'){$unsupported.Add('UnparsedAclLine');continue}
+        $principal=$Matches.principal.Trim();$codes=@([regex]::Matches($Matches.codes,'\((?<c>[^)]+)\)')|ForEach-Object{$_.Groups['c'].Value})
+        if([string]::IsNullOrWhiteSpace($principal)){$unsupported.Add('MissingPrincipal');continue}
+        if($principal -match '^\*?(S-1-\d+(?:-\d+)+)$'){ $sid=$Matches[1] } else {
+            $wellKnown=@{'BUILTIN\Administrators'='S-1-5-32-544';'Administrators'='S-1-5-32-544';'NT AUTHORITY\SYSTEM'='S-1-5-18';'SYSTEM'='S-1-5-18';'CREATOR OWNER'='S-1-3-0';'OWNER RIGHTS'='S-1-3-4';'Everyone'='S-1-1-0';'NT AUTHORITY\Authenticated Users'='S-1-5-11';'BUILTIN\Users'='S-1-5-32-545'}
+            if($wellKnown.ContainsKey($principal)){$sid=$wellKnown[$principal]}else{try{$sid=([Security.Principal.NTAccount]::new($principal)).Translate([Security.Principal.SecurityIdentifier]).Value}catch{$unsupported.Add('UnresolvedPrincipal');continue}}
+        }
+        $aceType='Allow';$flags=New-Object 'System.Collections.Generic.List[string]';$rights=New-Object 'System.Collections.Generic.List[string]'
+        foreach($codeGroup in $codes){foreach($code in ($codeGroup -split ',')){$token=$code.Trim();switch -CaseSensitive ($token){'I' {$flags.Add('Inherited')};'OI' {$flags.Add('ObjectInherit')};'CI' {$flags.Add('ContainerInherit')};'IO' {$flags.Add('InheritOnly')};'NP' {$flags.Add('NoPropagateInherit')};'DENY' {$aceType='Deny'};default {$rights.Add($token)}}}}
+        $mask=Get-F2IcaclsRightMask -Rights $rights.ToArray()
+        if(-not $mask.Supported){$unsupported.Add('UnsupportedRight');continue}
+        $aces.Add([pscustomobject]@{Sid=$sid;Type=$aceType;Mask=$mask.Mask;Flags=@($flags.ToArray()|Sort-Object -Unique);RawRights=$rights.ToArray();HasGeneric=(($mask.Mask -band [Convert]::ToUInt32('F0000000',16)) -ne 0)})
     }
-    return [pscustomobject]@{PathMatched=$pathSeen;Aces=$aces.ToArray();Unsupported=$unsupported.ToArray()}
+    if($aces.Count -eq 0){$unsupported.Add('NoAclEntries')}
+    return [pscustomobject]@{PathMatched=$pathMatched;Aces=$aces.ToArray();Unsupported=$unsupported.ToArray()}
+}
+
+function ConvertTo-F2IcaclsSpecificMask {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][uint32]$Mask)
+    [uint32]$genericMask=[Convert]::ToUInt32('F0000000',16)
+    [uint32]$mapped=$Mask -band (-bnot $genericMask)
+    if(($Mask -band [Convert]::ToUInt32('80000000',16)) -ne 0){$mapped=$mapped -bor [uint32]0x00120089}
+    if(($Mask -band [Convert]::ToUInt32('40000000',16)) -ne 0){$mapped=$mapped -bor [uint32]0x00120116}
+    if(($Mask -band [Convert]::ToUInt32('20000000',16)) -ne 0){$mapped=$mapped -bor [uint32]0x001200A0}
+    if(($Mask -band [Convert]::ToUInt32('10000000',16)) -ne 0){$mapped=$mapped -bor [uint32]0x001F01FF}
+    [uint32]$knownMask=([Convert]::ToUInt32('F0000000',16) -bor [uint32]0x031F01FF)
+    [uint32]$unknownBits=$Mask -band (-bnot $knownMask)
+    return [pscustomobject]@{RawMask=$Mask;SpecificMask=$mapped;HadGeneric=(($Mask -band $genericMask) -ne 0);UnknownBits=($unknownBits -ne 0);MaximumAllowed=(($Mask -band [uint32]0x02000000) -ne 0)}
 }
 
 function Get-F2IcaclsComparison {
@@ -227,11 +282,17 @@ function Get-F2IcaclsComparison {
     $expected=@();foreach($a in @($BaselineRecord.Aces)){
         try{$maskText=[string]$a.AccessMask;$mask=[uint32][Convert]::ToUInt32($maskText.Replace('0x',''),16)}catch{return [pscustomobject]@{Classification='INDETERMINATE';Reason='BaselineMaskUnsupported';Path=[string]$BaselineRecord.Path}}
         $flags=@();if($a.Inherited){$flags+='Inherited'};if($a.InheritanceFlags -match 'ObjectInherit'){$flags+='ObjectInherit'};if($a.InheritanceFlags -match 'ContainerInherit'){$flags+='ContainerInherit'};if($a.PropagationFlags -match 'InheritOnly'){$flags+='InheritOnly'};if($a.PropagationFlags -match 'NoPropagateInherit'){$flags+='NoPropagateInherit'}
-        $expected+=@(([string]$a.Sid+'|'+[string]$a.Type+'|'+$mask+'|'+(@($flags|Sort-Object -Unique)-join ',')))
+        $expected+=@([pscustomobject]@{Key=([string]$a.Sid+'|'+[string]$a.Type+'|'+$mask+'|'+(@($flags|Sort-Object -Unique)-join ','));Sid=[string]$a.Sid;Type=[string]$a.Type;Mask=$mask;Flags=@($flags|Sort-Object -Unique)})
     }
-    $actual=@($parsed.Aces|ForEach-Object{[string]$_.Sid+'|'+[string]$_.Type+'|'+[uint32]$_.Mask+'|'+(@($_.Flags|Sort-Object -Unique)-join ',')})
-    $diff=@(Compare-Object ($expected|Sort-Object) ($actual|Sort-Object))
-    if($diff.Count -eq 0 -and $expected.Count -eq $actual.Count){return [pscustomobject]@{Classification='PASS';Reason='AllParsedAcesMatch';Path=[string]$BaselineRecord.Path}}
+    $actual=@($parsed.Aces|ForEach-Object{[pscustomobject]@{Key=([string]$_.Sid+'|'+[string]$_.Type+'|'+[uint32]$_.Mask+'|'+(@($_.Flags|Sort-Object -Unique)-join ','));Sid=[string]$_.Sid;Type=[string]$_.Type;Mask=[uint32]$_.Mask;Flags=@($_.Flags|Sort-Object -Unique)}})
+    if($expected.Count -ne $actual.Count){return [pscustomobject]@{Classification='MISMATCH';Reason='ParsedAceCountDiffers';Path=[string]$BaselineRecord.Path}}
+    $remaining=[Collections.Generic.List[object]]::new();foreach($a in $actual){$remaining.Add($a)}
+    foreach($e in $expected){$matchIndex=-1;for($i=0;$i -lt $remaining.Count;$i++){if($remaining[$i].Key -ceq $e.Key){$matchIndex=$i;break}};if($matchIndex -ge 0){$remaining.RemoveAt($matchIndex);continue}
+        $compatible=$false
+        for($i=0;$i -lt $remaining.Count;$i++){$a=$remaining[$i];if($a.Sid -ceq $e.Sid -and $a.Type -ceq $e.Type -and (@(Compare-Object $e.Flags $a.Flags).Count -eq 0)){$em=ConvertTo-F2IcaclsSpecificMask -Mask $e.Mask;$am=ConvertTo-F2IcaclsSpecificMask -Mask $a.Mask;if($em.UnknownBits -or $am.UnknownBits -or $em.MaximumAllowed -or $am.MaximumAllowed){return [pscustomobject]@{Classification='INDETERMINATE';Reason='AccessMaskSemanticsUnresolved';Path=[string]$BaselineRecord.Path}};if($em.SpecificMask -eq $am.SpecificMask){$compatible=$true;$remaining.RemoveAt($i);break};if($em.HadGeneric -or $am.HadGeneric){return [pscustomobject]@{Classification='INDETERMINATE';Reason='GenericRightsMappingUnresolved';Path=[string]$BaselineRecord.Path}}}}
+        if(-not $compatible){return [pscustomobject]@{Classification='MISMATCH';Reason='ParsedAceSetDiffers';Path=[string]$BaselineRecord.Path}}
+    }
+    if($remaining.Count -eq 0){return [pscustomobject]@{Classification='PASS';Reason='AllParsedAcesMatchOrMapEquivalently';Path=[string]$BaselineRecord.Path}}
     return [pscustomobject]@{Classification='MISMATCH';Reason='ParsedAceSetDiffers';Path=[string]$BaselineRecord.Path}
 }
 
@@ -242,45 +303,53 @@ function Invoke-F2IcaclsProcessCore {
         [Parameter(Mandatory)][AllowEmptyString()][string]$Arguments,
         [ValidateRange(1,120)][int]$TimeoutSeconds=15,
         [ValidateRange(1,5000)][int]$CleanupGraceMilliseconds=1000,
-        [ValidateRange(1,5000)][int]$DrainGraceMilliseconds=1000,
         [ValidateRange(1024,1048576)][int]$MaxBytesPerStream=$script:F2IcaclsMaxOutputBytes
     )
 
-    $result=[ordered]@{Started=$false;ProcessId=$null;ExitCode=$null;TimedOut=$false;CleanupComplete=$true;OutputComplete=$false;Truncated=$false;Stdout='';Stderr='';StdoutBytes=0;StderrBytes=0;StdoutSha256=$null;StderrSha256=$null;ReaderError=$null;ElapsedMilliseconds=0}
-    $clock=[Diagnostics.Stopwatch]::StartNew();$process=$null;$outSource=$null;$errSource=$null
-    $capture=[hashtable]::Synchronized(@{Out=(New-Object Text.StringBuilder);Err=(New-Object Text.StringBuilder);OutBytes=0L;ErrBytes=0L;OutEof=$false;ErrEof=$false;Overflow=$false;OutError=$false;ErrError=$false})
+    $result=[ordered]@{Started=$false;ProcessId=$null;ExitCode=$null;TimedOut=$false;CleanupComplete=$true;OutputComplete=$false;Truncated=$false;Stdout='';Stderr='';StdoutBytes=0L;StderrBytes=0L;StdoutSha256=$null;StderrSha256=$null;OutputHashEncoding='UTF-8 decoded text';ReaderError=$null;ElapsedMilliseconds=0}
+    $clock=[Diagnostics.Stopwatch]::StartNew();$process=$null;$outTask=$null;$errTask=$null
+    $outBuffer=[char[]]::new(4096);$errBuffer=[char[]]::new(4096)
+    $outBuilder=[Text.StringBuilder]::new();$errBuilder=[Text.StringBuilder]::new()
+    $outEof=$false;$errEof=$false;$outFailed=$false;$errFailed=$false;$overflow=$false
+    [long]$outRetainedBytes=0;[long]$errRetainedBytes=0;[long]$outObservedBytes=0;[long]$errObservedBytes=0
     try {
         $startInfo=New-Object Diagnostics.ProcessStartInfo
         $startInfo.FileName=$FilePath;$startInfo.Arguments=$Arguments;$startInfo.UseShellExecute=$false;$startInfo.CreateNoWindow=$true;$startInfo.RedirectStandardOutput=$true;$startInfo.RedirectStandardError=$true
         $process=New-Object Diagnostics.Process;$process.StartInfo=$startInfo
         if(-not $process.Start()){throw 'IcaclsChildStartReturnedFalse.'}
         $result.Started=$true;$result.ProcessId=[int]$process.Id
-        $eventAction={
-            $state=$event.MessageData
-            $shared=$state.Shared
-            try {
-                $line=$event.SourceEventArgs.Data
-                if($null -eq $line){$shared[$state.EofKey]=$true;return}
-                $text=$line+[Environment]::NewLine;$bytes=[Text.Encoding]::UTF8.GetByteCount($text)
-                if(($shared[$state.BytesKey]+$bytes) -le $state.Limit){[void]$state.Builder.Append($text)}else{$state.Overflow=$true}
-                $shared[$state.BytesKey]+=$bytes
-            } catch {$state.Error=$true}
-        }
-        $outSource='F2IcaclsOut-'+[guid]::NewGuid().ToString('N');$errSource='F2IcaclsErr-'+[guid]::NewGuid().ToString('N')
-        $outState=[hashtable]::Synchronized(@{Shared=$capture;Builder=$capture.Out;BytesKey='OutBytes';EofKey='OutEof';Limit=$MaxBytesPerStream;Overflow=$false;Error=$false})
-        $errState=[hashtable]::Synchronized(@{Shared=$capture;Builder=$capture.Err;BytesKey='ErrBytes';EofKey='ErrEof';Limit=$MaxBytesPerStream;Overflow=$false;Error=$false})
-        Register-ObjectEvent -InputObject $process -EventName OutputDataReceived -SourceIdentifier $outSource -MessageData $outState -Action $eventAction | Out-Null
-        Register-ObjectEvent -InputObject $process -EventName ErrorDataReceived -SourceIdentifier $errSource -MessageData $errState -Action $eventAction | Out-Null
-        $process.BeginOutputReadLine();$process.BeginErrorReadLine()
         $deadline=[int64]$TimeoutSeconds*1000
+        $outTask=$process.StandardOutput.ReadAsync($outBuffer,0,$outBuffer.Length)
+        $errTask=$process.StandardError.ReadAsync($errBuffer,0,$errBuffer.Length)
         while($true){
+            foreach($stream in @('Out','Err')){
+                $task=if($stream -eq 'Out'){$outTask}else{$errTask}
+                $buffer=if($stream -eq 'Out'){$outBuffer}else{$errBuffer}
+                $done=if($stream -eq 'Out'){$outEof -or $outFailed}else{$errEof -or $errFailed}
+                if(-not $done -and $task.IsCompleted){
+                    try{
+                        $count=[int]$task.GetAwaiter().GetResult()
+                        if($count -le 0){if($stream -eq 'Out'){$outEof=$true}else{$errEof=$true}}
+                        else{
+                            $chunk=New-Object string ($buffer,0,$count)
+                            $chunkBytes=[long][Text.Encoding]::UTF8.GetByteCount($chunk)
+                            if($stream -eq 'Out'){$outObservedBytes+=$chunkBytes;$retained=$outRetainedBytes;$builder=$outBuilder}else{$errObservedBytes+=$chunkBytes;$retained=$errRetainedBytes;$builder=$errBuilder}
+                            if($retained+$chunkBytes -le $MaxBytesPerStream){[void]$builder.Append($chunk);if($stream -eq 'Out'){$outRetainedBytes+=$chunkBytes}else{$errRetainedBytes+=$chunkBytes}}
+                            else{
+                                $overflow=$true
+                                $available=[int][Math]::Max(0,$MaxBytesPerStream-$retained)
+                                if($available -gt 0){$keep='';$used=0;for($n=0;$n -lt $chunk.Length;$n++){$one=[string]$chunk[$n];$oneBytes=[Text.Encoding]::UTF8.GetByteCount($one);if($used+$oneBytes -gt $available){break};$keep+=$one;$used+=$oneBytes};[void]$builder.Append($keep);if($stream -eq 'Out'){$outRetainedBytes+=$used}else{$errRetainedBytes+=$used}}
+                            }
+                            if($stream -eq 'Out'){$outTask=$process.StandardOutput.ReadAsync($outBuffer,0,$outBuffer.Length)}else{$errTask=$process.StandardError.ReadAsync($errBuffer,0,$errBuffer.Length)}
+                        }
+                    }catch{if($stream -eq 'Out'){$outFailed=$true}else{$errFailed=$true};$result.ReaderError='RedirectedStreamReadFailed'}
+                }
+            }
             $hasExited=[bool]$process.HasExited
-            $streamsDone=($capture.OutEof -and $capture.ErrEof)
+            $streamsDone=(($outEof -or $outFailed) -and ($errEof -or $errFailed))
             if($hasExited -and $streamsDone){break}
             $remaining=$deadline-[int64]$clock.ElapsedMilliseconds
             if($remaining -le 0){$result.TimedOut=$true;break}
-            Wait-Event -SourceIdentifier $outSource -Timeout 0.01 | Out-Null
-            Wait-Event -SourceIdentifier $errSource -Timeout 0.01 | Out-Null
             $sleep=[int][Math]::Min(20,$remaining)
             if($sleep -gt 0){Start-Sleep -Milliseconds $sleep}
         }
@@ -288,29 +357,24 @@ function Invoke-F2IcaclsProcessCore {
             try{$process.Kill()}catch{$result.CleanupComplete=$false;$result.ReaderError='ChildTerminationFailed'}
             try{if(-not $process.WaitForExit($CleanupGraceMilliseconds)){$result.CleanupComplete=$false}}catch{$result.CleanupComplete=$false;$result.ReaderError='ChildTerminationWaitFailed'}
         }
-        $remainingDrain=[int][Math]::Max(0,[Math]::Min($DrainGraceMilliseconds,($deadline-[int64]$clock.ElapsedMilliseconds)))
-        $drainClock=[Diagnostics.Stopwatch]::StartNew()
-        while(((-not $capture.OutEof) -or (-not $capture.ErrEof)) -and $drainClock.ElapsedMilliseconds -lt $remainingDrain){Wait-Event -SourceIdentifier $outSource -Timeout 0.01 | Out-Null;Wait-Event -SourceIdentifier $errSource -Timeout 0.01 | Out-Null}
-        $drainClock.Stop()
-        if(-not $capture.OutEof -or -not $capture.ErrEof){$result.OutputComplete=$false;$result.CleanupComplete=$false;$result.ReaderError='RedirectedStreamDrainDeadlineExceeded'}
+        if(-not $outEof -or -not $errEof -or $outFailed -or $errFailed){$result.OutputComplete=$false;$result.CleanupComplete=$false;if($null -eq $result.ReaderError){$result.ReaderError='RedirectedStreamDrainDeadlineExceeded'}}
         if($process.HasExited){$result.ExitCode=[int]$process.ExitCode}
-        $result.Stdout=[string]$capture.Out.ToString();$result.Stderr=[string]$capture.Err.ToString()
-        $result.StdoutBytes=[long]$capture.OutBytes;$result.StderrBytes=[long]$capture.ErrBytes
-        if($outState.Overflow -or $errState.Overflow){$result.Truncated=$true;$result.CleanupComplete=$false;$result.ReaderError='OutputLimitExceeded'}
-        if($outState.Error -or $errState.Error){$result.CleanupComplete=$false;$result.ReaderError='OutputCaptureCallbackFailed'}
+        $result.Stdout=[string]$outBuilder.ToString();$result.Stderr=[string]$errBuilder.ToString()
+        $result.StdoutBytes=$outObservedBytes;$result.StderrBytes=$errObservedBytes
+        if($overflow){$result.Truncated=$true;$result.CleanupComplete=$false;$result.ReaderError='OutputLimitExceeded'}
+        if($outFailed -or $errFailed){$result.CleanupComplete=$false}
         $stdoutUtf8=[Text.Encoding]::UTF8.GetBytes($result.Stdout);$stderrUtf8=[Text.Encoding]::UTF8.GetBytes($result.Stderr)
         $result.StdoutSha256=Get-F2IcaclsSha256 -Bytes $stdoutUtf8;$result.StderrSha256=Get-F2IcaclsSha256 -Bytes $stderrUtf8
-        if(-not $result.TimedOut -and $result.CleanupComplete -and $process.HasExited -and $capture.OutEof -and $capture.ErrEof -and -not $outState.Overflow -and -not $errState.Overflow -and -not $outState.Error -and -not $errState.Error){$result.OutputComplete=$true}
+        if(-not $result.TimedOut -and $result.CleanupComplete -and $process.HasExited -and $outEof -and $errEof -and -not $overflow -and -not $outFailed -and -not $errFailed){$result.OutputComplete=$true}
     }
     catch{$result.ReaderError=if($null -eq $result.ReaderError){$_.Exception.GetType().Name+': '+$_.Exception.Message}else{$result.ReaderError};$result.CleanupComplete=$false}
     finally{
         if($null -ne $process){
             try{if(-not $process.HasExited){$process.Kill();if(-not $process.WaitForExit($CleanupGraceMilliseconds)){$result.CleanupComplete=$false}}}catch{$result.CleanupComplete=$false}
-            try{$process.CancelOutputRead()}catch{}
-            try{$process.CancelErrorRead()}catch{}
+            try{$process.StandardOutput.Dispose()}catch{if(-not $result.TimedOut){$result.CleanupComplete=$false}}
+            try{$process.StandardError.Dispose()}catch{if(-not $result.TimedOut){$result.CleanupComplete=$false}}
             try{$process.Dispose()}catch{$result.CleanupComplete=$false}
         }
-        foreach($source in @($outSource,$errSource)){if($source){try{Unregister-Event -SourceIdentifier $source -ErrorAction SilentlyContinue;Get-Job -Name $source -ErrorAction SilentlyContinue|Remove-Job -Force -ErrorAction SilentlyContinue}catch{$result.CleanupComplete=$false}}}
         $clock.Stop();$result.ElapsedMilliseconds=[long]$clock.ElapsedMilliseconds
     }
     return [pscustomobject]$result
