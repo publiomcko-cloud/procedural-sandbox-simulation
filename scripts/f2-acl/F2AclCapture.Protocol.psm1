@@ -642,6 +642,89 @@ function Test-F2AclCoordinatorMailboxDirectory {
     return $validated
 }
 
+function Test-F2AclCoordinatorMailboxParentSddl {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Sddl,
+        [switch]$RequireProtectedDacl,
+        [switch]$AllowBuiltinUsersCreateRights
+    )
+
+    $raw = [Security.AccessControl.RawSecurityDescriptor]::new($Sddl)
+    if ($null -eq $raw.DiscretionaryAcl -or ($raw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclPresent) -eq 0) { throw 'Coordinator mailbox ancestor has a missing or null DACL.' }
+    $protected = (($raw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclProtected) -ne 0)
+    if ($RequireProtectedDacl -and -not $protected) { throw 'Coordinator mailbox parent DACL must be protected from ancestor inheritance.' }
+
+    # For a directory, 0x2/0x4 are add-file/add-subdirectory (not overwrite or
+    # delete of an existing child). The observed ProgramData 0x116 additionally
+    # contains write-EA and write-attributes on ProgramData itself. Those are
+    # accepted only for BUILTIN\Users at the mailbox parent; the mailbox DACL is
+    # supplied at atomic creation and protected against inheriting these ACEs.
+    $benignParentMask = [long]0x00000116
+    $delete = [long]0x00010000
+    $deleteChild = [long]0x00000040
+    $writeDacl = [long]0x00040000
+    $writeOwner = [long]0x00080000
+    $genericWrite = [long]0x40000000
+    $genericAll = [long]0x10000000
+    $requesterSid = 'S-1-5-32-545'
+    $issues = [Collections.Generic.List[string]]::new()
+
+    foreach ($ace in $raw.DiscretionaryAcl) {
+        if ($ace.AceQualifier -ne [Security.AccessControl.AceQualifier]::AccessAllowed) { continue }
+        # Inherit-only ACEs do not apply to this ancestor. The exact mailbox
+        # DACL is separately required to be protected and is set at creation.
+        if (([int]$ace.AceFlags -band [int][Security.AccessControl.AceFlags]::InheritOnly) -ne 0) { continue }
+        $sid = $ace.SecurityIdentifier.Value
+        if ($sid -in @('S-1-5-18','S-1-5-32-544',$raw.Owner.Value)) { continue }
+        $mask = [long]([int64]$ace.AccessMask -band 0xFFFFFFFFL)
+        $untrustedControl = $mask -band ($delete -bor $deleteChild -bor $writeDacl -bor $writeOwner -bor $genericWrite -bor $genericAll)
+        if ($untrustedControl -ne 0) {
+            $issues.Add(('UntrustedMailboxParentControl:{0}:0x{1:X8}' -f $sid,$mask))
+            continue
+        }
+        $createRights = $mask -band $benignParentMask
+        if ($createRights -eq 0) { continue }
+        if ($AllowBuiltinUsersCreateRights -and $sid -eq $requesterSid -and (($mask -band (-bnot $benignParentMask)) -eq 0)) { continue }
+        if (-not $RequireProtectedDacl -and (($mask -band (-bnot $benignParentMask)) -eq 0)) { continue }
+        $issues.Add(('UnapprovedMailboxParentWrite:{0}:0x{1:X8}' -f $sid,$mask))
+    }
+    if ($issues.Count -gt 0) { throw ('Coordinator mailbox parent ACL is unsafe: ' + ($issues -join ',')) }
+    return [pscustomobject]@{Pass=$true;OwnerSid=$raw.Owner.Value;Protected=$protected;AceCount=@($raw.DiscretionaryAcl).Count;Policy=if($RequireProtectedDacl){'ProtectedMailboxParent'}else{'AncestorNoReplace'};Sddl=$raw.GetSddlForm([Security.AccessControl.AccessControlSections]::All)}
+}
+
+function Test-F2AclCoordinatorMailboxParentChain {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$MailboxParentPath)
+
+    $fullParent = [IO.Path]::GetFullPath($MailboxParentPath)
+    $current = $fullParent
+    $chain = [Collections.Generic.List[string]]::new()
+    while ($true) {
+        $chain.Add($current)
+        $root = [IO.Path]::GetPathRoot($current)
+        if ([string]::Equals($current.TrimEnd('\\'),$root.TrimEnd('\\'),[StringComparison]::OrdinalIgnoreCase)) { break }
+        $directory = [IO.Directory]::GetParent($current)
+        if ($null -eq $directory) { throw 'CoordinatorMailboxParentChainInvalid.' }
+        $current = $directory.FullName
+    }
+
+    $results = [Collections.Generic.List[object]]::new()
+    $trustedOwners = @('S-1-5-18','S-1-5-32-544','S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
+    foreach ($path in $chain) {
+        $sddl = [F2Acl.NativeDirectory]::GetSddl($path)
+        if ([string]::Equals($path,$fullParent,[StringComparison]::OrdinalIgnoreCase)) {
+            $result = Test-F2AclCoordinatorMailboxParentSddl -Sddl $sddl -RequireProtectedDacl -AllowBuiltinUsersCreateRights
+        }
+        else {
+            $result = Test-F2AclCoordinatorMailboxParentSddl -Sddl $sddl
+        }
+        if ($result.OwnerSid -notin $trustedOwners) { throw ('Coordinator mailbox ancestor owner is untrusted: ' + $path) }
+        $results.Add($result)
+    }
+    return @($results)
+}
+
 function New-F2AclCoordinatorMailboxDirectory {
     [CmdletBinding()]
     param([Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{32}$')][string]$CaptureId,[Parameter(Mandatory)][string]$RequesterSid,[string]$ProjectVolumePath='G:\')
@@ -652,11 +735,7 @@ function New-F2AclCoordinatorMailboxDirectory {
     $parentRaw = [Security.AccessControl.RawSecurityDescriptor]::new([F2Acl.NativeDirectory]::GetSddl($parentPath))
     if ($null -eq $parentRaw.DiscretionaryAcl -or ($parentRaw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclPresent) -eq 0) { throw 'Coordinator mailbox parent has a missing or null DACL.' }
     if ($parentRaw.Owner.Value -notin @('S-1-5-18','S-1-5-32-544','S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')) { throw 'Coordinator mailbox parent owner is not a recognized protected system principal.' }
-    $parentRules = @($parentRaw.DiscretionaryAcl | Where-Object { $_.SecurityIdentifier.Value -notin @('S-1-3-0','S-1-3-4') } | ForEach-Object {
-        [pscustomobject]@{IdentityReference=$_.SecurityIdentifier;AccessControlType=if ($_.AceQualifier -eq [Security.AccessControl.AceQualifier]::AccessAllowed) { 'Allow' } else { 'Deny' };FileSystemRights=[Security.AccessControl.FileSystemRights]$_.AccessMask}
-    })
-    $unexpectedWriters = @(Get-F2AclUnexpectedWritableSids -Rules $parentRules -OwnerSid $parentRaw.Owner.Value)
-    if ($unexpectedWriters.Count -gt 0) { throw ('Coordinator mailbox parent grants unexpected write/delete access: ' + ($unexpectedWriters -join ',')) }
+    [void](Test-F2AclCoordinatorMailboxParentChain -MailboxParentPath $parentPath)
     if (Test-Path -LiteralPath $fullPath) { throw 'Coordinator mailbox path already exists; refusing overwrite.' }
     $sddl = Get-F2AclCoordinatorMailboxSddl -RequesterSid $RequesterSid
     [F2Acl.NativeDirectory]::CreateWithSddl($fullPath,$sddl)
@@ -874,4 +953,4 @@ function Test-F2AclEvidenceDocument {
     return [pscustomobject]@{ Pass = ($errors.Count -eq 0); Errors = @($errors); Document = $doc }
 }
 
-Export-ModuleMember -Function Get-F2AclSha256, ConvertTo-F2AclUtf8Bytes, ConvertTo-F2AclWindowsArgument, ConvertTo-F2AclCanonicalPath, Assert-F2AclSupportedAce, Test-F2AclKingstonStorageIdentity, Test-F2AclZeroNicCount, Test-F2AclStorageObservationsEquivalent, Test-F2AclVmStorageSnapshot, Test-F2AclElevatedIdentityPair, Test-F2AclCoordinatorStatus, Write-F2AclAtomicCreateNewFile, Read-F2AclBoundedFile, Get-F2AclCoordinatorMailboxPath, Get-F2AclCoordinatorMailboxSddl, Test-F2AclCoordinatorMailboxSddl, Test-F2AclCoordinatorMailboxDirectory, New-F2AclCoordinatorMailboxDirectory, New-F2AclEvidenceDocument, Write-F2AclFrame, Read-F2AclFrame, Wait-F2AclProcessExit, New-F2AclRestrictedDirectory, Test-F2AclRestrictedDirectory, Test-F2AclNoReparseAncestors, Test-F2AclEvidenceVolumeSeparateFromG, Get-F2AclUnexpectedWritableSids, Add-F2AclBoundedStreamRecord, Test-F2AclEvidenceDocument
+Export-ModuleMember -Function Get-F2AclSha256, ConvertTo-F2AclUtf8Bytes, ConvertTo-F2AclWindowsArgument, ConvertTo-F2AclCanonicalPath, Assert-F2AclSupportedAce, Test-F2AclKingstonStorageIdentity, Test-F2AclZeroNicCount, Test-F2AclStorageObservationsEquivalent, Test-F2AclVmStorageSnapshot, Test-F2AclElevatedIdentityPair, Test-F2AclCoordinatorStatus, Write-F2AclAtomicCreateNewFile, Read-F2AclBoundedFile, Get-F2AclCoordinatorMailboxPath, Get-F2AclCoordinatorMailboxSddl, Test-F2AclCoordinatorMailboxSddl, Test-F2AclCoordinatorMailboxDirectory, Test-F2AclCoordinatorMailboxParentSddl, Test-F2AclCoordinatorMailboxParentChain, New-F2AclCoordinatorMailboxDirectory, New-F2AclEvidenceDocument, Write-F2AclFrame, Read-F2AclFrame, Wait-F2AclProcessExit, New-F2AclRestrictedDirectory, Test-F2AclRestrictedDirectory, Test-F2AclNoReparseAncestors, Test-F2AclEvidenceVolumeSeparateFromG, Get-F2AclUnexpectedWritableSids, Add-F2AclBoundedStreamRecord, Test-F2AclEvidenceDocument

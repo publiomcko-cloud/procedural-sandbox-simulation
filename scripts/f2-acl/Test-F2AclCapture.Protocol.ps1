@@ -138,6 +138,29 @@ $writableMailboxSddl = $mailboxSddl.Replace('0x1200a9','FA')
 Assert-F2AclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $writableMailboxSddl -RequesterSid $requesterSidFixture } 'requester write/delete/WRITE_DAC ACE is rejected'
 $requesterOwnedMailboxSddl = $mailboxSddl.Replace('O:BA','O:' + $requesterSidFixture)
 Assert-F2AclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $requesterOwnedMailboxSddl -RequesterSid $requesterSidFixture } 'requester ownership that could change mailbox DACL is rejected'
+$unprotectedMailboxSddl = $mailboxSddl.Replace('D:P','D:')
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $unprotectedMailboxSddl -RequesterSid $requesterSidFixture } 'unprotected mailbox DACL cannot inherit ProgramData grants'
+$extraWritableMailboxSddl = $mailboxSddl + '(A;OICI;0x120116;;;S-1-5-32-545)'
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $extraWritableMailboxSddl -RequesterSid $requesterSidFixture } 'unexpected Users create/write grant on mailbox is rejected'
+$observedProgramDataSddl = 'O:SYG:SYD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICIIO;GA;;;CO)(A;OICI;0x1200a9;;;BU)(A;CI;DCLCRPCR;;;BU)'
+$observedParentCheck = Test-F2AclCoordinatorMailboxParentSddl -Sddl $observedProgramDataSddl -RequireProtectedDacl -AllowBuiltinUsersCreateRights
+Assert-F2Acl ($observedParentCheck.Pass -and $observedParentCheck.OwnerSid -eq 'S-1-5-18' -and $observedParentCheck.Protected) 'exact observed protected ProgramData SDDL accepts BUILTIN Users 0x116 creation and metadata rights'
+$observedRawParent = [Security.AccessControl.RawSecurityDescriptor]::new($observedProgramDataSddl)
+$usersParentAce = @($observedRawParent.DiscretionaryAcl | Where-Object { $_.SecurityIdentifier.Value -eq 'S-1-5-32-545' -and $_.AccessMask -eq 0x116 })
+Assert-F2Acl ($usersParentAce.Count -eq 1 -and ($usersParentAce[0].AccessMask -band 0x40) -eq 0 -and ($usersParentAce[0].AccessMask -band 0x10000) -eq 0 -and ($usersParentAce[0].AccessMask -band 0x40000) -eq 0 -and ($usersParentAce[0].AccessMask -band 0x80000) -eq 0) 'observed 0x116 grants add-file/add-subdirectory/EA/attributes, not delete-child/delete/WRITE_DAC/WRITE_OWNER'
+foreach ($attack in @(
+    [pscustomobject]@{Name='DELETE_CHILD';Ace='(A;CI;0x00000040;;;BU)'},
+    [pscustomobject]@{Name='DELETE';Ace='(A;CI;0x00010000;;;BU)'},
+    [pscustomobject]@{Name='WRITE_DAC';Ace='(A;CI;0x00040000;;;BU)'},
+    [pscustomobject]@{Name='WRITE_OWNER';Ace='(A;CI;0x00080000;;;BU)'},
+    [pscustomobject]@{Name='GENERIC_WRITE';Ace='(A;CI;0x40000000;;;BU)'},
+    [pscustomobject]@{Name='GENERIC_ALL';Ace='(A;CI;0x10000000;;;BU)'}
+)) {
+    Assert-F2AclReject { Test-F2AclCoordinatorMailboxParentSddl -Sddl ($observedProgramDataSddl + $attack.Ace) -RequireProtectedDacl -AllowBuiltinUsersCreateRights } ('ProgramData ' + $attack.Name + ' attack fails closed')
+}
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxParentSddl -Sddl ($observedProgramDataSddl.Replace('D:PAI','D:AI')) -RequireProtectedDacl -AllowBuiltinUsersCreateRights } 'unprotected mailbox parent fails inherited-rights gate'
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxParentSddl -Sddl ($observedProgramDataSddl + '(A;CI;WD;;;S-1-5-11)') -RequireProtectedDacl -AllowBuiltinUsersCreateRights } 'dangerous inherited Authenticated Users grant is rejected'
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxParentSddl -Sddl ($observedProgramDataSddl + '(A;CI;0x00000002;;;S-1-5-11)') -RequireProtectedDacl -AllowBuiltinUsersCreateRights } 'unapproved broad-principal child-creation grant is rejected'
 $parentWriteRules = @([pscustomobject]@{IdentityReference=[Security.Principal.SecurityIdentifier]::new($requesterSidFixture);AccessControlType='Allow';FileSystemRights=[Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles})
 $parentUnexpectedWrite = @(Get-F2AclUnexpectedWritableSids -Rules $parentWriteRules -OwnerSid 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
 Assert-F2Acl ($parentUnexpectedWrite.Count -eq 1 -and $parentUnexpectedWrite[0] -eq $requesterSidFixture) 'requester delete-child permission on the protected parent is rejected'
@@ -437,6 +460,7 @@ try {
     $mklinkOutput = & $env:ComSpec /d /c ('mklink /J "{0}" "{1}"' -f $junctionPath, $junctionTarget) 2>&1
     if ($LASTEXITCODE -ne 0) { throw ('Could not create synthetic junction: ' + ($mklinkOutput -join ' ')) }
     Assert-F2AclReject { Test-F2AclNoReparseAncestors -Path (Join-Path $junctionPath 'missing-child') } 'ancestor junction is rejected'
+    Assert-F2AclReject { Test-F2AclCoordinatorMailboxDirectory -Path $junctionPath -RequesterSid $requesterSidFixture } 'mailbox path that is itself a junction is rejected before ACL acceptance'
 }
 finally {
     if (Test-Path -LiteralPath $junctionPath) {
@@ -501,6 +525,13 @@ Assert-F2Acl ($boundedRecords.Count -eq $beforeOversizeCount -and $boundedState.
 $mailboxRoot = Join-Path $env:TEMP ('F2Acl-Mailbox-Protocol-Test-' + [guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($mailboxRoot)
 try {
+    $collisionPath = Join-Path $mailboxRoot 'precreated-mailbox-name'
+    $testOwnerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $collisionSddl = 'O:' + $testOwnerSid + 'D:P(A;OICI;FA;;;' + $testOwnerSid + ')'
+    [F2Acl.NativeDirectory]::CreateWithSddl($collisionPath,$collisionSddl)
+    $collisionBefore = [F2Acl.NativeDirectory]::GetSddl($collisionPath)
+    Assert-F2AclReject { [F2Acl.NativeDirectory]::CreateWithSddl($collisionPath,$collisionSddl) } 'precreated mailbox directory-name collision is rejected atomically'
+    Assert-F2Acl (([F2Acl.NativeDirectory]::GetSddl($collisionPath) -ceq $collisionBefore) -and @(Get-ChildItem -LiteralPath $collisionPath -Force).Count -eq 0) 'collision leaves preexisting mailbox directory and ACL untouched'
     $mailboxPath = Join-Path $mailboxRoot 'coordinator-result.bin'
     $mailboxBytes = [Text.Encoding]::UTF8.GetBytes('synthetic-bounded-result')
     [void](Write-F2AclAtomicCreateNewFile -Path $mailboxPath -Bytes $mailboxBytes -MaxBytes 1024)
@@ -541,6 +572,11 @@ finally {
         $cleanupFile = Join-Path $mailboxRoot $fileName
         if ([IO.File]::Exists($cleanupFile)) { [IO.File]::Delete($cleanupFile) }
     }
+    if ([IO.Directory]::Exists($collisionPath)) {
+        $collisionItem = Get-Item -LiteralPath $collisionPath -Force
+        if ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($collisionPath)) -ne [IO.Path]::GetFullPath($mailboxRoot) -or ($collisionItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or @(Get-ChildItem -LiteralPath $collisionPath -Force).Count -ne 0) { throw 'Synthetic collision fixture is unexpected; refusing cleanup.' }
+        [IO.Directory]::Delete($collisionPath)
+    }
     if (@(Get-ChildItem -LiteralPath $mailboxRoot -Force).Count -ne 0) { throw 'Synthetic mailbox test left unexpected files; refusing directory cleanup.' }
     [IO.Directory]::Delete($mailboxRoot)
 }
@@ -550,5 +586,5 @@ if ($script:Failures.Count -gt 0) {
     $script:Failures | ForEach-Object { [Console]::Error.WriteLine('FAIL=' + $_) }
     exit 1
 }
-Write-Output 'Cases=source_pins,uac_coordinator_same_and_different_admin_identity_policy,filtered_admin_rejection,requester_read_only_mailbox_acl_and_owner,requester_write_delete_dac_tamper_rejection,parent_delete_child_race_rejection,coordinator_status_exit_binding,no_cross_token_named_pipe_production,bounded_file_mailbox_same_token_worker_integration,mailbox_missing_duplicate_oversized,kingston_storage_valid_wrong_serial_wrong_model_ambiguous_missing_field_transport_mapping,post_collection_vm_identity_state_path_nic_storage,unknown_final_state_incomplete,complete,argument_quoting,frame_roundtrip,bounded_eof_probe,standard_ace,callback_ace_rejection,object_ace_rejection,unknown_ace_flag_rejection,ancestor_junction_rejection,oversized_writer,oversized_reader,corrupt,partial_frame,stalled_partial_header,missing,duplicate,malformed_json,missing_envelope,missing_record_field,child_exit,sha256,partial_record,empty_preflight_failure,stdout_stderr,timeout,restricted_evidence_directory,exact_acl_principals,read_only_parent_ace,write_parent_ace,write_attributes_parent_ace,bounded_stream_accounting,oversized_stream_rejection'
+Write-Output 'Cases=source_pins,uac_coordinator_same_and_different_admin_identity_policy,filtered_admin_rejection,requester_read_only_mailbox_acl_and_owner,requester_write_delete_dac_tamper_rejection,observed_programdata_sddl_0x116_acceptance,delete_child_delete_write_dac_write_owner_generic_write_generic_all_rejection,dangerous_inherited_parent_grant_rejection,protected_parent_required,unapproved_broad_create_rights_rejection,atomic_precreated_mailbox_collision,mailbox_junction_rejection,coordinator_status_exit_binding,no_cross_token_named_pipe_production,bounded_file_mailbox_same_token_worker_integration,mailbox_missing_duplicate_oversized,kingston_storage_valid_wrong_serial_wrong_model_ambiguous_missing_field_transport_mapping,post_collection_vm_identity_state_path_nic_storage,unknown_final_state_incomplete,complete,argument_quoting,frame_roundtrip,bounded_eof_probe,standard_ace,callback_ace_rejection,object_ace_rejection,unknown_ace_flag_rejection,ancestor_junction_rejection,oversized_writer,oversized_reader,corrupt,partial_frame,stalled_partial_header,missing,duplicate,malformed_json,missing_envelope,missing_record_field,child_exit,sha256,partial_record,empty_preflight_failure,stdout_stderr,timeout,restricted_evidence_directory,exact_acl_principals,read_only_parent_ace,write_parent_ace,write_attributes_parent_ace,bounded_stream_accounting,oversized_stream_rejection'
 [Environment]::Exit(0)
