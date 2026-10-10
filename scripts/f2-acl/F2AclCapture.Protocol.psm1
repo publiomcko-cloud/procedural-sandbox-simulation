@@ -115,10 +115,10 @@ function Test-F2AclCoordinatorStatus {
     if ($Status.Outcome -cne 'COMPLETE_READ_ONLY_ACL_BASELINE') { $errors.Add('CoordinatorDidNotComplete') }
     if (($Status.WorkerExitCode -isnot [int] -and $Status.WorkerExitCode -isnot [long]) -or [int64]$Status.WorkerExitCode -ne 0 -or $ActualProcessExitCode -ne 0) { $errors.Add('CoordinatorOrWorkerExitNonzero') }
     $worker = $Status.WorkerDiagnostics
-    $workerRequired = @('Started','ProcessId','State','TimedOut','ExitCode','OutputComplete','StdoutBytes','StdoutSha256','StdoutTruncated','StderrBytes','StderrSha256','StderrTruncated','FatalError','Stages','ReaderErrors')
+    $workerRequired = @('Started','ProcessId','State','TimedOut','ExitCode','OutputComplete','CleanupComplete','StdoutBytes','StdoutSha256','StdoutTruncated','StderrBytes','StderrSha256','StderrTruncated','FatalError','Stages','ReaderErrors')
     if (-not (Test-F2AclHasProperties $worker $workerRequired)) { $errors.Add('WorkerDiagnosticsFieldsMissing') }
     else {
-        if ($worker.Started -ne $true -or $worker.State -cne 'Exited' -or $worker.TimedOut -ne $false -or $worker.OutputComplete -ne $true) { $errors.Add('WorkerExecutionStateIncomplete') }
+        if ($worker.Started -ne $true -or $worker.State -cne 'Exited' -or $worker.TimedOut -ne $false -or $worker.OutputComplete -ne $true -or $worker.CleanupComplete -ne $true) { $errors.Add('WorkerExecutionStateIncomplete') }
         if (($worker.ProcessId -isnot [int] -and $worker.ProcessId -isnot [long]) -or [int64]$worker.ProcessId -le 0 -or $worker.ExitCode -ne $Status.WorkerExitCode -or $Status.WorkerProcessId -ne $worker.ProcessId) { $errors.Add('WorkerExecutionIdentityOrExitMismatch') }
         if ($worker.StdoutTruncated -ne $false -or $worker.StderrTruncated -ne $false -or @($worker.ReaderErrors).Count -ne 0 -or $null -ne $worker.FatalError) { $errors.Add('WorkerDiagnosticsContainFailure') }
         if ([int64]$worker.StdoutBytes -gt 16384 -or [int64]$worker.StderrBytes -gt 16384 -or [string]$worker.StdoutSha256 -notmatch '^[0-9a-f]{64}$' -or [string]$worker.StderrSha256 -notmatch '^[0-9a-f]{64}$') { $errors.Add('WorkerDiagnosticBoundsOrDigestInvalid') }
@@ -563,7 +563,8 @@ function Wait-F2AclProcessExit {
     param(
         [Parameter(Mandatory)][Diagnostics.Process]$Process,
         [Parameter(Mandatory)][ValidateRange(1, 3600)][int]$TimeoutSeconds,
-        [ValidateRange(10, 5000)][int]$PollMilliseconds = 100
+        [ValidateRange(10, 5000)][int]$PollMilliseconds = 100,
+        [ValidateRange(1,5000)][int]$CleanupGraceMilliseconds = 1000
     )
 
     $timer = [Diagnostics.Stopwatch]::StartNew()
@@ -572,10 +573,13 @@ function Wait-F2AclProcessExit {
     }
     $timedOut = -not $Process.HasExited
     if ($timedOut) {
-        $Process.Kill()
-        $Process.WaitForExit()
+        try { $Process.Kill() } catch { }
+        try { [void]$Process.WaitForExit($CleanupGraceMilliseconds) } catch { }
     }
-    return [pscustomobject]@{Completed=(-not $timedOut);TimedOut=$timedOut;ExitCode=[int]$Process.ExitCode;ElapsedMilliseconds=[long]$timer.ElapsedMilliseconds}
+    $exitCode = $null
+    $state = 'StillRunningAfterBoundedCleanup'
+    try { if ($Process.HasExited) { $exitCode=[int]$Process.ExitCode; $state='Exited' } } catch { }
+    return [pscustomobject]@{Completed=(-not $timedOut -and $state -eq 'Exited');TimedOut=$timedOut;ExitCode=$exitCode;State=$state;ElapsedMilliseconds=[long]$timer.ElapsedMilliseconds}
 }
 
 function New-F2AclWorkerBootstrapCommand {
@@ -589,6 +593,16 @@ function New-F2AclWorkerBootstrapCommand {
     return $prefix + $Invocation + $suffix
 }
 
+function Close-F2AclCapturedStreamState {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$State)
+    if ($State.Closed) { return @() }
+    $errors = [Collections.Generic.List[string]]::new()
+    try { $State.Stream.Dispose(); $State.Closed = $true }
+    catch { $errors.Add(($State.Name + 'StreamDispose:' + [string]$_.Exception.Message)) }
+    return @($errors)
+}
+
 function Invoke-F2AclCapturedPowerShell {
     [CmdletBinding()]
     param(
@@ -597,17 +611,20 @@ function Invoke-F2AclCapturedPowerShell {
         [Parameter(Mandatory)][ValidateRange(1,3600)][int]$TimeoutSeconds,
         [ValidateRange(1024,65536)][int]$MaxBytesPerStream = 16384,
         [ValidateRange(1,100)][int]$PollMilliseconds = 10,
-        [ValidateRange(1,30)][int]$DrainTimeoutSeconds = 3
+        [ValidateRange(1,5000)][int]$CleanupGraceMilliseconds = 1000
     )
 
     $result = [ordered]@{
         Started=$false;ProcessId=$null;State='NotStarted';ExitCode=$null;TimedOut=$false
         StdoutBytes=[byte[]]@();StderrBytes=[byte[]]@();StdoutTruncated=$false;StderrTruncated=$false
-        OutputComplete=$false;StartError=$null;ReaderErrors=@();ElapsedMilliseconds=0
+        OutputComplete=$false;CleanupComplete=$true;StartError=$null;ReaderErrors=@();ElapsedMilliseconds=0
     }
     $process = $null
     $states = @()
     $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    $deadlineMilliseconds = [int64]$TimeoutSeconds * 1000
+    $timedOut = $false
+    $processExited = $false
     try {
         $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($CommandText))
         $argumentLine = @('-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',$encoded | ForEach-Object { ConvertTo-F2AclWindowsArgument ([string]$_) }) -join ' '
@@ -625,17 +642,41 @@ function Invoke-F2AclCapturedPowerShell {
         $result.ProcessId = [int]$process.Id
         $result.State = 'Running'
         foreach ($stream in @($process.StandardOutput.BaseStream,$process.StandardError.BaseStream)) {
-            $states += [pscustomobject]@{Stream=$stream;Buffer=[byte[]]::new(4096);Capture=[IO.MemoryStream]::new();Task=$null;Done=$false;Truncated=$false;Name=if($states.Count -eq 0){'Stdout'}else{'Stderr'}}
+            $states += [pscustomobject]@{Stream=$stream;Buffer=[byte[]]::new(4096);Capture=[IO.MemoryStream]::new();Task=$null;Done=$false;Abandoned=$false;Closed=$false;Truncated=$false;Name=if($states.Count -eq 0){'Stdout'}else{'Stderr'}}
         }
         foreach ($state in $states) { $state.Task = $state.Stream.ReadAsync($state.Buffer,0,$state.Buffer.Length) }
 
-        $timedOut = $false
-        $drainDeadline = $null
-        while (@($states | Where-Object { -not $_.Done }).Count -gt 0) {
-            if (-not $process.HasExited -and $stopwatch.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
+        $deadlineExceeded = $false
+        $workerExitedAtDeadline = $false
+        while ($true) {
+            try { $processExited = [bool]$process.HasExited }
+            catch { $result.ReaderErrors += ('WorkerStateRead:' + [string]$_.Exception.Message); throw }
+            $pendingReaders = @($states | Where-Object { -not $_.Done }).Count -gt 0
+            if ($processExited -and -not $pendingReaders) { break }
+            $remainingMilliseconds = $deadlineMilliseconds - [int64]$stopwatch.ElapsedMilliseconds
+            if ($remainingMilliseconds -le 0) {
+                $deadlineExceeded = $true
                 $timedOut = $true
-                try { $process.Kill(); [void]$process.WaitForExit(3000) } catch { $result.ReaderErrors += ('WorkerTermination:' + $_.Exception.Message) }
-                $drainDeadline = [DateTime]::UtcNow.AddSeconds($DrainTimeoutSeconds)
+                $workerExitedAtDeadline = $processExited
+                $result.ReaderErrors += 'WorkerExecutionOrOutputDrainDeadlineExceeded.'
+                if (-not $processExited) {
+                    try { $process.Kill() }
+                    catch { $result.ReaderErrors += ('WorkerTermination:' + [string]$_.Exception.Message); $result.CleanupComplete = $false }
+                    try { [void]$process.WaitForExit($CleanupGraceMilliseconds) }
+                    catch { $result.ReaderErrors += ('WorkerTerminationWait:' + [string]$_.Exception.Message); $result.CleanupComplete = $false }
+                    try { $processExited = [bool]$process.HasExited }
+                    catch { $result.ReaderErrors += ('WorkerStateReadAfterTermination:' + [string]$_.Exception.Message); $result.CleanupComplete = $false }
+                    if (-not $processExited) { $result.ReaderErrors += 'WorkerStillRunningAfterBoundedTermination.'; $result.CleanupComplete = $false }
+                }
+                foreach ($state in $states) {
+                    if (-not $state.Done) {
+                        $result.ReaderErrors += ($state.Name + 'ReaderAbandonedAtDeadline.')
+                        $state.Abandoned = $true
+                        $state.Done = $true
+                        foreach ($closeError in (Close-F2AclCapturedStreamState -State $state)) { $result.ReaderErrors += $closeError; $result.CleanupComplete = $false }
+                    }
+                }
+                break
             }
             foreach ($state in $states) {
                 if ($state.Done -or -not $state.Task.IsCompleted) { continue }
@@ -647,40 +688,48 @@ function Invoke-F2AclCapturedPowerShell {
                 if ($readCount -gt $remaining) { $state.Truncated = $true }
                 $state.Task = $state.Stream.ReadAsync($state.Buffer,0,$state.Buffer.Length)
             }
-            if ($timedOut -and $null -ne $drainDeadline -and [DateTime]::UtcNow -ge $drainDeadline -and @($states | Where-Object { -not $_.Done }).Count -gt 0) {
-                $result.ReaderErrors += 'WorkerOutputDrainTimeout.'
-                foreach ($state in $states) { if (-not $state.Done) { try { $state.Stream.Dispose() } catch {}; $state.Done = $true } }
-                break
+            $remainingMilliseconds = $deadlineMilliseconds - [int64]$stopwatch.ElapsedMilliseconds
+            if ($remainingMilliseconds -gt 0) {
+                $sleepMilliseconds = [int][Math]::Min([int64]$PollMilliseconds,$remainingMilliseconds)
+                if ($sleepMilliseconds -gt 0) { Start-Sleep -Milliseconds $sleepMilliseconds }
             }
-            if (@($states | Where-Object { -not $_.Done }).Count -gt 0) { Start-Sleep -Milliseconds $PollMilliseconds }
         }
-        while (-not $process.HasExited -and $stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds) { Start-Sleep -Milliseconds $PollMilliseconds }
-        if (-not $process.HasExited) {
-            $timedOut = $true
-            try { $process.Kill(); [void]$process.WaitForExit(3000) } catch { $result.ReaderErrors += ('WorkerTermination:' + $_.Exception.Message) }
-        }
-        if ($process.HasExited) { $result.ExitCode = [int]$process.ExitCode; $result.State = if($timedOut){'TimedOutTerminated'}else{'Exited'} }
+        try { $processExited = [bool]$process.HasExited } catch { $result.ReaderErrors += ('WorkerFinalStateRead:' + [string]$_.Exception.Message) }
+        if ($processExited) { try { $result.ExitCode = [int]$process.ExitCode } catch { $result.ReaderErrors += ('WorkerExitCodeRead:' + [string]$_.Exception.Message) }; $result.State = if($timedOut){'TimedOutTerminated'}else{'Exited'} }
         else { $result.State = 'StillRunningAtTimeout' }
         $result.TimedOut = $timedOut
         $result.StdoutBytes = $states[0].Capture.ToArray()
         $result.StderrBytes = $states[1].Capture.ToArray()
         $result.StdoutTruncated = [bool]$states[0].Truncated
         $result.StderrTruncated = [bool]$states[1].Truncated
-        $result.OutputComplete = (@($result.ReaderErrors).Count -eq 0 -and @($states | Where-Object { -not $_.Done }).Count -eq 0)
+        if ($deadlineExceeded -and $workerExitedAtDeadline) { $result.State = 'TimedOutAfterWorkerExit' }
     }
     catch {
         $result.StartError = ([string]$_.Exception.Message)
+        if ($stopwatch.ElapsedMilliseconds -ge $deadlineMilliseconds) { $timedOut = $true }
+        $result.TimedOut = $timedOut
         if (-not $result.Started) { $result.State = 'StartFailed' }
         if ($null -ne $process) {
-            try { if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }; if ($process.HasExited) { $result.ExitCode = [int]$process.ExitCode; $result.State = 'ExitedAfterCaptureFailure' } } catch { $result.ReaderErrors += ('WorkerCleanup:' + $_.Exception.Message) }
+            try { if (-not $process.HasExited) { $process.Kill() } } catch { $result.ReaderErrors += ('WorkerCleanupTerminate:' + [string]$_.Exception.Message); $result.CleanupComplete = $false }
+            try { [void]$process.WaitForExit($CleanupGraceMilliseconds) } catch { $result.ReaderErrors += ('WorkerCleanupWait:' + [string]$_.Exception.Message); $result.CleanupComplete = $false }
+            try { if ($process.HasExited) { $processExited = $true; $result.ExitCode = [int]$process.ExitCode; $result.State = 'ExitedAfterCaptureFailure' } else { $result.ReaderErrors += 'WorkerStillRunningAfterBoundedCleanup.'; $result.CleanupComplete = $false } }
+            catch { $result.ReaderErrors += ('WorkerCleanupExitCode:' + [string]$_.Exception.Message); $result.CleanupComplete = $false }
         }
-        foreach ($state in $states) { try { $result.ReaderErrors += ($state.Name + 'StreamCaptureFailed') } catch {} }
+        foreach ($state in $states) {
+            $state.Abandoned = $true
+            foreach ($closeError in (Close-F2AclCapturedStreamState -State $state)) { $result.ReaderErrors += $closeError; $result.CleanupComplete = $false }
+            $result.ReaderErrors += ($state.Name + 'StreamCaptureFailed')
+        }
     }
     finally {
+        foreach ($state in $states) {
+            foreach ($closeError in (Close-F2AclCapturedStreamState -State $state)) { $result.ReaderErrors += $closeError; $result.CleanupComplete = $false }
+            try { $state.Capture.Dispose() } catch { $result.ReaderErrors += ($state.Name + 'CaptureDispose:' + [string]$_.Exception.Message); $result.CleanupComplete = $false }
+        }
+        if ($null -ne $process) { try { $process.Dispose() } catch { $result.ReaderErrors += ('WorkerProcessDispose:' + [string]$_.Exception.Message); $result.CleanupComplete = $false } }
         $stopwatch.Stop()
         $result.ElapsedMilliseconds = [long]$stopwatch.ElapsedMilliseconds
-        foreach ($state in $states) { try { $state.Capture.Dispose() } catch {} }
-        if ($null -ne $process) { $process.Dispose() }
+        $result.OutputComplete = (-not $result.TimedOut -and $result.CleanupComplete -and @($result.ReaderErrors).Count -eq 0 -and @($states | Where-Object { -not $_.Done -or $_.Abandoned }).Count -eq 0 -and $processExited)
     }
     return [pscustomobject]$result
 }
@@ -735,6 +784,7 @@ function New-F2AclWorkerExecutionReport {
     if ($null -eq $CapturedProcess.ExitCode) { $errors.Add('WorkerProcessExitCodeUnavailable.') }
     elseif ([int]$CapturedProcess.ExitCode -ne 0) { $errors.Add('WorkerExitedNonzero:' + [string]$CapturedProcess.ExitCode) }
     if (-not $CapturedProcess.OutputComplete) { $errors.Add('WorkerOutputCaptureIncomplete:' + (@($CapturedProcess.ReaderErrors) -join ';')) }
+    if ($CapturedProcess.CleanupComplete -ne $true) { $errors.Add('WorkerCleanupIncomplete.') }
     if ($stdout.Truncated -or $stderr.Truncated) { $errors.Add('WorkerDiagnosticOutputTruncated.') }
 
     $fileNames = @($ExpectedFiles | ForEach-Object { [string]$_.Name })
@@ -758,6 +808,7 @@ function New-F2AclWorkerExecutionReport {
     $diagnostics = [ordered]@{
         Started=[bool]$CapturedProcess.Started;ProcessId=$CapturedProcess.ProcessId;State=$CapturedProcess.State;TimedOut=[bool]$CapturedProcess.TimedOut
         ExitCode=$CapturedProcess.ExitCode;ElapsedMilliseconds=$CapturedProcess.ElapsedMilliseconds;OutputComplete=[bool]$CapturedProcess.OutputComplete
+        CleanupComplete=[bool]$CapturedProcess.CleanupComplete
         StdoutBytes=$stdout.ByteCount;StdoutSha256=$stdout.Sha256;StdoutTruncated=$stdout.Truncated
         StderrBytes=$stderr.ByteCount;StderrSha256=$stderr.Sha256;StderrTruncated=$stderr.Truncated
         FatalError=$stderr.FatalError;Stages=@($stages);ReaderErrors=@($CapturedProcess.ReaderErrors)

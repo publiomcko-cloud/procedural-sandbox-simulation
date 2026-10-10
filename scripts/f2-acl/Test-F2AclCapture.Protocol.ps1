@@ -5,6 +5,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1') -Force
 
+class F2AclThrowingDisposeStream {
+    [void] Dispose() { throw 'SyntheticDisposeFailure.' }
+}
+
 $pinManifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'F2_ACL_SOURCE_PINS.json') -Raw | ConvertFrom-Json
 $launcherDigest = Get-F2AclSha256 ([IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'Invoke-F2AclReadOnlyCapture.ps1')))
 $moduleDigest = Get-F2AclSha256 ([IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1')))
@@ -123,7 +127,8 @@ Assert-F2Acl (([regex]::Matches($launcherSource,'-Verb RunAs')).Count -eq 1 -and
 Assert-F2Acl (-not $launcherSource.Contains('CurrentUserOnly') -and -not $launcherSource.Contains('NamedPipe') -and $coordinatorSource.Contains('New-F2AclCoordinatorMailboxDirectory') -and $coordinatorSource.Contains('Write-F2AclAtomicCreateNewFile') -and -not $coordinatorSource.Contains('-Verb RunAs') -and -not $launcherSource.Contains('New-F2AclRestrictedDirectory')) 'UAC boundary uses admin-created mailbox and no named-pipe IPC'
 Assert-F2Acl ($coordinatorSource.Contains("Schema='f2-acl-elevated-coordinator-v1'") -and $coordinatorSource.Contains('WorkerExitCode=') -and $coordinatorSource.Contains('ExpectedProcessExitCode=')) 'production coordinator status emits the schema and fields required by the parent validator'
 Assert-F2Acl ($coordinatorSource.Contains('Invoke-F2AclCapturedPowerShell') -and -not $coordinatorSource.Contains('Start-Process -FilePath $powerShellExe') -and $launcherSource.Contains('WorkerExpectedFiles') -and $launcherSource.IndexOf('WorkerExpectedFiles') -lt $launcherSource.IndexOf('Read-F2AclBoundedFile -Path $framePath')) 'production coordinator captures worker diagnostics and inventories files before frame parsing'
-Assert-F2Acl ($protocolSource.Contains('RedirectStandardOutput = $true') -and $protocolSource.Contains('RedirectStandardError = $true') -and $protocolSource.Contains('MaxBytesPerStream') -and $protocolSource.Contains('WorkerOutputDrainTimeout.')) 'production process reader redirects both streams with bounded retention and drain timeout'
+Assert-F2Acl ($protocolSource.Contains('RedirectStandardOutput = $true') -and $protocolSource.Contains('RedirectStandardError = $true') -and $protocolSource.Contains('MaxBytesPerStream') -and $protocolSource.Contains('WorkerExecutionOrOutputDrainDeadlineExceeded.') -and $protocolSource.Contains('Diagnostics.Stopwatch')) 'production process reader redirects both streams with bounded retention and one monotonic execution/drain deadline'
+Assert-F2Acl (-not [regex]::IsMatch($protocolSource,'(?im)\.WaitForExit\(\s*\)') -and $launcherSource.Contains('$outerWaitSeconds = $WaitSeconds + 60') -and $launcherSource.Contains('StillRunningAtTimeout') -and $launcherSource.Contains('ConvertTo-Json -Depth 12 -Compress')) 'coordinator cleanup has no unbounded process wait and launcher has bounded actionable timeout status'
 $workerBranchStart = $launcherSource.IndexOf('if ($CollectorChild)',[StringComparison]::Ordinal)
 $workerBranchEnd = $launcherSource.IndexOf('if ($ElevatedCoordinator)',[StringComparison]::Ordinal)
 $workerBranchSource = if($workerBranchStart -ge 0 -and $workerBranchEnd -gt $workerBranchStart){$launcherSource.Substring($workerBranchStart,$workerBranchEnd-$workerBranchStart)}else{''}
@@ -175,7 +180,7 @@ $parentWriteRules = @([pscustomobject]@{IdentityReference=[Security.Principal.Se
 $parentUnexpectedWrite = @(Get-F2AclUnexpectedWritableSids -Rules $parentWriteRules -OwnerSid 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
 Assert-F2Acl ($parentUnexpectedWrite.Count -eq 1 -and $parentUnexpectedWrite[0] -eq $requesterSidFixture) 'requester delete-child permission on the protected parent is rejected'
 $validWorkerStages = @('WorkerLaunched','EntrypointReached','InvocationStarted','SourceVerified','MailboxVerified','CollectorEntered','FramePublished','StreamPublished','InvocationReturned','WorkerExited')
-$validWorkerDiagnostics = [ordered]@{Started=$true;ProcessId=1001;State='Exited';TimedOut=$false;ExitCode=0;ElapsedMilliseconds=10;OutputComplete=$true;StdoutBytes=128;StdoutSha256=('c'*64);StdoutTruncated=$false;StderrBytes=0;StderrSha256=('d'*64);StderrTruncated=$false;FatalError=$null;Stages=$validWorkerStages;ReaderErrors=@()}
+$validWorkerDiagnostics = [ordered]@{Started=$true;ProcessId=1001;State='Exited';TimedOut=$false;ExitCode=0;ElapsedMilliseconds=10;OutputComplete=$true;CleanupComplete=$true;StdoutBytes=128;StdoutSha256=('c'*64);StdoutTruncated=$false;StderrBytes=0;StderrSha256=('d'*64);StderrTruncated=$false;FatalError=$null;Stages=$validWorkerStages;ReaderErrors=@()}
 $validWorkerExpectedFiles = @([pscustomobject]@{Name='acl-baseline.frame';Exists=$true;Length=64},[pscustomobject]@{Name='powershell-streams.json';Exists=$true;Length=64})
 $validWorkerDiagnosticFiles = @([pscustomobject]@{Name='worker-stdout.json';Bytes=200;Sha256=('e'*64)},[pscustomobject]@{Name='worker-stderr.json';Bytes=100;Sha256=('f'*64)})
 $validCoordinatorStatus = [pscustomobject]@{Schema='f2-acl-elevated-coordinator-v1';Outcome='COMPLETE_READ_ONLY_ACL_BASELINE';RequesterSid=$requesterSidFixture;CoordinatorSid=$otherAdminSidFixture;AdministratorRoleVerified=$true;WorkerExitCode=0;WorkerProcessId=1001;WorkerDiagnostics=$validWorkerDiagnostics;WorkerExpectedFiles=$validWorkerExpectedFiles;WorkerDiagnosticFiles=$validWorkerDiagnosticFiles;WorkerDiagnosticFallback=$null;ExpectedProcessExitCode=0;PayloadSha256=('a'*64);StreamsSha256=('b'*64);Errors=@()}
@@ -475,6 +480,24 @@ function Get-F2AclSyntheticArtifactManifest {
         [pscustomobject]@{Name='powershell-streams.json';Exists=[IO.File]::Exists((Join-Path $Directory 'powershell-streams.json'))}
     )
 }
+function Invoke-F2AclOpenPipeWorker {
+    param([ValidateSet('Stdout','Stderr')][string]$HeldStream,[string]$RedirectionPath)
+    $inner = 'Start-Sleep -Seconds 3'
+    $innerEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($inner))
+    $escapedExe = $powerShellExe.Replace("'","''")
+    $escapedRedirect = $RedirectionPath.Replace("'","''")
+    $redirectSwitch = if ($HeldStream -eq 'Stdout') { '-RedirectStandardError' } else { '-RedirectStandardOutput' }
+    $pidStream = if ($HeldStream -eq 'Stdout') { 'Error' } else { 'Out' }
+    $command = "`$holder = Start-Process -FilePath '$escapedExe' -ArgumentList @('-NoProfile','-NonInteractive','-EncodedCommand','$innerEncoded') -NoNewWindow -PassThru $redirectSwitch '$escapedRedirect'; [Console]::$pidStream.WriteLine('HOLDER_PID:' + `$holder.Id); exit 0"
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    $capture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText $command -TimeoutSeconds 1 -PollMilliseconds 10
+    $timer.Stop()
+    $oppositeBytes = if ($HeldStream -eq 'Stdout') { $capture.StderrBytes } else { $capture.StdoutBytes }
+    $oppositeText = [Text.Encoding]::UTF8.GetString($oppositeBytes)
+    $holderMatch = [regex]::Match($oppositeText,'HOLDER_PID:(\d+)')
+    $holderId = if ($holderMatch.Success) { [int]$holderMatch.Groups[1].Value } else { $null }
+    return [pscustomobject]@{Capture=$capture;ElapsedMilliseconds=$timer.ElapsedMilliseconds;HolderId=$holderId}
+}
 try {
     Write-Output 'Stage=production_encoded_worker_success'
     $successDir = Join-Path $workerTestRoot 'complete'
@@ -536,6 +559,36 @@ try {
     $largeCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText "[Console]::Out.Write('x' * 50000); exit 0" -TimeoutSeconds 10 -MaxBytesPerStream 1024
     $timeoutReport = New-F2AclWorkerExecutionReport -CapturedProcess $timeoutCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest (Join-Path $workerTestRoot 'timeout'))
     Assert-F2Acl ($parseCapture.ExitCode -ne 0 -and $parseCapture.StderrBytes.Length -gt 0 -and $parseReport.Errors -match '^WorkerExitedNonzero:' -and $badScriptCapture.ExitCode -eq 3 -and -not [string]::IsNullOrWhiteSpace($badScriptFatal) -and -not $startFailure.Started -and $null -ne $startFailure.StartError -and $timeoutCapture.TimedOut -and $timeoutCapture.State -eq 'TimedOutTerminated' -and $timeoutReport.Errors -contains 'WorkerTimeout.' -and $largeCapture.StdoutTruncated -and $largeCapture.StdoutBytes.Length -eq 1024 -and $largeCapture.OutputComplete) 'encoded and invoked-script parser/start/timeout and oversized output failures are independently bounded and observable'
+
+    Write-Output 'Stage=absolute_worker_and_pipe_deadline'
+    $openStdout = Invoke-F2AclOpenPipeWorker -HeldStream Stdout -RedirectionPath (Join-Path $workerTestRoot 'stderr-redirect.txt')
+    $openStdoutReport = New-F2AclWorkerExecutionReport -CapturedProcess $openStdout.Capture -ExpectedFiles @()
+    $openStderr = Invoke-F2AclOpenPipeWorker -HeldStream Stderr -RedirectionPath (Join-Path $workerTestRoot 'stdout-redirect.txt')
+    $openStderrReport = New-F2AclWorkerExecutionReport -CapturedProcess $openStderr.Capture -ExpectedFiles @()
+    foreach ($holderId in @($openStdout.HolderId,$openStderr.HolderId)) {
+        if ($null -ne $holderId) { try { Stop-Process -Id $holderId -Force -ErrorAction SilentlyContinue } catch { } }
+    }
+    $openPipeBounded = $openStdout.ElapsedMilliseconds -lt 5000 -and $openStderr.ElapsedMilliseconds -lt 5000
+    Assert-F2Acl ($openStdout.Capture.Started -and $openStdout.Capture.ExitCode -eq 0 -and $openStdout.Capture.TimedOut -and $openStdout.Capture.State -eq 'TimedOutAfterWorkerExit' -and -not $openStdout.Capture.OutputComplete -and $openStdoutReport.Errors -contains 'WorkerTimeout.' -and $openPipeBounded) 'worker exit with inherited stdout writer is bounded by the absolute deadline and remains incomplete'
+    Assert-F2Acl ($openStderr.Capture.Started -and $openStderr.Capture.ExitCode -eq 0 -and $openStderr.Capture.TimedOut -and $openStderr.Capture.State -eq 'TimedOutAfterWorkerExit' -and -not $openStderr.Capture.OutputComplete -and $openStderrReport.Errors -contains 'WorkerTimeout.' -and $openPipeBounded) 'worker exit with inherited stderr writer is bounded by the absolute deadline and remains incomplete'
+    $openPipeStatus = $validCoordinatorStatus.PSObject.Copy()
+    $openPipeStatus.WorkerExitCode=0; $openPipeStatus.WorkerProcessId=$openStdout.Capture.ProcessId; $openPipeStatus.WorkerDiagnostics=$openStdoutReport.Diagnostics
+    Assert-F2Acl (-not (Test-F2AclCoordinatorStatus -Status $openPipeStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture).Pass) 'zero worker exit with an incomplete redirected stream is rejected by final completion validator'
+
+    $disposeState = [pscustomobject]@{Stream=[F2AclThrowingDisposeStream]::new();Closed=$false;Name='Stdout'}
+    $disposeErrors = & (Get-Module F2AclCapture.Protocol) { param($state) Close-F2AclCapturedStreamState -State $state } $disposeState
+    $cleanupFailureStatus = $validCoordinatorStatus.PSObject.Copy()
+    $cleanupFailureDiagnostics = [ordered]@{}; foreach ($key in $validWorkerDiagnostics.Keys) { $cleanupFailureDiagnostics[$key]=$validWorkerDiagnostics[$key] }
+    $cleanupFailureDiagnostics.CleanupComplete=$false
+    $cleanupFailureDiagnostics.ReaderErrors=@('StdoutStreamDispose:SyntheticDisposeFailure.')
+    $cleanupFailureStatus.WorkerDiagnostics=$cleanupFailureDiagnostics
+    $disposeErrorText = @($disposeErrors) -join ';'
+    Assert-F2Acl ($disposeErrorText.Contains('StdoutStreamDispose:')) 'stream disposal exceptions are captured as explicit reader cleanup errors'
+    Assert-F2Acl (-not (Test-F2AclCoordinatorStatus -Status $cleanupFailureStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture).Pass) 'cleanup failure cannot satisfy complete coordinator status'
+
+    $incompleteDiagnosticCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText 'while ($true) { [Console]::Out.Write("x"); Start-Sleep -Milliseconds 5 }' -TimeoutSeconds 1 -MaxBytesPerStream 1024
+    $incompleteDiagnosticReport = New-F2AclWorkerExecutionReport -CapturedProcess $incompleteDiagnosticCapture -ExpectedFiles @()
+    Assert-F2Acl ($incompleteDiagnosticCapture.TimedOut -and -not $incompleteDiagnosticCapture.OutputComplete -and $incompleteDiagnosticCapture.StdoutBytes.Length -gt 0 -and $incompleteDiagnosticCapture.StdoutBytes.Length -le 1024 -and -not $incompleteDiagnosticReport.Pass -and $incompleteDiagnosticReport.Errors -contains 'WorkerTimeout.') 'output-producing hung worker is terminated within the deadline and cannot publish complete diagnostics'
 }
 finally {
     foreach ($item in @(Get-ChildItem -LiteralPath $workerTestRoot -Force -Recurse | Sort-Object FullName -Descending)) {
@@ -693,5 +746,5 @@ if ($script:Failures.Count -gt 0) {
     $script:Failures | ForEach-Object { [Console]::Error.WriteLine('FAIL=' + $_) }
     exit 1
 }
-Write-Output 'Cases=source_pins,uac_coordinator_same_and_different_admin_identity_policy,filtered_admin_rejection,requester_read_only_mailbox_acl_and_owner,requester_write_delete_dac_tamper_rejection,observed_programdata_sddl_0x116_acceptance,delete_child_delete_write_dac_write_owner_generic_write_generic_all_rejection,dangerous_inherited_parent_grant_rejection,protected_parent_required,unapproved_broad_create_rights_rejection,atomic_precreated_mailbox_collision,mailbox_junction_rejection,coordinator_status_exit_binding,no_cross_token_named_pipe_production,bounded_file_mailbox_same_token_worker_integration,mailbox_missing_duplicate_oversized,kingston_storage_valid_wrong_serial_wrong_model_ambiguous_missing_field_transport_mapping,post_collection_vm_identity_state_path_nic_storage,unknown_final_state_incomplete,complete,argument_quoting,frame_roundtrip,bounded_eof_probe,standard_ace,callback_ace_rejection,object_ace_rejection,unknown_ace_flag_rejection,ancestor_junction_rejection,oversized_writer,oversized_reader,corrupt,partial_frame,stalled_partial_header,missing,duplicate,malformed_json,missing_envelope,missing_record_field,child_exit,sha256,partial_record,empty_preflight_failure,stdout_stderr,timeout,restricted_evidence_directory,exact_acl_principals,read_only_parent_ace,write_parent_ace,write_attributes_parent_ace,bounded_stream_accounting,oversized_stream_rejection'
+Write-Output 'Cases=source_pins,uac_coordinator_same_and_different_admin_identity_policy,filtered_admin_rejection,requester_read_only_mailbox_acl_and_owner,requester_write_delete_dac_tamper_rejection,observed_programdata_sddl_0x116_acceptance,delete_child_delete_write_dac_write_owner_generic_write_generic_all_rejection,dangerous_inherited_parent_grant_rejection,protected_parent_required,unapproved_broad_create_rights_rejection,atomic_precreated_mailbox_collision,mailbox_junction_rejection,coordinator_status_exit_binding,no_cross_token_named_pipe_production,bounded_file_mailbox_same_token_worker_integration,mailbox_missing_duplicate_oversized,kingston_storage_valid_wrong_serial_wrong_model_ambiguous_missing_field_transport_mapping,post_collection_vm_identity_state_path_nic_storage,unknown_final_state_incomplete,complete,argument_quoting,frame_roundtrip,bounded_eof_probe,standard_ace,callback_ace_rejection,object_ace_rejection,unknown_ace_flag_rejection,ancestor_junction_rejection,oversized_writer,oversized_reader,corrupt,partial_frame,stalled_partial_header,missing,duplicate,malformed_json,missing_envelope,missing_record_field,child_exit,sha256,partial_record,empty_preflight_failure,stdout_stderr,timeout,absolute_monotonic_deadline,exited_worker_stdout_pipe_hold,exited_worker_stderr_pipe_hold,output_producing_hang,reader_disposal_failure,cleanup_failure_never_complete,restricted_evidence_directory,exact_acl_principals,read_only_parent_ace,write_parent_ace,write_attributes_parent_ace,bounded_stream_accounting,oversized_stream_rejection'
 [Environment]::Exit(0)

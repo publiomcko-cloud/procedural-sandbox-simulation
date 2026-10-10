@@ -664,7 +664,7 @@ try {
     }
     $summary.CoordinatorProcessId = $coordinator.Id
     $summary.CoordinatorProcessState = 'Running'
-    $outerWaitSeconds = [Math]::Min(3600, $WaitSeconds + 60)
+    $outerWaitSeconds = $WaitSeconds + 60
     $processExited = $coordinator.WaitForExit([int]($outerWaitSeconds * 1000))
     if (-not $processExited) {
         $summary.CoordinatorProcessState = 'StillRunningAtTimeout'
