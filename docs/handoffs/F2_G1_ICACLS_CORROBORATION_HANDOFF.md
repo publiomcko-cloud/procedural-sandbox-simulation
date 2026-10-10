@@ -5,7 +5,7 @@ Ticket / acceptance criteria: Issue #48, finding `6101582852`; implement and sou
 Repository / remote: `publiomcko-cloud/procedural-sandbox-simulation`
 Worktree / branch: `C:\Dev\f2-g1-icacls-corroboration` / `security/f2-icacls-corroboration-issue48`
 Base SHA: `a62773f0553dff4a05055b18fa10834f7488ae55`
-Candidate SHA: fill after commit
+Candidate SHA: `083241bb6cca562a7729f3ec33affa57f779f855` (source implementation commit; this handoff records that immutable source snapshot)
 Parent SHA: `a62773f0553dff4a05055b18fa10834f7488ae55`
 Changed paths: `.gitattributes`; `.github/workflows/f2-acl-source-only.yml`; `docs/handoffs/F2_G1_ICACLS_CORROBORATION_HANDOFF.md`; `scripts/f2-acl/F2AclIcacls.Corroboration.psm1`; `scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json`; `scripts/f2-acl/Test-F2AclIcacls.Corroboration.ps1`.
 
