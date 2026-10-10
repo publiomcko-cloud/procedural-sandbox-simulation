@@ -120,6 +120,25 @@ Assert-F2Acl ($pinManifest.Schema -eq 'f2-acl-source-pins-v1' -and $pinManifest.
 Assert-F2Acl ($pinManifest.ModuleSha256 -ceq $moduleDigest) 'committed source pin matches the protocol module hash'
 $launcherSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Invoke-F2AclReadOnlyCapture.ps1'))
 $protocolSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1'))
+$protocolModule = Get-Module | Where-Object { $_.Path -eq (Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1') } | Select-Object -First 1
+$moduleFunctionNames = @($protocolModule.ExportedCommands.Keys)
+$launcherTokens = $null
+$launcherParseErrors = $null
+$launcherAst = [Management.Automation.Language.Parser]::ParseInput($launcherSource,[ref]$launcherTokens,[ref]$launcherParseErrors)
+$launcherLocalFunctions = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+foreach ($functionAst in $launcherAst.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst]},$true)) {
+    [void]$launcherLocalFunctions.Add($functionAst.Name)
+}
+$moduleCalls = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+foreach ($commandAst in $launcherAst.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst]},$true)) {
+    $commandName = $commandAst.GetCommandName()
+    if ($commandName -match '^(Get|Test|Assert|ConvertTo|ConvertFrom|Write|Read|New|Invoke|Wait|Add|Save)-F2Acl' -and -not $launcherLocalFunctions.Contains($commandName)) {
+        [void]$moduleCalls.Add($commandName)
+    }
+}
+$missingModuleCalls = @($moduleCalls | Where-Object { $_ -notin $moduleFunctionNames })
+Assert-F2Acl ($null -ne $protocolModule -and (Get-Command Get-F2AclJsonBytes -ErrorAction SilentlyContinue) -and $missingModuleCalls.Count -eq 0) ('all production launcher module dependencies are exported and imported, including: ' + ($missingModuleCalls -join ','))
+Assert-F2Acl ((Get-Command Get-F2AclJsonBytes -ErrorAction SilentlyContinue).ModuleName -eq $protocolModule.Name) 'Get-F2AclJsonBytes is available as an imported module function'
 $coordinatorStart = $launcherSource.IndexOf('function Invoke-F2AclElevatedCoordinator', [StringComparison]::Ordinal)
 $coordinatorEnd = if ($coordinatorStart -ge 0) { $launcherSource.IndexOf('function Test-F2AclSavedEvidencePackage', $coordinatorStart, [StringComparison]::Ordinal) } else { -1 }
 $coordinatorSource = if ($coordinatorStart -ge 0 -and $coordinatorEnd -gt $coordinatorStart) { $launcherSource.Substring($coordinatorStart,$coordinatorEnd-$coordinatorStart) } else { '' }
@@ -127,6 +146,7 @@ Assert-F2Acl (([regex]::Matches($launcherSource,'-Verb RunAs')).Count -eq 1 -and
 Assert-F2Acl (-not $launcherSource.Contains('CurrentUserOnly') -and -not $launcherSource.Contains('NamedPipe') -and $coordinatorSource.Contains('New-F2AclCoordinatorMailboxDirectory') -and $coordinatorSource.Contains('Write-F2AclAtomicCreateNewFile') -and -not $coordinatorSource.Contains('-Verb RunAs') -and -not $launcherSource.Contains('New-F2AclRestrictedDirectory')) 'UAC boundary uses admin-created mailbox and no named-pipe IPC'
 Assert-F2Acl ($coordinatorSource.Contains("Schema='f2-acl-elevated-coordinator-v1'") -and $coordinatorSource.Contains('WorkerExitCode=') -and $coordinatorSource.Contains('ExpectedProcessExitCode=')) 'production coordinator status emits the schema and fields required by the parent validator'
 Assert-F2Acl ($coordinatorSource.Contains('Invoke-F2AclCapturedPowerShell') -and -not $coordinatorSource.Contains('Start-Process -FilePath $powerShellExe') -and $launcherSource.Contains('WorkerExpectedFiles') -and $launcherSource.IndexOf('WorkerExpectedFiles') -lt $launcherSource.IndexOf('Read-F2AclBoundedFile -Path $framePath')) 'production coordinator captures worker diagnostics and inventories files before frame parsing'
+Assert-F2Acl ($coordinatorSource.Contains('$stdoutBytes = Get-F2AclJsonBytes $executionReport.Stdout') -and $coordinatorSource.Contains('$stderrBytes = Get-F2AclJsonBytes $executionReport.Stderr') -and $coordinatorSource.Contains("'worker-stdout.json'") -and $coordinatorSource.Contains("'worker-stderr.json'") -and $coordinatorSource.Contains('Write-F2AclAtomicCreateNewFile')) 'production coordinator serializes and create-new publishes both worker diagnostic documents through imported module APIs'
 Assert-F2Acl ($protocolSource.Contains('RedirectStandardOutput = $true') -and $protocolSource.Contains('RedirectStandardError = $true') -and $protocolSource.Contains('MaxBytesPerStream') -and $protocolSource.Contains('WorkerExecutionOrOutputDrainDeadlineExceeded.') -and $protocolSource.Contains('Diagnostics.Stopwatch')) 'production process reader redirects both streams with bounded retention and one monotonic execution/drain deadline'
 Assert-F2Acl (-not [regex]::IsMatch($protocolSource,'(?im)\.WaitForExit\(\s*\)') -and $launcherSource.Contains('$outerWaitSeconds = $WaitSeconds + 60') -and $launcherSource.Contains('StillRunningAtTimeout') -and $launcherSource.Contains('ConvertTo-Json -Depth 12 -Compress')) 'coordinator cleanup has no unbounded process wait and launcher has bounded actionable timeout status'
 $workerBranchStart = $launcherSource.IndexOf('if ($CollectorChild)',[StringComparison]::Ordinal)
@@ -499,6 +519,70 @@ function Invoke-F2AclOpenPipeWorker {
     return [pscustomobject]@{Capture=$capture;ElapsedMilliseconds=$timer.ElapsedMilliseconds;HolderId=$holderId}
 }
 try {
+    Write-Output 'Stage=fresh_process_imported_module_serialization_frame_and_worker_diagnostics'
+    $boundaryRoot = Join-Path $workerTestRoot 'module-boundary'
+    [void][IO.Directory]::CreateDirectory($boundaryRoot)
+    $boundaryScriptPath = Join-Path $boundaryRoot 'exercise-imported-module.ps1'
+    $boundaryResultPath = Join-Path $boundaryRoot 'result.json'
+    $boundaryScript = @'
+param([string]$ModulePath,[string]$OutputRoot,[string]$ResultPath)
+$ErrorActionPreference = 'Stop'
+Import-Module -Name $ModulePath -Force -ErrorAction Stop
+if (-not (Get-Command Get-F2AclJsonBytes -ErrorAction Stop)) { throw 'ImportedJsonSerializerUnavailable.' }
+$unicodeValue = 'snowman-' + [char]0x2603
+$serializedBytes = Get-F2AclJsonBytes -Value ([ordered]@{kind='module-boundary';value=$unicodeValue;sequence=31})
+$serializedPath = Join-Path $OutputRoot 'serialized.json'
+[void](Write-F2AclAtomicCreateNewFile -Path $serializedPath -Bytes $serializedBytes -MaxBytes 4096)
+$serialized = [Text.Encoding]::UTF8.GetString((Read-F2AclBoundedFile -Path $serializedPath -MaxBytes 4096)) | ConvertFrom-Json -ErrorAction Stop
+if ($serialized.kind -cne 'module-boundary' -or $serialized.value -cne $unicodeValue -or $serialized.sequence -ne 31) { throw 'ImportedJsonSerializationMismatch.' }
+$framePayload = Get-F2AclJsonBytes -Value ([ordered]@{kind='synthetic-frame';sequence=32})
+$frameStream = [IO.MemoryStream]::new()
+try {
+    Write-F2AclFrame -Stream $frameStream -Payload $framePayload
+    $frameBytes = $frameStream.ToArray()
+    [void](Write-F2AclAtomicCreateNewFile -Path (Join-Path $OutputRoot 'acl-baseline.frame') -Bytes $frameBytes -MaxBytes 8192)
+    $frameStream.Position = 0
+    $frame = Read-F2AclFrame -Stream $frameStream -TimeoutSeconds 2
+    if ((Get-F2AclSha256 -Bytes $frame.Payload) -cne $frame.PayloadSha256) { throw 'ImportedFrameHashMismatch.' }
+}
+finally { $frameStream.Dispose() }
+$streamDocument = [ordered]@{Schema='f2-acl-powershell-streams-v1';Complete=$true;ExitCode=0;Records=@()}
+$streamBytes = Get-F2AclJsonBytes -Value $streamDocument
+[void](Write-F2AclAtomicCreateNewFile -Path (Join-Path $OutputRoot 'powershell-streams.json') -Bytes $streamBytes -MaxBytes 4096)
+$stdoutText = @('F2ACL_STAGE:EntrypointReached','F2ACL_STAGE:InvocationStarted','F2ACL_STAGE:SourceVerified','F2ACL_STAGE:MailboxVerified','F2ACL_STAGE:CollectorEntered','F2ACL_STAGE:FramePublished','F2ACL_STAGE:StreamPublished','F2ACL_STAGE:InvocationReturned') -join [Environment]::NewLine
+$captured = [pscustomobject]@{Started=$true;ProcessId=$PID;State='Exited';TimedOut=$false;ExitCode=0;ElapsedMilliseconds=1;OutputComplete=$true;CleanupComplete=$true;StartError=$null;StdoutBytes=[Text.Encoding]::UTF8.GetBytes($stdoutText);StderrBytes=[byte[]]@();StdoutTruncated=$false;StderrTruncated=$false;ReaderErrors=@()}
+$expectedFiles = @(
+    [pscustomobject]@{Name='acl-baseline.frame';Exists=[IO.File]::Exists((Join-Path $OutputRoot 'acl-baseline.frame'));Length=(Get-Item (Join-Path $OutputRoot 'acl-baseline.frame')).Length},
+    [pscustomobject]@{Name='powershell-streams.json';Exists=[IO.File]::Exists((Join-Path $OutputRoot 'powershell-streams.json'));Length=(Get-Item (Join-Path $OutputRoot 'powershell-streams.json')).Length}
+)
+$report = New-F2AclWorkerExecutionReport -CapturedProcess $captured -ExpectedFiles $expectedFiles
+if (-not $report.Pass) { throw ('SyntheticWorkerReportRejected:' + ($report.Errors -join ';')) }
+# These are the same imported serialization and create-new publication operations
+# used by Invoke-F2AclElevatedCoordinator for worker-stdout.json/stderr.json.
+$stdoutBytes = Get-F2AclJsonBytes -Value $report.Stdout
+$stderrBytes = Get-F2AclJsonBytes -Value $report.Stderr
+[void](Write-F2AclAtomicCreateNewFile -Path (Join-Path $OutputRoot 'worker-stdout.json') -Bytes $stdoutBytes -MaxBytes 65536)
+[void](Write-F2AclAtomicCreateNewFile -Path (Join-Path $OutputRoot 'worker-stderr.json') -Bytes $stderrBytes -MaxBytes 65536)
+$result = [ordered]@{Serialized=$serialized;FramePayloadSha256=$frame.PayloadSha256;ReportPass=$report.Pass;Stdout=$report.Stdout;Stderr=$report.Stderr}
+[void](Write-F2AclAtomicCreateNewFile -Path $ResultPath -Bytes (Get-F2AclJsonBytes -Value $result) -MaxBytes 16384)
+'@
+    [IO.File]::WriteAllText($boundaryScriptPath,$boundaryScript,[Text.UTF8Encoding]::new($false))
+    $boundaryInvocation = '$(& ' + (ConvertTo-F2AclWindowsArgument $boundaryScriptPath) + ' -ModulePath ' + (ConvertTo-F2AclWindowsArgument (Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1')) + ' -OutputRoot ' + (ConvertTo-F2AclWindowsArgument $boundaryRoot) + ' -ResultPath ' + (ConvertTo-F2AclWindowsArgument $boundaryResultPath) + '; 0)'
+    $boundaryCommand = New-F2AclWorkerBootstrapCommand -Invocation $boundaryInvocation
+    $boundaryCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText $boundaryCommand -TimeoutSeconds 15
+    if (-not ($boundaryCapture.Started -and $boundaryCapture.ExitCode -eq 0 -and $boundaryCapture.OutputComplete -and [IO.File]::Exists($boundaryResultPath))) {
+        Write-Output ('ModuleBoundaryExit=' + [string]$boundaryCapture.ExitCode + ';State=' + $boundaryCapture.State + ';Stdout=' + [Text.Encoding]::UTF8.GetString($boundaryCapture.StdoutBytes) + ';Stderr=' + [Text.Encoding]::UTF8.GetString($boundaryCapture.StderrBytes))
+    }
+    Assert-F2Acl ($boundaryCapture.Started -and $boundaryCapture.ExitCode -eq 0 -and $boundaryCapture.OutputComplete -and [IO.File]::Exists($boundaryResultPath)) 'fresh Windows PowerShell process imports and invokes the actual protocol module without host or UAC collection'
+    if ([IO.File]::Exists($boundaryResultPath)) {
+        $boundaryResult = [Text.Encoding]::UTF8.GetString((Read-F2AclBoundedFile -Path $boundaryResultPath -MaxBytes 16384)) | ConvertFrom-Json -ErrorAction Stop
+        $publishedStdout = [Text.Encoding]::UTF8.GetString((Read-F2AclBoundedFile -Path (Join-Path $boundaryRoot 'worker-stdout.json') -MaxBytes 65536)) | ConvertFrom-Json -ErrorAction Stop
+        $publishedStderr = [Text.Encoding]::UTF8.GetString((Read-F2AclBoundedFile -Path (Join-Path $boundaryRoot 'worker-stderr.json') -MaxBytes 65536)) | ConvertFrom-Json -ErrorAction Stop
+        $publishedFrameStream = [IO.MemoryStream]::new((Read-F2AclBoundedFile -Path (Join-Path $boundaryRoot 'acl-baseline.frame') -MaxBytes 8192))
+        try { $publishedFrame = Read-F2AclFrame -Stream $publishedFrameStream -TimeoutSeconds 2 } finally { $publishedFrameStream.Dispose() }
+        Assert-F2Acl ($boundaryResult.ReportPass -eq $true -and $boundaryResult.Serialized.value -ceq ('snowman-' + [char]0x2603) -and $boundaryResult.FramePayloadSha256 -ceq $publishedFrame.PayloadSha256 -and $publishedStdout.Stream -ceq 'stdout' -and $publishedStdout.Stages.Count -eq 8 -and $publishedStderr.Stream -ceq 'stderr' -and $publishedStderr.ByteCount -eq 0) 'imported serializer, synthetic frame integrity and both worker diagnostic publications round-trip across the fresh-process module boundary'
+    }
+
     Write-Output 'Stage=production_encoded_worker_success'
     $successDir = Join-Path $workerTestRoot 'complete'
     $successCapture = Invoke-F2AclSyntheticWorker -Scenario Complete -Directory $successDir
