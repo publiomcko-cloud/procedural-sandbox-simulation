@@ -108,7 +108,7 @@ function Test-F2AclFixedTimeEqual {
 }
 
 function Test-F2AclHasProperties {
-    param([Parameter(Mandatory)]$Object, [Parameter(Mandatory)][string[]]$Names)
+    param([Parameter(Mandatory)][AllowNull()]$Object, [Parameter(Mandatory)][string[]]$Names)
     if ($null -eq $Object) { return $false }
     foreach ($name in $Names) {
         if ($Object -is [System.Collections.IDictionary]) {
@@ -191,6 +191,20 @@ function Test-F2AclVmStorageSnapshot {
     $pathsPass = ($canonicalConfiguration -ceq (ConvertTo-F2AclCanonicalPath $ExpectedConfiguration) -and $canonicalCheckpoints -ceq (ConvertTo-F2AclCanonicalPath $ExpectedCheckpoints) -and $canonicalPaging -ceq (ConvertTo-F2AclCanonicalPath $ExpectedSmartPaging) -and $canonicalVhds.Count -eq $canonicalExpectedVhds.Count -and @((Compare-Object $canonicalVhds $canonicalExpectedVhds)).Count -eq 0)
     $nicPass = ($NicCount -eq 0)
     return [pscustomobject]@{Pass=($identityPass -and $pathsPass -and $nicPass);IdentityPass=$identityPass;PathsPass=$pathsPass;NicPass=$nicPass;ObservedState=$VmState;Configuration=$canonicalConfiguration;Checkpoints=$canonicalCheckpoints;SmartPaging=$canonicalPaging;VhdPaths=$canonicalVhds}
+}
+
+function Test-F2AclStorageObservationsEquivalent {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$Initial, [Parameter(Mandatory)]$Final)
+
+    $fields = @('Win32MatchCount','DiskMatchCount','PhysicalMatchCount','Win32Serial','DiskSerial','PhysicalSerial','Win32Model','DiskFriendlyName','DiskModel','BusType','DiskHealth','DiskOperationalStatus','PhysicalHealth','GPartitionCount','PartitionDiskNumber','DiskNumber','Win32Index','VolumeFileSystem','VolumeHealth')
+    if (-not (Test-F2AclHasProperties $Initial $fields) -or -not (Test-F2AclHasProperties $Final $fields)) { return $false }
+    foreach ($field in $fields) {
+        $left = if ($field -eq 'DiskOperationalStatus') { @($Initial.$field | ForEach-Object { [string]$_ } | Sort-Object) -join "`n" } else { [string]$Initial.$field }
+        $right = if ($field -eq 'DiskOperationalStatus') { @($Final.$field | ForEach-Object { [string]$_ } | Sort-Object) -join "`n" } else { [string]$Final.$field }
+        if ($left -cne $right) { return $false }
+    }
+    return $true
 }
 
 function Assert-F2AclSupportedAce {
@@ -331,6 +345,23 @@ function New-F2AclEvidenceDocument {
         RecordsSha256 = Get-F2AclSha256 (ConvertTo-F2AclUtf8Bytes $recordsManifest)
         Errors = @($Errors)
     }
+    $requiredCompletionGates = @('VmImmutableIdentityAndOff','KingstonSerialUniqueAcrossInterfaces','KingstonModelFieldsMatch','KingstonUSBTransport','KingstonDiskHealthAndOnline','GVolumeMapsToSerialSelectedDevice','ConfiguredStoragePathsExact','ZeroVirtualNetworkAdapters','ExactlyElevenUniqueKnownPaths','AllExpectedPathsExistWithoutReparsePoints','PostCollectionVmIdentityAndOff','PostCollectionStoragePathsUnchanged','PostCollectionZeroVirtualNetworkAdapters','PostCollectionKingstonStorageIdentityUnchanged','PostCollectionNoReparsePoints')
+    $gateMap = @{}
+    $metadataGates = if (Test-F2AclHasProperties $Metadata @('Gates')) { @($Metadata.Gates) } else { @() }
+    foreach ($gate in $metadataGates) {
+        if ((Test-F2AclHasProperties $gate @('Name','Pass')) -and -not $gateMap.ContainsKey([string]$gate.Name)) { $gateMap[[string]$gate.Name] = ($gate.Pass -eq $true) }
+        elseif (Test-F2AclHasProperties $gate @('Name')) { $gateMap[[string]$gate.Name] = $false }
+    }
+    $requiredGatesPass = $true
+    foreach ($gateName in $requiredCompletionGates) { if (-not $gateMap.ContainsKey($gateName) -or -not $gateMap[$gateName]) { $requiredGatesPass = $false } }
+    $post = if (Test-F2AclHasProperties $Metadata @('PostCollection')) { $Metadata.PostCollection } else { $null }
+    $postEvidencePass = $false
+    if ((Test-F2AclHasProperties $post @('VmId','VmName','VmState','Paths','Storage','StorageValidation')) -and (Test-F2AclHasProperties $post.Paths @('VmId','VmName','VmState','Configuration','Checkpoints','SmartPaging','VhdPaths','NicCount'))) {
+        $canonicalExpected = @($ExpectedPaths | ForEach-Object { ConvertTo-F2AclCanonicalPath $_ })
+        $postSnapshot = Test-F2AclVmStorageSnapshot -VmId ([string]$post.Paths.VmId) -VmName ([string]$post.Paths.VmName) -VmState ([string]$post.Paths.VmState) -ExpectedVmId $VmId -ExpectedVmName $VmName -ExpectedConfiguration $canonicalExpected[1] -ExpectedCheckpoints $canonicalExpected[0] -ExpectedSmartPaging $canonicalExpected[0] -ExpectedVhdPaths @($canonicalExpected[7],$canonicalExpected[8]) -Configuration ([string]$post.Paths.Configuration) -Checkpoints ([string]$post.Paths.Checkpoints) -SmartPaging ([string]$post.Paths.SmartPaging) -VhdPaths @($post.Paths.VhdPaths) -NicCount ([int]$post.Paths.NicCount)
+        $postDiskValidation = Test-F2AclKingstonStorageIdentity -Observation $post.Storage
+        $postEvidencePass = ([string]$post.VmId -ceq $VmId.ToLowerInvariant() -and [string]$post.VmName -ceq $VmName -and [string]$post.VmState -ceq 'Off' -and $postSnapshot.Pass -and $postDiskValidation.Pass -and (Test-F2AclStorageObservationsEquivalent -Initial $Metadata.Disk -Final $post.Storage) -and (Test-F2AclHasProperties $post.StorageValidation @('Pass')) -and $post.StorageValidation.Pass -eq $true)
+    }
     return [ordered]@{
         Schema = $script:F2AclSchema
         CaptureId = $CaptureId
@@ -338,7 +369,7 @@ function New-F2AclEvidenceDocument {
         VmId = $VmId.ToLowerInvariant()
         VmName = $VmName
         VmState = $VmState
-        Complete = (@($Errors).Count -eq 0 -and $VmState -ceq 'Off' -and $canonicalExpected.Count -eq 11 -and $recordRows.Count -eq 11 -and $distinct.Count -eq 11)
+        Complete = (@($Errors).Count -eq 0 -and $VmState -ceq 'Off' -and $canonicalExpected.Count -eq 11 -and $recordRows.Count -eq 11 -and $distinct.Count -eq 11 -and $requiredGatesPass -and $postEvidencePass)
         Manifest = $manifest
         Metadata = $Metadata
         Records = $recordRows
@@ -577,7 +608,7 @@ function Test-F2AclEvidenceDocument {
     if (-not (Test-F2AclHasProperties $doc $requiredTop)) { return [pscustomobject]@{ Pass=$false; Errors=@($errors)+@('RequiredTopLevelFieldMissing'); Document=$doc } }
     $requiredManifest = @('ExpectedCount','ExpectedPaths','RecordCount','UniquePathCount','AceCount','ErrorCount','ExpectedPathsSha256','RecordsSha256','Errors')
     if (-not (Test-F2AclHasProperties $doc.Manifest $requiredManifest)) { return [pscustomobject]@{ Pass=$false; Errors=@($errors)+@('RequiredManifestFieldMissing'); Document=$doc } }
-    if (-not (Test-F2AclHasProperties $doc.Metadata @('Gates','Disk'))) { return [pscustomobject]@{ Pass=$false; Errors=@($errors)+@('RequiredMetadataFieldMissing'); Document=$doc } }
+    if (-not (Test-F2AclHasProperties $doc.Metadata @('Gates','Disk','PostCollection'))) { return [pscustomobject]@{ Pass=$false; Errors=@($errors)+@('RequiredMetadataFieldMissing'); Document=$doc } }
     $requiredDiskFields = @('SerialMatched','Serial','Model','DriveLetter','FileSystem','BusType','Health','PhysicalHealth','VolumeHealth','DiskNumber','Win32Index','PartitionDisk','Win32MatchCount','DiskMatchCount','PhysicalMatchCount','Win32Serial','DiskSerial','PhysicalSerial','Win32Model','DiskFriendlyName','DiskModel','DiskHealth','DiskOperationalStatus','GPartitionCount','PartitionDiskNumber')
     if (-not (Test-F2AclHasProperties $doc.Metadata.Disk $requiredDiskFields)) { return [pscustomobject]@{ Pass=$false; Errors=@($errors)+@('StorageIdentityFieldsMissing'); Document=$doc } }
     if ($doc.Schema -ne $script:F2AclSchema) { $errors.Add('SchemaMismatch') }
@@ -586,13 +617,38 @@ function Test-F2AclEvidenceDocument {
     if (@($doc.Manifest.Errors).Count -ne 0 -or $doc.Manifest.ErrorCount -ne 0) { $errors.Add('CollectionErrorsPresent') }
     if ($null -eq $doc.Metadata -or @($doc.Metadata.Gates).Count -eq 0) { $errors.Add('PreflightGatesMissing') }
     else {
+        $gateNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
         foreach ($gate in @($doc.Metadata.Gates)) {
             if (-not (Test-F2AclHasProperties $gate @('Name','Pass','Detail'))) { $errors.Add('PreflightGateRecordIncomplete') }
-            elseif ($gate.Pass -ne $true) { $errors.Add('PreflightGateFailed: ' + [string]$gate.Name) }
+            else {
+                if (-not $gateNames.Add([string]$gate.Name)) { $errors.Add('DuplicateGateName: ' + [string]$gate.Name) }
+                if ($gate.Pass -ne $true) { $errors.Add('PreflightGateFailed: ' + [string]$gate.Name) }
+            }
         }
+        $requiredGates = @('VmImmutableIdentityAndOff','KingstonSerialUniqueAcrossInterfaces','KingstonModelFieldsMatch','KingstonUSBTransport','KingstonDiskHealthAndOnline','GVolumeMapsToSerialSelectedDevice','ConfiguredStoragePathsExact','ZeroVirtualNetworkAdapters','ExactlyElevenUniqueKnownPaths','AllExpectedPathsExistWithoutReparsePoints','PostCollectionVmIdentityAndOff','PostCollectionStoragePathsUnchanged','PostCollectionZeroVirtualNetworkAdapters','PostCollectionKingstonStorageIdentityUnchanged','PostCollectionNoReparsePoints')
+        foreach ($requiredGate in $requiredGates) { if (-not $gateNames.Contains($requiredGate)) { $errors.Add('RequiredGateMissing: ' + $requiredGate) } }
     }
     $storageValidation = Test-F2AclKingstonStorageIdentity -Observation $doc.Metadata.Disk
     if (-not $storageValidation.Pass -or $doc.Metadata.Disk.SerialMatched -ne $true -or $doc.Metadata.Disk.Serial -ne $ExpectedDiskSerial -or $doc.Metadata.Disk.Model -ne $ExpectedDiskModel -or $doc.Metadata.Disk.DriveLetter -ne 'G:' -or $doc.Metadata.Disk.FileSystem -ne 'NTFS' -or $doc.Metadata.Disk.BusType -ne 'USB' -or $doc.Metadata.Disk.Health -ne 'Healthy' -or $doc.Metadata.Disk.PhysicalHealth -ne 'Healthy' -or $doc.Metadata.Disk.VolumeHealth -ne 'Healthy') { $errors.Add('StorageIdentityIncomplete') }
+
+    $post = $doc.Metadata.PostCollection
+    $requiredPostFields = @('VmId','VmName','VmState','Paths','Storage','StorageValidation')
+    if (-not (Test-F2AclHasProperties $post $requiredPostFields)) { $errors.Add('PostCollectionEvidenceMissing') }
+    else {
+        if ([string]$post.VmId -cne $ExpectedVmId.ToLowerInvariant() -or [string]$post.VmName -cne $ExpectedVmName -or [string]$post.VmState -cne 'Off' -or [string]$doc.VmState -cne [string]$post.VmState) { $errors.Add('PostCollectionVmIdentityOrStateMismatch') }
+        $requiredPathFields = @('VmId','VmName','VmState','Configuration','Checkpoints','SmartPaging','VhdPaths','NicCount')
+        if (-not (Test-F2AclHasProperties $post.Paths $requiredPathFields)) { $errors.Add('PostCollectionPathsMissing') }
+        else {
+            $postPaths = $post.Paths
+            $expectedCanonical = @($ExpectedPaths | ForEach-Object { ConvertTo-F2AclCanonicalPath $_ })
+            $snapshot = Test-F2AclVmStorageSnapshot -VmId ([string]$postPaths.VmId) -VmName ([string]$postPaths.VmName) -VmState ([string]$postPaths.VmState) -ExpectedVmId $ExpectedVmId -ExpectedVmName $ExpectedVmName -ExpectedConfiguration $expectedCanonical[1] -ExpectedCheckpoints $expectedCanonical[0] -ExpectedSmartPaging $expectedCanonical[0] -ExpectedVhdPaths @($expectedCanonical[7],$expectedCanonical[8]) -Configuration ([string]$postPaths.Configuration) -Checkpoints ([string]$postPaths.Checkpoints) -SmartPaging ([string]$postPaths.SmartPaging) -VhdPaths @($postPaths.VhdPaths) -NicCount ([int]$postPaths.NicCount)
+            if (-not $snapshot.Pass) { $errors.Add('PostCollectionStorageSnapshotMismatch') }
+            if ([string]$postPaths.VmId -cne [string]$post.VmId -or [string]$postPaths.VmName -cne [string]$post.VmName -or [string]$postPaths.VmState -cne [string]$post.VmState) { $errors.Add('PostCollectionSnapshotIdentityMismatch') }
+        }
+        $postStorageValidation = Test-F2AclKingstonStorageIdentity -Observation $post.Storage
+        if (-not $postStorageValidation.Pass -or -not (Test-F2AclStorageObservationsEquivalent -Initial $doc.Metadata.Disk -Final $post.Storage)) { $errors.Add('PostCollectionStorageIdentityMismatch') }
+        if (-not (Test-F2AclHasProperties $post.StorageValidation @('Pass','SerialPass','ModelPass','TransportPass','HealthPass','MappingPass')) -or $post.StorageValidation.Pass -ne $true -or $post.StorageValidation.SerialPass -ne $postStorageValidation.SerialPass -or $post.StorageValidation.ModelPass -ne $postStorageValidation.ModelPass -or $post.StorageValidation.TransportPass -ne $postStorageValidation.TransportPass -or $post.StorageValidation.HealthPass -ne $postStorageValidation.HealthPass -or $post.StorageValidation.MappingPass -ne $postStorageValidation.MappingPass) { $errors.Add('PostCollectionStorageValidationMismatch') }
+    }
 
     $expected = @($ExpectedPaths | ForEach-Object { ConvertTo-F2AclCanonicalPath $_ })
     $actualRows = @($doc.Records)
@@ -656,4 +712,4 @@ function Test-F2AclEvidenceDocument {
     return [pscustomobject]@{ Pass = ($errors.Count -eq 0); Errors = @($errors); Document = $doc }
 }
 
-Export-ModuleMember -Function Get-F2AclSha256, ConvertTo-F2AclUtf8Bytes, ConvertTo-F2AclWindowsArgument, ConvertTo-F2AclCanonicalPath, Assert-F2AclSupportedAce, Test-F2AclKingstonStorageIdentity, Test-F2AclVmStorageSnapshot, New-F2AclEvidenceDocument, Write-F2AclFrame, Read-F2AclFrame, Wait-F2AclProcessExit, New-F2AclRestrictedDirectory, Test-F2AclRestrictedDirectory, Test-F2AclNoReparseAncestors, Test-F2AclEvidenceVolumeSeparateFromG, Get-F2AclUnexpectedWritableSids, Add-F2AclBoundedStreamRecord, Test-F2AclEvidenceDocument
+Export-ModuleMember -Function Get-F2AclSha256, ConvertTo-F2AclUtf8Bytes, ConvertTo-F2AclWindowsArgument, ConvertTo-F2AclCanonicalPath, Assert-F2AclSupportedAce, Test-F2AclKingstonStorageIdentity, Test-F2AclStorageObservationsEquivalent, Test-F2AclVmStorageSnapshot, New-F2AclEvidenceDocument, Write-F2AclFrame, Read-F2AclFrame, Wait-F2AclProcessExit, New-F2AclRestrictedDirectory, Test-F2AclRestrictedDirectory, Test-F2AclNoReparseAncestors, Test-F2AclEvidenceVolumeSeparateFromG, Get-F2AclUnexpectedWritableSids, Add-F2AclBoundedStreamRecord, Test-F2AclEvidenceDocument

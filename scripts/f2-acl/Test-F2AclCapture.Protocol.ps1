@@ -69,9 +69,15 @@ function New-F2AclFixtureDocument {
     $disk = [ordered]@{SerialMatched=$true;Serial='152D20337A0C';Model='KINGSTON SA400S37240G';DriveLetter='G:';FileSystem='NTFS';BusType='USB';Health='Healthy';PhysicalHealth='Healthy';VolumeHealth='Healthy';DiskNumber=2;Win32Index=2;PartitionDisk=2}
     $observation = New-F2AclStorageObservation
     foreach ($key in $observation.Keys) { $disk[$key] = $observation[$key] }
+    $requiredGateNames = @('VmImmutableIdentityAndOff','KingstonSerialUniqueAcrossInterfaces','KingstonModelFieldsMatch','KingstonUSBTransport','KingstonDiskHealthAndOnline','GVolumeMapsToSerialSelectedDevice','ConfiguredStoragePathsExact','ZeroVirtualNetworkAdapters','ExactlyElevenUniqueKnownPaths','AllExpectedPathsExistWithoutReparsePoints','PostCollectionVmIdentityAndOff','PostCollectionStoragePathsUnchanged','PostCollectionZeroVirtualNetworkAdapters','PostCollectionKingstonStorageIdentityUnchanged','PostCollectionNoReparsePoints')
+    $gates = @($requiredGateNames | ForEach-Object { [ordered]@{Name=$_;Pass=$true;Detail='synthetic required gate passed'} })
+    $postPaths = [ordered]@{VmId=$script:VmId;VmName=$script:VmName;VmState='Off';Configuration=[IO.Path]::Combine($script:Paths[0], 'F2-G1-Isolated-Disposable');Checkpoints=$script:Paths[0];SmartPaging=$script:Paths[0];VhdPaths=@($script:Paths[7],$script:Paths[8]);NicCount=0}
+    $postPaths.Validation = Test-F2AclVmStorageSnapshot -VmId $script:VmId -VmName $script:VmName -VmState 'Off' -ExpectedVmId $script:VmId -ExpectedVmName $script:VmName -ExpectedConfiguration $postPaths.Configuration -ExpectedCheckpoints $postPaths.Checkpoints -ExpectedSmartPaging $postPaths.SmartPaging -ExpectedVhdPaths $postPaths.VhdPaths -Configuration $postPaths.Configuration -Checkpoints $postPaths.Checkpoints -SmartPaging $postPaths.SmartPaging -VhdPaths $postPaths.VhdPaths -NicCount 0
+    $postStorageValidation = Test-F2AclKingstonStorageIdentity -Observation $observation
     $metadata = [ordered]@{
-        Gates = @([ordered]@{Name='synthetic_identity';Pass=$true;Detail='synthetic preflight passed'})
+        Gates = $gates
         Disk = $disk
+        PostCollection = [ordered]@{VmId=$script:VmId;VmName=$script:VmName;VmState='Off';Paths=$postPaths;Storage=$observation;StorageValidation=$postStorageValidation}
     }
     return New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records $records -Metadata $metadata -VmState 'Off'
 }
@@ -146,11 +152,64 @@ Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @nicSnapshotArgs).NicPass) 'unex
 $validDocument = New-F2AclFixtureDocument -Paths $script:Paths
 $unknownStateDocument = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @($script:Paths | ForEach-Object { New-F2AclFixtureRecord $_ }) -Metadata $validDocument.Metadata -VmState 'Unknown'
 Assert-F2Acl (-not $unknownStateDocument.Complete -and $unknownStateDocument.VmState -eq 'Unknown') 'unknown final VM state cannot produce a complete evidence document'
+$missingCompleteGateMetadata = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument.Metadata -Depth 20 -Compress)
+$missingCompleteGateMetadata.Gates = @($missingCompleteGateMetadata.Gates | Where-Object { $_.Name -cne 'PostCollectionVmIdentityAndOff' })
+$missingCompleteGateDocument = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @($script:Paths | ForEach-Object { New-F2AclFixtureRecord $_ }) -Metadata $missingCompleteGateMetadata -VmState 'Off'
+Assert-F2Acl (-not $missingCompleteGateDocument.Complete) 'missing post-collection gate cannot set Complete'
+$missingCompletePostMetadata = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument.Metadata -Depth 20 -Compress)
+$missingCompletePostMetadata.PSObject.Properties.Remove('PostCollection')
+$missingCompletePostDocument = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @($script:Paths | ForEach-Object { New-F2AclFixtureRecord $_ }) -Metadata $missingCompletePostMetadata -VmState 'Off'
+Assert-F2Acl (-not $missingCompletePostDocument.Complete) 'missing post-collection snapshot cannot set Complete'
 $validBytes = Convert-F2AclFixtureToBytes $validDocument
 $validHash = Get-F2AclSha256 $validBytes
 $valid = Test-F2AclFixturePayload $validBytes $validHash 0
 if (-not $valid.Pass) { $valid.Errors | ForEach-Object { Write-Output ("VALID_FIXTURE_ERROR=" + $_) } }
 Assert-F2Acl ($valid.Pass -and $valid.Document.Manifest.RecordCount -eq 11) 'complete 11-path fixture accepted'
+$requiredPostGateNames = @('PostCollectionVmIdentityAndOff','PostCollectionStoragePathsUnchanged','PostCollectionZeroVirtualNetworkAdapters','PostCollectionKingstonStorageIdentityUnchanged','PostCollectionNoReparsePoints')
+foreach ($gateName in $requiredPostGateNames) {
+    $gateMissingDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+    $gateMissingDoc.Metadata.Gates = @($gateMissingDoc.Metadata.Gates | Where-Object { $_.Name -cne $gateName })
+    $gateMissingBytes = Convert-F2AclFixtureToBytes $gateMissingDoc
+    $gateMissingResult = Test-F2AclFixturePayload $gateMissingBytes (Get-F2AclSha256 $gateMissingBytes) 0
+    Assert-F2Acl (-not $gateMissingResult.Pass -and $gateMissingResult.Errors -contains ('RequiredGateMissing: ' + $gateName)) ('missing named post-collection gate rejected: ' + $gateName)
+}
+$missingPostCollection = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$missingPostCollection.Metadata.PSObject.Properties.Remove('PostCollection')
+$missingPostBytes = Convert-F2AclFixtureToBytes $missingPostCollection
+$missingPostResult = Test-F2AclFixturePayload $missingPostBytes (Get-F2AclSha256 $missingPostBytes) 0
+Assert-F2Acl (-not $missingPostResult.Pass -and $missingPostResult.Errors -contains 'RequiredMetadataFieldMissing') 'missing post-collection snapshot rejected'
+foreach ($field in @('VmId','VmName','VmState','Paths','Storage','StorageValidation')) {
+    $fieldMissingDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+    $fieldMissingDoc.Metadata.PostCollection.PSObject.Properties.Remove($field)
+    $fieldMissingBytes = Convert-F2AclFixtureToBytes $fieldMissingDoc
+    $fieldMissingResult = Test-F2AclFixturePayload $fieldMissingBytes (Get-F2AclSha256 $fieldMissingBytes) 0
+    Assert-F2Acl (-not $fieldMissingResult.Pass -and $fieldMissingResult.Errors -contains 'PostCollectionEvidenceMissing') ('missing post-collection field rejected: ' + $field)
+}
+$postRunningDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postRunningDoc.Metadata.PostCollection.VmState = 'Running'; $postRunningDoc.VmState = 'Running'
+$postRunningBytes = Convert-F2AclFixtureToBytes $postRunningDoc
+$postRunningResult = Test-F2AclFixturePayload $postRunningBytes (Get-F2AclSha256 $postRunningBytes) 0
+Assert-F2Acl (-not $postRunningResult.Pass -and $postRunningResult.Errors -contains 'PostCollectionVmIdentityOrStateMismatch') 'post-collection running state rejected'
+$postWrongIdDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postWrongIdDoc.Metadata.PostCollection.VmId = [guid]::NewGuid().ToString()
+$postWrongIdBytes = Convert-F2AclFixtureToBytes $postWrongIdDoc
+$postWrongIdResult = Test-F2AclFixturePayload $postWrongIdBytes (Get-F2AclSha256 $postWrongIdBytes) 0
+Assert-F2Acl (-not $postWrongIdResult.Pass -and $postWrongIdResult.Errors -contains 'PostCollectionVmIdentityOrStateMismatch') 'post-collection immutable VM ID drift rejected'
+$postWrongPathDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postWrongPathDoc.Metadata.PostCollection.Paths.Checkpoints = 'G:\OtherProject'
+$postWrongPathBytes = Convert-F2AclFixtureToBytes $postWrongPathDoc
+$postWrongPathResult = Test-F2AclFixturePayload $postWrongPathBytes (Get-F2AclSha256 $postWrongPathBytes) 0
+Assert-F2Acl (-not $postWrongPathResult.Pass -and $postWrongPathResult.Errors -contains 'PostCollectionStorageSnapshotMismatch') 'post-collection storage path drift rejected'
+$postWrongDiskDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postWrongDiskDoc.Metadata.PostCollection.Storage.Win32Serial = '000000000000'
+$postWrongDiskBytes = Convert-F2AclFixtureToBytes $postWrongDiskDoc
+$postWrongDiskResult = Test-F2AclFixturePayload $postWrongDiskBytes (Get-F2AclSha256 $postWrongDiskBytes) 0
+Assert-F2Acl (-not $postWrongDiskResult.Pass -and $postWrongDiskResult.Errors -contains 'PostCollectionStorageIdentityMismatch') 'post-collection disk identity drift rejected'
+$postFalseValidationDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postFalseValidationDoc.Metadata.PostCollection.StorageValidation.Pass = $false
+$postFalseValidationBytes = Convert-F2AclFixtureToBytes $postFalseValidationDoc
+$postFalseValidationResult = Test-F2AclFixturePayload $postFalseValidationBytes (Get-F2AclSha256 $postFalseValidationBytes) 0
+Assert-F2Acl (-not $postFalseValidationResult.Pass -and $postFalseValidationResult.Errors -contains 'PostCollectionStorageValidationMismatch') 'untrusted post-collection validation claim rejected'
 Assert-F2Acl ((ConvertTo-F2AclWindowsArgument 'C:\Dev\Space Path\capture.ps1') -eq '"C:\Dev\Space Path\capture.ps1"') 'quoted child path preserves spaces'
 Assert-F2Acl ((ConvertTo-F2AclWindowsArgument 'C:\tail\') -eq '"C:\tail\\"') 'quoted child path doubles trailing slash'
 
