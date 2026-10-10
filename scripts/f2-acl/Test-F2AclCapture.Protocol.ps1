@@ -148,6 +148,8 @@ Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @runningSnapshotArgs).IdentityPa
 Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @wrongVmSnapshotArgs).IdentityPass) 'different immutable VM identity is rejected'
 Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @wrongPathSnapshotArgs).PathsPass) 'post-collection path drift is rejected'
 Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @nicSnapshotArgs).NicPass) 'unexpected virtual NIC is rejected by the snapshot validator'
+Assert-F2Acl (Test-F2AclZeroNicCount 0) 'integer zero NIC count is accepted'
+foreach ($badNicCount in @($null, '', '0', 0.0, 1)) { Assert-F2Acl (-not (Test-F2AclZeroNicCount -Value $badNicCount)) ('null, empty, non-integer or nonzero NIC count is rejected: ' + [string]$badNicCount) }
 
 $validDocument = New-F2AclFixtureDocument -Paths $script:Paths
 $unknownStateDocument = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @($script:Paths | ForEach-Object { New-F2AclFixtureRecord $_ }) -Metadata $validDocument.Metadata -VmState 'Unknown'
@@ -210,6 +212,16 @@ $postFalseValidationDoc.Metadata.PostCollection.StorageValidation.Pass = $false
 $postFalseValidationBytes = Convert-F2AclFixtureToBytes $postFalseValidationDoc
 $postFalseValidationResult = Test-F2AclFixturePayload $postFalseValidationBytes (Get-F2AclSha256 $postFalseValidationBytes) 0
 Assert-F2Acl (-not $postFalseValidationResult.Pass -and $postFalseValidationResult.Errors -contains 'PostCollectionStorageValidationMismatch') 'untrusted post-collection validation claim rejected'
+$postNullNicDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postNullNicDoc.Metadata.PostCollection.Paths.NicCount = $null
+$postNullNicBytes = Convert-F2AclFixtureToBytes $postNullNicDoc
+$postNullNicResult = Test-F2AclFixturePayload $postNullNicBytes (Get-F2AclSha256 $postNullNicBytes) 0
+Assert-F2Acl (-not $postNullNicResult.Pass -and $postNullNicResult.Errors -contains 'PostCollectionStorageSnapshotMismatch') 'null post-collection NIC count rejected by payload validation'
+$postEmptyNicDoc = ConvertFrom-Json (ConvertTo-Json -InputObject $validDocument -Depth 20 -Compress)
+$postEmptyNicDoc.Metadata.PostCollection.Paths.NicCount = ''
+$postEmptyNicBytes = Convert-F2AclFixtureToBytes $postEmptyNicDoc
+$postEmptyNicResult = Test-F2AclFixturePayload $postEmptyNicBytes (Get-F2AclSha256 $postEmptyNicBytes) 0
+Assert-F2Acl (-not $postEmptyNicResult.Pass -and $postEmptyNicResult.Errors -contains 'PostCollectionStorageSnapshotMismatch') 'empty post-collection NIC count rejected by payload validation'
 Assert-F2Acl ((ConvertTo-F2AclWindowsArgument 'C:\Dev\Space Path\capture.ps1') -eq '"C:\Dev\Space Path\capture.ps1"') 'quoted child path preserves spaces'
 Assert-F2Acl ((ConvertTo-F2AclWindowsArgument 'C:\tail\') -eq '"C:\tail\\"') 'quoted child path doubles trailing slash'
 

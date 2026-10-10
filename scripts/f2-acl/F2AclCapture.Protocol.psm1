@@ -163,6 +163,17 @@ function Test-F2AclKingstonStorageIdentity {
     return [pscustomobject]@{Pass=($errors.Count -eq 0 -and $serialPass -and $modelPass -and $transportPass -and $healthPass -and $mappingPass);SerialPass=$serialPass;ModelPass=$modelPass;TransportPass=$transportPass;HealthPass=$healthPass;MappingPass=$mappingPass;CanonicalModel=if($modelPass){'KINGSTON SA400S37240G'}else{''};RawWin32Model=[string]$Observation.Win32Model;NormalizedWin32Model=$rawWin32;RawDiskFriendlyName=[string]$Observation.DiskFriendlyName;NormalizedDiskFriendlyName=$rawFriendly;RawDiskModel=[string]$Observation.DiskModel;NormalizedDiskModel=$rawDiskModel;Errors=@($errors)}
 }
 
+function Test-F2AclZeroNicCount {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][AllowNull()]$Value)
+
+    if ($null -eq $Value) { return $false }
+    $numericTypes = @('System.Byte','System.SByte','System.Int16','System.UInt16','System.Int32','System.UInt32','System.Int64','System.UInt64')
+    if ($Value.GetType().FullName -notin $numericTypes) { return $false }
+    try { return ([decimal]$Value -eq [decimal]0) }
+    catch { return $false }
+}
+
 function Test-F2AclVmStorageSnapshot {
     [CmdletBinding()]
     param(
@@ -179,7 +190,7 @@ function Test-F2AclVmStorageSnapshot {
         [Parameter(Mandatory)][string]$Checkpoints,
         [Parameter(Mandatory)][string]$SmartPaging,
         [Parameter(Mandatory)][string[]]$VhdPaths,
-        [Parameter(Mandatory)][int]$NicCount
+        [Parameter(Mandatory)][AllowNull()]$NicCount
     )
 
     $identityPass = ($VmId.ToLowerInvariant() -ceq $ExpectedVmId.ToLowerInvariant() -and $VmName -ceq $ExpectedVmName -and $VmState -ceq 'Off')
@@ -189,7 +200,7 @@ function Test-F2AclVmStorageSnapshot {
     $canonicalVhds = @($VhdPaths | ForEach-Object { ConvertTo-F2AclCanonicalPath $_ } | Sort-Object)
     $canonicalExpectedVhds = @($ExpectedVhdPaths | ForEach-Object { ConvertTo-F2AclCanonicalPath $_ } | Sort-Object)
     $pathsPass = ($canonicalConfiguration -ceq (ConvertTo-F2AclCanonicalPath $ExpectedConfiguration) -and $canonicalCheckpoints -ceq (ConvertTo-F2AclCanonicalPath $ExpectedCheckpoints) -and $canonicalPaging -ceq (ConvertTo-F2AclCanonicalPath $ExpectedSmartPaging) -and $canonicalVhds.Count -eq $canonicalExpectedVhds.Count -and @((Compare-Object $canonicalVhds $canonicalExpectedVhds)).Count -eq 0)
-    $nicPass = ($NicCount -eq 0)
+    $nicPass = Test-F2AclZeroNicCount -Value $NicCount
     return [pscustomobject]@{Pass=($identityPass -and $pathsPass -and $nicPass);IdentityPass=$identityPass;PathsPass=$pathsPass;NicPass=$nicPass;ObservedState=$VmState;Configuration=$canonicalConfiguration;Checkpoints=$canonicalCheckpoints;SmartPaging=$canonicalPaging;VhdPaths=$canonicalVhds}
 }
 
@@ -358,7 +369,7 @@ function New-F2AclEvidenceDocument {
     $postEvidencePass = $false
     if ((Test-F2AclHasProperties $post @('VmId','VmName','VmState','Paths','Storage','StorageValidation')) -and (Test-F2AclHasProperties $post.Paths @('VmId','VmName','VmState','Configuration','Checkpoints','SmartPaging','VhdPaths','NicCount'))) {
         $canonicalExpected = @($ExpectedPaths | ForEach-Object { ConvertTo-F2AclCanonicalPath $_ })
-        $postSnapshot = Test-F2AclVmStorageSnapshot -VmId ([string]$post.Paths.VmId) -VmName ([string]$post.Paths.VmName) -VmState ([string]$post.Paths.VmState) -ExpectedVmId $VmId -ExpectedVmName $VmName -ExpectedConfiguration $canonicalExpected[1] -ExpectedCheckpoints $canonicalExpected[0] -ExpectedSmartPaging $canonicalExpected[0] -ExpectedVhdPaths @($canonicalExpected[7],$canonicalExpected[8]) -Configuration ([string]$post.Paths.Configuration) -Checkpoints ([string]$post.Paths.Checkpoints) -SmartPaging ([string]$post.Paths.SmartPaging) -VhdPaths @($post.Paths.VhdPaths) -NicCount ([int]$post.Paths.NicCount)
+        $postSnapshot = Test-F2AclVmStorageSnapshot -VmId ([string]$post.Paths.VmId) -VmName ([string]$post.Paths.VmName) -VmState ([string]$post.Paths.VmState) -ExpectedVmId $VmId -ExpectedVmName $VmName -ExpectedConfiguration $canonicalExpected[1] -ExpectedCheckpoints $canonicalExpected[0] -ExpectedSmartPaging $canonicalExpected[0] -ExpectedVhdPaths @($canonicalExpected[7],$canonicalExpected[8]) -Configuration ([string]$post.Paths.Configuration) -Checkpoints ([string]$post.Paths.Checkpoints) -SmartPaging ([string]$post.Paths.SmartPaging) -VhdPaths @($post.Paths.VhdPaths) -NicCount $post.Paths.NicCount
         $postDiskValidation = Test-F2AclKingstonStorageIdentity -Observation $post.Storage
         $postEvidencePass = ([string]$post.VmId -ceq $VmId.ToLowerInvariant() -and [string]$post.VmName -ceq $VmName -and [string]$post.VmState -ceq 'Off' -and $postSnapshot.Pass -and $postDiskValidation.Pass -and (Test-F2AclStorageObservationsEquivalent -Initial $Metadata.Disk -Final $post.Storage) -and (Test-F2AclHasProperties $post.StorageValidation @('Pass')) -and $post.StorageValidation.Pass -eq $true)
     }
@@ -641,7 +652,7 @@ function Test-F2AclEvidenceDocument {
         else {
             $postPaths = $post.Paths
             $expectedCanonical = @($ExpectedPaths | ForEach-Object { ConvertTo-F2AclCanonicalPath $_ })
-            $snapshot = Test-F2AclVmStorageSnapshot -VmId ([string]$postPaths.VmId) -VmName ([string]$postPaths.VmName) -VmState ([string]$postPaths.VmState) -ExpectedVmId $ExpectedVmId -ExpectedVmName $ExpectedVmName -ExpectedConfiguration $expectedCanonical[1] -ExpectedCheckpoints $expectedCanonical[0] -ExpectedSmartPaging $expectedCanonical[0] -ExpectedVhdPaths @($expectedCanonical[7],$expectedCanonical[8]) -Configuration ([string]$postPaths.Configuration) -Checkpoints ([string]$postPaths.Checkpoints) -SmartPaging ([string]$postPaths.SmartPaging) -VhdPaths @($postPaths.VhdPaths) -NicCount ([int]$postPaths.NicCount)
+            $snapshot = Test-F2AclVmStorageSnapshot -VmId ([string]$postPaths.VmId) -VmName ([string]$postPaths.VmName) -VmState ([string]$postPaths.VmState) -ExpectedVmId $ExpectedVmId -ExpectedVmName $ExpectedVmName -ExpectedConfiguration $expectedCanonical[1] -ExpectedCheckpoints $expectedCanonical[0] -ExpectedSmartPaging $expectedCanonical[0] -ExpectedVhdPaths @($expectedCanonical[7],$expectedCanonical[8]) -Configuration ([string]$postPaths.Configuration) -Checkpoints ([string]$postPaths.Checkpoints) -SmartPaging ([string]$postPaths.SmartPaging) -VhdPaths @($postPaths.VhdPaths) -NicCount $postPaths.NicCount
             if (-not $snapshot.Pass) { $errors.Add('PostCollectionStorageSnapshotMismatch') }
             if ([string]$postPaths.VmId -cne [string]$post.VmId -or [string]$postPaths.VmName -cne [string]$post.VmName -or [string]$postPaths.VmState -cne [string]$post.VmState) { $errors.Add('PostCollectionSnapshotIdentityMismatch') }
         }
@@ -712,4 +723,4 @@ function Test-F2AclEvidenceDocument {
     return [pscustomobject]@{ Pass = ($errors.Count -eq 0); Errors = @($errors); Document = $doc }
 }
 
-Export-ModuleMember -Function Get-F2AclSha256, ConvertTo-F2AclUtf8Bytes, ConvertTo-F2AclWindowsArgument, ConvertTo-F2AclCanonicalPath, Assert-F2AclSupportedAce, Test-F2AclKingstonStorageIdentity, Test-F2AclStorageObservationsEquivalent, Test-F2AclVmStorageSnapshot, New-F2AclEvidenceDocument, Write-F2AclFrame, Read-F2AclFrame, Wait-F2AclProcessExit, New-F2AclRestrictedDirectory, Test-F2AclRestrictedDirectory, Test-F2AclNoReparseAncestors, Test-F2AclEvidenceVolumeSeparateFromG, Get-F2AclUnexpectedWritableSids, Add-F2AclBoundedStreamRecord, Test-F2AclEvidenceDocument
+Export-ModuleMember -Function Get-F2AclSha256, ConvertTo-F2AclUtf8Bytes, ConvertTo-F2AclWindowsArgument, ConvertTo-F2AclCanonicalPath, Assert-F2AclSupportedAce, Test-F2AclKingstonStorageIdentity, Test-F2AclZeroNicCount, Test-F2AclStorageObservationsEquivalent, Test-F2AclVmStorageSnapshot, New-F2AclEvidenceDocument, Write-F2AclFrame, Read-F2AclFrame, Wait-F2AclProcessExit, New-F2AclRestrictedDirectory, Test-F2AclRestrictedDirectory, Test-F2AclNoReparseAncestors, Test-F2AclEvidenceVolumeSeparateFromG, Get-F2AclUnexpectedWritableSids, Add-F2AclBoundedStreamRecord, Test-F2AclEvidenceDocument
