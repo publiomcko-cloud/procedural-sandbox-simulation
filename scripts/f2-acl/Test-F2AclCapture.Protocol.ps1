@@ -139,6 +139,37 @@ foreach ($commandAst in $launcherAst.FindAll({param($node) $node -is [Management
 $missingModuleCalls = @($moduleCalls | Where-Object { $_ -notin $moduleFunctionNames })
 Assert-F2Acl ($null -ne $protocolModule -and (Get-Command Get-F2AclJsonBytes -ErrorAction SilentlyContinue) -and $missingModuleCalls.Count -eq 0) ('all production launcher module dependencies are exported and imported, including: ' + ($missingModuleCalls -join ','))
 Assert-F2Acl ((Get-Command Get-F2AclJsonBytes -ErrorAction SilentlyContinue).ModuleName -eq $protocolModule.Name) 'Get-F2AclJsonBytes is available as an imported module function'
+$aclScriptAst = [Management.Automation.Language.Parser]::ParseInput($launcherSource,[ref]$launcherTokens,[ref]$launcherParseErrors)
+$aclParserNames = @('ConvertTo-F2AclAccessMaskHex','ConvertTo-F2AclRightsDescription','ConvertFrom-F2AclSddlRecord')
+$aclParserFunctions = @($aclScriptAst.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $aclParserNames},$true))
+Assert-F2Acl ($aclParserFunctions.Count -eq $aclParserNames.Count) 'production SDDL parser helpers are present in the actual collector script'
+if ($aclParserFunctions.Count -eq $aclParserNames.Count) {
+    $aclParserSource = ($aclParserFunctions | ForEach-Object { $_.Extent.Text }) -join [Environment]::NewLine
+    . ([scriptblock]::Create($aclParserSource))
+    $maskFixtures = @(
+        [pscustomobject]@{Hex='10000000';Rights='GENERIC_ALL (unmapped)'},
+        [pscustomobject]@{Hex='80000006';Rights='GENERIC_READ (unmapped); remainder=0x00000006 (not interpreted with generic bits)'},
+        [pscustomobject]@{Hex='80000000';Rights='GENERIC_READ (unmapped)'},
+        [pscustomobject]@{Hex='20000000';Rights='GENERIC_EXECUTE (unmapped)'},
+        [pscustomobject]@{Hex='40000000';Rights='GENERIC_WRITE (unmapped)'},
+        [pscustomobject]@{Hex='001F01FF';Rights='ReadData/ListDirectory'},
+        [pscustomobject]@{Hex='F00001FF';Rights='GENERIC_READ (unmapped)'},
+        [pscustomobject]@{Hex='FFFFFFFF';Rights='GENERIC_READ (unmapped)'}
+    )
+    foreach ($maskFixture in $maskFixtures) {
+        $maskUnsigned = [Convert]::ToUInt32($maskFixture.Hex,16)
+        $maskAce = if ($maskUnsigned -gt 0x7FFFFFFF) { [int]([long]$maskUnsigned - 0x100000000L) } else { [int]$maskUnsigned }
+        $maskRecord = ConvertFrom-F2AclSddlRecord -Path 'C:\F2Acl-Synthetic\mask' -Sddl ('O:BAD:PAI(A;OICI;0x' + $maskFixture.Hex + ';;;SY)')
+        $maskPass = $maskRecord.Status -eq 'PASS' -and $maskRecord.AceCount -eq 1 -and $maskRecord.Aces[0].AccessMask -ceq ('0x' + $maskFixture.Hex) -and (ConvertTo-F2AclAccessMaskHex -AccessMask $maskAce) -ceq ('0x' + $maskFixture.Hex) -and $maskRecord.Aces[0].Rights.Contains(($maskFixture.Rights -split ';')[0])
+        if ($maskFixture.Hex -eq '80000006') { $maskPass = $maskPass -and $maskRecord.Aces[0].Rights -ceq $maskFixture.Rights }
+        Assert-F2Acl $maskPass ('actual collector SDDL parser preserves unsigned ACE mask 0x' + $maskFixture.Hex + ' and reports conservative rights')
+    }
+    $integritySddl = 'O:BAD:PAI(A;OICI;0x10000000;;;SY)(A;CIIOID;0x80000006;;;BA)(D;;0x40000000;;;BA)'
+    $integrityRecord = ConvertFrom-F2AclSddlRecord -Path 'C:\F2Acl-Synthetic\integrity' -Sddl $integritySddl
+    Assert-F2Acl ($integrityRecord.Status -eq 'PASS' -and $integrityRecord.OwnerSid -eq 'S-1-5-32-544' -and $integrityRecord.DaclProtected -and $integrityRecord.AceCount -eq 3 -and $integrityRecord.Aces[0].Sid -eq 'S-1-5-18' -and $integrityRecord.Aces[0].InheritanceFlags -eq 'ObjectInherit,ContainerInherit' -and $integrityRecord.Aces[1].Sid -eq 'S-1-5-32-544' -and $integrityRecord.Aces[1].InheritanceFlags -eq 'ContainerInherit' -and $integrityRecord.Aces[1].PropagationFlags -eq 'InheritOnly' -and $integrityRecord.Aces[1].Inherited -and $integrityRecord.Aces[2].Type -eq 'Deny') 'actual collector SDDL parser preserves owner, DACL protection, ACE type, inheritance, propagation and inherited flag'
+    $unsupportedSddlRecord = ConvertFrom-F2AclSddlRecord -Path 'C:\F2Acl-Synthetic\unsupported' -Sddl 'O:BAD:P(OA;;0x00000001;00112233-4455-6677-8899-aabbccddeeff;;SY)'
+    Assert-F2Acl ($unsupportedSddlRecord.Status -eq 'FAIL' -and $unsupportedSddlRecord.AceCount -eq 0 -and $unsupportedSddlRecord.Error -match 'UnsupportedDaclAceClass') 'actual collector SDDL parser still fails closed on unsupported object ACEs'
+}
 $coordinatorStart = $launcherSource.IndexOf('function Invoke-F2AclElevatedCoordinator', [StringComparison]::Ordinal)
 $coordinatorEnd = if ($coordinatorStart -ge 0) { $launcherSource.IndexOf('function Test-F2AclSavedEvidencePackage', $coordinatorStart, [StringComparison]::Ordinal) } else { -1 }
 $coordinatorSource = if ($coordinatorStart -ge 0 -and $coordinatorEnd -gt $coordinatorStart) { $launcherSource.Substring($coordinatorStart,$coordinatorEnd-$coordinatorStart) } else { '' }

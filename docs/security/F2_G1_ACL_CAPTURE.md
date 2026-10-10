@@ -34,6 +34,8 @@ Only a complete validated payload is saved. Before elevation, the parent require
 
 The ACL reader intentionally supports only ordinary `CommonAce` allow/deny entries with inheritance flags. It fails the object closed if it encounters object ACEs, callback/conditional ACEs, audit ACEs, unknown ACE classes, or unsupported flag bits, because omitting object GUID or callback semantics would make the evidence incomplete.
 
+Each captured ACE retains its complete 32-bit access mask as fixed-width unsigned hexadecimal (`0xXXXXXXXX`), including masks whose sign bit is set. The parser avoids casting arbitrary ACE masks to the `FileSystemRights` enum, which rejects valid generic masks in Windows PowerShell 5.1. The adjacent `Rights` text is only a conservative description of mask bits: generic rights remain explicitly unmapped, mixed generic masks keep their remainder unresolved, and unknown bits are reported rather than dropped. ACE inheritance flags are read as their documented bit values so high/combined flags do not depend on PowerShell enum conversion. The output does not expand generic rights or claim effective permissions. A successful parse is evidence capture only; ACL safety classification remains a separate reviewed step.
+
 ## Synthetic validation
 
 Run from Windows PowerShell 5.1:

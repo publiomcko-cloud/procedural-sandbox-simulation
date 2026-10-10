@@ -154,6 +154,112 @@ function Test-F2AclNoReparsePath {
     }
 }
 
+function ConvertTo-F2AclAccessMaskHex {
+    param([Parameter(Mandatory)][int]$AccessMask)
+    $unsignedMask = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$AccessMask), 0)
+    return ('0x{0:X8}' -f $unsignedMask)
+}
+
+function ConvertTo-F2AclRightsDescription {
+    param([Parameter(Mandatory)][int]$AccessMask)
+    $unsignedMask = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$AccessMask), 0)
+    $genericBits = [long]$unsignedMask -band 0xF0000000L
+    if ($genericBits -ne 0) {
+        $genericNames = [Collections.Generic.List[string]]::new()
+        foreach ($generic in @(
+            [pscustomobject]@{Mask=0x80000000L;Name='GENERIC_READ (unmapped)'},
+            [pscustomobject]@{Mask=0x40000000L;Name='GENERIC_WRITE (unmapped)'},
+            [pscustomobject]@{Mask=0x20000000L;Name='GENERIC_EXECUTE (unmapped)'},
+            [pscustomobject]@{Mask=0x10000000L;Name='GENERIC_ALL (unmapped)'}
+        )) {
+            if (($genericBits -band $generic.Mask) -ne 0) { $genericNames.Add($generic.Name) }
+        }
+        $otherBits = [long]$unsignedMask -band 0x0FFFFFFFL
+        if ($otherBits -ne 0) { $genericNames.Add(('remainder=0x{0:X8} (not interpreted with generic bits)' -f $otherBits)) }
+        return ($genericNames.ToArray() -join '; ')
+    }
+
+    $knownRights = @(
+        [pscustomobject]@{Mask=0x00000001;Name='ReadData/ListDirectory'},
+        [pscustomobject]@{Mask=0x00000002;Name='WriteData/CreateFiles'},
+        [pscustomobject]@{Mask=0x00000004;Name='AppendData/CreateDirectories'},
+        [pscustomobject]@{Mask=0x00000008;Name='ReadExtendedAttributes'},
+        [pscustomobject]@{Mask=0x00000010;Name='WriteExtendedAttributes'},
+        [pscustomobject]@{Mask=0x00000020;Name='ExecuteFile/Traverse'},
+        [pscustomobject]@{Mask=0x00000040;Name='DeleteSubdirectoriesAndFiles'},
+        [pscustomobject]@{Mask=0x00000080;Name='ReadAttributes'},
+        [pscustomobject]@{Mask=0x00000100;Name='WriteAttributes'},
+        [pscustomobject]@{Mask=0x00010000;Name='Delete'},
+        [pscustomobject]@{Mask=0x00020000;Name='ReadControl'},
+        [pscustomobject]@{Mask=0x00040000;Name='WriteDac'},
+        [pscustomobject]@{Mask=0x00080000;Name='WriteOwner'},
+        [pscustomobject]@{Mask=0x00100000;Name='Synchronize'}
+    )
+    $knownMask = [long]0
+    $labels = @()
+    foreach ($right in $knownRights) {
+        $mask = [long]$right.Mask
+        if (([long]$unsignedMask -band $mask) -ne 0) {
+            $labels += $right.Name
+            $knownMask = $knownMask -bor $mask
+        }
+    }
+    $unresolvedBits = [long]$unsignedMask -band (0xFFFFFFFFL -bxor $knownMask)
+    if ($unresolvedBits -ne 0) { $labels += ('UnresolvedBits=0x{0:X8}' -f $unresolvedBits) }
+    if ($labels.Count -eq 0) { return 'No recognized rights bits set' }
+    return $labels -join '; '
+}
+
+function ConvertFrom-F2AclSddlRecord {
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Sddl)
+    try {
+        $raw = [Security.AccessControl.RawSecurityDescriptor]::new($sddl)
+        $controlFlags = [int]$raw.ControlFlags
+        if ($null -eq $raw.DiscretionaryAcl -or ($controlFlags -band 0x0004) -eq 0) { throw 'Object has a missing or null DACL.' }
+        $ownerSid = $raw.Owner.Value
+        try { $ownerName = $raw.Owner.Translate([Security.Principal.NTAccount]).Value } catch { $ownerName = $ownerSid }
+        $aces = @()
+        foreach ($ace in $raw.DiscretionaryAcl) {
+            Assert-F2AclSupportedAce -Ace $ace | Out-Null
+            $type = if ($ace.AceType -eq [Security.AccessControl.AceType]::AccessAllowed) { 'Allow' } else { 'Deny' }
+            $sid = $ace.SecurityIdentifier
+            try { $principal = $sid.Translate([Security.Principal.NTAccount]).Value } catch { $principal = $sid.Value }
+            $aceFlags = [int]$ace.AceFlags
+            $inheritance = @()
+            if (($aceFlags -band 0x01) -ne 0) { $inheritance += 'ObjectInherit' }
+            if (($aceFlags -band 0x02) -ne 0) { $inheritance += 'ContainerInherit' }
+            $propagation = @()
+            if (($aceFlags -band 0x04) -ne 0) { $propagation += 'NoPropagateInherit' }
+            if (($aceFlags -band 0x08) -ne 0) { $propagation += 'InheritOnly' }
+            $aces += [ordered]@{
+                Principal = [string]$principal
+                Sid = $sid.Value
+                Type = $type
+                Rights = (ConvertTo-F2AclRightsDescription -AccessMask ([int]$ace.AccessMask))
+                AccessMask = (ConvertTo-F2AclAccessMaskHex -AccessMask ([int]$ace.AccessMask))
+                InheritanceFlags = if ($inheritance.Count) { $inheritance -join ',' } else { 'None' }
+                PropagationFlags = if ($propagation.Count) { $propagation -join ',' } else { 'None' }
+                Inherited = (($aceFlags -band 0x10) -ne 0)
+            }
+        }
+        if ([string]::IsNullOrWhiteSpace($sddl) -or [string]::IsNullOrWhiteSpace($ownerSid)) { throw 'Owner or SDDL was empty.' }
+        return [ordered]@{
+            Path = [IO.Path]::GetFullPath($Path)
+            Owner = [string]$ownerName
+            OwnerSid = $ownerSid
+            Sddl = [string]$sddl
+            DaclProtected = (($controlFlags -band 0x1000) -ne 0)
+            Status = 'PASS'
+            Error = ''
+            AceCount = $aces.Count
+            Aces = $aces
+        }
+    }
+    catch {
+        return [ordered]@{Path=$Path;Owner='';OwnerSid='';Sddl=[string]$sddl;DaclProtected=$false;Status='FAIL';Error=$_.Exception.Message;AceCount=0;Aces=@()}
+    }
+}
+
 function Get-F2AclRecord {
     param([string]$Path)
     $errorText = ''
@@ -165,51 +271,7 @@ function Get-F2AclRecord {
     if ([string]::IsNullOrWhiteSpace($sddl)) {
         return [ordered]@{Path=$Path;Owner='';OwnerSid='';Sddl='';DaclProtected=$false;Status='FAIL';Error=$errorText;AceCount=0;Aces=@()}
     }
-    try {
-        $raw = [Security.AccessControl.RawSecurityDescriptor]::new($sddl)
-        if ($null -eq $raw.DiscretionaryAcl -or ($raw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclPresent) -eq 0) { throw 'Object has a missing or null DACL.' }
-        $ownerSid = $raw.Owner.Value
-        try { $ownerName = $raw.Owner.Translate([Security.Principal.NTAccount]).Value } catch { $ownerName = $ownerSid }
-        $aces = @()
-        foreach ($ace in $raw.DiscretionaryAcl) {
-            Assert-F2AclSupportedAce -Ace $ace | Out-Null
-            $type = if ($ace.AceType -eq [Security.AccessControl.AceType]::AccessAllowed) { 'Allow' } else { 'Deny' }
-            $sid = $ace.SecurityIdentifier
-            try { $principal = $sid.Translate([Security.Principal.NTAccount]).Value } catch { $principal = $sid.Value }
-            $aceFlags = $ace.AceFlags
-            $inheritance = @()
-            if (($aceFlags -band [Security.AccessControl.AceFlags]::ObjectInherit) -ne 0) { $inheritance += 'ObjectInherit' }
-            if (($aceFlags -band [Security.AccessControl.AceFlags]::ContainerInherit) -ne 0) { $inheritance += 'ContainerInherit' }
-            $propagation = @()
-            if (($aceFlags -band [Security.AccessControl.AceFlags]::NoPropagateInherit) -ne 0) { $propagation += 'NoPropagateInherit' }
-            if (($aceFlags -band [Security.AccessControl.AceFlags]::InheritOnly) -ne 0) { $propagation += 'InheritOnly' }
-            $aces += [ordered]@{
-                Principal = [string]$principal
-                Sid = $sid.Value
-                Type = $type
-                Rights = [string]([Security.AccessControl.FileSystemRights]$ace.AccessMask)
-                AccessMask = ('0x{0:X8}' -f ([int]$ace.AccessMask -band 0xFFFFFFFF))
-                InheritanceFlags = if ($inheritance.Count) { $inheritance -join ',' } else { 'None' }
-                PropagationFlags = if ($propagation.Count) { $propagation -join ',' } else { 'None' }
-                Inherited = (($aceFlags -band [Security.AccessControl.AceFlags]::Inherited) -ne 0)
-            }
-        }
-        if ([string]::IsNullOrWhiteSpace($sddl) -or [string]::IsNullOrWhiteSpace($ownerSid)) { throw 'Owner or SDDL was empty.' }
-        return [ordered]@{
-            Path = [IO.Path]::GetFullPath($Path)
-            Owner = [string]$ownerName
-            OwnerSid = $ownerSid
-            Sddl = [string]$sddl
-            DaclProtected = (($raw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclProtected) -ne 0)
-            Status = 'PASS'
-            Error = ''
-            AceCount = $aces.Count
-            Aces = $aces
-        }
-    }
-    catch {
-        return [ordered]@{Path=$Path;Owner='';OwnerSid='';Sddl=[string]$sddl;DaclProtected=$false;Status='FAIL';Error=$_.Exception.Message;AceCount=0;Aces=@()}
-    }
+    return ConvertFrom-F2AclSddlRecord -Path $Path -Sddl $sddl
 }
 
 function Get-F2AclExpectedPaths {
