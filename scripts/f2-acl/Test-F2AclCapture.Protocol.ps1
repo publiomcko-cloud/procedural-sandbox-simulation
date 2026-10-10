@@ -50,14 +50,30 @@ function New-F2AclFixtureRecord {
     }
 }
 
+function New-F2AclStorageObservation {
+    param([hashtable]$Changes = @{})
+    $value = [ordered]@{
+        Win32MatchCount=1;DiskMatchCount=1;PhysicalMatchCount=1
+        Win32Serial='152D20337A0C';DiskSerial='152D20337A0C';PhysicalSerial='152D20337A0C'
+        Win32Model='KINGSTON  SA400S37240G USB Device';DiskFriendlyName='KINGSTON SA400S37240G';DiskModel=' SA400S37240G   '
+        BusType='USB';DiskHealth='Healthy';DiskOperationalStatus=@('Online');PhysicalHealth='Healthy'
+        GPartitionCount=1;PartitionDiskNumber=2;DiskNumber=2;Win32Index=2;VolumeFileSystem='NTFS';VolumeHealth='Healthy'
+    }
+    foreach ($key in $Changes.Keys) { $value[$key] = $Changes[$key] }
+    return $value
+}
+
 function New-F2AclFixtureDocument {
     param([string[]]$Paths)
     $records = @($Paths | ForEach-Object { New-F2AclFixtureRecord $_ })
+    $disk = [ordered]@{SerialMatched=$true;Serial='152D20337A0C';Model='KINGSTON SA400S37240G';DriveLetter='G:';FileSystem='NTFS';BusType='USB';Health='Healthy';PhysicalHealth='Healthy';VolumeHealth='Healthy';DiskNumber=2;Win32Index=2;PartitionDisk=2}
+    $observation = New-F2AclStorageObservation
+    foreach ($key in $observation.Keys) { $disk[$key] = $observation[$key] }
     $metadata = [ordered]@{
         Gates = @([ordered]@{Name='synthetic_identity';Pass=$true;Detail='synthetic preflight passed'})
-        Disk = [ordered]@{SerialMatched=$true;Serial='152D20337A0C';Model='KINGSTON SA400S37240G';DriveLetter='G:';FileSystem='NTFS';BusType='USB';Health='Healthy';PhysicalHealth='Healthy';VolumeHealth='Healthy';DiskNumber=1;Win32Index=1;PartitionDisk=1}
+        Disk = $disk
     }
-    return New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records $records -Metadata $metadata
+    return New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records $records -Metadata $metadata -VmState 'Off'
 }
 
 function Convert-F2AclFixtureToBytes {
@@ -92,8 +108,44 @@ $script:Paths = @(
 )
 Assert-F2Acl ($pinManifest.Schema -eq 'f2-acl-source-pins-v1' -and $pinManifest.ScriptSha256 -ceq $launcherDigest) 'committed source pin matches the launcher hash'
 Assert-F2Acl ($pinManifest.ModuleSha256 -ceq $moduleDigest) 'committed source pin matches the protocol module hash'
+$observedStorage = New-F2AclStorageObservation
+$observedStorageResult = Test-F2AclKingstonStorageIdentity -Observation $observedStorage
+Assert-F2Acl ($observedStorageResult.Pass -and $observedStorageResult.CanonicalModel -ceq 'KINGSTON SA400S37240G' -and $observedStorageResult.NormalizedWin32Model -ceq 'KINGSTON SA400S37240G USB Device') 'observed USB bridge model strings pass the production identity validator'
+$wrongSerial = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{Win32Serial='000000000000'})
+Assert-F2Acl (-not $wrongSerial.Pass -and -not $wrongSerial.SerialPass) 'wrong serial is rejected by the production identity validator'
+$wrongWin32Model = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{Win32Model='KINGSTON SA400S37240G USB Device Extra'})
+Assert-F2Acl (-not $wrongWin32Model.Pass -and -not $wrongWin32Model.ModelPass) 'unapproved Win32 model suffix is rejected'
+$wrongFriendly = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{DiskFriendlyName='Generic USB Disk'})
+Assert-F2Acl (-not $wrongFriendly.Pass -and -not $wrongFriendly.ModelPass) 'unrelated USB device friendly name is rejected'
+$wrongDiskModel = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{DiskModel='SA400S37000G'})
+Assert-F2Acl (-not $wrongDiskModel.Pass -and -not $wrongDiskModel.ModelPass) 'mismatched Get-Disk model is rejected'
+$ambiguousStorage = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{PhysicalMatchCount=2})
+Assert-F2Acl (-not $ambiguousStorage.Pass -and -not $ambiguousStorage.SerialPass) 'ambiguous duplicate serial match is rejected'
+$unavailableStorage = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{DiskFriendlyName=$null})
+Assert-F2Acl (-not $unavailableStorage.Pass -and $unavailableStorage.Errors -contains 'StorageFieldUnavailable:DiskFriendlyName') 'unavailable storage field fails closed'
+$missingStorage = New-F2AclStorageObservation; [void]$missingStorage.Remove('DiskFriendlyName')
+$missingStorageResult = Test-F2AclKingstonStorageIdentity -Observation $missingStorage
+Assert-F2Acl (-not $missingStorageResult.Pass -and $missingStorageResult.Errors -contains 'StorageObservationFieldsMissing') 'unavailable storage property fails closed'
+$wrongTransport = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{BusType='SATA'})
+Assert-F2Acl (-not $wrongTransport.Pass -and -not $wrongTransport.TransportPass) 'non-USB transport is rejected'
+$wrongMapping = Test-F2AclKingstonStorageIdentity -Observation (New-F2AclStorageObservation @{PartitionDiskNumber=3})
+Assert-F2Acl (-not $wrongMapping.Pass -and -not $wrongMapping.MappingPass) 'G partition on a different disk is rejected'
+
+$expectedVhds = @('G:\F2-G1-OS.vhdx','G:\F2-G1-Scratch.vhdx')
+$snapshotArgs = @{VmId=$script:VmId;VmName=$script:VmName;VmState='Off';ExpectedVmId=$script:VmId;ExpectedVmName=$script:VmName;ExpectedConfiguration='G:\F2-G1-Isolated-Disposable\F2-G1-Isolated-Disposable';ExpectedCheckpoints='G:\F2-G1-Isolated-Disposable';ExpectedSmartPaging='G:\F2-G1-Isolated-Disposable';ExpectedVhdPaths=$expectedVhds;Configuration='G:\F2-G1-Isolated-Disposable\F2-G1-Isolated-Disposable';Checkpoints='G:\F2-G1-Isolated-Disposable';SmartPaging='G:\F2-G1-Isolated-Disposable';VhdPaths=$expectedVhds;NicCount=0}
+Assert-F2Acl ((Test-F2AclVmStorageSnapshot @snapshotArgs).Pass) 'exact OFF VM and storage snapshot passes production invariant validator'
+$runningSnapshotArgs = $snapshotArgs.Clone(); $runningSnapshotArgs.VmState = 'Running'
+$wrongVmSnapshotArgs = $snapshotArgs.Clone(); $wrongVmSnapshotArgs.VmId = [guid]::NewGuid().ToString()
+$wrongPathSnapshotArgs = $snapshotArgs.Clone(); $wrongPathSnapshotArgs.Checkpoints = 'G:\OtherProject'
+$nicSnapshotArgs = $snapshotArgs.Clone(); $nicSnapshotArgs.NicCount = 1
+Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @runningSnapshotArgs).IdentityPass) 'post-collection VM start is rejected'
+Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @wrongVmSnapshotArgs).IdentityPass) 'different immutable VM identity is rejected'
+Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @wrongPathSnapshotArgs).PathsPass) 'post-collection path drift is rejected'
+Assert-F2Acl (-not (Test-F2AclVmStorageSnapshot @nicSnapshotArgs).NicPass) 'unexpected virtual NIC is rejected by the snapshot validator'
 
 $validDocument = New-F2AclFixtureDocument -Paths $script:Paths
+$unknownStateDocument = New-F2AclEvidenceDocument -VmId $script:VmId -VmName $script:VmName -ExpectedPaths $script:Paths -Records @($script:Paths | ForEach-Object { New-F2AclFixtureRecord $_ }) -Metadata $validDocument.Metadata -VmState 'Unknown'
+Assert-F2Acl (-not $unknownStateDocument.Complete -and $unknownStateDocument.VmState -eq 'Unknown') 'unknown final VM state cannot produce a complete evidence document'
 $validBytes = Convert-F2AclFixtureToBytes $validDocument
 $validHash = Get-F2AclSha256 $validBytes
 $valid = Test-F2AclFixturePayload $validBytes $validHash 0
@@ -245,6 +297,17 @@ $sleepChild.Dispose()
 
 $testAclParent = [IO.Path]::GetFullPath($env:LOCALAPPDATA)
 Write-Output 'Stage=restricted_local_evidence_directory'
+$testEvidenceVolumeGuid = [F2Acl.NativeDirectory]::GetVolumeGuidForPath($testAclParent)
+$testProjectVolumePath = $null
+foreach ($driveInfo in [IO.DriveInfo]::GetDrives()) {
+    if (-not $driveInfo.IsReady) { continue }
+    try {
+        $candidateGuid = [F2Acl.NativeDirectory]::GetVolumeGuidForPath($driveInfo.RootDirectory.FullName)
+        if ($candidateGuid -cne $testEvidenceVolumeGuid) { $testProjectVolumePath = $driveInfo.RootDirectory.FullName; break }
+    }
+    catch { }
+}
+if ([string]::IsNullOrWhiteSpace($testProjectVolumePath)) { throw 'Synthetic DACL test requires two available local volumes; no target volume is written.' }
 $normalPath = Join-Path $testAclParent 'F2Acl-Nonexistent-Path-Check'
 try { Test-F2AclNoReparseAncestors -Path $normalPath; Assert-F2Acl $true 'ordinary evidence path ancestors accepted' }
 catch { Assert-F2Acl $false ('ordinary evidence path ancestor check: ' + $_.Exception.Message) }
@@ -270,7 +333,7 @@ finally {
 $testAclPath = Join-Path $testAclParent ('F2Acl-Protocol-Test-' + [guid]::NewGuid().ToString('N'))
 try {
     $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    [void](New-F2AclRestrictedDirectory -Path $testAclPath -OwnerSid $currentSid)
+    [void](New-F2AclRestrictedDirectory -Path $testAclPath -OwnerSid $currentSid -ProjectVolumePath $testProjectVolumePath)
     $aclCheck = Test-F2AclRestrictedDirectory -Path $testAclPath -OwnerSid $currentSid
     Assert-F2Acl ($aclCheck.Protected -and $aclCheck.AceCount -eq 3 -and $aclCheck.AllowedSids -contains $currentSid) 'restricted evidence directory owner and DACL verified'
 }
@@ -318,8 +381,8 @@ Assert-F2Acl ($boundedRecords.Count -eq $beforeOversizeCount -and $boundedState.
 
 Write-Output "Assertions=$script:Assertions;Failures=$($script:Failures.Count)"
 if ($script:Failures.Count -gt 0) {
-    $script:Failures | ForEach-Object { Write-Error $_ }
+    $script:Failures | ForEach-Object { [Console]::Error.WriteLine('FAIL=' + $_) }
     exit 1
 }
-Write-Output 'Cases=source_pins,complete,argument_quoting,frame_roundtrip,bounded_eof_probe,standard_ace,callback_ace_rejection,object_ace_rejection,unknown_ace_flag_rejection,ancestor_junction_rejection,oversized_writer,oversized_reader,corrupt,partial_frame,stalled_partial_header,missing,duplicate,malformed_json,missing_envelope,missing_record_field,child_exit,sha256,partial_record,empty_preflight_failure,stdout_stderr,timeout,restricted_evidence_directory,exact_acl_principals,read_only_parent_ace,write_parent_ace,write_attributes_parent_ace,bounded_stream_accounting,oversized_stream_rejection'
+Write-Output 'Cases=source_pins,kingston_storage_valid_wrong_serial_wrong_model_ambiguous_missing_field_transport_mapping,post_collection_vm_state_identity_path_nic,unknown_final_state_incomplete,complete,argument_quoting,frame_roundtrip,bounded_eof_probe,standard_ace,callback_ace_rejection,object_ace_rejection,unknown_ace_flag_rejection,ancestor_junction_rejection,oversized_writer,oversized_reader,corrupt,partial_frame,stalled_partial_header,missing,duplicate,malformed_json,missing_envelope,missing_record_field,child_exit,sha256,partial_record,empty_preflight_failure,stdout_stderr,timeout,restricted_evidence_directory,exact_acl_principals,read_only_parent_ace,write_parent_ace,write_attributes_parent_ace,bounded_stream_accounting,oversized_stream_rejection'
 [Environment]::Exit(0)

@@ -110,8 +110,87 @@ function Test-F2AclFixedTimeEqual {
 function Test-F2AclHasProperties {
     param([Parameter(Mandatory)]$Object, [Parameter(Mandatory)][string[]]$Names)
     if ($null -eq $Object) { return $false }
-    foreach ($name in $Names) { if ($null -eq $Object.PSObject.Properties[$name]) { return $false } }
+    foreach ($name in $Names) {
+        if ($Object -is [System.Collections.IDictionary]) {
+            if (-not $Object.Contains($name)) { return $false }
+        }
+        elseif ($null -eq $Object.PSObject.Properties[$name]) { return $false }
+    }
     return $true
+}
+
+function ConvertTo-F2AclCollapsedWhitespace {
+    param([AllowNull()][string]$Value)
+    if ($null -eq $Value) { return '' }
+    return ([regex]::Replace($Value.Trim(), '\s+', ' '))
+}
+
+function Test-F2AclKingstonStorageIdentity {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$Observation)
+
+    $errors = [Collections.Generic.List[string]]::new()
+    $required = @('Win32MatchCount','DiskMatchCount','PhysicalMatchCount','Win32Serial','DiskSerial','PhysicalSerial','Win32Model','DiskFriendlyName','DiskModel','BusType','DiskHealth','DiskOperationalStatus','PhysicalHealth','GPartitionCount','PartitionDiskNumber','DiskNumber','Win32Index','VolumeFileSystem','VolumeHealth')
+    if (-not (Test-F2AclHasProperties $Observation $required)) {
+        return [pscustomobject]@{Pass=$false;SerialPass=$false;ModelPass=$false;TransportPass=$false;HealthPass=$false;MappingPass=$false;CanonicalModel='';Errors=@('StorageObservationFieldsMissing')}
+    }
+    foreach ($name in $required) {
+        $value = if ($Observation -is [System.Collections.IDictionary]) { $Observation[$name] } else { $Observation.PSObject.Properties[$name].Value }
+        if ($null -eq $value -or ($value -is [string] -and [string]::IsNullOrWhiteSpace($value))) { $errors.Add("StorageFieldUnavailable:$name") }
+    }
+
+    $expectedSerial = '152D20337A0C'
+    $serialValues = @([string]$Observation.Win32Serial, [string]$Observation.DiskSerial, [string]$Observation.PhysicalSerial) | ForEach-Object { ($_ -replace '\s', '').ToUpperInvariant() }
+    $serialPass = ([int]$Observation.Win32MatchCount -eq 1 -and [int]$Observation.DiskMatchCount -eq 1 -and [int]$Observation.PhysicalMatchCount -eq 1 -and @($serialValues | Where-Object { $_ -cne $expectedSerial }).Count -eq 0)
+    if (-not $serialPass) { $errors.Add('KingstonSerialNotUniqueOrConsistent') }
+
+    $rawWin32 = ConvertTo-F2AclCollapsedWhitespace ([string]$Observation.Win32Model)
+    $rawFriendly = ConvertTo-F2AclCollapsedWhitespace ([string]$Observation.DiskFriendlyName)
+    $rawDiskModel = ConvertTo-F2AclCollapsedWhitespace ([string]$Observation.DiskModel)
+    $win32ModelPass = $rawWin32 -cmatch '^KINGSTON SA400S37240G(?: USB Device)?$'
+    $friendlyModelPass = $rawFriendly -ceq 'KINGSTON SA400S37240G'
+    $diskModelPass = $rawDiskModel -ceq 'SA400S37240G'
+    $modelPass = $win32ModelPass -and $friendlyModelPass -and $diskModelPass
+    if (-not $modelPass) { $errors.Add('KingstonModelFieldsMismatch') }
+
+    $transportPass = ([string]$Observation.BusType -ceq 'USB')
+    if (-not $transportPass) { $errors.Add('KingstonTransportMismatch') }
+    $diskOnline = @($Observation.DiskOperationalStatus | ForEach-Object { [string]$_ }) -contains 'Online'
+    $healthPass = ([string]$Observation.DiskHealth -ceq 'Healthy' -and [string]$Observation.PhysicalHealth -ceq 'Healthy' -and $diskOnline)
+    if (-not $healthPass) { $errors.Add('KingstonHealthOrOnlineMismatch') }
+    $mappingPass = ([int]$Observation.GPartitionCount -eq 1 -and [int]$Observation.PartitionDiskNumber -eq [int]$Observation.DiskNumber -and [int]$Observation.Win32Index -eq [int]$Observation.DiskNumber -and [string]$Observation.VolumeFileSystem -ceq 'NTFS' -and [string]$Observation.VolumeHealth -ceq 'Healthy')
+    if (-not $mappingPass) { $errors.Add('KingstonGVolumeMappingMismatch') }
+    return [pscustomobject]@{Pass=($errors.Count -eq 0 -and $serialPass -and $modelPass -and $transportPass -and $healthPass -and $mappingPass);SerialPass=$serialPass;ModelPass=$modelPass;TransportPass=$transportPass;HealthPass=$healthPass;MappingPass=$mappingPass;CanonicalModel=if($modelPass){'KINGSTON SA400S37240G'}else{''};RawWin32Model=[string]$Observation.Win32Model;NormalizedWin32Model=$rawWin32;RawDiskFriendlyName=[string]$Observation.DiskFriendlyName;NormalizedDiskFriendlyName=$rawFriendly;RawDiskModel=[string]$Observation.DiskModel;NormalizedDiskModel=$rawDiskModel;Errors=@($errors)}
+}
+
+function Test-F2AclVmStorageSnapshot {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$VmId,
+        [Parameter(Mandatory)][string]$VmName,
+        [Parameter(Mandatory)][string]$VmState,
+        [Parameter(Mandatory)][string]$ExpectedVmId,
+        [Parameter(Mandatory)][string]$ExpectedVmName,
+        [Parameter(Mandatory)][string]$ExpectedConfiguration,
+        [Parameter(Mandatory)][string]$ExpectedCheckpoints,
+        [Parameter(Mandatory)][string]$ExpectedSmartPaging,
+        [Parameter(Mandatory)][string[]]$ExpectedVhdPaths,
+        [Parameter(Mandatory)][string]$Configuration,
+        [Parameter(Mandatory)][string]$Checkpoints,
+        [Parameter(Mandatory)][string]$SmartPaging,
+        [Parameter(Mandatory)][string[]]$VhdPaths,
+        [Parameter(Mandatory)][int]$NicCount
+    )
+
+    $identityPass = ($VmId.ToLowerInvariant() -ceq $ExpectedVmId.ToLowerInvariant() -and $VmName -ceq $ExpectedVmName -and $VmState -ceq 'Off')
+    $canonicalConfiguration = ConvertTo-F2AclCanonicalPath $Configuration
+    $canonicalCheckpoints = ConvertTo-F2AclCanonicalPath $Checkpoints
+    $canonicalPaging = ConvertTo-F2AclCanonicalPath $SmartPaging
+    $canonicalVhds = @($VhdPaths | ForEach-Object { ConvertTo-F2AclCanonicalPath $_ } | Sort-Object)
+    $canonicalExpectedVhds = @($ExpectedVhdPaths | ForEach-Object { ConvertTo-F2AclCanonicalPath $_ } | Sort-Object)
+    $pathsPass = ($canonicalConfiguration -ceq (ConvertTo-F2AclCanonicalPath $ExpectedConfiguration) -and $canonicalCheckpoints -ceq (ConvertTo-F2AclCanonicalPath $ExpectedCheckpoints) -and $canonicalPaging -ceq (ConvertTo-F2AclCanonicalPath $ExpectedSmartPaging) -and $canonicalVhds.Count -eq $canonicalExpectedVhds.Count -and @((Compare-Object $canonicalVhds $canonicalExpectedVhds)).Count -eq 0)
+    $nicPass = ($NicCount -eq 0)
+    return [pscustomobject]@{Pass=($identityPass -and $pathsPass -and $nicPass);IdentityPass=$identityPass;PathsPass=$pathsPass;NicPass=$nicPass;ObservedState=$VmState;Configuration=$canonicalConfiguration;Checkpoints=$canonicalCheckpoints;SmartPaging=$canonicalPaging;VhdPaths=$canonicalVhds}
 }
 
 function Assert-F2AclSupportedAce {
@@ -217,6 +296,7 @@ function New-F2AclEvidenceDocument {
         [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Records,
         [Parameter()][object]$Metadata = [ordered]@{},
         [Parameter()][string[]]$Errors = @(),
+        [Parameter()][string]$VmState = 'Unknown',
         [Parameter()][string]$CaptureId = ([guid]::NewGuid().ToString('D'))
     )
 
@@ -257,8 +337,8 @@ function New-F2AclEvidenceDocument {
         CreatedUtc = [DateTime]::UtcNow.ToString('o')
         VmId = $VmId.ToLowerInvariant()
         VmName = $VmName
-        VmState = 'Off'
-        Complete = (@($Errors).Count -eq 0 -and $canonicalExpected.Count -eq 11 -and $recordRows.Count -eq 11 -and $distinct.Count -eq 11)
+        VmState = $VmState
+        Complete = (@($Errors).Count -eq 0 -and $VmState -ceq 'Off' -and $canonicalExpected.Count -eq 11 -and $recordRows.Count -eq 11 -and $distinct.Count -eq 11)
         Manifest = $manifest
         Metadata = $Metadata
         Records = $recordRows
@@ -385,10 +465,10 @@ function Test-F2AclNoReparseAncestors {
 
 function Test-F2AclEvidenceVolumeSeparateFromG {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Path)
+    param([Parameter(Mandatory)][string]$Path,[string]$ProjectVolumePath='G:\')
     Test-F2AclNoReparseAncestors -Path $Path
     $evidenceVolume = [F2Acl.NativeDirectory]::GetVolumeGuidForPath($Path)
-    $projectVolume = [F2Acl.NativeDirectory]::GetVolumeGuidForPath('G:\')
+    $projectVolume = [F2Acl.NativeDirectory]::GetVolumeGuidForPath($ProjectVolumePath)
     if ([string]::IsNullOrWhiteSpace($evidenceVolume) -or [string]::IsNullOrWhiteSpace($projectVolume)) { throw 'EvidenceVolumeIdentityUnknown.' }
     if ([string]::Equals($evidenceVolume, $projectVolume, [StringComparison]::OrdinalIgnoreCase)) { throw 'EvidenceMustBeStoredOnVolumeSeparateFromG.' }
     return [pscustomobject]@{EvidenceVolumeGuid=$evidenceVolume;ProjectVolumeGuid=$projectVolume;Separate=$true}
@@ -396,12 +476,12 @@ function Test-F2AclEvidenceVolumeSeparateFromG {
 
 function New-F2AclRestrictedDirectory {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$OwnerSid)
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$OwnerSid, [string]$ProjectVolumePath='G:\')
 
     $fullPath = [IO.Path]::GetFullPath($Path)
     if (Test-Path -LiteralPath $fullPath) { throw 'Restricted directory already exists; refusing overwrite.' }
     $parentPath = [IO.Directory]::GetParent($fullPath).FullName
-    Test-F2AclEvidenceVolumeSeparateFromG -Path $parentPath | Out-Null
+    Test-F2AclEvidenceVolumeSeparateFromG -Path $parentPath -ProjectVolumePath $ProjectVolumePath | Out-Null
     $parentSddl = [F2Acl.NativeDirectory]::GetSddl($parentPath)
     $parentRaw = [Security.AccessControl.RawSecurityDescriptor]::new($parentSddl)
     if ($null -eq $parentRaw.DiscretionaryAcl -or ($parentRaw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclPresent) -eq 0) { throw 'Restricted evidence parent has a missing or null DACL.' }
@@ -498,7 +578,8 @@ function Test-F2AclEvidenceDocument {
     $requiredManifest = @('ExpectedCount','ExpectedPaths','RecordCount','UniquePathCount','AceCount','ErrorCount','ExpectedPathsSha256','RecordsSha256','Errors')
     if (-not (Test-F2AclHasProperties $doc.Manifest $requiredManifest)) { return [pscustomobject]@{ Pass=$false; Errors=@($errors)+@('RequiredManifestFieldMissing'); Document=$doc } }
     if (-not (Test-F2AclHasProperties $doc.Metadata @('Gates','Disk'))) { return [pscustomobject]@{ Pass=$false; Errors=@($errors)+@('RequiredMetadataFieldMissing'); Document=$doc } }
-    if (-not (Test-F2AclHasProperties $doc.Metadata.Disk @('SerialMatched','Serial','Model','DriveLetter','FileSystem','BusType','Health','PhysicalHealth','VolumeHealth','DiskNumber','Win32Index','PartitionDisk'))) { return [pscustomobject]@{ Pass=$false; Errors=@($errors)+@('StorageIdentityFieldsMissing'); Document=$doc } }
+    $requiredDiskFields = @('SerialMatched','Serial','Model','DriveLetter','FileSystem','BusType','Health','PhysicalHealth','VolumeHealth','DiskNumber','Win32Index','PartitionDisk','Win32MatchCount','DiskMatchCount','PhysicalMatchCount','Win32Serial','DiskSerial','PhysicalSerial','Win32Model','DiskFriendlyName','DiskModel','DiskHealth','DiskOperationalStatus','GPartitionCount','PartitionDiskNumber')
+    if (-not (Test-F2AclHasProperties $doc.Metadata.Disk $requiredDiskFields)) { return [pscustomobject]@{ Pass=$false; Errors=@($errors)+@('StorageIdentityFieldsMissing'); Document=$doc } }
     if ($doc.Schema -ne $script:F2AclSchema) { $errors.Add('SchemaMismatch') }
     if ($doc.VmId -ne $ExpectedVmId.ToLowerInvariant() -or $doc.VmName -ne $ExpectedVmName -or $doc.VmState -ne 'Off') { $errors.Add('VmIdentityOrStateMismatch') }
     if ($doc.Complete -ne $true) { $errors.Add('DocumentIncomplete') }
@@ -510,7 +591,8 @@ function Test-F2AclEvidenceDocument {
             elseif ($gate.Pass -ne $true) { $errors.Add('PreflightGateFailed: ' + [string]$gate.Name) }
         }
     }
-    if ($doc.Metadata.Disk.SerialMatched -ne $true -or $doc.Metadata.Disk.Serial -ne $ExpectedDiskSerial -or $doc.Metadata.Disk.Model -ne $ExpectedDiskModel -or $doc.Metadata.Disk.DriveLetter -ne 'G:' -or $doc.Metadata.Disk.FileSystem -ne 'NTFS' -or $doc.Metadata.Disk.BusType -ne 'USB' -or $doc.Metadata.Disk.Health -ne 'Healthy' -or $doc.Metadata.Disk.PhysicalHealth -ne 'Healthy' -or $doc.Metadata.Disk.VolumeHealth -ne 'Healthy' -or $doc.Metadata.Disk.DiskNumber -ne $doc.Metadata.Disk.Win32Index -or $doc.Metadata.Disk.PartitionDisk -ne $doc.Metadata.Disk.DiskNumber) { $errors.Add('StorageIdentityIncomplete') }
+    $storageValidation = Test-F2AclKingstonStorageIdentity -Observation $doc.Metadata.Disk
+    if (-not $storageValidation.Pass -or $doc.Metadata.Disk.SerialMatched -ne $true -or $doc.Metadata.Disk.Serial -ne $ExpectedDiskSerial -or $doc.Metadata.Disk.Model -ne $ExpectedDiskModel -or $doc.Metadata.Disk.DriveLetter -ne 'G:' -or $doc.Metadata.Disk.FileSystem -ne 'NTFS' -or $doc.Metadata.Disk.BusType -ne 'USB' -or $doc.Metadata.Disk.Health -ne 'Healthy' -or $doc.Metadata.Disk.PhysicalHealth -ne 'Healthy' -or $doc.Metadata.Disk.VolumeHealth -ne 'Healthy') { $errors.Add('StorageIdentityIncomplete') }
 
     $expected = @($ExpectedPaths | ForEach-Object { ConvertTo-F2AclCanonicalPath $_ })
     $actualRows = @($doc.Records)
@@ -574,4 +656,4 @@ function Test-F2AclEvidenceDocument {
     return [pscustomobject]@{ Pass = ($errors.Count -eq 0); Errors = @($errors); Document = $doc }
 }
 
-Export-ModuleMember -Function Get-F2AclSha256, ConvertTo-F2AclUtf8Bytes, ConvertTo-F2AclWindowsArgument, ConvertTo-F2AclCanonicalPath, Assert-F2AclSupportedAce, New-F2AclEvidenceDocument, Write-F2AclFrame, Read-F2AclFrame, Wait-F2AclProcessExit, New-F2AclRestrictedDirectory, Test-F2AclRestrictedDirectory, Test-F2AclNoReparseAncestors, Test-F2AclEvidenceVolumeSeparateFromG, Get-F2AclUnexpectedWritableSids, Add-F2AclBoundedStreamRecord, Test-F2AclEvidenceDocument
+Export-ModuleMember -Function Get-F2AclSha256, ConvertTo-F2AclUtf8Bytes, ConvertTo-F2AclWindowsArgument, ConvertTo-F2AclCanonicalPath, Assert-F2AclSupportedAce, Test-F2AclKingstonStorageIdentity, Test-F2AclVmStorageSnapshot, New-F2AclEvidenceDocument, Write-F2AclFrame, Read-F2AclFrame, Wait-F2AclProcessExit, New-F2AclRestrictedDirectory, Test-F2AclRestrictedDirectory, Test-F2AclNoReparseAncestors, Test-F2AclEvidenceVolumeSeparateFromG, Get-F2AclUnexpectedWritableSids, Add-F2AclBoundedStreamRecord, Test-F2AclEvidenceDocument

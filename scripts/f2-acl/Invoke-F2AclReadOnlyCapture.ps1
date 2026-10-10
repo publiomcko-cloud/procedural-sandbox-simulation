@@ -62,6 +62,80 @@ function Get-F2AclSerialKey {
     return ($Value -replace '\s', '').ToUpperInvariant()
 }
 
+function Get-F2AclStorageObservation {
+    $win32Matches = @(Get-CimInstance Win32_DiskDrive -ErrorAction Stop | Where-Object { (Get-F2AclSerialKey ([string]$_.SerialNumber)) -eq $expectedSerial })
+    $diskMatches = @(Get-Disk -ErrorAction Stop | Where-Object { (Get-F2AclSerialKey ([string]$_.SerialNumber)) -eq $expectedSerial })
+    $physicalMatches = @(Get-PhysicalDisk -ErrorAction Stop | Where-Object { (Get-F2AclSerialKey ([string]$_.SerialNumber)) -eq $expectedSerial })
+    $win32Disk = if ($win32Matches.Count -eq 1) { $win32Matches[0] } else { $null }
+    $disk = if ($diskMatches.Count -eq 1) { $diskMatches[0] } else { $null }
+    $physical = if ($physicalMatches.Count -eq 1) { $physicalMatches[0] } else { $null }
+    $partitions = @(Get-Partition -DriveLetter G -ErrorAction Stop)
+    $volume = Get-Volume -DriveLetter G -ErrorAction Stop
+    return [ordered]@{
+        Win32MatchCount=$win32Matches.Count;DiskMatchCount=$diskMatches.Count;PhysicalMatchCount=$physicalMatches.Count
+        Win32Serial=if($null -ne $win32Disk){[string]$win32Disk.SerialNumber}else{$null}
+        DiskSerial=if($null -ne $disk){[string]$disk.SerialNumber}else{$null}
+        PhysicalSerial=if($null -ne $physical){[string]$physical.SerialNumber}else{$null}
+        Win32Model=if($null -ne $win32Disk){[string]$win32Disk.Model}else{$null}
+        DiskFriendlyName=if($null -ne $disk){[string]$disk.FriendlyName}else{$null}
+        DiskModel=if($null -ne $disk){[string]$disk.Model}else{$null}
+        BusType=if($null -ne $disk){$disk.BusType.ToString()}else{$null}
+        DiskHealth=if($null -ne $disk){$disk.HealthStatus.ToString()}else{$null}
+        DiskOperationalStatus=if($null -ne $disk){@($disk.OperationalStatus | ForEach-Object {$_.ToString()})}else{$null}
+        PhysicalHealth=if($null -ne $physical){$physical.HealthStatus.ToString()}else{$null}
+        GPartitionCount=$partitions.Count
+        PartitionDiskNumber=if($partitions.Count -eq 1){[int]$partitions[0].DiskNumber}else{$null}
+        DiskNumber=if($null -ne $disk){[int]$disk.Number}else{$null}
+        Win32Index=if($null -ne $win32Disk){[int]$win32Disk.Index}else{$null}
+        VolumeFileSystem=[string]$volume.FileSystem
+        VolumeHealth=$volume.HealthStatus.ToString()
+    }
+}
+
+function Add-F2AclStorageObservation {
+    param([Collections.Generic.List[object]]$Gates,[Collections.Generic.List[string]]$Errors,[System.Collections.IDictionary]$DiskMetadata,[System.Collections.IDictionary]$Observation)
+    $result = Test-F2AclKingstonStorageIdentity -Observation $Observation
+    Add-F2AclGate $Gates $Errors 'KingstonSerialUniqueAcrossInterfaces' $result.SerialPass ('matches Win32/Disk/Physical=' + $Observation.Win32MatchCount + '/' + $Observation.DiskMatchCount + '/' + $Observation.PhysicalMatchCount)
+    Add-F2AclGate $Gates $Errors 'KingstonModelFieldsMatch' $result.ModelPass ('Win32=' + $Observation.Win32Model + ';FriendlyName=' + $Observation.DiskFriendlyName + ';DiskModel=' + $Observation.DiskModel + ';canonical=' + $result.CanonicalModel)
+    Add-F2AclGate $Gates $Errors 'KingstonUSBTransport' $result.TransportPass ('bus=' + $Observation.BusType)
+    Add-F2AclGate $Gates $Errors 'KingstonDiskHealthAndOnline' $result.HealthPass ('disk=' + $Observation.DiskHealth + ';operational=' + (@($Observation.DiskOperationalStatus) -join ',') + ';physical=' + $Observation.PhysicalHealth)
+    Add-F2AclGate $Gates $Errors 'GVolumeMapsToSerialSelectedDevice' $result.MappingPass ('partition count=' + $Observation.GPartitionCount + ';partition disk=' + $Observation.PartitionDiskNumber + ';disk number=' + $Observation.DiskNumber + ';filesystem=' + $Observation.VolumeFileSystem + ';volume health=' + $Observation.VolumeHealth)
+
+    $DiskMetadata.SerialMatched = $result.SerialPass -and $result.MappingPass
+    $DiskMetadata.Serial = $expectedSerial
+    $DiskMetadata.Model = $result.CanonicalModel
+    $DiskMetadata.RawWin32Model = $result.RawWin32Model
+    $DiskMetadata.NormalizedWin32Model = $result.NormalizedWin32Model
+    $DiskMetadata.RawDiskFriendlyName = $result.RawDiskFriendlyName
+    $DiskMetadata.NormalizedDiskFriendlyName = $result.NormalizedDiskFriendlyName
+    $DiskMetadata.RawDiskModel = $result.RawDiskModel
+    $DiskMetadata.NormalizedDiskModel = $result.NormalizedDiskModel
+    $DiskMetadata.DriveLetter = 'G:'
+    $DiskMetadata.FileSystem = [string]$Observation.VolumeFileSystem
+    $DiskMetadata.BusType = [string]$Observation.BusType
+    $DiskMetadata.Health = [string]$Observation.DiskHealth
+    $DiskMetadata.PhysicalHealth = [string]$Observation.PhysicalHealth
+    $DiskMetadata.VolumeHealth = [string]$Observation.VolumeHealth
+    $DiskMetadata.DiskNumber = $Observation.DiskNumber
+    $DiskMetadata.Win32Index = $Observation.Win32Index
+    $DiskMetadata.PartitionDisk = $Observation.PartitionDiskNumber
+    foreach ($key in $Observation.Keys) { $DiskMetadata[$key] = $Observation[$key] }
+    return $result
+}
+
+function Get-F2AclVmStorageSnapshot {
+    param([Parameter(Mandatory)]$Vm)
+    $configuration = ConvertTo-F2AclCanonicalPath ([string]$Vm.ConfigurationLocation)
+    $checkpoints = ConvertTo-F2AclCanonicalPath ([string]$Vm.SnapshotFileLocation)
+    $smartPaging = ConvertTo-F2AclCanonicalPath ([string]$Vm.SmartPagingFilePath)
+    $vhdPaths = @(Get-VMHardDiskDrive -VM $Vm -ErrorAction Stop | ForEach-Object { ConvertTo-F2AclCanonicalPath ([string]$_.Path) })
+    $nicCount = @(Get-VMNetworkAdapter -VM $Vm -ErrorAction Stop).Count
+    $expectedConfiguration = ConvertTo-F2AclCanonicalPath (Join-Path $projectRoot $vmName)
+    $expectedVhds = @((Join-Path $projectRoot 'F2-G1-OS.vhdx'), (Join-Path $projectRoot 'F2-G1-Scratch.vhdx') | ForEach-Object { ConvertTo-F2AclCanonicalPath $_ })
+    $validation = Test-F2AclVmStorageSnapshot -VmId $Vm.Id.ToString() -VmName $Vm.Name -VmState $Vm.State.ToString() -ExpectedVmId $vmId -ExpectedVmName $vmName -ExpectedConfiguration $expectedConfiguration -ExpectedCheckpoints $projectRoot -ExpectedSmartPaging $projectRoot -ExpectedVhdPaths $expectedVhds -Configuration $configuration -Checkpoints $checkpoints -SmartPaging $smartPaging -VhdPaths $vhdPaths -NicCount $nicCount
+    return [pscustomobject]@{Validation=$validation;Configuration=$configuration;Checkpoints=$checkpoints;SmartPaging=$smartPaging;VhdPaths=$vhdPaths;NicCount=$nicCount;VmId=$Vm.Id.ToString().ToLowerInvariant();VmName=$Vm.Name;VmState=$Vm.State.ToString()}
+}
+
 function Test-F2AclNoReparsePath {
     param([string]$Path, [string]$StopAt)
     $current = [IO.Path]::GetFullPath($Path)
@@ -161,7 +235,8 @@ function Invoke-F2AclCollectorChild {
     $gates = [Collections.Generic.List[object]]::new()
     $errors = [Collections.Generic.List[string]]::new()
     $records = [Collections.Generic.List[object]]::new()
-    $diskMetadata = [ordered]@{SerialMatched=$false;Serial=$expectedSerial;Model='';DriveLetter='G:';FileSystem='';BusType='';Health='';PhysicalHealth='';VolumeHealth='';DiskNumber=$null;Win32Index=$null;PartitionDisk=$null;Matches=@{Win32=0;Disk=0;Physical=0}}
+    $finalVmState = 'Unknown'
+    $diskMetadata = [ordered]@{SerialMatched=$false;Serial=$expectedSerial;Model='';RawWin32Model='';NormalizedWin32Model='';RawDiskFriendlyName='';NormalizedDiskFriendlyName='';RawDiskModel='';NormalizedDiskModel='';DriveLetter='G:';FileSystem='';BusType='';Health='';PhysicalHealth='';VolumeHealth='';DiskNumber=$null;Win32Index=$null;PartitionDisk=$null}
     $metadata = [ordered]@{Gates=@();Disk=$diskMetadata;ConfiguredPaths=@{};VmNicCount=$null}
     $paths = Get-F2AclExpectedPaths -Root $projectRoot -VmGuid $vmId.ToUpperInvariant()
 
@@ -169,49 +244,17 @@ function Invoke-F2AclCollectorChild {
         if ($PSVersionTable.PSEdition -ne 'Desktop') { throw 'Windows PowerShell Desktop edition is required.' }
         Import-Module Hyper-V -ErrorAction Stop
         $vm = Get-VM -Id ([guid]$vmId) -ErrorAction Stop
-        Add-F2AclGate $gates $errors 'VmImmutableIdentityAndOff' ($vm.Id.ToString().ToLowerInvariant() -eq $vmId -and $vm.Name -eq $vmName -and $vm.State.ToString() -eq 'Off') ('id/name/state matched; state=' + $vm.State)
+        $initialVmIdentityPass = $vm.Id.ToString().ToLowerInvariant() -eq $vmId -and $vm.Name -eq $vmName -and $vm.State.ToString() -eq 'Off'
+        Add-F2AclGate $gates $errors 'VmImmutableIdentityAndOff' $initialVmIdentityPass ('id/name/state matched=' + $initialVmIdentityPass + '; state=' + $vm.State)
 
-        $win32Matches = @(Get-CimInstance Win32_DiskDrive -ErrorAction Stop | Where-Object { (Get-F2AclSerialKey ([string]$_.SerialNumber)) -eq $expectedSerial })
-        $diskMatches = @(Get-Disk -ErrorAction Stop | Where-Object { (Get-F2AclSerialKey ([string]$_.SerialNumber)) -eq $expectedSerial })
-        $physicalMatches = @(Get-PhysicalDisk -ErrorAction Stop | Where-Object { (Get-F2AclSerialKey ([string]$_.SerialNumber)) -eq $expectedSerial })
-        $diskMetadata.Matches = @{Win32=$win32Matches.Count;Disk=$diskMatches.Count;Physical=$physicalMatches.Count}
-        $oneEach = $win32Matches.Count -eq 1 -and $diskMatches.Count -eq 1 -and $physicalMatches.Count -eq 1
-        Add-F2AclGate $gates $errors 'KingstonSerialUniqueAcrossInterfaces' $oneEach ('matches Win32/Disk/Physical=' + $win32Matches.Count + '/' + $diskMatches.Count + '/' + $physicalMatches.Count)
-        if ($oneEach) {
-            $win32Disk = $win32Matches[0]; $disk = $diskMatches[0]; $physical = $physicalMatches[0]
-            $modelPass = ([string]$win32Disk.Model).Trim() -eq $expectedModel
-            $transportPass = $disk.BusType.ToString() -eq 'USB'
-            $healthPass = $disk.HealthStatus.ToString() -eq 'Healthy' -and $disk.OperationalStatus -contains 'Online' -and $physical.HealthStatus.ToString() -eq 'Healthy'
-            Add-F2AclGate $gates $errors 'KingstonModelTransportAndHealth' ($modelPass -and $transportPass -and $healthPass) ('model=' + [string]$win32Disk.Model + ';bus=' + $disk.BusType + ';health=' + $disk.HealthStatus)
-            $volume = Get-Volume -DriveLetter G -ErrorAction Stop
-            $partitions = @(Get-Partition -DriveLetter G -ErrorAction Stop)
-            $mapped = $partitions.Count -eq 1 -and $partitions[0].DiskNumber -eq $disk.Number -and $win32Disk.Index -eq $disk.Number
-            $volumePass = $mapped -and $volume.FileSystem -eq 'NTFS' -and $volume.HealthStatus.ToString() -eq 'Healthy'
-            Add-F2AclGate $gates $errors 'GVolumeMapsToSerialSelectedDevice' $volumePass ('partition count=' + $partitions.Count + ';disk number=' + $disk.Number + ';filesystem=' + $volume.FileSystem + ';volume health=' + $volume.HealthStatus)
-            $diskMetadata.SerialMatched = $mapped
-            $diskMetadata.Model = ([string]$win32Disk.Model).Trim()
-            $diskMetadata.FileSystem = [string]$volume.FileSystem
-            $diskMetadata.BusType = $disk.BusType.ToString()
-            $diskMetadata.Health = $disk.HealthStatus.ToString()
-            $diskMetadata.PhysicalHealth = $physical.HealthStatus.ToString()
-            $diskMetadata.VolumeHealth = $volume.HealthStatus.ToString()
-            $diskMetadata.DiskNumber = [int]$disk.Number
-            $diskMetadata.Win32Index = [int]$win32Disk.Index
-            $diskMetadata.PartitionDisk = [int]$partitions[0].DiskNumber
-        }
+        $storageObservation = Get-F2AclStorageObservation
+        [void](Add-F2AclStorageObservation -Gates $gates -Errors $errors -DiskMetadata $diskMetadata -Observation $storageObservation)
 
-        $config = ConvertTo-F2AclCanonicalPath ([string]$vm.ConfigurationLocation)
-        $snapshots = ConvertTo-F2AclCanonicalPath ([string]$vm.SnapshotFileLocation)
-        $paging = ConvertTo-F2AclCanonicalPath ([string]$vm.SmartPagingFilePath)
-        $vhdPaths = @(Get-VMHardDiskDrive -VM $vm -ErrorAction Stop | ForEach-Object { ConvertTo-F2AclCanonicalPath ([string]$_.Path) })
-        $expectedConfig = ConvertTo-F2AclCanonicalPath (Join-Path $projectRoot $vmName)
-        $expectedVhds = @((Join-Path $projectRoot 'F2-G1-OS.vhdx'), (Join-Path $projectRoot 'F2-G1-Scratch.vhdx') | ForEach-Object { ConvertTo-F2AclCanonicalPath $_ })
-        $configPass = $config -eq $expectedConfig -and $snapshots -eq (ConvertTo-F2AclCanonicalPath $projectRoot) -and $paging -eq (ConvertTo-F2AclCanonicalPath $projectRoot) -and $vhdPaths.Count -eq 2 -and @((Compare-Object ($vhdPaths | Sort-Object) ($expectedVhds | Sort-Object))).Count -eq 0
-        Add-F2AclGate $gates $errors 'ConfiguredStoragePathsExact' $configPass 'configuration, checkpoint, smart-paging, and two VHDX paths checked'
-        $nicCount = @(Get-VMNetworkAdapter -VM $vm -ErrorAction Stop).Count
-        $metadata.VmNicCount = $nicCount
-        Add-F2AclGate $gates $errors 'ZeroVirtualNetworkAdapters' ($nicCount -eq 0) ('adapter count=' + $nicCount)
-        $metadata.ConfiguredPaths = [ordered]@{Configuration=$config;Snapshots=$snapshots;SmartPaging=$paging;Vhdx=$vhdPaths}
+        $initialSnapshot = Get-F2AclVmStorageSnapshot -Vm $vm
+        Add-F2AclGate $gates $errors 'ConfiguredStoragePathsExact' $initialSnapshot.Validation.PathsPass 'configuration, checkpoint, smart-paging, and two VHDX paths checked'
+        Add-F2AclGate $gates $errors 'ZeroVirtualNetworkAdapters' $initialSnapshot.Validation.NicPass ('adapter count=' + $initialSnapshot.NicCount)
+        $metadata.VmNicCount = $initialSnapshot.NicCount
+        $metadata.ConfiguredPaths = [ordered]@{Configuration=$initialSnapshot.Configuration;Snapshots=$initialSnapshot.Checkpoints;SmartPaging=$initialSnapshot.SmartPaging;Vhdx=$initialSnapshot.VhdPaths}
         $capabilityCache = 'HKLM:\SOFTWARE\Microsoft\SecurityManager\CapabilityClasses\AllCachedCapabilities'
         try {
             $cacheData = Get-ItemProperty -LiteralPath $capabilityCache -ErrorAction Stop
@@ -236,6 +279,30 @@ function Invoke-F2AclCollectorChild {
             $records.Add((Get-F2AclRecord $path))
         }
         foreach ($record in $records) { if ($record.Status -ne 'PASS') { $errors.Add('AclRecordFailed:' + $record.Path + ':' + $record.Error) } }
+
+        try {
+            $postVm = Get-VM -Id ([guid]$vmId) -ErrorAction Stop
+            $finalVmState = $postVm.State.ToString()
+            $postSnapshot = Get-F2AclVmStorageSnapshot -Vm $postVm
+            Add-F2AclGate $gates $errors 'PostCollectionVmIdentityAndOff' $postSnapshot.Validation.IdentityPass ('id/name/state=' + $postVm.Id + '/' + $postVm.Name + '/' + $postVm.State)
+            Add-F2AclGate $gates $errors 'PostCollectionStoragePathsUnchanged' $postSnapshot.Validation.PathsPass 'configuration, checkpoint, smart-paging, and VHDX paths re-read after ACL collection'
+            Add-F2AclGate $gates $errors 'PostCollectionZeroVirtualNetworkAdapters' $postSnapshot.Validation.NicPass ('adapter count=' + $postSnapshot.NicCount)
+
+            $postStorage = Get-F2AclStorageObservation
+            $postStorageValidation = Test-F2AclKingstonStorageIdentity -Observation $postStorage
+            Add-F2AclGate $gates $errors 'PostCollectionKingstonStorageIdentityUnchanged' $postStorageValidation.Pass ('serial/model/USB/health/G: mapping re-read; canonical model=' + $postStorageValidation.CanonicalModel)
+            $metadata.PostCollection = [ordered]@{VmId=$postVm.Id.ToString().ToLowerInvariant();VmName=$postVm.Name;VmState=$postVm.State.ToString();Paths=$postSnapshot;Storage=$postStorage;StorageValidation=$postStorageValidation}
+
+            foreach ($path in $canonicalPaths) {
+                try { Test-F2AclNoReparsePath -Path $path -StopAt $volumeRoot }
+                catch { $errors.Add('PostCollectionPathSafety:' + $_.Exception.Message) }
+            }
+            $postPathSafetyPass = @($errors | Where-Object { $_ -like 'PostCollectionPathSafety:*' }).Count -eq 0
+            Add-F2AclGate $gates $errors 'PostCollectionNoReparsePoints' $postPathSafetyPass ('rechecked target path count=' + $canonicalPaths.Count)
+        }
+        catch {
+            Add-F2AclGate $gates $errors 'PostCollectionRevalidationCompleted' $false $_.Exception.Message
+        }
     }
     catch {
         $errors.Add('CollectorException:' + $_.Exception.Message)
@@ -243,7 +310,7 @@ function Invoke-F2AclCollectorChild {
 
     $metadata.Gates = @($gates)
     $metadata.Disk.CapabilitySid = $expectedCapabilitySid
-    $document = New-F2AclEvidenceDocument -VmId $vmId -VmName $vmName -ExpectedPaths $paths -Records @($records) -Metadata $metadata -Errors @($errors)
+    $document = New-F2AclEvidenceDocument -VmId $vmId -VmName $vmName -ExpectedPaths $paths -Records @($records) -Metadata $metadata -Errors @($errors) -VmState $finalVmState
     $payload = Get-F2AclJsonBytes $document
     $client = $null
     try {
