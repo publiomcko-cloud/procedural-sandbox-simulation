@@ -134,11 +134,17 @@ function Test-F2IcaclsSourcePins {
         $modulePath=Join-Path $root 'scripts\f2-acl\F2AclIcacls.Corroboration.psm1'
         $capturePath=Join-Path $root 'scripts\f2-acl\Invoke-F2AclReadOnlyCapture.ps1'
         $protocolPath=Join-Path $root 'scripts\f2-acl\F2AclCapture.Protocol.psm1'
+        $runtimePath=Join-Path $root 'scripts\f2-acl\F2AclIcacls.Runtime.psm1'
+        $launcherPath=Join-Path $root 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1'
+        $coordinatorPath=Join-Path $root 'scripts\f2-acl\Invoke-F2IcaclsProtectedCoordinator.ps1'
         $moduleHash=Get-F2IcaclsFileSha256 -Path $modulePath
         $captureHash=Get-F2IcaclsFileSha256 -Path $capturePath
         $protocolHash=Get-F2IcaclsFileSha256 -Path $protocolPath
-        if($pins.CorroborationModuleSha256 -cne $moduleHash -or $pins.CollectorScriptSha256 -cne $captureHash -or $pins.ProtocolModuleSha256 -cne $protocolHash -or $Integrity.CollectorScriptSha256 -cne $captureHash -or $Integrity.ProtocolModuleSha256 -cne $protocolHash){throw 'SourcePinOrBaselineProvenanceMismatch.'}
-        return [pscustomobject]@{Pass=$true;CommitSha=$ActualCommitSha;PinManifestSha256=$pinsHash;CorroborationModuleSha256=$moduleHash;CollectorScriptSha256=$captureHash;ProtocolModuleSha256=$protocolHash;ErrorCode=$null}
+        $runtimeHash=Get-F2IcaclsFileSha256 -Path $runtimePath
+        $launcherHash=Get-F2IcaclsFileSha256 -Path $launcherPath
+        $coordinatorHash=Get-F2IcaclsFileSha256 -Path $coordinatorPath
+        if($pins.CorroborationModuleSha256 -cne $moduleHash -or $pins.CollectorScriptSha256 -cne $captureHash -or $pins.ProtocolModuleSha256 -cne $protocolHash -or $pins.RuntimeModuleSha256 -cne $runtimeHash -or $pins.LauncherScriptSha256 -cne $launcherHash -or $pins.CoordinatorScriptSha256 -cne $coordinatorHash -or $Integrity.CollectorScriptSha256 -cne $captureHash -or $Integrity.ProtocolModuleSha256 -cne $protocolHash){throw 'SourcePinOrBaselineProvenanceMismatch.'}
+        return [pscustomobject]@{Pass=$true;CommitSha=$ActualCommitSha;PinManifestSha256=$pinsHash;CorroborationModuleSha256=$moduleHash;CollectorScriptSha256=$captureHash;ProtocolModuleSha256=$protocolHash;RuntimeModuleSha256=$runtimeHash;LauncherScriptSha256=$launcherHash;CoordinatorScriptSha256=$coordinatorHash;ErrorCode=$null}
     } catch {
         return [pscustomobject]@{Pass=$false;CommitSha=$ActualCommitSha;PinManifestSha256=$null;CorroborationModuleSha256=$null;CollectorScriptSha256=$null;ProtocolModuleSha256=$null;ErrorCode='SourcePinVerificationFailed'}
     }
@@ -187,11 +193,13 @@ function Test-F2IcaclsPreflight {
     & $add 'RetainedBaselineIntegrity' $payloadPass 'Baseline bytes and integrity manifest digest must match the reviewed capture.'
 
     $storage = $Observation.Storage
-    $storagePass = ($storage.Win32MatchCount -eq 1 -and $storage.DiskMatchCount -eq 1 -and $storage.PhysicalMatchCount -eq 1 -and $storage.Win32Serial -eq $script:F2IcaclsDiskSerial -and $storage.DiskSerial -eq $script:F2IcaclsDiskSerial -and $storage.PhysicalSerial -eq $script:F2IcaclsDiskSerial -and $storage.Win32Model -ceq 'KINGSTON  SA400S37240G USB Device' -and $storage.DiskFriendlyName -ceq $script:F2IcaclsDiskModel -and $storage.DiskModel -ceq ' SA400S37240G   ' -and $storage.BusType -ceq 'USB' -and $storage.DiskHealth -ceq 'Healthy' -and $storage.PhysicalHealth -ceq 'Healthy' -and $storage.DiskOperationalStatus -ceq 'Online' -and $storage.DiskNumber -is [int] -and $storage.DiskNumber -ge 0 -and $storage.PartitionDiskNumber -is [int] -and $storage.Win32Index -is [int] -and $storage.PartitionDiskNumber -eq $storage.DiskNumber -and $storage.Win32Index -eq $storage.DiskNumber -and $storage.GDriveLetter -ceq 'G:' -and $storage.VolumeFileSystem -ceq 'NTFS' -and [string]::Equals([string]$storage.GVolumeGuid.TrimEnd('\'),$projectGuid.TrimEnd('\'),[StringComparison]::OrdinalIgnoreCase))
+    $storageIdentity = Test-F2AclKingstonStorageIdentity -Observation $storage
+    $storagePass = ($storageIdentity.Pass -and [int]$storage.PartitionDiskNumber -eq [int]$storage.DiskNumber -and [int]$storage.Win32Index -eq [int]$storage.DiskNumber -and [string]$storage.GDriveLetter -ceq 'G:' -and [string]$storage.VolumeFileSystem -ceq 'NTFS' -and [string]$storage.VolumeHealth -ceq 'Healthy' -and [string]::Equals([string]$storage.GVolumeGuid.TrimEnd('\'),$projectGuid.TrimEnd('\'),[StringComparison]::OrdinalIgnoreCase))
     & $add 'KingstonIdentityAndGMapping' $storagePass 'Unique serial/model/USB/health checks and G: volume mapping must all agree.'
 
     $pathChecks = @($Observation.PathChecks)
-    $safePaths = ($pathChecks.Count -eq 11 -and @($pathChecks | Where-Object { $_.Exists -ne $true -or $_.ReparsePoint -ne $false -or $_.ParentChainClear -ne $true -or -not [string]::Equals([string]$_.Path,[IO.Path]::GetFullPath([string]$_.Path),[StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetFullPath([string]$_.Path) -notin $expectedPaths }).Count -eq 0 -and @($pathChecks.Path | Sort-Object -Unique).Count -eq 11)
+    $expectedDirectories=@($expectedPaths[0],$expectedPaths[1],$expectedPaths[2],$expectedPaths[3],$expectedPaths[9],$expectedPaths[10])
+    $safePaths = ($pathChecks.Count -eq 11 -and @($pathChecks | Where-Object { $_.Exists -ne $true -or $_.ReparsePoint -ne $false -or $_.ParentChainClear -ne $true -or $_.IsDirectory -isnot [bool] -or ([bool]$_.IsDirectory -ne ([string]$_.Path -in $expectedDirectories)) -or -not [string]::Equals([string]$_.Path,[IO.Path]::GetFullPath([string]$_.Path),[StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetFullPath([string]$_.Path) -notin $expectedPaths }).Count -eq 0 -and @($pathChecks.Path | Sort-Object -Unique).Count -eq 11)
     & $add 'CanonicalPathsNoReparse' $safePaths 'All 11 approved paths and their ancestor chains must exist canonically without reparse points or aliases.'
 
     $pinsPass = ([string]$ExpectedScriptSha256 -match '^[0-9a-f]{64}$' -and [string]$ExpectedModuleSha256 -match '^[0-9a-f]{64}$' -and [string]::Equals($ExpectedScriptSha256,$ActualScriptSha256,[StringComparison]::OrdinalIgnoreCase) -and [string]::Equals($ExpectedModuleSha256,$ActualModuleSha256,[StringComparison]::OrdinalIgnoreCase))
@@ -306,7 +314,7 @@ function Invoke-F2IcaclsProcessCore {
         [ValidateRange(1024,1048576)][int]$MaxBytesPerStream=$script:F2IcaclsMaxOutputBytes
     )
 
-    $result=[ordered]@{Started=$false;ProcessId=$null;ExitCode=$null;TimedOut=$false;CleanupComplete=$true;OutputComplete=$false;Truncated=$false;Stdout='';Stderr='';StdoutBytes=0L;StderrBytes=0L;StdoutSha256=$null;StderrSha256=$null;OutputHashEncoding='UTF-8 decoded text';ReaderError=$null;ElapsedMilliseconds=0}
+    $result=[ordered]@{Started=$false;ProcessId=$null;ProcessStartUtc=$null;ExitCode=$null;TimedOut=$false;CleanupComplete=$true;OutputComplete=$false;Truncated=$false;Stdout='';Stderr='';StdoutBytes=0L;StderrBytes=0L;StdoutSha256=$null;StderrSha256=$null;OutputHashEncoding='UTF-8 decoded text';ReaderError=$null;ElapsedMilliseconds=0}
     $clock=[Diagnostics.Stopwatch]::StartNew();$process=$null;$outTask=$null;$errTask=$null
     $outBuffer=[char[]]::new(4096);$errBuffer=[char[]]::new(4096)
     $outBuilder=[Text.StringBuilder]::new();$errBuilder=[Text.StringBuilder]::new()
@@ -317,7 +325,7 @@ function Invoke-F2IcaclsProcessCore {
         $startInfo.FileName=$FilePath;$startInfo.Arguments=$Arguments;$startInfo.UseShellExecute=$false;$startInfo.CreateNoWindow=$true;$startInfo.RedirectStandardOutput=$true;$startInfo.RedirectStandardError=$true
         $process=New-Object Diagnostics.Process;$process.StartInfo=$startInfo
         if(-not $process.Start()){throw 'IcaclsChildStartReturnedFalse.'}
-        $result.Started=$true;$result.ProcessId=[int]$process.Id
+        $result.Started=$true;$result.ProcessId=[int]$process.Id;$result.ProcessStartUtc=$process.StartTime.ToUniversalTime().ToString('o')
         $deadline=[int64]$TimeoutSeconds*1000
         $outTask=$process.StandardOutput.ReadAsync($outBuffer,0,$outBuffer.Length)
         $errTask=$process.StandardError.ReadAsync($errBuffer,0,$errBuffer.Length)
@@ -392,7 +400,7 @@ function Get-F2IcaclsCommandSpec {
     $full=[IO.Path]::GetFullPath($Target)
     $allowlist=@(Get-F2IcaclsExpectedPaths -ProjectRoot $ProjectRoot)
     if(-not [string]::Equals($Target,$full,[StringComparison]::OrdinalIgnoreCase) -or $full -notin $allowlist -or $Target.Contains('"') -or $Target.Contains("`r") -or $Target.Contains("`n")){throw 'TargetOutsideExactIcaclsAllowlist.'}
-    $exe=Join-Path $env:SystemRoot 'System32\icacls.exe'
+    $exe=Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::System)) 'icacls.exe'
     return [pscustomobject]@{FilePath=$exe;Arguments=('"'+$full+'"');Target=$full;Switches=@()}
 }
 
@@ -440,12 +448,15 @@ function Invoke-F2IcaclsPlan {
 
 function Write-F2IcaclsEvidencePackage {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][string]$OwnerSid,[Parameter(Mandatory)][string[]]$Targets,[Parameter(Mandatory)][object[]]$Runs,[Parameter(Mandatory)][object[]]$Comparisons,[Parameter(Mandatory)][string]$ProjectVolumePath,[Parameter(Mandatory)][string]$ProjectVolumeGuid,[Parameter(Mandatory)][string]$EvidenceVolumeGuid,[ValidateRange(1024,1048576)][int]$MaxFileBytes=524288)
+    param([Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][string]$OwnerSid,[Parameter(Mandatory)][string[]]$Targets,[Parameter(Mandatory)][object[]]$Runs,[Parameter(Mandatory)][object[]]$Comparisons,[Parameter(Mandatory)][string]$ProjectVolumePath,[Parameter(Mandatory)][string]$ProjectVolumeGuid,[Parameter(Mandatory)][string]$EvidenceVolumeGuid,[ValidateRange(1024,1048576)][int]$MaxFileBytes=524288,[string]$MailboxCaptureId,[string]$MailboxRequesterSid)
     $full=[IO.Path]::GetFullPath($Directory)
     if(-not [IO.Directory]::Exists($full)){throw 'EvidenceDirectoryMissing.'}
     if($OwnerSid -notmatch '^S-1-'){throw 'EvidenceDirectoryOwnerSidInvalid.'}
     Test-F2AclNoReparseAncestors -Path $full | Out-Null
-    $secureDirectory=Test-F2AclRestrictedDirectory -Path $full -OwnerSid $OwnerSid
+    if(-not [string]::IsNullOrWhiteSpace($MailboxCaptureId) -or -not [string]::IsNullOrWhiteSpace($MailboxRequesterSid)){
+        if([string]::IsNullOrWhiteSpace($MailboxCaptureId) -or [string]::IsNullOrWhiteSpace($MailboxRequesterSid) -or $MailboxRequesterSid -cne $OwnerSid){throw 'EvidenceMailboxArgumentsInvalid.'}
+        $secureDirectory=Test-F2IcaclsMailboxEvidenceDirectory -Path $full -CaptureId $MailboxCaptureId -RequesterSid $MailboxRequesterSid
+    }else{$secureDirectory=Test-F2AclRestrictedDirectory -Path $full -OwnerSid $OwnerSid}
     if(-not $secureDirectory.Protected){throw 'EvidenceDirectoryAclNotVerified.'}
     $item=Get-Item -LiteralPath $full -Force -ErrorAction Stop
     if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint)-ne 0){throw 'EvidenceDirectoryIsReparsePoint.'}
@@ -454,7 +465,7 @@ function Write-F2IcaclsEvidencePackage {
     if(-not [string]::Equals($actualProjectVolume,$ProjectVolumeGuid,[StringComparison]::OrdinalIgnoreCase) -or -not [string]::Equals($actualEvidenceVolume,$EvidenceVolumeGuid,[StringComparison]::OrdinalIgnoreCase) -or [string]::Equals($actualEvidenceVolume,$actualProjectVolume,[StringComparison]::OrdinalIgnoreCase)){throw 'EvidenceVolumeIdentityOrSeparationFailed.'}
     $targetSet=@($Targets|Sort-Object -Unique)
     $runPaths=@($Runs.Path|Sort-Object -Unique);$comparisonPaths=@($Comparisons.Path|Sort-Object -Unique)
-    if($targetSet.Count -ne 11 -or $runPaths.Count -ne 11 -or @(Compare-Object $targetSet $runPaths).Count -ne 0 -or $comparisonPaths.Count -ne 11 -or @(Compare-Object $targetSet $comparisonPaths).Count -ne 0 -or $Comparisons.Count -ne 11){throw 'EvidencePackageTargetCompletenessFailed.'}
+    if($targetSet.Count -ne 11 -or $Runs.Count -lt 11 -or $runPaths.Count -ne 11 -or @(Compare-Object $targetSet $runPaths).Count -ne 0 -or $comparisonPaths.Count -ne 11 -or @(Compare-Object $targetSet $comparisonPaths).Count -ne 0 -or $Comparisons.Count -ne 11){throw 'EvidencePackageTargetCompletenessFailed.'}
     foreach($run in $Runs){if([string]$run.Path -notin $targetSet -or $null -eq $run.Result -or $null -eq $run.Result.ExitCode){throw 'EvidencePackageContainsInvalidRun.'}}
     foreach($comparison in $Comparisons){if([string]$comparison.Classification -notin @('PASS','MISMATCH','INDETERMINATE')){throw 'EvidencePackageContainsInvalidClassification.'}}
     $manifestRows=New-Object 'System.Collections.Generic.List[object]';$index=0
@@ -467,7 +478,7 @@ function Write-F2IcaclsEvidencePackage {
         $name=('icacls-{0:D2}.json' -f $index);$path=Join-Path $full $name
         $stream=[IO.File]::Open($path,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
         try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
-        $manifestRows.Add([pscustomobject]@{Name=$name;Bytes=$bytes.Length;Sha256=(Get-F2IcaclsSha256 -Bytes $bytes)})
+        $manifestRows.Add([pscustomobject]@{Name=$name;Path=[string]$run.Path;Bytes=$bytes.Length;Sha256=(Get-F2IcaclsSha256 -Bytes $bytes)})
     }
     $allTargets=@($Runs.Path|Sort-Object -Unique)
     $complete=($allTargets.Count -eq 11 -and @(Compare-Object $targetSet $allTargets).Count -eq 0 -and $Runs.Count -ge 11 -and $Comparisons.Count -eq 11)
@@ -481,4 +492,4 @@ function Write-F2IcaclsEvidencePackage {
     return [pscustomobject]@{Complete=$complete;Directory=$full;IntegritySha256=(Get-F2IcaclsSha256 -Bytes $manifestBytes);TargetCount=$targetSet.Count;RunCount=$Runs.Count;ComparisonCount=$Comparisons.Count;IntegrityPath=$manifestPath}
 }
 
-Export-ModuleMember -Function Get-F2IcaclsExpectedPaths,Get-F2IcaclsSha256,Get-F2IcaclsFileSha256,Read-F2IcaclsBaselineEvidence,Test-F2IcaclsSourcePins,Test-F2IcaclsPreflight,Get-F2IcaclsRightMask,ConvertFrom-F2IcaclsText,Get-F2IcaclsComparison,Test-F2IcaclsAccessDenied,Get-F2IcaclsCommandSpec,Invoke-F2IcaclsObject,Invoke-F2IcaclsPlan,Write-F2IcaclsEvidencePackage
+Export-ModuleMember -Function Get-F2IcaclsExpectedPaths,Get-F2IcaclsExpectedMailboxPath,Get-F2IcaclsSha256,Get-F2IcaclsFileSha256,Read-F2IcaclsBaselineEvidence,Test-F2IcaclsSourcePins,Test-F2IcaclsPreflight,Get-F2IcaclsRightMask,ConvertFrom-F2IcaclsText,Get-F2IcaclsComparison,Test-F2IcaclsAccessDenied,Get-F2IcaclsCommandSpec,Invoke-F2IcaclsObject,Invoke-F2IcaclsPlan,Write-F2IcaclsEvidencePackage,Test-F2IcaclsMailboxEvidenceDirectory

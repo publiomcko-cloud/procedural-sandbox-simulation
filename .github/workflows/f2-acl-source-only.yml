@@ -32,6 +32,13 @@ jobs:
           $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
           Write-Host "F2IcaclsTestProcessExit=$($test.ExitCode)"
           if ($test.ExitCode -ne 0) { exit $test.ExitCode }
+      - name: Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1').Path
+          $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
+          Write-Host "F2IcaclsRuntimeTestProcessExit=$($test.ExitCode)"
+          if ($test.ExitCode -ne 0) { exit $test.ExitCode }
       - name: Parse tracked PowerShell source
         shell: powershell
         run: |

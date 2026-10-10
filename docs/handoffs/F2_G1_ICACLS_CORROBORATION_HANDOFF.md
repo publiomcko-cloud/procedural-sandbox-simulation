@@ -1,70 +1,99 @@
-# Developer handoff — F2 G1 `icacls` corroboration helper
+# Developer handoff — F2 G1 accelerated `icacls` workflow
 
-Status: READY_FOR_INDEPENDENT_SOURCE_REVIEW
-Ticket / acceptance criteria: Issue #48, findings `6101582852` and `6101813008`; correct and source-validate the separate read-only `icacls` corroboration helper. No live collection is authorized.
-Repository / remote: `publiomcko-cloud/procedural-sandbox-simulation`
+Status: READY_FOR_INDEPENDENT_REVIEW
+Ticket / acceptance criteria: Issue #48 accelerated source-only implementation under owner approval `6102054991`; PR #50 remains draft.
+Repository / remote: `publiomcko-cloud/procedural-sandbox-simulation` / `origin`
 Worktree / branch: `C:\Dev\f2-g1-icacls-corroboration` / `security/f2-icacls-corroboration-issue48`
-Base SHA: `a62773f0553dff4a05055b18fa10834f7488ae55`
-Candidate SHA: `0174b277ba5cff36c3ea9cf8bd8402ab6a2ea8dc` (source implementation snapshot)
-Parent SHA: `d28c1235c1ee7f186dd1e46f3a5da1752a98b561`
-Changed paths: `docs/handoffs/F2_G1_ICACLS_CORROBORATION_HANDOFF.md`; `scripts/f2-acl/F2AclIcacls.Corroboration.psm1`; `scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json`; `scripts/f2-acl/Test-F2AclIcacls.Corroboration.ps1`.
+Base SHA: `58af4a8d8f83a184348082bf12fee7b1cef18779`
+Candidate SHA: The immutable candidate is the final PR #50 head reported with this handoff; a commit cannot contain its own hash.
+Parent SHA: `58af4a8d8f83a184348082bf12fee7b1cef18779`
+Changed paths:
+- `.github/workflows/f2-acl-source-only.yml`
+- `docs/architecture/F2_G1_ICACLS_EXECUTION_BOUNDARY.md`
+- `docs/handoffs/F2_G1_ICACLS_CORROBORATION_HANDOFF.md`
+- `scripts/f2-acl/F2AclIcacls.Corroboration.psm1`
+- `scripts/f2-acl/F2AclIcacls.Runtime.psm1`
+- `scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json`
+- `scripts/f2-acl/Invoke-F2IcaclsCapture.ps1`
+- `scripts/f2-acl/Invoke-F2IcaclsProtectedCoordinator.ps1`
+- `scripts/f2-acl/Test-F2AclIcacls.Corroboration.ps1`
+- `scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1`
 
 ## Implementation summary
 
-Corrected the helper’s file-hash call to pass a canonical path with `Get-FileHash -LiteralPath ... -Algorithm SHA256`. The baseline reader loads `ProjectVolumeGuid` only from `integrity.json`, verifies the exact baseline payload byte length and SHA-256, and carries `EvidenceVolumeGuid` as a separate identity. It now validates the exact capture-ID-derived mailbox path through the existing PR #49 coordinator-mailbox contract: protected DACL, Administrators owner, exactly four ACEs, SYSTEM and Administrators full control, and OWNER RIGHTS/requester read-execute grants. It does not apply the unrelated three-ACE requester-owned output-directory contract to the original mailbox. Preflight rejects source/commit mismatches, changed VM identity/state/NICs, non-unique Kingston serial/model/USB/health/mapping, wrong volume GUIDs, incomplete or aliased 11-path sets, reparse ancestry, and unverified evidence storage.
+Added a closed, no-argument standard-token launcher and a fixed-path protected coordinator. The launcher validates the external ProgramData release manifest, the exact reviewed commit and source package pins, retained baseline identity/digests, then creates a bounded one-use request and can issue at most one `Start-Process -Verb RunAs`. Cancellation is returned as a terminal result; there is no retry path. The elevated coordinator accepts only the validated capture GUID and obtains identity/requester pairing and a protected four-ACE evidence mailbox through the existing PR #49 protocol.
 
-The command builder emits only the system `icacls.exe` path and one quoted member of the exact 11-object allowlist, without ACL-changing or recursive switches. Its process wrapper uses asynchronous fixed-size 4096-character reads from stdout/stderr rather than line events, retains a bounded UTF-8 representation, enforces one monotonic deadline across child exit and stream EOF, and records PID, actual exit, observed byte counts, decoded-text SHA-256 and cleanup state. A long single line cannot trigger a proportional allocation. Timeout, incomplete drain, cleanup failure, output overflow, or unknown parse tokens never become PASS. The plan permits no elevation unless the complete standard result is explicit Access Denied, then calls the coordinator at most once for only denied targets.
+The elevated coordinator performs a fresh Hyper-V/storage/path preflight before its first ACL read. It requires the exact VM ID and name in OFF state, zero NICs, a unique Kingston serial with the reviewed model identity, USB/healthy/online state and G: NTFS volume mapping, exact expected canonical object set and file/directory types, no aliases/reparse ancestry, and matching baseline/source pins. It then runs exactly eleven individually bounded system `icacls.exe` invocations, with no recursive or modifying switches, followed by an equivalent postflight. It reuses PR #50's fixed-chunk process capture, parser, comparator and create-new evidence publication. The result reader verifies identity, the exact 11-path set, per-object records, byte counts, stream hashes, source/baseline pins and the package integrity hash before returning sanitized comparisons.
 
-The parser requires the first non-empty output line to begin with the exact expected canonical target path, consumes the first ACE when it follows that path on the same line, and rejects wrong paths, prefix collisions, malformed entries and unexpected trailers. It maps Microsoft-documented simple and detailed codes, including `RA`, `REA`, `RD`, `S`, `GR`, `GW`, `GE`, `GA`, comma-separated specific rights, deny entries and inheritance flags. Generic masks are retained as unsigned 32-bit values and normalized using Windows file generic mappings for comparison; equal normalized file rights can PASS, ambiguous generic/residual masks stay INDETERMINATE, and only fully understood unequal ACE sets become MISMATCH. The tests use synthetic profiles and contain no protected capture SDDL or VM-specific SIDs.
-
-Evidence publication checks the protected directory owner/DACL and non-reparse ancestry, verifies the project and evidence volume GUIDs independently, uses create-new files, and writes a hashed integrity manifest. Failed child outcomes remain diagnostic evidence with `AllCommandsSuccessful=false` and are not classified as PASS.
+The externally anchored release manifest is intentionally outside the mutable checkout. Its expected installed location is `C:\ProgramData\F2-G1-Icacls\approved-release.json`; package files are expected under `C:\Program Files\F2-G1-Icacls\scripts\f2-acl`. The manifest pins the final commit, baseline capture and payload/integrity digests, pin-manifest digest and exact executable file set/hashes. Both package and manifest locations are checked for exact protected owner/DACL profiles before coordinator execution. The source pin values are in `scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json`; the final commit and per-file values are included in the release manifest only after independent review.
 
 ## Architectural impact
 
-No changes to ACLs, Hyper-V, VM state, storage, networking, WSL, Docker or the baseline evidence. No cross-integrity IPC or UAC launcher was added. **Separate execution-readiness gate:** this module has no production standard-token UAC launcher or authenticated elevated coordinator transport. The coordinator is only an injected interface for synthetic call-count tests; this PR does not authorize or provide an executable privilege boundary, and the helper is not ready for elevated/live execution until that boundary is separately architected, reviewed and validated. PR #49 and its source branch are unchanged.
+Source-only. No protected directory was created and no package installed. No actual UAC, `icacls`, live VM/SSD/ACL/token query, ACL change, G: write, VM operation, native workload, Godot/Voxel Tools execution, PR merge or baseline modification occurred. Synthetic UAC/process/identity hooks are private module test seams; they do not prove real elevation or live system behavior. PR #49 is unchanged.
 
 ## Dependencies added / licenses
 
-None. Uses Windows PowerShell/.NET Framework APIs and the existing F2 ACL protocol module.
+None. Windows PowerShell 5.1 and inbox .NET/Windows facilities only; no external downloads or binaries.
 
 ## Tests executed (exact commands)
 
-Commands, executed using Windows PowerShell 5.1:
+All suites ran locally with Windows PowerShell 5.1:
 
-- `& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1`
 - `& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1`
-- Parser sweep using `[Management.Automation.Language.Parser]::ParseFile` for all tracked `scripts/f2-acl/*.ps1` and `*.psm1` files.
-- `git diff --check origin/security/f2-acl-capture-issue48...HEAD`
+- `& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1`
+- `& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1`
+- PowerShell parser sweep: `[Management.Automation.Language.Parser]::ParseFile` for all `scripts/f2-acl/*.ps1` and `*.psm1`.
+- `git diff --check`
 
-Results on source SHA `0174b277ba5cff36c3ea9cf8bd8402ab6a2ea8dc`: corroboration suite 110 assertions / 0 failures; existing ACL protocol suite 152 assertions / 0 failures; 5 PowerShell files parsed / 0 parser errors; `git diff --check a62773f0553dff4a05055b18fa10834f7488ae55...HEAD` exit 0. Corroboration module SHA-256 is `a0e53c02996a23b8648528b172302e6273891bbe0c0f85672b4e87c40f7261e8`, matching `F2_ICACLS_SOURCE_PINS.json`; collector and protocol pins remain `bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b` and `42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728`. Tests use synthetic ACL text, a synthetic four-ACE mailbox descriptor, fixture JSON, temporary test directories and inert PowerShell child processes. They do not execute `icacls.exe`.
+Results: protocol `152 assertions / 0 failures`, corroboration `111 assertions / 0 failures`, runtime integration `23 assertions / 0 failures`; 9 PowerShell files parsed with 0 errors; `git diff --check` exit 0. Runtime synthetic coverage includes successful single-launch/all-11 path, scope/storage/identity failure before reads, non-admin coordinator, UAC cancellation, source tamper, package tamper, ACL-profile rejection, incomplete evidence, timeout and cleanup failure. The two existing suites cover mailbox and process failure modes plus parser/comparison adversaries. Tests do not invoke actual `icacls` or UAC.
+
+Windows GitHub CI: Pending push of this candidate; report final result after workflow completion.
+
+## Source pins
+
+- Protocol module: `42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728`
+- Corroboration module: `06acb1d2eee45abcf1531a9b7113e342320b239bbc32aae1a10d114b55eaa13e`
+- Runtime module: `e6751179d2a36abea65527c260fb0f1d1cc81bdccf867172befba4e9f5dffddc`
+- Launcher: `fb55240a16f0858980bb38851414b28ce5f403ba26697ff78f227ca22ff804b0`
+- Protected coordinator: `3badc19c8ac6ac450f9691258c6ecd2a3754cd665fd5989325c90b64290ae9e2`
+- Existing PR #49 collector: `bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b`
+
+These pins are repeated in `F2_ICACLS_SOURCE_PINS.json`; PR #49's source remains unchanged.
 
 ## Tests not executed
 
-No live `icacls`, VM ACL/token queries, UAC elevation, ACL remediation, VM operation, G: writes, guest/native workload, Godot or Voxel Tools execution.
+No actual elevation/UAC, installation into Program Files/ProgramData, actual `icacls.exe`, live host or VM queries, token/group query, ACL assessment, VM operations, G: writes, or guest/native workload. No live result or security acceptance is claimed.
 
 ## Failure/recovery cases
 
-Synthetic coverage includes missing/malformed payload fields, baseline tampering, source-pin/commit mismatch, wrong GUID source/value, wrong Kingston model, ambiguous serial, altered identity/mapping, unexpected NIC, incomplete/aliased/reparse paths, unknown rights, mismatch, standard success/failure, Access Denied-only retry, exactly one coordinator launch, timeout, oversized output, child status, stream/event cleanup, evidence directory protection, create-new output hashes and failed diagnostic publication. Failure leaves the result non-PASS/INDETERMINATE.
+Every preflight gate must pass before the first command. A failed gate, UAC cancellation, access denial, any nonzero exit, truncated/incomplete streams, timeout, cleanup error, postflight drift, missing/duplicate path, mailbox mismatch or integrity error yields incomplete status; no retry occurs. The operator must preserve the protected diagnostic package and seek review rather than bypassing a gate.
 
 ## Benchmark machine and metrics
 
-Not applicable; this is an evidence helper, not a performance change.
+Not applicable.
 
 ## Known limitations
 
-- The source contains no live observations and does not establish ACL acceptance. Future actual UAC/elevated corroboration requires fresh owner authorization after independent review.
-- Rights/principals without an unambiguous supported mapping, or generic masks with unresolved residual bits, remain `INDETERMINATE`; the helper does not claim effective access.
-- Stream hashes describe UTF-8 re-encoded decoded text, not byte-for-byte OEM/native stdout. Output collection has fixed-size reads and a bounded retained text prefix; overflowing output is drained only within the deadline and cannot be complete.
-- The injected coordinator transport and credentialed UAC behavior are not exercised. Synthetic callbacks prove the at-most-one launch policy only. This remains a separate execution-readiness blocker.
+- Independent exact-SHA source review and successful Windows CI are still required.
+- Real package installation and exact ACL-profile verification have not been performed. The synthetic trust-root fixtures are not host-token/effective-access proof.
+- A future bounded live collection requires fresh owner authorization for the specific protected package/manifest installation and then separate explicit authorization for the one-UAC execution. The owner must approve the exact source SHA, installation paths/content/ACLs, baseline digests, single UAC prompt and exactly eleven read-only commands.
+- A successful collection only corroborates tool output against the retained baseline. It does not establish effective permissions or `PASS_RESTRICTIVE_ACL`; an independent reviewer must assess sanitized comparisons and remaining semantic uncertainty.
+- VM state changes that begin and end between preflight and postflight remain an observation race; host administrator/kernel/VMMS and inbox `icacls.exe` are trusted.
 
 ## Visual reproduction steps
 
-Not applicable.
+Not applicable; no visual behavior changed.
+
+## Precise future installation and live-execution gates
+
+1. After independent review of this exact commit and passing Windows CI, request fresh owner authorization to install only the seven pinned package files under `C:\Program Files\F2-G1-Icacls\scripts\f2-acl`, create the required protected parent directories, and place `approved-release.json` at `C:\ProgramData\F2-G1-Icacls\approved-release.json`. The release file must pin this commit, the baseline payload and integrity digests, the pin-manifest digest, and all seven file hashes. Verify the resulting owner, protected DACLs, no-reparse path and file hashes before running anything. This implementation task does not authorize or perform these writes.
+2. After installation is independently checked, obtain a separate fresh owner approval for one bounded live collection, explicitly authorizing the single Windows UAC prompt. Invoke the no-argument launcher once. The coordinator must do its fresh VM/storage/path preflight before exactly eleven `icacls` reads; on any failed preflight it must stop before reads. Do not retry, modify ACLs, start the VM, write to G:, or run guest/native workloads.
+3. Preserve raw evidence in the protected off-G mailbox. Submit only sanitized per-object comparisons and hashes for independent ACL review. Any remediation requires a new reviewed plan and separate owner authorization.
 
 ## Rollback instructions
 
-Close the draft PR and delete only this isolated topic branch/worktree after confirming no user changes. The immutable baseline and failed diagnostic evidence are not part of the changed paths and remain untouched.
+Before installation, revert the source-only commit or close the draft PR; retain the prior baseline/diagnostic evidence untouched. If package installation is separately approved later, rollback requires separate owner authorization and must remove only the exact newly installed package/manifest paths after confirming they have not been modified or adopted by another process; never alter G: or the retained baseline.
 
 ## Reviewer focus / open questions
 
-Review PowerShell 5.1 binding and event cleanup; exact volume identity sourcing; strict 11-object command allowlist; output/drain deadlines; fail-closed parse/comparison outcomes; evidence ACL and create-new publication; and the boundary between Access Denied and other failures. The next live `icacls` pass remains unauthorized.
+Review one-UAC boundary and cancellation behavior; external manifest trust and package/manifest ACL profiles; fixed scope and serial/model mapping; preflight-before-first-read and postflight equivalence; actual child process exit/stream/deadline/cleanup accounting; mailbox protections and payload integrity; and fail-closed status publication. Confirm the install manifest generation procedure and Windows CI for the exact candidate SHA.
