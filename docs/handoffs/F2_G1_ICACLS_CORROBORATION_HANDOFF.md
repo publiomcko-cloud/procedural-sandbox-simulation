@@ -6,7 +6,7 @@ Repository / remote: `publiomcko-cloud/procedural-sandbox-simulation` / `origin`
 Worktree / branch: `C:\Dev\f2-g1-icacls-corroboration` / `security/f2-icacls-corroboration-issue48`
 Base SHA: `58af4a8d8f83a184348082bf12fee7b1cef18779`
 Candidate SHA: The immutable candidate is the final PR #50 head reported with this handoff; a commit cannot contain its own hash.
-Parent SHA: `f204f34ecdb8e7ce8e242952bb47c908b29bee27`
+Parent SHA: `e4efd7a38bb73effb6488c542d530fbdbbe7d2f9`
 Changed paths:
 - `.gitattributes`
 - `.github/workflows/f2-acl-source-only.yml`
@@ -48,7 +48,7 @@ All suites ran locally with Windows PowerShell 5.1:
 
 Results: protocol `152 assertions / 0 failures`, corroboration `111 assertions / 0 failures`, runtime integration `23 assertions / 0 failures`; 9 PowerShell files parsed with 0 errors; `git diff --check` exit 0. Runtime synthetic coverage includes successful single-launch/all-11 path, scope/storage/identity failure before reads, non-admin coordinator, UAC cancellation, source tamper, package tamper, ACL-profile rejection, incomplete evidence, timeout and cleanup failure. The two existing suites cover mailbox and process failure modes plus parser/comparison adversaries. Tests do not invoke actual `icacls` or UAC.
 
-Windows GitHub CI: Pending push of this candidate; report final result after workflow completion.
+Windows GitHub CI: See the F2 ACL source-only check attached to the exact final PR #50 head; the final delivery reports its conclusion and run ID.
 
 ## Source pins
 
