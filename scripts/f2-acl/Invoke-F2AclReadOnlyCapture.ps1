@@ -1,8 +1,11 @@
 [CmdletBinding()]
 param(
     [switch]$CollectorChild,
-    [string]$PipeName,
+    [switch]$ElevatedCoordinator,
     [string]$OutputDirectory,
+    [string]$CaptureId,
+    [string]$RequesterSid,
+    [string]$CoordinatorSid,
     [string]$ExpectedScriptSha256,
     [string]$ExpectedModuleSha256,
     [string]$ExpectedCommitSha,
@@ -230,7 +233,6 @@ function Get-F2AclExpectedPaths {
 }
 
 function Invoke-F2AclCollectorChild {
-    param([string]$TargetPipe)
 
     $gates = [Collections.Generic.List[object]]::new()
     $errors = [Collections.Generic.List[string]]::new()
@@ -312,28 +314,27 @@ function Invoke-F2AclCollectorChild {
     $metadata.Disk.CapabilitySid = $expectedCapabilitySid
     $document = New-F2AclEvidenceDocument -VmId $vmId -VmName $vmName -ExpectedPaths $paths -Records @($records) -Metadata $metadata -Errors @($errors) -VmState $finalVmState
     $payload = Get-F2AclJsonBytes $document
-    $client = $null
+    $frameStream = [IO.MemoryStream]::new()
     try {
-        $client = [IO.Pipes.NamedPipeClientStream]::new('.', $TargetPipe, [IO.Pipes.PipeDirection]::Out, [IO.Pipes.PipeOptions]::None)
-        $client.Connect(30000)
-        Write-F2AclFrame -Stream $client -Payload $payload
+        Write-F2AclFrame -Stream $frameStream -Payload $payload
+        $framePath = Join-Path $OutputDirectory 'acl-baseline.frame'
+        [void](Write-F2AclAtomicCreateNewFile -Path $framePath -Bytes $frameStream.ToArray() -MaxBytes 262188)
         if ($document.Complete) { return 0 }
         return 1
     }
-    finally { if ($null -ne $client) { $client.Dispose() } }
+    finally { $frameStream.Dispose() }
 }
 
 function Save-F2AclEvidence {
-    param([byte[]]$Payload, [string]$PayloadSha256, [byte[]]$StreamBytes, [string]$StreamSha256, [int]$ChildExitCode, [string]$EvidencePath, [string]$ScriptSha256, [string]$ModuleSha256)
-    $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    $dirCheck = Test-F2AclRestrictedDirectory -Path $EvidencePath -OwnerSid $currentSid
+    param([byte[]]$Payload, [string]$PayloadSha256, [byte[]]$StreamBytes, [string]$StreamSha256, [int]$ChildExitCode, [string]$EvidencePath, [string]$DirectoryOwnerSid, [string]$ScriptSha256, [string]$ModuleSha256)
+    $dirCheck = Test-F2AclCoordinatorMailboxDirectory -Path $EvidencePath -RequesterSid $DirectoryOwnerSid
     $volumeProof = Test-F2AclEvidenceVolumeSeparateFromG -Path $EvidencePath
     $payloadPath = Join-Path $EvidencePath 'acl-baseline.json'
     $integrityPath = Join-Path $EvidencePath 'integrity.json'
     $payloadTemp = Join-Path $EvidencePath '.acl-baseline.json.pending'
     $integrityTemp = Join-Path $EvidencePath '.integrity.json.pending'
     $streamPath = Join-Path $EvidencePath 'powershell-streams.json'
-    $streamOnDisk = [IO.File]::ReadAllBytes($streamPath)
+    $streamOnDisk = Read-F2AclBoundedFile -Path $streamPath -MaxBytes 65536
     if ((Get-F2AclSha256 $streamOnDisk) -cne $StreamSha256 -or $streamOnDisk.Length -ne $StreamBytes.Length) { throw 'PowerShell stream log changed during validation.' }
     $integrity = [ordered]@{Schema='f2-acl-integrity-v1';PayloadFile='acl-baseline.json';PayloadBytes=$Payload.Length;PayloadSha256=$PayloadSha256;PowerShellStreamsFile='powershell-streams.json';PowerShellStreamsBytes=$StreamBytes.Length;PowerShellStreamsSha256=$StreamSha256;ChildExitCode=$ChildExitCode;CollectorScriptSha256=$ScriptSha256;ProtocolModuleSha256=$ModuleSha256;EvidenceVolumeGuid=$volumeProof.EvidenceVolumeGuid;ProjectVolumeGuid=$volumeProof.ProjectVolumeGuid;SeparateFromProjectVolume=$volumeProof.Separate;CreatedUtc=[DateTime]::UtcNow.ToString('o')}
     $integrityBytes = Get-F2AclJsonBytes $integrity
@@ -346,7 +347,7 @@ function Save-F2AclEvidence {
         if ((Get-F2AclSha256 ([IO.File]::ReadAllBytes($payloadTemp))) -cne $PayloadSha256 -or (Get-F2AclSha256 ([IO.File]::ReadAllBytes($integrityTemp))) -cne (Get-F2AclSha256 $integrityBytes)) { throw 'Temporary evidence bytes failed integrity recheck.' }
         [IO.File]::Move($payloadTemp, $payloadPath); $payloadPublished = $true
         [IO.File]::Move($integrityTemp, $integrityPath); $integrityPublished = $true
-        [void](Test-F2AclRestrictedDirectory -Path $EvidencePath -OwnerSid $currentSid)
+        [void](Test-F2AclCoordinatorMailboxDirectory -Path $EvidencePath -RequesterSid $DirectoryOwnerSid)
         return [ordered]@{Directory=$EvidencePath;Payload=$payloadPath;Streams=$streamPath;Integrity=$integrityPath}
     }
     catch {
@@ -355,6 +356,121 @@ function Save-F2AclEvidence {
         if ($payloadPublished -and [IO.File]::Exists($payloadPath) -and (Get-F2AclSha256 ([IO.File]::ReadAllBytes($payloadPath))) -ceq $PayloadSha256) { [IO.File]::Delete($payloadPath) }
         throw
     }
+}
+
+function Invoke-F2AclElevatedCoordinator {
+    param([string]$OwnerSid)
+    $summary = [ordered]@{Schema='f2-acl-elevated-coordinator-v1';Outcome='INCOMPLETE';CoordinatorSid=$null;RequesterSid=$OwnerSid;AdministratorRoleVerified=$false;WorkerExitCode=$null;ExpectedProcessExitCode=1;PayloadSha256=$null;StreamsSha256=$null;Errors=@();Evidence=$null}
+    $worker = $null; $pinnedSources = @()
+    try {
+        if ($CaptureId -notmatch '^[0-9a-f]{32}$') { throw 'Coordinator mailbox capture ID is missing or malformed.' }
+        $commonData = [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)
+        if ([string]::IsNullOrWhiteSpace($commonData)) { throw 'Coordinator mailbox common-data path is unavailable.' }
+        $OutputDirectory = [IO.Path]::GetFullPath((Join-Path $commonData ('F2-G1-ACL-Evidence-' + $CaptureId)))
+        Import-Module $protocolPath -Force -ErrorAction Stop
+        if ($ExpectedCommitSha -notmatch '^[0-9a-f]{40}$' -or $ExpectedScriptSha256 -notmatch '^[0-9a-f]{64}$' -or $ExpectedModuleSha256 -notmatch '^[0-9a-f]{64}$') { throw 'Reviewed commit or pinned source digest is missing or malformed.' }
+        $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+        $gitExe = (Get-Command git.exe -ErrorAction Stop).Source
+        $actualCommit = (& $gitExe -C $repoRoot rev-parse HEAD 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0) { throw ('Elevated Administrator account cannot read the reviewed worktree. Retry UAC with an account that can read it; Git reported: ' + $actualCommit) }
+        if ($actualCommit -cne $ExpectedCommitSha) { throw 'Elevated coordinator HEAD does not match the caller-reviewed commit.' }
+        $gitStatus = @(& $gitExe -C $repoRoot status --porcelain 2>&1)
+        if ($LASTEXITCODE -ne 0) { throw ('Elevated Administrator account cannot verify worktree status. Retry UAC with an account that can read it; Git reported: ' + ($gitStatus -join ' ')) }
+        if ($gitStatus.Count -ne 0) { throw 'Elevated coordinator requires the same clean reviewed worktree.' }
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $summary.CoordinatorSid = [string]$identity.User.Value
+        $summary.AdministratorRoleVerified = [Security.Principal.WindowsPrincipal]::new($identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        $identityResult = Test-F2AclElevatedIdentityPair -RequesterSid $OwnerSid -CoordinatorSid $summary.CoordinatorSid -CoordinatorIsAdministrator $summary.AdministratorRoleVerified
+        if (-not $identityResult.Pass) { throw ('UAC coordinator token rejected: ' + $identityResult.Reason + '. Retry with an Administrator account.') }
+
+        $pinPath = Join-Path $PSScriptRoot 'F2_ACL_SOURCE_PINS.json'
+        $pinnedScript = Open-F2AclPinnedSource -Path $PSCommandPath
+        $pinnedModule = Open-F2AclPinnedSource -Path $protocolPath
+        $pinnedIndex = Open-F2AclPinnedSource -Path $pinPath
+        $pinnedSources = @($pinnedScript,$pinnedModule,$pinnedIndex)
+        $pinDocument = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($pinPath)) | ConvertFrom-Json -ErrorAction Stop
+        if ($pinDocument.Schema -cne 'f2-acl-source-pins-v1' -or $pinnedScript.Sha256 -cne $ExpectedScriptSha256 -or $pinnedModule.Sha256 -cne $ExpectedModuleSha256 -or $pinDocument.ScriptSha256 -cne $pinnedScript.Sha256 -or $pinDocument.ModuleSha256 -cne $pinnedModule.Sha256) { throw 'Elevated coordinator source pin verification failed before worker launch.' }
+
+        $summary.SourcePins = [ordered]@{ReviewedCommit=$actualCommit;ScriptSha256=$pinnedScript.Sha256;ModuleSha256=$pinnedModule.Sha256;PinManifestSha256=$pinnedIndex.Sha256}
+        [void](New-F2AclCoordinatorMailboxDirectory -CaptureId $CaptureId -RequesterSid $OwnerSid)
+        $workerCommand = '& ' + (ConvertTo-F2AclPowerShellLiteral $PSCommandPath) + ' -CollectorChild -OutputDirectory ' + (ConvertTo-F2AclPowerShellLiteral $OutputDirectory) + ' -RequesterSid ' + (ConvertTo-F2AclPowerShellLiteral $OwnerSid) + ' -CoordinatorSid ' + (ConvertTo-F2AclPowerShellLiteral $summary.CoordinatorSid) + ' -ExpectedCommitSha ' + (ConvertTo-F2AclPowerShellLiteral $actualCommit) + ' -ExpectedScriptSha256 ' + (ConvertTo-F2AclPowerShellLiteral $pinnedScript.Sha256) + ' -ExpectedModuleSha256 ' + (ConvertTo-F2AclPowerShellLiteral $pinnedModule.Sha256)
+        $encodedWorkerCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($workerCommand))
+        $workerArgs = @('-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',$encodedWorkerCommand)
+        $workerArgumentLine = (@($workerArgs | ForEach-Object { ConvertTo-F2AclQuotedArgument ([string]$_) })) -join ' '
+        $powerShellExe = Join-Path $PSHOME 'powershell.exe'
+        $worker = Start-Process -FilePath $powerShellExe -ArgumentList $workerArgumentLine -PassThru -ErrorAction Stop
+        $waitResult = Wait-F2AclProcessExit -Process $worker -TimeoutSeconds $WaitSeconds
+        if (-not $waitResult.Completed) { $summary.WorkerExitCode = $waitResult.ExitCode; throw "CollectorWorkerTimeoutAfterSeconds:$WaitSeconds" }
+        $summary.WorkerExitCode = $waitResult.ExitCode
+        $framePath = Join-Path $OutputDirectory 'acl-baseline.frame'
+        $frameBytes = Read-F2AclBoundedFile -Path $framePath -MaxBytes 262188
+        $frameStream = [IO.MemoryStream]::new($frameBytes)
+        try { $frame = Read-F2AclFrame -Stream $frameStream -TimeoutSeconds 2 } finally { $frameStream.Dispose() }
+        $summary.PayloadSha256 = $frame.PayloadSha256
+        $streamPath = Join-Path $OutputDirectory 'powershell-streams.json'
+        $streamBytes = Read-F2AclBoundedFile -Path $streamPath -MaxBytes 65536
+        $summary.StreamsSha256 = Get-F2AclSha256 $streamBytes
+        $streamDocument = [Text.Encoding]::UTF8.GetString($streamBytes) | ConvertFrom-Json -ErrorAction Stop
+        if ($streamDocument.Schema -cne 'f2-acl-powershell-streams-v1' -or $streamDocument.Complete -ne $true -or $streamDocument.ExitCode -ne $waitResult.ExitCode) { throw 'Worker PowerShell stream capture is incomplete or inconsistent.' }
+        $validation = Test-F2AclEvidenceDocument -Payload $frame.Payload -PayloadSha256 $frame.PayloadSha256 -ChildExitCode $waitResult.ExitCode -ExpectedVmId $vmId -ExpectedVmName $vmName -ExpectedDiskSerial $expectedSerial -ExpectedDiskModel $expectedModel -ExpectedPaths (Get-F2AclExpectedPaths $projectRoot $vmId.ToUpperInvariant())
+        if ($null -ne $validation.Document) { $summary.StructuredErrors = @($validation.Document.Manifest.Errors) }
+        if (-not $validation.Pass) { $summary.Errors = @($validation.Errors); throw 'Worker evidence failed completeness or integrity validation.' }
+        $summary.Evidence = Save-F2AclEvidence -Payload $frame.Payload -PayloadSha256 $frame.PayloadSha256 -StreamBytes $streamBytes -StreamSha256 $summary.StreamsSha256 -ChildExitCode $waitResult.ExitCode -EvidencePath $OutputDirectory -DirectoryOwnerSid $OwnerSid -ScriptSha256 $pinnedScript.Sha256 -ModuleSha256 $pinnedModule.Sha256
+        $summary.Outcome = 'COMPLETE_READ_ONLY_ACL_BASELINE'
+        $summary.ExpectedProcessExitCode = 0
+    }
+    catch {
+        $summary.Errors = @($summary.Errors) + @($_.Exception.Message)
+        if ($null -ne $worker) {
+            try {
+                if (-not $worker.HasExited) { $workerResult = Wait-F2AclProcessExit -Process $worker -TimeoutSeconds 2; $summary.WorkerExitCode = $workerResult.ExitCode }
+                elseif ($null -eq $summary.WorkerExitCode) { $summary.WorkerExitCode = $worker.ExitCode }
+            }
+            catch { $summary.Errors = @($summary.Errors) + @('WorkerStatusCapture:' + $_.Exception.Message) }
+        }
+    }
+    finally {
+        if ($null -ne $worker) { $worker.Dispose() }
+        foreach ($sourcePin in $pinnedSources) { if ($null -ne $sourcePin.Stream) { $sourcePin.Stream.Dispose() } }
+    }
+    $statusPath = Join-Path $OutputDirectory 'coordinator-status.json'
+    try {
+        $statusJson = ConvertTo-Json -InputObject $summary -Depth 12 -Compress
+        $statusBytes = [Text.UTF8Encoding]::new($false).GetBytes($statusJson)
+        if ($statusBytes.Length -lt 1 -or $statusBytes.Length -gt 65536) { throw 'Coordinator status exceeds its 64 KiB limit.' }
+        if (Get-Command Write-F2AclAtomicCreateNewFile -ErrorAction SilentlyContinue) {
+            [void](Write-F2AclAtomicCreateNewFile -Path $statusPath -Bytes $statusBytes -MaxBytes 65536)
+        }
+        else {
+            $statusTemp = $statusPath + '.' + [guid]::NewGuid().ToString('N') + '.pending'
+            $statusStream = [IO.File]::Open($statusTemp,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+            try { $statusStream.Write($statusBytes,0,$statusBytes.Length); $statusStream.Flush($true) } finally { $statusStream.Dispose() }
+            [IO.File]::Move($statusTemp,$statusPath)
+        }
+    }
+    catch { [Console]::Error.WriteLine('CoordinatorStatusWriteFailure:' + $_.Exception.Message); return 4 }
+    return [int]$summary.ExpectedProcessExitCode
+}
+
+function Test-F2AclSavedEvidencePackage {
+    param([string]$EvidencePath,[string]$OwnerSid,[int]$CoordinatorExitCode,[string]$ScriptSha256,[string]$ModuleSha256)
+    Import-Module $protocolPath -Force -ErrorAction Stop
+    [void](Test-F2AclCoordinatorMailboxDirectory -Path $EvidencePath -RequesterSid $OwnerSid)
+    Test-F2AclEvidenceVolumeSeparateFromG -Path $EvidencePath | Out-Null
+    $payloadPath = Join-Path $EvidencePath 'acl-baseline.json'
+    $streamPath = Join-Path $EvidencePath 'powershell-streams.json'
+    $integrityPath = Join-Path $EvidencePath 'integrity.json'
+    $payload = Read-F2AclBoundedFile -Path $payloadPath -MaxBytes 262144
+    $streamBytes = Read-F2AclBoundedFile -Path $streamPath -MaxBytes 65536
+    $integrityBytes = Read-F2AclBoundedFile -Path $integrityPath -MaxBytes 65536
+    $payloadHash = Get-F2AclSha256 $payload; $streamsHash = Get-F2AclSha256 $streamBytes
+    $integrity = [Text.Encoding]::UTF8.GetString($integrityBytes) | ConvertFrom-Json -ErrorAction Stop
+    if ($integrity.Schema -cne 'f2-acl-integrity-v1' -or $integrity.PayloadFile -cne 'acl-baseline.json' -or $integrity.PayloadBytes -ne $payload.Length -or $integrity.PayloadSha256 -cne $payloadHash -or $integrity.PowerShellStreamsFile -cne 'powershell-streams.json' -or $integrity.PowerShellStreamsBytes -ne $streamBytes.Length -or $integrity.PowerShellStreamsSha256 -cne $streamsHash -or $integrity.ChildExitCode -ne 0 -or $integrity.CollectorScriptSha256 -cne $ScriptSha256 -or $integrity.ProtocolModuleSha256 -cne $ModuleSha256 -or $integrity.SeparateFromProjectVolume -ne $true) { throw 'Saved evidence integrity manifest does not match its exact files or pins.' }
+    $streamDocument = [Text.Encoding]::UTF8.GetString($streamBytes) | ConvertFrom-Json -ErrorAction Stop
+    if ($streamDocument.Schema -cne 'f2-acl-powershell-streams-v1' -or $streamDocument.Complete -ne $true -or $streamDocument.ExitCode -ne 0) { throw 'Saved PowerShell stream evidence is incomplete or inconsistent.' }
+    $validation = Test-F2AclEvidenceDocument -Payload $payload -PayloadSha256 $payloadHash -ChildExitCode 0 -ExpectedVmId $vmId -ExpectedVmName $vmName -ExpectedDiskSerial $expectedSerial -ExpectedDiskModel $expectedModel -ExpectedPaths (Get-F2AclExpectedPaths $projectRoot $vmId.ToUpperInvariant())
+    if (-not $validation.Pass) { throw ('Saved ACL baseline failed parent revalidation: ' + ($validation.Errors -join ';')) }
+    return [pscustomobject]@{Payload=$payloadPath;Streams=$streamPath;Integrity=$integrityPath;PayloadSha256=$payloadHash;StreamsSha256=$streamsHash;CoordinatorExitCode=$CoordinatorExitCode}
 }
 
 if ($CollectorChild) {
@@ -368,10 +484,14 @@ if ($CollectorChild) {
         if ($actualScriptSha -cne $ExpectedScriptSha256 -or $actualModuleSha -cne $ExpectedModuleSha256) { throw 'Elevated source hash mismatch; collector was not run.' }
         & {
             Import-Module $protocolPath -Force -ErrorAction Stop
-            if ($PipeName -notmatch '^f2acl_[0-9a-f]{32}$') { throw 'Invalid internal pipe name.' }
             if ([string]::IsNullOrWhiteSpace($OutputDirectory) -or -not (Test-Path -LiteralPath $OutputDirectory -PathType Container)) { throw 'Restricted output directory is missing.' }
+            $childIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $childIsAdministrator = [Security.Principal.WindowsPrincipal]::new($childIdentity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+            $identityGate = Test-F2AclElevatedIdentityPair -RequesterSid $RequesterSid -CoordinatorSid ([string]$childIdentity.User.Value) -CoordinatorIsAdministrator $childIsAdministrator
+            if (-not $identityGate.Pass -or [string]$childIdentity.User.Value -cne $CoordinatorSid) { throw ('Elevated worker identity verification failed: ' + $identityGate.Reason) }
+            [void](Test-F2AclCoordinatorMailboxDirectory -Path $OutputDirectory -RequesterSid $RequesterSid)
             Test-F2AclEvidenceVolumeSeparateFromG -Path $OutputDirectory | Out-Null
-            Invoke-F2AclCollectorChild -TargetPipe $PipeName
+            Invoke-F2AclCollectorChild
         } *>&1 | ForEach-Object {
             $entry = $_
             if ($entry -is [int] -or $entry -is [long]) { $streamState.ExitCode = [int]$entry; return }
@@ -396,18 +516,26 @@ if ($CollectorChild) {
         if ($logBytes.Length -gt 65536) { throw 'Captured PowerShell streams exceed the 64 KiB cap.' }
         $logPath = Join-Path $OutputDirectory 'powershell-streams.json'
         Test-F2AclEvidenceVolumeSeparateFromG -Path $OutputDirectory | Out-Null
-        $logFile = [IO.File]::Open($logPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-        try { $logFile.Write($logBytes, 0, $logBytes.Length); $logFile.Flush($true) } finally { $logFile.Dispose() }
+        [void](Write-F2AclAtomicCreateNewFile -Path $logPath -Bytes $logBytes -MaxBytes 65536)
     }
     catch { [Console]::Error.WriteLine('StreamCaptureFailure:' + $_.Exception.Message); exit 4 }
     exit $childExit
 }
 
-$summary = [ordered]@{Outcome='INCOMPLETE';ActualChildExitCode=$null;PayloadSha256=$null;PayloadLength=$null;PowerShellStreamsSha256=$null;StructuredErrors=@();Evidence=$null;WorkingDirectory=$null;Errors=@()}
-$server = $null; $child = $null; $pinnedSources = @()
+if ($ElevatedCoordinator) {
+    $coordinatorExit = Invoke-F2AclElevatedCoordinator -OwnerSid $RequesterSid
+    exit $coordinatorExit
+}
+
+$summary = [ordered]@{Outcome='INCOMPLETE';ReviewedCommit=$null;CoordinatorProcessId=$null;ActualCoordinatorExitCode=$null;CoordinatorProcessState='NotStarted';ActualWorkerExitCode=$null;WorkingDirectory=$null;SourcePins=$null;Evidence=$null;Errors=@()}
+$coordinator = $null; $pinnedSources = @()
 try {
     Import-Module $protocolPath -Force -ErrorAction Stop
     if ($ExpectedCommitSha -notmatch '^[0-9a-f]{40}$') { throw 'Expected reviewed commit SHA is required.' }
+    $requesterIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $requesterSid = [string]$requesterIdentity.User.Value
+    $requesterIsAdministrator = [Security.Principal.WindowsPrincipal]::new($requesterIdentity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if ($requesterIsAdministrator) { throw 'Launch this entry point from a standard, non-elevated PowerShell session; it will request UAC once and verify the resulting Administrator token.' }
     $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
     $gitExe = (Get-Command git.exe -ErrorAction Stop).Source
     $actualCommit = (& $gitExe -C $repoRoot rev-parse HEAD 2>&1 | Out-String).Trim()
@@ -419,74 +547,62 @@ try {
     $pinnedScript = Open-F2AclPinnedSource -Path $PSCommandPath
     $pinnedModule = Open-F2AclPinnedSource -Path $protocolPath
     $pinnedIndex = Open-F2AclPinnedSource -Path $pinPath
-    $pinnedSources = @($pinnedScript, $pinnedModule, $pinnedIndex)
+    $pinnedSources = @($pinnedScript,$pinnedModule,$pinnedIndex)
     $pinDocument = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($pinPath)) | ConvertFrom-Json -ErrorAction Stop
-    if ($pinDocument.Schema -ne 'f2-acl-source-pins-v1' -or $pinDocument.ScriptSha256 -cne $pinnedScript.Sha256 -or $pinDocument.ModuleSha256 -cne $pinnedModule.Sha256) { throw 'Reviewed source pin manifest does not match the collector source.' }
-    $captureId = [guid]::NewGuid().ToString('D')
-    $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    $summary.WorkingDirectory = New-F2AclRestrictedDirectory -Path (Join-Path $env:LOCALAPPDATA ('F2-G1-ACL-Evidence-' + $captureId)) -OwnerSid $currentSid
-    $summary.EvidenceVolume = Test-F2AclEvidenceVolumeSeparateFromG -Path $summary.WorkingDirectory
-    $pipe = 'f2acl_' + [guid]::NewGuid().ToString('N')
-    $pipeOptions = [IO.Pipes.PipeOptions]::Asynchronous -bor [IO.Pipes.PipeOptions]::CurrentUserOnly
-    $server = [IO.Pipes.NamedPipeServerStream]::new($pipe, [IO.Pipes.PipeDirection]::In, 1, [IO.Pipes.PipeTransmissionMode]::Byte, $pipeOptions)
-    $powerShellExe = Join-Path $PSHOME 'powershell.exe'
+    if ($pinDocument.Schema -cne 'f2-acl-source-pins-v1' -or $pinDocument.ScriptSha256 -cne $pinnedScript.Sha256 -or $pinDocument.ModuleSha256 -cne $pinnedModule.Sha256) { throw 'Reviewed source pin manifest does not match the collector source.' }
     $summary.SourcePins = [ordered]@{ReviewedCommit=$actualCommit;ScriptSha256=$pinnedScript.Sha256;ModuleSha256=$pinnedModule.Sha256;PinManifestSha256=$pinnedIndex.Sha256}
-    $childCommand = '& ' + (ConvertTo-F2AclPowerShellLiteral $PSCommandPath) + ' -CollectorChild -PipeName ' + (ConvertTo-F2AclPowerShellLiteral $pipe) + ' -OutputDirectory ' + (ConvertTo-F2AclPowerShellLiteral $summary.WorkingDirectory) + ' -ExpectedScriptSha256 ' + (ConvertTo-F2AclPowerShellLiteral $pinnedScript.Sha256) + ' -ExpectedModuleSha256 ' + (ConvertTo-F2AclPowerShellLiteral $pinnedModule.Sha256)
-    $encodedChildCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childCommand))
-    $childArgs = @('-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',$encodedChildCommand)
-    $childArgumentLine = (@($childArgs | ForEach-Object { ConvertTo-F2AclQuotedArgument ([string]$_) })) -join ' '
-    $child = Start-Process -FilePath $powerShellExe -Verb RunAs -ArgumentList $childArgumentLine -PassThru -ErrorAction Stop
-    $connectTask = $server.WaitForConnectionAsync()
-    $deadline = [DateTime]::UtcNow.AddSeconds($WaitSeconds)
-    while (-not $connectTask.IsCompleted) {
-        if ($child.HasExited) { $summary.ActualChildExitCode = $child.ExitCode; throw 'Elevated child exited before connecting to the evidence pipe.' }
-        if ([DateTime]::UtcNow -ge $deadline) {
-            $waitResult = Wait-F2AclProcessExit -Process $child -TimeoutSeconds 1
-            $summary.ActualChildExitCode = $waitResult.ExitCode
-            throw "CaptureTimeoutAfterSeconds:$WaitSeconds"
-        }
-        Start-Sleep -Milliseconds 100
+    $captureId = [guid]::NewGuid().ToString('N')
+    $summary.WorkingDirectory = Get-F2AclCoordinatorMailboxPath -CaptureId $captureId
+    Test-F2AclEvidenceVolumeSeparateFromG -Path ([IO.Directory]::GetParent($summary.WorkingDirectory).FullName) | Out-Null
+    $powerShellExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $coordinatorCommand = '& ' + (ConvertTo-F2AclPowerShellLiteral $PSCommandPath) + ' -ElevatedCoordinator -CaptureId ' + (ConvertTo-F2AclPowerShellLiteral $captureId) + ' -RequesterSid ' + (ConvertTo-F2AclPowerShellLiteral $requesterSid) + ' -ExpectedCommitSha ' + (ConvertTo-F2AclPowerShellLiteral $actualCommit) + ' -ExpectedScriptSha256 ' + (ConvertTo-F2AclPowerShellLiteral $pinnedScript.Sha256) + ' -ExpectedModuleSha256 ' + (ConvertTo-F2AclPowerShellLiteral $pinnedModule.Sha256) + ' -WaitSeconds ' + $WaitSeconds
+    $encodedCoordinatorCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($coordinatorCommand))
+    $coordinatorArgs = @('-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',$encodedCoordinatorCommand)
+    $coordinatorArgumentLine = (@($coordinatorArgs | ForEach-Object { ConvertTo-F2AclQuotedArgument ([string]$_) })) -join ' '
+    try { $coordinator = Start-Process -FilePath $powerShellExe -Verb RunAs -ArgumentList $coordinatorArgumentLine -PassThru -ErrorAction Stop }
+    catch {
+        if ($_.Exception.NativeErrorCode -eq 1223 -or $_.Exception.Message -match 'cancel|canceled|cancelled') { throw 'UACElevationCancelled: approve elevation or credentials for an Administrator account; no live collection was started.' }
+        throw ('UACCoordinatorStartFailed: ' + $_.Exception.Message)
     }
-    $connectTask.GetAwaiter().GetResult()
-    $frame = Read-F2AclFrame -Stream $server -TimeoutSeconds $WaitSeconds
-    $summary.PayloadSha256 = $frame.PayloadSha256
-    $summary.PayloadLength = $frame.PayloadLength
-    $waitResult = Wait-F2AclProcessExit -Process $child -TimeoutSeconds 15
-    if (-not $waitResult.Completed) {
-        $summary.ActualChildExitCode = $waitResult.ExitCode
-        throw 'Elevated child did not exit after closing the evidence frame.'
+    $summary.CoordinatorProcessId = $coordinator.Id
+    $summary.CoordinatorProcessState = 'Running'
+    $outerWaitSeconds = [Math]::Min(3600, $WaitSeconds + 60)
+    $processExited = $coordinator.WaitForExit([int]($outerWaitSeconds * 1000))
+    if (-not $processExited) {
+        $summary.CoordinatorProcessState = 'StillRunningAtTimeout'
+        throw "Elevated coordinator exceeded ${outerWaitSeconds}s; it remains running because a standard-token parent will not attempt to terminate a high-integrity process. No COMPLETE evidence is accepted."
     }
-    $summary.ActualChildExitCode = $waitResult.ExitCode
-    $streamPath = Join-Path $summary.WorkingDirectory 'powershell-streams.json'
-    if (-not (Test-Path -LiteralPath $streamPath -PathType Leaf)) { throw 'PowerShell stream capture file is missing.' }
-    $streamInfo = Get-Item -LiteralPath $streamPath -Force
-    if (($streamInfo.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $streamInfo.Length -gt 65536) { throw 'PowerShell stream capture file is unsafe or oversized.' }
-    $streamBytes = [IO.File]::ReadAllBytes($streamPath)
-    $summary.PowerShellStreamsSha256 = Get-F2AclSha256 $streamBytes
-    $streamDocument = [Text.Encoding]::UTF8.GetString($streamBytes) | ConvertFrom-Json -ErrorAction Stop
-    if ($streamDocument.Schema -ne 'f2-acl-powershell-streams-v1' -or $streamDocument.Complete -ne $true -or $streamDocument.ExitCode -ne $waitResult.ExitCode) { throw 'PowerShell stream capture is incomplete or inconsistent.' }
-    $validation = Test-F2AclEvidenceDocument -Payload $frame.Payload -PayloadSha256 $frame.PayloadSha256 -ChildExitCode $waitResult.ExitCode -ExpectedVmId $vmId -ExpectedVmName $vmName -ExpectedDiskSerial $expectedSerial -ExpectedDiskModel $expectedModel -ExpectedPaths (Get-F2AclExpectedPaths $projectRoot $vmId.ToUpperInvariant())
-    if ($null -ne $validation.Document) { $summary.StructuredErrors = @($validation.Document.Manifest.Errors) }
-    if (-not $validation.Pass) { $summary.Errors = @($validation.Errors); throw 'Evidence failed completeness or integrity validation.' }
-    $summary.Evidence = Save-F2AclEvidence -Payload $frame.Payload -PayloadSha256 $frame.PayloadSha256 -StreamBytes $streamBytes -StreamSha256 $summary.PowerShellStreamsSha256 -ChildExitCode $waitResult.ExitCode -EvidencePath $summary.WorkingDirectory -ScriptSha256 $summary.SourcePins.ScriptSha256 -ModuleSha256 $summary.SourcePins.ModuleSha256
+    $summary.CoordinatorProcessState = 'Exited'
+    $summary.ActualCoordinatorExitCode = [int]$coordinator.ExitCode
+    [void](Test-F2AclCoordinatorMailboxDirectory -Path $summary.WorkingDirectory -RequesterSid $requesterSid)
+    $statusPath = Join-Path $summary.WorkingDirectory 'coordinator-status.json'
+    $statusBytes = Read-F2AclBoundedFile -Path $statusPath -MaxBytes 65536
+    $status = [Text.Encoding]::UTF8.GetString($statusBytes) | ConvertFrom-Json -ErrorAction Stop
+    $statusCheck = Test-F2AclCoordinatorStatus -Status $status -ActualProcessExitCode $summary.ActualCoordinatorExitCode -ExpectedRequesterSid $requesterSid
+    $summary.ActualWorkerExitCode = $status.WorkerExitCode
+    $summary.CoordinatorStatus = $status
+    if (-not $statusCheck.Pass) { throw ('Coordinator status rejected: ' + ($statusCheck.Errors -join ';')) }
+    if ($status.SourcePins.ReviewedCommit -cne $actualCommit -or $status.SourcePins.ScriptSha256 -cne $pinnedScript.Sha256 -or $status.SourcePins.ModuleSha256 -cne $pinnedModule.Sha256 -or $status.SourcePins.PinManifestSha256 -cne $pinnedIndex.Sha256) { throw 'Coordinator source pin report differs from parent-held reviewed pins.' }
+    $package = Test-F2AclSavedEvidencePackage -EvidencePath $summary.WorkingDirectory -OwnerSid $requesterSid -CoordinatorExitCode $summary.ActualCoordinatorExitCode -ScriptSha256 $pinnedScript.Sha256 -ModuleSha256 $pinnedModule.Sha256
+    if ($status.PayloadSha256 -cne $package.PayloadSha256 -or $status.StreamsSha256 -cne $package.StreamsSha256) { throw 'Coordinator status digests differ from the saved evidence package.' }
+    $summary.Evidence = $package
     $summary.Outcome = 'COMPLETE_READ_ONLY_ACL_BASELINE'
 }
 catch {
     $summary.Errors = @($summary.Errors) + @($_.Exception.Message)
-    if ($null -ne $child) {
+    if ($null -ne $coordinator) {
         try {
-            if (-not $child.HasExited) { $waitResult = Wait-F2AclProcessExit -Process $child -TimeoutSeconds 2; $summary.ActualChildExitCode = $waitResult.ExitCode }
-            elseif ($summary.ActualChildExitCode -eq $null) { $summary.ActualChildExitCode = $child.ExitCode }
+            if ($coordinator.HasExited) { $summary.ActualCoordinatorExitCode = [int]$coordinator.ExitCode; $summary.CoordinatorProcessState = 'Exited' }
+            else { $summary.CoordinatorProcessState = 'StillRunningAfterFailure' }
         }
-        catch { $summary.Errors = @($summary.Errors) + @('ChildStatusCapture:' + $_.Exception.Message) }
+        catch { $summary.Errors += @('CoordinatorProcessStatusUnavailable:' + $_.Exception.Message) }
     }
 }
 finally {
-    if ($null -ne $server) { $server.Dispose() }
-    if ($null -ne $child) { $child.Dispose() }
+    if ($null -ne $coordinator) { $coordinator.Dispose() }
     foreach ($sourcePin in $pinnedSources) { if ($null -ne $sourcePin.Stream) { $sourcePin.Stream.Dispose() } }
 }
 
-$summary | ConvertTo-Json -Depth 10 -Compress
+$summary | ConvertTo-Json -Depth 12 -Compress
 if ($summary.Outcome -ne 'COMPLETE_READ_ONLY_ACL_BASELINE') { exit 1 }
 exit 0

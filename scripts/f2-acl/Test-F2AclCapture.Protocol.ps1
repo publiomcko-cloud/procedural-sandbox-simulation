@@ -114,6 +114,46 @@ $script:Paths = @(
 )
 Assert-F2Acl ($pinManifest.Schema -eq 'f2-acl-source-pins-v1' -and $pinManifest.ScriptSha256 -ceq $launcherDigest) 'committed source pin matches the launcher hash'
 Assert-F2Acl ($pinManifest.ModuleSha256 -ceq $moduleDigest) 'committed source pin matches the protocol module hash'
+$launcherSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Invoke-F2AclReadOnlyCapture.ps1'))
+$coordinatorStart = $launcherSource.IndexOf('function Invoke-F2AclElevatedCoordinator', [StringComparison]::Ordinal)
+$coordinatorEnd = if ($coordinatorStart -ge 0) { $launcherSource.IndexOf('function Test-F2AclSavedEvidencePackage', $coordinatorStart, [StringComparison]::Ordinal) } else { -1 }
+$coordinatorSource = if ($coordinatorStart -ge 0 -and $coordinatorEnd -gt $coordinatorStart) { $launcherSource.Substring($coordinatorStart,$coordinatorEnd-$coordinatorStart) } else { '' }
+Assert-F2Acl (([regex]::Matches($launcherSource,'-Verb RunAs')).Count -eq 1 -and $launcherSource.Contains('-ElevatedCoordinator')) 'only the standard launcher crosses UAC and starts the elevated coordinator'
+Assert-F2Acl (-not $launcherSource.Contains('CurrentUserOnly') -and -not $launcherSource.Contains('NamedPipe') -and $coordinatorSource.Contains('New-F2AclCoordinatorMailboxDirectory') -and $coordinatorSource.Contains('Write-F2AclAtomicCreateNewFile') -and -not $coordinatorSource.Contains('-Verb RunAs') -and -not $launcherSource.Contains('New-F2AclRestrictedDirectory')) 'UAC boundary uses admin-created mailbox and no named-pipe IPC'
+Assert-F2Acl ($coordinatorSource.Contains("Schema='f2-acl-elevated-coordinator-v1'") -and $coordinatorSource.Contains('WorkerExitCode=') -and $coordinatorSource.Contains('ExpectedProcessExitCode=')) 'production coordinator status emits the schema and fields required by the parent validator'
+$requesterSidFixture = 'S-1-5-21-111111111-222222222-333333333-1001'
+$otherAdminSidFixture = 'S-1-5-21-111111111-222222222-333333333-1002'
+$sameAdminPair = Test-F2AclElevatedIdentityPair -RequesterSid $requesterSidFixture -CoordinatorSid $requesterSidFixture -CoordinatorIsAdministrator $true
+$otherAdminPair = Test-F2AclElevatedIdentityPair -RequesterSid $requesterSidFixture -CoordinatorSid $otherAdminSidFixture -CoordinatorIsAdministrator $true
+$filteredSameUserPair = Test-F2AclElevatedIdentityPair -RequesterSid $requesterSidFixture -CoordinatorSid $requesterSidFixture -CoordinatorIsAdministrator $false
+$nonAdminOtherPair = Test-F2AclElevatedIdentityPair -RequesterSid $requesterSidFixture -CoordinatorSid $otherAdminSidFixture -CoordinatorIsAdministrator $false
+$malformedIdentityPair = Test-F2AclElevatedIdentityPair -RequesterSid $requesterSidFixture -CoordinatorSid 'not-a-sid' -CoordinatorIsAdministrator $true
+Assert-F2Acl ($sameAdminPair.Pass -and $sameAdminPair.SameIdentity) 'same-account elevated coordinator token is accepted'
+Assert-F2Acl ($otherAdminPair.Pass -and -not $otherAdminPair.SameIdentity) 'credentialed different Administrator identity is accepted by policy'
+Assert-F2Acl (-not $filteredSameUserPair.Pass -and -not $nonAdminOtherPair.Pass -and -not $malformedIdentityPair.Pass) 'non-elevated and malformed coordinator identities fail closed'
+$mailboxSddl = Get-F2AclCoordinatorMailboxSddl -RequesterSid $requesterSidFixture
+$mailboxDescriptor = Test-F2AclCoordinatorMailboxSddl -Sddl $mailboxSddl -RequesterSid $requesterSidFixture
+Assert-F2Acl ($mailboxDescriptor.Protected -and $mailboxDescriptor.OwnerSid -eq 'S-1-5-32-544' -and $mailboxDescriptor.RequesterRights -eq 'ReadAndExecute' -and $mailboxDescriptor.AceCount -eq 4 -and $mailboxDescriptor.Sddl.Contains('0x1200a9;;;OW')) 'mailbox grants requester read/traverse only and blocks same-account owner implicit WRITE_DAC'
+$writableMailboxSddl = $mailboxSddl.Replace('0x1200a9','FA')
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $writableMailboxSddl -RequesterSid $requesterSidFixture } 'requester write/delete/WRITE_DAC ACE is rejected'
+$requesterOwnedMailboxSddl = $mailboxSddl.Replace('O:BA','O:' + $requesterSidFixture)
+Assert-F2AclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $requesterOwnedMailboxSddl -RequesterSid $requesterSidFixture } 'requester ownership that could change mailbox DACL is rejected'
+$parentWriteRules = @([pscustomobject]@{IdentityReference=[Security.Principal.SecurityIdentifier]::new($requesterSidFixture);AccessControlType='Allow';FileSystemRights=[Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles})
+$parentUnexpectedWrite = @(Get-F2AclUnexpectedWritableSids -Rules $parentWriteRules -OwnerSid 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
+Assert-F2Acl ($parentUnexpectedWrite.Count -eq 1 -and $parentUnexpectedWrite[0] -eq $requesterSidFixture) 'requester delete-child permission on the protected parent is rejected'
+$validCoordinatorStatus = [pscustomobject]@{Schema='f2-acl-elevated-coordinator-v1';Outcome='COMPLETE_READ_ONLY_ACL_BASELINE';RequesterSid=$requesterSidFixture;CoordinatorSid=$otherAdminSidFixture;AdministratorRoleVerified=$true;WorkerExitCode=0;ExpectedProcessExitCode=0;PayloadSha256=('a'*64);StreamsSha256=('b'*64);Errors=@()}
+$validCoordinatorStatusCheck = Test-F2AclCoordinatorStatus -Status $validCoordinatorStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture
+$wrongCoordinatorExitStatus = Test-F2AclCoordinatorStatus -Status $validCoordinatorStatus -ActualProcessExitCode 4 -ExpectedRequesterSid $requesterSidFixture
+$wrongCoordinatorRequester = Test-F2AclCoordinatorStatus -Status $validCoordinatorStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $otherAdminSidFixture
+$invalidCoordinatorStatus = $validCoordinatorStatus.PSObject.Copy(); $invalidCoordinatorStatus.AdministratorRoleVerified=$false
+$invalidCoordinatorStatusCheck = Test-F2AclCoordinatorStatus -Status $invalidCoordinatorStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture
+$missingWorkerExitStatus = $validCoordinatorStatus.PSObject.Copy(); $missingWorkerExitStatus.WorkerExitCode=$null
+$missingWorkerExitCheck = Test-F2AclCoordinatorStatus -Status $missingWorkerExitStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture
+$malformedAdminFlagStatus = $validCoordinatorStatus.PSObject.Copy(); $malformedAdminFlagStatus.AdministratorRoleVerified='true'
+$malformedAdminFlagCheck = Test-F2AclCoordinatorStatus -Status $malformedAdminFlagStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture
+$missingCoordinatorStatus = Test-F2AclCoordinatorStatus -Status $null -ActualProcessExitCode 1 -ExpectedRequesterSid $requesterSidFixture
+Assert-F2Acl ($validCoordinatorStatusCheck.Pass -and -not $validCoordinatorStatusCheck.SameIdentity) 'different-identity coordinator status is bound to the requesting SID and actual process exit'
+Assert-F2Acl (-not $wrongCoordinatorExitStatus.Pass -and -not $wrongCoordinatorRequester.Pass -and -not $invalidCoordinatorStatusCheck.Pass -and -not $missingWorkerExitCheck.Pass -and -not $malformedAdminFlagCheck.Pass -and -not $missingCoordinatorStatus.Pass) 'wrong coordinator exit, requester, malformed token/worker status or missing status fails closed'
 $observedStorage = New-F2AclStorageObservation
 $observedStorageResult = Test-F2AclKingstonStorageIdentity -Observation $observedStorage
 Assert-F2Acl ($observedStorageResult.Pass -and $observedStorageResult.CanonicalModel -ceq 'KINGSTON SA400S37240G' -and $observedStorageResult.NormalizedWin32Model -ceq 'KINGSTON SA400S37240G USB Device') 'observed USB bridge model strings pass the production identity validator'
@@ -458,10 +498,57 @@ $beforeOversizeCount = $boundedRecords.Count; $beforeOversizeBytes = $boundedSta
 Assert-F2AclReject { Add-F2AclBoundedStreamRecord -Records $boundedRecords -State $boundedState -Stream 'Error' -Message ('x' * 70000) } 'oversized PowerShell stream record rejected before append'
 Assert-F2Acl ($boundedRecords.Count -eq $beforeOversizeCount -and $boundedState.Bytes -eq $beforeOversizeBytes) 'oversized stream leaves bounded collection unchanged'
 
+$mailboxRoot = Join-Path $env:TEMP ('F2Acl-Mailbox-Protocol-Test-' + [guid]::NewGuid().ToString('N'))
+[void][IO.Directory]::CreateDirectory($mailboxRoot)
+try {
+    $mailboxPath = Join-Path $mailboxRoot 'coordinator-result.bin'
+    $mailboxBytes = [Text.Encoding]::UTF8.GetBytes('synthetic-bounded-result')
+    [void](Write-F2AclAtomicCreateNewFile -Path $mailboxPath -Bytes $mailboxBytes -MaxBytes 1024)
+    $mailboxRead = Read-F2AclBoundedFile -Path $mailboxPath -MaxBytes 1024
+    Assert-F2Acl ([Text.Encoding]::UTF8.GetString($mailboxRead) -eq 'synthetic-bounded-result') 'bounded file mailbox exact bytes round-trip'
+    Assert-F2AclReject { Write-F2AclAtomicCreateNewFile -Path $mailboxPath -Bytes $mailboxBytes -MaxBytes 1024 } 'mailbox never overwrites an existing result'
+    Assert-F2AclReject { Write-F2AclAtomicCreateNewFile -Path (Join-Path $mailboxRoot 'oversized.bin') -Bytes ([byte[]]::new(1025)) -MaxBytes 1024 } 'mailbox writer rejects oversized result before creation'
+    Assert-F2AclReject { Read-F2AclBoundedFile -Path $mailboxPath -MaxBytes 4 } 'mailbox reader rejects oversized result'
+    Assert-F2AclReject { Read-F2AclBoundedFile -Path (Join-Path $mailboxRoot 'missing.bin') -MaxBytes 1024 } 'mailbox reader rejects missing result'
+    $childMailboxPath = Join-Path $mailboxRoot 'same-token-child-result.bin'
+    $escapedModule = (Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1').Replace("'","''")
+    $escapedOutput = $childMailboxPath.Replace("'","''")
+    $mailboxCommand = "Import-Module '$escapedModule' -Force; `$b=[Text.Encoding]::UTF8.GetBytes('child-result'); [void](Write-F2AclAtomicCreateNewFile -Path '$escapedOutput' -Bytes `$b -MaxBytes 1024); exit 0"
+    $mailboxInfo = [Diagnostics.ProcessStartInfo]::new()
+    $mailboxInfo.FileName = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $mailboxInfo.Arguments = '-NoProfile -NonInteractive -Command ' + (ConvertTo-F2AclWindowsArgument $mailboxCommand)
+    $mailboxInfo.UseShellExecute = $false; $mailboxInfo.CreateNoWindow = $true
+    $mailboxChild = [Diagnostics.Process]::new(); $mailboxChild.StartInfo = $mailboxInfo
+    if (-not $mailboxChild.Start()) { throw 'Synthetic file-mailbox worker process did not start.' }
+    $mailboxChild.WaitForExit()
+    $childMailboxExit = $mailboxChild.ExitCode
+    $mailboxChild.Dispose()
+    $childMailboxRead = Read-F2AclBoundedFile -Path $childMailboxPath -MaxBytes 1024
+    Assert-F2Acl ($childMailboxExit -eq 0 -and [Text.Encoding]::UTF8.GetString($childMailboxRead) -eq 'child-result') 'same-token worker process writes bounded mailbox and parent observes actual exit'
+    $failedWorkerInfo = [Diagnostics.ProcessStartInfo]::new()
+    $failedWorkerInfo.FileName = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $failedWorkerInfo.Arguments = '-NoProfile -NonInteractive -Command ' + (ConvertTo-F2AclWindowsArgument 'exit 7')
+    $failedWorkerInfo.UseShellExecute = $false; $failedWorkerInfo.CreateNoWindow = $true
+    $failedWorker = [Diagnostics.Process]::new(); $failedWorker.StartInfo = $failedWorkerInfo
+    if (-not $failedWorker.Start()) { throw 'Synthetic failing worker process did not start.' }
+    $failedWorker.WaitForExit()
+    $failedWorkerExit = $failedWorker.ExitCode
+    $failedWorker.Dispose()
+    Assert-F2Acl ($failedWorkerExit -eq 7) 'child-process failure preserves the actual nonzero exit code'
+}
+finally {
+    foreach ($fileName in @('coordinator-result.bin','same-token-child-result.bin','oversized.bin')) {
+        $cleanupFile = Join-Path $mailboxRoot $fileName
+        if ([IO.File]::Exists($cleanupFile)) { [IO.File]::Delete($cleanupFile) }
+    }
+    if (@(Get-ChildItem -LiteralPath $mailboxRoot -Force).Count -ne 0) { throw 'Synthetic mailbox test left unexpected files; refusing directory cleanup.' }
+    [IO.Directory]::Delete($mailboxRoot)
+}
+
 Write-Output "Assertions=$script:Assertions;Failures=$($script:Failures.Count)"
 if ($script:Failures.Count -gt 0) {
     $script:Failures | ForEach-Object { [Console]::Error.WriteLine('FAIL=' + $_) }
     exit 1
 }
-Write-Output 'Cases=source_pins,kingston_storage_valid_wrong_serial_wrong_model_ambiguous_missing_field_transport_mapping,post_collection_vm_state_identity_path_nic,unknown_final_state_incomplete,complete,argument_quoting,frame_roundtrip,bounded_eof_probe,standard_ace,callback_ace_rejection,object_ace_rejection,unknown_ace_flag_rejection,ancestor_junction_rejection,oversized_writer,oversized_reader,corrupt,partial_frame,stalled_partial_header,missing,duplicate,malformed_json,missing_envelope,missing_record_field,child_exit,sha256,partial_record,empty_preflight_failure,stdout_stderr,timeout,restricted_evidence_directory,exact_acl_principals,read_only_parent_ace,write_parent_ace,write_attributes_parent_ace,bounded_stream_accounting,oversized_stream_rejection'
+Write-Output 'Cases=source_pins,uac_coordinator_same_and_different_admin_identity_policy,filtered_admin_rejection,requester_read_only_mailbox_acl_and_owner,requester_write_delete_dac_tamper_rejection,parent_delete_child_race_rejection,coordinator_status_exit_binding,no_cross_token_named_pipe_production,bounded_file_mailbox_same_token_worker_integration,mailbox_missing_duplicate_oversized,kingston_storage_valid_wrong_serial_wrong_model_ambiguous_missing_field_transport_mapping,post_collection_vm_identity_state_path_nic_storage,unknown_final_state_incomplete,complete,argument_quoting,frame_roundtrip,bounded_eof_probe,standard_ace,callback_ace_rejection,object_ace_rejection,unknown_ace_flag_rejection,ancestor_junction_rejection,oversized_writer,oversized_reader,corrupt,partial_frame,stalled_partial_header,missing,duplicate,malformed_json,missing_envelope,missing_record_field,child_exit,sha256,partial_record,empty_preflight_failure,stdout_stderr,timeout,restricted_evidence_directory,exact_acl_principals,read_only_parent_ace,write_parent_ace,write_attributes_parent_ace,bounded_stream_accounting,oversized_stream_rejection'
 [Environment]::Exit(0)

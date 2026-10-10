@@ -87,6 +87,78 @@ function Get-F2AclSha256 {
     finally { $sha.Dispose() }
 }
 
+function Test-F2AclElevatedIdentityPair {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RequesterSid,
+        [Parameter(Mandatory)][string]$CoordinatorSid,
+        [Parameter(Mandatory)][bool]$CoordinatorIsAdministrator
+    )
+    try { [void][Security.Principal.SecurityIdentifier]::new($RequesterSid); [void][Security.Principal.SecurityIdentifier]::new($CoordinatorSid) }
+    catch { return [pscustomobject]@{Pass=$false;SameIdentity=$false;Reason='InvalidUserSid'} }
+    if (-not $CoordinatorIsAdministrator) { return [pscustomobject]@{Pass=$false;SameIdentity=($RequesterSid -ceq $CoordinatorSid);Reason='ElevatedAdministratorRequired'} }
+    return [pscustomobject]@{Pass=$true;SameIdentity=($RequesterSid -ceq $CoordinatorSid);Reason=if($RequesterSid -ceq $CoordinatorSid){'SameIdentityElevated'}else{'CredentialedAdministratorIdentityAccepted'}}
+}
+
+function Test-F2AclCoordinatorStatus {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][AllowNull()]$Status,[Parameter(Mandatory)][int]$ActualProcessExitCode,[Parameter(Mandatory)][string]$ExpectedRequesterSid)
+    $errors = [Collections.Generic.List[string]]::new()
+    $required = @('Schema','Outcome','RequesterSid','CoordinatorSid','AdministratorRoleVerified','WorkerExitCode','ExpectedProcessExitCode','PayloadSha256','StreamsSha256','Errors')
+    if (-not (Test-F2AclHasProperties $Status $required)) { return [pscustomobject]@{Pass=$false;Errors=@('CoordinatorStatusFieldsMissing')} }
+    if ($Status.Schema -cne 'f2-acl-elevated-coordinator-v1') { $errors.Add('CoordinatorStatusSchemaMismatch') }
+    if ([string]$Status.RequesterSid -cne $ExpectedRequesterSid) { $errors.Add('CoordinatorRequesterIdentityMismatch') }
+    $administratorVerified = ($Status.AdministratorRoleVerified -is [bool] -and $Status.AdministratorRoleVerified)
+    $identity = Test-F2AclElevatedIdentityPair -RequesterSid $ExpectedRequesterSid -CoordinatorSid ([string]$Status.CoordinatorSid) -CoordinatorIsAdministrator $administratorVerified
+    if (-not $identity.Pass) { $errors.Add('CoordinatorTokenNotAuthorized:' + $identity.Reason) }
+    if (($Status.ExpectedProcessExitCode -isnot [int] -and $Status.ExpectedProcessExitCode -isnot [long]) -or [int64]$Status.ExpectedProcessExitCode -ne $ActualProcessExitCode) { $errors.Add('CoordinatorProcessExitMismatch') }
+    if ($Status.Outcome -cne 'COMPLETE_READ_ONLY_ACL_BASELINE') { $errors.Add('CoordinatorDidNotComplete') }
+    if (($Status.WorkerExitCode -isnot [int] -and $Status.WorkerExitCode -isnot [long]) -or [int64]$Status.WorkerExitCode -ne 0 -or $ActualProcessExitCode -ne 0) { $errors.Add('CoordinatorOrWorkerExitNonzero') }
+    if ([string]$Status.PayloadSha256 -notmatch '^[0-9a-f]{64}$' -or [string]$Status.StreamsSha256 -notmatch '^[0-9a-f]{64}$') { $errors.Add('CoordinatorResultDigestInvalid') }
+    if ($Status.Errors -isnot [array] -or @($Status.Errors).Count -ne 0) { $errors.Add('CoordinatorErrorsPresent') }
+    return [pscustomobject]@{Pass=($errors.Count -eq 0);Errors=@($errors);SameIdentity=$identity.SameIdentity}
+}
+
+function Write-F2AclAtomicCreateNewFile {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][AllowEmptyCollection()][byte[]]$Bytes,[Parameter(Mandatory)][ValidateRange(1,1048576)][int]$MaxBytes)
+    if ($Bytes.Length -lt 1 -or $Bytes.Length -gt $MaxBytes) { throw 'EvidenceFileLengthOutsideLimit.' }
+    if ([IO.File]::Exists($Path) -or [IO.Directory]::Exists($Path)) { throw 'EvidenceFileAlreadyExists.' }
+    $temporary = $Path + '.' + [guid]::NewGuid().ToString('N') + '.pending'
+    try {
+        $stream = [IO.File]::Open($temporary,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+        try { $stream.Write($Bytes,0,$Bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
+        if ([IO.File]::Exists($Path) -or [IO.Directory]::Exists($Path)) { throw 'EvidenceFileAlreadyExists.' }
+        [IO.File]::Move($temporary,$Path)
+        return $Path
+    }
+    catch {
+        if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) }
+        throw
+    }
+}
+
+function Read-F2AclBoundedFile {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][ValidateRange(1,1048576)][int]$MaxBytes)
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'EvidenceFileTypeOrReparseInvalid.' }
+    $stream = [IO.File]::Open($Path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+    try {
+        if ($stream.Length -lt 1 -or $stream.Length -gt $MaxBytes) { throw 'EvidenceFileLengthOutsideLimit.' }
+        $bytes = [byte[]]::new([int]$stream.Length)
+        $offset = 0
+        while ($offset -lt $bytes.Length) {
+            $read = $stream.Read($bytes,$offset,$bytes.Length-$offset)
+            if ($read -le 0) { throw 'EvidenceFileShortRead.' }
+            $offset += $read
+        }
+        if ($stream.ReadByte() -ne -1) { throw 'EvidenceFileGrewDuringRead.' }
+        return ,$bytes
+    }
+    finally { $stream.Dispose() }
+}
+
 function ConvertFrom-F2AclHex {
     [CmdletBinding()]
     param([Parameter(Mandatory)][ValidatePattern('^(?:[0-9a-fA-F]{2})+$')][string]$Hex)
@@ -516,6 +588,85 @@ function Test-F2AclEvidenceVolumeSeparateFromG {
     return [pscustomobject]@{EvidenceVolumeGuid=$evidenceVolume;ProjectVolumeGuid=$projectVolume;Separate=$true}
 }
 
+function Get-F2AclCoordinatorMailboxPath {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{32}$')][string]$CaptureId)
+    $commonData = [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)
+    if ([string]::IsNullOrWhiteSpace($commonData)) { throw 'CoordinatorMailboxCommonDataPathUnavailable.' }
+    return [IO.Path]::GetFullPath((Join-Path $commonData ('F2-G1-ACL-Evidence-' + $CaptureId)))
+}
+
+function Get-F2AclCoordinatorMailboxSddl {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$RequesterSid)
+    try { [void][Security.Principal.SecurityIdentifier]::new($RequesterSid) } catch { throw 'CoordinatorMailboxRequesterSidInvalid.' }
+    # OWNER RIGHTS removes the file creator's implicit WRITE_DAC even when same-account UAC
+    # means the standard requester SID is also the owner of files created by the coordinator.
+    # The requester can read/traverse but cannot write, delete or change DACLs.
+    return ('O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;OW)(A;OICI;0x1200a9;;;' + $RequesterSid + ')')
+}
+
+function Test-F2AclCoordinatorMailboxSddl {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Sddl,[Parameter(Mandatory)][string]$RequesterSid)
+    try { [void][Security.Principal.SecurityIdentifier]::new($RequesterSid) } catch { throw 'CoordinatorMailboxRequesterSidInvalid.' }
+    $raw = [Security.AccessControl.RawSecurityDescriptor]::new($Sddl)
+    if (($raw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclProtected) -eq 0 -or $raw.Owner.Value -ne 'S-1-5-32-544') { throw 'Coordinator mailbox must have a protected DACL and Administrators-group owner.' }
+    $expectedMasks = [Collections.Generic.Dictionary[string,int]]::new([StringComparer]::OrdinalIgnoreCase)
+    $expectedMasks.Add('S-1-5-18',[int][Security.AccessControl.FileSystemRights]::FullControl)
+    $expectedMasks.Add('S-1-5-32-544',[int][Security.AccessControl.FileSystemRights]::FullControl)
+    $readExecuteMask = [int][Security.AccessControl.FileSystemRights]::ReadAndExecute -bor [int][Security.AccessControl.FileSystemRights]::Synchronize
+    $expectedMasks.Add('S-1-3-4',$readExecuteMask)
+    $expectedMasks.Add($RequesterSid,$readExecuteMask)
+    $expectedFlags = [int][Security.AccessControl.AceFlags]::ObjectInherit -bor [int][Security.AccessControl.AceFlags]::ContainerInherit
+    $rules = @($raw.DiscretionaryAcl)
+    if ($rules.Count -ne 4) { throw 'Coordinator mailbox DACL has an unexpected ACE count.' }
+    $actualSids = @()
+    foreach ($rule in $rules) {
+        $sid = $rule.SecurityIdentifier.Value
+        $actualSids += $sid
+        if (-not $expectedMasks.ContainsKey($sid) -or $rule.AceQualifier -ne [Security.AccessControl.AceQualifier]::AccessAllowed -or $rule.AccessMask -ne $expectedMasks[$sid] -or [int]$rule.AceFlags -ne $expectedFlags) { throw 'Coordinator mailbox DACL contains an unexpected or writable requester ACE.' }
+    }
+    $expectedSids = @('S-1-5-18','S-1-5-32-544','S-1-3-4',$RequesterSid)
+    if (@($actualSids | Sort-Object -Unique).Count -ne 4 -or @($expectedSids | Where-Object { $_ -notin $actualSids }).Count -ne 0) { throw 'Coordinator mailbox DACL is missing a required principal.' }
+    return [pscustomobject]@{OwnerSid=$raw.Owner.Value;RequesterSid=$RequesterSid;RequesterRights='ReadAndExecute';Protected=$true;AceCount=$rules.Count;Sddl=$raw.GetSddlForm([Security.AccessControl.AccessControlSections]::All)}
+}
+
+function Test-F2AclCoordinatorMailboxDirectory {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][string]$RequesterSid)
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Coordinator mailbox type or reparse check failed.' }
+    $validated = Test-F2AclCoordinatorMailboxSddl -Sddl ([F2Acl.NativeDirectory]::GetSddl($Path)) -RequesterSid $RequesterSid
+    $validated | Add-Member -NotePropertyName Path -NotePropertyValue $item.FullName
+    return $validated
+}
+
+function New-F2AclCoordinatorMailboxDirectory {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{32}$')][string]$CaptureId,[Parameter(Mandatory)][string]$RequesterSid,[string]$ProjectVolumePath='G:\')
+    $fullPath = Get-F2AclCoordinatorMailboxPath -CaptureId $CaptureId
+    $parentPath = [IO.Directory]::GetParent($fullPath).FullName
+    Test-F2AclEvidenceVolumeSeparateFromG -Path $parentPath -ProjectVolumePath $ProjectVolumePath | Out-Null
+    Test-F2AclNoReparseAncestors -Path $parentPath
+    $parentRaw = [Security.AccessControl.RawSecurityDescriptor]::new([F2Acl.NativeDirectory]::GetSddl($parentPath))
+    if ($null -eq $parentRaw.DiscretionaryAcl -or ($parentRaw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclPresent) -eq 0) { throw 'Coordinator mailbox parent has a missing or null DACL.' }
+    if ($parentRaw.Owner.Value -notin @('S-1-5-18','S-1-5-32-544','S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')) { throw 'Coordinator mailbox parent owner is not a recognized protected system principal.' }
+    $parentRules = @($parentRaw.DiscretionaryAcl | Where-Object { $_.SecurityIdentifier.Value -notin @('S-1-3-0','S-1-3-4') } | ForEach-Object {
+        [pscustomobject]@{IdentityReference=$_.SecurityIdentifier;AccessControlType=if ($_.AceQualifier -eq [Security.AccessControl.AceQualifier]::AccessAllowed) { 'Allow' } else { 'Deny' };FileSystemRights=[Security.AccessControl.FileSystemRights]$_.AccessMask}
+    })
+    $unexpectedWriters = @(Get-F2AclUnexpectedWritableSids -Rules $parentRules -OwnerSid $parentRaw.Owner.Value)
+    if ($unexpectedWriters.Count -gt 0) { throw ('Coordinator mailbox parent grants unexpected write/delete access: ' + ($unexpectedWriters -join ',')) }
+    if (Test-Path -LiteralPath $fullPath) { throw 'Coordinator mailbox path already exists; refusing overwrite.' }
+    $sddl = Get-F2AclCoordinatorMailboxSddl -RequesterSid $RequesterSid
+    [F2Acl.NativeDirectory]::CreateWithSddl($fullPath,$sddl)
+    try { return Test-F2AclCoordinatorMailboxDirectory -Path $fullPath -RequesterSid $RequesterSid }
+    catch {
+        try { if (@(Get-ChildItem -LiteralPath $fullPath -Force -ErrorAction Stop).Count -eq 0) { Remove-Item -LiteralPath $fullPath -Force -ErrorAction Stop } } catch { }
+        throw
+    }
+}
+
 function New-F2AclRestrictedDirectory {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$OwnerSid, [string]$ProjectVolumePath='G:\')
@@ -723,4 +874,4 @@ function Test-F2AclEvidenceDocument {
     return [pscustomobject]@{ Pass = ($errors.Count -eq 0); Errors = @($errors); Document = $doc }
 }
 
-Export-ModuleMember -Function Get-F2AclSha256, ConvertTo-F2AclUtf8Bytes, ConvertTo-F2AclWindowsArgument, ConvertTo-F2AclCanonicalPath, Assert-F2AclSupportedAce, Test-F2AclKingstonStorageIdentity, Test-F2AclZeroNicCount, Test-F2AclStorageObservationsEquivalent, Test-F2AclVmStorageSnapshot, New-F2AclEvidenceDocument, Write-F2AclFrame, Read-F2AclFrame, Wait-F2AclProcessExit, New-F2AclRestrictedDirectory, Test-F2AclRestrictedDirectory, Test-F2AclNoReparseAncestors, Test-F2AclEvidenceVolumeSeparateFromG, Get-F2AclUnexpectedWritableSids, Add-F2AclBoundedStreamRecord, Test-F2AclEvidenceDocument
+Export-ModuleMember -Function Get-F2AclSha256, ConvertTo-F2AclUtf8Bytes, ConvertTo-F2AclWindowsArgument, ConvertTo-F2AclCanonicalPath, Assert-F2AclSupportedAce, Test-F2AclKingstonStorageIdentity, Test-F2AclZeroNicCount, Test-F2AclStorageObservationsEquivalent, Test-F2AclVmStorageSnapshot, Test-F2AclElevatedIdentityPair, Test-F2AclCoordinatorStatus, Write-F2AclAtomicCreateNewFile, Read-F2AclBoundedFile, Get-F2AclCoordinatorMailboxPath, Get-F2AclCoordinatorMailboxSddl, Test-F2AclCoordinatorMailboxSddl, Test-F2AclCoordinatorMailboxDirectory, New-F2AclCoordinatorMailboxDirectory, New-F2AclEvidenceDocument, Write-F2AclFrame, Read-F2AclFrame, Wait-F2AclProcessExit, New-F2AclRestrictedDirectory, Test-F2AclRestrictedDirectory, Test-F2AclNoReparseAncestors, Test-F2AclEvidenceVolumeSeparateFromG, Get-F2AclUnexpectedWritableSids, Add-F2AclBoundedStreamRecord, Test-F2AclEvidenceDocument
