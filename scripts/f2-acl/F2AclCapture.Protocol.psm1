@@ -104,7 +104,7 @@ function Test-F2AclCoordinatorStatus {
     [CmdletBinding()]
     param([Parameter(Mandatory)][AllowNull()]$Status,[Parameter(Mandatory)][int]$ActualProcessExitCode,[Parameter(Mandatory)][string]$ExpectedRequesterSid)
     $errors = [Collections.Generic.List[string]]::new()
-    $required = @('Schema','Outcome','RequesterSid','CoordinatorSid','AdministratorRoleVerified','WorkerExitCode','ExpectedProcessExitCode','PayloadSha256','StreamsSha256','Errors')
+    $required = @('Schema','Outcome','RequesterSid','CoordinatorSid','AdministratorRoleVerified','WorkerExitCode','WorkerProcessId','WorkerDiagnostics','WorkerExpectedFiles','WorkerDiagnosticFiles','WorkerDiagnosticFallback','ExpectedProcessExitCode','PayloadSha256','StreamsSha256','Errors')
     if (-not (Test-F2AclHasProperties $Status $required)) { return [pscustomobject]@{Pass=$false;Errors=@('CoordinatorStatusFieldsMissing')} }
     if ($Status.Schema -cne 'f2-acl-elevated-coordinator-v1') { $errors.Add('CoordinatorStatusSchemaMismatch') }
     if ([string]$Status.RequesterSid -cne $ExpectedRequesterSid) { $errors.Add('CoordinatorRequesterIdentityMismatch') }
@@ -114,8 +114,26 @@ function Test-F2AclCoordinatorStatus {
     if (($Status.ExpectedProcessExitCode -isnot [int] -and $Status.ExpectedProcessExitCode -isnot [long]) -or [int64]$Status.ExpectedProcessExitCode -ne $ActualProcessExitCode) { $errors.Add('CoordinatorProcessExitMismatch') }
     if ($Status.Outcome -cne 'COMPLETE_READ_ONLY_ACL_BASELINE') { $errors.Add('CoordinatorDidNotComplete') }
     if (($Status.WorkerExitCode -isnot [int] -and $Status.WorkerExitCode -isnot [long]) -or [int64]$Status.WorkerExitCode -ne 0 -or $ActualProcessExitCode -ne 0) { $errors.Add('CoordinatorOrWorkerExitNonzero') }
+    $worker = $Status.WorkerDiagnostics
+    $workerRequired = @('Started','ProcessId','State','TimedOut','ExitCode','OutputComplete','StdoutBytes','StdoutSha256','StdoutTruncated','StderrBytes','StderrSha256','StderrTruncated','FatalError','Stages','ReaderErrors')
+    if (-not (Test-F2AclHasProperties $worker $workerRequired)) { $errors.Add('WorkerDiagnosticsFieldsMissing') }
+    else {
+        if ($worker.Started -ne $true -or $worker.State -cne 'Exited' -or $worker.TimedOut -ne $false -or $worker.OutputComplete -ne $true) { $errors.Add('WorkerExecutionStateIncomplete') }
+        if (($worker.ProcessId -isnot [int] -and $worker.ProcessId -isnot [long]) -or [int64]$worker.ProcessId -le 0 -or $worker.ExitCode -ne $Status.WorkerExitCode -or $Status.WorkerProcessId -ne $worker.ProcessId) { $errors.Add('WorkerExecutionIdentityOrExitMismatch') }
+        if ($worker.StdoutTruncated -ne $false -or $worker.StderrTruncated -ne $false -or @($worker.ReaderErrors).Count -ne 0 -or $null -ne $worker.FatalError) { $errors.Add('WorkerDiagnosticsContainFailure') }
+        if ([int64]$worker.StdoutBytes -gt 16384 -or [int64]$worker.StderrBytes -gt 16384 -or [string]$worker.StdoutSha256 -notmatch '^[0-9a-f]{64}$' -or [string]$worker.StderrSha256 -notmatch '^[0-9a-f]{64}$') { $errors.Add('WorkerDiagnosticBoundsOrDigestInvalid') }
+        $requiredStages = @('EntrypointReached','InvocationStarted','SourceVerified','MailboxVerified','CollectorEntered','FramePublished','StreamPublished','InvocationReturned')
+        foreach ($stage in $requiredStages) { if (@($worker.Stages) -cnotcontains $stage) { $errors.Add('WorkerStageMissing:' + $stage) } }
+    }
+    $expectedNames = @($Status.WorkerExpectedFiles | ForEach-Object { [string]$_.Name })
+    $expectedNamesExact = (@($expectedNames | Sort-Object) -join ',') -ceq 'acl-baseline.frame,powershell-streams.json'
+    if ($Status.WorkerExpectedFiles -isnot [array] -or -not $expectedNamesExact -or @($Status.WorkerExpectedFiles | Where-Object { $_.Exists -ne $true -or $_.Length -le 0 }).Count -ne 0) { $errors.Add('WorkerExpectedArtifactsIncomplete') }
+    $diagnosticNames = @($Status.WorkerDiagnosticFiles | ForEach-Object { [string]$_.Name })
+    $diagnosticNamesExact = (@($diagnosticNames | Sort-Object) -join ',') -ceq 'worker-stderr.json,worker-stdout.json'
+    if ($Status.WorkerDiagnosticFiles -isnot [array] -or -not $diagnosticNamesExact -or @($Status.WorkerDiagnosticFiles | Where-Object { [string]$_.Sha256 -notmatch '^[0-9a-f]{64}$' -or $_.Bytes -le 0 -or $_.Bytes -gt 65536 }).Count -ne 0) { $errors.Add('WorkerDiagnosticArtifactsIncomplete') }
     if ([string]$Status.PayloadSha256 -notmatch '^[0-9a-f]{64}$' -or [string]$Status.StreamsSha256 -notmatch '^[0-9a-f]{64}$') { $errors.Add('CoordinatorResultDigestInvalid') }
     if ($Status.Errors -isnot [array] -or @($Status.Errors).Count -ne 0) { $errors.Add('CoordinatorErrorsPresent') }
+    if ($null -ne $Status.WorkerDiagnosticFallback) { $errors.Add('UnexpectedWorkerDiagnosticFallbackOnCompleteResult') }
     return [pscustomobject]@{Pass=($errors.Count -eq 0);Errors=@($errors);SameIdentity=$identity.SameIdentity}
 }
 
@@ -560,6 +578,193 @@ function Wait-F2AclProcessExit {
     return [pscustomobject]@{Completed=(-not $timedOut);TimedOut=$timedOut;ExitCode=[int]$Process.ExitCode;ElapsedMilliseconds=[long]$timer.ElapsedMilliseconds}
 }
 
+function New-F2AclWorkerBootstrapCommand {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$Invocation)
+
+    $prefix = "`$ErrorActionPreference = 'Stop'; [Console]::Out.WriteLine('F2ACL_STAGE:EntrypointReached'); try { [Console]::Out.WriteLine('F2ACL_STAGE:InvocationStarted'); `$workerResult = "
+    $suffix = @'
+; if ($workerResult -isnot [int] -and $workerResult -isnot [long]) { throw 'WorkerScriptExitCodeMissingOrInvalid.' }; [Console]::Out.WriteLine('F2ACL_STAGE:InvocationReturned'); exit [int]$workerResult } catch { $fatal = [string]$_.Exception.Message; $fatal = [regex]::Replace($fatal, '[\x00-\x08\x0B\x0C\x0E-\x1F]', '?'); if ($fatal.Length -gt 2048) { $fatal = $fatal.Substring(0,2048) }; [Console]::Error.WriteLine('F2ACL_FATAL:' + $fatal); exit 3 }
+'@
+    return $prefix + $Invocation + $suffix
+}
+
+function Invoke-F2AclCapturedPowerShell {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$PowerShellExe,
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$CommandText,
+        [Parameter(Mandatory)][ValidateRange(1,3600)][int]$TimeoutSeconds,
+        [ValidateRange(1024,65536)][int]$MaxBytesPerStream = 16384,
+        [ValidateRange(1,100)][int]$PollMilliseconds = 10,
+        [ValidateRange(1,30)][int]$DrainTimeoutSeconds = 3
+    )
+
+    $result = [ordered]@{
+        Started=$false;ProcessId=$null;State='NotStarted';ExitCode=$null;TimedOut=$false
+        StdoutBytes=[byte[]]@();StderrBytes=[byte[]]@();StdoutTruncated=$false;StderrTruncated=$false
+        OutputComplete=$false;StartError=$null;ReaderErrors=@();ElapsedMilliseconds=0
+    }
+    $process = $null
+    $states = @()
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    try {
+        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($CommandText))
+        $argumentLine = @('-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',$encoded | ForEach-Object { ConvertTo-F2AclWindowsArgument ([string]$_) }) -join ' '
+        $startInfo = [Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = $PowerShellExe
+        $startInfo.Arguments = $argumentLine
+        $startInfo.UseShellExecute = $false
+        $startInfo.CreateNoWindow = $true
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $process = [Diagnostics.Process]::new()
+        $process.StartInfo = $startInfo
+        if (-not $process.Start()) { throw 'WorkerProcessStartReturnedFalse.' }
+        $result.Started = $true
+        $result.ProcessId = [int]$process.Id
+        $result.State = 'Running'
+        foreach ($stream in @($process.StandardOutput.BaseStream,$process.StandardError.BaseStream)) {
+            $states += [pscustomobject]@{Stream=$stream;Buffer=[byte[]]::new(4096);Capture=[IO.MemoryStream]::new();Task=$null;Done=$false;Truncated=$false;Name=if($states.Count -eq 0){'Stdout'}else{'Stderr'}}
+        }
+        foreach ($state in $states) { $state.Task = $state.Stream.ReadAsync($state.Buffer,0,$state.Buffer.Length) }
+
+        $timedOut = $false
+        $drainDeadline = $null
+        while (@($states | Where-Object { -not $_.Done }).Count -gt 0) {
+            if (-not $process.HasExited -and $stopwatch.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
+                $timedOut = $true
+                try { $process.Kill(); [void]$process.WaitForExit(3000) } catch { $result.ReaderErrors += ('WorkerTermination:' + $_.Exception.Message) }
+                $drainDeadline = [DateTime]::UtcNow.AddSeconds($DrainTimeoutSeconds)
+            }
+            foreach ($state in $states) {
+                if ($state.Done -or -not $state.Task.IsCompleted) { continue }
+                try { $readCount = [int]$state.Task.GetAwaiter().GetResult() }
+                catch { $result.ReaderErrors += ($state.Name + ':' + $_.Exception.Message); $state.Done = $true; continue }
+                if ($readCount -le 0) { $state.Done = $true; continue }
+                $remaining = $MaxBytesPerStream - [int]$state.Capture.Length
+                if ($remaining -gt 0) { $take = [Math]::Min($remaining,$readCount); $state.Capture.Write($state.Buffer,0,$take) }
+                if ($readCount -gt $remaining) { $state.Truncated = $true }
+                $state.Task = $state.Stream.ReadAsync($state.Buffer,0,$state.Buffer.Length)
+            }
+            if ($timedOut -and $null -ne $drainDeadline -and [DateTime]::UtcNow -ge $drainDeadline -and @($states | Where-Object { -not $_.Done }).Count -gt 0) {
+                $result.ReaderErrors += 'WorkerOutputDrainTimeout.'
+                foreach ($state in $states) { if (-not $state.Done) { try { $state.Stream.Dispose() } catch {}; $state.Done = $true } }
+                break
+            }
+            if (@($states | Where-Object { -not $_.Done }).Count -gt 0) { Start-Sleep -Milliseconds $PollMilliseconds }
+        }
+        while (-not $process.HasExited -and $stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds) { Start-Sleep -Milliseconds $PollMilliseconds }
+        if (-not $process.HasExited) {
+            $timedOut = $true
+            try { $process.Kill(); [void]$process.WaitForExit(3000) } catch { $result.ReaderErrors += ('WorkerTermination:' + $_.Exception.Message) }
+        }
+        if ($process.HasExited) { $result.ExitCode = [int]$process.ExitCode; $result.State = if($timedOut){'TimedOutTerminated'}else{'Exited'} }
+        else { $result.State = 'StillRunningAtTimeout' }
+        $result.TimedOut = $timedOut
+        $result.StdoutBytes = $states[0].Capture.ToArray()
+        $result.StderrBytes = $states[1].Capture.ToArray()
+        $result.StdoutTruncated = [bool]$states[0].Truncated
+        $result.StderrTruncated = [bool]$states[1].Truncated
+        $result.OutputComplete = (@($result.ReaderErrors).Count -eq 0 -and @($states | Where-Object { -not $_.Done }).Count -eq 0)
+    }
+    catch {
+        $result.StartError = ([string]$_.Exception.Message)
+        if (-not $result.Started) { $result.State = 'StartFailed' }
+        if ($null -ne $process) {
+            try { if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }; if ($process.HasExited) { $result.ExitCode = [int]$process.ExitCode; $result.State = 'ExitedAfterCaptureFailure' } } catch { $result.ReaderErrors += ('WorkerCleanup:' + $_.Exception.Message) }
+        }
+        foreach ($state in $states) { try { $result.ReaderErrors += ($state.Name + 'StreamCaptureFailed') } catch {} }
+    }
+    finally {
+        $stopwatch.Stop()
+        $result.ElapsedMilliseconds = [long]$stopwatch.ElapsedMilliseconds
+        foreach ($state in $states) { try { $state.Capture.Dispose() } catch {} }
+        if ($null -ne $process) { $process.Dispose() }
+    }
+    return [pscustomobject]$result
+}
+
+function ConvertTo-F2AclSanitizedWorkerError {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Message,[ValidateRange(1,2048)][int]$MaxLength=2048)
+    $safe = [regex]::Replace($Message,'[\x00-\x08\x0B\x0C\x0E-\x1F]','?')
+    $safe = [regex]::Replace($safe,'(?i)\bS-\d-(?:\d+-?)+','[sid]')
+    $safe = [regex]::Replace($safe,'(?i)\b[A-Z]:\\[^\s;,)]+','[path]')
+    $safe = [regex]::Replace($safe,'\\\\[^\\\s]+\\[^\\\s;,)]+','[network-path]')
+    if ($safe.Length -gt $MaxLength) { $safe=$safe.Substring(0,$MaxLength) }
+    return $safe
+}
+
+function ConvertTo-F2AclWorkerDiagnosticDocument {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$CapturedProcess,[Parameter(Mandatory)][string]$StreamName)
+
+    if ($StreamName -notin @('stdout','stderr')) { throw 'WorkerDiagnosticStreamNameInvalid.' }
+    $bytes = if ($StreamName -ceq 'stdout') { [byte[]]$CapturedProcess.StdoutBytes } else { [byte[]]$CapturedProcess.StderrBytes }
+    if ($null -eq $bytes) { $bytes = [byte[]]::new(0) }
+    $truncated = if ($StreamName -ceq 'stdout') { [bool]$CapturedProcess.StdoutTruncated } else { [bool]$CapturedProcess.StderrTruncated }
+    $text = [Text.Encoding]::UTF8.GetString($bytes)
+    $text = [regex]::Replace($text,'[\x00-\x08\x0B\x0C\x0E-\x1F]','?')
+    $stageNames = @('EntrypointReached','InvocationStarted','SourceVerified','MailboxVerified','CollectorEntered','FramePublished','StreamPublished','InvocationReturned')
+    $stages = [Collections.Generic.List[string]]::new()
+    foreach ($line in ($text -split "`r?`n")) {
+        if ($line -match '^F2ACL_STAGE:([A-Za-z]+)$' -and $stageNames -ccontains $Matches[1] -and -not $stages.Contains($Matches[1])) { $stages.Add($Matches[1]) }
+    }
+    $fatal = $null
+    if ($StreamName -ceq 'stderr') {
+        foreach ($line in ($text -split "`r?`n")) { if ($line.StartsWith('F2ACL_FATAL:',[StringComparison]::Ordinal)) { $fatal=$line.Substring(12); break } }
+    }
+    if ($null -ne $fatal) { $fatal=ConvertTo-F2AclSanitizedWorkerError -Message $fatal }
+    return [pscustomobject]@{Schema='f2-acl-worker-diagnostic-v1';Stream=$StreamName;ByteCount=$bytes.Length;Sha256=(Get-F2AclSha256 -Bytes $bytes);Truncated=$truncated;Text=$text;Stages=@($stages);FatalError=$fatal}
+}
+
+function New-F2AclWorkerExecutionReport {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$CapturedProcess,
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$ExpectedFiles
+    )
+
+    $stdout = ConvertTo-F2AclWorkerDiagnosticDocument -CapturedProcess $CapturedProcess -StreamName stdout
+    $stderr = ConvertTo-F2AclWorkerDiagnosticDocument -CapturedProcess $CapturedProcess -StreamName stderr
+    $errors = [Collections.Generic.List[string]]::new()
+    if ($CapturedProcess.StartError) { $errors.Add('WorkerStartFailure:' + (ConvertTo-F2AclSanitizedWorkerError -Message ([string]$CapturedProcess.StartError))) }
+    if ($null -ne $stderr.FatalError) { $errors.Add('WorkerFatal:' + $stderr.FatalError) }
+    if ($CapturedProcess.TimedOut) { $errors.Add('WorkerTimeout.') }
+    if ($null -eq $CapturedProcess.ExitCode) { $errors.Add('WorkerProcessExitCodeUnavailable.') }
+    elseif ([int]$CapturedProcess.ExitCode -ne 0) { $errors.Add('WorkerExitedNonzero:' + [string]$CapturedProcess.ExitCode) }
+    if (-not $CapturedProcess.OutputComplete) { $errors.Add('WorkerOutputCaptureIncomplete:' + (@($CapturedProcess.ReaderErrors) -join ';')) }
+    if ($stdout.Truncated -or $stderr.Truncated) { $errors.Add('WorkerDiagnosticOutputTruncated.') }
+
+    $fileNames = @($ExpectedFiles | ForEach-Object { [string]$_.Name })
+    if ($ExpectedFiles.Count -ne 2 -or @($fileNames | Sort-Object -Unique).Count -ne 2) { $errors.Add('WorkerExpectedArtifactManifestInvalid.') }
+    $missing = @($ExpectedFiles | Where-Object { $_.Exists -ne $true } | ForEach-Object { [string]$_.Name })
+    if ($missing.Count -gt 0) { $errors.Add('WorkerExpectedFilesMissing:' + ($missing -join ',')) }
+
+    $requiredStages = @('EntrypointReached','InvocationStarted','SourceVerified','MailboxVerified','CollectorEntered','FramePublished','StreamPublished','InvocationReturned')
+    foreach ($stage in $requiredStages) { if (@($stdout.Stages) -cnotcontains $stage) { $errors.Add('WorkerStageMissing:' + $stage) } }
+    if ($ExpectedFiles.Count -eq 2) {
+        $frame = @($ExpectedFiles | Where-Object { $_.Name -ceq 'acl-baseline.frame' })
+        $streams = @($ExpectedFiles | Where-Object { $_.Name -ceq 'powershell-streams.json' })
+        if ($frame.Count -ne 1 -or ($frame.Count -eq 1 -and (($frame[0].Exists -eq $true) -ne (@($stdout.Stages) -ccontains 'FramePublished')))) { $errors.Add('WorkerFrameStageArtifactMismatch.') }
+        if ($streams.Count -ne 1 -or ($streams.Count -eq 1 -and (($streams[0].Exists -eq $true) -ne (@($stdout.Stages) -ccontains 'StreamPublished')))) { $errors.Add('WorkerStreamStageArtifactMismatch.') }
+    }
+
+    $stages = [Collections.Generic.List[string]]::new()
+    if ($CapturedProcess.Started) { $stages.Add('WorkerLaunched') }
+    foreach ($stage in $stdout.Stages) { if (-not $stages.Contains($stage)) { $stages.Add($stage) } }
+    if ($null -ne $CapturedProcess.ExitCode) { $stages.Add('WorkerExited') }
+    $diagnostics = [ordered]@{
+        Started=[bool]$CapturedProcess.Started;ProcessId=$CapturedProcess.ProcessId;State=$CapturedProcess.State;TimedOut=[bool]$CapturedProcess.TimedOut
+        ExitCode=$CapturedProcess.ExitCode;ElapsedMilliseconds=$CapturedProcess.ElapsedMilliseconds;OutputComplete=[bool]$CapturedProcess.OutputComplete
+        StdoutBytes=$stdout.ByteCount;StdoutSha256=$stdout.Sha256;StdoutTruncated=$stdout.Truncated
+        StderrBytes=$stderr.ByteCount;StderrSha256=$stderr.Sha256;StderrTruncated=$stderr.Truncated
+        FatalError=$stderr.FatalError;Stages=@($stages);ReaderErrors=@($CapturedProcess.ReaderErrors)
+    }
+    return [pscustomobject]@{Pass=($errors.Count -eq 0);Errors=@($errors);Diagnostics=$diagnostics;Stdout=$stdout;Stderr=$stderr;ExpectedFiles=@($ExpectedFiles)}
+}
+
 function Test-F2AclNoReparseAncestors {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Path)
@@ -953,4 +1158,4 @@ function Test-F2AclEvidenceDocument {
     return [pscustomobject]@{ Pass = ($errors.Count -eq 0); Errors = @($errors); Document = $doc }
 }
 
-Export-ModuleMember -Function Get-F2AclSha256, ConvertTo-F2AclUtf8Bytes, ConvertTo-F2AclWindowsArgument, ConvertTo-F2AclCanonicalPath, Assert-F2AclSupportedAce, Test-F2AclKingstonStorageIdentity, Test-F2AclZeroNicCount, Test-F2AclStorageObservationsEquivalent, Test-F2AclVmStorageSnapshot, Test-F2AclElevatedIdentityPair, Test-F2AclCoordinatorStatus, Write-F2AclAtomicCreateNewFile, Read-F2AclBoundedFile, Get-F2AclCoordinatorMailboxPath, Get-F2AclCoordinatorMailboxSddl, Test-F2AclCoordinatorMailboxSddl, Test-F2AclCoordinatorMailboxDirectory, Test-F2AclCoordinatorMailboxParentSddl, Test-F2AclCoordinatorMailboxParentChain, New-F2AclCoordinatorMailboxDirectory, New-F2AclEvidenceDocument, Write-F2AclFrame, Read-F2AclFrame, Wait-F2AclProcessExit, New-F2AclRestrictedDirectory, Test-F2AclRestrictedDirectory, Test-F2AclNoReparseAncestors, Test-F2AclEvidenceVolumeSeparateFromG, Get-F2AclUnexpectedWritableSids, Add-F2AclBoundedStreamRecord, Test-F2AclEvidenceDocument
+Export-ModuleMember -Function Get-F2AclSha256, ConvertTo-F2AclUtf8Bytes, ConvertTo-F2AclWindowsArgument, ConvertTo-F2AclCanonicalPath, Assert-F2AclSupportedAce, Test-F2AclKingstonStorageIdentity, Test-F2AclZeroNicCount, Test-F2AclStorageObservationsEquivalent, Test-F2AclVmStorageSnapshot, Test-F2AclElevatedIdentityPair, Test-F2AclCoordinatorStatus, Write-F2AclAtomicCreateNewFile, Read-F2AclBoundedFile, Get-F2AclCoordinatorMailboxPath, Get-F2AclCoordinatorMailboxSddl, Test-F2AclCoordinatorMailboxSddl, Test-F2AclCoordinatorMailboxDirectory, Test-F2AclCoordinatorMailboxParentSddl, Test-F2AclCoordinatorMailboxParentChain, New-F2AclCoordinatorMailboxDirectory, New-F2AclEvidenceDocument, Write-F2AclFrame, Read-F2AclFrame, Wait-F2AclProcessExit, New-F2AclWorkerBootstrapCommand, Invoke-F2AclCapturedPowerShell, ConvertTo-F2AclSanitizedWorkerError, ConvertTo-F2AclWorkerDiagnosticDocument, New-F2AclWorkerExecutionReport, New-F2AclRestrictedDirectory, Test-F2AclRestrictedDirectory, Test-F2AclNoReparseAncestors, Test-F2AclEvidenceVolumeSeparateFromG, Get-F2AclUnexpectedWritableSids, Add-F2AclBoundedStreamRecord, Test-F2AclEvidenceDocument

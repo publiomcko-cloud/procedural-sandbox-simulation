@@ -115,12 +115,22 @@ $script:Paths = @(
 Assert-F2Acl ($pinManifest.Schema -eq 'f2-acl-source-pins-v1' -and $pinManifest.ScriptSha256 -ceq $launcherDigest) 'committed source pin matches the launcher hash'
 Assert-F2Acl ($pinManifest.ModuleSha256 -ceq $moduleDigest) 'committed source pin matches the protocol module hash'
 $launcherSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Invoke-F2AclReadOnlyCapture.ps1'))
+$protocolSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1'))
 $coordinatorStart = $launcherSource.IndexOf('function Invoke-F2AclElevatedCoordinator', [StringComparison]::Ordinal)
 $coordinatorEnd = if ($coordinatorStart -ge 0) { $launcherSource.IndexOf('function Test-F2AclSavedEvidencePackage', $coordinatorStart, [StringComparison]::Ordinal) } else { -1 }
 $coordinatorSource = if ($coordinatorStart -ge 0 -and $coordinatorEnd -gt $coordinatorStart) { $launcherSource.Substring($coordinatorStart,$coordinatorEnd-$coordinatorStart) } else { '' }
 Assert-F2Acl (([regex]::Matches($launcherSource,'-Verb RunAs')).Count -eq 1 -and $launcherSource.Contains('-ElevatedCoordinator')) 'only the standard launcher crosses UAC and starts the elevated coordinator'
 Assert-F2Acl (-not $launcherSource.Contains('CurrentUserOnly') -and -not $launcherSource.Contains('NamedPipe') -and $coordinatorSource.Contains('New-F2AclCoordinatorMailboxDirectory') -and $coordinatorSource.Contains('Write-F2AclAtomicCreateNewFile') -and -not $coordinatorSource.Contains('-Verb RunAs') -and -not $launcherSource.Contains('New-F2AclRestrictedDirectory')) 'UAC boundary uses admin-created mailbox and no named-pipe IPC'
 Assert-F2Acl ($coordinatorSource.Contains("Schema='f2-acl-elevated-coordinator-v1'") -and $coordinatorSource.Contains('WorkerExitCode=') -and $coordinatorSource.Contains('ExpectedProcessExitCode=')) 'production coordinator status emits the schema and fields required by the parent validator'
+Assert-F2Acl ($coordinatorSource.Contains('Invoke-F2AclCapturedPowerShell') -and -not $coordinatorSource.Contains('Start-Process -FilePath $powerShellExe') -and $launcherSource.Contains('WorkerExpectedFiles') -and $launcherSource.IndexOf('WorkerExpectedFiles') -lt $launcherSource.IndexOf('Read-F2AclBoundedFile -Path $framePath')) 'production coordinator captures worker diagnostics and inventories files before frame parsing'
+Assert-F2Acl ($protocolSource.Contains('RedirectStandardOutput = $true') -and $protocolSource.Contains('RedirectStandardError = $true') -and $protocolSource.Contains('MaxBytesPerStream') -and $protocolSource.Contains('WorkerOutputDrainTimeout.')) 'production process reader redirects both streams with bounded retention and drain timeout'
+$workerBranchStart = $launcherSource.IndexOf('if ($CollectorChild)',[StringComparison]::Ordinal)
+$workerBranchEnd = $launcherSource.IndexOf('if ($ElevatedCoordinator)',[StringComparison]::Ordinal)
+$workerBranchSource = if($workerBranchStart -ge 0 -and $workerBranchEnd -gt $workerBranchStart){$launcherSource.Substring($workerBranchStart,$workerBranchEnd-$workerBranchStart)}else{''}
+$workerFailureStart = $workerBranchSource.IndexOf('catch {',$workerBranchSource.IndexOf('} *>&1',[StringComparison]::Ordinal),[StringComparison]::Ordinal)
+$workerFailureEnd = $workerBranchSource.IndexOf('$logDocument =',[Math]::Max(0,$workerFailureStart),[StringComparison]::Ordinal)
+$workerFailureSource = if($workerFailureStart -ge 0 -and $workerFailureEnd -gt $workerFailureStart){$workerBranchSource.Substring($workerFailureStart,$workerFailureEnd-$workerFailureStart)}else{''}
+Assert-F2Acl ($workerFailureSource.Contains('F2ACL_FATAL:') -and $workerBranchSource.Contains('ConvertTo-Json') -and $workerBranchSource.Contains('Write-F2AclWorkerStreamLog') -and -not $workerFailureSource.Contains('Get-F2AclJsonBytes') -and -not $workerFailureSource.Contains('Add-F2AclBoundedStreamRecord')) 'worker early-failure diagnostic path does not depend on importing the protocol module'
 $requesterSidFixture = 'S-1-5-21-111111111-222222222-333333333-1001'
 $otherAdminSidFixture = 'S-1-5-21-111111111-222222222-333333333-1002'
 $sameAdminPair = Test-F2AclElevatedIdentityPair -RequesterSid $requesterSidFixture -CoordinatorSid $requesterSidFixture -CoordinatorIsAdministrator $true
@@ -164,7 +174,11 @@ Assert-F2AclReject { Test-F2AclCoordinatorMailboxParentSddl -Sddl ($observedProg
 $parentWriteRules = @([pscustomobject]@{IdentityReference=[Security.Principal.SecurityIdentifier]::new($requesterSidFixture);AccessControlType='Allow';FileSystemRights=[Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles})
 $parentUnexpectedWrite = @(Get-F2AclUnexpectedWritableSids -Rules $parentWriteRules -OwnerSid 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
 Assert-F2Acl ($parentUnexpectedWrite.Count -eq 1 -and $parentUnexpectedWrite[0] -eq $requesterSidFixture) 'requester delete-child permission on the protected parent is rejected'
-$validCoordinatorStatus = [pscustomobject]@{Schema='f2-acl-elevated-coordinator-v1';Outcome='COMPLETE_READ_ONLY_ACL_BASELINE';RequesterSid=$requesterSidFixture;CoordinatorSid=$otherAdminSidFixture;AdministratorRoleVerified=$true;WorkerExitCode=0;ExpectedProcessExitCode=0;PayloadSha256=('a'*64);StreamsSha256=('b'*64);Errors=@()}
+$validWorkerStages = @('WorkerLaunched','EntrypointReached','InvocationStarted','SourceVerified','MailboxVerified','CollectorEntered','FramePublished','StreamPublished','InvocationReturned','WorkerExited')
+$validWorkerDiagnostics = [ordered]@{Started=$true;ProcessId=1001;State='Exited';TimedOut=$false;ExitCode=0;ElapsedMilliseconds=10;OutputComplete=$true;StdoutBytes=128;StdoutSha256=('c'*64);StdoutTruncated=$false;StderrBytes=0;StderrSha256=('d'*64);StderrTruncated=$false;FatalError=$null;Stages=$validWorkerStages;ReaderErrors=@()}
+$validWorkerExpectedFiles = @([pscustomobject]@{Name='acl-baseline.frame';Exists=$true;Length=64},[pscustomobject]@{Name='powershell-streams.json';Exists=$true;Length=64})
+$validWorkerDiagnosticFiles = @([pscustomobject]@{Name='worker-stdout.json';Bytes=200;Sha256=('e'*64)},[pscustomobject]@{Name='worker-stderr.json';Bytes=100;Sha256=('f'*64)})
+$validCoordinatorStatus = [pscustomobject]@{Schema='f2-acl-elevated-coordinator-v1';Outcome='COMPLETE_READ_ONLY_ACL_BASELINE';RequesterSid=$requesterSidFixture;CoordinatorSid=$otherAdminSidFixture;AdministratorRoleVerified=$true;WorkerExitCode=0;WorkerProcessId=1001;WorkerDiagnostics=$validWorkerDiagnostics;WorkerExpectedFiles=$validWorkerExpectedFiles;WorkerDiagnosticFiles=$validWorkerDiagnosticFiles;WorkerDiagnosticFallback=$null;ExpectedProcessExitCode=0;PayloadSha256=('a'*64);StreamsSha256=('b'*64);Errors=@()}
 $validCoordinatorStatusCheck = Test-F2AclCoordinatorStatus -Status $validCoordinatorStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture
 $wrongCoordinatorExitStatus = Test-F2AclCoordinatorStatus -Status $validCoordinatorStatus -ActualProcessExitCode 4 -ExpectedRequesterSid $requesterSidFixture
 $wrongCoordinatorRequester = Test-F2AclCoordinatorStatus -Status $validCoordinatorStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $otherAdminSidFixture
@@ -177,6 +191,11 @@ $malformedAdminFlagCheck = Test-F2AclCoordinatorStatus -Status $malformedAdminFl
 $missingCoordinatorStatus = Test-F2AclCoordinatorStatus -Status $null -ActualProcessExitCode 1 -ExpectedRequesterSid $requesterSidFixture
 Assert-F2Acl ($validCoordinatorStatusCheck.Pass -and -not $validCoordinatorStatusCheck.SameIdentity) 'different-identity coordinator status is bound to the requesting SID and actual process exit'
 Assert-F2Acl (-not $wrongCoordinatorExitStatus.Pass -and -not $wrongCoordinatorRequester.Pass -and -not $invalidCoordinatorStatusCheck.Pass -and -not $missingWorkerExitCheck.Pass -and -not $malformedAdminFlagCheck.Pass -and -not $missingCoordinatorStatus.Pass) 'wrong coordinator exit, requester, malformed token/worker status or missing status fails closed'
+$fallbackStatus = $validCoordinatorStatus.PSObject.Copy(); $fallbackStatus.WorkerDiagnosticFallback = [pscustomobject]@{Schema='f2-acl-worker-diagnostic-fallback-v1'}
+Assert-F2Acl (-not (Test-F2AclCoordinatorStatus -Status $fallbackStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture).Pass) 'diagnostic publication fallback cannot be classified as a complete result'
+$missingStageStatus = $validCoordinatorStatus.PSObject.Copy(); $missingStageCopy = [ordered]@{}; foreach($key in $validWorkerDiagnostics.Keys){$missingStageCopy[$key]=$validWorkerDiagnostics[$key]}; $missingStageCopy.Stages = @('WorkerLaunched','EntrypointReached','InvocationStarted','SourceVerified','MailboxVerified','CollectorEntered','StreamPublished','InvocationReturned','WorkerExited'); $missingStageStatus.WorkerDiagnostics = $missingStageCopy
+$missingStreamStatus = $validCoordinatorStatus.PSObject.Copy(); $missingStreamStatus.WorkerExpectedFiles = @([pscustomobject]@{Name='acl-baseline.frame';Exists=$true;Length=64},[pscustomobject]@{Name='powershell-streams.json';Exists=$false;Length=$null})
+Assert-F2Acl (-not (Test-F2AclCoordinatorStatus -Status $missingStageStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture).Pass -and -not (Test-F2AclCoordinatorStatus -Status $missingStreamStatus -ActualProcessExitCode 0 -ExpectedRequesterSid $requesterSidFixture).Pass) 'successful coordinator status requires all worker lifecycle stages and both exact expected artifacts'
 $observedStorage = New-F2AclStorageObservation
 $observedStorageResult = Test-F2AclKingstonStorageIdentity -Observation $observedStorage
 Assert-F2Acl ($observedStorageResult.Pass -and $observedStorageResult.CanonicalModel -ceq 'KINGSTON SA400S37240G' -and $observedStorageResult.NormalizedWin32Model -ceq 'KINGSTON SA400S37240G USB Device') 'observed USB bridge model strings pass the production identity validator'
@@ -414,28 +433,116 @@ $emptyBytes = Convert-F2AclFixtureToBytes $emptyDocument
 $emptyResult = Test-F2AclFixturePayload $emptyBytes (Get-F2AclSha256 $emptyBytes) 1
 Assert-F2Acl (-not $emptyResult.Pass -and $emptyResult.Errors -contains 'DocumentIncomplete' -and $emptyResult.Document.Manifest.RecordCount -eq 0) 'preflight failure with no ACL rows remains structured and incomplete'
 
-$psi = [Diagnostics.ProcessStartInfo]::new()
-Write-Output 'Stage=child_stdout_stderr_exit'
-$psi.FileName = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-$psi.Arguments = '-NoProfile -NonInteractive -Command "[Console]::Out.WriteLine(''fixture-out''); [Console]::Error.WriteLine(''fixture-err''); exit 23"'
-$psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
-$process = [Diagnostics.Process]::new(); $process.StartInfo = $psi
-if (-not $process.Start()) { throw 'Synthetic child process did not start.' }
-$stdoutTask = $process.StandardOutput.ReadToEndAsync(); $stderrTask = $process.StandardError.ReadToEndAsync()
-$process.WaitForExit(); $stdout = $stdoutTask.Result.Trim(); $stderr = $stderrTask.Result.Trim(); $exitCode = $process.ExitCode
-Assert-F2Acl ($stdout -eq 'fixture-out' -and $stderr -eq 'fixture-err' -and $exitCode -eq 23) 'host child stdout stderr and exit captured independently'
-$process.Dispose()
+$workerTestRoot = Join-Path $env:TEMP ('F2Acl-Worker-Launch-Test-' + [guid]::NewGuid().ToString('N'))
+[void][IO.Directory]::CreateDirectory($workerTestRoot)
+$workerFixturePath = Join-Path $workerTestRoot 'synthetic-worker.ps1'
+$workerFixture = @'
+param([string]$Scenario,[string]$Directory,[string]$Pin)
+if ([string]::IsNullOrWhiteSpace($Scenario)) { throw 'SyntheticRequiredArgumentMissing.' }
+if ($Scenario -eq 'PinMismatch' -and $Pin -cne 'pin-ok') { throw 'SyntheticSourcePinMismatch.' }
+[Console]::Out.WriteLine('F2ACL_STAGE:SourceVerified')
+if ($Scenario -eq 'BeforeFrame') { throw 'SyntheticFailureBeforeFrame.' }
+if ($Scenario -eq 'ExitOneBeforeFrame') { return 1 }
+if ($Scenario -eq 'MailboxWriteFailure') { [IO.File]::WriteAllText((Join-Path $Directory 'missing-parent\result.bin'),'x'); return 0 }
+if ($Scenario -eq 'Timeout') { Start-Sleep -Seconds 10; return 0 }
+[Console]::Out.WriteLine('F2ACL_STAGE:MailboxVerified')
+[Console]::Out.WriteLine('F2ACL_STAGE:CollectorEntered')
+$frame = Join-Path $Directory 'acl-baseline.frame'
+$streams = Join-Path $Directory 'powershell-streams.json'
+if ($Scenario -eq 'InterruptedPublication') { [IO.File]::WriteAllText((Join-Path $Directory 'acl-baseline.frame.pending'),'partial'); return 0 }
+if ($Scenario -in @('Complete','MissingStream','NonzeroPartial')) { [IO.File]::WriteAllText($frame,'synthetic-frame'); [Console]::Out.WriteLine('F2ACL_STAGE:FramePublished') }
+if ($Scenario -in @('Complete','NonzeroPartial')) { [IO.File]::WriteAllText($streams,'synthetic-stream'); [Console]::Out.WriteLine('F2ACL_STAGE:StreamPublished') }
+if ($Scenario -eq 'NonzeroPartial') { [Console]::Error.WriteLine('synthetic late failure'); return 17 }
+if ($Scenario -eq 'Complete') { return 0 }
+return 0
+'@
+[IO.File]::WriteAllText($workerFixturePath,$workerFixture,[Text.UTF8Encoding]::new($false))
+$powerShellExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+function Invoke-F2AclSyntheticWorker {
+    param([string]$Scenario,[string]$Directory,[string]$Pin='pin-ok',[switch]$OmitScenario,[switch]$BadParameter,[int]$TimeoutSeconds=10,[int]$MaxBytesPerStream=16384)
+    [void][IO.Directory]::CreateDirectory($Directory)
+    $invocation = '& ' + ("'" + $workerFixturePath.Replace("'","''") + "'")
+    if (-not $OmitScenario) { $invocation += ' -Scenario ' + ("'" + $Scenario.Replace("'","''") + "'") }
+    if ($BadParameter) { $invocation += ' -NotARealParameter value' }
+    else { $invocation += ' -Directory ' + ("'" + $Directory.Replace("'","''") + "'") + ' -Pin ' + ("'" + $Pin.Replace("'","''") + "'") }
+    $command = New-F2AclWorkerBootstrapCommand -Invocation $invocation
+    return Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText $command -TimeoutSeconds $TimeoutSeconds -MaxBytesPerStream $MaxBytesPerStream
+}
+function Get-F2AclSyntheticArtifactManifest {
+    param([string]$Directory)
+    return @(
+        [pscustomobject]@{Name='acl-baseline.frame';Exists=[IO.File]::Exists((Join-Path $Directory 'acl-baseline.frame'))},
+        [pscustomobject]@{Name='powershell-streams.json';Exists=[IO.File]::Exists((Join-Path $Directory 'powershell-streams.json'))}
+    )
+}
+try {
+    Write-Output 'Stage=production_encoded_worker_success'
+    $successDir = Join-Path $workerTestRoot 'complete'
+    $successCapture = Invoke-F2AclSyntheticWorker -Scenario Complete -Directory $successDir
+    $successReport = New-F2AclWorkerExecutionReport -CapturedProcess $successCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest $successDir)
+    Assert-F2Acl ($successCapture.Started -and $successCapture.ExitCode -eq 0 -and $successCapture.OutputComplete -and $successReport.Pass) 'production encoded worker launch captures separate streams, actual exit, stages and expected artifacts on success'
 
-$sleepInfo = [Diagnostics.ProcessStartInfo]::new()
-Write-Output 'Stage=child_timeout'
-$sleepInfo.FileName = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-$sleepInfo.Arguments = '-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 10"'
-$sleepInfo.UseShellExecute = $false; $sleepInfo.CreateNoWindow = $true
-$sleepChild = [Diagnostics.Process]::new(); $sleepChild.StartInfo = $sleepInfo
-if (-not $sleepChild.Start()) { throw 'Synthetic timeout child process did not start.' }
-$timeoutResult = Wait-F2AclProcessExit -Process $sleepChild -TimeoutSeconds 1 -PollMilliseconds 25
-Assert-F2Acl ($timeoutResult.TimedOut -and $sleepChild.HasExited) 'timed out child is stopped and actual exit observed'
-$sleepChild.Dispose()
+    Write-Output 'Stage=production_encoded_worker_preframe_failure'
+    $beforeDir = Join-Path $workerTestRoot 'before-frame'
+    $beforeCapture = Invoke-F2AclSyntheticWorker -Scenario BeforeFrame -Directory $beforeDir
+    $beforeReport = New-F2AclWorkerExecutionReport -CapturedProcess $beforeCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest $beforeDir)
+    Assert-F2Acl ($beforeCapture.ExitCode -eq 3 -and $beforeReport.Diagnostics.FatalError -eq 'SyntheticFailureBeforeFrame.' -and ($beforeReport.Errors -match '^WorkerFatal:').Count -eq 1 -and ($beforeReport.Errors -match '^WorkerExpectedFilesMissing:').Count -eq 1) 'pre-frame fatal survives and is not replaced by missing-artifact diagnosis'
+
+    Write-Output 'Stage=production_encoded_worker_exit_before_frame'
+    $exitOneDir = Join-Path $workerTestRoot 'exit-one'
+    $exitOneCapture = Invoke-F2AclSyntheticWorker -Scenario ExitOneBeforeFrame -Directory $exitOneDir
+    $exitOneReport = New-F2AclWorkerExecutionReport -CapturedProcess $exitOneCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest $exitOneDir)
+    Assert-F2Acl ($exitOneCapture.ExitCode -eq 1 -and ($exitOneReport.Errors -match '^WorkerExitedNonzero:1$').Count -eq 1 -and ($exitOneReport.Errors -match '^WorkerExpectedFilesMissing:').Count -eq 1) 'exit 1 before frame retains actual code plus missing frame and stream manifest'
+
+    Write-Output 'Stage=production_encoded_worker_arguments_and_pins'
+    $missingArgs = Invoke-F2AclSyntheticWorker -Scenario '' -Directory (Join-Path $workerTestRoot 'missing-args') -OmitScenario
+    $badArgs = Invoke-F2AclSyntheticWorker -Scenario Complete -Directory (Join-Path $workerTestRoot 'bad-args') -BadParameter
+    $badPin = Invoke-F2AclSyntheticWorker -Scenario PinMismatch -Directory (Join-Path $workerTestRoot 'bad-pin') -Pin wrong
+    $actualLauncherPath = Join-Path $PSScriptRoot 'Invoke-F2AclReadOnlyCapture.ps1'
+    $escapedActualLauncher = $actualLauncherPath.Replace("'","''")
+    $actualWorkerArgs = "' -CollectorChild -OutputDirectory '" + (Join-Path $workerTestRoot 'actual-pin-failure').Replace("'","''") + "' -RequesterSid '" + $requesterSidFixture + "' -CoordinatorSid '" + $requesterSidFixture + "' -ExpectedCommitSha '" + ('a'*40) + "' -ExpectedScriptSha256 '" + ('0'*64) + "' -ExpectedModuleSha256 '" + $pinManifest.ModuleSha256 + "'"
+    $actualWorkerCommand = New-F2AclWorkerBootstrapCommand -Invocation ("& '" + $escapedActualLauncher + $actualWorkerArgs)
+    $actualPinCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText $actualWorkerCommand -TimeoutSeconds 10
+    $actualPinReport = New-F2AclWorkerExecutionReport -CapturedProcess $actualPinCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest (Join-Path $workerTestRoot 'actual-pin-failure'))
+    Assert-F2Acl ($missingArgs.ExitCode -eq 3 -and $null -ne (ConvertTo-F2AclWorkerDiagnosticDocument $missingArgs stderr).FatalError -and $badArgs.ExitCode -eq 3 -and $badPin.ExitCode -eq 3 -and (ConvertTo-F2AclWorkerDiagnosticDocument $badPin stderr).FatalError -eq 'SyntheticSourcePinMismatch.' -and $actualPinCapture.ExitCode -eq 4 -and $actualPinReport.Diagnostics.FatalError -eq 'Elevated source hash mismatch; collector was not run.') 'missing or incorrect arguments and synthetic plus actual production source-pin mismatch report through encoded wrapper before host inspection'
+
+    Write-Output 'Stage=production_encoded_worker_publication_failures'
+    $missingStreamDir = Join-Path $workerTestRoot 'missing-stream'
+    $missingStreamCapture = Invoke-F2AclSyntheticWorker -Scenario MissingStream -Directory $missingStreamDir
+    $missingStreamReport = New-F2AclWorkerExecutionReport -CapturedProcess $missingStreamCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest $missingStreamDir)
+    $partialDir = Join-Path $workerTestRoot 'partial-publication'
+    $partialCapture = Invoke-F2AclSyntheticWorker -Scenario InterruptedPublication -Directory $partialDir
+    $partialReport = New-F2AclWorkerExecutionReport -CapturedProcess $partialCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest $partialDir)
+    Assert-F2Acl (-not $missingStreamReport.Pass -and $missingStreamReport.Errors -match 'WorkerExpectedFilesMissing:powershell-streams.json' -and -not $partialReport.Pass -and $partialReport.Errors -match 'WorkerExpectedFilesMissing:acl-baseline.frame,powershell-streams.json' -and -not (Test-Path -LiteralPath (Join-Path $partialDir 'acl-baseline.frame'))) 'missing stream and interrupted atomic publication remain incomplete despite a pending artifact'
+
+    $mailboxFail = Invoke-F2AclSyntheticWorker -Scenario MailboxWriteFailure -Directory (Join-Path $workerTestRoot 'mailbox-write-failure')
+    $partialExitDir = Join-Path $workerTestRoot 'partial-nonzero'
+    $partialExit = Invoke-F2AclSyntheticWorker -Scenario NonzeroPartial -Directory $partialExitDir
+    $partialExitReport = New-F2AclWorkerExecutionReport -CapturedProcess $partialExit -ExpectedFiles (Get-F2AclSyntheticArtifactManifest $partialExitDir)
+    $partialExitStderr = [Text.Encoding]::UTF8.GetString($partialExit.StderrBytes)
+    Assert-F2Acl ($mailboxFail.ExitCode -eq 3 -and ($partialExitReport.Errors -match '^WorkerExitedNonzero:17$').Count -eq 1 -and -not $partialExitReport.Pass -and $partialExitStderr.Contains('synthetic late failure') -and [Text.Encoding]::UTF8.GetString($partialExit.StdoutBytes).Contains('F2ACL_STAGE:FramePublished')) 'mailbox publication failure is captured and stderr remains separate after nonzero partial publication'
+
+    Write-Output 'Stage=production_encoded_worker_parse_start_timeout_and_oversize'
+    $parseCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText 'if (' -TimeoutSeconds 10
+    $parseReport = New-F2AclWorkerExecutionReport -CapturedProcess $parseCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest (Join-Path $workerTestRoot 'parse-failure'))
+    $badScriptPath = Join-Path $workerTestRoot 'bad-entrypoint.ps1'
+    [IO.File]::WriteAllText($badScriptPath,'if (',[Text.UTF8Encoding]::new($false))
+    $badScriptInvocation = '& ' + ("'" + $badScriptPath.Replace("'","''") + "'")
+    $badScriptCommand = New-F2AclWorkerBootstrapCommand -Invocation $badScriptInvocation
+    $badScriptCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText $badScriptCommand -TimeoutSeconds 10
+    $badScriptFatal = (ConvertTo-F2AclWorkerDiagnosticDocument -CapturedProcess $badScriptCapture -StreamName stderr).FatalError
+    $startFailure = Invoke-F2AclCapturedPowerShell -PowerShellExe (Join-Path $workerTestRoot 'not-a-powershell.exe') -CommandText 'exit 0' -TimeoutSeconds 2
+    $timeoutCapture = Invoke-F2AclSyntheticWorker -Scenario Timeout -Directory (Join-Path $workerTestRoot 'timeout') -TimeoutSeconds 1
+    $largeCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText "[Console]::Out.Write('x' * 50000); exit 0" -TimeoutSeconds 10 -MaxBytesPerStream 1024
+    $timeoutReport = New-F2AclWorkerExecutionReport -CapturedProcess $timeoutCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest (Join-Path $workerTestRoot 'timeout'))
+    Assert-F2Acl ($parseCapture.ExitCode -ne 0 -and $parseCapture.StderrBytes.Length -gt 0 -and $parseReport.Errors -match '^WorkerExitedNonzero:' -and $badScriptCapture.ExitCode -eq 3 -and -not [string]::IsNullOrWhiteSpace($badScriptFatal) -and -not $startFailure.Started -and $null -ne $startFailure.StartError -and $timeoutCapture.TimedOut -and $timeoutCapture.State -eq 'TimedOutTerminated' -and $timeoutReport.Errors -contains 'WorkerTimeout.' -and $largeCapture.StdoutTruncated -and $largeCapture.StdoutBytes.Length -eq 1024 -and $largeCapture.OutputComplete) 'encoded and invoked-script parser/start/timeout and oversized output failures are independently bounded and observable'
+}
+finally {
+    foreach ($item in @(Get-ChildItem -LiteralPath $workerTestRoot -Force -Recurse | Sort-Object FullName -Descending)) {
+        if ($item.PSIsContainer) { [IO.Directory]::Delete($item.FullName,$false) } else { [IO.File]::Delete($item.FullName) }
+    }
+    [IO.Directory]::Delete($workerTestRoot)
+}
 
 $testAclParent = [IO.Path]::GetFullPath($env:LOCALAPPDATA)
 Write-Output 'Stage=restricted_local_evidence_directory'
