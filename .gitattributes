@@ -5,4 +5,7 @@
 *.ps1 text eol=crlf
 scripts/f2-acl/F2AclCapture.Protocol.psm1 text eol=crlf
 scripts/f2-acl/F2AclIcacls.Corroboration.psm1 text eol=lf
+scripts/f2-acl/F2AclIcacls.Runtime.psm1 text eol=lf
+scripts/f2-acl/Invoke-F2IcaclsCapture.ps1 text eol=lf
+scripts/f2-acl/Invoke-F2IcaclsProtectedCoordinator.ps1 text eol=lf
 scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json text eol=lf

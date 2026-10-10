@@ -6,7 +6,7 @@ Repository / remote: `publiomcko-cloud/procedural-sandbox-simulation` / `origin`
 Worktree / branch: `C:\Dev\f2-g1-icacls-corroboration` / `security/f2-icacls-corroboration-issue48`
 Base SHA: `58af4a8d8f83a184348082bf12fee7b1cef18779`
 Candidate SHA: The immutable candidate is the final PR #50 head reported with this handoff; a commit cannot contain its own hash.
-Parent SHA: `58af4a8d8f83a184348082bf12fee7b1cef18779`
+Parent SHA: `da2da4203bf5af4822c9a9badad9f6b54cee0c63`
 Changed paths:
 - `.github/workflows/f2-acl-source-only.yml`
 - `docs/architecture/F2_G1_ICACLS_EXECUTION_BOUNDARY.md`
@@ -58,7 +58,7 @@ Windows GitHub CI: Pending push of this candidate; report final result after wor
 - Protected coordinator: `3badc19c8ac6ac450f9691258c6ecd2a3754cd665fd5989325c90b64290ae9e2`
 - Existing PR #49 collector: `bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b`
 
-These pins are repeated in `F2_ICACLS_SOURCE_PINS.json`; PR #49's source remains unchanged.
+These pins are repeated in `F2_ICACLS_SOURCE_PINS.json`; explicit LF checkout attributes keep the new pinned file bytes stable on Windows CI. PR #49's source remains unchanged.
 
 ## Tests not executed
 
