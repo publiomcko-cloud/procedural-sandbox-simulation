@@ -6,8 +6,9 @@ Repository / remote: `publiomcko-cloud/procedural-sandbox-simulation` / `origin`
 Worktree / branch: `C:\Dev\f2-g1-icacls-corroboration` / `security/f2-icacls-corroboration-issue48`
 Base SHA: `58af4a8d8f83a184348082bf12fee7b1cef18779`
 Candidate SHA: The immutable candidate is the final PR #50 head reported with this handoff; a commit cannot contain its own hash.
-Parent SHA: `da2da4203bf5af4822c9a9badad9f6b54cee0c63`
+Parent SHA: `f204f34ecdb8e7ce8e242952bb47c908b29bee27`
 Changed paths:
+- `.gitattributes`
 - `.github/workflows/f2-acl-source-only.yml`
 - `docs/architecture/F2_G1_ICACLS_EXECUTION_BOUNDARY.md`
 - `docs/handoffs/F2_G1_ICACLS_CORROBORATION_HANDOFF.md`

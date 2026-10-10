@@ -27,7 +27,9 @@ $requester='S-1-5-21-111111111-222222222-333333333-1001'
 $coordinator='S-1-5-21-111111111-222222222-333333333-500'
 $projectGuid='\\?\Volume{11111111-1111-1111-1111-111111111111}\'
 $evidenceGuid='\\?\Volume{22222222-2222-2222-2222-222222222222}\'
-$script:paths=@(Get-F2IcaclsExpectedPaths)
+$syntheticProjectRoot=Join-Path $env:TEMP 'F2 Runtime Synthetic Project Root'
+$script:helperModule.SessionState.PSVariable.Set('F2IcaclsProjectRoot',$syntheticProjectRoot)
+$script:paths=@(Get-F2IcaclsExpectedPaths -ProjectRoot $syntheticProjectRoot)
 $script:payloadSha='a'*64;$script:integritySha='b'*64
 $script:records=@(foreach($path in $script:paths){[pscustomobject]@{Path=$path;Status='PASS';Aces=@([pscustomobject]@{Sid='S-1-5-32-544';Type='Allow';AccessMask='0x001F01FF';InheritanceFlags='None';PropagationFlags='None';Inherited=$false})}})
 $script:baseline=[pscustomobject]@{Complete=$true;CaptureId='ecb6deeb424e40feb5354d18908986df';VmId='6f8d61ce-7c08-4c48-82d9-5fa7fe40a7b1';VmName='F2-G1-Isolated-Disposable';VmState='Off';Manifest=[pscustomobject]@{ExpectedCount=11;ExpectedPaths=$script:paths;RecordCount=11;UniquePathCount=11};Records=$script:records}
