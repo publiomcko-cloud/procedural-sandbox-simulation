@@ -1,6 +1,3 @@
-[CmdletBinding()]
-param()
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -363,13 +360,16 @@ function Invoke-F2InstallMain {
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
-    if ($args.Count -ne 0) { [Console]::Error.WriteLine('F2_INSTALL: arguments are not accepted.'); exit 2 }
     try {
+        $unbound = @($MyInvocation.UnboundArguments)
+        if ($unbound.Count -ne 0) { throw 'INSTALL_ARGUMENTS_NOT_ACCEPTED' }
         $result=Invoke-F2InstallMain
         [Console]::Out.WriteLine(($result|ConvertTo-Json -Depth 8 -Compress))
         if (-not $result.Success) { exit 1 }
         exit 0
     } catch {
-        [Console]::Error.WriteLine('F2_INSTALL: unhandled installation failure; no success attestation.');exit 1
+        $code = [string]$_.Exception.Message
+        if ($code -cnotmatch '^[A-Z][A-Z0-9_]{0,63}$') { $code = 'INSTALL_OPERATION_FAILED' }
+        [Console]::Error.WriteLine(('F2_INSTALL: ' + $code + '; no success attestation.'));exit 1
     }
 }

@@ -9,7 +9,8 @@ $script:assertions=0;$script:failures=New-Object 'System.Collections.Generic.Lis
 function Assert-Install([bool]$Condition,[string]$Name){$script:assertions++;if(-not $Condition){$script:failures.Add($Name);Write-Host ('FAIL: '+$Name)}else{Write-Host ('PASS: '+$Name)}}
 
 . (Join-Path $PSScriptRoot 'Invoke-F2VerifiedInstaller.ps1')
-Assert-Install (($script:F2ApprovedInstallerPath -ceq 'C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1') -and ($script:F2ApprovedInstallerSha256 -ceq 'be622923a5931a1cc1ce8cfff18c72952b836f8f84e403a419254c6c2c778b0e')) 'production bootstrap pins the approved source installer path and digest'
+. (Join-Path $PSScriptRoot '..\f2-g1-install-failure-diagnostics\Start-F2VerifiedInstall.ps1')
+Assert-Install (($script:F2ApprovedInstallerPath -ceq 'C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1') -and ($script:F2ApprovedInstallerSha256 -ceq 'cf8abc7c94186f44044684e77eb432c3a20a20c3cfd8fb099b6e32e4a2ca0118')) 'production bootstrap pins the approved source installer path and complete Windows checkout-byte digest'
 
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $sourceAcl=Join-Path $repo 'scripts\f2-acl'
@@ -254,21 +255,28 @@ try {
     [IO.File]::WriteAllText($installerPath,$tamperSource,[Text.UTF8Encoding]::new($false))
     $approvedHash=Get-F2InstallHashBytes -Bytes ([IO.File]::ReadAllBytes($installerPath))
     [IO.File]::AppendAllText($installerPath,'#tampered')
-    $tamperRejected=$false
-    try { Invoke-F2VerifiedInstallerCore -InstallerPath $installerPath -ExpectedSha256 $approvedHash | Out-Null }
-    catch { $tamperRejected=$_.Exception.Message -eq 'BOOTSTRAP_INSTALLER_HASH_MISMATCH' }
-    Assert-Install ($tamperRejected -and -not (Test-Path -LiteralPath $markerPath)) 'modified installer is rejected before its synthetic protected write'
+    $ownerSid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $tamperMailbox=New-F2InstallDiagnosticMailbox -OwnerSid $ownerSid
+    try {
+        $tamperResult=Invoke-F2VerifiedInstallerCore -InstallerPath $installerPath -ExpectedSha256 $approvedHash -DiagnosticDirectory $tamperMailbox.Directory -CorrelationNonce $tamperMailbox.Nonce
+        Assert-Install ($tamperResult.ChildExitCode -eq 1 -and $tamperResult.ErrorCode -eq 'BOOTSTRAP_INSTALLER_HASH_MISMATCH' -and -not (Test-Path -LiteralPath $markerPath)) 'modified installer is rejected before its synthetic protected write'
+    } finally { Remove-Item -LiteralPath $tamperMailbox.Directory -Recurse -Force }
 
-    $selfModifyingSource='if($MyInvocation.InvocationName -ne ''.''){$p='''+$installerPath.Replace("'","''")+''';$m='''+$markerPath.Replace("'","''")+''';[IO.File]::WriteAllText($p,''changed after verification'');[IO.File]::WriteAllText($m,''executed verified bytes'')}'
+    $escapedInstaller=$installerPath.Replace("'","''");$escapedMarker=$markerPath.Replace("'","''")
+    $selfModifyingSource="[IO.File]::WriteAllText('$escapedInstaller','throw ''REPLACEMENT_MUST_NOT_EXECUTE''');[IO.File]::WriteAllText('$escapedMarker','executed verified bytes');function Invoke-F2InstallMain { return [pscustomobject]@{ Success=`$true; Stage='PostInstallAttestation'; ErrorCode='NONE' } }"
     [IO.File]::WriteAllText($installerPath,$selfModifyingSource,[Text.UTF8Encoding]::new($false))
     $selfModifyingHash=Get-F2InstallHashBytes -Bytes ([IO.File]::ReadAllBytes($installerPath))
-    Invoke-F2VerifiedInstallerCore -InstallerPath $installerPath -ExpectedSha256 $selfModifyingHash | Out-Null
-    Assert-Install ([IO.File]::ReadAllText($markerPath) -ceq 'executed verified bytes' -and [IO.File]::ReadAllText($installerPath) -ceq 'changed after verification') 'bootstrap invokes script entrypoint from verified bytes after backing path changes'
+    $selfMailbox=New-F2InstallDiagnosticMailbox -OwnerSid $ownerSid
+    try {
+        $selfResult=Invoke-F2VerifiedInstallerCore -InstallerPath $installerPath -ExpectedSha256 $selfModifyingHash -DiagnosticDirectory $selfMailbox.Directory -CorrelationNonce $selfMailbox.Nonce
+        Assert-Install ($selfResult.ChildExitCode -eq 0 -and [IO.File]::ReadAllText($markerPath) -ceq 'executed verified bytes' -and [IO.File]::ReadAllText($installerPath) -ceq "throw 'REPLACEMENT_MUST_NOT_EXECUTE'") 'bootstrap invokes verified dot-sourced ScriptBlock after backing path changes'
+    } finally { Remove-Item -LiteralPath $selfMailbox.Directory -Recurse -Force }
 
-    $badHashRejected=$false
-    try { Invoke-F2VerifiedInstallerCore -InstallerPath $installerPath -ExpectedSha256 'not-a-sha256' | Out-Null }
-    catch { $badHashRejected=$_.Exception.Message -eq 'BOOTSTRAP_EXPECTED_HASH_INVALID' }
-    Assert-Install $badHashRejected 'bootstrap rejects malformed pinned hashes'
+    $badHashMailbox=New-F2InstallDiagnosticMailbox -OwnerSid $ownerSid
+    try {
+        $badHash=Invoke-F2VerifiedInstallerCore -InstallerPath $installerPath -ExpectedSha256 'not-a-sha256' -DiagnosticDirectory $badHashMailbox.Directory -CorrelationNonce $badHashMailbox.Nonce
+        Assert-Install ($badHash.ChildExitCode -eq 1 -and $badHash.ErrorCode -eq 'BOOTSTRAP_EXPECTED_HASH_INVALID') 'bootstrap rejects malformed pinned hashes'
+    } finally { Remove-Item -LiteralPath $badHashMailbox.Directory -Recurse -Force }
 } finally { if(Test-Path -LiteralPath $bootstrapRoot){Remove-Item -LiteralPath $bootstrapRoot -Recurse -Force} }
 
 "Assertions=$script:assertions;Failures=$($script:failures.Count)"
