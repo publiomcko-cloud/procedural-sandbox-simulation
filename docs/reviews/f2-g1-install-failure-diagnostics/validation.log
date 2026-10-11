@@ -1,0 +1,36 @@
+F2 G1 diagnostic install correction — validation record
+Runtime: Windows PowerShell 5.1.22621.6133 (Desktop) for all five synthetic suites.
+Commands were run sequentially through powershell.exe -NoProfile -ExecutionPolicy Bypass -File; each child process exit was captured separately.
+
+COMMAND: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/f2-acl/Test-F2AclCapture.Protocol.ps1
+RESULT: Assertions=152; Failures=0; ChildExit=0
+
+COMMAND: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/f2-acl/Test-F2AclIcacls.Corroboration.ps1
+RESULT: Assertions=118; Failures=0; ChildExit=0
+
+COMMAND: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1
+RESULT: Assertions=35; Failures=0; ChildExit=0
+
+COMMAND: powershell.exe -NoProfile -ExecutionPolicy Bypass -File docs/reviews/f2-g1-capture-id-contract/Test-Install-F2IcaclsProtectedPackage.ps1
+RESULT: Assertions=47; Failures=0; ChildExit=0
+
+COMMAND: powershell.exe -NoProfile -ExecutionPolicy Bypass -File docs/reviews/f2-g1-install-failure-diagnostics/Test-F2InstallDiagnosticTransport.ps1
+RESULT: RESULT=PASS; ASSERTIONS=39; FAILURES=0; ChildExit=0
+
+TOTAL: 5 suites; 391 assertions; 0 failures; all five child exit codes 0.
+
+New diagnostic transport coverage verifies the actual production identity helper returns the current token SID and Administrator-role result. To keep integration tests deterministic on runners whose token belongs to Administrators, the synthetic test overrides only that helper with a synthetic requester SID and non-elevated status. The production file entrypoint remains parameterless, has no identity override input, and refuses to launch when its actual token is elevated.
+
+Hosted Windows CI history:
+- Run 38175626017 failed the diagnostics suite because default elevated-runner file ownership and inherited DACLs did not satisfy the mailbox record security contract.
+- Run 38175878414 reproduced the same synthetic mailbox file owner/protection mismatch. The bounded publisher now sets requester ownership and a protected explicit requester/SYSTEM file DACL and validates it before publication.
+- Run 38176932190 failed four launcher-parent assertions because the workflow runner's token was rejected by the production non-elevated guard before the injected process provider was reached. Other four suite steps passed. The test now supplies a synthetic standard-user identity through an internal function override after separately asserting the real identity helper. Production policy is unchanged.
+- Final hosted Windows CI for the immutable commit containing this correction is linked in the PR #54 handoff/comment. It runs the five suites, PowerShell parser sweep, and `git diff --check`.
+
+COMMAND: Windows PowerShell 5.1 Parser.ParseFile sweep over the same tracked paths used by `.github/workflows/f2-acl-source-only.yml` (`scripts/f2-acl/*.ps1`, `scripts/f2-acl/*.psm1`, and both review directories' `*.ps1` files).
+RESULT: ParserFiles=14; ParserErrors=0; Exit=0
+
+COMMAND: git diff --check
+RESULT: Exit=0
+
+All payloads, mailbox identifiers, and test identities are synthetic. No UAC, protected installation, live host query, permission change, VM/Hyper-V/G: operation, or native workload occurred. Cross-token UAC and actual installation remain unverified. Diagnostic status is NON-AUTHORITATIVE; actual success still requires independent host verification of the four protected directories, seven file hashes, and v2 release manifest.

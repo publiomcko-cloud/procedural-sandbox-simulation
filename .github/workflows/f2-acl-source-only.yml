@@ -6,12 +6,14 @@ on:
       - 'scripts/f2-acl/**'
       - 'docs/security/F2_G1_ACL_CAPTURE.md'
       - 'docs/reviews/f2-g1-capture-id-contract/**'
+      - 'docs/reviews/f2-g1-install-failure-diagnostics/**'
       - '.github/workflows/f2-acl-source-only.yml'
   pull_request:
     paths:
       - 'scripts/f2-acl/**'
       - 'docs/security/F2_G1_ACL_CAPTURE.md'
       - 'docs/reviews/f2-g1-capture-id-contract/**'
+      - 'docs/reviews/f2-g1-install-failure-diagnostics/**'
       - '.github/workflows/f2-acl-source-only.yml'
 jobs:
   powershell-source-only:
@@ -48,10 +50,17 @@ jobs:
           $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
           Write-Host "F2InstallerTestProcessExit=$($test.ExitCode)"
           if ($test.ExitCode -ne 0) { exit $test.ExitCode }
+      - name: Run protected install diagnostics synthetic suite in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $testPath = (Resolve-Path '.\docs\reviews\f2-g1-install-failure-diagnostics\Test-F2InstallDiagnosticTransport.ps1').Path
+          $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
+          Write-Host "F2InstallDiagnosticsTestProcessExit=$($test.ExitCode)"
+          if ($test.ExitCode -ne 0) { exit $test.ExitCode }
       - name: Parse tracked PowerShell source
         shell: powershell
         run: |
-          $files = @(git ls-files 'scripts/f2-acl/*.ps1' 'scripts/f2-acl/*.psm1')
+          $files = @(git ls-files 'scripts/f2-acl/*.ps1' 'scripts/f2-acl/*.psm1' 'docs/reviews/f2-g1-capture-id-contract/*.ps1' 'docs/reviews/f2-g1-install-failure-diagnostics/*.ps1')
           $failures = @()
           foreach ($file in $files) {
             $tokens = $null
