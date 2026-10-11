@@ -20,7 +20,18 @@ The corroboration suite's single initial failure was `bounded process runner cap
 
 ## GitHub Windows CI
 
-The workflow is `.github/workflows/f2-acl-source-only.yml` on `windows-latest`. The exact final PR SHA, Actions run URL, job result, suite summaries, parser result, and workflow log link are recorded here after the pushed review commit completes CI.
+The workflow is `.github/workflows/f2-acl-source-only.yml` on `windows-latest`.
+
+- Exact tested PR HEAD: `5c47672998209dfbacd9f59f260627bd69273750`.
+- Run: [F2 ACL source-only validation #38150384900](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38150384900), conclusion `success`, exit 0.
+- Windows PowerShell 5.1 protocol suite: 152 assertions, 0 failures; child exit 0.
+- Corroboration suite: 118 assertions, 0 failures; child exit 0.
+- Runtime suite: 35 assertions, 0 failures; child exit 0.
+- Parser step: 9 tracked PowerShell files, 0 errors.
+- `git diff --check`: passed.
+- The complete hosted step log is retrievable at [job 114502430594](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38150384900/job/114502430594).
+
+The final commit after this run contains only review-manifest metadata and this CI reference. It does not alter production source, installer, bootstrap, tests, or pins. The run covers the exact source-bearing SHA plus those evidence-only edits.
 
 ## Scope and limits
 

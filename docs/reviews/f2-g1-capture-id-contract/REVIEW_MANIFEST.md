@@ -11,7 +11,7 @@ This manifest covers every PR #53 changed path and the supporting seven-file pac
 | `docs/reviews/f2-g1-capture-id-contract/HANDOFF.md` | `3517fafb9245a9064da4da0a22eeeacda6395769ca02f3d017d31a8d52b157f6` | Developer handoff |
 | `docs/reviews/f2-g1-capture-id-contract/Install-F2IcaclsProtectedPackage.ps1` | `ca4d5a213615b1ce74d8fc7df17e7bb65ccfbcacd9dd7de2c9a6c36d42842d2d` | Seven-file protected installer and v2 release manifest producer |
 | `docs/reviews/f2-g1-capture-id-contract/Invoke-F2VerifiedInstaller.ps1` | `cf480bf047f9d38e21e11e75cd4f30ddd487bbb4af6c9474464b7596e675baf5` | One-read verified-byte UAC bootstrap |
-| `docs/reviews/f2-g1-capture-id-contract/TEST_EVIDENCE.md` | `b627dcf224adbd656c904b249178a41d4ee9cc73c3473d72a53ebcfe51f015dd` | Exact local commands and validation evidence |
+$16ce1d4416a708e025a50c2ced6dafe93a8ab9af56f8b8eb1155d9ac805ecdf4a` | Exact local commands and validation evidence |
 | `docs/reviews/f2-g1-capture-id-contract/Test-Install-F2IcaclsProtectedPackage.ps1` | `67851441b9196d6b95338a2a704363157b27d3a73e0afd8d0e2345b8030ae3ee` | Windows PowerShell 5.1 installer tests |
 | `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_CORROBORATION_TEST.log` | `c631f9353e41d6ef1b53579de3cd2ded6418d916a2145fdbbc95a60cebc632c7` | Complete successful 118-assertion output |
 | `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_CORROBORATION_TRANSIENT_FAILURE.log` | `787ba98ba009da7330e709e3f39350245d2bb3b88e74a6dfa7e3dbc14cad7ef3` | Initial failed assertion and unchanged successful rerun record |
