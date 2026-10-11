@@ -4,7 +4,7 @@
   "CorroborationModuleSha256": "a52ed86218a0ba0c0801ee6e84a4a5e47c73eda43db78f818b0b12670ad5110b",
   "CollectorScriptSha256": "bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b",
   "ProtocolModuleSha256": "42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728",
-  "RuntimeModuleSha256": "eecec7b86a4bfee7773e73b537ed74ae573ff3d5bfaaa44b9d1bc42c4e1953a7",
+  "RuntimeModuleSha256": "950b8232be2f22412e837d63f7b2fb678fc83871862b6bafc714d303599a71a5",
   "LauncherScriptSha256": "fb55240a16f0858980bb38851414b28ce5f403ba26697ff78f227ca22ff804b0",
   "CoordinatorScriptSha256": "3badc19c8ac6ac450f9691258c6ecd2a3754cd665fd5989325c90b64290ae9e2"
 }

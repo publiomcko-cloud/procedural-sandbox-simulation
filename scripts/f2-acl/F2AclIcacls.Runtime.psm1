@@ -69,7 +69,7 @@ function Get-F2RuntimeReleaseManifest {
     if ($file.PSIsContainer -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $file.Length -lt 1 -or $file.Length -gt 65536) { throw 'ReleaseManifestTypeOrSizeInvalid.' }
     $bytes = [IO.File]::ReadAllBytes($file.FullName)
     $manifest = [Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json -ErrorAction Stop
-    if ($manifest.Schema -cne 'f2-icacls-runtime-release-v1') { throw 'ReleaseManifestSchemaInvalid.' }
+    if ($manifest.Schema -cne 'f2-icacls-runtime-release-v2') { throw 'ReleaseManifestSchemaInvalid.' }
     return $manifest
 }
 

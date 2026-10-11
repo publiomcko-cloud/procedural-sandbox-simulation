@@ -101,6 +101,49 @@ try {
     Reset-RuntimeHooks
     $releaseCheck=Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($script:manifest,'Source')
     Assert-Runtime ($releaseCheck.Pass) 'release contract accepts the independently pinned mailbox ID and payload CaptureId'
+
+    # Exercise the real disk loader with no release-provider mock. The source
+    # contract is evaluated separately using only the commit-provider test hook.
+    $releaseManifestTestRoot=Join-Path $env:TEMP ('F2 Runtime Manifest Loader '+[guid]::NewGuid().ToString('N'))
+    [void][IO.Directory]::CreateDirectory($releaseManifestTestRoot)
+    $releaseManifestTestPath=Join-Path $releaseManifestTestRoot 'approved-release.json'
+    $originalReleasePath=$script:runtimeModule.SessionState.PSVariable.Get('F2RuntimeReleasePath').Value
+    try {
+        Set-RuntimeState 'F2RuntimeReleasePath' $releaseManifestTestPath
+        Set-RuntimeState 'F2RuntimeReleaseProvider' $null
+        $v2Bytes=[Text.UTF8Encoding]::new($false).GetBytes(($script:manifest|ConvertTo-Json -Depth 8 -Compress))
+        [IO.File]::WriteAllBytes($releaseManifestTestPath,$v2Bytes)
+        $diskManifest=Invoke-RuntimePrivate 'Get-F2RuntimeReleaseManifest' @()
+        Assert-Runtime ($diskManifest.Schema -ceq 'f2-icacls-runtime-release-v2' -and $diskManifest.BaselineMailboxId -ceq $baselineMailboxId -and $diskManifest.BaselinePayloadCaptureId -ceq $baselinePayloadCaptureId) 'actual disk loader reads valid v2 with separate pinned identities without a release-provider mock'
+        $diskPackageCheck=Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($diskManifest,'Source')
+        Assert-Runtime ($diskPackageCheck.Pass -and $diskPackageCheck.Files -eq 7 -and $diskPackageCheck.CommitSha -ceq ('a'*40)) 'disk-loaded v2 manifest passes the actual seven-file source package contract'
+
+        $legacyDiskManifest=$script:manifest.PSObject.Copy();$legacyDiskManifest.Schema='f2-icacls-runtime-release-v1'
+        [IO.File]::WriteAllBytes($releaseManifestTestPath,[Text.UTF8Encoding]::new($false).GetBytes(($legacyDiskManifest|ConvertTo-Json -Depth 8 -Compress)))
+        $legacyDiskRejected=$false;try{[void](Invoke-RuntimePrivate 'Get-F2RuntimeReleaseManifest' @())}catch{$legacyDiskRejected=$true}
+        Assert-Runtime $legacyDiskRejected 'actual disk loader rejects legacy v1 manifests'
+
+        [IO.File]::WriteAllText($releaseManifestTestPath,'{')
+        $malformedDiskRejected=$false;try{[void](Invoke-RuntimePrivate 'Get-F2RuntimeReleaseManifest' @())}catch{$malformedDiskRejected=$true}
+        Assert-Runtime $malformedDiskRejected 'actual disk loader rejects malformed JSON'
+
+        foreach($identityField in @('BaselineMailboxId','BaselinePayloadCaptureId')){
+            $missingIdentityManifest=$script:manifest.PSObject.Copy()
+            $missingIdentityManifest.PSObject.Properties.Remove($identityField)
+            [IO.File]::WriteAllBytes($releaseManifestTestPath,[Text.UTF8Encoding]::new($false).GetBytes(($missingIdentityManifest|ConvertTo-Json -Depth 8 -Compress)))
+            $missingIdentityRejected=$false
+            try {
+                $loadedMissingIdentity=Invoke-RuntimePrivate 'Get-F2RuntimeReleaseManifest' @()
+                [void](Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($loadedMissingIdentity,'Source'))
+            } catch { $missingIdentityRejected=$true }
+            Assert-Runtime $missingIdentityRejected ("disk-loaded manifest with missing $identityField fails the downstream release contract")
+        }
+    } finally {
+        Set-RuntimeState 'F2RuntimeReleasePath' $originalReleasePath
+        Reset-RuntimeHooks
+        if(Test-Path -LiteralPath $releaseManifestTestRoot){Remove-Item -LiteralPath $releaseManifestTestRoot -Recurse -Force -ErrorAction SilentlyContinue}
+    }
+
     $oldSchemaManifest=$script:manifest.PSObject.Copy();$oldSchemaManifest.Schema='f2-icacls-runtime-release-v1';$oldSchemaRejected=$false
     try{[void](Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($oldSchemaManifest,'Source'))}catch{$oldSchemaRejected=$true}
     Assert-Runtime $oldSchemaRejected 'legacy release-manifest schema without distinct ID semantics is rejected'
