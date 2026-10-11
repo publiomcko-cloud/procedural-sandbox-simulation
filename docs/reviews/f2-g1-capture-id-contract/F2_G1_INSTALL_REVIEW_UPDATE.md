@@ -33,20 +33,20 @@ The seven-file installer package contains the six executable/module files plus t
 
 ## Installer and bootstrap
 
-- Installer: `Install-F2IcaclsProtectedPackage.ps1`, SHA-256 `a6e2b59b847b9201dec1e9ab8f7b49c5ecd20f5bf3d02d2eb252a60f956edd95`.
-- One-read verified-byte bootstrap: `Invoke-F2VerifiedInstaller.ps1`, SHA-256 `c349f092516321b350905e59d66153ce4637e4c2e8b9227ab12ea8e4ae4ce6f0`.
-- Installer synthetic test: `Test-Install-F2IcaclsProtectedPackage.ps1`, SHA-256 `e73722bdab58024b9b3cd565cb39ceacd5aacc0d33a7a04135cf77cd226edef9`.
+- Installer: `Install-F2IcaclsProtectedPackage.ps1`, SHA-256 `be622923a5931a1cc1ce8cfff18c72952b836f8f84e403a419254c6c2c778b0e`.
+- One-read verified-byte bootstrap: `Invoke-F2VerifiedInstaller.ps1`, SHA-256 `3ae8fee4cfa7c809110a3233f9df2ad8f1fe877c91f1a4067e08541c5e893060`.
+- Installer synthetic test: `Test-Install-F2IcaclsProtectedPackage.ps1`, SHA-256 `a1967eff0627d3bbb3bd4be2a52c9acfa40f401e216e9988ab0b837e9cf967df`.
 - Bootstrap preparation path: `C:\Dev\f2-g1-protected-install-prep\Invoke-F2VerifiedInstaller.ps1`.
 - Installer preparation path: `C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1`; this matches the fixed path embedded in the bootstrap.
 - The bootstrap pins the installer SHA-256 above and reads, verifies, and executes the same in-memory bytes. The installer pins the unchanged production source commit and all seven package hashes above.
 
 ## Exact future installation command (not run)
 
-After independent review and fresh owner authorization, first replace only the two known prior preparation files at the paths above with the accepted exact bytes, checking their old SHA-256 values (`cf480bf047f9d38e21e11e75cd4f30ddd487bbb4af6c9474464b7596e675baf5` bootstrap and `ca4d5a213615b1ce74d8fc7df17e7bb65ccfbcacd9dd7de2c9a6c36d42842d2d` installer) and confirming they are regular non-reparse files. Then verify new hashes `c349f092516321b350905e59d66153ce4637e4c2e8b9227ab12ea8e4ae4ce6f0` and `a6e2b59b847b9201dec1e9ab8f7b49c5ecd20f5bf3d02d2eb252a60f956edd95`. Do not overwrite any unexpected file. Run the following from the original requester account in Windows PowerShell 5.1; the command displays the normal human-consented UAC prompt.
+After independent review and fresh owner authorization, first replace only the two known prior preparation files at the paths above with the accepted exact bytes, checking their old SHA-256 values (`cf480bf047f9d38e21e11e75cd4f30ddd487bbb4af6c9474464b7596e675baf5` bootstrap and `ca4d5a213615b1ce74d8fc7df17e7bb65ccfbcacd9dd7de2c9a6c36d42842d2d` installer) and confirming they are regular non-reparse files. Then verify new hashes `3ae8fee4cfa7c809110a3233f9df2ad8f1fe877c91f1a4067e08541c5e893060` and `be622923a5931a1cc1ce8cfff18c72952b836f8f84e403a419254c6c2c778b0e`. Do not overwrite any unexpected file. Run the following from the original requester account in Windows PowerShell 5.1; the command displays the normal human-consented UAC prompt.
 
 ```powershell
 $bootstrapPath = 'C:\Dev\f2-g1-protected-install-prep\Invoke-F2VerifiedInstaller.ps1'
-$expectedBootstrapSha = 'c349f092516321b350905e59d66153ce4637e4c2e8b9227ab12ea8e4ae4ce6f0'
+$expectedBootstrapSha = '3ae8fee4cfa7c809110a3233f9df2ad8f1fe877c91f1a4067e08541c5e893060'
 $bootstrapBytes = [IO.File]::ReadAllBytes($bootstrapPath)
 $sha = [Security.Cryptography.SHA256]::Create()
 try { $actualBootstrapSha = ([BitConverter]::ToString($sha.ComputeHash($bootstrapBytes))).Replace('-', '').ToLowerInvariant() }

@@ -1,6 +1,7 @@
-COMMAND: powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Dev\f2-g1-capture-id-contract\docs\reviews\f2-g1-capture-id-contract\Test-Install-F2IcaclsProtectedPackage.ps1
+COMMAND: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Dev\f2-g1-capture-id-contract\docs\reviews\f2-g1-capture-id-contract\Test-Install-F2IcaclsProtectedPackage.ps1
 POWERSHELL_VERSION: 5.1.22621.6133
 PASS: production bootstrap pins the approved source installer path and digest
+PASS: production path enumerator retains exact pinned G paths without requiring a G PowerShell drive
 PASS: synthetic parent provider returns the exact allowed root fixture
 PASS: synthetic parent chain accepts its reviewed fixture for Program Files
 PASS: synthetic parent chain accepts its reviewed fixture for ProgramData
@@ -46,5 +47,5 @@ PASS: different requester SID causes no package, release, or staging writes
 PASS: modified installer is rejected before its synthetic protected write
 PASS: bootstrap invokes script entrypoint from verified bytes after backing path changes
 PASS: bootstrap rejects malformed pinned hashes
-Assertions=46;Failures=0
+Assertions=47;Failures=0
 PROCESS_EXIT=0

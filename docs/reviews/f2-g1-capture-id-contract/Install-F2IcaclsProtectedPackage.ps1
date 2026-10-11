@@ -185,9 +185,11 @@ function Get-F2InstallExpectedPaths {
     param([Parameter(Mandatory)][string]$ProjectRoot)
     $vmId = '6f8d61ce-7c08-4c48-82d9-5fa7fe40a7b1'.ToUpperInvariant()
     $root = [IO.Path]::GetFullPath($ProjectRoot).TrimEnd('\')
-    $config = Join-Path $root 'F2-G1-Isolated-Disposable'
-    $configVm = Join-Path (Join-Path $config 'Virtual Machines') $vmId
-    return @($root,$config,(Join-Path $config 'Virtual Machines'),$configVm,($configVm+'.vmcx'),($configVm+'.vmgs'),($configVm+'.VMRS'),(Join-Path $root 'F2-G1-OS.vhdx'),(Join-Path $root 'F2-G1-Scratch.vhdx'),(Join-Path $root 'Virtual Machines'),(Join-Path (Join-Path $root 'Virtual Machines') $vmId))
+    $config = [IO.Path]::Combine($root,'F2-G1-Isolated-Disposable')
+    $configVirtualMachines = [IO.Path]::Combine($config,'Virtual Machines')
+    $configVm = [IO.Path]::Combine($configVirtualMachines,$vmId)
+    $virtualMachines = [IO.Path]::Combine($root,'Virtual Machines')
+    return @($root,$config,$configVirtualMachines,$configVm,($configVm+'.vmcx'),($configVm+'.vmgs'),($configVm+'.VMRS'),([IO.Path]::Combine($root,'F2-G1-OS.vhdx')),([IO.Path]::Combine($root,'F2-G1-Scratch.vhdx')),$virtualMachines,([IO.Path]::Combine($virtualMachines,$vmId)))
 }
 
 function Read-F2InstallBaseline {

@@ -9,7 +9,7 @@ $script:assertions=0;$script:failures=New-Object 'System.Collections.Generic.Lis
 function Assert-Install([bool]$Condition,[string]$Name){$script:assertions++;if(-not $Condition){$script:failures.Add($Name);Write-Host ('FAIL: '+$Name)}else{Write-Host ('PASS: '+$Name)}}
 
 . (Join-Path $PSScriptRoot 'Invoke-F2VerifiedInstaller.ps1')
-Assert-Install (($script:F2ApprovedInstallerPath -ceq 'C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1') -and ($script:F2ApprovedInstallerSha256 -ceq 'a6e2b59b847b9201dec1e9ab8f7b49c5ecd20f5bf3d02d2eb252a60f956edd95')) 'production bootstrap pins the approved source installer path and digest'
+Assert-Install (($script:F2ApprovedInstallerPath -ceq 'C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1') -and ($script:F2ApprovedInstallerSha256 -ceq 'be622923a5931a1cc1ce8cfff18c72952b836f8f84e403a419254c6c2c778b0e')) 'production bootstrap pins the approved source installer path and digest'
 
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $sourceAcl=Join-Path $repo 'scripts\f2-acl'
@@ -21,6 +21,7 @@ $testFiles=@($script:F2InstallFiles.Keys)
 $sourcePin=Get-F2InstallHashBytes -Bytes ([IO.File]::ReadAllBytes((Join-Path $sourceAcl 'F2_ICACLS_SOURCE_PINS.json')))
 $syntheticProject='G:\F2-G1-Isolated-Disposable'
 $syntheticPaths=@(Get-F2InstallExpectedPaths -ProjectRoot $syntheticProject)
+Assert-Install ($syntheticPaths.Count -eq 11 -and $syntheticPaths[0] -ceq 'G:\F2-G1-Isolated-Disposable' -and $syntheticPaths[1] -ceq 'G:\F2-G1-Isolated-Disposable\F2-G1-Isolated-Disposable') 'production path enumerator retains exact pinned G paths without requiring a G PowerShell drive'
 $requester='S-1-5-21-101010101-202020202-303030303-1001'
 $system=$script:F2InstallSystemSid;$admin=$script:F2InstallAdminSid
 $safeParent=('O:{0}D:P(A;;FA;;;SY)(A;;FA;;;{0})(A;;0x001200A9;;;AU)' -f $admin)
