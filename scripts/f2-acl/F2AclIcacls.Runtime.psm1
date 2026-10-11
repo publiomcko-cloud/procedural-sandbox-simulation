@@ -89,7 +89,7 @@ function Test-F2RuntimeReleasePackage {
         'F2_ICACLS_SOURCE_PINS.json',
         'Invoke-F2AclReadOnlyCapture.ps1'
     )
-    if ($Manifest.ReviewedCommitSha -notmatch '^[0-9a-f]{40}$' -or $Manifest.BaselineMailboxId -cne $script:F2RuntimeBaselineMailboxId -or $Manifest.BaselinePayloadCaptureId -cne $script:F2RuntimeBaselinePayloadCaptureId -or $Manifest.BaselinePayloadSha256 -notmatch '^[0-9a-f]{64}$' -or $Manifest.BaselineIntegritySha256 -notmatch '^[0-9a-f]{64}$') { throw 'ReleaseManifestIdentityOrBaselinePinInvalid.' }
+    if ($Manifest.Schema -cne 'f2-icacls-runtime-release-v2' -or $Manifest.ReviewedCommitSha -notmatch '^[0-9a-f]{40}$' -or $Manifest.BaselineMailboxId -cne $script:F2RuntimeBaselineMailboxId -or $Manifest.BaselinePayloadCaptureId -cne $script:F2RuntimeBaselinePayloadCaptureId -or $Manifest.BaselinePayloadSha256 -notmatch '^[0-9a-f]{64}$' -or $Manifest.BaselineIntegritySha256 -notmatch '^[0-9a-f]{64}$') { throw 'ReleaseManifestIdentityOrBaselinePinInvalid.' }
     $pins = @($Manifest.Files)
     if ($pins.Count -ne $expectedFiles.Count -or @($pins.Name | Sort-Object -Unique).Count -ne $expectedFiles.Count -or @(Compare-Object ($expectedFiles | Sort-Object) ($pins.Name | Sort-Object) -CaseSensitive).Count -ne 0) { throw 'ReleaseManifestFileSetInvalid.' }
     $base = if ($Mode -eq 'Installed') { Join-Path (Get-F2RuntimePackageRoot) 'scripts\f2-acl' } else { $PSScriptRoot }

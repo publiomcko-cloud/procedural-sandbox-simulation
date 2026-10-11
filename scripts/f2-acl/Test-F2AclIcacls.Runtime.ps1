@@ -45,7 +45,7 @@ $releaseNames=@('F2AclCapture.Protocol.psm1','F2AclIcacls.Corroboration.psm1','F
 foreach($name in $releaseNames){Copy-Item -LiteralPath (Join-Path $scriptDir $name) -Destination (Join-Path $packageAcl $name) -Force}
 $filePins=@(foreach($name in $releaseNames){[pscustomobject]@{Name=$name;Sha256=(Get-F2IcaclsFileSha256 -Path (Join-Path $packageAcl $name))}})
 $pinsPath=Join-Path $scriptDir 'F2_ICACLS_SOURCE_PINS.json'
-$script:manifest=[pscustomobject]@{Schema='f2-icacls-runtime-release-v1';ReviewedCommitSha=('a'*40);BaselineMailboxId=$baselineMailboxId;BaselinePayloadCaptureId=$baselinePayloadCaptureId;BaselinePayloadSha256=$script:payloadSha;BaselineIntegritySha256=$script:integritySha;SourcePinsManifestSha256=(Get-F2IcaclsFileSha256 -Path $pinsPath);Files=$filePins}
+$script:manifest=[pscustomobject]@{Schema='f2-icacls-runtime-release-v2';ReviewedCommitSha=('a'*40);BaselineMailboxId=$baselineMailboxId;BaselinePayloadCaptureId=$baselinePayloadCaptureId;BaselinePayloadSha256=$script:payloadSha;BaselineIntegritySha256=$script:integritySha;SourcePinsManifestSha256=(Get-F2IcaclsFileSha256 -Path $pinsPath);Files=$filePins}
 $mailboxSddl=Get-F2AclCoordinatorMailboxSddl -RequesterSid $requester
 $module=$script:helperModule
 $mailboxRootValue=$script:mailboxRoot;$projectGuidValue=$projectGuid;$evidenceGuidValue=$evidenceGuid;$mailboxSddlValue=$mailboxSddl
@@ -101,6 +101,9 @@ try {
     Reset-RuntimeHooks
     $releaseCheck=Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($script:manifest,'Source')
     Assert-Runtime ($releaseCheck.Pass) 'release contract accepts the independently pinned mailbox ID and payload CaptureId'
+    $oldSchemaManifest=$script:manifest.PSObject.Copy();$oldSchemaManifest.Schema='f2-icacls-runtime-release-v1';$oldSchemaRejected=$false
+    try{[void](Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($oldSchemaManifest,'Source'))}catch{$oldSchemaRejected=$true}
+    Assert-Runtime $oldSchemaRejected 'legacy release-manifest schema without distinct ID semantics is rejected'
     $wrongMailboxManifest=$script:manifest.PSObject.Copy();$wrongMailboxManifest.BaselineMailboxId='ffffffffffffffffffffffffffffffff'
     $wrongMailboxRejected=$false;try{[void](Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($wrongMailboxManifest,'Source'))}catch{$wrongMailboxRejected=$true}
     Assert-Runtime $wrongMailboxRejected 'release contract rejects an incorrect mailbox ID'
