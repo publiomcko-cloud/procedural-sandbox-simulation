@@ -6,6 +6,8 @@ $script:F2IcaclsDiskSerial = '152D20337A0C'
 $script:F2IcaclsDiskModel = 'KINGSTON SA400S37240G'
 $script:F2IcaclsReviewedCollectorBaseSha = 'a62773f0553dff4a05055b18fa10834f7488ae55'
 $script:F2IcaclsProjectRoot = 'G:\F2-G1-Isolated-Disposable'
+$script:F2IcaclsBaselineMailboxId = 'ecb6deeb424e40feb5354d18908986df'
+$script:F2IcaclsBaselinePayloadCaptureId = '489e7fec-0300-467c-bfbd-a46fb8cf7211'
 $script:F2IcaclsMaxOutputBytes = 262144
 $script:F2IcaclsVolumeResolver = $null
 $script:F2IcaclsMailboxPathResolver = $null
@@ -89,10 +91,16 @@ function Test-F2IcaclsMailboxEvidenceDirectory {
 
 function Read-F2IcaclsBaselineEvidence {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$EvidenceDirectory,[Parameter(Mandatory)][string]$ExpectedCaptureId,[Parameter(Mandatory)][string]$ExpectedRequesterSid)
+    param(
+        [Parameter(Mandatory)][string]$EvidenceDirectory,
+        [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{32}$')][string]$ExpectedMailboxId,
+        [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')][string]$ExpectedPayloadCaptureId,
+        [Parameter(Mandatory)][string]$ExpectedRequesterSid
+    )
     try {
+        if ($ExpectedMailboxId -cne $script:F2IcaclsBaselineMailboxId -or $ExpectedPayloadCaptureId -cne $script:F2IcaclsBaselinePayloadCaptureId) { throw 'BaselineMailboxOrPayloadCapturePinMismatch.' }
         $directory=[IO.Path]::GetFullPath($EvidenceDirectory)
-        [void](Test-F2IcaclsMailboxEvidenceDirectory -Path $directory -CaptureId $ExpectedCaptureId -RequesterSid $ExpectedRequesterSid)
+        [void](Test-F2IcaclsMailboxEvidenceDirectory -Path $directory -CaptureId $ExpectedMailboxId -RequesterSid $ExpectedRequesterSid)
         $integrityPath=Join-Path $directory 'integrity.json'
         $payloadPath=Join-Path $directory 'acl-baseline.json'
         foreach($path in @($integrityPath,$payloadPath)){
@@ -106,8 +114,9 @@ function Read-F2IcaclsBaselineEvidence {
         $payloadHash=Get-F2IcaclsSha256 -Bytes $payload
         if($integrity.PayloadBytes -ne $payload.Length -or -not [string]::Equals([string]$integrity.PayloadSha256,$payloadHash,[StringComparison]::OrdinalIgnoreCase)){throw 'BaselinePayloadIntegrityMismatch.'}
         $baseline=[Text.Encoding]::UTF8.GetString($payload)|ConvertFrom-Json -ErrorAction Stop
-        if($baseline.CaptureId -cne $ExpectedCaptureId -or $baseline.Complete -ne $true){throw 'BaselineCaptureIdentityOrCompletenessInvalid.'}
-        return [pscustomobject]@{Pass=$true;Baseline=$baseline;Integrity=$integrity;PayloadSha256=$payloadHash;IntegritySha256=(Get-F2IcaclsSha256 -Bytes $integrityBytes);ErrorCode=$null}
+        if($baseline.CaptureId -cne $ExpectedPayloadCaptureId -or $baseline.Complete -ne $true){throw 'BaselinePayloadCaptureIdentityOrCompletenessInvalid.'}
+        if($baseline.VmId -cne '6f8d61ce-7c08-4c48-82d9-5fa7fe40a7b1' -or $baseline.VmName -cne 'F2-G1-Isolated-Disposable' -or @($baseline.Records).Count -ne 11 -or $baseline.Manifest.ExpectedCount -ne 11){throw 'BaselineVmOrRecordCompletenessInvalid.'}
+        return [pscustomobject]@{Pass=$true;Baseline=$baseline;Integrity=$integrity;MailboxId=$ExpectedMailboxId;PayloadCaptureId=$ExpectedPayloadCaptureId;PayloadSha256=$payloadHash;IntegritySha256=(Get-F2IcaclsSha256 -Bytes $integrityBytes);ErrorCode=$null}
     } catch {
         return [pscustomobject]@{Pass=$false;Baseline=$null;Integrity=$null;PayloadSha256=$null;IntegritySha256=$null;ErrorCode='BaselineEvidenceReadOrIntegrityFailure'}
     }

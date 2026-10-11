@@ -23,6 +23,7 @@ function Invoke-RuntimePrivate([string]$Name,[object[]]$Arguments=@()) {
 }
 
 $capture='0123456789abcdef0123456789abcdef'
+$baselineMailboxId='ecb6deeb424e40feb5354d18908986df';$baselinePayloadCaptureId='489e7fec-0300-467c-bfbd-a46fb8cf7211'
 $requester='S-1-5-21-111111111-222222222-333333333-1001'
 $coordinator='S-1-5-21-111111111-222222222-333333333-500'
 $projectGuid='\\?\Volume{11111111-1111-1111-1111-111111111111}\'
@@ -32,7 +33,7 @@ $script:helperModule.SessionState.PSVariable.Set('F2IcaclsProjectRoot',$syntheti
 $script:paths=@(Get-F2IcaclsExpectedPaths -ProjectRoot $syntheticProjectRoot)
 $script:payloadSha='a'*64;$script:integritySha='b'*64
 $script:records=@(foreach($path in $script:paths){[pscustomobject]@{Path=$path;Status='PASS';Aces=@([pscustomobject]@{Sid='S-1-5-32-544';Type='Allow';AccessMask='0x001F01FF';InheritanceFlags='None';PropagationFlags='None';Inherited=$false})}})
-$script:baseline=[pscustomobject]@{Complete=$true;CaptureId='ecb6deeb424e40feb5354d18908986df';VmId='6f8d61ce-7c08-4c48-82d9-5fa7fe40a7b1';VmName='F2-G1-Isolated-Disposable';VmState='Off';Manifest=[pscustomobject]@{ExpectedCount=11;ExpectedPaths=$script:paths;RecordCount=11;UniquePathCount=11};Records=$script:records}
+$script:baseline=[pscustomobject]@{Complete=$true;CaptureId=$baselinePayloadCaptureId;VmId='6f8d61ce-7c08-4c48-82d9-5fa7fe40a7b1';VmName='F2-G1-Isolated-Disposable';VmState='Off';Manifest=[pscustomobject]@{ExpectedCount=11;ExpectedPaths=$script:paths;RecordCount=11;UniquePathCount=11};Records=$script:records}
 $script:baselineIntegrity=[pscustomobject]@{PayloadSha256=$script:payloadSha;ProjectVolumeGuid=$projectGuid;EvidenceVolumeGuid=$evidenceGuid;CollectorScriptSha256='c'*64;ProtocolModuleSha256='d'*64}
 $script:storage=[pscustomobject]@{Win32MatchCount=1;DiskMatchCount=1;PhysicalMatchCount=1;Win32Serial='152D20337A0C';DiskSerial='152D20337A0C';PhysicalSerial='152D20337A0C';Win32Model='KINGSTON  SA400S37240G USB Device';DiskFriendlyName='KINGSTON SA400S37240G';DiskModel=' SA400S37240G   ';BusType='USB';DiskHealth='Healthy';PhysicalHealth='Healthy';DiskOperationalStatus=@('Online');GPartitionCount=1;PartitionDiskNumber=2;DiskNumber=2;Win32Index=2;GDriveLetter='G:';VolumeFileSystem='NTFS';VolumeHealth='Healthy';GVolumeGuid=$projectGuid}
 $script:mailboxRoot=Join-Path $env:TEMP ('F2 Runtime Evidence '+[guid]::NewGuid().ToString('N'))
@@ -44,7 +45,7 @@ $releaseNames=@('F2AclCapture.Protocol.psm1','F2AclIcacls.Corroboration.psm1','F
 foreach($name in $releaseNames){Copy-Item -LiteralPath (Join-Path $scriptDir $name) -Destination (Join-Path $packageAcl $name) -Force}
 $filePins=@(foreach($name in $releaseNames){[pscustomobject]@{Name=$name;Sha256=(Get-F2IcaclsFileSha256 -Path (Join-Path $packageAcl $name))}})
 $pinsPath=Join-Path $scriptDir 'F2_ICACLS_SOURCE_PINS.json'
-$script:manifest=[pscustomobject]@{Schema='f2-icacls-runtime-release-v1';ReviewedCommitSha=('a'*40);BaselineCaptureId='ecb6deeb424e40feb5354d18908986df';BaselinePayloadSha256=$script:payloadSha;BaselineIntegritySha256=$script:integritySha;SourcePinsManifestSha256=(Get-F2IcaclsFileSha256 -Path $pinsPath);Files=$filePins}
+$script:manifest=[pscustomobject]@{Schema='f2-icacls-runtime-release-v1';ReviewedCommitSha=('a'*40);BaselineMailboxId=$baselineMailboxId;BaselinePayloadCaptureId=$baselinePayloadCaptureId;BaselinePayloadSha256=$script:payloadSha;BaselineIntegritySha256=$script:integritySha;SourcePinsManifestSha256=(Get-F2IcaclsFileSha256 -Path $pinsPath);Files=$filePins}
 $mailboxSddl=Get-F2AclCoordinatorMailboxSddl -RequesterSid $requester
 $module=$script:helperModule
 $mailboxRootValue=$script:mailboxRoot;$projectGuidValue=$projectGuid;$evidenceGuidValue=$evidenceGuid;$mailboxSddlValue=$mailboxSddl
@@ -72,8 +73,8 @@ $worker={
 $requestProvider={param($id,$sid)[pscustomobject]@{Path='synthetic-request';Sha256=('e'*64)}}
 $requesterValue=$requester
 $requestReader={param($id)[pscustomobject]@{CaptureId=$id;RequesterSid=$requesterValue;Path='synthetic-request';RequestSha256=('e'*64)}}.GetNewClosure()
-$baselineValue=$script:baseline;$baselineIntegrityValue=$script:baselineIntegrity;$payloadShaValue=$script:payloadSha
-$baselineProvider={param($m,$sid)[pscustomobject]@{Pass=$true;Baseline=$baselineValue;Integrity=$baselineIntegrityValue;PayloadSha256=$payloadShaValue}}.GetNewClosure()
+$baselineValue=$script:baseline;$baselineIntegrityValue=$script:baselineIntegrity;$payloadShaValue=$script:payloadSha;$expectedMailboxIdValue=$baselineMailboxId;$expectedPayloadCaptureIdValue=$baselinePayloadCaptureId;$baselineProviderState=[pscustomobject]@{Calls=0;IdsMatch=$true}
+$baselineProvider={param($m,$sid)$baselineProviderState.Calls++;$baselineProviderState.IdsMatch=$baselineProviderState.IdsMatch -and $m.BaselineMailboxId -ceq $expectedMailboxIdValue -and $m.BaselinePayloadCaptureId -ceq $expectedPayloadCaptureIdValue;[pscustomobject]@{Pass=$true;Baseline=$baselineValue;Integrity=$baselineIntegrityValue;MailboxId=$m.BaselineMailboxId;PayloadCaptureId=$m.BaselinePayloadCaptureId;PayloadSha256=$payloadShaValue}}.GetNewClosure()
 $mailboxRootCapture=$script:mailboxRoot
 $mailboxCreator={param($id,$sid)$path=Join-Path $mailboxRootCapture $id;[void][IO.Directory]::CreateDirectory($path);return $path}.GetNewClosure()
 
@@ -98,6 +99,17 @@ function Reset-RuntimeHooks {
 
 try {
     Reset-RuntimeHooks
+    $releaseCheck=Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($script:manifest,'Source')
+    Assert-Runtime ($releaseCheck.Pass) 'release contract accepts the independently pinned mailbox ID and payload CaptureId'
+    $wrongMailboxManifest=$script:manifest.PSObject.Copy();$wrongMailboxManifest.BaselineMailboxId='ffffffffffffffffffffffffffffffff'
+    $wrongMailboxRejected=$false;try{[void](Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($wrongMailboxManifest,'Source'))}catch{$wrongMailboxRejected=$true}
+    Assert-Runtime $wrongMailboxRejected 'release contract rejects an incorrect mailbox ID'
+    $wrongPayloadManifest=$script:manifest.PSObject.Copy();$wrongPayloadManifest.BaselinePayloadCaptureId='489e7fec-0300-467c-bfbd-a46fb8cf7210'
+    $wrongPayloadRejected=$false;try{[void](Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($wrongPayloadManifest,'Source'))}catch{$wrongPayloadRejected=$true}
+    Assert-Runtime $wrongPayloadRejected 'release contract rejects an incorrect payload CaptureId'
+    $missingPayloadManifest=$script:manifest.PSObject.Copy();$missingPayloadManifest.PSObject.Properties.Remove('BaselinePayloadCaptureId')
+    $missingPayloadRejected=$false;try{[void](Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($missingPayloadManifest,'Source'))}catch{$missingPayloadRejected=$true}
+    Assert-Runtime $missingPayloadRejected 'release contract rejects a missing payload CaptureId pin'
     $tampered=$script:manifest.PSObject.Copy();$badFiles=@($tampered.Files);$badFiles[0]=$badFiles[0].PSObject.Copy();$badFiles[0].Sha256='0'*64;$tampered.Files=$badFiles
     $tamperingRejected=$false;try{[void](Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($tampered,'Source'))}catch{$tamperingRejected=$true}
     Assert-Runtime $tamperingRejected 'source tampering is rejected before any coordinator launch'
@@ -165,6 +177,7 @@ try {
     $happy=Invoke-RuntimePrivate 'Invoke-F2IcaclsCaptureLauncher' @()
     Assert-Runtime ($happy.Success -and $happy.ActualCoordinatorExitCode -eq 0 -and $happy.ElevationLaunches -eq 1 -and $happy.Comparisons.Count -eq 11 -and @($happy.Comparisons|Where-Object{$_.Classification -ne 'PASS'}).Count -eq 0) 'one UAC launch coordinates the real production path for all 11 objects and verifies returned evidence'
     Assert-Runtime ($script:state.WorkerCalls -eq 11 -and $script:state.UacCalls -eq 1 -and $happy.ManifestSha256 -match '^[0-9a-f]{64}$') 'successful integration has exactly 11 workers, one launch and a verified integrity digest'
+    Assert-Runtime ($baselineProviderState.Calls -ge 1 -and $baselineProviderState.IdsMatch) 'runtime baseline caller preserves both distinct release-manifest identities'
 
     Reset-RuntimeHooks
     Set-RuntimeState 'F2RuntimeCoordinatorWaitProvider' {param($p,$t)[pscustomobject]@{Exited=$false;ExitCode=$null;CleanupComplete=$false;ProcessQueryFailed=$false}}
