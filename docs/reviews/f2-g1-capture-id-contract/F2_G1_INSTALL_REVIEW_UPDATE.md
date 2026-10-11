@@ -43,7 +43,7 @@ The pin manifest binds the six executable/module package members and remains inc
 
 ## Validation results
 
-Windows PowerShell 5.1 synthetic suites passed: corroboration **118 assertions, 0 failures, exit 0**; runtime **29 assertions, 0 failures, exit 0**; installer **31 assertions, 0 failures, exit 0**. The parser sweep checked **12 PowerShell files, 0 parser errors**. Exact commands and full bounded test output are in the adjacent `WINDOWS_POWERSHELL_5_1_*.log` files; their hashes are in `REVIEW_MANIFEST.md`. Windows GitHub CI is reported in `TEST_EVIDENCE.md` after publication.
+Windows PowerShell 5.1 synthetic suites passed: corroboration **118 assertions, 0 failures, exit 0**; runtime **29 assertions, 0 failures, exit 0**; installer **31 assertions, 0 failures, exit 0**. The parser sweep checked **12 PowerShell files, 0 parser errors**. Exact commands and full bounded test output are in the adjacent `WINDOWS_POWERSHELL_5_1_*.log` files; their hashes are in `REVIEW_MANIFEST.md`. Windows GitHub CI passed at the source-bearing draft commit; workflow/run details and the full hosted log are in `TEST_EVIDENCE.md`.
 
 All fixtures are synthetic/local temporary data. These results do not establish protected installation, live ACL state, UAC behavior, VM state, or security acceptance.
 

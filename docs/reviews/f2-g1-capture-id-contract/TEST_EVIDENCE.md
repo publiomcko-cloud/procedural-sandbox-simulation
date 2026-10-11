@@ -10,13 +10,13 @@ Environment: Windows PowerShell 5.1 (`C:\Windows\System32\WindowsPowerShell\v1.0
 | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1` | Exit 0; 29 assertions; 0 failures. Full output: `WINDOWS_POWERSHELL_5_1_RUNTIME_TEST.log`. |
 | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File docs/reviews/f2-g1-capture-id-contract/Test-Install-F2IcaclsProtectedPackage.ps1` | Exit 0; 31 assertions; 0 failures. Full output: `WINDOWS_POWERSHELL_5_1_INSTALL_TEST.log`. |
 | PowerShell `Language.Parser.ParseFile` sweep over the six tracked `scripts/f2-acl` `.ps1`/`.psm1` files and six package/test `.ps1`/`.psm1` review files | 12 files; 0 parser errors; exit 0. Output: `WINDOWS_POWERSHELL_5_1_PARSER.log`. |
-| `git diff --check` | Run against the complete source-plus-review change before commit; result recorded below after final publication. |
+| `git diff --check origin/security/f2-icacls-corroboration-issue48...HEAD` plus staged `git diff --cached --check` | Passed on the complete source-plus-review change before the final documentation commit. Windows CI also passed this check on the source-bearing commit. |
 
 The corroboration tests exercise distinct producer IDs passing, wrong mailbox ID, wrong expected and embedded payload CaptureIds, changed payload/integrity digests, missing and malformed data, and duplicate records. Runtime tests require both IDs and reject legacy v1 release schema. Installer tests validate the same distinction through the actual baseline reader and emitted v2 release manifest while preserving mailbox DACL, identity, completeness, package pins, destination, and fail-closed checks.
 
 ## GitHub CI
 
-Workflow: `.github/workflows/f2-acl-source-only.yml` (`F2 ACL source-only validation`, `windows-latest`). This section is completed after the draft PR run is available. The workflow runs the Windows PowerShell 5.1 protocol, corroboration and runtime suites, parser validation, and `git diff --check`. The installer test is also run locally as shown above.
+Workflow: `.github/workflows/f2-acl-source-only.yml` (`F2 ACL source-only validation`, `windows-latest`). Passing at source-bearing draft review commit `7b5bc43d946004de86027784da66803b82b5714b`: [Windows run 38147352219](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38147352219), job `powershell-source-only`, conclusion success (exit 0). The job ran the protocol, corroboration and runtime Windows PowerShell 5.1 suites, parsed 9 tracked PowerShell source files with zero parser errors, and passed `git diff --check`. The workflow does not run the installer suite; that suite is covered by the local Windows PowerShell 5.1 run above. Subsequent review-package commits only add documentation and evidence files; production source remains the exact CI-tested source commit `54b1d0c7a9865d710c19b59cd38c0da670a12536`.
 
 ## Evidence limits
 

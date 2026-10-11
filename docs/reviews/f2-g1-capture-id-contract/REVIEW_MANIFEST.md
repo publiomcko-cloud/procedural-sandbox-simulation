@@ -15,10 +15,10 @@ Every listed file is committed in this review package. Hashes are raw SHA-256 of
 | `docs/reviews/f2-g1-capture-id-contract/Install-F2IcaclsProtectedPackage.ps1` | `235aea7748c2c67b6c52996d5de4dd02a88709b46b96fff1710bd671b4fac0e4` | Protected installer baseline preflight and v2 release manifest |
 | `docs/reviews/f2-g1-capture-id-contract/Invoke-F2VerifiedInstaller.ps1` | `a466e347843d74e5474021a852e886aceb9e4e8b4d3c71c6db4857d861d92e82` | One-read hash-verified bootstrap executing the verified bytes |
 | `docs/reviews/f2-g1-capture-id-contract/Test-Install-F2IcaclsProtectedPackage.ps1` | `796dc3fb7d392dc68ed9fd0453a260eee310a8372dce5590d50145f07efab694` | Windows PowerShell 5.1 synthetic installer regressions |
-| `docs/reviews/f2-g1-capture-id-contract/F2_G1_INSTALL_REVIEW_UPDATE.md` | `8ba0048358bc1ffc47297f9108c46bc0a12447ebdb8c65c1dc9ca00c62b91950` | Installation handoff, exact future command, pins, limitations |
+| `docs/reviews/f2-g1-capture-id-contract/F2_G1_INSTALL_REVIEW_UPDATE.md` | `3e6be2c72aff616bd1a8102787805dc3f4016550bde83e1d0633f142644c0a59` | Installation handoff, exact future command, pins, limitations |
 | `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_CORROBORATION_TEST.log` | `1808478eddd3bfe7a8908ac8cac6b4448323aa08a8d7adbc8f8099125058c898` | Complete synthetic suite output and process exit |
 | `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_RUNTIME_TEST.log` | `35fb74fdee9b31ae60bfd80f930cfb886127c3ebe35dc1a17132d5297b888a87` | Complete synthetic suite output and process exit |
 | `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_INSTALL_TEST.log` | `e519a087a0e5dbf0bd25e4a38b46c42f9f931b1358fc7567f96d86e9193525c9` | Complete synthetic suite output and process exit |
 | `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_PARSER.log` | `d6fc1c8535fd8ea38c2b3e8662644581a238ba695e6796e583b3f6af9977e48c` | Parser sweep summary |
-| `docs/reviews/f2-g1-capture-id-contract/TEST_EVIDENCE.md` | `5eb7b79bbc666e2aa7914cd9039c6123026ab942ed0320a57ad98048fd00181c` | Exact validation commands and result summary |
-| `docs/reviews/f2-g1-capture-id-contract/HANDOFF.md` | `53a80b9e0f3a934e7f1420b445a34511acff23ef338f8e64538a305ee14a6af0` | Developer handoff and limits |
+| `docs/reviews/f2-g1-capture-id-contract/TEST_EVIDENCE.md` | `36bbae250f6175c18be60f7b2553a631b0c0c5ed6253c8779c2b9e95e008589e` | Exact commands and local/hosted validation results |
+| `docs/reviews/f2-g1-capture-id-contract/HANDOFF.md` | `8b737de72f76b30fcd28c18338dc84f36d0912d08eaf9d42680d9fcc753bdbf2` | Developer handoff and limits |
