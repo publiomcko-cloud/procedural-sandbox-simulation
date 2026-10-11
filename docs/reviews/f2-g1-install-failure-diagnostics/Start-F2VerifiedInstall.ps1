@@ -22,6 +22,12 @@ function Get-F2InstallLauncherHash {
     finally { $sha.Dispose() }
 }
 
+function Get-F2InstallLaunchIdentity {
+    $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal=[Security.Principal.WindowsPrincipal]::new($identity)
+    return [pscustomobject]@{Sid=$identity.User.Value;IsAdministrator=[bool]$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)}
+}
+
 function Read-F2InstallLauncherBytes {
     param([Parameter(Mandatory)][string]$Path)
     $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
@@ -179,9 +185,8 @@ function Invoke-F2InstallLaunch {
     try {
         if($PSVersionTable.PSVersion.Major-ne 5-or $PSVersionTable.PSVersion.Minor-ne 1-or $PSVersionTable.PSEdition-ne 'Desktop'){throw 'WINDOWS_POWERSHELL_51_REQUIRED'}
         if(-not(Test-Path -LiteralPath $script:F2InstallPowerShell51 -PathType Leaf)){throw 'WINDOWS_POWERSHELL_51_NOT_FOUND'}
-        $identity=[Security.Principal.WindowsIdentity]::GetCurrent();$sid=$identity.User.Value
-        $principal=[Security.Principal.WindowsPrincipal]::new($identity)
-        if($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){throw 'LAUNCHER_MUST_RUN_UNELEVATED'}
+        $launchIdentity=Get-F2InstallLaunchIdentity;$sid=[string]$launchIdentity.Sid
+        if($launchIdentity.IsAdministrator){throw 'LAUNCHER_MUST_RUN_UNELEVATED'}
         $bootstrapBytes=Read-F2InstallLauncherBytes -Path $script:F2InstallBootstrapPath
         if((Get-F2InstallLauncherHash -Bytes $bootstrapBytes)-cne $script:F2InstallBootstrapSha256){throw 'BOOTSTRAP_HASH_MISMATCH'}
         $installerBytes=Read-F2InstallLauncherBytes -Path $script:F2InstallInstallerPath

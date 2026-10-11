@@ -37,7 +37,7 @@ The complete source and tests are in this PR at the final immutable commit:
 |---|---|---|
 | `docs/reviews/f2-g1-capture-id-contract/Invoke-F2VerifiedInstaller.ps1` | Corrected bootstrap entrypoint, one-read verified execution and diagnostic publication | `6f47d802a2cd5d7deb65083c546829de6a71d26356dcf2b71f6cc6f14d81a4a9` |
 | `docs/reviews/f2-g1-capture-id-contract/Install-F2IcaclsProtectedPackage.ps1` | Existing installer with protected argument guard; seven-file production package pins unchanged | `cf8abc7c94186f44044684e77eb432c3a20a20c3cfd8fb099b6e32e4a2ca0118` |
-| `docs/reviews/f2-g1-install-failure-diagnostics/Start-F2VerifiedInstall.ps1` | New source-pinned, single-launch standard-token wrapper and diagnostic mailbox validator | `a27c315b196c1179eb10fba80867829aeac2b333e07415cc13a1326c0c3ad38d` |
+| `docs/reviews/f2-g1-install-failure-diagnostics/Start-F2VerifiedInstall.ps1` | New source-pinned, single-launch standard-token wrapper and diagnostic mailbox validator | `b044234882d60e17bd14603a9a74e0cd7ade27c8810c9901bfa18b1b73e1c343` |
 | `docs/reviews/f2-g1-capture-id-contract/Test-Install-F2IcaclsProtectedPackage.ps1` | Existing installer regressions plus actual bootstrap source and dot-source behavior checks | Recorded in `EVIDENCE_MANIFEST.md` |
 | `docs/reviews/f2-g1-install-failure-diagnostics/Test-F2InstallDiagnosticTransport.ps1` | 38 PS 5.1 transport, launcher, mailbox, scope and failure-path assertions | Recorded in `EVIDENCE_MANIFEST.md` |
 | `.github/workflows/f2-acl-source-only.yml` | Existing synthetic suites, new diagnostics suite, parser sweep and diff check on Windows CI | Recorded in `EVIDENCE_MANIFEST.md` |
@@ -55,8 +55,8 @@ Local validation used Windows PowerShell `5.1.22621.6133` and the exact commands
 | `Test-F2AclIcacls.Corroboration.ps1` | 118 | 0 | 0 |
 | `Test-F2AclIcacls.Runtime.ps1` | 35 | 0 | 0 |
 | `Test-Install-F2IcaclsProtectedPackage.ps1` | 47 | 0 | 0 |
-| `Test-F2InstallDiagnosticTransport.ps1` | 38 | 0 | 0 |
-| **Total** | **390** | **0** | **0** |
+| `Test-F2InstallDiagnosticTransport.ps1` | 39 | 0 | 0 |
+| **Total** | **391** | **0** | **0** |
 
 The diagnostic suite includes zero/extra encoded and file arguments, installer preflight and staged failures, bootstrap exceptions, byte tampering, same-process ScriptBlock scope, source read/hash/execute identity, mailbox access/owner/DACL/path failures, nonce and record corruption, child-exit conflicts, missing evidence, UAC cancellation without retry, and the non-authoritative success claim. Tests use synthetic temporary content and do not perform protected writes, installation, or elevation.
 
@@ -67,7 +67,7 @@ The Windows PowerShell parser sweep and `git diff --check` results are recorded 
 This is a **future** standard-token command only after an independent review accepts the exact final executable bytes and the owner provides fresh installation authorization. First stage the reviewed launcher, bootstrap, and installer into the preparation directory and verify their exact SHA-256 values from this report. The command below uses `-EncodedCommand` to avoid Windows PowerShell 5.1 native argument quoting ambiguities. Its decoded source reads the launcher once, hashes those exact bytes against the SHA-256 above, decodes and executes the same in-memory script block. Do not run it elevated directly; the reviewed launcher requests one ordinary human-consented UAC launch itself. Run from the original requester account:
 
 ```powershell
-& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -EncodedCommand JABwAGEAdABoAD0AJwBDADoAXABEAGUAdgBcAGYAMgAtAGcAMQAtAHAAcgBvAHQAZQBjAHQAZQBkAC0AaQBuAHMAdABhAGwAbAAtAHAAcgBlAHAAXABTAHQAYQByAHQALQBGADIAVgBlAHIAaQBmAGkAZQBkAEkAbgBzAHQAYQBsAGwALgBwAHMAMQAnAAoAJABiAHkAdABlAHMAPQBbAEkATwAuAEYAaQBsAGUAXQA6ADoAUgBlAGEAZABBAGwAbABCAHkAdABlAHMAKAAkAHAAYQB0AGgAKQAKACQAcwBoAGEAPQBbAFMAZQBjAHUAcgBpAHQAeQAuAEMAcgB5AHAAdABvAGcAcgBhAHAAaAB5AC4AUwBIAEEAMgA1ADYAXQA6ADoAQwByAGUAYQB0AGUAKAApAAoAdAByAHkAIAB7ACAAJABhAGMAdAB1AGEAbAA9ACgAWwBCAGkAdABDAG8AbgB2AGUAcgB0AGUAcgBdADoAOgBUAG8AUwB0AHIAaQBuAGcAKAAkAHMAaABhAC4AQwBvAG0AcAB1AHQAZQBIAGEAcwBoACgAJABiAHkAdABlAHMAKQApACkALgBSAGUAcABsAGEAYwBlACgAJwAtACcALAAnACcAKQAuAFQAbwBMAG8AdwBlAHIASQBuAHYAYQByAGkAYQBuAHQAKAApACAAfQAgAGYAaQBuAGEAbABsAHkAIAB7ACAAJABzAGgAYQAuAEQAaQBzAHAAbwBzAGUAKAApACAAfQAKAGkAZgAgACgAJABhAGMAdAB1AGEAbAAgAC0AYwBuAGUAIAAnAGEAMgA3AGMAMwAxADUAYgAxADkANgBjADEAMQA3ADkAZQBiADEAMABmAGIAYQA4ADAAOAA2ADcAOAAyADkAYQBlAGEAYwAyAGIAMwAzADMAZQAwADcANAAxADUAYwBjADEAMwBhADEAMwAyADYAYwAwAGMAMwBhAGQAMwA4AGQAJwApACAAewAgAHQAaAByAG8AdwAgACcARgAyAF8ATABBAFUATgBDAEgARQBSAF8ASABBAFMASABfAE0ASQBTAE0AQQBUAEMASAAnACAAfQAKACQAdQB0AGYAOAA9AE4AZQB3AC0ATwBiAGoAZQBjAHQAIABTAHkAcwB0AGUAbQAuAFQAZQB4AHQALgBVAFQARgA4AEUAbgBjAG8AZABpAG4AZwAoACQAZgBhAGwAcwBlACwAJAB0AHIAdQBlACkACgAkAHYAZQByAGkAZgBpAGUAZAA9AFsAUwBjAHIAaQBwAHQAQgBsAG8AYwBrAF0AOgA6AEMAcgBlAGEAdABlACgAJAB1AHQAZgA4AC4ARwBlAHQAUwB0AHIAaQBuAGcAKAAkAGIAeQB0AGUAcwApACkACgAmACAAJAB2AGUAcgBpAGYAaQBlAGQA
+& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -EncodedCommand JABwAGEAdABoAD0AJwBDADoAXABEAGUAdgBcAGYAMgAtAGcAMQAtAHAAcgBvAHQAZQBjAHQAZQBkAC0AaQBuAHMAdABhAGwAbAAtAHAAcgBlAHAAXABTAHQAYQByAHQALQBGADIAVgBlAHIAaQBmAGkAZQBkAEkAbgBzAHQAYQBsAGwALgBwAHMAMQAnAAoAJABiAHkAdABlAHMAPQBbAEkATwAuAEYAaQBsAGUAXQA6ADoAUgBlAGEAZABBAGwAbABCAHkAdABlAHMAKAAkAHAAYQB0AGgAKQAKACQAcwBoAGEAPQBbAFMAZQBjAHUAcgBpAHQAeQAuAEMAcgB5AHAAdABvAGcAcgBhAHAAaAB5AC4AUwBIAEEAMgA1ADYAXQA6ADoAQwByAGUAYQB0AGUAKAApAAoAdAByAHkAIAB7ACAAJABhAGMAdAB1AGEAbAA9ACgAWwBCAGkAdABDAG8AbgB2AGUAcgB0AGUAcgBdADoAOgBUAG8AUwB0AHIAaQBuAGcAKAAkAHMAaABhAC4AQwBvAG0AcAB1AHQAZQBIAGEAcwBoACgAJABiAHkAdABlAHMAKQApACkALgBSAGUAcABsAGEAYwBlACgAJwAtACcALAAnACcAKQAuAFQAbwBMAG8AdwBlAHIASQBuAHYAYQByAGkAYQBuAHQAKAApACAAfQAgAGYAaQBuAGEAbABsAHkAIAB7ACAAJABzAGgAYQAuAEQAaQBzAHAAbwBzAGUAKAApACAAfQAKAGkAZgAgACgAJABhAGMAdAB1AGEAbAAgAC0AYwBuAGUAIAAnAGIAMAA0ADQAMgAzADQAOAA4ADIAZAA2ADAAZQAxADcAYgBkADEANAA2ADAAMwBhADkAYQA3ADQAZQAwAGMAZAA3AGEAZABlADIANwBjADgAOAAxADAAYwA5ADkAMAAxAGIAZgBhADEAOABiADEAYgA3ADMAZQAxAGMAMwA0ADMAJwApACAAewAgAHQAaAByAG8AdwAgACcARgAyAF8ATABBAFUATgBDAEgARQBSAF8ASABBAFMASABfAE0ASQBTAE0AQQBUAEMASAAnACAAfQAKACQAdQB0AGYAOAA9AE4AZQB3AC0ATwBiAGoAZQBjAHQAIABTAHkAcwB0AGUAbQAuAFQAZQB4AHQALgBVAFQARgA4AEUAbgBjAG8AZABpAG4AZwAoACQAZgBhAGwAcwBlACwAJAB0AHIAdQBlACkACgAkAHYAZQByAGkAZgBpAGUAZAA9AFsAUwBjAHIAaQBwAHQAQgBsAG8AYwBrAF0AOgA6AEMAcgBlAGEAdABlACgAJAB1AHQAZgA4AC4ARwBlAHQAUwB0AHIAaQBuAGcAKAAkAGIAeQB0AGUAcwApACkACgAmACAAJAB2AGUAcgBpAGYAaQBlAGQA
 
 Decoded wrapper source represented by that exact command:
 
@@ -76,7 +76,7 @@ $path='C:\Dev\f2-g1-protected-install-prep\Start-F2VerifiedInstall.ps1'
 $bytes=[IO.File]::ReadAllBytes($path)
 $sha=[Security.Cryptography.SHA256]::Create()
 try { $actual=([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant() } finally { $sha.Dispose() }
-if ($actual -cne 'a27c315b196c1179eb10fba80867829aeac2b333e07415cc13a1326c0c3ad38d') { throw 'F2_LAUNCHER_HASH_MISMATCH' }
+if ($actual -cne 'b044234882d60e17bd14603a9a74e0cd7ade27c8810c9901bfa18b1b73e1c343') { throw 'F2_LAUNCHER_HASH_MISMATCH' }
 $utf8=New-Object System.Text.UTF8Encoding($false,$true)
 $verified=[ScriptBlock]::Create($utf8.GetString($bytes))
 & $verified

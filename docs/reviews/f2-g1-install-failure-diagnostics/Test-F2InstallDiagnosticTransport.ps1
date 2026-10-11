@@ -67,6 +67,9 @@ try {
     . $script:LauncherPath
 
     $identity=[Security.Principal.WindowsIdentity]::GetCurrent();$sid=$identity.User.Value
+    $principal=[Security.Principal.WindowsPrincipal]::new($identity)
+    $actualLaunchIdentity=Get-F2InstallLaunchIdentity
+    Assert-F2Diagnostic ($actualLaunchIdentity.Sid-ceq$sid-and$actualLaunchIdentity.IsAdministrator-eq[bool]$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) 'production-launch-identity-helper-reports-the-current-token'
     $bootstrapText=[IO.File]::ReadAllText((Resolve-Path $script:BootstrapPath).Path)
     $bootstrapBytes=[IO.File]::ReadAllBytes((Resolve-Path $script:BootstrapPath).Path)
 
@@ -222,7 +225,11 @@ try {
 
     # Validate that the real production launcher consumes the exact pins and
     # creates only a requester/SYSTEM protected mailbox before its injectable
-    # process boundary. The provider runs the encoded child unelevated.
+    # process boundary. Override only the identity helper for this synthetic
+    # non-elevated requester so CI runner account privileges cannot change test
+    # behavior; the actual production helper was asserted above.
+    $script:F2SyntheticRequesterSid=$sid
+    function Get-F2InstallLaunchIdentity { return [pscustomobject]@{Sid=$script:F2SyntheticRequesterSid;IsAdministrator=$false} }
     $launcherBootstrapHash=Get-F2InstallLauncherHash -Bytes $syntheticBootstrapBytes
     $installerBytes=[IO.File]::ReadAllBytes($installer)
     $installerHash=Get-F2InstallLauncherHash -Bytes $installerBytes
