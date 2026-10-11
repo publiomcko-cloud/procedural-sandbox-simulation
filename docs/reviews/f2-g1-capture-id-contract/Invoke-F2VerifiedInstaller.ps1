@@ -16,6 +16,17 @@ function Get-F2BootstrapHashBytes {
     finally { $sha.Dispose() }
 }
 
+function Test-F2BootstrapDiagnosticFileSecurity {
+    param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][string]$ExpectedOwnerSid)
+    $acl=Get-Acl -LiteralPath $Path -ErrorAction Stop
+    $raw=[Security.AccessControl.RawSecurityDescriptor]::new($acl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Owner -bor [Security.AccessControl.AccessControlSections]::Access))
+    if($raw.Owner.Value-cne$ExpectedOwnerSid-or($raw.ControlFlags-band[Security.AccessControl.ControlFlags]::DiscretionaryAclProtected)-eq 0-or$null-eq$raw.DiscretionaryAcl-or@($raw.DiscretionaryAcl).Count-ne 2){throw 'BOOTSTRAP_DIAGNOSTIC_DACL_INVALID'}
+    $expected=@{'S-1-5-18'=[uint32]0x001F01FF;$ExpectedOwnerSid=[uint32]0x001F01FF};$seen=@{}
+    foreach($ace in $raw.DiscretionaryAcl){$sid=$ace.SecurityIdentifier.Value;$mask=[uint32]([int64]$ace.AccessMask-band 0xFFFFFFFFL);if(-not$expected.ContainsKey($sid)-or$seen.ContainsKey($sid)-or$ace.AceQualifier-ne[Security.AccessControl.AceQualifier]::AccessAllowed-or$mask-ne$expected[$sid]-or[int]$ace.AceFlags-ne 0){throw 'BOOTSTRAP_DIAGNOSTIC_DACL_INVALID'};$seen[$sid]=$true}
+    if($seen.Count-ne 2){throw 'BOOTSTRAP_DIAGNOSTIC_DACL_INVALID'}
+    return $true
+}
+
 function Publish-F2InstallDiagnostic {
     [CmdletBinding()]
     param(
@@ -40,9 +51,12 @@ function Publish-F2InstallDiagnostic {
     $temporaryPath = Join-Path $Directory ('.result-' + [guid]::NewGuid().ToString('N') + '.tmp')
     $resultPath = Join-Path $Directory 'result.json'
     try {
-        $stream = [IO.File]::Open($temporaryPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+        $fileSecurity=[Security.AccessControl.FileSecurity]::new()
+        $fileSecurity.SetSecurityDescriptorSddlForm(('O:{0}D:P(A;;FA;;;SY)(A;;FA;;;{0})' -f $sid))
+        $stream=New-Object IO.FileStream($temporaryPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None,4096,[IO.FileOptions]::WriteThrough,$fileSecurity)
         try { $stream.Write($bytes,0,$bytes.Length); $stream.Flush($true) }
         finally { $stream.Dispose() }
+        Test-F2BootstrapDiagnosticFileSecurity -Path $temporaryPath -ExpectedOwnerSid $sid | Out-Null
         # Same-directory move publishes a complete record and never replaces a prior file.
         [IO.File]::Move($temporaryPath,$resultPath)
     } catch {

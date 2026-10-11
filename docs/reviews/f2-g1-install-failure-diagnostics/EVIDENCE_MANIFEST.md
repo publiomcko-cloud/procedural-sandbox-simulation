@@ -6,13 +6,13 @@ The original forensic evidence remains at base `56b4e3c0132436a4b2c918572078fe4d
 
 | File | SHA-256 | Purpose |
 |---|---|---|
-| `docs/reviews/f2-g1-capture-id-contract/Invoke-F2VerifiedInstaller.ps1` | `273f973803a50ea3f1b6792cc54fa7bb11147c893bf26c2f7b1452f29b5aa2ea` | Production bootstrap argument guard, verified in-memory installer execution, sanitized diagnostic producer. |
+| `docs/reviews/f2-g1-capture-id-contract/Invoke-F2VerifiedInstaller.ps1` | `6f47d802a2cd5d7deb65083c546829de6a71d26356dcf2b71f6cc6f14d81a4a9` | Production bootstrap argument guard, verified in-memory installer execution, sanitized diagnostic producer. |
 | `docs/reviews/f2-g1-capture-id-contract/Install-F2IcaclsProtectedPackage.ps1` | `cf8abc7c94186f44044684e77eb432c3a20a20c3cfd8fb099b6e32e4a2ca0118` | Reviewed installer; seven-file production package and source pins unchanged. |
 | `docs/reviews/f2-g1-capture-id-contract/Test-Install-F2IcaclsProtectedPackage.ps1` | `75cc1c252183f24cf0ca96a1677bc52c028c3d9d5bc1ab95d6fbac84057f8080` | Windows PowerShell 5.1 installer/bootstrap behavior regressions. |
-| `docs/reviews/f2-g1-install-failure-diagnostics/Start-F2VerifiedInstall.ps1` | `a5b2fc99979060334352a550ffa83e3a411bae5b5b23b7b40c78d6a3d1e0ae3d` | Standard-token launcher, exact bootstrap/installer pins, one normal UAC request, requester-owned mailbox, actual child exit. |
-| `docs/reviews/f2-g1-install-failure-diagnostics/Test-F2InstallDiagnosticTransport.ps1` | `8dd619cbab30beb7ce6b3a746f2ab633b5d30533a48527418eaef446ce113341` | 37 synthetic PowerShell 5.1 diagnostic transport and failure-path assertions, with sanitized file-DACL failure trace. |
-| `docs/reviews/f2-g1-install-failure-diagnostics/F2_G1_DIAGNOSTIC_INSTALL_REVIEW_UPDATE.md` | `c8447429d77f5013c7298c2496e124584466bb43ca950a04ab5456ec57c0e7e9` | Complete implementation explanation, security boundaries, exact future invocation, test totals, and elevated-only unknowns. |
-| `docs/reviews/f2-g1-install-failure-diagnostics/validation.log` | `86a27d722c135681f6cb0b893e977ff7745058f99811989858beb5a6c3f73f3f` | Five-suite command/results/exits, transient capture observation, parser result, and local diff-check result. |
+| `docs/reviews/f2-g1-install-failure-diagnostics/Start-F2VerifiedInstall.ps1` | `a27c315b196c1179eb10fba80867829aeac2b333e07415cc13a1326c0c3ad38d` | Standard-token launcher, exact bootstrap/installer pins, one normal UAC request, requester-owned mailbox, actual child exit. |
+| `docs/reviews/f2-g1-install-failure-diagnostics/Test-F2InstallDiagnosticTransport.ps1` | `729b4f1e4b7ed4e700777908cbda93fedbf836a51cb861cadb6c664ce081889c` | 38 synthetic PowerShell 5.1 diagnostic transport and failure-path assertions, with sanitized file-DACL failure trace. |
+| `docs/reviews/f2-g1-install-failure-diagnostics/F2_G1_DIAGNOSTIC_INSTALL_REVIEW_UPDATE.md` | `a8d624677d574c8d8cb8f0836571524593a9af9d9a366a4c258c6112a175b0b5` | Complete implementation explanation, security boundaries, exact future invocation, test totals, and elevated-only unknowns. |
+| `docs/reviews/f2-g1-install-failure-diagnostics/validation.log` | `7f65d7ae94ba2d29d7c27b5803633be254f49f3f86da3a7899664a860510a600` | Five-suite commands/results/exits, sanitized hosted failure diagnosis, parser result, and local diff-check result. |
 | `.github/workflows/f2-acl-source-only.yml` | `7edb3f3bd4a21fa5b12d0c7bf214fd4fef6f750c584fa768f300eb1fdcb91b28` | Windows CI coverage for all five suites, parser sweep and diff check. |
 
 ## Unchanged provenance/supporting files
@@ -27,7 +27,7 @@ The SHA-256 of this manifest itself is intentionally not embedded in itself; it 
 
 ## Validation evidence
 
-- Windows PowerShell 5.1.22621.6133: five suites, 389 assertions, zero final failures, every child exit code 0. Per-suite results and exact commands are in `validation.log`.
+- Windows PowerShell 5.1.22621.6133: five suites, 390 assertions, zero final failures, every child exit code 0. Per-suite results and exact commands are in `validation.log`.
 - PowerShell parser: 14 `.ps1`/`.psm1` files, zero parse errors, exit 0.
 - `git diff --check`: exit 0 locally; final commit check and GitHub workflow result are reported in the PR conversation handoff.
 - GitHub Windows CI runs this same five-suite and parser workflow for the final PR commit. The exact workflow run URL/result is added to the PR conversation after completion.

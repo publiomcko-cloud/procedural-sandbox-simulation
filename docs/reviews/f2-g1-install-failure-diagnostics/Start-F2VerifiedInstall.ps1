@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $script:F2InstallBootstrapPath = 'C:\Dev\f2-g1-protected-install-prep\Invoke-F2VerifiedInstaller.ps1'
-$script:F2InstallBootstrapSha256 = '273f973803a50ea3f1b6792cc54fa7bb11147c893bf26c2f7b1452f29b5aa2ea'
+$script:F2InstallBootstrapSha256 = '6f47d802a2cd5d7deb65083c546829de6a71d26356dcf2b71f6cc6f14d81a4a9'
 $script:F2InstallInstallerPath = 'C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1'
 $script:F2InstallInstallerSha256 = 'cf8abc7c94186f44044684e77eb432c3a20a20c3cfd8fb099b6e32e4a2ca0118'
 $script:F2InstallMaximumSourceBytes = 1048576
@@ -140,9 +140,9 @@ function Get-F2InstallDiagnosticStatus {
     try {
         $fileAcl=Get-Acl -LiteralPath $path -ErrorAction Stop
         $raw=[Security.AccessControl.RawSecurityDescriptor]::new($fileAcl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Owner -bor [Security.AccessControl.AccessControlSections]::Access))
-        if ($raw.Owner.Value -cne $OwnerSid -or ($raw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclProtected) -ne 0 -or @($raw.DiscretionaryAcl).Count -ne 2) { throw 'DIAGNOSTIC_FILE_SECURITY_INVALID' }
+        if ($raw.Owner.Value -cne $OwnerSid -or ($raw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclProtected) -eq 0 -or @($raw.DiscretionaryAcl).Count -ne 2) { throw 'DIAGNOSTIC_FILE_SECURITY_INVALID' }
         $expected=@{'S-1-5-18'=[uint32]0x001F01FF;$OwnerSid=[uint32]0x001F01FF};$seen=@{}
-        foreach($ace in $raw.DiscretionaryAcl){$sid=$ace.SecurityIdentifier.Value;$mask=[uint32]([int64]$ace.AccessMask-band 0xFFFFFFFFL);if(-not $expected.ContainsKey($sid)-or $seen.ContainsKey($sid)-or $ace.AceQualifier-ne[Security.AccessControl.AceQualifier]::AccessAllowed-or $mask-ne$expected[$sid]-or [int]$ace.AceFlags-ne[int][Security.AccessControl.AceFlags]::Inherited){throw 'DIAGNOSTIC_FILE_SECURITY_INVALID'};$seen[$sid]=$true}
+        foreach($ace in $raw.DiscretionaryAcl){$sid=$ace.SecurityIdentifier.Value;$mask=[uint32]([int64]$ace.AccessMask-band 0xFFFFFFFFL);if(-not $expected.ContainsKey($sid)-or $seen.ContainsKey($sid)-or $ace.AceQualifier-ne[Security.AccessControl.AceQualifier]::AccessAllowed-or $mask-ne$expected[$sid]-or [int]$ace.AceFlags-ne 0){throw 'DIAGNOSTIC_FILE_SECURITY_INVALID'};$seen[$sid]=$true}
         if($seen.Count-ne 2){throw 'DIAGNOSTIC_FILE_SECURITY_INVALID'}
         $bytes=[IO.File]::ReadAllBytes($path)
         $record=[Text.Encoding]::UTF8.GetString($bytes)|ConvertFrom-Json -ErrorAction Stop

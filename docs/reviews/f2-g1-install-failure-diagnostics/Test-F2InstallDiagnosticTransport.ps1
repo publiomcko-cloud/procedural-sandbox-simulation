@@ -46,6 +46,14 @@ function New-F2SyntheticMailbox {
     return New-F2InstallDiagnosticMailbox -OwnerSid $OwnerSid
 }
 
+function Write-F2SyntheticDiagnosticFile {
+    param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][string]$Content,[Parameter(Mandatory)][string]$OwnerSid)
+    $security=[Security.AccessControl.FileSecurity]::new();$security.SetSecurityDescriptorSddlForm(('O:{0}D:P(A;;FA;;;SY)(A;;FA;;;{0})'-f$OwnerSid))
+    $bytes=[Text.UTF8Encoding]::new($false).GetBytes($Content)
+    $stream=New-Object IO.FileStream($Path,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None,4096,[IO.FileOptions]::WriteThrough,$security)
+    try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
+}
+
 function Write-F2SyntheticInstaller {
     param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][bool]$Success,[Parameter(Mandatory)][string]$Stage,[Parameter(Mandatory)][string]$ErrorCode,[switch]$Throw)
     if($Throw){$source="throw 'PRIVATE_SYNTHETIC_DETAIL'"}else{$successLiteral=if($Success){'$true'}else{'$false'};$source="function Invoke-F2InstallMain { return [pscustomobject]@{ Success=$successLiteral; Stage='$Stage'; ErrorCode='$ErrorCode' } }"}
@@ -80,6 +88,8 @@ try {
     $failHash=Write-F2SyntheticInstaller -Path $installer -Success $false -Stage 'Preflight' -ErrorCode 'BASELINE_PIN_MISMATCH'
     $result=Invoke-F2VerifiedInstallerCore -InstallerPath $installer -ExpectedSha256 $failHash -DiagnosticDirectory $mailbox.Directory -CorrelationNonce $mailbox.Nonce
     Assert-F2Diagnostic ($result.ChildExitCode -eq 1 -and $result.DiagnosticPublished -and $result.Stage -eq 'Preflight' -and $result.ErrorCode -eq 'BASELINE_PIN_MISMATCH') 'installer-preflight-status-is-exported-through-verified-scriptblock-scope'
+    $publishedFileAcl=Get-Acl -LiteralPath (Join-Path $mailbox.Directory 'result.json');$publishedFileRaw=[Security.AccessControl.RawSecurityDescriptor]::new($publishedFileAcl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Owner-bor[Security.AccessControl.AccessControlSections]::Access))
+    Assert-F2Diagnostic ($publishedFileRaw.Owner.Value-ceq$sid-and($publishedFileRaw.ControlFlags-band[Security.AccessControl.ControlFlags]::DiscretionaryAclProtected)-ne 0-and@($publishedFileRaw.DiscretionaryAcl).Count-eq 2-and@($publishedFileRaw.DiscretionaryAcl|Where-Object{[int]$_.AceFlags-ne 0}).Count-eq 0) 'publisher-sets-requester-owner-and-protected-explicit-system-requester-file-dacl'
     $status=Get-F2InstallDiagnosticStatus -MailboxDirectory $mailbox.Directory -Nonce $mailbox.Nonce -OwnerSid $sid -ChildExitCode $result.ChildExitCode
     if($status.Status-ne 'CHILD_FAILURE'){
         $directoryCheck='PASS';try{Test-F2InstallMailboxDirectory -Path $mailbox.Directory -OwnerSid $sid|Out-Null}catch{$directoryCheck=[string]$_.Exception.Message}
@@ -164,25 +174,25 @@ try {
     Assert-F2Diagnostic ((Get-F2InstallDiagnosticStatus -MailboxDirectory $mailbox.Directory -Nonce $nonce -OwnerSid $sid -ChildExitCode 1).Status -eq 'DIAGNOSTIC_MISSING') 'missing-record-fails-closed'
     $missingNextStep=Get-F2InstallNextStep -LaunchDisposition 'CHILD_EXITED' -DiagnosticStatus 'DIAGNOSTIC_MISSING' -Outcome 'BLOCKED_CHILD_FAILURE'
     Assert-F2Diagnostic ($missingNextStep -match 'original requester account' -and $missingNextStep -match 'no success may be inferred') 'missing-cross-account-mailbox-gives-actionable-nonauthoritative-guidance'
-    [IO.File]::WriteAllText($recordPath,'{bad-json')
+    Write-F2SyntheticDiagnosticFile -Path $recordPath -Content '{bad-json' -OwnerSid $sid
     Assert-F2Diagnostic ((Get-F2InstallDiagnosticStatus -MailboxDirectory $mailbox.Directory -Nonce $nonce -OwnerSid $sid -ChildExitCode 1).Status -eq 'DIAGNOSTIC_MALFORMED_OR_SECURITY_INVALID') 'malformed-record-fails-closed'
     Remove-Item -LiteralPath $recordPath -Force
-    [IO.File]::WriteAllText($recordPath,('x'*4097))
+    Write-F2SyntheticDiagnosticFile -Path $recordPath -Content ('x'*4097) -OwnerSid $sid
     Assert-F2Diagnostic ((Get-F2InstallDiagnosticStatus -MailboxDirectory $mailbox.Directory -Nonce $nonce -OwnerSid $sid -ChildExitCode 1).Status -eq 'DIAGNOSTIC_SIZE_INVALID') 'oversized-record-fails-closed'
     Remove-Item -LiteralPath $recordPath -Force
     $wrongNonce=[ordered]@{Schema='f2-install-diagnostic-v1';Nonce=([guid]::NewGuid().ToString('N'));Component='Installer';Outcome='INSTALL_BLOCKED';Stage='Preflight';ErrorCode='SYNTHETIC_FAILURE'}
-    [IO.File]::WriteAllText($recordPath,($wrongNonce|ConvertTo-Json -Compress))
+    Write-F2SyntheticDiagnosticFile -Path $recordPath -Content ($wrongNonce|ConvertTo-Json -Compress) -OwnerSid $sid
     Assert-F2Diagnostic ((Get-F2InstallDiagnosticStatus -MailboxDirectory $mailbox.Directory -Nonce $nonce -OwnerSid $sid -ChildExitCode 1).Status -eq 'DIAGNOSTIC_CONTENT_INVALID') 'wrong-nonce-record-fails-closed'
     Remove-Item -LiteralPath $recordPath -Force
     $extraProperty=[ordered]@{Schema='f2-install-diagnostic-v1';Nonce=$nonce;Component='Installer';Outcome='INSTALL_BLOCKED';Stage='Preflight';ErrorCode='SYNTHETIC_FAILURE';PrivateData='must-not-be-accepted'}
-    [IO.File]::WriteAllText($recordPath,($extraProperty|ConvertTo-Json -Compress))
+    Write-F2SyntheticDiagnosticFile -Path $recordPath -Content ($extraProperty|ConvertTo-Json -Compress) -OwnerSid $sid
     Assert-F2Diagnostic ((Get-F2InstallDiagnosticStatus -MailboxDirectory $mailbox.Directory -Nonce $nonce -OwnerSid $sid -ChildExitCode 1).Status -eq 'DIAGNOSTIC_CONTENT_INVALID') 'unexpected-diagnostic-field-fails-closed'
     Remove-Item -LiteralPath $recordPath -Force
     $falseSuccess=[ordered]@{Schema='f2-install-diagnostic-v1';Nonce=$nonce;Component='Installer';Outcome='INSTALL_COMPLETE';Stage='PostInstallAttestation';ErrorCode='NONE'}
-    [IO.File]::WriteAllText($recordPath,($falseSuccess|ConvertTo-Json -Compress))
+    Write-F2SyntheticDiagnosticFile -Path $recordPath -Content ($falseSuccess|ConvertTo-Json -Compress) -OwnerSid $sid
     Assert-F2Diagnostic ((Get-F2InstallDiagnosticStatus -MailboxDirectory $mailbox.Directory -Nonce $nonce -OwnerSid $sid -ChildExitCode 1).Status -eq 'CHILD_STATUS_CONFLICT') 'false-success-claim-conflicts-with-nonzero-real-child-exit'
     Remove-Item -LiteralPath $recordPath -Force
-    [IO.File]::WriteAllText($recordPath,($falseSuccess|ConvertTo-Json -Compress))
+    Write-F2SyntheticDiagnosticFile -Path $recordPath -Content ($falseSuccess|ConvertTo-Json -Compress) -OwnerSid $sid
     $successOnly=Get-F2InstallDiagnosticStatus -MailboxDirectory $mailbox.Directory -Nonce $nonce -OwnerSid $sid -ChildExitCode 0
     Assert-F2Diagnostic ($successOnly.Status -eq 'CHILD_CLAIM_ONLY' -and $successOnly.Record.Outcome -eq 'INSTALL_COMPLETE') 'success-diagnostic-cannot-replace-independent-installation-attestation'
     [IO.File]::WriteAllText((Join-Path $mailbox.Directory '.result-leftover.tmp'),'incomplete publication')

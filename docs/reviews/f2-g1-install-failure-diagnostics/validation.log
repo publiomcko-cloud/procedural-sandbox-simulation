@@ -1,6 +1,6 @@
-F2 G1 diagnostic correction — final validation record
-Runtime: Windows PowerShell 5.1.22621.6133 (Desktop)
-All suites were invoked directly and sequentially without redirecting their output through a logging pipeline.
+F2 G1 diagnostic install correction — validation record
+Runtime: Windows PowerShell 5.1.22621.6133 (Desktop) for all five synthetic suites.
+All five child processes were invoked sequentially with powershell.exe -NoProfile -ExecutionPolicy Bypass -File. Output was captured in the calling process and summarized after each child completed.
 
 COMMAND: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/f2-acl/Test-F2AclCapture.Protocol.ps1
 RESULT: Assertions=152; Failures=0; ChildExit=0
@@ -15,18 +15,22 @@ COMMAND: powershell.exe -NoProfile -ExecutionPolicy Bypass -File docs/reviews/f2
 RESULT: Assertions=47; Failures=0; ChildExit=0
 
 COMMAND: powershell.exe -NoProfile -ExecutionPolicy Bypass -File docs/reviews/f2-g1-install-failure-diagnostics/Test-F2InstallDiagnosticTransport.ps1
-RESULT: Assertions=37; Failures=0; ChildExit=0
+RESULT: RESULT=PASS; ASSERTIONS=38; FAILURES=0; ChildExit=0
 
-TOTAL: 5 suites; 389 assertions; 0 final failures; all five child exit codes 0.
+TOTAL: 5 suites; 390 assertions; 0 failures; all child exit codes 0.
 
-Transient validation observation: one earlier summary-logging run sent suite output through Tee-Object and reported the corroboration case `nonzero child exit retains complete separate streams` as failing (118 assertions; one failure; child exit 1). A standalone direct rerun and the final complete direct sequential rerun both passed that suite (118 assertions; zero failures; exit 0). The exact underlying cause was not established. No seven-file runtime package source was changed.
+The diagnostics suite runs synthetic files in a temporary mailbox. It verifies that the production publisher assigns the requester as file owner and applies a protected explicit DACL containing only requester and SYSTEM full-control ACEs. It also exercises bootstrap argument failures, source tampering, installer preflight and staged failures, bootstrap exceptions, nonce and record corruption, inaccessible/missing/malformed diagnostics, child exit conflicts, UAC cancellation behavior, and false success claims. No UAC, protected installation, live host query, or filesystem permission change was performed.
 
-COMMAND: Windows PowerShell 5.1 Parser.ParseFile sweep over all 14 workflow PowerShell files (including the added launcher).
-RESULT: ParserFiles=
-14
-; ParserErrors=
-0
-; Exit=0
+PR #54 Windows CI history before the owner/DACL correction:
+- Run 38175626017 failed the new diagnostic transport suite: 18 assertions failed because elevated-runner-created diagnostic files had an unexpected owner and inherited rather than protected explicit DACL. The directory check passed.
+- Run 38175878414 reproduced that same synthetic mailbox file owner/DACL mismatch. The failure report was sanitized to owner-match/protection booleans, ACE categories, masks and flags; it contained no private SID or raw SDDL.
+- Correction: the bootstrap now creates the diagnostic file with an explicit protected SYSTEM/requester DACL and requester owner, flushes the create-new file, verifies its security descriptor, then publishes by same-directory non-overwriting move. The requester requires the same owner/protected-DACL contract.
+- The final GitHub Windows CI result for the immutable commit containing this log is linked in the PR #54 review handoff; the source workflow runs the same five suites, parser sweep, and whitespace check.
+
+COMMAND: Windows PowerShell 5.1 Parser.ParseFile over tracked source files selected by .github/workflows/f2-acl-source-only.yml.
+RESULT: ParserFiles=14; ParserErrors=0; Exit=0
 
 COMMAND: git diff --check
 RESULT: Exit=0
+
+All test payloads and host/mailbox identities are synthetic. The elevated owner and exact DACL behavior across a real UAC token transition remain unverified. Diagnostic status remains NON-AUTHORITATIVE; actual installation success still requires independent host verification of the four directories, seven pinned files, and v2 release manifest.
