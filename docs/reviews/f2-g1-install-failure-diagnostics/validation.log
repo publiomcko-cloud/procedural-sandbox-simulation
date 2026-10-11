@@ -1,0 +1,53 @@
+F2 G1 non-elevated failure diagnostics validation
+Base source: bd14a1908085065f08d3c62e4dd17fa3203a53ff
+Production source: 5741ffe90a3abd02a08563e6431e8a0b9b63eeb1
+Environment: Windows PowerShell 5.1.22621.6133
+Scope: synthetic temporary fixtures only; no UAC, installer, icacls, VM, Hyper-V, G:, or native workload.
+
+Command: Windows PowerShell 5.1 Parser.ParseFile on Test-F2InstallDiagnosticTransport.ps1
+Result: PARSER=PASS;ERRORS=0;PS=5.1
+Exit code: 0
+
+Command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\docs\reviews\f2-g1-install-failure-diagnostics\Test-F2InstallDiagnosticTransport.ps1
+Result:
+ASSERT=PASS;PS51-StartProcess-Verb-set-excludes-stdout-stderr-redirection
+ASSERT=PASS;PS51-strict-args-guard-exits-1
+ASSERT=PASS;PS51-strict-args-guard-reports-VariableIsUndefined
+ASSERT=PASS;PS51-strict-args-guard-fails-before-main-body
+ASSERT=PASS;PS51-unbound-arguments-guard-exits-0
+ASSERT=PASS;PS51-unbound-arguments-guard-reaches-body
+ASSERT=PASS;ordinary-child-real-exit-code-captured
+ASSERT=PASS;ordinary-child-stdout-captured
+ASSERT=PASS;ordinary-child-stderr-captured
+ASSERT=PASS;synthetic-mailbox-dacl-is-protected
+ASSERT=PASS;synthetic-mailbox-owner-is-requester
+ASSERT=PASS;status-file-child-exit-code-is-observed-separately
+ASSERT=PASS;valid-sanitized-status-file-correlates-to-child-failure
+ASSERT=PASS;status-file-preserves-allowlisted-stage-and-error-code
+ASSERT=PASS;missing-status-fails-closed
+ASSERT=PASS;malformed-status-fails-closed
+ASSERT=PASS;oversized-status-fails-closed
+ASSERT=PASS;wrong-nonce-status-fails-closed
+ASSERT=PASS;child-success-claim-cannot-override-nonzero-process-exit
+ASSERT=PASS;child-success-claim-is-not-install-attestation
+RESULT=PASS;ASSERTIONS=20;FAILURES=0;POWERSHELL=5.1.22621.6133
+TEST_EXIT=0
+Exit code: 0
+
+Command: git diff --cached --check
+Result: GIT_DIFF_CHECK=PASS
+Exit code: 0
+
+CI: not run; this review-only branch changes no production source or CI definition.
+
+Requester-side event inspection (read-only, local times UTC-03:00):
+- Microsoft-Windows-PowerShell/Operational 4104 record 152951, 2026-10-11T17:09:36.8538385-03:00, process 7292: RunAs launch script and approved pin/path presence; event account matched requester.
+- Windows PowerShell 400 record 251925, 2026-10-11T17:09:39.2284391-03:00, process 18284: PowerShell 5.1 engine start.
+- Microsoft-Windows-PowerShell/Operational 4100 record 152955, 2026-10-11T17:09:39.2958741-03:00, process 18284: VariableIsUndefined for `$args`; event account matched requester.
+- Windows PowerShell 403 record 251926, 2026-10-11T17:09:39.3814434-03:00, process 18284: engine stop.
+- Security log: inaccessible to the standard requester token; no elevation requested.
+- Sysmon channel: not registered.
+- PSReadLine search: no matching command.
+- Protected-install preparation directory: no retained per-attempt stdout/stderr file.
+
+Raw event XML, private SIDs, raw SDDL, credentials, and baseline payload data are intentionally not included.
