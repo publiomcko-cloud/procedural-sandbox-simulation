@@ -2,7 +2,7 @@
 
 Branch: `fix/f2-baseline-capture-identity-issue48`. Base: reviewed PR #50 source `2c967661163fc157b638fa4f76da86c48aa57ff2`. Production source tip: `54b1d0c7a9865d710c19b59cd38c0da670a12536`.
 
-SHA-256 values below were computed from exact GitHub API content bytes at review commit `66ee30c5c28974886c2167f2e4b2af0070f853a2`. `REVIEW_MANIFEST.md` is self-excluded; its exact digest is published in the PR description and final report.
+SHA-256 values below were computed from exact GitHub API content bytes at review commit `b8ded2d2675f1e82a7c5d44fd39d0d90810ec4d5`. `REVIEW_MANIFEST.md` is self-excluded; its exact digest is published in the PR description and final report.
 
 | File | SHA-256 | Purpose |
 | --- | --- | --- |
@@ -11,7 +11,7 @@ SHA-256 values below were computed from exact GitHub API content bytes at review
 | `docs/reviews/f2-g1-capture-id-contract/HANDOFF.md` | `e2747ce5c23b4297cbdbae2177b8b53cd38266e92c26e21ccd6219fa0030b415` | Developer handoff and limitations |
 | `docs/reviews/f2-g1-capture-id-contract/Install-F2IcaclsProtectedPackage.ps1` | `235aea7748c2c67b6c52996d5de4dd02a88709b46b96fff1710bd671b4fac0e4` | Protected installer baseline preflight and v2 release manifest |
 | `docs/reviews/f2-g1-capture-id-contract/Invoke-F2VerifiedInstaller.ps1` | `a466e347843d74e5474021a852e886aceb9e4e8b4d3c71c6db4857d861d92e82` | One-read hash-verified bootstrap |
-| `docs/reviews/f2-g1-capture-id-contract/TEST_EVIDENCE.md` | `c1072e662d977472b9938f0d171e910e6b784bcf56125b130949214a592a8e94` | Exact commands and local/hosted validation results |
+| `docs/reviews/f2-g1-capture-id-contract/TEST_EVIDENCE.md` | `43e6a636748716bad135acb3112faef43c84a7838e2e555088ac0047520df3c5` | Exact commands and local/hosted validation results |
 | `docs/reviews/f2-g1-capture-id-contract/Test-Install-F2IcaclsProtectedPackage.ps1` | `796dc3fb7d392dc68ed9fd0453a260eee310a8372dce5590d50145f07efab694` | Windows PowerShell 5.1 synthetic installer tests |
 | `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_CORROBORATION_TEST.log` | `1808478eddd3bfe7a8908ac8cac6b4448323aa08a8d7adbc8f8099125058c898` | Complete local synthetic output and exit |
 | `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_INSTALL_TEST.log` | `e519a087a0e5dbf0bd25e4a38b46c42f9f931b1358fc7567f96d86e9193525c9` | Complete local synthetic output and exit |
