@@ -66,7 +66,7 @@ The preexisting ProgramData create-mask exception is also tied to the exact obse
 | --- | --- |
 | `Install-F2IcaclsProtectedPackage.ps1` | `be622923a5931a1cc1ce8cfff18c72952b836f8f84e403a419254c6c2c778b0e` |
 | `Invoke-F2VerifiedInstaller.ps1` | `3ae8fee4cfa7c809110a3233f9df2ad8f1fe877c91f1a4067e08541c5e893060` |
-| `Test-Install-F2IcaclsProtectedPackage.ps1` | `a1967eff0627d3bbb3bd4be2a52c9acfa40f401e216e9988ab0b837e9cf967df` |
+| `Test-Install-F2IcaclsProtectedPackage.ps1` | `8f498d0f152c954afda58ec6c4d60577bb8158861aef529d42cb6e662b0ceaf3` |
 | `F2_ICACLS_SOURCE_PINS.json` (production package) | `bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7` |
 
 No production package source or package pin changed. The installer’s production source commit remains `5741ffe90a3abd02a08563e6431e8a0b9b63eeb1`; the new SHA propagation is limited to the installer hash in the bootstrap and the bootstrap hash in the documented command.
@@ -84,7 +84,7 @@ Fresh Windows PowerShell 5.1 synthetic suites passed with zero failures:
 - Total: 352 assertions, zero failures.
 - Parser sweep: 12 PowerShell files, zero errors.
 - `git diff --check`: recorded in the final handoff after publication.
-- The first hosted run on `e88144d15fb23ab58a2de4dc5dd0b1e281f1d3ca` exposed a synthetic test assumption that G: exists as a PowerShell drive; the hosted runner has no G: drive. The production path enumerator now uses path-string composition while retaining the exact pinned G: scope, and a regression asserts its 11 expected paths without requiring a mapped PSDrive. The failed run remains available at `https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38167667264`; final-head CI result will be recorded after rerun.
+- Hosted runs on `e88144d15fb23ab58a2de4dc5dd0b1e281f1d3ca` and `b17be040f5d5e3c2105e0d83d1f5abce55d891f0` exposed two synthetic-fixture environment assumptions: G: need not exist as a PowerShell drive, and the synthetic install's target path strings must be explicitly canonical before exercising the installer's strict path gate. Production keeps its fixed G: source scope; expected VM paths use string composition and fixture destination paths now use `Path.GetFullPath`. The CI runs remain available at `https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38167667264` and `https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38167926562`; final-head CI result will be recorded after rerun.
 
 Complete stdout logs and exact commands are in the adjacent `WINDOWS_POWERSHELL_5_1_*_CONSOLIDATED.log` files. These are synthetic/source-only tests. They do not establish the elevated UAC identity, consent, post-install ACLs, or a protected installation result.
 

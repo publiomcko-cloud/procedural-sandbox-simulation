@@ -15,7 +15,7 @@ Status: **READY_FOR_CONSOLIDATED_INSTALL_REVIEW**. This handoff covers a source-
 
 Completed a single consolidated readiness pass for the previously deterministic `INSTALL_PARENT_DACL_UNSAFE` on `C:\`. The production installer now allows exactly the observed Authenticated Users directory `FILE_ADD_SUBDIRECTORY` mask `0x00000004`, with no inheritance flags, only while validating the canonical `C:\` root. It separately requires the exact observed inherit-only root ACE, protected DACL, and an approved system owner. The root exception is not applied at Program Files or ProgramData. ProgramData's observed `0x116` creation/attribute ACE remains exact and duplicate/flag constrained. Protected child installation/staging DACL checks remain unchanged.
 
-The SHA-bound bootstrap now pins the corrected installer while retaining its one-read, hash-then-execute-the-identical-in-memory-bytes property. Windows PowerShell 5.1 regressions exercise the real production root path walker, observed and adversarial root ACL fixtures, non-root parent rejection, collisions, partial publication and installed ACL attestation failures. A hosted Windows CI run exposed a test-only assumption that the runner provides a `G:` PowerShell drive; production expected-path construction now uses path strings and the regression verifies the exact 11 pinned `G:` paths without requiring a mapped drive. No production volume selection or identity check changed.
+The SHA-bound bootstrap now pins the corrected installer while retaining its one-read, hash-then-execute-the-identical-in-memory-bytes property. Windows PowerShell 5.1 regressions exercise the real production root path walker, observed and adversarial root ACL fixtures, non-root parent rejection, collisions, partial publication and installed ACL attestation failures. Hosted Windows CI identified two fixture assumptions: the runner provides no `G:` PowerShell drive, and synthetic destination paths must be explicitly canonical to reach the install path. Expected VM path strings are now composed without requiring a mapped drive, and synthetic destination strings use `Path.GetFullPath`. Production retains the fixed G: scope and strict canonical-path gate.
 
 ## Changed paths
 
@@ -34,7 +34,7 @@ The production SourceRoot and its seven-file package are unchanged at the pinned
 
 ## Validation
 
-Windows PowerShell 5.1.22621.6133: protocol 152 assertions/0 failures/exit 0; corroboration 118/0/exit 0; runtime 35/0/exit 0; installer/bootstrap 47/0/exit 0. Total: 352 assertions, zero failures. Parser sweep: 12 PowerShell files, zero parse errors, exit 0. Actual read-only SourceRoot, baseline, package pins and both installation-parent-chain checks passed. `git diff --check` passed locally. The first hosted CI run exposed the missing-G: fixture assumption; the corrected final-SHA Windows GitHub CI result will be recorded in `TEST_EVIDENCE.md` and the PR handoff before review readiness.
+Windows PowerShell 5.1.22621.6133: protocol 152 assertions/0 failures/exit 0; corroboration 118/0/exit 0; runtime 35/0/exit 0; installer/bootstrap 47/0/exit 0. Total: 352 assertions, zero failures. Parser sweep: 12 PowerShell files, zero parse errors, exit 0. Actual read-only SourceRoot, baseline, package pins and both installation-parent-chain checks passed. `git diff --check` passed locally. Two hosted CI attempts exposed and informed the fixture-only corrections; final-SHA Windows GitHub CI must pass before this handoff is review-ready.
 
 ## Tests not run and limitations
 
