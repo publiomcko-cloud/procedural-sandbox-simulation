@@ -35,7 +35,7 @@ The seven-file installer package contains the six executable/module files plus t
 
 - Installer: `Install-F2IcaclsProtectedPackage.ps1`, SHA-256 `be622923a5931a1cc1ce8cfff18c72952b836f8f84e403a419254c6c2c778b0e`.
 - One-read verified-byte bootstrap: `Invoke-F2VerifiedInstaller.ps1`, SHA-256 `3ae8fee4cfa7c809110a3233f9df2ad8f1fe877c91f1a4067e08541c5e893060`.
-- Installer synthetic test: `Test-Install-F2IcaclsProtectedPackage.ps1`, SHA-256 `a1967eff0627d3bbb3bd4be2a52c9acfa40f401e216e9988ab0b837e9cf967df`.
+- Installer synthetic test: `Test-Install-F2IcaclsProtectedPackage.ps1`, SHA-256 `96e8af5f3eba2733e35ac3f4ab722a8b83e16c64a1feb2fd7fc87ac55bace053`.
 - Bootstrap preparation path: `C:\Dev\f2-g1-protected-install-prep\Invoke-F2VerifiedInstaller.ps1`.
 - Installer preparation path: `C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1`; this matches the fixed path embedded in the bootstrap.
 - The bootstrap pins the installer SHA-256 above and reads, verifies, and executes the same in-memory bytes. The installer pins the unchanged production source commit and all seven package hashes above.

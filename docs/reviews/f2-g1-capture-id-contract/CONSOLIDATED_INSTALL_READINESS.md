@@ -5,7 +5,7 @@ Status: **READY_FOR_CONSOLIDATED_INSTALL_REVIEW**. This is a source and read-onl
 ## Scope and immutable inputs
 
 - Repository: `publiomcko-cloud/procedural-sandbox-simulation`.
-- Existing draft PR: #53, branch `fix/f2-baseline-capture-identity-issue48`. The audited starting head was `9c2e6db22c433d736eff9358e62f20eb8f6b2071`; the production package source remains pinned to `5741ffe90a3abd02a08563e6431e8a0b9b63eeb1` (parent `4c53f6dd03c6ddc564a45f8c203286595385c46b`).
+- Existing draft PR: #53, branch `fix/f2-baseline-capture-identity-issue48`. Consolidated review HEAD: `409f3103efa56ea813edc612d2c2de29f5d3ef8c` (parent `83889642fbbd0e19eb2dddb229cda974d33f8de6`); the production package source remains pinned to `5741ffe90a3abd02a08563e6431e8a0b9b63eeb1` (parent `4c53f6dd03c6ddc564a45f8c203286595385c46b`).
 - SourceRoot: `C:\Dev\f2-g1-capture-id-contract-source`, exact production commit, clean, expected GitHub origin.
 - Seven-file source-pin manifest SHA-256: `bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7`.
 - Baseline mailbox ID: `ecb6deeb424e40feb5354d18908986df`.
@@ -83,8 +83,10 @@ Fresh Windows PowerShell 5.1 synthetic suites passed with zero failures:
 - Protected installer/bootstrap: 47 assertions.
 - Total: 352 assertions, zero failures.
 - Parser sweep: 12 PowerShell files, zero errors.
-- `git diff --check`: recorded in the final handoff after publication.
-- Hosted runs `38167667264`, `38167926562`, and `38168148807` exposed three test fixture portability issues: the runner has no G: PowerShell drive, strict target-path validation needs explicitly canonical fixture destinations, and the reparse test compared the normalized current path against an unnormalized fixture root. Corrections remain in synthetic setup/tests; production G: identity, canonical-path rejection and reparse checks were not relaxed. Exact failed runs: [38167667264](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38167667264), [38167926562](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38167926562), [38168148807](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38168148807). Final-head CI result will be recorded after rerun.
+- `git diff --check`: passed in the final-head Windows GitHub CI run below and locally before publication.
+- Hosted runs `38167667264`, `38167926562`, and `38168148807` exposed three test fixture portability issues: the runner has no G: PowerShell drive, strict target-path validation needs explicitly canonical fixture destinations, and the reparse test compared the normalized current path against an unnormalized fixture root. Corrections remain in synthetic setup/tests; production G: identity, canonical-path rejection and reparse checks were not relaxed. Exact failed runs: [38167667264](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38167667264), [38167926562](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38167926562), [38168148807](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38168148807).
+
+The corrected final source/evidence HEAD `409f3103efa56ea813edc612d2c2de29f5d3ef8c` passed [Windows CI run 38168511145](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38168511145), job [114555982388](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38168511145/job/114555982388): 152/118/35/47 assertions, zero failures, all test processes exit 0, hosted parser 9 files/0 errors, `git diff --check` passed. A documentation-only final evidence update is being validated on its own published tip.
 
 Complete stdout logs and exact commands are in the adjacent `WINDOWS_POWERSHELL_5_1_*_CONSOLIDATED.log` files. These are synthetic/source-only tests. They do not establish the elevated UAC identity, consent, post-install ACLs, or a protected installation result.
 

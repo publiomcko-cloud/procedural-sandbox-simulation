@@ -8,12 +8,12 @@ Repository: `publiomcko-cloud/procedural-sandbox-simulation`. Draft PR #53 branc
 | --- | --- | --- |
 | `.gitattributes` | `a7718781bfc3e84e35321e8a7d73c34d8264303b1591d793a849fa80e30698a7` | Keeps test logs byte-preserved. |
 | `.github/workflows/f2-acl-source-only.yml` | `7b96771c28f1b85f5db1c163bd1449727d08265a5deab76a67f0e995b6028a14` | Adds review-path triggering and PS 5.1 installer regression execution. |
-| `docs/reviews/f2-g1-capture-id-contract/CONSOLIDATED_INSTALL_READINESS.md` | `9b64cf00722999c9aeb6ccd33689782053b2aa076c9062058ecafe7edb0e3e34` | Complete gate matrix and sanitized root ACL assessment. |
-| `docs/reviews/f2-g1-capture-id-contract/F2_G1_INSTALL_REVIEW_UPDATE.md` | `2b2d29a898db27961bc833ffe0b30f678df16afaa20378d14bf9f8e9a4734343` | Exact post-review installation preparation/command and boundaries. |
-| `docs/reviews/f2-g1-capture-id-contract/HANDOFF.md` | `1f69a74a675cab4659708be1054e72c986f73cdd0528643df934d3c08c502793` | Developer handoff, implementation scope, limits and reviewer focus. |
+| `docs/reviews/f2-g1-capture-id-contract/CONSOLIDATED_INSTALL_READINESS.md` | `be37b506da147515d6e09d946a6972249c5cf1b8c2c9547340aceea775b3d1e5` | Complete gate matrix and sanitized root ACL assessment. |
+| `docs/reviews/f2-g1-capture-id-contract/F2_G1_INSTALL_REVIEW_UPDATE.md` | `4bfb84d74afb0c43d390b4c6876acc2e3074db68b87994fffd165afdec1a203b` | Exact post-review installation preparation/command and boundaries. |
+| `docs/reviews/f2-g1-capture-id-contract/HANDOFF.md` | `081c1ec8217335192ad7322a03f13597811aec08801329873eca0060d70c5669` | Developer handoff, implementation scope, limits and reviewer focus. |
 | `docs/reviews/f2-g1-capture-id-contract/Install-F2IcaclsProtectedPackage.ps1` | `be622923a5931a1cc1ce8cfff18c72952b836f8f84e403a419254c6c2c778b0e` | Protected installer with exact `C:\`-only parent ACL exception and PSDrive-independent path strings. |
 | `docs/reviews/f2-g1-capture-id-contract/Invoke-F2VerifiedInstaller.ps1` | `3ae8fee4cfa7c809110a3233f9df2ad8f1fe877c91f1a4067e08541c5e893060` | One-read hash-bound bootstrap that executes the verified in-memory installer bytes. |
-| `docs/reviews/f2-g1-capture-id-contract/TEST_EVIDENCE.md` | `e918e85b23ba33d6901bb3f1aa2119dfaf64bbf8a91195c7cefd64de517b499d` | Exact local commands, assertion results, logs and hosted CI reference. |
+| `docs/reviews/f2-g1-capture-id-contract/TEST_EVIDENCE.md` | `6d9be31d8ccbbcc41ac9306984e22d4cbabf1e26497dc672860412f38ccf6ca7` | Exact local commands, assertion results, logs and hosted CI reference. |
 | `docs/reviews/f2-g1-capture-id-contract/Test-Install-F2IcaclsProtectedPackage.ps1` | `96e8af5f3eba2733e35ac3f4ab722a8b83e16c64a1feb2fd7fc87ac55bace053` | Windows PowerShell 5.1 installer/bootstrap synthetic regressions. |
 | `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_CONSOLIDATED_PARSER.log` | `bf78636077f0fa87a92af36cb84d1668cc88c166440b6814e23da172fe4b59eb` | Fresh exact local parser command, file/error counts and exit. |
 | `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_CORROBORATION_CONSOLIDATED.log` | `75a583004a8a929f1969cc0fd1fb0307ea9ef89683fa70aa89750eab0f11346a` | Fresh 118-assertion Windows PowerShell 5.1 corroboration output. |
