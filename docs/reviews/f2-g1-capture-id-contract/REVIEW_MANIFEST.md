@@ -1,13 +1,13 @@
 # Consolidated F2 G1 review manifest
 
-Repository: `publiomcko-cloud/procedural-sandbox-simulation`. Draft PR #53 branch `fix/f2-baseline-capture-identity-issue48`, based on PR #50 production source. This manifest inventories all files changed in PR #53 at the final reviewed tip, except itself; its own raw SHA-256 is published in the PR handoff comment. Hashes below are SHA-256 over exact GitHub file bytes. Review scripts use LF bytes in GitHub; Windows checked-out package files follow the repository's line-ending rules.
+Repository: `publiomcko-cloud/procedural-sandbox-simulation`. Draft PR #53 branch `fix/f2-baseline-capture-identity-issue48`, based on PR #50 production source. This manifest inventories all files changed in PR #53 at the final reviewed tip, except itself; its own raw SHA-256 is published in the PR handoff comment. Hashes in the changed-file table below are SHA-256 over exact GitHub Git-blob bytes. The separate seven-file production package table gives the Windows checkout-byte hashes consumed by the installer; files with CRLF checkout rules can therefore have different values in the two tables.
 
 ## Changed review/source files and evidence
 
 | File | SHA-256 | Purpose |
 | --- | --- | --- |
-| `.gitattributes` | `a7718781bfc3e84e35321e8a7d73c34d8264303b1591d793a849fa80e30698a7` | Keeps test logs byte-preserved. |
-| `.github/workflows/f2-acl-source-only.yml` | `7b96771c28f1b85f5db1c163bd1449727d08265a5deab76a67f0e995b6028a14` | Adds review-path triggering and PS 5.1 installer regression execution. |
+| `.gitattributes` | `42416703328589db506d1446f480db64fec7f24d3f79d267cd48c9527122edc5` | Keeps test logs byte-preserved. |
+| `.github/workflows/f2-acl-source-only.yml` | `8b80db5252973567953477ab93ab43182553d51b024c0249aadb92e4fbe33899` | Adds review-path triggering and PS 5.1 installer regression execution. |
 | `docs/reviews/f2-g1-capture-id-contract/CONSOLIDATED_INSTALL_READINESS.md` | `60c0d40e6044c668ec6246018b7b46fffb4c9aa72c8b53c028ac2e769b3a8059` | Complete gate matrix and sanitized root ACL assessment. |
 | `docs/reviews/f2-g1-capture-id-contract/F2_G1_INSTALL_REVIEW_UPDATE.md` | `4bfb84d74afb0c43d390b4c6876acc2e3074db68b87994fffd165afdec1a203b` | Exact post-review installation preparation/command and boundaries. |
 | `docs/reviews/f2-g1-capture-id-contract/HANDOFF.md` | `91d9dd8d9f655e02fff9ff66dba419518eda690c9744a01f0c718f4b0a4e8de6` | Developer handoff, implementation scope, limits and reviewer focus. |
@@ -29,8 +29,8 @@ Repository: `publiomcko-cloud/procedural-sandbox-simulation`. Draft PR #53 branc
 | `scripts/f2-acl/F2AclIcacls.Corroboration.psm1` | `a52ed86218a0ba0c0801ee6e84a4a5e47c73eda43db78f818b0b12670ad5110b` | Retained baseline loader and icacls comparison module. |
 | `scripts/f2-acl/F2AclIcacls.Runtime.psm1` | `950b8232be2f22412e837d63f7b2fb678fc83871862b6bafc714d303599a71a5` | Runtime v2 release-manifest loader and package contract. |
 | `scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json` | `bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7` | Pinned source-package manifest. |
-| `scripts/f2-acl/Test-F2AclIcacls.Corroboration.ps1` | `8e744aad65e0f43326572f86564dbea0a6452e525fee62ef7c35cdd80a8fcc8a` | Synthetic corroboration and production-boundary integration tests. |
-| `scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1` | `f9ac3762a8e310f67490a4a441437e3e881178cb1876867985ce032bd08eeb7f` | Real disk-loader v2 and runtime contract tests. |
+| `scripts/f2-acl/Test-F2AclIcacls.Corroboration.ps1` | `84d0194707ae9497f20c112973b028d2e9907b8e923f0cea11e7a7fe662250aa` | Synthetic corroboration and production-boundary integration tests (GitHub blob bytes). |
+| `scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1` | `1566ae17cfe3cbe51c02b99512d4527130e0d32997edb9b20697f62f89561f31` | Real disk-loader v2 and runtime contract tests (GitHub blob bytes). |
 
 There are 26 changed paths including this manifest. Its own SHA-256 is intentionally self-excluded; the exact value is reported in the PR comment after the containing commit exists.
 
