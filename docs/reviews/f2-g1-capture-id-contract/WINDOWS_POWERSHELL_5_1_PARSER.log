@@ -1,1 +1,2 @@
-PowerShellParserFiles=12;ParserErrors=0;ExitCode=0
+Command: Windows PowerShell 5.1 Language.Parser.ParseFile over 9 tracked scripts/f2-acl PowerShell files and 3 review-package PowerShell files.
+Files=12;Errors=0;ExitCode=0

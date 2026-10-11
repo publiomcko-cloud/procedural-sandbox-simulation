@@ -15,7 +15,7 @@ The corroboration suite's single initial failure was `bounded process runner cap
 
 ## Parser and whitespace checks
 
-- Windows PowerShell 5.1 `Language.Parser.ParseFile` sweep over 6 tracked `scripts/f2-acl` PowerShell files and 3 installer/bootstrap/test files: 9 files, 0 parser errors, exit 0. Log: `WINDOWS_POWERSHELL_5_1_PARSER.log`.
+- Windows PowerShell 5.1 `Language.Parser.ParseFile` sweep over all 9 tracked `scripts/f2-acl` PowerShell files and all 3 installer/bootstrap/test review files: 12 files, 0 parser errors, exit 0. Log: `WINDOWS_POWERSHELL_5_1_PARSER.log`.
 - `git diff --check origin/security/f2-icacls-corroboration-issue48...HEAD`: passed after review package updates; exit 0.
 
 ## GitHub Windows CI
