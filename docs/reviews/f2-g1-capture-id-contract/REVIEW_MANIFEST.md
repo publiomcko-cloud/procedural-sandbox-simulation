@@ -19,15 +19,15 @@ $16ce1d4416a708e025a50c2ced6dafe93a8ab9af56f8b8eb1155d9ac805ecdf4a` | Exact loca
 | `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_PARSER.log` | `d6fc1c8535fd8ea38c2b3e8662644581a238ba695e6796e583b3f6af9977e48c` | PowerShell parser sweep output |
 | `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_PROTOCOL_TEST.log` | `6c1f9bf830939755a19eb077d000364bfca9c5ae0ac21421d60fb216f956450b` | Complete 152-assertion protocol output |
 | `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_RUNTIME_TEST.log` | `94b3554526963b7755b1ad32cafbb27a87ddfedc8df8ba918beab7fa179e2664` | Complete 35-assertion runtime output |
-| `scripts/f2-acl/F2AclCapture.Protocol.psm1` | `42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728` | Protocol package module |
+| `scripts/f2-acl/F2AclCapture.Protocol.psm1` | `530bebf1c93dbca3650a2846bc627b483d83ee89bed1abf2650f795600c8d6b1` | Protocol package module |
 | `scripts/f2-acl/F2AclIcacls.Corroboration.psm1` | `a52ed86218a0ba0c0801ee6e84a4a5e47c73eda43db78f818b0b12670ad5110b` | Baseline loader and corroboration implementation |
 | `scripts/f2-acl/F2AclIcacls.Runtime.psm1` | `950b8232be2f22412e837d63f7b2fb678fc83871862b6bafc714d303599a71a5` | Runtime release-manifest v2 loader and contract |
 | `scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json` | `bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7` | Seven-file package pin manifest |
-| `scripts/f2-acl/Invoke-F2AclReadOnlyCapture.ps1` | `bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b` | Read-only capture entrypoint |
+| `scripts/f2-acl/Invoke-F2AclReadOnlyCapture.ps1` | `e6ddd07ee067c15067e45a415d4a139523ea24269ed9d37d29132316620eedf0` | Read-only capture entrypoint |
 | `scripts/f2-acl/Invoke-F2IcaclsCapture.ps1` | `fb55240a16f0858980bb38851414b28ce5f403ba26697ff78f227ca22ff804b0` | Host launcher |
 | `scripts/f2-acl/Invoke-F2IcaclsProtectedCoordinator.ps1` | `3badc19c8ac6ac450f9691258c6ecd2a3754cd665fd5989325c90b64290ae9e2` | Protected elevated coordinator |
-| `scripts/f2-acl/Test-F2AclCapture.Protocol.ps1` | `0556e15a9b3cdfee625dc762a7087b8e96a4ce0dddde1a23213fa6da64a6666f` | Protocol synthetic tests |
+| `scripts/f2-acl/Test-F2AclCapture.Protocol.ps1` | `0adbb12770014a68df1c1ca73b9f320e1d617f97cbda2c5fc0b4e3986a46cea7` | Protocol synthetic tests |
 | `scripts/f2-acl/Test-F2AclIcacls.Corroboration.ps1` | `84d0194707ae9497f20c112973b028d2e9907b8e923f0cea11e7a7fe662250aa` | Corroboration synthetic tests |
-| `scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1` | `f9ac3762a8e310f67490a4a441437e3e881178cb1876867985ce032bd08eeb7f` | Disk-loader v2 regression tests |
+| `scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1` | `1566ae17cfe3cbe51c02b99512d4527130e0d32997edb9b20697f62f89561f31` | Disk-loader v2 regression tests |
 
 `TEST_EVIDENCE.md` identifies the exact Windows Actions run when available. Review artifacts contain no protected live ACL/SDDL evidence.
