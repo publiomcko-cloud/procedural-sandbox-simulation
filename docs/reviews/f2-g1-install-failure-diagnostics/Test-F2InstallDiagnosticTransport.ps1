@@ -81,6 +81,12 @@ try {
     $result=Invoke-F2VerifiedInstallerCore -InstallerPath $installer -ExpectedSha256 $failHash -DiagnosticDirectory $mailbox.Directory -CorrelationNonce $mailbox.Nonce
     Assert-F2Diagnostic ($result.ChildExitCode -eq 1 -and $result.DiagnosticPublished -and $result.Stage -eq 'Preflight' -and $result.ErrorCode -eq 'BASELINE_PIN_MISMATCH') 'installer-preflight-status-is-exported-through-verified-scriptblock-scope'
     $status=Get-F2InstallDiagnosticStatus -MailboxDirectory $mailbox.Directory -Nonce $mailbox.Nonce -OwnerSid $sid -ChildExitCode $result.ChildExitCode
+    if($status.Status-ne 'CHILD_FAILURE'){
+        $directoryCheck='PASS';try{Test-F2InstallMailboxDirectory -Path $mailbox.Directory -OwnerSid $sid|Out-Null}catch{$directoryCheck=[string]$_.Exception.Message}
+        $filePath=Join-Path $mailbox.Directory 'result.json';$fileCheck='MISSING';$aceSummary=@()
+        if(Test-Path -LiteralPath $filePath){$fileCheck='PRESENT';$fileAcl=Get-Acl -LiteralPath $filePath;$fileRaw=[Security.AccessControl.RawSecurityDescriptor]::new($fileAcl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Owner-bor[Security.AccessControl.AccessControlSections]::Access));$fileCheck='OwnerMatches='+($fileRaw.Owner.Value-ceq$sid)+';Protected='+([bool]($fileRaw.ControlFlags-band[Security.AccessControl.ControlFlags]::DiscretionaryAclProtected))+';AceCount='+@($fileRaw.DiscretionaryAcl).Count;foreach($ace in $fileRaw.DiscretionaryAcl){$category=if($ace.SecurityIdentifier.Value-eq'S-1-5-18'){'SYSTEM'}elseif($ace.SecurityIdentifier.Value-eq$sid){'REQUESTER'}else{'OTHER'};$aceSummary+=('{0}:Qualifier={1};Mask=0x{2:X8};Flags=0x{3:X2}'-f$category,$ace.AceQualifier,[uint32]$ace.AccessMask,[int]$ace.AceFlags)}}
+        Write-Output ('SYNTHETIC_DIAGNOSTIC_TRACE;Status='+$status.Status+';Error='+$status.ErrorCode+';DirectoryCheck='+$directoryCheck+';File='+$fileCheck+';Aces='+($aceSummary-join'|'))
+    }
     Assert-F2Diagnostic ($status.Status -eq 'CHILD_FAILURE' -and $status.Record.Component -eq 'Installer' -and $status.Record.Stage -eq 'Preflight') 'requester-validates-installer-failure-record-and-child-exit-separately'
     Assert-F2Diagnostic ($status.Sha256 -match '^[0-9a-f]{64}$') 'diagnostic-record-hash-is-calculated-after-bounded-read'
     Remove-Item -LiteralPath $mailbox.Directory -Recurse -Force
