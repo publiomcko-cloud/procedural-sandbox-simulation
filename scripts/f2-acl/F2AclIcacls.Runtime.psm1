@@ -4,7 +4,8 @@ $ErrorActionPreference = 'Stop'
 $script:F2RuntimeVmId = '6f8d61ce-7c08-4c48-82d9-5fa7fe40a7b1'
 $script:F2RuntimeVmName = 'F2-G1-Isolated-Disposable'
 $script:F2RuntimeDiskSerial = '152D20337A0C'
-$script:F2RuntimeBaselineCaptureId = 'ecb6deeb424e40feb5354d18908986df'
+$script:F2RuntimeBaselineMailboxId = 'ecb6deeb424e40feb5354d18908986df'
+$script:F2RuntimeBaselinePayloadCaptureId = '489e7fec-0300-467c-bfbd-a46fb8cf7211'
 $script:F2RuntimePackageRoot = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) 'F2-G1-Icacls'
 $script:F2RuntimeReleasePath = Join-Path (Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) 'F2-G1-Icacls') 'approved-release.json'
 $script:F2RuntimeDeadlineSeconds = 360
@@ -68,7 +69,7 @@ function Get-F2RuntimeReleaseManifest {
     if ($file.PSIsContainer -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $file.Length -lt 1 -or $file.Length -gt 65536) { throw 'ReleaseManifestTypeOrSizeInvalid.' }
     $bytes = [IO.File]::ReadAllBytes($file.FullName)
     $manifest = [Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json -ErrorAction Stop
-    if ($manifest.Schema -cne 'f2-icacls-runtime-release-v1') { throw 'ReleaseManifestSchemaInvalid.' }
+    if ($manifest.Schema -cne 'f2-icacls-runtime-release-v2') { throw 'ReleaseManifestSchemaInvalid.' }
     return $manifest
 }
 
@@ -88,7 +89,7 @@ function Test-F2RuntimeReleasePackage {
         'F2_ICACLS_SOURCE_PINS.json',
         'Invoke-F2AclReadOnlyCapture.ps1'
     )
-    if ($Manifest.ReviewedCommitSha -notmatch '^[0-9a-f]{40}$' -or $Manifest.BaselineCaptureId -cne $script:F2RuntimeBaselineCaptureId -or $Manifest.BaselinePayloadSha256 -notmatch '^[0-9a-f]{64}$' -or $Manifest.BaselineIntegritySha256 -notmatch '^[0-9a-f]{64}$') { throw 'ReleaseManifestIdentityOrBaselinePinInvalid.' }
+    if ($Manifest.Schema -cne 'f2-icacls-runtime-release-v2' -or $Manifest.ReviewedCommitSha -notmatch '^[0-9a-f]{40}$' -or $Manifest.BaselineMailboxId -cne $script:F2RuntimeBaselineMailboxId -or $Manifest.BaselinePayloadCaptureId -cne $script:F2RuntimeBaselinePayloadCaptureId -or $Manifest.BaselinePayloadSha256 -notmatch '^[0-9a-f]{64}$' -or $Manifest.BaselineIntegritySha256 -notmatch '^[0-9a-f]{64}$') { throw 'ReleaseManifestIdentityOrBaselinePinInvalid.' }
     $pins = @($Manifest.Files)
     if ($pins.Count -ne $expectedFiles.Count -or @($pins.Name | Sort-Object -Unique).Count -ne $expectedFiles.Count -or @(Compare-Object ($expectedFiles | Sort-Object) ($pins.Name | Sort-Object) -CaseSensitive).Count -ne 0) { throw 'ReleaseManifestFileSetInvalid.' }
     $base = if ($Mode -eq 'Installed') { Join-Path (Get-F2RuntimePackageRoot) 'scripts\f2-acl' } else { $PSScriptRoot }
@@ -295,8 +296,8 @@ function Get-F2RuntimeLiveObservation {
 function Get-F2RuntimeBaseline {
     param([Parameter(Mandatory)]$Manifest,[Parameter(Mandatory)][string]$RequesterSid)
     if($null -ne $script:F2RuntimeBaselineProvider){return & $script:F2RuntimeBaselineProvider $Manifest $RequesterSid}
-    $directory=Get-F2AclCoordinatorMailboxPath -CaptureId $script:F2RuntimeBaselineCaptureId
-    $loaded=Read-F2IcaclsBaselineEvidence -EvidenceDirectory $directory -ExpectedCaptureId $script:F2RuntimeBaselineCaptureId -ExpectedRequesterSid $RequesterSid
+    $directory=Get-F2AclCoordinatorMailboxPath -CaptureId $script:F2RuntimeBaselineMailboxId
+    $loaded=Read-F2IcaclsBaselineEvidence -EvidenceDirectory $directory -ExpectedMailboxId $Manifest.BaselineMailboxId -ExpectedPayloadCaptureId $Manifest.BaselinePayloadCaptureId -ExpectedRequesterSid $RequesterSid
     if (-not $loaded.Pass -or $loaded.PayloadSha256 -cne $Manifest.BaselinePayloadSha256 -or $loaded.IntegritySha256 -cne $Manifest.BaselineIntegritySha256) { throw 'PinnedBaselineEvidenceUnavailableOrChanged.' }
     return $loaded
 }

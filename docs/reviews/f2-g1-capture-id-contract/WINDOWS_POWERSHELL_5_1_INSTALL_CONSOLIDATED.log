@@ -1,0 +1,51 @@
+COMMAND: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Dev\f2-g1-capture-id-contract\docs\reviews\f2-g1-capture-id-contract\Test-Install-F2IcaclsProtectedPackage.ps1
+POWERSHELL_VERSION: 5.1.22621.6133
+PASS: production bootstrap pins the approved source installer path and digest
+PASS: production path enumerator retains exact pinned G paths without requiring a G PowerShell drive
+PASS: synthetic parent provider returns the exact allowed root fixture
+PASS: synthetic parent chain accepts its reviewed fixture for Program Files
+PASS: synthetic parent chain accepts its reviewed fixture for ProgramData
+PASS: synthetic install succeeds in temporary directories without elevation
+PASS: attestation covers four directories and seven package files plus the release manifest
+PASS: package and external release manifest publish at the required relative layout
+PASS: versioned release manifest binds reviewed SHA, distinct baseline IDs and exactly seven package files
+PASS: release manifest pins both evidence files and the source pin manifest
+PASS: installer baseline reader accepts producer-compatible distinct mailbox and payload IDs
+PASS: installer rejects a wrong mailbox ID without relaxing directory or four-ACE checks
+PASS: installer rejects a wrong independently pinned payload CaptureId
+PASS: installer rejects a wrong embedded payload CaptureId even after payload and integrity digests are consistently recomputed
+PASS: modified integrity file bytes fail their externally pinned hash
+PASS: missing baseline payload fails installer preflight
+PASS: malformed baseline JSON fails even when its synthetic integrity digest is recomputed
+PASS: duplicate baseline object paths fail installer preflight
+PASS: all published files and directories have exact protected ACLs and no reparse attributes
+PASS: observed benign ProgramData child-create mask is accepted when isolated by protected child DACL
+PASS: ProgramData create-mask exception rejects unexpected object-inherit flags
+PASS: ProgramData create-mask exception rejects duplicate matching ACEs
+PASS: observed protected drive-root ACE with only Authenticated Users FILE_ADD_SUBDIRECTORY is accepted under the root-only policy
+PASS: production parent walker permits the exact root exception only at canonical C:\
+PASS: the same root-create ACE is rejected when encountered at Program Files
+PASS: drive-root create ACE is rejected unless the root-specific policy switch is present
+PASS: root policy rejects mixed/extra masks, inheritable flags, wrong principal, duplicates, wrong owner, delete, ACL-control, unprotected DACL, and inherited write ACE variants
+PASS: parent DELETE_CHILD grant is rejected
+PASS: parent WRITE_DAC grant is rejected
+PASS: parent WRITE_OWNER grant is rejected
+PASS: parent GENERIC_ALL grant is rejected
+PASS: unrecognized ordinary-user parent access mask is rejected
+PASS: unprotected parent DACL inheritance is rejected
+PASS: inheriting/unprotected file DACL fixture is rejected
+PASS: synthetic reparse ancestor is rejected
+PASS: preexisting destination collision fails closed without overwriting existing content
+PASS: preexisting external release destination collision preserves existing content and publishes no package
+PASS: release-stage creation failure reports the retained package staging path and never reports success
+PASS: installed package ACL attestation mismatch is reported after publication without success status
+PASS: external release-manifest ACL attestation mismatch is reported after publication without success status
+PASS: modified source package fails before publishing any protected destination
+PASS: changed baseline evidence fails before publishing any protected destination
+PASS: different Administrator requester SID fails closed before staging
+PASS: different requester SID causes no package, release, or staging writes
+PASS: modified installer is rejected before its synthetic protected write
+PASS: bootstrap invokes script entrypoint from verified bytes after backing path changes
+PASS: bootstrap rejects malformed pinned hashes
+Assertions=47;Failures=0
+PROCESS_EXIT=0
