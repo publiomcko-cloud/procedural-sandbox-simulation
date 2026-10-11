@@ -1,0 +1,5 @@
+Command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1
+ExitCode: 1
+Assertions=118;Failures=1
+Failure: bounded process runner captures stdout, stderr, PID, exit and hashes
+Diagnostic: the synthetic child-process capture assertion failed once. Immediate rerun of the same unchanged suite passed all 118 assertions; no source change was made between runs.

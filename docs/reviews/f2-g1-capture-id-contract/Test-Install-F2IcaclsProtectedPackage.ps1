@@ -9,7 +9,7 @@ $script:assertions=0;$script:failures=New-Object 'System.Collections.Generic.Lis
 function Assert-Install([bool]$Condition,[string]$Name){$script:assertions++;if(-not $Condition){$script:failures.Add($Name);Write-Host ('FAIL: '+$Name)}else{Write-Host ('PASS: '+$Name)}}
 
 . (Join-Path $PSScriptRoot 'Invoke-F2VerifiedInstaller.ps1')
-Assert-Install (($script:F2ApprovedInstallerPath -ceq 'C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1') -and ($script:F2ApprovedInstallerSha256 -ceq '235aea7748c2c67b6c52996d5de4dd02a88709b46b96fff1710bd671b4fac0e4')) 'production bootstrap pins the approved source installer path and digest'
+Assert-Install (($script:F2ApprovedInstallerPath -ceq 'C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1') -and ($script:F2ApprovedInstallerSha256 -ceq 'ca4d5a213615b1ce74d8fc7df17e7bb65ccfbcacd9dd7de2c9a6c36d42842d2d')) 'production bootstrap pins the approved source installer path and digest'
 
 $repo='C:\Dev\f2-g1-capture-id-contract-source'
 $sourceAcl=Join-Path $repo 'scripts\f2-acl'

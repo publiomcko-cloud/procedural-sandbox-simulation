@@ -1,5 +1,10 @@
-COMMAND: powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1"
 PASS: release contract accepts the independently pinned mailbox ID and payload CaptureId
+PASS: actual disk loader reads valid v2 with separate pinned identities without a release-provider mock
+PASS: disk-loaded v2 manifest passes the actual seven-file source package contract
+PASS: actual disk loader rejects legacy v1 manifests
+PASS: actual disk loader rejects malformed JSON
+PASS: disk-loaded manifest with missing BaselineMailboxId fails the downstream release contract
+PASS: disk-loaded manifest with missing BaselinePayloadCaptureId fails the downstream release contract
 PASS: legacy release-manifest schema without distinct ID semantics is rejected
 PASS: release contract rejects an incorrect mailbox ID
 PASS: release contract rejects an incorrect payload CaptureId
@@ -29,5 +34,4 @@ PASS: protected coordinator accepts only the validated one-use capture identifie
 PASS: actual launcher script rejects unexpected runtime arguments before any host query or UAC
 F2_ICACLS_STAGE:ProtectedCoordinatorPathRejected
 PASS: actual coordinator script rejects an uninstalled source path before loading or querying host state
-Assertions=29;Failures=0
-ProcessExitCode=0
+Assertions=35;Failures=0

@@ -4,21 +4,21 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$script:F2InstallReviewedCommit = '54b1d0c7a9865d710c19b59cd38c0da670a12536'
+$script:F2InstallReviewedCommit = '5741ffe90a3abd02a08563e6431e8a0b9b63eeb1'
 $script:F2InstallBaselineMailboxId = 'ecb6deeb424e40feb5354d18908986df'
 $script:F2InstallBaselinePayloadCaptureId = '489e7fec-0300-467c-bfbd-a46fb8cf7211'
 $script:F2InstallBaselinePayloadSha256 = '1b5eee9aae928a909d4c251a4dd6d2c0898c400e2807e0acc3268d61d5149014'
 $script:F2InstallBaselineIntegritySha256 = '02d6f07f5b3bb6f47a84e58d7c207c9935481e8a898a3b1f5e1ed273d4d61b34'
-$script:F2InstallSourcePinsSha256 = 'cee4322fdc4603cdebeccfe3411303a0ea92db946aa920b8ad60cb3152cae3c5'
+$script:F2InstallSourcePinsSha256 = 'bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7'
 $script:F2InstallMaxSourceBytes = 1048576
 
 $script:F2InstallFiles = [ordered]@{
     'F2AclCapture.Protocol.psm1' = '42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728'
     'F2AclIcacls.Corroboration.psm1' = 'a52ed86218a0ba0c0801ee6e84a4a5e47c73eda43db78f818b0b12670ad5110b'
-    'F2AclIcacls.Runtime.psm1' = 'eecec7b86a4bfee7773e73b537ed74ae573ff3d5bfaaa44b9d1bc42c4e1953a7'
+    'F2AclIcacls.Runtime.psm1' = '950b8232be2f22412e837d63f7b2fb678fc83871862b6bafc714d303599a71a5'
     'Invoke-F2IcaclsCapture.ps1' = 'fb55240a16f0858980bb38851414b28ce5f403ba26697ff78f227ca22ff804b0'
     'Invoke-F2IcaclsProtectedCoordinator.ps1' = '3badc19c8ac6ac450f9691258c6ecd2a3754cd665fd5989325c90b64290ae9e2'
-    'F2_ICACLS_SOURCE_PINS.json' = 'cee4322fdc4603cdebeccfe3411303a0ea92db946aa920b8ad60cb3152cae3c5'
+    'F2_ICACLS_SOURCE_PINS.json' = 'bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7'
     'Invoke-F2AclReadOnlyCapture.ps1' = 'bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b'
 }
 

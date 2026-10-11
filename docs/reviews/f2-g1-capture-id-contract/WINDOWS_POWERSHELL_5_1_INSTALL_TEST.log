@@ -1,4 +1,3 @@
-COMMAND: powershell.exe -NoProfile -ExecutionPolicy Bypass -File "docs/reviews/f2-g1-capture-id-contract/Test-Install-F2IcaclsProtectedPackage.ps1"
 PASS: production bootstrap pins the approved source installer path and digest
 PASS: synthetic install succeeds in temporary directories without elevation
 PASS: attestation covers four directories and seven package files plus the release manifest
@@ -31,4 +30,3 @@ PASS: modified installer is rejected before its synthetic protected write
 PASS: bootstrap invokes script entrypoint from verified bytes after backing path changes
 PASS: bootstrap rejects malformed pinned hashes
 Assertions=31;Failures=0
-ProcessExitCode=0

@@ -1,4 +1,3 @@
-COMMAND: powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts/f2-acl/Test-F2AclIcacls.Corroboration.ps1"
 PASS: actual repository helper pins match source files and retained collector provenance
 PASS: all pre-elevation synthetic identity, manifest, volume, path, pin and evidence gates pass
 PASS: expected allowlist contains exactly 11 unique objects
@@ -118,4 +117,3 @@ PASS: evidence DACL remains protected after publication
 PASS: evidence completeness allows a standard denial plus one elevated retry without hiding the failed attempt
 PASS: failing icacls output and exit status are published as complete diagnostic evidence, never a pass
 Assertions=118; Failures=0
-ProcessExitCode=0

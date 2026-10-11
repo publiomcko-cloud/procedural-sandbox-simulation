@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $script:F2ApprovedInstallerPath = 'C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1'
-$script:F2ApprovedInstallerSha256 = '235aea7748c2c67b6c52996d5de4dd02a88709b46b96fff1710bd671b4fac0e4'
+$script:F2ApprovedInstallerSha256 = 'ca4d5a213615b1ce74d8fc7df17e7bb65ccfbcacd9dd7de2c9a6c36d42842d2d'
 $script:F2InstallerMaximumBytes = 1048576
 
 function Invoke-F2VerifiedInstallerCore {
