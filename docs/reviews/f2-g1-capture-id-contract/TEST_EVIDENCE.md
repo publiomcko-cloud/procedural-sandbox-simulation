@@ -22,9 +22,8 @@ The non-elevated read-only host audit separately verified the production source 
 
 Workflow: `.github/workflows/f2-acl-source-only.yml`, runner `windows-latest`.
 
-- Exact tested source/evidence HEAD: `409f3103efa56ea813edc612d2c2de29f5d3ef8c`.
-- Run [38168511145](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38168511145): completed, conclusion `success`.
-- Job [114555982388](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38168511145/job/114555982388): completed, conclusion `success`.
+- Source-bearing SHA: `409f3103efa56ea813edc612d2c2de29f5d3ef8c`; run [38168511145](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38168511145), job [114555982388](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38168511145/job/114555982388), completed successfully.
+- Exact evidence-finalization SHA: `5f1bfd22aca7ac3a7b16e6a859f77eced12982d0`; run [38168759143](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38168759143), job [114556718078](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38168759143/job/114556718078), completed successfully.
 - Protocol: 152 assertions, 0 failures, process exit 0.
 - Corroboration: 118 assertions, 0 failures, process exit 0.
 - Runtime: 35 assertions, 0 failures, process exit 0.
@@ -34,7 +33,7 @@ Workflow: `.github/workflows/f2-acl-source-only.yml`, runner `windows-latest`.
 
 Earlier failed hosted runs are preserved as diagnostic history: [38167667264](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38167667264), [38167926562](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38167926562), and [38168148807](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38168148807). Their failures were synthetic fixture portability/normalization issues. The corrected tests passed in run 38168511145; production identity, path, and reparse checks were not relaxed.
 
-The final documentation-only commit records this completed run. The PowerShell source, installer, bootstrap, tests, and package pins are unchanged from the tested HEAD. GitHub CI is rerun on the documentation commit so the exact published tip also has a green check.
+The evidence-finalization run checked the pushed review package and source at its exact SHA. A subsequent commit may update this document with the run reference; such a documentation-only change does not alter the tested PowerShell source, installer, bootstrap, tests, or package pins.
 
 ## Limits and next gates
 

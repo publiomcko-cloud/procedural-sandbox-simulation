@@ -34,7 +34,7 @@ The production SourceRoot and its seven-file package are unchanged at the pinned
 
 ## Validation
 
-Windows PowerShell 5.1.22621.6133: protocol 152 assertions/0 failures/exit 0; corroboration 118/0/exit 0; runtime 35/0/exit 0; installer/bootstrap 47/0/exit 0. Total: 352 assertions, zero failures. Parser sweep: 12 PowerShell files, zero parse errors, exit 0. Actual read-only SourceRoot, baseline, package pins and all installation-parent-chain checks passed. `git diff --check` passed locally. Final source/evidence HEAD `409f3103efa56ea813edc612d2c2de29f5d3ef8c` passed Windows GitHub CI run `38168511145` (job `114555982388`): all four suites passed, parser reported 9 files/0 errors, and whitespace check passed. A documentation-only update records that run and is being checked again on the final published tip.
+Windows PowerShell 5.1.22621.6133: protocol 152 assertions/0 failures/exit 0; corroboration 118/0/exit 0; runtime 35/0/exit 0; installer/bootstrap 47/0/exit 0. Total: 352 assertions, zero failures. Parser sweep: 12 PowerShell files, zero parse errors, exit 0. Actual read-only SourceRoot, baseline, package pins and all installation-parent-chain checks passed. `git diff --check` passed locally. Source-bearing HEAD `409f3103efa56ea813edc612d2c2de29f5d3ef8c` passed Windows GitHub CI run `38168511145`; pushed evidence-finalization HEAD `5f1bfd22aca7ac3a7b16e6a859f77eced12982d0` passed run `38168759143` (job `114556718078`): all four suites passed, parser reported 9 files/0 errors, and whitespace check passed. The remaining update is evidence-only; production source and executable hashes do not change.
 
 ## Tests not run and limitations
 
