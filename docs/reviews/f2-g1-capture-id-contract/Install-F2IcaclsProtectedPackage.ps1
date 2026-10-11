@@ -91,19 +91,35 @@ function Test-F2InstallExactDacl {
 }
 
 function Test-F2InstallSafeParentSddl {
-    param([Parameter(Mandatory)][string]$Sddl,[switch]$AllowProgramDataCreateMask)
+    param([Parameter(Mandatory)][string]$Sddl,[switch]$AllowProgramDataCreateMask,[switch]$AllowSystemDriveRootAddSubdirectoryMask)
     try { $raw = [Security.AccessControl.RawSecurityDescriptor]::new($Sddl) } catch { return $false }
-    if ($null -eq $raw.DiscretionaryAcl -or ($raw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclPresent) -eq 0 -or $raw.Owner.Value -notin @($script:F2InstallSystemSid,$script:F2InstallAdminSid,$script:F2InstallTrustedInstallerSid)) { return $false }
+    if ($null -eq $raw.DiscretionaryAcl -or ($raw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclPresent) -eq 0 -or ($raw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclProtected) -eq 0 -or $raw.Owner.Value -notin @($script:F2InstallSystemSid,$script:F2InstallAdminSid,$script:F2InstallTrustedInstallerSid)) { return $false }
     $danger = [long]0x00000002 -bor 0x00000004 -bor 0x00000010 -bor 0x00000040 -bor 0x00000100 -bor 0x00010000 -bor 0x00040000 -bor 0x00080000 -bor 0x40000000 -bor 0x10000000
     $safeReadExecute=[long]0x001200A9
+    $rootCreateAceCount=0
+    $rootInheritedAceCount=0
+    $programDataCreateAceCount=0
     foreach ($ace in $raw.DiscretionaryAcl) {
-        if ($ace.AceQualifier -ne [Security.AccessControl.AceQualifier]::AccessAllowed -or ([int]$ace.AceFlags -band [int][Security.AccessControl.AceFlags]::InheritOnly) -ne 0) { continue }
+        if ($ace.AceQualifier -ne [Security.AccessControl.AceQualifier]::AccessAllowed) { continue }
         $sid = $ace.SecurityIdentifier.Value
-        if ($sid -in @($script:F2InstallSystemSid,$script:F2InstallAdminSid,$script:F2InstallTrustedInstallerSid)) { continue }
         $mask = [long]([int64]$ace.AccessMask -band 0xFFFFFFFFL)
-        if ($AllowProgramDataCreateMask -and $sid -eq 'S-1-5-32-545' -and $mask -eq 0x116) { continue }
+        $isInheritOnly=([int]$ace.AceFlags -band [int][Security.AccessControl.AceFlags]::InheritOnly) -ne 0
+        if ($isInheritOnly) {
+            if (-not $AllowSystemDriveRootAddSubdirectoryMask) { continue }
+            if ($sid -in @($script:F2InstallSystemSid,$script:F2InstallAdminSid,$script:F2InstallTrustedInstallerSid)) { continue }
+            $observedRootInheritedFlags=[int][Security.AccessControl.AceFlags]::ObjectInherit -bor [int][Security.AccessControl.AceFlags]::ContainerInherit -bor [int][Security.AccessControl.AceFlags]::InheritOnly
+            if ($AllowSystemDriveRootAddSubdirectoryMask -and $sid -eq 'S-1-5-11' -and $mask -eq 3758161920 -and [int]$ace.AceFlags -eq $observedRootInheritedFlags) { $rootInheritedAceCount++; continue }
+            if (($mask -band $danger) -ne 0 -or ($mask -band (-bnot $safeReadExecute)) -ne 0) { return $false }
+            continue
+        }
+        if ($sid -in @($script:F2InstallSystemSid,$script:F2InstallAdminSid,$script:F2InstallTrustedInstallerSid)) { continue }
+        if ($AllowSystemDriveRootAddSubdirectoryMask -and $sid -eq 'S-1-5-11' -and $mask -eq 0x00000004 -and [int]$ace.AceFlags -eq 0) { $rootCreateAceCount++; continue }
+        if ($AllowProgramDataCreateMask -and $sid -eq 'S-1-5-32-545' -and $mask -eq 0x116 -and [int]$ace.AceFlags -eq [int][Security.AccessControl.AceFlags]::ContainerInherit) { $programDataCreateAceCount++; continue }
         if (($mask -band $danger) -ne 0 -or ($mask -band (-bnot $safeReadExecute)) -ne 0) { return $false }
     }
+    if ($AllowSystemDriveRootAddSubdirectoryMask -and $rootCreateAceCount -ne 1) { return $false }
+    if ($AllowSystemDriveRootAddSubdirectoryMask -and $rootInheritedAceCount -ne 1) { return $false }
+    if ($AllowProgramDataCreateMask -and $programDataCreateAceCount -ne 1) { return $false }
     return $true
 }
 
@@ -258,7 +274,8 @@ function Test-F2InstallParentChain {
         Test-F2InstallNoReparseChain -Path $current | Out-Null
         $sddl=if($null -ne $Context.ParentSddlProvider){[string](& $Context.ParentSddlProvider $current)}else{Get-F2InstallFileSddl -Path $current}
         $isProgramData=[string]::Equals($current,[string]$Context.CommonApplicationData,[StringComparison]::OrdinalIgnoreCase)
-        if (-not (Test-F2InstallSafeParentSddl -Sddl $sddl -AllowProgramDataCreateMask:$isProgramData)) { throw 'INSTALL_PARENT_DACL_UNSAFE' }
+        $isCanonicalSystemDriveRoot=[string]::Equals($current,'C:\',[StringComparison]::OrdinalIgnoreCase) -and [string]::Equals($current.TrimEnd('\'),$pathRoot.TrimEnd('\'),[StringComparison]::OrdinalIgnoreCase)
+        if (-not (Test-F2InstallSafeParentSddl -Sddl $sddl -AllowProgramDataCreateMask:$isProgramData -AllowSystemDriveRootAddSubdirectoryMask:$isCanonicalSystemDriveRoot)) { if ($isCanonicalSystemDriveRoot) { throw 'INSTALL_SYSTEM_DRIVE_ROOT_DACL_UNSAFE' } else { throw 'INSTALL_PARENT_DACL_UNSAFE' } }
         if ([string]::Equals($current.TrimEnd('\'),$pathRoot.TrimEnd('\'),[StringComparison]::OrdinalIgnoreCase)) { break }
         $parent=[IO.Directory]::GetParent($current)
         if ($null -eq $parent) { throw 'INSTALL_PARENT_CHAIN_UNKNOWN' }
@@ -331,7 +348,9 @@ function Invoke-F2InstallCore {
         $attested+=@([pscustomobject]@{Path=$manifestFinal;Type='File';OwnerSid=$script:F2InstallAdminSid;DaclProtected=$true;Aces=(Get-F2InstallSanitizedAces File);Sha256=(Get-F2InstallHashBytes -Bytes $finalManifest);Bytes=$finalManifest.Length;ReparsePoint=$false})
         return [pscustomobject]@{Success=$true;Outcome='INSTALL_COMPLETE';ReviewedCommitSha=$script:F2InstallReviewedCommit;BaselineMailboxId=$Context.BaselineMailboxId;BaselinePayloadCaptureId=$Context.BaselinePayloadCaptureId;BaselinePayloadSha256=$baseline.PayloadSha256;BaselineIntegritySha256=$baseline.IntegritySha256;SourcePinsManifestSha256=$package.PinsManifestSha256;PackagePath=$Context.PackageFinal;ReleaseManifestPath=$manifestFinal;InstalledFileCount=7;Attestation=$attested;PartialStagePaths=@()}
     } catch {
-        return [pscustomobject]@{Success=$false;Outcome='INSTALL_BLOCKED';Stage=$stage;ErrorCode='INSTALL_OPERATION_FAILED';PackagePublished=$packagePublished;ReleasePublished=$releasePublished;PartialStagePaths=@(@($packageStage,$releaseStage)|Where-Object{$_ -and (Test-Path -LiteralPath $_)})}
+        $errorCode=[string]$_.Exception.Message
+        if ($errorCode -cnotmatch '^[A-Z][A-Z0-9_]{0,63}$') { $errorCode='INSTALL_OPERATION_FAILED' }
+        return [pscustomobject]@{Success=$false;Outcome='INSTALL_BLOCKED';Stage=$stage;ErrorCode=$errorCode;PackagePublished=$packagePublished;ReleasePublished=$releasePublished;PartialStagePaths=@(@($packageStage,$releaseStage)|Where-Object{$_ -and (Test-Path -LiteralPath $_)})}
     }
 }
 

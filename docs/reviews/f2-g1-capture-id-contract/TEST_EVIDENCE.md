@@ -1,5 +1,23 @@
 # Source validation evidence
 
+## Consolidated readiness audit — final source corrections
+
+Environment: Windows PowerShell 5.1.22621.6133 on the owner host. The final local commands below ran without elevation. Installer integration cases use temporary synthetic fixtures. No actual UAC, protected installation, `icacls`, VM, G:, or ACL modification was performed. Fresh full stdout/diagnostic logs are published adjacent under the `*_CONSOLIDATED.log` names; each records the invocation, PowerShell version, assertion output and process exit.
+
+| Exact command | Result | Complete log |
+| --- | --- | --- |
+| `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Dev\f2-g1-capture-id-contract-source\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1` | Exit 0; 152 assertions; 0 failures. | `WINDOWS_POWERSHELL_5_1_PROTOCOL_CONSOLIDATED.log` |
+| `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Dev\f2-g1-capture-id-contract-source\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1` | Exit 0; 118 assertions; 0 failures. | `WINDOWS_POWERSHELL_5_1_CORROBORATION_CONSOLIDATED.log` |
+| `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Dev\f2-g1-capture-id-contract-source\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1` | Exit 0; 35 assertions; 0 failures. | `WINDOWS_POWERSHELL_5_1_RUNTIME_CONSOLIDATED.log` |
+| `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Dev\f2-g1-capture-id-contract\docs\reviews\f2-g1-capture-id-contract\Test-Install-F2IcaclsProtectedPackage.ps1` | Exit 0; 46 assertions; 0 failures. | `WINDOWS_POWERSHELL_5_1_INSTALL_CONSOLIDATED.log` |
+| Windows PowerShell 5.1 `Language.Parser.ParseFile` over SourceRoot `scripts/f2-acl` and the review PowerShell files | Exit 0; 12 files; 0 parser errors. | `WINDOWS_POWERSHELL_5_1_CONSOLIDATED_PARSER.log` |
+
+Total: **351 assertions, 0 failures**. The installer suite now covers the complete sanitized C:\ root fixture (including its inherit-only generic ACE), strict root-path binding, changed masks/principals/flags/owners, duplicates, unprotected DACLs, a writable non-root parent, both install-destination collisions, partial-stage failure, package and manifest attestation failures, wrong requester, baseline/source hash mismatch, and bootstrap verified-byte behavior.
+
+The actual live read-only Windows PowerShell 5.1 parent validation passed for both Program Files and ProgramData. It also verified the unchanged baseline, requester/four-ACE mailbox contract, 11-record set, seven package bytes, destination absence, and zero staging collisions. Sanitized results are in `CONSOLIDATED_INSTALL_READINESS.md`; no raw SDDL or private SID is published.
+
+GitHub Windows CI is triggered for the final source/review commit because the workflow now includes the review package path and installer suite. Its exact tested SHA, run URL, job log and conclusion will be recorded here after completion.
+
 Environment: Windows PowerShell 5.1. All tests use synthetic fixtures and temporary local files. Captured text logs use LF line endings for repository whitespace checks; test messages and assertion summaries are preserved.
 
 ## Local Windows PowerShell 5.1 suites

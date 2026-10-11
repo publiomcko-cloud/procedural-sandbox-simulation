@@ -1,33 +1,51 @@
-# Review package manifest
+# Consolidated F2 G1 review manifest
 
-PR #53 branch: `fix/f2-baseline-capture-identity-issue48`. Base: PR #50 source commit `2c967661163fc157b638fa4f76da86c48aa57ff2` (unchanged). Production source commit: `5741ffe90a3abd02a08563e6431e8a0b9b63eeb1`, parent `4c53f6dd03c6ddc564a45f8c203286595385c46b`.
+Repository: `publiomcko-cloud/procedural-sandbox-simulation`. Draft PR #53 branch `fix/f2-baseline-capture-identity-issue48`, based on PR #50 production source. This manifest inventories all files changed in PR #53 at the final reviewed tip, except itself; its own raw SHA-256 is published in the PR handoff comment. Hashes below are SHA-256 over exact GitHub file bytes. Review scripts use LF bytes in GitHub; Windows checked-out package files follow the repository's line-ending rules.
 
-This manifest covers every PR #53 changed path and the supporting seven-file package. SHA-256 values are raw file bytes; the final report and PR body publish the manifest's own SHA-256 because the manifest is self-excluded. GitHub retrievability is verified at the final review HEAD.
+## Changed review/source files and evidence
 
 | File | SHA-256 | Purpose |
 | --- | --- | --- |
-| `.gitattributes` | `42416703328589db506d1446f480db64fec7f24d3f79d267cd48c9527122edc5` | Preserves published test log bytes |
-| `docs/reviews/f2-g1-capture-id-contract/F2_G1_INSTALL_REVIEW_UPDATE.md` | `d7a5b067107a99201a0fed18a24abe3e308ff62c6116264e4f5b88e249d8b6e2` | Full installation command, pins and scope limits |
-| `docs/reviews/f2-g1-capture-id-contract/HANDOFF.md` | `3517fafb9245a9064da4da0a22eeeacda6395769ca02f3d017d31a8d52b157f6` | Developer handoff |
-| `docs/reviews/f2-g1-capture-id-contract/Install-F2IcaclsProtectedPackage.ps1` | `ca4d5a213615b1ce74d8fc7df17e7bb65ccfbcacd9dd7de2c9a6c36d42842d2d` | Seven-file protected installer and v2 release manifest producer |
-| `docs/reviews/f2-g1-capture-id-contract/Invoke-F2VerifiedInstaller.ps1` | `cf480bf047f9d38e21e11e75cd4f30ddd487bbb4af6c9474464b7596e675baf5` | One-read verified-byte UAC bootstrap |
-$16ce1d4416a708e025a50c2ced6dafe93a8ab9af56f8b8eb1155d9ac805ecdf4a` | Exact local commands and validation evidence |
-| `docs/reviews/f2-g1-capture-id-contract/Test-Install-F2IcaclsProtectedPackage.ps1` | `67851441b9196d6b95338a2a704363157b27d3a73e0afd8d0e2345b8030ae3ee` | Windows PowerShell 5.1 installer tests |
-| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_CORROBORATION_TEST.log` | `c631f9353e41d6ef1b53579de3cd2ded6418d916a2145fdbbc95a60cebc632c7` | Complete successful 118-assertion output |
-| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_CORROBORATION_TRANSIENT_FAILURE.log` | `787ba98ba009da7330e709e3f39350245d2bb3b88e74a6dfa7e3dbc14cad7ef3` | Initial failed assertion and unchanged successful rerun record |
-| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_INSTALL_TEST.log` | `a2ea6ea7d805d9330e2e7c991b87b5196c81824f3ea1d23ba08fca35d15c2f81` | Complete 31-assertion installer output |
-| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_PARSER.log` | `cfca2700023f58d5f765e9351d8f3a971c7e004b5cf98e98b736478391a09633` | PowerShell parser sweep output |
-| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_PROTOCOL_TEST.log` | `6c1f9bf830939755a19eb077d000364bfca9c5ae0ac21421d60fb216f956450b` | Complete 152-assertion protocol output |
-| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_RUNTIME_TEST.log` | `94b3554526963b7755b1ad32cafbb27a87ddfedc8df8ba918beab7fa179e2664` | Complete 35-assertion runtime output |
-| `scripts/f2-acl/F2AclCapture.Protocol.psm1` | `530bebf1c93dbca3650a2846bc627b483d83ee89bed1abf2650f795600c8d6b1` | Protocol package module |
-| `scripts/f2-acl/F2AclIcacls.Corroboration.psm1` | `a52ed86218a0ba0c0801ee6e84a4a5e47c73eda43db78f818b0b12670ad5110b` | Baseline loader and corroboration implementation |
-| `scripts/f2-acl/F2AclIcacls.Runtime.psm1` | `950b8232be2f22412e837d63f7b2fb678fc83871862b6bafc714d303599a71a5` | Runtime release-manifest v2 loader and contract |
-| `scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json` | `bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7` | Seven-file package pin manifest |
-| `scripts/f2-acl/Invoke-F2AclReadOnlyCapture.ps1` | `e6ddd07ee067c15067e45a415d4a139523ea24269ed9d37d29132316620eedf0` | Read-only capture entrypoint |
-| `scripts/f2-acl/Invoke-F2IcaclsCapture.ps1` | `fb55240a16f0858980bb38851414b28ce5f403ba26697ff78f227ca22ff804b0` | Host launcher |
-| `scripts/f2-acl/Invoke-F2IcaclsProtectedCoordinator.ps1` | `3badc19c8ac6ac450f9691258c6ecd2a3754cd665fd5989325c90b64290ae9e2` | Protected elevated coordinator |
-| `scripts/f2-acl/Test-F2AclCapture.Protocol.ps1` | `0adbb12770014a68df1c1ca73b9f320e1d617f97cbda2c5fc0b4e3986a46cea7` | Protocol synthetic tests |
-| `scripts/f2-acl/Test-F2AclIcacls.Corroboration.ps1` | `84d0194707ae9497f20c112973b028d2e9907b8e923f0cea11e7a7fe662250aa` | Corroboration synthetic tests |
-| `scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1` | `1566ae17cfe3cbe51c02b99512d4527130e0d32997edb9b20697f62f89561f31` | Disk-loader v2 regression tests |
+| `.gitattributes` | `a7718781bfc3e84e35321e8a7d73c34d8264303b1591d793a849fa80e30698a7` | Keeps test logs byte-preserved. |
+| `.github/workflows/f2-acl-source-only.yml` | `7b96771c28f1b85f5db1c163bd1449727d08265a5deab76a67f0e995b6028a14` | Adds review-path triggering and PS 5.1 installer regression execution. |
+| `docs/reviews/f2-g1-capture-id-contract/CONSOLIDATED_INSTALL_READINESS.md` | `daa7a6816441648efeb8dc20f5c07c2f32839ebf0b3dde4697d93c330efd3cb2` | Complete gate matrix and sanitized root ACL assessment. |
+| `docs/reviews/f2-g1-capture-id-contract/F2_G1_INSTALL_REVIEW_UPDATE.md` | `640c1a1390afea11003edcfe95835b9443fc12a14a19d4afa8a554615c4bd1e4` | Exact post-review installation preparation/command and boundaries. |
+| `docs/reviews/f2-g1-capture-id-contract/HANDOFF.md` | `bb8f0a8919445ef008fcbc9784369541276cedeccada37b4fb41ba8cddc0a59f` | Developer handoff, implementation scope, limits and reviewer focus. |
+| `docs/reviews/f2-g1-capture-id-contract/Install-F2IcaclsProtectedPackage.ps1` | `a6e2b59b847b9201dec1e9ab8f7b49c5ecd20f5bf3d02d2eb252a60f956edd95` | Protected installer with exact `C:\`-only parent ACL exception. |
+| `docs/reviews/f2-g1-capture-id-contract/Invoke-F2VerifiedInstaller.ps1` | `c349f092516321b350905e59d66153ce4637e4c2e8b9227ab12ea8e4ae4ce6f0` | One-read hash-bound bootstrap that executes the verified in-memory installer bytes. |
+| `docs/reviews/f2-g1-capture-id-contract/TEST_EVIDENCE.md` | `9fafce00d9b847ffbbfdfde4aaff93c63012b5a02ad71c1aa5a3d99e759d25ca` | Exact local commands, assertion results, logs and hosted CI reference. |
+| `docs/reviews/f2-g1-capture-id-contract/Test-Install-F2IcaclsProtectedPackage.ps1` | `e73722bdab58024b9b3cd565cb39ceacd5aacc0d33a7a04135cf77cd226edef9` | Windows PowerShell 5.1 installer/bootstrap synthetic regressions. |
+| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_CONSOLIDATED_PARSER.log` | `bf78636077f0fa87a92af36cb84d1668cc88c166440b6814e23da172fe4b59eb` | Fresh exact local parser command, file/error counts and exit. |
+| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_CORROBORATION_CONSOLIDATED.log` | `75a583004a8a929f1969cc0fd1fb0307ea9ef89683fa70aa89750eab0f11346a` | Fresh 118-assertion Windows PowerShell 5.1 corroboration output. |
+| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_CORROBORATION_TEST.log` | `c631f9353e41d6ef1b53579de3cd2ded6418d916a2145fdbbc95a60cebc632c7` | Earlier complete corroboration run evidence. |
+| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_CORROBORATION_TRANSIENT_FAILURE.log` | `787ba98ba009da7330e709e3f39350245d2bb3b88e74a6dfa7e3dbc14cad7ef3` | Preserves an earlier transient synthetic child-process assertion failure and unchanged rerun. |
+| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_INSTALL_CONSOLIDATED.log` | `63bf114af611760dd386a0e6d1157f056132d12addc8ddabe170b32aaeb0021c` | Fresh 46-assertion installer/bootstrap output. |
+| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_INSTALL_TEST.log` | `a2ea6ea7d805d9330e2e7c991b87b5196c81824f3ea1d23ba08fca35d15c2f81` | Earlier installer test output. |
+| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_PARSER.log` | `cfca2700023f58d5f765e9351d8f3a971c7e004b5cf98e98b736478391a09633` | Earlier local parser result. |
+| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_PROTOCOL_CONSOLIDATED.log` | `c58f91083a47ce166f8066c302e318ce4bfdb63389835525dec6c5feea6a5c55` | Fresh 152-assertion protocol output. |
+| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_PROTOCOL_TEST.log` | `6c1f9bf830939755a19eb077d000364bfca9c5ae0ac21421d60fb216f956450b` | Earlier protocol test output. |
+| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_RUNTIME_CONSOLIDATED.log` | `cc03bf5621595fb3888d7183668defcf224da03152c30fee2d4bd930604d3247` | Fresh 35-assertion runtime output. |
+| `docs/reviews/f2-g1-capture-id-contract/WINDOWS_POWERSHELL_5_1_RUNTIME_TEST.log` | `94b3554526963b7755b1ad32cafbb27a87ddfedc8df8ba918beab7fa179e2664` | Earlier runtime test output. |
+| `scripts/f2-acl/F2AclIcacls.Corroboration.psm1` | `a52ed86218a0ba0c0801ee6e84a4a5e47c73eda43db78f818b0b12670ad5110b` | Retained baseline loader and icacls comparison module. |
+| `scripts/f2-acl/F2AclIcacls.Runtime.psm1` | `950b8232be2f22412e837d63f7b2fb678fc83871862b6bafc714d303599a71a5` | Runtime v2 release-manifest loader and package contract. |
+| `scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json` | `bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7` | Pinned source-package manifest. |
+| `scripts/f2-acl/Test-F2AclIcacls.Corroboration.ps1` | `8e744aad65e0f43326572f86564dbea0a6452e525fee62ef7c35cdd80a8fcc8a` | Synthetic corroboration and production-boundary integration tests. |
+| `scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1` | `f9ac3762a8e310f67490a4a441437e3e881178cb1876867985ce032bd08eeb7f` | Real disk-loader v2 and runtime contract tests. |
 
-`TEST_EVIDENCE.md` identifies the exact Windows Actions run when available. Review artifacts contain no protected live ACL/SDDL evidence.
+There are 26 changed paths including this manifest. Its own SHA-256 is intentionally self-excluded; the exact value is reported in the PR comment after the containing commit exists.
+
+## Seven-file production package pins
+
+The installer reads the following seven exact SourceRoot files. Windows PowerShell 5.1 package validation passed against checkout bytes at source commit `5741ffe90a3abd02a08563e6431e8a0a9b63eeb1`; source-pin manifest SHA-256 is `bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7`.
+
+| Package file | Windows checkout SHA-256 |
+| --- | --- |
+| `scripts/f2-acl/F2AclCapture.Protocol.psm1` | `42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728` |
+| `scripts/f2-acl/F2AclIcacls.Corroboration.psm1` | `a52ed86218a0ba0c0801ee6e84a4a5e47c73eda43db78f818b0b12670ad5110b` |
+| `scripts/f2-acl/F2AclIcacls.Runtime.psm1` | `950b8232be2f22412e837d63f7b2fb678fc83871862b6bafc714d303599a71a5` |
+| `scripts/f2-acl/Invoke-F2IcaclsCapture.ps1` | `fb55240a16f0858980bb38851414b28ce5f403ba26697ff78f227ca22ff804b0` |
+| `scripts/f2-acl/Invoke-F2IcaclsProtectedCoordinator.ps1` | `3badc19c8ac6ac450f9691258c6ecd2a3754cd665fd5989325c90b64290ae9e2` |
+| `scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json` | `bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7` |
+| `scripts/f2-acl/Invoke-F2AclReadOnlyCapture.ps1` | `bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b` |
+
+Review evidence is sanitized; it contains no retained raw ACL/SDDL, private requester SID, capability SID, credential, or baseline payload bytes.

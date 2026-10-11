@@ -1,10 +1,12 @@
-# F2 G1 v2 release-manifest loader correction and install review
+# F2 G1 consolidated protected-install review
 
-Status: source-only correction prepared for independent review. No protected installation, UAC, live `icacls`, ACL/VM query, G: operation, or native workload was performed.
+Status: consolidated source correction and read-only host audit prepared for independent review. No protected installation, UAC, live `icacls`, VM/Hyper-V query, G: operation, ACL change, or native workload was performed.
 
 ## Correction
 
 `Get-F2RuntimeReleaseManifest` now requires `f2-icacls-runtime-release-v2`, matching the protected installer and `Test-F2RuntimeReleasePackage`. The Windows PowerShell 5.1 regression writes synthetic manifests to temporary files and calls the actual disk-loading function with `F2RuntimeReleaseProvider` set to `$null`. It verifies valid v2 load and the downstream seven-file package contract, rejects v1 and malformed JSON, and rejects missing `BaselineMailboxId` or `BaselinePayloadCaptureId` through the downstream contract.
+
+The consolidated audit also fixed the only live deterministic parent-ACL rejection. `C:\` grants Authenticated Users the exact directory mask `0x00000004` with no inheritance flags. The validator accepts it only while walking the exact canonical `C:\` root and only with the previously observed protected root DACL profile. It separately verifies the one exact inherit-only root `0xE0010000` ACE, and requires protected DACLs on all destination parents. Program Files and ProgramData receive no root-mask exception. The ProgramData `0x116` allowance is also limited to one exact ContainerInherit ACE. See `CONSOLIDATED_INSTALL_READINESS.md` for the sanitized live ACE inventory, full gate matrix, test evidence, and risks.
 
 ## Source lineage and clean SourceRoot
 
@@ -31,20 +33,20 @@ The seven-file installer package contains the six executable/module files plus t
 
 ## Installer and bootstrap
 
-- Installer: `Install-F2IcaclsProtectedPackage.ps1`, SHA-256 `ca4d5a213615b1ce74d8fc7df17e7bb65ccfbcacd9dd7de2c9a6c36d42842d2d`.
-- One-read verified-byte bootstrap: `Invoke-F2VerifiedInstaller.ps1`, SHA-256 `cf480bf047f9d38e21e11e75cd4f30ddd487bbb4af6c9474464b7596e675baf5`.
-- Installer synthetic test: `Test-Install-F2IcaclsProtectedPackage.ps1`, SHA-256 `67851441b9196d6b95338a2a704363157b27d3a73e0afd8d0e2345b8030ae3ee`.
+- Installer: `Install-F2IcaclsProtectedPackage.ps1`, SHA-256 `a6e2b59b847b9201dec1e9ab8f7b49c5ecd20f5bf3d02d2eb252a60f956edd95`.
+- One-read verified-byte bootstrap: `Invoke-F2VerifiedInstaller.ps1`, SHA-256 `c349f092516321b350905e59d66153ce4637e4c2e8b9227ab12ea8e4ae4ce6f0`.
+- Installer synthetic test: `Test-Install-F2IcaclsProtectedPackage.ps1`, SHA-256 `e73722bdab58024b9b3cd565cb39ceacd5aacc0d33a7a04135cf77cd226edef9`.
 - Bootstrap preparation path: `C:\Dev\f2-g1-protected-install-prep\Invoke-F2VerifiedInstaller.ps1`.
 - Installer preparation path: `C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1`; this matches the fixed path embedded in the bootstrap.
-- The bootstrap pins the installer SHA-256 above and reads, verifies, and executes the same in-memory bytes. The installer pins the source commit and all seven package hashes above.
+- The bootstrap pins the installer SHA-256 above and reads, verifies, and executes the same in-memory bytes. The installer pins the unchanged production source commit and all seven package hashes above.
 
 ## Exact future installation command (not run)
 
-After independent review and fresh owner authorization, run from the original requester account in Windows PowerShell 5.1. The bootstrap and installer must first be placed unchanged at the preparation paths above.
+After independent review and fresh owner authorization, first replace only the two known prior preparation files at the paths above with the accepted exact bytes, checking their old SHA-256 values (`cf480bf047f9d38e21e11e75cd4f30ddd487bbb4af6c9474464b7596e675baf5` bootstrap and `ca4d5a213615b1ce74d8fc7df17e7bb65ccfbcacd9dd7de2c9a6c36d42842d2d` installer) and confirming they are regular non-reparse files. Then verify new hashes `c349f092516321b350905e59d66153ce4637e4c2e8b9227ab12ea8e4ae4ce6f0` and `a6e2b59b847b9201dec1e9ab8f7b49c5ecd20f5bf3d02d2eb252a60f956edd95`. Do not overwrite any unexpected file. Run the following from the original requester account in Windows PowerShell 5.1; the command displays the normal human-consented UAC prompt.
 
 ```powershell
 $bootstrapPath = 'C:\Dev\f2-g1-protected-install-prep\Invoke-F2VerifiedInstaller.ps1'
-$expectedBootstrapSha = 'cf480bf047f9d38e21e11e75cd4f30ddd487bbb4af6c9474464b7596e675baf5'
+$expectedBootstrapSha = 'c349f092516321b350905e59d66153ce4637e4c2e8b9227ab12ea8e4ae4ce6f0'
 $bootstrapBytes = [IO.File]::ReadAllBytes($bootstrapPath)
 $sha = [Security.Cryptography.SHA256]::Create()
 try { $actualBootstrapSha = ([BitConverter]::ToString($sha.ComputeHash($bootstrapBytes))).Replace('-', '').ToLowerInvariant() }
@@ -56,10 +58,10 @@ $child = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.
 if ($child.ExitCode -ne 0) { throw "Elevated installer failed with exit code $($child.ExitCode)." }
 ```
 
-This command is documentation only. This task did not execute it. The previous installation authorization does not cover these changed executable bytes; independent review and fresh authorization remain required.
+This command is documentation only and was not executed. The previous installation authorization does not cover these changed executable bytes; independent review and fresh authorization remain required. The current local preparation copies still have the known previous hashes and were intentionally left untouched pending that gate.
 
 ## Retained baseline contract
 
 Mailbox ID `ecb6deeb424e40feb5354d18908986df` and payload CaptureId `489e7fec-0300-467c-bfbd-a46fb8cf7211` remain separate, independently pinned identities. The unchanged baseline payload SHA-256 is `1b5eee9aae928a909d4c251a4dd6d2c0898c400e2807e0acc3268d61d5149014`; integrity SHA-256 is `02d6f07f5b3bb6f47a84e58d7c207c9935481e8a898a3b1f5e1ed273d4d61b34`. Baseline bytes were not modified or recaptured.
 
-See `TEST_EVIDENCE.md` and `REVIEW_MANIFEST.md` for exact commands, results, CI run, and raw file hashes.
+See `CONSOLIDATED_INSTALL_READINESS.md`, `TEST_EVIDENCE.md`, and `REVIEW_MANIFEST.md` for the exact readiness matrix, sanitized root-ACL analysis, test commands/results, CI run, and file hashes.

@@ -1,0 +1,4 @@
+COMMAND: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\PUBLI\AppData\Local\Temp\f2-parser-f77ac16f3aee46a48d247dcc9ee18173.ps1
+POWERSHELL_VERSION: 5.1.22621.6133
+ParserFiles=12;ParserErrors=0
+PROCESS_EXIT=0
