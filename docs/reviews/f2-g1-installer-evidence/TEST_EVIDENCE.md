@@ -2,17 +2,18 @@
 
 ## Windows PowerShell 5.1 synthetic suite
 
-Command executed from `C:\Dev\f2-g1-protected-install-prep`:
+Executed from the PR #51 review worktree (`C:\Dev\f2-g1-installer-evidence-review`):
 
 ```powershell
-& $env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Test-Install-F2IcaclsProtectedPackage.ps1
+& $env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\docs\reviews\f2-g1-installer-evidence\Test-Install-F2IcaclsProtectedPackage.ps1
 ```
 
-Exit code: **0**. Summary: **22 assertions, 0 failures**.
+Exit code: **0**. Summary: **23 assertions, 0 failures**.
 
 Captured output:
 
 ```text
+PASS: production bootstrap pins the approved source installer path and digest
 PASS: synthetic install succeeds in temporary directories without elevation
 PASS: attestation covers four directories and seven package files plus the release manifest
 PASS: package and external release manifest publish at the required relative layout
@@ -35,18 +36,29 @@ PASS: different requester SID causes no package, release, or staging writes
 PASS: modified installer is rejected before its synthetic protected write
 PASS: bootstrap invokes script entrypoint from verified bytes after backing path changes
 PASS: bootstrap rejects malformed pinned hashes
-Assertions=22;Failures=0
+Assertions=23;Failures=0
 TEST_EXIT_CODE=0
 ```
 
-The different-SID, bootstrap tamper, and self-modifying-installer cases use synthetic data and temporary test files. They do not use an elevated token or write under Program Files, ProgramData, or G:.
+The fixed-path assertion verifies the production bootstrap constants equal `C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1` and the independently approved installer SHA-256. Parameterized bootstrap tests remain synthetic. The different-SID, bootstrap tamper, and self-modifying-installer cases use synthetic data and temporary files; they do not use an elevated token or write under Program Files, ProgramData, or G:.
 
 ## Windows PowerShell 5.1 parser
 
-Executed with `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -Command <parser loop>` over:
+Executed with Windows PowerShell 5.1 over the bootstrap, test, and unchanged installer:
 
-- `Install-F2IcaclsProtectedPackage.ps1`
-- `Invoke-F2VerifiedInstaller.ps1`
-- `Test-Install-F2IcaclsProtectedPackage.ps1`
+```powershell
+$files = @(
+    '.\docs\reviews\f2-g1-installer-evidence\Invoke-F2VerifiedInstaller.ps1',
+    '.\docs\reviews\f2-g1-installer-evidence\Test-Install-F2IcaclsProtectedPackage.ps1',
+    '.\docs\reviews\f2-g1-installer-evidence\Install-F2IcaclsProtectedPackage.ps1'
+)
+foreach ($path in $files) {
+    $tokens = $null
+    $errors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors)
+    if ($errors.Count) { $errors | ForEach-Object { Write-Error ($path + ': ' + $_.Message) }; exit 1 }
+    Write-Output ('PASS PS5.1 parser: ' + $path)
+}
+```
 
 Result: all three files parsed successfully; **0 parser errors; exit code 0**.

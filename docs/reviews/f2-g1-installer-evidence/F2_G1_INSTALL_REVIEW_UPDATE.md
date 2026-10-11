@@ -4,11 +4,11 @@ This publication supplements the unchanged historical `F2_G1_PROTECTED_INSTALL_R
 
 ## Reviewed source files
 
-- Bootstrap: `Invoke-F2VerifiedInstaller.ps1`, SHA-256 `c783f319b88f647cc8decd98d7d716b419d06994eb960a2c6be524fd4a43bb98`.
+- Bootstrap: `Invoke-F2VerifiedInstaller.ps1`, SHA-256 `5d6615dafc6608bb8777703eeb4909e796034f66eb2f2e16bc7f868cb885d965`.
 - Installer: `Install-F2IcaclsProtectedPackage.ps1`, SHA-256 `a6a130edf307341032200b88b68f719fc8a3540830d09bb2d26631993524a5c8` (unchanged from the independently inspected installer).
 - Synthetic suite: `Test-Install-F2IcaclsProtectedPackage.ps1`, SHA-256 `e0b80d6a178c4a9b3c8d4bdbff10e5f91e2d320435ff8293f576a340fa14b543`.
 
-The bootstrap reads the installer once, checks those bytes against the exact approved installer SHA-256, decodes the same byte array as strict UTF-8, creates a script block from that verified text, and invokes it. It does not reopen the installer path to execute it. Its production target and expected installer hash are fixed in the bootstrap. The outer command below similarly hashes one bootstrap byte snapshot and sends that same source as `-EncodedCommand`.
+The bootstrap's fixed installer input is `C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1`, the reviewed source file available before installation. It reads that file once, checks those bytes against the exact approved installer SHA-256, decodes the same byte array as strict UTF-8, creates a script block from that verified text, and invokes it. It does not reopen the installer path to execute it. The approved installer SHA remains unchanged. Its production target and expected installer hash are fixed in the bootstrap. A regression checks the actual production path and digest constants. The outer command below similarly hashes one bootstrap byte snapshot and sends that same source as `-EncodedCommand`.
 
 ## Different Administrator SID behavior
 
@@ -20,7 +20,7 @@ Run only after independent review and the separately required installation autho
 
 ```powershell
 $bootstrapPath = 'C:\Dev\f2-g1-protected-install-prep\Invoke-F2VerifiedInstaller.ps1'
-$expectedBootstrapSha = 'c783f319b88f647cc8decd98d7d716b419d06994eb960a2c6be524fd4a43bb98'
+$expectedBootstrapSha = '5d6615dafc6608bb8777703eeb4909e796034f66eb2f2e16bc7f868cb885d965'
 $bootstrapBytes = [IO.File]::ReadAllBytes($bootstrapPath)
 $sha = [Security.Cryptography.SHA256]::Create()
 try { $actualBootstrapSha = ([BitConverter]::ToString($sha.ComputeHash($bootstrapBytes))).Replace('-', '').ToLowerInvariant() }
@@ -40,9 +40,9 @@ This command was not executed. UAC cancellation, protected installation, live ho
 Windows PowerShell 5.1 synthetic suite command:
 
 ```powershell
-& $env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Test-Install-F2IcaclsProtectedPackage.ps1
+& $env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\docs\reviews\f2-g1-installer-evidence\Test-Install-F2IcaclsProtectedPackage.ps1
 ```
 
-Result: **22 assertions, 0 failures, process exit code 0**. Three files passed Windows PowerShell 5.1 parser validation with zero errors. The tests use temporary synthetic directories only. They include successful package attestation, source/evidence tampering, collision and reparse rejection, and a different-requester-SID preflight failure with no package, release, or staging writes. The full assertion output and parser command are in `TEST_EVIDENCE.md`.
+Result: **23 assertions, 0 failures, process exit code 0**. Three files passed Windows PowerShell 5.1 parser validation with zero errors. The tests use temporary synthetic directories only. They include a check of the fixed production installer input path and approved digest, successful package attestation, source/evidence tampering, collision and reparse rejection, and a different-requester-SID preflight failure with no package, release, or staging writes. The full assertion output and parser command are in `TEST_EVIDENCE.md`.
 
 No installer/bootstrap execution, UAC, protected installation, live `icacls`, live ACL/token query, VM operation, G: write, or native workload was performed.

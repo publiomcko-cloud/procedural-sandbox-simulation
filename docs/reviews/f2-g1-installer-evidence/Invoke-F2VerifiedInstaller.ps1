@@ -4,7 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$script:F2ApprovedInstallerPath = 'C:\Program Files\F2-G1-Icacls\scripts\f2-acl\Install-F2IcaclsProtectedPackage.ps1'
+$script:F2ApprovedInstallerPath = 'C:\Dev\f2-g1-protected-install-prep\Install-F2IcaclsProtectedPackage.ps1'
 $script:F2ApprovedInstallerSha256 = 'a6a130edf307341032200b88b68f719fc8a3540830d09bb2d26631993524a5c8'
 $script:F2InstallerMaximumBytes = 1048576
 
