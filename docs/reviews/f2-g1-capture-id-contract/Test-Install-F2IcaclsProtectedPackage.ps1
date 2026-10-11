@@ -149,7 +149,7 @@ try {
     Assert-Install (-not (Test-F2InstallSafeParentSddl -Sddl ('O:{0}D:P(A;;FA;;;SY)(A;;FA;;;{0})(A;OICI;0x01000000;;;BU)' -f $admin))) 'unrecognized ordinary-user parent access mask is rejected'
     Assert-Install (-not (Test-F2InstallSafeParentSddl -Sddl ('O:{0}D:(A;;FA;;;SY)(A;;FA;;;{0})(A;;0x001200A9;;;BU)' -f $admin))) 'unprotected parent DACL inheritance is rejected'
     Assert-Install (-not (Test-F2InstallExactDacl -Sddl ((Get-F2InstallExpectedSddl -Kind File).Replace('D:P','D:')) -Kind File)) 'inheriting/unprotected file DACL fixture is rejected'
-    $reparseTargetPath=[string]$fixture.Root
+    $reparseTargetPath=[IO.Path]::GetFullPath([string]$fixture.Root)
     $script:F2InstallReparseProvider={param($path)[string]::Equals($path,$reparseTargetPath,[StringComparison]::OrdinalIgnoreCase)}.GetNewClosure()
     $reparseRejected=$false;try{Test-F2InstallNoReparseChain -Path (Join-Path $fixture.Root 'missing-child')|Out-Null}catch{$reparseRejected=$_.Exception.Message -eq 'INSTALL_REPARSE_POINT'}
     Assert-Install $reparseRejected 'synthetic reparse ancestor is rejected'
