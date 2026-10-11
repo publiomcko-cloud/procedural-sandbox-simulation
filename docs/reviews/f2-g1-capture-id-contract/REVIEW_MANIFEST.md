@@ -2,7 +2,7 @@
 
 Branch: `fix/f2-baseline-capture-identity-issue48`. Base: reviewed PR #50 source `2c967661163fc157b638fa4f76da86c48aa57ff2`. Production source tip: `54b1d0c7a9865d710c19b59cd38c0da670a12536`.
 
-SHA-256 values below were computed from the exact GitHub API content bytes at review commit `b596d8d0dcb3e313101df547e97368a3678f634e`. `REVIEW_MANIFEST.md` is self-excluded; its exact digest is published in the PR description and final report.
+SHA-256 values below were computed from exact GitHub API content bytes at review commit `66ee30c5c28974886c2167f2e4b2af0070f853a2`. `REVIEW_MANIFEST.md` is self-excluded; its exact digest is published in the PR description and final report.
 
 | File | SHA-256 | Purpose |
 | --- | --- | --- |
