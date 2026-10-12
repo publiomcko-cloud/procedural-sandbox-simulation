@@ -12,6 +12,7 @@ function Invoke-F2ProtectedReleaseUpdateLauncher {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{40}$')][string]$ExpectedSourceCommit,
+        [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedLauncherSha256,
         [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedUpdaterSha256,
         [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedCandidateManifestSha256,
         [ValidatePattern('^[0-9a-f]{32}$')][string]$RecoveryTransactionId,
@@ -28,6 +29,12 @@ function Invoke-F2ProtectedReleaseUpdateLauncher {
         $requesterSid = [string]$identity.User.Value
         $identity.Dispose()
         if ($requesterSid -notmatch '^S-1-[0-9]+(-[0-9]+)+$') { throw 'UPDATE_REQUESTER_IDENTITY_UNVERIFIABLE' }
+        $requesterLauncherPid = [int]$PID
+        try {
+            $requesterProcess = @(Get-CimInstance -ClassName Win32_Process -Filter ('ProcessId=' + $requesterLauncherPid) -ErrorAction Stop)
+            if ($requesterProcess.Count -ne 1 -or $requesterProcess[0].Name -cne 'powershell.exe' -or $null -eq $requesterProcess[0].CreationDate) { throw 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN' }
+            $requesterLauncherCreationUtcTicks = ([datetime]$requesterProcess[0].CreationDate).ToUniversalTime().Ticks
+        } catch { throw 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN' }
 
         $sourceRoot = 'C:\Dev\f2-g1-protected-updater-source'
         $reviewRoot = 'C:\Dev\f2-g1-protected-updater'
@@ -75,8 +82,11 @@ $ErrorActionPreference='Stop'
 $updaterPath='__UPDATER_PATH__'
 $candidatePath='__CANDIDATE_PATH__'
 $expectedUpdater='__UPDATER_SHA__'
+$expectedLauncher='__LAUNCHER_SHA__'
 $expectedCandidate='__CANDIDATE_SHA__'
 $expectedRequesterSid='__REQUESTER_SID__'
+$requesterLauncherPid='__REQUESTER_LAUNCHER_PID__'
+$requesterLauncherCreationUtcTicks='__REQUESTER_LAUNCHER_CREATION_TICKS__'
 $recoveryTransactionId='__RECOVERY_TRANSACTION_ID__'
 $resumeForward=__RESUME_FORWARD__
 $sourceRoot='__SOURCE_ROOT__'
@@ -97,9 +107,9 @@ try {
   . $verifiedScript
   Test-F2UpdateElevationIdentity -ExpectedRequesterSid $expectedRequesterSid | Out-Null
   if(-not [string]::IsNullOrWhiteSpace($recoveryTransactionId)){
-    $result=Invoke-F2ProtectedReleaseRecovery -CandidateManifestBytes $candidateBytes -CandidateManifestSha256 $expectedCandidate -SourceRoot $sourceRoot -ExpectedRequesterSid $expectedRequesterSid -TransactionId $recoveryTransactionId -ResumeForward:$resumeForward
+    $result=Invoke-F2ProtectedReleaseRecovery -CandidateManifestBytes $candidateBytes -CandidateManifestSha256 $expectedCandidate -ExpectedUpdaterSha256 $expectedUpdater -ExpectedLauncherSha256 $expectedLauncher -SourceRoot $sourceRoot -ExpectedRequesterSid $expectedRequesterSid -RequesterLauncherProcessId ([int]$requesterLauncherPid) -RequesterLauncherCreationUtcTicks ([long]$requesterLauncherCreationUtcTicks) -TransactionId $recoveryTransactionId -ResumeForward:$resumeForward
   }else{
-    $result=Invoke-F2ProtectedReleaseUpdate -CandidateManifestBytes $candidateBytes -CandidateManifestSha256 $expectedCandidate -SourceRoot $sourceRoot -ExpectedRequesterSid $expectedRequesterSid
+    $result=Invoke-F2ProtectedReleaseUpdate -CandidateManifestBytes $candidateBytes -CandidateManifestSha256 $expectedCandidate -ExpectedUpdaterSha256 $expectedUpdater -ExpectedLauncherSha256 $expectedLauncher -SourceRoot $sourceRoot -ExpectedRequesterSid $expectedRequesterSid -RequesterLauncherProcessId ([int]$requesterLauncherPid) -RequesterLauncherCreationUtcTicks ([long]$requesterLauncherCreationUtcTicks)
   }
   [Console]::Out.WriteLine(($result | ConvertTo-Json -Depth 8 -Compress))
   if($result.Success){exit 0}else{exit 1}
@@ -109,7 +119,7 @@ try {
 }
 '@
         $resumeLiteral = if ($ResumeForward.IsPresent) { '$true' } else { '$false' }
-        $childScript = $childScript.Replace('__UPDATER_PATH__',$updaterPath).Replace('__CANDIDATE_PATH__',$candidatePath).Replace('__UPDATER_SHA__',$ExpectedUpdaterSha256).Replace('__CANDIDATE_SHA__',$ExpectedCandidateManifestSha256).Replace('__SOURCE_ROOT__',$sourceRoot).Replace('__REQUESTER_SID__',$requesterSid).Replace('__RECOVERY_TRANSACTION_ID__',[string]$RecoveryTransactionId).Replace('__RESUME_FORWARD__',$resumeLiteral)
+        $childScript = $childScript.Replace('__UPDATER_PATH__',$updaterPath).Replace('__CANDIDATE_PATH__',$candidatePath).Replace('__UPDATER_SHA__',$ExpectedUpdaterSha256).Replace('__LAUNCHER_SHA__',$ExpectedLauncherSha256).Replace('__CANDIDATE_SHA__',$ExpectedCandidateManifestSha256).Replace('__SOURCE_ROOT__',$sourceRoot).Replace('__REQUESTER_SID__',$requesterSid).Replace('__REQUESTER_LAUNCHER_PID__',[string]$requesterLauncherPid).Replace('__REQUESTER_LAUNCHER_CREATION_TICKS__',[string]$requesterLauncherCreationUtcTicks).Replace('__RECOVERY_TRANSACTION_ID__',[string]$RecoveryTransactionId).Replace('__RESUME_FORWARD__',$resumeLiteral)
         $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childScript))
         $uacLaunchAttempted = $true
         $child = Start-Process -FilePath $windowsPowerShell -ArgumentList @('-NoProfile','-NonInteractive','-EncodedCommand',$encoded) -Verb RunAs -PassThru -ErrorAction Stop

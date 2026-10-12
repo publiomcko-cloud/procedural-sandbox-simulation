@@ -100,11 +100,24 @@ function New-UpdateFixture {
     $candidateBytes=[Text.UTF8Encoding]::new($false).GetBytes(($candidate|ConvertTo-Json -Compress -Depth 6))
     $candidateSha=Get-F2UpdateSha256 -Bytes $candidateBytes
     if($CandidateHashMismatch){$candidateSha=('0'*64)}
-    $state=[pscustomobject]@{Handles=(New-Object 'System.Collections.Generic.List[System.IDisposable]');Operations=(New-Object 'System.Collections.Generic.List[string]');ProcessActive=$ProcessActive;AclRejectPath=$AclRejectPath;FaultAt=$FaultAt;Context=$null}
+    $state=[pscustomobject]@{Handles=(New-Object 'System.Collections.Generic.List[System.IDisposable]');Operations=(New-Object 'System.Collections.Generic.List[string]');Events=(New-Object 'System.Collections.Generic.List[string]');ProcessActive=$ProcessActive;LateProcess=$false;LateReaderBlocked=$false;InventoryCalls=0;InventoryFailureCall=0;AclRejectPath=$AclRejectPath;FaultAt=$FaultAt;Context=$null}
     $hooks=[pscustomobject]@{
         AclCheck={param($path,$kind) if($state.AclRejectPath -and [string]::Equals($path,$state.AclRejectPath,[StringComparison]::OrdinalIgnoreCase)){return $false};return $true}.GetNewClosure()
         ParentChainCheck={param($ctx)return $true}.GetNewClosure()
-        ProcessGate={param($paths)return (-not $state.ProcessActive)}.GetNewClosure()
+        ProcessInventory={param($ctx)
+            $state.InventoryCalls++;$state.Events.Add(('Inventory'+$state.InventoryCalls))
+            if($state.InventoryFailureCall -eq $state.InventoryCalls){throw 'SYNTHETIC_PROCESS_INVENTORY_FAILURE'}
+            $requesterPath=Join-Path $ctx.SourceRoot 'scripts\f2-acl\Start-F2ProtectedReleaseUpdate.ps1'
+            $requesterLine='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "& { $path="__PATH__"; $expected="__LAUNCHER_SHA__"; . ([scriptblock]::Create($text)); Invoke-F2ProtectedReleaseUpdateLauncher -ExpectedSourceCommit "__SOURCE_SHA__" -ExpectedUpdaterSha256 "__UPDATER_SHA__" -ExpectedLauncherSha256 "__LAUNCHER_SHA__" -ExpectedCandidateManifestSha256 "__CANDIDATE_SHA__" }"'
+            $requesterLine=$requesterLine.Replace('__PATH__',$requesterPath).Replace('__LAUNCHER_SHA__',$ctx.ExpectedLauncherSha256).Replace('__SOURCE_SHA__',$ctx.ExpectedSourceCommit).Replace('__UPDATER_SHA__',$ctx.UpdaterSha256).Replace('__CANDIDATE_SHA__',$ctx.CandidateManifestSha256)
+            $rows=New-Object 'System.Collections.Generic.List[object]'
+            $rows.Add([pscustomobject]@{ProcessId=$ctx.CurrentProcessId;Name='powershell.exe';CommandLine='powershell.exe -NoProfile -EncodedCommand synthetic-current';CreationUtcTicks=0L;OwnerSid=''})
+            $rows.Add([pscustomobject]@{ProcessId=$ctx.RequesterLauncherProcessId;Name='powershell.exe';CommandLine=$requesterLine;CreationUtcTicks=$ctx.RequesterLauncherCreationUtcTicks;OwnerSid=$ctx.ExpectedRequesterSid})
+            if($state.ProcessActive -or ($state.LateProcess -and $state.InventoryCalls -ge 2)){
+                $rows.Add([pscustomobject]@{ProcessId=3000+$state.InventoryCalls;Name='powershell.exe';CommandLine=('powershell.exe -File "'+(Join-Path $ctx.OldRuntimeSourceRoot 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1')+'"');CreationUtcTicks=638000000000000000L;OwnerSid='S-1-5-21-100'})
+            }
+            return $rows.ToArray()
+        }.GetNewClosure()
         Identity={return [pscustomobject]@{UserSid='S-1-5-21-100';IsAdministrator=$true}}.GetNewClosure()
         CreateDirectory={param($path)if([IO.File]::Exists($path)-or[IO.Directory]::Exists($path)){throw 'CREATE_NEW_COLLISION'};[void][IO.Directory]::CreateDirectory($path)}.GetNewClosure()
         WriteFile={param($path,$bytes,$kind)$stream=[IO.File]::Open($path,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None);try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}}.GetNewClosure()
@@ -112,13 +125,23 @@ function New-UpdateFixture {
             if(-not [IO.File]::Exists($lockPath)){[IO.File]::WriteAllBytes($lockPath,[byte[]]@())}
             $lock=[IO.File]::Open($lockPath,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
             $barrier=[IO.File]::Open($manifestPath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Delete)
+            $state.Events.Add('ManifestBarrierAcquired')
             $state.Handles.Add($lock);$state.Handles.Add($barrier);return [pscustomobject]@{Lease=$lock;ManifestBarrier=$barrier}
+        }.GetNewClosure()
+        ReplaceManifest={param($candidatePath,$activePath,$backupPath)
+            $state.Events.Add('ManifestActivation')
+            $state.LateReaderBlocked=$false;$lateReader=$null
+            try{$lateReader=[IO.File]::Open($activePath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)}catch{$state.LateReaderBlocked=$true}finally{if($null -ne $lateReader){$lateReader.Dispose()}}
+            [IO.File]::Replace($candidatePath,$activePath,$backupPath,$false)
         }.GetNewClosure()
         AfterOperation={param($name)$state.Operations.Add($name);if($state.FaultAt -ceq $name){throw 'INJECTED_FAULT'}}.GetNewClosure()
     }
     $context=[pscustomobject]@{
         SourceRoot=$script:sourceRoot;ExpectedSourceCommit=$script:fixtureCommit;CandidateManifestBytes=$candidateBytes;CandidateManifestSha256=$candidateSha
         PackageHome=$packageHome;ProgramDataRoot=$programDataRoot;ActiveManifestPath=$active;Hooks=$hooks;Manifest=$null;TransactionState=$null
+        OldRuntimeSourceRoot=(Split-Path (Split-Path $script:oldSource -Parent) -Parent)
+        UpdaterSha256=('9'*64);ExpectedLauncherSha256=('8'*64);ExpectedRequesterSid='S-1-5-21-100'
+        CurrentProcessId=1000;RequesterLauncherProcessId=1001;RequesterLauncherCreationUtcTicks=638000000000000000L
     }
     $state.Context=$context
     return $state
@@ -126,8 +149,11 @@ function New-UpdateFixture {
 
 function Close-UpdateFixture($State){foreach($handle in @($State.Handles)){try{$handle.Dispose()}catch{}}}
 function Get-UpdateActiveSha($State){return Get-F2UpdateSha256 -Bytes ([IO.File]::ReadAllBytes($State.Context.ActiveManifestPath))}
+function Get-ProcessInventoryError($Context,[object[]]$Processes){try{[void](Test-F2UpdateProcessInventory -Processes $Processes -CurrentProcessId $Context.CurrentProcessId -Context $Context);return ''}catch{return $_.Exception.Message}}
+function Get-QuiescenceError($Context){try{[void](Assert-F2UpdateProcessQuiescence -Context $Context);return ''}catch{return $_.Exception.Message}}
 
 try {
+
     # Build the previous-release fixture from the immutable old source commit
     # in this repository. Never depend on another developer's C:\Dev checkout.
     $oldArchive=Join-Path $script:root 'old-source.zip'
@@ -165,6 +191,60 @@ try {
         }
     } finally {$oldZip.Dispose()}
     Assert-Update $oldFixturesMatch 'old-release fixtures are extracted from the pinned Git commit and match all seven installed-byte hashes'
+
+    # The approved v2/v3 runtime surfaces include fixed installed paths and
+    # both immutable source checkouts. Tests use temporary roots so no real
+    # host process or filesystem inventory is queried.
+    $pathFixture=New-UpdateFixture
+    $runtimePathInventory=@(Get-F2UpdateRuntimePathInventory -Context $pathFixture.Context)
+    $expectedRuntimePaths=@(
+        (Join-Path $pathFixture.Context.PackageHome 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1'),
+        (Join-Path $pathFixture.Context.PackageHome 'scripts\f2-acl\Invoke-F2IcaclsProtectedCoordinator.ps1'),
+        (Join-Path $pathFixture.Context.PackageHome 'scripts\f2-acl\F2AclIcacls.Runtime.psm1'),
+        (Join-Path $pathFixture.Context.OldRuntimeSourceRoot 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1'),
+        (Join-Path $pathFixture.Context.OldRuntimeSourceRoot 'scripts\f2-acl\Invoke-F2IcaclsProtectedCoordinator.ps1'),
+        (Join-Path $pathFixture.Context.OldRuntimeSourceRoot 'scripts\f2-acl\F2AclIcacls.Runtime.psm1'),
+        (Join-Path $pathFixture.Context.SourceRoot 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1'),
+        (Join-Path $pathFixture.Context.SourceRoot 'scripts\f2-acl\Invoke-F2IcaclsProtectedCoordinator.ps1'),
+        (Join-Path $pathFixture.Context.SourceRoot 'scripts\f2-acl\F2AclIcacls.Runtime.psm1'),
+        (Join-Path (Join-Path (Join-Path $pathFixture.Context.PackageHome 'releases') $pathFixture.Context.ExpectedSourceCommit) 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1'),
+        (Join-Path (Join-Path (Join-Path $pathFixture.Context.PackageHome 'releases') $pathFixture.Context.ExpectedSourceCommit) 'scripts\f2-acl\Invoke-F2IcaclsProtectedCoordinator.ps1'),
+        (Join-Path (Join-Path (Join-Path $pathFixture.Context.PackageHome 'releases') $pathFixture.Context.ExpectedSourceCommit) 'scripts\f2-acl\F2AclIcacls.Runtime.psm1')
+    )
+    $runtimePathsCovered=$true
+    foreach($path in $expectedRuntimePaths){if($path -notin $runtimePathInventory){$runtimePathsCovered=$false}}
+    Assert-Update ($runtimePathsCovered -and $runtimePathInventory.Count -eq 12) 'runtime inventory includes old/new source checkout and fixed/versioned installed launchers, coordinators and direct runtime modules'
+    $baseInventory=@(& $pathFixture.Context.Hooks.ProcessInventory $pathFixture.Context)
+    Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $baseInventory) -ceq '') 'only the current updater and exact PID/creation-time/pin-bound requester launcher are allowed'
+    $foreignCases=@(
+        [pscustomobject]@{Label='active old source-checkout launcher';CommandLine=('powershell.exe -File "'+(Join-Path $pathFixture.Context.OldRuntimeSourceRoot 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1')+'"')},
+        [pscustomobject]@{Label='active new source-checkout launcher';CommandLine=('powershell.exe -File "'+(Join-Path $pathFixture.Context.SourceRoot 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1')+'"')},
+        [pscustomobject]@{Label='active installed coordinator';CommandLine=('powershell.exe -File "'+(Join-Path $pathFixture.Context.PackageHome 'scripts\f2-acl\Invoke-F2IcaclsProtectedCoordinator.ps1')+'" -CaptureId '+('a'*32))},
+        [pscustomobject]@{Label='direct runtime-module invocation';CommandLine=('powershell.exe -NoProfile -Command "Import-Module '+(Join-Path $pathFixture.Context.OldRuntimeSourceRoot 'scripts\f2-acl\F2AclIcacls.Runtime.psm1')+'; Invoke-F2IcaclsCaptureLauncher"')},
+        [pscustomobject]@{Label='encoded PowerShell invocation';CommandLine='powershell.exe -NoProfile -EncodedCommand SQBFAFgA'},
+        [pscustomobject]@{Label='legacy process with cached v2 manifest';CommandLine=('powershell.exe -NoProfile -Command "$cachedManifestSha256='''+$script:F2UpdateOldManifestSha256+'''"');CachedManifestSha256=$script:F2UpdateOldManifestSha256},
+        [pscustomobject]@{Label='active PowerShell ISE process';Name='powershell_ise.exe';CommandLine='powershell_ise.exe -NoProfile'}
+    )
+    $caseIndex=0
+    foreach($case in $foreignCases){
+        $caseIndex++
+        $processName=if($case.PSObject.Properties['Name']){[string]$case.Name}else{'powershell.exe'}
+        $rows=@($baseInventory)+@([pscustomobject]@{ProcessId=2000+$caseIndex;Name=$processName;CommandLine=$case.CommandLine;CreationUtcTicks=638000000000000000L;OwnerSid='S-1-5-21-200'})
+        Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $rows) -ceq 'UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN') ($case.Label+' blocks independent of path-only matching')
+    }
+    $missingLine=@($baseInventory)+@([pscustomobject]@{ProcessId=2010;Name='powershell.exe';CommandLine=$null;CreationUtcTicks=638000000000000000L;OwnerSid='S-1-5-21-200'})
+    Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $missingLine) -ceq 'UPDATE_PROCESS_COMMAND_LINE_UNKNOWN') 'missing or inaccessible foreign PowerShell command line fails closed'
+    $badRequester=@($baseInventory | Where-Object { $_.ProcessId -ne $pathFixture.Context.RequesterLauncherProcessId })+@([pscustomobject]@{ProcessId=$pathFixture.Context.RequesterLauncherProcessId;Name='powershell.exe';CommandLine=$baseInventory[1].CommandLine;CreationUtcTicks=1L;OwnerSid=$pathFixture.Context.ExpectedRequesterSid})
+    Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $badRequester) -ceq 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN') 'requester PID reuse or unexpected process creation time is rejected'
+    $badPinRequester=@($baseInventory | Where-Object { $_.ProcessId -ne $pathFixture.Context.RequesterLauncherProcessId })+@([pscustomobject]@{ProcessId=$pathFixture.Context.RequesterLauncherProcessId;Name='powershell.exe';CommandLine=$baseInventory[1].CommandLine.Replace($pathFixture.Context.CandidateManifestSha256,('0'*64));CreationUtcTicks=$pathFixture.Context.RequesterLauncherCreationUtcTicks;OwnerSid=$pathFixture.Context.ExpectedRequesterSid})
+    Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $badPinRequester) -ceq 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN') 'requester launch command with a changed source pin is rejected'
+    $encodedRequester=@($baseInventory | Where-Object { $_.ProcessId -ne $pathFixture.Context.RequesterLauncherProcessId })+@([pscustomobject]@{ProcessId=$pathFixture.Context.RequesterLauncherProcessId;Name='powershell.exe';CommandLine=$baseInventory[1].CommandLine.Replace('-Command','-EncodedCommand');CreationUtcTicks=$pathFixture.Context.RequesterLauncherCreationUtcTicks;OwnerSid=$pathFixture.Context.ExpectedRequesterSid})
+    Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $encodedRequester) -ceq 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN') 'encoded requester launch is rejected even when it repeats approved path text and pins'
+    $inventoryError=New-UpdateFixture
+    $inventoryError.Context.Hooks.ProcessInventory={param($ctx)throw 'SYNTHETIC_INVENTORY_FAILURE'}
+    Assert-Update ((Get-QuiescenceError $inventoryError.Context) -ceq 'UPDATE_PROCESS_INVENTORY_UNKNOWN') 'process inventory command failure fails closed with a stable diagnostic'
+    Close-UpdateFixture $inventoryError
+    Close-UpdateFixture $pathFixture
 
     $goodDir='O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200A9;;;AU)'
     $goodFile='O:BAG:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1200A9;;;AU)'
@@ -209,6 +289,9 @@ try {
     $result=Invoke-F2UpdateTransaction -Context $happy.Context
     Close-UpdateFixture $happy
     Assert-Update ($result.Success -and $result.Outcome -ceq 'UPDATE_COMPLETE' -and $result.InstalledFiles -eq 7 -and $result.OldReleaseRetained) 'successful transaction stages and activates exactly seven new files while retaining old package and manifest'
+    $events=@($happy.Events)
+    $barrierEvent=[array]::IndexOf($events,'ManifestBarrierAcquired');$firstInventoryEvent=[array]::IndexOf($events,'Inventory1');$secondInventoryEvent=[array]::IndexOf($events,'Inventory2');$activationEvent=[array]::IndexOf($events,'ManifestActivation')
+    Assert-Update ($barrierEvent -ge 0 -and $barrierEvent -lt $firstInventoryEvent -and $firstInventoryEvent -lt $secondInventoryEvent -and $secondInventoryEvent -lt $activationEvent -and $happy.LateReaderBlocked) 'manifest barrier precedes both process inventories; a later reader is blocked and the final scan directly precedes activation'
     Assert-Update ((Get-UpdateActiveSha $happy) -ceq $happy.Context.CandidateManifestSha256) 'active manifest points only to the complete new versioned package'
     Assert-Update ((Get-F2UpdateSha256 -Bytes ([IO.File]::ReadAllBytes($result.OldManifestBackup))) -ceq $script:F2UpdateOldManifestSha256) 'old external v2 manifest backup retains exact original digest'
     $newDir=Join-Path $result.PackageRoot 'scripts\f2-acl'
@@ -267,6 +350,11 @@ try {
     $busyResult=Invoke-F2UpdateTransaction -Context $busy.Context
     Close-UpdateFixture $busy
     Assert-Update (-not $busyResult.Success -and $busyResult.ErrorCode -ceq 'UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN' -and -not(Test-Path -LiteralPath (Join-Path $busy.Context.PackageHome 'releases'))) 'detected active legacy launcher blocks before package staging'
+    $late=New-UpdateFixture
+    $late.LateProcess=$true
+    $lateResult=Invoke-F2UpdateTransaction -Context $late.Context
+    Close-UpdateFixture $late
+    Assert-Update (-not $lateResult.Success -and $lateResult.ErrorCode -ceq 'UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN' -and $late.InventoryCalls -eq 2 -and (Get-UpdateActiveSha $late) -ceq $script:F2UpdateOldManifestSha256 -and -not($late.Events -contains 'ManifestActivation')) 'process spawned after the first inventory is detected by the activation-edge rescan while old manifest remains active'
     $dirty=New-UpdateFixture
     [IO.File]::WriteAllText((Join-Path $dirty.Context.SourceRoot 'untracked-test-only.txt'),'dirty')
     $dirtyResult=Invoke-F2UpdateTransaction -Context $dirty.Context
@@ -349,7 +437,8 @@ try {
     $updaterText=Get-Content -LiteralPath $sourceScript -Raw
     Assert-Update ($launcherText -match '\$uacLaunchAttempted\s*=\s*\$true' -and $launcherText -match 'Start-Process.+-Verb RunAs.+-PassThru' -and $launcherText -notmatch 'Start-Process.+-RedirectStandard') 'launcher uses one human-consented UAC process and does not assume UAC stdout redirection'
     Assert-Update ($launcherText -match 'UPDATE_CHILD_EXIT_ZERO_REQUIRES_POST_ATTESTATION' -and $launcherText -match 'ActualChildExitCode' -and $launcherText -match 'UPDATE_CHILD_STATUS_UNKNOWN') 'launcher retains actual child exit or reports bounded unknown without claiming installation success'
-    Assert-Update ($launcherText -match 'ExpectedSourceCommit' -and $launcherText -match 'ExpectedUpdaterSha256' -and $launcherText -match 'ExpectedCandidateManifestSha256' -and $launcherText -match 'C:\\Dev\\f2-g1-protected-updater-source') 'launcher has fixed destinations and requires externally reviewed commit and full SHA-256 pins'
+    Assert-Update ($launcherText -match 'ExpectedSourceCommit' -and $launcherText -match 'ExpectedLauncherSha256' -and $launcherText -match 'ExpectedUpdaterSha256' -and $launcherText -match 'ExpectedCandidateManifestSha256' -and $launcherText -match 'C:\\Dev\\f2-g1-protected-updater-source') 'launcher has fixed destinations and requires externally reviewed launcher, updater, candidate and source pins'
+    Assert-Update ($launcherText -match 'RequesterLauncherProcessId' -and $launcherText -match 'RequesterLauncherCreationUtcTicks' -and $launcherText -match 'requesterLauncherPid' -and $launcherText -match 'requesterLauncherCreationUtcTicks') 'launcher binds its single requester process across UAC by PID and creation timestamp without relying on ancestry alone'
     Assert-Update ($launcherText -match 'requesterSid' -and $launcherText -match '__REQUESTER_SID__' -and $launcherText -match 'Test-F2UpdateElevationIdentity' -and $updaterText -match 'function Test-F2UpdateElevationIdentity') 'standard requester SID is carried into the child and rechecked against the elevated Administrator token'
     Assert-Update ($launcherText -match 'RecoveryTransactionId' -and $launcherText -match 'ResumeForward' -and $updaterText -match 'function Invoke-F2ProtectedReleaseRecovery' -and $updaterText -match 'function Resolve-F2UpdateTransaction') 'same pinned updater exposes a bounded transaction-specific recovery entrypoint'
     Assert-Update ($launcherText -match 'Test-ChildNoReparse' -and $launcherText -match '4194304' -and $launcherText -match '65536' -and $launcherText -match 'Test-F2UpdateElevationIdentity' -and $updaterText -match 'UPDATE_ELEVATED_REQUESTER_IDENTITY_MISMATCH') 'parent and elevated child recheck bounded input paths and requester-token identity'

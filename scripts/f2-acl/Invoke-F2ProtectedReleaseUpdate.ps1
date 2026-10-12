@@ -223,32 +223,110 @@ function Get-F2UpdateManifestObject {
     return $manifest
 }
 
-function Assert-F2UpdateProcessQuiescence {
-    param([string[]]$ForbiddenScriptPaths,$Context)
-    $hook = Get-F2UpdateHook -Context $Context -Name 'ProcessGate'
-    if ($null -ne $hook) {
-        if (-not [bool](& $hook $ForbiddenScriptPaths)) { throw 'UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN' }
-        return $true
+function Get-F2UpdateRuntimePathInventory {
+    param($Context)
+    $oldSourceRoot = if ($null -ne $Context.Hooks -and $null -ne $Context.PSObject.Properties['OldRuntimeSourceRoot']) { [string]$Context.OldRuntimeSourceRoot } else { 'C:\Dev\f2-g1-capture-id-contract-source' }
+    $newSourceRoot = [string]$Context.SourceRoot
+    $versionRoot = Join-Path (Join-Path $Context.PackageHome 'releases') $Context.ExpectedSourceCommit
+    $roots = @(
+        (Join-Path $Context.PackageHome 'scripts\f2-acl'),
+        (Join-Path $versionRoot 'scripts\f2-acl'),
+        (Join-Path $oldSourceRoot 'scripts\f2-acl'),
+        (Join-Path $newSourceRoot 'scripts\f2-acl')
+    )
+    $names = @('Invoke-F2IcaclsCapture.ps1','Invoke-F2IcaclsProtectedCoordinator.ps1','F2AclIcacls.Runtime.psm1')
+    $paths = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($root in $roots) { foreach ($name in $names) { $paths.Add([IO.Path]::GetFullPath((Join-Path $root $name))) } }
+    return [string[]]$paths.ToArray()
+}
+
+function Test-F2UpdateAuthorizedRequesterProcess {
+    param($Process,$Context)
+    $commandLine = [string]$Process.CommandLine
+    if ([string]::IsNullOrWhiteSpace($commandLine) -or $commandLine.Length -gt 32767) { return $false }
+    if ($commandLine -match '(?i)(?:^|\s)-(?:encodedcommand|enc)(?:\s|:|$)' -or $commandLine -notmatch '(?i)(?:^|\s)-(?:command|c)(?:\s|:|$)') { return $false }
+    $expectedLauncherPath = Join-Path $Context.SourceRoot 'scripts\f2-acl\Start-F2ProtectedReleaseUpdate.ps1'
+    foreach ($value in @([IO.Path]::GetFullPath($expectedLauncherPath),'. ([scriptblock]::Create($text))','Invoke-F2ProtectedReleaseUpdateLauncher')) {
+        if ([string]::IsNullOrWhiteSpace($value) -or $commandLine.IndexOf($value,[StringComparison]::OrdinalIgnoreCase) -lt 0) { return $false }
     }
-    $forbidden = @($ForbiddenScriptPaths | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })
-    $selfAndAncestors = @{}
-    $pidValue = $PID
-    for ($depth = 0; $depth -lt 16 -and $pidValue -gt 0; $depth++) {
-        if ($selfAndAncestors.ContainsKey([int]$pidValue)) { break }
-        $selfAndAncestors[[int]$pidValue] = $true
-        try { $process = Get-CimInstance Win32_Process -Filter ('ProcessId=' + [int]$pidValue) -ErrorAction Stop; $pidValue = [int]$process.ParentProcessId }
-        catch { if ($depth -eq 0) { throw 'UPDATE_PROCESS_ANCESTRY_UNKNOWN' }; break }
-    }
-    try { $processes = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='pwsh.exe'" -ErrorAction Stop) }
-    catch { throw 'UPDATE_PROCESS_INVENTORY_UNKNOWN' }
-    foreach ($process in $processes) {
-        if ($selfAndAncestors.ContainsKey([int]$process.ProcessId)) { continue }
-        if ([string]::IsNullOrWhiteSpace([string]$process.CommandLine)) { throw 'UPDATE_PROCESS_COMMAND_LINE_UNKNOWN' }
-        foreach ($scriptPath in $forbidden) {
-            if ([string]$process.CommandLine -match [regex]::Escape($scriptPath)) { throw 'UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN' }
-        }
+    foreach ($pair in @(
+        @('ExpectedSourceCommit',[string]$Context.ExpectedSourceCommit),
+        @('ExpectedUpdaterSha256',[string]$Context.UpdaterSha256),
+        @('ExpectedLauncherSha256',[string]$Context.ExpectedLauncherSha256),
+        @('ExpectedCandidateManifestSha256',[string]$Context.CandidateManifestSha256)
+    )) {
+        if ([string]::IsNullOrWhiteSpace($pair[1]) -or $commandLine -notmatch ('(?i)-' + [regex]::Escape($pair[0]) + '\s+"?' + [regex]::Escape($pair[1]) + '"?(?=\s|;|\}|$)')) { return $false }
     }
     return $true
+}
+
+function Test-F2UpdateProcessInventory {
+    param([AllowEmptyCollection()][object[]]$Processes,[int]$CurrentProcessId,$Context)
+    if ($null -eq $Processes) { throw 'UPDATE_PROCESS_INVENTORY_UNKNOWN' }
+    if ($CurrentProcessId -le 0 -or [int]$Context.RequesterLauncherProcessId -le 0 -or [int]$Context.RequesterLauncherProcessId -eq $CurrentProcessId -or [long]$Context.RequesterLauncherCreationUtcTicks -le 0) { throw 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN' }
+    $currentCount = 0; $authorizedLauncherCount = 0; $seen = @{}
+    $runtimePaths = @(Get-F2UpdateRuntimePathInventory -Context $Context | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })
+    foreach ($process in $Processes) {
+        if ($null -eq $process -or $null -eq $process.PSObject.Properties['ProcessId'] -or $null -eq $process.PSObject.Properties['Name']) { throw 'UPDATE_PROCESS_INVENTORY_UNKNOWN' }
+        $processId = 0
+        if (-not [int]::TryParse([string]$process.ProcessId,[ref]$processId) -or $processId -le 0 -or $seen.ContainsKey($processId)) { throw 'UPDATE_PROCESS_INVENTORY_UNKNOWN' }
+        $seen[$processId] = $true
+        $name = [string]$process.Name
+        if ($name -notmatch '^(?i:powershell|powershell_ise|pwsh)\.exe$') { throw 'UPDATE_PROCESS_INVENTORY_UNKNOWN' }
+        if ($processId -eq $CurrentProcessId) {
+            if ($name -ine 'powershell.exe') { throw 'UPDATE_PROCESS_SELF_IDENTITY_UNKNOWN' }
+            $currentCount++
+            continue
+        }
+        if ($null -eq $process.PSObject.Properties['CommandLine'] -or [string]::IsNullOrWhiteSpace([string]$process.CommandLine)) { throw 'UPDATE_PROCESS_COMMAND_LINE_UNKNOWN' }
+        $commandLine = [string]$process.CommandLine
+        foreach ($path in $runtimePaths) {
+            if ($commandLine.IndexOf($path,[StringComparison]::OrdinalIgnoreCase) -ge 0) { throw 'UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN' }
+        }
+        if ($processId -eq [int]$Context.RequesterLauncherProcessId) {
+            if ($name -ine 'powershell.exe') { throw 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN' }
+            if ($null -eq $process.PSObject.Properties['CreationUtcTicks'] -or [long]$process.CreationUtcTicks -ne [long]$Context.RequesterLauncherCreationUtcTicks) { throw 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN' }
+            if ($null -eq $process.PSObject.Properties['OwnerSid'] -or [string]$process.OwnerSid -cne [string]$Context.ExpectedRequesterSid) { throw 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN' }
+            if (-not (Test-F2UpdateAuthorizedRequesterProcess -Process $process -Context $Context)) { throw 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN' }
+            $authorizedLauncherCount++
+            if ($authorizedLauncherCount -gt 1) { throw 'UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN' }
+            continue
+        }
+        # Unknown, unrelated, direct-module and encoded PowerShell invocations
+        # are all excluded. Command-line heuristics are not used to bless them.
+        throw 'UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN'
+    }
+    if ($currentCount -ne 1) { throw 'UPDATE_PROCESS_SELF_IDENTITY_UNKNOWN' }
+    if ($authorizedLauncherCount -ne 1) { throw 'UPDATE_REQUESTER_LAUNCHER_UNKNOWN' }
+    return $true
+}
+
+function Assert-F2UpdateProcessQuiescence {
+    param($Context)
+    $inventoryHook = Get-F2UpdateHook -Context $Context -Name 'ProcessInventory'
+    if ($null -ne $inventoryHook) {
+        try { $processes = @(& $inventoryHook $Context) } catch { throw 'UPDATE_PROCESS_INVENTORY_UNKNOWN' }
+        $currentProcessId = if ($null -ne $Context.PSObject.Properties['CurrentProcessId']) { [int]$Context.CurrentProcessId } else { 1000 }
+    } else {
+        try { $rawProcesses = @(Get-CimInstance -ClassName Win32_Process -Filter "Name='powershell.exe' OR Name='powershell_ise.exe' OR Name='pwsh.exe'" -ErrorAction Stop) }
+        catch { throw 'UPDATE_PROCESS_INVENTORY_UNKNOWN' }
+        $currentProcessId = $PID
+        $normalized = New-Object 'System.Collections.Generic.List[object]'
+        foreach ($process in $rawProcesses) {
+            $creationTicks = 0L; $ownerSid = ''
+            if ([int]$process.ProcessId -eq [int]$Context.RequesterLauncherProcessId) {
+                try {
+                    $creationTicks = ([datetime]$process.CreationDate).ToUniversalTime().Ticks
+                    $owner = Invoke-CimMethod -InputObject $process -MethodName GetOwnerSid -ErrorAction Stop
+                    if ([uint32]$owner.ReturnValue -ne 0 -or $null -eq $owner.Sid) { throw 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN' }
+                    $ownerSid = [string]$owner.Sid
+                } catch { throw 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN' }
+            }
+            $normalized.Add([pscustomobject]@{ProcessId=[int]$process.ProcessId;Name=[string]$process.Name;CommandLine=[string]$process.CommandLine;CreationUtcTicks=$creationTicks;OwnerSid=$ownerSid})
+        }
+        $processes = $normalized.ToArray()
+    }
+    return Test-F2UpdateProcessInventory -Processes $processes -CurrentProcessId $currentProcessId -Context $Context
 }
 
 function New-F2UpdateNativeSupport {
@@ -436,12 +514,8 @@ function Test-F2UpdateCandidate {
 
 function Test-F2UpdateRuntimeProcessPaths {
     param($Context)
-    $oldLauncher = Join-Path $Context.PackageHome 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1'
-    $oldCoordinator = Join-Path $Context.PackageHome 'scripts\f2-acl\Invoke-F2IcaclsProtectedCoordinator.ps1'
-    $versionRoot = Join-Path (Join-Path $Context.PackageHome 'releases') $Context.ExpectedSourceCommit
-    $newLauncher = Join-Path (Join-Path $versionRoot 'scripts\f2-acl') 'Invoke-F2IcaclsCapture.ps1'
-    $newCoordinator = Join-Path (Join-Path $versionRoot 'scripts\f2-acl') 'Invoke-F2IcaclsProtectedCoordinator.ps1'
-    Assert-F2UpdateProcessQuiescence -ForbiddenScriptPaths @($oldLauncher,$oldCoordinator,$newLauncher,$newCoordinator) -Context $Context | Out-Null
+    $null = Get-F2UpdateRuntimePathInventory -Context $Context
+    Assert-F2UpdateProcessQuiescence -Context $Context | Out-Null
 }
 
 function Invoke-F2UpdateTransaction {
@@ -466,9 +540,11 @@ function Invoke-F2UpdateTransaction {
 
         $stage = 'AcquireReleaseBarrier'
         # The updater's one pinned elevated bootstrap verifies the updater and
-        # candidate bytes before calling this function. The shared runtime lease
-        # plus the delete-share-only manifest barrier closes the v3 launch race;
-        # old v2 runtimes are stopped by the barrier and process quiescence gate.
+        # candidate bytes before calling this function. The shared lease blocks
+        # new v3 readers. The manifest barrier blocks fresh v2 manifest reads;
+        # the process inventory rejects every other PowerShell host so a v2
+        # process that cached the old manifest before the barrier cannot survive
+        # unnoticed. A second inventory sits at the activation edge.
         $lockHook = Get-F2UpdateHook -Context $Context -Name 'AcquireLocks'
         if ($null -ne $lockHook) {
             $lockResult = & $lockHook $lockPath $Context.ActiveManifestPath
@@ -547,6 +623,10 @@ function Invoke-F2UpdateTransaction {
         $stage = 'ActivateManifest'
         $replaceHook = Get-F2UpdateHook -Context $Context -Name 'ReplaceManifest'
         $activeState = 'UNKNOWN'
+        # Recheck at the activation edge. The manifest barrier is still held:
+        # pre-barrier cached readers must be visible in this inventory, while
+        # post-barrier supported readers cannot obtain the old manifest.
+        Test-F2UpdateRuntimeProcessPaths -Context $Context
         if ($null -ne $replaceHook) { & $replaceHook $candidatePath $Context.ActiveManifestPath $backupPath }
         else { [IO.File]::Replace($candidatePath,$Context.ActiveManifestPath,$backupPath,$false) }
         $activeState = [string]$Context.CandidateManifestSha256
@@ -659,8 +739,12 @@ function Invoke-F2ProtectedReleaseRecovery {
     param(
         [Parameter(Mandatory)][AllowEmptyCollection()][byte[]]$CandidateManifestBytes,
         [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{64}$')][string]$CandidateManifestSha256,
+        [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedUpdaterSha256,
+        [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedLauncherSha256,
         [Parameter(Mandatory)][string]$SourceRoot,
         [Parameter(Mandatory)][ValidatePattern('^S-1-')][string]$ExpectedRequesterSid,
+        [Parameter(Mandatory)][ValidateRange(1,2147483647)][int]$RequesterLauncherProcessId,
+        [Parameter(Mandatory)][ValidateRange(1,9223372036854775807)][long]$RequesterLauncherCreationUtcTicks,
         [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{32}$')][string]$TransactionId,
         [switch]$ResumeForward
     )
@@ -669,6 +753,8 @@ function Invoke-F2ProtectedReleaseRecovery {
     $context = [pscustomobject]@{
         SourceRoot=[IO.Path]::GetFullPath($SourceRoot);ExpectedSourceCommit=[string]$manifest.ReviewedCommitSha
         CandidateManifestBytes=$CandidateManifestBytes;CandidateManifestSha256=$CandidateManifestSha256;Manifest=$manifest
+        UpdaterSha256=$ExpectedUpdaterSha256;ExpectedLauncherSha256=$ExpectedLauncherSha256;ExpectedRequesterSid=$ExpectedRequesterSid
+        RequesterLauncherProcessId=$RequesterLauncherProcessId;RequesterLauncherCreationUtcTicks=$RequesterLauncherCreationUtcTicks
         PackageHome=(Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) 'F2-G1-Icacls')
         ProgramDataRoot=(Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) 'F2-G1-Icacls')
         ActiveManifestPath=(Join-Path (Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) 'F2-G1-Icacls') 'approved-release.json')
@@ -686,12 +772,14 @@ function Invoke-F2ProtectedReleaseUpdate {
     # Called only by a separately pinned, one-read in-memory elevated bootstrap.
     # SourceRoot selects bytes, but its clean origin/commit and every package
     # byte are revalidated before the updater writes anything.
-    param([Parameter(Mandatory)][AllowEmptyCollection()][byte[]]$CandidateManifestBytes,[Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{64}$')][string]$CandidateManifestSha256,[Parameter(Mandatory)][string]$SourceRoot,[Parameter(Mandatory)][ValidatePattern('^S-1-')][string]$ExpectedRequesterSid)
+    param([Parameter(Mandatory)][AllowEmptyCollection()][byte[]]$CandidateManifestBytes,[Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{64}$')][string]$CandidateManifestSha256,[Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedUpdaterSha256,[Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{64}$')][string]$ExpectedLauncherSha256,[Parameter(Mandatory)][string]$SourceRoot,[Parameter(Mandatory)][ValidatePattern('^S-1-')][string]$ExpectedRequesterSid,[Parameter(Mandatory)][ValidateRange(1,2147483647)][int]$RequesterLauncherProcessId,[Parameter(Mandatory)][ValidateRange(1,9223372036854775807)][long]$RequesterLauncherCreationUtcTicks)
     Test-F2UpdateElevationIdentity -ExpectedRequesterSid $ExpectedRequesterSid | Out-Null
     $manifest = Get-F2UpdateManifestObject -Bytes $CandidateManifestBytes -ExpectedSchema v3 -ExpectedHash $CandidateManifestSha256
     $context = [pscustomobject]@{
         SourceRoot=[IO.Path]::GetFullPath($SourceRoot);ExpectedSourceCommit=[string]$manifest.ReviewedCommitSha
         CandidateManifestBytes=$CandidateManifestBytes;CandidateManifestSha256=$CandidateManifestSha256
+        UpdaterSha256=$ExpectedUpdaterSha256;ExpectedLauncherSha256=$ExpectedLauncherSha256;ExpectedRequesterSid=$ExpectedRequesterSid
+        RequesterLauncherProcessId=$RequesterLauncherProcessId;RequesterLauncherCreationUtcTicks=$RequesterLauncherCreationUtcTicks
         PackageHome=(Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) 'F2-G1-Icacls')
         ProgramDataRoot=(Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) 'F2-G1-Icacls')
         ActiveManifestPath=(Join-Path (Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) 'F2-G1-Icacls') 'approved-release.json')
