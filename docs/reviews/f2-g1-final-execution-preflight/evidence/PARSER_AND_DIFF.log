@@ -1,0 +1,5 @@
+ParserCommand="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-final-execution-preflight-review\scripts\f2-acl\Test-F2ProtectedReleaseDiagnosticParser.ps1"
+PowerShellFiles=21;ParserErrors=0
+PARSER_PROCESS_EXIT=0
+GIT_DIFF_CHECK_EXIT=0
+GIT_DIFF_CHECK=PASS

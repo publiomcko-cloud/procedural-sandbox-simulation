@@ -74,7 +74,7 @@ The runner invokes seven Windows PowerShell 5.1 suites sequentially with `-NoPro
 | Protected release updater and interruption/recovery fault injection | 134 | 0 |
 | Production native helper TEMP tests | 20 | 0 |
 | Elevated child diagnostic channel | 38 | 0 |
-| **Total** | **520** | **0** |
+| **Total** | **521** | **0** |
 
 The diagnostics suite invokes the production child-script builder and the real production pipe receiver with ordinary Windows PowerShell 5.1 processes, using only a new GUID directory under TEMP, synthetic updater/candidate files and no UAC. It exercises protocol bootstrap failure; updater and candidate hash rejection; parsing/loading failure; identity rejection; synthetic source Git, parent ACL, old-release, native-helper and release-lock failures; server wait initialization failure with exact child exit; stale nonce; corrupted digest; duplicate, oversized, missing and stalled frames; wrong client PID; conflicting actual exit; and a false `Complete`/zero claim. The fake updater only returns failure objects and cannot create protected transaction paths. A separate updater regression injects a CreateNew lock failure into the actual production transaction using a TEMP fixture and verifies the stable stage/code with no transaction directory. The actual updater native-helper wrapper is separately tested with a synthetic compiler failure; the native helper's actual compile and TEMP behavior remain covered by the 20-assertion production helper suite.
 

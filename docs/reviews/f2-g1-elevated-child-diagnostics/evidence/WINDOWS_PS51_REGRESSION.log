@@ -3,7 +3,7 @@ PowerShell51Path=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
 PowerShellVersionOutput=5.1.22621.6133
 PowerShellVersionExit=0
 === Test-F2AclCapture.Protocol.ps1 ===
-Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1"
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-final-execution-preflight-review\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1"
 Stage=bounded_partial_pipe_read
 Stage=fresh_process_imported_module_serialization_frame_and_worker_diagnostics
 Stage=production_encoded_worker_success
@@ -18,7 +18,7 @@ Assertions=152;Failures=0
 Cases=source_pins,uac_coordinator_same_and_different_admin_identity_policy,filtered_admin_rejection,requester_read_only_mailbox_acl_and_owner,requester_write_delete_dac_tamper_rejection,observed_programdata_sddl_0x116_acceptance,delete_child_delete_write_dac_write_owner_generic_write_generic_all_rejection,dangerous_inherited_parent_grant_rejection,protected_parent_required,unapproved_broad_create_rights_rejection,atomic_precreated_mailbox_collision,mailbox_junction_rejection,coordinator_status_exit_binding,no_cross_token_named_pipe_production,bounded_file_mailbox_same_token_worker_integration,mailbox_missing_duplicate_oversized,kingston_storage_valid_wrong_serial_wrong_model_ambiguous_missing_field_transport_mapping,post_collection_vm_identity_state_path_nic_storage,unknown_final_state_incomplete,complete,argument_quoting,frame_roundtrip,bounded_eof_probe,standard_ace,callback_ace_rejection,object_ace_rejection,unknown_ace_flag_rejection,ancestor_junction_rejection,oversized_writer,oversized_reader,corrupt,partial_frame,stalled_partial_header,missing,duplicate,malformed_json,missing_envelope,missing_record_field,child_exit,sha256,partial_record,empty_preflight_failure,stdout_stderr,timeout,absolute_monotonic_deadline,exited_worker_stdout_pipe_hold,exited_worker_stderr_pipe_hold,output_producing_hang,reader_disposal_failure,cleanup_failure_never_complete,restricted_evidence_directory,exact_acl_principals,read_only_parent_ace,write_parent_ace,write_attributes_parent_ace,bounded_stream_accounting,oversized_stream_rejection
 EXIT=0
 === Test-F2AclIcacls.Corroboration.ps1 ===
-Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1"
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-final-execution-preflight-review\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1"
 PASS: actual repository helper pins match source files and retained collector provenance
 PASS: all pre-elevation synthetic identity, manifest, volume, path, pin and evidence gates pass
 PASS: expected allowlist contains exactly 11 unique objects
@@ -140,7 +140,7 @@ PASS: failing icacls output and exit status are published as complete diagnostic
 Assertions=118; Failures=0
 EXIT=0
 === Test-F2AclIcacls.Runtime.ps1 ===
-Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1"
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-final-execution-preflight-review\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1"
 PASS: release contract accepts the independently pinned mailbox ID and payload CaptureId
 PASS: actual disk loader reads valid v3 with separate pinned identities without a release-provider mock
 PASS: disk-loaded v3 manifest passes the actual seven-file source package contract
@@ -185,7 +185,7 @@ PASS: entrypoints avoid pre-body advanced binding and preserve controlled argume
 Assertions=41;Failures=0
 EXIT=0
 === Test-F2AclEntrypointArguments.ps1 ===
-Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2AclEntrypointArguments.ps1"
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-final-execution-preflight-review\scripts\f2-acl\Test-F2AclEntrypointArguments.ps1"
 PASS: both production entrypoints parse under Windows PowerShell 5.1
 PASS: both production entrypoints retain StrictMode Latest
 PASS: entrypoints avoid pre-body advanced-parameter binding so rejected arguments receive explicit failure status
@@ -216,7 +216,7 @@ PASS: synthetic coordinator rejects a path mismatch before its body
 Assertions=18;Failures=0
 EXIT=0
 === Test-F2AclProtectedReleaseUpdater.ps1 ===
-Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1"
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-final-execution-preflight-review\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1"
 PASS: updater parses in Windows PowerShell 5.1
 PASS: single-UAC launcher parses in Windows PowerShell 5.1
 PASS: exact approved updater bytes pass the SHA-256 pin while modified bytes fail the same pin
@@ -354,11 +354,11 @@ PASS: bootstrap verifies the one-read elevated updater bytes before executing th
 Assertions=134;Failures=0
 EXIT=0
 === Test-F2AclProtectedReleaseNativeHelper.ps1 ===
-Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2AclProtectedReleaseNativeHelper.ps1"
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-final-execution-preflight-review\scripts\f2-acl\Test-F2AclProtectedReleaseNativeHelper.ps1"
 F2NativeHelperAssertions=20;Failures=0;TempCleanup=PASS
 EXIT=0
 === Test-F2ProtectedReleaseDiagnostics.ps1 ===
-Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2ProtectedReleaseDiagnostics.ps1"
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-final-execution-preflight-review\scripts\f2-acl\Test-F2ProtectedReleaseDiagnostics.ps1"
 PASS: production launcher consumes a bounded child diagnostic record
 PASS: shared diagnostic protocol is present for real cross-process testing
 PASS: requester diagnostics preserve an exact approved stable error code
@@ -379,7 +379,7 @@ PASS: real production child reports synthetic failure for old installed-release 
 PASS: real production child reports synthetic failure for native helper compilation
 PASS: real production child reports synthetic failure for initial release-lock creation
 PASS: production child command and fixed PowerShell arguments stay below the Windows command-line limit
-ProductionChildEncodedCommandCharacters=18744;FixedArgumentReserve=100;Limit=32767
+ProductionChildEncodedCommandCharacters=18760;FixedArgumentReserve=100;Limit=32767
 PASS: cross-process report preserves ChildBootstrapInitialization/UPDATE_CHILD_BOOTSTRAP_INITIALIZATION_FAILED with child exit 1
 PASS: cross-process report preserves UpdaterScriptLoading/UPDATE_UPDATER_SCRIPT_LOAD_FAILED with child exit 1
 PASS: cross-process report preserves ElevatedIdentityValidation/UPDATE_ELEVATED_REQUESTER_IDENTITY_MISMATCH with child exit 1
