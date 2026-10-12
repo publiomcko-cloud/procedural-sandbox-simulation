@@ -9,6 +9,23 @@ function Get-F2UpdateLauncherSha256 {
     finally { $sha.Dispose() }
 }
 
+function Get-F2UpdateLauncherSafeErrorCode {
+    param([AllowNull()][string]$Code)
+    $approvedCodes = @(
+        'UPDATE_RECOVERY_TRANSACTION_ID_REQUIRED','UPDATE_REQUESTER_MUST_BE_STANDARD_TOKEN',
+        'UPDATE_REQUESTER_IDENTITY_UNVERIFIABLE','UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN',
+        'UPDATE_REPARSE_INPUT_REJECTED','UPDATE_SOURCE_COMMIT_MISMATCH','UPDATE_SOURCE_ORIGIN_MISMATCH',
+        'UPDATE_SOURCE_WORKTREE_NOT_CLEAN','UPDATE_DIAGNOSTIC_PROTOCOL_SIZE_INVALID',
+        'UPDATE_DIAGNOSTIC_PROTOCOL_HASH_MISMATCH','UPDATE_DIAGNOSTIC_PROTOCOL_PARSE_FAILED',
+        'UPDATE_DIAGNOSTIC_CHANNEL_FAILURE','UPDATE_INPUT_TYPE_OR_SIZE_INVALID',
+        'UPDATE_UPDATER_HASH_MISMATCH','UPDATE_CANDIDATE_HASH_MISMATCH',
+        'UPDATE_CANDIDATE_IDENTITY_MISMATCH','WINDOWS_POWERSHELL_51_UNAVAILABLE',
+        'UPDATE_ELEVATED_BOOTSTRAP_SCRIPT_PARSE_FAILED'
+    )
+    if ($Code -cin $approvedCodes) { return $Code }
+    return 'UPDATE_UNCLASSIFIED_FAILURE'
+}
+
 function New-F2UpdateElevatedChildScript {
     param(
         [Parameter(Mandatory)][string]$UpdaterPath,
@@ -221,7 +238,7 @@ function Invoke-F2ProtectedReleaseUpdateLauncher {
     } catch {
         $code = if ($_.Exception.HResult -band 0xFFFF) { [int]($_.Exception.HResult -band 0xFFFF) } else { 1 }
         $outcome = if ($uacLaunchAttempted -and $code -eq 1223) { 'UAC_CANCELLED' } elseif ($uacLaunchAttempted) { 'UPDATE_LAUNCH_OR_WAIT_FAILURE' } else { 'UPDATE_NON_ELEVATED_PREFLIGHT_FAILURE' }
-        $safeErrorCode = if($_.Exception.Message -match '^[A-Z0-9_:.\-]{1,100}$'){$_.Exception.Message}else{'UPDATE_UNCLASSIFIED_FAILURE'}
+        $safeErrorCode = Get-F2UpdateLauncherSafeErrorCode -Code ([string]$_.Exception.Message)
         $childExited = $false;$childExitCode=$null;$childPid=$null
         if($null -ne $child){$childPid=$child.Id;try{$child.Refresh();$childExited=$child.HasExited;if($childExited){$childExitCode=[int]$child.ExitCode}}catch{}}
         [Console]::Out.WriteLine((@{Success=$false;Outcome=$outcome;ElevationLaunches=[int]$uacLaunchAttempted;ChildProcessId=$childPid;ChildExited=$childExited;ActualChildExitCode=$childExitCode;Stage=$parentStage;ErrorCode=$safeErrorCode;DiagnosticStatus=if($uacLaunchAttempted){'CHANNEL_OR_WAIT_FAILURE'}else{'NOT_STARTED'}} | ConvertTo-Json -Compress))
