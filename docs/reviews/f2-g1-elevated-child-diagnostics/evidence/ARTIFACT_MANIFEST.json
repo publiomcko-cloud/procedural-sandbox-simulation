@@ -1,0 +1,94 @@
+{
+    "Schema":  "f2-g1-elevated-child-diagnostics-artifact-manifest-v1",
+    "ReviewBaseCommit":  "9e9915e6eb15bcb20cc2f5a1c990791e2a822b90",
+    "ProductionSourceCommit":  "03882eedf3104fc33aa0cf503ddef9c9a6bec702",
+    "ProductionSourceParent":  "12575f4802f471210c0516b68b5d0d37d2eb8642",
+    "Files":  [
+                  {
+                      "Path":  ".github/workflows/f2-acl-source-only.yml",
+                      "CheckoutSha256":  "76d826696d746eef3f39c58c5a1bcf90c9c01b1790420aa689f687d85b2f196e",
+                      "GitBlobSha256":  "16d54ca3eb0e471eddc637fc50c0a587352d3745782690b4f64a6e3a93d66969"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-elevated-child-diagnostics/F2_G1_ELEVATED_CHILD_DIAGNOSTICS_REVIEW.md",
+                      "CheckoutSha256":  "cfb1af615e1a08f34e9bb89b190fa8581fec0504c596f36a6f1fc92e6eeaa8d1",
+                      "GitBlobSha256":  "cfb1af615e1a08f34e9bb89b190fa8581fec0504c596f36a6f1fc92e6eeaa8d1"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-elevated-child-diagnostics/evidence/ITERATION_AUDIT.md",
+                      "CheckoutSha256":  "0c7be08d8d211b893596a34a6f032737b4357421f14dad60336399eb9db36016",
+                      "GitBlobSha256":  "51f87ddb15acfad119a406debc4d44d54af6b5f1a998ff5827a497382056e684"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-elevated-child-diagnostics/evidence/SOURCE_CHAIN_VALIDATION.log",
+                      "CheckoutSha256":  "87e66cd4a182d914764e729cb55b8538e4107ba58ac387f8d7c657464360f57e",
+                      "GitBlobSha256":  "f89bcf725e1da32b44287d60352dcf7e81d80617e8b2a2e4160aa4d26e2639ab"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-elevated-child-diagnostics/evidence/WINDOWS_PS51_PARSER_AND_DIFF.log",
+                      "CheckoutSha256":  "8bbb453146f07375184147142e728ad52281688026b59e81556b563f6dfb1c71",
+                      "GitBlobSha256":  "d929feb781dd7cd24afbe32d227e8539a45ab8a28e84256720c34f2754a5990c"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-elevated-child-diagnostics/evidence/WINDOWS_PS51_REGRESSION.log",
+                      "CheckoutSha256":  "64de04dc7742d564573b99dcb3c8c9e3746f3029ff20848fc724f2e2abd98ae9",
+                      "GitBlobSha256":  "52465890b0cbd9d18467068adf22940c345b75c29c4d04d957c572fb2ac1824f"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-protected-release-updater/F2_G1_PROTECTED_RELEASE_UPDATER_REVIEW.md",
+                      "CheckoutSha256":  "0ed07730b0a89e2b27b7e49cb545b37f3eb10e3356620c41754a0ba4bc287ce2",
+                      "GitBlobSha256":  "0ed07730b0a89e2b27b7e49cb545b37f3eb10e3356620c41754a0ba4bc287ce2"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-protected-release-updater/f2-runtime-release-v3.candidate.json",
+                      "CheckoutSha256":  "ac42f719583ba58b1c122a9318368d34699cf60103787034525be4fbe937ad07",
+                      "GitBlobSha256":  "ac42f719583ba58b1c122a9318368d34699cf60103787034525be4fbe937ad07"
+                  },
+                  {
+                      "Path":  "scripts/f2-acl/F2ProtectedRelease.Diagnostics.ps1",
+                      "CheckoutSha256":  "f66783ac53ce84c093193fc6e20547e707da7013f4f1406a87b088ab6898654c",
+                      "GitBlobSha256":  "1a30730e109c0e234ed8a2e8933b5b8c69a0037ef593e20089e041d83b3e1ca8"
+                  },
+                  {
+                      "Path":  "scripts/f2-acl/Invoke-F2ProtectedReleaseUpdate.ps1",
+                      "CheckoutSha256":  "c4dfc71606888555f7b93930671045490ba8e49d20d65f858eab6c084bf620eb",
+                      "GitBlobSha256":  "4b2817a67d87b737a28525f42026e4c4d64fd25e3783dba5e947aed781eed546"
+                  },
+                  {
+                      "Path":  "scripts/f2-acl/New-F2ProtectedReleaseDiagnosticsArtifactManifest.ps1",
+                      "CheckoutSha256":  "b17b14a8591acbf6b7246f60aabd3ba404a654c420f228f41b2424c3e2dc1f65",
+                      "GitBlobSha256":  "b17b14a8591acbf6b7246f60aabd3ba404a654c420f228f41b2424c3e2dc1f65"
+                  },
+                  {
+                      "Path":  "scripts/f2-acl/Start-F2ProtectedReleaseUpdate.ps1",
+                      "CheckoutSha256":  "054e69a4b908c1fe1927e5997bf1c7aca003e8ae21fbaa278323fdf6b5179e68",
+                      "GitBlobSha256":  "a3f7ff6291cdbfa3b9245ff74150e3299ccb4c9d26ac55debc763dbb794cec8a"
+                  },
+                  {
+                      "Path":  "scripts/f2-acl/Test-F2AclProtectedReleaseUpdater.ps1",
+                      "CheckoutSha256":  "39ac2ff4b23da9181f80cd809f8630bed9e6ec46f0999095b697b11f026fe5d7",
+                      "GitBlobSha256":  "685d8d204cdb51cfe94fbba4866b31d254f1a556332061c616421f6a41559136"
+                  },
+                  {
+                      "Path":  "scripts/f2-acl/Test-F2ProtectedReleaseDiagnosticParser.ps1",
+                      "CheckoutSha256":  "a3f28d321e28eac878f1167447495856aef3749bcd579453e02ee18f7ca25486",
+                      "GitBlobSha256":  "a3f28d321e28eac878f1167447495856aef3749bcd579453e02ee18f7ca25486"
+                  },
+                  {
+                      "Path":  "scripts/f2-acl/Test-F2ProtectedReleaseDiagnosticSuites.ps1",
+                      "CheckoutSha256":  "af5bf194aa507192bce849da6117b5c13fc19eb1b97599e1049fa993df833b75",
+                      "GitBlobSha256":  "af5bf194aa507192bce849da6117b5c13fc19eb1b97599e1049fa993df833b75"
+                  },
+                  {
+                      "Path":  "scripts/f2-acl/Test-F2ProtectedReleaseDiagnostics.ps1",
+                      "CheckoutSha256":  "9eea037483cc4962b5236c81c2517262d4170c9e9705cf19b5bdde7d57d68693",
+                      "GitBlobSha256":  "9eea037483cc4962b5236c81c2517262d4170c9e9705cf19b5bdde7d57d68693"
+                  },
+                  {
+                      "Path":  "scripts/f2-acl/Test-F2ProtectedReleaseDiagnosticsSourceChain.ps1",
+                      "CheckoutSha256":  "1e5228708a3250d44e056460c903e93b48c2453987a51527f4824008e86d1e02",
+                      "GitBlobSha256":  "1e5228708a3250d44e056460c903e93b48c2453987a51527f4824008e86d1e02"
+                  }
+              ],
+    "ManifestSelfHash":  "EXCLUDED_TO_AVOID_RECURSIVE_HASHING; report the committed manifest hash separately"
+}

@@ -1,0 +1,4 @@
+PowerShellVersion=5.1.22621.6133 Command=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2ProtectedReleaseDiagnosticParser.ps1
+PowerShellFiles=20;ParserErrors=0
+ParserExitCode=0
+DiffCheckCommand=git diff --cached --check 9e9915e6eb15bcb20cc2f5a1c990791e2a822b90;DiffCheck=PASS;ExitCode=0

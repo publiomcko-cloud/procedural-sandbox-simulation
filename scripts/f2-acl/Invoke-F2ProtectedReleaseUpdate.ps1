@@ -331,7 +331,7 @@ function Assert-F2UpdateProcessQuiescence {
 
 function New-F2UpdateNativeSupport {
     if ($null -ne ('F2Update.NativeOps' -as [type])) { return }
-    Add-Type -TypeDefinition @'
+    try { Add-Type -TypeDefinition @'
 using System;
 using System.ComponentModel;
 using System.IO;
@@ -373,6 +373,7 @@ namespace F2Update {
   }
 }
 '@ -ErrorAction Stop
+    } catch { throw 'UPDATE_NATIVE_HELPER_COMPILE_FAILED' }
 }
 
 function New-F2UpdateDirectory {
@@ -555,8 +556,10 @@ function Invoke-F2UpdateTransaction {
             if (-not [IO.File]::Exists($lockPath)) {
                 $leaseBytes = [byte[]]@()
                 $writeHook = Get-F2UpdateHook -Context $Context -Name 'WriteFile'
-                if ($null -ne $writeHook) { & $writeHook $lockPath $leaseBytes 'File' }
-                else { New-F2UpdateNativeSupport;[F2Update.NativeOps]::CreateNew($lockPath,$leaseBytes,'O:BAG:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1200A9;;;AU)') }
+                try {
+                    if ($null -ne $writeHook) { & $writeHook $lockPath $leaseBytes 'File' }
+                    else { New-F2UpdateNativeSupport;[F2Update.NativeOps]::CreateNew($lockPath,$leaseBytes,'O:BAG:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1200A9;;;AU)') }
+                } catch { throw 'UPDATE_RELEASE_LOCK_CREATE_FAILED' }
                 Invoke-F2UpdateFaultPoint -Name 'ReleaseLeaseCreated' -Context $Context
             }
             [void](Assert-F2UpdateFile -Path $lockPath -ExpectedSha256 (Get-F2UpdateSha256 -Bytes ([byte[]]@())) -Context $Context -MaxBytes 1)
@@ -643,6 +646,7 @@ function Invoke-F2UpdateTransaction {
         return [pscustomobject]@{Success=$true;Outcome='UPDATE_COMPLETE';TransactionId=$txId;ReviewedCommitSha=$manifest.ReviewedCommitSha;OldReleaseCommitSha=$script:F2UpdateOldCommit;PackageRoot=$finalRoot;OldReleaseRetained=$true;OldManifestBackup=$backupPath;JournalPath=$journalPath;InstalledFiles=7;PartialStagePaths=@()}
     } catch {
         $safeCode = [string]$_.Exception.Message
+        if ($_.Exception -is [Management.Automation.CommandNotFoundException] -and [string]$_.Exception.CommandName -ieq 'git.exe') { $safeCode = 'UPDATE_SOURCE_GIT_UNAVAILABLE' }
         if ($safeCode -notmatch '^[A-Z0-9_:.\-]{1,100}$') { $safeCode = 'UPDATE_UNCLASSIFIED_FAILURE' }
         $innerType = if ($null -ne $_.Exception.InnerException) { $_.Exception.InnerException.GetType().FullName } else { $null }
         return [pscustomobject]@{Success=$false;Outcome='UPDATE_BLOCKED';Stage=$stage;ErrorCode=$safeCode;FailureType=$_.Exception.GetType().FullName;FailureInnerType=$innerType;TransactionId=$txId;ActiveManifestSha256=$activeState;PartialObjectsPreserved=$true;CleanupPerformed=$false}
