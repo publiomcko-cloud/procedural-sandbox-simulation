@@ -1,0 +1,8 @@
+F2 G1 native Add-Type defect reproduction (source-only)
+Source repository commit: 40723492b97983c0c7bc6d441a1bcbace823ffe8
+Windows PowerShell child: 5.1.22621.6133
+Probe: fresh powershell.exe -NoProfile -NonInteractive child; extracted the exact Add-Type -TypeDefinition here-string from the immutable updater source and invoked Add-Type only. No updater function or entrypoint was invoked.
+Child process exit code: 1
+Compiler diagnostic (localized system output): O melhor método sobrecarregado compatível com 'F2Update.NativeOps.CreateFileNative(string, uint, uint, ref F2Update.NativeOps.SECURITY_ATTRIBUTES, uint, uint, System.IntPtr)' tem alguns argumentos inválidos.
+Compiler source excerpt: using(SafeFileHandle handle=CreateFileNative(path,0x40000000,0,ref attributes,1,0x80,null)) {
+The compiler identified the final System.IntPtr parameter as incompatible with C# null. The original stderr was CLIXML; this sanitized record retains the diagnostic without per-user TEMP paths.

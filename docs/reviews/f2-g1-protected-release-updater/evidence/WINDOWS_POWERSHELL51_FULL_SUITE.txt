@@ -1,0 +1,20 @@
+Windows PowerShell 5.1 source-only validation
+Date: 2026-10-12
+Repository: C:\Dev\f2-g1-protected-updater
+Invocation: direct call to %SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe with -NoProfile -NonInteractive -ExecutionPolicy Bypass -File
+
+Test-F2AclCapture.Protocol.ps1: exit 0; 152 assertions; zero failures.
+Test-F2AclIcacls.Corroboration.ps1: exit 0; 118 assertions; zero failures.
+Test-F2AclIcacls.Runtime.ps1: exit 0; 41 assertions; zero failures.
+Test-F2AclEntrypointArguments.ps1: exit 0; 18 assertions; zero failures.
+Test-F2AclProtectedReleaseUpdater.ps1: exit 0; 133 assertions; zero failures.
+Test-F2AclProtectedReleaseNativeHelper.ps1: exit 0; 20 assertions; zero failures; TEMP cleanup passed.
+
+Total: 482 assertions; zero failures; six child exit codes were 0.
+The updater suite additionally ran a TEMP-only CMD quoting fixture. Its inert PowerShell command exited 37 and CMD propagated exit 37. It did not import or invoke the production updater, launcher, UAC, or protected paths.
+
+Separate complete stdout and stderr files are named Test-F2Acl*.stdout.txt and Test-F2Acl*.stderr.txt in this directory. All stderr files are empty for the successful direct runs.
+
+Harness diagnosis: An earlier attempt used Start-Process from a PowerShell 7 parent to start Windows PowerShell 5.1. That inherited a PSModulePath containing PowerShell 7/WindowsApps module roots; the child then failed to auto-load Get-FileHash in the Corroboration suite. The failure was reproduced with Start-Process. Directly invoking the approved Windows PowerShell 5.1 executable produced the normal Windows PowerShell module path and the same Corroboration suite passed 118/118. See WINDOWS_TEST_HARNESS_DIAGNOSTIC.txt. This was test-runner environment contamination; no product source was changed.
+
+The command controller's first summary predicate also required the assertion marker to be the final stdout line. Protocol emits an additional Cases line after its 152/0 summary, so that controller returned 1 after all test processes had exited 0. Counts above were read from each captured suite output and checked individually; the controller status is not represented as a test-suite failure or pass.

@@ -88,7 +88,7 @@ Assert-Entrypoint ($productionLauncher -match '\$MyInvocation\.UnboundArguments'
 Assert-Entrypoint ($productionCoordinator -match '\$MyInvocation\.UnboundArguments' -and $productionCoordinator -notmatch '\$args\.Count') 'production coordinator uses a PS5.1-safe unbound-argument check'
 Assert-Entrypoint ($productionLauncher.IndexOf('try {', [StringComparison]::Ordinal) -lt $productionLauncher.IndexOf('$MyInvocation.UnboundArguments', [StringComparison]::Ordinal)) 'launcher argument validation is inside its protected error handler'
 Assert-Entrypoint ($productionCoordinator.IndexOf('try {', [StringComparison]::Ordinal) -lt $productionCoordinator.IndexOf('$MyInvocation.UnboundArguments', [StringComparison]::Ordinal)) 'coordinator path and argument checks are inside its protected error handler'
-Assert-Entrypoint ($productionCoordinator -match 'F2-G1-Icacls\\scripts\\f2-acl' -and $productionCoordinator -match 'Invoke-F2IcaclsProtectedCoordinator\.ps1') 'coordinator retains its exact installed-path enforcement'
+Assert-Entrypoint ($productionCoordinator -match 'F2-G1-Icacls.*releases' -and $productionCoordinator -match 'Invoke-F2IcaclsProtectedCoordinator\.ps1' -and $productionCoordinator -match 'ReviewedCommitSha') 'coordinator retains its commit-versioned exact installed-path enforcement'
 Assert-Entrypoint ($coordinatorAst.ParamBlock.Parameters.Count -eq 1 -and $coordinatorAst.ParamBlock.Parameters[0].Name.VariablePath.UserPath -eq 'CaptureId' -and $productionCoordinator -match '\$CaptureId -notmatch ''\^\[0-9a-f\]\{32\}\$''') 'coordinator retains exactly one required validated CaptureId input'
 
 $script:PowerShell51 = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::System)) 'WindowsPowerShell\v1.0\powershell.exe'

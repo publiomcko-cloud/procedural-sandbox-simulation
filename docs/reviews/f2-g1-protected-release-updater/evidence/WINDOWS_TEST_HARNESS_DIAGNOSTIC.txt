@@ -1,0 +1,21 @@
+Windows PowerShell test-runner diagnostic
+Date: 2026-10-12
+
+Observed first harness failure:
+- Parent was PowerShell 7.6.6.
+- Harness launched Windows PowerShell 5.1 with Start-Process -NoNewWindow -ArgumentList and redirected stdout/stderr.
+- The Corroboration test child exited 1 at Test-F2AclIcacls.Corroboration.ps1 line 19.
+- Exact error: `Get-F2IcaclsFileSha256 : The term 'Get-FileHash' is not recognized as the name of a cmdlet, function, script file, or operable program.` The failing function is Get-F2IcaclsFileSha256 in F2AclIcacls.Corroboration.psm1, line 58.
+
+Diagnosis evidence:
+- The PowerShell 7 parent had PSModulePath entries rooted under `C:\Program Files\PowerShell\7` and the PowerShell 7 WindowsApps package.
+- A Windows PowerShell 5.1 child created by Start-Process inherited that path, and `Get-Command Get-FileHash` failed.
+- Directly invoking the same `powershell.exe -NoProfile -NonInteractive` from the parent produced the Windows PowerShell module path (including `C:\Windows\System32\WindowsPowerShell\v1.0\Modules`), resolved `Get-FileHash` from Microsoft.PowerShell.Utility, and the Corroboration test passed 118 assertions with exit 0.
+- The test was then run through direct native invocation with stdout and stderr captured separately. All six suite child processes returned exit 0. Start-Process was not used for the final suite run.
+
+Separate controller issue:
+- The first aggregate status predicate expected every final stdout line to contain `Assertions=N;Failures=0`.
+- The Protocol suite reports its passing `Assertions=152;Failures=0` line and then a `Cases=...` inventory line. The controller therefore returned 1 after the suite had exited 0. The Native helper uses a distinct `F2NativeHelperAssertions=20;Failures=0` marker.
+- Per-suite child exit codes and assertion summaries were checked individually in `WINDOWS_POWERSHELL51_FULL_SUITE.txt`; the controller predicate was not treated as a test result.
+
+No updater, UAC, protected path, live process inventory, ACL, VM, G: or native F2 workload was used to diagnose this harness issue.

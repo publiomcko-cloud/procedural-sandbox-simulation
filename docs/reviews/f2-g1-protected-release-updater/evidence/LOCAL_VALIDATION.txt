@@ -1,0 +1,12 @@
+Local source-only validation for the PR #59 execution-topology correction
+Production updater/launcher/candidate commit: 8b70a70934445bee660c1e53e71b2e7b20a6191f (unchanged).
+Reviewed package base: d14aa0f6c9a1e358afa5b2a04a17e27a9bff22ed.
+Windows PowerShell 5.1 suites: Protocol 152, Corroboration 118, Runtime 41, Entrypoint 18, Updater 133, Native helper 20; 482 assertions, zero failures; six child exits 0.
+PowerShell 5.1 parser sweep: 14 tracked PowerShell files, zero parser errors, exit 0.
+Whitespace validation: git diff --check and staged equivalent pass (final result in GIT_DIFF_CHECK.txt).
+Process topology checks: former three-PowerShell caller/requester/updater inventory is rejected; exact two-process inventory is accepted; no ancestor exception added.
+CMD quoting/error propagation: TEMP-only inert command returned exit code 37 through CMD; production launch command not executed.
+EOL reconciliation: WINDOWS_EOL_RECONCILIATION.txt records exact Git-content and Windows CRLF hashes and the prior mixed-EOL measurement correction.
+Start-Process-from-PS7 harness failure and direct-PS5.1 rerun diagnosis: WINDOWS_TEST_HARNESS_DIAGNOSTIC.txt.
+Complete stdout/stderr: paired Test-F2Acl*.stdout.txt / Test-F2Acl*.stderr.txt files and WINDOWS_POWERSHELL51_FULL_SUITE.txt.
+No UAC, protected installation, live icacls, VM/Hyper-V/G:, process termination, ACL change, baseline modification, or native F2 workload.

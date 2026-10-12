@@ -1,0 +1,569 @@
+powershell-source-only	Set up job	﻿2026-10-12T16:30:58.6507292Z Current runner version: '2.337.0'
+powershell-source-only	Set up job	2026-10-12T16:30:58.6564012Z ##[group]Runner Image Provisioner
+powershell-source-only	Set up job	2026-10-12T16:30:58.6565396Z Hosted Compute Agent
+powershell-source-only	Set up job	2026-10-12T16:30:58.6566462Z Version: 20260901.588
+powershell-source-only	Set up job	2026-10-12T16:30:58.6567982Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+powershell-source-only	Set up job	2026-10-12T16:30:58.6569225Z Build Date: 2026-09-01T19:56:44Z
+powershell-source-only	Set up job	2026-10-12T16:30:58.6570420Z Worker ID: {2bd7a83d-2493-482a-9755-8fb35060579f}
+powershell-source-only	Set up job	2026-10-12T16:30:58.6571629Z Azure Region: westcentralus
+powershell-source-only	Set up job	2026-10-12T16:30:58.6572602Z ##[endgroup]
+powershell-source-only	Set up job	2026-10-12T16:30:58.6574941Z ##[group]Operating System
+powershell-source-only	Set up job	2026-10-12T16:30:58.6576072Z Microsoft Windows Server 2025
+powershell-source-only	Set up job	2026-10-12T16:30:58.6577167Z 10.0.26100
+powershell-source-only	Set up job	2026-10-12T16:30:58.6578041Z Datacenter
+powershell-source-only	Set up job	2026-10-12T16:30:58.6578851Z ##[endgroup]
+powershell-source-only	Set up job	2026-10-12T16:30:58.6579816Z ##[group]Runner Image
+powershell-source-only	Set up job	2026-10-12T16:30:58.6580815Z Image: windows-2025-vs2026
+powershell-source-only	Set up job	2026-10-12T16:30:58.6581799Z Version: 20260925.250.1
+powershell-source-only	Set up job	2026-10-12T16:30:58.6583784Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20260925.250/images/windows/Windows2025-VS2026-Readme.md
+powershell-source-only	Set up job	2026-10-12T16:30:58.6587399Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20260925.250
+powershell-source-only	Set up job	2026-10-12T16:30:58.6589634Z ##[endgroup]
+powershell-source-only	Set up job	2026-10-12T16:30:58.6591699Z ##[group]GITHUB_TOKEN Permissions
+powershell-source-only	Set up job	2026-10-12T16:30:58.6594245Z Contents: read
+powershell-source-only	Set up job	2026-10-12T16:30:58.6595291Z Metadata: read
+powershell-source-only	Set up job	2026-10-12T16:30:58.6596155Z Packages: read
+powershell-source-only	Set up job	2026-10-12T16:30:58.6596994Z ##[endgroup]
+powershell-source-only	Set up job	2026-10-12T16:30:58.6600039Z Secret source: Actions
+powershell-source-only	Set up job	2026-10-12T16:30:58.6601564Z Cache mode: write
+powershell-source-only	Set up job	2026-10-12T16:30:58.6602832Z Prepare workflow directory
+powershell-source-only	Set up job	2026-10-12T16:30:58.7189501Z Prepare all required actions
+powershell-source-only	Set up job	2026-10-12T16:30:58.7264429Z Getting action download info
+powershell-source-only	Set up job	2026-10-12T16:30:59.0341728Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+powershell-source-only	Set up job	2026-10-12T16:30:59.4320547Z Complete job name: powershell-source-only
+powershell-source-only	Run actions/checkout@v4	﻿2026-10-12T16:31:00.3830433Z ##[group]Run actions/checkout@v4
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3833708Z with:
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3834769Z   fetch-depth: 0
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3836383Z   repository: publiomcko-cloud/procedural-sandbox-simulation
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3845901Z   token: ***
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3846948Z   ssh-strict: true
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3848108Z   ssh-user: git
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3849039Z   persist-credentials: true
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3850124Z   clean: true
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3851082Z   sparse-checkout-cone-mode: true
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3852191Z   fetch-tags: false
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3853080Z   show-progress: true
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3854052Z   lfs: false
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3855021Z   submodules: false
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3856047Z   set-safe-directory: true
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3857366Z   allow-unsafe-pr-checkout: false
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:00.3859504Z ##[endgroup]
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8402721Z Syncing repository: publiomcko-cloud/procedural-sandbox-simulation
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8411757Z ##[group]Getting Git version info
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8413023Z Working directory is 'D:\a\procedural-sandbox-simulation\procedural-sandbox-simulation'
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8418963Z [command]"C:\Program Files\Git\bin\git.exe" version
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8419632Z git version 2.55.0.windows.5
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8421257Z ##[endgroup]
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8427217Z Temporarily overriding HOME='D:\a\_temp\fb44e155-dc1c-41e5-9451-4cc999149956' before making global git config changes
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8428582Z Adding repository directory to the temporary git global config as a safe directory
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8430088Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\procedural-sandbox-simulation\procedural-sandbox-simulation
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8432280Z Deleting the contents of 'D:\a\procedural-sandbox-simulation\procedural-sandbox-simulation'
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8433548Z ##[group]Initializing the repository
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8434535Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\procedural-sandbox-simulation\procedural-sandbox-simulation
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8439250Z Initialized empty Git repository in D:/a/procedural-sandbox-simulation/procedural-sandbox-simulation/.git/
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8441606Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/publiomcko-cloud/procedural-sandbox-simulation
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8443539Z ##[endgroup]
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8444326Z ##[group]Disabling automatic garbage collection
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8445088Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8446552Z ##[endgroup]
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8447205Z ##[group]Setting up auth
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8448020Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:02.8450833Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:04.2030640Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:04.2465703Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:05.2286880Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:05.2992516Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:06.3415750Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:06.4088663Z ##[endgroup]
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:06.4097331Z ##[group]Fetching the repository
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:06.4102032Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +b3a686989950ab08cec384f7bc58e73c2e7801d7:refs/remotes/pull/59/merge
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.2976750Z From https://github.com/publiomcko-cloud/procedural-sandbox-simulation
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.2981418Z  * [new branch]      docs/architecture-continuity-baseline    -> origin/docs/architecture-continuity-baseline
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.2990538Z  * [new branch]      docs/f2-g1-current-source-preflight-20261012 -> origin/docs/f2-g1-current-source-preflight-20261012
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3003756Z  * [new branch]      docs/f2-g1-install-attempt-receipt-20261012 -> origin/docs/f2-g1-install-attempt-receipt-20261012
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3028573Z  * [new branch]      docs/f2-g1-install-blocked-receipt       -> origin/docs/f2-g1-install-blocked-receipt
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3067381Z  * [new branch]      docs/f2-g1-install-failure-diagnostics   -> origin/docs/f2-g1-install-failure-diagnostics
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3090036Z  * [new branch]      docs/f2-g1-supervision-issue44           -> origin/docs/f2-g1-supervision-issue44
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3097331Z  * [new branch]      docs/p0-1-compatibility-prep-20261008    -> origin/docs/p0-1-compatibility-prep-20261008
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3114201Z  * [new branch]      docs/p0-1-f1-5-provenance-ticket-20261008 -> origin/docs/p0-1-f1-5-provenance-ticket-20261008
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3122380Z  * [new branch]      docs/p0-1-f1-6-notice-resolution-gate-20261008 -> origin/docs/p0-1-f1-6-notice-resolution-gate-20261008
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3142130Z  * [new branch]      docs/p0-1-f1-authorization-20261008      -> origin/docs/p0-1-f1-authorization-20261008
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3146475Z  * [new branch]      docs/p0-1-f2-provisioning-gate-20261008  -> origin/docs/p0-1-f2-provisioning-gate-20261008
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3167022Z  * [new branch]      docs/p0-1-f2-restricted-runtime-plan-20261008 -> origin/docs/p0-1-f2-restricted-runtime-plan-20261008
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3173036Z  * [new branch]      docs/post-p0-0-integration-status        -> origin/docs/post-p0-0-integration-status
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3196739Z  * [new branch]      docs/review-f2-auto-r2-b280633           -> origin/docs/review-f2-auto-r2-b280633
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3216204Z  * [new branch]      docs/review-f2-g1-supervision-5a5ba68    -> origin/docs/review-f2-g1-supervision-5a5ba68
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3220103Z  * [new branch]      docs/review-f2-g1-supervision-876d48a    -> origin/docs/review-f2-g1-supervision-876d48a
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3225175Z  * [new branch]      docs/review-f2-sandbox-automation-26f5007 -> origin/docs/review-f2-sandbox-automation-26f5007
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3226851Z  * [new branch]      docs/review-f2-sandbox-automation-e1b2e89 -> origin/docs/review-f2-sandbox-automation-e1b2e89
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3228553Z  * [new branch]      docs/review-f2-sandbox-readiness-16720f2 -> origin/docs/review-f2-sandbox-readiness-16720f2
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3230597Z  * [new branch]      docs/review-f2-sandbox-startup-d5b30f3   -> origin/docs/review-f2-sandbox-startup-d5b30f3
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3233500Z  * [new branch]      docs/review-p0-0-9e85ef1                 -> origin/docs/review-p0-0-9e85ef1
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3234886Z  * [new branch]      docs/review-p0-0-a9eba59                 -> origin/docs/review-p0-0-a9eba59
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3238577Z  * [new branch]      docs/review-p0-1-c1c7a8a                 -> origin/docs/review-p0-1-c1c7a8a
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3240524Z  * [new branch]      docs/review-p0-1-f0-8cfbd94              -> origin/docs/review-p0-1-f0-8cfbd94
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3250349Z  * [new branch]      docs/review-p0-1-f0-correction-e8af422   -> origin/docs/review-p0-1-f0-correction-e8af422
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3251853Z  * [new branch]      docs/review-p0-1-f1-3d5e9c5              -> origin/docs/review-p0-1-f1-3d5e9c5
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3253211Z  * [new branch]      docs/review-p0-1-f1-5-correction-3d67539 -> origin/docs/review-p0-1-f1-5-correction-3d67539
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3255702Z  * [new branch]      docs/review-p0-1-f1-5-fba1173            -> origin/docs/review-p0-1-f1-5-fba1173
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3256949Z  * [new branch]      docs/review-p0-1-f1-6-33b0390            -> origin/docs/review-p0-1-f1-6-33b0390
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3258348Z  * [new branch]      docs/review-p0-1-f1-6-correction-cfa0b7c -> origin/docs/review-p0-1-f1-6-correction-cfa0b7c
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3259815Z  * [new branch]      docs/review-p0-1-f1-correction-d86755e   -> origin/docs/review-p0-1-f1-correction-d86755e
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3261283Z  * [new branch]      docs/review-p0-1-f2-blocked-b2aa7846     -> origin/docs/review-p0-1-f2-blocked-b2aa7846
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3262963Z  * [new branch]      docs/review-p0-1-f2-corrections-9d7cb32  -> origin/docs/review-p0-1-f2-corrections-9d7cb32
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3264466Z  * [new branch]      docs/visual-p0-0-9e85ef1                 -> origin/docs/visual-p0-0-9e85ef1
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3265975Z  * [new branch]      evidence/f2-g1-protected-installation-20261012 -> origin/evidence/f2-g1-protected-installation-20261012
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3267561Z  * [new branch]      feat/p0-1-compatibility-inventory        -> origin/feat/p0-1-compatibility-inventory
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3268854Z  * [new branch]      feat/p0-1-f1-5-provenance                -> origin/feat/p0-1-f1-5-provenance
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3270507Z  * [new branch]      feat/p0-1-f1-6-notice-resolution         -> origin/feat/p0-1-f1-6-notice-resolution
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3272087Z  * [new branch]      feat/p0-1-f1-artifact-inspection         -> origin/feat/p0-1-f1-artifact-inspection
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3273411Z  * [new branch]      feat/p0-1-f2-isolated-runtime            -> origin/feat/p0-1-f2-isolated-runtime
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3274720Z  * [new branch]      feat/p0-1-f2-sandbox-readiness           -> origin/feat/p0-1-f2-sandbox-readiness
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3276065Z  * [new branch]      feat/p0-1-terrain-research               -> origin/feat/p0-1-terrain-research
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3277553Z  * [new branch]      feat/phase0-environment                  -> origin/feat/phase0-environment
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3278690Z  * [new branch]      feat/phase0-prototype                    -> origin/feat/phase0-prototype
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3280047Z  * [new branch]      fix/f2-baseline-capture-identity-issue48 -> origin/fix/f2-baseline-capture-identity-issue48
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3281936Z  * [new branch]      fix/f2-g1-protected-release-updater      -> origin/fix/f2-g1-protected-release-updater
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3291031Z  * [new branch]      fix/f2-g1-ps51-entrypoint-release        -> origin/fix/f2-g1-ps51-entrypoint-release
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3292483Z  * [new branch]      fix/f2-guest-cmd-wrapper-issue41         -> origin/fix/f2-guest-cmd-wrapper-issue41
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3293661Z  * [new branch]      main                                     -> origin/main
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3294884Z  * [new branch]      review/f2-g1-installer-evidence-issue48  -> origin/review/f2-g1-installer-evidence-issue48
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3296270Z  * [new branch]      security/f2-acl-capture-issue48          -> origin/security/f2-acl-capture-issue48
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3297701Z  * [new branch]      security/f2-icacls-corroboration-issue48 -> origin/security/f2-icacls-corroboration-issue48
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3299037Z  * [new ref]         b3a686989950ab08cec384f7bc58e73c2e7801d7 -> pull/59/merge
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3301098Z ##[endgroup]
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3301796Z ##[group]Determining the checkout info
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3303011Z ##[endgroup]
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.3303909Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.5185160Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.5744506Z ##[group]Checking out the ref
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.5747383Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force refs/remotes/pull/59/merge
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7804214Z Note: switching to 'refs/remotes/pull/59/merge'.
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7804689Z 
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7805011Z You are in 'detached HEAD' state. You can look around, make experimental
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7805784Z changes and commit them, and you can discard any commits you make in this
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7806566Z state without impacting any branches by switching back to a branch.
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7807042Z 
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7807346Z If you want to create a new branch to retain commits you create, you may
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7808071Z do so (now or later) by using -c with the switch command. Example:
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7808490Z 
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7808675Z   git switch -c <new-branch-name>
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7808966Z 
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7809107Z Or undo this operation with:
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7809358Z 
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7809474Z   git switch -
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7809654Z 
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7809988Z Turn off this advice by setting config variable advice.detachedHead to false
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7810557Z 
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.7811152Z HEAD is now at b3a6869 Merge d63b51db7c2de8b8e1197ebede653f4d762cae9a into 0a4d98ecad4c50ba2f749e4fafe6d28e35794804
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.8078613Z ##[endgroup]
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.8828571Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+powershell-source-only	Run actions/checkout@v4	2026-10-12T16:31:08.9726835Z b3a686989950ab08cec384f7bc58e73c2e7801d7
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	﻿2026-10-12T16:31:09.0430942Z ##[group]Run $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1').Path
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:09.0432540Z ^[[36;1m$testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1').Path^[[0m
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:09.0434452Z ^[[36;1m$test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow^[[0m
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:09.0436106Z ^[[36;1mWrite-Host "F2AclTestProcessExit=$($test.ExitCode)"^[[0m
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:09.0436766Z ^[[36;1mif ($test.ExitCode -ne 0) { exit $test.ExitCode }^[[0m
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:09.1090771Z shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE -command ". '{0}'"
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:09.1091531Z ##[endgroup]
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:23.9656980Z Stage=bounded_partial_pipe_read
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:25.9324811Z Stage=fresh_process_imported_module_serialization_frame_and_worker_diagnostics
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:27.4200593Z Stage=production_encoded_worker_success
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:27.9442271Z Stage=production_encoded_worker_preframe_failure
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:28.2802155Z Stage=production_encoded_worker_exit_before_frame
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:28.5953879Z Stage=production_encoded_worker_arguments_and_pins
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:30.4548702Z Stage=production_encoded_worker_publication_failures
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:32.2774190Z Stage=production_encoded_worker_parse_start_timeout_and_oversize
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:34.5673244Z Stage=absolute_worker_and_pipe_deadline
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:37.7050292Z Stage=restricted_local_evidence_directory
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:38.6922792Z Assertions=152;Failures=0
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:38.6935652Z Cases=source_pins,uac_coordinator_same_and_different_admin_identity_policy,filtered_admin_rejection,requester_read_only_mailbox_acl_and_owner,requester_write_delete_dac_tamper_rejection,observed_programdata_sddl_0x116_acceptance,delete_child_delete_write_dac_write_owner_generic_write_generic_all_rejection,dangerous_inherited_parent_grant_rejection,protected_parent_required,unapproved_broad_create_rights_rejection,atomic_precreated_mailbox_collision,mailbox_junction_rejection,coordinator_status_exit_binding,no_cross_token_named_pipe_production,bounded_file_mailbox_same_token_worker_integration,mailbox_missing_duplicate_oversized,kingston_storage_valid_wrong_serial_wrong_model_ambiguous_missing_field_transport_mapping,post_collection_vm_identity_state_path_nic_storage,unknown_final_state_incomplete,complete,argument_quoting,frame_roundtrip,bounded_eof_probe,standard_ace,callback_ace_rejection,object_ace_rejection,unknown_ace_flag_rejection,ancestor_junction_rejection,oversized_writer,oversized_reader,corrupt,partial_frame,stalled_partial_header,missing,duplicate,malformed_json,missing_envelope,missing_record_field,child_exit,sha256,partial_record,empty_preflight_failure,stdout_stderr,timeout,absolute_monotonic_deadline,exited_worker_stdout_pipe_hold,exited_worker_stderr_pipe_hold,output_producing_hang,reader_disposal_failure,cleanup_failure_never_complete,restricted_evidence_directory,exact_acl_principals,read_only_parent_ace,write_parent_ace,write_attributes_parent_ace,bounded_stream_accounting,oversized_stream_rejection
+powershell-source-only	Run F2 ACL synthetic regression suite in Windows PowerShell 5.1	2026-10-12T16:31:41.8361845Z F2AclTestProcessExit=0
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	﻿2026-10-12T16:31:41.8813695Z ##[group]Run $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1').Path
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:41.8814510Z ^[[36;1m$testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1').Path^[[0m
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:41.8815570Z ^[[36;1m$test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow^[[0m
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:41.8816527Z ^[[36;1mWrite-Host "F2IcaclsTestProcessExit=$($test.ExitCode)"^[[0m
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:41.8816920Z ^[[36;1mif ($test.ExitCode -ne 0) { exit $test.ExitCode }^[[0m
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:41.8888889Z shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE -command ". '{0}'"
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:41.8889335Z ##[endgroup]
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.2180998Z PASS: actual repository helper pins match source files and retained collector provenance
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.3895079Z PASS: all pre-elevation synthetic identity, manifest, volume, path, pin and evidence gates pass
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.3911255Z PASS: expected allowlist contains exactly 11 unique objects
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.4604177Z PASS: unexpected NIC fails before any coordinator can launch
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.4797560Z PASS: incorrect Kingston model fails closed
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.4799741Z PASS: ambiguous disk identity fails closed
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.4874037Z PASS: evidence volume GUID cannot be substituted for ProjectVolumeGuid
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.4964577Z PASS: wrong G: volume identity fails closed
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.5077625Z PASS: baseline integrity digest mismatch fails closed
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.5197289Z PASS: reparse path fails before UAC
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.5379758Z PASS: reparse or alias in an ancestor chain fails before UAC
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.5560795Z PASS: missing path check fails before UAC
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.5784570Z PASS: evidence storage on G: is rejected
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.5885853Z PASS: source pin mismatch fails before UAC
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.6042936Z PASS: missing baseline fields return a closed preflight failure rather than throwing
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.6148925Z PASS: duplicate baseline object records fail preflight
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.6265573Z PASS: non-canonical path spelling is rejected as an alias even when it resolves to an approved object
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.6373426Z PASS: file-versus-directory substitution on an authorized path fails closed
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.7806622Z PASS: source pin verifier reads the pin manifest and hashes spaced file paths with correct PowerShell 5.1 parameter binding
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.7942192Z PASS: source pin verifier rejects modified helper source
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.7960628Z PASS: source pin verifier rejects a commit mismatch
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.8188604Z PASS: production command spec pins system icacls and uses one quoted allowlisted path without switches
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.8232089Z PASS: command spec rejects non-allowlisted paths before process creation
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.9064821Z PASS: native-shaped output parses first header-line ACE and inherited ACE flags
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.9525089Z PASS: native friendly principal spellings resolve to their well-known SIDs
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:43.9560885Z PASS: unexpected trailer text prevents a complete parse
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.0093449Z PASS: matching synthetic object is classified PASS
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.0480760Z PASS: fully parsed different rights classify MISMATCH
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.0522269Z PASS: unsupported icacls rights are INDETERMINATE
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.0537735Z PASS: failed native invocation cannot classify an ACL
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.0558565Z PASS: wrong target path is rejected before ACE attribution
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.0580831Z PASS: path-prefix collision is rejected as a non-exact target
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.0995426Z PASS: comma-separated detailed rights map to exact combined unsigned mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.0997414Z PASS: right code N maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1054774Z PASS: right code F maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1059900Z PASS: right code M maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1061234Z PASS: right code RX maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1064245Z PASS: right code R maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1077102Z PASS: right code W maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1109623Z PASS: right code D maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1111160Z PASS: right code DE maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1350036Z PASS: right code RD maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1407303Z PASS: right code WD maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1409079Z PASS: right code AD maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1410290Z PASS: right code REA maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1415938Z PASS: right code WEA maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1429460Z PASS: right code X maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1688353Z PASS: right code DC maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1791681Z PASS: right code RA maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1883723Z PASS: right code WA maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1885145Z PASS: right code RC maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.1892047Z PASS: right code WDAC maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.2518645Z PASS: right code WO maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.2770373Z PASS: right code S maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.2841693Z PASS: right code AS maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.2863232Z PASS: right code MA maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.2869308Z PASS: right code GR maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3019615Z PASS: right code GW maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3130688Z PASS: right code GE maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3196256Z PASS: right code GA maps to its Windows file access mask
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3257042Z PASS: generic raw mask normalizes without false mismatch: 0x10000000
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3259346Z PASS: generic raw mask normalizes without false mismatch: 0x80000006
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3367175Z PASS: generic raw mask normalizes without false mismatch: 0x40000002
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3368917Z PASS: generic mask with unresolved residual semantics remains INDETERMINATE
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3370480Z PASS: unknown baseline access-mask bits do not become a false MISMATCH
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3373631Z PASS: MAXIMUM_ALLOWED requires exact raw equality or remains semantically indeterminate
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3416156Z PASS: deny ACE detailed rights and inheritance flags parse faithfully
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3430916Z PASS: synthetic captured ACE profile compares without protected evidence: Full
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3432809Z PASS: synthetic captured ACE profile compares without protected evidence: Modify
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3490439Z PASS: synthetic captured ACE profile compares without protected evidence: Read
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3492330Z PASS: synthetic captured ACE profile compares without protected evidence: ReadExecute
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3497998Z PASS: synthetic captured ACE profile compares without protected evidence: Write
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3552816Z PASS: synthetic captured ACE profile compares without protected evidence: ReadData
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3555257Z PASS: synthetic captured ACE profile compares without protected evidence: ReadAttributes
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3622355Z PASS: synthetic captured ACE profile compares without protected evidence: ReadExtendedAttributes
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3727743Z PASS: synthetic captured ACE profile compares without protected evidence: GenericAll
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3755302Z PASS: synthetic captured ACE profile compares without protected evidence: GenericReadPlusSpecific
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3910307Z PASS: synthetic captured ACE profile compares without protected evidence: InheritedDeny
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.3977739Z PASS: duplicate ACE multiplicity is retained and compared
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.4081979Z PASS: inherited templates compare with preserved inheritance flags
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.4553949Z PASS: end-to-end all-11 standard success makes zero coordinator launches
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.4572167Z PASS: out-of-scope target set fails before standard child or coordinator launch
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.4917831Z PASS: access-denied-only set triggers exactly one coordinator launch
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.5005019Z PASS: coordinator retries only the denied target
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.5140058Z PASS: non-access-denied failure never launches UAC
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.5183971Z PASS: timeout or incomplete stream prevents UAC retry and completion
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.5311114Z PASS: missing elevated evidence fails closed
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:44.5433253Z PASS: coordinator exception is bounded, reported and never retried
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:45.0103350Z PASS: bounded process runner captures stdout, stderr, PID, exit and hashes
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:45.2587155Z PASS: successful command with empty stderr receives the SHA-256 of the empty byte stream
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:45.5488604Z PASS: nonzero child exit retains complete separate streams
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:46.5723436Z PASS: hanging child returns bounded timeout with incomplete status
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:46.9890024Z PASS: oversized single-line output is drained with bounded retention and cannot be complete
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:46.9907931Z PASS: fixed-chunk stream pump does not depend on line events or allocate a giant line
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.4661434Z PASS: oversized stderr is independently bounded and incomplete
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.5113116Z PASS: child startup failure is reported without inventing an exit code or completion
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.7077553Z PASS: producer-compatible distinct mailbox and payload IDs pass with unchanged integrity and volume provenance checks
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.7115914Z PASS: faithful four-ACE Administrators-owned coordinator mailbox fixture passes
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.7208885Z PASS: wrong mailbox ID fails while payload ID remains correct
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.7217561Z PASS: wrong payload CaptureId pin fails while mailbox ID remains correct
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.7247030Z PASS: mailbox path must be derived from the separately pinned mailbox ID
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.7331137Z PASS: wrong requester SID invalidates four-ACE mailbox evidence
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.7625138Z PASS: wrong embedded payload CaptureId fails even when its integrity digest is recomputed
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.7705116Z PASS: modified integrity.json payload digest fails closed
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.7827986Z PASS: missing baseline payload fails closed
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.7971910Z PASS: malformed but correctly hashed baseline JSON fails closed
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.8043477Z PASS: requester-owned mailbox is rejected
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.8067778Z PASS: mailbox without OWNER RIGHTS protection is rejected
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.8091581Z PASS: inheriting mailbox DACL is rejected
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.8115812Z PASS: writable requester ACE in mailbox is rejected
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.8139733Z PASS: unexpected fifth mailbox ACE is rejected
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.8251365Z PASS: mailbox reparse/junction path is rejected before ACL acceptance
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.8552399Z PASS: modified payload bytes fail their integrity.json digest
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.9595654Z PASS: 11-object synthetic evidence package is atomically create-new in protected directory
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.9766454Z PASS: synthetic evidence file hashes and byte counts verify
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:47.9941153Z PASS: evidence DACL remains protected after publication
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:48.1143853Z PASS: evidence completeness allows a standard denial plus one elevated retry without hiding the failed attempt
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:48.2120963Z PASS: failing icacls output and exit status are published as complete diagnostic evidence, never a pass
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:48.2256033Z Assertions=118; Failures=0
+powershell-source-only	Run F2 icacls corroboration synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:48.4759139Z F2IcaclsTestProcessExit=0
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	﻿2026-10-12T16:31:48.5226897Z ##[group]Run $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1').Path
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:48.5227989Z ^[[36;1m$testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1').Path^[[0m
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:48.5229515Z ^[[36;1m$test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow^[[0m
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:48.5231012Z ^[[36;1mWrite-Host "F2IcaclsRuntimeTestProcessExit=$($test.ExitCode)"^[[0m
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:48.5231651Z ^[[36;1mif ($test.ExitCode -ne 0) { exit $test.ExitCode }^[[0m
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:48.5299515Z shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE -command ". '{0}'"
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:48.5299993Z ##[endgroup]
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:49.9330332Z PASS: release contract accepts the independently pinned mailbox ID and payload CaptureId
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:49.9878563Z PASS: actual disk loader reads valid v3 with separate pinned identities without a release-provider mock
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.0075151Z PASS: disk-loaded v3 manifest passes the actual seven-file source package contract
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.0190320Z PASS: actual disk loader rejects legacy v1 manifests
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.0243786Z PASS: actual disk loader rejects installed v2 manifests before the old package can launch
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.0337895Z PASS: actual disk loader rejects malformed JSON
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.0458337Z PASS: disk-loaded manifest with missing BaselineMailboxId fails the downstream release contract
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.0540667Z PASS: disk-loaded manifest with missing BaselinePayloadCaptureId fails the downstream release contract
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.0752093Z PASS: legacy v2 release-manifest schema is rejected by the upgraded package
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.0798468Z PASS: release contract rejects an incorrect mailbox ID
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.0836342Z PASS: release contract rejects an incorrect payload CaptureId
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.0877797Z PASS: release contract rejects a missing payload CaptureId pin
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.1254270Z PASS: source tampering is rejected before any coordinator launch
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.1496826Z PASS: tampered release package fails before UAC launch
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.1565281Z PASS: new source runtime rejects a legacy v2 installed manifest before the sole UAC boundary
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.2073108Z PASS: protected package directory ACL fixture matches exact owner, principals, rights and inheritance
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.2091617Z PASS: external release manifest ACL fixture is admin-owned, protected and non-inheriting
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.2119573Z PASS: unprotected, writable, unexpected-principal or unexpected-owner release ACL is rejected
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.2147344Z PASS: unprotected, writable, unexpected-principal or unexpected-owner release ACL is rejected
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.2173900Z PASS: unprotected, writable, unexpected-principal or unexpected-owner release ACL is rejected
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.2199613Z PASS: unprotected, writable, unexpected-principal or unexpected-owner release ACL is rejected
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.6454149Z PASS: scope mismatch fails before the first ACL command
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:50.7282797Z PASS: storage identity mismatch fails before the first ACL command
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1114467Z PASS: non-administrator coordinator identity is rejected before request or ACL reads
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1118439Z PASS: UAC cancellation is reported and is not retried
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1119653Z PASS: coordinator preflight and eleven bounded reads publish a complete synthetic mailbox
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1121046Z PASS: one UAC launch coordinates the real production path for all 11 objects and verifies returned evidence
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1122860Z PASS: successful integration has exactly 11 workers, one launch and a verified integrity digest
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1124157Z PASS: runtime baseline caller preserves both distinct release-manifest identities
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1125426Z PASS: coordinator timeout and failed cleanup return bounded incomplete status without relaunch
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1130745Z PASS: IncompleteOutput prevents complete publication and returns exit 1
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1132127Z PASS: Timeout prevents complete publication and returns exit 1
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1133101Z PASS: CleanupFailure prevents complete publication and returns exit 1
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1134139Z PASS: production host launcher exposes no runtime override parameters
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1135199Z PASS: protected coordinator accepts only the one-use capture identifier
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1136396Z PASS: production launcher holds the reviewed runtime lease and verifies all installed hashes before UAC
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1137835Z PASS: protected coordinator also acquires the lease and revalidates the installed version before ACL reads
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1207647Z PASS: production launcher validates unbound arguments in its protected block without a StrictMode-unsafe args access
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1209775Z PASS: production coordinator validates unbound arguments in its protected block without a StrictMode-unsafe args access
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1211778Z PASS: production coordinator validates the required CaptureId inside its protected block
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1213301Z PASS: entrypoints avoid pre-body advanced binding and preserve controlled argument-rejection exits
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:52.1301288Z Assertions=41;Failures=0
+powershell-source-only	Run F2 icacls runtime-boundary synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:53.0819587Z F2IcaclsRuntimeTestProcessExit=0
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	﻿2026-10-12T16:31:53.1300791Z ##[group]Run $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclEntrypointArguments.ps1').Path
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:53.1301590Z ^[[36;1m$testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclEntrypointArguments.ps1').Path^[[0m
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:53.1302634Z ^[[36;1m$test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow^[[0m
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:53.1303595Z ^[[36;1mWrite-Host "F2EntrypointTestProcessExit=$($test.ExitCode)"^[[0m
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:53.1304007Z ^[[36;1mif ($test.ExitCode -ne 0) { exit $test.ExitCode }^[[0m
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:53.1372200Z shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE -command ". '{0}'"
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:53.1372651Z ##[endgroup]
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.0029350Z PASS: both production entrypoints parse under Windows PowerShell 5.1
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.0051332Z PASS: both production entrypoints retain StrictMode Latest
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.0064338Z PASS: entrypoints avoid pre-body advanced-parameter binding so rejected arguments receive explicit failure status
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.0077047Z PASS: production launcher uses a PS5.1-safe unbound-argument check
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.0089337Z PASS: production coordinator uses a PS5.1-safe unbound-argument check
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.0159569Z PASS: launcher argument validation is inside its protected error handler
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.0171684Z PASS: coordinator path and argument checks are inside its protected error handler
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.0201678Z PASS: coordinator retains its commit-versioned exact installed-path enforcement
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.0318297Z PASS: coordinator retains exactly one required validated CaptureId input
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.3975344Z CASE=launcher-zero;ExitCode=0;TimedOut=False;Stdout=SYNTHETIC_BODY_REACHED;Stderr=
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.3987983Z PASS: synthetic launcher zero-argument -File invocation passes StrictMode
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.6738770Z CASE=launcher-extra;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:RuntimeArgumentsRejected
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.6765878Z PASS: synthetic launcher rejects unexpected arguments before its body
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.9552870Z CASE=launcher-named-extra;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:RuntimeArgumentsRejected
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:54.9565541Z PASS: synthetic launcher rejects unexpected named arguments with a controlled exit code
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:55.2354402Z CASE=coordinator-valid;ExitCode=0;TimedOut=False;Stdout=SYNTHETIC_BODY_REACHED:0123456789abcdef0123456789abcdef;Stderr=
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:55.2382035Z PASS: synthetic coordinator accepts named CaptureId with zero extra arguments under StrictMode
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:55.5313378Z CASE=coordinator-extra;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorArgumentsRejected
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:55.5325439Z PASS: synthetic coordinator rejects unexpected extra arguments before its body
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:55.8095247Z CASE=coordinator-named-extra;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorArgumentsRejected
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:55.8109221Z PASS: synthetic coordinator rejects unexpected named arguments with a controlled exit code
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:56.0975610Z CASE=coordinator-invalid;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorCaptureIdRejected
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:56.0987300Z PASS: synthetic coordinator rejects an invalid CaptureId before its body
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:56.3776588Z CASE=coordinator-missing;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorCaptureIdRejected
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:56.3788544Z PASS: synthetic coordinator rejects a missing required CaptureId before its body
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:56.6578719Z CASE=coordinator-wrong-path;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorPathRejected
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:56.6591762Z PASS: synthetic coordinator rejects a path mismatch before its body
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:56.6826832Z Assertions=18;Failures=0
+powershell-source-only	Run PS5.1 StrictMode entrypoint fixtures	2026-10-12T16:31:57.6470826Z F2EntrypointTestProcessExit=0
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	﻿2026-10-12T16:31:57.6964527Z ##[group]Run $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1').Path
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:57.6965357Z ^[[36;1m$testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1').Path^[[0m
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:57.6966419Z ^[[36;1m$test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow^[[0m
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:57.6967419Z ^[[36;1mWrite-Host "F2ProtectedUpdaterTestProcessExit=$($test.ExitCode)"^[[0m
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:57.6967889Z ^[[36;1mif ($test.ExitCode -ne 0) { exit $test.ExitCode }^[[0m
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:57.7035614Z shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE -command ". '{0}'"
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:57.7036072Z ##[endgroup]
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:58.7128118Z PASS: updater parses in Windows PowerShell 5.1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:58.7158178Z PASS: single-UAC launcher parses in Windows PowerShell 5.1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:58.7828353Z PASS: exact approved updater bytes pass the SHA-256 pin while modified bytes fail the same pin
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:59.3552596Z PASS: synthetic old v2 manifest exactly reproduces the approved retained old-manifest SHA-256
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:59.5463521Z PASS: old-release fixtures are extracted from the pinned Git commit and match all seven installed-byte hashes
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:59.7582472Z PASS: runtime inventory includes old/new source checkout and fixed/versioned installed launchers, coordinators and direct runtime modules; actualCount=12; missing=
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:59.8650230Z PASS: only the current updater and exact PID/creation-time/pin-bound requester launcher are allowed; actualError=; requesterChecks=CommandPresent:True,EncodedAbsent:True,SourceLauncherPath:True,DotSourceBootstrap:True,LauncherFunction:True,CommitPin:True,UpdaterPin:True,LauncherPin:True,CandidatePin:True,ProcessIdentity:True
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:59.8927629Z PASS: active old source-checkout launcher blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:59.9167247Z PASS: active new source-checkout launcher blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:59.9375641Z PASS: active installed coordinator blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:59.9509982Z PASS: direct runtime-module invocation blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:31:59.9901906Z PASS: encoded PowerShell invocation blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.0012427Z PASS: legacy process with cached v2 manifest blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.0453858Z PASS: active PowerShell ISE process blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.0479473Z PASS: missing or inaccessible foreign PowerShell command line fails closed
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.1111784Z PASS: requester PID reuse or unexpected process creation time is rejected
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.1149414Z PASS: requester launch command with a changed source pin is rejected
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.1333950Z PASS: encoded requester launch is rejected even when it repeats approved path text and pins
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.2076023Z PASS: process inventory command failure fails closed with a stable diagnostic
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.2491997Z PASS: exact protected Administrator-owned directory DACL is accepted
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.2505544Z PASS: exact protected Administrator-owned file DACL is accepted
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.2519928Z PASS: unexpected owner is rejected
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.2533099Z PASS: unprotected DACL is rejected
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.2546251Z PASS: extra writable principal is rejected
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.2735468Z PASS: reviewed ProgramData child-creation mask is distinguished from protected-child control
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.2765085Z PASS: ProgramData delete-child/write-control expansion is rejected
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.2779472Z PASS: ProgramData generic full-control grant is rejected
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.2864547Z PASS: same-requester Administrator identity satisfies the future elevated boundary
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.2891888Z PASS: different-account Administrator UAC credentials are rejected
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.2919148Z PASS: same-account non-Administrator token is rejected by elevated coordinator
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.3057100Z PASS: candidate parser rejects the installed legacy v2 schema
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.3186147Z PASS: synthetic junction fixture is a reparse point on the Windows test host
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.3419490Z PASS: reparse point in a candidate path is rejected before traversal
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.3569371Z PASS: exclusive updater lease blocks a new shared runtime lease
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.3608498Z PASS: active runtime shared lease blocks updater exclusive acquisition
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.3633200Z PASS: manifest barrier blocks a fresh v2 launcher read
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.3739670Z PASS: same-volume manifest replacement exposes only the new active release
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:00.3758033Z PASS: same-volume manifest replacement preserves the prior release backup after the barrier closes
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.2909254Z PASS: successful transaction stages and activates exactly seven new files while retaining old package and manifest; success=True; outcome=UPDATE_COMPLETE; error=; stage=
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.2973090Z PASS: manifest barrier precedes both process inventories; a later reader is blocked and the final scan directly precedes activation
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.2998035Z PASS: active manifest points only to the complete new versioned package
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.3027472Z PASS: old external v2 manifest backup retains exact original digest
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.3074366Z PASS: new immutable version directory contains exactly seven package files
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.3154135Z PASS: activated package hash matches F2AclCapture.Protocol.psm1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.3207742Z PASS: activated package hash matches F2AclIcacls.Corroboration.psm1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.3261072Z PASS: activated package hash matches F2AclIcacls.Runtime.psm1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.3285972Z PASS: activated package hash matches Invoke-F2IcaclsCapture.ps1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.3311050Z PASS: activated package hash matches Invoke-F2IcaclsProtectedCoordinator.ps1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.3334857Z PASS: activated package hash matches F2_ICACLS_SOURCE_PINS.json
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.3394040Z PASS: activated package hash matches Invoke-F2AclReadOnlyCapture.ps1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.8766303Z PASS: recovery classifies an already active, fully verified release without changing it
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:02.9816435Z PASS: candidate tampering fails before any protected release directory is created
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:03.0269650Z PASS: candidate with a rehashed but incorrect retained-baseline identity fails before staging
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:03.0647764Z PASS: candidate package path outside the versioned release root fails before staging
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:03.3212514Z PASS: unsafe current parent ACL profile fails before writes
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:03.6512589Z PASS: modified installed release fails preflight without overwrite or staging
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:03.9730232Z PASS: unexpected existing owner or DACL fails closed before staging
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:04.8496985Z PASS: staged directory ACL mismatch preserves the old active release and all partial objects
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:05.3832790Z PASS: new lease file ACL is verified immediately and blocks before release staging [UPDATE_ACL_PROFILE_INVALID]
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:06.8147332Z PASS: active manifest ACL postcheck failure blocks success without unsafe rollback or deleting the retained release
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:07.2372769Z PASS: detected active legacy launcher blocks before package staging
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:08.7380491Z PASS: process spawned after the first inventory is detected by the activation-edge rescan while old manifest remains active
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:08.8871299Z PASS: dirty source checkout fails before any protected staging write
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:08.9360492Z PASS: source commit mismatch fails before any protected staging write
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:09.2748364Z PASS: unexpected existing package objects fail before staging and are never overwritten [UPDATE_EXISTING_OBJECT_SET_INVALID]
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:09.7059383Z PASS: unowned release/staging entries are preserved and block the updater [UPDATE_EXISTING_TRANSACTION_OBJECTS_PRESENT]
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:09.7073780Z PASS: success path exposes fault checkpoints for each material transaction operation
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:10.4533747Z PASS: injected interruption fails closed and preserves objects at BackupRootCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:10.4565305Z PASS: failure before journal leaves the original release active after BackupRootCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:12.4842815Z PASS: injected interruption fails closed and preserves objects at CandidateManifestStaged
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:12.4843860Z PASS: incomplete transaction preserves old active release after CandidateManifestStaged
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:13.5702909Z PASS: injected interruption fails closed and preserves objects at JournalCommitted
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:14.0633353Z PASS: post-switch recovery validates new active package after JournalCommitted
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:15.0673427Z PASS: injected interruption fails closed and preserves objects at JournalCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:15.0954525Z PASS: incomplete transaction preserves old active release after JournalCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:16.4432895Z PASS: injected interruption fails closed and preserves objects at JournalPackageReady
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:17.2187251Z PASS: recovery completes only the exact fully staged transaction after JournalPackageReady [NEW_RELEASE_ACTIVATED_BY_RECOVERY]
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:18.5319248Z PASS: injected interruption fails closed and preserves objects at PackageActivatedSideBySide
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:19.2824599Z PASS: recovery completes only the exact fully staged transaction after PackageActivatedSideBySide [NEW_RELEASE_ACTIVATED_BY_RECOVERY]
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:20.2627965Z PASS: injected interruption fails closed and preserves objects at PackageDirectoryCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:20.2921888Z PASS: incomplete transaction preserves old active release after PackageDirectoryCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:21.4313534Z PASS: injected interruption fails closed and preserves objects at PackageFileCreated:F2_ICACLS_SOURCE_PINS.json
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:21.4685327Z PASS: incomplete transaction preserves old active release after PackageFileCreated:F2_ICACLS_SOURCE_PINS.json
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:22.4132970Z PASS: injected interruption fails closed and preserves objects at PackageFileCreated:F2AclCapture.Protocol.psm1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:22.4909070Z PASS: incomplete transaction preserves old active release after PackageFileCreated:F2AclCapture.Protocol.psm1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:23.4960478Z PASS: injected interruption fails closed and preserves objects at PackageFileCreated:F2AclIcacls.Corroboration.psm1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:24.2567268Z PASS: incomplete transaction preserves old active release after PackageFileCreated:F2AclIcacls.Corroboration.psm1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:24.5694329Z PASS: injected interruption fails closed and preserves objects at PackageFileCreated:F2AclIcacls.Runtime.psm1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:24.6011330Z PASS: incomplete transaction preserves old active release after PackageFileCreated:F2AclIcacls.Runtime.psm1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:25.7160816Z PASS: injected interruption fails closed and preserves objects at PackageFileCreated:Invoke-F2AclReadOnlyCapture.ps1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:25.7504888Z PASS: incomplete transaction preserves old active release after PackageFileCreated:Invoke-F2AclReadOnlyCapture.ps1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:26.8533538Z PASS: injected interruption fails closed and preserves objects at PackageFileCreated:Invoke-F2IcaclsCapture.ps1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:26.9046525Z PASS: incomplete transaction preserves old active release after PackageFileCreated:Invoke-F2IcaclsCapture.ps1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:27.9600142Z PASS: injected interruption fails closed and preserves objects at PackageFileCreated:Invoke-F2IcaclsProtectedCoordinator.ps1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:27.9914541Z PASS: incomplete transaction preserves old active release after PackageFileCreated:Invoke-F2IcaclsProtectedCoordinator.ps1
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:29.4877107Z PASS: injected interruption fails closed and preserves objects at ReleaseManifestActivated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:29.9855731Z PASS: post-switch recovery validates new active package after ReleaseManifestActivated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:30.6619815Z PASS: injected interruption fails closed and preserves objects at ReleaseRootCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:30.6651939Z PASS: failure before journal leaves the original release active after ReleaseRootCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:31.9730187Z PASS: injected interruption fails closed and preserves objects at ScriptsDirectoryCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:32.0020771Z PASS: incomplete transaction preserves old active release after ScriptsDirectoryCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:33.3161001Z PASS: injected interruption fails closed and preserves objects at StagedPackageVerified
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:33.3495060Z PASS: incomplete transaction preserves old active release after StagedPackageVerified
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:34.1972633Z PASS: injected interruption fails closed and preserves objects at StageRootCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:34.2261386Z PASS: incomplete transaction preserves old active release after StageRootCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:35.0658544Z PASS: injected interruption fails closed and preserves objects at UpdateRootCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:35.0690645Z PASS: failure before journal leaves the original release active after UpdateRootCreated
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:35.0702452Z PASS: bounded forward recovery was exercised at both package-ready crash checkpoints [count=2]
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:36.5548807Z PASS: malformed or partial transaction journal fails closed and is never repaired by guessing
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:37.9680152Z PASS: syntactically valid but incomplete transaction journal cannot authorize forward recovery
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:37.9933887Z PASS: unknown active-manifest bytes block recovery without rewriting or rolling back
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:37.9986885Z PASS: launcher uses one human-consented UAC process and does not assume UAC stdout redirection
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:37.9999909Z PASS: launcher retains actual child exit or reports bounded unknown without claiming installation success
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:38.0012476Z PASS: launcher has fixed destinations and requires externally reviewed launcher, updater, candidate and source pins
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:38.0024752Z PASS: launcher binds its single requester process across UAC by PID and creation timestamp without relying on ancestry alone
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:38.0037451Z PASS: standard requester SID is carried into the child and rechecked against the elevated Administrator token
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:38.0051374Z PASS: same pinned updater exposes a bounded transaction-specific recovery entrypoint
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:38.0065359Z PASS: parent and elevated child recheck bounded input paths and requester-token identity
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:38.0077814Z PASS: launcher distinguishes preflight failure, consent cancellation and bounded child-status uncertainty
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:38.0120043Z PASS: updater contains no cleanup, ACL-relaxation, icacls or nested process-launch path
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:38.0229936Z PASS: bootstrap verifies the one-read elevated updater bytes before executing those identical bytes and before staging
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:38.4621728Z Assertions=121;Failures=0
+powershell-source-only	Run protected release updater synthetic suite in Windows PowerShell 5.1	2026-10-12T16:32:38.6699181Z F2ProtectedUpdaterTestProcessExit=0
+powershell-source-only	Compile and exercise production native helper in Windows PowerShell 5.1 TEMP fixtures	﻿2026-10-12T16:32:38.7126060Z ##[group]Run $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclProtectedReleaseNativeHelper.ps1').Path
+powershell-source-only	Compile and exercise production native helper in Windows PowerShell 5.1 TEMP fixtures	2026-10-12T16:32:38.7127541Z ^[[36;1m$testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclProtectedReleaseNativeHelper.ps1').Path^[[0m
+powershell-source-only	Compile and exercise production native helper in Windows PowerShell 5.1 TEMP fixtures	2026-10-12T16:32:38.7129961Z ^[[36;1m$test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow^[[0m
+powershell-source-only	Compile and exercise production native helper in Windows PowerShell 5.1 TEMP fixtures	2026-10-12T16:32:38.7131822Z ^[[36;1mWrite-Host "F2NativeHelperTestProcessExit=$($test.ExitCode)"^[[0m
+powershell-source-only	Compile and exercise production native helper in Windows PowerShell 5.1 TEMP fixtures	2026-10-12T16:32:38.7132539Z ^[[36;1mif ($test.ExitCode -ne 0) { exit $test.ExitCode }^[[0m
+powershell-source-only	Compile and exercise production native helper in Windows PowerShell 5.1 TEMP fixtures	2026-10-12T16:32:38.7201971Z shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE -command ". '{0}'"
+powershell-source-only	Compile and exercise production native helper in Windows PowerShell 5.1 TEMP fixtures	2026-10-12T16:32:38.7202404Z ##[endgroup]
+powershell-source-only	Compile and exercise production native helper in Windows PowerShell 5.1 TEMP fixtures	2026-10-12T16:32:39.8477274Z F2NativeHelperAssertions=20;Failures=0;TempCleanup=PASS
+powershell-source-only	Compile and exercise production native helper in Windows PowerShell 5.1 TEMP fixtures	2026-10-12T16:32:40.2178240Z F2NativeHelperTestProcessExit=0
+powershell-source-only	Parse tracked PowerShell source	﻿2026-10-12T16:32:40.2654876Z ##[group]Run $files = @(git ls-files 'scripts/f2-acl/*.ps1' 'scripts/f2-acl/*.psm1')
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.2655542Z ^[[36;1m$files = @(git ls-files 'scripts/f2-acl/*.ps1' 'scripts/f2-acl/*.psm1')^[[0m
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.2655936Z ^[[36;1m$failures = @()^[[0m
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.2656155Z ^[[36;1mforeach ($file in $files) {^[[0m
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.2656394Z ^[[36;1m  $tokens = $null^[[0m
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.2656610Z ^[[36;1m  $parseErrors = $null^[[0m
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.2657157Z ^[[36;1m  [void][Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$parseErrors)^[[0m
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.2658036Z ^[[36;1m  foreach ($errorRecord in $parseErrors) { $failures += "${file}:$($errorRecord.Extent.StartLineNumber): $($errorRecord.Message)" }^[[0m
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.2658606Z ^[[36;1m}^[[0m
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.2659065Z ^[[36;1mWrite-Host "ParserFiles=$($files.Count);ParserErrors=$($failures.Count)"^[[0m
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.2659561Z ^[[36;1m$failures | ForEach-Object { Write-Error $_ }^[[0m
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.2660395Z ^[[36;1mif ($failures.Count -gt 0) { exit 1 }^[[0m
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.2729711Z shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE -command ". '{0}'"
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.2730558Z ##[endgroup]
+powershell-source-only	Parse tracked PowerShell source	2026-10-12T16:32:40.9728761Z ParserFiles=14;ParserErrors=0
+powershell-source-only	Check whitespace errors	﻿2026-10-12T16:32:41.0303146Z ##[group]Run if ([string]::IsNullOrWhiteSpace($env:GITHUB_BASE_REF)) { $base = 'origin/main' } else { $base = "origin/$env:GITHUB_BASE_REF" }
+powershell-source-only	Check whitespace errors	2026-10-12T16:32:41.0304907Z ^[[36;1mif ([string]::IsNullOrWhiteSpace($env:GITHUB_BASE_REF)) { $base = 'origin/main' } else { $base = "origin/$env:GITHUB_BASE_REF" }^[[0m
+powershell-source-only	Check whitespace errors	2026-10-12T16:32:41.0305909Z ^[[36;1mgit diff --check "$base...HEAD"^[[0m
+powershell-source-only	Check whitespace errors	2026-10-12T16:32:41.0306448Z ^[[36;1mif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }^[[0m
+powershell-source-only	Check whitespace errors	2026-10-12T16:32:41.0395567Z shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE -command ". '{0}'"
+powershell-source-only	Check whitespace errors	2026-10-12T16:32:41.0396033Z ##[endgroup]
+powershell-source-only	Post Run actions/checkout@v4	﻿2026-10-12T16:32:41.5314394Z Post job cleanup.
+powershell-source-only	Post Run actions/checkout@v4	2026-10-12T16:32:41.8033147Z [command]"C:\Program Files\Git\bin\git.exe" version
+powershell-source-only	Post Run actions/checkout@v4	2026-10-12T16:32:41.8387005Z git version 2.55.0.windows.5
+powershell-source-only	Post Run actions/checkout@v4	2026-10-12T16:32:41.8548738Z Temporarily overriding HOME='D:\a\_temp\bb7156b2-70fa-4630-b52a-cd4f111f8e06' before making global git config changes
+powershell-source-only	Post Run actions/checkout@v4	2026-10-12T16:32:41.8555977Z Adding repository directory to the temporary git global config as a safe directory
+powershell-source-only	Post Run actions/checkout@v4	2026-10-12T16:32:41.8561522Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\procedural-sandbox-simulation\procedural-sandbox-simulation
+powershell-source-only	Post Run actions/checkout@v4	2026-10-12T16:32:41.8907870Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+powershell-source-only	Post Run actions/checkout@v4	2026-10-12T16:32:41.9254630Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+powershell-source-only	Post Run actions/checkout@v4	2026-10-12T16:32:42.5987534Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+powershell-source-only	Post Run actions/checkout@v4	2026-10-12T16:32:42.6282367Z http.https://github.com/.extraheader
+powershell-source-only	Post Run actions/checkout@v4	2026-10-12T16:32:42.6337436Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+powershell-source-only	Post Run actions/checkout@v4	2026-10-12T16:32:42.6676993Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+powershell-source-only	Post Run actions/checkout@v4	2026-10-12T16:32:43.3585676Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+powershell-source-only	Post Run actions/checkout@v4	2026-10-12T16:32:43.3919039Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+powershell-source-only	Complete job	﻿2026-10-12T16:32:44.0482593Z Cleaning up orphan processes
+powershell-source-only	Complete job	2026-10-12T16:32:44.1713964Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

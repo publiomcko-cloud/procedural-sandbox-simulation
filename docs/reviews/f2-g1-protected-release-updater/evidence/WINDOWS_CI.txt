@@ -1,0 +1,20 @@
+Windows CI validation for process-quiescence correction
+Workflow: F2 ACL source-only validation
+Run: 38277921321
+Run URL: https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38277921321
+Job: powershell-source-only / 114907827701
+Job URL: https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38277921321/job/114907827701
+Event: pull_request
+Tested PR head: d63b51db7c2de8b8e1197ebede653f4d762cae9a
+Production updater/launcher/candidate commit: 8b70a70934445bee660c1e53e71b2e7b20a6191f
+Status: success; all steps completed successfully.
+
+Hosted Windows PowerShell 5.1 sequence: Protocol suite; Corroboration suite; Runtime suite; Entrypoint suite; protected updater suite; exact production native helper compile/TEMP test; tracked-source parser; git diff --check. Final process-quiescence run passed all six suites and both validation steps. Full complete hosted log is retained in WINDOWS_CI_LOG.txt and the immutable GitHub Actions run above.
+
+Earlier same-correction attempts are also retained transparently:
+- Run 38276195678, attempt 1, production commit 8b70a70934445bee660c1e53e71b2e7b20a6191f: Protocol test emitted Stage=bounded_partial_pipe_read and child exit 5 before assertions. A direct PS5.1 rerun passed; cause of that attempt remains unknown.
+- Run 38276195678, attempt 2: Protocol passed, updater suite exposed synthetic fixture path-normalization mismatch.
+- Run 38277249251 at test head 3a3383c6fd08b87dada4e3e4c1e9421657afba7c reproduced the mismatch with sanitized diagnostics: expected source launcher path did not match due to hosted temp profile path spelling. Test fixture now uses production GetFullPath normalization; production files and release package were unchanged.
+- Final run 38277921321 at d63b51db7c2de8b8e1197ebede653f4d762cae9a passed the complete Windows CI job.
+
+This CI is synthetic/source-only. It did not elevate, query host process state, inspect protected ACLs, update protected C:, access VM/Hyper-V/G:, invoke icacls, or execute a native F2 workload.

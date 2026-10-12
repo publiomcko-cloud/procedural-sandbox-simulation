@@ -1,0 +1,5 @@
+Whitespace validation for launch-topology correction
+
+Command: `git diff --check` after the final working-tree edits; exit 0 with no whitespace errors.
+Command: `git diff --cached --check` with all correction files and review evidence staged; exit 0 with no whitespace errors.
+Git reported only non-failing line-ending normalization notices for LF-attributed review files. The PowerShell test is tracked as LF Git content and checked out as CRLF per `*.ps1 text eol=crlf`.
