@@ -1,0 +1,88 @@
+{
+  "schema": "f2-g1-protected-installation-receipt-v1",
+  "outcome": "COMPLETE_PROTECTED_INSTALLATION",
+  "ownerAuthorization": "Issue #48 comment 6114759084",
+  "sourceReview": {
+    "pr": 54,
+    "reviewId": 5485359228,
+    "head": "b28dcb3139e6ac37ffdde6d94b205d1adac92c58"
+  },
+  "preflightReview": {
+    "pr": 56,
+    "reviewId": 5489457323,
+    "head": "8c6d7bb651a15f71762621b17bec19d9b5c7db93"
+  },
+  "productionSource": {
+    "commit": "5741ffe90a3abd02a08563e6431e8a0b9b63eeb1",
+    "pinManifestSha256": "bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7",
+    "filePins": {
+      "F2AclCapture.Protocol.psm1": "42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728",
+      "F2AclIcacls.Corroboration.psm1": "a52ed86218a0ba0c0801ee6e84a4a5e47c73eda43db78f818b0b12670ad5110b",
+      "F2AclIcacls.Runtime.psm1": "950b8232be2f22412e837d63f7b2fb678fc83871862b6bafc714d303599a71a5",
+      "Invoke-F2IcaclsCapture.ps1": "fb55240a16f0858980bb38851414b28ce5f403ba26697ff78f227ca22ff804b0",
+      "Invoke-F2IcaclsProtectedCoordinator.ps1": "3badc19c8ac6ac450f9691258c6ecd2a3754cd665fd5989325c90b64290ae9e2",
+      "F2_ICACLS_SOURCE_PINS.json": "bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7",
+      "Invoke-F2AclReadOnlyCapture.ps1": "bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b"
+    }
+  },
+  "approvedExecutables": {
+    "Start-F2VerifiedInstall.ps1": {
+      "sha256": "b044234882d60e17bd14603a9a74e0cd7ade27c8810c9901bfa18b1b73e1c343",
+      "lineEndings": "LF"
+    },
+    "Invoke-F2VerifiedInstaller.ps1": {
+      "sha256": "6f47d802a2cd5d7deb65083c546829de6a71d26356dcf2b71f6cc6f14d81a4a9",
+      "lineEndings": "LF"
+    },
+    "Install-F2IcaclsProtectedPackage.ps1": {
+      "sha256": "cf8abc7c94186f44044684e77eb432c3a20a20c3cfd8fb099b6e32e4a2ca0118",
+      "lineEndings": "CRLF"
+    }
+  },
+  "installCommand": {
+    "source": "PR #54 docs/reviews/f2-g1-install-failure-diagnostics/F2_G1_DIAGNOSTIC_INSTALL_REVIEW_UPDATE.md",
+    "utf8Sha256": "9dd27675f50986fb46e69f24a78c52c86bf8c8d7c6dc734f8d452cc632ec0ba9"
+  },
+  "execution": {
+    "uacAttempts": 1,
+    "launcherExitCode": 0,
+    "launchDisposition": "CHILD_EXITED",
+    "childPid": 9448,
+    "childExitCode": 0,
+    "diagnosticStatus": "CHILD_CLAIM_ONLY",
+    "diagnosticAuthoritative": false
+  },
+  "diagnostic": {
+    "schema": "f2-install-diagnostic-v1",
+    "component": "Installer",
+    "stage": "PostInstallAttestation",
+    "outcome": "INSTALL_COMPLETE",
+    "errorCode": "NONE",
+    "noncePresent": true,
+    "nonceDisclosed": false,
+    "bytes": 185,
+    "sha256": "1457e307849067654f710a6d681c71bc5db2603543947be487edc3bd7fd04118"
+  },
+  "baseline": {
+    "mailboxId": "ecb6deeb424e40feb5354d18908986df",
+    "payloadCaptureId": "489e7fec-0300-467c-bfbd-a46fb8cf7211",
+    "payloadSha256": "1b5eee9aae928a909d4c251a4dd6d2c0898c400e2807e0acc3268d61d5149014",
+    "integritySha256": "02d6f07f5b3bb6f47a84e58d7c207c9935481e8a898a3b1f5e1ed273d4d61b34",
+    "records": 11,
+    "mailboxDacl": "PASS_four-ACE_contract"
+  },
+  "installation": {
+    "directories": 4,
+    "packageFiles": 7,
+    "releaseManifests": 1,
+    "partialStagingDirectories": 0,
+    "reparsePoints": 0,
+    "owner": "Administrators",
+    "dacl": "protected_exact_three_allow_ACE_profile",
+    "releaseSchema": "f2-icacls-runtime-release-v2",
+    "manifestSha256": "b5f01570cf8937324f0c763f72a8d05b5532472156d4e5b0fcfbd180dc7abbe9",
+    "independentPostflightExitCode": 0
+  },
+  "remainingGate": "Separate owner authorization and independent review are still required for live read-only icacls corroboration of the VM ACL baseline.",
+  "prohibitedActivitiesPerformed": false
+}
