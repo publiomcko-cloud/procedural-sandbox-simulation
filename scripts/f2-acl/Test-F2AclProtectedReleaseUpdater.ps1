@@ -16,6 +16,10 @@ $startTokens=$null;$startErrors=$null
 Assert-Update ($startErrors.Count -eq 0) 'single-UAC launcher parses in Windows PowerShell 5.1'
 . $sourceScript
 . $startScript
+$approvedUpdaterBytes=[IO.File]::ReadAllBytes($sourceScript)
+$approvedUpdaterHash=Get-F2UpdateLauncherSha256 -Bytes $approvedUpdaterBytes
+$modifiedUpdaterBytes=[byte[]]$approvedUpdaterBytes.Clone();$modifiedUpdaterBytes[0]=($modifiedUpdaterBytes[0] -bxor 1)
+Assert-Update ((Get-F2UpdateLauncherSha256 -Bytes $approvedUpdaterBytes) -ceq $approvedUpdaterHash -and (Get-F2UpdateLauncherSha256 -Bytes $modifiedUpdaterBytes) -cne $approvedUpdaterHash) 'exact approved updater bytes pass the SHA-256 pin while modified bytes fail the same pin'
 
 $script:root=Join-Path $env:TEMP ('F2 Protected Updater Tests '+[guid]::NewGuid().ToString('N'))
 $script:oldSource='C:\Dev\f2-g1-capture-id-contract-source\scripts\f2-acl'
@@ -313,6 +317,13 @@ try {
     Assert-Update ($launcherText -match 'Test-ChildNoReparse' -and $launcherText -match '4194304' -and $launcherText -match '65536' -and $launcherText -match 'Test-F2UpdateElevationIdentity' -and $updaterText -match 'UPDATE_ELEVATED_REQUESTER_IDENTITY_MISMATCH') 'parent and elevated child recheck bounded input paths and requester-token identity'
     Assert-Update ($launcherText -match 'UAC_CANCELLED' -and $launcherText -match 'UPDATE_NON_ELEVATED_PREFLIGHT_FAILURE' -and $launcherText -match 'UPDATE_CHILD_STATUS_UNKNOWN') 'launcher distinguishes preflight failure, consent cancellation and bounded child-status uncertainty'
     Assert-Update ($updaterText -notmatch 'Remove-Item|Set-Acl|icacls\.exe|Start-Process') 'updater contains no cleanup, ACL-relaxation, icacls or nested process-launch path'
+    $childStart=$launcherText.IndexOf('$childScript = @''',[StringComparison]::Ordinal)
+    $childEnd=$launcherText.IndexOf("'@",$childStart+18,[StringComparison]::Ordinal)
+    $childTemplate=$launcherText.Substring($childStart,$childEnd-$childStart)
+    $uacIndex=$launcherText.IndexOf('$uacLaunchAttempted = $true',[StringComparison]::Ordinal)
+    $parentHashIndex=$launcherText.IndexOf('UPDATE_UPDATER_HASH_MISMATCH',[StringComparison]::Ordinal)
+    $childHashIndex=$childTemplate.IndexOf('UPDATE_UPDATER_HASH_MISMATCH',[StringComparison]::Ordinal)
+    Assert-Update ($uacIndex -gt $parentHashIndex -and ([regex]::Matches($childTemplate,'ReadAllBytes\(\$updaterPath\)')).Count -eq 1 -and $childHashIndex -lt $childTemplate.IndexOf('[scriptblock]::Create($text)',[StringComparison]::Ordinal) -and $childTemplate.IndexOf('[scriptblock]::Create($text)',[StringComparison]::Ordinal) -lt $childTemplate.IndexOf('Invoke-F2ProtectedReleaseUpdate -CandidateManifestBytes',[StringComparison]::Ordinal)) 'bootstrap verifies the one-read elevated updater bytes before executing those identical bytes and before staging'
 }
 finally {
     if(Test-Path -LiteralPath $script:root){Remove-Item -LiteralPath $script:root -Recurse -Force -ErrorAction SilentlyContinue}
