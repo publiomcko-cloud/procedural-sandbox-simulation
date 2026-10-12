@@ -1,0 +1,403 @@
+Runner=Test-F2ProtectedReleaseDiagnosticSuites.ps1
+PowerShell51Path=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+PowerShellVersionOutput=5.1.22621.6133
+PowerShellVersionExit=0
+=== Test-F2AclCapture.Protocol.ps1 ===
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1"
+Stage=bounded_partial_pipe_read
+Stage=fresh_process_imported_module_serialization_frame_and_worker_diagnostics
+Stage=production_encoded_worker_success
+Stage=production_encoded_worker_preframe_failure
+Stage=production_encoded_worker_exit_before_frame
+Stage=production_encoded_worker_arguments_and_pins
+Stage=production_encoded_worker_publication_failures
+Stage=production_encoded_worker_parse_start_timeout_and_oversize
+Stage=absolute_worker_and_pipe_deadline
+Stage=restricted_local_evidence_directory
+Assertions=152;Failures=0
+Cases=source_pins,uac_coordinator_same_and_different_admin_identity_policy,filtered_admin_rejection,requester_read_only_mailbox_acl_and_owner,requester_write_delete_dac_tamper_rejection,observed_programdata_sddl_0x116_acceptance,delete_child_delete_write_dac_write_owner_generic_write_generic_all_rejection,dangerous_inherited_parent_grant_rejection,protected_parent_required,unapproved_broad_create_rights_rejection,atomic_precreated_mailbox_collision,mailbox_junction_rejection,coordinator_status_exit_binding,no_cross_token_named_pipe_production,bounded_file_mailbox_same_token_worker_integration,mailbox_missing_duplicate_oversized,kingston_storage_valid_wrong_serial_wrong_model_ambiguous_missing_field_transport_mapping,post_collection_vm_identity_state_path_nic_storage,unknown_final_state_incomplete,complete,argument_quoting,frame_roundtrip,bounded_eof_probe,standard_ace,callback_ace_rejection,object_ace_rejection,unknown_ace_flag_rejection,ancestor_junction_rejection,oversized_writer,oversized_reader,corrupt,partial_frame,stalled_partial_header,missing,duplicate,malformed_json,missing_envelope,missing_record_field,child_exit,sha256,partial_record,empty_preflight_failure,stdout_stderr,timeout,absolute_monotonic_deadline,exited_worker_stdout_pipe_hold,exited_worker_stderr_pipe_hold,output_producing_hang,reader_disposal_failure,cleanup_failure_never_complete,restricted_evidence_directory,exact_acl_principals,read_only_parent_ace,write_parent_ace,write_attributes_parent_ace,bounded_stream_accounting,oversized_stream_rejection
+EXIT=0
+=== Test-F2AclIcacls.Corroboration.ps1 ===
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1"
+PASS: actual repository helper pins match source files and retained collector provenance
+PASS: all pre-elevation synthetic identity, manifest, volume, path, pin and evidence gates pass
+PASS: expected allowlist contains exactly 11 unique objects
+PASS: unexpected NIC fails before any coordinator can launch
+PASS: incorrect Kingston model fails closed
+PASS: ambiguous disk identity fails closed
+PASS: evidence volume GUID cannot be substituted for ProjectVolumeGuid
+PASS: wrong G: volume identity fails closed
+PASS: baseline integrity digest mismatch fails closed
+PASS: reparse path fails before UAC
+PASS: reparse or alias in an ancestor chain fails before UAC
+PASS: missing path check fails before UAC
+PASS: evidence storage on G: is rejected
+PASS: source pin mismatch fails before UAC
+PASS: missing baseline fields return a closed preflight failure rather than throwing
+PASS: duplicate baseline object records fail preflight
+PASS: non-canonical path spelling is rejected as an alias even when it resolves to an approved object
+PASS: file-versus-directory substitution on an authorized path fails closed
+PASS: source pin verifier reads the pin manifest and hashes spaced file paths with correct PowerShell 5.1 parameter binding
+PASS: source pin verifier rejects modified helper source
+PASS: source pin verifier rejects a commit mismatch
+PASS: production command spec pins system icacls and uses one quoted allowlisted path without switches
+PASS: command spec rejects non-allowlisted paths before process creation
+PASS: native-shaped output parses first header-line ACE and inherited ACE flags
+PASS: native friendly principal spellings resolve to their well-known SIDs
+PASS: unexpected trailer text prevents a complete parse
+PASS: matching synthetic object is classified PASS
+PASS: fully parsed different rights classify MISMATCH
+PASS: unsupported icacls rights are INDETERMINATE
+PASS: failed native invocation cannot classify an ACL
+PASS: wrong target path is rejected before ACE attribution
+PASS: path-prefix collision is rejected as a non-exact target
+PASS: comma-separated detailed rights map to exact combined unsigned mask
+PASS: right code N maps to its Windows file access mask
+PASS: right code F maps to its Windows file access mask
+PASS: right code M maps to its Windows file access mask
+PASS: right code RX maps to its Windows file access mask
+PASS: right code R maps to its Windows file access mask
+PASS: right code W maps to its Windows file access mask
+PASS: right code D maps to its Windows file access mask
+PASS: right code DE maps to its Windows file access mask
+PASS: right code RD maps to its Windows file access mask
+PASS: right code WD maps to its Windows file access mask
+PASS: right code AD maps to its Windows file access mask
+PASS: right code REA maps to its Windows file access mask
+PASS: right code WEA maps to its Windows file access mask
+PASS: right code X maps to its Windows file access mask
+PASS: right code DC maps to its Windows file access mask
+PASS: right code RA maps to its Windows file access mask
+PASS: right code WA maps to its Windows file access mask
+PASS: right code RC maps to its Windows file access mask
+PASS: right code WDAC maps to its Windows file access mask
+PASS: right code WO maps to its Windows file access mask
+PASS: right code S maps to its Windows file access mask
+PASS: right code AS maps to its Windows file access mask
+PASS: right code MA maps to its Windows file access mask
+PASS: right code GR maps to its Windows file access mask
+PASS: right code GW maps to its Windows file access mask
+PASS: right code GE maps to its Windows file access mask
+PASS: right code GA maps to its Windows file access mask
+PASS: generic raw mask normalizes without false mismatch: 0x10000000
+PASS: generic raw mask normalizes without false mismatch: 0x80000006
+PASS: generic raw mask normalizes without false mismatch: 0x40000002
+PASS: generic mask with unresolved residual semantics remains INDETERMINATE
+PASS: unknown baseline access-mask bits do not become a false MISMATCH
+PASS: MAXIMUM_ALLOWED requires exact raw equality or remains semantically indeterminate
+PASS: deny ACE detailed rights and inheritance flags parse faithfully
+PASS: synthetic captured ACE profile compares without protected evidence: Full
+PASS: synthetic captured ACE profile compares without protected evidence: Modify
+PASS: synthetic captured ACE profile compares without protected evidence: Read
+PASS: synthetic captured ACE profile compares without protected evidence: ReadExecute
+PASS: synthetic captured ACE profile compares without protected evidence: Write
+PASS: synthetic captured ACE profile compares without protected evidence: ReadData
+PASS: synthetic captured ACE profile compares without protected evidence: ReadAttributes
+PASS: synthetic captured ACE profile compares without protected evidence: ReadExtendedAttributes
+PASS: synthetic captured ACE profile compares without protected evidence: GenericAll
+PASS: synthetic captured ACE profile compares without protected evidence: GenericReadPlusSpecific
+PASS: synthetic captured ACE profile compares without protected evidence: InheritedDeny
+PASS: duplicate ACE multiplicity is retained and compared
+PASS: inherited templates compare with preserved inheritance flags
+PASS: end-to-end all-11 standard success makes zero coordinator launches
+PASS: out-of-scope target set fails before standard child or coordinator launch
+PASS: access-denied-only set triggers exactly one coordinator launch
+PASS: coordinator retries only the denied target
+PASS: non-access-denied failure never launches UAC
+PASS: timeout or incomplete stream prevents UAC retry and completion
+PASS: missing elevated evidence fails closed
+PASS: coordinator exception is bounded, reported and never retried
+PASS: bounded process runner captures stdout, stderr, PID, exit and hashes
+PASS: successful command with empty stderr receives the SHA-256 of the empty byte stream
+PASS: nonzero child exit retains complete separate streams
+PASS: hanging child returns bounded timeout with incomplete status
+PASS: oversized single-line output is drained with bounded retention and cannot be complete
+PASS: fixed-chunk stream pump does not depend on line events or allocate a giant line
+PASS: oversized stderr is independently bounded and incomplete
+PASS: child startup failure is reported without inventing an exit code or completion
+PASS: producer-compatible distinct mailbox and payload IDs pass with unchanged integrity and volume provenance checks
+PASS: faithful four-ACE Administrators-owned coordinator mailbox fixture passes
+PASS: wrong mailbox ID fails while payload ID remains correct
+PASS: wrong payload CaptureId pin fails while mailbox ID remains correct
+PASS: mailbox path must be derived from the separately pinned mailbox ID
+PASS: wrong requester SID invalidates four-ACE mailbox evidence
+PASS: wrong embedded payload CaptureId fails even when its integrity digest is recomputed
+PASS: modified integrity.json payload digest fails closed
+PASS: missing baseline payload fails closed
+PASS: malformed but correctly hashed baseline JSON fails closed
+PASS: requester-owned mailbox is rejected
+PASS: mailbox without OWNER RIGHTS protection is rejected
+PASS: inheriting mailbox DACL is rejected
+PASS: writable requester ACE in mailbox is rejected
+PASS: unexpected fifth mailbox ACE is rejected
+PASS: mailbox reparse/junction path is rejected before ACL acceptance
+PASS: modified payload bytes fail their integrity.json digest
+PASS: 11-object synthetic evidence package is atomically create-new in protected directory
+PASS: synthetic evidence file hashes and byte counts verify
+PASS: evidence DACL remains protected after publication
+PASS: evidence completeness allows a standard denial plus one elevated retry without hiding the failed attempt
+PASS: failing icacls output and exit status are published as complete diagnostic evidence, never a pass
+Assertions=118; Failures=0
+EXIT=0
+=== Test-F2AclIcacls.Runtime.ps1 ===
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1"
+PASS: release contract accepts the independently pinned mailbox ID and payload CaptureId
+PASS: actual disk loader reads valid v3 with separate pinned identities without a release-provider mock
+PASS: disk-loaded v3 manifest passes the actual seven-file source package contract
+PASS: actual disk loader rejects legacy v1 manifests
+PASS: actual disk loader rejects installed v2 manifests before the old package can launch
+PASS: actual disk loader rejects malformed JSON
+PASS: disk-loaded manifest with missing BaselineMailboxId fails the downstream release contract
+PASS: disk-loaded manifest with missing BaselinePayloadCaptureId fails the downstream release contract
+PASS: legacy v2 release-manifest schema is rejected by the upgraded package
+PASS: release contract rejects an incorrect mailbox ID
+PASS: release contract rejects an incorrect payload CaptureId
+PASS: release contract rejects a missing payload CaptureId pin
+PASS: source tampering is rejected before any coordinator launch
+PASS: tampered release package fails before UAC launch
+PASS: new source runtime rejects a legacy v2 installed manifest before the sole UAC boundary
+PASS: protected package directory ACL fixture matches exact owner, principals, rights and inheritance
+PASS: external release manifest ACL fixture is admin-owned, protected and non-inheriting
+PASS: unprotected, writable, unexpected-principal or unexpected-owner release ACL is rejected
+PASS: unprotected, writable, unexpected-principal or unexpected-owner release ACL is rejected
+PASS: unprotected, writable, unexpected-principal or unexpected-owner release ACL is rejected
+PASS: unprotected, writable, unexpected-principal or unexpected-owner release ACL is rejected
+PASS: scope mismatch fails before the first ACL command
+PASS: storage identity mismatch fails before the first ACL command
+PASS: non-administrator coordinator identity is rejected before request or ACL reads
+PASS: UAC cancellation is reported and is not retried
+PASS: coordinator preflight and eleven bounded reads publish a complete synthetic mailbox
+PASS: one UAC launch coordinates the real production path for all 11 objects and verifies returned evidence
+PASS: successful integration has exactly 11 workers, one launch and a verified integrity digest
+PASS: runtime baseline caller preserves both distinct release-manifest identities
+PASS: coordinator timeout and failed cleanup return bounded incomplete status without relaunch
+PASS: IncompleteOutput prevents complete publication and returns exit 1
+PASS: Timeout prevents complete publication and returns exit 1
+PASS: CleanupFailure prevents complete publication and returns exit 1
+PASS: production host launcher exposes no runtime override parameters
+PASS: protected coordinator accepts only the one-use capture identifier
+PASS: production launcher holds the reviewed runtime lease and verifies all installed hashes before UAC
+PASS: protected coordinator also acquires the lease and revalidates the installed version before ACL reads
+PASS: production launcher validates unbound arguments in its protected block without a StrictMode-unsafe args access
+PASS: production coordinator validates unbound arguments in its protected block without a StrictMode-unsafe args access
+PASS: production coordinator validates the required CaptureId inside its protected block
+PASS: entrypoints avoid pre-body advanced binding and preserve controlled argument-rejection exits
+Assertions=41;Failures=0
+EXIT=0
+=== Test-F2AclEntrypointArguments.ps1 ===
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2AclEntrypointArguments.ps1"
+PASS: both production entrypoints parse under Windows PowerShell 5.1
+PASS: both production entrypoints retain StrictMode Latest
+PASS: entrypoints avoid pre-body advanced-parameter binding so rejected arguments receive explicit failure status
+PASS: production launcher uses a PS5.1-safe unbound-argument check
+PASS: production coordinator uses a PS5.1-safe unbound-argument check
+PASS: launcher argument validation is inside its protected error handler
+PASS: coordinator path and argument checks are inside its protected error handler
+PASS: coordinator retains its commit-versioned exact installed-path enforcement
+PASS: coordinator retains exactly one required validated CaptureId input
+CASE=launcher-zero;ExitCode=0;TimedOut=False;Stdout=SYNTHETIC_BODY_REACHED;Stderr=
+PASS: synthetic launcher zero-argument -File invocation passes StrictMode
+CASE=launcher-extra;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:RuntimeArgumentsRejected
+PASS: synthetic launcher rejects unexpected arguments before its body
+CASE=launcher-named-extra;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:RuntimeArgumentsRejected
+PASS: synthetic launcher rejects unexpected named arguments with a controlled exit code
+CASE=coordinator-valid;ExitCode=0;TimedOut=False;Stdout=SYNTHETIC_BODY_REACHED:0123456789abcdef0123456789abcdef;Stderr=
+PASS: synthetic coordinator accepts named CaptureId with zero extra arguments under StrictMode
+CASE=coordinator-extra;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorArgumentsRejected
+PASS: synthetic coordinator rejects unexpected extra arguments before its body
+CASE=coordinator-named-extra;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorArgumentsRejected
+PASS: synthetic coordinator rejects unexpected named arguments with a controlled exit code
+CASE=coordinator-invalid;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorCaptureIdRejected
+PASS: synthetic coordinator rejects an invalid CaptureId before its body
+CASE=coordinator-missing;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorCaptureIdRejected
+PASS: synthetic coordinator rejects a missing required CaptureId before its body
+CASE=coordinator-wrong-path;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorPathRejected
+PASS: synthetic coordinator rejects a path mismatch before its body
+Assertions=18;Failures=0
+EXIT=0
+=== Test-F2AclProtectedReleaseUpdater.ps1 ===
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1"
+PASS: updater parses in Windows PowerShell 5.1
+PASS: single-UAC launcher parses in Windows PowerShell 5.1
+PASS: exact approved updater bytes pass the SHA-256 pin while modified bytes fail the same pin
+PASS: synthetic old v2 manifest exactly reproduces the approved retained old-manifest SHA-256
+PASS: old-release fixtures are extracted from the pinned Git commit and match all seven installed-byte hashes
+PASS: runtime inventory includes old/new source checkout and fixed/versioned installed launchers, coordinators and direct runtime modules; actualCount=12; missing=
+PASS: only the current updater and exact PID/creation-time/pin-bound requester launcher are allowed; actualError=; requesterChecks=CommandPresent:True,EncodedAbsent:True,SourceLauncherPath:True,DotSourceBootstrap:True,LauncherFunction:True,CommitPin:True,UpdaterPin:True,LauncherPin:True,CandidatePin:True,ProcessIdentity:True
+PASS: corrected Explorer/cmd.exe launch topology accepts exactly the pinned requester and elevated updater
+PASS: original three-PowerShell caller/requester/updater topology is rejected without an ancestor exception
+PASS: cmd.exe preserves quoted PowerShell -Command syntax and propagates its exit code; actual=37
+PASS: active old source-checkout launcher blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: active new source-checkout launcher blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: active installed coordinator blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: direct runtime-module invocation blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: unrelated PowerShell command blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: PowerShell Core host blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: encoded PowerShell invocation blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: legacy process with cached v2 manifest blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: active PowerShell ISE process blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: missing or inaccessible foreign PowerShell command line fails closed
+PASS: wrong requester PID binding or missing pinned requester process fails closed
+PASS: requester PID reuse or unexpected process creation time is rejected
+PASS: requester SID mismatch is rejected
+PASS: requester source commit mismatch is rejected
+PASS: requester updater hash mismatch is rejected
+PASS: requester launcher hash mismatch is rejected
+PASS: requester candidate hash mismatch is rejected
+PASS: requester launch command with a changed source pin is rejected
+PASS: encoded requester launch is rejected even when it repeats approved path text and pins
+PASS: process inventory command failure fails closed with a stable diagnostic
+PASS: new v2 manifest reader is denied while the synthetic read barrier is held
+PASS: exact protected Administrator-owned directory DACL is accepted
+PASS: exact protected Administrator-owned file DACL is accepted
+PASS: unexpected owner is rejected
+PASS: unprotected DACL is rejected
+PASS: extra writable principal is rejected
+PASS: reviewed ProgramData child-creation mask is distinguished from protected-child control
+PASS: ProgramData delete-child/write-control expansion is rejected
+PASS: ProgramData generic full-control grant is rejected
+PASS: same-requester Administrator identity satisfies the future elevated boundary
+PASS: different-account Administrator UAC credentials are rejected
+PASS: same-account non-Administrator token is rejected by elevated coordinator
+PASS: candidate parser rejects the installed legacy v2 schema
+PASS: synthetic junction fixture is a reparse point on the Windows test host
+PASS: reparse point in a candidate path is rejected before traversal
+PASS: exclusive updater lease blocks a new shared runtime lease
+PASS: active runtime shared lease blocks updater exclusive acquisition
+PASS: manifest barrier blocks a fresh v2 launcher read
+PASS: same-volume manifest replacement exposes only the new active release
+PASS: same-volume manifest replacement preserves the prior release backup after the barrier closes
+PASS: successful transaction stages and activates exactly seven new files while retaining old package and manifest; success=True; outcome=UPDATE_COMPLETE; error=; stage=
+PASS: manifest barrier precedes both process inventories; a later reader is blocked and the final scan directly precedes activation
+PASS: active manifest points only to the complete new versioned package
+PASS: old external v2 manifest backup retains exact original digest
+PASS: new immutable version directory contains exactly seven package files
+PASS: activated package hash matches F2AclCapture.Protocol.psm1
+PASS: activated package hash matches F2AclIcacls.Corroboration.psm1
+PASS: activated package hash matches F2AclIcacls.Runtime.psm1
+PASS: activated package hash matches Invoke-F2IcaclsCapture.ps1
+PASS: activated package hash matches Invoke-F2IcaclsProtectedCoordinator.ps1
+PASS: activated package hash matches F2_ICACLS_SOURCE_PINS.json
+PASS: activated package hash matches Invoke-F2AclReadOnlyCapture.ps1
+PASS: recovery classifies an already active, fully verified release without changing it
+PASS: candidate tampering fails before any protected release directory is created
+PASS: candidate with a rehashed but incorrect retained-baseline identity fails before staging
+PASS: candidate package path outside the versioned release root fails before staging
+PASS: unsafe current parent ACL profile fails before writes
+PASS: modified installed release fails preflight without overwrite or staging
+PASS: unexpected existing owner or DACL fails closed before staging
+PASS: staged directory ACL mismatch preserves the old active release and all partial objects
+PASS: new lease file ACL is verified immediately and blocks before release staging [UPDATE_ACL_PROFILE_INVALID]
+PASS: production CreateNew release-lock failure exposes a stable stage/code and creates no transaction tree
+PASS: active manifest ACL postcheck failure blocks success without unsafe rollback or deleting the retained release
+PASS: detected active legacy launcher blocks before package staging
+PASS: process spawned after the first inventory is detected by the activation-edge rescan while old manifest remains active
+PASS: dirty source checkout fails before any protected staging write
+PASS: source commit mismatch fails before any protected staging write
+PASS: unexpected existing package objects fail before staging and are never overwritten [UPDATE_EXISTING_OBJECT_SET_INVALID]
+PASS: unowned release/staging entries are preserved and block the updater [UPDATE_EXISTING_TRANSACTION_OBJECTS_PRESENT]
+PASS: success path exposes fault checkpoints for each material transaction operation
+PASS: injected interruption fails closed and preserves objects at BackupRootCreated
+PASS: failure before journal leaves the original release active after BackupRootCreated
+PASS: injected interruption fails closed and preserves objects at CandidateManifestStaged
+PASS: incomplete transaction preserves old active release after CandidateManifestStaged
+PASS: injected interruption fails closed and preserves objects at JournalCommitted
+PASS: post-switch recovery validates new active package after JournalCommitted
+PASS: injected interruption fails closed and preserves objects at JournalCreated
+PASS: incomplete transaction preserves old active release after JournalCreated
+PASS: injected interruption fails closed and preserves objects at JournalPackageReady
+PASS: recovery completes only the exact fully staged transaction after JournalPackageReady [NEW_RELEASE_ACTIVATED_BY_RECOVERY]
+PASS: injected interruption fails closed and preserves objects at PackageActivatedSideBySide
+PASS: recovery completes only the exact fully staged transaction after PackageActivatedSideBySide [NEW_RELEASE_ACTIVATED_BY_RECOVERY]
+PASS: injected interruption fails closed and preserves objects at PackageDirectoryCreated
+PASS: incomplete transaction preserves old active release after PackageDirectoryCreated
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:F2_ICACLS_SOURCE_PINS.json
+PASS: incomplete transaction preserves old active release after PackageFileCreated:F2_ICACLS_SOURCE_PINS.json
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:F2AclCapture.Protocol.psm1
+PASS: incomplete transaction preserves old active release after PackageFileCreated:F2AclCapture.Protocol.psm1
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:F2AclIcacls.Corroboration.psm1
+PASS: incomplete transaction preserves old active release after PackageFileCreated:F2AclIcacls.Corroboration.psm1
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:F2AclIcacls.Runtime.psm1
+PASS: incomplete transaction preserves old active release after PackageFileCreated:F2AclIcacls.Runtime.psm1
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:Invoke-F2AclReadOnlyCapture.ps1
+PASS: incomplete transaction preserves old active release after PackageFileCreated:Invoke-F2AclReadOnlyCapture.ps1
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:Invoke-F2IcaclsCapture.ps1
+PASS: incomplete transaction preserves old active release after PackageFileCreated:Invoke-F2IcaclsCapture.ps1
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:Invoke-F2IcaclsProtectedCoordinator.ps1
+PASS: incomplete transaction preserves old active release after PackageFileCreated:Invoke-F2IcaclsProtectedCoordinator.ps1
+PASS: injected interruption fails closed and preserves objects at ReleaseManifestActivated
+PASS: post-switch recovery validates new active package after ReleaseManifestActivated
+PASS: injected interruption fails closed and preserves objects at ReleaseRootCreated
+PASS: failure before journal leaves the original release active after ReleaseRootCreated
+PASS: injected interruption fails closed and preserves objects at ScriptsDirectoryCreated
+PASS: incomplete transaction preserves old active release after ScriptsDirectoryCreated
+PASS: injected interruption fails closed and preserves objects at StagedPackageVerified
+PASS: incomplete transaction preserves old active release after StagedPackageVerified
+PASS: injected interruption fails closed and preserves objects at StageRootCreated
+PASS: incomplete transaction preserves old active release after StageRootCreated
+PASS: injected interruption fails closed and preserves objects at UpdateRootCreated
+PASS: failure before journal leaves the original release active after UpdateRootCreated
+PASS: bounded forward recovery was exercised at both package-ready crash checkpoints [count=2]
+PASS: malformed or partial transaction journal fails closed and is never repaired by guessing
+PASS: syntactically valid but incomplete transaction journal cannot authorize forward recovery
+PASS: unknown active-manifest bytes block recovery without rewriting or rolling back
+PASS: launcher uses one human-consented UAC process and does not assume UAC stdout redirection
+PASS: launcher retains actual child exit or reports bounded unknown without claiming installation success
+PASS: launcher has fixed destinations and requires externally reviewed launcher, updater, candidate and source pins
+PASS: launcher binds its single requester process across UAC by PID and creation timestamp without relying on ancestry alone
+PASS: standard requester SID is carried into the child and rechecked against the elevated Administrator token
+PASS: same pinned updater exposes a bounded transaction-specific recovery entrypoint
+PASS: parent and elevated child recheck bounded input paths and requester-token identity
+PASS: launcher distinguishes preflight failure, consent cancellation and bounded child-status uncertainty
+PASS: updater contains no cleanup, ACL-relaxation, icacls or nested process-launch path
+PASS: bootstrap verifies the one-read elevated updater bytes before executing those identical bytes and before staging
+Assertions=134;Failures=0
+EXIT=0
+=== Test-F2AclProtectedReleaseNativeHelper.ps1 ===
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2AclProtectedReleaseNativeHelper.ps1"
+F2NativeHelperAssertions=20;Failures=0;TempCleanup=PASS
+EXIT=0
+=== Test-F2ProtectedReleaseDiagnostics.ps1 ===
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-updater-diagnostics-review\scripts\f2-acl\Test-F2ProtectedReleaseDiagnostics.ps1"
+PASS: production launcher consumes a bounded child diagnostic record
+PASS: shared diagnostic protocol is present for real cross-process testing
+PASS: requester diagnostics preserve an exact approved stable error code
+PASS: requester diagnostics reject raw SID and arbitrary token-like exception text
+PASS: launcher pins exact diagnostic protocol bytes
+PASS: actual updater native-helper wrapper converts a synthetic compiler failure to its stable safe code
+PASS: request uses fresh fixed-format identifiers
+PASS: request binds the requester by a digest without putting the SID in the record
+PASS: launcher maps diagnostic server initialization exceptions to a stable non-sensitive error code
+PASS: diagnostic channel initialization failure remains bounded while retaining the real child exit
+PASS: real child script retains exact exit when protocol bootstrap fails before a trusted sender is available
+PASS: real child script reports updater hash validation failure through the pipe
+PASS: real child script reports updater parsing/loading failure through the pipe
+PASS: real child script reports identity validation failure without invoking transaction code
+PASS: real production child reports synthetic failure for source Git resolution
+PASS: real production child reports synthetic failure for parent ACL validation
+PASS: real production child reports synthetic failure for old installed-release validation
+PASS: real production child reports synthetic failure for native helper compilation
+PASS: real production child reports synthetic failure for initial release-lock creation
+PASS: production child command and fixed PowerShell arguments stay below the Windows command-line limit
+ProductionChildEncodedCommandCharacters=18744;FixedArgumentReserve=100;Limit=32767
+PASS: cross-process report preserves ChildBootstrapInitialization/UPDATE_CHILD_BOOTSTRAP_INITIALIZATION_FAILED with child exit 1
+PASS: cross-process report preserves UpdaterScriptLoading/UPDATE_UPDATER_SCRIPT_LOAD_FAILED with child exit 1
+PASS: cross-process report preserves ElevatedIdentityValidation/UPDATE_ELEVATED_REQUESTER_IDENTITY_MISMATCH with child exit 1
+PASS: cross-process report preserves UpdaterAndCandidateHashValidation/UPDATE_UPDATER_HASH_MISMATCH with child exit 1
+PASS: cross-process report preserves CandidateAndSourceValidation/UPDATE_SOURCE_GIT_UNAVAILABLE with child exit 1
+PASS: cross-process report preserves CandidateAndSourceValidation/UPDATE_PROGRAM_FILES_PARENT_DACL_UNSAFE with child exit 1
+PASS: cross-process report preserves CandidateAndSourceValidation/UPDATE_OLD_RELEASE_PIN_MISMATCH with child exit 1
+PASS: cross-process report preserves AcquireReleaseBarrier/UPDATE_NATIVE_HELPER_COMPILE_FAILED with child exit 1
+PASS: cross-process report preserves AcquireReleaseBarrier/UPDATE_RELEASE_LOCK_CREATE_FAILED with child exit 1
+PASS: rejects stale or replayed nonce while retaining child exit (status=INVALID;code=UPDATE_DIAGNOSTIC_IDENTITY_MISMATCH;exit=1)
+PASS: rejects tampered payload digest while retaining child exit (status=INVALID;code=UPDATE_DIAGNOSTIC_INVALID;exit=1)
+PASS: rejects duplicate diagnostic frame while retaining child exit (status=INVALID;code=UPDATE_DIAGNOSTIC_INVALID;exit=1)
+PASS: rejects oversized frame while retaining child exit (status=INVALID;code=UPDATE_DIAGNOSTIC_INVALID;exit=1)
+PASS: rejects unavailable diagnostic record while retaining child exit (status=MISSING;code=UPDATE_DIAGNOSTIC_MISSING;exit=1)
+PASS: rejects stalled partial frame while retaining child exit (status=INVALID;code=UPDATE_DIAGNOSTIC_INVALID;exit=1)
+PASS: rejects a diagnostic claim that conflicts with the independently observed child exit
+PASS: rejects a forged Complete/zero diagnostic when the observed child actually failed
+PASS: rejects a distinct connected process while retaining the independently observed target exit
+Assertions=38;Failures=0
+EXIT=0
+SUITES=7;FAILED=0

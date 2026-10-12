@@ -416,6 +416,13 @@ exit /b %ERRORLEVEL%
     $lockAclBad.Context.Hooks.AclCheck={param($path,$kind)if([string]::Equals($path,(Join-Path $lockAclBad.Context.ProgramDataRoot 'release.lock'),[StringComparison]::OrdinalIgnoreCase)){return $false};return $true}.GetNewClosure()
     $lockAclResult=Invoke-F2UpdateTransaction -Context $lockAclBad.Context
     Assert-Update (-not $lockAclResult.Success -and $lockAclResult.ErrorCode -ceq 'UPDATE_ACL_PROFILE_INVALID' -and -not(Test-Path -LiteralPath (Join-Path $lockAclBad.Context.PackageHome 'releases'))) ('new lease file ACL is verified immediately and blocks before release staging ['+$lockAclResult.ErrorCode+']')
+    $lockWriteBad=New-UpdateFixture
+    $lockWriteBad.Context.Hooks.AcquireLocks=$null
+    $lockWritePath=Join-Path $lockWriteBad.Context.ProgramDataRoot 'release.lock'
+    $lockWriteBad.Context.Hooks.WriteFile={param($path,$bytes,$kind)if([string]::Equals($path,$lockWritePath,[StringComparison]::OrdinalIgnoreCase)){throw 'SYNTHETIC_LOCK_CREATE_DENIED'};[IO.File]::WriteAllBytes($path,$bytes)}.GetNewClosure()
+    $lockWriteResult=Invoke-F2UpdateTransaction -Context $lockWriteBad.Context
+    Assert-Update (-not $lockWriteResult.Success -and $lockWriteResult.ErrorCode -ceq 'UPDATE_RELEASE_LOCK_CREATE_FAILED' -and $lockWriteResult.Stage -ceq 'AcquireReleaseBarrier' -and -not(Test-Path -LiteralPath $lockWritePath) -and -not(Test-Path -LiteralPath (Join-Path $lockWriteBad.Context.PackageHome 'releases'))) 'production CreateNew release-lock failure exposes a stable stage/code and creates no transaction tree'
+    Close-UpdateFixture $lockWriteBad
     $manifestAclBad=New-UpdateFixture
     $manifestAclState=[pscustomobject]@{ActiveChecks=0;ActivePath=$manifestAclBad.Context.ActiveManifestPath}
     $manifestAclBad.Context.Hooks.AclCheck={param($path,$kind)if($kind -ceq 'File' -and [string]::Equals($path,$manifestAclState.ActivePath,[StringComparison]::OrdinalIgnoreCase)){$manifestAclState.ActiveChecks++;if($manifestAclState.ActiveChecks -ge 3){return $false}};return $true}.GetNewClosure()

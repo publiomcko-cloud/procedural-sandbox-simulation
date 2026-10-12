@@ -1,5 +1,7 @@
 # F2 G1 protected release updater
 
+> **Superseded execution command:** This historical document's command and hashes are not approved for a future run after the diagnostics update. Do not copy or execute the command below. The source-only diagnostics candidate, current release identity, and replacement command are in [F2 G1 elevated-child diagnostics review](../f2-g1-elevated-child-diagnostics/F2_G1_ELEVATED_CHILD_DIAGNOSTICS_REVIEW.md). This note does not authorize UAC or a protected update.
+
 **Status: SOURCE-ONLY; awaiting independent review. No protected upgrade has been run.**
 
 PR #59 reviewed starting HEAD for this execution-topology correction: `d14aa0f6c9a1e358afa5b2a04a17e27a9bff22ed`. This correction changes tests and review evidence only; production SourceRoot stays at `8b70a70934445bee660c1e53e71b2e7b20a6191f` (parent `5d231f4697673569de526c03cedf61c72e769e07`). Windows checkout pins remain updater `d26eb89a424e3f268099e0ac1d3ffd674dde1128321567df3a0702abb591f75e`, standard launcher `8278bbff8e5b7cdb313235bcc271fa31a947ca384d7496053650c3097af19720`, and candidate v3 manifest `74d178917fba4f50fdca40505d8c1dc81639f3c60bbb25c0332fd737c681562c`. The seven installed release file hashes and `F2_ICACLS_SOURCE_PINS.json` remain unchanged. The process map, exclusion rule, ordering proof, test cases, and limitations are in [F2_G1_PROCESS_QUIESCENCE_REVIEW.md](F2_G1_PROCESS_QUIESCENCE_REVIEW.md).
