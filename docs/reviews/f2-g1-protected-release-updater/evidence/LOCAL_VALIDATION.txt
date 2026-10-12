@@ -1,23 +1,15 @@
-Command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1
-ExitCode: 0
-Assertions: 152; Failures: 0
+Windows PowerShell 5.1 direct validation
 
-Command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1
-ExitCode: 0
-Assertions: 118; Failures: 0
+Commands (repository root):
 
-Command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1
-ExitCode: 0
-Assertions: 41; Failures: 0
+& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1
+& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1
+& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1
+& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclEntrypointArguments.ps1
+& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1
 
-Command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclEntrypointArguments.ps1
-ExitCode: 0
-Assertions: 18; Failures: 0
+Local results at the final code state: protocol 152 assertions, 0 failures, exit 0; updater 104 assertions, 0 failures, exit 0. The retained direct corroboration/runtime/entrypoint logs record 118/41/18 assertions, 0 failures, exit 0; those source files did not change in the test-fixture correction. A single same-head CI run below exercised all five suites together.
 
-Command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1
-ExitCode: 0
-Assertions: 103; Failures: 0
+Complete Windows GitHub CI result: run `38253974457`, retry attempt 2, checked PR head `73d2f7fbdd2f0295ff2cafc29c49d6471b98d6ec` at merge commit `7cf096bc9adc3ec40d79bebecd6bf186889a403d`. Assertions: 433; failures: 0; five child exit codes: 0. Parser: 13 files, 0 errors. Diff check: exit 0. See `WINDOWS_CI.txt` for run/job links.
 
-Total: 432 assertions; 0 failures; all five child process exit codes 0.
-Parser: 13 PowerShell files; 0 parse errors; process exit 0.
 Classification: source-only synthetic validation. No UAC, protected writes, live ACL/icacls, VM/Hyper-V/G: queries, native workload or PR merge.

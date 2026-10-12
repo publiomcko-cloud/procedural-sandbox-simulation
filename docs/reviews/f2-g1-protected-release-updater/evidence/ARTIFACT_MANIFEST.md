@@ -1,6 +1,6 @@
 # Source and evidence SHA-256 manifest
 
-This manifest covers the complete production source delta from base `0a4d98ecad4c50ba2f749e4fafe6d28e35794804` and review evidence files, except this manifest and `WINDOWS_CI.txt` (the latter is completed after the PR run). Hashes are SHA-256 over Git blob bytes after the repository's declared text normalization, except the explicitly identified Windows checkout hashes. Git commit/tree hashes bind all listed and excluded files in the immutable review commit.
+This manifest covers the complete production source delta from base `0a4d98ecad4c50ba2f749e4fafe6d28e35794804` and review evidence files, except this manifest itself. Hashes are SHA-256 over Git blob bytes after the repository's declared text normalization, except the explicitly identified Windows checkout hashes. The manifest and every listed file are bound by the immutable review commit tree.
 
 ## Production source at `0bda8f6437ad2ddb7ce24d3bf905a18f363df9df`
 
@@ -16,7 +16,14 @@ The following are Git-content SHA-256 values unless two forms are shown. Windows
 | `scripts/f2-acl/Start-F2ProtectedReleaseUpdate.ps1` | Git content `d5141345c4131673206b9679464a4e1e4ebf872fb42213015f32052e474b0f17`; Windows checkout `dc342139f4168e624d8554017a560c4c9243767847aaa411bdc6fb349693dfd3` | Hash-bound standard-token/UAC boundary |
 | `scripts/f2-acl/Test-F2AclEntrypointArguments.ps1` | `c8e9a126d6124fe3067a7ee228eaa897d56b4c66853124aee10f72aca038690d` | PS5.1 entrypoint contract regressions |
 | `scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1` | `cb22431c813d6c1a09c8ca04e270c9b1f316e365990e32d9c751cd00d9f3e152` | Runtime manifest/installed-file/UAC gate regressions |
-| `scripts/f2-acl/Test-F2AclProtectedReleaseUpdater.ps1` | Git content `1425a572649f4d3c605c330e4f2f724afa752354acbd66219877f9efadc6506c`; Windows checkout `9b64b853e9bf742bf6b1ec007bfd70d9f1cdfea5558da729d3d4d9d3631d78a0` | Updater synthetic, fault-injection and boundary tests |
+| `scripts/f2-acl/Test-F2AclProtectedReleaseUpdater.ps1` | Git content `e19bed3430cc09a6f9bae49781b944b8eabc89ecd82ab63a4c98d9d3e8bcad45`; Windows checkout `a2d93eff1d2e4024db7478cf6f951fb0491d815aed10d6549febd776c6d8a1f2` | Updater synthetic, fault-injection and boundary tests |
+
+Review-package attributes:
+
+| Path | Git blob SHA-256 | Purpose |
+|---|---|---|
+| `docs/reviews/f2-g1-protected-release-updater/.gitattributes` | `ac5c50e1b4b30b27d2a3dcc72a6688fa73e1db467740ca6b619ff6d68d7d6911` | Preserve candidate manifest bytes without line-ending conversion |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/.gitattributes` | `5a1fa692c9edb81f75a8d78d062c07ec07445d62537af291e7947d080bf627e2` | Normalize human-readable logs and reports to LF for clean diffs |
 
 Seven candidate package files:
 
@@ -40,10 +47,15 @@ Seven candidate package files:
 | `evidence/WINDOWS_PS51_RUNTIME.log` | `ed707b9a1d45061005c4d3c15da64c307ae0117efda3d2f00f0e81864d807b18` | Complete runtime suite output |
 | `evidence/WINDOWS_PS51_ENTRYPOINT.log` | `516b847cc7a22a88d764f63f1b5ec63b0c4744fcb0ebcec173fc662bd58d2376` | Complete entrypoint suite output |
 | `evidence/WINDOWS_PS51_UPDATER.log` | `80662c4c4b12e2db1c1da6195d302555cbaccdc71cc5f05d897d7436d9674349` | Complete updater suite output |
+| `evidence/WINDOWS_PS51_UPDATER_RERUN.log` | `9c901e950093ad7717e31d8f8a9afac32bde845c2f9e151e4d5d8dae12552202` | Complete direct Windows PowerShell 5.1 rerun after test portability correction; 104 assertions |
+| `evidence/WINDOWS_PS51_UPDATER_RERUN.stderr` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Exact empty stderr stream from that rerun |
 | `evidence/POWERSHELL_PARSER.txt` | `14da4bfcc6d91ee6763ea89ba0e4344b025f5bedf9c645c0a1ec263b374aa22c` | Parser sweep result |
-| `evidence/LOCAL_VALIDATION.txt` | `6e8702817a9a81692c07dc2416f28ab8ce42b3c1dd760ea55a94eb2529842f54` | Commands, assertion counts and local result summary |
+| `evidence/LOCAL_VALIDATION.txt` | `da88e10cc4d533fb4e90f1a729a696688e060ac3e3ff5af5f12633480a1b584c` | Commands, assertion counts and local result summary |
+| `evidence/WINDOWS_CI.txt` | `1b166edfb24bc70648870bfd8bd542fc9d4958d65461cd15d589e2766310e7d0` | Final GitHub Windows CI run, job and prior failures |
+| `evidence/WINDOWS_PS51_UPDATER_RERUN.log` | `9c901e950093ad7717e31d8f8a9afac32bde845c2f9e151e4d5d8dae12552202` | Complete direct Windows PowerShell 5.1 updater rerun after test portability correction; 104 assertions |
+| `evidence/WINDOWS_PS51_UPDATER_RERUN.stderr` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Exact empty stderr stream from that rerun |
 | `evidence/GIT_DIFF_CHECK.txt` | `8fb5b6cd42886214786e7dedeb2e83dc566c6b5bf0df52b1f5f17ed27e723b3b` | Diff check result |
-| `DEVELOPER_HANDOFF.md` | `ce6a486c4f7832875ca2fae2fb768f8e7b3aa11a6d2481c0a732fb67f4d4622e` | Required developer handoff |
-| `F2_G1_PROTECTED_RELEASE_UPDATER_REVIEW.md` | `9942b479cf80f35521a8cbde1d3dc0b287bea6fdc0c4c7f55cd983d917e59b7d` | Full design, transaction, recovery and future command review |
+| `DEVELOPER_HANDOFF.md` | `30635603721fdfe20f09055e2ba8cb4399a7d6f2ba474bf48734ff77573550b1` | Required developer handoff |
+| `F2_G1_PROTECTED_RELEASE_UPDATER_REVIEW.md` | `15fddf98928b2ad6bed4b1b748a4896fc8f3a21883a889a1f412ef077a4036f1` | Full design, transaction, recovery and future command review |
 
 GitHub CI evidence is recorded separately after the immutable PR head's run completes. No raw ACL/SDDL, private SID, credential or baseline payload was included.

@@ -10,11 +10,11 @@ Worktree / branch: `C:\Dev\f2-g1-protected-updater` / `fix/f2-g1-protected-relea
 
 Base SHA: `0a4d98ecad4c50ba2f749e4fafe6d28e35794804` (PR #58 branch head at fetch).
 
-Candidate SHA (production source): `0bda8f6437ad2ddb7ce24d3bf905a18f363df9df`. The evidence-only commit is a child of this source SHA; its immutable SHA is the final draft PR head metadata (self-embedding that head would create a hash cycle).
+Candidate SHA (production release source): `0bda8f6437ad2ddb7ce24d3bf905a18f363df9df`. A test-only fixture portability correction is commit `73d2f7fbdd2f0295ff2cafc29c49d6471b98d6ec` (parent `e7b813a8b67af8081a967a4002e9786f557dbb81`); it does not change the updater or seven packaged release files. The evidence-only commit is a child of the corrected test commit; the immutable SHA is the draft PR head metadata.
 
 Parent SHA (production source): `c95d0e4defc0d840995e69f96982f51dd9be779d`.
 
-Changed paths: `.github/workflows/f2-acl-source-only.yml`; `scripts/f2-acl/F2AclIcacls.Runtime.psm1`; `scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json`; `scripts/f2-acl/Invoke-F2IcaclsProtectedCoordinator.ps1`; `scripts/f2-acl/Invoke-F2ProtectedReleaseUpdate.ps1`; `scripts/f2-acl/Start-F2ProtectedReleaseUpdate.ps1`; `scripts/f2-acl/Test-F2AclEntrypointArguments.ps1`; `scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1`; `scripts/f2-acl/Test-F2AclProtectedReleaseUpdater.ps1`; plus all files under `docs/reviews/f2-g1-protected-release-updater/`. The updater source commit contains implementation and regressions; the descendant evidence commit contains the candidate manifest, handoff, complete logs and transaction review.
+Changed paths: `.github/workflows/f2-acl-source-only.yml`; `scripts/f2-acl/F2AclIcacls.Runtime.psm1`; `scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json`; `scripts/f2-acl/Invoke-F2IcaclsProtectedCoordinator.ps1`; `scripts/f2-acl/Invoke-F2ProtectedReleaseUpdate.ps1`; `scripts/f2-acl/Start-F2ProtectedReleaseUpdate.ps1`; `scripts/f2-acl/Test-F2AclEntrypointArguments.ps1`; `scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1`; `scripts/f2-acl/Test-F2AclProtectedReleaseUpdater.ps1`; plus all files under `docs/reviews/f2-g1-protected-release-updater/`. The updater source commit contains implementation and regressions; the test-only descendant makes the old-release fixture self-contained using the pinned Git commit; the evidence descendant carries the candidate manifest, handoff, logs and transaction review.
 
 Implementation summary: v3 versioned package staging and complete preflight; create-new protected paths; a shared runtime/exclusive updater lease and active-manifest barrier; one explicit same-requester UAC boundary; an atomic manifest pointer switch after package verification; retained old files/manifest; hash-chained bounded transaction journal; exact transaction-ID recovery with forward-only completion and no cleanup/rollback.
 
@@ -24,7 +24,7 @@ Dependencies added / licenses: none. Uses Windows PowerShell 5.1, .NET Framework
 
 Tests executed (exact commands): see `F2_G1_PROTECTED_RELEASE_UPDATER_REVIEW.md` and complete command/output logs in `evidence/`; five Windows PowerShell 5.1 suites, PowerShell AST parser sweep and `git diff --check`.
 
-Results / assertion counts: Protocol 152/0; corroboration 118/0; runtime 41/0; entrypoint 18/0; updater 103/0; **432 assertions / 0 failures**, all local direct test processes exit 0. Parser 13 PowerShell files / 0 errors. `git diff --check` exit 0. Windows CI run ID and job result: `evidence/WINDOWS_CI.txt` (updated after draft PR creation).
+Results / assertion counts: Protocol 152/0; corroboration 118/0; runtime 41/0; entrypoint 18/0; updater 104/0; **433 assertions / 0 failures**. The local Windows PowerShell 5.1 updater rerun after the fixture correction exited 0. GitHub Windows CI run `38253974457`, attempt 2, passed all five suites (433 assertions, five child exit codes 0), parser (13 files / zero errors), and `git diff --check`; details and links are in `evidence/WINDOWS_CI.txt`.
 
 Tests not executed: actual protected installation/update; actual UAC; live `icacls`, host ACL/token or parent ACL inspection; VM/Hyper-V/G: operations; real protected native ACL creation or real host crash testing.
 
@@ -32,7 +32,7 @@ Failure/recovery cases: injected fault after every transaction checkpoint; incom
 
 Benchmark machine and metrics: not applicable; this is an administrative source-only updater.
 
-Known limitations: elevated host behavior remains unverified; parent waiting is bounded but does not terminate an unknown child; noncooperating Administrator tampering is outside the protection model; GitHub CI validates synthetic paths only.
+Known limitations: elevated host behavior remains unverified; parent waiting is bounded but does not terminate an unknown child; noncooperating Administrator tampering is outside the protection model; GitHub CI validates synthetic paths only. Initial PR CI attempt `38253314568` exposed a stale absolute local fixture path; the test now extracts the pinned old commit from the repository object database and verifies all seven installed-byte hashes. The first attempt of CI run `38253974457` reported protocol child exit 5 immediately after `Stage=bounded_partial_pipe_read`; a direct local rerun passed 152 assertions, and rerunning the failed CI job passed. The transient exit-5 cause is UNKNOWN and the failed run remains linked in the evidence.
 
 Visual reproduction steps: not applicable.
 

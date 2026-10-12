@@ -1,3 +1,27 @@
-Status: PENDING draft PR creation.
+Workflow: F2 ACL source-only validation
+Workflow ID: 380163797
+Run: 38253974457 (run number 59)
+Run URL: https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38253974457
+Final attempt URL: https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38253974457/attempts/2
+PR: #59 (draft)
+PR head: 73d2f7fbdd2f0295ff2cafc29c49d6471b98d6ec
+CI merge commit: 7cf096bc9adc3ec40d79bebecd6bf186889a403d
+Job: powershell-source-only (114827707641)
+Final attempt conclusion: success
 
-The Windows GitHub Actions run will be recorded here by immutable run ID, tested commit, workflow, job result and conclusion. No protected installation or privileged execution is part of CI.
+Windows PowerShell 5.1 suite results (all child process exit codes 0):
+Protocol: 152 assertions; 0 failures.
+Corroboration: 118 assertions; 0 failures.
+Runtime: 41 assertions; 0 failures.
+Entrypoint: 18 assertions; 0 failures.
+Protected updater: 104 assertions; 0 failures.
+Total: 433 assertions; 0 failures.
+
+PowerShell parser: 13 tracked files; 0 errors; success.
+git diff --check: success.
+
+Failure history retained for review:
+- Run 38253314568, PR head e7b813a8b67af8081a967a4002e9786f557dbb81: updater suite failed because its fixture referenced a developer-local `C:\Dev\f2-g1-capture-id-contract-source` path unavailable on GitHub Actions. Commit 73d2f7f changes the test fixture to read the exact old source commit from the repository Git object database, enforce a 32 MiB archive/4 MiB per-entry limit, and verify all seven old installed-byte pins before use. No production updater or seven-file package bytes changed.
+- Run 38253974457, attempt 1: protocol child returned exit 5 after `Stage=bounded_partial_pipe_read`; no assertion/failure detail was emitted. A direct Windows PowerShell 5.1 rerun passed 152/0, and attempt 2 of the same CI run passed the complete suite. The transient child exit-5 cause remains UNKNOWN.
+
+The final successful CI logs are independently accessible at the run URL above. CI uses synthetic TEMP-only fixtures; it does not perform protected installation, UAC, live ACL/icacls, VM/Hyper-V/G: queries or native execution.
