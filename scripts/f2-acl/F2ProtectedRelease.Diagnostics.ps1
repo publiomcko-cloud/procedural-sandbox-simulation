@@ -311,7 +311,7 @@ function Receive-F2UpdateDiagnosticRecord {
     $clock=[Diagnostics.Stopwatch]::StartNew();$connected=$false;$resolved=$false;$record=$null;$recordHash=$null;$status='MISSING';$diagCode='UPDATE_DIAGNOSTIC_MISSING';$exitCode=$null;$timedOut=$false
     $connectResult=$null;$exitObservedAt=$null
     try { $connectResult=$Server.BeginWaitForConnection($null,$null) }
-    catch { return [pscustomobject]@{ActualChildExitCode=$null;TimedOut=$false;DiagnosticStatus='CHANNEL_FAILED';DiagnosticErrorCode='UPDATE_DIAGNOSTIC_CHANNEL_FAILURE';Record=$null;RecordSha256=$null;ChildPid=$ChildProcess.Id} }
+    catch { $resolved=$true;$status='CHANNEL_FAILED';$diagCode='UPDATE_DIAGNOSTIC_CHANNEL_FAILURE' }
     while($clock.Elapsed.TotalSeconds -lt $TimeoutSeconds){
         try{$ChildProcess.Refresh();if($ChildProcess.HasExited -and $null -eq $exitObservedAt){$exitObservedAt=$clock.ElapsedMilliseconds;$exitCode=[int]$ChildProcess.ExitCode}}catch{}
         if(-not $resolved -and $null -ne $connectResult -and $connectResult.IsCompleted){
