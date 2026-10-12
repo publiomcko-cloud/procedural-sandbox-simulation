@@ -1,0 +1,150 @@
+{
+  "schema": "f2-g1-upgrade-postfailure-readonly-v1",
+  "observedAtUtc": "2026-10-12T18:23:55Z",
+  "source": {
+    "reviewPullRequest": 59,
+    "reviewHead": "9e9915e6eb15bcb20cc2f5a1c990791e2a822b90",
+    "productionCommit": "8b70a70934445bee660c1e53e71b2e7b20a6191f",
+    "reviewWorktreeCleanAtStart": true,
+    "productionWorktreeCleanAtStart": true,
+    "updaterWindowsCheckoutSha256": "d26eb89a424e3f268099e0ac1d3ffd674dde1128321567df3a0702abb591f75e",
+    "launcherWindowsCheckoutSha256": "8278bbff8e5b7cdb313235bcc271fa31a947ca384d7496053650c3097af19720",
+    "candidateManifestSha256": "74d178917fba4f50fdca40505d8c1dc81639f3c60bbb25c0332fd737c681562c"
+  },
+  "ownerSuppliedAttempt": {
+    "issueComment": "6129922269",
+    "uacAttempts": 1,
+    "authorizationState": "CONSUMED",
+    "childPid": 50432,
+    "childExitCode": 1,
+    "cmdExitCode": 1,
+    "internalStage": "UNKNOWN",
+    "internalErrorCode": "UNKNOWN",
+    "childDiagnosticJsonRetained": false
+  },
+  "postfailureReadOnlyObservation": {
+    "method": "standard-token Get-Acl, path metadata, bounded directory listing, SHA-256 reads; no icacls",
+    "protectedDirectories": {
+      "count": 4,
+      "allPresent": true,
+      "allNoReparseIncludingAncestors": true,
+      "ownerCategory": "BUILTIN\\Administrators",
+      "protectedDacl": true,
+      "exactThreeAceReviewedProfile": true
+    },
+    "activeV2Manifest": {
+      "path": "C:\\ProgramData\\F2-G1-Icacls\\approved-release.json",
+      "sha256": "b5f01570cf8937324f0c763f72a8d05b5532472156d4e5b0fcfbd180dc7abbe9",
+      "schema": "f2-icacls-runtime-release-v2",
+      "reviewedCommitSha": "5741ffe90a3abd02a08563e6431e8a0b9b63eeb1",
+      "mailboxId": "ecb6deeb424e40feb5354d18908986df",
+      "payloadCaptureId": "489e7fec-0300-467c-bfbd-a46fb8cf7211",
+      "payloadSha256": "1b5eee9aae928a909d4c251a4dd6d2c0898c400e2807e0acc3268d61d5149014",
+      "integritySha256": "02d6f07f5b3bb6f47a84e58d7c207c9935481e8a898a3b1f5e1ed273d4d61b34",
+      "sourcePinsManifestSha256": "bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7",
+      "sevenFileManifestEntries": true,
+      "ownerAndDacl": "PASS",
+      "noReparseIncludingAncestors": true
+    },
+    "installedV2Package": {
+      "path": "C:\\Program Files\\F2-G1-Icacls\\scripts\\f2-acl",
+      "filesExpected": 7,
+      "filesPresent": 7,
+      "fileHashesMatch": true,
+      "ownerAndDaclForEveryFile": "PASS",
+      "noReparseIncludingAncestorsForEveryFile": true,
+      "exactChildSet": true,
+      "files": {
+        "F2AclCapture.Protocol.psm1": "42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728",
+        "F2AclIcacls.Corroboration.psm1": "a52ed86218a0ba0c0801ee6e84a4a5e47c73eda43db78f818b0b12670ad5110b",
+        "F2AclIcacls.Runtime.psm1": "950b8232be2f22412e837d63f7b2fb678fc83871862b6bafc714d303599a71a5",
+        "Invoke-F2IcaclsCapture.ps1": "fb55240a16f0858980bb38851414b28ce5f403ba26697ff78f227ca22ff804b0",
+        "Invoke-F2IcaclsProtectedCoordinator.ps1": "3badc19c8ac6ac450f9691258c6ecd2a3754cd665fd5989325c90b64290ae9e2",
+        "F2_ICACLS_SOURCE_PINS.json": "bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7",
+        "Invoke-F2AclReadOnlyCapture.ps1": "bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b"
+      }
+    },
+    "transactionObjects": {
+      "ProgramDataReleaseLock": "ABSENT",
+      "ProgramDataUpdatesDirectory": "ABSENT",
+      "ProgramDataBackupsDirectory": "ABSENT",
+      "ProgramFilesReleasesDirectory": "ABSENT"
+    },
+    "retainedBaselineMailbox": {
+      "directory": "C:\\ProgramData\\F2-G1-ACL-Evidence-ecb6deeb424e40feb5354d18908986df",
+      "ownerCategory": "BUILTIN\\Administrators",
+      "protectedDacl": true,
+      "exactFourAceMailboxProfile": true,
+      "noReparseIncludingAncestors": true,
+      "payloadSha256Matches": true,
+      "integritySha256Matches": true,
+      "payloadCaptureIdMatches": true,
+      "integrityPayloadByteCountAndDigestMatch": true,
+      "payloadComplete": true,
+      "entryCount": 7
+    }
+  },
+  "syntheticValidation": {
+    "powershellVersion": "5.1.22621.6133",
+    "updaterSuite": {
+      "assertions": 133,
+      "failures": 0,
+      "exitCode": 0,
+      "log": "Test-F2AclProtectedReleaseUpdater.ps1.log",
+      "logSha256": "e94be2aa9322921796bf4d1098a4f98a6e63ddfe078cbf4c135ed74637f9e297"
+    },
+    "nativeHelperTempSuite": {
+      "assertions": 20,
+      "failures": 0,
+      "tempCleanup": "PASS",
+      "exitCode": 0,
+      "log": "Test-F2AclProtectedReleaseNativeHelper.ps1.log",
+      "logSha256": "4549f1a7bd71c5f399f99e924c941e2b1df7748f443e9c5429e9e0d336f9decc"
+    },
+    "encodedChildTemplateParse": {
+      "result": "PASS",
+      "exitCode": 0,
+      "log": "EncodedChildTemplateParse.log",
+      "logSha256": "10da96c1e264ff18d8678658953cecfaf623bec99351013d007735a8e6ee8433"
+    },
+    "productionCrLfParserSweep": {
+      "files": 14,
+      "failures": 0,
+      "exitCode": 0,
+      "log": "PowerShellParserSweep.log",
+      "logSha256": "d701b6c8d45ec8d351231353d1d55c9def5ee9187b8b9b43a079a492c2bf7907"
+    },
+    "missingGitPathTransactionFixture": {
+      "result": "PASS_EXPECTED_FAIL_CLOSED",
+      "gitResolved": false,
+      "cimCmdletResolved": true,
+      "cimModuleAvailable": true,
+      "outcome": "UPDATE_BLOCKED",
+      "stage": "CandidateAndSourceValidation",
+      "errorCode": "UPDATE_UNCLASSIFIED_FAILURE",
+      "failureType": "System.Management.Automation.CommandNotFoundException",
+      "transactionObjectsCreated": false,
+      "protectedPathsAccessed": false,
+      "exitCode": 0,
+      "log": "Synthetic-GitPathFailure.log",
+      "logSha256": "1eed996613c27ef483f1ffeb4029ebab55d457e6b6b1aebd6473493dd7623ae8"
+    },
+    "currentNoProfilePowerShell51Dependencies": {
+      "gitAvailable": true,
+      "gitPath": "C:\\Program Files\\Git\\cmd\\git.exe",
+      "cimCmdletAvailable": true,
+      "cimModuleName": "CimCmdlets",
+      "cimModuleInstalled": true,
+      "exitCode": 0,
+      "log": "CurrentPS51Dependencies.log",
+      "logSha256": "a30fde4f6b927c8f73569978046d691f4b236d559fca900773cb60a869fff526"
+    }
+  },
+  "limitations": [
+    "The elevated child's actual Stage and ErrorCode were not retained and remain UNKNOWN.",
+    "The exited child's PATH, module state, token identity details, and console output are unavailable.",
+    "No source-level failure is attributed to the actual attempt.",
+    "The read-only postfailure checks do not reconstruct deleted or transient state and do not query VM, Hyper-V, G:, or live icacls.",
+    "Raw SDDL, requester SID, baseline payload, and raw ACL records are intentionally omitted."
+  ]
+}
