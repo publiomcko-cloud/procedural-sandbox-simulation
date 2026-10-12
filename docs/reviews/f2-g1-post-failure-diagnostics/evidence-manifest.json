@@ -2,7 +2,7 @@
     "Schema":  "f2-g1-postfailure-evidence-manifest-v1",
     "ReviewBaseCommit":  "9e9915e6eb15bcb20cc2f5a1c990791e2a822b90",
     "ProductionSourceCommit":  "8b70a70934445bee660c1e53e71b2e7b20a6191f",
-    "HashDefinition":  "SHA-256 over exact staged Git blob bytes; this matches the content served by GitHub.",
+    "HashDefinition":  "SHA-256 over exact Git blob bytes; these are the bytes served by GitHub and do not include Windows checkout EOL conversion.",
     "ReferencedProductionFiles":  [
                                       {
                                           "WindowsCheckoutSha256":  "8278bbff8e5b7cdb313235bcc271fa31a947ca384d7496053650c3097af19720",
@@ -21,80 +21,93 @@
                           {
                               "Path":  "F2_G1_UPGRADE_POST_FAILURE_DIAGNOSTIC.md",
                               "Purpose":  "Consolidated sanitized source-path and postfailure analysis",
+                              "GitBlobSha1":  "3ab86b076ebcdc2cdf0f5872f274d984b2d7f07f",
                               "GitHubRawBytes":  16723,
                               "Sha256":  "edb63a44e1ae9777fe1a0cd53e8aa584d01b2aaa7fa9244791c6814977eb844a"
                           },
                           {
                               "Path":  "evidence/postfailure-readonly-results.json",
                               "Purpose":  "Sanitized measured results; excludes SDDL and private requester SID",
-                              "GitHubRawBytes":  6776,
-                              "Sha256":  "f4633f578fffb8a9c349ce3c9ae8bcca22e54569724e40efafaec27c7a9821f3"
+                              "GitBlobSha1":  "72f29fdb49d0098fea27f119b7eaf20e7e92dfe0",
+                              "GitHubRawBytes":  6626,
+                              "Sha256":  "bba56dd62a69e61c6f5467f27c7e5b8c2de2a28e6dfff2c861663206f29e63f6"
                           },
                           {
                               "Path":  "evidence/Test-SyntheticMissingGitPreflight.ps1",
                               "Purpose":  "Reproducible PS5.1 TEMP-only missing-Git failure fixture",
-                              "GitHubRawBytes":  5099,
-                              "Sha256":  "8dbee280c3959895c82bbd90096e0553aeb3bce6a7e22bf84598fd73870dcc49"
+                              "GitBlobSha1":  "cca89def98335c91bac3547499236286697f9a53",
+                              "GitHubRawBytes":  5001,
+                              "Sha256":  "50f26d3f37eb4c82705457b6ecfc4bd04351a9240708be92514d3b14bf935371"
                           },
                           {
                               "Path":  "evidence/Synthetic-GitPathFailure.log",
                               "Purpose":  "Complete output of the synthetic missing-Git test",
-                              "GitHubRawBytes":  523,
-                              "Sha256":  "1eed996613c27ef483f1ffeb4029ebab55d457e6b6b1aebd6473493dd7623ae8"
+                              "GitBlobSha1":  "38ec8a9d16eb2f90a21e3e492b0e772eb34aded4",
+                              "GitHubRawBytes":  522,
+                              "Sha256":  "482d1eaf91230b2e59ee4a4a616ab7c943ab19537336438155d9864c53394743"
                           },
                           {
                               "Path":  "evidence/Test-EncodedChildTemplateParse.ps1",
                               "Purpose":  "Reproducible PS5.1 parser fixture for embedded elevated child script",
-                              "GitHubRawBytes":  1868,
-                              "Sha256":  "13eaacfca58fb22896caaeaada3bf87ae08e8bdfffe19ea8be177d425295e512"
+                              "GitBlobSha1":  "79ac792e3f7e65c5ea9a9c7c3bc8b71f34d0714e",
+                              "GitHubRawBytes":  1828,
+                              "Sha256":  "443da28aca02ade5d07f8cbc80b7d7702135694dbed73a3e432849a12d36e589"
                           },
                           {
                               "Path":  "evidence/EncodedChildTemplateParse.log",
                               "Purpose":  "Complete output of the child-template parser fixture",
-                              "GitHubRawBytes":  73,
-                              "Sha256":  "10da96c1e264ff18d8678658953cecfaf623bec99351013d007735a8e6ee8433"
+                              "GitBlobSha1":  "297727164e9543810bf2bb1b6cc867c5a8059564",
+                              "GitHubRawBytes":  72,
+                              "Sha256":  "c0862fc8a66cae23be2221f3485da1e051ca9bc44f024f60414b321942650072"
                           },
                           {
                               "Path":  "evidence/Test-ProductionPowerShellParserSweep.ps1",
                               "Purpose":  "Reproducible production-source parser sweep",
-                              "GitHubRawBytes":  1006,
-                              "Sha256":  "0791a845e3d1e092f916a5c9fd92beb61a4d7fdbb8aa32ada32c9a6741fb1604"
+                              "GitBlobSha1":  "10f40d001c2be6a9e5ed742cdd883a77d112d2dc",
+                              "GitHubRawBytes":  980,
+                              "Sha256":  "f3b088c80c17bbff5950714cf4cb23a0e2ab7bad4f5f86554a9538f4ee892cdc"
                           },
                           {
                               "Path":  "evidence/PowerShellParserSweep.log",
                               "Purpose":  "Complete parser sweep output",
-                              "GitHubRawBytes":  47,
-                              "Sha256":  "d701b6c8d45ec8d351231353d1d55c9def5ee9187b8b9b43a079a492c2bf7907"
+                              "GitBlobSha1":  "0dd0a39c6136de8d5a6237a26ad35ad08c398a66",
+                              "GitHubRawBytes":  46,
+                              "Sha256":  "23af255ac0d80a352a057d484e6c3089c65f5ca1844ebc3d4dfe64b05b33676c"
                           },
                           {
                               "Path":  "evidence/Test-CurrentPS51Dependencies.ps1",
                               "Purpose":  "Reproducible no-profile PS 5.1 command and module availability probe",
-                              "GitHubRawBytes":  725,
-                              "Sha256":  "a84575a90f0eb4a8d807f276d3868869512b0acd7373ca2d9b7e545334c0a7c4"
+                              "GitBlobSha1":  "4917572db0f3729bbf6f640a780ac8702c542fa9",
+                              "GitHubRawBytes":  707,
+                              "Sha256":  "d641080d7383fce1ac10758d7740a3e51761fa99eae50079d87c8edee1a5574c"
                           },
                           {
                               "Path":  "evidence/CurrentPS51Dependencies.log",
                               "Purpose":  "Complete current PS 5.1 dependency probe output",
-                              "GitHubRawBytes":  203,
-                              "Sha256":  "a30fde4f6b927c8f73569978046d691f4b236d559fca900773cb60a869fff526"
+                              "GitBlobSha1":  "a09a385a5ca323a34c73b776ca182426fb32d86f",
+                              "GitHubRawBytes":  202,
+                              "Sha256":  "964c1fe519d3cedcb781f222284d73a2cf8d03793dd61a091bd5759ee958a399"
                           },
                           {
                               "Path":  "evidence/Test-F2AclProtectedReleaseUpdater.ps1.log",
                               "Purpose":  "Full 133-assertion PS5.1 updater regression output",
-                              "GitHubRawBytes":  12475,
-                              "Sha256":  "e94be2aa9322921796bf4d1098a4f98a6e63ddfe078cbf4c135ed74637f9e297"
+                              "GitBlobSha1":  "aaa56527ce3dfbe0507e9220ad229a77fa488658",
+                              "GitHubRawBytes":  12341,
+                              "Sha256":  "398d42a839a6cfeb15246ba542a09a965bbd23b0bb8dad8149b92e2f74c43004"
                           },
                           {
                               "Path":  "evidence/Test-F2AclProtectedReleaseNativeHelper.ps1.log",
                               "Purpose":  "Full 20-assertion PS5.1 TEMP native helper output",
-                              "GitHubRawBytes":  57,
-                              "Sha256":  "4549f1a7bd71c5f399f99e924c941e2b1df7748f443e9c5429e9e0d336f9decc"
+                              "GitBlobSha1":  "41325476447007e456d11817d11575a1edea9286",
+                              "GitHubRawBytes":  56,
+                              "Sha256":  "a1eafbc35a1722b2ecd039ab91a1e70333fb4687fd658338221939abddbd872b"
                           },
                           {
                               "Path":  "evidence/Build-EvidenceManifest.ps1",
-                              "Purpose":  "Reproducible Git-blob hash manifest builder",
-                              "GitHubRawBytes":  7036,
-                              "Sha256":  "0a17f5248a4d4066651e73687130e3335f813bc419f7514e8cd50540bfa95102"
+                              "Purpose":  "Reproducible exact Git-blob hash manifest builder",
+                              "GitBlobSha1":  "1bee232783e318adf915d9c9df8a9db60f0e0cc3",
+                              "GitHubRawBytes":  6790,
+                              "Sha256":  "1c2a7b62d35dbbb21a4be2294c30f6fbe775dd08c07e60a17769aa7f045190cc"
                           }
                       ],
     "ManifestNote":  "This manifest lists all accompanying diagnostic and test artifacts except itself. Its own GitHub raw-content SHA-256 is recorded in the review handoff."
