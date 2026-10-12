@@ -44,8 +44,7 @@ try {
         if ($line -notmatch '^100644 ([0-9a-f]{40}) 0\s+(.+)$') { throw 'GIT_INDEX_ENTRY_UNEXPECTED' }
         $objectId = $Matches[1]
         $path = $Matches[2].Replace('\','/')
-        if ($path -ceq ($scope + '/evidence/EVIDENCE_MANIFEST.json') -or
-            $path -ceq ($scope + '/evidence/New-F2G1FailureEvidenceManifest.stdout.txt')) { continue }
+        if ($path -ceq ($scope + '/evidence/EVIDENCE_MANIFEST.json')) { continue }
         $bytes = Get-StagedBlobBytes -ObjectId $objectId
         $digest = ([BitConverter]::ToString($sha.ComputeHash([byte[]]$bytes))).Replace('-','').ToLowerInvariant()
         $files.Add([pscustomobject]@{ Path=$path; GitBlob=$objectId; ByteCount=$bytes.Length; Sha256=$digest })
@@ -67,7 +66,6 @@ $manifest = [ordered]@{
 $json = $manifest | ConvertTo-Json -Depth 8
 $manifestPath = Join-Path $PSScriptRoot 'EVIDENCE_MANIFEST.json'
 [IO.File]::WriteAllText($manifestPath,$json + [Environment]::NewLine,[Text.UTF8Encoding]::new($false))
-[Console]::Out.WriteLine(('ManifestFileCount={0}' -f $files.Count))
 [Console]::Out.WriteLine('ManifestPath=evidence/EVIDENCE_MANIFEST.json')
 [Console]::Out.WriteLine('Hashes=STAGED_GIT_BLOB_BYTES')
 [Console]::Out.WriteLine('ManifestSelfHash=EXCLUDED')

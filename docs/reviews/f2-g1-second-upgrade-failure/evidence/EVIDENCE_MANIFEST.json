@@ -1,7 +1,7 @@
 {
     "Schema":  "f2-g1-second-upgrade-failure-review-evidence-v1",
     "ReviewBranch":  "docs/f2-g1-second-upgrade-failure-review-20261012",
-    "BaseCommit":  "3dc05f98831924160474bfb5b554b2963d9a137b",
+    "BaseCommit":  "a5f368340245e7151956b272ba717ed93c925b76",
     "EvidenceCommit":  "SELF_REFERENTIAL_COMMIT_SHA_OMITTED; report the final commit separately",
     "RepositoryOrigin":  "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
     "ProductionCommitReviewed":  "03882eedf3104fc33aa0cf503ddef9c9a6bec702",
@@ -35,9 +35,15 @@
                   },
                   {
                       "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/New-F2G1FailureEvidenceManifest.ps1",
-                      "GitBlob":  "bfd9d4de7dc46fd5aea44032961dc05f1db8d410",
-                      "ByteCount":  3424,
-                      "Sha256":  "7715e22cf3cad6717092112fb600b4caede7e1abf3dee526e2d2c5f0392e2656"
+                      "GitBlob":  "f1827ee6b3154a1265768cffb4e1c61d6ab5706b",
+                      "ByteCount":  3263,
+                      "Sha256":  "60ba5b1cf28e246d79e5fbbcadf7b88d205c1f1134945476c150023a16676a1c"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/New-F2G1FailureEvidenceManifest.stdout.txt",
+                      "GitBlob":  "b44c1d5c909542d4bf7e4a65646efb5f844bc782",
+                      "ByteCount":  118,
+                      "Sha256":  "171eafe61a1ed0f23acdea14e150400065567c0e269289ddddfe954b0f7abfeb"
                   },
                   {
                       "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/read-only-production-validation.stdout.txt",
