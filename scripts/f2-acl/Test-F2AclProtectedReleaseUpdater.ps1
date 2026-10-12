@@ -212,12 +212,29 @@ try {
         (Join-Path (Join-Path (Join-Path $pathFixture.Context.PackageHome 'releases') $pathFixture.Context.ExpectedSourceCommit) 'scripts\f2-acl\F2AclIcacls.Runtime.psm1')
     )
     $runtimePathsCovered=$true
-    foreach($path in $expectedRuntimePaths){if($path -notin $runtimePathInventory){$runtimePathsCovered=$false}}
-    $missingRuntimePaths=@($expectedRuntimePaths | Where-Object { $_ -notin $runtimePathInventory })
+    $canonicalExpectedRuntimePaths=@($expectedRuntimePaths | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })
+    $canonicalRuntimePathInventory=@($runtimePathInventory | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })
+    foreach($path in $canonicalExpectedRuntimePaths){if($path -notin $canonicalRuntimePathInventory){$runtimePathsCovered=$false}}
+    $missingRuntimePaths=@($canonicalExpectedRuntimePaths | Where-Object { $_ -notin $canonicalRuntimePathInventory })
     Assert-Update ($runtimePathsCovered -and $runtimePathInventory.Count -eq 12) ('runtime inventory includes old/new source checkout and fixed/versioned installed launchers, coordinators and direct runtime modules; actualCount='+$runtimePathInventory.Count+'; missing='+($missingRuntimePaths -join '|'))
     $baseInventory=@(& $pathFixture.Context.Hooks.ProcessInventory $pathFixture.Context)
     $baseInventoryError=Get-ProcessInventoryError $pathFixture.Context $baseInventory
-    Assert-Update ($baseInventoryError -ceq '') ('only the current updater and exact PID/creation-time/pin-bound requester launcher are allowed; actualError='+$baseInventoryError)
+    $requesterRecord=$baseInventory | Where-Object { $_.ProcessId -eq $pathFixture.Context.RequesterLauncherProcessId } | Select-Object -First 1
+    $expectedRequesterPath=[IO.Path]::GetFullPath((Join-Path $pathFixture.Context.SourceRoot 'scripts\f2-acl\Start-F2ProtectedReleaseUpdate.ps1'))
+    $requesterDiagnostics=[ordered]@{
+        CommandPresent=([string]$requesterRecord.CommandLine -match '(?i)(?:^|\s)-(?:command|c)(?:\s|:|$)')
+        EncodedAbsent=([string]$requesterRecord.CommandLine -notmatch '(?i)(?:^|\s)-(?:encodedcommand|enc)(?:\s|:|$)')
+        SourceLauncherPath=([string]$requesterRecord.CommandLine).IndexOf($expectedRequesterPath,[StringComparison]::OrdinalIgnoreCase) -ge 0
+        DotSourceBootstrap=([string]$requesterRecord.CommandLine).IndexOf('. ([scriptblock]::Create($text))',[StringComparison]::OrdinalIgnoreCase) -ge 0
+        LauncherFunction=([string]$requesterRecord.CommandLine).IndexOf('Invoke-F2ProtectedReleaseUpdateLauncher',[StringComparison]::OrdinalIgnoreCase) -ge 0
+        CommitPin=([string]$requesterRecord.CommandLine).IndexOf([string]$pathFixture.Context.ExpectedSourceCommit,[StringComparison]::OrdinalIgnoreCase) -ge 0
+        UpdaterPin=([string]$requesterRecord.CommandLine).IndexOf([string]$pathFixture.Context.UpdaterSha256,[StringComparison]::OrdinalIgnoreCase) -ge 0
+        LauncherPin=([string]$requesterRecord.CommandLine).IndexOf([string]$pathFixture.Context.ExpectedLauncherSha256,[StringComparison]::OrdinalIgnoreCase) -ge 0
+        CandidatePin=([string]$requesterRecord.CommandLine).IndexOf([string]$pathFixture.Context.CandidateManifestSha256,[StringComparison]::OrdinalIgnoreCase) -ge 0
+        ProcessIdentity=([long]$requesterRecord.CreationUtcTicks -eq [long]$pathFixture.Context.RequesterLauncherCreationUtcTicks -and [string]$requesterRecord.OwnerSid -ceq [string]$pathFixture.Context.ExpectedRequesterSid)
+    }
+    $requesterDiagnosticText=($requesterDiagnostics.GetEnumerator() | ForEach-Object { '{0}:{1}' -f $_.Key,$_.Value }) -join ','
+    Assert-Update ($baseInventoryError -ceq '') ('only the current updater and exact PID/creation-time/pin-bound requester launcher are allowed; actualError='+$baseInventoryError+'; requesterChecks='+$requesterDiagnosticText)
     $foreignCases=@(
         [pscustomobject]@{Label='active old source-checkout launcher';CommandLine=('powershell.exe -File "'+(Join-Path $pathFixture.Context.OldRuntimeSourceRoot 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1')+'"')},
         [pscustomobject]@{Label='active new source-checkout launcher';CommandLine=('powershell.exe -File "'+(Join-Path $pathFixture.Context.SourceRoot 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1')+'"')},
