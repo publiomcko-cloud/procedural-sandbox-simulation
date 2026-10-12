@@ -112,7 +112,7 @@ function New-UpdateFixture {
             # 8.3 alias; comparing its raw Join-Path spelling to GetFullPath
             # would create a false requester-identity rejection.
             $requesterPath=[IO.Path]::GetFullPath((Join-Path $ctx.SourceRoot 'scripts\f2-acl\Start-F2ProtectedReleaseUpdate.ps1'))
-            $requesterLine='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "& { $path="__PATH__"; $expected="__LAUNCHER_SHA__"; . ([scriptblock]::Create($text)); Invoke-F2ProtectedReleaseUpdateLauncher -ExpectedSourceCommit "__SOURCE_SHA__" -ExpectedUpdaterSha256 "__UPDATER_SHA__" -ExpectedLauncherSha256 "__LAUNCHER_SHA__" -ExpectedCandidateManifestSha256 "__CANDIDATE_SHA__" }"'
+            $requesterLine='powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "& { $path=''__PATH__''; $expected=''__LAUNCHER_SHA__''; . ([scriptblock]::Create($text)); $rc=Invoke-F2ProtectedReleaseUpdateLauncher -ExpectedSourceCommit __SOURCE_SHA__ -ExpectedUpdaterSha256 __UPDATER_SHA__ -ExpectedLauncherSha256 __LAUNCHER_SHA__ -ExpectedCandidateManifestSha256 __CANDIDATE_SHA__; exit [int]$rc }"'
             $requesterLine=$requesterLine.Replace('__PATH__',$requesterPath).Replace('__LAUNCHER_SHA__',$ctx.ExpectedLauncherSha256).Replace('__SOURCE_SHA__',$ctx.ExpectedSourceCommit).Replace('__UPDATER_SHA__',$ctx.UpdaterSha256).Replace('__CANDIDATE_SHA__',$ctx.CandidateManifestSha256)
             $rows=New-Object 'System.Collections.Generic.List[object]'
             $rows.Add([pscustomobject]@{ProcessId=$ctx.CurrentProcessId;Name='powershell.exe';CommandLine='powershell.exe -NoProfile -EncodedCommand synthetic-current';CreationUtcTicks=0L;OwnerSid=''})
@@ -239,11 +239,34 @@ try {
     }
     $requesterDiagnosticText=($requesterDiagnostics.GetEnumerator() | ForEach-Object { '{0}:{1}' -f $_.Key,$_.Value }) -join ','
     Assert-Update ($baseInventoryError -ceq '') ('only the current updater and exact PID/creation-time/pin-bound requester launcher are allowed; actualError='+$baseInventoryError+'; requesterChecks='+$requesterDiagnosticText)
+    # Correct launch topology: Explorer -> cmd.exe -> requester PowerShell B;
+    # B's ordinary UAC child is elevated PowerShell C. The updater inventories
+    # only PowerShell hosts, so this is exactly the two-record base inventory.
+    Assert-Update (@($baseInventory).Count -eq 2 -and [bool](Test-F2UpdateProcessInventory -Processes $baseInventory -CurrentProcessId $pathFixture.Context.CurrentProcessId -Context $pathFixture.Context)) 'corrected Explorer/cmd.exe launch topology accepts exactly the pinned requester and elevated updater'
+    # The formerly documented shell invocation left PowerShell A alive while
+    # it synchronously launched B. No ancestor exception is permitted.
+    $threePowerShellTopology=@($baseInventory)+@([pscustomobject]@{ProcessId=1999;Name='powershell.exe';CommandLine='powershell.exe -NoProfile -Command interactive-parent';CreationUtcTicks=638000000000000001L;OwnerSid='S-1-5-21-100'})
+    Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $threePowerShellTopology) -ceq 'UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN') 'original three-PowerShell caller/requester/updater topology is rejected without an ancestor exception'
+    # Exercise the proposed cmd.exe quoting and exit propagation with a
+    # TEMP-only inert PowerShell command; this never imports the real launcher.
+    $cmdProbePath=Join-Path $script:root 'cmd-powershell-quoting-probe.cmd'
+    $cmdProbeText=@'
+@echo off
+setlocal DisableDelayedExpansion
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "& { $probe = 'value with spaces'; if($probe -cne 'value with spaces'){ exit 91 }; exit 37 }"
+exit /b %ERRORLEVEL%
+'@
+    [IO.File]::WriteAllText($cmdProbePath,$cmdProbeText,[Text.Encoding]::ASCII)
+    & $env:ComSpec /d /c ('"'+$cmdProbePath+'"')
+    $cmdProbeExit=$LASTEXITCODE
+    Assert-Update ($cmdProbeExit -eq 37) ('cmd.exe preserves quoted PowerShell -Command syntax and propagates its exit code; actual='+$cmdProbeExit)
     $foreignCases=@(
         [pscustomobject]@{Label='active old source-checkout launcher';CommandLine=('powershell.exe -File "'+(Join-Path $pathFixture.Context.OldRuntimeSourceRoot 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1')+'"')},
         [pscustomobject]@{Label='active new source-checkout launcher';CommandLine=('powershell.exe -File "'+(Join-Path $pathFixture.Context.SourceRoot 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1')+'"')},
         [pscustomobject]@{Label='active installed coordinator';CommandLine=('powershell.exe -File "'+(Join-Path $pathFixture.Context.PackageHome 'scripts\f2-acl\Invoke-F2IcaclsProtectedCoordinator.ps1')+'" -CaptureId '+('a'*32))},
         [pscustomobject]@{Label='direct runtime-module invocation';CommandLine=('powershell.exe -NoProfile -Command "Import-Module '+(Join-Path $pathFixture.Context.OldRuntimeSourceRoot 'scripts\f2-acl\F2AclIcacls.Runtime.psm1')+'; Invoke-F2IcaclsCaptureLauncher"')},
+        [pscustomobject]@{Label='unrelated PowerShell command';CommandLine='powershell.exe -NoProfile -Command Get-Date'},
+        [pscustomobject]@{Label='PowerShell Core host';Name='pwsh.exe';CommandLine='pwsh.exe -NoProfile -Command Get-Date'},
         [pscustomobject]@{Label='encoded PowerShell invocation';CommandLine='powershell.exe -NoProfile -EncodedCommand SQBFAFgA'},
         [pscustomobject]@{Label='legacy process with cached v2 manifest';CommandLine=('powershell.exe -NoProfile -Command "$cachedManifestSha256='''+$script:F2UpdateOldManifestSha256+'''"');CachedManifestSha256=$script:F2UpdateOldManifestSha256},
         [pscustomobject]@{Label='active PowerShell ISE process';Name='powershell_ise.exe';CommandLine='powershell_ise.exe -NoProfile'}
@@ -258,8 +281,24 @@ try {
     }
     $missingLine=@($baseInventory)+@([pscustomobject]@{ProcessId=2010;Name='powershell.exe';CommandLine=$null;CreationUtcTicks=638000000000000000L;OwnerSid='S-1-5-21-200'})
     Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $missingLine) -ceq 'UPDATE_PROCESS_COMMAND_LINE_UNKNOWN') 'missing or inaccessible foreign PowerShell command line fails closed'
+    $missingRequester=@($baseInventory | Where-Object { $_.ProcessId -ne $pathFixture.Context.RequesterLauncherProcessId })
+    Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $missingRequester) -ceq 'UPDATE_REQUESTER_LAUNCHER_UNKNOWN') 'wrong requester PID binding or missing pinned requester process fails closed'
     $badRequester=@($baseInventory | Where-Object { $_.ProcessId -ne $pathFixture.Context.RequesterLauncherProcessId })+@([pscustomobject]@{ProcessId=$pathFixture.Context.RequesterLauncherProcessId;Name='powershell.exe';CommandLine=$baseInventory[1].CommandLine;CreationUtcTicks=1L;OwnerSid=$pathFixture.Context.ExpectedRequesterSid})
     Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $badRequester) -ceq 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN') 'requester PID reuse or unexpected process creation time is rejected'
+    $badRequesterSid=@($baseInventory | Where-Object { $_.ProcessId -ne $pathFixture.Context.RequesterLauncherProcessId })+@([pscustomobject]@{ProcessId=$pathFixture.Context.RequesterLauncherProcessId;Name='powershell.exe';CommandLine=$baseInventory[1].CommandLine;CreationUtcTicks=$pathFixture.Context.RequesterLauncherCreationUtcTicks;OwnerSid='S-1-5-21-999'})
+    Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $badRequesterSid) -ceq 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN') 'requester SID mismatch is rejected'
+    $requesterPinCases=@(
+        [pscustomobject]@{Name='source commit';Value=[string]$pathFixture.Context.ExpectedSourceCommit},
+        [pscustomobject]@{Name='updater hash';Value=[string]$pathFixture.Context.UpdaterSha256},
+        [pscustomobject]@{Name='launcher hash';Value=[string]$pathFixture.Context.ExpectedLauncherSha256},
+        [pscustomobject]@{Name='candidate hash';Value=[string]$pathFixture.Context.CandidateManifestSha256}
+    )
+    foreach($pinCase in $requesterPinCases){
+        $badLine=[string]$baseInventory[1].CommandLine
+        $badLine=$badLine.Replace([string]$pinCase.Value,('0'*([string]$pinCase.Value).Length))
+        $badPinRows=@($baseInventory | Where-Object { $_.ProcessId -ne $pathFixture.Context.RequesterLauncherProcessId })+@([pscustomobject]@{ProcessId=$pathFixture.Context.RequesterLauncherProcessId;Name='powershell.exe';CommandLine=$badLine;CreationUtcTicks=$pathFixture.Context.RequesterLauncherCreationUtcTicks;OwnerSid=$pathFixture.Context.ExpectedRequesterSid})
+        Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $badPinRows) -ceq 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN') ('requester '+$pinCase.Name+' mismatch is rejected')
+    }
     $badPinRequester=@($baseInventory | Where-Object { $_.ProcessId -ne $pathFixture.Context.RequesterLauncherProcessId })+@([pscustomobject]@{ProcessId=$pathFixture.Context.RequesterLauncherProcessId;Name='powershell.exe';CommandLine=$baseInventory[1].CommandLine.Replace($pathFixture.Context.CandidateManifestSha256,('0'*64));CreationUtcTicks=$pathFixture.Context.RequesterLauncherCreationUtcTicks;OwnerSid=$pathFixture.Context.ExpectedRequesterSid})
     Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $badPinRequester) -ceq 'UPDATE_REQUESTER_LAUNCHER_IDENTITY_UNKNOWN') 'requester launch command with a changed source pin is rejected'
     $encodedRequester=@($baseInventory | Where-Object { $_.ProcessId -ne $pathFixture.Context.RequesterLauncherProcessId })+@([pscustomobject]@{ProcessId=$pathFixture.Context.RequesterLauncherProcessId;Name='powershell.exe';CommandLine=$baseInventory[1].CommandLine.Replace('-Command','-EncodedCommand');CreationUtcTicks=$pathFixture.Context.RequesterLauncherCreationUtcTicks;OwnerSid=$pathFixture.Context.ExpectedRequesterSid})
@@ -268,6 +307,17 @@ try {
     $inventoryError.Context.Hooks.ProcessInventory={param($ctx)throw 'SYNTHETIC_INVENTORY_FAILURE'}
     Assert-Update ((Get-QuiescenceError $inventoryError.Context) -ceq 'UPDATE_PROCESS_INVENTORY_UNKNOWN') 'process inventory command failure fails closed with a stable diagnostic'
     Close-UpdateFixture $inventoryError
+    $barrierProbe=New-UpdateFixture
+    $probeBarrier=$null;$lateManifestReaderDenied=$false
+    try {
+        $probeLock=Join-Path $barrierProbe.Context.ProgramDataRoot 'release.lock'
+        $locks=& $barrierProbe.Context.Hooks.AcquireLocks $probeLock $barrierProbe.Context.ActiveManifestPath
+        $probeBarrier=$locks.ManifestBarrier
+        try { $lateReader=[IO.File]::Open($barrierProbe.Context.ActiveManifestPath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read);$lateReader.Dispose() }
+        catch [IO.IOException] { $lateManifestReaderDenied=$true }
+        Assert-Update ($lateManifestReaderDenied -and $null -ne $probeBarrier -and $probeBarrier.CanRead) 'new v2 manifest reader is denied while the synthetic read barrier is held'
+    }
+    finally { Close-UpdateFixture $barrierProbe }
     Close-UpdateFixture $pathFixture
 
     $goodDir='O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200A9;;;AU)'

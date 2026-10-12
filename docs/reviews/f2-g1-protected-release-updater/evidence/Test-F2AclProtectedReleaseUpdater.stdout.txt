@@ -5,18 +5,30 @@ PASS: synthetic old v2 manifest exactly reproduces the approved retained old-man
 PASS: old-release fixtures are extracted from the pinned Git commit and match all seven installed-byte hashes
 PASS: runtime inventory includes old/new source checkout and fixed/versioned installed launchers, coordinators and direct runtime modules; actualCount=12; missing=
 PASS: only the current updater and exact PID/creation-time/pin-bound requester launcher are allowed; actualError=; requesterChecks=CommandPresent:True,EncodedAbsent:True,SourceLauncherPath:True,DotSourceBootstrap:True,LauncherFunction:True,CommitPin:True,UpdaterPin:True,LauncherPin:True,CandidatePin:True,ProcessIdentity:True
+PASS: corrected Explorer/cmd.exe launch topology accepts exactly the pinned requester and elevated updater
+PASS: original three-PowerShell caller/requester/updater topology is rejected without an ancestor exception
+PASS: cmd.exe preserves quoted PowerShell -Command syntax and propagates its exit code; actual=37
 PASS: active old source-checkout launcher blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
 PASS: active new source-checkout launcher blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
 PASS: active installed coordinator blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
 PASS: direct runtime-module invocation blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: unrelated PowerShell command blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: PowerShell Core host blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
 PASS: encoded PowerShell invocation blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
 PASS: legacy process with cached v2 manifest blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
 PASS: active PowerShell ISE process blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
 PASS: missing or inaccessible foreign PowerShell command line fails closed
+PASS: wrong requester PID binding or missing pinned requester process fails closed
 PASS: requester PID reuse or unexpected process creation time is rejected
+PASS: requester SID mismatch is rejected
+PASS: requester source commit mismatch is rejected
+PASS: requester updater hash mismatch is rejected
+PASS: requester launcher hash mismatch is rejected
+PASS: requester candidate hash mismatch is rejected
 PASS: requester launch command with a changed source pin is rejected
 PASS: encoded requester launch is rejected even when it repeats approved path text and pins
 PASS: process inventory command failure fails closed with a stable diagnostic
+PASS: new v2 manifest reader is denied while the synthetic read barrier is held
 PASS: exact protected Administrator-owned directory DACL is accepted
 PASS: exact protected Administrator-owned file DACL is accepted
 PASS: unexpected owner is rejected
@@ -119,4 +131,4 @@ PASS: parent and elevated child recheck bounded input paths and requester-token 
 PASS: launcher distinguishes preflight failure, consent cancellation and bounded child-status uncertainty
 PASS: updater contains no cleanup, ACL-relaxation, icacls or nested process-launch path
 PASS: bootstrap verifies the one-read elevated updater bytes before executing those identical bytes and before staging
-Assertions=121;Failures=0
+Assertions=133;Failures=0

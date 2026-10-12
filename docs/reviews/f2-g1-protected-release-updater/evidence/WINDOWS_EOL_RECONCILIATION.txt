@@ -1,0 +1,15 @@
+Windows checkout hash reconciliation for Test-F2AclProtectedReleaseUpdater.ps1
+Repository rule: `.gitattributes` applies `*.ps1 text eol=crlf`.
+
+Previous reviewed HEAD d14aa0f6c9a1e358afa5b2a04a17e27a9bff22ed:
+- GitHub Git-content SHA-256: 7d983dd239cbf3fe8a81017bfbee326f7642a7de9cc426568ecad575f8df439c.
+- Git blob object ID (Git's SHA-1 object name): 0f2c6675d8386ac5c2b9144e39edf2703f402d49.
+- The previous manifest recorded worktree SHA-256 56c4ee4688a401d249ec67a65187b1dac762226ea7a2a582bf51b5c43c07c046. Re-reading that local checkout showed it was mixed EOL: 486 LF bytes, only 1 CRLF and 485 bare LF (`git ls-files --eol`: i/lf, w/mixed, attr/text eol=crlf). That digest was not the correctly rendered Windows checkout hash.
+- Reconstructing Windows CRLF bytes from the exact GitHub Git-content bytes gives SHA-256 fceb324ce3c419c10fde4c3b2295673552294271ea23cc8ababb926af13a2578, matching the independent review's calculation.
+
+This correction's test file at publication:
+- Exact Git-content SHA-256 after CRLF-to-LF normalization: c4a81ab18531fd368c5a38f243a35342e3b6c8ca2525fa4488d3936573d1784b.
+- Local Windows worktree is now entirely CRLF (536 CRLF line endings, 0 bare LF); SHA-256 c918cc4e1180c657d34e032a126196e99809eab2deaffb2356db64cc3f21dbd6.
+- The file's git attributes are `text eol=crlf`; these exact working-tree bytes, not the former mixed-EOL digest, are the expected Windows checkout representation. GitHub-hosted Windows CI will independently check out and test the committed bytes under this attribute.
+
+No production updater, standard launcher, candidate manifest, seven-file source pin, or production package bytes changed in this correction.

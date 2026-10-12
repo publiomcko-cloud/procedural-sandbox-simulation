@@ -30,6 +30,18 @@ Every other PowerShell process blocks the transaction with `UPDATE_RUNTIME_PROCE
 
 An already-running v2 launcher, coordinator, direct runtime-module caller, or encoded PowerShell invocation is a foreign PowerShell process and blocks. An arbitrary non-PowerShell process host or renamed/custom PowerShell executable is outside the supported runtime interface and is not declared covered.
 
+## Supported launch topology (documentation/test correction)
+
+The previous proposed command was run from an interactive standard-user PowerShell session and started a second requester PowerShell. During UAC the updater would therefore see three PowerShell processes: the original interactive caller A, the pinned requester B, and the elevated updater C. A is not B or C and is correctly rejected. No ancestor exception is added.
+
+For a future separately authorized run, all `powershell.exe`, `powershell_ise.exe`, and `pwsh.exe` processes must first be exited normally. Then use Explorer's Win+R dialog to open a fresh `cmd.exe /d /k`; do not start CMD from a PowerShell session or PowerShell-backed terminal. Paste the exact CMD command in the main updater review and read `%ERRORLEVEL%` after it returns. The supported topology is:
+
+```text
+Explorer -> cmd.exe -> requester Windows PowerShell 5.1 B -> UAC -> elevated Windows PowerShell 5.1 C
+```
+
+At the quiescence point, the system-wide PowerShell inventory must contain exactly B and C. CMD is not one of the PowerShell hosts in the inventory. Any unrelated or legacy PowerShell process still running causes the existing fail-closed block; nothing is closed or terminated automatically. The exact command keeps the source commit, candidate, updater and launcher pins, hashes and dot-sources the exact verified launcher bytes in memory. A synthetic CMD fixture validated quoting and return-code propagation only; the production command and updater were not launched.
+
 ## Barrier, inventory and activation ordering
 
 Normal update path:
@@ -60,17 +72,19 @@ No process is killed to make the gate pass. Any process list, owner lookup, PID/
 - Direct module invocation, encoded command, PowerShell ISE, and a v2 process annotated as having cached the old manifest. All foreign processes block without needing a successful path match.
 - Missing command line, inventory exception, requester PID reuse/creation-time mismatch, changed SHA pin, and encoded requester command.
 - A normal exact requester process bound by PID, creation time, SID and reviewed command pins.
+- The old caller/requester/updater three-PowerShell process inventory is rejected; the corrected two-record requester/updater inventory is accepted without an ancestor exemption. The CMD-to-PowerShell quoting and exit-code propagation shape passes an inert TEMP-only `exit 37` probe.
+- Wrong/missing requester PID, SID, creation timestamp, source commit, launcher hash, updater hash or candidate hash is rejected. Unrelated PowerShell, `pwsh.exe`, encoded invocation, inaccessible command line and cached-v2 activity also fail closed.
 - A late process appearing between the first and activation-edge inventories. The update fails before replacing the old manifest. A separate real TEMP-only sharing fixture verifies that a new manifest reader is denied while the barrier is held; the activation hook repeats that read attempt immediately after the second synthetic inventory and verifies it remains denied.
 - Event ordering: barrier acquisition precedes inventory #1, inventory #2 occurs before activation, and all failure cases retain old active-manifest bytes.
 
-These tests model process inventory data and call ordering. The six direct Windows PowerShell 5.1 suites passed with test diagnostics from PR #59 test commit `3a3383c6fd08b87dada4e3e4c1e9421657afba7c` and production updater bytes from source commit `8b70a70934445bee660c1e53e71b2e7b20a6191f`: Protocol 152, Corroboration 118, Runtime 41, Entrypoint 18, Updater 121, Native helper 20; total 470 assertions, zero failures, all six exit codes 0. Exact commands, timestamps and outputs are in `evidence/`. These tests do not query the live Windows process table, prove elevated UAC visibility/owner lookup, or perform an update on protected C:.
+These tests model process inventory data and call ordering; the CMD probe runs only a TEMP fixture and exits with a synthetic nonzero status. The final direct Windows PowerShell 5.1 suite totals are Protocol 152, Corroboration 118, Runtime 41, Entrypoint 18, Updater 133, and Native helper 20: **482 assertions, zero failures**, all six child exit codes 0. The PS5.1 parser sweep parsed 14 tracked PowerShell files with zero errors; `git diff --check` passed. Complete stdout/stderr and command evidence are in `evidence/WINDOWS_POWERSHELL51_FULL_SUITE.txt`; hosted CI is linked from the PR. No production updater, UAC, actual process inventory, C: update, or process termination was performed. These tests do not prove elevated WMI visibility/owner lookup or protected NTFS sharing/rename behavior.
 
 ## Security limits and remaining gates
 
 - The process table is a point-in-time inventory. The lock/barrier, rather than polling alone, excludes new supported runtime reads after the barrier. This proof depends on the reviewed v2/v3 entrypoints continuing to require their active release manifest before runtime work; arbitrary user-authored code that carries a copied old manifest is outside the supported interface.
 - The exact elevated visibility of the requester process, `Win32_Process.GetOwnerSid`, and `CreationDate` round-trip remains UNKNOWN until a separately authorized real UAC run. Failure is fail-closed.
 - Real C: NTFS share-mode/replace behavior, Administrator ownership/DACL behavior, and update recovery remain untested.
-- No seven-file release member or `F2_ICACLS_SOURCE_PINS.json` bytes were changed. The updater and standard launcher are outside that seven-file payload and receive fresh outer SHA pins. Candidate `ReviewedCommitSha`, versioned `PackageRoot`, candidate SHA and proposed command are refreshed for this correction.
+- No production source, seven-file release member, `F2_ICACLS_SOURCE_PINS.json`, updater/launcher pin, candidate `ReviewedCommitSha`, versioned `PackageRoot`, or candidate SHA changed in this documentation-and-test-only correction.
 - The existing native C# `IntPtr.Zero` correction remains unchanged.
 
 ## Acceptance summary
@@ -81,6 +95,10 @@ These tests model process inventory data and call ordering. The six direct Windo
 | Installed fixed and versioned paths represented | Synthetic PASS |
 | Direct and encoded PowerShell activity excluded | Synthetic PASS; blanket foreign-host block |
 | Cached-old-manifest process rejected | Synthetic PASS |
+| Documented three-PowerShell command rejected | Synthetic PASS; no ancestor exception |
+| Fresh Explorer/CMD launch with exactly requester and updater PowerShell accepted | Synthetic PASS |
+| CMD quoting and exit propagation | TEMP-only synthetic PASS (`exit 37`) |
+| Wrong requester PID/SID/time/source/hash pins rejected | Synthetic PASS |
 | Barrier/inventory/activation sequence | Synthetic PASS |
 | Late process between inventories | Synthetic PASS; rejected before switch |
 | Fresh reader after final inventory | TEMP file-sharing fixture PASS |
