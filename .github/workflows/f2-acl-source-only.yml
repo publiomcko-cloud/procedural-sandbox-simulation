@@ -55,6 +55,13 @@ jobs:
           $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
           Write-Host "F2ProtectedUpdaterTestProcessExit=$($test.ExitCode)"
           if ($test.ExitCode -ne 0) { exit $test.ExitCode }
+      - name: Compile and exercise production native helper in Windows PowerShell 5.1 TEMP fixtures
+        shell: powershell
+        run: |
+          $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclProtectedReleaseNativeHelper.ps1').Path
+          $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
+          Write-Host "F2NativeHelperTestProcessExit=$($test.ExitCode)"
+          if ($test.ExitCode -ne 0) { exit $test.ExitCode }
       # The older create-only installer suite pins the superseded pre-correction
       # seven-file package. It is retained as historical evidence and is not an
       # upgrade path or a validation target for this source-only release change.

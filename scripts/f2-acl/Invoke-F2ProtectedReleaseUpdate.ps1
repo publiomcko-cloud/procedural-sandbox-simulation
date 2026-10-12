@@ -286,7 +286,7 @@ namespace F2Update {
       if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl,1,out descriptor,out size)) throw new Win32Exception(Marshal.GetLastWin32Error());
       try {
         SECURITY_ATTRIBUTES attributes=new SECURITY_ATTRIBUTES(); attributes.nLength=Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES)); attributes.lpSecurityDescriptor=descriptor; attributes.bInheritHandle=false;
-        using(SafeFileHandle handle=CreateFileNative(path,0x40000000,0,ref attributes,1,0x80,null)) {
+        using(SafeFileHandle handle=CreateFileNative(path,0x40000000,0,ref attributes,1,0x80,IntPtr.Zero)) {
           if(handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(),"Create-new protected file failed.");
           using(FileStream stream=new FileStream(handle,FileAccess.Write)) { stream.Write(bytes,0,bytes.Length); stream.Flush(true); }
         }
