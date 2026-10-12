@@ -129,6 +129,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-protected-
 
 This is a non-runnable placeholder, not approval to create or execute that file. The next implementation/review must publish the complete updater, its tests, exact command, pins, failure recovery and CI; then a fresh owner authorization is required. No UAC or protected update occurred for this PR.
 
+The legacy installer log preserves all messages, JSON, and exit status. Only trailing console whitespace is removed from that captured text to satisfy repository diff checks.
+
 ## Explicit remaining gates
 
 - Independent review of this immutable source correction, candidate manifest, evidence and upgrade design.

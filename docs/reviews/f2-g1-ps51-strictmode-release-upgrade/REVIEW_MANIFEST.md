@@ -1,7 +1,7 @@
 # Review artifact manifest
 
-Source correction: `e5a66a7558c027e54b1510e7197d6e3a331cff19`  
-Source parent: `bd14a1908085065f08d3c62e4dd17fa3203a53ff`  
+Source correction: `e5a66a7558c027e54b1510e7197d6e3a331cff19`
+Source parent: `bd14a1908085065f08d3c62e4dd17fa3203a53ff`
 Branch: `fix/f2-g1-ps51-entrypoint-release`
 
 All SHA-256 values below are full raw file digests over the checked-out bytes. The production source commit is the release identity. The review-only docs commit that will contain this manifest does not change production package bytes.
@@ -25,12 +25,12 @@ The unchanged package members, source pins, external v2 manifest contract, basel
 
 | File | Purpose | SHA-256 |
 |---|---|---|
-| `README.md` | Defect, source lineage, test report, old/new release comparison, upgrade threat model and owner gates | `5723f62f8f2d45e70aa7e2dc1781fa223635afb5a40311f499c35e019c3d2bb2` |
+| `README.md` | Defect, source lineage, test report, old/new release comparison, upgrade threat model and owner gates | `499b15f1b14393c5b09abc8dd3b889c3ad47cfd4139e79d784ca93f0c5c3020f` |
 | `approved-release-v2-candidate.json` | Candidate external v2 release manifest for source commit e5a66a; not installed/trusted | `8ef5920f3c3c3c789b0c9af7314843437dbb57741ad29f78d57beabb43050d96` |
 | `validation-ps51.log.txt` | Complete Windows PowerShell 5.1 regression suite output and diff-check result | `041ba6d15d7763b435242f78bf62c1c441eddb26991e768276a13d14d30611c9` |
 | `parser-ps51.log.txt` | Independent parser sweep executed by Windows PowerShell 5.1 | `d9d670daf60446a34bd3e35eec457ba584e7a2923cf2e927dcf2444a6fda9d48` |
 | `candidate-manifest-validation-ps51.log.txt` | Actual production disk-loader and seven-file source validator output | `8ba0c29239db3b376ed8453dad28bc9fa7b7525a5628fea16c88d060b45aae8a` |
-| `legacy-create-only-installer-synthetic.log.txt` | Failed historical installer fixture retained transparently; no protected paths written | `5fde9004220b1bd90c7a2b5fa845844516f7f0524dc8bb1cb0446639ef104444` |
+| `legacy-create-only-installer-synthetic.log.txt` | Failed historical installer fixture retained transparently; console trailing whitespace normalized only | `a90448238180e091c24110a862ac7fac48f8123c9ff9f4ae2a81c044f91ce4e4` |
 | `Test-CandidateReleaseManifest.ps1` | Reproducible candidate manifest verification through actual module functions | `2fc6759733f9d48a91ff70675207acdf458908ef9702b2b3002be600b2337c3b` |
 | `Test-TrackedPowerShellParse.ps1` | Reproducible PS 5.1 parser sweep for tracked F2 PowerShell files | `61522bc13eb67c7b9fe8ea6e37b2a50f61b65ac1201eb6f4005b1d383ecda503` |
 

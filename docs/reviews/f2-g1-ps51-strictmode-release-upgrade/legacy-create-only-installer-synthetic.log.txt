@@ -11,5 +11,5 @@ No C:\Dev\f2-g1-ps51-entrypoint-release\docs\reviews\f2-g1-capture-id-contract\T
 +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     + CategoryInfo          : OperationStopped: (Synthetic insta...ion evaluation.:String) [], RuntimeException
     + FullyQualifiedErrorId : Synthetic install fixture failed before assertion evaluation.
- 
+
 PROCESS_EXIT_CODE=1
