@@ -1,4 +1,1 @@
-git diff --check
-Command: git diff --check 0a4d98ecad4c50ba2f749e4fafe6d28e35794804
-Scope: complete PR #59 source and review evidence delta, including Windows CRLF pin verification.
-Result: no whitespace errors; ExitCode=0
+Final whitespace validation for staged review package Production SourceRoot commit: 8b70a70934445bee660c1e53e71b2e7b20a6191f PR test/evidence head at validation: d63b51db7c2de8b8e1197ebede653f4d762cae9a Raw GitHub Actions logs remain byte-for-byte intact and are scoped as non-diff evidence by the local .gitattributes rules. git diff --cached --check exit: 0

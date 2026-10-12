@@ -1,0 +1,17 @@
+Final direct Windows PowerShell 5.1 source-only suites
+Executable: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Production updater/launcher/candidate SourceRoot commit: 8b70a70934445bee660c1e53e71b2e7b20a6191f
+PR test/evidence HEAD: d63b51db7c2de8b8e1197ebede653f4d762cae9a
+Timestamp UTC: 2026-10-12 16:32:33 -03:00
+
+Exact command form for each test: & $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <script>
+Test-F2AclCapture.Protocol.ps1 | exit=0 | Assertions=152;Failures=0
+Test-F2AclIcacls.Corroboration.ps1 | exit=0 | Assertions=118; Failures=0
+Test-F2AclIcacls.Runtime.ps1 | exit=0 | Assertions=41;Failures=0
+Test-F2AclEntrypointArguments.ps1 | exit=0 | Assertions=18;Failures=0
+Test-F2AclProtectedReleaseUpdater.ps1 | exit=0 | Assertions=121;Failures=0
+Test-F2AclProtectedReleaseNativeHelper.ps1 | exit=0 | F2NativeHelperAssertions=20;Failures=0;TempCleanup=PASS
+Total assertions=470; failures=0; child process exit codes=0,0,0,0,0,0.
+Complete stdout/stderr is in paired Test-*.stdout.txt and Test-*.stderr.txt files.
+
+This run followed the synthetic requester path normalization correction. The earlier hosted CI discrepancy and its final successful Windows CI rerun are recorded in WINDOWS_CI.txt and TRANSIENT_VALIDATION_DIAGNOSTIC.txt.

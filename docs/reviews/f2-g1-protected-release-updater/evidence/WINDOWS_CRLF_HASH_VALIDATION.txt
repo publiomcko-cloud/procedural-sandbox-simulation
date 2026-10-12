@@ -1,10 +1,29 @@
-Windows checkout updater hash validation
-Source commit: 691eae48d67789bf798e270cb9cca7790d728d26
-Parent: 40723492b97983c0c7bc6d441a1bcbace823ffe8
-Method: Created a new detached Git worktree at the exact source commit using repository attributes, verified HEAD and clean status, then hashed the updater bytes from that checkout. The temporary worktree was removed after verification.
-Worktree commit: 691eae48d67789bf798e270cb9cca7790d728d26
-Worktree clean: PASS
-Updater bytes: 701 CRLF line endings; 701 total LF bytes; zero bare LF.
-Measured Windows checkout SHA-256: 49afef854aaee2b4501325063ade14e496072aaf74745e1203c2029ce9287744
-Expected pinned Windows checkout SHA-256: 49afef854aaee2b4501325063ade14e496072aaf74745e1203c2029ce9287744
+Windows checkout SHA-256 validation (clean detached source checkout)
+SourceRoot: C:\Dev\f2-g1-protected-updater-source
+Origin: https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git
+Commit: 8b70a70934445bee660c1e53e71b2e7b20a6191f
+Parent: 5d231f4697673569de526c03cedf61c72e769e07
+Worktree status: clean
+Checked at UTC: 2026-10-12T16:14Z
+
+Updater: scripts/f2-acl/Invoke-F2ProtectedReleaseUpdate.ps1
+CRLF lines / LF bytes / bare LF: 789 / 789 / 0
+SHA-256: d26eb89a424e3f268099e0ac1d3ffd674dde1128321567df3a0702abb591f75e
 Result: PASS
+
+Standard launcher: scripts/f2-acl/Start-F2ProtectedReleaseUpdate.ps1
+CRLF lines / LF bytes / bare LF: 141 / 141 / 0
+SHA-256: 8278bbff8e5b7cdb313235bcc271fa31a947ca384d7496053650c3097af19720
+Result: PASS
+
+Updater regression: scripts/f2-acl/Test-F2AclProtectedReleaseUpdater.ps1
+SHA-256: 3b4dfb527bb39438bda8b11e014ec3f19f2bed96ee295d6205e8d2c8bc8a8565
+Result: PASS
+
+Candidate v3 manifest: docs/reviews/f2-g1-protected-release-updater/f2-runtime-release-v3.candidate.json
+ReviewedCommitSha: 8b70a70934445bee660c1e53e71b2e7b20a6191f
+PackageRoot: C:\Program Files\F2-G1-Icacls\releases\8b70a70934445bee660c1e53e71b2e7b20a6191f
+SHA-256: 74d178917fba4f50fdca40505d8c1dc81639f3c60bbb25c0332fd737c681562c
+Result: PASS
+
+All seven packaged release-file SHA-256 pins and F2_ICACLS_SOURCE_PINS.json are unchanged and revalidated against this clean source checkout. See ARTIFACT_MANIFEST.md for the complete values.

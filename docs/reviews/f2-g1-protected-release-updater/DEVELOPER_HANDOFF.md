@@ -1,35 +1,41 @@
-# Developer handoff
+# Developer handoff — F2 G1 updater process quiescence
 
 Status: READY_FOR_INDEPENDENT_REVIEW
+Ticket / acceptance criteria: Issue #48 process-quiescence gap; PR #59 review 5493067444.
+Repository / remote: publiomcko-cloud/procedural-sandbox-simulation / https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git
+Worktree / branch: C:\Dev\f2-g1-protected-updater / fix/f2-g1-protected-release-updater
+Review branch HEAD: d63b51db7c2de8b8e1197ebede653f4d762cae9a
+Review branch parent: c95ce9b5751d7d3a6cb79b85eb2d836d87d762a4
+Production SourceRoot SHA: 8b70a70934445bee660c1e53e71b2e7b20a6191f
+Production SourceRoot parent: 5d231f4697673569de526c03cedf61c72e769e07
+Changed production paths:
+- scripts/f2-acl/Invoke-F2ProtectedReleaseUpdate.ps1 (production correction at 8b70a709; Windows CRLF SHA-256 d26eb89a424e3f268099e0ac1d3ffd674dde1128321567df3a0702abb591f75e)
+- scripts/f2-acl/Start-F2ProtectedReleaseUpdate.ps1 (production correction at 8b70a709; Windows CRLF SHA-256 8278bbff8e5b7cdb313235bcc271fa31a947ca384d7496053650c3097af19720)
+- scripts/f2-acl/Test-F2AclProtectedReleaseUpdater.ps1 (test-only synthetic diagnostics and canonical path normalization at d63b51db; Windows checkout SHA-256 56c4ee4688a401d249ec67a65187b1dac762226ea7a2a582bf51b5c43c07c046)
+- Review documents, candidate manifest, test logs and CI evidence under docs/reviews/f2-g1-protected-release-updater/; see evidence/ARTIFACT_MANIFEST.md.
 
-Ticket / review: PR #59 review `5492493517`; Issue #48 finding `6126813885`.
+Implementation summary: Added fail-closed process quiescence for supported v2/v3 PowerShell runtime surfaces. The updater acquires the exclusive v3 lease and v2 active-manifest read barrier before process inventory, permits only the exact current elevated updater and pinned requester bootstrap, rejects every other PowerShell process or unknown inventory state, and repeats inventory immediately before manifest activation. It never terminates processes. Test fixtures now normalize synthetic requester paths using the same GetFullPath behavior as production, avoiding a false failure when hosted Windows TEMP uses an 8.3 alias. The corrected native helper and seven release-package files are unchanged.
 
-Repository / remote: `publiomcko-cloud/procedural-sandbox-simulation` / `https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git`.
+Architectural impact: No runtime package member or source-pin digest changed. Candidate v3 manifest ReviewedCommitSha and versioned PackageRoot remain bound to production source commit 8b70a70934445bee660c1e53e71b2e7b20a6191f; candidate manifest SHA-256 is 74d178917fba4f50fdca40505d8c1dc81639f3c60bbb25c0332fd737c681562c.
+Dependencies added / licenses: None.
 
-Worktree / branch: `C:\Dev\f2-g1-protected-updater` / `fix/f2-g1-protected-release-updater`.
+Tests executed (exact direct commands, repository root):
+$ps51 = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1
+& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1
+& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1
+& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclEntrypointArguments.ps1
+& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1
+& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclProtectedReleaseNativeHelper.ps1
+PowerShell parser sweep: ParseFile for each `git ls-files 'scripts/f2-acl/*.ps1' 'scripts/f2-acl/*.psm1'` result.
+Whitespace: git diff --check.
 
-Base SHA: PR #58 head `0a4d98ecad4c50ba2f749e4fafe6d28e35794804`.
+Results / assertion counts: Protocol 152/0, Corroboration 118/0, Runtime 41/0, Entrypoint 18/0, Updater 121/0, Native helper 20/0; total 470 assertions, zero failures; all six child exit codes 0. Parser: 14 files, zero errors. git diff --check: exit 0. Hosted Windows CI run 38277921321 / job 114907827701 succeeded; full log is in evidence/WINDOWS_CI_LOG.txt and the immutable run URL in evidence/WINDOWS_CI.txt.
 
-Corrected production source SHA: `691eae48d67789bf798e270cb9cca7790d728d26`.
-
-Parent SHA: `40723492b97983c0c7bc6d441a1bcbace823ffe8`.
-
-Changed production/test paths: `.github/workflows/f2-acl-source-only.yml`; `scripts/f2-acl/Invoke-F2ProtectedReleaseUpdate.ps1`; `scripts/f2-acl/Test-F2AclProtectedReleaseNativeHelper.ps1`. Review/evidence paths are the candidate v3 manifest and files under `docs/reviews/f2-g1-protected-release-updater/`.
-
-Implementation summary: The updater's embedded P/Invoke call now passes `IntPtr.Zero` for the `IntPtr` CreateFile template handle. The new test extracts and compiles the exact production C# here-string in Windows PowerShell 5.1 without invoking the updater, then tests TEMP-only protected directory/file creation, owner/DACL read-back, exact fixture ACE masks/flags, byte write and create-new collision rejection. CI runs this regression as a required workflow step.
-
-Release provenance: Candidate v3 manifest binds `ReviewedCommitSha` and the versioned `PackageRoot` to production source commit `691eae48d67789bf798e270cb9cca7790d728d26`. Candidate manifest SHA-256 is `be98e9101f9171bb1bba59bfa063fc424132e19579b16d75816cec3b345974e2`. The corrected updater SHA-256 is `49afef854aaee2b4501325063ade14e496072aaf74745e1203c2029ce9287744` for Windows CRLF checkout bytes and `47953d6124c021b0b0332a37ab0183ea1b544cfb375a78c9a38081f7ca92e4fd` for LF Git content. The seven release-file hashes and source-pin manifest are unchanged and verified against the candidate.
-
-The Windows CRLF digest was independently measured in a clean detached checkout at that exact production commit: 701 CRLF line endings, zero bare LF, expected hash PASS. See `evidence/WINDOWS_CRLF_HASH_VALIDATION.txt`.
-
-Tests executed: Six direct Windows PowerShell 5.1 suite commands and results are in `F2_G1_PROTECTED_RELEASE_UPDATER_REVIEW.md` and the complete stdout/stderr files in `evidence/`. Results: Protocol 152/0; Corroboration 118/0; Runtime 41/0; Entrypoint 18/0; Updater 104/0; native helper 20/0; total 453 assertions, zero failures, six process exit codes 0. Parser: 14 PowerShell files, zero errors. `git diff --check`: pass. Windows CI run `38269076173` / job `114878539008` succeeded on the source commit; run `38270088078` / job `114881911163` also passed on the final evidence head. Both are linked from `evidence/WINDOWS_CI.txt`.
-
-Native failure reproduction: A fresh Windows PowerShell 5.1 process compiled the exact embedded C# from blocked source `40723492b97983c0c7bc6d441a1bcbace823ffe8`; `Add-Type` failed on `null` passed to the `System.IntPtr` parameter and the child exited 1. No updater entrypoint was called. The sanitized diagnostic is in `evidence/NATIVE_COMPILE_REPRO_BEFORE_FIX.txt`.
-
-Tests not executed: actual Administrator UAC; protected C: installation/update or recovery; live `icacls`, ACL/token/parent queries; G:, VM or Hyper-V operations; native collector/workload. No production updater invocation was made.
-
-Limitations: The native C# source compiles and its create-new/security-descriptor calls work with a current-user-owned TEMP fixture. This does not verify Administrator token behavior, actual C: parent ACLs, protected ownership or DACLs, installer/UAC identity behavior, protected-volume rename semantics, or a real update transaction. Those require a new exact-SHA independent review and fresh owner authorization.
-
-Reviewer focus: verify `IntPtr.Zero` is the only production change; inspect that the test compiles the exact production here-string without updater execution; check current candidate commit/package-root/hash chain; confirm test and CI evidence; retain the privileged-only unknowns above.
-
-No UAC, protected update, live host query, ACL modification, VM operation, native F2 workload or merge was performed.
+Tests not executed: No live PowerShell process inventory, UAC, protected update/recovery, C: ACL, icacls, VM/Hyper-V/G:, or native collector workload.
+Failure/recovery cases: Synthetic updater tests cover old/new source paths, installed coordinator/runtime surfaces, direct and encoded PowerShell, missing command line, inventory failure, PID reuse, cached v2 manifest, late spawn, barrier ordering, interrupted transaction steps and fail-closed recovery. No process is killed. Unknown process state blocks before activation.
+Benchmark machine and metrics: Not applicable.
+Known limitations: Real elevated process visibility and GetOwnerSid/CreationDate correlation remain unverified; actual C: share/rename and ACL behavior is untested. A foreign or unrelated PowerShell process intentionally blocks updating. Arbitrary non-PowerShell hosting or renamed/custom PowerShell is outside the supported runtime interface.
+Visual reproduction steps: Not applicable.
+Rollback instructions: Do not run an upgrade or recovery from this source-only review. No rollback was performed. Any future update/recovery requires a new independent exact-SHA review and fresh owner authorization; updater preserves transaction objects and does not auto-delete or rollback.
+Reviewer focus / open questions: Audit the complete legacy/current invocation-path map, lease/manifest barrier ordering, process-inventory exception policy, exact requester identity binding and Windows file-share semantics. Decide whether the explicit supported-host boundary is sufficient before authorizing an upgrade.

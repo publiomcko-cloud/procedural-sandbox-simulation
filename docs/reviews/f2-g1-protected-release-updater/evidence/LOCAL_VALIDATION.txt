@@ -1,15 +1,8 @@
-Windows PowerShell 5.1 local validation
-Executable: %SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe
-Version: 5.1.22621.6133
-Production source commit: 691eae48d67789bf798e270cb9cca7790d728d26
-Commands (each run as a fresh Windows PowerShell 5.1 process from repository root):
-& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1
-& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1
-& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1
-& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclEntrypointArguments.ps1
-& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1
-& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclProtectedReleaseNativeHelper.ps1
-
-Results: Protocol 152 assertions / 0 failures / exit 0; Corroboration 118 / 0 / exit 0; Runtime 41 / 0 / exit 0; Entrypoint 18 / 0 / exit 0; Protected updater 104 / 0 / exit 0; Native helper 20 / 0 / exit 0. Total 453 assertions, 0 failures, 6 process exit codes 0.
-The native helper regression compiled the exact C# here-string extracted from the production updater. It did not call any production updater function. It used one unique ordinary-user TEMP fixture to verify protected directory and file creation, owner/DACL read-back, exact ACE masks/inheritance, byte integrity, create-new collision failure and cleanup.
-An initial local test wrapper launched children using PowerShell 7 Start-Process and the Corroboration suite failed to resolve Get-FileHash. Running the exact Windows PowerShell 5.1 executable directly (as above) passed. This harness-specific initial failure was not reproduced in direct PS5.1 or the Windows CI workflow; its environmental cause was not determined.
+Local source-only validation
+Production updater/launcher/candidate commit: 8b70a70934445bee660c1e53e71b2e7b20a6191f
+PR test/evidence commit under test: d63b51db7c2de8b8e1197ebede653f4d762cae9a
+Windows PowerShell 5.1: six suites, 470 assertions, zero failures, all process exits 0.
+Parser: 14 tracked PowerShell files, zero errors, exit 0.
+git diff --check: exit 0.
+Detailed commands and logs: WINDOWS_POWERSHELL51_FULL_SUITE.txt, POWERSHELL_PARSER.txt, GIT_DIFF_CHECK.txt and paired suite stdout/stderr.
+The hosted CI failures during diagnosis were resolved by correcting the synthetic fixture to use production GetFullPath normalization. No production runtime/package file changed for that test-only fixture fix.

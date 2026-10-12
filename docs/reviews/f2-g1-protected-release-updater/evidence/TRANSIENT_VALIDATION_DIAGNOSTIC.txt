@@ -1,0 +1,13 @@
+Hosted Windows CI diagnostic summary
+
+A. Run 38276195678, production-source commit 8b70a70934445bee660c1e53e71b2e7b20a6191f
+- Attempt 1: protocol suite stopped at Stage=bounded_partial_pipe_read; child exit code 5; assertion summary unavailable. Root cause is UNKNOWN. The standalone local PS5.1 suite passed 152/0.
+- Attempt 2: protocol, corroboration, runtime and entrypoint suites passed. Updater synthetic fixtures failed requester identity checks before transaction activation. The initial log did not include the failed predicate.
+
+B. Run 38277249251, review test head 3a3383c6fd08b87dada4e3e4c1e9421657afba7c
+- Added sanitized predicate details. Hosted runner showed SourceLauncherPath=False while command type, dot-source form, pins and requester PID/creation/SID checks were true. Its temporary profile path was supplied through an 8.3 path alias, so the synthetic requester command used a different spelling from the production GetFullPath comparison.
+- The expected runtime-path assertions also compared raw Join-Path strings with GetFullPath results. Canonicalizing both test sides and constructing the synthetic requester command with GetFullPath matches production behavior. No production updater, launcher or seven-file package bytes changed.
+
+C. Final hosted run 38277921321 at PR test head d63b51db7c2de8b8e1197ebede653f4d762cae9a
+- PASS: all six Windows PowerShell 5.1 suites, native C# TEMP helper, 14-file parser sweep and git diff --check.
+- Complete final CI log: WINDOWS_CI_LOG.txt. Failed attempt logs are preserved separately and are not reported as passing.

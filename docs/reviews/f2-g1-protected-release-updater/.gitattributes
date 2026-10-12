@@ -1,1 +1,3 @@
 f2-runtime-release-v3.candidate.json -text
+evidence/WINDOWS_CI_LOG.txt -diff
+evidence/WINDOWS_CI_FAILURES_*.txt -diff

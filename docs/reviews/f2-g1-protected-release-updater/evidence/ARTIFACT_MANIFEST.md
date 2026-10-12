@@ -1,68 +1,77 @@
-# Source and evidence SHA-256 manifest
+# Review artifact manifest
 
-Immutable production source commit: 691eae48d67789bf798e270cb9cca7790d728d26 (parent 40723492b97983c0c7bc6d441a1bcbace823ffe8). Hashes cover every changed production/test file and every review evidence artifact except this manifest itself. Git hashes are SHA-256 of normalized Git blob bytes; Windows checkout hashes are shown for CRLF-pinned PowerShell files.
+Production SourceRoot: `8b70a70934445bee660c1e53e71b2e7b20a6191f` (parent `5d231f4697673569de526c03cedf61c72e769e07`); clean checkout `C:\Dev\f2-g1-protected-updater-source`. PR test-only commits: `3a3383c6fd08b87dada4e3e4c1e9421657afba7c`, `c95ce9b5751d7d3a6cb79b85eb2d836d87d762a4`, `d63b51db7c2de8b8e1197ebede653f4d762cae9a`. The final review-package commit is the immutable commit containing this manifest.
 
-## Production and regression source
+Every published file in the review directory and all three changed source/test scripts are listed except this self-referential manifest. Git blob SHA-256 covers exact staged repository bytes; working-tree SHA-256 covers the locally validated checkout bytes (CRLF differs for PowerShell source).
 
-| Path | Git-content SHA-256 | Windows checkout SHA-256 | Purpose |
+| Path | Git blob SHA-256 | Working-tree SHA-256 | Role |
 |---|---|---|---|
-| .github/workflows/f2-acl-source-only.yml | af65c996a3f616b8848989dab678fccdd95f2a20881bdecf2e5af4b3efc88699 | — | Windows PowerShell 5.1 regression/parse/whitespace CI |
-| scripts/f2-acl/F2AclIcacls.Runtime.psm1 | d1f4697e6fcb04d8707442e7c0579dc1bd0934c0565d48c5527080af462663e4 | — | F2 G1 source/release implementation or regression |
-| scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json | 7e05d48ef25e7cff19d84db151395921b5d89b52b1e2f45b94a84a4778a615ce | — | F2 G1 source/release implementation or regression |
-| scripts/f2-acl/Invoke-F2IcaclsProtectedCoordinator.ps1 | 9b8816c941eebaa87aafd597e6bc326d380c7fbb34321ef97ab0c04a4c1ac515 | — | F2 G1 source/release implementation or regression |
-| scripts/f2-acl/Invoke-F2ProtectedReleaseUpdate.ps1 | 47953d6124c021b0b0332a37ab0183ea1b544cfb375a78c9a38081f7ca92e4fd | 49afef854aaee2b4501325063ade14e496072aaf74745e1203c2029ce9287744 | Corrected protected release updater |
-| scripts/f2-acl/Start-F2ProtectedReleaseUpdate.ps1 | d5141345c4131673206b9679464a4e1e4ebf872fb42213015f32052e474b0f17 | dc342139f4168e624d8554017a560c4c9243767847aaa411bdc6fb349693dfd3 | F2 G1 source/release implementation or regression |
-| scripts/f2-acl/Test-F2AclEntrypointArguments.ps1 | c8e9a126d6124fe3067a7ee228eaa897d56b4c66853124aee10f72aca038690d | cb2dca12f721eeff25dfa65978d668a7dbe438aeb5cdc31c74adb682e5484ce0 | F2 G1 source/release implementation or regression |
-| scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1 | cb22431c813d6c1a09c8ca04e270c9b1f316e365990e32d9c751cd00d9f3e152 | f4da5c189f226e4b397cc91656ff117f1aab29f7695dc0abfd8f1d5403b4aed5 | F2 G1 source/release implementation or regression |
-| scripts/f2-acl/Test-F2AclProtectedReleaseNativeHelper.ps1 | 5e899f1d2a763955e5db49b092570ea0fa2f9e7956722b7c039b326d4fbb507e | d250a1b3ad40f6f78be75dc135857f022ae3eef3b4202aa7988b8ea8d2b894f1 | Exact production C# compile and TEMP-only native test |
-| scripts/f2-acl/Test-F2AclProtectedReleaseUpdater.ps1 | e19bed3430cc09a6f9bae49781b944b8eabc89ecd82ab63a4c98d9d3e8bcad45 | a2d93eff1d2e4024db7478cf6f951fb0491d815aed10d6549febd776c6d8a1f2 | F2 G1 source/release implementation or regression |
+| `docs/reviews/f2-g1-protected-release-updater/.gitattributes` | `25550e4039a7d56ba97b9f18ccf960df3be25e794a1348140752f883362203bd` | `cad86c9f71c4be0ac0b5451d19841e29beb3ceed69e1f003e55ec564b5bded0d` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/DEVELOPER_HANDOFF.md` | `d8037f1bc65bde2df5b9db0f96d18cbe3854d693f18897733e7704dc59b49071` | `a172af663f26c6256b77cd2bd06821a68a2e2c83c2d3d805bd391055c4c8376a` | Developer handoff |
+| `docs/reviews/f2-g1-protected-release-updater/F2_G1_PROCESS_QUIESCENCE_REVIEW.md` | `397b5c8f8b9c7190c01a9651de4e13726c240332132ca7d528dde9b163cfc0e3` | `320b002c9c539af1dbc44d98dfe1f47dbd36e68d732a3cf1ae4bb56ef57e2677` | Runtime path map, exclusion and ordering design |
+| `docs/reviews/f2-g1-protected-release-updater/F2_G1_PROTECTED_RELEASE_UPDATER_REVIEW.md` | `d44d50a77cd1f38666ec3124c146cd361554becbe3f141374cfc0bd82d478067` | `d44d50a77cd1f38666ec3124c146cd361554becbe3f141374cfc0bd82d478067` | Complete updater review and exact proposed command |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/.gitattributes` | `5a1fa692c9edb81f75a8d78d062c07ec07445d62537af291e7947d080bf627e2` | `5a1fa692c9edb81f75a8d78d062c07ec07445d62537af291e7947d080bf627e2` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/GIT_DIFF_CHECK.txt` | `844a83bd964a380cab969b7a3733e858437749e38c2206075900216b6c88730d` | `90af00eb055173aad9132d53bd1db97d3ec302a5c6b9f45524b5dec6d8dfcdf0` | Parser or whitespace validation |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/LOCAL_VALIDATION.txt` | `b24cd3ee8b2d5d02b66aa056cf0577532cc6c06efd2b1b2d2fb68e95ae6c32c8` | `4b422b2084560d954bd45827fcf614f16d584f240eb3ed823657805929e58679` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/NATIVE_COMPILE_REPRO_BEFORE_FIX.txt` | `58667d09d1324eb595507fad21d34c898b44da378adfc1d8a8814683e935d273` | `4d6f7df1b872699e3b740cc2bd6c011b673d5637d827b4fb85b20f4b4b3acba6` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/POWERSHELL_PARSER.txt` | `d6a8c3abdb18d180f0308f14ccc4eeb83ed1ccdd9a4f570a47716e8609abc303` | `50b8aab9e0300dbb410e92e24bb767b2f2eb7b5967fec29a5fb2d441c11185ef` | Parser or whitespace validation |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/PROTOCOL_STANDALONE_DIAGNOSTIC.stderr.txt` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/PROTOCOL_STANDALONE_DIAGNOSTIC.stdout.txt` | `6c1f9bf830939755a19eb077d000364bfca9c5ae0ac21421d60fb216f956450b` | `00a2f3ec9b2109719307f5840ead6039d9a255c74dacc373ffd8e03b1afb93b1` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/TRANSIENT_VALIDATION_DIAGNOSTIC.txt` | `e8f13a005a5e20b05ec458e97b6fb7f8f14bf91d5755edb33abda1a5b65ff0da` | `efff66936546779688c3dc1895e103810abefa5f3a85fe77ce24ed1684fa5b67` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclCapture.Protocol.stderr.log` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclCapture.Protocol.stderr.txt` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclCapture.Protocol.stdout.log` | `6c1f9bf830939755a19eb077d000364bfca9c5ae0ac21421d60fb216f956450b` | `00a2f3ec9b2109719307f5840ead6039d9a255c74dacc373ffd8e03b1afb93b1` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclCapture.Protocol.stdout.txt` | `6c1f9bf830939755a19eb077d000364bfca9c5ae0ac21421d60fb216f956450b` | `00a2f3ec9b2109719307f5840ead6039d9a255c74dacc373ffd8e03b1afb93b1` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclEntrypointArguments.stderr.log` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclEntrypointArguments.stderr.txt` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclEntrypointArguments.stdout.log` | `516b847cc7a22a88d764f63f1b5ec63b0c4744fcb0ebcec173fc662bd58d2376` | `516b847cc7a22a88d764f63f1b5ec63b0c4744fcb0ebcec173fc662bd58d2376` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclEntrypointArguments.stdout.txt` | `516b847cc7a22a88d764f63f1b5ec63b0c4744fcb0ebcec173fc662bd58d2376` | `516b847cc7a22a88d764f63f1b5ec63b0c4744fcb0ebcec173fc662bd58d2376` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclIcacls.Corroboration.stderr.log` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclIcacls.Corroboration.stderr.txt` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclIcacls.Corroboration.stdout.log` | `c631f9353e41d6ef1b53579de3cd2ded6418d916a2145fdbbc95a60cebc632c7` | `c631f9353e41d6ef1b53579de3cd2ded6418d916a2145fdbbc95a60cebc632c7` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclIcacls.Corroboration.stdout.txt` | `c631f9353e41d6ef1b53579de3cd2ded6418d916a2145fdbbc95a60cebc632c7` | `c631f9353e41d6ef1b53579de3cd2ded6418d916a2145fdbbc95a60cebc632c7` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclIcacls.Runtime.stderr.log` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclIcacls.Runtime.stderr.txt` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclIcacls.Runtime.stdout.log` | `ed707b9a1d45061005c4d3c15da64c307ae0117efda3d2f00f0e81864d807b18` | `ed707b9a1d45061005c4d3c15da64c307ae0117efda3d2f00f0e81864d807b18` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclIcacls.Runtime.stdout.txt` | `ed707b9a1d45061005c4d3c15da64c307ae0117efda3d2f00f0e81864d807b18` | `ed707b9a1d45061005c4d3c15da64c307ae0117efda3d2f00f0e81864d807b18` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseNativeHelper.stderr.log` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseNativeHelper.stderr.txt` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseNativeHelper.stdout.log` | `a1eafbc35a1722b2ecd039ab91a1e70333fb4687fd658338221939abddbd872b` | `4549f1a7bd71c5f399f99e924c941e2b1df7748f443e9c5429e9e0d336f9decc` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseNativeHelper.stdout.txt` | `a1eafbc35a1722b2ecd039ab91a1e70333fb4687fd658338221939abddbd872b` | `4549f1a7bd71c5f399f99e924c941e2b1df7748f443e9c5429e9e0d336f9decc` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseUpdater.stderr.log` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseUpdater.stderr.txt` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseUpdater.stdout.log` | `9c901e950093ad7717e31d8f8a9afac32bde845c2f9e151e4d5d8dae12552202` | `9c901e950093ad7717e31d8f8a9afac32bde845c2f9e151e4d5d8dae12552202` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseUpdater.stdout.txt` | `cacd823f20a0ccbb5bb891e96174c8eeefd52ac5e134af39cd3357d7975723df` | `cacd823f20a0ccbb5bb891e96174c8eeefd52ac5e134af39cd3357d7975723df` | Complete PS5.1 suite stdout/stderr |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_CI.txt` | `aca540e21ecab081964dd99cdb62e5d836ac94b143618313f3edb18bff38ef92` | `35413073c464bb224a84ea7b38d715640128a48095fae597d10099b0d0045dc8` | Hosted CI summary, complete logs or failures |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_CI_FAILURES_38276195678.txt` | `aaab6b938a94e0b46fdc58169197d7f5d00b2898a36cc527e6359dfc4a1c602c` | `b448194d739211ebba835e58df1f9396aa4504f64448180c1d7f161e32c5fa62` | Hosted CI summary, complete logs or failures |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_CI_FAILURES_38277249251.txt` | `eef826505919c0e392f7ab1be07f56785ba05f83b3793668f5e5ac3783908a5e` | `4e063a0b16a0e99c40a82cbe606bac9384444de32f092a172b837534c5578929` | Hosted CI summary, complete logs or failures |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_CI_LOG.txt` | `23e64c501e037a86cf6918b7b824fd793bc897fa7c4367907cb59c05358d44d1` | `0d9072ff46bfb29338e3dadb28a59c192a3e7e0b5f832755f120c21a08b56065` | Hosted CI summary, complete logs or failures |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_CRLF_HASH_VALIDATION.txt` | `770b847591d1b0ed5671bc3b319a248c703999d52ff405a438aba02962ee677c` | `5896c7eae37cb406c15d297dc2b9643560b92ffccc39d17491c449b1b0b11504` | Windows line-ending hash evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_POWERSHELL51_FULL_SUITE.txt` | `68bf8a86dc51d227876f719c3743336133a5b80ccbc83a13f4d07b2875f84af7` | `d3ef06ee3cbe0b63dd360e81c83ff5442a3918928974e284c890322b9bf81c78` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_CORROBORATION.log` | `c631f9353e41d6ef1b53579de3cd2ded6418d916a2145fdbbc95a60cebc632c7` | `8e4ad6cf8c3a8fa7ef6c92be1295d978cafefa52feeb19b50d5cdad2a65a5d64` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_ENTRYPOINT.log` | `516b847cc7a22a88d764f63f1b5ec63b0c4744fcb0ebcec173fc662bd58d2376` | `8debb495f5e73d6fdd3a9194f5670b0ce5b7e93760dd13e54435f1ff5c699b26` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_PROTOCOL.log` | `6c1f9bf830939755a19eb077d000364bfca9c5ae0ac21421d60fb216f956450b` | `b32a480b395cf6fb4eb5dc04b2f70f4d0d9ee926366d5982797904825da88654` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_RUNTIME.log` | `ed707b9a1d45061005c4d3c15da64c307ae0117efda3d2f00f0e81864d807b18` | `a9d781a0ae3f206d81284b8fa2aa6a44776432218684387afb8c986816a378df` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_UPDATER.log` | `80662c4c4b12e2db1c1da6195d302555cbaccdc71cc5f05d897d7436d9674349` | `5cc1c177f02d24027e0979f7d73c48de69194b6b18f6bf42dfa9eba2f30d3088` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_UPDATER_RERUN.log` | `9c901e950093ad7717e31d8f8a9afac32bde845c2f9e151e4d5d8dae12552202` | `9c901e950093ad7717e31d8f8a9afac32bde845c2f9e151e4d5d8dae12552202` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_UPDATER_RERUN.stderr` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Supporting review evidence |
+| `docs/reviews/f2-g1-protected-release-updater/f2-runtime-release-v3.candidate.json` | `74d178917fba4f50fdca40505d8c1dc81639f3c60bbb25c0332fd737c681562c` | `74d178917fba4f50fdca40505d8c1dc81639f3c60bbb25c0332fd737c681562c` | Candidate v3 manifest |
+| `scripts/f2-acl/Invoke-F2ProtectedReleaseUpdate.ps1` | `ac12ad4a9806f4b4c29d46a4a37ac7ba37408e39939d02d4169f2924d7feb4a1` | `ac12ad4a9806f4b4c29d46a4a37ac7ba37408e39939d02d4169f2924d7feb4a1` | Changed updater, launcher or regression source |
+| `scripts/f2-acl/Start-F2ProtectedReleaseUpdate.ps1` | `35a10d8d5edd04472d13ac78520e9b7e5d71d8e090a70343c96b20bfbdf58a87` | `35a10d8d5edd04472d13ac78520e9b7e5d71d8e090a70343c96b20bfbdf58a87` | Changed updater, launcher or regression source |
+| `scripts/f2-acl/Test-F2AclProtectedReleaseUpdater.ps1` | `7d983dd239cbf3fe8a81017bfbee326f7642a7de9cc426568ecad575f8df439c` | `56c4ee4688a401d249ec67a65187b1dac762226ea7a2a582bf51b5c43c07c046` | Changed updater, launcher or regression source |
 
-The candidate v3 manifest pins seven release files; all hashes and the source-pin manifest SHA are unchanged from the prior reviewed candidate:
+## Release package pins
 
-| Candidate package file | SHA-256 |
+Candidate `f2-runtime-release-v3.candidate.json` SHA-256: `74d178917fba4f50fdca40505d8c1dc81639f3c60bbb25c0332fd737c681562c`. `ReviewedCommitSha` and versioned `PackageRoot` bind to `8b70a70934445bee660c1e53e71b2e7b20a6191f`. Seven payload/source-pin hashes are unchanged:
+
+| File | SHA-256 |
 |---|---|
-| scripts/f2-acl/F2AclCapture.Protocol.psm1 | 42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728 |
-| scripts/f2-acl/F2AclIcacls.Corroboration.psm1 | a52ed86218a0ba0c0801ee6e84a4a5e47c73eda43db78f818b0b12670ad5110b |
-| scripts/f2-acl/F2AclIcacls.Runtime.psm1 | d1f4697e6fcb04d8707442e7c0579dc1bd0934c0565d48c5527080af462663e4 |
-| scripts/f2-acl/Invoke-F2IcaclsCapture.ps1 | 0b9214c3d6f6e96081b9d86aa8d62087c82527443f2c4b3e7ee09a1ca3dae818 |
-| scripts/f2-acl/Invoke-F2IcaclsProtectedCoordinator.ps1 | 9b8816c941eebaa87aafd597e6bc326d380c7fbb34321ef97ab0c04a4c1ac515 |
-| scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json | 7e05d48ef25e7cff19d84db151395921b5d89b52b1e2f45b94a84a4778a615ce |
-| scripts/f2-acl/Invoke-F2AclReadOnlyCapture.ps1 | bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b |
+| `F2AclCapture.Protocol.psm1` | `42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728` |
+| `F2AclIcacls.Corroboration.psm1` | `a52ed86218a0ba0c0801ee6e84a4a5e47c73eda43db78f818b0b12670ad5110b` |
+| `F2AclIcacls.Runtime.psm1` | `d1f4697e6fcb04d8707442e7c0579dc1bd0934c0565d48c5527080af462663e4` |
+| `Invoke-F2IcaclsCapture.ps1` | `0b9214c3d6f6e96081b9d86aa8d62087c82527443f2c4b3e7ee09a1ca3dae818` |
+| `Invoke-F2IcaclsProtectedCoordinator.ps1` | `9b8816c941eebaa87aafd597e6bc326d380c7fbb34321ef97ab0c04a4c1ac515` |
+| `F2_ICACLS_SOURCE_PINS.json` | `7e05d48ef25e7cff19d84db151395921b5d89b52b1e2f45b94a84a4778a615ce` |
+| `Invoke-F2AclReadOnlyCapture.ps1` | `bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b` |
 
-External candidate manifest SHA-256: be98e9101f9171bb1bba59bfa063fc424132e19579b16d75816cec3b345974e2
-
-## Review package and evidence
-
-| Path | Git-content/raw SHA-256 | Purpose |
-|---|---|---|
-| docs\reviews\f2-g1-protected-release-updater\.gitattributes | ac5c50e1b4b30b27d2a3dcc72a6688fa73e1db467740ca6b619ff6d68d7d6911 | Review/evidence packaging attributes or prior validation evidence |
-| docs\reviews\f2-g1-protected-release-updater\DEVELOPER_HANDOFF.md | 83ddf947accbd7a609a5c1629acdc47f3c2f96080bc7247557e20de5c92bdfe4 | Developer handoff |
-| docs\reviews\f2-g1-protected-release-updater\F2_G1_PROTECTED_RELEASE_UPDATER_REVIEW.md | 7adc44aa793e6488568d1fae1c015283f61cf90cb147c71983a7f01486fb9c1a | Complete updater/recovery/security review |
-| docs\reviews\f2-g1-protected-release-updater\f2-runtime-release-v3.candidate.json | be98e9101f9171bb1bba59bfa063fc424132e19579b16d75816cec3b345974e2 | External candidate manifest; reviewed commit/package root updated |
-| docs\reviews\f2-g1-protected-release-updater\evidence\.gitattributes | 5a1fa692c9edb81f75a8d78d062c07ec07445d62537af291e7947d080bf627e2 | Review/evidence packaging attributes or prior validation evidence |
-| docs/reviews/f2-g1-protected-release-updater/evidence/.gitattributes | 5a1fa692c9edb81f75a8d78d062c07ec07445d62537af291e7947d080bf627e2 | Review/evidence packaging attributes or prior validation evidence |
-| docs/reviews/f2-g1-protected-release-updater/evidence/GIT_DIFF_CHECK.txt | cfb607626bb94dfd3b4431f2cd29094493d126d7c923602cd5f76d2869a4adf9 | Whitespace validation result |
-| docs/reviews/f2-g1-protected-release-updater/evidence/LOCAL_VALIDATION.txt | 88c57104bfee5ca75b756acd70901a26f11b227241373fdb553d22aeead72afd | Commands and local PS5.1 suite results |
-| docs/reviews/f2-g1-protected-release-updater/evidence/NATIVE_COMPILE_REPRO_BEFORE_FIX.txt | 58667d09d1324eb595507fad21d34c898b44da378adfc1d8a8814683e935d273 | Sanitized exact compiler failure evidence before fix |
-| docs/reviews/f2-g1-protected-release-updater/evidence/POWERSHELL_PARSER.txt | a64c136e1bd0701caafdd326e791b9ea58b0aeabc5388d996bab48451a3caa60 | Parser results |
-| docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclCapture.Protocol.stderr.log | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 | Full local Windows PowerShell suite stderr |
-| docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclCapture.Protocol.stdout.log | 6c1f9bf830939755a19eb077d000364bfca9c5ae0ac21421d60fb216f956450b | Full local Windows PowerShell suite stdout |
-| docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclEntrypointArguments.stderr.log | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 | Full local Windows PowerShell suite stderr |
-| docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclEntrypointArguments.stdout.log | 516b847cc7a22a88d764f63f1b5ec63b0c4744fcb0ebcec173fc662bd58d2376 | Full local Windows PowerShell suite stdout |
-| docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclIcacls.Corroboration.stderr.log | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 | Full local Windows PowerShell suite stderr |
-| docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclIcacls.Corroboration.stdout.log | c631f9353e41d6ef1b53579de3cd2ded6418d916a2145fdbbc95a60cebc632c7 | Full local Windows PowerShell suite stdout |
-| docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclIcacls.Runtime.stderr.log | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 | Full local Windows PowerShell suite stderr |
-| docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclIcacls.Runtime.stdout.log | ed707b9a1d45061005c4d3c15da64c307ae0117efda3d2f00f0e81864d807b18 | Full local Windows PowerShell suite stdout |
-| docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseNativeHelper.stderr.log | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 | Complete native-helper suite stdout/stderr |
-| docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseNativeHelper.stdout.log | a1eafbc35a1722b2ecd039ab91a1e70333fb4687fd658338221939abddbd872b | Complete native-helper suite stdout/stderr |
-| docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseUpdater.stderr.log | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 | Full local Windows PowerShell suite stderr |
-| docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseUpdater.stdout.log | 9c901e950093ad7717e31d8f8a9afac32bde845c2f9e151e4d5d8dae12552202 | Full local Windows PowerShell suite stdout |
-| docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_CI.txt | 18c487e81b0396b1e19c720f28447db62a28dd58a8c21a3fd9e68e89d2e27ee0 | Hosted Windows CI run/job/results |
-| docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_CRLF_HASH_VALIDATION.txt | be2bc413f79d5b68fdc46af353aee0d10003fd9932025115ffcd61968cb7aee7 | Measured clean Windows checkout byte pin |
-| docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_CORROBORATION.log | c631f9353e41d6ef1b53579de3cd2ded6418d916a2145fdbbc95a60cebc632c7 | Review/evidence packaging attributes or prior validation evidence |
-| docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_ENTRYPOINT.log | 516b847cc7a22a88d764f63f1b5ec63b0c4744fcb0ebcec173fc662bd58d2376 | Review/evidence packaging attributes or prior validation evidence |
-| docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_PROTOCOL.log | 6c1f9bf830939755a19eb077d000364bfca9c5ae0ac21421d60fb216f956450b | Review/evidence packaging attributes or prior validation evidence |
-| docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_RUNTIME.log | ed707b9a1d45061005c4d3c15da64c307ae0117efda3d2f00f0e81864d807b18 | Review/evidence packaging attributes or prior validation evidence |
-| docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_UPDATER_RERUN.log | 9c901e950093ad7717e31d8f8a9afac32bde845c2f9e151e4d5d8dae12552202 | Review/evidence packaging attributes or prior validation evidence |
-| docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_UPDATER_RERUN.stderr | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 | Review/evidence packaging attributes or prior validation evidence |
-| docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_UPDATER.log | 80662c4c4b12e2db1c1da6195d302555cbaccdc71cc5f05d897d7436d9674349 | Review/evidence packaging attributes or prior validation evidence |
+The accepted native IntPtr.Zero correction remains; native regression compiles the exact production C# and passes 20 TEMP-only assertions. This source-only work did not elevate, update protected C:, query host processes/ACLs, run icacls, access VM/Hyper-V/G:, or execute native F2 workloads.
