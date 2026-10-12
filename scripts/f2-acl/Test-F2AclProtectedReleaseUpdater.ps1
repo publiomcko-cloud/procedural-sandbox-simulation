@@ -22,7 +22,7 @@ $modifiedUpdaterBytes=[byte[]]$approvedUpdaterBytes.Clone();$modifiedUpdaterByte
 Assert-Update ((Get-F2UpdateLauncherSha256 -Bytes $approvedUpdaterBytes) -ceq $approvedUpdaterHash -and (Get-F2UpdateLauncherSha256 -Bytes $modifiedUpdaterBytes) -cne $approvedUpdaterHash) 'exact approved updater bytes pass the SHA-256 pin while modified bytes fail the same pin'
 
 $script:root=Join-Path $env:TEMP ('F2 Protected Updater Tests '+[guid]::NewGuid().ToString('N'))
-$script:oldSource='C:\Dev\f2-g1-capture-id-contract-source\scripts\f2-acl'
+$script:oldSource=Join-Path $script:root 'old-source\scripts\f2-acl'
 $script:newSource=(Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $script:names=@($script:F2UpdateOldPins.Keys)
 $script:allPins=@{}
@@ -128,6 +128,44 @@ function Close-UpdateFixture($State){foreach($handle in @($State.Handles)){try{$
 function Get-UpdateActiveSha($State){return Get-F2UpdateSha256 -Bytes ([IO.File]::ReadAllBytes($State.Context.ActiveManifestPath))}
 
 try {
+    # Build the previous-release fixture from the immutable old source commit
+    # in this repository. Never depend on another developer's C:\Dev checkout.
+    $oldArchive=Join-Path $script:root 'old-source.zip'
+    & $git.Source -C $script:newSource archive --format=zip "--output=$oldArchive" $script:F2UpdateOldCommit 'scripts/f2-acl'
+    if($LASTEXITCODE -ne 0 -or -not [IO.File]::Exists($oldArchive)){throw 'UPDATE_TEST_OLD_SOURCE_ARCHIVE_FAILED'}
+    if((Get-Item -LiteralPath $oldArchive).Length -gt 33554432){throw 'UPDATE_TEST_OLD_SOURCE_ARCHIVE_OVERSIZED'}
+    [void][IO.Directory]::CreateDirectory($script:oldSource)
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $oldZip=[IO.Compression.ZipFile]::OpenRead($oldArchive)
+    try {
+        $oldFixturesMatch=$true
+        foreach($name in $script:names){
+            $entry=$oldZip.GetEntry(('scripts/f2-acl/'+$name))
+            if($null -eq $entry -or $entry.Length -gt 4194304){throw 'UPDATE_TEST_OLD_SOURCE_ENTRY_INVALID'}
+            $entryStream=$entry.Open();$memory=New-Object IO.MemoryStream
+            try {
+                $buffer=New-Object byte[] 8192;$total=0
+                while(($read=$entryStream.Read($buffer,0,$buffer.Length)) -gt 0){
+                    $total+=$read
+                    if($total -gt 4194304){throw 'UPDATE_TEST_OLD_SOURCE_ENTRY_OVERSIZED'}
+                    $memory.Write($buffer,0,$read)
+                }
+                $oldBytes=$memory.ToArray()
+            } finally {$entryStream.Dispose();$memory.Dispose()}
+            $oldHash=Get-F2UpdateSha256 -Bytes $oldBytes
+            if($oldHash -cne $script:F2UpdateOldPins[$name] -and $name -ceq 'F2AclCapture.Protocol.psm1'){
+                # That one source path is explicitly CRLF in the old commit's
+                # .gitattributes; git archive contains normalized LF blob bytes.
+                $oldText=[Text.UTF8Encoding]::new($false,$true).GetString($oldBytes)
+                $oldBytes=[Text.UTF8Encoding]::new($false).GetBytes(($oldText -replace "`r?`n","`r`n"))
+                $oldHash=Get-F2UpdateSha256 -Bytes $oldBytes
+            }
+            if($oldHash -cne $script:F2UpdateOldPins[$name]){$oldFixturesMatch=$false;throw ('UPDATE_TEST_OLD_SOURCE_PIN_MISMATCH:'+ $name)}
+            [IO.File]::WriteAllBytes((Join-Path $script:oldSource $name),$oldBytes)
+        }
+    } finally {$oldZip.Dispose()}
+    Assert-Update $oldFixturesMatch 'old-release fixtures are extracted from the pinned Git commit and match all seven installed-byte hashes'
+
     $goodDir='O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200A9;;;AU)'
     $goodFile='O:BAG:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1200A9;;;AU)'
     Assert-Update (Test-F2UpdateExactDacl -Sddl $goodDir -Kind Directory) 'exact protected Administrator-owned directory DACL is accepted'
