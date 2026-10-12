@@ -1,0 +1,101 @@
+{
+    "Schema":  "f2-g1-postfailure-evidence-manifest-v1",
+    "ReviewBaseCommit":  "9e9915e6eb15bcb20cc2f5a1c990791e2a822b90",
+    "ProductionSourceCommit":  "8b70a70934445bee660c1e53e71b2e7b20a6191f",
+    "HashDefinition":  "SHA-256 over exact staged Git blob bytes; this matches the content served by GitHub.",
+    "ReferencedProductionFiles":  [
+                                      {
+                                          "WindowsCheckoutSha256":  "8278bbff8e5b7cdb313235bcc271fa31a947ca384d7496053650c3097af19720",
+                                          "Path":  "scripts/f2-acl/Start-F2ProtectedReleaseUpdate.ps1"
+                                      },
+                                      {
+                                          "WindowsCheckoutSha256":  "d26eb89a424e3f268099e0ac1d3ffd674dde1128321567df3a0702abb591f75e",
+                                          "Path":  "scripts/f2-acl/Invoke-F2ProtectedReleaseUpdate.ps1"
+                                      },
+                                      {
+                                          "Sha256":  "74d178917fba4f50fdca40505d8c1dc81639f3c60bbb25c0332fd737c681562c",
+                                          "Path":  "docs/reviews/f2-g1-protected-release-updater/f2-runtime-release-v3.candidate.json"
+                                      }
+                                  ],
+    "EvidenceItems":  [
+                          {
+                              "Path":  "F2_G1_UPGRADE_POST_FAILURE_DIAGNOSTIC.md",
+                              "Purpose":  "Consolidated sanitized source-path and postfailure analysis",
+                              "GitHubRawBytes":  16723,
+                              "Sha256":  "edb63a44e1ae9777fe1a0cd53e8aa584d01b2aaa7fa9244791c6814977eb844a"
+                          },
+                          {
+                              "Path":  "evidence/postfailure-readonly-results.json",
+                              "Purpose":  "Sanitized measured results; excludes SDDL and private requester SID",
+                              "GitHubRawBytes":  6776,
+                              "Sha256":  "f4633f578fffb8a9c349ce3c9ae8bcca22e54569724e40efafaec27c7a9821f3"
+                          },
+                          {
+                              "Path":  "evidence/Test-SyntheticMissingGitPreflight.ps1",
+                              "Purpose":  "Reproducible PS5.1 TEMP-only missing-Git failure fixture",
+                              "GitHubRawBytes":  5099,
+                              "Sha256":  "8dbee280c3959895c82bbd90096e0553aeb3bce6a7e22bf84598fd73870dcc49"
+                          },
+                          {
+                              "Path":  "evidence/Synthetic-GitPathFailure.log",
+                              "Purpose":  "Complete output of the synthetic missing-Git test",
+                              "GitHubRawBytes":  523,
+                              "Sha256":  "1eed996613c27ef483f1ffeb4029ebab55d457e6b6b1aebd6473493dd7623ae8"
+                          },
+                          {
+                              "Path":  "evidence/Test-EncodedChildTemplateParse.ps1",
+                              "Purpose":  "Reproducible PS5.1 parser fixture for embedded elevated child script",
+                              "GitHubRawBytes":  1868,
+                              "Sha256":  "13eaacfca58fb22896caaeaada3bf87ae08e8bdfffe19ea8be177d425295e512"
+                          },
+                          {
+                              "Path":  "evidence/EncodedChildTemplateParse.log",
+                              "Purpose":  "Complete output of the child-template parser fixture",
+                              "GitHubRawBytes":  73,
+                              "Sha256":  "10da96c1e264ff18d8678658953cecfaf623bec99351013d007735a8e6ee8433"
+                          },
+                          {
+                              "Path":  "evidence/Test-ProductionPowerShellParserSweep.ps1",
+                              "Purpose":  "Reproducible production-source parser sweep",
+                              "GitHubRawBytes":  1006,
+                              "Sha256":  "0791a845e3d1e092f916a5c9fd92beb61a4d7fdbb8aa32ada32c9a6741fb1604"
+                          },
+                          {
+                              "Path":  "evidence/PowerShellParserSweep.log",
+                              "Purpose":  "Complete parser sweep output",
+                              "GitHubRawBytes":  47,
+                              "Sha256":  "d701b6c8d45ec8d351231353d1d55c9def5ee9187b8b9b43a079a492c2bf7907"
+                          },
+                          {
+                              "Path":  "evidence/Test-CurrentPS51Dependencies.ps1",
+                              "Purpose":  "Reproducible no-profile PS 5.1 command and module availability probe",
+                              "GitHubRawBytes":  725,
+                              "Sha256":  "a84575a90f0eb4a8d807f276d3868869512b0acd7373ca2d9b7e545334c0a7c4"
+                          },
+                          {
+                              "Path":  "evidence/CurrentPS51Dependencies.log",
+                              "Purpose":  "Complete current PS 5.1 dependency probe output",
+                              "GitHubRawBytes":  203,
+                              "Sha256":  "a30fde4f6b927c8f73569978046d691f4b236d559fca900773cb60a869fff526"
+                          },
+                          {
+                              "Path":  "evidence/Test-F2AclProtectedReleaseUpdater.ps1.log",
+                              "Purpose":  "Full 133-assertion PS5.1 updater regression output",
+                              "GitHubRawBytes":  12475,
+                              "Sha256":  "e94be2aa9322921796bf4d1098a4f98a6e63ddfe078cbf4c135ed74637f9e297"
+                          },
+                          {
+                              "Path":  "evidence/Test-F2AclProtectedReleaseNativeHelper.ps1.log",
+                              "Purpose":  "Full 20-assertion PS5.1 TEMP native helper output",
+                              "GitHubRawBytes":  57,
+                              "Sha256":  "4549f1a7bd71c5f399f99e924c941e2b1df7748f443e9c5429e9e0d336f9decc"
+                          },
+                          {
+                              "Path":  "evidence/Build-EvidenceManifest.ps1",
+                              "Purpose":  "Reproducible Git-blob hash manifest builder",
+                              "GitHubRawBytes":  7036,
+                              "Sha256":  "0a17f5248a4d4066651e73687130e3335f813bc419f7514e8cd50540bfa95102"
+                          }
+                      ],
+    "ManifestNote":  "This manifest lists all accompanying diagnostic and test artifacts except itself. Its own GitHub raw-content SHA-256 is recorded in the review handoff."
+}

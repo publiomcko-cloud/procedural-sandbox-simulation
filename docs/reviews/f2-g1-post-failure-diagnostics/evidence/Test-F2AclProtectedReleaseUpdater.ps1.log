@@ -1,0 +1,134 @@
+PASS: updater parses in Windows PowerShell 5.1
+PASS: single-UAC launcher parses in Windows PowerShell 5.1
+PASS: exact approved updater bytes pass the SHA-256 pin while modified bytes fail the same pin
+PASS: synthetic old v2 manifest exactly reproduces the approved retained old-manifest SHA-256
+PASS: old-release fixtures are extracted from the pinned Git commit and match all seven installed-byte hashes
+PASS: runtime inventory includes old/new source checkout and fixed/versioned installed launchers, coordinators and direct runtime modules; actualCount=12; missing=
+PASS: only the current updater and exact PID/creation-time/pin-bound requester launcher are allowed; actualError=; requesterChecks=CommandPresent:True,EncodedAbsent:True,SourceLauncherPath:True,DotSourceBootstrap:True,LauncherFunction:True,CommitPin:True,UpdaterPin:True,LauncherPin:True,CandidatePin:True,ProcessIdentity:True
+PASS: corrected Explorer/cmd.exe launch topology accepts exactly the pinned requester and elevated updater
+PASS: original three-PowerShell caller/requester/updater topology is rejected without an ancestor exception
+PASS: cmd.exe preserves quoted PowerShell -Command syntax and propagates its exit code; actual=37
+PASS: active old source-checkout launcher blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: active new source-checkout launcher blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: active installed coordinator blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: direct runtime-module invocation blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: unrelated PowerShell command blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: PowerShell Core host blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: encoded PowerShell invocation blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: legacy process with cached v2 manifest blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: active PowerShell ISE process blocks independent of path-only matching; actualError=UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN
+PASS: missing or inaccessible foreign PowerShell command line fails closed
+PASS: wrong requester PID binding or missing pinned requester process fails closed
+PASS: requester PID reuse or unexpected process creation time is rejected
+PASS: requester SID mismatch is rejected
+PASS: requester source commit mismatch is rejected
+PASS: requester updater hash mismatch is rejected
+PASS: requester launcher hash mismatch is rejected
+PASS: requester candidate hash mismatch is rejected
+PASS: requester launch command with a changed source pin is rejected
+PASS: encoded requester launch is rejected even when it repeats approved path text and pins
+PASS: process inventory command failure fails closed with a stable diagnostic
+PASS: new v2 manifest reader is denied while the synthetic read barrier is held
+PASS: exact protected Administrator-owned directory DACL is accepted
+PASS: exact protected Administrator-owned file DACL is accepted
+PASS: unexpected owner is rejected
+PASS: unprotected DACL is rejected
+PASS: extra writable principal is rejected
+PASS: reviewed ProgramData child-creation mask is distinguished from protected-child control
+PASS: ProgramData delete-child/write-control expansion is rejected
+PASS: ProgramData generic full-control grant is rejected
+PASS: same-requester Administrator identity satisfies the future elevated boundary
+PASS: different-account Administrator UAC credentials are rejected
+PASS: same-account non-Administrator token is rejected by elevated coordinator
+PASS: candidate parser rejects the installed legacy v2 schema
+PASS: synthetic junction fixture is a reparse point on the Windows test host
+PASS: reparse point in a candidate path is rejected before traversal
+PASS: exclusive updater lease blocks a new shared runtime lease
+PASS: active runtime shared lease blocks updater exclusive acquisition
+PASS: manifest barrier blocks a fresh v2 launcher read
+PASS: same-volume manifest replacement exposes only the new active release
+PASS: same-volume manifest replacement preserves the prior release backup after the barrier closes
+PASS: successful transaction stages and activates exactly seven new files while retaining old package and manifest; success=True; outcome=UPDATE_COMPLETE; error=; stage=
+PASS: manifest barrier precedes both process inventories; a later reader is blocked and the final scan directly precedes activation
+PASS: active manifest points only to the complete new versioned package
+PASS: old external v2 manifest backup retains exact original digest
+PASS: new immutable version directory contains exactly seven package files
+PASS: activated package hash matches F2AclCapture.Protocol.psm1
+PASS: activated package hash matches F2AclIcacls.Corroboration.psm1
+PASS: activated package hash matches F2AclIcacls.Runtime.psm1
+PASS: activated package hash matches Invoke-F2IcaclsCapture.ps1
+PASS: activated package hash matches Invoke-F2IcaclsProtectedCoordinator.ps1
+PASS: activated package hash matches F2_ICACLS_SOURCE_PINS.json
+PASS: activated package hash matches Invoke-F2AclReadOnlyCapture.ps1
+PASS: recovery classifies an already active, fully verified release without changing it
+PASS: candidate tampering fails before any protected release directory is created
+PASS: candidate with a rehashed but incorrect retained-baseline identity fails before staging
+PASS: candidate package path outside the versioned release root fails before staging
+PASS: unsafe current parent ACL profile fails before writes
+PASS: modified installed release fails preflight without overwrite or staging
+PASS: unexpected existing owner or DACL fails closed before staging
+PASS: staged directory ACL mismatch preserves the old active release and all partial objects
+PASS: new lease file ACL is verified immediately and blocks before release staging [UPDATE_ACL_PROFILE_INVALID]
+PASS: active manifest ACL postcheck failure blocks success without unsafe rollback or deleting the retained release
+PASS: detected active legacy launcher blocks before package staging
+PASS: process spawned after the first inventory is detected by the activation-edge rescan while old manifest remains active
+PASS: dirty source checkout fails before any protected staging write
+PASS: source commit mismatch fails before any protected staging write
+PASS: unexpected existing package objects fail before staging and are never overwritten [UPDATE_EXISTING_OBJECT_SET_INVALID]
+PASS: unowned release/staging entries are preserved and block the updater [UPDATE_EXISTING_TRANSACTION_OBJECTS_PRESENT]
+PASS: success path exposes fault checkpoints for each material transaction operation
+PASS: injected interruption fails closed and preserves objects at BackupRootCreated
+PASS: failure before journal leaves the original release active after BackupRootCreated
+PASS: injected interruption fails closed and preserves objects at CandidateManifestStaged
+PASS: incomplete transaction preserves old active release after CandidateManifestStaged
+PASS: injected interruption fails closed and preserves objects at JournalCommitted
+PASS: post-switch recovery validates new active package after JournalCommitted
+PASS: injected interruption fails closed and preserves objects at JournalCreated
+PASS: incomplete transaction preserves old active release after JournalCreated
+PASS: injected interruption fails closed and preserves objects at JournalPackageReady
+PASS: recovery completes only the exact fully staged transaction after JournalPackageReady [NEW_RELEASE_ACTIVATED_BY_RECOVERY]
+PASS: injected interruption fails closed and preserves objects at PackageActivatedSideBySide
+PASS: recovery completes only the exact fully staged transaction after PackageActivatedSideBySide [NEW_RELEASE_ACTIVATED_BY_RECOVERY]
+PASS: injected interruption fails closed and preserves objects at PackageDirectoryCreated
+PASS: incomplete transaction preserves old active release after PackageDirectoryCreated
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:F2_ICACLS_SOURCE_PINS.json
+PASS: incomplete transaction preserves old active release after PackageFileCreated:F2_ICACLS_SOURCE_PINS.json
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:F2AclCapture.Protocol.psm1
+PASS: incomplete transaction preserves old active release after PackageFileCreated:F2AclCapture.Protocol.psm1
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:F2AclIcacls.Corroboration.psm1
+PASS: incomplete transaction preserves old active release after PackageFileCreated:F2AclIcacls.Corroboration.psm1
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:F2AclIcacls.Runtime.psm1
+PASS: incomplete transaction preserves old active release after PackageFileCreated:F2AclIcacls.Runtime.psm1
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:Invoke-F2AclReadOnlyCapture.ps1
+PASS: incomplete transaction preserves old active release after PackageFileCreated:Invoke-F2AclReadOnlyCapture.ps1
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:Invoke-F2IcaclsCapture.ps1
+PASS: incomplete transaction preserves old active release after PackageFileCreated:Invoke-F2IcaclsCapture.ps1
+PASS: injected interruption fails closed and preserves objects at PackageFileCreated:Invoke-F2IcaclsProtectedCoordinator.ps1
+PASS: incomplete transaction preserves old active release after PackageFileCreated:Invoke-F2IcaclsProtectedCoordinator.ps1
+PASS: injected interruption fails closed and preserves objects at ReleaseManifestActivated
+PASS: post-switch recovery validates new active package after ReleaseManifestActivated
+PASS: injected interruption fails closed and preserves objects at ReleaseRootCreated
+PASS: failure before journal leaves the original release active after ReleaseRootCreated
+PASS: injected interruption fails closed and preserves objects at ScriptsDirectoryCreated
+PASS: incomplete transaction preserves old active release after ScriptsDirectoryCreated
+PASS: injected interruption fails closed and preserves objects at StagedPackageVerified
+PASS: incomplete transaction preserves old active release after StagedPackageVerified
+PASS: injected interruption fails closed and preserves objects at StageRootCreated
+PASS: incomplete transaction preserves old active release after StageRootCreated
+PASS: injected interruption fails closed and preserves objects at UpdateRootCreated
+PASS: failure before journal leaves the original release active after UpdateRootCreated
+PASS: bounded forward recovery was exercised at both package-ready crash checkpoints [count=2]
+PASS: malformed or partial transaction journal fails closed and is never repaired by guessing
+PASS: syntactically valid but incomplete transaction journal cannot authorize forward recovery
+PASS: unknown active-manifest bytes block recovery without rewriting or rolling back
+PASS: launcher uses one human-consented UAC process and does not assume UAC stdout redirection
+PASS: launcher retains actual child exit or reports bounded unknown without claiming installation success
+PASS: launcher has fixed destinations and requires externally reviewed launcher, updater, candidate and source pins
+PASS: launcher binds its single requester process across UAC by PID and creation timestamp without relying on ancestry alone
+PASS: standard requester SID is carried into the child and rechecked against the elevated Administrator token
+PASS: same pinned updater exposes a bounded transaction-specific recovery entrypoint
+PASS: parent and elevated child recheck bounded input paths and requester-token identity
+PASS: launcher distinguishes preflight failure, consent cancellation and bounded child-status uncertainty
+PASS: updater contains no cleanup, ACL-relaxation, icacls or nested process-launch path
+PASS: bootstrap verifies the one-read elevated updater bytes before executing those identical bytes and before staging
+Assertions=133;Failures=0
