@@ -1,0 +1,80 @@
+{
+  "Schema": "f2-g1-final-execution-preflight-review-manifest-v1",
+  "ReviewBaseCommit": "923c7d39d7fbfe106dea404c386efd4b5844654e",
+  "ProductionSourceCommit": "03882eedf3104fc33aa0cf503ddef9c9a6bec702",
+  "Files": [
+    {
+      "Path": "docs/reviews/f2-g1-elevated-child-diagnostics/F2_G1_ELEVATED_CHILD_DIAGNOSTICS_REVIEW.md",
+      "Purpose": "Corrected seven-suite arithmetic",
+      "CheckoutSha256": "4b7fe9a9f814a0f0a7b2d210ebe13270b19497a5941f1aac20ebb0fc349b5318",
+      "GitBlobSha256": "4b7fe9a9f814a0f0a7b2d210ebe13270b19497a5941f1aac20ebb0fc349b5318",
+      "TextAttribute": "docs/reviews/f2-g1-elevated-child-diagnostics/F2_G1_ELEVATED_CHILD_DIAGNOSTICS_REVIEW.md: text: set",
+      "EolAttribute": "docs/reviews/f2-g1-elevated-child-diagnostics/F2_G1_ELEVATED_CHILD_DIAGNOSTICS_REVIEW.md: eol: lf"
+    },
+    {
+      "Path": "docs/reviews/f2-g1-elevated-child-diagnostics/evidence/ARTIFACT_MANIFEST.json",
+      "Purpose": "Refreshed byte-accurate PR #62 evidence index",
+      "CheckoutSha256": "d452def91130b420274f515dcfea2b1a348a546d452774bef2a8f0cb16f3febd",
+      "GitBlobSha256": "be2aecdda5f901af04511679c14392f494e618015904e7e0c1a4de171e55c65e",
+      "TextAttribute": "docs/reviews/f2-g1-elevated-child-diagnostics/evidence/ARTIFACT_MANIFEST.json: text: auto",
+      "EolAttribute": "docs/reviews/f2-g1-elevated-child-diagnostics/evidence/ARTIFACT_MANIFEST.json: eol: unspecified"
+    },
+    {
+      "Path": "docs/reviews/f2-g1-elevated-child-diagnostics/evidence/ITERATION_AUDIT.md",
+      "Purpose": "Implementation audit and EOL reconciliation",
+      "CheckoutSha256": "a28ac78c48046afb4a4b5ffe85f3f0f6b238ada34db6355b256f11ccd2b85c64",
+      "GitBlobSha256": "a28ac78c48046afb4a4b5ffe85f3f0f6b238ada34db6355b256f11ccd2b85c64",
+      "TextAttribute": "docs/reviews/f2-g1-elevated-child-diagnostics/evidence/ITERATION_AUDIT.md: text: set",
+      "EolAttribute": "docs/reviews/f2-g1-elevated-child-diagnostics/evidence/ITERATION_AUDIT.md: eol: lf"
+    },
+    {
+      "Path": "docs/reviews/f2-g1-elevated-child-diagnostics/evidence/WINDOWS_PS51_REGRESSION.log",
+      "Purpose": "Fresh seven-suite Windows PowerShell 5.1 run",
+      "CheckoutSha256": "d9e9bd2be8f7c7ed8c10097431ed628a91b2984b3033c5894feac6b23ec0d4f9",
+      "GitBlobSha256": "af882f3900a663fb217ae449aeb4e2faf73a8f51de2e8435d13ab0fab507c4c3",
+      "TextAttribute": "docs/reviews/f2-g1-elevated-child-diagnostics/evidence/WINDOWS_PS51_REGRESSION.log: text: auto",
+      "EolAttribute": "docs/reviews/f2-g1-elevated-child-diagnostics/evidence/WINDOWS_PS51_REGRESSION.log: eol: unspecified"
+    },
+    {
+      "Path": "scripts/f2-acl/Test-F2ProtectedReleaseDiagnosticsSourceChain.ps1",
+      "Purpose": "Strict branch/ref handling for detached exact source checkout",
+      "CheckoutSha256": "0a81309d22d883bb86b9e5dc669b984c6a91ecf0847151899b2daf265ed32567",
+      "GitBlobSha256": "50ad3d81c87c0c5c58462019062488f968622419604605c7d12dafd2140f4c55",
+      "TextAttribute": "scripts/f2-acl/Test-F2ProtectedReleaseDiagnosticsSourceChain.ps1: text: set",
+      "EolAttribute": "scripts/f2-acl/Test-F2ProtectedReleaseDiagnosticsSourceChain.ps1: eol: crlf"
+    },
+    {
+      "Path": "scripts/f2-acl/Test-F2G1FixedSourceRootPreflight.ps1",
+      "Purpose": "Read-only check of exact fixed production/review paths and command pins",
+      "CheckoutSha256": "7a68ec97cab94dd6c98d8d935c4d6a0e36cbdc9471d3aa4693c85354c568292c",
+      "GitBlobSha256": "f7f9525e820f7a0a49686c7ee23ccd0b60de732cb263e11146d7099d3f725530",
+      "TextAttribute": "scripts/f2-acl/Test-F2G1FixedSourceRootPreflight.ps1: text: set",
+      "EolAttribute": "scripts/f2-acl/Test-F2G1FixedSourceRootPreflight.ps1: eol: crlf"
+    },
+    {
+      "Path": "docs/reviews/f2-g1-final-execution-preflight/F2_G1_FINAL_EXECUTION_PREFLIGHT_REVIEW.md",
+      "Purpose": "Final source-only preflight handoff and exact unexecuted CMD command",
+      "CheckoutSha256": "e9f941fa84248ce72d6d5b6fe03a5797e5b9e0134cbeb84bc3022b1eddf4282a",
+      "GitBlobSha256": "e9f941fa84248ce72d6d5b6fe03a5797e5b9e0134cbeb84bc3022b1eddf4282a",
+      "TextAttribute": "docs/reviews/f2-g1-final-execution-preflight/F2_G1_FINAL_EXECUTION_PREFLIGHT_REVIEW.md: text: set",
+      "EolAttribute": "docs/reviews/f2-g1-final-execution-preflight/F2_G1_FINAL_EXECUTION_PREFLIGHT_REVIEW.md: eol: lf"
+    },
+    {
+      "Path": "docs/reviews/f2-g1-final-execution-preflight/evidence/FIXED_PATH_PREFLIGHT.log",
+      "Purpose": "Windows PowerShell 5.1 exact-path validation output",
+      "CheckoutSha256": "b26de36d50e9f886f50ccb2b02f1c0cb7745d92d23b5a7cb3443e0739f22946d",
+      "GitBlobSha256": "c06a37b8ecdf4bd9e7d03e21722e8a23ccc5ad91cb9d4d788365b09f24d0f702",
+      "TextAttribute": "docs/reviews/f2-g1-final-execution-preflight/evidence/FIXED_PATH_PREFLIGHT.log: text: auto",
+      "EolAttribute": "docs/reviews/f2-g1-final-execution-preflight/evidence/FIXED_PATH_PREFLIGHT.log: eol: unspecified"
+    },
+    {
+      "Path": "docs/reviews/f2-g1-final-execution-preflight/evidence/PARSER_AND_DIFF.log",
+      "Purpose": "Windows PowerShell parser and whitespace checks",
+      "CheckoutSha256": "f06f569f99c6c0f350cfd2129da6c96166e971b658791428265b2707373af8cc",
+      "GitBlobSha256": "06260c281f0c9b1f38e471555e10c6f6256448040d2c184135f79ea5c0c19a3b",
+      "TextAttribute": "docs/reviews/f2-g1-final-execution-preflight/evidence/PARSER_AND_DIFF.log: text: auto",
+      "EolAttribute": "docs/reviews/f2-g1-final-execution-preflight/evidence/PARSER_AND_DIFF.log: eol: unspecified"
+    }
+  ],
+  "ManifestSelfHash": "EXCLUDED_TO_AVOID_RECURSIVE_HASHING"
+}

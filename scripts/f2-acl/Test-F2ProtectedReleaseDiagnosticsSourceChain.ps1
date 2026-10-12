@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$SourceRoot = 'C:\Dev\f2-g1-updater-diagnostics-source',
-    [string]$ReviewRoot
+    [string]$ReviewRoot,
+    [switch]$AllowDetachedSourceRoot
 )
 
 Set-StrictMode -Version Latest
@@ -45,7 +46,13 @@ try {
 
     Assert-Equal 'SourceHead' (Get-GitText $SourceRoot @('rev-parse', 'HEAD')) $expectedCommit
     Assert-Equal 'SourceParent' (Get-GitText $SourceRoot @('rev-parse', 'HEAD^')) $expectedParent
-    Assert-Equal 'SourceBranch' (Get-GitText $SourceRoot @('branch', '--show-current')) $expectedBranch
+    $sourceBranch = [string](Get-GitText $SourceRoot @('branch', '--show-current'))
+    if ([string]::IsNullOrWhiteSpace($sourceBranch)) {
+        if (-not $AllowDetachedSourceRoot) { throw 'SOURCE_BRANCH_MISMATCH' }
+        Write-Output 'PASS:SourceBranch=(detached; expected commit and remote ref verified)'
+    } else {
+        Assert-Equal 'SourceBranch' $sourceBranch $expectedBranch
+    }
     Assert-Equal 'SourceOrigin' (Get-GitText $SourceRoot @('remote', 'get-url', 'origin')) $expectedOrigin
     $remoteBranchRef = 'origin/' + $expectedBranch
     Assert-Equal 'RemoteBranchHead' (Get-GitText $SourceRoot @('rev-parse', $remoteBranchRef)) $expectedCommit
