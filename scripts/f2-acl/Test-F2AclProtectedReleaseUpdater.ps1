@@ -213,9 +213,11 @@ try {
     )
     $runtimePathsCovered=$true
     foreach($path in $expectedRuntimePaths){if($path -notin $runtimePathInventory){$runtimePathsCovered=$false}}
-    Assert-Update ($runtimePathsCovered -and $runtimePathInventory.Count -eq 12) 'runtime inventory includes old/new source checkout and fixed/versioned installed launchers, coordinators and direct runtime modules'
+    $missingRuntimePaths=@($expectedRuntimePaths | Where-Object { $_ -notin $runtimePathInventory })
+    Assert-Update ($runtimePathsCovered -and $runtimePathInventory.Count -eq 12) ('runtime inventory includes old/new source checkout and fixed/versioned installed launchers, coordinators and direct runtime modules; actualCount='+$runtimePathInventory.Count+'; missing='+($missingRuntimePaths -join '|'))
     $baseInventory=@(& $pathFixture.Context.Hooks.ProcessInventory $pathFixture.Context)
-    Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $baseInventory) -ceq '') 'only the current updater and exact PID/creation-time/pin-bound requester launcher are allowed'
+    $baseInventoryError=Get-ProcessInventoryError $pathFixture.Context $baseInventory
+    Assert-Update ($baseInventoryError -ceq '') ('only the current updater and exact PID/creation-time/pin-bound requester launcher are allowed; actualError='+$baseInventoryError)
     $foreignCases=@(
         [pscustomobject]@{Label='active old source-checkout launcher';CommandLine=('powershell.exe -File "'+(Join-Path $pathFixture.Context.OldRuntimeSourceRoot 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1')+'"')},
         [pscustomobject]@{Label='active new source-checkout launcher';CommandLine=('powershell.exe -File "'+(Join-Path $pathFixture.Context.SourceRoot 'scripts\f2-acl\Invoke-F2IcaclsCapture.ps1')+'"')},
@@ -230,7 +232,8 @@ try {
         $caseIndex++
         $processName=if($case.PSObject.Properties['Name']){[string]$case.Name}else{'powershell.exe'}
         $rows=@($baseInventory)+@([pscustomobject]@{ProcessId=2000+$caseIndex;Name=$processName;CommandLine=$case.CommandLine;CreationUtcTicks=638000000000000000L;OwnerSid='S-1-5-21-200'})
-        Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $rows) -ceq 'UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN') ($case.Label+' blocks independent of path-only matching')
+        $caseInventoryError=Get-ProcessInventoryError $pathFixture.Context $rows
+        Assert-Update ($caseInventoryError -ceq 'UPDATE_RUNTIME_PROCESS_ACTIVE_OR_UNKNOWN') ($case.Label+' blocks independent of path-only matching; actualError='+$caseInventoryError)
     }
     $missingLine=@($baseInventory)+@([pscustomobject]@{ProcessId=2010;Name='powershell.exe';CommandLine=$null;CreationUtcTicks=638000000000000000L;OwnerSid='S-1-5-21-200'})
     Assert-Update ((Get-ProcessInventoryError $pathFixture.Context $missingLine) -ceq 'UPDATE_PROCESS_COMMAND_LINE_UNKNOWN') 'missing or inaccessible foreign PowerShell command line fails closed'
@@ -288,7 +291,9 @@ try {
     $happy=New-UpdateFixture
     $result=Invoke-F2UpdateTransaction -Context $happy.Context
     Close-UpdateFixture $happy
-    Assert-Update ($result.Success -and $result.Outcome -ceq 'UPDATE_COMPLETE' -and $result.InstalledFiles -eq 7 -and $result.OldReleaseRetained) 'successful transaction stages and activates exactly seven new files while retaining old package and manifest'
+    $resultErrorCode=if($null -ne $result.PSObject.Properties['ErrorCode']){[string]$result.ErrorCode}else{''}
+    $resultStage=if($null -ne $result.PSObject.Properties['Stage']){[string]$result.Stage}else{''}
+    Assert-Update ($result.Success -and $result.Outcome -ceq 'UPDATE_COMPLETE' -and $result.InstalledFiles -eq 7 -and $result.OldReleaseRetained) ('successful transaction stages and activates exactly seven new files while retaining old package and manifest; success='+$result.Success+'; outcome='+$result.Outcome+'; error='+$resultErrorCode+'; stage='+$resultStage)
     $events=@($happy.Events)
     $barrierEvent=[array]::IndexOf($events,'ManifestBarrierAcquired');$firstInventoryEvent=[array]::IndexOf($events,'Inventory1');$secondInventoryEvent=[array]::IndexOf($events,'Inventory2');$activationEvent=[array]::IndexOf($events,'ManifestActivation')
     Assert-Update ($barrierEvent -ge 0 -and $barrierEvent -lt $firstInventoryEvent -and $firstInventoryEvent -lt $secondInventoryEvent -and $secondInventoryEvent -lt $activationEvent -and $happy.LateReaderBlocked) 'manifest barrier precedes both process inventories; a later reader is blocked and the final scan directly precedes activation'
