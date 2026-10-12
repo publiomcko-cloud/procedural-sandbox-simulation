@@ -1,0 +1,23 @@
+Command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1
+ExitCode: 0
+Assertions: 152; Failures: 0
+
+Command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1
+ExitCode: 0
+Assertions: 118; Failures: 0
+
+Command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1
+ExitCode: 0
+Assertions: 41; Failures: 0
+
+Command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclEntrypointArguments.ps1
+ExitCode: 0
+Assertions: 18; Failures: 0
+
+Command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1
+ExitCode: 0
+Assertions: 103; Failures: 0
+
+Total: 432 assertions; 0 failures; all five child process exit codes 0.
+Parser: 13 PowerShell files; 0 parse errors; process exit 0.
+Classification: source-only synthetic validation. No UAC, protected writes, live ACL/icacls, VM/Hyper-V/G: queries, native workload or PR merge.

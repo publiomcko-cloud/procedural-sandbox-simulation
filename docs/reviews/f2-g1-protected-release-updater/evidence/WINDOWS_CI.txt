@@ -1,0 +1,3 @@
+Status: PENDING draft PR creation.
+
+The Windows GitHub Actions run will be recorded here by immutable run ID, tested commit, workflow, job result and conclusion. No protected installation or privileged execution is part of CI.
