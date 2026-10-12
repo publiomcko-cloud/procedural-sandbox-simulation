@@ -1,27 +1,27 @@
 Workflow: F2 ACL source-only validation
 Workflow ID: 380163797
-Run: 38253974457 (run number 59)
-Run URL: https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38253974457
-Final attempt URL: https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38253974457/attempts/2
-PR: #59 (draft)
-PR head: 73d2f7fbdd2f0295ff2cafc29c49d6471b98d6ec
-CI merge commit: 7cf096bc9adc3ec40d79bebecd6bf186889a403d
-Job: powershell-source-only (114827707641)
-Final attempt conclusion: success
+Run: 38269076173 (run number 62)
+Run URL: https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38269076173
+PR: #59 (draft, open, unmerged)
+PR head/source commit: 691eae48d67789bf798e270cb9cca7790d728d26
+CI merge commit: 343c1b9416dece399962a387f691355384d0b682
+Job: powershell-source-only (114878539008)
+Conclusion: success
 
-Windows PowerShell 5.1 suite results (all child process exit codes 0):
+Windows PowerShell 5.1 suite results (each child process exit code 0):
 Protocol: 152 assertions; 0 failures.
 Corroboration: 118 assertions; 0 failures.
 Runtime: 41 assertions; 0 failures.
 Entrypoint: 18 assertions; 0 failures.
 Protected updater: 104 assertions; 0 failures.
-Total: 433 assertions; 0 failures.
+Production native helper: 20 assertions; 0 failures; TEMP cleanup PASS.
+Total: 453 assertions; 0 failures; six child exit codes 0.
 
-PowerShell parser: 13 tracked files; 0 errors; success.
+Native helper step compiled the exact Add-Type C# source extracted from the production updater, then exercised native protected directory/file creation, ACL read-back, exact fixture owner/mask/inheritance checks and create-new collision failures in a disposable ordinary-user TEMP tree. It did not invoke the updater or touch protected installation paths.
+
+PowerShell parser: 14 tracked files; 0 errors; success.
 git diff --check: success.
 
-Failure history retained for review:
-- Run 38253314568, PR head e7b813a8b67af8081a967a4002e9786f557dbb81: updater suite failed because its fixture referenced a developer-local `C:\Dev\f2-g1-capture-id-contract-source` path unavailable on GitHub Actions. Commit 73d2f7f changes the test fixture to read the exact old source commit from the repository Git object database, enforce a 32 MiB archive/4 MiB per-entry limit, and verify all seven old installed-byte pins before use. No production updater or seven-file package bytes changed.
-- Run 38253974457, attempt 1: protocol child returned exit 5 after `Stage=bounded_partial_pipe_read`; no assertion/failure detail was emitted. A direct Windows PowerShell 5.1 rerun passed 152/0, and attempt 2 of the same CI run passed the complete suite. The transient child exit-5 cause remains UNKNOWN.
+The full job log is available through the public GitHub Actions run URL. It contains each suite assertion summary, child exit code, parser count and diff check. Local full stdout/stderr logs are committed beside this report.
 
-The final successful CI logs are independently accessible at the run URL above. CI uses synthetic TEMP-only fixtures; it does not perform protected installation, UAC, live ACL/icacls, VM/Hyper-V/G: queries or native execution.
+This CI is source-only. It does not exercise Administrator UAC, the protected C: update, live ACLs/icacls, VM/Hyper-V/G:, or the native collector workload.

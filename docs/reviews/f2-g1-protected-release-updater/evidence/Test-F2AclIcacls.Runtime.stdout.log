@@ -1,0 +1,42 @@
+PASS: release contract accepts the independently pinned mailbox ID and payload CaptureId
+PASS: actual disk loader reads valid v3 with separate pinned identities without a release-provider mock
+PASS: disk-loaded v3 manifest passes the actual seven-file source package contract
+PASS: actual disk loader rejects legacy v1 manifests
+PASS: actual disk loader rejects installed v2 manifests before the old package can launch
+PASS: actual disk loader rejects malformed JSON
+PASS: disk-loaded manifest with missing BaselineMailboxId fails the downstream release contract
+PASS: disk-loaded manifest with missing BaselinePayloadCaptureId fails the downstream release contract
+PASS: legacy v2 release-manifest schema is rejected by the upgraded package
+PASS: release contract rejects an incorrect mailbox ID
+PASS: release contract rejects an incorrect payload CaptureId
+PASS: release contract rejects a missing payload CaptureId pin
+PASS: source tampering is rejected before any coordinator launch
+PASS: tampered release package fails before UAC launch
+PASS: new source runtime rejects a legacy v2 installed manifest before the sole UAC boundary
+PASS: protected package directory ACL fixture matches exact owner, principals, rights and inheritance
+PASS: external release manifest ACL fixture is admin-owned, protected and non-inheriting
+PASS: unprotected, writable, unexpected-principal or unexpected-owner release ACL is rejected
+PASS: unprotected, writable, unexpected-principal or unexpected-owner release ACL is rejected
+PASS: unprotected, writable, unexpected-principal or unexpected-owner release ACL is rejected
+PASS: unprotected, writable, unexpected-principal or unexpected-owner release ACL is rejected
+PASS: scope mismatch fails before the first ACL command
+PASS: storage identity mismatch fails before the first ACL command
+PASS: non-administrator coordinator identity is rejected before request or ACL reads
+PASS: UAC cancellation is reported and is not retried
+PASS: coordinator preflight and eleven bounded reads publish a complete synthetic mailbox
+PASS: one UAC launch coordinates the real production path for all 11 objects and verifies returned evidence
+PASS: successful integration has exactly 11 workers, one launch and a verified integrity digest
+PASS: runtime baseline caller preserves both distinct release-manifest identities
+PASS: coordinator timeout and failed cleanup return bounded incomplete status without relaunch
+PASS: IncompleteOutput prevents complete publication and returns exit 1
+PASS: Timeout prevents complete publication and returns exit 1
+PASS: CleanupFailure prevents complete publication and returns exit 1
+PASS: production host launcher exposes no runtime override parameters
+PASS: protected coordinator accepts only the one-use capture identifier
+PASS: production launcher holds the reviewed runtime lease and verifies all installed hashes before UAC
+PASS: protected coordinator also acquires the lease and revalidates the installed version before ACL reads
+PASS: production launcher validates unbound arguments in its protected block without a StrictMode-unsafe args access
+PASS: production coordinator validates unbound arguments in its protected block without a StrictMode-unsafe args access
+PASS: production coordinator validates the required CaptureId inside its protected block
+PASS: entrypoints avoid pre-body advanced binding and preserve controlled argument-rejection exits
+Assertions=41;Failures=0

@@ -1,2 +1,4 @@
-Command: git diff --check origin/fix/f2-g1-ps51-entrypoint-release...HEAD
-ExitCode: 0
+git diff --check
+Command: git diff --check 0a4d98ecad4c50ba2f749e4fafe6d28e35794804
+Scope: all PR #59 production and review evidence changes after the native-helper correction.
+Result: no whitespace errors; ExitCode=0

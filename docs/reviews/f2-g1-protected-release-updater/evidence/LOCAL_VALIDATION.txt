@@ -1,15 +1,15 @@
-Windows PowerShell 5.1 direct validation
+Windows PowerShell 5.1 local validation
+Executable: %SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe
+Version: 5.1.22621.6133
+Production source commit: 691eae48d67789bf798e270cb9cca7790d728d26
+Commands (each run as a fresh Windows PowerShell 5.1 process from repository root):
+& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1
+& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1
+& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1
+& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclEntrypointArguments.ps1
+& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1
+& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclProtectedReleaseNativeHelper.ps1
 
-Commands (repository root):
-
-& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1
-& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1
-& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1
-& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclEntrypointArguments.ps1
-& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1
-
-Local results at the final code state: protocol 152 assertions, 0 failures, exit 0; updater 104 assertions, 0 failures, exit 0. The retained direct corroboration/runtime/entrypoint logs record 118/41/18 assertions, 0 failures, exit 0; those source files did not change in the test-fixture correction. A single same-head CI run below exercised all five suites together.
-
-Complete Windows GitHub CI result: run `38253974457`, retry attempt 2, checked PR head `73d2f7fbdd2f0295ff2cafc29c49d6471b98d6ec` at merge commit `7cf096bc9adc3ec40d79bebecd6bf186889a403d`. Assertions: 433; failures: 0; five child exit codes: 0. Parser: 13 files, 0 errors. Diff check: exit 0. See `WINDOWS_CI.txt` for run/job links.
-
-Classification: source-only synthetic validation. No UAC, protected writes, live ACL/icacls, VM/Hyper-V/G: queries, native workload or PR merge.
+Results: Protocol 152 assertions / 0 failures / exit 0; Corroboration 118 / 0 / exit 0; Runtime 41 / 0 / exit 0; Entrypoint 18 / 0 / exit 0; Protected updater 104 / 0 / exit 0; Native helper 20 / 0 / exit 0. Total 453 assertions, 0 failures, 6 process exit codes 0.
+The native helper regression compiled the exact C# here-string extracted from the production updater. It did not call any production updater function. It used one unique ordinary-user TEMP fixture to verify protected directory and file creation, owner/DACL read-back, exact ACE masks/inheritance, byte integrity, create-new collision failure and cleanup.
+An initial local test wrapper launched children using PowerShell 7 Start-Process and the Corroboration suite failed to resolve Get-FileHash. Running the exact Windows PowerShell 5.1 executable directly (as above) passed. This harness-specific initial failure was not reproduced in direct PS5.1 or the Windows CI workflow; its environmental cause was not determined.

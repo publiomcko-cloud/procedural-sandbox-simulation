@@ -1,1 +1,4 @@
-ParserFiles=13;ParserErrors=0
+PowerShell parser validation
+Command: Windows PowerShell 5.1 Parser::ParseFile over git ls-files scripts/f2-acl/*.ps1 and scripts/f2-acl/*.psm1.
+Source commit: 691eae48d67789bf798e270cb9cca7790d728d26
+ParserFiles=14;ParserErrors=0;ExitCode=0

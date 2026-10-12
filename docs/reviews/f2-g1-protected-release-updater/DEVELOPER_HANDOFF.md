@@ -2,40 +2,32 @@
 
 Status: READY_FOR_INDEPENDENT_REVIEW
 
-Ticket / acceptance criteria: Issue #48 comment `6123499243`; PR #58 review `5490189436`. Implement a source-only, fail-closed protected-release updater with transaction recovery and a reviewed launch boundary.
+Ticket / review: PR #59 review `5492493517`; Issue #48 finding `6126813885`.
 
 Repository / remote: `publiomcko-cloud/procedural-sandbox-simulation` / `https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git`.
 
 Worktree / branch: `C:\Dev\f2-g1-protected-updater` / `fix/f2-g1-protected-release-updater`.
 
-Base SHA: `0a4d98ecad4c50ba2f749e4fafe6d28e35794804` (PR #58 branch head at fetch).
+Base SHA: PR #58 head `0a4d98ecad4c50ba2f749e4fafe6d28e35794804`.
 
-Candidate SHA (production release source): `0bda8f6437ad2ddb7ce24d3bf905a18f363df9df`. A test-only fixture portability correction is commit `73d2f7fbdd2f0295ff2cafc29c49d6471b98d6ec` (parent `e7b813a8b67af8081a967a4002e9786f557dbb81`); it does not change the updater or seven packaged release files. The evidence-only commit is a child of the corrected test commit; the immutable SHA is the draft PR head metadata.
+Corrected production source SHA: `691eae48d67789bf798e270cb9cca7790d728d26`.
 
-Parent SHA (production source): `c95d0e4defc0d840995e69f96982f51dd9be779d`.
+Parent SHA: `40723492b97983c0c7bc6d441a1bcbace823ffe8`.
 
-Changed paths: `.github/workflows/f2-acl-source-only.yml`; `scripts/f2-acl/F2AclIcacls.Runtime.psm1`; `scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json`; `scripts/f2-acl/Invoke-F2IcaclsProtectedCoordinator.ps1`; `scripts/f2-acl/Invoke-F2ProtectedReleaseUpdate.ps1`; `scripts/f2-acl/Start-F2ProtectedReleaseUpdate.ps1`; `scripts/f2-acl/Test-F2AclEntrypointArguments.ps1`; `scripts/f2-acl/Test-F2AclIcacls.Runtime.ps1`; `scripts/f2-acl/Test-F2AclProtectedReleaseUpdater.ps1`; plus all files under `docs/reviews/f2-g1-protected-release-updater/`. The updater source commit contains implementation and regressions; the test-only descendant makes the old-release fixture self-contained using the pinned Git commit; the evidence descendant carries the candidate manifest, handoff, logs and transaction review.
+Changed production/test paths: `.github/workflows/f2-acl-source-only.yml`; `scripts/f2-acl/Invoke-F2ProtectedReleaseUpdate.ps1`; `scripts/f2-acl/Test-F2AclProtectedReleaseNativeHelper.ps1`. Review/evidence paths are the candidate v3 manifest and files under `docs/reviews/f2-g1-protected-release-updater/`.
 
-Implementation summary: v3 versioned package staging and complete preflight; create-new protected paths; a shared runtime/exclusive updater lease and active-manifest barrier; one explicit same-requester UAC boundary; an atomic manifest pointer switch after package verification; retained old files/manifest; hash-chained bounded transaction journal; exact transaction-ID recovery with forward-only completion and no cleanup/rollback.
+Implementation summary: The updater's embedded P/Invoke call now passes `IntPtr.Zero` for the `IntPtr` CreateFile template handle. The new test extracts and compiles the exact production C# here-string in Windows PowerShell 5.1 without invoking the updater, then tests TEMP-only protected directory/file creation, owner/DACL read-back, exact fixture ACE masks/flags, byte write and create-new collision rejection. CI runs this regression as a required workflow step.
 
-Architectural impact: switches the active package from the fixed v2 tree to an immutable commit-versioned tree via one external v3 manifest replacement. The old v2 fixed tree and external manifest backup remain. Recovery never guesses or deletes.
+Release provenance: Candidate v3 manifest binds `ReviewedCommitSha` and the versioned `PackageRoot` to production source commit `691eae48d67789bf798e270cb9cca7790d728d26`. Candidate manifest SHA-256 is `be98e9101f9171bb1bba59bfa063fc424132e19579b16d75816cec3b345974e2`. The corrected updater SHA-256 is `49afef854aaee2b4501325063ade14e496072aaf74745e1203c2029ce9287744` for Windows CRLF checkout bytes and `47953d6124c021b0b0332a37ab0183ea1b544cfb375a78c9a38081f7ca92e4fd` for LF Git content. The seven release-file hashes and source-pin manifest are unchanged and verified against the candidate.
 
-Dependencies added / licenses: none. Uses Windows PowerShell 5.1, .NET Framework APIs and existing Git installation.
+Tests executed: Six direct Windows PowerShell 5.1 suite commands and results are in `F2_G1_PROTECTED_RELEASE_UPDATER_REVIEW.md` and the complete stdout/stderr files in `evidence/`. Results: Protocol 152/0; Corroboration 118/0; Runtime 41/0; Entrypoint 18/0; Updater 104/0; native helper 20/0; total 453 assertions, zero failures, six process exit codes 0. Parser: 14 PowerShell files, zero errors. `git diff --check`: pass. Windows CI run `38269076173` / job `114878539008` succeeded: https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38269076173.
 
-Tests executed (exact commands): see `F2_G1_PROTECTED_RELEASE_UPDATER_REVIEW.md` and complete command/output logs in `evidence/`; five Windows PowerShell 5.1 suites, PowerShell AST parser sweep and `git diff --check`.
+Native failure reproduction: A fresh Windows PowerShell 5.1 process compiled the exact embedded C# from blocked source `40723492b97983c0c7bc6d441a1bcbace823ffe8`; `Add-Type` failed on `null` passed to the `System.IntPtr` parameter and the child exited 1. No updater entrypoint was called. The sanitized diagnostic is in `evidence/NATIVE_COMPILE_REPRO_BEFORE_FIX.txt`.
 
-Results / assertion counts: Protocol 152/0; corroboration 118/0; runtime 41/0; entrypoint 18/0; updater 104/0; **433 assertions / 0 failures**. The local Windows PowerShell 5.1 updater rerun after the fixture correction exited 0. GitHub Windows CI run `38253974457`, attempt 2, passed all five suites (433 assertions, five child exit codes 0), parser (13 files / zero errors), and `git diff --check`; details and links are in `evidence/WINDOWS_CI.txt`.
+Tests not executed: actual Administrator UAC; protected C: installation/update or recovery; live `icacls`, ACL/token/parent queries; G:, VM or Hyper-V operations; native collector/workload. No production updater invocation was made.
 
-Tests not executed: actual protected installation/update; actual UAC; live `icacls`, host ACL/token or parent ACL inspection; VM/Hyper-V/G: operations; real protected native ACL creation or real host crash testing.
+Limitations: The native C# source compiles and its create-new/security-descriptor calls work with a current-user-owned TEMP fixture. This does not verify Administrator token behavior, actual C: parent ACLs, protected ownership or DACLs, installer/UAC identity behavior, protected-volume rename semantics, or a real update transaction. Those require a new exact-SHA independent review and fresh owner authorization.
 
-Failure/recovery cases: injected fault after every transaction checkpoint; incomplete stage preserves old active manifest; exact ready package may be promoted forward only; active v3 release is verify-only; unknown paths, modified source/package, DACL, journal, manifest or process status block. No rollback/deletion path.
+Reviewer focus: verify `IntPtr.Zero` is the only production change; inspect that the test compiles the exact production here-string without updater execution; check current candidate commit/package-root/hash chain; confirm test and CI evidence; retain the privileged-only unknowns above.
 
-Benchmark machine and metrics: not applicable; this is an administrative source-only updater.
-
-Known limitations: elevated host behavior remains unverified; parent waiting is bounded but does not terminate an unknown child; noncooperating Administrator tampering is outside the protection model; GitHub CI validates synthetic paths only. Initial PR CI attempt `38253314568` exposed a stale absolute local fixture path; the test now extracts the pinned old commit from the repository object database and verifies all seven installed-byte hashes. The first attempt of CI run `38253974457` reported protocol child exit 5 immediately after `Stage=bounded_partial_pipe_read`; a direct local rerun passed 152 assertions, and rerunning the failed CI job passed. The transient exit-5 cause is UNKNOWN and the failed run remains linked in the evidence.
-
-Visual reproduction steps: not applicable.
-
-Rollback instructions: none is automatic or approved. Preserve the previous fixed-path v2 files and the external v2 manifest backup. If an incomplete or unknown state appears, stop and retain all objects for a new reviewed recovery instruction.
-
-Reviewer focus / open questions: verify all candidate hashes and the CRLF bootstrap/updater hashes; inspect mixed-release boundary, locking, manifest replacement, ACL application, exact journal readiness sequence and recovery fail-closed behavior. Independent review is required before any future protected execution.
+No UAC, protected update, live host query, ACL modification, VM operation, native F2 workload or merge was performed.
