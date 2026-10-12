@@ -1,0 +1,97 @@
+{
+    "Schema":  "f2-g1-second-upgrade-failure-review-evidence-v1",
+    "ReviewBranch":  "docs/f2-g1-second-upgrade-failure-review-20261012",
+    "BaseCommit":  "a5f368340245e7151956b272ba717ed93c925b76",
+    "EvidenceCommit":  "SELF_REFERENTIAL_COMMIT_SHA_OMITTED; report the final commit separately",
+    "RepositoryOrigin":  "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+    "ProductionCommitReviewed":  "03882eedf3104fc33aa0cf503ddef9c9a6bec702",
+    "Pr62Head":  "923c7d39d7fbfe106dea404c386efd4b5844654e",
+    "Pr63Head":  "3dc05f98831924160474bfb5b554b2963d9a137b",
+    "ManifestSelfHash":  "EXCLUDED; publish receipt will report this file SHA-256",
+    "Files":  [
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/DEVELOPER_HANDOFF.md",
+                      "GitBlob":  "51042a99ea80bd624588caa6fffd50784adf9109",
+                      "ByteCount":  2476,
+                      "Sha256":  "81fd1fcaa1d34a9b63b51991ff3911615f78eae220761bd40e05a5a697433a78"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/git-diff-check.stdout.txt",
+                      "GitBlob":  "84ccf3a9f26e17a9af48c59d1221eed2dcdfbace",
+                      "ByteCount":  88,
+                      "Sha256":  "8f2eb9833ecbca68a79145673f41e2e66545b70d189efc4a3422d99d027e7fff"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/incident-sanitized.json",
+                      "GitBlob":  "a75ebf9e41f029cf332a8f73178d21dc8deb9f9b",
+                      "ByteCount":  979,
+                      "Sha256":  "c4245a9e27e34d6a647775bab7d9290b5ad7ec0f29fc09e16fbae46614a9c967"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/manifest-attempt1-index-format-error.stdout.txt",
+                      "GitBlob":  "7de307fadcd0b1daaa4a8fa364a1482348bd3e81",
+                      "ByteCount":  507,
+                      "Sha256":  "d264cac44103fe24895e49cbb6e5739aaccb9cbcc6afe3517c18e47c8ff8fd52"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/New-F2G1FailureEvidenceManifest.ps1",
+                      "GitBlob":  "f1827ee6b3154a1265768cffb4e1c61d6ab5706b",
+                      "ByteCount":  3263,
+                      "Sha256":  "60ba5b1cf28e246d79e5fbbcadf7b88d205c1f1134945476c150023a16676a1c"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/New-F2G1FailureEvidenceManifest.stdout.txt",
+                      "GitBlob":  "b44c1d5c909542d4bf7e4a65646efb5f844bc782",
+                      "ByteCount":  118,
+                      "Sha256":  "171eafe61a1ed0f23acdea14e150400065567c0e269289ddddfe954b0f7abfeb"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/read-only-production-validation.stdout.txt",
+                      "GitBlob":  "d5aba1d04bc22cde0b0ea23fbf86b30316f30135",
+                      "ByteCount":  537,
+                      "Sha256":  "5cb444d86f229b6d2ec13b092f1bdf40d2f5d52d308245e4a84423d81bde0471"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/read-only-validation-attempt1-harness-error.stdout.txt",
+                      "GitBlob":  "ca075a3dc435549c113e77a16c31579399d55f05",
+                      "ByteCount":  362,
+                      "Sha256":  "aa93ad35f10a0a5b2bde0294c27ed3bc1d7bc600792ca0d52fa7f3a4574fc2ac"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/Test-F2G1ReviewCheckoutIdentity.ps1",
+                      "GitBlob":  "fdbbe91a6bcd4fe7db5312345ccadebcd6e0427f",
+                      "ByteCount":  1762,
+                      "Sha256":  "a9ee03ebf42ae8dd702800692ab0b4f3e5f0c9e0e1841329decc80329596820c"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/Test-F2G1ReviewCheckoutIdentity.stdout.txt",
+                      "GitBlob":  "7b386a4670534c23dea326c1df77e8a261202b66",
+                      "ByteCount":  355,
+                      "Sha256":  "e36ddc0ecd8bfab266d2626d30dbafb6759bdd5be0869f4bb3b3a5b9e177ff4e"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/Test-F2G1SecondFailureParser.ps1",
+                      "GitBlob":  "e506489239536ab9720f04f3338a612fb08739f8",
+                      "ByteCount":  976,
+                      "Sha256":  "9c10f7e36be5c415086e6302a659e50245c3639420ef78e3cce7d3358b946cfd"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/Test-F2G1SecondFailureParser.stdout.txt",
+                      "GitBlob":  "c087a2b59cbe481a0fb6db413ec214627b48b550",
+                      "ByteCount":  258,
+                      "Sha256":  "076878c27473ea0c3af357a13435b48129fd9f6baec1968709d03bac66eefd84"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/evidence/Test-F2G1SecondFailureReadOnly.ps1",
+                      "GitBlob":  "977e9376066ad4a96afe46ff60d777c8e1dd4195",
+                      "ByteCount":  11943,
+                      "Sha256":  "1d36c27cc7bb170a7d16f8df09dd41fe451479a3e2b7046c063fbf6542acd14a"
+                  },
+                  {
+                      "Path":  "docs/reviews/f2-g1-second-upgrade-failure/F2_G1_SECOND_UPGRADE_FAILURE_ROOT_CAUSE_REVIEW.md",
+                      "GitBlob":  "bfd923d7d016285d40e0d7bc97cf4644def0ac83",
+                      "ByteCount":  13762,
+                      "Sha256":  "a471ea136df47d398bc7faf546dbd11159e9282bb8466c4c5df30b2e103b4c3e"
+                  }
+              ]
+}

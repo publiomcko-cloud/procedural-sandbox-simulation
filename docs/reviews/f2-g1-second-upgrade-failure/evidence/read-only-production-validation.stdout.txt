@@ -1,0 +1,16 @@
+PASS:PowerShell51StandardToken
+PASS:ReviewedUpdaterHashParseAndDefinitionsOnlyLoad
+PASS:CandidateManifestValidation
+PASS:GitSourceAndSevenPackagePinValidation
+PASS:CDriveParentAclValidation
+PASS:InstalledV2ReadOnlyValidation
+PASS:NoLockTransactionRootsBackupsReleasesOrStages
+PASS:BaselineMailboxPayloadIntegrityAndElevenRecordValidation
+UpdaterEntryPointInvoked=NO
+TransactionEntryPointInvoked=NO
+UAC=NONE
+ProtectedWrites=NONE
+LiveIcacls=NOT_RUN
+VMHyperVAndG=NOT_QUERIED
+Result=READ_ONLY_FUNCTION_DIAGNOSTICS_COMPLETE
+ProcessExitCode=0

@@ -1,0 +1,24 @@
+{
+  "incidentComment": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/48#issuecomment-6132774514",
+  "productionCommit": "03882eedf3104fc33aa0cf503ddef9c9a6bec702",
+  "reviewedPr62Head": "923c7d39d7fbfe106dea404c386efd4b5844654e",
+  "reviewedPr63Head": "3dc05f98831924160474bfb5b554b2963d9a137b",
+  "uacAttempts": 1,
+  "authorizationState": "CONSUMED",
+  "elevatedChildPid": 6468,
+  "actualChildExitCode": 1,
+  "diagnostic": {
+    "authority": "NON_AUTHORITATIVE_DIAGNOSTIC",
+    "status": "VALIDATED",
+    "transportErrorCode": "NONE",
+    "requestId": "3307daf65cb2462bb48b7e80c03116a2",
+    "stage": "CandidateAndSourceValidation",
+    "childErrorCode": "UPDATE_UNCLASSIFIED_FAILURE",
+    "recordSha256": "128b5830cfb0ef0711042c40baa82aa007d0e57be998f1c3cc80915e3a7a0219"
+  },
+  "installation": {
+    "v3Attested": false,
+    "activeReleasePostflight": "v2 verified by standard-token read-only checks",
+    "recoveryOrCleanupPerformed": false
+  }
+}

@@ -1,0 +1,9 @@
+PASS:PowerShell51StandardToken
+PASS:ReviewedUpdaterHashParseAndDefinitionsOnlyLoad
+PASS:CandidateManifestValidation
+PASS:GitSourceAndSevenPackagePinValidation
+PASS:CDriveParentAclValidation
+PASS:InstalledV2ReadOnlyValidation
+PASS:NoLockTransactionRootsBackupsReleasesOrStages
+Result=BLOCKED_WITH_EVIDENCE;Code=BASELINE_INTEGRITY_FIELDS_INVALID
+ProcessExitCode=1

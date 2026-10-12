@@ -1,0 +1,7 @@
+PASS:Parser:Test-F2G1SecondFailureReadOnly.ps1
+PASS:Parser:Test-F2G1ReviewCheckoutIdentity.ps1
+PASS:Parser:New-F2G1FailureEvidenceManifest.ps1
+PASS:Parser:Invoke-F2ProtectedReleaseUpdate.ps1
+ParsedFileCount=4
+Result=PS51_PARSE_SWEEP_PASSED
+ProcessExitCode=0
