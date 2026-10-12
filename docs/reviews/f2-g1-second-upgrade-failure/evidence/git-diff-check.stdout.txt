@@ -1,0 +1,4 @@
+Command=git diff --cached --check
+No whitespace errors reported.
+ExitCode=0
+Result=PASS

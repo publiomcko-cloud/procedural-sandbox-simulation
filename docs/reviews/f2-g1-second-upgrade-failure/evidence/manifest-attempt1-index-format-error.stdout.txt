@@ -1,0 +1,8 @@
+GIT_INDEX_ENTRY_UNEXPECTED
+No C:\Dev\f2-g1-second-upgrade-failure-review\docs\reviews\f2-g1-second-upgrade-failure\evidence\New-F2G1FailureEvidenc
+eManifest.ps1:46 caractere:72
++ ... lob ([0-9a-f]{40}) 0\s+(.+)$') { throw 'GIT_INDEX_ENTRY_UNEXPECTED' }
++                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (GIT_INDEX_ENTRY_UNEXPECTED:String) [], RuntimeException
+    + FullyQualifiedErrorId : GIT_INDEX_ENTRY_UNEXPECTED
+ProcessExitCode=1

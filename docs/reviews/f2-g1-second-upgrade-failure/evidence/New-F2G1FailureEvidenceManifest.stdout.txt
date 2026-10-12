@@ -1,0 +1,5 @@
+ManifestFileCount=13
+ManifestPath=evidence/EVIDENCE_MANIFEST.json
+Hashes=STAGED_GIT_BLOB_BYTES
+ManifestSelfHash=EXCLUDED
+ProcessExitCode=0
