@@ -1,0 +1,15 @@
+PASS: production bootstrap pins the approved source installer path and digest
+PASS: production path enumerator retains exact pinned G paths without requiring a G PowerShell drive
+PASS: synthetic parent provider returns the exact allowed root fixture
+PASS: synthetic parent chain accepts its reviewed fixture for Program Files
+PASS: synthetic parent chain accepts its reviewed fixture for ProgramData
+SyntheticInstallFailure={"Success":false,"Outcome":"INSTALL_BLOCKED","Stage":"Preflight","ErrorCode":"INSTALL_OPERATION_FAILED","PackagePublished":false,"ReleasePublished":false,"PartialStagePaths":[]}
+Synthetic install fixture failed before assertion evaluation.
+No C:\Dev\f2-g1-ps51-entrypoint-release\docs\reviews\f2-g1-capture-id-contract\Test-Install-F2IcaclsProtectedPackage.ps
+1:72 caractere:120
++ ...  -Depth 4));throw 'Synthetic install fixture failed before assertion  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Synthetic insta...ion evaluation.:String) [], RuntimeException
+    + FullyQualifiedErrorId : Synthetic install fixture failed before assertion evaluation.
+ 
+PROCESS_EXIT_CODE=1
