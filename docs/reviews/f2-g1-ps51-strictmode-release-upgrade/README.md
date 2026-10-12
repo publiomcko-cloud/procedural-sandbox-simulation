@@ -90,6 +90,20 @@ The workflow runs all four suites and the parser with Windows PowerShell on `win
 
 The accepted installed release is source commit `5741ffe90a3abd02a08563e6431e8a0b9b63eeb1`, with external v2 release-manifest SHA-256 `b5f01570cf8937324f0c763f72a8d05b5532472156d4e5b0fcfbd180dc7abbe9` and pin-manifest SHA-256 `bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7`. Its accepted installation receipt records launcher SHA-256 `fb55240a16f0858980bb38851414b28ce5f403ba26697ff78f227ca22ff804b0` and coordinator SHA-256 `3badc19c8ac6ac450f9691258c6ecd2a3754cd665fd5989325c90b64290ae9e2`; the unchanged package file hashes are listed in the candidate release-pin documents. The new candidate is the seven-file package and manifest described above, at source commit e5a66a.
 
+For a direct old/new comparison, the old seven-file package hashes are:
+
+| Package file | Accepted old Windows checkout SHA-256 |
+|---|---|
+| `F2AclCapture.Protocol.psm1` | `42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728` |
+| `F2AclIcacls.Corroboration.psm1` | `a52ed86218a0ba0c0801ee6e84a4a5e47c73eda43db78f818b0b12670ad5110b` |
+| `F2AclIcacls.Runtime.psm1` | `950b8232be2f22412e837d63f7b2fb678fc83871862b6bafc714d303599a71a5` |
+| `Invoke-F2IcaclsCapture.ps1` | `fb55240a16f0858980bb38851414b28ce5f403ba26697ff78f227ca22ff804b0` |
+| `Invoke-F2IcaclsProtectedCoordinator.ps1` | `3badc19c8ac6ac450f9691258c6ecd2a3754cd665fd5989325c90b64290ae9e2` |
+| `F2_ICACLS_SOURCE_PINS.json` | `bd0a66a5e81494acaa14facb48b58e4c485acda1c17ead4fdfff220bcef97cd7` |
+| `Invoke-F2AclReadOnlyCapture.ps1` | `bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b` |
+
+The new seven-file hashes are listed in the release hash dependency table above. Only the launcher, protected coordinator and their source pin fields change in the executable package; the other five package bytes and pins remain identical.
+
 Both releases use fixed active roots (`C:\Program Files\F2-G1-Icacls\scripts\f2-acl` and `C:\ProgramData\F2-G1-Icacls\approved-release.json`). The runtime has no active-release pointer or side-by-side selection contract.
 
 ### Option comparison and selection
