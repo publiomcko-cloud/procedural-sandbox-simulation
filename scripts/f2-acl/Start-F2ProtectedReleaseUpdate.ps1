@@ -26,6 +26,12 @@ function Get-F2UpdateLauncherSafeErrorCode {
     return 'UPDATE_UNCLASSIFIED_FAILURE'
 }
 
+function New-F2UpdateLauncherDiagnosticServer {
+    param([Parameter(Mandatory)]$Request)
+    try { return New-F2UpdateDiagnosticServer -Request $Request }
+    catch { throw 'UPDATE_DIAGNOSTIC_CHANNEL_FAILURE' }
+}
+
 function New-F2UpdateElevatedChildScript {
     param(
         [Parameter(Mandatory)][string]$UpdaterPath,
@@ -186,7 +192,6 @@ function Invoke-F2ProtectedReleaseUpdateLauncher {
         [void][Management.Automation.Language.Parser]::ParseInput($diagnosticProtocolText,[ref]$diagTokens,[ref]$diagParseErrors)
         if ($diagParseErrors.Count -ne 0) { throw 'UPDATE_DIAGNOSTIC_PROTOCOL_PARSE_FAILED' }
         . ([scriptblock]::Create($diagnosticProtocolText))
-        Initialize-F2UpdateDiagnosticNative
 
         # Each input is read once here for non-elevated screening. The elevated
         # child independently reads each once, hashes those exact bytes, then
@@ -206,7 +211,7 @@ function Invoke-F2ProtectedReleaseUpdateLauncher {
         if (-not [IO.File]::Exists($windowsPowerShell)) { throw 'WINDOWS_POWERSHELL_51_UNAVAILABLE' }
         $parentStage = 'DiagnosticChannelInitialization'
         $diagnosticRequest = New-F2UpdateDiagnosticRequest -SourceCommit $ExpectedSourceCommit -LauncherSha256 $ExpectedLauncherSha256 -UpdaterSha256 $ExpectedUpdaterSha256 -CandidateManifestSha256 $ExpectedCandidateManifestSha256 -RequesterPid $requesterLauncherPid -RequesterCreationUtcTicks $requesterLauncherCreationUtcTicks -RequesterSid $requesterSid
-        $diagnosticServer = New-F2UpdateDiagnosticServer -Request $diagnosticRequest
+        $diagnosticServer = New-F2UpdateLauncherDiagnosticServer -Request $diagnosticRequest
         $childScript = New-F2UpdateElevatedChildScript -UpdaterPath $updaterPath -CandidatePath $candidatePath -SourceRoot $sourceRoot -ExpectedSourceCommit $ExpectedSourceCommit -ExpectedLauncherSha256 $ExpectedLauncherSha256 -ExpectedUpdaterSha256 $ExpectedUpdaterSha256 -ExpectedCandidateManifestSha256 $ExpectedCandidateManifestSha256 -ExpectedRequesterSid $requesterSid -RequesterLauncherProcessId $requesterLauncherPid -RequesterLauncherCreationUtcTicks $requesterLauncherCreationUtcTicks -DiagnosticRequest $diagnosticRequest -DiagnosticProtocolPath $diagnosticProtocolPath -DiagnosticProtocolBytes $diagnosticProtocolBytes -RecoveryTransactionId $RecoveryTransactionId -ResumeForward:$ResumeForward
         $childTokens=$null;$childParseErrors=$null
         [void][Management.Automation.Language.Parser]::ParseInput($childScript,[ref]$childTokens,[ref]$childParseErrors)
