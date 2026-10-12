@@ -45,7 +45,7 @@ $releaseNames=@('F2AclCapture.Protocol.psm1','F2AclIcacls.Corroboration.psm1','F
 foreach($name in $releaseNames){Copy-Item -LiteralPath (Join-Path $scriptDir $name) -Destination (Join-Path $packageAcl $name) -Force}
 $filePins=@(foreach($name in $releaseNames){[pscustomobject]@{Name=$name;Sha256=(Get-F2IcaclsFileSha256 -Path (Join-Path $packageAcl $name))}})
 $pinsPath=Join-Path $scriptDir 'F2_ICACLS_SOURCE_PINS.json'
-$script:manifest=[pscustomobject]@{Schema='f2-icacls-runtime-release-v2';ReviewedCommitSha=('a'*40);BaselineMailboxId=$baselineMailboxId;BaselinePayloadCaptureId=$baselinePayloadCaptureId;BaselinePayloadSha256=$script:payloadSha;BaselineIntegritySha256=$script:integritySha;SourcePinsManifestSha256=(Get-F2IcaclsFileSha256 -Path $pinsPath);Files=$filePins}
+$script:manifest=[pscustomobject]@{Schema='f2-icacls-runtime-release-v3';ReviewedCommitSha=('a'*40);PackageRoot=$script:packageRoot;BaselineMailboxId=$baselineMailboxId;BaselinePayloadCaptureId=$baselinePayloadCaptureId;BaselinePayloadSha256=$script:payloadSha;BaselineIntegritySha256=$script:integritySha;SourcePinsManifestSha256=(Get-F2IcaclsFileSha256 -Path $pinsPath);Files=$filePins}
 $mailboxSddl=Get-F2AclCoordinatorMailboxSddl -RequesterSid $requester
 $module=$script:helperModule
 $mailboxRootValue=$script:mailboxRoot;$projectGuidValue=$projectGuid;$evidenceGuidValue=$evidenceGuid;$mailboxSddlValue=$mailboxSddl
@@ -111,17 +111,21 @@ try {
     try {
         Set-RuntimeState 'F2RuntimeReleasePath' $releaseManifestTestPath
         Set-RuntimeState 'F2RuntimeReleaseProvider' $null
-        $v2Bytes=[Text.UTF8Encoding]::new($false).GetBytes(($script:manifest|ConvertTo-Json -Depth 8 -Compress))
-        [IO.File]::WriteAllBytes($releaseManifestTestPath,$v2Bytes)
+        $v3Bytes=[Text.UTF8Encoding]::new($false).GetBytes(($script:manifest|ConvertTo-Json -Depth 8 -Compress))
+        [IO.File]::WriteAllBytes($releaseManifestTestPath,$v3Bytes)
         $diskManifest=Invoke-RuntimePrivate 'Get-F2RuntimeReleaseManifest' @()
-        Assert-Runtime ($diskManifest.Schema -ceq 'f2-icacls-runtime-release-v2' -and $diskManifest.BaselineMailboxId -ceq $baselineMailboxId -and $diskManifest.BaselinePayloadCaptureId -ceq $baselinePayloadCaptureId) 'actual disk loader reads valid v2 with separate pinned identities without a release-provider mock'
+        Assert-Runtime ($diskManifest.Schema -ceq 'f2-icacls-runtime-release-v3' -and $diskManifest.BaselineMailboxId -ceq $baselineMailboxId -and $diskManifest.BaselinePayloadCaptureId -ceq $baselinePayloadCaptureId -and $diskManifest.PackageRoot -ceq $script:packageRoot) 'actual disk loader reads valid v3 with separate pinned identities without a release-provider mock'
         $diskPackageCheck=Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($diskManifest,'Source')
-        Assert-Runtime ($diskPackageCheck.Pass -and $diskPackageCheck.Files -eq 7 -and $diskPackageCheck.CommitSha -ceq ('a'*40)) 'disk-loaded v2 manifest passes the actual seven-file source package contract'
+        Assert-Runtime ($diskPackageCheck.Pass -and $diskPackageCheck.Files -eq 7 -and $diskPackageCheck.CommitSha -ceq ('a'*40)) 'disk-loaded v3 manifest passes the actual seven-file source package contract'
 
         $legacyDiskManifest=$script:manifest.PSObject.Copy();$legacyDiskManifest.Schema='f2-icacls-runtime-release-v1'
         [IO.File]::WriteAllBytes($releaseManifestTestPath,[Text.UTF8Encoding]::new($false).GetBytes(($legacyDiskManifest|ConvertTo-Json -Depth 8 -Compress)))
         $legacyDiskRejected=$false;try{[void](Invoke-RuntimePrivate 'Get-F2RuntimeReleaseManifest' @())}catch{$legacyDiskRejected=$true}
         Assert-Runtime $legacyDiskRejected 'actual disk loader rejects legacy v1 manifests'
+        $legacyV2DiskManifest=$script:manifest.PSObject.Copy();$legacyV2DiskManifest.Schema='f2-icacls-runtime-release-v2'
+        [IO.File]::WriteAllBytes($releaseManifestTestPath,[Text.UTF8Encoding]::new($false).GetBytes(($legacyV2DiskManifest|ConvertTo-Json -Depth 8 -Compress)))
+        $legacyV2DiskRejected=$false;try{[void](Invoke-RuntimePrivate 'Get-F2RuntimeReleaseManifest' @())}catch{$legacyV2DiskRejected=$true}
+        Assert-Runtime $legacyV2DiskRejected 'actual disk loader rejects installed v2 manifests before the old package can launch'
 
         [IO.File]::WriteAllText($releaseManifestTestPath,'{')
         $malformedDiskRejected=$false;try{[void](Invoke-RuntimePrivate 'Get-F2RuntimeReleaseManifest' @())}catch{$malformedDiskRejected=$true}
@@ -144,9 +148,9 @@ try {
         if(Test-Path -LiteralPath $releaseManifestTestRoot){Remove-Item -LiteralPath $releaseManifestTestRoot -Recurse -Force -ErrorAction SilentlyContinue}
     }
 
-    $oldSchemaManifest=$script:manifest.PSObject.Copy();$oldSchemaManifest.Schema='f2-icacls-runtime-release-v1';$oldSchemaRejected=$false
+    $oldSchemaManifest=$script:manifest.PSObject.Copy();$oldSchemaManifest.Schema='f2-icacls-runtime-release-v2';$oldSchemaRejected=$false
     try{[void](Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($oldSchemaManifest,'Source'))}catch{$oldSchemaRejected=$true}
-    Assert-Runtime $oldSchemaRejected 'legacy release-manifest schema without distinct ID semantics is rejected'
+    Assert-Runtime $oldSchemaRejected 'legacy v2 release-manifest schema is rejected by the upgraded package'
     $wrongMailboxManifest=$script:manifest.PSObject.Copy();$wrongMailboxManifest.BaselineMailboxId='ffffffffffffffffffffffffffffffff'
     $wrongMailboxRejected=$false;try{[void](Invoke-RuntimePrivate 'Test-F2RuntimeReleasePackage' @($wrongMailboxManifest,'Source'))}catch{$wrongMailboxRejected=$true}
     Assert-Runtime $wrongMailboxRejected 'release contract rejects an incorrect mailbox ID'
@@ -166,6 +170,12 @@ try {
     Set-RuntimeState 'F2RuntimeUacStarter' $badUacStarter
     $tamperedLaunch=Invoke-RuntimePrivate 'Invoke-F2IcaclsCaptureLauncher' @()
     Assert-Runtime (-not $tamperedLaunch.Success -and $tamperedLaunch.ElevationLaunches -eq 0 -and $script:state.UacCalls -eq 0) 'tampered release package fails before UAC launch'
+    Reset-RuntimeHooks
+    $legacyManifest=$script:manifest.PSObject.Copy();$legacyManifest.Schema='f2-icacls-runtime-release-v2';$state=$script:state
+    Set-RuntimeState 'F2RuntimeReleaseProvider' {return $legacyManifest}.GetNewClosure()
+    Set-RuntimeState 'F2RuntimeUacStarter' {param($id,$timeout)$state.UacCalls++;throw 'UacMustNotStart'}.GetNewClosure()
+    $legacyLaunch=Invoke-RuntimePrivate 'Invoke-F2IcaclsCaptureLauncher' @()
+    Assert-Runtime (-not $legacyLaunch.Success -and $legacyLaunch.ElevationLaunches -eq 0 -and $script:state.UacCalls -eq 0) 'new source runtime rejects a legacy v2 installed manifest before the sole UAC boundary'
     Reset-RuntimeHooks
     $directoryMasks=@{'S-1-5-18'=[uint32]0x001F01FF;'S-1-5-32-544'=[uint32]0x001F01FF;'S-1-5-11'=[uint32]0x001200A9}
     $goodDirectorySddl='O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200A9;;;AU)'
@@ -255,6 +265,12 @@ try {
     Assert-Runtime ($coordinatorAst.ParamBlock.Parameters.Count -eq 1 -and $coordinatorAst.ParamBlock.Parameters[0].Name.VariablePath.UserPath -eq 'CaptureId') 'protected coordinator accepts only the one-use capture identifier'
     $launcherSource=Get-Content -LiteralPath (Join-Path $scriptDir 'Invoke-F2IcaclsCapture.ps1') -Raw
     $coordinatorSource=Get-Content -LiteralPath (Join-Path $scriptDir 'Invoke-F2IcaclsProtectedCoordinator.ps1') -Raw
+    $runtimeSource=Get-Content -LiteralPath (Join-Path $scriptDir 'F2AclIcacls.Runtime.psm1') -Raw
+    $launcherFunctionStart=$runtimeSource.IndexOf('function Invoke-F2IcaclsCaptureLauncher {',[StringComparison]::Ordinal)
+    $launcherFunctionEnd=$runtimeSource.IndexOf('function Invoke-F2IcaclsProtectedCoordinator {',[StringComparison]::Ordinal)
+    $launcherFunction=$runtimeSource.Substring($launcherFunctionStart,$launcherFunctionEnd-$launcherFunctionStart)
+    Assert-Runtime ($launcherFunction.IndexOf('$lease=Enter-F2RuntimeReleaseLease',[StringComparison]::Ordinal) -lt $launcherFunction.IndexOf('$manifest=Get-F2RuntimeReleaseManifest',[StringComparison]::Ordinal) -and $launcherFunction.IndexOf('Test-F2RuntimeReleasePackage -Manifest $manifest -Mode Installed',[StringComparison]::Ordinal) -lt $launcherFunction.IndexOf('$uacAttempted=$true',[StringComparison]::Ordinal)) 'production launcher holds the reviewed runtime lease and verifies all installed hashes before UAC'
+    Assert-Runtime ($coordinatorSource -match 'Invoke-F2IcaclsProtectedCoordinator' -and $runtimeSource -match 'Enter-F2RuntimeReleaseLease' -and $runtimeSource -match 'Test-F2RuntimeReleasePackage -Manifest \$manifest -Mode Installed') 'protected coordinator also acquires the lease and revalidates the installed version before ACL reads'
     Assert-Runtime ($launcherSource -match '\$MyInvocation\.UnboundArguments' -and $launcherSource -notmatch '\$args\.Count' -and $launcherSource.IndexOf('try {',[StringComparison]::Ordinal) -lt $launcherSource.IndexOf('$MyInvocation.UnboundArguments',[StringComparison]::Ordinal)) 'production launcher validates unbound arguments in its protected block without a StrictMode-unsafe args access'
     Assert-Runtime ($coordinatorSource -match '\$MyInvocation\.UnboundArguments' -and $coordinatorSource -notmatch '\$args\.Count' -and $coordinatorSource.IndexOf('try {',[StringComparison]::Ordinal) -lt $coordinatorSource.IndexOf('$MyInvocation.UnboundArguments',[StringComparison]::Ordinal)) 'production coordinator validates unbound arguments in its protected block without a StrictMode-unsafe args access'
     Assert-Runtime ($coordinatorSource -match '\$CaptureId -notmatch ''\^\[0-9a-f\]\{32\}\$''' -and $coordinatorSource.IndexOf('try {',[StringComparison]::Ordinal) -lt $coordinatorSource.IndexOf('$CaptureId -notmatch',[StringComparison]::Ordinal)) 'production coordinator validates the required CaptureId inside its protected block'

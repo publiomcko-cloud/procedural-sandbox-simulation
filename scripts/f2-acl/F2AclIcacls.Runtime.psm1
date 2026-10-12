@@ -8,6 +8,7 @@ $script:F2RuntimeBaselineMailboxId = 'ecb6deeb424e40feb5354d18908986df'
 $script:F2RuntimeBaselinePayloadCaptureId = '489e7fec-0300-467c-bfbd-a46fb8cf7211'
 $script:F2RuntimePackageRoot = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) 'F2-G1-Icacls'
 $script:F2RuntimeReleasePath = Join-Path (Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) 'F2-G1-Icacls') 'approved-release.json'
+$script:F2RuntimeReleaseLeasePath = Join-Path (Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) 'F2-G1-Icacls') 'release.lock'
 $script:F2RuntimeDeadlineSeconds = 360
 $script:F2RuntimeCoordinatorDeadlineSeconds = 300
 $script:F2RuntimeChildTimeoutSeconds = 15
@@ -25,6 +26,7 @@ $script:F2RuntimeBaselineProvider = $null
 $script:F2RuntimeMailboxCreator = $null
 $script:F2RuntimeResultReader = $null
 $script:F2RuntimePackageRootProvider = $null
+$script:F2RuntimeReleaseLeaseProvider = $null
 $script:F2RuntimeTrustRootProvider = $null
 $script:F2RuntimeIdentityProvider = $null
 $script:F2RuntimeCoordinatorWaitProvider = $null
@@ -69,13 +71,28 @@ function Get-F2RuntimeReleaseManifest {
     if ($file.PSIsContainer -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $file.Length -lt 1 -or $file.Length -gt 65536) { throw 'ReleaseManifestTypeOrSizeInvalid.' }
     $bytes = [IO.File]::ReadAllBytes($file.FullName)
     $manifest = [Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json -ErrorAction Stop
-    if ($manifest.Schema -cne 'f2-icacls-runtime-release-v2') { throw 'ReleaseManifestSchemaInvalid.' }
+    if ($manifest.Schema -cne 'f2-icacls-runtime-release-v3') { throw 'ReleaseManifestSchemaInvalid.' }
+    if ($manifest.ReviewedCommitSha -notmatch '^[0-9a-f]{40}$') { throw 'ReleaseManifestCommitInvalid.' }
+    $expectedPackageRoot = if ($null -ne $script:F2RuntimePackageRootProvider) { [string](& $script:F2RuntimePackageRootProvider $manifest) } else { Join-Path (Join-Path $script:F2RuntimePackageRoot 'releases') $manifest.ReviewedCommitSha }
+    if (-not [string]::Equals([IO.Path]::GetFullPath([string]$manifest.PackageRoot),[IO.Path]::GetFullPath($expectedPackageRoot),[StringComparison]::OrdinalIgnoreCase)) { throw 'ReleaseManifestPackageRootInvalid.' }
     return $manifest
 }
 
 function Get-F2RuntimePackageRoot {
-    if ($null -ne $script:F2RuntimePackageRootProvider) { return [string](& $script:F2RuntimePackageRootProvider) }
-    return $script:F2RuntimePackageRoot
+    param([Parameter(Mandatory)]$Manifest)
+    if ($null -ne $script:F2RuntimePackageRootProvider) { return [string](& $script:F2RuntimePackageRootProvider $Manifest) }
+    return [string]$Manifest.PackageRoot
+}
+
+function Enter-F2RuntimeReleaseLease {
+    if ($null -ne $script:F2RuntimeReleaseLeaseProvider) { return & $script:F2RuntimeReleaseLeaseProvider }
+    Test-F2AclNoReparseAncestors -Path $script:F2RuntimeReleaseLeasePath | Out-Null
+    $item = Get-Item -LiteralPath $script:F2RuntimeReleaseLeasePath -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $item.Length -ne 0) { throw 'ReleaseLeaseObjectInvalid.' }
+    $expected = @{'S-1-5-18'=[uint32]0x001F01FF;'S-1-5-32-544'=[uint32]0x001F01FF;'S-1-5-11'=[uint32]0x001200A9}
+    Test-F2RuntimeTrustedDaclSddl -Sddl ([F2Acl.NativeDirectory]::GetSddl($item.FullName)) -ExpectedMasks $expected -ExpectedAceFlags 0 | Out-Null
+    try { return [IO.File]::Open($item.FullName,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read) }
+    catch { throw 'ReleaseTransactionInProgressOrLeaseUnavailable.' }
 }
 
 function Test-F2RuntimeReleasePackage {
@@ -89,10 +106,12 @@ function Test-F2RuntimeReleasePackage {
         'F2_ICACLS_SOURCE_PINS.json',
         'Invoke-F2AclReadOnlyCapture.ps1'
     )
-    if ($Manifest.Schema -cne 'f2-icacls-runtime-release-v2' -or $Manifest.ReviewedCommitSha -notmatch '^[0-9a-f]{40}$' -or $Manifest.BaselineMailboxId -cne $script:F2RuntimeBaselineMailboxId -or $Manifest.BaselinePayloadCaptureId -cne $script:F2RuntimeBaselinePayloadCaptureId -or $Manifest.BaselinePayloadSha256 -notmatch '^[0-9a-f]{64}$' -or $Manifest.BaselineIntegritySha256 -notmatch '^[0-9a-f]{64}$') { throw 'ReleaseManifestIdentityOrBaselinePinInvalid.' }
+    if ($Manifest.Schema -cne 'f2-icacls-runtime-release-v3' -or $Manifest.ReviewedCommitSha -notmatch '^[0-9a-f]{40}$' -or $Manifest.BaselineMailboxId -cne $script:F2RuntimeBaselineMailboxId -or $Manifest.BaselinePayloadCaptureId -cne $script:F2RuntimeBaselinePayloadCaptureId -or $Manifest.BaselinePayloadSha256 -notmatch '^[0-9a-f]{64}$' -or $Manifest.BaselineIntegritySha256 -notmatch '^[0-9a-f]{64}$') { throw 'ReleaseManifestIdentityOrBaselinePinInvalid.' }
+    $expectedRoot = if ($null -ne $script:F2RuntimePackageRootProvider) { [string](& $script:F2RuntimePackageRootProvider $Manifest) } else { Join-Path (Join-Path $script:F2RuntimePackageRoot 'releases') $Manifest.ReviewedCommitSha }
+    if (-not [string]::Equals([IO.Path]::GetFullPath([string]$Manifest.PackageRoot),[IO.Path]::GetFullPath($expectedRoot),[StringComparison]::OrdinalIgnoreCase)) { throw 'ReleaseManifestPackageRootInvalid.' }
     $pins = @($Manifest.Files)
     if ($pins.Count -ne $expectedFiles.Count -or @($pins.Name | Sort-Object -Unique).Count -ne $expectedFiles.Count -or @(Compare-Object ($expectedFiles | Sort-Object) ($pins.Name | Sort-Object) -CaseSensitive).Count -ne 0) { throw 'ReleaseManifestFileSetInvalid.' }
-    $base = if ($Mode -eq 'Installed') { Join-Path (Get-F2RuntimePackageRoot) 'scripts\f2-acl' } else { $PSScriptRoot }
+    $base = if ($Mode -eq 'Installed') { Join-Path ([string]$Manifest.PackageRoot) 'scripts\f2-acl' } else { $PSScriptRoot }
     foreach ($pin in $pins) {
         if ($pin.Sha256 -notmatch '^[0-9a-f]{64}$') { throw 'ReleaseManifestFilePinInvalid.' }
         $path = Join-Path $base $pin.Name
@@ -125,8 +144,10 @@ function Test-F2RuntimeInstalledTrustRoot {
     if ($null -ne $script:F2RuntimeTrustRootProvider) { return [bool](& $script:F2RuntimeTrustRootProvider $PackageRoot $ManifestPath) }
     $packageScriptDir=Join-Path $PackageRoot 'scripts'
     $packageAclDir=Join-Path $packageScriptDir 'f2-acl'
-    foreach ($path in @($PackageRoot,$packageScriptDir,$packageAclDir,$ManifestPath)) { Test-F2AclNoReparseAncestors -Path $path | Out-Null }
-    foreach ($dir in @($PackageRoot,$packageScriptDir,$packageAclDir,(Split-Path -Parent $ManifestPath))) {
+    $packageHome=Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) 'F2-G1-Icacls'
+    $releaseRoot=Join-Path $packageHome 'releases'
+    foreach ($path in @($packageHome,$releaseRoot,$PackageRoot,$packageScriptDir,$packageAclDir,$ManifestPath,$script:F2RuntimeReleaseLeasePath)) { Test-F2AclNoReparseAncestors -Path $path | Out-Null }
+    foreach ($dir in @($packageHome,$releaseRoot,$PackageRoot,$packageScriptDir,$packageAclDir,(Split-Path -Parent $ManifestPath))) {
         $item = Get-Item -LiteralPath $dir -Force -ErrorAction Stop
         if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'TrustedPackagePathIsReparsePoint.' }
         $expected=@{'S-1-5-18'=[uint32]0x001F01FF;'S-1-5-32-544'=[uint32]0x001F01FF;'S-1-5-11'=[uint32]0x001200A9}
@@ -359,20 +380,23 @@ function Read-F2RuntimeMailboxResult {
 function Invoke-F2IcaclsCaptureLauncher {
     [CmdletBinding()]
     param()
-    $captureId=Get-F2RuntimeCaptureId;$requesterSid=Get-F2RuntimeRequesterSid;$uacAttempted=$false;$launch=$null
+    $captureId=Get-F2RuntimeCaptureId;$requesterSid=Get-F2RuntimeRequesterSid;$uacAttempted=$false;$launch=$null;$lease=$null;$manifest=$null;$packageRoot=$null
     try {
-        if($null -eq $script:F2RuntimeReleaseProvider){Test-F2RuntimeInstalledTrustRoot -PackageRoot $script:F2RuntimePackageRoot -ManifestPath $script:F2RuntimeReleasePath|Out-Null}
+        if($null -eq $script:F2RuntimeReleaseProvider){$lease=Enter-F2RuntimeReleaseLease}
         $manifest=Get-F2RuntimeReleaseManifest
+        $packageRoot=Get-F2RuntimePackageRoot -Manifest $manifest
+        if($null -eq $script:F2RuntimeReleaseProvider){Test-F2RuntimeInstalledTrustRoot -PackageRoot $packageRoot -ManifestPath $script:F2RuntimeReleasePath|Out-Null}
+        [void](Test-F2RuntimeReleasePackage -Manifest $manifest -Mode Installed)
         [void](Test-F2RuntimeReleasePackage -Manifest $manifest -Mode Source)
         $baseline=Get-F2RuntimeBaseline -Manifest $manifest -RequesterSid $requesterSid
         $request=New-F2RuntimeRequest -CaptureId $captureId -RequesterSid $requesterSid
         $uacAttempted=$true
         if($null -ne $script:F2RuntimeUacStarter){$launch=& $script:F2RuntimeUacStarter $captureId $script:F2RuntimeDeadlineSeconds}
         else {
-            $coordinator=Join-Path (Join-Path (Get-F2RuntimePackageRoot) 'scripts\f2-acl') 'Invoke-F2IcaclsProtectedCoordinator.ps1'
+            $coordinator=Join-Path (Join-Path $packageRoot 'scripts\f2-acl') 'Invoke-F2IcaclsProtectedCoordinator.ps1'
             $ps=Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::System)) 'WindowsPowerShell\v1.0\powershell.exe'
             $arg='-NoProfile -NonInteractive -File "'+$coordinator+'" -CaptureId '+$captureId
-            $launch=Start-Process -FilePath $ps -ArgumentList $arg -WorkingDirectory (Get-F2RuntimePackageRoot) -Verb RunAs -PassThru -ErrorAction Stop
+            $launch=Start-Process -FilePath $ps -ArgumentList $arg -WorkingDirectory $packageRoot -Verb RunAs -PassThru -ErrorAction Stop
         }
         if($null -eq $launch){throw 'UacCoordinatorNotStarted.'}
         $startUtc=$null
@@ -389,18 +413,21 @@ function Invoke-F2IcaclsCaptureLauncher {
         elseif($_.Exception.HResult -band 0xFFFF){$code=[int]($_.Exception.HResult -band 0xFFFF)}
         $outcome=if($code -eq 1223){'UAC_CANCELLED'}else{'LAUNCHER_PREFLIGHT_OR_COORDINATOR_FAILURE'}
         return [pscustomobject]@{Success=$false;Outcome=$outcome;CaptureId=$captureId;RequesterSid=$requesterSid;ActualCoordinatorExitCode=$null;ElevationLaunches=if($uacAttempted){1}else{0};Errors=@($outcome)}
+    } finally {
+        if($null -ne $lease){try{$lease.Dispose()}catch{}}
     }
 }
 
 function Invoke-F2IcaclsProtectedCoordinator {
     [CmdletBinding()]
     param([Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{32}$')][string]$CaptureId)
-    $request=$null;$manifest=$null;$mailboxPath=$null;$stage='PackageValidation';$runs=@();$comparisons=@();$status=$null;$coordinatorClock=[Diagnostics.Stopwatch]::StartNew()
+    $request=$null;$manifest=$null;$mailboxPath=$null;$stage='PackageValidation';$runs=@();$comparisons=@();$status=$null;$lease=$null;$coordinatorClock=[Diagnostics.Stopwatch]::StartNew()
     try {
-        $packageRoot=Get-F2RuntimePackageRoot
+        if($null -eq $script:F2RuntimeReleaseProvider){$lease=Enter-F2RuntimeReleaseLease}
         $releasePath=if($null -ne $script:F2RuntimeReleaseProvider){'C:\ProgramData\F2-G1-Icacls\approved-release.json'}else{$script:F2RuntimeReleasePath}
-        Test-F2RuntimeInstalledTrustRoot -PackageRoot $packageRoot -ManifestPath $releasePath | Out-Null
         $manifest=Get-F2RuntimeReleaseManifest
+        $packageRoot=Get-F2RuntimePackageRoot -Manifest $manifest
+        Test-F2RuntimeInstalledTrustRoot -PackageRoot $packageRoot -ManifestPath $releasePath | Out-Null
         [void](Test-F2RuntimeReleasePackage -Manifest $manifest -Mode Installed)
         $token=Get-F2RuntimeCoordinatorIdentity
         if(-not $token.IsAdministrator -or [string]$token.UserSid -notmatch '^S-1-'){throw 'CoordinatorTokenNotAdministrator.'}
@@ -464,6 +491,8 @@ function Invoke-F2IcaclsProtectedCoordinator {
             } catch { }
         }
         return [pscustomobject]@{Success=$false;Outcome='INCOMPLETE';CaptureId=$CaptureId;MailboxPath=$mailboxPath;TargetCount=11;RunCount=$runs.Count;CoordinatorExitCode=1;Stage=$stage;ElapsedMilliseconds=[long]$coordinatorClock.ElapsedMilliseconds;Errors=@($safe)}
+    } finally {
+        if($null -ne $lease){try{$lease.Dispose()}catch{}}
     }
 }
 
