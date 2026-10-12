@@ -107,7 +107,11 @@ function New-UpdateFixture {
         ProcessInventory={param($ctx)
             $state.InventoryCalls++;$state.Events.Add(('Inventory'+$state.InventoryCalls))
             if($state.InventoryFailureCall -eq $state.InventoryCalls){throw 'SYNTHETIC_PROCESS_INVENTORY_FAILURE'}
-            $requesterPath=Join-Path $ctx.SourceRoot 'scripts\f2-acl\Start-F2ProtectedReleaseUpdate.ps1'
+            # Match the production requester's full-path normalization. On
+            # hosted Windows runners the temp profile may resolve through an
+            # 8.3 alias; comparing its raw Join-Path spelling to GetFullPath
+            # would create a false requester-identity rejection.
+            $requesterPath=[IO.Path]::GetFullPath((Join-Path $ctx.SourceRoot 'scripts\f2-acl\Start-F2ProtectedReleaseUpdate.ps1'))
             $requesterLine='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "& { $path="__PATH__"; $expected="__LAUNCHER_SHA__"; . ([scriptblock]::Create($text)); Invoke-F2ProtectedReleaseUpdateLauncher -ExpectedSourceCommit "__SOURCE_SHA__" -ExpectedUpdaterSha256 "__UPDATER_SHA__" -ExpectedLauncherSha256 "__LAUNCHER_SHA__" -ExpectedCandidateManifestSha256 "__CANDIDATE_SHA__" }"'
             $requesterLine=$requesterLine.Replace('__PATH__',$requesterPath).Replace('__LAUNCHER_SHA__',$ctx.ExpectedLauncherSha256).Replace('__SOURCE_SHA__',$ctx.ExpectedSourceCommit).Replace('__UPDATER_SHA__',$ctx.UpdaterSha256).Replace('__CANDIDATE_SHA__',$ctx.CandidateManifestSha256)
             $rows=New-Object 'System.Collections.Generic.List[object]'
