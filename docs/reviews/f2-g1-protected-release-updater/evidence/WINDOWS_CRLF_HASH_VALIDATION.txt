@@ -1,0 +1,10 @@
+Windows checkout updater hash validation
+Source commit: 691eae48d67789bf798e270cb9cca7790d728d26
+Parent: 40723492b97983c0c7bc6d441a1bcbace823ffe8
+Method: Created a new detached Git worktree at the exact source commit using repository attributes, verified HEAD and clean status, then hashed the updater bytes from that checkout. The temporary worktree was removed after verification.
+Worktree commit: 691eae48d67789bf798e270cb9cca7790d728d26
+Worktree clean: PASS
+Updater bytes: 701 CRLF line endings; 701 total LF bytes; zero bare LF.
+Measured Windows checkout SHA-256: 49afef854aaee2b4501325063ade14e496072aaf74745e1203c2029ce9287744
+Expected pinned Windows checkout SHA-256: 49afef854aaee2b4501325063ade14e496072aaf74745e1203c2029ce9287744
+Result: PASS

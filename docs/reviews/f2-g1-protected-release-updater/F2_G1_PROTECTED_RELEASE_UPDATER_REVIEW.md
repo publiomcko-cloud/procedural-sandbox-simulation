@@ -30,6 +30,8 @@ The production source commit contains the complete updater and the standard-toke
 
 The candidate JSON has a path-scoped `-text` attribute so its pinned bytes stay identical on Windows and GitHub. A detached Windows checkout of the production commit reproduced both Windows script hashes and verified the runtime/coordinator source pins. The outer future command separately hashes the standard-token bootstrap before dot-sourcing its in-memory bytes. The elevated child reads the updater and candidate once each, verifies each full SHA-256, and executes the exact verified updater byte sequence as a `ScriptBlock`; it does not reopen the updater as a script path.
 
+The corrected updater pin was also measured in a new clean detached Windows checkout of production commit `691eae48d67789bf798e270cb9cca7790d728d26`: 701/701 line breaks were CRLF with zero bare LF, and the byte hash was `49afef854aaee2b4501325063ade14e496072aaf74745e1203c2029ce9287744`. The command and result are in `evidence/WINDOWS_CRLF_HASH_VALIDATION.txt`.
+
 ## Transaction and launch boundary
 
 ### Preconditions

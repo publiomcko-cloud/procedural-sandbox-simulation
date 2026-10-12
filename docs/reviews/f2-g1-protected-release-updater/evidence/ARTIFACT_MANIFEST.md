@@ -36,12 +36,12 @@ External candidate manifest SHA-256: be98e9101f9171bb1bba59bfa063fc424132e19579b
 | Path | Git-content/raw SHA-256 | Purpose |
 |---|---|---|
 | docs\reviews\f2-g1-protected-release-updater\.gitattributes | ac5c50e1b4b30b27d2a3dcc72a6688fa73e1db467740ca6b619ff6d68d7d6911 | Review/evidence packaging attributes or prior validation evidence |
-| docs\reviews\f2-g1-protected-release-updater\DEVELOPER_HANDOFF.md | 78160eb73a4406c7fc413238153f8c02048373bcebfeb525d689d84b59c370f3 | Developer handoff |
-| docs\reviews\f2-g1-protected-release-updater\F2_G1_PROTECTED_RELEASE_UPDATER_REVIEW.md | 70493159e408f6f428edc34a077a1dd4ebb84c5238c6735ae1cf0d79748b1365 | Complete updater/recovery/security review |
+| docs\reviews\f2-g1-protected-release-updater\DEVELOPER_HANDOFF.md | 83ddf947accbd7a609a5c1629acdc47f3c2f96080bc7247557e20de5c92bdfe4 | Developer handoff |
+| docs\reviews\f2-g1-protected-release-updater\F2_G1_PROTECTED_RELEASE_UPDATER_REVIEW.md | 7adc44aa793e6488568d1fae1c015283f61cf90cb147c71983a7f01486fb9c1a | Complete updater/recovery/security review |
 | docs\reviews\f2-g1-protected-release-updater\f2-runtime-release-v3.candidate.json | be98e9101f9171bb1bba59bfa063fc424132e19579b16d75816cec3b345974e2 | External candidate manifest; reviewed commit/package root updated |
 | docs\reviews\f2-g1-protected-release-updater\evidence\.gitattributes | 5a1fa692c9edb81f75a8d78d062c07ec07445d62537af291e7947d080bf627e2 | Review/evidence packaging attributes or prior validation evidence |
 | docs/reviews/f2-g1-protected-release-updater/evidence/.gitattributes | 5a1fa692c9edb81f75a8d78d062c07ec07445d62537af291e7947d080bf627e2 | Review/evidence packaging attributes or prior validation evidence |
-| docs/reviews/f2-g1-protected-release-updater/evidence/GIT_DIFF_CHECK.txt | d44e1be77ecbec020b8849b310bdc3708c41c14de1c7ba6edc2fa15dd0ad9d0b | Whitespace validation result |
+| docs/reviews/f2-g1-protected-release-updater/evidence/GIT_DIFF_CHECK.txt | cfb607626bb94dfd3b4431f2cd29094493d126d7c923602cd5f76d2869a4adf9 | Whitespace validation result |
 | docs/reviews/f2-g1-protected-release-updater/evidence/LOCAL_VALIDATION.txt | 88c57104bfee5ca75b756acd70901a26f11b227241373fdb553d22aeead72afd | Commands and local PS5.1 suite results |
 | docs/reviews/f2-g1-protected-release-updater/evidence/NATIVE_COMPILE_REPRO_BEFORE_FIX.txt | 58667d09d1324eb595507fad21d34c898b44da378adfc1d8a8814683e935d273 | Sanitized exact compiler failure evidence before fix |
 | docs/reviews/f2-g1-protected-release-updater/evidence/POWERSHELL_PARSER.txt | a64c136e1bd0701caafdd326e791b9ea58b0aeabc5388d996bab48451a3caa60 | Parser results |
@@ -58,6 +58,7 @@ External candidate manifest SHA-256: be98e9101f9171bb1bba59bfa063fc424132e19579b
 | docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseUpdater.stderr.log | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 | Full local Windows PowerShell suite stderr |
 | docs/reviews/f2-g1-protected-release-updater/evidence/Test-F2AclProtectedReleaseUpdater.stdout.log | 9c901e950093ad7717e31d8f8a9afac32bde845c2f9e151e4d5d8dae12552202 | Full local Windows PowerShell suite stdout |
 | docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_CI.txt | 18c487e81b0396b1e19c720f28447db62a28dd58a8c21a3fd9e68e89d2e27ee0 | Hosted Windows CI run/job/results |
+| docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_CRLF_HASH_VALIDATION.txt | be2bc413f79d5b68fdc46af353aee0d10003fd9932025115ffcd61968cb7aee7 | Measured clean Windows checkout byte pin |
 | docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_CORROBORATION.log | c631f9353e41d6ef1b53579de3cd2ded6418d916a2145fdbbc95a60cebc632c7 | Review/evidence packaging attributes or prior validation evidence |
 | docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_ENTRYPOINT.log | 516b847cc7a22a88d764f63f1b5ec63b0c4744fcb0ebcec173fc662bd58d2376 | Review/evidence packaging attributes or prior validation evidence |
 | docs/reviews/f2-g1-protected-release-updater/evidence/WINDOWS_PS51_PROTOCOL.log | 6c1f9bf830939755a19eb077d000364bfca9c5ae0ac21421d60fb216f956450b | Review/evidence packaging attributes or prior validation evidence |
