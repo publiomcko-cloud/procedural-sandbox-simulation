@@ -1,0 +1,4 @@
+PowerShellVersion=5.1.22621.6133
+ParserFiles=10
+ParserErrors=0
+PARSER_PROCESS_EXIT=0

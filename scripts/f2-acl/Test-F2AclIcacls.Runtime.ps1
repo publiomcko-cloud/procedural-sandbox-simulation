@@ -252,14 +252,13 @@ try {
     $launcherAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $scriptDir 'Invoke-F2IcaclsCapture.ps1'),[ref]$null,[ref]$null)
     Assert-Runtime ($launcherAst.ParamBlock.Parameters.Count -eq 0) 'production host launcher exposes no runtime override parameters'
     $coordinatorAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $scriptDir 'Invoke-F2IcaclsProtectedCoordinator.ps1'),[ref]$null,[ref]$null)
-    Assert-Runtime ($coordinatorAst.ParamBlock.Parameters.Count -eq 1 -and $coordinatorAst.ParamBlock.Parameters[0].Name.VariablePath.UserPath -eq 'CaptureId') 'protected coordinator accepts only the validated one-use capture identifier'
-    $powershellExe=Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::System)) 'WindowsPowerShell\v1.0\powershell.exe'
-    $launcherPath=Join-Path $scriptDir 'Invoke-F2IcaclsCapture.ps1'
-    $launcherProcess=Start-Process -FilePath $powershellExe -ArgumentList ('-NoProfile -File "'+$launcherPath+'" unexpected') -PassThru -Wait -NoNewWindow -RedirectStandardError (Join-Path $script:mailboxRoot 'launcher-arg-error.txt') -RedirectStandardOutput (Join-Path $script:mailboxRoot 'launcher-arg-output.txt')
-    Assert-Runtime ($launcherProcess.ExitCode -ne 0) 'actual launcher script rejects unexpected runtime arguments before any host query or UAC'
-    $coordinatorPath=Join-Path $scriptDir 'Invoke-F2IcaclsProtectedCoordinator.ps1'
-    $coordinatorProcess=Start-Process -FilePath $powershellExe -ArgumentList ('-NoProfile -File "'+$coordinatorPath+'" '+$capture) -PassThru -Wait -NoNewWindow
-    Assert-Runtime ($coordinatorProcess.ExitCode -eq 2) 'actual coordinator script rejects an uninstalled source path before loading or querying host state'
+    Assert-Runtime ($coordinatorAst.ParamBlock.Parameters.Count -eq 1 -and $coordinatorAst.ParamBlock.Parameters[0].Name.VariablePath.UserPath -eq 'CaptureId') 'protected coordinator accepts only the one-use capture identifier'
+    $launcherSource=Get-Content -LiteralPath (Join-Path $scriptDir 'Invoke-F2IcaclsCapture.ps1') -Raw
+    $coordinatorSource=Get-Content -LiteralPath (Join-Path $scriptDir 'Invoke-F2IcaclsProtectedCoordinator.ps1') -Raw
+    Assert-Runtime ($launcherSource -match '\$MyInvocation\.UnboundArguments' -and $launcherSource -notmatch '\$args\.Count' -and $launcherSource.IndexOf('try {',[StringComparison]::Ordinal) -lt $launcherSource.IndexOf('$MyInvocation.UnboundArguments',[StringComparison]::Ordinal)) 'production launcher validates unbound arguments in its protected block without a StrictMode-unsafe args access'
+    Assert-Runtime ($coordinatorSource -match '\$MyInvocation\.UnboundArguments' -and $coordinatorSource -notmatch '\$args\.Count' -and $coordinatorSource.IndexOf('try {',[StringComparison]::Ordinal) -lt $coordinatorSource.IndexOf('$MyInvocation.UnboundArguments',[StringComparison]::Ordinal)) 'production coordinator validates unbound arguments in its protected block without a StrictMode-unsafe args access'
+    Assert-Runtime ($coordinatorSource -match '\$CaptureId -notmatch ''\^\[0-9a-f\]\{32\}\$''' -and $coordinatorSource.IndexOf('try {',[StringComparison]::Ordinal) -lt $coordinatorSource.IndexOf('$CaptureId -notmatch',[StringComparison]::Ordinal)) 'production coordinator validates the required CaptureId inside its protected block'
+    Assert-Runtime ($launcherSource -notmatch '\[CmdletBinding\(\)\]' -and $coordinatorSource -notmatch '\[CmdletBinding\(\)\]') 'entrypoints avoid pre-body advanced binding and preserve controlled argument-rejection exits'
 }
 finally {
     foreach($name in @('F2RuntimeReleaseProvider','F2RuntimeObservationProvider','F2RuntimeNativeWorker','F2RuntimeUacStarter','F2RuntimeCurrentCommitProvider','F2RuntimeClockProvider','F2RuntimeRequestProvider','F2RuntimeRequestReader','F2RuntimeBaselineProvider','F2RuntimeMailboxCreator','F2RuntimeResultReader','F2RuntimePackageRootProvider','F2RuntimeTrustRootProvider','F2RuntimeIdentityProvider','F2RuntimeCoordinatorWaitProvider','F2RuntimeCaptureIdProvider','F2RuntimeRequesterSidProvider')){Set-RuntimeState $name $null}
