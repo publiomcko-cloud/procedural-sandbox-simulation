@@ -1,0 +1,113 @@
+{
+  "schema": "f2-g1-protected-upgrade-preflight-v1",
+  "status": "BLOCKED_WITH_EVIDENCE",
+  "date": "2026-10-12",
+  "authorization": {
+    "issueComment": "6129100523",
+    "uacAttempts": 0,
+    "consumed": false
+  },
+  "independentSourceApproval": {
+    "pr": 59,
+    "review": "5493936404"
+  },
+  "reviewedInputs": {
+    "reviewHead": "9e9915e6eb15bcb20cc2f5a1c990791e2a822b90",
+    "productionSourceHead": "8b70a70934445bee660c1e53e71b2e7b20a6191f",
+    "updaterCrlfSha256": "d26eb89a424e3f268099e0ac1d3ffd674dde1128321567df3a0702abb591f75e",
+    "launcherCrlfSha256": "8278bbff8e5b7cdb313235bcc271fa31a947ca384d7496053650c3097af19720",
+    "candidateManifestSha256": "74d178917fba4f50fdca40505d8c1dc81639f3c60bbb25c0332fd737c681562c",
+    "sourcePinsManifestSha256": "7e05d48ef25e7cff19d84db151395921b5d89b52b1e2f45b94a84a4778a615ce"
+  },
+  "preflight": {
+    "reviewAndProductionWorktrees": {
+      "result": "PASS",
+      "reviewClean": true,
+      "sourceClean": true,
+      "expectedOrigin": true
+    },
+    "sourcePackage": {
+      "result": "PASS",
+      "verifiedFiles": 7
+    },
+    "candidate": {
+      "result": "PASS",
+      "schema": "f2-icacls-runtime-release-v3",
+      "commit": "8b70a70934445bee660c1e53e71b2e7b20a6191f"
+    },
+    "requesterToken": {
+      "result": "PASS",
+      "standardNonAdministrator": true,
+      "identityRedacted": true
+    },
+    "activeV2": {
+      "result": "PASS",
+      "manifestSha256": "b5f01570cf8937324f0c763f72a8d05b5532472156d4e5b0fcfbd180dc7abbe9",
+      "schema": "f2-icacls-runtime-release-v2",
+      "commit": "5741ffe90a3abd02a08563e6431e8a0b9b63eeb1",
+      "verifiedFiles": 7
+    },
+    "baseline": {
+      "result": "PASS",
+      "mailboxId": "ecb6deeb424e40feb5354d18908986df",
+      "payloadCaptureId": "489e7fec-0300-467c-bfbd-a46fb8cf7211",
+      "payloadAndIntegrityHashesMatch": true
+    },
+    "protectedObjects": {
+      "result": "PASS",
+      "directories": 4,
+      "packageFiles": 7,
+      "activeManifestFiles": 1,
+      "administratorsOwner": true,
+      "protectedDacl": true,
+      "exactThreeAceProfile": true
+    },
+    "pathSafety": {
+      "result": "PASS",
+      "objectsAndChainsChecked": 12,
+      "noReparsePoints": true,
+      "noAliases": true
+    },
+    "parentAcl": {
+      "result": "PASS",
+      "paths": [
+        "C:\\",
+        "C:\\Program Files",
+        "C:\\ProgramData"
+      ]
+    },
+    "transactionCollisionCheck": {
+      "result": "PASS",
+      "versionedDestinationAbsent": true,
+      "releaseLockAbsent": true,
+      "updatesAbsent": true,
+      "backupsAbsent": true,
+      "unexpectedChildren": false
+    },
+    "powershellVersion": "7.6.6"
+  },
+  "execution": {
+    "launchDisposition": "BLOCKED_BEFORE_UAC",
+    "blocker": "PREEXISTING_WINDOWS_TERMINAL_POWERSHELL_HOST",
+    "requiredTopology": "Explorer -> cmd.exe -> requester Windows PowerShell 5.1 -> UAC -> elevated Windows PowerShell 5.1",
+    "updaterInvoked": false,
+    "childPid": null,
+    "childExitCode": null,
+    "transactionId": null,
+    "timeout": false,
+    "processTerminated": false,
+    "writesPerformed": false
+  },
+  "postflight": {
+    "status": "NOT_RUN_NO_UPDATE"
+  },
+  "resultingState": {
+    "status": "APPROVED_V2_REMAINS_ACTIVE",
+    "unexpectedPartialObjects": false
+  },
+  "privacy": {
+    "rawSddlIncluded": false,
+    "requesterSidIncluded": false,
+    "credentialsIncluded": false
+  }
+}
