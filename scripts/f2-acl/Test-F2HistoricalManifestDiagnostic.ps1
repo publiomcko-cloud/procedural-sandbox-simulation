@@ -120,7 +120,7 @@ try {
 
     $moduleBytes = [IO.File]::ReadAllBytes($modulePath)
     $moduleHash = Get-F2ProbeHash -Bytes $moduleBytes
-    Assert-F2Probe -Condition ($moduleHash -ceq '41156247154c95df8bcf7beb1c42db4a0fab7404c78e7e97d546c2a2a642405f') -Name 'DiagnosticModuleExactBytesPin'
+    Assert-F2Probe -Condition ($moduleHash -ceq 'c2be7ffc64e6ccff9c61f4ae940c6d4d81f9551e439c7a3ea3b15060cfab6206') -Name 'DiagnosticModuleExactBytesPin'
     $moduleText = (New-Object System.Text.UTF8Encoding($false,$true)).GetString($moduleBytes)
     $moduleInfo = New-Module -Name 'F2HistoricalManifestDiagnosticTest' -ScriptBlock ([scriptblock]::Create($moduleText)) -Force
     Import-Module -ModuleInfo $moduleInfo -Force -ErrorAction Stop | Out-Null
