@@ -282,10 +282,33 @@ function Invoke-ExpectedManifestFailure {
     }
 }
 
+function Test-ExpectedOrigin {
+    param([Parameter(Mandatory = $true)][string]$Remote)
+
+    try { $uri = New-Object System.Uri($Remote, [System.UriKind]::Absolute) }
+    catch { return $false }
+    if (-not $uri.IsAbsoluteUri -or $uri.Scheme -ne 'https' -or $uri.Host -ne 'github.com') { return $false }
+    if (-not [string]::IsNullOrEmpty($uri.UserInfo) -or -not [string]::IsNullOrEmpty($uri.Query) -or -not [string]::IsNullOrEmpty($uri.Fragment)) { return $false }
+    $path = $uri.AbsolutePath.TrimEnd('/')
+    if ($path.EndsWith('.git', [StringComparison]::OrdinalIgnoreCase)) { $path = $path.Substring(0, $path.Length - 4) }
+    return [string]::Equals($path, '/publiomcko-cloud/procedural-sandbox-simulation', [StringComparison]::OrdinalIgnoreCase)
+}
+
 function Invoke-SelfTest {
     $tempRoot = Join-Path $env:TEMP ('f2-review-evidence-manifest-' + [Guid]::NewGuid().ToString('N'))
     $assertions = 0
     try {
+        if (-not (Test-ExpectedOrigin -Remote 'https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git')) { throw 'SELFTEST_GIT_ORIGIN_WITH_SUFFIX_FAILED' }
+        $assertions++
+        if (-not (Test-ExpectedOrigin -Remote 'https://github.com/publiomcko-cloud/procedural-sandbox-simulation')) { throw 'SELFTEST_GIT_ORIGIN_WITHOUT_SUFFIX_FAILED' }
+        $assertions++
+        if (Test-ExpectedOrigin -Remote 'http://github.com/publiomcko-cloud/procedural-sandbox-simulation.git') { throw 'SELFTEST_GIT_ORIGIN_HTTP_ACCEPTED' }
+        $assertions++
+        if (Test-ExpectedOrigin -Remote 'https://github.com/other/repository.git') { throw 'SELFTEST_GIT_ORIGIN_WRONG_REPOSITORY_ACCEPTED' }
+        $assertions++
+        if (Test-ExpectedOrigin -Remote 'https://user@github.com/publiomcko-cloud/procedural-sandbox-simulation.git') { throw 'SELFTEST_GIT_ORIGIN_CREDENTIALS_ACCEPTED' }
+        $assertions++
+
         [void][System.IO.Directory]::CreateDirectory($tempRoot)
         [void](Invoke-GitUtf8 -RepositoryRoot $tempRoot -Arguments @('init', '--quiet'))
         [void](Invoke-GitUtf8 -RepositoryRoot $tempRoot -Arguments @('config', 'user.name', 'F2 Manifest Test'))
@@ -342,7 +365,7 @@ try {
     $actualRoot = Invoke-GitUtf8 -RepositoryRoot $repositoryRoot -Arguments @('rev-parse', '--show-toplevel')
     if (-not [string]::Equals([System.IO.Path]::GetFullPath($actualRoot), $repositoryRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'MANIFEST_REPOSITORY_ROOT_MISMATCH' }
     $origin = Invoke-GitUtf8 -RepositoryRoot $repositoryRoot -Arguments @('remote', 'get-url', 'origin')
-    if ($origin -ne 'https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git') { throw 'MANIFEST_ORIGIN_MISMATCH' }
+    if (-not (Test-ExpectedOrigin -Remote $origin)) { throw 'MANIFEST_ORIGIN_MISMATCH' }
     $head = Invoke-GitUtf8 -RepositoryRoot $repositoryRoot -Arguments @('rev-parse', '--verify', 'HEAD')
     $isAncestor = & (Get-Command git.exe -ErrorAction Stop).Source -C $repositoryRoot merge-base --is-ancestor $script:ExpectedInventoryCommit $head
     if ($LASTEXITCODE -ne 0) { throw 'MANIFEST_INVENTORY_NOT_ANCESTOR' }
