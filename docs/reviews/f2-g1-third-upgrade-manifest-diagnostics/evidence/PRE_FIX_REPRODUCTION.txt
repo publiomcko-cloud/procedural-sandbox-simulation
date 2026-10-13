@@ -1,0 +1,12 @@
+F2 G1 third-upgrade candidate manifest validation: pre-fix reproduction
+
+Environment: Windows PowerShell 5.1.22621.6133; standard user token; no UAC.
+Old production source commit: 396c44965c90c08292ad2835f8317e81b6b9daaf.
+Old updater Windows checkout SHA-256: d9572f7ea113ab01eaa4c6ab98d0852ce9549642b083719f68c01f02b2a81bb2.
+Reviewed candidate bytes SHA-256: b8596905f42ee429ae2fd3352f9133de8bd4f00da654f856012c02390661f022.
+
+Case A loaded the exact candidate bytes, supplied their computed expected hash, and called the production Get-F2UpdateManifestObject with ExpectedSchema v3. Result: PASS; the parser returned the v3 schema, reviewed commit 396c44965c90c08292ad2835f8317e81b6b9daaf, and seven files.
+
+Case B made a disposable in-memory JSON fixture by removing only BaselineMailboxId from the candidate object and recomputing that fixture's expected hash. The old production function accessed the absent property under StrictMode before validating its presence. The caught category was a missing-member StrictMode failure; the elevated-child normalizer reduced it to UPDATE_UNCLASSIFIED_FAILURE. The synthetic harness exited 0 because it observed the expected pre-fix failure. No exception text or private value is retained here.
+
+Interpretation: this reproduces a real malformed-manifest validation defect and the unclassified fallback. It does not establish that the owner's exact pinned candidate caused child PID 43072's elevated failure: the pinned candidate passed the same function in standard-token PowerShell 5.1. The incident's exact elevated exception remains UNKNOWN.
