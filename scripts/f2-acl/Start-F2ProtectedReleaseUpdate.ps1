@@ -86,7 +86,7 @@ try {
   $protocolText=[Text.UTF8Encoding]::new($false,$true).GetString($protocolBytes)
   . ([scriptblock]::Create($protocolText))
   $diagRequest=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($diagRequestB64)) | ConvertFrom-Json -ErrorAction Stop
-  $diagStage='UpdaterAndCandidateHashValidation';$diagCode='UPDATE_CANDIDATE_MANIFEST_INVALID'
+   $diagStage='UpdaterAndCandidateHashValidation';$diagCode='UPDATE_CANDIDATE_MANIFEST_INVALID'
   Test-ChildNoReparse $updaterPath;Test-ChildNoReparse $candidatePath
   $updaterItem=Get-Item -LiteralPath $updaterPath -Force -ErrorAction Stop
   $candidateItem=Get-Item -LiteralPath $candidatePath -Force -ErrorAction Stop
@@ -101,7 +101,7 @@ try {
   try{. $verifiedScript}catch{throw 'UPDATE_UPDATER_SCRIPT_LOAD_FAILED'}
   $diagStage='ElevatedIdentityValidation';$diagCode='UPDATE_ELEVATED_REQUESTER_IDENTITY_UNVERIFIABLE'
   Test-F2UpdateElevationIdentity -ExpectedRequesterSid $expectedRequesterSid | Out-Null
-  $diagStage='UpdaterAndCandidateHashValidation';$diagCode='UPDATE_CANDIDATE_MANIFEST_INVALID'
+  $diagStage='CandidateManifestValidation';$diagCode='UPDATE_CANDIDATE_MANIFEST_INVALID'
   $parsedCandidate=Get-F2UpdateManifestObject -Bytes $candidateBytes -ExpectedSchema v3 -ExpectedHash $expectedCandidate
   if($parsedCandidate.ReviewedCommitSha -cne $expectedSourceCommit){throw 'UPDATE_CANDIDATE_COMMIT_MISMATCH'}
   $diagStage='UpdaterInvocation';$diagCode='UPDATE_UNCLASSIFIED_FAILURE'

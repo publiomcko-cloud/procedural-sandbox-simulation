@@ -228,7 +228,8 @@ function New-PrelockOldReleaseFixture {
 }
 
 function New-PrelockCandidateBytes {
-    param($Source,[string]$PackageHome,[ValidateSet('Valid','WrongPackageRoot','WrongPackagePin')][string]$Fault='Valid')
+    param($Source,[string]$PackageHome,[ValidateSet('Valid','WrongPackageRoot','WrongPackagePin','MalformedCandidate')][string]$Fault='Valid')
+    if($Fault -eq 'MalformedCandidate'){return ,[Text.UTF8Encoding]::new($false).GetBytes('{invalid-json')}
     $files=@(foreach($name in $Source.Names){$sha=[string]$Source.SourcePins[$name];if($Fault -eq 'WrongPackagePin' -and $name -ceq $Source.Names[0]){$sha='0'*64};[pscustomobject]@{Name=$name;Sha256=$sha}})
     $packageRoot=Join-Path (Join-Path $PackageHome 'releases') $Source.Commit
     if($Fault -eq 'WrongPackageRoot'){$packageRoot=Join-Path ([IO.Path]::GetTempPath()) 'unrelated-release-root'}
@@ -327,6 +328,7 @@ try {
     $prelockUpdaterFixture=Join-Path $syntheticRoot 'production-updater-with-test-entrypoint.ps1'
     $prelockCandidateFixture=Join-Path $syntheticRoot 'prelock-candidate.json'
     $prelockCases=@(
+        @{Name='candidate manifest parse';Fault='MalformedCandidate';Stage='CandidateManifestValidation';Code='UPDATE_MANIFEST_JSON_INVALID';ParentPass=$true},
         @{Name='candidate manifest';Fault='WrongPackageRoot';Stage='CandidateManifestValidation';Code='UPDATE_CANDIDATE_PACKAGE_ROOT_MISMATCH';ParentPass=$true},
         @{Name='source Git';Fault='WrongOrigin';Stage='SourceGitValidation';Code='UPDATE_SOURCE_ORIGIN_MISMATCH';ParentPass=$true},
         @{Name='source package pin';Fault='WrongPackagePin';Stage='SourcePackagePinValidation';Code='UPDATE_SOURCE_PACKAGE_HASH_MISMATCH';ParentPass=$true},
@@ -338,7 +340,7 @@ try {
         $caseRoot=Join-Path $syntheticRoot ('prelock-'+[guid]::NewGuid().ToString('N'))
         [void][IO.Directory]::CreateDirectory($caseRoot)
         $installTree=New-PrelockInstallTree -Root $caseRoot -OldRelease $prelockOld
-        $candidateFault=if($prelockCase.Fault -eq 'WrongPackageRoot'){'WrongPackageRoot'}elseif($prelockCase.Fault -eq 'WrongPackagePin'){'WrongPackagePin'}else{'Valid'}
+        $candidateFault=if($prelockCase.Fault -eq 'WrongPackageRoot'){'WrongPackageRoot'}elseif($prelockCase.Fault -eq 'WrongPackagePin'){'WrongPackagePin'}elseif($prelockCase.Fault -eq 'MalformedCandidate'){'MalformedCandidate'}else{'Valid'}
         $prelockCandidateBytes=New-PrelockCandidateBytes -Source $prelockSource -PackageHome $installTree.PackageHome -Fault $candidateFault
         [IO.File]::WriteAllBytes($prelockCandidateFixture,$prelockCandidateBytes)
         $fixtureGit=Get-Command git.exe -ErrorAction Stop
