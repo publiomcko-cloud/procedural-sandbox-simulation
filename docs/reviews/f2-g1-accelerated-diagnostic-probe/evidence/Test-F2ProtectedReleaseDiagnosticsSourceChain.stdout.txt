@@ -1,0 +1,7 @@
+PASS:SourceHead=03882eedf3104fc33aa0cf503ddef9c9a6bec702
+PASS:SourceParent=12575f4802f471210c0516b68b5d0d37d2eb8642
+PASS:SourceBranch=fix/f2-g1-update-diagnostics-source
+PASS:SourceOrigin=https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git
+PASS:RemoteBranchHead=03882eedf3104fc33aa0cf503ddef9c9a6bec702
+PASS:SourceWorktree=
+Result=FAIL_SOURCE_CHAIN;Code=CandidateRawSha256_MISMATCH

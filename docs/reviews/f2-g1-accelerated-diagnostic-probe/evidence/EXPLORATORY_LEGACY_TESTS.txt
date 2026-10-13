@@ -1,0 +1,14 @@
+These two additional local scripts are not part of `.github/workflows/f2-acl-source-only.yml`. They were run as exploratory checks and are not counted in the required 593-assertion pass total.
+
+1. Command: `powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2ProtectedReleaseDiagnosticsSourceChain.ps1`
+   Exit: 1.
+   Output: `Result=FAIL_SOURCE_CHAIN;Code=CandidateRawSha256_MISMATCH`.
+   The unchanged test expects candidate SHA-256 `ac42f719583ba58b1c122a9318368d34699cf60103787034525be4fbe937ad07` in its default review root. This diagnostic uses a different historical candidate checkout and exact SHA-256 `b8596905f42ee429ae2fd3352f9133de8bd4f00da654f856012c02390661f022`. The test targets a different updater-source chain and was left unchanged.
+   Complete captured output: `Test-F2ProtectedReleaseDiagnosticsSourceChain.stdout.txt` and `.stderr.txt`.
+
+2. Command: `powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2ProtectedReleaseDiagnosticSuites.ps1`
+   Exit: 1.
+   The legacy aggregate runner passed its first nested protocol suite (152 assertions), then the nested corroboration invocation reported `Get-FileHash` as unavailable. The same corroboration suite passed independently in the required workflow invocation with 118 assertions and exit 0. A fresh Windows PowerShell 5.1 check resolves `Get-FileHash` from `Microsoft.PowerShell.Utility`; the aggregate-only failure was not reproduced on the direct required path and its legacy runner was not modified.
+   Captured output: `Test-F2ProtectedReleaseDiagnosticSuites.stdout.txt` and `.stderr.txt`. Trailing whitespace was normalized in this generated transcript; the diagnostic text and exit are retained.
+
+These failures do not affect the required PR workflow, but are disclosed for reviewer context. No existing tracked review evidence was retained from the exploratory aggregate runner; its incidental output modification was restored to the pre-run branch content.

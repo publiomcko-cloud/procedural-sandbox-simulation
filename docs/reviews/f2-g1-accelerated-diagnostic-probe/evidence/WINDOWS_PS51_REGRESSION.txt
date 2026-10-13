@@ -1,0 +1,13 @@
+Environment: Windows PowerShell 5.1.22621.6133; standard user token; non-elevated.
+Command form: powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\<suite>.ps1
+Required Windows workflow suites:
+Test-F2AclCapture.Protocol.ps1;Exit=0;Assertions=152;Failures=0
+Test-F2AclEntrypointArguments.ps1;Exit=0;Assertions=18;Failures=0
+Test-F2AclIcacls.Corroboration.ps1;Exit=0;Assertions=118;Failures=0
+Test-F2AclIcacls.Runtime.ps1;Exit=0;Assertions=41;Failures=0
+Test-F2AclProtectedReleaseUpdater.ps1;Exit=0;Assertions=136;Failures=0
+Test-F2AclProtectedReleaseNativeHelper.ps1;Exit=0;Assertions=20;Failures=0
+Test-F2ProtectedReleaseDiagnostics.ps1;Exit=0;Assertions=68;Failures=0
+Test-F2HistoricalManifestDiagnostic.ps1;Exit=0;Assertions=40;Failures=0
+TOTAL_ASSERTIONS=593;TOTAL_FAILURES=0
+Every child process exited 0. Complete stdout and stderr are stored in adjacent files.

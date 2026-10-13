@@ -1,0 +1,8 @@
+powershell.exe : Get-F2IcaclsFileSha256 : O termo 'Get-FileHash' não é reconhecido como nome de cmdlet, função,
+arquivo de script ou
+No C:\Dev\f2-g1-accelerated-diagnostic-probe-source\scripts\f2-acl\Test-F2ProtectedReleaseDiagnosticSuites.ps1:39
+caractere:18
++ ...    $lines=@(& $powershell51 -NoProfile -NonInteractive -ExecutionPoli ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Get-F2IcaclsFil...o de script ou :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
