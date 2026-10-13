@@ -50,7 +50,7 @@ $script:TempRootCreated = $false
 $script:ModuleInfo = $null
 $script:OldTimeoutDefaultPresent = $false
 $script:OldTimeoutDefault = $null
-$script:TimeoutDefaultSet = $false
+$script:TimeoutPreferenceState = 'UNREAD'
 $script:OverallWatch = [Diagnostics.Stopwatch]::StartNew()
 $script:MaximumRunMilliseconds = 120000
 
@@ -301,18 +301,30 @@ exit 0
     }
 
     $script:Result.Stage = 'PRODUCTION_VALIDATOR'
-    if ($null -eq $global:PSDefaultParameterValues) {
-        $global:PSDefaultParameterValues = @{}
+    $timeoutVariable = Get-Variable -Name PSDefaultParameterValues -Scope Global -ErrorAction SilentlyContinue
+    if ($null -eq $timeoutVariable) {
+        $script:TimeoutPreferenceState = 'ABSENT'
+        Set-Variable -Name PSDefaultParameterValues -Scope Global -Value @{} -Force
     }
-    if (-not $global:PSDefaultParameterValues.ContainsKey('Get-CimInstance:OperationTimeoutSec')) {
+    elseif ($null -eq $timeoutVariable.Value) {
+        $script:TimeoutPreferenceState = 'NULL'
+        Set-Variable -Name PSDefaultParameterValues -Scope Global -Value @{} -Force
+    }
+    else {
+        $script:TimeoutPreferenceState = 'EXISTING'
+    }
+    $timeoutMap = (Get-Variable -Name PSDefaultParameterValues -Scope Global -ErrorAction Stop).Value
+    if ($timeoutMap -isnot [System.Collections.IDictionary]) {
+        Stop-F2ManualWmiObservation -Code 'WMI_TIMEOUT_DEFAULTS_INVALID'
+    }
+    if (-not $timeoutMap.Contains('Get-CimInstance:OperationTimeoutSec')) {
         $script:OldTimeoutDefaultPresent = $false
     }
     else {
         $script:OldTimeoutDefaultPresent = $true
-        $script:OldTimeoutDefault = $global:PSDefaultParameterValues['Get-CimInstance:OperationTimeoutSec']
+        $script:OldTimeoutDefault = $timeoutMap['Get-CimInstance:OperationTimeoutSec']
     }
-    $global:PSDefaultParameterValues['Get-CimInstance:OperationTimeoutSec'] = 2
-    $script:TimeoutDefaultSet = $true
+    $timeoutMap['Get-CimInstance:OperationTimeoutSec'] = 2
     if (-not (Get-Command Get-CimInstance -ErrorAction Stop).Parameters.ContainsKey('OperationTimeoutSec')) {
         Stop-F2ManualWmiObservation -Code 'WMI_TIMEOUT_UNAVAILABLE'
     }
@@ -363,13 +375,27 @@ catch {
     }
 }
 finally {
-    if ($script:TimeoutDefaultSet) {
-        if ($script:OldTimeoutDefaultPresent) {
-            $global:PSDefaultParameterValues['Get-CimInstance:OperationTimeoutSec'] = $script:OldTimeoutDefault
+    try {
+        if ($script:TimeoutPreferenceState -eq 'EXISTING') {
+            $timeoutMap = (Get-Variable -Name PSDefaultParameterValues -Scope Global -ErrorAction Stop).Value
+            if ($script:OldTimeoutDefaultPresent) {
+                $timeoutMap['Get-CimInstance:OperationTimeoutSec'] = $script:OldTimeoutDefault
+            }
+            else {
+                [void]$timeoutMap.Remove('Get-CimInstance:OperationTimeoutSec')
+            }
         }
-        else {
-            [void]$global:PSDefaultParameterValues.Remove('Get-CimInstance:OperationTimeoutSec')
+        elseif ($script:TimeoutPreferenceState -eq 'ABSENT') {
+            Remove-Variable -Name PSDefaultParameterValues -Scope Global -Force -ErrorAction SilentlyContinue
         }
+        elseif ($script:TimeoutPreferenceState -eq 'NULL') {
+            Set-Variable -Name PSDefaultParameterValues -Scope Global -Value $null -Force
+        }
+    }
+    catch {
+        $script:Result.Outcome = 'FAIL'
+        $script:Result.ErrorCode = 'TIMEOUT_PREFERENCE_RESTORE_FAILED'
+        $script:Result.Stage = 'CLEANUP'
     }
 
     if ($script:ChildStarted -and $null -ne $script:ChildProcess) {

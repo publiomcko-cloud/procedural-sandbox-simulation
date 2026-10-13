@@ -13,7 +13,7 @@ The expected child script only validates its four builder-supplied arguments, sl
 - PR #69 review package: `56a34d7899ba31b0d3fe6d3185435bc182ac453f`.
 - Runtime implementation: `8c14cf97c9446e11b8afbd64196c3f4558d4c3c9`.
 - Runtime launch module checkout-byte SHA-256: `06f117c6be29e3e150149087cb19323e83df20601b8d134f0bb02ec7335867d2`.
-- This observation script's Windows checkout-byte SHA-256: `ed086752e55b2499b1b40a3a04344674b909b09afbb537243a5d56d514e69c53`.
+- This observation script's Windows checkout-byte SHA-256: `4fe30974cdab3b1ca4a87aaf26591c0192f5fa0c4423b23b155c5bab7a1abc4d`.
 - Git core path/SHA used by the production repository-facts helper: `C:\Program Files\Git\mingw64\bin\git.exe` / `1a0043555d254618f2d56c936c3d9a1fbfb878bc878416a133c346bc7835eda9`.
 - The script reads the launch module through a read-only handle, verifies the complete bytes, decodes those same bytes, and creates an in-memory dynamic module from that ScriptBlock. It does not import the module by reopening its path after verification.
 
@@ -37,7 +37,7 @@ $scriptPath = 'C:\Dev\f2-g1-manual-wmi-observation\docs\reviews\f2-g1-manual-wmi
 (Get-FileHash -LiteralPath $scriptPath -Algorithm SHA256).Hash.ToLowerInvariant()
 ```
 
-It must equal `ed086752e55b2499b1b40a3a04344674b909b09afbb537243a5d56d514e69c53`. Confirm the two prerequisite worktrees above are still clean at their exact commits.
+It must equal `4fe30974cdab3b1ca4a87aaf26591c0192f5fa0c4423b23b155c5bab7a1abc4d`. Confirm the two prerequisite worktrees above are still clean at their exact commits.
 2. Open a normal, non-administrator Windows PowerShell 5.1 window. Do not choose **Run as administrator**. If Windows presents a UAC prompt, cancel and stop; this package has no reason to request one.
 3. Paste these lines exactly into that standard-token window:
 

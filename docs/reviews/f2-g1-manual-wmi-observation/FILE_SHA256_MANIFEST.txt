@@ -1,4 +1,4 @@
 # SHA-256 values are for physical Windows checkout bytes (PowerShell CRLF; Markdown LF).
 # This manifest lists all package review files except itself.
-ed086752e55b2499b1b40a3a04344674b909b09afbb537243a5d56d514e69c53  docs/reviews/f2-g1-manual-wmi-observation/Observe-F2LaunchWmiCommandLine.ps1
-e8806b42833b2b8de82dfa56cc59336a9f6906adebacdc3ac49bcbb774337d4b  docs/reviews/f2-g1-manual-wmi-observation/MANUAL_OPERATOR_PROCEDURE.md
+4fe30974cdab3b1ca4a87aaf26591c0192f5fa0c4423b23b155c5bab7a1abc4d  docs/reviews/f2-g1-manual-wmi-observation/Observe-F2LaunchWmiCommandLine.ps1
+cb85de9a79361b0a82b18a8c55d0b74784960884b76bd3563b64f717826a03e7  docs/reviews/f2-g1-manual-wmi-observation/MANUAL_OPERATOR_PROCEDURE.md
