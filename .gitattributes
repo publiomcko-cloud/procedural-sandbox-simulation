@@ -12,4 +12,6 @@ scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json text eol=lf
 docs/reviews/f2-g1-capture-id-contract/*.log -text
 
 scripts/f2-acl/F2HistoricalManifestDiagnostic.psm1 text eol=lf
+scripts/f2-acl/F2HistoricalManifestLaunch.psm1 text eol=lf
 docs/reviews/f2-g1-accelerated-diagnostic-probe/** text eol=lf
+docs/reviews/f2-g1-elevated-diagnostic-launch/** text eol=lf

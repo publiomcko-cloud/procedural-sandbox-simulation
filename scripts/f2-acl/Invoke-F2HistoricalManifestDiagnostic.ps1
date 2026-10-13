@@ -48,6 +48,28 @@ function Test-F2ProbeNoReparsePath {
     }
 }
 
+function Get-F2ProbeModuleBytes {
+    param([AllowNull()][object]$InMemoryModuleBytes,
+          [AllowEmptyString()][string]$ScriptRoot)
+    if ($null -ne $InMemoryModuleBytes) {
+        if ($InMemoryModuleBytes -isnot [byte[]] -or $InMemoryModuleBytes.Length -lt 1 -or $InMemoryModuleBytes.Length -gt 131072) { throw 'PROBE_MODULE_INPUT_INVALID' }
+        return ,([byte[]]$InMemoryModuleBytes)
+    }
+    if ([string]::IsNullOrWhiteSpace($ScriptRoot)) { throw 'PROBE_MODULE_INPUT_INVALID' }
+    $modulePath = Join-Path $ScriptRoot 'F2HistoricalManifestDiagnostic.psm1'
+    Test-F2ProbeNoReparsePath -Path $modulePath
+    $moduleItem = Get-Item -LiteralPath $modulePath -Force -ErrorAction Stop
+    if ($moduleItem.PSIsContainer -or $moduleItem.Length -lt 1 -or $moduleItem.Length -gt 131072) { throw 'PROBE_MODULE_INPUT_INVALID' }
+    $stream = New-Object IO.FileStream($modulePath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+    try {
+        if ($stream.Length -ne $moduleItem.Length -or $stream.Length -lt 1 -or $stream.Length -gt 131072) { throw 'PROBE_MODULE_INPUT_INVALID' }
+        $bytes = New-Object byte[] ([int]$stream.Length)
+        $offset = 0
+        while ($offset -lt $bytes.Length) { $read = $stream.Read($bytes,$offset,$bytes.Length-$offset); if ($read -le 0) { throw 'PROBE_MODULE_INPUT_INVALID' }; $offset += $read }
+    } finally { $stream.Dispose() }
+    return ,$bytes
+}
+
 try {
     if (@($MyInvocation.UnboundArguments).Count -ne 0) {
         throw 'PROBE_UNEXPECTED_ARGUMENTS'
@@ -67,16 +89,14 @@ try {
     $launcherPath = Join-Path $historicalRoot 'scripts\f2-acl\Start-F2ProtectedReleaseUpdate.ps1'
     $protocolPath = Join-Path $historicalRoot 'scripts\f2-acl\F2ProtectedRelease.Diagnostics.ps1'
     $candidatePath = Join-Path $candidateRoot 'docs\reviews\f2-g1-protected-release-updater\f2-runtime-release-v3.candidate.json'
-    $modulePath = Join-Path $PSScriptRoot 'F2HistoricalManifestDiagnostic.psm1'
-    foreach ($inputPath in @($updaterPath,$launcherPath,$protocolPath,$candidatePath,$modulePath)) {
+    foreach ($inputPath in @($updaterPath,$launcherPath,$protocolPath,$candidatePath)) {
         Test-F2ProbeNoReparsePath -Path $inputPath
     }
 
     $stage = 'ModuleIntegrityValidation'
-    $moduleItem = Get-Item -LiteralPath $modulePath -Force -ErrorAction Stop
-    if ($moduleItem.PSIsContainer -or $moduleItem.Length -gt 131072) { throw 'PROBE_MODULE_INPUT_INVALID' }
-    $moduleBytes = [IO.File]::ReadAllBytes($modulePath)
-    if ($moduleBytes.Length -ne $moduleItem.Length) { throw 'PROBE_MODULE_INPUT_INVALID' }
+    $inMemoryModule = Get-Variable -Name 'F2HistoricalVerifiedModuleBytes' -Scope Global -ErrorAction SilentlyContinue
+    $inMemoryModuleBytes = if ($null -ne $inMemoryModule) { $inMemoryModule.Value } else { $null }
+    $moduleBytes = Get-F2ProbeModuleBytes -InMemoryModuleBytes $inMemoryModuleBytes -ScriptRoot ([string]$PSScriptRoot)
     $moduleSha256 = Get-F2ProbeBytesSha256 -Bytes $moduleBytes
     if ($moduleSha256 -cne '4541338491269ac2bf409c5ba0c63d93d6a5e3fd9896c9d378c79dbea43ee7ee') { throw 'PROBE_MODULE_HASH_MISMATCH' }
     $moduleText = (New-Object System.Text.UTF8Encoding($false,$true)).GetString($moduleBytes)
