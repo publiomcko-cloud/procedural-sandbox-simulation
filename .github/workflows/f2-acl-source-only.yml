@@ -6,12 +6,14 @@ on:
       - 'scripts/f2-acl/**'
       - 'docs/security/F2_G1_ACL_CAPTURE.md'
       - 'docs/reviews/f2-g1-capture-id-contract/**'
+      - 'docs/reviews/f2-g1-third-upgrade-manifest-diagnostics/**'
       - '.github/workflows/f2-acl-source-only.yml'
   pull_request:
     paths:
       - 'scripts/f2-acl/**'
       - 'docs/security/F2_G1_ACL_CAPTURE.md'
       - 'docs/reviews/f2-g1-capture-id-contract/**'
+      - 'docs/reviews/f2-g1-third-upgrade-manifest-diagnostics/**'
       - '.github/workflows/f2-acl-source-only.yml'
 jobs:
   powershell-source-only:
@@ -20,6 +22,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Verify F2 G1 review evidence Git and Windows checkout hashes
+        shell: powershell
+        run: |
+          $testPath = (Resolve-Path '.\docs\reviews\f2-g1-third-upgrade-manifest-diagnostics\Test-F2G1ReviewEvidenceManifest.ps1').Path
+          $powershell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+          foreach ($arguments in @(
+            @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath,'-SelfTest'),
+            @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath)
+          )) {
+            $test = Start-Process -FilePath $powershell -ArgumentList $arguments -PassThru -Wait -NoNewWindow
+            Write-Host "F2EvidenceManifestProcessExit=$($test.ExitCode)"
+            if ($test.ExitCode -ne 0) { exit $test.ExitCode }
+          }
       - name: Run F2 ACL synthetic regression suite in Windows PowerShell 5.1
         shell: powershell
         run: |

@@ -1,0 +1,3 @@
+Test=Test-F2AclProtectedReleaseNativeHelper.ps1 PowerShell=5.1.22621.6133 Exit=0
+F2NativeHelperAssertions=20;Failures=0;TempCleanup=PASS
+PROCESS_EXIT=0

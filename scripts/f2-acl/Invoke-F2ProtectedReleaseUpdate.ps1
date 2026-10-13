@@ -237,20 +237,82 @@ function Get-F2UpdateHeldManifestBytes {
 }
 
 function Get-F2UpdateManifestObject {
-    param([Parameter(Mandatory)][byte[]]$Bytes,[Parameter(Mandatory)][ValidateSet('v2','v3')][string]$ExpectedSchema,[string]$ExpectedHash)
-    if ($Bytes.Length -gt 65536 -or $Bytes.Length -eq 0) { throw 'UPDATE_MANIFEST_SIZE_INVALID' }
-    if (-not [string]::IsNullOrWhiteSpace($ExpectedHash) -and (Get-F2UpdateSha256 -Bytes $Bytes) -cne $ExpectedHash.ToLowerInvariant()) { throw 'UPDATE_MANIFEST_HASH_MISMATCH' }
-    try { $manifest = [Text.Encoding]::UTF8.GetString($Bytes) | ConvertFrom-Json -ErrorAction Stop } catch { throw 'UPDATE_MANIFEST_JSON_INVALID' }
-    $schema = 'f2-icacls-runtime-release-' + $ExpectedSchema
-    if ($manifest.Schema -cne $schema) { throw 'UPDATE_MANIFEST_SCHEMA_INVALID' }
-    if ($manifest.ReviewedCommitSha -notmatch '^[0-9a-f]{40}$' -or $manifest.BaselineMailboxId -cne $script:F2UpdateBaselineMailboxId -or $manifest.BaselinePayloadCaptureId -cne $script:F2UpdateBaselineCaptureId -or $manifest.BaselinePayloadSha256 -cne $script:F2UpdateBaselinePayloadSha256 -or $manifest.BaselineIntegritySha256 -cne $script:F2UpdateBaselineIntegritySha256) { throw 'UPDATE_MANIFEST_IDENTITY_OR_BASELINE_INVALID' }
-    if ($manifest.SourcePinsManifestSha256 -notmatch '^[0-9a-f]{64}$') { throw 'UPDATE_SOURCE_PINS_HASH_INVALID' }
-    $files = @($manifest.Files)
-    $names = @($script:F2UpdateOldPins.Keys | Sort-Object)
-    if ($files.Count -ne 7 -or @($files.Name | Sort-Object -Unique).Count -ne 7 -or @(Compare-Object $names ($files.Name | Sort-Object) -CaseSensitive).Count -ne 0) { throw 'UPDATE_MANIFEST_FILE_SET_INVALID' }
-    foreach ($file in $files) { if ($file.Sha256 -notmatch '^[0-9a-f]{64}$') { throw 'UPDATE_MANIFEST_FILE_PIN_INVALID' } }
-    if ($ExpectedSchema -eq 'v3' -and [string]::IsNullOrWhiteSpace([string]$manifest.PackageRoot)) { throw 'UPDATE_MANIFEST_PACKAGE_ROOT_INVALID' }
-    return $manifest
+    param([Parameter(Mandatory)][AllowEmptyCollection()][byte[]]$Bytes,[Parameter(Mandatory)][ValidateSet('v2','v3')][string]$ExpectedSchema,[string]$ExpectedHash)
+    # Every unexpected PowerShell/.NET failure is reduced to the fixed code for
+    # the operation in progress. Raw exception text, types, and values never
+    # escape the parser or reach the elevated-child diagnostic channel.
+    $operationFailureCode = 'UPDATE_MANIFEST_JSON_INVALID'
+    try {
+        $operationFailureCode = 'UPDATE_MANIFEST_SIZE_INVALID'
+        if ($Bytes.Length -gt 65536 -or $Bytes.Length -eq 0) { throw 'UPDATE_MANIFEST_SIZE_INVALID' }
+
+        $operationFailureCode = 'UPDATE_MANIFEST_HASH_MISMATCH'
+        if (-not [string]::IsNullOrWhiteSpace($ExpectedHash) -and (Get-F2UpdateSha256 -Bytes $Bytes) -cne $ExpectedHash.ToLowerInvariant()) { throw 'UPDATE_MANIFEST_HASH_MISMATCH' }
+
+        $operationFailureCode = 'UPDATE_MANIFEST_JSON_INVALID'
+        try { $manifest = [Text.Encoding]::UTF8.GetString($Bytes) | ConvertFrom-Json -ErrorAction Stop } catch { throw 'UPDATE_MANIFEST_JSON_INVALID' }
+        if ($null -eq $manifest -or $manifest -isnot [Management.Automation.PSCustomObject]) { throw 'UPDATE_MANIFEST_JSON_INVALID' }
+
+        $operationFailureCode = 'UPDATE_MANIFEST_SCHEMA_INVALID'
+        $schemaProperty = $manifest.PSObject.Properties['Schema']
+        $schema = 'f2-icacls-runtime-release-' + $ExpectedSchema
+        if ($null -eq $schemaProperty -or $schemaProperty.Value -isnot [string] -or $schemaProperty.Value -cne $schema) { throw 'UPDATE_MANIFEST_SCHEMA_INVALID' }
+
+        $operationFailureCode = 'UPDATE_MANIFEST_IDENTITY_OR_BASELINE_INVALID'
+        $identityValues = @{}
+        foreach ($name in @('ReviewedCommitSha','BaselineMailboxId','BaselinePayloadCaptureId','BaselinePayloadSha256','BaselineIntegritySha256')) {
+            $property = $manifest.PSObject.Properties[$name]
+            if ($null -eq $property -or $property.Value -isnot [string]) { throw 'UPDATE_MANIFEST_IDENTITY_OR_BASELINE_INVALID' }
+            $identityValues[$name] = [string]$property.Value
+        }
+        if ($identityValues['ReviewedCommitSha'] -notmatch '^[0-9a-f]{40}$' -or
+            $identityValues['BaselineMailboxId'] -cne $script:F2UpdateBaselineMailboxId -or
+            $identityValues['BaselinePayloadCaptureId'] -cne $script:F2UpdateBaselineCaptureId -or
+            $identityValues['BaselinePayloadSha256'] -cne $script:F2UpdateBaselinePayloadSha256 -or
+            $identityValues['BaselineIntegritySha256'] -cne $script:F2UpdateBaselineIntegritySha256) { throw 'UPDATE_MANIFEST_IDENTITY_OR_BASELINE_INVALID' }
+
+        $operationFailureCode = 'UPDATE_SOURCE_PINS_HASH_INVALID'
+        $sourcePinsProperty = $manifest.PSObject.Properties['SourcePinsManifestSha256']
+        if ($null -eq $sourcePinsProperty -or $sourcePinsProperty.Value -isnot [string] -or $sourcePinsProperty.Value -notmatch '^[0-9a-f]{64}$') { throw 'UPDATE_SOURCE_PINS_HASH_INVALID' }
+
+        $operationFailureCode = 'UPDATE_MANIFEST_FILE_SET_INVALID'
+        $filesProperty = $manifest.PSObject.Properties['Files']
+        if ($null -eq $filesProperty -or $filesProperty.Value -isnot [array]) { throw 'UPDATE_MANIFEST_FILE_SET_INVALID' }
+        $files = @($filesProperty.Value)
+        if ($files.Count -ne 7) { throw 'UPDATE_MANIFEST_FILE_SET_INVALID' }
+        $manifestNames = @()
+        foreach ($file in $files) {
+            if ($null -eq $file -or $file -isnot [Management.Automation.PSCustomObject]) { throw 'UPDATE_MANIFEST_FILE_SET_INVALID' }
+            $nameProperty = $file.PSObject.Properties['Name']
+            if ($null -eq $nameProperty -or $nameProperty.Value -isnot [string]) { throw 'UPDATE_MANIFEST_FILE_SET_INVALID' }
+            $manifestNames += [string]$nameProperty.Value
+
+            $operationFailureCode = 'UPDATE_MANIFEST_FILE_PIN_INVALID'
+            $shaProperty = $file.PSObject.Properties['Sha256']
+            if ($null -eq $shaProperty -or $shaProperty.Value -isnot [string] -or $shaProperty.Value -notmatch '^[0-9a-f]{64}$') { throw 'UPDATE_MANIFEST_FILE_PIN_INVALID' }
+            $operationFailureCode = 'UPDATE_MANIFEST_FILE_SET_INVALID'
+        }
+        $names = @($script:F2UpdateOldPins.Keys | Sort-Object)
+        if (@($manifestNames | Sort-Object -Unique).Count -ne 7 -or @(Compare-Object $names ($manifestNames | Sort-Object) -CaseSensitive).Count -ne 0) { throw 'UPDATE_MANIFEST_FILE_SET_INVALID' }
+
+        if ($ExpectedSchema -eq 'v3') {
+            $operationFailureCode = 'UPDATE_MANIFEST_PACKAGE_ROOT_INVALID'
+            $packageRootProperty = $manifest.PSObject.Properties['PackageRoot']
+            if ($null -eq $packageRootProperty -or $packageRootProperty.Value -isnot [string] -or [string]::IsNullOrWhiteSpace([string]$packageRootProperty.Value)) { throw 'UPDATE_MANIFEST_PACKAGE_ROOT_INVALID' }
+        }
+        return $manifest
+    } catch {
+        $caughtCode = ''
+        if ($null -ne $_.Exception) { try { $caughtCode = [string]$_.Exception.Message } catch { $caughtCode = '' } }
+        $safeManifestCodes = @(
+            'UPDATE_MANIFEST_SIZE_INVALID','UPDATE_MANIFEST_HASH_MISMATCH','UPDATE_MANIFEST_JSON_INVALID',
+            'UPDATE_MANIFEST_SCHEMA_INVALID','UPDATE_MANIFEST_IDENTITY_OR_BASELINE_INVALID',
+            'UPDATE_SOURCE_PINS_HASH_INVALID','UPDATE_MANIFEST_FILE_SET_INVALID',
+            'UPDATE_MANIFEST_FILE_PIN_INVALID','UPDATE_MANIFEST_PACKAGE_ROOT_INVALID'
+        )
+        if ($caughtCode -cin $safeManifestCodes) { throw $caughtCode }
+        throw $operationFailureCode
+    }
 }
 
 function Get-F2UpdateRuntimePathInventory {

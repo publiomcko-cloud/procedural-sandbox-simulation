@@ -1,0 +1,14 @@
+COMMAND=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Dev\f2-g1-candidate-manifest-diagnostic-review\docs\reviews\f2-g1-third-upgrade-manifest-diagnostics\evidence\Test-F2G1ThirdUpgradeParserSweep.ps1 -RepoRoot C:\Dev\f2-g1-candidate-manifest-diagnostic-review
+HarnessPowerShell=5.1.22621.6133 Test=Test-F2G1ThirdUpgradeParserSweep.ps1 ChildExit=1
+PowerShellVersion=5.1.22621.6133
+ParserFiles=40;ParserErrors=10
+PARSE_ERROR=check_f1_6_notice_text.ps1:84:MissingTypename
+PARSE_ERROR=check_f1_6_notice_text.ps1:84:UnexpectedToken
+PARSE_ERROR=check_f1_6_notice_text.ps1:84:MissingEndParenthesisInExpression
+PARSE_ERROR=check_f1_6_notice_text.ps1:34:MissingEndCurlyBrace
+PARSE_ERROR=check_f1_6_notice_text.ps1:84:UnexpectedToken
+PARSE_ERROR=check_f1_6_notice_text.ps1:84:UnexpectedToken
+PARSE_ERROR=check_f1_6_notice_text.ps1:86:UnexpectedToken
+PARSE_ERROR=check_f1_6_notice_text.ps1:99:TerminatorExpectedAtEndOfString
+PARSE_ERROR=validate_fixture.ps1:81:TerminatorExpectedAtEndOfString
+PARSE_ERROR=validate_fixture.ps1:63:MissingEndCurlyBrace

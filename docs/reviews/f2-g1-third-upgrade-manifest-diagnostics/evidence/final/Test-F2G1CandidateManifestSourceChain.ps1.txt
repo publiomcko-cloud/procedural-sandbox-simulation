@@ -1,0 +1,26 @@
+COMMAND=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Dev\f2-g1-candidate-manifest-diagnostic-review\docs\reviews\f2-g1-third-upgrade-manifest-diagnostics\evidence\Test-F2G1CandidateManifestSourceChain.ps1 -SourceRoot C:\Dev\f2-g1-third-upgrade-source-chain-af9aa616 -ReviewRoot C:\Dev\f2-g1-candidate-manifest-diagnostic-review
+HarnessPowerShell=5.1.22621.6133 Test=Test-F2G1CandidateManifestSourceChain.ps1 ChildExit=0
+PASS=WindowsPowerShell51;Version=5.1.22621.6133
+PASS=ProductionHead
+PASS=ProductionParent
+PASS=ProductionOrigin
+PASS=ProductionWorktreeClean
+PASS=ReviewOrigin
+PASS=ProductionIsAncestorOfReview
+PASS=LauncherSha256
+PASS=UpdaterSha256
+PASS=DiagnosticProtocolSha256
+PASS=SourcePinManifestSha256
+PASS=PackageFile_F2AclCapture.Protocol.psm1
+PASS=PackageFile_F2AclIcacls.Corroboration.psm1
+PASS=PackageFile_F2AclIcacls.Runtime.psm1
+PASS=PackageFile_Invoke-F2IcaclsCapture.ps1
+PASS=PackageFile_Invoke-F2IcaclsProtectedCoordinator.ps1
+PASS=PackageFile_F2_ICACLS_SOURCE_PINS.json
+PASS=PackageFile_Invoke-F2AclReadOnlyCapture.ps1
+PASS=CandidateManifestSha256
+PASS=CandidateSchema
+PASS=CandidateReviewedCommit
+PASS=CandidatePackageRoot
+PASS=CandidateSourcePinManifestSha256
+RESULT=PASS_SOURCE_CHAIN

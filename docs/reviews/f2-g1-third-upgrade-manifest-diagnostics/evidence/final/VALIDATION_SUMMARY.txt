@@ -1,0 +1,26 @@
+# Validation summary
+
+Environment: Windows PowerShell 5.1.22621.6133; standard user token; no elevation.
+
+Seven regression suites:
+Test-F2AclCapture.Protocol.ps1: 152 assertions; exit 0
+Test-F2AclEntrypointArguments.ps1: 18 assertions; exit 0
+Test-F2AclIcacls.Corroboration.ps1: 118 assertions; exit 0
+Test-F2AclIcacls.Runtime.ps1: 41 assertions; exit 0
+Test-F2AclProtectedReleaseNativeHelper.ps1: 20 assertions; exit 0
+Test-F2AclProtectedReleaseUpdater.ps1: 136 assertions; exit 0
+Test-F2ProtectedReleaseDiagnostics.ps1: 68 assertions; exit 0
+
+TOTAL: 553 assertions; 0 failures; all seven test-process exit codes 0.
+
+Additional checks:
+- Exact production candidate-manifest loader and authenticated child/pipe integration: included in Test-F2ProtectedReleaseDiagnostics.ps1 (68 assertions).
+- Existing F2 ACL parser: 21 files; 0 parser errors; child exit 0.
+- Expanded relevant parser sweep: 23 files; 0 parser errors; child exit 0.
+- Exact production source-chain check: PASS_SOURCE_CHAIN; child exit 0.
+- Postfailure host preflight: PASS_READ_ONLY_PREFLIGHT; six gates PASS; child exit 0; sanitized receipt at ../POSTFAILURE_READONLY_PREFLIGHT.json.
+- Pre-fix malformed identity fixture reproduced an unclassified missing-member condition; corrected fixture reports the allowlisted identity/baseline error in the final diagnostic suite.
+
+Exploratory scope note: a repository-wide parser sweep over 40 files reported 10 parser diagnostics in two unchanged, unrelated files (check_f1_6_notice_text.ps1 and validate_fixture.ps1). The full output is retained in EXPLORATORY_REPOSITORY_WIDE_PARSER_SWEEP.txt. No out-of-scope file was changed.
+
+No UAC, protected updater, protected filesystem mutation, live icacls, VM/Hyper-V/G: access, process termination, or native workload was run.

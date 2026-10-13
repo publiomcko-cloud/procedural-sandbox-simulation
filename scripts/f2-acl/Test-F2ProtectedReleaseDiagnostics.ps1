@@ -228,7 +228,7 @@ function New-PrelockOldReleaseFixture {
 }
 
 function New-PrelockCandidateBytes {
-    param($Source,[string]$PackageHome,[ValidateSet('Valid','WrongPackageRoot','WrongPackagePin','MalformedCandidate')][string]$Fault='Valid')
+    param($Source,[string]$PackageHome,[ValidateSet('Valid','WrongPackageRoot','WrongPackagePin','MalformedCandidate','MissingIdentity')][string]$Fault='Valid')
     if($Fault -eq 'MalformedCandidate'){return ,[Text.UTF8Encoding]::new($false).GetBytes('{invalid-json')}
     $files=@(foreach($name in $Source.Names){$sha=[string]$Source.SourcePins[$name];if($Fault -eq 'WrongPackagePin' -and $name -ceq $Source.Names[0]){$sha='0'*64};[pscustomobject]@{Name=$name;Sha256=$sha}})
     $packageRoot=Join-Path (Join-Path $PackageHome 'releases') $Source.Commit
@@ -244,6 +244,7 @@ function New-PrelockCandidateBytes {
         SourcePinsManifestSha256=$Source.PinManifestSha256
         Files=$files
     }
+    if($Fault -eq 'MissingIdentity'){$candidate.Remove('BaselineMailboxId')}
     return ,[Text.UTF8Encoding]::new($false).GetBytes(($candidate|ConvertTo-Json -Compress -Depth 6))
 }
 
@@ -309,6 +310,46 @@ function Invoke-F2ProtectedReleaseUpdate {
     [pscustomobject]@{Passed=[bool]$passed;Request=$request;Result=$result;Process=$child;Stdout=$stdout;Stderr=$stderr;UpdaterSha256=$updaterHash;CandidateSha256=$candidateHash;EncodedLength=$encoded.Length}
 }
 
+function Invoke-F2ManifestValidationChildFixture {
+    param([byte[]]$CandidateBytes,[string]$ExpectedSourceCommit,[string]$ExpectedStage,[string]$ExpectedCode)
+    $fixtureId=[guid]::NewGuid().ToString('N')
+    $updaterFile=Join-Path $syntheticRoot ('manifest-child-updater-'+$fixtureId+'.ps1')
+    $candidateFile=Join-Path $syntheticRoot ('manifest-child-candidate-'+$fixtureId+'.json')
+    $protocolFile=Join-Path $syntheticRoot ('manifest-child-protocol-'+$fixtureId+'.ps1')
+    $productionUpdaterBytes=[IO.File]::ReadAllBytes($updaterSourcePath)
+    $productionUpdaterText=[Text.UTF8Encoding]::new($false,$true).GetString($productionUpdaterBytes)
+    $testOnlyEntrypoint=@'
+function Test-F2UpdateElevationIdentity { param($ExpectedRequesterSid) return $true }
+function Invoke-F2ProtectedReleaseUpdate {
+    param($CandidateManifestBytes,$CandidateManifestSha256,$ExpectedUpdaterSha256,$ExpectedLauncherSha256,$SourceRoot,$ExpectedRequesterSid,$RequesterLauncherProcessId,$RequesterLauncherCreationUtcTicks)
+    return [pscustomobject]@{Success=$false;Stage='SourceGitValidation';ErrorCode='UPDATE_SOURCE_GIT_UNAVAILABLE';FailureType=''}
+}
+'@
+    $updaterFixtureBytes=[Text.UTF8Encoding]::new($false).GetBytes($productionUpdaterText+"`r`n"+$testOnlyEntrypoint)
+    $candidateSha=Get-F2UpdateDiagnosticSha256 -Bytes $CandidateBytes
+    [IO.File]::WriteAllBytes($updaterFile,$updaterFixtureBytes)
+    [IO.File]::WriteAllBytes($candidateFile,$CandidateBytes)
+    [IO.File]::WriteAllBytes($protocolFile,$protocolBytes)
+    $updaterSha=Get-F2UpdateDiagnosticSha256 -Bytes $updaterFixtureBytes
+    $requesterProcess=[Diagnostics.Process]::GetCurrentProcess()
+    $childRequest=New-F2UpdateDiagnosticRequest -SourceCommit $ExpectedSourceCommit -LauncherSha256 ('b'*64) -UpdaterSha256 $updaterSha -CandidateManifestSha256 $candidateSha -RequesterPid $PID -RequesterCreationUtcTicks $requesterProcess.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
+    $script:Server.Dispose();$script:Server=New-F2UpdateDiagnosticServer -Request $childRequest
+    $childScript=New-F2UpdateElevatedChildScript -UpdaterPath $updaterFile -CandidatePath $candidateFile -SourceRoot $syntheticRoot -ExpectedSourceCommit $ExpectedSourceCommit -ExpectedLauncherSha256 ('b'*64) -ExpectedUpdaterSha256 $updaterSha -ExpectedCandidateManifestSha256 $candidateSha -ExpectedRequesterSid $sid -RequesterLauncherProcessId $PID -RequesterLauncherCreationUtcTicks $requesterProcess.StartTime.ToUniversalTime().Ticks -DiagnosticRequest $childRequest -DiagnosticProtocolPath $protocolFile -DiagnosticProtocolBytes $protocolBytes
+    $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childScript))
+    if($encoded.Length -gt 32767){throw 'SYNTHETIC_MANIFEST_CHILD_COMMAND_TOO_LARGE'}
+    $start=New-Object Diagnostics.ProcessStartInfo
+    $start.FileName=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $start.Arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+$encoded
+    $start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
+    $child=New-Object Diagnostics.Process;$child.StartInfo=$start
+    if(-not $child.Start()){throw 'SYNTHETIC_MANIFEST_CHILD_START_FAILED'}
+    $ticks=$child.StartTime.ToUniversalTime().Ticks
+    $result=Receive-F2UpdateDiagnosticRecord -Server $script:Server -Request $childRequest -ChildProcess $child -ChildCreationUtcTicks $ticks -TimeoutSeconds 10 -PostExitWaitMilliseconds 300 -RecordTimeoutMilliseconds 1500
+    $stdout=$child.StandardOutput.ReadToEnd();$stderr=$child.StandardError.ReadToEnd()
+    $passed=$result.DiagnosticStatus -ceq 'VALIDATED' -and $result.ActualChildExitCode -eq 1 -and $result.Record.Stage -ceq $ExpectedStage -and $result.Record.ErrorCode -ceq $ExpectedCode -and -not $result.TimedOut
+    [pscustomobject]@{Passed=[bool]$passed;Result=$result;Process=$child;Stdout=$stdout;Stderr=$stderr;UpdaterSha256=$updaterSha;CandidateSha256=$candidateSha;EncodedLength=$encoded.Length}
+}
+
 $script:Server = New-F2UpdateDiagnosticServer -Request $request
 $syntheticRoot=$null
 try {
@@ -325,10 +366,67 @@ try {
     $prelockSource=New-PrelockSourceFixture -Root $syntheticRoot
     $prelockOld=New-PrelockOldReleaseFixture -Root $syntheticRoot
     Assert-Diagnostic ($prelockSource.Commit -match '^[0-9a-f]{40}$' -and $prelockSource.SourcePins.Count -eq 7 -and $prelockOld.Files.Count -eq 7 -and (Get-F2UpdateDiagnosticSha256 -Bytes $prelockOld.ManifestBytes) -ceq $script:F2UpdateOldManifestSha256) 'pre-lock child fixtures use a clean temporary Git source and exact pinned old-v2 manifest and files'
+
+    $reviewCandidatePath=(Resolve-Path (Join-Path $PSScriptRoot '..\..\docs\reviews\f2-g1-protected-release-updater\f2-runtime-release-v3.candidate.json')).Path
+    $reviewCandidateBytes=[IO.File]::ReadAllBytes($reviewCandidatePath)
+    $reviewCandidateHash=Get-F2UpdateSha256 -Bytes $reviewCandidateBytes
+    $reviewCandidate=Get-F2UpdateManifestObject -Bytes $reviewCandidateBytes -ExpectedSchema v3 -ExpectedHash $reviewCandidateHash
+    Assert-Diagnostic ($reviewCandidateHash -match '^[0-9a-f]{64}$' -and $reviewCandidate.Schema -ceq 'f2-icacls-runtime-release-v3' -and $reviewCandidate.ReviewedCommitSha -match '^[0-9a-f]{40}$' -and @($reviewCandidate.Files).Count -eq 7) 'actual reviewed candidate bytes pass the exact production manifest loader in the Windows PowerShell 5.1 suite'
+
+    function New-F2ManifestBytesOmittingProperty {
+        param($Manifest,[string]$OmittedName)
+        $document=[ordered]@{}
+        foreach($property in $Manifest.PSObject.Properties){if($property.Name -cne $OmittedName){$document[$property.Name]=$property.Value}}
+        return ,[Text.UTF8Encoding]::new($false).GetBytes(($document|ConvertTo-Json -Compress -Depth 8))
+    }
+    function Get-F2ManifestTestErrorCode {
+        param([AllowEmptyCollection()][byte[]]$Bytes)
+        $hash=Get-F2UpdateSha256 -Bytes $Bytes
+        try{$null=Get-F2UpdateManifestObject -Bytes $Bytes -ExpectedSchema v3 -ExpectedHash $hash;return 'UNEXPECTED_PASS'}
+        catch{return Normalize-F2UpdateDiagnosticCode -Code ([string]$_.Exception.Message) -Stage CandidateManifestValidation -ExceptionType ([string]$_.Exception.GetType().FullName)}
+    }
+    $reviewCandidateObject=[Text.Encoding]::UTF8.GetString($reviewCandidateBytes)|ConvertFrom-Json -ErrorAction Stop
+    $missingIdentityBytes=New-F2ManifestBytesOmittingProperty -Manifest $reviewCandidateObject -OmittedName 'BaselineMailboxId'
+    $missingFilesBytes=New-F2ManifestBytesOmittingProperty -Manifest $reviewCandidateObject -OmittedName 'Files'
+    $missingPackageRootBytes=New-F2ManifestBytesOmittingProperty -Manifest $reviewCandidateObject -OmittedName 'PackageRoot'
+    Assert-Diagnostic ((Get-F2ManifestTestErrorCode -Bytes ([Text.Encoding]::UTF8.GetBytes('[]'))) -ceq 'UPDATE_MANIFEST_JSON_INVALID') 'manifest arrays are rejected as non-object roots with a fixed safe code'
+    Assert-Diagnostic ((Get-F2ManifestTestErrorCode -Bytes $missingIdentityBytes) -ceq 'UPDATE_MANIFEST_IDENTITY_OR_BASELINE_INVALID') 'missing required baseline identity field returns its allowlisted stable code instead of a StrictMode exception'
+    Assert-Diagnostic ((Get-F2ManifestTestErrorCode -Bytes $missingFilesBytes) -ceq 'UPDATE_MANIFEST_FILE_SET_INVALID') 'missing Files property returns the fixed file-set code'
+    Assert-Diagnostic ((Get-F2ManifestTestErrorCode -Bytes $missingPackageRootBytes) -ceq 'UPDATE_MANIFEST_PACKAGE_ROOT_INVALID') 'missing v3 PackageRoot returns the fixed package-root code'
+
+    $badPinDocument=[ordered]@{}
+    $badPinFiles=New-Object 'System.Collections.Generic.List[object]'
+    foreach($property in $reviewCandidateObject.PSObject.Properties){
+        if($property.Name -ceq 'Files'){
+            $index=0
+            foreach($file in $property.Value){if($index -eq 0){$badPinFiles.Add([pscustomobject]@{Name=[string]$file.Name})}else{$badPinFiles.Add($file)};$index++}
+            $badPinDocument['Files']=$badPinFiles.ToArray()
+        }else{$badPinDocument[$property.Name]=$property.Value}
+    }
+    $badFilePinBytes=[Text.UTF8Encoding]::new($false).GetBytes(($badPinDocument|ConvertTo-Json -Compress -Depth 8))
+    Assert-Diagnostic ((Get-F2ManifestTestErrorCode -Bytes $badFilePinBytes) -ceq 'UPDATE_MANIFEST_FILE_PIN_INVALID') 'missing per-file SHA field returns the fixed file-pin code'
+
+    function Get-F2InjectedManifestHashFailureCode {
+        param([byte[]]$Bytes)
+        function Get-F2UpdateSha256 { throw 'SYNTHETIC_PRIVATE_EXCEPTION_MARKER' }
+        try{$null=Get-F2UpdateManifestObject -Bytes $Bytes -ExpectedSchema v3 -ExpectedHash ('0'*64);return 'UNEXPECTED_PASS'}
+        catch{return Normalize-F2UpdateDiagnosticCode -Code ([string]$_.Exception.Message) -Stage CandidateManifestValidation -ExceptionType ([string]$_.Exception.GetType().FullName)}
+    }
+    $hashFailureCode=Get-F2InjectedManifestHashFailureCode -Bytes $reviewCandidateBytes
+    Assert-Diagnostic ($hashFailureCode -ceq 'UPDATE_MANIFEST_HASH_MISMATCH' -and $hashFailureCode -notmatch 'SYNTHETIC|EXCEPTION') 'unexpected hash-operation exceptions are classified to a fixed category without leaking exception text'
+
+    $validManifestChild=Invoke-F2ManifestValidationChildFixture -CandidateBytes $reviewCandidateBytes -ExpectedSourceCommit $reviewCandidate.ReviewedCommitSha -ExpectedStage SourceGitValidation -ExpectedCode UPDATE_SOURCE_GIT_UNAVAILABLE
+    Assert-Diagnostic ($validManifestChild.Passed -and $validManifestChild.EncodedLength -le 32767) 'real child process executes the production bootstrap and production manifest loader, passes the exact candidate, then reaches a no-write synthetic updater stub'
+    $validManifestChild.Process.Dispose()
+    $malformedManifestChild=Invoke-F2ManifestValidationChildFixture -CandidateBytes $missingIdentityBytes -ExpectedSourceCommit $reviewCandidate.ReviewedCommitSha -ExpectedStage CandidateManifestValidation -ExpectedCode UPDATE_MANIFEST_IDENTITY_OR_BASELINE_INVALID
+    Assert-Diagnostic ($malformedManifestChild.Passed -and $malformedManifestChild.Result.Record.ErrorCode -cne 'UPDATE_UNCLASSIFIED_FAILURE') 'real child process reports malformed-manifest validation failure through the authenticated pipe with a fixed allowlisted code'
+    $malformedManifestChild.Process.Dispose()
+
     $prelockUpdaterFixture=Join-Path $syntheticRoot 'production-updater-with-test-entrypoint.ps1'
     $prelockCandidateFixture=Join-Path $syntheticRoot 'prelock-candidate.json'
     $prelockCases=@(
         @{Name='candidate manifest parse';Fault='MalformedCandidate';Stage='CandidateManifestValidation';Code='UPDATE_MANIFEST_JSON_INVALID';ParentPass=$true},
+        @{Name='candidate manifest missing required identity field';Fault='MissingIdentity';Stage='CandidateManifestValidation';Code='UPDATE_MANIFEST_IDENTITY_OR_BASELINE_INVALID';ParentPass=$true},
         @{Name='candidate manifest';Fault='WrongPackageRoot';Stage='CandidateManifestValidation';Code='UPDATE_CANDIDATE_PACKAGE_ROOT_MISMATCH';ParentPass=$true},
         @{Name='source Git';Fault='WrongOrigin';Stage='SourceGitValidation';Code='UPDATE_SOURCE_ORIGIN_MISMATCH';ParentPass=$true},
         @{Name='source package pin';Fault='WrongPackagePin';Stage='SourcePackagePinValidation';Code='UPDATE_SOURCE_PACKAGE_HASH_MISMATCH';ParentPass=$true},
@@ -340,7 +438,7 @@ try {
         $caseRoot=Join-Path $syntheticRoot ('prelock-'+[guid]::NewGuid().ToString('N'))
         [void][IO.Directory]::CreateDirectory($caseRoot)
         $installTree=New-PrelockInstallTree -Root $caseRoot -OldRelease $prelockOld
-        $candidateFault=if($prelockCase.Fault -eq 'WrongPackageRoot'){'WrongPackageRoot'}elseif($prelockCase.Fault -eq 'WrongPackagePin'){'WrongPackagePin'}elseif($prelockCase.Fault -eq 'MalformedCandidate'){'MalformedCandidate'}else{'Valid'}
+        $candidateFault=if($prelockCase.Fault -eq 'WrongPackageRoot'){'WrongPackageRoot'}elseif($prelockCase.Fault -eq 'WrongPackagePin'){'WrongPackagePin'}elseif($prelockCase.Fault -eq 'MalformedCandidate'){'MalformedCandidate'}elseif($prelockCase.Fault -eq 'MissingIdentity'){'MissingIdentity'}else{'Valid'}
         $prelockCandidateBytes=New-PrelockCandidateBytes -Source $prelockSource -PackageHome $installTree.PackageHome -Fault $candidateFault
         [IO.File]::WriteAllBytes($prelockCandidateFixture,$prelockCandidateBytes)
         $fixtureGit=Get-Command git.exe -ErrorAction Stop

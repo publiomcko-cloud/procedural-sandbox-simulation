@@ -1,0 +1,30 @@
+Test=Test-F2AclEntrypointArguments.ps1 PowerShell=5.1.22621.6133 Exit=0
+PASS: both production entrypoints parse under Windows PowerShell 5.1
+PASS: both production entrypoints retain StrictMode Latest
+PASS: entrypoints avoid pre-body advanced-parameter binding so rejected arguments receive explicit failure status
+PASS: production launcher uses a PS5.1-safe unbound-argument check
+PASS: production coordinator uses a PS5.1-safe unbound-argument check
+PASS: launcher argument validation is inside its protected error handler
+PASS: coordinator path and argument checks are inside its protected error handler
+PASS: coordinator retains its commit-versioned exact installed-path enforcement
+PASS: coordinator retains exactly one required validated CaptureId input
+CASE=launcher-zero;ExitCode=0;TimedOut=False;Stdout=SYNTHETIC_BODY_REACHED;Stderr=
+PASS: synthetic launcher zero-argument -File invocation passes StrictMode
+CASE=launcher-extra;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:RuntimeArgumentsRejected
+PASS: synthetic launcher rejects unexpected arguments before its body
+CASE=launcher-named-extra;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:RuntimeArgumentsRejected
+PASS: synthetic launcher rejects unexpected named arguments with a controlled exit code
+CASE=coordinator-valid;ExitCode=0;TimedOut=False;Stdout=SYNTHETIC_BODY_REACHED:0123456789abcdef0123456789abcdef;Stderr=
+PASS: synthetic coordinator accepts named CaptureId with zero extra arguments under StrictMode
+CASE=coordinator-extra;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorArgumentsRejected
+PASS: synthetic coordinator rejects unexpected extra arguments before its body
+CASE=coordinator-named-extra;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorArgumentsRejected
+PASS: synthetic coordinator rejects unexpected named arguments with a controlled exit code
+CASE=coordinator-invalid;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorCaptureIdRejected
+PASS: synthetic coordinator rejects an invalid CaptureId before its body
+CASE=coordinator-missing;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorCaptureIdRejected
+PASS: synthetic coordinator rejects a missing required CaptureId before its body
+CASE=coordinator-wrong-path;ExitCode=2;TimedOut=False;Stdout=;Stderr=SYNTHETIC_STAGE:CoordinatorPathRejected
+PASS: synthetic coordinator rejects a path mismatch before its body
+Assertions=18;Failures=0
+PROCESS_EXIT=0

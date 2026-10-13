@@ -1,0 +1,5 @@
+COMMAND=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Dev\f2-g1-candidate-manifest-diagnostic-review\docs\reviews\f2-g1-third-upgrade-manifest-diagnostics\evidence\Test-F2G1ThirdUpgradeParserSweep.ps1 -RepoRoot C:\Dev\f2-g1-candidate-manifest-diagnostic-review
+HarnessPowerShell=5.1.22621.6133 Test=Test-F2G1ThirdUpgradeParserSweep.ps1 ChildExit=0
+PowerShellVersion=5.1.22621.6133
+Scope=scripts/f2-acl plus two new review scripts
+ParserFiles=23;ParserErrors=0
