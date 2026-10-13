@@ -58,7 +58,7 @@ The command execution boundary rejected process creation **before the runner pro
 
 The Git core and four local DLL hashes are unchanged from the prior sanitized report at commit `2c19f161740b3efb1636134cd7f62b5c58da45e4`. The signed core executable remains distinguishable from the four unsigned local DLLs. No trustworthy local package/catalog evidence for those DLLs was found; their publisher provenance remains an explicit residual supply-chain risk. No provenance is inferred from version-resource strings.
 
-No diagnostic UAC was initiated in the reviewed tasks or this follow-up. No relevant child was visible during the prior/current process checks. Older attempt history remains **UNKNOWN** because Security event 4688 was inaccessible and the available UAC event-log retention cannot prove a historical negative. This historical limitation is documented, not used as a hidden acceptance requirement. Any future single-use authorization requires a fresh owner declaration; any UAC prompt consumes it, and retry is not permitted.
+No diagnostic UAC was initiated in the reviewed tasks or this follow-up. The prior host assessment found no relevant child; this follow-up did not run a process inventory, and the rejected process-creation request created no runner or child. Older attempt history remains **UNKNOWN** because Security event 4688 was inaccessible and the available UAC event-log retention cannot prove a historical negative. This historical limitation is documented, not used as a hidden acceptance requirement. Any future single-use authorization requires a fresh owner declaration; any UAC prompt consumes it, and retry is not permitted.
 
 ## Gate decision
 
