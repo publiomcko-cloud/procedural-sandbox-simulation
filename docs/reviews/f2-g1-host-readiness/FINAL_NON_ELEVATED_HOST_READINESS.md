@@ -100,6 +100,6 @@ Static PE import inspection found these four local dependencies in Git's `mingw6
 
 This is **BLOCKED_WITH_EVIDENCE**, not authorization to run the command. The fixed-path check fails; actual WMI command-line comparison is incomplete; unsigned Git runtime DLL provenance and historical no-attempt status remain unknown.
 
-Before any request for explicit owner authorization, the execution setup must be reconciled at the exact documented review and runtime paths without overwriting unknown files, the same-token fixture must capture and compare the real `Win32_Process.CommandLine`, and the dependency-provenance uncertainty must be independently resolved or accepted by a separate reviewer. Any mismatch requires a source correction and a new exact-SHA independent review.
+Before any request for explicit owner authorization, the execution setup must be reconciled at the exact documented review and runtime paths without overwriting unknown files, and the same-token fixture must capture and compare the real `Win32_Process.CommandLine`. The unsigned DLL provenance remains an explicitly disclosed unresolved risk for owner/reviewer disposition; no publisher provenance is claimed. Any command-line mismatch requires a source correction and a new exact-SHA independent review.
 
 No UAC, diagnostic launch, protected action, ACL modification, baseline change, VM/G: operation, or PR merge is authorized by this assessment.
