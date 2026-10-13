@@ -1,0 +1,5 @@
+Command="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Dev\f2-g1-final-independent-preflight\scripts\f2-acl\Test-F2ProtectedReleaseDiagnosticSuites.ps1"
+ExitCode=0
+CapturedRunnerLogSha256=6dc232c67c36a989d157863ec9f35195d26d1cd8ea1a9c5549e6389a9699928a
+OriginalTrackedLogRestoredSha256=d9e9bd2be8f7c7ed8c10097431ed628a91b2984b3033c5894feac6b23ec0d4f9
+RestoredByteExact=True
