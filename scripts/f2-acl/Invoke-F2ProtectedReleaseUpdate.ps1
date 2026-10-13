@@ -33,6 +33,36 @@ function Get-F2UpdateHook {
     return $property.Value
 }
 
+function Set-F2UpdateDiagnosticStage {
+    param(
+        [Parameter(Mandatory)]$Context,
+        [Parameter(Mandatory)][ValidateSet(
+            'CandidateManifestValidation','SourceGitValidation','SourcePackagePinValidation',
+            'ParentAclValidation','InstalledV2Validation','TransactionCollisionValidation',
+            'AcquireReleaseBarrier','RuntimeQuiescence','CreateTransactionRoots','StagePackage',
+            'ActivatePackageSideBySide','ActivateManifest'
+        )][string]$Stage
+    )
+    if ($null -eq $Context.PSObject.Properties['DiagnosticStage']) { throw 'UPDATE_DIAGNOSTIC_STAGE_CONTEXT_INVALID' }
+    $Context.DiagnosticStage = $Stage
+    return $Stage
+}
+
+function Get-F2UpdateDiagnosticStage {
+    param($Context)
+    $allowed = @(
+        'CandidateManifestValidation','SourceGitValidation','SourcePackagePinValidation',
+        'ParentAclValidation','InstalledV2Validation','TransactionCollisionValidation',
+        'AcquireReleaseBarrier','RuntimeQuiescence','CreateTransactionRoots','StagePackage',
+        'ActivatePackageSideBySide','ActivateManifest'
+    )
+    if ($null -ne $Context -and $null -ne $Context.PSObject.Properties['DiagnosticStage']) {
+        $stage = [string]$Context.DiagnosticStage
+        if ($stage -cin $allowed) { return $stage }
+    }
+    return 'UpdaterInvocation'
+}
+
 function Test-F2UpdateElevationIdentity {
     param([Parameter(Mandatory)][ValidatePattern('^S-1-')][string]$ExpectedRequesterSid,$Context)
     $hook = Get-F2UpdateHook -Context $Context -Name 'Identity'
@@ -425,6 +455,7 @@ function Invoke-F2UpdateFaultPoint {
 
 function Get-F2UpdateSourceBytes {
     param($Context)
+    Set-F2UpdateDiagnosticStage -Context $Context -Stage 'SourceGitValidation' | Out-Null
     $hook = Get-F2UpdateHook -Context $Context -Name 'SourceBytes'
     if ($null -ne $hook) { return & $hook $Context }
     $root = [IO.Path]::GetFullPath([string]$Context.SourceRoot)
@@ -436,6 +467,7 @@ function Get-F2UpdateSourceBytes {
     if ($LASTEXITCODE -ne 0 -or $origin -cne 'https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git') { throw 'UPDATE_SOURCE_ORIGIN_MISMATCH' }
     $status = @(& $git.Source -C $root status --porcelain --untracked-files=all 2>$null)
     if ($LASTEXITCODE -ne 0 -or $status.Count -ne 0) { throw 'UPDATE_SOURCE_WORKTREE_NOT_CLEAN' }
+    Set-F2UpdateDiagnosticStage -Context $Context -Stage 'SourcePackagePinValidation' | Out-Null
     $result = @{}
     foreach ($name in @($script:F2UpdateOldPins.Keys)) {
         $path = Join-Path (Join-Path $root 'scripts\f2-acl') $name
@@ -521,14 +553,18 @@ function Test-F2UpdateRuntimeProcessPaths {
 
 function Invoke-F2UpdateTransaction {
     param([Parameter(Mandatory)]$Context)
-    $stage = 'CandidateAndSourceValidation'; $manifest=$null; $source=$null; $txId=$null; $lease=$null; $manifestBarrier=$null;$activeState='UNKNOWN'
+    $manifest=$null; $source=$null; $txId=$null; $lease=$null; $manifestBarrier=$null;$activeState='UNKNOWN'
     try {
+        Set-F2UpdateDiagnosticStage -Context $Context -Stage 'CandidateManifestValidation' | Out-Null
         $manifest = Test-F2UpdateCandidate -Context $Context
         $Context.Manifest = $manifest
         $source = Get-F2UpdateSourceBytes -Context $Context
+        Set-F2UpdateDiagnosticStage -Context $Context -Stage 'ParentAclValidation' | Out-Null
         Test-F2UpdateParentChains -Context $Context | Out-Null
+        Set-F2UpdateDiagnosticStage -Context $Context -Stage 'InstalledV2Validation' | Out-Null
         $null = Test-F2UpdateInstalledOldRelease -Context $Context
         $activeState = $script:F2UpdateOldManifestSha256
+        Set-F2UpdateDiagnosticStage -Context $Context -Stage 'TransactionCollisionValidation' | Out-Null
         $releaseRoot = Join-Path $Context.PackageHome 'releases'
         if ([IO.Directory]::Exists($releaseRoot)) { Assert-F2UpdateDirectory -Path $releaseRoot -Context $Context | Out-Null }
         elseif ([IO.File]::Exists($releaseRoot)) { throw 'UPDATE_RELEASE_ROOT_TYPE_INVALID' }
@@ -539,7 +575,7 @@ function Invoke-F2UpdateTransaction {
         if ([IO.File]::Exists($lockPath)) { [void](Assert-F2UpdateFile -Path $lockPath -ExpectedSha256 (Get-F2UpdateSha256 -Bytes ([byte[]]@())) -Context $Context -MaxBytes 1) }
         elseif ([IO.Directory]::Exists($lockPath)) { throw 'UPDATE_RELEASE_LOCK_TYPE_INVALID' }
 
-        $stage = 'AcquireReleaseBarrier'
+        Set-F2UpdateDiagnosticStage -Context $Context -Stage 'AcquireReleaseBarrier' | Out-Null
         # The updater's one pinned elevated bootstrap verifies the updater and
         # candidate bytes before calling this function. The shared lease blocks
         # new v3 readers. The manifest barrier blocks fresh v2 manifest reads;
@@ -566,14 +602,14 @@ function Invoke-F2UpdateTransaction {
             $lease = [IO.File]::Open($lockPath,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
             $manifestBarrier = [IO.File]::Open($Context.ActiveManifestPath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Delete)
         }
-        $stage = 'RuntimeQuiescence'
+        Set-F2UpdateDiagnosticStage -Context $Context -Stage 'RuntimeQuiescence' | Out-Null
         Test-F2UpdateRuntimeProcessPaths -Context $Context
         if ($null -eq $manifestBarrier) { throw 'UPDATE_MANIFEST_BARRIER_UNAVAILABLE' }
         $barrierBytes = Get-F2UpdateHeldManifestBytes -Stream $manifestBarrier
         $null = Test-F2UpdateInstalledOldRelease -Context $Context -ActiveManifestBytes $barrierBytes
 
         $txId = [guid]::NewGuid().ToString('N')
-        $stage = 'CreateTransactionRoots'
+        Set-F2UpdateDiagnosticStage -Context $Context -Stage 'CreateTransactionRoots' | Out-Null
         if (-not [IO.Directory]::Exists($releaseRoot)) { New-F2UpdateDirectory -Path $releaseRoot -Context $Context; Invoke-F2UpdateFaultPoint -Name 'ReleaseRootCreated' -Context $Context }
         if (-not [IO.Directory]::Exists($updateRoot)) { New-F2UpdateDirectory -Path $updateRoot -Context $Context; Invoke-F2UpdateFaultPoint -Name 'UpdateRootCreated' -Context $Context }
         if (-not [IO.Directory]::Exists($backupRoot)) { New-F2UpdateDirectory -Path $backupRoot -Context $Context; Invoke-F2UpdateFaultPoint -Name 'BackupRootCreated' -Context $Context }
@@ -596,7 +632,7 @@ function Invoke-F2UpdateTransaction {
         $initialJournalHash = Add-F2UpdateJournalRecord -Path $journalPath -TxId $txId -State 'PREPARED' -PreviousHash '' -Context $Context
         $Context.TransactionState = [pscustomobject]@{TxId=$txId;JournalPath=$journalPath;JournalHash=$initialJournalHash}
         Invoke-F2UpdateFaultPoint -Name 'JournalCreated' -Context $Context
-        $stage = 'StagePackage'
+        Set-F2UpdateDiagnosticStage -Context $Context -Stage 'StagePackage' | Out-Null
         New-F2UpdateDirectory -Path $stageRoot -Context $Context
         Invoke-F2UpdateFaultPoint -Name 'StageRootCreated' -Context $Context
         $scriptsRoot = Join-Path $stageRoot 'scripts'
@@ -616,14 +652,14 @@ function Invoke-F2UpdateTransaction {
         Write-F2UpdateNewFile -Path $candidatePath -Bytes ([byte[]]$Context.CandidateManifestBytes) -Context $Context
         Invoke-F2UpdateFaultPoint -Name 'CandidateManifestStaged' -Context $Context
 
-        $stage = 'ActivatePackageSideBySide'
+        Set-F2UpdateDiagnosticStage -Context $Context -Stage 'ActivatePackageSideBySide' | Out-Null
         $moveHook = Get-F2UpdateHook -Context $Context -Name 'DirectoryMove'
         if ($null -ne $moveHook) { & $moveHook $stageRoot $finalRoot }
         else { [IO.Directory]::Move($stageRoot,$finalRoot) }
         Invoke-F2UpdateFaultPoint -Name 'PackageActivatedSideBySide' -Context $Context
         Invoke-F2UpdateFaultPoint -Name 'JournalPackageReady' -Context $Context
 
-        $stage = 'ActivateManifest'
+        Set-F2UpdateDiagnosticStage -Context $Context -Stage 'ActivateManifest' | Out-Null
         $replaceHook = Get-F2UpdateHook -Context $Context -Name 'ReplaceManifest'
         $activeState = 'UNKNOWN'
         # Recheck at the activation edge. The manifest barrier is still held:
@@ -649,7 +685,7 @@ function Invoke-F2UpdateTransaction {
         if ($_.Exception -is [Management.Automation.CommandNotFoundException] -and [string]$_.Exception.CommandName -ieq 'git.exe') { $safeCode = 'UPDATE_SOURCE_GIT_UNAVAILABLE' }
         if ($safeCode -notmatch '^[A-Z0-9_:.\-]{1,100}$') { $safeCode = 'UPDATE_UNCLASSIFIED_FAILURE' }
         $innerType = if ($null -ne $_.Exception.InnerException) { $_.Exception.InnerException.GetType().FullName } else { $null }
-        return [pscustomobject]@{Success=$false;Outcome='UPDATE_BLOCKED';Stage=$stage;ErrorCode=$safeCode;FailureType=$_.Exception.GetType().FullName;FailureInnerType=$innerType;TransactionId=$txId;ActiveManifestSha256=$activeState;PartialObjectsPreserved=$true;CleanupPerformed=$false}
+        return [pscustomobject]@{Success=$false;Outcome='UPDATE_BLOCKED';Stage=(Get-F2UpdateDiagnosticStage -Context $Context);ErrorCode=$safeCode;FailureType=$_.Exception.GetType().FullName;FailureInnerType=$innerType;TransactionId=$txId;ActiveManifestSha256=$activeState;PartialObjectsPreserved=$true;CleanupPerformed=$false}
     } finally {
         if ($null -ne $manifestBarrier) { try { $manifestBarrier.Dispose() } catch {} }
         if ($null -ne $lease) { try { $lease.Dispose() } catch {} }
@@ -762,7 +798,7 @@ function Invoke-F2ProtectedReleaseRecovery {
         PackageHome=(Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) 'F2-G1-Icacls')
         ProgramDataRoot=(Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) 'F2-G1-Icacls')
         ActiveManifestPath=(Join-Path (Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) 'F2-G1-Icacls') 'approved-release.json')
-        Hooks=$null
+        Hooks=$null;DiagnosticStage='UpdaterInvocation'
     }
     [void](Get-F2UpdateSourceBytes -Context $context)
     Test-F2UpdateParentChains -Context $context | Out-Null
@@ -787,7 +823,7 @@ function Invoke-F2ProtectedReleaseUpdate {
         PackageHome=(Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) 'F2-G1-Icacls')
         ProgramDataRoot=(Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) 'F2-G1-Icacls')
         ActiveManifestPath=(Join-Path (Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) 'F2-G1-Icacls') 'approved-release.json')
-        Hooks=$null
+        Hooks=$null;DiagnosticStage='UpdaterInvocation'
     }
     return Invoke-F2UpdateTransaction -Context $context
 }

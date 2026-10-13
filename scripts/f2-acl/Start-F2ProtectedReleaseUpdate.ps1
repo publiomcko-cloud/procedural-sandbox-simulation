@@ -1,6 +1,6 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$script:F2UpdateDiagnosticProtocolSha256 = 'f66783ac53ce84c093193fc6e20547e707da7013f4f1406a87b088ab6898654c'
+$script:F2UpdateDiagnosticProtocolSha256 = '66466fd15ce161fe2b522c77cfd6500845012480fc64890aa8435f54197eedc7'
 
 function Get-F2UpdateLauncherSha256 {
     param([Parameter(Mandatory)][AllowEmptyCollection()][byte[]]$Bytes)

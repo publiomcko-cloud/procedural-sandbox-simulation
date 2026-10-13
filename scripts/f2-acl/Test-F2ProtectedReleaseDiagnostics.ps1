@@ -38,6 +38,15 @@ Assert-Diagnostic ($protocolHash -ceq $expectedProtocolHash) 'launcher pins exac
 $updaterSourcePath=Join-Path $PSScriptRoot 'Invoke-F2ProtectedReleaseUpdate.ps1'
 $updaterSourceBytes=[IO.File]::ReadAllBytes($updaterSourcePath)
 . ([scriptblock]::Create([Text.UTF8Encoding]::new($false,$true).GetString($updaterSourceBytes)))
+$prelockStageNames=@('CandidateManifestValidation','SourceGitValidation','SourcePackagePinValidation','ParentAclValidation','InstalledV2Validation','TransactionCollisionValidation')
+Assert-Diagnostic (@($prelockStageNames | Where-Object { $_ -notin $script:F2UpdateDiagnosticStages }).Count -eq 0) 'pipe protocol allowlist includes all six fixed pre-lock diagnostic substages'
+$stageContext=[pscustomobject]@{DiagnosticStage='UpdaterInvocation'}
+$stageSetPass=$true
+foreach($fixedStage in $prelockStageNames){try{[void](Set-F2UpdateDiagnosticStage -Context $stageContext -Stage $fixedStage);if($stageContext.DiagnosticStage -cne $fixedStage){$stageSetPass=$false}}catch{$stageSetPass=$false}}
+Assert-Diagnostic $stageSetPass 'production updater accepts and stores every fixed pre-lock stage label'
+$unlistedStageRejected=$false
+try{Set-F2UpdateDiagnosticStage -Context $stageContext -Stage 'C:\private\path' | Out-Null}catch{$unlistedStageRejected=$true}
+Assert-Diagnostic ($unlistedStageRejected -and (Normalize-F2UpdateDiagnosticStage -Stage 'C:\private\path') -ceq 'UpdaterInvocation') 'unlisted stage labels are rejected at the updater boundary and normalized to a fixed non-sensitive fallback'
 function Add-Type { throw 'SYNTHETIC_NATIVE_COMPILER_FAILURE' }
 $nativeCompileCode=$null
 try { New-F2UpdateNativeSupport } catch { $nativeCompileCode=[string]$_.Exception.Message }
@@ -74,7 +83,7 @@ Assert-Diagnostic ($channelFailureResult.DiagnosticStatus -ceq 'CHANNEL_FAILED' 
 $channelChild.Dispose();$channelFailureServer.Dispose()
 
 function Invoke-SyntheticDiagnosticWorker {
-    param($Request,[string]$Stage='UpdaterInvocation',[string]$Code='UPDATE_UNCLASSIFIED_FAILURE',[int]$ExitCode=1,[int]$RecordExitCode=-1,[switch]$Duplicate,[switch]$Tamper,[switch]$Oversize,[switch]$Stall,[switch]$WrongRequest,[Diagnostics.Process]$ExpectedChildProcess)
+    param($Request,[string]$Stage='UpdaterInvocation',[string]$Code='UPDATE_UNCLASSIFIED_FAILURE',[int]$ExitCode=1,[int]$RecordExitCode=-1,[switch]$Duplicate,[switch]$Tamper,[switch]$Oversize,[switch]$Stall,[switch]$WrongRequest,[switch]$UnknownStage,[Diagnostics.Process]$ExpectedChildProcess)
     $pipeName = $Request.PipeName
     $requestJson = $Request | ConvertTo-Json -Compress -Depth 4
     $requestB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($requestJson))
@@ -90,13 +99,14 @@ if('__WRONG__' -eq '1'){$request.Nonce=('0'*64)}
 if('__OVERSIZE__' -eq '1'){$frame=[byte[]](0xFF,0xFF,0xFF,0x7F);$client=New-Object IO.Pipes.NamedPipeClientStream('.', $request.PipeName, [IO.Pipes.PipeDirection]::Out);$client.Connect(3000);$client.Write($frame,0,$frame.Length);$client.Dispose()}
 elseif('__TAMPER__' -eq '1' -or '__DUPLICATE__' -eq '1'){$record=New-F2UpdateDiagnosticRecord -Request $request -ChildPid $PID -ChildCreationUtcTicks $process.StartTime.ToUniversalTime().Ticks -ChildExitCode $recordExit -Stage $stage -ErrorCode $code;$frame=New-F2UpdateDiagnosticFrame -Record $record;if('__TAMPER__' -eq '1'){$frame[$frame.Length-1]=$frame[$frame.Length-1] -bxor 1};$client=New-Object IO.Pipes.NamedPipeClientStream('.', $request.PipeName, [IO.Pipes.PipeDirection]::Out);$client.Connect(3000);$client.Write($frame,0,$frame.Length);if('__DUPLICATE__' -eq '1'){$client.Write($frame,0,$frame.Length)};$client.Dispose()}
 elseif('__STALL__' -eq '1'){$client=New-Object IO.Pipes.NamedPipeClientStream('.', $request.PipeName, [IO.Pipes.PipeDirection]::Out);$client.Connect(3000);$client.WriteByte(0);$client.Flush();Start-Sleep -Seconds 8;$client.Dispose()}
+elseif('__UNKNOWN_STAGE__' -eq '1'){$record=New-F2UpdateDiagnosticRecord -Request $request -ChildPid $PID -ChildCreationUtcTicks $process.StartTime.ToUniversalTime().Ticks -ChildExitCode $recordExit -Stage $stage -ErrorCode $code;$record['Stage']='UNLISTED_DIAGNOSTIC_STAGE';$frame=New-F2UpdateDiagnosticFrame -Record $record;$client=New-Object IO.Pipes.NamedPipeClientStream('.', $request.PipeName, [IO.Pipes.PipeDirection]::Out);$client.Connect(3000);$client.Write($frame,0,$frame.Length);$client.Dispose()}
 elseif('__NO_MESSAGE__' -ne '1'){$null=Send-F2UpdateDiagnosticRecord -Request $request -Stage $stage -ErrorCode $code -ChildExitCode $recordExit -ConnectTimeoutMilliseconds 3000}
 exit $exit
 '@
-    $wrongFlag = if($WrongRequest.IsPresent){1}else{0}; $duplicateFlag = if($Duplicate.IsPresent){1}else{0}; $tamperFlag = if($Tamper.IsPresent){1}else{0}; $oversizeFlag = if($Oversize.IsPresent){1}else{0}; $stallFlag = if($Stall.IsPresent){1}else{0}
+    $wrongFlag = if($WrongRequest.IsPresent){1}else{0}; $duplicateFlag = if($Duplicate.IsPresent){1}else{0}; $tamperFlag = if($Tamper.IsPresent){1}else{0}; $oversizeFlag = if($Oversize.IsPresent){1}else{0}; $stallFlag = if($Stall.IsPresent){1}else{0}; $unknownStageFlag = if($UnknownStage.IsPresent){1}else{0}
     $noMessage = [int]($Stage -eq 'NO_MESSAGE')
     if($RecordExitCode -eq -1){$RecordExitCode=$ExitCode}
-    $worker = $worker.Replace('__PROTOCOL_PATH__',$protocolPath.Replace("'","''")).Replace('__REQUEST__',$requestB64).Replace('__STAGE__',$Stage).Replace('__CODE__',$Code).Replace('__EXIT__',[string]$ExitCode).Replace('__RECORD_EXIT__',[string]$RecordExitCode).Replace('__WRONG__',[string]$wrongFlag).Replace('__DUPLICATE__',[string]$duplicateFlag).Replace('__TAMPER__',[string]$tamperFlag).Replace('__OVERSIZE__',[string]$oversizeFlag).Replace('__STALL__',[string]$stallFlag).Replace('__NO_MESSAGE__',[string]$noMessage)
+    $worker = $worker.Replace('__PROTOCOL_PATH__',$protocolPath.Replace("'","''")).Replace('__REQUEST__',$requestB64).Replace('__STAGE__',$Stage).Replace('__CODE__',$Code).Replace('__EXIT__',[string]$ExitCode).Replace('__RECORD_EXIT__',[string]$RecordExitCode).Replace('__WRONG__',[string]$wrongFlag).Replace('__DUPLICATE__',[string]$duplicateFlag).Replace('__TAMPER__',[string]$tamperFlag).Replace('__OVERSIZE__',[string]$oversizeFlag).Replace('__STALL__',[string]$stallFlag).Replace('__UNKNOWN_STAGE__',[string]$unknownStageFlag).Replace('__NO_MESSAGE__',[string]$noMessage)
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($worker))
     $start = New-Object Diagnostics.ProcessStartInfo
     $start.FileName = (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe')
@@ -146,6 +156,158 @@ function Invoke-ProductionChildFixture {
     [pscustomobject]@{Passed=[bool]$passed;Result=$result;Process=$child;EncodedLength=$encoded.Length}
 }
 
+function New-PrelockSourceFixture {
+    param([string]$Root)
+    $sourceRoot=Join-Path $Root 'source-checkout'
+    $sourceAcl=Join-Path $sourceRoot 'scripts\f2-acl'
+    [void][IO.Directory]::CreateDirectory($sourceAcl)
+    $repoRoot=(Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+    $names=@($script:F2UpdateOldPins.Keys)
+    foreach($name in $names){Copy-Item -LiteralPath (Join-Path (Join-Path $repoRoot 'scripts\f2-acl') $name) -Destination (Join-Path $sourceAcl $name)}
+    if([IO.File]::Exists((Join-Path $repoRoot '.gitattributes'))){Copy-Item -LiteralPath (Join-Path $repoRoot '.gitattributes') -Destination (Join-Path $sourceRoot '.gitattributes')}
+    $git=Get-Command git.exe -ErrorAction Stop
+    & $git.Source -C $sourceRoot init --quiet
+    if($LASTEXITCODE -ne 0){throw 'SYNTHETIC_SOURCE_GIT_INIT_FAILED'}
+    & $git.Source -C $sourceRoot config core.autocrlf false
+    & $git.Source -C $sourceRoot config user.name 'F2 Prelock Synthetic'
+    & $git.Source -C $sourceRoot config user.email 'f2-prelock@example.invalid'
+    & $git.Source -C $sourceRoot remote add origin 'https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git'
+    & $git.Source -C $sourceRoot add -- .gitattributes scripts/f2-acl
+    if($LASTEXITCODE -ne 0){throw 'SYNTHETIC_SOURCE_GIT_ADD_FAILED'}
+    & $git.Source -C $sourceRoot commit --quiet -m 'synthetic source validation fixture'
+    if($LASTEXITCODE -ne 0){throw 'SYNTHETIC_SOURCE_GIT_COMMIT_FAILED'}
+    $commit=(& $git.Source -C $sourceRoot rev-parse HEAD 2>$null | Out-String).Trim()
+    if($LASTEXITCODE -ne 0 -or $commit -notmatch '^[0-9a-f]{40}$'){throw 'SYNTHETIC_SOURCE_GIT_HEAD_FAILED'}
+    $sourcePins=@{}
+    $pinBytes=$null
+    foreach($name in $names){
+        $bytes=[IO.File]::ReadAllBytes((Join-Path $sourceAcl $name))
+        if($name -ceq 'F2_ICACLS_SOURCE_PINS.json'){$pinBytes=$bytes}
+        $sourcePins[$name]=Get-F2UpdateDiagnosticSha256 -Bytes $bytes
+    }
+    return [pscustomobject]@{Root=$sourceRoot;AclRoot=$sourceAcl;Commit=$commit;Names=$names;SourcePins=$sourcePins;PinManifestSha256=(Get-F2UpdateDiagnosticSha256 -Bytes $pinBytes)}
+}
+
+function New-PrelockOldReleaseFixture {
+    param([string]$Root)
+    $repoRoot=(Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+    $archivePath=Join-Path $Root 'old-v2-source.zip'
+    $git=Get-Command git.exe -ErrorAction Stop
+    & $git.Source -C $repoRoot archive --format=zip "--output=$archivePath" $script:F2UpdateOldCommit 'scripts/f2-acl'
+    if($LASTEXITCODE -ne 0 -or -not [IO.File]::Exists($archivePath)){throw 'SYNTHETIC_OLD_RELEASE_ARCHIVE_FAILED'}
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip=[IO.Compression.ZipFile]::OpenRead($archivePath)
+    $files=@{}
+    try{
+        foreach($name in @($script:F2UpdateOldPins.Keys)){
+            $entry=$zip.GetEntry(('scripts/f2-acl/'+$name))
+            if($null -eq $entry -or $entry.Length -gt 4194304){throw 'SYNTHETIC_OLD_RELEASE_ENTRY_INVALID'}
+            $input=$entry.Open();$memory=New-Object IO.MemoryStream
+            try{$input.CopyTo($memory);$bytes=$memory.ToArray()}finally{$input.Dispose();$memory.Dispose()}
+            if($name -ceq 'F2AclCapture.Protocol.psm1' -and (Get-F2UpdateDiagnosticSha256 -Bytes $bytes) -cne $script:F2UpdateOldPins[$name]){
+                $text=[Text.UTF8Encoding]::new($false,$true).GetString($bytes)
+                $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($text -replace "`r?`n","`r`n"))
+            }
+            if((Get-F2UpdateDiagnosticSha256 -Bytes $bytes) -cne $script:F2UpdateOldPins[$name]){throw 'SYNTHETIC_OLD_RELEASE_PIN_MISMATCH'}
+            $files[$name]=$bytes
+        }
+    }finally{$zip.Dispose()}
+    $manifest=[ordered]@{
+        Schema='f2-icacls-runtime-release-v2'
+        ReviewedCommitSha=$script:F2UpdateOldCommit
+        BaselineMailboxId=$script:F2UpdateBaselineMailboxId
+        BaselinePayloadCaptureId=$script:F2UpdateBaselineCaptureId
+        BaselinePayloadSha256=$script:F2UpdateBaselinePayloadSha256
+        BaselineIntegritySha256=$script:F2UpdateBaselineIntegritySha256
+        SourcePinsManifestSha256=$script:F2UpdateOldPins['F2_ICACLS_SOURCE_PINS.json']
+        Files=@(foreach($name in $script:F2UpdateOldPins.Keys){[pscustomobject]@{Name=$name;Sha256=$script:F2UpdateOldPins[$name]}})
+    }
+    $manifestBytes=[Text.UTF8Encoding]::new($false).GetBytes(($manifest|ConvertTo-Json -Compress -Depth 6))
+    if((Get-F2UpdateDiagnosticSha256 -Bytes $manifestBytes) -cne $script:F2UpdateOldManifestSha256){throw 'SYNTHETIC_OLD_RELEASE_MANIFEST_PIN_MISMATCH'}
+    return [pscustomobject]@{Files=$files;ManifestBytes=$manifestBytes}
+}
+
+function New-PrelockCandidateBytes {
+    param($Source,[string]$PackageHome,[ValidateSet('Valid','WrongPackageRoot','WrongPackagePin')][string]$Fault='Valid')
+    $files=@(foreach($name in $Source.Names){$sha=[string]$Source.SourcePins[$name];if($Fault -eq 'WrongPackagePin' -and $name -ceq $Source.Names[0]){$sha='0'*64};[pscustomobject]@{Name=$name;Sha256=$sha}})
+    $packageRoot=Join-Path (Join-Path $PackageHome 'releases') $Source.Commit
+    if($Fault -eq 'WrongPackageRoot'){$packageRoot=Join-Path ([IO.Path]::GetTempPath()) 'unrelated-release-root'}
+    $candidate=[ordered]@{
+        Schema='f2-icacls-runtime-release-v3'
+        ReviewedCommitSha=$Source.Commit
+        PackageRoot=$packageRoot
+        BaselineMailboxId=$script:F2UpdateBaselineMailboxId
+        BaselinePayloadCaptureId=$script:F2UpdateBaselineCaptureId
+        BaselinePayloadSha256=$script:F2UpdateBaselinePayloadSha256
+        BaselineIntegritySha256=$script:F2UpdateBaselineIntegritySha256
+        SourcePinsManifestSha256=$Source.PinManifestSha256
+        Files=$files
+    }
+    return ,[Text.UTF8Encoding]::new($false).GetBytes(($candidate|ConvertTo-Json -Compress -Depth 6))
+}
+
+function New-PrelockInstallTree {
+    param([string]$Root,$OldRelease)
+    $fakeC=Join-Path $Root 'C'
+    $packageHome=Join-Path (Join-Path $fakeC 'Program Files') 'F2-G1-Icacls'
+    $oldAcl=Join-Path $packageHome 'scripts\f2-acl'
+    $programDataRoot=Join-Path (Join-Path $fakeC 'ProgramData') 'F2-G1-Icacls'
+    [void][IO.Directory]::CreateDirectory($oldAcl)
+    [void][IO.Directory]::CreateDirectory($programDataRoot)
+    foreach($name in $script:F2UpdateOldPins.Keys){[IO.File]::WriteAllBytes((Join-Path $oldAcl $name),[byte[]]$OldRelease.Files[$name])}
+    $active=Join-Path $programDataRoot 'approved-release.json'
+    [IO.File]::WriteAllBytes($active,[byte[]]$OldRelease.ManifestBytes)
+    return [pscustomobject]@{PackageHome=$packageHome;ProgramDataRoot=$programDataRoot;ActiveManifestPath=$active}
+}
+
+function Invoke-PrelockProductionChildFixture {
+    param([string]$UpdaterFile,[string]$CandidateFile,[string]$SourceRoot,[string]$SourceCommit,[string]$PackageHome,[string]$ProgramDataRoot,[string]$ActiveManifestPath,[bool]$ParentAclPass,[string]$ExpectedStage,[string]$ExpectedCode)
+    $spec=[ordered]@{PackageHome=$PackageHome;ProgramDataRoot=$ProgramDataRoot;ActiveManifestPath=$ActiveManifestPath;ParentAclPass=$ParentAclPass}
+    $specBytes=[Text.UTF8Encoding]::new($false).GetBytes(($spec|ConvertTo-Json -Compress -Depth 3))
+    $specB64=[Convert]::ToBase64String($specBytes)
+    $productionUpdater=[IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'Invoke-F2ProtectedReleaseUpdate.ps1'))
+    $fixtureEntrypoint=@'
+function Test-F2UpdateElevationIdentity { param($ExpectedRequesterSid) return $true }
+function Invoke-F2ProtectedReleaseUpdate {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][byte[]]$CandidateManifestBytes,[Parameter(Mandatory)][string]$CandidateManifestSha256,[Parameter(Mandatory)][string]$ExpectedUpdaterSha256,[Parameter(Mandatory)][string]$ExpectedLauncherSha256,[Parameter(Mandatory)][string]$SourceRoot,[Parameter(Mandatory)][string]$ExpectedRequesterSid,[Parameter(Mandatory)][int]$RequesterLauncherProcessId,[Parameter(Mandatory)][long]$RequesterLauncherCreationUtcTicks)
+    $spec=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__CASE_SPEC_B64__'))|ConvertFrom-Json -ErrorAction Stop
+    $parentPass=[bool]$spec.ParentAclPass
+    $candidateManifest=Get-F2UpdateManifestObject -Bytes $CandidateManifestBytes -ExpectedSchema v3 -ExpectedHash $CandidateManifestSha256
+    $hooks=[pscustomobject]@{
+        AclCheck={param($path,$kind)return $true}
+        ParentChainCheck={param($context)return $parentPass}.GetNewClosure()
+    }
+    $context=[pscustomobject]@{
+        SourceRoot=[IO.Path]::GetFullPath($SourceRoot);ExpectedSourceCommit=[string]$candidateManifest.ReviewedCommitSha
+        CandidateManifestBytes=$CandidateManifestBytes;CandidateManifestSha256=$CandidateManifestSha256;Manifest=$candidateManifest
+        PackageHome=[string]$spec.PackageHome;ProgramDataRoot=[string]$spec.ProgramDataRoot;ActiveManifestPath=[string]$spec.ActiveManifestPath
+        Hooks=$hooks;TransactionState=$null;DiagnosticStage='UpdaterInvocation'
+    }
+    return Invoke-F2UpdateTransaction -Context $context
+}
+'@.Replace('__CASE_SPEC_B64__',$specB64)
+    $updaterText=[Text.UTF8Encoding]::new($false,$true).GetString($productionUpdater)+"`r`n"+$fixtureEntrypoint
+    $updaterBytes=[Text.UTF8Encoding]::new($false).GetBytes($updaterText)
+    [IO.File]::WriteAllBytes($UpdaterFile,$updaterBytes)
+    $updaterHash=Get-F2UpdateDiagnosticSha256 -Bytes $updaterBytes
+    $candidateBytes=[IO.File]::ReadAllBytes($CandidateFile)
+    $candidateHash=Get-F2UpdateDiagnosticSha256 -Bytes $candidateBytes
+    $requesterProcess=[Diagnostics.Process]::GetCurrentProcess()
+    $request=New-F2UpdateDiagnosticRequest -SourceCommit $SourceCommit -LauncherSha256 ('b'*64) -UpdaterSha256 $updaterHash -CandidateManifestSha256 $candidateHash -RequesterPid $PID -RequesterCreationUtcTicks $requesterProcess.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
+    $script:Server.Dispose();$script:Server=New-F2UpdateDiagnosticServer -Request $request
+    $childScript=New-F2UpdateElevatedChildScript -UpdaterPath $UpdaterFile -CandidatePath $CandidateFile -SourceRoot $SourceRoot -ExpectedSourceCommit $SourceCommit -ExpectedLauncherSha256 ('b'*64) -ExpectedUpdaterSha256 $updaterHash -ExpectedCandidateManifestSha256 $candidateHash -ExpectedRequesterSid $sid -RequesterLauncherProcessId $PID -RequesterLauncherCreationUtcTicks $requesterProcess.StartTime.ToUniversalTime().Ticks -DiagnosticRequest $request -DiagnosticProtocolPath $protocolPath -DiagnosticProtocolBytes $protocolBytes
+    $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childScript))
+    if($encoded.Length -gt 32767){throw 'SYNTHETIC_CHILD_COMMAND_TOO_LARGE'}
+    $start=New-Object Diagnostics.ProcessStartInfo;$start.FileName=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe';$start.Arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+$encoded;$start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
+    $child=New-Object Diagnostics.Process;$child.StartInfo=$start
+    if(-not $child.Start()){throw 'SYNTHETIC_PRELOCK_CHILD_START_FAILED'}
+    $ticks=$child.StartTime.ToUniversalTime().Ticks
+    $result=Receive-F2UpdateDiagnosticRecord -Server $script:Server -Request $request -ChildProcess $child -ChildCreationUtcTicks $ticks -TimeoutSeconds 25 -PostExitWaitMilliseconds 500 -RecordTimeoutMilliseconds 5000
+    $stdout=$child.StandardOutput.ReadToEnd();$stderr=$child.StandardError.ReadToEnd()
+    $passed=$result.DiagnosticStatus -ceq 'VALIDATED' -and $result.ActualChildExitCode -eq 1 -and $result.Record.Stage -ceq $ExpectedStage -and $result.Record.ErrorCode -ceq $ExpectedCode -and -not $result.TimedOut
+    [pscustomobject]@{Passed=[bool]$passed;Request=$request;Result=$result;Process=$child;Stdout=$stdout;Stderr=$stderr;UpdaterSha256=$updaterHash;CandidateSha256=$candidateHash;EncodedLength=$encoded.Length}
+}
+
 $script:Server = New-F2UpdateDiagnosticServer -Request $request
 $syntheticRoot=$null
 try {
@@ -159,6 +321,51 @@ try {
     $candidateFixtureBytes=[Text.Encoding]::UTF8.GetBytes('{"Schema":"f2-icacls-runtime-release-v3","ReviewedCommitSha":"'+$commitFixture+'"}')
     [IO.File]::WriteAllBytes($candidateFixture,$candidateFixtureBytes)
     $candidateFixtureHash=Get-F2UpdateDiagnosticSha256 -Bytes $candidateFixtureBytes
+    $prelockSource=New-PrelockSourceFixture -Root $syntheticRoot
+    $prelockOld=New-PrelockOldReleaseFixture -Root $syntheticRoot
+    Assert-Diagnostic ($prelockSource.Commit -match '^[0-9a-f]{40}$' -and $prelockSource.SourcePins.Count -eq 7 -and $prelockOld.Files.Count -eq 7 -and (Get-F2UpdateDiagnosticSha256 -Bytes $prelockOld.ManifestBytes) -ceq $script:F2UpdateOldManifestSha256) 'pre-lock child fixtures use a clean temporary Git source and exact pinned old-v2 manifest and files'
+    $prelockUpdaterFixture=Join-Path $syntheticRoot 'production-updater-with-test-entrypoint.ps1'
+    $prelockCandidateFixture=Join-Path $syntheticRoot 'prelock-candidate.json'
+    $prelockCases=@(
+        @{Name='candidate manifest';Fault='WrongPackageRoot';Stage='CandidateManifestValidation';Code='UPDATE_CANDIDATE_PACKAGE_ROOT_MISMATCH';ParentPass=$true},
+        @{Name='source Git';Fault='WrongOrigin';Stage='SourceGitValidation';Code='UPDATE_SOURCE_ORIGIN_MISMATCH';ParentPass=$true},
+        @{Name='source package pin';Fault='WrongPackagePin';Stage='SourcePackagePinValidation';Code='UPDATE_SOURCE_PACKAGE_HASH_MISMATCH';ParentPass=$true},
+        @{Name='parent ACL';Fault='ParentReject';Stage='ParentAclValidation';Code='UPDATE_PARENT_CHAIN_UNSAFE';ParentPass=$false},
+        @{Name='installed v2';Fault='CorruptOldFile';Stage='InstalledV2Validation';Code='UPDATE_FILE_HASH_MISMATCH';ParentPass=$true},
+        @{Name='transaction collision';Fault='BadLockBytes';Stage='TransactionCollisionValidation';Code='UPDATE_FILE_TYPE_OR_SIZE_INVALID';ParentPass=$true}
+    )
+    foreach($prelockCase in $prelockCases){
+        $caseRoot=Join-Path $syntheticRoot ('prelock-'+[guid]::NewGuid().ToString('N'))
+        [void][IO.Directory]::CreateDirectory($caseRoot)
+        $installTree=New-PrelockInstallTree -Root $caseRoot -OldRelease $prelockOld
+        $candidateFault=if($prelockCase.Fault -eq 'WrongPackageRoot'){'WrongPackageRoot'}elseif($prelockCase.Fault -eq 'WrongPackagePin'){'WrongPackagePin'}else{'Valid'}
+        $prelockCandidateBytes=New-PrelockCandidateBytes -Source $prelockSource -PackageHome $installTree.PackageHome -Fault $candidateFault
+        [IO.File]::WriteAllBytes($prelockCandidateFixture,$prelockCandidateBytes)
+        $fixtureGit=Get-Command git.exe -ErrorAction Stop
+        if($prelockCase.Fault -eq 'WrongOrigin'){
+            & $fixtureGit.Source -C $prelockSource.Root remote set-url origin 'https://example.invalid/wrong-origin.git'
+            if($LASTEXITCODE -ne 0){throw 'SYNTHETIC_SOURCE_GIT_REMOTE_MUTATION_FAILED'}
+        }elseif($prelockCase.Fault -eq 'CorruptOldFile'){
+            [IO.File]::WriteAllText($installTree.ActiveManifestPath,'synthetic active-manifest corruption')
+        }elseif($prelockCase.Fault -eq 'BadLockBytes'){
+            [IO.File]::WriteAllText((Join-Path $installTree.ProgramDataRoot 'release.lock'),'non-empty synthetic collision')
+        }
+        $childCase=Invoke-PrelockProductionChildFixture -UpdaterFile $prelockUpdaterFixture -CandidateFile $prelockCandidateFixture -SourceRoot $prelockSource.Root -SourceCommit $prelockSource.Commit -PackageHome $installTree.PackageHome -ProgramDataRoot $installTree.ProgramDataRoot -ActiveManifestPath $installTree.ActiveManifestPath -ParentAclPass $prelockCase.ParentPass -ExpectedStage $prelockCase.Stage -ExpectedCode $prelockCase.Code
+        if($prelockCase.Fault -eq 'WrongOrigin'){
+            & $fixtureGit.Source -C $prelockSource.Root remote set-url origin 'https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git'
+            if($LASTEXITCODE -ne 0){throw 'SYNTHETIC_SOURCE_GIT_REMOTE_RESTORE_FAILED'}
+        }
+        $recordNames=if($null -ne $childCase.Result.Record){@($childCase.Result.Record.PSObject.Properties|ForEach-Object Name)}else{@()}
+        $expectedRecordNames=@('Schema','Authority','RequestId','Nonce','SourceCommit','LauncherSha256','UpdaterSha256','CandidateManifestSha256','RequesterPid','RequesterCreationUtcTicks','RequesterSidSha256','ChildPid','ChildCreationUtcTicks','ChildExitCode','Stage','ErrorCode')
+        $recordShape=$recordNames.Count -eq $expectedRecordNames.Count -and @(Compare-Object $expectedRecordNames $recordNames -CaseSensitive).Count -eq 0
+        $safeRecord=$childCase.Passed -and $childCase.Result.Record.Authority -ceq 'NON_AUTHORITATIVE_DIAGNOSTIC' -and $childCase.Result.Record.Stage -ceq $prelockCase.Stage -and $childCase.Result.Record.ErrorCode -ceq $prelockCase.Code -and $recordShape -and $childCase.Stdout.Length -le 4096 -and $childCase.Stderr.Length -le 4096
+        if(-not $safeRecord){$observedStage=if($null -ne $childCase.Result.Record){[string]$childCase.Result.Record.Stage}else{'<missing>'};$observedCode=if($null -ne $childCase.Result.Record){[string]$childCase.Result.Record.ErrorCode}else{$childCase.Result.DiagnosticErrorCode};Write-Host ('PRELOCK_CASE='+$prelockCase.Name+';Status='+$childCase.Result.DiagnosticStatus+';Stage='+$observedStage+';Code='+$observedCode+';ChildExit='+$childCase.Result.ActualChildExitCode+';Timeout='+$childCase.Result.TimedOut)}
+        Assert-Diagnostic $safeRecord ("production child builder and authenticated pipe report {0} failure as {1}/{2} in the fixed sanitized schema" -f $prelockCase.Name,$prelockCase.Stage,$prelockCase.Code)
+        $noTransactionRoots= -not [IO.Directory]::Exists((Join-Path $installTree.PackageHome 'releases')) -and -not [IO.Directory]::Exists((Join-Path $installTree.ProgramDataRoot 'updates')) -and -not [IO.Directory]::Exists((Join-Path $installTree.ProgramDataRoot 'backups'))
+        if($prelockCase.Fault -eq 'BadLockBytes'){$noTransactionRoots=$noTransactionRoots -and [IO.File]::ReadAllText((Join-Path $installTree.ProgramDataRoot 'release.lock')) -ceq 'non-empty synthetic collision'}else{$noTransactionRoots=$noTransactionRoots -and -not [IO.File]::Exists((Join-Path $installTree.ProgramDataRoot 'release.lock'))}
+        Assert-Diagnostic $noTransactionRoots ("{0} failure preserves the TEMP-only old release and creates no transaction objects" -f $prelockCase.Name)
+        $childCase.Process.Dispose()
+    }
     $fixtureUpdaterText=New-SyntheticUpdaterText -Stage 'CandidateAndSourceValidation' -Code 'UPDATE_SOURCE_GIT_UNAVAILABLE'
     $fixtureUpdaterBytes=[Text.UTF8Encoding]::new($false).GetBytes($fixtureUpdaterText)
     [IO.File]::WriteAllBytes($updaterFixture,$fixtureUpdaterBytes)
@@ -236,6 +443,7 @@ try {
     foreach($negative in @(
         @{Name='stale or replayed nonce';Args=@{WrongRequest=$true};Expected='INVALID'},
         @{Name='tampered payload digest';Args=@{Tamper=$true};Expected='INVALID'},
+        @{Name='unlisted diagnostic stage';Args=@{UnknownStage=$true};Expected='INVALID'},
         @{Name='duplicate diagnostic frame';Args=@{Duplicate=$true};Expected='INVALID'},
         @{Name='oversized frame';Args=@{Oversize=$true};Expected='INVALID'},
         @{Name='unavailable diagnostic record';Args=@{Stage='NO_MESSAGE'};Expected='MISSING'},

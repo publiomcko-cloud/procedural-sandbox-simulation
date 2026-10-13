@@ -59,6 +59,8 @@ namespace F2UpdateDiagnostics {
 $script:F2UpdateDiagnosticStages = @(
     'ChildBootstrapInitialization','UpdaterAndCandidateHashValidation','UpdaterScriptLoading',
     'ElevatedIdentityValidation','UpdaterInvocation','CandidateAndSourceValidation',
+    'CandidateManifestValidation','SourceGitValidation','SourcePackagePinValidation',
+    'ParentAclValidation','InstalledV2Validation','TransactionCollisionValidation',
     'AcquireReleaseBarrier','RuntimeQuiescence','CreateTransactionRoots','StagePackage',
     'ActivatePackageSideBySide','ActivateManifest','Complete'
 )
@@ -66,6 +68,7 @@ $script:F2UpdateDiagnosticCodes = @(
     'NONE','UPDATE_CHILD_BOOTSTRAP_INITIALIZATION_FAILED','UPDATE_UPDATER_SCRIPT_LOAD_FAILED',
     'UPDATE_ELEVATED_REQUESTER_IDENTITY_MISMATCH','UPDATE_ELEVATED_REQUESTER_IDENTITY_UNVERIFIABLE',
     'UPDATE_UPDATER_HASH_MISMATCH','UPDATE_CANDIDATE_HASH_MISMATCH','UPDATE_CANDIDATE_MANIFEST_INVALID',
+    'UPDATE_CANDIDATE_COMMIT_MISMATCH','UPDATE_CANDIDATE_PACKAGE_ROOT_MISMATCH',
     'UPDATE_SOURCE_GIT_UNAVAILABLE','UPDATE_SOURCE_COMMIT_MISMATCH','UPDATE_SOURCE_ORIGIN_MISMATCH',
     'UPDATE_SOURCE_WORKTREE_NOT_CLEAN','UPDATE_SOURCE_PACKAGE_HASH_MISMATCH','UPDATE_SOURCE_INTERNAL_PIN_MISMATCH',
     'UPDATE_SOURCE_PIN_MANIFEST_HASH_MISMATCH','UPDATE_SOURCE_PIN_PROVENANCE_INVALID','UPDATE_SOURCE_PINS_HASH_INVALID',
@@ -170,7 +173,7 @@ function Normalize-F2UpdateDiagnosticCode {
     if ($Code -ceq 'UPDATE_SOURCE_PACKAGE_HASH_MISMATCH:' -or $Code -like 'UPDATE_SOURCE_PACKAGE_HASH_MISMATCH:*') { return 'UPDATE_SOURCE_PACKAGE_HASH_MISMATCH' }
     if ($Code -ceq 'UPDATE_SOURCE_INTERNAL_PIN_MISMATCH:' -or $Code -like 'UPDATE_SOURCE_INTERNAL_PIN_MISMATCH:*') { return 'UPDATE_SOURCE_INTERNAL_PIN_MISMATCH' }
     if ($Code -in $script:F2UpdateDiagnosticCodes) { return $Code }
-    if ($ExceptionType -ceq 'System.Management.Automation.CommandNotFoundException' -and $Stage -ceq 'CandidateAndSourceValidation') { return 'UPDATE_SOURCE_GIT_UNAVAILABLE' }
+    if ($ExceptionType -ceq 'System.Management.Automation.CommandNotFoundException' -and $Stage -cin @('CandidateAndSourceValidation','SourceGitValidation')) { return 'UPDATE_SOURCE_GIT_UNAVAILABLE' }
     if ($Stage -ceq 'ChildBootstrapInitialization') { return 'UPDATE_CHILD_BOOTSTRAP_INITIALIZATION_FAILED' }
     if ($Stage -ceq 'UpdaterScriptLoading') { return 'UPDATE_UPDATER_SCRIPT_LOAD_FAILED' }
     return 'UPDATE_UNCLASSIFIED_FAILURE'
