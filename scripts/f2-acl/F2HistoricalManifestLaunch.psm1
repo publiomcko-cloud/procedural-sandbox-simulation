@@ -6,8 +6,8 @@ $script:F2LaunchExpectedCandidateRoot = 'C:\Dev\f2-g1-protected-updater'
 $script:F2LaunchExpectedSourceCommit = '396c44965c90c08292ad2835f8317e81b6b9daaf'
 $script:F2LaunchExpectedCandidateCommit = '7f99bc10f3e2258d2340cea4e7ba1352022cbb6d'
 $script:F2LaunchExpectedRemote = 'https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git'
-$script:F2LaunchExpectedGitPath = 'C:\Program Files\Git\cmd\git.exe'
-$script:F2LaunchExpectedGitSha256 = '7b7971dd13f0c3a284e538601f2f9770b3a87dfaccb5fb52d68141c67ed22364'
+$script:F2LaunchExpectedGitPath = 'C:\Program Files\Git\mingw64\bin\git.exe'
+$script:F2LaunchExpectedGitSha256 = '1a0043555d254618f2d56c936c3d9a1fbfb878bc878416a133c346bc7835eda9'
 $script:F2LaunchExpectedWrapperSha256 = '99505626679c75511e16d524c39dfd0ff0cbd27b3a0bd36d631cbadf2c1c9536'
 $script:F2LaunchExpectedProbeModuleSha256 = '4541338491269ac2bf409c5ba0c63d93d6a5e3fd9896c9d378c79dbea43ee7ee'
 $script:F2LaunchExpectedUpdaterSha256 = 'd9572f7ea113ab01eaa4c6ab98d0852ce9549642b083719f68c01f02b2a81bb2'
@@ -30,6 +30,10 @@ using Microsoft.Win32.SafeHandles;
 public static class F2HistoricalLaunchNative {
     [StructLayout(LayoutKind.Sequential)] private struct SECURITY_ATTRIBUTES { public int nLength; public IntPtr lpSecurityDescriptor; public int bInheritHandle; }
     [StructLayout(LayoutKind.Sequential)] private struct TOKEN_ELEVATION { public int TokenIsElevated; }
+    [StructLayout(LayoutKind.Sequential)] private struct FILE_INFORMATION { public uint Attributes,CreationLow,CreationHigh,AccessLow,AccessHigh,WriteLow,WriteHigh,Volume,SizeHigh,SizeLow,Links,IndexHigh,IndexLow; }
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] private static extern SafeFileHandle CreateFileW(string path,uint access,uint share,IntPtr security,uint creation,uint flags,IntPtr template);
+    [DllImport("kernel32.dll", SetLastError=true)] private static extern bool GetFileInformationByHandle(SafeFileHandle file,out FILE_INFORMATION info);
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] private static extern uint GetFinalPathNameByHandleW(SafeFileHandle file,StringBuilder path,uint length,uint flags);
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] private static extern SafePipeHandle CreateNamedPipeW(string name, uint openMode, uint pipeMode, uint maxInstances, uint outBuffer, uint inBuffer, uint timeout, ref SECURITY_ATTRIBUTES security);
     [DllImport("kernel32.dll", SetLastError=true)] private static extern bool GetNamedPipeClientProcessId(IntPtr pipe, out uint processId);
     [DllImport("kernel32.dll", SetLastError=true)] private static extern bool GetNamedPipeServerProcessId(IntPtr pipe, out uint processId);
@@ -52,6 +56,20 @@ public static class F2HistoricalLaunchNative {
     }
     public static uint ClientPid(IntPtr pipe) { uint pid; if(!GetNamedPipeClientProcessId(pipe,out pid)) throw new Win32Exception(Marshal.GetLastWin32Error()); return pid; }
     public static uint ServerPid(IntPtr pipe) { uint pid; if(!GetNamedPipeServerProcessId(pipe,out pid)) throw new Win32Exception(Marshal.GetLastWin32Error()); return pid; }
+    public static FileStream OpenPinnedReadOnly(string path) {
+        string expected=Path.GetFullPath(path);
+        SafeFileHandle h=CreateFileW(expected,0x80000000,1,IntPtr.Zero,3,0x00200000,IntPtr.Zero);
+        if(h==null||h.IsInvalid){int e=Marshal.GetLastWin32Error();if(h!=null)h.Dispose();throw new Win32Exception(e);}
+        try {
+            FILE_INFORMATION i;if(!GetFileInformationByHandle(h,out i))throw new Win32Exception(Marshal.GetLastWin32Error());
+            if((i.Attributes&0x410)!=0)throw new IOException("not a regular file");
+            StringBuilder b=new StringBuilder(1024);uint n=GetFinalPathNameByHandleW(h,b,(uint)b.Capacity,0);
+            if(n==0||n>=b.Capacity)throw new Win32Exception(Marshal.GetLastWin32Error());
+            string actual=b.ToString();if(actual.StartsWith(@"\\?\",StringComparison.Ordinal))actual=actual.Substring(4);
+            if(!String.Equals(Path.GetFullPath(actual),expected,StringComparison.OrdinalIgnoreCase))throw new IOException("path identity mismatch");
+            return new FileStream(h,FileAccess.Read);
+        } catch { h.Dispose();throw; }
+    }
     public static string ProcessSid(uint pid) { IntPtr process=OpenProcess(0x1000,false,pid); if(process==IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error()); IntPtr token=IntPtr.Zero; IntPtr buffer=IntPtr.Zero; try { if(!OpenProcessToken(process,0x0008,out token)) throw new Win32Exception(Marshal.GetLastWin32Error()); int needed; GetTokenInformation(token,1,IntPtr.Zero,0,out needed); buffer=Marshal.AllocHGlobal(needed); if(!GetTokenInformation(token,1,buffer,needed,out needed)) throw new Win32Exception(Marshal.GetLastWin32Error()); return new SecurityIdentifier(Marshal.ReadIntPtr(buffer)).Value; } finally { if(buffer!=IntPtr.Zero) Marshal.FreeHGlobal(buffer); if(token!=IntPtr.Zero) CloseHandle(token); CloseHandle(process); } }
     public static bool TokenIsElevated(IntPtr token) { IntPtr buffer=Marshal.AllocHGlobal(Marshal.SizeOf(typeof(TOKEN_ELEVATION))); try { int needed; if(!GetTokenInformation(token,20,buffer,Marshal.SizeOf(typeof(TOKEN_ELEVATION)),out needed)) throw new Win32Exception(Marshal.GetLastWin32Error()); return Marshal.ReadInt32(buffer)!=0; } finally { Marshal.FreeHGlobal(buffer); } }
     public static int TokenIntegrityRid(IntPtr token) { IntPtr buffer=IntPtr.Zero; try { int needed; GetTokenInformation(token,25,IntPtr.Zero,0,out needed); buffer=Marshal.AllocHGlobal(needed); if(!GetTokenInformation(token,25,buffer,needed,out needed)) throw new Win32Exception(Marshal.GetLastWin32Error()); IntPtr sid=Marshal.ReadIntPtr(buffer); byte count=Marshal.ReadByte(GetSidSubAuthorityCount(sid)); if(count==0) throw new InvalidOperationException("invalid token label"); return Marshal.ReadInt32(GetSidSubAuthority(sid,(uint)(count-1))); } finally { if(buffer!=IntPtr.Zero) Marshal.FreeHGlobal(buffer); } }
@@ -245,6 +263,7 @@ function Test-F2LaunchResponse {
     if ([string]$diagnostic.FullyQualifiedErrorId -cnotin $safeCodes -or [string]$diagnostic.FullyQualifiedErrorId -cne [string]$diagnostic.ErrorCode) { return $false }
     if ([string]$diagnostic.HistoricalSourceCommit -cne $script:F2LaunchExpectedSourceCommit -or [string]$diagnostic.HistoricalUpdaterSha256 -cne $script:F2LaunchExpectedUpdaterSha256 -or [string]$diagnostic.HistoricalLauncherSha256 -cne $script:F2LaunchExpectedHistoricalLauncherSha256 -or [string]$diagnostic.HistoricalCandidateSha256 -cne $script:F2LaunchExpectedCandidateSha256) { return $false }
     if ([string]$diagnostic.TokenClass -notin @('STANDARD','ELEVATED')) { return $false }
+    if ($Response.Status -ceq 'PASS' -and [string]$diagnostic.TokenClass -cne 'ELEVATED') { return $false }
     if ($diagnostic.UpdaterEntrypointInvoked -ne $false -or $diagnostic.RecoveryEntrypointInvoked -ne $false -or $diagnostic.ProtectedWritePerformed -ne $false) { return $false }
     if ($Response.Status -ceq 'PASS') {
         if ($diagnosticNames.Count -ne ($diagnosticRequired.Count+1)) { return $false }
@@ -403,11 +422,10 @@ function Read-F2LaunchPinnedFile {
           [Parameter(Mandatory)][string]$ExpectedSha256,
           [Parameter(Mandatory)][int]$MaximumBytes)
     Test-F2LaunchNoReparsePath -Path $Path | Out-Null
-    $item=Get-Item -LiteralPath $Path -Force -ErrorAction Stop
-    if ($item.PSIsContainer -or $item.Length -lt 1 -or $item.Length -gt $MaximumBytes) { throw 'LAUNCH_FILE_TYPE_OR_SIZE_INVALID' }
-    $stream=New-Object IO.FileStream($Path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+    Initialize-F2LaunchNative | Out-Null
+    $stream=[F2HistoricalLaunchNative]::OpenPinnedReadOnly($Path)
     try {
-        if ($stream.Length -ne $item.Length) { throw 'LAUNCH_FILE_CHANGED_DURING_READ' }
+        if ($stream.Length -lt 1 -or $stream.Length -gt $MaximumBytes) { throw 'LAUNCH_FILE_TYPE_OR_SIZE_INVALID' }
         $bytes=New-Object byte[] ([int]$stream.Length)
         $offset=0
         while ($offset -lt $bytes.Length) {
@@ -418,6 +436,36 @@ function Read-F2LaunchPinnedFile {
     } finally { $stream.Dispose() }
     if ((Get-F2LaunchSha256 -Bytes $bytes) -cne $ExpectedSha256.ToLowerInvariant()) { throw 'LAUNCH_FILE_HASH_MISMATCH' }
     return ,$bytes
+}
+
+function New-F2LaunchChildInvocation {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$ChildPath,
+          [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{64}$')][string]$ChildSha256,
+          [Parameter(Mandatory)][ValidatePattern('^F2D_[0-9a-f]{32}$')][string]$PipeName,
+          [Parameter(Mandatory)][ValidateRange(1,2147483647)][int]$RequesterPid,
+          [Parameter(Mandatory)][ValidateRange(1,[long]::MaxValue)][long]$RequesterStartUtcTicks,
+          [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{40}$')][string]$LaunchCommitSha,
+          [ValidateRange(512,8191)][int]$MaximumCommandLineLength = 3600)
+    $canonicalChildPath=[IO.Path]::GetFullPath($ChildPath)
+    if ($canonicalChildPath -match "['`r`n]" -or -not [IO.Path]::IsPathRooted($canonicalChildPath)) { throw 'LAUNCH_SOURCE_PATH_REJECTED' }
+    $bootstrap=@'
+$env:PSModulePath=$PSHOME+'\Modules';Set-StrictMode -Version Latest;$ErrorActionPreference='Stop';$p='__F2_CHILD_PATH__';$h='__F2_CHILD_SHA256__';$n='__F2_PIPE_NAME__';$rp=__F2_REQUESTER_PID__;$rt=__F2_REQUESTER_TICKS__;$c='__F2_LAUNCH_COMMIT__';try{$q=[IO.Path]::GetFullPath($p);$x=$q;while($x){$i=Get-Item -LiteralPath $x -Force -ErrorAction Stop;if($i.Attributes -band [IO.FileAttributes]::ReparsePoint){exit 81};$x=[IO.Path]::GetDirectoryName($x)};$f=[IO.File]::Open($q,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read);try{if($f.Length-lt 1-or$f.Length-gt 262144){exit 82};$b=New-Object byte[] ([int]$f.Length);$o=0;while($o-lt$b.Length){$r=$f.Read($b,$o,$b.Length-$o);if($r-le 0){exit 84};$o+=$r}}finally{$f.Dispose()};$z=[Security.Cryptography.SHA256]::Create();try{$v=[BitConverter]::ToString($z.ComputeHash($b)).Replace('-','').ToLowerInvariant()}finally{$z.Dispose()};if($v-cne$h){exit 85};$t=(New-Object Text.UTF8Encoding($false,$true)).GetString($b);$s=[scriptblock]::Create($t);&$s -PipeName $n -ExpectedParentPid $rp -ExpectedParentStartUtcTicks $rt -ExpectedLaunchCommitSha $c;exit $LASTEXITCODE}catch{exit 89}
+'@
+    $bootstrap=$bootstrap.Replace('__F2_CHILD_PATH__',$canonicalChildPath).
+        Replace('__F2_CHILD_SHA256__',$ChildSha256).
+        Replace('__F2_PIPE_NAME__',$PipeName).
+        Replace('__F2_REQUESTER_PID__',[string]$RequesterPid).
+        Replace('__F2_REQUESTER_TICKS__',[string]$RequesterStartUtcTicks).
+        Replace('__F2_LAUNCH_COMMIT__',$LaunchCommitSha)
+    if ($bootstrap -match '__F2_[A-Z0-9_]+__') { throw 'LAUNCH_CHILD_BOOTSTRAP_INVALID' }
+    $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($bootstrap))
+    $arguments='-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+$encoded
+    $powershellPath=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    Test-F2LaunchNoReparsePath -Path $powershellPath | Out-Null
+    $fullCommandLine='"'+$powershellPath+'" '+$arguments
+    if ($fullCommandLine.Length -gt $MaximumCommandLineLength) { throw 'LAUNCH_CHILD_ARGUMENT_LIMIT' }
+    return [pscustomobject][ordered]@{ExecutablePath=$powershellPath;Arguments=$arguments;EncodedCommand=$encoded;BootstrapText=$bootstrap;ArgumentLength=$arguments.Length;CommandLineLength=$fullCommandLine.Length;ChildPath=$canonicalChildPath;ChildSha256=$ChildSha256}
 }
 
 function Invoke-F2LaunchGitReadOnly {
@@ -505,4 +553,4 @@ function Get-F2LaunchProcessIdentity {
     finally { $process.Dispose() }
 }
 
-Export-ModuleMember -Function Get-F2LaunchSha256,ConvertTo-F2LaunchVerifiedScriptBlock,Test-F2LaunchTokenFacts,Test-F2LaunchRepositoryFacts,Test-F2LaunchHashSet,Test-F2LaunchPreflightFacts,New-F2LaunchRequest,Test-F2LaunchRequest,Test-F2LaunchResponse,ConvertTo-F2LaunchFrame,Read-F2LaunchFrameBytes,Test-F2LaunchPeerFacts,Test-F2LaunchProcessCommandLine,Test-F2LaunchCommandLineRecord,Test-F2LaunchHello,Test-F2LaunchNoForbiddenOperations,New-F2LaunchPipeSecurity,New-F2LaunchServerStream,Initialize-F2LaunchNative,Test-F2LaunchNoReparsePath,Read-F2LaunchPinnedFile,Get-F2LaunchRepositoryFacts,Get-F2LaunchTokenFacts,Get-F2LaunchProcessIdentity
+Export-ModuleMember -Function Get-F2LaunchSha256,ConvertTo-F2LaunchVerifiedScriptBlock,Test-F2LaunchTokenFacts,Test-F2LaunchRepositoryFacts,Test-F2LaunchHashSet,Test-F2LaunchPreflightFacts,New-F2LaunchRequest,Test-F2LaunchRequest,Test-F2LaunchResponse,ConvertTo-F2LaunchFrame,Read-F2LaunchFrameBytes,Test-F2LaunchPeerFacts,Test-F2LaunchProcessCommandLine,Test-F2LaunchCommandLineRecord,Test-F2LaunchHello,Test-F2LaunchNoForbiddenOperations,New-F2LaunchPipeSecurity,New-F2LaunchServerStream,Initialize-F2LaunchNative,Test-F2LaunchNoReparsePath,Read-F2LaunchPinnedFile,New-F2LaunchChildInvocation,Get-F2LaunchRepositoryFacts,Get-F2LaunchTokenFacts,Get-F2LaunchProcessIdentity

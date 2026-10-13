@@ -9,7 +9,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $script:launchAttempts=0
-$script:launchRoot='C:\Dev\f2-g1-diagnostic-elevation-plan-source'
+$script:launchRoot='C:\Dev\f2-g1-diagnostic-launch-runtime'
 $script:sourceRoot='C:\Dev\f2-g1-protected-updater-source'
 $script:candidateRoot='C:\Dev\f2-g1-protected-updater'
 $script:expectedRemote='https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git'
@@ -17,7 +17,7 @@ $script:expectedSourceCommit='396c44965c90c08292ad2835f8317e81b6b9daaf'
 $script:expectedCandidateCommit='7f99bc10f3e2258d2340cea4e7ba1352022cbb6d'
 $script:expectedProbeModuleSha256='4541338491269ac2bf409c5ba0c63d93d6a5e3fd9896c9d378c79dbea43ee7ee'
 $script:expectedWrapperSha256='99505626679c75511e16d524c39dfd0ff0cbd27b3a0bd36d631cbadf2c1c9536'
-$script:expectedChildSha256='1c7706d65267c578d5d2a76e93cb9dd99f3d4d3b6681a5e83341b991512d3baa'
+$script:expectedChildSha256='78c8ea2a51d3eece2914ea87f18b46186f604a357671fb0607393801bca5609e'
 $script:expectedUpdaterSha256='d9572f7ea113ab01eaa4c6ab98d0852ce9549642b083719f68c01f02b2a81bb2'
 $script:expectedHistoricalLauncherSha256='9fc4d574eda4a03ee05bca5ce789bdb10ee0b05f5f6de273839ba0060445bdc9'
 $script:expectedProtocolSha256='66466fd15ce161fe2b522c77cfd6500845012480fc64890aa8435f54197eedc7'
@@ -66,7 +66,7 @@ function Read-F2LaunchPipeFrame {
 function Get-F2LaunchSafeCode {
     param([Parameter(Mandatory)][System.Management.Automation.ErrorRecord]$Record)
     $head=([string]$Record.FullyQualifiedErrorId).Split(',')[0]
-    $safe=@('LAUNCH_PS_VERSION_INVALID','LAUNCH_PS_ARCH_INVALID','LAUNCH_UNEXPECTED_ARGUMENTS','LAUNCH_APPROVAL_SWITCH_REQUIRED','LAUNCH_REQUESTER_TOKEN_REQUIRED','LAUNCH_CHECKOUT_MISMATCH','LAUNCH_GIT_PATH_REJECTED','LAUNCH_GIT_START_FAILED','LAUNCH_GIT_TIMEOUT','LAUNCH_GIT_OUTPUT_LIMIT','LAUNCH_GIT_DRAIN_INCOMPLETE','LAUNCH_GIT_QUERY_FAILED','LAUNCH_CHECKOUT_METADATA_REJECTED','LAUNCH_FILE_TYPE_OR_SIZE_INVALID','LAUNCH_FILE_HASH_MISMATCH','LAUNCH_CHILD_HASH_MISMATCH','LAUNCH_WRAPPER_HASH_MISMATCH','LAUNCH_MODULE_HASH_MISMATCH','LAUNCH_SOURCE_INPUT_HASH_MISMATCH','LAUNCH_UAC_CANCELLED_OR_LAUNCH_FAILED','LAUNCH_CHILD_PROCESS_UNKNOWN','LAUNCH_CHILD_PEER_MISMATCH','LAUNCH_CHILD_TOKEN_MISMATCH','LAUNCH_CHILD_COMMAND_MISMATCH','LAUNCH_CHILD_EXIT_BEFORE_CONNECT','LAUNCH_PIPE_TIMEOUT','LAUNCH_PIPE_EOF','LAUNCH_FRAME_SIZE_INVALID','LAUNCH_FRAME_LENGTH_INVALID','LAUNCH_RESPONSE_INVALID','LAUNCH_CHILD_EXIT_TIMEOUT','LAUNCH_CHILD_EXIT_MISMATCH','LAUNCH_SOURCE_PATH_REJECTED','LAUNCH_PIPE_CREATE_FAILED','LAUNCH_PIPE_DACL_INVALID','LAUNCH_REQUEST_INVALID','LAUNCH_OUTPUT_BOUND_EXCEEDED')
+    $safe=@('LAUNCH_PS_VERSION_INVALID','LAUNCH_PS_ARCH_INVALID','LAUNCH_UNEXPECTED_ARGUMENTS','LAUNCH_APPROVAL_SWITCH_REQUIRED','LAUNCH_REQUESTER_TOKEN_REQUIRED','LAUNCH_CHECKOUT_MISMATCH','LAUNCH_GIT_PATH_REJECTED','LAUNCH_GIT_START_FAILED','LAUNCH_GIT_TIMEOUT','LAUNCH_GIT_OUTPUT_LIMIT','LAUNCH_GIT_DRAIN_INCOMPLETE','LAUNCH_GIT_QUERY_FAILED','LAUNCH_CHECKOUT_METADATA_REJECTED','LAUNCH_FILE_TYPE_OR_SIZE_INVALID','LAUNCH_FILE_HASH_MISMATCH','LAUNCH_CHILD_HASH_MISMATCH','LAUNCH_WRAPPER_HASH_MISMATCH','LAUNCH_MODULE_HASH_MISMATCH','LAUNCH_SOURCE_INPUT_HASH_MISMATCH','LAUNCH_UAC_CANCELLED_OR_LAUNCH_FAILED','LAUNCH_CHILD_PROCESS_UNKNOWN','LAUNCH_CHILD_PEER_MISMATCH','LAUNCH_CHILD_TOKEN_MISMATCH','LAUNCH_CHILD_COMMAND_MISMATCH','LAUNCH_CHILD_EXIT_BEFORE_CONNECT','LAUNCH_PIPE_TIMEOUT','LAUNCH_PIPE_EOF','LAUNCH_FRAME_SIZE_INVALID','LAUNCH_FRAME_LENGTH_INVALID','LAUNCH_RESPONSE_INVALID','LAUNCH_CHILD_EXIT_TIMEOUT','LAUNCH_CHILD_EXIT_MISMATCH','LAUNCH_SOURCE_PATH_REJECTED','LAUNCH_PIPE_CREATE_FAILED','LAUNCH_PIPE_DACL_INVALID','LAUNCH_REQUEST_INVALID','LAUNCH_OUTPUT_BOUND_EXCEEDED','LAUNCH_CHILD_ARGUMENT_LIMIT','LAUNCH_CHILD_BOOTSTRAP_INVALID')
     if($safe -ccontains $head){return $head}
     return 'LAUNCH_UNCLASSIFIED_FAILURE'
 }
@@ -91,15 +91,15 @@ try {
     $script:stage='LaunchCheckoutValidation'
     $currentScriptPath=Join-Path $script:launchRoot 'scripts\f2-acl\Start-F2HistoricalManifestDiagnostic.ps1'
     $scriptBytes=Read-F2LaunchPinnedFile -Path $currentScriptPath -ExpectedSha256 $ExpectedLauncherSha256 -MaximumBytes 262144
-    $launchFacts=Get-F2LaunchRepositoryFacts -GitPath 'C:\Program Files\Git\cmd\git.exe' -ExpectedGitSha256 '7b7971dd13f0c3a284e538601f2f9770b3a87dfaccb5fb52d68141c67ed22364' -Repository $script:launchRoot -ExpectedRoot $script:launchRoot -ExpectedHead $ExpectedLaunchCommitSha
+    $launchFacts=Get-F2LaunchRepositoryFacts -GitPath 'C:\Program Files\Git\mingw64\bin\git.exe' -ExpectedGitSha256 '1a0043555d254618f2d56c936c3d9a1fbfb878bc878416a133c346bc7835eda9' -Repository $script:launchRoot -ExpectedRoot $script:launchRoot -ExpectedHead $ExpectedLaunchCommitSha
     if(-not $launchFacts.Pass){throw 'LAUNCH_CHECKOUT_MISMATCH'}
 
     $script:stage='TokenValidation'
     $token=Get-F2LaunchTokenFacts
     if($token.IsAdministrator -or $token.IsElevated -or $token.IntegrityRid -ge 0x3000){throw 'LAUNCH_REQUESTER_TOKEN_REQUIRED'}
-    $gitPath='C:\Program Files\Git\cmd\git.exe'
+    $gitPath='C:\Program Files\Git\mingw64\bin\git.exe'
     [void](Test-F2LaunchNoReparsePath -Path $gitPath)
-    $gitSha='7b7971dd13f0c3a284e538601f2f9770b3a87dfaccb5fb52d68141c67ed22364'
+    $gitSha='1a0043555d254618f2d56c936c3d9a1fbfb878bc878416a133c346bc7835eda9'
     [void](Read-F2LaunchPinnedFile -Path $gitPath -ExpectedSha256 $gitSha -MaximumBytes 67108864)
     $script:stage='SourceIdentityValidation'
     $sourceFacts=Get-F2LaunchRepositoryFacts -GitPath $gitPath -ExpectedGitSha256 $gitSha -Repository $script:sourceRoot -ExpectedRoot $script:sourceRoot -ExpectedHead $script:expectedSourceCommit
@@ -131,21 +131,15 @@ try {
     $shortPipe='F2D_'+[guid]::NewGuid().ToString('N')
     $pipe=New-F2LaunchServerStream -ShortName $shortPipe -RequesterSid $requesterSid
     $launchModuleSha=$ExpectedLaunchModuleSha256
-    $childTemplatePath=$childPath
-    $childHash=$script:expectedChildSha256
-    $childLoader=@"
-`$env:PSModulePath=`$PSHOME+'\Modules';`$ErrorActionPreference='Stop';`$path='$childTemplatePath';`$expected='$childHash';`$current=[IO.Path]::GetFullPath(`$path);while(-not [string]::IsNullOrEmpty(`$current)){if(-not([IO.File]::Exists(`$current)-or[IO.Directory]::Exists(`$current))){exit 80};`$item=Get-Item -LiteralPath `$current -Force -ErrorAction Stop;if((`$item.Attributes -band [IO.FileAttributes]::ReparsePoint)-ne 0){exit 81};`$parent=[IO.Path]::GetDirectoryName(`$current);if([string]::IsNullOrEmpty(`$parent)-or`$parent -ceq `$current){break};`$current=`$parent};`$s=[IO.File]::Open(`$path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read);try{if(`$s.Length -lt 1 -or `$s.Length -gt 262144){exit 82};`$b=New-Object byte[] ([int]`$s.Length);`$o=0;while(`$o -lt `$b.Length){`$n=`$s.Read(`$b,`$o,`$b.Length-`$o);if(`$n -le 0){exit 83};`$o+=`$n}}finally{`$s.Dispose()};`$h=[BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash(`$b)).Replace('-','').ToLowerInvariant();if(`$h -cne `$expected){exit 84};`$t=(New-Object System.Text.UTF8Encoding(`$false,`$true)).GetString(`$b);`$scriptBlock=[scriptblock]::Create(`$t);& `$scriptBlock -PipeName '$shortPipe' -ExpectedParentPid $requesterPid -ExpectedParentStartUtcTicks $requesterStartTicks -ExpectedLaunchCommitSha '$ExpectedLaunchCommitSha';exit `$LASTEXITCODE
-"@
-    $childEncoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childLoader))
-    if($childEncoded.Length -gt 28000){throw 'LAUNCH_OUTPUT_BOUND_EXCEEDED'}
-    $powershellPath=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $childInvocation=New-F2LaunchChildInvocation -ChildPath $childPath -ChildSha256 $script:expectedChildSha256 -PipeName $shortPipe -RequesterPid $requesterPid -RequesterStartUtcTicks $requesterStartTicks -LaunchCommitSha $ExpectedLaunchCommitSha -MaximumCommandLineLength 3600
+    $childEncoded=$childInvocation.EncodedCommand
+    $powershellPath=$childInvocation.ExecutablePath
     [void](Test-F2LaunchNoReparsePath -Path $powershellPath)
     $process=$null
     $script:launchAttempts=1
     $script:result=[pscustomobject][ordered]@{Schema='f2-g1-diagnostic-launch-result-v1';Authority='NON_AUTHORITATIVE_DIAGNOSTIC_ONLY';Status='RUNNING';Stage='UacLaunch';ErrorCode='NONE';UacAttempted=$true;ChildPid=$null;ChildExitCode=$null;ChildMayRemain=$false;DiagnosticStatus='MISSING';DiagnosticStage='UNKNOWN';DiagnosticErrorCode='UNKNOWN';Stdout='';StderrCodes=@();WrapperSha256=$script:expectedWrapperSha256;ModuleSha256=$script:expectedProbeModuleSha256;UpdaterEntrypointInvoked=$false;RecoveryEntrypointInvoked=$false;ProtectedWritePerformed=$false}
     $script:stage='UacLaunch'
-    $arguments='-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+$childEncoded
-    try {$process=Start-Process -FilePath $powershellPath -ArgumentList $arguments -Verb RunAs -PassThru -WindowStyle Hidden -ErrorAction Stop}
+    try {$process=Start-Process -FilePath $powershellPath -ArgumentList $childInvocation.Arguments -Verb RunAs -PassThru -WindowStyle Hidden -ErrorAction Stop}
     catch {throw 'LAUNCH_UAC_CANCELLED_OR_LAUNCH_FAILED'}
     $childPid=$process.Id
     $childStart=[long]$process.StartTime.ToUniversalTime().Ticks
