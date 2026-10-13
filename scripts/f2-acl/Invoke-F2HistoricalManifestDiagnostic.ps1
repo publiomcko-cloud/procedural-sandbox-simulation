@@ -68,15 +68,22 @@ try {
     $protocolPath = Join-Path $historicalRoot 'scripts\f2-acl\F2ProtectedRelease.Diagnostics.ps1'
     $candidatePath = Join-Path $candidateRoot 'docs\reviews\f2-g1-protected-release-updater\f2-runtime-release-v3.candidate.json'
     $modulePath = Join-Path $PSScriptRoot 'F2HistoricalManifestDiagnostic.psm1'
-    foreach ($inputPath in @($updaterPath,$launcherPath,$protocolPath,$candidatePath,$modulePath)) {
+    foreach ($inputPath in @($updaterPath,$launcherPath,$protocolPath,$candidatePath)) {
         Test-F2ProbeNoReparsePath -Path $inputPath
     }
 
     $stage = 'ModuleIntegrityValidation'
-    $moduleItem = Get-Item -LiteralPath $modulePath -Force -ErrorAction Stop
-    if ($moduleItem.PSIsContainer -or $moduleItem.Length -gt 131072) { throw 'PROBE_MODULE_INPUT_INVALID' }
-    $moduleBytes = [IO.File]::ReadAllBytes($modulePath)
-    if ($moduleBytes.Length -ne $moduleItem.Length) { throw 'PROBE_MODULE_INPUT_INVALID' }
+    $inMemoryModule = Get-Variable -Name 'F2HistoricalVerifiedModuleBytes' -Scope Global -ErrorAction SilentlyContinue
+    if ($null -ne $inMemoryModule) {
+        if ($inMemoryModule.Value -isnot [byte[]] -or $inMemoryModule.Value.Length -gt 131072) { throw 'PROBE_MODULE_INPUT_INVALID' }
+        $moduleBytes = [byte[]]$inMemoryModule.Value
+    } else {
+        Test-F2ProbeNoReparsePath -Path $modulePath
+        $moduleItem = Get-Item -LiteralPath $modulePath -Force -ErrorAction Stop
+        if ($moduleItem.PSIsContainer -or $moduleItem.Length -gt 131072) { throw 'PROBE_MODULE_INPUT_INVALID' }
+        $moduleBytes = [IO.File]::ReadAllBytes($modulePath)
+        if ($moduleBytes.Length -ne $moduleItem.Length) { throw 'PROBE_MODULE_INPUT_INVALID' }
+    }
     $moduleSha256 = Get-F2ProbeBytesSha256 -Bytes $moduleBytes
     if ($moduleSha256 -cne '4541338491269ac2bf409c5ba0c63d93d6a5e3fd9896c9d378c79dbea43ee7ee') { throw 'PROBE_MODULE_HASH_MISMATCH' }
     $moduleText = (New-Object System.Text.UTF8Encoding($false,$true)).GetString($moduleBytes)
