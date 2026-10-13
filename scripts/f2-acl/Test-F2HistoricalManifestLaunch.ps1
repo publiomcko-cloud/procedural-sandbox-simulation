@@ -327,6 +327,7 @@ try {
     Assert-F2Launch -Condition ((Get-TestLiteralPin $childText "launchModuleSha256\s*=\s*'([0-9a-f]{64})'") -ceq $launchModuleSha -and (Get-TestLiteralPin $childText "wrapperSha256\s*=\s*'([0-9a-f]{64})'") -ceq $wrapperSha -and (Get-TestLiteralPin $childText "probeModuleSha256\s*=\s*'([0-9a-f]{64})'") -ceq $probeSha) -Name 'ElevatedChildPinsExactLaunchWrapperAndProbeModuleBytes'
     Assert-F2Launch -Condition ((Get-TestLiteralPin $wrapperText "moduleSha256\s*-cne\s*'([0-9a-f]{64})'") -ceq $probeSha) -Name 'WrapperPinsExactDiagnosticModuleBytes'
     Assert-F2Launch -Condition ((Get-TestLiteralPin $outerText "expectedLaunchModuleSha256\s*=\s*'([0-9a-f]{64})'") -ceq $launchModuleSha -and (Get-TestLiteralPin $outerText "expectedLauncherSha256\s*=\s*'([0-9a-f]{64})'") -ceq $launcherSha) -Name 'OuterBootstrapPinsExactModuleAndLauncherBytes'
+    Assert-F2Launch -Condition ((Get-TestLiteralPin $outerText "expectedLaunchCommitSha\s*=\s*'([0-9a-f]{40})'") -ceq '8c2bddd90c6ac5214eeed08b5648d0ef30b58bf4') -Name 'OuterBootstrapRequiresExactReviewedLaunchImplementationCommit'
     Assert-F2Launch -Condition ($outerText -notmatch '__[A-Z0-9_]+__' -and $startText -notmatch '__[A-Z0-9_]+__' -and $childText -notmatch '__[A-Z0-9_]+__' -and $moduleText -notmatch '__[A-Z0-9_]+__') -Name 'PublishedProductionPinsHaveNoUnresolvedPlaceholders'
     $commandPath=Join-Path (Split-Path $outerBootstrapPath -Parent) 'EXACT_UAC_COMMAND.txt'
     if(Test-Path -LiteralPath $commandPath){
