@@ -1,0 +1,1 @@
+F2NativeHelperAssertions=20;Failures=0;TempCleanup=PASS

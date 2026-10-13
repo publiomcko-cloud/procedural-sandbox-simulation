@@ -1,0 +1,6 @@
+Windows PowerShell 5.1 parser sweep command:
+powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\docs\reviews\f2-g1-accelerated-diagnostic-probe\evidence\Invoke-PowerShellParserSweep.ps1
+ParserRuntime=WindowsPowerShell 5.1.22621.6133;Files=24;Errors=0
+ParserProcessExit=0
+git diff --cached --check=0
+git diff --check=0

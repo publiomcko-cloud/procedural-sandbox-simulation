@@ -1,0 +1,119 @@
+PASS: actual repository helper pins match source files and retained collector provenance
+PASS: all pre-elevation synthetic identity, manifest, volume, path, pin and evidence gates pass
+PASS: expected allowlist contains exactly 11 unique objects
+PASS: unexpected NIC fails before any coordinator can launch
+PASS: incorrect Kingston model fails closed
+PASS: ambiguous disk identity fails closed
+PASS: evidence volume GUID cannot be substituted for ProjectVolumeGuid
+PASS: wrong G: volume identity fails closed
+PASS: baseline integrity digest mismatch fails closed
+PASS: reparse path fails before UAC
+PASS: reparse or alias in an ancestor chain fails before UAC
+PASS: missing path check fails before UAC
+PASS: evidence storage on G: is rejected
+PASS: source pin mismatch fails before UAC
+PASS: missing baseline fields return a closed preflight failure rather than throwing
+PASS: duplicate baseline object records fail preflight
+PASS: non-canonical path spelling is rejected as an alias even when it resolves to an approved object
+PASS: file-versus-directory substitution on an authorized path fails closed
+PASS: source pin verifier reads the pin manifest and hashes spaced file paths with correct PowerShell 5.1 parameter binding
+PASS: source pin verifier rejects modified helper source
+PASS: source pin verifier rejects a commit mismatch
+PASS: production command spec pins system icacls and uses one quoted allowlisted path without switches
+PASS: command spec rejects non-allowlisted paths before process creation
+PASS: native-shaped output parses first header-line ACE and inherited ACE flags
+PASS: native friendly principal spellings resolve to their well-known SIDs
+PASS: unexpected trailer text prevents a complete parse
+PASS: matching synthetic object is classified PASS
+PASS: fully parsed different rights classify MISMATCH
+PASS: unsupported icacls rights are INDETERMINATE
+PASS: failed native invocation cannot classify an ACL
+PASS: wrong target path is rejected before ACE attribution
+PASS: path-prefix collision is rejected as a non-exact target
+PASS: comma-separated detailed rights map to exact combined unsigned mask
+PASS: right code N maps to its Windows file access mask
+PASS: right code F maps to its Windows file access mask
+PASS: right code M maps to its Windows file access mask
+PASS: right code RX maps to its Windows file access mask
+PASS: right code R maps to its Windows file access mask
+PASS: right code W maps to its Windows file access mask
+PASS: right code D maps to its Windows file access mask
+PASS: right code DE maps to its Windows file access mask
+PASS: right code RD maps to its Windows file access mask
+PASS: right code WD maps to its Windows file access mask
+PASS: right code AD maps to its Windows file access mask
+PASS: right code REA maps to its Windows file access mask
+PASS: right code WEA maps to its Windows file access mask
+PASS: right code X maps to its Windows file access mask
+PASS: right code DC maps to its Windows file access mask
+PASS: right code RA maps to its Windows file access mask
+PASS: right code WA maps to its Windows file access mask
+PASS: right code RC maps to its Windows file access mask
+PASS: right code WDAC maps to its Windows file access mask
+PASS: right code WO maps to its Windows file access mask
+PASS: right code S maps to its Windows file access mask
+PASS: right code AS maps to its Windows file access mask
+PASS: right code MA maps to its Windows file access mask
+PASS: right code GR maps to its Windows file access mask
+PASS: right code GW maps to its Windows file access mask
+PASS: right code GE maps to its Windows file access mask
+PASS: right code GA maps to its Windows file access mask
+PASS: generic raw mask normalizes without false mismatch: 0x10000000
+PASS: generic raw mask normalizes without false mismatch: 0x80000006
+PASS: generic raw mask normalizes without false mismatch: 0x40000002
+PASS: generic mask with unresolved residual semantics remains INDETERMINATE
+PASS: unknown baseline access-mask bits do not become a false MISMATCH
+PASS: MAXIMUM_ALLOWED requires exact raw equality or remains semantically indeterminate
+PASS: deny ACE detailed rights and inheritance flags parse faithfully
+PASS: synthetic captured ACE profile compares without protected evidence: Full
+PASS: synthetic captured ACE profile compares without protected evidence: Modify
+PASS: synthetic captured ACE profile compares without protected evidence: Read
+PASS: synthetic captured ACE profile compares without protected evidence: ReadExecute
+PASS: synthetic captured ACE profile compares without protected evidence: Write
+PASS: synthetic captured ACE profile compares without protected evidence: ReadData
+PASS: synthetic captured ACE profile compares without protected evidence: ReadAttributes
+PASS: synthetic captured ACE profile compares without protected evidence: ReadExtendedAttributes
+PASS: synthetic captured ACE profile compares without protected evidence: GenericAll
+PASS: synthetic captured ACE profile compares without protected evidence: GenericReadPlusSpecific
+PASS: synthetic captured ACE profile compares without protected evidence: InheritedDeny
+PASS: duplicate ACE multiplicity is retained and compared
+PASS: inherited templates compare with preserved inheritance flags
+PASS: end-to-end all-11 standard success makes zero coordinator launches
+PASS: out-of-scope target set fails before standard child or coordinator launch
+PASS: access-denied-only set triggers exactly one coordinator launch
+PASS: coordinator retries only the denied target
+PASS: non-access-denied failure never launches UAC
+PASS: timeout or incomplete stream prevents UAC retry and completion
+PASS: missing elevated evidence fails closed
+PASS: coordinator exception is bounded, reported and never retried
+PASS: bounded process runner captures stdout, stderr, PID, exit and hashes
+PASS: successful command with empty stderr receives the SHA-256 of the empty byte stream
+PASS: nonzero child exit retains complete separate streams
+PASS: hanging child returns bounded timeout with incomplete status
+PASS: oversized single-line output is drained with bounded retention and cannot be complete
+PASS: fixed-chunk stream pump does not depend on line events or allocate a giant line
+PASS: oversized stderr is independently bounded and incomplete
+PASS: child startup failure is reported without inventing an exit code or completion
+PASS: producer-compatible distinct mailbox and payload IDs pass with unchanged integrity and volume provenance checks
+PASS: faithful four-ACE Administrators-owned coordinator mailbox fixture passes
+PASS: wrong mailbox ID fails while payload ID remains correct
+PASS: wrong payload CaptureId pin fails while mailbox ID remains correct
+PASS: mailbox path must be derived from the separately pinned mailbox ID
+PASS: wrong requester SID invalidates four-ACE mailbox evidence
+PASS: wrong embedded payload CaptureId fails even when its integrity digest is recomputed
+PASS: modified integrity.json payload digest fails closed
+PASS: missing baseline payload fails closed
+PASS: malformed but correctly hashed baseline JSON fails closed
+PASS: requester-owned mailbox is rejected
+PASS: mailbox without OWNER RIGHTS protection is rejected
+PASS: inheriting mailbox DACL is rejected
+PASS: writable requester ACE in mailbox is rejected
+PASS: unexpected fifth mailbox ACE is rejected
+PASS: mailbox reparse/junction path is rejected before ACL acceptance
+PASS: modified payload bytes fail their integrity.json digest
+PASS: 11-object synthetic evidence package is atomically create-new in protected directory
+PASS: synthetic evidence file hashes and byte counts verify
+PASS: evidence DACL remains protected after publication
+PASS: evidence completeness allows a standard denial plus one elevated retry without hiding the failed attempt
+PASS: failing icacls output and exit status are published as complete diagnostic evidence, never a pass
+Assertions=118; Failures=0

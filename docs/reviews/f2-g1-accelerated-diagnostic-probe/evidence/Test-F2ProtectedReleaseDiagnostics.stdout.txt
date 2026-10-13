@@ -1,0 +1,70 @@
+PASS: production launcher consumes a bounded child diagnostic record
+PASS: shared diagnostic protocol is present for real cross-process testing
+PASS: requester diagnostics preserve an exact approved stable error code
+PASS: requester diagnostics reject raw SID and arbitrary token-like exception text
+PASS: launcher pins exact diagnostic protocol bytes
+PASS: pipe protocol allowlist includes all six fixed pre-lock diagnostic substages
+PASS: production updater accepts and stores every fixed pre-lock stage label
+PASS: unlisted stage labels are rejected at the updater boundary and normalized to a fixed non-sensitive fallback
+PASS: actual updater native-helper wrapper converts a synthetic compiler failure to its stable safe code
+PASS: request uses fresh fixed-format identifiers
+PASS: request binds the requester by a digest without putting the SID in the record
+PASS: launcher maps diagnostic server initialization exceptions to a stable non-sensitive error code
+PASS: diagnostic channel initialization failure remains bounded while retaining the real child exit
+PASS: pre-lock child fixtures use a clean temporary Git source and exact pinned old-v2 manifest and files
+PASS: actual reviewed candidate bytes pass the exact production manifest loader in the Windows PowerShell 5.1 suite
+PASS: manifest arrays are rejected as non-object roots with a fixed safe code
+PASS: missing required baseline identity field returns its allowlisted stable code instead of a StrictMode exception
+PASS: missing Files property returns the fixed file-set code
+PASS: missing v3 PackageRoot returns the fixed package-root code
+PASS: missing per-file SHA field returns the fixed file-pin code
+PASS: unexpected hash-operation exceptions are classified to a fixed category without leaking exception text
+PASS: real child process executes the production bootstrap and production manifest loader, passes the exact candidate, then reaches a no-write synthetic updater stub
+PASS: real child process reports malformed-manifest validation failure through the authenticated pipe with a fixed allowlisted code
+PASS: production child builder and authenticated pipe report candidate manifest parse failure as CandidateManifestValidation/UPDATE_MANIFEST_JSON_INVALID in the fixed sanitized schema
+PASS: candidate manifest parse failure preserves the TEMP-only old release and creates no transaction objects
+PASS: production child builder and authenticated pipe report candidate manifest missing required identity field failure as CandidateManifestValidation/UPDATE_MANIFEST_IDENTITY_OR_BASELINE_INVALID in the fixed sanitized schema
+PASS: candidate manifest missing required identity field failure preserves the TEMP-only old release and creates no transaction objects
+PASS: production child builder and authenticated pipe report candidate manifest failure as CandidateManifestValidation/UPDATE_CANDIDATE_PACKAGE_ROOT_MISMATCH in the fixed sanitized schema
+PASS: candidate manifest failure preserves the TEMP-only old release and creates no transaction objects
+PASS: production child builder and authenticated pipe report source Git failure as SourceGitValidation/UPDATE_SOURCE_ORIGIN_MISMATCH in the fixed sanitized schema
+PASS: source Git failure preserves the TEMP-only old release and creates no transaction objects
+PASS: production child builder and authenticated pipe report source package pin failure as SourcePackagePinValidation/UPDATE_SOURCE_PACKAGE_HASH_MISMATCH in the fixed sanitized schema
+PASS: source package pin failure preserves the TEMP-only old release and creates no transaction objects
+PASS: production child builder and authenticated pipe report parent ACL failure as ParentAclValidation/UPDATE_PARENT_CHAIN_UNSAFE in the fixed sanitized schema
+PASS: parent ACL failure preserves the TEMP-only old release and creates no transaction objects
+PASS: production child builder and authenticated pipe report installed v2 failure as InstalledV2Validation/UPDATE_FILE_HASH_MISMATCH in the fixed sanitized schema
+PASS: installed v2 failure preserves the TEMP-only old release and creates no transaction objects
+PASS: production child builder and authenticated pipe report transaction collision failure as TransactionCollisionValidation/UPDATE_FILE_TYPE_OR_SIZE_INVALID in the fixed sanitized schema
+PASS: transaction collision failure preserves the TEMP-only old release and creates no transaction objects
+PASS: real child script retains exact exit when protocol bootstrap fails before a trusted sender is available
+PASS: real child script reports updater hash validation failure through the pipe
+PASS: real child script reports updater parsing/loading failure through the pipe
+PASS: real child script reports identity validation failure without invoking transaction code
+PASS: real production child reports synthetic failure for source Git resolution
+PASS: real production child reports synthetic failure for parent ACL validation
+PASS: real production child reports synthetic failure for old installed-release validation
+PASS: real production child reports synthetic failure for native helper compilation
+PASS: real production child reports synthetic failure for initial release-lock creation
+PASS: production child command and fixed PowerShell arguments stay below the Windows command-line limit
+ProductionChildEncodedCommandCharacters=18756;FixedArgumentReserve=100;Limit=32767
+PASS: cross-process report preserves ChildBootstrapInitialization/UPDATE_CHILD_BOOTSTRAP_INITIALIZATION_FAILED with child exit 1
+PASS: cross-process report preserves UpdaterScriptLoading/UPDATE_UPDATER_SCRIPT_LOAD_FAILED with child exit 1
+PASS: cross-process report preserves ElevatedIdentityValidation/UPDATE_ELEVATED_REQUESTER_IDENTITY_MISMATCH with child exit 1
+PASS: cross-process report preserves UpdaterAndCandidateHashValidation/UPDATE_UPDATER_HASH_MISMATCH with child exit 1
+PASS: cross-process report preserves CandidateAndSourceValidation/UPDATE_SOURCE_GIT_UNAVAILABLE with child exit 1
+PASS: cross-process report preserves CandidateAndSourceValidation/UPDATE_PROGRAM_FILES_PARENT_DACL_UNSAFE with child exit 1
+PASS: cross-process report preserves CandidateAndSourceValidation/UPDATE_OLD_RELEASE_PIN_MISMATCH with child exit 1
+PASS: cross-process report preserves AcquireReleaseBarrier/UPDATE_NATIVE_HELPER_COMPILE_FAILED with child exit 1
+PASS: cross-process report preserves AcquireReleaseBarrier/UPDATE_RELEASE_LOCK_CREATE_FAILED with child exit 1
+PASS: rejects stale or replayed nonce while retaining child exit (status=INVALID;code=UPDATE_DIAGNOSTIC_IDENTITY_MISMATCH;exit=1)
+PASS: rejects tampered payload digest while retaining child exit (status=INVALID;code=UPDATE_DIAGNOSTIC_INVALID;exit=1)
+PASS: rejects unlisted diagnostic stage while retaining child exit (status=INVALID;code=UPDATE_DIAGNOSTIC_INVALID;exit=1)
+PASS: rejects duplicate diagnostic frame while retaining child exit (status=INVALID;code=UPDATE_DIAGNOSTIC_INVALID;exit=1)
+PASS: rejects oversized frame while retaining child exit (status=INVALID;code=UPDATE_DIAGNOSTIC_INVALID;exit=1)
+PASS: rejects unavailable diagnostic record while retaining child exit (status=MISSING;code=UPDATE_DIAGNOSTIC_MISSING;exit=1)
+PASS: rejects stalled partial frame while retaining child exit (status=INVALID;code=UPDATE_DIAGNOSTIC_INVALID;exit=1)
+PASS: rejects a diagnostic claim that conflicts with the independently observed child exit
+PASS: rejects a forged Complete/zero diagnostic when the observed child actually failed
+PASS: rejects a distinct connected process while retaining the independently observed target exit
+Assertions=68;Failures=0
