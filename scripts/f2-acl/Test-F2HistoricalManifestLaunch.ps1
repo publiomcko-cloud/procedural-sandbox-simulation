@@ -12,6 +12,7 @@ $childPath = Join-Path $PSScriptRoot 'Invoke-F2HistoricalManifestDiagnosticChild
 $wrapperPath = Join-Path $PSScriptRoot 'Invoke-F2HistoricalManifestDiagnostic.ps1'
 $probeModulePath = Join-Path $PSScriptRoot 'F2HistoricalManifestDiagnostic.psm1'
 $outerBootstrapPath = Join-Path $repoRoot 'docs\reviews\f2-g1-elevated-diagnostic-launch\OUTER_BOOTSTRAP.ps1'
+$cmdEntryTemplatePath = Join-Path $repoRoot 'docs\reviews\f2-g1-elevated-diagnostic-launch\CMD_ENTRY_BOOTSTRAP.ps1'
 
 function Assert-F2Launch {
     param([Parameter(Mandatory)][bool]$Condition,[Parameter(Mandatory)][string]$Name)
@@ -31,6 +32,25 @@ function Get-TestLiteralPin {
     return $match.Groups[1].Value
 }
 
+function New-TestCmdEntry {
+    param([Parameter(Mandatory)][string]$Template,[Parameter(Mandatory)][string]$BootstrapPath,[Parameter(Mandatory)][string]$BootstrapSha256)
+    if ($BootstrapPath -match "['`r`n]" -or $BootstrapSha256 -notmatch '^[0-9a-f]{64}$') { throw 'TEST_ENTRY_INPUT_INVALID' }
+    $source=$Template.Replace('__F2_OUTER_BOOTSTRAP_PATH__',[IO.Path]::GetFullPath($BootstrapPath)).Replace('__F2_OUTER_BOOTSTRAP_SHA256__',$BootstrapSha256)
+    if ($source -match '__F2_[A-Z0-9_]+__') { throw 'TEST_ENTRY_PLACEHOLDER_REMAINS' }
+    $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($source))
+    $powershellPath=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $command='"'+$powershellPath+'" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+$encoded
+    return [pscustomobject][ordered]@{Source=$source;EncodedCommand=$encoded;PowerShellPath=$powershellPath;Command=$command}
+}
+
+function Invoke-TestCmdEntry {
+    param([Parameter(Mandatory)]$Entry)
+    $cmdPath=Join-Path $env:SystemRoot 'System32\cmd.exe'
+    $start=New-Object Diagnostics.ProcessStartInfo;$start.FileName=$cmdPath;$start.Arguments='/d /c "'+$Entry.Command+'"';$start.UseShellExecute=$false;$start.CreateNoWindow=$true
+    $process=New-Object Diagnostics.Process;$process.StartInfo=$start
+    try{[void]$process.Start();$finished=$process.WaitForExit(12000);return [pscustomobject]@{Finished=$finished;ExitCode=if($finished){[int]$process.ExitCode}else{$null}}}finally{if(-not $process.HasExited){try{$process.Kill()}catch{}};$process.Dispose()}
+}
+
 function Get-F2LaunchAst {
     param([Parameter(Mandatory)][string]$Path)
     $tokens=$null; $parseErrors=$null
@@ -46,6 +66,23 @@ function Get-ChildCode {
     $assignment=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq '$childBootstrapTemplate'},$true))
     if($assignment.Count -ne 1){return ''}
     return [string]$assignment[0].Right.SafeGetValue()
+}
+
+function Get-LaunchChildTemplate {
+    param([Parameter(Mandatory)][string]$Path)
+    $source=[IO.File]::ReadAllText($Path)
+    $match=[regex]::Match($source,"(?s)\`$bootstrap\s*=\s*@'(?<template>.*?)'@")
+    if(-not $match.Success){return ''}
+    return $match.Groups['template'].Value.Trim("`r","`n")
+}
+
+function Get-LaunchFunctionText {
+    param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][string]$Name)
+    $tokens=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($Path,[ref]$tokens,[ref]$errors)
+    if($errors.Count -ne 0){return ''}
+    $functions=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $Name},$true))
+    if($functions.Count -ne 1){return ''}
+    return [string]$functions[0].Extent.Text
 }
 
 try {
@@ -88,7 +125,7 @@ try {
     $spent=@{}+$allGates;$spent.PriorLaunchCount=1
     Assert-F2Launch -Condition (-not (Test-F2LaunchPreflightFacts $spent).Pass) -Name 'SecondLaunchRejected'
 
-    $request=New-F2LaunchRequest -RequesterSid 'S-1-5-21-100-200-300-1001' -RequesterPid 1234 -RequesterStartUtcTicks 638900000000000000 -GitPath 'C:\Program Files\Git\cmd\git.exe' -GitSha256 '7b7971dd13f0c3a284e538601f2f9770b3a87dfaccb5fb52d68141c67ed22364' -LaunchCommitSha ('e'*40) -LaunchModuleSha256 ('c'*64) -WrapperSha256 ('f'*64) -ModuleSha256 ('a'*64)
+    $request=New-F2LaunchRequest -RequesterSid 'S-1-5-21-100-200-300-1001' -RequesterPid 1234 -RequesterStartUtcTicks 638900000000000000 -GitPath 'C:\Program Files\Git\mingw64\bin\git.exe' -GitSha256 '1a0043555d254618f2d56c936c3d9a1fbfb878bc878416a133c346bc7835eda9' -LaunchCommitSha ('e'*40) -LaunchModuleSha256 ('c'*64) -WrapperSha256 ('f'*64) -ModuleSha256 ('a'*64)
     Assert-F2Launch -Condition (Test-F2LaunchRequest $request) -Name 'RequestSchemaAccepted'
     $extraRequest=[pscustomobject]($request|Select-Object *)
     Add-Member -InputObject $extraRequest -NotePropertyName Extra -NotePropertyValue 'reject'
@@ -100,6 +137,8 @@ try {
     $safeDiag='{"Schema":"f2-g1-historical-manifest-diagnostic-v1","Authority":"NON_AUTHORITATIVE_DIAGNOSTIC_ONLY","Status":"PASS","Stage":"CandidateManifestValidation","OperationClassification":"ManifestParseAndReviewedCommitComparison","ExceptionCategory":"NONE","FullyQualifiedErrorId":"NONE","ErrorCode":"NONE","TokenClass":"ELEVATED","HistoricalSourceCommit":"396c44965c90c08292ad2835f8317e81b6b9daaf","HistoricalUpdaterSha256":"d9572f7ea113ab01eaa4c6ab98d0852ce9549642b083719f68c01f02b2a81bb2","HistoricalLauncherSha256":"9fc4d574eda4a03ee05bca5ce789bdb10ee0b05f5f6de273839ba0060445bdc9","HistoricalCandidateSha256":"b8596905f42ee429ae2fd3352f9133de8bd4f00da654f856012c02390661f022","ParsedReviewedCommitSha":"396c44965c90c08292ad2835f8317e81b6b9daaf","UpdaterEntrypointInvoked":false,"RecoveryEntrypointInvoked":false,"ProtectedWritePerformed":false}'
     $response=[pscustomobject][ordered]@{Schema='f2-g1-diagnostic-launch-response-v1';RequestId=$request.RequestId;Nonce=$request.Nonce;ChildPid=2222;ChildStartUtcTicks=638900000000000111;Status='PASS';Stage='CandidateManifestValidation';ErrorCode='NONE';Stdout=$safeDiag;StderrCodes=@();LaunchModuleSha256=$request.LaunchModuleSha256;WrapperSha256=$request.WrapperSha256;ModuleSha256=$request.ModuleSha256;UpdaterEntrypointInvoked=$false;RecoveryEntrypointInvoked=$false;ProtectedWritePerformed=$false}
     Assert-F2Launch -Condition (Test-F2LaunchResponse -Response $response -Request $request -PipePeerPid 2222 -PipePeerStartUtcTicks 638900000000000111 -ActualExitCode 0) -Name 'AuthenticatedPassResponseAccepted'
+    $standardPass=[pscustomobject]($response|Select-Object *);$standardPass.Stdout=$safeDiag.Replace('"TokenClass":"ELEVATED"','"TokenClass":"STANDARD"')
+    Assert-F2Launch -Condition (-not (Test-F2LaunchResponse -Response $standardPass -Request $request -PipePeerPid 2222 -PipePeerStartUtcTicks 638900000000000111 -ActualExitCode 0)) -Name 'StandardTokenLabeledPassRejected'
     $badNonce=[pscustomobject]($response|Select-Object *);$badNonce.Nonce=('0'*64)
     Assert-F2Launch -Condition (-not (Test-F2LaunchResponse -Response $badNonce -Request $request -PipePeerPid 2222 -PipePeerStartUtcTicks 638900000000000111 -ActualExitCode 0)) -Name 'NonceMismatchRejected'
     $badPeer=@{ExpectedPid=2222;ExpectedStartUtcTicks=638900000000000111;ObservedPid=2223;ObservedStartUtcTicks=638900000000000111;CommandLineMatches=$true;TokenMatches=$true}
@@ -224,10 +263,50 @@ try {
     )){Assert-F2Launch -Condition (-not (Test-F2LaunchCommandLineRecord -Instances @($badRecord) -ExpectedProcessId 2222 -ExpectedImagePath $expectedImage -ExpectedEncodedCommand $encodedFixture)) -Name 'WrongOrUnavailableChildCommandLineRejected'}
     Assert-F2Launch -Condition (-not (Test-F2LaunchCommandLineRecord -Instances @($cmdRecord,$cmdRecord) -ExpectedProcessId 2222 -ExpectedImagePath $expectedImage -ExpectedEncodedCommand $encodedFixture)) -Name 'AmbiguousChildCommandLineRejected'
 
+    $shellRoot=Join-Path ([IO.Path]::GetTempPath()) ('F2ShellExecute child space '+[guid]::NewGuid().ToString('N'))
+    [IO.Directory]::CreateDirectory($shellRoot)|Out-Null
+    $childFixture=Join-Path $shellRoot 'fixture.ps1';$childMarker=Join-Path $shellRoot 'child-ran.txt'
+    $childFixtureSource="param([string]`$PipeName,[int]`$ExpectedParentPid,[long]`$ExpectedParentStartUtcTicks,[string]`$ExpectedLaunchCommitSha)`r`nif(`$PipeName -ceq 'F2D_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' -and `$ExpectedParentPid -eq 4321 -and `$ExpectedParentStartUtcTicks -eq 638900000000000222 -and `$ExpectedLaunchCommitSha -ceq ('d'*40)){[IO.File]::WriteAllText('$childMarker','fixture-only');exit 0}else{exit 71}`r`n"
+    [IO.File]::WriteAllText($childFixture,$childFixtureSource,(New-Object Text.UTF8Encoding($false)))
+    $childFixtureSha=Get-TestFileSha $childFixture
+    $childPipe='F2D_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    $childInvocation=New-F2LaunchChildInvocation -ChildPath $childFixture -ChildSha256 $childFixtureSha -PipeName $childPipe -RequesterPid 4321 -RequesterStartUtcTicks 638900000000000222 -LaunchCommitSha ('d'*40) -MaximumCommandLineLength 3600
+    $decodedChild=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($childInvocation.EncodedCommand))
+    $childTokens=$null;$childParseErrors=$null;[Management.Automation.Language.Parser]::ParseInput($decodedChild,[ref]$childTokens,[ref]$childParseErrors)|Out-Null
+    Assert-F2Launch -Condition ($childParseErrors.Count -eq 0 -and $decodedChild -ceq $childInvocation.BootstrapText) -Name 'GeneratedChildBootstrapParsesAndMatchesEncodedBytes'
+    $actualChildTemplate=Get-LaunchChildTemplate -Path $modulePath
+    $expectedChildBootstrap=$actualChildTemplate.Replace('__F2_CHILD_PATH__',[IO.Path]::GetFullPath($childFixture)).Replace('__F2_CHILD_SHA256__',$childFixtureSha).Replace('__F2_PIPE_NAME__',$childPipe).Replace('__F2_REQUESTER_PID__','4321').Replace('__F2_REQUESTER_TICKS__','638900000000000222').Replace('__F2_LAUNCH_COMMIT__',('d'*40))
+    Assert-F2Launch -Condition ($actualChildTemplate.Length -gt 0 -and $childInvocation.BootstrapText -ceq $expectedChildBootstrap) -Name 'GeneratedChildBootstrapExactlyMatchesProductionTemplate'
+    Assert-F2Launch -Condition ($childInvocation.CommandLineLength -le 3600 -and $childInvocation.EncodedCommand -match '^[A-Za-z0-9+/=]+$' -and $childInvocation.Arguments -match '^-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand [A-Za-z0-9+/=]+$') -Name 'ChildShellExecuteArgumentAndQuotingBounded'
+    $fixedChildPath='C:\Dev\f2-g1-diagnostic-launch-runtime\scripts\f2-acl\Invoke-F2HistoricalManifestDiagnosticChild.ps1'
+    $maxShapeInvocation=New-F2LaunchChildInvocation -ChildPath $fixedChildPath -ChildSha256 $childFixtureSha -PipeName ('F2D_'+('a'*32)) -RequesterPid ([int]::MaxValue) -RequesterStartUtcTicks ([long]::MaxValue) -LaunchCommitSha ('d'*40) -MaximumCommandLineLength 3600
+    Assert-F2Launch -Condition ($maxShapeInvocation.CommandLineLength -le 3600 -and $maxShapeInvocation.CommandLineLength -eq ('"'+$maxShapeInvocation.ExecutablePath+'" '+$maxShapeInvocation.Arguments).Length) -Name 'MaximumBoundedChildArgumentsFitShellExecuteLimit'
+    $tooLongChildRejected=$false;try{New-F2LaunchChildInvocation -ChildPath $childFixture -ChildSha256 $childFixtureSha -PipeName $childPipe -RequesterPid 4321 -RequesterStartUtcTicks 638900000000000222 -LaunchCommitSha ('d'*40) -MaximumCommandLineLength 512|Out-Null}catch{$tooLongChildRejected=([string]$_.FullyQualifiedErrorId -match 'LAUNCH_CHILD_ARGUMENT_LIMIT')}
+    Assert-F2Launch -Condition $tooLongChildRejected -Name 'ChildArgumentOverLimitFailsClosed'
+    $shellStart=New-Object Diagnostics.ProcessStartInfo;$shellStart.FileName=$childInvocation.ExecutablePath;$shellStart.Arguments=$childInvocation.Arguments;$shellStart.UseShellExecute=$true;$shellStart.Verb='';$shellStart.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
+    $shellProcess=New-Object Diagnostics.Process;$shellProcess.StartInfo=$shellStart
+    try{[void]$shellProcess.Start();$shellExited=$shellProcess.WaitForExit(12000);Assert-F2Launch -Condition ($shellExited -and $shellProcess.ExitCode -eq 0 -and (Test-Path -LiteralPath $childMarker -PathType Leaf) -and -not $shellStart.Verb.Equals('runas',[StringComparison]::OrdinalIgnoreCase)) -Name 'ProductionChildBuilderHarmlessShellExecuteFixture'}finally{$shellProcess.Dispose()}
+    $childExecutionCommand=[pscustomobject]@{ProcessId=4321;Name='powershell.exe';ExecutablePath=$childInvocation.ExecutablePath;CommandLine='"'+$childInvocation.ExecutablePath+'" '+$childInvocation.Arguments}
+    Assert-F2Launch -Condition (Test-F2LaunchCommandLineRecord -Instances @($childExecutionCommand) -ExpectedProcessId 4321 -ExpectedImagePath $childInvocation.ExecutablePath -ExpectedEncodedCommand $childInvocation.EncodedCommand) -Name 'GeneratedChildCommandLineQuotingMatchesPeerValidator'
+    $tamperedChild=[pscustomobject]@{ProcessId=4321;Name='powershell.exe';ExecutablePath=$childInvocation.ExecutablePath;CommandLine=$childExecutionCommand.CommandLine+' "extra"'}
+    Assert-F2Launch -Condition (-not (Test-F2LaunchCommandLineRecord -Instances @($tamperedChild) -ExpectedProcessId 4321 -ExpectedImagePath $childInvocation.ExecutablePath -ExpectedEncodedCommand $childInvocation.EncodedCommand)) -Name 'ChildCommandLineExtraArgumentRejected'
+    [IO.File]::WriteAllText($childFixture,"[IO.File]::WriteAllText('$childMarker','tampered')`r`nexit 0",(New-Object Text.UTF8Encoding($false)))
+    Remove-Item -LiteralPath $childMarker -Force -ErrorAction SilentlyContinue
+    $tamperStart=New-Object Diagnostics.ProcessStartInfo;$tamperStart.FileName=$childInvocation.ExecutablePath;$tamperStart.Arguments=$childInvocation.Arguments;$tamperStart.UseShellExecute=$true;$tamperStart.Verb='';$tamperStart.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
+    $tamperProcess=New-Object Diagnostics.Process;$tamperProcess.StartInfo=$tamperStart
+    try{[void]$tamperProcess.Start();$tamperExited=$tamperProcess.WaitForExit(12000);Assert-F2Launch -Condition ($tamperExited -and $tamperProcess.ExitCode -eq 85 -and -not(Test-Path -LiteralPath $childMarker)) -Name 'ChildBootstrapRejectsChangedFileBeforeScriptBlockExecution'}finally{$tamperProcess.Dispose()}
+    $junctionAlias=Join-Path ([IO.Path]::GetTempPath()) ('F2ShellAlias-'+[guid]::NewGuid().ToString('N'))
+    $junctionStart=New-Object Diagnostics.ProcessStartInfo;$junctionStart.FileName=Join-Path $env:SystemRoot 'System32\cmd.exe';$junctionStart.Arguments='/d /c mklink /J "'+$junctionAlias+'" "'+$shellRoot+'" >NUL 2>&1';$junctionStart.UseShellExecute=$false;$junctionStart.CreateNoWindow=$true
+    $junctionProcess=New-Object Diagnostics.Process;$junctionProcess.StartInfo=$junctionStart
+    try{[void]$junctionProcess.Start();$null=$junctionProcess.WaitForExit(5000);if($junctionProcess.ExitCode -eq 0){$aliasFixture=Join-Path $junctionAlias 'fixture.ps1';$aliasInvocation=New-F2LaunchChildInvocation -ChildPath $aliasFixture -ChildSha256 $childFixtureSha -PipeName $childPipe -RequesterPid 4321 -RequesterStartUtcTicks 638900000000000222 -LaunchCommitSha ('d'*40) -MaximumCommandLineLength 3600;$aliasStart=New-Object Diagnostics.ProcessStartInfo;$aliasStart.FileName=$aliasInvocation.ExecutablePath;$aliasStart.Arguments=$aliasInvocation.Arguments;$aliasStart.UseShellExecute=$true;$aliasStart.Verb='';$aliasStart.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden;$aliasProcess=New-Object Diagnostics.Process;$aliasProcess.StartInfo=$aliasStart;try{[void]$aliasProcess.Start();$aliasExited=$aliasProcess.WaitForExit(12000);Assert-F2Launch -Condition ($aliasExited -and $aliasProcess.ExitCode -eq 81 -and -not(Test-Path -LiteralPath $childMarker)) -Name 'ChildBootstrapRejectsReparseAlias'}finally{$aliasProcess.Dispose()}}else{Assert-F2Launch -Condition (-not(Test-Path -LiteralPath $junctionAlias)) -Name 'ChildReparseFixtureUnavailableFailsClosed'}}finally{$junctionProcess.Dispose();if(Test-Path -LiteralPath $junctionAlias){Remove-Item -LiteralPath $junctionAlias -Force -Recurse -ErrorAction SilentlyContinue};if(Test-Path -LiteralPath $shellRoot){Remove-Item -LiteralPath $shellRoot -Force -Recurse -ErrorAction SilentlyContinue}}
+
     $runspace=[runspacefactory]::CreateRunspace();$runner=[powershell]::Create()
     try{$runspace.Open();$runner.Runspace=$runspace;$null=$runner.AddScript("Write-Output 'bounded synthetic output'; exit 0");$runOutput=@($runner.Invoke());Assert-F2Launch -Condition ($runOutput.Count -eq 1 -and $runOutput[0] -ceq 'bounded synthetic output' -and $runner.InvocationStateInfo.State -eq [Management.Automation.PSInvocationState]::Completed) -Name 'ScriptBlockExitRemainsInsideDedicatedRunspace'}finally{$runner.Dispose();$runspace.Dispose()}
 
-    $pinnedGitPath='C:\Program Files\Git\cmd\git.exe';$pinnedGitHash='7b7971dd13f0c3a284e538601f2f9770b3a87dfaccb5fb52d68141c67ed22364'
+    $pinnedGitPath='C:\Program Files\Git\mingw64\bin\git.exe';$pinnedGitHash='1a0043555d254618f2d56c936c3d9a1fbfb878bc878416a133c346bc7835eda9'
+    $startSourceForGit=[IO.File]::ReadAllText($startPath);$childSourceForGit=[IO.File]::ReadAllText($childPath)
+    Assert-F2Launch -Condition ($moduleText -match [regex]::Escape("`$script:F2LaunchExpectedGitPath = '$pinnedGitPath'") -and $moduleText -match [regex]::Escape("`$script:F2LaunchExpectedGitSha256 = '$pinnedGitHash'") -and $startSourceForGit -match [regex]::Escape("`$gitPath='$pinnedGitPath'") -and $childSourceForGit -match [regex]::Escape("`$script:expectedGitPath='$pinnedGitPath'")) -Name 'GitCoreExecutableAndHashPinnedAcrossLaunchBoundaries'
+    Assert-F2Launch -Condition ($moduleText -notmatch 'C:\\Program Files\\Git\\cmd\\git\.exe' -and $startSourceForGit -notmatch 'C:\\Program Files\\Git\\cmd\\git\.exe' -and $childSourceForGit -notmatch 'C:\\Program Files\\Git\\cmd\\git\.exe') -Name 'GitWrapperIsNotInExecutionPath'
     if(Test-Path -LiteralPath $pinnedGitPath -PathType Leaf){
         if((Get-TestFileSha $pinnedGitPath) -ceq $pinnedGitHash){
             $actualHead=(& $pinnedGitPath -C $repoRoot rev-parse HEAD).Trim()
@@ -239,8 +318,8 @@ try {
         }
     }else{Assert-F2Launch -Condition $true -Name 'PinnedGitBinaryUnavailableFailsClosedByPathGate'}
 
-    foreach($productionFile in @($modulePath,$startPath,$childPath,$wrapperPath,$probeModulePath,$outerBootstrapPath)) { if(Test-Path -LiteralPath $productionFile){[void](Get-F2LaunchAst -Path $productionFile)} }
-    $productionFiles=@($modulePath,$startPath,$childPath,$wrapperPath,$probeModulePath,$outerBootstrapPath)
+    foreach($productionFile in @($modulePath,$startPath,$childPath,$wrapperPath,$probeModulePath,$outerBootstrapPath,$cmdEntryTemplatePath)) { if(Test-Path -LiteralPath $productionFile){[void](Get-F2LaunchAst -Path $productionFile)} }
+    $productionFiles=@($modulePath,$startPath,$childPath,$wrapperPath,$probeModulePath,$outerBootstrapPath,$cmdEntryTemplatePath)
     if(@($productionFiles|Where-Object{Test-Path -LiteralPath $_}).Count -eq $productionFiles.Count){
         Assert-F2Launch -Condition (Test-F2LaunchNoForbiddenOperations -SourcePaths $productionFiles) -Name 'ProductionAstExcludesProtectedOperations'
     } else { Assert-F2Launch -Condition $false -Name 'ProductionLaunchFilesPresent' }
@@ -254,12 +333,12 @@ try {
     Assert-F2Launch -Condition ($childCommands.Count -eq 0) -Name 'ElevatedChildCannotLaunchAnotherProcess'
     $outerAst=Get-F2LaunchAst -Path $outerBootstrapPath
     $outerStartCommands=@($outerAst.FindAll({param($node)$node -is [Management.Automation.Language.CommandAst]},$true)|Where-Object{$_.GetCommandName() -ceq 'Start-Process'})
-    Assert-F2Launch -Condition ($outerStartCommands.Count -eq 0 -and [IO.File]::ReadAllText($outerBootstrapPath) -match 'ConvertTo-F2LaunchVerifiedScriptBlock' -and [IO.File]::ReadAllText($outerBootstrapPath) -match 'Get-F2LaunchRepositoryFacts') -Name 'OuterBootstrapOnlyExecutesPinnedInMemoryLauncherAfterCheckoutGate'
+    Assert-F2Launch -Condition ($outerStartCommands.Count -eq 0 -and [IO.File]::ReadAllText($outerBootstrapPath) -match 'ConvertTo-F2LaunchVerifiedScriptBlock' -and [IO.File]::ReadAllText($outerBootstrapPath) -match 'Get-F2LaunchRepositoryFacts' -and [IO.File]::ReadAllText($outerBootstrapPath) -match 'function Read-OuterPinnedBytes' -and [IO.File]::ReadAllText($outerBootstrapPath) -match 'Read-OuterPinnedBytes -Path \$modulePath') -Name 'OuterBootstrapOnlyExecutesPinnedInMemoryLauncherAfterCheckoutGate'
     $outerLaunchSource=[IO.File]::ReadAllText($outerBootstrapPath);$startLaunchSource=[IO.File]::ReadAllText($startPath)
-    Assert-F2Launch -Condition ($outerLaunchSource.IndexOf('$env:PSModulePath', [StringComparison]::Ordinal) -lt $outerLaunchSource.IndexOf('Get-Item', [StringComparison]::Ordinal) -and $startLaunchSource.Contains('`$env:PSModulePath=`$PSHOME+''\Modules''')) -Name 'OuterAndElevatedProcessExcludeRequesterModuleSearchPaths'
+    Assert-F2Launch -Condition ($outerLaunchSource.IndexOf('$env:PSModulePath', [StringComparison]::Ordinal) -lt $outerLaunchSource.IndexOf('Get-Item', [StringComparison]::Ordinal) -and $childInvocation.BootstrapText.Contains('$env:PSModulePath=$PSHOME+''\Modules''')) -Name 'OuterAndElevatedProcessExcludeRequesterModuleSearchPaths'
     $nativeSourceNoWrites=($nativeSource -notmatch '(?is)(File\.Write(All)?Bytes|File\.WriteAllText|Directory\.CreateDirectory|SetAccessControl|SetSecurityDescriptor|Set-Acl|icacls|Get-VM|Start-VM|Invoke-F2ProtectedReleaseUpdate|Invoke-F2ProtectedReleaseRecovery)')
     Assert-F2Launch -Condition $nativeSourceNoWrites -Name 'NativeHelperHasNoProtectedMutationOrUpdaterCode'
-    Assert-F2Launch -Condition ($nativeSource -match 's\.FileName=fileName' -and $moduleText -match 'F2LaunchExpectedGitPath') -Name 'OnlyPinnedGitHelperProcessIsSpawned'
+    Assert-F2Launch -Condition ($nativeSource -match 's\.FileName=fileName' -and $moduleText -match 'F2LaunchExpectedGitPath' -and $moduleText -match 'C:\\Program Files\\Git\\mingw64\\bin\\git\.exe') -Name 'OnlyPinnedGitCoreHelperProcessIsSpawned'
     $childText=[IO.File]::ReadAllText($childPath)
     $wrapperText=[IO.File]::ReadAllText($wrapperPath)
     Assert-F2Launch -Condition ($childText -match 'function Read-ChildPinnedFile' -and $childText -notmatch '\[IO\.File\]::ReadAllBytes') -Name 'ElevatedChildUsesBoundedSingleReadForPinnedModule'
@@ -320,6 +399,29 @@ try {
     } finally { if(Test-Path -LiteralPath $dangerousFixture){Remove-Item -LiteralPath $dangerousFixture -Force} }
 
     $startText=[IO.File]::ReadAllText($startPath);$childText=[IO.File]::ReadAllText($childPath);$wrapperText=[IO.File]::ReadAllText($wrapperPath);$probeText=[IO.File]::ReadAllText($probeModulePath);$outerText=[IO.File]::ReadAllText($outerBootstrapPath)
+    $cmdTemplateText=[IO.File]::ReadAllText($cmdEntryTemplatePath);$memberMatch=[regex]::Match($cmdTemplateText,"-MemberDefinition '(?<member>[^']+)' -Name F2PinnedPath")
+    if(-not $memberMatch.Success){throw 'LAUNCH_PATH_PIN_API_MISSING'}
+    Add-Type -MemberDefinition $memberMatch.Groups['member'].Value -Name F2PinnedPath -Namespace F2 -ErrorAction Stop
+    $outerReaderBlock=[scriptblock]::Create((Get-LaunchFunctionText -Path $outerBootstrapPath -Name 'Read-OuterPinnedBytes'))
+    . $outerReaderBlock
+    $outerReaderRoot=Join-Path ([IO.Path]::GetTempPath()) ('F2OuterReader-'+[guid]::NewGuid().ToString('N'));[IO.Directory]::CreateDirectory($outerReaderRoot)|Out-Null
+    try {
+        $outerReaderFile=Join-Path $outerReaderRoot 'pinned.bin';$outerReaderBytes=[byte[]](21,22,23,24);[IO.File]::WriteAllBytes($outerReaderFile,$outerReaderBytes)
+        $outerReaderResult=@(Read-OuterPinnedBytes -Path $outerReaderFile -MaximumBytes 64)
+        Assert-F2Launch -Condition ($outerReaderResult.Count -eq 1 -and $outerReaderResult[0] -is [byte[]] -and [BitConverter]::ToString([byte[]]$outerReaderResult[0]) -ceq '15-16-17-18') -Name 'ActualOuterBootstrapReaderReturnsHandleVerifiedBytes'
+        $outerReaderBoundRejected=$false;try{Read-OuterPinnedBytes -Path $outerReaderFile -MaximumBytes 3|Out-Null}catch{$outerReaderBoundRejected=([string]$_.FullyQualifiedErrorId -match 'LAUNCH_FILE_TYPE_OR_SIZE_INVALID')}
+        Assert-F2Launch -Condition $outerReaderBoundRejected -Name 'ActualOuterBootstrapReaderRejectsOversizeInput'
+        $outerReaderAlias=Join-Path $outerReaderRoot 'alias';$linkStart=New-Object Diagnostics.ProcessStartInfo;$linkStart.FileName=Join-Path $env:SystemRoot 'System32\cmd.exe';$linkStart.Arguments='/d /c mklink /J "'+$outerReaderAlias+'" "'+$outerReaderRoot+'" >NUL 2>&1';$linkStart.UseShellExecute=$false;$linkStart.CreateNoWindow=$true;$linkProcess=New-Object Diagnostics.Process;$linkProcess.StartInfo=$linkStart
+        $linkStarted=$false
+        try {
+            $linkStarted=$linkProcess.Start();if(-not $linkStarted){throw 'REPARSE_FIXTURE_PROCESS_NOT_STARTED'};$linkFinished=$linkProcess.WaitForExit(5000)
+            if($linkFinished -and $linkProcess.ExitCode -eq 0){
+                $aliasRejected=$false
+                try{Read-OuterPinnedBytes -Path (Join-Path $outerReaderAlias 'pinned.bin') -MaximumBytes 64|Out-Null}catch{$aliasRejected=([string]$_.FullyQualifiedErrorId -match 'LAUNCH_REPARSE_PATH_REJECTED')}
+                Assert-F2Launch -Condition $aliasRejected -Name 'ActualOuterBootstrapReaderRejectsReparseAlias'
+            } else {Assert-F2Launch -Condition (-not $linkFinished -and -not(Test-Path -LiteralPath $outerReaderAlias)) -Name 'OuterReaderReparseFixtureUnavailableFailsClosed'}
+        } finally {if($linkStarted){try{if(-not $linkProcess.HasExited){$linkProcess.Kill();[void]$linkProcess.WaitForExit(1000)}}catch{}};$linkProcess.Dispose();if(Test-Path -LiteralPath $outerReaderAlias){[IO.Directory]::Delete($outerReaderAlias,$false)}}
+    } finally {Remove-Item Function:\Read-OuterPinnedBytes -ErrorAction SilentlyContinue;if(Test-Path -LiteralPath $outerReaderRoot){Remove-Item -LiteralPath $outerReaderRoot -Recurse -Force -ErrorAction SilentlyContinue}}
     $wrapperSha=Get-TestFileSha $wrapperPath;$launchModuleSha=Get-TestFileSha $modulePath;$probeSha=Get-TestFileSha $probeModulePath;$childSha=Get-TestFileSha $childPath;$launcherSha=Get-TestFileSha $startPath
     Assert-F2Launch -Condition ((Get-TestLiteralPin $moduleText "F2LaunchExpectedWrapperSha256\s*=\s*'([0-9a-f]{64})'") -ceq $wrapperSha) -Name 'LaunchModulePinsExactWrapperWorkingBytes'
     Assert-F2Launch -Condition ((Get-TestLiteralPin $moduleText "F2LaunchExpectedProbeModuleSha256\s*=\s*'([0-9a-f]{64})'") -ceq $probeSha) -Name 'LaunchModulePinsExactDiagnosticModuleBytes'
@@ -327,18 +429,38 @@ try {
     Assert-F2Launch -Condition ((Get-TestLiteralPin $childText "launchModuleSha256\s*=\s*'([0-9a-f]{64})'") -ceq $launchModuleSha -and (Get-TestLiteralPin $childText "wrapperSha256\s*=\s*'([0-9a-f]{64})'") -ceq $wrapperSha -and (Get-TestLiteralPin $childText "probeModuleSha256\s*=\s*'([0-9a-f]{64})'") -ceq $probeSha) -Name 'ElevatedChildPinsExactLaunchWrapperAndProbeModuleBytes'
     Assert-F2Launch -Condition ((Get-TestLiteralPin $wrapperText "moduleSha256\s*-cne\s*'([0-9a-f]{64})'") -ceq $probeSha) -Name 'WrapperPinsExactDiagnosticModuleBytes'
     Assert-F2Launch -Condition ((Get-TestLiteralPin $outerText "expectedLaunchModuleSha256\s*=\s*'([0-9a-f]{64})'") -ceq $launchModuleSha -and (Get-TestLiteralPin $outerText "expectedLauncherSha256\s*=\s*'([0-9a-f]{64})'") -ceq $launcherSha) -Name 'OuterBootstrapPinsExactModuleAndLauncherBytes'
-    Assert-F2Launch -Condition ((Get-TestLiteralPin $outerText "expectedLaunchCommitSha\s*=\s*'([0-9a-f]{40})'") -ceq '8c2bddd90c6ac5214eeed08b5648d0ef30b58bf4') -Name 'OuterBootstrapRequiresExactReviewedLaunchImplementationCommit'
-    Assert-F2Launch -Condition ($outerText -notmatch '__[A-Z0-9_]+__' -and $startText -notmatch '__[A-Z0-9_]+__' -and $childText -notmatch '__[A-Z0-9_]+__' -and $moduleText -notmatch '__[A-Z0-9_]+__') -Name 'PublishedProductionPinsHaveNoUnresolvedPlaceholders'
+    Assert-F2Launch -Condition ((Get-TestLiteralPin $outerText "expectedLaunchCommitSha\s*=\s*'([0-9a-f]{40})'") -ceq '8c14cf97c9446e11b8afbd64196c3f4558d4c3c9') -Name 'OuterBootstrapRequiresExactReviewedLaunchImplementationCommit'
+    $templatePlaceholders=@('__F2_CHILD_PATH__','__F2_CHILD_SHA256__','__F2_PIPE_NAME__','__F2_REQUESTER_PID__','__F2_REQUESTER_TICKS__','__F2_LAUNCH_COMMIT__')
+    $templateShapePass=$true;$modulePlaceholderShapePass=$true;foreach($placeholder in $templatePlaceholders){if(([regex]::Matches($actualChildTemplate,[regex]::Escape($placeholder))).Count -ne 1){$templateShapePass=$false};if(([regex]::Matches($moduleText,[regex]::Escape($placeholder))).Count -ne 2){$modulePlaceholderShapePass=$false}}
+    Assert-F2Launch -Condition ($outerText -notmatch '__[A-Z0-9_]+__' -and $startText -notmatch '__[A-Z0-9_]+__' -and $childText -notmatch '__[A-Z0-9_]+__' -and $templateShapePass -and $modulePlaceholderShapePass -and $childInvocation.BootstrapText -notmatch '__F2_[A-Z0-9_]+__') -Name 'PublishedPinsAreCompleteAndBootstrapPlaceholdersAreFullyBound'
     $commandPath=Join-Path (Split-Path $outerBootstrapPath -Parent) 'EXACT_UAC_COMMAND.txt'
     if(Test-Path -LiteralPath $commandPath){
         $commandText=[IO.File]::ReadAllText($commandPath)
         $encodedMatch=[regex]::Match($commandText,'-EncodedCommand\s+(?<encoded>[A-Za-z0-9+/=]+)')
-        $decodedOuter=if($encodedMatch.Success){[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($encodedMatch.Groups['encoded'].Value))}else{''}
-        Assert-F2Launch -Condition ($encodedMatch.Success -and $decodedOuter -ceq $outerText) -Name 'PublishedEncodedCommandMatchesReviewedBootstrapSource'
+        $entryTemplate=[IO.File]::ReadAllText($cmdEntryTemplatePath)
+        $outerBootstrapSha=Get-TestFileSha $outerBootstrapPath
+        $expectedEntry=New-TestCmdEntry -Template $entryTemplate -BootstrapPath 'C:\Dev\f2-g1-diagnostic-elevation-plan-review\docs\reviews\f2-g1-elevated-diagnostic-launch\OUTER_BOOTSTRAP.ps1' -BootstrapSha256 $outerBootstrapSha
+        $decodedEntry=if($encodedMatch.Success){[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($encodedMatch.Groups['encoded'].Value))}else{''}
+        Assert-F2Launch -Condition ($encodedMatch.Success -and $decodedEntry -ceq $expectedEntry.Source -and $commandText.TrimEnd("`r","`n") -ceq $expectedEntry.Command) -Name 'PublishedCMDEntryMatchesHashPinnedBootstrapLoader'
+        Assert-F2Launch -Condition ($commandText.TrimEnd("`r","`n").Length -le 8191 -and $encodedMatch.Groups['encoded'].Value -match '^[A-Za-z0-9+/=]+$' -and $commandText -notmatch '[&|<>^()%!]') -Name 'PublishedCMDCommandWithinWindowsCommandLineLimitAndQuotingSafe'
+        $tempEntryRoot=Join-Path ([IO.Path]::GetTempPath()) ('F2CmdEntry-'+[guid]::NewGuid().ToString('N'));[IO.Directory]::CreateDirectory($tempEntryRoot)|Out-Null
+        try {
+            $tempMarker=Join-Path $tempEntryRoot 'outer-marker.txt';$tempBootstrap=Join-Path $tempEntryRoot 'outer.ps1'
+            [IO.File]::WriteAllText($tempBootstrap,"[IO.File]::WriteAllText('$tempMarker','verified');exit 0",(New-Object Text.UTF8Encoding($false)))
+            $tempHash=Get-TestFileSha $tempBootstrap;$tempEntry=New-TestCmdEntry -Template $entryTemplate -BootstrapPath $tempBootstrap -BootstrapSha256 $tempHash
+            $cmdResult=Invoke-TestCmdEntry -Entry $tempEntry
+            Assert-F2Launch -Condition ($cmdResult.Finished -and $cmdResult.ExitCode -eq 0 -and (Test-Path -LiteralPath $tempMarker -PathType Leaf)) -Name 'CMDEntryExecutesOnlyVerifiedTemporaryBootstrapBytes'
+            [IO.File]::WriteAllText($tempBootstrap,"[IO.File]::WriteAllText('$tempMarker','substituted');exit 0",(New-Object Text.UTF8Encoding($false)));Remove-Item -LiteralPath $tempMarker -Force -ErrorAction SilentlyContinue
+            $tamperResult=Invoke-TestCmdEntry -Entry $tempEntry
+            Assert-F2Launch -Condition ($tamperResult.Finished -and $tamperResult.ExitCode -eq 85 -and -not(Test-Path -LiteralPath $tempMarker)) -Name 'CMDEntryRejectsChangedBootstrapBeforeExecution'
+            $targetRoot=Join-Path $tempEntryRoot 'target';[IO.Directory]::CreateDirectory($targetRoot)|Out-Null;$aliasBootstrap=Join-Path $targetRoot 'outer.ps1';[IO.File]::WriteAllText($aliasBootstrap,"[IO.File]::WriteAllText('$tempMarker','alias');exit 0",(New-Object Text.UTF8Encoding($false)));$aliasHash=Get-TestFileSha $aliasBootstrap
+            $tempAlias=Join-Path $tempEntryRoot 'alias';$mk=New-Object Diagnostics.ProcessStartInfo;$mk.FileName=Join-Path $env:SystemRoot 'System32\cmd.exe';$mk.Arguments='/d /c mklink /J "'+$tempAlias+'" "'+$targetRoot+'" >NUL 2>&1';$mk.UseShellExecute=$false;$mk.CreateNoWindow=$true;$mkp=New-Object Diagnostics.Process;$mkp.StartInfo=$mk
+            try{[void]$mkp.Start();$mkp.WaitForExit(5000)|Out-Null;if($mkp.ExitCode -eq 0){$aliasEntry=New-TestCmdEntry -Template $entryTemplate -BootstrapPath (Join-Path $tempAlias 'outer.ps1') -BootstrapSha256 $aliasHash;$aliasResult=Invoke-TestCmdEntry -Entry $aliasEntry;Assert-F2Launch -Condition ($aliasResult.Finished -and $aliasResult.ExitCode -eq 81 -and -not(Test-Path -LiteralPath $tempMarker)) -Name 'CMDEntryRejectsReparseAlias'}else{Assert-F2Launch -Condition (-not(Test-Path -LiteralPath $tempAlias)) -Name 'CMDEntryReparseFixtureUnavailableFailsClosed'}}finally{$mkp.Dispose();if(Test-Path -LiteralPath $tempAlias){Remove-Item -LiteralPath $tempAlias -Recurse -Force -ErrorAction SilentlyContinue}}
+        } finally {if(Test-Path -LiteralPath $tempEntryRoot){Remove-Item -LiteralPath $tempEntryRoot -Recurse -Force -ErrorAction SilentlyContinue}}
     }else{Assert-F2Launch -Condition $false -Name 'ExactUacCommandPublished'}
     $hashManifestPath=Join-Path (Split-Path $outerBootstrapPath -Parent) 'FILE_SHA256_MANIFEST.txt'
     if(Test-Path -LiteralPath $hashManifestPath){
-        $expectedManifestPaths=@('.gitattributes','.github/workflows/f2-acl-source-only.yml','docs/reviews/f2-g1-elevated-diagnostic-launch/OUTER_BOOTSTRAP.ps1','docs/reviews/f2-g1-elevated-diagnostic-launch/README.md','docs/reviews/f2-g1-elevated-diagnostic-launch/SECURITY_BOUNDARIES.md','docs/reviews/f2-g1-elevated-diagnostic-launch/DEVELOPER_HANDOFF.md','docs/reviews/f2-g1-elevated-diagnostic-launch/VALIDATION_RESULTS.md','docs/reviews/f2-g1-elevated-diagnostic-launch/EXACT_UAC_COMMAND.txt','scripts/f2-acl/Invoke-F2HistoricalManifestDiagnostic.ps1','scripts/f2-acl/F2HistoricalManifestLaunch.psm1','scripts/f2-acl/Invoke-F2HistoricalManifestDiagnosticChild.ps1','scripts/f2-acl/Start-F2HistoricalManifestDiagnostic.ps1','scripts/f2-acl/Test-F2HistoricalManifestLaunch.ps1')
+        $expectedManifestPaths=@('.gitattributes','.github/workflows/f2-acl-source-only.yml','docs/reviews/f2-g1-elevated-diagnostic-launch/CMD_ENTRY_BOOTSTRAP.ps1','docs/reviews/f2-g1-elevated-diagnostic-launch/OUTER_BOOTSTRAP.ps1','docs/reviews/f2-g1-elevated-diagnostic-launch/README.md','docs/reviews/f2-g1-elevated-diagnostic-launch/SECURITY_BOUNDARIES.md','docs/reviews/f2-g1-elevated-diagnostic-launch/DEVELOPER_HANDOFF.md','docs/reviews/f2-g1-elevated-diagnostic-launch/VALIDATION_RESULTS.md','docs/reviews/f2-g1-elevated-diagnostic-launch/EXACT_UAC_COMMAND.txt','docs/reviews/f2-g1-elevated-diagnostic-launch/TEST_RUN_RESULTS.log','scripts/f2-acl/Invoke-F2HistoricalManifestDiagnostic.ps1','scripts/f2-acl/F2HistoricalManifestLaunch.psm1','scripts/f2-acl/Invoke-F2HistoricalManifestDiagnosticChild.ps1','scripts/f2-acl/Start-F2HistoricalManifestDiagnostic.ps1','scripts/f2-acl/Test-F2HistoricalManifestLaunch.ps1')
         $manifestRecords=@();$manifestMalformed=$false
         foreach($line in Get-Content -LiteralPath $hashManifestPath){$match=[regex]::Match([string]$line,'^(?<hash>[0-9a-f]{64})  (?<path>[^\s][^\r\n]*)$');if(-not $match.Success){$manifestMalformed=$true;break};$manifestRecords+=([pscustomobject]@{Sha256=$match.Groups['hash'].Value;Path=$match.Groups['path'].Value})}
         $manifestNames=@($manifestRecords|ForEach-Object{$_.Path})

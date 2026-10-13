@@ -7,13 +7,31 @@ $ErrorActionPreference = 'Stop'
 $stage = 'BootstrapInitialization'
 $uacAttempted = $false
 $failureCode = 'OUTER_BOOTSTRAP_FAILED'
-$launchRoot = 'C:\Dev\f2-g1-diagnostic-elevation-plan-source'
-$expectedLaunchCommitSha = '8c2bddd90c6ac5214eeed08b5648d0ef30b58bf4'
+$launchRoot = 'C:\Dev\f2-g1-diagnostic-launch-runtime'
+$expectedLaunchCommitSha = '8c14cf97c9446e11b8afbd64196c3f4558d4c3c9'
 $expectedRemote = 'https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git'
-$expectedGitPath = 'C:\Program Files\Git\cmd\git.exe'
-$expectedGitSha256 = '7b7971dd13f0c3a284e538601f2f9770b3a87dfaccb5fb52d68141c67ed22364'
-$expectedLaunchModuleSha256 = 'ec40adb78eb54c1e6df92ca6ce142b85fe71e98340c30f185fc506e37a744432'
-$expectedLauncherSha256 = 'a314696562b3b3fd4fbb0785d06bb6c243450c69282a48c9a73ff008d05ff258'
+$expectedGitPath = 'C:\Program Files\Git\mingw64\bin\git.exe'
+$expectedGitSha256 = '1a0043555d254618f2d56c936c3d9a1fbfb878bc878416a133c346bc7835eda9'
+$expectedLaunchModuleSha256 = '06f117c6be29e3e150149087cb19323e83df20601b8d134f0bb02ec7335867d2'
+$expectedLauncherSha256 = '48b3f12dbc784e593a4ee5b468b3f005e6b6e1a53b1c09d542d0bfc2f9cdd83a'
+
+function Read-OuterPinnedBytes {
+    param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][int]$MaximumBytes)
+    $expectedPath=[IO.Path]::GetFullPath($Path)
+    $stream=[IO.File]::Open($expectedPath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+    try {
+        $finalPathBuffer=New-Object System.Text.StringBuilder 1024
+        $finalPathLength=[F2.F2PinnedPath]::GetFinalPathNameByHandleW($stream.SafeFileHandle,$finalPathBuffer,1024,0)
+        if($finalPathLength -eq 0 -or $finalPathLength -ge 1024){throw 'LAUNCH_REPARSE_PATH_REJECTED'}
+        $finalPath=$finalPathBuffer.ToString()
+        if($finalPath.StartsWith('\\?\',[StringComparison]::Ordinal)){$finalPath=$finalPath.Substring(4)}
+        if([IO.Path]::GetFullPath($finalPath) -ine $expectedPath){throw 'LAUNCH_REPARSE_PATH_REJECTED'}
+        if($stream.Length -lt 1 -or $stream.Length -gt $MaximumBytes){throw 'LAUNCH_FILE_TYPE_OR_SIZE_INVALID'}
+        $bytes=New-Object byte[] ([int]$stream.Length);$offset=0
+        while($offset -lt $bytes.Length){$read=$stream.Read($bytes,$offset,$bytes.Length-$offset);if($read -le 0){throw 'LAUNCH_FILE_TRUNCATED'};$offset+=$read}
+    } finally { $stream.Dispose() }
+    return ,$bytes
+}
 
 try {
     if ($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) { throw 'LAUNCH_PS_VERSION_INVALID' }
@@ -31,19 +49,7 @@ try {
     }
 
     $stage = 'LaunchModuleIntegrity'
-    $moduleItem = Get-Item -LiteralPath $modulePath -Force -ErrorAction Stop
-    if ($moduleItem.PSIsContainer -or $moduleItem.Length -lt 1 -or $moduleItem.Length -gt 262144) { throw 'LAUNCH_FILE_TYPE_OR_SIZE_INVALID' }
-    $stream = New-Object IO.FileStream($modulePath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
-    try {
-        if ($stream.Length -ne $moduleItem.Length) { throw 'LAUNCH_FILE_CHANGED_DURING_READ' }
-        $moduleBytes = New-Object byte[] ([int]$stream.Length)
-        $offset = 0
-        while ($offset -lt $moduleBytes.Length) {
-            $read = $stream.Read($moduleBytes,$offset,$moduleBytes.Length-$offset)
-            if ($read -le 0) { throw 'LAUNCH_FILE_TRUNCATED' }
-            $offset += $read
-        }
-    } finally { $stream.Dispose() }
+    $moduleBytes = Read-OuterPinnedBytes -Path $modulePath -MaximumBytes 262144
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $moduleSha = ([BitConverter]::ToString($sha.ComputeHash($moduleBytes))).Replace('-','').ToLowerInvariant() } finally { $sha.Dispose() }
     if ($moduleSha -cne $expectedLaunchModuleSha256) { throw 'LAUNCH_MODULE_HASH_MISMATCH' }

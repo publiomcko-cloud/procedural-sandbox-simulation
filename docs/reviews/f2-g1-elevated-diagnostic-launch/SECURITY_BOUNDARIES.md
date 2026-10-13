@@ -2,69 +2,54 @@
 
 ## Allowed operation set
 
-The elevated child may:
+The elevated child may verify its Windows PowerShell 5.1 version and same-requester elevated Administrator token; read pinned source/candidate/diagnostic inputs; perform four fixed, local Git queries; compile the small pipe/token helper; authenticate one local pipe request; parse the candidate manifest; and compare `ReviewedCommitSha` with the pinned source commit. It cannot reach the updater, recovery, transaction, rollback, `icacls`, ACL changes, Hyper-V/VM, disk/volume writes, registry writes, protected installation paths, `G:`, or native F2 workloads. No production path creates persistent files.
 
-1. Verify it is Windows PowerShell 5.1 and has an elevated Administrator token whose user SID is identical to the original requester SID.
-2. Read and verify the launch, source, candidate, wrapper, diagnostic module, historical updater, historical launcher, protocol and candidate manifest at the fixed paths and exact pins.
-3. Run only fixed, local Git `rev-parse`, `config --local --get remote.origin.url`, and `status --porcelain` queries using the pinned `C:\Program Files\Git\cmd\git.exe`, with system/global configuration disabled, hooks disabled, optional locks disabled, fsmonitor disabled, and bounded stdout/stderr/deadlines.
-4. Compile the embedded pipe/token helper and communicate one request and one bounded response over a local named pipe.
-5. Parse the exact historical manifest-validation call and compare the returned `ReviewedCommitSha` with its expected source commit.
+The four Git queries remain `rev-parse --show-toplevel`, `config --local --get remote.origin.url`, `rev-parse HEAD`, and `status --porcelain=v1 --untracked-files=all`. Their command names and arguments are fixed; system/global Git configuration, hooks, optional locks and fsmonitor are disabled. Output, error streams and deadlines are bounded.
 
-The executed PowerShell/native source has no call path to the protected updater entrypoint, recovery, transaction or rollback code, `icacls`, ACL-changing commands/APIs, Hyper-V/VM commands/APIs, disk/volume writes, registry writes, protected installation paths, `G:`, or native F2 workloads. The test suite parses the production launch/probe scripts and rejects the forbidden operation set; it separately checks the C# helper for write-capable APIs and constrains process creation to the fixed Git query wrapper.
+## Verified-byte execution and path handling
 
-No persistent file, registry, ACL, VM, disk, or protected-installation write is part of the production launch. The named pipe is a transient kernel IPC object. The tests write disposable files only under TEMP and remove their fixtures.
+- The exact CMD entry contains no mutable file execution. It sets `PSModulePath` to `$PSHOME\Modules`, opens the fixed outer-bootstrap file through the embedded handle reader, checks the opened handle's final path against the fixed canonical path, rejects a path whose resolved handle target differs, uses read-only sharing, reads at most 128 KiB once, hashes those bytes, and creates/invokes a ScriptBlock from that same byte array. A directory cannot be read as the required file and fails closed.
+- The outer bootstrap repeats no-reparse checks and uses the still-loaded handle reader to obtain the launch module as bytes. It verifies that hash and imports a module made from that exact byte array. It then reads and verifies the requester launcher and executes a ScriptBlock from those exact bytes. It never invokes a source checkout file with `-File` or dot-sources it.
+- The requester uses `Read-F2LaunchPinnedFile`, which opens through a handle-based native helper, compares the opened object's final path to the canonical requested path, rejects reparse or directory handles, enforces bounds, hashes the bytes and returns that same array. It performs fresh repository and input checks before the single UAC launch.
+- The generated elevated-child bootstrap is a short fixed template. It checks the full child path chain for reparse points, opens with reader-only sharing, bounds and reads the child script once, validates its SHA-256, then creates/invokes a ScriptBlock from those exact bytes. The one-shot child command is generated only from fixed path/hash/identity/nonce inputs and rejected if its complete command line exceeds 3,600 characters. No `-File` or unverified path execution occurs.
+- Opening with reader-only sharing prevents a later write or rename while that handle is open. The hash check catches content substituted before open, and only the byte array that passed hashing is executed; changing the path or file after the read cannot change that ScriptBlock. Parent-chain checks and handle final-path checks reject static reparse aliases. Regression tests cover changed bytes and directory-junction aliases. No source checkout can supply alternate paths or hashes at runtime.
 
-## Source and TOCTOU controls
+These controls protect against accidental mutation and path substitution by ordinary concurrent processes. A malicious local Administrator or code already controlling the same requester/elevated process is outside this boundary. The `powershell.exe` image and Windows loader remain operating-system trust assumptions.
 
-- The outer command contains the reviewed bootstrap text. It does not dot-source a mutable bootstrap file.
-- Before source execution, it resets `PSModulePath` to `$PSHOME\Modules`, checks the standard token and exact launch checkout, and reads the launch module through a bounded read-only handle. It verifies the SHA-256 and imports that same byte array with `New-Module`.
-- It reads the requester launcher once, checks its exact checkout-byte SHA-256 and parses/builds the ScriptBlock from those same bytes.
-- The requester checks the launch/source/candidate repository roots, origin, commit, clean state and reparse chains immediately before opening the pipe and reaching the UAC call. It also verifies all historical inputs and the wrapper/module/child hashes.
-- The child loader resets `PSModulePath` before its first module-capable cmdlet, validates the child file chain, opens the file read-only with sharing restricted to readers, enforces a 256 KiB bound, hashes the bytes and executes a ScriptBlock made from those exact bytes.
-- The elevated child repeats token, repository, fixed-path, reparse and input-hash checks. It loads the launch module and diagnostic module from pinned bytes, and gives the diagnostic wrapper the same verified diagnostic-module byte array in memory.
-- The pinned Git binary and all script inputs are re-hashed at use boundaries. A mismatch, missing path, dirty checkout, alternate origin, unexpected reparse point or unavailable identity information fails closed.
+## Git for Windows provenance
 
-`FileShare.Read` and in-memory execution prevent later path replacement from changing the bytes already verified for execution. Reparse checks protect path traversal. A malicious local Administrator or code already running inside the requester/elevated PowerShell process is outside this boundary; the plan is not a defense against a fully compromised host.
+The previous `C:\Program Files\Git\cmd\git.exe` pin pointed at Git for Windows' wrapper. The [Git for Windows wrapper documentation](https://gitforwindows.org/git-wrapper.html) explains that `cmd\git.exe` sets environment variables and starts the real program. Its [MINGW/MSYS2 layout documentation](https://github.com/git-for-windows/git-for-windows.github.io/blob/main/content/the-difference-between-mingw-and-msys2.md) locates 64-bit core Git at `mingw64\bin\git.exe`. The code now invokes that actual core binary directly, pins its fixed path and observed SHA-256, clears the inherited environment, supplies a minimal `PATH`, and retains the fixed four-query allowlist.
 
-## One-shot pipe authentication
+The core executable can load Git for Windows DLLs from its installation tree. Those dependent binaries are not individually pinned here. The remaining trust boundary is that the installed Git for Windows directory and its required runtime DLLs are genuine and protected from ordinary-user modification; this task did not query or attest their host ACLs or signatures. A mismatch of the core executable itself fails closed. Independent review should decide whether this explicit dependency assumption is acceptable for a diagnostic-only probe.
 
-The requester creates a cryptographically random `F2D_<32 hex>` pipe name with `FILE_FLAG_FIRST_PIPE_INSTANCE` and `PIPE_REJECT_REMOTE_CLIENTS`. Its protected DACL grants access only to the requester SID, built-in Administrators and SYSTEM. Messages have a four-byte length prefix and a strict 8 KiB maximum.
+## One-shot pipe authentication and result validation
 
-`PipeOptions.CurrentUserOnly` is intentionally not used: on Windows the option also requires the same elevation level, so it does not fit a medium-integrity requester/high-integrity child. Instead, the peer is tied to the kernel-reported pipe PID, process creation time, exact image and encoded command line, process user SID, and a `RunAsClient` token check. The child independently checks the named-pipe server PID, creation time and SID. A random request nonce and request ID, exact field sets, source hashes, identity and process IDs are validated on both sides. A malformed, duplicate, oversized, replayed or conflicting frame fails closed.
+The requester creates a random `F2D_<32 hex>` pipe with `FILE_FLAG_FIRST_PIPE_INSTANCE` and `PIPE_REJECT_REMOTE_CLIENTS`. Its protected DACL is limited to the requester, Administrators and SYSTEM. Frames have a four-byte length and an 8 KiB maximum. Peer binding includes kernel pipe PID, process creation time, exact image/encoded command line, SID and token elevation facts. Request ID, nonce, exact fields, fixed hashes, status and child exit are validated in both directions.
 
-Local administrators can still cause denial of service by racing/connecting to the random pipe; the peer checks reject that connection and no fallback or retry occurs. This is an availability limitation, not a path to run unverified commands or write files.
+The response validator accepts only the exact diagnostic schema and safe enum values. A successful diagnostic must say `TokenClass=ELEVATED`; a `STANDARD`-labeled `PASS` is rejected. A child exit conflict, nonzero exit, missing/tampered/duplicate frame, source mismatch, timeout or incomplete cleanup cannot become PASS. Diagnostic PASS is non-authoritative and does not mean any updater or installation succeeded.
 
-## UAC and identity policy
+`PipeOptions.CurrentUserOnly` is not used because it checks elevation level as well as account identity on Windows and would prevent the medium-to-high connection. The pipe instead binds actual process and token identities. Local administrators may still cause denial of service by racing the random pipe; there is no fallback or automatic retry.
 
-There is one `Start-Process -Verb RunAs` call site, after every deterministic requester-side preflight has passed. The code makes no automatic second launch. If a different Administrator account supplies credentials, the child SID will differ from the requester SID and the request is rejected. The owner must give ordinary, visible Windows consent for the same account's elevation; consent is never automated.
+## Git wrapper evidence and runtime dependency limits
 
-The code prevents a second launch within its single invocation. There is no durable cross-invocation attempt ledger: rerunning the exact command manually can present another UAC prompt. A separately granted one-time authorization must therefore be treated as consumed on the first UAC prompt, regardless of the result. The operator must not rerun it after that point.
+The distinction between wrapper and core binary is documented by Git for Windows, and the local `cmd\git.exe` had wrapper-sized file metadata while the `mingw64\bin\git.exe` used by the launch code was independently SHA-256 checked. No wrapper was executed. The source and test pin only the core executable, not the set of dynamic libraries it loads. A hostile or modified Git installation tree could affect the four Git queries; the source does not attempt DLL inventory or signature validation. This is an explicit trust assumption for independent review, not a claim that the full Git installation was attested.
 
-The human consent UI itself is not on a tool-controlled deadline. After `Start-Process` returns, pipe connect and complete-child deadlines are bounded. On a timeout the parent reports the actual exit code when available and `ChildMayRemain`; it never terminates the elevated process. A remaining diagnostic-only child requires owner-directed process review before any later attempt.
+## UAC policy and limitations
 
-## Output and failure reporting
+The requester contains one `Start-Process -Verb RunAs` site and no retry. If a different Administrator account is used, the elevated SID differs from the requester and is rejected. Ordinary visible Windows consent cannot be automated. The test harness uses a normal ShellExecute call with no `runas` verb and temporary harmless scripts only; it does not invoke UAC.
 
-- Standard output is one fixed-schema JSON result bounded to 8 KiB.
-- The authenticated child carries a bounded diagnostic JSON record (maximum 4 KiB) plus up to 16 sanitized PowerShell `FullyQualifiedErrorId` values from a finite allowlist. Raw exception messages, paths, SIDs, SDDL, credentials and environment data are not serialized.
-- The parent validates the nested schema, values, exact hashes, nonce, process identity and exit agreement. `PASS` requires the parser diagnostic PASS and child exit 0; it still means parser success only.
-- `Start-Process -Verb RunAs` uses the ShellExecute parameter set, which cannot use the redirected-stream parameters from the redirected-start parameter set. Therefore the launch does not claim to capture arbitrary OS stdout/stderr. The child sends its bounded result through the authenticated pipe. If PowerShell fails before connecting, the parent reports a missing/invalid record and the real process exit when available; it does not trust hidden-window text or infer an internal stage.
-- Child initialization failure after the authenticated connection yields a fixed stage/error classification. Errors before any trusted sender is available remain `UNKNOWN` with a missing record.
-- Output overflow, incomplete framing, timeout, cleanup/reader failure, child-claim mismatch, false success flags or nonzero/conflicting exit never yield PASS.
+The consent UI is not controlled by an automated deadline. After launch, pipe connect and child exit waits are bounded. A timeout reports the actual process status when available and whether the child may remain; the code does not terminate it. There is no durable cross-invocation UAC attempt ledger, so any future owner authorization is consumed at the first prompt and the exact command must not be rerun after that prompt.
 
-## Difference from the unexplained historical elevated updater
+## Remaining real-host unknowns
 
-The old incident was an elevated update process that could proceed through source/parent/installed-release checks and toward transaction-lock creation. This proposed probe runs a verified wrapper in an isolated PowerShell runspace and stops after the historical manifest parser call plus `ReviewedCommitSha` comparison. Its elevated identity, module path and standard-module search path are explicitly checked, but its runspace/scope, wrapper input-byte injection, pipe handshake, and intentionally absent updater transaction state differ from the historical updater execution context. A PASS or different failure here cannot prove the original PID 43072/6468/43072 behavior is fixed or diagnosed.
+- A real UAC cross-integrity pipe handshake and the actual `Start-Process -Verb RunAs` command-line representation remain untested.
+- Real elevated command-line visibility through `Win32_Process.CommandLine`, same-account consent, and rejection of alternate-account credentials remain untested.
+- Git runtime DLLs and protected parent paths have not been inspected on the host.
+- No protected state, VM, Hyper-V, ACL, `icacls`, `G:`, or baseline data was queried in this task.
+- No historical elevated updater process or updater entrypoint was run; the earlier elevated failure remains UNKNOWN.
 
-## Real-host conditions still UNKNOWN
+## Microsoft interfaces referenced
 
-- Windows UAC medium-to-high named-pipe behavior for the real requester and elevated child has not been exercised. The integration test uses ordinary same-token processes; the cross-token contract is supported by the explicit ACL/PID/SID/token checks but remains a real-host gate.
-- The exact `Start-Process -Verb RunAs` command-line representation and WMI `Win32_Process.CommandLine` visibility in the target host have not been tested. An unavailable or differently represented value fails closed.
-- Same-account UAC consent and rejection of alternate-account credentials have only synthetic token-policy coverage, not actual UAC validation.
-- Protected/real host state is not read by this package; no live VM, ACL, `icacls`, `G:`, or protected installation state was queried here.
-- No historical elevated process or updater entrypoint was run. The unexplained elevated failure remains UNKNOWN.
-
-## Microsoft API references
-
-- [Start-Process parameters](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/start-process?view=powershell-5.1) documents the separate `-Verb` and redirected-stream parameter sets.
-- [PipeOptions](https://learn.microsoft.com/en-us/dotnet/api/system.io.pipes.pipeoptions?view=netframework-4.8.1) documents `CurrentUserOnly` behavior and its Windows security semantics.
-- [GetNamedPipeClientProcessId](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeclientprocessid) supplies the kernel-reported client PID used for peer binding.
+- [Start-Process parameters](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/start-process?view=powershell-5.1)
+- [PipeOptions](https://learn.microsoft.com/en-us/dotnet/api/system.io.pipes.pipeoptions?view=netframework-4.8.1)
+- [GetNamedPipeClientProcessId](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeclientprocessid)

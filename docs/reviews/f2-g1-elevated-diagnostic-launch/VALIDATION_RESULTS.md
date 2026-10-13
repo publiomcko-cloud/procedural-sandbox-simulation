@@ -1,68 +1,61 @@
-# Source-only validation record
+# F2 G1 diagnostic launch validation
 
-## Scope and environment
+## Scope
 
-- Windows PowerShell 5.1.22621.6133, standard/non-elevated token.
-- No UAC, elevated child, protected updater, ACL change, live `icacls`, VM/Hyper-V/G:, native F2 workload, or protected write was invoked.
-- The new pipe integration launches only ordinary same-token PowerShell fixture children. It does not invoke `Start-F2HistoricalManifestDiagnostic.ps1` with `-ExecuteApprovedProbe` and does not reach the RunAs call site.
-- The Windows workflow skips `Test-F2AclProtectedReleaseUpdater.ps1` on this source branch so it cannot run the historical transaction test. The PR #68 review evidence verifier is also skipped here because it binds the prior PR to exact HEAD `c3d1280...`; it is not a verifier for this stacked review package.
+Validation used Windows PowerShell 5.1.22621.6133 for the synthetic suites. No UAC, `RunAs`, elevated probe, protected updater, live `icacls`, ACL/VM/Hyper-V/G: access, native workload, or protected write was performed. `TEST_RUN_RESULTS.log` preserves each suite's complete sanitized output and actual child exit code. The tests use disposable TEMP fixtures; ShellExecute fixtures set `UseShellExecute = $true` with an empty verb and never request elevation.
 
-## Non-elevated fixed-input verification
+The corrected launch implementation is commit `8c14cf97c9446e11b8afbd64196c3f4558d4c3c9`, parent `1f0ddfd26554f1302fc5815084d2adb3b24ea857`. The review package is on top of that implementation commit. Runtime checkout and review checkout paths are separate as described in `README.md`.
 
-The production read-only source-check functions were called under Windows PowerShell 5.1. They passed for the exact configured roots:
+## Corrected launch gates
 
-| Check | Observed result |
+| Gate | Result |
 |---|---|
-| Requester token / PS version | PASS; Windows PowerShell 5.1, standard non-elevated token; no SID published |
-| Production source root | PASS; exact commit `396c44965c90c08292ad2835f8317e81b6b9daaf`; clean; expected repository origin |
-| Historical candidate root | PASS; exact commit `7f99bc10f3e2258d2340cea4e7ba1352022cbb6d`; clean; expected repository origin |
-| Pinned Git executable | PASS; SHA-256 `7b7971dd13f0c3a284e538601f2f9770b3a87dfaccb5fb52d68141c67ed22364` |
-| Historical updater source | PASS; SHA-256 `d9572f7ea113ab01eaa4c6ab98d0852ce9549642b083719f68c01f02b2a81bb2` |
-| Historical launcher source | PASS; SHA-256 `9fc4d574eda4a03ee05bca5ce789bdb10ee0b05f5f6de273839ba0060445bdc9` |
-| Historical diagnostic protocol | PASS; SHA-256 `66466fd15ce161fe2b522c77cfd6500845012480fc64890aa8435f54197eedc7` |
-| Candidate manifest | PASS; SHA-256 `b8596905f42ee429ae2fd3352f9133de8bd4f00da654f856012c02390661f022` |
+| Exact standard-token CMD invocation | 4,683 characters; below the 8,191-character CMD limit; no command chaining or expansion metacharacters |
+| CMD entry source equivalence | Pass; the encoded command is generated from `CMD_ENTRY_BOOTSTRAP.ps1` with the exact outer path and SHA-256 bound |
+| Outer bootstrap | Opens the fixed file, checks its handle-resolved path and SHA-256, then invokes a ScriptBlock created from those same bytes |
+| Elevated child argument construction | Maximum-shaped full command line tested at or below 3,600 characters; the production builder rejects the smaller injected 512-character limit |
+| Elevated child bootstrap | Encoded bytes exactly match the production template after binding path, digest, pipe, requester PID/creation time and source commit |
+| Harmless ShellExecute integration | Pass using temporary scripts and `UseShellExecute = $true`; no `runas` verb and no UAC |
+| Successful diagnostic token label | `ELEVATED` required; synthetic `STANDARD`-labeled PASS rejected |
+| Git provenance | Direct pinned core binary path/hash; four read-only queries retained; wrapper is not in the execution path |
+| Source immutability | Historical source, parser, candidate, diagnostic module and retained-baseline identity/digest pins remain unchanged |
 
-These are read-only identity/hash checks. They do not execute the historical updater or read protected ACL/VM state.
+## Windows PowerShell 5.1 suites
 
-## Windows PowerShell 5.1 synthetic suites
+Each command was run in a fresh `powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <suite>` child. The exact command lines, sanitized output, assertion summaries and actual exit codes are in `TEST_RUN_RESULTS.log`.
 
-Commands are relative to a clean checkout of this branch:
-
-```powershell
-powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2HistoricalManifestLaunch.ps1
-powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclCapture.Protocol.ps1
-powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Corroboration.ps1
-powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclIcacls.Runtime.ps1
-powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclEntrypointArguments.ps1
-powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2AclProtectedReleaseNativeHelper.ps1
-powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2ProtectedReleaseDiagnostics.ps1
-powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2HistoricalManifestDiagnostic.ps1
-```
-
-The results below are the local Windows PowerShell 5.1 runs for the immutable launch source commit and its final review-package checks. Hosted Windows CI and complete job logs are linked from the draft PR checks.
-
-| Suite | Assertions | Failures | Process exit |
+| Suite | Assertions | Failures | Exit |
 |---|---:|---:|---:|
-| Launch boundary / pipe / byte pin chain | 107 | 0 | 0 |
+| Launch boundary, command construction, byte pins and pipe | 128 | 0 | 0 |
 | ACL protocol | 152 | 0 | 0 |
 | ACL corroboration | 118 | 0 | 0 |
 | ACL runtime contract | 41 | 0 | 0 |
 | Entrypoint arguments | 18 | 0 | 0 |
 | Native helper TEMP fixtures | 20 | 0 | 0 |
-| Protected-release diagnostic channel TEMP fixtures | 68 | 0 | 0 |
+| Protected-release diagnostics TEMP fixtures | 68 | 0 | 0 |
 | Historical manifest parser-only regression | 40 | 0 | 0 |
-| **Total** | **564** | **0** | **0** |
+| **Total** | **585** | **0** | **0** |
 
-## Parser and whitespace validation
+The focused launch suite command was:
 
-- Windows PowerShell 5.1 parser sweep: 29 files (28 tracked `scripts/f2-acl` PowerShell sources plus `OUTER_BOOTSTRAP.ps1`); 0 parse errors; exit 0.
-- `git diff --check` and `git diff --cached --check`: pass on the source correction before final docs staging; both are rerun on the complete review package before publication.
-- The checkout uses explicit `.gitattributes` rules: launch `.ps1` sources are CRLF, the launch `.psm1` and review package are LF. All SHA-256 values in `FILE_SHA256_MANIFEST.txt` are over actual Windows checkout bytes.
+```powershell
+& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2HistoricalManifestLaunch.ps1
+```
 
-## Hosted CI
+Observed output: `Assertions=128;Failures=0`; child process exit code `0`.
 
-The draft PR's final immutable HEAD must pass the `F2 ACL source-only validation` Windows workflow. Its exact run URL and conclusion are recorded in the final PR body after GitHub completes the run. The older create-only updater transaction suite is intentionally skipped for this PR; this task forbids executing that updater. The exact-HEAD PR #68 evidence self-check is likewise not applicable to the stacked head.
+During fixture development, the directory-junction cleanup initially used `Remove-Item` and triggered an interactive prompt under `-NonInteractive`. The test now removes only that exact TEMP junction via `Directory.Delete(path, false)`, which unlinks the reparse entry without recursing into its target. The corrected regression then passed; no protected or user data was touched.
 
-## Remaining limits
+## Parser and diff validation
 
-No test here proves Windows UAC consent, a real medium-to-high named-pipe connection, WMI command-line availability for the elevated process, or behavior in the historical updater execution context. The actual read-only source-input check passed, but the launch checkout must be clean at the pinned source implementation commit before a future invocation; this review-package commit is documentation-only after that pinned commit. Do not interpret source tests or a diagnostic PASS as an explanation of the historical failure.
+- Windows PowerShell 5.1 `Parser::ParseFile` sweep: all 28 `scripts/f2-acl` `.ps1`/`.psm1` files plus `OUTER_BOOTSTRAP.ps1` and the CMD-entry template; 30 files, 0 parse errors, exit 0.
+- `git diff --check`: pass; rerun after staging the complete final package before commit.
+- The review-package `.ps1` files use LF by `.gitattributes`; `scripts/f2-acl` files use CRLF except the launch module's explicit LF rule. The command is plain ASCII plus line ending. Package hashes are physical Windows checkout bytes and appear in `FILE_SHA256_MANIFEST.txt`.
+
+## Hosted Windows CI
+
+The draft branch workflow runs the compatible protocol, corroboration, runtime, entrypoint, native-helper, diagnostic and historical-manifest suites plus this launch suite and tracked-source parser sweep. It intentionally skips the PR #68 exact-HEAD evidence verifier and historical updater transaction suite; neither validates this stacked branch, and executing the updater is prohibited. The final Windows workflow check is attached to the exact pushed PR #69 HEAD; its run URL and conclusion are provided in the final handoff response.
+
+## Limits
+
+The tests prove generated launch arguments, verified-byte ScriptBlock behavior and harmless same-token ShellExecute fixtures, not actual UAC, cross-integrity named-pipe operation, Windows consent behavior, real elevated command-line visibility, or alternate-account rejection. Git for Windows runtime DLLs are not individually pinned; the installed Git tree remains an explicitly documented trust dependency. A diagnostic PASS is non-authoritative and does not establish the cause of the prior elevated failure or installation/ACL acceptance.
