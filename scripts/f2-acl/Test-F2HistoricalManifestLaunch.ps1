@@ -261,8 +261,41 @@ try {
     Assert-F2Launch -Condition $nativeSourceNoWrites -Name 'NativeHelperHasNoProtectedMutationOrUpdaterCode'
     Assert-F2Launch -Condition ($nativeSource -match 's\.FileName=fileName' -and $moduleText -match 'F2LaunchExpectedGitPath') -Name 'OnlyPinnedGitHelperProcessIsSpawned'
     $childText=[IO.File]::ReadAllText($childPath)
+    $wrapperText=[IO.File]::ReadAllText($wrapperPath)
     Assert-F2Launch -Condition ($childText -match 'function Read-ChildPinnedFile' -and $childText -notmatch '\[IO\.File\]::ReadAllBytes') -Name 'ElevatedChildUsesBoundedSingleReadForPinnedModule'
     Assert-F2Launch -Condition ($moduleText -match "ValidateSet\('Top','Origin','Head','Status'\)" -and $moduleText -match 'RunGitBounded\(\$GitPath,\$arguments,\$Repository' -and $moduleText -match 'GIT_OPTIONAL_LOCKS') -Name 'GitChildInvocationIsFixedReadOnlyQuerySet'
+    $wrapperFunctionNames=@('Test-F2ProbeNoReparsePath','Get-F2ProbeModuleBytes')
+    $wrapperFunctionAsts=@((Get-F2LaunchAst -Path $wrapperPath).FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $wrapperFunctionNames -contains $n.Name},$true))
+    $wrapperFunctionBundle=($wrapperFunctionAsts|Sort-Object Name|ForEach-Object{$_.Extent.Text}) -join "`n"
+    $moduleReaderTemp=Join-Path ([IO.Path]::GetTempPath()) ('F2ProbeModuleReader-'+[guid]::NewGuid().ToString('N'))
+    [IO.Directory]::CreateDirectory($moduleReaderTemp)|Out-Null
+    $moduleReaderRunspace=[runspacefactory]::CreateRunspace();$moduleReaderRunner=[powershell]::Create()
+    try {
+        $moduleReaderRunspace.Open();$moduleReaderRunspace.SessionStateProxy.SetVariable('fixtureModuleBytes',[IO.File]::ReadAllBytes($probeModulePath));$moduleReaderRunspace.SessionStateProxy.SetVariable('fixtureScriptRoot','')
+        $moduleReaderRunner.Runspace=$moduleReaderRunspace
+        $emptyScriptRootJoinFailed=$false;try{Join-Path '' 'F2HistoricalManifestDiagnostic.psm1'|Out-Null}catch{$emptyScriptRootJoinFailed=$true}
+        Assert-F2Launch -Condition $emptyScriptRootJoinFailed -Name 'WindowsPowerShell51EmptyScriptRootJoinPathHazardReproduced'
+        $null=$moduleReaderRunner.AddScript($wrapperFunctionBundle+"`n`$resolved=Get-F2ProbeModuleBytes -InMemoryModuleBytes `$fixtureModuleBytes -ScriptRoot `$fixtureScriptRoot; ,`$resolved")
+        $moduleReaderOutput=@($moduleReaderRunner.Invoke())
+        Assert-F2Launch -Condition ($moduleReaderOutput.Count -eq 1 -and $moduleReaderOutput[0] -is [byte[]] -and (Get-F2LaunchSha256 -Bytes ([byte[]]$moduleReaderOutput[0])) -ceq '4541338491269ac2bf409c5ba0c63d93d6a5e3fd9896c9d378c79dbea43ee7ee') -Name 'ActualWrapperModuleReaderUsesPinnedMemoryBytesWithEmptyScriptRoot'
+        $moduleReaderRunspace.SessionStateProxy.SetVariable('fixtureModuleBytes','not-byte-array')
+        $moduleReaderRunner.Commands.Clear();$null=$moduleReaderRunner.AddScript("try{Get-F2ProbeModuleBytes -InMemoryModuleBytes `$fixtureModuleBytes -ScriptRoot ''|Out-Null;'NOT_REJECTED'}catch{([string]`$_.FullyQualifiedErrorId).Split(',')[0]}")
+        $badMemoryOutput=@($moduleReaderRunner.Invoke())
+        Assert-F2Launch -Condition ($badMemoryOutput.Count -eq 1 -and $badMemoryOutput[0] -ceq 'PROBE_MODULE_INPUT_INVALID') -Name 'ActualWrapperModuleReaderRejectsNonByteInMemoryInput'
+        $moduleReaderRunspace.SessionStateProxy.SetVariable('fixtureModuleBytes',[byte[]]@())
+        $moduleReaderRunner.Commands.Clear();$null=$moduleReaderRunner.AddScript("try{Get-F2ProbeModuleBytes -InMemoryModuleBytes `$fixtureModuleBytes -ScriptRoot ''|Out-Null;'NOT_REJECTED'}catch{([string]`$_.FullyQualifiedErrorId).Split(',')[0]}")
+        $emptyMemoryOutput=@($moduleReaderRunner.Invoke())
+        Assert-F2Launch -Condition ($emptyMemoryOutput.Count -eq 1 -and $emptyMemoryOutput[0] -ceq 'PROBE_MODULE_INPUT_INVALID') -Name 'ActualWrapperModuleReaderRejectsEmptyInMemoryBytes'
+        $moduleReaderRunspace.SessionStateProxy.SetVariable('fixtureModuleBytes',[byte[]]::new(131073))
+        $moduleReaderRunner.Commands.Clear();$null=$moduleReaderRunner.AddScript("try{Get-F2ProbeModuleBytes -InMemoryModuleBytes `$fixtureModuleBytes -ScriptRoot ''|Out-Null;'NOT_REJECTED'}catch{([string]`$_.FullyQualifiedErrorId).Split(',')[0]}")
+        $oversizeMemoryOutput=@($moduleReaderRunner.Invoke())
+        Assert-F2Launch -Condition ($oversizeMemoryOutput.Count -eq 1 -and $oversizeMemoryOutput[0] -ceq 'PROBE_MODULE_INPUT_INVALID') -Name 'ActualWrapperModuleReaderRejectsOversizedInMemoryBytes'
+        $tempModulePath=Join-Path $moduleReaderTemp 'F2HistoricalManifestDiagnostic.psm1';$tempBytes=[byte[]](5,6,7,8);[IO.File]::WriteAllBytes($tempModulePath,$tempBytes)
+        $moduleReaderRunspace.SessionStateProxy.SetVariable('fixtureModuleBytes',$null);$moduleReaderRunspace.SessionStateProxy.SetVariable('fixtureScriptRoot',$moduleReaderTemp)
+        $moduleReaderRunner.Commands.Clear();$null=$moduleReaderRunner.AddScript($wrapperFunctionBundle+"`n`$resolved=Get-F2ProbeModuleBytes -InMemoryModuleBytes `$fixtureModuleBytes -ScriptRoot `$fixtureScriptRoot; ,`$resolved")
+        $fallbackOutput=@($moduleReaderRunner.Invoke())
+        Assert-F2Launch -Condition ($fallbackOutput.Count -eq 1 -and $fallbackOutput[0] -is [byte[]] -and [BitConverter]::ToString([byte[]]$fallbackOutput[0]) -ceq '05-06-07-08') -Name 'ActualWrapperModuleReaderUsesBoundedDiskFallbackOnlyWhenMemoryAbsent'
+    } finally {$moduleReaderRunner.Dispose();$moduleReaderRunspace.Dispose();if(Test-Path -LiteralPath $moduleReaderTemp){Remove-Item -LiteralPath $moduleReaderTemp -Recurse -Force}}
     $childFunctionNames=@('Test-ChildNoReparsePath','Get-ChildByteSha256','Read-ChildPinnedFile')
     $childFunctionAsts=@((Get-F2LaunchAst -Path $childPath).FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $childFunctionNames -contains $n.Name},$true))
     $childFunctionBundle=($childFunctionAsts|Sort-Object Name|ForEach-Object{$_.Extent.Text}) -join "`n"
