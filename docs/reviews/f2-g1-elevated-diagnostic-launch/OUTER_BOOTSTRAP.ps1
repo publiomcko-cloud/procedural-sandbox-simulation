@@ -8,12 +8,12 @@ $stage = 'BootstrapInitialization'
 $uacAttempted = $false
 $failureCode = 'OUTER_BOOTSTRAP_FAILED'
 $launchRoot = 'C:\Dev\f2-g1-diagnostic-elevation-plan-source'
-$expectedLaunchCommitSha = '__LAUNCH_CODE_COMMIT__'
+$expectedLaunchCommitSha = '8c2bddd90c6ac5214eeed08b5648d0ef30b58bf4'
 $expectedRemote = 'https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git'
 $expectedGitPath = 'C:\Program Files\Git\cmd\git.exe'
 $expectedGitSha256 = '7b7971dd13f0c3a284e538601f2f9770b3a87dfaccb5fb52d68141c67ed22364'
-$expectedLaunchModuleSha256 = '73971566ce4ac29aa75a6269883c2d5b0d13d420f2e03cc3b94ec135d9498380'
-$expectedLauncherSha256 = 'ce9f76ae17848ae96e1bcec1703382d106be2df15d8ec7d9698644869bbff34c'
+$expectedLaunchModuleSha256 = 'ec40adb78eb54c1e6df92ca6ce142b85fe71e98340c30f185fc506e37a744432'
+$expectedLauncherSha256 = 'a314696562b3b3fd4fbb0785d06bb6c243450c69282a48c9a73ff008d05ff258'
 
 try {
     if ($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) { throw 'LAUNCH_PS_VERSION_INVALID' }
