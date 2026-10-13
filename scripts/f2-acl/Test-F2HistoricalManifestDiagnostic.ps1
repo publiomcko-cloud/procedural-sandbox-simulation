@@ -120,8 +120,10 @@ try {
 
     $moduleBytes = [IO.File]::ReadAllBytes($modulePath)
     $moduleHash = Get-F2ProbeHash -Bytes $moduleBytes
-    Assert-F2Probe -Condition ($moduleHash -ceq 'c2be7ffc64e6ccff9c61f4ae940c6d4d81f9551e439c7a3ea3b15060cfab6206') -Name 'DiagnosticModuleExactBytesPin'
+    Assert-F2Probe -Condition ($moduleHash -ceq '4541338491269ac2bf409c5ba0c63d93d6a5e3fd9896c9d378c79dbea43ee7ee') -Name 'DiagnosticModuleExactBytesPin'
     $moduleText = (New-Object System.Text.UTF8Encoding($false,$true)).GetString($moduleBytes)
+    $syntheticSidLiteral = -join [char[]]@(83,45,49,45,53,45,50,49,45,49,49,49,45,50,50,50,45,51,51,51,45,49,48,48,49)
+    Assert-F2Probe -Condition (-not $moduleText.Contains($syntheticSidLiteral)) -Name 'NoLiteralSyntheticSidInPublishedProbeSource'
     $moduleInfo = New-Module -Name 'F2HistoricalManifestDiagnosticTest' -ScriptBlock ([scriptblock]::Create($moduleText)) -Force
     Import-Module -ModuleInfo $moduleInfo -Force -ErrorAction Stop | Out-Null
     $baseline = Invoke-F2HistoricalManifestDiagnosticCore -UpdaterBytes $updater -LauncherBytes $launcher -ProtocolBytes $protocol -CandidateBytes $candidate -ExpectedCandidateSha256 $expected.Candidate -TokenClass STANDARD

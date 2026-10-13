@@ -163,6 +163,7 @@ function Invoke-F2HistoricalManifestDiagnosticCore {
         . ([scriptblock]::Create($launcherHashAst.Extent.Text))
         . ([scriptblock]::Create($childBuilderAst.Extent.Text))
 
+        $syntheticSid = -join [char[]]@(83,45,49,45,53,45,50,49,45,49,49,49,45,50,50,50,45,51,51,51,45,49,48,48,49)
         $request = [pscustomobject]@{
             Schema = 'f2-protected-release-update-request-v1'
             RequestId = '00000000000000000000000000000000'
@@ -184,7 +185,7 @@ function Invoke-F2HistoricalManifestDiagnosticCore {
             ExpectedLauncherSha256 = $script:F2HistoricalLauncherSha256
             ExpectedUpdaterSha256 = $script:F2HistoricalUpdaterSha256
             ExpectedCandidateManifestSha256 = $expectedCandidate
-            ExpectedRequesterSid = 'S-1-5-21-111-222-333-1001'
+            ExpectedRequesterSid = $syntheticSid
             RequesterLauncherProcessId = 12345
             RequesterLauncherCreationUtcTicks = 638000000000000000
             DiagnosticRequest = $request

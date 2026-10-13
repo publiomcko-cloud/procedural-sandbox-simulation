@@ -78,7 +78,7 @@ try {
     $moduleBytes = [IO.File]::ReadAllBytes($modulePath)
     if ($moduleBytes.Length -ne $moduleItem.Length) { throw 'PROBE_MODULE_INPUT_INVALID' }
     $moduleSha256 = Get-F2ProbeBytesSha256 -Bytes $moduleBytes
-    if ($moduleSha256 -cne 'c2be7ffc64e6ccff9c61f4ae940c6d4d81f9551e439c7a3ea3b15060cfab6206') { throw 'PROBE_MODULE_HASH_MISMATCH' }
+    if ($moduleSha256 -cne '4541338491269ac2bf409c5ba0c63d93d6a5e3fd9896c9d378c79dbea43ee7ee') { throw 'PROBE_MODULE_HASH_MISMATCH' }
     $moduleText = (New-Object System.Text.UTF8Encoding($false,$true)).GetString($moduleBytes)
     $moduleScript = [scriptblock]::Create($moduleText)
     $moduleInfo = New-Module -Name 'F2HistoricalManifestDiagnostic' -ScriptBlock $moduleScript -Force
