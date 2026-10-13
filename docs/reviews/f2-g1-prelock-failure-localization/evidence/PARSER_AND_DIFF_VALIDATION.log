@@ -1,0 +1,8 @@
+Command: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\f2-acl\Test-F2ProtectedReleaseDiagnosticParser.ps1
+PowerShellFiles=21;ParserErrors=0
+PARSER_PROCESS_EXIT=0
+Command: git diff --check
+GIT_DIFF_CHECK_EXIT=0
+Command: PowerShell 5.1 Parser.ParseFile evidence/Test-F2PrelockSourceChain.ps1
+EvidenceHelperParserErrors=0
+EVIDENCE_HELPER_PARSE_EXIT=0

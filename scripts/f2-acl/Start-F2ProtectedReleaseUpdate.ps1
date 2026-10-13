@@ -1,6 +1,6 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$script:F2UpdateDiagnosticProtocolSha256 = 'f66783ac53ce84c093193fc6e20547e707da7013f4f1406a87b088ab6898654c'
+$script:F2UpdateDiagnosticProtocolSha256 = '66466fd15ce161fe2b522c77cfd6500845012480fc64890aa8435f54197eedc7'
 
 function Get-F2UpdateLauncherSha256 {
     param([Parameter(Mandatory)][AllowEmptyCollection()][byte[]]$Bytes)
@@ -86,7 +86,7 @@ try {
   $protocolText=[Text.UTF8Encoding]::new($false,$true).GetString($protocolBytes)
   . ([scriptblock]::Create($protocolText))
   $diagRequest=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($diagRequestB64)) | ConvertFrom-Json -ErrorAction Stop
-  $diagStage='UpdaterAndCandidateHashValidation';$diagCode='UPDATE_CANDIDATE_MANIFEST_INVALID'
+   $diagStage='UpdaterAndCandidateHashValidation';$diagCode='UPDATE_CANDIDATE_MANIFEST_INVALID'
   Test-ChildNoReparse $updaterPath;Test-ChildNoReparse $candidatePath
   $updaterItem=Get-Item -LiteralPath $updaterPath -Force -ErrorAction Stop
   $candidateItem=Get-Item -LiteralPath $candidatePath -Force -ErrorAction Stop
@@ -101,7 +101,7 @@ try {
   try{. $verifiedScript}catch{throw 'UPDATE_UPDATER_SCRIPT_LOAD_FAILED'}
   $diagStage='ElevatedIdentityValidation';$diagCode='UPDATE_ELEVATED_REQUESTER_IDENTITY_UNVERIFIABLE'
   Test-F2UpdateElevationIdentity -ExpectedRequesterSid $expectedRequesterSid | Out-Null
-  $diagStage='UpdaterAndCandidateHashValidation';$diagCode='UPDATE_CANDIDATE_MANIFEST_INVALID'
+  $diagStage='CandidateManifestValidation';$diagCode='UPDATE_CANDIDATE_MANIFEST_INVALID'
   $parsedCandidate=Get-F2UpdateManifestObject -Bytes $candidateBytes -ExpectedSchema v3 -ExpectedHash $expectedCandidate
   if($parsedCandidate.ReviewedCommitSha -cne $expectedSourceCommit){throw 'UPDATE_CANDIDATE_COMMIT_MISMATCH'}
   $diagStage='UpdaterInvocation';$diagCode='UPDATE_UNCLASSIFIED_FAILURE'

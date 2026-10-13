@@ -142,7 +142,7 @@ function New-UpdateFixture {
     }
     $context=[pscustomobject]@{
         SourceRoot=$script:sourceRoot;ExpectedSourceCommit=$script:fixtureCommit;CandidateManifestBytes=$candidateBytes;CandidateManifestSha256=$candidateSha
-        PackageHome=$packageHome;ProgramDataRoot=$programDataRoot;ActiveManifestPath=$active;Hooks=$hooks;Manifest=$null;TransactionState=$null
+        PackageHome=$packageHome;ProgramDataRoot=$programDataRoot;ActiveManifestPath=$active;Hooks=$hooks;Manifest=$null;TransactionState=$null;DiagnosticStage='UpdaterInvocation'
         OldRuntimeSourceRoot=(Split-Path (Split-Path $script:oldSource -Parent) -Parent)
         UpdaterSha256=('9'*64);ExpectedLauncherSha256=('8'*64);ExpectedRequesterSid='S-1-5-21-100'
         CurrentProcessId=1000;RequesterLauncherProcessId=1001;RequesterLauncherCreationUtcTicks=638000000000000000L
@@ -378,7 +378,7 @@ exit /b %ERRORLEVEL%
 
     $candidateBad=New-UpdateFixture -CandidateHashMismatch
     $badResult=Invoke-F2UpdateTransaction -Context $candidateBad.Context
-    Assert-Update (-not $badResult.Success -and $badResult.ErrorCode -ceq 'UPDATE_MANIFEST_HASH_MISMATCH' -and -not(Test-Path -LiteralPath (Join-Path $candidateBad.Context.PackageHome 'releases'))) 'candidate tampering fails before any protected release directory is created'
+    Assert-Update (-not $badResult.Success -and $badResult.Stage -ceq 'CandidateManifestValidation' -and $badResult.ErrorCode -ceq 'UPDATE_MANIFEST_HASH_MISMATCH' -and -not(Test-Path -LiteralPath (Join-Path $candidateBad.Context.PackageHome 'releases'))) 'candidate tampering reports its substage and fails before any release directory is created'
     $candidateIdentityBad=New-UpdateFixture
     $identityObject=[Text.Encoding]::UTF8.GetString($candidateIdentityBad.Context.CandidateManifestBytes)|ConvertFrom-Json
     $identityObject.BaselineMailboxId='ffffffffffffffffffffffffffffffff'
@@ -392,14 +392,14 @@ exit /b %ERRORLEVEL%
     $candidatePathBad.Context.CandidateManifestBytes=[Text.UTF8Encoding]::new($false).GetBytes(($pathObject|ConvertTo-Json -Compress -Depth 6))
     $candidatePathBad.Context.CandidateManifestSha256=Get-F2UpdateSha256 -Bytes $candidatePathBad.Context.CandidateManifestBytes
     $pathBadResult=Invoke-F2UpdateTransaction -Context $candidatePathBad.Context
-    Assert-Update (-not $pathBadResult.Success -and $pathBadResult.ErrorCode -ceq 'UPDATE_CANDIDATE_PACKAGE_ROOT_MISMATCH' -and -not(Test-Path -LiteralPath (Join-Path $candidatePathBad.Context.PackageHome 'releases'))) 'candidate package path outside the versioned release root fails before staging'
+    Assert-Update (-not $pathBadResult.Success -and $pathBadResult.Stage -ceq 'CandidateManifestValidation' -and $pathBadResult.ErrorCode -ceq 'UPDATE_CANDIDATE_PACKAGE_ROOT_MISMATCH' -and -not(Test-Path -LiteralPath (Join-Path $candidatePathBad.Context.PackageHome 'releases'))) 'candidate package path failure reports candidate validation and fails before staging'
     $parentBad=New-UpdateFixture
     $parentBad.Context.Hooks.ParentChainCheck={param($ctx)return $false}
     $parentResult=Invoke-F2UpdateTransaction -Context $parentBad.Context
-    Assert-Update (-not $parentResult.Success -and $parentResult.ErrorCode -ceq 'UPDATE_PARENT_CHAIN_UNSAFE' -and -not(Test-Path -LiteralPath (Join-Path $parentBad.Context.PackageHome 'releases'))) 'unsafe current parent ACL profile fails before writes'
+    Assert-Update (-not $parentResult.Success -and $parentResult.Stage -ceq 'ParentAclValidation' -and $parentResult.ErrorCode -ceq 'UPDATE_PARENT_CHAIN_UNSAFE' -and -not(Test-Path -LiteralPath (Join-Path $parentBad.Context.PackageHome 'releases'))) 'unsafe current parent ACL reports its substage and fails before writes'
     $oldBad=New-UpdateFixture -CorruptOldFile
     $oldResult=Invoke-F2UpdateTransaction -Context $oldBad.Context
-    Assert-Update (-not $oldResult.Success -and $oldResult.ErrorCode -ceq 'UPDATE_FILE_HASH_MISMATCH' -and -not(Test-Path -LiteralPath (Join-Path $oldBad.Context.PackageHome 'releases'))) 'modified installed release fails preflight without overwrite or staging'
+    Assert-Update (-not $oldResult.Success -and $oldResult.Stage -ceq 'InstalledV2Validation' -and $oldResult.ErrorCode -ceq 'UPDATE_FILE_HASH_MISMATCH' -and -not(Test-Path -LiteralPath (Join-Path $oldBad.Context.PackageHome 'releases'))) 'modified installed release reports its substage and fails without overwrite or staging'
     $aclBad=New-UpdateFixture
     $aclBadPath=Join-Path (Join-Path $aclBad.Context.PackageHome 'scripts\f2-acl') $script:names[0]
     $aclBadState=$aclBad
@@ -441,12 +441,23 @@ exit /b %ERRORLEVEL%
     $dirty=New-UpdateFixture
     [IO.File]::WriteAllText((Join-Path $dirty.Context.SourceRoot 'untracked-test-only.txt'),'dirty')
     $dirtyResult=Invoke-F2UpdateTransaction -Context $dirty.Context
-    Assert-Update (-not $dirtyResult.Success -and $dirtyResult.ErrorCode -ceq 'UPDATE_SOURCE_WORKTREE_NOT_CLEAN' -and -not(Test-Path -LiteralPath (Join-Path $dirty.Context.PackageHome 'releases'))) 'dirty source checkout fails before any protected staging write'
+    Assert-Update (-not $dirtyResult.Success -and $dirtyResult.Stage -ceq 'SourceGitValidation' -and $dirtyResult.ErrorCode -ceq 'UPDATE_SOURCE_WORKTREE_NOT_CLEAN' -and -not(Test-Path -LiteralPath (Join-Path $dirty.Context.PackageHome 'releases'))) 'dirty source checkout reports Git validation before any protected staging write'
     Remove-Item -LiteralPath (Join-Path $dirty.Context.SourceRoot 'untracked-test-only.txt') -Force
     $wrongCommit=New-UpdateFixture
     $wrongCommit.Context.ExpectedSourceCommit='f'*40
     $wrongCommitResult=Invoke-F2UpdateTransaction -Context $wrongCommit.Context
-    Assert-Update (-not $wrongCommitResult.Success -and $wrongCommitResult.ErrorCode -ceq 'UPDATE_CANDIDATE_COMMIT_MISMATCH' -and -not(Test-Path -LiteralPath (Join-Path $wrongCommit.Context.PackageHome 'releases'))) 'source commit mismatch fails before any protected staging write'
+    Assert-Update (-not $wrongCommitResult.Success -and $wrongCommitResult.Stage -ceq 'CandidateManifestValidation' -and $wrongCommitResult.ErrorCode -ceq 'UPDATE_CANDIDATE_COMMIT_MISMATCH' -and -not(Test-Path -LiteralPath (Join-Path $wrongCommit.Context.PackageHome 'releases'))) 'candidate source commit mismatch reports candidate validation before any staging write'
+    $packagePinBad=New-UpdateFixture
+    $packagePinObject=[Text.Encoding]::UTF8.GetString($packagePinBad.Context.CandidateManifestBytes)|ConvertFrom-Json
+    $packagePinObject.Files[0].Sha256='0'*64
+    $packagePinBad.Context.CandidateManifestBytes=[Text.UTF8Encoding]::new($false).GetBytes(($packagePinObject|ConvertTo-Json -Compress -Depth 6))
+    $packagePinBad.Context.CandidateManifestSha256=Get-F2UpdateSha256 -Bytes $packagePinBad.Context.CandidateManifestBytes
+    $packagePinResult=Invoke-F2UpdateTransaction -Context $packagePinBad.Context
+    Assert-Update (-not $packagePinResult.Success -and $packagePinResult.Stage -ceq 'SourcePackagePinValidation' -and $packagePinResult.ErrorCode -like 'UPDATE_SOURCE_PACKAGE_HASH_MISMATCH:*' -and -not(Test-Path -LiteralPath (Join-Path $packagePinBad.Context.PackageHome 'releases'))) 'source package hash mismatch reports the package-pin substage before staging'
+    $lockCollision=New-UpdateFixture
+    [IO.File]::WriteAllText((Join-Path $lockCollision.Context.ProgramDataRoot 'release.lock'),'unexpected-lock-bytes')
+    $lockCollisionResult=Invoke-F2UpdateTransaction -Context $lockCollision.Context
+    Assert-Update (-not $lockCollisionResult.Success -and $lockCollisionResult.Stage -ceq 'TransactionCollisionValidation' -and $lockCollisionResult.ErrorCode -ceq 'UPDATE_FILE_TYPE_OR_SIZE_INVALID' -and -not(Test-Path -LiteralPath (Join-Path $lockCollision.Context.PackageHome 'releases'))) 'invalid existing release-lock bytes report transaction collision validation without modifying the object'
     $extraOldObject=New-UpdateFixture
     [IO.File]::WriteAllText((Join-Path (Join-Path $extraOldObject.Context.PackageHome 'scripts\f2-acl') 'unexpected.txt'),'unknown')
     $extraOldResult=Invoke-F2UpdateTransaction -Context $extraOldObject.Context
