@@ -129,17 +129,37 @@ function Test-F2IcaclsSourcePins {
         [Parameter(Mandatory)]$Integrity,
         [Parameter(Mandatory)][string]$ExpectedPinManifestSha256,
         [Parameter(Mandatory)][string]$ExpectedCommitSha,
-        [Parameter(Mandatory)][string]$ActualCommitSha
+        [Parameter(Mandatory)][string]$ActualCommitSha,
+        [ValidateSet(1,2)][int]$PinContractVersion=1
     )
     try {
         if($ExpectedCommitSha -notmatch '^[0-9a-f]{40}$' -or $ActualCommitSha -cne $ExpectedCommitSha){throw 'ReviewedCommitMismatch.'}
         $root=[IO.Path]::GetFullPath($RepositoryRoot)
-        $pinPath=Join-Path $root 'scripts\f2-acl\F2_ICACLS_SOURCE_PINS.json'
+        $pinFilename=if($PinContractVersion -eq 2){'F2_ICACLS_SOURCE_PINS_V2.json'}else{'F2_ICACLS_SOURCE_PINS.json'}
+        $pinPath=Join-Path (Join-Path $root 'scripts\f2-acl') $pinFilename
         $pinsBytes=[IO.File]::ReadAllBytes($pinPath)
         $pinsHash=Get-F2IcaclsSha256 -Bytes $pinsBytes
         if($ExpectedPinManifestSha256 -notmatch '^[0-9a-f]{64}$' -or -not [string]::Equals($pinsHash,$ExpectedPinManifestSha256,[StringComparison]::OrdinalIgnoreCase)){throw 'PinManifestDigestMismatch.'}
         $pins=[Text.Encoding]::UTF8.GetString($pinsBytes)|ConvertFrom-Json -ErrorAction Stop
-        if($pins.Schema -cne 'f2-icacls-corroboration-pins-v1' -or $pins.ReviewedCollectorBaseSha -cne $script:F2IcaclsReviewedCollectorBaseSha){throw 'PinManifestSchemaOrBaseInvalid.'}
+        if($pins.ReviewedCollectorBaseSha -cne $script:F2IcaclsReviewedCollectorBaseSha){throw 'PinManifestSchemaOrBaseInvalid.'}
+        if($PinContractVersion -eq 2){
+            # The original v1 receipt is immutable. Never reinterpret the retained
+            # baseline's module provenance as a hash of the active implementation.
+            if($pins.Schema -cne 'f2-icacls-corroboration-pins-v2' -or
+                $pins.LegacyPinManifestSha256 -cne '7e05d48ef25e7cff19d84db151395921b5d89b52b1e2f45b94a84a4778a615ce' -or
+                $pins.RetainedBaseline.CollectorScriptSha256 -cne 'bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b' -or
+                $pins.RetainedBaseline.ProtocolModuleSha256 -cne '42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728'){
+                throw 'PinManifestV2HistoricalIdentityInvalid.'
+            }
+            $legacyPinPath=Join-Path (Join-Path $root 'scripts\f2-acl') 'F2_ICACLS_SOURCE_PINS.json'
+            if((Get-F2IcaclsFileSha256 -Path $legacyPinPath) -cne '7e05d48ef25e7cff19d84db151395921b5d89b52b1e2f45b94a84a4778a615ce'){
+                throw 'HistoricalPinManifestChanged.'
+            }
+            $activePins=$pins.Active
+        }else{
+            if($pins.Schema -cne 'f2-icacls-corroboration-pins-v1'){throw 'PinManifestSchemaOrBaseInvalid.'}
+            $activePins=$pins
+        }
         $modulePath=Join-Path $root 'scripts\f2-acl\F2AclIcacls.Corroboration.psm1'
         $capturePath=Join-Path $root 'scripts\f2-acl\Invoke-F2AclReadOnlyCapture.ps1'
         $protocolPath=Join-Path $root 'scripts\f2-acl\F2AclCapture.Protocol.psm1'
@@ -152,8 +172,11 @@ function Test-F2IcaclsSourcePins {
         $runtimeHash=Get-F2IcaclsFileSha256 -Path $runtimePath
         $launcherHash=Get-F2IcaclsFileSha256 -Path $launcherPath
         $coordinatorHash=Get-F2IcaclsFileSha256 -Path $coordinatorPath
-        if($pins.CorroborationModuleSha256 -cne $moduleHash -or $pins.CollectorScriptSha256 -cne $captureHash -or $pins.ProtocolModuleSha256 -cne $protocolHash -or $pins.RuntimeModuleSha256 -cne $runtimeHash -or $pins.LauncherScriptSha256 -cne $launcherHash -or $pins.CoordinatorScriptSha256 -cne $coordinatorHash -or $Integrity.CollectorScriptSha256 -cne $captureHash -or $Integrity.ProtocolModuleSha256 -cne $protocolHash){throw 'SourcePinOrBaselineProvenanceMismatch.'}
-        return [pscustomobject]@{Pass=$true;CommitSha=$ActualCommitSha;PinManifestSha256=$pinsHash;CorroborationModuleSha256=$moduleHash;CollectorScriptSha256=$captureHash;ProtocolModuleSha256=$protocolHash;RuntimeModuleSha256=$runtimeHash;LauncherScriptSha256=$launcherHash;CoordinatorScriptSha256=$coordinatorHash;ErrorCode=$null}
+        if($activePins.CorroborationModuleSha256 -cne $moduleHash -or $activePins.CollectorScriptSha256 -cne $captureHash -or $activePins.ProtocolModuleSha256 -cne $protocolHash -or $activePins.RuntimeModuleSha256 -cne $runtimeHash -or $activePins.LauncherScriptSha256 -cne $launcherHash -or $activePins.CoordinatorScriptSha256 -cne $coordinatorHash){throw 'SourcePinOrActiveImplementationMismatch.'}
+        $retainedCollector=if($PinContractVersion -eq 2){[string]$pins.RetainedBaseline.CollectorScriptSha256}else{$captureHash}
+        $retainedProtocol=if($PinContractVersion -eq 2){[string]$pins.RetainedBaseline.ProtocolModuleSha256}else{$protocolHash}
+        if($Integrity.CollectorScriptSha256 -cne $retainedCollector -or $Integrity.ProtocolModuleSha256 -cne $retainedProtocol){throw 'RetainedBaselineSourceProvenanceMismatch.'}
+        return [pscustomobject]@{Pass=$true;PinContractVersion=$PinContractVersion;CommitSha=$ActualCommitSha;PinManifestSha256=$pinsHash;CorroborationModuleSha256=$moduleHash;CollectorScriptSha256=$captureHash;ProtocolModuleSha256=$protocolHash;RuntimeModuleSha256=$runtimeHash;LauncherScriptSha256=$launcherHash;CoordinatorScriptSha256=$coordinatorHash;ErrorCode=$null}
     } catch {
         return [pscustomobject]@{Pass=$false;CommitSha=$ActualCommitSha;PinManifestSha256=$null;CorroborationModuleSha256=$null;CollectorScriptSha256=$null;ProtocolModuleSha256=$null;ErrorCode='SourcePinVerificationFailed'}
     }

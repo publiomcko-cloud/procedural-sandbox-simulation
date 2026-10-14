@@ -1,0 +1,13 @@
+{
+  "Schema": "f2-acl-source-pins-v2",
+  "ReviewedCollectorBaseSha": "a62773f0553dff4a05055b18fa10834f7488ae55",
+  "Active": {
+    "CollectorScriptSha256": "bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b",
+    "ProtocolModuleSha256": "cbeb608ccc4395f7944cca4fb84a7095219930de7a9bd4643fe4b0240dfd3cce"
+  },
+  "RetainedBaseline": {
+    "CollectorScriptSha256": "bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b",
+    "ProtocolModuleSha256": "42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728"
+  },
+  "Status": "SOURCE_REVIEW_ONLY_NOT_RELEASE_APPROVED"
+}

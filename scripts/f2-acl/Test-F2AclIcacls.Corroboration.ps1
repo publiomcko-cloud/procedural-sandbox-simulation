@@ -15,12 +15,18 @@ $script:corroborationModule=Get-Module F2AclIcacls.Corroboration
 $script:privateProcessInvocation=[scriptblock]::Create('param($file,$arguments,$timeout,$cleanup,$maxBytes) Invoke-F2IcaclsProcessCore -FilePath $file -Arguments $arguments -TimeoutSeconds $timeout -CleanupGraceMilliseconds $cleanup -MaxBytesPerStream $maxBytes')
 function Invoke-TestIcaclsProcess([string]$FilePath,[string]$Arguments,[int]$TimeoutSeconds=15,[int]$CleanupGraceMilliseconds=1000,[int]$MaxBytesPerStream=262144){return $script:corroborationModule.Invoke($script:privateProcessInvocation,@($FilePath,$Arguments,$TimeoutSeconds,$CleanupGraceMilliseconds,$MaxBytesPerStream))}
 $repoRoot=[IO.Path]::GetFullPath((Join-Path $scriptDir '..\..'))
-$pinPath=Join-Path $scriptDir 'F2_ICACLS_SOURCE_PINS.json'
+$pinPath=Join-Path $scriptDir 'F2_ICACLS_SOURCE_PINS_V2.json'
 $pinHash=Get-F2IcaclsFileSha256 -Path $pinPath
 $sourceCommit=(& git -C $repoRoot rev-parse HEAD).Trim()
 $baselinePinIntegrity=[pscustomobject]@{CollectorScriptSha256='bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b';ProtocolModuleSha256='42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728'}
-$actualPins=Test-F2IcaclsSourcePins -RepositoryRoot $repoRoot -Integrity $baselinePinIntegrity -ExpectedPinManifestSha256 $pinHash -ExpectedCommitSha $sourceCommit -ActualCommitSha $sourceCommit
-Assert-Icacl $actualPins.Pass 'actual repository helper pins match source files and retained collector provenance'
+$actualPins=Test-F2IcaclsSourcePins -RepositoryRoot $repoRoot -Integrity $baselinePinIntegrity -ExpectedPinManifestSha256 $pinHash -ExpectedCommitSha $sourceCommit -ActualCommitSha $sourceCommit -PinContractVersion 2
+Assert-Icacl ($actualPins.Pass -and $actualPins.PinContractVersion -eq 2) 'v2 active source hashes and retained historical baseline verify separately'
+$legacyPinHash=Get-F2IcaclsFileSha256 -Path (Join-Path $scriptDir 'F2_ICACLS_SOURCE_PINS.json')
+$unselectedLegacy=Test-F2IcaclsSourcePins -RepositoryRoot $repoRoot -Integrity $baselinePinIntegrity -ExpectedPinManifestSha256 $legacyPinHash -ExpectedCommitSha $sourceCommit -ActualCommitSha $sourceCommit
+Assert-Icacl (-not $unselectedLegacy.Pass -and $unselectedLegacy.ErrorCode -ceq 'SourcePinVerificationFailed') 'legacy v1 verifier fails closed against the changed active module even with its correct historical manifest hash'
+$badRetainedIntegrity=[pscustomobject]@{CollectorScriptSha256=$baselinePinIntegrity.CollectorScriptSha256;ProtocolModuleSha256=('0' * 64)}
+Assert-Icacl (-not (Test-F2IcaclsSourcePins -RepositoryRoot $repoRoot -Integrity $badRetainedIntegrity -ExpectedPinManifestSha256 $pinHash -ExpectedCommitSha $sourceCommit -ActualCommitSha $sourceCommit -PinContractVersion 2).Pass) 'v2 rejects forged retained baseline provenance'
+Assert-Icacl (-not (Test-F2IcaclsSourcePins -RepositoryRoot $repoRoot -Integrity $baselinePinIntegrity -ExpectedPinManifestSha256 ('0' * 64) -ExpectedCommitSha $sourceCommit -ActualCommitSha $sourceCommit -PinContractVersion 2).Pass) 'v2 rejects tampered active pin-manifest digest'
 
 $projectRoot='C:\F2Synthetic\F2-G1-Isolated-Disposable'
 $paths=@(Get-F2IcaclsExpectedPaths -ProjectRoot $projectRoot)

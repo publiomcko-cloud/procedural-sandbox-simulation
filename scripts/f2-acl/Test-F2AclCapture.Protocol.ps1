@@ -9,7 +9,7 @@ class F2AclThrowingDisposeStream {
     [void] Dispose() { throw 'SyntheticDisposeFailure.' }
 }
 
-$pinManifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'F2_ACL_SOURCE_PINS.json') -Raw | ConvertFrom-Json
+$pinManifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'F2_ACL_SOURCE_PINS_V2.json') -Raw | ConvertFrom-Json
 $launcherDigest = Get-F2AclSha256 ([IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'Invoke-F2AclReadOnlyCapture.ps1')))
 $moduleDigest = Get-F2AclSha256 ([IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1')))
 
@@ -116,8 +116,11 @@ $script:Paths = @(
     $rootVm,
     [IO.Path]::Combine($rootVm, $id)
 )
-Assert-F2Acl ($pinManifest.Schema -eq 'f2-acl-source-pins-v1' -and $pinManifest.ScriptSha256 -ceq $launcherDigest) 'committed source pin matches the launcher hash'
-Assert-F2Acl ($pinManifest.ModuleSha256 -ceq $moduleDigest) 'committed source pin matches the protocol module hash'
+Assert-F2Acl ($pinManifest.Schema -ceq 'f2-acl-source-pins-v2' -and $pinManifest.Active.CollectorScriptSha256 -ceq $launcherDigest -and $pinManifest.ReviewedCollectorBaseSha -ceq 'a62773f0553dff4a05055b18fa10834f7488ae55') 'v2 active collector pins and original review identity agree'
+Assert-F2Acl ($pinManifest.Active.ProtocolModuleSha256 -ceq $moduleDigest -and $pinManifest.RetainedBaseline.ProtocolModuleSha256 -ceq '42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728' -and $pinManifest.RetainedBaseline.CollectorScriptSha256 -ceq 'bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b') 'v2 active protocol and retained historical provenance are independently pinned'
+$legacyPinText=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'F2_ACL_SOURCE_PINS.json'))
+$legacyPin=$legacyPinText | ConvertFrom-Json
+Assert-F2Acl ($legacyPin.Schema -ceq 'f2-acl-source-pins-v1' -and $legacyPin.ModuleSha256 -ceq '42ba4dd5e31d1db64198bb1cee16d519f087a40364dfb4d2696b4a5bd844d728' -and $legacyPin.ScriptSha256 -ceq 'bea7cc93710c83d48a8ef9e54af306401694f17f611e696caa856938ca71a19b') 'original v1 collector source pins are unchanged'
 $launcherSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Invoke-F2AclReadOnlyCapture.ps1'))
 $protocolSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1'))
 $protocolModule = Get-Module | Where-Object { $_.Path -eq (Join-Path $PSScriptRoot 'F2AclCapture.Protocol.psm1') } | Select-Object -First 1
@@ -638,7 +641,7 @@ $result = [ordered]@{Serialized=$serialized;FramePayloadSha256=$frame.PayloadSha
     $badPin = Invoke-F2AclSyntheticWorker -Scenario PinMismatch -Directory (Join-Path $workerTestRoot 'bad-pin') -Pin wrong
     $actualLauncherPath = Join-Path $PSScriptRoot 'Invoke-F2AclReadOnlyCapture.ps1'
     $escapedActualLauncher = $actualLauncherPath.Replace("'","''")
-    $actualWorkerArgs = "' -CollectorChild -OutputDirectory '" + (Join-Path $workerTestRoot 'actual-pin-failure').Replace("'","''") + "' -RequesterSid '" + $requesterSidFixture + "' -CoordinatorSid '" + $requesterSidFixture + "' -ExpectedCommitSha '" + ('a'*40) + "' -ExpectedScriptSha256 '" + ('0'*64) + "' -ExpectedModuleSha256 '" + $pinManifest.ModuleSha256 + "'"
+    $actualWorkerArgs = "' -CollectorChild -OutputDirectory '" + (Join-Path $workerTestRoot 'actual-pin-failure').Replace("'","''") + "' -RequesterSid '" + $requesterSidFixture + "' -CoordinatorSid '" + $requesterSidFixture + "' -ExpectedCommitSha '" + ('a'*40) + "' -ExpectedScriptSha256 '" + ('0'*64) + "' -ExpectedModuleSha256 '" + $pinManifest.Active.ProtocolModuleSha256 + "'"
     $actualWorkerCommand = New-F2AclWorkerBootstrapCommand -Invocation ("& '" + $escapedActualLauncher + $actualWorkerArgs)
     $actualPinCapture = Invoke-F2AclCapturedPowerShell -PowerShellExe $powerShellExe -CommandText $actualWorkerCommand -TimeoutSeconds 10
     $actualPinReport = New-F2AclWorkerExecutionReport -CapturedProcess $actualPinCapture -ExpectedFiles (Get-F2AclSyntheticArtifactManifest (Join-Path $workerTestRoot 'actual-pin-failure'))
