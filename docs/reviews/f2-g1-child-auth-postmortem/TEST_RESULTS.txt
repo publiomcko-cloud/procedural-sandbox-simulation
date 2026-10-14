@@ -1,42 +1,96 @@
-F2 G1 child-authentication classification regression
-Command: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Dev\f2-g1-child-auth-postmortem\docs\reviews\f2-g1-child-auth-postmortem\Test-F2ChildAuthenticationClassification.ps1
-PowerShell: Windows PowerShell 5.1.22621.6133
-UAC attempts: 0
-Test child processes started: 0
-Exit code: 0
+F2 G1 child-authentication wrapper value-preservation regression
 
-PASS Known allowlisted pipe timeout stays specific
-PASS GetNamedPipeClientProcessId Win32Exception class collapses to generic
-PASS GetProcessById missing-process ArgumentException class collapses to generic
-PASS Process.StartTime InvalidOperationException class collapses to generic
-PASS Process.MainModule Win32Exception class collapses to generic
-PASS RunAsClient IOException class collapses to generic
-PASS RunAsClient ObjectDisposedException class collapses to generic
-PASS Malformed hello JSON class collapses to generic
-PASS WMI query failure is conservatively rejected
-PASS WMI query failure follows explicit command-mismatch branch
-PASS Malformed hello numeric fields fail closed and classify generic
-PASS Peer fact mismatch rejects child
-PASS Peer fact mismatch returns allowlisted command mismatch
-PASS Operation wrapper classifies native client-PID failure
-PASS Operation wrapper classifies process identity failure
-PASS Operation wrapper preserves an existing allowlisted timeout
-PASS Unlisted operation failure codes are rejected
-PASS Rejected code prevents operation execution
-PASS Production stage has bounded mapping: LAUNCH_PIPE_CLIENT_ID_QUERY_FAILED
-PASS Production stage has bounded mapping: LAUNCH_CHILD_PROCESS_IDENTITY_QUERY_FAILED
-PASS Production stage has bounded mapping: LAUNCH_CHILD_COMMAND_CHECK_FAILED
-PASS Production stage has bounded mapping: LAUNCH_CHILD_PEER_CHECK_FAILED
-PASS Production stage has bounded mapping: LAUNCH_CHILD_IMAGE_PATH_INVALID
-PASS Production stage has bounded mapping: LAUNCH_CHILD_HELLO_READ_FAILED
-PASS Production stage has bounded mapping: LAUNCH_CHILD_HELLO_JSON_INVALID
-PASS Production stage has bounded mapping: LAUNCH_CHILD_HELLO_VALIDATION_FAILED
-PASS Production stage has bounded mapping: LAUNCH_CHILD_TOKEN_IMPERSONATION_FAILED
-PASS Production stage has bounded mapping: LAUNCH_CHILD_TOKEN_VALIDATION_FAILED
-PASS Production stage has bounded mapping: LAUNCH_CHILD_REQUEST_BUILD_FAILED
-PASS Production stage has bounded mapping: LAUNCH_CHILD_REQUEST_WRITE_FAILED
-PASS Production stage has bounded mapping: LAUNCH_CHILD_RESPONSE_READ_FAILED
-PASS Production stage has bounded mapping: LAUNCH_CHILD_RESPONSE_JSON_INVALID
-PASS Production stage has bounded mapping: LAUNCH_CHILD_EXIT_WAIT_FAILED
-PASS Production stage has bounded mapping: LAUNCH_CHILD_EXIT_CODE_UNAVAILABLE
-ASSERTIONS=34; FAILURES=0; CHILD_PROCESSES_STARTED=0; UAC_ATTEMPTS=0
+Repository: publiomcko-cloud/procedural-sandbox-simulation
+Source correction: 41e9c34843815dbd69770de36c9525f44e218e1f
+Source parent: 58991441cfd6ca21cf7bc3cb2fda5f69b97a8633
+PowerShell: Windows PowerShell 5.1.22621.6133
+Command: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\docs\reviews\f2-g1-child-auth-postmortem\Test-F2ChildAuthenticationClassification.ps1
+Exit code: 0
+Assertions: 48
+Failures: 0
+Child processes started by test: 0
+UAC attempts: 0
+
+Pre-fix in-memory reproduction against the production wrapper and actual production frame converter:
+
+    FrameDirect=System.Byte[];count=15
+    FrameWrapped=System.Object[];count=15
+    PSCustomObject=System.Management.Automation.PSCustomObject;count=1
+    StreamWrapped=System.Object[];count=15
+    StreamRoundtrip=System.Byte[];count=15
+    String=System.String;count=1
+    Bool=System.Boolean;count=1
+    FrameDirectEq=True
+    StreamEqual=True
+    NoOutput=<null>
+    Known=LAUNCH_PIPE_TIMEOUT;Unknown=LAUNCH_CHILD_REQUEST_BUILD_FAILED
+
+    type=System.Object[]; writeFailure=NONE; bytes=15; expected=15
+    read=15;equal=True
+
+The MemoryStream accepted the `Object[]` through PowerShell's byte-array parameter conversion and the resulting bytes matched. This confirms that exact type preservation was lost; it does not demonstrate an actual named-pipe write failure or explain either historical incident or the hosted CI failure.
+
+Post-fix focused regression output:
+
+    PASS Operation wrapper preserves Boolean type
+    PASS Operation wrapper preserves Boolean value
+    PASS Operation wrapper preserves String type
+    PASS Operation wrapper preserves String value
+    PASS Operation wrapper preserves PSCustomObject type
+    PASS Operation wrapper preserves PSCustomObject property
+    PASS Production frame converter returns Byte[]
+    PASS Operation wrapper preserves production Byte[] frame type
+    PASS Operation wrapper preserves exact production frame bytes
+    PASS Stream.Write and Flush operation returns no pipeline value
+    PASS Stream.Read fills the complete production frame
+    PASS Stream.Read roundtrip preserves Byte[] type
+    PASS Stream.Read roundtrip preserves exact frame bytes
+    PASS No-output operation remains null
+    PASS Known allowlisted pipe timeout stays specific
+    PASS GetNamedPipeClientProcessId Win32Exception class collapses to generic
+    PASS GetProcessById missing-process ArgumentException class collapses to generic
+    PASS Process.StartTime InvalidOperationException class collapses to generic
+    PASS Process.MainModule Win32Exception class collapses to generic
+    PASS RunAsClient IOException class collapses to generic
+    PASS RunAsClient ObjectDisposedException class collapses to generic
+    PASS Malformed hello JSON class collapses to generic
+    PASS WMI query failure is conservatively rejected
+    PASS WMI query failure follows explicit command-mismatch branch
+    PASS Malformed hello numeric fields fail closed and classify generic
+    PASS Peer fact mismatch rejects child
+    PASS Peer fact mismatch returns allowlisted command mismatch
+    PASS Operation wrapper classifies native client-PID failure
+    PASS Operation wrapper classifies process identity failure
+    PASS Operation wrapper preserves an existing allowlisted timeout
+    PASS Unlisted operation failure codes are rejected
+    PASS Rejected code prevents operation execution
+    PASS Production stage has bounded mapping: LAUNCH_PIPE_CLIENT_ID_QUERY_FAILED
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_PROCESS_IDENTITY_QUERY_FAILED
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_COMMAND_CHECK_FAILED
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_PEER_CHECK_FAILED
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_IMAGE_PATH_INVALID
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_HELLO_READ_FAILED
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_HELLO_JSON_INVALID
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_HELLO_VALIDATION_FAILED
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_TOKEN_IMPERSONATION_FAILED
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_TOKEN_VALIDATION_FAILED
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_REQUEST_BUILD_FAILED
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_REQUEST_WRITE_FAILED
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_RESPONSE_READ_FAILED
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_RESPONSE_JSON_INVALID
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_EXIT_WAIT_FAILED
+    PASS Production stage has bounded mapping: LAUNCH_CHILD_EXIT_CODE_UNAVAILABLE
+    ASSERTIONS=48; FAILURES=0; CHILD_PROCESSES_STARTED=0; UAC_ATTEMPTS=0
+
+Additional validation:
+
+- Windows PowerShell parser: production launcher and regression test both parsed with zero errors.
+- Final `git diff --check`: passed after all source and evidence edits.
+- Only focused in-memory validation was run. No suite or workflow was rerun.
+
+CI log comparison (existing immutable runs; neither was rerun):
+
+- PR #71 run `38559236368`, job `115835905572`: diagnostics step failed; first divergence was the protocol-bootstrap child case. Subsequent child cases repeatedly failed/time-out; final summary `Assertions=68;Failures=28`, `F2ProtectedDiagnosticsTestProcessExit=1`. `WrongClientResult` recorded `TimedOut=true`, `DiagnosticErrorCode=UPDATE_DIAGNOSTIC_TIMEOUT`, and `ActualChildExitCode=null`.
+- PR #69 run `38471926228`, job `115552904354`: the unchanged diagnostics step passed with `Assertions=68;Failures=0`, process exit 0.
+- Both jobs reported Windows Server 2025 build `10.0.26100`, runner `2.337.0`, image `windows-2025-vs2026` version `20260925.250.1`. No resource metrics or discriminating setup error were present, so environment/resource exhaustion is not established.
+- The failing suite invokes the protected-release diagnostics test as its own PowerShell process and does not load the PR #71-modified historical diagnostic launcher or its operation wrapper. The CI failure therefore remains unexplained by this correction.

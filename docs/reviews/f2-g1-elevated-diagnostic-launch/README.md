@@ -7,8 +7,9 @@ This is a source-only launch design for a possible separately authorized diagnos
 ## Immutable lineage and fixed checkouts
 
 - Review base: PR #68 HEAD `c3d1280f9905730eda8cff40865e8afbbb642367`.
-- Candidate corrected launch source commit: `78a3cb3089babdab520d7d17dda920de276dfbc6`, parent `1057836646aba001ed1255e1ed566da5867a55d5`.
-- The review package and executable launch checkout are separate. The review copy used by the short outer-command loader is `C:\Dev\f2-g1-child-auth-postmortem`; the executable source worktree is `C:\Dev\f2-g1-diagnostic-launch-runtime` and was not changed. Before any future launch, that runtime worktree must be prepared clean at the candidate source commit above. No launch is authorized here.
+- Original corrected launch source commit: `78a3cb3089babdab520d7d17dda920de276dfbc6`, parent `1057836646aba001ed1255e1ed566da5867a55d5`.
+- Follow-up type-preservation candidate: `41e9c34843815dbd69770de36c9525f44e218e1f`, parent `58991441cfd6ca21cf7bc3cb2fda5f69b97a8633`.
+- The review package and executable launch checkout are separate. The review copy used by the short outer-command loader is `C:\Dev\f2-g1-child-auth-postmortem`; the executable source worktree is `C:\Dev\f2-g1-diagnostic-launch-runtime` and was not changed. The existing outer bootstrap and exact command still pin the original `78a3cb...` source and original launcher bytes. They are not valid for the follow-up candidate and must not be used with it. No launch is authorized here.
 - Historical production source: `C:\Dev\f2-g1-protected-updater-source`, commit `396c44965c90c08292ad2835f8317e81b6b9daaf`.
 - Historical candidate: `C:\Dev\f2-g1-protected-updater`, commit `7f99bc10f3e2258d2340cea4e7ba1352022cbb6d`.
 - The three checkouts must have the expected origin, exact commits, clean status, canonical paths, and no reparse points. The launch gate rejects mismatches.
@@ -49,7 +50,9 @@ sequenceDiagram
     R-->>O: Non-authoritative diagnostic result
 ```
 
-## Pinned bytes
+## Original launch-package pins
+
+The table below records the original PR #69 launch package. The follow-up candidate changes the current launcher's checkout bytes to `db4ba16e35af4710ce1f9a7e5082052348d61d787d8fbb38327736a79c3630b1`; the historical exact command and its outer bootstrap intentionally remain pinned to the original source. A newly reviewed and authorized launch package would need a separate pin refresh.
 
 Windows checkout-byte SHA-256 values for the changed launch sources:
 
@@ -89,7 +92,9 @@ The Git core's dependent DLLs are not individually hashed by this review. They r
 
 - [Incident postmortem](../f2-g1-child-auth-postmortem/INCIDENT_POSTMORTEM.md) preserves the supplied failure fields and PID-check result, maps the reviewed ChildAuthentication operations in execution order, and separates confirmed source behavior from the still-unknown incident cause.
 - [Regression source](../f2-g1-child-auth-postmortem/Test-F2ChildAuthenticationClassification.ps1), [complete test record](../f2-g1-child-auth-postmortem/TEST_RESULTS.txt), and [developer handoff](../f2-g1-child-auth-postmortem/DEVELOPER_HANDOFF.md) are included in the checkout-byte manifest.
-- Candidate correction commit: `78a3cb3089babdab520d7d17dda920de276dfbc6`; this exact command has not been executed or authorized.
+- Initial classification correction commit: `78a3cb3089babdab520d7d17dda920de276dfbc6`.
+- Follow-up wrapper return-value correction commit: `41e9c34843815dbd69770de36c9525f44e218e1f`. Its Windows checkout-byte launcher hash is `db4ba16e35af4710ce1f9a7e5082052348d61d787d8fbb38327736a79c3630b1`.
+- The `OUTER_BOOTSTRAP.ps1` and `EXACT_UAC_COMMAND.txt` files remain bound to the original `78a3cb...` source and launcher bytes. They are not usable for the follow-up candidate. No refreshed launch command is offered, no launch is authorized, and the earlier UAC authorization was consumed.
 
 ## Result limits
 

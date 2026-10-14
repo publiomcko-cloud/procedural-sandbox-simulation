@@ -110,6 +110,30 @@ Windows PowerShell 5.1.22621.6133: 34 assertions, 0 failures, exit 0. The test e
 
 git diff --check passed. Hosted CI and the complete inherited suites were not run for this narrow correction.
 
+## Follow-up: operation wrapper value preservation and CI failure triage
+
+**Confirmed additional source defect:** the production operation wrapper at `scripts/f2-acl/Start-F2HistoricalManifestDiagnostic.ps1` stored the operation output in `$result` and returned it with `return $result`. Under Windows PowerShell 5.1, that function return enumerated a framed `System.Byte[]` into `System.Object[]`. An in-memory reproduction against the production wrapper and the actual `ConvertTo-F2LaunchFrame` function observed:
+
+    FrameDirect=System.Byte[];count=15
+    FrameWrapped=System.Object[];count=15
+    StreamWrapped=System.Object[];count=15
+    FrameDirectEq=True
+    StreamEqual=True
+
+The `MemoryStream.Write` call accepted and converted the object array in this fixture, and its bytes matched. This proves a production return-type contract defect; it does not prove that the type change caused a real named-pipe failure or the consumed incident. The minimal correction is `return ,$result`, which preserves arrays as one pipeline value. The wrapper's ValidateSet, safe-code allowlist, error mapping, pipe framing and authentication checks are unchanged.
+
+The focused regression now extracts the actual wrapper, `Get-F2LaunchUtf8`, and `ConvertTo-F2LaunchFrame` from the production AST and checks Boolean, String, PSCustomObject, byte-array, MemoryStream write/read, no-output, known-error and unknown-error behavior. Windows PowerShell 5.1.22621.6133 reports 48 assertions, zero failures, exit 0, with `CHILD_PROCESSES_STARTED=0` and `UAC_ATTEMPTS=0`. Full output and the exact command are in `TEST_RESULTS.txt`.
+
+### CI log comparison
+
+- Failed PR #71 run: [38559236368](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38559236368), job `115835905572`. The diagnostics step first diverged at “real child script retains exact exit when protocol bootstrap fails before a trusted sender is available” after the preceding child fixtures passed. Every subsequent real-child/cross-process case logged a failure; multiple diagnostics explicitly reported `TIMEOUT`, `UPDATE_DIAGNOSTIC_TIMEOUT`, and no child exit code. Final `WrongClientResult` was `TimedOut=true`, `ActualChildExitCode=null`; total was 68 assertions, 28 failures, process exit 1.
+- Successful PR #69 run: [38471926228](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/38471926228), job `115552904354`. The same step and unchanged test source completed 68 assertions, zero failures, process exit 0.
+- Both logs report Windows Server 2025 build `10.0.26100`, runner `2.337.0`, and image `windows-2025-vs2026` version `20260925.250.1`. That rules out a different reported runner image, but does not establish equivalent transient resource state.
+- The PR #71 candidate changes `Start-F2HistoricalManifestDiagnostic.ps1` and its review documents/tests. The failed step invokes `Test-F2ProtectedReleaseDiagnostics.ps1` as a separate PowerShell process; that test loads the protected-release diagnostics module/updater and does not import, dot-source, or reference the changed launcher or `Invoke-F2LaunchChildAuthOperation`. The workflow/test bytes are unchanged from PR #69. Therefore the PR #71 source change is not reachable from the failed suite by the inspected source call graph.
+- The repeated timeout pattern supports a shared child/pipe/exit-wait symptom after the first divergence. The logs do not identify its cause. They contain no runner resource telemetry or discriminating setup error. Runner/resource exhaustion, fixture behavior, process startup, and pipe/test-harness failure remain hypotheses; none is confirmed. No workflow rerun was performed.
+
+This correction does not explain the failed PR #71 CI step and does not identify the historical `ChildAuthentication` exception. The historical cause remains UNKNOWN. Because the required CI failure remains unexplained, the candidate is not correction-ready for final acceptance.
+
 ## Next gate
 
 The source correction requires independent source review. No fourth UAC authorization exists. Any later execution requires newly approved exact source bytes and fresh explicit owner authorization. This postmortem is not a readiness report and makes no claim a later attempt would succeed.

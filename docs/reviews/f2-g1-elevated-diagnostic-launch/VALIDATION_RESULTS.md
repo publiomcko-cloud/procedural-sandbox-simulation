@@ -52,18 +52,21 @@ During fixture development, the directory-junction cleanup initially used `Remov
 - `git diff --check`: pass; rerun after staging the complete final package before commit.
 - The review-package `.ps1` files use LF by `.gitattributes`; `scripts/f2-acl` files use CRLF except the launch module's explicit LF rule. The command is plain ASCII plus line ending. Package hashes are physical Windows checkout bytes and appear in `FILE_SHA256_MANIFEST.txt`.
 
-## Hosted Windows CI
+## Hosted Windows CI history
 
-The draft branch workflow runs the compatible protocol, corroboration, runtime, entrypoint, native-helper, diagnostic and historical-manifest suites plus this launch suite and tracked-source parser sweep. It intentionally skips the PR #68 exact-HEAD evidence verifier and historical updater transaction suite; neither validates this stacked branch, and executing the updater is prohibited. The final Windows workflow check is attached to the exact pushed PR #69 HEAD; its run URL and conclusion are provided in the final handoff response.
+The baseline PR #69 run `38471926228` succeeded, including the protected-release diagnostics step with `Assertions=68;Failures=0` and `F2ProtectedDiagnosticsTestProcessExit=0`. The later PR #71 run `38559236368` failed in the same unchanged step: `Assertions=68;Failures=28`, process exit `1`. This is not a passing CI result for PR #71. The failure logs show a first child-integration failure followed by repeated timeout/missing-exit results. The failed test/workflow do not load the PR #71 launcher file changed here. No workflow rerun was performed for this correction; see the postmortem and `TEST_RESULTS.txt` for exact log evidence and remaining uncertainty.
+
+The workflow still contains the complete compatible suites and parser checks. It intentionally skips the PR #68 exact-HEAD evidence verifier and the historical updater transaction suite; neither validates this stacked branch, and executing the updater is prohibited.
 
 ## PR #71 source-only postmortem correction
 
-- Candidate launch source commit: `78a3cb3089babdab520d7d17dda920de276dfbc6`; parent: `1057836646aba001ed1255e1ed566da5867a55d5`.
-- Focused Windows PowerShell 5.1 mock regression: `Test-F2ChildAuthenticationClassification.ps1`, 34 assertions, 0 failures, exit 0. Complete output: `docs/reviews/f2-g1-child-auth-postmortem/TEST_RESULTS.txt`.
-- The regression parses the pinned launcher/module and exercises only extracted safe-classification functions, injected exceptions, and a mocked WMI query failure. It starts no fixture child process and invokes no production entrypoint.
-- Launcher and module parser errors: 0. `git diff --check`: pass.
-- The inherited full suites and hosted CI were not rerun for this postmortem correction; existing PR #69 CI evidence is for its immutable predecessor, not this candidate.
-- No UAC/RunAs, live WMI query, process inspection, protected operation, VM/Hyper-V/G: action, ACL change, baseline change, or merge occurred.
+- Initial classification source candidate: `78a3cb3089babdab520d7d17dda920de276dfbc6`; its underlying incident cause remains UNKNOWN.
+- Follow-up type-preservation correction: `41e9c34843815dbd69770de36c9525f44e218e1f`, parent `58991441cfd6ca21cf7bc3cb2fda5f69b97a8633`. The Windows checkout-byte hash for `Start-F2HistoricalManifestDiagnostic.ps1` is `db4ba16e35af4710ce1f9a7e5082052348d61d787d8fbb38327736a79c3630b1`.
+- Focused Windows PowerShell 5.1 in-memory regression: 48 assertions, 0 failures, exit 0. It covers Boolean, String, PSCustomObject, production frame `Byte[]`, in-memory Stream.Write/Read, no-output return and safe exception classification. No child processes or UAC were started.
+- The old launch command remains pinned to the initial source candidate and is not valid for the follow-up source bytes. No execution is authorized.
+- Exact PR #71 CI run `38559236368` failed the unchanged diagnostics suite at 68 assertions / 28 failures / exit 1. Earlier PR #69 run `38471926228` passed the same step at 68 / 0 / exit 0. The failure source remains UNKNOWN; neither full CI nor the failing test was rerun.
+- Launcher and regression parser checks: 0 errors; `git diff --check`: pass for the published correction.
+- No UAC/RunAs, live WMI query, process inspection, protected operation, VM/Hyper-V/G: action, ACL change, baseline change, workflow rerun, or merge occurred.
 
 ## Limits
 
