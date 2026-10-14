@@ -109,7 +109,6 @@ jobs:
             exit 1
           }
       - name: Verify F2 G1 review evidence Git and Windows checkout hashes
-        if: github.head_ref != 'feat/f2-g1-diagnostic-elevation-plan-issue48'
         shell: powershell
         run: |
           $testPath = (Resolve-Path '.\docs\reviews\f2-g1-third-upgrade-manifest-diagnostics\Test-F2G1ReviewEvidenceManifest.ps1').Path
@@ -151,8 +150,8 @@ jobs:
           Write-Host "F2EntrypointTestProcessExit=$($test.ExitCode)"
           if ($test.ExitCode -ne 0) { exit $test.ExitCode }
       - name: Run protected release updater synthetic suite in Windows PowerShell 5.1
-        # This task expressly excludes executing the historical updater, including its synthetic transaction suite.
-        if: github.head_ref != 'feat/f2-g1-diagnostic-elevation-plan-issue48'
+        # This suite exercises updater logic only with fixture paths below TEMP.
+        # It does not invoke the protected installation entrypoint.
         shell: powershell
         run: |
           $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1').Path
