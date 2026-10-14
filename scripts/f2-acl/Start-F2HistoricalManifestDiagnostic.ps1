@@ -168,13 +168,14 @@ try {
     }
     $pipe.EndWaitForConnection($accept)
     $script:stage='ChildAuthentication'
-    $pipePeerPid=[int](Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_PIPE_CLIENT_ID_QUERY_FAILED' -Operation { [F2HistoricalLaunchNative]::ClientPid($pipe.SafePipeHandle.DangerousGetHandle()) })
+    $pipePeerPid=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_PIPE_CLIENT_ID_QUERY_FAILED' -Operation { [int][F2HistoricalLaunchNative]::ClientPid($pipe.SafePipeHandle.DangerousGetHandle()) }
     $peer=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_PROCESS_IDENTITY_QUERY_FAILED' -Operation { Get-F2LaunchProcessIdentity -ProcessId $pipePeerPid }
     $commandLineMatches=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_COMMAND_CHECK_FAILED' -Operation { Test-F2LaunchProcessCommandLine -ProcessId $childPid -ExpectedImagePath $powershellPath -ExpectedEncodedCommand $childEncoded }
     $peerFactsMatch=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_PEER_CHECK_FAILED' -Operation { Test-F2LaunchPeerFacts -ExpectedPid $childPid -ExpectedStartUtcTicks $childStart -ObservedPid $peer.ProcessId -ObservedStartUtcTicks $peer.StartUtcTicks -CommandLineMatches $commandLineMatches -TokenMatches $true }
     if(-not $peerFactsMatch){throw 'LAUNCH_CHILD_COMMAND_MISMATCH'}
     $peerImagePath=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_IMAGE_PATH_INVALID' -Operation { [IO.Path]::GetFullPath($peer.ImagePath) }
-    if($peerImagePath -cne [IO.Path]::GetFullPath($powershellPath)){throw 'LAUNCH_CHILD_PEER_MISMATCH'}
+    $expectedImagePath=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_IMAGE_PATH_INVALID' -Operation { [IO.Path]::GetFullPath($powershellPath) }
+    if($peerImagePath -cne $expectedImagePath){throw 'LAUNCH_CHILD_PEER_MISMATCH'}
     $helloJson=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_HELLO_READ_FAILED' -Operation { Read-F2LaunchPipeFrame -Pipe $pipe -Clock $clock -DeadlineMs 90000 }
     $hello=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_HELLO_JSON_INVALID' -Operation { $helloJson|ConvertFrom-Json -ErrorAction Stop }
     $helloValid=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_HELLO_VALIDATION_FAILED' -Operation { Test-F2LaunchHello -Hello $hello -ExpectedPid $childPid -ExpectedStartUtcTicks $childStart }
@@ -202,7 +203,7 @@ try {
     $remaining=90000-[int]$clock.ElapsedMilliseconds
     $waited=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_EXIT_WAIT_FAILED' -Operation { if($remaining -le 0){return $false}; return $process.WaitForExit($remaining) }
     if(-not $waited){throw 'LAUNCH_CHILD_EXIT_TIMEOUT'}
-    $actualExit=[int](Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_EXIT_CODE_UNAVAILABLE' -Operation { $process.ExitCode })
+    $actualExit=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_EXIT_CODE_UNAVAILABLE' -Operation { [int]$process.ExitCode }
     $script:stage='ResultValidation'
     if(-not (Test-F2LaunchResponse -Response $response -Request $request -PipePeerPid $pipePeerPid -PipePeerStartUtcTicks $childStart -ActualExitCode $actualExit)){throw 'LAUNCH_RESPONSE_INVALID'}
     $script:result=New-F2LaunchResult -Status $(if($response.Status -ceq 'PASS' -and $actualExit -eq 0){'PASS'}else{'FAIL'}) -Stage 'Complete' -Code $response.ErrorCode -UacAttempted $true -ChildPid $childPid -ChildExitCode $actualExit -ChildMayRemain $false -DiagnosticStatus $response.Status -DiagnosticStage $response.Stage -DiagnosticErrorCode $response.ErrorCode -Stdout $response.Stdout -StderrCodes $response.StderrCodes
