@@ -24,7 +24,9 @@ No unilateral CI, PR, merge, UAC, protected ACL modification, release/update, re
 | New v4 release contract source-only | diagnostics/f2-v4-release-contract-source-only | 52ed1258f1500830e970c4f13d81722b4ffd0465; **initial harness BLOCKED** on read-only $HOME |
 | v4 harness reserved-variable fix | diagnostics/f2-v4-harness-home-fix | 722e428c6bcdd27d8849d07ff023effa036059ad; Codex Windows PS 5.1 **24/24 PASS** |
 | Six-role inspect-only v4 integration design | diagnostics/f2-v4-integration-contracts-source-only | d29f5d5a10e1b16147a3638c0545d13dcf12c39d; Codex **BLOCKED**, 2 PASS then dependency function not visible |
-| Fix v4 integration harness import order | diagnostics/f2-v4-integration-import-fix | cb0bdddf278da51be4e2acaea0d80141b7b4bbc4; **Codex Windows retest PENDING as of snapshot** |
+| Fix v4 integration harness import order | diagnostics/f2-v4-integration-import-fix | cb0bdddf278da51be4e2acaea0d80141b7b4bbc4; **Codex Windows PS 5.1 49/49 PASS**, exit 0, three files parsed with zero errors; source-only only |
+
+**Latest durable exact-SHA review:** docs/reviews/2026-10-14-F2-G1-V4-INTEGRATION-cb0bdddf.md. It records the Codex-reported 49/49 Windows PowerShell 5.1 result, exact Git blob/checkout hashes, earlier blocked attempt and unresolved release gates. This is a source-only verification record, not a signed release receipt or merge authority.
 
 **Important:** source-only PASS is limited to those exact snapshots; it is not a reviewed production release. Each next correction must have a new exact SHA, explicit scope and new validation. Do not combine differently reviewed Git identities, treat SHA abbreviations as independent trust pins, or imply unmerged branches are already integrated.
 
@@ -47,10 +49,10 @@ Evidence links: https://github.com/publiomcko-cloud/procedural-sandbox-simulatio
 
 ## Immediate next action — no hidden background work
 
-1. Obtain the Codex **independent Windows PowerShell 5.1 test result** on exact HEAD cb0bdddf278da51be4e2acaea0d80141b7b4bbc4, not on parent d29f5d5. Validate origin/ref, detached worktree, one-file harness diff, two module parser results and the command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/f2-acl/Test-F2ReleaseIntegration.V4.SourceOnly.ps1 .
-2. If BLOCKED_WITH_EVIDENCE, preserve the exact first failure and evidence; scope the next correction separately with owner authority; ChatGPT may propose a minimal isolated GitHub patch, Codex then retests Windows. Do not silently rerun CI or broaden into installed runtime.
-3. If LOCAL_V4_INTEGRATION_REVIEW_PASS, record the complete assertion count, hashes, source review limitations and exact reviewed SHA in docs/reviews/ and refresh this handoff. **Do not infer production integration, release readiness, merge authorization or resolution of the original timeout.**
-4. The next **production v4** interface/transaction/updater integration, external manifest receipt, recovery fault injection, CI and eventual privileged deployment each need explicit independent gates and owner authorization. Do not use this handoff to manufacture such authority.
+1. **Completed:** Codex independently tested exact HEAD cb0bdddf278da51be4e2acaea0d80141b7b4bbc4 on Windows PowerShell 5.1: **49 assertions PASS, 0 failures, exit 0**, with three parser checks passing. The actual test evidence is Codex-reported, not ChatGPT-executed; see the exact-SHA review document above.
+2. **Next owner decision required:** determine whether to authorize a bounded **production v4 integration design/implementation** (collector, runtime, coordinator, launcher, updater, exact ten-member package and release trust roots). No such broader production implementation is granted by this source-only PASS.
+3. **Separate security gates remain:** independently authenticate actual Git HEAD and external release receipt, version journal/transaction/recovery with rollback and fault injection, test installed-state compatibility and Windows EOL pinning, resolve or safely isolate the historical diagnostic full-sequence timeout and intermittent receiver failure. Preserve all historical v1/v2/v3 artifacts, no protected operations until separately authorized.
+4. **No implicit continuation:** keep PRs #73/#74 draft/unmerged, CI not rerun, v4 runtime and installation disabled, and `F2_G1_RELEASE_HOLD`. Require explicit owner approval for new production/CI/PR/merge/elevated operations. After owner-recorded closure of the blocked cycle, restore Codex-author / ChatGPT-independent-reviewer / human-decision roles.
 
 ## Onboarding after a chat-context reset
 
