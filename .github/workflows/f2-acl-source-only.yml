@@ -134,7 +134,7 @@ jobs:
           $powershell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
           foreach ($arguments in @(
             @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath,'-SelfTest'),
-            @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath)
+            @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath,'-AllowReviewedDiagnosticFixture')
           )) {
             $test = Start-Process -FilePath $powershell -ArgumentList $arguments -PassThru -Wait -NoNewWindow
             Write-Host "F2EvidenceManifestProcessExit=$($test.ExitCode)"
