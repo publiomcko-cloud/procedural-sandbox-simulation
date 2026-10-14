@@ -2,3 +2,5 @@
 # This manifest lists all package review files except itself.
 4fe30974cdab3b1ca4a87aaf26591c0192f5fa0c4423b23b155c5bab7a1abc4d  docs/reviews/f2-g1-manual-wmi-observation/Observe-F2LaunchWmiCommandLine.ps1
 163c0d8ea5df030d83926e4a962199db146a6f1d46363801f287e19335a0757c  docs/reviews/f2-g1-manual-wmi-observation/MANUAL_OPERATOR_PROCEDURE.md
+7faf19b05d7c03b1385e571a907313814c692e72fea8c9050d062719e46959ad  docs/reviews/f2-g1-manual-wmi-observation/MANUAL_OBSERVATION_RECEIPT.md
+f53df587063ec759e12e1be7ab8f71e55843ee7813eb68c60710e6a90d8b4dee  docs/reviews/f2-g1-manual-wmi-observation/OWNER_AUTHORIZATION_DECISION.md
