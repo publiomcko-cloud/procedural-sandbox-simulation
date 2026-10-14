@@ -66,9 +66,24 @@ function Read-F2LaunchPipeFrame {
 function Get-F2LaunchSafeCode {
     param([Parameter(Mandatory)][System.Management.Automation.ErrorRecord]$Record)
     $head=([string]$Record.FullyQualifiedErrorId).Split(',')[0]
-    $safe=@('LAUNCH_PS_VERSION_INVALID','LAUNCH_PS_ARCH_INVALID','LAUNCH_UNEXPECTED_ARGUMENTS','LAUNCH_APPROVAL_SWITCH_REQUIRED','LAUNCH_REQUESTER_TOKEN_REQUIRED','LAUNCH_CHECKOUT_MISMATCH','LAUNCH_GIT_PATH_REJECTED','LAUNCH_GIT_START_FAILED','LAUNCH_GIT_TIMEOUT','LAUNCH_GIT_OUTPUT_LIMIT','LAUNCH_GIT_DRAIN_INCOMPLETE','LAUNCH_GIT_QUERY_FAILED','LAUNCH_CHECKOUT_METADATA_REJECTED','LAUNCH_FILE_TYPE_OR_SIZE_INVALID','LAUNCH_FILE_HASH_MISMATCH','LAUNCH_CHILD_HASH_MISMATCH','LAUNCH_WRAPPER_HASH_MISMATCH','LAUNCH_MODULE_HASH_MISMATCH','LAUNCH_SOURCE_INPUT_HASH_MISMATCH','LAUNCH_UAC_CANCELLED_OR_LAUNCH_FAILED','LAUNCH_CHILD_PROCESS_UNKNOWN','LAUNCH_CHILD_PEER_MISMATCH','LAUNCH_CHILD_TOKEN_MISMATCH','LAUNCH_CHILD_COMMAND_MISMATCH','LAUNCH_CHILD_EXIT_BEFORE_CONNECT','LAUNCH_PIPE_TIMEOUT','LAUNCH_PIPE_EOF','LAUNCH_FRAME_SIZE_INVALID','LAUNCH_FRAME_LENGTH_INVALID','LAUNCH_RESPONSE_INVALID','LAUNCH_CHILD_EXIT_TIMEOUT','LAUNCH_CHILD_EXIT_MISMATCH','LAUNCH_SOURCE_PATH_REJECTED','LAUNCH_PIPE_CREATE_FAILED','LAUNCH_PIPE_DACL_INVALID','LAUNCH_REQUEST_INVALID','LAUNCH_OUTPUT_BOUND_EXCEEDED','LAUNCH_CHILD_ARGUMENT_LIMIT','LAUNCH_CHILD_BOOTSTRAP_INVALID')
+    $safe=@('LAUNCH_PS_VERSION_INVALID','LAUNCH_PS_ARCH_INVALID','LAUNCH_UNEXPECTED_ARGUMENTS','LAUNCH_APPROVAL_SWITCH_REQUIRED','LAUNCH_REQUESTER_TOKEN_REQUIRED','LAUNCH_CHECKOUT_MISMATCH','LAUNCH_GIT_PATH_REJECTED','LAUNCH_GIT_START_FAILED','LAUNCH_GIT_TIMEOUT','LAUNCH_GIT_OUTPUT_LIMIT','LAUNCH_GIT_DRAIN_INCOMPLETE','LAUNCH_GIT_QUERY_FAILED','LAUNCH_CHECKOUT_METADATA_REJECTED','LAUNCH_FILE_TYPE_OR_SIZE_INVALID','LAUNCH_FILE_HASH_MISMATCH','LAUNCH_CHILD_HASH_MISMATCH','LAUNCH_WRAPPER_HASH_MISMATCH','LAUNCH_MODULE_HASH_MISMATCH','LAUNCH_SOURCE_INPUT_HASH_MISMATCH','LAUNCH_UAC_CANCELLED_OR_LAUNCH_FAILED','LAUNCH_CHILD_PROCESS_UNKNOWN','LAUNCH_CHILD_PEER_MISMATCH','LAUNCH_CHILD_TOKEN_MISMATCH','LAUNCH_CHILD_COMMAND_MISMATCH','LAUNCH_CHILD_EXIT_BEFORE_CONNECT','LAUNCH_PIPE_TIMEOUT','LAUNCH_PIPE_EOF','LAUNCH_FRAME_SIZE_INVALID','LAUNCH_FRAME_LENGTH_INVALID','LAUNCH_RESPONSE_INVALID','LAUNCH_CHILD_EXIT_TIMEOUT','LAUNCH_CHILD_EXIT_MISMATCH','LAUNCH_SOURCE_PATH_REJECTED','LAUNCH_PIPE_CREATE_FAILED','LAUNCH_PIPE_DACL_INVALID','LAUNCH_REQUEST_INVALID','LAUNCH_OUTPUT_BOUND_EXCEEDED','LAUNCH_CHILD_ARGUMENT_LIMIT','LAUNCH_CHILD_BOOTSTRAP_INVALID','LAUNCH_PIPE_CLIENT_ID_QUERY_FAILED','LAUNCH_CHILD_PROCESS_IDENTITY_QUERY_FAILED','LAUNCH_CHILD_COMMAND_CHECK_FAILED','LAUNCH_CHILD_PEER_CHECK_FAILED','LAUNCH_CHILD_IMAGE_PATH_INVALID','LAUNCH_CHILD_HELLO_READ_FAILED','LAUNCH_CHILD_HELLO_JSON_INVALID','LAUNCH_CHILD_HELLO_VALIDATION_FAILED','LAUNCH_CHILD_TOKEN_IMPERSONATION_FAILED','LAUNCH_CHILD_TOKEN_VALIDATION_FAILED','LAUNCH_CHILD_REQUEST_BUILD_FAILED','LAUNCH_CHILD_REQUEST_WRITE_FAILED','LAUNCH_CHILD_RESPONSE_READ_FAILED','LAUNCH_CHILD_RESPONSE_JSON_INVALID','LAUNCH_CHILD_EXIT_WAIT_FAILED','LAUNCH_CHILD_EXIT_CODE_UNAVAILABLE')
     if($safe -ccontains $head){return $head}
     return 'LAUNCH_UNCLASSIFIED_FAILURE'
+}
+
+function Invoke-F2LaunchChildAuthOperation {
+    param(
+        [Parameter(Mandatory)][ValidateSet('LAUNCH_PIPE_CLIENT_ID_QUERY_FAILED','LAUNCH_CHILD_PROCESS_IDENTITY_QUERY_FAILED','LAUNCH_CHILD_COMMAND_CHECK_FAILED','LAUNCH_CHILD_PEER_CHECK_FAILED','LAUNCH_CHILD_IMAGE_PATH_INVALID','LAUNCH_CHILD_HELLO_READ_FAILED','LAUNCH_CHILD_HELLO_JSON_INVALID','LAUNCH_CHILD_HELLO_VALIDATION_FAILED','LAUNCH_CHILD_TOKEN_IMPERSONATION_FAILED','LAUNCH_CHILD_TOKEN_VALIDATION_FAILED','LAUNCH_CHILD_REQUEST_BUILD_FAILED','LAUNCH_CHILD_REQUEST_WRITE_FAILED','LAUNCH_CHILD_RESPONSE_READ_FAILED','LAUNCH_CHILD_RESPONSE_JSON_INVALID','LAUNCH_CHILD_EXIT_WAIT_FAILED','LAUNCH_CHILD_EXIT_CODE_UNAVAILABLE')][string]$FailureCode,
+        [Parameter(Mandatory)][scriptblock]$Operation
+    )
+    try {
+        $result = & $Operation
+        return $result
+    } catch {
+        $knownCode = Get-F2LaunchSafeCode -Record $_
+        if ($knownCode -cne 'LAUNCH_UNCLASSIFIED_FAILURE') { throw $knownCode }
+        throw $FailureCode
+    }
 }
 
 try {
@@ -153,34 +168,41 @@ try {
     }
     $pipe.EndWaitForConnection($accept)
     $script:stage='ChildAuthentication'
-    $pipePeerPid=[int][F2HistoricalLaunchNative]::ClientPid($pipe.SafePipeHandle.DangerousGetHandle())
-    $peer=Get-F2LaunchProcessIdentity -ProcessId $pipePeerPid
-    $commandLineMatches=Test-F2LaunchProcessCommandLine -ProcessId $childPid -ExpectedImagePath $powershellPath -ExpectedEncodedCommand $childEncoded
-    if(-not (Test-F2LaunchPeerFacts -ExpectedPid $childPid -ExpectedStartUtcTicks $childStart -ObservedPid $peer.ProcessId -ObservedStartUtcTicks $peer.StartUtcTicks -CommandLineMatches $commandLineMatches -TokenMatches $true)){throw 'LAUNCH_CHILD_COMMAND_MISMATCH'}
-    if([IO.Path]::GetFullPath($peer.ImagePath) -cne [IO.Path]::GetFullPath($powershellPath)){throw 'LAUNCH_CHILD_PEER_MISMATCH'}
-    $helloJson=Read-F2LaunchPipeFrame -Pipe $pipe -Clock $clock -DeadlineMs 90000
-    $hello=$helloJson|ConvertFrom-Json -ErrorAction Stop
-    if(-not (Test-F2LaunchHello -Hello $hello -ExpectedPid $childPid -ExpectedStartUtcTicks $childStart)){throw 'LAUNCH_CHILD_PEER_MISMATCH'}
+    $pipePeerPid=[int](Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_PIPE_CLIENT_ID_QUERY_FAILED' -Operation { [F2HistoricalLaunchNative]::ClientPid($pipe.SafePipeHandle.DangerousGetHandle()) })
+    $peer=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_PROCESS_IDENTITY_QUERY_FAILED' -Operation { Get-F2LaunchProcessIdentity -ProcessId $pipePeerPid }
+    $commandLineMatches=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_COMMAND_CHECK_FAILED' -Operation { Test-F2LaunchProcessCommandLine -ProcessId $childPid -ExpectedImagePath $powershellPath -ExpectedEncodedCommand $childEncoded }
+    $peerFactsMatch=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_PEER_CHECK_FAILED' -Operation { Test-F2LaunchPeerFacts -ExpectedPid $childPid -ExpectedStartUtcTicks $childStart -ObservedPid $peer.ProcessId -ObservedStartUtcTicks $peer.StartUtcTicks -CommandLineMatches $commandLineMatches -TokenMatches $true }
+    if(-not $peerFactsMatch){throw 'LAUNCH_CHILD_COMMAND_MISMATCH'}
+    $peerImagePath=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_IMAGE_PATH_INVALID' -Operation { [IO.Path]::GetFullPath($peer.ImagePath) }
+    if($peerImagePath -cne [IO.Path]::GetFullPath($powershellPath)){throw 'LAUNCH_CHILD_PEER_MISMATCH'}
+    $helloJson=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_HELLO_READ_FAILED' -Operation { Read-F2LaunchPipeFrame -Pipe $pipe -Clock $clock -DeadlineMs 90000 }
+    $hello=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_HELLO_JSON_INVALID' -Operation { $helloJson|ConvertFrom-Json -ErrorAction Stop }
+    $helloValid=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_HELLO_VALIDATION_FAILED' -Operation { Test-F2LaunchHello -Hello $hello -ExpectedPid $childPid -ExpectedStartUtcTicks $childStart }
+    if(-not $helloValid){throw 'LAUNCH_CHILD_PEER_MISMATCH'}
     $peerBox=@{Identity=$null}
-    $pipe.RunAsClient({
-        $i=[Security.Principal.WindowsIdentity]::GetCurrent()
-        try {
-            $p=New-Object Security.Principal.WindowsPrincipal($i)
-            $native=[F2HistoricalLaunchNative]::TokenIsElevated($i.Token)
-            $integrity=[F2HistoricalLaunchNative]::TokenIntegrityRid($i.Token)
-            $peerBox.Identity=[pscustomobject]@{Sid=$i.User.Value;Admin=$p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator);Elevated=$native;Integrity=$integrity}
-        } finally {$i.Dispose()}
-    }.GetNewClosure())
+    Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_TOKEN_IMPERSONATION_FAILED' -Operation {
+        $pipe.RunAsClient({
+            $i=[Security.Principal.WindowsIdentity]::GetCurrent()
+            try {
+                $p=New-Object Security.Principal.WindowsPrincipal($i)
+                $native=[F2HistoricalLaunchNative]::TokenIsElevated($i.Token)
+                $integrity=[F2HistoricalLaunchNative]::TokenIntegrityRid($i.Token)
+                $peerBox.Identity=[pscustomobject]@{Sid=$i.User.Value;Admin=$p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator);Elevated=$native;Integrity=$integrity}
+            } finally {$i.Dispose()}
+        }.GetNewClosure())
+    } | Out-Null
     $peerIdentity=$peerBox.Identity
-    if($null -eq $peerIdentity -or -not (Test-F2LaunchTokenFacts -RequiredClass ELEVATED -UserSid $peerIdentity.Sid -IsElevated $peerIdentity.Elevated -IsAdministrator $peerIdentity.Admin -IntegrityRid $peerIdentity.Integrity -ExpectedUserSid $requesterSid)){throw 'LAUNCH_CHILD_TOKEN_MISMATCH'}
-    $requestJson=ConvertTo-Json -InputObject $request -Depth 5 -Compress
-    $requestFrame=ConvertTo-F2LaunchFrame -Json $requestJson
-    $pipe.Write($requestFrame,0,$requestFrame.Length);$pipe.Flush()
-    $responseJson=Read-F2LaunchPipeFrame -Pipe $pipe -Clock $clock -DeadlineMs 90000
-    $response=$responseJson|ConvertFrom-Json -ErrorAction Stop
+    $tokenMatches=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_TOKEN_VALIDATION_FAILED' -Operation { $null -ne $peerIdentity -and (Test-F2LaunchTokenFacts -RequiredClass ELEVATED -UserSid $peerIdentity.Sid -IsElevated $peerIdentity.Elevated -IsAdministrator $peerIdentity.Admin -IntegrityRid $peerIdentity.Integrity -ExpectedUserSid $requesterSid) }
+    if(-not $tokenMatches){throw 'LAUNCH_CHILD_TOKEN_MISMATCH'}
+    $requestJson=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_REQUEST_BUILD_FAILED' -Operation { ConvertTo-Json -InputObject $request -Depth 5 -Compress }
+    $requestFrame=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_REQUEST_BUILD_FAILED' -Operation { ConvertTo-F2LaunchFrame -Json $requestJson }
+    Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_REQUEST_WRITE_FAILED' -Operation { $pipe.Write($requestFrame,0,$requestFrame.Length);$pipe.Flush() } | Out-Null
+    $responseJson=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_RESPONSE_READ_FAILED' -Operation { Read-F2LaunchPipeFrame -Pipe $pipe -Clock $clock -DeadlineMs 90000 }
+    $response=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_RESPONSE_JSON_INVALID' -Operation { $responseJson|ConvertFrom-Json -ErrorAction Stop }
     $remaining=90000-[int]$clock.ElapsedMilliseconds
-    if($remaining -le 0 -or -not $process.WaitForExit($remaining)){throw 'LAUNCH_CHILD_EXIT_TIMEOUT'}
-    $actualExit=[int]$process.ExitCode
+    $waited=Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_EXIT_WAIT_FAILED' -Operation { if($remaining -le 0){return $false}; return $process.WaitForExit($remaining) }
+    if(-not $waited){throw 'LAUNCH_CHILD_EXIT_TIMEOUT'}
+    $actualExit=[int](Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_EXIT_CODE_UNAVAILABLE' -Operation { $process.ExitCode })
     $script:stage='ResultValidation'
     if(-not (Test-F2LaunchResponse -Response $response -Request $request -PipePeerPid $pipePeerPid -PipePeerStartUtcTicks $childStart -ActualExitCode $actualExit)){throw 'LAUNCH_RESPONSE_INVALID'}
     $script:result=New-F2LaunchResult -Status $(if($response.Status -ceq 'PASS' -and $actualExit -eq 0){'PASS'}else{'FAIL'}) -Stage 'Complete' -Code $response.ErrorCode -UacAttempted $true -ChildPid $childPid -ChildExitCode $actualExit -ChildMayRemain $false -DiagnosticStatus $response.Status -DiagnosticStage $response.Stage -DiagnosticErrorCode $response.ErrorCode -Stdout $response.Stdout -StderrCodes $response.StderrCodes
