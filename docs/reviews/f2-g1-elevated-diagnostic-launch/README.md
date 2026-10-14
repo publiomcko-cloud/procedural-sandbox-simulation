@@ -7,15 +7,15 @@ This is a source-only launch design for a possible separately authorized diagnos
 ## Immutable lineage and fixed checkouts
 
 - Review base: PR #68 HEAD `c3d1280f9905730eda8cff40865e8afbbb642367`.
-- New launch implementation commit: `8c14cf97c9446e11b8afbd64196c3f4558d4c3c9`, parent `1f0ddfd26554f1302fc5815084d2adb3b24ea857`.
-- The review package and the executable launch checkout are separate. The review copy used by the short outer-command loader is `C:\Dev\f2-g1-diagnostic-elevation-plan-review`; it must contain this reviewed package at the published HEAD. The executable source worktree is `C:\Dev\f2-g1-diagnostic-launch-runtime`, clean at the implementation commit above. This split avoids a self-referential commit pin.
+- Candidate corrected launch source commit: `78a3cb3089babdab520d7d17dda920de276dfbc6`, parent `1057836646aba001ed1255e1ed566da5867a55d5`.
+- The review package and executable launch checkout are separate. The review copy used by the short outer-command loader is `C:\Dev\f2-g1-child-auth-postmortem`; the executable source worktree is `C:\Dev\f2-g1-diagnostic-launch-runtime` and was not changed. Before any future launch, that runtime worktree must be prepared clean at the candidate source commit above. No launch is authorized here.
 - Historical production source: `C:\Dev\f2-g1-protected-updater-source`, commit `396c44965c90c08292ad2835f8317e81b6b9daaf`.
 - Historical candidate: `C:\Dev\f2-g1-protected-updater`, commit `7f99bc10f3e2258d2340cea4e7ba1352022cbb6d`.
 - The three checkouts must have the expected origin, exact commits, clean status, canonical paths, and no reparse points. The launch gate rejects mismatches.
 
 ## Standard-token CMD entry
 
-Open a normal `cmd.exe` from Win+R with `cmd.exe /d /k`, then paste the single line in `EXACT_UAC_COMMAND.txt`. It is a proposed command and was not executed. The exact line is 4,683 characters, below the documented 8,191-character `cmd.exe` limit. It names the system PowerShell executable by absolute path and contains only an encoded bootstrap, with no CMD metacharacters that trigger command chaining or expansion.
+Open a normal `cmd.exe` from Win+R with `cmd.exe /d /k`, then paste the single line in `EXACT_UAC_COMMAND.txt`. This candidate command is for review only, was not executed, and is not authorized. Its line is 4,655 characters, below the documented 8,191-character `cmd.exe` limit. It names the system PowerShell executable by absolute path and contains only an encoded bootstrap, with no CMD metacharacters that trigger command chaining or expansion.
 
 The small encoded entry opens the fixed outer-bootstrap path through a read-only handle, checks the opened handle's final path and exact SHA-256, and creates a ScriptBlock from those same in-memory bytes. It does not invoke a mutable checkout file with `-File`, dot-source it, or accept path/hash arguments from the command line. The outer bootstrap then verifies the separate runtime checkout and pinned launch module/launcher before continuing.
 
@@ -56,13 +56,13 @@ Windows checkout-byte SHA-256 values for the changed launch sources:
 | File | SHA-256 |
 |---|---|
 | `scripts/f2-acl/F2HistoricalManifestLaunch.psm1` | `06f117c6be29e3e150149087cb19323e83df20601b8d134f0bb02ec7335867d2` |
-| `scripts/f2-acl/Start-F2HistoricalManifestDiagnostic.ps1` | `48b3f12dbc784e593a4ee5b468b3f005e6b6e1a53b1c09d542d0bfc2f9cdd83a` |
+| `scripts/f2-acl/Start-F2HistoricalManifestDiagnostic.ps1` | `82e43661e8d0be7e03ca20a0329ce272219d1da46242cf3c0457aad4a5ec8775` |
 | `scripts/f2-acl/Invoke-F2HistoricalManifestDiagnosticChild.ps1` | `78c8ea2a51d3eece2914ea87f18b46186f604a357671fb0607393801bca5609e` |
 | `scripts/f2-acl/Invoke-F2HistoricalManifestDiagnostic.ps1` | `99505626679c75511e16d524c39dfd0ff0cbd27b3a0bd36d631cbadf2c1c9536` |
 | `scripts/f2-acl/F2HistoricalManifestDiagnostic.psm1` | `4541338491269ac2bf409c5ba0c63d93d6a5e3fd9896c9d378c79dbea43ee7ee` |
-| `docs/reviews/f2-g1-elevated-diagnostic-launch/OUTER_BOOTSTRAP.ps1` | `e1eea999392510d05ea69578377d8476e70ba4df3ed152417cecef55c3acf6a9` |
+| `docs/reviews/f2-g1-elevated-diagnostic-launch/OUTER_BOOTSTRAP.ps1` | `00c8e16b7044b0d54500268ca624254cf864d9b85ea405a61ee252b1cacffaa1` |
 | `docs/reviews/f2-g1-elevated-diagnostic-launch/CMD_ENTRY_BOOTSTRAP.ps1` | `436aecdab7c4baaa7f80d93c95f2d15257f366e4a83beff78e3ae4753c993156` |
-| `docs/reviews/f2-g1-elevated-diagnostic-launch/EXACT_UAC_COMMAND.txt` | `1f1d4f51025b853bc571728258ae220cb689be97bf7c7355a0094393c113706a` |
+| `docs/reviews/f2-g1-elevated-diagnostic-launch/EXACT_UAC_COMMAND.txt` | `010705f7fe1bd1112cfddd0e64e33590731345d36ac7ca5047d56f078f370e75` |
 | Pinned Git core executable | `1a0043555d254618f2d56c936c3d9a1fbfb878bc878416a133c346bc7835eda9` |
 
 The full child process command line includes the PowerShell executable path, fixed switches, and a compact encoded bootstrap. It is capped at 3,600 characters before the single `Start-Process -Verb RunAs` call. The synthetic ShellExecute tests use `UseShellExecute = $true` with no `runas` verb; they do not invoke UAC.
@@ -84,6 +84,12 @@ The Git core's dependent DLLs are not individually hashed by this review. They r
 - `TEST_RUN_RESULTS.log` contains the complete sanitized stdout, stderr, and actual process exit code for each local Windows PowerShell 5.1 suite.
 - `DEVELOPER_HANDOFF.md` gives commit, parent, changed paths, tests and stop conditions.
 - `FILE_SHA256_MANIFEST.txt` covers the complete review package using Windows checkout bytes; the manifest excludes itself.
+
+## Separate ChildAuthentication postmortem candidate
+
+- [Incident postmortem](../f2-g1-child-auth-postmortem/INCIDENT_POSTMORTEM.md) preserves the supplied failure fields and PID-check result, maps the reviewed ChildAuthentication operations in execution order, and separates confirmed source behavior from the still-unknown incident cause.
+- [Regression source](../f2-g1-child-auth-postmortem/Test-F2ChildAuthenticationClassification.ps1), [complete test record](../f2-g1-child-auth-postmortem/TEST_RESULTS.txt), and [developer handoff](../f2-g1-child-auth-postmortem/DEVELOPER_HANDOFF.md) are included in the checkout-byte manifest.
+- Candidate correction commit: `78a3cb3089babdab520d7d17dda920de276dfbc6`; this exact command has not been executed or authorized.
 
 ## Result limits
 

@@ -1,0 +1,42 @@
+F2 G1 child-authentication classification regression
+Command: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Dev\f2-g1-child-auth-postmortem\docs\reviews\f2-g1-child-auth-postmortem\Test-F2ChildAuthenticationClassification.ps1
+PowerShell: Windows PowerShell 5.1.22621.6133
+UAC attempts: 0
+Test child processes started: 0
+Exit code: 0
+
+PASS Known allowlisted pipe timeout stays specific
+PASS GetNamedPipeClientProcessId Win32Exception class collapses to generic
+PASS GetProcessById missing-process ArgumentException class collapses to generic
+PASS Process.StartTime InvalidOperationException class collapses to generic
+PASS Process.MainModule Win32Exception class collapses to generic
+PASS RunAsClient IOException class collapses to generic
+PASS RunAsClient ObjectDisposedException class collapses to generic
+PASS Malformed hello JSON class collapses to generic
+PASS WMI query failure is conservatively rejected
+PASS WMI query failure follows explicit command-mismatch branch
+PASS Malformed hello numeric fields fail closed and classify generic
+PASS Peer fact mismatch rejects child
+PASS Peer fact mismatch returns allowlisted command mismatch
+PASS Operation wrapper classifies native client-PID failure
+PASS Operation wrapper classifies process identity failure
+PASS Operation wrapper preserves an existing allowlisted timeout
+PASS Unlisted operation failure codes are rejected
+PASS Rejected code prevents operation execution
+PASS Production stage has bounded mapping: LAUNCH_PIPE_CLIENT_ID_QUERY_FAILED
+PASS Production stage has bounded mapping: LAUNCH_CHILD_PROCESS_IDENTITY_QUERY_FAILED
+PASS Production stage has bounded mapping: LAUNCH_CHILD_COMMAND_CHECK_FAILED
+PASS Production stage has bounded mapping: LAUNCH_CHILD_PEER_CHECK_FAILED
+PASS Production stage has bounded mapping: LAUNCH_CHILD_IMAGE_PATH_INVALID
+PASS Production stage has bounded mapping: LAUNCH_CHILD_HELLO_READ_FAILED
+PASS Production stage has bounded mapping: LAUNCH_CHILD_HELLO_JSON_INVALID
+PASS Production stage has bounded mapping: LAUNCH_CHILD_HELLO_VALIDATION_FAILED
+PASS Production stage has bounded mapping: LAUNCH_CHILD_TOKEN_IMPERSONATION_FAILED
+PASS Production stage has bounded mapping: LAUNCH_CHILD_TOKEN_VALIDATION_FAILED
+PASS Production stage has bounded mapping: LAUNCH_CHILD_REQUEST_BUILD_FAILED
+PASS Production stage has bounded mapping: LAUNCH_CHILD_REQUEST_WRITE_FAILED
+PASS Production stage has bounded mapping: LAUNCH_CHILD_RESPONSE_READ_FAILED
+PASS Production stage has bounded mapping: LAUNCH_CHILD_RESPONSE_JSON_INVALID
+PASS Production stage has bounded mapping: LAUNCH_CHILD_EXIT_WAIT_FAILED
+PASS Production stage has bounded mapping: LAUNCH_CHILD_EXIT_CODE_UNAVAILABLE
+ASSERTIONS=34; FAILURES=0; CHILD_PROCESSES_STARTED=0; UAC_ATTEMPTS=0

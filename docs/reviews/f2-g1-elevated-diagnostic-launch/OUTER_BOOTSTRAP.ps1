@@ -8,12 +8,12 @@ $stage = 'BootstrapInitialization'
 $uacAttempted = $false
 $failureCode = 'OUTER_BOOTSTRAP_FAILED'
 $launchRoot = 'C:\Dev\f2-g1-diagnostic-launch-runtime'
-$expectedLaunchCommitSha = '8c14cf97c9446e11b8afbd64196c3f4558d4c3c9'
+$expectedLaunchCommitSha = '78a3cb3089babdab520d7d17dda920de276dfbc6'
 $expectedRemote = 'https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git'
 $expectedGitPath = 'C:\Program Files\Git\mingw64\bin\git.exe'
 $expectedGitSha256 = '1a0043555d254618f2d56c936c3d9a1fbfb878bc878416a133c346bc7835eda9'
 $expectedLaunchModuleSha256 = '06f117c6be29e3e150149087cb19323e83df20601b8d134f0bb02ec7335867d2'
-$expectedLauncherSha256 = '48b3f12dbc784e593a4ee5b468b3f005e6b6e1a53b1c09d542d0bfc2f9cdd83a'
+$expectedLauncherSha256 = '82e43661e8d0be7e03ca20a0329ce272219d1da46242cf3c0457aad4a5ec8775'
 
 function Read-OuterPinnedBytes {
     param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][int]$MaximumBytes)

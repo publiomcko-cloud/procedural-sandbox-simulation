@@ -10,7 +10,7 @@ The corrected launch implementation is commit `8c14cf97c9446e11b8afbd64196c3f455
 
 | Gate | Result |
 |---|---|
-| Exact standard-token CMD invocation | 4,683 characters; below the 8,191-character CMD limit; no command chaining or expansion metacharacters |
+| Exact standard-token CMD invocation (PR #69 reviewed baseline) | 4,683 characters; below the 8,191-character CMD limit; no command chaining or expansion metacharacters. The separate PR #71 candidate command is 4,655 characters, as recorded in its README and exact command file. |
 | CMD entry source equivalence | Pass; the encoded command is generated from `CMD_ENTRY_BOOTSTRAP.ps1` with the exact outer path and SHA-256 bound |
 | Outer bootstrap | Opens the fixed file, checks its handle-resolved path and SHA-256, then invokes a ScriptBlock created from those same bytes |
 | Elevated child argument construction | Maximum-shaped full command line tested at or below 3,600 characters; the production builder rejects the smaller injected 512-character limit |
@@ -55,6 +55,15 @@ During fixture development, the directory-junction cleanup initially used `Remov
 ## Hosted Windows CI
 
 The draft branch workflow runs the compatible protocol, corroboration, runtime, entrypoint, native-helper, diagnostic and historical-manifest suites plus this launch suite and tracked-source parser sweep. It intentionally skips the PR #68 exact-HEAD evidence verifier and historical updater transaction suite; neither validates this stacked branch, and executing the updater is prohibited. The final Windows workflow check is attached to the exact pushed PR #69 HEAD; its run URL and conclusion are provided in the final handoff response.
+
+## PR #71 source-only postmortem correction
+
+- Candidate launch source commit: `78a3cb3089babdab520d7d17dda920de276dfbc6`; parent: `1057836646aba001ed1255e1ed566da5867a55d5`.
+- Focused Windows PowerShell 5.1 mock regression: `Test-F2ChildAuthenticationClassification.ps1`, 34 assertions, 0 failures, exit 0. Complete output: `docs/reviews/f2-g1-child-auth-postmortem/TEST_RESULTS.txt`.
+- The regression parses the pinned launcher/module and exercises only extracted safe-classification functions, injected exceptions, and a mocked WMI query failure. It starts no fixture child process and invokes no production entrypoint.
+- Launcher and module parser errors: 0. `git diff --check`: pass.
+- The inherited full suites and hosted CI were not rerun for this postmortem correction; existing PR #69 CI evidence is for its immutable predecessor, not this candidate.
+- No UAC/RunAs, live WMI query, process inspection, protected operation, VM/Hyper-V/G: action, ACL change, baseline change, or merge occurred.
 
 ## Limits
 
