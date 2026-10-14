@@ -8,7 +8,7 @@ The unredacted command line, encoded payload, requester SID, and exception data 
 
 ## Immutable source references
 
-- PR #70 source HEAD: `dc9d1fbd56553598d27b9c7722bcf7ebdf17d65a`.
+- Original PR #70 observation-package source HEAD (before evidence-receipt commits): `dc9d1fbd56553598d27b9c7722bcf7ebdf17d65a`.
 - PR #69 reviewed HEAD: `56a34d7899ba31b0d3fe6d3185435bc182ac453f`.
 - Runtime implementation commit: `8c14cf97c9446e11b8afbd64196c3f4558d4c3c9`.
 - Observation script physical Windows checkout SHA-256: `4fe30974cdab3b1ca4a87aaf26591c0192f5fa0c4423b23b155c5bab7a1abc4d`.
