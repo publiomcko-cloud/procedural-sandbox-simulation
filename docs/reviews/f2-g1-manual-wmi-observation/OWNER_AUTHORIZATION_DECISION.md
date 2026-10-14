@@ -37,8 +37,8 @@ Do not launch UAC if any of the following occurs:
 
 - The manual WMI test was same-token only. It did not validate the elevated child's command-line representation, UAC behavior, cross-integrity pipe connection, or alternate-account rejection at runtime.
 - The actual original elevated failure remains unexplained; the proposed action is diagnostic only.
-- The pinned Git core executable hash is checked, but dependent Git DLL hashes, provenance, and modification exposure were not verified.
-- The supplied WMI summary is not the original complete JSON/transcript; fields omitted from that summary remain unverified at the record level.
+- The [earlier immutable host-readiness assessment](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/blob/2c19f161740b3efb1636134cd7f62b5c58da45e4/docs/reviews/f2-g1-host-readiness/FINAL_NON_ELEVATED_HOST_READINESS.md) recorded SHA-256 hashes for the four unsigned Git DLLs and inspected their paths, reparse status, and applicable standard-user allow ACEs. It found no trustworthy local package/catalog evidence for those DLLs. Independently authenticated publisher/package provenance and complete effective-access assurance remain **UNKNOWN**; the recorded standard-user ACE review is not a complete effective-access evaluation.
+- The operator supplied the complete WMI JSON result and terminal exit result in the conversation. The earlier Codex handoff omitted some supplied fields; the corrected receipt restores them. The capture timestamp remains **UNKNOWN**, and the operator report has not been independently authenticated by Codex.
 
 ## Owner decision (leave pending until the owner acts)
 

@@ -2,9 +2,9 @@
 
 ## Disposition
 
-**Same-token WMI command-line gate: CLOSED — based on human-supplied observation.** The supplied successful summary is internally consistent with the pinned PR #70 script's success path. Codex did not execute or reproduce this observation. This receipt records the human report and source comparison; it is not independent host-runtime evidence.
+**Same-token WMI command-line gate: CLOSED — based on the operator-reported observation.** The operator supplied the complete JSON result and terminal exit result in the ChatGPT conversation. The earlier Codex handoff was abbreviated and omitted fields that had been supplied; this receipt now records those omitted values. The capture timestamp remains **UNKNOWN**. Codex did not execute or independently authenticate the host observation.
 
-Capture timestamp and the original complete JSON/stdout transcript were not supplied. The original raw command line, encoded payload, requester SID, exception data, and full image path are not reproduced here.
+The unredacted command line, encoded payload, requester SID, and exception data remain withheld. The script-generated redacted command line and non-sensitive child image path are included below.
 
 ## Immutable source references
 
@@ -16,22 +16,41 @@ Capture timestamp and the original complete JSON/stdout transcript were not supp
 
 The published script and operator procedure were preserved byte-for-byte for this receipt.
 
-## Human-reported result
+## Complete operator-reported result
 
-| Field | Reported value |
-|---|---|
-| Schema / outcome / stage / error | `f2-g1-manual-wmi-observation-v1` / `PASS` / `COMPLETE` / `NONE` |
-| PowerShell | `5.1.22621.6133` |
-| Requester PID / token class | `37092` / `STANDARD` |
-| Child PID / same requester owner | `24532` / `true` |
-| Generated / observed command-line length | `3583` / `3583` characters |
-| Observed command-line SHA-256 | `99b1510e432c206c0b8494a767884426cf89da29e756046d3430392fb62bd104` |
-| Observed encoded-payload SHA-256 | `e8b8ca701772b6ebb3ba1e449572ef53015b2a9c66aa954849484b573f6aafc0` |
-| Exact command-line / encoded-payload match | `true` / `true` |
-| Production validator | `true` |
-| Child exit / timeout | `0` / `false` |
-| Temporary root ID / cleanup | `abc1ff79f07144378b6aca1a6da2b04d` / `COMPLETE` |
-| Operator-observed script exit | `0` |
+The following is the complete operator-reported JSON field/value set supplied in the conversation, transcribed here for independent review. It is not a Codex-captured record.
+
+```json
+{
+  "Schema": "f2-g1-manual-wmi-observation-v1",
+  "Outcome": "PASS",
+  "Stage": "COMPLETE",
+  "ErrorCode": "NONE",
+  "ReviewCommit": "56a34d7899ba31b0d3fe6d3185435bc182ac453f",
+  "RuntimeCommit": "8c14cf97c9446e11b8afbd64196c3f4558d4c3c9",
+  "RuntimeModuleSha256": "06f117c6be29e3e150149087cb19323e83df20601b8d134f0bb02ec7335867d2",
+  "PowerShellVersion": "5.1.22621.6133",
+  "RequesterPid": 37092,
+  "RequesterTokenClass": "STANDARD",
+  "ChildPid": 24532,
+  "ChildImagePath": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+  "ChildOwnerMatchesRequester": true,
+  "GeneratedCommandLineLength": 3583,
+  "ObservedCommandLineLength": 3583,
+  "ObservedCommandLineSha256": "99b1510e432c206c0b8494a767884426cf89da29e756046d3430392fb62bd104",
+  "ObservedCommandLineRedacted": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand <redacted;chars=3448;sha256=e8b8ca701772b6ebb3ba1e449572ef53015b2a9c66aa954849484b573f6aafc0>",
+  "ObservedEncodedPayloadSha256": "e8b8ca701772b6ebb3ba1e449572ef53015b2a9c66aa954849484b573f6aafc0",
+  "ExactCommandLineMatch": true,
+  "EncodedPayloadMatch": true,
+  "ProductionValidatorPass": true,
+  "ChildExitCode": 0,
+  "TimedOut": false,
+  "TemporaryRootId": "abc1ff79f07144378b6aca1a6da2b04d",
+  "CleanupOutcome": "COMPLETE"
+}
+```
+
+The operator separately reported terminal exit code **0** for the observation script. This terminal result is reported evidence, not independently captured by Codex.
 
 ## Consistency review against the pinned script
 
@@ -41,14 +60,14 @@ The published script and operator procedure were preserved byte-for-byte for thi
 - The two reported PIDs are distinct positive integers. The temporary root ID is a 32-character lowercase hexadecimal GUID-N value.
 - Both reported SHA-256 values have the expected 64-character lowercase hexadecimal form. The command-line digest in the script is SHA-256 over UTF-16LE command-line bytes. The encoded-payload digest is SHA-256 over bytes obtained by Base64-decoding the encoded command; it is not the hash of the Base64 text.
 - The reported PowerShell version satisfies the script's Windows PowerShell 5.1 version gate.
-- The summary omits `ChildImagePath`, the script-reported review/runtime commit and module hash fields, and the redacted command-line field. The pinned script checks the image path and embeds those identities before it can report `PASS`, but the omitted values cannot be independently compared from this summary. No values have been inferred or added.
+- The restored `ChildImagePath`, `ReviewCommit`, `RuntimeCommit`, and `RuntimeModuleSha256` match the pinned script's expected image path and embedded identity constants. The restored redacted command-line value matches the script's redaction format and reported payload length/hash. These are source/value consistency checks; they do not authenticate the host execution.
 
-A non-elevated in-memory consistency check of the supplied summary passed **12/12** checks: schema/disposition, PS 5.1 version, standard requester, distinct positive PIDs and owner match, equal bounded command lengths, SHA-256 formats, both command comparisons, production validator result, natural exit/no timeout, temporary GUID/cleanup, and operator exit. This check validated reported values only; it did not run the observation script or query WMI.
+The previously recorded non-elevated in-memory consistency check passed **12/12** checks over the summary fields: schema/disposition, PS 5.1 version, standard requester, distinct positive PIDs and owner match, equal bounded command lengths, SHA-256 formats, both command comparisons, production validator result, natural exit/no timeout, temporary GUID/cleanup, and operator exit. A separate review of the restored five fields (child image, review commit, runtime commit, module hash, and redacted command line) matches the pinned script constants and output construction. These checks validate reported values only; they did not run the observation script or query WMI.
 
 ## Scope and evidentiary limit
 
 This closes only the **same-token ShellExecute/WMI command-line observation gate** on the basis of the operator's report. It supports that a harmless temporary child command line was observed and accepted by the production validator in the reported Windows PowerShell 5.1 session. It does not prove an elevated token, UAC behavior, medium-to-high integrity named-pipe connectivity, alternate-account behavior, or the historical elevated failure's cause.
 
-The published Git core executable is pinned by path and SHA in PR #69. Its dependent DLL provenance and non-administrator modification exposure remain unverified. No live process, WMI query, UAC action, protected write, ACL query, VM operation, G: access, or native F2 workload was performed by Codex for this receipt.
+The [earlier immutable host-readiness assessment](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/blob/2c19f161740b3efb1636134cd7f62b5c58da45e4/docs/reviews/f2-g1-host-readiness/FINAL_NON_ELEVATED_HOST_READINESS.md) recorded SHA-256 values for four unsigned Git DLLs and inspected their paths, reparse status, and applicable standard-user allow ACEs. It found no trustworthy local package/catalog evidence for those DLLs. Their independently authenticated publisher/package provenance and complete effective-access assurance remain **UNKNOWN**; the earlier read-only ACE review was not a kernel effective-access evaluation. No live process, WMI query, UAC action, protected write, ACL query, VM operation, G: access, or native F2 workload was performed by Codex for this receipt.
 
-The source-only review of this report can validate the supplied values against the script contract; it cannot authenticate the human execution or recreate the missing original transcript.
+The source-only review can compare the operator-supplied values with the pinned script contract, but cannot independently authenticate the human execution. The complete JSON and terminal result were supplied in conversation; Codex's earlier handoff, rather than the operator's submission, was abbreviated.
