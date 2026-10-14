@@ -1,12 +1,18 @@
 [CmdletBinding()]
 param(
-    [switch]$SelfTest
+    [switch]$SelfTest,
+    [switch]$AllowReviewedDiagnosticFixture
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $script:ExpectedInventoryCommit = '12d97902d79b362ca406ef6f45422ef9ad54d5ef'
+# An explicit CI-only exception for exactly the independently reviewed TEMP-only
+# diagnostic fixture. Historical inventory pins and default strict mode are unchanged.
+$script:ReviewedDiagnosticPath = 'scripts/f2-acl/Test-F2ProtectedReleaseDiagnostics.ps1'
+$script:ReviewedDiagnosticGitBlob = '9c716358d9b5c14488fc281da59f156a3ab8f268'
+$script:ReviewedDiagnosticWindowsSha256 = '933a3e842c6f7bca18f85d009906e0bfa81e8300c0aa0479fb784cff344183a2'
 $script:MaximumEvidenceBytes = 2MB
 $script:MaximumGitOutputBytes = 4MB
 
@@ -176,7 +182,8 @@ function Test-ManifestContent {
         [Parameter(Mandatory = $true)][string]$ManifestText,
         [Parameter(Mandatory = $true)][string]$ExpectedCommitSha,
         [Parameter(Mandatory = $true)][int]$ExpectedEntryCount,
-        [switch]$VerifyPhysicalCheckout
+        [switch]$VerifyPhysicalCheckout,
+        [switch]$AllowReviewedDiagnosticFixture
     )
 
     $lines = $ManifestText -split "`n"
@@ -221,7 +228,25 @@ function Test-ManifestContent {
         $inventoryBlob = Invoke-GitUtf8 -RepositoryRoot $RepositoryRoot -Arguments @('rev-parse', '--verify', ($ExpectedCommitSha + ':' + $row.Path))
         $head = Invoke-GitUtf8 -RepositoryRoot $RepositoryRoot -Arguments @('rev-parse', '--verify', 'HEAD')
         $headBlob = Invoke-GitUtf8 -RepositoryRoot $RepositoryRoot -Arguments @('rev-parse', '--verify', ($head + ':' + $row.Path))
-        if (($inventoryBlob -ne $row.GitBlob) -or ($headBlob -ne $row.GitBlob)) { throw 'MANIFEST_BLOB_ID_MISMATCH' }
+        if ($inventoryBlob -cne $row.GitBlob) { throw 'MANIFEST_BLOB_ID_MISMATCH' }
+        # Preserve the immutable inventory; accept only the exact reviewed diagnostic
+        # instrumentation blob when explicitly requested by the CI wrapper.
+        if ($headBlob -cne $row.GitBlob) {
+            $allowed = [bool]$AllowReviewedDiagnosticFixture -and
+                [string]::Equals($row.Path, $script:ReviewedDiagnosticPath, [StringComparison]::Ordinal) -and
+                [string]::Equals($headBlob, $script:ReviewedDiagnosticGitBlob, [StringComparison]::Ordinal)
+            if (-not $allowed) { throw 'MANIFEST_BLOB_ID_MISMATCH' }
+            $reviewed = Get-ManifestEntry -RepositoryRoot $RepositoryRoot -CommitSha $head -RelativePath $row.Path
+            if ($reviewed.GitBlob -cne $script:ReviewedDiagnosticGitBlob -or
+                $reviewed.WindowsCheckoutSha256 -cne $script:ReviewedDiagnosticWindowsSha256) {
+                throw 'MANIFEST_REVIEWED_DIAGNOSTIC_BYTES_MISMATCH'
+            }
+            $physicalPath = Join-Path $RepositoryRoot ($row.Path -replace '/', '\')
+            $physicalSha = Get-Sha256Hex -Bytes ([System.IO.File]::ReadAllBytes($physicalPath))
+            if ($physicalSha -cne $script:ReviewedDiagnosticWindowsSha256) {
+                throw 'MANIFEST_REVIEWED_DIAGNOSTIC_PHYSICAL_MISMATCH'
+            }
+        }
 
         $actual = Get-ManifestEntry -RepositoryRoot $RepositoryRoot -CommitSha $ExpectedCommitSha -RelativePath $row.Path
         if (($actual.GitBytes -ne [int64]$row.GitBytes) -or ($actual.GitSha256 -ne $row.GitSha256)) { throw 'MANIFEST_GIT_BYTES_MISMATCH' }
@@ -375,8 +400,8 @@ try {
     $manifestItem = Get-Item -LiteralPath $manifestPath -Force
     if (($manifestItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'MANIFEST_FILE_REPARSE' }
     $manifestText = [System.IO.File]::ReadAllText($manifestPath, (New-Object System.Text.UTF8Encoding($false, $true)))
-    $count = Test-ManifestContent -RepositoryRoot $repositoryRoot -ManifestText $manifestText -ExpectedCommitSha $script:ExpectedInventoryCommit -ExpectedEntryCount 29
-    Write-Output ('ManifestEntries=' + $count + ';GitBlobAndWindowsCheckoutRepresentations=PASS;Failures=0')
+    $count = Test-ManifestContent -RepositoryRoot $repositoryRoot -ManifestText $manifestText -ExpectedCommitSha $script:ExpectedInventoryCommit -ExpectedEntryCount 29 -AllowReviewedDiagnosticFixture:$AllowReviewedDiagnosticFixture
+    Write-Output ('ManifestEntries=' + $count + ';GitBlobAndWindowsCheckoutRepresentations=PASS;ReviewedDiagnosticOptIn=' + [bool]$AllowReviewedDiagnosticFixture + ';Failures=0')
     exit 0
 }
 catch {
