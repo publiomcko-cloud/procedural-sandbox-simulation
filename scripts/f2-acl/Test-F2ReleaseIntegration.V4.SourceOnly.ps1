@@ -2,8 +2,10 @@
 param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-Import-Module (Join-Path $PSScriptRoot 'F2ReleaseContract.V4.SourceOnly.psm1') -Force -ErrorAction Stop
+# Load the integration dependency first; import the verifier into this
+# harness scope LAST to keep its three public test helpers visible.
 Import-Module (Join-Path $PSScriptRoot 'F2ReleaseIntegration.V4.SourceOnly.psm1') -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'F2ReleaseContract.V4.SourceOnly.psm1') -Force -ErrorAction Stop
 $script:assertions=0
 $script:failures=[Collections.Generic.List[string]]::new()
 function Assert-Integration([bool]$condition,[string]$label) {
