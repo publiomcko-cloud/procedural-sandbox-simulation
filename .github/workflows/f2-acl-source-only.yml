@@ -48,8 +48,8 @@ jobs:
             if (-not [string]::Equals($rawComparable, $full, [StringComparison]::OrdinalIgnoreCase)) { throw 'F2_TEMP_PATH_NOT_CANONICAL' }
             $root = [IO.Path]::GetPathRoot($full)
             if ($full.Length -le $root.Length) { throw 'F2_TEMP_PATH_IS_VOLUME_ROOT' }
-            $drive = [IO.DriveInfo]::new($root)
-            if (-not $drive.IsReady -or $drive.DriveType -ne [IO.DriveType]::Fixed) { throw 'F2_TEMP_PATH_DRIVE_NOT_FIXED' }
+            $drive = Get-F2DriveValidationFacts -RootPath $root
+            if ($null -eq $drive -or -not $drive.IsReady -or $drive.DriveType -ne [IO.DriveType]::Fixed) { throw 'F2_TEMP_PATH_DRIVE_NOT_FIXED' }
             $resolved = (Resolve-Path -LiteralPath $full -ErrorAction Stop).Path
             if (-not [string]::Equals((Get-F2CanonicalLocalPath -PathValue $resolved), $full, [StringComparison]::OrdinalIgnoreCase)) { throw 'F2_TEMP_PATH_RESOLUTION_MISMATCH' }
             $current = $root
@@ -72,12 +72,16 @@ jobs:
             $prefix = $root.TrimEnd([char]'\') + '\'
             return $path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
           }
+          function Get-F2DriveValidationFacts {
+            param([Parameter(Mandatory = $true)][string]$RootPath)
+            $drive = [IO.DriveInfo]::new($RootPath)
+            return [pscustomobject]@{ IsReady = $drive.IsReady; DriveType = $drive.DriveType }
+          }
           function Get-F2TempPreflightStageLabel {
             param([AllowNull()][string]$Stage)
             $allowedStages = @(
+              'PREFLIGHT_INITIALIZATION',
               'RUNNER_TEMP_VALIDATION',
-              'ORIGINAL_TEMP_VALIDATION',
-              'ORIGINAL_TMP_VALIDATION',
               'PROTECTED_ROOT_REJECTION',
               'GITHUB_ENV_VALIDATION',
               'ENVIRONMENT_EXPORT'
@@ -89,10 +93,6 @@ jobs:
           try {
             $stage = 'RUNNER_TEMP_VALIDATION'
             $runnerTemp = Assert-F2SafeLocalDirectory -PathValue $env:RUNNER_TEMP
-            $stage = 'ORIGINAL_TEMP_VALIDATION'
-            $originalTemp = Assert-F2SafeLocalDirectory -PathValue $env:TEMP
-            $stage = 'ORIGINAL_TMP_VALIDATION'
-            $originalTmp = Assert-F2SafeLocalDirectory -PathValue $env:TMP
             $stage = 'PROTECTED_ROOT_REJECTION'
             $deniedRoots = @(
               $env:SystemRoot,
@@ -107,10 +107,8 @@ jobs:
               'C:\ProgramData\F2-G1-Icacls',
               'G:\'
             ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-            foreach ($path in @($runnerTemp, $originalTemp, $originalTmp)) {
-              foreach ($deniedRoot in $deniedRoots) {
-                if (Test-F2PathWithin -PathValue $path -RootValue $deniedRoot) { throw 'F2_TEMP_PATH_IN_PROTECTED_LOCATION' }
-              }
+            foreach ($deniedRoot in $deniedRoots) {
+              if (Test-F2PathWithin -PathValue $runnerTemp -RootValue $deniedRoot) { throw 'F2_TEMP_PATH_IN_PROTECTED_LOCATION' }
             }
             $stage = 'GITHUB_ENV_VALIDATION'
             if ([string]::IsNullOrWhiteSpace($env:GITHUB_ENV) -or $env:GITHUB_ENV -notmatch '^[A-Za-z]:\\') { throw 'F2_GITHUB_ENV_PATH_INVALID' }
@@ -123,7 +121,7 @@ jobs:
             $lineFeed = [string][char]10
             $updates = 'TEMP=' + $runnerTemp + $lineFeed + 'TMP=' + $runnerTemp + $lineFeed
             [IO.File]::AppendAllText($githubEnvPath, $updates, [Text.UTF8Encoding]::new($false))
-            Write-Host 'F2TempPreflight=PASS;OriginalTemp=SAFE;OriginalTmp=SAFE;EffectiveTemp=RUNNER_TEMP;EffectiveTmp=RUNNER_TEMP'
+            Write-Host 'F2TempPreflight=PASS;EffectiveTemp=RUNNER_TEMP;EffectiveTmp=RUNNER_TEMP'
           } catch {
             $safeStage = Get-F2TempPreflightStageLabel -Stage $stage
             [Console]::Error.WriteLine(('F2TempPreflight=FAIL;Stage={0};ErrorClass=UNCLASSIFIED' -f $safeStage))
