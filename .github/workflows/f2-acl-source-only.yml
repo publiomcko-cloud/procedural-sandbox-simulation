@@ -72,10 +72,28 @@ jobs:
             $prefix = $root.TrimEnd([char]'\') + '\'
             return $path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
           }
+          function Get-F2TempPreflightStageLabel {
+            param([AllowNull()][string]$Stage)
+            $allowedStages = @(
+              'RUNNER_TEMP_VALIDATION',
+              'ORIGINAL_TEMP_VALIDATION',
+              'ORIGINAL_TMP_VALIDATION',
+              'PROTECTED_ROOT_REJECTION',
+              'GITHUB_ENV_VALIDATION',
+              'ENVIRONMENT_EXPORT'
+            )
+            if ($allowedStages -contains $Stage) { return $Stage }
+            return 'PREFLIGHT_INITIALIZATION'
+          }
+          $stage = 'PREFLIGHT_INITIALIZATION'
           try {
+            $stage = 'RUNNER_TEMP_VALIDATION'
             $runnerTemp = Assert-F2SafeLocalDirectory -PathValue $env:RUNNER_TEMP
+            $stage = 'ORIGINAL_TEMP_VALIDATION'
             $originalTemp = Assert-F2SafeLocalDirectory -PathValue $env:TEMP
+            $stage = 'ORIGINAL_TMP_VALIDATION'
             $originalTmp = Assert-F2SafeLocalDirectory -PathValue $env:TMP
+            $stage = 'PROTECTED_ROOT_REJECTION'
             $deniedRoots = @(
               $env:SystemRoot,
               $env:ProgramFiles,
@@ -94,18 +112,21 @@ jobs:
                 if (Test-F2PathWithin -PathValue $path -RootValue $deniedRoot) { throw 'F2_TEMP_PATH_IN_PROTECTED_LOCATION' }
               }
             }
+            $stage = 'GITHUB_ENV_VALIDATION'
             if ([string]::IsNullOrWhiteSpace($env:GITHUB_ENV) -or $env:GITHUB_ENV -notmatch '^[A-Za-z]:\\') { throw 'F2_GITHUB_ENV_PATH_INVALID' }
             $githubEnvPath = [IO.Path]::GetFullPath($env:GITHUB_ENV)
             $githubEnvParent = Assert-F2SafeLocalDirectory -PathValue ([IO.Path]::GetDirectoryName($githubEnvPath))
             if (-not (Test-F2PathWithin -PathValue $githubEnvParent -RootValue $runnerTemp)) { throw 'F2_GITHUB_ENV_OUTSIDE_RUNNER_TEMP' }
             $githubEnvItem = Get-Item -LiteralPath $githubEnvPath -Force -ErrorAction Stop
             if ($githubEnvItem.PSIsContainer -or (($githubEnvItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { throw 'F2_GITHUB_ENV_NOT_REGULAR_FILE' }
+            $stage = 'ENVIRONMENT_EXPORT'
             $lineFeed = [string][char]10
             $updates = 'TEMP=' + $runnerTemp + $lineFeed + 'TMP=' + $runnerTemp + $lineFeed
             [IO.File]::AppendAllText($githubEnvPath, $updates, [Text.UTF8Encoding]::new($false))
             Write-Host 'F2TempPreflight=PASS;OriginalTemp=SAFE;OriginalTmp=SAFE;EffectiveTemp=RUNNER_TEMP;EffectiveTmp=RUNNER_TEMP'
           } catch {
-            [Console]::Error.WriteLine('F2TempPreflight=FAIL;ErrorClass=UNCLASSIFIED')
+            $safeStage = Get-F2TempPreflightStageLabel -Stage $stage
+            [Console]::Error.WriteLine(('F2TempPreflight=FAIL;Stage={0};ErrorClass=UNCLASSIFIED' -f $safeStage))
             exit 1
           }
       - name: Verify F2 G1 review evidence Git and Windows checkout hashes
