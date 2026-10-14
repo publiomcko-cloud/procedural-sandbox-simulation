@@ -78,7 +78,8 @@ function Invoke-F2LaunchChildAuthOperation {
     )
     try {
         $result = & $Operation
-        return $result
+        # Preserve collection values (notably byte[] protocol frames) as one value.
+        return ,$result
     } catch {
         $knownCode = Get-F2LaunchSafeCode -Record $_
         if ($knownCode -cne 'LAUNCH_UNCLASSIFIED_FAILURE') { throw $knownCode }

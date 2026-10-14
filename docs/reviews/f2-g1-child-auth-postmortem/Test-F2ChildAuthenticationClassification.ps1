@@ -49,12 +49,58 @@ $moduleAst = Get-ParsedSource -Path $modulePath
 $functionSpecs = @(
     @{ Ast = $launcherAst; Name = 'Get-F2LaunchSafeCode' },
     @{ Ast = $launcherAst; Name = 'Invoke-F2LaunchChildAuthOperation' },
+    @{ Ast = $moduleAst; Name = 'Get-F2LaunchUtf8' },
+    @{ Ast = $moduleAst; Name = 'ConvertTo-F2LaunchFrame' },
     @{ Ast = $moduleAst; Name = 'Test-F2LaunchProcessCommandLine' },
     @{ Ast = $moduleAst; Name = 'Test-F2LaunchCommandLineRecord' },
     @{ Ast = $moduleAst; Name = 'Test-F2LaunchPeerFacts' },
     @{ Ast = $moduleAst; Name = 'Test-F2LaunchHello' }
 )
 foreach ($spec in $functionSpecs) { Invoke-Expression (Get-FunctionNode -Ast $spec.Ast -Name $spec.Name).Extent.Text }
+$script:F2LaunchMaxRecordBytes = 8192
+
+function Get-TypeNameOrNull {
+    param([object]$Value)
+    if ($null -eq $Value) { return '<null>' }
+    return $Value.GetType().FullName
+}
+
+$wrappedBoolean = Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_REQUEST_BUILD_FAILED' -Operation { [bool]$true }
+Assert-Equal 'Operation wrapper preserves Boolean type' 'System.Boolean' (Get-TypeNameOrNull $wrappedBoolean)
+Assert-Equal 'Operation wrapper preserves Boolean value' $true $wrappedBoolean
+$wrappedString = Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_REQUEST_BUILD_FAILED' -Operation { [string]'frame-ready' }
+Assert-Equal 'Operation wrapper preserves String type' 'System.String' (Get-TypeNameOrNull $wrappedString)
+Assert-Equal 'Operation wrapper preserves String value' 'frame-ready' $wrappedString
+$wrappedObject = Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_REQUEST_BUILD_FAILED' -Operation { [pscustomobject]@{ Marker = 'frame-ready' } }
+Assert-Equal 'Operation wrapper preserves PSCustomObject type' 'System.Management.Automation.PSCustomObject' (Get-TypeNameOrNull $wrappedObject)
+Assert-Equal 'Operation wrapper preserves PSCustomObject property' 'frame-ready' $wrappedObject.Marker
+
+$frameJson = '{"schema":"synthetic-frame-v1"}'
+$directFrame = ConvertTo-F2LaunchFrame -Json $frameJson
+$wrappedFrame = Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_REQUEST_BUILD_FAILED' -Operation { ConvertTo-F2LaunchFrame -Json $frameJson }
+Assert-Equal 'Production frame converter returns Byte[]' 'System.Byte[]' (Get-TypeNameOrNull $directFrame)
+Assert-Equal 'Operation wrapper preserves production Byte[] frame type' 'System.Byte[]' (Get-TypeNameOrNull $wrappedFrame)
+Assert-Equal 'Operation wrapper preserves exact production frame bytes' ([Convert]::ToBase64String($directFrame)) ([Convert]::ToBase64String($wrappedFrame))
+
+$memoryStream = New-Object System.IO.MemoryStream
+$streamWriteResult = Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_REQUEST_WRITE_FAILED' -Operation {
+    $memoryStream.Write($wrappedFrame,0,$wrappedFrame.Length)
+    $memoryStream.Flush()
+}
+Assert-Equal 'Stream.Write and Flush operation returns no pipeline value' '<null>' (Get-TypeNameOrNull $streamWriteResult)
+$memoryStream.Position = 0
+$streamReadCount = 0
+$streamReadFrame = Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_RESPONSE_READ_FAILED' -Operation {
+    $readBuffer = New-Object byte[] $wrappedFrame.Length
+    $script:streamReadCount = $memoryStream.Read($readBuffer,0,$readBuffer.Length)
+    ,$readBuffer
+}
+Assert-Equal 'Stream.Read fills the complete production frame' $wrappedFrame.Length $script:streamReadCount
+Assert-Equal 'Stream.Read roundtrip preserves Byte[] type' 'System.Byte[]' (Get-TypeNameOrNull $streamReadFrame)
+Assert-Equal 'Stream.Read roundtrip preserves exact frame bytes' ([Convert]::ToBase64String($directFrame)) ([Convert]::ToBase64String($streamReadFrame))
+$memoryStream.Dispose()
+$noOutputResult = Invoke-F2LaunchChildAuthOperation -FailureCode 'LAUNCH_CHILD_REQUEST_WRITE_FAILED' -Operation { [void]$true }
+Assert-Equal 'No-output operation remains null' '<null>' (Get-TypeNameOrNull $noOutputResult)
 
 Assert-Equal 'Known allowlisted pipe timeout stays specific' 'LAUNCH_PIPE_TIMEOUT' (Get-SyntheticErrorClassCode -Exception (New-Object InvalidOperationException 'LAUNCH_PIPE_TIMEOUT'))
 Assert-Equal 'GetNamedPipeClientProcessId Win32Exception class collapses to generic' 'LAUNCH_UNCLASSIFIED_FAILURE' (Get-SyntheticErrorClassCode -Exception (New-Object ComponentModel.Win32Exception 5))
