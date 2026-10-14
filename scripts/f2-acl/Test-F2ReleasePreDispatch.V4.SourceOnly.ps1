@@ -17,9 +17,15 @@ function Assert-PreDispatch([bool]$condition,[string]$label){
 $module=(Get-Module F2ReleasePreDispatch.V4.SourceOnly)
 Assert-PreDispatch (@($module.ExportedCommands.Keys).Count -eq 1 -and $module.ExportedCommands.ContainsKey('Test-F2V4ReadOnlyPreDispatch')) 'pre-dispatch module exposes exactly one read-only verifier'
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$headRaw=@(& git.exe -C $root rev-parse --verify HEAD)
-if($LASTEXITCODE -ne 0 -or $headRaw.Count -ne 1){throw 'F2_V4_TEST_GIT_HEAD_UNAVAILABLE'}
-$actualGitHead=[string]$headRaw[0]
+$gitFixture=Get-Command git.exe -CommandType Application -ErrorAction Stop
+$gitExePath=[IO.Path]::GetFullPath([string]$gitFixture.Source)
+$gitExeHash=(Get-FileHash -LiteralPath $gitExePath -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
+$actualGitHead=[string]((Get-Module F2ReleasePreDispatch.V4.SourceOnly).Invoke({
+    param($GitPath,$RepositoryPath)
+    Invoke-F2V4GitRead -GitExecutable $GitPath -RepositoryRoot $RepositoryPath -Query Head
+},$gitExePath,$root))
+# The executable hash here is a synthetic fixture derived from local bytes.
+# It is NOT an independently authorized Git toolchain identity.
 Assert-PreDispatch ($actualGitHead -match '^[0-9a-f]{40}$') 'test fixture reads an actual valid Git SHA-1 HEAD'
 $known=@(Get-F2V4PackageNames)
 Assert-PreDispatch ($known.Count -eq 10 -and @($known|Sort-Object -Unique).Count -eq 10) 'v4 package inventory contains exactly ten distinct members'
@@ -55,14 +61,84 @@ $goodBytes=[byte[]](Get-TestBytes $manifest)
 $manifestDigest=Get-F2V4Sha256 -Bytes $goodBytes
 # These digests are generated locally for test vectors ONLY, not external release approval.
 function Invoke-TestPreflight {
-    param([string]$Actor='Runtime',[byte[]]$Payload=$goodBytes,[string]$Commit=$actualGitHead,[string]$ManifestHash=$manifestDigest,[string]$PinHash=$activePin,[string]$Source=$root,[string]$PackageLocation=$packageHome)
-    return Test-F2V4ReadOnlyPreDispatch -Role $Actor -ManifestBytes $Payload -ExternallyReviewedCommitSha $Commit -ExternallyApprovedManifestSha256 $ManifestHash -ExternallyApprovedActivePinsSha256 $PinHash -SourceRoot $Source -ExpectedPackageHome $PackageLocation
+    param([string]$Actor='Runtime',[byte[]]$Payload=$goodBytes,[string]$Commit=$actualGitHead,[string]$ManifestHash=$manifestDigest,[string]$PinHash=$activePin,[string]$Source=$root,[string]$PackageLocation=$packageHome,[string]$GitTool=$gitExePath,[string]$ToolHash=$gitExeHash)
+    return Test-F2V4ReadOnlyPreDispatch -Role $Actor -ManifestBytes $Payload -ExternallyReviewedCommitSha $Commit -ExternallyApprovedManifestSha256 $ManifestHash -ExternallyApprovedActivePinsSha256 $PinHash -SourceRoot $Source -ExpectedPackageHome $PackageLocation -TrustedGitExecutablePath $GitTool -ExternallyPinnedGitExecutableSha256 $ToolHash
 }
 foreach($role in @('Collector','Runtime','Coordinator','Launcher','Updater','Recovery')){
     $v=Invoke-TestPreflight -Actor $role
     Assert-PreDispatch ($v.Pass -and $v.Disposition -ceq 'SOURCE_ONLY_INSPECTION_ACCEPTED' -and $v.VerifiedCheckoutHead -ceq $actualGitHead -and $v.GitHeadMatchesExpected -and $v.CheckoutClean -and $v.ExactTenSourceBytesVerified) ('real Git checkout and ten-byte package verify for '+$role)
     Assert-PreDispatch (-not $v.CanDispatch -and -not $v.CanCapture -and -not $v.CanLaunch -and -not $v.CanInstall -and -not $v.CanActivate -and -not $v.CanRollback -and -not $v.CanResumeForward -and -not $v.ReleaseApproved -and -not $v.ExternalReceiptIndependentlyAuthenticated -and -not $v.HasSideEffects) ('role '+$role+' cannot perform protected dispatch')
 }
+Assert-PreDispatch (-not (Invoke-TestPreflight -ToolHash ('0'*64)).Pass) 'incorrect externally pinned Git executable SHA-256 rejected before Git execution'
+Assert-PreDispatch (-not (Invoke-TestPreflight -GitTool (Join-Path $root 'does-not-exist\git.exe')).Pass) 'missing trusted Git executable rejected'
+Assert-PreDispatch (-not (Invoke-TestPreflight -GitTool 'G:\Forbidden\git.exe').Pass) 'G: Git binary path rejected before file I/O'
+Assert-PreDispatch (-not (Invoke-TestPreflight -Source '\\server\share\repo').Pass) 'UNC source root rejected before file I/O'
+Assert-PreDispatch (-not (Invoke-TestPreflight -Source '\\?\C:\Dev\repo').Pass) 'Windows device namespace rejected before file I/O'
+Assert-PreDispatch (-not (Invoke-TestPreflight -Source 'C:relative\repo').Pass) 'drive-relative source root rejected'
+Assert-PreDispatch (-not (Invoke-TestPreflight -Source '\root-relative\repo').Pass) 'rooted-relative source root rejected'
+Assert-PreDispatch (-not (Invoke-TestPreflight -Source 'Z:\Unmapped\repo').Pass) 'unavailable or non-fixed volume rejected'
+
+# A junction is a reparse point even on a fixed drive; create and delete
+# this synthetic fixture exclusively in the ordinary temp directory.
+$junctionFixture=Join-Path ([IO.Path]::GetTempPath()) ('f2v4-source-junction-'+[Guid]::NewGuid().ToString('N'))
+try {
+    [void](New-Item -ItemType Junction -Path $junctionFixture -Target $root -ErrorAction Stop)
+    Assert-PreDispatch (-not (Invoke-TestPreflight -Source $junctionFixture).Pass) 'junction/reparse source path rejected'
+} finally {
+    if([IO.Directory]::Exists($junctionFixture)){
+        [IO.Directory]::Delete($junctionFixture,$false)
+    }
+}
+
+
+# A temporary untracked fixture exercises the actual dirty checkout rejection.
+# It is ALWAYS removed by finally, and no tracked file is modified.
+$dirtyPath=Join-Path $root ('__F2_V4_DIRTY_SENTINEL__'+[Guid]::NewGuid().ToString('N'))
+try {
+    [IO.File]::WriteAllText($dirtyPath,'synthetic untracked fixture')
+    Assert-PreDispatch (-not (Invoke-TestPreflight).Pass) 'actual dirty checkout with untracked file rejected'
+} finally {
+    if([IO.File]::Exists($dirtyPath)){[IO.File]::Delete($dirtyPath)}
+}
+Assert-PreDispatch ((Invoke-TestPreflight).Pass) 'clean checkout accepted again after fixture cleanup'
+
+# Test the process runner's bounded stdout and timeout with synthetic,
+# nonprivileged PowerShell child processes (never updater, UAC or VM).
+$testRunner=(Get-Module F2ReleasePreDispatch.V4.SourceOnly)
+$powerShellFixture=(Get-Command powershell.exe -CommandType Application -ErrorAction Stop).Source
+$timedOut=$false
+try {
+    [void]$testRunner.Invoke({
+        param($exe,$dir)
+        Invoke-F2V4BoundedProcess -ExecutablePath $exe -WorkingDirectory $dir -ArgumentsText '-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5"' -TimeoutMilliseconds 150 -MaxOutputBytes 1024
+    },$powerShellFixture,$root)
+} catch { $timedOut=$true }
+Assert-PreDispatch $timedOut 'synthetic stalled child process is rejected by deadline'
+$overflowRejected=$false
+try {
+    [void]$testRunner.Invoke({
+        param($exe,$dir)
+        Invoke-F2V4BoundedProcess -ExecutablePath $exe -WorkingDirectory $dir -ArgumentsText '-NoProfile -NonInteractive -Command "[Console]::Out.Write((''x''*200000))"' -TimeoutMilliseconds 4000 -MaxOutputBytes 1024
+    },$powerShellFixture,$root)
+} catch { $overflowRejected=$true }
+Assert-PreDispatch $overflowRejected 'synthetic oversized stdout stream rejected while draining'
+
+# Force a malicious-looking inherited Git config. The bounded runner MUST clear
+# GIT_CONFIG_* and must apply core.fsmonitor=false on its fixed command line.
+$beforeCount=$env:GIT_CONFIG_COUNT
+$beforeKey=$env:GIT_CONFIG_KEY_0
+$beforeValue=$env:GIT_CONFIG_VALUE_0
+try {
+    $env:GIT_CONFIG_COUNT='1'
+    $env:GIT_CONFIG_KEY_0='core.fsmonitor'
+    $env:GIT_CONFIG_VALUE_0='C:\F2SyntheticV4\no-fsmonitor-helper.exe'
+    Assert-PreDispatch ((Invoke-TestPreflight).Pass) 'inherited FSMonitor configuration cannot change the read-only preflight'
+} finally {
+    if($null -eq $beforeCount){[Environment]::SetEnvironmentVariable('GIT_CONFIG_COUNT',$null,'Process')}else{$env:GIT_CONFIG_COUNT=$beforeCount}
+    if($null -eq $beforeKey){[Environment]::SetEnvironmentVariable('GIT_CONFIG_KEY_0',$null,'Process')}else{$env:GIT_CONFIG_KEY_0=$beforeKey}
+    if($null -eq $beforeValue){[Environment]::SetEnvironmentVariable('GIT_CONFIG_VALUE_0',$null,'Process')}else{$env:GIT_CONFIG_VALUE_0=$beforeValue}
+}
+
 Assert-PreDispatch (-not (Invoke-TestPreflight -Commit ('0'*40)).Pass) 'incorrect expected reviewed source commit is rejected'
 Assert-PreDispatch (-not (Invoke-TestPreflight -ManifestHash ('0'*64)).Pass) 'incorrect independently supplied manifest hash is rejected'
 Assert-PreDispatch (-not (Invoke-TestPreflight -PinHash ('0'*64)).Pass) 'incorrect independently supplied active pin hash is rejected'
