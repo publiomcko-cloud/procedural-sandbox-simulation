@@ -8,7 +8,7 @@ $script:count=0
 $script:failures=New-Object 'System.Collections.Generic.List[string]'
 function Assert-V4([bool]$ok,[string]$label){$script:count++;if(-not $ok){$script:failures.Add($label);Write-Output ('FAIL: '+$label)}else{Write-Output ('PASS: '+$label)}}
 $sha='1234567890abcdef1234567890abcdef12345678'
-$home='C:\F2SyntheticV4\PackageHome'
+$packageHome='C:\F2SyntheticV4\PackageHome'
 $sourcePins='a'*64
 $known=Get-F2V4PackageNames
 Assert-V4 ($known.Count -eq 10 -and @($known | Sort-Object -Unique).Count -eq 10) 'exact ten members and no duplicates'
@@ -18,7 +18,7 @@ $manifest=[ordered]@{
   Schema='f2-icacls-runtime-release-v4'
   Status='SOURCE_ONLY_NOT_RELEASE_APPROVED'
   ReviewedCommitSha=$sha
-  PackageRoot=(Join-Path (Join-Path $home 'releases') $sha)
+  PackageRoot=(Join-Path (Join-Path $packageHome 'releases') $sha)
   BaselineMailboxId='ecb6deeb424e40feb5354d18908986df'
   BaselinePayloadCaptureId='489e7fec-0300-467c-bfbd-a46fb8cf7211'
   BaselinePayloadSha256='1b5eee9aae928a909d4c251a4dd6d2c0898c400e2807e0acc3268d61d5149014'
@@ -39,7 +39,7 @@ $manifest=[ordered]@{
 function Invoke-Contract($candidate,[string]$pins=$sourcePins,[string]$expectedCommit=$sha,[string]$actualCommit=$sha,[string]$digest=''){
     $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($candidate | ConvertTo-Json -Depth 8 -Compress))
     if(-not $digest){$digest=Get-F2V4Sha256 -Bytes $bytes}
-    return Test-F2V4ReleaseContract -ManifestBytes $bytes -ExpectedManifestSha256 $digest -ExpectedActivePinsSha256 $pins -ExpectedCommitSha $expectedCommit -ActualCommitSha $actualCommit -ExpectedPackageHome $home
+    return Test-F2V4ReleaseContract -ManifestBytes $bytes -ExpectedManifestSha256 $digest -ExpectedActivePinsSha256 $pins -ExpectedCommitSha $expectedCommit -ActualCommitSha $actualCommit -ExpectedPackageHome $packageHome
 }
 $good=Invoke-Contract $manifest
 Assert-V4 ($good.Pass -and $good.Files -eq 10 -and -not $good.InstallAuthorized) 'source-only v4 candidate accepted without runtime/install authorization'
@@ -88,15 +88,15 @@ $sourceActual.CollectorPinsManifestSha256=[string](@($sourceRows | Where-Object 
 $sourceActual.LegacyCollectorPinsManifestSha256=[string](@($sourceRows | Where-Object { $_.Name -ceq 'F2_ACL_SOURCE_PINS.json' })[0].Sha256)
 $sourceBytes=[Text.UTF8Encoding]::new($false).GetBytes(($sourceActual | ConvertTo-Json -Depth 8 -Compress))
 $sourceDigest=Get-F2V4Sha256 -Bytes $sourceBytes
-$sourceCheck=Test-F2V4ReleaseContract -ManifestBytes $sourceBytes -ExpectedManifestSha256 $sourceDigest -ExpectedActivePinsSha256 $actualPinDigest -ExpectedCommitSha $sha -ActualCommitSha $sha -ExpectedPackageHome $home -VerifySourceBytes -SourceRoot $sourceRoot
+$sourceCheck=Test-F2V4ReleaseContract -ManifestBytes $sourceBytes -ExpectedManifestSha256 $sourceDigest -ExpectedActivePinsSha256 $actualPinDigest -ExpectedCommitSha $sha -ActualCommitSha $sha -ExpectedPackageHome $packageHome -VerifySourceBytes -SourceRoot $sourceRoot
 Assert-V4 ($sourceCheck.Pass -and $sourceCheck.SourceBytesVerified -and -not $sourceCheck.InstallAuthorized) 'ten real checkout package files and nested v1/v2 pin roles validate read-only'
 $badSource=Copy-V4 $sourceActual
 $badSource.Files[0].Sha256=('0'*64)
 $badBytes=[Text.UTF8Encoding]::new($false).GetBytes(($badSource | ConvertTo-Json -Depth 8 -Compress))
 $badDigest=Get-F2V4Sha256 -Bytes $badBytes
-$badSourceCheck=Test-F2V4ReleaseContract -ManifestBytes $badBytes -ExpectedManifestSha256 $badDigest -ExpectedActivePinsSha256 $actualPinDigest -ExpectedCommitSha $sha -ActualCommitSha $sha -ExpectedPackageHome $home -VerifySourceBytes -SourceRoot $sourceRoot
+$badSourceCheck=Test-F2V4ReleaseContract -ManifestBytes $badBytes -ExpectedManifestSha256 $badDigest -ExpectedActivePinsSha256 $actualPinDigest -ExpectedCommitSha $sha -ActualCommitSha $sha -ExpectedPackageHome $packageHome -VerifySourceBytes -SourceRoot $sourceRoot
 Assert-V4 (-not $badSourceCheck.Pass -and -not $badSourceCheck.InstallAuthorized) 'changed individual source-file pin fails the exact-byte package gate'
-$wrongPath=Test-F2V4ReleaseContract -ManifestBytes $sourceBytes -ExpectedManifestSha256 $sourceDigest -ExpectedActivePinsSha256 $actualPinDigest -ExpectedCommitSha $sha -ActualCommitSha $sha -ExpectedPackageHome $home -VerifySourceBytes -SourceRoot 'G:\F2Forbidden'
+$wrongPath=Test-F2V4ReleaseContract -ManifestBytes $sourceBytes -ExpectedManifestSha256 $sourceDigest -ExpectedActivePinsSha256 $actualPinDigest -ExpectedCommitSha $sha -ActualCommitSha $sha -ExpectedPackageHome $packageHome -VerifySourceBytes -SourceRoot 'G:\F2Forbidden'
 Assert-V4 (-not $wrongPath.Pass -and -not $wrongPath.InstallAuthorized) 'project volume G: cannot be used as v4 source root'
 
 # Static source checks: the current installed path must still reject v4.
