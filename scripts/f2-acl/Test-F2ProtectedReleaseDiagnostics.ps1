@@ -11,7 +11,7 @@ $script:F2TraceRecordCount = 0
 $script:F2TraceLimitReported = $false
 $script:F2TraceRecordLimit = 1024
 $script:Server = $null
-trap { Write-Host ('ERROR=' + $_.Exception.Message); Write-Host ('TRACE=' + $_.ScriptStackTrace); exit 1 }
+trap { [Console]::Error.WriteLine('F2FIXTURE_FAILURE ErrorClass=UNCLASSIFIED'); exit 1 }
 
 function Assert-Diagnostic([bool]$Condition, [string]$Name) {
     $script:Assertions++
@@ -582,7 +582,7 @@ try {
         $expectedRecordNames=@('Schema','Authority','RequestId','Nonce','SourceCommit','LauncherSha256','UpdaterSha256','CandidateManifestSha256','RequesterPid','RequesterCreationUtcTicks','RequesterSidSha256','ChildPid','ChildCreationUtcTicks','ChildExitCode','Stage','ErrorCode')
         $recordShape=$recordNames.Count -eq $expectedRecordNames.Count -and @(Compare-Object $expectedRecordNames $recordNames -CaseSensitive).Count -eq 0
         $safeRecord=$childCase.Passed -and $childCase.Result.Record.Authority -ceq 'NON_AUTHORITATIVE_DIAGNOSTIC' -and $childCase.Result.Record.Stage -ceq $prelockCase.Stage -and $childCase.Result.Record.ErrorCode -ceq $prelockCase.Code -and $recordShape -and $childCase.Stdout.Length -le 4096 -and $childCase.Stderr.Length -le 4096
-        if(-not $safeRecord){$observedStage=if($null -ne $childCase.Result.Record){[string]$childCase.Result.Record.Stage}else{'<missing>'};$observedCode=if($null -ne $childCase.Result.Record){[string]$childCase.Result.Record.ErrorCode}else{$childCase.Result.DiagnosticErrorCode};Write-Host ('PRELOCK_CASE='+$prelockCase.Name+';Status='+$childCase.Result.DiagnosticStatus+';Stage='+$observedStage+';Code='+$observedCode+';ChildExit='+$childCase.Result.ActualChildExitCode+';Timeout='+$childCase.Result.TimedOut)}
+        if(-not $safeRecord){Write-Host 'PRELOCK_CASE=FAIL;ErrorClass=RESULT_SHAPE_MISMATCH'}
         Assert-Diagnostic $safeRecord ("production child builder and authenticated pipe report {0} failure as {1}/{2} in the fixed sanitized schema" -f $prelockCase.Name,$prelockCase.Stage,$prelockCase.Code)
         $noTransactionRoots= -not [IO.Directory]::Exists((Join-Path $installTree.PackageHome 'releases')) -and -not [IO.Directory]::Exists((Join-Path $installTree.ProgramDataRoot 'updates')) -and -not [IO.Directory]::Exists((Join-Path $installTree.ProgramDataRoot 'backups'))
         if($prelockCase.Fault -eq 'BadLockBytes'){$noTransactionRoots=$noTransactionRoots -and [IO.File]::ReadAllText((Join-Path $installTree.ProgramDataRoot 'release.lock')) -ceq 'non-empty synthetic collision'}else{$noTransactionRoots=$noTransactionRoots -and -not [IO.File]::Exists((Join-Path $installTree.ProgramDataRoot 'release.lock'))}
@@ -702,7 +702,7 @@ try {
     [void](Start-F2FixtureProcess -Process $target -FailureLabel 'SYNTHETIC_EXPECTED_PROCESS_START_FAILED')
     $wrongWorker=Invoke-SyntheticDiagnosticWorker -Request $badPid -Stage 'CandidateAndSourceValidation' -Code 'UPDATE_SOURCE_COMMIT_MISMATCH' -ExpectedChildProcess $target
     $wrongClientPass = $wrongWorker.Result.DiagnosticStatus -ceq 'INVALID' -and $wrongWorker.Result.DiagnosticErrorCode -ceq 'UPDATE_DIAGNOSTIC_IDENTITY_MISMATCH' -and $wrongWorker.Result.ActualChildExitCode -eq 1
-    if (-not $wrongClientPass) { Write-Host ('WrongClientResult=' + ($wrongWorker.Result | ConvertTo-Json -Compress -Depth 4)) }
+    if (-not $wrongClientPass) { Write-Host 'WrongClientResult=FAIL;ErrorClass=ASSERTION_FAILED' }
     Assert-Diagnostic $wrongClientPass 'rejects a distinct connected process while retaining the independently observed target exit'
     Dispose-F2FixtureProcess -Process $wrongWorker.Process;Dispose-F2FixtureProcess -Process $target
 }
