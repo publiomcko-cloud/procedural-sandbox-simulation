@@ -2,6 +2,8 @@
 
 Read `docs/specs/PHASE_0.md`, `docs/architecture/ARCHITECTURE.md`, `docs/architecture/CONTRACTS.md`, and the current task ticket before coding. Treat the user as release authority; ChatGPT is independent evaluator, not executor.
 
+**Temporary F2 G1 exception (owner-approved 2026-10-14):** During the specifically blocked F2 G1 diagnostics/protected-release cycle, ChatGPT is the GitHub-side source author/static provenance reviewer, Codex independently validates exact candidate commits under Windows PowerShell 5.1, and the owner retains all important decisions. Codex must not modify the reviewed source during independent validation. This does **not** transfer merge, CI, UAC or release authority. See docs/decisions/ADR-0003-GITHUB-FIRST-WORKFLOW.md and docs/status/F2_G1_ACTIVE_HANDOFF.md on the docs-only branch docs/f2-g1-temporary-github-first-handoff until merged. **On explicit owner-recorded closure**, return to the normal rule below: Codex implements/commits, ChatGPT independently evaluates, owner decides. Other project work is unchanged.
+
 ## Non-negotiables
 - Work only in assigned topic branch/worktree. Do not merge, force-push, change remote settings or rewrite history without explicit human approval.
 - State assumptions and risks. A green smoke test never proves full correctness.

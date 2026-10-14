@@ -1,4 +1,12 @@
 # Canonical project status — 2026-10-08 (P0.1-F1.6 integrated; F2 plan prepared)
+## Non-integrated F2 G1 continuity notice — 2026-10-14
+
+**Do not confuse this section with integrated releases.** The status narrative below records the already-integrated 2026-10-08 baseline, while the F2 G1 protected-release / ACL remediation has continued on **unmerged** draft PRs and source-only branches. This docs-only continuity proposal is based on main SHA 0b3e69cec1bd0eeb6da5ff19b50f410acf33129b and is **not merged into main** without a separate owner decision.
+
+The owner authorized a temporary **ChatGPT-authors-on-GitHub / Codex-independently-tests-on-Windows** process for this blocked cycle only. On explicit owner-recorded resolution, the project returns to **Codex implements and commits / ChatGPT evaluates / owner decides**. Read docs/decisions/ADR-0003-GITHUB-FIRST-WORKFLOW.md and docs/status/F2_G1_ACTIVE_HANDOFF.md (fetch docs/f2-g1-temporary-github-first-handoff until merged).
+
+At this snapshot, PRs #73 and #74 are **draft/open/unmerged**, and the one-time non-elevated F2 CI run #85 (38608659340) is **inconclusive/failed**. Source-only v4 helper validation reached **24/24 reported Windows assertions** at 722e428c6bcdd27d8849d07ff023effa036059ad; the v4 integration harness had a subsequent import-visibility blocker. Latest isolated import-order correction is cb0bdddf278da51be4e2acaea0d80141b7b4bbc4 with **Codex Windows retest pending**. This is NOT a passing production full sequence, v4 integration, installation or release approval. Main's integrated architecture milestones and guest-provisioning restrictions below still apply.
+
 Verify live Git refs before action. Repository: publiomcko-cloud/procedural-sandbox-simulation. Authority: docs/PROJECT_CHARTER.md, accepted ADR-0001, docs/workflow/PROJECT_MEMORY_PROTOCOL.md. **ADR-0002 remains PROPOSED/DEFERRED; no backend selected.**
 
 ## Verified integrated stages

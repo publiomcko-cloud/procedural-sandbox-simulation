@@ -4,11 +4,12 @@
 
 ## Read in this order
 1. `docs/setup/WINDOWS_SETUP.md` — Windows 11 / PowerShell / VS Code / Godot.
-2. `docs/workflow/ROLES_AND_GATES.md` — Codex developer, ChatGPT evaluator, human bridge and visual tester.
+2. `docs/workflow/ROLES_AND_GATES.md` — standard Codex developer / ChatGPT evaluator / owner workflow; read ADR-0003 for the **temporary F2 G1-only** GitHub-first exception.
 3. `AGENTS.md` — developer operating contract.
 4. `docs/architecture/ARCHITECTURE.md` and `docs/architecture/CONTRACTS.md`.
 5. `docs/roadmap/MILESTONES.md` and `docs/specs/PHASE_0.md`.
 6. `docs/workflow/FIRST_TASK.md` — first developer assignment.
+7. `docs/workflow/PROJECT_MEMORY_PROTOCOL.md` and `docs/status/F2_G1_ACTIVE_HANDOFF.md` — durable context. **If the F2 G1 docs-only branch is not merged, fetch `docs/f2-g1-temporary-github-first-handoff`; do not assume this handoff is on main.**
 
 ## Quick commands
 ```powershell
