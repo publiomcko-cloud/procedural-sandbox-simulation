@@ -112,7 +112,7 @@ try {
         param($exe,$dir)
         Invoke-F2V4BoundedProcess -ExecutablePath $exe -WorkingDirectory $dir -ArgumentsText '-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5"' -TimeoutMilliseconds 150 -MaxOutputBytes 1024
     },$powerShellFixture,$root)
-} catch { $timedOut=$true }
+} catch { $timedOut=($_.ToString() -match 'F2_V4_PROCESS_TIMEOUT') }
 Assert-PreDispatch $timedOut 'synthetic stalled child process is rejected by deadline'
 $overflowRejected=$false
 try {
@@ -120,7 +120,7 @@ try {
         param($exe,$dir)
         Invoke-F2V4BoundedProcess -ExecutablePath $exe -WorkingDirectory $dir -ArgumentsText '-NoProfile -NonInteractive -Command "[Console]::Out.Write((''x''*200000))"' -TimeoutMilliseconds 4000 -MaxOutputBytes 1024
     },$powerShellFixture,$root)
-} catch { $overflowRejected=$true }
+} catch { $overflowRejected=($_.ToString() -match 'F2_V4_OUTPUT_LIMIT') }
 Assert-PreDispatch $overflowRejected 'synthetic oversized stdout stream rejected while draining'
 
 # Force a malicious-looking inherited Git config. The bounded runner MUST clear
