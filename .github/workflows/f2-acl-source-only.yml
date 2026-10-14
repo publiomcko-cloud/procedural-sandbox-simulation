@@ -20,12 +20,114 @@ on:
 jobs:
   powershell-source-only:
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Validate and pin synthetic fixture temporary roots
+        id: temp_preflight
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Get-F2CanonicalLocalPath {
+            param([Parameter(Mandatory = $true)][string]$PathValue)
+            $full = [IO.Path]::GetFullPath($PathValue)
+            $root = [IO.Path]::GetPathRoot($full)
+            if ($full.Length -gt $root.Length) { return $full.TrimEnd([char]'\') }
+            return $root
+          }
+          function Assert-F2SafeLocalDirectory {
+            param([Parameter(Mandatory = $true)][string]$PathValue)
+            if ([string]::IsNullOrWhiteSpace($PathValue) -or $PathValue -match '[\r\n]') { throw 'F2_TEMP_PATH_INVALID' }
+            if ($PathValue -notmatch '^[A-Za-z]:\\') { throw 'F2_TEMP_PATH_NOT_LOCAL_ABSOLUTE' }
+            $full = Get-F2CanonicalLocalPath -PathValue $PathValue
+            $rawComparable = $PathValue
+            $rawRoot = [IO.Path]::GetPathRoot($rawComparable)
+            if ($rawComparable.Length -gt $rawRoot.Length) { $rawComparable = $rawComparable.TrimEnd([char]'\') }
+            if (-not [string]::Equals($rawComparable, $full, [StringComparison]::OrdinalIgnoreCase)) { throw 'F2_TEMP_PATH_NOT_CANONICAL' }
+            $root = [IO.Path]::GetPathRoot($full)
+            if ($full.Length -le $root.Length) { throw 'F2_TEMP_PATH_IS_VOLUME_ROOT' }
+            $drive = Get-F2DriveValidationFacts -RootPath $root
+            if ($null -eq $drive -or -not $drive.IsReady -or $drive.DriveType -ne [IO.DriveType]::Fixed) { throw 'F2_TEMP_PATH_DRIVE_NOT_FIXED' }
+            $resolved = (Resolve-Path -LiteralPath $full -ErrorAction Stop).Path
+            if (-not [string]::Equals((Get-F2CanonicalLocalPath -PathValue $resolved), $full, [StringComparison]::OrdinalIgnoreCase)) { throw 'F2_TEMP_PATH_RESOLUTION_MISMATCH' }
+            $current = $root
+            $rootItem = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+            if (-not $rootItem.PSIsContainer -or (($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { throw 'F2_TEMP_ANCESTOR_REPARSE' }
+            $relative = $full.Substring($root.Length)
+            foreach ($part in $relative.Split([char]'\')) {
+              if ([string]::IsNullOrEmpty($part)) { continue }
+              $current = Join-Path $current $part
+              $item = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+              if (-not $item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { throw 'F2_TEMP_ANCESTOR_NOT_REGULAR_DIRECTORY' }
+            }
+            return $full
+          }
+          function Test-F2PathWithin {
+            param([Parameter(Mandatory = $true)][string]$PathValue, [Parameter(Mandatory = $true)][string]$RootValue)
+            $path = Get-F2CanonicalLocalPath -PathValue $PathValue
+            $root = Get-F2CanonicalLocalPath -PathValue $RootValue
+            if ([string]::Equals($path, $root, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+            $prefix = $root.TrimEnd([char]'\') + '\'
+            return $path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
+          }
+          function Get-F2DriveValidationFacts {
+            param([Parameter(Mandatory = $true)][string]$RootPath)
+            $drive = [IO.DriveInfo]::new($RootPath)
+            return [pscustomobject]@{ IsReady = $drive.IsReady; DriveType = $drive.DriveType }
+          }
+          function Get-F2TempPreflightStageLabel {
+            param([AllowNull()][string]$Stage)
+            $allowedStages = @(
+              'PREFLIGHT_INITIALIZATION',
+              'RUNNER_TEMP_VALIDATION',
+              'PROTECTED_ROOT_REJECTION',
+              'GITHUB_ENV_VALIDATION',
+              'ENVIRONMENT_EXPORT'
+            )
+            if ($allowedStages -contains $Stage) { return $Stage }
+            return 'PREFLIGHT_INITIALIZATION'
+          }
+          $stage = 'PREFLIGHT_INITIALIZATION'
+          try {
+            $stage = 'RUNNER_TEMP_VALIDATION'
+            $runnerTemp = Assert-F2SafeLocalDirectory -PathValue $env:RUNNER_TEMP
+            $stage = 'PROTECTED_ROOT_REJECTION'
+            $deniedRoots = @(
+              $env:SystemRoot,
+              $env:ProgramFiles,
+              [Environment]::GetEnvironmentVariable('ProgramFiles(x86)'),
+              [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData),
+              'C:\Windows',
+              'C:\Program Files',
+              'C:\Program Files (x86)',
+              'C:\ProgramData',
+              'C:\Program Files\F2-G1-Icacls',
+              'C:\ProgramData\F2-G1-Icacls',
+              'G:\'
+            ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+            foreach ($deniedRoot in $deniedRoots) {
+              if (Test-F2PathWithin -PathValue $runnerTemp -RootValue $deniedRoot) { throw 'F2_TEMP_PATH_IN_PROTECTED_LOCATION' }
+            }
+            $stage = 'GITHUB_ENV_VALIDATION'
+            if ([string]::IsNullOrWhiteSpace($env:GITHUB_ENV) -or $env:GITHUB_ENV -notmatch '^[A-Za-z]:\\') { throw 'F2_GITHUB_ENV_PATH_INVALID' }
+            $githubEnvPath = [IO.Path]::GetFullPath($env:GITHUB_ENV)
+            $githubEnvParent = Assert-F2SafeLocalDirectory -PathValue ([IO.Path]::GetDirectoryName($githubEnvPath))
+            if (-not (Test-F2PathWithin -PathValue $githubEnvParent -RootValue $runnerTemp)) { throw 'F2_GITHUB_ENV_OUTSIDE_RUNNER_TEMP' }
+            $githubEnvItem = Get-Item -LiteralPath $githubEnvPath -Force -ErrorAction Stop
+            if ($githubEnvItem.PSIsContainer -or (($githubEnvItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { throw 'F2_GITHUB_ENV_NOT_REGULAR_FILE' }
+            $stage = 'ENVIRONMENT_EXPORT'
+            $lineFeed = [string][char]10
+            $updates = 'TEMP=' + $runnerTemp + $lineFeed + 'TMP=' + $runnerTemp + $lineFeed
+            [IO.File]::AppendAllText($githubEnvPath, $updates, [Text.UTF8Encoding]::new($false))
+            Write-Host 'F2TempPreflight=PASS;EffectiveTemp=RUNNER_TEMP;EffectiveTmp=RUNNER_TEMP'
+          } catch {
+            $safeStage = Get-F2TempPreflightStageLabel -Stage $stage
+            [Console]::Error.WriteLine(('F2TempPreflight=FAIL;Stage={0};ErrorClass=UNCLASSIFIED' -f $safeStage))
+            exit 1
+          }
       - name: Verify F2 G1 review evidence Git and Windows checkout hashes
-        if: github.head_ref != 'feat/f2-g1-diagnostic-elevation-plan-issue48'
         shell: powershell
         run: |
           $testPath = (Resolve-Path '.\docs\reviews\f2-g1-third-upgrade-manifest-diagnostics\Test-F2G1ReviewEvidenceManifest.ps1').Path
@@ -67,8 +169,8 @@ jobs:
           Write-Host "F2EntrypointTestProcessExit=$($test.ExitCode)"
           if ($test.ExitCode -ne 0) { exit $test.ExitCode }
       - name: Run protected release updater synthetic suite in Windows PowerShell 5.1
-        # This task expressly excludes executing the historical updater, including its synthetic transaction suite.
-        if: github.head_ref != 'feat/f2-g1-diagnostic-elevation-plan-issue48'
+        # This suite exercises updater logic only with fixture paths below TEMP.
+        # It does not invoke the protected installation entrypoint.
         shell: powershell
         run: |
           $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2AclProtectedReleaseUpdater.ps1').Path
@@ -83,12 +185,16 @@ jobs:
           Write-Host "F2NativeHelperTestProcessExit=$($test.ExitCode)"
           if ($test.ExitCode -ne 0) { exit $test.ExitCode }
       - name: Run elevated-child diagnostics channel integration and failure suite in Windows PowerShell 5.1
+        if: ${{ !cancelled() && steps.temp_preflight.outcome == 'success' }}
         shell: powershell
+        timeout-minutes: 10
         run: |
           $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2ProtectedReleaseDiagnostics.ps1').Path
-          $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
-          Write-Host "F2ProtectedDiagnosticsTestProcessExit=$($test.ExitCode)"
-          if ($test.ExitCode -ne 0) { exit $test.ExitCode }
+          $powershell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+          & $powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $testPath
+          $testExit = $LASTEXITCODE
+          Write-Host "F2ProtectedDiagnosticsTestProcessExit=$testExit"
+          if ($testExit -ne 0) { exit $testExit }
       # The older create-only installer suite pins the superseded pre-correction
       # seven-file package. It is retained as historical evidence and is not an
       # upgrade path or a validation target for this source-only release change.
