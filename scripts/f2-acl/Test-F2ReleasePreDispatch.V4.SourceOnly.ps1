@@ -106,22 +106,52 @@ Assert-PreDispatch ((Invoke-TestPreflight).Pass) 'clean checkout accepted again 
 # nonprivileged PowerShell child processes (never updater, UAC or VM).
 $testRunner=(Get-Module F2ReleasePreDispatch.V4.SourceOnly)
 $powerShellFixture=(Get-Command powershell.exe -CommandType Application -ErrorAction Stop).Source
-$timedOut=$false
-try {
-    [void]$testRunner.Invoke({
-        param($exe,$dir)
-        Invoke-F2V4BoundedProcess -ExecutablePath $exe -WorkingDirectory $dir -ArgumentsText '-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5"' -TimeoutMilliseconds 150 -MaxOutputBytes 1024
-    },$powerShellFixture,$root)
-} catch { $timedOut=($_.ToString() -match 'F2_V4_PROCESS_TIMEOUT') }
-Assert-PreDispatch $timedOut 'synthetic stalled child process is rejected by deadline'
-$overflowRejected=$false
-try {
-    [void]$testRunner.Invoke({
-        param($exe,$dir)
-        Invoke-F2V4BoundedProcess -ExecutablePath $exe -WorkingDirectory $dir -ArgumentsText '-NoProfile -NonInteractive -Command "[Console]::Out.Write((''x''*200000))"' -TimeoutMilliseconds 4000 -MaxOutputBytes 1024
-    },$powerShellFixture,$root)
-} catch { $overflowRejected=($_.ToString() -match 'F2_V4_OUTPUT_LIMIT') }
-Assert-PreDispatch $overflowRejected 'synthetic oversized stdout stream rejected while draining'
+# The process exception is captured INSIDE the invoked module session state,
+# before PowerShell can wrap it in the public Module.Invoke exception.
+# Exact ErrorRecord.Exception.Message equality is required: matching a
+# formatted stack, wrapper, or message substring is deliberately forbidden.
+function Test-F2V4ExactRunnerError {
+    [CmdletBinding()]
+    param(
+        [AllowNull()][object]$ObservedError,
+        [Parameter(Mandatory)][ValidateSet('F2_V4_PROCESS_TIMEOUT','F2_V4_OUTPUT_LIMIT')][string]$ExpectedCode
+    )
+    return ($ObservedError -is [Management.Automation.ErrorRecord] -and
+        $ObservedError.Exception.Message -ceq $ExpectedCode)
+}
+
+$timeoutOutcome=@($testRunner.Invoke({
+    param($exe,$dir)
+    try {
+        [void](Invoke-F2V4BoundedProcess -ExecutablePath $exe -WorkingDirectory $dir -ArgumentsText '-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5"' -TimeoutMilliseconds 150 -MaxOutputBytes 1024)
+        return [pscustomobject]@{Caught=$false;ObservedError=$null}
+    } catch {
+        return [pscustomobject]@{Caught=$true;ObservedError=$_}
+    }
+},$powerShellFixture,$root))
+Assert-PreDispatch ($timeoutOutcome.Count -eq 1 -and $timeoutOutcome[0].Caught -and
+    (Test-F2V4ExactRunnerError -ObservedError $timeoutOutcome[0].ObservedError -ExpectedCode 'F2_V4_PROCESS_TIMEOUT')) 'synthetic stalled child process rejected by exact timeout error code'
+
+$overflowOutcome=@($testRunner.Invoke({
+    param($exe,$dir)
+    try {
+        [void](Invoke-F2V4BoundedProcess -ExecutablePath $exe -WorkingDirectory $dir -ArgumentsText '-NoProfile -NonInteractive -Command "[Console]::Out.Write((''x''*200000))"' -TimeoutMilliseconds 4000 -MaxOutputBytes 1024)
+        return [pscustomobject]@{Caught=$false;ObservedError=$null}
+    } catch {
+        return [pscustomobject]@{Caught=$true;ObservedError=$_}
+    }
+},$powerShellFixture,$root))
+Assert-PreDispatch ($overflowOutcome.Count -eq 1 -and $overflowOutcome[0].Caught -and
+    (Test-F2V4ExactRunnerError -ObservedError $overflowOutcome[0].ObservedError -ExpectedCode 'F2_V4_OUTPUT_LIMIT')) 'synthetic oversized stdout rejected by exact output-cap error code'
+
+# Negative controls are REAL ErrorRecords with the expected markers embedded
+# in unrelated messages. Neither may satisfy the exact-code classifier.
+$unrelatedTimeout=try { throw 'UNRELATED_EXCEPTION: F2_V4_PROCESS_TIMEOUT' } catch { $_ }
+$unrelatedOutput=try { throw 'F2_V4_OUTPUT_LIMIT: unrelated child failure' } catch { $_ }
+Assert-PreDispatch (-not (Test-F2V4ExactRunnerError -ObservedError $unrelatedTimeout -ExpectedCode 'F2_V4_PROCESS_TIMEOUT')) 'unrelated error mentioning timeout marker is rejected'
+Assert-PreDispatch (-not (Test-F2V4ExactRunnerError -ObservedError $unrelatedOutput -ExpectedCode 'F2_V4_OUTPUT_LIMIT')) 'unrelated error mentioning output-cap marker is rejected'
+Assert-PreDispatch (-not (Test-F2V4ExactRunnerError -ObservedError $timeoutOutcome[0].ObservedError -ExpectedCode 'F2_V4_OUTPUT_LIMIT')) 'actual timeout cannot masquerade as output-cap result'
+Assert-PreDispatch (-not (Test-F2V4ExactRunnerError -ObservedError $overflowOutcome[0].ObservedError -ExpectedCode 'F2_V4_PROCESS_TIMEOUT')) 'actual output-cap cannot masquerade as timeout result'
 
 # Force a malicious-looking inherited Git config. The bounded runner MUST clear
 # GIT_CONFIG_* and must apply core.fsmonitor=false on its fixed command line.
