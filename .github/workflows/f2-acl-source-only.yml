@@ -106,9 +106,11 @@ jobs:
         timeout-minutes: 10
         run: |
           $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2ProtectedReleaseDiagnostics.ps1').Path
-          $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
-          Write-Host "F2ProtectedDiagnosticsTestProcessExit=$($test.ExitCode)"
-          if ($test.ExitCode -ne 0) { exit $test.ExitCode }
+          $powershell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+          & $powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $testPath
+          $testExit = $LASTEXITCODE
+          Write-Host "F2ProtectedDiagnosticsTestProcessExit=$testExit"
+          if ($testExit -ne 0) { exit $testExit }
       - name: Parse tracked PowerShell source
         shell: powershell
         run: |
