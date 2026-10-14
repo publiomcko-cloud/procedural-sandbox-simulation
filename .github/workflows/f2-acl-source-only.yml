@@ -101,6 +101,7 @@ jobs:
           Write-Host "F2HistoricalManifestLaunchTestProcessExit=$($test.ExitCode)"
           if ($test.ExitCode -ne 0) { exit $test.ExitCode }
       - name: Run elevated-child diagnostics channel integration and failure suite in Windows PowerShell 5.1
+        if: ${{ !cancelled() }}
         shell: powershell
         timeout-minutes: 10
         run: |
