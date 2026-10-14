@@ -5,12 +5,123 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $script:Assertions = 0
 $script:Failures = New-Object 'System.Collections.Generic.List[string]'
+$script:F2TraceCaseId = 'BOOTSTRAP'
+$script:F2TraceClock = [Diagnostics.Stopwatch]::StartNew()
+$script:F2TraceRecordCount = 0
+$script:F2TraceLimitReported = $false
+$script:F2TraceRecordLimit = 1024
+$script:Server = $null
 trap { Write-Host ('ERROR=' + $_.Exception.Message); Write-Host ('TRACE=' + $_.ScriptStackTrace); exit 1 }
 
 function Assert-Diagnostic([bool]$Condition, [string]$Name) {
     $script:Assertions++
     if (-not $Condition) { $script:Failures.Add($Name); Write-Host ('FAIL: ' + $Name) }
     else { Write-Host ('PASS: ' + $Name) }
+}
+
+# TEMP-fixture-only trace. Values are finite labels/numbers; never include paths,
+# command lines, pipe names, identities, nonces, captured streams or exceptions.
+function Start-F2FixtureTraceCase {
+    param([ValidateSet('CHANNEL_FAILURE','MANIFEST_VALID','MANIFEST_MALFORMED','PRELOCK_CANDIDATE_PARSE','PRELOCK_CANDIDATE_IDENTITY','PRELOCK_CANDIDATE_ROOT','PRELOCK_CANDIDATE_PIN','PRELOCK_SOURCE_GIT','PRELOCK_PARENT_ACL','PRELOCK_OLD_RELEASE','PRELOCK_TRANSACTION_COLLISION','PROTOCOL_BOOTSTRAP_FAILURE','UPDATER_HASH_FAILURE','UPDATER_PARSE_FAILURE','IDENTITY_FAILURE','INVOKE_SOURCE_GIT','INVOKE_PARENT_ACL','INVOKE_OLD_RELEASE','INVOKE_NATIVE_HELPER','INVOKE_RELEASE_LOCK','DIAGNOSTIC_VALID','DIAGNOSTIC_BOOTSTRAP','DIAGNOSTIC_SCRIPT_LOADING','DIAGNOSTIC_IDENTITY','DIAGNOSTIC_HASH','DIAGNOSTIC_SOURCE_GIT','DIAGNOSTIC_PARENT_ACL','DIAGNOSTIC_OLD_RELEASE','DIAGNOSTIC_NATIVE_HELPER','DIAGNOSTIC_RELEASE_LOCK','DIAGNOSTIC_BAD_NONCE','DIAGNOSTIC_TAMPERED','DIAGNOSTIC_UNKNOWN_STAGE','DIAGNOSTIC_DUPLICATE','DIAGNOSTIC_OVERSIZE','DIAGNOSTIC_MISSING','DIAGNOSTIC_STALL','CHILD_EXIT_MISMATCH','FALSE_SUCCESS','WRONG_CLIENT','TEMP_CLEANUP')][string]$CaseId)
+    $script:F2TraceCaseId = $CaseId
+    $script:F2TraceClock = [Diagnostics.Stopwatch]::StartNew()
+    Write-F2FixtureTrace -Event CASE_START -Status STARTED
+    return $script:F2TraceClock
+}
+
+function Write-F2FixtureTrace {
+    param(
+        [ValidateSet('CASE_START','PIPE_CREATE','SERVER_DISPOSE','PROCESS_OBJECT_CREATE','PROCESS_START','PROCESS_START_TIME','RECEIVER','EXIT_OBSERVATION','STDOUT_DRAIN','STDERR_DRAIN','PROCESS_DISPOSE','TEMP_CLEANUP','TRACE_LIMIT_REACHED')][string]$Event,
+        [ValidateSet('STARTED','BEGIN','COMPLETE','FAILED','RETURNED_FALSE','OBSERVED','NOT_OBSERVED','VALIDATED','INVALID','MISSING','CHANNEL_FAILED','TIMEOUT','SKIPPED','REPARSE_BLOCKED')][string]$Status,
+        [int]$ProcessId = 0,
+        [int]$ChildExitCode = -2147483648,
+        [ValidateSet('NONE','PIPE_CREATE','SERVER_DISPOSE','PROCESS_START','PROCESS_START_TIME','RECEIVER','STDOUT_DRAIN','STDERR_DRAIN','PROCESS_DISPOSE','TEMP_CLEANUP','UNCLASSIFIED')][string]$ErrorClass = 'NONE'
+    )
+    if ($script:F2TraceRecordCount -ge $script:F2TraceRecordLimit) {
+        if (-not $script:F2TraceLimitReported) {
+            $script:F2TraceLimitReported = $true
+            try { [Console]::Out.WriteLine('F2FIXTURETRACE {"Schema":"f2-diagnostic-fixture-trace-v1","CaseId":"TRACE_LIMIT","Event":"TRACE_LIMIT_REACHED","ElapsedMs":0,"Status":"SKIPPED","ErrorClass":"NONE","Pid":null,"ChildExitCode":null}') } catch { }
+        }
+        return
+    }
+    $script:F2TraceRecordCount++
+    try {
+        $elapsed = if ($null -ne $script:F2TraceClock) { [long]$script:F2TraceClock.ElapsedMilliseconds } else { [long]0 }
+        $record = [ordered]@{
+            Schema = 'f2-diagnostic-fixture-trace-v1'
+            CaseId = $script:F2TraceCaseId
+            Event = $Event
+            ElapsedMs = $elapsed
+            Status = $Status
+            ErrorClass = $ErrorClass
+            Pid = if ($ProcessId -gt 0) { $ProcessId } else { $null }
+            ChildExitCode = if ($ChildExitCode -ne -2147483648) { $ChildExitCode } else { $null }
+        }
+        $json = ConvertTo-Json -InputObject $record -Compress -Depth 3
+        if ($json.Length -le 512) { [Console]::Out.WriteLine('F2FIXTURETRACE ' + $json) }
+    } catch { }
+}
+
+function Reset-F2FixtureServer {
+    param($Request,[ValidateSet('CHANNEL_FAILURE','MANIFEST_VALID','MANIFEST_MALFORMED','PRELOCK_CANDIDATE_PARSE','PRELOCK_CANDIDATE_IDENTITY','PRELOCK_CANDIDATE_ROOT','PRELOCK_CANDIDATE_PIN','PRELOCK_SOURCE_GIT','PRELOCK_PARENT_ACL','PRELOCK_OLD_RELEASE','PRELOCK_TRANSACTION_COLLISION','PROTOCOL_BOOTSTRAP_FAILURE','UPDATER_HASH_FAILURE','UPDATER_PARSE_FAILURE','IDENTITY_FAILURE','INVOKE_SOURCE_GIT','INVOKE_PARENT_ACL','INVOKE_OLD_RELEASE','INVOKE_NATIVE_HELPER','INVOKE_RELEASE_LOCK','DIAGNOSTIC_VALID','DIAGNOSTIC_BOOTSTRAP','DIAGNOSTIC_SCRIPT_LOADING','DIAGNOSTIC_IDENTITY','DIAGNOSTIC_HASH','DIAGNOSTIC_SOURCE_GIT','DIAGNOSTIC_PARENT_ACL','DIAGNOSTIC_OLD_RELEASE','DIAGNOSTIC_NATIVE_HELPER','DIAGNOSTIC_RELEASE_LOCK','DIAGNOSTIC_BAD_NONCE','DIAGNOSTIC_TAMPERED','DIAGNOSTIC_UNKNOWN_STAGE','DIAGNOSTIC_DUPLICATE','DIAGNOSTIC_OVERSIZE','DIAGNOSTIC_MISSING','DIAGNOSTIC_STALL','CHILD_EXIT_MISMATCH','FALSE_SUCCESS','WRONG_CLIENT')][string]$CaseId)
+    [void](Start-F2FixtureTraceCase -CaseId $CaseId)
+    if ($null -ne $script:Server) {
+        Write-F2FixtureTrace -Event SERVER_DISPOSE -Status BEGIN
+        try { $script:Server.Dispose(); $script:Server = $null; Write-F2FixtureTrace -Event SERVER_DISPOSE -Status COMPLETE }
+        catch { Write-F2FixtureTrace -Event SERVER_DISPOSE -Status FAILED -ErrorClass SERVER_DISPOSE; throw }
+    }
+    Write-F2FixtureTrace -Event PIPE_CREATE -Status BEGIN
+    try { $script:Server = New-F2UpdateDiagnosticServer -Request $Request; Write-F2FixtureTrace -Event PIPE_CREATE -Status COMPLETE }
+    catch { Write-F2FixtureTrace -Event PIPE_CREATE -Status FAILED -ErrorClass PIPE_CREATE; throw }
+}
+
+function New-F2FixtureProcess {
+    param([Diagnostics.ProcessStartInfo]$StartInfo)
+    Write-F2FixtureTrace -Event PROCESS_OBJECT_CREATE -Status BEGIN
+    try { $process = New-Object Diagnostics.Process; $process.StartInfo = $StartInfo; Write-F2FixtureTrace -Event PROCESS_OBJECT_CREATE -Status COMPLETE; return $process }
+    catch { Write-F2FixtureTrace -Event PROCESS_OBJECT_CREATE -Status FAILED -ErrorClass UNCLASSIFIED; throw }
+}
+
+function Get-F2FixtureProcessId {
+    param([Diagnostics.Process]$Process)
+    try { return [int]$Process.Id } catch { return 0 }
+}
+
+function Start-F2FixtureProcess {
+    param([Diagnostics.Process]$Process,[string]$FailureLabel)
+    Write-F2FixtureTrace -Event PROCESS_START -Status BEGIN
+    $startReturnedFalse = $false
+    try {
+        if (-not $Process.Start()) { $startReturnedFalse = $true; Write-F2FixtureTrace -Event PROCESS_START -Status RETURNED_FALSE -ErrorClass PROCESS_START; throw $FailureLabel }
+        Write-F2FixtureTrace -Event PROCESS_START -Status COMPLETE -ProcessId (Get-F2FixtureProcessId -Process $Process)
+    } catch { if (-not $startReturnedFalse) { Write-F2FixtureTrace -Event PROCESS_START -Status FAILED -ErrorClass PROCESS_START }; throw }
+    $pidValue = Get-F2FixtureProcessId -Process $Process
+    Write-F2FixtureTrace -Event PROCESS_START_TIME -Status BEGIN -ProcessId $pidValue
+    try { $ticks = $Process.StartTime.ToUniversalTime().Ticks; Write-F2FixtureTrace -Event PROCESS_START_TIME -Status COMPLETE -ProcessId $pidValue; return $ticks }
+    catch { Write-F2FixtureTrace -Event PROCESS_START_TIME -Status FAILED -ProcessId $pidValue -ErrorClass PROCESS_START_TIME; throw }
+}
+
+function Receive-F2FixtureDiagnostic {
+    param($Server,$Request,[Diagnostics.Process]$Process,[long]$ChildCreationUtcTicks,[int]$TimeoutSeconds,[int]$PostExitWaitMilliseconds,[int]$RecordTimeoutMilliseconds)
+    $pidValue = Get-F2FixtureProcessId -Process $Process
+    Write-F2FixtureTrace -Event RECEIVER -Status BEGIN -ProcessId $pidValue
+    try {
+        $result = Receive-F2UpdateDiagnosticRecord -Server $Server -Request $Request -ChildProcess $Process -ChildCreationUtcTicks $ChildCreationUtcTicks -TimeoutSeconds $TimeoutSeconds -PostExitWaitMilliseconds $PostExitWaitMilliseconds -RecordTimeoutMilliseconds $RecordTimeoutMilliseconds
+        $safeStatus = switch ([string]$result.DiagnosticStatus) { 'VALIDATED' {'VALIDATED'} 'INVALID' {'INVALID'} 'MISSING' {'MISSING'} 'CHANNEL_FAILED' {'CHANNEL_FAILED'} 'TIMEOUT' {'TIMEOUT'} default {$null} }
+        if ($null -eq $safeStatus) { Write-F2FixtureTrace -Event RECEIVER -Status FAILED -ProcessId $pidValue -ErrorClass UNCLASSIFIED }
+        else { Write-F2FixtureTrace -Event RECEIVER -Status $safeStatus -ProcessId $pidValue }
+        if ($null -eq $result.ActualChildExitCode) { Write-F2FixtureTrace -Event EXIT_OBSERVATION -Status NOT_OBSERVED -ProcessId $pidValue }
+        else { Write-F2FixtureTrace -Event EXIT_OBSERVATION -Status OBSERVED -ProcessId $pidValue -ChildExitCode ([int]$result.ActualChildExitCode) }
+        return ,$result
+    } catch { Write-F2FixtureTrace -Event RECEIVER -Status FAILED -ProcessId $pidValue -ErrorClass RECEIVER; throw }
+}
+
+function Dispose-F2FixtureProcess {
+    param([Diagnostics.Process]$Process)
+    $pidValue = 0; try { $pidValue = $Process.Id } catch { }
+    Write-F2FixtureTrace -Event PROCESS_DISPOSE -Status BEGIN -ProcessId $pidValue
+    try { $Process.Dispose(); Write-F2FixtureTrace -Event PROCESS_DISPOSE -Status COMPLETE -ProcessId $pidValue }
+    catch { Write-F2FixtureTrace -Event PROCESS_DISPOSE -Status FAILED -ProcessId $pidValue -ErrorClass PROCESS_DISPOSE; throw }
 }
 
 $launcherPath = Join-Path $PSScriptRoot 'Start-F2ProtectedReleaseUpdate.ps1'
@@ -69,18 +180,22 @@ try { Invoke-SyntheticBrokenDiagnosticServer -Request $request | Out-Null } catc
 Assert-Diagnostic ($wrappedServerError -ceq 'UPDATE_DIAGNOSTIC_CHANNEL_FAILURE') 'launcher maps diagnostic server initialization exceptions to a stable non-sensitive error code'
 
 $channelFailureRequest=New-F2UpdateDiagnosticRequest -SourceCommit $request.SourceCommit -LauncherSha256 $request.LauncherSha256 -UpdaterSha256 $request.UpdaterSha256 -CandidateManifestSha256 $request.CandidateManifestSha256 -RequesterPid $PID -RequesterCreationUtcTicks $requester.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
-$channelFailureServer=New-F2UpdateDiagnosticServer -Request $channelFailureRequest
-$channelFailureServer.Dispose()
+[void](Start-F2FixtureTraceCase -CaseId 'CHANNEL_FAILURE')
+Write-F2FixtureTrace -Event PIPE_CREATE -Status BEGIN
+try{$channelFailureServer=New-F2UpdateDiagnosticServer -Request $channelFailureRequest;Write-F2FixtureTrace -Event PIPE_CREATE -Status COMPLETE}catch{Write-F2FixtureTrace -Event PIPE_CREATE -Status FAILED -ErrorClass PIPE_CREATE;throw}
+Write-F2FixtureTrace -Event SERVER_DISPOSE -Status BEGIN
+try{$channelFailureServer.Dispose();Write-F2FixtureTrace -Event SERVER_DISPOSE -Status COMPLETE}catch{Write-F2FixtureTrace -Event SERVER_DISPOSE -Status FAILED -ErrorClass SERVER_DISPOSE;throw}
 $channelChildStart=New-Object Diagnostics.ProcessStartInfo
 $channelChildStart.FileName=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $channelChildStart.Arguments='-NoProfile -NonInteractive -Command "Start-Sleep -Milliseconds 250; exit 7"'
 $channelChildStart.UseShellExecute=$false;$channelChildStart.CreateNoWindow=$true
-$channelChild=New-Object Diagnostics.Process;$channelChild.StartInfo=$channelChildStart
-if(-not $channelChild.Start()){throw 'SYNTHETIC_CHANNEL_CHILD_START_FAILED'}
-$channelChildTicks=$channelChild.StartTime.ToUniversalTime().Ticks
-$channelFailureResult=Receive-F2UpdateDiagnosticRecord -Server $channelFailureServer -Request $channelFailureRequest -ChildProcess $channelChild -ChildCreationUtcTicks $channelChildTicks -TimeoutSeconds 5 -PostExitWaitMilliseconds 250 -RecordTimeoutMilliseconds 1000
+$channelChild=New-F2FixtureProcess -StartInfo $channelChildStart
+$channelChildTicks=Start-F2FixtureProcess -Process $channelChild -FailureLabel 'SYNTHETIC_CHANNEL_CHILD_START_FAILED'
+$channelFailureResult=Receive-F2FixtureDiagnostic -Server $channelFailureServer -Request $channelFailureRequest -Process $channelChild -ChildCreationUtcTicks $channelChildTicks -TimeoutSeconds 5 -PostExitWaitMilliseconds 250 -RecordTimeoutMilliseconds 1000
 Assert-Diagnostic ($channelFailureResult.DiagnosticStatus -ceq 'CHANNEL_FAILED' -and $channelFailureResult.DiagnosticErrorCode -ceq 'UPDATE_DIAGNOSTIC_CHANNEL_FAILURE' -and $channelFailureResult.ActualChildExitCode -eq 7 -and -not $channelFailureResult.TimedOut) 'diagnostic channel initialization failure remains bounded while retaining the real child exit'
-$channelChild.Dispose();$channelFailureServer.Dispose()
+Dispose-F2FixtureProcess -Process $channelChild
+Write-F2FixtureTrace -Event SERVER_DISPOSE -Status BEGIN
+try{$channelFailureServer.Dispose();Write-F2FixtureTrace -Event SERVER_DISPOSE -Status COMPLETE}catch{Write-F2FixtureTrace -Event SERVER_DISPOSE -Status FAILED -ErrorClass SERVER_DISPOSE;throw}
 
 function Invoke-SyntheticDiagnosticWorker {
     param($Request,[string]$Stage='UpdaterInvocation',[string]$Code='UPDATE_UNCLASSIFIED_FAILURE',[int]$ExitCode=1,[int]$RecordExitCode=-1,[switch]$Duplicate,[switch]$Tamper,[switch]$Oversize,[switch]$Stall,[switch]$WrongRequest,[switch]$UnknownStage,[Diagnostics.Process]$ExpectedChildProcess)
@@ -112,13 +227,15 @@ exit $exit
     $start.FileName = (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe')
     $start.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ' + $encoded
     $start.UseShellExecute = $false; $start.CreateNoWindow = $true; $start.RedirectStandardError = $true; $start.RedirectStandardOutput = $true
-    $process = New-Object Diagnostics.Process; $process.StartInfo=$start
-    if(-not $process.Start()){throw 'SYNTHETIC_WORKER_START_FAILED'}
-    $ticks=$process.StartTime.ToUniversalTime().Ticks
+    $process = New-F2FixtureProcess -StartInfo $start
+    $ticks=Start-F2FixtureProcess -Process $process -FailureLabel 'SYNTHETIC_WORKER_START_FAILED'
     $expectedProcess=$process;$expectedTicks=$ticks
-    if($null -ne $ExpectedChildProcess){$expectedProcess=$ExpectedChildProcess;$expectedTicks=$ExpectedChildProcess.StartTime.ToUniversalTime().Ticks}
-    $result=Receive-F2UpdateDiagnosticRecord -Server $script:Server -Request $Request -ChildProcess $expectedProcess -ChildCreationUtcTicks $expectedTicks -TimeoutSeconds 10 -PostExitWaitMilliseconds 500 -RecordTimeoutMilliseconds 1500
-    $workerStdout=$process.StandardOutput.ReadToEnd();$workerStderr=$process.StandardError.ReadToEnd()
+    if($null -ne $ExpectedChildProcess){$expectedProcess=$ExpectedChildProcess;$expectedPid=Get-F2FixtureProcessId -Process $ExpectedChildProcess;Write-F2FixtureTrace -Event PROCESS_START_TIME -Status BEGIN -ProcessId $expectedPid;try{$expectedTicks=$ExpectedChildProcess.StartTime.ToUniversalTime().Ticks;Write-F2FixtureTrace -Event PROCESS_START_TIME -Status COMPLETE -ProcessId $expectedPid}catch{Write-F2FixtureTrace -Event PROCESS_START_TIME -Status FAILED -ProcessId $expectedPid -ErrorClass PROCESS_START_TIME;throw}}
+    $result=Receive-F2FixtureDiagnostic -Server $script:Server -Request $Request -Process $expectedProcess -ChildCreationUtcTicks $expectedTicks -TimeoutSeconds 10 -PostExitWaitMilliseconds 500 -RecordTimeoutMilliseconds 1500
+    Write-F2FixtureTrace -Event STDOUT_DRAIN -Status BEGIN -ProcessId (Get-F2FixtureProcessId -Process $process)
+    try{$workerStdout=$process.StandardOutput.ReadToEnd();Write-F2FixtureTrace -Event STDOUT_DRAIN -Status COMPLETE -ProcessId (Get-F2FixtureProcessId -Process $process)}catch{Write-F2FixtureTrace -Event STDOUT_DRAIN -Status FAILED -ProcessId (Get-F2FixtureProcessId -Process $process) -ErrorClass STDOUT_DRAIN;throw}
+    Write-F2FixtureTrace -Event STDERR_DRAIN -Status BEGIN -ProcessId (Get-F2FixtureProcessId -Process $process)
+    try{$workerStderr=$process.StandardError.ReadToEnd();Write-F2FixtureTrace -Event STDERR_DRAIN -Status COMPLETE -ProcessId (Get-F2FixtureProcessId -Process $process)}catch{Write-F2FixtureTrace -Event STDERR_DRAIN -Status FAILED -ProcessId (Get-F2FixtureProcessId -Process $process) -ErrorClass STDERR_DRAIN;throw}
     [pscustomobject]@{Result=$result;Process=$process;ExpectedProcess=$expectedProcess;ExpectedExit=$ExitCode;WorkerStdout=$workerStdout;WorkerStderr=$workerStderr}
 }
 
@@ -137,8 +254,8 @@ function Invoke-F2ProtectedReleaseUpdate { return [pscustomobject]@{Success=$fal
 }
 
 function Invoke-ProductionChildFixture {
-    param($Request,[string]$TempRoot,[string]$ProtocolFile,[string]$UpdaterFile,[string]$CandidateFile,[string]$ExpectedUpdaterHash,[string]$ExpectedCandidateHash,[string]$ExpectedStage,[string]$ExpectedCode,[switch]$ExpectMissing)
-    $script:Server.Dispose();$script:Server=New-F2UpdateDiagnosticServer -Request $Request
+    param($Request,[string]$TempRoot,[string]$ProtocolFile,[string]$UpdaterFile,[string]$CandidateFile,[string]$ExpectedUpdaterHash,[string]$ExpectedCandidateHash,[string]$ExpectedStage,[string]$ExpectedCode,[string]$TraceCaseId,[switch]$ExpectMissing)
+    Reset-F2FixtureServer -Request $Request -CaseId $TraceCaseId
     $proc=[Diagnostics.Process]::GetCurrentProcess()
     $childScript=New-F2UpdateElevatedChildScript -UpdaterPath $UpdaterFile -CandidatePath $CandidateFile -SourceRoot $TempRoot -ExpectedSourceCommit ('a'*40) -ExpectedLauncherSha256 ('b'*64) -ExpectedUpdaterSha256 $ExpectedUpdaterHash -ExpectedCandidateManifestSha256 $ExpectedCandidateHash -ExpectedRequesterSid $sid -RequesterLauncherProcessId $PID -RequesterLauncherCreationUtcTicks $proc.StartTime.ToUniversalTime().Ticks -DiagnosticRequest $Request -DiagnosticProtocolPath $ProtocolFile -DiagnosticProtocolBytes $protocolBytes
     $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childScript))
@@ -147,11 +264,13 @@ function Invoke-ProductionChildFixture {
     $start.FileName=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $start.Arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+$encoded
     $start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardError=$true;$start.RedirectStandardOutput=$true
-    $child=New-Object Diagnostics.Process;$child.StartInfo=$start
-    if(-not $child.Start()){throw 'SYNTHETIC_PRODUCTION_CHILD_START_FAILED'}
-    $ticks=$child.StartTime.ToUniversalTime().Ticks
-    $result=Receive-F2UpdateDiagnosticRecord -Server $script:Server -Request $Request -ChildProcess $child -ChildCreationUtcTicks $ticks -TimeoutSeconds 10 -PostExitWaitMilliseconds 300 -RecordTimeoutMilliseconds 1500
-    $null=$child.StandardOutput.ReadToEnd();$null=$child.StandardError.ReadToEnd()
+    $child=New-F2FixtureProcess -StartInfo $start
+    $ticks=Start-F2FixtureProcess -Process $child -FailureLabel 'SYNTHETIC_PRODUCTION_CHILD_START_FAILED'
+    $result=Receive-F2FixtureDiagnostic -Server $script:Server -Request $Request -Process $child -ChildCreationUtcTicks $ticks -TimeoutSeconds 10 -PostExitWaitMilliseconds 300 -RecordTimeoutMilliseconds 1500
+    Write-F2FixtureTrace -Event STDOUT_DRAIN -Status BEGIN -ProcessId (Get-F2FixtureProcessId -Process $child)
+    try{$null=$child.StandardOutput.ReadToEnd();Write-F2FixtureTrace -Event STDOUT_DRAIN -Status COMPLETE -ProcessId (Get-F2FixtureProcessId -Process $child)}catch{Write-F2FixtureTrace -Event STDOUT_DRAIN -Status FAILED -ProcessId (Get-F2FixtureProcessId -Process $child) -ErrorClass STDOUT_DRAIN;throw}
+    Write-F2FixtureTrace -Event STDERR_DRAIN -Status BEGIN -ProcessId (Get-F2FixtureProcessId -Process $child)
+    try{$null=$child.StandardError.ReadToEnd();Write-F2FixtureTrace -Event STDERR_DRAIN -Status COMPLETE -ProcessId (Get-F2FixtureProcessId -Process $child)}catch{Write-F2FixtureTrace -Event STDERR_DRAIN -Status FAILED -ProcessId (Get-F2FixtureProcessId -Process $child) -ErrorClass STDERR_DRAIN;throw}
     $passed=if($ExpectMissing){$result.DiagnosticStatus -ceq 'MISSING' -and $result.ActualChildExitCode -eq 1}else{$result.DiagnosticStatus -ceq 'VALIDATED' -and $result.ActualChildExitCode -eq 1 -and $result.Record.Stage -ceq $ExpectedStage -and $result.Record.ErrorCode -ceq $ExpectedCode}
     [pscustomobject]@{Passed=[bool]$passed;Result=$result;Process=$child;EncodedLength=$encoded.Length}
 }
@@ -263,7 +382,7 @@ function New-PrelockInstallTree {
 }
 
 function Invoke-PrelockProductionChildFixture {
-    param([string]$UpdaterFile,[string]$CandidateFile,[string]$SourceRoot,[string]$SourceCommit,[string]$PackageHome,[string]$ProgramDataRoot,[string]$ActiveManifestPath,[bool]$ParentAclPass,[string]$ExpectedStage,[string]$ExpectedCode)
+    param([string]$UpdaterFile,[string]$CandidateFile,[string]$SourceRoot,[string]$SourceCommit,[string]$PackageHome,[string]$ProgramDataRoot,[string]$ActiveManifestPath,[bool]$ParentAclPass,[string]$ExpectedStage,[string]$ExpectedCode,[string]$TraceCaseId)
     $spec=[ordered]@{PackageHome=$PackageHome;ProgramDataRoot=$ProgramDataRoot;ActiveManifestPath=$ActiveManifestPath;ParentAclPass=$ParentAclPass}
     $specBytes=[Text.UTF8Encoding]::new($false).GetBytes(($spec|ConvertTo-Json -Compress -Depth 3))
     $specB64=[Convert]::ToBase64String($specBytes)
@@ -296,22 +415,24 @@ function Invoke-F2ProtectedReleaseUpdate {
     $candidateHash=Get-F2UpdateDiagnosticSha256 -Bytes $candidateBytes
     $requesterProcess=[Diagnostics.Process]::GetCurrentProcess()
     $request=New-F2UpdateDiagnosticRequest -SourceCommit $SourceCommit -LauncherSha256 ('b'*64) -UpdaterSha256 $updaterHash -CandidateManifestSha256 $candidateHash -RequesterPid $PID -RequesterCreationUtcTicks $requesterProcess.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
-    $script:Server.Dispose();$script:Server=New-F2UpdateDiagnosticServer -Request $request
+    Reset-F2FixtureServer -Request $request -CaseId $TraceCaseId
     $childScript=New-F2UpdateElevatedChildScript -UpdaterPath $UpdaterFile -CandidatePath $CandidateFile -SourceRoot $SourceRoot -ExpectedSourceCommit $SourceCommit -ExpectedLauncherSha256 ('b'*64) -ExpectedUpdaterSha256 $updaterHash -ExpectedCandidateManifestSha256 $candidateHash -ExpectedRequesterSid $sid -RequesterLauncherProcessId $PID -RequesterLauncherCreationUtcTicks $requesterProcess.StartTime.ToUniversalTime().Ticks -DiagnosticRequest $request -DiagnosticProtocolPath $protocolPath -DiagnosticProtocolBytes $protocolBytes
     $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childScript))
     if($encoded.Length -gt 32767){throw 'SYNTHETIC_CHILD_COMMAND_TOO_LARGE'}
     $start=New-Object Diagnostics.ProcessStartInfo;$start.FileName=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe';$start.Arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+$encoded;$start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
-    $child=New-Object Diagnostics.Process;$child.StartInfo=$start
-    if(-not $child.Start()){throw 'SYNTHETIC_PRELOCK_CHILD_START_FAILED'}
-    $ticks=$child.StartTime.ToUniversalTime().Ticks
-    $result=Receive-F2UpdateDiagnosticRecord -Server $script:Server -Request $request -ChildProcess $child -ChildCreationUtcTicks $ticks -TimeoutSeconds 25 -PostExitWaitMilliseconds 500 -RecordTimeoutMilliseconds 5000
-    $stdout=$child.StandardOutput.ReadToEnd();$stderr=$child.StandardError.ReadToEnd()
+    $child=New-F2FixtureProcess -StartInfo $start
+    $ticks=Start-F2FixtureProcess -Process $child -FailureLabel 'SYNTHETIC_PRELOCK_CHILD_START_FAILED'
+    $result=Receive-F2FixtureDiagnostic -Server $script:Server -Request $request -Process $child -ChildCreationUtcTicks $ticks -TimeoutSeconds 25 -PostExitWaitMilliseconds 500 -RecordTimeoutMilliseconds 5000
+    Write-F2FixtureTrace -Event STDOUT_DRAIN -Status BEGIN -ProcessId (Get-F2FixtureProcessId -Process $child)
+    try{$stdout=$child.StandardOutput.ReadToEnd();Write-F2FixtureTrace -Event STDOUT_DRAIN -Status COMPLETE -ProcessId (Get-F2FixtureProcessId -Process $child)}catch{Write-F2FixtureTrace -Event STDOUT_DRAIN -Status FAILED -ProcessId (Get-F2FixtureProcessId -Process $child) -ErrorClass STDOUT_DRAIN;throw}
+    Write-F2FixtureTrace -Event STDERR_DRAIN -Status BEGIN -ProcessId (Get-F2FixtureProcessId -Process $child)
+    try{$stderr=$child.StandardError.ReadToEnd();Write-F2FixtureTrace -Event STDERR_DRAIN -Status COMPLETE -ProcessId (Get-F2FixtureProcessId -Process $child)}catch{Write-F2FixtureTrace -Event STDERR_DRAIN -Status FAILED -ProcessId (Get-F2FixtureProcessId -Process $child) -ErrorClass STDERR_DRAIN;throw}
     $passed=$result.DiagnosticStatus -ceq 'VALIDATED' -and $result.ActualChildExitCode -eq 1 -and $result.Record.Stage -ceq $ExpectedStage -and $result.Record.ErrorCode -ceq $ExpectedCode -and -not $result.TimedOut
     [pscustomobject]@{Passed=[bool]$passed;Request=$request;Result=$result;Process=$child;Stdout=$stdout;Stderr=$stderr;UpdaterSha256=$updaterHash;CandidateSha256=$candidateHash;EncodedLength=$encoded.Length}
 }
 
 function Invoke-F2ManifestValidationChildFixture {
-    param([byte[]]$CandidateBytes,[string]$ExpectedSourceCommit,[string]$ExpectedStage,[string]$ExpectedCode)
+    param([byte[]]$CandidateBytes,[string]$ExpectedSourceCommit,[string]$ExpectedStage,[string]$ExpectedCode,[string]$TraceCaseId)
     $fixtureId=[guid]::NewGuid().ToString('N')
     $updaterFile=Join-Path $syntheticRoot ('manifest-child-updater-'+$fixtureId+'.ps1')
     $candidateFile=Join-Path $syntheticRoot ('manifest-child-candidate-'+$fixtureId+'.json')
@@ -333,7 +454,7 @@ function Invoke-F2ProtectedReleaseUpdate {
     $updaterSha=Get-F2UpdateDiagnosticSha256 -Bytes $updaterFixtureBytes
     $requesterProcess=[Diagnostics.Process]::GetCurrentProcess()
     $childRequest=New-F2UpdateDiagnosticRequest -SourceCommit $ExpectedSourceCommit -LauncherSha256 ('b'*64) -UpdaterSha256 $updaterSha -CandidateManifestSha256 $candidateSha -RequesterPid $PID -RequesterCreationUtcTicks $requesterProcess.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
-    $script:Server.Dispose();$script:Server=New-F2UpdateDiagnosticServer -Request $childRequest
+    Reset-F2FixtureServer -Request $childRequest -CaseId $TraceCaseId
     $childScript=New-F2UpdateElevatedChildScript -UpdaterPath $updaterFile -CandidatePath $candidateFile -SourceRoot $syntheticRoot -ExpectedSourceCommit $ExpectedSourceCommit -ExpectedLauncherSha256 ('b'*64) -ExpectedUpdaterSha256 $updaterSha -ExpectedCandidateManifestSha256 $candidateSha -ExpectedRequesterSid $sid -RequesterLauncherProcessId $PID -RequesterLauncherCreationUtcTicks $requesterProcess.StartTime.ToUniversalTime().Ticks -DiagnosticRequest $childRequest -DiagnosticProtocolPath $protocolFile -DiagnosticProtocolBytes $protocolBytes
     $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childScript))
     if($encoded.Length -gt 32767){throw 'SYNTHETIC_MANIFEST_CHILD_COMMAND_TOO_LARGE'}
@@ -341,16 +462,18 @@ function Invoke-F2ProtectedReleaseUpdate {
     $start.FileName=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $start.Arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+$encoded
     $start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
-    $child=New-Object Diagnostics.Process;$child.StartInfo=$start
-    if(-not $child.Start()){throw 'SYNTHETIC_MANIFEST_CHILD_START_FAILED'}
-    $ticks=$child.StartTime.ToUniversalTime().Ticks
-    $result=Receive-F2UpdateDiagnosticRecord -Server $script:Server -Request $childRequest -ChildProcess $child -ChildCreationUtcTicks $ticks -TimeoutSeconds 10 -PostExitWaitMilliseconds 300 -RecordTimeoutMilliseconds 1500
-    $stdout=$child.StandardOutput.ReadToEnd();$stderr=$child.StandardError.ReadToEnd()
+    $child=New-F2FixtureProcess -StartInfo $start
+    $ticks=Start-F2FixtureProcess -Process $child -FailureLabel 'SYNTHETIC_MANIFEST_CHILD_START_FAILED'
+    $result=Receive-F2FixtureDiagnostic -Server $script:Server -Request $childRequest -Process $child -ChildCreationUtcTicks $ticks -TimeoutSeconds 10 -PostExitWaitMilliseconds 300 -RecordTimeoutMilliseconds 1500
+    Write-F2FixtureTrace -Event STDOUT_DRAIN -Status BEGIN -ProcessId (Get-F2FixtureProcessId -Process $child)
+    try{$stdout=$child.StandardOutput.ReadToEnd();Write-F2FixtureTrace -Event STDOUT_DRAIN -Status COMPLETE -ProcessId (Get-F2FixtureProcessId -Process $child)}catch{Write-F2FixtureTrace -Event STDOUT_DRAIN -Status FAILED -ProcessId (Get-F2FixtureProcessId -Process $child) -ErrorClass STDOUT_DRAIN;throw}
+    Write-F2FixtureTrace -Event STDERR_DRAIN -Status BEGIN -ProcessId (Get-F2FixtureProcessId -Process $child)
+    try{$stderr=$child.StandardError.ReadToEnd();Write-F2FixtureTrace -Event STDERR_DRAIN -Status COMPLETE -ProcessId (Get-F2FixtureProcessId -Process $child)}catch{Write-F2FixtureTrace -Event STDERR_DRAIN -Status FAILED -ProcessId (Get-F2FixtureProcessId -Process $child) -ErrorClass STDERR_DRAIN;throw}
     $passed=$result.DiagnosticStatus -ceq 'VALIDATED' -and $result.ActualChildExitCode -eq 1 -and $result.Record.Stage -ceq $ExpectedStage -and $result.Record.ErrorCode -ceq $ExpectedCode -and -not $result.TimedOut
     [pscustomobject]@{Passed=[bool]$passed;Result=$result;Process=$child;Stdout=$stdout;Stderr=$stderr;UpdaterSha256=$updaterSha;CandidateSha256=$candidateSha;EncodedLength=$encoded.Length}
 }
 
-$script:Server = New-F2UpdateDiagnosticServer -Request $request
+    Reset-F2FixtureServer -Request $request -CaseId 'DIAGNOSTIC_VALID'
 $syntheticRoot=$null
 try {
     $tempBase=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
@@ -415,24 +538,24 @@ try {
     $hashFailureCode=Get-F2InjectedManifestHashFailureCode -Bytes $reviewCandidateBytes
     Assert-Diagnostic ($hashFailureCode -ceq 'UPDATE_MANIFEST_HASH_MISMATCH' -and $hashFailureCode -notmatch 'SYNTHETIC|EXCEPTION') 'unexpected hash-operation exceptions are classified to a fixed category without leaking exception text'
 
-    $validManifestChild=Invoke-F2ManifestValidationChildFixture -CandidateBytes $reviewCandidateBytes -ExpectedSourceCommit $reviewCandidate.ReviewedCommitSha -ExpectedStage SourceGitValidation -ExpectedCode UPDATE_SOURCE_GIT_UNAVAILABLE
+    $validManifestChild=Invoke-F2ManifestValidationChildFixture -CandidateBytes $reviewCandidateBytes -ExpectedSourceCommit $reviewCandidate.ReviewedCommitSha -ExpectedStage SourceGitValidation -ExpectedCode UPDATE_SOURCE_GIT_UNAVAILABLE -TraceCaseId MANIFEST_VALID
     Assert-Diagnostic ($validManifestChild.Passed -and $validManifestChild.EncodedLength -le 32767) 'real child process executes the production bootstrap and production manifest loader, passes the exact candidate, then reaches a no-write synthetic updater stub'
-    $validManifestChild.Process.Dispose()
-    $malformedManifestChild=Invoke-F2ManifestValidationChildFixture -CandidateBytes $missingIdentityBytes -ExpectedSourceCommit $reviewCandidate.ReviewedCommitSha -ExpectedStage CandidateManifestValidation -ExpectedCode UPDATE_MANIFEST_IDENTITY_OR_BASELINE_INVALID
+    Dispose-F2FixtureProcess -Process $validManifestChild.Process
+    $malformedManifestChild=Invoke-F2ManifestValidationChildFixture -CandidateBytes $missingIdentityBytes -ExpectedSourceCommit $reviewCandidate.ReviewedCommitSha -ExpectedStage CandidateManifestValidation -ExpectedCode UPDATE_MANIFEST_IDENTITY_OR_BASELINE_INVALID -TraceCaseId MANIFEST_MALFORMED
     Assert-Diagnostic ($malformedManifestChild.Passed -and $malformedManifestChild.Result.Record.ErrorCode -cne 'UPDATE_UNCLASSIFIED_FAILURE') 'real child process reports malformed-manifest validation failure through the authenticated pipe with a fixed allowlisted code'
-    $malformedManifestChild.Process.Dispose()
+    Dispose-F2FixtureProcess -Process $malformedManifestChild.Process
 
     $prelockUpdaterFixture=Join-Path $syntheticRoot 'production-updater-with-test-entrypoint.ps1'
     $prelockCandidateFixture=Join-Path $syntheticRoot 'prelock-candidate.json'
     $prelockCases=@(
-        @{Name='candidate manifest parse';Fault='MalformedCandidate';Stage='CandidateManifestValidation';Code='UPDATE_MANIFEST_JSON_INVALID';ParentPass=$true},
-        @{Name='candidate manifest missing required identity field';Fault='MissingIdentity';Stage='CandidateManifestValidation';Code='UPDATE_MANIFEST_IDENTITY_OR_BASELINE_INVALID';ParentPass=$true},
-        @{Name='candidate manifest';Fault='WrongPackageRoot';Stage='CandidateManifestValidation';Code='UPDATE_CANDIDATE_PACKAGE_ROOT_MISMATCH';ParentPass=$true},
-        @{Name='source Git';Fault='WrongOrigin';Stage='SourceGitValidation';Code='UPDATE_SOURCE_ORIGIN_MISMATCH';ParentPass=$true},
-        @{Name='source package pin';Fault='WrongPackagePin';Stage='SourcePackagePinValidation';Code='UPDATE_SOURCE_PACKAGE_HASH_MISMATCH';ParentPass=$true},
-        @{Name='parent ACL';Fault='ParentReject';Stage='ParentAclValidation';Code='UPDATE_PARENT_CHAIN_UNSAFE';ParentPass=$false},
-        @{Name='installed v2';Fault='CorruptOldFile';Stage='InstalledV2Validation';Code='UPDATE_FILE_HASH_MISMATCH';ParentPass=$true},
-        @{Name='transaction collision';Fault='BadLockBytes';Stage='TransactionCollisionValidation';Code='UPDATE_FILE_TYPE_OR_SIZE_INVALID';ParentPass=$true}
+        @{Name='candidate manifest parse';Fault='MalformedCandidate';Stage='CandidateManifestValidation';Code='UPDATE_MANIFEST_JSON_INVALID';ParentPass=$true;TraceCaseId='PRELOCK_CANDIDATE_PARSE'},
+        @{Name='candidate manifest missing required identity field';Fault='MissingIdentity';Stage='CandidateManifestValidation';Code='UPDATE_MANIFEST_IDENTITY_OR_BASELINE_INVALID';ParentPass=$true;TraceCaseId='PRELOCK_CANDIDATE_IDENTITY'},
+        @{Name='candidate manifest';Fault='WrongPackageRoot';Stage='CandidateManifestValidation';Code='UPDATE_CANDIDATE_PACKAGE_ROOT_MISMATCH';ParentPass=$true;TraceCaseId='PRELOCK_CANDIDATE_ROOT'},
+        @{Name='source Git';Fault='WrongOrigin';Stage='SourceGitValidation';Code='UPDATE_SOURCE_ORIGIN_MISMATCH';ParentPass=$true;TraceCaseId='PRELOCK_SOURCE_GIT'},
+        @{Name='source package pin';Fault='WrongPackagePin';Stage='SourcePackagePinValidation';Code='UPDATE_SOURCE_PACKAGE_HASH_MISMATCH';ParentPass=$true;TraceCaseId='PRELOCK_CANDIDATE_PIN'},
+        @{Name='parent ACL';Fault='ParentReject';Stage='ParentAclValidation';Code='UPDATE_PARENT_CHAIN_UNSAFE';ParentPass=$false;TraceCaseId='PRELOCK_PARENT_ACL'},
+        @{Name='installed v2';Fault='CorruptOldFile';Stage='InstalledV2Validation';Code='UPDATE_FILE_HASH_MISMATCH';ParentPass=$true;TraceCaseId='PRELOCK_OLD_RELEASE'},
+        @{Name='transaction collision';Fault='BadLockBytes';Stage='TransactionCollisionValidation';Code='UPDATE_FILE_TYPE_OR_SIZE_INVALID';ParentPass=$true;TraceCaseId='PRELOCK_TRANSACTION_COLLISION'}
     )
     foreach($prelockCase in $prelockCases){
         $caseRoot=Join-Path $syntheticRoot ('prelock-'+[guid]::NewGuid().ToString('N'))
@@ -450,7 +573,7 @@ try {
         }elseif($prelockCase.Fault -eq 'BadLockBytes'){
             [IO.File]::WriteAllText((Join-Path $installTree.ProgramDataRoot 'release.lock'),'non-empty synthetic collision')
         }
-        $childCase=Invoke-PrelockProductionChildFixture -UpdaterFile $prelockUpdaterFixture -CandidateFile $prelockCandidateFixture -SourceRoot $prelockSource.Root -SourceCommit $prelockSource.Commit -PackageHome $installTree.PackageHome -ProgramDataRoot $installTree.ProgramDataRoot -ActiveManifestPath $installTree.ActiveManifestPath -ParentAclPass $prelockCase.ParentPass -ExpectedStage $prelockCase.Stage -ExpectedCode $prelockCase.Code
+        $childCase=Invoke-PrelockProductionChildFixture -UpdaterFile $prelockUpdaterFixture -CandidateFile $prelockCandidateFixture -SourceRoot $prelockSource.Root -SourceCommit $prelockSource.Commit -PackageHome $installTree.PackageHome -ProgramDataRoot $installTree.ProgramDataRoot -ActiveManifestPath $installTree.ActiveManifestPath -ParentAclPass $prelockCase.ParentPass -ExpectedStage $prelockCase.Stage -ExpectedCode $prelockCase.Code -TraceCaseId $prelockCase.TraceCaseId
         if($prelockCase.Fault -eq 'WrongOrigin'){
             & $fixtureGit.Source -C $prelockSource.Root remote set-url origin 'https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git'
             if($LASTEXITCODE -ne 0){throw 'SYNTHETIC_SOURCE_GIT_REMOTE_RESTORE_FAILED'}
@@ -464,7 +587,7 @@ try {
         $noTransactionRoots= -not [IO.Directory]::Exists((Join-Path $installTree.PackageHome 'releases')) -and -not [IO.Directory]::Exists((Join-Path $installTree.ProgramDataRoot 'updates')) -and -not [IO.Directory]::Exists((Join-Path $installTree.ProgramDataRoot 'backups'))
         if($prelockCase.Fault -eq 'BadLockBytes'){$noTransactionRoots=$noTransactionRoots -and [IO.File]::ReadAllText((Join-Path $installTree.ProgramDataRoot 'release.lock')) -ceq 'non-empty synthetic collision'}else{$noTransactionRoots=$noTransactionRoots -and -not [IO.File]::Exists((Join-Path $installTree.ProgramDataRoot 'release.lock'))}
         Assert-Diagnostic $noTransactionRoots ("{0} failure preserves the TEMP-only old release and creates no transaction objects" -f $prelockCase.Name)
-        $childCase.Process.Dispose()
+        Dispose-F2FixtureProcess -Process $childCase.Process
     }
     $fixtureUpdaterText=New-SyntheticUpdaterText -Stage 'CandidateAndSourceValidation' -Code 'UPDATE_SOURCE_GIT_UNAVAILABLE'
     $fixtureUpdaterBytes=[Text.UTF8Encoding]::new($false).GetBytes($fixtureUpdaterText)
@@ -473,46 +596,46 @@ try {
 
     $validChildRequest=New-F2UpdateDiagnosticRequest -SourceCommit $commitFixture -LauncherSha256 ('b'*64) -UpdaterSha256 $fixtureUpdaterHash -CandidateManifestSha256 $candidateFixtureHash -RequesterPid $PID -RequesterCreationUtcTicks $requester.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
     [IO.File]::WriteAllBytes($badProtocolFixture,[Text.Encoding]::UTF8.GetBytes('Set-StrictMode -Version Latest'))
-    $bootstrapChild=Invoke-ProductionChildFixture -Request $validChildRequest -TempRoot $syntheticRoot -ProtocolFile $badProtocolFixture -UpdaterFile $updaterFixture -CandidateFile $candidateFixture -ExpectedUpdaterHash $fixtureUpdaterHash -ExpectedCandidateHash $candidateFixtureHash -ExpectedStage '' -ExpectedCode '' -ExpectMissing
+    $bootstrapChild=Invoke-ProductionChildFixture -Request $validChildRequest -TempRoot $syntheticRoot -ProtocolFile $badProtocolFixture -UpdaterFile $updaterFixture -CandidateFile $candidateFixture -ExpectedUpdaterHash $fixtureUpdaterHash -ExpectedCandidateHash $candidateFixtureHash -ExpectedStage '' -ExpectedCode '' -TraceCaseId PROTOCOL_BOOTSTRAP_FAILURE -ExpectMissing
     Assert-Diagnostic ($bootstrapChild.Passed -and $bootstrapChild.Result.DiagnosticErrorCode -ceq 'UPDATE_DIAGNOSTIC_MISSING' -and $bootstrapChild.Result.ActualChildExitCode -eq 1) 'real child script retains exact exit when protocol bootstrap fails before a trusted sender is available'
-    $bootstrapChild.Process.Dispose()
+    Dispose-F2FixtureProcess -Process $bootstrapChild.Process
 
     $hashRequest=New-F2UpdateDiagnosticRequest -SourceCommit $commitFixture -LauncherSha256 ('b'*64) -UpdaterSha256 $fixtureUpdaterHash -CandidateManifestSha256 $candidateFixtureHash -RequesterPid $PID -RequesterCreationUtcTicks $requester.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
-    $hashChild=Invoke-ProductionChildFixture -Request $hashRequest -TempRoot $syntheticRoot -ProtocolFile $protocolPath -UpdaterFile $updaterFixture -CandidateFile $candidateFixture -ExpectedUpdaterHash ('f'*64) -ExpectedCandidateHash $candidateFixtureHash -ExpectedStage 'UpdaterAndCandidateHashValidation' -ExpectedCode 'UPDATE_UPDATER_HASH_MISMATCH'
+    $hashChild=Invoke-ProductionChildFixture -Request $hashRequest -TempRoot $syntheticRoot -ProtocolFile $protocolPath -UpdaterFile $updaterFixture -CandidateFile $candidateFixture -ExpectedUpdaterHash ('f'*64) -ExpectedCandidateHash $candidateFixtureHash -ExpectedStage 'UpdaterAndCandidateHashValidation' -ExpectedCode 'UPDATE_UPDATER_HASH_MISMATCH' -TraceCaseId UPDATER_HASH_FAILURE
     Assert-Diagnostic $hashChild.Passed 'real child script reports updater hash validation failure through the pipe'
-    $hashChild.Process.Dispose()
+    Dispose-F2FixtureProcess -Process $hashChild.Process
 
     $invalidUpdaterBytes=[Text.UTF8Encoding]::new($false).GetBytes('function This-Script-Is-Not-Closed {')
     [IO.File]::WriteAllBytes($updaterFixture,$invalidUpdaterBytes)
     $invalidUpdaterHash=Get-F2UpdateDiagnosticSha256 -Bytes $invalidUpdaterBytes
     $parseRequest=New-F2UpdateDiagnosticRequest -SourceCommit $commitFixture -LauncherSha256 ('b'*64) -UpdaterSha256 $invalidUpdaterHash -CandidateManifestSha256 $candidateFixtureHash -RequesterPid $PID -RequesterCreationUtcTicks $requester.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
-    $parseChild=Invoke-ProductionChildFixture -Request $parseRequest -TempRoot $syntheticRoot -ProtocolFile $protocolPath -UpdaterFile $updaterFixture -CandidateFile $candidateFixture -ExpectedUpdaterHash $invalidUpdaterHash -ExpectedCandidateHash $candidateFixtureHash -ExpectedStage 'UpdaterScriptLoading' -ExpectedCode 'UPDATE_UPDATER_SCRIPT_LOAD_FAILED'
+    $parseChild=Invoke-ProductionChildFixture -Request $parseRequest -TempRoot $syntheticRoot -ProtocolFile $protocolPath -UpdaterFile $updaterFixture -CandidateFile $candidateFixture -ExpectedUpdaterHash $invalidUpdaterHash -ExpectedCandidateHash $candidateFixtureHash -ExpectedStage 'UpdaterScriptLoading' -ExpectedCode 'UPDATE_UPDATER_SCRIPT_LOAD_FAILED' -TraceCaseId UPDATER_PARSE_FAILURE
     Assert-Diagnostic $parseChild.Passed 'real child script reports updater parsing/loading failure through the pipe'
-    $parseChild.Process.Dispose()
+    Dispose-F2FixtureProcess -Process $parseChild.Process
 
     $identityBytes=[Text.UTF8Encoding]::new($false).GetBytes((New-SyntheticUpdaterText -Stage 'CandidateAndSourceValidation' -Code 'UPDATE_SOURCE_GIT_UNAVAILABLE' -IdentityFailure))
     [IO.File]::WriteAllBytes($updaterFixture,$identityBytes)
     $identityHash=Get-F2UpdateDiagnosticSha256 -Bytes $identityBytes
     $identityRequest=New-F2UpdateDiagnosticRequest -SourceCommit $commitFixture -LauncherSha256 ('b'*64) -UpdaterSha256 $identityHash -CandidateManifestSha256 $candidateFixtureHash -RequesterPid $PID -RequesterCreationUtcTicks $requester.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
-    $identityChild=Invoke-ProductionChildFixture -Request $identityRequest -TempRoot $syntheticRoot -ProtocolFile $protocolPath -UpdaterFile $updaterFixture -CandidateFile $candidateFixture -ExpectedUpdaterHash $identityHash -ExpectedCandidateHash $candidateFixtureHash -ExpectedStage 'ElevatedIdentityValidation' -ExpectedCode 'UPDATE_ELEVATED_REQUESTER_IDENTITY_MISMATCH'
+    $identityChild=Invoke-ProductionChildFixture -Request $identityRequest -TempRoot $syntheticRoot -ProtocolFile $protocolPath -UpdaterFile $updaterFixture -CandidateFile $candidateFixture -ExpectedUpdaterHash $identityHash -ExpectedCandidateHash $candidateFixtureHash -ExpectedStage 'ElevatedIdentityValidation' -ExpectedCode 'UPDATE_ELEVATED_REQUESTER_IDENTITY_MISMATCH' -TraceCaseId IDENTITY_FAILURE
     Assert-Diagnostic $identityChild.Passed 'real child script reports identity validation failure without invoking transaction code'
-    $identityChild.Process.Dispose()
+    Dispose-F2FixtureProcess -Process $identityChild.Process
 
     $invokeCases=@(
-        @{Stage='CandidateAndSourceValidation';Code='UPDATE_SOURCE_GIT_UNAVAILABLE';Name='source Git resolution'},
-        @{Stage='CandidateAndSourceValidation';Code='UPDATE_PROGRAM_FILES_PARENT_DACL_UNSAFE';Name='parent ACL validation'},
-        @{Stage='CandidateAndSourceValidation';Code='UPDATE_OLD_RELEASE_PIN_MISMATCH';Name='old installed-release validation'},
-        @{Stage='AcquireReleaseBarrier';Code='UPDATE_NATIVE_HELPER_COMPILE_FAILED';Name='native helper compilation'},
-        @{Stage='AcquireReleaseBarrier';Code='UPDATE_RELEASE_LOCK_CREATE_FAILED';Name='initial release-lock creation'}
+        @{Stage='CandidateAndSourceValidation';Code='UPDATE_SOURCE_GIT_UNAVAILABLE';Name='source Git resolution';TraceCaseId='INVOKE_SOURCE_GIT'},
+        @{Stage='CandidateAndSourceValidation';Code='UPDATE_PROGRAM_FILES_PARENT_DACL_UNSAFE';Name='parent ACL validation';TraceCaseId='INVOKE_PARENT_ACL'},
+        @{Stage='CandidateAndSourceValidation';Code='UPDATE_OLD_RELEASE_PIN_MISMATCH';Name='old installed-release validation';TraceCaseId='INVOKE_OLD_RELEASE'},
+        @{Stage='AcquireReleaseBarrier';Code='UPDATE_NATIVE_HELPER_COMPILE_FAILED';Name='native helper compilation';TraceCaseId='INVOKE_NATIVE_HELPER'},
+        @{Stage='AcquireReleaseBarrier';Code='UPDATE_RELEASE_LOCK_CREATE_FAILED';Name='initial release-lock creation';TraceCaseId='INVOKE_RELEASE_LOCK'}
     )
     foreach($invokeCase in $invokeCases){
         $fixtureBytes=[Text.UTF8Encoding]::new($false).GetBytes((New-SyntheticUpdaterText -Stage $invokeCase.Stage -Code $invokeCase.Code))
         [IO.File]::WriteAllBytes($updaterFixture,$fixtureBytes)
         $fixtureHash=Get-F2UpdateDiagnosticSha256 -Bytes $fixtureBytes
         $caseRequest=New-F2UpdateDiagnosticRequest -SourceCommit $commitFixture -LauncherSha256 ('b'*64) -UpdaterSha256 $fixtureHash -CandidateManifestSha256 $candidateFixtureHash -RequesterPid $PID -RequesterCreationUtcTicks $requester.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
-        $childCase=Invoke-ProductionChildFixture -Request $caseRequest -TempRoot $syntheticRoot -ProtocolFile $protocolPath -UpdaterFile $updaterFixture -CandidateFile $candidateFixture -ExpectedUpdaterHash $fixtureHash -ExpectedCandidateHash $candidateFixtureHash -ExpectedStage $invokeCase.Stage -ExpectedCode $invokeCase.Code
+        $childCase=Invoke-ProductionChildFixture -Request $caseRequest -TempRoot $syntheticRoot -ProtocolFile $protocolPath -UpdaterFile $updaterFixture -CandidateFile $candidateFixture -ExpectedUpdaterHash $fixtureHash -ExpectedCandidateHash $candidateFixtureHash -ExpectedStage $invokeCase.Stage -ExpectedCode $invokeCase.Code -TraceCaseId $invokeCase.TraceCaseId
         Assert-Diagnostic $childCase.Passed ("real production child reports synthetic failure for {0}" -f $invokeCase.Name)
-        $childCase.Process.Dispose()
+        Dispose-F2FixtureProcess -Process $childCase.Process
     }
 
     $sizeProbe=New-F2UpdateElevatedChildScript -UpdaterPath $updaterFixture -CandidatePath $candidateFixture -SourceRoot $syntheticRoot -ExpectedSourceCommit $commitFixture -ExpectedLauncherSha256 ('b'*64) -ExpectedUpdaterSha256 $fixtureHash -ExpectedCandidateManifestSha256 $candidateFixtureHash -ExpectedRequesterSid $sid -RequesterLauncherProcessId $PID -RequesterLauncherCreationUtcTicks $requester.StartTime.ToUniversalTime().Ticks -DiagnosticRequest $caseRequest -DiagnosticProtocolPath $protocolPath -DiagnosticProtocolBytes $protocolBytes
@@ -521,73 +644,75 @@ try {
     Write-Output ('ProductionChildEncodedCommandCharacters='+$encodedSize+';FixedArgumentReserve=100;Limit=32767')
 
     $cases = @(
-        @{Stage='ChildBootstrapInitialization';Code='UPDATE_CHILD_BOOTSTRAP_INITIALIZATION_FAILED'},
-        @{Stage='UpdaterScriptLoading';Code='UPDATE_UPDATER_SCRIPT_LOAD_FAILED'},
-        @{Stage='ElevatedIdentityValidation';Code='UPDATE_ELEVATED_REQUESTER_IDENTITY_MISMATCH'},
-        @{Stage='UpdaterAndCandidateHashValidation';Code='UPDATE_UPDATER_HASH_MISMATCH'},
-        @{Stage='CandidateAndSourceValidation';Code='UPDATE_SOURCE_GIT_UNAVAILABLE'},
-        @{Stage='CandidateAndSourceValidation';Code='UPDATE_PROGRAM_FILES_PARENT_DACL_UNSAFE'},
-        @{Stage='CandidateAndSourceValidation';Code='UPDATE_OLD_RELEASE_PIN_MISMATCH'},
-        @{Stage='AcquireReleaseBarrier';Code='UPDATE_NATIVE_HELPER_COMPILE_FAILED'},
-        @{Stage='AcquireReleaseBarrier';Code='UPDATE_RELEASE_LOCK_CREATE_FAILED'}
+        @{Stage='ChildBootstrapInitialization';Code='UPDATE_CHILD_BOOTSTRAP_INITIALIZATION_FAILED';TraceCaseId='DIAGNOSTIC_BOOTSTRAP'},
+        @{Stage='UpdaterScriptLoading';Code='UPDATE_UPDATER_SCRIPT_LOAD_FAILED';TraceCaseId='DIAGNOSTIC_SCRIPT_LOADING'},
+        @{Stage='ElevatedIdentityValidation';Code='UPDATE_ELEVATED_REQUESTER_IDENTITY_MISMATCH';TraceCaseId='DIAGNOSTIC_IDENTITY'},
+        @{Stage='UpdaterAndCandidateHashValidation';Code='UPDATE_UPDATER_HASH_MISMATCH';TraceCaseId='DIAGNOSTIC_HASH'},
+        @{Stage='CandidateAndSourceValidation';Code='UPDATE_SOURCE_GIT_UNAVAILABLE';TraceCaseId='DIAGNOSTIC_SOURCE_GIT'},
+        @{Stage='CandidateAndSourceValidation';Code='UPDATE_PROGRAM_FILES_PARENT_DACL_UNSAFE';TraceCaseId='DIAGNOSTIC_PARENT_ACL'},
+        @{Stage='CandidateAndSourceValidation';Code='UPDATE_OLD_RELEASE_PIN_MISMATCH';TraceCaseId='DIAGNOSTIC_OLD_RELEASE'},
+        @{Stage='AcquireReleaseBarrier';Code='UPDATE_NATIVE_HELPER_COMPILE_FAILED';TraceCaseId='DIAGNOSTIC_NATIVE_HELPER'},
+        @{Stage='AcquireReleaseBarrier';Code='UPDATE_RELEASE_LOCK_CREATE_FAILED';TraceCaseId='DIAGNOSTIC_RELEASE_LOCK'}
     )
     foreach($case in $cases){
         $one=New-F2UpdateDiagnosticRequest -SourceCommit $request.SourceCommit -LauncherSha256 $request.LauncherSha256 -UpdaterSha256 $request.UpdaterSha256 -CandidateManifestSha256 $request.CandidateManifestSha256 -RequesterPid $PID -RequesterCreationUtcTicks $requester.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
-        $script:Server.Dispose();$script:Server=New-F2UpdateDiagnosticServer -Request $one
+        Reset-F2FixtureServer -Request $one -CaseId $case.TraceCaseId
         $worker=Invoke-SyntheticDiagnosticWorker -Request $one -Stage $case.Stage -Code $case.Code
         $ok=$worker.Result.DiagnosticStatus -ceq 'VALIDATED' -and $worker.Result.Record.Stage -ceq $case.Stage -and $worker.Result.Record.ErrorCode -ceq $case.Code -and $worker.Result.ActualChildExitCode -eq 1 -and -not $worker.Result.TimedOut
         Assert-Diagnostic $ok ("cross-process report preserves {0}/{1} with child exit 1" -f $case.Stage,$case.Code)
-        $worker.Process.Dispose()
+        Dispose-F2FixtureProcess -Process $worker.Process
     }
 
     foreach($negative in @(
-        @{Name='stale or replayed nonce';Args=@{WrongRequest=$true};Expected='INVALID'},
-        @{Name='tampered payload digest';Args=@{Tamper=$true};Expected='INVALID'},
-        @{Name='unlisted diagnostic stage';Args=@{UnknownStage=$true};Expected='INVALID'},
-        @{Name='duplicate diagnostic frame';Args=@{Duplicate=$true};Expected='INVALID'},
-        @{Name='oversized frame';Args=@{Oversize=$true};Expected='INVALID'},
-        @{Name='unavailable diagnostic record';Args=@{Stage='NO_MESSAGE'};Expected='MISSING'},
-        @{Name='stalled partial frame';Args=@{Stall=$true};Expected='INVALID'}
+        @{Name='stale or replayed nonce';Args=@{WrongRequest=$true};Expected='INVALID';TraceCaseId='DIAGNOSTIC_BAD_NONCE'},
+        @{Name='tampered payload digest';Args=@{Tamper=$true};Expected='INVALID';TraceCaseId='DIAGNOSTIC_TAMPERED'},
+        @{Name='unlisted diagnostic stage';Args=@{UnknownStage=$true};Expected='INVALID';TraceCaseId='DIAGNOSTIC_UNKNOWN_STAGE'},
+        @{Name='duplicate diagnostic frame';Args=@{Duplicate=$true};Expected='INVALID';TraceCaseId='DIAGNOSTIC_DUPLICATE'},
+        @{Name='oversized frame';Args=@{Oversize=$true};Expected='INVALID';TraceCaseId='DIAGNOSTIC_OVERSIZE'},
+        @{Name='unavailable diagnostic record';Args=@{Stage='NO_MESSAGE'};Expected='MISSING';TraceCaseId='DIAGNOSTIC_MISSING'},
+        @{Name='stalled partial frame';Args=@{Stall=$true};Expected='INVALID';TraceCaseId='DIAGNOSTIC_STALL'}
     )){
         $one=New-F2UpdateDiagnosticRequest -SourceCommit $request.SourceCommit -LauncherSha256 $request.LauncherSha256 -UpdaterSha256 $request.UpdaterSha256 -CandidateManifestSha256 $request.CandidateManifestSha256 -RequesterPid $PID -RequesterCreationUtcTicks $requester.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
-        $script:Server.Dispose();$script:Server=New-F2UpdateDiagnosticServer -Request $one
+        Reset-F2FixtureServer -Request $one -CaseId $negative.TraceCaseId
         $negativeArgs = $negative.Args
         $worker=Invoke-SyntheticDiagnosticWorker -Request $one @negativeArgs
         Assert-Diagnostic ($worker.Result.DiagnosticStatus -ceq $negative.Expected -and $worker.Result.ActualChildExitCode -eq 1) ("rejects {0} while retaining child exit (status={1};code={2};exit={3})" -f $negative.Name,$worker.Result.DiagnosticStatus,$worker.Result.DiagnosticErrorCode,$worker.Result.ActualChildExitCode)
-        $worker.Process.Dispose()
+        Dispose-F2FixtureProcess -Process $worker.Process
     }
 
     $exitMismatch = New-F2UpdateDiagnosticRequest -SourceCommit $request.SourceCommit -LauncherSha256 $request.LauncherSha256 -UpdaterSha256 $request.UpdaterSha256 -CandidateManifestSha256 $request.CandidateManifestSha256 -RequesterPid $PID -RequesterCreationUtcTicks $requester.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
-    $script:Server.Dispose();$script:Server=New-F2UpdateDiagnosticServer -Request $exitMismatch
+    Reset-F2FixtureServer -Request $exitMismatch -CaseId CHILD_EXIT_MISMATCH
     $exitMismatchWorker=Invoke-SyntheticDiagnosticWorker -Request $exitMismatch -Stage 'CandidateAndSourceValidation' -Code 'UPDATE_SOURCE_GIT_UNAVAILABLE' -ExitCode 2 -RecordExitCode 1
     Assert-Diagnostic ($exitMismatchWorker.Result.DiagnosticStatus -ceq 'INVALID' -and $exitMismatchWorker.Result.DiagnosticErrorCode -ceq 'UPDATE_DIAGNOSTIC_IDENTITY_MISMATCH' -and $exitMismatchWorker.Result.ActualChildExitCode -eq 2 -and $null -eq $exitMismatchWorker.Result.Record) 'rejects a diagnostic claim that conflicts with the independently observed child exit'
-    $exitMismatchWorker.Process.Dispose()
+    Dispose-F2FixtureProcess -Process $exitMismatchWorker.Process
 
     $falseSuccessRequest = New-F2UpdateDiagnosticRequest -SourceCommit $request.SourceCommit -LauncherSha256 $request.LauncherSha256 -UpdaterSha256 $request.UpdaterSha256 -CandidateManifestSha256 $request.CandidateManifestSha256 -RequesterPid $PID -RequesterCreationUtcTicks $requester.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
-    $script:Server.Dispose();$script:Server=New-F2UpdateDiagnosticServer -Request $falseSuccessRequest
+    Reset-F2FixtureServer -Request $falseSuccessRequest -CaseId FALSE_SUCCESS
     $falseSuccessWorker=Invoke-SyntheticDiagnosticWorker -Request $falseSuccessRequest -Stage 'Complete' -Code 'NONE' -ExitCode 1 -RecordExitCode 0
     Assert-Diagnostic ($falseSuccessWorker.Result.DiagnosticStatus -ceq 'INVALID' -and $falseSuccessWorker.Result.ActualChildExitCode -eq 1 -and $null -eq $falseSuccessWorker.Result.Record) 'rejects a forged Complete/zero diagnostic when the observed child actually failed'
-    $falseSuccessWorker.Process.Dispose()
+    Dispose-F2FixtureProcess -Process $falseSuccessWorker.Process
 
     $badPid = New-F2UpdateDiagnosticRequest -SourceCommit $request.SourceCommit -LauncherSha256 $request.LauncherSha256 -UpdaterSha256 $request.UpdaterSha256 -CandidateManifestSha256 $request.CandidateManifestSha256 -RequesterPid $PID -RequesterCreationUtcTicks $requester.StartTime.ToUniversalTime().Ticks -RequesterSid $sid
-    $script:Server.Dispose();$script:Server=New-F2UpdateDiagnosticServer -Request $badPid
+    Reset-F2FixtureServer -Request $badPid -CaseId WRONG_CLIENT
     $targetStart=New-Object Diagnostics.ProcessStartInfo
     $targetStart.FileName=(Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe')
     $targetStart.Arguments='-NoProfile -NonInteractive -Command "Start-Sleep -Milliseconds 5000; exit 1"'
     $targetStart.UseShellExecute=$false;$targetStart.CreateNoWindow=$true;$targetStart.RedirectStandardOutput=$true;$targetStart.RedirectStandardError=$true
-    $target=New-Object Diagnostics.Process;$target.StartInfo=$targetStart
-    if(-not $target.Start()){throw 'SYNTHETIC_EXPECTED_PROCESS_START_FAILED'}
+    $target=New-F2FixtureProcess -StartInfo $targetStart
+    [void](Start-F2FixtureProcess -Process $target -FailureLabel 'SYNTHETIC_EXPECTED_PROCESS_START_FAILED')
     $wrongWorker=Invoke-SyntheticDiagnosticWorker -Request $badPid -Stage 'CandidateAndSourceValidation' -Code 'UPDATE_SOURCE_COMMIT_MISMATCH' -ExpectedChildProcess $target
     $wrongClientPass = $wrongWorker.Result.DiagnosticStatus -ceq 'INVALID' -and $wrongWorker.Result.DiagnosticErrorCode -ceq 'UPDATE_DIAGNOSTIC_IDENTITY_MISMATCH' -and $wrongWorker.Result.ActualChildExitCode -eq 1
     if (-not $wrongClientPass) { Write-Host ('WrongClientResult=' + ($wrongWorker.Result | ConvertTo-Json -Compress -Depth 4)) }
     Assert-Diagnostic $wrongClientPass 'rejects a distinct connected process while retaining the independently observed target exit'
-    $wrongWorker.Process.Dispose();$target.Dispose()
+    Dispose-F2FixtureProcess -Process $wrongWorker.Process;Dispose-F2FixtureProcess -Process $target
 }
 finally {
-    if($null -ne $script:Server){$script:Server.Dispose()}
+    if($null -ne $script:Server){Write-F2FixtureTrace -Event SERVER_DISPOSE -Status BEGIN;try{$script:Server.Dispose();$script:Server=$null;Write-F2FixtureTrace -Event SERVER_DISPOSE -Status COMPLETE}catch{Write-F2FixtureTrace -Event SERVER_DISPOSE -Status FAILED -ErrorClass SERVER_DISPOSE;throw}}
     if($null -ne $syntheticRoot -and [IO.Path]::GetFullPath($syntheticRoot).StartsWith(([IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')+'\'),[StringComparison]::OrdinalIgnoreCase) -and [IO.Path]::GetFileName($syntheticRoot) -match '^F2G1-Diagnostic-Test-[0-9a-f]{32}$'){
         $tempItem=Get-Item -LiteralPath $syntheticRoot -Force -ErrorAction SilentlyContinue
-        if($null -ne $tempItem -and ($tempItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0){Remove-Item -LiteralPath $syntheticRoot -Recurse -Force -ErrorAction Stop}
+        if($null -ne $tempItem -and ($tempItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0){[void](Start-F2FixtureTraceCase -CaseId TEMP_CLEANUP);Write-F2FixtureTrace -Event TEMP_CLEANUP -Status BEGIN;try{Remove-Item -LiteralPath $syntheticRoot -Recurse -Force -ErrorAction Stop;Write-F2FixtureTrace -Event TEMP_CLEANUP -Status COMPLETE}catch{Write-F2FixtureTrace -Event TEMP_CLEANUP -Status FAILED -ErrorClass TEMP_CLEANUP;throw}}
+        elseif($null -eq $tempItem){[void](Start-F2FixtureTraceCase -CaseId TEMP_CLEANUP);Write-F2FixtureTrace -Event TEMP_CLEANUP -Status SKIPPED}
+        else{[void](Start-F2FixtureTraceCase -CaseId TEMP_CLEANUP);Write-F2FixtureTrace -Event TEMP_CLEANUP -Status REPARSE_BLOCKED}
     }
 }
 
