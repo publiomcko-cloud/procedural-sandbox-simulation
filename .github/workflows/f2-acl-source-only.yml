@@ -19,8 +19,8 @@ on:
       - '.github/workflows/f2-acl-source-only.yml'
 jobs:
   powershell-source-only:
-    if: github.event_name != 'pull_request' || github.head_ref != 'diagnostics/f2-ci-fixture-observability'
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -83,13 +83,6 @@ jobs:
           $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
           Write-Host "F2NativeHelperTestProcessExit=$($test.ExitCode)"
           if ($test.ExitCode -ne 0) { exit $test.ExitCode }
-      - name: Run elevated-child diagnostics channel integration and failure suite in Windows PowerShell 5.1
-        shell: powershell
-        run: |
-          $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2ProtectedReleaseDiagnostics.ps1').Path
-          $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
-          Write-Host "F2ProtectedDiagnosticsTestProcessExit=$($test.ExitCode)"
-          if ($test.ExitCode -ne 0) { exit $test.ExitCode }
       # The older create-only installer suite pins the superseded pre-correction
       # seven-file package. It is retained as historical evidence and is not an
       # upgrade path or a validation target for this source-only release change.
@@ -106,6 +99,14 @@ jobs:
           $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2HistoricalManifestLaunch.ps1').Path
           $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
           Write-Host "F2HistoricalManifestLaunchTestProcessExit=$($test.ExitCode)"
+          if ($test.ExitCode -ne 0) { exit $test.ExitCode }
+      - name: Run elevated-child diagnostics channel integration and failure suite in Windows PowerShell 5.1
+        shell: powershell
+        timeout-minutes: 10
+        run: |
+          $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2ProtectedReleaseDiagnostics.ps1').Path
+          $test = Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
+          Write-Host "F2ProtectedDiagnosticsTestProcessExit=$($test.ExitCode)"
           if ($test.ExitCode -ne 0) { exit $test.ExitCode }
       - name: Parse tracked PowerShell source
         shell: powershell
@@ -127,22 +128,3 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:GITHUB_BASE_REF)) { $base = 'origin/main' } else { $base = "origin/$env:GITHUB_BASE_REF" }
           git diff --check "$base...HEAD"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-  powershell-diagnostics-observability:
-    if: github.event_name == 'pull_request' && github.head_ref == 'diagnostics/f2-ci-fixture-observability' && github.base_ref == 'docs/f2-g1-child-auth-postmortem'
-    runs-on: windows-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Run only the isolated F2 diagnostics fixture suite in Windows PowerShell 5.1
-        shell: powershell
-        timeout-minutes: 5
-        run: |
-          $testPath = (Resolve-Path '.\scripts\f2-acl\Test-F2ProtectedReleaseDiagnostics.ps1').Path
-          $powershell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-          & $powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $testPath
-          $testExit = $LASTEXITCODE
-          Write-Host "F2ProtectedDiagnosticsTestProcessExit=$testExit"
-          if ($testExit -ne 0) { exit $testExit }
