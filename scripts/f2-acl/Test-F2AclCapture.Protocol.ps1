@@ -789,6 +789,26 @@ $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 Assert-F2Acl (@(Get-F2AclUnexpectedWritableSids -Rules @($readOnlyRule) -OwnerSid $currentSid).Count -eq 0) 'read-only parent ACE is allowed'
 Assert-F2Acl (@(Get-F2AclUnexpectedWritableSids -Rules @($writeRule) -OwnerSid $currentSid) -contains 'S-1-5-11') 'unexpected parent writer is rejected by SID'
 Assert-F2Acl (@(Get-F2AclUnexpectedWritableSids -Rules @($writeAttributesRule) -OwnerSid $currentSid) -contains 'S-1-5-11') 'write-attributes parent ACE is rejected'
+# Use actual raw CommonAce access masks, including generic bits that are not
+# valid FileSystemRights enum members. Do not touch live ACLs or protected paths.
+$rawParentMaskCases = @(
+    [pscustomobject]@{Name='GENERIC_ALL';Mask=[int]0x10000000;Unexpected=$true},
+    [pscustomobject]@{Name='GENERIC_WRITE';Mask=[int]0x40000000;Unexpected=$true},
+    [pscustomobject]@{Name='GENERIC_READ';Mask=[int]::MinValue;Unexpected=$false},
+    [pscustomobject]@{Name='GENERIC_READ_WITH_WRITE_DATA';Mask=([int]::MinValue + 2);Unexpected=$true},
+    [pscustomobject]@{Name='DELETE_CHILD';Mask=[int]0x00000040;Unexpected=$true}
+)
+foreach ($case in $rawParentMaskCases) {
+    $rawAce = [Security.AccessControl.CommonAce]::new([Security.AccessControl.AceFlags]::None, [Security.AccessControl.AceQualifier]::AccessAllowed, [int]$case.Mask, $otherSid, $false, $null)
+    $rawRule = [pscustomobject]@{IdentityReference=$rawAce.SecurityIdentifier;AccessControlType='Allow';FileSystemRights=[long]([int64]$rawAce.AccessMask -band 0xFFFFFFFFL)}
+    $writers = @(Get-F2AclUnexpectedWritableSids -Rules @($rawRule) -OwnerSid $currentSid)
+    Assert-F2Acl (($writers.Count -eq [int][bool]$case.Unexpected) -and (($writers -contains 'S-1-5-11') -eq [bool]$case.Unexpected)) ('raw parent ACL mask ' + $case.Name + ' classification is fail-closed')
+}
+$denyGenericAll = [pscustomobject]@{IdentityReference=$otherSid;AccessControlType='Deny';FileSystemRights=[long]0x10000000}
+Assert-F2Acl (@(Get-F2AclUnexpectedWritableSids -Rules @($denyGenericAll) -OwnerSid $currentSid).Count -eq 0) 'deny ACE is not classified as an allow grant'
+$systemSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
+$trustedGenericAll = [pscustomobject]@{IdentityReference=$systemSid;AccessControlType='Allow';FileSystemRights=[long]0x10000000}
+Assert-F2Acl (@(Get-F2AclUnexpectedWritableSids -Rules @($trustedGenericAll) -OwnerSid $currentSid).Count -eq 0) 'trusted SYSTEM ACE is not an unexpected writer'
 $boundedRecords = [Collections.Generic.List[object]]::new()
 $boundedState = [pscustomobject]@{Bytes=0}
 Add-F2AclBoundedStreamRecord -Records $boundedRecords -State $boundedState -Stream 'Warning' -Message 'synthetic warning'

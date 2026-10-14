@@ -1013,8 +1013,11 @@ function New-F2AclRestrictedDirectory {
     $parentSddl = [F2Acl.NativeDirectory]::GetSddl($parentPath)
     $parentRaw = [Security.AccessControl.RawSecurityDescriptor]::new($parentSddl)
     if ($null -eq $parentRaw.DiscretionaryAcl -or ($parentRaw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclPresent) -eq 0) { throw 'Restricted evidence parent has a missing or null DACL.' }
+    # A raw DACL may contain GENERIC_ALL/WRITE/READ ACE masks that cannot be
+    # represented by FileSystemRights. Preserve the complete unsigned 32-bit
+    # access mask for the existing fail-closed writable-SID policy check.
     $parentRules = @($parentRaw.DiscretionaryAcl | ForEach-Object {
-        [pscustomobject]@{IdentityReference=$_.SecurityIdentifier;AccessControlType=if ($_.AceQualifier -eq [Security.AccessControl.AceQualifier]::AccessAllowed) { 'Allow' } else { 'Deny' };FileSystemRights=[Security.AccessControl.FileSystemRights]$_.AccessMask}
+        [pscustomobject]@{IdentityReference=$_.SecurityIdentifier;AccessControlType=if ($_.AceQualifier -eq [Security.AccessControl.AceQualifier]::AccessAllowed) { 'Allow' } else { 'Deny' };FileSystemRights=[long]([int64]$_.AccessMask -band 0xFFFFFFFFL)}
     })
     $unexpectedWriters = @(Get-F2AclUnexpectedWritableSids -Rules $parentRules -OwnerSid $OwnerSid)
     if ($unexpectedWriters.Count -gt 0) { throw ('Restricted evidence parent grants write-capable access to an unexpected SID: ' + ($unexpectedWriters -join ',')) }
