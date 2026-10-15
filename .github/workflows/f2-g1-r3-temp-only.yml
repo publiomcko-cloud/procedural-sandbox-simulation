@@ -1,7 +1,7 @@
 name: F2 G1 R3 TEMP-only focused validation
 on:
   push:
-    branches: [feat/f2-g1-c-postfailure-r3-source-only-contract, fix/f2-g1-r3-1-temp-trust-boundary]
+    branches: [feat/f2-g1-c-postfailure-r3-source-only-contract, fix/f2-g1-r3-1-temp-trust-boundary, fix/f2-g1-r3-2-synthetic-hardlink-output]
     paths:
       - 'scripts/f2-acl/r3/**'
       - '.github/workflows/f2-g1-r3-temp-only.yml'
