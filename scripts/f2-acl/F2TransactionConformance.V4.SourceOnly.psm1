@@ -156,6 +156,11 @@ function Resolve-F2V4ConformanceObservation {
             }
         }
     }
+    # A pre-write rejection is unsafe if any local write could have occurred.
+    # Resolve contradictory synthetic evidence to evidence-preserving HOLD.
+    if($localWrite -and $script:DispositionByState[$state] -ceq 'REJECT_BEFORE_WRITE'){
+        $state='PRECONDITION_UNMET'
+    }
     return New-F2V4ConformanceDecision -InspectionState $state
 }
 function New-F2V4FakeAuthority {
@@ -186,7 +191,7 @@ function Invoke-F2V4FakeReservation {
     $tuple="$TxId|$EnvironmentId|$TargetDigest|$Operation"
     if($Operation -cnotin @('INSTALL','RECOVER_FORWARD','FINALIZE_POST_SWITCH')){
         $status='UNSUPPORTED_OPERATION'
-    } elseif($PredecessorSchema -cin @('v2','v3')){
+    } elseif($PredecessorSchema -cne 'synthetic'){
         $status='UNSUPPORTED_PREDECESSOR'
     } elseif($Authority.Approvals.ContainsKey($ApprovalId)){
         if($Authority.Approvals[$ApprovalId] -ceq $tuple){$status='REPLAY_IDENTICAL'}

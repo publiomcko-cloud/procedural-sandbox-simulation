@@ -114,7 +114,33 @@ try {
     }
     Assert-F2V4Conformance ((Resolve-F2V4ConformanceObservation -Evidence $offline).Classification -ceq 'HOLD_PRESERVE') 'authority outage after possible local write cannot claim prewrite rejection'
 
-    # Pure transition graph checks: modeled edge approval never implies protected
+
+    # A possible earlier local write overrides all nominal pre-write outcomes.
+    # These synthetic contradictions are outside the immutable 92-case oracle.
+    $contradictoryPrewrite=@(
+        @{Domain='Receipt';Condition='Missing';RequestedOperation='INSPECT';SignatureValidated=$false;RootPresent=$false}
+        @{Domain='Bootstrap';Condition='Unprovisioned';RequestedOperation='INSPECT';SignatureValidated=$false;RootPresent=$true}
+        @{Domain='Cutover';Condition='LegacyInstallRequested';RequestedOperation='INSPECT';SignatureValidated=$false;RootPresent=$true}
+        @{Domain='Authority';Condition='DuplicateApprovalOtherTx';RequestedOperation='INSPECT';SignatureValidated=$false;RootPresent=$true}
+        @{Domain='Recovery';Condition='AuthenticRollbackReceipt';RequestedOperation='ROLLBACK';SignatureValidated=$true;RootPresent=$true}
+    )
+    foreach($case in $contradictoryPrewrite){
+        $possibleWrite=[pscustomobject]@{
+            Domain=$case.Domain
+            Condition=$case.Condition
+            LocalWritePossible=$true
+            RootPresent=[bool]$case.RootPresent
+            AuthorityReserved=$false
+            RequestedOperation=$case.RequestedOperation
+            SignatureValidated=[bool]$case.SignatureValidated
+        }
+        $decision=Resolve-F2V4ConformanceObservation -Evidence $possibleWrite
+        Assert-F2V4Conformance ($decision.InspectionState -ceq 'PRECONDITION_UNMET' -and
+            $decision.Classification -ceq 'HOLD_PRESERVE' -and
+            (Test-F2V4NoPower -Result $decision)) ("possible local write overrides prewrite verdict: "+$case.Domain+"/"+$case.Condition)
+    }
+
+    # Pure transition graph checks: modeled edge approval never imply protected
     # filesystem or manifest activation authority.
     $normalPhases=@('REMOTE_RESERVED_NO_LOCAL','GENESIS','STAGE_INTENT','STAGE_CREATED',
         'PACKAGE_VERIFIED','PUBLISH_INTENT','PACKAGE_PUBLISHED',
@@ -152,6 +178,20 @@ try {
     Assert-F2V4Conformance (-not $unknownEdge.AllowedInModel) 'unknown phase fail closed'
 
     # Fake authority: in-memory generation, replay and restored-head simulation only.
+
+    # Only the explicitly modeled synthetic predecessor is accepted by this
+    # in-memory test double. All other schemas must leave its ledger unchanged.
+    $schemaProbe=New-F2V4FakeAuthority
+    $schemaTx=('c'*32)
+    $schemaDigest=('3'*64)
+    foreach($unsupportedSchema in @('v2','v3','v5','unknown','Synthetic','')){
+        $schemaDenied=Invoke-F2V4FakeReservation -Authority $schemaProbe -ApprovalId 'schema-probe' -TxId $schemaTx -EnvironmentId 'synthetic-host' -TargetDigest $schemaDigest -Operation INSTALL -ExpectedGeneration 0 -PredecessorSchema $unsupportedSchema
+        Assert-F2V4Conformance ($schemaDenied.Status -ceq 'UNSUPPORTED_PREDECESSOR' -and
+            $schemaDenied.CanMutate -eq $false -and $schemaDenied.Durable -eq $false -and
+            $schemaProbe.Generation -eq 0 -and $schemaProbe.Approvals.Count -eq 0 -and
+            $schemaProbe.Transactions.Count -eq 0 -and $schemaProbe.Checkpoints.Count -eq 0) ("unsupported predecessor schema rejected without reservation: ["+$unsupportedSchema+"]")
+    }
+
     $authority=New-F2V4FakeAuthority
     $tx='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     $anotherTx='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
