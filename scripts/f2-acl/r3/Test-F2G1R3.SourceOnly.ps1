@@ -38,6 +38,16 @@ Check (-not $source.Contains('[switch]$Live') -and -not $source.Contains('OwnerA
 $nativeSource=[IO.File]::ReadAllText($native)
 Check ($nativeSource.Contains('NtCreateFile') -and $nativeSource.Contains('NtQueryDirectoryFile') -and $nativeSource.Contains('GetSecurityInfo')) 'experimental native code binds relative handle, inventory and ACL'
 Check ($nativeSource.Contains('OUTSIDE_TEMP_FIXTURE') -and $nativeSource.Contains('F2G1-R3Handle-') -and -not $nativeSource.Contains('C:\\Program Files\\F2-G1-Icacls')) 'native probe has explicit TEMP-only fixture guard and no protected path constants'
+# Verify the experimental native code actually compiles on the Windows PS5.1 runner.
+try {
+    Add-Type -Path $native -ErrorAction Stop
+    Check $true 'native C# handle prototype compiles on Windows PowerShell 5.1'
+} catch {
+    Write-Host ('TEMP_ONLY_COMPILER_DIAGNOSTIC='+$_.Exception.ToString())
+    Check $false 'native C# handle prototype compiles on Windows PowerShell 5.1'
+    Write-Host ('ASSERTIONS='+$script:Count+' FAILURES='+$script:Failed.Count)
+    exit 1
+}
 # Source hash comparison is a fixture correctness check, NOT owner authorization.
 $h1=(Get-FileHash -LiteralPath $native -Algorithm SHA256).Hash.ToLowerInvariant()
 $h2=(Get-FileHash -LiteralPath $scope -Algorithm SHA256).Hash.ToLowerInvariant()
