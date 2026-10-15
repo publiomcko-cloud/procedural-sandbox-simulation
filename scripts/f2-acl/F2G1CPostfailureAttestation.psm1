@@ -194,7 +194,7 @@ function New-F2G1FixtureProvider {
     $listChildren={param([string]$Path) if ($fixture.Fault -eq 'AccessDenied' -and $Path -eq $fixture.FaultPath) { throw 'SIMULATED_ACCESS_DENIED' }; $row=@($fixture.Children | Where-Object { $_.Path -ceq $Path }) | Select-Object -First 1; if($null -eq $row){throw 'SIMULATED_MISSING_INVENTORY'}; return @($row.Entries)}.GetNewClosure()
     return @{
         Mode='Fixture'; Fixture=$fixture; GetPath=$getPath; ReadBytes=$readBytes; ListChildren=$listChildren
-        Identity=[pscustomobject]@{IsAdministrator=[bool]$fixture.IsAdministrator;UserSid=[string]$fixture.UserSid}
+        Identity=[pscustomobject]@{IsAdministrator=[bool]$fixture.IsAdministrator;AdministratorGroupPresent=[bool]$fixture.AdministratorGroupPresent;UserSid=[string]$fixture.UserSid}
     }
 }
 
@@ -208,8 +208,8 @@ function Get-F2G1Sha256 {
 function Invoke-F2G1Core {
     param($Provider)
     $report=New-F2G1Report $Provider.Mode
-    $identity = if($Provider.Mode -eq 'Live') { $i=[Security.Principal.WindowsIdentity]::GetCurrent();$p=New-Object Security.Principal.WindowsPrincipal($i);[pscustomobject]@{IsAdministrator=[bool]$p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator);UserSid=[string]$i.User.Value} } else { $Provider.Identity }
-    if ($identity.IsAdministrator) { return (Stop-F2G1 $report 'ExecutionContext' 'ADMINISTRATOR_TOKEN' @{}) }
+    $identity = if($Provider.Mode -eq 'Live') { $i=[Security.Principal.WindowsIdentity]::GetCurrent();$p=New-Object Security.Principal.WindowsPrincipal($i);$administratorGroupPresent=@($i.Groups|Where-Object{$_.Value -eq 'S-1-5-32-544'}).Count -gt 0;[pscustomobject]@{IsAdministrator=[bool]$p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator);AdministratorGroupPresent=$administratorGroupPresent;UserSid=[string]$i.User.Value} } else { $Provider.Identity }
+    if ($identity.IsAdministrator -or $identity.AdministratorGroupPresent) { return (Stop-F2G1 $report 'ExecutionContext' 'ADMINISTRATOR_TOKEN_OR_GROUP_MEMBERSHIP' @{}) }
     Add-F2G1Gate $report 'ExecutionContext' 'PASS' @{PowerShell='5.1';IsAdministrator=$false}
 
     $parentModes=@{'C:\'='DriveRoot';'C:\Program Files'='ProgramFiles';'C:\ProgramData'='ProgramData'}

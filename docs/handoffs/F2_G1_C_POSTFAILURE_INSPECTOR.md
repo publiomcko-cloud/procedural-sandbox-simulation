@@ -21,7 +21,7 @@ Changed paths:
 - `scripts/f2-acl/Test-F2G1CPostfailureAttestation.SourceOnly.ps1`
 - `docs/handoffs/F2_G1_C_POSTFAILURE_INSPECTOR.md`
 
-Implementation summary: Adds an exact path allowlist for the reviewed C: system parents, F2 package directories/files, active manifest, seven-file baseline mailbox, and enumerated immediate transaction-artifact names. The live provider uses bounded read-only file reads, path/ancestor reparse checks, ACL metadata reads and immediate-child enumeration only. It rejects administrator tokens, requires a new Issue #48 comment reference in live mode, and rejects the spent comment `6196160426`. The wrapper has no default execution mode and only imports the new inspector module. The test creates a single disposable fixture document under a guarded direct TEMP child and removes only that guarded fixture directory.
+Implementation summary: Adds an exact path allowlist for the reviewed C: system parents, F2 package directories/files, active manifest, seven-file baseline mailbox, and enumerated immediate transaction-artifact names. The live provider uses bounded read-only file reads, path/ancestor reparse checks, ACL metadata reads and immediate-child enumeration only. It rejects administrator tokens and membership in the local Administrators group, requires a new Issue #48 comment reference in live mode, and rejects the spent comment `6196160426`. The wrapper has no default execution mode and only imports the new inspector module. The test creates a single disposable fixture document under a guarded direct TEMP child and removes only that guarded fixture directory.
 
 Architectural impact: None to production. Historical V2 preservation evidence is inspected only as data. No installed script/module is imported or executed; no external authority, cryptographic signature, durable storage, or effective token authorization is provided. The report cannot establish `PASS_RESTRICTIVE_ACL`, V3 readiness, or production readiness.
 
@@ -33,7 +33,7 @@ Tests executed (exact commands):
 - Windows PowerShell 5.1 inert suite: `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/f2-acl/Test-F2G1CPostfailureAttestation.SourceOnly.ps1`, run as a child with redirected streams and a 30-second bound.
 - `git diff --check`
 
-Results / assertion counts: parser-only process exited 0 with `PARSE_ERRORS=0` for all three candidate PowerShell files. Synthetic suite exited 0 with `ASSERTIONS=18 FAILURES=0`; stdout and stderr were drained, no timeout occurred, and the fixture cleanup completed. `git diff --check` passed after staging.
+Results / assertion counts: parser-only Windows PowerShell 5.1 process exited 0 with `PARSE_ERRORS=0` for all three candidate PowerShell files. The inert suite exited 0 with `ASSERTIONS=19 FAILURES=0`; stdout and stderr were drained, no timeout occurred, and the guarded TEMP fixture was cleaned up. `git diff --check` passed after staging.
 
 Tests not executed: No live C: inspection; no C:, G:, Hyper-V, VM, UAC, `icacls`, updater, installation, ACL mutation, CI, or release operation.
 

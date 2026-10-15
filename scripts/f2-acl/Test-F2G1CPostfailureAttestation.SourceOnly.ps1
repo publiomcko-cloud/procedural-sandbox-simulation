@@ -26,7 +26,7 @@ function ConvertTo-Utf8Bytes {
 }
 
 function New-Fixture {
-    param([string]$Root,[string]$Fault='',[string]$FaultPath='',[string]$ManifestOverride='',[switch]$MutatePackage,[switch]$AddUnexpected,[switch]$Incomplete,[switch]$Admin)
+    param([string]$Root,[string]$Fault='',[string]$FaultPath='',[string]$ManifestOverride='',[switch]$MutatePackage,[switch]$AddUnexpected,[switch]$Incomplete,[switch]$Admin,[switch]$AdministratorGroup)
     $pkg='C:\Program Files\F2-G1-Icacls\scripts\f2-acl'
     $data='C:\ProgramData\F2-G1-Icacls'
     $mailbox='C:\ProgramData\F2-G1-ACL-Evidence-ecb6deeb424e40feb5354d18908986df'
@@ -88,7 +88,7 @@ function New-Fixture {
     $children.Add([pscustomobject]@{Path=$data;Entries=@(@{Name='approved-release.json';Kind='File';Reparse=$false})})
     $children.Add([pscustomobject]@{Path=$mailbox;Entries=@($mailNames|ForEach-Object{@{Name=$_;Kind='File';Reparse=$false}})})
     $faultValue=if($Fault -eq 'AccessDenied'){'AccessDenied'}else{''}
-$fixture=[ordered]@{Fault=$faultValue;FaultPath=$FaultPath;IsAdministrator=[bool]$Admin;UserSid=$userSid;Expected=@{ManifestSha256=(Get-BytesSha256 $manifestBytes);ReviewedCommitSha='5741ffe90a3abd02a08563e6431e8a0b9b63eeb1';BaselineMailboxId='ecb6deeb424e40feb5354d18908986df';BaselinePayloadCaptureId='489e7fec-0300-467c-bfbd-a46fb8cf7211';RecordPaths=@($recordPaths)};Paths=@($paths.ToArray());Files=@($files.ToArray());Children=@($children.ToArray())}
+$fixture=[ordered]@{Fault=$faultValue;FaultPath=$FaultPath;IsAdministrator=[bool]$Admin;AdministratorGroupPresent=[bool]$AdministratorGroup;UserSid=$userSid;Expected=@{ManifestSha256=(Get-BytesSha256 $manifestBytes);ReviewedCommitSha='5741ffe90a3abd02a08563e6431e8a0b9b63eeb1';BaselineMailboxId='ecb6deeb424e40feb5354d18908986df';BaselinePayloadCaptureId='489e7fec-0300-467c-bfbd-a46fb8cf7211';RecordPaths=@($recordPaths)};Paths=@($paths.ToArray());Files=@($files.ToArray());Children=@($children.ToArray())}
     $fixturePath=Join-Path $Root 'fixture.json'
     $json=$fixture|ConvertTo-Json -Depth 16 -Compress
     [IO.File]::WriteAllText($fixturePath,$json,(New-Object Text.UTF8Encoding($false)))
@@ -154,7 +154,11 @@ try {
 
     New-Fixture -Root $root -Admin
     $r=Invoke-F2G1CPostfailureAttestation -SyntheticFixtureRoot $root
-    Assert-Case (@($r.Gates|Where-Object{$null -ne $_.Data -and $_.Data.ContainsKey('Code') -and $_.Data['Code'] -eq 'ADMINISTRATOR_TOKEN'}).Count -eq 1) 'Administrator token blocks before path inspection'
+    Assert-Case (@($r.Gates|Where-Object{$null -ne $_.Data -and $_.Data.ContainsKey('Code') -and $_.Data['Code'] -eq 'ADMINISTRATOR_TOKEN_OR_GROUP_MEMBERSHIP'}).Count -eq 1) 'Administrator token blocks before path inspection'
+
+    New-Fixture -Root $root -AdministratorGroup
+    $r=Invoke-F2G1CPostfailureAttestation -SyntheticFixtureRoot $root
+    Assert-Case (@($r.Gates|Where-Object{$null -ne $_.Data -and $_.Data.ContainsKey('Code') -and $_.Data['Code'] -eq 'ADMINISTRATOR_TOKEN_OR_GROUP_MEMBERSHIP'}).Count -eq 1) 'filtered administrator group membership blocks before path inspection'
 
     New-Fixture -Root $root -Fault Reparse -FaultPath 'C:\Program Files\F2-G1-Icacls\scripts\f2-acl'
     $r=Invoke-F2G1CPostfailureAttestation -SyntheticFixtureRoot $root
