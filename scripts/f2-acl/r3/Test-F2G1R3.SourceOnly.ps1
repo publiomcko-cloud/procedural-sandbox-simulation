@@ -48,6 +48,7 @@ try {
     [IO.File]::WriteAllBytes((Join-Path $fixture 'payload.bin'),[Text.Encoding]::UTF8.GetBytes('TEMP-only R3 handle probe'))
     $common=@('-SyntheticFixtureRoot','"'+$fixture+'"','-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',$h2)
     $good=Case $bootstrap $common 0 'TEMP_HANDLE_FIXTURE_PASS'
+    if(-not $good.Ok) { Write-Host ('TEMP_ONLY_DIAGNOSTIC:POSITIVE_EXIT='+$good.Exit+';STDERR='+$good.Stderr.Trim()+';STDOUT='+$good.Stdout.Trim()) }
     Check $good.Ok 'held relative file and directory handles support TEMP-only positive capture'
     $changed=Case $bootstrap ($common+@('-AttemptReplacement')) 0 'TEMP_HANDLE_FIXTURE_PASS'
     Check $changed.Ok 'rename/replacement denied while held read-only handles remain open'
@@ -55,6 +56,7 @@ try {
     $drift=Case $bootstrap ($common+@('-InjectIdentityDrift')) 2 'BLOCKED_WITH_EVIDENCE'
     Check $drift.Ok 'injected identity drift rejects with sanitized failure'
     $badHash=Case $bootstrap @('-SyntheticFixtureRoot','"'+$fixture+'"','-ExpectedNativeSha256',('0'*64),'-ExpectedScopeSha256',$h2) 2 'BLOCKED_WITH_EVIDENCE'
+    if(-not $badHash.Ok) { Write-Host ('TEMP_ONLY_DIAGNOSTIC:NEGATIVE_EXIT='+$badHash.Exit+';STDERR='+$badHash.Stderr.Trim()+';STDOUT='+$badHash.Stdout.Trim()) }
     Check $badHash.Ok 'incorrect native source bytes reject before compile'
     $badScope=Case $bootstrap @('-SyntheticFixtureRoot','"'+$fixture+'"','-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',('0'*64)) 2 'BLOCKED_WITH_EVIDENCE'
     Check $badScope.Ok 'incorrect canonical scope digest rejects'
