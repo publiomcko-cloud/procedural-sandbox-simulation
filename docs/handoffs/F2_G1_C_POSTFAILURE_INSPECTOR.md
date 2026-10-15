@@ -10,7 +10,7 @@ Worktree / branch: `C:\Dev\f2-g1-c-postfailure-inspector-r1` / `fix/f2-g1-c-post
 
 Base SHA: `33e985b8e7807bf1feda935374889efd5e5f158a` (accepted PR #50 PowerShell 5.1 entrypoint bridge)
 
-Candidate SHA: populated after the source-only commit
+Candidate source SHA: `6008e453ad2be152ef6fc4306f9b609c39d30474` (inspector/test implementation commit; no source files changed afterward)
 
 Parent SHA: `33e985b8e7807bf1feda935374889efd5e5f158a`
 
