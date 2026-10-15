@@ -41,9 +41,9 @@ namespace F2G1R3 {
 
     static void Require(bool ok,string error) {if(!ok)throw new InvalidOperationException(error);}
     static string Digest(byte[] bytes) {using(SHA256 sha=SHA256.Create())return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-","").ToLowerInvariant();}
-    static FileInformation GetInfo(SafeFileHandle h) {
+    static FileInformation GetInfo(SafeFileHandle h,string stage) {
       FileInformation info;
-      Require(h!=null&&!h.IsInvalid&&!h.IsClosed&&GetFileInformationByHandle(h,out info),"HANDLE_INFO_UNAVAILABLE");
+      Require(h!=null&&!h.IsInvalid&&!h.IsClosed&&GetFileInformationByHandle(h,out info),"HANDLE_INFO_UNAVAILABLE_"+stage);
       return info;
     }
     static string Id(FileInformation f){return f.Volume.ToString("x8")+":"+f.IndexHigh.ToString("x8")+f.IndexLow.ToString("x8");}
@@ -105,7 +105,7 @@ namespace F2G1R3 {
       } finally {Marshal.FreeHGlobal(buffer);}
     }
     static byte[] ReadBounded(SafeFileHandle h){
-      FileInformation meta=GetInfo(h);
+      FileInformation meta=GetInfo(h,"PAYLOAD");
       Require(meta.SizeHigh==0&&meta.SizeLow>0&&meta.SizeLow<=4096,"PAYLOAD_SIZE_INVALID");
       byte[] data=new byte[(int)meta.SizeLow];int offset=0;
       while(offset<data.Length){
@@ -126,10 +126,10 @@ namespace F2G1R3 {
        &&Guid.TryParseExact(name.Substring(14),"D",out id),"OUTSIDE_TEMP_FIXTURE");
       using(SafeFileHandle dir=CreateFile(full,READ_CONTROL|READ_DATA|READ_ATTRIBUTES,SHARE_READ,IntPtr.Zero,OPEN_EXISTING,BACKUP_SEMANTICS|OPEN_REPARSE,IntPtr.Zero)){
         Require(!dir.IsInvalid,"FIXTURE_HANDLE_OPEN_FAILED");
-        FileInformation initialDir=GetInfo(dir);VerifyType(initialDir,true);
+        FileInformation initialDir=GetInfo(dir,"ROOT");VerifyType(initialDir,true);
         string dirId=Id(initialDir),dirAcl=AclDigest(dir),names=Entries(dir);
         using(SafeFileHandle file=OpenRelativeFile(dir)){
-          FileInformation initial=GetInfo(file);VerifyType(initial,false);
+          FileInformation initial=GetInfo(file,"CHILD");VerifyType(initial,false);
           string fileId=Id(initial),fileAcl=AclDigest(file);
           if(tryReplace){
             bool refused=false;
@@ -139,8 +139,8 @@ namespace F2G1R3 {
           }
           byte[] bytes=ReadBounded(file);
           if(injectIdentityDrift)throw new InvalidOperationException("INJECTED_FILE_IDENTITY_DRIFT");
-          Require(Id(GetInfo(file))==fileId&&AclDigest(file)==fileAcl,"FILE_IDENTITY_OR_ACL_CHANGED");
-          Require(Entries(dir)==names&&Id(GetInfo(dir))==dirId&&AclDigest(dir)==dirAcl,"DIR_IDENTITY_ACL_OR_INVENTORY_CHANGED");
+          Require(Id(GetInfo(file,"CHILD_RECHECK"))==fileId&&AclDigest(file)==fileAcl,"FILE_IDENTITY_OR_ACL_CHANGED");
+          Require(Entries(dir)==names&&Id(GetInfo(dir,"ROOT_RECHECK"))==dirId&&AclDigest(dir)==dirAcl,"DIR_IDENTITY_ACL_OR_INVENTORY_CHANGED");
           return "TEMP_HANDLE_FIXTURE_PASS|SHA256="+Digest(bytes)+"|Length="+bytes.Length;
         }
       }
