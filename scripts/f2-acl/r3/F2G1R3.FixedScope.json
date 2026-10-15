@@ -1,0 +1,45 @@
+{
+  "Schema": "f2-g1-r3-fixed-c-scope-design-v1",
+  "ParentAclOnly": [
+    "C:\\",
+    "C:\\Program Files",
+    "C:\\ProgramData"
+  ],
+  "PackageDirs": [
+    "C:\\Program Files\\F2-G1-Icacls",
+    "C:\\Program Files\\F2-G1-Icacls\\scripts",
+    "C:\\Program Files\\F2-G1-Icacls\\scripts\\f2-acl",
+    "C:\\ProgramData\\F2-G1-Icacls"
+  ],
+  "Manifest": "C:\\ProgramData\\F2-G1-Icacls\\approved-release.json",
+  "PackageMembers": [
+    "F2AclCapture.Protocol.psm1",
+    "F2AclIcacls.Corroboration.psm1",
+    "F2AclIcacls.Runtime.psm1",
+    "Invoke-F2IcaclsCapture.ps1",
+    "Invoke-F2IcaclsProtectedCoordinator.ps1",
+    "F2_ICACLS_SOURCE_PINS.json",
+    "Invoke-F2AclReadOnlyCapture.ps1"
+  ],
+  "MailboxDir": "C:\\ProgramData\\F2-G1-ACL-Evidence-ecb6deeb424e40feb5354d18908986df",
+  "MailboxMembers": [
+    "acl-baseline.frame",
+    "acl-baseline.json",
+    "coordinator-status.json",
+    "integrity.json",
+    "powershell-streams.json",
+    "worker-stderr.json",
+    "worker-stdout.json"
+  ],
+  "ImmediateTransactionNames": [
+    "release.lock",
+    "updates",
+    "backups",
+    "releases",
+    "journals",
+    "stages"
+  ],
+  "Mode": "NON_ELEVATED_READ_ONLY_ONLY",
+  "LivePermitted": false,
+  "Authorization": "OWNER_DIRECT_AUTHENTICATED_EXTERNAL_CHECK_ONLY"
+}

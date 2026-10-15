@@ -12,3 +12,6 @@ scripts/f2-acl/F2_ICACLS_SOURCE_PINS.json text eol=lf
 scripts/f2-acl/F2G1CPostfailureAttestation.psm1 text eol=lf
 scripts/f2-acl/Invoke-F2G1CPostfailureAttestation.ps1 text eol=lf
 scripts/f2-acl/Test-F2G1CPostfailureAttestation.SourceOnly.ps1 text eol=lf
+scripts/f2-acl/r3/*.cs text eol=lf
+scripts/f2-acl/r3/*.json text eol=lf
+scripts/f2-acl/r3/*.ps1 text eol=lf

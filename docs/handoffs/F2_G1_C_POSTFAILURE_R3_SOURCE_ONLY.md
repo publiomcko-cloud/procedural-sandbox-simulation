@@ -1,0 +1,20 @@
+# F2 G1 R3 — owner-operated one-time C: attestation: source-only implementation candidate
+
+Status: PARTIAL_SOURCE_ONLY_IMPLEMENTATION / NOT_LIVE_CAPABLE / INDEPENDENT_SOURCE_REVIEW_REQUIRED.
+
+Base R2: `48ac3e8551127451d1b0d3861a98c3b075f2c4f6`. Isolated branch: `feat/f2-g1-c-postfailure-r3-source-only-contract`. No PR or merge; protected C:/G: and VM not inspected. Owner's authorization in ChatGPT was **source-only R3 implementation**, not live C: or fourth UAC.
+
+## R3 supplied
+
+- `F2G1R3.FixedScope.json`: versioned closed **design-time** C: parent/package/mailbox/transaction-name allowlist, with `LivePermitted:false`. Not an installed manifest or trust authority.
+- `Invoke-F2G1R3.SourceOnly.ps1`: **TEMP-only** entrypoint with no `-Live`. Reads exact local R3 native code/scope SHA-256 against **caller-supplied** test pins before loading R3 C# code. Enforces standard-token/no Administrators group, bounded fixture-root form, and sanitized blocking exits. Caller-supplied SHA values do **not authenticate owner consent, executable launcher identity or trusted scope** and must never be treated as operational trust.
+- `F2G1R3.TempHandleProbe.cs`: experimental Windows P/Invoke implementation: held directory handle, `NtCreateFile` for a named child relative to the handle with `FILE_OPEN_REPARSE_POINT`, no write/delete file sharing, `NtQueryDirectoryFile` for immediate child names, owner/DACL metadata `GetSecurityInfo` from held handles, same-handle bounded `ReadFile`, file/volume identity and directory inventory rechecks. It **only** accepts a direct named fixture child of the process TEMP directory and the literal `payload.bin` under it. No C: package APIs are exposed as operations and no protected source is imported.
+- `Test-F2G1R3.SourceOnly.ps1`: TEMP-only Windows PowerShell 5.1 tests for source/scope hash mismatch, replacement blocked while handles held, injected identity drift, missing/unexpected children, fail-closed output, cleanup.
+
+## Trust and TOCTOU limits (not complete)
+
+The bootstrap **is not an externally trusted executable**. Neither its own bytes nor the bytes actually loaded by the PowerShell interpreter are bound to owner-independent pinned identity. The source file verification and immediate `Add-Type` are separate operations, so the source-open/load binding is NOT qualified; a caller-chosen expected hash is not a trusted grant. The no-follow native file-open is prototype code for a **single relative child only**; it does NOT yet walk C: parent components by held relative handles, validate package/manifest identities, bind all seven package and mailbox members, verify inventories throughout C:, or resolve hostile privileged/kernel mutators. No user-mode atomic-snapshot or effective-token access assurance.
+
+**Live must remain disabled regardless of TEMP test outcome.** R2 original `-Live` route still fails closed, and this R3 branch adds no live path. A future separately authorized, independently pinned bootstrap must first establish actual executing bytes/scope and authenticated human grant, and independently reviewed handle traversal must cover every fixed C: object. Synthetic success supports TEMP-only handle semantics, not protected C: attestation.
+
+Keep `CURRENT_PROTECTED_STATE_UNKNOWN / V3_NOT_ATTESTED / ACL_REVIEW_REQUIRED / G1_BLOCKED_ENVIRONMENT / F2_G1_RELEASE_HOLD`. No UAC, protected updater, icacls, G:/Hyper-V/VM, production runtime, package installation, source merge, or release authorized.

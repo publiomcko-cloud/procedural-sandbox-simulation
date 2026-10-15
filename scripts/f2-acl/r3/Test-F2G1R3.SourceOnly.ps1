@@ -1,0 +1,76 @@
+[CmdletBinding()]
+param()
+Set-StrictMode -Version Latest
+$ErrorActionPreference='Stop'
+$script:Count=0;$script:Failed=New-Object 'System.Collections.Generic.List[string]'
+function Check([bool]$condition,[string]$label){
+    $script:Count++
+    if($condition){Write-Host ('PASS: '+$label)}else{$script:Failed.Add($label);Write-Host ('FAIL: '+$label)}
+}
+function Case([string]$wrapper,[string[]]$args,[int]$expectedExit,[string]$expectedText){
+    $psi=New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $psi.UseShellExecute=$false;$psi.CreateNoWindow=$true
+    $psi.RedirectStandardOutput=$true;$psi.RedirectStandardError=$true
+    foreach($arg in @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$wrapper)+$args){[void]$psi.ArgumentList.Add($arg)}
+    # Windows PowerShell 5.1 runs on .NET Framework, where ProcessStartInfo.ArgumentList
+    # may not exist. The child arguments here are fixed, synthetic and whitespace-free.
+    $psi.Arguments=(@('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','"'+$wrapper+'"')+$args) -join ' '
+    $p=New-Object Diagnostics.Process
+    $p.StartInfo=$psi
+    $completed=$false;$stdout='';$stderr='';$exit=-1
+    try{
+        if(-not $p.Start()){throw 'CHILD_NOT_STARTED'}
+        if(-not $p.WaitForExit(30000)){$p.Kill();throw 'SYNTHETIC_TEST_TIMEOUT'}
+        $stdout=$p.StandardOutput.ReadToEnd();$stderr=$p.StandardError.ReadToEnd()
+        $exit=$p.ExitCode;$completed=$true
+    } finally {$p.Dispose()}
+    return [pscustomobject]@{Ok=($completed -and $exit -eq $expectedExit -and ($stdout+$stderr).Contains($expectedText));Exit=$exit;Stdout=$stdout;Stderr=$stderr}
+}
+$root=Split-Path -Parent $MyInvocation.MyCommand.Path
+$bootstrap=Join-Path $root 'Invoke-F2G1R3.SourceOnly.ps1'
+$native=Join-Path $root 'F2G1R3.TempHandleProbe.cs'
+$scope=Join-Path $root 'F2G1R3.FixedScope.json'
+$tok=$null;$parse=$null
+[void][Management.Automation.Language.Parser]::ParseFile($bootstrap,[ref]$tok,[ref]$parse)
+Check ($parse.Count -eq 0) 'bootstrap parses on actual Windows PowerShell 5.1'
+$source=[IO.File]::ReadAllText($bootstrap)
+Check (-not $source.Contains('[switch]$Live') -and -not $source.Contains('OwnerAuthorizationReference') -and -not $source.Contains('Get-Acl')) 'R3 entrypoint provides no live or protected-host access mode'
+$nativeSource=[IO.File]::ReadAllText($native)
+Check ($nativeSource.Contains('NtCreateFile') -and $nativeSource.Contains('NtQueryDirectoryFile') -and $nativeSource.Contains('GetSecurityInfo')) 'experimental native code binds relative handle, inventory and ACL'
+Check ($nativeSource.Contains('OUTSIDE_TEMP_FIXTURE') -and $nativeSource.Contains('TEMP') -eq $false) 'TEMP fixture gate guard token remains independently reviewable'
+# Source hash comparison is a fixture correctness check, NOT owner authorization.
+$h1=(Get-FileHash -LiteralPath $native -Algorithm SHA256).Hash.ToLowerInvariant()
+$h2=(Get-FileHash -LiteralPath $scope -Algorithm SHA256).Hash.ToLowerInvariant()
+$temp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
+$fixture=Join-Path $temp ('F2G1-R3Handle-'+[guid]::NewGuid().ToString())
+[void][IO.Directory]::CreateDirectory($fixture)
+try {
+    [IO.File]::WriteAllBytes((Join-Path $fixture 'payload.bin'),[Text.Encoding]::UTF8.GetBytes('TEMP-only R3 handle probe'))
+    $common=@('-SyntheticFixtureRoot','"'+$fixture+'"','-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',$h2)
+    $good=Case $bootstrap $common 0 'TEMP_HANDLE_FIXTURE_PASS'
+    Check $good.Ok 'held relative file and directory handles support TEMP-only positive capture'
+    $changed=Case $bootstrap ($common+@('-AttemptReplacement')) 0 'TEMP_HANDLE_FIXTURE_PASS'
+    Check $changed.Ok 'rename/replacement denied while held read-only handles remain open'
+    Check ([IO.File]::Exists((Join-Path $fixture 'payload.bin'))) 'inert replacement attempt does not rename held TEMP file'
+    $drift=Case $bootstrap ($common+@('-InjectIdentityDrift')) 2 'BLOCKED_WITH_EVIDENCE'
+    Check $drift.Ok 'injected identity drift rejects with sanitized failure'
+    $badHash=Case $bootstrap @('-SyntheticFixtureRoot','"'+$fixture+'"','-ExpectedNativeSha256',('0'*64),'-ExpectedScopeSha256',$h2) 2 'BLOCKED_WITH_EVIDENCE'
+    Check $badHash.Ok 'incorrect native source bytes reject before compile'
+    $badScope=Case $bootstrap @('-SyntheticFixtureRoot','"'+$fixture+'"','-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',('0'*64)) 2 'BLOCKED_WITH_EVIDENCE'
+    Check $badScope.Ok 'incorrect canonical scope digest rejects'
+    [IO.File]::WriteAllText((Join-Path $fixture 'unexpected.txt'),'TEMP unexpected child')
+    $unexpected=Case $bootstrap $common 2 'BLOCKED_WITH_EVIDENCE'
+    Check $unexpected.Ok 'unexpected immediate TEMP child rejects'
+    [IO.File]::Delete((Join-Path $fixture 'unexpected.txt'))
+    [IO.File]::Delete((Join-Path $fixture 'payload.bin'))
+    $missing=Case $bootstrap $common 2 'BLOCKED_WITH_EVIDENCE'
+    Check $missing.Ok 'missing TEMP child rejects'
+} finally {
+    $full=[IO.Path]::GetFullPath($fixture).TrimEnd('\')
+    if([IO.Path]::GetDirectoryName($full) -cne $temp -or [IO.Path]::GetFileName($full) -notmatch '^F2G1-R3Handle-[0-9a-fA-F-]{36}$'){throw 'UNSAFE_TEST_CLEANUP_PATH'}
+    if([IO.Directory]::Exists($full)){[IO.Directory]::Delete($full,$true)}
+}
+Write-Host ('ASSERTIONS='+$script:Count+' FAILURES='+$script:Failed.Count)
+if($script:Failed.Count -gt 0){$script:Failed|ForEach-Object{Write-Host ('FAILED='+$_)};exit 1}
+exit 0
