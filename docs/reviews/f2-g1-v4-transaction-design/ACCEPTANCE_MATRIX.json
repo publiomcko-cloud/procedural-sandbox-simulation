@@ -1,11 +1,22 @@
 {
-  "Schema": "f2-g1-v4-transaction-design-acceptance-matrix-v1",
-  "Status": "PROPOSED_SOURCE_ONLY_NOT_EXECUTABLE",
-  "SourceReviewParent": "b044e517c46e8f8d95bb5d8d4bc1225f6459fe84",
+  "Schema": "f2-g1-v4-transaction-design-acceptance-matrix-v2",
+  "Status": "REVISED_PROPOSAL_NOT_EXECUTABLE_ARCHITECTURE_REVIEW_PENDING",
+  "SourceReviewParent": "bbf001bc5a91c7b38289b31e2725aabde46a9499",
+  "TrustBootstrap": "OS policy + independently provisioned pinned verifier before receipt; requires future owner approval; no current implementation",
+  "AuthorityPolicy": "Online independent approval/time/revocation/monotonic CAS ledger required; deny offline transactions",
   "TransactionSchema": "f2-protected-update-transaction-v4",
   "ProposedInstallableManifestSchema": "f2-icacls-runtime-release-v5",
-  "Warning": "These are contract review scenarios, not executed tests, trusted receipts, authorized recovery actions or evidence of production safety.",
-  "ClassificationRule": "Every case defaults to zero mutation; eligible forward/verify statuses are advisory only and require separate owner/signer approval and new validation.",
+  "DispositionField": "expected_classification",
+  "DispositionValues": [
+    "REJECT_BEFORE_WRITE",
+    "OBSERVE_ONLY",
+    "HOLD_PRESERVE"
+  ],
+  "InspectionField": "inspection_state",
+  "DispositionSemantics": "All expected_classification values are non-mutating. Candidate eligibility is descriptive only; separate signed/ledger operation approval required for writes.",
+  "DefaultMutationAllowed": false,
+  "PreviousBlockedReviewHead": "bbf001bc5a91c7b38289b31e2725aabde46a9499",
+  "Warning": "Design scenarios only; not an executable validator, receipt, trusted authority, protected recovery implementation or production test.",
   "Cases": [
     {
       "id": "T01",
@@ -13,7 +24,9 @@
       "observation": "exact v2 manifest and seven historical file hashes verified; target signed receipt absent",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
-      "rationale": "missing independent target receipt"
+      "rationale": "missing independent target receipt",
+      "inspection_state": "REJECTED_RECEIPT",
+      "fault_boundary": null
     },
     {
       "id": "T02",
@@ -21,7 +34,9 @@
       "observation": "source-only v4 manifest has Status SOURCE_ONLY_NOT_RELEASE_APPROVED",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
-      "rationale": "source-only cannot become installable"
+      "rationale": "source-only cannot become installable",
+      "inspection_state": "REJECTED_RECEIPT",
+      "fault_boundary": null
     },
     {
       "id": "T03",
@@ -29,7 +44,9 @@
       "observation": "valid SHA-256 digest supplied only by candidate itself; no pinned signer",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
-      "rationale": "self-hash is not release authorization"
+      "rationale": "self-hash is not release authorization",
+      "inspection_state": "REJECTED_RECEIPT",
+      "fault_boundary": null
     },
     {
       "id": "T04",
@@ -37,7 +54,9 @@
       "observation": "installer receives unverified signature or unknown signing key",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
-      "rationale": "untrusted signer"
+      "rationale": "untrusted signer",
+      "inspection_state": "REJECTED_RECEIPT",
+      "fault_boundary": null
     },
     {
       "id": "T05",
@@ -45,7 +64,9 @@
       "observation": "receipt binds different source commit or installed target package",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
-      "rationale": "source/target identity mismatch"
+      "rationale": "source/target identity mismatch",
+      "inspection_state": "REJECTED_RECEIPT",
+      "fault_boundary": null
     },
     {
       "id": "T06",
@@ -53,7 +74,9 @@
       "observation": "predecessor advertises v3 from open draft PR; no verified installed v3 manifest",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
-      "rationale": "unproven predecessor"
+      "rationale": "unproven predecessor",
+      "inspection_state": "REJECTED_RECEIPT",
+      "fault_boundary": null
     },
     {
       "id": "T07",
@@ -61,7 +84,9 @@
       "observation": "old v2 active exact hash matches pinned historical manifest and files",
       "expected_classification": "OBSERVE_ONLY",
       "default_mutation_allowed": false,
-      "rationale": "historical installed release observed only"
+      "rationale": "historical installed release observed only",
+      "inspection_state": "PREDECESSOR_OBSERVED",
+      "fault_boundary": null
     },
     {
       "id": "T08",
@@ -69,7 +94,9 @@
       "observation": "unexpected additional/missing/duplicate runtime package member",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
-      "rationale": "closed inventory"
+      "rationale": "closed inventory",
+      "inspection_state": "REJECTED_RECEIPT",
+      "fault_boundary": null
     },
     {
       "id": "T09",
@@ -77,7 +104,9 @@
       "observation": "new executable bytes disagree with unchanged historical v2 pin manifest",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
-      "rationale": "no silent repin; new pin generation required"
+      "rationale": "no silent repin; new pin generation required",
+      "inspection_state": "REJECTED_RECEIPT",
+      "fault_boundary": null
     },
     {
       "id": "T10",
@@ -85,7 +114,9 @@
       "observation": "source-only v4 ten-member schema supplied as installable v5 candidate",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
-      "rationale": "cross-version collision"
+      "rationale": "cross-version collision",
+      "inspection_state": "REJECTED_RECEIPT",
+      "fault_boundary": null
     },
     {
       "id": "T11",
@@ -93,7 +124,9 @@
       "observation": "installer proposes to run git.exe in elevated context",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
-      "rationale": "Git outside protected trust boundary"
+      "rationale": "Git outside protected trust boundary",
+      "inspection_state": "REJECTED_RECEIPT",
+      "fault_boundary": null
     },
     {
       "id": "T12",
@@ -101,7 +134,9 @@
       "observation": "unsigned launch/updater/receipt-verifier binary does not match signed pin",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
-      "rationale": "pinned executable identity mismatch"
+      "rationale": "pinned executable identity mismatch",
+      "inspection_state": "REJECTED_RECEIPT",
+      "fault_boundary": null
     },
     {
       "id": "T13",
@@ -109,7 +144,9 @@
       "observation": "fixed local path canonicalizes to UNC/reparse/mapped/network/G volume",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
-      "rationale": "invalid protected path"
+      "rationale": "invalid protected path",
+      "inspection_state": "REJECTED_RECEIPT",
+      "fault_boundary": null
     },
     {
       "id": "T14",
@@ -117,7 +154,9 @@
       "observation": "active release neither exact v2 predecessor nor separately authorized installed version",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
-      "rationale": "unknown installed identity"
+      "rationale": "unknown installed identity",
+      "inspection_state": "REJECTED_RECEIPT",
+      "fault_boundary": null
     },
     {
       "id": "T15",
@@ -125,7 +164,9 @@
       "observation": "release lock unavailable or cached v3-only reader remains live",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "no forced termination or activation"
+      "rationale": "no forced termination or activation",
+      "inspection_state": "PRECONDITION_UNMET",
+      "fault_boundary": null
     },
     {
       "id": "T16",
@@ -133,7 +174,9 @@
       "observation": "duplicate TxId or collision with existing stage/backup/final root",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "no overwrite or cleanup"
+      "rationale": "no overwrite or cleanup",
+      "inspection_state": "PRECONDITION_UNMET",
+      "fault_boundary": null
     },
     {
       "id": "T17",
@@ -141,7 +184,9 @@
       "observation": "v3 transaction.ndjson sent to v4 journal parser",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "never reinterpret legacy schema"
+      "rationale": "never reinterpret legacy schema",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "fault_boundary": null
     },
     {
       "id": "T18",
@@ -149,7 +194,9 @@
       "observation": "v4 record Sequence starts at 2, skips number or repeats state",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "no inferred phase"
+      "rationale": "no inferred phase",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "fault_boundary": null
     },
     {
       "id": "T19",
@@ -157,7 +204,9 @@
       "observation": "v4 PreviousHash does not equal SHA-256 of exact prior canonical bytes",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "broken chain"
+      "rationale": "broken chain",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "fault_boundary": null
     },
     {
       "id": "T20",
@@ -165,7 +214,9 @@
       "observation": "record has torn UTF-8, missing LF, extra field or noncanonical serialization",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "ambiguous journal bytes"
+      "rationale": "ambiguous journal bytes",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "fault_boundary": null
     },
     {
       "id": "T21",
@@ -173,7 +224,9 @@
       "observation": "all journal records rewritten to a self-consistent chain without trusted head/closure anchor",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "hash chain not authentication"
+      "rationale": "hash chain not authentication",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "fault_boundary": null
     },
     {
       "id": "T22",
@@ -181,7 +234,9 @@
       "observation": "record candidate digest changes within a transaction",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "receipt tuple immutable"
+      "rationale": "receipt tuple immutable",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "fault_boundary": null
     },
     {
       "id": "T23",
@@ -189,7 +244,9 @@
       "observation": "journal append returned but flush/durable write unconfirmed",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "unknown persistence"
+      "rationale": "unknown persistence",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "fault_boundary": null
     },
     {
       "id": "T24",
@@ -197,23 +254,29 @@
       "observation": "old exact active, before staging and no package publication",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "pre-switch partial objects must remain"
+      "rationale": "pre-switch partial objects must remain",
+      "inspection_state": "PRECONDITION_UNMET",
+      "fault_boundary": null
     },
     {
       "id": "T25",
       "phase": "crash",
       "observation": "old exact active, published target package and valid SWITCH_INTENT",
-      "expected_classification": "FORWARD_CANDIDATE_ONLY",
+      "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "requires fresh explicit signed forward authorization and preconditions"
+      "rationale": "requires fresh explicit signed forward authorization and preconditions",
+      "inspection_state": "OLD_ACTIVE_FORWARD_ELIGIBILITY_CANDIDATE",
+      "fault_boundary": null
     },
     {
       "id": "T26",
       "phase": "crash",
-      "observation": "new exact active, switch marker absent, exact backup and target bytes present",
-      "expected_classification": "VERIFY_CANDIDATE_ONLY",
+      "observation": "new exact target manifest active, both independently verified predecessor backups and full target package exact, journal has durable SWITCH_INTENT but ACTIVE_MANIFEST_SWITCHED record absent",
+      "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "active pointer readback outweighs journal prefix"
+      "rationale": "active pointer readback outweighs journal prefix",
+      "inspection_state": "NEW_ACTIVE_VERIFY_ONLY_CANDIDATE",
+      "fault_boundary": null
     },
     {
       "id": "T27",
@@ -221,7 +284,9 @@
       "observation": "new exact active, backup absent or unexpected target bytes",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "post-switch ambiguity cannot auto-repair"
+      "rationale": "post-switch ambiguity cannot auto-repair",
+      "inspection_state": "AMBIGUOUS_NEW_ACTIVE",
+      "fault_boundary": null
     },
     {
       "id": "T28",
@@ -229,7 +294,9 @@
       "observation": "active pointer equals neither old nor new exact manifest SHA",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "unknown active; neither rollback nor forward"
+      "rationale": "unknown active; neither rollback nor forward",
+      "inspection_state": "UNKNOWN_ACTIVE",
+      "fault_boundary": null
     },
     {
       "id": "T29",
@@ -237,7 +304,9 @@
       "observation": "user asks ResumeForward without new separately signed operation receipt",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "inspection never grants write"
+      "rationale": "inspection never grants write",
+      "inspection_state": "PRECONDITION_UNMET",
+      "fault_boundary": null
     },
     {
       "id": "T30",
@@ -245,15 +314,19 @@
       "observation": "user asks Rollback without independently approved rollback protocol",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "rollback not implemented or approved"
+      "rationale": "rollback not implemented or approved",
+      "inspection_state": "PRECONDITION_UNMET",
+      "fault_boundary": null
     },
     {
       "id": "T31",
       "phase": "recovery",
-      "observation": "exact new active, exact backup, complete v4 terminal durable journal",
+      "observation": "exact new active, both exact backups, complete v4 terminal durable journal and authoritative external completion",
       "expected_classification": "OBSERVE_ONLY",
       "default_mutation_allowed": false,
-      "rationale": "complete release may be verified without cleanup"
+      "rationale": "complete release may be verified without cleanup",
+      "inspection_state": "NEW_ACTIVE_COMPLETE_OBSERVED",
+      "fault_boundary": null
     },
     {
       "id": "T32",
@@ -261,7 +334,9 @@
       "observation": "new active but old v2/v3 package root missing or modified",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "predecessor must remain retained"
+      "rationale": "predecessor must remain retained",
+      "inspection_state": "AMBIGUOUS_NEW_ACTIVE",
+      "fault_boundary": null
     },
     {
       "id": "T33",
@@ -269,7 +344,9 @@
       "observation": "valid journal and receipt but unexpected ACL owner/DACL or reparse ancestry",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "ACL invariant fails"
+      "rationale": "ACL invariant fails",
+      "inspection_state": "QUIESCENCE_UNPROVEN",
+      "fault_boundary": null
     },
     {
       "id": "T34",
@@ -277,7 +354,9 @@
       "observation": "prior unknown crash state automatically triggers deletion or second manifest replacement",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "no automatic repair on ambiguity"
+      "rationale": "no automatic repair on ambiguity",
+      "inspection_state": "PRECONDITION_UNMET",
+      "fault_boundary": null
     },
     {
       "id": "T35",
@@ -285,7 +364,9 @@
       "observation": "separately authorized forward attempt loses lease or quiescence",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
-      "rationale": "recheck at activation edge"
+      "rationale": "recheck at activation edge",
+      "inspection_state": "PRECONDITION_UNMET",
+      "fault_boundary": null
     },
     {
       "id": "T36",
@@ -293,7 +374,9 @@
       "observation": "all source-only v4 tests passed but no independent protected installer execution occurred",
       "expected_classification": "OBSERVE_ONLY",
       "default_mutation_allowed": false,
-      "rationale": "source-only test cannot establish runtime release safety"
+      "rationale": "source-only test cannot establish runtime release safety",
+      "inspection_state": "SOURCE_ONLY_ACCEPTED",
+      "fault_boundary": null
     },
     {
       "id": "T37",
@@ -301,7 +384,9 @@
       "observation": "CI #85 remained failed/inconclusive and intermittent receiver unresolved",
       "expected_classification": "OBSERVE_ONLY",
       "default_mutation_allowed": false,
-      "rationale": "diagnostic blocker remains independent"
+      "rationale": "diagnostic blocker remains independent",
+      "inspection_state": "OBSERVATION_ONLY",
+      "fault_boundary": null
     },
     {
       "id": "T38",
@@ -309,7 +394,497 @@
       "observation": "PS 5.1 synthetic tests and receipt parser reviewed, no owner authorization for UAC",
       "expected_classification": "OBSERVE_ONLY",
       "default_mutation_allowed": false,
-      "rationale": "explicit owner gate required"
+      "rationale": "explicit owner gate required",
+      "inspection_state": "OBSERVATION_ONLY",
+      "fault_boundary": null
+    },
+    {
+      "id": "T39",
+      "phase": "bootstrap",
+      "observation": "receipt lists matching verifier digest but machine has no independently provisioned bootstrap trust policy",
+      "inspection_state": "REJECTED_RECEIPT",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "self-referential verifier digest cannot establish trust",
+      "fault_boundary": "bootstrap"
+    },
+    {
+      "id": "T40",
+      "phase": "bootstrap",
+      "observation": "bootstrap code signer valid but Windows code integrity policy is not actually enforced",
+      "inspection_state": "REJECTED_RECEIPT",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "signed file without OS enforcement is insufficient",
+      "fault_boundary": "bootstrap"
+    },
+    {
+      "id": "T41",
+      "phase": "bootstrap",
+      "observation": "bootstrap has candidate-controlled keyring or candidate-controlled verifier path",
+      "inspection_state": "REJECTED_RECEIPT",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "trust roots must be independent of candidate",
+      "fault_boundary": "bootstrap"
+    },
+    {
+      "id": "T42",
+      "phase": "signature",
+      "observation": "receipt JSON contains duplicate TxId, ApprovalId or AlgorithmId fields",
+      "inspection_state": "REJECTED_RECEIPT",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "strict canonical parser forbids duplicates",
+      "fault_boundary": "receipt"
+    },
+    {
+      "id": "T43",
+      "phase": "signature",
+      "observation": "algorithm confusion or unsupported signature suite/key format appears",
+      "inspection_state": "REJECTED_RECEIPT",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "reject crypto agility downgrade",
+      "fault_boundary": "receipt"
+    },
+    {
+      "id": "T44",
+      "phase": "signature",
+      "observation": "signer revoked, unknown or invalid key rotation without independent enrollment",
+      "inspection_state": "REJECTED_RECEIPT",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "trusted signer status mandatory",
+      "fault_boundary": "receipt"
+    },
+    {
+      "id": "T45",
+      "phase": "signature",
+      "observation": "receipt expired according to authenticated authority time, despite local clock within window",
+      "inspection_state": "REJECTED_RECEIPT",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "local clock cannot override trusted time",
+      "fault_boundary": "receipt"
+    },
+    {
+      "id": "T46",
+      "phase": "signature",
+      "observation": "local time moved backwards or authority time unavailable",
+      "inspection_state": "REJECTED_RECEIPT",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "cannot rely on local time or offline grace",
+      "fault_boundary": "receipt"
+    },
+    {
+      "id": "T47",
+      "phase": "authority",
+      "observation": "mutating INSTALL requested while remote authority unreachable or offline",
+      "inspection_state": "REJECTED_RECEIPT",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "online authority required before first write",
+      "fault_boundary": "reservation"
+    },
+    {
+      "id": "T48",
+      "phase": "authority",
+      "observation": "ApprovalId replayed with a new TxId and otherwise identical signed claims",
+      "inspection_state": "REJECTED_RECEIPT",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "one approval bound to exact transaction id",
+      "fault_boundary": "reservation"
+    },
+    {
+      "id": "T49",
+      "phase": "authority",
+      "observation": "same TxId reused with changed target manifest or operation",
+      "inspection_state": "REJECTED_RECEIPT",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "immutable transaction tuple and operation",
+      "fault_boundary": "reservation"
+    },
+    {
+      "id": "T50",
+      "phase": "authority",
+      "observation": "ApprovalId replayed across different EnvironmentBoundaryId",
+      "inspection_state": "REJECTED_RECEIPT",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "environment-specific reservation",
+      "fault_boundary": "reservation"
+    },
+    {
+      "id": "T51",
+      "phase": "authority",
+      "observation": "identical receipt replay after remote reservation already consumed",
+      "inspection_state": "PRECONDITION_UNMET",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "read-only observation only, never second install",
+      "fault_boundary": "reservation"
+    },
+    {
+      "id": "T52",
+      "phase": "authority",
+      "observation": "local journal restored to older fully valid prefix while authority already anchored newer head",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "external head detects prefix rollback",
+      "fault_boundary": "checkpoint"
+    },
+    {
+      "id": "T53",
+      "phase": "authority",
+      "observation": "local remote-generation claim decreases relative to independently queried ledger",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "remote monotonic generation prevents rollback",
+      "fault_boundary": "checkpoint"
+    },
+    {
+      "id": "T54",
+      "phase": "authority",
+      "observation": "remote reservation acknowledged but local transaction root absent after interruption",
+      "inspection_state": "REMOTE_RESERVED_NO_LOCAL",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "remote reservation is canonical pre-genesis state",
+      "fault_boundary": "root_creation"
+    },
+    {
+      "id": "T55",
+      "phase": "authority",
+      "observation": "remote reservation intent rejected; local transaction root already exists unexpectedly",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "never overwrite transaction root or infer fresh approval",
+      "fault_boundary": "root_creation"
+    },
+    {
+      "id": "T56",
+      "phase": "journal",
+      "observation": "local transaction root created but genesis file missing or only partially written",
+      "inspection_state": "REMOTE_RESERVED_NO_LOCAL",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "first local write/bootstrap gap explicitly recognized",
+      "fault_boundary": "genesis"
+    },
+    {
+      "id": "T57",
+      "phase": "journal",
+      "observation": "genesis durable locally but external checkpoint not anchored",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "no advancement before trusted checkpoint",
+      "fault_boundary": "genesis_checkpoint"
+    },
+    {
+      "id": "T58",
+      "phase": "journal",
+      "observation": "valid record has altered EventHash covered bytes or self-referential serialization",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "hash exact payload excluding EventHash, fixed domain separation",
+      "fault_boundary": "journal_append"
+    },
+    {
+      "id": "T59",
+      "phase": "transaction",
+      "observation": "stage directory created but preceding STAGE_INTENT missing or not flushed",
+      "inspection_state": "PRECONDITION_UNMET",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "state intent must precede filesystem mutation",
+      "fault_boundary": "stage_create"
+    },
+    {
+      "id": "T60",
+      "phase": "transaction",
+      "observation": "package published by rename with PUBLISH_INTENT missing or no remote anchor",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "write-intent and checkpoint order before rename",
+      "fault_boundary": "package_rename"
+    },
+    {
+      "id": "T61",
+      "phase": "transaction",
+      "observation": "package directory rename interrupted and both stage and final path exist",
+      "inspection_state": "PRECONDITION_UNMET",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "ambiguous side-by-side publish is not auto repaired",
+      "fault_boundary": "package_rename"
+    },
+    {
+      "id": "T62",
+      "phase": "transaction",
+      "observation": "source/destination package roots are different volume GUID or unsupported FS semantics",
+      "inspection_state": "PRECONDITION_UNMET",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "same-volume atomicity proof required",
+      "fault_boundary": "volume"
+    },
+    {
+      "id": "T63",
+      "phase": "backup",
+      "observation": "predecessor backup publish fails after BACKUP_INTENT but before BACKUP_DURABLE",
+      "inspection_state": "PRECONDITION_UNMET",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "old state not proven durable",
+      "fault_boundary": "backup_publish"
+    },
+    {
+      "id": "T64",
+      "phase": "backup",
+      "observation": "predecessor backup exact bytes match but ACL or independent reread invalid",
+      "inspection_state": "PRECONDITION_UNMET",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "verified durable backup required before switch",
+      "fault_boundary": "backup_verify"
+    },
+    {
+      "id": "T65",
+      "phase": "backup",
+      "observation": "File.Replace-generated secondary backup path preexists or collides",
+      "inspection_state": "PRECONDITION_UNMET",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "must not overwrite preexisting backup",
+      "fault_boundary": "active_replace"
+    },
+    {
+      "id": "T66",
+      "phase": "backup",
+      "observation": "prepublished backup and File.Replace backup disagree after switch",
+      "inspection_state": "AMBIGUOUS_NEW_ACTIVE",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "dual-copy mismatch is incident state",
+      "fault_boundary": "active_readback"
+    },
+    {
+      "id": "T67",
+      "phase": "switch",
+      "observation": "SWITCH_INTENT missing or unflushed when active manifest already equals target",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "switch evidence inadequate for safe finalization",
+      "fault_boundary": "active_replace"
+    },
+    {
+      "id": "T68",
+      "phase": "switch",
+      "observation": "active manifest readback matches neither exact old nor exact target after uncertain replace",
+      "inspection_state": "UNKNOWN_ACTIVE",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "do not infer rollback or forward",
+      "fault_boundary": "active_readback"
+    },
+    {
+      "id": "T69",
+      "phase": "switch",
+      "observation": "target manifest exact and both backups exact, journal ends at durable SWITCH_INTENT",
+      "inspection_state": "NEW_ACTIVE_VERIFY_ONLY_CANDIDATE",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "requires separate FINALIZE_POST_SWITCH authority",
+      "fault_boundary": "active_readback"
+    },
+    {
+      "id": "T70",
+      "phase": "finalize",
+      "observation": "FINALIZE_POST_SWITCH requested using the original INSTALL receipt",
+      "inspection_state": "NEW_ACTIVE_VERIFY_ONLY_CANDIDATE",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "requires new operation-specific signed receipt",
+      "fault_boundary": "finalize_reservation"
+    },
+    {
+      "id": "T71",
+      "phase": "finalize",
+      "observation": "signed FINALIZE_POST_SWITCH exists but target backup/package/readback not exact",
+      "inspection_state": "AMBIGUOUS_NEW_ACTIVE",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "finalization cannot manufacture missing evidence",
+      "fault_boundary": "finalize_check"
+    },
+    {
+      "id": "T72",
+      "phase": "finalize",
+      "observation": "valid FINALIZE_POST_SWITCH capability with exact target active and verified backup",
+      "inspection_state": "NEW_ACTIVE_VERIFY_ONLY_CANDIDATE",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "inspection class remains non-mutating; operation separately gated",
+      "fault_boundary": "finalize_check"
+    },
+    {
+      "id": "T73",
+      "phase": "finalize",
+      "observation": "finalization path would invoke File.Replace a second time",
+      "inspection_state": "PRECONDITION_UNMET",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "only append post-switch evidence, no second switch",
+      "fault_boundary": "finalize_commit"
+    },
+    {
+      "id": "T74",
+      "phase": "finalize",
+      "observation": "remote completion not durably acknowledged after local COMMIT_DURABLE write",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "terminal success requires local+remote durable agreement",
+      "fault_boundary": "finalize_commit"
+    },
+    {
+      "id": "T75",
+      "phase": "recovery",
+      "observation": "already consumed FINALIZE_POST_SWITCH ApprovalId replayed to append another terminal record",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "exactly once operation ledger",
+      "fault_boundary": "finalize_reservation"
+    },
+    {
+      "id": "T76",
+      "phase": "quiescence",
+      "observation": "legacy v2 PowerShell worker arrives after final process inventory, before active switch",
+      "inspection_state": "QUIESCENCE_UNPROVEN",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "late v2 reader without lease can cache old manifest",
+      "fault_boundary": "launch_barrier"
+    },
+    {
+      "id": "T77",
+      "phase": "quiescence",
+      "observation": "v3 process starts by unmediated direct PowerShell path despite broker gate",
+      "inspection_state": "QUIESCENCE_UNPROVEN",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "unknown launch channel prevents online cutover",
+      "fault_boundary": "launch_barrier"
+    },
+    {
+      "id": "T78",
+      "phase": "quiescence",
+      "observation": "process metadata inaccessible, parent or handles cannot be inspected conclusively",
+      "inspection_state": "QUIESCENCE_UNPROVEN",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "inaccessible process is not absent",
+      "fault_boundary": "process_inventory"
+    },
+    {
+      "id": "T79",
+      "phase": "quiescence",
+      "observation": "v2 maintenance policy permits direct legacy launch by privileged or scheduled process",
+      "inspection_state": "QUIESCENCE_UNPROVEN",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "OS-enforced inhibitor is not proven",
+      "fault_boundary": "launch_barrier"
+    },
+    {
+      "id": "T80",
+      "phase": "quiescence",
+      "observation": "old reader caches active manifest before switch while exclusive barrier is acquired",
+      "inspection_state": "QUIESCENCE_UNPROVEN",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "lease/barrier alone does not invalidate cached bytes",
+      "fault_boundary": "process_inventory"
+    },
+    {
+      "id": "T81",
+      "phase": "storage",
+      "observation": "File.Replace operation correct on process crash but OS crash/power-loss tier not verified",
+      "inspection_state": "PRECONDITION_UNMET",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "must not claim unsupported durability tier",
+      "fault_boundary": "active_replace"
+    },
+    {
+      "id": "T82",
+      "phase": "storage",
+      "observation": "directory metadata flush unsupported or storage reorders writes despite file flush",
+      "inspection_state": "PRECONDITION_UNMET",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "unknown durability requires hold and supported tier decision",
+      "fault_boundary": "checkpoint"
+    },
+    {
+      "id": "T83",
+      "phase": "recovery",
+      "observation": "unknown active target after reboot with valid-looking local journal but mismatched remote head",
+      "inspection_state": "UNTRUSTED_TRANSACTION",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "anti-rollback authoritative check mandatory",
+      "fault_boundary": "checkpoint"
+    },
+    {
+      "id": "T84",
+      "phase": "recovery",
+      "observation": "ROLLBACK operation requested through install-approved receipt",
+      "inspection_state": "PRECONDITION_UNMET",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "rollback is separate unimplemented protocol",
+      "fault_boundary": "rollback"
+    },
+    {
+      "id": "T85",
+      "phase": "review",
+      "observation": "read-only design matrix contains all faults but no Windows crash-injection implementation",
+      "inspection_state": "OBSERVATION_ONLY",
+      "expected_classification": "OBSERVE_ONLY",
+      "default_mutation_allowed": false,
+      "rationale": "specification is not executable production proof",
+      "fault_boundary": "review"
     }
+  ],
+  "MandatoryFaultBoundaries": [
+    "reservation",
+    "root_creation",
+    "genesis",
+    "genesis_checkpoint",
+    "stage_create",
+    "package_rename",
+    "backup_publish",
+    "backup_verify",
+    "active_replace",
+    "active_readback",
+    "finalize_reservation",
+    "finalize_check",
+    "finalize_commit",
+    "checkpoint",
+    "journal_append",
+    "launch_barrier"
   ]
 }
