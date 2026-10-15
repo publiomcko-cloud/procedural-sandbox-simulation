@@ -86,7 +86,7 @@ $capture=Join-Path $root 'F2G1R3.BoundedCapture.cs'
 Add-Type -Path $capture -ErrorAction Stop
 $tokens=$null;$parseErrors=$null
 [void][Management.Automation.Language.Parser]::ParseFile($bootstrap,[ref]$tokens,[ref]$parseErrors)
-Check ($parseErrors.Count -eq 0) 'R3.1 bootstrap parses under Windows PowerShell 5.1'
+Check ($parseErrors.Count -eq 0) 'R3.3 source-only bootstrap parses under Windows PowerShell 5.1'
 $source=[IO.File]::ReadAllText($bootstrap)
 $nativeSource=[IO.File]::ReadAllText($native)
 Check (-not $source.Contains('[switch]$Live') -and -not $source.Contains('OwnerAuthorizationReference') -and
