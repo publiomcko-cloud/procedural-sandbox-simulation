@@ -7,14 +7,14 @@ function Check([bool]$condition,[string]$label){
     $script:Count++
     if($condition){Write-Host ('PASS: '+$label)}else{$script:Failed.Add($label);Write-Host ('FAIL: '+$label)}
 }
-function Case([string]$wrapper,[string[]]$args,[int]$expectedExit,[string]$expectedText){
+function Case([string]$wrapper,[string[]]$caseArgs,[int]$expectedExit,[string]$expectedText){
     $psi=New-Object Diagnostics.ProcessStartInfo
     $psi.FileName=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $psi.UseShellExecute=$false;$psi.CreateNoWindow=$true
     $psi.RedirectStandardOutput=$true;$psi.RedirectStandardError=$true
     # Windows PowerShell 5.1/.NET Framework lacks ProcessStartInfo.ArgumentList.
     # Fixed source-only test arguments; never passed through untrusted input.
-    $psi.Arguments=(@('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','"'+$wrapper+'"')+$args) -join ' '
+    $psi.Arguments=(@('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','"'+$wrapper+'"')+$caseArgs) -join ' '
     $p=New-Object Diagnostics.Process
     $p.StartInfo=$psi
     $completed=$false;$stdout='';$stderr='';$exit=-1
