@@ -1,0 +1,315 @@
+{
+  "Schema": "f2-g1-v4-transaction-design-acceptance-matrix-v1",
+  "Status": "PROPOSED_SOURCE_ONLY_NOT_EXECUTABLE",
+  "SourceReviewParent": "b044e517c46e8f8d95bb5d8d4bc1225f6459fe84",
+  "TransactionSchema": "f2-protected-update-transaction-v4",
+  "ProposedInstallableManifestSchema": "f2-icacls-runtime-release-v5",
+  "Warning": "These are contract review scenarios, not executed tests, trusted receipts, authorized recovery actions or evidence of production safety.",
+  "ClassificationRule": "Every case defaults to zero mutation; eligible forward/verify statuses are advisory only and require separate owner/signer approval and new validation.",
+  "Cases": [
+    {
+      "id": "T01",
+      "phase": "preflight",
+      "observation": "exact v2 manifest and seven historical file hashes verified; target signed receipt absent",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "missing independent target receipt"
+    },
+    {
+      "id": "T02",
+      "phase": "preflight",
+      "observation": "source-only v4 manifest has Status SOURCE_ONLY_NOT_RELEASE_APPROVED",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "source-only cannot become installable"
+    },
+    {
+      "id": "T03",
+      "phase": "preflight",
+      "observation": "valid SHA-256 digest supplied only by candidate itself; no pinned signer",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "self-hash is not release authorization"
+    },
+    {
+      "id": "T04",
+      "phase": "preflight",
+      "observation": "installer receives unverified signature or unknown signing key",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "untrusted signer"
+    },
+    {
+      "id": "T05",
+      "phase": "preflight",
+      "observation": "receipt binds different source commit or installed target package",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "source/target identity mismatch"
+    },
+    {
+      "id": "T06",
+      "phase": "preflight",
+      "observation": "predecessor advertises v3 from open draft PR; no verified installed v3 manifest",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "unproven predecessor"
+    },
+    {
+      "id": "T07",
+      "phase": "preflight",
+      "observation": "old v2 active exact hash matches pinned historical manifest and files",
+      "expected_classification": "OBSERVE_ONLY",
+      "default_mutation_allowed": false,
+      "rationale": "historical installed release observed only"
+    },
+    {
+      "id": "T08",
+      "phase": "preflight",
+      "observation": "unexpected additional/missing/duplicate runtime package member",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "closed inventory"
+    },
+    {
+      "id": "T09",
+      "phase": "preflight",
+      "observation": "new executable bytes disagree with unchanged historical v2 pin manifest",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "no silent repin; new pin generation required"
+    },
+    {
+      "id": "T10",
+      "phase": "preflight",
+      "observation": "source-only v4 ten-member schema supplied as installable v5 candidate",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "cross-version collision"
+    },
+    {
+      "id": "T11",
+      "phase": "preflight",
+      "observation": "installer proposes to run git.exe in elevated context",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "Git outside protected trust boundary"
+    },
+    {
+      "id": "T12",
+      "phase": "preflight",
+      "observation": "unsigned launch/updater/receipt-verifier binary does not match signed pin",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "pinned executable identity mismatch"
+    },
+    {
+      "id": "T13",
+      "phase": "preflight",
+      "observation": "fixed local path canonicalizes to UNC/reparse/mapped/network/G volume",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "invalid protected path"
+    },
+    {
+      "id": "T14",
+      "phase": "preflight",
+      "observation": "active release neither exact v2 predecessor nor separately authorized installed version",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "unknown installed identity"
+    },
+    {
+      "id": "T15",
+      "phase": "transaction",
+      "observation": "release lock unavailable or cached v3-only reader remains live",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "no forced termination or activation"
+    },
+    {
+      "id": "T16",
+      "phase": "transaction",
+      "observation": "duplicate TxId or collision with existing stage/backup/final root",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "no overwrite or cleanup"
+    },
+    {
+      "id": "T17",
+      "phase": "journal",
+      "observation": "v3 transaction.ndjson sent to v4 journal parser",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "never reinterpret legacy schema"
+    },
+    {
+      "id": "T18",
+      "phase": "journal",
+      "observation": "v4 record Sequence starts at 2, skips number or repeats state",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "no inferred phase"
+    },
+    {
+      "id": "T19",
+      "phase": "journal",
+      "observation": "v4 PreviousHash does not equal SHA-256 of exact prior canonical bytes",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "broken chain"
+    },
+    {
+      "id": "T20",
+      "phase": "journal",
+      "observation": "record has torn UTF-8, missing LF, extra field or noncanonical serialization",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "ambiguous journal bytes"
+    },
+    {
+      "id": "T21",
+      "phase": "journal",
+      "observation": "all journal records rewritten to a self-consistent chain without trusted head/closure anchor",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "hash chain not authentication"
+    },
+    {
+      "id": "T22",
+      "phase": "journal",
+      "observation": "record candidate digest changes within a transaction",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "receipt tuple immutable"
+    },
+    {
+      "id": "T23",
+      "phase": "journal",
+      "observation": "journal append returned but flush/durable write unconfirmed",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "unknown persistence"
+    },
+    {
+      "id": "T24",
+      "phase": "crash",
+      "observation": "old exact active, before staging and no package publication",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "pre-switch partial objects must remain"
+    },
+    {
+      "id": "T25",
+      "phase": "crash",
+      "observation": "old exact active, published target package and valid SWITCH_INTENT",
+      "expected_classification": "FORWARD_CANDIDATE_ONLY",
+      "default_mutation_allowed": false,
+      "rationale": "requires fresh explicit signed forward authorization and preconditions"
+    },
+    {
+      "id": "T26",
+      "phase": "crash",
+      "observation": "new exact active, switch marker absent, exact backup and target bytes present",
+      "expected_classification": "VERIFY_CANDIDATE_ONLY",
+      "default_mutation_allowed": false,
+      "rationale": "active pointer readback outweighs journal prefix"
+    },
+    {
+      "id": "T27",
+      "phase": "crash",
+      "observation": "new exact active, backup absent or unexpected target bytes",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "post-switch ambiguity cannot auto-repair"
+    },
+    {
+      "id": "T28",
+      "phase": "crash",
+      "observation": "active pointer equals neither old nor new exact manifest SHA",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "unknown active; neither rollback nor forward"
+    },
+    {
+      "id": "T29",
+      "phase": "recovery",
+      "observation": "user asks ResumeForward without new separately signed operation receipt",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "inspection never grants write"
+    },
+    {
+      "id": "T30",
+      "phase": "recovery",
+      "observation": "user asks Rollback without independently approved rollback protocol",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "rollback not implemented or approved"
+    },
+    {
+      "id": "T31",
+      "phase": "recovery",
+      "observation": "exact new active, exact backup, complete v4 terminal durable journal",
+      "expected_classification": "OBSERVE_ONLY",
+      "default_mutation_allowed": false,
+      "rationale": "complete release may be verified without cleanup"
+    },
+    {
+      "id": "T32",
+      "phase": "recovery",
+      "observation": "new active but old v2/v3 package root missing or modified",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "predecessor must remain retained"
+    },
+    {
+      "id": "T33",
+      "phase": "recovery",
+      "observation": "valid journal and receipt but unexpected ACL owner/DACL or reparse ancestry",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "ACL invariant fails"
+    },
+    {
+      "id": "T34",
+      "phase": "recovery",
+      "observation": "prior unknown crash state automatically triggers deletion or second manifest replacement",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "no automatic repair on ambiguity"
+    },
+    {
+      "id": "T35",
+      "phase": "recovery",
+      "observation": "separately authorized forward attempt loses lease or quiescence",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "recheck at activation edge"
+    },
+    {
+      "id": "T36",
+      "phase": "review",
+      "observation": "all source-only v4 tests passed but no independent protected installer execution occurred",
+      "expected_classification": "OBSERVE_ONLY",
+      "default_mutation_allowed": false,
+      "rationale": "source-only test cannot establish runtime release safety"
+    },
+    {
+      "id": "T37",
+      "phase": "review",
+      "observation": "CI #85 remained failed/inconclusive and intermittent receiver unresolved",
+      "expected_classification": "OBSERVE_ONLY",
+      "default_mutation_allowed": false,
+      "rationale": "diagnostic blocker remains independent"
+    },
+    {
+      "id": "T38",
+      "phase": "review",
+      "observation": "PS 5.1 synthetic tests and receipt parser reviewed, no owner authorization for UAC",
+      "expected_classification": "OBSERVE_ONLY",
+      "default_mutation_allowed": false,
+      "rationale": "explicit owner gate required"
+    }
+  ]
+}
