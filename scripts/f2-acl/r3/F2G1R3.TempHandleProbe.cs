@@ -136,6 +136,7 @@ namespace F2G1R3 {
     }
     static byte[] ReadBounded(SafeFileHandle h){
       FileInformation meta=GetInfo(h,"PAYLOAD");
+      Require(meta.Links==1,"PAYLOAD_MULTIPLE_LINKS");
       Require(meta.SizeHigh==0&&meta.SizeLow>0&&meta.SizeLow<=4096,"PAYLOAD_SIZE_INVALID");
       byte[] data=new byte[(int)meta.SizeLow];int offset=0;
       while(offset<data.Length){
@@ -145,6 +146,10 @@ namespace F2G1R3 {
       }
       byte[] tail=new byte[1];uint eof;
       Require(ReadFile(h,tail,1,out eof,IntPtr.Zero)&&eof==0,"PAYLOAD_TRAILING_BYTES");
+      // Public exact synthetic test vector, never a host-file hash oracle.
+      byte[] known=Encoding.UTF8.GetBytes("TEMP-fixture-only R3.1");
+      Require(data.Length==known.Length,"PAYLOAD_TEST_BYTES_MISMATCH");
+      for(int i=0;i<data.Length;i++)Require(data[i]==known[i],"PAYLOAD_TEST_BYTES_MISMATCH");
       return data;
     }
     public static string ProbeFixture(string root,bool tryReplace,bool injectIdentityDrift) {
@@ -174,6 +179,7 @@ namespace F2G1R3 {
               using(SafeFileHandle file=OpenRelativeFile(dir)) {
                 FileInformation initial=GetInfo(file,"CHILD");VerifyType(initial,false);
                 Require(initial.Volume==volumeInfo.Volume,"CHILD_VOLUME_CHANGED");
+                Require(initial.Links==1,"PAYLOAD_MULTIPLE_LINKS");
                 string fileId=Id(initial),fileAcl=AclDigest(file);
                 if(tryReplace) {
                   bool refused=false;
@@ -185,7 +191,9 @@ namespace F2G1R3 {
                 }
                 byte[] bytes=ReadBounded(file);
                 if(injectIdentityDrift)throw new InvalidOperationException("INJECTED_FILE_IDENTITY_DRIFT");
-                Require(Id(GetInfo(file,"CHILD_RECHECK"))==fileId&&AclDigest(file)==fileAcl,
+                FileInformation finalFile=GetInfo(file,"CHILD_RECHECK");
+                Require(finalFile.Links==1,"PAYLOAD_MULTIPLE_LINKS");
+                Require(Id(finalFile)==fileId&&AclDigest(file)==fileAcl,
                   "FILE_IDENTITY_OR_ACL_CHANGED");
                 Require(Entries(dir)==names&&Id(GetInfo(dir,"ROOT_RECHECK"))==dirId
                   &&AclDigest(dir)==dirAcl,"DIR_IDENTITY_ACL_OR_INVENTORY_CHANGED");
