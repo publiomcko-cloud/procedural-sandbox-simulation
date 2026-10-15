@@ -76,6 +76,36 @@ namespace F2G1R3 {
         return result;
       } finally {if(unicode!=IntPtr.Zero)Marshal.FreeHGlobal(unicode);if(buffer!=IntPtr.Zero)Marshal.FreeHGlobal(buffer);}
     }
+    static SafeFileHandle OpenRelativeDirectory(SafeFileHandle parent,string name) {
+      // Never accept separators or caller-supplied path components.
+      Guid fixtureId;
+      bool fixedParent=name=="Users"||name=="Public";
+      bool fixtureName=name.StartsWith("F2G1-R3Handle-",StringComparison.Ordinal)
+        &&Guid.TryParseExact(name.Substring(14),"D",out fixtureId);
+      Require(fixedParent||fixtureName,"RELATIVE_DIRECTORY_COMPONENT_DENIED");
+      IntPtr buffer=IntPtr.Zero,unicode=IntPtr.Zero;
+      try {
+        buffer=Marshal.StringToHGlobalUni(name);
+        UnicodeString u=new UnicodeString();u.Length=checked((ushort)(name.Length*2));
+        u.MaximumLength=checked((ushort)((name.Length+1)*2));u.Buffer=buffer;
+        unicode=Marshal.AllocHGlobal(Marshal.SizeOf(typeof(UnicodeString)));
+        Marshal.StructureToPtr(u,unicode,false);
+        ObjectAttributes oa=new ObjectAttributes();oa.Length=Marshal.SizeOf(typeof(ObjectAttributes));
+        oa.RootDirectory=parent.DangerousGetHandle();oa.ObjectName=unicode;oa.Attributes=0x40;
+        SafeFileHandle result;IoStatusBlock status;
+        int rc=NtCreateFile(out result,READ_CONTROL|SYNCHRONIZE|READ_DATA|READ_ATTRIBUTES,
+          ref oa,out status,IntPtr.Zero,0,SHARE_READ,NT_FILE_OPEN,
+          OPEN_REPARSE|NT_SYNCHRONOUS|NT_DIRECTORY,IntPtr.Zero,0);
+        if(rc!=0||result==null||result.IsInvalid) {
+          if(result!=null)result.Dispose();
+          throw new InvalidOperationException("RELATIVE_DIRECTORY_OPEN_FAILED");
+        }
+        return result;
+      } finally {
+        if(unicode!=IntPtr.Zero)Marshal.FreeHGlobal(unicode);
+        if(buffer!=IntPtr.Zero)Marshal.FreeHGlobal(buffer);
+      }
+    }
     static string Entries(SafeFileHandle dir) {
       // NtQueryDirectoryFile FileNamesInformation=12, bound to a held directory handle.
       IntPtr buffer=Marshal.AllocHGlobal(65536);List<string> names=new List<string>();bool restart=true;
@@ -117,31 +147,56 @@ namespace F2G1R3 {
       Require(ReadFile(h,tail,1,out eof,IntPtr.Zero)&&eof==0,"PAYLOAD_TRAILING_BYTES");
       return data;
     }
-    public static string ProbeFixture(string root,bool tryReplace,bool injectIdentityDrift){
+    public static string ProbeFixture(string root,bool tryReplace,bool injectIdentityDrift) {
+      // Fixed source-reviewed synthetic parent. Environment TEMP/TMP is NOT consulted.
+      // The input is a lexically exact one-component child; it is NEVER opened as
+      // a full path. All actual opens are relative to previously verified handles.
       Require(!String.IsNullOrEmpty(root),"FIXTURE_REQUIRED");
-      string full=Path.GetFullPath(root).TrimEnd('\\'),temp=Path.GetFullPath(Path.GetTempPath()).TrimEnd('\\');
-      string name=Path.GetFileName(full);Guid id;
-      Require(String.Equals(Path.GetDirectoryName(full),temp,StringComparison.OrdinalIgnoreCase)
-       &&name.StartsWith("F2G1-R3Handle-",StringComparison.Ordinal)
-       &&Guid.TryParseExact(name.Substring(14),"D",out id),"OUTSIDE_TEMP_FIXTURE");
-      using(SafeFileHandle dir=CreateFile(full,READ_CONTROL|READ_DATA|READ_ATTRIBUTES,SHARE_READ,IntPtr.Zero,OPEN_EXISTING,BACKUP_SEMANTICS|OPEN_REPARSE,IntPtr.Zero)){
-        Require(!dir.IsInvalid,"FIXTURE_HANDLE_OPEN_FAILED");
-        FileInformation initialDir=GetInfo(dir,"ROOT");VerifyType(initialDir,true);
-        string dirId=Id(initialDir),dirAcl=AclDigest(dir),names=Entries(dir);
-        using(SafeFileHandle file=OpenRelativeFile(dir)){
-          FileInformation initial=GetInfo(file,"CHILD");VerifyType(initial,false);
-          string fileId=Id(initial),fileAcl=AclDigest(file);
-          if(tryReplace){
-            bool refused=false;
-            try{File.Move(Path.Combine(full,"payload.bin"),Path.Combine(full,"renamed.bin"));}
-            catch(IOException){refused=true;}catch(UnauthorizedAccessException){refused=true;}
-            Require(refused,"REPLACEMENT_SUCCEEDED_WITH_HELD_HANDLE");
+      string leaf=Path.GetFileName(root.TrimEnd('\\'));Guid id;
+      Require(leaf.StartsWith("F2G1-R3Handle-",StringComparison.Ordinal)
+        &&Guid.TryParseExact(leaf.Substring(14),"D",out id),"FIXTURE_NAME_INVALID");
+      string expected=@"C:\Users\Public\"+leaf;
+      Require(String.Equals(root,expected,StringComparison.OrdinalIgnoreCase),"OUTSIDE_FIXED_FIXTURE_ANCHOR");
+      using(SafeFileHandle volume=CreateFile(@"\\?\C:\",READ_CONTROL|READ_DATA|READ_ATTRIBUTES,
+        SHARE_READ,IntPtr.Zero,OPEN_EXISTING,BACKUP_SEMANTICS|OPEN_REPARSE,IntPtr.Zero)) {
+        Require(!volume.IsInvalid,"FIXED_VOLUME_OPEN_FAILED");
+        FileInformation volumeInfo=GetInfo(volume,"VOLUME");VerifyType(volumeInfo,true);
+        using(SafeFileHandle users=OpenRelativeDirectory(volume,"Users")) {
+          FileInformation usersInfo=GetInfo(users,"USERS");VerifyType(usersInfo,true);
+          Require(usersInfo.Volume==volumeInfo.Volume,"ANCESTOR_VOLUME_CHANGED");
+          using(SafeFileHandle publicRoot=OpenRelativeDirectory(users,"Public")) {
+            FileInformation publicInfo=GetInfo(publicRoot,"PUBLIC");VerifyType(publicInfo,true);
+            Require(publicInfo.Volume==volumeInfo.Volume,"ANCESTOR_VOLUME_CHANGED");
+            using(SafeFileHandle dir=OpenRelativeDirectory(publicRoot,leaf)) {
+              FileInformation initialDir=GetInfo(dir,"ROOT");VerifyType(initialDir,true);
+              Require(initialDir.Volume==volumeInfo.Volume,"FIXTURE_VOLUME_CHANGED");
+              string dirId=Id(initialDir),dirAcl=AclDigest(dir),names=Entries(dir);
+              using(SafeFileHandle file=OpenRelativeFile(dir)) {
+                FileInformation initial=GetInfo(file,"CHILD");VerifyType(initial,false);
+                Require(initial.Volume==volumeInfo.Volume,"CHILD_VOLUME_CHANGED");
+                string fileId=Id(initial),fileAcl=AclDigest(file);
+                if(tryReplace) {
+                  bool refused=false;
+                  // Path use ONLY as a non-authoritative adversarial rename attempt
+                  // in the verified disposable child; never to read bytes or ACL.
+                  try{File.Move(expected+@"\payload.bin",expected+@"\renamed.bin");}
+                  catch(IOException){refused=true;}catch(UnauthorizedAccessException){refused=true;}
+                  Require(refused,"REPLACEMENT_SUCCEEDED_WITH_HELD_HANDLE");
+                }
+                byte[] bytes=ReadBounded(file);
+                if(injectIdentityDrift)throw new InvalidOperationException("INJECTED_FILE_IDENTITY_DRIFT");
+                Require(Id(GetInfo(file,"CHILD_RECHECK"))==fileId&&AclDigest(file)==fileAcl,
+                  "FILE_IDENTITY_OR_ACL_CHANGED");
+                Require(Entries(dir)==names&&Id(GetInfo(dir,"ROOT_RECHECK"))==dirId
+                  &&AclDigest(dir)==dirAcl,"DIR_IDENTITY_ACL_OR_INVENTORY_CHANGED");
+                Require(Id(GetInfo(users,"USERS_RECHECK"))==Id(usersInfo)
+                  &&Id(GetInfo(publicRoot,"PUBLIC_RECHECK"))==Id(publicInfo)
+                  &&Id(GetInfo(volume,"VOLUME_RECHECK"))==Id(volumeInfo),
+                  "ANCESTOR_IDENTITY_CHANGED");
+                return "TEMP_HANDLE_FIXTURE_PASS|SHA256="+Digest(bytes)+"|Length="+bytes.Length;
+              }
+            }
           }
-          byte[] bytes=ReadBounded(file);
-          if(injectIdentityDrift)throw new InvalidOperationException("INJECTED_FILE_IDENTITY_DRIFT");
-          Require(Id(GetInfo(file,"CHILD_RECHECK"))==fileId&&AclDigest(file)==fileAcl,"FILE_IDENTITY_OR_ACL_CHANGED");
-          Require(Entries(dir)==names&&Id(GetInfo(dir,"ROOT_RECHECK"))==dirId&&AclDigest(dir)==dirAcl,"DIR_IDENTITY_ACL_OR_INVENTORY_CHANGED");
-          return "TEMP_HANDLE_FIXTURE_PASS|SHA256="+Digest(bytes)+"|Length="+bytes.Length;
         }
       }
     }
