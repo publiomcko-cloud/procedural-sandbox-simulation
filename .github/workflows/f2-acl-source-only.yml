@@ -1,7 +1,7 @@
 name: F2 ACL source-only validation
 on:
   push:
-    branches: [security/f2-acl-capture-issue48, fix/f2-g1-pr50-ps51-entrypoint-bridge]
+    branches: [security/f2-acl-capture-issue48, fix/f2-g1-pr50-ps51-entrypoint-bridge, fix/f2-g1-c-postfailure-inspector-r2]
     paths:
       - 'scripts/f2-acl/**'
       - 'docs/security/F2_G1_ACL_CAPTURE.md'
@@ -45,6 +45,13 @@ jobs:
           $testPath = (Resolve-Path '.\\scripts\\f2-acl\\Test-F2AclEntrypointArguments.ps1').Path
           $test = Start-Process -FilePath "$env:SystemRoot\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
           Write-Host "F2EntrypointTestProcessExit=$($test.ExitCode)"
+          if ($test.ExitCode -ne 0) { exit $test.ExitCode }
+      - name: Run F2 C postfailure inspector source-only synthetic suite in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $testPath = (Resolve-Path '.\\scripts\\f2-acl\\Test-F2G1CPostfailureAttestation.SourceOnly.ps1').Path
+          $test = Start-Process -FilePath "$env:SystemRoot\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$testPath) -PassThru -Wait -NoNewWindow
+          Write-Host "F2CInspectorTestProcessExit=$($test.ExitCode)"
           if ($test.ExitCode -ne 0) { exit $test.ExitCode }
       - name: Parse tracked PowerShell source
         shell: powershell

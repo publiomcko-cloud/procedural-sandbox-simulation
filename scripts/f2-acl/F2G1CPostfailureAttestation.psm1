@@ -127,48 +127,17 @@ function Get-F2G1ExpectedBaselinePaths {
     return @($root,$config,(Join-Path $config 'Virtual Machines'),$configVm,($configVm+'.vmcx'),($configVm+'.vmgs'),($configVm+'.VMRS'),(Join-Path $root 'F2-G1-OS.vhdx'),(Join-Path $root 'F2-G1-Scratch.vhdx'),(Join-Path $root 'Virtual Machines'),(Join-Path (Join-Path $root 'Virtual Machines') $vm))
 }
 
+# R2: no live C: provider can be constructed before separately reviewed, handle-stable
+# no-follow object inspection AND independently authenticated exact-SHA owner consent.
 function New-F2G1LiveProvider {
-    $getPath={
-            param([string]$Path)
-            if ($Path -notin $script:Directories -and $Path -ne $script:ActiveManifest -and $Path -ne $script:Mailbox -and $Path -notin @($script:PackageFiles | ForEach-Object { Join-Path $script:PackageAclDir $_ }) -and $Path -notin @($script:MailboxFiles | ForEach-Object { Join-Path $script:Mailbox $_ })) { throw 'PATH_NOT_ALLOWLISTED' }
-            $full = [IO.Path]::GetFullPath($Path)
-            if (-not [string]::Equals($full,$Path,[StringComparison]::OrdinalIgnoreCase)) { throw 'PATH_NOT_CANONICAL' }
-            $root = [IO.Path]::GetPathRoot($full); $current=$root; $rest=$full.Substring($root.Length).TrimEnd('\')
-            if (-not [string]::IsNullOrEmpty($rest)) {
-                foreach ($part in $rest.Split('\')) {
-                    if ([string]::IsNullOrEmpty($part)) { continue }
-                    $current=Join-Path $current $part
-                    if ([IO.File]::Exists($current) -or [IO.Directory]::Exists($current)) {
-                        $ancestor=Get-Item -LiteralPath $current -Force -ErrorAction Stop
-                        if (($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'REPARSE_POINT_PRESENT' }
-                    }
-                }
-            }
-            $item=Get-Item -LiteralPath $full -Force -ErrorAction Stop
-            $acl=Get-Acl -LiteralPath $full -ErrorAction Stop
-            $sections=[Security.AccessControl.AccessControlSections]::Owner -bor [Security.AccessControl.AccessControlSections]::Group -bor [Security.AccessControl.AccessControlSections]::Access
-            $sddl=$acl.GetSecurityDescriptorSddlForm($sections)
-            return [pscustomobject]@{Exists=$true;Kind=$(if($item.PSIsContainer){'Directory'}else{'File'});Reparse=(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0);Length=$(if($item.PSIsContainer){0}else{$item.Length});Sddl=$sddl}
-        }.GetNewClosure()
-    $readBytes={
-            param([string]$Path,[int]$MaximumBytes)
-            $meta=& $getPath $Path
-            if ($meta.Kind -ne 'File' -or $meta.Length -lt 0 -or $meta.Length -gt $MaximumBytes) { throw 'FILE_SIZE_OR_TYPE_INVALID' }
-            $stream=New-Object IO.FileStream($Path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
-            try {
-                if($stream.Length -gt $MaximumBytes){throw 'FILE_SIZE_OR_TYPE_INVALID'}
-                $bytes=New-Object byte[] ([int]$stream.Length);$offset=0
-                while($offset -lt $bytes.Length){$read=$stream.Read($bytes,$offset,$bytes.Length-$offset);if($read -le 0){throw 'INCOMPLETE_FILE_READ'};$offset+=$read}
-                if($stream.ReadByte() -ne -1){throw 'FILE_CHANGED_DURING_READ'}
-                return ,$bytes
-            } finally { $stream.Dispose() }
-        }.GetNewClosure()
-    $listChildren={
-            param([string]$Path)
-            if ($Path -notin @($script:PackageHome,$script:PackageScriptDir,$script:PackageAclDir,$script:ProgramDataRoot,$script:Mailbox)) { throw 'DIRECTORY_NOT_ALLOWLISTED_FOR_ENUMERATION' }
-            return @((Get-ChildItem -LiteralPath $Path -Force -ErrorAction Stop | ForEach-Object { [pscustomobject]@{Name=[string]$_.Name;Kind=$(if($_.PSIsContainer){'Directory'}else{'File'});Reparse=(($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)} }))
-        }.GetNewClosure()
-    return @{Mode='Live';GetPath=$getPath;ReadBytes=$readBytes;ListChildren=$listChildren}
+    throw 'LIVE_PROVIDER_DISABLED_UNQUALIFIED_OBJECT_IDENTITY'
+}
+
+# No trusted external authority or signing key has been approved or installed.
+# This pure gate must deny every reference; a URL string alone is not evidence.
+function Test-F2G1TrustedOwnerAuthorization {
+    param([AllowEmptyString()][string]$Reference)
+    return $false
 }
 
 function New-F2G1FixtureProvider {
@@ -190,7 +159,7 @@ function New-F2G1FixtureProvider {
     } finally { $fixtureStream.Dispose() }
     $fixture=[Text.Encoding]::UTF8.GetString($fixtureBytes)|ConvertFrom-Json -ErrorAction Stop
     $getPath={param([string]$Path) if ($fixture.Fault -eq 'AccessDenied' -and $Path -eq $fixture.FaultPath) { throw 'SIMULATED_ACCESS_DENIED' }; $row=@($fixture.Paths | Where-Object { $_.Path -ceq $Path }) | Select-Object -First 1; if ($null -eq $row -or -not $row.Exists) { throw 'SIMULATED_MISSING_OBJECT' }; return $row}.GetNewClosure()
-    $readBytes={param([string]$Path,[int]$MaximumBytes) if ($fixture.Fault -eq 'AccessDenied' -and $Path -eq $fixture.FaultPath) { throw 'SIMULATED_ACCESS_DENIED' }; $row=@($fixture.Files | Where-Object { $_.Path -ceq $Path }) | Select-Object -First 1; if ($null -eq $row) { throw 'SIMULATED_MISSING_FILE' }; $bytes=[Convert]::FromBase64String([string]$row.Base64); if($bytes.Length -gt $MaximumBytes){throw 'SIMULATED_FILE_TOO_LARGE'}; return ,$bytes}.GetNewClosure()
+    $readBytes={param([string]$Path,[int]$MaximumBytes) if ($fixture.Fault -eq 'ObjectReplaced' -and $Path -eq $fixture.FaultPath) { throw 'SIMULATED_OBJECT_REPLACED' }; if ($fixture.Fault -eq 'AccessDenied' -and $Path -eq $fixture.FaultPath) { throw 'SIMULATED_ACCESS_DENIED' }; $row=@($fixture.Files | Where-Object { $_.Path -ceq $Path }) | Select-Object -First 1; if ($null -eq $row) { throw 'SIMULATED_MISSING_FILE' }; $bytes=[Convert]::FromBase64String([string]$row.Base64); if($bytes.Length -gt $MaximumBytes){throw 'SIMULATED_FILE_TOO_LARGE'}; return ,$bytes}.GetNewClosure()
     $listChildren={param([string]$Path) if ($fixture.Fault -eq 'AccessDenied' -and $Path -eq $fixture.FaultPath) { throw 'SIMULATED_ACCESS_DENIED' }; $row=@($fixture.Children | Where-Object { $_.Path -ceq $Path }) | Select-Object -First 1; if($null -eq $row){throw 'SIMULATED_MISSING_INVENTORY'}; return @($row.Entries)}.GetNewClosure()
     return @{
         Mode='Fixture'; Fixture=$fixture; GetPath=$getPath; ReadBytes=$readBytes; ListChildren=$listChildren
@@ -318,11 +287,17 @@ function Invoke-F2G1CPostfailureAttestation {
         [Parameter(Mandatory,ParameterSetName='Fixture')][ValidateNotNullOrEmpty()][string]$SyntheticFixtureRoot
     )
     if ($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) { return (Stop-F2G1 (New-F2G1Report 'Environment') 'Environment' 'POWERSHELL_51_REQUIRED' @{}) }
-    if ($PSCmdlet.ParameterSetName -eq 'Live' -and $OwnerAuthorizationReference -notmatch '^https://github\.com/publiomcko-cloud/procedural-sandbox-simulation/issues/48#issuecomment-[1-9][0-9]*$') { return (Stop-F2G1 (New-F2G1Report 'Live') 'Authorization' 'EXACT_ISSUE_48_COMMENT_REFERENCE_REQUIRED' @{}) }
-    if ($PSCmdlet.ParameterSetName -eq 'Live' -and $OwnerAuthorizationReference -match '6196160426') { return (Stop-F2G1 (New-F2G1Report 'Live') 'Authorization' 'PREVIOUS_OWNER_AUTHORIZATION_NOT_REUSABLE' @{}) }
+    if ($PSCmdlet.ParameterSetName -eq 'Live') {
+        # R2 blocks BEFORE protected paths, ACLs, enumeration or byte reads.
+        if (-not (Test-F2G1TrustedOwnerAuthorization -Reference $OwnerAuthorizationReference)) {
+            return (Stop-F2G1 (New-F2G1Report 'Live') 'Authorization' 'LIVE_DISABLED_UNVERIFIED_OWNER_GRANT' @{ProtectedReads=0;TrustedAuthorityConfigured=$false})
+        }
+        # Defense in depth: even a future authorization verifier cannot silently enable
+        # the removed path-based provider or bypass stable-object qualification.
+        return (Stop-F2G1 (New-F2G1Report 'Live') 'ObjectIdentity' 'LIVE_DISABLED_STABLE_NOFOLLOW_HANDLES_NOT_QUALIFIED' @{ProtectedReads=0})
+    }
     try {
-        if ($PSCmdlet.ParameterSetName -eq 'Live') { $provider=New-F2G1LiveProvider }
-        else { $provider=New-F2G1FixtureProvider $SyntheticFixtureRoot }
+        $provider=New-F2G1FixtureProvider $SyntheticFixtureRoot
         return Invoke-F2G1Core $provider
     } catch {
         $r=New-F2G1Report $PSCmdlet.ParameterSetName

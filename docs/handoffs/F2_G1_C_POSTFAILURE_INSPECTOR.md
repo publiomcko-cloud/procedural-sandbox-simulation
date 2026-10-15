@@ -1,6 +1,6 @@
 # Developer handoff: F2 G1 C: postfailure inspector
 
-Status: READY_FOR_INDEPENDENT_REVIEW
+Status: R1 independent review BLOCKED_WITH_EVIDENCE; R2 source-only fail-closed patch awaiting independent review.
 
 Ticket / acceptance criteria: Prepare a bounded Windows PowerShell 5.1 source-only inspector and inert synthetic suite; do not perform the protected C: attestation. Preserve `CURRENT_PROTECTED_STATE_UNKNOWN`, `V3_NOT_ATTESTED`, `ACL_REVIEW_REQUIRED`, `G1_BLOCKED_ENVIRONMENT`, and `F2_G1_RELEASE_HOLD`.
 
@@ -12,7 +12,7 @@ Base SHA: `33e985b8e7807bf1feda935374889efd5e5f158a` (accepted PR #50 PowerShell
 
 Candidate source SHA: `11773a928f39efda32a8f79c7133debe3d5c00bc` (inspector/test implementation commit; no source files changed afterward)
 
-Parent SHA: `33e985b8e7807bf1feda935374889efd5e5f158a`
+R1 candidate direct parent: `11773a928f39efda32a8f79c7133debe3d5c00bc` (implementation parent: `c45127d567653fdae47bef9f017803568f3686f9`). The accepted bridge `33e985b8e7807bf1feda935374889efd5e5f158a` is an ANCESTOR, not the direct parent. R2 source branch parent is R1 candidate `009d77cfdb62c4f054dd19b90dd8654f96f354b4`.
 
 Changed paths:
 
@@ -48,3 +48,13 @@ Visual reproduction steps: Not applicable.
 Rollback instructions: Delete the isolated local topic worktree/branch only after review evidence has been retained; no shared branch or remote was changed.
 
 Reviewer focus / open questions: Verify the live allowlist against current Issue #48 restrictions, baseline evidence format and historical pins; inspect fail-closed path handling and synthetic coverage. In particular, confirm the report's ACL metadata remains sanitized and is not mistaken for effective-token acceptance.
+
+## R2 independent-security correction (source-only, no host attestation)
+
+- R1 was **rejected** because it trusted a user-supplied Issue #48 comment URL without authenticating the owner/scope/source-SHA, and used path-based ACL/file reads vulnerable to TOCTOU. The previous owner grant 6196160426 is spent.
+- R2 removes the unsafe live provider entirely. The pure authorization hook denies *every* reference, including genuine-looking and forged URLs. The exported -Live route returns BLOCKED_WITH_EVIDENCE before constructing any C: provider, and a future change to the authorization hook alone cannot enable it. A second stable-identity gate also denies. No C: read-only attestation is possible with this R2.
+- **TOCTOU disposition:** The path-based live access was deleted, so it cannot attest stale, replaced or mismatched objects. Handle-based no-follow object identity (including parent directories, held ACL/content handles and stable inventories) is **not implemented**. It remains a mandatory future independent design/qualification gate; do not claim a live race-free success now.
+- **R1 SHA discrepancy independently resolved:** R1 Git/LF SHA-256 values `2e43c03c79409c510d7a5c6457bc0299744b835c15d02e44fb7b82ab695427d5` (module), `c2bae816034cc2f6295f746509d45e1b9c2c71281f8d426877c77c30553f2d3b` (wrapper), `82d53b4117a31c1004ba9262147989ff5971fc9f88c43b9747a3dd6ef56aae3d` (test) match original author; CRLF hashes `f0c4d787ba70277ff2f72e3862aa5105931061608a705b905a5adc162b09e844`, `9f0c3d50db089eaeb45ba1156c44871ad5a285fc63e58e08de6e4a44284f5a7e`, `556f826cb88501304ca81d6a6451a2c5b54601d6626743d0e756033089dc2701` match independent reviewer exactly. The handoff LF SHA `cd3414b8200745b7a3be9a3a9d785b7fb3250b49978f002cb524a603c844fe71` matches. Exact LF checkout is explicitly pinned for the three PowerShell files in R2 `.gitattributes`.
+- R2 synthetic tests retain the prior 19 assertions, add denial of four untrusted authorization references **without running live mode**, deny direct construction of the live provider, and simulate object replacement in a disposable TEMP fixture. Passing fixture tests cannot qualify future live handles.
+- No installed-package trust root, owner-authentication service, cryptographic signing key, remote API access or Windows handle-based identity is implemented or implied. No protected Windows objects were accessed by this change. A fresh exact-SHA reviewed live architecture and owner authorization remain necessary.
+- Keep `CURRENT_PROTECTED_STATE_UNKNOWN / V3_NOT_ATTESTED / ACL_REVIEW_REQUIRED / G1_BLOCKED_ENVIRONMENT / F2_G1_RELEASE_HOLD`. No UAC, protected updater, `icacls`, VM, native test, merge or release is authorized.

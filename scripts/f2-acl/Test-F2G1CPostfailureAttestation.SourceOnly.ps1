@@ -111,11 +111,27 @@ $sourceText=[IO.File]::ReadAllText($modulePath)
  $forbiddenCommands=@($sourceAst.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -in @('Set-Acl','Remove-Item','Start-Process','Invoke-Expression','icacls','icacls.exe','Start-Job')},$true))
 Assert-Case ($forbiddenCommands.Count -eq 0) 'inspector contains no mutator, process launcher, eval or icacls command'
 Assert-Case ($sourceText -notmatch 'C:\\Dev|git\.exe|Get-Command') 'inspector has no checkout or Git remote checks'
-Assert-Case ($sourceText.Contains('EXACT_ISSUE_48_COMMENT_REFERENCE_REQUIRED') -and $sourceText.Contains('PREVIOUS_OWNER_AUTHORIZATION_NOT_REUSABLE')) 'live mode requires a fresh Issue 48 comment reference and rejects the spent authorization'
+Assert-Case ($sourceText.Contains('LIVE_DISABLED_UNVERIFIED_OWNER_GRANT') -and $sourceText.Contains('LIVE_DISABLED_STABLE_NOFOLLOW_HANDLES_NOT_QUALIFIED')) 'live mode never constructs provider without independently verified owner and object identity'
+Assert-Case ($sourceText -notmatch 'Get-Acl -LiteralPath' -and $sourceText -notmatch 'Get-ChildItem -LiteralPath \\$Path' -and $sourceText -notmatch 'New-Object IO.FileStream\\(\\$Path') 'unsafe legacy path-based live reader removed'
 Assert-Case ($sourceText.Contains('$script:PackageHome = ''C:\Program Files\F2-G1-Icacls''') -and $sourceText.Contains("Join-Path `$script:PackageHome 'scripts'") -and $sourceText.Contains("Join-Path `$script:PackageScriptDir 'f2-acl'")) 'package path is pinned'
 Assert-Case ($sourceText -match [regex]::Escape('C:\ProgramData\F2-G1-ACL-Evidence-ecb6deeb424e40feb5354d18908986df')) 'mailbox path is pinned'
 
 Import-Module -Name $modulePath -Force -ErrorAction Stop
+$reviewedModule=Get-Module F2G1CPostfailureAttestation
+foreach($untrustedReference in @(
+    'https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/48#issuecomment-6196160426',
+    'https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/48#issuecomment-9999999999',
+    'https://github.com/other/repo/issues/48#issuecomment-999',
+    ''
+)){
+    $reviewedModule.SessionState.PSVariable.Set('__R2Reference',$untrustedReference)
+    $verdict=@($reviewedModule.Invoke([scriptblock]::Create('Test-F2G1TrustedOwnerAuthorization -Reference $script:__R2Reference'),@()))
+    Assert-Case ($verdict.Count -eq 1 -and $verdict[0] -eq $false) 'pure authorization hook rejects untrusted reference without invoking live mode'
+}
+$liveProviderBlocked=$false
+try { [void]$reviewedModule.Invoke([scriptblock]::Create('New-F2G1LiveProvider'),@()) }
+catch { $liveProviderBlocked=($_.Exception.Message -match 'LIVE_PROVIDER_DISABLED') }
+Assert-Case $liveProviderBlocked 'live-provider constructor rejects all operations before protected path access'
 $temp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
 $root=Join-Path $temp ('F2G1-CPostfailure-'+[guid]::NewGuid().ToString())
 [void][IO.Directory]::CreateDirectory($root)
@@ -131,6 +147,10 @@ try {
     New-Fixture -Root $root -Fault AccessDenied -FaultPath $manifestPath
     $r=Invoke-F2G1CPostfailureAttestation -SyntheticFixtureRoot $root
     Assert-Case ($r.Verdict -eq 'BLOCKED_WITH_EVIDENCE' -and @($r.Gates|Where-Object{$null -ne $_.Data -and $_.Data.ContainsKey('Code') -and $_.Data['Code'] -eq 'READ_FAILED'}).Count -eq 1) 'simulated access denied blocks closed'
+
+    New-Fixture -Root $root -Fault ObjectReplaced -FaultPath $manifestPath
+    $r=Invoke-F2G1CPostfailureAttestation -SyntheticFixtureRoot $root
+    Assert-Case ($r.Verdict -eq 'BLOCKED_WITH_EVIDENCE' -and @($r.Gates|Where-Object{$null -ne $_.Data -and $_.Data.ContainsKey('Code') -and $_.Data['Code'] -eq 'READ_FAILED'}).Count -eq 1) 'synthetic replacement injection fails closed; no live handle claims'
 
     New-Fixture -Root $root -Fault MissingObject -FaultPath $manifestPath
     $r=Invoke-F2G1CPostfailureAttestation -SyntheticFixtureRoot $root
