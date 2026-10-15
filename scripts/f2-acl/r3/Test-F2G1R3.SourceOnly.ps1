@@ -5,6 +5,14 @@ $ErrorActionPreference='Stop'
 $script:Count=0
 $script:Failures=New-Object 'System.Collections.Generic.List[string]'
 $script:SafeCleanup=$true
+# The path-based test fixture writer/remover is permitted ONLY on a disposable,
+# single-tenant hosted Windows CI worker. This is an operational assumption,
+# not authentication; CI-related environment variables can be forged.
+if ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_OS -cne 'Windows' -or
+    $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or
+    $env:GITHUB_REPOSITORY -cne 'publiomcko-cloud/procedural-sandbox-simulation') {
+    throw 'R3_2_ISOLATED_HOSTED_WINDOWS_CI_REQUIRED'
+}
 function Check([bool]$condition,[string]$label) {
     $script:Count++
     if($condition) { Write-Host ('PASS: '+$label) }
@@ -17,7 +25,8 @@ function Case {
         [int]$ExpectedExit,
         [string]$ExpectedText,
         [int]$TimeoutMs=30000,
-        [switch]$RedirectTemp
+        [switch]$RedirectTemp,
+        [switch]$SimulateUntrustedRunner
     )
     $psi=New-Object Diagnostics.ProcessStartInfo
     $psi.FileName=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -28,6 +37,7 @@ function Case {
         $psi.EnvironmentVariables['TEMP']='C:\Windows'
         $psi.EnvironmentVariables['TMP']='C:\Windows'
     }
+    if($SimulateUntrustedRunner) { $psi.EnvironmentVariables['GITHUB_ACTIONS']='false' }
     $p=New-Object Diagnostics.Process
     $p.StartInfo=$psi
     $stdoutTask=$null;$stderrTask=$null
@@ -37,8 +47,8 @@ function Case {
         $script:SafeCleanup=$false
         # Both streams are drained concurrently while the child runs; no
         # WaitForExit-before-ReadToEnd deadlock.
-        $stdoutTask=$p.StandardOutput.ReadToEndAsync()
-        $stderrTask=$p.StandardError.ReadToEndAsync()
+        $stdoutTask=[F2G1R3Synthetic.BoundedCapture]::Drain($p.StandardOutput,4096)
+        $stderrTask=[F2G1R3Synthetic.BoundedCapture]::Drain($p.StandardError,4096)
         if(-not $p.WaitForExit($TimeoutMs)) {
             $timedOut=$true
             $p.Kill()
@@ -47,12 +57,13 @@ function Case {
         $exited=$true
         if(-not [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($stdoutTask,$stderrTask),5000)) {throw 'TEST_CHILD_STREAM_DRAIN_UNCONFIRMED'}
         $script:SafeCleanup=$true
-        $out=[string]$stdoutTask.Result
-        $err=[string]$stderrTask.Result
+        $out=[string]$stdoutTask.Result.Text
+        $err=[string]$stderrTask.Result.Text
+        $overflow=($stdoutTask.Result.Overflow -or $stderrTask.Result.Overflow)
         if($out.Length -gt 4096 -or $err.Length -gt 4096) {throw 'TEST_CHILD_OUTPUT_NOT_BOUNDED'}
-        if($timedOut) { return [pscustomobject]@{Ok=$false;TimedOut=$true;Exited=$exited;Exit=-1;Stdout=$out;Stderr=$err} }
+        if($timedOut) { return [pscustomobject]@{Ok=$false;TimedOut=$true;Exited=$exited;Overflow=$overflow;Exit=-1;Stdout=$out;Stderr=$err} }
         $exit=$p.ExitCode
-        return [pscustomobject]@{Ok=($exit -eq $ExpectedExit -and ($out+$err).Contains($ExpectedText));TimedOut=$false;Exited=$exited;Exit=$exit;Stdout=$out;Stderr=$err}
+        return [pscustomobject]@{Ok=(-not $overflow -and $exit -eq $ExpectedExit -and ($out+$err).Contains($ExpectedText));TimedOut=$false;Exited=$exited;Overflow=$overflow;Exit=$exit;Stdout=$out;Stderr=$err}
     } finally {
         if($p.HasExited) { $script:SafeCleanup=$true }
         $p.Dispose()
@@ -68,6 +79,8 @@ $root=Split-Path -Parent $MyInvocation.MyCommand.Path
 $bootstrap=Join-Path $root 'Invoke-F2G1R3.SourceOnly.ps1'
 $native=Join-Path $root 'F2G1R3.TempHandleProbe.cs'
 $scope=Join-Path $root 'F2G1R3.FixedScope.json'
+$capture=Join-Path $root 'F2G1R3.BoundedCapture.cs'
+Add-Type -Path $capture -ErrorAction Stop
 $tokens=$null;$parseErrors=$null
 [void][Management.Automation.Language.Parser]::ParseFile($bootstrap,[ref]$tokens,[ref]$parseErrors)
 Check ($parseErrors.Count -eq 0) 'R3.1 bootstrap parses under Windows PowerShell 5.1'
@@ -89,7 +102,9 @@ $junction=$null
 $tamper=$null
 [void][IO.Directory]::CreateDirectory($fixture)
 try {
-    [IO.File]::WriteAllBytes((Join-Path $fixture 'payload.bin'),[Text.Encoding]::UTF8.GetBytes('TEMP-fixture-only R3.1'))
+    $created=[IO.FileStream]::new((Join-Path $fixture 'payload.bin'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+    try { $known=[Text.Encoding]::UTF8.GetBytes('TEMP-fixture-only R3.1');$created.Write($known,0,$known.Length) }
+    finally { $created.Dispose() }
     Write-Host ('SAFE_TEST_LEAF_LENGTH='+([IO.Path]::GetFileName($fixture)).Length+';PREFIX='+([IO.Path]::GetFileName($fixture)).StartsWith('F2G1-R3Handle-'))
     $h1=(Get-FileHash -LiteralPath $native -Algorithm SHA256).Hash.ToLowerInvariant()
     $h2=(Get-FileHash -LiteralPath $scope -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -99,6 +114,10 @@ try {
     Check $good.Ok 'fixed parent and held relative file handles permit synthetic capture'
     $redirect=Case -Wrapper $bootstrap -CaseArgs $common -ExpectedExit 0 -ExpectedText 'TEMP_HANDLE_FIXTURE_PASS' -RedirectTemp
     Check $redirect.Ok 'redirected TEMP/TMP do not change trusted fixture parent'
+    $untrustedHost=Case -Wrapper $bootstrap -CaseArgs $common -ExpectedExit 2 -ExpectedText 'ISOLATED_CI_RUNNER_REQUIRED' -SimulateUntrustedRunner
+    Check $untrustedHost.Ok 'launcher rejects a non-CI test context before fixture access'
+    $flood=Case -Wrapper $bootstrap -CaseArgs ($common+@('-SimulateOutputFlood')) -ExpectedExit 0 -ExpectedText 'TEMP_HANDLE_FIXTURE_PASS'
+    Check ($flood.Overflow -and $flood.Exited -and -not $flood.Ok -and $flood.Stdout.Length -le 4096) 'synthetic stdout flood is drained with strict retention cap and blocked result'
     $rename=Case -Wrapper $bootstrap -CaseArgs ($common+@('-AttemptReplacement')) -ExpectedExit 0 -ExpectedText 'TEMP_HANDLE_FIXTURE_PASS'
     Check ($rename.Ok -and [IO.File]::Exists((Join-Path $fixture 'payload.bin'))) 'held file denies adversarial rename while open'
     $drift=Case -Wrapper $bootstrap -CaseArgs ($common+@('-InjectIdentityDrift')) -ExpectedExit 2 -ExpectedText 'BLOCKED_WITH_EVIDENCE'
@@ -133,6 +152,25 @@ try {
     foreach($name in @('Invoke-F2G1R3.SourceOnly.ps1','F2G1R3.TempHandleProbe.cs','F2G1R3.FixedScope.json')) {
         [IO.File]::Copy((Join-Path $root $name),(Join-Path $tamper $name),$false)
     }
+    # An out-of-fixture hard-link target has the same bytes as the known
+    # vector. A link-count check MUST reject before owner/DACL or content proof.
+    $outsideBytes=Join-Path $tamper 'outside-payload.bin'
+    [IO.File]::WriteAllBytes($outsideBytes,[Text.Encoding]::UTF8.GetBytes('TEMP-fixture-only R3.1'))
+    [IO.File]::Delete((Join-Path $fixture 'payload.bin'))
+    $linked=[F2G1R3Synthetic.BoundedCapture]::CreateHardLink((Join-Path $fixture 'payload.bin'),$outsideBytes,[IntPtr]::Zero)
+    Check $linked 'hard-link adversarial fixture created on isolated hosted CI'
+    if(-not $linked) {throw 'HARD_LINK_TEST_SETUP_FAILED'}
+    $hardResult=Case -Wrapper $bootstrap -CaseArgs $common -ExpectedExit 2 -ExpectedText 'PAYLOAD_MULTIPLE_LINKS'
+    Check $hardResult.Ok 'out-of-fixture hard link rejected before synthetic PASS'
+    [IO.File]::Delete((Join-Path $fixture 'payload.bin'))
+    [IO.File]::WriteAllBytes((Join-Path $fixture 'payload.bin'),[Text.Encoding]::UTF8.GetBytes('wrong-single-link-vector'))
+    $wrong=Case -Wrapper $bootstrap -CaseArgs $common -ExpectedExit 2 -ExpectedText 'PAYLOAD_TEST_BYTES_MISMATCH'
+    Check $wrong.Ok 'single-link fixture with wrong bytes rejected'
+    [IO.File]::Delete((Join-Path $fixture 'payload.bin'))
+    [IO.File]::WriteAllBytes((Join-Path $fixture 'payload.bin'),[Text.Encoding]::UTF8.GetBytes('TEMP-fixture-only R3.1'))
+    $restored=Case -Wrapper $bootstrap -CaseArgs $common -ExpectedExit 0 -ExpectedText 'TEMP_HANDLE_FIXTURE_PASS'
+    Check $restored.Ok 'known payload restored after adversarial tests'
+
     $tBootstrap=Join-Path $tamper 'Invoke-F2G1R3.SourceOnly.ps1'
     $tNative=Join-Path $tamper 'F2G1R3.TempHandleProbe.cs'
     $tScope=Join-Path $tamper 'F2G1R3.FixedScope.json'
