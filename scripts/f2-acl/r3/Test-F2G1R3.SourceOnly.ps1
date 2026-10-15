@@ -65,7 +65,10 @@ function Case {
         $exit=$p.ExitCode
         return [pscustomobject]@{Ok=(-not $overflow -and $exit -eq $ExpectedExit -and ($out+$err).Contains($ExpectedText));TimedOut=$false;Exited=$exited;Overflow=$overflow;Exit=$exit;Stdout=$out;Stderr=$err}
     } finally {
-        if($p.HasExited) { $script:SafeCleanup=$true }
+        # NEVER promote cleanup based solely on the direct child's exit.
+        # Both drains must have returned successfully before the preceding
+        # success path can assign SafeCleanup=true. An inherited pipe held by
+        # a descendant is sufficient to prohibit fixture deletion.
         $p.Dispose()
     }
 }
@@ -198,6 +201,53 @@ try {
     if($null -ne $tamper) {Remove-Fixture -Path $tamper -TrustedParent $parent}
     Remove-Fixture -Path $fixture -TrustedParent $parent
 }
+
+# Incomplete-drain integration: the direct child exits, but a descendant
+# started without a new window inherits stdout/stderr and keeps a pipe open.
+# On drain timeout Case MUST fail closed and MUST NOT authorize fixture cleanup.
+# This one disposable fixture is intentionally retained for ephemeral runner
+# teardown after the descendant exits. It is never a local-host test.
+$heldFixture=Join-Path $parent ('F2G1-R3Handle-'+[guid]::NewGuid().ToString())
+[void][IO.Directory]::CreateDirectory($heldFixture)
+$holder=Join-Path $heldFixture 'HoldInheritedPipe.ps1'
+$holderSource=@'
+$ErrorActionPreference='Stop'
+$exe=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+$desc=Start-Process -FilePath $exe -ArgumentList '-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 12"' -NoNewWindow -PassThru
+[IO.File]::WriteAllText((Join-Path $PSScriptRoot 'descendant.pid'),[string]$desc.Id)
+[Console]::Out.WriteLine('DIRECT_CHILD_FINISHED')
+'@
+[IO.File]::WriteAllText($holder,$holderSource)
+$script:SafeCleanup=$true
+$incompleteDrain=$false
+try {
+    [void](Case -Wrapper $holder -CaseArgs @() -ExpectedExit 0 -ExpectedText 'DIRECT_CHILD_FINISHED' -TimeoutMs 3000)
+} catch {
+    $incompleteDrain=$_.Exception.ToString().Contains('TEST_CHILD_STREAM_DRAIN_UNCONFIRMED')
+}
+$preserved=[IO.Directory]::Exists($heldFixture)
+Check ($incompleteDrain -and -not $script:SafeCleanup -and $preserved) 'descendant inherited-pipe drain timeout fails closed and preserves fixture'
+# Proactively terminate the known synthetic descendant, avoiding orphan work;
+# do NOT retroactively mark the failed case cleanup-safe or delete its fixture.
+$pidPath=Join-Path $heldFixture 'descendant.pid'
+$stopped=$false
+if ([IO.File]::Exists($pidPath)) {
+    $numericId=0
+    if ([int]::TryParse(([IO.File]::ReadAllText($pidPath)).Trim(),[ref]$numericId) -and $numericId -gt 0) {
+        $descendant=$null
+        try {
+            $descendant=[Diagnostics.Process]::GetProcessById($numericId)
+            if (-not $descendant.HasExited) {
+                $descendant.Kill()
+                $stopped=$descendant.WaitForExit(5000)
+            } else { $stopped=$true }
+        } catch [ArgumentException] { $stopped=$true }
+        finally { if($null -ne $descendant) { $descendant.Dispose() } }
+    }
+}
+Check ($stopped -and -not $script:SafeCleanup -and [IO.Directory]::Exists($heldFixture)) 'synthetic descendant terminated; failed drain does not retroactively permit cleanup'
+Write-Host 'R3_3_INCOMPLETE_DRAIN_FIXTURE_RETAINED_ON_EPHEMERAL_RUNNER'
+
 Write-Host ('ASSERTIONS='+$script:Count+' FAILURES='+$script:Failures.Count)
 if($script:Failures.Count -gt 0) {$script:Failures|ForEach-Object {Write-Host ('FAILED='+$_)};exit 1}
 exit 0
