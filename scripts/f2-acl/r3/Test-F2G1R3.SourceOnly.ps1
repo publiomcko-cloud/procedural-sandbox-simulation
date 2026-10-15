@@ -90,6 +90,7 @@ $tamper=$null
 [void][IO.Directory]::CreateDirectory($fixture)
 try {
     [IO.File]::WriteAllBytes((Join-Path $fixture 'payload.bin'),[Text.Encoding]::UTF8.GetBytes('TEMP-fixture-only R3.1'))
+    Write-Host ('SAFE_TEST_LEAF_LENGTH='+([IO.Path]::GetFileName($fixture)).Length+';PREFIX='+([IO.Path]::GetFileName($fixture)).StartsWith('F2G1-R3Handle-'))
     $h1=(Get-FileHash -LiteralPath $native -Algorithm SHA256).Hash.ToLowerInvariant()
     $h2=(Get-FileHash -LiteralPath $scope -Algorithm SHA256).Hash.ToLowerInvariant()
     $common=@('-SyntheticFixtureRoot','"'+$fixture+'"','-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',$h2)

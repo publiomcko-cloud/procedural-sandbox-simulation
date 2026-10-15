@@ -38,7 +38,7 @@ try {
     $parent='C:\Users\Public'
     $name=[IO.Path]::GetFileName($SyntheticFixtureRoot.TrimEnd('\'))
     $accepted=$parent+'\'+$name
-    if ($name -notmatch '^F2G1-R3Handle-[0-9a-fA-F-]{36}$') { throw 'FIXED_FIXTURE_PARENT_ONLY_BAD_LEAF' }
+    if ($name -notmatch '^F2G1-R3Handle-[0-9a-fA-F-]{36}$') { throw ('FIXED_FIXTURE_PARENT_ONLY_BAD_LEAF_LENGTH_'+$name.Length+'_PREFIX_'+$name.StartsWith('F2G1-R3Handle-')) }
     if (-not [string]::Equals($SyntheticFixtureRoot,$accepted,[StringComparison]::OrdinalIgnoreCase)) { throw 'FIXED_FIXTURE_PARENT_ONLY_MISMATCH' }
     $root=Split-Path -Parent $MyInvocation.MyCommand.Path
     $native=Join-Path $root 'F2G1R3.TempHandleProbe.cs'
@@ -81,6 +81,7 @@ try {
     $stage='NONE'
     if ($_.Exception.ToString().Contains('FIXED_FIXTURE_PARENT_ONLY_BAD_LEAF')) {$stage='BAD_LEAF'}
     elseif ($_.Exception.ToString().Contains('FIXED_FIXTURE_PARENT_ONLY_MISMATCH')) {$stage='PARENT_MISMATCH'}
+    if ($_.Exception.ToString() -match 'BAD_LEAF_LENGTH_([0-9]+)_PREFIX_(True|False)') {$stage='BAD_LEAF_LENGTH_'+$Matches[1]+'_PREFIX_'+$Matches[2]}
     [Console]::Error.WriteLine('BLOCKED_WITH_EVIDENCE:R3_1_SYNTHETIC_ONLY:'+$errorCode+';STAGE='+$stage)
     exit 2
 } finally {
