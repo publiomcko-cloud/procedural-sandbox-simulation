@@ -87,7 +87,7 @@ function New-Fixture {
     $children.Add([pscustomobject]@{Path=$pkg;Entries=$pkgEntries})
     $children.Add([pscustomobject]@{Path=$data;Entries=@(@{Name='approved-release.json';Kind='File';Reparse=$false})})
     $children.Add([pscustomobject]@{Path=$mailbox;Entries=@($mailNames|ForEach-Object{@{Name=$_;Kind='File';Reparse=$false}})})
-    $faultValue=if($Fault -eq 'AccessDenied'){'AccessDenied'}else{''}
+    $faultValue=if($Fault -in @('AccessDenied','ObjectReplaced')){$Fault}else{''}
 $fixture=[ordered]@{Fault=$faultValue;FaultPath=$FaultPath;IsAdministrator=[bool]$Admin;AdministratorGroupPresent=[bool]$AdministratorGroup;UserSid=$userSid;Expected=@{ManifestSha256=(Get-BytesSha256 $manifestBytes);ReviewedCommitSha='5741ffe90a3abd02a08563e6431e8a0b9b63eeb1';BaselineMailboxId='ecb6deeb424e40feb5354d18908986df';BaselinePayloadCaptureId='489e7fec-0300-467c-bfbd-a46fb8cf7211';RecordPaths=@($recordPaths)};Paths=@($paths.ToArray());Files=@($files.ToArray());Children=@($children.ToArray())}
     $fixturePath=Join-Path $Root 'fixture.json'
     $json=$fixture|ConvertTo-Json -Depth 16 -Compress
@@ -112,7 +112,7 @@ $sourceText=[IO.File]::ReadAllText($modulePath)
 Assert-Case ($forbiddenCommands.Count -eq 0) 'inspector contains no mutator, process launcher, eval or icacls command'
 Assert-Case ($sourceText -notmatch 'C:\\Dev|git\.exe|Get-Command') 'inspector has no checkout or Git remote checks'
 Assert-Case ($sourceText.Contains('LIVE_DISABLED_UNVERIFIED_OWNER_GRANT') -and $sourceText.Contains('LIVE_DISABLED_STABLE_NOFOLLOW_HANDLES_NOT_QUALIFIED')) 'live mode never constructs provider without independently verified owner and object identity'
-Assert-Case ($sourceText -notmatch 'Get-Acl -LiteralPath' -and $sourceText -notmatch 'Get-ChildItem -LiteralPath \\$Path' -and $sourceText -notmatch 'New-Object IO.FileStream\\(\\$Path') 'unsafe legacy path-based live reader removed'
+Assert-Case (-not $sourceText.Contains('Get-Acl -LiteralPath') -and -not $sourceText.Contains('Get-ChildItem -LiteralPath $Path') -and -not $sourceText.Contains('New-Object IO.FileStream($Path')) 'unsafe legacy path-based live reader removed'
 Assert-Case ($sourceText.Contains('$script:PackageHome = ''C:\Program Files\F2-G1-Icacls''') -and $sourceText.Contains("Join-Path `$script:PackageHome 'scripts'") -and $sourceText.Contains("Join-Path `$script:PackageScriptDir 'f2-acl'")) 'package path is pinned'
 Assert-Case ($sourceText -match [regex]::Escape('C:\ProgramData\F2-G1-ACL-Evidence-ecb6deeb424e40feb5354d18908986df')) 'mailbox path is pinned'
 
