@@ -42,7 +42,7 @@ namespace F2G1R3 {
     static void Require(bool ok,string error) {if(!ok)throw new InvalidOperationException(error);}
     static string Digest(byte[] bytes) {using(SHA256 sha=SHA256.Create())return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-","").ToLowerInvariant();}
     static FileInformation GetInfo(SafeFileHandle h,string stage) {
-      FileInformation info;
+      FileInformation info=default(FileInformation);
       Require(h!=null&&!h.IsInvalid&&!h.IsClosed&&GetFileInformationByHandle(h,out info),"HANDLE_INFO_UNAVAILABLE_"+stage);
       return info;
     }
