@@ -1,0 +1,1121 @@
+{
+  "Schema": "f2-g1-v4-pure-conformance-facts-v1",
+  "OriginDesignHead": "c15b6440f91fe363b7bc1be7bf24b59229c3e402",
+  "DesignOraclePath": "docs/reviews/f2-g1-v4-transaction-design/ACCEPTANCE_MATRIX.json",
+  "FactFields": [
+    "Domain",
+    "Condition",
+    "LocalWritePossible",
+    "RootPresent",
+    "AuthorityReserved",
+    "RequestedOperation",
+    "SignatureValidated"
+  ],
+  "Notice": "Facts are authored independently of expected classifications and never interpreted as trusted input. Distinct synthetic predicates; no signature, Git, OS, protected path or actual filesystem transaction.",
+  "Vectors": [
+    {
+      "Id": "T01",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "Missing",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T02",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "SourceOnlyInstall",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T03",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "SelfSigned",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T04",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "UnverifiedSignature",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T05",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "CommitMismatch",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T06",
+      "Facts": {
+        "Domain": "Cutover",
+        "Condition": "DraftV3",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T07",
+      "Facts": {
+        "Domain": "Observation",
+        "Condition": "VerifiedHistoricalV2",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T08",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "MemberMismatch",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T09",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "HistoricalPinMismatch",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T10",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "MixedSchema",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T11",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "PrivilegedGit",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T12",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "ExecutablePinMismatch",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T13",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "ForbiddenPath",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T14",
+      "Facts": {
+        "Domain": "Cutover",
+        "Condition": "UnknownInstalledVersion",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T15",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "LeaseConflict",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T16",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "DuplicateTransaction",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T17",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "LegacySchema",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T18",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "SequenceGap",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T19",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "PreviousHashMismatch",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T20",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "NoncanonicalBytes",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T21",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "RewrittenChain",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T22",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "TupleChanged",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T23",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "UnknownFlush",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T24",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "BeforeStage",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T25",
+      "Facts": {
+        "Domain": "Active",
+        "Condition": "OldWithPublishedTarget",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T26",
+      "Facts": {
+        "Domain": "Active",
+        "Condition": "TargetWithBothBackups",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T27",
+      "Facts": {
+        "Domain": "Active",
+        "Condition": "TargetMissingBackup",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T28",
+      "Facts": {
+        "Domain": "Active",
+        "Condition": "UnknownPointer",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T29",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "UnsignedForward",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T30",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "UnapprovedRollback",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T31",
+      "Facts": {
+        "Domain": "Active",
+        "Condition": "TerminalVerified",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T32",
+      "Facts": {
+        "Domain": "Active",
+        "Condition": "OldPackageModified",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T33",
+      "Facts": {
+        "Domain": "Quiescence",
+        "Condition": "AclOrReparseConflict",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T34",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "AutoRepair",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T35",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "LostLease",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T36",
+      "Facts": {
+        "Domain": "Observation",
+        "Condition": "ValidatedSourceOnlyV4",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T37",
+      "Facts": {
+        "Domain": "Observation",
+        "Condition": "CIInconclusive",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T38",
+      "Facts": {
+        "Domain": "Observation",
+        "Condition": "SyntheticReviewOnly",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T39",
+      "Facts": {
+        "Domain": "Bootstrap",
+        "Condition": "Unprovisioned",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T40",
+      "Facts": {
+        "Domain": "Bootstrap",
+        "Condition": "PolicyUnenforced",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T41",
+      "Facts": {
+        "Domain": "Bootstrap",
+        "Condition": "CandidateControlledKey",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T42",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "DuplicateField",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T43",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "AlgorithmConfusion",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T44",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "RevokedSigner",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T45",
+      "Facts": {
+        "Domain": "Receipt",
+        "Condition": "ExpiredSigner",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T46",
+      "Facts": {
+        "Domain": "Authority",
+        "Condition": "TrustedTimeUnavailable",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T47",
+      "Facts": {
+        "Domain": "Authority",
+        "Condition": "Offline",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T48",
+      "Facts": {
+        "Domain": "Authority",
+        "Condition": "DuplicateApprovalOtherTx",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T49",
+      "Facts": {
+        "Domain": "Authority",
+        "Condition": "SameTxAlteredTuple",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T50",
+      "Facts": {
+        "Domain": "Authority",
+        "Condition": "CrossEnvironmentReplay",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T51",
+      "Facts": {
+        "Domain": "Authority",
+        "Condition": "IdenticalReplay",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T52",
+      "Facts": {
+        "Domain": "Authority",
+        "Condition": "OldHeadRestore",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T53",
+      "Facts": {
+        "Domain": "Authority",
+        "Condition": "OldGeneration",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T54",
+      "Facts": {
+        "Domain": "Authority",
+        "Condition": "ReservedWithoutRoot",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": true,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T55",
+      "Facts": {
+        "Domain": "Authority",
+        "Condition": "RootWithoutReservation",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T56",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "GenesisMissing",
+        "LocalWritePossible": false,
+        "RootPresent": true,
+        "AuthorityReserved": true,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T57",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "GenesisNotAnchored",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T58",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "EventHashMismatch",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T59",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "NoStageIntent",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T60",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "NoPublishIntent",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T61",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "AmbiguousRename",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T62",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "VolumeMismatch",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T63",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "BackupPublishIncomplete",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T64",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "BackupNotVerified",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T65",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "BackupCollision",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T66",
+      "Facts": {
+        "Domain": "Active",
+        "Condition": "BackupsDisagree",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T67",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "NoSwitchIntent",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T68",
+      "Facts": {
+        "Domain": "Active",
+        "Condition": "UnknownPointer",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T69",
+      "Facts": {
+        "Domain": "Active",
+        "Condition": "TargetWithBothBackups",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T70",
+      "Facts": {
+        "Domain": "Active",
+        "Condition": "TargetMissingFinalizeReceipt",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T71",
+      "Facts": {
+        "Domain": "Active",
+        "Condition": "TargetPackageMismatch",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T72",
+      "Facts": {
+        "Domain": "Active",
+        "Condition": "TargetAuthorizedFinalizeCandidate",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T73",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "RepeatManifestSwap",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T74",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "RemoteCompletionMissing",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T75",
+      "Facts": {
+        "Domain": "Authority",
+        "Condition": "AlreadyConsumedFinalizer",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T76",
+      "Facts": {
+        "Domain": "Quiescence",
+        "Condition": "LateV2Worker",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T77",
+      "Facts": {
+        "Domain": "Quiescence",
+        "Condition": "UnmediatedV3",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T78",
+      "Facts": {
+        "Domain": "Quiescence",
+        "Condition": "MetadataInaccessible",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T79",
+      "Facts": {
+        "Domain": "Quiescence",
+        "Condition": "LegacyLaunchStillAllowed",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T80",
+      "Facts": {
+        "Domain": "Quiescence",
+        "Condition": "CachedOldReader",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T81",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "UnprovenCrashTier",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T82",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "DirectoryFlushUnknown",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T83",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "CheckpointMismatch",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T84",
+      "Facts": {
+        "Domain": "Recovery",
+        "Condition": "RollbackWithInstallReceipt",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "ROLLBACK",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T85",
+      "Facts": {
+        "Domain": "Observation",
+        "Condition": "DesignOnly",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T86",
+      "Facts": {
+        "Domain": "Recovery",
+        "Condition": "AuthenticRollbackReceipt",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "ROLLBACK",
+        "SignatureValidated": true
+      }
+    },
+    {
+      "Id": "T87",
+      "Facts": {
+        "Domain": "Cutover",
+        "Condition": "LegacyInstallRequested",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T88",
+      "Facts": {
+        "Domain": "Journal",
+        "Condition": "GenesisTorn",
+        "LocalWritePossible": false,
+        "RootPresent": true,
+        "AuthorityReserved": true,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T89",
+      "Facts": {
+        "Domain": "Authority",
+        "Condition": "OfflineAfterWrite",
+        "LocalWritePossible": true,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T90",
+      "Facts": {
+        "Domain": "Active",
+        "Condition": "AmbiguousReplaceNames",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T91",
+      "Facts": {
+        "Domain": "Transaction",
+        "Condition": "UnsupportedPowerCrash",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    },
+    {
+      "Id": "T92",
+      "Facts": {
+        "Domain": "Bootstrap",
+        "Condition": "ConstrainedLanguage",
+        "LocalWritePossible": false,
+        "RootPresent": false,
+        "AuthorityReserved": false,
+        "RequestedOperation": "INSPECT",
+        "SignatureValidated": false
+      }
+    }
+  ]
+}
