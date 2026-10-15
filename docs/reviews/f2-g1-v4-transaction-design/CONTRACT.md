@@ -1,6 +1,6 @@
 # F2 G1 — v4 transaction protocol contract (design candidate)
 
-**Classification:** SOURCE-ONLY DESIGN / PROPOSED / RELEASE_HOLD. Not executable code, installation guidance or an approved security control.
+**Classification:** SOURCE-ONLY DESIGN R3 / PROPOSED / RELEASE_HOLD. R2 was independently BLOCKED_WITH_EVIDENCE; R3 has not been reviewed or owner-approved. Not executable code, installation guidance or an approved security control.
 **Immutable design-review parent:** `b044e517c46e8f8d95bb5d8d4bc1225f6459fe84`.
 **Normative interpretation:** requirements prefixed MUST / MUST NOT / SHOULD are **proposed acceptance conditions**, not claims that production implements them. Any unclear observation resolves to `HOLD_PRESERVE`, never an authorized write.
 **Decision:** ADR-0004; accompanying negative scenario oracle: `ACCEPTANCE_MATRIX.json`.
@@ -37,7 +37,7 @@ The authority must maintain an append-only durable per-environment ledger outsid
 
 Every future detached signature must bind **exactly one** transaction tuple and operation:
 
-- ReceiptSchema, ReceiptFormatVersion, AlgorithmId, SignerKeyId, ApprovalId (globally unique), TxId (32 lowercase hex), EnvironmentBoundaryId, AllowedOperation (INSTALL / RECOVER_FORWARD / FINALIZE_POST_SWITCH / ROLLBACK each distinct), AllowedActor, TargetVolumeIdentity and PackageDestinationRoot.
+- ReceiptSchema, ReceiptFormatVersion, AlgorithmId, SignerKeyId, ApprovalId (globally unique), TxId (32 lowercase hex), EnvironmentBoundaryId, AllowedOperation (INSTALL / RECOVER_FORWARD / FINALIZE_POST_SWITCH only; ROLLBACK is unconditionally UNSUPPORTED in transaction-v4, even if a receipt is correctly signed), AllowedActor, TargetVolumeIdentity and PackageDestinationRoot.
 - TransactionProtocolSchema = f2-protected-update-transaction-v4; future InstallableManifestSchema (proposed f2-icacls-runtime-release-v5); raw exact InstallableManifestSha256, SourceCommitSha, canonical PackageInventorySha256, all member byte hashes, build provenance and exact approved target package root.
 - Exactly one verified expected Predecessor tuple (Schema, ManifestSha256, ReviewedCommitSha, complete installed inventory) per approval. The v2 manifest hash b5f01570cf8937324f0c763f72a8d05b5532472156d4e5b0fcfbd180dc7abbe9 and historical commit 5741ffe90a3abd02a08563e6431e8a0b9b63eeb1 are known reference values, **not evidence that v2 is currently installed**. Draft v3 is not an allowed predecessor without independent proof.
 - UpdaterSha256, LauncherSha256, RuntimeEntrypointSha256, CoordinatorSha256, CollectorSha256, ReceiptVerifierSha256, provisioned BootstrapPolicyId, ExpectedSignerKeyId, and precise permitted post-switch state for finalization.
@@ -49,13 +49,19 @@ Signer metadata, digest, TxId, ApprovalId, key, operation, predecessor, authorit
 
 Independent signer provisioning, network authority, signature vectors, exact wire encoding, expiry/revocation semantics and any operation authorization remain owner approval gates. The source-only tests' self-generated Git hash is not a signer attestation.
 
+### 2.4 Proposed threat model (OWNER DECISION PENDING)
+
+The candidate threat model includes malicious/malformed package and receipt bytes, untrusted Git/source, replayed approvals, rollback/restoration of local transaction history, and partial writes/process crashes. It assumes uncompromised independently administered Windows bootstrap/code-integrity policy and an independently durable online signer/time/revocation/replay authority. It does **not** establish security after kernel/admin policy compromise, signer private-key compromise or rollback of the external authority itself. If protection from locally restored history is desired, a remote monotonic authority or independently reviewed hardware equivalent is needed. A lighter local one-use authorization model would be a **different, weaker** design requiring explicit owner consent and independent review; R3 makes no such implicit downgrade.
+
+The Windows App Control device-wide signed-policy chain and the separate candidate receipt signature chain are distinct. The independent reviewer notes RSA-signed policy and Secure Boot/reboot policy-enforcement requirements; the proposed ECDSA receipt signature requires a separate key, signer and verifier. Windows PowerShell 5.1 script-enforcement and Constrained Language Mode effects on the bootstrap, verifier and every dependency must be tested before any claim that a policy is operational. No platform policy, signer, provisioned key or trusted authority exists by virtue of this document.
+
 ## 3. Package, installed-state and quiescence gates
 
 - Freeze current accepted ten-member source-only v4 (Status SOURCE_ONLY_NOT_RELEASE_APPROVED); it is **not** an installable package. Propose a separately reviewed installable v5 manifest and new source-pin generation. Freeze exact cardinality, case-sensitive paths, Windows checkout EOL policy, individual SHA-256, canonical sorted inventory encoding, max sizes, destination identities and predecessor tuple after production source is reviewed. Old v1/v2 manifests/pins remain byte-identical.
 - Installation must use already authenticated signed/verifier toolchain; **no privileged Git command**. Sealed package is independently re-read byte for byte under elevation; forbidden UNC, network/mapped/removable/G:/reparse/device paths and cross-volume moves, unexpected installed files, owner/DACL mismatches or extra package members ⇒ reject before writes or hold after partial staging.
 - All transaction, stage, backup, package and active-manifest directories must be on independently verified **same fixed local volume GUID** (not only same drive letter) with reviewed NTFS/ReFS semantics. Reject ambiguous mount points, reparse ancestors and volume identity changes.
 - Inventory includes launcher entrypoints (Start-F2ProtectedReleaseUpdate.ps1 and all registered direct/script invocations), collector (Invoke-F2AclReadOnlyCapture.ps1 and Invoke-F2IcaclsCapture.ps1), runtime (F2AclIcacls.Runtime.psm1), coordinator (Invoke-F2IcaclsProtectedCoordinator.ps1), updater (Invoke-F2ProtectedReleaseUpdate.ps1), Windows PowerShell child workers, scheduled tasks/services, inherited handles, memory-cached manifests and any operator-initiated direct PowerShell path. This list is an **initial discovery checklist**, not proof that every possible launcher is known. Freeze executable SHA and process identity predicates after full enumeration.
-- **v2 cutover gate:** the historical v2 runtime lacks the shared lease; therefore an app-level lock or two process inventories cannot prevent a late v2 launch. Default **NO LIVE v2 -> v5 CUTOVER**. Only a separately authorized, independently verified maintenance execution context with authenticated online approval-authority connectivity and OS-enforced prevention of legacy launches for the entire interval may be evaluated. Maintenance means legacy launch isolation, NOT disconnection from the approval authority. If uncooperative direct launches remain possible, stay HOLD_PRESERVE. v3 online cutover also remains blocked until *all* launch paths are forced through an OS-enforced trusted broker plus the lease/barrier, and late starts are demonstrably denied throughout the switch.
+- **R3 supported production predecessor/cutover: NONE.** Both live and maintenance v2/v3-to-v5 cutovers are explicitly UNSUPPORTED by this revision, even with a signed receipt. Historical v2 lacks the shared lease; the R2 design did not identify a proven OS-enforced mechanism to prevent every late/direct/scheduled/elevated legacy launch. The only next permitted implementation milestone is a temporary-fixture **read-only pure conformance harness** with fake authority, no protected filesystem, activation or File.Replace. A separate owner-approved cutover ADR must later define and verify enforceable launch inhibition, fixed volume identity, authenticated authority connectivity, reader/process/handle coverage, prevention of late launches and safe exit to normal host operation. No production path is implied by the current state graph.
 - Once launch inhibition is enforced, acquire exclusive release lease and active-manifest barrier, inventory all relevant processes including inaccessible metadata, verify all known file handles are quiescent, and revalidate at the switch edge. **Inaccessible process details, unknown child ancestry, handles that can cache old manifest, or failure to inhibit new direct readers ⇒ HOLD_PRESERVE**. The lock must remain held through readback and terminal evidence; no forced termination of unrelated processes.
 - Windows manifest file sharing/barrier semantics must be specified and tested with the exact v2/v3 reader handle modes. A barrier alone does NOT block a late process already running uncooperative v2 code. The release strategy must prove no legacy executable can read/cache a changed active manifest during the cutover.
 - Any consent to write protected paths, enable WDAC, install a broker or enter maintenance is **outside** this document's authorization. These are blocking owner decisions, not tasks granted to a code agent.
@@ -65,6 +71,8 @@ Independent signer provisioning, network authority, signature vectors, exact wir
 ### 4.1 Explicit durability scope
 
 Define separate crash classes: (A) process/PowerShell exception or termination; (B) OS reboot/crash; (C) sudden power loss or storage controller failure. File flush and same-volume rename semantics alone **do not prove** B/C crash-consistent durability. Owner must select supported Windows filesystem and storage durability guarantee, write-through/flush and directory metadata persistence mechanisms, and independent fault-injection evidence. Until B/C semantics are demonstrably supported, an ambiguous post-crash state is HOLD_PRESERVE; no successful transaction claim is warranted. Do not assume File.Replace and Directory.Move guarantee power-loss atomicity. Production implementation may narrow its formally supported crash tier only after owner explicitly accepts the residual risk.
+
+**R3 simulation tier (not storage production support):** Only process exception/termination (tier A) is eligible for a **synthetic temporary-fixture conformance harness**. OS crash/reboot (tier B) and power/controller failure (tier C) remain unsupported and lead to HOLD_PRESERVE. R3 authorizes no real active pointer switch or production COMMIT_DURABLE, including on tier A. Owner must choose a real filesystem/storage crash tier and approve independent Windows fault tests before any installation.
 
 ### 4.2 First local write, journal byte protocol, and external anchor
 
@@ -95,6 +103,8 @@ The table defines explicit intent before every externally visible mutation. Each
 | POSTCHECK_VERIFIED | Independently verify active/backup target/old package, DACL, no mixed readers, remote checkpoint | HOLD_PRESERVE on mismatch |
 | COMMIT_DURABLE | Final local terminal flush and remote durable completion acknowledgement, retained predecessor; no cleanup inferred | OBSERVE_ONLY |
 
+**ReplaceFileW is NOT universally all-or-nothing.** The word *atomic* refers only to the intended same-volume call boundary, never a guarantee after any API error, OS crash or power loss. The independent reviewer identified documented failure cases leaving replacement/replaced/backup objects under different names; REPLACEFILE_WRITE_THROUGH is unsupported. Future implementation must enumerate allowed API outcomes and independently read back the active, staged replacement, File.Replace-generated backup and separately durable predecessor backup, including absent/extra names, bytes and ACLs. Every unproved state ⇒ HOLD_PRESERVE, never inferred success, rollback or second switch.
+
 Before SWITCH_INTENT, the predecessor backup is already independently durable and exact. File.Replace backup-output path must be **distinct** from the previously published predecessor backup and must start absent. The two backup artifacts must independently verify exact old bytes; the replacement operation must never truncate/overwrite the durable predecessor backup. A reviewer must prove whether File.Replace, flush and directory metadata behavior meet the selected Windows filesystem crash-tier guarantee. If not, block implementation pending a better primitive. Neither journal intent nor state label is itself evidence of completed file operation.
 
 Every root creation, local record write, journal flush, stage directory/file create, package-publish rename, backup temporary write/rename, active-pointer replacement, both backup checks and remote checkpoint acknowledgement requires an independently reproducible synthetic fault point. Old release packages and backups are never automatically deleted.
@@ -105,7 +115,7 @@ Crash can occur after the active-manifest replacement while local journal still 
 
 A distinct, **new signed operation receipt** AllowedOperation=FINALIZE_POST_SWITCH, referring to original TxId, ApprovalId, exact original install receipt, expected target/old manifest and external ledger Generation, is required. Remote authority atomically reserves this **separate** operation. Under the same exclusive barrier and launch inhibition, recheck all identities and append only new v4 RECOVERY_POST_SWITCH_VERIFIED, POSTCHECK_VERIFIED and COMMIT_DURABLE evidence with remote anchoring. **It MUST NOT call File.Replace or change approved-release.json, publish/delete packages, rewrite backup, reinterpret v3 journal or re-execute INSTALL.** Incomplete or inconsistent evidence remains HOLD_PRESERVE indefinitely until separately reviewed; no attempt to manufacture missing backup is permitted.
 
-If old exact predecessor remains active despite SWITCH_INTENT, a *different* new signed RECOVER_FORWARD authorization is required, and it must recheck exact backup/package, launch inhibition and no actual prior switch before one future controlled activation. ROLLBACK has no approved implementation; it requires an independent protocol and signed operation receipt, not an implicit compensation action.
+If old exact predecessor remains active despite SWITCH_INTENT, a new signed RECOVER_FORWARD authorization would be required **in a separately approved future production protocol**. Under R3 all production operations remain unsupported. **ROLLBACK is reject-only:** even a cryptographically valid receipt requesting ROLLBACK must be classified UNSUPPORTED_OPERATION / REJECT_BEFORE_WRITE, without creating a transaction directory. A future rollback needs a separately designed, versioned and approved protocol.
 
 ## 5. Closed recovery observations and classifications
 
@@ -121,19 +131,48 @@ The **single field** expected_classification is the default **non-mutating dispo
 | New active with missing/invalid backup, missing target or unclear filesystem crash tier | AMBIGUOUS_NEW_ACTIVE | HOLD_PRESERVE | None |
 | Active equals neither exact predecessor nor target | UNKNOWN_ACTIVE | HOLD_PRESERVE | None |
 | Broken, older-prefix, colliding or v3 legacy journal supplied as v4 | UNTRUSTED_TRANSACTION | HOLD_PRESERVE | None |
-| Remote approval reserved, local transaction root absent or journal genesis missing | REMOTE_RESERVED_NO_LOCAL | HOLD_PRESERVE | None |
+| Remote approval reserved, transaction root absent | REMOTE_RESERVED_NO_LOCAL | HOLD_PRESERVE | None |
+| Transaction root exists, journal genesis missing or incomplete | LOCAL_ROOT_GENESIS_INCOMPLETE | HOLD_PRESERVE | None |
 | Untrusted signer/unsupported version or duplicate receipt JSON field before any write | REJECTED_RECEIPT | REJECT_BEFORE_WRITE | None |
 | Inaccessible process info or unproven launch barrier | QUIESCENCE_UNPROVEN | HOLD_PRESERVE | None |
 | Valid sealed source-only v4 contract, no installer | SOURCE_ONLY_ACCEPTED | OBSERVE_ONLY | None |
 
 When observations disagree, use the **least-permissive** classification and preserve evidence. No classification is a capability token. A recovery *operation* requires a separate signed/remote-reserved authorization, and no such write path is implemented.
 
+### 5.1 Closed inspection_state enum and disposition mapping (R3)
+
+**inspection_state is descriptive, not authority.** Exactly these 19 values are recognized. The separately stored expected_classification is the indicated default non-mutating disposition, never an operation token. Unknown states fail closed.
+
+| inspection_state | expected_classification | Meaning |
+|---|---|---|
+| REJECTED_RECEIPT | REJECT_BEFORE_WRITE | Invalid receipt, signature, algorithm, revocation, expiry or canonical fields |
+| TRUST_BOOTSTRAP_UNPROVEN | REJECT_BEFORE_WRITE | Independent OS/verifier/bootstrap identity absent |
+| AUTHORITY_UNAVAILABLE | REJECT_BEFORE_WRITE | No remote authority **before** local transaction mutation |
+| UNSUPPORTED_OPERATION | REJECT_BEFORE_WRITE | ROLLBACK or other unsupported operation |
+| UNSUPPORTED_PREDECESSOR | REJECT_BEFORE_WRITE | v2/v3 migration under R3, no cutover path |
+| PREDECESSOR_OBSERVED | OBSERVE_ONLY | Historical predecessor verified read-only |
+| SOURCE_ONLY_ACCEPTED | OBSERVE_ONLY | Accepted noninstallable v4 source package |
+| OBSERVATION_ONLY | OBSERVE_ONLY | No operational instruction (tests/CI/design) |
+| NEW_ACTIVE_COMPLETE_OBSERVED | OBSERVE_ONLY | Hypothetical exact verified terminal state |
+| PRECONDITION_UNMET | HOLD_PRESERVE | Unsafe path/lease/backup/staging prerequisites |
+| UNTRUSTED_TRANSACTION | HOLD_PRESERVE | Journal, anchor, replay or durability inconsistent |
+| REMOTE_RESERVED_NO_LOCAL | HOLD_PRESERVE | Remote reserved, **no local transaction root** |
+| LOCAL_ROOT_GENESIS_INCOMPLETE | HOLD_PRESERVE | Root exists but genesis missing/incomplete |
+| OLD_ACTIVE_PARTIAL_STAGING | HOLD_PRESERVE | Old active, incomplete staging |
+| OLD_ACTIVE_FORWARD_ELIGIBILITY_CANDIDATE | HOLD_PRESERVE | Hypothetical forward candidate, no authority |
+| NEW_ACTIVE_VERIFY_ONLY_CANDIDATE | HOLD_PRESERVE | Hypothetical post-switch finalization candidate |
+| AMBIGUOUS_NEW_ACTIVE | HOLD_PRESERVE | New active with untrusted/missing evidence |
+| UNKNOWN_ACTIVE | HOLD_PRESERVE | Active neither exact predecessor nor target |
+| QUIESCENCE_UNPROVEN | HOLD_PRESERVE | Late/unknown/uncorroborated reader/process |
+
+An authority outage after *any* possibly completed local write must classify PRECONDITION_UNMET / HOLD_PRESERVE, **not** AUTHORITY_UNAVAILABLE / REJECT_BEFORE_WRITE (which would incorrectly imply zero local effects). A signed ROLLBACK receipt is still UNSUPPORTED_OPERATION; a local root with partial genesis is always LOCAL_ROOT_GENESIS_INCOMPLETE. Matrix IDs T25/T26/T31 name candidate/complete inspection states but do not authorize operation.
+
 ## 6. Boundary assurance, no circular pins, and proof gates
 
 - Strictly retain historical old v1/v2 pins, v2/v3 manifests and legacy transaction.ndjson; prevent any v4 resolver from importing the legacy parser, or vice versa. New production code needs a separately frozen pin generation and installable manifest (proposed v5), NEVER relabel the already reviewed ten-member source-only v4 as installable.
 - Freeze operator-approved package inventory and authenticated bootstrap/key/authority ledger before any code. The ledger proves replay state independent of locally restored old transaction files; if it cannot, no production cutover. Signed operation-specific recovery uses a distinct ApprovalId and the same immutable TxId.
-- Enumerate every known launch and reader process path; v2 needs a proved OS-enforced maintenance/launch-inhibited cutover or must remain unsupported. v3 may be eligible for online migration only if all late launches are mediated; do not assume v3 is installed.
+- R3 does not support production v2/v3 cutover. The reader/launcher inventory is only a future proof checklist. No live v2/v3 compatibility or launch inhibition can be inferred from the app lease or process inventory; a separate cutover ADR and explicit owner approval are required.
 - Independent Windows reviewers must audit real filesystem semantics, exact File.Replace backup effects, directory metadata durability, process handle/share modes, replay after restoration, remote partition/crash, all 38 prior matrix scenarios plus the expanded ones, and fault injection at each mutating boundary.
 - The original CI #85 (FULL_SEQUENCE_INCONCLUSIVE, intermittent receiver) is NOT resolved by this design. No CI, PR, merge, UAC, protected recovery, updater execution or release is authorized here.
 
-**Status: PROPOSED_R2_NOT_CODED / ARCHITECTURE_REVIEW_PENDING / RELEASE_HOLD.** The trust bootstrap, signature/key operations, ledger service, OS enforcement and storage crash tier remain unimplemented and require owner decisions. This specification is a **candidate for independent design review**, not production approval.
+**Status: PROPOSED_R3_NOT_CODED / ARCHITECTURE_REVIEW_PENDING / NO_SUPPORTED_PRODUCTION_CUTOVER / RELEASE_HOLD.** The trust bootstrap, signature/key operations, ledger service, OS enforcement and storage crash tier remain unimplemented and require owner decisions. This specification is a **candidate for independent design review**, not production approval.

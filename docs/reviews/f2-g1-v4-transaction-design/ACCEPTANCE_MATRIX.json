@@ -1,7 +1,7 @@
 {
-  "Schema": "f2-g1-v4-transaction-design-acceptance-matrix-v2",
-  "Status": "REVISED_PROPOSAL_NOT_EXECUTABLE_ARCHITECTURE_REVIEW_PENDING",
-  "SourceReviewParent": "bbf001bc5a91c7b38289b31e2725aabde46a9499",
+  "Schema": "f2-g1-v4-transaction-design-acceptance-matrix-v3",
+  "Status": "PROPOSED_R3_DESIGN_ONLY_ARCHITECTURE_REVIEW_PENDING_NO_PRODUCTION_CUTOVER",
+  "SourceReviewParent": "d47970d89ad002d206639bbf3cf7acc088ac7127",
   "TrustBootstrap": "OS policy + independently provisioned pinned verifier before receipt; requires future owner approval; no current implementation",
   "AuthorityPolicy": "Online independent approval/time/revocation/monotonic CAS ledger required; deny offline transactions",
   "TransactionSchema": "f2-protected-update-transaction-v4",
@@ -13,10 +13,10 @@
     "HOLD_PRESERVE"
   ],
   "InspectionField": "inspection_state",
-  "DispositionSemantics": "All expected_classification values are non-mutating. Candidate eligibility is descriptive only; separate signed/ledger operation approval required for writes.",
+  "DispositionSemantics": "All classifications are non-mutating; even modeled receipt operations have no live runtime/installation authority. Any unknown inspection_state is fail closed.",
   "DefaultMutationAllowed": false,
-  "PreviousBlockedReviewHead": "bbf001bc5a91c7b38289b31e2725aabde46a9499",
-  "Warning": "Design scenarios only; not an executable validator, receipt, trusted authority, protected recovery implementation or production test.",
+  "PreviousBlockedReviewHead": "d47970d89ad002d206639bbf3cf7acc088ac7127",
+  "Warning": "Pure design oracle only; neither production v2/v3 cutover nor rollback is supported, and no runtime/state-machine tests have been executed.",
   "Cases": [
     {
       "id": "T01",
@@ -75,7 +75,7 @@
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
       "rationale": "unproven predecessor",
-      "inspection_state": "REJECTED_RECEIPT",
+      "inspection_state": "UNSUPPORTED_PREDECESSOR",
       "fault_boundary": null
     },
     {
@@ -155,7 +155,7 @@
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
       "rationale": "unknown installed identity",
-      "inspection_state": "REJECTED_RECEIPT",
+      "inspection_state": "UNSUPPORTED_PREDECESSOR",
       "fault_boundary": null
     },
     {
@@ -402,7 +402,7 @@
       "id": "T39",
       "phase": "bootstrap",
       "observation": "receipt lists matching verifier digest but machine has no independently provisioned bootstrap trust policy",
-      "inspection_state": "REJECTED_RECEIPT",
+      "inspection_state": "TRUST_BOOTSTRAP_UNPROVEN",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
       "rationale": "self-referential verifier digest cannot establish trust",
@@ -412,7 +412,7 @@
       "id": "T40",
       "phase": "bootstrap",
       "observation": "bootstrap code signer valid but Windows code integrity policy is not actually enforced",
-      "inspection_state": "REJECTED_RECEIPT",
+      "inspection_state": "TRUST_BOOTSTRAP_UNPROVEN",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
       "rationale": "signed file without OS enforcement is insufficient",
@@ -422,7 +422,7 @@
       "id": "T41",
       "phase": "bootstrap",
       "observation": "bootstrap has candidate-controlled keyring or candidate-controlled verifier path",
-      "inspection_state": "REJECTED_RECEIPT",
+      "inspection_state": "TRUST_BOOTSTRAP_UNPROVEN",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
       "rationale": "trust roots must be independent of candidate",
@@ -472,7 +472,7 @@
       "id": "T46",
       "phase": "signature",
       "observation": "local time moved backwards or authority time unavailable",
-      "inspection_state": "REJECTED_RECEIPT",
+      "inspection_state": "AUTHORITY_UNAVAILABLE",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
       "rationale": "cannot rely on local time or offline grace",
@@ -482,7 +482,7 @@
       "id": "T47",
       "phase": "authority",
       "observation": "mutating INSTALL requested while remote authority unreachable or offline",
-      "inspection_state": "REJECTED_RECEIPT",
+      "inspection_state": "AUTHORITY_UNAVAILABLE",
       "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
       "rationale": "online authority required before first write",
@@ -571,8 +571,8 @@
     {
       "id": "T56",
       "phase": "journal",
-      "observation": "local transaction root created but genesis file missing or only partially written",
-      "inspection_state": "REMOTE_RESERVED_NO_LOCAL",
+      "observation": "remote reservation valid; local transaction directory already exists but GENESIS record is absent, torn or partially written",
+      "inspection_state": "LOCAL_ROOT_GENESIS_INCOMPLETE",
       "expected_classification": "HOLD_PRESERVE",
       "default_mutation_allowed": false,
       "rationale": "first local write/bootstrap gap explicitly recognized",
@@ -851,9 +851,9 @@
     {
       "id": "T84",
       "phase": "recovery",
-      "observation": "ROLLBACK operation requested through install-approved receipt",
-      "inspection_state": "PRECONDITION_UNMET",
-      "expected_classification": "HOLD_PRESERVE",
+      "observation": "ROLLBACK invoked using an INSTALL receipt: transaction-v4 R3 must reject before creating any transaction artifacts",
+      "inspection_state": "UNSUPPORTED_OPERATION",
+      "expected_classification": "REJECT_BEFORE_WRITE",
       "default_mutation_allowed": false,
       "rationale": "rollback is separate unimplemented protocol",
       "fault_boundary": "rollback"
@@ -867,6 +867,76 @@
       "default_mutation_allowed": false,
       "rationale": "specification is not executable production proof",
       "fault_boundary": "review"
+    },
+    {
+      "id": "T86",
+      "phase": "recovery",
+      "observation": "Correctly signed-looking ROLLBACK receipt with exact TxId/predecessor/target presented to v4 verifier",
+      "inspection_state": "UNSUPPORTED_OPERATION",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "ROLLBACK reject-only even when otherwise authentic",
+      "fault_boundary": "rollback"
+    },
+    {
+      "id": "T87",
+      "phase": "cutover",
+      "observation": "An otherwise valid signed INSTALL receipt requests v2 or v3 production migration, whether live or during maintenance",
+      "inspection_state": "UNSUPPORTED_PREDECESSOR",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "R3 contains no supported production cutover path",
+      "fault_boundary": "cutover_admission"
+    },
+    {
+      "id": "T88",
+      "phase": "genesis",
+      "observation": "Remote approval reserved; transaction root exists while genesis is missing, rather than root being absent",
+      "inspection_state": "LOCAL_ROOT_GENESIS_INCOMPLETE",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "distinguish local-root/partial-genesis from remote-only reservation",
+      "fault_boundary": "genesis"
+    },
+    {
+      "id": "T89",
+      "phase": "authority",
+      "observation": "Online approval authority becomes unavailable after any local filesystem mutation may have occurred",
+      "inspection_state": "PRECONDITION_UNMET",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "must not falsely return zero-write authority-unavailable rejection after partial transaction",
+      "fault_boundary": "authority_partition"
+    },
+    {
+      "id": "T90",
+      "phase": "storage",
+      "observation": "ReplaceFileW error leaves replacement, old active and backup under inconsistent or unexpected names",
+      "inspection_state": "AMBIGUOUS_NEW_ACTIVE",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "independent readback required after every replace API outcome; no all-or-nothing inference",
+      "fault_boundary": "replacefile_outcome"
+    },
+    {
+      "id": "T91",
+      "phase": "storage",
+      "observation": "OS crash, power loss or controller failure modeled without approved tier B/C durability proof",
+      "inspection_state": "PRECONDITION_UNMET",
+      "expected_classification": "HOLD_PRESERVE",
+      "default_mutation_allowed": false,
+      "rationale": "synthetic process-only tier A does not establish installation safety",
+      "fault_boundary": "storage_crash"
+    },
+    {
+      "id": "T92",
+      "phase": "bootstrap",
+      "observation": "Device-wide App Control policy restricts PowerShell module to ConstrainedLanguage when verifier requires FullLanguage",
+      "inspection_state": "TRUST_BOOTSTRAP_UNPROVEN",
+      "expected_classification": "REJECT_BEFORE_WRITE",
+      "default_mutation_allowed": false,
+      "rationale": "verify actual script policy and separate policy/receipt signing chains before writes",
+      "fault_boundary": "script_enforcement"
     }
   ],
   "MandatoryFaultBoundaries": [
@@ -885,6 +955,48 @@
     "finalize_commit",
     "checkpoint",
     "journal_append",
-    "launch_barrier"
-  ]
+    "launch_barrier",
+    "cutover_admission",
+    "authority_partition",
+    "replacefile_outcome",
+    "storage_crash",
+    "script_enforcement"
+  ],
+  "SupportedOperationalOperations": [],
+  "ModeledButDisabledReceiptOperations": [
+    "INSTALL",
+    "RECOVER_FORWARD",
+    "FINALIZE_POST_SWITCH"
+  ],
+  "UnsupportedOperations": [
+    "ROLLBACK"
+  ],
+  "SupportedProductionPredecessors": [],
+  "SimulationCrashTier": "PROCESS_TERMINATION_ONLY_ON_TEMPORARY_UNPROTECTED_FIXTURES",
+  "UnsupportedCrashTiers": [
+    "OS_REBOOT_OR_CRASH",
+    "POWER_OR_STORAGE_FAILURE"
+  ],
+  "TrustModelOwnerApproved": false,
+  "ClosedInspectionStateDispositionMap": {
+    "REJECTED_RECEIPT": "REJECT_BEFORE_WRITE",
+    "TRUST_BOOTSTRAP_UNPROVEN": "REJECT_BEFORE_WRITE",
+    "AUTHORITY_UNAVAILABLE": "REJECT_BEFORE_WRITE",
+    "UNSUPPORTED_OPERATION": "REJECT_BEFORE_WRITE",
+    "UNSUPPORTED_PREDECESSOR": "REJECT_BEFORE_WRITE",
+    "PREDECESSOR_OBSERVED": "OBSERVE_ONLY",
+    "SOURCE_ONLY_ACCEPTED": "OBSERVE_ONLY",
+    "OBSERVATION_ONLY": "OBSERVE_ONLY",
+    "NEW_ACTIVE_COMPLETE_OBSERVED": "OBSERVE_ONLY",
+    "PRECONDITION_UNMET": "HOLD_PRESERVE",
+    "UNTRUSTED_TRANSACTION": "HOLD_PRESERVE",
+    "REMOTE_RESERVED_NO_LOCAL": "HOLD_PRESERVE",
+    "LOCAL_ROOT_GENESIS_INCOMPLETE": "HOLD_PRESERVE",
+    "OLD_ACTIVE_PARTIAL_STAGING": "HOLD_PRESERVE",
+    "OLD_ACTIVE_FORWARD_ELIGIBILITY_CANDIDATE": "HOLD_PRESERVE",
+    "NEW_ACTIVE_VERIFY_ONLY_CANDIDATE": "HOLD_PRESERVE",
+    "AMBIGUOUS_NEW_ACTIVE": "HOLD_PRESERVE",
+    "UNKNOWN_ACTIVE": "HOLD_PRESERVE",
+    "QUIESCENCE_UNPROVEN": "HOLD_PRESERVE"
+  }
 }
