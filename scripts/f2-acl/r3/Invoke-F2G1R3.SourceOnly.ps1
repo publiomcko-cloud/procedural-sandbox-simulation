@@ -6,6 +6,7 @@ param(
     [switch]$AttemptReplacement,
     [switch]$InjectIdentityDrift,
     [switch]$SimulatePrivilegedToken,
+    [switch]$SimulateOutputFlood,
     [ValidateRange(0,10)][int]$SimulateDelaySeconds=0
 )
 Set-StrictMode -Version Latest
@@ -33,6 +34,13 @@ function Sha256-Hex {
 }
 try {
     if ($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1 -or $env:OS -ne 'Windows_NT') { throw 'WINDOWS_PS51_ONLY' }
+    # Test-host restriction, NOT independent authentication. Environment can be spoofed.
+    # Fixture writes and path cleanup are supported only in ephemeral hosted Windows CI.
+    if ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_OS -cne 'Windows' -or
+        $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or
+        $env:GITHUB_REPOSITORY -cne 'publiomcko-cloud/procedural-sandbox-simulation') {
+        throw 'ISOLATED_CI_RUNNER_REQUIRED'
+    }
     # The input is NEVER used to open the fixture. Native code opens only a
     # literal C: volume root, then Users/Public/one GUID via held no-follow handles.
     $parent='C:\Users\Public'
@@ -66,6 +74,10 @@ try {
         $scopeSpec.FixtureTrustedParent -cne $parent) { throw 'FIXED_SCOPE_CONTRACT_REJECTED' }
     if ($SimulatePrivilegedToken) { throw 'SIMULATED_PRIVILEGED_TOKEN_REJECTED' }
     if ($SimulateDelaySeconds -gt 0) { Start-Sleep -Seconds $SimulateDelaySeconds }
+    if ($SimulateOutputFlood) {
+        # Finite synthetic burst to prove the parent retains only bounded output.
+        for($i=0;$i -lt 128;$i++) { [Console]::Out.WriteLine(('X' * 1024)) }
+    }
     $code=$utf8.GetString($nativeBytes)
     Add-Type -TypeDefinition $code -Language CSharp -ErrorAction Stop
     $probe=[F2G1R3.TempHandleProbe]::ProbeFixture($SyntheticFixtureRoot,[bool]$AttemptReplacement,[bool]$InjectIdentityDrift)
@@ -75,7 +87,7 @@ try {
 } catch {
     # This entrypoint NEVER reports a successful protected-host result.
     # Avoid raw stack traces, paths, SDDL, tokens or source in error output.
-    $allowed=@('FIXED_FIXTURE_PARENT_ONLY','SOURCE_OR_SCOPE_HASH_MISMATCH','NONCANONICAL_FIXED_SCOPE','SIMULATED_PRIVILEGED_TOKEN_REJECTED','RELATIVE_DIRECTORY_OPEN_FAILED','RELATIVE_NOFOLLOW_OPEN_FAILED','REPARSE_POINT_DENIED','UNEXPECTED_OR_MISSING_CHILD','FILE_IDENTITY_OR_ACL_CHANGED','DIR_IDENTITY_ACL_OR_INVENTORY_CHANGED','INJECTED_FILE_IDENTITY_DRIFT','PAYLOAD_INCOMPLETE')
+    $allowed=@('FIXED_FIXTURE_PARENT_ONLY','SOURCE_OR_SCOPE_HASH_MISMATCH','NONCANONICAL_FIXED_SCOPE','SIMULATED_PRIVILEGED_TOKEN_REJECTED','RELATIVE_DIRECTORY_OPEN_FAILED','RELATIVE_NOFOLLOW_OPEN_FAILED','REPARSE_POINT_DENIED','UNEXPECTED_OR_MISSING_CHILD','FILE_IDENTITY_OR_ACL_CHANGED','DIR_IDENTITY_ACL_OR_INVENTORY_CHANGED','INJECTED_FILE_IDENTITY_DRIFT','PAYLOAD_INCOMPLETE','PAYLOAD_MULTIPLE_LINKS','PAYLOAD_TEST_BYTES_MISMATCH','ISOLATED_CI_RUNNER_REQUIRED')
     $errorCode='UNCLASSIFIED_BLOCKED'
     foreach($candidate in $allowed) {if ($_.Exception.ToString().Contains($candidate)) {$errorCode=$candidate;break}}
     $stage='NONE'
