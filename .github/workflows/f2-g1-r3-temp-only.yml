@@ -1,0 +1,25 @@
+name: F2 G1 R3 TEMP-only focused validation
+on:
+  push:
+    branches: [feat/f2-g1-c-postfailure-r3-source-only-contract]
+    paths:
+      - 'scripts/f2-acl/r3/**'
+      - '.github/workflows/f2-g1-r3-temp-only.yml'
+  workflow_dispatch:
+jobs:
+  focused-windows-ps51:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse and execute TEMP-only R3 source tests
+        shell: powershell
+        run: |
+          $source = '.\\scripts\\f2-acl\\r3\\Invoke-F2G1R3.SourceOnly.ps1'
+          $tests = '.\\scripts\\f2-acl\\r3\\Test-F2G1R3.SourceOnly.ps1'
+          foreach ($file in @($source,$tests)) {
+            $tokens = $null; $errors = $null
+            [void][Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path,[ref]$tokens,[ref]$errors)
+            if (@($errors).Count -ne 0) { throw "R3 parse errors in $file" }
+          }
+          & "$env:SystemRoot\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $tests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
