@@ -12,9 +12,8 @@ function Case([string]$wrapper,[string[]]$args,[int]$expectedExit,[string]$expec
     $psi.FileName=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $psi.UseShellExecute=$false;$psi.CreateNoWindow=$true
     $psi.RedirectStandardOutput=$true;$psi.RedirectStandardError=$true
-    foreach($arg in @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$wrapper)+$args){[void]$psi.ArgumentList.Add($arg)}
-    # Windows PowerShell 5.1 runs on .NET Framework, where ProcessStartInfo.ArgumentList
-    # may not exist. The child arguments here are fixed, synthetic and whitespace-free.
+    # Windows PowerShell 5.1/.NET Framework lacks ProcessStartInfo.ArgumentList.
+    # Fixed source-only test arguments; never passed through untrusted input.
     $psi.Arguments=(@('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','"'+$wrapper+'"')+$args) -join ' '
     $p=New-Object Diagnostics.Process
     $p.StartInfo=$psi
@@ -38,7 +37,7 @@ $source=[IO.File]::ReadAllText($bootstrap)
 Check (-not $source.Contains('[switch]$Live') -and -not $source.Contains('OwnerAuthorizationReference') -and -not $source.Contains('Get-Acl')) 'R3 entrypoint provides no live or protected-host access mode'
 $nativeSource=[IO.File]::ReadAllText($native)
 Check ($nativeSource.Contains('NtCreateFile') -and $nativeSource.Contains('NtQueryDirectoryFile') -and $nativeSource.Contains('GetSecurityInfo')) 'experimental native code binds relative handle, inventory and ACL'
-Check ($nativeSource.Contains('OUTSIDE_TEMP_FIXTURE') -and $nativeSource.Contains('TEMP') -eq $false) 'TEMP fixture gate guard token remains independently reviewable'
+Check ($nativeSource.Contains('OUTSIDE_TEMP_FIXTURE') -and $nativeSource.Contains('F2G1-R3Handle-') -and -not $nativeSource.Contains('C:\\Program Files\\F2-G1-Icacls')) 'native probe has explicit TEMP-only fixture guard and no protected path constants'
 # Source hash comparison is a fixture correctness check, NOT owner authorization.
 $h1=(Get-FileHash -LiteralPath $native -Algorithm SHA256).Hash.ToLowerInvariant()
 $h2=(Get-FileHash -LiteralPath $scope -Algorithm SHA256).Hash.ToLowerInvariant()
