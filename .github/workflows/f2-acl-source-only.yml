@@ -1,7 +1,7 @@
 name: F2 ACL source-only validation
 on:
   push:
-    branches: [security/f2-acl-capture-issue48, fix/f2-g1-pr50-ps51-entrypoint-bridge, fix/f2-g1-c-postfailure-inspector-r2, feat/f2-g1-c-postfailure-r3-source-only-contract, fix/f2-g1-r3-1-temp-trust-boundary, fix/f2-g1-r3-2-synthetic-hardlink-output]
+    branches: [security/f2-acl-capture-issue48, fix/f2-g1-pr50-ps51-entrypoint-bridge, fix/f2-g1-c-postfailure-inspector-r2, feat/f2-g1-c-postfailure-r3-source-only-contract, fix/f2-g1-r3-1-temp-trust-boundary, fix/f2-g1-r3-2-synthetic-hardlink-output, fix/f2-g1-r3-3-drain-cleanup-gate]
     paths:
       - 'scripts/f2-acl/**'
       - 'docs/security/F2_G1_ACL_CAPTURE.md'
