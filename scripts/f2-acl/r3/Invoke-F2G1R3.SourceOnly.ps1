@@ -38,12 +38,12 @@ try {
     $safeCodes=@('SIMULATED_PRIVILEGED_TOKEN_REJECTED','FIXTURE_HANDLE_OPEN_FAILED','RELATIVE_NOFOLLOW_OPEN_FAILED','HANDLE_ENUM_FAILED','HANDLE_ENUM_SIZE_INVALID','HANDLE_INFO_UNAVAILABLE_ROOT','HANDLE_INFO_UNAVAILABLE_CHILD','HANDLE_INFO_UNAVAILABLE_CHILD_RECHECK','HANDLE_INFO_UNAVAILABLE_ROOT_RECHECK','HANDLE_INFO_UNAVAILABLE_PAYLOAD','HANDLE_INFO_UNAVAILABLE','HANDLE_OWNER_DACL_UNREADABLE','HANDLE_SDDL_CONVERSION_FAILED','OUTSIDE_TEMP_FIXTURE','UNEXPECTED_OR_MISSING_CHILD','FILE_IDENTITY_OR_ACL_CHANGED','DIR_IDENTITY_ACL_OR_INVENTORY_CHANGED','ENTRY_INVALID','ENTRY_TRUNCATED','PAYLOAD_INCOMPLETE','PAYLOAD_SIZE_INVALID','FIXED_SCOPE_CONTRACT_REJECTED','EXECUTABLE_OR_SCOPE_DIGEST_MISMATCH')
     $code='UNCLASSIFIED'
     foreach($candidate in $safeCodes) { if ($_.Exception.ToString().Contains($candidate)) { $code=$candidate;break } }
-    # Diagnostic only for the guarded disposable TEMP prototype; never a protected host path.
-    $baseError=$_.Exception.GetBaseException().Message
-    $tag=if ($baseError -match 'HANDLE_INFO_UNAVAILABLE_(ROOT|CHILD|CHILD_RECHECK|ROOT_RECHECK|PAYLOAD)') { 'HANDLE_'+$Matches[1] } elseif ($baseError -match '^(NON_ADMINISTRATOR_REQUIRED|RELATIVE_NOFOLLOW_OPEN_FAILED|HANDLE_ENUM_FAILED)
-    exit 2
-}
-) { $Matches[1] } else { 'OTHER' }
-    [Console]::Error.WriteLine('BLOCKED_WITH_EVIDENCE:R3_SOURCE_ONLY:' + $code + ';TEMP_STAGE=' + $tag)
+    # TEMP-only stage classification; never expose raw exceptions or host paths.
+    $message=$_.Exception.GetBaseException().Message
+    $stage='OTHER'
+    if ($message.Contains('HANDLE_INFO_UNAVAILABLE_ROOT')) { $stage='ROOT' }
+    elseif ($message.Contains('HANDLE_INFO_UNAVAILABLE_CHILD')) { $stage='CHILD' }
+    elseif ($message.Contains('HANDLE_INFO_UNAVAILABLE_PAYLOAD')) { $stage='PAYLOAD' }
+    [Console]::Error.WriteLine('BLOCKED_WITH_EVIDENCE:R3_SOURCE_ONLY:' + $code + ';TEMP_STAGE=' + $stage)
     exit 2
 }
