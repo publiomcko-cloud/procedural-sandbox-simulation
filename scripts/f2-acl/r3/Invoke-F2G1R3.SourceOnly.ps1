@@ -41,6 +41,9 @@ try {
     # TEMP-only stage classification; never expose raw exceptions or host paths.
     $message=$_.Exception.GetBaseException().Message
     $stage='OTHER'
+    # Report only a safe C# diagnostic code, never raw compiler output.
+    $diagnostic=$_.Exception.ToString()
+    if ($diagnostic -match 'CS[0-9]{4}') { $stage='C_SHARP_'+$Matches[0] }
     if ($message.Contains('HANDLE_INFO_UNAVAILABLE_ROOT')) { $stage='ROOT' }
     elseif ($message.Contains('HANDLE_INFO_UNAVAILABLE_CHILD')) { $stage='CHILD' }
     elseif ($message.Contains('HANDLE_INFO_UNAVAILABLE_PAYLOAD')) { $stage='PAYLOAD' }
