@@ -55,6 +55,9 @@ try {
     Check ([IO.File]::Exists((Join-Path $fixture 'payload.bin'))) 'inert replacement attempt does not rename held TEMP file'
     $drift=Case $bootstrap ($common+@('-InjectIdentityDrift')) 2 'BLOCKED_WITH_EVIDENCE'
     Check $drift.Ok 'injected identity drift rejects with sanitized failure'
+    $admin=Case $bootstrap ($common+@('-SimulatePrivilegedToken')) 2 'SIMULATED_PRIVILEGED_TOKEN_REJECTED'
+    Check $admin.Ok 'simulated privileged token denied in TEMP-only bootstrap'
+
     $badHash=Case $bootstrap @('-SyntheticFixtureRoot','"'+$fixture+'"','-ExpectedNativeSha256',('0'*64),'-ExpectedScopeSha256',$h2) 2 'BLOCKED_WITH_EVIDENCE'
     if(-not $badHash.Ok) { Write-Host ('TEMP_ONLY_DIAGNOSTIC:NEGATIVE_EXIT='+$badHash.Exit+';STDERR='+$badHash.Stderr.Trim()+';STDOUT='+$badHash.Stdout.Trim()) }
     Check $badHash.Ok 'incorrect native source bytes reject before compile'

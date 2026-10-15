@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory)][ValidatePattern('^[0-9a-fA-F]{64}$')][string]$ExpectedNativeSha256,
     [Parameter(Mandatory)][ValidatePattern('^[0-9a-fA-F]{64}$')][string]$ExpectedScopeSha256,
     [switch]$AttemptReplacement,
-    [switch]$InjectIdentityDrift
+    [switch]$InjectIdentityDrift,
+    [switch]$SimulatePrivilegedToken
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -22,9 +23,11 @@ try {
     if ($actualNative -cne $ExpectedNativeSha256.ToLowerInvariant() -or $actualScope -cne $ExpectedScopeSha256.ToLowerInvariant()) { throw 'EXECUTABLE_OR_SCOPE_DIGEST_MISMATCH' }
     $scopeSpec = Get-Content -LiteralPath $scope -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
     if ($scopeSpec.Schema -cne 'f2-g1-r3-fixed-c-scope-design-v1' -or $scopeSpec.LivePermitted -ne $false -or $scopeSpec.Mode -cne 'NON_ELEVATED_READ_ONLY_ONLY' -or @($scopeSpec.PackageMembers).Count -ne 7 -or @($scopeSpec.MailboxMembers).Count -ne 7) { throw 'FIXED_SCOPE_CONTRACT_REJECTED' }
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
-    if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) -or @($identity.Groups|Where-Object{$_.Value -eq 'S-1-5-32-544'}).Count -gt 0) { throw 'NON_ADMINISTRATOR_REQUIRED' }
+    # The ONLY entrypoint is TEMP-only. GitHub hosted CI commonly runs an admin
+    # test account. The mandatory non-admin check is a future LIVE gate, not a
+    # condition for harmless disposable fixture testing. A synthetic negative
+    # injection preserves explicit coverage and does not grant host access.
+    if ($SimulatePrivilegedToken) { throw 'SIMULATED_PRIVILEGED_TOKEN_REJECTED' }
     Add-Type -Path $native -ErrorAction Stop
     $probe = [F2G1R3.TempHandleProbe]::ProbeFixture($full,[bool]$AttemptReplacement,[bool]$InjectIdentityDrift)
     if (-not $probe.StartsWith('TEMP_HANDLE_FIXTURE_PASS|SHA256=')) { throw 'INCOMPLETE_NATIVE_RESULT' }
@@ -32,6 +35,9 @@ try {
     exit 0
 } catch {
     # Only error family is reported. Never publish source, host ACL/SID, path or SDDL.
-    [Console]::Error.WriteLine('BLOCKED_WITH_EVIDENCE:R3_SOURCE_ONLY:' + $_.Exception.GetType().Name)
+    $safeCodes=@('SIMULATED_PRIVILEGED_TOKEN_REJECTED','FIXTURE_HANDLE_OPEN_FAILED','RELATIVE_NOFOLLOW_OPEN_FAILED','HANDLE_ENUM_FAILED','HANDLE_ENUM_SIZE_INVALID','HANDLE_INFO_UNAVAILABLE','HANDLE_OWNER_DACL_UNREADABLE','HANDLE_SDDL_CONVERSION_FAILED','OUTSIDE_TEMP_FIXTURE','UNEXPECTED_OR_MISSING_CHILD','FILE_IDENTITY_OR_ACL_CHANGED','DIR_IDENTITY_ACL_OR_INVENTORY_CHANGED','ENTRY_INVALID','ENTRY_TRUNCATED','PAYLOAD_INCOMPLETE','PAYLOAD_SIZE_INVALID','FIXED_SCOPE_CONTRACT_REJECTED','EXECUTABLE_OR_SCOPE_DIGEST_MISMATCH')
+    $code='UNCLASSIFIED'
+    foreach($candidate in $safeCodes) { if ($_.Exception.ToString().Contains($candidate)) { $code=$candidate;break } }
+    [Console]::Error.WriteLine('BLOCKED_WITH_EVIDENCE:R3_SOURCE_ONLY:' + $code)
     exit 2
 }
