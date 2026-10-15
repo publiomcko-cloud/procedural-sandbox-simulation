@@ -39,7 +39,9 @@
     "journals",
     "stages"
   ],
-  "Mode": "NON_ELEVATED_READ_ONLY_ONLY",
+  "Mode": "SYNTHETIC_FIXTURE_ONLY",
   "LivePermitted": false,
-  "Authorization": "OWNER_DIRECT_AUTHENTICATED_EXTERNAL_CHECK_ONLY"
+  "TokenGate": "SIMULATED_NEGATIVE_TEST_ONLY",
+  "Authorization": "NONE_NO_LIVE_OWNER_GATE",
+  "FixtureTrustedParent": "C:\\Users\\Public"
 }
