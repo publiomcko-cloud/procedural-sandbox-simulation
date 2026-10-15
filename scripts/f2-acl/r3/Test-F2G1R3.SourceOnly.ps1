@@ -93,7 +93,7 @@ try {
     Write-Host ('SAFE_TEST_LEAF_LENGTH='+([IO.Path]::GetFileName($fixture)).Length+';PREFIX='+([IO.Path]::GetFileName($fixture)).StartsWith('F2G1-R3Handle-'))
     $h1=(Get-FileHash -LiteralPath $native -Algorithm SHA256).Hash.ToLowerInvariant()
     $h2=(Get-FileHash -LiteralPath $scope -Algorithm SHA256).Hash.ToLowerInvariant()
-    $common=@('-SyntheticFixtureRoot','"'+$fixture+'"','-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',$h2)
+    $common=@('-SyntheticFixtureRoot',$fixture,'-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',$h2)
     $good=Case -Wrapper $bootstrap -CaseArgs $common -ExpectedExit 0 -ExpectedText 'TEMP_HANDLE_FIXTURE_PASS'
     if(-not $good.Ok) {Write-Host ('TEST_ONLY_DIAGNOSTIC:POSITIVE_EXIT='+$good.Exit+';STDERR='+$good.Stderr.Trim())}
     Check $good.Ok 'fixed parent and held relative file handles permit synthetic capture'
@@ -105,13 +105,13 @@ try {
     Check $drift.Ok 'injected identity drift blocks, no real race-free claim'
     $admin=Case -Wrapper $bootstrap -CaseArgs ($common+@('-SimulatePrivilegedToken')) -ExpectedExit 2 -ExpectedText 'SIMULATED_PRIVILEGED_TOKEN_REJECTED'
     Check $admin.Ok 'simulated token denial only, not actual admin enforcement'
-    $hash=Case -Wrapper $bootstrap -CaseArgs @('-SyntheticFixtureRoot','"'+$fixture+'"','-ExpectedNativeSha256',('0'*64),'-ExpectedScopeSha256',$h2) -ExpectedExit 2 -ExpectedText 'BLOCKED_WITH_EVIDENCE'
+    $hash=Case -Wrapper $bootstrap -CaseArgs @('-SyntheticFixtureRoot',$fixture,'-ExpectedNativeSha256',('0'*64),'-ExpectedScopeSha256',$h2) -ExpectedExit 2 -ExpectedText 'BLOCKED_WITH_EVIDENCE'
     Check $hash.Ok 'wrong native source digest fails closed'
-    $scopeHash=Case -Wrapper $bootstrap -CaseArgs @('-SyntheticFixtureRoot','"'+$fixture+'"','-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',('0'*64)) -ExpectedExit 2 -ExpectedText 'BLOCKED_WITH_EVIDENCE'
+    $scopeHash=Case -Wrapper $bootstrap -CaseArgs @('-SyntheticFixtureRoot',$fixture,'-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',('0'*64)) -ExpectedExit 2 -ExpectedText 'BLOCKED_WITH_EVIDENCE'
     Check $scopeHash.Ok 'wrong scope digest fails closed'
-    $pathAlias=Case -Wrapper $bootstrap -CaseArgs @('-SyntheticFixtureRoot','"C:\Windows\Temp\F2G1-R3Handle-11111111-1111-4111-8111-111111111111"','-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',$h2) -ExpectedExit 2 -ExpectedText 'FIXED_FIXTURE_PARENT_ONLY'
+    $pathAlias=Case -Wrapper $bootstrap -CaseArgs @('-SyntheticFixtureRoot','C:\Windows\Temp\F2G1-R3Handle-11111111-1111-4111-8111-111111111111','-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',$h2) -ExpectedExit 2 -ExpectedText 'FIXED_FIXTURE_PARENT_ONLY'
     Check $pathAlias.Ok 'untrusted absolute fixture path is rejected before open'
-    $untrusted=Case -Wrapper $bootstrap -CaseArgs @('-SyntheticFixtureRoot','"'+$fixture+'\..\'+[IO.Path]::GetFileName($fixture)+'"','-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',$h2) -ExpectedExit 2 -ExpectedText 'FIXED_FIXTURE_PARENT_ONLY'
+    $untrusted=Case -Wrapper $bootstrap -CaseArgs @('-SyntheticFixtureRoot',($fixture+'\..\'+[IO.Path]::GetFileName($fixture)),'-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',$h2) -ExpectedExit 2 -ExpectedText 'FIXED_FIXTURE_PARENT_ONLY'
     Check $untrusted.Ok 'parent alias in requested fixture is rejected'
     $exclusive=[IO.FileStream]::new((Join-Path $fixture 'payload.bin'),[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
     try {
@@ -124,7 +124,7 @@ try {
     [IO.File]::Delete((Join-Path $fixture 'unexpected.bin'))
     $junction=Join-Path $parent ('F2G1-R3Handle-'+[guid]::NewGuid().ToString())
     [void](New-Item -ItemType Junction -Path $junction -Target $fixture -ErrorAction Stop)
-    $rp=Case -Wrapper $bootstrap -CaseArgs (@('-SyntheticFixtureRoot','"'+$junction+'"','-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',$h2)) -ExpectedExit 2 -ExpectedText 'REPARSE_POINT_DENIED'
+    $rp=Case -Wrapper $bootstrap -CaseArgs (@('-SyntheticFixtureRoot',$junction,'-ExpectedNativeSha256',$h1,'-ExpectedScopeSha256',$h2)) -ExpectedExit 2 -ExpectedText 'REPARSE_POINT_DENIED'
     Check $rp.Ok 'reparse in ancestor of payload is rejected via held no-follow directory handle'
     # Tamper a disposable COPY of native source/scope while giving the child
     # matching, attacker-picked hashes; the source is test code, never trusted.
@@ -139,12 +139,12 @@ try {
     $tNativeHash=(Get-FileHash $tNative -Algorithm SHA256).Hash.ToLowerInvariant()
     [IO.File]::AppendAllText($tScope,'{"Mutated":true}')
     $tScopeHash=(Get-FileHash $tScope -Algorithm SHA256).Hash.ToLowerInvariant()
-    $altered=Case -Wrapper $tBootstrap -CaseArgs @('-SyntheticFixtureRoot','"'+$fixture+'"','-ExpectedNativeSha256',$tNativeHash,'-ExpectedScopeSha256',$tScopeHash) -ExpectedExit 2 -ExpectedText 'NONCANONICAL_FIXED_SCOPE'
+    $altered=Case -Wrapper $tBootstrap -CaseArgs @('-SyntheticFixtureRoot',$fixture,'-ExpectedNativeSha256',$tNativeHash,'-ExpectedScopeSha256',$tScopeHash) -ExpectedExit 2 -ExpectedText 'NONCANONICAL_FIXED_SCOPE'
     Check $altered.Ok 'altered-but-rehashed scope cannot bypass canonical byte pin'
     [IO.File]::Copy($scope,$tScope,$true)
     [IO.File]::AppendAllText($tNative,[Environment]::NewLine+'not valid c sharp !!!')
     $alteredNativeHash=(Get-FileHash $tNative -Algorithm SHA256).Hash.ToLowerInvariant()
-    $badSource=Case -Wrapper $tBootstrap -CaseArgs @('-SyntheticFixtureRoot','"'+$fixture+'"','-ExpectedNativeSha256',$alteredNativeHash,'-ExpectedScopeSha256',$h2) -ExpectedExit 2 -ExpectedText 'BLOCKED_WITH_EVIDENCE'
+    $badSource=Case -Wrapper $tBootstrap -CaseArgs @('-SyntheticFixtureRoot',$fixture,'-ExpectedNativeSha256',$alteredNativeHash,'-ExpectedScopeSha256',$h2) -ExpectedExit 2 -ExpectedText 'BLOCKED_WITH_EVIDENCE'
     Check $badSource.Ok 'malformed-but-rehashed native source never produces PASS'
     $timeout=Case -Wrapper $bootstrap -CaseArgs ($common+@('-SimulateDelaySeconds','10')) -ExpectedExit 2 -ExpectedText '' -TimeoutMs 350
     Check ($timeout.TimedOut -and $timeout.Exited) 'timed-out child is killed and confirmed exited before cleanup'
