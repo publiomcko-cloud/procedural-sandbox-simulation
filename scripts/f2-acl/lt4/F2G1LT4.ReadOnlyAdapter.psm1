@@ -266,9 +266,16 @@ function Invoke-F2G1LT4R2HistoricalPolicy($Map) {
             UserSid=[string]$identity.User.Value
         }
     } finally {$identity.Dispose()}
-    $getPath={param([string]$Label) Get-F2G1LT4PhysicalMeta $Map $Label}.GetNewClosure()
-    $readBytes={param([string]$Label,[int]$Max) Get-F2G1LT4PhysicalBytes $Map $Label $Max}.GetNewClosure()
-    $listChildren={param([string]$Label) @(Get-F2G1LT4PhysicalChildren $Map $Label)}.GetNewClosure()
+    # GetNewClosure() moves the callback to a dynamic module, where unexported
+    # LT4 functions are not name-resolvable. Bind each original-module private
+    # FunctionInfo explicitly; the closure captures its *command*, not a name.
+    # These are the same frozen-scope physical observers used by the host pre-read.
+    $getMetaCommand=Get-Command Get-F2G1LT4PhysicalMeta -CommandType Function -ErrorAction Stop
+    $readBytesCommand=Get-Command Get-F2G1LT4PhysicalBytes -CommandType Function -ErrorAction Stop
+    $listChildrenCommand=Get-Command Get-F2G1LT4PhysicalChildren -CommandType Function -ErrorAction Stop
+    $getPath={param([string]$Label) & $getMetaCommand $Map $Label}.GetNewClosure()
+    $readBytes={param([string]$Label,[int]$Max) & $readBytesCommand $Map $Label $Max}.GetNewClosure()
+    $listChildren={param([string]$Label) @(& $listChildrenCommand $Map $Label)}.GetNewClosure()
     $fixtureExpected=[pscustomobject]@{
         ManifestSha256=$refs.ManifestSha256
         ReviewedCommitSha=$refs.ReviewedSourceSha
