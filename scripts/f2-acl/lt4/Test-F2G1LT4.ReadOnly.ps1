@@ -61,30 +61,26 @@ Check ($token -is [bool]) 'actual process token classified'
 $root=CreateFixture
 $before=Snapshot $root
 $result=Invoke-F2G1LT4Fixture -FixtureRoot $root
-# Temporary disposable-CI-only diagnostic: *class names* only, no message,
-# path, SID, SDDL or bytes; removed before final review.
-$lt4Synthetic=(Get-Module F2G1LT4.ReadOnlyAdapter)
-$diagText='param($R) $Map=New-F2G1LT4PathMap "Fixture" $R; '+ 
-  '$getMetaCommand=Get-Command Get-F2G1LT4PhysicalMeta -CommandType Function; '+
-  '$getPath={param([string]$Label) & $getMetaCommand $Map $Label}.GetNewClosure(); '+
-  'try{$value=& $getPath "C:\"; if($null -eq $value){"META_NULL"}else{"META_OK"}} '+
-  'catch{$_.Exception.GetType().Name}'
-try {
-  $syntheticDiag=@($lt4Synthetic.Invoke([scriptblock]::Create($diagText),@($root)))
-  $candidate=if($syntheticDiag.Count -eq 1){[string]$syntheticDiag[0]}else{'INVALID_CARDINALITY'}
-  $safe=@('META_NULL','META_OK','CommandNotFoundException','RuntimeException',
-      'PropertyNotFoundException','MethodInvocationException','ParameterBindingException',
-      'ItemNotFoundException','FileNotFoundException','UnauthorizedAccessException',
-      'InvalidOperationException','SessionStateException','ArgumentException',
-      'ParentContainsErrorRecordException','INVALID_CARDINALITY')
-  if($safe -cnotcontains $candidate){$candidate='OTHER_EXCEPTION_CLASS'}
-  Write-Output ('LT4_SYNTHETIC_CALLBACK_PROBE='+$candidate)
-} catch {
-  Write-Output ('LT4_SYNTHETIC_CALLBACK_PROBE=WRAPPER_EXCEPTION')
-}
-Write-Output ('LT4_R2_SYNTHETIC_STOP_CLASS='+[string]$result.R2StopErrorClass+
-  ';STAGE='+[string]$result.R2StopStage+';CODE='+[string]$result.R2StopCode+
-  ';POLICY='+[string]$result.R2PolicyEvaluated+';OUTCOME='+[string]$result.Code)
+# Exercise the exact R2 callbacks across the LT4 module boundary, using
+# physical but disposable CI fixture objects. No protected-host path is used.
+$lt4Module=Get-Module F2G1LT4.ReadOnlyAdapter
+$callbackBuilder=[scriptblock]::Create(
+    'param($FixtureRoot) $map=New-F2G1LT4PathMap ''Fixture'' $FixtureRoot; New-F2G1LT4R2Callbacks $map')
+$callbackSets=@($lt4Module.Invoke($callbackBuilder,@($root)))
+if($callbackSets.Count -ne 1){throw 'LT4_FIXTURE_CALLBACK_CARDINALITY'}
+$callbacks=$callbackSets[0]
+$fixtureScope=Get-F2G1LT1Scope
+$fixtureMeta=& $callbacks.GetPath 'C:\'
+$firstFile=@($fixtureScope.Files)[0]
+$fixtureBytes=& $callbacks.ReadBytes $firstFile.Path ([int]$firstFile.Max)
+$firstInventory=@($fixtureScope.Inventories)[0]
+$fixtureChildren=@(& $callbacks.ListChildren $firstInventory.Path)
+Check ($fixtureMeta.Path -ceq 'C:\' -and $fixtureMeta.Kind -ceq 'Directory' -and
+  -not $fixtureMeta.Reparse) 'R2 GetPath callback resolves private LT4 metadata observer'
+Check ($fixtureBytes -is [byte[]] -and $fixtureBytes.Length -gt 0 -and
+  [Text.Encoding]::UTF8.GetString($fixtureBytes).StartsWith('LT4-CI-SYNTHETIC|')) 'R2 ReadBytes callback preserves bounded byte array'
+Check ($fixtureChildren.Count -eq @($firstInventory.Names).Count -and
+  @($fixtureChildren | Where-Object {$_.Reparse}).Count -eq 0) 'R2 ListChildren callback resolves private LT4 inventory observer'
 $after=Snapshot $root
 Check ($result.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and $result.ProtectedReads -eq 0 -and
  $result.HostAttestation -ceq 'NOT_PERFORMED') 'physical fixture cannot claim host pass'
