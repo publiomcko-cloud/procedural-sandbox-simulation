@@ -111,12 +111,19 @@ $probeEncoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($probe
 $falseOptIn=@(& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $probeEncoded)
 $falseOptInCode=$LASTEXITCODE
 $falseResult=($falseOptIn -join [Environment]::NewLine)|ConvertFrom-Json
-Check ($falseOptInCode -eq 2 -and
+$falseSwitchBlocked=($falseOptInCode -eq 2 -and
   $falseResult.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and
   $falseResult.Code -ceq 'HOST_ADAPTER_EXECUTION_NOT_AUTHORIZED' -and
   $falseResult.ProtectedReads -eq 0 -and
   $falseResult.HostAttestation -ceq 'NOT_PERFORMED' -and
-  -not $falseResult.HostAccessEnabled) 'false-valued host switch never calls protected reader, even with matching identity and module hash'
+  -not $falseResult.HostAccessEnabled)
+if(-not $falseSwitchBlocked){
+  Write-Output ('SANITIZED_FALSE_SWITCH_DIAGNOSTIC exit='+$falseOptInCode+
+    ';verdict='+[string]$falseResult.Verdict+';code='+[string]$falseResult.Code+
+    ';reads='+[string]$falseResult.ProtectedReads+';hostAttestation='+[string]$falseResult.HostAttestation+
+    ';hostAccessEnabled='+[string]$falseResult.HostAccessEnabled)
+}
+Check $falseSwitchBlocked 'false-valued host switch never calls protected reader, even with matching identity and module hash'
 
 $hash='0'*64
 $cliOutput=@(& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $hostCli -InspectFixedHostC -ExpectedComputerName 'DO-NOT-READ-HOST' -ExpectedUserSid 'S-1-5-21-1-2-3-1001' -ReviewedAdapterSha256 $hash)
