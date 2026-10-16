@@ -1,7 +1,7 @@
 name: F2 G1 LT4 read-only adapter source-only
 on:
   push:
-    branches: [feat/f2-g1-lt4-readonly-host-adapter-disabled-v1, feat/f2-g1-lt4-fixed-host-read-review-candidate-v1]
+    branches: [feat/f2-g1-lt4-readonly-host-adapter-disabled-v1, feat/f2-g1-lt4-fixed-host-read-review-candidate-v1, feat/f2-g1-r2-first-stop-diagnostic-v1]
     paths:
       - 'scripts/f2-acl/lt4/**'
       - 'docs/handoffs/F2_G1_LT4_READ_ONLY_ADAPTER.md'
