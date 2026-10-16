@@ -18,6 +18,18 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Probe PowerShell 5.1 char-array alias semantics without IO
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $origin=[char[]]::new(16)
+          $alias=if($true){$origin}else{$null}
+          $origin[0]=[char]'X'
+          $copy= -not [object]::ReferenceEquals($origin,$alias)
+          $stale=([int]$alias[0] -eq 0 -and [int]$origin[0] -eq 88)
+          $typeName=if($null -eq $alias){'NULL'}else{$alias.GetType().Name}
+          if($typeName -notin @('Char[]','Object[]')){$typeName='OTHER_ARRAY_TYPE'}
+          Write-Output ('F2_CHAR_ARRAY_ALIAS_PROBE=Copy='+$copy+';Stale='+$stale+';Type='+$typeName)
       - name: Execute original synthetic suite with sanitized bounded report
         shell: powershell
         env:
