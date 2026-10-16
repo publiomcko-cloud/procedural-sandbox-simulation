@@ -48,6 +48,7 @@ function WriteFixture([string]$Root) {
     $integrity=JsonBytes ([ordered]@{
         Schema='f2-acl-integrity-v1';PayloadFile='acl-baseline.json'
         PayloadBytes=$payload.Length;PayloadSha256=(Hash $payload)
+        PowerShellStreamsFile='powershell-streams.json'
         PowerShellStreamsBytes=$streams.Length;PowerShellStreamsSha256=(Hash $streams)
     })
     $frame=New-Object byte[] (44+$payload.Length)
@@ -77,6 +78,45 @@ function WriteFixture([string]$Root) {
     })
     [IO.File]::WriteAllBytes((FilePath $Root $data),$manifest)
 }
+
+# Modify the semantic fields, then rebuild ALL dependent hashes/frame.
+# A rejection must be semantic, not merely caused by stale SHA-256 values.
+function RewriteSemanticFixture([string]$Root,[scriptblock]$Mutation) {
+    $manifestPath=FilePath $Root 'C:\ProgramData\F2-G1-Icacls\approved-release.json'
+    $mail='C:\ProgramData\F2-G1-ACL-Evidence-ecb6deeb424e40feb5354d18908986df\'
+    $payloadPath=FilePath $Root ($mail+'acl-baseline.json')
+    $integrityPath=FilePath $Root ($mail+'integrity.json')
+    $streamsPath=FilePath $Root ($mail+'powershell-streams.json')
+    $framePath=FilePath $Root ($mail+'acl-baseline.frame')
+    $manifest=[IO.File]::ReadAllText($manifestPath)|ConvertFrom-Json
+    $payload=[IO.File]::ReadAllText($payloadPath)|ConvertFrom-Json
+    $integrity=[IO.File]::ReadAllText($integrityPath)|ConvertFrom-Json
+    $streams=[IO.File]::ReadAllText($streamsPath)|ConvertFrom-Json
+    & $Mutation $manifest $payload $integrity $streams
+    $newPayload=JsonBytes $payload
+    $newStreams=JsonBytes $streams
+    $integrity.PayloadBytes=$newPayload.Length
+    $integrity.PayloadSha256=Hash $newPayload
+    $integrity.PowerShellStreamsBytes=$newStreams.Length
+    $integrity.PowerShellStreamsSha256=Hash $newStreams
+    $newIntegrity=JsonBytes $integrity
+    $manifest.BaselinePayloadSha256=Hash $newPayload
+    $manifest.BaselineIntegritySha256=Hash $newIntegrity
+    $newManifest=JsonBytes $manifest
+    $frame=New-Object byte[] (44+$newPayload.Length)
+    [Buffer]::BlockCopy([byte[]](0x46,0x32,0x41,0x43,0x4c,0x01,0x0d,0x0a),0,$frame,0,8)
+    [Buffer]::BlockCopy([BitConverter]::GetBytes([int]$newPayload.Length),0,$frame,8,4)
+    [Buffer]::BlockCopy($newPayload,0,$frame,12,$newPayload.Length)
+    $sha=[Security.Cryptography.SHA256]::Create()
+    try {$digest=$sha.ComputeHash($newPayload)}finally{$sha.Dispose()}
+    [Buffer]::BlockCopy($digest,0,$frame,12+$newPayload.Length,32)
+    [IO.File]::WriteAllBytes($payloadPath,$newPayload)
+    [IO.File]::WriteAllBytes($streamsPath,$newStreams)
+    [IO.File]::WriteAllBytes($integrityPath,$newIntegrity)
+    [IO.File]::WriteAllBytes($manifestPath,$newManifest)
+    [IO.File]::WriteAllBytes($framePath,$frame)
+}
+
 function Fingerprint([string]$Root) {
     $list=New-Object 'System.Collections.Generic.List[string]'
     foreach($file in @(Get-ChildItem -LiteralPath $Root -Recurse -File -Force | Sort-Object FullName)){
@@ -85,7 +125,7 @@ function Fingerprint([string]$Root) {
     }
     return ($list -join '|')
 }
-function RunCase([string]$Name,[scriptblock]$Fault) {
+function RunCase([string]$Name,[scriptblock]$Fault,[string]$ExpectedCode='') {
     $root=Join-Path $env:RUNNER_TEMP ('F2G1-LT2-'+[guid]::NewGuid().ToString())
     [void][IO.Directory]::CreateDirectory($root)
     try {
@@ -98,6 +138,7 @@ function RunCase([string]$Name,[scriptblock]$Fault) {
         Assert (($result.Verdict -ceq $(if($expected){'SYNTHETIC_FIXTURE_PASS'}else{'BLOCKED_WITH_EVIDENCE'})) -and
            $result.ProtectedReads -eq 0 -and $result.HistoricalV2 -ceq 'NOT_ATTESTED_SYNTHETIC_BYTES' -and
            $result.LinkAndAds -ceq 'LINK_ADS_NOT_ATTESTED' -and
+           ([string]::IsNullOrEmpty($ExpectedCode) -or $result.Code -ceq $ExpectedCode) -and
            $unchanged) ("real Windows fixture "+$Name+"; no mutations")
         if($expected){
             Assert ($result.FixtureObjects -eq 23 -and $result.FixtureFiles -eq 15 -and $result.Inventories -eq 5) '23 objects, 15 read files, 5 real inventories'
@@ -131,6 +172,48 @@ RunCase 'unexpected-reparse' {param($root)
     [IO.File]::Delete($path)
     [void](New-Item -ItemType SymbolicLink -Path $path -Target (FilePath $root 'C:\ProgramData\F2-G1-Icacls\approved-release.json') -ErrorAction Stop)
 }
+# Semantic negatives remain internally hash-consistent after each mutation.
+RunCase 'duplicate-manifest-pin' {
+    param($root)
+    RewriteSemanticFixture $root {
+        param($m,$p,$i,$s)
+        $m.Files[1].Name=$m.Files[0].Name
+        $m.Files[1].Sha256=$m.Files[0].Sha256
+    }
+} 'PACKAGE_PIN_SET_INVALID'
+RunCase 'malformed-manifest-pin' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s) $m.Files[0].Sha256='not-a-sha256'}
+} 'PACKAGE_HASH_INVALID'
+RunCase 'record-path-set-mismatch' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s) $p.Manifest.ExpectedPaths[0]='synthetic-evidence-not-in-records'}
+} 'EVIDENCE_RECORD_SET_INVALID'
+RunCase 'record-path-duplicates' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s) $p.Manifest.ExpectedPaths[1]=$p.Manifest.ExpectedPaths[0]}
+} 'EVIDENCE_RECORD_SET_INVALID'
+RunCase 'expected-count-mismatch' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s) $p.Manifest.ExpectedCount=10}
+} 'EVIDENCE_INTEGRITY_INVALID'
+RunCase 'record-count-mismatch' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s) $p.Manifest.RecordCount=10}
+} 'EVIDENCE_INTEGRITY_INVALID'
+RunCase 'unique-count-mismatch' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s) $p.Manifest.UniquePathCount=10}
+} 'EVIDENCE_INTEGRITY_INVALID'
+RunCase 'stream-nonzero-exit' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s) $s.ExitCode=7}
+} 'STREAM_INTEGRITY_INVALID'
+RunCase 'integrity-stream-filename' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s) $i.PowerShellStreamsFile='different.json'}
+} 'STREAM_INTEGRITY_INVALID'
+
 $badRoot=Join-Path $env:RUNNER_TEMP 'not-an-approved-fixture'
 $r=Test-F2G1LT2Physical -FixtureRoot $badRoot
 Assert ($r.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and $r.ProtectedReads -eq 0) 'unapproved fixture root blocks before path traversal'
