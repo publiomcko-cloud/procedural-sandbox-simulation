@@ -67,7 +67,7 @@ $lt4Synthetic=(Get-Module F2G1LT4.ReadOnlyAdapter)
 $diagText='param($R) $Map=New-F2G1LT4PathMap "Fixture" $R; '+ 
   '$getMetaCommand=Get-Command Get-F2G1LT4PhysicalMeta -CommandType Function; '+
   '$getPath={param([string]$Label) & $getMetaCommand $Map $Label}.GetNewClosure(); '+
-  'try{$value=& $getPath "C:\\"; if($null -eq $value){"META_NULL"}else{"META_OK"}} '+
+  'try{$value=& $getPath "C:\"; if($null -eq $value){"META_NULL"}else{"META_OK"}} '+
   'catch{$_.Exception.GetType().Name}'
 try {
   $syntheticDiag=@($lt4Synthetic.Invoke([scriptblock]::Create($diagText),@($root)))
