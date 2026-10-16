@@ -61,6 +61,16 @@ Check ($token -is [bool]) 'actual process token classified'
 $root=CreateFixture
 $before=Snapshot $root
 $result=Invoke-F2G1LT4Fixture -FixtureRoot $root
+if($result.Code -ceq 'FIXTURE_OBSERVATION_FAILED_CLOSED'){
+  try {
+    $debugModule=Get-Module F2G1LT4.ReadOnlyAdapter
+    [void]@($debugModule.Invoke([scriptblock]::Create(
+      'param($FixtureRoot) $mapped=New-F2G1LT4PathMap ''Fixture'' $FixtureRoot; Invoke-F2G1LT4R2HistoricalPolicy $mapped'),@($root)))
+  } catch {
+    Write-Output ('LT4_SYNTHETIC_BRIDGE_CLASS='+$_.Exception.GetType().Name+
+       ';LINE='+[int]$_.InvocationInfo.ScriptLineNumber)
+  }
+}
 $after=Snapshot $root
 Check ($result.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and $result.ProtectedReads -eq 0 -and
  $result.HostAttestation -ceq 'NOT_PERFORMED') 'physical fixture cannot claim host pass'
