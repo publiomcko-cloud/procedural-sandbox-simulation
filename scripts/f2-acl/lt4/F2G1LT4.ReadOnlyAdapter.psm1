@@ -177,6 +177,45 @@ function Get-F2G1LT4PhysicalChildren($Map,[string]$Label) {
     return $rows
 }
 
+
+function Invoke-F2G1LT4R2PolicyOnFixture($Map) {
+    # Reuse the accepted R2 policy with ACTUAL fixture bytes and ACL observations.
+    # This is NOT R2's disabled -Live entrypoint and cannot produce a host verdict.
+    $r2=Import-Module (Join-Path $PSScriptRoot '..\F2G1CPostfailureAttestation.psm1') -PassThru -ErrorAction Stop
+    $refs=Get-F2G1LT3ReferenceContract
+    $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
+    try {
+        $principal=New-Object Security.Principal.WindowsPrincipal($identity)
+        $admin=$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        $groupPresent=@($identity.Groups|Where-Object {$_.Value -ceq 'S-1-5-32-544'}).Count -gt 0
+        $identityInfo=[pscustomobject]@{
+            IsAdministrator=[bool]$admin
+            AdministratorGroupPresent=[bool]$groupPresent
+            UserSid=[string]$identity.User.Value
+        }
+    } finally {$identity.Dispose()}
+    $getPath={param([string]$Label) Get-F2G1LT4PhysicalMeta $Map $Label}.GetNewClosure()
+    $readBytes={param([string]$Label,[int]$Max) Get-F2G1LT4PhysicalBytes $Map $Label $Max}.GetNewClosure()
+    $listChildren={param([string]$Label) @(Get-F2G1LT4PhysicalChildren $Map $Label)}.GetNewClosure()
+    $fixtureExpected=[pscustomobject]@{
+        ManifestSha256=$refs.ManifestSha256
+        ReviewedCommitSha=$refs.ReviewedSourceSha
+        BaselineMailboxId=$refs.MailboxId
+        BaselinePayloadCaptureId=$refs.CaptureId
+        RecordPaths=@() # Fixture cannot claim historical G: observations.
+    }
+    $provider=@{
+        Mode='Fixture';Fixture=[pscustomobject]@{Expected=$fixtureExpected}
+        Identity=$identityInfo;GetPath=$getPath;ReadBytes=$readBytes
+        ListChildren=$listChildren
+    }
+    # Execute in R2 module scope to reuse private historical ACL/evidence policy
+    # without changing or making R2's live entrypoint reachable.
+    $result=@($r2.Invoke([scriptblock]::Create('param($Provider) Invoke-F2G1Core -Provider $Provider'),@($provider)))
+    if($result.Count -ne 1){throw 'R2_POLICY_BRIDGE_INVALID'}
+    return [pscustomobject]@{Executed=$true;FixtureVerdict=[string]$result[0].Verdict}
+}
+
 function Invoke-F2G1LT4Fixture {
     param([string]$FixtureRoot)
     $out=[ordered]@{
@@ -185,18 +224,22 @@ function Invoke-F2G1LT4Fixture {
         PhysicalObjects=0;PhysicalFiles=0;PhysicalInventories=0
         ProtectedReads=0;HostAttestation='NOT_PERFORMED'
         HistoricalV2='NOT_ATTESTED_FIXTURE_ONLY';LinkAndAds='LINK_ADS_NOT_ATTESTED'
+        R2PolicyEvaluated=$false;R2FixtureVerdict='NOT_RUN'
     }
     try {
         $map=New-F2G1LT4PathMap 'Fixture' $FixtureRoot
         # This adapter reads REAL NTFS fixture bytes/ACLs, not mock dictionaries.
         foreach($label in @($script:Scope.Directories)){[void](Get-F2G1LT4PhysicalMeta $map $label);$out.PhysicalObjects++}
-        $contents=New-Object 'System.Collections.Generic.Dictionary[string,byte[]]' ([StringComparer]::Ordinal)
+        $contents=New-Object 'System.Collections.Generic.Dictionary[string,object]' ([StringComparer]::Ordinal)
         foreach($file in @($script:Scope.Files)){
             $bytes=Get-F2G1LT4PhysicalBytes $map $file.Path ([int]$file.Max)
             $contents.Add($file.Path,[byte[]]$bytes)
             $out.PhysicalObjects++;$out.PhysicalFiles++
         }
         foreach($inv in @($script:Scope.Inventories)){[void]@(Get-F2G1LT4PhysicalChildren $map $inv.Path);$out.PhysicalInventories++}
+        $r2policy=Invoke-F2G1LT4R2PolicyOnFixture $map
+        $out.R2PolicyEvaluated=$r2policy.Executed
+        $out.R2FixtureVerdict=$r2policy.FixtureVerdict
         $reference=Get-F2G1LT3ReferenceContract
         $package=@()
         foreach($pin in @($reference.PackageMembers)){
