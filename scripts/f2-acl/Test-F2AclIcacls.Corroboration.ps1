@@ -178,7 +178,62 @@ Assert-Icacl (-not $plan.Complete -and $plan.ElevationLaunches -eq 1 -and $plan.
 $psExe=Join-Path $PSHOME 'powershell.exe'
 $okArgs='-NoProfile -NonInteractive -Command "[Console]::Out.WriteLine(''fixture-stdout'');[Console]::Error.WriteLine(''fixture-stderr'');exit 0"'
 $proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $okArgs -TimeoutSeconds 5
-Assert-Icacl ($proc.Started -and $proc.ExitCode -eq 0 -and $proc.OutputComplete -and $proc.CleanupComplete -and $proc.Stdout -match 'fixture-stdout' -and $proc.Stderr -match 'fixture-stderr' -and $proc.StdoutSha256 -match '^[0-9a-f]{64}$' -and $proc.StderrSha256 -match '^[0-9a-f]{64}$') 'bounded process runner captures stdout, stderr, PID, exit and hashes'
+$firstCapturePass=($proc.Started -and $proc.ExitCode -eq 0 -and $proc.OutputComplete -and $proc.CleanupComplete -and $proc.Stdout -match 'fixture-stdout' -and $proc.Stderr -match 'fixture-stderr' -and $proc.StdoutSha256 -match '^[0-9a-f]{64}$' -and $proc.StderrSha256 -match '^[0-9a-f]{64}$')
+if(-not $firstCapturePass){
+    # Disposable synthetic CI fixture only; do not expose raw streams or paths.
+    $expectedOut="fixture-stdout`r`n"
+    $expectedErr="fixture-stderr`r`n"
+    $observedOut=[string]$proc.Stdout
+    $observedErr=[string]$proc.Stderr
+    $readerCategory='NONE'
+    if(-not [string]::IsNullOrEmpty([string]$proc.ReaderError)){
+        $known=@('RedirectedStreamReadFailed','RedirectedStreamDrainDeadlineExceeded','ChildTerminationFailed','ChildTerminationWaitFailed','OutputLimitExceeded')
+        $readerCategory=if($known -ccontains [string]$proc.ReaderError){[string]$proc.ReaderError}else{'OTHER_REDACTED'}
+    }
+    $outClass=if($observedOut -ceq $expectedOut){'EXPECTED_CRLF'}elseif($observedOut -ceq ("fixture-stderr`r`n")){'SWAPPED_WITH_STDERR'}elseif($observedOut.TrimEnd("`r","`n") -ceq 'fixture-stdout'){'LINE_ENDING_ONLY'}else{'OTHER_REDACTED'}
+    $errClass=if($observedErr -ceq $expectedErr){'EXPECTED_CRLF'}elseif($observedErr -ceq ("fixture-stdout`r`n")){'SWAPPED_WITH_STDOUT'}elseif($observedErr.TrimEnd("`r","`n") -ceq 'fixture-stderr'){'LINE_ENDING_ONLY'}else{'OTHER_REDACTED'}
+    # Difference *positions*, not raw observed characters or output.
+    $outFirst=-1;$errFirst=-1;$outDiffs=0;$errDiffs=0
+    for($n=0;$n -lt [Math]::Min($observedOut.Length,$expectedOut.Length);$n++){
+        if($observedOut[$n] -cne $expectedOut[$n]){if($outFirst -lt 0){$outFirst=$n};$outDiffs++}
+    }
+    for($n=0;$n -lt [Math]::Min($observedErr.Length,$expectedErr.Length);$n++){
+        if($observedErr[$n] -cne $expectedErr[$n]){if($errFirst -lt 0){$errFirst=$n};$errDiffs++}
+    }
+    if($outFirst -eq -1 -and $observedOut.Length -ne $expectedOut.Length){$outFirst=[Math]::Min($observedOut.Length,$expectedOut.Length)}
+    if($errFirst -eq -1 -and $observedErr.Length -ne $expectedErr.Length){$errFirst=[Math]::Min($observedErr.Length,$expectedErr.Length)}
+    $diag=[ordered]@{
+        Schema='f2-icacls-synthetic-capture-failure-v1'
+        StdoutFirstMismatch=$outFirst;StderrFirstMismatch=$errFirst
+        StdoutMismatchCount=$outDiffs;StderrMismatchCount=$errDiffs
+        StdoutEndsWithCRLF=[bool]$observedOut.EndsWith("`r`n")
+        StderrEndsWithCRLF=[bool]$observedErr.EndsWith("`r`n")
+        StdoutNulCount=@($observedOut.ToCharArray()|Where-Object{[int]$_ -eq 0}).Count
+        StderrNulCount=@($observedErr.ToCharArray()|Where-Object{[int]$_ -eq 0}).Count
+        StdoutPrintableAsciiCount=@($observedOut.ToCharArray()|Where-Object{[int]$_ -ge 32 -and [int]$_ -le 126}).Count
+        StderrPrintableAsciiCount=@($observedErr.ToCharArray()|Where-Object{[int]$_ -ge 32 -and [int]$_ -le 126}).Count
+        StdoutReplacementCharCount=@($observedOut.ToCharArray()|Where-Object{[int]$_ -eq 65533}).Count
+        StderrReplacementCharCount=@($observedErr.ToCharArray()|Where-Object{[int]$_ -eq 65533}).Count
+        StdoutObservedHashPrefix=if([string]$proc.StdoutSha256 -match '^[0-9a-f]{64}$'){([string]$proc.StdoutSha256).Substring(0,12)}else{'INVALID_FORMAT'}
+        StderrObservedHashPrefix=if([string]$proc.StderrSha256 -match '^[0-9a-f]{64}$'){([string]$proc.StderrSha256).Substring(0,12)}else{'INVALID_FORMAT'}
+        Started=[bool]$proc.Started;ExitCode=$proc.ExitCode;TimedOut=[bool]$proc.TimedOut
+        OutputComplete=[bool]$proc.OutputComplete;CleanupComplete=[bool]$proc.CleanupComplete
+        Truncated=[bool]$proc.Truncated;ReaderClass=$readerCategory
+        ElapsedMilliseconds=[int64]$proc.ElapsedMilliseconds
+        StdoutClass=$outClass;StderrClass=$errClass
+        StdoutLength=$observedOut.Length;StderrLength=$observedErr.Length
+        StdoutMarker=[bool]($observedOut -match 'fixture-stdout')
+        StderrMarker=[bool]($observedErr -match 'fixture-stderr')
+        StdoutHashFormat=[bool]($proc.StdoutSha256 -match '^[0-9a-f]{64}$')
+        StderrHashFormat=[bool]($proc.StderrSha256 -match '^[0-9a-f]{64}$')
+        StdoutExpectedHash=[bool]([string]$proc.StdoutSha256 -ceq (Get-F2IcaclsSha256 -Bytes ([Text.Encoding]::UTF8.GetBytes($expectedOut))))
+        StderrExpectedHash=[bool]([string]$proc.StderrSha256 -ceq (Get-F2IcaclsSha256 -Bytes ([Text.Encoding]::UTF8.GetBytes($expectedErr))))
+        StdoutHashMatchesText=[bool]([string]$proc.StdoutSha256 -ceq (Get-F2IcaclsSha256 -Bytes ([Text.Encoding]::UTF8.GetBytes($observedOut))))
+        StderrHashMatchesText=[bool]([string]$proc.StderrSha256 -ceq (Get-F2IcaclsSha256 -Bytes ([Text.Encoding]::UTF8.GetBytes($observedErr))))
+    }
+    Write-Host ('F2_ICACLS_CAPTURE_DIAG=' + ($diag|ConvertTo-Json -Compress -Depth 3))
+}
+Assert-Icacl $firstCapturePass 'bounded process runner captures stdout, stderr, PID, exit and hashes'
 $quietArgs='-NoProfile -NonInteractive -Command "[Console]::Out.WriteLine(''quiet-stdout'');exit 0"'
 $proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $quietArgs -TimeoutSeconds 5
 Assert-Icacl ($proc.ExitCode -eq 0 -and $proc.OutputComplete -and $proc.StderrBytes -eq 0 -and $proc.StderrSha256 -match '^[0-9a-f]{64}$') 'successful command with empty stderr receives the SHA-256 of the empty byte stream'
