@@ -179,9 +179,17 @@ function Test-F2G1LT2Physical {
         if(@($m.Files).Count -ne 7){throw 'PACKAGE_MANIFEST_INCOMPLETE'}
         $packageRoot='C:\Program Files\F2-G1-Icacls\scripts\f2-acl\'
         $pkgs=@($scope.Files|Where-Object {$_.Path.StartsWith($packageRoot,[StringComparison]::Ordinal)})
+        $pinNames=New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
         foreach($pin in @($m.Files)){
-            $label=$packageRoot+[string]$pin.Name
-            if(@($pkgs.Path) -cnotcontains $label -or $contents[$label].Hash -cne [string]$pin.Sha256){throw 'PACKAGE_HASH_INVALID'}
+            $name=[string]$pin.Name
+            $digest=[string]$pin.Sha256
+            $label=$packageRoot+$name
+            if(-not $pinNames.Add($name) -or @($pkgs.Path) -cnotcontains $label){throw 'PACKAGE_PIN_SET_INVALID'}
+            if($digest -cnotmatch '^[0-9a-f]{64}$' -or $contents[$label].Hash -cne $digest){throw 'PACKAGE_HASH_INVALID'}
+        }
+        if($pinNames.Count -ne $pkgs.Count){throw 'PACKAGE_PIN_SET_INVALID'}
+        foreach($pkg in $pkgs){
+            if(-not $pinNames.Contains($pkg.Path.Substring($packageRoot.Length))){throw 'PACKAGE_PIN_SET_INVALID'}
         }
         $payload=$contents[$mailbox+'acl-baseline.json']
         $integrity=$contents[$mailbox+'integrity.json']
@@ -189,10 +197,27 @@ function Test-F2G1LT2Physical {
         $base=$utf8.GetString($payload.Bytes)|ConvertFrom-Json -ErrorAction Stop
         $integ=$utf8.GetString($integrity.Bytes)|ConvertFrom-Json -ErrorAction Stop
         if($base.CaptureId -cne $m.BaselinePayloadCaptureId -or $base.Complete -ne $true -or
-           @($base.Records).Count -ne 11 -or @($base.Records.Path|Sort-Object -Unique).Count -ne 11 -or
-           @($base.Manifest.ExpectedPaths).Count -ne 11 -or $integ.Schema -cne 'f2-acl-integrity-v1' -or
+           @($base.Records).Count -ne 11 -or @($base.Manifest.ExpectedPaths).Count -ne 11 -or
+           [int]$base.Manifest.ExpectedCount -ne 11 -or
+           [int]$base.Manifest.RecordCount -ne 11 -or
+           [int]$base.Manifest.UniquePathCount -ne 11 -or
+           $integ.Schema -cne 'f2-acl-integrity-v1' -or
            $integ.PayloadFile -cne 'acl-baseline.json' -or [int64]$integ.PayloadBytes -ne $payload.Bytes.Length -or
            $integ.PayloadSha256 -cne $payload.Hash){throw 'EVIDENCE_INTEGRITY_INVALID'}
+        $records=New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+        $expectedPaths=New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+        foreach($record in @($base.Records)){
+            $recordPath=[string]$record.Path
+            if([string]::IsNullOrWhiteSpace($recordPath) -or -not $records.Add($recordPath)){throw 'EVIDENCE_RECORD_SET_INVALID'}
+        }
+        foreach($item in @($base.Manifest.ExpectedPaths)){
+            $expectedPath=[string]$item
+            if([string]::IsNullOrWhiteSpace($expectedPath) -or -not $expectedPaths.Add($expectedPath)){throw 'EVIDENCE_RECORD_SET_INVALID'}
+        }
+        if($records.Count -ne 11 -or $expectedPaths.Count -ne 11){throw 'EVIDENCE_RECORD_SET_INVALID'}
+        foreach($recordPath in $records){
+            if(-not $expectedPaths.Contains($recordPath)){throw 'EVIDENCE_RECORD_SET_INVALID'}
+        }
         $frame=$contents[$mailbox+'acl-baseline.frame'].Bytes
         if($frame.Length -ne $payload.Bytes.Length+44 -or
            [BitConverter]::ToString($frame[0..7]) -cne '46-32-41-43-4C-01-0D-0A' -or
@@ -204,16 +229,19 @@ function Test-F2G1LT2Physical {
         try {$digest=$sha.ComputeHash($fb)}finally{$sha.Dispose()}
         if((Get-F2G1LT2Sha $fb) -cne $payload.Hash -or [BitConverter]::ToString($fh) -cne [BitConverter]::ToString($digest)){throw 'FRAME_INVALID'}
         $stream=$contents[$mailbox+'powershell-streams.json']
-        if($integ.PowerShellStreamsSha256 -cne $stream.Hash -or
+        if($integ.PowerShellStreamsFile -cne 'powershell-streams.json' -or
+           $integ.PowerShellStreamsSha256 -cne $stream.Hash -or
            [int64]$integ.PowerShellStreamsBytes -ne $stream.Bytes.Length){throw 'STREAM_INTEGRITY_INVALID'}
         $streamJson=$utf8.GetString($stream.Bytes)|ConvertFrom-Json -ErrorAction Stop
-        if($streamJson.Schema -cne 'f2-acl-powershell-streams-v1' -or $streamJson.Complete -ne $true){throw 'STREAM_INTEGRITY_INVALID'}
+        if($streamJson.Schema -cne 'f2-acl-powershell-streams-v1' -or
+           $streamJson.Complete -ne $true -or
+           [int]$streamJson.ExitCode -ne 0){throw 'STREAM_INTEGRITY_INVALID'}
         $report.Verdict='SYNTHETIC_FIXTURE_PASS'
         $report.Code='PHYSICAL_FIXTURE_EVIDENCE_MATCHED'
         $report.FixtureObjects=23;$report.FixtureFiles=15;$report.Inventories=5
     } catch {
         # Only finite sanitized codes, never paths, Windows SIDs, SDDL or contents.
-        $allowed=@('CI_WINDOWS_FIXTURE_ONLY','FIXTURE_ROOT_REJECTED','FIXTURE_REPARSE_REJECTED','REAL_TOKEN_NOT_STANDARD','DIRECTORY_TYPE_REPARSE','ACL_UNREADABLE','FILE_TYPE_REPARSE','FILE_SIZE_REJECTED','FILE_DRIFT','TRUNCATED_READ','TRAILING_BYTES','INVENTORY_MISMATCH','DIRECTORY_DRIFT','MANIFEST_IDENTITY_INVALID','PACKAGE_MANIFEST_INCOMPLETE','PACKAGE_HASH_INVALID','BASELINE_HASH_INVALID','EVIDENCE_INTEGRITY_INVALID','FRAME_INVALID','STREAM_INTEGRITY_INVALID')
+        $allowed=@('CI_WINDOWS_FIXTURE_ONLY','FIXTURE_ROOT_REJECTED','FIXTURE_REPARSE_REJECTED','REAL_TOKEN_NOT_STANDARD','DIRECTORY_TYPE_REPARSE','ACL_UNREADABLE','FILE_TYPE_REPARSE','FILE_SIZE_REJECTED','FILE_DRIFT','TRUNCATED_READ','TRAILING_BYTES','INVENTORY_MISMATCH','DIRECTORY_DRIFT','MANIFEST_IDENTITY_INVALID','PACKAGE_MANIFEST_INCOMPLETE','PACKAGE_PIN_SET_INVALID','PACKAGE_HASH_INVALID','BASELINE_HASH_INVALID','EVIDENCE_INTEGRITY_INVALID','EVIDENCE_RECORD_SET_INVALID','FRAME_INVALID','STREAM_INTEGRITY_INVALID')
         $code='UNCLASSIFIED_BLOCKED'
         foreach($allowedCode in $allowed){if($_.Exception.Message -ceq $allowedCode){$code=$allowedCode;break}}
         $report.Code=$code
