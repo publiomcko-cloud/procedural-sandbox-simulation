@@ -61,12 +61,37 @@ Check ($token -is [bool]) 'actual process token classified'
 $root=CreateFixture
 $before=Snapshot $root
 $result=Invoke-F2G1LT4Fixture -FixtureRoot $root
+# Exercise the exact R2 callbacks across the LT4 module boundary, using
+# physical but disposable CI fixture objects. No protected-host path is used.
+$lt4Module=Get-Module F2G1LT4.ReadOnlyAdapter
+$callbackBuilder=[scriptblock]::Create(
+    'param($FixtureRoot) $map=New-F2G1LT4PathMap ''Fixture'' $FixtureRoot; New-F2G1LT4R2Callbacks $map')
+$callbackSets=@($lt4Module.Invoke($callbackBuilder,@($root)))
+if($callbackSets.Count -ne 1){throw 'LT4_FIXTURE_CALLBACK_CARDINALITY'}
+$callbacks=$callbackSets[0]
+$fixtureScope=Get-F2G1LT1Scope
+$fixtureMeta=& $callbacks.GetPath 'C:\'
+$firstFile=@($fixtureScope.Files)[0]
+$fixtureBytes=& $callbacks.ReadBytes $firstFile.Path ([int]$firstFile.Max)
+$firstInventory=@($fixtureScope.Inventories)[0]
+$fixtureChildren=@(& $callbacks.ListChildren $firstInventory.Path)
+Check ($fixtureMeta.Path -ceq 'C:\' -and $fixtureMeta.Kind -ceq 'Directory' -and
+  -not $fixtureMeta.Reparse) 'R2 GetPath callback resolves private LT4 metadata observer'
+Check ($fixtureBytes -is [byte[]] -and $fixtureBytes.Length -gt 0 -and
+  [Text.Encoding]::UTF8.GetString($fixtureBytes).StartsWith('LT4-CI-SYNTHETIC|')) 'R2 ReadBytes callback preserves bounded byte array'
+Check ($fixtureChildren.Count -eq @($firstInventory.Names).Count -and
+  @($fixtureChildren | Where-Object {$_.Reparse}).Count -eq 0) 'R2 ListChildren callback resolves private LT4 inventory observer'
 $after=Snapshot $root
 Check ($result.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and $result.ProtectedReads -eq 0 -and
  $result.HostAttestation -ceq 'NOT_PERFORMED') 'physical fixture cannot claim host pass'
 Check ($result.PhysicalObjects -eq 23 -and $result.PhysicalFiles -eq 15 -and
  $result.PhysicalInventories -eq 5) 'all 23 objects, 15 files and five inventories read'
 Check ($result.R2PolicyEvaluated -and $result.R2FixtureVerdict -ceq 'BLOCKED_WITH_EVIDENCE') 'frozen R2 ACL/evidence policy invoked'
+# A freshly built NTFS fixture has an intentionally nonhistorical owner/DACL.
+# The R2 callback must return metadata, allowing R2 to reject that *policy*.
+# PATH_OR_ACL_UNREADABLE instead indicates callback/provider integration failure.
+Check ($result.R2StopStage -ceq 'Path' -and
+  $result.R2StopCode -ceq 'OWNER_OR_DACL_POLICY_MISMATCH') 'synthetic R2 callback reaches ACL policy rather than throwing during metadata read'
 Check ($result.Code -ceq 'HISTORICAL_PIN_MISMATCH_IN_DISPOSABLE_FIXTURE') 'synthetic bytes do not match R2 historical file pins'
 Check ($before -ceq $after) 'read-only observer preserved file bytes and DACLs'
 [IO.File]::WriteAllText((FixturePath $root 'C:\ProgramData\F2-G1-Icacls\unexpected.tmp'),'synthetic extra child')

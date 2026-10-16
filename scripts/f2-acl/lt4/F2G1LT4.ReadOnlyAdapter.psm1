@@ -250,6 +250,19 @@ function ConvertTo-F2G1LT4SanitizedR2Stop {
     return $default
 }
 
+# A closure is a dynamic module. Resolve the original LT4 private commands
+# inside LT4 before capturing them, then invoke those bound FunctionInfo values
+# rather than looking up private function names inside the closure or R2 module.
+function New-F2G1LT4R2Callbacks($Map) {
+    $getMetaCommand=Get-Command Get-F2G1LT4PhysicalMeta -CommandType Function -ErrorAction Stop
+    $readBytesCommand=Get-Command Get-F2G1LT4PhysicalBytes -CommandType Function -ErrorAction Stop
+    $listChildrenCommand=Get-Command Get-F2G1LT4PhysicalChildren -CommandType Function -ErrorAction Stop
+    $getPath={param([string]$Label) & $getMetaCommand $Map $Label}.GetNewClosure()
+    $readBytes={param([string]$Label,[int]$Max) & $readBytesCommand $Map $Label $Max}.GetNewClosure()
+    $listChildren={param([string]$Label) @(& $listChildrenCommand $Map $Label)}.GetNewClosure()
+    return [pscustomobject]@{GetPath=$getPath;ReadBytes=$readBytes;ListChildren=$listChildren}
+}
+
 function Invoke-F2G1LT4R2HistoricalPolicy($Map) {
     # Reuse unchanged R2 semantics with physically read bytes/ACLs.
     # Its public legacy -Live entrypoint stays disabled.
@@ -266,9 +279,16 @@ function Invoke-F2G1LT4R2HistoricalPolicy($Map) {
             UserSid=[string]$identity.User.Value
         }
     } finally {$identity.Dispose()}
-    $getPath={param([string]$Label) Get-F2G1LT4PhysicalMeta $Map $Label}.GetNewClosure()
-    $readBytes={param([string]$Label,[int]$Max) Get-F2G1LT4PhysicalBytes $Map $Label $Max}.GetNewClosure()
-    $listChildren={param([string]$Label) @(Get-F2G1LT4PhysicalChildren $Map $Label)}.GetNewClosure()
+    # GitHub-hosted Windows runners normally hold an administrator token.
+    # The synthetic fixture must exercise R2's *path/ACL policy*, not stop at
+    # that CI token. Host mode always keeps the actual measured identity.
+    if($Map.Mode -ceq 'Fixture'){
+        $identityInfo=[pscustomobject]@{
+            IsAdministrator=$false;AdministratorGroupPresent=$false
+            UserSid=$identityInfo.UserSid
+        }
+    }
+    $callbacks=New-F2G1LT4R2Callbacks $Map
     $fixtureExpected=[pscustomobject]@{
         ManifestSha256=$refs.ManifestSha256
         ReviewedCommitSha=$refs.ReviewedSourceSha
@@ -279,8 +299,8 @@ function Invoke-F2G1LT4R2HistoricalPolicy($Map) {
     $r2Mode=if($Map.Mode -ceq 'Host'){'Live'}else{'Fixture'}
     $provider=@{
         Mode=$r2Mode;Fixture=[pscustomobject]@{Expected=$fixtureExpected}
-        Identity=$identityInfo;GetPath=$getPath;ReadBytes=$readBytes
-        ListChildren=$listChildren
+        Identity=$identityInfo;GetPath=$callbacks.GetPath;ReadBytes=$callbacks.ReadBytes
+        ListChildren=$callbacks.ListChildren
     }
     # Execute in R2 module scope to reuse private historical ACL/evidence policy
     # without changing or making R2's live entrypoint reachable.
