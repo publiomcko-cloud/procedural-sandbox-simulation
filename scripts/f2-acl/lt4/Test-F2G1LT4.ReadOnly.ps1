@@ -82,7 +82,9 @@ try {
 } catch {
   Write-Output ('LT4_SYNTHETIC_CALLBACK_PROBE=WRAPPER_EXCEPTION')
 }
-Write-Output ('LT4_R2_SYNTHETIC_STOP_CLASS='+[string]$result.R2StopErrorClass)
+Write-Output ('LT4_R2_SYNTHETIC_STOP_CLASS='+[string]$result.R2StopErrorClass+
+  ';STAGE='+[string]$result.R2StopStage+';CODE='+[string]$result.R2StopCode+
+  ';POLICY='+[string]$result.R2PolicyEvaluated+';OUTCOME='+[string]$result.Code)
 $after=Snapshot $root
 Check ($result.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and $result.ProtectedReads -eq 0 -and
  $result.HostAttestation -ceq 'NOT_PERFORMED') 'physical fixture cannot claim host pass'
