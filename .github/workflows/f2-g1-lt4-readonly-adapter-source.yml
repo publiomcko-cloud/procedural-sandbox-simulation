@@ -1,10 +1,11 @@
 name: F2 G1 LT4 read-only adapter source-only
 on:
   push:
-    branches: [feat/f2-g1-lt4-readonly-host-adapter-disabled-v1]
+    branches: [feat/f2-g1-lt4-readonly-host-adapter-disabled-v1, feat/f2-g1-lt4-fixed-host-read-review-candidate-v1]
     paths:
       - 'scripts/f2-acl/lt4/**'
       - 'docs/handoffs/F2_G1_LT4_READ_ONLY_ADAPTER.md'
+      - 'docs/handoffs/F2_G1_LT4_FIXED_HOST_READ_REVIEW_CANDIDATE.md'
       - '.github/workflows/f2-g1-lt4-readonly-adapter-source.yml'
   workflow_dispatch:
 permissions:
@@ -37,5 +38,5 @@ jobs:
       - name: Verify bounded source diff
         shell: powershell
         run: |
-          git diff --check 8c4d72d0b2cbaccaccf025bac8137dcbaa330829 HEAD
+          git diff --check 182f09a2aa5759288e8fe37645e84d1ccccfed4d HEAD
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
