@@ -67,8 +67,11 @@ if($result.Code -ceq 'FIXTURE_OBSERVATION_FAILED_CLOSED'){
     [void]@($debugModule.Invoke([scriptblock]::Create(
       'param($FixtureRoot) $mapped=New-F2G1LT4PathMap ''Fixture'' $FixtureRoot; Invoke-F2G1LT4R2HistoricalPolicy $mapped'),@($root)))
   } catch {
+    $inner=$_.Exception.InnerException
+    $innerType=if($null -eq $inner){'NONE'}else{$inner.GetType().Name}
+    $innerInner=if($null -eq $inner -or $null -eq $inner.InnerException){'NONE'}else{$inner.InnerException.GetType().Name}
     Write-Output ('LT4_SYNTHETIC_BRIDGE_CLASS='+$_.Exception.GetType().Name+
-       ';LINE='+[int]$_.InvocationInfo.ScriptLineNumber)
+       ';INNER='+$innerType+';INNER_INNER='+$innerInner+';LINE='+[int]$_.InvocationInfo.ScriptLineNumber)
   }
 }
 $after=Snapshot $root
