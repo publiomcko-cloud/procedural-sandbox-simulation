@@ -208,6 +208,14 @@ if(-not $firstCapturePass){
         StdoutMismatchCount=$outDiffs;StderrMismatchCount=$errDiffs
         StdoutEndsWithCRLF=[bool]$observedOut.EndsWith("`r`n")
         StderrEndsWithCRLF=[bool]$observedErr.EndsWith("`r`n")
+        StdoutNulCount=@($observedOut.ToCharArray()|Where-Object{[int]$_ -eq 0}).Count
+        StderrNulCount=@($observedErr.ToCharArray()|Where-Object{[int]$_ -eq 0}).Count
+        StdoutPrintableAsciiCount=@($observedOut.ToCharArray()|Where-Object{[int]$_ -ge 32 -and [int]$_ -le 126}).Count
+        StderrPrintableAsciiCount=@($observedErr.ToCharArray()|Where-Object{[int]$_ -ge 32 -and [int]$_ -le 126}).Count
+        StdoutReplacementCharCount=@($observedOut.ToCharArray()|Where-Object{[int]$_ -eq 65533}).Count
+        StderrReplacementCharCount=@($observedErr.ToCharArray()|Where-Object{[int]$_ -eq 65533}).Count
+        StdoutObservedHashPrefix=if([string]$proc.StdoutSha256 -match '^[0-9a-f]{64}$'){([string]$proc.StdoutSha256).Substring(0,12)}else{'INVALID_FORMAT'}
+        StderrObservedHashPrefix=if([string]$proc.StderrSha256 -match '^[0-9a-f]{64}$'){([string]$proc.StderrSha256).Substring(0,12)}else{'INVALID_FORMAT'}
         Started=[bool]$proc.Started;ExitCode=$proc.ExitCode;TimedOut=[bool]$proc.TimedOut
         OutputComplete=[bool]$proc.OutputComplete;CleanupComplete=[bool]$proc.CleanupComplete
         Truncated=[bool]$proc.Truncated;ReaderClass=$readerCategory
