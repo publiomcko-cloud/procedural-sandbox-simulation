@@ -93,6 +93,12 @@ function Get-F2G1LT2Sha([byte[]]$Bytes) {
     try {return ([BitConverter]::ToString($hash.ComputeHash($Bytes))).Replace('-','').ToLowerInvariant()}
     finally {$hash.Dispose()}
 }
+# ConvertFrom-Json under Windows PowerShell 5.1 may deserialize fractional JSON
+# numbers as Decimal; [int]/[int64] casts round values (10.6 -> 11, 0.4 -> 0).
+# Accept only native integral JSON numeric tokens, never strings/booleans/fractions.
+function Test-F2G1LT2JsonInteger([object]$Value) {
+    return ($Value -is [int] -or $Value -is [long])
+}
 function Test-F2G1LT2Physical {
     param([string]$FixtureRoot,[switch]$RequireStandardToken)
     $report=[ordered]@{
@@ -198,11 +204,16 @@ function Test-F2G1LT2Physical {
         $integ=$utf8.GetString($integrity.Bytes)|ConvertFrom-Json -ErrorAction Stop
         if($base.CaptureId -cne $m.BaselinePayloadCaptureId -or $base.Complete -ne $true -or
            @($base.Records).Count -ne 11 -or @($base.Manifest.ExpectedPaths).Count -ne 11 -or
-           [int]$base.Manifest.ExpectedCount -ne 11 -or
-           [int]$base.Manifest.RecordCount -ne 11 -or
-           [int]$base.Manifest.UniquePathCount -ne 11 -or
+           -not (Test-F2G1LT2JsonInteger $base.Manifest.ExpectedCount) -or
+           -not (Test-F2G1LT2JsonInteger $base.Manifest.RecordCount) -or
+           -not (Test-F2G1LT2JsonInteger $base.Manifest.UniquePathCount) -or
+           [long]$base.Manifest.ExpectedCount -ne 11 -or
+           [long]$base.Manifest.RecordCount -ne 11 -or
+           [long]$base.Manifest.UniquePathCount -ne 11 -or
            $integ.Schema -cne 'f2-acl-integrity-v1' -or
-           $integ.PayloadFile -cne 'acl-baseline.json' -or [int64]$integ.PayloadBytes -ne $payload.Bytes.Length -or
+           $integ.PayloadFile -cne 'acl-baseline.json' -or
+           -not (Test-F2G1LT2JsonInteger $integ.PayloadBytes) -or
+           [long]$integ.PayloadBytes -ne $payload.Bytes.Length -or
            $integ.PayloadSha256 -cne $payload.Hash){throw 'EVIDENCE_INTEGRITY_INVALID'}
         $records=New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
         $expectedPaths=New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
@@ -231,11 +242,13 @@ function Test-F2G1LT2Physical {
         $stream=$contents[$mailbox+'powershell-streams.json']
         if($integ.PowerShellStreamsFile -cne 'powershell-streams.json' -or
            $integ.PowerShellStreamsSha256 -cne $stream.Hash -or
-           [int64]$integ.PowerShellStreamsBytes -ne $stream.Bytes.Length){throw 'STREAM_INTEGRITY_INVALID'}
+           -not (Test-F2G1LT2JsonInteger $integ.PowerShellStreamsBytes) -or
+           [long]$integ.PowerShellStreamsBytes -ne $stream.Bytes.Length){throw 'STREAM_INTEGRITY_INVALID'}
         $streamJson=$utf8.GetString($stream.Bytes)|ConvertFrom-Json -ErrorAction Stop
         if($streamJson.Schema -cne 'f2-acl-powershell-streams-v1' -or
            $streamJson.Complete -ne $true -or
-           [int]$streamJson.ExitCode -ne 0){throw 'STREAM_INTEGRITY_INVALID'}
+           -not (Test-F2G1LT2JsonInteger $streamJson.ExitCode) -or
+           [long]$streamJson.ExitCode -ne 0){throw 'STREAM_INTEGRITY_INVALID'}
         $report.Verdict='SYNTHETIC_FIXTURE_PASS'
         $report.Code='PHYSICAL_FIXTURE_EVIDENCE_MATCHED'
         $report.FixtureObjects=23;$report.FixtureFiles=15;$report.Inventories=5
