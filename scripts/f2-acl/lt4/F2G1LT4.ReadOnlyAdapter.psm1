@@ -185,6 +185,71 @@ function Get-F2G1LT4PhysicalChildren($Map,[string]$Label) {
 }
 
 
+# Only the first R2 STOP category and a finite, R2-defined code may leave the
+# private evaluator. Never forward raw Gate.Name, Gate.Data, SDDL or object paths.
+function ConvertTo-F2G1LT4SanitizedR2Stop {
+    param([object]$R2Report)
+    $default=[pscustomobject]@{Stage='R2_STOP_NOT_REPORTED';Code='R2_STOP_NOT_REPORTED'}
+    if($null -eq $R2Report){return $default}
+    $stages=@('ExecutionContext','ImmediateChildInventory','TransactionArtifacts',
+        'ActiveManifest','BaselineMailbox','BaselineMailboxInventory','BaselineHashes',
+        'BaselineJson','BaselineRecords','BaselineIntegrity','BaselineStreams',
+        'BaselineFrame','BaselineCoordinator','BaselineEvidence')
+    $allowedCodes=@(
+        'ADMINISTRATOR_TOKEN_OR_GROUP_MEMBERSHIP',
+        'CAPTURE_ID_OR_ELEVEN_RECORD_COMPLETENESS_INVALID',
+        'CHILD_TYPE_OR_REPARSE_INVALID',
+        'COORDINATOR_OR_OUTPUT_COMPLETENESS_INVALID',
+        'EXACT_ELEVEN_PATH_SET_INVALID',
+        'FOUR_ACE_PROFILE_MISMATCH',
+        'FRAME_HEADER_INVALID',
+        'FRAME_LENGTH_INVALID',
+        'FRAME_PAYLOAD_OR_DIGEST_INVALID',
+        'HISTORICAL_HASH_MISMATCH',
+        'INCOMPLETE_STREAM_OUTPUT',
+        'INVENTORY_FAILED',
+        'MALFORMED_OR_INCOMPLETE_OUTPUT',
+        'MALFORMED_STREAM_OUTPUT',
+        'MANIFEST_BASELINE_OR_SOURCE_PIN_MISMATCH',
+        'MANIFEST_FILE_SET_INVALID',
+        'MANIFEST_IDENTITY_MISMATCH',
+        'MANIFEST_JSON_INVALID',
+        'MANIFEST_SHA256_MISMATCH',
+        'MISSING_OR_REPARSE',
+        'MISSING_TYPE_OR_REPARSE',
+        'MISSING_TYPE_REPARSE_OR_READ_RACE',
+        'OBJECT_TYPE_MISMATCH',
+        'OWNER_OR_DACL_POLICY_MISMATCH',
+        'PACKAGE_HASH_MISMATCH',
+        'PATH_OR_ACL_UNREADABLE',
+        'PAYLOAD_OR_PROVENANCE_BINDING_INVALID',
+        'READ_FAILED',
+        'REPARSE_CHILD',
+        'REQUIRED_CHILD_MISSING',
+        'SEVEN_FILE_SET_INVALID',
+        'STATUS_JSON_INVALID',
+        'STREAM_HASH_MISMATCH',
+        'TRANSACTION_ARTIFACT_PRESENT',
+        'TYPE_REPARSE_OWNER_DACL_OR_READ_RACE',
+        'UNEXPECTED_CHILD',
+        'WORKER_DIAGNOSTIC_HASH_MISMATCH',
+        'WORKER_DIAGNOSTIC_MANIFEST_INVALID'
+    )
+    foreach($gate in @($R2Report.Gates)){
+        if($null -eq $gate -or [string]$gate.Result -cne 'STOP'){continue}
+        $name=[string]$gate.Name
+        $stage='R2_UNCLASSIFIED_STAGE'
+        if($name.StartsWith('Path:',[StringComparison]::Ordinal)){$stage='Path'}
+        elseif($name.StartsWith('PackageFile:',[StringComparison]::Ordinal)){$stage='PackageFile'}
+        elseif($name.StartsWith('BaselineFile:',[StringComparison]::Ordinal)){$stage='BaselineFile'}
+        elseif($stages -ccontains $name){$stage=$name}
+        $rawCode=if($null -eq $gate.Data){''}else{[string]$gate.Data.Code}
+        $code=if($allowedCodes -ccontains $rawCode){$rawCode}else{'R2_UNCLASSIFIED_STOP'}
+        return [pscustomobject]@{Stage=$stage;Code=$code}
+    }
+    return $default
+}
+
 function Invoke-F2G1LT4R2HistoricalPolicy($Map) {
     # Reuse unchanged R2 semantics with physically read bytes/ACLs.
     # Its public legacy -Live entrypoint stays disabled.
@@ -221,7 +286,11 @@ function Invoke-F2G1LT4R2HistoricalPolicy($Map) {
     # without changing or making R2's live entrypoint reachable.
     $result=@($r2.Invoke([scriptblock]::Create('param($Provider) Invoke-F2G1Core -Provider $Provider'),@($provider)))
     if($result.Count -ne 1){throw 'R2_POLICY_BRIDGE_INVALID'}
-    return [pscustomobject]@{Executed=$true;FixtureVerdict=[string]$result[0].Verdict}
+    $stop=ConvertTo-F2G1LT4SanitizedR2Stop -R2Report $result[0]
+    return [pscustomobject]@{
+        Executed=$true;FixtureVerdict=[string]$result[0].Verdict
+        StopStage=$stop.Stage;StopCode=$stop.Code
+    }
 }
 
 function Invoke-F2G1LT4Fixture {
@@ -233,6 +302,7 @@ function Invoke-F2G1LT4Fixture {
         ProtectedReads=0;HostAttestation='NOT_PERFORMED'
         HistoricalV2='NOT_ATTESTED_FIXTURE_ONLY';LinkAndAds='LINK_ADS_NOT_ATTESTED'
         R2PolicyEvaluated=$false;R2FixtureVerdict='NOT_RUN'
+        R2StopStage='NOT_EVALUATED';R2StopCode='NOT_EVALUATED'
     }
     try {
         $map=New-F2G1LT4PathMap 'Fixture' $FixtureRoot
@@ -248,6 +318,8 @@ function Invoke-F2G1LT4Fixture {
         $r2policy=Invoke-F2G1LT4R2HistoricalPolicy $map
         $out.R2PolicyEvaluated=$r2policy.Executed
         $out.R2FixtureVerdict=$r2policy.FixtureVerdict
+        $out.R2StopStage=$r2policy.StopStage
+        $out.R2StopCode=$r2policy.StopCode
         $reference=Get-F2G1LT3ReferenceContract
         $package=@()
         foreach($pin in @($reference.PackageMembers)){
@@ -296,6 +368,7 @@ function Invoke-F2G1LT4OwnerHostReadOnly {
         ProtectedAccessAttempted=$false;ObservedObjects=0;ObservedFiles=0;ObservedInventories=0
         HistoricalV2='NOT_ATTESTED';LinkAndAds='LINK_ADS_NOT_ATTESTED'
         GVolumeAccess=$false;WritesPerformed=$false;Elevated=$false
+        R2StopStage='NOT_EVALUATED';R2StopCode='NOT_EVALUATED'
     }
     try {
         # No hosted CI or non-Windows environment can ever take a host-read path.
@@ -357,6 +430,8 @@ function Invoke-F2G1LT4OwnerHostReadOnly {
             }
             # The unchanged R2 Live *semantic core*, not its disabled Live entrypoint.
             $evaluated=Invoke-F2G1LT4R2HistoricalPolicy $map
+            $report.R2StopStage=[string]$evaluated.StopStage
+            $report.R2StopCode=[string]$evaluated.StopCode
             if(-not $evaluated.Executed -or $evaluated.FixtureVerdict -cne 'PASS_READ_ONLY_C_POSTFAILURE_ATTESTATION'){
                 throw 'R2_HISTORICAL_POLICY_NOT_MATCHED'
             }
