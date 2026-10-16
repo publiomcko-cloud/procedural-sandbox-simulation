@@ -316,9 +316,9 @@ function Invoke-F2G1LT4OwnerHostReadOnly {
         } finally {$identity.Dispose()}
         if(-not (Test-F2G1LT4ActualToken)){throw 'STANDARD_TOKEN_REQUIRED'}
         # Read only source bytes from this checkout, never a protected C: target.
-        $sourceHash=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256 -ErrorAction Stop).Hash
-        # PSCommandPath is the module path for functions defined in this module.
-        if([string]::IsNullOrWhiteSpace($sourceHash)){throw 'SOURCE_IDENTITY_UNAVAILABLE'}
+        $self=Get-Module -Name F2G1LT4.ReadOnlyAdapter -ErrorAction Stop
+        if($null -eq $self -or [string]::IsNullOrWhiteSpace([string]$self.Path)){throw 'SOURCE_IDENTITY_UNAVAILABLE'}
+        $sourceHash=(Get-FileHash -LiteralPath $self.Path -Algorithm SHA256 -ErrorAction Stop).Hash
         if($sourceHash -cne $ReviewedAdapterSha256.ToUpperInvariant()){throw 'REVIEWED_SOURCE_HASH_MISMATCH'}
         if($script:ProtectedHostAccessEnabled){throw 'HOST_REENTRANCY_DENIED'}
         $script:ProtectedHostAccessEnabled=$true
