@@ -106,4 +106,61 @@ function Test-F2G1LT3ReferenceDeclarations {
     return [pscustomobject]$out
 }
 
-Export-ModuleMember -Function Get-F2G1LT3ReferenceContract,Get-F2G1LT3Readiness,Test-F2G1LT3ReferenceDeclarations
+
+function Test-F2G1LT3CapturedBytes {
+    param([object]$Capture)
+    # Pure CPU/memory evaluation; only physically sourced bytes can ultimately
+    # establish physical matching. No caller-supplied digest can replace bytes.
+    $report=[ordered]@{
+        Schema='f2-g1-lt3-bytes-preflight-v1'
+        Verdict='BLOCKED_WITH_EVIDENCE'
+        Code='CAPTURE_INCOMPLETE'
+        ProtectedReads=0
+        HostAttestation='NOT_PERFORMED'
+        TrustedOrigin=$false
+    }
+    try {
+        if($null -eq $Capture){throw 'CAPTURE_INCOMPLETE'}
+        $contract=Get-F2G1LT3ReferenceContract
+        $expected=New-Object 'System.Collections.Generic.Dictionary[string,string]' ([StringComparer]::Ordinal)
+        foreach($item in @($contract.PackageMembers)){$expected.Add($item.Path,$item.Sha256)}
+        $members=@($Capture.PackageMembers)
+        if($members.Count -ne 7){throw 'PACKAGE_BYTES_SET_INVALID'}
+        $seen=New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+        $sha=[Security.Cryptography.SHA256]::Create()
+        try {
+            foreach($member in $members){
+                $label=[string]$member.Path
+                if(-not $expected.ContainsKey($label) -or -not $seen.Add($label)){throw 'PACKAGE_BYTES_SET_INVALID'}
+                $bytes=$member.Bytes
+                if($null -eq $bytes -or $bytes -isnot [byte[]] -or $bytes.Length -le 0 -or $bytes.Length -gt 16777216){throw 'PACKAGE_BYTES_INVALID'}
+                $actual=([BitConverter]::ToString($sha.ComputeHash([byte[]]$bytes))).Replace('-','').ToLowerInvariant()
+                if($actual -cne $expected[$label]){throw 'PACKAGE_BYTES_HASH_MISMATCH'}
+            }
+            foreach($item in @($contract.PackageMembers)){
+                if(-not $seen.Contains($item.Path)){throw 'PACKAGE_BYTES_SET_INVALID'}
+            }
+            foreach($spec in @(
+                @{Value=$Capture.ManifestBytes;Limit=65536;Expected=$contract.ManifestSha256},
+                @{Value=$Capture.PayloadBytes;Limit=1048576;Expected=$contract.PayloadSha256},
+                @{Value=$Capture.IntegrityBytes;Limit=65536;Expected=$contract.IntegritySha256}
+            )){
+                $b=$spec.Value
+                if($null -eq $b -or $b -isnot [byte[]] -or $b.Length -le 0 -or $b.Length -gt [int]$spec.Limit){throw 'BASELINE_BYTES_INVALID'}
+                $actual=([BitConverter]::ToString($sha.ComputeHash([byte[]]$b))).Replace('-','').ToLowerInvariant()
+                if($actual -cne $spec.Expected){throw 'BASELINE_BYTES_HASH_MISMATCH'}
+            }
+        } finally {$sha.Dispose()}
+        $report.Code='BYTES_MATCH_HISTORICAL_PINS_ORIGIN_UNVERIFIED'
+        # No operational PASS: provenance/ACLs/inventories and complete historical
+        # evidence are separately required, and are not checked by this function.
+    } catch {
+        $report.Code='CAPTURE_UNCLASSIFIED_BLOCKED'
+        foreach($code in @('CAPTURE_INCOMPLETE','PACKAGE_BYTES_SET_INVALID','PACKAGE_BYTES_INVALID','PACKAGE_BYTES_HASH_MISMATCH','BASELINE_BYTES_INVALID','BASELINE_BYTES_HASH_MISMATCH')){
+            if($_.Exception.Message -ceq $code){$report.Code=$code;break}
+        }
+    }
+    return [pscustomobject]$report
+}
+
+Export-ModuleMember -Function Get-F2G1LT3ReferenceContract,Get-F2G1LT3Readiness,Test-F2G1LT3ReferenceDeclarations,Test-F2G1LT3CapturedBytes
