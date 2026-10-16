@@ -102,6 +102,11 @@ jobs:
                         StdoutFirstMismatch=[int]$candidate.StdoutFirstMismatch;StderrFirstMismatch=[int]$candidate.StderrFirstMismatch
                         StdoutMismatchCount=[int]$candidate.StdoutMismatchCount;StderrMismatchCount=[int]$candidate.StderrMismatchCount
                         StdoutEndsWithCRLF=[bool]$candidate.StdoutEndsWithCRLF;StderrEndsWithCRLF=[bool]$candidate.StderrEndsWithCRLF
+                        StdoutNulCount=[int]$candidate.StdoutNulCount;StderrNulCount=[int]$candidate.StderrNulCount
+                        StdoutPrintableAsciiCount=[int]$candidate.StdoutPrintableAsciiCount;StderrPrintableAsciiCount=[int]$candidate.StderrPrintableAsciiCount
+                        StdoutReplacementCharCount=[int]$candidate.StdoutReplacementCharCount;StderrReplacementCharCount=[int]$candidate.StderrReplacementCharCount
+                        StdoutObservedHashPrefix=if([string]$candidate.StdoutObservedHashPrefix -match '^[0-9a-f]{12}$'){[string]$candidate.StdoutObservedHashPrefix}else{'INVALID_FORMAT'}
+                        StderrObservedHashPrefix=if([string]$candidate.StderrObservedHashPrefix -match '^[0-9a-f]{12}$'){[string]$candidate.StderrObservedHashPrefix}else{'INVALID_FORMAT'}
                         StdoutMarker=[bool]$candidate.StdoutMarker;StderrMarker=[bool]$candidate.StderrMarker
                         StdoutHashFormat=[bool]$candidate.StdoutHashFormat;StderrHashFormat=[bool]$candidate.StderrHashFormat
                         StdoutExpectedHash=[bool]$candidate.StdoutExpectedHash;StderrExpectedHash=[bool]$candidate.StderrExpectedHash
