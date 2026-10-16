@@ -1,0 +1,137 @@
+name: F2 G1 broad CI fail-only source diagnostics
+on:
+  push:
+    branches: [diagnostics/f2-g1-broad-ci-fail-only-v1]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-synthetic-triage:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [Protocol, Icacls]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Execute original synthetic suite with sanitized bounded report
+        shell: powershell
+        env:
+          F2_TRIAGE_SUITE: ${{ matrix.suite }}
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-StrictMode -Version Latest
+          if ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_OS -cne 'Windows' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted') {
+              throw 'HOSTED_DISPOSABLE_WINDOWS_ONLY'
+          }
+          $suite=[string]$env:F2_TRIAGE_SUITE
+          if ($suite -cnotin @('Protocol','Icacls')) { throw 'INVALID_TRIAGE_SUITE' }
+          $testLeaf=if($suite -ceq 'Protocol'){'Test-F2AclCapture.Protocol.ps1'}else{'Test-F2AclIcacls.Corroboration.ps1'}
+          $testPath=(Resolve-Path (Join-Path 'scripts\f2-acl' $testLeaf)).Path
+          $psExe=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          $workRoot=Join-Path $env:RUNNER_TEMP ('f2-broad-triage-'+[guid]::NewGuid().ToString('N'))
+          [void][IO.Directory]::CreateDirectory($workRoot)
+          $failures=0
+          try {
+            for($i=1;$i -le 3;$i++){
+              $stdoutFile=Join-Path $workRoot ('out'+$i+'.tmp')
+              $stderrFile=Join-Path $workRoot ('err'+$i+'.tmp')
+              $clock=[Diagnostics.Stopwatch]::StartNew()
+              $process=$null;$started=$false;$timedOut=$false;$exitCode=$null;$startClass='NONE'
+              try {
+                $process=Start-Process -FilePath $psExe -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"' + $testPath + '"')) -PassThru -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile -ErrorAction Stop
+                $started=$true
+                if(-not $process.WaitForExit(180000)){
+                  $timedOut=$true
+                  try{$process.Kill()}catch{}
+                  try{[void]$process.WaitForExit(3000)}catch{}
+                }
+                if($process.HasExited){$exitCode=[int]$process.ExitCode}
+              } catch {
+                # Exception *class* only; no messages, paths or process arguments.
+                $known=@('Win32Exception','InvalidOperationException','UnauthorizedAccessException','IOException')
+                $candidate=$_.Exception.GetType().Name
+                $startClass=if($known -ccontains $candidate){$candidate}else{'OTHER_REDACTED'}
+              } finally {
+                $clock.Stop()
+                if($null -ne $process){try{$process.Dispose()}catch{}}
+              }
+              $stdoutBytes=if([IO.File]::Exists($stdoutFile)){[long]([IO.FileInfo]$stdoutFile).Length}else{0L}
+              $stderrBytes=if([IO.File]::Exists($stderrFile)){[long]([IO.FileInfo]$stderrFile).Length}else{0L}
+              $maxCapture=1048576L
+              $captureOversize=($stdoutBytes -gt $maxCapture -or $stderrBytes -gt $maxCapture)
+              $outLines=@();$errLines=@()
+              if(-not $captureOversize){
+                if([IO.File]::Exists($stdoutFile)){$outLines=@([IO.File]::ReadAllLines($stdoutFile))}
+                if([IO.File]::Exists($stderrFile)){$errLines=@([IO.File]::ReadAllLines($stderrFile))}
+              }
+              $allowedStage=@('bounded_partial_pipe_read','fresh_process_imported_module_serialization_frame_and_worker_diagnostics',
+                'production_encoded_worker_success','production_encoded_worker_preframe_failure',
+                'production_encoded_worker_exit_before_frame','production_encoded_worker_arguments_and_pins',
+                'production_encoded_worker_publication_failures','production_encoded_worker_parse_start_timeout_and_oversize',
+                'absolute_worker_and_pipe_deadline','restricted_local_evidence_directory')
+              $stage='NONE'
+              $totalAssertions=$null;$assertionFailures=$null;$observedFailures=0
+              $captureProbe=$null
+              foreach($line in $outLines){
+                $t=[string]$line
+                if($t -match '^Stage=([a-z_]{1,90})$'){
+                  if($allowedStage -ccontains $Matches[1]){$stage=$Matches[1]}else{$stage='OTHER_STAGE_REDACTED'}
+                }
+                if($t -match '^Assertions=(\d{1,5});\s*Failures=(\d{1,5})$'){
+                  $totalAssertions=[int]$Matches[1];$assertionFailures=[int]$Matches[2]
+                }
+                if($t -match '^FAIL(?::|=)'){$observedFailures++}
+                if($t.StartsWith('F2_ICACLS_CAPTURE_DIAG=')){
+                  try {
+                    $candidate=$t.Substring('F2_ICACLS_CAPTURE_DIAG='.Length)|ConvertFrom-Json -ErrorAction Stop
+                    if($candidate.Schema -ceq 'f2-icacls-synthetic-capture-failure-v1'){
+                      $captureProbe=[ordered]@{
+                        Started=[bool]$candidate.Started;ExitCode=$candidate.ExitCode
+                        TimedOut=[bool]$candidate.TimedOut;OutputComplete=[bool]$candidate.OutputComplete
+                        CleanupComplete=[bool]$candidate.CleanupComplete;Truncated=[bool]$candidate.Truncated
+                        ReaderClass=if(@('NONE','RedirectedStreamReadFailed','RedirectedStreamDrainDeadlineExceeded','ChildTerminationFailed','ChildTerminationWaitFailed','OutputLimitExceeded','OTHER_REDACTED') -ccontains [string]$candidate.ReaderClass){[string]$candidate.ReaderClass}else{'OTHER_REDACTED'}
+                        ElapsedMilliseconds=[int64]$candidate.ElapsedMilliseconds
+                        StdoutClass=if(@('EXPECTED_CRLF','SWAPPED_WITH_STDERR','LINE_ENDING_ONLY','OTHER_REDACTED') -ccontains [string]$candidate.StdoutClass){[string]$candidate.StdoutClass}else{'OTHER_REDACTED'}
+                        StderrClass=if(@('EXPECTED_CRLF','SWAPPED_WITH_STDOUT','LINE_ENDING_ONLY','OTHER_REDACTED') -ccontains [string]$candidate.StderrClass){[string]$candidate.StderrClass}else{'OTHER_REDACTED'}
+                        StdoutLength=[int]$candidate.StdoutLength;StderrLength=[int]$candidate.StderrLength
+                        StdoutMarker=[bool]$candidate.StdoutMarker;StderrMarker=[bool]$candidate.StderrMarker
+                        StdoutHashFormat=[bool]$candidate.StdoutHashFormat;StderrHashFormat=[bool]$candidate.StderrHashFormat
+                        StdoutExpectedHash=[bool]$candidate.StdoutExpectedHash;StderrExpectedHash=[bool]$candidate.StderrExpectedHash
+                        StdoutHashMatchesText=[bool]$candidate.StdoutHashMatchesText;StderrHashMatchesText=[bool]$candidate.StderrHashMatchesText
+                      }
+                    }
+                  }catch{$captureProbe=[ordered]@{Status='DIAGNOSTIC_PARSE_FAILED'}}
+                }
+              }
+              foreach($line in $errLines){if(([string]$line) -match '^FAIL(?::|=)'){$observedFailures++}}
+              $pass=($started -and -not $timedOut -and $exitCode -eq 0 -and -not $captureOversize -and $observedFailures -eq 0)
+              $record=[ordered]@{
+                Schema='f2-g1-broad-ci-fail-only-v1';Suite=$suite;Iteration=$i
+                Started=$started;ExitCode=$exitCode;TimedOut=$timedOut
+                StartClass=$startClass;ElapsedMilliseconds=[int64]$clock.ElapsedMilliseconds
+                StdoutBytes=$stdoutBytes;StderrBytes=$stderrBytes
+                OutputTooLarge=$captureOversize;KnownLastStage=$stage
+                AssertionCount=$totalAssertions;ReportedFailures=$assertionFailures
+                VisibleFailureLines=$observedFailures;SyntheticIcaclsCapture=$captureProbe
+                Pass=$pass
+              }
+              Write-Output ('F2_BROAD_CI_TRIAGE='+($record|ConvertTo-Json -Compress -Depth 5))
+              if(-not $pass){$failures++}
+            }
+          } finally {
+            # Logs are never printed, published as artifacts, or retained.
+            if([IO.Directory]::Exists($workRoot)){Remove-Item -LiteralPath $workRoot -Recurse -Force -ErrorAction Stop}
+          }
+          Write-Output ('F2_BROAD_CI_TRIAGE_SUMMARY='+($suite+';Executions=3;Failed='+$failures))
+          if($failures -gt 0){exit 1}
+      - name: Verify bounded diff
+        if: always()
+        shell: powershell
+        run: |
+          git diff --check
+          if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
