@@ -70,8 +70,13 @@ if($result.Code -ceq 'FIXTURE_OBSERVATION_FAILED_CLOSED'){
     $inner=$_.Exception.InnerException
     $innerType=if($null -eq $inner){'NONE'}else{$inner.GetType().Name}
     $innerInner=if($null -eq $inner -or $null -eq $inner.InnerException){'NONE'}else{$inner.InnerException.GetType().Name}
+    $deep=if($null -eq $inner){$null}else{$inner.InnerException}
+    $safeMessage=if($null -eq $deep){'NONE'}else{[string]$deep.Message}
+    $safeMessage=$safeMessage -replace '[A-Za-z]:\\[^\s\r\n]+','[PATH]' -replace 'S-1-5-\d+(-\d+)*','[SID]'
+    if($safeMessage.Length -gt 180){$safeMessage=$safeMessage.Substring(0,180)}
     Write-Output ('LT4_SYNTHETIC_BRIDGE_CLASS='+$_.Exception.GetType().Name+
-       ';INNER='+$innerType+';INNER_INNER='+$innerInner+';LINE='+[int]$_.InvocationInfo.ScriptLineNumber)
+       ';INNER='+$innerType+';INNER_INNER='+$innerInner+';LINE='+[int]$_.InvocationInfo.ScriptLineNumber+
+       ';DETAIL='+$safeMessage)
   }
 }
 $after=Snapshot $root
