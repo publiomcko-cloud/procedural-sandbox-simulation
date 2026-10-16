@@ -104,7 +104,11 @@ Check ($noargsCode -eq 2 -and $noargsStatus.Verdict -ceq 'BLOCKED_WITH_EVIDENCE'
 $ciIdentity=[Security.Principal.WindowsIdentity]::GetCurrent()
 try {$ciSid=[string]$ciIdentity.User.Value}finally{$ciIdentity.Dispose()}
 $ciModuleHash=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'F2G1LT4.ReadOnlyAdapter.psm1') -Algorithm SHA256).Hash
-$falseOptIn=@(& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $hostCli '-InspectFixedHostC:$false' -ExpectedComputerName ([Environment]::MachineName) -ExpectedUserSid $ciSid -ReviewedAdapterSha256 $ciModuleHash)
+# powershell.exe -File marshals switch values as strings on Windows PS5.1.
+# -EncodedCommand executes native PowerShell parameter binding INSIDE the child.
+$probe="& '$($hostCli.Replace("'","''"))' -InspectFixedHostC:`$false -ExpectedComputerName '$([Environment]::MachineName)' -ExpectedUserSid '$ciSid' -ReviewedAdapterSha256 '$ciModuleHash'"
+$probeEncoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($probe))
+$falseOptIn=@(& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $probeEncoded)
 $falseOptInCode=$LASTEXITCODE
 $falseResult=($falseOptIn -join [Environment]::NewLine)|ConvertFrom-Json
 Check ($falseOptInCode -eq 2 -and
