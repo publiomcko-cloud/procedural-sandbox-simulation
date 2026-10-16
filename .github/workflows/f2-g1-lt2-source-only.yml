@@ -1,7 +1,7 @@
 name: F2 G1 LT2 trusted-local disposable Windows fixture
 on:
   push:
-    branches: [feat/f2-g1-lt2-trusted-local-fixture-v1, fix/f2-g1-lt2-semantic-evidence-integrity-v1]
+    branches: [feat/f2-g1-lt2-trusted-local-fixture-v1, fix/f2-g1-lt2-semantic-evidence-integrity-v1, fix/f2-g1-lt2-json-integer-semantics-v1]
     paths:
       - 'scripts/f2-acl/lt2/**'
       - '.github/workflows/f2-g1-lt2-source-only.yml'
