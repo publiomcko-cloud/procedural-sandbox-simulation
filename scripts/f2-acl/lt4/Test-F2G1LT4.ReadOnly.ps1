@@ -111,7 +111,8 @@ $probeEncoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($probe
 $falseOptIn=@(& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $probeEncoded)
 $falseOptInCode=$LASTEXITCODE
 $falseResult=($falseOptIn -join [Environment]::NewLine)|ConvertFrom-Json
-$falseSwitchBlocked=($falseOptInCode -eq 2 -and
+# EncodedCommand on Windows PowerShell 5.1 may normalize nested nonzero exits to 1.
+$falseSwitchBlocked=($falseOptInCode -ne 0 -and
   $falseResult.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and
   $falseResult.Code -ceq 'HOST_ADAPTER_EXECUTION_NOT_AUTHORIZED' -and
   $falseResult.ProtectedReads -eq 0 -and
