@@ -192,8 +192,22 @@ if(-not $firstCapturePass){
     }
     $outClass=if($observedOut -ceq $expectedOut){'EXPECTED_CRLF'}elseif($observedOut -ceq ("fixture-stderr`r`n")){'SWAPPED_WITH_STDERR'}elseif($observedOut.TrimEnd("`r","`n") -ceq 'fixture-stdout'){'LINE_ENDING_ONLY'}else{'OTHER_REDACTED'}
     $errClass=if($observedErr -ceq $expectedErr){'EXPECTED_CRLF'}elseif($observedErr -ceq ("fixture-stdout`r`n")){'SWAPPED_WITH_STDOUT'}elseif($observedErr.TrimEnd("`r","`n") -ceq 'fixture-stderr'){'LINE_ENDING_ONLY'}else{'OTHER_REDACTED'}
+    # Difference *positions*, not raw observed characters or output.
+    $outFirst=-1;$errFirst=-1;$outDiffs=0;$errDiffs=0
+    for($n=0;$n -lt [Math]::Min($observedOut.Length,$expectedOut.Length);$n++){
+        if($observedOut[$n] -cne $expectedOut[$n]){if($outFirst -lt 0){$outFirst=$n};$outDiffs++}
+    }
+    for($n=0;$n -lt [Math]::Min($observedErr.Length,$expectedErr.Length);$n++){
+        if($observedErr[$n] -cne $expectedErr[$n]){if($errFirst -lt 0){$errFirst=$n};$errDiffs++}
+    }
+    if($outFirst -eq -1 -and $observedOut.Length -ne $expectedOut.Length){$outFirst=[Math]::Min($observedOut.Length,$expectedOut.Length)}
+    if($errFirst -eq -1 -and $observedErr.Length -ne $expectedErr.Length){$errFirst=[Math]::Min($observedErr.Length,$expectedErr.Length)}
     $diag=[ordered]@{
         Schema='f2-icacls-synthetic-capture-failure-v1'
+        StdoutFirstMismatch=$outFirst;StderrFirstMismatch=$errFirst
+        StdoutMismatchCount=$outDiffs;StderrMismatchCount=$errDiffs
+        StdoutEndsWithCRLF=[bool]$observedOut.EndsWith("`r`n")
+        StderrEndsWithCRLF=[bool]$observedErr.EndsWith("`r`n")
         Started=[bool]$proc.Started;ExitCode=$proc.ExitCode;TimedOut=[bool]$proc.TimedOut
         OutputComplete=[bool]$proc.OutputComplete;CleanupComplete=[bool]$proc.CleanupComplete
         Truncated=[bool]$proc.Truncated;ReaderClass=$readerCategory
