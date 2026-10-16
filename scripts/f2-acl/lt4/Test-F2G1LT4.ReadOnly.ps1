@@ -138,6 +138,48 @@ Check ($direct.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and
   $direct.Code -ceq 'HOST_RUN_CONTEXT_REJECTED' -and
   -not $direct.ProtectedAccessAttempted) 'direct module host invocation denies in CI'
 
+# LT-4 diagnostic-only bridge unit probes: pure in-memory R2-shaped gates.
+# No invocation of host mapping or protected C: from any of these probes.
+$lt4Module=Get-Module F2G1LT4.ReadOnlyAdapter
+function InspectSanitizedR2Stop([object]$Report){
+    $result=@($lt4Module.Invoke([scriptblock]::Create(
+        'param($R) ConvertTo-F2G1LT4SanitizedR2Stop -R2Report $R'),@($Report)))
+    if($result.Count -ne 1){throw 'SANITIZED_R2_STOP_RESULT_CARDINALITY'}
+    return $result[0]
+}
+$secret='C:\Users\PRIVATE-DO-NOT-EMIT\secret.sddl'
+$mockStop=[pscustomobject]@{Gates=@(
+    [pscustomobject]@{Name='ExecutionContext';Result='PASS';Data=@{Private=$secret}},
+    [pscustomobject]@{Name=('Path:'+$secret);Result='STOP';Data=@{
+        Code='OWNER_OR_DACL_POLICY_MISMATCH';Sddl=$secret;Sid=$secret
+    }},
+    [pscustomobject]@{Name='BaselineIntegrity';Result='STOP';Data=@{Code='STREAM_HASH_MISMATCH'}}
+)}
+$first=InspectSanitizedR2Stop $mockStop
+$firstJson=ConvertTo-Json -InputObject $first -Compress
+Check ($first.Stage -ceq 'Path' -and
+    $first.Code -ceq 'OWNER_OR_DACL_POLICY_MISMATCH' -and
+    $firstJson -notmatch 'PRIVATE-DO-NOT-EMIT|secret\.sddl|Sddl|Sid' -and
+    @($first.PSObject.Properties).Count -eq 2) 'first R2 STOP: fixed category/code only; paths, SDDL, SID never propagated'
+$second=InspectSanitizedR2Stop ([pscustomobject]@{Gates=@(
+    [pscustomobject]@{Name='ActiveManifest';Result='STOP';Data=@{Code='MANIFEST_JSON_INVALID'}}
+)})
+Check ($second.Stage -ceq 'ActiveManifest' -and
+    $second.Code -ceq 'MANIFEST_JSON_INVALID') 'named R2 stage and documented code preserved'
+$unknown=InspectSanitizedR2Stop ([pscustomobject]@{Gates=@(
+    [pscustomobject]@{Name=('FORGED:'+$secret);Result='STOP';Data=@{Code=$secret}}
+)})
+Check ($unknown.Stage -ceq 'R2_UNCLASSIFIED_STAGE' -and
+    $unknown.Code -ceq 'R2_UNCLASSIFIED_STOP' -and
+    (ConvertTo-Json -InputObject $unknown -Compress) -notmatch 'PRIVATE-DO-NOT-EMIT') 'unknown or private R2 gate fields fail closed'
+$empty=InspectSanitizedR2Stop ([pscustomobject]@{Gates=@(
+    [pscustomobject]@{Name='ExecutionContext';Result='PASS';Data=@{}}
+)})
+Check ($empty.Stage -ceq 'R2_STOP_NOT_REPORTED' -and
+    $empty.Code -ceq 'R2_STOP_NOT_REPORTED') 'no STOP never fabricated into a matching gate'
+Check ($result.R2StopStage -cne 'NOT_EVALUATED' -and
+    $result.R2StopCode -cne 'NOT_EVALUATED') 'physical disposable fixture propagates R2 first-stop diagnostics'
+
 Write-Output ('LT4_ASSERTIONS='+$script:Assertions+' FAILURES='+$script:Failures)
 if($script:Failures -ne 0){exit 1}
 exit 0
