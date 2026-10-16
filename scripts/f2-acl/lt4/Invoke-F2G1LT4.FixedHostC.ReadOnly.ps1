@@ -20,7 +20,9 @@ if($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne
 }
 try {
     Import-Module (Join-Path $PSScriptRoot 'F2G1LT4.ReadOnlyAdapter.psm1') -Force -ErrorAction Stop
-    if($PSCmdlet.ParameterSetName -ceq 'Host'){
+    # Mandatory switch binding can select Host even with -InspectFixedHostC:$false.
+    # Require an affirmative switch value; otherwise do not invoke the reader.
+    if($PSCmdlet.ParameterSetName -ceq 'Host' -and $InspectFixedHostC.IsPresent){
         $result=Invoke-F2G1LT4OwnerHostReadOnly -ExpectedComputerName $ExpectedComputerName -ExpectedUserSid $ExpectedUserSid -ReviewedAdapterSha256 $ReviewedAdapterSha256
     } else {
         $result=Get-F2G1LT4HostReadiness
