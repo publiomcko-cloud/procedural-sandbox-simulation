@@ -67,6 +67,11 @@ Check ($result.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and $result.ProtectedReads 
 Check ($result.PhysicalObjects -eq 23 -and $result.PhysicalFiles -eq 15 -and
  $result.PhysicalInventories -eq 5) 'all 23 objects, 15 files and five inventories read'
 Check ($result.R2PolicyEvaluated -and $result.R2FixtureVerdict -ceq 'BLOCKED_WITH_EVIDENCE') 'frozen R2 ACL/evidence policy invoked'
+# A freshly built NTFS fixture has an intentionally nonhistorical owner/DACL.
+# The R2 callback must return metadata, allowing R2 to reject that *policy*.
+# PATH_OR_ACL_UNREADABLE instead indicates callback/provider integration failure.
+Check ($result.R2StopStage -ceq 'Path' -and
+  $result.R2StopCode -ceq 'OWNER_OR_DACL_POLICY_MISMATCH') 'synthetic R2 callback reaches ACL policy rather than throwing during metadata read'
 Check ($result.Code -ceq 'HISTORICAL_PIN_MISMATCH_IN_DISPOSABLE_FIXTURE') 'synthetic bytes do not match R2 historical file pins'
 Check ($before -ceq $after) 'read-only observer preserved file bytes and DACLs'
 [IO.File]::WriteAllText((FixturePath $root 'C:\ProgramData\F2-G1-Icacls\unexpected.tmp'),'synthetic extra child')
