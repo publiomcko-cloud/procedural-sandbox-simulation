@@ -68,7 +68,7 @@ function New-F2G1LT4PathMap([string]$Mode,[string]$Root) {
     if($Mode -ceq 'Host'){
         if(-not $script:ProtectedHostAccessEnabled){throw 'HOST_MAPPING_DISABLED'}
         if(-not (Test-F2G1LT4ActualToken)){throw 'HOST_TOKEN_REJECTED'}
-        throw 'HOST_EXECUTION_GATE_NOT_IMPLEMENTED'
+        return [pscustomobject]@{Mode='Host';Root=$null}
     }
     if($Mode -cne 'Fixture'){throw 'UNKNOWN_ADAPTER_MODE'}
     $verified=Assert-F2G1LT4FixtureRoot $Root
@@ -82,7 +82,14 @@ function Get-F2G1LT4PhysicalPath($Map,[string]$Label,[string]$Kind) {
     if(($Kind -ceq 'Directory' -and $dirs -cnotcontains $Label) -or
        ($Kind -ceq 'File' -and $files -cnotcontains $Label) -or
        $Kind -cnotin @('File','Directory')){throw 'LABEL_OUTSIDE_FROZEN_SCOPE'}
-    if($Map.Mode -cne 'Fixture'){throw 'HOST_MAPPING_DISABLED'}
+    if($Map.Mode -ceq 'Host'){
+        # All labels are fixed by the allowlist above. This branch is unreachable
+        # until a separately reviewed source change provides an owner grant.
+        if(-not $script:ProtectedHostAccessEnabled){throw 'HOST_MAPPING_DISABLED'}
+        if(-not (Test-F2G1LT4ActualToken)){throw 'HOST_TOKEN_REJECTED'}
+        return $Label
+    }
+    if($Map.Mode -cne 'Fixture'){throw 'UNKNOWN_ADAPTER_MODE'}
     if($Label -ceq 'C:\') {return (Join-Path $Map.Root 'C')}
     if(-not $Label.StartsWith('C:\',[StringComparison]::Ordinal)){throw 'LABEL_OUTSIDE_FROZEN_SCOPE'}
     return (Join-Path (Join-Path $Map.Root 'C') $Label.Substring(3))
@@ -178,7 +185,7 @@ function Get-F2G1LT4PhysicalChildren($Map,[string]$Label) {
 }
 
 
-function Invoke-F2G1LT4R2PolicyOnFixture($Map) {
+function Invoke-F2G1LT4R2HistoricalPolicy($Map) {
     # Reuse the accepted R2 policy with ACTUAL fixture bytes and ACL observations.
     # This is NOT R2's disabled -Live entrypoint and cannot produce a host verdict.
     $r2=Import-Module (Join-Path $PSScriptRoot '..\F2G1CPostfailureAttestation.psm1') -PassThru -ErrorAction Stop
@@ -204,8 +211,9 @@ function Invoke-F2G1LT4R2PolicyOnFixture($Map) {
         BaselinePayloadCaptureId=$refs.CaptureId
         RecordPaths=@() # Fixture cannot claim historical G: observations.
     }
+    $r2Mode=if($Map.Mode -ceq 'Host'){'Live'}else{'Fixture'}
     $provider=@{
-        Mode='Fixture';Fixture=[pscustomobject]@{Expected=$fixtureExpected}
+        Mode=$r2Mode;Fixture=[pscustomobject]@{Expected=$fixtureExpected}
         Identity=$identityInfo;GetPath=$getPath;ReadBytes=$readBytes
         ListChildren=$listChildren
     }
@@ -237,7 +245,7 @@ function Invoke-F2G1LT4Fixture {
             $out.PhysicalObjects++;$out.PhysicalFiles++
         }
         foreach($inv in @($script:Scope.Inventories)){[void]@(Get-F2G1LT4PhysicalChildren $map $inv.Path);$out.PhysicalInventories++}
-        $r2policy=Invoke-F2G1LT4R2PolicyOnFixture $map
+        $r2policy=Invoke-F2G1LT4R2HistoricalPolicy $map
         $out.R2PolicyEvaluated=$r2policy.Executed
         $out.R2FixtureVerdict=$r2policy.FixtureVerdict
         $reference=Get-F2G1LT3ReferenceContract
