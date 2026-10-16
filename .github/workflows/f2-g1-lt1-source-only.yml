@@ -16,6 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Execute LT1 in-memory synthetic regression suite
         shell: powershell
         run: |
@@ -35,6 +36,7 @@ jobs:
           if ($LASTEXITCODE -ne 2) { throw 'Elevated mock did not fail closed' }
           & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\f2-acl\lt1\Invoke-F2G1LT1.SourceOnly.ps1" -SyntheticFault WrongHash
           if ($LASTEXITCODE -ne 2) { throw 'Changed mock content did not fail closed' }
+          exit 0
       - name: Retain R2 historical fixture regression
         shell: powershell
         run: |
@@ -43,5 +45,5 @@ jobs:
       - name: Whitespace check against parent
         shell: powershell
         run: |
-          git diff --check HEAD^ HEAD
+          git diff --check 29f90ef9b2310044e64d3acd775534559a404425 HEAD
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
