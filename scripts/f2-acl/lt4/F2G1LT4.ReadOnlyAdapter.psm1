@@ -235,7 +235,7 @@ function ConvertTo-F2G1LT4SanitizedR2Stop {
         'WORKER_DIAGNOSTIC_HASH_MISMATCH',
         'WORKER_DIAGNOSTIC_MANIFEST_INVALID'
     )
-    foreach($gate in @($R2Report.Gates)){
+    foreach($gate in $R2Report.Gates){
         if($null -eq $gate -or [string]$gate.Result -cne 'STOP'){continue}
         $name=[string]$gate.Name
         $stage='R2_UNCLASSIFIED_STAGE'
