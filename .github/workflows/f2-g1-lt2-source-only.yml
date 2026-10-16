@@ -1,0 +1,39 @@
+name: F2 G1 LT2 trusted-local disposable Windows fixture
+on:
+  push:
+    branches: [feat/f2-g1-lt2-trusted-local-fixture-v1]
+    paths:
+      - 'scripts/f2-acl/lt2/**'
+      - '.github/workflows/f2-g1-lt2-source-only.yml'
+      - 'docs/handoffs/F2_G1_LT2_DISPOSABLE_WINDOWS_FIXTURE.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lt2-disposable-windows-ps51:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Read-only file ACL and token fixture suite — PowerShell 5.1
+        shell: powershell
+        run: |
+          & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\f2-acl\lt2\Test-F2G1LT2.Fixture.ps1"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Retain unchanged LT1 and R2 synthetic regressions
+        shell: powershell
+        run: |
+          foreach ($f in @(
+            '.\scripts\f2-acl\lt1\Test-F2G1LT1.SourceOnly.ps1',
+            '.\scripts\f2-acl\Test-F2G1CPostfailureAttestation.SourceOnly.ps1')) {
+            & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $f
+            if ($LASTEXITCODE -ne 0) { throw "prior synthetic suite failed" }
+          }
+      - name: Check change set formatting
+        shell: powershell
+        run: |
+          git diff --check ff97bfd4c5d13cbe03bd6a0d5de3c37113b31e4e HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
