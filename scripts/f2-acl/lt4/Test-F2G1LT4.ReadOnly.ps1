@@ -61,6 +61,27 @@ Check ($token -is [bool]) 'actual process token classified'
 $root=CreateFixture
 $before=Snapshot $root
 $result=Invoke-F2G1LT4Fixture -FixtureRoot $root
+# Temporary disposable-CI-only diagnostic: *class names* only, no message,
+# path, SID, SDDL or bytes; removed before final review.
+$lt4Synthetic=(Get-Module F2G1LT4.ReadOnlyAdapter)
+$diagText='param($R) $Map=New-F2G1LT4PathMap "Fixture" $R; '+ 
+  '$getMetaCommand=Get-Command Get-F2G1LT4PhysicalMeta -CommandType Function; '+
+  '$getPath={param([string]$Label) & $getMetaCommand $Map $Label}.GetNewClosure(); '+
+  'try{$value=& $getPath "C:\\"; if($null -eq $value){"META_NULL"}else{"META_OK"}} '+
+  'catch{$_.Exception.GetType().Name}'
+try {
+  $syntheticDiag=@($lt4Synthetic.Invoke([scriptblock]::Create($diagText),@($root)))
+  $candidate=if($syntheticDiag.Count -eq 1){[string]$syntheticDiag[0]}else{'INVALID_CARDINALITY'}
+  $safe=@('META_NULL','META_OK','CommandNotFoundException','RuntimeException',
+      'PropertyNotFoundException','MethodInvocationException','ParameterBindingException',
+      'ItemNotFoundException','FileNotFoundException','UnauthorizedAccessException',
+      'InvalidOperationException','SessionStateException','ArgumentException',
+      'ParentContainsErrorRecordException','INVALID_CARDINALITY')
+  if($safe -cnotcontains $candidate){$candidate='OTHER_EXCEPTION_CLASS'}
+  Write-Output ('LT4_SYNTHETIC_CALLBACK_PROBE='+$candidate)
+} catch {
+  Write-Output ('LT4_SYNTHETIC_CALLBACK_PROBE=WRAPPER_EXCEPTION')
+}
 $after=Snapshot $root
 Check ($result.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and $result.ProtectedReads -eq 0 -and
  $result.HostAttestation -ceq 'NOT_PERFORMED') 'physical fixture cannot claim host pass'
