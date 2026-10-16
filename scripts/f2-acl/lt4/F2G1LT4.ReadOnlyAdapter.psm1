@@ -250,6 +250,19 @@ function ConvertTo-F2G1LT4SanitizedR2Stop {
     return $default
 }
 
+# A closure is a dynamic module. Resolve the original LT4 private commands
+# inside LT4 before capturing them, then invoke those bound FunctionInfo values
+# rather than looking up private function names inside the closure or R2 module.
+function New-F2G1LT4R2Callbacks($Map) {
+    $getMetaCommand=Get-Command Get-F2G1LT4PhysicalMeta -CommandType Function -ErrorAction Stop
+    $readBytesCommand=Get-Command Get-F2G1LT4PhysicalBytes -CommandType Function -ErrorAction Stop
+    $listChildrenCommand=Get-Command Get-F2G1LT4PhysicalChildren -CommandType Function -ErrorAction Stop
+    $getPath={param([string]$Label) & $getMetaCommand $Map $Label}.GetNewClosure()
+    $readBytes={param([string]$Label,[int]$Max) & $readBytesCommand $Map $Label $Max}.GetNewClosure()
+    $listChildren={param([string]$Label) @(& $listChildrenCommand $Map $Label)}.GetNewClosure()
+    return [pscustomobject]@{GetPath=$getPath;ReadBytes=$readBytes;ListChildren=$listChildren}
+}
+
 function Invoke-F2G1LT4R2HistoricalPolicy($Map) {
     # Reuse unchanged R2 semantics with physically read bytes/ACLs.
     # Its public legacy -Live entrypoint stays disabled.
@@ -275,16 +288,7 @@ function Invoke-F2G1LT4R2HistoricalPolicy($Map) {
             UserSid=$identityInfo.UserSid
         }
     }
-    # GetNewClosure() moves the callback to a dynamic module, where unexported
-    # LT4 functions are not name-resolvable. Bind each original-module private
-    # FunctionInfo explicitly; the closure captures its *command*, not a name.
-    # These are the same frozen-scope physical observers used by the host pre-read.
-    $getMetaCommand=Get-Command Get-F2G1LT4PhysicalMeta -CommandType Function -ErrorAction Stop
-    $readBytesCommand=Get-Command Get-F2G1LT4PhysicalBytes -CommandType Function -ErrorAction Stop
-    $listChildrenCommand=Get-Command Get-F2G1LT4PhysicalChildren -CommandType Function -ErrorAction Stop
-    $getPath={param([string]$Label) & $getMetaCommand $Map $Label}.GetNewClosure()
-    $readBytes={param([string]$Label,[int]$Max) & $readBytesCommand $Map $Label $Max}.GetNewClosure()
-    $listChildren={param([string]$Label) @(& $listChildrenCommand $Map $Label)}.GetNewClosure()
+    $callbacks=New-F2G1LT4R2Callbacks $Map
     $fixtureExpected=[pscustomobject]@{
         ManifestSha256=$refs.ManifestSha256
         ReviewedCommitSha=$refs.ReviewedSourceSha
@@ -295,32 +299,17 @@ function Invoke-F2G1LT4R2HistoricalPolicy($Map) {
     $r2Mode=if($Map.Mode -ceq 'Host'){'Live'}else{'Fixture'}
     $provider=@{
         Mode=$r2Mode;Fixture=[pscustomobject]@{Expected=$fixtureExpected}
-        Identity=$identityInfo;GetPath=$getPath;ReadBytes=$readBytes
-        ListChildren=$listChildren
+        Identity=$identityInfo;GetPath=$callbacks.GetPath;ReadBytes=$callbacks.ReadBytes
+        ListChildren=$callbacks.ListChildren
     }
     # Execute in R2 module scope to reuse private historical ACL/evidence policy
     # without changing or making R2's live entrypoint reachable.
     $result=@($r2.Invoke([scriptblock]::Create('param($Provider) Invoke-F2G1Core -Provider $Provider'),@($provider)))
     if($result.Count -ne 1){throw 'R2_POLICY_BRIDGE_INVALID'}
     $stop=ConvertTo-F2G1LT4SanitizedR2Stop -R2Report $result[0]
-    # TEMP: only a finite exception class from the disposable fixture, never
-    # raw R2 gate data. Do not expose this through the owner-host report.
-    $fixtureErrorClass='NOT_APPLICABLE'
-    if($Map.Mode -ceq 'Fixture'){
-        foreach($gate in $result[0].Gates){
-            if($null -eq $gate -or [string]$gate.Result -cne 'STOP'){continue}
-            $value=if($gate.Data -is [hashtable] -and $gate.Data.ContainsKey('ErrorClass')){[string]$gate.Data['ErrorClass']}else{'NOT_APPLICABLE'}
-            $allowed=@('CommandNotFoundException','RuntimeException','PropertyNotFoundException',
-                'MethodInvocationException','ParameterBindingException','ItemNotFoundException',
-                'FileNotFoundException','UnauthorizedAccessException','InvalidOperationException',
-                'SessionStateException','ArgumentException','ParentContainsErrorRecordException')
-            $fixtureErrorClass=if($allowed -ccontains $value){$value}else{'OTHER_OR_NOT_REPORTED'}
-            break
-        }
-    }
     return [pscustomobject]@{
         Executed=$true;FixtureVerdict=[string]$result[0].Verdict
-        StopStage=$stop.Stage;StopCode=$stop.Code;FixtureErrorClass=$fixtureErrorClass
+        StopStage=$stop.Stage;StopCode=$stop.Code
     }
 }
 
@@ -333,7 +322,7 @@ function Invoke-F2G1LT4Fixture {
         ProtectedReads=0;HostAttestation='NOT_PERFORMED'
         HistoricalV2='NOT_ATTESTED_FIXTURE_ONLY';LinkAndAds='LINK_ADS_NOT_ATTESTED'
         R2PolicyEvaluated=$false;R2FixtureVerdict='NOT_RUN'
-        R2StopStage='NOT_EVALUATED';R2StopCode='NOT_EVALUATED';R2StopErrorClass='NOT_EVALUATED'
+        R2StopStage='NOT_EVALUATED';R2StopCode='NOT_EVALUATED'
     }
     try {
         $map=New-F2G1LT4PathMap 'Fixture' $FixtureRoot
@@ -351,7 +340,6 @@ function Invoke-F2G1LT4Fixture {
         $out.R2FixtureVerdict=$r2policy.FixtureVerdict
         $out.R2StopStage=$r2policy.StopStage
         $out.R2StopCode=$r2policy.StopCode
-        $out.R2StopErrorClass=$r2policy.FixtureErrorClass
         $reference=Get-F2G1LT3ReferenceContract
         $package=@()
         foreach($pin in @($reference.PackageMembers)){
