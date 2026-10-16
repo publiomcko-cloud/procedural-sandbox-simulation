@@ -98,6 +98,22 @@ $noargsCode=$LASTEXITCODE
 $noargsStatus=($noargs -join [Environment]::NewLine)|ConvertFrom-Json
 Check ($noargsCode -eq 2 -and $noargsStatus.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and
   $noargsStatus.ProtectedReads -eq 0) 'new host CLI default denies with zero reads'
+# Regression: PS5.1 binds a mandatory switch with :$false to the Host
+# parameter set. Use valid machine/account/module identities so the blocked
+# result must come from the FALSE switch branch, never from host preflight.
+$ciIdentity=[Security.Principal.WindowsIdentity]::GetCurrent()
+try {$ciSid=[string]$ciIdentity.User.Value}finally{$ciIdentity.Dispose()}
+$ciModuleHash=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'F2G1LT4.ReadOnlyAdapter.psm1') -Algorithm SHA256).Hash
+$falseOptIn=@(& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $hostCli '-InspectFixedHostC:$false' -ExpectedComputerName ([Environment]::MachineName) -ExpectedUserSid $ciSid -ReviewedAdapterSha256 $ciModuleHash)
+$falseOptInCode=$LASTEXITCODE
+$falseResult=($falseOptIn -join [Environment]::NewLine)|ConvertFrom-Json
+Check ($falseOptInCode -eq 2 -and
+  $falseResult.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and
+  $falseResult.Code -ceq 'HOST_ADAPTER_EXECUTION_NOT_AUTHORIZED' -and
+  $falseResult.ProtectedReads -eq 0 -and
+  $falseResult.HostAttestation -ceq 'NOT_PERFORMED' -and
+  -not $falseResult.HostAccessEnabled) 'false-valued host switch never calls protected reader, even with matching identity and module hash'
+
 $hash='0'*64
 $cliOutput=@(& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $hostCli -InspectFixedHostC -ExpectedComputerName 'DO-NOT-READ-HOST' -ExpectedUserSid 'S-1-5-21-1-2-3-1001' -ReviewedAdapterSha256 $hash)
 $cliExit=$LASTEXITCODE
