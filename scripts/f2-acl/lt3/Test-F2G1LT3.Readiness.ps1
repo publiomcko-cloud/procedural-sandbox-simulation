@@ -83,6 +83,26 @@ foreach($which in @('default','describe')){
  $j=($output -join [Environment]::NewLine)|ConvertFrom-Json
  Check ($exitcode -eq 2 -and $j.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and $j.ProtectedReads -eq 0 -and $j.HostAttestation -ceq 'NOT_PERFORMED') ('CLI '+$which+' denied')
 }
+
+# Actual BYTES (not advertised checksums) must be digested against the immutable R2 pins.
+# Known historical installed bytes are intentionally NOT in this synthetic source suite.
+$bytes=[Text.UTF8Encoding]::new($false).GetBytes('synthetic-not-historical')
+$members=@($ref.PackageMembers|ForEach-Object{[pscustomobject]@{Path=$_.Path;Bytes=[byte[]]$bytes}})
+$captured=[pscustomobject]@{
+    PackageMembers=$members
+    ManifestBytes=[byte[]]$bytes
+    PayloadBytes=[byte[]]$bytes
+    IntegrityBytes=[byte[]]$bytes
+}
+$wrongBytes=Test-F2G1LT3CapturedBytes $captured
+Check ($wrongBytes.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and $wrongBytes.Code -ceq 'PACKAGE_BYTES_HASH_MISMATCH' -and
+    $wrongBytes.ProtectedReads -eq 0 -and -not $wrongBytes.TrustedOrigin) 'real byte digests cannot be forged by declared hash values'
+$captured.PackageMembers[1].Path=$captured.PackageMembers[0].Path
+$dupe=Test-F2G1LT3CapturedBytes $captured
+Check ($dupe.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and $dupe.ProtectedReads -eq 0) 'duplicate captured byte path cannot pass'
+$empty=Test-F2G1LT3CapturedBytes $null
+Check ($empty.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and $empty.ProtectedReads -eq 0) 'missing bytes fail closed'
+
 Write-Output ('LT3_ASSERTIONS='+$script:Count+' FAILURES='+$script:Failures)
 if($script:Failures -ne 0){exit 1}
 exit 0
