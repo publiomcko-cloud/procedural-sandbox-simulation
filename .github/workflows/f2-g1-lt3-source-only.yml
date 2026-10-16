@@ -1,0 +1,40 @@
+name: F2 G1 LT3 host-readiness source-only
+on:
+  push:
+    branches: [feat/f2-g1-lt3-host-readiness-source-only-v1]
+    paths:
+      - 'scripts/f2-acl/lt3/**'
+      - 'docs/handoffs/F2_G1_LT3_HOST_READINESS.md'
+      - '.github/workflows/f2-g1-lt3-source-only.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lt3-source-only:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: LT3 historical reference and disabled-host gate — Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\f2-acl\lt3\Test-F2G1LT3.Readiness.ps1"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Retain LT2, LT1, R2 fixture regressions
+        shell: powershell
+        run: |
+          foreach ($source in @(
+            '.\scripts\f2-acl\lt2\Test-F2G1LT2.Fixture.ps1',
+            '.\scripts\f2-acl\lt1\Test-F2G1LT1.SourceOnly.ps1',
+            '.\scripts\f2-acl\Test-F2G1CPostfailureAttestation.SourceOnly.ps1')) {
+            & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $source
+            if ($LASTEXITCODE -ne 0) { throw "Retained source-only regression failure" }
+          }
+      - name: Check whitespace against accepted LT2
+        shell: powershell
+        run: |
+          git diff --check fd19fe0ec65897e401bf18c57c1730183aff32c5 HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
