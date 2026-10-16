@@ -99,6 +99,9 @@ jobs:
                         StdoutClass=if(@('EXPECTED_CRLF','SWAPPED_WITH_STDERR','LINE_ENDING_ONLY','OTHER_REDACTED') -ccontains [string]$candidate.StdoutClass){[string]$candidate.StdoutClass}else{'OTHER_REDACTED'}
                         StderrClass=if(@('EXPECTED_CRLF','SWAPPED_WITH_STDOUT','LINE_ENDING_ONLY','OTHER_REDACTED') -ccontains [string]$candidate.StderrClass){[string]$candidate.StderrClass}else{'OTHER_REDACTED'}
                         StdoutLength=[int]$candidate.StdoutLength;StderrLength=[int]$candidate.StderrLength
+                        StdoutFirstMismatch=[int]$candidate.StdoutFirstMismatch;StderrFirstMismatch=[int]$candidate.StderrFirstMismatch
+                        StdoutMismatchCount=[int]$candidate.StdoutMismatchCount;StderrMismatchCount=[int]$candidate.StderrMismatchCount
+                        StdoutEndsWithCRLF=[bool]$candidate.StdoutEndsWithCRLF;StderrEndsWithCRLF=[bool]$candidate.StderrEndsWithCRLF
                         StdoutMarker=[bool]$candidate.StdoutMarker;StderrMarker=[bool]$candidate.StderrMarker
                         StdoutHashFormat=[bool]$candidate.StdoutHashFormat;StderrHashFormat=[bool]$candidate.StderrHashFormat
                         StdoutExpectedHash=[bool]$candidate.StdoutExpectedHash;StderrExpectedHash=[bool]$candidate.StderrExpectedHash
