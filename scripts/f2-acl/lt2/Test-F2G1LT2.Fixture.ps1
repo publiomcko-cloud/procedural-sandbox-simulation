@@ -6,6 +6,7 @@ if($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne
  $env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_OS -cne 'Windows' -or
  $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or
  $env:GITHUB_REPOSITORY -cne 'publiomcko-cloud/procedural-sandbox-simulation') {throw 'LT2_DISPOSABLE_WINDOWS_CI_ONLY'}
+Import-Module (Join-Path $PSScriptRoot '..\lt1\F2G1LT1.Synthetic.psm1') -Force -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot 'F2G1LT2.Fixture.psm1') -Force -ErrorAction Stop
 $script:Count=0;$script:Fail=0
 function Assert([bool]$Ok,[string]$Label) {
