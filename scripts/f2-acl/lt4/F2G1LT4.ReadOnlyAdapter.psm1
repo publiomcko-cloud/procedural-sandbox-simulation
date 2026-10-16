@@ -284,10 +284,8 @@ function Invoke-F2G1LT4OwnerHostReadOnly {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$ExpectedComputerName,
-        [Parameter(Mandatory)][ValidatePattern('^S-1-[0-9-]+
-)][string]$ExpectedUserSid,
-        [Parameter(Mandatory)][ValidatePattern('^[0-9a-fA-F]{64}
-)][string]$ReviewedAdapterSha256
+        [Parameter(Mandatory)][ValidatePattern('^S-1-[0-9-]+$')][string]$ExpectedUserSid,
+        [Parameter(Mandatory)][ValidatePattern('^[0-9a-fA-F]{64}$')][string]$ReviewedAdapterSha256
     )
     # The caller must first obtain a separate, fresh owner execution approval
     # naming exact reviewed SHA, account, machine, command and fixed C: scope.
