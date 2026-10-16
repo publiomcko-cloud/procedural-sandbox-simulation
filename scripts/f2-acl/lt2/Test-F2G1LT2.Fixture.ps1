@@ -81,7 +81,7 @@ function WriteFixture([string]$Root) {
 
 # Modify the semantic fields, then rebuild ALL dependent hashes/frame.
 # A rejection must be semantic, not merely caused by stale SHA-256 values.
-function RewriteSemanticFixture([string]$Root,[scriptblock]$Mutation) {
+function RewriteSemanticFixture([string]$Root,[scriptblock]$Mutation,[scriptblock]$DerivedMutation=$null) {
     $manifestPath=FilePath $Root 'C:\ProgramData\F2-G1-Icacls\approved-release.json'
     $mail='C:\ProgramData\F2-G1-ACL-Evidence-ecb6deeb424e40feb5354d18908986df\'
     $payloadPath=FilePath $Root ($mail+'acl-baseline.json')
@@ -99,6 +99,9 @@ function RewriteSemanticFixture([string]$Root,[scriptblock]$Mutation) {
     $integrity.PayloadSha256=Hash $newPayload
     $integrity.PowerShellStreamsBytes=$newStreams.Length
     $integrity.PowerShellStreamsSha256=Hash $newStreams
+    # Optional mutation AFTER integrity byte counts are recomputed, BEFORE its SHA.
+    # This deliberately produces hash-consistent but semantically invalid numbers.
+    if($null -ne $DerivedMutation){& $DerivedMutation $manifest $payload $integrity $streams}
     $newIntegrity=JsonBytes $integrity
     $manifest.BaselinePayloadSha256=Hash $newPayload
     $manifest.BaselineIntegritySha256=Hash $newIntegrity
@@ -212,6 +215,39 @@ RunCase 'stream-nonzero-exit' {
 RunCase 'integrity-stream-filename' {
     param($root)
     RewriteSemanticFixture $root {param($m,$p,$i,$s) $i.PowerShellStreamsFile='different.json'}
+} 'STREAM_INTEGRITY_INVALID'
+
+# PS5.1 ConvertFrom-Json decimals can round via [int] / [int64] casts.
+# These six cases keep ALL outer hashes and frame bytes internally consistent.
+RunCase 'fractional-expected-count' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s) $p.Manifest.ExpectedCount=[decimal]10.6}
+} 'EVIDENCE_INTEGRITY_INVALID'
+RunCase 'fractional-record-count' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s) $p.Manifest.RecordCount=[decimal]10.6}
+} 'EVIDENCE_INTEGRITY_INVALID'
+RunCase 'fractional-unique-count' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s) $p.Manifest.UniquePathCount=[decimal]10.6}
+} 'EVIDENCE_INTEGRITY_INVALID'
+RunCase 'fractional-payload-length' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s)} {
+        param($m,$p,$i,$s)
+        $i.PayloadBytes=[decimal]$i.PayloadBytes+[decimal]0.4
+    }
+} 'EVIDENCE_INTEGRITY_INVALID'
+RunCase 'fractional-stream-length' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s)} {
+        param($m,$p,$i,$s)
+        $i.PowerShellStreamsBytes=[decimal]$i.PowerShellStreamsBytes+[decimal]0.4
+    }
+} 'STREAM_INTEGRITY_INVALID'
+RunCase 'fractional-stream-exit-code' {
+    param($root)
+    RewriteSemanticFixture $root {param($m,$p,$i,$s) $s.ExitCode=[decimal]0.4}
 } 'STREAM_INTEGRITY_INVALID'
 
 $badRoot=Join-Path $env:RUNNER_TEMP 'not-an-approved-fixture'
