@@ -1,0 +1,41 @@
+name: F2 G1 LT4 read-only adapter source-only
+on:
+  push:
+    branches: [feat/f2-g1-lt4-readonly-host-adapter-disabled-v1]
+    paths:
+      - 'scripts/f2-acl/lt4/**'
+      - 'docs/handoffs/F2_G1_LT4_READ_ONLY_ADAPTER.md'
+      - '.github/workflows/f2-g1-lt4-readonly-adapter-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lt4-source-only:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: LT4 physical fixture adapter and blocked host gate — Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\f2-acl\lt4\Test-F2G1LT4.ReadOnly.ps1"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Retain accepted LT3 LT2 LT1 and R2 regressions
+        shell: powershell
+        run: |
+          foreach ($script in @(
+            '.\scripts\f2-acl\lt3\Test-F2G1LT3.Readiness.ps1',
+            '.\scripts\f2-acl\lt2\Test-F2G1LT2.Fixture.ps1',
+            '.\scripts\f2-acl\lt1\Test-F2G1LT1.SourceOnly.ps1',
+            '.\scripts\f2-acl\Test-F2G1CPostfailureAttestation.SourceOnly.ps1')) {
+            & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script
+            if ($LASTEXITCODE -ne 0) { throw "Regression failed in source-only CI" }
+          }
+      - name: Verify bounded source diff
+        shell: powershell
+        run: |
+          git diff --check 8c4d72d0b2cbaccaccf025bac8137dcbaa330829 HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
