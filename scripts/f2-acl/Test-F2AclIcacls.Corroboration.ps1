@@ -178,7 +178,385 @@ Assert-Icacl (-not $plan.Complete -and $plan.ElevationLaunches -eq 1 -and $plan.
 $psExe=Join-Path $PSHOME 'powershell.exe'
 $okArgs='-NoProfile -NonInteractive -Command "[Console]::Out.WriteLine(''fixture-stdout'');[Console]::Error.WriteLine(''fixture-stderr'');exit 0"'
 $proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $okArgs -TimeoutSeconds 5
-Assert-Icacl ($proc.Started -and $proc.ExitCode -eq 0 -and $proc.OutputComplete -and $proc.CleanupComplete -and $proc.Stdout -match 'fixture-stdout' -and $proc.Stderr -match 'fixture-stderr' -and $proc.StdoutSha256 -match '^[0-9a-f]{64}$' -and $proc.StderrSha256 -match '^[0-9a-f]{64}$') 'bounded process runner captures stdout, stderr, PID, exit and hashes'
+$firstCapturePass=($proc.Started -and $proc.ExitCode -eq 0 -and $proc.OutputComplete -and $proc.CleanupComplete -and $proc.Stdout -match 'fixture-stdout' -and $proc.Stderr -match 'fixture-stderr' -and $proc.StdoutSha256 -match '^[0-9a-f]{64}
+$quietArgs='-NoProfile -NonInteractive -Command "[Console]::Out.WriteLine(''quiet-stdout'');exit 0"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $quietArgs -TimeoutSeconds 5
+Assert-Icacl ($proc.ExitCode -eq 0 -and $proc.OutputComplete -and $proc.StderrBytes -eq 0 -and $proc.StderrSha256 -match '^[0-9a-f]{64}$') 'successful command with empty stderr receives the SHA-256 of the empty byte stream'
+$failArgs='-NoProfile -NonInteractive -Command "[Console]::Out.WriteLine(''fixture-fail-out'');[Console]::Error.WriteLine(''fixture-fail-err'');exit 23"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $failArgs -TimeoutSeconds 5
+Assert-Icacl ($proc.ExitCode -eq 23 -and $proc.OutputComplete -and $proc.Stdout -match 'fixture-fail-out' -and $proc.Stderr -match 'fixture-fail-err') 'nonzero child exit retains complete separate streams'
+$hangArgs='-NoProfile -NonInteractive -Command "while($true){[Console]::Out.WriteLine(''tick'');Start-Sleep -Milliseconds 25}"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $hangArgs -TimeoutSeconds 1 -CleanupGraceMilliseconds 500
+Assert-Icacl ($proc.TimedOut -and -not $proc.OutputComplete -and $proc.ElapsedMilliseconds -lt 5000) 'hanging child returns bounded timeout with incomplete status'
+$largeArgs='-NoProfile -NonInteractive -Command "[Console]::Out.Write(''x'' * 20000);exit 0"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $largeArgs -TimeoutSeconds 5 -MaxBytesPerStream 1024
+Assert-Icacl ($proc.Truncated -and -not $proc.OutputComplete -and $proc.Stdout.Length -le 1024 -and $proc.StdoutBytes -gt 1024 -and $proc.ExitCode -eq 0) 'oversized single-line output is drained with bounded retention and cannot be complete'
+Assert-Icacl ($proc.StdoutBytes -gt $proc.Stdout.Length -and $proc.Truncated -and $proc.Stdout.Length -le 1024) 'fixed-chunk stream pump does not depend on line events or allocate a giant line'
+$largeErrorArgs='-NoProfile -NonInteractive -Command "[Console]::Error.Write(''y'' * 20000);exit 0"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $largeErrorArgs -TimeoutSeconds 5 -MaxBytesPerStream 1024
+Assert-Icacl ($proc.Truncated -and -not $proc.OutputComplete -and $proc.Stderr.Length -le 1024 -and $proc.StderrBytes -gt 1024) 'oversized stderr is independently bounded and incomplete'
+$missingExecutable=Join-Path $env:TEMP ('F2-Icacl-Missing-'+[guid]::NewGuid().ToString('N')+'.exe')
+$proc=Invoke-TestIcaclsProcess -FilePath $missingExecutable -Arguments '' -TimeoutSeconds 1
+Assert-Icacl (-not $proc.Started -and $null -eq $proc.ExitCode -and -not $proc.CleanupComplete -and -not $proc.OutputComplete) 'child startup failure is reported without inventing an exit code or completion'
+
+$tempRoot=Join-Path $env:TEMP ('F2Icacls-Synthetic-'+[guid]::NewGuid().ToString('N'));$owner=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+try{
+    $testDir=Join-Path $tempRoot 'evidence';[void][IO.Directory]::CreateDirectory($tempRoot)
+    $testEvidenceGuid=[F2Acl.NativeDirectory]::GetVolumeGuidForPath($tempRoot)
+    $testProjectPath=$null
+    foreach($driveInfo in [IO.DriveInfo]::GetDrives()){if(-not $driveInfo.IsReady){continue};try{$candidate=[F2Acl.NativeDirectory]::GetVolumeGuidForPath($driveInfo.RootDirectory.FullName);if($candidate -cne $testEvidenceGuid){$testProjectPath=$driveInfo.RootDirectory.FullName;break}}catch{}}
+    if([string]::IsNullOrWhiteSpace($testProjectPath)){throw 'Synthetic evidence publication requires a second local volume; no project data is read or written.'}
+    $testProjectGuid=[F2Acl.NativeDirectory]::GetVolumeGuidForPath($testProjectPath)
+    $module=Get-Module F2AclIcacls.Corroboration
+    $resolver={param($path)if([string]::Equals([IO.Path]::GetPathRoot($path),[IO.Path]::GetPathRoot($testProjectPath),[StringComparison]::OrdinalIgnoreCase)){$testProjectGuid}else{$testEvidenceGuid}}
+    $module.SessionState.PSVariable.Set('F2IcaclsVolumeResolver',$resolver)
+    $safeDir=New-F2AclRestrictedDirectory -Path $testDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $acl=Test-F2AclRestrictedDirectory -Path $safeDir -OwnerSid $owner
+    $inputDir=Join-Path $tempRoot 'baseline-input';$inputSafe=New-F2AclRestrictedDirectory -Path $inputDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $payloadBytes=[Text.UTF8Encoding]::new($false).GetBytes(($baseline|ConvertTo-Json -Depth 14))
+    [IO.File]::WriteAllBytes((Join-Path $inputSafe 'acl-baseline.json'),$payloadBytes)
+    $inputIntegrity=[pscustomobject]@{Schema='f2-acl-integrity-v1';PayloadFile='acl-baseline.json';PayloadBytes=$payloadBytes.Length;PayloadSha256=(Get-F2IcaclsSha256 -Bytes $payloadBytes);ProjectVolumeGuid=$projectVolume;EvidenceVolumeGuid=$evidenceVolume;SeparateFromProjectVolume=$true}
+    [IO.File]::WriteAllText((Join-Path $inputSafe 'integrity.json'),($inputIntegrity|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
+    $mailboxSddl=Get-F2AclCoordinatorMailboxSddl -RequesterSid $owner
+    $module.SessionState.PSVariable.Set('F2IcaclsMailboxPathResolver',{param($captureId) if($captureId -ceq $baseline.CaptureId){$inputSafe}else{Join-Path $tempRoot 'wrong-mailbox'}})
+    $module.SessionState.PSVariable.Set('F2IcaclsMailboxDescriptorResolver',{param($path,$captureId) if([string]::Equals([IO.Path]::GetFullPath($path),[IO.Path]::GetFullPath($inputSafe),[StringComparison]::OrdinalIgnoreCase) -and $captureId -ceq $baseline.CaptureId){$mailboxSddl}else{throw 'Synthetic mailbox path mismatch.'}})
+    $loaded=Read-F2IcaclsBaselineEvidence -EvidenceDirectory $inputSafe -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner
+    Assert-Icacl ($loaded.Pass -and $loaded.Integrity.ProjectVolumeGuid -eq $projectVolume -and $loaded.Integrity.ProjectVolumeGuid -ne $loaded.Baseline.Manifest.ProjectVolumeGuid -and $loaded.Integrity.EvidenceVolumeGuid -eq $evidenceVolume) 'baseline loader sources ProjectVolumeGuid from integrity.json and keeps EvidenceVolumeGuid separate'
+    $mailboxCheck=Test-F2AclCoordinatorMailboxSddl -Sddl $mailboxSddl -RequesterSid $owner
+    Assert-Icacl ($mailboxCheck.Protected -and $mailboxCheck.OwnerSid -eq 'S-1-5-32-544' -and $mailboxCheck.AceCount -eq 4 -and $mailboxCheck.RequesterSid -eq $owner) 'faithful four-ACE Administrators-owned coordinator mailbox fixture passes'
+    Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory (Join-Path $tempRoot 'wrong-mailbox') -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner).Pass) 'mailbox path must be the exact capture-id-derived location'
+    Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory $inputSafe -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid 'S-1-5-21-111111111-222222222-333333333-4444').Pass) 'wrong requester SID invalidates four-ACE mailbox evidence'
+    $wrongMailboxOwner=$mailboxSddl.Replace('O:BA','O:'+ $owner)
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $wrongMailboxOwner -RequesterSid $owner } 'requester-owned mailbox is rejected'
+    $missingOwnerRights=$mailboxSddl.Replace('(A;OICI;0x1200a9;;;OW)','')
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $missingOwnerRights -RequesterSid $owner } 'mailbox without OWNER RIGHTS protection is rejected'
+    $unprotectedMailbox=$mailboxSddl.Replace('D:P','D:')
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $unprotectedMailbox -RequesterSid $owner } 'inheriting mailbox DACL is rejected'
+    $writableMailbox=$mailboxSddl.Replace('0x1200a9','FA')
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $writableMailbox -RequesterSid $owner } 'writable requester ACE in mailbox is rejected'
+    $extraMailboxAce=$mailboxSddl+'(A;OICI;0x1200a9;;;S-1-5-21-111111111-222222222-333333333-5555)'
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $extraMailboxAce -RequesterSid $owner } 'unexpected fifth mailbox ACE is rejected'
+    $junctionPath=Join-Path $tempRoot 'mailbox-junction';$junctionMade=$false
+    try{New-Item -ItemType Junction -Path $junctionPath -Target $inputSafe -ErrorAction Stop|Out-Null;$junctionMade=$true;$module.SessionState.PSVariable.Set('F2IcaclsMailboxPathResolver',{param($captureId)$junctionPath});Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory $junctionPath -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner).Pass) 'mailbox reparse/junction path is rejected before ACL acceptance'}catch{Assert-Icacl $false ('mailbox junction adversarial fixture could not be created: '+$_.Exception.GetType().Name)}finally{if($junctionMade){try{[IO.Directory]::Delete($junctionPath)}catch{}};$module.SessionState.PSVariable.Set('F2IcaclsMailboxPathResolver',{param($captureId) if($captureId -ceq $baseline.CaptureId){$inputSafe}else{Join-Path $tempRoot 'wrong-mailbox'}})}
+    [IO.File]::WriteAllText((Join-Path $inputSafe 'acl-baseline.json'),'tampered payload',[Text.UTF8Encoding]::new($false))
+    Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory $inputSafe -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner).Pass) 'baseline payload tampering fails its integrity.json digest'
+    $runs=@();$comparisons=@();foreach($path in $paths){$txt=@($path,'S-1-5-32-544:(F)') -join "`r`n";$r=New-CommandResult $path 0 $txt;$runs+=@([pscustomobject]@{Path=$path;Result=$r;Mode='Synthetic'});$comparisons+=@([pscustomobject]@{Path=$path;Classification='PASS';Reason='SyntheticFixture'})}
+    $package=Write-F2IcaclsEvidencePackage -Directory $safeDir -OwnerSid $owner -Targets $paths -Runs $runs -Comparisons $comparisons -ProjectVolumePath $testProjectPath -ProjectVolumeGuid $testProjectGuid -EvidenceVolumeGuid $testEvidenceGuid
+    Assert-Icacl ($package.Complete -and $package.TargetCount -eq 11 -and $package.RunCount -eq 11 -and (Test-Path (Join-Path $safeDir 'integrity.json'))) '11-object synthetic evidence package is atomically create-new in protected directory'
+    $integrityDoc=Get-Content -Raw (Join-Path $safeDir 'integrity.json')|ConvertFrom-Json
+    $verified=$true;foreach($row in $integrityDoc.Results){$file=Join-Path $safeDir $row.Name;$verified=$verified -and (Get-Item $file).Length -eq $row.Bytes -and (Get-F2IcaclsSha256 -Bytes ([IO.File]::ReadAllBytes($file))) -eq $row.Sha256}
+    Assert-Icacl $verified 'synthetic evidence file hashes and byte counts verify'
+    Assert-Icacl (Test-F2AclRestrictedDirectory -Path $safeDir -OwnerSid $owner).Protected 'evidence DACL remains protected after publication'
+    $retryRuns=@($runs);$retryRuns+=@([pscustomobject]@{Path=$paths[0];Result=(New-CommandResult $paths[0] 5 '' 'Access is denied.');Mode='Standard'})
+    $retryDir=Join-Path $tempRoot 'retry-evidence';$retrySafe=New-F2AclRestrictedDirectory -Path $retryDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $retryPackage=Write-F2IcaclsEvidencePackage -Directory $retrySafe -OwnerSid $owner -Targets $paths -Runs $retryRuns -Comparisons $comparisons -ProjectVolumePath $testProjectPath -ProjectVolumeGuid $testProjectGuid -EvidenceVolumeGuid $testEvidenceGuid
+    $retryManifest=Get-Content -Raw (Join-Path $retrySafe 'integrity.json')|ConvertFrom-Json
+    Assert-Icacl ($retryPackage.Complete -and $retryManifest.RunCount -eq 12 -and -not $retryManifest.AllCommandsSuccessful -and $retryManifest.AllComparisonsPass) 'evidence completeness allows a standard denial plus one elevated retry without hiding the failed attempt'
+    $badRuns=@($runs);$badRuns[0]=$badRuns[0].PSObject.Copy();$badRuns[0].Result=New-CommandResult $paths[0] 5 '' 'Access is denied.'
+    $badComparisons=@($comparisons);$badComparisons[0]=[pscustomobject]@{Path=$paths[0];Classification='INDETERMINATE';Reason='AccessDenied'}
+    $failedDir=Join-Path $tempRoot 'failed-evidence';$failedSafe=New-F2AclRestrictedDirectory -Path $failedDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $failedPackage=Write-F2IcaclsEvidencePackage -Directory $failedSafe -OwnerSid $owner -Targets $paths -Runs $badRuns -Comparisons $badComparisons -ProjectVolumePath $testProjectPath -ProjectVolumeGuid $testProjectGuid -EvidenceVolumeGuid $testEvidenceGuid
+    $failedRecord=Get-Content -Raw (Join-Path $failedSafe 'icacls-01.json')|ConvertFrom-Json
+    $failedManifest=Get-Content -Raw (Join-Path $failedSafe 'integrity.json')|ConvertFrom-Json
+    Assert-Icacl ($failedPackage.Complete -and -not $failedManifest.AllCommandsSuccessful -and -not $failedManifest.AllComparisonsPass -and $failedRecord.Result.ExitCode -eq 5 -and $failedRecord.Result.Stderr -eq 'Access is denied.') 'failing icacls output and exit status are published as complete diagnostic evidence, never a pass'
+}finally{if(Test-Path $tempRoot){Remove-Item -LiteralPath $tempRoot -Recurse -Force}}
+
+Write-Host ("Assertions={0}; Failures={1}" -f $testCount,$failures.Count)
+if($failures.Count -gt 0){$failures|ForEach-Object{Write-Error $_};exit 1}
+exit 0
+ -and $proc.StderrSha256 -match '^[0-9a-f]{64}
+$quietArgs='-NoProfile -NonInteractive -Command "[Console]::Out.WriteLine(''quiet-stdout'');exit 0"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $quietArgs -TimeoutSeconds 5
+Assert-Icacl ($proc.ExitCode -eq 0 -and $proc.OutputComplete -and $proc.StderrBytes -eq 0 -and $proc.StderrSha256 -match '^[0-9a-f]{64}$') 'successful command with empty stderr receives the SHA-256 of the empty byte stream'
+$failArgs='-NoProfile -NonInteractive -Command "[Console]::Out.WriteLine(''fixture-fail-out'');[Console]::Error.WriteLine(''fixture-fail-err'');exit 23"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $failArgs -TimeoutSeconds 5
+Assert-Icacl ($proc.ExitCode -eq 23 -and $proc.OutputComplete -and $proc.Stdout -match 'fixture-fail-out' -and $proc.Stderr -match 'fixture-fail-err') 'nonzero child exit retains complete separate streams'
+$hangArgs='-NoProfile -NonInteractive -Command "while($true){[Console]::Out.WriteLine(''tick'');Start-Sleep -Milliseconds 25}"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $hangArgs -TimeoutSeconds 1 -CleanupGraceMilliseconds 500
+Assert-Icacl ($proc.TimedOut -and -not $proc.OutputComplete -and $proc.ElapsedMilliseconds -lt 5000) 'hanging child returns bounded timeout with incomplete status'
+$largeArgs='-NoProfile -NonInteractive -Command "[Console]::Out.Write(''x'' * 20000);exit 0"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $largeArgs -TimeoutSeconds 5 -MaxBytesPerStream 1024
+Assert-Icacl ($proc.Truncated -and -not $proc.OutputComplete -and $proc.Stdout.Length -le 1024 -and $proc.StdoutBytes -gt 1024 -and $proc.ExitCode -eq 0) 'oversized single-line output is drained with bounded retention and cannot be complete'
+Assert-Icacl ($proc.StdoutBytes -gt $proc.Stdout.Length -and $proc.Truncated -and $proc.Stdout.Length -le 1024) 'fixed-chunk stream pump does not depend on line events or allocate a giant line'
+$largeErrorArgs='-NoProfile -NonInteractive -Command "[Console]::Error.Write(''y'' * 20000);exit 0"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $largeErrorArgs -TimeoutSeconds 5 -MaxBytesPerStream 1024
+Assert-Icacl ($proc.Truncated -and -not $proc.OutputComplete -and $proc.Stderr.Length -le 1024 -and $proc.StderrBytes -gt 1024) 'oversized stderr is independently bounded and incomplete'
+$missingExecutable=Join-Path $env:TEMP ('F2-Icacl-Missing-'+[guid]::NewGuid().ToString('N')+'.exe')
+$proc=Invoke-TestIcaclsProcess -FilePath $missingExecutable -Arguments '' -TimeoutSeconds 1
+Assert-Icacl (-not $proc.Started -and $null -eq $proc.ExitCode -and -not $proc.CleanupComplete -and -not $proc.OutputComplete) 'child startup failure is reported without inventing an exit code or completion'
+
+$tempRoot=Join-Path $env:TEMP ('F2Icacls-Synthetic-'+[guid]::NewGuid().ToString('N'));$owner=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+try{
+    $testDir=Join-Path $tempRoot 'evidence';[void][IO.Directory]::CreateDirectory($tempRoot)
+    $testEvidenceGuid=[F2Acl.NativeDirectory]::GetVolumeGuidForPath($tempRoot)
+    $testProjectPath=$null
+    foreach($driveInfo in [IO.DriveInfo]::GetDrives()){if(-not $driveInfo.IsReady){continue};try{$candidate=[F2Acl.NativeDirectory]::GetVolumeGuidForPath($driveInfo.RootDirectory.FullName);if($candidate -cne $testEvidenceGuid){$testProjectPath=$driveInfo.RootDirectory.FullName;break}}catch{}}
+    if([string]::IsNullOrWhiteSpace($testProjectPath)){throw 'Synthetic evidence publication requires a second local volume; no project data is read or written.'}
+    $testProjectGuid=[F2Acl.NativeDirectory]::GetVolumeGuidForPath($testProjectPath)
+    $module=Get-Module F2AclIcacls.Corroboration
+    $resolver={param($path)if([string]::Equals([IO.Path]::GetPathRoot($path),[IO.Path]::GetPathRoot($testProjectPath),[StringComparison]::OrdinalIgnoreCase)){$testProjectGuid}else{$testEvidenceGuid}}
+    $module.SessionState.PSVariable.Set('F2IcaclsVolumeResolver',$resolver)
+    $safeDir=New-F2AclRestrictedDirectory -Path $testDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $acl=Test-F2AclRestrictedDirectory -Path $safeDir -OwnerSid $owner
+    $inputDir=Join-Path $tempRoot 'baseline-input';$inputSafe=New-F2AclRestrictedDirectory -Path $inputDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $payloadBytes=[Text.UTF8Encoding]::new($false).GetBytes(($baseline|ConvertTo-Json -Depth 14))
+    [IO.File]::WriteAllBytes((Join-Path $inputSafe 'acl-baseline.json'),$payloadBytes)
+    $inputIntegrity=[pscustomobject]@{Schema='f2-acl-integrity-v1';PayloadFile='acl-baseline.json';PayloadBytes=$payloadBytes.Length;PayloadSha256=(Get-F2IcaclsSha256 -Bytes $payloadBytes);ProjectVolumeGuid=$projectVolume;EvidenceVolumeGuid=$evidenceVolume;SeparateFromProjectVolume=$true}
+    [IO.File]::WriteAllText((Join-Path $inputSafe 'integrity.json'),($inputIntegrity|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
+    $mailboxSddl=Get-F2AclCoordinatorMailboxSddl -RequesterSid $owner
+    $module.SessionState.PSVariable.Set('F2IcaclsMailboxPathResolver',{param($captureId) if($captureId -ceq $baseline.CaptureId){$inputSafe}else{Join-Path $tempRoot 'wrong-mailbox'}})
+    $module.SessionState.PSVariable.Set('F2IcaclsMailboxDescriptorResolver',{param($path,$captureId) if([string]::Equals([IO.Path]::GetFullPath($path),[IO.Path]::GetFullPath($inputSafe),[StringComparison]::OrdinalIgnoreCase) -and $captureId -ceq $baseline.CaptureId){$mailboxSddl}else{throw 'Synthetic mailbox path mismatch.'}})
+    $loaded=Read-F2IcaclsBaselineEvidence -EvidenceDirectory $inputSafe -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner
+    Assert-Icacl ($loaded.Pass -and $loaded.Integrity.ProjectVolumeGuid -eq $projectVolume -and $loaded.Integrity.ProjectVolumeGuid -ne $loaded.Baseline.Manifest.ProjectVolumeGuid -and $loaded.Integrity.EvidenceVolumeGuid -eq $evidenceVolume) 'baseline loader sources ProjectVolumeGuid from integrity.json and keeps EvidenceVolumeGuid separate'
+    $mailboxCheck=Test-F2AclCoordinatorMailboxSddl -Sddl $mailboxSddl -RequesterSid $owner
+    Assert-Icacl ($mailboxCheck.Protected -and $mailboxCheck.OwnerSid -eq 'S-1-5-32-544' -and $mailboxCheck.AceCount -eq 4 -and $mailboxCheck.RequesterSid -eq $owner) 'faithful four-ACE Administrators-owned coordinator mailbox fixture passes'
+    Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory (Join-Path $tempRoot 'wrong-mailbox') -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner).Pass) 'mailbox path must be the exact capture-id-derived location'
+    Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory $inputSafe -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid 'S-1-5-21-111111111-222222222-333333333-4444').Pass) 'wrong requester SID invalidates four-ACE mailbox evidence'
+    $wrongMailboxOwner=$mailboxSddl.Replace('O:BA','O:'+ $owner)
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $wrongMailboxOwner -RequesterSid $owner } 'requester-owned mailbox is rejected'
+    $missingOwnerRights=$mailboxSddl.Replace('(A;OICI;0x1200a9;;;OW)','')
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $missingOwnerRights -RequesterSid $owner } 'mailbox without OWNER RIGHTS protection is rejected'
+    $unprotectedMailbox=$mailboxSddl.Replace('D:P','D:')
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $unprotectedMailbox -RequesterSid $owner } 'inheriting mailbox DACL is rejected'
+    $writableMailbox=$mailboxSddl.Replace('0x1200a9','FA')
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $writableMailbox -RequesterSid $owner } 'writable requester ACE in mailbox is rejected'
+    $extraMailboxAce=$mailboxSddl+'(A;OICI;0x1200a9;;;S-1-5-21-111111111-222222222-333333333-5555)'
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $extraMailboxAce -RequesterSid $owner } 'unexpected fifth mailbox ACE is rejected'
+    $junctionPath=Join-Path $tempRoot 'mailbox-junction';$junctionMade=$false
+    try{New-Item -ItemType Junction -Path $junctionPath -Target $inputSafe -ErrorAction Stop|Out-Null;$junctionMade=$true;$module.SessionState.PSVariable.Set('F2IcaclsMailboxPathResolver',{param($captureId)$junctionPath});Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory $junctionPath -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner).Pass) 'mailbox reparse/junction path is rejected before ACL acceptance'}catch{Assert-Icacl $false ('mailbox junction adversarial fixture could not be created: '+$_.Exception.GetType().Name)}finally{if($junctionMade){try{[IO.Directory]::Delete($junctionPath)}catch{}};$module.SessionState.PSVariable.Set('F2IcaclsMailboxPathResolver',{param($captureId) if($captureId -ceq $baseline.CaptureId){$inputSafe}else{Join-Path $tempRoot 'wrong-mailbox'}})}
+    [IO.File]::WriteAllText((Join-Path $inputSafe 'acl-baseline.json'),'tampered payload',[Text.UTF8Encoding]::new($false))
+    Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory $inputSafe -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner).Pass) 'baseline payload tampering fails its integrity.json digest'
+    $runs=@();$comparisons=@();foreach($path in $paths){$txt=@($path,'S-1-5-32-544:(F)') -join "`r`n";$r=New-CommandResult $path 0 $txt;$runs+=@([pscustomobject]@{Path=$path;Result=$r;Mode='Synthetic'});$comparisons+=@([pscustomobject]@{Path=$path;Classification='PASS';Reason='SyntheticFixture'})}
+    $package=Write-F2IcaclsEvidencePackage -Directory $safeDir -OwnerSid $owner -Targets $paths -Runs $runs -Comparisons $comparisons -ProjectVolumePath $testProjectPath -ProjectVolumeGuid $testProjectGuid -EvidenceVolumeGuid $testEvidenceGuid
+    Assert-Icacl ($package.Complete -and $package.TargetCount -eq 11 -and $package.RunCount -eq 11 -and (Test-Path (Join-Path $safeDir 'integrity.json'))) '11-object synthetic evidence package is atomically create-new in protected directory'
+    $integrityDoc=Get-Content -Raw (Join-Path $safeDir 'integrity.json')|ConvertFrom-Json
+    $verified=$true;foreach($row in $integrityDoc.Results){$file=Join-Path $safeDir $row.Name;$verified=$verified -and (Get-Item $file).Length -eq $row.Bytes -and (Get-F2IcaclsSha256 -Bytes ([IO.File]::ReadAllBytes($file))) -eq $row.Sha256}
+    Assert-Icacl $verified 'synthetic evidence file hashes and byte counts verify'
+    Assert-Icacl (Test-F2AclRestrictedDirectory -Path $safeDir -OwnerSid $owner).Protected 'evidence DACL remains protected after publication'
+    $retryRuns=@($runs);$retryRuns+=@([pscustomobject]@{Path=$paths[0];Result=(New-CommandResult $paths[0] 5 '' 'Access is denied.');Mode='Standard'})
+    $retryDir=Join-Path $tempRoot 'retry-evidence';$retrySafe=New-F2AclRestrictedDirectory -Path $retryDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $retryPackage=Write-F2IcaclsEvidencePackage -Directory $retrySafe -OwnerSid $owner -Targets $paths -Runs $retryRuns -Comparisons $comparisons -ProjectVolumePath $testProjectPath -ProjectVolumeGuid $testProjectGuid -EvidenceVolumeGuid $testEvidenceGuid
+    $retryManifest=Get-Content -Raw (Join-Path $retrySafe 'integrity.json')|ConvertFrom-Json
+    Assert-Icacl ($retryPackage.Complete -and $retryManifest.RunCount -eq 12 -and -not $retryManifest.AllCommandsSuccessful -and $retryManifest.AllComparisonsPass) 'evidence completeness allows a standard denial plus one elevated retry without hiding the failed attempt'
+    $badRuns=@($runs);$badRuns[0]=$badRuns[0].PSObject.Copy();$badRuns[0].Result=New-CommandResult $paths[0] 5 '' 'Access is denied.'
+    $badComparisons=@($comparisons);$badComparisons[0]=[pscustomobject]@{Path=$paths[0];Classification='INDETERMINATE';Reason='AccessDenied'}
+    $failedDir=Join-Path $tempRoot 'failed-evidence';$failedSafe=New-F2AclRestrictedDirectory -Path $failedDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $failedPackage=Write-F2IcaclsEvidencePackage -Directory $failedSafe -OwnerSid $owner -Targets $paths -Runs $badRuns -Comparisons $badComparisons -ProjectVolumePath $testProjectPath -ProjectVolumeGuid $testProjectGuid -EvidenceVolumeGuid $testEvidenceGuid
+    $failedRecord=Get-Content -Raw (Join-Path $failedSafe 'icacls-01.json')|ConvertFrom-Json
+    $failedManifest=Get-Content -Raw (Join-Path $failedSafe 'integrity.json')|ConvertFrom-Json
+    Assert-Icacl ($failedPackage.Complete -and -not $failedManifest.AllCommandsSuccessful -and -not $failedManifest.AllComparisonsPass -and $failedRecord.Result.ExitCode -eq 5 -and $failedRecord.Result.Stderr -eq 'Access is denied.') 'failing icacls output and exit status are published as complete diagnostic evidence, never a pass'
+}finally{if(Test-Path $tempRoot){Remove-Item -LiteralPath $tempRoot -Recurse -Force}}
+
+Write-Host ("Assertions={0}; Failures={1}" -f $testCount,$failures.Count)
+if($failures.Count -gt 0){$failures|ForEach-Object{Write-Error $_};exit 1}
+exit 0
+)
+if(-not $firstCapturePass){
+    # CI-only synthetic fixture failure classification. Never print raw streams,
+    # exceptions, paths, SIDs, DACLs or source payloads.
+    $expectedOut="fixture-stdout`r`n"
+    $expectedErr="fixture-stderr`r`n"
+    $observedOut=[string]$proc.Stdout
+    $observedErr=[string]$proc.Stderr
+    $readerCategory='NONE'
+    if(-not [string]::IsNullOrEmpty([string]$proc.ReaderError)){
+        $knownReaderErrors=@('RedirectedStreamReadFailed','RedirectedStreamDrainDeadlineExceeded','ChildTerminationFailed','ChildTerminationWaitFailed','OutputLimitExceeded')
+        $readerCategory=if($knownReaderErrors -ccontains ([string]$proc.ReaderError)) {[string]$proc.ReaderError} else {'OTHER_REDACTED'}
+    }
+    $outClass=if($observedOut -ceq $expectedOut){'EXPECTED_CRLF'}elseif($observedOut -ceq 'fixture-stderr' + "`r`n"){'SWAPPED_WITH_STDERR'}elseif($observedOut.TrimEnd("`r","`n") -ceq 'fixture-stdout'){'LINE_ENDING_ONLY'}else{'OTHER_REDACTED'}
+    $errClass=if($observedErr -ceq $expectedErr){'EXPECTED_CRLF'}elseif($observedErr -ceq 'fixture-stdout' + "`r`n"){'SWAPPED_WITH_STDOUT'}elseif($observedErr.TrimEnd("`r","`n") -ceq 'fixture-stderr'){'LINE_ENDING_ONLY'}else{'OTHER_REDACTED'}
+    $diag=[ordered]@{
+        Schema='f2-icacls-synthetic-capture-failure-v1'
+        Started=[bool]$proc.Started;ExitCode=$proc.ExitCode;TimedOut=[bool]$proc.TimedOut
+        OutputComplete=[bool]$proc.OutputComplete;CleanupComplete=[bool]$proc.CleanupComplete
+        Truncated=[bool]$proc.Truncated;ReaderClass=$readerCategory
+        ElapsedMilliseconds=[int64]$proc.ElapsedMilliseconds
+        StdoutClass=$outClass;StderrClass=$errClass
+        StdoutLength=$observedOut.Length;StderrLength=$observedErr.Length
+        StdoutMarker=[bool]($observedOut -match 'fixture-stdout')
+        StderrMarker=[bool]($observedErr -match 'fixture-stderr')
+        StdoutHashFormat=[bool]($proc.StdoutSha256 -match '^[0-9a-f]{64}
+$quietArgs='-NoProfile -NonInteractive -Command "[Console]::Out.WriteLine(''quiet-stdout'');exit 0"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $quietArgs -TimeoutSeconds 5
+Assert-Icacl ($proc.ExitCode -eq 0 -and $proc.OutputComplete -and $proc.StderrBytes -eq 0 -and $proc.StderrSha256 -match '^[0-9a-f]{64}$') 'successful command with empty stderr receives the SHA-256 of the empty byte stream'
+$failArgs='-NoProfile -NonInteractive -Command "[Console]::Out.WriteLine(''fixture-fail-out'');[Console]::Error.WriteLine(''fixture-fail-err'');exit 23"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $failArgs -TimeoutSeconds 5
+Assert-Icacl ($proc.ExitCode -eq 23 -and $proc.OutputComplete -and $proc.Stdout -match 'fixture-fail-out' -and $proc.Stderr -match 'fixture-fail-err') 'nonzero child exit retains complete separate streams'
+$hangArgs='-NoProfile -NonInteractive -Command "while($true){[Console]::Out.WriteLine(''tick'');Start-Sleep -Milliseconds 25}"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $hangArgs -TimeoutSeconds 1 -CleanupGraceMilliseconds 500
+Assert-Icacl ($proc.TimedOut -and -not $proc.OutputComplete -and $proc.ElapsedMilliseconds -lt 5000) 'hanging child returns bounded timeout with incomplete status'
+$largeArgs='-NoProfile -NonInteractive -Command "[Console]::Out.Write(''x'' * 20000);exit 0"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $largeArgs -TimeoutSeconds 5 -MaxBytesPerStream 1024
+Assert-Icacl ($proc.Truncated -and -not $proc.OutputComplete -and $proc.Stdout.Length -le 1024 -and $proc.StdoutBytes -gt 1024 -and $proc.ExitCode -eq 0) 'oversized single-line output is drained with bounded retention and cannot be complete'
+Assert-Icacl ($proc.StdoutBytes -gt $proc.Stdout.Length -and $proc.Truncated -and $proc.Stdout.Length -le 1024) 'fixed-chunk stream pump does not depend on line events or allocate a giant line'
+$largeErrorArgs='-NoProfile -NonInteractive -Command "[Console]::Error.Write(''y'' * 20000);exit 0"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $largeErrorArgs -TimeoutSeconds 5 -MaxBytesPerStream 1024
+Assert-Icacl ($proc.Truncated -and -not $proc.OutputComplete -and $proc.Stderr.Length -le 1024 -and $proc.StderrBytes -gt 1024) 'oversized stderr is independently bounded and incomplete'
+$missingExecutable=Join-Path $env:TEMP ('F2-Icacl-Missing-'+[guid]::NewGuid().ToString('N')+'.exe')
+$proc=Invoke-TestIcaclsProcess -FilePath $missingExecutable -Arguments '' -TimeoutSeconds 1
+Assert-Icacl (-not $proc.Started -and $null -eq $proc.ExitCode -and -not $proc.CleanupComplete -and -not $proc.OutputComplete) 'child startup failure is reported without inventing an exit code or completion'
+
+$tempRoot=Join-Path $env:TEMP ('F2Icacls-Synthetic-'+[guid]::NewGuid().ToString('N'));$owner=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+try{
+    $testDir=Join-Path $tempRoot 'evidence';[void][IO.Directory]::CreateDirectory($tempRoot)
+    $testEvidenceGuid=[F2Acl.NativeDirectory]::GetVolumeGuidForPath($tempRoot)
+    $testProjectPath=$null
+    foreach($driveInfo in [IO.DriveInfo]::GetDrives()){if(-not $driveInfo.IsReady){continue};try{$candidate=[F2Acl.NativeDirectory]::GetVolumeGuidForPath($driveInfo.RootDirectory.FullName);if($candidate -cne $testEvidenceGuid){$testProjectPath=$driveInfo.RootDirectory.FullName;break}}catch{}}
+    if([string]::IsNullOrWhiteSpace($testProjectPath)){throw 'Synthetic evidence publication requires a second local volume; no project data is read or written.'}
+    $testProjectGuid=[F2Acl.NativeDirectory]::GetVolumeGuidForPath($testProjectPath)
+    $module=Get-Module F2AclIcacls.Corroboration
+    $resolver={param($path)if([string]::Equals([IO.Path]::GetPathRoot($path),[IO.Path]::GetPathRoot($testProjectPath),[StringComparison]::OrdinalIgnoreCase)){$testProjectGuid}else{$testEvidenceGuid}}
+    $module.SessionState.PSVariable.Set('F2IcaclsVolumeResolver',$resolver)
+    $safeDir=New-F2AclRestrictedDirectory -Path $testDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $acl=Test-F2AclRestrictedDirectory -Path $safeDir -OwnerSid $owner
+    $inputDir=Join-Path $tempRoot 'baseline-input';$inputSafe=New-F2AclRestrictedDirectory -Path $inputDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $payloadBytes=[Text.UTF8Encoding]::new($false).GetBytes(($baseline|ConvertTo-Json -Depth 14))
+    [IO.File]::WriteAllBytes((Join-Path $inputSafe 'acl-baseline.json'),$payloadBytes)
+    $inputIntegrity=[pscustomobject]@{Schema='f2-acl-integrity-v1';PayloadFile='acl-baseline.json';PayloadBytes=$payloadBytes.Length;PayloadSha256=(Get-F2IcaclsSha256 -Bytes $payloadBytes);ProjectVolumeGuid=$projectVolume;EvidenceVolumeGuid=$evidenceVolume;SeparateFromProjectVolume=$true}
+    [IO.File]::WriteAllText((Join-Path $inputSafe 'integrity.json'),($inputIntegrity|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
+    $mailboxSddl=Get-F2AclCoordinatorMailboxSddl -RequesterSid $owner
+    $module.SessionState.PSVariable.Set('F2IcaclsMailboxPathResolver',{param($captureId) if($captureId -ceq $baseline.CaptureId){$inputSafe}else{Join-Path $tempRoot 'wrong-mailbox'}})
+    $module.SessionState.PSVariable.Set('F2IcaclsMailboxDescriptorResolver',{param($path,$captureId) if([string]::Equals([IO.Path]::GetFullPath($path),[IO.Path]::GetFullPath($inputSafe),[StringComparison]::OrdinalIgnoreCase) -and $captureId -ceq $baseline.CaptureId){$mailboxSddl}else{throw 'Synthetic mailbox path mismatch.'}})
+    $loaded=Read-F2IcaclsBaselineEvidence -EvidenceDirectory $inputSafe -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner
+    Assert-Icacl ($loaded.Pass -and $loaded.Integrity.ProjectVolumeGuid -eq $projectVolume -and $loaded.Integrity.ProjectVolumeGuid -ne $loaded.Baseline.Manifest.ProjectVolumeGuid -and $loaded.Integrity.EvidenceVolumeGuid -eq $evidenceVolume) 'baseline loader sources ProjectVolumeGuid from integrity.json and keeps EvidenceVolumeGuid separate'
+    $mailboxCheck=Test-F2AclCoordinatorMailboxSddl -Sddl $mailboxSddl -RequesterSid $owner
+    Assert-Icacl ($mailboxCheck.Protected -and $mailboxCheck.OwnerSid -eq 'S-1-5-32-544' -and $mailboxCheck.AceCount -eq 4 -and $mailboxCheck.RequesterSid -eq $owner) 'faithful four-ACE Administrators-owned coordinator mailbox fixture passes'
+    Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory (Join-Path $tempRoot 'wrong-mailbox') -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner).Pass) 'mailbox path must be the exact capture-id-derived location'
+    Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory $inputSafe -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid 'S-1-5-21-111111111-222222222-333333333-4444').Pass) 'wrong requester SID invalidates four-ACE mailbox evidence'
+    $wrongMailboxOwner=$mailboxSddl.Replace('O:BA','O:'+ $owner)
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $wrongMailboxOwner -RequesterSid $owner } 'requester-owned mailbox is rejected'
+    $missingOwnerRights=$mailboxSddl.Replace('(A;OICI;0x1200a9;;;OW)','')
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $missingOwnerRights -RequesterSid $owner } 'mailbox without OWNER RIGHTS protection is rejected'
+    $unprotectedMailbox=$mailboxSddl.Replace('D:P','D:')
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $unprotectedMailbox -RequesterSid $owner } 'inheriting mailbox DACL is rejected'
+    $writableMailbox=$mailboxSddl.Replace('0x1200a9','FA')
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $writableMailbox -RequesterSid $owner } 'writable requester ACE in mailbox is rejected'
+    $extraMailboxAce=$mailboxSddl+'(A;OICI;0x1200a9;;;S-1-5-21-111111111-222222222-333333333-5555)'
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $extraMailboxAce -RequesterSid $owner } 'unexpected fifth mailbox ACE is rejected'
+    $junctionPath=Join-Path $tempRoot 'mailbox-junction';$junctionMade=$false
+    try{New-Item -ItemType Junction -Path $junctionPath -Target $inputSafe -ErrorAction Stop|Out-Null;$junctionMade=$true;$module.SessionState.PSVariable.Set('F2IcaclsMailboxPathResolver',{param($captureId)$junctionPath});Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory $junctionPath -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner).Pass) 'mailbox reparse/junction path is rejected before ACL acceptance'}catch{Assert-Icacl $false ('mailbox junction adversarial fixture could not be created: '+$_.Exception.GetType().Name)}finally{if($junctionMade){try{[IO.Directory]::Delete($junctionPath)}catch{}};$module.SessionState.PSVariable.Set('F2IcaclsMailboxPathResolver',{param($captureId) if($captureId -ceq $baseline.CaptureId){$inputSafe}else{Join-Path $tempRoot 'wrong-mailbox'}})}
+    [IO.File]::WriteAllText((Join-Path $inputSafe 'acl-baseline.json'),'tampered payload',[Text.UTF8Encoding]::new($false))
+    Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory $inputSafe -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner).Pass) 'baseline payload tampering fails its integrity.json digest'
+    $runs=@();$comparisons=@();foreach($path in $paths){$txt=@($path,'S-1-5-32-544:(F)') -join "`r`n";$r=New-CommandResult $path 0 $txt;$runs+=@([pscustomobject]@{Path=$path;Result=$r;Mode='Synthetic'});$comparisons+=@([pscustomobject]@{Path=$path;Classification='PASS';Reason='SyntheticFixture'})}
+    $package=Write-F2IcaclsEvidencePackage -Directory $safeDir -OwnerSid $owner -Targets $paths -Runs $runs -Comparisons $comparisons -ProjectVolumePath $testProjectPath -ProjectVolumeGuid $testProjectGuid -EvidenceVolumeGuid $testEvidenceGuid
+    Assert-Icacl ($package.Complete -and $package.TargetCount -eq 11 -and $package.RunCount -eq 11 -and (Test-Path (Join-Path $safeDir 'integrity.json'))) '11-object synthetic evidence package is atomically create-new in protected directory'
+    $integrityDoc=Get-Content -Raw (Join-Path $safeDir 'integrity.json')|ConvertFrom-Json
+    $verified=$true;foreach($row in $integrityDoc.Results){$file=Join-Path $safeDir $row.Name;$verified=$verified -and (Get-Item $file).Length -eq $row.Bytes -and (Get-F2IcaclsSha256 -Bytes ([IO.File]::ReadAllBytes($file))) -eq $row.Sha256}
+    Assert-Icacl $verified 'synthetic evidence file hashes and byte counts verify'
+    Assert-Icacl (Test-F2AclRestrictedDirectory -Path $safeDir -OwnerSid $owner).Protected 'evidence DACL remains protected after publication'
+    $retryRuns=@($runs);$retryRuns+=@([pscustomobject]@{Path=$paths[0];Result=(New-CommandResult $paths[0] 5 '' 'Access is denied.');Mode='Standard'})
+    $retryDir=Join-Path $tempRoot 'retry-evidence';$retrySafe=New-F2AclRestrictedDirectory -Path $retryDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $retryPackage=Write-F2IcaclsEvidencePackage -Directory $retrySafe -OwnerSid $owner -Targets $paths -Runs $retryRuns -Comparisons $comparisons -ProjectVolumePath $testProjectPath -ProjectVolumeGuid $testProjectGuid -EvidenceVolumeGuid $testEvidenceGuid
+    $retryManifest=Get-Content -Raw (Join-Path $retrySafe 'integrity.json')|ConvertFrom-Json
+    Assert-Icacl ($retryPackage.Complete -and $retryManifest.RunCount -eq 12 -and -not $retryManifest.AllCommandsSuccessful -and $retryManifest.AllComparisonsPass) 'evidence completeness allows a standard denial plus one elevated retry without hiding the failed attempt'
+    $badRuns=@($runs);$badRuns[0]=$badRuns[0].PSObject.Copy();$badRuns[0].Result=New-CommandResult $paths[0] 5 '' 'Access is denied.'
+    $badComparisons=@($comparisons);$badComparisons[0]=[pscustomobject]@{Path=$paths[0];Classification='INDETERMINATE';Reason='AccessDenied'}
+    $failedDir=Join-Path $tempRoot 'failed-evidence';$failedSafe=New-F2AclRestrictedDirectory -Path $failedDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $failedPackage=Write-F2IcaclsEvidencePackage -Directory $failedSafe -OwnerSid $owner -Targets $paths -Runs $badRuns -Comparisons $badComparisons -ProjectVolumePath $testProjectPath -ProjectVolumeGuid $testProjectGuid -EvidenceVolumeGuid $testEvidenceGuid
+    $failedRecord=Get-Content -Raw (Join-Path $failedSafe 'icacls-01.json')|ConvertFrom-Json
+    $failedManifest=Get-Content -Raw (Join-Path $failedSafe 'integrity.json')|ConvertFrom-Json
+    Assert-Icacl ($failedPackage.Complete -and -not $failedManifest.AllCommandsSuccessful -and -not $failedManifest.AllComparisonsPass -and $failedRecord.Result.ExitCode -eq 5 -and $failedRecord.Result.Stderr -eq 'Access is denied.') 'failing icacls output and exit status are published as complete diagnostic evidence, never a pass'
+}finally{if(Test-Path $tempRoot){Remove-Item -LiteralPath $tempRoot -Recurse -Force}}
+
+Write-Host ("Assertions={0}; Failures={1}" -f $testCount,$failures.Count)
+if($failures.Count -gt 0){$failures|ForEach-Object{Write-Error $_};exit 1}
+exit 0
+)
+        StderrHashFormat=[bool]($proc.StderrSha256 -match '^[0-9a-f]{64}
+$quietArgs='-NoProfile -NonInteractive -Command "[Console]::Out.WriteLine(''quiet-stdout'');exit 0"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $quietArgs -TimeoutSeconds 5
+Assert-Icacl ($proc.ExitCode -eq 0 -and $proc.OutputComplete -and $proc.StderrBytes -eq 0 -and $proc.StderrSha256 -match '^[0-9a-f]{64}$') 'successful command with empty stderr receives the SHA-256 of the empty byte stream'
+$failArgs='-NoProfile -NonInteractive -Command "[Console]::Out.WriteLine(''fixture-fail-out'');[Console]::Error.WriteLine(''fixture-fail-err'');exit 23"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $failArgs -TimeoutSeconds 5
+Assert-Icacl ($proc.ExitCode -eq 23 -and $proc.OutputComplete -and $proc.Stdout -match 'fixture-fail-out' -and $proc.Stderr -match 'fixture-fail-err') 'nonzero child exit retains complete separate streams'
+$hangArgs='-NoProfile -NonInteractive -Command "while($true){[Console]::Out.WriteLine(''tick'');Start-Sleep -Milliseconds 25}"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $hangArgs -TimeoutSeconds 1 -CleanupGraceMilliseconds 500
+Assert-Icacl ($proc.TimedOut -and -not $proc.OutputComplete -and $proc.ElapsedMilliseconds -lt 5000) 'hanging child returns bounded timeout with incomplete status'
+$largeArgs='-NoProfile -NonInteractive -Command "[Console]::Out.Write(''x'' * 20000);exit 0"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $largeArgs -TimeoutSeconds 5 -MaxBytesPerStream 1024
+Assert-Icacl ($proc.Truncated -and -not $proc.OutputComplete -and $proc.Stdout.Length -le 1024 -and $proc.StdoutBytes -gt 1024 -and $proc.ExitCode -eq 0) 'oversized single-line output is drained with bounded retention and cannot be complete'
+Assert-Icacl ($proc.StdoutBytes -gt $proc.Stdout.Length -and $proc.Truncated -and $proc.Stdout.Length -le 1024) 'fixed-chunk stream pump does not depend on line events or allocate a giant line'
+$largeErrorArgs='-NoProfile -NonInteractive -Command "[Console]::Error.Write(''y'' * 20000);exit 0"'
+$proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $largeErrorArgs -TimeoutSeconds 5 -MaxBytesPerStream 1024
+Assert-Icacl ($proc.Truncated -and -not $proc.OutputComplete -and $proc.Stderr.Length -le 1024 -and $proc.StderrBytes -gt 1024) 'oversized stderr is independently bounded and incomplete'
+$missingExecutable=Join-Path $env:TEMP ('F2-Icacl-Missing-'+[guid]::NewGuid().ToString('N')+'.exe')
+$proc=Invoke-TestIcaclsProcess -FilePath $missingExecutable -Arguments '' -TimeoutSeconds 1
+Assert-Icacl (-not $proc.Started -and $null -eq $proc.ExitCode -and -not $proc.CleanupComplete -and -not $proc.OutputComplete) 'child startup failure is reported without inventing an exit code or completion'
+
+$tempRoot=Join-Path $env:TEMP ('F2Icacls-Synthetic-'+[guid]::NewGuid().ToString('N'));$owner=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+try{
+    $testDir=Join-Path $tempRoot 'evidence';[void][IO.Directory]::CreateDirectory($tempRoot)
+    $testEvidenceGuid=[F2Acl.NativeDirectory]::GetVolumeGuidForPath($tempRoot)
+    $testProjectPath=$null
+    foreach($driveInfo in [IO.DriveInfo]::GetDrives()){if(-not $driveInfo.IsReady){continue};try{$candidate=[F2Acl.NativeDirectory]::GetVolumeGuidForPath($driveInfo.RootDirectory.FullName);if($candidate -cne $testEvidenceGuid){$testProjectPath=$driveInfo.RootDirectory.FullName;break}}catch{}}
+    if([string]::IsNullOrWhiteSpace($testProjectPath)){throw 'Synthetic evidence publication requires a second local volume; no project data is read or written.'}
+    $testProjectGuid=[F2Acl.NativeDirectory]::GetVolumeGuidForPath($testProjectPath)
+    $module=Get-Module F2AclIcacls.Corroboration
+    $resolver={param($path)if([string]::Equals([IO.Path]::GetPathRoot($path),[IO.Path]::GetPathRoot($testProjectPath),[StringComparison]::OrdinalIgnoreCase)){$testProjectGuid}else{$testEvidenceGuid}}
+    $module.SessionState.PSVariable.Set('F2IcaclsVolumeResolver',$resolver)
+    $safeDir=New-F2AclRestrictedDirectory -Path $testDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $acl=Test-F2AclRestrictedDirectory -Path $safeDir -OwnerSid $owner
+    $inputDir=Join-Path $tempRoot 'baseline-input';$inputSafe=New-F2AclRestrictedDirectory -Path $inputDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $payloadBytes=[Text.UTF8Encoding]::new($false).GetBytes(($baseline|ConvertTo-Json -Depth 14))
+    [IO.File]::WriteAllBytes((Join-Path $inputSafe 'acl-baseline.json'),$payloadBytes)
+    $inputIntegrity=[pscustomobject]@{Schema='f2-acl-integrity-v1';PayloadFile='acl-baseline.json';PayloadBytes=$payloadBytes.Length;PayloadSha256=(Get-F2IcaclsSha256 -Bytes $payloadBytes);ProjectVolumeGuid=$projectVolume;EvidenceVolumeGuid=$evidenceVolume;SeparateFromProjectVolume=$true}
+    [IO.File]::WriteAllText((Join-Path $inputSafe 'integrity.json'),($inputIntegrity|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
+    $mailboxSddl=Get-F2AclCoordinatorMailboxSddl -RequesterSid $owner
+    $module.SessionState.PSVariable.Set('F2IcaclsMailboxPathResolver',{param($captureId) if($captureId -ceq $baseline.CaptureId){$inputSafe}else{Join-Path $tempRoot 'wrong-mailbox'}})
+    $module.SessionState.PSVariable.Set('F2IcaclsMailboxDescriptorResolver',{param($path,$captureId) if([string]::Equals([IO.Path]::GetFullPath($path),[IO.Path]::GetFullPath($inputSafe),[StringComparison]::OrdinalIgnoreCase) -and $captureId -ceq $baseline.CaptureId){$mailboxSddl}else{throw 'Synthetic mailbox path mismatch.'}})
+    $loaded=Read-F2IcaclsBaselineEvidence -EvidenceDirectory $inputSafe -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner
+    Assert-Icacl ($loaded.Pass -and $loaded.Integrity.ProjectVolumeGuid -eq $projectVolume -and $loaded.Integrity.ProjectVolumeGuid -ne $loaded.Baseline.Manifest.ProjectVolumeGuid -and $loaded.Integrity.EvidenceVolumeGuid -eq $evidenceVolume) 'baseline loader sources ProjectVolumeGuid from integrity.json and keeps EvidenceVolumeGuid separate'
+    $mailboxCheck=Test-F2AclCoordinatorMailboxSddl -Sddl $mailboxSddl -RequesterSid $owner
+    Assert-Icacl ($mailboxCheck.Protected -and $mailboxCheck.OwnerSid -eq 'S-1-5-32-544' -and $mailboxCheck.AceCount -eq 4 -and $mailboxCheck.RequesterSid -eq $owner) 'faithful four-ACE Administrators-owned coordinator mailbox fixture passes'
+    Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory (Join-Path $tempRoot 'wrong-mailbox') -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner).Pass) 'mailbox path must be the exact capture-id-derived location'
+    Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory $inputSafe -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid 'S-1-5-21-111111111-222222222-333333333-4444').Pass) 'wrong requester SID invalidates four-ACE mailbox evidence'
+    $wrongMailboxOwner=$mailboxSddl.Replace('O:BA','O:'+ $owner)
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $wrongMailboxOwner -RequesterSid $owner } 'requester-owned mailbox is rejected'
+    $missingOwnerRights=$mailboxSddl.Replace('(A;OICI;0x1200a9;;;OW)','')
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $missingOwnerRights -RequesterSid $owner } 'mailbox without OWNER RIGHTS protection is rejected'
+    $unprotectedMailbox=$mailboxSddl.Replace('D:P','D:')
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $unprotectedMailbox -RequesterSid $owner } 'inheriting mailbox DACL is rejected'
+    $writableMailbox=$mailboxSddl.Replace('0x1200a9','FA')
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $writableMailbox -RequesterSid $owner } 'writable requester ACE in mailbox is rejected'
+    $extraMailboxAce=$mailboxSddl+'(A;OICI;0x1200a9;;;S-1-5-21-111111111-222222222-333333333-5555)'
+    Assert-IcaclReject { Test-F2AclCoordinatorMailboxSddl -Sddl $extraMailboxAce -RequesterSid $owner } 'unexpected fifth mailbox ACE is rejected'
+    $junctionPath=Join-Path $tempRoot 'mailbox-junction';$junctionMade=$false
+    try{New-Item -ItemType Junction -Path $junctionPath -Target $inputSafe -ErrorAction Stop|Out-Null;$junctionMade=$true;$module.SessionState.PSVariable.Set('F2IcaclsMailboxPathResolver',{param($captureId)$junctionPath});Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory $junctionPath -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner).Pass) 'mailbox reparse/junction path is rejected before ACL acceptance'}catch{Assert-Icacl $false ('mailbox junction adversarial fixture could not be created: '+$_.Exception.GetType().Name)}finally{if($junctionMade){try{[IO.Directory]::Delete($junctionPath)}catch{}};$module.SessionState.PSVariable.Set('F2IcaclsMailboxPathResolver',{param($captureId) if($captureId -ceq $baseline.CaptureId){$inputSafe}else{Join-Path $tempRoot 'wrong-mailbox'}})}
+    [IO.File]::WriteAllText((Join-Path $inputSafe 'acl-baseline.json'),'tampered payload',[Text.UTF8Encoding]::new($false))
+    Assert-Icacl (-not (Read-F2IcaclsBaselineEvidence -EvidenceDirectory $inputSafe -ExpectedCaptureId $baseline.CaptureId -ExpectedRequesterSid $owner).Pass) 'baseline payload tampering fails its integrity.json digest'
+    $runs=@();$comparisons=@();foreach($path in $paths){$txt=@($path,'S-1-5-32-544:(F)') -join "`r`n";$r=New-CommandResult $path 0 $txt;$runs+=@([pscustomobject]@{Path=$path;Result=$r;Mode='Synthetic'});$comparisons+=@([pscustomobject]@{Path=$path;Classification='PASS';Reason='SyntheticFixture'})}
+    $package=Write-F2IcaclsEvidencePackage -Directory $safeDir -OwnerSid $owner -Targets $paths -Runs $runs -Comparisons $comparisons -ProjectVolumePath $testProjectPath -ProjectVolumeGuid $testProjectGuid -EvidenceVolumeGuid $testEvidenceGuid
+    Assert-Icacl ($package.Complete -and $package.TargetCount -eq 11 -and $package.RunCount -eq 11 -and (Test-Path (Join-Path $safeDir 'integrity.json'))) '11-object synthetic evidence package is atomically create-new in protected directory'
+    $integrityDoc=Get-Content -Raw (Join-Path $safeDir 'integrity.json')|ConvertFrom-Json
+    $verified=$true;foreach($row in $integrityDoc.Results){$file=Join-Path $safeDir $row.Name;$verified=$verified -and (Get-Item $file).Length -eq $row.Bytes -and (Get-F2IcaclsSha256 -Bytes ([IO.File]::ReadAllBytes($file))) -eq $row.Sha256}
+    Assert-Icacl $verified 'synthetic evidence file hashes and byte counts verify'
+    Assert-Icacl (Test-F2AclRestrictedDirectory -Path $safeDir -OwnerSid $owner).Protected 'evidence DACL remains protected after publication'
+    $retryRuns=@($runs);$retryRuns+=@([pscustomobject]@{Path=$paths[0];Result=(New-CommandResult $paths[0] 5 '' 'Access is denied.');Mode='Standard'})
+    $retryDir=Join-Path $tempRoot 'retry-evidence';$retrySafe=New-F2AclRestrictedDirectory -Path $retryDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $retryPackage=Write-F2IcaclsEvidencePackage -Directory $retrySafe -OwnerSid $owner -Targets $paths -Runs $retryRuns -Comparisons $comparisons -ProjectVolumePath $testProjectPath -ProjectVolumeGuid $testProjectGuid -EvidenceVolumeGuid $testEvidenceGuid
+    $retryManifest=Get-Content -Raw (Join-Path $retrySafe 'integrity.json')|ConvertFrom-Json
+    Assert-Icacl ($retryPackage.Complete -and $retryManifest.RunCount -eq 12 -and -not $retryManifest.AllCommandsSuccessful -and $retryManifest.AllComparisonsPass) 'evidence completeness allows a standard denial plus one elevated retry without hiding the failed attempt'
+    $badRuns=@($runs);$badRuns[0]=$badRuns[0].PSObject.Copy();$badRuns[0].Result=New-CommandResult $paths[0] 5 '' 'Access is denied.'
+    $badComparisons=@($comparisons);$badComparisons[0]=[pscustomobject]@{Path=$paths[0];Classification='INDETERMINATE';Reason='AccessDenied'}
+    $failedDir=Join-Path $tempRoot 'failed-evidence';$failedSafe=New-F2AclRestrictedDirectory -Path $failedDir -OwnerSid $owner -ProjectVolumePath $testProjectPath
+    $failedPackage=Write-F2IcaclsEvidencePackage -Directory $failedSafe -OwnerSid $owner -Targets $paths -Runs $badRuns -Comparisons $badComparisons -ProjectVolumePath $testProjectPath -ProjectVolumeGuid $testProjectGuid -EvidenceVolumeGuid $testEvidenceGuid
+    $failedRecord=Get-Content -Raw (Join-Path $failedSafe 'icacls-01.json')|ConvertFrom-Json
+    $failedManifest=Get-Content -Raw (Join-Path $failedSafe 'integrity.json')|ConvertFrom-Json
+    Assert-Icacl ($failedPackage.Complete -and -not $failedManifest.AllCommandsSuccessful -and -not $failedManifest.AllComparisonsPass -and $failedRecord.Result.ExitCode -eq 5 -and $failedRecord.Result.Stderr -eq 'Access is denied.') 'failing icacls output and exit status are published as complete diagnostic evidence, never a pass'
+}finally{if(Test-Path $tempRoot){Remove-Item -LiteralPath $tempRoot -Recurse -Force}}
+
+Write-Host ("Assertions={0}; Failures={1}" -f $testCount,$failures.Count)
+if($failures.Count -gt 0){$failures|ForEach-Object{Write-Error $_};exit 1}
+exit 0
+)
+        StdoutExpectedHash=[bool]([string]$proc.StdoutSha256 -ceq (Get-F2IcaclsSha256 -Bytes ([Text.Encoding]::UTF8.GetBytes($expectedOut))))
+        StderrExpectedHash=[bool]([string]$proc.StderrSha256 -ceq (Get-F2IcaclsSha256 -Bytes ([Text.Encoding]::UTF8.GetBytes($expectedErr))))
+        StdoutHashMatchesText=[bool]([string]$proc.StdoutSha256 -ceq (Get-F2IcaclsSha256 -Bytes ([Text.Encoding]::UTF8.GetBytes($observedOut))))
+        StderrHashMatchesText=[bool]([string]$proc.StderrSha256 -ceq (Get-F2IcaclsSha256 -Bytes ([Text.Encoding]::UTF8.GetBytes($observedErr))))
+    }
+    Write-Host ('F2_ICACLS_CAPTURE_DIAG=' + ($diag|ConvertTo-Json -Compress -Depth 3))
+}
+Assert-Icacl $firstCapturePass 'bounded process runner captures stdout, stderr, PID, exit and hashes'
 $quietArgs='-NoProfile -NonInteractive -Command "[Console]::Out.WriteLine(''quiet-stdout'');exit 0"'
 $proc=Invoke-TestIcaclsProcess -FilePath $psExe -Arguments $quietArgs -TimeoutSeconds 5
 Assert-Icacl ($proc.ExitCode -eq 0 -and $proc.OutputComplete -and $proc.StderrBytes -eq 0 -and $proc.StderrSha256 -match '^[0-9a-f]{64}$') 'successful command with empty stderr receives the SHA-256 of the empty byte stream'
