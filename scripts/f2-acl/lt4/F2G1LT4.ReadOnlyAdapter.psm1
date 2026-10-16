@@ -1,5 +1,6 @@
-# F2 G1 LT-4 — reusable read-only filesystem provider; HOST mode hard disabled.
-# No public host path parameter, no live entrypoint, no destructive code.
+# F2 G1 — fixed-scope owner-operated read-only host inspection candidate.
+# Do NOT execute against host without fresh owner grant for reviewed exact SHA.
+# No caller-defined paths, UAC elevation, ACL mutation or guest/VM access.
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSScriptRoot '..\lt1\F2G1LT1.Synthetic.psm1') -ErrorAction Stop
@@ -29,7 +30,7 @@ function Test-F2G1LT4ActualToken {
 }
 
 function Get-F2G1LT4HostReadiness {
-    # This is the ONLY exported host-specific function. It never calls I/O.
+    # Status function never calls host I/O. Owner-operated function is separate.
     return [pscustomobject]@{
         Schema='f2-g1-lt4-host-gate-v1';Verdict='BLOCKED_WITH_EVIDENCE'
         Code='HOST_ADAPTER_EXECUTION_NOT_AUTHORIZED'
@@ -63,8 +64,8 @@ function Assert-F2G1LT4FixtureRoot([string]$Root) {
 }
 
 function New-F2G1LT4PathMap([string]$Mode,[string]$Root) {
-    # The physical adapter can use either mapping after a future separately
-    # reviewed source change/owner grant. HOST is presently unreachable.
+    # Host mapping is transiently enabled only inside validated owner operation.
+    # This is procedural local-host control, NOT protection from host malware.
     if($Mode -ceq 'Host'){
         if(-not $script:ProtectedHostAccessEnabled){throw 'HOST_MAPPING_DISABLED'}
         if(-not (Test-F2G1LT4ActualToken)){throw 'HOST_TOKEN_REJECTED'}
@@ -83,8 +84,7 @@ function Get-F2G1LT4PhysicalPath($Map,[string]$Label,[string]$Kind) {
        ($Kind -ceq 'File' -and $files -cnotcontains $Label) -or
        $Kind -cnotin @('File','Directory')){throw 'LABEL_OUTSIDE_FROZEN_SCOPE'}
     if($Map.Mode -ceq 'Host'){
-        # All labels are fixed by the allowlist above. This branch is unreachable
-        # until a separately reviewed source change provides an owner grant.
+        # All labels are fixed by the allowlist above. No caller path accepted.
         if(-not $script:ProtectedHostAccessEnabled){throw 'HOST_MAPPING_DISABLED'}
         if(-not (Test-F2G1LT4ActualToken)){throw 'HOST_TOKEN_REJECTED'}
         return $Label
@@ -186,8 +186,8 @@ function Get-F2G1LT4PhysicalChildren($Map,[string]$Label) {
 
 
 function Invoke-F2G1LT4R2HistoricalPolicy($Map) {
-    # Reuse the accepted R2 policy with ACTUAL fixture bytes and ACL observations.
-    # This is NOT R2's disabled -Live entrypoint and cannot produce a host verdict.
+    # Reuse unchanged R2 semantics with physically read bytes/ACLs.
+    # Its public legacy -Live entrypoint stays disabled.
     $r2=Import-Module (Join-Path $PSScriptRoot '..\F2G1CPostfailureAttestation.psm1') -PassThru -ErrorAction Stop
     $refs=Get-F2G1LT3ReferenceContract
     $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
@@ -279,4 +279,106 @@ function Invoke-F2G1LT4Fixture {
     return [pscustomobject]$out
 }
 
-Export-ModuleMember -Function Get-F2G1LT4HostReadiness,Invoke-F2G1LT4Fixture,Test-F2G1LT4ActualToken
+
+function Invoke-F2G1LT4OwnerHostReadOnly {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$ExpectedComputerName,
+        [Parameter(Mandatory)][ValidatePattern('^S-1-[0-9-]+
+)][string]$ExpectedUserSid,
+        [Parameter(Mandatory)][ValidatePattern('^[0-9a-fA-F]{64}
+)][string]$ReviewedAdapterSha256
+    )
+    # The caller must first obtain a separate, fresh owner execution approval
+    # naming exact reviewed SHA, account, machine, command and fixed C: scope.
+    # These metadata checks prevent operator mistakes; they are NOT authentication.
+    $report=[ordered]@{
+        Schema='f2-g1-fixed-host-read-v1';Mode='OWNER_OPERATED_FIXED_C_READ_ONLY'
+        Verdict='BLOCKED_WITH_EVIDENCE';Code='HOST_PREFLIGHT_FAILED'
+        ProtectedAccessAttempted=$false;ObservedObjects=0;ObservedFiles=0;ObservedInventories=0
+        HistoricalV2='NOT_ATTESTED';LinkAndAds='LINK_ADS_NOT_ATTESTED'
+        GVolumeAccess=$false;WritesPerformed=$false;Elevated=$false
+    }
+    try {
+        # No hosted CI or non-Windows environment can ever take a host-read path.
+        if($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1 -or
+           $env:GITHUB_ACTIONS -ceq 'true'){throw 'HOST_RUN_CONTEXT_REJECTED'}
+        if(-not [string]::Equals([Environment]::MachineName,$ExpectedComputerName,[StringComparison]::OrdinalIgnoreCase)){
+            throw 'MACHINE_NOT_MATCHED'
+        }
+        $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
+        try {
+            if([string]$identity.User.Value -cne $ExpectedUserSid){throw 'ACCOUNT_NOT_MATCHED'}
+            # R2 still forbids Administrator-group membership even on a UAC filtered token.
+            if(@($identity.Groups|Where-Object {$_.Value -ceq 'S-1-5-32-544'}).Count -ne 0){
+                throw 'R2_ADMINISTRATORS_GROUP_REJECTED'
+            }
+        } finally {$identity.Dispose()}
+        if(-not (Test-F2G1LT4ActualToken)){throw 'STANDARD_TOKEN_REQUIRED'}
+        # Read only source bytes from this checkout, never a protected C: target.
+        $sourceHash=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256 -ErrorAction Stop).Hash
+        # PSCommandPath is the module path for functions defined in this module.
+        if([string]::IsNullOrWhiteSpace($sourceHash)){throw 'SOURCE_IDENTITY_UNAVAILABLE'}
+        if($sourceHash -cne $ReviewedAdapterSha256.ToUpperInvariant()){throw 'REVIEWED_SOURCE_HASH_MISMATCH'}
+        if($script:ProtectedHostAccessEnabled){throw 'HOST_REENTRANCY_DENIED'}
+        $script:ProtectedHostAccessEnabled=$true
+        try {
+            $map=New-F2G1LT4PathMap 'Host' ''
+            $scope=$script:Scope
+            $report.ProtectedAccessAttempted=$true
+            foreach($label in @($scope.Directories)){
+                [void](Get-F2G1LT4PhysicalMeta $map $label)
+                $report.ObservedObjects++
+            }
+            $bytesByLabel=New-Object 'System.Collections.Generic.Dictionary[string,object]' ([StringComparer]::Ordinal)
+            foreach($file in @($scope.Files)){
+                $bytes=Get-F2G1LT4PhysicalBytes $map $file.Path ([int]$file.Max)
+                $bytesByLabel.Add($file.Path,[byte[]]$bytes)
+                $report.ObservedFiles++
+                $report.ObservedObjects++
+            }
+            foreach($inventory in @($scope.Inventories)){
+                [void]@(Get-F2G1LT4PhysicalChildren $map $inventory.Path)
+                $report.ObservedInventories++
+            }
+            # Check actual physically read package/manifest/payload/integrity bytes.
+            $ref=Get-F2G1LT3ReferenceContract
+            $members=@()
+            foreach($pin in @($ref.PackageMembers)){
+                $members+=[pscustomobject]@{Path=$pin.Path;Bytes=$bytesByLabel[$pin.Path]}
+            }
+            $mail='C:\ProgramData\F2-G1-ACL-Evidence-ecb6deeb424e40feb5354d18908986df\'
+            $check=Test-F2G1LT3CapturedBytes ([pscustomobject]@{
+                PackageMembers=$members
+                ManifestBytes=$bytesByLabel['C:\ProgramData\F2-G1-Icacls\approved-release.json']
+                PayloadBytes=$bytesByLabel[$mail+'acl-baseline.json']
+                IntegrityBytes=$bytesByLabel[$mail+'integrity.json']
+            })
+            if($check.Code -cne 'BYTES_MATCH_HISTORICAL_PINS_ORIGIN_UNVERIFIED'){
+                throw 'HISTORICAL_HASHES_NOT_MATCHED'
+            }
+            # The unchanged R2 Live *semantic core*, not its disabled Live entrypoint.
+            $evaluated=Invoke-F2G1LT4R2HistoricalPolicy $map
+            if(-not $evaluated.Executed -or $evaluated.FixtureVerdict -cne 'PASS_READ_ONLY_C_POSTFAILURE_ATTESTATION'){
+                throw 'R2_HISTORICAL_POLICY_NOT_MATCHED'
+            }
+            $report.Verdict='PASS_READ_ONLY_C_POSTFAILURE_ATTESTATION'
+            $report.Code='HISTORICAL_V2_C_OBJECTS_MATCHED_READ_ONLY'
+            $report.HistoricalV2='C_FIXED_OBJECTS_MATCHED_AT_OBSERVATION'
+        } finally {
+            $script:ProtectedHostAccessEnabled=$false
+        }
+    } catch {
+        # Do not emit exception messages, paths, user SIDs, SDDL or historical bytes.
+        $report.Code='HOST_OBSERVATION_BLOCKED'
+        foreach($code in @('HOST_RUN_CONTEXT_REJECTED','MACHINE_NOT_MATCHED','ACCOUNT_NOT_MATCHED',
+           'R2_ADMINISTRATORS_GROUP_REJECTED','STANDARD_TOKEN_REQUIRED','SOURCE_IDENTITY_UNAVAILABLE',
+           'REVIEWED_SOURCE_HASH_MISMATCH','HOST_REENTRANCY_DENIED','HISTORICAL_HASHES_NOT_MATCHED',
+           'R2_HISTORICAL_POLICY_NOT_MATCHED')){
+            if($_.Exception.Message -ceq $code){$report.Code=$code;break}
+        }
+    }
+    return [pscustomobject]$report
+}
+
+Export-ModuleMember -Function Get-F2G1LT4HostReadiness,Invoke-F2G1LT4Fixture,Test-F2G1LT4ActualToken,Invoke-F2G1LT4OwnerHostReadOnly
