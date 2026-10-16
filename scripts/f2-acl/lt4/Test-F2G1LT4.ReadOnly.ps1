@@ -80,6 +80,36 @@ $output=@(& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -No
 $j=($output -join [Environment]::NewLine)|ConvertFrom-Json
 Check ($LASTEXITCODE -eq 2 -and $j.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and
  $j.ProtectedReads -eq 0) 'default CLI refuses protected host execution'
+
+# Host activation is a source-review candidate, NOT an owner execution grant.
+$hostCli=Join-Path $PSScriptRoot 'Invoke-F2G1LT4.FixedHostC.ReadOnly.ps1'
+$tokens=$null;$parseErrors=$null
+[void][Management.Automation.Language.Parser]::ParseFile($hostCli,[ref]$tokens,[ref]$parseErrors)
+Check ($parseErrors.Count -eq 0) 'fixed-host owner entrypoint parses under PS5.1'
+$hostSource=[IO.File]::ReadAllText($hostCli)
+Check ($hostSource.Contains('InspectFixedHostC') -and
+  $hostSource.Contains('ReviewedAdapterSha256') -and
+  $hostSource.Contains('ExpectedComputerName') -and
+  $hostSource.Contains('ExpectedUserSid') -and
+  -not $hostSource.Contains('SyntheticFixtureRoot') -and
+  -not $hostSource.Contains('OwnerAuthorizationReference')) 'operational command has no caller-selected object paths or grant URL'
+$noargs=@(& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $hostCli)
+$noargsCode=$LASTEXITCODE
+$noargsStatus=($noargs -join [Environment]::NewLine)|ConvertFrom-Json
+Check ($noargsCode -eq 2 -and $noargsStatus.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and
+  $noargsStatus.ProtectedReads -eq 0) 'new host CLI default denies with zero reads'
+$hash='0'*64
+$cliOutput=@(& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $hostCli -InspectFixedHostC -ExpectedComputerName 'DO-NOT-READ-HOST' -ExpectedUserSid 'S-1-5-21-1-2-3-1001' -ReviewedAdapterSha256 $hash)
+$cliExit=$LASTEXITCODE
+$cliResult=($cliOutput -join [Environment]::NewLine)|ConvertFrom-Json
+Check ($cliExit -eq 2 -and $cliResult.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and
+  $cliResult.Code -ceq 'HOST_RUN_CONTEXT_REJECTED' -and
+  -not $cliResult.ProtectedAccessAttempted) 'host CLI fails closed before physical I/O in GitHub CI'
+$direct=Invoke-F2G1LT4OwnerHostReadOnly -ExpectedComputerName 'DO-NOT-READ-HOST' -ExpectedUserSid 'S-1-5-21-1-2-3-1001' -ReviewedAdapterSha256 $hash
+Check ($direct.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and
+  $direct.Code -ceq 'HOST_RUN_CONTEXT_REJECTED' -and
+  -not $direct.ProtectedAccessAttempted) 'direct module host invocation denies in CI'
+
 Write-Output ('LT4_ASSERTIONS='+$script:Assertions+' FAILURES='+$script:Failures)
 if($script:Failures -ne 0){exit 1}
 exit 0
