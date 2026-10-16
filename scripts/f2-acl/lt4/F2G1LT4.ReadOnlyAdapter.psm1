@@ -300,7 +300,7 @@ function Invoke-F2G1LT4R2HistoricalPolicy($Map) {
     if($Map.Mode -ceq 'Fixture'){
         foreach($gate in $result[0].Gates){
             if($null -eq $gate -or [string]$gate.Result -cne 'STOP'){continue}
-            $value=[string]$gate.Data.ErrorClass
+            $value=if($gate.Data -is [hashtable] -and $gate.Data.ContainsKey('ErrorClass')){[string]$gate.Data['ErrorClass']}else{'NOT_APPLICABLE'}
             $allowed=@('CommandNotFoundException','RuntimeException','PropertyNotFoundException',
                 'MethodInvocationException','ParameterBindingException','ItemNotFoundException',
                 'FileNotFoundException','UnauthorizedAccessException','InvalidOperationException',
