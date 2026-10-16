@@ -61,27 +61,6 @@ Check ($token -is [bool]) 'actual process token classified'
 $root=CreateFixture
 $before=Snapshot $root
 $result=Invoke-F2G1LT4Fixture -FixtureRoot $root
-if($result.Code -ceq 'FIXTURE_OBSERVATION_FAILED_CLOSED'){
-  try {
-    $debugModule=Get-Module F2G1LT4.ReadOnlyAdapter
-    [void]@($debugModule.Invoke([scriptblock]::Create(
-      'param($FixtureRoot) $mapped=New-F2G1LT4PathMap ''Fixture'' $FixtureRoot; Invoke-F2G1LT4R2HistoricalPolicy $mapped'),@($root)))
-  } catch {
-    $inner=$_.Exception.InnerException
-    $innerType=if($null -eq $inner){'NONE'}else{$inner.GetType().Name}
-    $innerInner=if($null -eq $inner -or $null -eq $inner.InnerException){'NONE'}else{$inner.InnerException.GetType().Name}
-    $deep=if($null -eq $inner){$null}else{$inner.InnerException}
-    $safeMessage=if($null -eq $deep){'NONE'}else{[string]$deep.Message}
-    $safeMessage=$safeMessage -replace '[A-Za-z]:\\[^\s\r\n]+','[PATH]' -replace 'S-1-5-\d+(-\d+)*','[SID]'
-    if($safeMessage.Length -gt 180){$safeMessage=$safeMessage.Substring(0,180)}
-    $stack=if($null -eq $inner -or $null -eq $inner.ErrorRecord){''}else{[string]$inner.ErrorRecord.ScriptStackTrace}
-    $stack=$stack -replace '[A-Za-z]:\\[^\s\r\n]+','[PATH]' -replace 'S-1-5-\d+(-\d+)*','[SID]'
-    if($stack.Length -gt 650){$stack=$stack.Substring(0,650)}
-    Write-Output ('LT4_SYNTHETIC_BRIDGE_CLASS='+$_.Exception.GetType().Name+
-       ';INNER='+$innerType+';INNER_INNER='+$innerInner+';LINE='+[int]$_.InvocationInfo.ScriptLineNumber+
-       ';DETAIL='+$safeMessage+';STACK='+$stack)
-  }
-}
 $after=Snapshot $root
 Check ($result.Verdict -ceq 'BLOCKED_WITH_EVIDENCE' -and $result.ProtectedReads -eq 0 -and
  $result.HostAttestation -ceq 'NOT_PERFORMED') 'physical fixture cannot claim host pass'
