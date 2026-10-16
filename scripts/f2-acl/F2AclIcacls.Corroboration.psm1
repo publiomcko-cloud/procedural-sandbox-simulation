@@ -332,14 +332,14 @@ function Invoke-F2IcaclsProcessCore {
         while($true){
             foreach($stream in @('Out','Err')){
                 $task=if($stream -eq 'Out'){$outTask}else{$errTask}
-                $buffer=if($stream -eq 'Out'){$outBuffer}else{$errBuffer}
+                # Do not snapshot char[] through PowerShell's conditional output before ReadAsync completes.
                 $done=if($stream -eq 'Out'){$outEof -or $outFailed}else{$errEof -or $errFailed}
                 if(-not $done -and $task.IsCompleted){
                     try{
                         $count=[int]$task.GetAwaiter().GetResult()
                         if($count -le 0){if($stream -eq 'Out'){$outEof=$true}else{$errEof=$true}}
                         else{
-                            $chunk=New-Object string ($buffer,0,$count)
+                            $chunk=if($stream -eq 'Out'){[string]::new($outBuffer,0,$count)}else{[string]::new($errBuffer,0,$count)}
                             $chunkBytes=[long][Text.Encoding]::UTF8.GetByteCount($chunk)
                             if($stream -eq 'Out'){$outObservedBytes+=$chunkBytes;$retained=$outRetainedBytes;$builder=$outBuilder}else{$errObservedBytes+=$chunkBytes;$retained=$errRetainedBytes;$builder=$errBuilder}
                             if($retained+$chunkBytes -le $MaxBytesPerStream){[void]$builder.Append($chunk);if($stream -eq 'Out'){$outRetainedBytes+=$chunkBytes}else{$errRetainedBytes+=$chunkBytes}}
