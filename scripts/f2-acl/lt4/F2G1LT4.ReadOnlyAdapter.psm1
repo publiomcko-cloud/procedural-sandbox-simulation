@@ -266,6 +266,15 @@ function Invoke-F2G1LT4R2HistoricalPolicy($Map) {
             UserSid=[string]$identity.User.Value
         }
     } finally {$identity.Dispose()}
+    # GitHub-hosted Windows runners normally hold an administrator token.
+    # The synthetic fixture must exercise R2's *path/ACL policy*, not stop at
+    # that CI token. Host mode always keeps the actual measured identity.
+    if($Map.Mode -ceq 'Fixture'){
+        $identityInfo=[pscustomobject]@{
+            IsAdministrator=$false;AdministratorGroupPresent=$false
+            UserSid=$identityInfo.UserSid
+        }
+    }
     # GetNewClosure() moves the callback to a dynamic module, where unexported
     # LT4 functions are not name-resolvable. Bind each original-module private
     # FunctionInfo explicitly; the closure captures its *command*, not a name.
