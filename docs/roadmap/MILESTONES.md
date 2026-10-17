@@ -24,7 +24,11 @@ Multiplayer synchronization, NPC civilizations, crafting/combat loops, photoreal
 
 The functional P0.1 GDScript SDF prototypes are accepted/merged (PRs #78, #80, #82): one finite region, transient brushes and 16-chunk localized remeshing. Their successful review is **not** acceptance of the complete P0 terrain backend comparison, durable save/mod/simulation spikes, or the full P1 streaming milestone.
 
-P1.0 proposed order: **P1.0A** [#84](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/84) fixed 3×3 region geometry and seam ownership (**integrated at `7f87c1e9`**) → **P1.0B** bounded dynamic load/unload (**owner-authorized and merged as PR #88 at `13d08b828553df4a3b2bb9d3eb783b4cc3f45beb`; lighting depth correction deferred to Issue #89**) → **P1.0C** globally ordered edits across regions (**deferred**), tracked in [#83](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/83). Each requires its own independent review, owner GUI gate where relevant and separate merge authorization.
+P1.0 proposed order: **P1.0A** [#84](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/84) fixed 3×3 region geometry and seam ownership (**integrated at `7f87c1e9`**) → **P1.0B** bounded dynamic load/unload (**owner-authorized for implementation on 2026-10-17; source review and owner GUI pending**) → **P1.0C** globally ordered edits across regions (**deferred**), tracked in [#83](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/83). Each requires its own independent review, owner GUI gate where relevant and separate merge authorization.
 
 See [CURRENT_STATUS](../status/CURRENT_STATUS.md) and [DECISION_REGISTER](../decisions/DECISION_REGISTER.md) for current accepted/proposed distinctions, and [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md) for a new chat/agent.
 
+
+## Next prepared P1.0C slice (2026-10-17)
+
+P1.0A regions (#86), P1.0B streaming (#88) and lighting (#90) are integrated into `main` `2f86c42503cfa3a334215b1ff5b9bf9658263440`. [Issue #91](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/91) plans globally ordered canonical sphere edits crossing loaded/unloaded region boundaries and corners with atomic mesh staging and in-memory replay. **Do not implement until separate owner authorization.** No change to phase acceptance criteria, final backend ADR, persistence or initial-release multiplayer non-goal.

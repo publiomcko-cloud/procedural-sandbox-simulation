@@ -10,7 +10,7 @@ Godot 4.7.2 procedural 3D sandbox: versioned SDF terrain, caves, additive/subtra
 4. [Agent recovery runbook](docs/workflow/AGENT_RECOVERY.md) and [memory protocol](docs/workflow/PROJECT_MEMORY_PROTOCOL.md) — resume safely in a fresh chat/agent, preserve evidence and update checkpoints.
 5. [Developer contract](AGENTS.md), [workflow gates](docs/workflow/ROLES_AND_GATES.md), [architecture](docs/architecture/ARCHITECTURE.md), [contracts](docs/architecture/CONTRACTS.md), [roadmap](docs/roadmap/MILESTONES.md), and **current GitHub issue**.
 
-A new agent **must not** infer completed work from an issue title or old chat. Reconcile the latest `main`/PR HEAD and the owner's acceptance gate first. P1.0A (PR #86) and P1.0B camera-focused dynamic streaming (PR #88) are integrated; verified post-P1.0B `main` is `13d08b828553df4a3b2bb9d3eb783b4cc3f45beb`. **Lighting depth contrast remains an open visual defect**, deferred to next [Issue #89](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/89) (prepared branch only). P1.0C cross-region edits remain deferred; see [current status](docs/status/CURRENT_STATUS.md) and [post-merge checkpoint](docs/checkpoints/2026-10-17-PR88-MERGE-LIGHTING-DEFERRED.md).
+A new agent **must not** infer completed work from an issue title or old chat. Reconcile the latest `main`/PR HEAD and the owner's acceptance gate first. P1.0A is integrated by PR #86 at main `7f87c1e9`; P1.0B dynamic region streaming is merged; lighting #90 is also merged at `2f86c42503cfa3a334215b1ff5b9bf9658263440`. P1.0C cross-region edits remain deferred; see [current status](docs/status/CURRENT_STATUS.md) and the dated [P1.0B checkpoint](docs/checkpoints/2026-10-17-P1-0B-AUTHORIZATION.md).
 
 ## Open the current prototype (Windows)
 
@@ -24,7 +24,7 @@ $env:GODOT_BIN='C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
 & 'C:\Dev\sandbox-sim-dev\scripts\validate.ps1'
 ```
 
-Check exact executable paths and engine version on the machine. The integrated prototype has versioned 16×12 logical regions, each divided into 16 chunks, and a dynamically shifting 3×3 focus request window (PR #88), with left-click carve, Shift+left fill, right-drag orbit, wheel zoom, C section, R regenerate and X reset. Dynamic region loading/unloading is integrated. The added auxiliary spotlight did not noticeably improve depth perception in owner GUI review; the bounded lighting correction is deferred to Issue #89.
+Check exact executable paths and engine version on the machine. The integrated prototype has versioned 16×12 logical regions, each divided into 16 chunks, and a fixed 3×3 preview (PR #86), with left-click carve, Shift+left fill, right-drag orbit, wheel zoom, C section, R regenerate and X reset. Dynamic streaming is integrated. Next scoped [P1.0C Issue #91](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/91) globally ordered cross-region editing is planning only, not yet authorized for coding.
 
 ## Product goal vs current deliverable
 

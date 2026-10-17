@@ -101,17 +101,24 @@ func _test_scene_contract() -> void:
 	_check(scene.get_node_or_null("TerrainChunks/Terrain") is MeshInstance3D, "demonstration scene has a terrain chunk mesh node")
 	_check(scene.get_node_or_null("Camera3D") is Camera3D, "demonstration scene has a camera")
 	_check(scene.get_node_or_null("DirectionalLight3D") is DirectionalLight3D, "demonstration scene has lighting")
+	var directional := scene.get_node_or_null("DirectionalLight3D") as DirectionalLight3D
+	if directional != null:
+		_check(directional.rotation_degrees.x > 0.0 and directional.basis.z.y < 0.0, "directional key is oriented down onto terrain in the Compatibility renderer")
+		_check(not directional.shadow_enabled, "directional shadow maps remain disabled after the visual cost comparison")
 	var camera := scene.get_node_or_null("Camera3D") as Camera3D
 	_check(camera != null and camera.get_node_or_null("ViewAlignedLight") is SpotLight3D, "camera carries an auxiliary view-aligned spotlight")
 	if camera != null:
 		var view_light := camera.get_node("ViewAlignedLight") as SpotLight3D
-		_check(view_light.light_energy > 0.0 and view_light.light_energy <= 0.5, "view-aligned light has subtle bounded energy")
+		_check(view_light.light_energy >= 12.0 and view_light.light_energy <= 16.0, "view-aligned fill has enough bounded energy to show at close inspection range")
+		_check(view_light.spot_range == 72.0 and is_equal_approx(view_light.spot_attenuation, 1.0), "view-aligned fill keeps its broad cone range and natural distance falloff")
 		_check(not view_light.shadow_enabled, "auxiliary light preserves the established shadow look and cost")
 	_check(scene.get_node_or_null("CanvasLayer/Status") is Label, "demonstration scene explains its controls")
 	var environment: Environment = scene.get_node("WorldEnvironment").environment
 	_check(environment.ambient_light_source == Environment.AMBIENT_SOURCE_COLOR, "environment uses colored ambient lighting")
 	_check(environment.ambient_light_sky_contribution == 0.0, "colored ambient light is not overridden by the sky")
-	_check(environment.ambient_light_energy > 0.0 and environment.ambient_light_color != Color.BLACK, "ambient light has usable energy and color")
+	_check(environment.ambient_light_energy > 0.0 and environment.ambient_light_energy <= 1.25 and environment.ambient_light_color != Color.BLACK, "colored ambient fill stays below the directional key so terrain slopes retain contrast")
+	if directional != null:
+		_check(directional.light_energy > environment.ambient_light_energy, "directional key remains stronger than ambient fill")
 	var material: StandardMaterial3D = scene.get_node("TerrainChunks/Terrain").material_override
 	_check(material.albedo_color.g > material.albedo_color.r, "terrain material remains green")
 	_check(material.shading_mode != BaseMaterial3D.SHADING_MODE_UNSHADED, "terrain remains affected by real lighting")

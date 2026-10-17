@@ -295,7 +295,7 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	var view_light := camera.get_node_or_null("ViewAlignedLight") as SpotLight3D
 	_check(view_light != null, "camera has an auxiliary aligned spotlight")
 	if view_light != null:
-		_check(view_light.light_energy > 0.0 and view_light.light_energy < 1.0 and not view_light.shadow_enabled, "auxiliary light remains subtle and does not replace directional shading")
+		_check(view_light.light_energy >= 12.0 and view_light.light_energy <= 16.0 and not view_light.shadow_enabled, "auxiliary light adds a bounded close-range fill without replacing directional shading")
 	var active_before_move := active_regions.size()
 	await _send_key(KEY_D)
 	await _send_key(KEY_D)
