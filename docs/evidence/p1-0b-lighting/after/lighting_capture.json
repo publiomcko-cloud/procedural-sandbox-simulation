@@ -1,0 +1,436 @@
+{
+  "ambient_energy": 1.20000004768372,
+  "camera_ray_direction": [
+    0.589015066623688,
+    0.41577535867691,
+    0.692958950996399
+  ],
+  "captures": [
+    {
+      "camera_position": [
+        42.0,
+        27.1000003814697,
+        46.0
+      ],
+      "camera_rotation": [
+        -0.42879518866539,
+        0.704494059085846,
+        0.0
+      ],
+      "camera_target": [
+        8.0,
+        3.09999990463257,
+        6.0
+      ],
+      "cave_section": false,
+      "directional_shadows": false,
+      "file": "wide_exterior_shadow_off.png",
+      "height": 648,
+      "name": "wide_exterior_shadow_off",
+      "terrain_luminance": {
+        "mean": 136.621729158576,
+        "p10": 131,
+        "p50": 136,
+        "p90": 144,
+        "pixels": 136471,
+        "std_dev": 5.83263905550765
+      },
+      "width": 1152
+    },
+    {
+      "camera_position": [
+        42.0,
+        27.1000003814697,
+        46.0
+      ],
+      "camera_rotation": [
+        -0.42879518866539,
+        0.704494059085846,
+        0.0
+      ],
+      "camera_target": [
+        8.0,
+        3.09999990463257,
+        6.0
+      ],
+      "cave_section": false,
+      "directional_shadows": false,
+      "file": "wide_exterior_fill_off.png",
+      "height": 648,
+      "name": "wide_exterior_fill_off",
+      "terrain_luminance": {
+        "mean": 136.621729158576,
+        "p10": 131,
+        "p50": 136,
+        "p90": 144,
+        "pixels": 136471,
+        "std_dev": 5.83263905550765
+      },
+      "width": 1152
+    },
+    {
+      "camera_position": [
+        42.0,
+        27.1000003814697,
+        46.0
+      ],
+      "camera_rotation": [
+        -0.42879518866539,
+        0.704494059085846,
+        0.0
+      ],
+      "camera_target": [
+        8.0,
+        3.09999990463257,
+        6.0
+      ],
+      "cave_section": false,
+      "directional_shadows": true,
+      "file": "wide_exterior_shadow_on.png",
+      "height": 648,
+      "name": "wide_exterior_shadow_on",
+      "terrain_luminance": {
+        "mean": 136.808985059097,
+        "p10": 106,
+        "p50": 128,
+        "p90": 190,
+        "pixels": 136471,
+        "std_dev": 31.1896591852873
+      },
+      "width": 1152
+    },
+    {
+      "camera_position": [
+        10.0,
+        8.10000038146973,
+        20.0
+      ],
+      "camera_rotation": [
+        -0.339836984872818,
+        0.141897082328796,
+        0.0
+      ],
+      "camera_target": [
+        8.0,
+        3.09999990463257,
+        6.0
+      ],
+      "cave_section": false,
+      "directional_shadows": false,
+      "file": "close_exterior_shadow_off.png",
+      "height": 648,
+      "name": "close_exterior_shadow_off",
+      "terrain_luminance": {
+        "mean": 133.835474387887,
+        "p10": 125,
+        "p50": 132,
+        "p90": 146,
+        "pixels": 446976,
+        "std_dev": 7.69571677383104
+      },
+      "width": 1152
+    },
+    {
+      "camera_position": [
+        10.0,
+        8.10000038146973,
+        20.0
+      ],
+      "camera_rotation": [
+        -0.339836984872818,
+        0.141897082328796,
+        0.0
+      ],
+      "camera_target": [
+        8.0,
+        3.09999990463257,
+        6.0
+      ],
+      "cave_section": false,
+      "directional_shadows": true,
+      "file": "close_exterior_shadow_on.png",
+      "height": 648,
+      "name": "close_exterior_shadow_on",
+      "terrain_luminance": {
+        "mean": 112.692377219359,
+        "p10": 90,
+        "p50": 114,
+        "p90": 133,
+        "pixels": 446976,
+        "std_dev": 16.6378044138885
+      },
+      "width": 1152
+    },
+    {
+      "camera_position": [
+        9.0,
+        1.64999997615814,
+        14.0
+      ],
+      "camera_rotation": [
+        -0.0619380436837673,
+        0.124354995787144,
+        0.0
+      ],
+      "camera_target": [
+        8.0,
+        1.14999997615814,
+        6.0
+      ],
+      "cave_section": true,
+      "directional_shadows": false,
+      "file": "close_cave_shadow_off.png",
+      "height": 648,
+      "name": "close_cave_shadow_off",
+      "terrain_luminance": {
+        "mean": 82.8171234240721,
+        "p10": 79,
+        "p50": 79,
+        "p90": 79,
+        "pixels": 261116,
+        "std_dev": 14.0901663318192
+      },
+      "width": 1152
+    },
+    {
+      "camera_position": [
+        9.0,
+        1.64999997615814,
+        14.0
+      ],
+      "camera_rotation": [
+        -0.0619380436837673,
+        0.124354995787144,
+        0.0
+      ],
+      "camera_target": [
+        8.0,
+        1.14999997615814,
+        6.0
+      ],
+      "cave_section": true,
+      "directional_shadows": false,
+      "file": "close_cave_fill_off.png",
+      "height": 648,
+      "name": "close_cave_fill_off",
+      "terrain_luminance": {
+        "mean": 82.0435093981219,
+        "p10": 79,
+        "p50": 79,
+        "p90": 79,
+        "pixels": 261116,
+        "std_dev": 10.5896317424233
+      },
+      "width": 1152
+    },
+    {
+      "camera_position": [
+        9.0,
+        1.64999997615814,
+        14.0
+      ],
+      "camera_rotation": [
+        -0.0619380436837673,
+        0.124354995787144,
+        0.0
+      ],
+      "camera_target": [
+        8.0,
+        1.14999997615814,
+        6.0
+      ],
+      "cave_section": true,
+      "directional_shadows": true,
+      "file": "close_cave_shadow_on.png",
+      "height": 648,
+      "name": "close_cave_shadow_on",
+      "terrain_luminance": {
+        "mean": 82.6022687234792,
+        "p10": 79,
+        "p50": 79,
+        "p90": 79,
+        "pixels": 261116,
+        "std_dev": 20.7789686273695
+      },
+      "width": 1152
+    }
+  ],
+  "directional_energy": 1.29999995231628,
+  "directional_ray_direction": [
+    -0.314137786626816,
+    -0.743144869804382,
+    0.590807199478149
+  ],
+  "directional_visible": true,
+  "focus_region": [
+    0,
+    0
+  ],
+  "frame_samples": [
+    {
+      "active_regions": 9,
+      "fps_monitor": 188.0,
+      "max_frame_interval_ms": 1.964,
+      "mean_frame_interval_ms": 1.32141666666667,
+      "min_frame_interval_ms": 1.016,
+      "name": "wide_exterior_shadow_off",
+      "p95_frame_interval_ms": 1.737,
+      "queued_mesh_slices": 0,
+      "samples": 180
+    },
+    {
+      "active_regions": 9,
+      "fps_monitor": 279.0,
+      "max_frame_interval_ms": 4.252,
+      "mean_frame_interval_ms": 1.91028888888889,
+      "min_frame_interval_ms": 1.292,
+      "name": "wide_exterior_shadow_on",
+      "p95_frame_interval_ms": 3.381,
+      "queued_mesh_slices": 0,
+      "samples": 180
+    },
+    {
+      "active_regions": 9,
+      "fps_monitor": 262.0,
+      "max_frame_interval_ms": 1.706,
+      "mean_frame_interval_ms": 1.04676666666667,
+      "min_frame_interval_ms": 0.904,
+      "name": "close_exterior_shadow_off",
+      "p95_frame_interval_ms": 1.371,
+      "queued_mesh_slices": 0,
+      "samples": 180
+    },
+    {
+      "active_regions": 9,
+      "fps_monitor": 262.0,
+      "max_frame_interval_ms": 3.498,
+      "mean_frame_interval_ms": 1.48933333333333,
+      "min_frame_interval_ms": 1.213,
+      "name": "close_exterior_shadow_on",
+      "p95_frame_interval_ms": 2.117,
+      "queued_mesh_slices": 0,
+      "samples": 180
+    },
+    {
+      "active_regions": 9,
+      "fps_monitor": 216.0,
+      "max_frame_interval_ms": 1.88,
+      "mean_frame_interval_ms": 0.921616666666668,
+      "min_frame_interval_ms": 0.834,
+      "name": "close_cave_shadow_off",
+      "p95_frame_interval_ms": 1.244,
+      "queued_mesh_slices": 0,
+      "samples": 180
+    },
+    {
+      "active_regions": 9,
+      "fps_monitor": 216.0,
+      "max_frame_interval_ms": 2.664,
+      "mean_frame_interval_ms": 1.22624444444444,
+      "min_frame_interval_ms": 1.107,
+      "name": "close_cave_shadow_on",
+      "p95_frame_interval_ms": 1.535,
+      "queued_mesh_slices": 0,
+      "samples": 180
+    }
+  ],
+  "godot_version": {
+    "build": "official",
+    "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "hex": 263938,
+    "major": 4,
+    "minor": 7,
+    "patch": 2,
+    "status": "stable",
+    "string": "4.7.2-stable (official)",
+    "timestamp": 0
+  },
+  "image_comparisons": [
+    {
+      "max_absolute_rgb_delta": 0.0,
+      "mean_absolute_rgb_delta": 0.0,
+      "off": "wide_exterior_fill_off",
+      "on": "wide_exterior_shadow_off",
+      "pixels_changed_over_1_percent": 0,
+      "terrain_pixels": 141117,
+      "valid": true
+    },
+    {
+      "max_absolute_rgb_delta": 0.247058828671773,
+      "mean_absolute_rgb_delta": 0.086406046061061,
+      "off": "wide_exterior_shadow_off",
+      "on": "wide_exterior_shadow_on",
+      "pixels_changed_over_1_percent": 140845,
+      "terrain_pixels": 141117,
+      "valid": true
+    },
+    {
+      "max_absolute_rgb_delta": 0.274509807427724,
+      "mean_absolute_rgb_delta": 0.0840461353170627,
+      "off": "close_exterior_shadow_off",
+      "on": "close_exterior_shadow_on",
+      "pixels_changed_over_1_percent": 537221,
+      "terrain_pixels": 537311,
+      "valid": true
+    },
+    {
+      "max_absolute_rgb_delta": 0.179084966580073,
+      "mean_absolute_rgb_delta": 0.00301145669405344,
+      "off": "close_cave_fill_off",
+      "on": "close_cave_shadow_off",
+      "pixels_changed_over_1_percent": 10306,
+      "terrain_pixels": 434455,
+      "valid": true
+    },
+    {
+      "max_absolute_rgb_delta": 0.235294123490651,
+      "mean_absolute_rgb_delta": 0.00905545961076422,
+      "off": "close_cave_shadow_off",
+      "on": "close_cave_shadow_on",
+      "pixels_changed_over_1_percent": 27668,
+      "terrain_pixels": 434455,
+      "valid": true
+    }
+  ],
+  "material_albedo": [
+    0.280000001192093,
+    0.419999986886978,
+    0.219999998807907
+  ],
+  "material_shading_mode": 1,
+  "mesh_normal_stats": {
+    "count": 261231,
+    "max_up": 0.999999046325684,
+    "mean_normal": [
+      0.0421882693442298,
+      0.553590141483974,
+      0.0251038237140931
+    ],
+    "min_up": -1.0,
+    "up_std_dev": 0.77378387125987
+  },
+  "sample_mesh_layers": 1,
+  "seed": 424242,
+  "target": [
+    8.0,
+    3.09999990463257,
+    6.0
+  ],
+  "view_light_angle": 58.0,
+  "view_light_attenuation": 1.0,
+  "view_light_cull_mask": 4294967295,
+  "view_light_energy": 16.0,
+  "view_light_range": 72.0,
+  "view_light_ray_direction": [
+    0.589015066623688,
+    0.41577535867691,
+    0.692958950996399
+  ],
+  "view_light_shadows": false,
+  "view_light_specular": 0.5,
+  "view_light_visible": true,
+  "viewport_size": [
+    1152,
+    648
+  ]
+}

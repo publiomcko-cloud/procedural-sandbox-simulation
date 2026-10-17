@@ -18,7 +18,7 @@ Owner explicitly authorized each merge after source and GUI approval. Runtime co
 
 ## Active, authorized — not yet accepted
 
-- **P1.0B:** directly authorized by the owner on 2026-10-17; implementation is underway on `feat/p1-0b-dynamic-region-streaming` from the verified main SHA above, in `C:\Dev\sandbox-sim-dev`. The frozen [authorization checkpoint](../checkpoints/2026-10-17-P1-0B-AUTHORIZATION.md) records scope. Source review, owner GUI retest and merge decision remain pending.
+- **P1.0B:** dynamic streaming was merged in PR #88 at `13d08b828553df4a3b2bb9d3eb783b4cc3f45beb`. Its lighting follow-up in Issue #89 is being prepared on `fix/p1-0b-terrain-depth-lighting` in `C:\Dev\sandbox-sim-dev`; see the [lighting checkpoint](../checkpoints/2026-10-17-P1-0B-LIGHTING-FOLLOWUP.md). Independent source review and owner GUI retest remain pending; this follow-up does not authorize a merge.
 - **P1.0C:** globally ordered cross-region edit behavior remains deferred under [Issue #83](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/83); this P1.0B task does not authorize it.
 
 ## Spatial contract retained after P1.0A
