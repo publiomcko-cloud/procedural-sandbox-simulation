@@ -18,7 +18,9 @@ ambient_light_sky_contribution = 0.0
 [node name="TerrainDemo" type="Node3D"]
 script = ExtResource("1_demo")
 
-[node name="Terrain" type="MeshInstance3D" parent="."]
+[node name="TerrainChunks" type="Node3D" parent="."]
+
+[node name="Terrain" type="MeshInstance3D" parent="TerrainChunks"]
 material_override = SubResource("TerrainMaterial")
 
 [node name="Camera3D" type="Camera3D" parent="."]

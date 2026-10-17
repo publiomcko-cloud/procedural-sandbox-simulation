@@ -98,7 +98,7 @@ func _test_scene_contract() -> void:
 	if packed == null:
 		return
 	var scene := packed.instantiate()
-	_check(scene.get_node_or_null("Terrain") is MeshInstance3D, "demonstration scene has a terrain mesh node")
+	_check(scene.get_node_or_null("TerrainChunks/Terrain") is MeshInstance3D, "demonstration scene has a terrain chunk mesh node")
 	_check(scene.get_node_or_null("Camera3D") is Camera3D, "demonstration scene has a camera")
 	_check(scene.get_node_or_null("DirectionalLight3D") is DirectionalLight3D, "demonstration scene has lighting")
 	_check(scene.get_node_or_null("CanvasLayer/Status") is Label, "demonstration scene explains its controls")
@@ -106,7 +106,7 @@ func _test_scene_contract() -> void:
 	_check(environment.ambient_light_source == Environment.AMBIENT_SOURCE_COLOR, "environment uses colored ambient lighting")
 	_check(environment.ambient_light_sky_contribution == 0.0, "colored ambient light is not overridden by the sky")
 	_check(environment.ambient_light_energy > 0.0 and environment.ambient_light_color != Color.BLACK, "ambient light has usable energy and color")
-	var material: StandardMaterial3D = scene.get_node("Terrain").material_override
+	var material: StandardMaterial3D = scene.get_node("TerrainChunks/Terrain").material_override
 	_check(material.albedo_color.g > material.albedo_color.r, "terrain material remains green")
 	_check(material.shading_mode != BaseMaterial3D.SHADING_MODE_UNSHADED, "terrain remains affected by real lighting")
 	var status: Label = scene.get_node("CanvasLayer/Status")
@@ -121,7 +121,7 @@ func _test_demo_controls() -> void:
 	var scene := packed.instantiate()
 	root.add_child(scene)
 	await process_frame
-	var initial_mesh: ArrayMesh = scene.get_node("Terrain").mesh
+	var initial_mesh: ArrayMesh = scene.get_node("TerrainChunks/Terrain").mesh
 	_check(initial_mesh != null and initial_mesh.get_surface_count() == 1, "demo builds terrain when added to the scene tree")
 	var camera: Camera3D = scene.get_node("Camera3D")
 	var viewport: Viewport = root
@@ -158,7 +158,7 @@ func _test_demo_controls() -> void:
 	toggle.pressed = true
 	viewport.push_input(toggle)
 	await process_frame
-	var section_mesh: ArrayMesh = scene.get_node("Terrain").mesh
+	var section_mesh: ArrayMesh = scene.get_node("TerrainChunks/Terrain").mesh
 	_check(scene.get("cave_section_enabled"), "C input enables the cave cross-section")
 	_check(section_mesh != initial_mesh, "C input rebuilds the terrain mesh")
 	_check(scene.get_node("CanvasLayer/Status").text.contains("Cave section: ON"), "status label reports the cave section state")
@@ -168,7 +168,7 @@ func _test_demo_controls() -> void:
 	viewport.push_input(regenerate)
 	await process_frame
 	_check(scene.get("cave_section_enabled"), "R input preserves the current section mode")
-	_check(scene.get_node("Terrain").mesh != section_mesh, "R input regenerates the mesh")
+	_check(scene.get_node("TerrainChunks/Terrain").mesh != section_mesh, "R input regenerates the mesh")
 	scene.queue_free()
 	await process_frame
 

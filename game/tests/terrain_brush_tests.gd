@@ -4,6 +4,7 @@ const TerrainField := preload("res://scripts/terrain/sdf_world.gd")
 const TerrainMesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const BrushEditState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const BrushPicker := preload("res://scripts/terrain/terrain_brush_picker.gd")
+const ChunkGrid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 
 var assertion_count := 0
 var failure_count := 0
@@ -128,8 +129,12 @@ func _test_viewport_interaction() -> void:
 	root.add_child(scene)
 	await process_frame
 	var camera: Camera3D = scene.get_node("Camera3D")
-	var edits: RefCounted = scene.get("brush_edits")
-	var start_mesh: ArrayMesh = scene.get_node("Terrain").mesh
+	var world_state: RefCounted = scene.get("world_state")
+	var edits: RefCounted = world_state.brush_edits
+	var start_meshes := _snapshot_chunk_meshes(scene)
+	var start_chunk_nodes := _snapshot_chunk_nodes(scene)
+	_check(start_meshes.size() == ChunkGrid.CHUNK_COUNT_X * ChunkGrid.CHUNK_COUNT_Z, "scene creates all fixed chunk mesh instances")
+	_check(scene.get("last_mesh_diagnostics")["active_chunk_count"] == start_meshes.size(), "initial diagnostics report active chunk count")
 	var viewport_size := root.get_visible_rect().size
 	var click_position := viewport_size * 0.5
 	var carve_click := InputEventMouseButton.new()
@@ -140,15 +145,36 @@ func _test_viewport_interaction() -> void:
 	await process_frame
 	_check(edits.get_edit_count() == 1, "viewport-dispatched left click ray-picks and applies a carve edit")
 	_check(scene.get("selected_brush_mode") == BrushEditState.Mode.CARVE, "left click selects carve mode")
-	var carved_mesh: ArrayMesh = scene.get_node("Terrain").mesh
-	_check(start_mesh != carved_mesh, "accepted carve rebuilds the live terrain mesh")
-	if start_mesh != null and carved_mesh != null:
-		_check(
-			start_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] != carved_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX],
-			"viewport carve visibly changes generated geometry"
-		)
-	_check(scene.get("last_mesh_diagnostics").has("elapsed_ms"), "mesh rebuild diagnostics include elapsed time")
-	_check(scene.get("last_mesh_diagnostics")["triangle_count"] > 0, "mesh rebuild diagnostics include triangle count")
+	var carve_diagnostics: Dictionary = scene.get("last_mesh_diagnostics")
+	var carved_meshes := _snapshot_chunk_meshes(scene)
+	var dirty_ids: Array[String] = carve_diagnostics["remeshed_chunk_ids"]
+	_check(carve_diagnostics["remeshed_chunk_count"] > 0, "accepted carve rebuilds affected chunk meshes")
+	_check(carve_diagnostics["remeshed_chunk_count"] < start_meshes.size(), "accepted carve avoids a full-grid rebuild")
+	_check(carve_diagnostics["elapsed_ms"] >= 0.0, "edit diagnostics include measured elapsed time")
+	_check(carve_diagnostics["triangle_count"] > 0, "edit diagnostics include total triangle count")
+	var replaced_dirty_meshes := 0
+	var unchanged_clean_meshes := 0
+	var preserved_chunk_nodes := 0
+	var carve_geometry_changed := false
+	for chunk_id in start_meshes:
+		if start_chunk_nodes[chunk_id] == scene.get("chunk_nodes")[chunk_id]:
+			preserved_chunk_nodes += 1
+		var before_mesh: ArrayMesh = start_meshes[chunk_id]
+		var after_mesh: ArrayMesh = carved_meshes[chunk_id]
+		if dirty_ids.has(chunk_id):
+			if before_mesh != after_mesh:
+				replaced_dirty_meshes += 1
+				if before_mesh.get_surface_count() > 0 and after_mesh.get_surface_count() > 0:
+					var before_vertices: PackedVector3Array = before_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+					var after_vertices: PackedVector3Array = after_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+					carve_geometry_changed = carve_geometry_changed or before_vertices != after_vertices
+		else:
+			if before_mesh == after_mesh:
+				unchanged_clean_meshes += 1
+	_check(replaced_dirty_meshes == dirty_ids.size(), "every reported dirty chunk replaces its mesh")
+	_check(unchanged_clean_meshes == start_meshes.size() - dirty_ids.size(), "unaffected chunk mesh objects remain unchanged")
+	_check(preserved_chunk_nodes == start_chunk_nodes.size(), "localized rebuild preserves every chunk scene node instance")
+	_check(carve_geometry_changed, "viewport carve changes generated chunk geometry")
 
 	var fill_click := InputEventMouseButton.new()
 	fill_click.button_index = MOUSE_BUTTON_LEFT
@@ -170,7 +196,8 @@ func _test_viewport_interaction() -> void:
 	await process_frame
 	_check(scene.get("cave_section_enabled"), "viewport C shortcut enables the visualization section")
 	_check(edits.get_operations_snapshot() == operations_before_section, "C does not mutate canonical brush edits")
-	var section_mesh: ArrayMesh = scene.get_node("Terrain").mesh
+	var section_mesh: ArrayMesh = scene.get_node("TerrainChunks/Terrain").mesh
+	_check(scene.get("last_mesh_diagnostics")["remeshed_chunk_count"] == start_meshes.size(), "C rebuilds every chunk for the global visualization cut")
 
 	var regenerate := InputEventKey.new()
 	regenerate.keycode = KEY_R
@@ -178,7 +205,9 @@ func _test_viewport_interaction() -> void:
 	root.push_input(regenerate)
 	await process_frame
 	_check(edits.get_edit_count() == 2, "R regeneration retains accepted edits")
-	_check(scene.get_node("Terrain").mesh != section_mesh, "R rebuilds the finite mesh")
+	_check(edits.get_operations_snapshot() == operations_before_section, "R preserves the ordered brush data")
+	_check(scene.get_node("TerrainChunks/Terrain").mesh != section_mesh, "R rebuilds the finite mesh")
+	_check(scene.get("last_mesh_diagnostics")["remeshed_chunk_count"] == start_meshes.size(), "R regenerates every chunk")
 
 	var initial_camera_position := camera.position
 	var right_down := InputEventMouseButton.new()
@@ -216,9 +245,29 @@ func _test_viewport_interaction() -> void:
 	await process_frame
 	_check(edits.get_edit_count() == 0, "viewport X shortcut clears transient edits")
 	_check(scene.get("cave_section_enabled"), "reset preserves cave-section visualization mode")
-	_check(scene.get_node("Terrain").mesh != null, "reset rebuilds the base terrain")
+	_check(scene.get_node("TerrainChunks/Terrain").mesh != null, "reset rebuilds the base terrain")
+	_check(scene.get("last_mesh_diagnostics")["remeshed_chunk_count"] == start_meshes.size(), "X reset regenerates all baseline chunks")
 	scene.queue_free()
 	await process_frame
+
+
+func _snapshot_chunk_meshes(scene: Node) -> Dictionary:
+	var snapshot: Dictionary = {}
+	var world_state: RefCounted = scene.get("world_state")
+	var chunk_nodes: Dictionary = scene.get("chunk_nodes")
+	for coordinate in ChunkGrid.all_coordinates():
+		var chunk_id: String = world_state.chunk_id(coordinate)
+		var chunk_node: MeshInstance3D = chunk_nodes[chunk_id]
+		snapshot[chunk_id] = chunk_node.mesh
+	return snapshot
+
+
+func _snapshot_chunk_nodes(scene: Node) -> Dictionary:
+	var snapshot: Dictionary = {}
+	var chunk_nodes: Dictionary = scene.get("chunk_nodes")
+	for chunk_id in chunk_nodes:
+		snapshot[chunk_id] = chunk_nodes[chunk_id]
+	return snapshot
 
 
 func _check(condition: bool, label: String) -> void:
