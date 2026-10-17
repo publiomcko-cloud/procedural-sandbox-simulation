@@ -10,7 +10,7 @@ Godot 4.7.2 procedural 3D sandbox: versioned SDF terrain, caves, additive/subtra
 4. [Agent recovery runbook](docs/workflow/AGENT_RECOVERY.md) and [memory protocol](docs/workflow/PROJECT_MEMORY_PROTOCOL.md) — resume safely in a fresh chat/agent, preserve evidence and update checkpoints.
 5. [Developer contract](AGENTS.md), [workflow gates](docs/workflow/ROLES_AND_GATES.md), [architecture](docs/architecture/ARCHITECTURE.md), [contracts](docs/architecture/CONTRACTS.md), [roadmap](docs/roadmap/MILESTONES.md), and **current GitHub issue**.
 
-A new agent **must not** infer completed work from an issue title or old chat. Reconcile the latest `main`/PR HEAD and the owner's acceptance gate first. P1.0A is integrated by PR #86 at main `7f87c1e9`; P1.0B camera-focused bounded streaming is authorized and under development on `feat/p1-0b-dynamic-region-streaming`. P1.0C cross-region edits remain deferred; see [current status](docs/status/CURRENT_STATUS.md) and the dated [P1.0B checkpoint](docs/checkpoints/2026-10-17-P1-0B-AUTHORIZATION.md).
+A new agent **must not** infer completed work from an issue title or old chat. Reconcile the latest `main`/PR HEAD and the owner's acceptance gate first. P1.0A and P1.0B are integrated through PR #90 at `2f86c42503cfa3a334215b1ff5b9bf9658263440`. P1.0C global cross-region editing is implemented in draft PR #92 on `feat/p1-0c-global-cross-region-brushes`; independent review and owner GUI retest remain pending. See [current status](docs/status/CURRENT_STATUS.md) and [the P1.0C checkpoint](docs/checkpoints/2026-10-17-P1-0C-IMPLEMENTATION.md).
 
 ## Open the current prototype (Windows)
 
@@ -24,7 +24,7 @@ $env:GODOT_BIN='C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
 & 'C:\Dev\sandbox-sim-dev\scripts\validate.ps1'
 ```
 
-Check exact executable paths and engine version on the machine. The integrated prototype has versioned 16×12 logical regions, each divided into 16 chunks, and a fixed 3×3 preview (PR #86), with left-click carve, Shift+left fill, right-drag orbit, wheel zoom, C section, R regenerate and X reset. Dynamic streaming is the current P1.0B feature-branch change and is not integrated until independently reviewed, visually retested and merged by owner decision.
+Check exact executable paths and engine version on the machine. The integrated prototype has versioned 16×12 logical regions, each divided into 16 chunks, camera-driven bounded streaming (PR #88) and the accepted P1.0B lighting correction (PR #90). Controls are left-click carve, Shift+left fill, right-drag orbit, wheel zoom, C section, R regenerate and X focused reset. P1.0C defines globally ordered transient edits across region seams; its independent review and owner GUI retest remain pending.
 
 ## Product goal vs current deliverable
 

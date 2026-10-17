@@ -43,7 +43,7 @@ Report in one concise block:
 
 Code agent: stay on an assigned existing branch/workspace; verify clean/ownership, pinned parent/base, test with Godot 4.7.2, deliver exact commit and draft PR, never merge without owner approval. Evaluator: fetch exact remote source, assess diff/contracts/tests, clearly separate observed evidence classes and reserve GUI to owner. Owner: visual test and explicit merge decision.
 
-Specific latest snapshot: P1.0A [#84](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/84) is integrated at main `7f87c1e9c0cc1e85dd5c5fb612ebf2cd40aeffb0`; the owner explicitly authorized P1.0B bounded dynamic streaming and a small view-aligned light on 2026-10-17, recorded in [the P1.0B checkpoint](../checkpoints/2026-10-17-P1-0B-AUTHORIZATION.md). P1.0C cross-region edits, persistence, networking and F2 protected operations remain outside that authorization.
+Specific latest snapshot: P1.0A [#84](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/84) is integrated at main `7f87c1e9c0cc1e85dd5c5fb612ebf2cd40aeffb0`; P1.0B streaming and depth lighting are integrated at `2f86c42503cfa3a334215b1ff5b9bf9658263440`. P1.0C global cross-region transient edits were explicitly authorized under [Issue #91](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/91) and implemented through source commit `71fbe678c7f6a24b2aa0f0b7813d30e154a2f9bc`, currently in draft PR #92. Read [the P1.0C implementation checkpoint](../checkpoints/2026-10-17-P1-0C-IMPLEMENTATION.md), then verify the live PR HEAD and review/owner GUI status. Persistence, networking and F2 protected operations remain outside this authorization.
 
 ## 5. Create the next durable checkpoint
 
