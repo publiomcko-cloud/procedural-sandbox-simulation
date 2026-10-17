@@ -43,7 +43,7 @@ Report in one concise block:
 
 Code agent: stay on an assigned existing branch/workspace; verify clean/ownership, pinned parent/base, test with Godot 4.7.2, deliver exact commit and draft PR, never merge without owner approval. Evaluator: fetch exact remote source, assess diff/contracts/tests, clearly separate observed evidence classes and reserve GUI to owner. Owner: visual test and explicit merge decision.
 
-Specific latest snapshot: P1.0A [#84](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/84), fixed **static** 3×3 logical regions; no automatic authority for P1.0B streaming, P1.0C cross-region edits, networking or F2 protected operations.
+Specific latest snapshot: P1.0A [#84](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/84) is integrated at main `7f87c1e9c0cc1e85dd5c5fb612ebf2cd40aeffb0`; the owner explicitly authorized P1.0B bounded dynamic streaming and a small view-aligned light on 2026-10-17, recorded in [the P1.0B checkpoint](../checkpoints/2026-10-17-P1-0B-AUTHORIZATION.md). P1.0C cross-region edits, persistence, networking and F2 protected operations remain outside that authorization.
 
 ## 5. Create the next durable checkpoint
 
