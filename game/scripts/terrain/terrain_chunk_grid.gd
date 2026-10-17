@@ -1,17 +1,17 @@
 class_name TerrainChunkGrid
 extends RefCounted
 
-## Fixed rendering partition for one finite region; IDs include the parent region.
-const MIN_BOUND := Vector3(-1.0, -2.0, -1.0)
-const MAX_BOUND := Vector3(17.0, 8.0, 13.0)
+## Half-open region cells partitioned into a fixed 4x4 render grid.
+const MIN_BOUND := Vector3(0.0, -2.0, 0.0)
+const MAX_BOUND := Vector3(16.0, 8.0, 12.0)
 const SAMPLE_STEP := 0.5
-const CELL_COUNT_X := 36
+const CELL_COUNT_X := 32
 const CELL_COUNT_Y := 20
-const CELL_COUNT_Z := 28
+const CELL_COUNT_Z := 24
 const CHUNK_COUNT_X := 4
 const CHUNK_COUNT_Z := 4
-const CELLS_PER_CHUNK_X := CELL_COUNT_X / CHUNK_COUNT_X
-const CELLS_PER_CHUNK_Z := CELL_COUNT_Z / CHUNK_COUNT_Z
+const CELLS_PER_CHUNK_X := 8
+const CELLS_PER_CHUNK_Z := 6
 
 
 static func all_coordinates() -> Array[Vector2i]:
@@ -36,17 +36,13 @@ static func cell_bounds(coordinate: Vector2i) -> Vector4i:
 		return Vector4i.ZERO
 	var start_x := coordinate.x * CELLS_PER_CHUNK_X
 	var start_z := coordinate.y * CELLS_PER_CHUNK_Z
-	# x/z are half-open cell ranges. Both neighbors sample the shared end plane.
+	# End indices are exclusive for cells. Neighboring chunks share the end sample plane.
 	return Vector4i(start_x, start_x + CELLS_PER_CHUNK_X, start_z, start_z + CELLS_PER_CHUNK_Z)
 
 
 static func origin_for(coordinate: Vector2i) -> Vector3:
 	var bounds := cell_bounds(coordinate)
-	return Vector3(
-		MIN_BOUND.x + float(bounds.x) * SAMPLE_STEP,
-		0.0,
-		MIN_BOUND.z + float(bounds.z) * SAMPLE_STEP
-	)
+	return Vector3(float(bounds.x) * SAMPLE_STEP, 0.0, float(bounds.z) * SAMPLE_STEP)
 
 
 static func size_for(coordinate: Vector2i) -> Vector3:
@@ -59,7 +55,7 @@ static func affected_chunks_for_sphere(center: Vector3, radius: float) -> Array[
 	var result: Array[Vector2i] = []
 	if not center.is_finite() or not is_finite(radius) or radius <= 0.0:
 		return result
-	# One sample-step halo conservatively includes cells that depend on affected lattice samples.
+	# One sample-step halo covers cells whose lattice samples can change.
 	var extent := Vector3.ONE * (radius + SAMPLE_STEP)
 	var brush_min := center - extent
 	var brush_max := center + extent
@@ -82,12 +78,13 @@ static func is_shared_boundary_vertex(point: Vector3, coordinate: Vector2i, tole
 	if not is_valid_coordinate(coordinate):
 		return false
 	var bounds := cell_bounds(coordinate)
-	var min_x := MIN_BOUND.x + float(bounds.x) * SAMPLE_STEP
-	var max_x := MIN_BOUND.x + float(bounds.y) * SAMPLE_STEP
-	var min_z := MIN_BOUND.z + float(bounds.z) * SAMPLE_STEP
-	var max_z := MIN_BOUND.z + float(bounds.w) * SAMPLE_STEP
-	var on_x_boundary := (coordinate.x > 0 and absf(point.x - min_x) <= tolerance) \
-		or (coordinate.x < CHUNK_COUNT_X - 1 and absf(point.x - max_x) <= tolerance)
-	var on_z_boundary := (coordinate.y > 0 and absf(point.z - min_z) <= tolerance) \
-		or (coordinate.y < CHUNK_COUNT_Z - 1 and absf(point.z - max_z) <= tolerance)
+	var min_x := float(bounds.x) * SAMPLE_STEP
+	var max_x := float(bounds.y) * SAMPLE_STEP
+	var min_z := float(bounds.z) * SAMPLE_STEP
+	var max_z := float(bounds.w) * SAMPLE_STEP
+	# Region-edge chunks are also shared with adjacent regions in the fixed preview.
+	var on_x_boundary := absf(point.x - min_x) <= tolerance \
+		or absf(point.x - max_x) <= tolerance
+	var on_z_boundary := absf(point.z - min_z) <= tolerance \
+		or absf(point.z - max_z) <= tolerance
 	return on_x_boundary or on_z_boundary

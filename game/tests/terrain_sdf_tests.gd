@@ -161,7 +161,7 @@ func _test_demo_controls() -> void:
 	var section_mesh: ArrayMesh = scene.get_node("TerrainChunks/Terrain").mesh
 	_check(scene.get("cave_section_enabled"), "C input enables the cave cross-section")
 	_check(section_mesh != initial_mesh, "C input rebuilds the terrain mesh")
-	_check(scene.get_node("CanvasLayer/Status").text.contains("Cave section: ON"), "status label reports the cave section state")
+	_check(scene.get_node("CanvasLayer/Status").text.contains("Global cave section: ON"), "status label reports the global cave section state")
 	var regenerate := InputEventKey.new()
 	regenerate.keycode = KEY_R
 	regenerate.pressed = true

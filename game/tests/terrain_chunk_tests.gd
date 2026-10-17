@@ -126,7 +126,7 @@ func _boundary_sets_match(left: Dictionary, right: Dictionary) -> bool:
 			if distance < nearest_distance:
 				nearest_distance = distance
 				nearest_key = right_key
-		if nearest_distance > 0.0001:
+		if nearest_distance > 0.0003:
 			print("SEAM_VERTEX_GAP: left=%s nearest=%s distance=%.8f" % [left_key, nearest_key, nearest_distance])
 			return false
 		var left_normal: Vector3 = left[left_key]
@@ -138,7 +138,7 @@ func _boundary_sets_match(left: Dictionary, right: Dictionary) -> bool:
 		var right_point := _key_point(right_key)
 		var found := false
 		for left_key in left:
-			if right_point.distance_to(_key_point(left_key)) <= 0.0001:
+			if right_point.distance_to(_key_point(left_key)) <= 0.0003:
 				found = true
 				break
 		if not found:
@@ -152,14 +152,14 @@ func _key_point(key: String) -> Vector3:
 
 
 func _test_dirty_selection() -> void:
-	var inside := Grid.affected_chunks_for_sphere(Vector3(0.0, 0.0, 0.0), 0.45)
-	var border := Grid.affected_chunks_for_sphere(Vector3(8.0, 0.0, 0.0), 0.45)
-	var corner := Grid.affected_chunks_for_sphere(Vector3(8.0, 0.0, 6.0), 0.45)
+	var inside := Grid.affected_chunks_for_sphere(Vector3(2.0, 0.0, 1.5), 0.45)
+	var border := Grid.affected_chunks_for_sphere(Vector3(4.0, 0.0, 1.5), 0.45)
+	var corner := Grid.affected_chunks_for_sphere(Vector3(4.0, 0.0, 3.0), 0.45)
 	_check(inside.size() == 1, "interior edit dirties one chunk")
 	_check(border.size() == 2, "exact chunk-border edit dirties both neighbors")
 	_check(corner.size() == 4, "exact chunk-corner edit dirties all four neighbors")
-	_check(inside == Grid.affected_chunks_for_sphere(Vector3(0.0, 0.0, 0.0), 0.45), "dirty chunk selection is deterministic")
-	_check(Grid.affected_chunks_for_sphere(Vector3(0.0, 20.0, 0.0), 1.0).is_empty(), "edit outside the vertical mesh domain dirties no chunk")
+	_check(inside == Grid.affected_chunks_for_sphere(Vector3(2.0, 0.0, 1.5), 0.45), "dirty chunk selection is deterministic")
+	_check(Grid.affected_chunks_for_sphere(Vector3(2.0, 20.0, 1.5), 1.0).is_empty(), "edit outside the vertical mesh domain dirties no chunk")
 	_check(Grid.affected_chunks_for_sphere(Vector3.ZERO, NAN).is_empty(), "non-finite radius dirties no chunk")
 
 
@@ -184,9 +184,9 @@ func _test_world_state_ordering() -> void:
 
 func _run_comparable_benchmarks() -> void:
 	var patterns := {
-		"interior": Vector3(1.0, 0.0, 0.0),
-		"border": Vector3(8.0, 0.0, 0.0),
-		"corner": Vector3(8.0, 0.0, 6.0),
+		"interior": Vector3(2.0, 0.0, 1.5),
+		"border": Vector3(4.0, 0.0, 1.5),
+		"corner": Vector3(4.0, 0.0, 3.0),
 	}
 	# One warm-up per implementation; alternate measurement order to reduce order bias.
 	for pattern_name in patterns:

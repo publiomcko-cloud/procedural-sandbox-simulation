@@ -5,6 +5,7 @@ extends RefCounted
 const FIELD := preload("res://scripts/terrain/sdf_world.gd")
 const BRUSH_STATE_SCRIPT := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const CHUNK_GRID := preload("res://scripts/terrain/terrain_chunk_grid.gd")
+const SPATIAL := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const MIN_BOUND: Vector3 = CHUNK_GRID.MIN_BOUND
 const MAX_BOUND: Vector3 = CHUNK_GRID.MAX_BOUND
 const STEP: float = CHUNK_GRID.SAMPLE_STEP
@@ -25,7 +26,7 @@ static func build_mesh(
 	brush_state: RefCounted = null
 ) -> Dictionary:
 	return _build_mesh_cells(
-		seed, region_key, 0, CHUNK_GRID.CELL_COUNT_X, 0, CHUNK_GRID.CELL_COUNT_Z,
+		seed, region_key, CHUNK_GRID.MIN_BOUND, 0, CHUNK_GRID.CELL_COUNT_X, 0, CHUNK_GRID.CELL_COUNT_Z,
 		show_cave_section, Vector3.ZERO, brush_state, Vector2i(-1, -1)
 	)
 
@@ -41,14 +42,34 @@ static func build_chunk_mesh(
 		return {"mesh": ArrayMesh.new(), "vertex_count": 0, "triangle_count": 0, "sample_count": 0, "valid": false}
 	var bounds: Vector4i = CHUNK_GRID.cell_bounds(chunk_coordinate)
 	return _build_mesh_cells(
-		seed, region_key, bounds.x, bounds.y, bounds.z, bounds.w,
+		seed, region_key, CHUNK_GRID.MIN_BOUND, bounds.x, bounds.y, bounds.z, bounds.w,
 		show_cave_section, CHUNK_GRID.origin_for(chunk_coordinate), brush_state, chunk_coordinate
+	)
+
+
+static func build_world_reference_mesh(
+	seed: int,
+	min_world_cell: Vector2i,
+	cell_count: Vector2i,
+	show_cave_section: bool = false
+) -> Dictionary:
+	if cell_count.x <= 0 or cell_count.y <= 0:
+		return {"mesh": ArrayMesh.new(), "vertex_count": 0, "triangle_count": 0, "sample_count": 0, "valid": false}
+	var world_min := Vector3(
+		float(min_world_cell.x) * CHUNK_GRID.SAMPLE_STEP,
+		CHUNK_GRID.MIN_BOUND.y,
+		float(min_world_cell.y) * CHUNK_GRID.SAMPLE_STEP
+	)
+	return _build_mesh_cells(
+		seed, Vector2i.ZERO, world_min, 0, cell_count.x, 0, cell_count.y,
+		show_cave_section, Vector3.ZERO, null, Vector2i(-1, -1)
 	)
 
 
 static func _build_mesh_cells(
 	seed: int,
 	region_key: Vector2i,
+	grid_min: Vector3,
 	cell_start_x: int,
 	cell_end_x: int,
 	cell_start_z: int,
@@ -66,13 +87,15 @@ static func _build_mesh_cells(
 	for y in range(ny):
 		for z in range(nz):
 			for x in range(nx):
-				var p := MIN_BOUND + Vector3(cell_start_x + x, y, cell_start_z + z) * STEP
+				var p := grid_min + Vector3(cell_start_x + x, y, cell_start_z + z) * STEP
 				var density := _sample_density(seed, region_key, p, show_cave_section, brush_state)
 				values[_index(x, y, z, nx, nz)] = density
 
 	var positions := PackedVector3Array()
 	var normals := PackedVector3Array()
-	var sample_origin := MIN_BOUND + Vector3(cell_start_x, 0, cell_start_z) * STEP
+	var sample_origin := grid_min + Vector3(cell_start_x, 0, cell_start_z) * STEP
+	var world_region_origin: Vector3 = SPATIAL.region_origin_world(region_key)
+	var world_sample_origin := world_region_origin + sample_origin
 	for y in range(ny - 1):
 		for z in range(nz - 1):
 			for x in range(nx - 1):
@@ -82,7 +105,7 @@ static func _build_mesh_cells(
 					var cx: int = x + corner.x
 					var cy: int = y + corner.y
 					var cz: int = z + corner.z
-					cube_points.append(sample_origin + Vector3(x + corner.x, y + corner.y, z + corner.z) * STEP)
+					cube_points.append(world_sample_origin + Vector3(x + corner.x, y + corner.y, z + corner.z) * STEP)
 					cube_values.append(values[_index(cx, cy, cz, nx, nz)])
 				for tetra in TETRAHEDRA:
 					_polygonize_tetra(tetra, cube_points, cube_values, positions, normals)
@@ -91,15 +114,17 @@ static func _build_mesh_cells(
 	var mesh := ArrayMesh.new()
 	if not positions.is_empty():
 		var has_chunk_coordinate := CHUNK_GRID.is_valid_coordinate(chunk_coordinate)
+		var world_mesh_origin: Vector3 = world_region_origin + mesh_origin
 		for vertex_index in range(positions.size()):
 			var global_position: Vector3 = positions[vertex_index]
-			if has_chunk_coordinate and CHUNK_GRID.is_shared_boundary_vertex(global_position, chunk_coordinate):
+			var region_local_position: Vector3 = global_position - world_region_origin
+			if has_chunk_coordinate and CHUNK_GRID.is_shared_boundary_vertex(region_local_position, chunk_coordinate):
 				var shared_normal := _sample_outward_normal(
-					seed, region_key, global_position, show_cave_section, brush_state
+					seed, region_key, region_local_position, show_cave_section, brush_state
 				)
 				if shared_normal.length_squared() > 0.000001:
 					normals[vertex_index] = shared_normal
-			positions[vertex_index] = global_position - mesh_origin
+			positions[vertex_index] = global_position - world_mesh_origin
 		var arrays: Array = []
 		arrays.resize(Mesh.ARRAY_MAX)
 		arrays[Mesh.ARRAY_VERTEX] = positions
@@ -129,7 +154,10 @@ static func _sample_density(
 ) -> float:
 	if brush_state is BRUSH_STATE_SCRIPT:
 		return brush_state.sample_density(seed, region_key, point, show_cave_section)
-	return FIELD.sample_density(seed, region_key, point, show_cave_section)
+	# Evaluate the immutable field from canonical world coordinates so a point
+	# sampled through a neighboring region follows the same floating-point path.
+	var world_point: Vector3 = SPATIAL.region_local_to_world(region_key, point)
+	return FIELD.sample_density(seed, Vector2i.ZERO, world_point, show_cave_section)
 
 
 static func _sample_outward_normal(

@@ -133,7 +133,7 @@ func _test_viewport_interaction() -> void:
 	var edits: RefCounted = world_state.brush_edits
 	var start_meshes := _snapshot_chunk_meshes(scene)
 	var start_chunk_nodes := _snapshot_chunk_nodes(scene)
-	_check(start_meshes.size() == ChunkGrid.CHUNK_COUNT_X * ChunkGrid.CHUNK_COUNT_Z, "scene creates all fixed chunk mesh instances")
+	_check(start_meshes.size() == 9 * ChunkGrid.CHUNK_COUNT_X * ChunkGrid.CHUNK_COUNT_Z, "scene creates all fixed 3x3 preview chunk mesh instances")
 	_check(scene.get("last_mesh_diagnostics")["active_chunk_count"] == start_meshes.size(), "initial diagnostics report active chunk count")
 	var viewport_size := root.get_visible_rect().size
 	var click_position := viewport_size * 0.5
@@ -253,10 +253,8 @@ func _test_viewport_interaction() -> void:
 
 func _snapshot_chunk_meshes(scene: Node) -> Dictionary:
 	var snapshot: Dictionary = {}
-	var world_state: RefCounted = scene.get("world_state")
 	var chunk_nodes: Dictionary = scene.get("chunk_nodes")
-	for coordinate in ChunkGrid.all_coordinates():
-		var chunk_id: String = world_state.chunk_id(coordinate)
+	for chunk_id in chunk_nodes:
 		var chunk_node: MeshInstance3D = chunk_nodes[chunk_id]
 		snapshot[chunk_id] = chunk_node.mesh
 	return snapshot
