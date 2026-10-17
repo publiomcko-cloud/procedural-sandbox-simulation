@@ -5,6 +5,7 @@ extends RefCounted
 const FIELD := preload("res://scripts/terrain/sdf_world.gd")
 const BRUSH_STATE := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const CHUNK_GRID := preload("res://scripts/terrain/terrain_chunk_grid.gd")
+const SPATIAL := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 
 const DEMO_SEED := 424242
 const DEMO_REGION_KEY := Vector2i.ZERO
@@ -15,11 +16,11 @@ var region_key: Vector2i
 var brush_edits: RefCounted
 
 
-func _init(seed_value: int = DEMO_SEED, region_value: Vector2i = DEMO_REGION_KEY) -> void:
+func _init(seed_value: int = DEMO_SEED, region_value: Vector2i = DEMO_REGION_KEY, shared_edits: RefCounted = null) -> void:
 	world_seed = seed_value
 	generator_version = FIELD.GENERATOR_VERSION
 	region_key = region_value
-	brush_edits = BRUSH_STATE.new()
+	brush_edits = shared_edits if shared_edits != null else BRUSH_STATE.new(seed_value, generator_version)
 
 
 func sample_density(local_position: Vector3, show_cave_section: bool = false) -> float:
@@ -27,11 +28,16 @@ func sample_density(local_position: Vector3, show_cave_section: bool = false) ->
 
 
 func apply_sphere(mode: int, center: Vector3, radius: float) -> bool:
-	return brush_edits.add_sphere(mode, center, radius)
+	var world_center := SPATIAL.region_local_to_world(region_key, center)
+	return brush_edits.add_sphere(mode, world_center, radius)
+
+
+func apply_world_sphere(mode: int, world_center: Vector3, radius: float) -> bool:
+	return brush_edits.add_sphere(mode, world_center, radius)
 
 
 func clear_edits() -> void:
-	brush_edits.clear()
+	brush_edits.clear_for_region(region_key)
 
 
 func chunk_id(chunk_coordinate: Vector2i) -> String:

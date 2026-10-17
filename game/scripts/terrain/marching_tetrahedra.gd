@@ -105,7 +105,8 @@ static func build_world_reference_mesh(
 	seed: int,
 	min_world_cell: Vector2i,
 	cell_count: Vector2i,
-	show_cave_section: bool = false
+	show_cave_section: bool = false,
+	brush_state: RefCounted = null
 ) -> Dictionary:
 	if cell_count.x <= 0 or cell_count.y <= 0:
 		return {"mesh": ArrayMesh.new(), "vertex_count": 0, "triangle_count": 0, "sample_count": 0, "valid": false}
@@ -116,7 +117,7 @@ static func build_world_reference_mesh(
 	)
 	return _build_mesh_cells(
 		seed, Vector2i.ZERO, world_min, 0, cell_count.x, 0, cell_count.y,
-		show_cave_section, Vector3.ZERO, null, Vector2i(-1, -1), 0, CHUNK_GRID.CELL_COUNT_Y
+		show_cave_section, Vector3.ZERO, brush_state, Vector2i(-1, -1), 0, CHUNK_GRID.CELL_COUNT_Y
 	)
 
 

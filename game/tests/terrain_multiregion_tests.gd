@@ -25,7 +25,9 @@ func _run() -> void:
 	_test_region_and_corner_continuity()
 	_test_global_cut_plane()
 	_test_three_by_three_mesh_union_and_seams()
+	_test_cross_region_edit_mesh_equivalence()
 	await _test_dynamic_region_streaming_and_focused_edits()
+	await _test_edit_while_neighbor_is_loading()
 	if failures == 0:
 		print("TERRAIN_MULTI_REGION_PASS: assertions=%d failures=0" % assertions)
 	else:
@@ -209,6 +211,176 @@ func _test_three_by_three_mesh_union_and_seams() -> void:
 	print("MULTIREGION_EQUIVALENCE: regions=9 chunks=144 full_triangles=%d chunk_triangles=%d reference_samples=%d" % [full["triangle_count"], chunk_triangles, full["sample_count"]])
 
 
+func _test_cross_region_edit_mesh_equivalence() -> void:
+	var edits := BrushState.new(SEED, Field.GENERATOR_VERSION)
+	_check(edits.add_sphere(BrushState.Mode.CARVE, Vector3(16.0, 4.0, 6.0), 1.25), "mesh comparison accepts a canonical edit centered on the shared region seam")
+	_check(edits.add_sphere(BrushState.Mode.FILL, Vector3(16.25, 4.0, 6.0), 1.0), "mesh comparison preserves interleaved fill ordering on the same seam")
+	var full := Mesher.build_world_reference_mesh(SEED, Vector2i.ZERO, Vector2i(64, 24), false, edits)
+	var full_positions := _mesh_signatures(full["mesh"], Vector3.ZERO)
+	var full_oriented := _oriented_mesh_signatures(full["mesh"], Vector3.ZERO)
+	var full_outward := _edited_normals_outward(full["mesh"], Vector3.ZERO, Vector2i.ZERO, false, edits)
+	var streamed_positions: Array[String] = []
+	var streamed_oriented: Array[String] = []
+	var streamed_outward := Vector2i.ZERO
+	var edited_chunks: Dictionary = {}
+	var streamed_triangles := 0
+	for region_key in [Vector2i.ZERO, Vector2i(1, 0)]:
+		var region_origin: Vector3 = Spatial.region_origin_world(region_key)
+		for coordinate in ChunkGrid.all_coordinates():
+			var chunk := Mesher.build_chunk_mesh(SEED, region_key, coordinate, false, edits)
+			var offset := region_origin + ChunkGrid.origin_for(coordinate)
+			streamed_positions.append_array(_mesh_signatures(chunk["mesh"], offset))
+			streamed_oriented.append_array(_oriented_mesh_signatures(chunk["mesh"], offset))
+			var outward: Vector2i = _edited_normals_outward(chunk["mesh"], offset, region_key, false, edits)
+			streamed_outward += outward
+			edited_chunks[_global_chunk_coordinate(region_key, coordinate)] = {"mesh": chunk["mesh"], "offset": offset}
+			streamed_triangles += chunk["triangle_count"]
+	_check(full["valid"] and full["triangle_count"] == streamed_triangles, "edited 2-region chunk union preserves monolithic triangle count")
+	_check(full_positions == _sorted_signatures(streamed_positions), "edited global SDF chunk union matches monolithic triangle position multisets")
+	_check(full_oriented == _sorted_signatures(streamed_oriented), "edited global SDF preserves triangle winding across the region seam")
+	_check(full_outward.y > 0 and full_outward.x >= int(ceil(float(full_outward.y) * 0.9)), "edited monolithic SDF normals point toward empty space")
+	_check(streamed_outward.y > 0 and streamed_outward.x >= int(ceil(float(streamed_outward.y) * 0.9)), "edited chunk SDF normals point toward empty space")
+	for z in range(ChunkGrid.CHUNK_COUNT_Z):
+		_check_edit_seam_if_present(edited_chunks, Vector2i(7, z + 4), Vector2i(8, z + 4), true)
+	var left: float = edits.sample_density(SEED, Vector2i.ZERO, Vector3(16.0, 4.0, 6.0))
+	var right: float = edits.sample_density(SEED, Vector2i(1, 0), Vector3(0.0, 4.0, 6.0))
+	_check(is_equal_approx(left, right), "interleaved global commands produce identical shared seam samples")
+	var cut_full := Mesher.build_world_reference_mesh(SEED, Vector2i.ZERO, Vector2i(64, 24), true, edits)
+	var cut_positions := _mesh_signatures(cut_full["mesh"], Vector3.ZERO)
+	var cut_oriented := _oriented_mesh_signatures(cut_full["mesh"], Vector3.ZERO)
+	var cut_outward := _edited_normals_outward(cut_full["mesh"], Vector3.ZERO, Vector2i.ZERO, true, edits)
+	var cut_chunk_positions: Array[String] = []
+	var cut_chunk_oriented: Array[String] = []
+	var cut_chunk_outward := Vector2i.ZERO
+	var cut_chunks: Dictionary = {}
+	for region_key in [Vector2i.ZERO, Vector2i(1, 0)]:
+		var region_origin: Vector3 = Spatial.region_origin_world(region_key)
+		for coordinate in ChunkGrid.all_coordinates():
+			var cut_chunk := Mesher.build_chunk_mesh(SEED, region_key, coordinate, true, edits)
+			var offset := region_origin + ChunkGrid.origin_for(coordinate)
+			cut_chunk_positions.append_array(_mesh_signatures(cut_chunk["mesh"], offset))
+			cut_chunk_oriented.append_array(_oriented_mesh_signatures(cut_chunk["mesh"], offset))
+			cut_chunk_outward += _edited_normals_outward(cut_chunk["mesh"], offset, region_key, true, edits)
+			cut_chunks[_global_chunk_coordinate(region_key, coordinate)] = {"mesh": cut_chunk["mesh"], "offset": offset}
+	_check(cut_positions == _sorted_signatures(cut_chunk_positions) and cut_oriented == _sorted_signatures(cut_chunk_oriented), "global cut-plane mode preserves edited triangle positions and winding across region chunks")
+	_check(cut_outward.y > 0 and cut_outward.x >= int(ceil(float(cut_outward.y) * 0.9)), "global cut-plane monolithic normals point toward empty space")
+	_check(cut_chunk_outward.y > 0 and cut_chunk_outward.x >= int(ceil(float(cut_chunk_outward.y) * 0.9)), "global cut-plane chunk normals point toward empty space")
+	_check_cut_seam_samples(edits)
+	print("GLOBAL_EDIT_EQUIVALENCE: regions=2 operations=%d full_triangles=%d chunk_triangles=%d" % [edits.get_edit_count(), full["triangle_count"], streamed_triangles])
+
+
+func _oriented_mesh_signatures(mesh: ArrayMesh, origin: Vector3) -> Array[String]:
+	var result: Array[String] = []
+	if mesh.get_surface_count() == 0:
+		return result
+	var arrays: Array = mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	for index in range(0, vertices.size(), 3):
+		var parts: Array[String] = []
+		for offset in range(3):
+			var point: Vector3 = vertices[index + offset] + origin
+			parts.append("%.4f,%.4f,%.4f" % [point.x, point.y, point.z])
+		result.append("%s|%s|%s" % [parts[0], parts[1], parts[2]])
+	return _sorted_signatures(result)
+
+
+func _mesh_normal_map(mesh: ArrayMesh, origin: Vector3) -> Dictionary:
+	var result: Dictionary = {}
+	if mesh.get_surface_count() == 0:
+		return result
+	var arrays: Array = mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	for index in range(vertices.size()):
+		var key := _point_key(vertices[index] + origin)
+		if not result.has(key):
+			result[key] = []
+		(result[key] as Array).append(normals[index].normalized())
+	return result
+
+
+func _merge_normal_map(target: Dictionary, source: Dictionary) -> void:
+	for key in source:
+		if not target.has(key):
+			target[key] = []
+		(target[key] as Array).append_array(source[key])
+
+
+func _normal_maps_match(a: Dictionary, b: Dictionary) -> bool:
+	if a.size() != b.size():
+		return false
+	for key in a:
+		if not b.has(key) or (a[key] as Array).size() != (b[key] as Array).size():
+			return false
+		var unmatched: Array = (b[key] as Array).duplicate()
+		for normal_value in a[key]:
+			var normal: Vector3 = normal_value
+			var match_index := -1
+			for index in range(unmatched.size()):
+				if normal.dot(unmatched[index]) > 0.999:
+					match_index = index
+					break
+			if match_index < 0:
+				var best_dot := -1.0
+				for other in unmatched:
+					best_dot = maxf(best_dot, normal.dot(other))
+				print("NORMAL_MAP_MISMATCH: point=%s best_dot=%.6f ref_count=%d candidate_count=%d" % [key, best_dot, (a[key] as Array).size(), (b[key] as Array).size()])
+				return false
+			unmatched.remove_at(match_index)
+	return true
+
+
+func _edited_normals_outward(mesh: ArrayMesh, offset: Vector3, fallback_region: Vector2i, cut: bool, edits: RefCounted) -> Vector2i:
+	if mesh.get_surface_count() == 0:
+		return Vector2i.ZERO
+	var arrays: Array = mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var stride := maxi(1, int(vertices.size() / 512))
+	var outward_count := 0
+	var sample_count := 0
+	for index in range(0, vertices.size(), stride):
+		var point: Vector3 = vertices[index] + offset
+		var normal := normals[index].normalized()
+		var mapped: Dictionary = Spatial.world_to_region_local(point)
+		var key: Vector2i = mapped["region_key"] if mapped.get("valid", false) else fallback_region
+		var local: Vector3 = mapped["local_position"] if mapped.get("valid", false) else point
+		var outside_density: float = edits.sample_density(SEED, key, local + normal * 0.12, cut)
+		var inside_density: float = edits.sample_density(SEED, key, local - normal * 0.12, cut)
+		if outside_density < inside_density:
+			outward_count += 1
+		sample_count += 1
+	return Vector2i(outward_count, sample_count)
+
+
+func _check_edit_seam_if_present(chunk_data: Dictionary, left_coord: Vector2i, right_coord: Vector2i, x_axis: bool) -> void:
+	var left: Dictionary = chunk_data[left_coord]
+	var right: Dictionary = chunk_data[right_coord]
+	var boundary: float = right["offset"].x if x_axis else right["offset"].z
+	var left_map := _boundary_map(left["mesh"], left["offset"], x_axis, boundary)
+	var right_map := _boundary_map(right["mesh"], right["offset"], x_axis, boundary)
+	if left_map.is_empty() and right_map.is_empty():
+		_check(true, "edited adjacent chunks have matching empty seam intervals")
+		return
+	_check(not left_map.is_empty() and not right_map.is_empty() and _boundary_matches(left_map, right_map), "edited global region seam positions and normals agree")
+
+
+func _check_cut_seam_samples(edits: RefCounted) -> void:
+	var checked := 0
+	for yi in range(ChunkGrid.CELL_COUNT_Y + 1):
+		for zi in range(ChunkGrid.CELL_COUNT_Z + 1):
+			var y := ChunkGrid.MIN_BOUND.y + float(yi) * ChunkGrid.SAMPLE_STEP
+			var z := float(zi) * ChunkGrid.SAMPLE_STEP
+			var left: float = edits.sample_density(SEED, Vector2i.ZERO, Vector3(16.0, y, z), true)
+			var right: float = edits.sample_density(SEED, Vector2i(1, 0), Vector3(0.0, y, z), true)
+			if not is_equal_approx(left, right):
+				_check(false, "cut and edit samples remain continuous at a region seam")
+				return
+			checked += 1
+	_check(checked == (ChunkGrid.CELL_COUNT_Y + 1) * (ChunkGrid.CELL_COUNT_Z + 1), "cut and edited SDF samples remain continuous across every shared seam lattice point")
+
+
 func _check_seam(chunk_data: Dictionary, left_coord: Vector2i, right_coord: Vector2i, x_axis: bool) -> void:
 	var left: Dictionary = chunk_data[left_coord]
 	var right: Dictionary = chunk_data[right_coord]
@@ -251,7 +423,7 @@ func _boundary_matches(left: Dictionary, right: Dictionary) -> bool:
 				nearest_distance = distance
 				nearest_key = right_key
 		if nearest_distance > 0.0002:
-			print("SEAM_POSITION_MISMATCH: %s nearest=%s distance=%.6f" % [left_key, nearest_key, nearest_distance])
+			print("SEAM_POSITION_MISMATCH: left=%s right=%s nearest=%s distance=%.6f" % [left_key, right.keys(), nearest_key, nearest_distance])
 			return false
 		var normal_dot := Vector3(left[left_key]).dot(Vector3(right[nearest_key]))
 		if normal_dot <= 0.999:
@@ -289,8 +461,34 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	_check(scene.get("last_mesh_diagnostics")["queued_chunk_count"] == 0, "initial requested-region queue drains completely")
 	_check(initial_diagnostics["peak_mesh_slice_queue_depth"] == 1440, "initial nine-region request remains bounded to 1440 incremental slice jobs")
 	_check(initial_diagnostics["remeshed_chunk_count"] == 144 and initial_diagnostics["triangle_count"] == 87077, "initial streamed window preserves the exact 144-chunk baseline geometry")
-	_check(scene.get_node("CanvasLayer/Status").text.contains("WASD/arrows") and scene.get_node("CanvasLayer/Status").text.contains("dynamic SDF regions"), "HUD documents dynamic camera focus controls")
+	_check(scene.get_node("CanvasLayer/Status").text.contains("WASD/arrows") and scene.get_node("CanvasLayer/Status").text.contains("P1.0C global SDF edits"), "HUD documents controls and global edit ledger")
 	_check(region_states.size() == 9, "initial domain states correspond only to requested or active regions")
+	var ledger: RefCounted = scene.get("edit_ledger")
+	var left_boundary_id: String = ChunkGrid.stable_id(Vector2i.ZERO, Vector2i(3, 2))
+	var right_boundary_id: String = ChunkGrid.stable_id(Vector2i(1, 0), Vector2i(0, 2))
+	var left_boundary_node: MeshInstance3D = scene.get("chunk_nodes")[left_boundary_id]
+	var right_boundary_node: MeshInstance3D = scene.get("chunk_nodes")[right_boundary_id]
+	var left_before: ArrayMesh = left_boundary_node.mesh
+	var right_before: ArrayMesh = right_boundary_node.mesh
+	var retry_total_before: int = scene.get("last_mesh_diagnostics").get("mesh_stage_retry_total", 0)
+	scene.set("debug_fail_next_mesh_stage", true)
+	scene.set("selected_brush_mode", BrushState.Mode.CARVE)
+	_check(scene.call("_accept_brush_at_world", Vector3(16.0, 4.0, 6.0)), "world-space seam operation is admitted once across two loaded regions")
+	_check(ledger.get_operations_snapshot()[0]["affected_regions"].size() == 2, "seam operation indexes both sides of its region boundary")
+	await process_frame
+	_check(left_boundary_node.mesh == left_before and right_boundary_node.mesh == right_before, "injected stage failure leaves both visible sides on the old mesh set")
+	_check(scene.get("last_mesh_diagnostics").get("mesh_stage_retry_total", 0) > retry_total_before, "injected cross-region mesh failure triggers a bounded transaction retry")
+	await _wait_for_edit_transaction(scene)
+	_check(left_boundary_node.mesh != left_before and right_boundary_node.mesh != right_before, "successful transaction publishes both sides of the seam together")
+	_check(ledger.get_edit_count() == 1 and ledger.get_last_sequence() == 0, "one accepted cross-region gesture occupies one global log slot")
+	var edit_metrics: Dictionary = scene.get("last_mesh_diagnostics")
+	print("GLOBAL_EDIT_BENCH: elapsed_ms=%.3f dirty_regions=%d dirty_chunks=%d dirty_slices=%d frame_p50/p95/p99_ms=%.3f/%.3f/%.3f resident_peak=%d ledger=%d/%d" % [
+		edit_metrics.get("elapsed_ms", 0.0), edit_metrics.get("last_affected_region_count", 0),
+		edit_metrics.get("last_affected_chunk_count", 0), edit_metrics.get("last_dirty_mesh_slice_count", 0),
+		edit_metrics.get("frame_time_p50_ms", 0.0), edit_metrics.get("frame_time_p95_ms", 0.0),
+		edit_metrics.get("frame_time_p99_ms", 0.0), edit_metrics.get("peak_active_region_count", 0),
+		ledger.get_edit_count(), BrushState.MAX_EDITS,
+	])
 	var camera: Camera3D = scene.get_node("Camera3D")
 	var view_light := camera.get_node_or_null("ViewAlignedLight") as SpotLight3D
 	_check(view_light != null, "camera has an auxiliary aligned spotlight")
@@ -307,6 +505,31 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	var positive_seams := _active_chunk_data(scene, [Vector2i.ZERO, Vector2i(1, 0)])
 	for z in range(ChunkGrid.CHUNK_COUNT_Z):
 		_check_seam(positive_seams, Vector2i(3, z), Vector2i(4, z), true)
+	var operation_count_before_viewport: int = ledger.get_edit_count()
+	var positive_viewport_hit := await _push_viewport_brush(scene, BrushState.Mode.FILL)
+	_check(positive_viewport_hit, "real viewport click accepts a brush centered on the positive region seam")
+	if positive_viewport_hit:
+		await _wait_for_edit_transaction(scene)
+		var positive_operation: Dictionary = ledger.get_operations_snapshot()[-1]
+		var positive_affected: Array[Vector2i] = positive_operation["affected_regions"]
+		_check(ledger.get_edit_count() == operation_count_before_viewport + 1, "one viewport gesture appends exactly one global command")
+		_check(positive_affected.has(Vector2i.ZERO) and positive_affected.has(Vector2i(1, 0)), "positive seam viewport command affects both neighboring region keys")
+		var cancel_test_hit := await _push_viewport_brush(scene, BrushState.Mode.CARVE)
+		_check(cancel_test_hit, "second viewport edit starts before cave-section cancellation")
+		if cancel_test_hit:
+			var before_cancel_count: int = ledger.get_edit_count()
+			var cave_toggle := InputEventKey.new()
+			cave_toggle.keycode = KEY_C
+			cave_toggle.pressed = true
+			root.push_input(cave_toggle)
+			await _wait_for_global_rebuild(scene)
+			_check(ledger.get_edit_count() == before_cancel_count, "C cancels staged publication but retains every accepted global operation")
+			_check(scene.get("_edit_transaction").is_empty() and scene.get("cave_section_enabled"), "C resolves a pending edit by rebuilding the coherent visible set")
+			var cave_restore := InputEventKey.new()
+			cave_restore.keycode = KEY_C
+			cave_restore.pressed = true
+			root.push_input(cave_restore)
+			await _wait_for_global_rebuild(scene)
 	var positive_state: RefCounted = scene.get("world_states")["1,0"]
 	_check(positive_state.region_key == Vector2i(1, 0), "loaded region retains its canonical signed region key")
 	for _step in range(5):
@@ -322,19 +545,62 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	var expected_mesh: Dictionary = Mesher.build_chunk_mesh(SEED, Vector2i(-1, 0), Vector2i.ZERO)
 	var observed_node: MeshInstance3D = negative_entry["chunk_nodes"][ChunkGrid.stable_id(Vector2i(-1, 0), Vector2i.ZERO)]
 	_check(_meshes_equal(observed_node.mesh, expected_mesh["mesh"]), "negative-region streamed mesh matches canonical deterministic chunk generation")
-	var base_sample: float = negative_state.sample_density(Vector3(8.0, 4.0, 6.0))
-	_check(negative_state.apply_sphere(BrushState.Mode.FILL, Vector3(8.0, 4.0, 6.0), 1.25), "test applies one bounded transient operation to the focused region state")
-	var edited_sample: float = negative_state.sample_density(Vector3(8.0, 4.0, 6.0))
-	_check(edited_sample > base_sample, "focused-region edit is retained in canonical domain data")
+	var base_sample: float = negative_state.sample_density(Vector3(15.75, 4.0, 6.0))
+	scene.set("selected_brush_mode", BrushState.Mode.FILL)
+	scene.set("orbit_target", Vector3(-0.5, 3.0, 6.0))
+	scene.set("orbit_offset", Vector3(0.0, 10.0, 18.0))
+	scene.call("_update_camera")
+	scene.call("_update_focus_key")
+	scene.call("_reconcile_region_window", true)
+	await _wait_for_requested_window(scene)
+	var negative_viewport_hit := await _push_viewport_brush(scene, BrushState.Mode.FILL)
+	_check(negative_viewport_hit, "real viewport click accepts a brush centered on the negative zero seam")
+	if negative_viewport_hit:
+		await _wait_for_edit_transaction(scene)
+		var negative_operation: Dictionary = ledger.get_operations_snapshot()[-1]
+		var negative_affected: Array[Vector2i] = negative_operation["affected_regions"]
+		_check(negative_affected.has(Vector2i(-1, 0)) and negative_affected.has(Vector2i.ZERO), "negative seam viewport command uses floor-owned keys on both sides")
+	var global_count_before_unload: int = ledger.get_edit_count()
+	var edited_sample: float = negative_state.sample_density(Vector3(15.75, 4.0, 6.0))
+	_check(edited_sample > base_sample, "cross-region edit affects its negative-side owner")
+	var positive_neighbor_state: RefCounted = scene.get("active_regions")["0,0"]["world_state"]
+	_check(is_equal_approx(
+		negative_state.sample_density(Vector3(16.0, 4.0, 6.0)),
+		positive_neighbor_state.sample_density(Vector3(0.0, 4.0, 6.0))
+	), "global operation produces an identical density on both sides of the shared x=0 sample")
 	for _step in range(12):
 		await _send_key(KEY_D)
-	_check(not scene.get("active_regions").has("-1,0") and scene.get("edited_region_states").has("-1,0"), "unload removes render nodes but keeps bounded transient edit data")
+	_check(not scene.get("active_regions").has("-1,0") and scene.get("edit_ledger").get_edit_count() == global_count_before_unload, "unload removes render nodes while all bounded global commands remain")
 	for _step in range(12):
 		await _send_key(KEY_A)
 	await _wait_for_requested_window(scene)
 	var reloaded_state: RefCounted = scene.get("active_regions")["-1,0"]["world_state"]
-	_check(reloaded_state == negative_state, "re-entering a region reuses its in-memory edited state")
-	_check(reloaded_state.sample_density(Vector3(8.0, 4.0, 6.0)) > base_sample, "region reload preserves the accepted transient edit")
+	_check(reloaded_state.brush_edits.get_instance_id() == ledger.get_instance_id(), "re-entered region reuses the canonical global edit ledger")
+	_check(reloaded_state.sample_density(Vector3(15.75, 4.0, 6.0)) > base_sample, "region reload replays the accepted cross-region transient edit")
+	var sequence_before_reset: int = ledger.get_last_sequence()
+	var count_before_reset: int = ledger.get_edit_count()
+	await _send_key(KEY_X)
+	await _wait_for_global_rebuild(scene)
+	_check(ledger.get_edit_count() == count_before_reset - 1, "X removes only global commands whose support intersects the focused negative region")
+	_check(ledger.get_last_sequence() == sequence_before_reset, "focused reset does not reuse the removed command sequence")
+	_check(is_equal_approx(reloaded_state.sample_density(Vector3(15.75, 4.0, 6.0)), base_sample), "focused reset remeshes the negative side and removes its cross-region effect")
+	var unloaded_center := Vector3(-48.0, 4.0, 6.0)
+	var unloaded_baseline: float = Field.sample_density(SEED, Vector2i(-3, 0), Vector3(0.0, 4.0, 6.0))
+	_check(ledger.add_sphere(BrushState.Mode.CARVE, unloaded_center, 1.25), "canonical operation is accepted while both intersected regions are unloaded")
+	_check(not scene.get("active_regions").has("-3,0") and not scene.get("active_regions").has("-4,0"), "unloaded-region operation does not require retaining region meshes")
+	var load_retry_before: int = scene.get("last_mesh_diagnostics").get("mesh_stage_retry_total", 0)
+	scene.set("debug_fail_next_load_stage", true)
+	for _step in range(8):
+		await _send_key(KEY_A)
+	await _wait_for_requested_window(scene)
+	_check(not scene.get("debug_fail_next_load_stage"), "injected first-load failure was consumed by a disposable streamed region")
+	_check(scene.get("last_mesh_diagnostics").get("mesh_stage_retry_total", 0) > load_retry_before, "failed initial load is explicitly retried within a fixed bound")
+	var replayed_entry: Dictionary = scene.get("active_regions")["-3,0"]
+	var replayed_state: RefCounted = replayed_entry["world_state"]
+	_check(replayed_state.sample_density(Vector3(0.0, 4.0, 6.0)) < unloaded_baseline, "later region load replays the earlier global operation")
+	var replayed_chunk_id: String = ChunkGrid.stable_id(Vector2i(-3, 0), Vector2i(0, 2))
+	var replayed_mesh: Dictionary = Mesher.build_chunk_mesh(SEED, Vector2i(-3, 0), Vector2i(0, 2), false, ledger)
+	_check(_meshes_equal(replayed_entry["chunk_nodes"][replayed_chunk_id].mesh, replayed_mesh["mesh"]), "reloaded mesh bytes derive from the canonical command ledger")
 	_check(scene.get("active_regions").size() <= 25 and scene.get("chunk_nodes").size() <= 400, "repeated region crossings stay within region and chunk caps")
 	_check(scene.get("loading_regions").size() <= 9 and scene.get("last_mesh_diagnostics")["peak_mesh_slices_per_frame"] == 1, "ordinary load queue and per-frame work remain bounded after repeated crossings")
 	var diagnostics: Dictionary = scene.get("last_mesh_diagnostics")
@@ -357,12 +623,56 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	await process_frame
 
 
+func _test_edit_while_neighbor_is_loading() -> void:
+	var packed := load("res://scenes/terrain_demo.tscn") as PackedScene
+	if packed == null:
+		_check(false, "loading-neighbor edit scene loads")
+		return
+	var scene := packed.instantiate()
+	root.add_child(scene)
+	await _wait_for_region(scene, Vector2i.ZERO)
+	var neighbor_id := "1,0"
+	_check(scene.get("loading_regions").has(neighbor_id), "positive seam neighbor remains incrementally loading while focus is already visible")
+	var accepted: bool = scene.call("_accept_brush_at_world", Vector3(16.0, 4.0, 6.0))
+	_check(accepted, "global brush is accepted while one intersected neighbor is still loading")
+	if accepted:
+		_check(scene.get("loading_regions").has(neighbor_id) and scene.get("loading_regions")[neighbor_id]["purpose"] == "edit_transaction", "stale load stage is replaced by a revision-pinned full edit stage")
+		await _wait_for_edit_transaction(scene)
+		await _wait_for_requested_window(scene)
+		var entry: Dictionary = scene.get("active_regions")[neighbor_id]
+		var state: RefCounted = entry["world_state"]
+		_check(state.brush_edits.get_instance_id() == scene.get("edit_ledger").get_instance_id(), "loaded neighbor samples the canonical global ledger")
+		var chunk_id: String = ChunkGrid.stable_id(Vector2i(1, 0), Vector2i(0, 2))
+		var expected := Mesher.build_chunk_mesh(SEED, Vector2i(1, 0), Vector2i(0, 2), false, state.brush_edits)
+		_check(_meshes_equal(entry["chunk_nodes"][chunk_id].mesh, expected["mesh"]), "neighbor published after loading matches the accepted global command")
+	scene.queue_free()
+	await process_frame
+
+
 func _send_key(keycode: Key) -> void:
 	var event := InputEventKey.new()
 	event.keycode = keycode
 	event.pressed = true
 	root.push_input(event)
 	await process_frame
+
+
+func _push_viewport_brush(scene: Node, mode: int) -> bool:
+	if not scene.get("_edit_transaction").is_empty() or scene.get("global_rebuild_pending"):
+		return false
+	scene.set("selected_brush_mode", mode)
+	scene.set("orbit_offset", Vector3(0.0, 10.0, 18.0))
+	scene.call("_update_camera")
+	await process_frame
+	var before_count: int = scene.get("edit_ledger").get_edit_count()
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.shift_pressed = mode == BrushState.Mode.FILL
+	click.position = root.get_visible_rect().size * 0.5
+	root.push_input(click, true)
+	await process_frame
+	return scene.get("edit_ledger").get_edit_count() == before_count + 1
 
 
 func _wait_for_requested_window(scene: Node) -> void:
@@ -389,6 +699,22 @@ func _wait_for_region(scene: Node, region_key: Vector2i) -> void:
 	_check(scene.get("active_regions").has(id), "focused region becomes visible after bounded slice work")
 
 
+func _wait_for_global_rebuild(scene: Node) -> void:
+	for _frame in range(4000):
+		if not scene.get("global_rebuild_pending"):
+			return
+		await process_frame
+	_check(not scene.get("global_rebuild_pending"), "C/R rebuild completes incrementally after pending edit cancellation")
+
+
+func _wait_for_edit_transaction(scene: Node) -> void:
+	for _frame in range(2000):
+		if scene.get("_edit_transaction").is_empty():
+			return
+		await process_frame
+	_check(scene.get("_edit_transaction").is_empty(), "cross-region edit transaction completes or explicitly resolves after unload")
+
+
 func _active_chunk_data(scene: Node, region_keys: Array[Vector2i]) -> Dictionary:
 	var result: Dictionary = {}
 	var active: Dictionary = scene.get("active_regions")
@@ -406,6 +732,7 @@ func _active_chunk_data(scene: Node, region_keys: Array[Vector2i]) -> Dictionary
 
 func _meshes_equal(actual: ArrayMesh, expected: ArrayMesh) -> bool:
 	if actual.get_surface_count() != expected.get_surface_count():
+		print("MESH_MISMATCH: actual_surfaces=%d expected_surfaces=%d" % [actual.get_surface_count(), expected.get_surface_count()])
 		return false
 	if actual.get_surface_count() == 0:
 		return true
@@ -416,9 +743,17 @@ func _meshes_equal(actual: ArrayMesh, expected: ArrayMesh) -> bool:
 	var actual_normals: PackedVector3Array = actual_arrays[Mesh.ARRAY_NORMAL]
 	var expected_normals: PackedVector3Array = expected_arrays[Mesh.ARRAY_NORMAL]
 	if actual_vertices != expected_vertices or actual_normals.size() != expected_normals.size():
+		if actual_vertices.size() != expected_vertices.size():
+			print("MESH_MISMATCH: actual_vertices=%d expected_vertices=%d actual_normals=%d expected_normals=%d" % [actual_vertices.size(), expected_vertices.size(), actual_normals.size(), expected_normals.size()])
+		elif not actual_vertices.is_empty():
+			for index in range(actual_vertices.size()):
+				if actual_vertices[index] != expected_vertices[index]:
+					print("MESH_MISMATCH: first_vertex_index=%d actual=%s expected=%s" % [index, actual_vertices[index], expected_vertices[index]])
+					break
 		return false
 	for index in range(actual_normals.size()):
-		if actual_normals[index].distance_to(expected_normals[index]) > 0.0001:
+		if actual_normals[index].distance_to(expected_normals[index]) > 0.001:
+			print("MESH_NORMAL_MISMATCH: index=%d distance=%.6f actual=%s expected=%s" % [index, actual_normals[index].distance_to(expected_normals[index]), actual_normals[index], expected_normals[index]])
 			return false
 	return true
 

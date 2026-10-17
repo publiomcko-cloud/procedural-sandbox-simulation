@@ -14,8 +14,8 @@ const UNLOAD_RADIUS := 2
 const MAX_ACTIVE_REGIONS := 25
 const MAX_MESH_SLICES_PER_FRAME := 1
 const MESH_SLICE_COUNT := ceili(float(ChunkGrid.CELL_COUNT_Y) / float(TerrainMesher.CELLS_PER_MESH_SLICE))
-const MAX_EDITED_REGION_STATES := 16
 const FOCUS_MOVE_STEP := 4.0
+const MAX_STAGE_RETRIES := 2
 
 @onready var terrain_chunks_root: Node3D = $TerrainChunks
 @onready var terrain_mesh_template: MeshInstance3D = $TerrainChunks/Terrain
@@ -32,9 +32,9 @@ var _last_reconciled_focus := Vector2i(2147483647, 2147483647)
 # Rendering residency is transient. WorldState remains separate from these nodes.
 var active_regions: Dictionary = {} # region id -> {region_key, world_state, chunk_nodes}
 var loading_regions: Dictionary = {} # region id -> bounded incremental mesh staging state
-var edited_region_states: Dictionary = {} # unloaded regions with accepted transient edits
 var world_states: Dictionary = {} # active and currently staged domain states
 var world_state: RefCounted # focused region compatibility alias for the demo/tests
+var edit_ledger: RefCounted
 var chunk_nodes: Dictionary = {} # stable chunk id -> active MeshInstance3D
 
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
@@ -45,6 +45,12 @@ var last_stream_error := ""
 var global_rebuild_pending := false
 var global_rebuild_reason := ""
 var _full_rebuild_target_ids: Array[String] = []
+var _edit_transaction: Dictionary = {}
+var _stage_retry_counts: Dictionary = {}
+var _global_rebuild_retry_count := 0
+var debug_fail_next_mesh_stage := false
+var debug_fail_next_load_stage := false
+var _mesh_stage_retry_total := 0
 var _rendered_cave_section_enabled := false
 var _operation_name := "initial_load"
 var _operation_chunk_ids: Array[String] = []
@@ -59,6 +65,7 @@ var _last_frame_ms := 0.0
 var _peak_frame_ms := 0.0
 var _mesh_slices_this_frame := 0
 var _peak_mesh_slices_per_frame := 0
+var _frame_time_samples: Array[float] = []
 var _peak_active_region_count := 0
 var _peak_queue_depth := 0
 var _peak_mesh_slice_queue_depth := 0
@@ -66,9 +73,14 @@ var _streamed_region_loads := 0
 var _streamed_region_unloads := 0
 var _active_triangle_count := 0
 var _active_vertex_count := 0
+var _last_edit_affected_regions := 0
+var _last_edit_affected_chunks := 0
+var _last_edit_mesh_slices := 0
+var _last_edit_rejection := ""
 
 
 func _ready() -> void:
+	edit_ledger = BrushEditState.new(WorldState.DEMO_SEED, Field.GENERATOR_VERSION)
 	terrain_mesh_template.mesh = null
 	terrain_mesh_template.visible = false
 	_begin_operation("initial_load")
@@ -81,6 +93,9 @@ func _process(delta: float) -> void:
 	var process_started_usec := Time.get_ticks_usec()
 	_mesh_slices_this_frame = 0
 	_last_frame_ms = maxf(delta * 1000.0, 0.0)
+	if _frame_time_samples.size() >= 512:
+		_frame_time_samples.pop_front()
+	_frame_time_samples.append(_last_frame_ms)
 	_peak_frame_ms = maxf(_peak_frame_ms, _last_frame_ms)
 	_update_focus_key()
 	_reconcile_region_window()
@@ -114,12 +129,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_R:
 			_start_global_rebuild("regenerate")
 		elif event.keycode == KEY_X:
-			var focused_state := _state_for_region(focus_region_key)
-			if focused_state != null:
-				focused_state.clear_edits()
-				if focused_state.brush_edits.get_edit_count() == 0:
-					edited_region_states.erase(_region_id(focus_region_key))
-			last_brush_result = "Transient edits cleared for focused region %s" % focus_region_key
+			var cleared: Dictionary = edit_ledger.clear_for_region(focus_region_key)
+			last_brush_result = "Reset focused edits for %s: removed %d command(s) affecting %d region(s)" % [
+				focus_region_key, cleared["removed_count"], cleared["affected_regions"].size(),
+			]
 			_start_global_rebuild("reset")
 		elif event.keycode in [KEY_A, KEY_LEFT]:
 			_move_focus(Vector3(-FOCUS_MOVE_STEP, 0.0, 0.0))
@@ -169,13 +182,60 @@ func _reconcile_region_window(force: bool = false) -> void:
 			var key: Vector2i = stage["region_key"]
 			if not retained_ids.has(id) or (stage["purpose"] == "load" and not _contains_region(desired, key)):
 				loading_regions.erase(id)
+				if not _edit_transaction.is_empty() and (_edit_transaction["target_ids"] as Array).has(id):
+					_edit_transaction["target_ids"].erase(id)
+		if not _edit_transaction.is_empty() and (_edit_transaction["target_ids"] as Array).is_empty():
+			_finish_edit_transaction("accepted; affected regions left residency and will apply it on load")
 		for key in desired:
 			var id := _region_id(key)
 			if not active_regions.has(id) and not loading_regions.has(id):
 				if loading_regions.is_empty():
 					_begin_operation("region_stream_load")
-				_begin_region_stage(key, "load", ChunkGrid.all_coordinates())
+				if _edit_transaction_affects_region(key):
+					_add_edit_transaction_region(key)
+				else:
+					_begin_region_stage(key, "load", ChunkGrid.all_coordinates())
+		for id_value in loading_regions.keys().duplicate():
+			var id: String = id_value
+			var stage: Dictionary = loading_regions[id]
+			var key: Vector2i = stage["region_key"]
+			if stage["purpose"] == "load" and _edit_transaction_affects_region(key):
+				_add_edit_transaction_region(key)
 	_sync_world_state_index()
+	_update_runtime_diagnostics()
+
+
+func _edit_transaction_affects_region(region_key: Vector2i) -> bool:
+	return not _edit_transaction.is_empty() \
+		and (_edit_transaction.get("affected_regions", []) as Array).has(region_key)
+
+
+func _add_edit_transaction_region(region_key: Vector2i) -> void:
+	if not _edit_transaction_affects_region(region_key):
+		return
+	var id := _region_id(region_key)
+	var already_targeted := false
+	for target in _edit_transaction["targets"]:
+		if target["id"] == id:
+			already_targeted = true
+			break
+	if not already_targeted:
+		_edit_transaction["targets"].append({
+			"region_key": region_key,
+			"id": id,
+			"chunks": ChunkGrid.all_coordinates(),
+			"full": true,
+		})
+	if _edit_transaction.get("stage_state", "") == "failed_pending_retry":
+		_edit_transaction["stage_state"] = "staging"
+		_edit_transaction["retries"] = 0
+		_start_edit_transaction_attempt()
+		return
+	if not (_edit_transaction["target_ids"] as Array).has(id):
+		loading_regions.erase(id)
+		_begin_region_stage(region_key, "edit_transaction", ChunkGrid.all_coordinates())
+		_edit_transaction["target_ids"].append(id)
+		_edit_transaction["affected_chunk_count"] += ChunkGrid.CHUNK_COUNT_X * ChunkGrid.CHUNK_COUNT_Z
 	_update_runtime_diagnostics()
 
 
@@ -223,7 +283,7 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 	var id := _region_id(region_key)
 	var state := _state_for_region(region_key)
 	if state == null:
-		state = WorldState.new(WorldState.DEMO_SEED, region_key)
+		state = WorldState.new(WorldState.DEMO_SEED, region_key, edit_ledger)
 	var coordinates: Array[Vector2i] = chunk_coordinates.duplicate()
 	var empty_slice_results: Array[Dictionary] = []
 	loading_regions[id] = {
@@ -237,6 +297,7 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 		"meshes": {},
 		"cave_section_enabled": cave_section_enabled,
 		"edit_revision": state.brush_edits.revision,
+		"retry_count": 0,
 	}
 	world_states[id] = state
 	if region_key == focus_region_key:
@@ -276,6 +337,16 @@ func _process_one_chunk_job() -> void:
 	var coordinates: Array[Vector2i] = stage["chunk_coordinates"]
 	var coordinate: Vector2i = coordinates[next_index]
 	var state: RefCounted = stage["world_state"]
+	if state.brush_edits.revision != int(stage["edit_revision"]):
+		_fail_region_stage(id, "Edit revision changed during mesh staging; stage discarded and retried")
+		return
+	var inject_edit_failure: bool = debug_fail_next_mesh_stage and String(stage["purpose"]) == "edit_transaction"
+	var inject_load_failure: bool = debug_fail_next_load_stage and String(stage["purpose"]) == "load"
+	if inject_edit_failure or inject_load_failure:
+		debug_fail_next_mesh_stage = false
+		debug_fail_next_load_stage = false
+		_fail_region_stage(id, "Injected mesh-stage failure; prior meshes retained")
+		return
 	var brush_state: RefCounted = state.brush_edits if state.brush_edits.get_edit_count() > 0 else null
 	var slice_index: int = stage["slice_index"]
 	var cell_start_y := slice_index * TerrainMesher.CELLS_PER_MESH_SLICE
@@ -301,6 +372,8 @@ func _process_one_chunk_job() -> void:
 	slice_results.append(result)
 	stage["slice_results"] = slice_results
 	stage["slice_index"] = slice_index + 1
+	if stage["purpose"] == "edit_transaction" and not _edit_transaction.is_empty():
+		_edit_transaction["mesh_slice_count"] = int(_edit_transaction.get("mesh_slice_count", 0)) + 1
 	if int(stage["slice_index"]) >= MESH_SLICE_COUNT:
 		var combined: Dictionary = TerrainMesher.combine_chunk_mesh_slices(slice_results)
 		if not combined.get("valid", false):
@@ -332,12 +405,16 @@ func _complete_region_stage(id: String) -> void:
 	if global_rebuild_pending or stage["purpose"] == "full":
 		_try_commit_global_rebuild()
 		return
+	if stage["purpose"] == "edit_transaction":
+		_try_commit_edit_transaction()
+		return
 	loading_regions.erase(id)
 	if stage["purpose"] == "partial":
 		_publish_partial_stage(id, stage)
 	else:
 		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"])
 		_streamed_region_loads += 1
+		_stage_retry_counts.erase(id)
 		if _operation_name == "initial_load" and loading_regions.is_empty():
 			print("TERRAIN_STREAM_WINDOW_READY: focus=%s active_regions=%d active_chunks=%d queued_chunks=0 peak_queue=%d peak_mesh_slice_ms=%.3f" % [
 				focus_region_key, active_regions.size(), chunk_nodes.size(), _peak_queue_depth, _peak_mesh_slice_ms,
@@ -379,8 +456,11 @@ func _try_commit_global_rebuild() -> void:
 		all_stages.append(loading_regions[id])
 	global_rebuild_pending = false
 	global_rebuild_reason = ""
+	_global_rebuild_retry_count = 0
+	last_stream_error = ""
 	_full_rebuild_target_ids.clear()
 	loading_regions.clear()
+	_edit_transaction = {}
 	for stage in all_stages:
 		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"])
 	_rendered_cave_section_enabled = cave_section_enabled
@@ -475,11 +555,9 @@ func _unload_region(id: String) -> void:
 	if not active_regions.has(id):
 		return
 	var entry: Dictionary = active_regions[id]
-	var state: RefCounted = entry["world_state"]
-	if state.brush_edits.get_edit_count() > 0:
-		edited_region_states[id] = state
-	else:
-		edited_region_states.erase(id)
+	if _edit_transaction.has("target_ids") and (_edit_transaction["target_ids"] as Array).has(id):
+		_edit_transaction["target_ids"].erase(id)
+		loading_regions.erase(id)
 	for chunk_id in entry["chunk_nodes"]:
 		_release_chunk_node(chunk_id, entry["chunk_nodes"][chunk_id])
 	active_regions.erase(id)
@@ -489,15 +567,37 @@ func _unload_region(id: String) -> void:
 
 func _fail_region_stage(id: String, message: String) -> void:
 	last_stream_error = message
+	var failed_stage: Dictionary = loading_regions.get(id, {})
 	loading_regions.erase(id)
+	if not _edit_transaction.is_empty() and (_edit_transaction["target_ids"] as Array).has(id):
+		_retry_edit_transaction(message)
+		_sync_world_state_index()
+		_update_status()
+		return
 	if global_rebuild_pending:
-		loading_regions.clear()
-		global_rebuild_pending = false
-		global_rebuild_reason = ""
-		_full_rebuild_target_ids.clear()
-		cave_section_enabled = _rendered_cave_section_enabled
-		last_mesh_diagnostics["operation"] = "failed"
-		last_brush_result = message
+		_global_rebuild_retry_count += 1
+		if _global_rebuild_retry_count <= MAX_STAGE_RETRIES:
+			last_stream_error = "%s; full rebuild retry %d/%d" % [message, _global_rebuild_retry_count, MAX_STAGE_RETRIES]
+			loading_regions.clear()
+			for target_id in _full_rebuild_target_ids:
+				_begin_region_stage(_region_key_from_id(target_id), "full", ChunkGrid.all_coordinates())
+		else:
+			loading_regions.clear()
+			global_rebuild_pending = false
+			global_rebuild_reason = ""
+			_full_rebuild_target_ids.clear()
+			cave_section_enabled = _rendered_cave_section_enabled
+			last_mesh_diagnostics["operation"] = "failed_pending_retry"
+			last_brush_result = "%s; visible mesh set retained, press R to retry" % message
+	elif id != "" and not active_regions.has(id) and failed_stage.get("purpose", "") == "load":
+		var retries := int(_stage_retry_counts.get(id, 0)) + 1
+		_stage_retry_counts[id] = retries
+		_mesh_stage_retry_total += 1
+		var key: Vector2i = failed_stage.get("region_key", Vector2i.ZERO)
+		if retries <= MAX_STAGE_RETRIES and _contains_region(_region_keys_within_radius(focus_region_key, REQUEST_RADIUS), key):
+			_begin_region_stage(key, "load", ChunkGrid.all_coordinates())
+		else:
+			last_stream_error = "%s; load retry limit reached, move focus away and back or press R" % message
 	_sync_world_state_index()
 	_update_status()
 
@@ -521,12 +621,22 @@ func _record_completed_operation(stage: Dictionary) -> void:
 		"max_active_region_count": _peak_active_region_count,
 		"max_queue_depth": _peak_queue_depth,
 		"operation_region_key": stage.get("region_key", focus_region_key),
+		"global_edit_count": edit_ledger.get_edit_count(),
+		"global_edit_last_sequence": edit_ledger.get_last_sequence(),
+		"global_edit_revision": edit_ledger.revision,
+		"last_affected_region_count": _last_edit_affected_regions,
+		"last_affected_chunk_count": _last_edit_affected_chunks,
+		"last_dirty_mesh_slice_count": _last_edit_mesh_slices,
+		"edit_stage_state": "idle" if _edit_transaction.is_empty() else _edit_transaction.get("stage_state", "staging"),
+		"last_edit_rejection": _last_edit_rejection,
 	}
 
 
 func _start_global_rebuild(operation_name: String) -> void:
 	_begin_operation(operation_name)
 	last_stream_error = ""
+	_global_rebuild_retry_count = 0
+	_edit_transaction = {}
 	global_rebuild_pending = true
 	global_rebuild_reason = operation_name
 	loading_regions.clear()
@@ -557,10 +667,149 @@ func _start_global_rebuild(operation_name: String) -> void:
 	_update_runtime_diagnostics()
 
 
-func _schedule_partial_rebuild(region_key: Vector2i, chunks: Array[Vector2i], operation_name: String) -> void:
-	var id := _region_id(region_key)
-	_begin_operation(operation_name)
-	_begin_region_stage(region_key, "partial", chunks)
+func _schedule_edit_transaction(operation: Dictionary) -> void:
+	_begin_operation("global_brush_edit")
+	var targets: Array[Dictionary] = []
+	_last_edit_affected_regions = operation["affected_regions"].size()
+	_last_edit_affected_chunks = 0
+	_last_edit_rejection = ""
+	for region_key in operation["affected_regions"]:
+		var id := _region_id(region_key)
+		if not active_regions.has(id) and not loading_regions.has(id):
+			continue # Canonical ledger replays this command on the next load.
+		var local_center := Vector3(
+			operation["center_world"].x - float(region_key.x) * SpatialGrid.REGION_SIZE_X,
+			operation["center_world"].y,
+			operation["center_world"].z - float(region_key.y) * SpatialGrid.REGION_SIZE_Z
+		)
+		var chunks: Array[Vector2i] = ChunkGrid.affected_chunks_for_sphere(local_center, float(operation["radius"]))
+		var needs_full_stage := not active_regions.has(id)
+		if needs_full_stage:
+			chunks = ChunkGrid.all_coordinates()
+		if chunks.is_empty():
+			continue
+		targets.append({"region_key": region_key, "id": id, "chunks": chunks, "full": needs_full_stage})
+		_last_edit_affected_chunks += chunks.size()
+	if targets.is_empty():
+		_edit_transaction = {}
+		last_brush_result += "; no affected region is resident, future loads will replay it"
+		_record_completed_operation({"region_key": focus_region_key, "purpose": "global_brush_edit"})
+		return
+	_edit_transaction = {
+		"revision": edit_ledger.revision,
+		"operation_sequence": operation["sequence"],
+		"affected_regions": operation["affected_regions"],
+		"target_ids": [],
+		"targets": targets,
+		"retries": 0,
+		"stage_state": "staging",
+		"affected_region_count": operation["affected_regions"].size(),
+		"affected_chunk_count": 0,
+		"mesh_slice_count": 0,
+	}
+	_start_edit_transaction_attempt()
+	_update_runtime_diagnostics()
+
+
+func _start_edit_transaction_attempt() -> void:
+	if _edit_transaction.is_empty():
+		return
+	var target_ids: Array[String] = []
+	for target in _edit_transaction["targets"]:
+		var id: String = target["id"]
+		if not active_regions.has(id) and not loading_regions.has(id):
+			continue
+		var region_key: Vector2i = target["region_key"]
+		var chunks: Array[Vector2i] = target["chunks"]
+		if not active_regions.has(id):
+			chunks = ChunkGrid.all_coordinates()
+		loading_regions.erase(id)
+		_begin_region_stage(region_key, "edit_transaction", chunks)
+		target_ids.append(id)
+	_edit_transaction["target_ids"] = target_ids
+	_edit_transaction["stage_state"] = "staging"
+	_edit_transaction["affected_chunk_count"] = 0
+	_edit_transaction["mesh_slice_count"] = 0
+	for target in _edit_transaction["targets"]:
+		if target_ids.has(target["id"]):
+			_edit_transaction["affected_chunk_count"] += target["chunks"].size()
+	if target_ids.is_empty():
+		_finish_edit_transaction("accepted; unloaded affected regions will apply it on load")
+
+
+func _try_commit_edit_transaction() -> void:
+	if _edit_transaction.is_empty() or int(_edit_transaction["revision"]) != edit_ledger.revision:
+		return
+	var target_ids: Array[String] = _edit_transaction["target_ids"]
+	for id in target_ids:
+		if not loading_regions.has(id):
+			return
+		var stage: Dictionary = loading_regions[id]
+		if stage["purpose"] != "edit_transaction" \
+			or int(stage["edit_revision"]) != edit_ledger.revision \
+			or int(stage["next_index"]) < (stage["chunk_coordinates"] as Array).size():
+			return
+		for coordinate in stage["chunk_coordinates"]:
+			if not stage["meshes"].has(coordinate):
+				_fail_region_stage(id, "Edit transaction mesh set is incomplete; previous meshes retained")
+				return
+		if active_regions.has(id):
+			var nodes: Dictionary = active_regions[id]["chunk_nodes"]
+			for coordinate in stage["chunk_coordinates"]:
+				if not nodes.has(ChunkGrid.stable_id(stage["region_key"], coordinate)):
+					_fail_region_stage(id, "Edit transaction lost a visible chunk target; previous meshes retained")
+					return
+	# All targets and meshes validate before the first visible assignment.
+	_edit_transaction["stage_state"] = "committing"
+	for id in target_ids:
+		var stage: Dictionary = loading_regions[id]
+		if active_regions.has(id):
+			var nodes: Dictionary = active_regions[id]["chunk_nodes"]
+			for coordinate in stage["chunk_coordinates"]:
+				var chunk_id: String = ChunkGrid.stable_id(stage["region_key"], coordinate)
+				_replace_node_mesh(nodes[chunk_id], stage["meshes"][coordinate])
+		else:
+			_publish_region(stage["region_key"], stage["world_state"], stage["meshes"])
+		loading_regions.erase(id)
+	var committed_sequence: int = _edit_transaction["operation_sequence"]
+	var committed_regions: int = target_ids.size()
+	_last_edit_mesh_slices = int(_edit_transaction.get("mesh_slice_count", 0))
+	_edit_transaction = {}
+	last_stream_error = ""
+	last_brush_result = "Global edit #%d mesh commit complete across %d resident region(s)" % [committed_sequence, committed_regions]
+	_record_completed_operation({"region_key": focus_region_key, "purpose": "global_brush_edit"})
+	_sync_world_state_index()
+	_update_runtime_diagnostics()
+
+
+func _finish_edit_transaction(message: String) -> void:
+	if _edit_transaction.is_empty():
+		return
+	var sequence: int = _edit_transaction["operation_sequence"]
+	_edit_transaction = {}
+	last_brush_result = "Global edit #%d %s" % [sequence, message]
+	_record_completed_operation({"region_key": focus_region_key, "purpose": "global_brush_edit"})
+	_sync_world_state_index()
+	_update_runtime_diagnostics()
+
+
+func _retry_edit_transaction(failure_message: String) -> void:
+	if _edit_transaction.is_empty():
+		return
+	_edit_transaction["retries"] = int(_edit_transaction["retries"]) + 1
+	_mesh_stage_retry_total += 1
+	if int(_edit_transaction["retries"]) <= MAX_STAGE_RETRIES:
+		last_stream_error = "%s; retry %d/%d" % [failure_message, _edit_transaction["retries"], MAX_STAGE_RETRIES]
+		_start_edit_transaction_attempt()
+		return
+	for id_value in (_edit_transaction["target_ids"] as Array).duplicate():
+		var id: String = id_value
+		if loading_regions.has(id) and loading_regions[id]["purpose"] == "edit_transaction":
+			loading_regions.erase(id)
+	_edit_transaction["stage_state"] = "failed_pending_retry"
+	_edit_transaction["target_ids"] = []
+	last_stream_error = "%s; accepted edit retained, press R to retry mesh build" % failure_message
+	last_brush_result = "Accepted edit remains in the global ledger; visible meshes retained until retry succeeds"
 	_update_runtime_diagnostics()
 
 
@@ -580,10 +829,6 @@ func _sync_world_state_index() -> void:
 	for id_value in loading_regions:
 		var id: String = id_value
 		world_states[id] = loading_regions[id]["world_state"]
-	for id_value in edited_region_states:
-		var id: String = id_value
-		if not world_states.has(id):
-			world_states[id] = edited_region_states[id]
 	world_state = _state_for_region(focus_region_key)
 
 
@@ -593,23 +838,7 @@ func _state_for_region(region_key: Vector2i) -> RefCounted:
 		return active_regions[id]["world_state"]
 	if loading_regions.has(id):
 		return loading_regions[id]["world_state"]
-	if edited_region_states.has(id):
-		return edited_region_states[id]
-	return null
-
-
-func _can_accept_edit(state: RefCounted, region_key: Vector2i) -> bool:
-	if state.brush_edits.get_edit_count() > 0:
-		return true
-	var edited_ids: Dictionary = {}
-	for entry in active_regions.values():
-		var candidate: RefCounted = entry["world_state"]
-		if candidate.brush_edits.get_edit_count() > 0:
-			edited_ids[_region_id(candidate.region_key)] = true
-	for candidate in edited_region_states.values():
-		if candidate.brush_edits.get_edit_count() > 0:
-			edited_ids[_region_id(candidate.region_key)] = true
-	return edited_ids.has(_region_id(region_key)) or edited_ids.size() < MAX_EDITED_REGION_STATES
+	return WorldState.new(WorldState.DEMO_SEED, region_key, edit_ledger)
 
 
 func _sample_world_density(world_position: Vector3) -> float:
@@ -618,9 +847,7 @@ func _sample_world_density(world_position: Vector3) -> float:
 		return -INF
 	var key: Vector2i = mapped["region_key"]
 	var state := _state_for_region(key)
-	if state != null:
-		return state.sample_density(mapped["local_position"], cave_section_enabled)
-	return Field.sample_density(WorldState.DEMO_SEED, key, mapped["local_position"], cave_section_enabled)
+	return state.sample_density(mapped["local_position"], cave_section_enabled)
 
 
 func _apply_brush_at(screen_position: Vector2) -> void:
@@ -628,8 +855,8 @@ func _apply_brush_at(screen_position: Vector2) -> void:
 		last_brush_result = "Focused region is not ready for edits; no edit added"
 		_update_status()
 		return
-	if loading_regions.has(_region_id(focus_region_key)):
-		last_brush_result = "Focused region is rebuilding; no edit added"
+	if not _edit_transaction.is_empty():
+		last_brush_result = "Previous accepted edit is waiting for a coherent mesh commit; no new edit added"
 		_update_status()
 		return
 	var ray_origin := camera.project_ray_origin(screen_position)
@@ -647,49 +874,40 @@ func _apply_brush_at(screen_position: Vector2) -> void:
 		last_brush_result = "Invalid world position; no edit added"
 		_update_status()
 		return
-	var hit_region: Vector2i = mapped["region_key"]
-	var local_hit: Vector3 = mapped["local_position"]
-	if hit_region != focus_region_key:
-		last_brush_result = "Region %s is outside the focused edit region" % hit_region
+	_accept_brush_at_world(world_hit)
+
+
+func _accept_brush_at_world(world_hit: Vector3) -> bool:
+	if global_rebuild_pending or not _edit_transaction.is_empty():
+		last_brush_result = "Mesh publication is busy; no edit added"
 		_update_status()
-		return
-	if not _is_region_edit_safe(local_hit):
-		last_brush_result = "Brush reaches a region or mesh boundary; no edit added"
+		return false
+	if not edit_ledger.add_sphere(selected_brush_mode, world_hit, BRUSH_RADIUS):
+		_last_edit_rejection = "global_ledger_full_or_invalid"
+		last_brush_result = "Global edit ledger full or operation invalid; terrain unchanged"
 		_update_status()
-		return
-	var state := _state_for_region(focus_region_key)
-	if state == null or not _can_accept_edit(state, focus_region_key):
-		last_brush_result = "Transient edited-region limit reached; terrain unchanged"
-		_update_status()
-		return
-	var dirty_chunks: Array[Vector2i] = ChunkGrid.affected_chunks_for_sphere(local_hit, BRUSH_RADIUS)
-	if dirty_chunks.is_empty():
-		last_brush_result = "Brush does not intersect the focused region mesh; no edit added"
-		_update_status()
-		return
-	if not state.apply_sphere(selected_brush_mode, local_hit, BRUSH_RADIUS):
-		last_brush_result = "Edit limit reached or brush rejected; terrain unchanged"
-		_update_status()
-		return
+		return false
+	var operation: Dictionary = edit_ledger.get_operations_snapshot()[-1]
+	var affected_regions: Array[Vector2i] = operation["affected_regions"]
+	_last_edit_rejection = ""
 	var mode_name := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
-	last_brush_result = "%s sphere applied to focused region %s only" % [mode_name, focus_region_key]
-	if state.brush_edits.get_edit_count() > 0:
-		edited_region_states[_region_id(focus_region_key)] = state
-	_schedule_partial_rebuild(focus_region_key, dirty_chunks, "focused_region_brush_edit")
+	last_brush_result = "%s #%d accepted globally at %s; staging %d intersecting region(s)" % [
+		mode_name, operation["sequence"], world_hit, affected_regions.size(),
+	]
+	_schedule_edit_transaction(operation)
 	_update_status()
-
-
-func _is_region_edit_safe(local_hit: Vector3) -> bool:
-	return local_hit.x - BRUSH_RADIUS >= ChunkGrid.MIN_BOUND.x \
-		and local_hit.x + BRUSH_RADIUS <= ChunkGrid.MAX_BOUND.x \
-		and local_hit.z - BRUSH_RADIUS >= ChunkGrid.MIN_BOUND.z \
-		and local_hit.z + BRUSH_RADIUS <= ChunkGrid.MAX_BOUND.z \
-		and local_hit.y - BRUSH_RADIUS >= ChunkGrid.MIN_BOUND.y \
-		and local_hit.y + BRUSH_RADIUS <= ChunkGrid.MAX_BOUND.y
+	return true
 
 
 func _region_id(region_key: Vector2i) -> String:
 	return "%d,%d" % [region_key.x, region_key.y]
+
+
+func _region_key_from_id(region_id: String) -> Vector2i:
+	var parts := region_id.split(",")
+	if parts.size() != 2:
+		return Vector2i.ZERO
+	return Vector2i(int(parts[0]), int(parts[1]))
 
 
 func _update_camera() -> void:
@@ -708,6 +926,18 @@ func _get_total_triangle_count() -> int:
 
 func _get_mesh_attribute_bytes_estimate() -> int:
 	return _active_vertex_count * 24
+
+
+func _frame_time_percentiles() -> Vector3:
+	if _frame_time_samples.is_empty():
+		return Vector3.ZERO
+	var sorted: Array[float] = _frame_time_samples.duplicate()
+	sorted.sort()
+	return Vector3(
+		sorted[maxi(0, ceili(float(sorted.size()) * 0.50) - 1)],
+		sorted[maxi(0, ceili(float(sorted.size()) * 0.95) - 1)],
+		sorted[maxi(0, ceili(float(sorted.size()) * 0.99) - 1)]
+	)
 
 
 func _queued_chunk_count() -> int:
@@ -757,16 +987,32 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["max_active_region_count"] = MAX_ACTIVE_REGIONS
 	last_mesh_diagnostics["max_mesh_slices_per_frame"] = MAX_MESH_SLICES_PER_FRAME
 	last_mesh_diagnostics["peak_mesh_slices_per_frame"] = _peak_mesh_slices_per_frame
+	last_mesh_diagnostics["global_edit_count"] = edit_ledger.get_edit_count()
+	last_mesh_diagnostics["global_edit_limit"] = BrushEditState.MAX_EDITS
+	last_mesh_diagnostics["global_edit_last_sequence"] = edit_ledger.get_last_sequence()
+	last_mesh_diagnostics["global_edit_revision"] = edit_ledger.revision
+	last_mesh_diagnostics["last_affected_region_count"] = _last_edit_affected_regions
+	last_mesh_diagnostics["last_affected_chunk_count"] = _last_edit_affected_chunks
+	last_mesh_diagnostics["last_dirty_mesh_slice_count"] = _last_edit_mesh_slices
+	last_mesh_diagnostics["edit_stage_state"] = "idle" if _edit_transaction.is_empty() else _edit_transaction.get("stage_state", "staging")
+	last_mesh_diagnostics["last_edit_rejection"] = _last_edit_rejection
+	last_mesh_diagnostics["mesh_stage_retry_total"] = _mesh_stage_retry_total
+	last_mesh_diagnostics["resident_region_count"] = active_regions.size()
+	last_mesh_diagnostics["queued_region_count"] = loading_regions.size()
+	var frame_percentiles := _frame_time_percentiles()
+	last_mesh_diagnostics["frame_time_p50_ms"] = frame_percentiles.x
+	last_mesh_diagnostics["frame_time_p95_ms"] = frame_percentiles.y
+	last_mesh_diagnostics["frame_time_p99_ms"] = frame_percentiles.z
 
 
 func _update_status() -> void:
 	var state := _state_for_region(focus_region_key)
-	var edit_count: int = state.brush_edits.get_edit_count() if state != null else 0
 	var seed: int = state.world_seed if state != null else WorldState.DEMO_SEED
 	var generator_version: int = state.generator_version if state != null else Field.GENERATOR_VERSION
 	var selected_mode_name := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
 	var queue_depth := _queued_chunk_count()
-	var status := "P1.0B dynamic SDF regions  |  seed %d  |  generator v%d\nFocus region: %s  |  active: %d/%d  |  loading: %d  |  queued chunks/slices: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: global cave section    R: regenerate    X: reset focused edits\nSelected: %s    Edits: %d/%d in focus region    Radius: %.2f\nBuild budget: %d mesh slice/frame  |  last/peak slice: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
+	var transaction_state := "idle" if _edit_transaction.is_empty() else String(_edit_transaction.get("stage_state", "staging"))
+	var status := "P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/slices: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: global cave section    R: regenerate    X: reset commands affecting focused region\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d region(s), %d chunk(s), %d slices  |  commit: %s\nBuild budget: %d mesh slice/frame  |  last/peak slice: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
 		seed,
 		generator_version,
 		focus_region_key,
@@ -776,9 +1022,15 @@ func _update_status() -> void:
 		queue_depth,
 		_queued_mesh_slice_count(),
 		selected_mode_name,
-		edit_count,
+		edit_ledger.get_edit_count(),
 		BrushEditState.MAX_EDITS,
+		edit_ledger.get_last_sequence(),
+		edit_ledger.revision,
 		BRUSH_RADIUS,
+		_last_edit_affected_regions,
+		_last_edit_affected_chunks,
+		_last_edit_mesh_slices,
+		transaction_state,
 		MAX_MESH_SLICES_PER_FRAME,
 		_last_mesh_slice_ms,
 		_peak_mesh_slice_ms,
