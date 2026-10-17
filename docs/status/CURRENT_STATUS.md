@@ -16,8 +16,7 @@ Owner explicitly authorized each merge after source and GUI approval. Runtime co
 
 ## Active, authorized — not yet accepted
 
-- **P1.0A only:** [Issue #84](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/84), fixed static 3×3 adjoining logical regions, unique cell ownership, cross-region seam proofs, central-safe controls. Owner authorized 2026-10-17; Codex executing in **`C:\Dev\sandbox-sim-dev`** on `feat/p1-0a-multiregion-spatial-ownership`, created from `817fc72cd85d5de66932d2aa722d1b077d55bf92`.
-- This checkpoint does **not** assert an implementation SHA, a PR, passing tests or visual acceptance for P1.0A. Obtain the latest developer handoff and independently review the actual GitHub commit when Codex finishes; owner performs GUI test before a separate merge decision.
+- **P1.0A only:** [Issue #84](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/84), developer candidate [draft PR #86](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/86), reviewed head `27b911e32ea396be6c66436542473093123e1b54` on `feat/p1-0a-multiregion-spatial-ownership` in `C:\Dev\sandbox-sim-dev`. **Independent source review PASS; owner GUI PENDING; NOT MERGED.** Review [record](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/86#pullrequestreview-5558985964) and [event checkpoint](../checkpoints/2026-10-17-P1-0A-SOURCE-REVIEW-PR86.md). Source includes 9 regions/144 chunks and 7,917 developer-reported Godot assertions; reviewer did not run Godot independently. No P1.0B/0C authorization.
 - **Plan only:** [Issue #83](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/83), P1.0B bounded dynamic region loading/unloading and P1.0C globally ordered cross-region edits. Neither slice is authorized for coding by the P1.0A instruction.
 - **Independent parallel documentation repair:** `docs/recovery-checkpoint-2026-10-17` branch, separate from the active Codex branch. This snapshot must not be assumed integrated until its docs PR is reviewed and actually merged.
 
@@ -34,7 +33,7 @@ Version 1 `SdfWorld` logical region size 16×12, but PR #82 demo mesher covers X
 
 ## Next authorized action and handoff
 
-**Codex:** finish Issue #84 in the existing workspace/branch, open one draft PR, report exact parent/head, tests, limitations and owner GUI steps; **do not merge**. **ChatGPT:** source-review new HEAD against charter/specs and verify GitHub refs; distinguish headless from GUI evidence. **Owner:** visually validate 3×3 continuity and decide whether to merge. Do not initiate P1.0B or P1.0C without new explicit authorization.
+**Owner:** perform the exact PR #86 head GUI test and report PASS/FAIL, including seam continuity and response on center/noncenter clicks; this is the next gate. **ChatGPT:** record owner GUI event checkpoint and, if corrections are needed, conduct a new exact-SHA source review. **Codex:** make bounded corrections only if a GUI/source defect appears; otherwise wait for a separate explicit merge decision. PR #86 and docs PR #85 remain unmerged; do not initiate P1.0B/P1.0C without new authorization.
 
 For any new agent: [recovery runbook](../workflow/AGENT_RECOVERY.md), [decision register](../decisions/DECISION_REGISTER.md), [dated checkpoint](../checkpoints/2026-10-17-P1-0A-KICKOFF.md).
 
