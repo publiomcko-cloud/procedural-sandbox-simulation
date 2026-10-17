@@ -5,7 +5,7 @@ Godot 4.7.2 procedural 3D sandbox: versioned SDF terrain, caves, additive/subtra
 ## Start here — authoritative continuity
 
 1. [Current status](docs/status/CURRENT_STATUS.md) — last recorded integrated SHA, active work, risks and next owner gate. **Compare with live GitHub refs**; this file is a snapshot, not real-time state.
-2. [Checkpoint index and latest dated snapshot](docs/checkpoints/2026-10-17-P1-0A-KICKOFF.md) — reconstructible baseline and acceptance history.
+2. [Checkpoint index and latest dated snapshot](docs/checkpoints/INDEX.md) — reconstructible baseline and acceptance history.
 3. [Decision register](docs/decisions/DECISION_REGISTER.md) and [accepted charter](docs/PROJECT_CHARTER.md) — accepted vs experimental vs deferred decisions.
 4. [Agent recovery runbook](docs/workflow/AGENT_RECOVERY.md) and [memory protocol](docs/workflow/PROJECT_MEMORY_PROTOCOL.md) — resume safely in a fresh chat/agent, preserve evidence and update checkpoints.
 5. [Developer contract](AGENTS.md), [workflow gates](docs/workflow/ROLES_AND_GATES.md), [architecture](docs/architecture/ARCHITECTURE.md), [contracts](docs/architecture/CONTRACTS.md), [roadmap](docs/roadmap/MILESTONES.md), and **current GitHub issue**.

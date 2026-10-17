@@ -37,3 +37,7 @@ Version 1 `SdfWorld` logical region size 16×12, but PR #82 demo mesher covers X
 **Codex:** finish Issue #84 in the existing workspace/branch, open one draft PR, report exact parent/head, tests, limitations and owner GUI steps; **do not merge**. **ChatGPT:** source-review new HEAD against charter/specs and verify GitHub refs; distinguish headless from GUI evidence. **Owner:** visually validate 3×3 continuity and decide whether to merge. Do not initiate P1.0B or P1.0C without new explicit authorization.
 
 For any new agent: [recovery runbook](../workflow/AGENT_RECOVERY.md), [decision register](../decisions/DECISION_REGISTER.md), [dated checkpoint](../checkpoints/2026-10-17-P1-0A-KICKOFF.md).
+
+## Additional documentation decision, 2026-10-17 — checkpoint cadence
+
+The owner explicitly requires **a documentary checkpoint after every merge or other significant project interaction**. Consequential approvals/changes of scope, source/GUI review verdicts, blockers, architecture changes and major handoffs count even when there is no merge. See [event checkpoint](../checkpoints/2026-10-17-CHECKPOINT-CADENCE-DECISION.md), [index](../checkpoints/INDEX.md) and [revised protocol](../workflow/PROJECT_MEMORY_PROTOCOL.md). These additions are recorded on **open draft PR #85, not yet merged**; they do not authorize merging #85 or the P1.0A work.

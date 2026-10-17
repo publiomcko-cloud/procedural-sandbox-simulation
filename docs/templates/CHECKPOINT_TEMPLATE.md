@@ -1,6 +1,8 @@
 # Checkpoint template — copy to docs/checkpoints/YYYY-MM-DD-ID.md
 
 **Checkpoint ID/date and timezone:**
+**Event type:** merged PR | owner authorization/decision | source review | visual PASS/FAIL | blocker | architecture change | major handoff | other consequential event
+**Publication state:** integrated | recorded on draft docs PR | pending repo publication
 **Immutable once integrated:** yes; add a new checkpoint for later events.
 
 ## Verified repository identity
@@ -29,3 +31,10 @@
 - Which docs were updated: CURRENT_STATUS, CHANGELOG, DECISION_REGISTER, handoffs/reviews:
 
 **Important:** verify this against live Git refs when using it; do not retroactively modify an integrated snapshot.
+
+## Event significance and decision
+- Exact source of decision/report, changed scope or consequential observation:
+- Accepted / authorized / proposed / rejected / blocked / merely observed:
+- Implementation/merge status: verified with exact SHA, or explicitly pending:
+- Why a new checkpoint is required even if no merge occurred:
+- Checkpoint index row added: [INDEX](../checkpoints/INDEX.md)

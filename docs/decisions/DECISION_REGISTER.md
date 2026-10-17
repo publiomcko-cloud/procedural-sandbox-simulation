@@ -18,3 +18,7 @@ This register maps *recorded owner decisions* to proof and status; it does **not
 | New agent/chat must resume safely without conversational memory and the project must have recoverable documentary checkpoints | **Accepted documentation/recovery requirement**, documentation PR pending integration | [Recovery runbook](../workflow/AGENT_RECOVERY.md), [checkpoint](../checkpoints/2026-10-17-P1-0A-KICKOFF.md) | A checkpoint is trustworthy only relative to pinned Git SHA and current external status verification |
 
 **Documented decisions are not identical to implementation acceptance.** No status row grants broader coding, merging, protected execution or dependency authorization. Do not reinterpret prototype PR numbering "P0.1" as completion of all original P0.1/F2, P0.2, or P1 release gates.
+
+## Owner decision, 2026-10-17 — mandatory event checkpoints
+
+Owner instructed: *sempre pos merge ou outras interacoes significativas faça checkpoints documentais*. This explicitly extends the existing merge-only rule to material owner decisions/authorizations, review results, GUI acceptance/rejection, architectural changes, significant blockers and handoffs. Ordinary conversational acknowledgments are not material. The event is recorded at [CHK-2026-10-17-CHECKPOINT-CADENCE-DECISION](../checkpoints/2026-10-17-CHECKPOINT-CADENCE-DECISION.md), indexed in [CHECKPOINT INDEX](../checkpoints/INDEX.md). The policy amendment is **proposed for integration in draft docs PR #85**, not yet merged.

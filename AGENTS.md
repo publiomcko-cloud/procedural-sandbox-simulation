@@ -17,3 +17,6 @@
 Use [developer handoff template](docs/templates/DEVELOPER_HANDOFF.md): exact SHA and parent, branch/PR, changed paths, rationale and limits, Godot 4.7.2 command results (or tests not run), failing cases, reproducible GUI steps. End with `READY_FOR_INDEPENDENT_SOURCE_REVIEW_AND_OWNER_GUI` or `BLOCKED_WITH_EVIDENCE`. ChatGPT evaluates exact remote source; owner does GUI and authorizes any merge.
 
 Every verified accepted merge needs an updated status ledger and a dated documentary checkpoint, following [PROJECT_MEMORY_PROTOCOL](docs/workflow/PROJECT_MEMORY_PROTOCOL.md). Do not touch concurrent docs-only branch/PR without coordinating changes.
+
+## Significant-interaction checkpoints (owner requirement)
+After **every verified merge** and **every materially significant interaction** (owner decision/authorization, substantial source-review or GUI verdict, blocker, architectural change, critical correction or major handoff), create a dated immutable checkpoint and update the [checkpoint index](docs/checkpoints/INDEX.md). Preserve approved vs merely reported/blocked statuses and exact Git SHAs. This requirement does **not** authorize auto-merging documentation. During Codex work, use a separate remote docs-only branch; do not touch its Windows workspace.

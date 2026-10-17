@@ -4,7 +4,7 @@
 
 ## 1. Verify real current state before acting
 
-Identify repo `publiomcko-cloud/procedural-sandbox-simulation`. Read [CURRENT_STATUS](../status/CURRENT_STATUS.md) for the last checkpoint and [latest dated checkpoint](../checkpoints/2026-10-17-P1-0A-KICKOFF.md). **Check actual GitHub `main` SHA, current PRs, changed paths, comments/owner approvals**; the snapshot may be outdated. Never use a checkpoint branch's HEAD as if it were `main`.
+Identify repo `publiomcko-cloud/procedural-sandbox-simulation`. Read [CURRENT_STATUS](../status/CURRENT_STATUS.md) for the last checkpoint and [checkpoint index](../checkpoints/INDEX.md). **Check actual GitHub `main` SHA, current PRs, changed paths, comments/owner approvals**; the snapshot may be outdated. Never use a checkpoint branch's HEAD as if it were `main`.
 
 On owner's existing Windows workspace (read-only first):
 
@@ -58,3 +58,7 @@ Template: [CHECKPOINT_TEMPLATE](../templates/CHECKPOINT_TEMPLATE.md). Checkpoint
 - GDScript custom prototype is the final chosen production backend.
 - Open F2 security branches may be used during unrelated gameplay development.
 - A new chat inherits local files, permissions, API connections or Codex process state just because the docs exist.
+
+## Significant interaction recovery gate (2026-10-17)
+
+Follow [PROJECT_MEMORY_PROTOCOL](PROJECT_MEMORY_PROTOCOL.md): every verified merge **and** meaningful authorization/architecture decision, source review outcome, owner visual PASS/FAIL, blocker or major handoff triggers a separate timestamped checkpoint. Update the [checkpoint index](../checkpoints/INDEX.md) even when no source code was merged. Mark PR drafts/observed branch heads pending and verify live refs again when resuming. Do not treat a newer documentation record as proof a feature was integrated. Keep historical checkpoint files immutable after integration.
