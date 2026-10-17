@@ -16,4 +16,6 @@
 | 2026-10-17 | [CHK-2026-10-17-P1-0B-OWNER-GUI-LIGHTING-CORRECTION](2026-10-17-P1-0B-OWNER-GUI-LIGHTING-CORRECTION.md) | Owner observed streaming works progressively but depth lighting has no noticeable improvement; bounded correction required before GUI acceptance | Draft docs PR #87 / not integrated |
 | 2026-10-17 | [CHK-2026-10-17-PR88-MERGE-LIGHTING-DEFERRED](2026-10-17-PR88-MERGE-LIGHTING-DEFERRED.md) | P1.0B PR #88 merged SHA `13d08b828553df4a3b2bb9d3eb783b4cc3f45beb` with failed lighting goal explicitly deferred to Issue #89 | New post-merge checkpoint in draft PR #87 |
 
+| 2026-10-17 | [CHK-2026-10-17-PR90-LIGHTING-SOURCE-REVIEW](2026-10-17-PR90-LIGHTING-SOURCE-REVIEW.md) | PR #90 exact-SHA lighting source/image review passed with cave and stippling caveats; owner GUI pending | Open docs PR #87; not integrated |
+
 New checkpoint after each verified merge and consequential owner decision, source-review/GUI gate, blocker and agent handoff. A checkpoint in an open docs PR **has not been integrated** merely because the associated code was merged. Read [current status](../status/CURRENT_STATUS.md), [agent recovery](../workflow/AGENT_RECOVERY.md) and [template](../templates/CHECKPOINT_TEMPLATE.md).
