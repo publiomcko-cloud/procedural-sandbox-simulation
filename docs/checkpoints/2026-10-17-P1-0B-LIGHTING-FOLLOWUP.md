@@ -4,7 +4,7 @@
 
 **Event:** Issue #89 lighting correction prepared on `fix/p1-0b-terrain-depth-lighting`, based on `13d08b828553df4a3b2bb9d3eb783b4cc3f45beb`. The lighting-only changes and same-view image evidence are ready for independent source review; owner GUI retest is still required.
 
-**Publication state:** one draft PR is to be opened after the final commit. No merge or release is authorized. The pre-existing local CRLF-only `game/project.godot` worktree state is retained and excluded from the implementation commit.
+**Publication state:** implementation commit `2b29498` is complete on the prepared feature branch; the final review head adds this checkpoint identity update. One draft PR is pending. No merge or release is authorized. The pre-existing local CRLF-only `game/project.godot` worktree state is retained and excluded from both commits.
 
 ## Evidence
 
@@ -13,7 +13,7 @@
 - Final scene settings: colored ambient 1.2; directional energy 1.3 at rotation `(48,-28,0)`; camera-aligned fill energy 16, range 72, angle 58°, attenuation 1.0. Terrain albedo/shading and all geometry/generation remain unchanged.
 - Directional shadow A/B changed 537,221 of 537,311 classified close-exterior pixels (>1% RGB delta) and reduced luma mean from 133.84 to 112.69. It increased measured mean frame interval by about 0.44 ms in the close exterior view and 0.30 ms in the cave view, and produced visible Compatibility-renderer cave striping. Both scene lights keep shadows disabled.
 - Godot `4.7.2.stable.official.ed1daf0bf` import, all headless suites and main-scene startup passed: smoke 52, SDF 44, brush 89, chunk 179, multiregion 7,565, bootstrap 18; total 7,947 assertions, zero failures. Automated startup does not assess GUI pixels.
-- Final full validation and source commit identity are recorded in the final PR/checkpoint revision; no independent review or owner GUI result is implied by this checkpoint.
+- Implementation source commit: `2b29498` (parent `13d08b828553df4a3b2bb9d3eb783b4cc3f45beb`). This checkpoint update is documentation-only. No independent review or owner GUI result is implied by this checkpoint.
 
 ## Scope
 
