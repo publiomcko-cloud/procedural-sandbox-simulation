@@ -3,6 +3,7 @@ extends RefCounted
 
 ## Bounded single-region isosurface extraction. All sampled values are pure SDF data.
 const FIELD := preload("res://scripts/terrain/sdf_world.gd")
+const BRUSH_STATE_SCRIPT := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const MIN_BOUND := Vector3(-1.0, -2.0, -1.0)
 const MAX_BOUND := Vector3(17.0, 8.0, 13.0)
 const STEP := 0.5
@@ -16,7 +17,12 @@ const TETRAHEDRA := [
 ]
 
 
-static func build_mesh(seed: int, region_key: Vector2i, show_cave_section: bool = false) -> Dictionary:
+static func build_mesh(
+	seed: int,
+	region_key: Vector2i,
+	show_cave_section: bool = false,
+	brush_state: RefCounted = null
+) -> Dictionary:
 	var nx := int(round((MAX_BOUND.x - MIN_BOUND.x) / STEP)) + 1
 	var ny := int(round((MAX_BOUND.y - MIN_BOUND.y) / STEP)) + 1
 	var nz := int(round((MAX_BOUND.z - MIN_BOUND.z) / STEP)) + 1
@@ -26,7 +32,12 @@ static func build_mesh(seed: int, region_key: Vector2i, show_cave_section: bool 
 		for z in range(nz):
 			for x in range(nx):
 				var p := MIN_BOUND + Vector3(x, y, z) * STEP
-				values[_index(x, y, z, nx, nz)] = FIELD.sample_density(seed, region_key, p, show_cave_section)
+				var density: float
+				if brush_state is BRUSH_STATE_SCRIPT:
+					density = brush_state.sample_density(seed, region_key, p, show_cave_section)
+				else:
+					density = FIELD.sample_density(seed, region_key, p, show_cave_section)
+				values[_index(x, y, z, nx, nz)] = density
 
 	var positions := PackedVector3Array()
 	var normals := PackedVector3Array()
@@ -58,6 +69,12 @@ static func build_mesh(seed: int, region_key: Vector2i, show_cave_section: bool 
 		"triangle_count": triangle_count,
 		"sample_count": values.size(),
 	}
+
+
+static func contains_mesh_point(point: Vector3) -> bool:
+	return point.x >= MIN_BOUND.x and point.x <= MAX_BOUND.x \
+		and point.y >= MIN_BOUND.y and point.y <= MAX_BOUND.y \
+		and point.z >= MIN_BOUND.z and point.z <= MAX_BOUND.z
 
 
 static func _polygonize_tetra(
