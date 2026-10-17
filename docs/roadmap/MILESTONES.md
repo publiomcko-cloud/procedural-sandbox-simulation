@@ -19,3 +19,12 @@ For each phase: architecture change summary; exact commit and tests; result log 
 
 ## Initial non-goals
 Multiplayer synchronization, NPC civilizations, crafting/combat loops, photorealism, arbitrarily realistic CFD, full granular fracture physics, unrestricted safe untrusted code execution. Future extensibility is a design constraint, not a promise of implementing all these now.
+
+## Execution checkpoint — 2026-10-17 (does not change phase exit criteria)
+
+The functional P0.1 GDScript SDF prototypes are accepted/merged (PRs #78, #80, #82): one finite region, transient brushes and 16-chunk localized remeshing. Their successful review is **not** acceptance of the complete P0 terrain backend comparison, durable save/mod/simulation spikes, or the full P1 streaming milestone.
+
+P1.0 proposed order: **P1.0A** [#84](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/84) fixed 3×3 region geometry and seam ownership (**authorized/in progress at this checkpoint**) → **P1.0B** bounded dynamic load/unload (**plan only**) → **P1.0C** globally ordered edits across regions (**plan only**), tracked in [#83](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/83). Each requires its own independent review, owner GUI gate where relevant and separate merge authorization.
+
+See [CURRENT_STATUS](../status/CURRENT_STATUS.md) and [DECISION_REGISTER](../decisions/DECISION_REGISTER.md) for current accepted/proposed distinctions, and [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md) for a new chat/agent.
+
