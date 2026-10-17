@@ -1,0 +1,228 @@
+extends SceneTree
+
+const TerrainField := preload("res://scripts/terrain/sdf_world.gd")
+const TerrainMesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
+const BrushEditState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
+const BrushPicker := preload("res://scripts/terrain/terrain_brush_picker.gd")
+
+var assertion_count := 0
+var failure_count := 0
+
+
+func _initialize() -> void:
+	call_deferred("_run_tests")
+
+
+func _run_tests() -> void:
+	_test_brush_field_contract()
+	_test_edit_bounds_and_reset()
+	_test_picker_contract()
+	await _test_viewport_interaction()
+	if failure_count == 0:
+		print("TERRAIN_BRUSH_PASS: assertions=%d failures=0" % assertion_count)
+	else:
+		push_error("TERRAIN_BRUSH_FAIL: assertions=%d failures=%d" % [assertion_count, failure_count])
+	quit(0 if failure_count == 0 else 1)
+
+
+func _test_brush_field_contract() -> void:
+	var region := Vector2i.ZERO
+	var cave_center: Vector2 = TerrainField.cave_center(424242, region, 8.0)
+	var open_point := Vector3(8.0, cave_center.y, cave_center.x)
+	var baseline: float = TerrainField.sample_density(424242, region, open_point)
+	var carve := BrushEditState.new()
+	var fill := BrushEditState.new()
+	_check(baseline < 0.0, "test carve point starts in empty field")
+	_check(carve.add_sphere(BrushEditState.Mode.CARVE, open_point, 1.25), "carve operation is accepted")
+	_check(fill.add_sphere(BrushEditState.Mode.FILL, open_point, 1.25), "fill operation is accepted")
+	_check(carve.sample_density(424242, region, open_point) < baseline, "carve decreases density at brush center")
+	_check(fill.sample_density(424242, region, open_point) > baseline, "fill increases density at brush center")
+	var remote_point := Vector3(-40.0, -35.0, -40.0)
+	_check(
+		is_equal_approx(carve.sample_density(424242, region, remote_point), TerrainField.sample_density(424242, region, remote_point)),
+		"brush leaves a distant sample unchanged"
+	)
+	var repeated := BrushEditState.new()
+	repeated.add_sphere(BrushEditState.Mode.CARVE, open_point, 1.25)
+	_check(
+		is_equal_approx(repeated.sample_density(424242, region, open_point), carve.sample_density(424242, region, open_point)),
+		"fixed seed and ordered edits produce repeatable samples"
+	)
+	var carve_then_fill := BrushEditState.new()
+	carve_then_fill.add_sphere(BrushEditState.Mode.CARVE, open_point, 1.25)
+	carve_then_fill.add_sphere(BrushEditState.Mode.FILL, open_point, 1.25)
+	var fill_then_carve := BrushEditState.new()
+	fill_then_carve.add_sphere(BrushEditState.Mode.FILL, open_point, 1.25)
+	fill_then_carve.add_sphere(BrushEditState.Mode.CARVE, open_point, 1.25)
+	_check(
+		not is_equal_approx(
+			carve_then_fill.sample_density(424242, region, open_point),
+			fill_then_carve.sample_density(424242, region, open_point)
+		),
+		"brush operations replay in insertion order"
+	)
+	var canonical_before_section: float = carve.sample_density(424242, region, Vector3(8.0, 4.0, 8.0))
+	var section_value: float = carve.sample_density(424242, region, Vector3(8.0, 4.0, 8.0), true)
+	_check(canonical_before_section != section_value, "cave section changes only the visualization sample")
+	_check(carve.get_edit_count() == 1, "visual cave section does not add or change brush edits")
+	var snapshot: Array[Dictionary] = carve.get_operations_snapshot()
+	snapshot[0]["radius"] = 99.0
+	_check(carve.get_operations_snapshot()[0]["radius"] == 1.25, "edit snapshots do not expose mutable canonical state")
+	var sculpt_mesh: Dictionary = TerrainMesher.build_mesh(424242, region, false, fill)
+	var base_mesh: Dictionary = TerrainMesher.build_mesh(424242, region)
+	var sculpt_vertices: PackedVector3Array = sculpt_mesh["mesh"].surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var base_vertices: PackedVector3Array = base_mesh["mesh"].surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	_check(sculpt_vertices != base_vertices, "applying a sphere edit changes rebuilt mesh vertices")
+	_check(sculpt_mesh["triangle_count"] > 0 and sculpt_mesh["sample_count"] == base_mesh["sample_count"], "edited mesh remains bounded and nonempty")
+
+
+func _test_edit_bounds_and_reset() -> void:
+	var edits := BrushEditState.new()
+	var center := Vector3(8.0, 4.5, 6.0)
+	_check(not edits.add_sphere(BrushEditState.Mode.CARVE, center, BrushEditState.MIN_RADIUS - 0.01), "too-small radius is rejected")
+	_check(not edits.add_sphere(BrushEditState.Mode.CARVE, center, BrushEditState.MAX_RADIUS + 0.01), "too-large radius is rejected")
+	_check(not edits.add_sphere(99, center, 1.0), "unknown brush mode is rejected")
+	_check(not edits.add_sphere(BrushEditState.Mode.CARVE, Vector3(INF, 0.0, 0.0), 1.0), "non-finite brush center is rejected")
+	for _index in range(BrushEditState.MAX_EDITS):
+		_check(edits.add_sphere(BrushEditState.Mode.CARVE, center, 1.0), "bounded edit slot is accepted")
+	var count_before_rejection := edits.get_edit_count()
+	_check(not edits.add_sphere(BrushEditState.Mode.FILL, center, 1.0), "edit count limit rejects the next operation")
+	_check(edits.get_edit_count() == count_before_rejection, "rejected operation does not alter edit state")
+	var sample_before_reset: float = edits.sample_density(424242, Vector2i.ZERO, center)
+	var base_sample: float = TerrainField.sample_density(424242, Vector2i.ZERO, center)
+	_check(not is_equal_approx(sample_before_reset, base_sample), "accepted edits affect the field before reset")
+	edits.clear()
+	_check(edits.get_edit_count() == 0, "reset clears the transient ordered edit list")
+	_check(
+		is_equal_approx(edits.sample_density(424242, Vector2i.ZERO, center), base_sample),
+		"reset restores the original base density"
+	)
+
+
+func _test_picker_contract() -> void:
+	var samples := [0]
+	var all_empty := func(_point: Vector3) -> float:
+		samples[0] += 1
+		return -1.0
+	var no_hit: Dictionary = BrushPicker.pick_surface(Vector3.ZERO, Vector3.DOWN, all_empty)
+	_check(not no_hit["hit"], "ray with no field crossing reports no hit")
+	_check(samples[0] == BrushPicker.MAX_STEPS + 1, "no-hit ray terminates at the fixed work limit")
+	var non_finite := func(_point: Vector3) -> float:
+		return NAN
+	_check(not BrushPicker.pick_surface(Vector3.ZERO, Vector3.DOWN, non_finite)["hit"], "non-finite field sample fails closed")
+	var sample_field := func(point: Vector3) -> float:
+		return TerrainField.sample_density(424242, Vector2i.ZERO, point)
+	var vertical_hit: Dictionary = BrushPicker.pick_surface(Vector3(8.0, 10.0, 6.0), Vector3.DOWN, sample_field)
+	_check(vertical_hit["hit"], "fixed ray march finds the known terrain surface")
+	if vertical_hit["hit"]:
+		_check(TerrainMesher.contains_mesh_point(vertical_hit["position"]), "picked point belongs to the finite visible mesh bounds")
+		_check(absf(TerrainField.sample_density(424242, Vector2i.ZERO, vertical_hit["position"])) < 0.02, "picked point is refined close to the field surface")
+
+
+func _test_viewport_interaction() -> void:
+	var packed := load("res://scenes/terrain_demo.tscn") as PackedScene
+	_check(packed != null, "terrain scene loads for viewport edit test")
+	if packed == null:
+		return
+	var scene := packed.instantiate()
+	root.add_child(scene)
+	await process_frame
+	var camera: Camera3D = scene.get_node("Camera3D")
+	var edits: RefCounted = scene.get("brush_edits")
+	var start_mesh: ArrayMesh = scene.get_node("Terrain").mesh
+	var viewport_size := root.get_visible_rect().size
+	var click_position := viewport_size * 0.5
+	var carve_click := InputEventMouseButton.new()
+	carve_click.button_index = MOUSE_BUTTON_LEFT
+	carve_click.pressed = true
+	carve_click.position = click_position
+	root.push_input(carve_click, true)
+	await process_frame
+	_check(edits.get_edit_count() == 1, "viewport-dispatched left click ray-picks and applies a carve edit")
+	_check(scene.get("selected_brush_mode") == BrushEditState.Mode.CARVE, "left click selects carve mode")
+	var carved_mesh: ArrayMesh = scene.get_node("Terrain").mesh
+	_check(start_mesh != carved_mesh, "accepted carve rebuilds the live terrain mesh")
+	if start_mesh != null and carved_mesh != null:
+		_check(
+			start_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] != carved_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX],
+			"viewport carve visibly changes generated geometry"
+		)
+	_check(scene.get("last_mesh_diagnostics").has("elapsed_ms"), "mesh rebuild diagnostics include elapsed time")
+	_check(scene.get("last_mesh_diagnostics")["triangle_count"] > 0, "mesh rebuild diagnostics include triangle count")
+
+	var fill_click := InputEventMouseButton.new()
+	fill_click.button_index = MOUSE_BUTTON_LEFT
+	fill_click.pressed = true
+	fill_click.shift_pressed = true
+	fill_click.position = click_position + Vector2(4.0, 0.0)
+	root.push_input(fill_click, true)
+	await process_frame
+	_check(edits.get_edit_count() == 2, "viewport-dispatched Shift+left click applies fill")
+	_check(scene.get("selected_brush_mode") == BrushEditState.Mode.FILL, "Shift+left click selects fill mode")
+	var mode_label: String = scene.get_node("CanvasLayer/Status").text
+	_check(mode_label.contains("Selected: FILL") and mode_label.contains("Edits: 2/32"), "HUD reports selected mode and edit count")
+
+	var operations_before_section: Array[Dictionary] = edits.get_operations_snapshot()
+	var section_event := InputEventKey.new()
+	section_event.keycode = KEY_C
+	section_event.pressed = true
+	root.push_input(section_event)
+	await process_frame
+	_check(scene.get("cave_section_enabled"), "viewport C shortcut enables the visualization section")
+	_check(edits.get_operations_snapshot() == operations_before_section, "C does not mutate canonical brush edits")
+	var section_mesh: ArrayMesh = scene.get_node("Terrain").mesh
+
+	var regenerate := InputEventKey.new()
+	regenerate.keycode = KEY_R
+	regenerate.pressed = true
+	root.push_input(regenerate)
+	await process_frame
+	_check(edits.get_edit_count() == 2, "R regeneration retains accepted edits")
+	_check(scene.get_node("Terrain").mesh != section_mesh, "R rebuilds the finite mesh")
+
+	var initial_camera_position := camera.position
+	var right_down := InputEventMouseButton.new()
+	right_down.button_index = MOUSE_BUTTON_RIGHT
+	right_down.pressed = true
+	right_down.position = Vector2(30.0, 30.0)
+	root.push_input(right_down, true)
+	await process_frame
+	var drag := InputEventMouseMotion.new()
+	drag.position = Vector2(50.0, 40.0)
+	drag.relative = Vector2(20.0, 10.0)
+	drag.button_mask = MOUSE_BUTTON_MASK_RIGHT
+	root.push_input(drag, true)
+	await process_frame
+	_check(not camera.position.is_equal_approx(initial_camera_position), "right-drag remains routed through viewport around the HUD")
+	var right_up := InputEventMouseButton.new()
+	right_up.button_index = MOUSE_BUTTON_RIGHT
+	right_up.pressed = false
+	right_up.position = Vector2(50.0, 40.0)
+	root.push_input(right_up, true)
+	await process_frame
+	var distance_before_zoom: float = camera.position.distance_to(Vector3(8.0, 3.1, 6.0))
+	var zoom_event := InputEventMouseButton.new()
+	zoom_event.button_index = MOUSE_BUTTON_WHEEL_UP
+	zoom_event.pressed = true
+	zoom_event.position = click_position
+	root.push_input(zoom_event, true)
+	await process_frame
+	_check(camera.position.distance_to(Vector3(8.0, 3.1, 6.0)) < distance_before_zoom, "wheel zoom remains functional through the viewport")
+
+	var reset := InputEventKey.new()
+	reset.keycode = KEY_X
+	reset.pressed = true
+	root.push_input(reset)
+	await process_frame
+	_check(edits.get_edit_count() == 0, "viewport X shortcut clears transient edits")
+	_check(scene.get("cave_section_enabled"), "reset preserves cave-section visualization mode")
+	_check(scene.get_node("Terrain").mesh != null, "reset rebuilds the base terrain")
+	scene.queue_free()
+	await process_frame
+
+
+func _check(condition: bool, label: String) -> void:
+	assertion_count += 1
+	if not condition:
+		failure_count += 1
+		push_error("ASSERTION FAILED: " + label)
