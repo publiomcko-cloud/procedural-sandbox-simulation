@@ -101,6 +101,12 @@ func _test_scene_contract() -> void:
 	_check(scene.get_node_or_null("TerrainChunks/Terrain") is MeshInstance3D, "demonstration scene has a terrain chunk mesh node")
 	_check(scene.get_node_or_null("Camera3D") is Camera3D, "demonstration scene has a camera")
 	_check(scene.get_node_or_null("DirectionalLight3D") is DirectionalLight3D, "demonstration scene has lighting")
+	var camera := scene.get_node_or_null("Camera3D") as Camera3D
+	_check(camera != null and camera.get_node_or_null("ViewAlignedLight") is SpotLight3D, "camera carries an auxiliary view-aligned spotlight")
+	if camera != null:
+		var view_light := camera.get_node("ViewAlignedLight") as SpotLight3D
+		_check(view_light.light_energy > 0.0 and view_light.light_energy <= 0.5, "view-aligned light has subtle bounded energy")
+		_check(not view_light.shadow_enabled, "auxiliary light preserves the established shadow look and cost")
 	_check(scene.get_node_or_null("CanvasLayer/Status") is Label, "demonstration scene explains its controls")
 	var environment: Environment = scene.get_node("WorldEnvironment").environment
 	_check(environment.ambient_light_source == Environment.AMBIENT_SOURCE_COLOR, "environment uses colored ambient lighting")
@@ -120,7 +126,7 @@ func _test_demo_controls() -> void:
 		return
 	var scene := packed.instantiate()
 	root.add_child(scene)
-	await process_frame
+	await _wait_for_region(scene, Vector2i.ZERO)
 	var initial_mesh: ArrayMesh = scene.get_node("TerrainChunks/Terrain").mesh
 	_check(initial_mesh != null and initial_mesh.get_surface_count() == 1, "demo builds terrain when added to the scene tree")
 	var camera: Camera3D = scene.get_node("Camera3D")
@@ -157,7 +163,7 @@ func _test_demo_controls() -> void:
 	toggle.keycode = KEY_C
 	toggle.pressed = true
 	viewport.push_input(toggle)
-	await process_frame
+	await _wait_for_global_rebuild(scene)
 	var section_mesh: ArrayMesh = scene.get_node("TerrainChunks/Terrain").mesh
 	_check(scene.get("cave_section_enabled"), "C input enables the cave cross-section")
 	_check(section_mesh != initial_mesh, "C input rebuilds the terrain mesh")
@@ -166,11 +172,30 @@ func _test_demo_controls() -> void:
 	regenerate.keycode = KEY_R
 	regenerate.pressed = true
 	viewport.push_input(regenerate)
-	await process_frame
+	await _wait_for_global_rebuild(scene)
 	_check(scene.get("cave_section_enabled"), "R input preserves the current section mode")
 	_check(scene.get_node("TerrainChunks/Terrain").mesh != section_mesh, "R input regenerates the mesh")
 	scene.queue_free()
 	await process_frame
+
+
+func _wait_for_region(scene: Node, region_key: Vector2i) -> void:
+	var region_id := "%d,%d" % [region_key.x, region_key.y]
+	for _frame in range(600):
+		if scene.get("active_regions").has(region_id):
+			return
+		await process_frame
+	_check(scene.get("active_regions").has(region_id), "focused region completes its incremental load")
+
+
+func _wait_for_global_rebuild(scene: Node) -> void:
+	for _frame in range(2000):
+		if not scene.get("global_rebuild_pending"):
+			return
+		await process_frame
+	if scene.get("global_rebuild_pending"):
+		print("GLOBAL_REBUILD_TIMEOUT: stages=%d queued=%d targets=%s" % [scene.get("loading_regions").size(), scene.call("_queued_chunk_count"), scene.get("_full_rebuild_target_ids")])
+	_check(not scene.get("global_rebuild_pending"), "global rebuild completes through incremental chunk jobs")
 
 
 func _check(condition: bool, label: String) -> void:

@@ -9,6 +9,7 @@ const SPATIAL := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const MIN_BOUND: Vector3 = CHUNK_GRID.MIN_BOUND
 const MAX_BOUND: Vector3 = CHUNK_GRID.MAX_BOUND
 const STEP: float = CHUNK_GRID.SAMPLE_STEP
+const CELLS_PER_MESH_SLICE := 2
 const CORNERS := [
 	Vector3i(0, 0, 0), Vector3i(1, 0, 0), Vector3i(1, 1, 0), Vector3i(0, 1, 0),
 	Vector3i(0, 0, 1), Vector3i(1, 0, 1), Vector3i(1, 1, 1), Vector3i(0, 1, 1),
@@ -27,7 +28,7 @@ static func build_mesh(
 ) -> Dictionary:
 	return _build_mesh_cells(
 		seed, region_key, CHUNK_GRID.MIN_BOUND, 0, CHUNK_GRID.CELL_COUNT_X, 0, CHUNK_GRID.CELL_COUNT_Z,
-		show_cave_section, Vector3.ZERO, brush_state, Vector2i(-1, -1)
+		show_cave_section, Vector3.ZERO, brush_state, Vector2i(-1, -1), 0, CHUNK_GRID.CELL_COUNT_Y
 	)
 
 
@@ -43,8 +44,61 @@ static func build_chunk_mesh(
 	var bounds: Vector4i = CHUNK_GRID.cell_bounds(chunk_coordinate)
 	return _build_mesh_cells(
 		seed, region_key, CHUNK_GRID.MIN_BOUND, bounds.x, bounds.y, bounds.z, bounds.w,
-		show_cave_section, CHUNK_GRID.origin_for(chunk_coordinate), brush_state, chunk_coordinate
+		show_cave_section, CHUNK_GRID.origin_for(chunk_coordinate), brush_state, chunk_coordinate,
+		0, CHUNK_GRID.CELL_COUNT_Y
 	)
+
+
+static func build_chunk_mesh_slice(
+	seed: int,
+	region_key: Vector2i,
+	chunk_coordinate: Vector2i,
+	show_cave_section: bool,
+	brush_state: RefCounted,
+	cell_start_y: int,
+	cell_end_y: int
+) -> Dictionary:
+	if not CHUNK_GRID.is_valid_coordinate(chunk_coordinate) \
+		or cell_start_y < 0 or cell_end_y > CHUNK_GRID.CELL_COUNT_Y or cell_start_y >= cell_end_y:
+		return {"mesh": ArrayMesh.new(), "vertex_count": 0, "triangle_count": 0, "sample_count": 0, "valid": false}
+	var bounds: Vector4i = CHUNK_GRID.cell_bounds(chunk_coordinate)
+	return _build_mesh_cells(
+		seed, region_key, CHUNK_GRID.MIN_BOUND, bounds.x, bounds.y, bounds.z, bounds.w,
+		show_cave_section, CHUNK_GRID.origin_for(chunk_coordinate), brush_state, chunk_coordinate,
+		cell_start_y, cell_end_y
+	)
+
+
+static func combine_chunk_mesh_slices(slices: Array[Dictionary]) -> Dictionary:
+	var positions := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var triangle_count := 0
+	var sample_count := 0
+	for slice in slices:
+		if not slice.get("valid", false):
+			return {"mesh": ArrayMesh.new(), "vertex_count": 0, "triangle_count": 0, "sample_count": 0, "valid": false}
+		triangle_count += int(slice["triangle_count"])
+		sample_count += int(slice["sample_count"])
+		var slice_mesh: ArrayMesh = slice["mesh"]
+		if slice_mesh.get_surface_count() == 0:
+			continue
+		var slice_arrays: Array = slice_mesh.surface_get_arrays(0)
+		positions.append_array(slice_arrays[Mesh.ARRAY_VERTEX])
+		normals.append_array(slice_arrays[Mesh.ARRAY_NORMAL])
+	var mesh := ArrayMesh.new()
+	if not positions.is_empty():
+		var arrays: Array = []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = positions
+		arrays[Mesh.ARRAY_NORMAL] = normals
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return {
+		"mesh": mesh,
+		"vertex_count": positions.size(),
+		"triangle_count": triangle_count,
+		"sample_count": sample_count,
+		"valid": true,
+	}
 
 
 static func build_world_reference_mesh(
@@ -62,7 +116,7 @@ static func build_world_reference_mesh(
 	)
 	return _build_mesh_cells(
 		seed, Vector2i.ZERO, world_min, 0, cell_count.x, 0, cell_count.y,
-		show_cave_section, Vector3.ZERO, null, Vector2i(-1, -1)
+		show_cave_section, Vector3.ZERO, null, Vector2i(-1, -1), 0, CHUNK_GRID.CELL_COUNT_Y
 	)
 
 
@@ -77,17 +131,19 @@ static func _build_mesh_cells(
 	show_cave_section: bool,
 	mesh_origin: Vector3,
 	brush_state: RefCounted,
-	chunk_coordinate: Vector2i
+	chunk_coordinate: Vector2i,
+	cell_start_y: int,
+	cell_end_y: int
 ) -> Dictionary:
 	var nx := cell_end_x - cell_start_x + 1
-	var ny := CHUNK_GRID.CELL_COUNT_Y + 1
+	var ny := cell_end_y - cell_start_y + 1
 	var nz := cell_end_z - cell_start_z + 1
 	var values := PackedFloat32Array()
 	values.resize(nx * ny * nz)
 	for y in range(ny):
 		for z in range(nz):
 			for x in range(nx):
-				var p := grid_min + Vector3(cell_start_x + x, y, cell_start_z + z) * STEP
+				var p := grid_min + Vector3(cell_start_x + x, cell_start_y + y, cell_start_z + z) * STEP
 				var density := _sample_density(seed, region_key, p, show_cave_section, brush_state)
 				values[_index(x, y, z, nx, nz)] = density
 
@@ -105,7 +161,7 @@ static func _build_mesh_cells(
 					var cx: int = x + corner.x
 					var cy: int = y + corner.y
 					var cz: int = z + corner.z
-					cube_points.append(world_sample_origin + Vector3(x + corner.x, y + corner.y, z + corner.z) * STEP)
+					cube_points.append(world_sample_origin + Vector3(x + corner.x, cell_start_y + y + corner.y, z + corner.z) * STEP)
 					cube_values.append(values[_index(cx, cy, cz, nx, nz)])
 				for tetra in TETRAHEDRA:
 					_polygonize_tetra(tetra, cube_points, cube_values, positions, normals)
