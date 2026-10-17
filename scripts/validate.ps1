@@ -4,7 +4,7 @@ $project = Join-Path $root 'game'
 $godot = if ($env:GODOT_BIN) { $env:GODOT_BIN } else { 'godot' }
 $failures = [System.Collections.Generic.List[string]]::new()
 
-foreach ($file in @('project.godot', 'scenes/main.tscn', 'scenes/terrain_demo.tscn', 'scripts/bootstrap.gd', 'scripts/region_generator.gd', 'scripts/terrain/sdf_world.gd', 'scripts/terrain/sdf_brush_edit_state.gd', 'scripts/terrain/terrain_brush_picker.gd', 'scripts/terrain/marching_tetrahedra.gd', 'scripts/terrain/terrain_demo.gd', 'tests/smoke.gd', 'tests/terrain_sdf_tests.gd', 'tests/terrain_brush_tests.gd', 'tests/bootstrap_visual_regression.gd')) {
+foreach ($file in @('project.godot', 'scenes/main.tscn', 'scenes/terrain_demo.tscn', 'scripts/bootstrap.gd', 'scripts/region_generator.gd', 'scripts/terrain/sdf_world.gd', 'scripts/terrain/sdf_brush_edit_state.gd', 'scripts/terrain/terrain_brush_picker.gd', 'scripts/terrain/terrain_chunk_grid.gd', 'scripts/terrain/terrain_world_state.gd', 'scripts/terrain/marching_tetrahedra.gd', 'scripts/terrain/terrain_demo.gd', 'tests/smoke.gd', 'tests/terrain_sdf_tests.gd', 'tests/terrain_brush_tests.gd', 'tests/terrain_chunk_tests.gd', 'tests/bootstrap_visual_regression.gd')) {
     if (-not (Test-Path (Join-Path $project $file))) { $failures.Add("L0 FAIL: missing source $file") }
 }
 if ($failures.Count -eq 0) { Write-Host 'L0 PASS: all project source files exist' }
@@ -43,6 +43,12 @@ if ((Get-Command $godot -ErrorAction SilentlyContinue) -or (Test-Path $godot)) {
     $brushExit = $LASTEXITCODE
     if ($brushExit -eq 0) { Write-Host 'L2 PASS: bounded SDF brush edits and viewport interaction tests' }
     else { $failures.Add("L2 FAIL: terrain brush test exit code $brushExit") }
+
+    Write-Host "COMMAND: `"$godot`" --headless --path `"$project`" --script res://tests/terrain_chunk_tests.gd"
+    & $godot --headless --path $project --script 'res://tests/terrain_chunk_tests.gd'
+    $chunkExit = $LASTEXITCODE
+    if ($chunkExit -eq 0) { Write-Host 'L2 PASS: chunk partition, seam, localized rebuild and benchmark tests' }
+    else { $failures.Add("L2 FAIL: terrain chunk test exit code $chunkExit") }
 
     Write-Host ('COMMAND: ' + $godot + ' --headless --path ' + $project + ' --script res://tests/bootstrap_visual_regression.gd')
     & $godot --headless --path $project --script 'res://tests/bootstrap_visual_regression.gd'

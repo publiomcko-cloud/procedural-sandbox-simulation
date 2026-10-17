@@ -10,6 +10,8 @@ const MAX_RADIUS := 2.0
 enum Mode { CARVE, FILL }
 
 var _operations: Array[Dictionary] = []
+var revision := 0
+var _next_sequence := 0
 
 
 func add_sphere(mode: int, center: Vector3, radius: float) -> bool:
@@ -21,12 +23,17 @@ func add_sphere(mode: int, center: Vector3, radius: float) -> bool:
 		return false
 	if radius < MIN_RADIUS or radius > MAX_RADIUS:
 		return false
-	_operations.append({"mode": mode, "center": center, "radius": radius})
+	_operations.append({"sequence": _next_sequence, "mode": mode, "center": center, "radius": radius})
+	_next_sequence += 1
+	revision += 1
 	return true
 
 
 func clear() -> void:
+	if _operations.is_empty():
+		return
 	_operations.clear()
+	revision += 1
 
 
 func get_edit_count() -> int:
