@@ -10,8 +10,8 @@ config_version=5
 
 [application]
 
-config/name="Procedural Sandbox Simulation — Bootstrap"
-run/main_scene="res://scenes/main.tscn"
+config/name="Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype"
+run/main_scene="res://scenes/terrain_demo.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [rendering]

@@ -4,7 +4,7 @@ $project = Join-Path $root 'game'
 $godot = if ($env:GODOT_BIN) { $env:GODOT_BIN } else { 'godot' }
 $failures = [System.Collections.Generic.List[string]]::new()
 
-foreach ($file in @('project.godot', 'scenes/main.tscn', 'scripts/bootstrap.gd', 'scripts/region_generator.gd', 'tests/smoke.gd', 'tests/bootstrap_visual_regression.gd')) {
+foreach ($file in @('project.godot', 'scenes/main.tscn', 'scenes/terrain_demo.tscn', 'scripts/bootstrap.gd', 'scripts/region_generator.gd', 'scripts/terrain/sdf_world.gd', 'scripts/terrain/marching_tetrahedra.gd', 'scripts/terrain/terrain_demo.gd', 'tests/smoke.gd', 'tests/terrain_sdf_tests.gd', 'tests/bootstrap_visual_regression.gd')) {
     if (-not (Test-Path (Join-Path $project $file))) { $failures.Add("L0 FAIL: missing source $file") }
 }
 if ($failures.Count -eq 0) { Write-Host 'L0 PASS: all project source files exist' }
@@ -31,6 +31,12 @@ if ((Get-Command $godot -ErrorAction SilentlyContinue) -or (Test-Path $godot)) {
     $testExit = $LASTEXITCODE
     if ($testExit -eq 0) { Write-Host 'L2 PASS: deterministic generation and failure-path checks' }
     else { $failures.Add("L2 FAIL: headless tests exit code $testExit") }
+
+    Write-Host "COMMAND: `"$godot`" --headless --path `"$project`" --script res://tests/terrain_sdf_tests.gd"
+    & $godot --headless --path $project --script 'res://tests/terrain_sdf_tests.gd'
+    $terrainExit = $LASTEXITCODE
+    if ($terrainExit -eq 0) { Write-Host 'L2 PASS: deterministic SDF and mesh tests' }
+    else { $failures.Add("L2 FAIL: terrain SDF test exit code $terrainExit") }
 
     Write-Host ('COMMAND: ' + $godot + ' --headless --path ' + $project + ' --script res://tests/bootstrap_visual_regression.gd')
     & $godot --headless --path $project --script 'res://tests/bootstrap_visual_regression.gd'

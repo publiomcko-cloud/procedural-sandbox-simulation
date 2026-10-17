@@ -20,8 +20,8 @@ func _run_tests() -> void:
 
 func _test_project_entry() -> void:
 	_check(
-		ProjectSettings.get_setting("application/run/main_scene", "") == "res://scenes/main.tscn",
-		"configured project entry points at the bootstrap scene"
+		ProjectSettings.get_setting("application/run/main_scene", "") == "res://scenes/terrain_demo.tscn",
+		"configured project entry points at the terrain demonstration"
 	)
 	_check(
 		ProjectSettings.get_setting("rendering/renderer/rendering_method", "") == "gl_compatibility",
@@ -31,7 +31,7 @@ func _test_project_entry() -> void:
 
 func _test_instantiated_bootstrap() -> void:
 	var packed_scene := load("res://scenes/main.tscn") as PackedScene
-	_check(packed_scene != null, "main scene loads as PackedScene")
+	_check(packed_scene != null, "preserved bootstrap scene loads as PackedScene")
 	if packed_scene == null:
 		return
 	var scene := packed_scene.instantiate() as Node3D
