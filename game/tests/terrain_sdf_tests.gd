@@ -62,8 +62,21 @@ func _test_mesh_generation() -> void:
 	_check(first["triangle_count"] > 0 and first["vertex_count"] > 0, "SDF produces visible triangle geometry")
 	_check(first_mesh.get_surface_count() == 1, "nonempty output is a single triangle surface")
 	var first_vertices: PackedVector3Array = first_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var first_normals: PackedVector3Array = first_mesh.surface_get_arrays(0)[Mesh.ARRAY_NORMAL]
 	var second_vertices: PackedVector3Array = second_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 	_check(first_vertices == second_vertices, "regeneration produces identical ordered mesh vertices")
+	var normal_samples := 0
+	var outward_samples := 0
+	var triangle_stride: int = maxi(1, first_vertices.size() / 192)
+	for vertex_index in range(0, first_vertices.size(), triangle_stride * 3):
+		var point: Vector3 = first_vertices[vertex_index]
+		var normal: Vector3 = first_normals[vertex_index].normalized()
+		var toward_empty: float = TerrainField.sample_density(424242, Vector2i.ZERO, point + normal * 0.12)
+		var toward_solid: float = TerrainField.sample_density(424242, Vector2i.ZERO, point - normal * 0.12)
+		if toward_empty < toward_solid:
+			outward_samples += 1
+		normal_samples += 1
+	_check(outward_samples >= int(normal_samples * 0.9), "mesh normals point from solid toward empty space")
 	var has_cave_surface := false
 	for vertex in first_vertices:
 		var center: Vector2 = TerrainField.cave_center(424242, Vector2i.ZERO, vertex.x)
@@ -89,6 +102,15 @@ func _test_scene_contract() -> void:
 	_check(scene.get_node_or_null("Camera3D") is Camera3D, "demonstration scene has a camera")
 	_check(scene.get_node_or_null("DirectionalLight3D") is DirectionalLight3D, "demonstration scene has lighting")
 	_check(scene.get_node_or_null("CanvasLayer/Status") is Label, "demonstration scene explains its controls")
+	var environment: Environment = scene.get_node("WorldEnvironment").environment
+	_check(environment.ambient_light_source == Environment.AMBIENT_SOURCE_COLOR, "environment uses colored ambient lighting")
+	_check(environment.ambient_light_sky_contribution == 0.0, "colored ambient light is not overridden by the sky")
+	_check(environment.ambient_light_energy > 0.0 and environment.ambient_light_color != Color.BLACK, "ambient light has usable energy and color")
+	var material: StandardMaterial3D = scene.get_node("Terrain").material_override
+	_check(material.albedo_color.g > material.albedo_color.r, "terrain material remains green")
+	_check(material.shading_mode != BaseMaterial3D.SHADING_MODE_UNSHADED, "terrain remains affected by real lighting")
+	var status: Label = scene.get_node("CanvasLayer/Status")
+	_check(status.mouse_filter == Control.MOUSE_FILTER_IGNORE, "HUD does not consume viewport mouse input")
 	scene.free()
 
 
@@ -102,25 +124,40 @@ func _test_demo_controls() -> void:
 	var initial_mesh: ArrayMesh = scene.get_node("Terrain").mesh
 	_check(initial_mesh != null and initial_mesh.get_surface_count() == 1, "demo builds terrain when added to the scene tree")
 	var camera: Camera3D = scene.get_node("Camera3D")
+	var viewport: Viewport = root
 	var initial_camera_position := camera.position
 	var begin_orbit := InputEventMouseButton.new()
 	begin_orbit.button_index = MOUSE_BUTTON_RIGHT
 	begin_orbit.pressed = true
-	scene.call("_unhandled_input", begin_orbit)
+	begin_orbit.position = Vector2(30.0, 30.0)
+	viewport.push_input(begin_orbit, true)
+	await process_frame
 	var drag := InputEventMouseMotion.new()
-	drag.relative = Vector2(20.0, -5.0)
-	scene.call("_unhandled_input", drag)
-	_check(not camera.position.is_equal_approx(initial_camera_position), "right-drag changes the inspection camera")
+	drag.position = Vector2(50.0, 40.0)
+	drag.relative = Vector2(20.0, 10.0)
+	drag.button_mask = MOUSE_BUTTON_MASK_RIGHT
+	viewport.push_input(drag, true)
+	await process_frame
+	_check(not camera.position.is_equal_approx(initial_camera_position), "right-drag routed through the viewport changes the inspection camera")
+	var end_orbit := InputEventMouseButton.new()
+	end_orbit.button_index = MOUSE_BUTTON_RIGHT
+	end_orbit.pressed = false
+	end_orbit.position = Vector2(50.0, 40.0)
+	viewport.push_input(end_orbit, true)
+	await process_frame
 	var distance_before_zoom: float = camera.position.distance_to(Vector3(8.0, 3.1, 6.0))
 	var zoom := InputEventMouseButton.new()
 	zoom.button_index = MOUSE_BUTTON_WHEEL_UP
 	zoom.pressed = true
-	scene.call("_unhandled_input", zoom)
+	zoom.position = Vector2(50.0, 40.0)
+	viewport.push_input(zoom, true)
+	await process_frame
 	_check(camera.position.distance_to(Vector3(8.0, 3.1, 6.0)) < distance_before_zoom, "mouse wheel zooms toward the terrain")
 	var toggle := InputEventKey.new()
 	toggle.keycode = KEY_C
 	toggle.pressed = true
-	scene.call("_unhandled_input", toggle)
+	viewport.push_input(toggle)
+	await process_frame
 	var section_mesh: ArrayMesh = scene.get_node("Terrain").mesh
 	_check(scene.get("cave_section_enabled"), "C input enables the cave cross-section")
 	_check(section_mesh != initial_mesh, "C input rebuilds the terrain mesh")
@@ -128,7 +165,8 @@ func _test_demo_controls() -> void:
 	var regenerate := InputEventKey.new()
 	regenerate.keycode = KEY_R
 	regenerate.pressed = true
-	scene.call("_unhandled_input", regenerate)
+	viewport.push_input(regenerate)
+	await process_frame
 	_check(scene.get("cave_section_enabled"), "R input preserves the current section mode")
 	_check(scene.get_node("Terrain").mesh != section_mesh, "R input regenerates the mesh")
 	scene.queue_free()

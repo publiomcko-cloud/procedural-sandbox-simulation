@@ -10,9 +10,10 @@ cull_mode = 2
 [sub_resource type="Environment" id="TerrainEnvironment"]
 background_mode = 1
 background_color = Color(0.34, 0.48, 0.62, 1)
-ambient_light_source = 1
+ambient_light_source = 2
 ambient_light_color = Color(0.72, 0.78, 0.86, 1)
-ambient_light_energy = 0.8
+ambient_light_energy = 1.5
+ambient_light_sky_contribution = 0.0
 
 [node name="TerrainDemo" type="Node3D"]
 script = ExtResource("1_demo")
@@ -35,6 +36,7 @@ environment = SubResource("TerrainEnvironment")
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
 [node name="Status" type="Label" parent="CanvasLayer"]
+mouse_filter = 2
 offset_left = 20.0
 offset_top = 18.0
 offset_right = 740.0
