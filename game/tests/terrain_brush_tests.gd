@@ -127,13 +127,13 @@ func _test_viewport_interaction() -> void:
 		return
 	var scene := packed.instantiate()
 	root.add_child(scene)
-	await process_frame
+	await _wait_for_region(scene, Vector2i.ZERO)
 	var camera: Camera3D = scene.get_node("Camera3D")
 	var world_state: RefCounted = scene.get("world_state")
 	var edits: RefCounted = world_state.brush_edits
 	var start_meshes := _snapshot_chunk_meshes(scene)
 	var start_chunk_nodes := _snapshot_chunk_nodes(scene)
-	_check(start_meshes.size() == 9 * ChunkGrid.CHUNK_COUNT_X * ChunkGrid.CHUNK_COUNT_Z, "scene creates all fixed 3x3 preview chunk mesh instances")
+	_check(start_meshes.size() == ChunkGrid.CHUNK_COUNT_X * ChunkGrid.CHUNK_COUNT_Z, "scene publishes a region only after all its chunk jobs finish")
 	_check(scene.get("last_mesh_diagnostics")["active_chunk_count"] == start_meshes.size(), "initial diagnostics report active chunk count")
 	var viewport_size := root.get_visible_rect().size
 	var click_position := viewport_size * 0.5
@@ -142,7 +142,7 @@ func _test_viewport_interaction() -> void:
 	carve_click.pressed = true
 	carve_click.position = click_position
 	root.push_input(carve_click, true)
-	await process_frame
+	await _wait_for_region_stage(scene, Vector2i.ZERO)
 	_check(edits.get_edit_count() == 1, "viewport-dispatched left click ray-picks and applies a carve edit")
 	_check(scene.get("selected_brush_mode") == BrushEditState.Mode.CARVE, "left click selects carve mode")
 	var carve_diagnostics: Dictionary = scene.get("last_mesh_diagnostics")
@@ -182,7 +182,7 @@ func _test_viewport_interaction() -> void:
 	fill_click.shift_pressed = true
 	fill_click.position = click_position + Vector2(4.0, 0.0)
 	root.push_input(fill_click, true)
-	await process_frame
+	await _wait_for_region_stage(scene, Vector2i.ZERO)
 	_check(edits.get_edit_count() == 2, "viewport-dispatched Shift+left click applies fill")
 	_check(scene.get("selected_brush_mode") == BrushEditState.Mode.FILL, "Shift+left click selects fill mode")
 	var mode_label: String = scene.get_node("CanvasLayer/Status").text
@@ -193,21 +193,21 @@ func _test_viewport_interaction() -> void:
 	section_event.keycode = KEY_C
 	section_event.pressed = true
 	root.push_input(section_event)
-	await process_frame
+	await _wait_for_global_rebuild(scene)
 	_check(scene.get("cave_section_enabled"), "viewport C shortcut enables the visualization section")
 	_check(edits.get_operations_snapshot() == operations_before_section, "C does not mutate canonical brush edits")
 	var section_mesh: ArrayMesh = scene.get_node("TerrainChunks/Terrain").mesh
-	_check(scene.get("last_mesh_diagnostics")["remeshed_chunk_count"] == start_meshes.size(), "C rebuilds every chunk for the global visualization cut")
+	_check(scene.get("last_mesh_diagnostics")["remeshed_chunk_count"] >= start_meshes.size(), "C rebuilds active chunks for the global visualization cut")
 
 	var regenerate := InputEventKey.new()
 	regenerate.keycode = KEY_R
 	regenerate.pressed = true
 	root.push_input(regenerate)
-	await process_frame
+	await _wait_for_global_rebuild(scene)
 	_check(edits.get_edit_count() == 2, "R regeneration retains accepted edits")
 	_check(edits.get_operations_snapshot() == operations_before_section, "R preserves the ordered brush data")
 	_check(scene.get_node("TerrainChunks/Terrain").mesh != section_mesh, "R rebuilds the finite mesh")
-	_check(scene.get("last_mesh_diagnostics")["remeshed_chunk_count"] == start_meshes.size(), "R regenerates every chunk")
+	_check(scene.get("last_mesh_diagnostics")["remeshed_chunk_count"] >= start_meshes.size(), "R regenerates active chunks")
 
 	var initial_camera_position := camera.position
 	var right_down := InputEventMouseButton.new()
@@ -242,11 +242,11 @@ func _test_viewport_interaction() -> void:
 	reset.keycode = KEY_X
 	reset.pressed = true
 	root.push_input(reset)
-	await process_frame
+	await _wait_for_global_rebuild(scene)
 	_check(edits.get_edit_count() == 0, "viewport X shortcut clears transient edits")
 	_check(scene.get("cave_section_enabled"), "reset preserves cave-section visualization mode")
 	_check(scene.get_node("TerrainChunks/Terrain").mesh != null, "reset rebuilds the base terrain")
-	_check(scene.get("last_mesh_diagnostics")["remeshed_chunk_count"] == start_meshes.size(), "X reset regenerates all baseline chunks")
+	_check(scene.get("last_mesh_diagnostics")["remeshed_chunk_count"] >= start_meshes.size(), "X reset regenerates the visible region set")
 	scene.queue_free()
 	await process_frame
 
@@ -266,6 +266,32 @@ func _snapshot_chunk_nodes(scene: Node) -> Dictionary:
 	for chunk_id in chunk_nodes:
 		snapshot[chunk_id] = chunk_nodes[chunk_id]
 	return snapshot
+
+
+func _wait_for_region(scene: Node, region_key: Vector2i) -> void:
+	var id := "%d,%d" % [region_key.x, region_key.y]
+	for _frame in range(600):
+		if scene.get("active_regions").has(id):
+			return
+		await process_frame
+	_check(scene.get("active_regions").has(id), "focused region completes incremental loading")
+
+
+func _wait_for_region_stage(scene: Node, region_key: Vector2i) -> void:
+	var id := "%d,%d" % [region_key.x, region_key.y]
+	for _frame in range(600):
+		if not scene.get("loading_regions").has(id):
+			return
+		await process_frame
+	_check(not scene.get("loading_regions").has(id), "focused region staged mesh work completes")
+
+
+func _wait_for_global_rebuild(scene: Node) -> void:
+	for _frame in range(2000):
+		if not scene.get("global_rebuild_pending"):
+			return
+		await process_frame
+	_check(not scene.get("global_rebuild_pending"), "global mesh rebuild completes incrementally")
 
 
 func _check(condition: bool, label: String) -> void:

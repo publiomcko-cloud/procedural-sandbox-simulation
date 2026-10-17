@@ -28,6 +28,13 @@ position = Vector3(22, 13, 23)
 current = true
 fov = 55.0
 
+[node name="ViewAlignedLight" type="SpotLight3D" parent="Camera3D"]
+light_color = Color(0.9, 0.94, 1, 1)
+light_energy = 0.42
+spot_range = 72.0
+spot_angle = 58.0
+shadow_enabled = false
+
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 rotation_degrees = Vector3(-48, -28, 0)
 light_energy = 1.3
@@ -42,6 +49,6 @@ mouse_filter = 2
 offset_left = 20.0
 offset_top = 18.0
 offset_right = 1120.0
-offset_bottom = 230.0
+offset_bottom = 260.0
 theme_override_colors/font_color = Color(0.05, 0.06, 0.08, 1)
 theme_override_font_sizes/font_size = 17

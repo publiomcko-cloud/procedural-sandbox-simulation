@@ -67,6 +67,7 @@ if ((Get-Command $godot -ErrorAction SilentlyContinue) -or (Test-Path $godot)) {
     $startupExit = $LASTEXITCODE
     if ($startupExit -eq 0) { Write-Host 'L2 PASS: configured main scene startup' }
     else { $failures.Add("L2 FAIL: main scene startup exit code $startupExit") }
+
 } else {
     $failures.Add("Godot command not found: $godot")
 }

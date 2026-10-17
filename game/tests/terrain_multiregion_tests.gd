@@ -25,7 +25,7 @@ func _run() -> void:
 	_test_region_and_corner_continuity()
 	_test_global_cut_plane()
 	_test_three_by_three_mesh_union_and_seams()
-	await _test_static_scene_and_center_only_edits()
+	await _test_dynamic_region_streaming_and_focused_edits()
 	if failures == 0:
 		print("TERRAIN_MULTI_REGION_PASS: assertions=%d failures=0" % assertions)
 	else:
@@ -269,70 +269,158 @@ func _boundary_matches(left: Dictionary, right: Dictionary) -> bool:
 	return true
 
 
-func _test_static_scene_and_center_only_edits() -> void:
+func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	var packed := load("res://scenes/terrain_demo.tscn") as PackedScene
 	_check(packed != null, "multiregion demonstration scene loads")
 	if packed == null:
 		return
 	var scene := packed.instantiate()
 	root.add_child(scene)
-	await process_frame
+	await _wait_for_region(scene, Vector2i.ZERO)
+	_check(scene.get("active_regions").size() == 1 and scene.get("chunk_nodes").size() == 16, "focused center region becomes visible after its staged mesh slices finish")
+	await _wait_for_requested_window(scene)
 	var chunk_nodes: Dictionary = scene.get("chunk_nodes")
 	var region_states: Dictionary = scene.get("world_states")
-	_check(region_states.size() == 9 and chunk_nodes.size() == 144, "scene instantiates a static 3x3 grid with 144 chunk nodes")
-	_check(scene.get("last_mesh_diagnostics")["preview_region_count"] == 9, "startup diagnostics report nine active regions")
-	_check(scene.get("last_mesh_diagnostics")["active_chunk_count"] == 144, "startup diagnostics report all active chunks")
-	_check(scene.get_node("CanvasLayer/Status").text.contains("fixed 3x3") and scene.get_node("CanvasLayer/Status").text.contains("center editable"), "HUD identifies fixed preview and center-only editing scope")
-	var world_state: RefCounted = scene.get("world_state")
-	var before_edit_meshes := _snapshot_meshes(scene)
-	var center_click: Vector2 = _find_surface_click(scene, Vector2i.ZERO, false)
-	_check(center_click.x >= 0.0, "viewport can project a safe central-region terrain point")
-	if center_click.x >= 0.0:
-		_dispatch_left_click(center_click)
-		await process_frame
-	_check(world_state.brush_edits.get_edit_count() == 1, "real viewport input applies one center safe-area operation")
-	_check(scene.get("last_mesh_diagnostics")["remeshed_chunk_count"] > 0 and scene.get("last_mesh_diagnostics")["remeshed_chunk_count"] < 16, "center edit remeshes only its local center-region chunks")
-	var after_edit_meshes := _snapshot_meshes(scene)
-	var remote_unchanged := true
-	for chunk_id in before_edit_meshes:
-		if not String(chunk_id).begins_with("region:0,0/") and before_edit_meshes[chunk_id] != after_edit_meshes[chunk_id]:
-			remote_unchanged = false
-	_check(remote_unchanged, "editing center region leaves every other region mesh object unchanged")
-	var center_after_edit: Array[Dictionary] = world_state.brush_edits.get_operations_snapshot()
-	var outside_click := _find_surface_click(scene, Vector2i(1, 0), true)
-	_check(outside_click.x >= 0.0, "viewport can target visible geometry in a neighboring region")
-	if outside_click.x >= 0.0:
-		_dispatch_left_click(outside_click)
-		await process_frame
-	_check(world_state.brush_edits.get_operations_snapshot() == center_after_edit, "neighbor-region click is rejected without mutating center edit state")
-	_check(scene.get("last_brush_result").contains("read-only"), "neighbor-region rejection is reported to the user")
-	var edge_click := _find_unsafe_center_edge_click(scene)
-	_check(edge_click.x >= 0.0, "viewport can target center-region geometry too close to its region edge")
-	if edge_click.x >= 0.0:
-		var before_edge_meshes := _snapshot_meshes(scene)
-		_dispatch_left_click(edge_click)
-		await process_frame
-		_check(world_state.brush_edits.get_operations_snapshot() == center_after_edit, "boundary-crossing brush is rejected without changing operations")
-		_check(_snapshots_equal(before_edge_meshes, _snapshot_meshes(scene)), "boundary-crossing rejection preserves all mesh identities")
-		_check(scene.get("last_brush_result").contains("boundary"), "boundary rejection is reported to the user")
-	var operations_before_cut: Array[Dictionary] = world_state.brush_edits.get_operations_snapshot()
-	var cut_event := InputEventKey.new()
-	cut_event.keycode = KEY_C
-	cut_event.pressed = true
-	root.push_input(cut_event)
-	await process_frame
-	_check(scene.get("cave_section_enabled"), "C enables a global visualization cut")
-	_check(world_state.brush_edits.get_operations_snapshot() == operations_before_cut, "global cut does not change canonical center edits")
-	_check(scene.get("last_mesh_diagnostics")["remeshed_chunk_count"] == 144, "global cut rebuilds all nine regions")
-	var reset_event := InputEventKey.new()
-	reset_event.keycode = KEY_X
-	reset_event.pressed = true
-	root.push_input(reset_event)
-	await process_frame
-	_check(world_state.brush_edits.get_edit_count() == 0, "X resets center-region operations")
-	_check(scene.get("last_mesh_diagnostics")["remeshed_chunk_count"] == 144, "X rebuilds the full static preview")
+	var initial_diagnostics: Dictionary = scene.get("last_mesh_diagnostics").duplicate(true)
+	var active_regions: Dictionary = scene.get("active_regions")
+	_check(active_regions.size() == 9 and chunk_nodes.size() == 144, "camera focus requests and publishes a complete 3x3 region window")
+	_check(scene.get("last_mesh_diagnostics")["active_region_count"] == 9, "startup diagnostics report nine active regions")
+	_check(scene.get("last_mesh_diagnostics")["peak_mesh_slices_per_frame"] == 1, "streaming builds no more than one vertical mesh slice in any process frame")
+	_check(scene.get("last_mesh_diagnostics")["queued_chunk_count"] == 0, "initial requested-region queue drains completely")
+	_check(initial_diagnostics["peak_mesh_slice_queue_depth"] == 1440, "initial nine-region request remains bounded to 1440 incremental slice jobs")
+	_check(initial_diagnostics["remeshed_chunk_count"] == 144 and initial_diagnostics["triangle_count"] == 87077, "initial streamed window preserves the exact 144-chunk baseline geometry")
+	_check(scene.get_node("CanvasLayer/Status").text.contains("WASD/arrows") and scene.get_node("CanvasLayer/Status").text.contains("dynamic SDF regions"), "HUD documents dynamic camera focus controls")
+	_check(region_states.size() == 9, "initial domain states correspond only to requested or active regions")
+	var camera: Camera3D = scene.get_node("Camera3D")
+	var view_light := camera.get_node_or_null("ViewAlignedLight") as SpotLight3D
+	_check(view_light != null, "camera has an auxiliary aligned spotlight")
+	if view_light != null:
+		_check(view_light.light_energy > 0.0 and view_light.light_energy < 1.0 and not view_light.shadow_enabled, "auxiliary light remains subtle and does not replace directional shading")
+	var active_before_move := active_regions.size()
+	await _send_key(KEY_D)
+	await _send_key(KEY_D)
+	await _wait_for_requested_window(scene)
+	_check(scene.get("focus_region_key") == Vector2i(1, 0), "viewport movement crosses the positive region boundary with stable floor ownership")
+	_check(active_regions.size() > active_before_move and active_regions.size() <= 25, "positive traversal loads new regions while respecting the resident cap")
+	_check(chunk_nodes.size() <= 25 * ChunkGrid.CHUNK_COUNT_X * ChunkGrid.CHUNK_COUNT_Z, "positive traversal keeps active chunk nodes bounded")
+	_check(scene.get("last_mesh_diagnostics")["queued_chunk_count"] <= 25 * ChunkGrid.CHUNK_COUNT_X * ChunkGrid.CHUNK_COUNT_Z, "streaming job queue remains bounded by resident capacity")
+	var positive_seams := _active_chunk_data(scene, [Vector2i.ZERO, Vector2i(1, 0)])
+	for z in range(ChunkGrid.CHUNK_COUNT_Z):
+		_check_seam(positive_seams, Vector2i(3, z), Vector2i(4, z), true)
+	var positive_state: RefCounted = scene.get("world_states")["1,0"]
+	_check(positive_state.region_key == Vector2i(1, 0), "loaded region retains its canonical signed region key")
+	for _step in range(5):
+		await _send_key(KEY_A)
+	await _wait_for_requested_window(scene)
+	_check(scene.get("focus_region_key") == Vector2i(-1, 0), "viewport traversal crosses into negative coordinates without truncation toward zero")
+	_check(scene.get("active_regions").has("-1,0") and scene.get("active_regions").has("0,0"), "negative focus loads the correct neighboring region pair")
+	var negative_seams := _active_chunk_data(scene, [Vector2i(-1, 0), Vector2i.ZERO])
+	for z in range(ChunkGrid.CHUNK_COUNT_Z):
+		_check_seam(negative_seams, Vector2i(-1, z), Vector2i(0, z), true)
+	var negative_entry: Dictionary = scene.get("active_regions")["-1,0"]
+	var negative_state: RefCounted = negative_entry["world_state"]
+	var expected_mesh: Dictionary = Mesher.build_chunk_mesh(SEED, Vector2i(-1, 0), Vector2i.ZERO)
+	var observed_node: MeshInstance3D = negative_entry["chunk_nodes"][ChunkGrid.stable_id(Vector2i(-1, 0), Vector2i.ZERO)]
+	_check(_meshes_equal(observed_node.mesh, expected_mesh["mesh"]), "negative-region streamed mesh matches canonical deterministic chunk generation")
+	var base_sample: float = negative_state.sample_density(Vector3(8.0, 4.0, 6.0))
+	_check(negative_state.apply_sphere(BrushState.Mode.FILL, Vector3(8.0, 4.0, 6.0), 1.25), "test applies one bounded transient operation to the focused region state")
+	var edited_sample: float = negative_state.sample_density(Vector3(8.0, 4.0, 6.0))
+	_check(edited_sample > base_sample, "focused-region edit is retained in canonical domain data")
+	for _step in range(12):
+		await _send_key(KEY_D)
+	_check(not scene.get("active_regions").has("-1,0") and scene.get("edited_region_states").has("-1,0"), "unload removes render nodes but keeps bounded transient edit data")
+	for _step in range(12):
+		await _send_key(KEY_A)
+	await _wait_for_requested_window(scene)
+	var reloaded_state: RefCounted = scene.get("active_regions")["-1,0"]["world_state"]
+	_check(reloaded_state == negative_state, "re-entering a region reuses its in-memory edited state")
+	_check(reloaded_state.sample_density(Vector3(8.0, 4.0, 6.0)) > base_sample, "region reload preserves the accepted transient edit")
+	_check(scene.get("active_regions").size() <= 25 and scene.get("chunk_nodes").size() <= 400, "repeated region crossings stay within region and chunk caps")
+	_check(scene.get("loading_regions").size() <= 9 and scene.get("last_mesh_diagnostics")["peak_mesh_slices_per_frame"] == 1, "ordinary load queue and per-frame work remain bounded after repeated crossings")
+	var diagnostics: Dictionary = scene.get("last_mesh_diagnostics")
+	_check(diagnostics["peak_active_region_count"] <= 25 and diagnostics["peak_queue_depth"] <= 400 and diagnostics["peak_mesh_slice_queue_depth"] <= 4000, "observed resident and worst-case rebuild queues stay within fixed caps")
+	for id_value in scene.get("loading_regions"):
+		var staged: Dictionary = scene.get("loading_regions")[id_value]
+		var staged_key: Vector2i = staged["region_key"]
+		_check(maxi(absi(staged_key.x - scene.get("focus_region_key").x), absi(staged_key.y - scene.get("focus_region_key").y)) <= 1, "obsolete load work cannot remain queued outside the requested window")
+	print("TERRAIN_STREAM_INITIAL_METRICS: active=%d chunks=%d triangles=%d queue_peak=%d slice_queue_peak=%d elapsed_ms=%.3f mesh_work_total_ms=%.3f peak_mesh_slice_ms=%.3f peak_process_work_ms=%.3f" % [
+		initial_diagnostics["active_region_count"], initial_diagnostics["active_chunk_count"], initial_diagnostics["triangle_count"],
+		initial_diagnostics["peak_queue_depth"], initial_diagnostics["peak_mesh_slice_queue_depth"], initial_diagnostics["elapsed_ms"], initial_diagnostics["total_mesh_work_ms"],
+		initial_diagnostics["peak_mesh_slice_ms"], initial_diagnostics["peak_process_work_ms"],
+	])
+	print("TERRAIN_STREAM_METRICS: active=%d peak_active=%d chunk_nodes=%d queued=%d peak_queued=%d peak_mesh_slice_ms=%.3f peak_process_work_ms=%.3f loads=%d unloads=%d" % [
+		diagnostics["active_region_count"], diagnostics["peak_active_region_count"], diagnostics["active_chunk_count"],
+		diagnostics["queued_chunk_count"], diagnostics["peak_queue_depth"], diagnostics["peak_mesh_slice_ms"],
+		diagnostics["peak_process_work_ms"], diagnostics["streamed_region_loads"], diagnostics["streamed_region_unloads"],
+	])
 	scene.queue_free()
 	await process_frame
+
+
+func _send_key(keycode: Key) -> void:
+	var event := InputEventKey.new()
+	event.keycode = keycode
+	event.pressed = true
+	root.push_input(event)
+	await process_frame
+
+
+func _wait_for_requested_window(scene: Node) -> void:
+	for _frame in range(4000):
+		var focus: Vector2i = scene.get("focus_region_key")
+		var active: Dictionary = scene.get("active_regions")
+		var complete := true
+		for z in range(focus.y - 1, focus.y + 2):
+			for x in range(focus.x - 1, focus.x + 2):
+				if not active.has("%d,%d" % [x, z]):
+					complete = false
+		if complete:
+			return
+		await process_frame
+	_check(false, "all nine camera-requested regions finish incremental loading within the bounded test wait")
+
+
+func _wait_for_region(scene: Node, region_key: Vector2i) -> void:
+	var id := "%d,%d" % [region_key.x, region_key.y]
+	for _frame in range(4000):
+		if scene.get("active_regions").has(id):
+			return
+		await process_frame
+	_check(scene.get("active_regions").has(id), "focused region becomes visible after bounded slice work")
+
+
+func _active_chunk_data(scene: Node, region_keys: Array[Vector2i]) -> Dictionary:
+	var result: Dictionary = {}
+	var active: Dictionary = scene.get("active_regions")
+	for region_key in region_keys:
+		var entry: Dictionary = active["%d,%d" % [region_key.x, region_key.y]]
+		for coordinate in ChunkGrid.all_coordinates():
+			var global_coordinate := Vector2i(region_key.x * ChunkGrid.CHUNK_COUNT_X + coordinate.x, region_key.y * ChunkGrid.CHUNK_COUNT_Z + coordinate.y)
+			var chunk_id: String = ChunkGrid.stable_id(region_key, coordinate)
+			result[global_coordinate] = {
+				"mesh": entry["chunk_nodes"][chunk_id].mesh,
+				"offset": Spatial.region_origin_world(region_key) + ChunkGrid.origin_for(coordinate),
+			}
+	return result
+
+
+func _meshes_equal(actual: ArrayMesh, expected: ArrayMesh) -> bool:
+	if actual.get_surface_count() != expected.get_surface_count():
+		return false
+	if actual.get_surface_count() == 0:
+		return true
+	var actual_arrays: Array = actual.surface_get_arrays(0)
+	var expected_arrays: Array = expected.surface_get_arrays(0)
+	var actual_vertices: PackedVector3Array = actual_arrays[Mesh.ARRAY_VERTEX]
+	var expected_vertices: PackedVector3Array = expected_arrays[Mesh.ARRAY_VERTEX]
+	var actual_normals: PackedVector3Array = actual_arrays[Mesh.ARRAY_NORMAL]
+	var expected_normals: PackedVector3Array = expected_arrays[Mesh.ARRAY_NORMAL]
+	if actual_vertices != expected_vertices or actual_normals.size() != expected_normals.size():
+		return false
+	for index in range(actual_normals.size()):
+		if actual_normals[index].distance_to(expected_normals[index]) > 0.0001:
+			return false
+	return true
 
 
 func _find_surface_click(scene: Node, target_region: Vector2i, require_unsafe_center: bool) -> Vector2:

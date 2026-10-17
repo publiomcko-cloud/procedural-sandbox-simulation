@@ -10,6 +10,12 @@ This ledger reports verified merge actions; consult GitHub refs for current HEAD
 - PR #6 canonical post-P0.0 status: 581ce8f0c34cab84e1f0296a83f0ef14422f0038
 Outcome: P0.0 merged/accepted for basic bootstrap, deterministic fixture and owner-observed cube visibility. No claim of complete Phase 0 or independent Windows runtime execution.
 
+## 2026-10-17 — P1.0A ownership integration and recovery documentation merged
+- PR #85 recovery/checkpoint/status documentation merged as `a7391fa7eafe55c9b38888249b3eaafbf03da9a9`.
+- PR #86 P1.0A half-open 16×12 region ownership, 3×3 preview, 4×4 chunks per region, negative-coordinate and continuity coverage merged as `7f87c1e9c0cc1e85dd5c5fb612ebf2cd40aeffb0`; reviewed feature head `27b911e32ea396be6c66436542473093123e1b54`. PR reports 7,917 Godot assertions on its head; these were developer-reported, not independently re-executed here.
+- The owner subsequently authorized the bounded P1.0B camera-focused dynamic load/unload slice and auxiliary view light on 2026-10-17. Its authorization and scope are recorded at [CHK-2026-10-17-P1-0B-AUTHORIZATION](../checkpoints/2026-10-17-P1-0B-AUTHORIZATION.md); implementation and acceptance remain pending.
+- This integration does not establish persistence, cross-region edits, networking, a final terrain backend choice, or protected-host/F2-G1 acceptance. All five F2-G1 operational holds remain in force.
+
 ## 2026-10-08 — P0.1 research and review integrated
 - PR #7 research, candidate-independent adapter proposal, benchmark plan, proposed ADR-0002: b27b4e90ca19d7e83f34003de488d063f00399eb
 - PR #8 independent research review with conditions: a1171450e4178399f3130790368dc093be176c65
