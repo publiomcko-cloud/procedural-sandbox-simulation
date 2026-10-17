@@ -147,6 +147,9 @@ func _test_global_ledger_contract() -> void:
 	var cloned := BrushEditState.new(424242, TerrainField.GENERATOR_VERSION)
 	cloned.add_sphere(BrushEditState.Mode.FILL, Vector3(0.0, 4.0, 0.0), 1.25)
 	_check(cloned.get_operations_snapshot()[0]["operation_id"] == negative.get_operations_snapshot()[0]["operation_id"], "same versioned command stream produces a deterministic operation ID")
+	var regional_snapshot: Array[Dictionary] = cloned.get_operations_for_region(Vector2i.ZERO)
+	regional_snapshot[0]["mode"] = BrushEditState.Mode.CARVE
+	_check(cloned.get_operations_snapshot()[0]["mode"] == BrushEditState.Mode.FILL, "regional command views cannot mutate canonical ledger records")
 	var bounded := BrushEditState.new(424242, TerrainField.GENERATOR_VERSION)
 	for _index in range(BrushEditState.MAX_EDITS):
 		_check(bounded.add_sphere(BrushEditState.Mode.CARVE, Vector3(8.0, 4.0, 6.0), 1.0), "bounded global ledger admits an operation")

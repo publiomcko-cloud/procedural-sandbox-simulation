@@ -135,7 +135,7 @@ func get_operations_for_region(region_key: Vector2i) -> Array[Dictionary]:
 		var sequence: int = sequence_value
 		# Sequence is monotonic but operations may have been removed by focused reset.
 		if _by_sequence.has(sequence):
-			result.append(_by_sequence[sequence])
+			result.append((_by_sequence[sequence] as Dictionary).duplicate(true))
 	return result
 
 
