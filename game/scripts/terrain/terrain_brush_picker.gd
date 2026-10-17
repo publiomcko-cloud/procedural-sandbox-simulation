@@ -3,7 +3,9 @@ extends RefCounted
 
 ## Deterministic fixed-step ray/field intersection with a hard per-click work bound.
 const SAMPLE_STEP := 0.1
-const MAX_STEPS := 512
+# The orbit camera can be up to 96 units from the target; leave room to reach
+# the surface at maximum zoom while retaining a fixed per-click work bound.
+const MAX_STEPS := 1200
 const BISECTION_STEPS := 12
 
 

@@ -32,8 +32,8 @@ static func sample_density(
 	).length() - 0.92
 	var density: float = minf(bounded_surface, cave_distance)
 	if show_cave_section:
-		# Positive density means solid; this removes the half-space above the cut plane.
-		density = minf(density, 6.0 - local_position.z)
+		# Visualization uses one world-space plane across every region.
+		density = minf(density, 6.0 - world_z)
 	return density
 
 

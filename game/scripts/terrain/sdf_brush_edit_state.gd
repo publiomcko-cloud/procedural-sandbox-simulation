@@ -3,6 +3,7 @@ extends RefCounted
 
 ## Bounded transient sphere edits, stored as ordered data separate from scene nodes.
 const FIELD := preload("res://scripts/terrain/sdf_world.gd")
+const SPATIAL := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const MAX_EDITS := 32
 const MIN_RADIUS := 0.45
 const MAX_RADIUS := 2.0
@@ -66,5 +67,6 @@ func sample_density(
 			density = maxf(density, -distance_to_surface)
 	if show_cave_section:
 		# The section affects only this visualization sample, after canonical edits.
-		density = minf(density, 6.0 - local_position.z)
+		var world_z := float(region_key.y) * SPATIAL.REGION_SIZE_Z + local_position.z
+		density = minf(density, 6.0 - world_z)
 	return density
