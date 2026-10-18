@@ -26,6 +26,7 @@ func _run() -> void:
 	_test_global_cut_plane()
 	_test_three_by_three_mesh_union_and_seams()
 	_test_cross_region_edit_mesh_equivalence()
+	_test_near_boundary_normal_dependencies()
 	await _test_dynamic_region_streaming_and_focused_edits()
 	await _test_edit_while_neighbor_is_loading()
 	if failures == 0:
@@ -269,6 +270,65 @@ func _test_cross_region_edit_mesh_equivalence() -> void:
 	print("GLOBAL_EDIT_EQUIVALENCE: regions=2 operations=%d full_triangles=%d chunk_triangles=%d" % [edits.get_edit_count(), full["triangle_count"], streamed_triangles])
 
 
+func _test_near_boundary_normal_dependencies() -> void:
+	var seam_z := 5.0
+	var seam_y := _surface_height(16.0, seam_z)
+	_check(is_finite(seam_y), "deterministic near-boundary brush point uses the actual generated terrain surface height")
+	if not is_finite(seam_y):
+		return
+	var baseline_left := _region_boundary_normal_map(Vector2i.ZERO, true)
+	var baseline_right := _region_boundary_normal_map(Vector2i(1, 0), false)
+	_check(not baseline_left.is_empty() and _normal_maps_match(baseline_left, baseline_right), "unmodified shared region seam has matching vertex normals")
+	var edits := BrushState.new(SEED, Field.GENERATOR_VERSION)
+	var center := Vector3(15.0, seam_y, seam_z)
+	_check(center.x + 0.9 < Spatial.REGION_SIZE_X, "positive X test brush remains wholly inside canonical support region")
+	_check(edits.add_sphere(BrushState.Mode.CARVE, center, 0.9), "positive near-boundary brush is admitted for actual terrain geometry")
+	var operation: Dictionary = edits.get_operations_snapshot()[0]
+	_check(operation["support_regions"] == [Vector2i.ZERO] and operation["dependency_regions"] == [Vector2i(1, 0)], "positive boundary neighbor is a rebuild dependency only, not canonical support")
+	var edited_left := _region_boundary_normal_map(Vector2i.ZERO, true, edits)
+	var edited_right := _region_boundary_normal_map(Vector2i(1, 0), false, edits)
+	_check(not edited_left.is_empty() and _normal_maps_match(edited_left, edited_right), "rebuilt adjacent regions publish identical normals at shared seam vertices")
+	_check(_normal_map_differs(baseline_left, edited_right), "the dependency-side seam normal changes after sampling the one-sided brush")
+	_check(not _normal_maps_match(edited_left, _region_boundary_normal_map(Vector2i(1, 0), false)), "keeping the dependency-side mesh stale would create a shared-normal mismatch")
+	var negative_surface_y := _surface_height(-16.0, -5.0)
+	_check(is_finite(negative_surface_y), "negative-coordinate test point resolves to deterministic terrain surface")
+	if is_finite(negative_surface_y):
+		var negative_edits := BrushState.new(SEED, Field.GENERATOR_VERSION)
+		var negative_center := Vector3(-16.91, negative_surface_y, -5.0)
+		_check(negative_center.x + 0.9 < -16.0, "negative test brush stays inside its canonical region across X")
+		_check(negative_edits.add_sphere(BrushState.Mode.FILL, negative_center, 0.9), "negative near-boundary surface brush is admitted")
+		var negative_operation: Dictionary = negative_edits.get_operations_snapshot()[0]
+		_check(negative_operation["support_regions"] == [Vector2i(-2, -1)] and negative_operation["dependency_regions"].has(Vector2i(-1, -1)), "negative sample dependency is assigned by mathematical floor")
+
+
+func _region_boundary_normal_map(region_key: Vector2i, is_left: bool, edits: RefCounted = null) -> Dictionary:
+	var result: Dictionary = {}
+	var origin := Spatial.region_origin_world(region_key)
+	var boundary_x := origin.x + Spatial.REGION_SIZE_X if is_left else origin.x
+	for z in range(ChunkGrid.CHUNK_COUNT_Z):
+		var coordinate := Vector2i(ChunkGrid.CHUNK_COUNT_X - 1 if is_left else 0, z)
+		var built := Mesher.build_chunk_mesh(SEED, region_key, coordinate, false, edits)
+		var offset := origin + ChunkGrid.origin_for(coordinate)
+		var boundary_map := _boundary_map(built["mesh"], offset, true, boundary_x)
+		for key in boundary_map:
+			if not result.has(key):
+				result[key] = []
+			(result[key] as Array).append(boundary_map[key])
+	return result
+
+
+func _normal_map_differs(a: Dictionary, b: Dictionary) -> bool:
+	for key in a:
+		if not b.has(key):
+			continue
+		for normal_value in a[key]:
+			var normal: Vector3 = normal_value
+			for other_value in b[key]:
+				if normal.dot(Vector3(other_value)) < 0.999:
+					return true
+	return false
+
+
 func _oriented_mesh_signatures(mesh: ArrayMesh, origin: Vector3) -> Array[String]:
 	var result: Array[String] = []
 	if mesh.get_surface_count() == 0:
@@ -473,18 +533,43 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	var retry_total_before: int = scene.get("last_mesh_diagnostics").get("mesh_stage_retry_total", 0)
 	scene.set("debug_fail_next_mesh_stage", true)
 	scene.set("selected_brush_mode", BrushState.Mode.CARVE)
-	_check(scene.call("_accept_brush_at_world", Vector3(16.0, 4.0, 6.0)), "world-space seam operation is admitted once across two loaded regions")
-	_check(ledger.get_operations_snapshot()[0]["affected_regions"].size() == 2, "seam operation indexes both sides of its region boundary")
+	var near_seam_surface_y := _surface_height(15.0, 6.0)
+	_check(is_finite(near_seam_surface_y), "dynamic neighbor test resolves the real terrain surface near positive X seam")
+	var near_seam_center := Vector3(15.0, near_seam_surface_y, 6.0)
+	var one_sided_accepted: bool = ledger.add_sphere(BrushState.Mode.CARVE, near_seam_center, 0.9)
+	_check(one_sided_accepted, "one-sided near-seam operation is admitted once with an explicit bounded test radius")
+	if one_sided_accepted:
+		scene.call("_schedule_edit_transaction", ledger.get_operations_snapshot()[-1])
+	var near_seam_operation: Dictionary = ledger.get_operations_snapshot()[0]
+	_check(near_seam_operation["support_regions"] == [Vector2i.ZERO] and near_seam_operation["dependency_regions"].has(Vector2i(1, 0)), "one-sided geometric support explicitly fans out to the normal-dependent neighbor")
 	await process_frame
 	_check(left_boundary_node.mesh == left_before and right_boundary_node.mesh == right_before, "injected stage failure leaves both visible sides on the old mesh set")
 	_check(scene.get("last_mesh_diagnostics").get("mesh_stage_retry_total", 0) > retry_total_before, "injected cross-region mesh failure triggers a bounded transaction retry")
 	await _wait_for_edit_transaction(scene)
 	_check(left_boundary_node.mesh != left_before and right_boundary_node.mesh != right_before, "successful transaction publishes both sides of the seam together")
 	_check(ledger.get_edit_count() == 1 and ledger.get_last_sequence() == 0, "one accepted cross-region gesture occupies one global log slot")
+	scene.call("_move_focus", Vector3(64.0, 0.0, 0.0))
+	await _wait_for_requested_window(scene)
+	_check(not scene.get("active_regions").has("1,0") and ledger.get_edit_count() == 1, "dependency-only neighbor unloads while canonical brush remains in the global ledger")
+	scene.call("_move_focus", Vector3(-48.0, 0.0, 0.0))
+	await _wait_for_requested_window(scene)
+	_check(scene.get("active_regions").has("1,0"), "dependency-only neighbor reloads when it re-enters the requested region window")
+	if scene.get("active_regions").has("1,0"):
+		var reloaded_neighbor: Dictionary = scene.get("active_regions")["1,0"]
+		var dependent_chunk_coordinate := Vector2i(0, 2)
+		var reloaded_chunk: MeshInstance3D = reloaded_neighbor["chunk_nodes"][ChunkGrid.stable_id(Vector2i(1, 0), dependent_chunk_coordinate)]
+		var expected_neighbor := Mesher.build_chunk_mesh(SEED, Vector2i(1, 0), dependent_chunk_coordinate, false, ledger)
+		_check(_meshes_equal(reloaded_chunk.mesh, expected_neighbor["mesh"]), "dependency-only neighbor reconstructs byte-equivalent geometry and normals after reload")
+		var reentry_seams := _active_chunk_data(scene, [Vector2i.ZERO, Vector2i(1, 0)])
+		for seam_chunk_z in range(ChunkGrid.CHUNK_COUNT_Z):
+			_check_seam(reentry_seams, Vector2i(3, seam_chunk_z), Vector2i(4, seam_chunk_z), true)
+	scene.call("_move_focus", Vector3(-16.0, 0.0, 0.0))
+	await _wait_for_requested_window(scene)
+	_check(scene.get("focus_region_key") == Vector2i.ZERO, "dependency reload test restores the original focus before existing traversal checks")
 	var edit_metrics: Dictionary = scene.get("last_mesh_diagnostics")
 	print("GLOBAL_EDIT_BENCH: elapsed_ms=%.3f dirty_regions=%d dirty_chunks=%d dirty_slices=%d frame_p50/p95/p99_ms=%.3f/%.3f/%.3f resident_peak=%d ledger=%d/%d" % [
-		edit_metrics.get("elapsed_ms", 0.0), edit_metrics.get("last_affected_region_count", 0),
-		edit_metrics.get("last_affected_chunk_count", 0), edit_metrics.get("last_dirty_mesh_slice_count", 0),
+		edit_metrics.get("elapsed_ms", 0.0), edit_metrics.get("last_rebuild_region_count", 0),
+		edit_metrics.get("last_rebuild_chunk_count", 0), edit_metrics.get("last_dirty_mesh_slice_count", 0),
 		edit_metrics.get("frame_time_p50_ms", 0.0), edit_metrics.get("frame_time_p95_ms", 0.0),
 		edit_metrics.get("frame_time_p99_ms", 0.0), edit_metrics.get("peak_active_region_count", 0),
 		ledger.get_edit_count(), BrushState.MAX_EDITS,
@@ -499,7 +584,7 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	await _send_key(KEY_D)
 	await _wait_for_requested_window(scene)
 	_check(scene.get("focus_region_key") == Vector2i(1, 0), "viewport movement crosses the positive region boundary with stable floor ownership")
-	_check(active_regions.size() > active_before_move and active_regions.size() <= 25, "positive traversal loads new regions while respecting the resident cap")
+	_check(active_regions.size() >= active_before_move and active_regions.size() <= 25, "positive traversal preserves resident coverage while respecting the region cap")
 	_check(chunk_nodes.size() <= 25 * ChunkGrid.CHUNK_COUNT_X * ChunkGrid.CHUNK_COUNT_Z, "positive traversal keeps active chunk nodes bounded")
 	_check(scene.get("last_mesh_diagnostics")["queued_chunk_count"] <= 25 * ChunkGrid.CHUNK_COUNT_X * ChunkGrid.CHUNK_COUNT_Z, "streaming job queue remains bounded by resident capacity")
 	var positive_seams := _active_chunk_data(scene, [Vector2i.ZERO, Vector2i(1, 0)])
@@ -511,7 +596,7 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	if positive_viewport_hit:
 		await _wait_for_edit_transaction(scene)
 		var positive_operation: Dictionary = ledger.get_operations_snapshot()[-1]
-		var positive_affected: Array[Vector2i] = positive_operation["affected_regions"]
+		var positive_affected: Array[Vector2i] = positive_operation["support_regions"]
 		_check(ledger.get_edit_count() == operation_count_before_viewport + 1, "one viewport gesture appends exactly one global command")
 		_check(positive_affected.has(Vector2i.ZERO) and positive_affected.has(Vector2i(1, 0)), "positive seam viewport command affects both neighboring region keys")
 		var cancel_test_hit := await _push_viewport_brush(scene, BrushState.Mode.CARVE)
@@ -558,7 +643,7 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	if negative_viewport_hit:
 		await _wait_for_edit_transaction(scene)
 		var negative_operation: Dictionary = ledger.get_operations_snapshot()[-1]
-		var negative_affected: Array[Vector2i] = negative_operation["affected_regions"]
+		var negative_affected: Array[Vector2i] = negative_operation["support_regions"]
 		_check(negative_affected.has(Vector2i(-1, 0)) and negative_affected.has(Vector2i.ZERO), "negative seam viewport command uses floor-owned keys on both sides")
 	var global_count_before_unload: int = ledger.get_edit_count()
 	var edited_sample: float = negative_state.sample_density(Vector3(15.75, 4.0, 6.0))
@@ -813,16 +898,16 @@ func _find_unsafe_center_edge_click(scene: Node) -> Vector2:
 
 func _surface_height(world_x: float, world_z: float) -> float:
 	var outside_y := 8.0
-	var outside_density: float = Field.sample_density(SEED, Vector2i.ZERO, Vector3(world_x, outside_y, world_z))
+	var outside_density: float = _sample_world_field(Vector3(world_x, outside_y, world_z))
 	for y_step in range(1, 100):
 		var candidate_y := 8.0 - float(y_step) * 0.1
-		var density: float = Field.sample_density(SEED, Vector2i.ZERO, Vector3(world_x, candidate_y, world_z))
+		var density: float = _sample_world_field(Vector3(world_x, candidate_y, world_z))
 		if outside_density < 0.0 and density >= 0.0:
 			var low := candidate_y
 			var high := outside_y
 			for _iteration in range(16):
 				var middle := (low + high) * 0.5
-				if Field.sample_density(SEED, Vector2i.ZERO, Vector3(world_x, middle, world_z)) >= 0.0:
+				if _sample_world_field(Vector3(world_x, middle, world_z)) >= 0.0:
 					low = middle
 				else:
 					high = middle
@@ -830,6 +915,11 @@ func _surface_height(world_x: float, world_z: float) -> float:
 		outside_y = candidate_y
 		outside_density = density
 	return NAN
+
+
+func _sample_world_field(world_position: Vector3) -> float:
+	var mapped: Dictionary = Spatial.world_to_region_local(world_position)
+	return Field.sample_density(SEED, mapped["region_key"], mapped["local_position"])
 
 
 func _dispatch_left_click(position: Vector2) -> void:

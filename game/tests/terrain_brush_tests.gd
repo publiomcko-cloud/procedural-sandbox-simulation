@@ -125,25 +125,47 @@ func _test_global_ledger_contract() -> void:
 	var corner := BrushEditState.new(424242, TerrainField.GENERATOR_VERSION)
 	_check(corner.add_sphere(BrushEditState.Mode.CARVE, Vector3(16.0, 4.0, 12.0), 1.25), "exact positive region corner accepts one canonical global command")
 	var corner_op: Dictionary = corner.get_operations_snapshot()[0]
-	var corner_regions: Array[Vector2i] = corner_op["affected_regions"]
+	var corner_regions: Array[Vector2i] = corner_op["support_regions"]
 	_check(corner_regions.size() == 4, "sphere support at an exact corner fans out to exactly four regions")
-	_check(corner_regions.has(Vector2i(0, 0)) and corner_regions.has(Vector2i(1, 0)) and corner_regions.has(Vector2i(0, 1)) and corner_regions.has(Vector2i(1, 1)), "corner fanout includes the four half-open owners")
+	_check(corner_regions.has(Vector2i(0, 0)) and corner_regions.has(Vector2i(1, 0)) and corner_regions.has(Vector2i(0, 1)) and corner_regions.has(Vector2i(1, 1)), "corner support includes the four half-open owners")
+	_check(corner_op["dependency_regions"].is_empty() and corner_op["rebuild_regions"].size() == 4, "crossing corner support is distinct from its bounded normal-dependency rebuild set")
 	_check(corner_op["operation_id"] == "sdf-v1-seed424242-seq0", "stable command ID derives only from seed, generator version and global sequence")
 	_check(corner_op["sequence"] == 0 and corner_op["revision"] == 1, "first command has global sequence zero and revision one")
 	var negative := BrushEditState.new(424242, TerrainField.GENERATOR_VERSION)
 	_check(negative.add_sphere(BrushEditState.Mode.FILL, Vector3(0.0, 4.0, 0.0), 1.25), "exact zero corner accepts a negative-coordinate crossing command")
-	var negative_regions: Array[Vector2i] = negative.get_operations_snapshot()[0]["affected_regions"]
+	var negative_regions: Array[Vector2i] = negative.get_operations_snapshot()[0]["support_regions"]
 	_check(negative_regions.size() == 4 and negative_regions.has(Vector2i(-1, -1)) and negative_regions.has(Vector2i(-1, 0)) and negative_regions.has(Vector2i(0, -1)) and negative_regions.has(Vector2i(0, 0)), "zero-corner fanout uses mathematical floor for all four signed keys")
 	var boundary_left := negative.sample_density(424242, Vector2i(-1, -1), Vector3(16.0, 4.0, 12.0))
 	var boundary_right := negative.sample_density(424242, Vector2i.ZERO, Vector3(0.0, 4.0, 0.0))
 	_check(is_equal_approx(boundary_left, boundary_right), "global replay produces the same density at an exact shared border sample")
 	var one_sided_support := BrushEditState.new(424242, TerrainField.GENERATOR_VERSION)
 	_check(one_sided_support.add_sphere(BrushEditState.Mode.CARVE, Vector3(-2.0, -2.0, 6.0), 0.45), "small sphere can have support in only one region")
-	_check(one_sided_support.get_operations_snapshot()[0]["affected_regions"] == [Vector2i(-1, 0)], "spatial fanout records only the region whose bounds intersect the sphere")
+	var one_sided_operation: Dictionary = one_sided_support.get_operations_snapshot()[0]
+	_check(one_sided_operation["support_regions"] == [Vector2i(-1, 0)], "canonical support records only the region whose bounds intersect the sphere")
+	_check(one_sided_operation["dependency_regions"].is_empty() and one_sided_operation["rebuild_regions"] == one_sided_operation["support_regions"], "distant one-sided brush does not spuriously expand region rebuild fanout")
 	_check(is_equal_approx(
 		one_sided_support.sample_density(424242, Vector2i(-1, 0), Vector3(16.0, -2.0, 6.0)),
 		one_sided_support.sample_density(424242, Vector2i.ZERO, Vector3(0.0, -2.0, 6.0))
 	), "shared border samples agree even when the canonical sphere intersects only one region")
+	var near_positive := BrushEditState.new(424242, TerrainField.GENERATOR_VERSION)
+	_check(near_positive.add_sphere(BrushEditState.Mode.CARVE, Vector3(15.0, 4.0, 5.0), 0.9), "brush just inside positive X boundary is accepted")
+	var positive_op: Dictionary = near_positive.get_operations_snapshot()[0]
+	_check(positive_op["support_regions"] == [Vector2i.ZERO], "near-boundary brush remains canonically supported only by its non-crossed region")
+	_check(positive_op["dependency_regions"] == [Vector2i(1, 0)] and positive_op["rebuild_regions"].size() == 2, "normal sample halo schedules the neighboring positive region without changing geometric support")
+	var near_negative := BrushEditState.new(424242, TerrainField.GENERATOR_VERSION)
+	_check(near_negative.add_sphere(BrushEditState.Mode.FILL, Vector3(-15.0, 4.0, 5.0), 0.9), "brush just inside negative X boundary is accepted")
+	var negative_op: Dictionary = near_negative.get_operations_snapshot()[0]
+	_check(negative_op["support_regions"] == [Vector2i(-1, 0)] and negative_op["dependency_regions"] == [Vector2i(-2, 0)], "negative near-boundary dependency uses floor-owned signed region keys")
+	var near_corner := BrushEditState.new(424242, TerrainField.GENERATOR_VERSION)
+	_check(near_corner.add_sphere(BrushEditState.Mode.CARVE, Vector3(15.4, 4.0, 11.4), 0.55), "brush near positive X/Z corner but wholly inside canonical support is accepted")
+	var near_corner_op: Dictionary = near_corner.get_operations_snapshot()[0]
+	_check(near_corner_op["support_regions"] == [Vector2i.ZERO], "near-corner brush does not cross either physical region boundary")
+	_check(near_corner_op["rebuild_regions"].size() == 4 and near_corner_op["dependency_regions"].size() == 3, "corner normal dependencies conservatively include both neighbors and diagonal region")
+	var negative_corner := BrushEditState.new(424242, TerrainField.GENERATOR_VERSION)
+	_check(negative_corner.add_sphere(BrushEditState.Mode.FILL, Vector3(-0.6, 4.0, -0.6), 0.55), "brush near negative zero corner is accepted without crossing either boundary")
+	var negative_corner_op: Dictionary = negative_corner.get_operations_snapshot()[0]
+	_check(negative_corner_op["support_regions"] == [Vector2i(-1, -1)], "negative near-corner canonical support remains in the negative region")
+	_check(negative_corner_op["dependency_regions"].has(Vector2i.ZERO), "negative corner dependency includes the diagonally adjacent zero region")
 	var cloned := BrushEditState.new(424242, TerrainField.GENERATOR_VERSION)
 	cloned.add_sphere(BrushEditState.Mode.FILL, Vector3(0.0, 4.0, 0.0), 1.25)
 	_check(cloned.get_operations_snapshot()[0]["operation_id"] == negative.get_operations_snapshot()[0]["operation_id"], "same versioned command stream produces a deterministic operation ID")
@@ -160,7 +182,13 @@ func _test_global_ledger_contract() -> void:
 	_check(bounded.get_operations_snapshot() == before_reject and bounded.revision == revision_before_reject and bounded.get_last_sequence() == sequence_before_reject, "overflow rejection leaves log, revision, sequence and index unchanged")
 	var before_reset_sequence: int = corner.get_last_sequence()
 	var reset_result: Dictionary = corner.clear_for_region(Vector2i(0, 0))
-	_check(reset_result["removed_count"] == 1 and reset_result["affected_regions"].size() == 4, "focused reset removes a cross-region command and returns all dependent regions")
+	_check(reset_result["removed_count"] == 1 and reset_result["rebuild_regions"].size() == 4, "focused reset removes a cross-region command and returns every mesh dependency")
+	var dependency_only_reset := BrushEditState.new(424242, TerrainField.GENERATOR_VERSION)
+	_check(dependency_only_reset.add_sphere(BrushEditState.Mode.CARVE, Vector3(15.0, 4.0, 5.0), 0.9), "focused-reset dependency case accepts a one-sided near-boundary brush")
+	var dependency_reset := dependency_only_reset.clear_for_region(Vector2i(1, 0))
+	_check(dependency_reset["removed_count"] == 0 and dependency_only_reset.get_edit_count() == 1, "X-style focused reset does not delete a command merely because the focused region is a normal dependency")
+	var support_reset := dependency_only_reset.clear_for_region(Vector2i.ZERO)
+	_check(support_reset["removed_count"] == 1 and support_reset["rebuild_regions"].has(Vector2i(1, 0)), "reset from canonical support removes the command and returns its dependent neighbor for remeshing")
 	_check(corner.get_edit_count() == 0 and corner.get_region_edit_count(Vector2i(1, 1)) == 0, "focused reset clears the command from every spatial index bucket")
 	_check(corner.add_sphere(BrushEditState.Mode.CARVE, Vector3(8.0, 4.0, 6.0), 1.0), "global ledger accepts a new command after focused reset")
 	_check(corner.get_operations_snapshot()[0]["sequence"] == before_reset_sequence + 1, "focused reset never reuses a prior global sequence")

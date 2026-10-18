@@ -9,6 +9,7 @@ const MAX_EDITS := 32
 const MIN_RADIUS := 0.45
 const MAX_RADIUS := 2.0
 const MAX_ABS_WORLD_COORDINATE := 1000000.0
+const REBUILD_DEPENDENCY_HALO := GRID.SAMPLE_STEP
 
 enum Mode { CARVE, FILL }
 
@@ -39,9 +40,14 @@ func add_sphere(mode: int, center: Vector3, radius: float) -> bool:
 		return false
 	if radius < MIN_RADIUS or radius > MAX_RADIUS:
 		return false
-	var affected_regions := _regions_intersecting_sphere(center, radius)
-	if affected_regions.is_empty() or affected_regions.size() > 4:
+	var support_regions := _regions_intersecting_sphere(center, radius)
+	var rebuild_regions := _regions_intersecting_sphere(center, radius + REBUILD_DEPENDENCY_HALO)
+	if support_regions.is_empty() or support_regions.size() > 4 or rebuild_regions.is_empty() or rebuild_regions.size() > 4:
 		return false
+	var dependency_regions: Array[Vector2i] = []
+	for region_key in rebuild_regions:
+		if not support_regions.has(region_key):
+			dependency_regions.append(region_key)
 	var sequence := _next_sequence
 	var operation_id := "sdf-v%d-seed%d-seq%d" % [generator_version, world_seed, sequence]
 	var operation := {
@@ -53,11 +59,13 @@ func add_sphere(mode: int, center: Vector3, radius: float) -> bool:
 		"mode": mode,
 		"center_world": center,
 		"radius": radius,
-		"affected_regions": affected_regions,
+		"support_regions": support_regions,
+		"dependency_regions": dependency_regions,
+		"rebuild_regions": rebuild_regions,
 	}
 	_operations.append(operation)
 	_by_sequence[sequence] = operation
-	for region_key in affected_regions:
+	for region_key in support_regions:
 		var region_id := _region_id(region_key)
 		if not _by_region.has(region_id):
 			_by_region[region_id] = []
@@ -71,15 +79,15 @@ func add_sphere(mode: int, center: Vector3, radius: float) -> bool:
 ## the focused region. Neighbor regions are returned for a coherent resident remesh.
 func clear_for_region(region_key: Vector2i) -> Dictionary:
 	var removed_sequences: Dictionary = {}
-	var affected_regions: Dictionary = {}
+	var rebuild_regions: Dictionary = {}
 	for operation in _operations:
-		var regions: Array[Vector2i] = operation["affected_regions"]
-		if regions.has(region_key):
+		var support_regions: Array[Vector2i] = operation["support_regions"]
+		if support_regions.has(region_key):
 			removed_sequences[int(operation["sequence"])] = true
-			for key in regions:
-				affected_regions[_region_id(key)] = key
+			for key in operation["rebuild_regions"]:
+				rebuild_regions[_region_id(key)] = key
 	if removed_sequences.is_empty():
-		return {"removed_count": 0, "affected_regions": []}
+		return {"removed_count": 0, "rebuild_regions": []}
 	var retained: Array[Dictionary] = []
 	for operation in _operations:
 		if not removed_sequences.has(int(operation["sequence"])):
@@ -89,12 +97,12 @@ func clear_for_region(region_key: Vector2i) -> Dictionary:
 	_rebuild_spatial_index()
 	revision += 1
 	var keys: Array[Vector2i] = []
-	for key_value in affected_regions.values():
+	for key_value in rebuild_regions.values():
 		keys.append(key_value)
 	keys.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
 		return a.y < b.y if a.y != b.y else a.x < b.x
 	)
-	return {"removed_count": removed_sequences.size(), "affected_regions": keys}
+	return {"removed_count": removed_sequences.size(), "rebuild_regions": keys}
 
 
 func clear() -> void:
@@ -190,7 +198,7 @@ func _rebuild_spatial_index() -> void:
 	_by_region.clear()
 	for operation in _operations:
 		var sequence: int = operation["sequence"]
-		for region_key in operation["affected_regions"]:
+		for region_key in operation["support_regions"]:
 			var region_id := _region_id(region_key)
 			if not _by_region.has(region_id):
 				_by_region[region_id] = []
