@@ -47,7 +47,7 @@ Godot: `C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe`, version `4.7.2.st
 | Bootstrap structure | 18 | PASS |
 | **Total** | **8,083** | **0 failures** |
 
-Godot import and main-scene startup passed. The local run reported a two-region, four-chunk, 40-slice global brush stage at about 3,315 ms elapsed, with peak mesh-slice/process values around 18.8/67.5 ms. The seven-run full-mesh medians were about 411–430 ms; localized interior/border/corner medians were about 35.3/73.9/152.7 ms. These single-host measurements are variable and are not frame-time or cross-machine guarantees. No F2 ACL suite was run.
+Godot import and main-scene startup passed. The local run reported a two-region, four-chunk, 40-slice global brush stage at about 3,315 ms elapsed. Final streaming diagnostics measured peak mesh-slice/process work around 30.3/67.5 ms. The seven-run full-mesh medians were about 411–430 ms; localized interior/border/corner medians were about 35.3/73.9/152.7 ms. These single-host measurements are variable and are not frame-time or cross-machine guarantees. No F2 ACL suite was run.
 
 ## Remaining gates and visual retest
 
