@@ -26,4 +26,6 @@
 
 | 2026-10-18 | [CHK-2026-10-18-P1-0C-PR92-REREVIEW-PASS](2026-10-18-P1-0C-PR92-NORMAL-DEPENDENCY-REREVIEW-PASS.md) | PR #92 corrected normal-dependency halo; independent SHA-specific source rereview PASS; owner GUI pending | Separate open draft documentation PR #87; not yet merged |
 
+| 2026-10-18 | [CHK-2026-10-18-P1-0C-OWNER-PERFORMANCE-BLOCKER-PR92](2026-10-18-P1-0C-OWNER-GUI-PERFORMANCE-BLOCKER-PR92.md) | Owner GUI rejects sculpt and streaming latency; Issue #93 optimizations required before PR #92 merge | Recorded on open draft docs PR #87, not integrated |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
