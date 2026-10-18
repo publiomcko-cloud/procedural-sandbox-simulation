@@ -1,4 +1,4 @@
-# Project current status — checkpoint 2026-10-17
+# Project current status — checkpoint 2026-10-18
 
 **Snapshot, not a live branch monitor.** Evidence baseline: repository `publiomcko-cloud/procedural-sandbox-simulation`, verified `main` at `2f86c42503cfa3a334215b1ff5b9bf9658263440` on 2026-10-17 after PRs #85, #86, #88 and #90 merged. **Always check live GitHub `main`, feature PR, issue and working tree before acting.** Earlier P1.0A and P1.0B checkpoints remain frozen; the [P1.0C implementation checkpoint](../checkpoints/2026-10-17-P1-0C-IMPLEMENTATION.md) records this authorized slice.
 
@@ -20,7 +20,7 @@ Owner explicitly authorized each merge after source and GUI approval. Runtime co
 
 ## Active, authorized — implementation prepared, pending review and owner GUI
 
-- **P1.0C / Issue #91:** owner explicitly authorized globally ordered transient carve/fill across streamed region seams on `feat/p1-0c-global-cross-region-brushes`, based on `2f86c42503cfa3a334215b1ff5b9bf9658263440`. Source commits `33710924db224cf63dbb54b5aba378956be8c45a` and `71fbe678c7f6a24b2aa0f0b7813d30e154a2f9bc` are in draft PR [#92](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/92); local Godot 4.7.2 validation passed 8,042 assertions. Independent source review and owner GUI acceptance remain pending. See the [P1.0C checkpoint](../checkpoints/2026-10-17-P1-0C-IMPLEMENTATION.md). No merge or release is implied.
+- **P1.0C / Issue #91:** owner explicitly authorized globally ordered transient carve/fill across streamed region seams on `feat/p1-0c-global-cross-region-brushes`, based on `2f86c42503cfa3a334215b1ff5b9bf9658263440`. The normal-dependency correction is committed as `ad9997b2deaf285d01e360bb7f7adb9d0f03ba41` (parent `608b7d6d621d0b340454f84c00a9ad7bb0379317`) in the same draft PR [#92](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/92). Local Godot 4.7.2 validation passed 8,083 assertions. Independent source rereview and owner GUI acceptance remain pending. See the [2026-10-18 correction checkpoint](../checkpoints/2026-10-18-P1-0C-NORMAL-DEPENDENCY-CORRECTION.md). No merge or release is implied.
 
 ## Spatial contract retained after P1.0A
 
