@@ -133,6 +133,50 @@ func get_operations_snapshot() -> Array[Dictionary]:
 	return snapshot
 
 
+## Compact immutable worker input. Packed arrays are shared read-only with mesh jobs.
+func get_meshing_snapshot() -> Dictionary:
+	var centers := PackedVector3Array()
+	var radii := PackedFloat64Array()
+	var modes := PackedByteArray()
+	for operation in _operations:
+		if int(operation["world_seed"]) != world_seed or int(operation["generator_version"]) != generator_version:
+			continue
+		centers.append(operation["center_world"])
+		radii.append(float(operation["radius"]))
+		modes.append(int(operation["mode"]))
+	return {
+		"revision": revision,
+		"world_seed": world_seed,
+		"generator_version": generator_version,
+		"centers": centers,
+		"radii": radii,
+		"modes": modes,
+	}
+
+
+static func sample_density_snapshot(
+	seed: int,
+	region_key: Vector2i,
+	local_position: Vector3,
+	show_cave_section: bool,
+	snapshot: Dictionary
+) -> float:
+	var density: float = FIELD.sample_density(seed, region_key, local_position)
+	var world_position := SPATIAL.region_local_to_world(region_key, local_position)
+	var centers: PackedVector3Array = snapshot["centers"]
+	var radii: PackedFloat64Array = snapshot["radii"]
+	var modes: PackedByteArray = snapshot["modes"]
+	for index in range(centers.size()):
+		var distance_to_surface := world_position.distance_to(centers[index]) - radii[index]
+		if modes[index] == Mode.CARVE:
+			density = minf(density, distance_to_surface)
+		else:
+			density = maxf(density, -distance_to_surface)
+	if show_cave_section:
+		density = minf(density, 6.0 - world_position.z)
+	return density
+
+
 func get_operations_for_region(region_key: Vector2i) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var region_id := _region_id(region_key)

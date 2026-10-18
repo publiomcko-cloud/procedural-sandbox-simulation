@@ -217,7 +217,7 @@ func _measure_frames(label: String, demo: Node) -> void:
 		"max_frame_interval_ms": sorted[sorted.size() - 1],
 		"fps_monitor": Performance.get_monitor(Performance.TIME_FPS),
 		"active_regions": demo.active_regions.size(),
-		"queued_mesh_slices": demo._queued_mesh_slice_count(),
+		"queued_mesh_jobs": demo._queued_mesh_job_count(),
 	}
 	_report["frame_samples"].append(measurement)
 	print("LIGHTING_FRAME_METRICS: %s mean=%.3fms p95=%.3fms min=%.3fms max=%.3fms fps=%s" % [

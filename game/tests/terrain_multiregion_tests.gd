@@ -509,7 +509,7 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	var scene := packed.instantiate()
 	root.add_child(scene)
 	await _wait_for_region(scene, Vector2i.ZERO)
-	_check(scene.get("active_regions").size() == 1 and scene.get("chunk_nodes").size() == 16, "focused center region becomes visible after its staged mesh slices finish")
+	_check(scene.get("active_regions").size() == 1 and scene.get("chunk_nodes").size() == 16, "focused center region becomes visible after its CPU mesh jobs finish")
 	await _wait_for_requested_window(scene)
 	var chunk_nodes: Dictionary = scene.get("chunk_nodes")
 	var region_states: Dictionary = scene.get("world_states")
@@ -517,9 +517,9 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	var active_regions: Dictionary = scene.get("active_regions")
 	_check(active_regions.size() == 9 and chunk_nodes.size() == 144, "camera focus requests and publishes a complete 3x3 region window")
 	_check(scene.get("last_mesh_diagnostics")["active_region_count"] == 9, "startup diagnostics report nine active regions")
-	_check(scene.get("last_mesh_diagnostics")["peak_mesh_slices_per_frame"] == 1, "streaming builds no more than one vertical mesh slice in any process frame")
+	_check(scene.get("last_mesh_diagnostics")["peak_mesh_uploads_per_frame"] <= 2, "streaming publishes no more than two finished chunk meshes per process frame")
 	_check(scene.get("last_mesh_diagnostics")["queued_chunk_count"] == 0, "initial requested-region queue drains completely")
-	_check(initial_diagnostics["peak_mesh_slice_queue_depth"] == 1440, "initial nine-region request remains bounded to 1440 incremental slice jobs")
+	_check(initial_diagnostics["peak_mesh_job_queue_depth"] == 144, "initial nine-region request remains bounded to one CPU job per chunk")
 	_check(initial_diagnostics["remeshed_chunk_count"] == 144 and initial_diagnostics["triangle_count"] == 87077, "initial streamed window preserves the exact 144-chunk baseline geometry")
 	_check(scene.get_node("CanvasLayer/Status").text.contains("WASD/arrows") and scene.get_node("CanvasLayer/Status").text.contains("P1.0C global SDF edits"), "HUD documents controls and global edit ledger")
 	_check(region_states.size() == 9, "initial domain states correspond only to requested or active regions")
@@ -548,6 +548,7 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	await _wait_for_edit_transaction(scene)
 	_check(left_boundary_node.mesh != left_before and right_boundary_node.mesh != right_before, "successful transaction publishes both sides of the seam together")
 	_check(ledger.get_edit_count() == 1 and ledger.get_last_sequence() == 0, "one accepted cross-region gesture occupies one global log slot")
+	var edit_metrics: Dictionary = scene.get("last_mesh_diagnostics").duplicate(true)
 	scene.call("_move_focus", Vector3(64.0, 0.0, 0.0))
 	await _wait_for_requested_window(scene)
 	_check(not scene.get("active_regions").has("1,0") and ledger.get_edit_count() == 1, "dependency-only neighbor unloads while canonical brush remains in the global ledger")
@@ -566,13 +567,16 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	scene.call("_move_focus", Vector3(-16.0, 0.0, 0.0))
 	await _wait_for_requested_window(scene)
 	_check(scene.get("focus_region_key") == Vector2i.ZERO, "dependency reload test restores the original focus before existing traversal checks")
-	var edit_metrics: Dictionary = scene.get("last_mesh_diagnostics")
-	print("GLOBAL_EDIT_BENCH: elapsed_ms=%.3f dirty_regions=%d dirty_chunks=%d dirty_slices=%d frame_p50/p95/p99_ms=%.3f/%.3f/%.3f resident_peak=%d ledger=%d/%d" % [
+	print("GLOBAL_EDIT_BENCH: elapsed_ms=%.3f dirty_regions=%d dirty_chunks=%d dirty_jobs=%d frame_p50/p95/p99_ms=%.3f/%.3f/%.3f resident_peak=%d ledger=%d/%d" % [
 		edit_metrics.get("elapsed_ms", 0.0), edit_metrics.get("last_rebuild_region_count", 0),
-		edit_metrics.get("last_rebuild_chunk_count", 0), edit_metrics.get("last_dirty_mesh_slice_count", 0),
+		edit_metrics.get("last_rebuild_chunk_count", 0), edit_metrics.get("last_dirty_mesh_job_count", 0),
 		edit_metrics.get("frame_time_p50_ms", 0.0), edit_metrics.get("frame_time_p95_ms", 0.0),
 		edit_metrics.get("frame_time_p99_ms", 0.0), edit_metrics.get("peak_active_region_count", 0),
 		ledger.get_edit_count(), BrushState.MAX_EDITS,
+	])
+	print("GLOBAL_EDIT_STAGE_BENCH: queue_wait_p50/p95/total_ms=%.3f/%.3f/%.3f stages=%s" % [
+		edit_metrics.get("mesh_queue_wait_p50_ms", 0.0), edit_metrics.get("mesh_queue_wait_p95_ms", 0.0),
+		edit_metrics.get("mesh_queue_wait_total_ms", 0.0), JSON.stringify(edit_metrics.get("stage_timings_ms", {})),
 	])
 	var camera: Camera3D = scene.get_node("Camera3D")
 	var view_light := camera.get_node_or_null("ViewAlignedLight") as SpotLight3D
@@ -687,21 +691,25 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	var replayed_mesh: Dictionary = Mesher.build_chunk_mesh(SEED, Vector2i(-3, 0), Vector2i(0, 2), false, ledger)
 	_check(_meshes_equal(replayed_entry["chunk_nodes"][replayed_chunk_id].mesh, replayed_mesh["mesh"]), "reloaded mesh bytes derive from the canonical command ledger")
 	_check(scene.get("active_regions").size() <= 25 and scene.get("chunk_nodes").size() <= 400, "repeated region crossings stay within region and chunk caps")
-	_check(scene.get("loading_regions").size() <= 9 and scene.get("last_mesh_diagnostics")["peak_mesh_slices_per_frame"] == 1, "ordinary load queue and per-frame work remain bounded after repeated crossings")
+	_check(scene.get("loading_regions").size() <= 9 and scene.get("last_mesh_diagnostics")["peak_mesh_uploads_per_frame"] <= 2, "ordinary load queue and per-frame uploads remain bounded after repeated crossings")
 	var diagnostics: Dictionary = scene.get("last_mesh_diagnostics")
-	_check(diagnostics["peak_active_region_count"] <= 25 and diagnostics["peak_queue_depth"] <= 400 and diagnostics["peak_mesh_slice_queue_depth"] <= 4000, "observed resident and worst-case rebuild queues stay within fixed caps")
+	_check(diagnostics["peak_active_region_count"] <= 25 and diagnostics["peak_queue_depth"] <= 400 and diagnostics["peak_mesh_job_queue_depth"] <= 400, "observed resident and worst-case rebuild queues stay within fixed caps")
 	for id_value in scene.get("loading_regions"):
 		var staged: Dictionary = scene.get("loading_regions")[id_value]
 		var staged_key: Vector2i = staged["region_key"]
 		_check(maxi(absi(staged_key.x - scene.get("focus_region_key").x), absi(staged_key.y - scene.get("focus_region_key").y)) <= 1, "obsolete load work cannot remain queued outside the requested window")
-	print("TERRAIN_STREAM_INITIAL_METRICS: active=%d chunks=%d triangles=%d queue_peak=%d slice_queue_peak=%d elapsed_ms=%.3f mesh_work_total_ms=%.3f peak_mesh_slice_ms=%.3f peak_process_work_ms=%.3f" % [
+	print("TERRAIN_STREAM_INITIAL_METRICS: active=%d chunks=%d triangles=%d queue_peak=%d mesh_job_queue_peak=%d elapsed_ms=%.3f mesh_work_total_ms=%.3f peak_mesh_ms=%.3f peak_process_work_ms=%.3f" % [
 		initial_diagnostics["active_region_count"], initial_diagnostics["active_chunk_count"], initial_diagnostics["triangle_count"],
-		initial_diagnostics["peak_queue_depth"], initial_diagnostics["peak_mesh_slice_queue_depth"], initial_diagnostics["elapsed_ms"], initial_diagnostics["total_mesh_work_ms"],
-		initial_diagnostics["peak_mesh_slice_ms"], initial_diagnostics["peak_process_work_ms"],
+		initial_diagnostics["peak_queue_depth"], initial_diagnostics["peak_mesh_job_queue_depth"], initial_diagnostics["elapsed_ms"], initial_diagnostics["total_mesh_work_ms"],
+		initial_diagnostics["peak_mesh_upload_ms"], initial_diagnostics["peak_process_work_ms"],
 	])
-	print("TERRAIN_STREAM_METRICS: active=%d peak_active=%d chunk_nodes=%d queued=%d peak_queued=%d peak_mesh_slice_ms=%.3f peak_process_work_ms=%.3f loads=%d unloads=%d" % [
+	print("TERRAIN_STREAM_STAGE_METRICS: queue_wait_p50/p95/total_ms=%.3f/%.3f/%.3f stages=%s" % [
+		initial_diagnostics.get("mesh_queue_wait_p50_ms", 0.0), initial_diagnostics.get("mesh_queue_wait_p95_ms", 0.0),
+		initial_diagnostics.get("mesh_queue_wait_total_ms", 0.0), JSON.stringify(initial_diagnostics.get("stage_timings_ms", {})),
+	])
+	print("TERRAIN_STREAM_METRICS: active=%d peak_active=%d chunk_nodes=%d queued=%d peak_queued=%d peak_mesh_upload_ms=%.3f peak_process_work_ms=%.3f loads=%d unloads=%d" % [
 		diagnostics["active_region_count"], diagnostics["peak_active_region_count"], diagnostics["active_chunk_count"],
-		diagnostics["queued_chunk_count"], diagnostics["peak_queue_depth"], diagnostics["peak_mesh_slice_ms"],
+		diagnostics["queued_chunk_count"], diagnostics["peak_queue_depth"], diagnostics["peak_mesh_upload_ms"],
 		diagnostics["peak_process_work_ms"], diagnostics["streamed_region_loads"], diagnostics["streamed_region_unloads"],
 	])
 	scene.queue_free()
@@ -781,7 +789,7 @@ func _wait_for_region(scene: Node, region_key: Vector2i) -> void:
 		if scene.get("active_regions").has(id):
 			return
 		await process_frame
-	_check(scene.get("active_regions").has(id), "focused region becomes visible after bounded slice work")
+	_check(scene.get("active_regions").has(id), "focused region becomes visible after bounded mesh jobs")
 
 
 func _wait_for_global_rebuild(scene: Node) -> void:

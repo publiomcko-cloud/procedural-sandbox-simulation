@@ -7,13 +7,15 @@ const WorldState := preload("res://scripts/terrain/terrain_world_state.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const BrushEditState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const BrushPicker := preload("res://scripts/terrain/terrain_brush_picker.gd")
+const TerrainMeshJob := preload("res://scripts/terrain/terrain_mesh_job.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
 const UNLOAD_RADIUS := 2
 const MAX_ACTIVE_REGIONS := 25
-const MAX_MESH_SLICES_PER_FRAME := 1
-const MESH_SLICE_COUNT := ceili(float(ChunkGrid.CELL_COUNT_Y) / float(TerrainMesher.CELLS_PER_MESH_SLICE))
+const MAX_MESH_JOBS_IN_FLIGHT := 4
+const MAX_MESH_UPLOADS_PER_FRAME := 2
+const DIAGNOSTICS_REFRESH_INTERVAL := 0.25
 const FOCUS_MOVE_STEP := 4.0
 const MAX_STAGE_RETRIES := 2
 
@@ -47,6 +49,12 @@ var global_rebuild_reason := ""
 var _full_rebuild_target_ids: Array[String] = []
 var _edit_transaction: Dictionary = {}
 var _stage_retry_counts: Dictionary = {}
+var _next_stage_token := 1
+var _mesh_jobs: Dictionary = {} # WorkerThreadPool task id -> immutable job/stage token
+var _mesh_queue_wait_usec_samples: Array[int] = []
+var _pool_queue_wait_usec_samples: Array[int] = []
+var _mesh_upload_usec_samples: Array[int] = []
+var _mesh_publish_usec_samples: Array[int] = []
 var _global_rebuild_retry_count := 0
 var debug_fail_next_mesh_stage := false
 var debug_fail_next_load_stage := false
@@ -57,18 +65,22 @@ var _operation_chunk_ids: Array[String] = []
 var _operation_sample_count := 0
 var _operation_started_usec := 0
 var _operation_total_mesh_work_ms := 0.0
-var _last_mesh_slice_ms := 0.0
-var _peak_mesh_slice_ms := 0.0
+var _operation_stage_timings_usec: Dictionary = {}
+var _last_mesh_upload_ms := 0.0
+var _peak_mesh_upload_ms := 0.0
 var _last_process_work_ms := 0.0
 var _peak_process_work_ms := 0.0
 var _last_frame_ms := 0.0
 var _peak_frame_ms := 0.0
-var _mesh_slices_this_frame := 0
-var _peak_mesh_slices_per_frame := 0
+var _mesh_uploads_this_frame := 0
+var _peak_mesh_uploads_per_frame := 0
 var _frame_time_samples: Array[float] = []
+var _frame_sample_write_index := 0
+var _frame_sample_count := 0
+var _diagnostics_refresh_elapsed := 0.0
 var _peak_active_region_count := 0
 var _peak_queue_depth := 0
-var _peak_mesh_slice_queue_depth := 0
+var _peak_mesh_job_queue_depth := 0
 var _streamed_region_loads := 0
 var _streamed_region_unloads := 0
 var _active_triangle_count := 0
@@ -76,11 +88,12 @@ var _active_vertex_count := 0
 var _last_edit_support_region_count := 0
 var _last_edit_rebuild_region_count := 0
 var _last_edit_rebuild_chunk_count := 0
-var _last_edit_mesh_slices := 0
+var _last_edit_mesh_jobs := 0
 var _last_edit_rejection := ""
 
 
 func _ready() -> void:
+	_frame_time_samples.resize(512)
 	edit_ledger = BrushEditState.new(WorldState.DEMO_SEED, Field.GENERATOR_VERSION)
 	terrain_mesh_template.mesh = null
 	terrain_mesh_template.visible = false
@@ -90,22 +103,34 @@ func _ready() -> void:
 	_update_status()
 
 
+func _exit_tree() -> void:
+	# Worker callbacks own only immutable input and CPU packed arrays, but complete
+	# them before the scene and their result holders are released.
+	for task_id_value in _mesh_jobs.keys().duplicate():
+		WorkerThreadPool.wait_for_task_completion(int(task_id_value))
+	_mesh_jobs.clear()
+
+
 func _process(delta: float) -> void:
 	var process_started_usec := Time.get_ticks_usec()
-	_mesh_slices_this_frame = 0
+	_mesh_uploads_this_frame = 0
 	_last_frame_ms = maxf(delta * 1000.0, 0.0)
-	if _frame_time_samples.size() >= 512:
-		_frame_time_samples.pop_front()
-	_frame_time_samples.append(_last_frame_ms)
+	if _frame_time_samples.size() == 512:
+		_frame_time_samples[_frame_sample_write_index] = _last_frame_ms
+		_frame_sample_write_index = (_frame_sample_write_index + 1) % 512
+		_frame_sample_count = mini(_frame_sample_count + 1, 512)
 	_peak_frame_ms = maxf(_peak_frame_ms, _last_frame_ms)
 	_update_focus_key()
 	_reconcile_region_window()
 	_process_one_chunk_job()
-	_peak_mesh_slices_per_frame = maxi(_peak_mesh_slices_per_frame, _mesh_slices_this_frame)
+	_peak_mesh_uploads_per_frame = maxi(_peak_mesh_uploads_per_frame, _mesh_uploads_this_frame)
 	_last_process_work_ms = float(Time.get_ticks_usec() - process_started_usec) / 1000.0
 	_peak_process_work_ms = maxf(_peak_process_work_ms, _last_process_work_ms)
-	_update_runtime_diagnostics()
-	_update_status()
+	_diagnostics_refresh_elapsed += delta
+	if _diagnostics_refresh_elapsed >= DIAGNOSTICS_REFRESH_INTERVAL:
+		_diagnostics_refresh_elapsed = 0.0
+		_update_runtime_diagnostics()
+		_update_status()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -286,18 +311,28 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 	if state == null:
 		state = WorldState.new(WorldState.DEMO_SEED, region_key, edit_ledger)
 	var coordinates: Array[Vector2i] = chunk_coordinates.duplicate()
-	var empty_slice_results: Array[Dictionary] = []
+	var token := _next_stage_token
+	_next_stage_token += 1
+	var brush_snapshot: Variant = state.brush_edits.get_meshing_snapshot() if state.brush_edits.get_edit_count() > 0 else null
+	var queued_times: Array[int] = []
+	var queued_now := Time.get_ticks_usec()
+	for _coordinate in coordinates:
+		queued_times.append(queued_now)
 	loading_regions[id] = {
 		"region_key": region_key,
 		"world_state": state,
 		"purpose": purpose,
 		"chunk_coordinates": coordinates,
 		"next_index": 0,
-		"slice_index": 0,
-		"slice_results": empty_slice_results,
+		"stage_token": token,
+		"submit_index": 0,
+		"pending_count": 0,
+		"chunk_queued_usec": queued_times,
+		"brush_snapshot": brush_snapshot,
 		"meshes": {},
 		"cave_section_enabled": cave_section_enabled,
 		"edit_revision": state.brush_edits.revision,
+		"chunk_enqueued_usec": Time.get_ticks_usec(),
 		"retry_count": 0,
 	}
 	world_states[id] = state
@@ -306,95 +341,156 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 
 
 func _process_one_chunk_job() -> void:
-	if loading_regions.is_empty():
-		if global_rebuild_pending:
-			_try_commit_global_rebuild()
-		return
-	var ids: Array[String] = []
-	for value in loading_regions.keys():
-		ids.append(String(value))
-	ids.sort_custom(func(a: String, b: String) -> bool:
-		var ka: Vector2i = loading_regions[a]["region_key"]
-		var kb: Vector2i = loading_regions[b]["region_key"]
+	_process_completed_mesh_jobs()
+	_dispatch_mesh_jobs()
+	if loading_regions.is_empty() and global_rebuild_pending:
+		_try_commit_global_rebuild()
+
+
+func _process_completed_mesh_jobs() -> void:
+	var completed_task_ids: Array[int] = []
+	for task_id_value in _mesh_jobs.keys():
+		var task_id := int(task_id_value)
+		if WorkerThreadPool.is_task_completed(task_id):
+			completed_task_ids.append(task_id)
+	var uploads_this_frame := 0
+	for task_id in completed_task_ids:
+		if uploads_this_frame >= MAX_MESH_UPLOADS_PER_FRAME:
+			break
+		WorkerThreadPool.wait_for_task_completion(task_id)
+		var record: Dictionary = _mesh_jobs[task_id]
+		_mesh_jobs.erase(task_id)
+		var job = record["job"]
+		var id: String = record["stage_id"]
+		_pool_queue_wait_usec_samples.append(maxi(0, int(job.worker_started_usec) - int(record["submitted_usec"])))
+		if not loading_regions.has(id):
+			continue
+		var stage: Dictionary = loading_regions[id]
+		if int(stage["stage_token"]) != int(record["stage_token"]):
+			continue
+		var state: RefCounted = stage["world_state"]
+		if state.brush_edits.revision != int(stage["edit_revision"]):
+			_fail_region_stage(id, "Edit revision changed during CPU mesh job; stale result discarded")
+			continue
+		var cpu_result: Dictionary = job.result
+		if not cpu_result.get("valid", false) or not cpu_result.has("positions"):
+			_fail_region_stage(id, "Chunk CPU mesh job failed; previous visible meshes retained")
+			continue
+		var upload_started_usec := Time.get_ticks_usec()
+		var result: Dictionary = TerrainMesher.mesh_from_cpu_data(cpu_result)
+		var upload_elapsed_usec := Time.get_ticks_usec() - upload_started_usec
+		_mesh_upload_usec_samples.append(upload_elapsed_usec)
+		_last_mesh_upload_ms = float(upload_elapsed_usec) / 1000.0
+		_peak_mesh_upload_ms = maxf(_peak_mesh_upload_ms, _last_mesh_upload_ms)
+		_mesh_uploads_this_frame += 1
+		var cpu_timings: Dictionary = result.get("timings_usec", {})
+		var cpu_work_usec := int(cpu_timings.get("sdf_and_ledger", 0)) \
+			+ int(cpu_timings.get("triangulation_and_face_normals", 0)) \
+			+ int(cpu_timings.get("shared_gradient_normals", 0))
+		_operation_total_mesh_work_ms += float(cpu_work_usec + upload_elapsed_usec) / 1000.0
+		_add_stage_timings(result.get("timings_usec", {}))
+		if not result.get("mesh") is ArrayMesh:
+			_fail_region_stage(id, "Chunk main-thread mesh creation failed; previous meshes retained")
+			continue
+		var coordinate: Vector2i = record["coordinate"]
+		stage["meshes"][coordinate] = result["mesh"]
+		stage["next_index"] = int(stage["next_index"]) + 1
+		stage["pending_count"] = maxi(0, int(stage["pending_count"]) - 1)
+		stage["sample_count"] = int(stage.get("sample_count", 0)) + int(result["sample_count"])
+		stage["triangle_count"] = int(stage.get("triangle_count", 0)) + int(result["triangle_count"])
+		var chunk_id: String = ChunkGrid.stable_id(stage["region_key"], coordinate)
+		_operation_chunk_ids.append(chunk_id)
+		_operation_sample_count += int(result["sample_count"])
+		if stage["purpose"] == "edit_transaction" and not _edit_transaction.is_empty():
+			_edit_transaction["mesh_job_count"] = int(_edit_transaction.get("mesh_job_count", 0)) + 1
+		loading_regions[id] = stage
+		uploads_this_frame += 1
+		if int(stage["next_index"]) >= (stage["chunk_coordinates"] as Array).size() \
+			and int(stage["submit_index"]) >= (stage["chunk_coordinates"] as Array).size() \
+			and int(stage["pending_count"]) == 0:
+			_complete_region_stage(id)
+
+
+func _dispatch_mesh_jobs() -> void:
+	while _mesh_jobs.size() < MAX_MESH_JOBS_IN_FLIGHT:
+		var request := _next_mesh_job_request()
+		if request.is_empty():
+			return
+		var id: String = request["id"]
+		var stage: Dictionary = loading_regions[id]
+		var state: RefCounted = stage["world_state"]
+		if state.brush_edits.revision != int(stage["edit_revision"]):
+			_fail_region_stage(id, "Edit revision changed before CPU mesh job submission")
+			continue
+		var inject_edit_failure: bool = debug_fail_next_mesh_stage and String(stage["purpose"]) == "edit_transaction"
+		var inject_load_failure: bool = debug_fail_next_load_stage and String(stage["purpose"]) == "load"
+		if inject_edit_failure or inject_load_failure:
+			debug_fail_next_mesh_stage = false
+			debug_fail_next_load_stage = false
+			_fail_region_stage(id, "Injected mesh-stage failure; prior meshes retained")
+			continue
+		var coordinate: Vector2i = request["coordinate"]
+		var queue_index: int = int(stage["submit_index"])
+		var enqueued_usec := int(stage["chunk_queued_usec"][queue_index])
+		var submitted_usec := Time.get_ticks_usec()
+		_mesh_queue_wait_usec_samples.append(maxi(0, submitted_usec - enqueued_usec))
+		var job := TerrainMeshJob.new(
+			state.world_seed, stage["region_key"], coordinate,
+			stage["cave_section_enabled"], stage["brush_snapshot"], submitted_usec
+		)
+		var high_priority: bool = String(stage["purpose"]) in ["edit_transaction", "partial"]
+		var task_id := WorkerThreadPool.add_task(Callable(job, "run"), high_priority, "P1.0C terrain chunk")
+		if task_id < 0:
+			_fail_region_stage(id, "Worker pool rejected a mesh job; previous visible meshes retained")
+			continue
+		stage["submit_index"] = int(stage["submit_index"]) + 1
+		stage["pending_count"] = int(stage["pending_count"]) + 1
+		loading_regions[id] = stage
+		_mesh_jobs[task_id] = {
+			"job": job,
+			"stage_id": id,
+			"stage_token": stage["stage_token"],
+			"coordinate": coordinate,
+			"submitted_usec": submitted_usec,
+		}
+
+
+func _next_mesh_job_request() -> Dictionary:
+	var candidates: Array[String] = []
+	for key_value in loading_regions.keys():
+		candidates.append(String(key_value))
+	candidates.sort_custom(func(a: String, b: String) -> bool:
+		var stage_a: Dictionary = loading_regions[a]
+		var stage_b: Dictionary = loading_regions[b]
+		var pa := _stage_priority(String(stage_a["purpose"]))
+		var pb := _stage_priority(String(stage_b["purpose"]))
+		if pa != pb:
+			return pa < pb
+		var ka: Vector2i = stage_a["region_key"]
+		var kb: Vector2i = stage_b["region_key"]
 		var da := maxi(absi(ka.x - focus_region_key.x), absi(ka.y - focus_region_key.y))
 		var db := maxi(absi(kb.x - focus_region_key.x), absi(kb.y - focus_region_key.y))
 		if da == db:
-			if ka.y == kb.y:
-				return ka.x < kb.x
-			return ka.y < kb.y
+			return ka.y < kb.y if ka.y != kb.y else ka.x < kb.x
 		return da < db
 	)
-	var id := ""
-	for candidate in ids:
-		var candidate_stage: Dictionary = loading_regions[candidate]
-		if int(candidate_stage["next_index"]) < (candidate_stage["chunk_coordinates"] as Array).size():
-			id = candidate
-			break
-	if id.is_empty():
-		_try_commit_global_rebuild()
-		return
-	var stage: Dictionary = loading_regions[id]
-	var next_index: int = stage["next_index"]
-	var coordinates: Array[Vector2i] = stage["chunk_coordinates"]
-	var coordinate: Vector2i = coordinates[next_index]
-	var state: RefCounted = stage["world_state"]
-	if state.brush_edits.revision != int(stage["edit_revision"]):
-		_fail_region_stage(id, "Edit revision changed during mesh staging; stage discarded and retried")
-		return
-	var inject_edit_failure: bool = debug_fail_next_mesh_stage and String(stage["purpose"]) == "edit_transaction"
-	var inject_load_failure: bool = debug_fail_next_load_stage and String(stage["purpose"]) == "load"
-	if inject_edit_failure or inject_load_failure:
-		debug_fail_next_mesh_stage = false
-		debug_fail_next_load_stage = false
-		_fail_region_stage(id, "Injected mesh-stage failure; prior meshes retained")
-		return
-	var brush_state: RefCounted = state.brush_edits if state.brush_edits.get_edit_count() > 0 else null
-	var slice_index: int = stage["slice_index"]
-	var cell_start_y := slice_index * TerrainMesher.CELLS_PER_MESH_SLICE
-	var cell_end_y := mini(cell_start_y + TerrainMesher.CELLS_PER_MESH_SLICE, ChunkGrid.CELL_COUNT_Y)
-	var build_started_usec := Time.get_ticks_usec()
-	_mesh_slices_this_frame += 1
-	var result: Dictionary = TerrainMesher.build_chunk_mesh_slice(
-		state.world_seed,
-		stage["region_key"],
-		coordinate,
-		stage["cave_section_enabled"],
-		brush_state,
-		cell_start_y,
-		cell_end_y
-	)
-	_last_mesh_slice_ms = float(Time.get_ticks_usec() - build_started_usec) / 1000.0
-	_peak_mesh_slice_ms = maxf(_peak_mesh_slice_ms, _last_mesh_slice_ms)
-	_operation_total_mesh_work_ms += _last_mesh_slice_ms
-	if not result.get("valid", false) or not result.get("mesh") is ArrayMesh:
-		_fail_region_stage(id, "Chunk mesh-slice generation failed; old visible terrain retained")
-		return
-	var slice_results: Array[Dictionary] = stage["slice_results"]
-	slice_results.append(result)
-	stage["slice_results"] = slice_results
-	stage["slice_index"] = slice_index + 1
-	if stage["purpose"] == "edit_transaction" and not _edit_transaction.is_empty():
-		_edit_transaction["mesh_slice_count"] = int(_edit_transaction.get("mesh_slice_count", 0)) + 1
-	if int(stage["slice_index"]) >= MESH_SLICE_COUNT:
-		var combined: Dictionary = TerrainMesher.combine_chunk_mesh_slices(slice_results)
-		if not combined.get("valid", false):
-			_fail_region_stage(id, "Chunk mesh-slice combination failed; old visible terrain retained")
-			return
-		stage["meshes"][coordinate] = combined["mesh"]
-		stage["next_index"] = next_index + 1
-		stage["slice_index"] = 0
-		var next_slice_results: Array[Dictionary] = []
-		stage["slice_results"] = next_slice_results
-		var unique_samples := (ChunkGrid.CELLS_PER_CHUNK_X + 1) * (ChunkGrid.CELL_COUNT_Y + 1) * (ChunkGrid.CELLS_PER_CHUNK_Z + 1)
-		stage["sample_count"] = int(stage.get("sample_count", 0)) + unique_samples
-		stage["triangle_count"] = int(stage.get("triangle_count", 0)) + int(combined["triangle_count"])
-		var chunk_id: String = ChunkGrid.stable_id(stage["region_key"], coordinate)
-		if not _operation_chunk_ids.has(chunk_id):
-			_operation_chunk_ids.append(chunk_id)
-		_operation_sample_count += unique_samples
-	loading_regions[id] = stage
-	if int(stage["next_index"]) >= coordinates.size():
-		_complete_region_stage(id)
+	for id in candidates:
+		var stage: Dictionary = loading_regions[id]
+		var submit_index: int = int(stage.get("submit_index", 0))
+		var coordinates: Array[Vector2i] = stage["chunk_coordinates"]
+		if submit_index < coordinates.size():
+			return {"id": id, "coordinate": coordinates[submit_index], "index": submit_index}
+	return {}
+
+
+func _stage_priority(purpose: String) -> int:
+	if purpose == "edit_transaction":
+		return 0
+	if purpose == "partial":
+		return 1
+	if purpose == "full":
+		return 2
+	return 3
 
 
 func _complete_region_stage(id: String) -> void:
@@ -417,8 +513,8 @@ func _complete_region_stage(id: String) -> void:
 		_streamed_region_loads += 1
 		_stage_retry_counts.erase(id)
 		if _operation_name == "initial_load" and loading_regions.is_empty():
-			print("TERRAIN_STREAM_WINDOW_READY: focus=%s active_regions=%d active_chunks=%d queued_chunks=0 peak_queue=%d peak_mesh_slice_ms=%.3f" % [
-				focus_region_key, active_regions.size(), chunk_nodes.size(), _peak_queue_depth, _peak_mesh_slice_ms,
+			print("TERRAIN_STREAM_WINDOW_READY: focus=%s active_regions=%d active_chunks=%d queued_chunks=0 peak_queue=%d peak_mesh_upload_ms=%.3f" % [
+				focus_region_key, active_regions.size(), chunk_nodes.size(), _peak_queue_depth, _peak_mesh_upload_ms,
 			])
 	_sync_world_state_index()
 	_record_completed_operation(stage)
@@ -462,8 +558,10 @@ func _try_commit_global_rebuild() -> void:
 	_full_rebuild_target_ids.clear()
 	loading_regions.clear()
 	_edit_transaction = {}
+	var publish_started_usec := Time.get_ticks_usec()
 	for stage in all_stages:
 		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"])
+	_mesh_publish_usec_samples.append(Time.get_ticks_usec() - publish_started_usec)
 	_rendered_cave_section_enabled = cave_section_enabled
 	_streamed_region_loads += all_stages.size()
 	_sync_world_state_index()
@@ -573,6 +671,7 @@ func _fail_region_stage(id: String, message: String) -> void:
 	if not _edit_transaction.is_empty() and (_edit_transaction["target_ids"] as Array).has(id):
 		_retry_edit_transaction(message)
 		_sync_world_state_index()
+		_update_runtime_diagnostics()
 		_update_status()
 		return
 	if global_rebuild_pending:
@@ -600,10 +699,12 @@ func _fail_region_stage(id: String, message: String) -> void:
 		else:
 			last_stream_error = "%s; load retry limit reached, move focus away and back or press R" % message
 	_sync_world_state_index()
+	_update_runtime_diagnostics()
 	_update_status()
 
 
 func _record_completed_operation(stage: Dictionary) -> void:
+	var queue_waits := _queue_wait_percentiles_ms()
 	last_mesh_diagnostics = {
 		"operation": _operation_name,
 		"focus_region_key": focus_region_key,
@@ -618,7 +719,15 @@ func _record_completed_operation(stage: Dictionary) -> void:
 		"mesh_vertex_attribute_bytes_estimate": _get_mesh_attribute_bytes_estimate(),
 		"elapsed_ms": float(Time.get_ticks_usec() - _operation_started_usec) / 1000.0 if _operation_started_usec > 0 else 0.0,
 		"total_mesh_work_ms": _operation_total_mesh_work_ms,
-		"peak_mesh_slice_ms": _peak_mesh_slice_ms,
+		"mesh_queue_wait_p50_ms": queue_waits.x,
+		"mesh_queue_wait_p95_ms": queue_waits.y,
+		"mesh_queue_wait_total_ms": _sum_usec(_mesh_queue_wait_usec_samples) / 1000.0,
+		"worker_queue_wait_p50_ms": _percentile_usec(_pool_queue_wait_usec_samples, 0.50),
+		"worker_queue_wait_p95_ms": _percentile_usec(_pool_queue_wait_usec_samples, 0.95),
+		"array_mesh_upload_p50_ms": _percentile_usec(_mesh_upload_usec_samples, 0.50),
+		"mesh_publish_p95_ms": _percentile_usec(_mesh_publish_usec_samples, 0.95),
+		"stage_timings_ms": _stage_timings_ms(),
+		"peak_mesh_upload_ms": _peak_mesh_upload_ms,
 		"max_active_region_count": _peak_active_region_count,
 		"max_queue_depth": _peak_queue_depth,
 		"operation_region_key": stage.get("region_key", focus_region_key),
@@ -628,7 +737,7 @@ func _record_completed_operation(stage: Dictionary) -> void:
 		"last_support_region_count": _last_edit_support_region_count,
 		"last_rebuild_region_count": _last_edit_rebuild_region_count,
 		"last_rebuild_chunk_count": _last_edit_rebuild_chunk_count,
-		"last_dirty_mesh_slice_count": _last_edit_mesh_slices,
+		"last_dirty_mesh_job_count": _last_edit_mesh_jobs,
 		"edit_stage_state": "idle" if _edit_transaction.is_empty() else _edit_transaction.get("stage_state", "staging"),
 		"last_edit_rejection": _last_edit_rejection,
 	}
@@ -709,7 +818,7 @@ func _schedule_edit_transaction(operation: Dictionary) -> void:
 		"support_region_count": operation["support_regions"].size(),
 		"rebuild_region_count": operation["rebuild_regions"].size(),
 		"rebuild_chunk_count": 0,
-		"mesh_slice_count": 0,
+		"mesh_job_count": 0,
 	}
 	_start_edit_transaction_attempt()
 	_update_runtime_diagnostics()
@@ -733,7 +842,7 @@ func _start_edit_transaction_attempt() -> void:
 	_edit_transaction["target_ids"] = target_ids
 	_edit_transaction["stage_state"] = "staging"
 	_edit_transaction["rebuild_chunk_count"] = 0
-	_edit_transaction["mesh_slice_count"] = 0
+	_edit_transaction["mesh_job_count"] = 0
 	for target in _edit_transaction["targets"]:
 		if target_ids.has(target["id"]):
 			_edit_transaction["rebuild_chunk_count"] += target["chunks"].size()
@@ -765,6 +874,7 @@ func _try_commit_edit_transaction() -> void:
 					return
 	# All targets and meshes validate before the first visible assignment.
 	_edit_transaction["stage_state"] = "committing"
+	var publish_started_usec := Time.get_ticks_usec()
 	for id in target_ids:
 		var stage: Dictionary = loading_regions[id]
 		if active_regions.has(id):
@@ -775,9 +885,10 @@ func _try_commit_edit_transaction() -> void:
 		else:
 			_publish_region(stage["region_key"], stage["world_state"], stage["meshes"])
 		loading_regions.erase(id)
+	_mesh_publish_usec_samples.append(Time.get_ticks_usec() - publish_started_usec)
 	var committed_sequence: int = _edit_transaction["operation_sequence"]
 	var committed_regions: int = target_ids.size()
-	_last_edit_mesh_slices = int(_edit_transaction.get("mesh_slice_count", 0))
+	_last_edit_mesh_jobs = int(_edit_transaction.get("mesh_job_count", 0))
 	_edit_transaction = {}
 	last_stream_error = ""
 	last_brush_result = "Global edit #%d mesh commit complete across %d resident region(s)" % [committed_sequence, committed_regions]
@@ -822,7 +933,51 @@ func _begin_operation(operation_name: String) -> void:
 	_operation_chunk_ids.clear()
 	_operation_sample_count = 0
 	_operation_total_mesh_work_ms = 0.0
+	_operation_stage_timings_usec.clear()
+	_mesh_queue_wait_usec_samples.clear()
+	_pool_queue_wait_usec_samples.clear()
+	_mesh_upload_usec_samples.clear()
+	_mesh_publish_usec_samples.clear()
 	_operation_started_usec = Time.get_ticks_usec()
+
+
+func _add_stage_timings(timings_usec: Dictionary) -> void:
+	for key in timings_usec:
+		_operation_stage_timings_usec[key] = int(_operation_stage_timings_usec.get(key, 0)) + int(timings_usec[key])
+
+
+func _stage_timings_ms() -> Dictionary:
+	var result: Dictionary = {}
+	for key in _operation_stage_timings_usec:
+		result[key] = float(_operation_stage_timings_usec[key]) / 1000.0
+	return result
+
+
+func _queue_wait_percentiles_ms() -> Vector2:
+	if _mesh_queue_wait_usec_samples.is_empty():
+		return Vector2.ZERO
+	var samples := _mesh_queue_wait_usec_samples.duplicate()
+	samples.sort()
+	return Vector2(
+		float(samples[maxi(0, ceili(float(samples.size()) * 0.50) - 1)]) / 1000.0,
+		float(samples[maxi(0, ceili(float(samples.size()) * 0.95) - 1)]) / 1000.0
+	)
+
+
+func _percentile_usec(samples: Array[int], fraction: float) -> float:
+	if samples.is_empty():
+		return 0.0
+	var sorted_samples := samples.duplicate()
+	sorted_samples.sort()
+	var index := clampi(ceili(float(sorted_samples.size()) * fraction) - 1, 0, sorted_samples.size() - 1)
+	return float(sorted_samples[index]) / 1000.0
+
+
+func _sum_usec(samples: Array[int]) -> int:
+	var total := 0
+	for sample in samples:
+		total += sample
+	return total
 
 
 func _sync_world_state_index() -> void:
@@ -935,9 +1090,11 @@ func _get_mesh_attribute_bytes_estimate() -> int:
 
 
 func _frame_time_percentiles() -> Vector3:
-	if _frame_time_samples.is_empty():
+	if _frame_sample_count == 0:
 		return Vector3.ZERO
-	var sorted: Array[float] = _frame_time_samples.duplicate()
+	var sorted: Array[float] = []
+	for index in range(_frame_sample_count):
+		sorted.append(_frame_time_samples[index])
 	sorted.sort()
 	return Vector3(
 		sorted[maxi(0, ceili(float(sorted.size()) * 0.50) - 1)],
@@ -954,21 +1111,14 @@ func _queued_chunk_count() -> int:
 	return total
 
 
-func _queued_mesh_slice_count() -> int:
-	var total := 0
-	for stage_value in loading_regions.values():
-		var stage: Dictionary = stage_value
-		var remaining_chunks: int = (stage["chunk_coordinates"] as Array).size() - int(stage["next_index"])
-		if remaining_chunks <= 0:
-			continue
-		total += (remaining_chunks - 1) * MESH_SLICE_COUNT + (MESH_SLICE_COUNT - int(stage["slice_index"]))
-	return total
+func _queued_mesh_job_count() -> int:
+	return _queued_chunk_count()
 
 
 func _update_runtime_diagnostics() -> void:
 	_peak_active_region_count = maxi(_peak_active_region_count, active_regions.size())
 	_peak_queue_depth = maxi(_peak_queue_depth, _queued_chunk_count())
-	_peak_mesh_slice_queue_depth = maxi(_peak_mesh_slice_queue_depth, _queued_mesh_slice_count())
+	_peak_mesh_job_queue_depth = maxi(_peak_mesh_job_queue_depth, _queued_mesh_job_count())
 	if last_mesh_diagnostics.is_empty():
 		last_mesh_diagnostics = {}
 	last_mesh_diagnostics["active_region_count"] = active_regions.size()
@@ -977,12 +1127,12 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["requested_region_count"] = (REQUEST_RADIUS * 2 + 1) * (REQUEST_RADIUS * 2 + 1)
 	last_mesh_diagnostics["loading_region_count"] = loading_regions.size()
 	last_mesh_diagnostics["queued_chunk_count"] = _queued_chunk_count()
-	last_mesh_diagnostics["queued_mesh_slice_count"] = _queued_mesh_slice_count()
+	last_mesh_diagnostics["queued_mesh_job_count"] = _queued_mesh_job_count()
 	last_mesh_diagnostics["peak_active_region_count"] = _peak_active_region_count
 	last_mesh_diagnostics["peak_queue_depth"] = _peak_queue_depth
-	last_mesh_diagnostics["peak_mesh_slice_queue_depth"] = _peak_mesh_slice_queue_depth
-	last_mesh_diagnostics["last_mesh_slice_ms"] = _last_mesh_slice_ms
-	last_mesh_diagnostics["peak_mesh_slice_ms"] = _peak_mesh_slice_ms
+	last_mesh_diagnostics["peak_mesh_job_queue_depth"] = _peak_mesh_job_queue_depth
+	last_mesh_diagnostics["last_mesh_upload_ms"] = _last_mesh_upload_ms
+	last_mesh_diagnostics["peak_mesh_upload_ms"] = _peak_mesh_upload_ms
 	last_mesh_diagnostics["last_process_work_ms"] = _last_process_work_ms
 	last_mesh_diagnostics["peak_process_work_ms"] = _peak_process_work_ms
 	last_mesh_diagnostics["last_frame_ms"] = _last_frame_ms
@@ -991,8 +1141,9 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["streamed_region_unloads"] = _streamed_region_unloads
 	last_mesh_diagnostics["global_rebuild_pending"] = global_rebuild_pending
 	last_mesh_diagnostics["max_active_region_count"] = MAX_ACTIVE_REGIONS
-	last_mesh_diagnostics["max_mesh_slices_per_frame"] = MAX_MESH_SLICES_PER_FRAME
-	last_mesh_diagnostics["peak_mesh_slices_per_frame"] = _peak_mesh_slices_per_frame
+	last_mesh_diagnostics["max_mesh_uploads_per_frame"] = MAX_MESH_UPLOADS_PER_FRAME
+	last_mesh_diagnostics["peak_mesh_uploads_per_frame"] = _peak_mesh_uploads_per_frame
+	last_mesh_diagnostics["mesh_jobs_in_flight"] = _mesh_jobs.size()
 	last_mesh_diagnostics["global_edit_count"] = edit_ledger.get_edit_count()
 	last_mesh_diagnostics["global_edit_limit"] = BrushEditState.MAX_EDITS
 	last_mesh_diagnostics["global_edit_last_sequence"] = edit_ledger.get_last_sequence()
@@ -1000,7 +1151,7 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["last_support_region_count"] = _last_edit_support_region_count
 	last_mesh_diagnostics["last_rebuild_region_count"] = _last_edit_rebuild_region_count
 	last_mesh_diagnostics["last_rebuild_chunk_count"] = _last_edit_rebuild_chunk_count
-	last_mesh_diagnostics["last_dirty_mesh_slice_count"] = _last_edit_mesh_slices
+	last_mesh_diagnostics["last_dirty_mesh_job_count"] = _last_edit_mesh_jobs
 	last_mesh_diagnostics["edit_stage_state"] = "idle" if _edit_transaction.is_empty() else _edit_transaction.get("stage_state", "staging")
 	last_mesh_diagnostics["last_edit_rejection"] = _last_edit_rejection
 	last_mesh_diagnostics["mesh_stage_retry_total"] = _mesh_stage_retry_total
@@ -1019,7 +1170,7 @@ func _update_status() -> void:
 	var selected_mode_name := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
 	var queue_depth := _queued_chunk_count()
 	var transaction_state := "idle" if _edit_transaction.is_empty() else String(_edit_transaction.get("stage_state", "staging"))
-	var status := "P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/slices: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: global cave section    R: regenerate    X: reset commands supported by focused region\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d slices  |  commit: %s\nBuild budget: %d mesh slice/frame  |  last/peak slice: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
+	var status := "P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: global cave section    R: regenerate    X: reset commands supported by focused region\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nWorker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
 		seed,
 		generator_version,
 		focus_region_key,
@@ -1027,7 +1178,7 @@ func _update_status() -> void:
 		MAX_ACTIVE_REGIONS,
 		loading_regions.size(),
 		queue_depth,
-		_queued_mesh_slice_count(),
+		_queued_mesh_job_count(),
 		selected_mode_name,
 		edit_ledger.get_edit_count(),
 		BrushEditState.MAX_EDITS,
@@ -1037,11 +1188,13 @@ func _update_status() -> void:
 		_last_edit_support_region_count,
 		_last_edit_rebuild_region_count,
 		_last_edit_rebuild_chunk_count,
-		_last_edit_mesh_slices,
+		_last_edit_mesh_jobs,
 		transaction_state,
-		MAX_MESH_SLICES_PER_FRAME,
-		_last_mesh_slice_ms,
-		_peak_mesh_slice_ms,
+		_mesh_jobs.size(),
+		MAX_MESH_JOBS_IN_FLIGHT,
+		MAX_MESH_UPLOADS_PER_FRAME,
+		_last_mesh_upload_ms,
+		_peak_mesh_upload_ms,
 		_peak_frame_ms,
 	]
 	if global_rebuild_pending:
