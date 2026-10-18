@@ -20,7 +20,7 @@ Owner explicitly authorized each merge after source and GUI approval. Runtime co
 
 ## Active, authorized — implementation prepared, pending review and owner GUI
 
-- **P1.0C / Issue #91:** owner explicitly authorized globally ordered transient carve/fill across streamed region seams on `feat/p1-0c-global-cross-region-brushes`, based on `2f86c42503cfa3a334215b1ff5b9bf9658263440`. The normal-dependency correction is committed as `ad9997b2deaf285d01e360bb7f7adb9d0f03ba41` (parent `608b7d6d621d0b340454f84c00a9ad7bb0379317`) in the same draft PR [#92](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/92). Local Godot 4.7.2 validation passed 8,083 assertions. Independent source rereview and owner GUI acceptance remain pending. See the [2026-10-18 correction checkpoint](../checkpoints/2026-10-18-P1-0C-NORMAL-DEPENDENCY-CORRECTION.md). No merge or release is implied.
+- **P1.0C / Issue #93:** performance work is committed on `feat/p1-0c-global-cross-region-brushes` as `69a168eb6fe2a42f3fd6cb40024f86ed50634c2b` (parent `163ef37a1ec0aab33dfea773a4176fae470161d8`) in the same draft PR [#92](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/92). Godot 4.7.2 validation passed 8,133 assertions. The 3×3 cold window measured 1.08 s; common/seam click-to-scene-commit p50 measured 54.7–54.9 ms; worker/serial geometry equivalence and cancellation tests passed. Independent source rereview and owner GUI acceptance remain pending. See the [performance checkpoint](../checkpoints/2026-10-18-P1-0C-MESH-PERFORMANCE.md). No merge or release is implied.
 
 ## Spatial contract retained after P1.0A
 
@@ -30,7 +30,7 @@ Version 1 `SdfWorld` logical regions are 16×12 world units, divided into 4×4 c
 
 - Binding product scope: [PROJECT_CHARTER](../PROJECT_CHARTER.md), [ADR-0001](../decisions/ADR-0001-BASELINE.md). [ADR-0002](../decisions/ADR-0002-TERRAIN-BACKEND-PROPOSED.md) is **proposed**, not adopted. No final terrain backend has been selected and full Phase 0 gates (comparative backend, durable save, mods, simulation) have not passed.
 - Multiplayer: future architectural compatibility desired (stable region keys, canonical ordered edits, rendering not authoritative), but multiplayer **not part of initial release or active slice**. No networking is implemented.
-- Persistence, LOD, collision, background worker execution, entity/simulation/mod contracts and cross-platform bit-identical replay remain unproven. P1.0B/P1.0C use bounded incremental main-thread work; they do not claim asynchronous meshing or a frame-time guarantee.
+- Persistence, LOD, collision, entity/simulation/mod contracts and cross-platform bit-identical replay remain unproven. P1.0C now uses bounded CPU worker meshing with main-thread-only ArrayMesh construction/publication; this does not claim a GPU upload completion time or a frame-time guarantee.
 - F2-G1 protected-host/native-addon operations remain **on hold** pending independent environment/protected-state validation; no implied elevation, ACL updates or VM access from this functional track. PRs [#75](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/75), [#76](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/76), [#77](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/77) were not part of any of these merges. The 2026-10-08 F2 report is archived at [historical snapshot](archive/2026-10-08-F2-PREPARATION-STATUS.md), **not** current live environment certification.
 
 ## Next authorized action and handoff
