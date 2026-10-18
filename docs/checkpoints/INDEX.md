@@ -30,4 +30,6 @@
 
 | 2026-10-18 | [CHK-2026-10-18-P1-0C-PR92-PERF-SOURCE-PASS](2026-10-18-P1-0C-PR92-PERFORMANCE-SOURCE-REVIEW-PASS.md) | PR #92 performance worker optimization source review PASS with frame/GPU caveats; owner performance GUI still pending | Open draft docs PR #87, not merged |
 
+| 2026-10-18 | [CHK-2026-10-18-P1-0C-OWNER-GUI-LEDGER-LIMIT](2026-10-18-P1-0C-OWNER-GUI-LEDGER-FULL-AND-STALE-REVISION.md) | Owner accepts speed but global ledger 32/32 rejects further editing; stale revision banner; Issue #94 blocks PR #92 | Recorded in open docs-only PR #87; not merged |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
