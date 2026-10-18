@@ -22,4 +22,6 @@
 | 2026-10-17 | [CHK-2026-10-17-PR90-MERGE](2026-10-17-PR90-MERGE.md) | PR #90 owner-approved visual acceptance and verified merge | Recorded in draft docs-only PR #87 |
 | 2026-10-17 | [CHK-2026-10-17-P1-0C-PREPARED-ISSUE91](2026-10-17-P1-0C-PREPARED-ISSUE91.md) | P1.0C scope, issue and branch prepared, not implemented | Recorded in draft docs-only PR #87 |
 
+| 2026-10-18 | [CHK-2026-10-18-P1-0C-SOURCE-REVIEW-PR92](2026-10-18-P1-0C-INDEPENDENT-SOURCE-REVIEW-PR92.md) | PR #92 exact-SHA source review: regional normal dependency halo correction required; owner GUI pending | Open documentation PR #87, not integrated |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
