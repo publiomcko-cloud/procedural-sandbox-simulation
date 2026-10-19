@@ -49,6 +49,8 @@ var global_rebuild_reason := ""
 var _full_rebuild_target_ids: Array[String] = []
 var _edit_transaction: Dictionary = {}
 var _stage_retry_counts: Dictionary = {}
+var _stream_errors_by_region: Dictionary = {}
+var _superseded_stage_total := 0
 var _next_stage_token := 1
 var _mesh_jobs: Dictionary = {} # WorkerThreadPool task id -> immutable job/stage token
 var _mesh_queue_wait_usec_samples: Array[int] = []
@@ -74,6 +76,7 @@ var _last_frame_ms := 0.0
 var _peak_frame_ms := 0.0
 var _mesh_uploads_this_frame := 0
 var _peak_mesh_uploads_per_frame := 0
+var _peak_mesh_jobs_in_flight := 0
 var _frame_time_samples: Array[float] = []
 var _frame_sample_write_index := 0
 var _frame_sample_count := 0
@@ -313,7 +316,6 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 	var coordinates: Array[Vector2i] = chunk_coordinates.duplicate()
 	var token := _next_stage_token
 	_next_stage_token += 1
-	var brush_snapshot: Variant = state.brush_edits.get_meshing_snapshot() if state.brush_edits.get_edit_count() > 0 else null
 	var queued_times: Array[int] = []
 	var queued_now := Time.get_ticks_usec()
 	for _coordinate in coordinates:
@@ -328,7 +330,6 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 		"submit_index": 0,
 		"pending_count": 0,
 		"chunk_queued_usec": queued_times,
-		"brush_snapshot": brush_snapshot,
 		"meshes": {},
 		"cave_section_enabled": cave_section_enabled,
 		"edit_revision": state.brush_edits.revision,
@@ -370,7 +371,7 @@ func _process_completed_mesh_jobs() -> void:
 			continue
 		var state: RefCounted = stage["world_state"]
 		if state.brush_edits.revision != int(stage["edit_revision"]):
-			_fail_region_stage(id, "Edit revision changed during CPU mesh job; stale result discarded")
+			_supersede_region_stage(id)
 			continue
 		var cpu_result: Dictionary = job.result
 		if not cpu_result.get("valid", false) or not cpu_result.has("positions"):
@@ -420,7 +421,7 @@ func _dispatch_mesh_jobs() -> void:
 		var stage: Dictionary = loading_regions[id]
 		var state: RefCounted = stage["world_state"]
 		if state.brush_edits.revision != int(stage["edit_revision"]):
-			_fail_region_stage(id, "Edit revision changed before CPU mesh job submission")
+			_supersede_region_stage(id)
 			continue
 		var inject_edit_failure: bool = debug_fail_next_mesh_stage and String(stage["purpose"]) == "edit_transaction"
 		var inject_load_failure: bool = debug_fail_next_load_stage and String(stage["purpose"]) == "load"
@@ -436,7 +437,9 @@ func _dispatch_mesh_jobs() -> void:
 		_mesh_queue_wait_usec_samples.append(maxi(0, submitted_usec - enqueued_usec))
 		var job := TerrainMeshJob.new(
 			state.world_seed, stage["region_key"], coordinate,
-			stage["cave_section_enabled"], stage["brush_snapshot"], submitted_usec
+			stage["cave_section_enabled"],
+			state.brush_edits.get_meshing_snapshot_for_chunk(stage["region_key"], coordinate),
+			submitted_usec
 		)
 		var high_priority: bool = String(stage["purpose"]) in ["edit_transaction", "partial"]
 		var task_id := WorkerThreadPool.add_task(Callable(job, "run"), high_priority, "P1.0C terrain chunk")
@@ -453,6 +456,7 @@ func _dispatch_mesh_jobs() -> void:
 			"coordinate": coordinate,
 			"submitted_usec": submitted_usec,
 		}
+		_peak_mesh_jobs_in_flight = maxi(_peak_mesh_jobs_in_flight, _mesh_jobs.size())
 
 
 func _next_mesh_job_request() -> Dictionary:
@@ -507,11 +511,13 @@ func _complete_region_stage(id: String) -> void:
 		return
 	loading_regions.erase(id)
 	if stage["purpose"] == "partial":
-		_publish_partial_stage(id, stage)
+		if _publish_partial_stage(id, stage):
+			_clear_stream_error(id)
 	else:
 		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"])
 		_streamed_region_loads += 1
 		_stage_retry_counts.erase(id)
+		_clear_stream_error(id)
 		if _operation_name == "initial_load" and loading_regions.is_empty():
 			print("TERRAIN_STREAM_WINDOW_READY: focus=%s active_regions=%d active_chunks=%d queued_chunks=0 peak_queue=%d peak_mesh_upload_ms=%.3f" % [
 				focus_region_key, active_regions.size(), chunk_nodes.size(), _peak_queue_depth, _peak_mesh_upload_ms,
@@ -521,22 +527,23 @@ func _complete_region_stage(id: String) -> void:
 	_update_runtime_diagnostics()
 
 
-func _publish_partial_stage(id: String, stage: Dictionary) -> void:
+func _publish_partial_stage(id: String, stage: Dictionary) -> bool:
 	if not active_regions.has(id):
-		return
+		return false
 	var entry: Dictionary = active_regions[id]
 	var region_nodes: Dictionary = entry["chunk_nodes"]
 	for coordinate in stage["chunk_coordinates"]:
 		var chunk_id: String = ChunkGrid.stable_id(stage["region_key"], coordinate)
 		if not region_nodes.has(chunk_id) or not stage["meshes"].has(coordinate):
 			_fail_region_stage(id, "Partial remesh was incomplete; old visible meshes retained")
-			return
+			return false
 	for coordinate in stage["chunk_coordinates"]:
 		var chunk_id: String = ChunkGrid.stable_id(stage["region_key"], coordinate)
 		var node: MeshInstance3D = region_nodes[chunk_id]
 		_replace_node_mesh(node, stage["meshes"][coordinate])
 	_record_completed_operation(stage)
 	_update_runtime_diagnostics()
+	return true
 
 
 func _try_commit_global_rebuild() -> void:
@@ -554,7 +561,8 @@ func _try_commit_global_rebuild() -> void:
 	global_rebuild_pending = false
 	global_rebuild_reason = ""
 	_global_rebuild_retry_count = 0
-	last_stream_error = ""
+	for id in _full_rebuild_target_ids:
+		_clear_stream_error(id)
 	_full_rebuild_target_ids.clear()
 	loading_regions.clear()
 	_edit_transaction = {}
@@ -664,8 +672,58 @@ func _unload_region(id: String) -> void:
 	_streamed_region_unloads += 1
 
 
-func _fail_region_stage(id: String, message: String) -> void:
+func _supersede_region_stage(id: String) -> void:
+	if not loading_regions.has(id):
+		return
+	var stale_stage: Dictionary = loading_regions[id]
+	loading_regions.erase(id)
+	_superseded_stage_total += 1
+	var region_key: Vector2i = stale_stage["region_key"]
+	var purpose: String = stale_stage["purpose"]
+	if not _edit_transaction.is_empty() \
+		and int(_edit_transaction.get("revision", -1)) == edit_ledger.revision \
+		and (_edit_transaction.get("target_ids", []) as Array).has(id):
+		_start_edit_transaction_attempt()
+	elif global_rebuild_pending:
+		# Every full-rebuild snapshot is revision-pinned. Replace the complete staged
+		# set together so no mixture of revisions can be published.
+		loading_regions.clear()
+		_full_rebuild_target_ids.clear()
+		var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
+		var retained: Dictionary = {}
+		for key in _region_keys_within_radius(focus_region_key, UNLOAD_RADIUS):
+			retained[_region_id(key)] = true
+		_ensure_full_rebuild_targets(desired, retained)
+	elif purpose == "load":
+		var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
+		if not active_regions.has(id) and _contains_region(desired, region_key):
+			_begin_region_stage(region_key, "load", ChunkGrid.all_coordinates())
+	elif purpose == "partial":
+		if active_regions.has(id):
+			_begin_region_stage(region_key, "partial", stale_stage["chunk_coordinates"])
+	_sync_world_state_index()
+	_update_runtime_diagnostics()
+	_update_status()
+
+
+func _record_stream_error(id: String, message: String) -> void:
+	var error_key := id if id != "" else "_global"
+	_stream_errors_by_region[error_key] = message
 	last_stream_error = message
+
+
+func _clear_stream_error(id: String) -> void:
+	_stream_errors_by_region.erase(id)
+	if _stream_errors_by_region.is_empty():
+		last_stream_error = ""
+	else:
+		var keys: Array = _stream_errors_by_region.keys()
+		keys.sort()
+		last_stream_error = String(_stream_errors_by_region[keys[-1]])
+
+
+func _fail_region_stage(id: String, message: String) -> void:
+	_record_stream_error(id, message)
 	var failed_stage: Dictionary = loading_regions.get(id, {})
 	loading_regions.erase(id)
 	if not _edit_transaction.is_empty() and (_edit_transaction["target_ids"] as Array).has(id):
@@ -678,6 +736,7 @@ func _fail_region_stage(id: String, message: String) -> void:
 		_global_rebuild_retry_count += 1
 		if _global_rebuild_retry_count <= MAX_STAGE_RETRIES:
 			last_stream_error = "%s; full rebuild retry %d/%d" % [message, _global_rebuild_retry_count, MAX_STAGE_RETRIES]
+			_stream_errors_by_region[id if id != "" else "_global"] = last_stream_error
 			loading_regions.clear()
 			for target_id in _full_rebuild_target_ids:
 				_begin_region_stage(_region_key_from_id(target_id), "full", ChunkGrid.all_coordinates())
@@ -698,6 +757,7 @@ func _fail_region_stage(id: String, message: String) -> void:
 			_begin_region_stage(key, "load", ChunkGrid.all_coordinates())
 		else:
 			last_stream_error = "%s; load retry limit reached, move focus away and back or press R" % message
+			_stream_errors_by_region[id] = last_stream_error
 	_sync_world_state_index()
 	_update_runtime_diagnostics()
 	_update_status()
@@ -732,6 +792,7 @@ func _record_completed_operation(stage: Dictionary) -> void:
 		"max_queue_depth": _peak_queue_depth,
 		"operation_region_key": stage.get("region_key", focus_region_key),
 		"global_edit_count": edit_ledger.get_edit_count(),
+		"peak_mesh_jobs_in_flight": _peak_mesh_jobs_in_flight,
 		"global_edit_last_sequence": edit_ledger.get_last_sequence(),
 		"global_edit_revision": edit_ledger.revision,
 		"last_support_region_count": _last_edit_support_region_count,
@@ -745,7 +806,6 @@ func _record_completed_operation(stage: Dictionary) -> void:
 
 func _start_global_rebuild(operation_name: String) -> void:
 	_begin_operation(operation_name)
-	last_stream_error = ""
 	_global_rebuild_retry_count = 0
 	_edit_transaction = {}
 	global_rebuild_pending = true
@@ -888,9 +948,10 @@ func _try_commit_edit_transaction() -> void:
 	_mesh_publish_usec_samples.append(Time.get_ticks_usec() - publish_started_usec)
 	var committed_sequence: int = _edit_transaction["operation_sequence"]
 	var committed_regions: int = target_ids.size()
+	for id in target_ids:
+		_clear_stream_error(id)
 	_last_edit_mesh_jobs = int(_edit_transaction.get("mesh_job_count", 0))
 	_edit_transaction = {}
-	last_stream_error = ""
 	last_brush_result = "Global edit #%d mesh commit complete across %d resident region(s)" % [committed_sequence, committed_regions]
 	_record_completed_operation({"region_key": focus_region_key, "purpose": "global_brush_edit"})
 	_sync_world_state_index()
@@ -915,6 +976,8 @@ func _retry_edit_transaction(failure_message: String) -> void:
 	_mesh_stage_retry_total += 1
 	if int(_edit_transaction["retries"]) <= MAX_STAGE_RETRIES:
 		last_stream_error = "%s; retry %d/%d" % [failure_message, _edit_transaction["retries"], MAX_STAGE_RETRIES]
+		for id in _edit_transaction["target_ids"]:
+			_stream_errors_by_region[id] = last_stream_error
 		_start_edit_transaction_attempt()
 		return
 	for id_value in (_edit_transaction["target_ids"] as Array).duplicate():
@@ -924,6 +987,8 @@ func _retry_edit_transaction(failure_message: String) -> void:
 	_edit_transaction["stage_state"] = "failed_pending_retry"
 	_edit_transaction["target_ids"] = []
 	last_stream_error = "%s; accepted edit retained, press R to retry mesh build" % failure_message
+	for id in _edit_transaction["target_ids"]:
+		_stream_errors_by_region[id] = last_stream_error
 	last_brush_result = "Accepted edit remains in the global ledger; visible meshes retained until retry succeeds"
 	_update_runtime_diagnostics()
 
@@ -1042,11 +1107,11 @@ func _accept_brush_at_world(world_hit: Vector3) -> bool:
 		_update_status()
 		return false
 	if not edit_ledger.add_sphere(selected_brush_mode, world_hit, BRUSH_RADIUS):
-		_last_edit_rejection = "global_ledger_full_or_invalid"
-		last_brush_result = "Global edit ledger full or operation invalid; terrain unchanged"
+		_last_edit_rejection = edit_ledger.last_rejection_reason
+		last_brush_result = "Edit rejected (%s); terrain unchanged" % _last_edit_rejection
 		_update_status()
 		return false
-	var operation: Dictionary = edit_ledger.get_operations_snapshot()[-1]
+	var operation: Dictionary = edit_ledger.get_last_operation_snapshot()
 	var support_regions: Array[Vector2i] = operation["support_regions"]
 	var dependency_regions: Array[Vector2i] = operation["dependency_regions"]
 	var rebuild_regions: Array[Vector2i] = operation["rebuild_regions"]
@@ -1144,6 +1209,7 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["max_mesh_uploads_per_frame"] = MAX_MESH_UPLOADS_PER_FRAME
 	last_mesh_diagnostics["peak_mesh_uploads_per_frame"] = _peak_mesh_uploads_per_frame
 	last_mesh_diagnostics["mesh_jobs_in_flight"] = _mesh_jobs.size()
+	last_mesh_diagnostics["peak_mesh_jobs_in_flight"] = _peak_mesh_jobs_in_flight
 	last_mesh_diagnostics["global_edit_count"] = edit_ledger.get_edit_count()
 	last_mesh_diagnostics["global_edit_limit"] = BrushEditState.MAX_EDITS
 	last_mesh_diagnostics["global_edit_last_sequence"] = edit_ledger.get_last_sequence()
@@ -1155,6 +1221,7 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["edit_stage_state"] = "idle" if _edit_transaction.is_empty() else _edit_transaction.get("stage_state", "staging")
 	last_mesh_diagnostics["last_edit_rejection"] = _last_edit_rejection
 	last_mesh_diagnostics["mesh_stage_retry_total"] = _mesh_stage_retry_total
+	last_mesh_diagnostics["superseded_stage_total"] = _superseded_stage_total
 	last_mesh_diagnostics["resident_region_count"] = active_regions.size()
 	last_mesh_diagnostics["queued_region_count"] = loading_regions.size()
 	var frame_percentiles := _frame_time_percentiles()

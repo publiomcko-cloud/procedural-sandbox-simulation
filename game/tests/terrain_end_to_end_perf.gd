@@ -90,7 +90,7 @@ func _run() -> void:
 	await _wait_for_window(scene)
 	var full_ledger_started := Time.get_ticks_usec()
 	var full_ledger_accepted: bool = scene.call("_accept_brush_at_world", Vector3(15.8, 4.0, 3.0))
-	_check(full_ledger_accepted, "32nd command is accepted through the canonical world-space edit path")
+	_check(full_ledger_accepted, "256th command is accepted through the canonical world-space edit path")
 	await _wait_for_transaction(scene)
 	var full_ledger_latency := Time.get_ticks_usec() - full_ledger_started
 	var full_ledger_metrics: Dictionary = scene.get("last_mesh_diagnostics").duplicate(true)
@@ -102,7 +102,7 @@ func _run() -> void:
 		JSON.stringify(full_ledger_metrics.get("stage_timings_ms", {})),
 		full_ledger_metrics.get("frame_time_p95_ms", 0.0), full_ledger_metrics.get("frame_time_p99_ms", 0.0),
 	])
-	_check(ledger.get_edit_count() == 32 and full_ledger_metrics.get("last_rebuild_chunk_count", 0) > 0, "32nd global operation commits through the same coherent rebuild path")
+	_check(ledger.get_edit_count() == BrushState.MAX_EDITS and full_ledger_metrics.get("last_rebuild_chunk_count", 0) > 0, "256th global operation commits through the same coherent rebuild path")
 
 	var old_region_start := Time.get_ticks_usec()
 	scene.call("_move_focus", Vector3(64.0, 0.0, 0.0))

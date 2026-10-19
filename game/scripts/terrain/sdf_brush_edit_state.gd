@@ -5,11 +5,19 @@ extends RefCounted
 const FIELD := preload("res://scripts/terrain/sdf_world.gd")
 const SPATIAL := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const GRID := preload("res://scripts/terrain/terrain_chunk_grid.gd")
-const MAX_EDITS := 32
+const MAX_EDITS := 256
 const MIN_RADIUS := 0.45
 const MAX_RADIUS := 2.0
 const MAX_ABS_WORLD_COORDINATE := 1000000.0
 const REBUILD_DEPENDENCY_HALO := GRID.SAMPLE_STEP
+# Exact meshing-query bound. Mesh samples and central-difference normal probes
+# lie in the chunk AABB expanded by SAMPLE_STEP/2. In that domain, the v1 base
+# SDF is within [-6.68, 4.0]. A carve threshold at distance >= 9 is >= 7;
+# a fill threshold is <= -7. Both are dominated for every possible ordered
+# intermediate density. This prunes only provably no-op terms, never by brush
+# support alone. General density queries still evaluate the full ledger.
+const MESHING_QUERY_MARGIN := GRID.SAMPLE_STEP * 0.5
+const MESHING_NOOP_DISTANCE := 9.0
 
 enum Mode { CARVE, FILL }
 
@@ -20,6 +28,7 @@ var _by_region: Dictionary = {} # "x,z" -> ordered sequence numbers
 var _by_sequence: Dictionary = {} # sequence -> canonical operation
 var revision := 0
 var _next_sequence := 0
+var last_rejection_reason := ""
 
 
 func _init(seed_value: int = 424242, generator_value: int = FIELD.GENERATOR_VERSION) -> void:
@@ -30,19 +39,25 @@ func _init(seed_value: int = 424242, generator_value: int = FIELD.GENERATOR_VERS
 ## center is canonical world space. Admission is atomic: all validation and fanout
 ## complete before the operation, sequence, revision or index changes.
 func add_sphere(mode: int, center: Vector3, radius: float) -> bool:
-	if _operations.size() >= MAX_EDITS:
-		return false
 	if mode != Mode.CARVE and mode != Mode.FILL:
+		last_rejection_reason = "invalid_mode"
 		return false
 	if not center.is_finite() or not is_finite(radius):
+		last_rejection_reason = "non_finite_input"
 		return false
 	if maxf(absf(center.x), maxf(absf(center.y), absf(center.z))) > MAX_ABS_WORLD_COORDINATE:
+		last_rejection_reason = "coordinate_out_of_bounds"
 		return false
 	if radius < MIN_RADIUS or radius > MAX_RADIUS:
+		last_rejection_reason = "radius_out_of_bounds"
 		return false
 	var support_regions := _regions_intersecting_sphere(center, radius)
 	var rebuild_regions := _regions_intersecting_sphere(center, radius + REBUILD_DEPENDENCY_HALO)
 	if support_regions.is_empty() or support_regions.size() > 4 or rebuild_regions.is_empty() or rebuild_regions.size() > 4:
+		last_rejection_reason = "region_fanout_exceeded"
+		return false
+	if _operations.size() >= MAX_EDITS:
+		last_rejection_reason = "ledger_capacity_exceeded"
 		return false
 	var dependency_regions: Array[Vector2i] = []
 	for region_key in rebuild_regions:
@@ -72,6 +87,7 @@ func add_sphere(mode: int, center: Vector3, radius: float) -> bool:
 		(_by_region[region_id] as Array).append(sequence)
 	_next_sequence += 1
 	revision += 1
+	last_rejection_reason = ""
 	return true
 
 
@@ -133,6 +149,12 @@ func get_operations_snapshot() -> Array[Dictionary]:
 	return snapshot
 
 
+func get_last_operation_snapshot() -> Dictionary:
+	if _operations.is_empty():
+		return {}
+	return (_operations[-1] as Dictionary).duplicate(true)
+
+
 ## Compact immutable worker input. Packed arrays are shared read-only with mesh jobs.
 func get_meshing_snapshot() -> Dictionary:
 	var centers := PackedVector3Array()
@@ -151,6 +173,51 @@ func get_meshing_snapshot() -> Dictionary:
 		"centers": centers,
 		"radii": radii,
 		"modes": modes,
+	}
+
+
+## Build an ordered, immutable operation subset for one chunk. Terms are omitted
+## only when their sphere SDF is mathematically dominated for every lattice and
+## normal probe in this chunk. This is deliberately broader than geometric
+## support because min/max SDF tails can affect values beyond the brush sphere.
+func get_meshing_snapshot_for_chunk(region_key: Vector2i, chunk_coordinate: Vector2i) -> Dictionary:
+	var centers := PackedVector3Array()
+	var radii := PackedFloat64Array()
+	var modes := PackedByteArray()
+	var sequences := PackedInt32Array()
+	if GRID.is_valid_coordinate(chunk_coordinate):
+		var region_origin := SPATIAL.region_origin_world(region_key)
+		var chunk_min := region_origin + GRID.origin_for(chunk_coordinate) \
+			- Vector3.ONE * MESHING_QUERY_MARGIN
+		var chunk_max := region_origin + GRID.origin_for(chunk_coordinate) \
+			+ GRID.size_for(chunk_coordinate) + Vector3.ONE * MESHING_QUERY_MARGIN
+		var max_distance_squared := MESHING_NOOP_DISTANCE * MESHING_NOOP_DISTANCE
+		for operation in _operations:
+			if int(operation["world_seed"]) != world_seed \
+				or int(operation["generator_version"]) != generator_version:
+				continue
+			var center: Vector3 = operation["center_world"]
+			var nearest := Vector3(
+				clampf(center.x, chunk_min.x, chunk_max.x),
+				clampf(center.y, chunk_min.y, chunk_max.y),
+				clampf(center.z, chunk_min.z, chunk_max.z)
+			)
+			if nearest.distance_squared_to(center) > max_distance_squared:
+				continue
+			centers.append(center)
+			radii.append(float(operation["radius"]))
+			modes.append(int(operation["mode"]))
+			sequences.append(int(operation["sequence"]))
+	return {
+		"revision": revision,
+		"world_seed": world_seed,
+		"generator_version": generator_version,
+		"centers": centers,
+		"radii": radii,
+		"modes": modes,
+		"sequences": sequences,
+		"candidate_operation_count": centers.size(),
+		"ledger_operation_count": _operations.size(),
 	}
 
 

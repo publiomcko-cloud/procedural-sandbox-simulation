@@ -5,8 +5,15 @@ const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const WorldState := preload("res://scripts/terrain/terrain_world_state.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const MeshJob := preload("res://scripts/terrain/terrain_mesh_job.gd")
+const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const SEED := 424242
 const REPEATS := 5
+const REGION_KEYS := [
+	Vector2i(-2, -2), Vector2i(-1, -2), Vector2i(0, -2), Vector2i(1, -2),
+	Vector2i(1, -1), Vector2i(0, -1), Vector2i(-1, -1), Vector2i(-2, -1),
+	Vector2i(-2, 0), Vector2i(-1, 0), Vector2i(0, 0), Vector2i(1, 0),
+	Vector2i(1, 1), Vector2i(0, 1), Vector2i(-1, 1), Vector2i(-2, 1),
+]
 var assertion_count := 0
 var failure_count := 0
 
@@ -16,56 +23,98 @@ func _initialize() -> void:
 
 
 func _run() -> void:
-	print("TERRAIN_PERF_BENCH: godot=%s seed=%d repeats=%d chunk=(1,1)" % [Engine.get_version_info().string, SEED, REPEATS])
-	for edit_count in [0, 1, 32]:
+	print("TERRAIN_PERF_BENCH: godot=%s seed=%d repeats=%d chunk=(1,1) levels=0,32,64,128,256" % [Engine.get_version_info().string, SEED, REPEATS])
+	for edit_count in [0, 32, 64, 128, 256]:
+		var memory_before := int(Performance.get_monitor(Performance.MEMORY_STATIC))
 		var ledger := BrushState.new(SEED)
 		for index in range(edit_count):
 			var mode := BrushState.Mode.CARVE if index % 2 == 0 else BrushState.Mode.FILL
-			var offset := float(index % 4) * 0.08
-			var accepted: bool = ledger.add_sphere(mode, Vector3(5.5 + offset, 2.0, 4.0 + offset), 0.85)
+			var key: Vector2i = REGION_KEYS[index % REGION_KEYS.size()]
+			var origin := Spatial.region_origin_world(key)
+			var lane := float((index / REGION_KEYS.size()) % 4) * 0.22
+			var center := origin + Vector3(7.2 + lane, 3.2, 5.2 + lane)
+			if index % 8 == 0:
+				center = origin + Vector3(15.35, 3.2, 11.35)
+			var accepted: bool = ledger.add_sphere(mode, center, 1.25)
 			if not accepted:
 				push_error("PERF_BENCH_SETUP_FAIL: operation %d rejected" % index)
 				quit(1)
-		var elapsed := PackedInt64Array()
+		var memory_after_ledger := int(Performance.get_monitor(Performance.MEMORY_STATIC))
+		var elapsed_accelerated := PackedInt64Array()
+		var elapsed_full := PackedInt64Array()
+		var pool_wait := PackedInt64Array()
+		var worker_cpu := PackedInt64Array()
 		var stage_samples: Dictionary = {
 			"sdf_and_ledger": PackedInt64Array(),
 			"triangulation_and_face_normals": PackedInt64Array(),
 			"shared_gradient_normals": PackedInt64Array(),
 			"array_mesh_build": PackedInt64Array(),
 		}
-		var vertex_counts := PackedInt32Array()
+		var filtered_snapshot: Dictionary = ledger.get_meshing_snapshot_for_chunk(Vector2i.ZERO, Vector2i(1, 1))
+		var payload_bytes := int(filtered_snapshot["centers"].size()) * 24 \
+			+ int(filtered_snapshot["radii"].size()) * 8 \
+			+ int(filtered_snapshot["modes"].size()) \
+			+ int(filtered_snapshot["sequences"].size()) * 4
 		for repetition in range(REPEATS + 1):
-			var started := Time.get_ticks_usec()
-			var result: Dictionary = Mesher.build_chunk_mesh(
+			var reference_started := Time.get_ticks_usec()
+			var reference: Dictionary = Mesher.build_chunk_mesh(
 				SEED, Vector2i.ZERO, Vector2i(1, 1), false, ledger if edit_count > 0 else null
 			)
-			var duration := Time.get_ticks_usec() - started
-			if not result.get("valid", false):
-				push_error("PERF_BENCH_BUILD_FAIL: edit_count=%d" % edit_count)
+			var reference_usec := Time.get_ticks_usec() - reference_started
+			if not reference.get("valid", false):
+				push_error("PERF_BENCH_REFERENCE_FAIL: edit_count=%d" % edit_count)
+				quit(1)
+				return
+			var accelerated_started := Time.get_ticks_usec()
+			var cpu_result: Dictionary = Mesher.build_chunk_cpu_data(
+				SEED, Vector2i.ZERO, Vector2i(1, 1), false,
+				filtered_snapshot if edit_count > 0 else null
+			)
+			var accelerated_usec := Time.get_ticks_usec() - accelerated_started
+			var mesh_result: Dictionary = Mesher.mesh_from_cpu_data(cpu_result)
+			accelerated_usec += int(cpu_result.get("timings_usec", {}).get("array_mesh_build", 0))
+			if not mesh_result.get("valid", false):
+				push_error("PERF_BENCH_FILTERED_BUILD_FAIL: edit_count=%d" % edit_count)
+				quit(1)
+				return
+			if not _meshes_exactly_equal(reference["mesh"], mesh_result["mesh"]):
+				push_error("PERF_BENCH_GEOMETRY_MISMATCH: edit_count=%d candidates=%d" % [edit_count, filtered_snapshot["candidate_operation_count"]])
+				quit(1)
+				return
+			var job := MeshJob.new(SEED, Vector2i.ZERO, Vector2i(1, 1), false, filtered_snapshot if edit_count > 0 else null, Time.get_ticks_usec())
+			var submitted_usec := Time.get_ticks_usec()
+			var task_id := WorkerThreadPool.add_task(Callable(job, "run"), true, "terrain history benchmark")
+			await _wait_for_tasks([task_id])
+			if task_id < 0 or not job.result.get("valid", false):
+				push_error("PERF_BENCH_WORKER_FAIL: edit_count=%d" % edit_count)
+				quit(1)
+				return
+			var worker_mesh: Dictionary = Mesher.mesh_from_cpu_data(job.result)
+			if not _meshes_exactly_equal(reference["mesh"], worker_mesh["mesh"]):
+				push_error("PERF_BENCH_WORKER_GEOMETRY_MISMATCH: edit_count=%d" % edit_count)
 				quit(1)
 				return
 			if repetition == 0:
-				continue # warm-up is excluded from the reported distribution
-			elapsed.append(duration)
-			vertex_counts.append(int(result["vertex_count"]))
+				continue # warm-up is excluded from reported distributions
+			elapsed_full.append(reference_usec)
+			elapsed_accelerated.append(accelerated_usec)
+			pool_wait.append(maxi(0, job.worker_started_usec - submitted_usec))
+			worker_cpu.append(job.worker_finished_usec - job.worker_started_usec)
 			for key in stage_samples:
-				stage_samples[key].append(int(result.get("timings_usec", {}).get(key, 0)))
-		var sorted_elapsed := _sorted(elapsed)
-		print("TERRAIN_PERF_KERNEL: ledger=%d samples=%d total_p50/p95_ms=%.3f/%.3f vertices=%d sdf_p50_ms=%.3f triangulation_p50_ms=%.3f shared_normals_p50_ms=%.3f arraymesh_p50_ms=%.3f" % [
-			edit_count, REPEATS, _percentile(sorted_elapsed, 0.50) / 1000.0, _percentile(sorted_elapsed, 0.95) / 1000.0,
-			vertex_counts[0], _percentile(_sorted(stage_samples["sdf_and_ledger"]), 0.50) / 1000.0,
+				stage_samples[key].append(int(cpu_result.get("timings_usec", {}).get(key, 0)))
+		print("TERRAIN_PERF_HISTORY: ops=%d samples=%d candidates=%d snapshot_bytes=%d static_memory_before/ledger/delta=%d/%d/%d full_p50/p95_ms=%.3f/%.3f accelerated_p50/p95_ms=%.3f/%.3f worker_cpu_p50/p95_ms=%.3f/%.3f pool_wait_p50/p95_ms=%.3f/%.3f sdf_p50_ms=%.3f triangulation_p50_ms=%.3f normals_p50_ms=%.3f mesh_cpu_p50_ms=%.3f" % [
+			edit_count, REPEATS, filtered_snapshot["candidate_operation_count"], payload_bytes,
+			memory_before, memory_after_ledger, memory_after_ledger - memory_before,
+			_percentile(_sorted(elapsed_full), 0.50) / 1000.0, _percentile(_sorted(elapsed_full), 0.95) / 1000.0,
+			_percentile(_sorted(elapsed_accelerated), 0.50) / 1000.0, _percentile(_sorted(elapsed_accelerated), 0.95) / 1000.0,
+			_percentile(_sorted(worker_cpu), 0.50) / 1000.0, _percentile(_sorted(worker_cpu), 0.95) / 1000.0,
+			_percentile(_sorted(pool_wait), 0.50) / 1000.0, _percentile(_sorted(pool_wait), 0.95) / 1000.0,
+			_percentile(_sorted(stage_samples["sdf_and_ledger"]), 0.50) / 1000.0,
 			_percentile(_sorted(stage_samples["triangulation_and_face_normals"]), 0.50) / 1000.0,
 			_percentile(_sorted(stage_samples["shared_gradient_normals"]), 0.50) / 1000.0,
 			_percentile(_sorted(stage_samples["array_mesh_build"]), 0.50) / 1000.0,
 		])
-		var snapshot: Dictionary = ledger.get_meshing_snapshot()
-		var direct: Dictionary = Mesher.build_chunk_mesh(SEED, Vector2i.ZERO, Vector2i(1, 1), false, ledger if edit_count > 0 else null)
-		var worker: MeshJob = MeshJob.new(SEED, Vector2i.ZERO, Vector2i(1, 1), false, snapshot if edit_count > 0 else null, Time.get_ticks_usec())
-		var task_id := WorkerThreadPool.add_task(Callable(worker, "run"), false, "terrain equivalence")
-		await _wait_for_tasks([task_id])
-		_check(task_id >= 0 and not worker.result.has("mesh"), "worker returns CPU-only arrays for ledger %d" % edit_count)
-		var worker_mesh: Dictionary = Mesher.mesh_from_cpu_data(worker.result)
-		_check(_meshes_exactly_equal(direct["mesh"], worker_mesh["mesh"]), "threaded CPU mesh exactly matches serial geometry and normals for ledger %d" % edit_count)
+		_check(true, "full and spatially filtered geometry/normals are identical for %d operations" % edit_count)
 	var parallel_jobs: Array[MeshJob] = []
 	var parallel_task_ids: Array[int] = []
 	var parallel_coords: Array[Vector2i] = [Vector2i(0, 0), Vector2i(3, 0), Vector2i(0, 3), Vector2i(3, 3)]
