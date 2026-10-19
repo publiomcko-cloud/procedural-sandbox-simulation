@@ -107,9 +107,24 @@ func _test_picker_contract() -> void:
 	var all_empty := func(_point: Vector3) -> float:
 		samples[0] += 1
 		return -1.0
-	var no_hit: Dictionary = BrushPicker.pick_surface(Vector3.ZERO, Vector3.DOWN, all_empty)
+	var no_hit: Dictionary = BrushPicker.pick_sdf_v1_surface(Vector3.ZERO, Vector3.DOWN, all_empty)
 	_check(not no_hit["hit"], "ray with no field crossing reports no hit")
-	_check(samples[0] == BrushPicker.MAX_STEPS + 1, "no-hit ray terminates at the fixed work limit")
+	_check(
+		samples[0] > 0 and samples[0] <= BrushPicker.MAX_STEPS + 1,
+		"no-hit ray stays within the fixed picker work limit"
+	)
+	_check(samples[0] < BrushPicker.MAX_STEPS + 1, "Lipschitz-safe jumps avoid redundant empty-space samples")
+	samples[0] = 0
+	var generic_no_hit: Dictionary = BrushPicker.pick_surface(Vector3.ZERO, Vector3.DOWN, all_empty)
+	_check(not generic_no_hit["hit"] and samples[0] == BrushPicker.MAX_STEPS + 1, "generic callable preserves the exact legacy work bound")
+	var steep_field := func(point: Vector3) -> float:
+		return -10.0 + point.x * 3.0
+	var steep_hit: Dictionary = BrushPicker.pick_sdf_v1_surface(Vector3.ZERO, Vector3.RIGHT, steep_field)
+	_check(steep_hit.get("hit", false), "unexpected high-gradient adaptive sample falls back to the legacy grid")
+	if steep_hit.get("hit", false):
+		_check(absf(steep_hit["position"].x - (10.0 / 3.0)) < 0.0001, "high-gradient fallback refines the actual first surface")
+	var generic_steep_hit: Dictionary = BrushPicker.pick_surface(Vector3.ZERO, Vector3.RIGHT, steep_field)
+	_check(generic_steep_hit.get("hit", false), "generic sample callables retain the legacy fixed-step picker")
 	var non_finite := func(_point: Vector3) -> float:
 		return NAN
 	_check(not BrushPicker.pick_surface(Vector3.ZERO, Vector3.DOWN, non_finite)["hit"], "non-finite field sample fails closed")
