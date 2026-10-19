@@ -25,6 +25,8 @@ func _run() -> void:
 	print("TERRAIN_HISTORY_TEST: Godot=%s target_edits=256 distributed_regions=%d" % [Engine.get_version_info().string, REGION_KEYS.size()])
 	var ledger := _make_full_ledger()
 	_test_capacity_and_exact_spatial_filter(ledger)
+	_test_ray_snapshot_equivalence(ledger, "distributed")
+	_test_concentrated_256_filter()
 	await _test_256_sequential_scene_edits()
 	await _test_revision_supersession_and_rapid_movement()
 	if failures == 0:
@@ -90,6 +92,7 @@ func _test_capacity_and_exact_spatial_filter(ledger: RefCounted) -> void:
 							_check(false, "spatial subset exactly preserves full ordered SDF at %s %s" % [key, local])
 							return
 			_check(true, "all lattice samples match full replay for signed region %s chunk %s" % [key, coordinate])
+			_check_expanded_query_domain(full_snapshot, filtered, key, coordinate, "distributed")
 	_check(max_candidates < 256, "conservative chunk filter removes only provably dominated distant operations (max candidates=%d)" % max_candidates)
 
 	for key in [Vector2i(-2, -2), Vector2i.ZERO, Vector2i(1, 1)]:
@@ -110,6 +113,91 @@ func _test_capacity_and_exact_spatial_filter(ledger: RefCounted) -> void:
 	print("TERRAIN_HISTORY_FILTER: total_ops=256 max_chunk_candidates=%d process_static_bytes=%d" % [
 		max_candidates, int(Performance.get_monitor(Performance.MEMORY_STATIC)),
 	])
+
+
+func _make_concentrated_ledger() -> RefCounted:
+	var ledger: RefCounted = BrushState.new(SEED, Field.GENERATOR_VERSION)
+	var origin := Spatial.region_origin_world(Vector2i(-1, -1))
+	for index in range(BrushState.MAX_EDITS):
+		var lane := float(index % 4) * 0.035
+		var y_values := [-1.75, 3.2, 7.75]
+		var center := origin + Vector3(15.35 + lane, y_values[index % y_values.size()], 11.35 + lane)
+		var mode := BrushState.Mode.CARVE if index % 2 == 0 else BrushState.Mode.FILL
+		_check(ledger.add_sphere(mode, center, 1.25), "concentrated command %d is accepted" % index)
+	return ledger
+
+
+func _test_concentrated_256_filter() -> void:
+	var ledger: RefCounted = _make_concentrated_ledger()
+	var full_snapshot: Dictionary = ledger.get_meshing_snapshot()
+	var cases := [
+		{"region": Vector2i(-1, -1), "chunk": Vector2i(3, 3)},
+		{"region": Vector2i(0, -1), "chunk": Vector2i(0, 3)},
+		{"region": Vector2i(-1, 0), "chunk": Vector2i(3, 0)},
+		{"region": Vector2i(0, 0), "chunk": Vector2i(0, 0)},
+	]
+	for case in cases:
+		var key: Vector2i = case["region"]
+		var coordinate: Vector2i = case["chunk"]
+		var filtered: Dictionary = ledger.get_meshing_snapshot_for_chunk(key, coordinate)
+		_check(filtered["candidate_operation_count"] == 256, "concentrated corner history retains every potentially effective command at %s/%s" % [key, coordinate])
+		_check_expanded_query_domain(full_snapshot, filtered, key, coordinate, "concentrated")
+		var reference: Dictionary = Mesher.build_chunk_mesh(SEED, key, coordinate, false, ledger)
+		var cpu_data: Dictionary = Mesher.build_chunk_cpu_data(SEED, key, coordinate, false, filtered)
+		var candidate: Dictionary = Mesher.mesh_from_cpu_data(cpu_data)
+		_check(_meshes_equal(reference["mesh"], candidate["mesh"]), "concentrated 256-operation mesh and normals exactly match full ordered replay at %s/%s" % [key, coordinate])
+	_test_ray_snapshot_equivalence(ledger, "concentrated")
+
+
+func _test_ray_snapshot_equivalence(ledger: RefCounted, history_name: String) -> void:
+	var full_snapshot: Dictionary = ledger.get_meshing_snapshot()
+	var rays := [
+		{"origin": Vector3(20.0, 20.0, 26.0), "direction": Vector3(-12.0, -8.0, -15.0).normalized(), "cave": false},
+		{"origin": Vector3(8.0, 195.0, 16.0), "direction": Vector3(4.0, -95.0, 10.0).normalized(), "cave": true},
+		{"origin": Vector3(-0.6, 19.0, 20.0), "direction": Vector3(0.42, -0.7, -0.58).normalized(), "cave": false},
+	]
+	for ray in rays:
+		var origin: Vector3 = ray["origin"]
+		var direction: Vector3 = ray["direction"]
+		var optimized: Dictionary = ledger.get_ray_snapshot(origin, direction, 120.0)
+		_check(optimized["candidate_operation_count"] <= ledger.get_edit_count(), "%s ray subset is bounded by canonical history" % history_name)
+		for step_index in range(2401):
+			var distance := float(step_index) * 0.05
+			var world_position := origin + direction * distance
+			var mapped: Dictionary = Spatial.world_to_region_local(world_position)
+			if not mapped.get("valid", false):
+				continue
+			var expected := BrushState.sample_density_snapshot(SEED, mapped["region_key"], mapped["local_position"], ray["cave"], full_snapshot)
+			var actual := BrushState.sample_density_snapshot(SEED, mapped["region_key"], mapped["local_position"], ray["cave"], optimized)
+			if expected != actual:
+				_check(false, "%s ordered ray subset differs at t=%.2f, point=%s, candidate_ops=%d" % [history_name, distance, world_position, optimized["candidate_operation_count"]])
+				return
+		_check(true, "%s ray preserves exact SDF at 0.05-unit march and bisection samples (candidates=%d/%d)" % [history_name, optimized["candidate_operation_count"], ledger.get_edit_count()])
+
+
+func _check_expanded_query_domain(
+	full_snapshot: Dictionary,
+	filtered_snapshot: Dictionary,
+	region_key: Vector2i,
+	chunk_coordinate: Vector2i,
+	history_name: String
+) -> void:
+	var chunk_origin := Grid.origin_for(chunk_coordinate)
+	var chunk_size := Grid.size_for(chunk_coordinate)
+	var margin := Grid.SAMPLE_STEP * 0.5
+	var xs := [chunk_origin.x - margin, chunk_origin.x, chunk_origin.x + chunk_size.x, chunk_origin.x + chunk_size.x + margin]
+	var ys := [Grid.MIN_BOUND.y - margin, Grid.MIN_BOUND.y, Grid.MIN_BOUND.y + margin, Grid.MAX_BOUND.y - margin, Grid.MAX_BOUND.y, Grid.MAX_BOUND.y + margin]
+	var zs := [chunk_origin.z - margin, chunk_origin.z, chunk_origin.z + chunk_size.z, chunk_origin.z + chunk_size.z + margin]
+	for y_value in ys:
+		for x_value in xs:
+			for z_value in zs:
+				var local := Vector3(x_value, y_value, z_value)
+				var expected := BrushState.sample_density_snapshot(SEED, region_key, local, false, full_snapshot)
+				var actual := BrushState.sample_density_snapshot(SEED, region_key, local, false, filtered_snapshot)
+				if expected != actual:
+					_check(false, "%s history differs at expanded vertical/border query %s/%s/%s: %.6f vs %.6f" % [history_name, region_key, chunk_coordinate, local, expected, actual])
+					return
+	_check(true, "%s history matches full replay at vertical endpoints, normal probes, and signed chunk borders for %s/%s" % [history_name, region_key, chunk_coordinate])
 
 
 func _test_256_sequential_scene_edits() -> void:

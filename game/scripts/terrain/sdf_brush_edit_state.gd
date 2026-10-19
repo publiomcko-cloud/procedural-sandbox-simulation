@@ -18,6 +18,8 @@ const REBUILD_DEPENDENCY_HALO := GRID.SAMPLE_STEP
 # support alone. General density queries still evaluate the full ledger.
 const MESHING_QUERY_MARGIN := GRID.SAMPLE_STEP * 0.5
 const MESHING_NOOP_DISTANCE := 9.0
+const SURFACE_Y_MIN := 1.57
+const SURFACE_Y_MAX := 6.03
 
 enum Mode { CARVE, FILL }
 
@@ -187,10 +189,22 @@ func get_meshing_snapshot_for_chunk(region_key: Vector2i, chunk_coordinate: Vect
 	var sequences := PackedInt32Array()
 	if GRID.is_valid_coordinate(chunk_coordinate):
 		var region_origin := SPATIAL.region_origin_world(region_key)
-		var chunk_min := region_origin + GRID.origin_for(chunk_coordinate) \
-			- Vector3.ONE * MESHING_QUERY_MARGIN
-		var chunk_max := region_origin + GRID.origin_for(chunk_coordinate) \
-			+ GRID.size_for(chunk_coordinate) + Vector3.ONE * MESHING_QUERY_MARGIN
+		var chunk_origin := region_origin + GRID.origin_for(chunk_coordinate)
+		var chunk_size := GRID.size_for(chunk_coordinate)
+		# origin_for()/size_for() intentionally describe horizontal chunk placement
+		# and the vertical extent size, respectively; they do not encode the grid's
+		# negative minimum Y. Cover the complete lattice and central-difference
+		# normal domain explicitly, including both vertical endpoints.
+		var chunk_min := Vector3(
+			chunk_origin.x - MESHING_QUERY_MARGIN,
+			GRID.MIN_BOUND.y - MESHING_QUERY_MARGIN,
+			chunk_origin.z - MESHING_QUERY_MARGIN
+		)
+		var chunk_max := Vector3(
+			chunk_origin.x + chunk_size.x + MESHING_QUERY_MARGIN,
+			GRID.MAX_BOUND.y + MESHING_QUERY_MARGIN,
+			chunk_origin.z + chunk_size.z + MESHING_QUERY_MARGIN
+		)
 		var max_distance_squared := MESHING_NOOP_DISTANCE * MESHING_NOOP_DISTANCE
 		for operation in _operations:
 			if int(operation["world_seed"]) != world_seed \
@@ -207,6 +221,78 @@ func get_meshing_snapshot_for_chunk(region_key: Vector2i, chunk_coordinate: Vect
 			centers.append(center)
 			radii.append(float(operation["radius"]))
 			modes.append(int(operation["mode"]))
+			sequences.append(int(operation["sequence"]))
+	return {
+		"revision": revision,
+		"world_seed": world_seed,
+		"generator_version": generator_version,
+		"centers": centers,
+		"radii": radii,
+		"modes": modes,
+		"sequences": sequences,
+		"candidate_operation_count": centers.size(),
+		"ledger_operation_count": _operations.size(),
+	}
+
+
+## Ordered, conservative subset for every point on one bounded picker ray. The
+## interval is propagated through each min/max command, so omitting a command
+## is proven harmless even after all earlier retained commands. This preserves
+## exact values/order while avoiding a full ledger scan for every ray sample.
+func get_ray_snapshot(ray_origin: Vector3, ray_direction: Vector3, max_distance: float) -> Dictionary:
+	if not ray_origin.is_finite() or not ray_direction.is_finite() \
+		or not is_finite(max_distance) or max_distance < 0.0 \
+		or ray_direction.length_squared() <= 0.000001:
+		return get_meshing_snapshot()
+	var direction := ray_direction.normalized()
+	var ray_end := ray_origin + direction * max_distance
+	var y_min := minf(ray_origin.y, ray_end.y)
+	var y_max := maxf(ray_origin.y, ray_end.y)
+	# SdfWorld's surface term is min(surface_y-y, y-MIN_Y), with
+	# surface_y in [1.57, 6.03]. The cave SDF is always >= -0.92. These are
+	# conservative bounds for the base field on the complete ray segment.
+	var density_min := minf(SURFACE_Y_MIN - y_max, minf(y_min - FIELD.MIN_Y, -0.92))
+	var peak_y := clampf((SURFACE_Y_MAX + FIELD.MIN_Y) * 0.5, y_min, y_max)
+	var density_max := minf(SURFACE_Y_MAX - peak_y, peak_y - FIELD.MIN_Y)
+	var centers := PackedVector3Array()
+	var radii := PackedFloat64Array()
+	var modes := PackedByteArray()
+	var sequences := PackedInt32Array()
+	var segment := ray_end - ray_origin
+	var segment_length_squared := segment.length_squared()
+	for operation in _operations:
+		if int(operation["world_seed"]) != world_seed or int(operation["generator_version"]) != generator_version:
+			continue
+		var center: Vector3 = operation["center_world"]
+		var radius := float(operation["radius"])
+		var projection := 0.0
+		if segment_length_squared > 0.000001:
+			projection = clampf((center - ray_origin).dot(segment) / segment_length_squared, 0.0, 1.0)
+		var nearest := ray_origin + segment * projection
+		var minimum_distance := center.distance_to(nearest)
+		var maximum_distance := maxf(center.distance_to(ray_origin), center.distance_to(ray_end))
+		var mode := int(operation["mode"])
+		var keep_operation := true
+		if mode == Mode.CARVE:
+			var threshold_min := minimum_distance - radius
+			var threshold_max := maximum_distance - radius
+			if threshold_min >= density_max:
+				keep_operation = false
+			else:
+				density_min = minf(density_min, threshold_min)
+				density_max = minf(density_max, threshold_max)
+		else:
+			var threshold_min := radius - maximum_distance
+			var threshold_max := radius - minimum_distance
+			if threshold_max <= density_min:
+				keep_operation = false
+			else:
+				density_min = maxf(density_min, threshold_min)
+				density_max = maxf(density_max, threshold_max)
+		if keep_operation:
+			centers.append(center)
+			radii.append(radius)
+			modes.append(mode)
 			sequences.append(int(operation["sequence"]))
 	return {
 		"revision": revision,

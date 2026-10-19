@@ -77,6 +77,11 @@ var _peak_frame_ms := 0.0
 var _mesh_uploads_this_frame := 0
 var _peak_mesh_uploads_per_frame := 0
 var _peak_mesh_jobs_in_flight := 0
+var _brush_pick_serial := 0
+var _last_brush_pick_elapsed_usec := 0
+var _last_brush_pick_sample_count := 0
+var _last_brush_pick_hit := false
+var _last_brush_pick_candidate_count := 0
 var _frame_time_samples: Array[float] = []
 var _frame_sample_write_index := 0
 var _frame_sample_count := 0
@@ -1074,6 +1079,15 @@ func _sample_world_density(world_position: Vector3) -> float:
 	return state.sample_density(mapped["local_position"], cave_section_enabled)
 
 
+func _sample_world_density_from_snapshot(world_position: Vector3, snapshot: Dictionary) -> float:
+	var mapped: Dictionary = SpatialGrid.world_to_region_local(world_position)
+	if not mapped.get("valid", false):
+		return -INF
+	return BrushEditState.sample_density_snapshot(
+		WorldState.DEMO_SEED, mapped["region_key"], mapped["local_position"], cave_section_enabled, snapshot
+	)
+
+
 func _apply_brush_at(screen_position: Vector2) -> void:
 	if global_rebuild_pending or not active_regions.has(_region_id(focus_region_key)):
 		last_brush_result = "Focused region is not ready for edits; no edit added"
@@ -1085,9 +1099,20 @@ func _apply_brush_at(screen_position: Vector2) -> void:
 		return
 	var ray_origin := camera.project_ray_origin(screen_position)
 	var ray_direction := camera.project_ray_normal(screen_position)
+	var focused_state: RefCounted = _state_for_region(focus_region_key)
+	var pick_snapshot: Dictionary = focused_state.brush_edits.get_ray_snapshot(
+		ray_origin, ray_direction, BrushPicker.MAX_DISTANCE
+	)
+	_last_brush_pick_candidate_count = int(pick_snapshot.get("candidate_operation_count", 0))
+	_last_brush_pick_sample_count = 0
 	var density_sampler := func(point: Vector3) -> float:
-		return _sample_world_density(point)
+		_last_brush_pick_sample_count += 1
+		return _sample_world_density_from_snapshot(point, pick_snapshot)
+	var pick_started_usec := Time.get_ticks_usec()
 	var pick: Dictionary = BrushPicker.pick_surface(ray_origin, ray_direction, density_sampler)
+	_last_brush_pick_elapsed_usec = Time.get_ticks_usec() - pick_started_usec
+	_last_brush_pick_hit = bool(pick.get("hit", false))
+	_brush_pick_serial += 1
 	if not pick.get("hit", false):
 		last_brush_result = "No terrain surface hit; no edit added"
 		_update_status()
@@ -1210,6 +1235,11 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["peak_mesh_uploads_per_frame"] = _peak_mesh_uploads_per_frame
 	last_mesh_diagnostics["mesh_jobs_in_flight"] = _mesh_jobs.size()
 	last_mesh_diagnostics["peak_mesh_jobs_in_flight"] = _peak_mesh_jobs_in_flight
+	last_mesh_diagnostics["last_brush_pick_elapsed_ms"] = float(_last_brush_pick_elapsed_usec) / 1000.0
+	last_mesh_diagnostics["last_brush_pick_sample_count"] = _last_brush_pick_sample_count
+	last_mesh_diagnostics["last_brush_pick_hit"] = _last_brush_pick_hit
+	last_mesh_diagnostics["last_brush_pick_candidate_count"] = _last_brush_pick_candidate_count
+	last_mesh_diagnostics["brush_pick_serial"] = _brush_pick_serial
 	last_mesh_diagnostics["global_edit_count"] = edit_ledger.get_edit_count()
 	last_mesh_diagnostics["global_edit_limit"] = BrushEditState.MAX_EDITS
 	last_mesh_diagnostics["global_edit_last_sequence"] = edit_ledger.get_last_sequence()

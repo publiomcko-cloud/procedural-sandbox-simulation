@@ -7,6 +7,7 @@ const SAMPLE_STEP := 0.1
 # the surface at maximum zoom while retaining a fixed per-click work bound.
 const MAX_STEPS := 1200
 const BISECTION_STEPS := 12
+const MAX_DISTANCE := MAX_STEPS * SAMPLE_STEP
 
 
 

@@ -94,7 +94,9 @@ func _run() -> void:
 	await _wait_for_transaction(scene)
 	var full_ledger_latency := Time.get_ticks_usec() - full_ledger_started
 	var full_ledger_metrics: Dictionary = scene.get("last_mesh_diagnostics").duplicate(true)
-	print("TERRAIN_PERF_ACCEPTED_TO_VISIBLE: scenario=two_region_seam ledger_before=31 latency_ms=%.3f support=%d rebuild_regions=%d chunks=%d queue/pool_p95_ms=%.3f/%.3f upload_p50/publish_p95_ms=%.3f/%.3f stage_ms=%s frame_p95/p99_ms=%.3f/%.3f" % [
+	var ledger_before_final: int = ledger.get_edit_count()
+	print("TERRAIN_PERF_ACCEPTED_TO_VISIBLE: scenario=two_region_seam ledger_before=%d latency_ms=%.3f support=%d rebuild_regions=%d chunks=%d queue/pool_p95_ms=%.3f/%.3f upload_p50/publish_p95_ms=%.3f/%.3f stage_ms=%s frame_p95/p99_ms=%.3f/%.3f" % [
+		ledger_before_final,
 		float(full_ledger_latency) / 1000.0, full_ledger_metrics.get("last_support_region_count", 0),
 		full_ledger_metrics.get("last_rebuild_region_count", 0), full_ledger_metrics.get("last_rebuild_chunk_count", 0),
 		full_ledger_metrics.get("mesh_queue_wait_p95_ms", 0.0), full_ledger_metrics.get("worker_queue_wait_p95_ms", 0.0),
