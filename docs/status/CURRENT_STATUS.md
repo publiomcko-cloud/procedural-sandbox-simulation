@@ -1,4 +1,4 @@
-# Project current status — checkpoint 2026-10-18
+# Project current status — checkpoint 2026-10-19
 
 **Snapshot, not a live branch monitor.** Evidence baseline: repository `publiomcko-cloud/procedural-sandbox-simulation`, verified `main` at `2f86c42503cfa3a334215b1ff5b9bf9658263440` on 2026-10-17 after PRs #85, #86, #88 and #90 merged. **Always check live GitHub `main`, feature PR, issue and working tree before acting.** Earlier P1.0A and P1.0B checkpoints remain frozen; the [P1.0C implementation checkpoint](../checkpoints/2026-10-17-P1-0C-IMPLEMENTATION.md) records this authorized slice.
 
@@ -20,7 +20,9 @@ Owner explicitly authorized each merge after source and GUI approval. Runtime co
 
 ## Active, authorized — implementation prepared, pending review and owner GUI
 
-- **P1.0C / Issue #93:** performance work is committed on `feat/p1-0c-global-cross-region-brushes` as `69a168eb6fe2a42f3fd6cb40024f86ed50634c2b` (parent `163ef37a1ec0aab33dfea773a4176fae470161d8`) in the same draft PR [#92](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/92). Godot 4.7.2 validation passed 8,133 assertions. The 3×3 cold window measured 1.08 s; common/seam click-to-scene-commit p50 measured 54.7–54.9 ms; worker/serial geometry equivalence and cancellation tests passed. Independent source rereview and owner GUI acceptance remain pending. See the [performance checkpoint](../checkpoints/2026-10-18-P1-0C-MESH-PERFORMANCE.md). No merge or release is implied.
+- **P1.0C / Issue #94:** correction commit `3ee811b8a814ed52229bae21db0b21e703e2413a` (parent `6d128e3d231aa0456c42cf06e9e60f5a861d59df`) is prepared on `feat/p1-0c-global-cross-region-brushes` in the same draft PR [#92](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/92); see [Issue #94 checkpoint](../checkpoints/2026-10-19-P1-0C-ISSUE94-LONG-HISTORY.md). Against the old code, a 33rd global edit was rejected at the fixed 32-command cap. The new explicitly bounded 256-command ledger and mathematically no-op-only chunk replay filter passed 9,360 assertions under Godot `4.7.2.stable.official.ed1daf0bf`; stale revision supersession no longer spends genuine-failure retries. Local headless p50/p95 visible publication for a 256-op distributed history was 48.3/62.1 ms; return to an edited 3×3 region after unload/travel measured 1.73 s, and movement can still hitch. Independent source rereview and owner GUI acceptance remain pending. No merge or release is implied.
+
+**Documentation reconciliation:** docs-only PR [#87](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/87) was rechecked on 2026-10-19 and remains open/draft/unmerged at head `6fad428a22a149624da245e88a5e608d09ed7dd3`. This P1.0C checkpoint is on PR #92's branch; PR #87 was not modified. Its overlapping status/index snapshot must be reconciled deliberately before either branch is integrated.
 
 ## Spatial contract retained after P1.0A
 
@@ -35,7 +37,7 @@ Version 1 `SdfWorld` logical regions are 16×12 world units, divided into 4×4 c
 
 ## Next authorized action and handoff
 
-**Owner:** after source review, visually test seam/corner edits, stream-out/reentry, reset, and preserved lighting; separately authorize any merge. **Independent reviewer:** inspect the exact P1.0C PR HEAD and test evidence. **Codex:** no further implementation is authorized by the current P1.0C scope; leave persistence/networking deferred.
+**Independent reviewer:** inspect the final exact PR #92 SHA, particularly ordered-operation equivalence, the chunk no-op bound, reset semantics, supersession handling, test coverage and the full Godot validation report. **Owner:** then retest sustained edits up to 256, positive/negative and seam/corner edits, rapid region movement, unload/reentry, X/C/R, visible error behavior, lighting and frame hitches in Godot GUI. A source PASS does not certify pixels or owner acceptance. Only a separate explicit owner decision authorizes merge. Persistence/networking remain deferred.
 
 For any new agent: [recovery runbook](../workflow/AGENT_RECOVERY.md), [decision register](../decisions/DECISION_REGISTER.md), and the dated [P1.0C implementation checkpoint](../checkpoints/2026-10-17-P1-0C-IMPLEMENTATION.md).
 
