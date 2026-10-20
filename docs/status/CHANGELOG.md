@@ -86,3 +86,16 @@ Outcome: PASS_RESEARCH_WITH_CONDITIONS. ADR-0002 remains PROPOSED/DEFERRED; no b
 - All 13 unique historical PR #87 checkpoint files were preserved in PR #92 and are therefore in `main`. PR #87 was independently observed **closed without merge** at 2026-10-20T10:12:11Z; do not attribute its closure to this merge or overwrite the reconciled documentation.
 - Owner approved P1.1 R2 plan, included in #92; proposed P1.1A is a separately gated experimental LOD0/1 fixture, not approval of native Voxel Tools or P1.1B/C. See [post-merge checkpoint](../checkpoints/2026-10-20-PR92-P1-0C-MERGE.md).
 - All five F2-G1 holds unchanged.
+
+## 2026-10-20 — P1.1A experimental LOD 0/1 fixture
+
+- Owner separately authorized the P1.1A implementation after verified PR #92 and PR #95 integration; branch `feat/p1-1a-lod01-transition-fixture` starts from main `f42f9dbdd54809df202a81b4aa59ed0d1f377a2e`.
+- Added an isolated GDScript transition-cell fixture, matched LOD0/LOD1 references, deterministic topology/ledger tests, CPU-only exploratory benchmarks, and the [P1.1A specification](../specs/P1-1A-LOD01-TRANSITION-FIXTURE.md). The production scene, SDF v1, ledger semantics and P1.0C mesher are unchanged.
+- Full validation evidence and exact feature SHA are in the [P1.1A implementation checkpoint](../checkpoints/2026-10-20-P1-1A-IMPLEMENTATION.md). Performance and geometric acceptance remain pending owner-approved targets; headless data is not visual/GPU evidence. Feature PR remains draft/unmerged.
+- No P1.1B/C, native Voxel Tools, ADR-0002 adoption or F2-G1 operation. All five protected-state holds remain.
+
+## 2026-10-20 — P1.1A independent source-review corrections
+
+- Corrected LOD1 global-origin parity checks, compact snapshot domain validation, nonfinite SDF/normal-probe failure handling, and added independent neighboring LOD0/LOD1 mesh contour and normal comparisons on the existing fixture.
+- Godot 4.7.2 full validation passed 16,174 assertions across 12 suites, zero failures, at `9669a03ec691532862e9aee1251f15e15f06b690`. Updated 0/1/32/128/256 CPU fixture measurements are in the [review-correction checkpoint](../checkpoints/2026-10-20-P1-1A-REVIEW-CORRECTIONS.md); all budgets remain exploratory.
+- PR #96 remains draft and unmerged, pending independent rereview. No production LOD, P1.1B/C, native component, or F2-G1 scope was performed. All five holds remain.
