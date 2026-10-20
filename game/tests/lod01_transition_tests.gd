@@ -220,14 +220,22 @@ func _mesh_interface_segments(mesh_data: Dictionary, face: int) -> Dictionary:
 
 
 func _test_adjacent_reference_mesh_seams() -> void:
+	_test_adjacent_reference_aabb_contracts()
 	var base := Vector3(SEAM_LATTICE) * Fixture.LOD0_STEP
 	var nonlinear_field := func(point: Vector3) -> float:
 		var local := point - base
 		return 0.38 * local.x + 0.31 * local.y + 0.27 * local.z + 0.18 * local.x * local.y - 0.45
 	var configurations := [
-		{"name": "neighbor_face", "faces": [Fixture.FACE_X_NEG]},
-		{"name": "neighbor_edge", "faces": [Fixture.FACE_X_NEG, Fixture.FACE_Y_NEG]},
-		{"name": "neighbor_corner", "faces": [Fixture.FACE_X_NEG, Fixture.FACE_Y_NEG, Fixture.FACE_Z_NEG]},
+		{"name": "face_x_negative", "faces": [Fixture.FACE_X_NEG]},
+		{"name": "face_x_positive", "faces": [Fixture.FACE_X_POS]},
+		{"name": "face_y_negative", "faces": [Fixture.FACE_Y_NEG]},
+		{"name": "face_y_positive", "faces": [Fixture.FACE_Y_POS]},
+		{"name": "face_z_negative", "faces": [Fixture.FACE_Z_NEG]},
+		{"name": "face_z_positive", "faces": [Fixture.FACE_Z_POS]},
+		{"name": "negative_edge", "faces": [Fixture.FACE_X_NEG, Fixture.FACE_Y_NEG]},
+		{"name": "mixed_sign_edge", "faces": [Fixture.FACE_X_POS, Fixture.FACE_Y_NEG]},
+		{"name": "mixed_sign_corner", "faces": [Fixture.FACE_X_NEG, Fixture.FACE_Y_POS, Fixture.FACE_Z_NEG]},
+		{"name": "positive_corner", "faces": [Fixture.FACE_X_POS, Fixture.FACE_Y_POS, Fixture.FACE_Z_POS]},
 	]
 	for configuration in configurations:
 		var faces: Array[int] = []
@@ -238,31 +246,108 @@ func _test_adjacent_reference_mesh_seams() -> void:
 		_check(nonlinear_field.call(base) < 0.0 and nonlinear_field.call(base + Vector3.ONE) > 0.0, "%s uses a nontrivial field crossing its signed unit cell" % configuration["name"])
 		for fine_face in faces:
 			var fine_neighbors := _adjacent_lod0_reference_meshes(SEAM_LATTICE, fine_face, nonlinear_field)
+			var fine_neighbor_origin := _adjacent_reference_origin(SEAM_LATTICE, fine_face)
 			_check(fine_neighbors.size() == 1, "%s independently builds a neighboring LOD0 reference mesh for face %d" % [configuration["name"], fine_face])
-			_assert_adjacent_mesh_seam(transition, fine_neighbors, fine_face, base, "%s LOD0 face %d" % [configuration["name"], fine_face])
+			_check(fine_neighbors[0].get("triangle_count", 0) > 0 and _no_degenerate_or_duplicate_triangles(fine_neighbors[0]), "%s LOD0 reference has nondegenerate triangles" % configuration["name"])
+			_assert_adjacent_mesh_seam(transition, fine_neighbors, fine_face, SEAM_LATTICE, [fine_neighbor_origin], 0, base, "%s LOD0 face %d" % [configuration["name"], fine_face])
 			var coarse_face: int = fine_face ^ 1
 			var coarse_neighbor := _adjacent_lod1_reference_mesh(SEAM_LATTICE, coarse_face, nonlinear_field)
+			var coarse_neighbor_origin := _adjacent_reference_origin(SEAM_LATTICE, coarse_face)
 			var coarse_neighbors: Array[Dictionary] = [coarse_neighbor]
-			_assert_adjacent_mesh_seam(transition, coarse_neighbors, coarse_face, base, "%s LOD1 face %d" % [configuration["name"], coarse_face])
+			_check(coarse_neighbor.get("triangle_count", 0) > 0 and _no_degenerate_or_duplicate_triangles(coarse_neighbor), "%s LOD1 reference has nondegenerate triangles" % configuration["name"])
+			_assert_adjacent_mesh_seam(transition, coarse_neighbors, coarse_face, SEAM_LATTICE, [coarse_neighbor_origin], 1, base, "%s LOD1 face %d" % [configuration["name"], coarse_face])
+
+
+func _test_adjacent_reference_aabb_contracts() -> void:
+	var base := Vector3(SEAM_LATTICE) * Fixture.LOD0_STEP
+	var transition_bounds := _unit_domain_aabb(SEAM_LATTICE)
+	# Reproduce the reviewed defect before checking corrected placements: one
+	# LOD0 index is only 0.5 world units, so the full-unit reference overlaps.
+	var bad_origin := SEAM_LATTICE
+	bad_origin.x -= 1
+	var bad_bounds := _unit_domain_aabb(bad_origin)
+	_check(transition_bounds["min"].x == -2.0 and transition_bounds["max"].x == -1.0, "reproduction transition AABB is exactly x=[-2,-1]")
+	_check(bad_bounds["min"].x == -2.5 and bad_bounds["max"].x == -1.5, "reviewed -1 LOD0-index neighbor AABB is exactly x=[-2.5,-1.5]")
+	_check(bad_bounds["max"].x > transition_bounds["min"].x, "reviewed -1 offset reproduces 0.5-unit interior overlap")
+	var bad_spatial := _adjacency_aabb_checks(transition_bounds, bad_bounds, Fixture.FACE_X_NEG)
+	_check(not bad_spatial["touches_requested_plane"] and not bad_spatial["interiors_disjoint"], "deliberately incorrect -1 offset fails the independent spatial adjacency contract")
+
+	for lod in [0, 1]:
+		for face in range(6):
+			var neighbor_origin := _adjacent_reference_origin(SEAM_LATTICE, face)
+			var neighbor_bounds := _unit_domain_aabb(neighbor_origin)
+			var spatial := _adjacency_aabb_checks(transition_bounds, neighbor_bounds, face)
+			_check(spatial["touches_requested_plane"], "LOD%d reference face %d touches the requested external boundary plane exactly" % [lod, face])
+			_check(spatial["interiors_disjoint"], "LOD%d reference face %d has no interior overlap with transition domain" % [lod, face])
+			_check(spatial["tangent_ranges_match"], "LOD%d reference face %d has identical ranges on both tangent axes" % [lod, face])
+			var axis := int(face / 2)
+			var expected_plane := base[axis] + (0.0 if face % 2 == 0 else Fixture.LOD1_STEP)
+			_check(neighbor_bounds["max"][axis] == expected_plane if face % 2 == 0 else neighbor_bounds["min"][axis] == expected_plane, "LOD%d reference face %d uses the exact signed-world contact coordinate %.3f" % [lod, face, expected_plane])
+			_check(spatial["neighbor_min"].is_finite() and spatial["neighbor_max"].is_finite(), "LOD%d reference face %d has finite signed AABB coordinates" % [lod, face])
+
+	var corrected_origin := _adjacent_reference_origin(SEAM_LATTICE, Fixture.FACE_X_NEG)
+	var corrected_bounds := _unit_domain_aabb(corrected_origin)
+	_check(corrected_origin.x == SEAM_LATTICE.x - 2 and corrected_bounds["max"].x == transition_bounds["min"].x, "corrected negative X neighbor shifts -2 indices and touches at x=-2")
+
+
+func _unit_domain_aabb(origin: Vector3i) -> Dictionary:
+	var minimum := Vector3(origin) * Fixture.LOD0_STEP
+	return {"min": minimum, "max": minimum + Vector3.ONE}
+
+
+func _adjacent_reference_origin(origin: Vector3i, face: int) -> Vector3i:
+	var neighbor_origin := origin
+	var axis := int(face / 2)
+	neighbor_origin[axis] += -2 if face % 2 == 0 else 2
+	return neighbor_origin
+
+
+func _adjacency_aabb_checks(transition: Dictionary, neighbor: Dictionary, face: int) -> Dictionary:
+	var axis := int(face / 2)
+	var negative := face % 2 == 0
+	var transition_min: Vector3 = transition["min"]
+	var transition_max: Vector3 = transition["max"]
+	var neighbor_min: Vector3 = neighbor["min"]
+	var neighbor_max: Vector3 = neighbor["max"]
+	var boundary_matches := neighbor_max[axis] == transition_min[axis] if negative else neighbor_min[axis] == transition_max[axis]
+	var disjoint := neighbor_max[axis] <= transition_min[axis] if negative else neighbor_min[axis] >= transition_max[axis]
+	var tangents_match := true
+	for tangent_axis in range(3):
+		if tangent_axis == axis:
+			continue
+		if neighbor_min[tangent_axis] != transition_min[tangent_axis] or neighbor_max[tangent_axis] != transition_max[tangent_axis]:
+			tangents_match = false
+	return {
+		"touches_requested_plane": boundary_matches,
+		"interiors_disjoint": disjoint,
+		"tangent_ranges_match": tangents_match,
+		"neighbor_min": neighbor_min,
+		"neighbor_max": neighbor_max,
+	}
 
 
 func _adjacent_lod0_reference_meshes(origin: Vector3i, face: int, sampler: Callable) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	var axis := int(face / 2)
-	var neighbor_origin := origin
-	neighbor_origin[axis] += -1 if face % 2 == 0 else 2
+	var neighbor_origin := _adjacent_reference_origin(origin, face)
 	result.append(Fixture.build_uniform_reference_cell(SEED, neighbor_origin, 0, {}, sampler))
 	return result
 
 
 func _adjacent_lod1_reference_mesh(origin: Vector3i, face: int, sampler: Callable) -> Dictionary:
-	var axis := int(face / 2)
-	var neighbor_origin := origin
-	neighbor_origin[axis] += -2 if face % 2 == 0 else 2
+	var neighbor_origin := _adjacent_reference_origin(origin, face)
 	return Fixture.build_uniform_reference_cell(SEED, neighbor_origin, 1, {}, sampler)
 
 
-func _assert_adjacent_mesh_seam(transition: Dictionary, neighbors: Array[Dictionary], face: int, base: Vector3, label: String) -> void:
+func _assert_adjacent_mesh_seam(transition: Dictionary, neighbors: Array[Dictionary], face: int, transition_origin: Vector3i, neighbor_origins: Array[Vector3i], neighbor_lod: int, base: Vector3, label: String) -> void:
+	_check(neighbor_lod == 0 or neighbor_lod == 1, "%s reference builder uses a supported LOD level" % label)
+	_check(neighbors.size() == neighbor_origins.size(), "%s has one declared physical neighbor origin per independently built mesh" % label)
+	var transition_bounds := _unit_domain_aabb(transition_origin)
+	for index in range(mini(neighbors.size(), neighbor_origins.size())):
+		var neighbor_bounds := _unit_domain_aabb(neighbor_origins[index])
+		var spatial := _adjacency_aabb_checks(transition_bounds, neighbor_bounds, face)
+		_check(spatial["touches_requested_plane"], "%s neighbor and transition share the requested external plane before contour comparison" % label)
+		_check(spatial["interiors_disjoint"], "%s neighbor and transition interiors are disjoint before contour comparison" % label)
+		_check(spatial["tangent_ranges_match"], "%s neighbor and transition have the same interface ranges before contour comparison" % label)
 	for neighbor in neighbors:
 		_check(neighbor.get("valid", false), "%s adjacent uniform reference mesh builds independently" % label)
 	var axis := int(face / 2)
@@ -271,7 +356,10 @@ func _assert_adjacent_mesh_seam(transition: Dictionary, neighbors: Array[Diction
 	var actual := _collect_boundary_contours(transition_meshes, axis, plane)
 	var expected := _collect_boundary_contours(neighbors, axis, plane)
 	_check(not expected["segments"].is_empty(), "%s adjacent mesh produces a nonempty boundary contour" % label)
+	_check(bool(actual["boundary_geometry_valid"]) and bool(expected["boundary_geometry_valid"]), "%s interface has no zero-length or degenerate boundary segments" % label)
 	_check(actual["segments"] == expected["segments"], "%s actual transition contour equals independently meshed neighboring cells" % label)
+	_check(_contours_have_no_t_junctions(actual["segment_points"]), "%s transition contour has no endpoint T-junctions" % label)
+	_check(_contours_have_no_t_junctions(expected["segment_points"]), "%s independently generated neighbor contour has no endpoint T-junctions" % label)
 	_check(bool(actual["normals_valid"]) and bool(expected["normals_valid"]), "%s boundary vertices have internally consistent normals" % label)
 	_check(actual["normals"].keys().size() == expected["normals"].keys().size(), "%s reference and transition contour have the same normal-bearing vertices" % label)
 	for point_key in expected["normals"]:
@@ -284,8 +372,10 @@ func _assert_adjacent_mesh_seam(transition: Dictionary, neighbors: Array[Diction
 
 func _collect_boundary_contours(meshes: Array[Dictionary], axis: int, plane: float) -> Dictionary:
 	var segments: Dictionary = {}
+	var segment_points: Dictionary = {}
 	var normals: Dictionary = {}
 	var normals_valid := true
+	var boundary_geometry_valid := true
 	for mesh_data in meshes:
 		if not mesh_data.get("valid", false):
 			normals_valid = false
@@ -301,8 +391,11 @@ func _collect_boundary_contours(meshes: Array[Dictionary], axis: int, plane: flo
 				if absf(a[axis] - plane) > ASSERT_TOLERANCE or absf(b[axis] - plane) > ASSERT_TOLERANCE:
 					continue
 				if a.distance_squared_to(b) <= ASSERT_TOLERANCE * ASSERT_TOLERANCE:
+					boundary_geometry_valid = false
 					continue
-				segments[_segment_key(a, b)] = true
+				var segment_key := _segment_key(a, b)
+				segments[segment_key] = true
+				segment_points[segment_key] = [a, b]
 				for endpoint in [[a, mesh_normals[a_index]], [b, mesh_normals[b_index]]]:
 					var point: Vector3 = endpoint[0]
 					var normal: Vector3 = endpoint[1]
@@ -312,7 +405,30 @@ func _collect_boundary_contours(meshes: Array[Dictionary], axis: int, plane: flo
 						if existing_normal.distance_to(normal) > 0.000001:
 							normals_valid = false
 					normals[key] = normal
-	return {"segments": segments, "normals": normals, "normals_valid": normals_valid}
+	return {"segments": segments, "segment_points": segment_points, "normals": normals, "normals_valid": normals_valid, "boundary_geometry_valid": boundary_geometry_valid}
+
+
+func _contours_have_no_t_junctions(segment_points: Dictionary) -> bool:
+	var points: Dictionary = {}
+	for endpoints in segment_points.values():
+		points[_point_key(endpoints[0])] = endpoints[0]
+		points[_point_key(endpoints[1])] = endpoints[1]
+	for endpoints in segment_points.values():
+		var a: Vector3 = endpoints[0]
+		var b: Vector3 = endpoints[1]
+		var ab := b - a
+		var length_squared := ab.length_squared()
+		if length_squared <= ASSERT_TOLERANCE * ASSERT_TOLERANCE:
+			return false
+		for point_variant in points.values():
+			var point: Vector3 = point_variant
+			if point.distance_to(a) <= ASSERT_TOLERANCE or point.distance_to(b) <= ASSERT_TOLERANCE:
+				continue
+			var t := (point - a).dot(ab) / length_squared
+			if t > ASSERT_TOLERANCE and t < 1.0 - ASSERT_TOLERANCE:
+				if point.distance_to(a + ab * t) <= ASSERT_TOLERANCE:
+					return false
+	return true
 
 
 func _test_cave_and_narrow_features() -> void:
