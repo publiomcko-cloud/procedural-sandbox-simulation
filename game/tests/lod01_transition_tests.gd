@@ -7,6 +7,7 @@ const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const ProductionMesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const SEED := 424242
 const MIN_LATTICE := Vector3i(-4, 4, -6)
+const SEAM_LATTICE := Vector3i(-4, -2, -6)
 const ASSERT_TOLERANCE := 0.00001
 
 var assertions := 0
@@ -20,13 +21,16 @@ func _initialize() -> void:
 func _run() -> void:
 	print("LOD01_TRANSITION_TEST: Godot=%s seed=%d generator=%d" % [Engine.get_version_info().string, SEED, Field.GENERATOR_VERSION])
 	_test_global_lattice_and_negative_floor()
+	_test_lod1_origin_alignment_guards()
 	_test_common_sample_parity()
 	_test_transition_topology()
 	_test_production_tetra_face_parity()
+	_test_adjacent_reference_mesh_seams()
 	_test_cave_and_narrow_features()
 	_test_ordered_ledger_parity_and_revision_identity()
 	_test_matched_lod_references_and_normals()
 	_test_snapshot_identity_and_capacity_guards()
+	_test_nonfinite_density_rejection()
 	_benchmark_transition_fixture()
 	if failures == 0:
 		print("LOD01_TRANSITION_PASS: assertions=%d failures=0" % assertions)
@@ -43,6 +47,34 @@ func _test_global_lattice_and_negative_floor() -> void:
 	var common := Fixture.world_position_for_lattice(Vector3i(-4, 4, -6), 0)
 	_check(common == Fixture.world_position_for_lattice(Vector3i(-2, 2, -3), 1), "coincident samples share globally anchored integer lattice positions")
 	_check(Fixture.world_position_for_lattice(Vector3i.ZERO, 3).is_finite() == false, "unsupported LOD cannot silently produce a coordinate")
+	_check(Fixture.is_lod1_aligned_origin(Vector3i(-4, 4, -6)), "negative and positive even LOD0 lattice indices align to global LOD1")
+
+
+func _test_lod1_origin_alignment_guards() -> void:
+	var invalid_origins: Array[Vector3i] = [
+		Vector3i(1, 0, 0), Vector3i(-3, 0, 0),
+		Vector3i(0, 1, 0), Vector3i(0, -1, 0),
+		Vector3i(0, 0, 1), Vector3i(0, 0, -1),
+	]
+	for origin in invalid_origins:
+		_check(not Fixture.is_lod1_aligned_origin(origin), "odd signed origin is rejected by the LOD1 alignment predicate: %s" % origin)
+		var sample_calls := [0]
+		var counter_sampler := func(_point: Vector3) -> float:
+			sample_calls[0] = int(sample_calls[0]) + 1
+			return 1.0
+		var transition := Fixture.build_transition_cell(SEED, origin, [Fixture.FACE_X_NEG], {}, counter_sampler)
+		_check(not transition.get("valid", false) and transition.get("reason", "") == "misaligned_lod1_cell_origin", "transition rejects odd signed origin with a deterministic reason")
+		var reference := Fixture.build_uniform_reference_cell(SEED, origin, 1, {}, counter_sampler)
+		_check_lod1_alignment_reference(reference)
+		_check(Fixture.interface_triangles(origin, Fixture.FACE_X_NEG, 1).is_empty(), "coarse public interface helper rejects odd signed origins")
+		_check(sample_calls[0] == 0, "misaligned LOD1 requests fail before invoking a density sampler")
+		var fine_reference := Fixture.build_uniform_reference_cell(SEED, origin, 0)
+		_check(fine_reference.get("valid", false), "LOD0 reference preserves odd fine-lattice origins")
+	_check(Fixture.interface_triangles(Vector3i(1, 0, 0), Fixture.FACE_X_NEG, 2).size() == 8, "fine-resolution interface helper permits an odd LOD0 origin")
+
+
+func _check_lod1_alignment_reference(reference: Dictionary) -> void:
+	_check(not reference.get("valid", false) and reference.get("reason", "") == "misaligned_lod1_cell_origin", "LOD1 reference rejects odd signed origin with a deterministic reason")
 
 
 func _test_common_sample_parity() -> void:
@@ -187,6 +219,102 @@ func _mesh_interface_segments(mesh_data: Dictionary, face: int) -> Dictionary:
 	return result
 
 
+func _test_adjacent_reference_mesh_seams() -> void:
+	var base := Vector3(SEAM_LATTICE) * Fixture.LOD0_STEP
+	var nonlinear_field := func(point: Vector3) -> float:
+		var local := point - base
+		return 0.38 * local.x + 0.31 * local.y + 0.27 * local.z + 0.18 * local.x * local.y - 0.45
+	var configurations := [
+		{"name": "neighbor_face", "faces": [Fixture.FACE_X_NEG]},
+		{"name": "neighbor_edge", "faces": [Fixture.FACE_X_NEG, Fixture.FACE_Y_NEG]},
+		{"name": "neighbor_corner", "faces": [Fixture.FACE_X_NEG, Fixture.FACE_Y_NEG, Fixture.FACE_Z_NEG]},
+	]
+	for configuration in configurations:
+		var faces: Array[int] = []
+		for face_value in configuration["faces"]:
+			faces.append(int(face_value))
+		var transition := Fixture.build_transition_cell(SEED, SEAM_LATTICE, faces, {}, nonlinear_field)
+		_check(transition.get("valid", false), "%s transition builds on signed XYZ coordinates with nonlinear samples" % configuration["name"])
+		_check(nonlinear_field.call(base) < 0.0 and nonlinear_field.call(base + Vector3.ONE) > 0.0, "%s uses a nontrivial field crossing its signed unit cell" % configuration["name"])
+		for fine_face in faces:
+			var fine_neighbors := _adjacent_lod0_reference_meshes(SEAM_LATTICE, fine_face, nonlinear_field)
+			_check(fine_neighbors.size() == 1, "%s independently builds a neighboring LOD0 reference mesh for face %d" % [configuration["name"], fine_face])
+			_assert_adjacent_mesh_seam(transition, fine_neighbors, fine_face, base, "%s LOD0 face %d" % [configuration["name"], fine_face])
+			var coarse_face: int = fine_face ^ 1
+			var coarse_neighbor := _adjacent_lod1_reference_mesh(SEAM_LATTICE, coarse_face, nonlinear_field)
+			var coarse_neighbors: Array[Dictionary] = [coarse_neighbor]
+			_assert_adjacent_mesh_seam(transition, coarse_neighbors, coarse_face, base, "%s LOD1 face %d" % [configuration["name"], coarse_face])
+
+
+func _adjacent_lod0_reference_meshes(origin: Vector3i, face: int, sampler: Callable) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var axis := int(face / 2)
+	var neighbor_origin := origin
+	neighbor_origin[axis] += -1 if face % 2 == 0 else 2
+	result.append(Fixture.build_uniform_reference_cell(SEED, neighbor_origin, 0, {}, sampler))
+	return result
+
+
+func _adjacent_lod1_reference_mesh(origin: Vector3i, face: int, sampler: Callable) -> Dictionary:
+	var axis := int(face / 2)
+	var neighbor_origin := origin
+	neighbor_origin[axis] += -2 if face % 2 == 0 else 2
+	return Fixture.build_uniform_reference_cell(SEED, neighbor_origin, 1, {}, sampler)
+
+
+func _assert_adjacent_mesh_seam(transition: Dictionary, neighbors: Array[Dictionary], face: int, base: Vector3, label: String) -> void:
+	for neighbor in neighbors:
+		_check(neighbor.get("valid", false), "%s adjacent uniform reference mesh builds independently" % label)
+	var axis := int(face / 2)
+	var plane := base[axis] + (0.0 if face % 2 == 0 else Fixture.LOD1_STEP)
+	var transition_meshes: Array[Dictionary] = [transition]
+	var actual := _collect_boundary_contours(transition_meshes, axis, plane)
+	var expected := _collect_boundary_contours(neighbors, axis, plane)
+	_check(not expected["segments"].is_empty(), "%s adjacent mesh produces a nonempty boundary contour" % label)
+	_check(actual["segments"] == expected["segments"], "%s actual transition contour equals independently meshed neighboring cells" % label)
+	_check(bool(actual["normals_valid"]) and bool(expected["normals_valid"]), "%s boundary vertices have internally consistent normals" % label)
+	_check(actual["normals"].keys().size() == expected["normals"].keys().size(), "%s reference and transition contour have the same normal-bearing vertices" % label)
+	for point_key in expected["normals"]:
+		_check(actual["normals"].has(point_key), "%s transition contains neighbor contour vertex %s" % [label, point_key])
+		if actual["normals"].has(point_key):
+			var actual_normal: Vector3 = actual["normals"][point_key]
+			var expected_normal: Vector3 = expected["normals"][point_key]
+			_check(actual_normal.distance_to(expected_normal) <= 0.000001, "%s shared boundary normal is identical within tolerance" % label)
+
+
+func _collect_boundary_contours(meshes: Array[Dictionary], axis: int, plane: float) -> Dictionary:
+	var segments: Dictionary = {}
+	var normals: Dictionary = {}
+	var normals_valid := true
+	for mesh_data in meshes:
+		if not mesh_data.get("valid", false):
+			normals_valid = false
+			continue
+		var vertices: PackedVector3Array = mesh_data["vertices"]
+		var mesh_normals: PackedVector3Array = mesh_data["normals"]
+		for triangle_start in range(0, vertices.size(), 3):
+			for edge in range(3):
+				var a_index := triangle_start + edge
+				var b_index := triangle_start + (edge + 1) % 3
+				var a: Vector3 = vertices[a_index]
+				var b: Vector3 = vertices[b_index]
+				if absf(a[axis] - plane) > ASSERT_TOLERANCE or absf(b[axis] - plane) > ASSERT_TOLERANCE:
+					continue
+				if a.distance_squared_to(b) <= ASSERT_TOLERANCE * ASSERT_TOLERANCE:
+					continue
+				segments[_segment_key(a, b)] = true
+				for endpoint in [[a, mesh_normals[a_index]], [b, mesh_normals[b_index]]]:
+					var point: Vector3 = endpoint[0]
+					var normal: Vector3 = endpoint[1]
+					var key := _point_key(point)
+					if normals.has(key):
+						var existing_normal: Vector3 = normals[key]
+						if existing_normal.distance_to(normal) > 0.000001:
+							normals_valid = false
+					normals[key] = normal
+	return {"segments": segments, "normals": normals, "normals_valid": normals_valid}
+
+
 func _test_cave_and_narrow_features() -> void:
 	var cave_sampler := func(point: Vector3) -> float:
 		var base := Vector3(MIN_LATTICE) * Fixture.LOD0_STEP
@@ -293,6 +421,67 @@ func _test_snapshot_identity_and_capacity_guards() -> void:
 	var wrong_version := snapshot.duplicate(true)
 	wrong_version["generator_version"] = Field.GENERATOR_VERSION + 1
 	_check(not Fixture.build_uniform_reference_cell(SEED, MIN_LATTICE, 0, wrong_version).get("valid", false), "fixture rejects an unsupported generator version")
+	var populated_ledger: RefCounted = Brush.new(SEED, Field.GENERATOR_VERSION)
+	_check(populated_ledger.add_sphere(Brush.Mode.CARVE, Vector3(0.0, 1.0, 0.0), Brush.MIN_RADIUS), "canonical ledger accepts fixture snapshot seed operation")
+	var valid_command_snapshot: Dictionary = populated_ledger.get_meshing_snapshot()
+	var invalid_mode := valid_command_snapshot.duplicate(true)
+	var invalid_modes: PackedByteArray = invalid_mode["modes"]
+	invalid_modes[0] = 2
+	invalid_mode["modes"] = invalid_modes
+	_expect_snapshot_failure(invalid_mode, "unsupported_snapshot_mode", "mode byte 2 is not silently reinterpreted as FILL")
+	var nan_center := valid_command_snapshot.duplicate(true)
+	var nan_centers: PackedVector3Array = nan_center["centers"]
+	nan_centers[0] = Vector3(NAN, 0.0, 0.0)
+	nan_center["centers"] = nan_centers
+	_expect_snapshot_failure(nan_center, "invalid_snapshot_center", "snapshot rejects a nonfinite center")
+	var infinite_center := valid_command_snapshot.duplicate(true)
+	var infinite_centers: PackedVector3Array = infinite_center["centers"]
+	infinite_centers[0] = Vector3(0.0, INF, 0.0)
+	infinite_center["centers"] = infinite_centers
+	_expect_snapshot_failure(infinite_center, "invalid_snapshot_center", "snapshot rejects an infinite center")
+	var unbounded_center := valid_command_snapshot.duplicate(true)
+	var unbounded_centers: PackedVector3Array = unbounded_center["centers"]
+	unbounded_centers[0] = Vector3(Brush.MAX_ABS_WORLD_COORDINATE + 1.0, 0.0, 0.0)
+	unbounded_center["centers"] = unbounded_centers
+	_expect_snapshot_failure(unbounded_center, "invalid_snapshot_center", "snapshot rejects centers outside canonical world bounds")
+	var nan_radius := valid_command_snapshot.duplicate(true)
+	var nan_radii: PackedFloat64Array = nan_radius["radii"]
+	nan_radii[0] = NAN
+	nan_radius["radii"] = nan_radii
+	_expect_snapshot_failure(nan_radius, "invalid_snapshot_radius", "snapshot rejects a nonfinite radius")
+	var infinite_radius := valid_command_snapshot.duplicate(true)
+	var infinite_radii: PackedFloat64Array = infinite_radius["radii"]
+	infinite_radii[0] = INF
+	infinite_radius["radii"] = infinite_radii
+	_expect_snapshot_failure(infinite_radius, "invalid_snapshot_radius", "snapshot rejects an infinite radius")
+	var undersized_radius := valid_command_snapshot.duplicate(true)
+	var undersized_radii: PackedFloat64Array = undersized_radius["radii"]
+	undersized_radii[0] = Brush.MIN_RADIUS - 0.01
+	undersized_radius["radii"] = undersized_radii
+	_expect_snapshot_failure(undersized_radius, "invalid_snapshot_radius", "snapshot rejects radii below the canonical bound")
+	var oversized_radius := valid_command_snapshot.duplicate(true)
+	var oversized_radii: PackedFloat64Array = oversized_radius["radii"]
+	oversized_radii[0] = Brush.MAX_RADIUS + 0.01
+	oversized_radius["radii"] = oversized_radii
+	_expect_snapshot_failure(oversized_radius, "invalid_snapshot_radius", "snapshot rejects radii above the canonical bound")
+	var negative_revision := valid_command_snapshot.duplicate(true)
+	negative_revision["revision"] = -1
+	_expect_snapshot_failure(negative_revision, "invalid_snapshot_revision", "snapshot rejects negative revisions")
+	var malformed_revision := valid_command_snapshot.duplicate(true)
+	malformed_revision["revision"] = "1"
+	_expect_snapshot_failure(malformed_revision, "malformed_snapshot_metadata", "snapshot rejects non-integer revision metadata")
+	var malformed_seed := valid_command_snapshot.duplicate(true)
+	malformed_seed["world_seed"] = str(SEED)
+	_expect_snapshot_failure(malformed_seed, "malformed_snapshot_metadata", "snapshot rejects non-integer world-seed metadata")
+	var missing_revision := valid_command_snapshot.duplicate(true)
+	missing_revision.erase("revision")
+	_expect_snapshot_failure(missing_revision, "malformed_snapshot_metadata", "snapshot rejects missing revision metadata")
+	var impossible_revision := valid_command_snapshot.duplicate(true)
+	impossible_revision["revision"] = 0
+	_expect_snapshot_failure(impossible_revision, "invalid_snapshot_revision", "revision cannot precede the number of retained commands")
+	var mismatched_lengths := valid_command_snapshot.duplicate(true)
+	mismatched_lengths["radii"] = PackedFloat64Array()
+	_expect_snapshot_failure(mismatched_lengths, "invalid_snapshot_command_count", "snapshot rejects mismatched packed-array lengths")
 	var unbounded := snapshot.duplicate(true)
 	var excessive_centers := PackedVector3Array()
 	var excessive_radii := PackedFloat64Array()
@@ -304,7 +493,33 @@ func _test_snapshot_identity_and_capacity_guards() -> void:
 	unbounded["centers"] = excessive_centers
 	unbounded["radii"] = excessive_radii
 	unbounded["modes"] = excessive_modes
-	_check(not Fixture.build_transition_cell(SEED, MIN_LATTICE, [Fixture.FACE_X_NEG], unbounded).get("valid", false), "fixture enforces canonical ledger capacity without expanding authority")
+	_expect_snapshot_failure(unbounded, "invalid_snapshot_command_count", "fixture enforces canonical ledger capacity without expanding authority")
+
+
+func _expect_snapshot_failure(snapshot: Dictionary, expected_reason: String, label: String) -> void:
+	var result := Fixture.build_transition_cell(SEED, MIN_LATTICE, [Fixture.FACE_X_NEG], snapshot)
+	_check(not result.get("valid", false) and result.get("reason", "") == expected_reason, label)
+
+
+func _test_nonfinite_density_rejection() -> void:
+	var nan_sampler := func(_point: Vector3) -> float:
+		return NAN
+	var nan_transition := Fixture.build_transition_cell(SEED, MIN_LATTICE, [Fixture.FACE_X_NEG], {}, nan_sampler)
+	_check(not nan_transition.get("valid", false) and nan_transition.get("reason", "") == "non_finite_sample_density", "transition rejects NaN density with a deterministic reason")
+	var infinity_sampler := func(_point: Vector3) -> float:
+		return INF
+	var infinity_reference := Fixture.build_uniform_reference_cell(SEED, MIN_LATTICE, 0, {}, infinity_sampler)
+	_check(not infinity_reference.get("valid", false) and infinity_reference.get("reason", "") == "non_finite_sample_density", "uniform reference rejects infinite density with a deterministic reason")
+	var base := Vector3(MIN_LATTICE) * Fixture.LOD0_STEP
+	var normal_only_infinity_sampler := func(point: Vector3) -> float:
+		var scaled := point * 2.0
+		if absf(scaled.x - roundf(scaled.x)) > 0.0001 or absf(scaled.y - roundf(scaled.y)) > 0.0001 or absf(scaled.z - roundf(scaled.z)) > 0.0001:
+			return INF
+		var local := point - base
+		return local.x + local.y + local.z - 1.37
+	var normal_failure := Fixture.build_transition_cell(SEED, MIN_LATTICE, [Fixture.FACE_X_NEG], {}, normal_only_infinity_sampler)
+	_check(not normal_failure.get("valid", false) and normal_failure.get("reason", "") == "non_finite_sample_density", "nonfinite normal-probe density cannot leave a valid partial mesh")
+	_check(not normal_failure.has("timings_usec") and not normal_failure.has("vertices"), "failed nonfinite build exposes no accepted mesh or timing payload")
 
 
 func _benchmark_transition_fixture() -> void:

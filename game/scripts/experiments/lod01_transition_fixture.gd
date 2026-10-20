@@ -37,6 +37,7 @@ var _world_seed := 424242
 var _brush_snapshot: Dictionary = {}
 var _sampling_usec := 0
 var _normal_usec := 0
+var _failure_reason := ""
 
 
 static func step_for_lod(lod: int) -> float:
@@ -59,8 +60,22 @@ static func lattice_floor(world_position: Vector3, lod: int) -> Vector3i:
 	return Vector3i(floori(world_position.x / step), floori(world_position.y / step), floori(world_position.z / step))
 
 
+static func is_lod1_aligned_origin(min_lod0_lattice: Vector3i) -> bool:
+	return min_lod0_lattice.x % LOD1_IN_LOD0_STEPS == 0 \
+		and min_lod0_lattice.y % LOD1_IN_LOD0_STEPS == 0 \
+		and min_lod0_lattice.z % LOD1_IN_LOD0_STEPS == 0
+
+
 static func sample_canonical(world_seed: int, world_position: Vector3, brush_snapshot: Dictionary = {}) -> float:
 	if not _snapshot_compatible(world_seed, brush_snapshot):
+		return NAN
+	return _sample_canonical_validated(world_seed, world_position, brush_snapshot)
+
+
+## Builder entrypoints validate the complete immutable snapshot once before
+## geometry starts, so per-vertex and normal probes avoid rescanning the ledger.
+static func _sample_canonical_validated(world_seed: int, world_position: Vector3, brush_snapshot: Dictionary) -> float:
+	if not world_position.is_finite():
 		return NAN
 	var mapped: Dictionary = SPATIAL.world_to_region_local(world_position)
 	if not mapped.get("valid", false):
@@ -83,8 +98,11 @@ static func build_transition_cell(
 	brush_snapshot: Dictionary = {},
 	density_override: Callable = Callable()
 ) -> Dictionary:
-	if not _snapshot_compatible(world_seed, brush_snapshot):
-		return {"valid": false, "reason": "incompatible_or_unbounded_ledger_snapshot"}
+	if not is_lod1_aligned_origin(min_lod0_lattice):
+		return {"valid": false, "reason": "misaligned_lod1_cell_origin"}
+	var snapshot_failure := _snapshot_rejection_reason(world_seed, brush_snapshot)
+	if not snapshot_failure.is_empty():
+		return {"valid": false, "reason": snapshot_failure}
 	var selected: Array[int] = []
 	for face in selected_fine_faces:
 		if face < FACE_X_NEG or face > FACE_Z_POS or selected.has(face):
@@ -105,11 +123,21 @@ static func build_transition_cell(
 	var geometry_usec := Time.get_ticks_usec() - geometry_started
 	var triangulation_started := Time.get_ticks_usec()
 	var center_id := builder._add_sample_point(builder._center, world_seed, brush_snapshot)
+	if center_id < 0:
+		return builder._failure_result()
 	for triangle in boundary_triangles:
 		var a: int = builder._add_sample_point(triangle[0], world_seed, brush_snapshot)
+		if a < 0:
+			return builder._failure_result()
 		var b: int = builder._add_sample_point(triangle[1], world_seed, brush_snapshot)
+		if b < 0:
+			return builder._failure_result()
 		var c: int = builder._add_sample_point(triangle[2], world_seed, brush_snapshot)
+		if c < 0:
+			return builder._failure_result()
 		builder._polygonize_tetra([center_id, a, b, c])
+		if not builder._failure_reason.is_empty():
+			return builder._failure_result()
 	var polygonization_usec := Time.get_ticks_usec() - triangulation_started
 	return builder._make_result(world_seed, min_lod0_lattice, selected, _opposite_faces(selected), geometry_usec, polygonization_usec, "transition")
 
@@ -123,8 +151,11 @@ static func build_uniform_reference_cell(
 ) -> Dictionary:
 	if lod < 0 or lod > 1:
 		return {"valid": false, "reason": "unsupported_lod"}
-	if not _snapshot_compatible(world_seed, brush_snapshot):
-		return {"valid": false, "reason": "incompatible_or_unbounded_ledger_snapshot"}
+	if lod == 1 and not is_lod1_aligned_origin(min_lod0_lattice):
+		return {"valid": false, "reason": "misaligned_lod1_cell_origin"}
+	var snapshot_failure := _snapshot_rejection_reason(world_seed, brush_snapshot)
+	if not snapshot_failure.is_empty():
+		return {"valid": false, "reason": snapshot_failure}
 	var builder := Lod01TransitionFixture.new()
 	builder._world_seed = world_seed
 	builder._brush_snapshot = brush_snapshot
@@ -140,9 +171,14 @@ static func build_uniform_reference_cell(
 				var ids: Array[int] = []
 				for corner in CUBE_CORNERS:
 					var point := origin + Vector3(x, y, z) * step + Vector3(corner) * step
-					ids.append(builder._add_sample_point(point, world_seed, brush_snapshot))
+					var sample_id := builder._add_sample_point(point, world_seed, brush_snapshot)
+					if sample_id < 0:
+						return builder._failure_result()
+					ids.append(sample_id)
 				for tetra in CUBE_TETRAHEDRA:
 					builder._polygonize_tetra([ids[tetra[0]], ids[tetra[1]], ids[tetra[2]], ids[tetra[3]]])
+					if not builder._failure_reason.is_empty():
+						return builder._failure_result()
 	var polygonization_usec := Time.get_ticks_usec() - triangulation_started
 	return builder._make_result(world_seed, min_lod0_lattice, [], [], geometry_usec, polygonization_usec, "lod%d_reference" % lod)
 
@@ -156,6 +192,14 @@ func _make_result(
 	polygonization_usec: int,
 	kind: String
 ) -> Dictionary:
+	if not _failure_reason.is_empty():
+		return _failure_result()
+	if _positions.size() != _normals.size() or not _packed_vectors_are_finite(_positions) or not _packed_vectors_are_finite(_normals):
+		return {"valid": false, "reason": "non_finite_mesh_output"}
+	var timing_values := [geometry_usec, _sampling_usec, maxi(0, polygonization_usec - _sampling_usec - _normal_usec), _normal_usec, 0]
+	for timing in timing_values:
+		if typeof(timing) != TYPE_INT or int(timing) < 0:
+			return {"valid": false, "reason": "invalid_fixture_timing"}
 	return {
 		"valid": true,
 		"vertices": _positions,
@@ -188,8 +232,11 @@ static func interface_triangles(
 ) -> Array[Array]:
 	## Returns globally positioned triangles on one face, in the exact boundary
 	## triangulation used by the transition cell (resolution 2 fine or 1 coarse).
+	## Coarse requests on an odd LOD0 lattice origin fail closed with an empty array.
 	var result: Array[Array] = []
 	if face < 0 or face > 5 or resolution not in [1, 2]:
+		return result
+	if resolution == 1 and not is_lod1_aligned_origin(min_lod0_lattice):
 		return result
 	var axis: int = FACE_AXES[face]
 	var base := Vector3(min_lod0_lattice) * LOD0_STEP
@@ -290,8 +337,11 @@ func _add_sample_point(point: Vector3, world_seed: int, brush_snapshot: Dictiona
 	if _sampler.is_valid():
 		density = float(_sampler.call(point))
 	else:
-		density = sample_canonical(world_seed, point, brush_snapshot)
+		density = _sample_canonical_validated(world_seed, point, brush_snapshot)
 	_sampling_usec += Time.get_ticks_usec() - sample_started
+	if not is_finite(density):
+		_failure_reason = "non_finite_sample_density"
+		return -1
 	var sample := {"id": _samples.size(), "point": point, "density": density}
 	_samples[key] = sample
 	_sample_list.append(sample)
@@ -344,7 +394,13 @@ func _edge_point(a_id: int, b_id: int) -> Vector3:
 
 
 func _emit_triangle(a: Vector3, b: Vector3, c: Vector3, toward_empty: Vector3) -> void:
+	if not a.is_finite() or not b.is_finite() or not c.is_finite():
+		_failure_reason = "non_finite_mesh_output"
+		return
 	var cross := (b - a).cross(c - a)
+	if not cross.is_finite():
+		_failure_reason = "non_finite_mesh_output"
+		return
 	if cross.length_squared() <= 1.0e-12:
 		return
 	if cross.dot(toward_empty) < 0.0:
@@ -352,8 +408,8 @@ func _emit_triangle(a: Vector3, b: Vector3, c: Vector3, toward_empty: Vector3) -
 		b = c
 		c = swap
 		cross = -cross
-	_positions.append_array([a, b, c])
 	var normal := Vector3.ZERO
+	var triangle_normals: Array[Vector3] = []
 	var normal_started := Time.get_ticks_usec()
 	for point in [a, b, c]:
 		var gradient := Vector3(
@@ -361,15 +417,42 @@ func _emit_triangle(a: Vector3, b: Vector3, c: Vector3, toward_empty: Vector3) -
 			_sample_density(point + Vector3.UP * NORMAL_EPSILON) - _sample_density(point - Vector3.UP * NORMAL_EPSILON),
 			_sample_density(point + Vector3.BACK * NORMAL_EPSILON) - _sample_density(point - Vector3.BACK * NORMAL_EPSILON)
 		)
+		if not _failure_reason.is_empty():
+			return
 		normal = -gradient.normalized() if gradient.length_squared() > 1.0e-12 else cross.normalized()
-		_normals.append(normal)
+		if not gradient.is_finite() or not normal.is_finite():
+			_failure_reason = "non_finite_normal_output"
+			return
+		triangle_normals.append(normal)
 	_normal_usec += Time.get_ticks_usec() - normal_started
+	if triangle_normals.size() != 3:
+		_failure_reason = "invalid_normal_output"
+		return
+	_positions.append_array([a, b, c])
+	_normals.append_array(triangle_normals)
 
 
 func _sample_density(point: Vector3) -> float:
+	var density := NAN
 	if _sampler.is_valid():
-		return float(_sampler.call(point))
-	return sample_canonical(_world_seed, point, _brush_snapshot)
+		density = float(_sampler.call(point))
+	else:
+		density = _sample_canonical_validated(_world_seed, point, _brush_snapshot)
+	if not is_finite(density):
+		_failure_reason = "non_finite_sample_density"
+		return NAN
+	return density
+
+
+func _failure_result() -> Dictionary:
+	return {"valid": false, "reason": _failure_reason if not _failure_reason.is_empty() else "fixture_build_failed"}
+
+
+static func _packed_vectors_are_finite(values: PackedVector3Array) -> bool:
+	for value in values:
+		if not value.is_finite():
+			return false
+	return true
 
 
 static func result_matches_request(
@@ -397,21 +480,43 @@ static func canonical_outward_normal(world_seed: int, point: Vector3, brush_snap
 
 
 static func _snapshot_compatible(world_seed: int, snapshot: Dictionary) -> bool:
+	return _snapshot_rejection_reason(world_seed, snapshot).is_empty()
+
+
+static func _snapshot_rejection_reason(world_seed: int, snapshot: Dictionary) -> String:
 	if snapshot.is_empty():
-		return true
+		return ""
 	if not snapshot.has("world_seed") or not snapshot.has("generator_version") or not snapshot.has("revision"):
-		return false
-	if int(snapshot["world_seed"]) != world_seed or int(snapshot["generator_version"]) != FIELD.GENERATOR_VERSION:
-		return false
+		return "malformed_snapshot_metadata"
+	if typeof(snapshot["world_seed"]) != TYPE_INT or typeof(snapshot["generator_version"]) != TYPE_INT or typeof(snapshot["revision"]) != TYPE_INT:
+		return "malformed_snapshot_metadata"
+	if int(snapshot["world_seed"]) != world_seed:
+		return "snapshot_world_seed_mismatch"
+	if int(snapshot["generator_version"]) != FIELD.GENERATOR_VERSION:
+		return "unsupported_snapshot_generator_version"
+	if int(snapshot["revision"]) < 0:
+		return "invalid_snapshot_revision"
 	if not snapshot.has("centers") or not snapshot.has("radii") or not snapshot.has("modes"):
-		return false
+		return "malformed_snapshot_arrays"
 	if typeof(snapshot["centers"]) != TYPE_PACKED_VECTOR3_ARRAY \
 			or typeof(snapshot["radii"]) != TYPE_PACKED_FLOAT64_ARRAY \
 			or typeof(snapshot["modes"]) != TYPE_PACKED_BYTE_ARRAY:
-		return false
+		return "malformed_snapshot_arrays"
 	var centers: PackedVector3Array = snapshot["centers"]
 	var radii: PackedFloat64Array = snapshot["radii"]
 	var modes: PackedByteArray = snapshot["modes"]
-	return centers.size() <= BRUSH.MAX_EDITS \
-		and centers.size() == radii.size() \
-		and centers.size() == modes.size()
+	if centers.size() > BRUSH.MAX_EDITS or centers.size() != radii.size() or centers.size() != modes.size():
+		return "invalid_snapshot_command_count"
+	if int(snapshot["revision"]) < centers.size():
+		return "invalid_snapshot_revision"
+	for index in range(centers.size()):
+		var center: Vector3 = centers[index]
+		var radius: float = radii[index]
+		var mode: int = int(modes[index])
+		if not center.is_finite() or maxf(absf(center.x), maxf(absf(center.y), absf(center.z))) > BRUSH.MAX_ABS_WORLD_COORDINATE:
+			return "invalid_snapshot_center"
+		if not is_finite(radius) or radius < BRUSH.MIN_RADIUS or radius > BRUSH.MAX_RADIUS:
+			return "invalid_snapshot_radius"
+		if mode != BRUSH.Mode.CARVE and mode != BRUSH.Mode.FILL:
+			return "unsupported_snapshot_mode"
+	return ""
