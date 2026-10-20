@@ -9,7 +9,6 @@ const SPATIAL := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const MIN_BOUND: Vector3 = CHUNK_GRID.MIN_BOUND
 const MAX_BOUND: Vector3 = CHUNK_GRID.MAX_BOUND
 const STEP: float = CHUNK_GRID.SAMPLE_STEP
-const CELLS_PER_MESH_SLICE := 2
 const CORNERS := [
 	Vector3i(0, 0, 0), Vector3i(1, 0, 0), Vector3i(1, 1, 0), Vector3i(0, 1, 0),
 	Vector3i(0, 0, 1), Vector3i(1, 0, 1), Vector3i(1, 1, 1), Vector3i(0, 1, 1),
@@ -24,7 +23,7 @@ static func build_mesh(
 	seed: int,
 	region_key: Vector2i,
 	show_cave_section: bool = false,
-	brush_state: RefCounted = null
+	brush_state: Variant = null
 ) -> Dictionary:
 	return _build_mesh_cells(
 		seed, region_key, CHUNK_GRID.MIN_BOUND, 0, CHUNK_GRID.CELL_COUNT_X, 0, CHUNK_GRID.CELL_COUNT_Z,
@@ -37,7 +36,7 @@ static func build_chunk_mesh(
 	region_key: Vector2i,
 	chunk_coordinate: Vector2i,
 	show_cave_section: bool = false,
-	brush_state: RefCounted = null
+	brush_state: Variant = null
 ) -> Dictionary:
 	if not CHUNK_GRID.is_valid_coordinate(chunk_coordinate):
 		return {"mesh": ArrayMesh.new(), "vertex_count": 0, "triangle_count": 0, "sample_count": 0, "valid": false}
@@ -49,63 +48,29 @@ static func build_chunk_mesh(
 	)
 
 
-static func build_chunk_mesh_slice(
+static func build_chunk_cpu_data(
 	seed: int,
 	region_key: Vector2i,
 	chunk_coordinate: Vector2i,
 	show_cave_section: bool,
-	brush_state: RefCounted,
-	cell_start_y: int,
-	cell_end_y: int
+	brush_snapshot: Variant
 ) -> Dictionary:
-	if not CHUNK_GRID.is_valid_coordinate(chunk_coordinate) \
-		or cell_start_y < 0 or cell_end_y > CHUNK_GRID.CELL_COUNT_Y or cell_start_y >= cell_end_y:
-		return {"mesh": ArrayMesh.new(), "vertex_count": 0, "triangle_count": 0, "sample_count": 0, "valid": false}
+	if not CHUNK_GRID.is_valid_coordinate(chunk_coordinate):
+		return {"vertex_count": 0, "triangle_count": 0, "sample_count": 0, "valid": false}
 	var bounds: Vector4i = CHUNK_GRID.cell_bounds(chunk_coordinate)
 	return _build_mesh_cells(
 		seed, region_key, CHUNK_GRID.MIN_BOUND, bounds.x, bounds.y, bounds.z, bounds.w,
-		show_cave_section, CHUNK_GRID.origin_for(chunk_coordinate), brush_state, chunk_coordinate,
-		cell_start_y, cell_end_y
+		show_cave_section, CHUNK_GRID.origin_for(chunk_coordinate), brush_snapshot, chunk_coordinate,
+		0, CHUNK_GRID.CELL_COUNT_Y, false
 	)
-
-
-static func combine_chunk_mesh_slices(slices: Array[Dictionary]) -> Dictionary:
-	var positions := PackedVector3Array()
-	var normals := PackedVector3Array()
-	var triangle_count := 0
-	var sample_count := 0
-	for slice in slices:
-		if not slice.get("valid", false):
-			return {"mesh": ArrayMesh.new(), "vertex_count": 0, "triangle_count": 0, "sample_count": 0, "valid": false}
-		triangle_count += int(slice["triangle_count"])
-		sample_count += int(slice["sample_count"])
-		var slice_mesh: ArrayMesh = slice["mesh"]
-		if slice_mesh.get_surface_count() == 0:
-			continue
-		var slice_arrays: Array = slice_mesh.surface_get_arrays(0)
-		positions.append_array(slice_arrays[Mesh.ARRAY_VERTEX])
-		normals.append_array(slice_arrays[Mesh.ARRAY_NORMAL])
-	var mesh := ArrayMesh.new()
-	if not positions.is_empty():
-		var arrays: Array = []
-		arrays.resize(Mesh.ARRAY_MAX)
-		arrays[Mesh.ARRAY_VERTEX] = positions
-		arrays[Mesh.ARRAY_NORMAL] = normals
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	return {
-		"mesh": mesh,
-		"vertex_count": positions.size(),
-		"triangle_count": triangle_count,
-		"sample_count": sample_count,
-		"valid": true,
-	}
 
 
 static func build_world_reference_mesh(
 	seed: int,
 	min_world_cell: Vector2i,
 	cell_count: Vector2i,
-	show_cave_section: bool = false
+	show_cave_section: bool = false,
+	brush_state: RefCounted = null
 ) -> Dictionary:
 	if cell_count.x <= 0 or cell_count.y <= 0:
 		return {"mesh": ArrayMesh.new(), "vertex_count": 0, "triangle_count": 0, "sample_count": 0, "valid": false}
@@ -116,7 +81,7 @@ static func build_world_reference_mesh(
 	)
 	return _build_mesh_cells(
 		seed, Vector2i.ZERO, world_min, 0, cell_count.x, 0, cell_count.y,
-		show_cave_section, Vector3.ZERO, null, Vector2i(-1, -1), 0, CHUNK_GRID.CELL_COUNT_Y
+		show_cave_section, Vector3.ZERO, brush_state, Vector2i(-1, -1), 0, CHUNK_GRID.CELL_COUNT_Y
 	)
 
 
@@ -130,69 +95,109 @@ static func _build_mesh_cells(
 	cell_end_z: int,
 	show_cave_section: bool,
 	mesh_origin: Vector3,
-	brush_state: RefCounted,
+	brush_state: Variant,
 	chunk_coordinate: Vector2i,
 	cell_start_y: int,
-	cell_end_y: int
+	cell_end_y: int,
+	make_mesh: bool = true
 ) -> Dictionary:
+	var timings_usec := {
+		"sdf_and_ledger": 0,
+		"triangulation_and_face_normals": 0,
+		"shared_gradient_normals": 0,
+		"array_mesh_build": 0,
+	}
 	var nx := cell_end_x - cell_start_x + 1
 	var ny := cell_end_y - cell_start_y + 1
 	var nz := cell_end_z - cell_start_z + 1
 	var values := PackedFloat32Array()
 	values.resize(nx * ny * nz)
+	var sample_started_usec := Time.get_ticks_usec()
 	for y in range(ny):
 		for z in range(nz):
 			for x in range(nx):
 				var p := grid_min + Vector3(cell_start_x + x, cell_start_y + y, cell_start_z + z) * STEP
 				var density := _sample_density(seed, region_key, p, show_cave_section, brush_state)
 				values[_index(x, y, z, nx, nz)] = density
+	timings_usec["sdf_and_ledger"] = Time.get_ticks_usec() - sample_started_usec
 
 	var positions := PackedVector3Array()
 	var normals := PackedVector3Array()
+	var shared_normal_cache: Dictionary = {}
 	var sample_origin := grid_min + Vector3(cell_start_x, 0, cell_start_z) * STEP
 	var world_region_origin: Vector3 = SPATIAL.region_origin_world(region_key)
 	var world_sample_origin := world_region_origin + sample_origin
+	var polygonize_started_usec := Time.get_ticks_usec()
 	for y in range(ny - 1):
 		for z in range(nz - 1):
 			for x in range(nx - 1):
 				var cube_points: Array[Vector3] = []
 				var cube_values: Array[float] = []
+				var has_solid_sample := false
+				var has_empty_sample := false
 				for corner in CORNERS:
 					var cx: int = x + corner.x
 					var cy: int = y + corner.y
 					var cz: int = z + corner.z
+					var sample_value: float = values[_index(cx, cy, cz, nx, nz)]
+					cube_values.append(sample_value)
+					has_solid_sample = has_solid_sample or sample_value >= 0.0
+					has_empty_sample = has_empty_sample or sample_value < 0.0
+				if not has_solid_sample or not has_empty_sample:
+					continue
+				for corner in CORNERS:
 					cube_points.append(world_sample_origin + Vector3(x + corner.x, cell_start_y + y + corner.y, z + corner.z) * STEP)
-					cube_values.append(values[_index(cx, cy, cz, nx, nz)])
 				for tetra in TETRAHEDRA:
 					_polygonize_tetra(tetra, cube_points, cube_values, positions, normals)
 	var triangle_count := positions.size() / 3
+	timings_usec["triangulation_and_face_normals"] = Time.get_ticks_usec() - polygonize_started_usec
+	var has_chunk_coordinate := CHUNK_GRID.is_valid_coordinate(chunk_coordinate)
+	var world_mesh_origin: Vector3 = world_region_origin + mesh_origin
+	for vertex_index in range(positions.size()):
+		var global_position: Vector3 = positions[vertex_index]
+		var region_local_position: Vector3 = global_position - world_region_origin
+		if has_chunk_coordinate and CHUNK_GRID.is_shared_boundary_vertex(region_local_position, chunk_coordinate):
+			var shared_normal: Vector3 = shared_normal_cache.get(global_position, Vector3.ZERO)
+			if not shared_normal_cache.has(global_position):
+				var normal_started_usec := Time.get_ticks_usec()
+				shared_normal = _sample_outward_normal(seed, region_key, region_local_position, show_cave_section, brush_state)
+				timings_usec["shared_gradient_normals"] = int(timings_usec["shared_gradient_normals"]) + Time.get_ticks_usec() - normal_started_usec
+				shared_normal_cache[global_position] = shared_normal
+			if shared_normal.length_squared() > 0.000001:
+				normals[vertex_index] = shared_normal
+		positions[vertex_index] = global_position - world_mesh_origin
 
-	var mesh := ArrayMesh.new()
-	if not positions.is_empty():
-		var has_chunk_coordinate := CHUNK_GRID.is_valid_coordinate(chunk_coordinate)
-		var world_mesh_origin: Vector3 = world_region_origin + mesh_origin
-		for vertex_index in range(positions.size()):
-			var global_position: Vector3 = positions[vertex_index]
-			var region_local_position: Vector3 = global_position - world_region_origin
-			if has_chunk_coordinate and CHUNK_GRID.is_shared_boundary_vertex(region_local_position, chunk_coordinate):
-				var shared_normal := _sample_outward_normal(
-					seed, region_key, region_local_position, show_cave_section, brush_state
-				)
-				if shared_normal.length_squared() > 0.000001:
-					normals[vertex_index] = shared_normal
-			positions[vertex_index] = global_position - world_mesh_origin
-		var arrays: Array = []
-		arrays.resize(Mesh.ARRAY_MAX)
-		arrays[Mesh.ARRAY_VERTEX] = positions
-		arrays[Mesh.ARRAY_NORMAL] = normals
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	return {
-		"mesh": mesh,
+	var cpu_data := {
+		"positions": positions,
+		"normals": normals,
 		"vertex_count": positions.size(),
 		"triangle_count": triangle_count,
 		"sample_count": values.size(),
+		"timings_usec": timings_usec,
 		"valid": true,
 	}
+	return mesh_from_cpu_data(cpu_data) if make_mesh else cpu_data
+
+
+static func mesh_from_cpu_data(cpu_data: Dictionary) -> Dictionary:
+	if not cpu_data.get("valid", false):
+		return cpu_data
+	var mesh := ArrayMesh.new()
+	var positions: PackedVector3Array = cpu_data["positions"]
+	if not positions.is_empty():
+		var arrays: Array = []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = positions
+		arrays[Mesh.ARRAY_NORMAL] = cpu_data["normals"]
+		var upload_started_usec := Time.get_ticks_usec()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		var timings: Dictionary = cpu_data.get("timings_usec", {})
+		timings["array_mesh_build"] = Time.get_ticks_usec() - upload_started_usec
+		cpu_data["timings_usec"] = timings
+	cpu_data["mesh"] = mesh
+	cpu_data.erase("positions")
+	cpu_data.erase("normals")
+	return cpu_data
 
 
 static func contains_mesh_point(point: Vector3) -> bool:
@@ -206,8 +211,10 @@ static func _sample_density(
 	region_key: Vector2i,
 	point: Vector3,
 	show_cave_section: bool,
-	brush_state: RefCounted
+	brush_state: Variant
 ) -> float:
+	if brush_state is Dictionary:
+		return BRUSH_STATE_SCRIPT.sample_density_snapshot(seed, region_key, point, show_cave_section, brush_state)
 	if brush_state is BRUSH_STATE_SCRIPT:
 		return brush_state.sample_density(seed, region_key, point, show_cave_section)
 	# Evaluate the immutable field from canonical world coordinates so a point
@@ -221,7 +228,7 @@ static func _sample_outward_normal(
 	region_key: Vector2i,
 	point: Vector3,
 	show_cave_section: bool,
-	brush_state: RefCounted
+	brush_state: Variant
 ) -> Vector3:
 	var half_step := STEP * 0.5
 	var dx := _sample_density(seed, region_key, point + Vector3.RIGHT * half_step, show_cave_section, brush_state) \
@@ -244,40 +251,56 @@ static func _polygonize_tetra(
 	positions: PackedVector3Array,
 	normals: PackedVector3Array
 ) -> int:
-	var inside: Array[int] = []
-	var outside: Array[int] = []
+	var inside_count := 0
+	var outside_count := 0
+	var inside0 := -1
+	var inside1 := -1
+	var inside2 := -1
+	var outside0 := -1
+	var outside1 := -1
+	var outside2 := -1
 	for corner_index in tetra:
 		if cube_values[corner_index] >= 0.0:
-			inside.append(corner_index)
+			match inside_count:
+				0: inside0 = corner_index
+				1: inside1 = corner_index
+				2: inside2 = corner_index
+			inside_count += 1
 		else:
-			outside.append(corner_index)
-	if inside.is_empty() or outside.is_empty():
+			match outside_count:
+				0: outside0 = corner_index
+				1: outside1 = corner_index
+				2: outside2 = corner_index
+			outside_count += 1
+	if inside_count == 0 or outside_count == 0:
 		return 0
 	var inside_center := Vector3.ZERO
 	var outside_center := Vector3.ZERO
-	for index in inside:
-		inside_center += cube_points[index]
-	for index in outside:
-		outside_center += cube_points[index]
-	inside_center /= float(inside.size())
-	outside_center /= float(outside.size())
+	if inside_count > 0: inside_center += cube_points[inside0]
+	if inside_count > 1: inside_center += cube_points[inside1]
+	if inside_count > 2: inside_center += cube_points[inside2]
+	if outside_count > 0: outside_center += cube_points[outside0]
+	if outside_count > 1: outside_center += cube_points[outside1]
+	if outside_count > 2: outside_center += cube_points[outside2]
+	inside_center /= float(inside_count)
+	outside_center /= float(outside_count)
 	var toward_empty := outside_center - inside_center
-	if inside.size() == 1:
-		var a := _interpolate(inside[0], outside[0], cube_points, cube_values)
-		var b := _interpolate(inside[0], outside[1], cube_points, cube_values)
-		var c := _interpolate(inside[0], outside[2], cube_points, cube_values)
+	if inside_count == 1:
+		var a := _interpolate(inside0, outside0, cube_points, cube_values)
+		var b := _interpolate(inside0, outside1, cube_points, cube_values)
+		var c := _interpolate(inside0, outside2, cube_points, cube_values)
 		_add_triangle(a, b, c, toward_empty, positions, normals)
 		return 1
-	if inside.size() == 3:
-		var a := _interpolate(outside[0], inside[0], cube_points, cube_values)
-		var b := _interpolate(outside[0], inside[1], cube_points, cube_values)
-		var c := _interpolate(outside[0], inside[2], cube_points, cube_values)
+	if inside_count == 3:
+		var a := _interpolate(outside0, inside0, cube_points, cube_values)
+		var b := _interpolate(outside0, inside1, cube_points, cube_values)
+		var c := _interpolate(outside0, inside2, cube_points, cube_values)
 		_add_triangle(a, b, c, toward_empty, positions, normals)
 		return 1
-	var a := _interpolate(inside[0], outside[0], cube_points, cube_values)
-	var b := _interpolate(inside[0], outside[1], cube_points, cube_values)
-	var c := _interpolate(inside[1], outside[0], cube_points, cube_values)
-	var d := _interpolate(inside[1], outside[1], cube_points, cube_values)
+	var a := _interpolate(inside0, outside0, cube_points, cube_values)
+	var b := _interpolate(inside0, outside1, cube_points, cube_values)
+	var c := _interpolate(inside1, outside0, cube_points, cube_values)
+	var d := _interpolate(inside1, outside1, cube_points, cube_values)
 	_add_triangle(a, b, d, toward_empty, positions, normals)
 	_add_triangle(a, d, c, toward_empty, positions, normals)
 	return 2
@@ -315,8 +338,12 @@ static func _add_triangle(
 		c = swap
 		normal = -normal
 	normal = normal.normalized()
-	positions.append_array(PackedVector3Array([a, b, c]))
-	normals.append_array(PackedVector3Array([normal, normal, normal]))
+	positions.append(a)
+	positions.append(b)
+	positions.append(c)
+	normals.append(normal)
+	normals.append(normal)
+	normals.append(normal)
 
 
 static func _index(x: int, y: int, z: int, size_x: int, size_z: int) -> int:
