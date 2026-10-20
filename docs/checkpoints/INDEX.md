@@ -43,4 +43,6 @@
 
 | 2026-10-20 | [CHK-2026-10-20-P1-1A-ADJACENT-ORACLE-CORRECTION](2026-10-20-P1-1A-ADJACENT-ORACLE-CORRECTION.md) | Corrected adjacent LOD0 reference placement; explicit AABB/contact, six-orientation, edge/corner and independent contour checks; full validation 16,807/0 | Updated on existing draft PR #96; final independent rereview pending |
 
+| 2026-10-20 | [CHK-2026-10-20-P1-1A-OWNER-AUTHORIZED-INTEGRATION](2026-10-20-P1-1A-OWNER-AUTHORIZED-INTEGRATION.md) | Owner-authorized PR #96 merge verified at aca6b640; P1.1A exact-SHA source PASS and limited experiment; P1.1B planning proposed | New docs-only draft PR, not yet integrated into main |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
