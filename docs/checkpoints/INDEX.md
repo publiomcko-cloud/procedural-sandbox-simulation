@@ -37,4 +37,6 @@
 
 | 2026-10-20 | [CHK-2026-10-20-PR92-P1-0C-MERGE](2026-10-20-PR92-P1-0C-MERGE.md) | Owner-authorized PR #92 merge verified on main at 9452cefe; P1.0C integrated; PR #87 observed closed without merge; P1.1A post-merge handoff | Prepared in separate docs-only draft PR, pending integration |
 
+| 2026-10-20 | [CHK-2026-10-20-P1-1A-IMPLEMENTATION](2026-10-20-P1-1A-IMPLEMENTATION.md) | P1.1A isolated custom GDScript LOD0/1 transition fixture, exact-SHA tests and exploratory benchmarks; final performance/geometric thresholds remain unapproved | Recorded in draft P1.1A feature PR, unmerged |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
