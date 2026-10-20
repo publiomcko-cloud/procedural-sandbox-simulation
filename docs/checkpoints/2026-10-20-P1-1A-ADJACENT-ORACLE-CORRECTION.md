@@ -1,8 +1,8 @@
 # CHK-2026-10-20-P1-1A-ADJACENT-ORACLE-CORRECTION
 
-**Checkpoint date/timezone:** 2026-10-20, America/Sao_Paulo  
-**Event type:** final adjacent-reference placement correction and exact-branch validation  
-**Publication state:** prepared on existing draft PR #96; not merged  
+**Checkpoint date/timezone:** 2026-10-20, America/Sao_Paulo
+**Event type:** final adjacent-reference placement correction and exact-branch validation
+**Publication state:** prepared on existing draft PR #96; not merged
 **Historical record:** supplements the original P1.1A implementation and review-correction checkpoints; neither is rewritten.
 
 ## Identity and scope
