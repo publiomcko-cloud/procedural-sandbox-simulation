@@ -39,4 +39,6 @@
 
 | 2026-10-20 | [CHK-2026-10-20-P1-1A-IMPLEMENTATION](2026-10-20-P1-1A-IMPLEMENTATION.md) | P1.1A isolated custom GDScript LOD0/1 transition fixture, exact-SHA tests and exploratory benchmarks; final performance/geometric thresholds remain unapproved | Recorded in draft P1.1A feature PR, unmerged |
 
+| 2026-10-20 | [CHK-2026-10-20-P1-1A-REVIEW-CORRECTIONS](2026-10-20-P1-1A-REVIEW-CORRECTIONS.md) | Corrected LOD1 lattice alignment, snapshot validation, nonfinite sample handling, and independent neighboring-mesh seam evidence; full validation 16,174/0 | Updated on existing draft PR #96; independent rereview pending |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).

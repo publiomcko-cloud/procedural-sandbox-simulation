@@ -14,8 +14,11 @@ No LOD 2 is implemented. Although `h(L)=0.5·2^L`, the current chunk Z span is 3
 
 - Region span remains 16×12 in XZ; chunks remain 4×3; vertical bounds remain [-2, 8].
 - LOD0 step is 0.5 and LOD1 step is 1.0. Positions come from global integer lattice indices, never chunk-local rounding. `floori` gives the same half-open ownership semantics at negative coordinates.
+- An LOD1 cell origin represented in LOD0 lattice indices must be even in X, Y, and Z, including negative indices. Transition and LOD1 reference builders reject any odd component before sampling; the public coarse-interface helper returns an empty array for that invalid request. LOD0 reference cells remain valid at any LOD0 lattice origin.
 - At shared lattice positions both resolutions call the same SDF v1 sampler. Edited samples replay the same global carve/fill snapshot in sequence order. The fixture validates snapshot seed/version/types/array lengths and the 256-operation cap.
+- Compact edit snapshots require integer seed/version/revision metadata, a nonnegative revision at least as large as the retained command count, equal packed-array lengths, finite centers inside the canonical world-coordinate bound, finite radii within the ledger's canonical min/max, and only CARVE/FILL mode bytes. Invalid metadata or commands fail with a stable reason; production ledger semantics are unchanged.
 - Surface normals are sampled from that same canonical field using a fixed 0.25-world-unit central-difference offset, equal to the current production LOD0 normal probe distance.
+- Nonfinite density from the SDF or an experimental override fails the whole fixture build with `valid=false`. This includes field evaluations made by the central-difference normal probes; no partial vertex, normal, or timing payload is returned as a successful mesh.
 
 ## Transition construction
 
@@ -27,6 +30,7 @@ The proof combines complementary checks rather than treating sample equality as 
 
 - Internal transition surface edges that do not touch the exterior cell boundary have incidence exactly two; degenerate and duplicate triangles are rejected.
 - On every supported internal fine/coarse interface, the isosurface segment set from the transition surface exactly matches the segment set generated directly from the adjacent LOD face triangles.
+- Independent seam tests also construct neighboring uniform LOD0 and LOD1 reference meshes with a nonlinear synthetic field at signed X/Y/Z coordinates. They compare contour segments extracted from those generated mesh boundaries and compare endpoint normals against the transition cell for a face, edge, and corner. The expected result comes from separate neighboring meshes, not only from the transition fixture's interface-triangle helper.
 - Tests cover negative-orientation face/edge/corner junctions and their positive-orientation corner mirror, signed-world origins, winding toward the empty side, duplicate-position normal equality, canonical finite-difference normals, a canonical SDF tunnel wall, a synthetic cave-like cross-section, and a deterministic sub-grid feature that disappears as expected.
 - A matched LOD0 (2×2×2 cells) and LOD1 (one cell) six-tetrahedron reference is produced for the same unit domain and seed. Canonical density residuals at generated vertices are reported as exploratory geometry measurements; they have no approved acceptance tolerance.
 

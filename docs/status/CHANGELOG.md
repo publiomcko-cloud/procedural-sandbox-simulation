@@ -93,3 +93,9 @@ Outcome: PASS_RESEARCH_WITH_CONDITIONS. ADR-0002 remains PROPOSED/DEFERRED; no b
 - Added an isolated GDScript transition-cell fixture, matched LOD0/LOD1 references, deterministic topology/ledger tests, CPU-only exploratory benchmarks, and the [P1.1A specification](../specs/P1-1A-LOD01-TRANSITION-FIXTURE.md). The production scene, SDF v1, ledger semantics and P1.0C mesher are unchanged.
 - Full validation evidence and exact feature SHA are in the [P1.1A implementation checkpoint](../checkpoints/2026-10-20-P1-1A-IMPLEMENTATION.md). Performance and geometric acceptance remain pending owner-approved targets; headless data is not visual/GPU evidence. Feature PR remains draft/unmerged.
 - No P1.1B/C, native Voxel Tools, ADR-0002 adoption or F2-G1 operation. All five protected-state holds remain.
+
+## 2026-10-20 — P1.1A independent source-review corrections
+
+- Corrected LOD1 global-origin parity checks, compact snapshot domain validation, nonfinite SDF/normal-probe failure handling, and added independent neighboring LOD0/LOD1 mesh contour and normal comparisons on the existing fixture.
+- Godot 4.7.2 full validation passed 16,174 assertions across 12 suites, zero failures, at `9669a03ec691532862e9aee1251f15e15f06b690`. Updated 0/1/32/128/256 CPU fixture measurements are in the [review-correction checkpoint](../checkpoints/2026-10-20-P1-1A-REVIEW-CORRECTIONS.md); all budgets remain exploratory.
+- PR #96 remains draft and unmerged, pending independent rereview. No production LOD, P1.1B/C, native component, or F2-G1 scope was performed. All five holds remain.
