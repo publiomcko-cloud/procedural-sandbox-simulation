@@ -1,6 +1,6 @@
-# Project current status — checkpoint 2026-10-19
+# Project current status — checkpoint 2026-10-20
 
-**Snapshot, not a live branch monitor.** Evidence baseline: repository `publiomcko-cloud/procedural-sandbox-simulation`, verified `main` at `2f86c42503cfa3a334215b1ff5b9bf9658263440` on 2026-10-17 after PRs #85, #86, #88 and #90 merged. **Always check live GitHub `main`, feature PR, issue and working tree before acting.** Earlier P1.0A and P1.0B checkpoints remain frozen; the [P1.0C implementation checkpoint](../checkpoints/2026-10-17-P1-0C-IMPLEMENTATION.md) records this authorized slice.
+**Snapshot, not a live branch monitor.** Evidence baseline: repository `publiomcko-cloud/procedural-sandbox-simulation`, verified `main` at **`9452cefe5788bbbd3a38fedb55773d10ebafb0d2`** on 2026-10-20 after owner-authorized PR #92 merge. The P1.0C source, prior decisions and owner-approved P1.1 R2 plan are now integrated. **Always check live GitHub `main`, feature PR, issue and working tree before acting.** Earlier P1.0A and P1.0B checkpoints remain frozen; the [P1.0C implementation checkpoint](../checkpoints/2026-10-17-P1-0C-IMPLEMENTATION.md) records this authorized slice.
 
 ## Accepted integrated functional results
 
@@ -14,15 +14,19 @@
 | [#88](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/88) | P1.0B bounded camera-driven region streaming | `13d08b828553df4a3b2bb9d3eb783b4cc3f45beb` | Source reviewed and owner GUI gate recorded separately |
 | [#90](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/90) | P1.0B terrain depth lighting correction | `2f86c42503cfa3a334215b1ff5b9bf9658263440` | Lighting checkpoint is integrated; visual result applies to its recorded owner retest |
 
+| [#92](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/92) | P1.0C global ordered edits across streamed region boundaries; 256-op transient ledger and revision-safe meshing; owner GUI PASS | `9452cefe5788bbbd3a38fedb55773d10ebafb0d2` | Reviewed source head `531bae3d…`, 10,366 developer-reported asserts, performance caveats and full docs reconciliation |
+
 [SHA-specific source-review and owner GUI evidence index](../reviews/2026-10-17-P0-1-FUNCTIONAL-ACCEPTANCE-EVIDENCE-INDEX.md) records the exact GitHub review/comment links for PRs #78, #80 and #82.
 
 Owner explicitly authorized each merge after source and GUI approval. Runtime counts and timing are developer-provided; ChatGPT inspected source and reports, **not** an independent Godot Windows execution. GitHub "Starter checks" only checks project structure. At PR #82 local benchmark, seven-run median full mesh ~525–537 ms and localized ~44/88/194 ms for 1/2/4 affected chunks; not a full-frame or scaling guarantee.
 
-## P1.0C — source and owner GUI accepted; merge authorization pending
+## P1.0C — integration verified; P1.1A is next separately scoped slice
 
-- **P1.0C / Issues #91/#93/#94:** source and tests on existing draft [PR #92](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/92), reviewed exact feature HEAD `531bae3d5d5770b67e4b7fa4c5c44a8c13249284`, source commit `f632f7cc06066b690ad7574fe7b92bb306851893` (parent `dd1b2d75569444a49200c996873a86e81479767f`). [Independent review #5578386601](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/92#pullrequestreview-5578386601) was `PASS_SOURCE_REVIEW_WITH_GUI_PERFORMANCE_CAVEATS`. On 2026-10-19 the owner confirmed **GUI PASS** for sustained edits while moving and, on explicit follow-up, borders/corners, X/C/R, unload/reentry and absence of persistent stream errors. This acceptance is scope-bounded and *does not authorize merge*. Codex reports full Godot 4.7.2 `scripts/validate.ps1` **10,366 assertions, 0 failures**, independently inspected as source/evidence but not re-executed by reviewer; hosted CI is static only. No persistent save; 256-operation ledger cap. Local headless worst-layout 255-op click-to-scene-commit p95 ~248 ms and frame peak ~110 ms remain known caveats. [Owner GUI checkpoint](../checkpoints/2026-10-19-P1-0C-OWNER-GUI-ACCEPTANCE-AND-PREFLIGHT.md), [review record](../reviews/2026-10-19-P1-0C-EXACT-SHA-SOURCE-AND-GUI-READINESS.md).
+- **PR #92 MERGED:** exact owner-authorized head `7e484c2912de04448726d0a63fbaed39d4fd7b3c`, merge `9452cefe5788bbbd3a38fedb55773d10ebafb0d2` on remote `main`, parents and tree verified. [Post-merge checkpoint](../checkpoints/2026-10-20-PR92-P1-0C-MERGE.md) documents the event in a separate docs-only draft PR.
+- **Evidence:** independently source-reviewed feature HEAD `531bae3d5d5770b67e4b7fa4c5c44a8c13249284` [review #5578386601](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/92#pullrequestreview-5578386601) PASS with performance caveats; Godot 4.7.2 `scripts/validate.ps1` 10,366 assertions/0 failures developer-reported, not independently executed; owner GUI PASS recorded for sustained edits, simultaneous movement, borders/corners, X/C/R, unload/reentry and no persistent stream errors. The CI hosted check was static only.
+- **PR #87:** historical docs-only PR now **closed without merge** at head `6fad428a22a149624da245e88a5e608d09ed7dd3`, observed GitHub close event 2026-10-20T10:12:11Z; 13 unique checkpoint blobs were already fully preserved in the merged PR #92. Do not re-merge stale status or infer who authorized its closure.
+- **P1.1:** [owner-approved plan R2](../roadmap/P1-1-APPROVED-PLAN-R2.md) is now integrated via PR #92; proposed P1.1A remains a **custom GDScript experimental LOD0/1 fixture only**. The post-merge checkpoint must be published/reviewed in the repository and hardware/budget/tolerance requirements reconciled before claiming completion of Gate 0 for implementation. No native F2-G1, Voxel Tools runtime, production LOD or P1.1B/C authorization.
 
-**Documentation reconciliation:** online documentary consolidation on the **existing draft PR #92** preserves 13 historical PR #87 checkpoint blobs unchanged, unions `docs/checkpoints/INDEX.md`, adds missing verified PR #88/#90 merge entries to `CHANGELOG`, and updates current status/roadmap/decisions without importing #87's obsolete snapshots. [Reconciliation checkpoint](../checkpoints/2026-10-19-PR87-PR92-DOCUMENTATION-RECONCILIATION.md). PR [#87](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/87) remains open/draft/unmerged, untouched at `6fad428a22a149624da245e88a5e608d09ed7dd3`; its later closure/supersession requires owner disposition after #92 integration.
 
 ## Spatial contract retained after P1.0A
 
@@ -37,14 +41,13 @@ Version 1 `SdfWorld` logical regions are 16×12 world units, divided into 4×4 c
 
 ## Next authorized action and handoff
 
-**Status:** `P1_0C_READY_FOR_OWNER_MERGE_DECISION`, subject to final published docs-only commit/readback, actual branch mergeability and owner authorization. The source and owner GUI gates are fulfilled for this bounded prototype. The next action is **not** implementing P1.1 or merging automatically: request owner's explicit integration decision for PR #92, then verify actual remote `main` merge SHA and create a fresh post-merge checkpoint/`CHANGELOG` entry. After #92 merges, obtain a separate decision to retire or salvage any genuinely missing residual content from docs-only PR #87; do not merge its stale overlapping `CURRENT_STATUS` or roadmap. P1.1 may be designed and discussed but is not authorized for implementation by this checkpoint.
-
-Do not infer that P1.0C prototype completes Phase 0 backend qualification or all P1 material/LOD/streaming requirements. For new agents consult [recovery runbook](../workflow/AGENT_RECOVERY.md), [review record](../reviews/2026-10-19-P1-0C-EXACT-SHA-SOURCE-AND-GUI-READINESS.md) and the [checkpoint index](../checkpoints/INDEX.md). All five F2-G1 holds remain in force.
+**Verified:** P1.0C owner-authorized integration completed; `main` at `9452cefe5788bbbd3a38fedb55773d10ebafb0d2`. Produce and integrate a distinct post-merge documentation checkpoint under normal owner review. After its checkpoint is available, the existing Codex P1.1A prompt may be executed against the verified post-merge `main`, subject to safe workspace reconciliation and the accepted plan's resource/error gates. Do not overwrite local `stash@{0}` or invent runtime budgets. P1.1B/C and backend selection remain for later explicit decisions. All five F2-G1 holds remain.
 
 
-## 2026-10-20 — P1.1 owner-approved plan (not yet integrated)
+## 2026-10-20 — P1.1 owner-approved R2 plan integrated with PR #92
 
-Owner approved the [P1.1 R2 roadmap](../roadmap/P1-1-APPROVED-PLAN-R2.md), incorporating global LOD lattice alignment, topologically watertight LOD0/1 transitions, separately gated backend qualification and per-scenario CPU/GPU/memory benchmarks. The [owner decision checkpoint](../checkpoints/2026-10-20-P1-1-OWNER-PLAN-APPROVAL.md) records a request for a Codex implementation prompt. **P1.1A implementation is conditional** upon owner-authorized PR #92 merge, actual `main` readback and post-merge checkpoint. At this snapshot PR #92 remains draft/unmerged and #87 remains unchanged; neither merge is authorized by the plan decision. P1.1B/C, native Voxel Tools, F2-G1, ADR-0002 approval and full P1 completion are not authorized.
+Owner approved [P1.1 R2](../roadmap/P1-1-APPROVED-PLAN-R2.md) with global LOD0/1 lattice, watertight mixed-LOD transitions, gated backend qualification and per-scenario profiling. The plan was part of the merged PR #92, while **P1.1A implementation itself has not started**. The [approval checkpoint](../checkpoints/2026-10-20-P1-1-OWNER-PLAN-APPROVAL.md) and [post-merge receipt](../checkpoints/2026-10-20-PR92-P1-0C-MERGE.md) distinguish design acceptance from execution. P1.1B/C, native dependencies, production materials/persistence/collision and ADR-0002 finalization remain unapproved.
+
 
 ## Additional documentation decision, 2026-10-17 — checkpoint cadence
 
