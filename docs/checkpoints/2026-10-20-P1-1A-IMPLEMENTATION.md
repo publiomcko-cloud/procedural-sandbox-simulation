@@ -2,7 +2,7 @@
 
 **Checkpoint date/timezone:** 2026-10-20, America/Sao_Paulo
 **Event type:** authorized implementation and test handoff
-**Publication state:** recorded on the P1.1A feature branch; draft PR pending creation
+**Publication state:** recorded on the P1.1A feature branch and draft PR #96; unmerged
 **Immutable once integrated:** yes; record later review, GUI, or merge events in a new checkpoint.
 
 ## Verified repository identity
@@ -10,6 +10,7 @@
 - Repository: `publiomcko-cloud/procedural-sandbox-simulation`; origin `https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git`.
 - Verified `origin/main`: `f42f9dbdd54809df202a81b4aa59ed0d1f377a2e`; P1.1A branch base is exactly this commit.
 - P1.1A source/test commit: `155a41d974754257afcb8ec78ada7fb2f454f058`, direct parent `f42f9dbdd54809df202a81b4aa59ed0d1f377a2e`.
+- Draft PR #96 was opened against `main` from this branch after the two initial commits; it was unmerged and the branch head at creation was `0a343e50c944bea47d181fc8d8ba2e0c5cd0c7af`. The final head must always be read from the live PR after subsequent documentation updates.
 - Branch: `feat/p1-1a-lod01-transition-fixture`. The implementation uses the existing `C:\Dev\sandbox-sim-dev` worktree. The pre-existing `stash@{0}` was preserved.
 - Source commit paths: `game/scripts/experiments/lod01_transition_fixture.gd` (+ Godot UID), `game/tests/lod01_transition_tests.gd` (+ Godot UID), `scripts/validate.ps1`, and `scripts/validate.sh`.
 - Documentation paths are added in the following commit on this same branch: this checkpoint, `docs/specs/P1-1A-LOD01-TRANSITION-FIXTURE.md`, `docs/status/CURRENT_STATUS.md`, `docs/status/CHANGELOG.md`, and `docs/checkpoints/INDEX.md`.
@@ -59,18 +60,18 @@ These figures measure a deliberately small fixture, not region/chunk production 
 
 ## Architecture and recovery
 
-- Current working state at checkpoint: source commit is on `feat/p1-1a-lod01-transition-fixture`; documentation is committed separately on the same branch. Draft PR creation is the handoff action; the final branch SHA and PR URL should be read from live GitHub after publication.
+- Current working state at checkpoint: source and documentation commits are on `feat/p1-1a-lod01-transition-fixture`, associated with [draft PR #96](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/96). The PR is unmerged. The final branch SHA should be read from the live PR after this checkpoint update is pushed.
 - Reproduce: set `GODOT_BIN` to the pinned Godot 4.7.2 executable and run `scripts/validate.ps1` from the repository root. The LOD suite may also be invoked with `--headless --path game --script res://tests/lod01_transition_tests.gd`.
 - Fixture implementation: `game/scripts/experiments/lod01_transition_fixture.gd`; tests and benchmark: `game/tests/lod01_transition_tests.gd`; scope/spec: `docs/specs/P1-1A-LOD01-TRANSITION-FIXTURE.md`.
 - Known limits: one-cell templates only; finite fixture exterior intentionally open; no arbitrary neighboring-cell mosaic, adaptive selection, edit invalidation, worker result publication, production integration, or GPU/visual evidence. LOD2 remains unsupported. Very narrow features may disappear at the chosen samples. No approved geometry/performance budgets exist.
 - No new defect was found in the implemented bounded template by the passing deterministic tests, but this is not an independent source review.
-- Next action: create one draft PR against `main`, then request independent source review. Owner GUI testing is not a substitute for the independent source review; no merge occurs without separate explicit authorization. Future P1.1B/C and native backend work require their own authorization.
+- Next action: request independent source review of PR #96. Owner GUI testing is not a substitute for the independent source review; no merge occurs without separate explicit authorization. Future P1.1B/C and native backend work require their own authorization.
 - Protected environment holds remain unchanged: `CURRENT_PROTECTED_STATE_UNKNOWN`, `V3_NOT_ATTESTED`, `ACL_REVIEW_REQUIRED`, `G1_BLOCKED_ENVIRONMENT`, `F2_G1_RELEASE_HOLD`.
 - Documentation updated: `CURRENT_STATUS.md`, `CHANGELOG.md`, and this checkpoint index entry. No decision register or ADR status changed.
 
 ## Event significance and decision
 
-- Exact event: owner-authorized P1.1A implementation on verified post-PR-95 `main`, after the earlier Gate 0 blocker was resolved by the expressly authorized integration evidence.
+- Exact event: owner-authorized P1.1A implementation on verified post-PR-95 `main`, after the earlier Gate 0 blocker was resolved by the expressly authorized integration evidence; draft PR #96 was opened for independent review.
 - Status: implementation and local L0-L2 validation passed; exact source/test commit is recorded above. Performance/geometric acceptance, visual behavior, independent review, and integration remain pending.
 - This checkpoint is required because it records a newly authorized implementation slice and its test/measurement evidence, while preserving the distinction between a passing experiment and production readiness.
 - Checkpoint index row: [INDEX](../checkpoints/INDEX.md).
