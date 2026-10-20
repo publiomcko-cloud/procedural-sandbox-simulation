@@ -5,7 +5,7 @@ PROJECT="$ROOT/game"
 GODOT="${GODOT_BIN:-godot}"
 failures=0
 
-for file in project.godot scenes/main.tscn scenes/terrain_demo.tscn scripts/bootstrap.gd scripts/region_generator.gd scripts/terrain/sdf_world.gd scripts/terrain/marching_tetrahedra.gd scripts/terrain/terrain_demo.gd tests/smoke.gd tests/terrain_sdf_tests.gd tests/bootstrap_visual_regression.gd; do
+for file in project.godot scenes/main.tscn scenes/terrain_demo.tscn scripts/bootstrap.gd scripts/region_generator.gd scripts/terrain/sdf_world.gd scripts/terrain/marching_tetrahedra.gd scripts/terrain/terrain_demo.gd scripts/experiments/lod01_transition_fixture.gd tests/smoke.gd tests/terrain_sdf_tests.gd tests/lod01_transition_tests.gd tests/bootstrap_visual_regression.gd; do
   if [[ -f "$PROJECT/$file" ]]; then
     :
   else
@@ -35,6 +35,8 @@ echo "COMMAND: $GODOT --headless --path $PROJECT --script res://tests/smoke.gd"
 if "$GODOT" --headless --path "$PROJECT" --script res://tests/smoke.gd; then echo 'L2 PASS: deterministic generation and failure-path checks'; else code=$?; printf 'L2 FAIL: exit code %s\n' "$code" >&2; failures=$((failures + 1)); fi
 echo "COMMAND: $GODOT --headless --path $PROJECT --script res://tests/terrain_sdf_tests.gd"
 if "$GODOT" --headless --path "$PROJECT" --script res://tests/terrain_sdf_tests.gd; then echo 'L2 PASS: deterministic SDF and mesh tests'; else code=$?; printf 'L2 FAIL: terrain SDF tests exit code %s\n' "$code" >&2; failures=$((failures + 1)); fi
+echo "COMMAND: $GODOT --headless --path $PROJECT --script res://tests/lod01_transition_tests.gd"
+if "$GODOT" --headless --path "$PROJECT" --script res://tests/lod01_transition_tests.gd; then echo 'L2 PASS: experimental deterministic LOD 0/1 transition fixture'; else code=$?; printf 'L2 FAIL: LOD 0/1 transition fixture exit code %s\n' "$code" >&2; failures=$((failures + 1)); fi
 echo "COMMAND: $GODOT --headless --path $PROJECT --script res://tests/bootstrap_visual_regression.gd"
 if "$GODOT" --headless --path "$PROJECT" --script res://tests/bootstrap_visual_regression.gd; then echo 'L2 PASS: instantiated bootstrap structure (pixels are not assessed)'; else code=$?; printf 'L2 FAIL: bootstrap structure exit code %s\n' "$code" >&2; failures=$((failures + 1)); fi
 echo "COMMAND: $GODOT --headless --path $PROJECT --quit-after 2"
