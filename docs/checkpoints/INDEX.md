@@ -33,4 +33,6 @@
 | 2026-10-19 | [P1.0C owner GUI PASS and integration preflight](2026-10-19-P1-0C-OWNER-GUI-ACCEPTANCE-AND-PREFLIGHT.md) | Owner confirmed sustained/local edits, simultaneous movement, edges/corners, X/C/R, unload/reentry, and no persistent STREAM ERROR; merge still requires separate approval | Recorded on draft PR #92, not merged |
 | 2026-10-19 | [PR #87/#92 documentation reconciliation](2026-10-19-PR87-PR92-DOCUMENTATION-RECONCILIATION.md) | Original historical PR #87 checkpoints included without rewriting; status/roadmap/index/changelog reconciled online; no merge | Recorded on draft PR #92, not merged |
 
+| 2026-10-20 | [P1.1 owner-approved R2 plan](2026-10-20-P1-1-OWNER-PLAN-APPROVAL.md) | Owner approves P1.1 design, conditional P1.1A fixture scope and Codex prompt; no #92 merge or native permission | Draft PR #92 documentation-only; not integrated in main |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).

@@ -42,6 +42,10 @@ Version 1 `SdfWorld` logical regions are 16×12 world units, divided into 4×4 c
 Do not infer that P1.0C prototype completes Phase 0 backend qualification or all P1 material/LOD/streaming requirements. For new agents consult [recovery runbook](../workflow/AGENT_RECOVERY.md), [review record](../reviews/2026-10-19-P1-0C-EXACT-SHA-SOURCE-AND-GUI-READINESS.md) and the [checkpoint index](../checkpoints/INDEX.md). All five F2-G1 holds remain in force.
 
 
+## 2026-10-20 — P1.1 owner-approved plan (not yet integrated)
+
+Owner approved the [P1.1 R2 roadmap](../roadmap/P1-1-APPROVED-PLAN-R2.md), incorporating global LOD lattice alignment, topologically watertight LOD0/1 transitions, separately gated backend qualification and per-scenario CPU/GPU/memory benchmarks. The [owner decision checkpoint](../checkpoints/2026-10-20-P1-1-OWNER-PLAN-APPROVAL.md) records a request for a Codex implementation prompt. **P1.1A implementation is conditional** upon owner-authorized PR #92 merge, actual `main` readback and post-merge checkpoint. At this snapshot PR #92 remains draft/unmerged and #87 remains unchanged; neither merge is authorized by the plan decision. P1.1B/C, native Voxel Tools, F2-G1, ADR-0002 approval and full P1 completion are not authorized.
+
 ## Additional documentation decision, 2026-10-17 — checkpoint cadence
 
 The owner explicitly requires **a documentary checkpoint after every merge or other significant project interaction**. The protocol was merged in PR #85 (`a7391fa7eafe55c9b38888249b3eaafbf03da9a9`). The later P1.0A merge and P1.0B authorization are recorded in the [P1.0B checkpoint](../checkpoints/2026-10-17-P1-0B-AUTHORIZATION.md) and [checkpoint index](../checkpoints/INDEX.md).
