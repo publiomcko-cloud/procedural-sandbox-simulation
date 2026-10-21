@@ -15,6 +15,13 @@ const MAX_SAFE_JSON_INTEGER := 9007199254740991
 const MIN_SAFE_JSON_INTEGER := -9007199254740991
 const BOUNDARY_T_JUNCTION_DISTANCE_TOLERANCE := 0.00001
 const BOUNDARY_T_JUNCTION_ENDPOINT_PARAMETER_TOLERANCE := 0.000001
+const EXPECTED_GODOT_MAJOR := 4
+const EXPECTED_GODOT_MINOR := 7
+const EXPECTED_GODOT_PATCH := 2
+const EXPECTED_GODOT_STATUS := "stable"
+const EXPECTED_GODOT_BUILD := "official"
+const EXPECTED_GODOT_COMMIT_PREFIX := "ed1daf0bf"
+const EXPECTED_GODOT_COMMIT_SHA := "ed1daf0bf001b61586d9930840f2f1394092c079"
 const DISTRIBUTED_KEYS := [
 	Vector2i(-2, -2), Vector2i(-1, -2), Vector2i(0, -2), Vector2i(1, -2),
 	Vector2i(1, -1), Vector2i(0, -1), Vector2i(-1, -1), Vector2i(-2, -1),
@@ -22,6 +29,79 @@ const DISTRIBUTED_KEYS := [
 	Vector2i(1, 1), Vector2i(0, 1), Vector2i(-1, 1), Vector2i(-2, 1),
 ]
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
+
+
+static func validate_engine_version_info(version_info: Dictionary) -> Dictionary:
+	var expected_identity := {
+		"major": EXPECTED_GODOT_MAJOR,
+		"minor": EXPECTED_GODOT_MINOR,
+		"patch": EXPECTED_GODOT_PATCH,
+		"status": EXPECTED_GODOT_STATUS,
+		"build": EXPECTED_GODOT_BUILD,
+		"commit_prefix": EXPECTED_GODOT_COMMIT_PREFIX,
+		"commit_sha": EXPECTED_GODOT_COMMIT_SHA,
+	}
+	var observed_identity: Dictionary = {}
+	for field in ["major", "minor", "patch", "status", "build", "hash", "string"]:
+		observed_identity[field] = version_info.get(field, null)
+	for field in ["major", "minor", "patch", "status", "build"]:
+		if not version_info.has(field):
+			return _engine_version_rejection("runtime_version_field_missing", field, expected_identity, observed_identity, "NOT_CHECKED")
+	var expected_numeric_fields := {
+		"major": EXPECTED_GODOT_MAJOR,
+		"minor": EXPECTED_GODOT_MINOR,
+		"patch": EXPECTED_GODOT_PATCH,
+	}
+	for field in ["major", "minor", "patch"]:
+		if typeof(version_info[field]) != TYPE_INT:
+			return _engine_version_rejection("runtime_version_field_invalid_type", field, expected_identity, observed_identity, "NOT_CHECKED")
+		if int(version_info[field]) != int(expected_numeric_fields[field]):
+			return _engine_version_rejection("runtime_version_tuple_mismatch", field, expected_identity, observed_identity, "NOT_CHECKED")
+	for field in ["status", "build"]:
+		if typeof(version_info[field]) != TYPE_STRING:
+			return _engine_version_rejection("runtime_version_field_invalid_type", field, expected_identity, observed_identity, "NOT_CHECKED")
+	if String(version_info["status"]) != EXPECTED_GODOT_STATUS:
+		return _engine_version_rejection("runtime_version_status_mismatch", "status", expected_identity, observed_identity, "NOT_CHECKED")
+	if String(version_info["build"]) != EXPECTED_GODOT_BUILD:
+		return _engine_version_rejection("runtime_version_build_mismatch", "build", expected_identity, observed_identity, "NOT_CHECKED")
+	var runtime_hash_status := "UNAVAILABLE_MISSING"
+	if version_info.has("hash"):
+		if typeof(version_info["hash"]) != TYPE_STRING:
+			return _engine_version_rejection("runtime_version_hash_invalid_type", "hash", expected_identity, observed_identity, "INVALID")
+		var runtime_hash := String(version_info["hash"])
+		if runtime_hash.is_empty():
+			runtime_hash_status = "UNAVAILABLE_EMPTY"
+		elif runtime_hash == EXPECTED_GODOT_COMMIT_PREFIX:
+			runtime_hash_status = "MATCHED_COMMIT_PREFIX"
+		elif runtime_hash == EXPECTED_GODOT_COMMIT_SHA:
+			runtime_hash_status = "MATCHED_FULL_COMMIT_SHA"
+		else:
+			return _engine_version_rejection("runtime_version_git_hash_mismatch", "hash", expected_identity, observed_identity, "MISMATCH")
+	return {
+		"ok": true,
+		"reason": "",
+		"field": "",
+		"expected_identity": expected_identity,
+		"observed_identity": observed_identity,
+		"runtime_hash_status": runtime_hash_status,
+	}
+
+
+static func _engine_version_rejection(
+	reason: String,
+	field: String,
+	expected_identity: Dictionary,
+	observed_identity: Dictionary,
+	runtime_hash_status: String
+) -> Dictionary:
+	return {
+		"ok": false,
+		"reason": reason,
+		"field": field,
+		"expected_identity": expected_identity,
+		"observed_identity": observed_identity,
+		"runtime_hash_status": runtime_hash_status,
+	}
 
 
 static func verify_manifest(path: String = MANIFEST_PATH, pin_path: String = MANIFEST_SHA_PATH) -> Dictionary:

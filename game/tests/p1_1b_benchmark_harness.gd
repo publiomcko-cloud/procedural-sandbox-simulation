@@ -61,11 +61,17 @@ func _run() -> void:
 		return
 	var version_info: Dictionary = Engine.get_version_info()
 	var engine_version := String(version_info.get("string", ""))
-	if engine_version != "4.7.2.stable.official.ed1daf0bf":
+	var engine_version_check: Dictionary = Contract.validate_engine_version_info(version_info)
+	if not engine_version_check.get("ok", false):
 		_emit_event("invocation_failure", {
 			"reason_code": "godot_version_mismatch",
 			"expected_engine": "4.7.2.stable.official.ed1daf0bf",
 			"actual_engine": engine_version,
+			"version_check_reason": engine_version_check.get("reason", "runtime_version_check_failed"),
+			"version_check_field": engine_version_check.get("field", ""),
+			"expected_engine_identity": engine_version_check.get("expected_identity", {}),
+			"actual_engine_identity": engine_version_check.get("observed_identity", {}),
+			"runtime_hash_status": engine_version_check.get("runtime_hash_status", "NOT_CHECKED"),
 		})
 		quit(2)
 		return
@@ -98,6 +104,8 @@ func _run() -> void:
 		"scenario_contract_main_sha": _manifest.get("contract_main_sha", ""),
 		"source_commit_sha": "NOT_RECORDED_BY_HARNESS_VERIFY_GIT_HEAD_EXTERNALLY",
 		"godot_version": engine_version,
+		"godot_version_identity": engine_version_check["observed_identity"],
+		"godot_runtime_hash_status": engine_version_check["runtime_hash_status"],
 		"clock": "Time.get_ticks_usec process-local monotonic microseconds",
 		"raw_output": "stdout_jsonl_only_artifact_retention_owner_to_define",
 	})

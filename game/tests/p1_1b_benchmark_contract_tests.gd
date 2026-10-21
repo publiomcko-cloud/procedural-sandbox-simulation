@@ -307,6 +307,7 @@ func _test_fixed_edits_and_reload() -> void:
 
 
 func _test_review_correction_gates() -> void:
+	_test_engine_version_validation()
 	var movement_failure := Contract.movement_result_gate("RUNNING", {"ok": false, "reason_code": "invalid_route_leg"})
 	_check(movement_failure["abort"] and movement_failure["terminal_status"] == "FAIL", "unsuccessful streaming movement fails closed")
 	_check(movement_failure["reason_code"] == "invalid_route_leg", "movement failure preserves the source reason code")
@@ -459,6 +460,76 @@ func _test_review_correction_gates() -> void:
 	_check(Contract.validate_publication_evidence(reload_receipt)["ok"], "revision-matched region load publication receipt passes")
 	reload_receipt["successful_publication_delta"] = 0
 	_check(Contract.validate_publication_evidence(reload_receipt)["reason_code"] == "region_load_publication_not_observed", "SDF equality without a successful region publication is rejected")
+
+
+func _test_engine_version_validation() -> void:
+	var authorized_prefix_identity := {
+		"major": 4, "minor": 7, "patch": 2, "status": "stable", "build": "official",
+		"hash": "ed1daf0bf", "string": "4.7.2.stable.official.ed1daf0bf",
+	}
+	var prefix_result: Dictionary = Contract.validate_engine_version_info(authorized_prefix_identity)
+	_check(prefix_result.get("ok", false), "exact structured 4.7.2 stable official identity with the authorized commit prefix passes")
+	_check(prefix_result.get("runtime_hash_status", "") == "MATCHED_COMMIT_PREFIX", "runtime commit prefix is reported as matched, not as a full-hash observation")
+	var display_variant: Dictionary = authorized_prefix_identity.duplicate(true)
+	display_variant["string"] = "4.7.2-stable (official)"
+	_check(Contract.validate_engine_version_info(display_variant).get("ok", false), "authorized structured identity passes with Godot's alternate display string")
+	var full_hash_identity: Dictionary = authorized_prefix_identity.duplicate(true)
+	full_hash_identity["hash"] = "ed1daf0bf001b61586d9930840f2f1394092c079"
+	var full_hash_result: Dictionary = Contract.validate_engine_version_info(full_hash_identity)
+	_check(full_hash_result.get("ok", false), "exact full Godot source commit hash passes")
+	_check(full_hash_result.get("runtime_hash_status", "") == "MATCHED_FULL_COMMIT_SHA", "full source hash is identified separately from the abbreviated prefix")
+	var missing_hash_identity: Dictionary = authorized_prefix_identity.duplicate(true)
+	missing_hash_identity.erase("hash")
+	var missing_hash_result: Dictionary = Contract.validate_engine_version_info(missing_hash_identity)
+	_check(missing_hash_result.get("ok", false), "unavailable runtime hash does not override the external executable SHA pin or block matching structured version fields")
+	_check(missing_hash_result.get("runtime_hash_status", "") == "UNAVAILABLE_MISSING", "missing runtime hash is explicitly reported as unavailable")
+	var empty_hash_identity: Dictionary = authorized_prefix_identity.duplicate(true)
+	empty_hash_identity["hash"] = ""
+	_check(Contract.validate_engine_version_info(empty_hash_identity).get("runtime_hash_status", "") == "UNAVAILABLE_EMPTY", "empty runtime hash is explicitly reported as unavailable")
+	for wrong_version in [
+		{"field": "major", "value": 5},
+		{"field": "minor", "value": 6},
+		{"field": "patch", "value": 3},
+	]:
+		var wrong_tuple: Dictionary = authorized_prefix_identity.duplicate(true)
+		wrong_tuple[wrong_version["field"]] = wrong_version["value"]
+		var wrong_tuple_result: Dictionary = Contract.validate_engine_version_info(wrong_tuple)
+		_check(not wrong_tuple_result.get("ok", false) and wrong_tuple_result.get("reason", "") == "runtime_version_tuple_mismatch", "wrong structured %s version is rejected" % wrong_version["field"])
+	for unsupported_status in ["beta", "rc"]:
+		var prerelease: Dictionary = authorized_prefix_identity.duplicate(true)
+		prerelease["status"] = unsupported_status
+		_check(Contract.validate_engine_version_info(prerelease).get("reason", "") == "runtime_version_status_mismatch", "unsupported %s status is rejected" % unsupported_status)
+	var custom_build: Dictionary = authorized_prefix_identity.duplicate(true)
+	custom_build["build"] = "custom_build"
+	_check(Contract.validate_engine_version_info(custom_build).get("reason", "") == "runtime_version_build_mismatch", "custom engine build is rejected")
+	for field in ["major", "minor", "patch", "status", "build"]:
+		var missing_field: Dictionary = authorized_prefix_identity.duplicate(true)
+		missing_field.erase(field)
+		var missing_result: Dictionary = Contract.validate_engine_version_info(missing_field)
+		_check(not missing_result.get("ok", false) and missing_result.get("reason", "") == "runtime_version_field_missing" and missing_result.get("field", "") == field, "missing required %s field is rejected with its field identity" % field)
+	for invalid_field in [
+		{"field": "major", "value": "4"},
+		{"field": "minor", "value": 7.0},
+		{"field": "patch", "value": true},
+		{"field": "status", "value": 1},
+		{"field": "build", "value": 1},
+	]:
+		var invalid_type: Dictionary = authorized_prefix_identity.duplicate(true)
+		invalid_type[invalid_field["field"]] = invalid_field["value"]
+		var invalid_type_result: Dictionary = Contract.validate_engine_version_info(invalid_type)
+		_check(not invalid_type_result.get("ok", false) and invalid_type_result.get("reason", "") == "runtime_version_field_invalid_type", "invalid type for required %s field is rejected" % invalid_field["field"])
+	for wrong_hash in ["ed1daf0b0", "000000000", "ed1daf0bf001b61586d9930840f2f1394092c078"]:
+		var arbitrary_hash: Dictionary = authorized_prefix_identity.duplicate(true)
+		arbitrary_hash["hash"] = wrong_hash
+		var wrong_hash_result: Dictionary = Contract.validate_engine_version_info(arbitrary_hash)
+		_check(not wrong_hash_result.get("ok", false) and wrong_hash_result.get("reason", "") == "runtime_version_git_hash_mismatch", "nonmatching runtime Git hash is rejected: %s" % wrong_hash)
+	var invalid_hash_type: Dictionary = authorized_prefix_identity.duplicate(true)
+	invalid_hash_type["hash"] = 4
+	_check(Contract.validate_engine_version_info(invalid_hash_type).get("reason", "") == "runtime_version_hash_invalid_type", "provided non-string runtime hash is rejected")
+	var misleading_display: Dictionary = authorized_prefix_identity.duplicate(true)
+	misleading_display["patch"] = 3
+	misleading_display["string"] = "4.7.2-stable (official)"
+	_check(not Contract.validate_engine_version_info(misleading_display).get("ok", false), "a correct-looking display string cannot override an incorrect structured version")
 
 
 func _scenario(manifest: Dictionary, id: String) -> Dictionary:
