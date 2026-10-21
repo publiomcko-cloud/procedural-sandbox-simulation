@@ -10,6 +10,8 @@ const CONTRACT_ID := "P1.1B-B0-R4-R4A-OWNER-APPROVED-EXPERIMENTAL-INPUTS"
 const SEED := 424242
 const GENERATOR_VERSION := 1
 const REPLAY_RADIUS_MM := 580
+const BOUNDARY_T_JUNCTION_DISTANCE_TOLERANCE := 0.00001
+const BOUNDARY_T_JUNCTION_ENDPOINT_PARAMETER_TOLERANCE := 0.000001
 const DISTRIBUTED_KEYS := [
 	Vector2i(-2, -2), Vector2i(-1, -2), Vector2i(0, -2), Vector2i(1, -2),
 	Vector2i(1, -1), Vector2i(0, -1), Vector2i(-1, -1), Vector2i(-2, -1),
@@ -239,6 +241,17 @@ static func boundary_contour(mesh: Dictionary, axis: int, plane: float, position
 				return {"segments": segments, "normals": point_normals, "valid": false, "reason_code": "conflicting_boundary_normals"}
 			point_normals[a_key] = normals[ai]
 			point_normals[b_key] = normals[bi]
+	var t_junction := _find_boundary_t_junction(segments, point_normals)
+	if not t_junction.is_empty():
+		return {
+			"segments": segments,
+			"normals": point_normals,
+			"valid": false,
+			"reason_code": "t_junction_boundary_vertex",
+			"t_junction": t_junction,
+			"t_junction_distance_tolerance": BOUNDARY_T_JUNCTION_DISTANCE_TOLERANCE,
+			"endpoint_parameter_tolerance": BOUNDARY_T_JUNCTION_ENDPOINT_PARAMETER_TOLERANCE,
+		}
 	return {"segments": segments, "normals": point_normals, "valid": true}
 
 
@@ -248,6 +261,49 @@ static func _boundary_point_key(point: Vector3) -> String:
 		roundi(point.y * 1000000.0),
 		roundi(point.z * 1000000.0),
 	]
+
+
+static func _find_boundary_t_junction(segments: Dictionary, point_normals: Dictionary) -> Dictionary:
+	for segment_value: Variant in segments.keys():
+		var endpoints := String(segment_value).split("|")
+		if endpoints.size() != 2:
+			return {"reason_code": "malformed_boundary_segment_key"}
+		var a := _boundary_point_from_key(endpoints[0])
+		var b := _boundary_point_from_key(endpoints[1])
+		var ab := b - a
+		var length_squared := ab.length_squared()
+		if length_squared <= BOUNDARY_T_JUNCTION_DISTANCE_TOLERANCE * BOUNDARY_T_JUNCTION_DISTANCE_TOLERANCE:
+			return {"reason_code": "degenerate_boundary_segment_key", "segment": String(segment_value)}
+		for point_value: Variant in point_normals.keys():
+			var point_key := String(point_value)
+			if point_key == endpoints[0] or point_key == endpoints[1]:
+				continue
+			var point := _boundary_point_from_key(point_key)
+			var t := (point - a).dot(ab) / length_squared
+			if t <= BOUNDARY_T_JUNCTION_ENDPOINT_PARAMETER_TOLERANCE \
+				or t >= 1.0 - BOUNDARY_T_JUNCTION_ENDPOINT_PARAMETER_TOLERANCE:
+				continue
+			var closest := a + ab * t
+			if point.distance_to(closest) <= BOUNDARY_T_JUNCTION_DISTANCE_TOLERANCE:
+				return {
+					"segment": String(segment_value),
+					"interior_vertex": point_key,
+					"segment_parameter": t,
+					"distance_tolerance": BOUNDARY_T_JUNCTION_DISTANCE_TOLERANCE,
+					"endpoint_parameter_tolerance": BOUNDARY_T_JUNCTION_ENDPOINT_PARAMETER_TOLERANCE,
+				}
+	return {}
+
+
+static func _boundary_point_from_key(key: String) -> Vector3:
+	var coordinates := key.split(",")
+	if coordinates.size() != 3:
+		return Vector3(INF, INF, INF)
+	return Vector3(
+		float(coordinates[0].to_int()) / 1000000.0,
+		float(coordinates[1].to_int()) / 1000000.0,
+		float(coordinates[2].to_int()) / 1000000.0
+	)
 
 
 static func connected_required_samples(mask: PackedByteArray, dimensions: Vector3i, required_indices: PackedInt32Array) -> Dictionary:

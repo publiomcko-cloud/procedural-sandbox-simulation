@@ -205,6 +205,45 @@ func _test_review_correction_gates() -> void:
 	var matching_contour := Contract.boundary_contour(matching_mesh, 0, 0.0, 0.00001, 0.000001)
 	_check(Contract.compare_boundary_contours(valid_contour, valid_contour)["ok"], "matching valid boundary contours pass")
 	_check(Contract.compare_boundary_contours(valid_contour, matching_contour)["ok"], "independently built matching LOD boundary geometry passes")
+	var t_junction_mesh := {
+		"vertices": PackedVector3Array([
+			Vector3(0, 0, 0), Vector3(0, 2, 0), Vector3(1, 1, 1),
+			Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(1, 0, 1),
+			Vector3(0, 1, 0), Vector3(0, 2, 0), Vector3(1, 2, 1),
+		]),
+		"normals": PackedVector3Array([
+			Vector3.UP, Vector3.UP, Vector3.UP,
+			Vector3.UP, Vector3.UP, Vector3.UP,
+			Vector3.UP, Vector3.UP, Vector3.UP,
+		]),
+	}
+	var t_junction_transition := Contract.boundary_contour(t_junction_mesh, 0, 0.0, 0.00001, 0.000001)
+	var t_junction_reference := Contract.boundary_contour(t_junction_mesh.duplicate(true), 0, 0.0, 0.00001, 0.000001)
+	_check(not t_junction_transition["valid"] and t_junction_transition["reason_code"] == "t_junction_boundary_vertex", "boundary oracle rejects a vertex strictly inside an unsplit segment")
+	_check(not t_junction_reference["valid"] and t_junction_reference["reason_code"] == "t_junction_boundary_vertex", "independent reference oracle detects the same T-junction")
+	_check(t_junction_transition["segments"] == t_junction_reference["segments"] and t_junction_transition["normals"] == t_junction_reference["normals"], "negative T-junction pair has identical segments and matching normals")
+	var matching_t_junction := Contract.compare_boundary_contours(t_junction_transition, t_junction_reference)
+	_check(not matching_t_junction["ok"] and matching_t_junction["reason_code"] == "transition_boundary_contour_invalid", "identical segment dictionaries and normals cannot conceal matching T-junctions")
+	var split_boundary_mesh := {
+		"vertices": PackedVector3Array([
+			Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(1, 0, 1),
+			Vector3(0, 1, 0), Vector3(0, 2, 0), Vector3(1, 2, 1),
+		]),
+		"normals": PackedVector3Array([Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP]),
+	}
+	var split_boundary := Contract.boundary_contour(split_boundary_mesh, 0, 0.0, 0.00001, 0.000001)
+	_check(split_boundary["valid"] and split_boundary["segments"].size() == 2, "matching split-only boundary segments remain valid")
+	_check(Contract.compare_boundary_contours(split_boundary, split_boundary)["ok"], "matching split-only contour passes without an unsplit parent segment")
+	var adjacent_triangle_mesh := {
+		"vertices": PackedVector3Array([
+			Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(1, 1, 1),
+			Vector3(0, 1, 0), Vector3(0, 2, 0), Vector3(1, 1, 1),
+		]),
+		"normals": PackedVector3Array([Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP]),
+	}
+	var adjacent_triangle_contour := Contract.boundary_contour(adjacent_triangle_mesh, 0, 0.0, 0.00001, 0.000001)
+	_check(adjacent_triangle_contour["valid"] and adjacent_triangle_contour["segments"].size() == 2, "legitimate adjacent triangles sharing an off-plane edge and boundary endpoint remain valid")
+	_check(Contract.compare_boundary_contours(split_boundary, adjacent_triangle_contour)["ok"], "adjacent triangle topology is not blanket-rejected as a T-junction")
 	var duplicate_mesh := {
 		"vertices": PackedVector3Array([
 			Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(1, 0, 0),
@@ -255,7 +294,7 @@ func _test_review_correction_gates() -> void:
 	for index in centerline:
 		corridor_empty[index] = 1
 	var corridor_result := Contract.connected_required_samples(corridor_empty, dimensions, centerline)
-	_check(not corridor_result["ok"] and corridor_result["reason_code"] == "required_samples_disconnected", "corridor-constrained tunnel oracle rejects an exterior-only detour")
+	_check(not corridor_result["ok"] and corridor_result["reason_code"] == "required_samples_disconnected", "global empty-space connectivity cannot mask an obstructed centerline-constrained corridor")
 	_check(Contract.connected_required_samples(PackedByteArray(), dimensions, centerline)["reason_code"] == "invalid_connectivity_dimensions_or_seeds", "corridor oracle rejects incomplete grid data")
 
 	var good_edit_receipt := {

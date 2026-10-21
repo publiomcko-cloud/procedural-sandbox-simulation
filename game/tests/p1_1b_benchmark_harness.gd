@@ -583,12 +583,36 @@ func _run_tunnel_scenario(scenario: Dictionary) -> void:
 	var total := nx * plane_size
 	var synthetic_tunnel := String(scenario["id"]) != "B0G.TUNNEL.CANONICAL_CONTROL.W1840.v1"
 	var radius := float(int(scenario["radius_mm"])) / 1000.0
+	var corridor_radius := radius if synthetic_tunnel else 0.92
+	if not synthetic_tunnel and not is_equal_approx(radius, 0.92):
+		_fail("canonical_tunnel_radius_does_not_match_sdf_v1", {"scenario_radius": radius, "canonical_radius": 0.92})
+		return
 	var phase := float(posmod(int(_manifest["global_seed"]), 100003)) * 0.000173
+	var centerline_y := PackedFloat64Array()
+	var centerline_z := PackedFloat64Array()
+	centerline_y.resize(nx)
+	centerline_z.resize(nx)
+	for xi in range(nx):
+		var world_x := float(int(min_mm[0]) + xi * step_mm) / 1000.0
+		if synthetic_tunnel:
+			centerline_y[xi] = _tunnel_center_y(world_x, phase)
+			centerline_z[xi] = _tunnel_center_z(world_x, phase)
+		else:
+			var center_mapping: Dictionary = Spatial.world_to_region_local(Vector3(world_x, 0.0, 0.0))
+			if not center_mapping.get("valid", false):
+				_fail("canonical_tunnel_centerline_mapping_invalid", {"x_index": xi})
+				return
+			var center_region: Vector2i = center_mapping["region_key"]
+			var center_local_position: Vector3 = center_mapping["local_position"]
+			var center_local: Vector2 = CanonicalField.cave_center(
+				int(_manifest["global_seed"]), center_region, center_local_position.x
+			)
+			centerline_y[xi] = center_local.y
+			centerline_z[xi] = center_local.x + float(center_region.y) * CanonicalField.REGION_SIZE_Z
 	var solid := PackedByteArray()
 	solid.resize(total)
 	var corridor_empty := PackedByteArray()
-	if synthetic_tunnel:
-		corridor_empty.resize(total)
+	corridor_empty.resize(total)
 	var sample_started := Time.get_ticks_usec()
 	for xi in range(nx):
 		var x_mm := int(min_mm[0]) + xi * step_mm
@@ -619,10 +643,10 @@ func _run_tunnel_scenario(scenario: Dictionary) -> void:
 						int(_manifest["global_seed"])
 					)
 				solid[index] = 1 if density >= 0.0 else 0
-				if synthetic_tunnel and density < 0.0:
-					var center_y := _tunnel_center_y(world_x, phase)
-					var center_z := _tunnel_center_z(world_x, phase)
-					if Vector2(world_y - center_y, world_z - center_z).length_squared() < radius * radius:
+				if density < 0.0:
+					var center_y := centerline_y[xi]
+					var center_z := centerline_z[xi]
+					if Vector2(world_y - center_y, world_z - center_z).length_squared() < corridor_radius * corridor_radius:
 						corridor_empty[index] = 1
 		if xi % 4 == 0:
 			await process_frame
@@ -696,9 +720,8 @@ func _run_tunnel_scenario(scenario: Dictionary) -> void:
 	var minimum_centerline_lattice_clearance := INF
 	var centerline_indices := PackedInt32Array()
 	for xi in range(nx):
-		var x := float(int(min_mm[0]) + xi * step_mm) / 1000.0
-		var center_y := 1.15 + 0.24 * sin(0.25 * x + phase)
-		var center_z := 6.0 + 1.05 * sin(0.17 * x + 0.6 * phase)
+		var center_y := centerline_y[xi]
+		var center_z := centerline_z[xi]
 		var yi := clampi(floori((center_y - float(min_mm[1]) / 1000.0) / (float(step_mm) / 1000.0) + 0.5), 0, ny - 1)
 		var zi := clampi(floori((center_z - float(min_mm[2]) / 1000.0) / (float(step_mm) / 1000.0) + 0.5), 0, nz - 1)
 		var nearest_y := float(int(min_mm[1]) + yi * step_mm) / 1000.0
@@ -717,15 +740,14 @@ func _run_tunnel_scenario(scenario: Dictionary) -> void:
 		elif label != tunnel_label:
 			_fail("tunnel_centerline_components_are_disconnected", {"x_index": xi, "first_component": tunnel_label, "actual_component": label})
 			return
-	var corridor_connectivity: Dictionary = {"ok": true, "visited_sample_count": 0, "missing_required_indices": []}
-	if synthetic_tunnel:
-		corridor_connectivity = Contract.connected_required_samples(corridor_empty, Vector3i(nx, ny, nz), centerline_indices)
-		if not corridor_connectivity.get("ok", false):
-			_fail("synthetic_tunnel_centerline_corridor_disconnected", {
-				"reason_code": corridor_connectivity.get("reason_code", "unknown"),
-				"missing_centerline_sample_indices": corridor_connectivity.get("missing_required_indices", []),
-			})
-			return
+	var corridor_connectivity := Contract.connected_required_samples(corridor_empty, Vector3i(nx, ny, nz), centerline_indices)
+	if not corridor_connectivity.get("ok", false):
+		_fail("tunnel_centerline_corridor_disconnected", {
+			"field_source": "PRODUCTION_SDF_V1" if not synthetic_tunnel else "B0_R4_SYNTHETIC_FIELD",
+			"reason_code": corridor_connectivity.get("reason_code", "unknown"),
+			"missing_centerline_sample_indices": corridor_connectivity.get("missing_required_indices", []),
+		})
+		return
 	var top_index := _grid_index(128, 79, 96, plane_size, nz)
 	var bottom_index := _grid_index(128, 1, 96, plane_size, nz)
 	var top_label := labels[top_index]
@@ -748,10 +770,12 @@ func _run_tunnel_scenario(scenario: Dictionary) -> void:
 		"component_count": component_id,
 		"centerline_seed_component_id": tunnel_label,
 		"centerline_connected_x_samples": centerline_labels.size(),
-		"centerline_corridor_connected": bool(corridor_connectivity.get("ok", false)) if synthetic_tunnel else null,
-		"centerline_corridor_applicability": "SYNTHETIC_TUNNEL_ONLY" if synthetic_tunnel else "NOT_APPLICABLE_CANONICAL_CONTROL",
+		"centerline_corridor_connected": bool(corridor_connectivity.get("ok", false)),
+		"centerline_corridor_applicability": "CANONICAL_AND_SYNTHETIC_TUNNEL_FIELDS",
+		"centerline_corridor_radius_world": corridor_radius,
 		"centerline_corridor_visited_sample_count": int(corridor_connectivity.get("visited_sample_count", 0)),
-		"centerline_corridor_method": "six_neighbor_empty_mask_within_seeded_tunnel_radius" if synthetic_tunnel else "NOT_APPLICABLE_CANONICAL_CONTROL",
+		"centerline_corridor_method": "six_neighbor_negative_density_mask_constrained_to_seeded_centerline_radius",
+		"centerline_corridor_source": "SDF_V1_CAVE_CENTER_RADIUS_0_92" if not synthetic_tunnel else "B0_R4_SYNTHETIC_CENTERLINE_AND_SCENARIO_RADIUS",
 		"negative_x_opening_reached": true,
 		"positive_x_opening_reached": true,
 		"centerline_nearest_lattice_clearance_min_world": minimum_centerline_lattice_clearance,
