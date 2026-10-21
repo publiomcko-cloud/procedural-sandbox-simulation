@@ -101,7 +101,7 @@ func _test_manifest_numeric_normalization() -> void:
 	var fractional_result := Contract.normalize_json_value(fractional_value)
 	_check(not fractional_result.get("ok", false) and fractional_result.get("reason", "") == "manifest_json_number_not_integral", "fractional JSON numbers are rejected with an exact reason")
 	for lexical_number in ["1.0", "1e0", "1.00"]:
-		var alternate_bytes := ("{\"value\":" + lexical_number + "}").to_utf8_buffer()
+		var alternate_bytes: PackedByteArray = ("{\"value\":" + String(lexical_number) + "}").to_utf8_buffer()
 		var alternate_value: Variant = JSON.parse_string(alternate_bytes.get_string_from_utf8())
 		var alternate_result := Contract.validate_canonical_json_bytes(alternate_bytes, alternate_value)
 		_check(not alternate_result.get("ok", false) and alternate_result.get("reason", "") == "manifest_bytes_not_canonical_utf8_json", "integral decimal/exponent spelling %s is rejected by exact-byte comparison" % lexical_number)
