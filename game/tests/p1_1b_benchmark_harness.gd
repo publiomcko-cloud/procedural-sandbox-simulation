@@ -236,7 +236,7 @@ func _run_ledger_scenario(scenario: Dictionary) -> void:
 				"command": command,
 			})
 			return
-		var operation := ledger.get_last_operation_snapshot()
+		var operation: Dictionary = ledger.get_last_operation_snapshot()
 		var actual_command: Dictionary = Contract.command_from_operation(operation)
 		actual_commands.append(actual_command)
 		var expected_support: Array[String] = Contract.expected_support_for_command(scenario, command)
@@ -1109,6 +1109,7 @@ func _wait_for_stream_settled(scene: Node, focus: Vector2i, stage: String) -> bo
 			})
 			return true
 		await process_frame
+	return false
 
 
 func _stream_snapshot(scene: Node) -> Dictionary:
@@ -1294,7 +1295,7 @@ func _run_edited_reload_scenario(scenario: Dictionary) -> void:
 			scene.queue_free()
 			await process_frame
 			return
-		var operation := ledger.get_last_operation_snapshot()
+		var operation: Dictionary = ledger.get_last_operation_snapshot()
 		var support := Contract.operation_region_keys(operation, "support_regions")
 		var dependencies := Contract.operation_region_keys(operation, "dependency_regions")
 		var rebuild := Contract.operation_region_keys(operation, "rebuild_regions")
@@ -1367,7 +1368,8 @@ func _run_edited_reload_scenario(scenario: Dictionary) -> void:
 		scene.queue_free()
 		await process_frame
 		return
-	var unloaded := not scene.get("active_regions").has(target_id)
+	var active_regions: Dictionary = scene.get("active_regions")
+	var unloaded: bool = not active_regions.has(target_id)
 	var unloads_after := int(_stream_diagnostics(scene).get("streamed_region_unloads", 0))
 	if not unloaded or unloads_after <= unloads_before:
 		_fail("edited_target_region_was_not_unloaded", {"target_region": target_id, "unload_count_before": unloads_before, "unload_count_after": unloads_after})
