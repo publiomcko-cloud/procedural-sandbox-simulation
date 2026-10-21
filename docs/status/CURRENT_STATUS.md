@@ -1,6 +1,16 @@
-# Project current status — checkpoint 2026-10-20
+# Project current status — checkpoint 2026-10-21
 
-**Snapshot, not a live branch monitor.** Evidence baseline: repository `publiomcko-cloud/procedural-sandbox-simulation`, verified `main` at **`aca6b6403c455708cacda01c8fbf0bf980d813a2`** on 2026-10-20 after owner-authorized PR #96 P1.1A integration. PR #95 documentation remains previously integrated. P1.0C source and the owner-approved P1.1 R2 plan remain integrated. **Always check live GitHub `main`, feature PR and working tree before acting.** Earlier P1.0A and P1.0B checkpoints remain frozen; the [P1.0C implementation checkpoint](../checkpoints/2026-10-17-P1-0C-IMPLEMENTATION.md) records its authorized source slice.
+**Snapshot, not a live branch monitor.** Evidence baseline: repository `publiomcko-cloud/procedural-sandbox-simulation`, verified `main` at **`665c5c883ae88b949f4030f7affc786064999f61`** on 2026-10-21 after verified owner-authorized PR #97 documentation integration (first parent `aca6b6403c455708cacda01c8fbf0bf980d813a2`, second parent `4cc18693d9f01e759b272c6302de2663ffc42a1e`). PR #96 P1.1A experimental integration and PR #95 documentation remain previously merged. P1.0C source and the owner-approved P1.1 R2 plan remain integrated. **Always check live GitHub `main`, feature PR and working tree before acting.** Earlier P1.0A and P1.0B checkpoints remain frozen; the [P1.0C implementation checkpoint](../checkpoints/2026-10-17-P1-0C-IMPLEMENTATION.md) records its authorized source slice.
+
+## 2026-10-21 — P1.1B B0 owner approves R4 + R4a experimental inputs ONLY
+
+**NEW owner decision:** after the final independent [B0 R4a source-only PASS](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/97#issuecomment-6314241218), owner explicitly authorized **approving B0 R4+R4a as an experimental input/methodology contract and registering that decision online**. See [binding narrowed owner contract](../specs/P1-1B-B0-OWNER-APPROVED-CONTRACT.md), [source R4](../specs/P1-1B-B0-R4-SOURCE-PROPOSAL.md), [R4a overriding addendum](../specs/P1-1B-B0-R4A-ACCEPTED-ADDENDUM.md), [review record](../reviews/2026-10-21-P1-1B-B0-R4A-INDEPENDENT-SOURCE-REVIEW.md) and [immutable decision checkpoint](../checkpoints/2026-10-21-P1-1B-B0-R4A-OWNER-INPUT-APPROVAL.md).
+
+**APPROVED INPUTS, not execution:** canonical radius-0.58 isolated replay, event-based streaming including atomic diagonal 9→14 and three-step 9→12→15→16 *after successful publications*, detached LOD0/LOD1 signed fixtures, fully defined synthetic tunnels and fixed seam/reload inputs. **EXCLUDED / NOT_FROZEN:** repeated real viewport clicks, remote-picker click cases, edited revisit and unproven edited LOD contour scoring. The R4a addendum has precedence for its three corrections.
+
+**NOT AUTHORIZED:** B1-1 harness implementation, benchmark execution (even `UNSCORED`), code changes, any native Voxel Tools acquisition/use, backend selection/ADR-0002, P1.1C, production LOD and protected F2-G1 operations. Product performance/geometry thresholds, target hardware and permitted GPU/memory tools remain `OWNER_TO_DEFINE`; no test/GUI data was obtained by this planning decision. The **next permitted step** is decision collection and bounded B1-1 *proposal only*, not Codex code or runs.
+
+This event is documented on a separate docs-only PR based on the verified `665c5c...` `main`; historical earlier checkpoint statements below are preserved as time-scoped evidence and must not override this later approval. The future documentation PR merge is not asserted until GitHub readback verifies it. All five F2-G1 holds remain.
 
 ## Accepted integrated functional results
 
