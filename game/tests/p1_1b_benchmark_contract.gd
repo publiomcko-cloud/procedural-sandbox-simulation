@@ -156,6 +156,203 @@ static func region_id(key: Vector2i) -> String:
 	return _region_id(key)
 
 
+static func movement_result_gate(current_status: String, move_result: Dictionary) -> Dictionary:
+	if bool(move_result.get("ok", false)):
+		return {"abort": false, "terminal_status": current_status, "reason_code": ""}
+	var reason := String(move_result.get("reason_code", "movement_failed_without_reason"))
+	return {
+		"abort": true,
+		"terminal_status": "TIMEOUT" if current_status == "TIMEOUT" else "FAIL",
+		"reason_code": reason if not reason.is_empty() else "movement_failed_without_reason",
+	}
+
+
+static func last_successful_movement_base_keys(move_result: Dictionary) -> Dictionary:
+	if move_result.is_empty():
+		return {"ok": false, "reason_code": "nonsettled_route_has_no_successful_movement_record"}
+	var raw_keys: Variant = move_result.get("active_before_last_crossing", null)
+	if typeof(raw_keys) != TYPE_ARRAY or (raw_keys as Array).is_empty():
+		return {"ok": false, "reason_code": "successful_movement_record_missing_crossing_residency"}
+	var keys: Array[String] = []
+	for key in raw_keys:
+		if typeof(key) != TYPE_STRING:
+			return {"ok": false, "reason_code": "successful_movement_record_has_invalid_crossing_residency"}
+		keys.append(key)
+	return {"ok": true, "keys": keys}
+
+
+static func compare_boundary_contours(actual: Dictionary, expected: Dictionary) -> Dictionary:
+	if not bool(actual.get("valid", false)):
+		return {
+			"ok": false,
+			"reason_code": "transition_boundary_contour_invalid",
+			"contour_reason": String(actual.get("reason_code", "unspecified")),
+		}
+	if not bool(expected.get("valid", false)):
+		return {
+			"ok": false,
+			"reason_code": "reference_boundary_contour_invalid",
+			"contour_reason": String(expected.get("reason_code", "unspecified")),
+		}
+	var actual_segments: Dictionary = actual.get("segments", {})
+	var expected_segments: Dictionary = expected.get("segments", {})
+	if actual_segments.is_empty() or expected_segments.is_empty():
+		return {"ok": false, "reason_code": "empty_interface_contour"}
+	if actual_segments != expected_segments:
+		return {
+			"ok": false,
+			"reason_code": "interface_segment_mismatch",
+			"actual_segment_count": actual_segments.size(),
+			"expected_segment_count": expected_segments.size(),
+		}
+	return {"ok": true, "segment_count": actual_segments.size()}
+
+
+static func boundary_contour(mesh: Dictionary, axis: int, plane: float, position_tolerance: float, normal_tolerance: float) -> Dictionary:
+	var vertices: PackedVector3Array = mesh.get("vertices", PackedVector3Array())
+	var normals: PackedVector3Array = mesh.get("normals", PackedVector3Array())
+	if axis < 0 or axis > 2 or vertices.is_empty() or vertices.size() != normals.size() or vertices.size() % 3 != 0:
+		return {"segments": {}, "normals": {}, "valid": false, "reason_code": "malformed_boundary_mesh_arrays"}
+	var segments: Dictionary = {}
+	var point_normals: Dictionary = {}
+	for start in range(0, vertices.size(), 3):
+		for edge in range(3):
+			var ai := start + edge
+			var bi := start + (edge + 1) % 3
+			var a: Vector3 = vertices[ai]
+			var b: Vector3 = vertices[bi]
+			if not a.is_finite() or not b.is_finite() or not normals[ai].is_finite() or not normals[bi].is_finite():
+				return {"segments": segments, "normals": point_normals, "valid": false, "reason_code": "nonfinite_boundary_geometry"}
+			if absf(a[axis] - plane) > position_tolerance or absf(b[axis] - plane) > position_tolerance:
+				continue
+			if a.distance_squared_to(b) <= position_tolerance * position_tolerance:
+				return {"segments": segments, "normals": point_normals, "valid": false, "reason_code": "degenerate_boundary_segment"}
+			var a_key := _boundary_point_key(a)
+			var b_key := _boundary_point_key(b)
+			var segment_key := a_key + "|" + b_key if a_key < b_key else b_key + "|" + a_key
+			if segments.has(segment_key):
+				return {"segments": segments, "normals": point_normals, "valid": false, "reason_code": "duplicate_boundary_segment"}
+			segments[segment_key] = true
+			if point_normals.has(a_key) and (point_normals[a_key] as Vector3).distance_to(normals[ai]) > normal_tolerance:
+				return {"segments": segments, "normals": point_normals, "valid": false, "reason_code": "conflicting_boundary_normals"}
+			if point_normals.has(b_key) and (point_normals[b_key] as Vector3).distance_to(normals[bi]) > normal_tolerance:
+				return {"segments": segments, "normals": point_normals, "valid": false, "reason_code": "conflicting_boundary_normals"}
+			point_normals[a_key] = normals[ai]
+			point_normals[b_key] = normals[bi]
+	return {"segments": segments, "normals": point_normals, "valid": true}
+
+
+static func _boundary_point_key(point: Vector3) -> String:
+	return "%d,%d,%d" % [
+		roundi(point.x * 1000000.0),
+		roundi(point.y * 1000000.0),
+		roundi(point.z * 1000000.0),
+	]
+
+
+static func connected_required_samples(mask: PackedByteArray, dimensions: Vector3i, required_indices: PackedInt32Array) -> Dictionary:
+	var total := dimensions.x * dimensions.y * dimensions.z
+	if dimensions.x <= 0 or dimensions.y <= 0 or dimensions.z <= 0 \
+		or total != mask.size() or required_indices.is_empty():
+		return {"ok": false, "reason_code": "invalid_connectivity_dimensions_or_seeds"}
+	for index in required_indices:
+		if index < 0 or index >= total or mask[index] == 0:
+			return {"ok": false, "reason_code": "required_sample_not_in_component_mask", "sample_index": index}
+	var visited := PackedByteArray()
+	visited.resize(total)
+	var queue := PackedInt32Array([required_indices[0]])
+	visited[required_indices[0]] = 1
+	var head := 0
+	var ny_nz := dimensions.y * dimensions.z
+	while head < queue.size():
+		var current := queue[head]
+		head += 1
+		var x := int(current / ny_nz)
+		var remainder := current % ny_nz
+		var y := int(remainder / dimensions.z)
+		var z := remainder % dimensions.z
+		if x > 0:
+			var neighbor_x_low := current - ny_nz
+			if mask[neighbor_x_low] != 0 and visited[neighbor_x_low] == 0:
+				visited[neighbor_x_low] = 1
+				queue.append(neighbor_x_low)
+		if x + 1 < dimensions.x:
+			var neighbor_x_high := current + ny_nz
+			if mask[neighbor_x_high] != 0 and visited[neighbor_x_high] == 0:
+				visited[neighbor_x_high] = 1
+				queue.append(neighbor_x_high)
+		if y > 0:
+			var neighbor_y_low := current - dimensions.z
+			if mask[neighbor_y_low] != 0 and visited[neighbor_y_low] == 0:
+				visited[neighbor_y_low] = 1
+				queue.append(neighbor_y_low)
+		if y + 1 < dimensions.y:
+			var neighbor_y_high := current + dimensions.z
+			if mask[neighbor_y_high] != 0 and visited[neighbor_y_high] == 0:
+				visited[neighbor_y_high] = 1
+				queue.append(neighbor_y_high)
+		if z > 0:
+			var neighbor_z_low := current - 1
+			if mask[neighbor_z_low] != 0 and visited[neighbor_z_low] == 0:
+				visited[neighbor_z_low] = 1
+				queue.append(neighbor_z_low)
+		if z + 1 < dimensions.z:
+			var neighbor_z_high := current + 1
+			if mask[neighbor_z_high] != 0 and visited[neighbor_z_high] == 0:
+				visited[neighbor_z_high] = 1
+				queue.append(neighbor_z_high)
+	var missing: Array[int] = []
+	for index in required_indices:
+		if visited[index] == 0:
+			missing.append(index)
+	return {
+		"ok": missing.is_empty(),
+		"reason_code": "required_samples_disconnected" if not missing.is_empty() else "",
+		"visited_sample_count": queue.size(),
+		"missing_required_indices": missing,
+	}
+
+
+static func validate_publication_evidence(evidence: Dictionary) -> Dictionary:
+	if not bool(evidence.get("transaction_clear", false)):
+		return {"ok": false, "reason_code": "publication_transaction_not_clear"}
+	if bool(evidence.get("pending_stage", true)):
+		return {"ok": false, "reason_code": "publication_stage_still_pending"}
+	if not (evidence.get("stream_errors", []) as Array).is_empty():
+		return {"ok": false, "reason_code": "publication_has_stream_errors"}
+	var expected_revision := int(evidence.get("expected_revision", -1))
+	if expected_revision < 0 or int(evidence.get("observed_revision", -2)) != expected_revision:
+		return {"ok": false, "reason_code": "publication_revision_mismatch"}
+	var expected_chunks := int(evidence.get("expected_chunk_count", -1))
+	if expected_chunks <= 0 or int(evidence.get("active_chunk_count", -1)) != expected_chunks \
+		or int(evidence.get("array_mesh_count", -1)) != expected_chunks:
+		return {"ok": false, "reason_code": "publication_mesh_set_incomplete"}
+	match String(evidence.get("kind", "")):
+		"EDIT_TRANSACTION":
+			if String(evidence.get("edit_commit_status", "")) != "COHERENT_COMMIT" \
+				or int(evidence.get("edit_commit_sequence", -1)) != int(evidence.get("expected_sequence", -2)) \
+				or int(evidence.get("mesh_job_count", 0)) <= 0:
+				return {"ok": false, "reason_code": "edit_mesh_commit_receipt_missing_or_mismatched"}
+		"REGION_LOAD":
+			if int(evidence.get("successful_publication_delta", 0)) <= 0:
+				return {"ok": false, "reason_code": "region_load_publication_not_observed"}
+		_:
+			return {"ok": false, "reason_code": "unsupported_publication_evidence_kind"}
+	var expected_stage_purpose := "edit_transaction" if String(evidence["kind"]) == "EDIT_TRANSACTION" else "load"
+	var matching_stage_observed := false
+	for stage_value in evidence.get("stage_observations", []):
+		var stage: Dictionary = stage_value
+		if String(stage.get("region_id", "")) == String(evidence.get("target_region_id", "")) \
+			and String(stage.get("purpose", "")) == expected_stage_purpose \
+			and int(stage.get("edit_revision", -1)) == expected_revision \
+			and int(stage.get("chunk_count", 0)) > 0 \
+			and (expected_stage_purpose != "load" or int(stage.get("chunk_count", 0)) == expected_chunks):
+			matching_stage_observed = true
+	if not matching_stage_observed:
+		return {"ok": false, "reason_code": "revision_pinned_production_stage_not_observed"}
+	return {"ok": true, "reason_code": "", "revision": expected_revision, "kind": String(evidence["kind"])}
+
+
 static func key_array(key: Vector2i) -> Array[int]:
 	return [key.x, key.y]
 

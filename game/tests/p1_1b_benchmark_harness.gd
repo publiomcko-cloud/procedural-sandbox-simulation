@@ -539,18 +539,12 @@ func _compare_adjacent_meshes(
 			"neighbor_min": _vector_array(neighbor_min),
 			"neighbor_max": _vector_array(neighbor_max),
 		}
-	var actual := _boundary_contour(transition, axis, expected_plane)
-	var expected := _boundary_contour(neighbor, axis, expected_plane)
-	if actual["segments"].is_empty() or expected["segments"].is_empty():
-		return {"ok": false, "reason_code": "empty_interface_contour", "face": face}
-	if actual["segments"] != expected["segments"]:
-		return {
-			"ok": false,
-			"reason_code": "interface_segment_mismatch",
-			"face": face,
-			"actual_segment_count": actual["segments"].size(),
-			"expected_segment_count": expected["segments"].size(),
-		}
+	var actual := Contract.boundary_contour(transition, axis, expected_plane, ASSERT_TOLERANCE, SHARED_NORMAL_TOLERANCE)
+	var expected := Contract.boundary_contour(neighbor, axis, expected_plane, ASSERT_TOLERANCE, SHARED_NORMAL_TOLERANCE)
+	var contour_match := Contract.compare_boundary_contours(actual, expected)
+	if not contour_match.get("ok", false):
+		contour_match["face"] = face
+		return contour_match
 	if actual["normals"].size() != expected["normals"].size():
 		return {"ok": false, "reason_code": "interface_normal_vertex_count_mismatch", "face": face}
 	for point_key in expected["normals"]:
@@ -573,42 +567,6 @@ func _compare_adjacent_meshes(
 	}
 
 
-func _boundary_contour(mesh: Dictionary, axis: int, plane: float) -> Dictionary:
-	var vertices: PackedVector3Array = mesh.get("vertices", PackedVector3Array())
-	var normals: PackedVector3Array = mesh.get("normals", PackedVector3Array())
-	var segments: Dictionary = {}
-	var point_normals: Dictionary = {}
-	for start in range(0, vertices.size(), 3):
-		for edge in range(3):
-			var ai := start + edge
-			var bi := start + (edge + 1) % 3
-			var a: Vector3 = vertices[ai]
-			var b: Vector3 = vertices[bi]
-			if absf(a[axis] - plane) > ASSERT_TOLERANCE or absf(b[axis] - plane) > ASSERT_TOLERANCE:
-				continue
-			if a.distance_squared_to(b) <= ASSERT_TOLERANCE * ASSERT_TOLERANCE:
-				return {"segments": {}, "normals": {}, "valid": false}
-			var a_key := _point_key(a)
-			var b_key := _point_key(b)
-			var segment_key := a_key + "|" + b_key if a_key < b_key else b_key + "|" + a_key
-			segments[segment_key] = true
-			if point_normals.has(a_key) and (point_normals[a_key] as Vector3).distance_to(normals[ai]) > SHARED_NORMAL_TOLERANCE:
-				return {"segments": segments, "normals": point_normals, "valid": false}
-			if point_normals.has(b_key) and (point_normals[b_key] as Vector3).distance_to(normals[bi]) > SHARED_NORMAL_TOLERANCE:
-				return {"segments": segments, "normals": point_normals, "valid": false}
-			point_normals[a_key] = normals[ai]
-			point_normals[b_key] = normals[bi]
-	return {"segments": segments, "normals": point_normals, "valid": true}
-
-
-func _point_key(point: Vector3) -> String:
-	return "%d,%d,%d" % [
-		roundi(point.x * 1000000.0),
-		roundi(point.y * 1000000.0),
-		roundi(point.z * 1000000.0),
-	]
-
-
 func _vector_array(value: Vector3) -> Array[float]:
 	return [value.x, value.y, value.z]
 
@@ -623,8 +581,14 @@ func _run_tunnel_scenario(scenario: Dictionary) -> void:
 	var nz := int((int(max_mm[2]) - int(min_mm[2])) / step_mm) + 1
 	var plane_size := ny * nz
 	var total := nx * plane_size
+	var synthetic_tunnel := String(scenario["id"]) != "B0G.TUNNEL.CANONICAL_CONTROL.W1840.v1"
+	var radius := float(int(scenario["radius_mm"])) / 1000.0
+	var phase := float(posmod(int(_manifest["global_seed"]), 100003)) * 0.000173
 	var solid := PackedByteArray()
 	solid.resize(total)
+	var corridor_empty := PackedByteArray()
+	if synthetic_tunnel:
+		corridor_empty.resize(total)
 	var sample_started := Time.get_ticks_usec()
 	for xi in range(nx):
 		var x_mm := int(min_mm[0]) + xi * step_mm
@@ -637,7 +601,7 @@ func _run_tunnel_scenario(scenario: Dictionary) -> void:
 				var world_y := float(y_mm) / 1000.0
 				var world_z := float(z_mm) / 1000.0
 				var density: float
-				if String(scenario["id"]) == "B0G.TUNNEL.CANONICAL_CONTROL.W1840.v1":
+				if not synthetic_tunnel:
 					var world_position := Vector3(world_x, world_y, world_z)
 					var mapped: Dictionary = Spatial.world_to_region_local(world_position)
 					if not mapped.get("valid", false):
@@ -651,10 +615,15 @@ func _run_tunnel_scenario(scenario: Dictionary) -> void:
 						world_x,
 						world_y,
 						world_z,
-						float(int(scenario["radius_mm"])) / 1000.0,
+						radius,
 						int(_manifest["global_seed"])
 					)
 				solid[index] = 1 if density >= 0.0 else 0
+				if synthetic_tunnel and density < 0.0:
+					var center_y := _tunnel_center_y(world_x, phase)
+					var center_z := _tunnel_center_z(world_x, phase)
+					if Vector2(world_y - center_y, world_z - center_z).length_squared() < radius * radius:
+						corridor_empty[index] = 1
 		if xi % 4 == 0:
 			await process_frame
 			if _process_guard_exceeded():
@@ -725,8 +694,7 @@ func _run_tunnel_scenario(scenario: Dictionary) -> void:
 	var tunnel_label := 0
 	var centerline_labels: Array[int] = []
 	var minimum_centerline_lattice_clearance := INF
-	var radius := float(int(scenario["radius_mm"])) / 1000.0
-	var phase := float(posmod(int(_manifest["global_seed"]), 100003)) * 0.000173
+	var centerline_indices := PackedInt32Array()
 	for xi in range(nx):
 		var x := float(int(min_mm[0]) + xi * step_mm) / 1000.0
 		var center_y := 1.15 + 0.24 * sin(0.25 * x + phase)
@@ -738,6 +706,7 @@ func _run_tunnel_scenario(scenario: Dictionary) -> void:
 		var center_distance := Vector2(nearest_y - center_y, nearest_z - center_z).length()
 		minimum_centerline_lattice_clearance = minf(minimum_centerline_lattice_clearance, radius - center_distance)
 		var sample_index := xi * plane_size + yi * nz + zi
+		centerline_indices.append(sample_index)
 		if solid[sample_index] != 0 or labels[sample_index] == 0:
 			_fail("centerline_nearest_sample_is_not_empty", {"x_index": xi, "y_index": yi, "z_index": zi})
 			return
@@ -747,6 +716,15 @@ func _run_tunnel_scenario(scenario: Dictionary) -> void:
 			tunnel_label = label
 		elif label != tunnel_label:
 			_fail("tunnel_centerline_components_are_disconnected", {"x_index": xi, "first_component": tunnel_label, "actual_component": label})
+			return
+	var corridor_connectivity: Dictionary = {"ok": true, "visited_sample_count": 0, "missing_required_indices": []}
+	if synthetic_tunnel:
+		corridor_connectivity = Contract.connected_required_samples(corridor_empty, Vector3i(nx, ny, nz), centerline_indices)
+		if not corridor_connectivity.get("ok", false):
+			_fail("synthetic_tunnel_centerline_corridor_disconnected", {
+				"reason_code": corridor_connectivity.get("reason_code", "unknown"),
+				"missing_centerline_sample_indices": corridor_connectivity.get("missing_required_indices", []),
+			})
 			return
 	var top_index := _grid_index(128, 79, 96, plane_size, nz)
 	var bottom_index := _grid_index(128, 1, 96, plane_size, nz)
@@ -770,6 +748,10 @@ func _run_tunnel_scenario(scenario: Dictionary) -> void:
 		"component_count": component_id,
 		"centerline_seed_component_id": tunnel_label,
 		"centerline_connected_x_samples": centerline_labels.size(),
+		"centerline_corridor_connected": bool(corridor_connectivity.get("ok", false)) if synthetic_tunnel else null,
+		"centerline_corridor_applicability": "SYNTHETIC_TUNNEL_ONLY" if synthetic_tunnel else "NOT_APPLICABLE_CANONICAL_CONTROL",
+		"centerline_corridor_visited_sample_count": int(corridor_connectivity.get("visited_sample_count", 0)),
+		"centerline_corridor_method": "six_neighbor_empty_mask_within_seeded_tunnel_radius" if synthetic_tunnel else "NOT_APPLICABLE_CANONICAL_CONTROL",
 		"negative_x_opening_reached": true,
 		"positive_x_opening_reached": true,
 		"centerline_nearest_lattice_clearance_min_world": minimum_centerline_lattice_clearance,
@@ -892,6 +874,7 @@ func _run_streaming_scenario(scenario: Dictionary) -> void:
 	var expected_counts: Array = scenario.get("expected_settled_counts", [])
 	var previous_keys := initial_keys
 	var leg_index := 0
+	var last_successful_move: Dictionary = {}
 	for waypoint_index in range(1, waypoints.size()):
 		var target_mm: Array = waypoints[waypoint_index]
 		var target := Vector3(float(target_mm[0]) / 1000.0, float(target_mm[1]) / 1000.0, float(target_mm[2]) / 1000.0)
@@ -901,10 +884,15 @@ func _run_streaming_scenario(scenario: Dictionary) -> void:
 		else:
 			velocity_values = scenario["velocity_mm_s"]
 		var move_result: Dictionary = await _move_focus_continuously(scene, target, Vector3(velocity_values[0], velocity_values[1], velocity_values[2]))
-		if not move_result.get("ok", false):
+		var movement_gate := Contract.movement_result_gate(_scenario_status, move_result)
+		if movement_gate.get("abort", false):
+			_scenario_status = String(movement_gate.get("terminal_status", "FAIL"))
+			if _scenario_status != "TIMEOUT":
+				_fail("streaming_movement_failed", {"reason_code": movement_gate.get("reason_code", "unknown")})
 			scene.queue_free()
 			await process_frame
 			return
+		last_successful_move = move_result
 		_emit_event("stream_movement_leg_completed", {
 			"waypoint_index": waypoint_index,
 			"start_position_world": move_result["start_position"],
@@ -963,7 +951,13 @@ func _run_streaming_scenario(scenario: Dictionary) -> void:
 	var final_keys := _active_keys(scene)
 	var final_base_keys: Array[String] = previous_keys
 	if not bool(scenario.get("settle_after_each_waypoint", true)):
-		final_base_keys = move_result.get("active_before_last_crossing", previous_keys)
+		var movement_base := Contract.last_successful_movement_base_keys(last_successful_move)
+		if not movement_base.get("ok", false):
+			_fail(String(movement_base.get("reason_code", "nonsettled_route_has_no_successful_movement_record")))
+			scene.queue_free()
+			await process_frame
+			return
+		final_base_keys = movement_base["keys"]
 	var final_expected := _expected_after_focus(final_base_keys, final_focus)
 	if final_keys != final_expected:
 		_fail("final_route_active_set_mismatch", {"expected": final_expected, "actual": final_keys})
@@ -1052,6 +1046,7 @@ func _wait_for_stream_settled(scene: Node, focus: Vector2i, stage: String) -> bo
 		"initial_pending_keys": _pending_keys(scene),
 	})
 	while true:
+		_observe_loading_stage_revisions(scene)
 		if _process_guard_exceeded():
 			_mark_timeout(stage, started, PROCESS_GUARD_USEC)
 			return false
@@ -1262,6 +1257,7 @@ func _run_edited_reload_scenario(scenario: Dictionary) -> void:
 	var ledger: RefCounted = scene.get("edit_ledger")
 	var commands: Array[Dictionary] = Contract.commands_from_scenario(scenario)
 	var actual_commands: Array[Dictionary] = []
+	var edit_publication_receipts: Array[Dictionary] = []
 	for command in commands:
 		var center_mm: Array = command["center_mm"]
 		var center := Vector3(float(center_mm[0]) / 1000.0, float(center_mm[1]) / 1000.0, float(center_mm[2]) / 1000.0)
@@ -1299,18 +1295,34 @@ func _run_edited_reload_scenario(scenario: Dictionary) -> void:
 			await process_frame
 			return
 		var transaction_started := Time.get_ticks_usec()
+		_clear_loading_stage_observation(scene, Contract.region_id(focus_key))
 		scene.call("_schedule_edit_transaction", operation)
 		var transaction_ready: bool = await _wait_for_edit_transaction(scene, "edited_reload_command_%d" % int(command["sequence"]))
 		if not transaction_ready:
 			scene.queue_free()
 			await process_frame
 			return
+		var edit_receipt := _region_publication_evidence(
+			scene, focus_key, "EDIT_TRANSACTION", int(operation["revision"]),
+			int(operation["sequence"]), 0
+		)
+		var edit_receipt_verdict := Contract.validate_publication_evidence(edit_receipt)
+		if not edit_receipt_verdict.get("ok", false):
+			_fail("edited_reload_mesh_publication_not_proven", {
+				"reason_code": edit_receipt_verdict.get("reason_code", "unknown"),
+				"publication_evidence": edit_receipt,
+			})
+			scene.queue_free()
+			await process_frame
+			return
+		edit_publication_receipts.append(edit_receipt)
 		_emit_event("edit_mesh_transaction_completed", {
 			"sequence": operation["sequence"],
 			"revision": operation["revision"],
 			"elapsed_since_scheduling_usec": Time.get_ticks_usec() - transaction_started,
 			"acceptance_plus_publication_elapsed_usec": Time.get_ticks_usec() - acceptance_started,
 			"coherent_mesh_transaction_completed": true,
+			"publication_evidence": edit_receipt,
 		})
 	var command_sha := Contract.command_list_sha256(actual_commands)
 	var probe_positions: Array = scenario["probe_positions_mm"]
@@ -1339,6 +1351,7 @@ func _run_edited_reload_scenario(scenario: Dictionary) -> void:
 		await process_frame
 		return
 	var loads_before := int(_stream_diagnostics(scene).get("streamed_region_loads", 0))
+	_clear_loading_stage_observation(scene, target_id)
 	scene.call("_move_focus", initial_focus - (scene.get("orbit_target") as Vector3))
 	var return_ready: bool = await _wait_for_stream_settled(scene, focus_key, "edited_reload_return")
 	if not return_ready:
@@ -1347,7 +1360,16 @@ func _run_edited_reload_scenario(scenario: Dictionary) -> void:
 		return
 	var loads_after := int(_stream_diagnostics(scene).get("streamed_region_loads", 0))
 	var after_values := _sample_region_probes(scene, focus_key, probe_positions)
-	if not scene.get("active_regions").has(target_id) or loads_after <= loads_before:
+	var reload_receipt := _region_publication_evidence(
+		scene, focus_key, "REGION_LOAD", int(ledger.revision), -1, loads_after - loads_before
+	)
+	var reload_receipt_verdict := Contract.validate_publication_evidence(reload_receipt)
+	if not reload_receipt_verdict.get("ok", false):
+		_fail("edited_reload_mesh_publication_not_proven", {
+			"reason_code": reload_receipt_verdict.get("reason_code", "unknown"),
+			"publication_evidence": reload_receipt,
+		})
+	elif not scene.get("active_regions").has(target_id) or loads_after <= loads_before:
 		_fail("edited_target_region_did_not_reload", {"target_region": target_id, "load_count_before": loads_before, "load_count_after": loads_after})
 	elif before_values != after_values:
 		_fail("edited_reload_probe_values_changed", {"before": before_values, "after": after_values})
@@ -1363,6 +1385,8 @@ func _run_edited_reload_scenario(scenario: Dictionary) -> void:
 			"probe_densities_after_reload": after_values,
 			"target_was_unloaded": unloaded,
 			"successful_reload_observed": true,
+			"edit_mesh_publication_receipts": edit_publication_receipts,
+			"reload_mesh_publication_receipt": reload_receipt,
 			"geometric_scoring": "SDF_PROBE_REPLAY_ONLY",
 		})
 	scene.queue_free()
@@ -1382,9 +1406,77 @@ func _sample_region_probes(scene: Node, region_key: Vector2i, positions_mm: Arra
 	return values
 
 
+func _region_publication_evidence(
+	scene: Node,
+	region_key: Vector2i,
+	kind: String,
+	expected_revision: int,
+	expected_sequence: int,
+	successful_publication_delta: int
+) -> Dictionary:
+	var target_id := Contract.region_id(region_key)
+	var active_regions: Dictionary = scene.get("active_regions")
+	var loading_regions: Dictionary = scene.get("loading_regions")
+	var entry: Dictionary = active_regions.get(target_id, {})
+	var state_revision := -1
+	var nodes: Dictionary = entry.get("chunk_nodes", {})
+	if entry.has("world_state"):
+		var state: RefCounted = entry["world_state"]
+		state_revision = int(state.brush_edits.revision)
+	var expected_chunk_count := Grid.CHUNK_COUNT_X * Grid.CHUNK_COUNT_Z
+	var array_mesh_count := 0
+	var requested_region_ids: Array[String] = [target_id]
+	var stage_observations: Array[Dictionary] = []
+	var all_stage_observations: Dictionary = scene.get_meta("p1b_stage_revision_observations", {})
+	if all_stage_observations.has(target_id):
+		stage_observations.append(all_stage_observations[target_id])
+	for coordinate in Grid.all_coordinates():
+		var chunk_id := Grid.stable_id(region_key, coordinate)
+		if not nodes.has(chunk_id):
+			continue
+		var chunk_node: Variant = nodes[chunk_id]
+		if chunk_node is MeshInstance3D:
+			var mesh_node: MeshInstance3D = chunk_node
+			if mesh_node.mesh is ArrayMesh:
+				array_mesh_count += 1
+	var receipt: Dictionary = {
+		"kind": kind,
+		"target_region_id": target_id,
+		"stage_observations": stage_observations,
+		"transaction_clear": (scene.get("_edit_transaction") as Dictionary).is_empty(),
+		"pending_stage": loading_regions.has(target_id),
+		"stream_errors": _relevant_stream_errors(scene, requested_region_ids),
+		"expected_revision": expected_revision,
+		"observed_revision": state_revision,
+		"expected_chunk_count": expected_chunk_count,
+		"active_chunk_count": nodes.size(),
+		"array_mesh_count": array_mesh_count,
+		"successful_publication_delta": successful_publication_delta,
+		"edit_commit_status": "NOT_APPLICABLE",
+		"expected_sequence": expected_sequence,
+		"edit_commit_sequence": -1,
+		"mesh_job_count": 0,
+	}
+	if kind == "EDIT_TRANSACTION":
+		var result_text := String(scene.get("last_brush_result"))
+		var prefix := "Global edit #%d mesh commit complete across " % expected_sequence
+		var suffix := " resident region(s)"
+		if result_text.begins_with(prefix) and result_text.ends_with(suffix):
+			var committed_region_count := result_text.substr(prefix.length(), result_text.length() - prefix.length() - suffix.length())
+			if committed_region_count.is_valid_int() and int(committed_region_count) > 0:
+				receipt["edit_commit_status"] = "COHERENT_COMMIT"
+				receipt["edit_commit_sequence"] = expected_sequence
+				receipt["committed_region_count"] = int(committed_region_count)
+				receipt["mesh_job_count"] = int(_stream_diagnostics(scene).get("last_dirty_mesh_job_count", 0))
+	return receipt
+
+
 func _wait_for_edit_transaction(scene: Node, label: String) -> bool:
+	# Clearing only ends the wait. The caller must separately validate a coherent
+	# revision-matched commit receipt before recording publication success.
 	var started := Time.get_ticks_usec()
 	while not scene.get("_edit_transaction").is_empty():
+		_observe_loading_stage_revisions(scene)
 		await process_frame
 		if _process_guard_exceeded():
 			_mark_timeout(label, started, PROCESS_GUARD_USEC)
@@ -1393,6 +1485,30 @@ func _wait_for_edit_transaction(scene: Node, label: String) -> bool:
 			_mark_timeout(label, started, READINESS_GUARD_USEC)
 			return false
 	return true
+
+
+func _observe_loading_stage_revisions(scene: Node) -> void:
+	var stages: Dictionary = scene.get("loading_regions")
+	var observations: Dictionary = scene.get_meta("p1b_stage_revision_observations", {})
+	for region_id_value in stages.keys():
+		var region_id := String(region_id_value)
+		var stage: Dictionary = stages[region_id]
+		var coordinates: Array = stage.get("chunk_coordinates", [])
+		var meshes: Dictionary = stage.get("meshes", {})
+		observations[region_id] = {
+			"region_id": region_id,
+			"purpose": String(stage.get("purpose", "")),
+			"edit_revision": int(stage.get("edit_revision", -1)),
+			"chunk_count": coordinates.size(),
+			"staged_mesh_count": meshes.size(),
+		}
+	scene.set_meta("p1b_stage_revision_observations", observations)
+
+
+func _clear_loading_stage_observation(scene: Node, region_id: String) -> void:
+	var observations: Dictionary = scene.get_meta("p1b_stage_revision_observations", {})
+	observations.erase(region_id)
+	scene.set_meta("p1b_stage_revision_observations", observations)
 
 
 func _percentiles(samples: Array[int]) -> Dictionary:
