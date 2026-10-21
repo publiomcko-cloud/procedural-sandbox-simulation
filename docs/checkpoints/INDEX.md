@@ -47,4 +47,6 @@
 
 | 2026-10-21 | [CHK-2026-10-21-P1-1B-B0-R4A-OWNER-INPUT-APPROVAL](2026-10-21-P1-1B-B0-R4A-OWNER-INPUT-APPROVAL.md) | Owner approves experimental B0 R4+R4a inputs/methodology only after exact-baseline source PASS; NOT_FROZEN scenarios and B1-1 code/runtime blocked | New docs-only reconciliation PR atop verified `main` `665c5c88…`; not yet integrated at record creation |
 
+| 2026-10-21 | [CHK-2026-10-21-P1-1B-B1-1-R6-N000-CONTRACT-AND-PREFLIGHT](2026-10-21-P1-1B-B1-1-R6-N000-CONTRACT-AND-PREFLIGHT.md) | PR #98 merged; PR #99 B1-1 R5 contract suite 2,557/0 reported; R6 import and harness parser PASS, N000 blocked by exact Godot version-string mismatch before scenario start; standing Godot authorization retained | New separate docs-only draft PR, not integrated at recording |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
