@@ -51,4 +51,6 @@
 
 | 2026-10-21 | [CHK-2026-10-21-P1-1B-B1-1-R7-N000-FIRST-UNSCORED-PASS](2026-10-21-P1-1B-B1-1-R7-N000-FIRST-UNSCORED-PASS.md) | PR #99 R7 four-stage Godot validation reported PASS: 2,586 contract assertions/0, first N000 UNSCORED terminal PASS with 4 JSONL events; PowerShell/Godot PID provenance remains unverified; no scored benchmark or merge | Added to existing separate docs-only draft PR #101; not integrated at creation |
 
+| 2026-10-21 | [CHK-2026-10-21-P1-1B-B1-1-N001-POWERSHELL-LAUNCHER-BLOCKER](2026-10-21-P1-1B-B1-1-N001-POWERSHELL-LAUNCHER-BLOCKER.md) | N001 preflight blocked before Stage A: PowerShell helper Args/$Args collision launched Godot with no flags; intended import NOT_EXECUTED, exit not captured; B/C/N001 NOT_RUN; R7 source remains unchanged | Added to existing docs-only draft PR #101; not integrated at creation |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
