@@ -10,6 +10,9 @@ const CONTRACT_ID := "P1.1B-B0-R4-R4A-OWNER-APPROVED-EXPERIMENTAL-INPUTS"
 const SEED := 424242
 const GENERATOR_VERSION := 1
 const REPLAY_RADIUS_MM := 580
+## Match the exact-integer range that IEEE-754 binary64 can represent without ambiguity.
+const MAX_SAFE_JSON_INTEGER := 9007199254740991
+const MIN_SAFE_JSON_INTEGER := -9007199254740991
 const BOUNDARY_T_JUNCTION_DISTANCE_TOLERANCE := 0.00001
 const BOUNDARY_T_JUNCTION_ENDPOINT_PARAMETER_TOLERANCE := 0.000001
 const DISTRIBUTED_KEYS := [
@@ -29,11 +32,10 @@ static func verify_manifest(path: String = MANIFEST_PATH, pin_path: String = MAN
 	var parsed: Variant = JSON.parse_string(text_value)
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return {"ok": false, "reason": "manifest_json_not_object"}
-	if not _canonical_value_supported(parsed):
-		return {"ok": false, "reason": "manifest_contains_noncanonical_value"}
-	var canonical := canonical_json(parsed).to_utf8_buffer()
-	if raw != canonical:
-		return {"ok": false, "reason": "manifest_bytes_not_canonical_utf8_json"}
+	var canonical_check := validate_canonical_json_bytes(raw, parsed)
+	if not canonical_check.get("ok", false):
+		return {"ok": false, "reason": String(canonical_check.get("reason", "manifest_canonical_validation_failed"))}
+	parsed = canonical_check["value"]
 	var expected := FileAccess.get_file_as_string(pin_path).strip_edges().to_lower()
 	if expected.length() != 64 or not _is_lower_hex_sha256(expected):
 		return {"ok": false, "reason": "manifest_sha256_pin_malformed"}
@@ -49,6 +51,96 @@ static func verify_manifest(path: String = MANIFEST_PATH, pin_path: String = MAN
 		or int(parsed.get("generator_version", -1)) != GENERATOR_VERSION:
 		return {"ok": false, "reason": "manifest_contract_identity_mismatch"}
 	return {"ok": true, "manifest": parsed, "sha256": actual, "byte_count": raw.size()}
+
+
+static func validate_canonical_json_bytes(raw: PackedByteArray, parsed: Variant) -> Dictionary:
+	var normalized := normalize_json_value(parsed)
+	if not normalized.get("ok", false):
+		return {"ok": false, "reason": String(normalized.get("reason", "manifest_contains_noncanonical_value"))}
+	var canonical := canonical_json(normalized["value"]).to_utf8_buffer()
+	if raw != canonical:
+		return {"ok": false, "reason": "manifest_bytes_not_canonical_utf8_json"}
+	return {"ok": true, "reason": "", "value": normalized["value"]}
+
+
+static func normalize_json_value(value: Variant) -> Dictionary:
+	match typeof(value):
+		TYPE_NIL, TYPE_BOOL, TYPE_STRING:
+			return {"ok": true, "value": value}
+		TYPE_INT:
+			var integer_value := int(value)
+			if integer_value < MIN_SAFE_JSON_INTEGER or integer_value > MAX_SAFE_JSON_INTEGER:
+				return {"ok": false, "reason": "manifest_json_integer_outside_safe_range"}
+			return {"ok": true, "value": integer_value}
+		TYPE_FLOAT:
+			var numeric_value := float(value)
+			if not is_finite(numeric_value):
+				return {"ok": false, "reason": "manifest_json_number_not_finite"}
+			if numeric_value != floor(numeric_value):
+				return {"ok": false, "reason": "manifest_json_number_not_integral"}
+			if numeric_value < float(MIN_SAFE_JSON_INTEGER) or numeric_value > float(MAX_SAFE_JSON_INTEGER):
+				return {"ok": false, "reason": "manifest_json_integer_outside_safe_range"}
+			var normalized_integer := int(numeric_value)
+			if float(normalized_integer) != numeric_value:
+				return {"ok": false, "reason": "manifest_json_integer_not_exactly_representable"}
+			return {"ok": true, "value": normalized_integer}
+		TYPE_ARRAY:
+			var normalized_array: Array = []
+			for item in value:
+				var normalized_item := normalize_json_value(item)
+				if not normalized_item.get("ok", false):
+					return normalized_item
+				normalized_array.append(normalized_item["value"])
+			return {"ok": true, "value": normalized_array}
+		TYPE_DICTIONARY:
+			var normalized_dictionary: Dictionary = {}
+			for key in value:
+				if typeof(key) != TYPE_STRING:
+					return {"ok": false, "reason": "manifest_json_object_key_not_string"}
+				var normalized_child := normalize_json_value(value[key])
+				if not normalized_child.get("ok", false):
+					return normalized_child
+				normalized_dictionary[key] = normalized_child["value"]
+			return {"ok": true, "value": normalized_dictionary}
+		_:
+			return {"ok": false, "reason": "manifest_contains_noncanonical_value"}
+
+
+static func contract_suite_plan(verification: Dictionary) -> Dictionary:
+	if not bool(verification.get("ok", false)):
+		return {
+			"ok": false,
+			"status": "FAIL",
+			"reason": String(verification.get("reason", "manifest_preflight_failed")),
+			"dependent_groups": [],
+		}
+	var manifest_value: Variant = verification.get("manifest", null)
+	if typeof(manifest_value) != TYPE_DICTIONARY:
+		return {
+			"ok": false,
+			"status": "FAIL",
+			"reason": "manifest_preflight_valid_result_missing_manifest",
+			"dependent_groups": [],
+		}
+	return {
+		"ok": true,
+		"status": "RUN",
+		"reason": "",
+		"manifest": manifest_value,
+		"dependent_groups": [
+			"manifest_identity",
+			"canonical_replay",
+			"support_rebuild_dependency",
+			"streaming_contract",
+			"lod_registry",
+			"tunnel_registry",
+			"fixed_edits_reload",
+			"review_correction_gates",
+			"manifest_normalization",
+			"manifest_file_failures",
+			"preflight_fail_closed",
+		],
+	}
 
 
 static func canonical_json(value: Variant) -> String:
@@ -435,23 +527,7 @@ static func _command(sequence: int, mode: String, center_mm: Vector3i, radius_mm
 
 
 static func _canonical_value_supported(value: Variant) -> bool:
-	match typeof(value):
-		TYPE_NIL, TYPE_BOOL, TYPE_INT, TYPE_STRING:
-			return true
-		TYPE_FLOAT:
-			return false
-		TYPE_ARRAY:
-			for item in value:
-				if not _canonical_value_supported(item):
-					return false
-			return true
-		TYPE_DICTIONARY:
-			for key in value:
-				if typeof(key) != TYPE_STRING or not _canonical_value_supported(value[key]):
-					return false
-			return true
-		_:
-			return false
+	return bool(normalize_json_value(value).get("ok", false))
 
 
 static func _is_lower_hex_sha256(value: String) -> bool:

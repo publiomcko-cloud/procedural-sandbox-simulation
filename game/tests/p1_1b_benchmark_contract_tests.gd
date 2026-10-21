@@ -6,6 +6,8 @@ const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 
 var _assertions := 0
 var _failures := 0
+var _manifest: Dictionary = {}
+var _manifest_sha256 := ""
 
 
 func _initialize() -> void:
@@ -13,14 +15,16 @@ func _initialize() -> void:
 
 
 func _run() -> void:
-	_test_manifest_identity_and_freeze_boundary()
-	_test_canonical_replay_recipes()
-	_test_support_and_rebuild_dependency_are_distinct()
-	_test_atomic_and_settled_streaming_contract()
-	_test_lod_case_registry()
-	_test_tunnel_registry()
-	_test_fixed_edits_and_reload()
-	_test_review_correction_gates()
+	var verification: Dictionary = Contract.verify_manifest()
+	var plan: Dictionary = Contract.contract_suite_plan(verification)
+	if not plan.get("ok", false):
+		print("P1B1_CONTRACT_TESTS_FAIL: stage=manifest_preflight reason=%s dependent_groups=0" % String(plan.get("reason", "manifest_preflight_failed")))
+		quit(1)
+		return
+	_manifest = plan["manifest"]
+	_manifest_sha256 = String(verification.get("sha256", ""))
+	for group_value in plan["dependent_groups"]:
+		_run_group(String(group_value))
 	if _failures == 0:
 		print("P1B1_CONTRACT_TESTS_PASS: assertions=%d failures=0" % _assertions)
 		quit(0)
@@ -29,13 +33,38 @@ func _run() -> void:
 		quit(1)
 
 
+func _run_group(group: String) -> void:
+	match group:
+		"manifest_identity":
+			_test_manifest_identity_and_freeze_boundary()
+		"canonical_replay":
+			_test_canonical_replay_recipes()
+		"support_rebuild_dependency":
+			_test_support_and_rebuild_dependency_are_distinct()
+		"streaming_contract":
+			_test_atomic_and_settled_streaming_contract()
+		"lod_registry":
+			_test_lod_case_registry()
+		"tunnel_registry":
+			_test_tunnel_registry()
+		"fixed_edits_reload":
+			_test_fixed_edits_and_reload()
+		"review_correction_gates":
+			_test_review_correction_gates()
+		"manifest_normalization":
+			_test_manifest_numeric_normalization()
+		"manifest_file_failures":
+			_test_manifest_file_failures()
+		"preflight_fail_closed":
+			_test_preflight_fail_closed()
+		_:
+			_check(false, "unknown contract group is rejected: %s" % group)
+
+
 func _test_manifest_identity_and_freeze_boundary() -> void:
-	var verified: Dictionary = Contract.verify_manifest()
-	_check(verified.get("ok", false), "manifest is canonical UTF-8 JSON and matches its independent SHA-256 sidecar")
-	if not verified.get("ok", false):
-		return
-	var manifest: Dictionary = verified["manifest"]
-	_check(String(verified["sha256"]) == Contract.MANIFEST_SHA256, "physical manifest SHA matches the source-pinned digest")
+	var manifest := _manifest
+	_check(not manifest.is_empty(), "suite uses the single validated canonical manifest")
+	_check(_manifest_sha256 == Contract.MANIFEST_SHA256, "physical manifest SHA matches the source-pinned digest")
 	_check(String(manifest["contract_main_sha"]) == "ea4422d90726d3f2fe6d5cef097126268f93685a", "manifest pins the verified B0 contract main")
 	_check(manifest["scenarios"].size() == 44, "manifest contains the complete frozen B0 scenario registry")
 	var ids: Dictionary = {}
@@ -48,14 +77,111 @@ func _test_manifest_identity_and_freeze_boundary() -> void:
 		_check(String(scenario["status"]) == "FROZEN", "only owner-frozen inputs are executable: %s" % id)
 	for excluded in manifest["excluded_not_frozen"]:
 		_check(not ids.has(String(excluded)), "NOT_FROZEN scenario is absent from executable registry: %s" % excluded)
-	_check(not Contract._canonical_value_supported({"fractional": 0.58}), "canonical manifest rejects floating-point JSON values")
+	_check(not Contract._canonical_value_supported({"fractional": 0.58}), "normalizer rejects fractional numeric values")
 	_check(Contract.canonical_json({"z": 1, "a": [true, "x"]}) == "{\"a\":[true,\"x\"],\"z\":1}", "canonical JSON sorts object keys and preserves array order")
 	_check(not Contract._is_lower_hex_sha256("A".repeat(64)), "SHA-256 pin validation rejects uppercase hex")
 	_check(manifest["excluded_not_frozen"].size() == 9, "all nine unresolved B0 scenarios remain excluded")
 
 
+func _test_manifest_numeric_normalization() -> void:
+	var canonical_integer_bytes := "{\"items\":[-2,0,7],\"version\":1}".to_utf8_buffer()
+	var canonical_integer_value: Variant = JSON.parse_string(canonical_integer_bytes.get_string_from_utf8())
+	var canonical_integer_check := Contract.validate_canonical_json_bytes(canonical_integer_bytes, canonical_integer_value)
+	_check(canonical_integer_check.get("ok", false), "canonical JSON with integer number tokens validates after safe normalization")
+	if canonical_integer_check.get("ok", false):
+		var normalized: Dictionary = canonical_integer_check["value"]
+		_check(typeof(normalized["version"]) == TYPE_INT and typeof(normalized["items"][0]) == TYPE_INT, "integral parser floats are normalized to integer Variants")
+		_check(normalized["items"] == [-2, 0, 7], "normalization preserves array order and signed integer values")
+	var float_backed_integer_value: Dictionary = {"items": [-2.0, 0.0, 7.0], "version": 1.0}
+	var float_backed_check := Contract.validate_canonical_json_bytes(canonical_integer_bytes, float_backed_integer_value)
+	_check(float_backed_check.get("ok", false), "integer-token bytes remain valid when the parser supplies integral TYPE_FLOAT values")
+	if float_backed_check.get("ok", false):
+		_check(typeof(float_backed_check["value"]["version"]) == TYPE_INT, "float-backed parsed integer is normalized before returning the manifest")
+	var fractional_value: Variant = JSON.parse_string("{\"value\":0.58}")
+	var fractional_result := Contract.normalize_json_value(fractional_value)
+	_check(not fractional_result.get("ok", false) and fractional_result.get("reason", "") == "manifest_json_number_not_integral", "fractional JSON numbers are rejected with an exact reason")
+	for lexical_number in ["1.0", "1e0", "1.00"]:
+		var alternate_bytes := ("{\"value\":" + lexical_number + "}").to_utf8_buffer()
+		var alternate_value: Variant = JSON.parse_string(alternate_bytes.get_string_from_utf8())
+		var alternate_result := Contract.validate_canonical_json_bytes(alternate_bytes, alternate_value)
+		_check(not alternate_result.get("ok", false) and alternate_result.get("reason", "") == "manifest_bytes_not_canonical_utf8_json", "integral decimal/exponent spelling %s is rejected by exact-byte comparison" % lexical_number)
+	var maximum_safe := Contract.normalize_json_value(Contract.MAX_SAFE_JSON_INTEGER)
+	var minimum_safe := Contract.normalize_json_value(Contract.MIN_SAFE_JSON_INTEGER)
+	_check(maximum_safe.get("ok", false) and minimum_safe.get("ok", false), "both boundaries of the safe integer range are accepted")
+	var above_safe := Contract.normalize_json_value(9007199254740992.0)
+	var below_safe := Contract.normalize_json_value(-9007199254740992.0)
+	_check(above_safe.get("reason", "") == "manifest_json_integer_outside_safe_range", "integer above the safe range is rejected")
+	_check(below_safe.get("reason", "") == "manifest_json_integer_outside_safe_range", "integer below the safe range is rejected")
+	_check(Contract.normalize_json_value(INF).get("reason", "") == "manifest_json_number_not_finite", "infinite numeric values are rejected")
+	_check(Contract.normalize_json_value(NAN).get("reason", "") == "manifest_json_number_not_finite", "NaN numeric values are rejected")
+	var reordered_bytes := "{\"z\":0,\"a\":1}".to_utf8_buffer()
+	var reordered_value: Variant = JSON.parse_string(reordered_bytes.get_string_from_utf8())
+	_check(Contract.validate_canonical_json_bytes(reordered_bytes, reordered_value).get("reason", "") == "manifest_bytes_not_canonical_utf8_json", "object keys must retain the canonical sorted byte representation")
+
+
+func _test_manifest_file_failures() -> void:
+	var temporary_root := OS.get_user_data_dir().path_join("p1_1b_manifest_contract_%d" % Time.get_ticks_usec())
+	var directory_result := DirAccess.make_dir_recursive_absolute(temporary_root)
+	_check(directory_result == OK, "manifest validation fixtures use a disposable user-data directory")
+	if directory_result != OK:
+		return
+	var manifest_path := temporary_root.path_join("manifest.json")
+	var pin_path := temporary_root.path_join("manifest.sha256")
+	var incorrect_pin_path := temporary_root.path_join("incorrect.sha256")
+	var canonical_bytes := Contract.canonical_json(_manifest).to_utf8_buffer()
+	var manifest_written := _write_test_bytes(manifest_path, canonical_bytes)
+	var pin_written := _write_test_text(pin_path, Contract.MANIFEST_SHA256 + "\n")
+	_check(manifest_written and pin_written, "temporary manifest and correct sidecar are written completely")
+	if manifest_written and pin_written:
+		var valid_file := Contract.verify_manifest(manifest_path, pin_path)
+		_check(valid_file.get("ok", false), "canonical integer-token manifest with pinned bytes and sidecar verifies")
+		var corrupted_bytes := canonical_bytes.duplicate()
+		corrupted_bytes.insert(0, 0x20)
+		_check(_write_test_bytes(manifest_path, corrupted_bytes), "corrupted-byte fixture is written")
+		var corrupted := Contract.verify_manifest(manifest_path, pin_path)
+		_check(corrupted.get("reason", "") == "manifest_bytes_not_canonical_utf8_json", "corrupted manifest bytes fail exact canonical comparison")
+		_check(_write_test_bytes(manifest_path, canonical_bytes), "canonical manifest bytes are restored in the disposable fixture")
+		_check(_write_test_text(incorrect_pin_path, "0".repeat(64) + "\n"), "incorrect sidecar fixture is written")
+		var incorrect_pin := Contract.verify_manifest(manifest_path, incorrect_pin_path)
+		_check(incorrect_pin.get("reason", "") == "manifest_sha256_pin_does_not_match_reviewed_source", "incorrect but well-formed sidecar is rejected")
+		var absent_pin := Contract.verify_manifest(manifest_path, temporary_root.path_join("absent.sha256"))
+		_check(absent_pin.get("reason", "") == "manifest_or_digest_file_missing", "absent SHA-256 sidecar is rejected")
+	DirAccess.remove_absolute(manifest_path)
+	DirAccess.remove_absolute(pin_path)
+	DirAccess.remove_absolute(incorrect_pin_path)
+	DirAccess.remove_absolute(temporary_root)
+
+
+func _test_preflight_fail_closed() -> void:
+	var failure := Contract.contract_suite_plan({"ok": false, "reason": "manifest_json_number_not_integral"})
+	_check(not failure.get("ok", false) and failure.get("status", "") == "FAIL", "failed manifest preflight has an explicit FAIL suite decision")
+	_check(failure.get("reason", "") == "manifest_json_number_not_integral", "suite preflight preserves the exact manifest verification reason")
+	_check((failure.get("dependent_groups", []) as Array).is_empty(), "failed preflight schedules zero dependent test groups")
+	var missing_manifest := Contract.contract_suite_plan({"ok": true})
+	_check(not missing_manifest.get("ok", false) and missing_manifest.get("status", "") == "FAIL", "success without a manifest is rejected before dependent tests")
+	_check((missing_manifest.get("dependent_groups", []) as Array).is_empty(), "malformed successful preflight also schedules zero dependent groups")
+
+
+func _write_test_bytes(path: String, bytes: PackedByteArray) -> bool:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_buffer(bytes)
+	file.close()
+	return FileAccess.get_file_as_bytes(path) == bytes
+
+
+func _write_test_text(path: String, value: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(value)
+	file.close()
+	return FileAccess.get_file_as_string(path) == value
+
+
 func _test_canonical_replay_recipes() -> void:
-	var manifest: Dictionary = Contract.verify_manifest()["manifest"]
+	var manifest := _manifest
 	var expected_counts := [0, 1, 32, 128, 255, 256]
 	for count in expected_counts:
 		var suffix := "%03d" % count
@@ -98,7 +224,7 @@ func _test_support_and_rebuild_dependency_are_distinct() -> void:
 
 
 func _test_atomic_and_settled_streaming_contract() -> void:
-	var manifest: Dictionary = Contract.verify_manifest()["manifest"]
+	var manifest := _manifest
 	var scenario := _scenario(manifest, "B0S.CORNER.DIRECT_ATOMIC_POS_POS.v1")
 	_check(scenario["expected_focus_keys"] == [[0, 0], [1, 1]], "atomic diagonal has no intermediate focus key")
 	_check(int(scenario["expected_final_active_count"]) == 14, "R4a atomic diagonal records the approved 14-region result")
@@ -123,7 +249,7 @@ func _test_atomic_and_settled_streaming_contract() -> void:
 
 
 func _test_lod_case_registry() -> void:
-	var manifest: Dictionary = Contract.verify_manifest()["manifest"]
+	var manifest := _manifest
 	var faces := [
 		"B0G.LOD01.FACE.X_NEG.v1", "B0G.LOD01.FACE.X_POS.v1",
 		"B0G.LOD01.FACE.Y_NEG.v1", "B0G.LOD01.FACE.Y_POS.v1",
@@ -142,7 +268,7 @@ func _test_lod_case_registry() -> void:
 
 
 func _test_tunnel_registry() -> void:
-	var manifest: Dictionary = Contract.verify_manifest()["manifest"]
+	var manifest := _manifest
 	var tunnel: Dictionary = manifest["tunnel_field"]
 	var min_mm: Array = tunnel["domain_min_mm"]
 	var max_mm: Array = tunnel["domain_max_mm"]
@@ -163,7 +289,7 @@ func _test_tunnel_registry() -> void:
 
 
 func _test_fixed_edits_and_reload() -> void:
-	var manifest: Dictionary = Contract.verify_manifest()["manifest"]
+	var manifest := _manifest
 	for id in [
 		"B0E.SEAM.POS_X.CARVE_FILL.v1",
 		"B0E.SEAM.POS_XZ.CARVE_FILL.v1",
