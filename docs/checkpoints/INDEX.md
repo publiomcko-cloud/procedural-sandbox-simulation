@@ -65,4 +65,6 @@
 
 | 2026-10-22 | [CHK-2026-10-22-P1-1B-B1-1-EDGE-POS-X-N032-UNSCORED-REVIEW](2026-10-22-P1-1B-B1-1-EDGE-POS-X-N032-UNSCORED-REVIEW.md) | Two-region +X EDGE N032 UNSCORED reported PASS, independent canonical SHA verified; 224 parity probes reported, launcher PID ancestry unresolved, no scoring or merge | Docs-only PR #101 draft |
 
+| 2026-10-22 | [CHK-2026-10-22-P1-1B-B1-1-CORNER-POS-XZ-N032-UNSCORED-REVIEW](2026-10-22-P1-1B-B1-1-CORNER-POS-XZ-N032-UNSCORED-REVIEW.md) | Four-region +XZ CORNER N032 UNSCORED PASS reported; independent canonical SHA matched, 224 probe parity reported PASS and process ancestry reported captured; next task consolidates 11 remaining frozen ledger/seam scenarios into one independently reviewed batch | Existing separate docs-only draft PR #101; not integrated |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
