@@ -69,4 +69,6 @@
 
 | 2026-10-22 | [CHK-2026-10-22-P1-1B-B1-1-CROSS-REGION-LEDGER-BATCH-11-UNSCORED-REVIEW](2026-10-22-P1-1B-B1-1-CROSS-REGION-LEDGER-BATCH-11-UNSCORED-REVIEW.md) | Eleven-case cross-region ledger/seam batch UNSCORED 11/11 PASS reported; 11 canonical final SHA-256 independently matched, 1,350 commands/9,450 probes, host evidence 239 file hashes Codex-reported; one evidence-path discrepancy; no score or merge | Existing draft docs PR #101; not integrated |
 
+| 2026-10-22 | [CHK-2026-10-22-P1-1B-B1-1-STREAMING-RELOAD-BATCH-11-EVIDENCE-CUSTODY-INCIDENT](2026-10-22-P1-1B-B1-1-STREAMING-RELOAD-BATCH-11-EVIDENCE-CUSTODY-INCIDENT.md) | Streaming/reload batch halted: two first-run raw captures overwritten by unintended postprocessor reruns; campaign 0 qualified PASS / 2 BLOCKED / 9 NOT_RUN; needs host runner anti-replay guards and explicit owner decision before new Godot scenario execution | Separate docs-only draft PR #101; not integrated |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
