@@ -75,4 +75,6 @@
 
 | 2026-10-22 | [CHK-2026-10-22-P1-1B-B1-1-STREAMING-RELOAD-11-FRESH-REQUALIFICATION-REVIEW](2026-10-22-P1-1B-B1-1-STREAMING-RELOAD-11-FRESH-REQUALIFICATION-REVIEW.md) | One NEW safeguarded B0S streaming/reload UNSCORED campaign 11/11 Codex-reported PASS, reviewed source/frozen acceptance; 33 custody guard assertions and 125 artifact hashes reported; old custody-compromised incident remains 0 PASS/2 BLOCKED/9 NOT_RUN; 30/44 total frozen cases reported PASS | Existing docs-only draft PR #101, unmerged |
 
+| 2026-10-22 | [CHK-2026-10-22-P1-1B-B1-1-B0G-BATCH-14-PRELAUNCH-UID-GUARD-BLOCKED](2026-10-22-P1-1B-B1-1-B0G-BATCH-14-PRELAUNCH-UID-GUARD-BLOCKED.md) | Final B0G 14-case batch prelaunch BLOCKED due false-positive dirty checkout from three Godot-generated .gd.uid; shared gates Codex-reported PASS, all 14 NOT_RUN, no LOD/tunnel verdict; one narrowly scoped host guard correction recommended | Existing separate docs-only draft PR #101; no merge |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
