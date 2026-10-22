@@ -71,4 +71,6 @@
 
 | 2026-10-22 | [CHK-2026-10-22-P1-1B-B1-1-STREAMING-RELOAD-BATCH-11-EVIDENCE-CUSTODY-INCIDENT](2026-10-22-P1-1B-B1-1-STREAMING-RELOAD-BATCH-11-EVIDENCE-CUSTODY-INCIDENT.md) | Streaming/reload batch halted: two first-run raw captures overwritten by unintended postprocessor reruns; campaign 0 qualified PASS / 2 BLOCKED / 9 NOT_RUN; needs host runner anti-replay guards and explicit owner decision before new Godot scenario execution | Separate docs-only draft PR #101; not integrated |
 
+| 2026-10-22 | [CHK-2026-10-22-P1-1B-B1-1-STREAMING-REQUALIFICATION-OWNER-AUTHORIZATION](2026-10-22-P1-1B-B1-1-STREAMING-REQUALIFICATION-OWNER-AUTHORIZATION.md) | Owner authorizes one fresh 11-case streaming/reload UNSCORED campaign after minimal proven custody guards; tests essential only, max 2 host recovery attempts per issue / 4 corrections total; prior incident 0 PASS/2 BLOCKED/9 NOT_RUN unchanged | Existing docs-only draft PR #101, unmerged |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
