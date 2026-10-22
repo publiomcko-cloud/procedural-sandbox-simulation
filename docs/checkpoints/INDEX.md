@@ -57,4 +57,6 @@
 
 | 2026-10-22 | [CHK-2026-10-22-P1-1B-B1-1-N032-UNSCORED-REVIEW](2026-10-22-P1-1B-B1-1-N032-UNSCORED-REVIEW.md) | N032 32-operation UNSCORED Codex-reported PASS, reviewer independently reconstructed matching SHA-256 and zero-based sequence; PID ancestry unresolved, no scored benchmark or merge | Existing docs-only draft PR #101, not integrated |
 
+| 2026-10-22 | [CHK-2026-10-22-P1-1B-B1-1-N128-UNSCORED-REVIEW](2026-10-22-P1-1B-B1-1-N128-UNSCORED-REVIEW.md) | N128 128-operation UNSCORED Codex-reported PASS, reviewer recomputed matching full command SHA-256, 896 parity probes reported PASS; process ancestry reported observed, not independently attested; no scored benchmark or merge | Existing separate docs-only draft PR #101, not integrated |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
