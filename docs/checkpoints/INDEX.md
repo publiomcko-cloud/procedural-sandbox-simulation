@@ -47,4 +47,6 @@
 
 | 2026-10-21 | [CHK-2026-10-21-P1-1B-B0-R4A-OWNER-INPUT-APPROVAL](2026-10-21-P1-1B-B0-R4A-OWNER-INPUT-APPROVAL.md) | Owner approves experimental B0 R4+R4a inputs/methodology only after exact-baseline source PASS; NOT_FROZEN scenarios and B1-1 code/runtime blocked | New docs-only reconciliation PR atop verified `main` `665c5c88…`; not yet integrated at record creation |
 
+| 2026-10-23 | [P1.1B +Z LOD seam correction](2026-10-23-P1-1B-PLUSZ-LOD-SEAM-CORRECTION.md) | Canonical edge interpolation order removes float32 key-split false T-junction; two +Z failures and two controls pass focused Godot validation; PR #102 draft, independent review pending | Feature correction branch `fix/p1-1b-b0g-plusz-seam`, based on pinned R7 harness SHA; not merged |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
