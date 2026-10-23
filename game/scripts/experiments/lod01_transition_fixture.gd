@@ -1,8 +1,9 @@
 class_name Lod01TransitionFixture
 extends RefCounted
 
-## Experimental CPU-only LOD 0/1 transition cell. It does not participate in
-## the playable terrain, streaming scheduler, or canonical edit ledger.
+## CPU-only LOD 0/1 transition-cell construction. P1.1A introduced it as an
+## isolated fixture; P1.1C reuses this data-only builder from worker jobs.
+## It owns no scene nodes and does not mutate the canonical edit ledger.
 const FIELD := preload("res://scripts/terrain/sdf_world.gd")
 const BRUSH := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const SPATIAL := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
@@ -64,6 +65,19 @@ static func is_lod1_aligned_origin(min_lod0_lattice: Vector3i) -> bool:
 	return min_lod0_lattice.x % LOD1_IN_LOD0_STEPS == 0 \
 		and min_lod0_lattice.y % LOD1_IN_LOD0_STEPS == 0 \
 		and min_lod0_lattice.z % LOD1_IN_LOD0_STEPS == 0
+
+
+static func transition_faces_for_chunk_cell(cell: Vector3i, extent: Vector3i) -> Array[int]:
+	var faces: Array[int] = []
+	if cell.x == 0:
+		faces.append(FACE_X_NEG)
+	if cell.x == extent.x - 1:
+		faces.append(FACE_X_POS)
+	if cell.z == 0:
+		faces.append(FACE_Z_NEG)
+	if cell.z == extent.z - 1:
+		faces.append(FACE_Z_POS)
+	return faces
 
 
 static func sample_canonical(world_seed: int, world_position: Vector3, brush_snapshot: Dictionary = {}) -> float:
@@ -140,6 +154,78 @@ static func build_transition_cell(
 			return builder._failure_result()
 	var polygonization_usec := Time.get_ticks_usec() - triangulation_started
 	return builder._make_result(world_seed, min_lod0_lattice, selected, _opposite_faces(selected), geometry_usec, polygonization_usec, "transition")
+
+
+## Production chunk assembly shares the per-cell sample cache across the chunk,
+## avoiding 120 independent builder allocations for the current 4x3x10 LOD1 grid.
+static func build_lod1_chunk(
+	world_seed: int,
+	min_lod0_lattice: Vector3i,
+	cell_extent: Vector3i,
+	brush_snapshot: Dictionary = {},
+	density_override: Callable = Callable()
+) -> Dictionary:
+	if not is_lod1_aligned_origin(min_lod0_lattice):
+		return {"valid": false, "reason": "misaligned_lod1_chunk_origin"}
+	if cell_extent.x <= 0 or cell_extent.y <= 0 or cell_extent.z <= 0:
+		return {"valid": false, "reason": "invalid_lod1_chunk_extent"}
+	var snapshot_failure := _snapshot_rejection_reason(world_seed, brush_snapshot)
+	if not snapshot_failure.is_empty():
+		return {"valid": false, "reason": snapshot_failure}
+	var builder := Lod01TransitionFixture.new()
+	builder._sampler = density_override
+	builder._world_seed = world_seed
+	builder._brush_snapshot = brush_snapshot
+	var min_world := Vector3(min_lod0_lattice) * LOD0_STEP
+	var geometry_usec := 0
+	var transition_count := 0
+	var polygonization_started_usec := Time.get_ticks_usec()
+	for y in range(cell_extent.y):
+		for z in range(cell_extent.z):
+			for x in range(cell_extent.x):
+				var cell := Vector3i(x, y, z)
+				var cell_lattice := min_lod0_lattice + cell * LOD1_IN_LOD0_STEPS
+				var selected := transition_faces_for_chunk_cell(cell, cell_extent)
+				if selected.is_empty():
+					var ids: Array[int] = []
+					var origin := min_world + Vector3(cell) * LOD1_STEP
+					for corner in CUBE_CORNERS:
+						var sample_id: int = builder._add_sample_point(origin + Vector3(corner) * LOD1_STEP, world_seed, brush_snapshot)
+						if sample_id < 0:
+							return builder._failure_result()
+						ids.append(sample_id)
+					for tetra in CUBE_TETRAHEDRA:
+						builder._polygonize_tetra([ids[tetra[0]], ids[tetra[1]], ids[tetra[2]], ids[tetra[3]]])
+						if not builder._failure_reason.is_empty():
+							return builder._failure_result()
+					continue
+				transition_count += 1
+				var geometry_started_usec := Time.get_ticks_usec()
+				var boundary_triangles := _boundary_triangles(cell_lattice, selected)
+				geometry_usec += Time.get_ticks_usec() - geometry_started_usec
+				var center := min_world + Vector3(cell) * LOD1_STEP + Vector3.ONE * (LOD1_STEP * 0.5)
+				var center_id: int = builder._add_sample_point(center, world_seed, brush_snapshot)
+				if center_id < 0:
+					return builder._failure_result()
+				for triangle in boundary_triangles:
+					var a: int = builder._add_sample_point(triangle[0], world_seed, brush_snapshot)
+					if a < 0:
+						return builder._failure_result()
+					var b: int = builder._add_sample_point(triangle[1], world_seed, brush_snapshot)
+					if b < 0:
+						return builder._failure_result()
+					var c: int = builder._add_sample_point(triangle[2], world_seed, brush_snapshot)
+					if c < 0:
+						return builder._failure_result()
+					builder._polygonize_tetra([center_id, a, b, c])
+					if not builder._failure_reason.is_empty():
+						return builder._failure_result()
+	var polygonization_usec := Time.get_ticks_usec() - polygonization_started_usec
+	var result := builder._make_result(
+		world_seed, min_lod0_lattice, [], [], geometry_usec, polygonization_usec, "lod1_chunk"
+	)
+	result["transition_cell_count"] = transition_count
+	return result
 
 
 static func build_uniform_reference_cell(

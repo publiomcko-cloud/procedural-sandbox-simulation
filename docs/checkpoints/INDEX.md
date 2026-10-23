@@ -46,6 +46,7 @@
 | 2026-10-20 | [CHK-2026-10-20-P1-1A-OWNER-AUTHORIZED-INTEGRATION](2026-10-20-P1-1A-OWNER-AUTHORIZED-INTEGRATION.md) | Owner-authorized PR #96 merge verified at aca6b640; P1.1A exact-SHA source PASS and limited experiment; P1.1B planning proposed | New docs-only draft PR, not yet integrated into main |
 
 | 2026-10-21 | [CHK-2026-10-21-P1-1B-B0-R4A-OWNER-INPUT-APPROVAL](2026-10-21-P1-1B-B0-R4A-OWNER-INPUT-APPROVAL.md) | Owner approves experimental B0 R4+R4a inputs/methodology only after exact-baseline source PASS; NOT_FROZEN scenarios and B1-1 code/runtime blocked | New docs-only reconciliation PR atop verified `main` `665c5c88…`; not yet integrated at record creation |
+| 2026-10-23 | [P1.1B closeout and P1.1C playable LOD candidate](2026-10-23-P1-1B-CLOSEOUT-P1-1C-PLAYABLE-LOD.md) | P1.1B historical frozen outcomes consolidated; initial custom playable LOD0/1 implementation and Godot validation recorded; independent source and owner GUI gates pending | Recorded on `feat/p1-1c-playable-lod01`; draft PR, not integrated |
 
 | 2026-10-23 | [P1.1B +Z LOD seam correction](2026-10-23-P1-1B-PLUSZ-LOD-SEAM-CORRECTION.md) | Canonical edge interpolation order removes float32 key-split false T-junction; two +Z failures and two controls pass focused Godot validation; PR #102 draft, independent review pending | Feature correction branch `fix/p1-1b-b0g-plusz-seam`, based on pinned R7 harness SHA; not merged |
 
