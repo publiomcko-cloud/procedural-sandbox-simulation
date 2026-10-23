@@ -1,11 +1,11 @@
 # P0.3 canonical terrain test isolation correction
 
-**Date:** 2026-10-23  
-**Repository:** `publiomcko-cloud/procedural-sandbox-simulation`  
-**Branch / PR:** `feat/p0-3-declarative-mod-foundation`, [draft PR #105](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/105)  
-**Baseline main:** `66263baeef2f628c91a6a271dad04e7cd86659e4`  
-**P0.3 candidate before correction:** `1d00305d3539989ab862b9f6591af0946e9324c2`  
-**Source correction:** `fc3677ce16f65b34825b3678214e9fb5250081cd` (parent `1d00305d3539989ab862b9f6591af0946e9324c2`)  
+**Date:** 2026-10-23
+**Repository:** `publiomcko-cloud/procedural-sandbox-simulation`
+**Branch / PR:** `feat/p0-3-declarative-mod-foundation`, [draft PR #105](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/105)
+**Baseline main:** `66263baeef2f628c91a6a271dad04e7cd86659e4`
+**P0.3 candidate before correction:** `1d00305d3539989ab862b9f6591af0946e9324c2`
+**Source correction:** `fc3677ce16f65b34825b3678214e9fb5250081cd` (parent `1d00305d3539989ab862b9f6591af0946e9324c2`)
 **Evidence grade:** L4 local Godot 4.7.2 execution on detached source snapshots and the designated development workspace. No owner visual result or independent rereview is implied.
 
 ## Finding and reproduction
