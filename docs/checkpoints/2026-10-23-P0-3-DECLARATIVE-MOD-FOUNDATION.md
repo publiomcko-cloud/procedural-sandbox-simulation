@@ -6,7 +6,7 @@
 - Feature branch: `feat/p0-3-declarative-mod-foundation`.
 - Implementation commit: `ab46214aaa5eb320ab22563d17340a8da857b4bf`.
 - Scope: declarative packages and shared content registry; no playable terrain, SDF, ledger, streaming, or save schema changes.
-- PR: draft, created after the implementation commit; not merged.
+- PR #105: [draft pull request](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/105), open and unmerged.
 
 ## Implemented
 
