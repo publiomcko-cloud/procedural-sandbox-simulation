@@ -1,9 +1,9 @@
 # P1.1B +Z LOD seam correction
 
-**Date:** 2026-10-23 (America/Sao_Paulo).  
-**Implementation branch:** `fix/p1-1b-b0g-plusz-seam`.  
-**Draft PR:** [#102](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/102), targeting the reviewed P1.1B harness branch.  
-**Implementation commit:** `89d5b6f5205c354333e66b9044475395a7edacf4`; parent `2b4355363a43b73476715cf4002e31575bf9828d`.  
+**Date:** 2026-10-23 (America/Sao_Paulo).
+**Implementation branch:** `fix/p1-1b-b0g-plusz-seam`.
+**Draft PR:** [#102](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/102), targeting the reviewed P1.1B harness branch.
+**Implementation commit:** `89d5b6f5205c354333e66b9044475395a7edacf4`; parent `2b4355363a43b73476715cf4002e31575bf9828d`.
 **State:** `PLUSZ_FIX_FOCUSED_VALIDATION_PASS / INDEPENDENT_REVIEW_PENDING / UNSCORED`.
 
 ## Root cause
