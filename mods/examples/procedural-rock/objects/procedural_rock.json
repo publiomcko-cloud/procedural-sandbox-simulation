@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "type": "procedural_rock",
+  "id": "official.example.procedural_rock:basalt_stack",
+  "display_name": "Example Basalt Stack",
+  "tags": ["rock", "basalt", "example"],
+  "recipe": {
+    "algorithm": "stacked_spheres_v1",
+    "lobe_count": 5,
+    "radius_min_mm": 320,
+    "radius_max_mm": 620,
+    "vertical_step_mm": 360,
+    "spread_mm": 180,
+    "jitter_mm": 90
+  }
+}

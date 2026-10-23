@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "type": "procedural_rock",
+  "id": "firstparty.core_rocks:granite",
+  "display_name": "Granite Formation",
+  "tags": ["rock", "granite", "first_party"],
+  "recipe": {
+    "algorithm": "stacked_spheres_v1",
+    "lobe_count": 4,
+    "radius_min_mm": 500,
+    "radius_max_mm": 900,
+    "vertical_step_mm": 420,
+    "spread_mm": 250,
+    "jitter_mm": 120
+  }
+}
