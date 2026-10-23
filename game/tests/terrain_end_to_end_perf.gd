@@ -3,11 +3,13 @@ extends SceneTree
 const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
+const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
 const MAX_FRAMES := 3000
 const CLICK_REPEATS := 5
 
 var assertions := 0
 var failures := 0
+var _test_scene_serial := 0
 
 
 func _initialize() -> void:
@@ -20,7 +22,7 @@ func _run() -> void:
 	if packed == null:
 		_finish()
 		return
-	var scene := packed.instantiate()
+	var scene := _instantiate_clean_scene(packed)
 	var cold_started := Time.get_ticks_usec()
 	root.add_child(scene)
 	await _wait_for_window(scene)
@@ -213,3 +215,15 @@ func _finish() -> void:
 	else:
 		push_error("TERRAIN_E2E_PERF_FAIL: assertions=%d failures=%d" % [assertions, failures])
 		quit(1)
+
+
+func _instantiate_clean_scene(packed: PackedScene) -> Node:
+	_test_scene_serial += 1
+	var scene: Node = packed.instantiate()
+	var store_path := ""
+	while store_path.is_empty() or DirAccess.dir_exists_absolute(store_path):
+		store_path = OS.get_temp_dir().path_join("p0_3-terrain-e2e-%d-%d-%d" % [
+			OS.get_process_id(), _test_scene_serial, Time.get_ticks_usec(),
+		])
+	scene.set("world_save_store", WorldSaveStore.new(store_path))
+	return scene

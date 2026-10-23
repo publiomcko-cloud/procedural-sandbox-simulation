@@ -6,6 +6,7 @@ const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const Mesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const Scene := preload("res://scenes/terrain_demo.tscn")
+const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
 const SEED := 424242
 const REGION_KEYS := [
 	Vector2i(-2, -2), Vector2i(-1, -2), Vector2i(0, -2), Vector2i(1, -2),
@@ -15,6 +16,7 @@ const REGION_KEYS := [
 ]
 var assertions := 0
 var failures := 0
+var _test_scene_serial := 0
 
 
 func _initialize() -> void:
@@ -201,7 +203,7 @@ func _check_expanded_query_domain(
 
 
 func _test_256_sequential_scene_edits() -> void:
-	var scene: Node = Scene.instantiate()
+	var scene: Node = _instantiate_clean_scene()
 	root.add_child(scene)
 	await _wait_for_window(scene)
 	var latencies := PackedInt64Array()
@@ -287,7 +289,7 @@ func _test_256_sequential_scene_edits() -> void:
 
 
 func _test_revision_supersession_and_rapid_movement() -> void:
-	var scene: Node = Scene.instantiate()
+	var scene: Node = _instantiate_clean_scene()
 	root.add_child(scene)
 	await _wait_for_window(scene)
 	var retry_before: int = scene.get("last_mesh_diagnostics").get("mesh_stage_retry_total", 0)
@@ -379,3 +381,15 @@ func _check(condition: bool, message: String) -> void:
 	if not condition:
 		failures += 1
 		push_error("TERRAIN_HISTORY_ASSERTION_FAILED: " + message)
+
+
+func _instantiate_clean_scene() -> Node:
+	_test_scene_serial += 1
+	var scene: Node = Scene.instantiate()
+	var store_path := ""
+	while store_path.is_empty() or DirAccess.dir_exists_absolute(store_path):
+		store_path = OS.get_temp_dir().path_join("p0_3-terrain-history-%d-%d-%d" % [
+			OS.get_process_id(), _test_scene_serial, Time.get_ticks_usec(),
+		])
+	scene.set("world_save_store", WorldSaveStore.new(store_path))
+	return scene

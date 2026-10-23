@@ -5,9 +5,11 @@ const TerrainMesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const BrushEditState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const BrushPicker := preload("res://scripts/terrain/terrain_brush_picker.gd")
 const ChunkGrid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
+const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
 
 var assertion_count := 0
 var failure_count := 0
+var _test_scene_serial := 0
 
 
 func _initialize() -> void:
@@ -216,7 +218,7 @@ func _test_viewport_interaction() -> void:
 	_check(packed != null, "terrain scene loads for viewport edit test")
 	if packed == null:
 		return
-	var scene := packed.instantiate()
+	var scene := _instantiate_clean_scene(packed)
 	root.add_child(scene)
 	await _wait_for_region(scene, Vector2i.ZERO)
 	var camera: Camera3D = scene.get_node("Camera3D")
@@ -398,3 +400,15 @@ func _check(condition: bool, label: String) -> void:
 	if not condition:
 		failure_count += 1
 		push_error("ASSERTION FAILED: " + label)
+
+
+func _instantiate_clean_scene(packed: PackedScene) -> Node:
+	_test_scene_serial += 1
+	var scene: Node = packed.instantiate()
+	var store_path := ""
+	while store_path.is_empty() or DirAccess.dir_exists_absolute(store_path):
+		store_path = OS.get_temp_dir().path_join("p0_3-terrain-brush-%d-%d-%d" % [
+			OS.get_process_id(), _test_scene_serial, Time.get_ticks_usec(),
+		])
+	scene.set("world_save_store", WorldSaveStore.new(store_path))
+	return scene
