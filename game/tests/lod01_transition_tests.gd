@@ -5,6 +5,7 @@ const Field := preload("res://scripts/terrain/sdf_world.gd")
 const Brush := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const ProductionMesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
+const BenchmarkContract := preload("res://tests/p1_1b_benchmark_contract.gd")
 const SEED := 424242
 const MIN_LATTICE := Vector3i(-4, 4, -6)
 const SEAM_LATTICE := Vector3i(-4, -2, -6)
@@ -355,6 +356,11 @@ func _assert_adjacent_mesh_seam(transition: Dictionary, neighbors: Array[Diction
 	var transition_meshes: Array[Dictionary] = [transition]
 	var actual := _collect_boundary_contours(transition_meshes, axis, plane)
 	var expected := _collect_boundary_contours(neighbors, axis, plane)
+	if neighbor_lod == 0:
+		var actual_contract := BenchmarkContract.boundary_contour(transition, axis, plane, 0.00001, 0.000001)
+		var expected_contract := BenchmarkContract.boundary_contour(neighbors[0], axis, plane, 0.00001, 0.000001)
+		_check(actual_contract.get("valid", false), "%s transition contour passes the independent R7 precision and T-junction oracle" % label)
+		_check(expected_contract.get("valid", false), "%s independent LOD0 contour passes the independent R7 precision and T-junction oracle" % label)
 	_check(not expected["segments"].is_empty(), "%s adjacent mesh produces a nonempty boundary contour" % label)
 	_check(bool(actual["boundary_geometry_valid"]) and bool(expected["boundary_geometry_valid"]), "%s interface has no zero-length or degenerate boundary segments" % label)
 	_check(actual["segments"] == expected["segments"], "%s actual transition contour equals independently meshed neighboring cells" % label)
