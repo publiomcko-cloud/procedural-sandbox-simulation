@@ -31,6 +31,7 @@ var _by_sequence: Dictionary = {} # sequence -> canonical operation
 var revision := 0
 var _next_sequence := 0
 var last_rejection_reason := ""
+var last_restore_rejection_reason := ""
 
 
 func _init(seed_value: int = 424242, generator_value: int = FIELD.GENERATOR_VERSION) -> void:
@@ -138,6 +139,114 @@ func get_edit_count() -> int:
 
 func get_last_sequence() -> int:
 	return _next_sequence - 1
+
+
+func get_next_sequence() -> int:
+	return _next_sequence
+
+
+## Durable saves contain commands and ledger metadata, never meshes or scene data.
+func get_persistence_snapshot() -> Dictionary:
+	var operations: Array[Dictionary] = []
+	for operation in _operations:
+		operations.append({
+			"sequence": int(operation["sequence"]),
+			"revision": int(operation["revision"]),
+			"mode": int(operation["mode"]),
+			"center": [float(operation["center_world"].x), float(operation["center_world"].y), float(operation["center_world"].z)],
+			"radius": float(operation["radius"]),
+		})
+	return {
+		"world_seed": world_seed,
+		"generator_version": generator_version,
+		"revision": revision,
+		"next_sequence": _next_sequence,
+		"operations": operations,
+	}
+
+
+## Restore is accepted only into a pristine ledger. Validation and spatial fanout
+## are completed into temporary structures before any live state is replaced.
+func restore_persistence_snapshot(snapshot: Dictionary) -> bool:
+	last_restore_rejection_reason = ""
+	if not _operations.is_empty() or not _by_region.is_empty() or not _by_sequence.is_empty() or revision != 0 or _next_sequence != 0:
+		last_restore_rejection_reason = "restore_target_not_pristine"
+		return false
+	var saved_seed_value: Variant = snapshot.get("world_seed", null)
+	var saved_generator_value: Variant = snapshot.get("generator_version", null)
+	if not _is_safe_integer(saved_seed_value) or not _is_safe_integer(saved_generator_value) \
+		or int(saved_seed_value) != world_seed or int(saved_generator_value) != generator_version:
+		last_restore_rejection_reason = "restore_world_identity_mismatch"
+		return false
+	var target_revision_value: Variant = snapshot.get("revision", null)
+	var next_sequence_value: Variant = snapshot.get("next_sequence", null)
+	var operations_value: Variant = snapshot.get("operations", null)
+	if not _is_safe_integer(target_revision_value) or not _is_safe_integer(next_sequence_value) \
+		or typeof(operations_value) != TYPE_ARRAY:
+		last_restore_rejection_reason = "restore_metadata_invalid"
+		return false
+	var target_revision := int(target_revision_value)
+	var target_next_sequence := int(next_sequence_value)
+	var source_operations: Array = operations_value
+	if target_revision < 0 or target_next_sequence < 0 or source_operations.size() > MAX_EDITS \
+		or target_revision < source_operations.size() or target_next_sequence < source_operations.size():
+		last_restore_rejection_reason = "restore_metadata_out_of_bounds"
+		return false
+	var restored: Array[Dictionary] = []
+	var restored_by_region: Dictionary = {}
+	var restored_by_sequence: Dictionary = {}
+	var previous_sequence := -1
+	var previous_operation_revision := 0
+	for source_value in source_operations:
+		if typeof(source_value) != TYPE_DICTIONARY:
+			last_restore_rejection_reason = "restore_operation_not_object"
+			return false
+		var source: Dictionary = source_value
+		var sequence_value: Variant = source.get("sequence", null)
+		var operation_revision_value: Variant = source.get("revision", null)
+		var mode_value: Variant = source.get("mode", null)
+		var center_value: Variant = source.get("center", null)
+		var radius_value: Variant = source.get("radius", null)
+		if not _is_safe_integer(sequence_value) or not _is_safe_integer(operation_revision_value) \
+			or not _is_safe_integer(mode_value) or typeof(center_value) != TYPE_ARRAY \
+			or not _is_finite_number(radius_value):
+			last_restore_rejection_reason = "restore_operation_metadata_invalid"
+			return false
+		var sequence := int(sequence_value)
+		var operation_revision := int(operation_revision_value)
+		var mode := int(mode_value)
+		var center_values: Array = center_value
+		if center_values.size() != 3 or sequence <= previous_sequence \
+			or operation_revision <= previous_operation_revision or operation_revision > target_revision \
+			or sequence >= target_next_sequence or (mode != Mode.CARVE and mode != Mode.FILL):
+			last_restore_rejection_reason = "restore_operation_order_or_mode_invalid"
+			return false
+		for component in center_values:
+			if not _is_finite_number(component):
+				last_restore_rejection_reason = "restore_operation_center_invalid"
+				return false
+		var center := Vector3(float(center_values[0]), float(center_values[1]), float(center_values[2]))
+		var radius := float(radius_value)
+		var operation_result := _build_operation(mode, center, radius, sequence, operation_revision)
+		if not operation_result.get("valid", false):
+			last_restore_rejection_reason = "restore_operation_rejected_%s" % operation_result.get("reason", "invalid")
+			return false
+		var operation: Dictionary = operation_result["operation"]
+		restored.append(operation)
+		restored_by_sequence[sequence] = operation
+		for region_key in operation["support_regions"]:
+			var region_id := _region_id(region_key)
+			if not restored_by_region.has(region_id):
+				restored_by_region[region_id] = []
+			(restored_by_region[region_id] as Array).append(sequence)
+		previous_sequence = sequence
+		previous_operation_revision = operation_revision
+	_operations = restored
+	_by_region = restored_by_region
+	_by_sequence = restored_by_sequence
+	revision = target_revision
+	_next_sequence = target_next_sequence
+	return true
 
 
 func get_region_edit_count(region_key: Vector2i) -> int:
@@ -410,3 +519,51 @@ func _rebuild_sequence_index() -> void:
 
 func _region_id(region_key: Vector2i) -> String:
 	return "%d,%d" % [region_key.x, region_key.y]
+
+
+func _build_operation(mode: int, center: Vector3, radius: float, sequence: int, operation_revision: int) -> Dictionary:
+	if mode != Mode.CARVE and mode != Mode.FILL:
+		return {"valid": false, "reason": "invalid_mode"}
+	if not center.is_finite() or not is_finite(radius):
+		return {"valid": false, "reason": "non_finite_input"}
+	if maxf(absf(center.x), maxf(absf(center.y), absf(center.z))) > MAX_ABS_WORLD_COORDINATE:
+		return {"valid": false, "reason": "coordinate_out_of_bounds"}
+	if radius < MIN_RADIUS or radius > MAX_RADIUS:
+		return {"valid": false, "reason": "radius_out_of_bounds"}
+	var support_regions := _regions_intersecting_sphere(center, radius)
+	var rebuild_regions := _regions_intersecting_sphere(center, radius + REBUILD_DEPENDENCY_HALO)
+	if support_regions.is_empty() or support_regions.size() > 4 or rebuild_regions.is_empty() or rebuild_regions.size() > 4:
+		return {"valid": false, "reason": "region_fanout_exceeded"}
+	var dependency_regions: Array[Vector2i] = []
+	for region_key in rebuild_regions:
+		if not support_regions.has(region_key):
+			dependency_regions.append(region_key)
+	return {
+		"valid": true,
+		"operation": {
+			"operation_id": "sdf-v%d-seed%d-seq%d" % [generator_version, world_seed, sequence],
+			"sequence": sequence,
+			"revision": operation_revision,
+			"world_seed": world_seed,
+			"generator_version": generator_version,
+			"mode": mode,
+			"center_world": center,
+			"radius": radius,
+			"support_regions": support_regions,
+			"dependency_regions": dependency_regions,
+			"rebuild_regions": rebuild_regions,
+		},
+	}
+
+
+func _is_safe_integer(value: Variant) -> bool:
+	if typeof(value) == TYPE_INT:
+		return absf(float(value)) <= 9007199254740991.0
+	if typeof(value) == TYPE_FLOAT:
+		var numeric := float(value)
+		return is_finite(numeric) and floorf(numeric) == numeric and absf(numeric) <= 9007199254740991.0
+	return false
+
+
+func _is_finite_number(value: Variant) -> bool:
+	return (typeof(value) == TYPE_INT or typeof(value) == TYPE_FLOAT) and is_finite(float(value))
