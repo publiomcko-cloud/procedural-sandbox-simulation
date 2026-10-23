@@ -6,6 +6,7 @@ const Mesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const Picker := preload("res://scripts/terrain/terrain_brush_picker.gd")
 const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
+const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
 
 const SEED := 424242
 const MIN_WORLD_CELL := Vector2i(-Spatial.CELLS_PER_REGION_X, -Spatial.CELLS_PER_REGION_Z)
@@ -13,6 +14,7 @@ const WORLD_CELL_COUNT := Vector2i(Spatial.CELLS_PER_REGION_X * 3, Spatial.CELLS
 
 var assertions := 0
 var failures := 0
+var _test_scene_serial := 0
 
 
 func _initialize() -> void:
@@ -506,7 +508,7 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 	_check(packed != null, "multiregion demonstration scene loads")
 	if packed == null:
 		return
-	var scene := packed.instantiate()
+	var scene := _instantiate_clean_scene(packed)
 	root.add_child(scene)
 	await _wait_for_region(scene, Vector2i.ZERO)
 	_check(scene.get("active_regions").size() == 1 and scene.get("chunk_nodes").size() == 16, "focused center region becomes visible after its CPU mesh jobs finish")
@@ -739,7 +741,7 @@ func _test_edit_while_neighbor_is_loading() -> void:
 	if packed == null:
 		_check(false, "loading-neighbor edit scene loads")
 		return
-	var scene := packed.instantiate()
+	var scene := _instantiate_clean_scene(packed)
 	root.add_child(scene)
 	await _wait_for_region(scene, Vector2i.ZERO)
 	var neighbor_id := "1,0"
@@ -1032,3 +1034,15 @@ func _check(condition: bool, label: String) -> void:
 	if not condition:
 		failures += 1
 		push_error("ASSERTION FAILED: " + label)
+
+
+func _instantiate_clean_scene(packed: PackedScene) -> Node:
+	_test_scene_serial += 1
+	var scene: Node = packed.instantiate()
+	var store_path := ""
+	while store_path.is_empty() or DirAccess.dir_exists_absolute(store_path):
+		store_path = OS.get_temp_dir().path_join("p0_3-terrain-multiregion-%d-%d-%d" % [
+			OS.get_process_id(), _test_scene_serial, Time.get_ticks_usec(),
+		])
+	scene.set("world_save_store", WorldSaveStore.new(store_path))
+	return scene

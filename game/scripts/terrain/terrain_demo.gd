@@ -116,7 +116,10 @@ var _last_edit_rejection := ""
 
 func _ready() -> void:
 	_frame_time_samples.resize(512)
-	world_save_store = WorldSaveStore.new()
+	# Tests may inject an isolated store before adding this scene to the tree.
+	# Ordinary production instances still use the default user:// world slot.
+	if world_save_store == null:
+		world_save_store = WorldSaveStore.new()
 	edit_ledger = BrushEditState.new(world_seed, Field.GENERATOR_VERSION)
 	var saved_world: Dictionary = world_save_store.load_world(world_id)
 	if saved_world.get("found", false):
