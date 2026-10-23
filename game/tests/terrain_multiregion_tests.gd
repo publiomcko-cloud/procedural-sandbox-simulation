@@ -712,6 +712,24 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 		diagnostics["queued_chunk_count"], diagnostics["peak_queue_depth"], diagnostics["peak_mesh_upload_ms"],
 		diagnostics["peak_process_work_ms"], diagnostics["streamed_region_loads"], diagnostics["streamed_region_unloads"],
 	])
+	var lod_region: Vector2i = scene.get("focus_region_key")
+	var lod_coordinate := Vector2i.ZERO
+	var lod_id: String = ChunkGrid.stable_id(lod_region, lod_coordinate)
+	var lod_node: MeshInstance3D = scene.get("chunk_nodes")[lod_id]
+	var lod_mesh_before: Mesh = lod_node.mesh
+	var lod_center: Vector3 = Spatial.region_origin_world(lod_region) + ChunkGrid.origin_for(lod_coordinate) + ChunkGrid.size_for(lod_coordinate) * 0.5
+	var lod_camera: Camera3D = scene.get("camera")
+	lod_camera.global_position = lod_center + Vector3(60.0, 0.0, 0.0)
+	scene.set("lod_enabled", true)
+	var lod_coordinates: Array[Vector2i] = [lod_coordinate]
+	scene.call("_begin_region_stage", lod_region, "partial", lod_coordinates)
+	_check(int(scene.get("loading_regions")["%d,%d" % [lod_region.x, lod_region.y]]["lod_by_coordinate"][lod_coordinate]) == 1, "camera-distance selection stages one LOD1 chunk in the active scene")
+	await _wait_for_chunk_lod(scene, lod_region, lod_coordinate, 1)
+	_check(int(lod_node.get_meta("lod_level", -1)) == 1 and lod_node.mesh != lod_mesh_before, "completed LOD1 ArrayMesh is published on the playable chunk node")
+	scene.set("lod_enabled", false)
+	scene.call("_update_lod_selection")
+	await _wait_for_chunk_lod(scene, lod_region, lod_coordinate, 0)
+	_check(int(lod_node.get_meta("lod_level", -1)) == 0, "LOD0 fallback rebuilds the changed playable chunk")
 	scene.queue_free()
 	await process_frame
 
@@ -806,6 +824,19 @@ func _wait_for_edit_transaction(scene: Node) -> void:
 			return
 		await process_frame
 	_check(scene.get("_edit_transaction").is_empty(), "cross-region edit transaction completes or explicitly resolves after unload")
+
+
+func _wait_for_chunk_lod(scene: Node, region_key: Vector2i, coordinate: Vector2i, expected_lod: int) -> void:
+	var chunk_id: String = ChunkGrid.stable_id(region_key, coordinate)
+	var region_id := "%d,%d" % [region_key.x, region_key.y]
+	for _frame in range(2400):
+		await process_frame
+		var active: Dictionary = scene.get("active_regions")
+		if active.has(region_id) and active[region_id]["chunk_nodes"].has(chunk_id) \
+			and not scene.get("loading_regions").has(region_id) \
+			and int(active[region_id]["chunk_nodes"][chunk_id].get_meta("lod_level", -1)) == expected_lod:
+			return
+	_check(false, "playable LOD stage reaches expected level %d before bounded test timeout" % expected_lod)
 
 
 func _active_chunk_data(scene: Node, region_keys: Array[Vector2i]) -> Dictionary:

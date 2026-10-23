@@ -8,6 +8,7 @@ const Field := preload("res://scripts/terrain/sdf_world.gd")
 const BrushEditState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const BrushPicker := preload("res://scripts/terrain/terrain_brush_picker.gd")
 const TerrainMeshJob := preload("res://scripts/terrain/terrain_mesh_job.gd")
+const TerrainLodPolicy := preload("res://scripts/terrain/terrain_lod_policy.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -38,6 +39,9 @@ var world_states: Dictionary = {} # active and currently staged domain states
 var world_state: RefCounted # focused region compatibility alias for the demo/tests
 var edit_ledger: RefCounted
 var chunk_nodes: Dictionary = {} # stable chunk id -> active MeshInstance3D
+var _published_lod_by_chunk: Dictionary = {} # stable chunk id -> 0/1
+var _lod_fallback_chunks: Dictionary = {} # stable chunk id -> deterministic LOD0 fallback until retry/toggle
+var lod_enabled := false
 
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
@@ -133,6 +137,7 @@ func _process(delta: float) -> void:
 	_peak_frame_ms = maxf(_peak_frame_ms, _last_frame_ms)
 	_update_focus_key()
 	_reconcile_region_window()
+	_update_lod_selection()
 	_process_one_chunk_job()
 	_peak_mesh_uploads_per_frame = maxi(_peak_mesh_uploads_per_frame, _mesh_uploads_this_frame)
 	_last_process_work_ms = float(Time.get_ticks_usec() - process_started_usec) / 1000.0
@@ -171,6 +176,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				focus_region_key, cleared["removed_count"], cleared["rebuild_regions"].size(),
 			]
 			_start_global_rebuild("reset")
+		elif event.keycode == KEY_L:
+			lod_enabled = not lod_enabled
+			_lod_fallback_chunks.clear()
+			last_brush_result = "Custom LOD 0/1: %s" % ("ON" if lod_enabled else "OFF; using LOD0 fallback")
 		elif event.keycode in [KEY_A, KEY_LEFT]:
 			_move_focus(Vector3(-FOCUS_MOVE_STEP, 0.0, 0.0))
 		elif event.keycode in [KEY_D, KEY_RIGHT]:
@@ -187,6 +196,55 @@ func _move_focus(delta: Vector3) -> void:
 	_update_camera()
 	_update_focus_key()
 	_reconcile_region_window()
+
+
+func _update_lod_selection() -> void:
+	if global_rebuild_pending or not _edit_transaction.is_empty():
+		return
+	# Keep old and replacement meshes alive for at most one LOD region transaction.
+	# This bounds temporary transition memory while retaining the normal worker and
+	# two-ArrayMesh-per-frame publication limits.
+	for stage_value in loading_regions.values():
+		var pending_stage: Dictionary = stage_value
+		if String(pending_stage.get("purpose", "")) == "partial":
+			return
+	var changed_by_region: Dictionary = {}
+	for entry_value in active_regions.values():
+		var entry: Dictionary = entry_value
+		var region_key: Vector2i = entry["region_key"]
+		var id := _region_id(region_key)
+		if loading_regions.has(id):
+			continue
+		var changed: Array[Vector2i] = []
+		for coordinate in ChunkGrid.all_coordinates():
+			var chunk_id: String = ChunkGrid.stable_id(region_key, coordinate)
+			var current_lod := int(_published_lod_by_chunk.get(chunk_id, 0))
+			var desired_lod := _desired_lod_for_chunk(region_key, coordinate, current_lod)
+			if desired_lod != current_lod:
+				changed.append(coordinate)
+		if not changed.is_empty():
+			changed_by_region[id] = {"region_key": region_key, "coordinates": changed}
+	if changed_by_region.is_empty():
+		return
+	_begin_operation("lod_transition")
+	var ordered_ids: Array[String] = []
+	for id_value in changed_by_region.keys():
+		ordered_ids.append(String(id_value))
+	ordered_ids.sort()
+	var change: Dictionary = changed_by_region[ordered_ids[0]]
+	_begin_region_stage(change["region_key"], "partial", change["coordinates"])
+	_update_runtime_diagnostics()
+	_update_status()
+
+
+func _desired_lod_for_chunk(region_key: Vector2i, coordinate: Vector2i, current_lod: int) -> int:
+	var chunk_id: String = ChunkGrid.stable_id(region_key, coordinate)
+	if not lod_enabled or _lod_fallback_chunks.has(chunk_id):
+		return 0
+	var center_local: Vector3 = ChunkGrid.origin_for(coordinate) + ChunkGrid.size_for(coordinate) * 0.5
+	var center_world: Vector3 = SpatialGrid.region_local_to_world(region_key, center_local)
+	var distance := camera.global_position.distance_to(center_world)
+	return TerrainLodPolicy.select_lod(distance, current_lod, true)
 
 
 func _update_focus_key() -> void:
@@ -328,6 +386,11 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 	var queued_now := Time.get_ticks_usec()
 	for _coordinate in coordinates:
 		queued_times.append(queued_now)
+	var lod_by_coordinate: Dictionary = {}
+	for coordinate in coordinates:
+		var chunk_id: String = ChunkGrid.stable_id(region_key, coordinate)
+		var current_lod := int(_published_lod_by_chunk.get(chunk_id, 0))
+		lod_by_coordinate[coordinate] = _desired_lod_for_chunk(region_key, coordinate, current_lod)
 	loading_regions[id] = {
 		"region_key": region_key,
 		"world_state": state,
@@ -339,6 +402,9 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 		"pending_count": 0,
 		"chunk_queued_usec": queued_times,
 		"meshes": {},
+		"lod_by_coordinate": lod_by_coordinate,
+		"actual_lod_by_coordinate": {},
+		"fallback_by_coordinate": {},
 		"cave_section_enabled": cave_section_enabled,
 		"edit_revision": state.brush_edits.revision,
 		"chunk_enqueued_usec": Time.get_ticks_usec(),
@@ -403,6 +469,8 @@ func _process_completed_mesh_jobs() -> void:
 			continue
 		var coordinate: Vector2i = record["coordinate"]
 		stage["meshes"][coordinate] = result["mesh"]
+		stage["actual_lod_by_coordinate"][coordinate] = int(result.get("lod_level", 0))
+		stage["fallback_by_coordinate"][coordinate] = bool(result.get("lod_fallback", false))
 		stage["next_index"] = int(stage["next_index"]) + 1
 		stage["pending_count"] = maxi(0, int(stage["pending_count"]) - 1)
 		stage["sample_count"] = int(stage.get("sample_count", 0)) + int(result["sample_count"])
@@ -447,7 +515,8 @@ func _dispatch_mesh_jobs() -> void:
 			state.world_seed, stage["region_key"], coordinate,
 			stage["cave_section_enabled"],
 			state.brush_edits.get_meshing_snapshot_for_chunk(stage["region_key"], coordinate),
-			submitted_usec
+			submitted_usec,
+			int(stage.get("lod_by_coordinate", {}).get(coordinate, 0))
 		)
 		var high_priority: bool = String(stage["purpose"]) in ["edit_transaction", "partial"]
 		var task_id := WorkerThreadPool.add_task(Callable(job, "run"), high_priority, "P1.0C terrain chunk")
@@ -511,6 +580,9 @@ func _complete_region_stage(id: String) -> void:
 	var stage: Dictionary = loading_regions[id]
 	if int(stage["next_index"]) < (stage["chunk_coordinates"] as Array).size():
 		return
+	if not _stage_lod_selection_is_current(stage):
+		_supersede_region_stage(id)
+		return
 	if global_rebuild_pending or stage["purpose"] == "full":
 		_try_commit_global_rebuild()
 		return
@@ -522,7 +594,7 @@ func _complete_region_stage(id: String) -> void:
 		if _publish_partial_stage(id, stage):
 			_clear_stream_error(id)
 	else:
-		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"])
+		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"], stage.get("actual_lod_by_coordinate", {}), stage.get("fallback_by_coordinate", {}))
 		_streamed_region_loads += 1
 		_stage_retry_counts.erase(id)
 		_clear_stream_error(id)
@@ -549,6 +621,7 @@ func _publish_partial_stage(id: String, stage: Dictionary) -> bool:
 		var chunk_id: String = ChunkGrid.stable_id(stage["region_key"], coordinate)
 		var node: MeshInstance3D = region_nodes[chunk_id]
 		_replace_node_mesh(node, stage["meshes"][coordinate])
+		_set_chunk_lod_state(chunk_id, node, int(stage.get("actual_lod_by_coordinate", {}).get(coordinate, 0)), bool(stage.get("fallback_by_coordinate", {}).get(coordinate, false)))
 	_record_completed_operation(stage)
 	_update_runtime_diagnostics()
 	return true
@@ -563,6 +636,9 @@ func _try_commit_global_rebuild() -> void:
 		var stage: Dictionary = loading_regions[id]
 		if int(stage["next_index"]) < (stage["chunk_coordinates"] as Array).size():
 			return
+		if not _stage_lod_selection_is_current(stage):
+			_supersede_region_stage(id)
+			return
 	var all_stages: Array[Dictionary] = []
 	for id in _full_rebuild_target_ids:
 		all_stages.append(loading_regions[id])
@@ -576,7 +652,7 @@ func _try_commit_global_rebuild() -> void:
 	_edit_transaction = {}
 	var publish_started_usec := Time.get_ticks_usec()
 	for stage in all_stages:
-		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"])
+		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"], stage.get("actual_lod_by_coordinate", {}), stage.get("fallback_by_coordinate", {}))
 	_mesh_publish_usec_samples.append(Time.get_ticks_usec() - publish_started_usec)
 	_rendered_cave_section_enabled = cave_section_enabled
 	_streamed_region_loads += all_stages.size()
@@ -591,7 +667,7 @@ func _try_commit_global_rebuild() -> void:
 	_update_runtime_diagnostics()
 
 
-func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary) -> void:
+func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary, actual_lods: Dictionary = {}, fallback_lods: Dictionary = {}) -> void:
 	var id := _region_id(region_key)
 	var region_nodes: Dictionary = {}
 	var region_origin: Vector3 = SpatialGrid.region_origin_world(region_key)
@@ -610,6 +686,7 @@ func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary
 		node.set_meta("stable_chunk_id", chunk_id)
 		node.set_meta("region_key", region_key)
 		node.set_meta("chunk_coordinate", coordinate)
+		_set_chunk_lod_state(chunk_id, node, int(actual_lods.get(coordinate, 0)), bool(fallback_lods.get(coordinate, false)))
 		region_nodes[chunk_id] = node
 		chunk_nodes[chunk_id] = node
 	var previous: Dictionary = active_regions.get(id, {})
@@ -634,6 +711,8 @@ func _create_chunk_node(region_key: Vector2i, coordinate: Vector2i, chunk_id: St
 
 func _release_chunk_node(chunk_id: String, node: MeshInstance3D) -> void:
 	chunk_nodes.erase(chunk_id)
+	_published_lod_by_chunk.erase(chunk_id)
+	_lod_fallback_chunks.erase(chunk_id)
 	_replace_node_mesh(node, null)
 	if node == terrain_mesh_template:
 		node.visible = false
@@ -650,6 +729,26 @@ func _replace_node_mesh(node: MeshInstance3D, replacement: Mesh) -> void:
 	node.mesh = replacement
 	_active_triangle_count += _mesh_triangle_count(replacement)
 	_active_vertex_count += _mesh_vertex_count(replacement)
+
+
+func _set_chunk_lod_state(chunk_id: String, node: MeshInstance3D, lod_level: int, did_fallback: bool) -> void:
+	var actual_lod := clampi(lod_level, 0, 1)
+	_published_lod_by_chunk[chunk_id] = actual_lod
+	node.set_meta("lod_level", actual_lod)
+	if did_fallback:
+		_lod_fallback_chunks[chunk_id] = true
+	else:
+		_lod_fallback_chunks.erase(chunk_id)
+
+
+func _stage_lod_selection_is_current(stage: Dictionary) -> bool:
+	var lods: Dictionary = stage.get("lod_by_coordinate", {})
+	for coordinate in stage.get("chunk_coordinates", []):
+		var chunk_id: String = ChunkGrid.stable_id(stage["region_key"], coordinate)
+		var current_lod := int(_published_lod_by_chunk.get(chunk_id, 0))
+		if int(lods.get(coordinate, 0)) != _desired_lod_for_chunk(stage["region_key"], coordinate, current_lod):
+			return false
+	return true
 
 
 func _mesh_triangle_count(mesh: Mesh) -> int:
@@ -930,6 +1029,9 @@ func _try_commit_edit_transaction() -> void:
 			or int(stage["edit_revision"]) != edit_ledger.revision \
 			or int(stage["next_index"]) < (stage["chunk_coordinates"] as Array).size():
 			return
+		if not _stage_lod_selection_is_current(stage):
+			_supersede_region_stage(id)
+			return
 		for coordinate in stage["chunk_coordinates"]:
 			if not stage["meshes"].has(coordinate):
 				_fail_region_stage(id, "Edit transaction mesh set is incomplete; previous meshes retained")
@@ -950,8 +1052,9 @@ func _try_commit_edit_transaction() -> void:
 			for coordinate in stage["chunk_coordinates"]:
 				var chunk_id: String = ChunkGrid.stable_id(stage["region_key"], coordinate)
 				_replace_node_mesh(nodes[chunk_id], stage["meshes"][coordinate])
+				_set_chunk_lod_state(chunk_id, nodes[chunk_id], int(stage.get("actual_lod_by_coordinate", {}).get(coordinate, 0)), bool(stage.get("fallback_by_coordinate", {}).get(coordinate, false)))
 		else:
-			_publish_region(stage["region_key"], stage["world_state"], stage["meshes"])
+			_publish_region(stage["region_key"], stage["world_state"], stage["meshes"], stage.get("actual_lod_by_coordinate", {}), stage.get("fallback_by_coordinate", {}))
 		loading_regions.erase(id)
 	_mesh_publish_usec_samples.append(Time.get_ticks_usec() - publish_started_usec)
 	var committed_sequence: int = _edit_transaction["operation_sequence"]
@@ -1222,6 +1325,17 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["active_region_count"] = active_regions.size()
 	last_mesh_diagnostics["preview_region_count"] = active_regions.size()
 	last_mesh_diagnostics["active_chunk_count"] = chunk_nodes.size()
+	var lod0_count := 0
+	var lod1_count := 0
+	for lod_value in _published_lod_by_chunk.values():
+		if int(lod_value) == 1:
+			lod1_count += 1
+		else:
+			lod0_count += 1
+	last_mesh_diagnostics["lod_enabled"] = lod_enabled
+	last_mesh_diagnostics["lod0_chunk_count"] = lod0_count
+	last_mesh_diagnostics["lod1_chunk_count"] = lod1_count
+	last_mesh_diagnostics["lod_fallback_chunk_count"] = _lod_fallback_chunks.size()
 	last_mesh_diagnostics["requested_region_count"] = (REQUEST_RADIUS * 2 + 1) * (REQUEST_RADIUS * 2 + 1)
 	last_mesh_diagnostics["loading_region_count"] = loading_regions.size()
 	last_mesh_diagnostics["queued_chunk_count"] = _queued_chunk_count()
@@ -1278,7 +1392,7 @@ func _update_status() -> void:
 	var selected_mode_name := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
 	var queue_depth := _queued_chunk_count()
 	var transaction_state := "idle" if _edit_transaction.is_empty() else String(_edit_transaction.get("stage_state", "staging"))
-	var status := "P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: global cave section    R: regenerate    X: reset commands supported by focused region\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nWorker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
+	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: global cave section    R: regenerate    X: focused reset    L: toggle LOD0 fallback\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
 		seed,
 		generator_version,
 		focus_region_key,
@@ -1298,6 +1412,8 @@ func _update_status() -> void:
 		_last_edit_rebuild_chunk_count,
 		_last_edit_mesh_jobs,
 		transaction_state,
+		int(last_mesh_diagnostics.get("lod0_chunk_count", 0)),
+		int(last_mesh_diagnostics.get("lod1_chunk_count", 0)),
 		_mesh_jobs.size(),
 		MAX_MESH_JOBS_IN_FLIGHT,
 		MAX_MESH_UPLOADS_PER_FRAME,

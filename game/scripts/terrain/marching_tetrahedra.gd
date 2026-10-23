@@ -53,7 +53,8 @@ static func build_chunk_cpu_data(
 	region_key: Vector2i,
 	chunk_coordinate: Vector2i,
 	show_cave_section: bool,
-	brush_snapshot: Variant
+	brush_snapshot: Variant,
+	density_override: Callable = Callable()
 ) -> Dictionary:
 	if not CHUNK_GRID.is_valid_coordinate(chunk_coordinate):
 		return {"vertex_count": 0, "triangle_count": 0, "sample_count": 0, "valid": false}
@@ -61,7 +62,7 @@ static func build_chunk_cpu_data(
 	return _build_mesh_cells(
 		seed, region_key, CHUNK_GRID.MIN_BOUND, bounds.x, bounds.y, bounds.z, bounds.w,
 		show_cave_section, CHUNK_GRID.origin_for(chunk_coordinate), brush_snapshot, chunk_coordinate,
-		0, CHUNK_GRID.CELL_COUNT_Y, false
+		0, CHUNK_GRID.CELL_COUNT_Y, false, density_override
 	)
 
 
@@ -99,7 +100,8 @@ static func _build_mesh_cells(
 	chunk_coordinate: Vector2i,
 	cell_start_y: int,
 	cell_end_y: int,
-	make_mesh: bool = true
+	make_mesh: bool = true,
+	density_override: Callable = Callable()
 ) -> Dictionary:
 	var timings_usec := {
 		"sdf_and_ledger": 0,
@@ -117,7 +119,7 @@ static func _build_mesh_cells(
 		for z in range(nz):
 			for x in range(nx):
 				var p := grid_min + Vector3(cell_start_x + x, cell_start_y + y, cell_start_z + z) * STEP
-				var density := _sample_density(seed, region_key, p, show_cave_section, brush_state)
+				var density := _sample_density(seed, region_key, p, show_cave_section, brush_state, density_override)
 				values[_index(x, y, z, nx, nz)] = density
 	timings_usec["sdf_and_ledger"] = Time.get_ticks_usec() - sample_started_usec
 
@@ -160,7 +162,7 @@ static func _build_mesh_cells(
 			var shared_normal: Vector3 = shared_normal_cache.get(global_position, Vector3.ZERO)
 			if not shared_normal_cache.has(global_position):
 				var normal_started_usec := Time.get_ticks_usec()
-				shared_normal = _sample_outward_normal(seed, region_key, region_local_position, show_cave_section, brush_state)
+				shared_normal = _sample_outward_normal(seed, region_key, region_local_position, show_cave_section, brush_state, density_override)
 				timings_usec["shared_gradient_normals"] = int(timings_usec["shared_gradient_normals"]) + Time.get_ticks_usec() - normal_started_usec
 				shared_normal_cache[global_position] = shared_normal
 			if shared_normal.length_squared() > 0.000001:
@@ -211,8 +213,12 @@ static func _sample_density(
 	region_key: Vector2i,
 	point: Vector3,
 	show_cave_section: bool,
-	brush_state: Variant
+	brush_state: Variant,
+	density_override: Callable = Callable()
 ) -> float:
+	if density_override.is_valid():
+		var world_point: Vector3 = SPATIAL.region_local_to_world(region_key, point)
+		return float(density_override.call(world_point))
 	if brush_state is Dictionary:
 		return BRUSH_STATE_SCRIPT.sample_density_snapshot(seed, region_key, point, show_cave_section, brush_state)
 	if brush_state is BRUSH_STATE_SCRIPT:
@@ -228,15 +234,16 @@ static func _sample_outward_normal(
 	region_key: Vector2i,
 	point: Vector3,
 	show_cave_section: bool,
-	brush_state: Variant
+	brush_state: Variant,
+	density_override: Callable = Callable()
 ) -> Vector3:
 	var half_step := STEP * 0.5
-	var dx := _sample_density(seed, region_key, point + Vector3.RIGHT * half_step, show_cave_section, brush_state) \
-		- _sample_density(seed, region_key, point - Vector3.RIGHT * half_step, show_cave_section, brush_state)
-	var dy := _sample_density(seed, region_key, point + Vector3.UP * half_step, show_cave_section, brush_state) \
-		- _sample_density(seed, region_key, point - Vector3.UP * half_step, show_cave_section, brush_state)
-	var dz := _sample_density(seed, region_key, point + Vector3.BACK * half_step, show_cave_section, brush_state) \
-		- _sample_density(seed, region_key, point - Vector3.BACK * half_step, show_cave_section, brush_state)
+	var dx := _sample_density(seed, region_key, point + Vector3.RIGHT * half_step, show_cave_section, brush_state, density_override) \
+		- _sample_density(seed, region_key, point - Vector3.RIGHT * half_step, show_cave_section, brush_state, density_override)
+	var dy := _sample_density(seed, region_key, point + Vector3.UP * half_step, show_cave_section, brush_state, density_override) \
+		- _sample_density(seed, region_key, point - Vector3.UP * half_step, show_cave_section, brush_state, density_override)
+	var dz := _sample_density(seed, region_key, point + Vector3.BACK * half_step, show_cave_section, brush_state, density_override) \
+		- _sample_density(seed, region_key, point - Vector3.BACK * half_step, show_cave_section, brush_state, density_override)
 	var density_gradient := Vector3(dx, dy, dz)
 	if density_gradient.length_squared() <= 0.000001:
 		return Vector3.ZERO
