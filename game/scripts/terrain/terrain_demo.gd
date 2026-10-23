@@ -9,6 +9,7 @@ const BrushEditState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const BrushPicker := preload("res://scripts/terrain/terrain_brush_picker.gd")
 const TerrainMeshJob := preload("res://scripts/terrain/terrain_mesh_job.gd")
 const TerrainLodPolicy := preload("res://scripts/terrain/terrain_lod_policy.gd")
+const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -38,6 +39,12 @@ var loading_regions: Dictionary = {} # region id -> bounded incremental mesh sta
 var world_states: Dictionary = {} # active and currently staged domain states
 var world_state: RefCounted # focused region compatibility alias for the demo/tests
 var edit_ledger: RefCounted
+var world_seed := WorldState.DEMO_SEED
+var world_id := WorldSaveStore.WORLD_ID
+var world_save_store: RefCounted
+var _pending_world_load: Dictionary = {}
+var _persistence_status := "No saved world; press P to save or O to load"
+var _persistence_blocked := false
 var chunk_nodes: Dictionary = {} # stable chunk id -> active MeshInstance3D
 var _published_lod_by_chunk: Dictionary = {} # stable chunk id -> 0/1
 var _lod_fallback_chunks: Dictionary = {} # stable chunk id -> deterministic LOD0 fallback until retry/toggle
@@ -109,7 +116,22 @@ var _last_edit_rejection := ""
 
 func _ready() -> void:
 	_frame_time_samples.resize(512)
-	edit_ledger = BrushEditState.new(WorldState.DEMO_SEED, Field.GENERATOR_VERSION)
+	world_save_store = WorldSaveStore.new()
+	edit_ledger = BrushEditState.new(world_seed, Field.GENERATOR_VERSION)
+	var saved_world: Dictionary = world_save_store.load_world(world_id)
+	if saved_world.get("found", false):
+		if saved_world.get("ok", false):
+			var loaded: Dictionary = _build_ledger_from_payload(saved_world.get("payload", {}))
+			if loaded.get("ok", false):
+				world_seed = int(loaded["world_seed"])
+				edit_ledger = loaded["ledger"]
+				_persistence_status = _loaded_world_message(saved_world)
+			else:
+				_persistence_blocked = true
+				_persistence_status = "Saved world rejected (%s); edits remain untouched and saving is blocked" % loaded.get("reason", "invalid")
+		else:
+			_persistence_blocked = true
+			_persistence_status = "Saved world unavailable (%s); edits remain untouched and saving is blocked" % saved_world.get("reason", "invalid")
 	terrain_mesh_template.mesh = null
 	terrain_mesh_template.visible = false
 	_begin_operation("initial_load")
@@ -180,6 +202,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			lod_enabled = not lod_enabled
 			_lod_fallback_chunks.clear()
 			last_brush_result = "Custom LOD 0/1: %s" % ("ON" if lod_enabled else "OFF; using LOD0 fallback")
+		elif event.keycode == KEY_P:
+			_save_world_to_storage()
+		elif event.keycode == KEY_O:
+			_load_world_from_storage()
 		elif event.keycode in [KEY_A, KEY_LEFT]:
 			_move_focus(Vector3(-FOCUS_MOVE_STEP, 0.0, 0.0))
 		elif event.keycode in [KEY_D, KEY_RIGHT]:
@@ -376,9 +402,13 @@ func _ensure_full_rebuild_targets(desired: Array[Vector2i], retained_ids: Dictio
 
 func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinates: Array[Vector2i]) -> void:
 	var id := _region_id(region_key)
-	var state := _state_for_region(region_key)
+	var state: RefCounted
+	if purpose == "full" and not _pending_world_load.is_empty():
+		state = WorldState.new(int(_pending_world_load["world_seed"]), region_key, _pending_world_load["ledger"])
+	else:
+		state = _state_for_region(region_key)
 	if state == null:
-		state = WorldState.new(WorldState.DEMO_SEED, region_key, edit_ledger)
+		state = WorldState.new(world_seed, region_key, edit_ledger)
 	var coordinates: Array[Vector2i] = chunk_coordinates.duplicate()
 	var token := _next_stage_token
 	_next_stage_token += 1
@@ -642,6 +672,14 @@ func _try_commit_global_rebuild() -> void:
 	var all_stages: Array[Dictionary] = []
 	for id in _full_rebuild_target_ids:
 		all_stages.append(loading_regions[id])
+	if not _pending_world_load.is_empty():
+		world_seed = int(_pending_world_load["world_seed"])
+		edit_ledger = _pending_world_load["ledger"]
+		_persistence_blocked = false
+		_persistence_status = "Loaded generation %d (%d ordered edit(s))" % [
+			int(_pending_world_load["generation"]), edit_ledger.get_edit_count(),
+		]
+		_pending_world_load = {}
 	global_rebuild_pending = false
 	global_rebuild_reason = ""
 	_global_rebuild_retry_count = 0
@@ -852,6 +890,9 @@ func _fail_region_stage(id: String, message: String) -> void:
 			global_rebuild_pending = false
 			global_rebuild_reason = ""
 			_full_rebuild_target_ids.clear()
+			if not _pending_world_load.is_empty():
+				_pending_world_load = {}
+				_persistence_status = "World load rebuild failed; previous world and meshes retained"
 			cave_section_enabled = _rendered_cave_section_enabled
 			last_mesh_diagnostics["operation"] = "failed_pending_retry"
 			last_brush_result = "%s; visible mesh set retained, press R to retry" % message
@@ -912,6 +953,8 @@ func _record_completed_operation(stage: Dictionary) -> void:
 
 
 func _start_global_rebuild(operation_name: String) -> void:
+	if operation_name != "load_world":
+		_pending_world_load = {}
 	_begin_operation(operation_name)
 	_global_rebuild_retry_count = 0
 	_edit_transaction = {}
@@ -1173,7 +1216,9 @@ func _state_for_region(region_key: Vector2i) -> RefCounted:
 		return active_regions[id]["world_state"]
 	if loading_regions.has(id):
 		return loading_regions[id]["world_state"]
-	return WorldState.new(WorldState.DEMO_SEED, region_key, edit_ledger)
+	if not _pending_world_load.is_empty():
+		return WorldState.new(int(_pending_world_load["world_seed"]), region_key, _pending_world_load["ledger"])
+	return WorldState.new(world_seed, region_key, edit_ledger)
 
 
 func _sample_world_density(world_position: Vector3) -> float:
@@ -1190,7 +1235,7 @@ func _sample_world_density_from_snapshot(world_position: Vector3, snapshot: Dict
 	if not mapped.get("valid", false):
 		return -INF
 	return BrushEditState.sample_density_snapshot(
-		WorldState.DEMO_SEED, mapped["region_key"], mapped["local_position"], cave_section_enabled, snapshot
+		world_seed, mapped["region_key"], mapped["local_position"], cave_section_enabled, snapshot
 	)
 
 
@@ -1385,14 +1430,94 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["frame_time_p99_ms"] = frame_percentiles.z
 
 
+func _build_ledger_from_payload(payload: Dictionary) -> Dictionary:
+	var seed_value: Variant = payload.get("world_seed", null)
+	var generator_value: Variant = payload.get("generator_version", null)
+	if typeof(seed_value) != TYPE_INT or typeof(generator_value) != TYPE_INT \
+		or int(generator_value) != Field.GENERATOR_VERSION:
+		return {"ok": false, "reason": "world_identity_or_generator_invalid"}
+	var ledger: RefCounted = BrushEditState.new(int(seed_value), int(generator_value))
+	var snapshot := {
+		"world_seed": int(seed_value),
+		"generator_version": int(generator_value),
+		"revision": int(payload.get("ledger_revision", -1)),
+		"next_sequence": int(payload.get("next_sequence", -1)),
+		"operations": payload.get("operations", null),
+	}
+	if not ledger.restore_persistence_snapshot(snapshot):
+		return {"ok": false, "reason": ledger.last_restore_rejection_reason}
+	return {"ok": true, "world_seed": int(seed_value), "ledger": ledger}
+
+
+func _loaded_world_message(load_result: Dictionary) -> String:
+	if load_result.get("recovered_temporary", false):
+		return "Recovered complete interrupted save generation %d" % int(load_result.get("generation", 0))
+	if int(load_result.get("ignored_invalid_candidates", 0)) > 0:
+		return "Loaded valid generation %d; ignored %d invalid candidate(s)" % [
+			int(load_result.get("generation", 0)), int(load_result["ignored_invalid_candidates"]),
+		]
+	return "Loaded local world generation %d" % int(load_result.get("generation", 0))
+
+
+func _save_world_to_storage() -> bool:
+	if _persistence_blocked:
+		_persistence_status = "Save blocked until the invalid/incompatible existing world is handled"
+		_update_status()
+		return false
+	if global_rebuild_pending or not _edit_transaction.is_empty():
+		_persistence_status = "Save waits for coherent terrain publication to finish"
+		_update_status()
+		return false
+	var saved: Dictionary = world_save_store.save_ledger(world_id, edit_ledger)
+	if not saved.get("ok", false):
+		_persistence_status = "Save failed (%s); previous generations retained" % saved.get("reason", "unknown")
+		_update_status()
+		return false
+	_persistence_status = "Saved generation %d (%d ordered edit(s), revision %d)" % [
+		int(saved["generation"]), int(saved["operation_count"]), int(saved["revision"]),
+	]
+	_update_status()
+	return true
+
+
+func _load_world_from_storage() -> bool:
+	if global_rebuild_pending or not _edit_transaction.is_empty():
+		_persistence_status = "Load waits for the current mesh transaction to finish"
+		_update_status()
+		return false
+	var loaded: Dictionary = world_save_store.load_world(world_id)
+	if not loaded.get("ok", false):
+		_persistence_status = "Load rejected (%s); current world is unchanged" % loaded.get("reason", "invalid")
+		_update_status()
+		return false
+	if not loaded.get("found", false):
+		_persistence_status = "No saved local world exists; current world is unchanged"
+		_update_status()
+		return false
+	var candidate: Dictionary = _build_ledger_from_payload(loaded.get("payload", {}))
+	if not candidate.get("ok", false):
+		_persistence_status = "Load rejected (%s); current world is unchanged" % candidate.get("reason", "invalid")
+		_update_status()
+		return false
+	_pending_world_load = {
+		"world_seed": int(candidate["world_seed"]),
+		"ledger": candidate["ledger"],
+		"generation": int(loaded["generation"]),
+	}
+	_persistence_status = "Loading generation %d; old meshes remain until the complete set is ready" % int(loaded["generation"])
+	_start_global_rebuild("load_world")
+	_update_status()
+	return true
+
+
 func _update_status() -> void:
 	var state := _state_for_region(focus_region_key)
-	var seed: int = state.world_seed if state != null else WorldState.DEMO_SEED
+	var seed: int = state.world_seed if state != null else world_seed
 	var generator_version: int = state.generator_version if state != null else Field.GENERATOR_VERSION
 	var selected_mode_name := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
 	var queue_depth := _queued_chunk_count()
 	var transaction_state := "idle" if _edit_transaction.is_empty() else String(_edit_transaction.get("stage_state", "staging"))
-	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: global cave section    R: regenerate    X: focused reset    L: toggle LOD0 fallback\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
+	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: cave section    R: rebuild    X: focused reset    L: toggle LOD0 fallback    P: save    O: load\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
 		seed,
 		generator_version,
 		focus_region_key,
@@ -1401,6 +1526,7 @@ func _update_status() -> void:
 		loading_regions.size(),
 		queue_depth,
 		_queued_mesh_job_count(),
+		_persistence_status,
 		selected_mode_name,
 		edit_ledger.get_edit_count(),
 		BrushEditState.MAX_EDITS,
