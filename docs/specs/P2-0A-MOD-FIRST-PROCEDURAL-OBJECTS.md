@@ -42,4 +42,6 @@ Focused command:
 
 The suite covers shared first-party/external registry and recipe use, installed `user://mods` discovery and duplicate-source avoidance, deterministic mesh conversion, signed-region placement and order independence, canonical surface anchoring, stable IDs and content pins, actual terrain scene publication/eviction/revisit, duplicate prevention, visibility toggling, missing/incompatible package failures, unchanged terrain edits and unchanged disposable schema-1 save bytes. `scripts/validate.ps1` includes the focused suite and all existing canonical regression groups.
 
+Final implementation validation on Godot `4.7.2.stable.official.ed1daf0bf`: focused object suite 117 assertions/0 failures; full `scripts/validate.ps1` 17,375 assertions/0 failures across 16 assertion groups, exit 0. The full log is preserved in the P2.0A checkpoint. These are headless/source-runtime results; GUI visual acceptance remains pending.
+
 Headless results establish source/runtime behavior only. Owner GUI acceptance is still needed to assess rock scale, silhouette, grounding and readability while moving through regions. No scored performance target is defined.
