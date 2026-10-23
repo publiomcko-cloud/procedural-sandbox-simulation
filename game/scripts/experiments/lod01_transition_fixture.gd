@@ -386,11 +386,31 @@ func _sample_by_id(id: int) -> Dictionary:
 func _edge_point(a_id: int, b_id: int) -> Vector3:
 	var a: Dictionary = _sample_by_id(a_id)
 	var b: Dictionary = _sample_by_id(b_id)
+	var a_point: Vector3 = a["point"]
+	var b_point: Vector3 = b["point"]
 	var av := float(a["density"])
 	var bv := float(b["density"])
+	# Adjacent tetrahedra can ask for the same crossed edge in opposite
+	# directions. Canonicalize its endpoints before interpolation so the
+	# resulting Vector3 bits do not depend on tetrahedron traversal order.
+	if _point_precedes(b_point, a_point):
+		var point_swap := a_point
+		a_point = b_point
+		b_point = point_swap
+		var density_swap := av
+		av = bv
+		bv = density_swap
 	var denominator := av - bv
 	var t := 0.5 if is_zero_approx(denominator) else clampf(av / denominator, 0.0, 1.0)
-	return (a["point"] as Vector3).lerp(b["point"], t)
+	return a_point.lerp(b_point, t)
+
+
+static func _point_precedes(a: Vector3, b: Vector3) -> bool:
+	if a.x != b.x:
+		return a.x < b.x
+	if a.y != b.y:
+		return a.y < b.y
+	return a.z < b.z
 
 
 func _emit_triangle(a: Vector3, b: Vector3, c: Vector3, toward_empty: Vector3) -> void:
