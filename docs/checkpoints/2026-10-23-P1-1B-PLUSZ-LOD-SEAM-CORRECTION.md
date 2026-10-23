@@ -27,7 +27,7 @@ Godot `4.7.2.stable.official.ed1daf0bf`, executable SHA-256 `C8F0A6BC45A19B33541
 - Regression controls `B0G.LOD01.FACE.Y_NEG.v1` and `B0G.LOD01.EDGE.X_NEG_Y_NEG.v1`: PASS.
 - All four new scenario invocations exited 0 with one `scenario_started`, one `lod_fixture_result=PASS`, one `scenario_complete=PASS`, and zero failures. Timings are headless and UNSCORED.
 
-Raw stdout/stderr, parsed scenario events, preflight hashes, focused suite logs, diagnostic notes and an artifact hash index are retained at `C:\Users\PUBLI\AppData\Local\Temp\p1_1b_plusz_fix_c29e96f015304daa9a266dd5557cb4e1`. `artifact-index.json` SHA-256: `DA675BB12D1E072A3EE82BD86AEBB41EB6FEFB23BC4D707B6B70826F100D1B03`.
+Raw stdout/stderr, parsed scenario events, event-integrity checks, preflight hashes, focused suite logs, diagnostic notes and an artifact hash index are retained at `C:\Users\PUBLI\AppData\Local\Temp\p1_1b_plusz_fix_c29e96f015304daa9a266dd5557cb4e1`. `artifact-index.json` SHA-256: `CB1728CC76C97FC0FEB73BE621B79AAA91BF6CFF41D89F691FE05036530CA8DD`. The harness labels its source SHA as externally verified; the exact Git HEAD was recorded before execution and rechecked after all scenario runs.
 
 ## Scope and remaining limits
 
