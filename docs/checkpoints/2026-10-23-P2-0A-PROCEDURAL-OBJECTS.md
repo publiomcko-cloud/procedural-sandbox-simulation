@@ -1,9 +1,13 @@
 # P2.0A — Mod-First Procedural Objects Checkpoint
 
-Date: 2026-10-23  
-Feature branch: `feat/p2-0a-mod-first-procedural-objects`  
-Implementation commit: `5dd3ddf40b955c373868797c1b79c47a1f0755dc`  
-Implementation parent: `0ea2ad834db5dc2de1110cf0388ea06604cc7715`  
+Date: 2026-10-23
+
+Feature branch: `feat/p2-0a-mod-first-procedural-objects`
+
+Implementation commit: `5dd3ddf40b955c373868797c1b79c47a1f0755dc`
+
+Implementation parent: `0ea2ad834db5dc2de1110cf0388ea06604cc7715`
+
 Verified base: `main` at `0ea2ad834db5dc2de1110cf0388ea06604cc7715`
 
 ## Delivered
@@ -16,8 +20,10 @@ Verified base: `main` at `0ea2ad834db5dc2de1110cf0388ea06604cc7715`
 
 ## Validation evidence
 
-Pinned executable: `C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe`  
-Version: `4.7.2.stable.official.ed1daf0bf`  
+Pinned executable: `C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe`
+
+Version: `4.7.2.stable.official.ed1daf0bf`
+
 Executable SHA-256: `c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643`
 
 Focused import and object suite passed: `PROCEDURAL_OBJECT_PASS: assertions=117 failures=0`.
@@ -26,7 +32,8 @@ Full validation ran once after implementation stabilization using an isolated te
 
 Raw validation log and run metadata:
 
-`C:\Users\PUBLI\AppData\Local\Temp\p2_0a_full_validation_b0d8e6626740431695b0ef5f11539461\validate.log`  
+`C:\Users\PUBLI\AppData\Local\Temp\p2_0a_full_validation_b0d8e6626740431695b0ef5f11539461\validate.log`
+
 `C:\Users\PUBLI\AppData\Local\Temp\p2_0a_full_validation_b0d8e6626740431695b0ef5f11539461\run-metadata.txt`
 
 Observed exploratory tests report workload measurements only; this slice has no approved performance target and headless timing does not establish GUI/GPU acceptance.
