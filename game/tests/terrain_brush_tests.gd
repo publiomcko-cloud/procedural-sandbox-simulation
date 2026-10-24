@@ -241,6 +241,23 @@ func _test_viewport_interaction() -> void:
 	var carve_diagnostics: Dictionary = scene.get("last_mesh_diagnostics")
 	var carved_meshes := _snapshot_chunk_meshes(scene)
 	var dirty_ids: Array[String] = carve_diagnostics["remeshed_chunk_ids"]
+	var dirty_id_set: Dictionary = {}
+	var dirty_ids_are_unique := true
+	for dirty_id in dirty_ids:
+		if dirty_id_set.has(dirty_id):
+			dirty_ids_are_unique = false
+		dirty_id_set[dirty_id] = true
+	_check(dirty_ids_are_unique, "remeshed chunk diagnostics contain unique IDs across retries")
+	var preexisting_dirty_count := 0
+	var newly_published_dirty_count := 0
+	var every_dirty_chunk_published := true
+	for dirty_id in dirty_ids:
+		if not carved_meshes.has(dirty_id) or not carved_meshes[dirty_id] is ArrayMesh:
+			every_dirty_chunk_published = false
+		elif not start_meshes.has(dirty_id):
+			newly_published_dirty_count += 1
+		if start_meshes.has(dirty_id):
+			preexisting_dirty_count += 1
 	_check(carve_diagnostics["remeshed_chunk_count"] > 0, "accepted carve rebuilds affected chunk meshes")
 	_check(carve_diagnostics["remeshed_chunk_count"] < start_meshes.size(), "accepted carve avoids a full-grid rebuild")
 	_check(carve_diagnostics["elapsed_ms"] >= 0.0, "edit diagnostics include measured elapsed time")
@@ -264,8 +281,9 @@ func _test_viewport_interaction() -> void:
 		else:
 			if before_mesh == after_mesh:
 				unchanged_clean_meshes += 1
-	_check(replaced_dirty_meshes == dirty_ids.size(), "every reported dirty chunk replaces its mesh")
-	_check(unchanged_clean_meshes == start_meshes.size() - dirty_ids.size(), "unaffected chunk mesh objects remain unchanged")
+	_check(every_dirty_chunk_published, "every reported dirty chunk has a mesh after the transaction")
+	_check(replaced_dirty_meshes == preexisting_dirty_count, "every preexisting dirty chunk replaces its mesh (reported=%d replaced=%d newly_published=%d)" % [preexisting_dirty_count, replaced_dirty_meshes, newly_published_dirty_count])
+	_check(unchanged_clean_meshes == start_meshes.size() - preexisting_dirty_count, "unaffected preexisting chunk mesh objects remain unchanged (expected=%d unchanged=%d)" % [start_meshes.size() - preexisting_dirty_count, unchanged_clean_meshes])
 	_check(preserved_chunk_nodes == start_chunk_nodes.size(), "localized rebuild preserves every chunk scene node instance")
 	_check(carve_geometry_changed, "viewport carve changes generated chunk geometry")
 

@@ -7,10 +7,15 @@ const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 const RegistryScript := preload("res://scripts/modding/content_definition_registry.gd")
 const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const RockMeshAdapter := preload("res://scripts/objects/procedural_rock_mesh_adapter.gd")
+const StaticBatchBuilder := preload("res://scripts/objects/procedural_object_static_batch.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const FIELD := preload("res://scripts/terrain/sdf_world.gd")
 const StateServiceScript := preload("res://scripts/objects/procedural_object_state_service.gd")
 const REQUIRED_MOD_IDS := ["firstparty.core_rocks", "official.example.procedural_rock"]
+const MAX_RESIDENT_REGIONS := 25
+const MAX_PENDING_REGION_PUBLICATIONS := 25
+const MAX_REGION_PUBLICATIONS_PER_FRAME := 1
+const MAX_CACHED_GEOMETRY_VARIANTS := 32
 
 var registry: ContentDefinitionRegistry
 var world_seed := 0
@@ -27,6 +32,18 @@ var state_service: RefCounted
 var state_directory_override := ""
 var _expected_publication_tokens: Dictionary = {}
 var _published_publication_tokens: Dictionary = {}
+var _population_rule_ids: Array[String] = []
+var _pending_region_publications: Dictionary = {}
+var _pending_publication_order: Array[String] = []
+var _geometry_mesh_cache: Dictionary = {}
+var _geometry_mesh_cache_order: Array[String] = []
+var _last_region_metrics: Dictionary = {}
+var _peak_region_generation_usec := 0
+var _peak_mesh_build_usec := 0
+var _peak_batch_build_usec := 0
+var _peak_publications_per_process_tick := 0
+var _publications_last_process_tick := 0
+var _total_published_instance_count := 0
 
 
 func initialize(seed_value: int, world_identifier: String, package_roots: Array[String] = [], object_state_directory: String = "") -> Dictionary:
@@ -38,6 +55,11 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	world_id = world_identifier
 	_expected_publication_tokens.clear()
 	_published_publication_tokens.clear()
+	_pending_region_publications.clear()
+	_pending_publication_order.clear()
+	_geometry_mesh_cache.clear()
+	_geometry_mesh_cache_order.clear()
+	_population_rule_ids.clear()
 	var roots: Array[String] = []
 	for package_root in package_roots:
 		roots.append(package_root)
@@ -61,6 +83,12 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 			return _fail_initialize("required_definition_missing:%s" % definition_id)
 		if int(definition.get("schema_version", -1)) != 2 or definition.get("recipe", {}).get("algorithm", "") != RockMeshAdapter.ALGORITHM:
 			return _fail_initialize("required_definition_geometry_version_unsupported:%s" % definition_id)
+	var compatibility_rules: Array[Dictionary] = candidate.get_compatibility_population_rules()
+	if compatibility_rules.size() != ObjectWorld.SLOT_DEFINITIONS.size():
+		return _fail_initialize("legacy_population_rules_incompatible")
+	for slot in range(compatibility_rules.size()):
+		if int(compatibility_rules[slot].get("legacy_slot", -1)) != slot or String(compatibility_rules[slot].get("definition_id", "")) != String(ObjectWorld.SLOT_DEFINITIONS[slot]):
+			return _fail_initialize("legacy_population_rules_incompatible")
 	state_directory_override = object_state_directory
 	var state_load := _initialize_state_service(world_seed)
 	if not state_load.get("ok", false):
@@ -68,25 +96,68 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	registry = candidate
 	_mod_count = int(registration.get("mod_count", 0))
 	_definition_ids.clear()
+	_population_rule_ids.clear()
 	for package in discovery.get("packages", []):
 		for definition in package.get("definitions", []):
 			_definition_ids.append(String(definition.get("id", "")))
+		for rule in package.get("population_rules", []):
+			_population_rule_ids.append(String(rule.get("id", "")))
 	_definition_ids.sort()
+	_population_rule_ids.sort()
 	_rock_material = StandardMaterial3D.new()
 	_rock_material.albedo_color = Color(0.38, 0.39, 0.37, 1.0)
 	_rock_material.roughness = 0.94
 	initialized = true
 	initialization_error = ""
-	return {"ok": true, "reason": "ok", "mod_count": _mod_count, "definition_ids": _definition_ids.duplicate()}
+	return {"ok": true, "reason": "ok", "mod_count": _mod_count, "definition_ids": _definition_ids.duplicate(), "population_rule_ids": _population_rule_ids.duplicate()}
 
 
 func expect_region_publication(region_key: Vector2i, publication_token: int) -> void:
 	var id := _region_id(region_key)
 	if publication_token > int(_expected_publication_tokens.get(id, -1)):
 		_expected_publication_tokens[id] = publication_token
+		if _pending_region_publications.has(id) and int(_pending_region_publications[id].get("publication_token", -1)) != publication_token:
+			_pending_region_publications.erase(id)
+			_pending_publication_order.erase(id)
+
+
+func enqueue_region_publication(region_key: Vector2i, state: RefCounted, publication_token: int = -1) -> Dictionary:
+	var id := _region_id(region_key)
+	if not initialized:
+		return _record_region_failure(id, "object_stream_not_initialized")
+	if state == null or state.get("region_key") != region_key:
+		return _record_region_failure(id, "region_world_identity_mismatch")
+	if _expected_publication_tokens.has(id) and publication_token != int(_expected_publication_tokens[id]):
+		return _failure("stale_object_region_publication")
+	if _pending_region_publications.has(id):
+		_pending_region_publications[id] = {"region_key": region_key, "world_state": state, "publication_token": publication_token}
+		return {"ok": true, "reason": "queued_replaced", "queue_depth": _pending_region_publications.size()}
+	if _pending_region_publications.size() >= MAX_PENDING_REGION_PUBLICATIONS:
+		return _record_region_failure(id, "object_publication_queue_full")
+	_pending_region_publications[id] = {"region_key": region_key, "world_state": state, "publication_token": publication_token}
+	_pending_publication_order.append(id)
+	_region_errors.erase(id)
+	return {"ok": true, "reason": "queued", "queue_depth": _pending_region_publications.size()}
+
+
+func process_queued_publications() -> int:
+	_publications_last_process_tick = 0
+	while _publications_last_process_tick < MAX_REGION_PUBLICATIONS_PER_FRAME and not _pending_publication_order.is_empty():
+		var id: String = _pending_publication_order.pop_front()
+		if not _pending_region_publications.has(id):
+			continue
+		var request: Dictionary = _pending_region_publications[id]
+		_pending_region_publications.erase(id)
+		var result := publish_region(request["region_key"], request["world_state"], false, int(request["publication_token"]))
+		_publications_last_process_tick += 1
+		if not result.get("ok", false) and result.get("reason", "") != "stale_object_region_publication":
+			_region_errors[id] = String(result.get("reason", "object_region_publication_failed"))
+	_peak_publications_per_process_tick = maxi(_peak_publications_per_process_tick, _publications_last_process_tick)
+	return _publications_last_process_tick
 
 
 func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool = false, publication_token: int = -1) -> Dictionary:
+	var publication_started_usec := Time.get_ticks_usec()
 	var id := _region_id(region_key)
 	if _expected_publication_tokens.has(id) and publication_token != int(_expected_publication_tokens[id]):
 		return _failure("stale_object_region_publication")
@@ -105,6 +176,8 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 		if not state_load.get("ok", false):
 			return _record_region_failure(id, "object_state_unavailable:%s" % state_load.get("reason", "invalid"))
 		world_seed = region_world_seed
+	if not _regions.has(id) and _regions.size() >= MAX_RESIDENT_REGIONS:
+		return _record_region_failure(id, "object_resident_region_budget_exceeded")
 	if not force_rebuild and _regions.has(id) and int(_regions[id]["world_seed"]) == region_world_seed and _regions[id].get("world_state") == state:
 		if publication_token >= 0:
 			_published_publication_tokens[id] = publication_token
@@ -115,6 +188,8 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 	var pending_nodes: Array[Node3D] = []
 	var base_instances: Array[Dictionary] = generated["instances"]
 	var instances: Array[Dictionary] = []
+	var batch_items: Array[Dictionary] = []
+	var mesh_build_started_usec := Time.get_ticks_usec()
 	for base_instance in base_instances:
 		var resolved: Dictionary = state_service.resolve_instance(base_instance)
 		if not resolved.get("ok", false):
@@ -125,11 +200,20 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 			continue
 		var instance: Dictionary = resolved["instance"]
 		instances.append(instance)
-		var mesh_result: Dictionary = RockMeshAdapter.build_mesh(instance["geometry"], instance["geometry_seeds"])
+		var mesh_result: Dictionary = _get_or_build_geometry_mesh(instance)
 		if not mesh_result.get("ok", false):
 			for pending_node in pending_nodes:
 				pending_node.free()
 			return _record_region_failure(id, "object_mesh_build_failed:%s" % mesh_result.get("reason", "unknown"))
+		if bool(instance.get("population_batched", false)) and instance.get("instance_components", {}).is_empty():
+			batch_items.append({
+				"instance_id": String(instance["instance_id"]),
+				"mesh": mesh_result["mesh"],
+				"position": Vector3(instance["position_mm"]) / 1000.0,
+				"scale_milli": instance.get("default_scale_milli", Vector3i(1000, 1000, 1000)),
+				"yaw_mdeg": int(instance.get("default_yaw_mdeg", 0)),
+			})
+			continue
 		var object_node := Node3D.new()
 		object_node.name = "Object_%s" % String(instance["instance_id"]).sha256_text().substr(0, 12)
 		object_node.position = Vector3(instance["position_mm"]) / 1000.0
@@ -147,10 +231,27 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 		object_node.add_child(mesh_instance)
 		_apply_components_to_node(object_node, instance)
 		pending_nodes.append(object_node)
+	var mesh_build_elapsed_usec := Time.get_ticks_usec() - mesh_build_started_usec
+	var batch_started_usec := Time.get_ticks_usec()
+	var batch_result := StaticBatchBuilder.build(batch_items)
+	if not batch_result.get("ok", false):
+		for pending_node in pending_nodes:
+			pending_node.free()
+		return _record_region_failure(id, String(batch_result.get("reason", "static_batch_failed")))
 	var region_root := Node3D.new()
 	region_root.name = "Objects_%d_%d" % [region_key.x, region_key.y]
 	region_root.position = Spatial.region_origin_world(region_key)
 	region_root.visible = objects_visible
+	if batch_result.get("mesh", null) is ArrayMesh:
+		var batch_node := Node3D.new()
+		batch_node.name = "StaticPopulationBatch"
+		batch_node.set_meta("stable_instance_ids", batch_result["instance_ids"])
+		batch_node.set_meta("population_batch_version", 1)
+		var batch_mesh_instance := MeshInstance3D.new()
+		batch_mesh_instance.mesh = batch_result["mesh"]
+		batch_mesh_instance.material_override = _rock_material
+		batch_node.add_child(batch_mesh_instance)
+		region_root.add_child(batch_node)
 	for object_node in pending_nodes:
 		region_root.add_child(object_node)
 	if _regions.has(id):
@@ -161,6 +262,24 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 	_regions.erase(id)
 	add_child(region_root)
 	_regions[id] = {"root": region_root, "instances": instances, "base_instances": base_instances, "world_state": state, "world_seed": region_world_seed}
+	_total_published_instance_count += instances.size()
+	var batch_elapsed_usec := Time.get_ticks_usec() - batch_started_usec
+	_last_region_metrics = {
+		"region_key": region_key,
+		"instance_count": instances.size(),
+		"batched_instance_count": batch_items.size(),
+		"individual_node_count": pending_nodes.size(),
+		"candidate_cell_count": int(generated.get("candidate_cell_count", 0)),
+		"surface_anchor_count": int(generated.get("surface_anchor_count", 0)),
+		"generation_usec": int(generated.get("timings_usec", {}).get("total", 0)),
+		"mesh_build_usec": mesh_build_elapsed_usec,
+		"batch_build_usec": batch_elapsed_usec,
+		"publication_usec": Time.get_ticks_usec() - publication_started_usec,
+		"batch_vertex_count": int(batch_result.get("vertex_count", 0)),
+	}
+	_peak_region_generation_usec = maxi(_peak_region_generation_usec, int(_last_region_metrics["generation_usec"]))
+	_peak_mesh_build_usec = maxi(_peak_mesh_build_usec, mesh_build_elapsed_usec)
+	_peak_batch_build_usec = maxi(_peak_batch_build_usec, batch_elapsed_usec)
 	if publication_token >= 0:
 		_published_publication_tokens[id] = publication_token
 	_region_errors.erase(id)
@@ -257,6 +376,10 @@ func _republish_after_state_mutation(region_key: Vector2i, world_state: RefCount
 
 
 func _apply_components_to_node(node: Node3D, instance: Dictionary) -> void:
+	var default_scale: Vector3i = instance.get("default_scale_milli", Vector3i(1000, 1000, 1000))
+	var default_yaw := int(instance.get("default_yaw_mdeg", 0))
+	node.scale = Vector3(default_scale) / 1000.0
+	node.rotation = Vector3(0.0, float(default_yaw) * (PI / 180000.0), 0.0)
 	var components: Dictionary = instance.get("instance_components", {})
 	var transform_component: Dictionary = components.get("core.transform", {})
 	if not transform_component.is_empty():
@@ -286,6 +409,8 @@ func _apply_components_to_node(node: Node3D, instance: Dictionary) -> void:
 func unload_region(region_key: Vector2i) -> void:
 	var id := _region_id(region_key)
 	_region_errors.erase(id)
+	_pending_region_publications.erase(id)
+	_pending_publication_order.erase(id)
 	if not _regions.has(id):
 		return
 	var region_root: Node3D = _regions[id]["root"]
@@ -324,6 +449,33 @@ func get_region_instance_records(region_key: Vector2i) -> Array[Dictionary]:
 
 func get_definition_ids() -> Array[String]:
 	return _definition_ids.duplicate()
+
+
+func get_population_rule_ids() -> Array[String]:
+	return _population_rule_ids.duplicate()
+
+
+func get_performance_snapshot() -> Dictionary:
+	var resident_instances := 0
+	var resident_batched := 0
+	for entry in _regions.values():
+		resident_instances += (entry.get("instances", []) as Array).size()
+		for instance in entry.get("instances", []):
+			if bool(instance.get("population_batched", false)) and instance.get("instance_components", {}).is_empty():
+				resident_batched += 1
+	return {
+		"active_region_count": _regions.size(),
+		"pending_region_publication_count": _pending_region_publications.size(),
+		"active_instance_count": resident_instances,
+		"batched_instance_count": resident_batched,
+		"geometry_cache_variant_count": _geometry_mesh_cache.size(),
+		"last_region": _last_region_metrics.duplicate(true),
+		"peak_generation_usec": _peak_region_generation_usec,
+		"peak_geometry_build_usec": _peak_mesh_build_usec,
+		"peak_batch_build_usec": _peak_batch_build_usec,
+		"peak_publications_per_process_tick": _peak_publications_per_process_tick,
+		"publications_last_process_tick": _publications_last_process_tick,
+	}
 
 
 func get_error_summary() -> String:
@@ -388,6 +540,8 @@ func _record_region_failure(region_id: String, reason: String) -> Dictionary:
 
 
 func _clear_region_nodes() -> void:
+	_pending_region_publications.clear()
+	_pending_publication_order.clear()
 	for entry in _regions.values():
 		var region_root: Node3D = entry.get("root")
 		if is_instance_valid(region_root):
@@ -400,6 +554,32 @@ func _clear_region_nodes() -> void:
 
 func _region_id(region_key: Vector2i) -> String:
 	return "%d,%d" % [region_key.x, region_key.y]
+
+
+func _get_or_build_geometry_mesh(instance: Dictionary) -> Dictionary:
+	var cacheable := bool(instance.get("population_batched", false))
+	var cache_key := ""
+	if cacheable:
+		var key_data := {
+			"definition_id": instance.get("definition_id", ""),
+			"content_pin": instance.get("content_pin", {}),
+			"algorithm": instance.get("recipe_algorithm", ""),
+			"geometry": instance.get("geometry", {}),
+			"geometry_seeds": instance.get("geometry_seeds", {}),
+		}
+		cache_key = JSON.stringify(key_data, "", true, true).sha256_text()
+		if _geometry_mesh_cache.has(cache_key):
+			_geometry_mesh_cache_order.erase(cache_key)
+			_geometry_mesh_cache_order.append(cache_key)
+			return {"ok": true, "reason": "cache_hit", "mesh": _geometry_mesh_cache[cache_key]}
+	var result: Dictionary = RockMeshAdapter.build_mesh(instance["geometry"], instance["geometry_seeds"])
+	if result.get("ok", false) and cacheable:
+		_geometry_mesh_cache[cache_key] = result["mesh"]
+		_geometry_mesh_cache_order.append(cache_key)
+		while _geometry_mesh_cache_order.size() > MAX_CACHED_GEOMETRY_VARIANTS:
+			var evicted: String = _geometry_mesh_cache_order.pop_front()
+			_geometry_mesh_cache.erase(evicted)
+	return result
 
 
 func _failure(reason: String) -> Dictionary:

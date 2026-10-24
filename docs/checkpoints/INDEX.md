@@ -2,6 +2,12 @@
 
 **Check live GitHub refs before action**; each checkpoint is a dated immutable evidence snapshot, never a real-time claim. A draft document is not merged or approved.
 
+## Latest feature event
+
+| Date | Checkpoint | Event | Publication state at creation |
+| --- | --- | --- | --- |
+| 2026-10-24 | [P2.0C modular static population](2026-10-24-P2-0C-IMPLEMENTATION.md) | Deterministic declarative population candidate; Godot validation 17,883/0; independent source review and owner GUI retest pending | Draft PR #112, not merged |
+
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
 | 2026-10-17 | [CHK-2026-10-17-P1-0A-KICKOFF](2026-10-17-P1-0A-KICKOFF.md) | Merged functional PRs #78/#80/#82; authorized ongoing P1.0A #84 | Draft docs PR #85, not yet integrated |

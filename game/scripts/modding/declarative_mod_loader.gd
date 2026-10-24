@@ -16,7 +16,7 @@ const MANIFEST_KEYS := ["id", "version", "schema_version", "requires_engine", "d
 static func discover_and_validate(roots: Array[String]) -> Dictionary:
 	var packages_by_id: Dictionary = {}
 	var package_paths: Array[String] = []
-	var total_definition_count := 0
+	var total_content_record_count := 0
 	for root in roots:
 		if not _is_authorized_root(root):
 			return _failure("unauthorized_package_root")
@@ -49,9 +49,9 @@ static func discover_and_validate(roots: Array[String]) -> Dictionary:
 		var mod_id: String = package["manifest"]["id"]
 		if packages_by_id.has(mod_id):
 			return _failure("duplicate_mod_id")
-		total_definition_count += package["definitions"].size()
-		if total_definition_count > MAX_DEFINITIONS:
-			return _failure("content_definition_limit_exceeded")
+		total_content_record_count += package["definitions"].size() + package["population_rules"].size()
+		if total_content_record_count > MAX_DEFINITIONS:
+			return _failure("content_record_limit_exceeded")
 		packages_by_id[mod_id] = package
 	var ordered := _resolve_order(packages_by_id)
 	if not ordered.get("ok", false):
@@ -126,6 +126,7 @@ static func _read_package(package_path: String) -> Dictionary:
 	if not manifest_result.get("ok", false):
 		return manifest_result
 	var definitions: Array[Dictionary] = []
+	var population_rules: Array[Dictionary] = []
 	for content_root in manifest["content_roots"]:
 		if not _is_safe_relative_root(content_root):
 			return _failure("unsafe_content_root")
@@ -155,14 +156,23 @@ static func _read_package(package_path: String) -> Dictionary:
 					if not definition.get("ok", false):
 						content_directory.list_dir_end()
 						return definition
-					definitions.append(definition["value"])
-					if definitions.size() > MAX_DEFINITIONS:
+					var content_record: Dictionary = definition["value"]
+					match String(content_record.get("type", "")):
+						"procedural_rock":
+							definitions.append(content_record)
+						"static_population_rule":
+							population_rules.append(content_record)
+						_:
+							content_directory.list_dir_end()
+							return _failure("unsupported_content_record_type")
+					if definitions.size() + population_rules.size() > MAX_DEFINITIONS:
 						content_directory.list_dir_end()
-						return _failure("content_definition_limit_exceeded")
+						return _failure("content_record_limit_exceeded")
 			entry = content_directory.get_next()
 		content_directory.list_dir_end()
 	definitions.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.get("id", "")) < str(b.get("id", "")))
-	return {"ok": true, "package": {"path": package_path, "manifest": manifest, "definitions": definitions}}
+	population_rules.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.get("id", "")) < str(b.get("id", "")))
+	return {"ok": true, "package": {"path": package_path, "manifest": manifest, "definitions": definitions, "population_rules": population_rules}}
 
 
 static func validate_manifest(manifest: Dictionary) -> Dictionary:

@@ -28,6 +28,10 @@ P1.0 execution sequence: **P1.0A** [#84](https://github.com/publiomcko-cloud/pro
 
 See [CURRENT_STATUS](../status/CURRENT_STATUS.md) and [DECISION_REGISTER](../decisions/DECISION_REGISTER.md) for current accepted/proposed distinctions, and [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md) for a new chat/agent.
 
+## P2.0C candidate — 2026-10-24 (implementation review pending)
+
+P2.0C modular static population is implemented on draft PR #112 from verified main baseline `84bb7c3e573e7aa5a07608aac7834735aeb2c84f`. It adds data-only population rules, deterministic signed-region generation and bounded rendering/publication. Godot 4.7.2 full validation reports 17,883 assertions/0 failures. This is a feature candidate only: independent source review and owner GUI retest remain pending, and no geometry/performance acceptance thresholds were established. P2.0B compatibility identities remain; issue #108, physics/collision, networking and all F2-G1 operations remain out of scope. See [P2.0C specification](../specs/P2-0C-MODULAR-STATIC-POPULATION.md) and [implementation checkpoint](../checkpoints/2026-10-24-P2-0C-IMPLEMENTATION.md).
+
 ## P1.1 candidate planning handoff — 2026-10-19 (not implementation authorization)
 
 After an expressly authorized #92 merge and post-merge documentary checkpoint, **propose a scoped P1.1 design/benchmark gate** before new coding. Prioritize objective LOD/multi-resolution streaming, chunk residency and CPU/GPU/scene-publication frame spikes, while preserving canonical SDF ownership, bounded memory, signed seams and exact ordered edits. Separately evaluate materials/terrain representation and the still-proposed ADR-0002 custom-vs-Voxel-Tools backend comparison against original P0/P1 gates. Persistence, collision, material detail and production backend choice remain open; avoid treating full P1 as delivered. Present ranked candidate slices and measured acceptance budgets to the owner for **separate authorization**.

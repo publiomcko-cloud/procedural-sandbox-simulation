@@ -176,6 +176,7 @@ func _process(delta: float) -> void:
 	_reconcile_region_window()
 	_update_lod_selection()
 	_process_one_chunk_job()
+	object_stream.process_queued_publications()
 	_peak_mesh_uploads_per_frame = maxi(_peak_mesh_uploads_per_frame, _mesh_uploads_this_frame)
 	_last_process_work_ms = float(Time.get_ticks_usec() - process_started_usec) / 1000.0
 	_peak_process_work_ms = maxf(_peak_process_work_ms, _last_process_work_ms)
@@ -540,12 +541,14 @@ func _process_completed_mesh_jobs() -> void:
 		_mesh_jobs.erase(task_id)
 		var job = record["job"]
 		var id: String = record["stage_id"]
-		_pool_queue_wait_usec_samples.append(maxi(0, int(job.worker_started_usec) - int(record["submitted_usec"])))
 		if not loading_regions.has(id):
 			continue
 		var stage: Dictionary = loading_regions[id]
 		if int(stage["stage_token"]) != int(record["stage_token"]):
 			continue
+		var contributes_to_operation := _stage_contributes_to_active_operation(stage)
+		if contributes_to_operation:
+			_pool_queue_wait_usec_samples.append(maxi(0, int(job.worker_started_usec) - int(record["submitted_usec"])))
 		var state: RefCounted = stage["world_state"]
 		if state.brush_edits.revision != int(stage["edit_revision"]):
 			_supersede_region_stage(id)
@@ -557,7 +560,8 @@ func _process_completed_mesh_jobs() -> void:
 		var upload_started_usec := Time.get_ticks_usec()
 		var result: Dictionary = TerrainMesher.mesh_from_cpu_data(cpu_result)
 		var upload_elapsed_usec := Time.get_ticks_usec() - upload_started_usec
-		_mesh_upload_usec_samples.append(upload_elapsed_usec)
+		if contributes_to_operation:
+			_mesh_upload_usec_samples.append(upload_elapsed_usec)
 		_last_mesh_upload_ms = float(upload_elapsed_usec) / 1000.0
 		_peak_mesh_upload_ms = maxf(_peak_mesh_upload_ms, _last_mesh_upload_ms)
 		_mesh_uploads_this_frame += 1
@@ -565,8 +569,9 @@ func _process_completed_mesh_jobs() -> void:
 		var cpu_work_usec := int(cpu_timings.get("sdf_and_ledger", 0)) \
 			+ int(cpu_timings.get("triangulation_and_face_normals", 0)) \
 			+ int(cpu_timings.get("shared_gradient_normals", 0))
-		_operation_total_mesh_work_ms += float(cpu_work_usec + upload_elapsed_usec) / 1000.0
-		_add_stage_timings(result.get("timings_usec", {}))
+		if contributes_to_operation:
+			_operation_total_mesh_work_ms += float(cpu_work_usec + upload_elapsed_usec) / 1000.0
+			_add_stage_timings(result.get("timings_usec", {}))
 		if not result.get("mesh") is ArrayMesh:
 			_fail_region_stage(id, "Chunk main-thread mesh creation failed; previous meshes retained")
 			continue
@@ -579,8 +584,13 @@ func _process_completed_mesh_jobs() -> void:
 		stage["sample_count"] = int(stage.get("sample_count", 0)) + int(result["sample_count"])
 		stage["triangle_count"] = int(stage.get("triangle_count", 0)) + int(result["triangle_count"])
 		var chunk_id: String = ChunkGrid.stable_id(stage["region_key"], coordinate)
-		_operation_chunk_ids.append(chunk_id)
-		_operation_sample_count += int(result["sample_count"])
+		# A retried or superseded staging attempt can finish a chunk before the
+		# transaction restarts. Diagnostics represent affected chunk identities,
+		# not the number of mesh-job completions.
+		if contributes_to_operation:
+			if not _operation_chunk_ids.has(chunk_id):
+				_operation_chunk_ids.append(chunk_id)
+			_operation_sample_count += int(result["sample_count"])
 		if stage["purpose"] == "edit_transaction" and not _edit_transaction.is_empty():
 			_edit_transaction["mesh_job_count"] = int(_edit_transaction.get("mesh_job_count", 0)) + 1
 		loading_regions[id] = stage
@@ -613,7 +623,8 @@ func _dispatch_mesh_jobs() -> void:
 		var queue_index: int = int(stage["submit_index"])
 		var enqueued_usec := int(stage["chunk_queued_usec"][queue_index])
 		var submitted_usec := Time.get_ticks_usec()
-		_mesh_queue_wait_usec_samples.append(maxi(0, submitted_usec - enqueued_usec))
+		if _stage_contributes_to_active_operation(stage):
+			_mesh_queue_wait_usec_samples.append(maxi(0, submitted_usec - enqueued_usec))
 		var job := TerrainMeshJob.new(
 			state.world_seed, stage["region_key"], coordinate,
 			stage["cave_section_enabled"],
@@ -806,12 +817,12 @@ func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary
 			_release_chunk_node(old_id, previous["chunk_nodes"][old_id])
 	active_regions[id] = {"region_key": region_key, "world_state": state, "chunk_nodes": region_nodes}
 	world_states[id] = state
-	var object_publication: Dictionary = object_stream.publish_region(region_key, state, false, publication_token)
+	var object_publication: Dictionary = object_stream.enqueue_region_publication(region_key, state, publication_token)
 	if not object_publication.get("ok", false) and object_publication.get("reason") != "stale_object_region_publication":
 		_procedural_object_status = "Procedural object issue: %s" % object_stream.get_error_summary()
 	else:
 		var object_error: String = object_stream.get_error_summary()
-		_procedural_object_status = "Procedural objects ready" if object_error.is_empty() else "Procedural object issue: %s" % object_error
+		_procedural_object_status = "Procedural objects queued" if object_error.is_empty() else "Procedural object issue: %s" % object_error
 	if region_key == focus_region_key:
 		world_state = state
 
@@ -1240,6 +1251,19 @@ func _begin_operation(operation_name: String) -> void:
 	_operation_started_usec = Time.get_ticks_usec()
 
 
+func _stage_contributes_to_active_operation(stage: Dictionary) -> bool:
+	var purpose := String(stage.get("purpose", ""))
+	match _operation_name:
+		"global_brush_edit":
+			return purpose == "edit_transaction"
+		"lod_transition":
+			return purpose == "partial"
+		"initial_load", "region_stream_load":
+			return purpose == "load"
+		_:
+			return purpose == "full"
+
+
 func _add_stage_timings(timings_usec: Dictionary) -> void:
 	for key in timings_usec:
 		_operation_stage_timings_usec[key] = int(_operation_stage_timings_usec.get(key, 0)) + int(timings_usec[key])
@@ -1636,6 +1660,13 @@ func _update_status() -> void:
 		object_stream.get_visible_instance_count(),
 		object_stream.get_active_region_count(),
 	", ".join(definition_ids),
+	]
+	var population_metrics: Dictionary = object_stream.get_performance_snapshot()
+	status += "Static population: %d declarative rules | %d batched instances | %d pending region(s) | peak region generation %.2f ms\n" % [
+		object_stream.get_population_rule_ids().size(),
+		int(population_metrics.get("batched_instance_count", 0)),
+		int(population_metrics.get("pending_region_publication_count", 0)),
+		float(population_metrics.get("peak_generation_usec", 0)) / 1000.0,
 	]
 	status += "Object state revision %d | F6 select, F7 override, F8 logical delete, F9 restore\n" % object_stream.get_instance_state_revision()
 	status += _object_state_action_status + "\n"

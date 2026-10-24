@@ -11,6 +11,8 @@ const SaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const ObjectStateService := preload("res://scripts/objects/procedural_object_state_service.gd")
 const ObjectStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
+const StaticBatch := preload("res://scripts/objects/procedural_object_static_batch.gd")
+const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 
 const SEED := 424242
 const WORLD_ID := "procedural-object-test-world"
@@ -39,6 +41,11 @@ func _run() -> void:
 	_test_mesh_conversion()
 	_test_seed_family_variation()
 	_test_order_independent_records(roots)
+	_test_population_contracts_and_distribution(roots)
+	_test_population_identity_persistence(roots)
+	_test_static_population_batch(roots)
+	_test_population_publication_queue(roots)
+	_test_population_density_benchmarks(roots)
 	_test_persistent_instance_state(roots)
 	_test_runtime_streaming_and_unload_reload(roots)
 	_test_seed_partition_isolation(roots)
@@ -277,7 +284,7 @@ func _test_order_independent_records(roots: Array[String]) -> void:
 	var forward: Dictionary = {}
 	for key in visitation:
 		var generated: Dictionary = ObjectWorld.build_region_instances(SEED, WORLD_ID, key, registry)
-		_check(generated.get("ok", false), "signed region %s creates deterministic placements" % key)
+		_check(generated.get("ok", false), "signed region %s creates deterministic placements (%s)" % [key, generated.get("reason", "ok")])
 		forward[key] = generated.get("instances", [])
 	var reverse: Dictionary = {}
 	visitation.reverse()
@@ -286,7 +293,8 @@ func _test_order_independent_records(roots: Array[String]) -> void:
 	var all_ids: Dictionary = {}
 	for key in forward:
 		_check(forward[key] == reverse[key], "region %s placement is independent of region discovery order" % key)
-		_check(forward[key].size() == 2, "region %s contains the fixed first-party and external slots" % key)
+		_check(forward[key].size() >= 2, "region %s retains both legacy objects and adds bounded declarative population" % key)
+		_check(String(forward[key][0].get("population_algorithm", "")) == ObjectWorld.LEGACY_ALGORITHM and String(forward[key][1].get("population_algorithm", "")) == ObjectWorld.LEGACY_ALGORITHM, "region %s preserves the two exact P2.0B compatibility identities before additive population" % key)
 		for instance in forward[key]:
 			var instance_id: String = instance["instance_id"]
 			_check(not all_ids.has(instance_id), "stable instance ID is unique across signed regions")
@@ -298,6 +306,327 @@ func _test_order_independent_records(roots: Array[String]) -> void:
 			var below: float = Field.sample_density(SEED, key, local_position + Vector3.DOWN * 0.05)
 			var above: float = Field.sample_density(SEED, key, local_position + Vector3.UP * 0.05)
 			_check(below > 0.0 and above < 0.0, "surface placement is derived from canonical solid-to-empty density crossing")
+
+
+func _test_population_contracts_and_distribution(roots: Array[String]) -> void:
+	var registry := Registry.new()
+	var setup: Dictionary = registry.discover_and_register(roots)
+	_check(setup.get("ok", false) and int(setup.get("population_rule_count", 0)) == 4, "P0.3 registers two versioned compatibility rules and two generic package population rules")
+	if not setup.get("ok", false):
+		return
+	var rule_ids := registry.get_population_rule_ids()
+	var sorted_ids := rule_ids.duplicate()
+	sorted_ids.sort()
+	_check(rule_ids == sorted_ids and rule_ids.size() == 4, "population rule enumeration is stable and independent of package discovery order")
+	var all_ids: Dictionary = {}
+	var generic_counts: Array[int] = []
+	var region_keys: Array[Vector2i] = [Vector2i(-3, -2), Vector2i(-2, -1), Vector2i(-1, 0), Vector2i(0, 0), Vector2i(1, -1), Vector2i(2, 1), Vector2i(3, -2), Vector2i(-4, 3), Vector2i(4, 2), Vector2i(0, -3), Vector2i(-1, -1), Vector2i(2, -3)]
+	var forward: Dictionary = {}
+	for key in region_keys:
+		var generated: Dictionary = ObjectWorld.build_region_instances(SEED, WORLD_ID, key, registry)
+		_check(generated.get("ok", false), "population generation succeeds for signed region %s (%s)" % [key, generated.get("reason", "ok")])
+		if not generated.get("ok", false):
+			return
+		var instances: Array[Dictionary] = generated["instances"]
+		_check(instances.size() <= ObjectWorld.MAX_OBJECTS_PER_REGION and int(generated.get("candidate_cell_count", 0)) <= ObjectWorld.MAX_CANDIDATE_CELLS_PER_REGION and int(generated.get("surface_anchor_count", 0)) <= ObjectWorld.MAX_SURFACE_ANCHORS_PER_REGION, "region %s output, lattice and surface sampling stay within explicit resource budgets" % key)
+		forward[key] = instances
+		var generic_count := 0
+		var same_region_separation_valid := true
+		for instance_index in range(instances.size()):
+			var instance: Dictionary = instances[instance_index]
+			var instance_id := String(instance["instance_id"])
+			_check(not all_ids.has(instance_id), "population identity is collision-free across signed regions")
+			all_ids[instance_id] = true
+			var world_position: Vector3 = Spatial.region_origin_world(key) + Vector3(instance["position_mm"]) / 1000.0
+			var owner: Vector2i = Spatial.world_to_region_local(world_position).get("region_key", Vector2i.ZERO)
+			_check(owner == key, "half-open ownership places each instance in its canonical positive or negative region")
+			if not String(instance.get("population_rule_id", "")).is_empty():
+				generic_count += 1
+				var identity: Dictionary = ObjectStateContract.identity_for_instance(instance)
+				var validated := ObjectStateContract.validate_identity(identity, WORLD_ID, SEED, Field.GENERATOR_VERSION)
+				_check(validated.get("ok", false) and int(identity.get("identity_schema_version", -1)) == 2, "generic population identity pins its namespaced rule and candidate index")
+				var rule_pin: Dictionary = instance.get("population_rule_pin", {})
+				_check(rule_pin.get("rule_id", "") == instance.get("population_rule_id", "") and String(rule_pin.get("rule_sha256", "")).length() == 64, "persistent population identity pins the exact declarative rule content")
+			_check(int(instance.get("default_scale_milli", Vector3i.ZERO).x) >= 500 and int(instance.get("default_scale_milli", Vector3i.ZERO).x) <= 2000 and int(instance.get("default_yaw_mdeg", 0)) >= 0, "declared scale and orientation constraints are represented in deterministic records")
+			if instance_index < 2:
+				var expected_legacy_id := "%s/seed-%d/object/%s/region/%d,%d/slot/%d" % [WORLD_ID, SEED, instance["definition_id"], key.x, key.y, instance_index]
+				var expected_placement_seed := ObjectWorld._mix_seed(SEED, key, instance_index)
+				var expected_recipe_seed := ObjectWorld._mix_seed(expected_placement_seed, key, 97 + instance_index)
+				_check(instance["instance_id"] == expected_legacy_id and int(instance["placement_seed"]) == expected_placement_seed and int(instance["recipe_seed"]) == expected_recipe_seed, "P2.0B slot %d ID and seeds remain byte-for-byte derivable in region %s" % [instance_index, key])
+			for prior_index in range(instance_index):
+				var prior: Dictionary = instances[prior_index]
+				var distance_mm := Vector2(float(prior["position_mm"].x - instance["position_mm"].x), float(prior["position_mm"].z - instance["position_mm"].z)).length()
+				var required_mm := maxf(float(prior.get("minimum_separation_mm", 0)), maxf(float(instance.get("minimum_separation_mm", 0)), float(prior.get("clearance_radius_mm", 0)) + float(instance.get("clearance_radius_mm", 0)) + 100.0))
+				same_region_separation_valid = same_region_separation_valid and distance_mm >= required_mm
+		_check(same_region_separation_valid, "generated footprints respect minimum spacing and conservative rock clearance in region %s" % key)
+		generic_counts.append(generic_count)
+	var boundary_clear := true
+	for first_key in region_keys:
+		for second_key in region_keys:
+			if abs(first_key.x - second_key.x) + abs(first_key.y - second_key.y) != 1:
+				continue
+			for first_instance in forward[first_key]:
+				for second_instance in forward[second_key]:
+					var first_world := Spatial.region_origin_world(first_key) + Vector3(first_instance["position_mm"]) / 1000.0
+					var second_world := Spatial.region_origin_world(second_key) + Vector3(second_instance["position_mm"]) / 1000.0
+					var footprint_distance_mm := Vector2(first_world.x - second_world.x, first_world.z - second_world.z).length() * 1000.0
+					var footprint_required := float(first_instance.get("clearance_radius_mm", 0)) + float(second_instance.get("clearance_radius_mm", 0)) + 100.0
+					boundary_clear = boundary_clear and footprint_distance_mm >= footprint_required
+	_check(boundary_clear, "adjacent positive and negative regions keep deterministic static footprints separated across their shared boundaries")
+	var reverse_keys := region_keys.duplicate()
+	reverse_keys.reverse()
+	var reverse_equal := true
+	for key in reverse_keys:
+		reverse_equal = reverse_equal and forward[key] == ObjectWorld.build_region_instances(SEED, WORLD_ID, key, registry).get("instances", [])
+	_check(reverse_equal, "region visitation order does not change candidate selection, identities, transforms or records")
+	var reversed_roots: Array[String] = roots.duplicate()
+	reversed_roots.reverse()
+	var reversed_registry := Registry.new()
+	var reversed_registration: Dictionary = reversed_registry.discover_and_register(reversed_roots)
+	var package_order_equal: bool = reversed_registration.get("ok", false)
+	if package_order_equal:
+		for key in region_keys:
+			package_order_equal = package_order_equal and forward[key] == ObjectWorld.build_region_instances(SEED, WORLD_ID, key, reversed_registry).get("instances", [])
+	_check(package_order_equal, "reversing package search roots does not change any generated content or stable identity")
+	var minimum_count := 2147483647
+	var maximum_count := 0
+	for count in generic_counts:
+		minimum_count = mini(minimum_count, count)
+		maximum_count = maxi(maximum_count, count)
+	_check(maximum_count > minimum_count, "seeded density tickets produce reproducible regional population variation rather than a fixed object count")
+	var next_seed_region: Dictionary = ObjectWorld.build_region_instances(SEED + 1, WORLD_ID, Vector2i.ZERO, registry)
+	var seed_domain_separated: bool = next_seed_region.get("ok", false)
+	if seed_domain_separated:
+		for new_instance in next_seed_region["instances"]:
+			seed_domain_separated = seed_domain_separated and String(new_instance["instance_id"]).contains("/seed-%d/" % (SEED + 1))
+	_check(seed_domain_separated, "world seed participates in generated population instance identities")
+	var discovery: Dictionary = Loader.discover_and_validate(roots)
+	var malformed: Dictionary = discovery.duplicate(true)
+	var packages: Array = malformed["packages"]
+	var rules: Array = packages[0]["population_rules"]
+	rules[0]["algorithm"] = "arbitrary_script_callback_v1"
+	packages[0]["population_rules"] = rules
+	malformed["packages"] = packages
+	var rejected_registry := Registry.new()
+	var rejected := rejected_registry.register_discovered(malformed)
+	_check(not rejected.get("ok", false) and rejected_registry.get_population_rule_ids().is_empty() and rejected_registry.get_definition("firstparty.core_rocks:granite").is_empty(), "unsupported package algorithm rejects transactionally without partial registration or script execution")
+	var bad_density_discovery: Dictionary = discovery.duplicate(true)
+	var density_packages: Array = bad_density_discovery["packages"]
+	var first_rules: Array = density_packages[0]["population_rules"]
+	for rule in first_rules:
+		if String(rule.get("algorithm", "")) == Registry.POPULATION_ALGORITHM:
+			rule["density_milli_per_region"] = 15001
+	density_packages[0]["population_rules"] = first_rules
+	bad_density_discovery["packages"] = density_packages
+	_check(not Registry.new().register_discovered(bad_density_discovery).get("ok", false), "out-of-contract density is rejected at the package boundary")
+	var changed_legacy_discovery: Dictionary = discovery.duplicate(true)
+	var legacy_packages: Array = changed_legacy_discovery["packages"]
+	for package_index in range(legacy_packages.size()):
+		var package: Dictionary = legacy_packages[package_index]
+		var package_rules: Array = package.get("population_rules", [])
+		for rule_value in package_rules:
+			var rule: Dictionary = rule_value
+			if String(rule.get("algorithm", "")) == Registry.LEGACY_POPULATION_ALGORITHM:
+				rule["surface"]["maximum_slope_mdeg"] = 45000
+		package["population_rules"] = package_rules
+		legacy_packages[package_index] = package
+	changed_legacy_discovery["packages"] = legacy_packages
+	var legacy_registry := Registry.new()
+	var changed_legacy_result: Dictionary = legacy_registry.register_discovered(changed_legacy_discovery)
+	_check(not changed_legacy_result.get("ok", false) and changed_legacy_result.get("reason") == "population_rule_legacy_contract_invalid" and legacy_registry.get_population_rule_ids().is_empty(), "compatibility rules reject changed fields that the identity-preserving legacy generator does not consume")
+
+
+func _test_population_identity_persistence(roots: Array[String]) -> void:
+	var registry := Registry.new()
+	if not registry.discover_and_register(roots).get("ok", false):
+		_check(false, "population persistence fixture registers package rules")
+		return
+	var population: Dictionary = {}
+	for key in [Vector2i.ZERO, Vector2i(-1, 0), Vector2i(1, -2), Vector2i(-3, 2)]:
+		var generated := ObjectWorld.build_region_instances(SEED, WORLD_ID, key, registry)
+		if generated.get("ok", false):
+			for instance in generated["instances"]:
+				if not String(instance.get("population_rule_id", "")).is_empty():
+					population = instance
+					break
+		if not population.is_empty():
+			break
+	_check(not population.is_empty(), "bounded fixture finds at least one declaratively populated object for persistence testing")
+	if population.is_empty():
+		return
+	var directory := _unique_state_path("population_identity")
+	var writer: ProceduralObjectStateService = ObjectStateService.new()
+	_check(writer.initialize(WORLD_ID, SEED, Field.GENERATOR_VERSION, directory).get("ok", false), "population state service starts without per-object baseline records")
+	_check(writer.resolve_instance(population).get("ok", false), "population instance resolves from its deterministic rule and recipe seeds")
+	var appearance := {"schema_version": 1, "properties": {"tint_milli": [750, 800, 900], "label": "mod-population-instance"}}
+	var mutation := writer.set_component(population, ObjectStateContract.COMPONENT_APPEARANCE, appearance)
+	_check(mutation.get("ok", false) and writer.get_revision() == 1, "schema-2 population identity accepts a sparse P2.0B component override (%s)" % mutation.get("reason", "ok"))
+	var reader: ProceduralObjectStateService = ObjectStateService.new()
+	var reload := reader.initialize(WORLD_ID, SEED, Field.GENERATOR_VERSION, directory)
+	var resolved := reader.resolve_instance(population)
+	_check(reload.get("ok", false) and resolved.get("ok", false) and resolved.get("instance", {}).get("instance_components", {}).has(ObjectStateContract.COMPONENT_APPEARANCE), "population override survives service restart using the exact pinned rule identity (%s)" % resolved.get("reason", "ok"))
+	var deleted_result: Dictionary = reader.delete_instance(population)
+	_check(deleted_result.get("ok", false) and reader.resolve_instance(population).get("deleted", false), "population candidate can be logically excluded without changing its procedural identity (%s)" % deleted_result.get("reason", "ok"))
+	var restored := ProceduralObjectStateService.new()
+	var restored_init: Dictionary = restored.initialize(WORLD_ID, SEED, Field.GENERATOR_VERSION, directory)
+	var restored_baseline: Dictionary = restored.resolve_instance(population)
+	var restored_result: Dictionary = restored.restore_instance(population)
+	_check(restored_init.get("ok", false) and restored_baseline.get("ok", false) and restored_result.get("ok", false), "population candidate restoration accepts its previously pinned identity (%s / %s)" % [restored_init.get("reason", "ok"), restored_result.get("reason", "ok")])
+	_check(restored.resolve_instance(population).get("ok", false) and restored.resolve_instance(population).instance.instance_components.is_empty(), "restored population candidate returns to derived state with no per-object record")
+	_remove_tree(directory)
+
+
+func _test_static_population_batch(roots: Array[String]) -> void:
+	var registry := Registry.new()
+	if not registry.discover_and_register(roots).get("ok", false):
+		_check(false, "static batch fixture registers declarative package content")
+		return
+	var items: Array[Dictionary] = []
+	for key in [Vector2i(-1, -1), Vector2i.ZERO, Vector2i(1, 1), Vector2i(-2, 1), Vector2i(3, -2)]:
+		var generated := ObjectWorld.build_region_instances(SEED, WORLD_ID, key, registry)
+		if not generated.get("ok", false):
+			continue
+		for instance in generated["instances"]:
+			if String(instance.get("population_rule_id", "")).is_empty():
+				continue
+			var mesh_data := RockMeshAdapter.build_mesh(instance["geometry"], instance["geometry_seeds"])
+			if mesh_data.get("ok", false):
+				items.append({"instance_id": instance["instance_id"], "mesh": mesh_data["mesh"], "position": Vector3(instance["position_mm"]) / 1000.0, "scale_milli": instance["default_scale_milli"], "yaw_mdeg": instance["default_yaw_mdeg"]})
+		if items.size() >= 2:
+			break
+	_check(not items.is_empty(), "generic population produces meshable static instances")
+	if items.is_empty():
+		return
+	var first := StaticBatch.build(items)
+	var second := StaticBatch.build(items)
+	_check(first.get("ok", false) and second.get("ok", false), "bounded static batch publishes declarative instances in one deterministic mesh")
+	if first.get("ok", false) and second.get("ok", false):
+		_check(first["instance_ids"] == second["instance_ids"] and first["vertex_count"] == second["vertex_count"], "batch ordering and geometry counts are deterministic across input order")
+		_check(first["mesh"].surface_get_arrays(0)[Mesh.ARRAY_VERTEX] == second["mesh"].surface_get_arrays(0)[Mesh.ARRAY_VERTEX], "batched transformed vertices are bitwise stable")
+		_check(int(first["vertex_count"]) <= StaticBatch.MAX_BATCH_VERTICES and int(first["triangle_count"]) == int(first["vertex_count"]) / 3, "batch output respects explicit vertex and triangle budgets")
+	var invalid: Array[Dictionary] = [{"instance_id": "bad", "mesh": null}]
+	_check(not StaticBatch.build(invalid).get("ok", false), "invalid package mesh cannot produce a partial static batch")
+
+
+func _test_population_publication_queue(roots: Array[String]) -> void:
+	var manager: ProceduralObjectStream = ObjectStream.new()
+	var state_path := _unique_state_path("population_queue")
+	_check(manager.initialize(SEED, WORLD_ID, roots, state_path).get("ok", false), "bounded population publication queue initializes through the declarative package loader")
+	if not manager.initialized:
+		manager.free()
+		_remove_tree(state_path)
+		return
+	var key := Vector2i(-2, 3)
+	var state_a: RefCounted = WorldState.new(SEED, key, BrushState.new(SEED))
+	var state_b: RefCounted = WorldState.new(SEED, key, BrushState.new(SEED))
+	manager.expect_region_publication(key, 10)
+	var first := manager.enqueue_region_publication(key, state_a, 10)
+	var replacement := manager.enqueue_region_publication(key, state_b, 10)
+	_check(first.get("ok", false) and replacement.get("reason", "") == "queued_replaced" and manager.get_performance_snapshot().get("pending_region_publication_count", 0) == 1, "same-region queued work is replaced without duplicate queue entries")
+	manager.expect_region_publication(key, 11)
+	_check(manager.get_performance_snapshot().get("pending_region_publication_count", 0) == 0 and not manager.enqueue_region_publication(key, state_a, 10).get("ok", false), "a superseding token cancels pending work and rejects stale enqueue attempts")
+	_check(manager.enqueue_region_publication(key, state_b, 11).get("ok", false), "current publication token is admitted after cancellation")
+	_check(manager.process_queued_publications() == 1 and manager.get_active_region_count() == 1 and manager.get_performance_snapshot().get("publications_last_process_tick", 0) == 1, "one explicit queue tick publishes at most one complete region batch")
+	var metrics: Dictionary = manager.get_performance_snapshot().get("last_region", {})
+	_check(metrics.get("batched_instance_count", 0) > 0 and metrics.get("individual_node_count", 0) == 2 and metrics.get("batch_vertex_count", 0) <= StaticBatch.MAX_BATCH_VERTICES, "unmodified population is batched while P2.0B compatibility objects remain individual and bounded")
+	var records := manager.get_region_instance_records(key)
+	var generic_id := ""
+	for instance in records:
+		if not String(instance.get("population_rule_id", "")).is_empty():
+			generic_id = String(instance["instance_id"])
+			break
+	if not generic_id.is_empty():
+		var promoted := manager.set_instance_component(generic_id, ObjectStateContract.COMPONENT_APPEARANCE, {"schema_version": 1, "properties": {"tint_milli": [700, 800, 900], "label": "promoted"}})
+		_check(promoted.get("ok", false), "mutable generic instance persists through the existing P2.0B state service")
+		var region_root: Node3D = manager.get_node("Objects_%d_%d" % [key.x, key.y])
+		var individual_found := false
+		for child in region_root.get_children():
+			if String(child.get_meta("stable_instance_id", "")) == generic_id:
+				individual_found = true
+		_check(individual_found, "mutated batched population candidate is republished as an individual stateful representative")
+	var canceled_key := Vector2i(4, -2)
+	var canceled_state: RefCounted = WorldState.new(SEED, canceled_key, BrushState.new(SEED))
+	manager.enqueue_region_publication(canceled_key, canceled_state, 4)
+	manager.unload_region(canceled_key)
+	_check(manager.get_performance_snapshot().get("pending_region_publication_count", 0) == 0, "unloading an unpublished region releases its queued state and prevents later publication")
+	manager.free()
+	_remove_tree(state_path)
+
+
+func _test_population_density_benchmarks(roots: Array[String]) -> void:
+	var density_values: Array[int] = [0, 1000, 5000, 10000]
+	var sample_keys: Array[Vector2i] = [Vector2i(-3, -2), Vector2i(-2, 1), Vector2i(-1, -3), Vector2i.ZERO, Vector2i(1, 2), Vector2i(2, -1), Vector2i(3, 1), Vector2i(-4, 3)]
+	for density in density_values:
+		var discovery: Dictionary = Loader.discover_and_validate(roots)
+		if not discovery.get("ok", false):
+			_check(false, "density benchmark source packages remain valid (%s)" % discovery.get("reason", "unknown"))
+			return
+		var packages: Array = discovery["packages"]
+		for package_index in range(packages.size()):
+			var package: Dictionary = packages[package_index]
+			var rules: Array = package.get("population_rules", [])
+			for rule_value in rules:
+				var rule: Dictionary = rule_value
+				if String(rule.get("algorithm", "")) == Registry.POPULATION_ALGORITHM:
+					rule["density_milli_per_region"] = density
+			package["population_rules"] = rules
+			packages[package_index] = package
+		discovery["packages"] = packages
+		var candidate_registry := Registry.new()
+		var registration: Dictionary = candidate_registry.register_discovered(discovery)
+		_check(registration.get("ok", false), "exploratory density %d registry remains schema-valid" % density)
+		if not registration.get("ok", false):
+			continue
+		var generation_samples: Array[int] = []
+		var total_instances := 0
+		var maximum_instances := 0
+		var anchors := 0
+		var memory_before := OS.get_static_memory_usage()
+		for repeat_index in range(2):
+			for key in sample_keys:
+				var generated: Dictionary = ObjectWorld.build_region_instances(SEED, WORLD_ID, key, candidate_registry)
+				if not generated.get("ok", false):
+					_check(false, "density %d region %s remains inside bounded generation (%s)" % [density, key, generated.get("reason", "unknown")])
+					continue
+				generation_samples.append(int(generated.get("timings_usec", {}).get("total", 0)))
+				var count := (generated.get("instances", []) as Array).size()
+				total_instances += count
+				maximum_instances = maxi(maximum_instances, count)
+				anchors += int(generated.get("surface_anchor_count", 0))
+		var memory_after := OS.get_static_memory_usage()
+		generation_samples.sort()
+		var p50 := generation_samples[int(floor(float(generation_samples.size() - 1) * 0.50))] if not generation_samples.is_empty() else 0
+		var p95 := generation_samples[ceili(float(generation_samples.size()) * 0.95) - 1] if not generation_samples.is_empty() else 0
+		var stream: ProceduralObjectStream = ObjectStream.new()
+		var state_path := _unique_state_path("population_benchmark_%d" % density)
+		var init_result: Dictionary = stream.initialize(SEED, WORLD_ID, roots, state_path)
+		var publication_samples: Array[int] = []
+		var geometry_samples: Array[int] = []
+		var batch_samples: Array[int] = []
+		var batch_vertex_peak := 0
+		if init_result.get("ok", false):
+			stream.registry = candidate_registry
+			for index in range(3):
+				var key: Vector2i = sample_keys[index]
+				var state: RefCounted = WorldState.new(SEED, key, BrushState.new(SEED))
+				var publish_result: Dictionary = stream.publish_region(key, state)
+				_check(publish_result.get("ok", false), "density %d publication sample %d succeeds (%s)" % [density, index, publish_result.get("reason", "ok")])
+				if publish_result.get("ok", false):
+					var region_metrics: Dictionary = stream.get_performance_snapshot().get("last_region", {})
+					publication_samples.append(int(region_metrics.get("publication_usec", 0)))
+					geometry_samples.append(int(region_metrics.get("mesh_build_usec", 0)))
+					batch_samples.append(int(region_metrics.get("batch_build_usec", 0)))
+					batch_vertex_peak = maxi(batch_vertex_peak, int(region_metrics.get("batch_vertex_count", 0)))
+		else:
+			_check(false, "density %d publication stream initializes" % density)
+		publication_samples.sort()
+		geometry_samples.sort()
+		batch_samples.sort()
+		var publication_p50 := _sample_percentile(publication_samples, 0.50)
+		var publication_p95 := _sample_percentile(publication_samples, 0.95)
+		print("P2C_POPULATION_UNSCORED: density_milli=%d generation_samples=%d generation_p50_usec=%d generation_p95_usec=%d mean_objects=%.2f max_objects=%d mean_surface_anchors=%.2f publication_samples=%d publication_p50_usec=%d publication_p95_usec=%d mesh_build_p50_usec=%d batch_build_p50_usec=%d batch_vertex_peak=%d static_memory_before_bytes=%d static_memory_after_bytes=%d" % [density, generation_samples.size(), p50, p95, float(total_instances) / float(maxi(1, generation_samples.size())), maximum_instances, float(anchors) / float(maxi(1, generation_samples.size())), publication_samples.size(), publication_p50, publication_p95, _sample_percentile(geometry_samples, 0.50), _sample_percentile(batch_samples, 0.50), batch_vertex_peak, memory_before, memory_after])
+		stream.free()
+		_remove_tree(state_path)
 
 
 func _test_runtime_streaming_and_unload_reload(roots: Array[String]) -> void:
@@ -312,7 +641,7 @@ func _test_runtime_streaming_and_unload_reload(roots: Array[String]) -> void:
 	_check(not rejected_stale.get("ok", false) and rejected_stale.get("reason") == "stale_object_region_publication" and stale_manager.get_active_region_count() == 0, "superseded region token cannot publish an object root")
 	var current_publication := stale_manager.publish_region(stale_key, stale_state, false, 12)
 	var stale_after_current := stale_manager.publish_region(stale_key, stale_state, true, 11)
-	_check(current_publication.get("ok", false) and not stale_after_current.get("ok", false) and stale_manager.get_region_instance_records(stale_key).size() == 2, "late stale completion cannot replace the current published region")
+	_check(current_publication.get("ok", false) and not stale_after_current.get("ok", false) and stale_manager.get_region_instance_records(stale_key).size() >= 2, "late stale completion cannot replace the current published region")
 	stale_manager.free()
 	_remove_tree(stale_path)
 	var manager: ProceduralObjectStream = ObjectStream.new()
@@ -327,13 +656,14 @@ func _test_runtime_streaming_and_unload_reload(roots: Array[String]) -> void:
 	var state: RefCounted = WorldState.new(SEED, key, BrushState.new(SEED))
 	var before_revision: int = state.get("brush_edits").revision
 	var first: Dictionary = manager.publish_region(key, state)
-	_check(first.get("ok", false) and first.get("instance_count", 0) == 2, "published negative region receives two static object representations")
+	_check(first.get("ok", false) and first.get("instance_count", 0) >= 2, "published negative region receives the two compatibility objects and any deterministic population")
 	if not first.get("ok", false):
 		manager.free()
 		return
 	var records_before: Array[Dictionary] = manager.get_region_instance_records(key)
 	var geometry_before: Array = _mesh_snapshots(manager, key)
-	_check(manager.get_active_region_count() == 1 and manager.get_visible_instance_count() == 2, "visual object residency is bounded to explicitly published regions")
+	var baseline_instance_count := manager.get_region_instance_records(key).size()
+	_check(manager.get_active_region_count() == 1 and manager.get_visible_instance_count() == baseline_instance_count, "visual object residency is bounded to explicitly published regions")
 	var edited_id := String(records_before[0]["instance_id"])
 	var component_edit: Dictionary = manager.set_instance_component(edited_id, ObjectStateContract.COMPONENT_TRANSFORM, {"schema_version": 1, "properties": {"translation_mm": [250, 125, -75], "rotation_mdeg": [0, 0, 9000], "scale_milli": [1100, 1000, 900]}})
 	_check(component_edit.get("ok", false) and manager.get_instance_state_revision() == 1, "component override commits transactionally before visual publication")
@@ -346,9 +676,17 @@ func _test_runtime_streaming_and_unload_reload(roots: Array[String]) -> void:
 	_check(changed_record.get("geometry_seeds") == records_before[0].get("geometry_seeds") and changed_record.get("content_pin") == records_before[0].get("content_pin"), "mutable transform leaves recipe seeds and P2.0A content pins unchanged")
 	var deleted_id := String(records_before[1]["instance_id"])
 	var deleted_result: Dictionary = manager.delete_instance(deleted_id)
-	_check(deleted_result.get("ok", false) and manager.get_visible_instance_count() == 1 and manager.state_service.get_deleted_count() == 1, "logical deletion is persisted and removes only its active representation")
+	_check(deleted_result.get("ok", false) and manager.get_visible_instance_count() == baseline_instance_count - 1 and manager.state_service.get_deleted_count() == 1, "logical deletion is persisted and removes only its active representation")
 	var restored: Dictionary = manager.restore_instance(deleted_id)
-	_check(restored.get("ok", false) and manager.get_visible_instance_count() == 2 and manager.state_service.get_deleted_count() == 0, "restore removes tombstone and reconstructs the deterministic procedural baseline")
+	_check(restored.get("ok", false) and manager.get_visible_instance_count() == baseline_instance_count and manager.state_service.get_deleted_count() == 0, "restore removes tombstone and reconstructs the deterministic procedural baseline")
+	var generic_id := ""
+	for record in manager.get_region_instance_records(key):
+		if not String(record.get("population_rule_id", "")).is_empty():
+			generic_id = String(record["instance_id"])
+			break
+	if not generic_id.is_empty():
+		var generic_override := manager.set_instance_component(generic_id, ObjectStateContract.COMPONENT_APPEARANCE, {"schema_version": 1, "properties": {"tint_milli": [800, 850, 900], "label": "reloaded-population"}})
+		_check(generic_override.get("ok", false) and int(manager.get_performance_snapshot().get("batched_instance_count", 0)) < baseline_instance_count - 2, "mutating one population instance promotes it out of the immutable static batch")
 	stateful_records = manager.get_region_instance_records(key)
 	var duplicate: Dictionary = manager.publish_region(key, state)
 	_check(duplicate.get("ok", false) and duplicate.get("reason") == "already_published" and manager.get_child_count() == 1, "repeated publication does not create duplicate region or object nodes")
@@ -366,7 +704,7 @@ func _test_runtime_streaming_and_unload_reload(roots: Array[String]) -> void:
 	_check(not manager.get_child(0).visible and manager.get_visible_instance_count() == 0, "streamed-in regions preserve the user's hidden-object setting")
 	manager.set_object_visibility(true)
 	_check(manager.get_region_instance_records(key) == stateful_records, "reload recreates persistent overrides with identical IDs, pins, seeds and placements")
-	_check(_mesh_snapshots(manager, key).size() == geometry_before.size(), "reloaded mesh set retains the original object count")
+	_check(_flatten_snapshot_ids(_mesh_snapshots(manager, key)) == _flatten_snapshot_ids(geometry_before), "reloaded individual and batched mesh representations cover the exact original stable instance identities")
 	_check(state.get("brush_edits").revision == before_revision and state.get("brush_edits").get_edit_count() == 0, "object publication does not mutate the canonical terrain ledger")
 	manager.free()
 	_remove_tree(state_path)
@@ -396,7 +734,7 @@ func _test_seed_partition_isolation(roots: Array[String]) -> void:
 	var new_state: RefCounted = WorldState.new(SEED + 1, new_key, BrushState.new(SEED + 1))
 	var switched := manager.publish_region(new_key, new_state)
 	_check(switched.get("ok", false) and manager.get_active_region_count() == 1, "changing world seed discards visual representatives from the prior seed domain")
-	_check(manager.get_instance_state_revision() == 0 and manager.get_region_instance_records(new_key).size() == 2, "new seed reconstructs a clean derived baseline without inheriting old overrides")
+	_check(manager.get_instance_state_revision() == 0 and manager.get_region_instance_records(new_key).size() >= 2, "new seed reconstructs a clean derived baseline without inheriting old overrides")
 	var old_partition_after_switch := state_root.path_join("seed-%d-generator-%d" % [SEED, Field.GENERATOR_VERSION])
 	var new_partition := state_root.path_join("seed-%d-generator-%d" % [SEED + 1, Field.GENERATOR_VERSION])
 	_check(FileAccess.file_exists(old_partition_after_switch.path_join("objects-00000001.json")) and not DirAccess.dir_exists_absolute(new_partition), "switching seeds preserves the previous save and derives the new seed without creating an unnecessary object-state file")
@@ -424,7 +762,7 @@ func _test_missing_and_incompatible_content(_roots: Array[String]) -> void:
 	_write_text(definition_path, JSON.stringify(legacy_definition, "\t"))
 	var legacy_stream: ProceduralObjectStream = ObjectStream.new()
 	var legacy_stream_result: Dictionary = legacy_stream.initialize(SEED, WORLD_ID, _test_roots())
-	_check(not legacy_stream_result.get("ok", false) and String(legacy_stream_result.get("reason", "")).begins_with("required_definition_geometry_version_unsupported:"), "legacy required runtime content fails explicitly rather than being interpreted by the new geometry adapter")
+	_check(not legacy_stream_result.get("ok", false) and String(legacy_stream_result.get("reason", "")).begins_with("package_registration_failed:population_rule_definition_unsupported"), "schema-1 external recipe cannot satisfy a schema-2 population rule and fails explicitly without silent reinterpretation")
 	legacy_stream.free()
 	_write_bytes(definition_path, current_definition_bytes)
 	var manifest_path := ProjectSettings.globalize_path(_mod_root.path_join("manifest.json"))
@@ -447,7 +785,7 @@ func _test_persistent_instance_state(roots: Array[String]) -> void:
 	if not registered.get("ok", false):
 		return
 	var generated: Dictionary = ObjectWorld.build_region_instances(SEED, WORLD_ID, Vector2i(-2, 3), registry)
-	_check(generated.get("ok", false) and generated["instances"].size() == 2, "state fixture deterministically builds both instances in a negative region")
+	_check(generated.get("ok", false) and generated.get("instances", []).size() >= 2, "state fixture deterministically builds both legacy and additive instances in a negative region")
 	if not generated.get("ok", false):
 		return
 	var baseline: Dictionary = generated["instances"][0]
@@ -601,9 +939,17 @@ func _test_playable_scene_publication() -> void:
 	var stream: ProceduralObjectStream = demo.get_node("ProceduralObjects")
 	_check(center_ready, "playable terrain scene publishes its focused region during streaming")
 	if center_ready:
+		for _frame in range(1200):
+			await process_frame
+			if stream.get_active_region_count() == demo.get("active_regions").size() and not stream.get_region_instance_records(Vector2i.ZERO).is_empty():
+				break
 		_check(stream.get_active_region_count() == demo.get("active_regions").size(), "object visibility follows actually published active regions (objects=%d terrain=%d init=%s status=%s)" % [stream.get_active_region_count(), demo.get("active_regions").size(), stream.initialized, demo.get("_procedural_object_status")])
 		var center_records: Array[Dictionary] = stream.get_region_instance_records(Vector2i.ZERO)
-		_check(center_records.size() == 2, "scene publication creates objects from both registered packages (instances=%d init=%s error=%s)" % [center_records.size(), stream.initialized, stream.initialization_error])
+		_check(center_records.size() >= 2, "scene publication creates both compatibility objects and declarative population from registered packages (instances=%d init=%s error=%s)" % [center_records.size(), stream.initialized, stream.initialization_error])
+		if center_records.size() < 2:
+			demo.queue_free()
+			_remove_tree(isolated_object_state)
+			return
 		var selected_id := String(center_records[0]["instance_id"])
 		var visual_override := stream.set_instance_component(selected_id, ObjectStateContract.COMPONENT_TRANSFORM, {"schema_version": 1, "properties": {"translation_mm": [400, 250, 0], "rotation_mdeg": [0, 0, 15000], "scale_milli": [1200, 1000, 900]}})
 		_check(visual_override.get("ok", false), "playable GUI path accepts and persists a transform override through the stream")
@@ -617,8 +963,8 @@ func _test_playable_scene_publication() -> void:
 				transformed_node = candidate_node
 		_check(transformed_node != null and transformed_node.position.x > Vector3(center_records[0]["position_mm"]).x / 1000.0, "published Node3D reflects the saved transform delta while remaining derived presentation")
 		var deleted_id := String(center_records[1]["instance_id"])
-		_check(stream.delete_instance(deleted_id).get("ok", false) and stream.get_visible_instance_count() == 1, "playable stream commits a logical deletion and removes the representative")
-		_check(stream.restore_instance(deleted_id).get("ok", false) and stream.get_visible_instance_count() == 2, "playable stream restores the procedural baseline for a deleted object")
+		_check(stream.delete_instance(deleted_id).get("ok", false) and stream.get_visible_instance_count() == center_records.size() - 1, "playable stream commits a logical deletion and removes the representative")
+		_check(stream.restore_instance(deleted_id).get("ok", false) and stream.get_visible_instance_count() == center_records.size(), "playable stream restores the procedural baseline for a deleted object")
 		stateful_records = stream.get_region_instance_records(Vector2i.ZERO)
 		var region_root_count := 0
 		for child in stream.get_children():
@@ -658,15 +1004,33 @@ func _mesh_snapshots(manager: ProceduralObjectStream, region_key: Vector2i) -> A
 	for object_node in region_root.get_children():
 		var mesh_instance: MeshInstance3D = object_node.get_child(0)
 		var arrays: Array = mesh_instance.mesh.surface_get_arrays(0)
-		result.append({"id": object_node.get_meta("stable_instance_id"), "geometry_version": object_node.get_meta("geometry_adapter_version"), "vertices": arrays[Mesh.ARRAY_VERTEX], "normals": arrays[Mesh.ARRAY_NORMAL]})
+		var representation_ids: Array = []
+		var geometry_version := -1
+		if object_node.has_meta("stable_instance_id"):
+			representation_ids.append(String(object_node.get_meta("stable_instance_id")))
+			geometry_version = int(object_node.get_meta("geometry_adapter_version", -1))
+		elif object_node.has_meta("stable_instance_ids"):
+			representation_ids = object_node.get_meta("stable_instance_ids")
+			geometry_version = int(object_node.get_meta("population_batch_version", -1))
+		result.append({"ids": representation_ids, "geometry_version": geometry_version, "vertices": arrays[Mesh.ARRAY_VERTEX], "normals": arrays[Mesh.ARRAY_NORMAL]})
 	return result
+
+
+func _flatten_snapshot_ids(snapshots: Array) -> Array[String]:
+	var ids: Array[String] = []
+	for snapshot in snapshots:
+		for value in snapshot.get("ids", []):
+			ids.append(String(value))
+	ids.sort()
+	return ids
 
 
 func _create_external_package(package_path: String) -> String:
 	var global_path: String = ProjectSettings.globalize_path(package_path)
 	DirAccess.make_dir_recursive_absolute(global_path.path_join("objects"))
+	DirAccess.make_dir_recursive_absolute(global_path.path_join("populations"))
 	var source_root := ProjectSettings.globalize_path("res://").trim_suffix("/").get_base_dir().path_join("mods/examples/procedural-rock")
-	for relative_path in ["manifest.json", "objects/procedural_rock.json"]:
+	for relative_path in ["manifest.json", "objects/procedural_rock.json", "populations/basalt_legacy.json", "populations/basalt_population.json"]:
 		var source_path: String = source_root.path_join(relative_path)
 		var bytes: PackedByteArray = FileAccess.get_file_as_bytes(source_path)
 		if bytes.is_empty() or not _write_bytes(package_path.path_join(relative_path), bytes):
@@ -749,3 +1113,10 @@ func _check(condition: bool, description: String) -> void:
 		push_error("FAIL: " + description)
 	else:
 		print("PASS: " + description)
+
+
+func _sample_percentile(sorted_values: Array[int], fraction: float) -> int:
+	if sorted_values.is_empty():
+		return 0
+	var index := clampi(int(floor(float(sorted_values.size() - 1) * fraction)), 0, sorted_values.size() - 1)
+	return sorted_values[index]
