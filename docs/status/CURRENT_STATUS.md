@@ -1,3 +1,5 @@
+> **2026-10-24 newer integrated status:** P2.0B PR #110 merged at main `84bb7c3e573e7aa5a07608aac7834735aeb2c84f` after owner GUI PASS and independent source review. [Merge checkpoint](../checkpoints/2026-10-24-PR110-P2-0B-MERGE.md). Prior assertions that PR #110 remains unmerged are historical. Issue #108 remains open and deferred. Next P2.0C/P3 work requires scoped planning and review. Five F2-G1 holds unchanged.
+
 > **2026-10-24 P2.0B owner GUI result:** six interaction and persistence checks PASS on PR #110 source HEAD `819e18c8ac299c2569e4d7f3b8aeefc384bde0b2`. Independent source review PASS [#5639809147](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/110#pullrequestreview-5639809147). **Merge authorization pending**; do not treat feature as integrated. [Acceptance checkpoint](../checkpoints/2026-10-24-P2-0B-OWNER-GUI-ACCEPTANCE.md). Issue #108 remains deferred.
 
 # Live verified status override — 2026-10-24 (P2.0B implementation)
