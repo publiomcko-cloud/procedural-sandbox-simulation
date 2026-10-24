@@ -1,4 +1,10 @@
-# Live verified status override — 2026-10-24
+# Live verified status override — 2026-10-24 (P2.0B implementation)
+
+The required live main baseline for the current task is `d23f5ee37f8e13b3bb5c6b7b5dbbe16997a0b499`. P2.0B source commit `f090cf50fd32d6c9b8497a1d9fe3c1a659593577` is on `feat/p2-0b-persistent-object-state`, draft PR [#110](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/110). Full Godot 4.7.2 validation passed 17,527 assertions in 16 groups, zero failures; focused object tests passed 267/267. PR remains open/draft/unmerged; exact final head must be refreshed from GitHub. Independent source review and owner GUI retest are pending. Contract, storage behavior, evidence and limits are recorded in [P2.0B spec](../specs/P2-0B-PERSISTENT-OBJECT-STATE.md) and [implementation checkpoint](../checkpoints/2026-10-24-P2-0B-IMPLEMENTATION.md). No merge or visual approval is asserted. All five F2-G1 holds remain unchanged.
+
+---
+
+## Earlier live verified status snapshot — 2026-10-24
 
 Integrated main: `52ed9601c70ddade80e75ee9faccd45ec8d2e9a3` after PR #106. PRs #99, #103, #104, #105 and #106 integrated; exact receipts in [post-merge checkpoint](../checkpoints/2026-10-24-PR106-MERGE-AND-NEXT-P2-0B-HANDOFF.md). Owner accepted rock shapes; visual terrain/rock intersection persists and is deferred in issue #108, not resolved or denied. P2.0B is next separately scoped candidate; no code yet. Five F2-G1 holds, ADR-0002 proposed and non-automatic authorization preserved. Check live GitHub refs before relying on snapshot. Every significant event must have new immutable checkpoint, index update and pertinent status/doc reconciliation.
 

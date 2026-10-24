@@ -1,6 +1,6 @@
 # P2.0B — Persistent procedural object state (implementation candidate)
 
-Date: 2026-10-24  
+Date: 2026-10-24
 Status: implemented on `feat/p2-0b-persistent-object-state`; draft PR/source review and owner GUI verification pending. This specification records the candidate contract; it is not a merge or visual-acceptance decision.
 
 ## Scope and authority
