@@ -1,16 +1,23 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "type": "procedural_rock",
   "id": "firstparty.core_rocks:granite",
   "display_name": "Granite Formation",
   "tags": ["rock", "granite", "first_party"],
   "recipe": {
-    "algorithm": "stacked_spheres_v1",
-    "lobe_count": 4,
-    "radius_min_mm": 500,
-    "radius_max_mm": 900,
-    "vertical_step_mm": 420,
-    "spread_mm": 250,
-    "jitter_mm": 120
+    "algorithm": "geological_halfspace_v1",
+    "profile": "granite_massive_weathered_v1",
+    "half_extent_x_mm": 720,
+    "half_extent_y_mm": 610,
+    "half_extent_z_mm": 680,
+    "primary_plane_count": 9,
+    "fracture_plane_count": 2,
+    "anisotropy_axis": "y",
+    "anisotropy_milli": 1120,
+    "bevel_count": 4,
+    "weathering_milli": 920,
+    "macro_roughness_mm": 42,
+    "meso_roughness_mm": 22,
+    "fine_roughness_mm": 8
   }
 }

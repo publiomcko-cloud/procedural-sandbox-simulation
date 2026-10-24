@@ -25,6 +25,7 @@ const MAX_STAGE_RETRIES := 2
 @onready var terrain_mesh_template: MeshInstance3D = $TerrainChunks/Terrain
 @onready var camera: Camera3D = $Camera3D
 @onready var status_label: Label = $CanvasLayer/Status
+@onready var object_stream: ProceduralObjectStream = $ProceduralObjects
 
 var cave_section_enabled := false
 var orbit_target := Vector3(8.0, 3.1, 6.0)
@@ -45,6 +46,7 @@ var world_save_store: RefCounted
 var _pending_world_load: Dictionary = {}
 var _persistence_status := "No saved world; press P to save or O to load"
 var _persistence_blocked := false
+var _procedural_object_status := "Procedural objects unavailable"
 var chunk_nodes: Dictionary = {} # stable chunk id -> active MeshInstance3D
 var _published_lod_by_chunk: Dictionary = {} # stable chunk id -> 0/1
 var _lod_fallback_chunks: Dictionary = {} # stable chunk id -> deterministic LOD0 fallback until retry/toggle
@@ -135,6 +137,11 @@ func _ready() -> void:
 		else:
 			_persistence_blocked = true
 			_persistence_status = "Saved world unavailable (%s); edits remain untouched and saving is blocked" % saved_world.get("reason", "invalid")
+	var object_initialization: Dictionary = object_stream.initialize(world_seed, world_id)
+	if object_initialization.get("ok", false):
+		_procedural_object_status = "Procedural objects ready"
+	else:
+		_procedural_object_status = "Procedural objects unavailable (%s)" % object_initialization.get("reason", "unknown")
 	terrain_mesh_template.mesh = null
 	terrain_mesh_template.visible = false
 	_begin_operation("initial_load")
@@ -205,6 +212,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			lod_enabled = not lod_enabled
 			_lod_fallback_chunks.clear()
 			last_brush_result = "Custom LOD 0/1: %s" % ("ON" if lod_enabled else "OFF; using LOD0 fallback")
+		elif event.keycode == KEY_V:
+			object_stream.set_object_visibility(not object_stream.objects_visible)
 		elif event.keycode == KEY_P:
 			_save_world_to_storage()
 		elif event.keycode == KEY_O:
@@ -736,6 +745,12 @@ func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary
 			_release_chunk_node(old_id, previous["chunk_nodes"][old_id])
 	active_regions[id] = {"region_key": region_key, "world_state": state, "chunk_nodes": region_nodes}
 	world_states[id] = state
+	var object_publication: Dictionary = object_stream.publish_region(region_key, state)
+	if not object_publication.get("ok", false):
+		_procedural_object_status = "Procedural object issue: %s" % object_stream.get_error_summary()
+	else:
+		var object_error: String = object_stream.get_error_summary()
+		_procedural_object_status = "Procedural objects ready" if object_error.is_empty() else "Procedural object issue: %s" % object_error
 	if region_key == focus_region_key:
 		world_state = state
 
@@ -810,6 +825,7 @@ func _unload_region(id: String) -> void:
 	if not active_regions.has(id):
 		return
 	var entry: Dictionary = active_regions[id]
+	object_stream.unload_region(entry["region_key"])
 	if _edit_transaction.has("target_ids") and (_edit_transaction["target_ids"] as Array).has(id):
 		_edit_transaction["target_ids"].erase(id)
 		loading_regions.erase(id)
@@ -1554,6 +1570,13 @@ func _update_status() -> void:
 		status += "Rebuilding visible set: %d regions staged\n" % loading_regions.size()
 	if cave_section_enabled:
 		status += "Global cave section: ON (world Z=6)\n"
+	var definition_ids: Array[String] = object_stream.get_definition_ids()
+	status += "Procedural objects: %d visible in %d regions | definitions: %s | V: toggle objects\n" % [
+		object_stream.get_visible_instance_count(),
+		object_stream.get_active_region_count(),
+	", ".join(definition_ids),
+	]
+	status += _procedural_object_status + "\n"
 	if last_stream_error != "":
 		status += "STREAM ERROR: " + last_stream_error + "\n"
 	status += last_brush_result
