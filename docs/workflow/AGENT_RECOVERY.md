@@ -1,3 +1,5 @@
+> **Recovery override (2026-10-24):** Verify live `main` and PRs before using the historical timeline below. Main baseline at reconciliation: `0ea2ad834db5dc2de1110cf0388ea06604cc7715` (includes PRs #99/#103/#104/#105). PR #106 at `5166c311` was open/draft/unmerged and has a reported owner GUI blocker: procedural rocks resemble overlapping spheres. See [current status](../status/CURRENT_STATUS.md) and [merge/GUI checkpoint](../checkpoints/2026-10-24-P1-1C-P0-2-P0-3-MERGE-RECEIPTS-P2-0A-GUI.md). Every material advance gets a new checkpoint and index/status reconciliation by default; old instructions asserting P1.0C or P1.1B as currently pending are historical. No implied merge or F2-G1 permissions.
+
 # Fresh-agent / new-chat recovery runbook
 
 **Objective:** make the repository, not conversation history, the durable source of project decisions, approved evidence, open work and next action. A complete safe *logical reconstruction* requires Git refs + accepted docs + tickets + independent reviews + owner authority. A checkpoint is not a clone/VM backup and cannot restore unsaved local changes or credentials.
