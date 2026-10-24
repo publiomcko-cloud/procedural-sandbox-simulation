@@ -1,4 +1,4 @@
-> **2026-10-24 live override:** main `52ed9601c70ddade80e75ee9faccd45ec8d2e9a3` includes procedural rocks PR #106; P2.0B prepared, not implemented. Owner accepts shapes but terrain contact is deferred to issue #108. Read [checkpoint](../checkpoints/2026-10-24-PR106-MERGE-AND-NEXT-P2-0B-HANDOFF.md), reconcile live PRs and always add an immutable checkpoint/index entry at material steps. Older 'PR #92 pending' notes below are historical.
+> **Latest 2026-10-24 live override:** required main baseline `d23f5ee37f8e13b3bb5c6b7b5dbbe16997a0b499`; P2.0B latest source correction `85d3b9bd2a95f8dfbcd83d2ef04c68793912f232` on `feat/p2-0b-persistent-object-state`, draft PR #110. Full Godot 4.7.2 validation passed 17,529 assertions/0 failures. Independent source review and owner GUI remain pending; do not merge. See [P2.0B checkpoint](../checkpoints/2026-10-24-P2-0B-IMPLEMENTATION.md), [identity correction](../checkpoints/2026-10-24-P2-0B-IDENTITY-BOUND-CORRECTION.md) and [specification](../specs/P2-0B-PERSISTENT-OBJECT-STATE.md). Earlier P2.0B preparation-only statement below is historical. All five F2-G1 holds remain.
 
 # Fresh-agent / new-chat recovery runbook
 
