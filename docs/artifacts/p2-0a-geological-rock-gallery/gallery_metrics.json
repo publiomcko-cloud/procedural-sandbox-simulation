@@ -1,0 +1,725 @@
+{
+	"assertions": 57,
+	"failures": 0,
+	"family_timings_usec": {
+		"basalt": {
+			"count": 12,
+			"max_usec": 17052,
+			"median_usec": 14711,
+			"p95_usec": 17052
+		},
+		"granite": {
+			"count": 12,
+			"max_usec": 19650,
+			"median_usec": 13955,
+			"p95_usec": 19650
+		}
+	},
+	"fixed_environment": {
+		"ambient": 0.3,
+		"fill": 0.12,
+		"key_light_direction": [
+			-0.45,
+			0.82,
+			0.35
+		],
+		"key_light_intensity": 0.82,
+		"renderer": "deterministic CPU triangle preview; not Godot shading or artistic acceptance"
+	},
+	"generator_algorithm": "geological_halfspace_v1",
+	"geometry_version": 3,
+	"godot_version": {
+		"build": "official",
+		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+		"hex": 263938,
+		"major": 4,
+		"minor": 7,
+		"patch": 2,
+		"status": "stable",
+		"string": "4.7.2-stable (official)",
+		"timestamp": 0
+	},
+	"images": [
+		"rock_gallery_oblique.png",
+		"rock_gallery_rear_oblique.png",
+		"rock_gallery_side_oblique.png"
+	],
+	"recipe_seed_base": 700100,
+	"sample_count_per_family": 12,
+	"samples": [
+		{
+			"bounds_max": [
+				0.72320568561554,
+				1.24393248558044,
+				0.697584450244904
+			],
+			"bounds_min": [
+				-0.723856151103973,
+				0.0,
+				-0.693339645862579
+			],
+			"build_usec": 15629,
+			"definition_id": "firstparty.core_rocks:granite",
+			"family": "granite",
+			"geometry_seeds": {
+				"detail": 224041283,
+				"fracture": 1227608261,
+				"structure": 655649927,
+				"wear": 1799566595
+			},
+			"profile": "granite_massive_weathered_v1",
+			"recipe_seed": 700100,
+			"sample_index": 0,
+			"surface_area_m2": 8.56169342849171,
+			"triangle_count": 408,
+			"unique_vertex_count": 238,
+			"volume_m3": 1.96220009005992
+		},
+		{
+			"bounds_max": [
+				0.73383229970932,
+				1.24914312362671,
+				0.689674079418182
+			],
+			"bounds_min": [
+				-0.725340723991394,
+				0.0,
+				-0.691696763038635
+			],
+			"build_usec": 14180,
+			"definition_id": "firstparty.core_rocks:granite",
+			"family": "granite",
+			"geometry_seeds": {
+				"detail": 224089554,
+				"fracture": 1227656532,
+				"structure": 655698198,
+				"wear": 1799614866
+			},
+			"profile": "granite_massive_weathered_v1",
+			"recipe_seed": 700101,
+			"sample_index": 1,
+			"surface_area_m2": 8.65035411705321,
+			"triangle_count": 336,
+			"unique_vertex_count": 191,
+			"volume_m3": 1.97067113873588
+		},
+		{
+			"bounds_max": [
+				0.720000028610229,
+				1.25446271896362,
+				0.695891916751862
+			],
+			"bounds_min": [
+				-0.727978229522705,
+				0.0,
+				-0.692026615142822
+			],
+			"build_usec": 19650,
+			"definition_id": "firstparty.core_rocks:granite",
+			"family": "granite",
+			"geometry_seeds": {
+				"detail": 224137825,
+				"fracture": 1227704803,
+				"structure": 655746469,
+				"wear": 1799663137
+			},
+			"profile": "granite_massive_weathered_v1",
+			"recipe_seed": 700102,
+			"sample_index": 2,
+			"surface_area_m2": 8.22028753366612,
+			"triangle_count": 360,
+			"unique_vertex_count": 214,
+			"volume_m3": 1.81268385931132
+		},
+		{
+			"bounds_max": [
+				0.740511298179626,
+				1.22419559955597,
+				0.691030919551849
+			],
+			"bounds_min": [
+				-0.739523231983185,
+				0.0,
+				-0.699475228786469
+			],
+			"build_usec": 14264,
+			"definition_id": "firstparty.core_rocks:granite",
+			"family": "granite",
+			"geometry_seeds": {
+				"detail": 224186096,
+				"fracture": 1227753074,
+				"structure": 655794740,
+				"wear": 1799711408
+			},
+			"profile": "granite_massive_weathered_v1",
+			"recipe_seed": 700103,
+			"sample_index": 3,
+			"surface_area_m2": 8.84071893885266,
+			"triangle_count": 312,
+			"unique_vertex_count": 185,
+			"volume_m3": 1.97431712833152
+		},
+		{
+			"bounds_max": [
+				0.720000028610229,
+				1.24776613712311,
+				0.692186534404755
+			],
+			"bounds_min": [
+				-0.736349403858185,
+				0.0,
+				-0.692227780818939
+			],
+			"build_usec": 12927,
+			"definition_id": "firstparty.core_rocks:granite",
+			"family": "granite",
+			"geometry_seeds": {
+				"detail": 224234367,
+				"fracture": 1227801345,
+				"structure": 655843011,
+				"wear": 1799759679
+			},
+			"profile": "granite_massive_weathered_v1",
+			"recipe_seed": 700104,
+			"sample_index": 4,
+			"surface_area_m2": 7.99527736403979,
+			"triangle_count": 336,
+			"unique_vertex_count": 203,
+			"volume_m3": 1.7768972280913
+		},
+		{
+			"bounds_max": [
+				0.740418553352356,
+				1.25343883037567,
+				0.688187003135681
+			],
+			"bounds_min": [
+				-0.734342455863953,
+				0.0,
+				-0.691391408443451
+			],
+			"build_usec": 14991,
+			"definition_id": "firstparty.core_rocks:granite",
+			"family": "granite",
+			"geometry_seeds": {
+				"detail": 224282638,
+				"fracture": 1227849616,
+				"structure": 655891282,
+				"wear": 1799807950
+			},
+			"profile": "granite_massive_weathered_v1",
+			"recipe_seed": 700105,
+			"sample_index": 5,
+			"surface_area_m2": 8.76543745340314,
+			"triangle_count": 384,
+			"unique_vertex_count": 223,
+			"volume_m3": 2.02192264629169
+		},
+		{
+			"bounds_max": [
+				0.720000028610229,
+				1.26404356956482,
+				0.699554026126862
+			],
+			"bounds_min": [
+				-0.727212131023407,
+				0.0,
+				-0.689692258834839
+			],
+			"build_usec": 13021,
+			"definition_id": "firstparty.core_rocks:granite",
+			"family": "granite",
+			"geometry_seeds": {
+				"detail": 224330909,
+				"fracture": 1227897887,
+				"structure": 655939553,
+				"wear": 1799856221
+			},
+			"profile": "granite_massive_weathered_v1",
+			"recipe_seed": 700106,
+			"sample_index": 6,
+			"surface_area_m2": 8.25921694984572,
+			"triangle_count": 360,
+			"unique_vertex_count": 209,
+			"volume_m3": 1.90694912558138
+		},
+		{
+			"bounds_max": [
+				0.721505403518677,
+				1.241459608078,
+				0.699378371238709
+			],
+			"bounds_min": [
+				-0.726612091064453,
+				0.0,
+				-0.695789635181427
+			],
+			"build_usec": 13091,
+			"definition_id": "firstparty.core_rocks:granite",
+			"family": "granite",
+			"geometry_seeds": {
+				"detail": 224379180,
+				"fracture": 1227946158,
+				"structure": 655987824,
+				"wear": 1799904492
+			},
+			"profile": "granite_massive_weathered_v1",
+			"recipe_seed": 700107,
+			"sample_index": 7,
+			"surface_area_m2": 8.60545029462082,
+			"triangle_count": 360,
+			"unique_vertex_count": 208,
+			"volume_m3": 1.96108340426387
+		},
+		{
+			"bounds_max": [
+				0.729004204273224,
+				1.24947667121887,
+				0.700083792209625
+			],
+			"bounds_min": [
+				-0.729616403579712,
+				0.0,
+				-0.701903700828552
+			],
+			"build_usec": 13938,
+			"definition_id": "firstparty.core_rocks:granite",
+			"family": "granite",
+			"geometry_seeds": {
+				"detail": 224427451,
+				"fracture": 1227994429,
+				"structure": 656036095,
+				"wear": 1799952763
+			},
+			"profile": "granite_massive_weathered_v1",
+			"recipe_seed": 700108,
+			"sample_index": 8,
+			"surface_area_m2": 8.9309545501601,
+			"triangle_count": 384,
+			"unique_vertex_count": 217,
+			"volume_m3": 2.10998545149778
+		},
+		{
+			"bounds_max": [
+				0.737780690193176,
+				1.26037621498108,
+				0.702729463577271
+			],
+			"bounds_min": [
+				-0.723828852176666,
+				0.0,
+				-0.686714887619019
+			],
+			"build_usec": 13069,
+			"definition_id": "firstparty.core_rocks:granite",
+			"family": "granite",
+			"geometry_seeds": {
+				"detail": 224475722,
+				"fracture": 1228042700,
+				"structure": 656084366,
+				"wear": 1800001034
+			},
+			"profile": "granite_massive_weathered_v1",
+			"recipe_seed": 700109,
+			"sample_index": 9,
+			"surface_area_m2": 8.60147796591627,
+			"triangle_count": 360,
+			"unique_vertex_count": 204,
+			"volume_m3": 1.98412245057746
+		},
+		{
+			"bounds_max": [
+				0.73437374830246,
+				1.23741328716278,
+				0.685271084308624
+			],
+			"bounds_min": [
+				-0.739806354045868,
+				0.0,
+				-0.688828885555267
+			],
+			"build_usec": 14870,
+			"definition_id": "firstparty.core_rocks:granite",
+			"family": "granite",
+			"geometry_seeds": {
+				"detail": 224523993,
+				"fracture": 1228090971,
+				"structure": 656132637,
+				"wear": 1800049305
+			},
+			"profile": "granite_massive_weathered_v1",
+			"recipe_seed": 700110,
+			"sample_index": 10,
+			"surface_area_m2": 8.72000042613945,
+			"triangle_count": 408,
+			"unique_vertex_count": 231,
+			"volume_m3": 2.00940475462994
+		},
+		{
+			"bounds_max": [
+				0.742815136909485,
+				1.23646688461304,
+				0.693135023117065
+			],
+			"bounds_min": [
+				-0.720000028610229,
+				0.0,
+				-0.690767526626587
+			],
+			"build_usec": 13955,
+			"definition_id": "firstparty.core_rocks:granite",
+			"family": "granite",
+			"geometry_seeds": {
+				"detail": 224572264,
+				"fracture": 1228139242,
+				"structure": 656180908,
+				"wear": 1800097576
+			},
+			"profile": "granite_massive_weathered_v1",
+			"recipe_seed": 700111,
+			"sample_index": 11,
+			"surface_area_m2": 8.54724101713873,
+			"triangle_count": 360,
+			"unique_vertex_count": 211,
+			"volume_m3": 1.8955357065779
+		},
+		{
+			"bounds_max": [
+				0.59359347820282,
+				1.66067922115326,
+				0.631517291069031
+			],
+			"bounds_min": [
+				-0.601614832878113,
+				0.0,
+				-0.621988713741302
+			],
+			"build_usec": 14731,
+			"definition_id": "official.example.procedural_rock:basalt_stack",
+			"family": "basalt",
+			"geometry_seeds": {
+				"detail": 224041283,
+				"fracture": 1227608261,
+				"structure": 655649927,
+				"wear": 1799566595
+			},
+			"profile": "basalt_fractured_anisotropic_v1",
+			"recipe_seed": 700100,
+			"sample_index": 0,
+			"surface_area_m2": 8.36917190249369,
+			"triangle_count": 408,
+			"unique_vertex_count": 239,
+			"volume_m3": 1.79031996922519
+		},
+		{
+			"bounds_max": [
+				0.607275784015656,
+				1.67057514190674,
+				0.631057620048523
+			],
+			"bounds_min": [
+				-0.600894868373871,
+				0.0,
+				-0.623781561851501
+			],
+			"build_usec": 14857,
+			"definition_id": "official.example.procedural_rock:basalt_stack",
+			"family": "basalt",
+			"geometry_seeds": {
+				"detail": 224089554,
+				"fracture": 1227656532,
+				"structure": 655698198,
+				"wear": 1799614866
+			},
+			"profile": "basalt_fractured_anisotropic_v1",
+			"recipe_seed": 700101,
+			"sample_index": 1,
+			"surface_area_m2": 8.64689170918427,
+			"triangle_count": 360,
+			"unique_vertex_count": 225,
+			"volume_m3": 1.87496222998016
+		},
+		{
+			"bounds_max": [
+				0.589999973773956,
+				1.65981578826904,
+				0.631939828395844
+			],
+			"bounds_min": [
+				-0.602033615112305,
+				0.0,
+				-0.626993238925934
+			],
+			"build_usec": 13426,
+			"definition_id": "official.example.procedural_rock:basalt_stack",
+			"family": "basalt",
+			"geometry_seeds": {
+				"detail": 224137825,
+				"fracture": 1227704803,
+				"structure": 655746469,
+				"wear": 1799663137
+			},
+			"profile": "basalt_fractured_anisotropic_v1",
+			"recipe_seed": 700102,
+			"sample_index": 2,
+			"surface_area_m2": 8.33127561141737,
+			"triangle_count": 360,
+			"unique_vertex_count": 218,
+			"volume_m3": 1.74344478162963
+		},
+		{
+			"bounds_max": [
+				0.608558177947998,
+				1.63999998569489,
+				0.630407452583313
+			],
+			"bounds_min": [
+				-0.605963408946991,
+				0.0,
+				-0.614925861358643
+			],
+			"build_usec": 17052,
+			"definition_id": "official.example.procedural_rock:basalt_stack",
+			"family": "basalt",
+			"geometry_seeds": {
+				"detail": 224186096,
+				"fracture": 1227753074,
+				"structure": 655794740,
+				"wear": 1799711408
+			},
+			"profile": "basalt_fractured_anisotropic_v1",
+			"recipe_seed": 700103,
+			"sample_index": 3,
+			"surface_area_m2": 8.02503077108122,
+			"triangle_count": 312,
+			"unique_vertex_count": 197,
+			"volume_m3": 1.70524165348615
+		},
+		{
+			"bounds_max": [
+				0.603851616382599,
+				1.66216218471527,
+				0.616649985313416
+			],
+			"bounds_min": [
+				-0.606371164321899,
+				0.0,
+				-0.612701594829559
+			],
+			"build_usec": 15519,
+			"definition_id": "official.example.procedural_rock:basalt_stack",
+			"family": "basalt",
+			"geometry_seeds": {
+				"detail": 224234367,
+				"fracture": 1227801345,
+				"structure": 655843011,
+				"wear": 1799759679
+			},
+			"profile": "basalt_fractured_anisotropic_v1",
+			"recipe_seed": 700104,
+			"sample_index": 4,
+			"surface_area_m2": 8.04530343432998,
+			"triangle_count": 408,
+			"unique_vertex_count": 245,
+			"volume_m3": 1.73517201245227
+		},
+		{
+			"bounds_max": [
+				0.60612940788269,
+				1.66142559051514,
+				0.618115067481995
+			],
+			"bounds_min": [
+				-0.613529920578003,
+				0.0,
+				-0.620833933353424
+			],
+			"build_usec": 14825,
+			"definition_id": "official.example.procedural_rock:basalt_stack",
+			"family": "basalt",
+			"geometry_seeds": {
+				"detail": 224282638,
+				"fracture": 1227849616,
+				"structure": 655891282,
+				"wear": 1799807950
+			},
+			"profile": "basalt_fractured_anisotropic_v1",
+			"recipe_seed": 700105,
+			"sample_index": 5,
+			"surface_area_m2": 8.62632313242648,
+			"triangle_count": 408,
+			"unique_vertex_count": 241,
+			"volume_m3": 1.94620208093996
+		},
+		{
+			"bounds_max": [
+				0.590330839157104,
+				1.66425251960754,
+				0.629849314689636
+			],
+			"bounds_min": [
+				-0.615298271179199,
+				0.0,
+				-0.610000014305115
+			],
+			"build_usec": 14186,
+			"definition_id": "official.example.procedural_rock:basalt_stack",
+			"family": "basalt",
+			"geometry_seeds": {
+				"detail": 224330909,
+				"fracture": 1227897887,
+				"structure": 655939553,
+				"wear": 1799856221
+			},
+			"profile": "basalt_fractured_anisotropic_v1",
+			"recipe_seed": 700106,
+			"sample_index": 6,
+			"surface_area_m2": 8.32540629850701,
+			"triangle_count": 384,
+			"unique_vertex_count": 232,
+			"volume_m3": 1.82753064542703
+		},
+		{
+			"bounds_max": [
+				0.603850841522217,
+				1.66554713249207,
+				0.628129959106445
+			],
+			"bounds_min": [
+				-0.614650130271912,
+				0.0,
+				-0.618380784988403
+			],
+			"build_usec": 13739,
+			"definition_id": "official.example.procedural_rock:basalt_stack",
+			"family": "basalt",
+			"geometry_seeds": {
+				"detail": 224379180,
+				"fracture": 1227946158,
+				"structure": 655987824,
+				"wear": 1799904492
+			},
+			"profile": "basalt_fractured_anisotropic_v1",
+			"recipe_seed": 700107,
+			"sample_index": 7,
+			"surface_area_m2": 8.72580473870039,
+			"triangle_count": 360,
+			"unique_vertex_count": 221,
+			"volume_m3": 1.9248430726196
+		},
+		{
+			"bounds_max": [
+				0.60589587688446,
+				1.66245555877686,
+				0.630291342735291
+			],
+			"bounds_min": [
+				-0.599502444267273,
+				0.0,
+				-0.630862236022949
+			],
+			"build_usec": 15218,
+			"definition_id": "official.example.procedural_rock:basalt_stack",
+			"family": "basalt",
+			"geometry_seeds": {
+				"detail": 224427451,
+				"fracture": 1227994429,
+				"structure": 656036095,
+				"wear": 1799952763
+			},
+			"profile": "basalt_fractured_anisotropic_v1",
+			"recipe_seed": 700108,
+			"sample_index": 8,
+			"surface_area_m2": 8.93768942320628,
+			"triangle_count": 408,
+			"unique_vertex_count": 231,
+			"volume_m3": 2.04620657240684
+		},
+		{
+			"bounds_max": [
+				0.589999973773956,
+				1.66075026988983,
+				0.634246408939362
+			],
+			"bounds_min": [
+				-0.597642183303833,
+				0.0,
+				-0.622723162174225
+			],
+			"build_usec": 14711,
+			"definition_id": "official.example.procedural_rock:basalt_stack",
+			"family": "basalt",
+			"geometry_seeds": {
+				"detail": 224475722,
+				"fracture": 1228042700,
+				"structure": 656084366,
+				"wear": 1800001034
+			},
+			"profile": "basalt_fractured_anisotropic_v1",
+			"recipe_seed": 700109,
+			"sample_index": 9,
+			"surface_area_m2": 8.43552300013835,
+			"triangle_count": 384,
+			"unique_vertex_count": 225,
+			"volume_m3": 1.82556411951858
+		},
+		{
+			"bounds_max": [
+				0.60986316204071,
+				1.66266703605652,
+				0.615359544754028
+			],
+			"bounds_min": [
+				-0.605116784572601,
+				0.0,
+				-0.621358811855316
+			],
+			"build_usec": 14138,
+			"definition_id": "official.example.procedural_rock:basalt_stack",
+			"family": "basalt",
+			"geometry_seeds": {
+				"detail": 224523993,
+				"fracture": 1228090971,
+				"structure": 656132637,
+				"wear": 1800049305
+			},
+			"profile": "basalt_fractured_anisotropic_v1",
+			"recipe_seed": 700110,
+			"sample_index": 10,
+			"surface_area_m2": 8.6085777428425,
+			"triangle_count": 384,
+			"unique_vertex_count": 226,
+			"volume_m3": 1.84520707870312
+		},
+		{
+			"bounds_max": [
+				0.6062952876091,
+				1.67307102680206,
+				0.630211234092712
+			],
+			"bounds_min": [
+				-0.589999973773956,
+				0.0,
+				-0.618347108364105
+			],
+			"build_usec": 12480,
+			"definition_id": "official.example.procedural_rock:basalt_stack",
+			"family": "basalt",
+			"geometry_seeds": {
+				"detail": 224572264,
+				"fracture": 1228139242,
+				"structure": 656180908,
+				"wear": 1800097576
+			},
+			"profile": "basalt_fractured_anisotropic_v1",
+			"recipe_seed": 700111,
+			"sample_index": 11,
+			"surface_area_m2": 8.75160988155403,
+			"triangle_count": 336,
+			"unique_vertex_count": 201,
+			"volume_m3": 1.89332546773221
+		}
+	],
+	"schema_version": 1,
+	"status": "UNSCORED_EXPLORATORY_SOFTWARE_PREVIEW"
+}

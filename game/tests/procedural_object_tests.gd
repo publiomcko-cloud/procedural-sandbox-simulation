@@ -32,7 +32,9 @@ func _run() -> void:
 	var external_copy: String = _create_external_package(_mod_root)
 	var roots: Array[String] = ["res://mods/first-party", "user://mods"]
 	_test_same_registry_pipeline(roots)
+	_test_versioned_recipe_compatibility()
 	_test_mesh_conversion()
+	_test_seed_family_variation()
 	_test_order_independent_records(roots)
 	_test_runtime_streaming_and_unload_reload(roots)
 	_test_missing_and_incompatible_content(roots)
@@ -53,14 +55,53 @@ func _test_same_registry_pipeline(roots: Array[String]) -> void:
 	var builtin_recipe: Dictionary = registry.evaluate_rock_recipe(String(builtin.get("id", "")), 654321)
 	var external_recipe: Dictionary = registry.evaluate_rock_recipe(String(external.get("id", "")), 654321)
 	_check(builtin_recipe.get("ok", false) and external_recipe.get("ok", false), "first-party and external recipes use the same evaluator")
-	_check(builtin_recipe.get("lobes", []).size() == int(builtin.get("recipe", {}).get("lobe_count", -1)), "first-party output follows its declarative lobe count")
-	_check(external_recipe.get("lobes", []).size() == int(external.get("recipe", {}).get("lobe_count", -1)), "external output follows its declarative lobe count")
+	_check(builtin.get("schema_version") == 2 and builtin_recipe.get("algorithm") == RockMeshAdapter.ALGORITHM and builtin_recipe.get("profile") == "granite_massive_weathered_v1", "first-party granite uses the explicit geological schema/profile")
+	_check(external.get("schema_version") == 2 and external_recipe.get("algorithm") == RockMeshAdapter.ALGORITHM and external_recipe.get("profile") == "basalt_fractured_anisotropic_v1", "external basalt uses the same registry contract with its distinct versioned profile")
+	_check(builtin_recipe.get("geometry", {}).get("fracture_plane_count", 0) < external_recipe.get("geometry", {}).get("fracture_plane_count", 0), "the basalt profile declares a denser fracture system")
+	_check(builtin_recipe.get("geometry_seeds", {}).size() == 4 and external_recipe.get("geometry_seeds", {}).size() == 4, "the registry derives independent structure, fracture, wear and detail seeds")
 	_check(registry.pin_definitions([builtin["id"], external["id"]]).get("ok", false), "runtime object definitions carry P0.3 content version pins")
 	var runtime: ProceduralObjectStream = ObjectStream.new()
 	var default_roots: Dictionary = runtime.initialize(SEED, WORLD_ID)
 	_check(default_roots.get("ok", false), "default runtime discovers the external package installed under user://mods")
 	_check(runtime._configured_package_roots().size() == 2, "installed example takes precedence over its repository copy to avoid duplicate package IDs")
 	runtime.free()
+
+
+func _test_versioned_recipe_compatibility() -> void:
+	var registry := Registry.new()
+	var legacy_recipe := {
+		"algorithm": "stacked_spheres_v1", "lobe_count": 2, "radius_min_mm": 400, "radius_max_mm": 500,
+		"vertical_step_mm": 300, "spread_mm": 150, "jitter_mm": 20,
+	}
+	var legacy_definition := {
+		"schema_version": 1, "type": "procedural_rock", "id": "test.legacy_rocks:granite",
+		"display_name": "Legacy granite fixture", "tags": ["rock", "legacy"], "recipe": legacy_recipe,
+	}
+	var manifest := {
+		"id": "test.legacy_rocks", "version": "1.0.0", "schema_version": 1,
+		"requires_engine": "4.7.2", "dependencies": [], "content_roots": ["objects/"], "script_policy": "data_only",
+	}
+	var discovery := {"ok": true, "packages": [{"manifest": manifest, "definitions": [legacy_definition]}]}
+	var registration: Dictionary = registry.register_discovered(discovery)
+	var evaluated: Dictionary = registry.evaluate_rock_recipe("test.legacy_rocks:granite", 99)
+	_check(registration.get("ok", false) and evaluated.get("ok", false) and evaluated.get("algorithm") == "stacked_spheres_v1" and evaluated.get("lobes", []).size() == 2, "schema-1 stacked_spheres_v1 retains its original declarative meaning")
+	var invalid_legacy := legacy_definition.duplicate(true)
+	invalid_legacy["recipe"]["algorithm"] = "geological_halfspace_v1"
+	var rejected_legacy := Registry.new().register_discovered({"ok": true, "packages": [{"manifest": manifest, "definitions": [invalid_legacy]}]})
+	_check(not rejected_legacy.get("ok", false), "schema-1 cannot silently reinterpret legacy fields as the geological algorithm")
+	var isolated_seeds := {"structure": 11, "fracture": 22, "wear": 33, "detail": 44}
+	_check(not RockMeshAdapter.build_mesh(legacy_recipe, isolated_seeds).get("ok", false), "legacy stacked-spheres data is not passed into the new geological adapter")
+	var geological_bytes: PackedByteArray = FileAccess.get_file_as_bytes("res://mods/first-party/core-rocks/objects/granite.json")
+	var geological: Dictionary = JSON.parse_string(geological_bytes.get_string_from_utf8())
+	geological["schema_version"] = 1
+	geological["id"] = "test.legacy_rocks:granite"
+	var rejected_new := Registry.new().register_discovered({"ok": true, "packages": [{"manifest": manifest, "definitions": [geological]}]})
+	_check(not rejected_new.get("ok", false), "schema-2 geological parameters cannot be loaded under schema-1")
+	var unknown_profile := JSON.parse_string(geological_bytes.get_string_from_utf8()) as Dictionary
+	unknown_profile["id"] = "test.legacy_rocks:granite"
+	unknown_profile["recipe"]["profile"] = "granite_magic_v1"
+	var rejected_profile := Registry.new().register_discovered({"ok": true, "packages": [{"manifest": manifest, "definitions": [unknown_profile]}]})
+	_check(not rejected_profile.get("ok", false), "unregistered geological profiles fail schema validation")
 
 
 func _test_mesh_conversion() -> void:
@@ -71,10 +112,12 @@ func _test_mesh_conversion() -> void:
 		return
 	for definition_id in ObjectWorld.SLOT_DEFINITIONS:
 		var recipe: Dictionary = registry.evaluate_rock_recipe(definition_id, 91234)
-		var lobes: Array = recipe.get("lobes", [])
-		var first: Dictionary = RockMeshAdapter.build_mesh(lobes, 91234)
-		var second: Dictionary = RockMeshAdapter.build_mesh(lobes, 91234)
-		var alternate_seed: Dictionary = RockMeshAdapter.build_mesh(lobes, 91235)
+		var geometry: Dictionary = recipe.get("geometry", {})
+		var seeds: Dictionary = recipe.get("geometry_seeds", {})
+		var first: Dictionary = RockMeshAdapter.build_mesh(geometry, seeds)
+		var second: Dictionary = RockMeshAdapter.build_mesh(geometry, seeds)
+		var alternate_recipe: Dictionary = registry.evaluate_rock_recipe(definition_id, 91235)
+		var alternate_seed: Dictionary = RockMeshAdapter.build_mesh(alternate_recipe.get("geometry", {}), alternate_recipe.get("geometry_seeds", {}))
 		_check(first.get("ok", false) and second.get("ok", false), "%s recipe converts to visible mesh data" % definition_id)
 		if not first.get("ok", false) or not second.get("ok", false):
 			continue
@@ -86,26 +129,44 @@ func _test_mesh_conversion() -> void:
 		_check(not vertices.is_empty() and vertices.size() == normals.size(), "%s mesh has matched vertex and normal arrays" % definition_id)
 		_check(vertices == second_arrays[Mesh.ARRAY_VERTEX] and normals == second_arrays[Mesh.ARRAY_NORMAL], "%s geometry conversion is deterministic" % definition_id)
 		_check(alternate_seed.get("ok", false) and vertices != alternate_arrays[Mesh.ARRAY_VERTEX], "%s seed changes the irregular silhouette deterministically" % definition_id)
-		_check(int(first.get("triangle_count", 0)) == 320 and vertices.size() == 960, "%s is one bounded faceted body rather than a sphere mesh per lobe" % definition_id)
+		_check(int(first.get("triangle_count", 0)) >= 100 and int(first.get("triangle_count", 0)) <= 500 and vertices.size() == int(first.get("triangle_count", 0)) * 3, "%s stays within the exploratory 100-500 triangle closed-shell budget" % definition_id)
 		_check(first["mesh"].get_surface_count() == 1 and int(first.get("geometry_version", -1)) == RockMeshAdapter.GEOMETRY_VERSION, "%s has one registered geometry-adapter versioned surface" % definition_id)
+		_check(first.get("algorithm") == "geological_halfspace_v1" and first.get("profile") == recipe.get("profile"), "%s reports its explicit geometry algorithm and profile" % definition_id)
+		_check(float(first.get("volume_m3", 0.0)) > 0.0 and float(first.get("surface_area_m2", 0.0)) > 0.0, "%s reports finite positive volume and surface area" % definition_id)
 		var finite := true
 		for index in range(vertices.size()):
 			if not vertices[index].is_finite() or not normals[index].is_finite() or normals[index].length_squared() < 0.9:
 				finite = false
 				break
 		_check(finite, "%s mesh positions and normals are finite and normalized" % definition_id)
-		var integrity: Dictionary = _inspect_low_poly_mesh(vertices, normals, first["mesh_center"], first["half_extents"])
+		var bounds_min: Vector3 = first["bounds_min"]
+		var bounds_max: Vector3 = first["bounds_max"]
+		_check(absf(bounds_min.y) <= 1.0e-5, "%s keeps its deterministic contact base at region-local y=0" % definition_id)
+		var integrity: Dictionary = _inspect_low_poly_mesh(vertices, normals, (bounds_min + bounds_max) * 0.5, (bounds_max - bounds_min) * 0.5)
 		_check(integrity.get("ok", false), "%s has outward flat normals, nondegenerate faces, one connected shell and closed two-face edges (%s)" % [definition_id, integrity.get("reason", "ok")])
-		_check(integrity.get("radial_spread", 0.0) > 0.04, "%s silhouette has deterministic radial asymmetry" % definition_id)
-		_check(normals[0].dot(normals[3]) < 0.999, "%s uses angular face normals instead of smooth sphere shading" % definition_id)
-		_check(vertices == _mesh_arrays(RockMeshAdapter.build_mesh(lobes, 91234))[Mesh.ARRAY_VERTEX], "%s repeated recipe conversion preserves the exact geometry regression snapshot" % definition_id)
-		_check(not RockMeshAdapter.build_mesh(lobes, -1).get("ok", false), "%s negative geometry variation seed is rejected" % definition_id)
-		_check(not RockMeshAdapter.build_mesh(lobes, 2147483648).get("ok", false), "%s out-of-range geometry variation seed is rejected" % definition_id)
-	_check(not RockMeshAdapter.build_mesh([], 0).get("ok", false), "empty geometry recipe is rejected")
+		var box_volume := (bounds_max.x - bounds_min.x) * (bounds_max.y - bounds_min.y) * (bounds_max.z - bounds_min.z)
+		_check(float(first["volume_m3"]) < box_volume * 0.97 and float(first["volume_m3"]) > box_volume * 0.18, "%s is clipped into a non-spherical asymmetric solid within its bounds" % definition_id)
+		var angular_faces := false
+		for normal_index in range(3, normals.size(), 3):
+			if normals[0].dot(normals[normal_index]) < 0.97:
+				angular_faces = true
+				break
+		_check(angular_faces, "%s retains distinct flat facet normals rather than a smooth sphere surface" % definition_id)
+		for seed_key in ["structure", "fracture", "wear", "detail"]:
+			var changed_seeds: Dictionary = seeds.duplicate(true)
+			changed_seeds[seed_key] = int(changed_seeds[seed_key]) + 1
+			var stage_variant: Dictionary = RockMeshAdapter.build_mesh(geometry, changed_seeds)
+			_check(stage_variant.get("ok", false) and _mesh_arrays(stage_variant)[Mesh.ARRAY_VERTEX] != vertices, "%s %s seed independently affects geometry" % [definition_id, seed_key])
+		_check(vertices == _mesh_arrays(RockMeshAdapter.build_mesh(geometry, seeds))[Mesh.ARRAY_VERTEX], "%s repeated recipe conversion preserves deterministic geometry" % definition_id)
+		_check(not RockMeshAdapter.build_mesh(geometry, {"structure": -1, "fracture": 2, "wear": 3, "detail": 4}).get("ok", false), "%s invalid geometry seeds are rejected" % definition_id)
+		var malformed_geometry := geometry.duplicate(true)
+		malformed_geometry["half_extent_x_mm"] = 9007199254740992
+		_check(not RockMeshAdapter.build_mesh(malformed_geometry, seeds).get("ok", false), "%s rejects unsafe integer dimensions" % definition_id)
+	_check(not RockMeshAdapter.build_mesh({}, {} ).get("ok", false), "empty geological geometry recipe is rejected")
 
 
 func _inspect_low_poly_mesh(vertices: PackedVector3Array, normals: PackedVector3Array, center: Vector3, half_extents: Vector3) -> Dictionary:
-	if vertices.size() != 960 or vertices.size() != normals.size() or vertices.size() % 3 != 0:
+	if vertices.size() < 300 or vertices.size() > 1500 or vertices.size() != normals.size() or vertices.size() % 3 != 0:
 		return {"ok": false, "reason": "invalid_triangle_arrays"}
 	var edge_counts: Dictionary = {}
 	var graph: Dictionary = {}
@@ -141,9 +202,9 @@ func _inspect_low_poly_mesh(vertices: PackedVector3Array, normals: PackedVector3
 			var normalized_radius := Vector3(normalized_vertex.x / half_extents.x, normalized_vertex.y / half_extents.y, normalized_vertex.z / half_extents.z).length()
 			radial_min = minf(radial_min, normalized_radius)
 			radial_max = maxf(radial_max, normalized_radius)
-	for edge_count in edge_counts.values():
-		if int(edge_count) != 2:
-			return {"ok": false, "reason": "open_or_nonmanifold_edge"}
+	for edge_key in edge_counts:
+		if int(edge_counts[edge_key]) != 2:
+			return {"ok": false, "reason": "open_or_nonmanifold_edge:%d:%s" % [int(edge_counts[edge_key]), String(edge_key)]}
 	var start_key: String = graph.keys()[0]
 	var visited: Dictionary = {start_key: true}
 	var pending: Array[String] = [start_key]
@@ -156,6 +217,33 @@ func _inspect_low_poly_mesh(vertices: PackedVector3Array, normals: PackedVector3
 	if visited.size() != graph.size():
 		return {"ok": false, "reason": "disconnected_shells"}
 	return {"ok": true, "reason": "ok", "radial_spread": radial_max - radial_min}
+
+
+func _test_seed_family_variation() -> void:
+	var registry := Registry.new()
+	var repository_example_root := ProjectSettings.globalize_path("res://").trim_suffix("/").get_base_dir().path_join("mods/examples")
+	var setup: Dictionary = registry.discover_and_register(["res://mods/first-party", repository_example_root])
+	_check(setup.get("ok", false), "seed gallery can register bundled granite and example basalt profiles")
+	if not setup.get("ok", false):
+		return
+	for definition_id in ObjectWorld.SLOT_DEFINITIONS:
+		var signatures: Dictionary = {}
+		var triangle_total := 0
+		for sample_index in range(12):
+			var recipe: Dictionary = registry.evaluate_rock_recipe(definition_id, 700100 + sample_index)
+			var built: Dictionary = RockMeshAdapter.build_mesh(recipe.get("geometry", {}), recipe.get("geometry_seeds", {}))
+			_check(built.get("ok", false), "%s seed-gallery sample %02d builds (%s)" % [definition_id, sample_index + 1, built.get("reason", "ok")])
+			if not built.get("ok", false):
+				continue
+			var vertices: PackedVector3Array = _mesh_arrays(built)[Mesh.ARRAY_VERTEX]
+			var signature := "%s:%d" % [str(vertices[0]), vertices.size()]
+			for vertex_index in range(0, vertices.size(), 3):
+				signature += ";" + _vertex_key(vertices[vertex_index])
+			_check(not signatures.has(signature), "%s gallery seed %02d has a distinct deterministic silhouette" % [definition_id, sample_index + 1])
+			signatures[signature] = true
+			triangle_total += int(built["triangle_count"])
+		_check(signatures.size() == 12, "%s produces all twelve requested independent gallery silhouettes" % definition_id)
+		print("ROCK_GALLERY_TEST_METRICS: family=%s count=%d mean_triangles=%.2f" % [definition_id, signatures.size(), float(triangle_total) / 12.0])
 
 
 func _mesh_arrays(result: Dictionary) -> Array:
@@ -197,7 +285,7 @@ func _test_order_independent_records(roots: Array[String]) -> void:
 			_check(not all_ids.has(instance_id), "stable instance ID is unique across signed regions")
 			all_ids[instance_id] = true
 			_check(instance["position_mm"] is Vector3i and instance["region_key"] == key, "placement uses integer local millimeters and its canonical signed region")
-			_check(instance["content_pin"].get("mod_version", "").is_empty() == false and instance["recipe_algorithm"] == "stacked_spheres_v1", "instance pins its definition and recipe version")
+			_check(instance["content_pin"].get("mod_version", "").is_empty() == false and instance["recipe_algorithm"] == "geological_halfspace_v1" and instance["geometry_profile"] != "" and instance["geometry_seeds"].size() == 4, "instance pins its definition, recipe version, profile and independent stage seeds")
 			_check(instance.get("instance_state", null) is Dictionary and instance["instance_state"].is_empty(), "future instance-state boundary is explicit but nonpersistent")
 			var local_position := Vector3(instance["position_mm"]) / 1000.0
 			var below: float = Field.sample_density(SEED, key, local_position + Vector3.DOWN * 0.05)
@@ -250,6 +338,22 @@ func _test_missing_and_incompatible_content(_roots: Array[String]) -> void:
 	_check(missing.get_error_summary() == "required_mod_missing:official.example.procedural_rock", "required package failure remains visible to the HUD status adapter")
 	_check(not missing.initialized, "missing required content cannot produce a partially initialized object stream")
 	missing.free()
+	var definition_path := _mod_root.path_join("objects/procedural_rock.json")
+	var current_definition_bytes: PackedByteArray = FileAccess.get_file_as_bytes(definition_path)
+	var legacy_definition := {
+		"schema_version": 1,
+		"type": "procedural_rock",
+		"id": "official.example.procedural_rock:basalt_stack",
+		"display_name": "Legacy Basalt Stack",
+		"tags": ["rock", "basalt", "example"],
+		"recipe": {"algorithm": "stacked_spheres_v1", "lobe_count": 5, "radius_min_mm": 320, "radius_max_mm": 620, "vertical_step_mm": 360, "spread_mm": 180, "jitter_mm": 90},
+	}
+	_write_text(definition_path, JSON.stringify(legacy_definition, "\t"))
+	var legacy_stream: ProceduralObjectStream = ObjectStream.new()
+	var legacy_stream_result: Dictionary = legacy_stream.initialize(SEED, WORLD_ID, ["res://mods/first-party", "user://mods"])
+	_check(not legacy_stream_result.get("ok", false) and String(legacy_stream_result.get("reason", "")).begins_with("required_definition_geometry_version_unsupported:"), "legacy required runtime content fails explicitly rather than being interpreted by the new geometry adapter")
+	legacy_stream.free()
+	_write_bytes(definition_path, current_definition_bytes)
 	var manifest_path := ProjectSettings.globalize_path(_mod_root.path_join("manifest.json"))
 	var manifest_bytes: PackedByteArray = FileAccess.get_file_as_bytes(manifest_path)
 	var parsed := JSON.parse_string(manifest_bytes.get_string_from_utf8()) as Dictionary

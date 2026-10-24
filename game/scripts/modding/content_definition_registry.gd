@@ -3,7 +3,15 @@ class_name ContentDefinitionRegistry
 
 const ROCK_TYPE := "procedural_rock"
 const ROCK_KEYS := ["schema_version", "type", "id", "display_name", "tags", "recipe"]
-const RECIPE_KEYS := ["algorithm", "lobe_count", "radius_min_mm", "radius_max_mm", "vertical_step_mm", "spread_mm", "jitter_mm"]
+const LEGACY_RECIPE_KEYS := ["algorithm", "lobe_count", "radius_min_mm", "radius_max_mm", "vertical_step_mm", "spread_mm", "jitter_mm"]
+const GEOLOGICAL_RECIPE_KEYS := [
+	"algorithm", "profile", "half_extent_x_mm", "half_extent_y_mm", "half_extent_z_mm",
+	"primary_plane_count", "fracture_plane_count", "anisotropy_axis", "anisotropy_milli",
+	"bevel_count", "weathering_milli", "macro_roughness_mm", "meso_roughness_mm", "fine_roughness_mm"
+]
+const GEOLOGICAL_ALGORITHM := "geological_halfspace_v1"
+const GRANITE_PROFILE := "granite_massive_weathered_v1"
+const BASALT_PROFILE := "basalt_fractured_anisotropic_v1"
 const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 
 var _definitions: Dictionary = {}
@@ -124,6 +132,26 @@ func evaluate_rock_recipe(namespaced_id: String, seed: int) -> Dictionary:
 	if seed < 0 or seed > 2147483647:
 		return _failure("seed_out_of_range")
 	var recipe: Dictionary = definition["recipe"]
+	if recipe.get("algorithm") == GEOLOGICAL_ALGORITHM and int(definition.get("schema_version", -1)) == 2:
+		var seeds := {
+			"structure": _derive_seed(seed, 0x13579),
+			"fracture": _derive_seed(seed, 0x2468B),
+			"wear": _derive_seed(seed, 0x3579D),
+			"detail": _derive_seed(seed, 0x468AF),
+		}
+		var geometry := recipe.duplicate(true)
+		return {
+			"ok": true,
+			"definition_id": namespaced_id,
+			"seed": seed,
+			"algorithm": GEOLOGICAL_ALGORITHM,
+			"schema_version": 2,
+			"profile": recipe["profile"],
+			"geometry": geometry,
+			"geometry_seeds": seeds,
+		}
+	if recipe.get("algorithm") != "stacked_spheres_v1" or int(definition.get("schema_version", -1)) != 1:
+		return _failure("recipe_schema_algorithm_mismatch")
 	var state: int = seed
 	var lobes: Array[Dictionary] = []
 	var count: int = recipe["lobe_count"]
@@ -139,7 +167,7 @@ func evaluate_rock_recipe(namespaced_id: String, seed: int) -> Dictionary:
 			"center_mm": Vector3i(centered_index * int(recipe["spread_mm"]) + x_jitter, index * int(recipe["vertical_step_mm"]), z_jitter),
 			"radius_mm": radius
 		})
-	return {"ok": true, "definition_id": namespaced_id, "seed": seed, "algorithm": recipe["algorithm"], "lobes": lobes}
+	return {"ok": true, "definition_id": namespaced_id, "seed": seed, "algorithm": recipe["algorithm"], "schema_version": 1, "lobes": lobes}
 
 
 func _validate_definition(definition: Dictionary, mod_id: String) -> Dictionary:
@@ -150,7 +178,7 @@ func _validate_definition(definition: Dictionary, mod_id: String) -> Dictionary:
 			return _failure("definition_schema_fields")
 	if not _valid_local_id(definition["id"], mod_id):
 		return _failure("definition_namespace_mismatch")
-	if not _is_integer(definition["schema_version"]) or int(definition["schema_version"]) != 1 or definition["type"] != ROCK_TYPE:
+	if not _is_integer(definition["schema_version"]) or not [1, 2].has(int(definition["schema_version"])) or definition["type"] != ROCK_TYPE:
 		return _failure("unsupported_definition_schema")
 	if not definition["display_name"] is String or definition["display_name"].strip_edges().is_empty():
 		return _failure("invalid_definition_metadata")
@@ -164,14 +192,20 @@ func _validate_definition(definition: Dictionary, mod_id: String) -> Dictionary:
 	if not definition["recipe"] is Dictionary:
 		return _failure("invalid_rock_recipe")
 	var recipe: Dictionary = definition["recipe"]
-	if recipe.size() != RECIPE_KEYS.size():
+	match int(definition["schema_version"]):
+		1:
+			return _validate_legacy_recipe(recipe)
+		2:
+			return _validate_geological_recipe(recipe)
+	return _failure("unsupported_definition_schema")
+
+
+func _validate_legacy_recipe(recipe: Dictionary) -> Dictionary:
+	if not _has_exact_keys(recipe, LEGACY_RECIPE_KEYS):
 		return _failure("invalid_rock_recipe")
-	for key in RECIPE_KEYS:
-		if not recipe.has(key):
-			return _failure("invalid_rock_recipe")
 	if recipe["algorithm"] != "stacked_spheres_v1":
 		return _failure("unsupported_rock_algorithm")
-	for key in RECIPE_KEYS.slice(1):
+	for key in LEGACY_RECIPE_KEYS.slice(1):
 		if not _is_integer(recipe[key]):
 			return _failure("invalid_rock_recipe")
 	if int(recipe["lobe_count"]) < 1 or int(recipe["lobe_count"]) > 32:
@@ -181,6 +215,56 @@ func _validate_definition(definition: Dictionary, mod_id: String) -> Dictionary:
 	if int(recipe["vertical_step_mm"]) < 0 or int(recipe["vertical_step_mm"]) > 5000 or int(recipe["spread_mm"]) < 0 or int(recipe["spread_mm"]) > 5000 or int(recipe["jitter_mm"]) < 0 or int(recipe["jitter_mm"]) > 2000:
 		return _failure("invalid_rock_recipe")
 	return {"ok": true, "reason": "ok"}
+
+
+func _validate_geological_recipe(recipe: Dictionary) -> Dictionary:
+	if not _has_exact_keys(recipe, GEOLOGICAL_RECIPE_KEYS):
+		return _failure("invalid_rock_recipe")
+	if recipe["algorithm"] != GEOLOGICAL_ALGORITHM:
+		return _failure("unsupported_rock_algorithm")
+	if recipe["profile"] != GRANITE_PROFILE and recipe["profile"] != BASALT_PROFILE:
+		return _failure("unsupported_rock_profile")
+	for key in GEOLOGICAL_RECIPE_KEYS.slice(2):
+		if key == "anisotropy_axis":
+			if not ["x", "y", "z"].has(recipe[key]):
+				return _failure("invalid_rock_recipe")
+		elif not _is_integer(recipe[key]):
+			return _failure("invalid_rock_recipe")
+	for key in ["half_extent_x_mm", "half_extent_y_mm", "half_extent_z_mm"]:
+		if int(recipe[key]) < 300 or int(recipe[key]) > 1800:
+			return _failure("invalid_rock_recipe")
+	if int(recipe["primary_plane_count"]) < 4 or int(recipe["primary_plane_count"]) > 10:
+		return _failure("invalid_rock_recipe")
+	if int(recipe["fracture_plane_count"]) < 1 or int(recipe["fracture_plane_count"]) > 7:
+		return _failure("invalid_rock_recipe")
+	if int(recipe["bevel_count"]) < 1 or int(recipe["bevel_count"]) > 5:
+		return _failure("invalid_rock_recipe")
+	if int(recipe["anisotropy_milli"]) < 700 or int(recipe["anisotropy_milli"]) > 1900:
+		return _failure("invalid_rock_recipe")
+	if int(recipe["weathering_milli"]) < 0 or int(recipe["weathering_milli"]) > 1000:
+		return _failure("invalid_rock_recipe")
+	if int(recipe["macro_roughness_mm"]) < 0 or int(recipe["macro_roughness_mm"]) > 100 or int(recipe["meso_roughness_mm"]) < 0 or int(recipe["meso_roughness_mm"]) > 60 or int(recipe["fine_roughness_mm"]) < 0 or int(recipe["fine_roughness_mm"]) > 30:
+		return _failure("invalid_rock_recipe")
+	if recipe["profile"] == GRANITE_PROFILE:
+		if int(recipe["fracture_plane_count"]) > 3 or int(recipe["weathering_milli"]) < 600 or int(recipe["anisotropy_milli"]) > 1300:
+			return _failure("profile_parameter_mismatch")
+	else:
+		if int(recipe["fracture_plane_count"]) < 4 or int(recipe["weathering_milli"]) > 450 or int(recipe["anisotropy_milli"]) < 1300:
+			return _failure("profile_parameter_mismatch")
+	return {"ok": true, "reason": "ok"}
+
+
+func _has_exact_keys(value: Dictionary, expected: Array) -> bool:
+	if value.size() != expected.size():
+		return false
+	for key in expected:
+		if not value.has(key):
+			return false
+	return true
+
+
+func _derive_seed(seed: int, discriminator: int) -> int:
+	return posmod(seed * 48271 + discriminator * 69621 + 104729, 2147483646) + 1
 
 
 func _valid_local_id(value: Variant, mod_id: String) -> bool:

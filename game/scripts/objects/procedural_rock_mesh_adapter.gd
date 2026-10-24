@@ -1,67 +1,136 @@
 class_name ProceduralRockMeshAdapter
 extends RefCounted
 
-## Converts a data-only stacked_spheres_v1 recipe into one irregular faceted stone.
-## Lobe bounds determine the body envelope; the recipe lobes are not rendered as spheres.
-const MAX_LOBES := 32
-const SUBDIVISION_LEVELS := 2
-const EXPECTED_TRIANGLES := 320
-const MAX_ABS_SEED := 2147483647
-const GEOMETRY_VERSION := 2
-const MIN_RADIUS_MM := 50
-const MAX_RADIUS_MM := 5000
-const MIN_TRIANGLE_AREA_SQUARED := 1.0e-12
-const MAX_RADIAL_VARIATION := 0.15
+## Builds versioned rock shells from intersections of oriented half-spaces.
+## All noise is a deterministic function of local coordinates; no per-vertex RNG is used.
+const GEOMETRY_VERSION := 3
+const ALGORITHM := "geological_halfspace_v1"
+const MAX_SEED := 2147483646
+const MIN_TRIANGLES := 100
+const MAX_TRIANGLES := 500
+const MIN_AREA_SQUARED := 1.0e-12
+const RECIPE_KEYS := [
+	"algorithm", "profile", "half_extent_x_mm", "half_extent_y_mm", "half_extent_z_mm",
+	"primary_plane_count", "fracture_plane_count", "anisotropy_axis", "anisotropy_milli",
+	"bevel_count", "weathering_milli", "macro_roughness_mm", "meso_roughness_mm", "fine_roughness_mm"
+]
+const SEED_KEYS := ["structure", "fracture", "wear", "detail"]
+const RAND_MOD := 2147483647
 
 
-static func build_mesh(lobes: Array, variation_seed: int) -> Dictionary:
-	if lobes.is_empty() or lobes.size() > MAX_LOBES:
-		return _failure("invalid_lobe_count")
-	if variation_seed < 0 or variation_seed > MAX_ABS_SEED:
-		return _failure("invalid_variation_seed")
-	var bounds := _recipe_bounds(lobes)
-	if not bounds.get("ok", false):
-		return bounds
-	var center_mm: Vector3 = bounds["center_mm"]
-	var half_extents_mm: Vector3 = bounds["half_extents_mm"]
-	var sphere := _create_icosphere()
-	var unit_vertices: Array[Vector3] = sphere["vertices"]
-	var faces: Array[Vector3i] = sphere["faces"]
-	var deformed_vertices: Array[Vector3] = []
-	deformed_vertices.resize(unit_vertices.size())
-	var center := center_mm / 1000.0
-	var half_extents := half_extents_mm / 1000.0
-	for index in range(unit_vertices.size()):
-		var direction: Vector3 = unit_vertices[index]
-		var radial_scale := 1.0 + _radial_variation(direction, variation_seed, index)
-		deformed_vertices[index] = center + Vector3(
-			direction.x * half_extents.x,
-			direction.y * half_extents.y,
-			direction.z * half_extents.z
-		) * radial_scale
+static func build_mesh(recipe: Dictionary, seeds: Dictionary) -> Dictionary:
+	var input_check := _validate_input(recipe, seeds)
+	if not input_check.get("ok", false):
+		return input_check
+	var half_extents := Vector3(
+		float(recipe["half_extent_x_mm"]),
+		float(recipe["half_extent_y_mm"]),
+		float(recipe["half_extent_z_mm"])
+	) / 1000.0
+	var center := Vector3(0.0, half_extents.y, 0.0)
+	var shell := _create_box(half_extents)
+	var points: Array[Vector3] = shell["points"]
+	var polygons: Array = shell["polygons"]
+	var point_cache: Dictionary = {}
+	for index in range(points.size()):
+		point_cache[_point_key(points[index])] = index
+	var structure_state := int(seeds["structure"])
+	for _index in range(int(recipe["primary_plane_count"])):
+		var sampled: Dictionary = _random_unit(structure_state)
+		structure_state = int(sampled["state"])
+		var normal: Vector3 = sampled["vector"]
+		var fraction := 0.64 + _random_unit_float(structure_state) * 0.20
+		structure_state = _next_random(structure_state)
+		var cut := _support_distance(normal, half_extents) * fraction
+		var clipped := _clip_half_space(points, polygons, point_cache, normal, center.dot(normal) + cut)
+		if not clipped.get("ok", false):
+			return clipped
+		polygons = clipped["polygons"]
+
+	var fracture_state := int(seeds["fracture"])
+	var preferred_axis := _axis_index(String(recipe["anisotropy_axis"]))
+	for _index in range(int(recipe["fracture_plane_count"])):
+		var sampled: Dictionary = _random_unit(fracture_state)
+		fracture_state = int(sampled["state"])
+		var normal: Vector3 = sampled["vector"]
+		var attenuation := 1.0 - float(recipe["anisotropy_milli"]) / 2000.0
+		normal[preferred_axis] *= attenuation
+		if normal.length_squared() < 0.04:
+			normal[preferred_axis] = 0.35
+		normal = normal.normalized()
+		var fraction := 0.62 + _random_unit_float(fracture_state) * 0.20
+		fracture_state = _next_random(fracture_state)
+		var cut := _support_distance(normal, half_extents) * fraction
+		var clipped := _clip_half_space(points, polygons, point_cache, normal, center.dot(normal) + cut)
+		if not clipped.get("ok", false):
+			return clipped
+		polygons = clipped["polygons"]
+
+	var wear_state := int(seeds["wear"])
+	for _index in range(int(recipe["bevel_count"])):
+		var signs := Vector3(
+			-1.0 if _random_bit(wear_state) == 0 else 1.0,
+			-1.0 if _random_bit(_next_random(wear_state)) == 0 else 1.0,
+			-1.0 if _random_bit(_next_random(_next_random(wear_state))) == 0 else 1.0
+		)
+		wear_state = _next_random(_next_random(_next_random(wear_state)))
+		var normal := Vector3(signs.x / half_extents.x, signs.y / half_extents.y, signs.z / half_extents.z).normalized()
+		var bevel_fraction := 0.055 + _random_unit_float(wear_state) * 0.065
+		wear_state = _next_random(wear_state)
+		var support := _support_distance(normal, half_extents)
+		var clipped := _clip_half_space(points, polygons, point_cache, normal, center.dot(normal) + support * (1.0 - bevel_fraction))
+		if not clipped.get("ok", false):
+			return clipped
+		polygons = clipped["polygons"]
+
+	var triangulated := _triangulate_polygons(points, polygons, center)
+	if not triangulated.get("ok", false):
+		return triangulated
+	var vertices: Array[Vector3] = triangulated["points"]
+	var triangles: Array[Vector3i] = triangulated["triangles"]
+	var subdivided := _subdivide_once(vertices, triangles)
+	vertices = subdivided["points"]
+	triangles = subdivided["triangles"]
+	var weathering := float(recipe["weathering_milli"]) / 1000.0
+	vertices = _wear_vertices(vertices, triangles, weathering, int(seeds["wear"]))
+	vertices = _apply_coherent_roughness(vertices, triangles, recipe, int(seeds["detail"]), preferred_axis)
+	var lowest_y := INF
+	for vertex in vertices:
+		lowest_y = minf(lowest_y, vertex.y)
+	for vertex_index in range(vertices.size()):
+		var grounded_vertex: Vector3 = vertices[vertex_index]
+		grounded_vertex.y -= lowest_y
+		vertices[vertex_index] = grounded_vertex
+	center.y -= lowest_y
+	if triangles.size() < MIN_TRIANGLES or triangles.size() > MAX_TRIANGLES:
+		return _failure("triangle_budget_exceeded")
+
 	var output_vertices := PackedVector3Array()
 	var output_normals := PackedVector3Array()
-	for face in faces:
-		var a: Vector3 = deformed_vertices[face.x]
-		var b: Vector3 = deformed_vertices[face.y]
-		var c: Vector3 = deformed_vertices[face.z]
-		var face_normal := (b - a).cross(c - a)
-		if face_normal.length_squared() <= MIN_TRIANGLE_AREA_SQUARED:
+	var signed_volume := 0.0
+	var surface_area := 0.0
+	for triangle in triangles:
+		var a: Vector3 = vertices[triangle.x]
+		var b: Vector3 = vertices[triangle.y]
+		var c: Vector3 = vertices[triangle.z]
+		var cross := (b - a).cross(c - a)
+		if not cross.is_finite() or cross.length_squared() <= MIN_AREA_SQUARED:
 			return _failure("degenerate_triangle")
 		var face_center := (a + b + c) / 3.0
-		var outward := face_center - center
-		if face_normal.dot(outward) < 0.0:
-			var swap := b
+		if cross.dot(face_center - center) < 0.0:
+			var temporary := b
 			b = c
-			c = swap
-			face_normal = (b - a).cross(c - a)
-		if not face_normal.is_finite() or face_normal.length_squared() <= MIN_TRIANGLE_AREA_SQUARED:
+			c = temporary
+			cross = (b - a).cross(c - a)
+		var normal := cross.normalized()
+		if not normal.is_finite() or normal.length_squared() < 0.99:
 			return _failure("invalid_face_normal")
-		var normal := face_normal.normalized()
 		output_vertices.append_array(PackedVector3Array([a, b, c]))
 		output_normals.append_array(PackedVector3Array([normal, normal, normal]))
-	if faces.size() != EXPECTED_TRIANGLES:
-		return _failure("unexpected_icosphere_topology")
+		signed_volume += a.dot(b.cross(c)) / 6.0
+		surface_area += cross.length() * 0.5
+	if not is_finite(signed_volume) or signed_volume <= 1.0e-8 or not is_finite(surface_area) or surface_area <= 0.0:
+		return _failure("invalid_shell_measure")
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = output_vertices
@@ -70,89 +139,382 @@ static func build_mesh(lobes: Array, variation_seed: int) -> Dictionary:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	if mesh.get_surface_count() != 1:
 		return _failure("mesh_commit_failed")
+	var bounds := _measure_bounds(vertices)
 	return {
 		"ok": true,
 		"mesh": mesh,
+		"triangle_count": triangles.size(),
 		"vertex_count": output_vertices.size(),
-		"triangle_count": faces.size(),
-		"mesh_center": center,
-		"half_extents": half_extents,
-		"variation_seed": variation_seed,
+		"unique_vertex_count": vertices.size(),
+		"surface_area_m2": surface_area,
+		"volume_m3": signed_volume,
+		"bounds_min": bounds["min"],
+		"bounds_max": bounds["max"],
+		"profile": recipe["profile"],
 		"geometry_version": GEOMETRY_VERSION,
+		"algorithm": ALGORITHM,
+		"geometry_seeds": seeds.duplicate(true),
 	}
 
 
-static func _recipe_bounds(lobes: Array) -> Dictionary:
+static func _validate_input(recipe: Dictionary, seeds: Dictionary) -> Dictionary:
+	if recipe.size() != RECIPE_KEYS.size() or seeds.size() != SEED_KEYS.size():
+		return _failure("geometry_recipe_or_seed_fields")
+	for key in RECIPE_KEYS:
+		if not recipe.has(key):
+			return _failure("missing_geometry_recipe_field:%s" % key)
+	for key in SEED_KEYS:
+		if not seeds.has(key) or typeof(seeds[key]) != TYPE_INT or int(seeds[key]) < 1 or int(seeds[key]) > MAX_SEED:
+			return _failure("invalid_geometry_seeds")
+	if recipe["algorithm"] != ALGORITHM or not ["granite_massive_weathered_v1", "basalt_fractured_anisotropic_v1"].has(recipe["profile"]):
+		return _failure("unsupported_geometry_version_or_profile:%s:%s" % [recipe["algorithm"], recipe["profile"]])
+	for key in RECIPE_KEYS.slice(2):
+		if key == "anisotropy_axis":
+			if not ["x", "y", "z"].has(recipe[key]):
+				return _failure("invalid_geometry_axis")
+		elif not _is_integer(recipe[key]):
+			return _failure("invalid_geometry_integer_field:%s" % key)
+	for key in ["half_extent_x_mm", "half_extent_y_mm", "half_extent_z_mm"]:
+		if int(recipe[key]) < 300 or int(recipe[key]) > 1800:
+			return _failure("geometry_extent_out_of_range")
+	if int(recipe["primary_plane_count"]) < 4 or int(recipe["primary_plane_count"]) > 10 or int(recipe["fracture_plane_count"]) < 1 or int(recipe["fracture_plane_count"]) > 7 or int(recipe["bevel_count"]) < 1 or int(recipe["bevel_count"]) > 5:
+		return _failure("geometry_plane_count_out_of_range")
+	if int(recipe["anisotropy_milli"]) < 700 or int(recipe["anisotropy_milli"]) > 1900 or int(recipe["weathering_milli"]) < 0 or int(recipe["weathering_milli"]) > 1000:
+		return _failure("geometry_profile_parameter_out_of_range")
+	if int(recipe["macro_roughness_mm"]) < 0 or int(recipe["macro_roughness_mm"]) > 100 or int(recipe["meso_roughness_mm"]) < 0 or int(recipe["meso_roughness_mm"]) > 60 or int(recipe["fine_roughness_mm"]) < 0 or int(recipe["fine_roughness_mm"]) > 30:
+		return _failure("geometry_roughness_out_of_range")
+	if recipe["profile"] == "granite_massive_weathered_v1" and (int(recipe["fracture_plane_count"]) > 3 or int(recipe["weathering_milli"]) < 600 or int(recipe["anisotropy_milli"]) > 1300):
+		return _failure("granite_profile_parameters_invalid")
+	if recipe["profile"] == "basalt_fractured_anisotropic_v1" and (int(recipe["fracture_plane_count"]) < 4 or int(recipe["weathering_milli"]) > 450 or int(recipe["anisotropy_milli"]) < 1300):
+		return _failure("basalt_profile_parameters_invalid")
+	return {"ok": true}
+
+
+static func _is_integer(value: Variant) -> bool:
+	return typeof(value) == TYPE_INT or (typeof(value) == TYPE_FLOAT and is_finite(value) and floor(value) == value and absf(value) <= 9007199254740991.0)
+
+
+static func _create_box(half_extents: Vector3) -> Dictionary:
+	var points: Array[Vector3] = [
+		Vector3(-half_extents.x, 0.0, -half_extents.z), Vector3(half_extents.x, 0.0, -half_extents.z),
+		Vector3(half_extents.x, half_extents.y * 2.0, -half_extents.z), Vector3(-half_extents.x, half_extents.y * 2.0, -half_extents.z),
+		Vector3(-half_extents.x, 0.0, half_extents.z), Vector3(half_extents.x, 0.0, half_extents.z),
+		Vector3(half_extents.x, half_extents.y * 2.0, half_extents.z), Vector3(-half_extents.x, half_extents.y * 2.0, half_extents.z),
+	]
+	var polygons: Array = [
+		PackedInt32Array([0, 3, 2, 1]), PackedInt32Array([4, 5, 6, 7]),
+		PackedInt32Array([0, 4, 7, 3]), PackedInt32Array([1, 2, 6, 5]),
+		PackedInt32Array([0, 1, 5, 4]), PackedInt32Array([3, 7, 6, 2]),
+	]
+	return {"points": points, "polygons": polygons}
+
+
+static func _clip_half_space(points: Array[Vector3], polygons: Array, point_cache: Dictionary, normal: Vector3, distance: float) -> Dictionary:
+	var output_polygons: Array = []
+	var cap_indices: Dictionary = {}
+	var changed := false
+	for polygon_value in polygons:
+		var polygon: PackedInt32Array = polygon_value
+		var output := PackedInt32Array()
+		for edge_index in range(polygon.size()):
+			var first_index: int = polygon[edge_index]
+			var second_index: int = polygon[(edge_index + 1) % polygon.size()]
+			var first: Vector3 = points[first_index]
+			var second: Vector3 = points[second_index]
+			var first_delta := normal.dot(first) - distance
+			var second_delta := normal.dot(second) - distance
+			var first_inside := first_delta <= 1.0e-8
+			var second_inside := second_delta <= 1.0e-8
+			if first_inside:
+				_append_unique(output, first_index)
+			else:
+				changed = true
+			if first_inside != second_inside:
+				var denominator := first_delta - second_delta
+				if absf(denominator) <= 1.0e-12:
+					return _failure("unstable_plane_intersection")
+				var amount := clampf(first_delta / denominator, 0.0, 1.0)
+				var intersection: Vector3 = first.lerp(second, amount)
+				var index := _insert_point(points, point_cache, intersection)
+				_append_unique(output, index)
+				cap_indices[index] = true
+		output = _clean_polygon(output, points)
+		if output.size() >= 3:
+			output_polygons.append(output)
+	if not changed:
+		return {"ok": true, "polygons": polygons}
+	if cap_indices.size() >= 3:
+		var cap: Array[int] = []
+		var cap_center := Vector3.ZERO
+		for index_value in cap_indices:
+			var index := int(index_value)
+			cap.append(index)
+			cap_center += points[index]
+		cap_center /= float(cap.size())
+		var reference := Vector3.RIGHT if absf(normal.dot(Vector3.UP)) > 0.92 else Vector3.UP
+		var basis_u := normal.cross(reference).normalized()
+		var basis_v := normal.cross(basis_u).normalized()
+		cap.sort_custom(func(a: int, b: int) -> bool:
+			var delta_a: Vector3 = points[a] - cap_center
+			var delta_b: Vector3 = points[b] - cap_center
+			return atan2(delta_a.dot(basis_v), delta_a.dot(basis_u)) < atan2(delta_b.dot(basis_v), delta_b.dot(basis_u))
+		)
+		var cap_polygon := PackedInt32Array()
+		for index in cap:
+			_append_unique(cap_polygon, index)
+		cap_polygon = _clean_polygon(cap_polygon, points)
+		if cap_polygon.size() >= 3:
+			output_polygons.append(cap_polygon)
+	if output_polygons.size() < 4:
+		return _failure("half_space_removed_shell")
+	return {"ok": true, "polygons": output_polygons}
+
+
+static func _triangulate_polygons(points: Array[Vector3], polygons: Array, center: Vector3) -> Dictionary:
+	var output_points: Array[Vector3] = points.duplicate()
+	var triangles: Array[Vector3i] = []
+	for polygon_value in polygons:
+		var polygon: PackedInt32Array = polygon_value
+		if polygon.size() < 3:
+			return _failure("invalid_clipped_face")
+		var face_center := Vector3.ZERO
+		for index in polygon:
+			face_center += output_points[index]
+		face_center /= float(polygon.size())
+		var center_index := output_points.size()
+		output_points.append(face_center)
+		for edge_index in range(polygon.size()):
+			var a: int = polygon[edge_index]
+			var b: int = polygon[(edge_index + 1) % polygon.size()]
+			var triangle := Vector3i(a, b, center_index)
+			var normal := (output_points[b] - output_points[a]).cross(face_center - output_points[a])
+			if normal.length_squared() <= MIN_AREA_SQUARED:
+				return _failure("degenerate_clipped_face")
+			if normal.dot(face_center - center) < 0.0:
+				triangle = Vector3i(b, a, center_index)
+			triangles.append(triangle)
+	if triangles.size() < 25:
+		return _failure("insufficient_base_surface")
+	return {"ok": true, "points": output_points, "triangles": triangles}
+
+
+static func _subdivide_once(points: Array[Vector3], triangles: Array[Vector3i]) -> Dictionary:
+	var output_points: Array[Vector3] = points.duplicate()
+	var midpoint_cache: Dictionary = {}
+	var output_triangles: Array[Vector3i] = []
+	for triangle in triangles:
+		var ab := _midpoint_index(triangle.x, triangle.y, output_points, midpoint_cache)
+		var bc := _midpoint_index(triangle.y, triangle.z, output_points, midpoint_cache)
+		var ca := _midpoint_index(triangle.z, triangle.x, output_points, midpoint_cache)
+		output_triangles.append(Vector3i(triangle.x, ab, ca))
+		output_triangles.append(Vector3i(triangle.y, bc, ab))
+		output_triangles.append(Vector3i(triangle.z, ca, bc))
+		output_triangles.append(Vector3i(ab, bc, ca))
+	return {"points": output_points, "triangles": output_triangles}
+
+
+static func _wear_vertices(points: Array[Vector3], triangles: Array[Vector3i], weathering: float, seed: int) -> Array[Vector3]:
+	var neighbors: Array = []
+	var normal_sums: Array[Vector3] = []
+	var face_normals: Array = []
+	var curvature_values: Array[float] = []
+	neighbors.resize(points.size())
+	normal_sums.resize(points.size())
+	curvature_values.resize(points.size())
+	for index in range(points.size()):
+		neighbors[index] = {}
+		normal_sums[index] = Vector3.ZERO
+		curvature_values[index] = 0.0
+	for triangle in triangles:
+		var normal := (points[triangle.y] - points[triangle.x]).cross(points[triangle.z] - points[triangle.x]).normalized()
+		face_normals.append(normal)
+		for vertex_index in [triangle.x, triangle.y, triangle.z]:
+			normal_sums[vertex_index] = (normal_sums[vertex_index] as Vector3) + normal
+		for pair in [[triangle.x, triangle.y], [triangle.y, triangle.z], [triangle.z, triangle.x]]:
+			(neighbors[pair[0]] as Dictionary)[pair[1]] = true
+			(neighbors[pair[1]] as Dictionary)[pair[0]] = true
+	for triangle_index in range(triangles.size()):
+		var triangle: Vector3i = triangles[triangle_index]
+		var face_normal: Vector3 = face_normals[triangle_index]
+		for vertex_index in [triangle.x, triangle.y, triangle.z]:
+			var average_normal: Vector3 = (normal_sums[vertex_index] as Vector3).normalized()
+			curvature_values[vertex_index] = maxf(curvature_values[vertex_index], 1.0 - average_normal.dot(face_normal))
+	var output := points.duplicate()
+	for index in range(points.size()):
+		var average_normal: Vector3 = (normal_sums[index] as Vector3).normalized()
+		var neighbor_center := Vector3.ZERO
+		for neighbor_index in (neighbors[index] as Dictionary):
+			neighbor_center += points[int(neighbor_index)]
+		var neighbor_count := (neighbors[index] as Dictionary).size()
+		if neighbor_count < 3 or average_normal.length_squared() < 0.5:
+			continue
+		neighbor_center /= float(neighbor_count)
+		var wear_variation := 0.78 + 0.22 * (_value_noise(points[index] * 2.7, seed) * 0.5 + 0.5)
+		var selective_blend := weathering * 0.24 * wear_variation * clampf(0.18 + curvature_values[index] * 2.8, 0.0, 1.0)
+		output[index] = points[index].lerp(neighbor_center, selective_blend)
+	return output
+
+
+static func _apply_coherent_roughness(points: Array[Vector3], triangles: Array[Vector3i], recipe: Dictionary, seed: int, anisotropy_axis: int) -> Array[Vector3]:
+	var normals: Array[Vector3] = []
+	var shortest_edges: Array[float] = []
+	normals.resize(points.size())
+	shortest_edges.resize(points.size())
+	for index in range(points.size()):
+		normals[index] = Vector3.ZERO
+		shortest_edges[index] = INF
+	for triangle in triangles:
+		var normal := (points[triangle.y] - points[triangle.x]).cross(points[triangle.z] - points[triangle.x]).normalized()
+		normals[triangle.x] += normal
+		normals[triangle.y] += normal
+		normals[triangle.z] += normal
+		for pair in [[triangle.x, triangle.y], [triangle.y, triangle.z], [triangle.z, triangle.x]]:
+			var edge_length := points[pair[0]].distance_to(points[pair[1]])
+			shortest_edges[pair[0]] = minf(shortest_edges[pair[0]], edge_length)
+			shortest_edges[pair[1]] = minf(shortest_edges[pair[1]], edge_length)
+	var scale := float(recipe["anisotropy_milli"]) / 1000.0
+	var output := points.duplicate()
+	for index in range(points.size()):
+		var coordinate: Vector3 = points[index]
+		coordinate[anisotropy_axis] *= scale
+		var broad := _value_noise(coordinate * 1.6, seed)
+		var middle := _value_noise(coordinate * 4.7, _derive_noise_seed(seed, 31))
+		var fine := _value_noise(coordinate * 10.2, _derive_noise_seed(seed, 73))
+		var displacement := broad * float(recipe["macro_roughness_mm"]) / 1000.0
+		displacement += middle * float(recipe["meso_roughness_mm"]) / 1000.0
+		displacement += fine * float(recipe["fine_roughness_mm"]) / 1000.0
+		var configured_amplitude := (float(recipe["macro_roughness_mm"]) + float(recipe["meso_roughness_mm"]) + float(recipe["fine_roughness_mm"])) / 1000.0
+		var maximum_safe_amplitude := minf(configured_amplitude, shortest_edges[index] * 0.07)
+		displacement = clampf(displacement, -maximum_safe_amplitude, maximum_safe_amplitude)
+		var normal: Vector3 = (normals[index] as Vector3).normalized()
+		if normal.length_squared() > 0.5:
+			output[index] = points[index] + normal * displacement
+	return output
+
+
+static func _value_noise(position: Vector3, seed: int) -> float:
+	var cell := Vector3i(floori(position.x), floori(position.y), floori(position.z))
+	var fraction := Vector3(position.x - floor(position.x), position.y - floor(position.y), position.z - floor(position.z))
+	fraction = Vector3(_smooth(fraction.x), _smooth(fraction.y), _smooth(fraction.z))
+	var values: Array[float] = []
+	for z in range(2):
+		for y in range(2):
+			for x in range(2):
+				values.append(_lattice_value(cell.x + x, cell.y + y, cell.z + z, seed))
+	var x00 := lerpf(values[0], values[1], fraction.x)
+	var x10 := lerpf(values[2], values[3], fraction.x)
+	var x01 := lerpf(values[4], values[5], fraction.x)
+	var x11 := lerpf(values[6], values[7], fraction.x)
+	return lerpf(lerpf(x00, x10, fraction.y), lerpf(x01, x11, fraction.y), fraction.z)
+
+
+static func _lattice_value(x: int, y: int, z: int, seed: int) -> float:
+	var value := posmod(seed * 48271 + x * 69621 + y * 104729 + z * 130363 + 15485863, RAND_MOD)
+	value = posmod(value * 16807 + 1013904223, RAND_MOD)
+	return float(value) / float(RAND_MOD) * 2.0 - 1.0
+
+
+static func _random_unit(state: int) -> Dictionary:
+	var next := state
+	var vector := Vector3.ZERO
+	for axis in range(3):
+		next = _next_random(next)
+		vector[axis] = float(next) / float(RAND_MOD) * 2.0 - 1.0
+	if vector.length_squared() < 0.08:
+		vector = Vector3(0.71, 0.41, 0.57)
+	return {"state": next, "vector": vector.normalized()}
+
+
+static func _random_unit_float(state: int) -> float:
+	return float(posmod(state, RAND_MOD)) / float(RAND_MOD)
+
+
+static func _next_random(state: int) -> int:
+	return int((state * 48271 + 1) % RAND_MOD)
+
+
+static func _random_bit(state: int) -> int:
+	return posmod(state, 2)
+
+
+static func _derive_noise_seed(seed: int, discriminator: int) -> int:
+	return posmod(seed * 69621 + discriminator * 48271 + 1, RAND_MOD)
+
+
+static func _support_distance(normal: Vector3, extents: Vector3) -> float:
+	return absf(normal.x) * extents.x + absf(normal.y) * extents.y + absf(normal.z) * extents.z
+
+
+static func _axis_index(axis: String) -> int:
+	match axis:
+		"x": return 0
+		"y": return 1
+		"z": return 2
+	return 1
+
+
+static func _insert_point(points: Array[Vector3], cache: Dictionary, point: Vector3) -> int:
+	var key := _point_key(point)
+	if cache.has(key):
+		return int(cache[key])
+	var index := points.size()
+	points.append(point)
+	cache[key] = index
+	return index
+
+
+static func _point_key(point: Vector3) -> String:
+	return "%d,%d,%d" % [roundi(point.x * 1000000.0), roundi(point.y * 1000000.0), roundi(point.z * 1000000.0)]
+
+
+static func _append_unique(indices: PackedInt32Array, index: int) -> void:
+	if indices.is_empty() or indices[indices.size() - 1] != index:
+		indices.append(index)
+
+
+static func _clean_polygon(indices: PackedInt32Array, points: Array[Vector3]) -> PackedInt32Array:
+	var cleaned := PackedInt32Array()
+	for index in indices:
+		_append_unique(cleaned, index)
+	if cleaned.size() > 1 and cleaned[0] == cleaned[cleaned.size() - 1]:
+		cleaned.remove_at(cleaned.size() - 1)
+	var changed := true
+	while changed and cleaned.size() >= 3:
+		changed = false
+		for offset in range(cleaned.size()):
+			var previous: Vector3 = points[cleaned[posmod(offset - 1, cleaned.size())]]
+			var current: Vector3 = points[cleaned[offset]]
+			var next: Vector3 = points[cleaned[(offset + 1) % cleaned.size()]]
+			if (current - previous).cross(next - current).length_squared() <= MIN_AREA_SQUARED:
+				cleaned.remove_at(offset)
+				changed = true
+				break
+	return cleaned
+
+
+static func _midpoint_index(first: int, second: int, points: Array[Vector3], cache: Dictionary) -> int:
+	var low := mini(first, second)
+	var high := maxi(first, second)
+	var key := "%d:%d" % [low, high]
+	if cache.has(key):
+		return int(cache[key])
+	var index := points.size()
+	points.append((points[first] + points[second]) * 0.5)
+	cache[key] = index
+	return index
+
+
+static func _measure_bounds(points: Array[Vector3]) -> Dictionary:
 	var minimum := Vector3(INF, INF, INF)
 	var maximum := Vector3(-INF, -INF, -INF)
-	for lobe_value in lobes:
-		if not lobe_value is Dictionary or not lobe_value.get("center_mm") is Vector3i:
-			return _failure("invalid_lobe_record")
-		var center_mm: Vector3i = lobe_value["center_mm"]
-		var radius_mm := int(lobe_value.get("radius_mm", 0))
-		if radius_mm < MIN_RADIUS_MM or radius_mm > MAX_RADIUS_MM:
-			return _failure("invalid_lobe_radius")
-		var radius := Vector3.ONE * float(radius_mm)
-		var lobe_center := Vector3(center_mm)
-		minimum = minimum.min(lobe_center - radius)
-		maximum = maximum.max(lobe_center + radius)
-	var half_extents := (maximum - minimum) * 0.5
-	if not half_extents.is_finite() or minf(half_extents.x, minf(half_extents.y, half_extents.z)) < MIN_RADIUS_MM:
-		return _failure("invalid_recipe_envelope")
-	return {"ok": true, "center_mm": (minimum + maximum) * 0.5, "half_extents_mm": half_extents}
+	for point in points:
+		minimum = minimum.min(point)
+		maximum = maximum.max(point)
+	return {"min": minimum, "max": maximum}
 
 
-static func _radial_variation(direction: Vector3, seed: int, vertex_index: int) -> float:
-	var phase := float(seed % 100003) * 0.0137
-	var broad := sin(direction.dot(Vector3(4.7, 7.1, 3.9)) + phase)
-	var medium := sin(direction.dot(Vector3(-8.3, 2.9, 6.2)) - phase * 0.71)
-	var fine := sin(direction.dot(Vector3(11.9, -9.1, 5.3)) + phase * 1.37)
-	var hash_value := posmod(seed * 48271 + (vertex_index + 1) * 69621, MAX_ABS_SEED)
-	var vertex_jitter := float(hash_value % 20001) / 10000.0 - 1.0
-	return clampf(broad * 0.055 + medium * 0.035 + fine * 0.02 + vertex_jitter * 0.035, -MAX_RADIAL_VARIATION, MAX_RADIAL_VARIATION)
-
-
-static func _create_icosphere() -> Dictionary:
-	var phi := (1.0 + sqrt(5.0)) * 0.5
-	var vertices: Array[Vector3] = [
-		Vector3(-1, phi, 0), Vector3(1, phi, 0), Vector3(-1, -phi, 0), Vector3(1, -phi, 0),
-		Vector3(0, -1, phi), Vector3(0, 1, phi), Vector3(0, -1, -phi), Vector3(0, 1, -phi),
-		Vector3(phi, 0, -1), Vector3(phi, 0, 1), Vector3(-phi, 0, -1), Vector3(-phi, 0, 1),
-	]
-	for index in range(vertices.size()):
-		vertices[index] = vertices[index].normalized()
-	var faces: Array[Vector3i] = [
-		Vector3i(0, 11, 5), Vector3i(0, 5, 1), Vector3i(0, 1, 7), Vector3i(0, 7, 10), Vector3i(0, 10, 11),
-		Vector3i(1, 5, 9), Vector3i(5, 11, 4), Vector3i(11, 10, 2), Vector3i(10, 7, 6), Vector3i(7, 1, 8),
-		Vector3i(3, 9, 4), Vector3i(3, 4, 2), Vector3i(3, 2, 6), Vector3i(3, 6, 8), Vector3i(3, 8, 9),
-		Vector3i(4, 9, 5), Vector3i(2, 4, 11), Vector3i(6, 2, 10), Vector3i(8, 6, 7), Vector3i(9, 8, 1),
-	]
-	for _level in range(SUBDIVISION_LEVELS):
-		var midpoint_cache: Dictionary = {}
-		var subdivided: Array[Vector3i] = []
-		for face in faces:
-			var ab := _midpoint_index(face.x, face.y, vertices, midpoint_cache)
-			var bc := _midpoint_index(face.y, face.z, vertices, midpoint_cache)
-			var ca := _midpoint_index(face.z, face.x, vertices, midpoint_cache)
-			subdivided.append(Vector3i(face.x, ab, ca))
-			subdivided.append(Vector3i(face.y, bc, ab))
-			subdivided.append(Vector3i(face.z, ca, bc))
-			subdivided.append(Vector3i(ab, bc, ca))
-		faces = subdivided
-	return {"vertices": vertices, "faces": faces}
-
-
-static func _midpoint_index(first: int, second: int, vertices: Array[Vector3], midpoint_cache: Dictionary) -> int:
-	var lower := mini(first, second)
-	var upper := maxi(first, second)
-	var key := lower * 1000 + upper
-	if midpoint_cache.has(key):
-		return int(midpoint_cache[key])
-	var midpoint := (vertices[first] + vertices[second]).normalized()
-	var index := vertices.size()
-	vertices.append(midpoint)
-	midpoint_cache[key] = index
-	return index
+static func _smooth(value: float) -> float:
+	return value * value * (3.0 - 2.0 * value)
 
 
 static func _failure(reason: String) -> Dictionary:

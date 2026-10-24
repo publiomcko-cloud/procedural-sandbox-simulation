@@ -48,8 +48,11 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 		if not candidate.has_mod(mod_id):
 			return _fail_initialize("required_mod_missing:%s" % mod_id)
 	for definition_id in ObjectWorld.SLOT_DEFINITIONS:
-		if candidate.get_definition(definition_id).is_empty():
+		var definition: Dictionary = candidate.get_definition(definition_id)
+		if definition.is_empty():
 			return _fail_initialize("required_definition_missing:%s" % definition_id)
+		if int(definition.get("schema_version", -1)) != 2 or definition.get("recipe", {}).get("algorithm", "") != RockMeshAdapter.ALGORITHM:
+			return _fail_initialize("required_definition_geometry_version_unsupported:%s" % definition_id)
 	registry = candidate
 	_mod_count = int(registration.get("mod_count", 0))
 	_definition_ids.clear()
@@ -81,7 +84,7 @@ func publish_region(region_key: Vector2i, state: RefCounted) -> Dictionary:
 	var pending_nodes: Array[Node3D] = []
 	var instances: Array[Dictionary] = generated["instances"]
 	for instance in instances:
-		var mesh_result: Dictionary = RockMeshAdapter.build_mesh(instance["lobes"], int(instance["recipe_seed"]))
+		var mesh_result: Dictionary = RockMeshAdapter.build_mesh(instance["geometry"], instance["geometry_seeds"])
 		if not mesh_result.get("ok", false):
 			for pending_node in pending_nodes:
 				pending_node.free()
@@ -93,6 +96,8 @@ func publish_region(region_key: Vector2i, state: RefCounted) -> Dictionary:
 		object_node.set_meta("definition_id", instance["definition_id"])
 		object_node.set_meta("content_pin", instance["content_pin"])
 		object_node.set_meta("recipe_algorithm", instance["recipe_algorithm"])
+		object_node.set_meta("geometry_profile", instance["geometry_profile"])
+		object_node.set_meta("geometry_seeds", instance["geometry_seeds"].duplicate(true))
 		object_node.set_meta("geometry_adapter_version", RockMeshAdapter.GEOMETRY_VERSION)
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = mesh_result["mesh"]

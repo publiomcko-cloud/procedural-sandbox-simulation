@@ -1,16 +1,23 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "type": "procedural_rock",
   "id": "official.example.procedural_rock:basalt_stack",
   "display_name": "Example Basalt Stack",
   "tags": ["rock", "basalt", "example"],
   "recipe": {
-    "algorithm": "stacked_spheres_v1",
-    "lobe_count": 5,
-    "radius_min_mm": 320,
-    "radius_max_mm": 620,
-    "vertical_step_mm": 360,
-    "spread_mm": 180,
-    "jitter_mm": 90
+    "algorithm": "geological_halfspace_v1",
+    "profile": "basalt_fractured_anisotropic_v1",
+    "half_extent_x_mm": 590,
+    "half_extent_y_mm": 820,
+    "half_extent_z_mm": 610,
+    "primary_plane_count": 8,
+    "fracture_plane_count": 5,
+    "anisotropy_axis": "y",
+    "anisotropy_milli": 1580,
+    "bevel_count": 2,
+    "weathering_milli": 270,
+    "macro_roughness_mm": 55,
+    "meso_roughness_mm": 32,
+    "fine_roughness_mm": 14
   }
 }

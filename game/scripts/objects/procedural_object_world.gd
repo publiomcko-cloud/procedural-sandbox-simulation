@@ -46,6 +46,8 @@ static func build_region_instances(
 		var recipe: Dictionary = registry.evaluate_rock_recipe(definition_id, recipe_seed)
 		if not recipe.get("ok", false):
 			return _failure("required_object_recipe_failed")
+		if recipe.get("algorithm", "") != ContentDefinitionRegistry.GEOLOGICAL_ALGORITHM or not recipe.get("geometry", null) is Dictionary or not recipe.get("geometry_seeds", null) is Dictionary:
+			return _failure("required_object_geometry_version_unavailable")
 		instances.append({
 			"instance_id": _instance_id(world_id, world_seed, definition_id, region_key, slot_index),
 			"definition_id": definition_id,
@@ -58,9 +60,11 @@ static func build_region_instances(
 			"placement_seed": placement_seed,
 			"recipe_seed": recipe_seed,
 			"recipe_algorithm": recipe.get("algorithm", ""),
+			"geometry_profile": recipe.get("profile", ""),
+			"geometry": recipe["geometry"].duplicate(true),
+			"geometry_seeds": recipe["geometry_seeds"].duplicate(true),
 			"instance_state": {},
 			"position_mm": position_result["position_mm"],
-			"lobes": recipe.get("lobes", []).duplicate(true),
 		})
 	return {"ok": true, "reason": "ok", "region_key": region_key, "instances": instances}
 
