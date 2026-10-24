@@ -1,3 +1,9 @@
+# Live verified status override — 2026-10-24
+
+Integrated main: `52ed9601c70ddade80e75ee9faccd45ec8d2e9a3` after PR #106. PRs #99, #103, #104, #105 and #106 integrated; exact receipts in [post-merge checkpoint](../checkpoints/2026-10-24-PR106-MERGE-AND-NEXT-P2-0B-HANDOFF.md). Owner accepted rock shapes; visual terrain/rock intersection persists and is deferred in issue #108, not resolved or denied. P2.0B is next separately scoped candidate; no code yet. Five F2-G1 holds, ADR-0002 proposed and non-automatic authorization preserved. Check live GitHub refs before relying on snapshot. Every significant event must have new immutable checkpoint, index update and pertinent status/doc reconciliation.
+
+---
+
 # Project current status — checkpoint 2026-10-21
 
 **Snapshot, not a live branch monitor.** Evidence baseline: repository `publiomcko-cloud/procedural-sandbox-simulation`, verified `main` at **`665c5c883ae88b949f4030f7affc786064999f61`** on 2026-10-21 after verified owner-authorized PR #97 documentation integration (first parent `aca6b6403c455708cacda01c8fbf0bf980d813a2`, second parent `4cc18693d9f01e759b272c6302de2663ffc42a1e`). PR #96 P1.1A experimental integration and PR #95 documentation remain previously merged. P1.0C source and the owner-approved P1.1 R2 plan remain integrated. **Always check live GitHub `main`, feature PR and working tree before acting.** Earlier P1.0A and P1.0B checkpoints remain frozen; the [P1.0C implementation checkpoint](../checkpoints/2026-10-17-P1-0C-IMPLEMENTATION.md) records its authorized source slice.
