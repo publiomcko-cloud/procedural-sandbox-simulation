@@ -1,3 +1,15 @@
+# Current verified snapshot — 2026-10-24 (docs-only reconciliation)
+
+**Live-verified integrated main:** `0ea2ad834db5dc2de1110cf0388ea06604cc7715` (PR #105 merge). This section supersedes older time-scoped status below; preserve historic wording. Independent checks and owner approvals are separate gates.
+
+Integrated since the older 2026-10-21 snapshot: benchmark test harness PR #99 (`784c2071`); playable custom LOD0/1 PR #103 (`bcf19fbc`); local terrain save PR #104 (`66263bae`); declarative mod foundation/test isolation PR #105 (`0ea2ad834db5dc2de1110cf0388ea06604cc7715`). These are scoped slices, not whole P0/P1/engine release acceptance. [Retrospective exact-SHA receipt](../checkpoints/2026-10-24-P1-1C-P0-2-P0-3-MERGE-RECEIPTS-P2-0A-GUI.md).
+
+**Active:** [draft PR #106](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/106) at `5166c311ba8d6ac7e8c6eac3b9a097db1e1ef8c1`, source reviewed for bounded object prototype; headless 17,375/0 developer-reported. Owner 2026-10-24 reports other visual functionality correct but rock geometry unnatural (overlapping spheres). **OWNER_GUI_VISUAL_BLOCKER**: no owner GUI PASS, no merge. Need deterministic irregular rock geometry correction, focused tests, independent rereview and owner GUI retest. Existing custom GDScript backend remains provisional; ADR-0002 proposed. All five F2-G1 holds remain.
+
+**Mandatory documentation rule:** every material owner GUI PASS/FAIL, significant defect/correction, review, decision, merge and handoff creates a new immutable dated event checkpoint plus index entry, with CURRENT_STATUS/README/recovery guidance updated as appropriate, even when a feature branch is concurrently active. Use docs-only PR; never self-merge. See [PROJECT_MEMORY_PROTOCOL](../workflow/PROJECT_MEMORY_PROTOCOL.md).
+
+---
+
 # Project current status — checkpoint 2026-10-21
 
 **Snapshot, not a live branch monitor.** Evidence baseline: repository `publiomcko-cloud/procedural-sandbox-simulation`, verified `main` at **`665c5c883ae88b949f4030f7affc786064999f61`** on 2026-10-21 after verified owner-authorized PR #97 documentation integration (first parent `aca6b6403c455708cacda01c8fbf0bf980d813a2`, second parent `4cc18693d9f01e759b272c6302de2663ffc42a1e`). PR #96 P1.1A experimental integration and PR #95 documentation remain previously merged. P1.0C source and the owner-approved P1.1 R2 plan remain integrated. **Always check live GitHub `main`, feature PR and working tree before acting.** Earlier P1.0A and P1.0B checkpoints remain frozen; the [P1.0C implementation checkpoint](../checkpoints/2026-10-17-P1-0C-IMPLEMENTATION.md) records its authorized source slice.
