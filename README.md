@@ -1,5 +1,8 @@
 # Procedural Sandbox Simulation
 
+**2026-10-24 live status:** `main` at `0ea2ad834db5dc2de1110cf0388ea06604cc7715`. PRs #99 (test-only P1.1B harness), #103 (playable LOD0/1), #104 (local single-slot world save), and #105 (declarative mod registry) are integrated. [PR #106](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/106) is an unmerged draft: owner GUI reports unnatural spherical procedural rocks; correction and repeat GUI review required before merge. [Verified reconciliation checkpoint](docs/checkpoints/2026-10-24-P1-1C-P0-2-P0-3-MERGE-RECEIPTS-P2-0A-GUI.md). Older text below is historical where inconsistent; prefer the live verified SHA and [CURRENT_STATUS](docs/status/CURRENT_STATUS.md). Document every significant event with an immutable checkpoint and update index/status, without self-merging.
+
+
 Godot 4.7.2 procedural 3D sandbox: versioned SDF terrain, caves, additive/subtractive brushes and localized chunk remeshing. **Functional finite prototypes exist; a production-ready endless world, persistent saves, multiplayer, LOD, collision, mods and simulation do not.**
 
 ## Start here — authoritative continuity
