@@ -2,12 +2,18 @@
 
 Date: 2026-10-24
 
-Repository: `publiomcko-cloud/procedural-sandbox-simulation`  
-Workspace: `C:\Dev\sandbox-sim-dev`  
-Branch: `feat/p2-0a-mod-first-procedural-objects`  
-PR: [#106](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/106), open/draft/unmerged  
-Correction commit: `29b0935336d084461b680b00eb0f4e020962098a`  
-Direct parent: `5166c311ba8d6ac7e8c6eac3b9a097db1e1ef8c1`  
+Repository: `publiomcko-cloud/procedural-sandbox-simulation`
+
+Workspace: `C:\Dev\sandbox-sim-dev`
+
+Branch: `feat/p2-0a-mod-first-procedural-objects`
+
+PR: [#106](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/106), open/draft/unmerged
+
+Correction commit: `29b0935336d084461b680b00eb0f4e020962098a`
+
+Direct parent: `5166c311ba8d6ac7e8c6eac3b9a097db1e1ef8c1`
+
 Main base: `0ea2ad834db5dc2de1110cf0388ea06604cc7715`
 
 ## Owner finding and correction
@@ -20,8 +26,10 @@ Placement records, world/object IDs, content pins, recipe and placement seeds, r
 
 ## Focused verification
 
-Godot: `4.7.2.stable.official.ed1daf0bf`  
-Executable: `C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe`  
+Godot: `4.7.2.stable.official.ed1daf0bf`
+
+Executable: `C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe`
+
 Executable SHA-256: `c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643`
 
 - Import plus focused procedural-object test: exit 0; `PROCEDURAL_OBJECT_PASS: assertions=135 failures=0`.
