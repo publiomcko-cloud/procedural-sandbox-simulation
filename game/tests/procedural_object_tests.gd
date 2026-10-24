@@ -71,24 +71,105 @@ func _test_mesh_conversion() -> void:
 		return
 	for definition_id in ObjectWorld.SLOT_DEFINITIONS:
 		var recipe: Dictionary = registry.evaluate_rock_recipe(definition_id, 91234)
-		var first: Dictionary = RockMeshAdapter.build_mesh(recipe.get("lobes", []))
-		var second: Dictionary = RockMeshAdapter.build_mesh(recipe.get("lobes", []))
+		var lobes: Array = recipe.get("lobes", [])
+		var first: Dictionary = RockMeshAdapter.build_mesh(lobes, 91234)
+		var second: Dictionary = RockMeshAdapter.build_mesh(lobes, 91234)
+		var alternate_seed: Dictionary = RockMeshAdapter.build_mesh(lobes, 91235)
 		_check(first.get("ok", false) and second.get("ok", false), "%s recipe converts to visible mesh data" % definition_id)
 		if not first.get("ok", false) or not second.get("ok", false):
 			continue
 		var first_arrays: Array = first["mesh"].surface_get_arrays(0)
 		var second_arrays: Array = second["mesh"].surface_get_arrays(0)
+		var alternate_arrays: Array = alternate_seed["mesh"].surface_get_arrays(0) if alternate_seed.get("ok", false) else []
 		var vertices: PackedVector3Array = first_arrays[Mesh.ARRAY_VERTEX]
 		var normals: PackedVector3Array = first_arrays[Mesh.ARRAY_NORMAL]
 		_check(not vertices.is_empty() and vertices.size() == normals.size(), "%s mesh has matched vertex and normal arrays" % definition_id)
 		_check(vertices == second_arrays[Mesh.ARRAY_VERTEX] and normals == second_arrays[Mesh.ARRAY_NORMAL], "%s geometry conversion is deterministic" % definition_id)
+		_check(alternate_seed.get("ok", false) and vertices != alternate_arrays[Mesh.ARRAY_VERTEX], "%s seed changes the irregular silhouette deterministically" % definition_id)
+		_check(int(first.get("triangle_count", 0)) == 320 and vertices.size() == 960, "%s is one bounded faceted body rather than a sphere mesh per lobe" % definition_id)
+		_check(first["mesh"].get_surface_count() == 1 and int(first.get("geometry_version", -1)) == RockMeshAdapter.GEOMETRY_VERSION, "%s has one registered geometry-adapter versioned surface" % definition_id)
 		var finite := true
 		for index in range(vertices.size()):
 			if not vertices[index].is_finite() or not normals[index].is_finite() or normals[index].length_squared() < 0.9:
 				finite = false
 				break
 		_check(finite, "%s mesh positions and normals are finite and normalized" % definition_id)
-	_check(not RockMeshAdapter.build_mesh([]).get("ok", false), "empty geometry recipe is rejected")
+		var integrity: Dictionary = _inspect_low_poly_mesh(vertices, normals, first["mesh_center"], first["half_extents"])
+		_check(integrity.get("ok", false), "%s has outward flat normals, nondegenerate faces, one connected shell and closed two-face edges (%s)" % [definition_id, integrity.get("reason", "ok")])
+		_check(integrity.get("radial_spread", 0.0) > 0.04, "%s silhouette has deterministic radial asymmetry" % definition_id)
+		_check(normals[0].dot(normals[3]) < 0.999, "%s uses angular face normals instead of smooth sphere shading" % definition_id)
+		_check(vertices == _mesh_arrays(RockMeshAdapter.build_mesh(lobes, 91234))[Mesh.ARRAY_VERTEX], "%s repeated recipe conversion preserves the exact geometry regression snapshot" % definition_id)
+		_check(not RockMeshAdapter.build_mesh(lobes, -1).get("ok", false), "%s negative geometry variation seed is rejected" % definition_id)
+		_check(not RockMeshAdapter.build_mesh(lobes, 2147483648).get("ok", false), "%s out-of-range geometry variation seed is rejected" % definition_id)
+	_check(not RockMeshAdapter.build_mesh([], 0).get("ok", false), "empty geometry recipe is rejected")
+
+
+func _inspect_low_poly_mesh(vertices: PackedVector3Array, normals: PackedVector3Array, center: Vector3, half_extents: Vector3) -> Dictionary:
+	if vertices.size() != 960 or vertices.size() != normals.size() or vertices.size() % 3 != 0:
+		return {"ok": false, "reason": "invalid_triangle_arrays"}
+	var edge_counts: Dictionary = {}
+	var graph: Dictionary = {}
+	var radial_min := INF
+	var radial_max := -INF
+	for index in range(0, vertices.size(), 3):
+		var a := vertices[index]
+		var b := vertices[index + 1]
+		var c := vertices[index + 2]
+		var area_normal := (b - a).cross(c - a)
+		if area_normal.length_squared() <= 1.0e-12:
+			return {"ok": false, "reason": "degenerate_triangle"}
+		var face_center := (a + b + c) / 3.0
+		if area_normal.dot(face_center - center) <= 0.0:
+			return {"ok": false, "reason": "inward_or_ambiguous_winding"}
+		var expected_normal := area_normal.normalized()
+		for offset in range(3):
+			if normals[index + offset].dot(expected_normal) < 0.9999:
+				return {"ok": false, "reason": "face_normal_mismatch"}
+		var keys := [_vertex_key(a), _vertex_key(b), _vertex_key(c)]
+		for key in keys:
+			if not graph.has(key):
+				graph[key] = []
+		for edge_index in range(3):
+			var first_key: String = keys[edge_index]
+			var second_key: String = keys[(edge_index + 1) % 3]
+			var edge_key := _edge_key(first_key, second_key)
+			edge_counts[edge_key] = int(edge_counts.get(edge_key, 0)) + 1
+			(graph[first_key] as Array).append(second_key)
+			(graph[second_key] as Array).append(first_key)
+		for vertex_index in range(index, index + 3):
+			var normalized_vertex := vertices[vertex_index] - center
+			var normalized_radius := Vector3(normalized_vertex.x / half_extents.x, normalized_vertex.y / half_extents.y, normalized_vertex.z / half_extents.z).length()
+			radial_min = minf(radial_min, normalized_radius)
+			radial_max = maxf(radial_max, normalized_radius)
+	for edge_count in edge_counts.values():
+		if int(edge_count) != 2:
+			return {"ok": false, "reason": "open_or_nonmanifold_edge"}
+	var start_key: String = graph.keys()[0]
+	var visited: Dictionary = {start_key: true}
+	var pending: Array[String] = [start_key]
+	while not pending.is_empty():
+		var key: String = pending.pop_back()
+		for neighbor in graph[key]:
+			if not visited.has(neighbor):
+				visited[neighbor] = true
+				pending.append(neighbor)
+	if visited.size() != graph.size():
+		return {"ok": false, "reason": "disconnected_shells"}
+	return {"ok": true, "reason": "ok", "radial_spread": radial_max - radial_min}
+
+
+func _mesh_arrays(result: Dictionary) -> Array:
+	if not result.get("ok", false):
+		return []
+	return result["mesh"].surface_get_arrays(0)
+
+
+func _vertex_key(vertex: Vector3) -> String:
+	return "%d,%d,%d" % [roundi(vertex.x * 1000000.0), roundi(vertex.y * 1000000.0), roundi(vertex.z * 1000000.0)]
+
+
+func _edge_key(first: String, second: String) -> String:
+	return first + "|" + second if first < second else second + "|" + first
 
 
 func _test_order_independent_records(roots: Array[String]) -> void:
@@ -264,7 +345,7 @@ func _mesh_snapshots(manager: ProceduralObjectStream, region_key: Vector2i) -> A
 	for object_node in region_root.get_children():
 		var mesh_instance: MeshInstance3D = object_node.get_child(0)
 		var arrays: Array = mesh_instance.mesh.surface_get_arrays(0)
-		result.append({"id": object_node.get_meta("stable_instance_id"), "vertices": arrays[Mesh.ARRAY_VERTEX], "normals": arrays[Mesh.ARRAY_NORMAL]})
+		result.append({"id": object_node.get_meta("stable_instance_id"), "geometry_version": object_node.get_meta("geometry_adapter_version"), "vertices": arrays[Mesh.ARRAY_VERTEX], "normals": arrays[Mesh.ARRAY_NORMAL]})
 	return result
 
 

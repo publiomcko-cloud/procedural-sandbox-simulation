@@ -81,7 +81,7 @@ func publish_region(region_key: Vector2i, state: RefCounted) -> Dictionary:
 	var pending_nodes: Array[Node3D] = []
 	var instances: Array[Dictionary] = generated["instances"]
 	for instance in instances:
-		var mesh_result: Dictionary = RockMeshAdapter.build_mesh(instance["lobes"])
+		var mesh_result: Dictionary = RockMeshAdapter.build_mesh(instance["lobes"], int(instance["recipe_seed"]))
 		if not mesh_result.get("ok", false):
 			for pending_node in pending_nodes:
 				pending_node.free()
@@ -93,6 +93,7 @@ func publish_region(region_key: Vector2i, state: RefCounted) -> Dictionary:
 		object_node.set_meta("definition_id", instance["definition_id"])
 		object_node.set_meta("content_pin", instance["content_pin"])
 		object_node.set_meta("recipe_algorithm", instance["recipe_algorithm"])
+		object_node.set_meta("geometry_adapter_version", RockMeshAdapter.GEOMETRY_VERSION)
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = mesh_result["mesh"]
 		mesh_instance.material_override = _rock_material
