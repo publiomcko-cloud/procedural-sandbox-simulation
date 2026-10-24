@@ -1,3 +1,5 @@
+> **2026-10-24 live override:** main `52ed9601c70ddade80e75ee9faccd45ec8d2e9a3` includes procedural rocks PR #106; P2.0B prepared, not implemented. Owner accepts shapes but terrain contact is deferred to issue #108. Read [checkpoint](../checkpoints/2026-10-24-PR106-MERGE-AND-NEXT-P2-0B-HANDOFF.md), reconcile live PRs and always add an immutable checkpoint/index entry at material steps. Older 'PR #92 pending' notes below are historical.
+
 # Fresh-agent / new-chat recovery runbook
 
 **Objective:** make the repository, not conversation history, the durable source of project decisions, approved evidence, open work and next action. A complete safe *logical reconstruction* requires Git refs + accepted docs + tickets + independent reviews + owner authority. A checkpoint is not a clone/VM backup and cannot restore unsaved local changes or credentials.
