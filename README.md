@@ -1,5 +1,8 @@
 # Procedural Sandbox Simulation
 
+**Verified 2026-10-24:** main at `52ed9601c70ddade80e75ee9faccd45ec8d2e9a3`; PR #106 procedural geological rocks merged. Recent integrated PRs: #99, #103, #104, #105, #106. Terrain/object contacts remain visually imperfect and are deferred to issue #108. See [post-merge checkpoint](docs/checkpoints/2026-10-24-PR106-MERGE-AND-NEXT-P2-0B-HANDOFF.md). All earlier status claims below are historical when inconsistent. Every material advancement triggers a dated checkpoint and index/status update.
+
+
 Godot 4.7.2 procedural 3D sandbox: versioned SDF terrain, caves, additive/subtractive brushes and localized chunk remeshing. **Functional finite prototypes exist; a production-ready endless world, persistent saves, multiplayer, LOD, collision, mods and simulation do not.**
 
 ## Start here — authoritative continuity
