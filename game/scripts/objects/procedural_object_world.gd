@@ -64,6 +64,8 @@ static func build_region_instances(
 			"geometry": recipe["geometry"].duplicate(true),
 			"geometry_seeds": recipe["geometry_seeds"].duplicate(true),
 			"instance_state": {},
+			"component_contract_version": 1,
+			"components": ["core.transform@1", "core.appearance@1", "core.logical@1"],
 			"position_mm": position_result["position_mm"],
 		})
 	return {"ok": true, "reason": "ok", "region_key": region_key, "instances": instances}

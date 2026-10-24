@@ -1,0 +1,234 @@
+class_name ProceduralObjectStateContract
+extends RefCounted
+
+## Versioned, data-only component contracts for mutable procedural instances.
+## These values are deliberately independent of Node3D, meshes and mod scripts.
+const SCHEMA_VERSION := 1
+const COMPONENT_TRANSFORM := "core.transform"
+const COMPONENT_APPEARANCE := "core.appearance"
+const COMPONENT_LOGICAL := "core.logical"
+const MAX_LOGICAL_FIELDS := 32
+const MAX_LABEL_LENGTH := 64
+
+
+static func normalize_component(component_id: String, value: Variant) -> Dictionary:
+	if typeof(value) != TYPE_DICTIONARY:
+		return _failure("component_state_not_dictionary")
+	var component: Dictionary = value
+	if component.get("schema_version", null) != SCHEMA_VERSION:
+		return _failure("component_schema_unsupported")
+	var properties_value: Variant = component.get("properties", null)
+	if typeof(properties_value) != TYPE_DICTIONARY:
+		return _failure("component_properties_invalid")
+	var properties: Dictionary = properties_value
+	match component_id:
+		COMPONENT_TRANSFORM:
+			return _normalize_transform(properties)
+		COMPONENT_APPEARANCE:
+			return _normalize_appearance(properties)
+		COMPONENT_LOGICAL:
+			return _normalize_logical(properties)
+	return _failure("component_id_unsupported")
+
+
+static func _normalize_transform(properties: Dictionary) -> Dictionary:
+	if not _exact_keys(properties, ["translation_mm", "rotation_mdeg", "scale_milli"]):
+		return _failure("transform_fields_invalid")
+	var translation := _read_int_vector(properties["translation_mm"], -8000, 8000)
+	var rotation := _read_int_vector(properties["rotation_mdeg"], -360000, 360000)
+	var scale := _read_int_vector(properties["scale_milli"], 100, 5000)
+	if not translation.ok or not rotation.ok or not scale.ok:
+		return _failure("transform_values_out_of_range")
+	return {"ok": true, "value": {"schema_version": SCHEMA_VERSION, "properties": {"translation_mm": translation.value, "rotation_mdeg": rotation.value, "scale_milli": scale.value}}}
+
+
+static func _normalize_appearance(properties: Dictionary) -> Dictionary:
+	if not _exact_keys(properties, ["tint_milli", "label"]):
+		return _failure("appearance_fields_invalid")
+	var tint_value: Variant = properties["tint_milli"]
+	if typeof(tint_value) != TYPE_ARRAY or tint_value.size() != 3:
+		return _failure("appearance_tint_invalid")
+	var tint: Array[int] = []
+	for channel in tint_value:
+		var parsed := _read_integer(channel, 0, 1000)
+		if not parsed.ok:
+			return _failure("appearance_tint_invalid")
+		tint.append(parsed.value)
+	var label_value: Variant = properties["label"]
+	if typeof(label_value) != TYPE_STRING or String(label_value).length() > MAX_LABEL_LENGTH:
+		return _failure("appearance_label_invalid")
+	return {"ok": true, "value": {"schema_version": SCHEMA_VERSION, "properties": {"tint_milli": tint, "label": String(label_value)}}}
+
+
+static func _normalize_logical(properties: Dictionary) -> Dictionary:
+	if not _exact_keys(properties, ["values"]):
+		return _failure("logical_fields_invalid")
+	var values_value: Variant = properties["values"]
+	if typeof(values_value) != TYPE_DICTIONARY or values_value.size() > MAX_LOGICAL_FIELDS:
+		return _failure("logical_values_invalid")
+	var normalized: Dictionary = {}
+	for key_value in values_value:
+		if typeof(key_value) != TYPE_STRING or not _valid_logical_key(String(key_value)):
+			return _failure("logical_key_invalid")
+		var item: Variant = values_value[key_value]
+		match typeof(item):
+			TYPE_BOOL:
+				normalized[key_value] = item
+			TYPE_INT, TYPE_FLOAT:
+				if not is_finite(float(item)) or floor(float(item)) != float(item) or abs(float(item)) > 2147483647.0:
+					return _failure("logical_integer_out_of_range")
+				normalized[key_value] = int(item)
+			TYPE_STRING:
+				if String(item).length() > MAX_LABEL_LENGTH:
+					return _failure("logical_string_too_long")
+				normalized[key_value] = item
+			_:
+				return _failure("logical_value_type_unsupported")
+	return {"ok": true, "value": {"schema_version": SCHEMA_VERSION, "properties": {"values": normalized}}}
+
+
+static func validate_snapshot(snapshot: Variant, expected_world_id: String, expected_seed: int, expected_generator: int) -> Dictionary:
+	if typeof(snapshot) != TYPE_DICTIONARY:
+		return _failure("snapshot_not_dictionary")
+	var value: Dictionary = snapshot
+	if not _exact_keys(value, ["schema_version", "world_id", "world_seed", "generator_version", "revision", "overrides", "deleted"]):
+		return _failure("snapshot_fields_invalid")
+	if not _is_int(value.schema_version) or int(value.schema_version) != SCHEMA_VERSION:
+		return _failure("snapshot_schema_unsupported")
+	if value.world_id != expected_world_id or not _is_int(value.world_seed) or int(value.world_seed) != expected_seed:
+		return _failure("snapshot_world_identity_mismatch")
+	if not _is_int(value.generator_version) or int(value.generator_version) != expected_generator:
+		return _failure("snapshot_generator_unsupported")
+	if not _is_int(value.revision) or int(value.revision) < 0 or int(value.revision) > 2147483647:
+		return _failure("snapshot_revision_invalid")
+	if typeof(value.overrides) != TYPE_DICTIONARY or value.overrides.size() > 20000 or typeof(value.deleted) != TYPE_DICTIONARY or value.deleted.size() > 20000:
+		return _failure("snapshot_state_bounds_invalid")
+	var normalized_snapshot: Dictionary = value.duplicate(true)
+	normalized_snapshot.schema_version = SCHEMA_VERSION
+	normalized_snapshot.world_seed = expected_seed
+	normalized_snapshot.generator_version = expected_generator
+	normalized_snapshot.revision = int(value.revision)
+	var normalized_overrides: Dictionary = {}
+	var normalized_deleted: Dictionary = {}
+	var deleted_ids: Dictionary = {}
+	for id_value in value.deleted:
+		if typeof(id_value) != TYPE_STRING or not _valid_instance_id(String(id_value), expected_world_id, expected_seed):
+			return _failure("snapshot_deleted_id_invalid")
+		var deleted_identity := validate_identity(value.deleted[id_value], expected_world_id, expected_seed, expected_generator)
+		if not deleted_identity.ok or deleted_identity.instance_id != id_value:
+			return _failure("snapshot_deleted_identity_invalid")
+		deleted_ids[id_value] = true
+		normalized_deleted[id_value] = deleted_identity.identity
+	for id_value in value.overrides:
+		if typeof(id_value) != TYPE_STRING or not _valid_instance_id(String(id_value), expected_world_id, expected_seed) or deleted_ids.has(id_value):
+			return _failure("snapshot_override_id_invalid")
+		var record: Variant = value.overrides[id_value]
+		if typeof(record) != TYPE_DICTIONARY or not _exact_keys(record, ["identity", "components"]):
+			return _failure("snapshot_override_record_invalid")
+		var identity_result := validate_identity(record.identity, expected_world_id, expected_seed, expected_generator)
+		if not identity_result.ok or identity_result.instance_id != id_value:
+			return _failure("snapshot_override_identity_invalid")
+		if typeof(record.components) != TYPE_DICTIONARY or record.components.is_empty() or record.components.size() > 3:
+			return _failure("snapshot_components_invalid")
+		var normalized_components: Dictionary = {}
+		for component_id in record.components:
+			var normalized := normalize_component(String(component_id), record.components[component_id])
+			if not normalized.ok:
+				return _failure("snapshot_component_invalid")
+			normalized_components[component_id] = normalized.value
+		normalized_overrides[id_value] = {"identity": identity_result.identity, "components": normalized_components}
+	normalized_snapshot.overrides = normalized_overrides
+	normalized_snapshot.deleted = normalized_deleted
+	return {"ok": true, "snapshot": normalized_snapshot}
+
+
+static func validate_identity(identity: Variant, expected_world_id: String, expected_seed: int, expected_generator: int) -> Dictionary:
+	if typeof(identity) != TYPE_DICTIONARY or not _exact_keys(identity, ["instance_id", "definition_id", "content_pin", "world_id", "world_seed", "generator_version", "region_key", "slot", "placement_seed", "recipe_seed"]):
+		return _failure("identity_fields_invalid")
+	if identity.world_id != expected_world_id or not _is_int(identity.world_seed) or int(identity.world_seed) != expected_seed or not _is_int(identity.generator_version) or int(identity.generator_version) != expected_generator:
+		return _failure("identity_world_mismatch")
+	if typeof(identity.definition_id) != TYPE_STRING or String(identity.definition_id).find(":") < 1:
+		return _failure("identity_definition_invalid")
+	if typeof(identity.content_pin) != TYPE_DICTIONARY or not _exact_keys(identity.content_pin, ["content_id", "mod_id", "mod_version", "definition_schema_version"]):
+		return _failure("identity_content_pin_invalid")
+	if identity.content_pin.content_id != identity.definition_id or typeof(identity.content_pin.mod_id) != TYPE_STRING or not String(identity.definition_id).begins_with(String(identity.content_pin.mod_id) + ":") or typeof(identity.content_pin.mod_version) != TYPE_STRING or not _is_int(identity.content_pin.definition_schema_version) or int(identity.content_pin.definition_schema_version) < 1:
+		return _failure("identity_content_pin_invalid")
+	if typeof(identity.region_key) != TYPE_ARRAY or identity.region_key.size() != 2 or not _is_int(identity.region_key[0]) or not _is_int(identity.region_key[1]):
+		return _failure("identity_region_invalid")
+	if not _is_int(identity.slot) or int(identity.slot) < 0 or int(identity.slot) > 15 or not _is_int(identity.placement_seed) or int(identity.placement_seed) < 1 or int(identity.placement_seed) > 2147483647 or not _is_int(identity.recipe_seed) or int(identity.recipe_seed) < 1 or int(identity.recipe_seed) > 2147483647:
+		return _failure("identity_recipe_invalid")
+	var region := Vector2i(int(identity.region_key[0]), int(identity.region_key[1]))
+	var expected_id := "%s/seed-%d/object/%s/region/%d,%d/slot/%d" % [expected_world_id, expected_seed, identity.definition_id, region.x, region.y, int(identity.slot)]
+	if identity.instance_id != expected_id:
+		return _failure("identity_id_mismatch")
+	var normalized_identity: Dictionary = identity.duplicate(true)
+	normalized_identity.world_seed = expected_seed
+	normalized_identity.generator_version = expected_generator
+	normalized_identity.region_key = [int(identity.region_key[0]), int(identity.region_key[1])]
+	normalized_identity.slot = int(identity.slot)
+	normalized_identity.placement_seed = int(identity.placement_seed)
+	normalized_identity.recipe_seed = int(identity.recipe_seed)
+	var normalized_pin: Dictionary = identity.content_pin.duplicate(true)
+	normalized_pin.definition_schema_version = int(identity.content_pin.definition_schema_version)
+	normalized_identity.content_pin = normalized_pin
+	return {"ok": true, "instance_id": expected_id, "identity": normalized_identity}
+
+
+static func identity_for_instance(instance: Dictionary) -> Dictionary:
+	var key: Vector2i = instance.region_key
+	return {"instance_id": instance.instance_id, "definition_id": instance.definition_id, "content_pin": instance.content_pin.duplicate(true), "world_id": instance.world_id, "world_seed": instance.world_seed, "generator_version": instance.generator_version, "region_key": [key.x, key.y], "slot": instance.slot, "placement_seed": instance.placement_seed, "recipe_seed": instance.recipe_seed}
+
+
+static func identities_equal(first: Dictionary, second: Dictionary) -> bool:
+	return JSON.stringify(first, "", true, true) == JSON.stringify(second, "", true, true)
+
+
+static func _read_int_vector(value: Variant, minimum: int, maximum: int) -> Dictionary:
+	if typeof(value) != TYPE_ARRAY or value.size() != 3:
+		return {"ok": false}
+	var output: Array[int] = []
+	for item in value:
+		var parsed := _read_integer(item, minimum, maximum)
+		if not parsed.ok:
+			return {"ok": false}
+		output.append(parsed.value)
+	return {"ok": true, "value": output}
+
+
+static func _read_integer(value: Variant, minimum: int, maximum: int) -> Dictionary:
+	if not _is_int(value) or int(value) < minimum or int(value) > maximum:
+		return {"ok": false}
+	return {"ok": true, "value": int(value)}
+
+
+static func _is_int(value: Variant) -> bool:
+	return typeof(value) == TYPE_INT or (typeof(value) == TYPE_FLOAT and is_finite(value) and floor(value) == value and abs(value) <= 9007199254740991.0)
+
+
+static func _exact_keys(value: Dictionary, keys: Array) -> bool:
+	if value.size() != keys.size():
+		return false
+	for key in keys:
+		if not value.has(key):
+			return false
+	return true
+
+
+static func _valid_instance_id(value: String, world_id: String, world_seed: int) -> bool:
+	if value.length() > 256:
+		return false
+	var regex := RegEx.new()
+	regex.compile("^" + world_id + "/seed-" + str(world_seed) + "/object/[a-z][a-z0-9_.]*:[a-z][a-z0-9_.]*/region/-?[0-9]+,-?[0-9]+/slot/[0-9]+$")
+	return regex.search(value) != null
+
+
+static func _valid_logical_key(value: String) -> bool:
+	if value.is_empty() or value.length() > 48:
+		return false
+	var regex := RegEx.new()
+	regex.compile("^[a-z][a-z0-9_]*$")
+	return regex.search(value) != null
+
+
+static func _failure(reason: String) -> Dictionary:
+	return {"ok": false, "reason": reason}

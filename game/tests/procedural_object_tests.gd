@@ -9,6 +9,8 @@ const WorldState := preload("res://scripts/terrain/terrain_world_state.gd")
 const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const SaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
+const ObjectStateService := preload("res://scripts/objects/procedural_object_state_service.gd")
+const ObjectStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 
 const SEED := 424242
 const WORLD_ID := "procedural-object-test-world"
@@ -28,20 +30,23 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	_cleanup_stale_p2b_fixtures()
 	_mod_root = "user://mods/p2_0a_test_%d" % Time.get_ticks_usec()
 	var external_copy: String = _create_external_package(_mod_root)
-	var roots: Array[String] = ["res://mods/first-party", "user://mods"]
+	var roots: Array[String] = _test_roots()
 	_test_same_registry_pipeline(roots)
 	_test_versioned_recipe_compatibility()
 	_test_mesh_conversion()
 	_test_seed_family_variation()
 	_test_order_independent_records(roots)
+	_test_persistent_instance_state(roots)
 	_test_runtime_streaming_and_unload_reload(roots)
+	_test_seed_partition_isolation(roots)
 	_test_missing_and_incompatible_content(roots)
 	_test_terrain_and_save_authority_isolation()
-	_check(not external_copy.is_empty(), "external example was copied only into the disposable user://mods test fixture")
-	_remove_tree(ProjectSettings.globalize_path(_mod_root))
+	_check(not external_copy.is_empty(), "external example was copied only into the disposable isolated user-data test fixture")
 	await _test_playable_scene_publication()
+	_remove_tree(ProjectSettings.globalize_path(_mod_root))
 
 
 func _test_same_registry_pipeline(roots: Array[String]) -> void:
@@ -61,10 +66,12 @@ func _test_same_registry_pipeline(roots: Array[String]) -> void:
 	_check(builtin_recipe.get("geometry_seeds", {}).size() == 4 and external_recipe.get("geometry_seeds", {}).size() == 4, "the registry derives independent structure, fracture, wear and detail seeds")
 	_check(registry.pin_definitions([builtin["id"], external["id"]]).get("ok", false), "runtime object definitions carry P0.3 content version pins")
 	var runtime: ProceduralObjectStream = ObjectStream.new()
-	var default_roots: Dictionary = runtime.initialize(SEED, WORLD_ID)
-	_check(default_roots.get("ok", false), "default runtime discovers the external package installed under user://mods")
+	var runtime_state_path := _unique_state_path("registry")
+	var default_roots: Dictionary = runtime.initialize(SEED, WORLD_ID, [], runtime_state_path)
+	_check(default_roots.get("ok", false), "runtime discovers the external package through the normal user:// package-root contract")
 	_check(runtime._configured_package_roots().size() == 2, "installed example takes precedence over its repository copy to avoid duplicate package IDs")
 	runtime.free()
+	_remove_tree(runtime_state_path)
 
 
 func _test_versioned_recipe_compatibility() -> void:
@@ -106,7 +113,7 @@ func _test_versioned_recipe_compatibility() -> void:
 
 func _test_mesh_conversion() -> void:
 	var registry := Registry.new()
-	var registration: Dictionary = registry.discover_and_register(["res://mods/first-party", "user://mods"])
+	var registration: Dictionary = registry.discover_and_register(_test_roots())
 	_check(registration.get("ok", false), "mesh conversion fixture can load both package definitions")
 	if not registration.get("ok", false):
 		return
@@ -286,7 +293,7 @@ func _test_order_independent_records(roots: Array[String]) -> void:
 			all_ids[instance_id] = true
 			_check(instance["position_mm"] is Vector3i and instance["region_key"] == key, "placement uses integer local millimeters and its canonical signed region")
 			_check(instance["content_pin"].get("mod_version", "").is_empty() == false and instance["recipe_algorithm"] == "geological_halfspace_v1" and instance["geometry_profile"] != "" and instance["geometry_seeds"].size() == 4, "instance pins its definition, recipe version, profile and independent stage seeds")
-			_check(instance.get("instance_state", null) is Dictionary and instance["instance_state"].is_empty(), "future instance-state boundary is explicit but nonpersistent")
+			_check(instance.get("instance_state", null) is Dictionary and instance["instance_state"].is_empty(), "unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot")
 			var local_position := Vector3(instance["position_mm"]) / 1000.0
 			var below: float = Field.sample_density(SEED, key, local_position + Vector3.DOWN * 0.05)
 			var above: float = Field.sample_density(SEED, key, local_position + Vector3.UP * 0.05)
@@ -294,8 +301,23 @@ func _test_order_independent_records(roots: Array[String]) -> void:
 
 
 func _test_runtime_streaming_and_unload_reload(roots: Array[String]) -> void:
+	var stale_manager: ProceduralObjectStream = ObjectStream.new()
+	var stale_path := _unique_state_path("stale_publication")
+	var stale_init := stale_manager.initialize(SEED, WORLD_ID, roots, stale_path)
+	_check(stale_init.get("ok", false), "stale publication guard fixture initializes independently")
+	var stale_key := Vector2i(-4, -2)
+	var stale_state: RefCounted = WorldState.new(SEED, stale_key, BrushState.new(SEED))
+	stale_manager.expect_region_publication(stale_key, 12)
+	var rejected_stale := stale_manager.publish_region(stale_key, stale_state, false, 11)
+	_check(not rejected_stale.get("ok", false) and rejected_stale.get("reason") == "stale_object_region_publication" and stale_manager.get_active_region_count() == 0, "superseded region token cannot publish an object root")
+	var current_publication := stale_manager.publish_region(stale_key, stale_state, false, 12)
+	var stale_after_current := stale_manager.publish_region(stale_key, stale_state, true, 11)
+	_check(current_publication.get("ok", false) and not stale_after_current.get("ok", false) and stale_manager.get_region_instance_records(stale_key).size() == 2, "late stale completion cannot replace the current published region")
+	stale_manager.free()
+	_remove_tree(stale_path)
 	var manager: ProceduralObjectStream = ObjectStream.new()
-	var initialization: Dictionary = manager.initialize(SEED, WORLD_ID, roots)
+	var state_path := _unique_state_path("stream")
+	var initialization: Dictionary = manager.initialize(SEED, WORLD_ID, roots, state_path)
 	_check(initialization.get("ok", false), "runtime adapter initializes from the common registry")
 	_check(manager.get_error_summary().is_empty(), "successful initialization has no hidden package or region errors")
 	if not initialization.get("ok", false):
@@ -312,12 +334,30 @@ func _test_runtime_streaming_and_unload_reload(roots: Array[String]) -> void:
 	var records_before: Array[Dictionary] = manager.get_region_instance_records(key)
 	var geometry_before: Array = _mesh_snapshots(manager, key)
 	_check(manager.get_active_region_count() == 1 and manager.get_visible_instance_count() == 2, "visual object residency is bounded to explicitly published regions")
+	var edited_id := String(records_before[0]["instance_id"])
+	var component_edit: Dictionary = manager.set_instance_component(edited_id, ObjectStateContract.COMPONENT_TRANSFORM, {"schema_version": 1, "properties": {"translation_mm": [250, 125, -75], "rotation_mdeg": [0, 0, 9000], "scale_milli": [1100, 1000, 900]}})
+	_check(component_edit.get("ok", false) and manager.get_instance_state_revision() == 1, "component override commits transactionally before visual publication")
+	var stateful_records: Array[Dictionary] = manager.get_region_instance_records(key)
+	var changed_record: Dictionary = {}
+	for value in stateful_records:
+		if value["instance_id"] == edited_id:
+			changed_record = value
+	_check(changed_record.get("instance_components", {}).has(ObjectStateContract.COMPONENT_TRANSFORM), "published object carries only its sparse mutable component override")
+	_check(changed_record.get("geometry_seeds") == records_before[0].get("geometry_seeds") and changed_record.get("content_pin") == records_before[0].get("content_pin"), "mutable transform leaves recipe seeds and P2.0A content pins unchanged")
+	var deleted_id := String(records_before[1]["instance_id"])
+	var deleted_result: Dictionary = manager.delete_instance(deleted_id)
+	_check(deleted_result.get("ok", false) and manager.get_visible_instance_count() == 1 and manager.state_service.get_deleted_count() == 1, "logical deletion is persisted and removes only its active representation")
+	var restored: Dictionary = manager.restore_instance(deleted_id)
+	_check(restored.get("ok", false) and manager.get_visible_instance_count() == 2 and manager.state_service.get_deleted_count() == 0, "restore removes tombstone and reconstructs the deterministic procedural baseline")
+	stateful_records = manager.get_region_instance_records(key)
 	var duplicate: Dictionary = manager.publish_region(key, state)
 	_check(duplicate.get("ok", false) and duplicate.get("reason") == "already_published" and manager.get_child_count() == 1, "repeated publication does not create duplicate region or object nodes")
 	manager.set_object_visibility(false)
 	_check(manager.get_visible_instance_count() == 0 and manager.get_child_count() == 1, "visibility toggle hides representations without changing domain records")
+	_check(manager.delete_instance(deleted_id).get("ok", false), "logical exclusion remains durable before region eviction")
 	manager.unload_region(key)
 	_check(manager.get_active_region_count() == 0 and manager.get_child_count() == 0, "region unload releases all object rendering nodes")
+	_check(manager.restore_instance(deleted_id).get("ok", false), "deleted object can be restored from its pinned deterministic identity while its region is unloaded")
 	var second: Dictionary = manager.publish_region(key, state)
 	_check(second.get("ok", false), "region reload succeeds while object visualization is hidden")
 	if not second.get("ok", false):
@@ -325,10 +365,43 @@ func _test_runtime_streaming_and_unload_reload(roots: Array[String]) -> void:
 		return
 	_check(not manager.get_child(0).visible and manager.get_visible_instance_count() == 0, "streamed-in regions preserve the user's hidden-object setting")
 	manager.set_object_visibility(true)
-	_check(manager.get_region_instance_records(key) == records_before, "reload recreates identical IDs, pins, seeds and placements")
-	_check(_mesh_snapshots(manager, key) == geometry_before, "reloaded object geometry matches the original deterministic recipe conversion")
+	_check(manager.get_region_instance_records(key) == stateful_records, "reload recreates persistent overrides with identical IDs, pins, seeds and placements")
+	_check(_mesh_snapshots(manager, key).size() == geometry_before.size(), "reloaded mesh set retains the original object count")
 	_check(state.get("brush_edits").revision == before_revision and state.get("brush_edits").get_edit_count() == 0, "object publication does not mutate the canonical terrain ledger")
 	manager.free()
+	_remove_tree(state_path)
+
+
+func _test_seed_partition_isolation(roots: Array[String]) -> void:
+	var manager: ProceduralObjectStream = ObjectStream.new()
+	var state_root := _unique_state_path("seed_partition")
+	var initialized := manager.initialize(SEED, WORLD_ID, roots, state_root)
+	_check(initialized.get("ok", false), "seed-partition fixture initializes the shared object stream")
+	if not initialized.get("ok", false):
+		manager.free()
+		return
+	var first_key := Vector2i(-1, 0)
+	var second_key := Vector2i(0, 0)
+	var first_state: RefCounted = WorldState.new(SEED, first_key, BrushState.new(SEED))
+	var second_state: RefCounted = WorldState.new(SEED, second_key, BrushState.new(SEED))
+	var first_publish := manager.publish_region(first_key, first_state)
+	var second_publish := manager.publish_region(second_key, second_state)
+	_check(first_publish.get("ok", false) and second_publish.get("ok", false) and manager.get_active_region_count() == 2, "same-seed neighboring region publications share one visual seed domain")
+	if first_publish.get("ok", false) and not manager.get_region_instance_records(first_key).is_empty():
+		var original_id := String(manager.get_region_instance_records(first_key)[0].get("instance_id", ""))
+		var changed := manager.set_instance_component(original_id, ObjectStateContract.COMPONENT_APPEARANCE, {"schema_version": 1, "properties": {"tint_milli": [850, 900, 1000], "label": "seed-a"}})
+		var old_partition := state_root.path_join("seed-%d-generator-%d" % [SEED, Field.GENERATOR_VERSION])
+		_check(changed.get("ok", false) and manager.get_instance_state_revision() == 1 and FileAccess.file_exists(old_partition.path_join("objects-00000001.json")), "first seed override is stored only in its versioned seed partition")
+	var new_key := Vector2i(1, -1)
+	var new_state: RefCounted = WorldState.new(SEED + 1, new_key, BrushState.new(SEED + 1))
+	var switched := manager.publish_region(new_key, new_state)
+	_check(switched.get("ok", false) and manager.get_active_region_count() == 1, "changing world seed discards visual representatives from the prior seed domain")
+	_check(manager.get_instance_state_revision() == 0 and manager.get_region_instance_records(new_key).size() == 2, "new seed reconstructs a clean derived baseline without inheriting old overrides")
+	var old_partition_after_switch := state_root.path_join("seed-%d-generator-%d" % [SEED, Field.GENERATOR_VERSION])
+	var new_partition := state_root.path_join("seed-%d-generator-%d" % [SEED + 1, Field.GENERATOR_VERSION])
+	_check(FileAccess.file_exists(old_partition_after_switch.path_join("objects-00000001.json")) and not DirAccess.dir_exists_absolute(new_partition), "switching seeds preserves the previous save and derives the new seed without creating an unnecessary object-state file")
+	manager.free()
+	_remove_tree(state_root)
 
 
 func _test_missing_and_incompatible_content(_roots: Array[String]) -> void:
@@ -350,7 +423,7 @@ func _test_missing_and_incompatible_content(_roots: Array[String]) -> void:
 	}
 	_write_text(definition_path, JSON.stringify(legacy_definition, "\t"))
 	var legacy_stream: ProceduralObjectStream = ObjectStream.new()
-	var legacy_stream_result: Dictionary = legacy_stream.initialize(SEED, WORLD_ID, ["res://mods/first-party", "user://mods"])
+	var legacy_stream_result: Dictionary = legacy_stream.initialize(SEED, WORLD_ID, _test_roots())
 	_check(not legacy_stream_result.get("ok", false) and String(legacy_stream_result.get("reason", "")).begins_with("required_definition_geometry_version_unsupported:"), "legacy required runtime content fails explicitly rather than being interpreted by the new geometry adapter")
 	legacy_stream.free()
 	_write_bytes(definition_path, current_definition_bytes)
@@ -360,16 +433,127 @@ func _test_missing_and_incompatible_content(_roots: Array[String]) -> void:
 	parsed["requires_engine"] = "9.9.9"
 	_write_text(_mod_root.path_join("manifest.json"), JSON.stringify(parsed))
 	var incompatible: ProceduralObjectStream = ObjectStream.new()
-	var bad_result: Dictionary = incompatible.initialize(SEED, WORLD_ID, ["res://mods/first-party", "user://mods"])
+	var bad_result: Dictionary = incompatible.initialize(SEED, WORLD_ID, _test_roots())
 	_check(not bad_result.get("ok", false) and bad_result.get("reason") == "package_discovery_failed:incompatible_engine_version", "incompatible external package is rejected through the existing loader")
 	_check(not incompatible.initialized, "incompatible content cannot be replaced by a fallback definition")
 	incompatible.free()
 	_write_text(_mod_root.path_join("manifest.json"), manifest_bytes.get_string_from_utf8())
 
 
+func _test_persistent_instance_state(roots: Array[String]) -> void:
+	var registry := Registry.new()
+	var registered: Dictionary = registry.discover_and_register(roots)
+	_check(registered.get("ok", false), "state round-trip fixture uses shared first-party and external data-only registry")
+	if not registered.get("ok", false):
+		return
+	var generated: Dictionary = ObjectWorld.build_region_instances(SEED, WORLD_ID, Vector2i(-2, 3), registry)
+	_check(generated.get("ok", false) and generated["instances"].size() == 2, "state fixture deterministically builds both instances in a negative region")
+	if not generated.get("ok", false):
+		return
+	var baseline: Dictionary = generated["instances"][0]
+	var directory := _unique_state_path("roundtrip")
+	var service: ProceduralObjectStateService = ObjectStateService.new()
+	var initialized: Dictionary = service.initialize(WORLD_ID, SEED, Field.GENERATOR_VERSION, directory)
+	_check(initialized.get("ok", false) and not initialized.get("found", true), "new world starts from derived procedural state without per-object disk records")
+	var original := service.resolve_instance(baseline)
+	_check(original.get("ok", false) and original.get("instance", {}).get("instance_id") == baseline.instance_id and original.instance.get("instance_components", {}).is_empty(), "unmodified object reconstructs from recipe and seed with sparse empty state")
+	var bad_component := service.set_component(baseline, ObjectStateContract.COMPONENT_TRANSFORM, {"schema_version": 2, "properties": {}})
+	_check(not bad_component.get("ok", false) and service.get_revision() == 0, "unsupported component schema is rejected without advancing revision")
+	var transform := {"schema_version": 1, "properties": {"translation_mm": [100, 200, -300], "rotation_mdeg": [0, 0, 45000], "scale_milli": [1000, 1250, 900]}}
+	var changed: Dictionary = service.set_component(baseline, ObjectStateContract.COMPONENT_TRANSFORM, transform)
+	_check(changed.get("ok", false) and service.get_revision() == 1 and service.get_persisted_override_count() == 1, "bounded transform override persists as one sparse instance record")
+	var appearance := {"schema_version": 1, "properties": {"tint_milli": [1000, 600, 350], "label": "granite-test"}}
+	var appearance_result := service.set_component(baseline, ObjectStateContract.COMPONENT_APPEARANCE, appearance)
+	_check(appearance_result.get("ok", false), "appearance property override accepts bounded declarative values (%s)" % appearance_result.get("reason", "ok"))
+	var logical := {"schema_version": 1, "properties": {"values": {"opened": true, "condition": 900, "note": "checked"}}}
+	var logical_result := service.set_component(baseline, ObjectStateContract.COMPONENT_LOGICAL, logical)
+	_check(logical_result.get("ok", false), "extensible logical state accepts bounded primitive fields (%s)" % logical_result.get("reason", "ok"))
+	_check(not service.set_component(baseline, ObjectStateContract.COMPONENT_LOGICAL, {"schema_version": 1, "properties": {"values": {"callback": Callable()}}}).get("ok", false), "logical state rejects executable/object values")
+	_check(not service.set_component(baseline, ObjectStateContract.COMPONENT_TRANSFORM, {"schema_version": 1, "properties": {"translation_mm": [8001, 0, 0], "rotation_mdeg": [0, 0, 0], "scale_milli": [1000, 1000, 1000]}}).get("ok", false), "transform range overflow is rejected before persistence")
+	_check(not service.set_component(baseline, ObjectStateContract.COMPONENT_APPEARANCE, {"schema_version": 1, "properties": {"tint_milli": [1000, 1000], "label": "bad"}}).get("ok", false), "malformed appearance array is rejected")
+	var reconstructed: ProceduralObjectStateService = ObjectStateService.new()
+	var restarted := reconstructed.initialize(WORLD_ID, SEED, Field.GENERATOR_VERSION, directory)
+	_check(restarted.get("ok", false) and restarted.get("found", false) and reconstructed.get_revision() == 3, "fresh service instance reloads the committed snapshot and revision")
+	var resolved := reconstructed.resolve_instance(baseline)
+	_check(resolved.get("ok", false) and resolved.instance.instance_components.size() == 3, "save/reload reconstructs all declared components")
+	_check(resolved.instance.geometry == baseline.geometry and resolved.instance.geometry_seeds == baseline.geometry_seeds and resolved.instance.position_mm == baseline.position_mm, "overrides do not rewrite deterministic recipe, seeds or placement")
+	var child_output: Array = []
+	var project_root := ProjectSettings.globalize_path("res://")
+	var child_args: PackedStringArray = ["--headless", "--path", project_root, "--script", "res://tests/procedural_object_state_process_probe.gd", "--", "read", WORLD_ID, str(SEED), str(Field.GENERATOR_VERSION), directory]
+	var child_exit := OS.execute(OS.get_executable_path(), child_args, child_output, true, false)
+	var child_text := "\n".join(PackedStringArray(child_output))
+	_check(child_exit == 0 and child_text.contains("OBJECT_STATE_PROCESS_RESTART_PASS"), "separate Godot process reconstructs persisted instance overrides (%s)" % child_text.strip_edges())
+	var stale := baseline.duplicate(true)
+	stale["content_pin"] = {"content_id": baseline.definition_id, "mod_id": "wrong.mod", "mod_version": "1.0.0", "definition_schema_version": 2}
+	_check(not reconstructed.resolve_instance(stale).get("ok", false), "same ID with changed content pin is rejected rather than substituted")
+	var incomplete_path: String = directory.path_join("objects-00000099.tmp")
+	_check(_write_bytes(incomplete_path, "incomplete".to_utf8_buffer()), "interrupted transaction fixture leaves an incomplete temporary generation")
+	var after_interrupt: ProceduralObjectStateService = ObjectStateService.new()
+	var recovered := after_interrupt.initialize(WORLD_ID, SEED, Field.GENERATOR_VERSION, directory)
+	_check(recovered.get("ok", false) and recovered.get("revision") == 3, "incomplete temporary write preserves the prior complete generation")
+	after_interrupt.resolve_instance(baseline)
+	var deleted := after_interrupt.delete_instance(baseline)
+	_check(deleted.get("ok", false) and after_interrupt.get_deleted_count() == 1 and after_interrupt.get_persisted_override_count() == 0, "logical exclusion replaces overrides in one committed snapshot")
+	var after_delete: ProceduralObjectStateService = ObjectStateService.new()
+	_check(after_delete.initialize(WORLD_ID, SEED, Field.GENERATOR_VERSION, directory).get("ok", false) and after_delete.resolve_instance(baseline).get("deleted", false), "logical exclusion survives service restart")
+	_check(after_delete.restore_instance(baseline).get("ok", false), "explicit restore commits removal of exclusion and prior mutable overrides")
+	var final_service: ProceduralObjectStateService = ObjectStateService.new()
+	_check(final_service.initialize(WORLD_ID, SEED, Field.GENERATOR_VERSION, directory).get("ok", false), "restored state reloads successfully")
+	var restored := final_service.resolve_instance(baseline)
+	_check(not restored.get("deleted", true) and restored.instance.instance_components.is_empty(), "restoration returns exact derived baseline without a per-object record")
+	var recovered_temp_dir := _unique_state_path("complete_temp_recovery")
+	var recovery_writer: ProceduralObjectStateService = ObjectStateService.new()
+	_check(recovery_writer.initialize(WORLD_ID, SEED, Field.GENERATOR_VERSION, recovered_temp_dir).get("ok", false), "complete temporary recovery fixture initializes in an isolated root")
+	recovery_writer.resolve_instance(baseline)
+	_check(recovery_writer.set_component(baseline, ObjectStateContract.COMPONENT_APPEARANCE, appearance).get("ok", false), "complete temporary recovery fixture commits a baseline generation")
+	var finalized_path: String = recovered_temp_dir.path_join("objects-%08d.json" % recovery_writer.storage_generation)
+	var temporary_path: String = recovered_temp_dir.path_join("objects-%08d.tmp" % recovery_writer.storage_generation)
+	_check(DirAccess.rename_absolute(finalized_path, temporary_path) == OK, "simulated interruption occurs after flush but before generation rename")
+	var direct_temp_validation: Dictionary = recovery_writer.store._decode_document(FileAccess.get_file_as_bytes(temporary_path))
+	_check(direct_temp_validation.get("ok", false), "complete temporary generation independently validates before recovery (%s)" % direct_temp_validation.get("reason", "ok"))
+	var recovery_reader: ProceduralObjectStateService = ObjectStateService.new()
+	var temp_recovery := recovery_reader.initialize(WORLD_ID, SEED, Field.GENERATOR_VERSION, recovered_temp_dir)
+	_check(temp_recovery.get("ok", false) and temp_recovery.get("recovered_temporary", false) and recovery_reader.get_revision() == 1, "complete temporary generation is recovered and finalized without losing accepted state (reason=%s gen=%d recovered=%s revision=%d)" % [temp_recovery.get("reason", ""), temp_recovery.get("generation", -1), temp_recovery.get("recovered_temporary", false), recovery_reader.get_revision()])
+	_check(FileAccess.file_exists(finalized_path), "recovered generation becomes an immutable finalized object-state record")
+	var wrong_world: ProceduralObjectStateService = ObjectStateService.new()
+	_check(not wrong_world.initialize(WORLD_ID, SEED + 1, Field.GENERATOR_VERSION, directory).get("ok", false), "save for a different world seed is rejected rather than merged")
+	var blocked_directory := _unique_state_path("blocked_storage")
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(blocked_directory.get_base_dir()))
+	_check(_write_bytes(blocked_directory, "not-a-directory".to_utf8_buffer()), "failed-write fixture reserves its state directory path as a regular file")
+	var blocked_service: ProceduralObjectStateService = ObjectStateService.new()
+	var blocked_init := blocked_service.initialize(WORLD_ID, SEED, Field.GENERATOR_VERSION, blocked_directory)
+	_check(blocked_init.get("ok", false), "failed-write service starts from derived state without touching the blocking file")
+	blocked_service.resolve_instance(baseline)
+	var blocked_mutation := blocked_service.set_component(baseline, ObjectStateContract.COMPONENT_APPEARANCE, appearance)
+	_check(not blocked_mutation.get("ok", false) and blocked_service.get_revision() == 0 and blocked_service.get_persisted_override_count() == 0, "storage failure rejects the mutation without advancing authoritative in-memory state")
+	DirAccess.remove_absolute(blocked_directory)
+	var corrupted_dir := _unique_state_path("corrupt")
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(corrupted_dir))
+	var source_generation_path: String = directory.path_join("objects-%08d.json" % final_service.storage_generation)
+	var corrupt_document: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(source_generation_path))
+	corrupt_document["generation"] = 1
+	corrupt_document["payload_json"] = " " + String(corrupt_document["payload_json"])
+	_check(_write_bytes(corrupted_dir.path_join("objects-00000001.json"), JSON.stringify(corrupt_document, "", true, true).to_utf8_buffer()), "corruption fixture changes payload bytes while retaining its original digest")
+	var corrupt_service: ProceduralObjectStateService = ObjectStateService.new()
+	var corrupt_load := corrupt_service.initialize(WORLD_ID, SEED, Field.GENERATOR_VERSION, corrupted_dir)
+	_check(not corrupt_load.get("ok", false) and String(corrupt_load.get("reason", "")).contains("corrupt"), "corrupt finalized generation blocks object-state startup fail-closed")
+	var incompatible := final_service.snapshot.duplicate(true)
+	incompatible["schema_version"] = 2
+	_check(not ObjectStateContract.validate_snapshot(incompatible, WORLD_ID, SEED, Field.GENERATOR_VERSION).get("ok", false), "unsupported object-state schema is rejected without migration or reinterpretation")
+	var malformed := final_service.snapshot.duplicate(true)
+	malformed["revision"] = -1
+	_check(not ObjectStateContract.validate_snapshot(malformed, WORLD_ID, SEED, Field.GENERATOR_VERSION).get("ok", false), "malformed revision metadata is rejected before serialization")
+	var changed_baseline := baseline.duplicate(true)
+	changed_baseline["instance_id"] = String(baseline.instance_id) + "/stale"
+	_check(not final_service.resolve_instance(changed_baseline).get("ok", false), "stable instance identity mismatch is rejected")
+	_remove_tree(directory)
+	_remove_tree(corrupted_dir)
+	_remove_tree(recovered_temp_dir)
+
+
 func _test_terrain_and_save_authority_isolation() -> void:
 	var registry := Registry.new()
-	var registration: Dictionary = registry.discover_and_register(["res://mods/first-party", "user://mods"])
+	var registration: Dictionary = registry.discover_and_register(_test_roots())
 	_check(registration.get("ok", false), "authority isolation fixture registers content")
 	if not registration.get("ok", false):
 		return
@@ -399,6 +583,9 @@ func _test_playable_scene_publication() -> void:
 	var demo: Node = packed.instantiate()
 	var isolated_store: RefCounted = SaveStore.new("user://p2_0a_scene_test_%d" % Time.get_ticks_usec())
 	demo.set("world_save_store", isolated_store)
+	var isolated_object_state := _unique_state_path("playable_scene")
+	demo.set("object_state_directory_override", isolated_object_state)
+	demo.set("object_package_roots_override", _test_roots())
 	root.add_child(demo)
 	var center_ready := false
 	for _frame in range(4000):
@@ -412,6 +599,22 @@ func _test_playable_scene_publication() -> void:
 		_check(stream.get_active_region_count() == demo.get("active_regions").size(), "object visibility follows actually published active regions (objects=%d terrain=%d init=%s status=%s)" % [stream.get_active_region_count(), demo.get("active_regions").size(), stream.initialized, demo.get("_procedural_object_status")])
 		var center_records: Array[Dictionary] = stream.get_region_instance_records(Vector2i.ZERO)
 		_check(center_records.size() == 2, "scene publication creates objects from both registered packages (instances=%d init=%s error=%s)" % [center_records.size(), stream.initialized, stream.initialization_error])
+		var selected_id := String(center_records[0]["instance_id"])
+		var visual_override := stream.set_instance_component(selected_id, ObjectStateContract.COMPONENT_TRANSFORM, {"schema_version": 1, "properties": {"translation_mm": [400, 250, 0], "rotation_mdeg": [0, 0, 15000], "scale_milli": [1200, 1000, 900]}})
+		_check(visual_override.get("ok", false), "playable GUI path accepts and persists a transform override through the stream")
+		var visual_appearance := stream.set_instance_component(selected_id, ObjectStateContract.COMPONENT_APPEARANCE, {"schema_version": 1, "properties": {"tint_milli": [900, 600, 350], "label": "visual-state"}})
+		_check(visual_appearance.get("ok", false), "playable GUI path accepts a per-instance declarative appearance property")
+		var stateful_records: Array[Dictionary] = stream.get_region_instance_records(Vector2i.ZERO)
+		var object_root: Node3D = stream.get_node("Objects_0_0")
+		var transformed_node: Node3D
+		for candidate_node in object_root.get_children():
+			if candidate_node.get_meta("stable_instance_id", "") == selected_id:
+				transformed_node = candidate_node
+		_check(transformed_node != null and transformed_node.position.x > Vector3(center_records[0]["position_mm"]).x / 1000.0, "published Node3D reflects the saved transform delta while remaining derived presentation")
+		var deleted_id := String(center_records[1]["instance_id"])
+		_check(stream.delete_instance(deleted_id).get("ok", false) and stream.get_visible_instance_count() == 1, "playable stream commits a logical deletion and removes the representative")
+		_check(stream.restore_instance(deleted_id).get("ok", false) and stream.get_visible_instance_count() == 2, "playable stream restores the procedural baseline for a deleted object")
+		stateful_records = stream.get_region_instance_records(Vector2i.ZERO)
 		var region_root_count := 0
 		for child in stream.get_children():
 			if child.name == "Objects_0_0":
@@ -436,10 +639,11 @@ func _test_playable_scene_publication() -> void:
 				break
 		_check(center_reloaded, "camera-driven revisit republishes the original region")
 		if center_reloaded:
-			_check(stream.get_region_instance_records(Vector2i.ZERO) == center_records, "playable stream revisit reproduces identical procedural object identities and placements")
+			_check(stream.get_region_instance_records(Vector2i.ZERO) == stateful_records, "playable stream revisit rebuilds the persisted override independent of visit order")
 	demo.queue_free()
 	for _frame in range(2):
 		await process_frame
+	_remove_tree(isolated_object_state)
 
 
 func _mesh_snapshots(manager: ProceduralObjectStream, region_key: Vector2i) -> Array:
@@ -474,6 +678,31 @@ func _write_bytes(path: String, bytes: PackedByteArray) -> bool:
 	return true
 
 
+func _unique_state_path(label: String) -> String:
+	return ProjectSettings.globalize_path("user://p2_0b_state/%s_%d" % [label, Time.get_ticks_usec()])
+
+
+func _test_roots() -> Array[String]:
+	return ["res://mods/first-party", "user://mods"]
+
+
+func _cleanup_stale_p2b_fixtures() -> void:
+	var old_mod_root := "user://mods"
+	var directory := DirAccess.open(old_mod_root)
+	if directory != null:
+		var stale_names: Array[String] = []
+		directory.list_dir_begin()
+		while true:
+			var entry := directory.get_next()
+			if entry.is_empty():
+				break
+			if directory.current_is_dir() and entry.begins_with("p2_0b_roundtrip_"):
+				stale_names.append(entry)
+		directory.list_dir_end()
+		for entry in stale_names:
+			_remove_tree(ProjectSettings.globalize_path(old_mod_root.path_join(entry)))
+
+
 func _write_text(path: String, value: String) -> void:
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
@@ -486,8 +715,9 @@ func _write_text(path: String, value: String) -> void:
 func _remove_tree(path: String) -> void:
 	var full_path := path.replace("\\", "/")
 	var user_mod_root := ProjectSettings.globalize_path("user://mods").replace("\\", "/").trim_suffix("/")
-	if not full_path.begins_with(user_mod_root + "/"):
-		_check(false, "test cleanup path is strictly contained under user://mods")
+	var test_state_root := ProjectSettings.globalize_path("user://p2_0b_state").replace("\\", "/").trim_suffix("/")
+	if not full_path.begins_with(user_mod_root + "/") and not full_path.begins_with(test_state_root + "/"):
+		_check(false, "test cleanup path is strictly contained under an owned disposable user:// fixture root")
 		return
 	var directory := DirAccess.open(full_path)
 	if directory == null:

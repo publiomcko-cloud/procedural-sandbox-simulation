@@ -47,6 +47,11 @@ var _pending_world_load: Dictionary = {}
 var _persistence_status := "No saved world; press P to save or O to load"
 var _persistence_blocked := false
 var _procedural_object_status := "Procedural objects unavailable"
+var object_state_directory_override := ""
+var object_package_roots_override: Array[String] = []
+var _selected_object_index := 0
+var _selected_object_id := ""
+var _object_state_action_status := "Object state: select with F6; mutate F7; delete F8; restore F9"
 var chunk_nodes: Dictionary = {} # stable chunk id -> active MeshInstance3D
 var _published_lod_by_chunk: Dictionary = {} # stable chunk id -> 0/1
 var _lod_fallback_chunks: Dictionary = {} # stable chunk id -> deterministic LOD0 fallback until retry/toggle
@@ -137,7 +142,7 @@ func _ready() -> void:
 		else:
 			_persistence_blocked = true
 			_persistence_status = "Saved world unavailable (%s); edits remain untouched and saving is blocked" % saved_world.get("reason", "invalid")
-	var object_initialization: Dictionary = object_stream.initialize(world_seed, world_id)
+	var object_initialization: Dictionary = object_stream.initialize(world_seed, world_id, object_package_roots_override, object_state_directory_override)
 	if object_initialization.get("ok", false):
 		_procedural_object_status = "Procedural objects ready"
 	else:
@@ -218,6 +223,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_save_world_to_storage()
 		elif event.keycode == KEY_O:
 			_load_world_from_storage()
+		elif event.keycode == KEY_F6:
+			_select_next_object()
+		elif event.keycode == KEY_F7:
+			_mutate_selected_object()
+		elif event.keycode == KEY_F8:
+			_delete_selected_object()
+		elif event.keycode == KEY_F9:
+			_restore_selected_object()
 		elif event.keycode in [KEY_A, KEY_LEFT]:
 			_move_focus(Vector3(-FOCUS_MOVE_STEP, 0.0, 0.0))
 		elif event.keycode in [KEY_D, KEY_RIGHT]:
@@ -227,6 +240,53 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode in [KEY_S, KEY_DOWN]:
 			_move_focus(Vector3(0.0, 0.0, FOCUS_MOVE_STEP))
 		_update_status()
+
+
+func _select_next_object() -> void:
+	var ids: Array[String] = object_stream.get_instance_ids()
+	if ids.is_empty():
+		_selected_object_id = ""
+		_object_state_action_status = "Object state: no active object; move near a published region"
+		return
+	_selected_object_index = posmod(_selected_object_index, ids.size())
+	_selected_object_id = ids[_selected_object_index]
+	_selected_object_index += 1
+	_object_state_action_status = "Selected object %s" % _selected_object_id
+
+
+func _mutate_selected_object() -> void:
+	if _selected_object_id.is_empty():
+		_select_next_object()
+		if _selected_object_id.is_empty():
+			return
+	var transform_result: Dictionary = object_stream.set_instance_component(_selected_object_id, "core.transform", {
+		"schema_version": 1,
+		"properties": {"translation_mm": [350, 250, 0], "rotation_mdeg": [0, 0, 12000], "scale_milli": [1100, 1000, 900]},
+	})
+	if not transform_result.get("ok", false):
+		_object_state_action_status = "Object transform rejected: %s" % transform_result.get("reason", "invalid")
+		return
+	var appearance_result: Dictionary = object_stream.set_instance_component(_selected_object_id, "core.appearance", {
+		"schema_version": 1,
+		"properties": {"tint_milli": [1000, 650, 350], "label": "owner-state-demo"},
+	})
+	_object_state_action_status = "Object override saved (revision %d)" % object_stream.get_instance_state_revision() if appearance_result.get("ok", false) else "Object appearance rejected: %s" % appearance_result.get("reason", "invalid")
+
+
+func _delete_selected_object() -> void:
+	if _selected_object_id.is_empty():
+		_object_state_action_status = "Select an object with F6 first"
+		return
+	var result: Dictionary = object_stream.delete_instance(_selected_object_id)
+	_object_state_action_status = "Logical deletion saved (revision %d)" % object_stream.get_instance_state_revision() if result.get("ok", false) else "Object deletion rejected: %s" % result.get("reason", "invalid")
+
+
+func _restore_selected_object() -> void:
+	if _selected_object_id.is_empty():
+		_object_state_action_status = "Select an object with F6 first"
+		return
+	var result: Dictionary = object_stream.restore_instance(_selected_object_id)
+	_object_state_action_status = "Procedural baseline restored (revision %d)" % object_stream.get_instance_state_revision() if result.get("ok", false) else "Object restore rejected: %s" % result.get("reason", "invalid")
 
 
 func _move_focus(delta: Vector3) -> void:
@@ -424,6 +484,7 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 	var coordinates: Array[Vector2i] = chunk_coordinates.duplicate()
 	var token := _next_stage_token
 	_next_stage_token += 1
+	object_stream.expect_region_publication(region_key, token)
 	var queued_times: Array[int] = []
 	var queued_now := Time.get_ticks_usec()
 	for _coordinate in coordinates:
@@ -636,7 +697,7 @@ func _complete_region_stage(id: String) -> void:
 		if _publish_partial_stage(id, stage):
 			_clear_stream_error(id)
 	else:
-		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"], stage.get("actual_lod_by_coordinate", {}), stage.get("fallback_by_coordinate", {}))
+		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"], stage.get("actual_lod_by_coordinate", {}), stage.get("fallback_by_coordinate", {}), int(stage["stage_token"]))
 		_streamed_region_loads += 1
 		_stage_retry_counts.erase(id)
 		_clear_stream_error(id)
@@ -702,7 +763,7 @@ func _try_commit_global_rebuild() -> void:
 	_edit_transaction = {}
 	var publish_started_usec := Time.get_ticks_usec()
 	for stage in all_stages:
-		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"], stage.get("actual_lod_by_coordinate", {}), stage.get("fallback_by_coordinate", {}))
+		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"], stage.get("actual_lod_by_coordinate", {}), stage.get("fallback_by_coordinate", {}), int(stage["stage_token"]))
 	_mesh_publish_usec_samples.append(Time.get_ticks_usec() - publish_started_usec)
 	_rendered_cave_section_enabled = cave_section_enabled
 	_streamed_region_loads += all_stages.size()
@@ -717,7 +778,7 @@ func _try_commit_global_rebuild() -> void:
 	_update_runtime_diagnostics()
 
 
-func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary, actual_lods: Dictionary = {}, fallback_lods: Dictionary = {}) -> void:
+func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary, actual_lods: Dictionary = {}, fallback_lods: Dictionary = {}, publication_token: int = -1) -> void:
 	var id := _region_id(region_key)
 	var region_nodes: Dictionary = {}
 	var region_origin: Vector3 = SpatialGrid.region_origin_world(region_key)
@@ -745,8 +806,8 @@ func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary
 			_release_chunk_node(old_id, previous["chunk_nodes"][old_id])
 	active_regions[id] = {"region_key": region_key, "world_state": state, "chunk_nodes": region_nodes}
 	world_states[id] = state
-	var object_publication: Dictionary = object_stream.publish_region(region_key, state)
-	if not object_publication.get("ok", false):
+	var object_publication: Dictionary = object_stream.publish_region(region_key, state, false, publication_token)
+	if not object_publication.get("ok", false) and object_publication.get("reason") != "stale_object_region_publication":
 		_procedural_object_status = "Procedural object issue: %s" % object_stream.get_error_summary()
 	else:
 		var object_error: String = object_stream.get_error_summary()
@@ -1116,7 +1177,7 @@ func _try_commit_edit_transaction() -> void:
 				_replace_node_mesh(nodes[chunk_id], stage["meshes"][coordinate])
 				_set_chunk_lod_state(chunk_id, nodes[chunk_id], int(stage.get("actual_lod_by_coordinate", {}).get(coordinate, 0)), bool(stage.get("fallback_by_coordinate", {}).get(coordinate, false)))
 		else:
-			_publish_region(stage["region_key"], stage["world_state"], stage["meshes"], stage.get("actual_lod_by_coordinate", {}), stage.get("fallback_by_coordinate", {}))
+			_publish_region(stage["region_key"], stage["world_state"], stage["meshes"], stage.get("actual_lod_by_coordinate", {}), stage.get("fallback_by_coordinate", {}), int(stage["stage_token"]))
 		loading_regions.erase(id)
 	_mesh_publish_usec_samples.append(Time.get_ticks_usec() - publish_started_usec)
 	var committed_sequence: int = _edit_transaction["operation_sequence"]
@@ -1576,6 +1637,8 @@ func _update_status() -> void:
 		object_stream.get_active_region_count(),
 	", ".join(definition_ids),
 	]
+	status += "Object state revision %d | F6 select, F7 override, F8 logical delete, F9 restore\n" % object_stream.get_instance_state_revision()
+	status += _object_state_action_status + "\n"
 	status += _procedural_object_status + "\n"
 	if last_stream_error != "":
 		status += "STREAM ERROR: " + last_stream_error + "\n"
