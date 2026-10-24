@@ -71,4 +71,6 @@
 
 | 2026-10-24 | [PR #112 P2.0C integration](2026-10-24-PR112-P2-0C-MERGE.md) | Owner GUI visuals and practical streaming PASS; independently reviewed source; exact merge `38021b0e72b30f4b868e49c870bf43f402dd0fce` | Documentation-only post-merge receipt |
 
+| 2026-10-24 | [P3.0A transactional entity command implementation](2026-10-24-P3-0A-IMPLEMENTATION.md) | P2.0C exit assessment; P2 state-store-backed command dispatcher, explicit placement identity/schema extension, revisions/idempotency/inverse metadata, isolated harness; full Godot 4.7.2 validation 17,950/0 | Source `ca2273953d3b578cf349990f487fcac25336db6b` on draft PR #114; independent source review and owner GUI pending |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
