@@ -9,6 +9,9 @@ const COMPONENT_APPEARANCE := "core.appearance"
 const COMPONENT_LOGICAL := "core.logical"
 const MAX_LOGICAL_FIELDS := 32
 const MAX_LABEL_LENGTH := 64
+const MAX_WORLD_SEED := 2147483646
+const MIN_REGION_COORD := -2147483648
+const MAX_REGION_COORD := 2147483647
 
 
 static func normalize_component(component_id: String, value: Variant) -> Dictionary:
@@ -90,6 +93,8 @@ static func _normalize_logical(properties: Dictionary) -> Dictionary:
 static func validate_snapshot(snapshot: Variant, expected_world_id: String, expected_seed: int, expected_generator: int) -> Dictionary:
 	if typeof(snapshot) != TYPE_DICTIONARY:
 		return _failure("snapshot_not_dictionary")
+	if not _valid_world_identity(expected_world_id, expected_seed, expected_generator):
+		return _failure("snapshot_expected_world_identity_invalid")
 	var value: Dictionary = snapshot
 	if not _exact_keys(value, ["schema_version", "world_id", "world_seed", "generator_version", "revision", "overrides", "deleted"]):
 		return _failure("snapshot_fields_invalid")
@@ -143,6 +148,8 @@ static func validate_snapshot(snapshot: Variant, expected_world_id: String, expe
 
 
 static func validate_identity(identity: Variant, expected_world_id: String, expected_seed: int, expected_generator: int) -> Dictionary:
+	if not _valid_world_identity(expected_world_id, expected_seed, expected_generator):
+		return _failure("identity_expected_world_invalid")
 	if typeof(identity) != TYPE_DICTIONARY or not _exact_keys(identity, ["instance_id", "definition_id", "content_pin", "world_id", "world_seed", "generator_version", "region_key", "slot", "placement_seed", "recipe_seed"]):
 		return _failure("identity_fields_invalid")
 	if identity.world_id != expected_world_id or not _is_int(identity.world_seed) or int(identity.world_seed) != expected_seed or not _is_int(identity.generator_version) or int(identity.generator_version) != expected_generator:
@@ -153,7 +160,7 @@ static func validate_identity(identity: Variant, expected_world_id: String, expe
 		return _failure("identity_content_pin_invalid")
 	if identity.content_pin.content_id != identity.definition_id or typeof(identity.content_pin.mod_id) != TYPE_STRING or not String(identity.definition_id).begins_with(String(identity.content_pin.mod_id) + ":") or typeof(identity.content_pin.mod_version) != TYPE_STRING or not _is_int(identity.content_pin.definition_schema_version) or int(identity.content_pin.definition_schema_version) < 1:
 		return _failure("identity_content_pin_invalid")
-	if typeof(identity.region_key) != TYPE_ARRAY or identity.region_key.size() != 2 or not _is_int(identity.region_key[0]) or not _is_int(identity.region_key[1]):
+	if typeof(identity.region_key) != TYPE_ARRAY or identity.region_key.size() != 2 or not _is_int(identity.region_key[0]) or not _is_int(identity.region_key[1]) or int(identity.region_key[0]) < MIN_REGION_COORD or int(identity.region_key[0]) > MAX_REGION_COORD or int(identity.region_key[1]) < MIN_REGION_COORD or int(identity.region_key[1]) > MAX_REGION_COORD:
 		return _failure("identity_region_invalid")
 	if not _is_int(identity.slot) or int(identity.slot) < 0 or int(identity.slot) > 15 or not _is_int(identity.placement_seed) or int(identity.placement_seed) < 1 or int(identity.placement_seed) > 2147483647 or not _is_int(identity.recipe_seed) or int(identity.recipe_seed) < 1 or int(identity.recipe_seed) > 2147483647:
 		return _failure("identity_recipe_invalid")
@@ -220,6 +227,14 @@ static func _valid_instance_id(value: String, world_id: String, world_seed: int)
 	var regex := RegEx.new()
 	regex.compile("^" + world_id + "/seed-" + str(world_seed) + "/object/[a-z][a-z0-9_.]*:[a-z][a-z0-9_.]*/region/-?[0-9]+,-?[0-9]+/slot/[0-9]+$")
 	return regex.search(value) != null
+
+
+static func _valid_world_identity(world_id: String, world_seed: int, generator_version: int) -> bool:
+	if world_id.is_empty() or world_id.length() > 64 or world_seed < 0 or world_seed > MAX_WORLD_SEED or generator_version < 1 or generator_version > 2147483647:
+		return false
+	var regex := RegEx.new()
+	regex.compile("^[a-z][a-z0-9_-]*$")
+	return regex.search(world_id) != null
 
 
 static func _valid_logical_key(value: String) -> bool:

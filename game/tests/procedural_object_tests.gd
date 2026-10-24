@@ -543,6 +543,11 @@ func _test_persistent_instance_state(roots: Array[String]) -> void:
 	var malformed := final_service.snapshot.duplicate(true)
 	malformed["revision"] = -1
 	_check(not ObjectStateContract.validate_snapshot(malformed, WORLD_ID, SEED, Field.GENERATOR_VERSION).get("ok", false), "malformed revision metadata is rejected before serialization")
+	_check(not ObjectStateContract.validate_snapshot(final_service.snapshot, "../outside", SEED, Field.GENERATOR_VERSION).get("ok", false), "world identifiers cannot redirect the default object-state storage path")
+	var overflow_identity := ObjectStateContract.identity_for_instance(baseline)
+	overflow_identity.region_key[0] = 2147483648
+	overflow_identity.instance_id = String(overflow_identity.instance_id).replace("/region/-2,3/slot/0", "/region/-2147483648,3/slot/0")
+	_check(not ObjectStateContract.validate_identity(overflow_identity, WORLD_ID, SEED, Field.GENERATOR_VERSION).get("ok", false), "signed region coordinates outside Vector2i range are rejected before identity normalization")
 	var changed_baseline := baseline.duplicate(true)
 	changed_baseline["instance_id"] = String(baseline.instance_id) + "/stale"
 	_check(not final_service.resolve_instance(changed_baseline).get("ok", false), "stable instance identity mismatch is rejected")
