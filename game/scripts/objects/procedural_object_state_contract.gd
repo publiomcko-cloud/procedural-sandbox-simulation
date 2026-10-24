@@ -150,7 +150,17 @@ static func validate_snapshot(snapshot: Variant, expected_world_id: String, expe
 static func validate_identity(identity: Variant, expected_world_id: String, expected_seed: int, expected_generator: int) -> Dictionary:
 	if not _valid_world_identity(expected_world_id, expected_seed, expected_generator):
 		return _failure("identity_expected_world_invalid")
-	if typeof(identity) != TYPE_DICTIONARY or not _exact_keys(identity, ["instance_id", "definition_id", "content_pin", "world_id", "world_seed", "generator_version", "region_key", "slot", "placement_seed", "recipe_seed"]):
+	if typeof(identity) != TYPE_DICTIONARY:
+		return _failure("identity_fields_invalid")
+	var identity_version := 1
+	if identity.has("identity_schema_version"):
+		if not _is_int(identity["identity_schema_version"]) or int(identity["identity_schema_version"]) != 2:
+			return _failure("identity_schema_unsupported")
+		identity_version = 2
+	var expected_keys := ["instance_id", "definition_id", "content_pin", "world_id", "world_seed", "generator_version", "region_key", "slot", "placement_seed", "recipe_seed"]
+	if identity_version == 2:
+		expected_keys = ["identity_schema_version", "instance_id", "definition_id", "content_pin", "world_id", "world_seed", "generator_version", "region_key", "population_rule_id", "population_rule_pin", "candidate_index", "placement_seed", "recipe_seed"]
+	if not _exact_keys(identity, expected_keys):
 		return _failure("identity_fields_invalid")
 	if identity.world_id != expected_world_id or not _is_int(identity.world_seed) or int(identity.world_seed) != expected_seed or not _is_int(identity.generator_version) or int(identity.generator_version) != expected_generator:
 		return _failure("identity_world_mismatch")
@@ -162,27 +172,55 @@ static func validate_identity(identity: Variant, expected_world_id: String, expe
 		return _failure("identity_content_pin_invalid")
 	if typeof(identity.region_key) != TYPE_ARRAY or identity.region_key.size() != 2 or not _is_int(identity.region_key[0]) or not _is_int(identity.region_key[1]) or int(identity.region_key[0]) < MIN_REGION_COORD or int(identity.region_key[0]) > MAX_REGION_COORD or int(identity.region_key[1]) < MIN_REGION_COORD or int(identity.region_key[1]) > MAX_REGION_COORD:
 		return _failure("identity_region_invalid")
-	if not _is_int(identity.slot) or int(identity.slot) < 0 or int(identity.slot) > 15 or not _is_int(identity.placement_seed) or int(identity.placement_seed) < 1 or int(identity.placement_seed) > 2147483647 or not _is_int(identity.recipe_seed) or int(identity.recipe_seed) < 1 or int(identity.recipe_seed) > 2147483647:
-		return _failure("identity_recipe_invalid")
 	var region := Vector2i(int(identity.region_key[0]), int(identity.region_key[1]))
-	var expected_id := "%s/seed-%d/object/%s/region/%d,%d/slot/%d" % [expected_world_id, expected_seed, identity.definition_id, region.x, region.y, int(identity.slot)]
+	var expected_id := ""
+	if identity_version == 1:
+		if not _is_int(identity.slot) or int(identity.slot) < 0 or int(identity.slot) > 15:
+			return _failure("identity_recipe_invalid")
+		expected_id = "%s/seed-%d/object/%s/region/%d,%d/slot/%d" % [expected_world_id, expected_seed, identity.definition_id, region.x, region.y, int(identity.slot)]
+	else:
+		var rule_pin: Variant = identity.population_rule_pin
+		if typeof(identity.population_rule_id) != TYPE_STRING or String(identity.population_rule_id).find(":") < 1 or typeof(rule_pin) != TYPE_DICTIONARY or not _exact_keys(rule_pin, ["rule_id", "mod_id", "mod_version", "rule_schema_version", "algorithm", "rule_sha256"]):
+			return _failure("identity_population_rule_invalid")
+		var rule_id := String(identity.population_rule_id)
+		var colon_index := rule_id.find(":")
+		var local_rule_id := rule_id.substr(colon_index + 1)
+		var rule_regex := RegEx.new()
+		rule_regex.compile("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$")
+		if rule_pin.rule_id != rule_id or rule_pin.mod_id != rule_id.substr(0, colon_index) or not rule_id.begins_with(String(rule_pin.mod_id) + ":") or rule_regex.search(local_rule_id) == null or typeof(rule_pin.mod_version) != TYPE_STRING or not _is_int(rule_pin.rule_schema_version) or int(rule_pin.rule_schema_version) != 1 or typeof(rule_pin.algorithm) != TYPE_STRING or not ["region_grid_density_v1"].has(rule_pin.algorithm) or typeof(rule_pin.rule_sha256) != TYPE_STRING or String(rule_pin.rule_sha256).length() != 64 or not _is_hex(String(rule_pin.rule_sha256)):
+			return _failure("identity_population_rule_pin_invalid")
+		if not _is_int(identity.candidate_index) or int(identity.candidate_index) < 0 or int(identity.candidate_index) > 255:
+			return _failure("identity_recipe_invalid")
+		expected_id = "%s/seed-%d/object/%s/region/%d,%d/population/%s/candidate/%d" % [expected_world_id, expected_seed, identity.definition_id, region.x, region.y, rule_id, int(identity.candidate_index)]
+	if not _is_int(identity.placement_seed) or int(identity.placement_seed) < 1 or int(identity.placement_seed) > 2147483647 or not _is_int(identity.recipe_seed) or int(identity.recipe_seed) < 1 or int(identity.recipe_seed) > 2147483647:
+		return _failure("identity_recipe_invalid")
 	if identity.instance_id != expected_id:
 		return _failure("identity_id_mismatch")
 	var normalized_identity: Dictionary = identity.duplicate(true)
 	normalized_identity.world_seed = expected_seed
 	normalized_identity.generator_version = expected_generator
 	normalized_identity.region_key = [int(identity.region_key[0]), int(identity.region_key[1])]
-	normalized_identity.slot = int(identity.slot)
+	if identity_version == 1:
+		normalized_identity.slot = int(identity.slot)
+	else:
+		normalized_identity.identity_schema_version = 2
+		normalized_identity.candidate_index = int(identity.candidate_index)
 	normalized_identity.placement_seed = int(identity.placement_seed)
 	normalized_identity.recipe_seed = int(identity.recipe_seed)
 	var normalized_pin: Dictionary = identity.content_pin.duplicate(true)
 	normalized_pin.definition_schema_version = int(identity.content_pin.definition_schema_version)
 	normalized_identity.content_pin = normalized_pin
+	if identity_version == 2:
+		var normalized_rule_pin: Dictionary = identity.population_rule_pin.duplicate(true)
+		normalized_rule_pin.rule_schema_version = int(identity.population_rule_pin.rule_schema_version)
+		normalized_identity.population_rule_pin = normalized_rule_pin
 	return {"ok": true, "instance_id": expected_id, "identity": normalized_identity}
 
 
 static func identity_for_instance(instance: Dictionary) -> Dictionary:
 	var key: Vector2i = instance.region_key
+	if not String(instance.get("population_rule_id", "")).is_empty():
+		return {"identity_schema_version": 2, "instance_id": instance.instance_id, "definition_id": instance.definition_id, "content_pin": instance.content_pin.duplicate(true), "world_id": instance.world_id, "world_seed": instance.world_seed, "generator_version": instance.generator_version, "region_key": [key.x, key.y], "population_rule_id": instance.population_rule_id, "population_rule_pin": instance.population_rule_pin.duplicate(true), "candidate_index": instance.population_candidate_index, "placement_seed": instance.placement_seed, "recipe_seed": instance.recipe_seed}
 	return {"instance_id": instance.instance_id, "definition_id": instance.definition_id, "content_pin": instance.content_pin.duplicate(true), "world_id": instance.world_id, "world_seed": instance.world_seed, "generator_version": instance.generator_version, "region_key": [key.x, key.y], "slot": instance.slot, "placement_seed": instance.placement_seed, "recipe_seed": instance.recipe_seed}
 
 
@@ -226,7 +264,17 @@ static func _valid_instance_id(value: String, world_id: String, world_seed: int)
 		return false
 	var regex := RegEx.new()
 	regex.compile("^" + world_id + "/seed-" + str(world_seed) + "/object/[a-z][a-z0-9_.]*:[a-z][a-z0-9_.]*/region/-?[0-9]+,-?[0-9]+/slot/[0-9]+$")
+	if regex.search(value) != null:
+		return true
+	regex.compile("^" + world_id + "/seed-" + str(world_seed) + "/object/[a-z][a-z0-9_.]*:[a-z][a-z0-9_.]*/region/-?[0-9]+,-?[0-9]+/population/[a-z][a-z0-9_.]*:[a-z][a-z0-9_.]*/candidate/[0-9]+$")
 	return regex.search(value) != null
+
+
+static func _is_hex(value: String) -> bool:
+	for character in value:
+		if not "0123456789abcdef".contains(character):
+			return false
+	return true
 
 
 static func _valid_world_identity(world_id: String, world_seed: int, generator_version: int) -> bool:

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "type": "static_population_rule",
+  "id": "official.example.procedural_rock:basalt_population",
+  "definition_id": "official.example.procedural_rock:basalt_stack",
+  "algorithm": "region_grid_density_v1",
+  "density_milli_per_region": 2000,
+  "legacy_slot": -1,
+  "distribution": {
+    "grid_spacing_mm": 3000,
+    "jitter_milli": 100,
+    "minimum_separation_mm": 2400,
+    "edge_margin_mm": 2000,
+    "geometry_variant_count": 4
+  },
+  "transform": {
+    "scale_min_milli": [800, 800, 800],
+    "scale_max_milli": [1150, 1150, 1150],
+    "orientation": "yaw_uniform_v1",
+    "yaw_min_mdeg": 0,
+    "yaw_max_mdeg": 360000
+  },
+  "surface": {
+    "mode": "top_surface_v1",
+    "minimum_height_mm": -1000,
+    "maximum_height_mm": 12000,
+    "maximum_slope_mdeg": 50000
+  }
+}

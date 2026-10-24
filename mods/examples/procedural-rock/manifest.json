@@ -7,5 +7,5 @@
     { "id": "firstparty.core_rocks", "version": "1.0.0" }
   ],
   "script_policy": "data_only",
-  "content_roots": ["objects/"]
+  "content_roots": ["objects/", "populations/"]
 }
