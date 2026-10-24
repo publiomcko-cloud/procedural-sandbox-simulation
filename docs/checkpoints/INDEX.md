@@ -63,4 +63,6 @@
 
 | 2026-10-24 | [P2.0B owner GUI acceptance](2026-10-24-P2-0B-OWNER-GUI-ACCEPTANCE.md) | Owner reports six GUI checks PASS on feature HEAD `819e18c8ac299c2569e4d7f3b8aeefc384bde0b2`; merge decision pending | PR #110 feature branch; not yet integrated |
 
+| 2026-10-24 | [P2.0B PR #110 merge](2026-10-24-PR110-P2-0B-MERGE.md) | Exact owner-authorized merge to main 84bb7c3e573e7aa5a07608aac7834735aeb2c84f; six GUI checks PASS; next stage pending | Documentation-only post-merge receipt |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
