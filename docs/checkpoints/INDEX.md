@@ -55,4 +55,6 @@
 
 | 2026-10-24 | [Recent merge receipts and P2.0A GUI blocker](2026-10-24-P1-1C-P0-2-P0-3-MERGE-RECEIPTS-P2-0A-GUI.md) | Verified merges #99/#103/#104/#105 to main; PR #106 visual rocks resemble stacked spheres despite other owner GUI checks passing; merge blocked pending correction/retest | Retrospective docs-only reconciliation; PR #106 remains open/draft/unmerged |
 
+| 2026-10-24 | [P2.0A shapes accepted; terrain contact deferred](2026-10-24-P2-0A-OWNER-SHAPES-PASS-TERRAIN-CONTACT-DEFERRED.md) | Owner GUI accepts natural rock shapes; visible terrain intersection/contact defects deferred to issue #108; PR #106 remains unmerged | PR #107 documentation-only draft; no automatic merge approval |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
