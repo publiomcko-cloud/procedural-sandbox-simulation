@@ -33,6 +33,7 @@ var _rock_material: StandardMaterial3D
 var state_service: RefCounted
 var entity_command_service: RefCounted
 var state_directory_override := ""
+var _package_discovery_report: Dictionary = {}
 var _expected_publication_tokens: Dictionary = {}
 var _published_publication_tokens: Dictionary = {}
 var _population_rule_ids: Array[String] = []
@@ -72,15 +73,22 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_geometry_mesh_cache.clear()
 	_geometry_mesh_cache_order.clear()
 	_population_rule_ids.clear()
+	_package_discovery_report.clear()
 	var roots: Array[String] = []
 	for package_root in package_roots:
 		roots.append(package_root)
+	var discovery: Dictionary = {}
 	if roots.is_empty():
 		roots = _configured_package_roots()
 		if roots.is_empty():
-			return _fail_initialize("user_mod_directory_unavailable")
+			var root_error := initialization_error if not initialization_error.is_empty() else "user_mod_directory_unavailable"
+			return _fail_initialize(root_error)
+		discovery = _discover_configured_packages(roots)
+	else:
+		var optional_roots := _configured_optional_roots(roots)
+		discovery = Loader.discover_and_validate(roots, optional_roots)
 	var candidate: ContentDefinitionRegistry = RegistryScript.new()
-	var discovery: Dictionary = Loader.discover_and_validate(roots)
+	_package_discovery_report = discovery.duplicate(true)
 	if not discovery.get("ok", false):
 		return _fail_initialize("package_discovery_failed:%s" % discovery.get("reason", "unknown"))
 	var registration: Dictionary = candidate.register_discovered(discovery)
@@ -122,7 +130,16 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_rock_material.roughness = 0.94
 	initialized = true
 	initialization_error = ""
-	return {"ok": true, "reason": "ok", "mod_count": _mod_count, "definition_ids": _definition_ids.duplicate(), "population_rule_ids": _population_rule_ids.duplicate()}
+	return {
+		"ok": true,
+		"reason": "ok",
+		"mod_count": _mod_count,
+		"definition_ids": _definition_ids.duplicate(),
+		"population_rule_ids": _population_rule_ids.duplicate(),
+		"accepted_package_count": int(discovery.get("accepted_package_count", _mod_count)),
+		"optional_directory_ignored_count": int(discovery.get("optional_directory_ignored_count", 0)),
+		"discovery_diagnostics": discovery.get("diagnostics", []).duplicate(true),
+	}
 
 
 func expect_region_publication(region_key: Vector2i, publication_token: int) -> void:
@@ -815,21 +832,62 @@ func get_error_summary() -> String:
 	return "region %s: %s" % [ids[0], _region_errors[ids[0]]]
 
 
+func get_package_discovery_diagnostics() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for value in _package_discovery_report.get("diagnostics", []):
+		if value is Dictionary:
+			result.append(value.duplicate(true))
+	return result
+
+
+func get_package_discovery_summary() -> String:
+	if _package_discovery_report.is_empty():
+		return ""
+	var ignored_count := int(_package_discovery_report.get("optional_directory_ignored_count", 0))
+	if bool(_package_discovery_report.get("ok", false)):
+		if ignored_count == 0:
+			return ""
+		return "Mod discovery warning: ignored %d undeclared folder(s) in optional user mods; package contents were not loaded" % ignored_count
+	var reason := String(_package_discovery_report.get("reason", "unknown"))
+	if reason == "missing_manifest":
+		return "Mod discovery blocked: a required package directory has no manifest; restore a valid package manifest"
+	if reason == "malformed_manifest":
+		return "Mod discovery blocked: a declared package manifest is malformed; correct or remove that declared package"
+	if reason == "malformed_content" or reason == "content_root_unavailable" or reason == "content_unreadable":
+		return "Mod discovery blocked: declared package content is invalid or unavailable; correct that package before retrying"
+	if reason.begins_with("reparse_") or reason.begins_with("unsafe_") or reason == "unauthorized_package_root":
+		return "Mod discovery blocked by a package path safety check; inspect the mod folder layout"
+	return "Mod discovery blocked (%s); inspect the declared package and its dependencies" % reason
+
+
 func _configured_package_roots() -> Array[String]:
 	var user_root := ProjectSettings.globalize_path("user://mods")
+	if not Loader._is_authorized_root("user://mods"):
+		initialization_error = "package_discovery_failed:unauthorized_package_root"
+		return []
 	var mkdir_error := DirAccess.make_dir_recursive_absolute(user_root)
 	if mkdir_error != OK and mkdir_error != ERR_ALREADY_EXISTS:
 		initialization_error = "user_mod_directory_unavailable"
 		return []
+	return ["res://mods/first-party", "user://mods"]
+
+
+func _discover_configured_packages(base_roots: Array[String]) -> Dictionary:
+	var optional_roots: Array[String] = ["user://mods"]
+	var installed_discovery: Dictionary = Loader.discover_and_validate(base_roots, optional_roots)
+	if not installed_discovery.get("ok", false):
+		return installed_discovery
+	for package in installed_discovery.get("packages", []):
+		if String(package.get("manifest", {}).get("id", "")) == "official.example.procedural_rock":
+			return installed_discovery
 	var project_root := ProjectSettings.globalize_path("res://").trim_suffix("/")
 	var repository_example_root := project_root.get_base_dir().path_join("mods/examples")
-	var user_roots: Array[String] = ["res://mods/first-party", "user://mods"]
-	var installed_discovery: Dictionary = Loader.discover_and_validate(user_roots)
-	if installed_discovery.get("ok", false):
-		for package in installed_discovery.get("packages", []):
-			if package.get("manifest", {}).get("id", "") == "official.example.procedural_rock":
-				return user_roots
-	return ["res://mods/first-party", repository_example_root, "user://mods"]
+	var fallback_roots: Array[String] = ["res://mods/first-party", repository_example_root, "user://mods"]
+	return Loader.discover_and_validate(fallback_roots, optional_roots)
+
+
+func _configured_optional_roots(roots: Array[String]) -> Array[String]:
+	return Loader.optional_user_roots(roots)
 
 
 func _initialize_state_service(seed_value: int) -> Dictionary:

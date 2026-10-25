@@ -20,6 +20,7 @@ const WORLD_ID := "procedural-object-test-world"
 var assertions := 0
 var failures := 0
 var _mod_root := ""
+var _issue118_stray_root := ""
 
 
 func _initialize() -> void:
@@ -53,6 +54,7 @@ func _run() -> void:
 	_test_terrain_and_save_authority_isolation()
 	_check(not external_copy.is_empty(), "external example was copied only into the disposable isolated user-data test fixture")
 	await _test_playable_scene_publication()
+	_remove_tree(ProjectSettings.globalize_path(_issue118_stray_root))
 	_remove_tree(ProjectSettings.globalize_path(_mod_root))
 
 
@@ -74,8 +76,12 @@ func _test_same_registry_pipeline(roots: Array[String]) -> void:
 	_check(registry.pin_definitions([builtin["id"], external["id"]]).get("ok", false), "runtime object definitions carry P0.3 content version pins")
 	var runtime: ProceduralObjectStream = ObjectStream.new()
 	var runtime_state_path := _unique_state_path("registry")
+	_issue118_stray_root = "user://mods/issue118_runtime_residual_%d" % Time.get_ticks_usec()
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_issue118_stray_root))
 	var default_roots: Dictionary = runtime.initialize(SEED, WORLD_ID, [], runtime_state_path)
-	_check(default_roots.get("ok", false), "runtime discovers the external package through the normal user:// package-root contract")
+	_check(default_roots.get("ok", false), "runtime discovers valid first-party and installed external packages despite an unmanifested user mod directory")
+	_check(int(default_roots.get("optional_directory_ignored_count", 0)) == 1 and runtime.get_package_discovery_summary().contains("ignored 1 undeclared folder"), "runtime returns a nonfatal actionable warning for the ignored residual directory")
+	_check(not runtime.get_package_discovery_summary().contains(ProjectSettings.globalize_path("user://mods")), "runtime discovery warning does not expose a private absolute path")
 	_check(runtime._configured_package_roots().size() == 2, "installed example takes precedence over its repository copy to avoid duplicate package IDs")
 	runtime.free()
 	_remove_tree(runtime_state_path)
@@ -928,7 +934,8 @@ func _test_playable_scene_publication() -> void:
 	demo.set("world_save_store", isolated_store)
 	var isolated_object_state := _unique_state_path("playable_scene")
 	demo.set("object_state_directory_override", isolated_object_state)
-	demo.set("object_package_roots_override", _test_roots())
+	var package_roots_override: Array[String] = []
+	demo.set("object_package_roots_override", package_roots_override)
 	root.add_child(demo)
 	var center_ready := false
 	for _frame in range(4000):
@@ -938,6 +945,7 @@ func _test_playable_scene_publication() -> void:
 			break
 	var stream: ProceduralObjectStream = demo.get_node("ProceduralObjects")
 	_check(center_ready, "playable terrain scene publishes its focused region during streaming")
+	_check(stream.initialized and int(stream.get_package_discovery_diagnostics().size()) >= 1 and stream.get_package_discovery_summary().contains("ignored 1 undeclared folder"), "main scene initializes packages and displays the nonfatal optional-folder diagnostic")
 	if center_ready:
 		for _frame in range(1200):
 			await process_frame

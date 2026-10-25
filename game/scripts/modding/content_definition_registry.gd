@@ -27,8 +27,11 @@ var _population_rules: Dictionary = {}
 var _mods: Dictionary = {}
 
 
-func discover_and_register(roots: Array[String]) -> Dictionary:
-	var discovered: Dictionary = Loader.discover_and_validate(roots)
+func discover_and_register(roots: Array[String], optional_roots: Array[String] = []) -> Dictionary:
+	var effective_optional_roots := optional_roots
+	if effective_optional_roots.is_empty():
+		effective_optional_roots = Loader.optional_user_roots(roots)
+	var discovered: Dictionary = Loader.discover_and_validate(roots, effective_optional_roots)
 	if not discovered.get("ok", false):
 		return discovered
 	return register_discovered(discovered)

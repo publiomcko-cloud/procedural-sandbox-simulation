@@ -13,16 +13,27 @@ const SEMVER_PATTERN := "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
 const MANIFEST_KEYS := ["id", "version", "schema_version", "requires_engine", "dependencies", "content_roots", "script_policy"]
 
 
-static func discover_and_validate(roots: Array[String]) -> Dictionary:
+static func discover_and_validate(roots: Array[String], optional_roots: Array[String] = []) -> Dictionary:
+	if optional_roots.is_empty():
+		optional_roots = optional_user_roots(roots)
 	var packages_by_id: Dictionary = {}
-	var package_paths: Array[String] = []
+	var package_paths: Array[Dictionary] = []
+	var diagnostics: Array[Dictionary] = []
 	var total_content_record_count := 0
+	var ignored_optional_directory_count := 0
+	for optional_root in optional_roots:
+		if not _is_authorized_root(optional_root) or not _contains_root_path(roots, optional_root):
+			var invalid_optional := _discovery_diagnostic(optional_root, "", "invalid_optional_root", "optional_root_not_in_authorized_roots", "REJECTED")
+			diagnostics.append(invalid_optional)
+			return _discovery_failure("invalid_optional_package_root", diagnostics, 0, 0)
 	for root in roots:
 		if not _is_authorized_root(root):
-			return _failure("unauthorized_package_root")
+			diagnostics.append(_discovery_diagnostic(root, "", "package_root_rejected", "unauthorized_package_root", "REJECTED"))
+			return _discovery_failure("unauthorized_package_root", diagnostics, packages_by_id.size(), ignored_optional_directory_count)
 		var directory := DirAccess.open(ProjectSettings.globalize_path(root))
 		if directory == null:
-			return _failure("package_root_unavailable")
+			diagnostics.append(_discovery_diagnostic(root, "", "package_root_unavailable", "package_root_unavailable", "REJECTED"))
+			return _discovery_failure("package_root_unavailable", diagnostics, packages_by_id.size(), ignored_optional_directory_count)
 		directory.list_dir_begin()
 		var entry := directory.get_next()
 		var root_entry_count := 0
@@ -30,33 +41,110 @@ static func discover_and_validate(roots: Array[String]) -> Dictionary:
 			root_entry_count += 1
 			if root_entry_count > MAX_PACKAGES * 2:
 				directory.list_dir_end()
-				return _failure("package_root_entry_limit_exceeded")
+				diagnostics.append(_discovery_diagnostic(root, "", "package_root_limit", "package_root_entry_limit_exceeded", "REJECTED"))
+				return _discovery_failure("package_root_entry_limit_exceeded", diagnostics, packages_by_id.size(), ignored_optional_directory_count)
 			if entry != "." and entry != ".." and not entry.begins_with(".") and directory.current_is_dir():
 				if directory.is_link(entry):
 					directory.list_dir_end()
-					return _failure("reparse_package_path_forbidden")
-				package_paths.append(root.path_join(entry))
+					diagnostics.append(_discovery_diagnostic(root, entry, "security_rejection", "reparse_package_path_forbidden", "REJECTED"))
+					return _discovery_failure("reparse_package_path_forbidden", diagnostics, packages_by_id.size(), ignored_optional_directory_count)
+				package_paths.append({"root": root, "path": root.path_join(entry)})
 			entry = directory.get_next()
 		directory.list_dir_end()
 		if package_paths.size() > MAX_PACKAGES:
-			return _failure("package_limit_exceeded")
-	package_paths.sort()
-	for package_path in package_paths:
+			diagnostics.append(_discovery_diagnostic(root, "", "package_root_limit", "package_limit_exceeded", "REJECTED"))
+			return _discovery_failure("package_limit_exceeded", diagnostics, packages_by_id.size(), ignored_optional_directory_count)
+	package_paths.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.get("path", "")).to_lower() < String(b.get("path", "")).to_lower())
+	for package_record in package_paths:
+		var package_path: String = package_record["path"]
+		var root_path: String = package_record["root"]
 		var parsed := _read_package(package_path)
 		if not parsed.get("ok", false):
-			return parsed
+			var reason := String(parsed.get("reason", "package_validation_failed"))
+			if reason == "missing_manifest" and _is_optional_root(root_path, optional_roots):
+				ignored_optional_directory_count += 1
+				diagnostics.append(_discovery_diagnostic(root_path, _relative_package_path(root_path, package_path), "optional_directory_without_manifest", reason, "IGNORED_NOT_A_PACKAGE"))
+				continue
+			var category := "declared_package_invalid" if reason != "missing_manifest" else "required_package_manifest_missing"
+			if reason.begins_with("reparse_") or reason.begins_with("unsafe_"):
+				category = "security_rejection"
+			diagnostics.append(_discovery_diagnostic(root_path, _relative_package_path(root_path, package_path), category, reason, "REJECTED"))
+			return _discovery_failure(reason, diagnostics, packages_by_id.size(), ignored_optional_directory_count)
 		var package: Dictionary = parsed["package"]
 		var mod_id: String = package["manifest"]["id"]
 		if packages_by_id.has(mod_id):
-			return _failure("duplicate_mod_id")
+			diagnostics.append(_discovery_diagnostic(root_path, _relative_package_path(root_path, package_path), "duplicate_package_id", "duplicate_mod_id", "REJECTED"))
+			return _discovery_failure("duplicate_mod_id", diagnostics, packages_by_id.size(), ignored_optional_directory_count)
 		total_content_record_count += package["definitions"].size() + package["population_rules"].size()
 		if total_content_record_count > MAX_DEFINITIONS:
-			return _failure("content_record_limit_exceeded")
+			diagnostics.append(_discovery_diagnostic(root_path, _relative_package_path(root_path, package_path), "content_limit", "content_record_limit_exceeded", "REJECTED"))
+			return _discovery_failure("content_record_limit_exceeded", diagnostics, packages_by_id.size(), ignored_optional_directory_count)
 		packages_by_id[mod_id] = package
 	var ordered := _resolve_order(packages_by_id)
 	if not ordered.get("ok", false):
-		return ordered
-	return {"ok": true, "reason": "ok", "packages": ordered["packages"]}
+		var failed_mod_id := String(ordered.get("mod_id", ""))
+		var failed_package: Dictionary = packages_by_id.get(failed_mod_id, {})
+		var failed_path := String(failed_package.get("path", ""))
+		var failed_root := ""
+		for record in package_paths:
+			if String(record.get("path", "")) == failed_path:
+				failed_root = String(record.get("root", ""))
+				break
+		diagnostics.append(_discovery_diagnostic(failed_root, _relative_package_path(failed_root, failed_path), "dependency_resolution_failed", String(ordered.get("reason", "dependency_resolution_failed")), "REJECTED"))
+		return _discovery_failure(String(ordered.get("reason", "dependency_resolution_failed")), diagnostics, packages_by_id.size(), ignored_optional_directory_count)
+	diagnostics.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_key := "%s/%s/%s" % [String(a.get("root", "")), String(a.get("relative_package_directory", "")), String(a.get("category", ""))]
+		var b_key := "%s/%s/%s" % [String(b.get("root", "")), String(b.get("relative_package_directory", "")), String(b.get("category", ""))]
+		return a_key.to_lower() < b_key.to_lower()
+	)
+	return {"ok": true, "reason": "ok", "packages": ordered["packages"], "diagnostics": diagnostics, "accepted_package_count": ordered["packages"].size(), "optional_directory_ignored_count": ignored_optional_directory_count}
+
+
+static func _contains_root_path(roots: Array[String], candidate: String) -> bool:
+	var candidate_key := _path_key(candidate)
+	for root in roots:
+		if _path_key(root) == candidate_key:
+			return true
+	return false
+
+
+static func optional_user_roots(roots: Array[String]) -> Array[String]:
+	var result: Array[String] = []
+	var user_root_key := _path_key("user://mods")
+	for root in roots:
+		if _path_key(root) == user_root_key:
+			result.append(root)
+	return result
+
+
+static func _is_optional_root(root: String, optional_roots: Array[String]) -> bool:
+	return _contains_root_path(optional_roots, root)
+
+
+static func _path_key(path: String) -> String:
+	var normalized := ProjectSettings.globalize_path(path) if path.begins_with("res://") or path.begins_with("user://") else path
+	return normalized.replace("\\", "/").trim_suffix("/").to_lower()
+
+
+static func _relative_package_path(root: String, package_path: String) -> String:
+	if root.is_empty() or package_path.is_empty():
+		return ""
+	var normalized_root := root.replace("\\", "/").trim_suffix("/")
+	var normalized_package := package_path.replace("\\", "/")
+	if normalized_package.begins_with(normalized_root + "/"):
+		return normalized_package.substr(normalized_root.length() + 1)
+	return package_path.get_file()
+
+
+static func _discovery_diagnostic(root: String, relative_package_directory: String, category: String, reason: String, disposition: String) -> Dictionary:
+	return {"root": root, "relative_package_directory": relative_package_directory, "category": category, "reason": reason, "disposition": disposition}
+
+
+static func _discovery_failure(reason: String, diagnostics: Array[Dictionary], accepted_count: int, ignored_count: int) -> Dictionary:
+	diagnostics.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return "%s/%s" % [String(a.get("root", "")), String(a.get("relative_package_directory", ""))] < "%s/%s" % [String(b.get("root", "")), String(b.get("relative_package_directory", ""))]
+	)
+	return {"ok": false, "reason": reason, "diagnostics": diagnostics, "accepted_package_count": accepted_count, "optional_directory_ignored_count": ignored_count}
 
 
 static func _is_authorized_root(path: String) -> bool:
@@ -225,9 +313,9 @@ static func _resolve_order(packages_by_id: Dictionary) -> Dictionary:
 		for dependency in manifest["dependencies"]:
 			var dependency_id: String = dependency["id"]
 			if not packages_by_id.has(dependency_id):
-				return _failure("missing_dependency")
+				return {"ok": false, "reason": "missing_dependency", "mod_id": mod_id}
 			if packages_by_id[dependency_id]["manifest"]["version"] != dependency["version"]:
-				return _failure("dependency_version_mismatch")
+				return {"ok": false, "reason": "dependency_version_mismatch", "mod_id": mod_id}
 			indegree[mod_id] += 1
 			dependents[dependency_id].append(mod_id)
 		var child_ids: Array = dependents[mod_id]
@@ -248,7 +336,12 @@ static func _resolve_order(packages_by_id: Dictionary) -> Dictionary:
 				ready.append(dependent_id)
 				ready.sort()
 	if ordered.size() != packages_by_id.size():
-		return _failure("dependency_cycle")
+		var unresolved_ids: Array[String] = []
+		for mod_id in indegree:
+			if int(indegree[mod_id]) > 0:
+				unresolved_ids.append(String(mod_id))
+		unresolved_ids.sort()
+		return {"ok": false, "reason": "dependency_cycle", "mod_id": unresolved_ids[0] if not unresolved_ids.is_empty() else ""}
 	return {"ok": true, "packages": ordered}
 
 
