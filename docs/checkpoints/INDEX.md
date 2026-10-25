@@ -73,4 +73,6 @@
 
 | 2026-10-24 | [P3.0A transactional entity command implementation](2026-10-24-P3-0A-IMPLEMENTATION.md) | P2.0C exit assessment; P2 state-store-backed command dispatcher, explicit placement identity/schema extension, revisions/idempotency/inverse metadata, isolated harness; full Godot 4.7.2 validation 17,950/0 | Source `ca2273953d3b578cf349990f487fcac25336db6b` on draft PR #114; independent source review and owner GUI pending |
 
+| 2026-10-25 | [P3.0A Delete owner-GUI failure correction](2026-10-25-P3-0A-ENTITY-DELETE-GUI-CORRECTION.md) | Owner reported Delete did not hide the last entity; reproduced `keycode=0` / `physical_keycode=KEY_DELETE` input omission, corrected viewport handler and authoritative visual sync; full Godot 4.7.2 validation 17,969/0 | Source `3da4bc6f7272ed838da7438c43312227e32ae59e` on draft PR #114; owner GUI retest and independent review pending |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
