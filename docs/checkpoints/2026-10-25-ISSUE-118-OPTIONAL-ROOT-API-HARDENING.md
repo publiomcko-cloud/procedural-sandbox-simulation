@@ -36,6 +36,7 @@ New regressions prove the canonical user root remains eligible; callers cannot m
 Engine: Godot `4.7.2.stable.official.ed1daf0bf`, executable SHA-256 `C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643`.
 
 - Pre-fix downgrade reproduction: returned success as described above.
+- Post-fix focused direct probe: the same authorized descendant root returns `ok=false`, reason `invalid_optional_package_root`, diagnostic `optional_root_not_exact_user_mod_root`, exit 0. Log `C:\Users\PUBLI\AppData\Local\Temp\issue118-r1-postprobe-1b2637d01932449abd82559d1f010e67\probe.log`, SHA-256 `C2EE0E476DB7A2B0AA040C194933EDC6DA1116E2FFCB05A71298DA4995D66A16`.
 - Focused `declarative_mod_tests.gd`, ordinary isolated profile: 66 assertions / 0 failures. Log `C:\Users\PUBLI\AppData\Local\Temp\issue118-r1-focused-f4c4102dbae04facb8b2618e29654fc0\mods.log`, SHA-256 `E4A0542D747A1412C0DF4E7776B03BA0D3F53721DEADA5F4C1A18698D5C49E38`.
 - Focused procedural-object regressions: 633 assertions / 0 failures. Log `...\objects.log`, SHA-256 `54C4606E8874AB7EC296E02EFC78186A31B2F99472845BB82246837FEF86A999`.
 - Focused declarative suite with a prepared junction under the isolated user profile: 67 assertions / 0 failures; the test observed/rejected and removed the junction. Log `...\mods-junction.log`, SHA-256 `FBBA733DFF5753EB44736457F9B6CD587C8DD2E80B7E56ACBB7D818198BAA93C`.
