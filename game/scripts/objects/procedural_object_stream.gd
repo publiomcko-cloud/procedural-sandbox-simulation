@@ -184,12 +184,21 @@ func process_queued_publications() -> int:
 			_region_errors[id] = String(result.get("reason", "object_region_publication_failed"))
 		if _command_visual_pending.has(id):
 			var pending_visual: Dictionary = _command_visual_pending[id]
+			var visual_publication_usec := int(_last_region_metrics.get("publication_usec", 0))
+			var visual_queue_wait_usec := maxi(0, int(Time.get_ticks_usec() - int(pending_visual.get("queued_usec", Time.get_ticks_usec())) - visual_publication_usec))
+			var visual_elapsed_usec := Time.get_ticks_usec() - int(pending_visual.get("command_started_usec", Time.get_ticks_usec()))
+			var visual_timings: Dictionary = _last_entity_command_metrics.duplicate(true)
+			visual_timings["visual_queue_wait_usec"] = visual_queue_wait_usec
+			visual_timings["visual_publication_usec"] = visual_publication_usec
+			visual_timings["command_total_to_visual_publish_usec"] = visual_elapsed_usec
+			_last_entity_command_metrics = visual_timings
 			_last_command_visual_result = {
 				"entity_id": String(pending_visual.get("entity_id", "")),
 				"operation": String(pending_visual.get("operation", "")),
 				"world_revision": int(pending_visual.get("world_revision", -1)),
 				"ok": bool(result.get("ok", false)),
 				"reason": String(result.get("reason", "publication_failed")),
+				"timings_usec": visual_timings,
 			}
 			_command_visual_pending.erase(id)
 		if _command_migration_sync_regions.has(id) and result.get("ok", false):
@@ -387,14 +396,14 @@ func is_entity_command_ready() -> bool:
 func get_command_migration_preflight() -> Dictionary:
 	if state_service == null or not bool(state_service.get("initialized")):
 		return _failure("object_state_service_not_initialized")
-	return state_service.preflight_command_snapshot_upgrade()
+	return state_service.preflight_history_snapshot_upgrade()
 
 
 func migrate_command_snapshot_explicitly() -> Dictionary:
 	var preflight := get_command_migration_preflight()
 	if not preflight.get("ok", false):
 		return preflight
-	var migrated: Dictionary = state_service.upgrade_command_snapshot_schema()
+	var migrated: Dictionary = state_service.upgrade_history_snapshot_schema()
 	if not migrated.get("ok", false):
 		entity_command_service = null
 		return migrated
@@ -409,6 +418,7 @@ func migrate_command_snapshot_explicitly() -> Dictionary:
 	queued_result["generation"] = int(migrated.get("generation", 0))
 	queued_result["backup_generation"] = int(migrated.get("backup_generation", 0))
 	queued_result["source_payload_sha256"] = String(migrated.get("source_payload_sha256", ""))
+	queued_result["preserved_receipt_count"] = int(migrated.get("preserved_receipt_count", 0))
 	return queued_result
 
 
@@ -428,7 +438,7 @@ func retry_command_migration_region_publications() -> Dictionary:
 		if not queued.get("ok", false):
 			return {"ok": false, "committed": true, "reason": "migration_committed_visual_queue_failed:%s" % queued.get("reason", "unknown"), "queued_regions": queued_count, "remaining_regions": _command_migration_sync_regions.size(), "generation": int(state_service.get("storage_generation"))}
 		queued_count += 1
-	return {"ok": true, "reason": "schema_upgraded_explicitly", "committed": true, "revision": int(state_service.get_revision()), "generation": int(state_service.get("storage_generation")), "queued_regions": queued_count, "remaining_regions": _command_migration_sync_regions.size()}
+	return {"ok": true, "reason": "history_schema_upgraded_explicitly", "committed": true, "revision": int(state_service.get_revision()), "generation": int(state_service.get("storage_generation")), "queued_regions": queued_count, "remaining_regions": _command_migration_sync_regions.size()}
 
 
 func dispatch_entity_command(command: Dictionary) -> Dictionary:
@@ -441,6 +451,7 @@ func dispatch_entity_command(command: Dictionary) -> Dictionary:
 	var entity_id := String(command.get("entity_id", ""))
 	var temporary_reconstruction := false
 	var temporary_region := Vector2i.ZERO
+	var region_reconstruction_usec := 0
 	if operation == "ENTITY_RESTORE":
 		var located: Dictionary = entity_command_service.get_entity_region(entity_id)
 		if not located.get("ok", false):
@@ -456,6 +467,7 @@ func dispatch_entity_command(command: Dictionary) -> Dictionary:
 			if not rebuilt.get("ok", false):
 				return _failure(String(rebuilt.get("reason", "restore_region_reconstruction_failed")))
 			temporary_reconstruction = not _regions.has(_region_id(temporary_region))
+			region_reconstruction_usec = int(rebuilt.get("reconstruction_usec", 0))
 	elif operation != "ENTITY_PLACE":
 		if not entity_command_service.get_entity_region(entity_id).get("ok", false):
 			return _failure("entity_not_reconstructed_or_content_missing")
@@ -476,7 +488,7 @@ func dispatch_entity_command(command: Dictionary) -> Dictionary:
 		if not placed_location.get("ok", false):
 			return {"ok": true, "committed": true, "reason": "committed_but_identity_cache_missing", "entity_id": entity_id, "world_revision": int(placed_result.get("world_revision", -1)), "entity_revision": int(placed_result.get("entity_revision", -1))}
 		affected_region = Vector2i(placed_location.region_key)
-		return _queue_committed_visual_update(placed_result, affected_region, started_usec)
+		return _queue_committed_visual_update(placed_result, affected_region, started_usec, region_reconstruction_usec)
 	var old_location: Dictionary = entity_command_service.get_entity_region(entity_id)
 	if old_location.get("ok", false):
 		affected_region = Vector2i(old_location.region_key)
@@ -490,14 +502,15 @@ func dispatch_entity_command(command: Dictionary) -> Dictionary:
 		affected_region = Vector2i(new_location.region_key)
 	if temporary_reconstruction and not _regions.has(_region_id(temporary_region)):
 		entity_command_service.release_region(temporary_region)
-	return _queue_committed_visual_update(result, affected_region, started_usec)
+	return _queue_committed_visual_update(result, affected_region, started_usec, region_reconstruction_usec)
 
 
-func _queue_committed_visual_update(result: Dictionary, region_key: Vector2i, started_usec: int) -> Dictionary:
+func _queue_committed_visual_update(result: Dictionary, region_key: Vector2i, started_usec: int, region_reconstruction_usec: int = 0) -> Dictionary:
 	var output: Dictionary = result.duplicate(true)
 	output["committed"] = true
 	var timings: Dictionary = output.get("timings_usec", {}).duplicate(true)
 	timings["visual_queue_usec"] = 0
+	timings["regional_reconstruction_usec"] = region_reconstruction_usec
 	timings["command_total_usec"] = Time.get_ticks_usec() - started_usec
 	output["timings_usec"] = timings
 	var region_id := _region_id(region_key)
@@ -517,7 +530,7 @@ func _queue_committed_visual_update(result: Dictionary, region_key: Vector2i, st
 		output["visual_status"] = "failed"
 		_last_command_visual_result = {"entity_id": String(output.get("entity_id", "")), "operation": String(output.get("operation", "")), "world_revision": int(output.get("world_revision", -1)), "ok": false, "reason": String(output["reason"])}
 		return output
-	_command_visual_pending[region_id] = {"entity_id": String(output.get("entity_id", "")), "operation": String(output.get("operation", "")), "world_revision": int(output.get("world_revision", -1))}
+	_command_visual_pending[region_id] = {"entity_id": String(output.get("entity_id", "")), "operation": String(output.get("operation", "")), "world_revision": int(output.get("world_revision", -1)), "queued_usec": Time.get_ticks_usec(), "command_started_usec": started_usec}
 	output["visual_status"] = "queued"
 	return output
 
@@ -910,7 +923,7 @@ func _initialize_entity_command_service() -> void:
 	entity_command_service = null
 	if state_service == null or registry == null or not bool(state_service.get("initialized")):
 		return
-	if int(state_service.snapshot.get("schema_version", 0)) != StateContract.COMMAND_SNAPSHOT_SCHEMA_VERSION:
+	if int(state_service.snapshot.get("schema_version", 0)) != StateContract.HISTORY_SNAPSHOT_SCHEMA_VERSION:
 		return
 	var candidate: RefCounted = EntityCommandServiceScript.new()
 	var initialized_result: Dictionary = candidate.initialize(state_service, registry)

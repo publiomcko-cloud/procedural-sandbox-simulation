@@ -15,6 +15,8 @@ var initialized := false
 var initialization_error := ""
 var storage_generation := 0
 var last_persist_duration_usec := 0
+var last_candidate_validation_usec := 0
+var last_history_validation_usec := 0
 var _known_instances: Dictionary = {}
 
 
@@ -67,6 +69,8 @@ func resolve_instance(base_instance: Dictionary) -> Dictionary:
 
 
 func set_component(base_instance: Dictionary, component_id: String, component_value: Dictionary) -> Dictionary:
+	if int(snapshot.get("schema_version", 0)) == Contract.HISTORY_SNAPSHOT_SCHEMA_VERSION:
+		return _failure("schema3_mutation_requires_entity_command_dispatcher")
 	var identity_result := _validate_mutation_identity(base_instance)
 	if not identity_result.get("ok", false):
 		return identity_result
@@ -89,6 +93,8 @@ func set_component(base_instance: Dictionary, component_id: String, component_va
 
 
 func delete_instance(base_instance: Dictionary) -> Dictionary:
+	if int(snapshot.get("schema_version", 0)) == Contract.HISTORY_SNAPSHOT_SCHEMA_VERSION:
+		return _failure("schema3_mutation_requires_entity_command_dispatcher")
 	var identity_result := _validate_mutation_identity(base_instance)
 	if not identity_result.get("ok", false):
 		return identity_result
@@ -104,6 +110,8 @@ func delete_instance(base_instance: Dictionary) -> Dictionary:
 
 
 func restore_instance(base_instance: Dictionary) -> Dictionary:
+	if int(snapshot.get("schema_version", 0)) == Contract.HISTORY_SNAPSHOT_SCHEMA_VERSION:
+		return _failure("schema3_mutation_requires_entity_command_dispatcher")
 	var identity_result := _validate_mutation_identity(base_instance)
 	if not identity_result.get("ok", false):
 		return identity_result
@@ -200,16 +208,89 @@ func upgrade_command_snapshot_schema() -> Dictionary:
 	return {"ok": true, "reason": "schema_upgraded_explicitly", "revision": get_revision(), "generation": storage_generation, "backup_generation": int(preflight.get("source_generation", 0)), "source_payload_sha256": String(preflight.get("source_payload_sha256", ""))}
 
 
+## P3.0C preflight upgrades schema 1 or 2 directly to schema 3. Existing
+## schema-2 receipts remain intact; their operations predate the history cursor
+## and are intentionally not retroactively undoable.
+func preflight_history_snapshot_upgrade() -> Dictionary:
+	if not initialized:
+		return _failure("object_state_service_not_initialized")
+	var source_schema := int(snapshot.get("schema_version", 0))
+	if source_schema == Contract.HISTORY_SNAPSHOT_SCHEMA_VERSION:
+		return {"ok": true, "reason": "already_upgraded", "source_schema": source_schema, "target_schema": source_schema, "source_generation": storage_generation, "revision": get_revision(), "history_depth": snapshot.get("entity_history", []).size()}
+	if source_schema != Contract.SCHEMA_VERSION and source_schema != Contract.COMMAND_SNAPSHOT_SCHEMA_VERSION:
+		return _failure("history_schema_upgrade_unsupported")
+	var source_checked := Contract.validate_snapshot(snapshot, world_id, world_seed, generator_version)
+	if not source_checked.get("ok", false):
+		return _failure("history_upgrade_source_invalid:%s" % source_checked.get("reason", "unknown"))
+	var candidate: Dictionary = source_checked.snapshot.duplicate(true)
+	if source_schema == Contract.SCHEMA_VERSION:
+		candidate["placed_entities"] = {}
+		candidate["entity_revisions"] = {}
+		candidate["command_receipts"] = {}
+	candidate["schema_version"] = Contract.HISTORY_SNAPSHOT_SCHEMA_VERSION
+	candidate["entity_history"] = []
+	candidate["history_cursor"] = 0
+	var checked := Contract.validate_snapshot(candidate, world_id, world_seed, generator_version)
+	if not checked.get("ok", false):
+		return _failure("history_upgrade_candidate_invalid:%s" % checked.get("reason", "unknown"))
+	var candidate_bytes := JSON.stringify(checked.snapshot, "", true, true).to_utf8_buffer()
+	if candidate_bytes.size() > StoreScript.MAX_DOCUMENT_BYTES:
+		return _failure("history_upgrade_document_too_large")
+	return {
+		"ok": true, "reason": "preflight_ok", "source_schema": source_schema,
+		"target_schema": Contract.HISTORY_SNAPSHOT_SCHEMA_VERSION,
+		"source_generation": storage_generation, "revision": get_revision(),
+		"source_payload_sha256": _sha256_bytes(JSON.stringify(source_checked.snapshot, "", true, true).to_utf8_buffer()),
+		"candidate_payload_sha256": _sha256_bytes(candidate_bytes),
+		"preserved_receipt_count": int(snapshot.get("command_receipts", {}).size()),
+		"initial_history_depth": 0,
+	}
+
+
+func upgrade_history_snapshot_schema() -> Dictionary:
+	if not initialized:
+		return _failure("object_state_service_not_initialized")
+	if int(snapshot.get("schema_version", 0)) == Contract.HISTORY_SNAPSHOT_SCHEMA_VERSION:
+		return {"ok": true, "reason": "already_upgraded", "revision": get_revision(), "generation": storage_generation, "history_depth": snapshot.get("entity_history", []).size()}
+	var preflight := preflight_history_snapshot_upgrade()
+	if not preflight.get("ok", false):
+		return preflight
+	var candidate: Dictionary = snapshot.duplicate(true)
+	if int(candidate.get("schema_version", 0)) == Contract.SCHEMA_VERSION:
+		candidate["placed_entities"] = {}
+		candidate["entity_revisions"] = {}
+		candidate["command_receipts"] = {}
+	candidate["schema_version"] = Contract.HISTORY_SNAPSHOT_SCHEMA_VERSION
+	candidate["entity_history"] = []
+	candidate["history_cursor"] = 0
+	var checked := Contract.validate_snapshot(candidate, world_id, world_seed, generator_version)
+	if not checked.get("ok", false):
+		return _failure("history_upgrade_candidate_invalid:%s" % checked.get("reason", "unknown"))
+	var persist_started := Time.get_ticks_usec()
+	var saved: Dictionary = store.save_snapshot(checked.snapshot)
+	last_persist_duration_usec = Time.get_ticks_usec() - persist_started
+	if not saved.get("ok", false):
+		initialized = false
+		initialization_error = String(saved.get("reason", "history_schema_upgrade_write_failed"))
+		return _failure("history_schema_upgrade_uncertain:%s" % initialization_error)
+	snapshot = checked.snapshot
+	storage_generation = int(saved.get("generation", storage_generation))
+	return {"ok": true, "reason": "history_schema_upgraded_explicitly", "revision": get_revision(), "generation": storage_generation, "backup_generation": int(preflight.get("source_generation", 0)), "source_payload_sha256": String(preflight.get("source_payload_sha256", "")), "preserved_receipt_count": int(preflight.get("preserved_receipt_count", 0)), "history_depth": 0}
+
+
 func commit_command_candidate(candidate: Dictionary, expected_world_revision: int) -> Dictionary:
 	if not initialized:
 		return _failure("object_state_service_not_initialized")
-	if int(snapshot.get("schema_version", 0)) != Contract.COMMAND_SNAPSHOT_SCHEMA_VERSION:
+	if not [Contract.COMMAND_SNAPSHOT_SCHEMA_VERSION, Contract.HISTORY_SNAPSHOT_SCHEMA_VERSION].has(int(snapshot.get("schema_version", 0))):
 		return _failure("command_snapshot_migration_required")
 	if get_revision() != expected_world_revision:
 		return _failure("stale_world_revision")
 	var normalized_candidate: Dictionary = candidate.duplicate(true)
 	normalized_candidate.revision = expected_world_revision + 1
+	var validation_started_usec := Time.get_ticks_usec()
 	var checked := Contract.validate_snapshot(normalized_candidate, world_id, world_seed, generator_version)
+	last_candidate_validation_usec = Time.get_ticks_usec() - validation_started_usec
+	last_history_validation_usec = int(checked.get("timings_usec", {}).get("history_validation_usec", 0))
 	if not checked.get("ok", false):
 		return _failure(String(checked.get("reason", "command_candidate_invalid")))
 	var persist_started := Time.get_ticks_usec()

@@ -1,5 +1,9 @@
 # Roadmap with implementation gates
 
+## 2026-10-25 — P3.0C persistent transactional entity history candidate
+
+The P3.0C candidate on `feat/p3-0c-transactional-undo-redo`, draft PR [#121](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/121), adds explicit schema-3 persistent history and revision-checked `ENTITY_UNDO`/`ENTITY_REDO` through the existing P2.0B state store. It preserves exact pre-delete overrides (including F7), keeps F9 as baseline restore with reversible prior state, and requires explicit schema migration. Full Godot 4.7.2 validation passed 18,153 assertions/0 failures; developer headless evidence only. See [spec](../specs/P3-0C-TRANSACTIONAL-PERSISTENT-UNDO-REDO.md), [ADR-0006](../decisions/ADR-0006-PERSISTENT-ENTITY-UNDO-REDO.md), and [checkpoint](../checkpoints/2026-10-25-P3-0C-IMPLEMENTATION.md). Independent source review and owner GUI retest remain gates; do not merge. All five F2-G1 holds remain.
+
 ## 2026-10-25 — Issue #118 R1 optional-root API hardening
 
 Source `f0164b140009bb797951aa4085bb36001889bc57` on the existing Issue #118 branch enforces optional-root eligibility inside the loader. Only the exact canonical `user://mods` root can receive undeclared-child handling; caller-provided first-party, example, descendant and prefix roots are rejected. The pre-fix downgrade was reproduced on an isolated fixture. Focused and full Godot 4.7.2 validation passed 18,047 assertions/0 failures. PR #119 remains open/draft; exact-HEAD Starter checks pass (static only); independent R1 review and owner GUI retest remain pending. See [R1 checkpoint](../checkpoints/2026-10-25-ISSUE-118-OPTIONAL-ROOT-API-HARDENING.md). No merge or schema change is authorized; F2-G1 holds remain.

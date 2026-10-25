@@ -76,11 +76,13 @@ func _test_same_registry_pipeline(roots: Array[String]) -> void:
 	_check(registry.pin_definitions([builtin["id"], external["id"]]).get("ok", false), "runtime object definitions carry P0.3 content version pins")
 	var runtime: ProceduralObjectStream = ObjectStream.new()
 	var runtime_state_path := _unique_state_path("registry")
+	var ignored_before_result: Dictionary = Loader.discover_and_validate(roots, ["user://mods"])
+	var ignored_before := int(ignored_before_result.get("optional_directory_ignored_count", 0))
 	_issue118_stray_root = "user://mods/issue118_runtime_residual_%d" % Time.get_ticks_usec()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_issue118_stray_root))
 	var default_roots: Dictionary = runtime.initialize(SEED, WORLD_ID, [], runtime_state_path)
 	_check(default_roots.get("ok", false), "runtime discovers valid first-party and installed external packages despite an unmanifested user mod directory")
-	_check(int(default_roots.get("optional_directory_ignored_count", 0)) == 1 and runtime.get_package_discovery_summary().contains("ignored 1 undeclared folder"), "runtime returns a nonfatal actionable warning for the ignored residual directory")
+	_check(int(default_roots.get("optional_directory_ignored_count", 0)) == ignored_before + 1 and runtime.get_package_discovery_summary().contains("undeclared folder"), "runtime reports the newly ignored residual folder alongside any pre-existing optional directories")
 	_check(not runtime.get_package_discovery_summary().contains(ProjectSettings.globalize_path("user://mods")), "runtime discovery warning does not expose a private absolute path")
 	_check(runtime._configured_package_roots().size() == 2, "installed example takes precedence over its repository copy to avoid duplicate package IDs")
 	runtime.free()
@@ -945,7 +947,7 @@ func _test_playable_scene_publication() -> void:
 			break
 	var stream: ProceduralObjectStream = demo.get_node("ProceduralObjects")
 	_check(center_ready, "playable terrain scene publishes its focused region during streaming")
-	_check(stream.initialized and int(stream.get_package_discovery_diagnostics().size()) >= 1 and stream.get_package_discovery_summary().contains("ignored 1 undeclared folder"), "main scene initializes packages and displays the nonfatal optional-folder diagnostic")
+	_check(stream.initialized and int(stream.get_package_discovery_diagnostics().size()) >= 1 and stream.get_package_discovery_summary().contains("undeclared folder"), "main scene initializes packages and displays the nonfatal optional-folder diagnostic")
 	if center_ready:
 		for _frame in range(1200):
 			await process_frame
@@ -975,7 +977,7 @@ func _test_playable_scene_publication() -> void:
 		_check(stream.restore_instance(deleted_id).get("ok", false) and stream.get_visible_instance_count() == center_records.size(), "playable stream restores the procedural baseline for a deleted object")
 		# Exercise the P3B main-scene controls through real Viewport input routing.
 		_push_demo_key(demo, KEY_M)
-		_check(String(demo.get("_object_state_action_status")).contains("Migration preflight passed") and not stream.is_entity_command_ready(), "main-scene M input preflights without implicitly upgrading the legacy object save")
+		_check(String(demo.get("_object_state_action_status")).contains("History migration preflight passed") and not stream.is_entity_command_ready(), "main-scene M input preflights without implicitly upgrading the legacy object save")
 		_push_demo_key(demo, KEY_M)
 		var migration_sync_completed := false
 		for _frame in range(240):
@@ -983,7 +985,7 @@ func _test_playable_scene_publication() -> void:
 			if stream.is_entity_command_ready():
 				migration_sync_completed = true
 				break
-		_check(migration_sync_completed and int(stream.state_service.snapshot.get("schema_version", 0)) == 2, "second main-scene M input explicitly commits the entity schema and waits for active regions to synchronize")
+		_check(migration_sync_completed and int(stream.state_service.snapshot.get("schema_version", 0)) == 3, "second main-scene M input explicitly commits the entity-history schema and waits for active regions to synchronize")
 		demo.set("orbit_target", Vector3(8.0, 10.0, 6.0))
 		demo.set("orbit_offset", Vector3(0.0, 20.0, 0.0))
 		demo.call("_update_camera")
@@ -1004,6 +1006,7 @@ func _test_playable_scene_publication() -> void:
 		_push_demo_key(demo, KEY_F7)
 		_check(stream.get_command_world_revision() == command_revision_before_f7 + 2 and int(stream.state_service.get_entity_revision(input_selected_id)) == 2, "F7 routes transform and appearance changes through two revision-checked entity commands (status=%s world=%d->%d entity=%d)" % [String(demo.get("_object_state_action_status")), command_revision_before_f7, stream.get_command_world_revision(), int(stream.state_service.get_entity_revision(input_selected_id))])
 		var command_revision_before_delete := stream.get_command_world_revision()
+		var selected_override_before_delete: Dictionary = stream.state_service.snapshot.get("overrides", {}).get(input_selected_id, {}).duplicate(true)
 		_push_demo_key(demo, KEY_F8)
 		await _wait_for_entity_presence(stream, input_selected_id, false)
 		var visual_after_delete := stream.get_instance_ids()
@@ -1011,10 +1014,40 @@ func _test_playable_scene_publication() -> void:
 		var command_revision_after_delete := stream.get_command_world_revision()
 		_push_demo_key(demo, KEY_F8)
 		_check(stream.get_command_world_revision() == command_revision_after_delete and not stream.get_instance_ids().has(input_selected_id) and String(demo.get("_object_state_action_status")).contains("rejected"), "rejected repeated F8 command leaves the visual representation unchanged and reports its reason")
+		var command_revision_before_undo_delete := stream.get_command_world_revision()
+		_push_demo_key(demo, KEY_Z, true)
+		await _wait_for_entity_presence(stream, input_selected_id, true)
+		_check(stream.get_command_world_revision() == command_revision_before_undo_delete + 1 and stream.state_service.snapshot.get("overrides", {}).get(input_selected_id, {}) == selected_override_before_delete and not stream.state_service.snapshot.get("deleted", {}).has(input_selected_id), "Ctrl+Z transactionally undoes ENTITY_DELETE and restores the exact transform and appearance overrides")
+		var command_revision_before_redo_delete := stream.get_command_world_revision()
+		_push_demo_key(demo, KEY_Y, true)
+		await _wait_for_entity_presence(stream, input_selected_id, false)
+		_check(stream.get_command_world_revision() == command_revision_before_redo_delete + 1 and stream.state_service.snapshot.get("deleted", {}).has(input_selected_id), "Ctrl+Y transactionally redoes the deletion without losing its inverse data")
+		var command_revision_before_second_undo := stream.get_command_world_revision()
+		_push_demo_key(demo, KEY_Z, true)
+		await _wait_for_entity_presence(stream, input_selected_id, true)
+		_check(stream.get_command_world_revision() == command_revision_before_second_undo + 1 and stream.state_service.snapshot.get("overrides", {}).get(input_selected_id, {}) == selected_override_before_delete, "a second Ctrl+Z restores the same full pre-delete state")
+		stream.debug_fail_next_visual_publication = true
+		var command_revision_before_visual_failure := stream.get_command_world_revision()
+		_push_demo_key(demo, KEY_Y, true)
+		var visual_failure_reported := false
+		for _frame in range(120):
+			await process_frame
+			if String(demo.get("_object_state_action_status")).contains("visual publication failed"):
+				visual_failure_reported = true
+				break
+		_check(stream.get_command_world_revision() == command_revision_before_visual_failure + 1 and stream.state_service.snapshot.get("deleted", {}).has(input_selected_id) and visual_failure_reported, "committed Redo remains authoritative when mesh publication fails, and the HUD reports the visual failure separately")
+		var command_revision_before_visual_recovery := stream.get_command_world_revision()
+		_push_demo_key(demo, KEY_Z, true)
+		await _wait_for_entity_presence(stream, input_selected_id, true)
+		_check(stream.get_command_world_revision() == command_revision_before_visual_recovery + 1 and not stream.state_service.snapshot.get("deleted", {}).has(input_selected_id), "a later Undo can publish and visually reconcile after the explicit failed publication")
 		var command_revision_before_restore := stream.get_command_world_revision()
 		_push_demo_key(demo, KEY_F9)
+		for _frame in range(120):
+			await process_frame
+			if stream.get_command_world_revision() > command_revision_before_restore:
+				break
 		await _wait_for_entity_presence(stream, input_selected_id, true)
-		_check(stream.get_command_world_revision() == command_revision_before_restore + 1 and not stream.state_service.snapshot.get("deleted", {}).has(input_selected_id) and stream.get_instance_ids().count(input_selected_id) == 1, "F9 viewport input restores the exact deleted entity without duplication (status=%s)" % String(demo.get("_object_state_action_status")))
+		_check(stream.get_command_world_revision() == command_revision_before_restore + 1 and not stream.state_service.snapshot.get("deleted", {}).has(input_selected_id) and not stream.state_service.snapshot.get("overrides", {}).has(input_selected_id) and stream.get_instance_ids().count(input_selected_id) == 1 and String(demo.get("_object_state_action_status")).contains("ENTITY_RESTORE committed"), "F9 remains distinct from Undo Delete and restores the procedural baseline without overrides or duplication (status=%s)" % String(demo.get("_object_state_action_status")))
 		stateful_records = stream.get_region_instance_records(Vector2i.ZERO)
 		var region_root_count := 0
 		for child in stream.get_children():
@@ -1047,11 +1080,13 @@ func _test_playable_scene_publication() -> void:
 	_remove_tree(isolated_object_state)
 
 
-func _push_demo_key(demo: Node, key_code: int) -> void:
+func _push_demo_key(demo: Node, key_code: int, ctrl_pressed: bool = false, shift_pressed: bool = false) -> void:
 	var event := InputEventKey.new()
 	event.keycode = key_code
 	event.physical_keycode = key_code
 	event.pressed = true
+	event.ctrl_pressed = ctrl_pressed
+	event.shift_pressed = shift_pressed
 	demo.get_viewport().push_input(event)
 	await process_frame
 

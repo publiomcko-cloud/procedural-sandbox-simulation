@@ -9,6 +9,8 @@ const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const RockMeshAdapter := preload("res://scripts/objects/procedural_rock_mesh_adapter.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const MAX_COMMAND_RECEIPTS := StateContract.MAX_COMMAND_RECEIPTS
+const MAX_HISTORY_ENTRIES := StateContract.MAX_HISTORY_ENTRIES
+const HISTORY_SCHEMA_VERSION := StateContract.HISTORY_SNAPSHOT_SCHEMA_VERSION
 
 var state_service: ProceduralObjectStateService
 var registry: ContentDefinitionRegistry
@@ -27,12 +29,12 @@ func initialize(authoritative_state_service: ProceduralObjectStateService, conte
 	if state_service == null or registry == null or not bool(state_service.get("initialized")):
 		initialization_error = "command_dependencies_uninitialized"
 		return _failure(initialization_error)
-	if int(state_service.snapshot.get("schema_version", 0)) != StateContract.COMMAND_SNAPSHOT_SCHEMA_VERSION:
+	if not [StateContract.COMMAND_SNAPSHOT_SCHEMA_VERSION, HISTORY_SCHEMA_VERSION].has(int(state_service.snapshot.get("schema_version", 0))):
 		initialization_error = "command_snapshot_migration_required"
 		return _failure(initialization_error)
 	initialized = true
 	initialization_error = ""
-	return {"ok": true, "reason": "ok", "world_revision": state_service.get_revision(), "entity_snapshot_schema": StateContract.COMMAND_SNAPSHOT_SCHEMA_VERSION}
+	return {"ok": true, "reason": "ok", "world_revision": state_service.get_revision(), "entity_snapshot_schema": int(state_service.snapshot.get("schema_version", 0))}
 
 
 ## Reconstructs one canonical region without creating Godot nodes. Regions are
@@ -113,9 +115,10 @@ func dispatch(raw_command: Variant) -> Dictionary:
 	var checked := Contract.validate(raw_command, state_service.world_id, state_service.world_seed, state_service.generator_version)
 	if not checked.get("ok", false):
 		return checked
+	var command_validation_usec := Time.get_ticks_usec() - validation_started_usec
 	var command: Dictionary = checked.command
 	var command_id := String(command.command_id)
-	var command_digest := JSON.stringify(command, "", true, true).sha256_text()
+	var command_digest := StateContract.canonical_sha256(command)
 	var receipts: Dictionary = state_service.snapshot.get("command_receipts", {})
 	if receipts.has(command_id):
 		var prior: Dictionary = receipts[command_id]
@@ -129,11 +132,15 @@ func dispatch(raw_command: Variant) -> Dictionary:
 		return _failure("stale_world_revision")
 	if receipts.size() >= MAX_COMMAND_RECEIPTS:
 		return _failure("command_receipt_capacity_reached")
-	var candidate: Dictionary = state_service.snapshot.duplicate(true)
 	var operation := String(command.operation)
+	if operation == "ENTITY_UNDO" or operation == "ENTITY_REDO":
+		return _dispatch_history_navigation(command, command_digest, dispatch_started_usec, command_validation_usec)
+	var candidate: Dictionary = state_service.snapshot.duplicate(true)
+	var command_preparation_started_usec := Time.get_ticks_usec()
 	var entity_id := ""
 	var identity: Dictionary = {}
 	var entity_revision := 1
+	var entity_revision_before := 0
 	var prepared: Dictionary = {}
 	var undo_metadata: Dictionary = {}
 	match operation:
@@ -166,6 +173,7 @@ func dispatch(raw_command: Variant) -> Dictionary:
 				if not ownership_check.get("ok", false):
 					return ownership_check
 			entity_revision = state_service.get_entity_revision(entity_id)
+			entity_revision_before = entity_revision
 			if entity_revision != int(command.expected_entity_revision):
 				return _failure("stale_entity_revision")
 			var deleted: Dictionary = candidate.deleted
@@ -195,11 +203,17 @@ func dispatch(raw_command: Variant) -> Dictionary:
 				candidate.deleted = deleted
 				candidate.overrides = overrides
 			else:
-				if not deleted.has(entity_id) or not StateContract.identities_equal(deleted[entity_id], identity):
-					return _failure("entity_not_deleted_or_identity_mismatch")
-				undo_metadata = {"inverse_operation": "ENTITY_DELETE", "identity": identity.duplicate(true), "prior_override": overrides.get(entity_id, {}).duplicate(true)}
+				var was_deleted := deleted.has(entity_id)
+				if was_deleted and not StateContract.identities_equal(deleted[entity_id], identity):
+					return _failure("entity_identity_mismatch")
+				var prior_override: Dictionary = overrides.get(entity_id, {}).duplicate(true)
+				if not was_deleted and prior_override.is_empty():
+					return _failure("entity_already_at_procedural_baseline")
+				undo_metadata = {"inverse_operation": "ENTITY_DELETE", "identity": identity.duplicate(true), "prior_deleted": was_deleted, "prior_override": prior_override}
 				deleted.erase(entity_id)
 				overrides.erase(entity_id)
+				candidate.deleted = deleted
+				candidate.overrides = overrides
 				candidate.deleted = deleted
 				candidate.overrides = overrides
 			entity_revision += 1
@@ -209,7 +223,11 @@ func dispatch(raw_command: Variant) -> Dictionary:
 	var next_world_revision := int(state_service.get_revision()) + 1
 	var receipt := {"command_sha256": command_digest, "operation": operation, "entity_id": entity_id, "world_revision": next_world_revision, "entity_revision": entity_revision, "undo_metadata": undo_metadata}
 	candidate.command_receipts[command_id] = receipt
-	var validation_prepare_usec := Time.get_ticks_usec() - validation_started_usec
+	if int(state_service.snapshot.get("schema_version", 0)) == HISTORY_SCHEMA_VERSION:
+		var history_result := _append_history_entry(candidate, command, command_digest, entity_id, identity, receipt, int(state_service.get_revision()), entity_revision_before, entity_revision)
+		if not history_result.get("ok", false):
+			return history_result
+	var command_preparation_usec := Time.get_ticks_usec() - command_preparation_started_usec
 	var commit := state_service.commit_command_candidate(candidate, int(command.expected_world_revision))
 	if not commit.get("ok", false):
 		if not state_service.initialized:
@@ -219,11 +237,246 @@ func dispatch(raw_command: Variant) -> Dictionary:
 	if operation == "ENTITY_PLACE":
 		_base_instances[entity_id] = prepared.instance
 	last_dispatch_metrics = {
-		"validation_prepare_usec": validation_prepare_usec,
+		"command_validation_usec": command_validation_usec,
+		"command_preparation_usec": command_preparation_usec,
+		"candidate_validation_usec": int(state_service.last_candidate_validation_usec),
+		"history_validation_usec": int(state_service.last_history_validation_usec),
 		"persistence_usec": int(state_service.last_persist_duration_usec),
 		"dispatch_total_usec": Time.get_ticks_usec() - dispatch_started_usec,
 	}
-	return {"ok": true, "reason": "committed", "duplicate": false, "operation": operation, "entity_id": entity_id, "world_revision": int(commit.world_revision), "entity_revision": entity_revision, "generation": int(commit.generation), "timings_usec": last_dispatch_metrics.duplicate(true)}
+	return {"ok": true, "reason": "committed", "duplicate": false, "operation": operation, "entity_id": entity_id, "world_revision": int(commit.world_revision), "entity_revision": entity_revision, "generation": int(commit.generation), "history_depth": int(candidate.get("entity_history", []).size()), "history_cursor": int(candidate.get("history_cursor", 0)), "timings_usec": last_dispatch_metrics.duplicate(true)}
+
+
+func get_history_summary() -> Dictionary:
+	if not initialized or int(state_service.snapshot.get("schema_version", 0)) != HISTORY_SCHEMA_VERSION:
+		return {"enabled": false, "depth": 0, "cursor": 0, "undo": {}, "redo": {}}
+	var history: Array = state_service.snapshot.get("entity_history", [])
+	var cursor := int(state_service.snapshot.get("history_cursor", 0))
+	var undo_entry: Dictionary = history[cursor - 1] if cursor > 0 else {}
+	var redo_entry: Dictionary = history[cursor] if cursor < history.size() else {}
+	return {"enabled": true, "depth": history.size(), "cursor": cursor, "undo": _history_entry_summary(undo_entry), "redo": _history_entry_summary(redo_entry)}
+
+
+func _history_entry_summary(entry: Dictionary) -> Dictionary:
+	if entry.is_empty():
+		return {}
+	return {"history_entry_id": String(entry.get("history_entry_id", "")), "operation": String(entry.get("operation", "")), "entity_id": String(entry.get("entity_id", "")), "application_state": String(entry.get("application_state", ""))}
+
+
+func _append_history_entry(candidate: Dictionary, command: Dictionary, digest: String, entity_id: String, identity: Dictionary, receipt: Dictionary, world_revision_before: int, entity_revision_before: int, entity_revision_after: int) -> Dictionary:
+	var history: Array = candidate.get("entity_history", []).duplicate(true)
+	var cursor := int(candidate.get("history_cursor", 0))
+	if cursor < 0 or cursor > history.size():
+		return _failure("history_cursor_invalid_before_append")
+	for index in range(history.size() - 1, cursor - 1, -1):
+		history.remove_at(index)
+	if history.size() >= MAX_HISTORY_ENTRIES:
+		if cursor <= 0:
+			return _failure("history_capacity_cannot_prune_redoable_entry")
+		history.remove_at(0)
+		cursor -= 1
+	var history_id := String(command.command_id)
+	var entry := {
+		"schema_version": 1,
+		"history_entry_id": history_id,
+		"source_command_id": history_id,
+		"original_command": command.duplicate(true),
+		"original_command_sha256": digest,
+		"entity_id": entity_id,
+		"operation": String(command.operation),
+		"world_id": state_service.world_id,
+		"world_seed": state_service.world_seed,
+		"generator_version": state_service.generator_version,
+		"entity_identity": identity.duplicate(true),
+		"world_revision_before": world_revision_before,
+		"world_revision_after": int(receipt.world_revision),
+		"entity_revision_before": entity_revision_before,
+		"entity_revision_after": entity_revision_after,
+		"receipt_command_id": history_id,
+		"inverse_metadata_sha256": StateContract.canonical_sha256(receipt.undo_metadata),
+		"application_state": "APPLIED",
+	}
+	history.append(entry)
+	candidate.entity_history = history
+	candidate.history_cursor = history.size()
+	return {"ok": true}
+
+
+func _dispatch_history_navigation(command: Dictionary, command_digest: String, dispatch_started_usec: int, command_validation_usec: int) -> Dictionary:
+	if int(state_service.snapshot.get("schema_version", 0)) != HISTORY_SCHEMA_VERSION:
+		return _failure("entity_history_schema_migration_required")
+	var operation := String(command.operation)
+	var history: Array = state_service.snapshot.get("entity_history", [])
+	var cursor := int(state_service.snapshot.get("history_cursor", 0))
+	var entry_index := cursor - 1 if operation == "ENTITY_UNDO" else cursor
+	if entry_index < 0 or entry_index >= history.size():
+		return _failure("entity_undo_history_empty" if operation == "ENTITY_UNDO" else "entity_redo_history_empty")
+	var entry: Dictionary = history[entry_index]
+	if String(entry.get("history_entry_id", "")) != String(command.history_entry_id) or String(entry.get("entity_id", "")) != String(command.entity_id):
+		return _failure("entity_history_operation_out_of_order")
+	var expected_state := "APPLIED" if operation == "ENTITY_UNDO" else "UNDONE"
+	if String(entry.get("application_state", "")) != expected_state:
+		return _failure("entity_history_state_conflict")
+	if not _base_instances.has(String(command.entity_id)):
+		return _failure("entity_not_reconstructed_or_content_missing")
+	var base_instance: Dictionary = _base_instances[String(command.entity_id)]
+	var identity: Dictionary = StateContract.identity_for_instance(base_instance)
+	if not StateContract.identities_equal(identity, entry.get("entity_identity", {})):
+		return _failure("entity_history_identity_mismatch")
+	var pin_check := _validate_identity_pin(identity)
+	if not pin_check.get("ok", false):
+		return pin_check
+	var current_entity_revision := state_service.get_entity_revision(String(command.entity_id))
+	if current_entity_revision != int(command.expected_entity_revision):
+		return _failure("stale_entity_revision")
+	var original_receipt: Dictionary = state_service.snapshot.get("command_receipts", {}).get(String(entry.receipt_command_id), {})
+	if original_receipt.is_empty() or String(original_receipt.command_sha256) != String(entry.original_command_sha256):
+		return _failure("entity_history_source_receipt_unavailable")
+	var candidate: Dictionary = state_service.snapshot.duplicate(true)
+	var inverse_started_usec := Time.get_ticks_usec()
+	var apply_result := _apply_history_operation(candidate, entry, original_receipt, operation == "ENTITY_REDO")
+	if not apply_result.get("ok", false):
+		return apply_result
+	var next_cursor := cursor - 1 if operation == "ENTITY_UNDO" else cursor + 1
+	var updated_history: Array = candidate.entity_history
+	updated_history[entry_index]["application_state"] = "APPLIED" if operation == "ENTITY_REDO" else "UNDONE"
+	candidate.entity_history = updated_history
+	candidate.history_cursor = next_cursor
+	var next_entity_revision := current_entity_revision + 1
+	if next_entity_revision >= 2147483647:
+		return _failure("entity_revision_limit_reached")
+	candidate.entity_revisions[String(command.entity_id)] = next_entity_revision
+	var next_world_revision := state_service.get_revision() + 1
+	var inverse_prepare_usec := Time.get_ticks_usec() - inverse_started_usec
+	var command_preparation_usec := maxi(0, inverse_started_usec - dispatch_started_usec - command_validation_usec)
+	var receipt := {
+		"command_sha256": command_digest,
+		"operation": operation,
+		"entity_id": String(command.entity_id),
+		"world_revision": next_world_revision,
+		"entity_revision": next_entity_revision,
+		"undo_metadata": {"inverse_operation": "ENTITY_REDO" if operation == "ENTITY_UNDO" else "ENTITY_UNDO", "history_entry_id": String(command.history_entry_id)},
+	}
+	candidate.command_receipts[String(command.command_id)] = receipt
+	var commit: Dictionary = state_service.commit_command_candidate(candidate, int(command.expected_world_revision))
+	if not commit.get("ok", false):
+		if not state_service.initialized:
+			initialized = false
+		initialization_error = String(commit.get("reason", "history_command_commit_failed"))
+		return commit
+	last_dispatch_metrics = {
+		"command_validation_usec": command_validation_usec,
+		"command_preparation_usec": command_preparation_usec,
+		"inverse_preparation_usec": inverse_prepare_usec,
+		"candidate_validation_usec": int(state_service.last_candidate_validation_usec),
+		"history_validation_usec": int(state_service.last_history_validation_usec),
+		"persistence_usec": int(state_service.last_persist_duration_usec),
+		"dispatch_total_usec": Time.get_ticks_usec() - dispatch_started_usec,
+	}
+	return {"ok": true, "reason": "committed", "duplicate": false, "operation": operation, "history_entry_id": String(entry.history_entry_id), "entity_id": String(command.entity_id), "world_revision": int(commit.world_revision), "entity_revision": next_entity_revision, "generation": int(commit.generation), "history_depth": history.size(), "history_cursor": next_cursor, "timings_usec": last_dispatch_metrics.duplicate(true)}
+
+
+func _apply_history_operation(candidate: Dictionary, entry: Dictionary, original_receipt: Dictionary, redo: bool) -> Dictionary:
+	var entity_id := String(entry.entity_id)
+	var identity: Dictionary = entry.entity_identity
+	var operation := String(entry.operation)
+	var overrides: Dictionary = candidate.overrides.duplicate(true)
+	var deleted: Dictionary = candidate.deleted.duplicate(true)
+	var placed: Dictionary = candidate.placed_entities.duplicate(true)
+	var override_record: Dictionary = overrides.get(entity_id, {}).duplicate(true)
+	var prior_override: Dictionary = original_receipt.undo_metadata.get("prior_override", {}).duplicate(true)
+	match operation:
+		"ENTITY_SET_COMPONENT":
+			if deleted.has(entity_id):
+				return _failure("entity_history_set_target_deleted")
+			var source_command: Dictionary = entry.original_command
+			var component_id := String(source_command.component_id)
+			var metadata: Dictionary = original_receipt.undo_metadata
+			var components_before: Dictionary = override_record.get("components", {})
+			var component_value: Dictionary
+			if redo:
+				var prior_present := bool(metadata.prior_component_present)
+				if prior_present != components_before.has(component_id) or (prior_present and not _same_history_value(components_before[component_id], metadata.prior_component)):
+					return _failure("entity_history_redo_component_precondition_mismatch")
+				component_value = source_command.component.duplicate(true)
+			else:
+				if not components_before.has(component_id) or not _same_history_value(components_before[component_id], source_command.component):
+					return _failure("entity_history_undo_component_precondition_mismatch")
+				if bool(metadata.prior_component_present):
+					component_value = metadata.prior_component.duplicate(true)
+			if override_record.is_empty():
+				override_record = {"identity": identity.duplicate(true), "components": {}}
+			if not StateContract.identities_equal(override_record.get("identity", {}), identity):
+				return _failure("entity_history_override_identity_mismatch")
+			var components: Dictionary = override_record.get("components", {}).duplicate(true)
+			if redo or bool(original_receipt.undo_metadata.prior_component_present):
+				components[component_id] = component_value
+			else:
+				components.erase(component_id)
+			if components.is_empty():
+				overrides.erase(entity_id)
+			else:
+				override_record.components = components
+				overrides[entity_id] = override_record
+		"ENTITY_DELETE":
+			if redo:
+				if deleted.has(entity_id):
+					return _failure("entity_history_delete_target_already_deleted")
+				if not _same_history_value(overrides.get(entity_id, {}), prior_override):
+					return _failure("entity_history_redo_delete_override_mismatch")
+				deleted[entity_id] = identity.duplicate(true)
+				overrides.erase(entity_id)
+			else:
+				if not deleted.has(entity_id) or not StateContract.identities_equal(deleted[entity_id], identity):
+					return _failure("entity_history_delete_tombstone_missing")
+				deleted.erase(entity_id)
+				if prior_override.is_empty():
+					overrides.erase(entity_id)
+				else:
+					overrides[entity_id] = prior_override
+		"ENTITY_RESTORE":
+			var prior_deleted := bool(original_receipt.undo_metadata.get("prior_deleted", true))
+			if redo:
+				if deleted.has(entity_id) != prior_deleted or (prior_deleted and not StateContract.identities_equal(deleted.get(entity_id, {}), identity)):
+					return _failure("entity_history_redo_restore_deletion_state_mismatch")
+				if not _same_history_value(overrides.get(entity_id, {}), prior_override):
+					return _failure("entity_history_redo_restore_override_mismatch")
+				deleted.erase(entity_id)
+				overrides.erase(entity_id)
+			else:
+				if deleted.has(entity_id) or overrides.has(entity_id):
+					return _failure("entity_history_undo_restore_target_not_baseline")
+				if prior_deleted:
+					deleted[entity_id] = identity.duplicate(true)
+				else:
+					deleted.erase(entity_id)
+				if prior_override.is_empty():
+					overrides.erase(entity_id)
+				else:
+					overrides[entity_id] = prior_override
+		"ENTITY_PLACE":
+			if not placed.has(entity_id) or not StateContract.identities_equal(placed[entity_id].get("identity", {}), identity):
+				return _failure("entity_history_placed_record_missing")
+			if redo:
+				if not deleted.has(entity_id) or not StateContract.identities_equal(deleted[entity_id], identity):
+					return _failure("entity_history_place_tombstone_missing")
+				if overrides.has(entity_id):
+					return _failure("entity_history_redo_place_override_mismatch")
+				deleted.erase(entity_id)
+			else:
+				if deleted.has(entity_id):
+					return _failure("entity_history_place_target_already_deleted")
+				if overrides.has(entity_id):
+					return _failure("entity_history_undo_place_override_mismatch")
+				# Keep the explicit record and tombstone it so redo reserves the same ID.
+				deleted[entity_id] = identity.duplicate(true)
+			overrides.erase(entity_id)
+		_:
+			return _failure("entity_history_operation_unsupported")
+	candidate.overrides = overrides
+	candidate.deleted = deleted
+	candidate.placed_entities = placed
+	return {"ok": true}
 
 
 func _register_reconstructed_instance(base_instance: Dictionary) -> Dictionary:
@@ -329,6 +582,10 @@ func _content_pins_equal(first: Dictionary, second: Dictionary) -> bool:
 		and String(first.get("mod_id", "")) == String(second.get("mod_id", "")) \
 		and String(first.get("mod_version", "")) == String(second.get("mod_version", "")) \
 		and int(first.get("definition_schema_version", -1)) == int(second.get("definition_schema_version", -2))
+
+
+func _same_history_value(first: Variant, second: Variant) -> bool:
+	return StateContract.canonical_sha256(first) == StateContract.canonical_sha256(second)
 
 
 func _validate_origin_registration(origin: Dictionary) -> Dictionary:

@@ -5,7 +5,7 @@ extends RefCounted
 const StateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const VERSION := 1
-const OPERATIONS := ["ENTITY_SET_COMPONENT", "ENTITY_DELETE", "ENTITY_RESTORE", "ENTITY_PLACE"]
+const OPERATIONS := ["ENTITY_SET_COMPONENT", "ENTITY_DELETE", "ENTITY_RESTORE", "ENTITY_PLACE", "ENTITY_UNDO", "ENTITY_REDO"]
 const MAX_WORLD_COORD_MM := 2147483647
 const COMMAND_ID_PATTERN := "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 
@@ -24,6 +24,8 @@ static func validate(command: Variant, world_id: String, world_seed: int, genera
 		expected.append("entity_id")
 	if operation == "ENTITY_SET_COMPONENT":
 		expected.append_array(["component_id", "component"])
+	elif operation == "ENTITY_UNDO" or operation == "ENTITY_REDO":
+		expected.append("history_entry_id")
 	if not _exact_keys(command, expected):
 		return _failure("command_fields_invalid")
 	if not _is_int(command.schema_version) or int(command.schema_version) != VERSION:
@@ -67,6 +69,10 @@ static func validate(command: Variant, world_id: String, world_seed: int, genera
 		if typeof(command.entity_id) != TYPE_STRING or not StateContract._valid_instance_id(String(command.entity_id), world_id, world_seed):
 			return _failure("command_entity_id_invalid")
 		normalized.entity_id = String(command.entity_id)
+		if operation == "ENTITY_UNDO" or operation == "ENTITY_REDO":
+			if typeof(command.history_entry_id) != TYPE_STRING or not _matches(String(command.history_entry_id), COMMAND_ID_PATTERN):
+				return _failure("command_history_reference_invalid")
+			normalized.history_entry_id = String(command.history_entry_id)
 		if operation == "ENTITY_SET_COMPONENT":
 			if typeof(command.component_id) != TYPE_STRING:
 				return _failure("command_component_id_invalid")
