@@ -7,8 +7,9 @@
 - Baseline includes merged Issue #118 PR #119; #119 merge commit has parents `fd431dbcad18685a3aa2c86c3c9b25fbd81303c9` and `a00c9c31a972e36f194c38d38ac44d68323fd7b8`.
 - Feature branch: `feat/p3-0c-transactional-undo-redo`
 - Implementation commit: `90313961352d1fe5216b5cd9efa342bbbb3c6378` (direct parent: `d391e09c1a7aac2116de2004c80d7f58bdb54986`)
+- Draft implementation PR: [#121](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/121), base `main`; open/draft/unmerged at publication. The final PR head includes this checkpoint-link update and is verified from GitHub at closeout.
 - Implementation work reused `C:\Dev\sandbox-sim-dev`; local P3.0C modifications were snapshotted before safely fast-forwarding to main and reapplied without conflicts. Original stash `5eff3e94ceba7bffbbc19a081b43139f72b4905e` and preservation snapshot `ab2c3c612221722b3da70843117ac240e9769c3a` remain in the stash list. Three pre-existing benchmark `.gd.uid` files were preserved.
-- The implementation commit changes 15 source/test/validation paths; this checkpoint and status/specification changes are a separate documentation commit. The resulting draft PR is the single P3.0C implementation PR.
+- The implementation commit changes 15 source/test/validation paths; this checkpoint and status/specification changes are separate documentation commits. PR #121 is the single P3.0C implementation PR.
 - No merge is authorized. PRs #115, #117, #120 and Issue #108 are untouched.
 
 ## Implementation
