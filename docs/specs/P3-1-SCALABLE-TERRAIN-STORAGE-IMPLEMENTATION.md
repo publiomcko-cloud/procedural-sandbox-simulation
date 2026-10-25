@@ -1,6 +1,6 @@
 # P3.1 Storage — implementation candidate
 
-**Status: IMPLEMENTATION CANDIDATE; independent source review and owner GUI retest pending.** Source HEAD 1438784d40567a787156afc12778cc30e27365e0 on draft PR #129, based on main 5997a76d345f45bf86edfe83f690336391e8be27. The architecture proposal remains separate in draft PR #128; neither PR is merged.
+**Status: IMPLEMENTATION CANDIDATE; independent source review and owner GUI retest pending.** Corrected source HEAD db1c72fadd24e69f87f0eb2c5091cee1ac1b39da (parent 1438784d40567a787156afc12778cc30e27365e0) on draft PR #129, based on main 5997a76d345f45bf86edfe83f690336391e8be27. The architecture proposal remains separate in draft PR #128; neither PR is merged.
 
 ## Scope
 
@@ -36,13 +36,15 @@ These are implementation limits, not infinite capacity or product performance ac
 
 ## Verification evidence
 
-Godot 4.7.2.stable.official.ed1daf0bf, isolated APPDATA/LOCALAPPDATA: scripts/validate.ps1 exited 0 with 20,660 assertions across 21 assertion-marker suites; no failed assertions, parser errors or script errors. Three non-fatal existing procedural-object test warnings concern colinear camera target/up vectors. Headless startup passed; visual acceptance is not claimed.
+Godot 4.7.2.stable.official.ed1daf0bf, isolated APPDATA/LOCALAPPDATA: scripts/validate.ps1 exited 0 with 20,664 assertions across 21 assertion-marker suites; no failed assertions, parser errors or script errors. Three non-fatal existing procedural-object test warnings concern colinear camera target/up vectors. Headless startup passed; visual acceptance is not claimed.
 
-The V2 storage suite passed 2,778 assertions. It tested 640 distributed alternating operations and 2,048 concentrated alternating operations, exact full-order evaluator parity, negative/positive boundaries, lazy reload, LOD0/LOD1 reconstruction, resets, interrupted manifests, corruption, quotas and preservation of schema-1 fixture bytes.
+The V2 storage suite passed 2,782 assertions. It tested 640 distributed alternating operations and 2,048 concentrated alternating operations, exact full-order evaluator parity, negative/positive boundaries, lazy reload, LOD0/LOD1 reconstruction, resets, interrupted manifests, corruption, quotas and preservation of schema-1 fixture bytes.
 
-Exploratory single-run timings from the isolated local test process (not thresholds): 640 distributed operations: generation 20.975 ms, save 202.067 ms, verify/load 69.153 ms, LOD0 chunk 20.881 ms, LOD1 chunk 110.889 ms. 2,048 concentrated operations: generation 73.698 ms, static process-memory delta during generation 4,260,068 bytes (not RSS/peak), save 638.134 ms, verify/load 180.677 ms, four-probe replay 374.712 ms, LOD0 chunk 560.192 ms, LOD1 chunk 1,959.425 ms. These are machine-specific exploratory measurements, not scored acceptance.
+Exploratory single-run timings from the isolated local test process (not thresholds): 640 distributed operations: generation 39.212 ms, save 181.252 ms, verify/load 58.731 ms, LOD0 chunk 19.144 ms, LOD1 chunk 107.248 ms. 2,048 concentrated operations: generation 77.724 ms, static process-memory delta during generation 4,260,068 bytes (not RSS/peak), save 625.303 ms, verify/load 177.044 ms, four-probe replay 379.799 ms, LOD0 chunk 576.161 ms, LOD1 chunk 2,002.461 ms. These are machine-specific exploratory measurements, not scored acceptance.
 
-Full raw validation log: C:/Users/PUBLI/AppData/Local/Temp/p3-1-final-validation-1433ea3971a94553b92406be4f8dac14/validate.log. Focused V2 test evidence was produced in isolated disposable fixtures; no actual schema-1 user save was opened.
+Full raw validation log: C:/Users/PUBLI/AppData/Local/Temp/p3-1-final-validation-r2-e6af7864106c4da486ff73bb2f436638/validate.log. Focused V2 test evidence was produced in isolated disposable fixtures; no actual schema-1 user save was opened.
+
+The follow-up identity correction binds lazy references to world seed and generator version as well as generation/count/revision metadata; malformed seed/version references are rejected without partial ledger mutation. See [the correction checkpoint](../checkpoints/2026-10-25-P3-1-LAZY-REFERENCE-IDENTITY-CORRECTION.md).
 
 ## Next gates and limitations
 
