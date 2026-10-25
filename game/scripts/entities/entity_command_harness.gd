@@ -52,21 +52,21 @@ func _ready() -> void:
 	if not command_service.initialize(state_service, registry).get("ok", false):
 		_set_status("Command service initialization failed")
 		return
-	_place_new_entity()
+	_set_status("Ready. Focus this window, then use P to place, E to edit, Delete to hide, and R to restore.")
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
-	match event.keycode:
-		KEY_P:
-			_place_new_entity()
-		KEY_E:
-			_edit_selected()
-		KEY_DELETE:
-			_delete_selected()
-		KEY_R:
-			_restore_selected()
+	var key_event: InputEventKey = event
+	if _matches_key(key_event, KEY_P):
+		_place_new_entity()
+	elif _matches_key(key_event, KEY_E):
+		_edit_selected()
+	elif _matches_key(key_event, KEY_DELETE):
+		_delete_selected()
+	elif _matches_key(key_event, KEY_R):
+		_restore_selected()
 
 
 func _notification(what: int) -> void:
@@ -124,9 +124,10 @@ func _build_hud() -> void:
 	column.add_child(heading)
 	_operation_label = Label.new()
 	_operation_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_operation_label.custom_minimum_size = Vector2(620.0, 56.0)
 	column.add_child(_operation_label)
 	var controls := Label.new()
-	controls.text = "P place  |  E alter transform  |  Delete logical delete  |  R restore"
+	controls.text = "Focus window: P place  |  E alter  |  Delete hide  |  R restore"
 	column.add_child(controls)
 
 
@@ -155,9 +156,8 @@ func _place_new_entity() -> void:
 		_set_status("ENTITY_PLACE rejected: %s" % result.get("reason", "unknown"))
 		return
 	selected_id = String(result.entity_id)
-	var entity: Dictionary = command_service.resolve_entity(selected_id)
-	if entity.get("ok", false):
-		_show_entity(entity.instance)
+	if not _apply_authoritative_entity_view(selected_id, "ENTITY_PLACE"):
+		return
 	_set_status("Placed %s\nworld revision %d / entity revision %d" % [selected_id, result.world_revision, result.entity_revision])
 
 
@@ -172,9 +172,8 @@ func _edit_selected() -> void:
 	if not result.get("ok", false):
 		_set_status("ENTITY_SET_COMPONENT rejected: %s" % result.get("reason", "unknown"))
 		return
-	var entity: Dictionary = command_service.resolve_entity(selected_id)
-	if entity.get("ok", false):
-		_show_entity(entity.instance)
+	if not _apply_authoritative_entity_view(selected_id, "ENTITY_SET_COMPONENT"):
+		return
 	_set_status("Altered %s\nworld revision %d / entity revision %d" % [selected_id, result.world_revision, result.entity_revision])
 
 
@@ -186,8 +185,8 @@ func _delete_selected() -> void:
 	if not result.get("ok", false):
 		_set_status("ENTITY_DELETE rejected: %s" % result.get("reason", "unknown"))
 		return
-	if _object_nodes.has(selected_id):
-		_object_nodes[selected_id].visible = false
+	if not _apply_authoritative_entity_view(selected_id, "ENTITY_DELETE"):
+		return
 	_set_status("Logically deleted %s\nworld revision %d / entity revision %d" % [selected_id, result.world_revision, result.entity_revision])
 
 
@@ -199,9 +198,8 @@ func _restore_selected() -> void:
 	if not result.get("ok", false):
 		_set_status("ENTITY_RESTORE rejected: %s" % result.get("reason", "unknown"))
 		return
-	var entity: Dictionary = command_service.resolve_entity(selected_id)
-	if entity.get("ok", false):
-		_show_entity(entity.instance)
+	if not _apply_authoritative_entity_view(selected_id, "ENTITY_RESTORE"):
+		return
 	_set_status("Restored %s\nworld revision %d / entity revision %d" % [selected_id, result.world_revision, result.entity_revision])
 
 
@@ -215,14 +213,36 @@ func _entity_command(operation: String, command_id: String, entity_revision: int
 	}
 
 
-func _show_entity(instance: Dictionary) -> void:
+func _apply_authoritative_entity_view(entity_id: String, operation: String) -> bool:
+	var resolved: Dictionary = command_service.resolve_entity(entity_id)
+	if not resolved.get("ok", false):
+		_set_status("%s committed but visual synchronization failed: %s" % [operation, resolved.get("reason", "unknown")])
+		return false
+	var node: Node3D = _object_nodes.get(entity_id)
+	if bool(resolved.get("deleted", false)):
+		if node == null:
+			_set_status("%s committed but the entity node is missing" % operation)
+			return false
+		node.visible = false
+		return true
+	if not _show_entity(resolved.instance):
+		_set_status("%s committed but mesh/view synchronization failed" % operation)
+		return false
+	return true
+
+
+func _matches_key(event: InputEventKey, expected: int) -> bool:
+	return int(event.keycode) == expected or int(event.physical_keycode) == expected
+
+
+func _show_entity(instance: Dictionary) -> bool:
 	var entity_id := String(instance.instance_id)
 	var node: Node3D = _object_nodes.get(entity_id)
 	if node == null:
 		var built: Dictionary = RockMeshAdapter.build_mesh(instance.geometry, instance.geometry_seeds)
 		if not built.get("ok", false):
 			_set_status("Mesh build failed: %s" % built.get("reason", "unknown"))
-			return
+			return false
 		node = Node3D.new()
 		node.name = "ExplicitEntity_%s" % entity_id.sha256_text().substr(0, 10)
 		var mesh_node := MeshInstance3D.new()
@@ -247,6 +267,7 @@ func _show_entity(instance: Dictionary) -> void:
 	node.position += Vector3(float(delta[0]), float(delta[1]), float(delta[2])) / 1000.0
 	node.rotation = Vector3(float(rotation[0]), float(rotation[1]), float(rotation[2])) * PI / 180000.0
 	node.scale = Vector3(float(scale[0]), float(scale[1]), float(scale[2])) / 1000.0
+	return true
 
 
 func _transform(translation: Array, rotation: Array, scale: Array) -> Dictionary:
