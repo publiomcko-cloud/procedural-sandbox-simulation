@@ -1,6 +1,6 @@
 # ADR-0007 — Universal persistent terrain imprints for solid mod objects (PROPOSED)
 
-Date: 2026-10-25. Issue [#108](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/108). Design-only PR #126. **Status: PROPOSED — architecture review pending, no production implementation/migration authorized.** Baseline main `5997a76d345f45bf86edfe83f690336391e8be27`.
+Date: 2026-10-25. Issue [#108](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/108). Design-only PR #126. **Status: PROPOSED — owner approved two operation semantics on 2026-10-25; architectural review pending, no production implementation/migration authorized.** Baseline main `5997a76d345f45bf86edfe83f690336391e8be27`.
 
 ## Owner-approved design requirements (not implementation acceptance)
 
@@ -29,8 +29,8 @@ For automatically populated static procedural rocks, establish creation epochs a
 | Spawn/PLACE intersecting solid | Commit immutable cut once | Spawn stable entity |
 | DELETE/F8 | Retain cut | Tombstone entity |
 | Undo DELETE / RESTORE F9 | Retain cut, never cut twice | Restore previous overrides / procedural baseline respectively |
-| Undo PLACE | **Decision pending**: whether removing newly placed entity compensates its cut (would conflict with permanent-hole rule); default proposal is *retain already committed cut*, with explicit user-facing warning | Tombstone placed entity |
-| SET_COMPONENT transform / F7 | **Decision pending**: movement creates a new imprint at destination, leaving prior imprint, or requires explicit carve action; no silent cut overwrite | Preserve entity history |
+| Undo PLACE | **Owner-approved policy**: retain the committed cut when Undo PLACE removes the entity; excavation reversal is a separate explicit terrain command | Tombstone placed entity |
+| SET_COMPONENT transform / F7 | **Owner-approved policy**: keep the old imprint and issue a new, idempotent cut at destination only if the moved solid intersects existing effective solid terrain; no redundant cut for unembedded movement | Preserve entity history |
 | CARVE then FILL | Respect global operation order, so later FILL can fill old cut | Object stays fixed for now |
 | Mod uninstall/content unavailable | Retain self-contained/archived imprint, fail closed on new operations | Existing identity/visual handled separately |
 
@@ -52,4 +52,4 @@ Fixtures: flat ground, irregular slopes, caves/overhangs, objects partially/full
 
 ## Phase gates
 
-P3.1A: finish architecture, transaction/migration contract, mod excavation schema, owner decision on movement/undo. P3.1B: isolated single-writer persistent imprint prototype and deterministic SDF integration with focused tests, then independent review. P3.1C: mod-first default integration, editing/revisions/streaming/GUI. P3.1D: physics/collision-facing interfaces only (no promise of dynamic simulation). No code merge without independent review and owner GUI acceptance.
+P3.1A: finish architecture, transaction/migration contract and mod excavation schema; owner approved Undo PLACE and movement terrain policies on 2026-10-25. P3.1B: isolated single-writer persistent imprint prototype and deterministic SDF integration with focused tests, then independent review. P3.1C: mod-first default integration, editing/revisions/streaming/GUI. P3.1D: physics/collision-facing interfaces only (no promise of dynamic simulation). No code merge without independent review and owner GUI acceptance.
