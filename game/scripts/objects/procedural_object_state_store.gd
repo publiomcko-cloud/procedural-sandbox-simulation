@@ -101,8 +101,10 @@ func save_snapshot(snapshot: Dictionary) -> Dictionary:
 	if readback != bytes or readback.size() > MAX_DOCUMENT_BYTES:
 		return _failure("object_state_readback_mismatch")
 	var checked_temp := _decode_document(readback)
-	if not checked_temp.get("ok", false) or int(checked_temp.generation) != generation:
-		return _failure("object_state_temporary_validation_failed")
+	if not checked_temp.get("ok", false):
+		return _failure("object_state_temporary_validation_failed:%s" % checked_temp.get("reason", "unknown"))
+	if int(checked_temp.generation) != generation:
+		return _failure("object_state_temporary_generation_mismatch")
 	var rename_error := DirAccess.rename_absolute(temporary_path, final_path)
 	if rename_error != OK:
 		return _failure("object_state_commit_rename_failed")

@@ -876,7 +876,7 @@ func _test_persistent_instance_state(roots: Array[String]) -> void:
 	var corrupt_load := corrupt_service.initialize(WORLD_ID, SEED, Field.GENERATOR_VERSION, corrupted_dir)
 	_check(not corrupt_load.get("ok", false) and String(corrupt_load.get("reason", "")).contains("corrupt"), "corrupt finalized generation blocks object-state startup fail-closed")
 	var incompatible := final_service.snapshot.duplicate(true)
-	incompatible["schema_version"] = 2
+	incompatible["schema_version"] = 3
 	_check(not ObjectStateContract.validate_snapshot(incompatible, WORLD_ID, SEED, Field.GENERATOR_VERSION).get("ok", false), "unsupported object-state schema is rejected without migration or reinterpretation")
 	var malformed := final_service.snapshot.duplicate(true)
 	malformed["revision"] = -1

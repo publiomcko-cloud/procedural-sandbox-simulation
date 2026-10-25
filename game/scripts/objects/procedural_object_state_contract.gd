@@ -4,6 +4,7 @@ extends RefCounted
 ## Versioned, data-only component contracts for mutable procedural instances.
 ## These values are deliberately independent of Node3D, meshes and mod scripts.
 const SCHEMA_VERSION := 1
+const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const COMPONENT_TRANSFORM := "core.transform"
 const COMPONENT_APPEARANCE := "core.appearance"
 const COMPONENT_LOGICAL := "core.logical"
@@ -12,6 +13,8 @@ const MAX_LABEL_LENGTH := 64
 const MAX_WORLD_SEED := 2147483646
 const MIN_REGION_COORD := -2147483648
 const MAX_REGION_COORD := 2147483647
+const COMMAND_SNAPSHOT_SCHEMA_VERSION := 2
+const MAX_COMMAND_RECEIPTS := 4096
 
 
 static func normalize_component(component_id: String, value: Variant) -> Dictionary:
@@ -93,6 +96,92 @@ static func _normalize_logical(properties: Dictionary) -> Dictionary:
 static func validate_snapshot(snapshot: Variant, expected_world_id: String, expected_seed: int, expected_generator: int) -> Dictionary:
 	if typeof(snapshot) != TYPE_DICTIONARY:
 		return _failure("snapshot_not_dictionary")
+	var version: Variant = snapshot.get("schema_version", null)
+	if not _is_int(version):
+		return _failure("snapshot_schema_unsupported")
+	if int(version) == SCHEMA_VERSION:
+		return _validate_snapshot_v1(snapshot, expected_world_id, expected_seed, expected_generator)
+	if int(version) != COMMAND_SNAPSHOT_SCHEMA_VERSION:
+		return _failure("snapshot_schema_unsupported")
+	if not _exact_keys(snapshot, ["schema_version", "world_id", "world_seed", "generator_version", "revision", "overrides", "deleted", "placed_entities", "entity_revisions", "command_receipts"]):
+		return _failure("snapshot_fields_invalid")
+	var legacy_shape: Dictionary = {}
+	for key in ["schema_version", "world_id", "world_seed", "generator_version", "revision", "overrides", "deleted"]:
+		legacy_shape[key] = snapshot[key]
+	legacy_shape.schema_version = SCHEMA_VERSION
+	var legacy_checked := _validate_snapshot_v1(legacy_shape, expected_world_id, expected_seed, expected_generator, true)
+	if not legacy_checked.get("ok", false):
+		return legacy_checked
+	if typeof(snapshot.placed_entities) != TYPE_DICTIONARY or snapshot.placed_entities.size() > 20000 or typeof(snapshot.entity_revisions) != TYPE_DICTIONARY or snapshot.entity_revisions.size() > 40000 or typeof(snapshot.command_receipts) != TYPE_DICTIONARY or snapshot.command_receipts.size() > MAX_COMMAND_RECEIPTS:
+		return _failure("command_snapshot_bounds_invalid")
+	var normalized: Dictionary = legacy_checked.snapshot
+	normalized.schema_version = COMMAND_SNAPSHOT_SCHEMA_VERSION
+	var placed: Dictionary = {}
+	for id_value in snapshot.placed_entities:
+		if typeof(id_value) != TYPE_STRING or not _valid_instance_id(String(id_value), expected_world_id, expected_seed) or not _exact_keys(snapshot.placed_entities[id_value], ["identity", "position_mm", "components"]):
+			return _failure("placed_entity_record_invalid")
+		var record: Dictionary = snapshot.placed_entities[id_value]
+		var identity_result := validate_identity(record.identity, expected_world_id, expected_seed, expected_generator)
+		if not identity_result.get("ok", false) or int(record.identity.get("identity_schema_version", -1)) != 3 or String(id_value) != String(identity_result.instance_id):
+			return _failure("placed_entity_identity_invalid")
+		var position := _read_int_vector(record.position_mm, -2147483647, 2147483647)
+		if not position.ok:
+			return _failure("placed_entity_transform_invalid")
+		var region_key_array: Array = identity_result.identity.region_key
+		var region_key := Vector2i(int(region_key_array[0]), int(region_key_array[1]))
+		if _region_for_mm(int(position.value[0]), int(position.value[2])) != region_key:
+			return _failure("placed_entity_region_mismatch")
+		if typeof(record.components) != TYPE_DICTIONARY or not _exact_keys(record.components, [COMPONENT_TRANSFORM, COMPONENT_APPEARANCE, COMPONENT_LOGICAL]):
+			return _failure("placed_entity_components_invalid")
+		var components: Dictionary = {}
+		for component_id in record.components:
+			var component_result := normalize_component(String(component_id), record.components[component_id])
+			if not component_result.get("ok", false):
+				return _failure("placed_entity_component_invalid")
+			components[component_id] = component_result.value
+		placed[id_value] = {"identity": identity_result.identity, "position_mm": position.value, "components": components}
+	var entity_revisions: Dictionary = {}
+	for id_value in snapshot.entity_revisions:
+		if typeof(id_value) != TYPE_STRING or not _valid_instance_id(String(id_value), expected_world_id, expected_seed) or not _is_int(snapshot.entity_revisions[id_value]):
+			return _failure("entity_revision_record_invalid")
+		var entity_revision := int(snapshot.entity_revisions[id_value])
+		if entity_revision < 1 or entity_revision > int(normalized.revision):
+			return _failure("entity_revision_record_invalid")
+		entity_revisions[id_value] = entity_revision
+	for id_value in placed:
+		if not entity_revisions.has(id_value):
+			return _failure("placed_entity_revision_missing")
+	for id_value in normalized.overrides:
+		if int(normalized.overrides[id_value].identity.get("identity_schema_version", 1)) == 3 and not placed.has(id_value):
+			return _failure("placed_entity_record_missing")
+	for id_value in normalized.deleted:
+		if int(normalized.deleted[id_value].get("identity_schema_version", 1)) == 3 and not placed.has(id_value):
+			return _failure("placed_entity_record_missing")
+	var receipts: Dictionary = {}
+	for command_id in snapshot.command_receipts:
+		if typeof(command_id) != TYPE_STRING or not _valid_command_id(String(command_id)) or not _exact_keys(snapshot.command_receipts[command_id], ["command_sha256", "operation", "entity_id", "world_revision", "entity_revision", "undo_metadata"]):
+			return _failure("command_receipt_invalid")
+		var receipt: Dictionary = snapshot.command_receipts[command_id]
+		if typeof(receipt.command_sha256) != TYPE_STRING or String(receipt.command_sha256).length() != 64 or not _is_hex(String(receipt.command_sha256)) or not ["ENTITY_SET_COMPONENT", "ENTITY_DELETE", "ENTITY_RESTORE", "ENTITY_PLACE"].has(receipt.operation) or not _is_int(receipt.world_revision) or int(receipt.world_revision) < 1 or int(receipt.world_revision) > int(normalized.revision) or not _is_int(receipt.entity_revision) or int(receipt.entity_revision) < 1 or int(receipt.entity_revision) > int(receipt.world_revision):
+			return _failure("command_receipt_invalid")
+		if receipt.operation == "ENTITY_PLACE":
+			if typeof(receipt.entity_id) != TYPE_STRING or not placed.has(receipt.entity_id) or String(receipt.entity_id) != _placed_id(expected_world_id, expected_seed, String(command_id)):
+				return _failure("command_receipt_entity_invalid")
+		elif typeof(receipt.entity_id) != TYPE_STRING or not _valid_instance_id(String(receipt.entity_id), expected_world_id, expected_seed):
+			return _failure("command_receipt_entity_invalid")
+		var undo_check := _validate_undo_metadata(String(receipt.operation), String(receipt.entity_id), receipt.undo_metadata, expected_world_id, expected_seed, expected_generator)
+		if not undo_check.get("ok", false):
+			return undo_check
+		receipts[command_id] = {"command_sha256": String(receipt.command_sha256), "operation": String(receipt.operation), "entity_id": String(receipt.entity_id), "world_revision": int(receipt.world_revision), "entity_revision": int(receipt.entity_revision), "undo_metadata": undo_check.value}
+	normalized.placed_entities = placed
+	normalized.entity_revisions = entity_revisions
+	normalized.command_receipts = receipts
+	return {"ok": true, "snapshot": normalized}
+
+
+static func _validate_snapshot_v1(snapshot: Variant, expected_world_id: String, expected_seed: int, expected_generator: int, allow_explicit_identity: bool = false) -> Dictionary:
+	if typeof(snapshot) != TYPE_DICTIONARY:
+		return _failure("snapshot_not_dictionary")
 	if not _valid_world_identity(expected_world_id, expected_seed, expected_generator):
 		return _failure("snapshot_expected_world_identity_invalid")
 	var value: Dictionary = snapshot
@@ -120,7 +209,7 @@ static func validate_snapshot(snapshot: Variant, expected_world_id: String, expe
 		if typeof(id_value) != TYPE_STRING or not _valid_instance_id(String(id_value), expected_world_id, expected_seed):
 			return _failure("snapshot_deleted_id_invalid")
 		var deleted_identity := validate_identity(value.deleted[id_value], expected_world_id, expected_seed, expected_generator)
-		if not deleted_identity.ok or deleted_identity.instance_id != id_value:
+		if not deleted_identity.ok or deleted_identity.instance_id != id_value or (not allow_explicit_identity and int(deleted_identity.identity.get("identity_schema_version", 1)) == 3):
 			return _failure("snapshot_deleted_identity_invalid")
 		deleted_ids[id_value] = true
 		normalized_deleted[id_value] = deleted_identity.identity
@@ -131,7 +220,7 @@ static func validate_snapshot(snapshot: Variant, expected_world_id: String, expe
 		if typeof(record) != TYPE_DICTIONARY or not _exact_keys(record, ["identity", "components"]):
 			return _failure("snapshot_override_record_invalid")
 		var identity_result := validate_identity(record.identity, expected_world_id, expected_seed, expected_generator)
-		if not identity_result.ok or identity_result.instance_id != id_value:
+		if not identity_result.ok or identity_result.instance_id != id_value or (not allow_explicit_identity and int(identity_result.identity.get("identity_schema_version", 1)) == 3):
 			return _failure("snapshot_override_identity_invalid")
 		if typeof(record.components) != TYPE_DICTIONARY or record.components.is_empty() or record.components.size() > 3:
 			return _failure("snapshot_components_invalid")
@@ -154,12 +243,14 @@ static func validate_identity(identity: Variant, expected_world_id: String, expe
 		return _failure("identity_fields_invalid")
 	var identity_version := 1
 	if identity.has("identity_schema_version"):
-		if not _is_int(identity["identity_schema_version"]) or int(identity["identity_schema_version"]) != 2:
+		if not _is_int(identity["identity_schema_version"]) or not [2, 3].has(int(identity["identity_schema_version"])):
 			return _failure("identity_schema_unsupported")
-		identity_version = 2
+		identity_version = int(identity["identity_schema_version"])
 	var expected_keys := ["instance_id", "definition_id", "content_pin", "world_id", "world_seed", "generator_version", "region_key", "slot", "placement_seed", "recipe_seed"]
 	if identity_version == 2:
 		expected_keys = ["identity_schema_version", "instance_id", "definition_id", "content_pin", "world_id", "world_seed", "generator_version", "region_key", "population_rule_id", "population_rule_pin", "candidate_index", "placement_seed", "recipe_seed"]
+	elif identity_version == 3:
+		expected_keys = ["identity_schema_version", "identity_kind", "instance_id", "definition_id", "content_pin", "world_id", "world_seed", "generator_version", "region_key", "placement_seed", "recipe_seed"]
 	if not _exact_keys(identity, expected_keys):
 		return _failure("identity_fields_invalid")
 	if identity.world_id != expected_world_id or not _is_int(identity.world_seed) or int(identity.world_seed) != expected_seed or not _is_int(identity.generator_version) or int(identity.generator_version) != expected_generator:
@@ -178,7 +269,7 @@ static func validate_identity(identity: Variant, expected_world_id: String, expe
 		if not _is_int(identity.slot) or int(identity.slot) < 0 or int(identity.slot) > 15:
 			return _failure("identity_recipe_invalid")
 		expected_id = "%s/seed-%d/object/%s/region/%d,%d/slot/%d" % [expected_world_id, expected_seed, identity.definition_id, region.x, region.y, int(identity.slot)]
-	else:
+	elif identity_version == 2:
 		var rule_pin: Variant = identity.population_rule_pin
 		if typeof(identity.population_rule_id) != TYPE_STRING or String(identity.population_rule_id).find(":") < 1 or typeof(rule_pin) != TYPE_DICTIONARY or not _exact_keys(rule_pin, ["rule_id", "mod_id", "mod_version", "rule_schema_version", "algorithm", "rule_sha256"]):
 			return _failure("identity_population_rule_invalid")
@@ -192,6 +283,10 @@ static func validate_identity(identity: Variant, expected_world_id: String, expe
 		if not _is_int(identity.candidate_index) or int(identity.candidate_index) < 0 or int(identity.candidate_index) > 255:
 			return _failure("identity_recipe_invalid")
 		expected_id = "%s/seed-%d/object/%s/region/%d,%d/population/%s/candidate/%d" % [expected_world_id, expected_seed, identity.definition_id, region.x, region.y, rule_id, int(identity.candidate_index)]
+	else:
+		if identity.identity_kind != "placed_explicit_v1" or not _valid_command_id(String(identity.instance_id).get_slice("/placed/", 1)):
+			return _failure("identity_placed_contract_invalid")
+		expected_id = _placed_id(expected_world_id, expected_seed, String(identity.instance_id).get_slice("/placed/", 1))
 	if not _is_int(identity.placement_seed) or int(identity.placement_seed) < 1 or int(identity.placement_seed) > 2147483647 or not _is_int(identity.recipe_seed) or int(identity.recipe_seed) < 1 or int(identity.recipe_seed) > 2147483647:
 		return _failure("identity_recipe_invalid")
 	if identity.instance_id != expected_id:
@@ -202,9 +297,11 @@ static func validate_identity(identity: Variant, expected_world_id: String, expe
 	normalized_identity.region_key = [int(identity.region_key[0]), int(identity.region_key[1])]
 	if identity_version == 1:
 		normalized_identity.slot = int(identity.slot)
-	else:
+	elif identity_version == 2:
 		normalized_identity.identity_schema_version = 2
 		normalized_identity.candidate_index = int(identity.candidate_index)
+	else:
+		normalized_identity.identity_schema_version = 3
 	normalized_identity.placement_seed = int(identity.placement_seed)
 	normalized_identity.recipe_seed = int(identity.recipe_seed)
 	var normalized_pin: Dictionary = identity.content_pin.duplicate(true)
@@ -218,6 +315,8 @@ static func validate_identity(identity: Variant, expected_world_id: String, expe
 
 
 static func identity_for_instance(instance: Dictionary) -> Dictionary:
+	if instance.has("entity_identity"):
+		return (instance.entity_identity as Dictionary).duplicate(true)
 	var key: Vector2i = instance.region_key
 	if not String(instance.get("population_rule_id", "")).is_empty():
 		return {"identity_schema_version": 2, "instance_id": instance.instance_id, "definition_id": instance.definition_id, "content_pin": instance.content_pin.duplicate(true), "world_id": instance.world_id, "world_seed": instance.world_seed, "generator_version": instance.generator_version, "region_key": [key.x, key.y], "population_rule_id": instance.population_rule_id, "population_rule_pin": instance.population_rule_pin.duplicate(true), "candidate_index": instance.population_candidate_index, "placement_seed": instance.placement_seed, "recipe_seed": instance.recipe_seed}
@@ -267,7 +366,78 @@ static func _valid_instance_id(value: String, world_id: String, world_seed: int)
 	if regex.search(value) != null:
 		return true
 	regex.compile("^" + world_id + "/seed-" + str(world_seed) + "/object/[a-z][a-z0-9_.]*:[a-z][a-z0-9_.]*/region/-?[0-9]+,-?[0-9]+/population/[a-z][a-z0-9_.]*:[a-z][a-z0-9_.]*/candidate/[0-9]+$")
+	if regex.search(value) != null:
+		return true
+	regex.compile("^" + world_id + "/seed-" + str(world_seed) + "/placed/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 	return regex.search(value) != null
+
+
+static func _valid_command_id(value: String) -> bool:
+	var regex := RegEx.new()
+	regex.compile("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+	return regex.search(value) != null
+
+
+static func _placed_id(world_id: String, world_seed: int, command_id: String) -> String:
+	return "%s/seed-%d/placed/%s" % [world_id, world_seed, command_id]
+
+
+static func _validate_undo_metadata(operation: String, entity_id: String, value: Variant, world_id: String, world_seed: int, generator: int) -> Dictionary:
+	if typeof(value) != TYPE_DICTIONARY:
+		return _failure("command_undo_metadata_invalid")
+	var metadata: Dictionary = value
+	if operation == "ENTITY_SET_COMPONENT":
+		if not _exact_keys(metadata, ["inverse_operation", "component_id", "prior_component_present", "prior_component"]) or metadata.inverse_operation != "ENTITY_SET_COMPONENT" or typeof(metadata.component_id) != TYPE_STRING or typeof(metadata.prior_component_present) != TYPE_BOOL or typeof(metadata.prior_component) != TYPE_DICTIONARY:
+			return _failure("command_undo_metadata_invalid")
+		if bool(metadata.prior_component_present):
+			var prior := normalize_component(String(metadata.component_id), metadata.prior_component)
+			if not prior.get("ok", false):
+				return _failure("command_undo_metadata_invalid")
+			return {"ok": true, "value": {"inverse_operation": "ENTITY_SET_COMPONENT", "component_id": String(metadata.component_id), "prior_component_present": true, "prior_component": prior.value}}
+		if not metadata.prior_component.is_empty():
+			return _failure("command_undo_metadata_invalid")
+		return {"ok": true, "value": {"inverse_operation": "ENTITY_SET_COMPONENT", "component_id": String(metadata.component_id), "prior_component_present": false, "prior_component": {}}}
+	var expected_inverse := "ENTITY_DELETE" if operation == "ENTITY_RESTORE" else "ENTITY_RESTORE" if operation == "ENTITY_DELETE" else ""
+	if operation == "ENTITY_PLACE":
+		if not _exact_keys(metadata, ["inverse_operation", "identity"]) or metadata.inverse_operation != "ENTITY_DELETE":
+			return _failure("command_undo_metadata_invalid")
+	else:
+		if expected_inverse.is_empty() or not _exact_keys(metadata, ["inverse_operation", "identity", "prior_override"]) or metadata.inverse_operation != expected_inverse or typeof(metadata.prior_override) != TYPE_DICTIONARY:
+			return _failure("command_undo_metadata_invalid")
+	var identity_result := validate_identity(metadata.identity, world_id, world_seed, generator)
+	if not identity_result.get("ok", false) or String(identity_result.instance_id) != entity_id:
+		return _failure("command_undo_metadata_invalid")
+	var normalized: Dictionary = {"inverse_operation": String(metadata.inverse_operation), "identity": identity_result.identity}
+	if operation != "ENTITY_PLACE":
+		var prior_override := _normalize_undo_override(metadata.prior_override, identity_result.identity)
+		if not prior_override.get("ok", false):
+			return _failure("command_undo_metadata_invalid")
+		normalized.prior_override = prior_override.value
+	return {"ok": true, "value": normalized}
+
+
+static func _normalize_undo_override(value: Variant, identity: Dictionary) -> Dictionary:
+	if typeof(value) != TYPE_DICTIONARY:
+		return {"ok": false}
+	if value.is_empty():
+		return {"ok": true, "value": {}}
+	if not _exact_keys(value, ["identity", "components"]) or typeof(value.identity) != TYPE_DICTIONARY or typeof(value.components) != TYPE_DICTIONARY or value.components.is_empty() or value.components.size() > 3:
+		return {"ok": false}
+	var prior_identity := validate_identity(value.identity, String(identity.world_id), int(identity.world_seed), int(identity.generator_version))
+	if not prior_identity.get("ok", false) or not identities_equal(prior_identity.identity, identity):
+		return {"ok": false}
+	var components: Dictionary = {}
+	for component_id in value.components:
+		var checked := normalize_component(String(component_id), value.components[component_id])
+		if not checked.get("ok", false):
+			return {"ok": false}
+		components[String(component_id)] = checked.value
+	return {"ok": true, "value": {"identity": prior_identity.identity, "components": components}}
+
+
+static func _region_for_mm(x_mm: int, z_mm: int) -> Vector2i:
+	var result: Dictionary = Spatial.world_to_region_local(Vector3(float(x_mm) / 1000.0, 0.0, float(z_mm) / 1000.0))
+	return result.region_key
 
 
 static func _is_hex(value: String) -> bool:
