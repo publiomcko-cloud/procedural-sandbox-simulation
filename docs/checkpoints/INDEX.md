@@ -6,6 +6,7 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-10-25 | [P3.1 lazy-reference identity correction](2026-10-25-P3-1-LAZY-REFERENCE-IDENTITY-CORRECTION.md) | Bound source references to world seed and generator version; full Godot validation 20,664/0 and V2 storage suite 2,782/0 | Draft PR #129; source review and owner GUI pending |
 | 2026-10-25 | [P3.1 Storage implementation](2026-10-25-P3-1-STORAGE-IMPLEMENTATION.md) | Separate schema-2 terrain store with 65,536-command quota, immutable ordered segments, verified spatial references, lazy replay and corruption-safe generation selection; full Godot validation 20,660/0 | Draft PR #129; source review and owner GUI pending |
 | 2026-10-25 | [P3.0D precise entity placement](2026-10-25-P3-0D-ENTITY-PLACEMENT.md) | Reproduced center-aim selection mismatch; added visible-pointer SDF placement, shared target marker, consistent millimeter/region ownership, and 51 focused assertions; full Godot validation 18,204/0 | Draft PR #124; independent source review and owner GUI retest pending |
 | 2026-10-25 | [P3.0C persistent entity undo/redo](2026-10-25-P3-0C-IMPLEMENTATION.md) | Schema-3 bounded history, transactional undo/redo, exact DELETE/F7 restoration and F9 baseline semantics; complete Godot validation 18,153/0 | Feature candidate on `feat/p3-0c-transactional-undo-redo`; draft PR pending; independent source review and owner GUI pending |
