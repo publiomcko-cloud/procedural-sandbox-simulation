@@ -1,3 +1,21 @@
+# Current implementation candidate — P3.1 Storage (2026-10-25)
+
+Verified `main` and required baseline: `5997a76d345f45bf86edfe83f690336391e8be27`. P3.1-Storage source HEAD `1438784d40567a787156afc12778cc30e27365e0` (parent `ad53055f0a63da2d8d79ff3efaea2358c27acdba`) is on `feat/p3-1-scalable-terrain-storage`, open draft PR #129. Full Godot 4.7.2 validation passed 20,660 assertions across 21 assertion-marker suites, zero failures. This is developer-run isolated headless evidence, not visual acceptance or independent review. The V2 suite passed 2,778/0. Three non-fatal camera target/up warnings in unchanged procedural-object tests were observed. Source review and owner GUI retest are pending; do not merge.
+
+The implementation introduces a separate schema-2 terrain namespace and segmented global command stream, with a verified reference index and lazy source-backed restore. SDF generator v1 and ordered CARVE/FILL semantics remain the evaluator contract. Schema-1 files remain untouched and are not imported. The new corruption behavior refuses a corrupt newer committed generation rather than silently loading an older saved state. Finite quotas are 65,536 operations, 128 operations/2 MiB per segment, 256 MiB total v2 directory and 2,000,000 spatial references. No lossy compaction, GC, cross-process lock, per-edit durability or power-loss guarantee is implemented. Issue #108 remains excluded.
+
+Exploratory local single-run metrics: 640 distributed operations: generation 20.975 ms, save 202.067 ms, verify/load 69.153 ms, LOD0 20.881 ms, LOD1 110.889 ms. 2,048 concentrated: generation 73.698 ms, static process-memory delta 4,260,068 bytes (not RSS/peak), save 638.134 ms, verify/load 180.677 ms, four-probe replay 374.712 ms, LOD0 560.192 ms, LOD1 1,959.425 ms. These are not acceptance thresholds. Raw validation log: `C:\Users\PUBLI\AppData\Local\Temp\p3-1-final-validation-1433ea3971a94553b92406be4f8dac14\validate.log`.
+
+Architecture remains separately proposed on draft PR #128; it was not changed. The P3.1 event checkpoint/spec are prepared on a separate docs-only branch/PR, not integrated. Preserve all five holds: CURRENT_PROTECTED_STATE_UNKNOWN, V3_NOT_ATTESTED, ACL_REVIEW_REQUIRED, G1_BLOCKED_ENVIRONMENT, F2_G1_RELEASE_HOLD.
+
+## P3.1 next gates
+
+1. Independent exact-SHA source review of PR #129.
+2. Owner GUI retest of v2 save/load across positive and negative boundaries and confirmation that any schema-1 save remains intact.
+3. Explicit review of finite quota exhaustion, retained-generation policy and single-writer assumption.
+4. No Issue #108 work until its separate architectural dependencies are resolved.
+
+---
 # Current implementation candidate — P3.0D (2026-10-25)
 
 ## Newer candidate — P3.0D Issue #123 (2026-10-25)
