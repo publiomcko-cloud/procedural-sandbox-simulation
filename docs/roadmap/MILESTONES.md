@@ -2,7 +2,7 @@
 
 ## 2026-10-25 — Issue #118 R1 optional-root API hardening
 
-Source `f0164b140009bb797951aa4085bb36001889bc57` on the existing Issue #118 branch enforces optional-root eligibility inside the loader. Only the exact canonical `user://mods` root can receive undeclared-child handling; caller-provided first-party, example, descendant and prefix roots are rejected. The pre-fix downgrade was reproduced on an isolated fixture. Focused and full Godot 4.7.2 validation passed 18,047 assertions/0 failures. PR #119 remains open/draft; independent R1 review, hosted checks and owner GUI retest remain pending. See [R1 checkpoint](../checkpoints/2026-10-25-ISSUE-118-OPTIONAL-ROOT-API-HARDENING.md). No merge or schema change is authorized; F2-G1 holds remain.
+Source `f0164b140009bb797951aa4085bb36001889bc57` on the existing Issue #118 branch enforces optional-root eligibility inside the loader. Only the exact canonical `user://mods` root can receive undeclared-child handling; caller-provided first-party, example, descendant and prefix roots are rejected. The pre-fix downgrade was reproduced on an isolated fixture. Focused and full Godot 4.7.2 validation passed 18,047 assertions/0 failures. PR #119 remains open/draft; exact-HEAD Starter checks pass (static only); independent R1 review and owner GUI retest remain pending. See [R1 checkpoint](../checkpoints/2026-10-25-ISSUE-118-OPTIONAL-ROOT-API-HARDENING.md). No merge or schema change is authorized; F2-G1 holds remain.
 
 ## 2026-10-25 — Issue #118 mod discovery correction candidate
 
