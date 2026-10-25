@@ -965,6 +965,48 @@ func _test_playable_scene_publication() -> void:
 		var deleted_id := String(center_records[1]["instance_id"])
 		_check(stream.delete_instance(deleted_id).get("ok", false) and stream.get_visible_instance_count() == center_records.size() - 1, "playable stream commits a logical deletion and removes the representative")
 		_check(stream.restore_instance(deleted_id).get("ok", false) and stream.get_visible_instance_count() == center_records.size(), "playable stream restores the procedural baseline for a deleted object")
+		# Exercise the P3B main-scene controls through real Viewport input routing.
+		_push_demo_key(demo, KEY_M)
+		_check(String(demo.get("_object_state_action_status")).contains("Migration preflight passed") and not stream.is_entity_command_ready(), "main-scene M input preflights without implicitly upgrading the legacy object save")
+		_push_demo_key(demo, KEY_M)
+		var migration_sync_completed := false
+		for _frame in range(240):
+			await process_frame
+			if stream.is_entity_command_ready():
+				migration_sync_completed = true
+				break
+		_check(migration_sync_completed and int(stream.state_service.snapshot.get("schema_version", 0)) == 2, "second main-scene M input explicitly commits the entity schema and waits for active regions to synchronize")
+		demo.set("orbit_target", Vector3(8.0, 10.0, 6.0))
+		demo.set("orbit_offset", Vector3(0.0, 20.0, 0.0))
+		demo.call("_update_camera")
+		var command_revision_before_b := stream.get_command_world_revision()
+		_push_demo_key(demo, KEY_B)
+		var viewport_placed_id := String(demo.get("_selected_object_id"))
+		await _wait_for_entity_presence(stream, viewport_placed_id, true)
+		_check(not viewport_placed_id.is_empty() and viewport_placed_id.contains("/placed/") and stream.get_command_world_revision() == command_revision_before_b + 1, "B viewport input places a persistent explicit entity at the center crosshair surface")
+		var viewport_placed_node := _find_stable_object_node(stream, viewport_placed_id)
+		if viewport_placed_node != null:
+			var click_point: Vector2 = demo.get("camera").unproject_position(viewport_placed_node.global_position + Vector3.UP * 0.5)
+			_push_demo_ctrl_click(demo, click_point)
+			_check(String(demo.get("_selected_object_id")) == viewport_placed_id, "Ctrl+left viewport event selects the placed entity through terrain-occlusion-aware picking")
+		_push_demo_key(demo, KEY_F6)
+		var input_selected_id := String(demo.get("_selected_object_id"))
+		_check(not input_selected_id.is_empty(), "F6 viewport input selects an entity for transactional commands")
+		var command_revision_before_f7 := stream.get_command_world_revision()
+		_push_demo_key(demo, KEY_F7)
+		_check(stream.get_command_world_revision() == command_revision_before_f7 + 2 and int(stream.state_service.get_entity_revision(input_selected_id)) == 2, "F7 routes transform and appearance changes through two revision-checked entity commands (status=%s world=%d->%d entity=%d)" % [String(demo.get("_object_state_action_status")), command_revision_before_f7, stream.get_command_world_revision(), int(stream.state_service.get_entity_revision(input_selected_id))])
+		var command_revision_before_delete := stream.get_command_world_revision()
+		_push_demo_key(demo, KEY_F8)
+		await _wait_for_entity_presence(stream, input_selected_id, false)
+		var visual_after_delete := stream.get_instance_ids()
+		_check(stream.get_command_world_revision() == command_revision_before_delete + 1 and stream.state_service.snapshot.get("deleted", {}).has(input_selected_id) and not visual_after_delete.has(input_selected_id), "F8 viewport input commits ENTITY_DELETE and removes only the selected visual identity (status=%s)" % String(demo.get("_object_state_action_status")))
+		var command_revision_after_delete := stream.get_command_world_revision()
+		_push_demo_key(demo, KEY_F8)
+		_check(stream.get_command_world_revision() == command_revision_after_delete and not stream.get_instance_ids().has(input_selected_id) and String(demo.get("_object_state_action_status")).contains("rejected"), "rejected repeated F8 command leaves the visual representation unchanged and reports its reason")
+		var command_revision_before_restore := stream.get_command_world_revision()
+		_push_demo_key(demo, KEY_F9)
+		await _wait_for_entity_presence(stream, input_selected_id, true)
+		_check(stream.get_command_world_revision() == command_revision_before_restore + 1 and not stream.state_service.snapshot.get("deleted", {}).has(input_selected_id) and stream.get_instance_ids().count(input_selected_id) == 1, "F9 viewport input restores the exact deleted entity without duplication (status=%s)" % String(demo.get("_object_state_action_status")))
 		stateful_records = stream.get_region_instance_records(Vector2i.ZERO)
 		var region_root_count := 0
 		for child in stream.get_children():
@@ -995,6 +1037,40 @@ func _test_playable_scene_publication() -> void:
 	for _frame in range(2):
 		await process_frame
 	_remove_tree(isolated_object_state)
+
+
+func _push_demo_key(demo: Node, key_code: int) -> void:
+	var event := InputEventKey.new()
+	event.keycode = key_code
+	event.physical_keycode = key_code
+	event.pressed = true
+	demo.get_viewport().push_input(event)
+	await process_frame
+
+
+func _push_demo_ctrl_click(demo: Node, position: Vector2) -> void:
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = true
+	event.ctrl_pressed = true
+	event.position = position
+	demo.get_viewport().push_input(event)
+	await process_frame
+
+
+func _wait_for_entity_presence(stream: ProceduralObjectStream, instance_id: String, expected_present: bool) -> void:
+	for _frame in range(60):
+		await process_frame
+		if stream.get_instance_ids().has(instance_id) == expected_present:
+			return
+
+
+func _find_stable_object_node(stream: ProceduralObjectStream, instance_id: String) -> Node3D:
+	for region_root in stream.get_children():
+		for child in region_root.get_children():
+			if child.get_meta("stable_instance_id", "") == instance_id:
+				return child
+	return null
 
 
 func _mesh_snapshots(manager: ProceduralObjectStream, region_key: Vector2i) -> Array:

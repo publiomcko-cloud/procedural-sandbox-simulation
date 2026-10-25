@@ -1,5 +1,9 @@
 # Roadmap with implementation gates
 
+## 2026-10-25 — P3.0B playable transactional entity integration candidate
+
+On branch `feat/p3-0b-playable-world-entity-commands`, source commit `6ce65bbe2f1a54bd1436416b5cb6102c75a09769` connects the P3.0A dispatcher to playable placement, selection, transform/appearance, logical delete and exact restore. It reuses P2.0B persistence and P0.3 definitions; schema-1 object snapshots require explicit two-step migration. Full Godot 4.7.2 validation passed 18,022 assertions with no failures. This remains a draft candidate pending independent source review and owner GUI retest; no merge is authorized. Cross-region object transform, issue #108 terrain conformation, physics/collision, networking, multiplayer, full undo/redo and native dependencies are excluded. See [spec](../specs/P3-0B-PLAYABLE-WORLD-ENTITY-INTEGRATION.md) and [checkpoint](../checkpoints/2026-10-25-P3-0B-IMPLEMENTATION.md).
+
 **Gating:** Each phase needs developer evidence, independent evaluator ACCEPT, and human visual acceptance if interactive. Numeric budgets are provisional until Phase 0 benchmarking. Order can be split into tickets but dependencies must hold.
 
 | Phase | Core deliverable | Representative acceptance gate |

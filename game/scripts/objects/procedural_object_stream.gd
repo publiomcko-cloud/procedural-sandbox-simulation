@@ -11,6 +11,8 @@ const StaticBatchBuilder := preload("res://scripts/objects/procedural_object_sta
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const FIELD := preload("res://scripts/terrain/sdf_world.gd")
 const StateServiceScript := preload("res://scripts/objects/procedural_object_state_service.gd")
+const StateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
+const EntityCommandServiceScript := preload("res://scripts/entities/entity_command_service.gd")
 const REQUIRED_MOD_IDS := ["firstparty.core_rocks", "official.example.procedural_rock"]
 const MAX_RESIDENT_REGIONS := 25
 const MAX_PENDING_REGION_PUBLICATIONS := 25
@@ -29,6 +31,7 @@ var _definition_ids: Array[String] = []
 var _mod_count := 0
 var _rock_material: StandardMaterial3D
 var state_service: RefCounted
+var entity_command_service: RefCounted
 var state_directory_override := ""
 var _expected_publication_tokens: Dictionary = {}
 var _published_publication_tokens: Dictionary = {}
@@ -44,6 +47,12 @@ var _peak_batch_build_usec := 0
 var _peak_publications_per_process_tick := 0
 var _publications_last_process_tick := 0
 var _total_published_instance_count := 0
+var _command_visual_pending: Dictionary = {}
+var _command_migration_sync_regions: Dictionary = {}
+var _last_command_visual_result: Dictionary = {}
+var _last_entity_command_metrics: Dictionary = {}
+var _last_reconstruction_usec := 0
+var debug_fail_next_visual_publication := false
 
 
 func initialize(seed_value: int, world_identifier: String, package_roots: Array[String] = [], object_state_directory: String = "") -> Dictionary:
@@ -57,6 +66,9 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_published_publication_tokens.clear()
 	_pending_region_publications.clear()
 	_pending_publication_order.clear()
+	_command_visual_pending.clear()
+	_command_migration_sync_regions.clear()
+	_last_command_visual_result.clear()
 	_geometry_mesh_cache.clear()
 	_geometry_mesh_cache_order.clear()
 	_population_rule_ids.clear()
@@ -94,6 +106,7 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	if not state_load.get("ok", false):
 		return _fail_initialize("object_state_unavailable:%s" % state_load.get("reason", "invalid"))
 	registry = candidate
+	_initialize_entity_command_service()
 	_mod_count = int(registration.get("mod_count", 0))
 	_definition_ids.clear()
 	_population_rule_ids.clear()
@@ -121,7 +134,7 @@ func expect_region_publication(region_key: Vector2i, publication_token: int) -> 
 			_pending_publication_order.erase(id)
 
 
-func enqueue_region_publication(region_key: Vector2i, state: RefCounted, publication_token: int = -1) -> Dictionary:
+func enqueue_region_publication(region_key: Vector2i, state: RefCounted, publication_token: int = -1, force_rebuild: bool = false) -> Dictionary:
 	var id := _region_id(region_key)
 	if not initialized:
 		return _record_region_failure(id, "object_stream_not_initialized")
@@ -130,11 +143,11 @@ func enqueue_region_publication(region_key: Vector2i, state: RefCounted, publica
 	if _expected_publication_tokens.has(id) and publication_token != int(_expected_publication_tokens[id]):
 		return _failure("stale_object_region_publication")
 	if _pending_region_publications.has(id):
-		_pending_region_publications[id] = {"region_key": region_key, "world_state": state, "publication_token": publication_token}
+		_pending_region_publications[id] = {"region_key": region_key, "world_state": state, "publication_token": publication_token, "force_rebuild": force_rebuild}
 		return {"ok": true, "reason": "queued_replaced", "queue_depth": _pending_region_publications.size()}
 	if _pending_region_publications.size() >= MAX_PENDING_REGION_PUBLICATIONS:
 		return _record_region_failure(id, "object_publication_queue_full")
-	_pending_region_publications[id] = {"region_key": region_key, "world_state": state, "publication_token": publication_token}
+	_pending_region_publications[id] = {"region_key": region_key, "world_state": state, "publication_token": publication_token, "force_rebuild": force_rebuild}
 	_pending_publication_order.append(id)
 	_region_errors.erase(id)
 	return {"ok": true, "reason": "queued", "queue_depth": _pending_region_publications.size()}
@@ -148,10 +161,22 @@ func process_queued_publications() -> int:
 			continue
 		var request: Dictionary = _pending_region_publications[id]
 		_pending_region_publications.erase(id)
-		var result := publish_region(request["region_key"], request["world_state"], false, int(request["publication_token"]))
+		var result := publish_region(request["region_key"], request["world_state"], bool(request.get("force_rebuild", false)), int(request["publication_token"]))
 		_publications_last_process_tick += 1
 		if not result.get("ok", false) and result.get("reason", "") != "stale_object_region_publication":
 			_region_errors[id] = String(result.get("reason", "object_region_publication_failed"))
+		if _command_visual_pending.has(id):
+			var pending_visual: Dictionary = _command_visual_pending[id]
+			_last_command_visual_result = {
+				"entity_id": String(pending_visual.get("entity_id", "")),
+				"operation": String(pending_visual.get("operation", "")),
+				"world_revision": int(pending_visual.get("world_revision", -1)),
+				"ok": bool(result.get("ok", false)),
+				"reason": String(result.get("reason", "publication_failed")),
+			}
+			_command_visual_pending.erase(id)
+		if _command_migration_sync_regions.has(id) and result.get("ok", false):
+			_command_migration_sync_regions.erase(id)
 	_peak_publications_per_process_tick = maxi(_peak_publications_per_process_tick, _publications_last_process_tick)
 	return _publications_last_process_tick
 
@@ -176,17 +201,35 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 		if not state_load.get("ok", false):
 			return _record_region_failure(id, "object_state_unavailable:%s" % state_load.get("reason", "invalid"))
 		world_seed = region_world_seed
+		_initialize_entity_command_service()
 	if not _regions.has(id) and _regions.size() >= MAX_RESIDENT_REGIONS:
 		return _record_region_failure(id, "object_resident_region_budget_exceeded")
 	if not force_rebuild and _regions.has(id) and int(_regions[id]["world_seed"]) == region_world_seed and _regions[id].get("world_state") == state:
 		if publication_token >= 0:
 			_published_publication_tokens[id] = publication_token
 		return {"ok": true, "reason": "already_published", "instance_count": _regions[id]["instances"].size()}
-	var generated: Dictionary = ObjectWorld.build_region_instances(region_world_seed, world_id, region_key, registry)
-	if not generated.get("ok", false):
-		return _record_region_failure(id, String(generated.get("reason", "object_generation_failed")))
+	var base_instances: Array[Dictionary] = []
+	var generation_usec := 0
+	var candidate_cell_count := 0
+	var surface_anchor_count := 0
+	if entity_command_service != null and bool(entity_command_service.get("initialized")):
+		var reconstruction: Dictionary = entity_command_service.reconstruct_region(region_key)
+		if not reconstruction.get("ok", false):
+			return _record_region_failure(id, String(reconstruction.get("reason", "entity_region_reconstruction_failed")))
+		base_instances = entity_command_service.get_region_base_instances(region_key)
+		_last_reconstruction_usec = int(reconstruction.get("reconstruction_usec", 0))
+		generation_usec = _last_reconstruction_usec
+		candidate_cell_count = int(reconstruction.get("candidate_cell_count", 0))
+		surface_anchor_count = int(reconstruction.get("surface_anchor_count", 0))
+	else:
+		var generated: Dictionary = ObjectWorld.build_region_instances(region_world_seed, world_id, region_key, registry)
+		if not generated.get("ok", false):
+			return _record_region_failure(id, String(generated.get("reason", "object_generation_failed")))
+		base_instances = generated["instances"]
+		generation_usec = int(generated.get("timings_usec", {}).get("total", 0))
+		candidate_cell_count = int(generated.get("candidate_cell_count", 0))
+		surface_anchor_count = int(generated.get("surface_anchor_count", 0))
 	var pending_nodes: Array[Node3D] = []
-	var base_instances: Array[Dictionary] = generated["instances"]
 	var instances: Array[Dictionary] = []
 	var batch_items: Array[Dictionary] = []
 	var mesh_build_started_usec := Time.get_ticks_usec()
@@ -212,6 +255,7 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 				"position": Vector3(instance["position_mm"]) / 1000.0,
 				"scale_milli": instance.get("default_scale_milli", Vector3i(1000, 1000, 1000)),
 				"yaw_mdeg": int(instance.get("default_yaw_mdeg", 0)),
+				"selection_record": _build_selection_record(instance),
 			})
 			continue
 		var object_node := Node3D.new()
@@ -247,6 +291,10 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 		batch_node.name = "StaticPopulationBatch"
 		batch_node.set_meta("stable_instance_ids", batch_result["instance_ids"])
 		batch_node.set_meta("population_batch_version", 1)
+		var selection_records: Array[Dictionary] = []
+		for batch_item in batch_items:
+			selection_records.append(batch_item["selection_record"])
+		batch_node.set_meta("selection_records", selection_records)
 		var batch_mesh_instance := MeshInstance3D.new()
 		batch_mesh_instance.mesh = batch_result["mesh"]
 		batch_mesh_instance.material_override = _rock_material
@@ -254,6 +302,13 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 		region_root.add_child(batch_node)
 	for object_node in pending_nodes:
 		region_root.add_child(object_node)
+	if debug_fail_next_visual_publication:
+		debug_fail_next_visual_publication = false
+		region_root.free()
+		for pending_node in pending_nodes:
+			if is_instance_valid(pending_node) and pending_node.get_parent() == null:
+				pending_node.free()
+		return _record_region_failure(id, "debug_visual_publication_failure")
 	if _regions.has(id):
 		var previous_root: Node3D = _regions[id]["root"]
 		if is_instance_valid(previous_root):
@@ -261,7 +316,7 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 			previous_root.free()
 	_regions.erase(id)
 	add_child(region_root)
-	_regions[id] = {"root": region_root, "instances": instances, "base_instances": base_instances, "world_state": state, "world_seed": region_world_seed}
+	_regions[id] = {"root": region_root, "region_key": region_key, "instances": instances, "base_instances": base_instances, "world_state": state, "world_seed": region_world_seed}
 	_total_published_instance_count += instances.size()
 	var batch_elapsed_usec := Time.get_ticks_usec() - batch_started_usec
 	_last_region_metrics = {
@@ -269,9 +324,10 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 		"instance_count": instances.size(),
 		"batched_instance_count": batch_items.size(),
 		"individual_node_count": pending_nodes.size(),
-		"candidate_cell_count": int(generated.get("candidate_cell_count", 0)),
-		"surface_anchor_count": int(generated.get("surface_anchor_count", 0)),
-		"generation_usec": int(generated.get("timings_usec", {}).get("total", 0)),
+		"candidate_cell_count": candidate_cell_count,
+		"surface_anchor_count": surface_anchor_count,
+		"generation_usec": generation_usec,
+		"logical_reconstruction_usec": _last_reconstruction_usec,
 		"mesh_build_usec": mesh_build_elapsed_usec,
 		"batch_build_usec": batch_elapsed_usec,
 		"publication_usec": Time.get_ticks_usec() - publication_started_usec,
@@ -297,6 +353,257 @@ func get_instance_ids() -> Array[String]:
 
 func get_instance_state_revision() -> int:
 	return int(state_service.get_revision()) if state_service != null and state_service.initialized else 0
+
+
+func get_entity_command_service() -> RefCounted:
+	return entity_command_service
+
+
+func get_command_world_revision() -> int:
+	return int(state_service.get_revision()) if state_service != null and state_service.initialized else 0
+
+
+func is_entity_command_ready() -> bool:
+	return entity_command_service != null and bool(entity_command_service.get("initialized")) and _command_migration_sync_regions.is_empty()
+
+
+func get_command_migration_preflight() -> Dictionary:
+	if state_service == null or not bool(state_service.get("initialized")):
+		return _failure("object_state_service_not_initialized")
+	return state_service.preflight_command_snapshot_upgrade()
+
+
+func migrate_command_snapshot_explicitly() -> Dictionary:
+	var preflight := get_command_migration_preflight()
+	if not preflight.get("ok", false):
+		return preflight
+	var migrated: Dictionary = state_service.upgrade_command_snapshot_schema()
+	if not migrated.get("ok", false):
+		entity_command_service = null
+		return migrated
+	_initialize_entity_command_service()
+	if entity_command_service == null or not bool(entity_command_service.get("initialized")):
+		return {"ok": false, "reason": "command_service_initialization_failed_after_migration", "committed": true, "generation": int(migrated.get("generation", -1))}
+	_command_migration_sync_regions.clear()
+	for id_value in _regions.keys():
+		_command_migration_sync_regions[String(id_value)] = true
+	var queued_result := retry_command_migration_region_publications()
+	queued_result["revision"] = int(migrated.get("revision", 0))
+	queued_result["generation"] = int(migrated.get("generation", 0))
+	queued_result["backup_generation"] = int(migrated.get("backup_generation", 0))
+	queued_result["source_payload_sha256"] = String(migrated.get("source_payload_sha256", ""))
+	return queued_result
+
+
+func retry_command_migration_region_publications() -> Dictionary:
+	if entity_command_service == null or not bool(entity_command_service.get("initialized")):
+		return _failure("command_snapshot_migration_required")
+	var queued_count := 0
+	for id_value in _command_migration_sync_regions.keys().duplicate():
+		var id := String(id_value)
+		if not _regions.has(id):
+			_command_migration_sync_regions.erase(id)
+			continue
+		if _pending_region_publications.has(id):
+			continue
+		var entry: Dictionary = _regions[id]
+		var queued := enqueue_region_publication(entry["region_key"], entry["world_state"], int(_published_publication_tokens.get(id, -1)), true)
+		if not queued.get("ok", false):
+			return {"ok": false, "committed": true, "reason": "migration_committed_visual_queue_failed:%s" % queued.get("reason", "unknown"), "queued_regions": queued_count, "remaining_regions": _command_migration_sync_regions.size(), "generation": int(state_service.get("storage_generation"))}
+		queued_count += 1
+	return {"ok": true, "reason": "schema_upgraded_explicitly", "committed": true, "revision": int(state_service.get_revision()), "generation": int(state_service.get("storage_generation")), "queued_regions": queued_count, "remaining_regions": _command_migration_sync_regions.size()}
+
+
+func dispatch_entity_command(command: Dictionary) -> Dictionary:
+	var started_usec := Time.get_ticks_usec()
+	if entity_command_service == null or not bool(entity_command_service.get("initialized")):
+		return _failure("command_snapshot_migration_required")
+	if not _command_migration_sync_regions.is_empty():
+		return _failure("command_region_rebuild_pending")
+	var operation := String(command.get("operation", ""))
+	var entity_id := String(command.get("entity_id", ""))
+	var temporary_reconstruction := false
+	var temporary_region := Vector2i.ZERO
+	if operation == "ENTITY_RESTORE":
+		var located: Dictionary = entity_command_service.get_entity_region(entity_id)
+		if not located.get("ok", false):
+			var identity: Dictionary = state_service.get_deleted_identity(entity_id)
+			if identity.is_empty():
+				var placed: Dictionary = state_service.snapshot.get("placed_entities", {}).get(entity_id, {})
+				identity = placed.get("identity", {})
+			if identity.is_empty() or typeof(identity.get("region_key", null)) != TYPE_ARRAY or identity.region_key.size() != 2:
+				return _failure("restore_identity_unavailable")
+			var values: Array = identity.region_key
+			temporary_region = Vector2i(int(values[0]), int(values[1]))
+			var rebuilt: Dictionary = entity_command_service.reconstruct_region(temporary_region)
+			if not rebuilt.get("ok", false):
+				return _failure(String(rebuilt.get("reason", "restore_region_reconstruction_failed")))
+			temporary_reconstruction = not _regions.has(_region_id(temporary_region))
+	elif operation != "ENTITY_PLACE":
+		if not entity_command_service.get_entity_region(entity_id).get("ok", false):
+			return _failure("entity_not_reconstructed_or_content_missing")
+	if operation == "ENTITY_PLACE":
+		var place_region_values: Array = command.get("region_key", [])
+		if place_region_values.size() != 2:
+			return _failure("place_region_invalid")
+		var place_region := Vector2i(int(place_region_values[0]), int(place_region_values[1]))
+		if not _regions.has(_region_id(place_region)):
+			return _failure("place_region_not_published")
+	var affected_region := Vector2i.ZERO
+	if operation == "ENTITY_PLACE":
+		var placed_result: Dictionary = entity_command_service.dispatch(command)
+		if not placed_result.get("ok", false):
+			return placed_result
+		entity_id = String(placed_result.get("entity_id", ""))
+		var placed_location: Dictionary = entity_command_service.get_entity_region(entity_id)
+		if not placed_location.get("ok", false):
+			return {"ok": true, "committed": true, "reason": "committed_but_identity_cache_missing", "entity_id": entity_id, "world_revision": int(placed_result.get("world_revision", -1)), "entity_revision": int(placed_result.get("entity_revision", -1))}
+		affected_region = Vector2i(placed_location.region_key)
+		return _queue_committed_visual_update(placed_result, affected_region, started_usec)
+	var old_location: Dictionary = entity_command_service.get_entity_region(entity_id)
+	if old_location.get("ok", false):
+		affected_region = Vector2i(old_location.region_key)
+	var result: Dictionary = entity_command_service.dispatch(command)
+	if not result.get("ok", false):
+		if temporary_reconstruction:
+			entity_command_service.release_region(temporary_region)
+		return result
+	var new_location: Dictionary = entity_command_service.get_entity_region(entity_id)
+	if new_location.get("ok", false):
+		affected_region = Vector2i(new_location.region_key)
+	if temporary_reconstruction and not _regions.has(_region_id(temporary_region)):
+		entity_command_service.release_region(temporary_region)
+	return _queue_committed_visual_update(result, affected_region, started_usec)
+
+
+func _queue_committed_visual_update(result: Dictionary, region_key: Vector2i, started_usec: int) -> Dictionary:
+	var output: Dictionary = result.duplicate(true)
+	output["committed"] = true
+	var timings: Dictionary = output.get("timings_usec", {}).duplicate(true)
+	timings["visual_queue_usec"] = 0
+	timings["command_total_usec"] = Time.get_ticks_usec() - started_usec
+	output["timings_usec"] = timings
+	var region_id := _region_id(region_key)
+	if not _regions.has(region_id):
+		output["visual_status"] = "not_resident_rebuild_on_next_load"
+		_last_entity_command_metrics = timings.duplicate(true)
+		return output
+	var enqueue_started_usec := Time.get_ticks_usec()
+	var entry: Dictionary = _regions[region_id]
+	var token := int(_published_publication_tokens.get(region_id, -1))
+	var queued := enqueue_region_publication(region_key, entry["world_state"], token, true)
+	timings["visual_queue_usec"] = Time.get_ticks_usec() - enqueue_started_usec
+	output["timings_usec"] = timings
+	_last_entity_command_metrics = timings.duplicate(true)
+	if not queued.get("ok", false):
+		output["reason"] = "committed_visual_update_queue_failed:%s" % queued.get("reason", "unknown")
+		output["visual_status"] = "failed"
+		_last_command_visual_result = {"entity_id": String(output.get("entity_id", "")), "operation": String(output.get("operation", "")), "world_revision": int(output.get("world_revision", -1)), "ok": false, "reason": String(output["reason"])}
+		return output
+	_command_visual_pending[region_id] = {"entity_id": String(output.get("entity_id", "")), "operation": String(output.get("operation", "")), "world_revision": int(output.get("world_revision", -1))}
+	output["visual_status"] = "queued"
+	return output
+
+
+func consume_last_command_visual_result() -> Dictionary:
+	var result := _last_command_visual_result.duplicate(true)
+	_last_command_visual_result.clear()
+	return result
+
+
+func get_last_entity_command_metrics() -> Dictionary:
+	return _last_entity_command_metrics.duplicate(true)
+
+
+func get_deleted_instance_ids() -> Array[String]:
+	var result: Array[String] = []
+	if state_service == null:
+		return result
+	for entity_id in state_service.snapshot.get("deleted", {}):
+		result.append(String(entity_id))
+	result.sort()
+	return result
+
+
+func get_latest_deleted_instance_id() -> String:
+	if state_service == null:
+		return ""
+	var deleted: Dictionary = state_service.snapshot.get("deleted", {})
+	var receipts: Dictionary = state_service.snapshot.get("command_receipts", {})
+	var selected_id := ""
+	var latest_revision := -1
+	for command_id in receipts:
+		var receipt: Dictionary = receipts[command_id]
+		var candidate_id := String(receipt.get("entity_id", ""))
+		if String(receipt.get("operation", "")) == "ENTITY_DELETE" and deleted.has(candidate_id) and int(receipt.get("world_revision", -1)) > latest_revision:
+			latest_revision = int(receipt.world_revision)
+			selected_id = candidate_id
+	if selected_id.is_empty() and not deleted.is_empty():
+		var ids: Array[String] = []
+		for entity_id in deleted:
+			ids.append(String(entity_id))
+		ids.sort()
+		selected_id = ids.back()
+	return selected_id
+
+
+func get_entity_summary(instance_id: String) -> Dictionary:
+	if state_service == null or instance_id.is_empty():
+		return _failure("entity_not_found")
+	for entry in _regions.values():
+		for base_instance in entry.get("base_instances", []):
+			if String(base_instance.get("instance_id", "")) != instance_id:
+				continue
+			var identity: Dictionary = StateContract.identity_for_instance(base_instance)
+			var resolved: Dictionary = state_service.resolve_instance(base_instance)
+			if not resolved.get("ok", false):
+				return _failure(String(resolved.get("reason", "entity_state_resolution_failed")))
+			return {"ok": true, "entity_id": instance_id, "identity": identity, "definition_id": String(base_instance.get("definition_id", "")), "identity_kind": String(identity.get("identity_kind", "procedural")), "deleted": bool(resolved.get("deleted", false)), "world_revision": int(state_service.get_revision()), "entity_revision": int(state_service.get_entity_revision(instance_id)), "region_key": Vector2i(base_instance.get("region_key", Vector2i.ZERO))}
+	var deleted_identity: Dictionary = state_service.get_deleted_identity(instance_id)
+	if not deleted_identity.is_empty():
+		var key: Array = deleted_identity.get("region_key", [0, 0])
+		return {"ok": true, "entity_id": instance_id, "identity": deleted_identity, "definition_id": String(deleted_identity.get("definition_id", "")), "identity_kind": String(deleted_identity.get("identity_kind", "procedural")), "deleted": true, "world_revision": int(state_service.get_revision()), "entity_revision": int(state_service.get_entity_revision(instance_id)), "region_key": Vector2i(int(key[0]), int(key[1]))}
+	return _failure("entity_not_found")
+
+
+func has_published_region(region_key: Vector2i) -> bool:
+	return _regions.has(_region_id(region_key))
+
+
+func find_instance_along_ray(ray_origin: Vector3, ray_direction: Vector3, max_distance: float = 120.0) -> Dictionary:
+	if not ray_origin.is_finite() or not ray_direction.is_finite() or ray_direction.length_squared() < 0.000001 or not objects_visible:
+		return _failure("selection_ray_invalid")
+	var direction := ray_direction.normalized()
+	var best_distance := max_distance
+	var best: Dictionary = {}
+	for entry in _regions.values():
+		var region_key: Vector2i = entry["region_key"]
+		var region_origin: Vector3 = Spatial.region_origin_world(region_key)
+		for instance in entry.get("instances", []):
+			var position_mm: Vector3i = instance.get("position_mm", Vector3i.ZERO)
+			var geometry: Dictionary = instance.get("geometry", {})
+			var components: Dictionary = instance.get("instance_components", {})
+			var transform: Dictionary = components.get(StateContract.COMPONENT_TRANSFORM, {})
+			var properties: Dictionary = transform.get("properties", {})
+			var translation: Array = properties.get("translation_mm", [0, 0, 0])
+			var scale_values: Array = properties.get("scale_milli", [1000, 1000, 1000])
+			var default_scale: Vector3i = instance.get("default_scale_milli", Vector3i(1000, 1000, 1000))
+			var scale := Vector3(default_scale) if transform.is_empty() else Vector3(float(scale_values[0]), float(scale_values[1]), float(scale_values[2]))
+			var delta := Vector3.ZERO if transform.is_empty() else Vector3(float(translation[0]), float(translation[1]), float(translation[2])) / 1000.0
+			var half_extents := Vector3(float(geometry.get("half_extent_x_mm", 600)), float(geometry.get("half_extent_y_mm", 600)), float(geometry.get("half_extent_z_mm", 600))) / 1000.0
+			var center := region_origin + Vector3(position_mm) / 1000.0 + delta + Vector3(0.0, half_extents.y * scale.y / 1000.0, 0.0)
+			var radius := (half_extents * scale / 1000.0).length()
+			var along := (center - ray_origin).dot(direction)
+			if along < 0.0 or along > max_distance:
+				continue
+			var perpendicular_squared := (center - (ray_origin + direction * along)).length_squared()
+			if perpendicular_squared > radius * radius:
+				continue
+			var hit_distance := maxf(0.0, along - sqrt(maxf(0.0, radius * radius - perpendicular_squared)))
+			if hit_distance < best_distance:
+				best_distance = hit_distance
+				best = {"ok": true, "entity_id": String(instance.get("instance_id", "")), "distance": hit_distance, "region_key": region_key, "batched": bool(instance.get("population_batched", false)) and components.is_empty()}
+	return best if not best.is_empty() else _failure("selection_no_entity_hit")
 
 
 func set_instance_component(instance_id: String, component_id: String, value: Dictionary) -> Dictionary:
@@ -411,6 +718,10 @@ func unload_region(region_key: Vector2i) -> void:
 	_region_errors.erase(id)
 	_pending_region_publications.erase(id)
 	_pending_publication_order.erase(id)
+	_command_visual_pending.erase(id)
+	_command_migration_sync_regions.erase(id)
+	if entity_command_service != null and bool(entity_command_service.get("initialized")):
+		entity_command_service.release_region(region_key)
 	if not _regions.has(id):
 		return
 	var region_root: Node3D = _regions[id]["root"]
@@ -445,6 +756,20 @@ func get_region_instance_records(region_key: Vector2i) -> Array[Dictionary]:
 	for instance in entry.get("instances", []):
 		result.append(instance.duplicate(true))
 	return result
+
+
+func _build_selection_record(instance: Dictionary) -> Dictionary:
+	var geometry: Dictionary = instance.get("geometry", {})
+	var extents := Vector3(float(geometry.get("half_extent_x_mm", 600)), float(geometry.get("half_extent_y_mm", 600)), float(geometry.get("half_extent_z_mm", 600))) / 1000.0
+	var scale_milli: Vector3i = instance.get("default_scale_milli", Vector3i(1000, 1000, 1000))
+	var position: Vector3 = Vector3(instance.get("position_mm", Vector3i.ZERO)) / 1000.0
+	return {
+		"entity_id": String(instance.get("instance_id", "")),
+		"definition_id": String(instance.get("definition_id", "")),
+		"identity_kind": String(instance.get("entity_identity", {}).get("identity_kind", "procedural")),
+		"center_local": position + Vector3(0.0, extents.y * float(scale_milli.y) / 1000.0, 0.0),
+		"radius": (extents * Vector3(scale_milli) / 1000.0).length(),
+	}
 
 
 func get_definition_ids() -> Array[String]:
@@ -521,6 +846,18 @@ func _initialize_state_service(seed_value: int) -> Dictionary:
 		return loaded
 	state_service = candidate
 	return loaded
+
+
+func _initialize_entity_command_service() -> void:
+	entity_command_service = null
+	if state_service == null or registry == null or not bool(state_service.get("initialized")):
+		return
+	if int(state_service.snapshot.get("schema_version", 0)) != StateContract.COMMAND_SNAPSHOT_SCHEMA_VERSION:
+		return
+	var candidate: RefCounted = EntityCommandServiceScript.new()
+	var initialized_result: Dictionary = candidate.initialize(state_service, registry)
+	if initialized_result.get("ok", false):
+		entity_command_service = candidate
 
 
 func _fail_initialize(reason: String) -> Dictionary:
