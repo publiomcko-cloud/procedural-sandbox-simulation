@@ -1,6 +1,6 @@
 # Issue #108 — Terrain / procedural rock contact architecture (design brief)
 
-Status: DRAFT DESIGN, implementation and migration NOT AUTHORIZED by this document. Baseline main: `5997a76d345f45bf86edfe83f690336391e8be27`. Source issue: [#108](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/108).
+Status: DRAFT DESIGN, implementation and migration NOT AUTHORIZED by this document. Owner accepted the universal persistent excavation *design direction* on 2026-10-25, not any implementation. See [proposed ADR-0007](../decisions/ADR-0007-PERSISTENT-TERRAIN-OBJECT-IMPRINTS-PROPOSAL.md). Baseline main: `5997a76d345f45bf86edfe83f690336391e8be27`. Source issue: [#108](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/108).
 
 ## Verified present behavior
 
@@ -17,3 +17,7 @@ P3.0D places a rock using the SDF surface hit, a persisted millimeter-quantized 
 ## Completion gate
 
 Author an ADR with tradeoff table, selected model, hazards, alternatives rejected and test matrix before attempting implementation. A design PR must remain draft pending independent source/architecture review and owner decision. Owner test on rendered GUI required before implementation integration. Preserve Issue #123 completion, open docs PRs #115/#117/#120/#122/#125, local stashes/untracked files, and five F2-G1 holds.
+
+## Superseding owner requirements (2026-10-25)
+
+Terrain displacement by intersecting solid mod objects is intended as the default for subsequent compatible mods. Imprints persist after deletion, unload, and uninstall; later excavation does not move the object until future physics; FILL/CARVE chronology must be specified. This **rules out purely transient object-presence-derived contact cuts** as the authority. A versioned permanent terrain event/ledger and recoverable cross-store transaction protocol are prerequisites. The exact policies for Undo PLACE and F7 moves, world migration, volume certification, and automatic procedural population require an explicit design decision before production work. See ADR-0007.
