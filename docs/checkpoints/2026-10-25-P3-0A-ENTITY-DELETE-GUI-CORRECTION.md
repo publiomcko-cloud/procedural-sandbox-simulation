@@ -1,12 +1,12 @@
 # P3.0A — ENTITY_DELETE owner-GUI failure correction
 
-**Event:** owner GUI failure, reproduction and bounded correction candidate  
-**Date:** 2026-10-25  
-**Repository:** `publiomcko-cloud/procedural-sandbox-simulation`  
-**Workspace:** `C:\Dev\sandbox-sim-dev`  
-**Branch / PR:** `feat/p3-0a-entity-command-contract`, draft PR [#114](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/114)  
-**Verified main/base:** `b874991bb0f2cc698e41dd8709f3b0325d73c855`  
-**Failure source:** `c8a91eb387f037beb7c8db7670aed4186d37c496`  
+**Event:** owner GUI failure, reproduction and bounded correction candidate
+**Date:** 2026-10-25
+**Repository:** `publiomcko-cloud/procedural-sandbox-simulation`
+**Workspace:** `C:\Dev\sandbox-sim-dev`
+**Branch / PR:** `feat/p3-0a-entity-command-contract`, draft PR [#114](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/114)
+**Verified main/base:** `b874991bb0f2cc698e41dd8709f3b0325d73c855`
+**Failure source:** `c8a91eb387f037beb7c8db7670aed4186d37c496`
 **Correction source:** `3da4bc6f7272ed838da7438c43312227e32ae59e` (direct parent `c8a91eb387f037beb7c8db7670aed4186d37c496`)
 
 ## Reported failure and reproduction
