@@ -10,6 +10,7 @@ const BrushPicker := preload("res://scripts/terrain/terrain_brush_picker.gd")
 const TerrainMeshJob := preload("res://scripts/terrain/terrain_mesh_job.gd")
 const TerrainLodPolicy := preload("res://scripts/terrain/terrain_lod_policy.gd")
 const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
+const EntityStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -213,7 +214,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		orbit_offset.y = clampf(orbit_offset.y - event.relative.y * 0.05, 2.0, 36.0)
 		_update_camera()
 	elif event is InputEventKey and event.pressed and not event.echo:
-		if _event_matches_key(event, KEY_C):
+		if event.ctrl_pressed and _event_matches_key(event, KEY_Z):
+			if event.shift_pressed:
+				_handle_entity_history_navigation("ENTITY_REDO")
+			else:
+				_handle_entity_history_navigation("ENTITY_UNDO")
+		elif event.ctrl_pressed and _event_matches_key(event, KEY_Y):
+			_handle_entity_history_navigation("ENTITY_REDO")
+		elif _event_matches_key(event, KEY_C):
 			cave_section_enabled = not cave_section_enabled
 			_start_global_rebuild("cave_section")
 		elif _event_matches_key(event, KEY_R):
@@ -368,13 +376,13 @@ func _place_entity_under_crosshair() -> void:
 
 func _handle_entity_schema_migration() -> void:
 	var current_schema := int(object_stream.state_service.snapshot.get("schema_version", 0)) if object_stream.state_service != null else 0
-	if current_schema >= 2:
+	if current_schema >= EntityStateContract.HISTORY_SNAPSHOT_SCHEMA_VERSION:
 		_entity_migration_confirmation_deadline_msec = 0
 		if object_stream.is_entity_command_ready():
-			_object_state_action_status = "Entity command schema is ready (schema 2)"
+			_object_state_action_status = "Entity command/history schema is ready (schema 3)"
 		else:
 			var retry: Dictionary = object_stream.retry_command_migration_region_publications()
-			_object_state_action_status = "Entity schema 2 committed; region representations rebuilding (%d queued, %d pending): %s" % [int(retry.get("queued_regions", 0)), int(retry.get("remaining_regions", 0)), retry.get("reason", "retry")]
+			_object_state_action_status = "Entity schema 3 committed; region representations rebuilding (%d queued, %d pending): %s" % [int(retry.get("queued_regions", 0)), int(retry.get("remaining_regions", 0)), retry.get("reason", "retry")]
 		return
 	var now := Time.get_ticks_msec()
 	if _entity_migration_confirmation_deadline_msec > 0 and now <= _entity_migration_confirmation_deadline_msec:
@@ -383,7 +391,7 @@ func _handle_entity_schema_migration() -> void:
 		if not migration.get("ok", false):
 			_object_state_action_status = "Entity schema migration failed%s: %s" % [" after commit" if migration.get("committed", false) else "", migration.get("reason", "unknown")]
 			return
-		_object_state_action_status = "Entity schema migrated explicitly; generation %d (previous generation %d retained); %d region representation(s) rebuilding; hash %s" % [int(migration.get("generation", -1)), int(migration.get("backup_generation", 0)), int(migration.get("remaining_regions", 0)), String(migration.get("source_payload_sha256", "")).substr(0, 12)]
+		_object_state_action_status = "Entity/history schema migrated explicitly; generation %d (previous generation %d retained); %d region representation(s) rebuilding; %d older receipt(s) preserved but not undoable; hash %s" % [int(migration.get("generation", -1)), int(migration.get("backup_generation", 0)), int(migration.get("remaining_regions", 0)), int(migration.get("preserved_receipt_count", 0)), String(migration.get("source_payload_sha256", "")).substr(0, 12)]
 		return
 	var preflight: Dictionary = object_stream.get_command_migration_preflight()
 	if not preflight.get("ok", false):
@@ -394,7 +402,28 @@ func _handle_entity_schema_migration() -> void:
 		object_stream.migrate_command_snapshot_explicitly()
 		return
 	_entity_migration_confirmation_deadline_msec = now + 6000
-	_object_state_action_status = "Migration preflight passed: schema %d to %d, generation %d, revision %d; press M again within 6 s to commit" % [int(preflight.get("source_schema", -1)), int(preflight.get("target_schema", -1)), int(preflight.get("source_generation", 0)), int(preflight.get("revision", -1))]
+	_object_state_action_status = "History migration preflight passed: schema %d to %d, generation %d, revision %d; %d old receipt(s) preserved, prior commands are not in the new undo history; press M again within 6 s to commit" % [int(preflight.get("source_schema", -1)), int(preflight.get("target_schema", -1)), int(preflight.get("source_generation", 0)), int(preflight.get("revision", -1)), int(preflight.get("preserved_receipt_count", 0))]
+
+
+func _handle_entity_history_navigation(operation: String) -> void:
+	if not object_stream.is_entity_command_ready():
+		_object_state_action_status = "%s rejected: history schema migration or resident-region rebuild is pending" % operation
+		return
+	var command_service: RefCounted = object_stream.get_entity_command_service()
+	var summary: Dictionary = command_service.get_history_summary()
+	var target: Dictionary = summary.get("undo" if operation == "ENTITY_UNDO" else "redo", {})
+	if target.is_empty():
+		_object_state_action_status = "%s rejected: no %s operation is available (history %d/%d)" % [operation, "applied" if operation == "ENTITY_UNDO" else "undone", int(summary.get("cursor", 0)), int(summary.get("depth", 0))]
+		return
+	var entity_id := String(target.get("entity_id", ""))
+	var command := _entity_command_base(operation, _new_entity_command_id(), entity_id)
+	command["history_entry_id"] = String(target.get("history_entry_id", ""))
+	var result: Dictionary = object_stream.dispatch_entity_command(command)
+	if not result.get("ok", false):
+		_object_state_action_status = "%s rejected: %s" % [operation, result.get("reason", "unknown")]
+		return
+	_selected_object_id = entity_id
+	_object_state_action_status = "%s committed for %s at world/entity revisions %d/%d; history %d/%d; visual %s" % [operation, entity_id, int(result.get("world_revision", -1)), int(result.get("entity_revision", -1)), int(result.get("history_cursor", 0)), int(result.get("history_depth", 0)), result.get("visual_status", "unknown")]
 
 
 func _dispatch_entity_component(entity_id: String, component_id: String, component: Dictionary) -> Dictionary:
@@ -1767,7 +1796,7 @@ func _update_status() -> void:
 	var selected_mode_name := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
 	var queue_depth := _queued_chunk_count()
 	var transaction_state := "idle" if _edit_transaction.is_empty() else String(_edit_transaction.get("stage_state", "staging"))
-	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: cave section    R: rebuild    X: focused reset    L: LOD    P/O: terrain save/load\nCtrl+left: select object    B: place under center crosshair    F6: cycle    F7: transform + appearance    F8: delete    F9: restore\nM twice within 6 s: explicit entity-schema migration (preflight then commit); no automatic migration\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
+	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: cave section    R: rebuild    X: focused reset    L: LOD    P/O: terrain save/load\nCtrl+left: select object    B: place under center crosshair    F6: cycle    F7: transform + appearance    F8: delete    F9: restore baseline\nCtrl+Z: Undo entity command    Ctrl+Y / Ctrl+Shift+Z: Redo entity command\nM twice within 6 s: explicit schema-3 history migration (preflight then commit); no automatic migration\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
 		seed,
 		generator_version,
 		focus_region_key,
@@ -1815,8 +1844,14 @@ func _update_status() -> void:
 		float(population_metrics.get("peak_generation_usec", 0)) / 1000.0,
 	]
 	var state_schema := int(object_stream.state_service.snapshot.get("schema_version", 0)) if object_stream.state_service != null else 0
-	var command_readiness := "READY" if object_stream.is_entity_command_ready() else ("REBUILDING resident regions" if state_schema >= 2 else "LOCKED until explicit migration")
+	var command_readiness := "READY" if object_stream.is_entity_command_ready() else ("REBUILDING resident regions" if state_schema >= EntityStateContract.HISTORY_SNAPSHOT_SCHEMA_VERSION else "LOCKED until explicit history migration")
 	status += "Entity state schema %d | world revision %d | command dispatcher %s\n" % [state_schema, object_stream.get_instance_state_revision(), command_readiness]
+	var entity_command_service: RefCounted = object_stream.get_entity_command_service()
+	if entity_command_service != null and bool(entity_command_service.get("initialized")):
+		var history: Dictionary = entity_command_service.get_history_summary()
+		var undo_entry: Dictionary = history.get("undo", {})
+		var redo_entry: Dictionary = history.get("redo", {})
+		status += "History depth/cursor %d/%d | Undo: %s | Redo: %s | Ctrl+Z undo, Ctrl+Y/Ctrl+Shift+Z redo (F9 remains baseline restore)\n" % [int(history.get("depth", 0)), int(history.get("cursor", 0)), String(undo_entry.get("operation", "none")), String(redo_entry.get("operation", "none"))]
 	if not _selected_object_id.is_empty():
 		var selected_summary: Dictionary = object_stream.get_entity_summary(_selected_object_id)
 		if selected_summary.get("ok", false):
@@ -1830,11 +1865,18 @@ func _update_status() -> void:
 			]
 	var command_metrics: Dictionary = object_stream.get_last_entity_command_metrics()
 	if not command_metrics.is_empty():
-		status += "Last command timings us: validation %d, persistence %d, visual queue %d, command total %d\n" % [
-			int(command_metrics.get("validation_prepare_usec", 0)),
+		status += "Last command timings us: validate %d, inverse %d, candidate/history validate %d/%d, persist %d, reconstruct %d, visual queue/wait/publish %d/%d/%d, total/published %d/%d\n" % [
+			int(command_metrics.get("command_validation_usec", 0)),
+			int(command_metrics.get("inverse_preparation_usec", 0)),
+			int(command_metrics.get("candidate_validation_usec", 0)),
+			int(command_metrics.get("history_validation_usec", 0)),
 			int(command_metrics.get("persistence_usec", 0)),
+			int(command_metrics.get("regional_reconstruction_usec", 0)),
 			int(command_metrics.get("visual_queue_usec", 0)),
+			int(command_metrics.get("visual_queue_wait_usec", 0)),
+			int(command_metrics.get("visual_publication_usec", 0)),
 			int(command_metrics.get("command_total_usec", 0)),
+			int(command_metrics.get("command_total_to_visual_publish_usec", 0)),
 		]
 	status += _object_state_action_status + "\n"
 	status += _procedural_object_status + "\n"

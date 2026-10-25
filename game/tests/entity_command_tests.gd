@@ -194,7 +194,7 @@ func _test_legacy_state_migration(registry: ContentDefinitionRegistry) -> void:
 
 func _test_contract_rejections() -> void:
 	var unsupported: Dictionary = _empty_v2_snapshot()
-	unsupported.schema_version = 3
+	unsupported.schema_version = 4
 	_check(StateContract.validate_snapshot(unsupported, WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION).get("reason") == "snapshot_schema_unsupported", "unknown future snapshot version is rejected without migration")
 	var malformed: Dictionary = _empty_v2_snapshot()
 	malformed.entity_revisions["forged"] = 1

@@ -15,6 +15,9 @@ const MIN_REGION_COORD := -2147483648
 const MAX_REGION_COORD := 2147483647
 const COMMAND_SNAPSHOT_SCHEMA_VERSION := 2
 const MAX_COMMAND_RECEIPTS := 4096
+const HISTORY_SNAPSHOT_SCHEMA_VERSION := 3
+const MAX_HISTORY_ENTRIES := 256
+const MAX_DOCUMENT_BYTES := 4 * 1024 * 1024
 
 
 static func normalize_component(component_id: String, value: Variant) -> Dictionary:
@@ -101,10 +104,18 @@ static func validate_snapshot(snapshot: Variant, expected_world_id: String, expe
 		return _failure("snapshot_schema_unsupported")
 	if int(version) == SCHEMA_VERSION:
 		return _validate_snapshot_v1(snapshot, expected_world_id, expected_seed, expected_generator)
-	if int(version) != COMMAND_SNAPSHOT_SCHEMA_VERSION:
-		return _failure("snapshot_schema_unsupported")
+	if int(version) == COMMAND_SNAPSHOT_SCHEMA_VERSION:
+		return _validate_snapshot_v2(snapshot, expected_world_id, expected_seed, expected_generator)
+	if int(version) == HISTORY_SNAPSHOT_SCHEMA_VERSION:
+		return _validate_snapshot_v3(snapshot, expected_world_id, expected_seed, expected_generator)
+	return _failure("snapshot_schema_unsupported")
+
+
+static func _validate_snapshot_v2(snapshot: Variant, expected_world_id: String, expected_seed: int, expected_generator: int, allow_history_commands: bool = false) -> Dictionary:
 	if not _exact_keys(snapshot, ["schema_version", "world_id", "world_seed", "generator_version", "revision", "overrides", "deleted", "placed_entities", "entity_revisions", "command_receipts"]):
 		return _failure("snapshot_fields_invalid")
+	if not _is_int(snapshot.get("schema_version")) or int(snapshot.schema_version) != COMMAND_SNAPSHOT_SCHEMA_VERSION:
+		return _failure("snapshot_schema_unsupported")
 	var legacy_shape: Dictionary = {}
 	for key in ["schema_version", "world_id", "world_seed", "generator_version", "revision", "overrides", "deleted"]:
 		legacy_shape[key] = snapshot[key]
@@ -162,7 +173,10 @@ static func validate_snapshot(snapshot: Variant, expected_world_id: String, expe
 		if typeof(command_id) != TYPE_STRING or not _valid_command_id(String(command_id)) or not _exact_keys(snapshot.command_receipts[command_id], ["command_sha256", "operation", "entity_id", "world_revision", "entity_revision", "undo_metadata"]):
 			return _failure("command_receipt_invalid")
 		var receipt: Dictionary = snapshot.command_receipts[command_id]
-		if typeof(receipt.command_sha256) != TYPE_STRING or String(receipt.command_sha256).length() != 64 or not _is_hex(String(receipt.command_sha256)) or not ["ENTITY_SET_COMPONENT", "ENTITY_DELETE", "ENTITY_RESTORE", "ENTITY_PLACE"].has(receipt.operation) or not _is_int(receipt.world_revision) or int(receipt.world_revision) < 1 or int(receipt.world_revision) > int(normalized.revision) or not _is_int(receipt.entity_revision) or int(receipt.entity_revision) < 1 or int(receipt.entity_revision) > int(receipt.world_revision):
+		var allowed_operations := ["ENTITY_SET_COMPONENT", "ENTITY_DELETE", "ENTITY_RESTORE", "ENTITY_PLACE"]
+		if allow_history_commands:
+			allowed_operations.append_array(["ENTITY_UNDO", "ENTITY_REDO"])
+		if typeof(receipt.command_sha256) != TYPE_STRING or String(receipt.command_sha256).length() != 64 or not _is_hex(String(receipt.command_sha256)) or not allowed_operations.has(receipt.operation) or not _is_int(receipt.world_revision) or int(receipt.world_revision) < 1 or int(receipt.world_revision) > int(normalized.revision) or not _is_int(receipt.entity_revision) or int(receipt.entity_revision) < 1 or int(receipt.entity_revision) > int(receipt.world_revision):
 			return _failure("command_receipt_invalid")
 		if receipt.operation == "ENTITY_PLACE":
 			if typeof(receipt.entity_id) != TYPE_STRING or not placed.has(receipt.entity_id) or String(receipt.entity_id) != _placed_id(expected_world_id, expected_seed, String(command_id)):
@@ -177,6 +191,154 @@ static func validate_snapshot(snapshot: Variant, expected_world_id: String, expe
 	normalized.entity_revisions = entity_revisions
 	normalized.command_receipts = receipts
 	return {"ok": true, "snapshot": normalized}
+
+
+static func _validate_snapshot_v3(snapshot: Dictionary, expected_world_id: String, expected_seed: int, expected_generator: int) -> Dictionary:
+	var validation_started_usec := Time.get_ticks_usec()
+	if not _exact_keys(snapshot, ["schema_version", "world_id", "world_seed", "generator_version", "revision", "overrides", "deleted", "placed_entities", "entity_revisions", "command_receipts", "entity_history", "history_cursor"]):
+		return _failure("history_snapshot_fields_invalid")
+	var schema_two: Dictionary = {}
+	for key in ["world_id", "world_seed", "generator_version", "revision", "overrides", "deleted", "placed_entities", "entity_revisions", "command_receipts"]:
+		schema_two[key] = snapshot[key]
+	schema_two["schema_version"] = COMMAND_SNAPSHOT_SCHEMA_VERSION
+	var base_validation_started_usec := Time.get_ticks_usec()
+	var base_checked := _validate_snapshot_v2(schema_two, expected_world_id, expected_seed, expected_generator, true)
+	var base_validation_usec := Time.get_ticks_usec() - base_validation_started_usec
+	if not base_checked.get("ok", false):
+		return base_checked
+	if typeof(snapshot.entity_history) != TYPE_ARRAY or snapshot.entity_history.size() > MAX_HISTORY_ENTRIES or not _is_int(snapshot.history_cursor):
+		return _failure("entity_history_bounds_invalid")
+	var history: Array = []
+	var seen_ids: Dictionary = {}
+	var cursor := int(snapshot.history_cursor)
+	if cursor < 0 or cursor > snapshot.entity_history.size():
+		return _failure("entity_history_cursor_invalid")
+	var previous_world_revision := -1
+	var history_validation_started_usec := Time.get_ticks_usec()
+	for index in range(snapshot.entity_history.size()):
+		var entry_result := _validate_history_entry(snapshot.entity_history[index], base_checked.snapshot, expected_world_id, expected_seed, expected_generator, index < cursor, previous_world_revision)
+		if not entry_result.get("ok", false):
+			return entry_result
+		var entry: Dictionary = entry_result.entry
+		if seen_ids.has(entry.history_entry_id):
+			return _failure("entity_history_duplicate_entry")
+		seen_ids[entry.history_entry_id] = true
+		previous_world_revision = int(entry.world_revision_after)
+		history.append(entry)
+	var history_validation_usec := Time.get_ticks_usec() - history_validation_started_usec
+	var normalized: Dictionary = base_checked.snapshot
+	normalized.schema_version = HISTORY_SNAPSHOT_SCHEMA_VERSION
+	normalized.entity_history = history
+	normalized.history_cursor = cursor
+	var snapshot_bytes := JSON.stringify(normalized, "", true, true).to_utf8_buffer()
+	if snapshot_bytes.size() > MAX_DOCUMENT_BYTES:
+		return _failure("entity_history_snapshot_too_large")
+	return {"ok": true, "snapshot": normalized, "timings_usec": {"base_snapshot_validation_usec": base_validation_usec, "history_validation_usec": history_validation_usec, "history_snapshot_validation_total_usec": Time.get_ticks_usec() - validation_started_usec}}
+
+
+static func _validate_history_entry(value: Variant, base_snapshot: Dictionary, expected_world_id: String, expected_seed: int, expected_generator: int, should_be_applied: bool, prior_world_revision: int) -> Dictionary:
+	var keys := ["schema_version", "history_entry_id", "source_command_id", "original_command", "original_command_sha256", "entity_id", "operation", "world_id", "world_seed", "generator_version", "entity_identity", "world_revision_before", "world_revision_after", "entity_revision_before", "entity_revision_after", "receipt_command_id", "inverse_metadata_sha256", "application_state"]
+	if typeof(value) != TYPE_DICTIONARY or not _exact_keys(value, keys):
+		return _failure("entity_history_entry_fields_invalid")
+	var entry: Dictionary = value
+	if not _is_int(entry.schema_version) or int(entry.schema_version) != 1 or typeof(entry.history_entry_id) != TYPE_STRING or not _valid_command_id(String(entry.history_entry_id)) or entry.source_command_id != entry.history_entry_id or entry.receipt_command_id != entry.history_entry_id or typeof(entry.entity_id) != TYPE_STRING or not _valid_instance_id(String(entry.entity_id), expected_world_id, expected_seed):
+		return _failure("entity_history_entry_identity_invalid")
+	if typeof(entry.operation) != TYPE_STRING or not ["ENTITY_SET_COMPONENT", "ENTITY_DELETE", "ENTITY_RESTORE", "ENTITY_PLACE"].has(entry.operation) or entry.world_id != expected_world_id or not _is_int(entry.world_seed) or int(entry.world_seed) != expected_seed or not _is_int(entry.generator_version) or int(entry.generator_version) != expected_generator:
+		return _failure("entity_history_entry_world_invalid")
+	if not _is_int(entry.world_revision_before) or not _is_int(entry.world_revision_after) or int(entry.world_revision_after) != int(entry.world_revision_before) + 1 or int(entry.world_revision_after) <= prior_world_revision or int(entry.world_revision_after) > int(base_snapshot.revision):
+		return _failure("entity_history_world_revision_invalid")
+	if not _is_int(entry.entity_revision_before) or not _is_int(entry.entity_revision_after) or int(entry.entity_revision_after) != int(entry.entity_revision_before) + 1 or int(entry.entity_revision_before) < 0 or int(entry.entity_revision_after) > int(entry.world_revision_after) or (entry.operation == "ENTITY_PLACE" and (int(entry.entity_revision_before) != 0 or int(entry.entity_revision_after) != 1)):
+		return _failure("entity_history_entity_revision_invalid")
+	var expected_state := "APPLIED" if should_be_applied else "UNDONE"
+	if typeof(entry.application_state) != TYPE_STRING or String(entry.application_state) != expected_state:
+		return _failure("entity_history_cursor_state_mismatch")
+	var identity_result := validate_identity(entry.entity_identity, expected_world_id, expected_seed, expected_generator)
+	if not identity_result.get("ok", false) or String(identity_result.instance_id) != String(entry.entity_id):
+		return _failure("entity_history_content_identity_invalid")
+	var command_check := _validate_history_source_command(entry.original_command, entry, expected_world_id, expected_seed, expected_generator)
+	if not command_check.get("ok", false):
+		return command_check
+	var canonical_command: Dictionary = command_check.command
+	var digest := _sha256_canonical(canonical_command)
+	if typeof(entry.original_command_sha256) != TYPE_STRING or String(entry.original_command_sha256) != digest:
+		return _failure("entity_history_command_digest_mismatch")
+	var receipts: Dictionary = base_snapshot.command_receipts
+	if not receipts.has(entry.receipt_command_id):
+		return _failure("entity_history_receipt_missing")
+	var receipt: Dictionary = receipts[entry.receipt_command_id]
+	if String(receipt.command_sha256) != digest or String(receipt.operation) != String(entry.operation) or String(receipt.entity_id) != String(entry.entity_id) or int(receipt.world_revision) != int(entry.world_revision_after) or int(receipt.entity_revision) != int(entry.entity_revision_after) or String(entry.inverse_metadata_sha256) != _sha256_canonical(receipt.undo_metadata):
+		return _failure("entity_history_receipt_mismatch")
+	var normalized_entry: Dictionary = _canonical_json_numbers(entry)
+	normalized_entry.entity_identity = identity_result.identity
+	normalized_entry.original_command = canonical_command
+	return {"ok": true, "entry": normalized_entry}
+
+
+static func _validate_history_source_command(value: Variant, entry: Dictionary, world_id: String, world_seed: int, generator_version: int) -> Dictionary:
+	if typeof(value) != TYPE_DICTIONARY:
+		return _failure("entity_history_command_invalid")
+	var command: Dictionary = value
+	var operation := String(entry.operation)
+	var keys := ["schema_version", "command_id", "operation", "origin", "world_id", "world_seed", "generator_version", "expected_world_revision", "expected_entity_revision"]
+	if operation == "ENTITY_PLACE":
+		keys.append_array(["definition_id", "position_mm", "region_key", "recipe_seed", "components"])
+	else:
+		keys.append("entity_id")
+	if operation == "ENTITY_SET_COMPONENT":
+		keys.append_array(["component_id", "component"])
+	if not _exact_keys(command, keys) or not _is_int(command.schema_version) or int(command.schema_version) != 1 or command.command_id != entry.history_entry_id or command.operation != operation or command.world_id != world_id or not _is_int(command.world_seed) or int(command.world_seed) != world_seed or not _is_int(command.generator_version) or int(command.generator_version) != generator_version or not _is_int(command.expected_world_revision) or int(command.expected_world_revision) != int(entry.world_revision_before) or not _is_int(command.expected_entity_revision) or int(command.expected_entity_revision) != int(entry.entity_revision_before):
+		return _failure("entity_history_command_invalid")
+	if typeof(command.origin) != TYPE_DICTIONARY or not _exact_keys(command.origin, ["type", "id"]) or not ["player", "editor", "mod"].has(command.origin.get("type")) or typeof(command.origin.get("id")) != TYPE_STRING or String(command.origin.id).is_empty() or String(command.origin.id).length() > 64:
+		return _failure("entity_history_origin_invalid")
+	if operation == "ENTITY_PLACE":
+		if typeof(command.definition_id) != TYPE_STRING or String(command.definition_id).find(":") < 1 or not _is_int(command.recipe_seed) or int(command.recipe_seed) < 1 or int(command.recipe_seed) > 2147483647:
+			return _failure("entity_history_place_command_invalid")
+		var position := _read_int_vector(command.position_mm, -2147483647, 2147483647)
+		if not position.get("ok", false) or typeof(command.region_key) != TYPE_ARRAY or command.region_key.size() != 2 or not _is_int(command.region_key[0]) or not _is_int(command.region_key[1]):
+			return _failure("entity_history_place_command_invalid")
+		if String(entry.entity_id) != _placed_id(world_id, world_seed, String(entry.history_entry_id)):
+			return _failure("entity_history_place_identity_invalid")
+		if typeof(command.components) != TYPE_DICTIONARY or not _exact_keys(command.components, [COMPONENT_TRANSFORM, COMPONENT_APPEARANCE, COMPONENT_LOGICAL]):
+			return _failure("entity_history_place_components_invalid")
+		for component_id in command.components:
+			if not normalize_component(String(component_id), command.components[component_id]).get("ok", false):
+				return _failure("entity_history_place_components_invalid")
+	elif operation == "ENTITY_SET_COMPONENT":
+		if typeof(command.entity_id) != TYPE_STRING or command.entity_id != entry.entity_id or typeof(command.component_id) != TYPE_STRING or not normalize_component(String(command.component_id), command.component).get("ok", false):
+			return _failure("entity_history_set_command_invalid")
+	elif typeof(command.entity_id) != TYPE_STRING or command.entity_id != entry.entity_id:
+		return _failure("entity_history_command_entity_invalid")
+	return {"ok": true, "command": _canonical_json_numbers(command)}
+
+
+static func _sha256_canonical(value: Variant) -> String:
+	return canonical_sha256(value)
+
+
+static func canonical_sha256(value: Variant) -> String:
+	return JSON.stringify(_canonical_json_numbers(value), "", true, true).sha256_text()
+
+
+static func _canonical_json_numbers(value: Variant) -> Variant:
+	# Godot's JSON parser may materialize integer lexical tokens as integral
+	# floats. Normalize exact safe integers before hashing so command and
+	# receipt identities remain stable across serialize/readback cycles.
+	if typeof(value) == TYPE_FLOAT:
+		var numeric := float(value)
+		if is_finite(numeric) and numeric == floor(numeric) and abs(numeric) <= 9007199254740991.0:
+			return int(numeric)
+		return numeric
+	if typeof(value) == TYPE_ARRAY:
+		var normalized_array: Array = []
+		for item in value:
+			normalized_array.append(_canonical_json_numbers(item))
+		return normalized_array
+	if typeof(value) == TYPE_DICTIONARY:
+		var normalized_dictionary: Dictionary = {}
+		for key in value:
+			normalized_dictionary[key] = _canonical_json_numbers(value[key])
+		return normalized_dictionary
+	return value
 
 
 static func _validate_snapshot_v1(snapshot: Variant, expected_world_id: String, expected_seed: int, expected_generator: int, allow_explicit_identity: bool = false) -> Dictionary:
@@ -324,7 +486,7 @@ static func identity_for_instance(instance: Dictionary) -> Dictionary:
 
 
 static func identities_equal(first: Dictionary, second: Dictionary) -> bool:
-	return JSON.stringify(first, "", true, true) == JSON.stringify(second, "", true, true)
+	return canonical_sha256(first) == canonical_sha256(second)
 
 
 static func _read_int_vector(value: Variant, minimum: int, maximum: int) -> Dictionary:
@@ -386,6 +548,11 @@ static func _validate_undo_metadata(operation: String, entity_id: String, value:
 	if typeof(value) != TYPE_DICTIONARY:
 		return _failure("command_undo_metadata_invalid")
 	var metadata: Dictionary = value
+	if operation == "ENTITY_UNDO" or operation == "ENTITY_REDO":
+		var expected_inverse_operation := "ENTITY_REDO" if operation == "ENTITY_UNDO" else "ENTITY_UNDO"
+		if not _exact_keys(metadata, ["inverse_operation", "history_entry_id"]) or metadata.get("inverse_operation") != expected_inverse_operation or typeof(metadata.get("history_entry_id")) != TYPE_STRING or not _valid_command_id(String(metadata.history_entry_id)):
+			return _failure("command_undo_metadata_invalid")
+		return {"ok": true, "value": {"inverse_operation": expected_inverse_operation, "history_entry_id": String(metadata.history_entry_id)}}
 	if operation == "ENTITY_SET_COMPONENT":
 		if not _exact_keys(metadata, ["inverse_operation", "component_id", "prior_component_present", "prior_component"]) or metadata.inverse_operation != "ENTITY_SET_COMPONENT" or typeof(metadata.component_id) != TYPE_STRING or typeof(metadata.prior_component_present) != TYPE_BOOL or typeof(metadata.prior_component) != TYPE_DICTIONARY:
 			return _failure("command_undo_metadata_invalid")
@@ -402,7 +569,12 @@ static func _validate_undo_metadata(operation: String, entity_id: String, value:
 		if not _exact_keys(metadata, ["inverse_operation", "identity"]) or metadata.inverse_operation != "ENTITY_DELETE":
 			return _failure("command_undo_metadata_invalid")
 	else:
-		if expected_inverse.is_empty() or not _exact_keys(metadata, ["inverse_operation", "identity", "prior_override"]) or metadata.inverse_operation != expected_inverse or typeof(metadata.prior_override) != TYPE_DICTIONARY:
+		var legacy_keys := ["inverse_operation", "identity", "prior_override"]
+		var current_restore_keys := ["inverse_operation", "identity", "prior_deleted", "prior_override"]
+		var keys_valid := _exact_keys(metadata, legacy_keys)
+		if operation == "ENTITY_RESTORE" and _exact_keys(metadata, current_restore_keys):
+			keys_valid = typeof(metadata.prior_deleted) == TYPE_BOOL
+		if expected_inverse.is_empty() or not keys_valid or metadata.inverse_operation != expected_inverse or typeof(metadata.prior_override) != TYPE_DICTIONARY:
 			return _failure("command_undo_metadata_invalid")
 	var identity_result := validate_identity(metadata.identity, world_id, world_seed, generator)
 	if not identity_result.get("ok", false) or String(identity_result.instance_id) != entity_id:
@@ -413,6 +585,8 @@ static func _validate_undo_metadata(operation: String, entity_id: String, value:
 		if not prior_override.get("ok", false):
 			return _failure("command_undo_metadata_invalid")
 		normalized.prior_override = prior_override.value
+		if operation == "ENTITY_RESTORE" and metadata.has("prior_deleted"):
+			normalized.prior_deleted = bool(metadata.prior_deleted)
 	return {"ok": true, "value": normalized}
 
 

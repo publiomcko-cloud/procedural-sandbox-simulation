@@ -6,7 +6,7 @@ extends RefCounted
 const Contract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 const FORMAT_ID := "procedural-sandbox-object-state"
 const SCHEMA_VERSION := 1
-const MAX_DOCUMENT_BYTES := 4 * 1024 * 1024
+const MAX_DOCUMENT_BYTES := Contract.MAX_DOCUMENT_BYTES
 const GENERATIONS_TO_KEEP := 2
 
 var _directory: String
