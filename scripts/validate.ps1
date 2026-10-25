@@ -7,6 +7,7 @@ $failures = [System.Collections.Generic.List[string]]::new()
 foreach ($file in @('project.godot', 'scenes/main.tscn', 'scenes/terrain_demo.tscn', 'scenes/entity_command_harness.tscn', 'scripts/bootstrap.gd', 'scripts/region_generator.gd', 'scripts/modding/declarative_mod_loader.gd', 'scripts/modding/content_definition_registry.gd', 'scripts/entities/entity_command_contract.gd', 'scripts/entities/entity_command_service.gd', 'scripts/entities/entity_command_harness.gd', 'scripts/objects/procedural_object_world.gd', 'scripts/objects/procedural_object_static_batch.gd', 'scripts/objects/procedural_rock_mesh_adapter.gd', 'scripts/objects/procedural_object_stream.gd', 'scripts/objects/procedural_object_state_contract.gd', 'scripts/objects/procedural_object_state_store.gd', 'scripts/objects/procedural_object_state_service.gd', 'scripts/terrain/sdf_world.gd', 'scripts/terrain/sdf_brush_edit_state.gd', 'scripts/terrain/terrain_brush_picker.gd', 'scripts/terrain/terrain_chunk_grid.gd', 'scripts/terrain/terrain_spatial_ownership.gd', 'scripts/terrain/terrain_world_state.gd', 'scripts/terrain/terrain_world_save_store.gd', 'scripts/terrain/marching_tetrahedra.gd', 'scripts/terrain/terrain_mesh_job.gd', 'scripts/terrain/terrain_lod_policy.gd', 'scripts/terrain/lod01_chunk_mesher.gd', 'scripts/terrain/terrain_demo.gd', 'scripts/experiments/lod01_transition_fixture.gd', 'tests/smoke.gd', 'tests/terrain_sdf_tests.gd', 'tests/terrain_brush_tests.gd', 'tests/terrain_chunk_tests.gd', 'tests/terrain_multiregion_tests.gd', 'tests/terrain_perf_benchmark.gd', 'tests/terrain_history_tests.gd', 'tests/terrain_picker_history_perf.gd', 'tests/terrain_end_to_end_perf.gd', 'tests/terrain_concurrency_tests.gd', 'tests/lod01_transition_tests.gd', 'tests/terrain_lod_runtime_tests.gd', 'tests/terrain_world_persistence_tests.gd', 'tests/terrain_world_persistence_process_probe.gd', 'tests/declarative_mod_tests.gd', 'tests/procedural_object_tests.gd', 'tests/entity_command_tests.gd', 'tests/entity_command_harness_tests.gd', 'tests/procedural_object_state_process_probe.gd', 'tests/terrain_lighting_capture.gd', 'tests/bootstrap_visual_regression.gd')) {
     if (-not (Test-Path (Join-Path $project $file))) { $failures.Add("L0 FAIL: missing source $file") }
 }
+if (-not (Test-Path (Join-Path $project 'tests/playable_entity_command_tests.gd'))) { $failures.Add('L0 FAIL: missing source tests/playable_entity_command_tests.gd') }
 if ($failures.Count -eq 0) { Write-Host 'L0 PASS: all project source files exist' }
 
 if ((Get-Command $godot -ErrorAction SilentlyContinue) -or (Test-Path $godot)) {
@@ -97,6 +98,12 @@ if ((Get-Command $godot -ErrorAction SilentlyContinue) -or (Test-Path $godot)) {
     $entityCommandHarnessExit = $LASTEXITCODE
     if ($entityCommandHarnessExit -eq 0) { Write-Host 'L2 PASS: transactional entity harness viewport input, delete and restore regression' }
     else { $failures.Add("L2 FAIL: entity command harness tests exit code $entityCommandHarnessExit") }
+
+    Write-Host "COMMAND: `"$godot`" --headless --path `"$project`" --script res://tests/playable_entity_command_tests.gd"
+    & $godot --headless --path $project --script 'res://tests/playable_entity_command_tests.gd'
+    $playableEntityExit = $LASTEXITCODE
+    if ($playableEntityExit -eq 0) { Write-Host 'L2 PASS: playable world transactional entity integration tests' }
+    else { $failures.Add("L2 FAIL: playable entity command test exit code $playableEntityExit") }
 
     Write-Host "COMMAND: `"$godot`" --headless --path `"$project`" --script res://tests/terrain_picker_history_perf.gd"
     & $godot --headless --path $project --script 'res://tests/terrain_picker_history_perf.gd'

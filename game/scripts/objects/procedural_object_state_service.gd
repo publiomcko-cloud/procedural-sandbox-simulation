@@ -138,14 +138,48 @@ func get_entity_revision(instance_id: String) -> int:
 	return int(snapshot.get("entity_revisions", {}).get(instance_id, 0))
 
 
+## A side-effect-free schema migration preflight. The object-state store keeps the
+## previous immutable generation when the new generation is committed.
+func preflight_command_snapshot_upgrade() -> Dictionary:
+	if not initialized:
+		return _failure("object_state_service_not_initialized")
+	var source_schema := int(snapshot.get("schema_version", 0))
+	if source_schema == Contract.COMMAND_SNAPSHOT_SCHEMA_VERSION:
+		return {"ok": true, "reason": "already_upgraded", "source_schema": source_schema, "target_schema": source_schema, "source_generation": storage_generation, "revision": get_revision()}
+	if source_schema != Contract.SCHEMA_VERSION:
+		return _failure("object_state_schema_upgrade_unsupported")
+	var candidate: Dictionary = snapshot.duplicate(true)
+	candidate.schema_version = Contract.COMMAND_SNAPSHOT_SCHEMA_VERSION
+	candidate["placed_entities"] = {}
+	candidate["entity_revisions"] = {}
+	candidate["command_receipts"] = {}
+	var checked := Contract.validate_snapshot(candidate, world_id, world_seed, generator_version)
+	if not checked.get("ok", false):
+		return _failure(String(checked.get("reason", "object_state_upgrade_invalid")))
+	var candidate_bytes := JSON.stringify(checked.snapshot, "", true, true).to_utf8_buffer()
+	if candidate_bytes.size() > StoreScript.MAX_DOCUMENT_BYTES:
+		return _failure("object_state_upgrade_document_too_large")
+	return {
+		"ok": true,
+		"reason": "preflight_ok",
+		"source_schema": source_schema,
+		"target_schema": Contract.COMMAND_SNAPSHOT_SCHEMA_VERSION,
+		"source_generation": storage_generation,
+		"revision": get_revision(),
+		"source_payload_sha256": _sha256_bytes(JSON.stringify(snapshot, "", true, true).to_utf8_buffer()),
+		"candidate_payload_sha256": _sha256_bytes(candidate_bytes),
+	}
+
+
 ## Explicit schema upgrade. Loading schema 1 never rewrites a user's save.
 func upgrade_command_snapshot_schema() -> Dictionary:
 	if not initialized:
 		return _failure("object_state_service_not_initialized")
 	if int(snapshot.get("schema_version", 0)) == Contract.COMMAND_SNAPSHOT_SCHEMA_VERSION:
 		return {"ok": true, "reason": "already_upgraded", "revision": get_revision()}
-	if int(snapshot.get("schema_version", 0)) != Contract.SCHEMA_VERSION:
-		return _failure("object_state_schema_upgrade_unsupported")
+	var preflight := preflight_command_snapshot_upgrade()
+	if not preflight.get("ok", false):
+		return preflight
 	var candidate: Dictionary = snapshot.duplicate(true)
 	candidate.schema_version = Contract.COMMAND_SNAPSHOT_SCHEMA_VERSION
 	candidate["placed_entities"] = {}
@@ -158,10 +192,12 @@ func upgrade_command_snapshot_schema() -> Dictionary:
 	var saved: Dictionary = store.save_snapshot(checked.snapshot)
 	last_persist_duration_usec = Time.get_ticks_usec() - persist_started
 	if not saved.get("ok", false):
+		initialized = false
+		initialization_error = String(saved.get("reason", "object_state_upgrade_write_failed"))
 		return _failure(String(saved.get("reason", "object_state_upgrade_write_failed")))
 	snapshot = checked.snapshot
 	storage_generation = int(saved.get("generation", storage_generation))
-	return {"ok": true, "reason": "schema_upgraded_explicitly", "revision": get_revision(), "generation": storage_generation}
+	return {"ok": true, "reason": "schema_upgraded_explicitly", "revision": get_revision(), "generation": storage_generation, "backup_generation": int(preflight.get("source_generation", 0)), "source_payload_sha256": String(preflight.get("source_payload_sha256", ""))}
 
 
 func commit_command_candidate(candidate: Dictionary, expected_world_revision: int) -> Dictionary:
@@ -224,3 +260,10 @@ func _commit_candidate(candidate: Dictionary, changed_instance_id: String = "") 
 
 func _failure(reason: String) -> Dictionary:
 	return {"ok": false, "reason": reason}
+
+
+func _sha256_bytes(bytes: PackedByteArray) -> String:
+	var context := HashingContext.new()
+	if context.start(HashingContext.HASH_SHA256) != OK or context.update(bytes) != OK:
+		return ""
+	return context.finish().hex_encode()

@@ -7,6 +7,7 @@ const Contract := preload("res://scripts/entities/entity_command_contract.gd")
 const StateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const RockMeshAdapter := preload("res://scripts/objects/procedural_rock_mesh_adapter.gd")
+const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const MAX_COMMAND_RECEIPTS := StateContract.MAX_COMMAND_RECEIPTS
 
 var state_service: ProceduralObjectStateService
@@ -14,6 +15,8 @@ var registry: ContentDefinitionRegistry
 var initialized := false
 var initialization_error := ""
 var _base_instances: Dictionary = {}
+var last_reconstruction_usec := 0
+var last_dispatch_metrics: Dictionary = {}
 
 
 func initialize(authoritative_state_service: ProceduralObjectStateService, content_registry: ContentDefinitionRegistry) -> Dictionary:
@@ -35,11 +38,12 @@ func initialize(authoritative_state_service: ProceduralObjectStateService, conte
 ## Reconstructs one canonical region without creating Godot nodes. Regions are
 ## explicit command preconditions: absent/unloaded content cannot be mutated.
 func reconstruct_region(region_key: Vector2i) -> Dictionary:
+	var reconstruction_started_usec := Time.get_ticks_usec()
 	if not initialized:
 		return _failure("command_service_not_initialized")
 	if not _valid_region(region_key):
 		return _failure("command_region_invalid")
-	for existing_id in _base_instances.keys():
+	for existing_id in _base_instances.keys().duplicate():
 		var existing: Dictionary = _base_instances[existing_id]
 		if Vector2i(existing.region_key) == region_key:
 			_base_instances.erase(existing_id)
@@ -65,13 +69,32 @@ func reconstruct_region(region_key: Vector2i) -> Dictionary:
 		if not registered.get("ok", false):
 			return registered
 		count += 1
-	return {"ok": true, "region_key": region_key, "entity_count": count}
+	last_reconstruction_usec = Time.get_ticks_usec() - reconstruction_started_usec
+	return {"ok": true, "region_key": region_key, "entity_count": count, "candidate_cell_count": int(generated.get("candidate_cell_count", 0)), "surface_anchor_count": int(generated.get("surface_anchor_count", 0)), "reconstruction_usec": last_reconstruction_usec}
 
 
 func release_region(region_key: Vector2i) -> void:
-	for entity_id in _base_instances.keys():
+	for entity_id in _base_instances.keys().duplicate():
 		if Vector2i(_base_instances[entity_id].region_key) == region_key:
 			_base_instances.erase(entity_id)
+
+
+func get_region_base_instances(region_key: Vector2i) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var ids: Array[String] = []
+	for entity_id in _base_instances:
+		if Vector2i(_base_instances[entity_id].get("region_key", Vector2i(2147483647, 2147483647))) == region_key:
+			ids.append(String(entity_id))
+	ids.sort()
+	for entity_id in ids:
+		result.append(_base_instances[entity_id].duplicate(true))
+	return result
+
+
+func get_entity_region(entity_id: String) -> Dictionary:
+	if not _base_instances.has(entity_id):
+		return _failure("entity_not_reconstructed_or_content_missing")
+	return {"ok": true, "region_key": Vector2i(_base_instances[entity_id].region_key)}
 
 
 func resolve_entity(entity_id: String) -> Dictionary:
@@ -83,8 +106,10 @@ func resolve_entity(entity_id: String) -> Dictionary:
 
 
 func dispatch(raw_command: Variant) -> Dictionary:
+	var dispatch_started_usec := Time.get_ticks_usec()
 	if not initialized:
 		return _failure("command_service_not_initialized")
+	var validation_started_usec := Time.get_ticks_usec()
 	var checked := Contract.validate(raw_command, state_service.world_id, state_service.world_seed, state_service.generator_version)
 	if not checked.get("ok", false):
 		return checked
@@ -136,6 +161,10 @@ func dispatch(raw_command: Variant) -> Dictionary:
 			var pin_check := _validate_identity_pin(identity)
 			if not pin_check.ok:
 				return pin_check
+			if operation == "ENTITY_SET_COMPONENT" and String(command.component_id) == StateContract.COMPONENT_TRANSFORM:
+				var ownership_check := _validate_transform_region_ownership(base_instance, command.component)
+				if not ownership_check.get("ok", false):
+					return ownership_check
 			entity_revision = state_service.get_entity_revision(entity_id)
 			if entity_revision != int(command.expected_entity_revision):
 				return _failure("stale_entity_revision")
@@ -180,6 +209,7 @@ func dispatch(raw_command: Variant) -> Dictionary:
 	var next_world_revision := int(state_service.get_revision()) + 1
 	var receipt := {"command_sha256": command_digest, "operation": operation, "entity_id": entity_id, "world_revision": next_world_revision, "entity_revision": entity_revision, "undo_metadata": undo_metadata}
 	candidate.command_receipts[command_id] = receipt
+	var validation_prepare_usec := Time.get_ticks_usec() - validation_started_usec
 	var commit := state_service.commit_command_candidate(candidate, int(command.expected_world_revision))
 	if not commit.get("ok", false):
 		if not state_service.initialized:
@@ -188,7 +218,12 @@ func dispatch(raw_command: Variant) -> Dictionary:
 		return commit
 	if operation == "ENTITY_PLACE":
 		_base_instances[entity_id] = prepared.instance
-	return {"ok": true, "reason": "committed", "duplicate": false, "operation": operation, "entity_id": entity_id, "world_revision": int(commit.world_revision), "entity_revision": entity_revision, "generation": int(commit.generation)}
+	last_dispatch_metrics = {
+		"validation_prepare_usec": validation_prepare_usec,
+		"persistence_usec": int(state_service.last_persist_duration_usec),
+		"dispatch_total_usec": Time.get_ticks_usec() - dispatch_started_usec,
+	}
+	return {"ok": true, "reason": "committed", "duplicate": false, "operation": operation, "entity_id": entity_id, "world_revision": int(commit.world_revision), "entity_revision": entity_revision, "generation": int(commit.generation), "timings_usec": last_dispatch_metrics.duplicate(true)}
 
 
 func _register_reconstructed_instance(base_instance: Dictionary) -> Dictionary:
@@ -243,15 +278,20 @@ func _build_placed_instance(entity_id: String, record: Dictionary) -> Dictionary
 	var recipe: Dictionary = registry.evaluate_rock_recipe(String(identity.definition_id), int(identity.recipe_seed))
 	if not recipe.get("ok", false) or String(recipe.get("algorithm", "")) != RockMeshAdapter.ALGORITHM:
 		return _failure("placed_entity_recipe_unavailable")
+	var region_key := Vector2i(int(identity.region_key[0]), int(identity.region_key[1]))
+	var world_position_mm := Vector3i(int(record.position_mm[0]), int(record.position_mm[1]), int(record.position_mm[2]))
+	var region_origin_mm := Vector3i(roundi(Spatial.region_origin_world(region_key).x * 1000.0), 0, roundi(Spatial.region_origin_world(region_key).z * 1000.0))
+	var region_local_position_mm: Vector3i = world_position_mm - region_origin_mm
 	return {"ok": true, "instance": {
 		"instance_id": entity_id, "entity_identity": identity.duplicate(true), "definition_id": identity.definition_id,
 		"content_pin": identity.content_pin.duplicate(true), "world_id": identity.world_id, "world_seed": identity.world_seed,
-		"generator_version": identity.generator_version, "region_key": Vector2i(int(identity.region_key[0]), int(identity.region_key[1])),
+		"generator_version": identity.generator_version, "region_key": region_key,
 		"placement_seed": identity.placement_seed, "recipe_seed": identity.recipe_seed, "recipe_algorithm": recipe.algorithm,
 		"geometry_profile": recipe.get("profile", ""), "geometry": recipe.geometry.duplicate(true),
 		"geometry_seeds": recipe.geometry_seeds.duplicate(true), "instance_state": {}, "component_contract_version": 1,
 		"components": ["core.transform@1", "core.appearance@1", "core.logical@1"],
-		"position_mm": Vector3i(int(record.position_mm[0]), int(record.position_mm[1]), int(record.position_mm[2])),
+		# Persistent records store world-space anchors; streamed region roots use local coordinates.
+		"position_mm": region_local_position_mm, "world_position_mm": world_position_mm,
 		"default_scale_milli": Vector3i(1000, 1000, 1000), "default_yaw_mdeg": 0, "population_rule_id": "",
 		"population_rule_pin": {}, "population_rule_schema_version": 0, "population_candidate_index": -1,
 		"population_algorithm": "explicit_place_v1", "population_batched": false,
@@ -294,6 +334,20 @@ func _content_pins_equal(first: Dictionary, second: Dictionary) -> bool:
 func _validate_origin_registration(origin: Dictionary) -> Dictionary:
 	if String(origin.type) == "mod" and (registry == null or not registry.has_method("has_mod") or not registry.has_mod(String(origin.id))):
 		return _failure("command_origin_mod_missing")
+	return {"ok": true}
+
+
+func _validate_transform_region_ownership(base_instance: Dictionary, component: Dictionary) -> Dictionary:
+	var properties: Dictionary = component.get("properties", {})
+	var translation: Array = properties.get("translation_mm", [0, 0, 0])
+	if translation.size() != 3:
+		return _failure("component_transform_invalid")
+	var base_region: Vector2i = Vector2i(base_instance.get("region_key", Vector2i.ZERO))
+	var local_position_mm: Vector3i = Vector3i(base_instance.get("position_mm", Vector3i.ZERO))
+	var effective_position := Spatial.region_origin_world(base_region) + Vector3(local_position_mm) / 1000.0 + Vector3(int(translation[0]), int(translation[1]), int(translation[2])) / 1000.0
+	var mapped: Dictionary = Spatial.world_to_region_local(effective_position)
+	if not mapped.get("valid", false) or Vector2i(mapped.get("region_key", Vector2i.ZERO)) != base_region:
+		return _failure("component_transform_region_transfer_not_supported")
 	return {"ok": true}
 
 

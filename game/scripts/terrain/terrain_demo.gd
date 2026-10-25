@@ -51,7 +51,8 @@ var object_state_directory_override := ""
 var object_package_roots_override: Array[String] = []
 var _selected_object_index := 0
 var _selected_object_id := ""
-var _object_state_action_status := "Object state: select with F6; mutate F7; delete F8; restore F9"
+var _object_state_action_status := "Entities: Ctrl+click select; M twice migrates entity save; B place; F6 cycle; F7 edit; F8 delete; F9 restore"
+var _entity_migration_confirmation_deadline_msec := 0
 var chunk_nodes: Dictionary = {} # stable chunk id -> active MeshInstance3D
 var _published_lod_by_chunk: Dictionary = {} # stable chunk id -> 0/1
 var _lod_fallback_chunks: Dictionary = {} # stable chunk id -> deterministic LOD0 fallback until retry/toggle
@@ -177,6 +178,12 @@ func _process(delta: float) -> void:
 	_update_lod_selection()
 	_process_one_chunk_job()
 	object_stream.process_queued_publications()
+	var visual_result: Dictionary = object_stream.consume_last_command_visual_result()
+	if not visual_result.is_empty():
+		if visual_result.get("ok", false):
+			_object_state_action_status = "%s committed at world revision %d; visual publication succeeded" % [visual_result.get("operation", "Entity command"), int(visual_result.get("world_revision", -1))]
+		else:
+			_object_state_action_status = "%s committed at world revision %d, but visual publication failed: %s" % [visual_result.get("operation", "Entity command"), int(visual_result.get("world_revision", -1)), visual_result.get("reason", "unknown")]
 	_peak_mesh_uploads_per_frame = maxi(_peak_mesh_uploads_per_frame, _mesh_uploads_this_frame)
 	_last_process_work_ms = float(Time.get_ticks_usec() - process_started_usec) / 1000.0
 	_peak_process_work_ms = maxf(_peak_process_work_ms, _last_process_work_ms)
@@ -192,8 +199,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			orbit_dragging = event.pressed
 		elif event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			selected_brush_mode = BrushEditState.Mode.FILL if event.shift_pressed else BrushEditState.Mode.CARVE
-			_apply_brush_at(event.position)
+			if event.ctrl_pressed:
+				_select_entity_at(event.position)
+			else:
+				selected_brush_mode = BrushEditState.Mode.FILL if event.shift_pressed else BrushEditState.Mode.CARVE
+				_apply_brush_at(event.position)
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_set_orbit_distance(orbit_offset.length() * 0.9)
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -203,42 +213,46 @@ func _unhandled_input(event: InputEvent) -> void:
 		orbit_offset.y = clampf(orbit_offset.y - event.relative.y * 0.05, 2.0, 36.0)
 		_update_camera()
 	elif event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_C:
+		if _event_matches_key(event, KEY_C):
 			cave_section_enabled = not cave_section_enabled
 			_start_global_rebuild("cave_section")
-		elif event.keycode == KEY_R:
+		elif _event_matches_key(event, KEY_R):
 			_start_global_rebuild("regenerate")
-		elif event.keycode == KEY_X:
+		elif _event_matches_key(event, KEY_X):
 			var cleared: Dictionary = edit_ledger.clear_for_region(focus_region_key)
 			last_brush_result = "Reset focused edits for %s: removed %d command(s); rebuilding %d dependent region(s)" % [
 				focus_region_key, cleared["removed_count"], cleared["rebuild_regions"].size(),
 			]
 			_start_global_rebuild("reset")
-		elif event.keycode == KEY_L:
+		elif _event_matches_key(event, KEY_L):
 			lod_enabled = not lod_enabled
 			_lod_fallback_chunks.clear()
 			last_brush_result = "Custom LOD 0/1: %s" % ("ON" if lod_enabled else "OFF; using LOD0 fallback")
-		elif event.keycode == KEY_V:
+		elif _event_matches_key(event, KEY_V):
 			object_stream.set_object_visibility(not object_stream.objects_visible)
-		elif event.keycode == KEY_P:
+		elif _event_matches_key(event, KEY_P):
 			_save_world_to_storage()
-		elif event.keycode == KEY_O:
+		elif _event_matches_key(event, KEY_O):
 			_load_world_from_storage()
-		elif event.keycode == KEY_F6:
+		elif _event_matches_key(event, KEY_F6):
 			_select_next_object()
-		elif event.keycode == KEY_F7:
+		elif _event_matches_key(event, KEY_F7):
 			_mutate_selected_object()
-		elif event.keycode == KEY_F8:
+		elif _event_matches_key(event, KEY_F8):
 			_delete_selected_object()
-		elif event.keycode == KEY_F9:
+		elif _event_matches_key(event, KEY_F9):
 			_restore_selected_object()
-		elif event.keycode in [KEY_A, KEY_LEFT]:
+		elif _event_matches_key(event, KEY_M):
+			_handle_entity_schema_migration()
+		elif _event_matches_key(event, KEY_B):
+			_place_entity_under_crosshair()
+		elif _event_matches_key(event, KEY_A) or _event_matches_key(event, KEY_LEFT):
 			_move_focus(Vector3(-FOCUS_MOVE_STEP, 0.0, 0.0))
-		elif event.keycode in [KEY_D, KEY_RIGHT]:
+		elif _event_matches_key(event, KEY_D) or _event_matches_key(event, KEY_RIGHT):
 			_move_focus(Vector3(FOCUS_MOVE_STEP, 0.0, 0.0))
-		elif event.keycode in [KEY_W, KEY_UP]:
+		elif _event_matches_key(event, KEY_W) or _event_matches_key(event, KEY_UP):
 			_move_focus(Vector3(0.0, 0.0, -FOCUS_MOVE_STEP))
-		elif event.keycode in [KEY_S, KEY_DOWN]:
+		elif _event_matches_key(event, KEY_S) or _event_matches_key(event, KEY_DOWN):
 			_move_focus(Vector3(0.0, 0.0, FOCUS_MOVE_STEP))
 		_update_status()
 
@@ -260,34 +274,166 @@ func _mutate_selected_object() -> void:
 		_select_next_object()
 		if _selected_object_id.is_empty():
 			return
-	var transform_result: Dictionary = object_stream.set_instance_component(_selected_object_id, "core.transform", {
+	var transform_result := _dispatch_entity_component(_selected_object_id, "core.transform", {
 		"schema_version": 1,
-		"properties": {"translation_mm": [350, 250, 0], "rotation_mdeg": [0, 0, 12000], "scale_milli": [1100, 1000, 900]},
+		"properties": {"translation_mm": [0, 250, 0], "rotation_mdeg": [0, 0, 12000], "scale_milli": [1100, 1000, 900]},
 	})
 	if not transform_result.get("ok", false):
-		_object_state_action_status = "Object transform rejected: %s" % transform_result.get("reason", "invalid")
+		_object_state_action_status = "ENTITY_SET_COMPONENT transform rejected: %s" % transform_result.get("reason", "invalid")
 		return
-	var appearance_result: Dictionary = object_stream.set_instance_component(_selected_object_id, "core.appearance", {
+	var appearance_result := _dispatch_entity_component(_selected_object_id, "core.appearance", {
 		"schema_version": 1,
 		"properties": {"tint_milli": [1000, 650, 350], "label": "owner-state-demo"},
 	})
-	_object_state_action_status = "Object override saved (revision %d)" % object_stream.get_instance_state_revision() if appearance_result.get("ok", false) else "Object appearance rejected: %s" % appearance_result.get("reason", "invalid")
+	_object_state_action_status = "ENTITY_SET_COMPONENT transform + appearance committed (world revision %d; visual %s)" % [object_stream.get_command_world_revision(), appearance_result.get("visual_status", "queued")] if appearance_result.get("ok", false) else "Transform committed at world revision %d; appearance command rejected: %s" % [object_stream.get_command_world_revision(), appearance_result.get("reason", "invalid")]
 
 
 func _delete_selected_object() -> void:
 	if _selected_object_id.is_empty():
 		_object_state_action_status = "Select an object with F6 first"
 		return
-	var result: Dictionary = object_stream.delete_instance(_selected_object_id)
-	_object_state_action_status = "Logical deletion saved (revision %d)" % object_stream.get_instance_state_revision() if result.get("ok", false) else "Object deletion rejected: %s" % result.get("reason", "invalid")
+	var result := _dispatch_entity_operation("ENTITY_DELETE", _selected_object_id)
+	_object_state_action_status = "ENTITY_DELETE committed at world/entity revisions %d/%d; visual %s" % [int(result.get("world_revision", -1)), int(result.get("entity_revision", -1)), result.get("visual_status", "unknown")] if result.get("ok", false) else "ENTITY_DELETE rejected: %s" % result.get("reason", "invalid")
 
 
 func _restore_selected_object() -> void:
 	if _selected_object_id.is_empty():
-		_object_state_action_status = "Select an object with F6 first"
+		_selected_object_id = object_stream.get_latest_deleted_instance_id()
+	if _selected_object_id.is_empty():
+		_object_state_action_status = "ENTITY_RESTORE rejected: no deleted entity is available"
 		return
-	var result: Dictionary = object_stream.restore_instance(_selected_object_id)
-	_object_state_action_status = "Procedural baseline restored (revision %d)" % object_stream.get_instance_state_revision() if result.get("ok", false) else "Object restore rejected: %s" % result.get("reason", "invalid")
+	var result := _dispatch_entity_operation("ENTITY_RESTORE", _selected_object_id)
+	_object_state_action_status = "ENTITY_RESTORE committed at world/entity revisions %d/%d; visual %s" % [int(result.get("world_revision", -1)), int(result.get("entity_revision", -1)), result.get("visual_status", "unknown")] if result.get("ok", false) else "ENTITY_RESTORE rejected: %s" % result.get("reason", "invalid")
+
+
+func _select_entity_at(screen_position: Vector2) -> void:
+	var ray_origin := camera.project_ray_origin(screen_position)
+	var ray_direction := camera.project_ray_normal(screen_position)
+	var picked: Dictionary = object_stream.find_instance_along_ray(ray_origin, ray_direction)
+	if not picked.get("ok", false):
+		_object_state_action_status = "Selection missed: %s" % picked.get("reason", "no entity")
+		return
+	var terrain_hit: Dictionary = BrushPicker.pick_sdf_v1_surface(ray_origin, ray_direction, Callable(self, "_sample_world_density"))
+	if terrain_hit.get("hit", false):
+		var terrain_distance := ray_origin.distance_to(Vector3(terrain_hit.position))
+		if float(picked.get("distance", INF)) > terrain_distance + 0.15:
+			_object_state_action_status = "Selection blocked by the terrain surface"
+			return
+	_selected_object_id = String(picked.entity_id)
+	var summary: Dictionary = object_stream.get_entity_summary(_selected_object_id)
+	_object_state_action_status = "Selected %s (%s; %s)" % [_selected_object_id, summary.get("definition_id", "unknown definition"), "static batch member" if picked.get("batched", false) else "individual representative"]
+
+
+func _place_entity_under_crosshair() -> void:
+	if not object_stream.is_entity_command_ready():
+		_object_state_action_status = "Placement blocked: entity save migration required; press M to preflight, then M again to confirm"
+		return
+	var viewport_size := get_viewport().get_visible_rect().size
+	var screen_position := viewport_size * 0.5
+	var ray_origin := camera.project_ray_origin(screen_position)
+	var ray_direction := camera.project_ray_normal(screen_position)
+	var picked: Dictionary = BrushPicker.pick_sdf_v1_surface(ray_origin, ray_direction, Callable(self, "_sample_world_density"))
+	if not picked.get("hit", false):
+		_object_state_action_status = "ENTITY_PLACE rejected: no terrain surface under the crosshair; aim at a visible surface"
+		return
+	var world_position: Vector3 = picked.position
+	var mapped: Dictionary = SpatialGrid.world_to_region_local(world_position)
+	if not mapped.get("valid", false) or not active_regions.has(_region_id(mapped.get("region_key", Vector2i.ZERO))) or not object_stream.has_published_region(mapped.get("region_key", Vector2i.ZERO)):
+		_object_state_action_status = "ENTITY_PLACE rejected: target region is not fully published"
+		return
+	var definitions: Array[String] = object_stream.get_definition_ids()
+	var definition_id := "firstparty.core_rocks:granite" if definitions.has("firstparty.core_rocks:granite") else (String(definitions[0]) if not definitions.is_empty() else "")
+	if definition_id.is_empty():
+		_object_state_action_status = "ENTITY_PLACE rejected: no registered definition is available"
+		return
+	var command_id := _new_entity_command_id()
+	var recipe_seed := int(command_id.substr(0, 8).hex_to_int() % 2147483646) + 1
+	var command := _entity_command_base("ENTITY_PLACE", command_id, "")
+	command["definition_id"] = definition_id
+	command["position_mm"] = [roundi(world_position.x * 1000.0), roundi(world_position.y * 1000.0), roundi(world_position.z * 1000.0)]
+	command["region_key"] = [int(mapped.region_key.x), int(mapped.region_key.y)]
+	command["recipe_seed"] = recipe_seed
+	command["components"] = {
+		"core.transform": {"schema_version": 1, "properties": {"translation_mm": [0, 0, 0], "rotation_mdeg": [0, 0, 0], "scale_milli": [1000, 1000, 1000]}},
+		"core.appearance": {"schema_version": 1, "properties": {"tint_milli": [1000, 1000, 1000], "label": ""}},
+		"core.logical": {"schema_version": 1, "properties": {"values": {}}},
+	}
+	var result: Dictionary = object_stream.dispatch_entity_command(command)
+	if not result.get("ok", false):
+		_object_state_action_status = "ENTITY_PLACE rejected: %s" % result.get("reason", "unknown")
+		return
+	_selected_object_id = String(result.get("entity_id", ""))
+	_object_state_action_status = "ENTITY_PLACE committed %s at world/entity revisions %d/%d; visual %s" % [_selected_object_id, int(result.get("world_revision", -1)), int(result.get("entity_revision", -1)), result.get("visual_status", "unknown")]
+
+
+func _handle_entity_schema_migration() -> void:
+	var current_schema := int(object_stream.state_service.snapshot.get("schema_version", 0)) if object_stream.state_service != null else 0
+	if current_schema >= 2:
+		_entity_migration_confirmation_deadline_msec = 0
+		if object_stream.is_entity_command_ready():
+			_object_state_action_status = "Entity command schema is ready (schema 2)"
+		else:
+			var retry: Dictionary = object_stream.retry_command_migration_region_publications()
+			_object_state_action_status = "Entity schema 2 committed; region representations rebuilding (%d queued, %d pending): %s" % [int(retry.get("queued_regions", 0)), int(retry.get("remaining_regions", 0)), retry.get("reason", "retry")]
+		return
+	var now := Time.get_ticks_msec()
+	if _entity_migration_confirmation_deadline_msec > 0 and now <= _entity_migration_confirmation_deadline_msec:
+		_entity_migration_confirmation_deadline_msec = 0
+		var migration: Dictionary = object_stream.migrate_command_snapshot_explicitly()
+		if not migration.get("ok", false):
+			_object_state_action_status = "Entity schema migration failed%s: %s" % [" after commit" if migration.get("committed", false) else "", migration.get("reason", "unknown")]
+			return
+		_object_state_action_status = "Entity schema migrated explicitly; generation %d (previous generation %d retained); %d region representation(s) rebuilding; hash %s" % [int(migration.get("generation", -1)), int(migration.get("backup_generation", 0)), int(migration.get("remaining_regions", 0)), String(migration.get("source_payload_sha256", "")).substr(0, 12)]
+		return
+	var preflight: Dictionary = object_stream.get_command_migration_preflight()
+	if not preflight.get("ok", false):
+		_object_state_action_status = "Entity schema migration preflight rejected: %s" % preflight.get("reason", "unknown")
+		return
+	if String(preflight.get("reason", "")) == "already_upgraded":
+		_object_state_action_status = "Entity snapshot already uses schema %d; reinitializing command service" % int(preflight.get("source_schema", -1))
+		object_stream.migrate_command_snapshot_explicitly()
+		return
+	_entity_migration_confirmation_deadline_msec = now + 6000
+	_object_state_action_status = "Migration preflight passed: schema %d to %d, generation %d, revision %d; press M again within 6 s to commit" % [int(preflight.get("source_schema", -1)), int(preflight.get("target_schema", -1)), int(preflight.get("source_generation", 0)), int(preflight.get("revision", -1))]
+
+
+func _dispatch_entity_component(entity_id: String, component_id: String, component: Dictionary) -> Dictionary:
+	var command_id := _new_entity_command_id()
+	var command := _entity_command_base("ENTITY_SET_COMPONENT", command_id, entity_id)
+	command["component_id"] = component_id
+	command["component"] = component
+	return object_stream.dispatch_entity_command(command)
+
+
+func _dispatch_entity_operation(operation: String, entity_id: String) -> Dictionary:
+	return object_stream.dispatch_entity_command(_entity_command_base(operation, _new_entity_command_id(), entity_id))
+
+
+func _entity_command_base(operation: String, command_id: String, entity_id: String) -> Dictionary:
+	var state: Object = object_stream.state_service
+	var command := {
+		"schema_version": 1,
+		"command_id": command_id,
+		"operation": operation,
+		"origin": {"type": "player", "id": "local.player"},
+		"world_id": String(state.get("world_id")),
+		"world_seed": int(state.get("world_seed")),
+		"generator_version": int(state.get("generator_version")),
+		"expected_world_revision": object_stream.get_command_world_revision(),
+		"expected_entity_revision": int(state.get_entity_revision(entity_id)) if not entity_id.is_empty() else 0,
+	}
+	if operation != "ENTITY_PLACE":
+		command["entity_id"] = entity_id
+	return command
+
+
+func _new_entity_command_id() -> String:
+	var hex := Crypto.new().generate_random_bytes(16).hex_encode()
+	return "%s-%s-%s-%s-%s" % [hex.substr(0, 8), hex.substr(8, 4), hex.substr(12, 4), hex.substr(16, 4), hex.substr(20, 12)]
+
+
+func _event_matches_key(event: InputEventKey, keycode: int) -> bool:
+	return event.keycode == keycode or event.physical_keycode == keycode
 
 
 func _move_focus(delta: Vector3) -> void:
@@ -1621,7 +1767,7 @@ func _update_status() -> void:
 	var selected_mode_name := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
 	var queue_depth := _queued_chunk_count()
 	var transaction_state := "idle" if _edit_transaction.is_empty() else String(_edit_transaction.get("stage_state", "staging"))
-	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: cave section    R: rebuild    X: focused reset    L: toggle LOD0 fallback    P: save    O: load\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
+	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: cave section    R: rebuild    X: focused reset    L: LOD    P/O: terrain save/load\nCtrl+left: select object    B: place under center crosshair    F6: cycle    F7: transform + appearance    F8: delete    F9: restore\nM twice within 6 s: explicit entity-schema migration (preflight then commit); no automatic migration\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
 		seed,
 		generator_version,
 		focus_region_key,
@@ -1668,7 +1814,28 @@ func _update_status() -> void:
 		int(population_metrics.get("pending_region_publication_count", 0)),
 		float(population_metrics.get("peak_generation_usec", 0)) / 1000.0,
 	]
-	status += "Object state revision %d | F6 select, F7 override, F8 logical delete, F9 restore\n" % object_stream.get_instance_state_revision()
+	var state_schema := int(object_stream.state_service.snapshot.get("schema_version", 0)) if object_stream.state_service != null else 0
+	var command_readiness := "READY" if object_stream.is_entity_command_ready() else ("REBUILDING resident regions" if state_schema >= 2 else "LOCKED until explicit migration")
+	status += "Entity state schema %d | world revision %d | command dispatcher %s\n" % [state_schema, object_stream.get_instance_state_revision(), command_readiness]
+	if not _selected_object_id.is_empty():
+		var selected_summary: Dictionary = object_stream.get_entity_summary(_selected_object_id)
+		if selected_summary.get("ok", false):
+			status += "Entity: %s | %s | %s | world/entity rev %d/%d | %s\n" % [
+				_selected_object_id,
+				selected_summary.get("definition_id", "unknown"),
+				"explicitly placed" if String(selected_summary.get("identity_kind", "")) == "placed_explicit_v1" else "procedural identity",
+				int(selected_summary.get("world_revision", 0)),
+				int(selected_summary.get("entity_revision", 0)),
+				"logically deleted" if bool(selected_summary.get("deleted", false)) else "active",
+			]
+	var command_metrics: Dictionary = object_stream.get_last_entity_command_metrics()
+	if not command_metrics.is_empty():
+		status += "Last command timings us: validation %d, persistence %d, visual queue %d, command total %d\n" % [
+			int(command_metrics.get("validation_prepare_usec", 0)),
+			int(command_metrics.get("persistence_usec", 0)),
+			int(command_metrics.get("visual_queue_usec", 0)),
+			int(command_metrics.get("command_total_usec", 0)),
+		]
 	status += _object_state_action_status + "\n"
 	status += _procedural_object_status + "\n"
 	if last_stream_error != "":
