@@ -41,6 +41,16 @@ func _init(
 func run() -> void:
 	worker_started_usec = Time.get_ticks_usec()
 	worker_thread_id = OS.get_thread_caller_id()
+	if brush_snapshot is Dictionary and not bool(brush_snapshot.get("valid", true)):
+		result = {
+			"valid": false,
+			"reason": String(brush_snapshot.get("storage_error", "invalid_brush_snapshot")),
+			"region_key": region_key,
+			"coordinate": coordinate,
+			"ledger_revision": int(brush_snapshot.get("revision", -1)),
+		}
+		worker_finished_usec = Time.get_ticks_usec()
+		return
 	if lod_level == 1:
 		var snapshot: Dictionary = brush_snapshot if brush_snapshot is Dictionary else {}
 		result = LodMesher.build_chunk_cpu_data(

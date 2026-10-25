@@ -6,7 +6,7 @@ const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const Mesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const Scene := preload("res://scenes/terrain_demo.tscn")
-const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
+const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store_v2.gd")
 const SEED := 424242
 const REGION_KEYS := [
 	Vector2i(-2, -2), Vector2i(-1, -2), Vector2i(0, -2), Vector2i(1, -2),
@@ -69,9 +69,8 @@ func _test_capacity_and_exact_spatial_filter(ledger: RefCounted) -> void:
 	var before_count: int = ledger.get_edit_count()
 	var before_revision: int = ledger.revision
 	var before_sequence: int = ledger.get_last_sequence()
-	_check(not ledger.add_sphere(BrushState.Mode.CARVE, Vector3(8.0, 3.0, 6.0), 1.25), "257th valid command is rejected at the documented finite cap")
-	_check(ledger.last_rejection_reason == "ledger_capacity_exceeded", "257th rejection identifies capacity rather than invalid brush data")
-	_check(ledger.get_edit_count() == before_count and ledger.revision == before_revision and ledger.get_last_sequence() == before_sequence, "capacity rejection cannot silently evict or consume sequence/revision")
+	_check(ledger.add_sphere(BrushState.Mode.CARVE, Vector3(8.0, 3.0, 6.0), 1.25), "257th valid command is accepted beyond the former prototype cap")
+	_check(ledger.get_edit_count() == before_count + 1 and ledger.revision == before_revision + 1 and ledger.get_last_sequence() == before_sequence + 1, "scalable history preserves the 257th command without eviction")
 	_check(not ledger.add_sphere(BrushState.Mode.CARVE, Vector3(NAN, 3.0, 6.0), 1.25), "invalid input remains rejected when ledger is full")
 	_check(ledger.last_rejection_reason == "non_finite_input", "invalid input reason takes precedence over full-capacity status")
 

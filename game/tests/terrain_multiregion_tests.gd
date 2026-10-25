@@ -6,7 +6,7 @@ const Mesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const Picker := preload("res://scripts/terrain/terrain_brush_picker.gd")
 const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
-const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
+const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store_v2.gd")
 
 const SEED := 424242
 const MIN_WORLD_CELL := Vector2i(-Spatial.CELLS_PER_REGION_X, -Spatial.CELLS_PER_REGION_Z)
@@ -574,7 +574,7 @@ func _test_dynamic_region_streaming_and_focused_edits() -> void:
 		edit_metrics.get("last_rebuild_chunk_count", 0), edit_metrics.get("last_dirty_mesh_job_count", 0),
 		edit_metrics.get("frame_time_p50_ms", 0.0), edit_metrics.get("frame_time_p95_ms", 0.0),
 		edit_metrics.get("frame_time_p99_ms", 0.0), edit_metrics.get("peak_active_region_count", 0),
-		ledger.get_edit_count(), BrushState.MAX_EDITS,
+		ledger.get_edit_count(), BrushState.MAX_OPERATION_COUNT,
 	])
 	print("GLOBAL_EDIT_STAGE_BENCH: queue_wait_p50/p95/total_ms=%.3f/%.3f/%.3f stages=%s" % [
 		edit_metrics.get("mesh_queue_wait_p50_ms", 0.0), edit_metrics.get("mesh_queue_wait_p95_ms", 0.0),

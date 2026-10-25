@@ -611,7 +611,7 @@ static func _snapshot_rejection_reason(world_seed: int, snapshot: Dictionary) ->
 	var centers: PackedVector3Array = snapshot["centers"]
 	var radii: PackedFloat64Array = snapshot["radii"]
 	var modes: PackedByteArray = snapshot["modes"]
-	if centers.size() > BRUSH.MAX_EDITS or centers.size() != radii.size() or centers.size() != modes.size():
+	if centers.size() > BRUSH.MAX_OPERATION_COUNT or centers.size() != radii.size() or centers.size() != modes.size():
 		return "invalid_snapshot_command_count"
 	if int(snapshot["revision"]) < centers.size():
 		return "invalid_snapshot_revision"

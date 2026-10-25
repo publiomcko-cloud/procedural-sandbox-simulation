@@ -3,7 +3,7 @@ extends SceneTree
 const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
-const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
+const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store_v2.gd")
 const MAX_FRAMES := 3000
 const CLICK_REPEATS := 5
 

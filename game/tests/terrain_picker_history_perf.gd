@@ -124,7 +124,7 @@ func _run() -> void:
 			sample_counts.append(sample_count)
 			_check(hit == expect_hit, "mouse picking outcome %s equals expected hit=%s at history=%d actual=%s (samples=%d)" % [scenario, expect_hit, history_size, hit, sample_count])
 			_check(sample_count > 0 and sample_count <= 1 + 1200 + 12, "picker sample count stays inside fixed ray/bisection bound")
-			if expect_hit and before_count < BrushState.MAX_EDITS:
+			if expect_hit and before_count < BrushState.MAX_OPERATION_COUNT:
 				_check(ledger.revision == before_revision + 1 and ledger.get_edit_count() == before_count + 1, "actual hit event is admitted exactly once at history=%d" % before_count)
 				await _wait_for_transaction(scene, frame_usec)
 				visible_usec.append(Time.get_ticks_usec() - started_usec)
@@ -133,7 +133,7 @@ func _run() -> void:
 				worker_queue_wait_usec.append(int(round(float(operation_metrics.get("worker_queue_wait_p95_ms", 0.0)) * 1000.0)))
 				publish_usec.append(int(round(float(operation_metrics.get("mesh_publish_p95_ms", 0.0)) * 1000.0)))
 			elif expect_hit:
-				_check(ledger.revision == before_revision and scene.get("_last_edit_rejection") == "ledger_capacity_exceeded", "actual hit at 256 reports capacity rejection without ledger mutation")
+				_check(ledger.revision == before_revision and scene.get("_last_edit_rejection") == "ledger_capacity_exceeded", "actual hit at configured operation quota fails closed without ledger mutation")
 			else:
 				_check(ledger.revision == before_revision and String(scene.get("last_brush_result")).contains("No terrain surface hit"), "no-intersection mouse event leaves the ledger unchanged")
 			terminal_usec.append(Time.get_ticks_usec() - started_usec)
@@ -270,7 +270,7 @@ func _run_concentrated_profiles(scene: Node, diagnostic_mode: bool = false) -> v
 				dispatch_usec.append(immediate_dispatch_usec)
 				candidate_counts.append(int(scene.get("_last_brush_pick_candidate_count")))
 				sample_counts.append(int(scene.get("_last_brush_pick_sample_count")))
-				if expect_hit and before_count < BrushState.MAX_EDITS:
+				if expect_hit and before_count < BrushState.MAX_OPERATION_COUNT:
 					_check(ledger.get_edit_count() == before_count + 1 and ledger.revision == before_revision + 1, "%s valid concentrated click accepted once history=%d" % [layout["name"], before_count])
 					var accepted_usec := Time.get_ticks_usec()
 					accept_usec.append(accepted_usec - started_usec)
@@ -285,7 +285,7 @@ func _run_concentrated_profiles(scene: Node, diagnostic_mode: bool = false) -> v
 					publish_usec.append(int(round(float(diagnostics.get("mesh_publish_p95_ms", 0.0)) * 1000.0)))
 					array_mesh_upload_usec.append(int(round(float(diagnostics.get("array_mesh_upload_p50_ms", 0.0)) * 1000.0)))
 				elif expect_hit:
-					_check(ledger.revision == before_revision and scene.get("_last_edit_rejection") == "ledger_capacity_exceeded", "%s 256-operation hit is rejected only for capacity" % layout["name"])
+					_check(ledger.revision == before_revision and scene.get("_last_edit_rejection") == "ledger_capacity_exceeded", "%s configured operation quota rejects only after its finite bound" % layout["name"])
 				else:
 					_check(ledger.revision == before_revision and String(scene.get("last_brush_result")).contains("No terrain surface hit"), "%s miss leaves concentrated ledger unchanged" % layout["name"])
 				var release_event := InputEventMouseButton.new()

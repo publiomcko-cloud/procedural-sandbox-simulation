@@ -9,7 +9,7 @@ const BrushEditState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const BrushPicker := preload("res://scripts/terrain/terrain_brush_picker.gd")
 const TerrainMeshJob := preload("res://scripts/terrain/terrain_mesh_job.gd")
 const TerrainLodPolicy := preload("res://scripts/terrain/terrain_lod_policy.gd")
-const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
+const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store_v2.gd")
 const EntityStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 
 const BRUSH_RADIUS := 1.25
@@ -154,6 +154,8 @@ func _ready() -> void:
 		else:
 			_persistence_blocked = true
 			_persistence_status = "Saved world unavailable (%s); edits remain untouched and saving is blocked" % saved_world.get("reason", "invalid")
+	elif saved_world.get("legacy_available", false):
+		_persistence_status = "Schema-1 terrain save detected and preserved; choose a new v2 world explicitly (no migration/import)"
 	var object_initialization: Dictionary = object_stream.initialize(world_seed, world_id, object_package_roots_override, object_state_directory_override)
 	if object_initialization.get("ok", false):
 		_procedural_object_status = "Procedural objects ready"
@@ -1844,7 +1846,7 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["last_brush_pick_candidate_count"] = _last_brush_pick_candidate_count
 	last_mesh_diagnostics["brush_pick_serial"] = _brush_pick_serial
 	last_mesh_diagnostics["global_edit_count"] = edit_ledger.get_edit_count()
-	last_mesh_diagnostics["global_edit_limit"] = BrushEditState.MAX_EDITS
+	last_mesh_diagnostics["global_edit_limit"] = BrushEditState.MAX_OPERATION_COUNT
 	last_mesh_diagnostics["global_edit_last_sequence"] = edit_ledger.get_last_sequence()
 	last_mesh_diagnostics["global_edit_revision"] = edit_ledger.revision
 	last_mesh_diagnostics["last_support_region_count"] = _last_edit_support_region_count
@@ -1875,8 +1877,11 @@ func _build_ledger_from_payload(payload: Dictionary) -> Dictionary:
 		"generator_version": int(generator_value),
 		"revision": int(payload.get("ledger_revision", -1)),
 		"next_sequence": int(payload.get("next_sequence", -1)),
-		"operations": payload.get("operations", null),
 	}
+	if payload.has("storage_reference"):
+		snapshot["storage_reference"] = payload["storage_reference"]
+	else:
+		snapshot["operations"] = payload.get("operations", null)
 	if not ledger.restore_persistence_snapshot(snapshot):
 		return {"ok": false, "reason": ledger.last_restore_rejection_reason}
 	return {"ok": true, "world_seed": int(seed_value), "ledger": ledger}
@@ -1889,7 +1894,7 @@ func _loaded_world_message(load_result: Dictionary) -> String:
 		return "Loaded valid generation %d; ignored %d invalid candidate(s)" % [
 			int(load_result.get("generation", 0)), int(load_result["ignored_invalid_candidates"]),
 		]
-	return "Loaded local world generation %d" % int(load_result.get("generation", 0))
+	return "Loaded terrain schema v2 generation %d (%d indexed segment(s))" % [int(load_result.get("generation", 0)), int(load_result.get("segment_count", 0))]
 
 
 func _save_world_to_storage() -> bool:
@@ -1965,7 +1970,7 @@ func _update_status() -> void:
 		_persistence_status,
 		selected_mode_name,
 		edit_ledger.get_edit_count(),
-		BrushEditState.MAX_EDITS,
+		BrushEditState.MAX_OPERATION_COUNT,
 		edit_ledger.get_last_sequence(),
 		edit_ledger.revision,
 		BRUSH_RADIUS,

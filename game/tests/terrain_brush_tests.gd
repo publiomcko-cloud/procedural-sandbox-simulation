@@ -5,7 +5,7 @@ const TerrainMesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const BrushEditState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const BrushPicker := preload("res://scripts/terrain/terrain_brush_picker.gd")
 const ChunkGrid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
-const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
+const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store_v2.gd")
 
 var assertion_count := 0
 var failure_count := 0
@@ -89,10 +89,9 @@ func _test_edit_bounds_and_reset() -> void:
 	_check(not edits.add_sphere(BrushEditState.Mode.CARVE, Vector3(INF, 0.0, 0.0), 1.0), "non-finite brush center is rejected")
 	for _index in range(BrushEditState.MAX_EDITS):
 		_check(edits.add_sphere(BrushEditState.Mode.CARVE, center, 1.0), "bounded edit slot is accepted")
-	var count_before_rejection := edits.get_edit_count()
-	_check(not edits.add_sphere(BrushEditState.Mode.FILL, center, 1.0), "edit count limit rejects the next operation")
-	_check(edits.last_rejection_reason == "ledger_capacity_exceeded", "capacity rejection is distinct from invalid brush input")
-	_check(edits.get_edit_count() == count_before_rejection, "rejected operation does not alter edit state")
+	_check(edits.add_sphere(BrushEditState.Mode.FILL, center, 1.0), "the 257th operation is accepted by the scalable ledger")
+	_check(edits.get_edit_count() == BrushEditState.MAX_EDITS + 1, "historical 256 fixture size is no longer an operation admission limit")
+	_check(BrushEditState.MAX_OPERATION_COUNT > BrushEditState.MAX_EDITS, "finite v2 quota is explicit and higher than the prototype cap")
 	var sample_before_reset: float = edits.sample_density(424242, Vector2i.ZERO, center)
 	var base_sample: float = TerrainField.sample_density(424242, Vector2i.ZERO, center)
 	_check(not is_equal_approx(sample_before_reset, base_sample), "accepted edits affect the field before reset")
@@ -196,9 +195,8 @@ func _test_global_ledger_contract() -> void:
 	var before_reject := bounded.get_operations_snapshot()
 	var revision_before_reject: int = bounded.revision
 	var sequence_before_reject: int = bounded.get_last_sequence()
-	_check(not bounded.add_sphere(BrushEditState.Mode.FILL, Vector3(8.0, 4.0, 6.0), 1.0), "global ledger rejects operation beyond fixed cap")
-	_check(bounded.last_rejection_reason == "ledger_capacity_exceeded", "full global ledger reports an actionable capacity reason")
-	_check(bounded.get_operations_snapshot() == before_reject and bounded.revision == revision_before_reject and bounded.get_last_sequence() == sequence_before_reject, "overflow rejection leaves log, revision, sequence and index unchanged")
+	_check(bounded.add_sphere(BrushEditState.Mode.FILL, Vector3(8.0, 4.0, 6.0), 1.0), "global ledger accepts operation beyond former fixed cap")
+	_check(bounded.get_edit_count() == before_reject.size() + 1 and bounded.revision == revision_before_reject + 1 and bounded.get_last_sequence() == sequence_before_reject + 1, "257th command advances log, revision and sequence")
 	var before_reset_sequence: int = corner.get_last_sequence()
 	var reset_result: Dictionary = corner.clear_for_region(Vector2i(0, 0))
 	_check(reset_result["removed_count"] == 1 and reset_result["rebuild_regions"].size() == 4, "focused reset removes a cross-region command and returns every mesh dependency")
@@ -297,7 +295,7 @@ func _test_viewport_interaction() -> void:
 	_check(edits.get_edit_count() == 2, "viewport-dispatched Shift+left click applies fill")
 	_check(scene.get("selected_brush_mode") == BrushEditState.Mode.FILL, "Shift+left click selects fill mode")
 	var mode_label: String = scene.get_node("CanvasLayer/Status").text
-	_check(mode_label.contains("Selected: FILL") and mode_label.contains("Global edits: 2/256"), "HUD reports selected mode and 256-command global history capacity")
+	_check(mode_label.contains("Selected: FILL") and mode_label.contains("Global edits: 2/65536"), "HUD reports selected mode and finite v2 global history capacity")
 
 	var operations_before_section: Array[Dictionary] = edits.get_operations_snapshot()
 	var section_event := InputEventKey.new()
