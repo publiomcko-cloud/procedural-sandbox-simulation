@@ -1,0 +1,9 @@
+# ADR-0006 — Persisted Transactional Entity Undo/Redo
+
+- **Status:** Proposed with P3.0C implementation candidate; pending independent source review and owner GUI evaluation.
+- **Date:** 2026-10-25
+- **Context:** P3.0A/P3.0B persist entity state, optimistic revisions and command receipts in the P2.0B object-state service. Undo/redo must restore logical state without making streamed scene nodes authoritative or changing terrain save schema 1.
+- **Decision:** Extend the object-state snapshot to explicit schema 3 with a bounded ordered entity history and cursor. Record inverse metadata in the same durable receipt as each source command. Dispatch undo/redo through the same validated command service and commit state, revisions, history cursor/state, and idempotency receipt in one new immutable snapshot generation. Keep schema 1 and 2 readable and require explicit preflight plus owner-triggered migration. Preserve schema-2 command receipts, but do not synthesize undo history for old commands.
+- **Consequences:** Undo/redo survives restart and region streaming; all state remains in one existing authority. History is limited to 256 entries, receipts to 4096, and serialized state to 4 MiB. A new command after undo drops the redo branch. IDs and entity revisions are never rewound. Missing content pins or violated preconditions block navigation.
+- **Limits:** The store's temporary-write/readback/rename and two-generation retention are not a claim of universal power-loss durability, cross-process locking, or external-writer safety. Scene publication is downstream of persistence and can fail independently. GUI acceptance and independent review remain pending. This ADR does not approve merge or release.
+- **References:** [P3.0C specification](../specs/P3-0C-TRANSACTIONAL-PERSISTENT-UNDO-REDO.md), [implementation checkpoint](../checkpoints/2026-10-25-P3-0C-IMPLEMENTATION.md).
