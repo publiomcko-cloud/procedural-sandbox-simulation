@@ -1,5 +1,9 @@
 # Roadmap with implementation gates
 
+## 2026-10-25 — Issue #118 R1 optional-root API hardening
+
+Source `f0164b140009bb797951aa4085bb36001889bc57` on the existing Issue #118 branch enforces optional-root eligibility inside the loader. Only the exact canonical `user://mods` root can receive undeclared-child handling; caller-provided first-party, example, descendant and prefix roots are rejected. The pre-fix downgrade was reproduced on an isolated fixture. Focused and full Godot 4.7.2 validation passed 18,047 assertions/0 failures. PR #119 remains open/draft; independent R1 review, hosted checks and owner GUI retest remain pending. See [R1 checkpoint](../checkpoints/2026-10-25-ISSUE-118-OPTIONAL-ROOT-API-HARDENING.md). No merge or schema change is authorized; F2-G1 holds remain.
+
 ## 2026-10-25 — Issue #118 mod discovery correction candidate
 
 On branch `fix/issue-118-mod-discovery-initialization`, source commit `f8edbff0a7bab3ea733b4903611a9e6a5904613c` (parent verified main `fd431dbcad18685a3aa2c86c3c9b25fbd81303c9`) corrects initialization failure when undeclared immediate folders exist under the optional user package root. It preserves strict validation of required roots, declared packages and path safety. Full Godot 4.7.2 headless validation passed 18,040 assertions/0 failures with isolated user data. This is not visual/save acceptance; independent source review and owner GUI retest remain pending. No merge is authorized. See [Issue #118 spec](../specs/ISSUE-118-MOD-DISCOVERY.md) and [checkpoint](../checkpoints/2026-10-25-ISSUE-118-MOD-DISCOVERY-FIX.md). All five F2-G1 holds remain unchanged.

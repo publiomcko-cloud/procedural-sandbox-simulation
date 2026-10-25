@@ -13,6 +13,8 @@ Package discovery previously interpreted every immediate directory in every auth
 
 Treat only the exact `user://mods` root as optional. Within that root, an immediate child directory with no `manifest.json` is reported as an ignored undeclared folder and discovery continues. Required roots remain strict. A present but invalid manifest or content, dependency/identity failure, missing required root, or path safety failure remains fatal. Discovery stays deterministic, bounded and non-recursive.
 
+The loader enforces this allowlist itself: a caller cannot mark a different authorized root, a descendant, or a string-prefix neighbor as optional. Path normalization is limited to the canonical comparison of the exact user root and does not resolve a descendant or reparse alias into eligibility.
+
 The loader reports counts and structured diagnostics. The HUD presents a brief sanitized warning, without exposing absolute user paths. The loader does not create package manifests or mutate user folders.
 
 ## Consequences
