@@ -267,6 +267,8 @@ func load_world(world_id: String = WORLD_ID) -> Dictionary:
 func validate_storage_reference(metadata: Dictionary) -> bool:
 	return not _loaded_metadata.is_empty() \
 		and String(metadata.get("world_id", "")) == String(_loaded_metadata.get("world_id", "")) \
+		and int(metadata.get("world_seed", -1)) == int(_loaded_metadata.get("world_seed", -2)) \
+		and int(metadata.get("generator_version", -1)) == int(_loaded_metadata.get("generator_version", -2)) \
 		and int(metadata.get("generation", -1)) == int(_loaded_metadata.get("generation", -2)) \
 		and int(metadata.get("operation_count", -1)) == int(_loaded_metadata.get("operation_count", -2)) \
 		and int(metadata.get("ledger_revision", -1)) == int(_loaded_metadata.get("ledger_revision", -2)) \

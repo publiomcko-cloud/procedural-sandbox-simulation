@@ -52,6 +52,7 @@ func _test_scalable_segmented_replay_and_spatial_index() -> void:
 	if not loaded.get("ok", false) or not loaded.get("found", false):
 		return
 	_check(not loaded["payload"].has("operations") and loaded["payload"].has("storage_reference"), "load keeps operation payloads lazy instead of materializing the world log")
+	_test_storage_reference_identity(loaded)
 	var restored: RefCounted = _restore_loaded(store, loaded)
 	if restored.get_edit_count() != 640:
 		return
@@ -80,6 +81,26 @@ func _test_scalable_segmented_replay_and_spatial_index() -> void:
 	var lod1_build_us := Time.get_ticks_usec() - chunk_started
 	_check(mesh0.get("valid", false) and mesh1.get("valid", false), "LOD0/LOD1 reconstruct from lazy chunk candidates")
 	print("P3_1_STORAGE_BENCH distributed_count=640 generation_ms=%.3f save_ms=%.3f verify_load_ms=%.3f lod0_chunk_ms=%.3f lod1_chunk_ms=%.3f segments=%d candidate_count=%d" % [float(generation_us) / 1000.0, float(save_us) / 1000.0, float(load_us) / 1000.0, float(lod0_build_us) / 1000.0, float(lod1_build_us) / 1000.0, int(saved.get("segment_count", 0)), int(filtered.get("candidate_operation_count", 0))])
+
+
+func _test_storage_reference_identity(loaded: Dictionary) -> void:
+	var payload: Dictionary = loaded["payload"]
+	var reference: Dictionary = payload["storage_reference"]
+	for identity_field in ["world_seed", "generator_version"]:
+		var forged_reference: Dictionary = reference.duplicate()
+		var forged_metadata: Dictionary = (reference["metadata"] as Dictionary).duplicate(true)
+		forged_metadata[identity_field] = int(forged_metadata[identity_field]) + 1
+		forged_reference["metadata"] = forged_metadata
+		var candidate: RefCounted = Brush.new(int(payload["world_seed"]), int(payload["generator_version"]))
+		var snapshot := {
+			"world_seed": int(payload["world_seed"]),
+			"generator_version": int(payload["generator_version"]),
+			"revision": int(payload["ledger_revision"]),
+			"next_sequence": int(payload["next_sequence"]),
+			"storage_reference": forged_reference,
+		}
+		_check(not candidate.restore_persistence_snapshot(snapshot), "lazy storage reference rejects mismatched %s" % identity_field)
+		_check(candidate.get_edit_count() == 0 and candidate.revision == 0 and candidate.get_next_sequence() == 0, "rejected %s reference leaves the target ledger pristine" % identity_field)
 
 
 func _test_dense_history_exact_order_and_reset() -> void:
