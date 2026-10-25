@@ -1838,6 +1838,9 @@ func _update_status() -> void:
 		]
 	status += _object_state_action_status + "\n"
 	status += _procedural_object_status + "\n"
+	var package_discovery_summary := object_stream.get_package_discovery_summary()
+	if not package_discovery_summary.is_empty():
+		status += package_discovery_summary + "\n"
 	if last_stream_error != "":
 		status += "STREAM ERROR: " + last_stream_error + "\n"
 	status += last_brush_result
