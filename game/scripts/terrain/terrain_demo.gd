@@ -53,6 +53,16 @@ var object_package_roots_override: Array[String] = []
 var _selected_object_index := 0
 var _selected_object_id := ""
 var _object_state_action_status := "Entities: Ctrl+click select; M twice migrates entity save; B place; F6 cycle; F7 edit; F8 delete; F9 restore"
+var _placement_target_marker: MeshInstance3D
+var _placement_target_valid := false
+var _placement_target_published := false
+var _placement_target_region_key := Vector2i.ZERO
+var _placement_target_world_position := Vector3.ZERO
+var _placement_target_normal := Vector3.UP
+var _last_pointer_viewport_position := Vector2.ZERO
+var _has_pointer_viewport_position := false
+var _last_placement_aim_mode := "center"
+var _last_placement_mouse_mode := -1
 var _entity_migration_confirmation_deadline_msec := 0
 var chunk_nodes: Dictionary = {} # stable chunk id -> active MeshInstance3D
 var _published_lod_by_chunk: Dictionary = {} # stable chunk id -> 0/1
@@ -149,6 +159,7 @@ func _ready() -> void:
 		_procedural_object_status = "Procedural objects ready"
 	else:
 		_procedural_object_status = "Procedural objects unavailable (%s)" % object_initialization.get("reason", "unknown")
+	_create_placement_target_marker()
 	terrain_mesh_template.mesh = null
 	terrain_mesh_template.visible = false
 	_begin_operation("initial_load")
@@ -185,10 +196,18 @@ func _process(delta: float) -> void:
 			_object_state_action_status = "%s committed at world revision %d; visual publication succeeded" % [visual_result.get("operation", "Entity command"), int(visual_result.get("world_revision", -1))]
 		else:
 			_object_state_action_status = "%s committed at world revision %d, but visual publication failed: %s" % [visual_result.get("operation", "Entity command"), int(visual_result.get("world_revision", -1)), visual_result.get("reason", "unknown")]
+	if _placement_target_valid:
+		var target_is_published := _is_placement_region_published(_placement_target_region_key)
+		if target_is_published != _placement_target_published:
+			_placement_target_published = target_is_published
+			_update_placement_marker_visual()
 	_peak_mesh_uploads_per_frame = maxi(_peak_mesh_uploads_per_frame, _mesh_uploads_this_frame)
 	_last_process_work_ms = float(Time.get_ticks_usec() - process_started_usec) / 1000.0
 	_peak_process_work_ms = maxf(_peak_process_work_ms, _last_process_work_ms)
 	_diagnostics_refresh_elapsed += delta
+	if int(Input.mouse_mode) != _last_placement_mouse_mode:
+		_last_placement_mouse_mode = int(Input.mouse_mode)
+		_refresh_placement_target_indicator()
 	if _diagnostics_refresh_elapsed >= DIAGNOSTICS_REFRESH_INTERVAL:
 		_diagnostics_refresh_elapsed = 0.0
 		_update_runtime_diagnostics()
@@ -196,6 +215,9 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion or event is InputEventMouseButton:
+		_last_pointer_viewport_position = event.position
+		_has_pointer_viewport_position = true
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			orbit_dragging = event.pressed
@@ -263,6 +285,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif _event_matches_key(event, KEY_S) or _event_matches_key(event, KEY_DOWN):
 			_move_focus(Vector3(0.0, 0.0, FOCUS_MOVE_STEP))
 		_update_status()
+	if event is InputEventMouseMotion or event is InputEventMouseButton:
+		_refresh_placement_target_indicator(event.position)
 
 
 func _select_next_object() -> void:
@@ -336,18 +360,28 @@ func _place_entity_under_crosshair() -> void:
 	if not object_stream.is_entity_command_ready():
 		_object_state_action_status = "Placement blocked: entity save migration required; press M to preflight, then M again to confirm"
 		return
-	var viewport_size := get_viewport().get_visible_rect().size
-	var screen_position := viewport_size * 0.5
-	var ray_origin := camera.project_ray_origin(screen_position)
-	var ray_direction := camera.project_ray_normal(screen_position)
-	var picked: Dictionary = BrushPicker.pick_sdf_v1_surface(ray_origin, ray_direction, Callable(self, "_sample_world_density"))
-	if not picked.get("hit", false):
-		_object_state_action_status = "ENTITY_PLACE rejected: no terrain surface under the crosshair; aim at a visible surface"
+	var aim := _placement_aim()
+	var screen_position: Vector2 = aim["screen_position"]
+	_last_placement_aim_mode = String(aim["mode"])
+	var target := _placement_target_at(screen_position)
+	if not target.get("valid", false):
+		_placement_target_valid = false
+		if is_instance_valid(_placement_target_marker):
+			_placement_target_marker.visible = false
+		var reason := String(target.get("reason", "no_surface"))
+		var reason_text := "no terrain surface at the %s target; aim at a visible surface" % _aim_description(_last_placement_aim_mode) if reason == "no_surface" else "target is outside supported world coordinates"
+		_object_state_action_status = "ENTITY_PLACE rejected: %s" % reason_text
 		return
-	var world_position: Vector3 = picked.position
-	var mapped: Dictionary = SpatialGrid.world_to_region_local(world_position)
-	if not mapped.get("valid", false) or not active_regions.has(_region_id(mapped.get("region_key", Vector2i.ZERO))) or not object_stream.has_published_region(mapped.get("region_key", Vector2i.ZERO)):
-		_object_state_action_status = "ENTITY_PLACE rejected: target region is not fully published"
+	var world_position: Vector3 = target["world_position"]
+	var position_mm: Vector3i = target["position_mm"]
+	var region_key: Vector2i = target["region_key"]
+	if not _is_placement_region_published(region_key):
+		_placement_target_valid = true
+		_placement_target_published = false
+		_placement_target_region_key = region_key
+		_placement_target_world_position = world_position
+		_update_placement_marker_visual()
+		_object_state_action_status = "ENTITY_PLACE rejected: target region %s is not fully published" % region_key
 		return
 	var definitions: Array[String] = object_stream.get_definition_ids()
 	var definition_id := "firstparty.core_rocks:granite" if definitions.has("firstparty.core_rocks:granite") else (String(definitions[0]) if not definitions.is_empty() else "")
@@ -358,8 +392,8 @@ func _place_entity_under_crosshair() -> void:
 	var recipe_seed := int(command_id.substr(0, 8).hex_to_int() % 2147483646) + 1
 	var command := _entity_command_base("ENTITY_PLACE", command_id, "")
 	command["definition_id"] = definition_id
-	command["position_mm"] = [roundi(world_position.x * 1000.0), roundi(world_position.y * 1000.0), roundi(world_position.z * 1000.0)]
-	command["region_key"] = [int(mapped.region_key.x), int(mapped.region_key.y)]
+	command["position_mm"] = [position_mm.x, position_mm.y, position_mm.z]
+	command["region_key"] = [region_key.x, region_key.y]
 	command["recipe_seed"] = recipe_seed
 	command["components"] = {
 		"core.transform": {"schema_version": 1, "properties": {"translation_mm": [0, 0, 0], "rotation_mdeg": [0, 0, 0], "scale_milli": [1000, 1000, 1000]}},
@@ -370,8 +404,125 @@ func _place_entity_under_crosshair() -> void:
 	if not result.get("ok", false):
 		_object_state_action_status = "ENTITY_PLACE rejected: %s" % result.get("reason", "unknown")
 		return
+	_placement_target_valid = true
+	_placement_target_published = true
+	_placement_target_region_key = region_key
+	_placement_target_world_position = world_position
+	_placement_target_normal = target["normal"]
+	_update_placement_marker_visual()
 	_selected_object_id = String(result.get("entity_id", ""))
-	_object_state_action_status = "ENTITY_PLACE committed %s at world/entity revisions %d/%d; visual %s" % [_selected_object_id, int(result.get("world_revision", -1)), int(result.get("entity_revision", -1)), result.get("visual_status", "unknown")]
+	_object_state_action_status = "ENTITY_PLACE committed %s at %s target %s (anchor mm %s; world/entity revisions %d/%d; visual %s)" % [_selected_object_id, _aim_description(_last_placement_aim_mode), region_key, position_mm, int(result.get("world_revision", -1)), int(result.get("entity_revision", -1)), result.get("visual_status", "unknown")]
+
+
+func _placement_aim() -> Dictionary:
+	var viewport := get_viewport()
+	var visible_rect := viewport.get_visible_rect()
+	var pointer := _last_pointer_viewport_position if _has_pointer_viewport_position else viewport.get_mouse_position()
+	return _placement_aim_for_cursor(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, pointer, visible_rect)
+
+
+func _placement_aim_for_cursor(cursor_visible: bool, pointer: Vector2, visible_rect: Rect2) -> Dictionary:
+	if cursor_visible and visible_rect.has_point(pointer):
+		return {"mode": "pointer", "screen_position": pointer}
+	return {"mode": "center", "screen_position": visible_rect.position + visible_rect.size * 0.5}
+
+
+func _placement_target_at(screen_position: Vector2) -> Dictionary:
+	if not is_instance_valid(camera) or not is_instance_valid(object_stream):
+		return {"valid": false, "published": false, "reason": "scene_not_ready"}
+	var ray_origin := camera.project_ray_origin(screen_position)
+	var ray_direction := camera.project_ray_normal(screen_position)
+	var picked: Dictionary = BrushPicker.pick_sdf_v1_surface(ray_origin, ray_direction, Callable(self, "_sample_world_density"))
+	if not picked.get("hit", false):
+		return {"valid": false, "published": false, "reason": "no_surface"}
+	var world_position: Vector3 = picked["position"]
+	var position_mm := _world_position_to_mm(world_position)
+	var mapped: Dictionary = SpatialGrid.world_to_region_local(Vector3(position_mm) / 1000.0)
+	if not mapped.get("valid", false):
+		return {"valid": false, "published": false, "reason": "unsupported_world_position"}
+	var region_key: Vector2i = mapped["region_key"]
+	return {
+		"valid": true,
+		"published": _is_placement_region_published(region_key),
+		"world_position": world_position,
+		"position_mm": position_mm,
+		"region_key": region_key,
+		"normal": _estimate_surface_normal(world_position),
+	}
+
+
+func _is_placement_region_published(region_key: Vector2i) -> bool:
+	return active_regions.has(_region_id(region_key)) and object_stream.has_published_region(region_key)
+
+
+func _world_position_to_mm(world_position: Vector3) -> Vector3i:
+	return Vector3i(roundi(world_position.x * 1000.0), roundi(world_position.y * 1000.0), roundi(world_position.z * 1000.0))
+
+
+func _estimate_surface_normal(world_position: Vector3) -> Vector3:
+	const SAMPLE_RADIUS := 0.025
+	var x_gradient := _sample_world_density(world_position + Vector3.RIGHT * SAMPLE_RADIUS) - _sample_world_density(world_position - Vector3.RIGHT * SAMPLE_RADIUS)
+	var y_gradient := _sample_world_density(world_position + Vector3.UP * SAMPLE_RADIUS) - _sample_world_density(world_position - Vector3.UP * SAMPLE_RADIUS)
+	var z_gradient := _sample_world_density(world_position + Vector3.BACK * SAMPLE_RADIUS) - _sample_world_density(world_position - Vector3.BACK * SAMPLE_RADIUS)
+	var gradient := Vector3(x_gradient, y_gradient, z_gradient)
+	return gradient.normalized() if gradient.is_finite() and gradient.length_squared() > 0.000001 else Vector3.UP
+
+
+func _create_placement_target_marker() -> void:
+	var marker := MeshInstance3D.new()
+	marker.name = "PlacementTargetMarker"
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.095
+	sphere.height = 0.19
+	sphere.radial_segments = 12
+	sphere.rings = 6
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = Color(0.2, 0.95, 1.0, 1.0)
+	material.emission_enabled = true
+	material.emission = Color(0.08, 0.65, 0.9, 1.0)
+	material.emission_energy_multiplier = 1.3
+	marker.mesh = sphere
+	marker.material_override = material
+	marker.visible = false
+	add_child(marker)
+	_placement_target_marker = marker
+
+
+func _refresh_placement_target_indicator(screen_override: Variant = null) -> void:
+	if not is_instance_valid(_placement_target_marker) or not is_inside_tree():
+		return
+	var aim := _placement_aim()
+	if screen_override is Vector2 and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and get_viewport().get_visible_rect().has_point(screen_override):
+		aim["screen_position"] = screen_override
+		aim["mode"] = "pointer"
+	_last_placement_aim_mode = String(aim["mode"])
+	var target := _placement_target_at(aim["screen_position"])
+	_placement_target_valid = bool(target.get("valid", false))
+	_placement_target_published = bool(target.get("published", false))
+	if _placement_target_valid:
+		_placement_target_world_position = target["world_position"]
+		_placement_target_region_key = target["region_key"]
+		_placement_target_normal = target["normal"]
+	_update_placement_marker_visual()
+
+
+func _update_placement_marker_visual() -> void:
+	if not is_instance_valid(_placement_target_marker):
+		return
+	_placement_target_marker.visible = _placement_target_valid
+	if not _placement_target_valid:
+		return
+	_placement_target_marker.global_position = _placement_target_world_position + _placement_target_normal * 0.045
+	var material := _placement_target_marker.material_override as StandardMaterial3D
+	if material != null:
+		var color := Color(0.2, 1.0, 0.45, 1.0) if _placement_target_published else Color(1.0, 0.48, 0.08, 1.0)
+		material.albedo_color = color
+		material.emission = color
+
+
+func _aim_description(mode: String) -> String:
+	return "visible pointer" if mode == "pointer" else "center aim (cursor hidden or unavailable)"
 
 
 func _handle_entity_schema_migration() -> void:
@@ -1000,6 +1151,7 @@ func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary
 		_procedural_object_status = "Procedural objects queued" if object_error.is_empty() else "Procedural object issue: %s" % object_error
 	if region_key == focus_region_key:
 		world_state = state
+	_refresh_placement_target_indicator()
 
 
 func _create_chunk_node(region_key: Vector2i, coordinate: Vector2i, chunk_id: String) -> MeshInstance3D:
@@ -1599,6 +1751,8 @@ func _region_key_from_id(region_id: String) -> Vector2i:
 func _update_camera() -> void:
 	camera.position = orbit_target + orbit_offset
 	camera.look_at(orbit_target, Vector3.UP)
+	if is_instance_valid(_placement_target_marker):
+		_refresh_placement_target_indicator()
 
 
 func _set_orbit_distance(distance: float) -> void:
@@ -1796,7 +1950,9 @@ func _update_status() -> void:
 	var selected_mode_name := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
 	var queue_depth := _queued_chunk_count()
 	var transaction_state := "idle" if _edit_transaction.is_empty() else String(_edit_transaction.get("stage_state", "staging"))
-	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: cave section    R: rebuild    X: focused reset    L: LOD    P/O: terrain save/load\nCtrl+left: select object    B: place under center crosshair    F6: cycle    F7: transform + appearance    F8: delete    F9: restore baseline\nCtrl+Z: Undo entity command    Ctrl+Y / Ctrl+Shift+Z: Redo entity command\nM twice within 6 s: explicit schema-3 history migration (preflight then commit); no automatic migration\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
+	var aim_text := "visible pointer" if _last_placement_aim_mode == "pointer" else "center aim (cursor hidden/unavailable)"
+	var target_text := "none" if not _placement_target_valid else "%s at %s (%s)" % [aim_text, _placement_target_region_key, "published" if _placement_target_published else "waiting for publication"]
+	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: cave section    R: rebuild    X: focused reset    L: LOD    P/O: terrain save/load\nCtrl+left: select object    B: place at visible pointer; hidden cursor uses center aim    F6: cycle    F7: transform + appearance    F8: delete    F9: restore baseline\nPlacement target: %s\nUndo anchor: entity origin/base center coincides with the terrain hit; no slope conforming\nCtrl+Z: Undo entity command    Ctrl+Y / Ctrl+Shift+Z: Redo entity command\nM twice within 6 s: explicit schema-3 history migration (preflight then commit); no automatic migration\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
 		seed,
 		generator_version,
 		focus_region_key,
@@ -1805,6 +1961,7 @@ func _update_status() -> void:
 		loading_regions.size(),
 		queue_depth,
 		_queued_mesh_job_count(),
+		target_text,
 		_persistence_status,
 		selected_mode_name,
 		edit_ledger.get_edit_count(),

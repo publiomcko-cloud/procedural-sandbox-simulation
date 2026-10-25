@@ -6,6 +6,7 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-10-25 | [P3.0D precise entity placement](2026-10-25-P3-0D-ENTITY-PLACEMENT.md) | Reproduced center-aim selection mismatch; added visible-pointer SDF placement, shared target marker, consistent millimeter/region ownership, and 51 focused assertions; full Godot validation 18,204/0 | Draft PR #124; independent source review and owner GUI retest pending |
 | 2026-10-25 | [P3.0C persistent entity undo/redo](2026-10-25-P3-0C-IMPLEMENTATION.md) | Schema-3 bounded history, transactional undo/redo, exact DELETE/F7 restoration and F9 baseline semantics; complete Godot validation 18,153/0 | Feature candidate on `feat/p3-0c-transactional-undo-redo`; draft PR pending; independent source review and owner GUI pending |
 | 2026-10-25 | [Issue #118 optional-root API hardening](2026-10-25-ISSUE-118-OPTIONAL-ROOT-API-HARDENING.md) | Reproduced caller downgrade of an authorized required root; loader now allows optional handling only for canonical `user://mods`; full validation 18,047/0 | R1 source `f0164b14`; exact-HEAD static checks pass; independent review and owner GUI pending |
 | 2026-10-25 | [Issue #118 mod discovery and initialization correction](2026-10-25-ISSUE-118-MOD-DISCOVERY-FIX.md) | Reproduced optional `user://mods` residual folder blocking package discovery; bounded ignore-with-diagnostic correction; Godot validation 18,040/0 | Source `f8edbff0`; correction candidate, independent review/hosted CI/owner GUI pending |

@@ -990,10 +990,12 @@ func _test_playable_scene_publication() -> void:
 		demo.set("orbit_offset", Vector3(0.0, 20.0, 0.0))
 		demo.call("_update_camera")
 		var command_revision_before_b := stream.get_command_world_revision()
+		var viewport_center: Vector2 = demo.get_viewport().get_visible_rect().size * 0.5
+		_push_demo_pointer(demo, viewport_center)
 		_push_demo_key(demo, KEY_B)
 		var viewport_placed_id := String(demo.get("_selected_object_id"))
 		await _wait_for_entity_presence(stream, viewport_placed_id, true)
-		_check(not viewport_placed_id.is_empty() and viewport_placed_id.contains("/placed/") and stream.get_command_world_revision() == command_revision_before_b + 1, "B viewport input places a persistent explicit entity at the center crosshair surface")
+		_check(not viewport_placed_id.is_empty() and viewport_placed_id.contains("/placed/") and stream.get_command_world_revision() == command_revision_before_b + 1, "B viewport input places a persistent explicit entity at the visible-pointer target")
 		var viewport_placed_node := _find_stable_object_node(stream, viewport_placed_id)
 		if viewport_placed_node != null:
 			var click_point: Vector2 = demo.get("camera").unproject_position(viewport_placed_node.global_position + Vector3.UP * 0.5)
@@ -1087,6 +1089,13 @@ func _push_demo_key(demo: Node, key_code: int, ctrl_pressed: bool = false, shift
 	event.pressed = true
 	event.ctrl_pressed = ctrl_pressed
 	event.shift_pressed = shift_pressed
+	demo.get_viewport().push_input(event)
+	await process_frame
+
+
+func _push_demo_pointer(demo: Node, position: Vector2) -> void:
+	var event := InputEventMouseMotion.new()
+	event.position = position
 	demo.get_viewport().push_input(event)
 	await process_frame
 
