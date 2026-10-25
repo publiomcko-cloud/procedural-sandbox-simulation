@@ -2,6 +2,8 @@
 
 # Fresh-agent / new-chat recovery runbook
 
+> **Latest 2026-10-25 feature candidate override:** verified implementation baseline `5b8cf36108ce48476095f14b35426e7e8ab4bfe8`; P3.0B source commit `6ce65bbe2f1a54bd1436416b5cb6102c75a09769` is on `feat/p3-0b-playable-world-entity-commands`, with full Godot 4.7.2 validation 18,022 assertions/0 failures. Draft PR publication, independent source review and owner GUI retest are pending; no merge. Separate PR #115 remains untouched. Start with the [P3.0B checkpoint](../checkpoints/2026-10-25-P3-0B-IMPLEMENTATION.md), [spec](../specs/P3-0B-PLAYABLE-WORLD-ENTITY-INTEGRATION.md), and [ADR-0004](../decisions/ADR-0004-P3-0B-PLAYABLE-ENTITY-INTEGRATION.md), then verify live refs and workspace before any action. All five F2-G1 holds remain.
+
 **Objective:** make the repository, not conversation history, the durable source of project decisions, approved evidence, open work and next action. A complete safe *logical reconstruction* requires Git refs + accepted docs + tickets + independent reviews + owner authority. A checkpoint is not a clone/VM backup and cannot restore unsaved local changes or credentials.
 
 ## 1. Verify real current state before acting
