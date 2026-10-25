@@ -6,6 +6,7 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-10-25 | [Issue #118 mod discovery and initialization correction](2026-10-25-ISSUE-118-MOD-DISCOVERY-FIX.md) | Reproduced optional `user://mods` residual folder blocking package discovery; bounded ignore-with-diagnostic correction; Godot validation 18,040/0 | Source `f8edbff0`; correction candidate, independent review/hosted CI/owner GUI pending |
 | 2026-10-25 | [P3.0B playable transactional entity integration](2026-10-25-P3-0B-IMPLEMENTATION.md) | P2-backed command integration, explicit schema migration, playable place/select/modify/delete/restore; full Godot validation 18,022/0 | Source commit `6ce65bbe`; draft PR publication pending; source review and owner GUI pending |
 | 2026-10-24 | [P2.0C modular static population](2026-10-24-P2-0C-IMPLEMENTATION.md) | Deterministic declarative population candidate; Godot validation 17,883/0; independent source review and owner GUI retest pending | Draft PR #112, not merged |
 
