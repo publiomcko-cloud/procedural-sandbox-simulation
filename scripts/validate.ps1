@@ -8,6 +8,7 @@ foreach ($file in @('project.godot', 'scenes/main.tscn', 'scenes/terrain_demo.ts
     if (-not (Test-Path (Join-Path $project $file))) { $failures.Add("L0 FAIL: missing source $file") }
 }
 if (-not (Test-Path (Join-Path $project 'tests/playable_entity_command_tests.gd'))) { $failures.Add('L0 FAIL: missing source tests/playable_entity_command_tests.gd') }
+if (-not (Test-Path (Join-Path $project 'tests/p3_0d_entity_placement_tests.gd'))) { $failures.Add('L0 FAIL: missing source tests/p3_0d_entity_placement_tests.gd') }
 if ($failures.Count -eq 0) { Write-Host 'L0 PASS: all project source files exist' }
 
 if ((Get-Command $godot -ErrorAction SilentlyContinue) -or (Test-Path $godot)) {
@@ -110,6 +111,12 @@ if ((Get-Command $godot -ErrorAction SilentlyContinue) -or (Test-Path $godot)) {
     $playableEntityExit = $LASTEXITCODE
     if ($playableEntityExit -eq 0) { Write-Host 'L2 PASS: playable world transactional entity integration tests' }
     else { $failures.Add("L2 FAIL: playable entity command test exit code $playableEntityExit") }
+
+    Write-Host "COMMAND: `"$godot`" --headless --path `"$project`" --script res://tests/p3_0d_entity_placement_tests.gd"
+    & $godot --headless --path $project --script 'res://tests/p3_0d_entity_placement_tests.gd'
+    $placementExit = $LASTEXITCODE
+    if ($placementExit -eq 0) { Write-Host 'L2 PASS: pointer-driven persistent entity placement and region reconstruction tests' }
+    else { $failures.Add("L2 FAIL: P3.0D entity placement test exit code $placementExit") }
 
     Write-Host "COMMAND: `"$godot`" --headless --path `"$project`" --script res://tests/terrain_picker_history_perf.gd"
     & $godot --headless --path $project --script 'res://tests/terrain_picker_history_perf.gd'
