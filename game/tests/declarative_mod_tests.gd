@@ -33,6 +33,24 @@ func _initialize() -> void:
 
 func _test_optional_user_mod_directories() -> void:
 	var user_root := "user://mods"
+	var first_party_root := "res://mods/first-party"
+	var example_root := _repo_mod_path("examples")
+	_check(Loader.optional_user_roots([user_root]) == [user_root], "only the exact canonical user mods root is inferred as optional")
+	_check(Loader.optional_user_roots([first_party_root, example_root]).is_empty(), "required first-party and example roots are never inferred as optional")
+	var required_root_rejection: Dictionary = Loader.discover_and_validate([first_party_root], [first_party_root])
+	_check(not required_root_rejection.get("ok", false) and required_root_rejection.get("reason", "") == "invalid_optional_package_root", "a caller cannot downgrade the required first-party root to optional")
+	_check(String(required_root_rejection.get("diagnostics", [{}])[0].get("reason", "")) == "optional_root_not_exact_user_mod_root", "first-party optional-root rejection explains the exact-root policy")
+	var example_root_rejection: Dictionary = Loader.discover_and_validate([example_root], [example_root])
+	_check(not example_root_rejection.get("ok", false) and example_root_rejection.get("reason", "") == "invalid_optional_package_root", "an authorized example package root cannot be promoted to optional")
+	var descendant_root := "user://mods/issue118_required_descendant_%d" % Time.get_ticks_usec()
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(descendant_root.path_join("undeclared-child")))
+	var descendant_rejection: Dictionary = Loader.discover_and_validate([descendant_root], [descendant_root])
+	_check(not descendant_rejection.get("ok", false) and descendant_rejection.get("reason", "") == "invalid_optional_package_root" and int(descendant_rejection.get("optional_directory_ignored_count", 0)) == 0, "an authorized descendant of user mods cannot inherit optional treatment")
+	var prefix_root := "user://mods-issue118-prefix"
+	var prefix_rejection: Dictionary = Loader.discover_and_validate([prefix_root], [prefix_root])
+	_check(not prefix_rejection.get("ok", false) and prefix_rejection.get("reason", "") == "invalid_optional_package_root", "a path sharing the user mods string prefix is not the canonical user mods root")
+	_check(Loader.optional_user_roots(["user://mods/issue118_child"]).is_empty(), "optional-root inference excludes descendants of user mods")
+	_remove_tree(ProjectSettings.globalize_path(descendant_root))
 	_test_reparse_package_root()
 	var empty_name := "issue118_empty_%d" % Time.get_ticks_usec()
 	var residual_name := "issue118_residual_%d" % Time.get_ticks_usec()
@@ -46,7 +64,7 @@ func _test_optional_user_mod_directories() -> void:
 	var nested_package := nested_path.path_join("child-package")
 	_write_package(nested_path, "child-package", _manifest("sample.nested", "1.0.0", [], ["objects/"]), [])
 	var real_example_root := _repo_mod_path("examples")
-	var roots: Array[String] = ["res://mods/first-party", real_example_root, user_root]
+	var roots: Array[String] = [first_party_root, real_example_root, user_root]
 	var optional_roots: Array[String] = [user_root]
 	var discovered: Dictionary = Loader.discover_and_validate(roots, optional_roots)
 	_check(discovered.get("ok", false), "empty, residual and nested non-package directories in optional user mods do not disable valid declared packages (%s)" % discovered.get("reason", "ok"))
@@ -67,7 +85,7 @@ func _test_optional_user_mod_directories() -> void:
 		saw_residual = saw_residual or String(diagnostic.get("relative_package_directory", "")) == residual_name
 		saw_nested_parent = saw_nested_parent or String(diagnostic.get("relative_package_directory", "")) == nested_name
 	_check(saw_empty and saw_residual and saw_nested_parent, "discovery diagnostics identify optional root, relative folder and ignored-not-package disposition without recursive traversal")
-	var reversed_roots: Array[String] = [user_root, real_example_root, "res://mods/first-party"]
+	var reversed_roots: Array[String] = [user_root, real_example_root, first_party_root]
 	var reversed_discovery: Dictionary = Loader.discover_and_validate(reversed_roots, optional_roots)
 	_check(reversed_discovery.get("ok", false) and _package_ids(reversed_discovery.get("packages", [])) == _package_ids(discovered.get("packages", [])), "optional directory policy preserves deterministic package order regardless of root ordering")
 

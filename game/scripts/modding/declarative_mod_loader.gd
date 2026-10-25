@@ -22,9 +22,13 @@ static func discover_and_validate(roots: Array[String], optional_roots: Array[St
 	var total_content_record_count := 0
 	var ignored_optional_directory_count := 0
 	for optional_root in optional_roots:
-		if not _is_authorized_root(optional_root) or not _contains_root_path(roots, optional_root):
-			var invalid_optional := _discovery_diagnostic(optional_root, "", "invalid_optional_root", "optional_root_not_in_authorized_roots", "REJECTED")
-			diagnostics.append(invalid_optional)
+		if not _is_optional_root_eligible(optional_root):
+			var invalid_root_eligibility := _discovery_diagnostic(optional_root, "", "invalid_optional_root", "optional_root_not_exact_user_mod_root", "REJECTED")
+			diagnostics.append(invalid_root_eligibility)
+			return _discovery_failure("invalid_optional_package_root", diagnostics, 0, 0)
+		if not _contains_root_path(roots, optional_root):
+			var invalid_root_membership := _discovery_diagnostic(optional_root, "", "invalid_optional_root", "optional_root_not_in_authorized_roots", "REJECTED")
+			diagnostics.append(invalid_root_membership)
 			return _discovery_failure("invalid_optional_package_root", diagnostics, 0, 0)
 	for root in roots:
 		if not _is_authorized_root(root):
@@ -110,15 +114,21 @@ static func _contains_root_path(roots: Array[String], candidate: String) -> bool
 
 static func optional_user_roots(roots: Array[String]) -> Array[String]:
 	var result: Array[String] = []
-	var user_root_key := _path_key("user://mods")
 	for root in roots:
-		if _path_key(root) == user_root_key:
+		if _is_optional_root_eligible(root):
 			result.append(root)
 	return result
 
 
+static func _is_optional_root_eligible(root: String) -> bool:
+	return _is_authorized_root(root) and _path_key(root) == _path_key("user://mods")
+
+
 static func _is_optional_root(root: String, optional_roots: Array[String]) -> bool:
-	return _contains_root_path(optional_roots, root)
+	for optional_root in optional_roots:
+		if _is_optional_root_eligible(optional_root) and _path_key(optional_root) == _path_key(root):
+			return true
+	return false
 
 
 static func _path_key(path: String) -> String:
