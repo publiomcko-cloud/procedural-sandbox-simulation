@@ -18,7 +18,10 @@ All five F2-G1 holds remain: CURRENT_PROTECTED_STATE_UNKNOWN, V3_NOT_ATTESTED, A
 2. Owner GUI retest on v2 storage with positive/negative boundaries and confirmation that a schema-1 save remains unchanged.
 3. Review finite quota, retained-generation, single-writer and explicit-save limitations.
 4. No Issue #108 work until its architectural dependencies are addressed.
----
+
+## Concurrent open draft PRs verified 2026-10-25
+
+These parallel records remain open, draft and unmerged: [#115](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/115) (P3.0A post-merge documentation, head `6a7aaa206fa14ba7fd1adaac1c19d7586be15d72`), [#117](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/117) (P3.0B post-merge documentation, head `fc3e1bf78ece204d272ec05f7f6a9fccd45f00c9`), [#120](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/120) (Issue #118 owner-GUI/merge receipt, head `75d5725d3b787321c23c1e6ef73e8210bcc416d3`), [#125](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/125) (P3.0D integration receipt, head `b09d60e065c95ecbe7f3e9be6ef2454ebc8f3593`), and [#126](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/126) (Issue #108 architecture brief, head `78b3d3ea0b037c122f7dd4229fbc2f9cf0d2e6b3`). Storage design PR [#128](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/128) remains separately open/draft at `6b5614464a30ba93977856a851afaaad726d6703`; implementation PR #129 and this documentation PR #130 are listed above. These records are parallel and were not modified by the P3.1 implementation.
 
 ---
 
