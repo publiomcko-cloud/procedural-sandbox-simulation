@@ -75,4 +75,6 @@
 
 | 2026-10-25 | [P3.0A Delete owner-GUI failure correction](2026-10-25-P3-0A-ENTITY-DELETE-GUI-CORRECTION.md) | Owner reported Delete did not hide the last entity; reproduced `keycode=0` / `physical_keycode=KEY_DELETE` input omission, corrected viewport handler and authoritative visual sync; full Godot 4.7.2 validation 17,969/0 | Source `3da4bc6f7272ed838da7438c43312227e32ae59e` on draft PR #114; owner GUI retest and independent review pending |
 
+| 2026-10-25 | [P3.0A PR #114 merge](2026-10-25-PR114-P3-0A-MERGE.md) | Owner full harness GUI PASS; exact main merge `5b8cf36108ce48476095f14b35426e7e8ab4bfe8` | Post-merge documentation receipt |
+
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).
