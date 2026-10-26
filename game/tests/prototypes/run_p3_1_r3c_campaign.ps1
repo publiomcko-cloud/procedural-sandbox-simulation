@@ -107,12 +107,25 @@ foreach ($scenario in $scenarioNames) {
         $env:P31_R3C_SOURCE_SHA = $sourceSha
         $env:P31_R3C_OUTPUT_DIR = $outputRoot
         $env:P31_R3C_CACHE_DIR = $cacheRoot
+        $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $startInfo.FileName = $Godot
+        $quotedArguments = @($engineArguments | ForEach-Object { '"' + ([string]$_).Replace('"','\"') + '"' })
+        $startInfo.Arguments = [string]::Join(' ', $quotedArguments)
+        $startInfo.UseShellExecute = $false
+        $startInfo.CreateNoWindow = $true
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $proc = New-Object System.Diagnostics.Process
+        $proc.StartInfo = $startInfo
         $started = [Diagnostics.Stopwatch]::StartNew()
-        $proc = Start-Process -FilePath $Godot -ArgumentList $engineArguments -PassThru -NoNewWindow -RedirectStandardOutput $outPath -RedirectStandardError $errPath
+        if (-not $proc.Start()) { throw "Godot process start returned false: $runId" }
         $record.godot_wrapper_pid = $proc.Id
         $record.status = 'STARTED'
         $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'process.json') -Encoding utf8
-        # Catch short-lived/fast-failing Godot child processes before the first polling sleep.
+        # Drain both pipes asynchronously so neither stream can block the engine.
+        $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+        $stderrTask = $proc.StandardError.ReadToEndAsync()
+        # Catch short-lived/fast-failing child processes before the first polling sleep.
         try {
             $engineProcess = Get-CimInstance -ClassName Win32_Process -Filter "ParentProcessId = $($proc.Id)" | Where-Object { [IO.Path]::GetFileName([string]$_.ExecutablePath) -eq [IO.Path]::GetFileName($engineImage) } | Select-Object -First 1
             if ($engineProcess) {
@@ -152,15 +165,24 @@ foreach ($scenario in $scenarioNames) {
             }
             if ($started.Elapsed.TotalSeconds -gt $ProcessTimeoutSeconds) {
                 $timedOut = $true
+                try {
+                    $engineProcess = Get-CimInstance -ClassName Win32_Process -Filter "ParentProcessId = $($proc.Id)" | Where-Object { [IO.Path]::GetFileName([string]$_.ExecutablePath) -eq [IO.Path]::GetFileName($engineImage) } | Select-Object -First 1
+                    if ($engineProcess) { Stop-Process -Id ([int]$engineProcess.ProcessId) -Force -ErrorAction SilentlyContinue }
+                } catch { }
                 Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
                 break
             }
             Start-Sleep -Milliseconds 100
         }
+        $proc.WaitForExit()
         $proc.Refresh()
-        if ($null -eq $record.engine_pid) { $record.process_attribution = 'UNRESOLVED_ACTUAL_ENGINE_CHILD_NOT_OBSERVED' }
-        $record.exit_code = if ($timedOut) { $null } else { $proc.ExitCode }
-        $record.status = if ($timedOut) { 'TIMEOUT_CENSORED_PROCESS_STOPPED' } elseif ($proc.ExitCode -eq 0) { 'EXIT_ZERO' } else { 'EXIT_NONZERO' }
+        $stdoutTask.Wait()
+        $stderrTask.Wait()
+        [IO.File]::WriteAllText($outPath, [string]$stdoutTask.Result, [Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText($errPath, [string]$stderrTask.Result, [Text.UTF8Encoding]::new($false))
+        if ($record.engine_pid -eq $null) { $record.process_attribution = 'UNRESOLVED_ACTUAL_ENGINE_CHILD_NOT_OBSERVED' }
+        $record.exit_code = if ($timedOut) { $null } else { [int]$proc.ExitCode }
+        $record.status = if ($timedOut) { 'TIMEOUT_CENSORED_PROCESS_STOPPED' } elseif ([int]$proc.ExitCode -eq 0) { 'EXIT_ZERO' } else { 'EXIT_NONZERO' }
         $record.ended_utc = [DateTime]::UtcNow.ToString('o')
         $started.Stop()
         $record.duration_ms = [math]::Round($started.Elapsed.TotalMilliseconds,3)
