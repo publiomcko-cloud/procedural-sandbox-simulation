@@ -1,5 +1,9 @@
 # Roadmap with implementation gates
 
+## 2026-10-26 — P3.1 R3A isolated comparative prototype
+
+Based on P3.1 source `92b442d7f5b605c7bc9c48fac2aceea9d71813aa`, isolated evidence PR #137 compares ordered SDF replay pruning, a persistent derived CPU mesh cache, and a sampled density lattice using the frozen Issue #131 workloads (256/640/2,048/8,192, concentrated/distributed). The schema-2 ledger remains the sole edit authority. The lattice is exact only at stored nodes and is not equivalent to the continuous SDF; its cave topology and off-grid probes differ. The tested replay optimization regresses concentrated cases. The mesh cache may warrant a bounded local-key experiment but is not production-ready. Full headless Godot validation and raw evidence are in the [R3A report](../reports/P3-1-R3A/REPORT.md); independent review and an owner architecture decision remain gates. This does not authorize production changes, Issue #108, backend adoption, or merge. All five F2-G1 holds remain unchanged.
+
 ## 2026-10-25 — P3.0C persistent transactional entity history candidate
 
 The P3.0C candidate on `feat/p3-0c-transactional-undo-redo`, draft PR [#121](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/121), adds explicit schema-3 persistent history and revision-checked `ENTITY_UNDO`/`ENTITY_REDO` through the existing P2.0B state store. It preserves exact pre-delete overrides (including F7), keeps F9 as baseline restore with reversible prior state, and requires explicit schema migration. Full Godot 4.7.2 validation passed 18,153 assertions/0 failures; developer headless evidence only. See [spec](../specs/P3-0C-TRANSACTIONAL-PERSISTENT-UNDO-REDO.md), [ADR-0006](../decisions/ADR-0006-PERSISTENT-ENTITY-UNDO-REDO.md), and [checkpoint](../checkpoints/2026-10-25-P3-0C-IMPLEMENTATION.md). Independent source review and owner GUI retest remain gates; do not merge. All five F2-G1 holds remain.

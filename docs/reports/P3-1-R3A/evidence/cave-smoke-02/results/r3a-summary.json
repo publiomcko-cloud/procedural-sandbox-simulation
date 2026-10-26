@@ -1,0 +1,9 @@
+{
+	"duration_ms": 117.241,
+	"failures": 0,
+	"reference_hash_checks": 23,
+	"result_sha256": "e18cbffb6456f6749bfba3574cb831d1587fae8c0afb2c2905e074d1586a4cdf",
+	"scenarios": 1,
+	"seed": 131102026,
+	"source_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa"
+}
