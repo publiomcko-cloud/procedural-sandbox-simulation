@@ -6,7 +6,7 @@ const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const Mesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const LodMesher := preload("res://scripts/terrain/lod01_chunk_mesher.gd")
-const ExactReplay := preload("res://tests/prototypes/r3b_exact_replay.gd")
+const ExactReplay := preload("res://tests/prototypes/r3c_exact_replay.gd")
 const MeshCache := preload("res://tests/prototypes/r3c_profile_cache.gd")
 
 const SEED := 131102026
@@ -156,24 +156,27 @@ func _run() -> void:
 	var baseline_query_usec := PackedInt64Array()
 	var optimized_query_usec := PackedInt64Array()
 	var query_mismatches := 0
+	var normal_mismatches := 0
 	for probe_index in range(QUERY_PROBES):
 		var point := _probe(region, chunk, probe_index)
 		var expected := _canonical_world_sample(point, full_snapshot)
 		var actual: float = exact_query.sample_density(point)
 		if expected != actual:
 			query_mismatches += 1
+		if _canonical_normal(point, full_snapshot) != _exact_normal(point, exact_query):
+			normal_mismatches += 1
 		for loop_index in range(RUNS_IN_PROCESS):
 			var started := Time.get_ticks_usec()
 			if (repeat + probe_index + loop_index) % 2 == 0:
 				var baseline := _canonical_world_sample(point, full_snapshot)
 				baseline_query_usec.append(Time.get_ticks_usec() - started)
 				started = Time.get_ticks_usec()
-				var optimized: float = exact_query.sample_density(point) if exact_query.can_reduce_exact_replay() else _canonical_world_sample(point, full_snapshot)
+				var optimized: float = exact_query.sample_density(point)
 				optimized_query_usec.append(Time.get_ticks_usec() - started)
 				if baseline != optimized:
 					query_mismatches += 1
 			else:
-				var optimized: float = exact_query.sample_density(point) if exact_query.can_reduce_exact_replay() else _canonical_world_sample(point, full_snapshot)
+				var optimized: float = exact_query.sample_density(point)
 				optimized_query_usec.append(Time.get_ticks_usec() - started)
 				started = Time.get_ticks_usec()
 				var baseline := _canonical_world_sample(point, full_snapshot)
@@ -182,6 +185,24 @@ func _run() -> void:
 					query_mismatches += 1
 	if query_mismatches > 0:
 		_failures.append("exact_sdf_query_mismatches_%d" % query_mismatches)
+	if normal_mismatches > 0:
+		_failures.append("exact_normal_mismatches_%d" % normal_mismatches)
+	var picker_baseline_usec := PackedInt64Array()
+	var picker_optimized_usec := PackedInt64Array()
+	var picker_mismatches := 0
+	for picker_index in range(4):
+		var picker_origin := Vector3(float(region.x) * Field.REGION_SIZE_X + 2.5 + float(picker_index) * 3.0, 8.0,
+			float(region.y) * Field.REGION_SIZE_Z + 3.0 + float(picker_index % 2) * 5.0)
+		var picker_started := Time.get_ticks_usec()
+		var canonical_hit := _ray_hit(picker_origin, Vector3.DOWN, full_snapshot, Callable())
+		picker_baseline_usec.append(Time.get_ticks_usec() - picker_started)
+		picker_started = Time.get_ticks_usec()
+		var exact_hit := _ray_hit(picker_origin, Vector3.DOWN, full_snapshot, Callable(exact_query, "sample_density"))
+		picker_optimized_usec.append(Time.get_ticks_usec() - picker_started)
+		if canonical_hit != exact_hit:
+			picker_mismatches += 1
+	if picker_mismatches > 0:
+		_failures.append("exact_picker_mismatches_%d" % picker_mismatches)
 	var callback_lod0 := Callable(exact, "sample_density")
 	var callback_lod1 := Callable(exact_world, "sample_density")
 	var mesh_samples := {"lod0": {"baseline": PackedInt64Array(), "optimized": PackedInt64Array()}, "lod1": {"baseline": PackedInt64Array(), "optimized": PackedInt64Array()}}
@@ -203,10 +224,7 @@ func _run() -> void:
 					baseline_elapsed = Time.get_ticks_usec() - phase_started
 					baseline_mesh = built
 				else:
-					if (lod == 0 and exact.can_reduce_exact_replay()) or (lod == 1 and exact_world.can_reduce_exact_replay()):
-						built = Mesher.build_chunk_cpu_data(SEED, region, chunk, false, {}, callback_lod0) if lod == 0 else LodMesher.build_chunk_cpu_data(SEED, region, chunk, snapshot, callback_lod1)
-					else:
-						built = Mesher.build_chunk_cpu_data(SEED, region, chunk, false, snapshot) if lod == 0 else LodMesher.build_chunk_cpu_data(SEED, region, chunk, snapshot)
+					built = Mesher.build_chunk_cpu_data(SEED, region, chunk, false, {}, callback_lod0) if lod == 0 else LodMesher.build_chunk_cpu_data(SEED, region, chunk, snapshot, callback_lod1)
 					optimized_elapsed = Time.get_ticks_usec() - phase_started
 					optimized_mesh = built
 			var name := "lod%d" % lod
@@ -316,9 +334,11 @@ func _run() -> void:
 		"scenario_id": expected_scenario_id, "run_id": scenario_run_id, "repeat": repeat,
 		"source_sha": source_sha, "baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa", "seed": SEED,
 		"operation_count": count, "layout": layout, "command_sha256": _sha256(input_bytes),
-		"query_strategy": "exact_period_reduction" if exact_query.can_reduce_exact_replay() else "canonical_fallback_no_reduction",
-		"mesh_strategy": "exact_period_reduction" if exact.can_reduce_exact_replay() or exact_world.can_reduce_exact_replay() else "canonical_fallback_no_reduction",
+		"query_strategy": "exact_period_reduction" if exact_query.can_reduce_exact_replay() else "conservative_dominance_pruning",
+		"mesh_strategy": "exact_period_reduction" if exact.can_reduce_exact_replay() or exact_world.can_reduce_exact_replay() else "conservative_dominance_pruning",
 		"meshing_candidate_count": int(snapshot.get("candidate_operation_count", -1)), "query_mismatches": query_mismatches,
+		"normal_mismatches": normal_mismatches, "picker_mismatches": picker_mismatches,
+		"picker_baseline_us": _summary(picker_baseline_usec), "picker_optimized_us": _summary(picker_optimized_usec),
 		"baseline_query_us": _summary(baseline_query_usec), "optimized_query_us": _summary(optimized_query_usec), "replay_stats": exact_query.stats(),
 		"lod0_baseline_build_us": _summary(mesh_samples.lod0.baseline), "lod0_optimized_build_us": _summary(mesh_samples.lod0.optimized),
 		"lod1_baseline_build_us": _summary(mesh_samples.lod1.baseline), "lod1_optimized_build_us": _summary(mesh_samples.lod1.optimized),
@@ -390,6 +410,46 @@ func _canonical_world_sample(world_point: Vector3, snapshot: Dictionary) -> floa
 	if not bool(mapped.get("valid", false)):
 		return NAN
 	return Brush.sample_density_snapshot(SEED, mapped["region_key"], mapped["local_position"], false, snapshot)
+
+
+func _canonical_normal(world_point: Vector3, snapshot: Dictionary) -> Vector3:
+	var delta := Grid.SAMPLE_STEP * 0.5
+	return Vector3(
+		_canonical_world_sample(world_point + Vector3.RIGHT * delta, snapshot) - _canonical_world_sample(world_point - Vector3.RIGHT * delta, snapshot),
+		_canonical_world_sample(world_point + Vector3.UP * delta, snapshot) - _canonical_world_sample(world_point - Vector3.UP * delta, snapshot),
+		_canonical_world_sample(world_point + Vector3.BACK * delta, snapshot) - _canonical_world_sample(world_point - Vector3.BACK * delta, snapshot)
+	).normalized()
+
+
+func _exact_normal(world_point: Vector3, evaluator: RefCounted) -> Vector3:
+	var delta := Grid.SAMPLE_STEP * 0.5
+	return Vector3(
+		evaluator.sample_density(world_point + Vector3.RIGHT * delta) - evaluator.sample_density(world_point - Vector3.RIGHT * delta),
+		evaluator.sample_density(world_point + Vector3.UP * delta) - evaluator.sample_density(world_point - Vector3.UP * delta),
+		evaluator.sample_density(world_point + Vector3.BACK * delta) - evaluator.sample_density(world_point - Vector3.BACK * delta)
+	).normalized()
+
+
+func _ray_hit(origin: Vector3, direction: Vector3, canonical_snapshot: Dictionary, evaluator: Callable) -> Vector3:
+	var previous_point := origin
+	var previous_density := _canonical_world_sample(previous_point, canonical_snapshot) if not evaluator.is_valid() else float(evaluator.call(previous_point))
+	for index in range(1, 256):
+		var point := origin + direction * (float(index) * Grid.SAMPLE_STEP * 0.5)
+		var density := _canonical_world_sample(point, canonical_snapshot) if not evaluator.is_valid() else float(evaluator.call(point))
+		if previous_density >= 0.0 and density < 0.0:
+			var low := previous_point
+			var high := point
+			for _iteration in range(20):
+				var middle := (low + high) * 0.5
+				var value := _canonical_world_sample(middle, canonical_snapshot) if not evaluator.is_valid() else float(evaluator.call(middle))
+				if value >= 0.0:
+					low = middle
+				else:
+					high = middle
+			return (low + high) * 0.5
+		previous_point = point
+		previous_density = density
+	return Vector3(INF, INF, INF)
 
 
 func _mesh_exact(left: Dictionary, right: Dictionary) -> bool:
