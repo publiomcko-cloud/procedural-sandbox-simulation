@@ -43,6 +43,16 @@ mesh inputs cover the selected chunk's complete horizontal bounds, full
 vertical grid bounds, and the production normal-query margin. Global signed
 operation sequence and mode are retained exactly.
 
+The R3B frozen set has eight workload IDs (two layouts × 256/640/2048/8192),
+with a separate zero-operation control per layout. The R3C nonperiodic set has
+eight distinct command-list IDs at the same two layouts/counts. Each ID has
+five independent process repeats unless stopped by the timeout rule. Snapshot
+spacing is `0.5` for every scenario; `0.25` is additionally measured for
+counts through 2048; `0.125` is measured for counts through 256. This avoids
+unbounded sample-count × history-count growth while still comparing three
+resolutions. The executable manifest will enumerate every scenario/arm/repeat
+before launch.
+
 ## Run plan and stop-loss
 
 Each measured row runs in a fresh Godot process with a new profile/output
