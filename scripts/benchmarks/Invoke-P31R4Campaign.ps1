@@ -16,7 +16,8 @@ if ((Get-FileHash -LiteralPath $GodotPath -Algorithm SHA256).Hash.ToLowerInvaria
 }
 $head = (& git -C $repo rev-parse HEAD).Trim()
 if ($head -ne $ExpectedHead) { throw "Source HEAD mismatch: expected $ExpectedHead, got $head" }
-if ((& git -C $repo status --porcelain --untracked-files=no).Trim()) { throw 'Tracked source tree is dirty.' }
+$trackedStatus = @(& git -C $repo status --porcelain --untracked-files=no)
+if ($trackedStatus.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace(($trackedStatus -join "`n"))) { throw 'Tracked source tree is dirty.' }
 $manifestBytes = [System.IO.File]::ReadAllBytes((Resolve-Path $ManifestPath).Path)
 $manifestSha = (Get-FileHash -LiteralPath $ManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $sidecar = ((Get-Content -LiteralPath ($ManifestPath + '.sha256') -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
