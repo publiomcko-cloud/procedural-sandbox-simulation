@@ -1,0 +1,153 @@
+{
+  "schema": 1,
+  "generator": "P31-R3C-NONPERIODIC-v1",
+  "seed": 135031,
+  "hash_input": "UTF8(P31-R3C-NONPERIODIC-v1|seed|layout|zero_based_sequence), SHA-256",
+  "center_uniqueness": "ordinal world-mm tuple; collision resolves by incrementing local X mm with wrap in [50,15949]",
+  "scenarios": [
+    {
+      "scenario_id": "P31.R3C.NONPERIODIC.CONCENTRATED.N0256.v1",
+      "layout": "CONCENTRATED",
+      "count": 256,
+      "seed": 135031,
+      "command_file": "P31.R3C.NONPERIODIC.CONCENTRATED.N0256.v1.commands.json",
+      "command_sha256": "ea24c592626c13479eb2c017876a92fe400e04d46aae4ab7e12ab74a0b302cbe",
+      "unique_center_count": 256,
+      "selected_region": [
+        0,
+        0
+      ],
+      "selected_chunk": [
+        0,
+        0
+      ],
+      "geometry": "single-region strip spanning chunk boundaries, varied height/radius, cave and surface samples"
+    },
+    {
+      "scenario_id": "P31.R3C.NONPERIODIC.CONCENTRATED.N0640.v1",
+      "layout": "CONCENTRATED",
+      "count": 640,
+      "seed": 135031,
+      "command_file": "P31.R3C.NONPERIODIC.CONCENTRATED.N0640.v1.commands.json",
+      "command_sha256": "d5e41de81bbace9efd34b0fb18693d84a2a9edfc8e3652a14674d97b0ec1524b",
+      "unique_center_count": 640,
+      "selected_region": [
+        0,
+        0
+      ],
+      "selected_chunk": [
+        0,
+        0
+      ],
+      "geometry": "single-region strip spanning chunk boundaries, varied height/radius, cave and surface samples"
+    },
+    {
+      "scenario_id": "P31.R3C.NONPERIODIC.CONCENTRATED.N2048.v1",
+      "layout": "CONCENTRATED",
+      "count": 2048,
+      "seed": 135031,
+      "command_file": "P31.R3C.NONPERIODIC.CONCENTRATED.N2048.v1.commands.json",
+      "command_sha256": "d7260b168d4fca1ce5be55298a3a4a37e157635dd875658ccf82c198ff6eb5a5",
+      "unique_center_count": 2048,
+      "selected_region": [
+        0,
+        0
+      ],
+      "selected_chunk": [
+        0,
+        0
+      ],
+      "geometry": "single-region strip spanning chunk boundaries, varied height/radius, cave and surface samples"
+    },
+    {
+      "scenario_id": "P31.R3C.NONPERIODIC.CONCENTRATED.N8192.v1",
+      "layout": "CONCENTRATED",
+      "count": 8192,
+      "seed": 135031,
+      "command_file": "P31.R3C.NONPERIODIC.CONCENTRATED.N8192.v1.commands.json",
+      "command_sha256": "fa4066ef3aab6d9fc7d01f2df846390eba14cdf15439f7df5cc30d22351b4d15",
+      "unique_center_count": 8192,
+      "selected_region": [
+        0,
+        0
+      ],
+      "selected_chunk": [
+        0,
+        0
+      ],
+      "geometry": "single-region strip spanning chunk boundaries, varied height/radius, cave and surface samples"
+    },
+    {
+      "scenario_id": "P31.R3C.NONPERIODIC.DISTRIBUTED.N0256.v1",
+      "layout": "DISTRIBUTED",
+      "count": 256,
+      "seed": 135031,
+      "command_file": "P31.R3C.NONPERIODIC.DISTRIBUTED.N0256.v1.commands.json",
+      "command_sha256": "a61069eb72732db6ae2d12c80bc56f7d868cb9c4a2a0b3c9db0ee7a95df87cef",
+      "unique_center_count": 256,
+      "selected_region": [
+        -31,
+        -64
+      ],
+      "selected_chunk": [
+        2,
+        2
+      ],
+      "geometry": "9x9 negative-region neighborhood with face/edge/corner seam centers and varied geometry"
+    },
+    {
+      "scenario_id": "P31.R3C.NONPERIODIC.DISTRIBUTED.N0640.v1",
+      "layout": "DISTRIBUTED",
+      "count": 640,
+      "seed": 135031,
+      "command_file": "P31.R3C.NONPERIODIC.DISTRIBUTED.N0640.v1.commands.json",
+      "command_sha256": "2f015a2c23cc2a8a8d3aa0dbc52adeb864d270cf4e3f1425b27551d51a7d7970",
+      "unique_center_count": 640,
+      "selected_region": [
+        -31,
+        -64
+      ],
+      "selected_chunk": [
+        2,
+        2
+      ],
+      "geometry": "9x9 negative-region neighborhood with face/edge/corner seam centers and varied geometry"
+    },
+    {
+      "scenario_id": "P31.R3C.NONPERIODIC.DISTRIBUTED.N2048.v1",
+      "layout": "DISTRIBUTED",
+      "count": 2048,
+      "seed": 135031,
+      "command_file": "P31.R3C.NONPERIODIC.DISTRIBUTED.N2048.v1.commands.json",
+      "command_sha256": "8e5cbe318557fb7c6316b2fe9fab82cdb2290c93c6ed80fa648d5b4e563755d7",
+      "unique_center_count": 2048,
+      "selected_region": [
+        -31,
+        -64
+      ],
+      "selected_chunk": [
+        2,
+        2
+      ],
+      "geometry": "9x9 negative-region neighborhood with face/edge/corner seam centers and varied geometry"
+    },
+    {
+      "scenario_id": "P31.R3C.NONPERIODIC.DISTRIBUTED.N8192.v1",
+      "layout": "DISTRIBUTED",
+      "count": 8192,
+      "seed": 135031,
+      "command_file": "P31.R3C.NONPERIODIC.DISTRIBUTED.N8192.v1.commands.json",
+      "command_sha256": "b0eb6c17cd0a92b9e90bce0393b63cfa5f7b153b6dcb0f80be93431d9782a760",
+      "unique_center_count": 8192,
+      "selected_region": [
+        -31,
+        -64
+      ],
+      "selected_chunk": [
+        2,
+        2
+      ],
+      "geometry": "9x9 negative-region neighborhood with face/edge/corner seam centers and varied geometry"
+    }
+  ]
+}
