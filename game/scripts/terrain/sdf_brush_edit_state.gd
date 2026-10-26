@@ -33,6 +33,7 @@ var _by_region: Dictionary = {} # "x,z" -> ordered sequence numbers
 var _by_sequence: Dictionary = {} # sequence -> canonical operation
 var _by_query_region: Dictionary = {} # conservative min/max influence index for chunk queries
 var _operation_source: RefCounted
+var _source_storage_metadata: Dictionary = {}
 var _source_operation_count := 0
 var _excluded_sequences: Dictionary = {}
 var revision := 0
@@ -40,6 +41,7 @@ var _next_sequence := 0
 var last_rejection_reason := ""
 var last_restore_rejection_reason := ""
 var last_storage_error := ""
+var last_sample_candidate_count := 0
 
 
 func _init(seed_value: int = 424242, generator_value: int = FIELD.GENERATOR_VERSION) -> void:
@@ -238,6 +240,7 @@ func restore_persistence_snapshot(snapshot: Dictionary) -> bool:
 				last_restore_rejection_reason = "restore_storage_metadata_invalid"
 				return false
 			_operation_source = source_value
+			_source_storage_metadata = metadata.duplicate(true)
 			_source_operation_count = int(source_count_value)
 			revision = int(source_revision_value)
 			_next_sequence = int(source_next_value)
@@ -387,30 +390,58 @@ func get_meshing_snapshot_for_chunk(region_key: Vector2i, chunk_coordinate: Vect
 			GRID.MAX_BOUND.y + MESHING_QUERY_MARGIN,
 			chunk_origin.z + chunk_size.z + MESHING_QUERY_MARGIN
 		)
-		var max_distance_squared := MESHING_NOOP_DISTANCE * MESHING_NOOP_DISTANCE
-		var candidates: Array[Dictionary] = []
-		if _operation_source != null:
-			candidates.append_array(_operation_source.get_operations_for_query_region(region_key, _excluded_sequences))
-			last_storage_error = String(_operation_source.last_read_error)
-			if not last_storage_error.is_empty():
-				return {"valid": false, "storage_error": last_storage_error, "revision": revision}
-		candidates.append_array(_operations)
-		candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["sequence"]) < int(b["sequence"]))
+		var density_interval := _base_density_interval(chunk_min.y, chunk_max.y)
+		var candidates := get_operations_for_query_regions([region_key])
+		if not last_storage_error.is_empty():
+			return {"valid": false, "storage_error": last_storage_error, "revision": revision}
+		var have_previous_operation := false
+		var previous_mode := -1
+		var previous_center := Vector3.ZERO
+		var previous_radius := -1.0
 		for operation in candidates:
 			if int(operation["world_seed"]) != world_seed \
 				or int(operation["generator_version"]) != generator_version:
 				continue
 			var center: Vector3 = operation["center_world"]
+			var radius := float(operation["radius"])
+			var mode := int(operation["mode"])
+			# Consecutive identical min/max operators are idempotent. This exact
+			# reduction does not assume anything about the field or later commands.
+			if have_previous_operation and mode == previous_mode and center == previous_center and radius == previous_radius:
+				continue
+			have_previous_operation = true
+			previous_mode = mode
+			previous_center = center
+			previous_radius = radius
 			var nearest := Vector3(
 				clampf(center.x, chunk_min.x, chunk_max.x),
 				clampf(center.y, chunk_min.y, chunk_max.y),
 				clampf(center.z, chunk_min.z, chunk_max.z)
 			)
-			if nearest.distance_squared_to(center) > max_distance_squared:
-				continue
+			var farthest := Vector3(
+				maxf(absf(center.x - chunk_min.x), absf(center.x - chunk_max.x)),
+				maxf(absf(center.y - chunk_min.y), absf(center.y - chunk_max.y)),
+				maxf(absf(center.z - chunk_min.z), absf(center.z - chunk_max.z))
+			)
+			var minimum_distance := nearest.distance_to(center)
+			var maximum_distance := farthest.length()
+			if mode == Mode.CARVE:
+				var threshold_min := minimum_distance - radius
+				var threshold_max := maximum_distance - radius
+				if threshold_min >= float(density_interval["maximum"]):
+					continue
+				density_interval["minimum"] = minf(float(density_interval["minimum"]), threshold_min)
+				density_interval["maximum"] = minf(float(density_interval["maximum"]), threshold_max)
+			else:
+				var threshold_min := radius - maximum_distance
+				var threshold_max := radius - minimum_distance
+				if threshold_max <= float(density_interval["minimum"]):
+					continue
+				density_interval["minimum"] = maxf(float(density_interval["minimum"]), threshold_min)
+				density_interval["maximum"] = maxf(float(density_interval["maximum"]), threshold_max)
 			centers.append(center)
-			radii.append(float(operation["radius"]))
-			modes.append(int(operation["mode"]))
+			radii.append(radius)
+			modes.append(mode)
 			sequences.append(int(operation["sequence"]))
 	return {
 		"valid": true,
@@ -424,6 +455,16 @@ func get_meshing_snapshot_for_chunk(region_key: Vector2i, chunk_coordinate: Vect
 		"candidate_operation_count": centers.size(),
 		"ledger_operation_count": get_edit_count(),
 	}
+
+
+func _base_density_interval(minimum_y: float, maximum_y: float) -> Dictionary:
+	# The v1 field is min(surface_y-y, y-MIN_Y, cave_distance), with
+	# surface_y in [1.57,6.03] and cave_distance >= -0.92. These bounds cover
+	# every point in the chunk and the normal-probe margin.
+	var density_min := minf(SURFACE_Y_MIN - maximum_y, minf(minimum_y - FIELD.MIN_Y, -0.92))
+	var peak_y := clampf((SURFACE_Y_MAX + FIELD.MIN_Y) * 0.5, minimum_y, maximum_y)
+	var density_max := minf(SURFACE_Y_MAX - peak_y, peak_y - FIELD.MIN_Y)
+	return {"minimum": density_min, "maximum": density_max}
 
 
 ## Ordered, conservative subset for every point on one bounded picker ray. The
@@ -489,10 +530,28 @@ func get_ray_snapshot(ray_origin: Vector3, ray_direction: Vector3, max_distance:
 			radii.append(radius)
 			modes.append(mode)
 			sequences.append(int(operation["sequence"]))
+	var candidates: Array[Dictionary] = []
+	if y_min >= GRID.MIN_BOUND.y - MESHING_QUERY_MARGIN and y_max <= GRID.MAX_BOUND.y + MESHING_QUERY_MARGIN:
+		var min_region_x := floori(minf(ray_origin.x, ray_end.x) / SPATIAL.REGION_SIZE_X)
+		var max_region_x := floori(maxf(ray_origin.x, ray_end.x) / SPATIAL.REGION_SIZE_X)
+		var min_region_z := floori(minf(ray_origin.z, ray_end.z) / SPATIAL.REGION_SIZE_Z)
+		var max_region_z := floori(maxf(ray_origin.z, ray_end.z) / SPATIAL.REGION_SIZE_Z)
+		var region_count := (max_region_x - min_region_x + 1) * (max_region_z - min_region_z + 1)
+		if region_count <= 4096:
+			var query_regions: Array[Vector2i] = []
+			for region_z in range(min_region_z, max_region_z + 1):
+				for region_x in range(min_region_x, max_region_x + 1):
+					query_regions.append(Vector2i(region_x, region_z))
+			candidates = get_operations_for_query_regions(query_regions)
+		else:
+			candidates = _all_active_operations()
+	else:
+		# Outside the bounded terrain sample domain the base field is not bounded
+		# by the proof below, so retain the exact full ordered replay.
+		candidates = _all_active_operations()
 	if _operation_source != null:
-		_operation_source.for_each_operation(consume_operation)
 		last_storage_error = String(_operation_source.last_read_error)
-	for operation in _operations:
+	for operation in candidates:
 		consume_operation.call(operation)
 	return {
 		"valid": last_storage_error.is_empty(),
@@ -558,33 +617,109 @@ func sample_density(
 	last_storage_error = ""
 	var density: float = FIELD.sample_density(seed, region_key, local_position)
 	var world_position := SPATIAL.region_local_to_world(region_key, local_position)
-	var replay_state := {"density": density}
-	# Evaluate one canonical command stream at every world sample. The spatial
-	# index controls affected mesh fanout; it never changes shared-border values.
-	var process_operation := func(operation: Dictionary) -> void:
+	# Within the finite mesh/sample domain, the v1 base field is in
+	# [-6.68, 3.515]. A command more than 9 units away has CARVE threshold > 7
+	# or FILL threshold < -7 (radius <= 2), so it is a no-op for every ordered
+	# prefix. The persisted query-region index stores every command whose 9-unit
+	# sphere intersects that region's full x/z extent and full sample y interval.
+	# This is a conservative superset; it does not filter by brush support.
+	var operations: Array[Dictionary]
+	if world_position.y >= GRID.MIN_BOUND.y - MESHING_QUERY_MARGIN \
+		and world_position.y <= GRID.MAX_BOUND.y + MESHING_QUERY_MARGIN:
+		var mapped := SPATIAL.world_to_region_local(world_position)
+		operations = get_operations_for_query_regions([mapped["region_key"]])
+	else:
+		# Preserve exact semantics for callers outside the terrain mesh domain.
+		operations = _all_active_operations()
+		if _operation_source != null:
+			last_storage_error = String(_operation_source.last_read_error)
+	if not last_storage_error.is_empty():
+		return NAN
+	last_sample_candidate_count = operations.size()
+	# Replay selected commands in their original global sequence order.
+	for operation in operations:
 		if int(operation["world_seed"]) != world_seed or int(operation["generator_version"]) != generator_version:
-			return
+			continue
 		var center: Vector3 = operation["center_world"]
 		var distance_to_surface := world_position.distance_to(center) - float(operation["radius"])
 		if int(operation["mode"]) == Mode.CARVE:
-			replay_state["density"] = minf(float(replay_state["density"]), distance_to_surface)
+			density = minf(density, distance_to_surface)
 		else:
-			replay_state["density"] = maxf(float(replay_state["density"]), -distance_to_surface)
-	if _operation_source != null:
-		_operation_source.for_each_operation(func(operation: Dictionary) -> void:
-			if not _excluded_sequences.has(int(operation["sequence"])):
-				process_operation.call(operation)
-		)
-		last_storage_error = String(_operation_source.last_read_error)
-		if not last_storage_error.is_empty():
-			return NAN
-	for operation in _operations:
-		process_operation.call(operation)
-	density = float(replay_state["density"])
+			density = maxf(density, -distance_to_surface)
 	if show_cave_section:
 		# The section affects only this visualization sample, after canonical edits.
 		density = minf(density, 6.0 - world_position.z)
 	return density
+
+
+func get_operations_for_query_regions(region_keys: Array) -> Array[Dictionary]:
+	last_storage_error = ""
+	var result: Array[Dictionary] = []
+	var seen_sequences: Dictionary = {}
+	if _operation_source != null:
+		result.append_array(_operation_source.get_operations_for_query_regions(region_keys, _excluded_sequences))
+		last_storage_error = String(_operation_source.last_read_error)
+		if not last_storage_error.is_empty():
+			return []
+		for operation in result:
+			seen_sequences[int(operation["sequence"])] = true
+	var overlay_sequences: Dictionary = {}
+	for region_key_value in region_keys:
+		var region_key: Vector2i = region_key_value
+		for sequence_value in _by_query_region.get(_region_id(region_key), []):
+			overlay_sequences[int(sequence_value)] = true
+	var sorted_overlay_sequences: Array[int] = []
+	for sequence_value in overlay_sequences.keys():
+		sorted_overlay_sequences.append(int(sequence_value))
+	sorted_overlay_sequences.sort()
+	for sequence in sorted_overlay_sequences:
+		if seen_sequences.has(sequence) or _excluded_sequences.has(sequence) or not _by_sequence.has(sequence):
+			continue
+		result.append((_by_sequence[sequence] as Dictionary).duplicate(true))
+	return result
+
+
+func get_persistence_delta() -> Dictionary:
+	var append_compatible := _operation_source != null and _excluded_sequences.is_empty()
+	var baseline_next := int(_source_storage_metadata.get("next_sequence", 0))
+	var baseline_revision := int(_source_storage_metadata.get("ledger_revision", 0))
+	if append_compatible:
+		if _operations.size() != get_edit_count() - _source_operation_count:
+			append_compatible = false
+		for index in range(_operations.size()):
+			var operation: Dictionary = _operations[index]
+			if int(operation["sequence"]) != baseline_next + index \
+				or int(operation["revision"]) != baseline_revision + index + 1:
+				append_compatible = false
+				break
+	var overlay: Array[Dictionary] = []
+	if append_compatible:
+		for operation in _operations:
+			overlay.append(operation.duplicate(true))
+	return {
+		"append_compatible": append_compatible,
+		"source": _operation_source,
+		"source_metadata": _source_storage_metadata.duplicate(true),
+		"overlay_operations": overlay,
+		"base_operation_count": _source_operation_count,
+	}
+
+
+func accept_persistence_save(source: RefCounted, metadata: Dictionary) -> bool:
+	if source == null or not source.validate_storage_reference(metadata) \
+		or int(metadata.get("operation_count", -1)) != get_edit_count() \
+		or int(metadata.get("ledger_revision", -1)) != revision \
+		or int(metadata.get("next_sequence", -1)) != _next_sequence:
+		return false
+	_operation_source = source
+	_source_storage_metadata = metadata.duplicate(true)
+	_source_operation_count = int(metadata.get("operation_count", -1))
+	_operations.clear()
+	_excluded_sequences.clear()
+	_by_region.clear()
+	_by_sequence.clear()
+	_by_query_region.clear()
+	return true
 
 
 func _regions_intersecting_sphere(center: Vector3, radius: float) -> Array[Vector2i]:

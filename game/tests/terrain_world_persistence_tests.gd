@@ -4,9 +4,11 @@ const Store := preload("res://scripts/terrain/terrain_world_save_store_v2.gd")
 const LegacyStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
 const Brush := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
+const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const Mesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const LodMesher := preload("res://scripts/terrain/lod01_chunk_mesher.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
+const BrushPicker := preload("res://scripts/terrain/terrain_brush_picker.gd")
 
 var assertions := 0
 var failures := 0
@@ -20,6 +22,7 @@ func _initialize() -> void:
 	_test_dense_history_exact_order_and_reset()
 	_test_restart_streaming_lod_and_corruption()
 	_test_interruption_legacy_isolation_and_quotas()
+	_test_r2_scaling_profiles()
 	_remove_tree(_root)
 	if failures == 0:
 		print("TERRAIN_WORLD_V2_STORAGE_PASS: assertions=%d failures=0" % assertions)
@@ -57,30 +60,247 @@ func _test_scalable_segmented_replay_and_spatial_index() -> void:
 	if restored.get_edit_count() != 640:
 		return
 	_check(restored.get_edit_count() == 640 and restored.get_last_sequence() == 639, "lazy ledger exposes durable count and sequence")
-	for world_point in [Vector3(-319.9, 2.45, -257.9), Vector3(-0.1, 2.5, 0.1), Vector3(159.9, 2.6, 113.9), Vector3(320.1, 2.4, 257.8)]:
+	for world_point in [Vector3(-320.0, 2.45, -96.0), Vector3(-16.0, 2.5, -12.0), Vector3(-0.1, 2.5, 0.1), Vector3(0.0, 2.6, 0.0), Vector3(159.9, 2.6, 113.9), Vector3(320.1, 2.4, 257.8)]:
 		var mapped: Dictionary = Spatial.world_to_region_local(world_point)
 		var expected := _reference_density(13579, mapped["region_key"], mapped["local_position"], ledger.get_operations_snapshot())
 		var actual: float = restored.sample_density(13579, mapped["region_key"], mapped["local_position"])
-		_check(is_equal_approx(expected, actual), "streamed exact min/max replay matches reference at %s" % world_point)
+		_check(expected == actual, "spatially filtered replay is bitwise equal to full ordered min/max replay at %s" % world_point)
+	_test_spatial_query_io_and_ray_parity(store, restored, ledger)
 	var region_key := Vector2i(0, 0)
 	var filtered: Dictionary = restored.get_meshing_snapshot_for_chunk(region_key, Vector2i.ZERO)
 	var chunk_origin := Spatial.region_origin_world(region_key) + Vector3.ZERO
-	var chunk_min := Vector3(chunk_origin.x - Brush.MESHING_QUERY_MARGIN, -8.5, chunk_origin.z - Brush.MESHING_QUERY_MARGIN)
-	var chunk_max := Vector3(chunk_origin.x + 4.0 + Brush.MESHING_QUERY_MARGIN, 8.5, chunk_origin.z + 4.0 + Brush.MESHING_QUERY_MARGIN)
+	var chunk_min := Vector3(chunk_origin.x - Brush.MESHING_QUERY_MARGIN, Grid.MIN_BOUND.y - Brush.MESHING_QUERY_MARGIN, chunk_origin.z - Brush.MESHING_QUERY_MARGIN)
+	var chunk_max := Vector3(chunk_origin.x + 4.0 + Brush.MESHING_QUERY_MARGIN, Grid.MAX_BOUND.y + Brush.MESHING_QUERY_MARGIN, chunk_origin.z + 4.0 + Brush.MESHING_QUERY_MARGIN)
 	var full_operations: Array[Dictionary] = ledger.get_operations_snapshot()
+	var spatial_candidates: Array[Dictionary] = restored.get_operations_for_query_regions([region_key])
+	var spatial_candidate_sequences: Dictionary = {}
+	for candidate in spatial_candidates:
+		spatial_candidate_sequences[int(candidate["sequence"])] = true
 	for operation in full_operations:
 		var center: Vector3 = operation["center_world"]
 		var nearest := Vector3(clampf(center.x, chunk_min.x, chunk_max.x), clampf(center.y, chunk_min.y, chunk_max.y), clampf(center.z, chunk_min.z, chunk_max.z))
 		if nearest.distance_squared_to(center) <= Brush.MESHING_NOOP_DISTANCE * Brush.MESHING_NOOP_DISTANCE:
-			_check((filtered["sequences"] as PackedInt32Array).has(int(operation["sequence"])), "spatial index retains every mathematically relevant SDF tail")
+			_check(spatial_candidate_sequences.has(int(operation["sequence"])), "spatial index retains every potentially relevant SDF tail before ordered interval reduction")
 	var chunk_started := Time.get_ticks_usec()
 	var mesh0: Dictionary = Mesher.build_chunk_cpu_data(13579, region_key, Vector2i.ZERO, false, filtered)
 	var lod0_build_us := Time.get_ticks_usec() - chunk_started
+	var full_snapshot: Dictionary = ledger.get_meshing_snapshot()
+	var full_mesh0: Dictionary = Mesher.build_chunk_cpu_data(13579, region_key, Vector2i.ZERO, false, full_snapshot)
+	_check(_mesh_cpu_data_equal(full_mesh0, mesh0), "persisted 640-history LOD0 vertices and normals exactly match full global replay")
 	chunk_started = Time.get_ticks_usec()
 	var mesh1: Dictionary = LodMesher.build_chunk_cpu_data(13579, region_key, Vector2i.ZERO, filtered)
 	var lod1_build_us := Time.get_ticks_usec() - chunk_started
+	var full_mesh1: Dictionary = LodMesher.build_chunk_cpu_data(13579, region_key, Vector2i.ZERO, full_snapshot)
+	_check(_mesh_cpu_data_equal(full_mesh1, mesh1), "persisted 640-history LOD1 vertices and normals exactly match full global replay")
 	_check(mesh0.get("valid", false) and mesh1.get("valid", false), "LOD0/LOD1 reconstruct from lazy chunk candidates")
 	print("P3_1_STORAGE_BENCH distributed_count=640 generation_ms=%.3f save_ms=%.3f verify_load_ms=%.3f lod0_chunk_ms=%.3f lod1_chunk_ms=%.3f segments=%d candidate_count=%d" % [float(generation_us) / 1000.0, float(save_us) / 1000.0, float(load_us) / 1000.0, float(lod0_build_us) / 1000.0, float(lod1_build_us) / 1000.0, int(saved.get("segment_count", 0)), int(filtered.get("candidate_operation_count", 0))])
+	_test_incremental_save_reuse(store, ledger)
+
+
+func _test_spatial_query_io_and_ray_parity(store: RefCounted, restored: RefCounted, original_ledger: RefCounted) -> void:
+	var full_operations: Array[Dictionary] = original_ledger.get_operations_snapshot()
+	store.clear_segment_cache()
+	store.reset_query_stats()
+	var warm_point := Vector3(0.0, 2.5, 0.0)
+	var mapped: Dictionary = Spatial.world_to_region_local(warm_point)
+	var expected := _reference_density(13579, mapped["region_key"], mapped["local_position"], full_operations)
+	var first_result: float = restored.sample_density(13579, mapped["region_key"], mapped["local_position"])
+	var cold_reads := int(store.last_query_segment_reads)
+	var cold_candidates := int(restored.last_sample_candidate_count)
+	_check(first_result == expected and cold_reads > 0 and cold_reads < int(restored._source_operation_count / Store.MAX_SEGMENT_OPERATIONS), "point query reads only spatially relevant segments and exactly matches full replay")
+	var total_reads := int(store.segment_read_count)
+	var second_result: float = restored.sample_density(13579, mapped["region_key"], mapped["local_position"])
+	_check(second_result == expected and int(store.segment_read_count) == total_reads and int(store.segment_cache_hit_count) > 0, "repeated point query uses bounded verified segment cache without disk reads")
+	_check(cold_candidates < full_operations.size(), "query-region candidate set excludes remote history without radius-only filtering")
+	var ray_origin := Vector3(-1.0, 2.5, 0.0)
+	var ray_snapshot: Dictionary = restored.get_ray_snapshot(ray_origin, Vector3.RIGHT, 18.0)
+	_check(ray_snapshot.get("valid", false), "ray candidate snapshot is valid across negative and positive region boundaries")
+	for step in range(37):
+		var point := ray_origin + Vector3(float(step) * 0.5, 0.0, 0.0)
+		var point_map: Dictionary = Spatial.world_to_region_local(point)
+		var actual := Brush.sample_density_snapshot(13579, point_map["region_key"], point_map["local_position"], false, ray_snapshot)
+		var full := _reference_density(13579, point_map["region_key"], point_map["local_position"], full_operations)
+		_check(actual == full, "ray-filtered replay exactly matches full stream at x=%.2f" % point.x)
+	var outside := Vector3(0.0, 100.0, 0.0)
+	var outside_map: Dictionary = Spatial.world_to_region_local(outside)
+	var outside_actual: float = restored.sample_density(13579, outside_map["region_key"], outside_map["local_position"])
+	_check(outside_actual == _reference_density(13579, outside_map["region_key"], outside_map["local_position"], full_operations) \
+		and restored.last_sample_candidate_count == full_operations.size(), "unbounded-y callers fall back to complete ordered replay")
+	print("P3_1_STORAGE_QUERY_PROFILE: total=%d candidates=%d cold_segment_reads=%d warm_segment_reads=0 cache_hits=%d" % [full_operations.size(), cold_candidates, cold_reads, int(store.segment_cache_hit_count)])
+
+
+func _test_incremental_save_reuse(store: RefCounted, ledger: RefCounted) -> void:
+	var first_repeat: Dictionary = store.save_ledger(Store.WORLD_ID, ledger)
+	_check(first_repeat.get("ok", false) and int(first_repeat.get("segments_written", -1)) == 0 \
+		and int(first_repeat.get("segments_reused", -1)) == 5, "unchanged save writes a new manifest while reusing all immutable segments")
+	_check(_list_files(_root.path_join("distributed"), "manifest-").size() == 2, "two committed generations are retained after repeated save")
+	_check(ledger.add_sphere(Brush.Mode.FILL, Vector3(500.0, 2.4, 700.0), 0.58), "append after save is accepted at the next global sequence")
+	var appended_point := Vector3(500.2, 2.6, 700.1)
+	var appended_map: Dictionary = Spatial.world_to_region_local(appended_point)
+	var appended_full: Array[Dictionary] = ledger.get_operations_snapshot()
+	_check(ledger.sample_density(int(ledger.world_seed), appended_map["region_key"], appended_map["local_position"]) \
+		== _reference_density(int(ledger.world_seed), appended_map["region_key"], appended_map["local_position"], appended_full), "unpersisted overlay query preserves global source-then-overlay operation order")
+	var append_save: Dictionary = store.save_ledger(Store.WORLD_ID, ledger)
+	_check(append_save.get("ok", false) and int(append_save.get("segments_reused", -1)) == 5 \
+		and int(append_save.get("segments_written", -1)) == 1, "append save reuses five history segments and writes one delta segment")
+	var restarted: Dictionary = store.load_world()
+	_check(restarted.get("ok", false) and int(restarted.get("payload", {}).get("operation_count", -1)) == 641 \
+		and int(restarted.get("payload", {}).get("next_sequence", -1)) == 641, "delta manifest restarts with complete ordered history")
+	var restarted_ledger: RefCounted = _restore_loaded(store, restarted)
+	_check(restarted_ledger.sample_density(int(ledger.world_seed), appended_map["region_key"], appended_map["local_position"]) \
+		== _reference_density(int(ledger.world_seed), appended_map["region_key"], appended_map["local_position"], appended_full), "restarted delta source returns exact appended density")
+	_check(_list_files(_root.path_join("distributed"), "manifest-").size() == 3, "three committed generations remain available without garbage collection")
+
+
+func _test_r2_scaling_profiles() -> void:
+	for operation_count in [640, 2048, 8192]:
+		for layout in ["distributed", "concentrated"]:
+			var run_id := "%s-%d" % [layout, operation_count]
+			var run_directory := _root.path_join("r2-%s" % run_id)
+			var ledger: RefCounted = Brush.new(900000 + operation_count, Field.GENERATOR_VERSION)
+			var memory_before := OS.get_static_memory_usage()
+			var generation_start := Time.get_ticks_usec()
+			var accepted := true
+			for index in range(operation_count):
+				var center: Vector3
+				if layout == "distributed":
+					var region := Vector2i((index % 128) - 64, int(index / 128) - 32)
+					center = Spatial.region_origin_world(region) + Vector3(8.0, 2.25 + float(index % 5) * 0.1, 6.0)
+				else:
+					center = Vector3(-0.12 + float(index % 13) * 0.02, 2.1 + float(index % 7) * 0.03, -0.16 + float(index % 11) * 0.025)
+				var mode := Brush.Mode.CARVE if index % 2 == 0 else Brush.Mode.FILL
+				if not ledger.add_sphere(mode, center, 0.58):
+					accepted = false
+					break
+			var generation_usec := Time.get_ticks_usec() - generation_start
+			_check(accepted and ledger.get_edit_count() == operation_count, "%s builds %d ordered commands" % [run_id, operation_count])
+			if not accepted:
+				continue
+			var store: RefCounted = Store.new(run_directory, _root.path_join("no-legacy-%s" % run_id))
+			var save_samples := PackedInt64Array()
+			var save_start := Time.get_ticks_usec()
+			var first_save: Dictionary = store.save_ledger(Store.WORLD_ID, ledger)
+			var first_save_usec := Time.get_ticks_usec() - save_start
+			_check(first_save.get("ok", false), "%s initial segmented save succeeds" % run_id)
+			var load_start := Time.get_ticks_usec()
+			var loaded: Dictionary = store.load_world()
+			var load_usec := Time.get_ticks_usec() - load_start
+			_check(loaded.get("ok", false) and int(loaded.get("payload", {}).get("operation_count", -1)) == operation_count, "%s restart verifies the complete segmented generation" % run_id)
+			if not loaded.get("ok", false):
+				continue
+			var restored: RefCounted = _restore_loaded(store, loaded)
+			store.clear_segment_cache()
+			store.reset_query_stats()
+			var query_samples := PackedInt64Array()
+			var query_point := Vector3(0.0, 2.5, 0.0)
+			var query_map: Dictionary = Spatial.world_to_region_local(query_point)
+			for repeat_index in range(101):
+				var query_start := Time.get_ticks_usec()
+				restored.sample_density(int(ledger.world_seed), query_map["region_key"], query_map["local_position"])
+				query_samples.append(Time.get_ticks_usec() - query_start)
+			var query_segment_reads := int(store.segment_read_count)
+			var query_segment_bytes := int(store.segment_read_bytes)
+			var query_cache_hits := int(store.segment_cache_hit_count)
+			var query_candidates := int(restored.last_sample_candidate_count)
+			var expected: float = _reference_density(int(ledger.world_seed), query_map["region_key"], query_map["local_position"], ledger.get_operations_snapshot())
+			_check(restored.sample_density(int(ledger.world_seed), query_map["region_key"], query_map["local_position"]) == expected, "%s indexed sample is exactly equivalent to full global replay" % run_id)
+			var ray_profile: Dictionary = _measure_ray_picker_profile(restored, ledger, store, 101)
+			for repeat_index in range(3):
+				var repeated_save_start := Time.get_ticks_usec()
+				var repeated_save: Dictionary = store.save_ledger(Store.WORLD_ID, restored)
+				save_samples.append(Time.get_ticks_usec() - repeated_save_start)
+				_check(repeated_save.get("ok", false) and int(repeated_save.get("segments_written", -1)) == 0, "%s repeated unchanged save reuses immutable segments" % run_id)
+			var chunk_snapshot: Dictionary = restored.get_meshing_snapshot_for_chunk(Vector2i.ZERO, Vector2i.ZERO)
+			var mesh0_start := Time.get_ticks_usec()
+			var mesh0: Dictionary = Mesher.build_chunk_cpu_data(int(ledger.world_seed), Vector2i.ZERO, Vector2i.ZERO, false, chunk_snapshot)
+			var mesh0_usec := Time.get_ticks_usec() - mesh0_start
+			var mesh1_start := Time.get_ticks_usec()
+			var mesh1: Dictionary = LodMesher.build_chunk_cpu_data(int(ledger.world_seed), Vector2i.ZERO, Vector2i.ZERO, chunk_snapshot)
+			var mesh1_usec := Time.get_ticks_usec() - mesh1_start
+			_check(mesh0.get("valid", false) and mesh1.get("valid", false), "%s reconstructs LOD0/LOD1 from persisted history" % run_id)
+			var disk_bytes := _directory_bytes(run_directory)
+			var memory_delta := maxi(0, OS.get_static_memory_usage() - memory_before)
+			print("P3_1_STORAGE_R2_PROFILE: id=%s generator_ms=%.3f initial_save_ms=%.3f repeat_save_p50/p95/p99_ms=%.3f/%.3f/%.3f restart_verify_ms=%.3f sample_p50/p95/p99_ms=%.3f/%.3f/%.3f query_segment_reads=%d query_segment_bytes=%d query_cache_hits=%d query_candidates=%d cache_weight_bytes=%d reuse_verify_segment_count=%d reuse_verify_bytes=%d ray_snapshot_p50/p95/p99_ms=%.3f/%.3f/%.3f picker_p50/p95/p99_ms=%.3f/%.3f/%.3f ray_e2e_p50/p95/p99_ms=%.3f/%.3f/%.3f ray_segment_reads=%d ray_segment_bytes=%d ray_cache_hits=%d ray_spatial_candidates=%d ray_retained_candidates=%d lod0_ms=%.3f lod1_ms=%.3f segments=%d disk_bytes=%d process_memory_delta_bytes=%d" % [
+				run_id, float(generation_usec) / 1000.0, float(first_save_usec) / 1000.0,
+				_percentile_usec(save_samples, 0.50) / 1000.0, _percentile_usec(save_samples, 0.95) / 1000.0, _percentile_usec(save_samples, 0.99) / 1000.0,
+				float(load_usec) / 1000.0, _percentile_usec(query_samples, 0.50) / 1000.0, _percentile_usec(query_samples, 0.95) / 1000.0, _percentile_usec(query_samples, 0.99) / 1000.0,
+				query_segment_reads, query_segment_bytes, query_cache_hits, query_candidates, int(store._segment_cache_bytes), int(store.reuse_verification_read_count), int(store.reuse_verification_read_bytes),
+				float(ray_profile.snapshot_p50_usec) / 1000.0, float(ray_profile.snapshot_p95_usec) / 1000.0, float(ray_profile.snapshot_p99_usec) / 1000.0,
+				float(ray_profile.picker_p50_usec) / 1000.0, float(ray_profile.picker_p95_usec) / 1000.0, float(ray_profile.picker_p99_usec) / 1000.0,
+				float(ray_profile.e2e_p50_usec) / 1000.0, float(ray_profile.e2e_p95_usec) / 1000.0, float(ray_profile.e2e_p99_usec) / 1000.0,
+				ray_profile.segment_reads, ray_profile.segment_bytes, ray_profile.cache_hits, ray_profile.spatial_query_candidate_count, ray_profile.candidate_count,
+				float(mesh0_usec) / 1000.0, float(mesh1_usec) / 1000.0, int(first_save.get("segment_count", 0)), disk_bytes, memory_delta,
+			])
+
+
+func _measure_ray_picker_profile(ledger: RefCounted, source_ledger: RefCounted, store: RefCounted, sample_count: int) -> Dictionary:
+	var seed := int(source_ledger.world_seed)
+	var cave_center: Vector2 = Field.cave_center(seed, Vector2i.ZERO, 0.0)
+	var ray_origin := Vector3(0.0, cave_center.y, cave_center.x)
+	var ray_direction := Vector3(0.0, 0.0, 1.0)
+	var full_operations: Array[Dictionary] = source_ledger.get_operations_snapshot()
+	var snapshot_samples := PackedInt64Array()
+	var picker_samples := PackedInt64Array()
+	var e2e_samples := PackedInt64Array()
+	store.clear_segment_cache()
+	store.reset_query_stats()
+	var candidate_count := 0
+	var spatial_query_candidate_count := 0
+	var compared_surface := false
+	for sample_index in range(sample_count):
+		var e2e_start := Time.get_ticks_usec()
+		var snapshot_start := Time.get_ticks_usec()
+		var ray_snapshot: Dictionary = ledger.get_ray_snapshot(ray_origin, ray_direction, BrushPicker.MAX_DISTANCE)
+		var snapshot_usec := Time.get_ticks_usec() - snapshot_start
+		var filtered_sampler := func(point: Vector3) -> float:
+			var mapped: Dictionary = Spatial.world_to_region_local(point)
+			return Brush.sample_density_snapshot(seed, mapped["region_key"], mapped["local_position"], false, ray_snapshot)
+		var picker_start := Time.get_ticks_usec()
+		var filtered_pick: Dictionary = BrushPicker.pick_sdf_v1_surface(ray_origin, ray_direction, filtered_sampler)
+		var picker_usec := Time.get_ticks_usec() - picker_start
+		snapshot_samples.append(snapshot_usec)
+		picker_samples.append(picker_usec)
+		e2e_samples.append(Time.get_ticks_usec() - e2e_start)
+		if sample_index == 0:
+			candidate_count = int(ray_snapshot.get("candidate_operation_count", -1))
+			spatial_query_candidate_count = int(store.last_query_candidate_count)
+			var full_sampler := func(point: Vector3) -> float:
+				var mapped: Dictionary = Spatial.world_to_region_local(point)
+				return _reference_density(seed, mapped["region_key"], mapped["local_position"], full_operations)
+			var full_pick: Dictionary = BrushPicker.pick_sdf_v1_surface(ray_origin, ray_direction, full_sampler)
+			var same_surface := bool(full_pick.get("hit", false)) == bool(filtered_pick.get("hit", false))
+			if same_surface and bool(full_pick.get("hit", false)):
+				same_surface = full_pick["position"].distance_to(filtered_pick["position"]) <= 0.0001
+			compared_surface = same_surface and bool(ray_snapshot.get("valid", false)) and bool(filtered_pick.get("hit", false))
+			_check(compared_surface, "%s ray picker hits the same cave wall under indexed and full ordered replay" % ("%d" % full_operations.size()))
+			_check(candidate_count >= 0 and candidate_count <= full_operations.size(), "ray snapshot reports a bounded candidate count")
+		else:
+			_check(bool(ray_snapshot.get("valid", false)) and bool(filtered_pick.get("hit", false)), "repeated ray picker remains valid and hits the cave wall")
+	return {
+		"snapshot_p50_usec": _percentile_usec(snapshot_samples, 0.50),
+		"snapshot_p95_usec": _percentile_usec(snapshot_samples, 0.95),
+		"snapshot_p99_usec": _percentile_usec(snapshot_samples, 0.99),
+		"picker_p50_usec": _percentile_usec(picker_samples, 0.50),
+		"picker_p95_usec": _percentile_usec(picker_samples, 0.95),
+		"picker_p99_usec": _percentile_usec(picker_samples, 0.99),
+		"e2e_p50_usec": _percentile_usec(e2e_samples, 0.50),
+		"e2e_p95_usec": _percentile_usec(e2e_samples, 0.95),
+		"e2e_p99_usec": _percentile_usec(e2e_samples, 0.99),
+		"segment_reads": int(store.segment_read_count),
+		"segment_bytes": int(store.segment_read_bytes),
+		"cache_hits": int(store.segment_cache_hit_count),
+		"candidate_count": candidate_count,
+		"spatial_query_candidate_count": spatial_query_candidate_count,
+	}
+
+
+func _percentile_usec(values: PackedInt64Array, percentile: float) -> int:
+	if values.is_empty():
+		return 0
+	var sorted := values.duplicate()
+	sorted.sort()
+	var index := clampi(int(ceil(float(sorted.size() - 1) * percentile)), 0, sorted.size() - 1)
+	return int(sorted[index])
 
 
 func _test_storage_reference_identity(loaded: Dictionary) -> void:
@@ -122,7 +342,7 @@ func _test_dense_history_exact_order_and_reset() -> void:
 		var mapped: Dictionary = Spatial.world_to_region_local(point)
 		var expected := _reference_density(2222, mapped["region_key"], mapped["local_position"], reference_operations)
 		var actual: float = ledger.sample_density(2222, mapped["region_key"], mapped["local_position"])
-		_check(is_equal_approx(expected, actual), "in-memory evaluator preserves ordered alternating min/max semantics expected=%s actual=%s" % [expected, actual])
+		_check(expected == actual, "in-memory evaluator preserves exact ordered alternating min/max semantics expected=%s actual=%s" % [expected, actual])
 	var save_started := Time.get_ticks_usec()
 	var saved: Dictionary = store.save_ledger(Store.WORLD_ID, ledger)
 	var save_usec := Time.get_ticks_usec() - save_started
@@ -139,7 +359,7 @@ func _test_dense_history_exact_order_and_reset() -> void:
 	for point in before_points:
 		var mapped: Dictionary = Spatial.world_to_region_local(point)
 		var expected := _reference_density(2222, mapped["region_key"], mapped["local_position"], reference_operations)
-		_check(is_equal_approx(expected, restored.sample_density(2222, mapped["region_key"], mapped["local_position"])), "lazy segment evaluator exactly matches full original operator replay")
+		_check(expected == restored.sample_density(2222, mapped["region_key"], mapped["local_position"]), "lazy segment evaluator exactly matches full original operator replay")
 	var replay_usec := Time.get_ticks_usec() - replay_started
 	var restored_chunk_started := Time.get_ticks_usec()
 	var restored_chunk_snapshot: Dictionary = restored.get_meshing_snapshot_for_chunk(Vector2i.ZERO, Vector2i.ZERO)
@@ -149,6 +369,10 @@ func _test_dense_history_exact_order_and_reset() -> void:
 	var restored_lod1 := LodMesher.build_chunk_cpu_data(2222, Vector2i.ZERO, Vector2i.ZERO, restored_chunk_snapshot)
 	var restored_lod1_us := Time.get_ticks_usec() - restored_lod1_started
 	_check(restored_lod0.get("valid", false) and restored_lod1.get("valid", false), "dense lazy history reconstructs LOD0/LOD1 chunks without changing the field")
+	var original_chunk0: Dictionary = Mesher.build_chunk_cpu_data(2222, Vector2i.ZERO, Vector2i.ZERO, false, ledger.get_meshing_snapshot())
+	var original_chunk1: Dictionary = LodMesher.build_chunk_cpu_data(2222, Vector2i.ZERO, Vector2i.ZERO, ledger.get_meshing_snapshot())
+	_check(_mesh_cpu_data_equal(original_chunk0, restored_lod0), "persisted 2048-history LOD0 geometry and normals exactly match full replay")
+	_check(_mesh_cpu_data_equal(original_chunk1, restored_lod1), "persisted 2048-history LOD1 geometry and normals exactly match full replay")
 	var cleared: Dictionary = restored.clear_for_region(Vector2i.ZERO)
 	_check(int(cleared.get("removed_count", 0)) == 2048 and restored.get_edit_count() == 0, "focused reset tombstones every support command without reusing sequences")
 	_check(restored.revision == 2049 and restored.get_next_sequence() == 2048, "reset revision advances while global command sequence remains monotonic")
@@ -187,6 +411,7 @@ func _test_restart_streaming_lod_and_corruption() -> void:
 	var segment_path := directory.path_join(segment_name)
 	var original_bytes := FileAccess.get_file_as_bytes(segment_path)
 	_check(_write_bytes(segment_path, "corrupted segment".to_utf8_buffer()), "segment corruption is injected into disposable fixture")
+	store.clear_segment_cache()
 	_check(is_nan(restored.sample_density(13579, Vector2i(-1, -1), Vector3(15.9, 2.6, 11.9))), "runtime segment corruption fails closed instead of falling back to the base SDF")
 	_check(not restored.get_meshing_snapshot_for_chunk(Vector2i(-1, -1), Vector2i.ZERO).get("valid", true), "runtime corruption prevents a valid chunk snapshot")
 	var corrupt_result: Dictionary = store.load_world()
@@ -237,10 +462,22 @@ func _test_interruption_legacy_isolation_and_quotas() -> void:
 	_check(committed_ledger.add_sphere(Brush.Mode.CARVE, Vector3.ZERO, 0.6), "corruption rollback fixture starts with one command")
 	_check(committed_store.save_ledger(Store.WORLD_ID, committed_ledger).get("ok", false), "first committed generation is written")
 	_check(committed_ledger.add_sphere(Brush.Mode.FILL, Vector3(1.0, 0.0, 0.0), 0.6), "second command is added after first commit")
+	var first_manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(committed_directory.path_join("manifest-00000001.json")))
+	var first_payload: Dictionary = JSON.parse_string(String(first_manifest["payload_json"]))
+	var reused_segment_path := committed_directory.path_join(String(first_payload["segments"][0]["file"]))
+	var reused_segment_backup := FileAccess.get_file_as_bytes(reused_segment_path)
+	_check(_write_bytes(reused_segment_path, "corrupt reused source".to_utf8_buffer()), "source corruption is injected before an append save")
+	var append_on_corrupt_source: Dictionary = committed_store.save_ledger(Store.WORLD_ID, committed_ledger)
+	_check(not append_on_corrupt_source.get("ok", false) and append_on_corrupt_source.get("reason", "") == "reusable_segment_integrity_failure", "append save rejects corrupted reused segment before publishing a manifest")
+	_check(_write_bytes(reused_segment_path, reused_segment_backup), "verified source segment is restored before the valid append")
 	_check(committed_store.save_ledger(Store.WORLD_ID, committed_ledger).get("ok", false), "newer committed generation is written")
 	var newest_manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(committed_directory.path_join("manifest-00000002.json")))
 	var newest_payload: Dictionary = JSON.parse_string(String(newest_manifest["payload_json"]))
-	var newest_segment_path := committed_directory.path_join(String(newest_payload["segments"][0]["file"]))
+	var previous_manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(committed_directory.path_join("manifest-00000001.json")))
+	var previous_payload: Dictionary = JSON.parse_string(String(previous_manifest["payload_json"]))
+	var newest_segment_entry: Dictionary = newest_payload["segments"][-1]
+	_check(not (previous_payload["segments"] as Array).any(func(entry: Dictionary) -> bool: return String(entry["sha256"]) == String(newest_segment_entry["sha256"])), "corruption target belongs only to the newer append generation")
+	var newest_segment_path := committed_directory.path_join(String(newest_segment_entry["file"]))
 	var newest_segment_backup := FileAccess.get_file_as_bytes(newest_segment_path)
 	_check(_write_bytes(newest_segment_path, "committed corruption".to_utf8_buffer()), "newest committed generation corruption is injected")
 	var rollback_rejected: Dictionary = committed_store.load_world()
@@ -284,6 +521,12 @@ func _reference_density(seed: int, region: Vector2i, local: Vector3, operations:
 		else:
 			density = maxf(density, -distance)
 	return density
+
+
+func _mesh_cpu_data_equal(left: Dictionary, right: Dictionary) -> bool:
+	return left.get("valid", false) == right.get("valid", false) \
+		and left.get("positions", PackedVector3Array()) == right.get("positions", PackedVector3Array()) \
+		and left.get("normals", PackedVector3Array()) == right.get("normals", PackedVector3Array())
 
 
 func _list_files(directory_path: String, prefix: String) -> Array[String]:

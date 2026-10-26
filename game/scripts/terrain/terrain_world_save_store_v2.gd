@@ -20,6 +20,7 @@ const MAX_TOTAL_BYTES := 268435456
 const MAX_INDEX_REFERENCES := 2000000
 const MAX_GENERATION := 99999999
 const QUERY_INFLUENCE_RADIUS := Brush.MESHING_NOOP_DISTANCE
+const MAX_SEGMENT_CACHE_BYTES := 8 * 1024 * 1024 # Conservative serialized+decoded weight budget.
 
 var _world_directory: String
 var _legacy_directory: String
@@ -32,6 +33,16 @@ var _max_segment_operations := MAX_SEGMENT_OPERATIONS
 var _max_segment_bytes := MAX_SEGMENT_BYTES
 var _max_total_bytes := MAX_TOTAL_BYTES
 var _max_index_references := MAX_INDEX_REFERENCES
+var _segment_cache: Dictionary = {}
+var _segment_cache_lru: Array[String] = []
+var _segment_cache_bytes := 0
+var segment_read_count := 0
+var segment_read_bytes := 0
+var segment_cache_hit_count := 0
+var reuse_verification_read_count := 0
+var reuse_verification_read_bytes := 0
+var last_query_segment_reads := 0
+var last_query_candidate_count := 0
 var last_read_error := ""
 
 
@@ -63,64 +74,105 @@ func save_ledger(world_id: String, ledger: RefCounted) -> Dictionary:
 	var generation := _next_generation()
 	if generation < 1 or generation > MAX_GENERATION:
 		return {"ok": false, "reason": "save_generation_limit_reached"}
+	var delta: Dictionary = ledger.get_persistence_delta()
+	var reusable: bool = bool(delta.get("append_compatible", false)) \
+		and delta.get("source", null) == self \
+		and validate_storage_reference(delta.get("source_metadata", {})) \
+		and int(delta.get("base_operation_count", -1)) == int(_loaded_metadata.get("operation_count", -2))
+	if reusable:
+		var source_metadata: Dictionary = delta["source_metadata"]
+		var appended: Array = delta["overlay_operations"]
+		reusable = int(metadata.get("world_seed", -1)) == int(_loaded_metadata.get("world_seed", -2)) \
+			and int(metadata.get("generator_version", -1)) == int(_loaded_metadata.get("generator_version", -2)) \
+			and operation_count == int(source_metadata["operation_count"]) + appended.size() \
+			and int(metadata.get("revision", -1)) == int(source_metadata["ledger_revision"]) + appended.size() \
+			and int(metadata.get("next_sequence", -1)) == int(source_metadata["next_sequence"]) + appended.size()
+	if reusable:
+		var source_integrity := _verify_reusable_artifacts()
+		if not source_integrity.get("valid", false):
+			return {"ok": false, "reason": String(source_integrity.get("reason", "reusable_source_invalid"))}
 	var segments: Array[Dictionary] = []
 	var support_index: Dictionary = {}
 	var query_index: Dictionary = {}
-	var records_buffer: Array[Dictionary] = []
-	var export_state := {"written_operation_count": 0, "error": ""}
-	var indexed_references := 0
+	var sequence_to_segment: Dictionary = {}
+	var initial_count := 0
+	if reusable:
+		segments.assign(_loaded_segments)
+		support_index = (_loaded_index.get("support_regions", {}) as Dictionary).duplicate(true)
+		query_index = (_loaded_index.get("query_regions", {}) as Dictionary).duplicate(true)
+		sequence_to_segment = _sequence_to_segment.duplicate()
+		initial_count = int(delta["base_operation_count"])
+	var indexed_references := _index_reference_count(support_index) + _index_reference_count(query_index)
+	if indexed_references > _max_index_references:
+		return {"ok": false, "reason": "spatial_index_quota_exceeded"}
+	var state := {
+		"segments": segments,
+		"support_index": support_index,
+		"query_index": query_index,
+		"sequence_to_segment": sequence_to_segment,
+		"records_buffer": [],
+		"written_operation_count": initial_count,
+		"indexed_references": indexed_references,
+		"error": "",
+		"reused_segments": segments.size(),
+		"new_segments": 0,
+	}
 	var consume_operation := func(operation: Dictionary) -> void:
-		if not String(export_state["error"]).is_empty():
+		if not String(state["error"]).is_empty():
 			return
 		var record := _record_from_operation(operation)
 		if record.is_empty():
-			export_state["error"] = "operation_record_invalid"
+			state["error"] = "operation_record_invalid"
 			return
-		records_buffer.append(record)
-		export_state["written_operation_count"] = int(export_state["written_operation_count"]) + 1
+		(state["records_buffer"] as Array).append(record)
+		state["written_operation_count"] = int(state["written_operation_count"]) + 1
 		var sequence := int(record["sequence"])
 		for region_key in operation["support_regions"]:
-			_append_index(support_index, _region_id(region_key), sequence)
-			indexed_references += 1
+			_append_index(state["support_index"], _region_id(region_key), sequence)
+			state["indexed_references"] = int(state["indexed_references"]) + 1
 		for query_key in _query_regions_for_operation(operation):
-			_append_index(query_index, _region_id(query_key), sequence)
-			indexed_references += 1
-		if indexed_references > _max_index_references:
-			export_state["error"] = "spatial_index_quota_exceeded"
+			_append_index(state["query_index"], _region_id(query_key), sequence)
+			state["indexed_references"] = int(state["indexed_references"]) + 1
+		if int(state["indexed_references"]) > _max_index_references:
+			state["error"] = "spatial_index_quota_exceeded"
 			return
-		if records_buffer.size() >= _max_segment_operations:
-			var segment_result := _write_segment(records_buffer, write_accounting)
-			if not segment_result.get("ok", false):
-				export_state["error"] = String(segment_result.get("reason", "segment_write_failed"))
-			else:
-				segments.append(segment_result["entry"])
-				records_buffer.clear()
-	ledger.for_each_persistence_operation(consume_operation)
-	if not String(ledger.last_storage_error).is_empty():
-		return {"ok": false, "reason": "source_read_failed_%s" % String(ledger.last_storage_error)}
-	if not String(export_state["error"]).is_empty():
-		return {"ok": false, "reason": String(export_state["error"])}
-	if not records_buffer.is_empty():
-		var final_segment := _write_segment(records_buffer, write_accounting)
+		if (state["records_buffer"] as Array).size() >= _max_segment_operations:
+			var flush_result := _flush_segment_buffer(state, write_accounting)
+			if not flush_result.get("ok", false):
+				state["error"] = String(flush_result.get("reason", "segment_write_failed"))
+	if reusable:
+		for operation in delta["overlay_operations"]:
+			consume_operation.call(operation)
+	else:
+		state["written_operation_count"] = 0
+		ledger.for_each_persistence_operation(consume_operation)
+		if not String(ledger.last_storage_error).is_empty():
+			return {"ok": false, "reason": "source_read_failed_%s" % String(ledger.last_storage_error)}
+	if not String(state["error"]).is_empty():
+		return {"ok": false, "reason": String(state["error"])}
+	if not (state["records_buffer"] as Array).is_empty():
+		var final_segment := _flush_segment_buffer(state, write_accounting)
 		if not final_segment.get("ok", false):
 			return final_segment
-		segments.append(final_segment["entry"])
-	if int(export_state["written_operation_count"]) != operation_count:
+	segments = state["segments"]
+	support_index = state["support_index"]
+	query_index = state["query_index"]
+	sequence_to_segment = state["sequence_to_segment"]
+	indexed_references = int(state["indexed_references"])
+	if int(state["written_operation_count"]) != operation_count:
 		return {"ok": false, "reason": "operation_count_changed_during_save"}
-	var index_payload := {
-		"format": FORMAT_ID,
-		"schema_version": SCHEMA_VERSION,
-		"support_regions": support_index,
-		"query_regions": query_index,
-	}
-	var index_bytes := _canonical_bytes(index_payload)
-	if index_bytes.size() > _max_total_bytes:
-		return {"ok": false, "reason": "spatial_index_byte_quota_exceeded"}
-	var index_hash := _sha256(index_bytes)
-	var index_filename := "index-%s.json" % index_hash
-	var index_write := _write_immutable(_world_directory.path_join(index_filename), index_bytes, write_accounting)
-	if not index_write.get("ok", false):
-		return index_write
+	var index_filename := String(_loaded_metadata.get("index_file", "")) if reusable and int(state["new_segments"]) == 0 else ""
+	var index_hash := String(_loaded_metadata.get("index_sha256", "")) if reusable and int(state["new_segments"]) == 0 else ""
+	var normalized_index := {"format": FORMAT_ID, "schema_version": SCHEMA_VERSION, "support_regions": support_index, "query_regions": query_index}
+	if index_filename.is_empty():
+		var index_bytes := _canonical_bytes(normalized_index)
+		if index_bytes.size() > _max_total_bytes:
+			return {"ok": false, "reason": "spatial_index_byte_quota_exceeded"}
+		index_hash = _sha256(index_bytes)
+		index_filename = "index-%s.json" % index_hash
+		var index_write := _write_immutable(_world_directory.path_join(index_filename), index_bytes, write_accounting)
+		if not index_write.get("ok", false):
+			return index_write
 	var manifest_payload := {
 		"world_id": world_id,
 		"world_seed": int(metadata["world_seed"]),
@@ -162,10 +214,36 @@ func save_ledger(world_id: String, ledger: RefCounted) -> Dictionary:
 	var committed := _decode_manifest(FileAccess.get_file_as_bytes(final_path), generation)
 	if not committed.get("valid", false):
 		return {"ok": false, "reason": "committed_manifest_verification_failed"}
-	return {"ok": true, "generation": generation, "operation_count": operation_count, "revision": int(metadata["revision"]), "segment_count": segments.size(), "index_references": indexed_references, "storage_bytes": _directory_bytes()}
+	var new_metadata: Dictionary = manifest_payload.duplicate(true)
+	new_metadata["generation"] = generation
+	_loaded_metadata = new_metadata
+	_loaded_segments = segments.duplicate(true)
+	_loaded_index = normalized_index
+	_sequence_to_segment = sequence_to_segment.duplicate()
+	if not ledger.accept_persistence_save(self, get_storage_reference_metadata()):
+		return {"ok": false, "reason": "ledger_source_rebind_failed_after_commit", "generation": generation}
+	return {"ok": true, "generation": generation, "operation_count": operation_count, "revision": int(metadata["revision"]), "segment_count": segments.size(), "index_references": indexed_references, "segments_reused": int(state["reused_segments"]), "segments_written": int(state["new_segments"]), "storage_bytes": _directory_bytes()}
+
+
+func _flush_segment_buffer(state: Dictionary, write_accounting: Dictionary) -> Dictionary:
+	var records: Array[Dictionary] = []
+	for value in state["records_buffer"]:
+		records.append(value)
+	var segment_result := _write_segment(records, write_accounting)
+	if not segment_result.get("ok", false):
+		return segment_result
+	var segment_index := (state["segments"] as Array).size()
+	(state["segments"] as Array).append(segment_result["entry"])
+	for record in records:
+		state["sequence_to_segment"][int(record["sequence"])] = segment_index
+	state["new_segments"] = int(state["new_segments"]) + 1
+	(state["records_buffer"] as Array).clear()
+	return {"ok": true}
 
 
 func load_world(world_id: String = WORLD_ID) -> Dictionary:
+	clear_segment_cache()
+	reset_query_stats()
 	if world_id != WORLD_ID:
 		return {"ok": false, "found": false, "reason": "unsupported_world_identity"}
 	if not DirAccess.dir_exists_absolute(_world_directory):
@@ -285,12 +363,111 @@ func for_each_operation(callback: Callable) -> void:
 			callback.call(operation)
 
 
+func get_operations_for_query_region(region_key: Vector2i, excluded: Dictionary = {}) -> Array[Dictionary]:
+	return get_operations_for_query_regions([region_key], excluded)
+
+
+## Reads each intersecting immutable segment at most once per request. Query
+## entries are a conservative 9-unit SDF-influence superset, not brush support.
+func get_operations_for_query_regions(region_keys: Array, excluded: Dictionary = {}) -> Array[Dictionary]:
+	last_read_error = ""
+	last_query_segment_reads = 0
+	last_query_candidate_count = 0
+	var result: Array[Dictionary] = []
+	var entries: Dictionary = _loaded_index.get("query_regions", {})
+	var sequences_by_segment: Dictionary = {}
+	var wanted_sequences: Dictionary = {}
+	for region_key_value in region_keys:
+		var region_key: Vector2i = region_key_value
+		for sequence_value in entries.get(_region_id(region_key), []):
+			var sequence := int(sequence_value)
+			if excluded.has(sequence) or wanted_sequences.has(sequence):
+				continue
+			var segment_index := int(_sequence_to_segment.get(sequence, -1))
+			if segment_index < 0:
+				last_read_error = "spatial_index_reference_unmapped"
+				return []
+			wanted_sequences[sequence] = true
+			if not sequences_by_segment.has(segment_index):
+				sequences_by_segment[segment_index] = []
+			(sequences_by_segment[segment_index] as Array).append(sequence)
+	var segment_indices: Array = sequences_by_segment.keys()
+	segment_indices.sort()
+	for segment_index_value in segment_indices:
+		var segment_index := int(segment_index_value)
+		var wanted: Dictionary = {}
+		for sequence_value in sequences_by_segment[segment_index]:
+			wanted[int(sequence_value)] = true
+		var matched := 0
+		var operations := _read_segment_operations(segment_index)
+		if not last_read_error.is_empty():
+			return []
+		for operation in operations:
+			var sequence := int(operation["sequence"])
+			if wanted.has(sequence):
+				result.append(operation)
+				matched += 1
+		if matched != wanted.size():
+			last_read_error = "spatial_index_reference_missing"
+			return []
+	# Segment indices and each verified segment's records are globally ordered.
+	# Preserve that order without sorting a potentially large candidate array.
+	last_query_candidate_count = result.size()
+	return result
+
+
+func get_storage_reference_metadata() -> Dictionary:
+	if _loaded_metadata.is_empty():
+		return {}
+	return {
+		"generation": int(_loaded_metadata.get("generation", -1)),
+		"world_id": String(_loaded_metadata.get("world_id", "")),
+		"world_seed": int(_loaded_metadata.get("world_seed", -1)),
+		"generator_version": int(_loaded_metadata.get("generator_version", -1)),
+		"ledger_revision": int(_loaded_metadata.get("ledger_revision", -1)),
+		"next_sequence": int(_loaded_metadata.get("next_sequence", -1)),
+		"operation_count": int(_loaded_metadata.get("operation_count", -1)),
+	}
+
+
+func reset_query_stats() -> void:
+	segment_read_count = 0
+	segment_read_bytes = 0
+	segment_cache_hit_count = 0
+	reuse_verification_read_count = 0
+	reuse_verification_read_bytes = 0
+	last_query_segment_reads = 0
+	last_query_candidate_count = 0
+
+
+func clear_segment_cache() -> void:
+	_segment_cache.clear()
+	_segment_cache_lru.clear()
+	_segment_cache_bytes = 0
+
+
+func _verify_reusable_artifacts() -> Dictionary:
+	# Reuse is allowed only after checking the on-disk bytes still match the
+	# content-addressed identities that were fully decoded and cross-indexed at
+	# load/previous commit. This detects post-load corruption without rebuilding
+	# or reserializing the old operation corpus.
+	for entry in _loaded_segments:
+		var bytes := FileAccess.get_file_as_bytes(_world_directory.path_join(String(entry.get("file", ""))))
+		reuse_verification_read_count += 1
+		reuse_verification_read_bytes += bytes.size()
+		if bytes.is_empty() or bytes.size() > _max_segment_bytes or _sha256(bytes) != String(entry.get("sha256", "")):
+			return {"valid": false, "reason": "reusable_segment_integrity_failure"}
+	var index_file := String(_loaded_metadata.get("index_file", ""))
+	var index_bytes := FileAccess.get_file_as_bytes(_world_directory.path_join(index_file))
+	reuse_verification_read_count += 1
+	reuse_verification_read_bytes += index_bytes.size()
+	if index_bytes.is_empty() or _sha256(index_bytes) != String(_loaded_metadata.get("index_sha256", "")):
+		return {"valid": false, "reason": "reusable_index_integrity_failure"}
+	return {"valid": true}
+
+
 func get_operations_for_support_region(region_key: Vector2i) -> Array[Dictionary]:
 	return _operations_for_index("support_regions", _region_id(region_key), {})
-
-
-func get_operations_for_query_region(region_key: Vector2i, excluded: Dictionary = {}) -> Array[Dictionary]:
-	return _operations_for_index("query_regions", _region_id(region_key), excluded)
 
 
 func _operations_for_index(index_name: String, key: String, excluded: Dictionary) -> Array[Dictionary]:
@@ -336,7 +513,17 @@ func _read_segment_operations(segment_index: int) -> Array[Dictionary]:
 		last_read_error = "segment_index_out_of_range"
 		return result
 	var entry: Dictionary = _loaded_segments[segment_index]
+	var cache_key := String(entry["sha256"])
+	if _segment_cache.has(cache_key):
+		segment_cache_hit_count += 1
+		_segment_cache_lru.erase(cache_key)
+		_segment_cache_lru.append(cache_key)
+		var cached: Dictionary = _segment_cache[cache_key]
+		return cached["operations"]
 	var bytes := FileAccess.get_file_as_bytes(_world_directory.path_join(String(entry["file"])))
+	segment_read_count += 1
+	segment_read_bytes += bytes.size()
+	last_query_segment_reads += 1
 	var decoded := _decode_segment(bytes)
 	if not decoded.get("valid", false) or _sha256(bytes) != String(entry["sha256"]):
 		last_read_error = "segment_integrity_failure"
@@ -348,7 +535,23 @@ func _read_segment_operations(segment_index: int) -> Array[Dictionary]:
 			last_read_error = "segment_semantics_failure"
 			return []
 		result.append(operation_result["operation"])
+	_cache_segment(cache_key, result, bytes.size())
 	return result
+
+
+func _cache_segment(cache_key: String, operations: Array[Dictionary], byte_size: int) -> void:
+	var cache_weight := maxi(byte_size, operations.size() * 512)
+	if byte_size <= 0 or cache_weight > MAX_SEGMENT_CACHE_BYTES:
+		return
+	while _segment_cache_bytes + cache_weight > MAX_SEGMENT_CACHE_BYTES and not _segment_cache_lru.is_empty():
+		var oldest: String = _segment_cache_lru.pop_front()
+		if _segment_cache.has(oldest):
+			var removed: Dictionary = _segment_cache[oldest]
+			_segment_cache_bytes -= int(removed["bytes"])
+			_segment_cache.erase(oldest)
+	_segment_cache[cache_key] = {"operations": operations, "bytes": cache_weight}
+	_segment_cache_lru.append(cache_key)
+	_segment_cache_bytes += cache_weight
 
 
 func _verify_generation(payload: Dictionary) -> Dictionary:
@@ -628,6 +831,14 @@ func _append_index(index: Dictionary, key: String, sequence: int) -> void:
 	if not index.has(key):
 		index[key] = []
 	(index[key] as Array).append(sequence)
+
+
+func _index_reference_count(index: Dictionary) -> int:
+	var total := 0
+	for values in index.values():
+		if typeof(values) == TYPE_ARRAY:
+			total += (values as Array).size()
+	return total
 
 
 func _next_generation() -> int:

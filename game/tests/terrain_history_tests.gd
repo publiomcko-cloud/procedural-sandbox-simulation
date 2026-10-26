@@ -29,6 +29,7 @@ func _run() -> void:
 	_test_capacity_and_exact_spatial_filter(ledger)
 	_test_ray_snapshot_equivalence(ledger, "distributed")
 	_test_concentrated_256_filter()
+	_test_idempotent_interval_pruning()
 	await _test_256_sequential_scene_edits()
 	await _test_revision_supersession_and_rapid_movement()
 	if failures == 0:
@@ -141,13 +142,27 @@ func _test_concentrated_256_filter() -> void:
 		var key: Vector2i = case["region"]
 		var coordinate: Vector2i = case["chunk"]
 		var filtered: Dictionary = ledger.get_meshing_snapshot_for_chunk(key, coordinate)
-		_check(filtered["candidate_operation_count"] == 256, "concentrated corner history retains every potentially effective command at %s/%s" % [key, coordinate])
+		_check(int(filtered["candidate_operation_count"]) <= 256, "concentrated corner history remains bounded after interval proof at %s/%s" % [key, coordinate])
 		_check_expanded_query_domain(full_snapshot, filtered, key, coordinate, "concentrated")
 		var reference: Dictionary = Mesher.build_chunk_mesh(SEED, key, coordinate, false, ledger)
 		var cpu_data: Dictionary = Mesher.build_chunk_cpu_data(SEED, key, coordinate, false, filtered)
 		var candidate: Dictionary = Mesher.mesh_from_cpu_data(cpu_data)
 		_check(_meshes_equal(reference["mesh"], candidate["mesh"]), "concentrated 256-operation mesh and normals exactly match full ordered replay at %s/%s" % [key, coordinate])
 	_test_ray_snapshot_equivalence(ledger, "concentrated")
+
+
+func _test_idempotent_interval_pruning() -> void:
+	var ledger: RefCounted = BrushState.new(SEED, Field.GENERATOR_VERSION)
+	for index in range(64):
+		_check(ledger.add_sphere(BrushState.Mode.CARVE, Vector3(2.0, 3.0, 2.0), 0.58), "consecutive identical carve %d is accepted" % index)
+	var full_snapshot: Dictionary = ledger.get_meshing_snapshot()
+	var filtered: Dictionary = ledger.get_meshing_snapshot_for_chunk(Vector2i.ZERO, Vector2i.ZERO)
+	_check(int(filtered["candidate_operation_count"]) == 1, "consecutive identical min operators are reduced by exact idempotence")
+	var full_data: Dictionary = Mesher.build_chunk_cpu_data(SEED, Vector2i.ZERO, Vector2i.ZERO, false, full_snapshot)
+	var filtered_data: Dictionary = Mesher.build_chunk_cpu_data(SEED, Vector2i.ZERO, Vector2i.ZERO, false, filtered)
+	var full_mesh: Dictionary = Mesher.mesh_from_cpu_data(full_data)
+	var filtered_mesh: Dictionary = Mesher.mesh_from_cpu_data(filtered_data)
+	_check(_meshes_equal(full_mesh["mesh"], filtered_mesh["mesh"]), "idempotence reduction preserves complete chunk geometry and normals")
 
 
 func _test_ray_snapshot_equivalence(ledger: RefCounted, history_name: String) -> void:
