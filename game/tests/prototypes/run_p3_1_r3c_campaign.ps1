@@ -45,13 +45,25 @@ foreach ($artifact in Get-ChildItem -LiteralPath $fixtureR3B -File | Where-Objec
 $r3cSumsHash = (Get-FileHash -LiteralPath (Join-Path $fixtureR3C 'SHA256SUMS.txt') -Algorithm SHA256).Hash.ToLowerInvariant()
 $r3cManifestHash = (Get-FileHash -LiteralPath (Join-Path $fixtureR3C 'scenario-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($r3cSumsHash -ne $expectedSumsShaR3C -or $r3cManifestHash -ne $expectedManifestShaR3C) { throw "R3C frozen manifest/checksum identity mismatch: $r3cSumsHash $r3cManifestHash" }
+$manifestSidecar = (Get-Content -LiteralPath (Join-Path $fixtureR3C 'scenario-manifest.sha256') -Raw).Trim().ToLowerInvariant()
+if ($manifestSidecar -ne $r3cManifestHash) { throw "R3C manifest sidecar mismatch: $manifestSidecar" }
+$r3cManifest = Get-Content -LiteralPath (Join-Path $fixtureR3C 'scenario-manifest.json') -Raw | ConvertFrom-Json -ErrorAction Stop
 $r3cSumsLines = Get-Content -LiteralPath (Join-Path $fixtureR3C 'SHA256SUMS.txt')
-foreach ($artifact in Get-ChildItem -LiteralPath $fixtureR3C -File | Where-Object { $_.Name -notin @('SHA256SUMS.txt','scenario-manifest.sha256') }) {
+foreach ($artifact in Get-ChildItem -LiteralPath $fixtureR3C -File | Where-Object { $_.Name -notin @('SHA256SUMS.txt','scenario-manifest.sha256') -and $_.Name -notlike '*.commands.sha256' }) {
     $line = $r3cSumsLines | Where-Object { $_.TrimEnd().EndsWith($artifact.Name) } | Select-Object -First 1
     if (-not $line) { throw "R3C fixture artifact missing from SHA256SUMS: $($artifact.Name)" }
     $expectedHash = $line.Substring(0,64).ToLowerInvariant()
     $actualHash = (Get-FileHash -LiteralPath $artifact.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actualHash -ne $expectedHash) { throw "R3C fixture SHA mismatch for $($artifact.Name): $actualHash" }
+}
+foreach ($scenarioEntry in $r3cManifest.scenarios) {
+    $commandPath = Join-Path $fixtureR3C $scenarioEntry.command_file
+    $sidecarPath = [IO.Path]::ChangeExtension($commandPath, $null) + '.sha256'
+    $actualCommandHash = (Get-FileHash -LiteralPath $commandPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $commandSidecar = (Get-Content -LiteralPath $sidecarPath -Raw).Trim().ToLowerInvariant()
+    if ($actualCommandHash -ne $scenarioEntry.command_sha256 -or $commandSidecar -ne $actualCommandHash) {
+        throw "R3C command manifest/sidecar mismatch: $($scenarioEntry.scenario_id)"
+    }
 }
 $sourceSha = (git -C $repo rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Unable to read source commit' }
