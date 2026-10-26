@@ -1,12 +1,12 @@
 # P3.1 R3A — Ledger, Mesh Cache, and Density Snapshot Prototype
 
-Date: 2026-10-26  
-Repository: `publiomcko-cloud/procedural-sandbox-simulation`  
-Production baseline and prototype code parent: `92b442d7f5b605c7bc9c48fac2aceea9d71813aa` (PR #129 source).  
-Prototype code commit: `ffb5ccc4e59c03913b179f2b2db05cddd90ab1cd`.  
-Last verified `origin/main` at preflight: `5997a76d345f45bf86edfe83f690336391e8be27`.  
-Draft evidence PR: [#137](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/137), based on `feat/p3-1-scalable-terrain-storage`; open, unmerged.  
-R3 architecture: [PR #136](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/136), draft.  
+Date: 2026-10-26<br>
+Repository: `publiomcko-cloud/procedural-sandbox-simulation`<br>
+Production baseline and prototype code parent: `92b442d7f5b605c7bc9c48fac2aceea9d71813aa` (PR #129 source).<br>
+Prototype code commit: `ffb5ccc4e59c03913b179f2b2db05cddd90ab1cd`.<br>
+Last verified `origin/main` at preflight: `5997a76d345f45bf86edfe83f690336391e8be27`.<br>
+Draft evidence PR: [#137](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/137), based on `feat/p3-1-scalable-terrain-storage`; open, unmerged.<br>
+R3 architecture: [PR #136](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/136), draft.<br>
 Reference benchmark: [Issue #131](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/131) / [PR #134](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/134), draft.
 
 ## Event and disposition

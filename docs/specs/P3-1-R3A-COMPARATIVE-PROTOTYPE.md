@@ -1,6 +1,6 @@
 # P3.1 R3A — Ledger, Derived Mesh Cache, and Density Snapshot Prototype
 
-Date: 2026-10-26  
+Date: 2026-10-26<br>
 Classification: disposable, test-only experiment; not a production decision.
 
 ## Authority and scope

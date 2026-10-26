@@ -4,4 +4,4 @@
 *.md text eol=lf
 *.ps1 text eol=crlf
 /game/tests/fixtures/p3_1_r3a/issue131/** -text
-/docs/reports/P3-1-R3A/evidence/** -text
+/docs/reports/P3-1-R3A/evidence/** -text -diff

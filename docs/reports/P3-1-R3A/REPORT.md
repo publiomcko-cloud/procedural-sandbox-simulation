@@ -1,11 +1,11 @@
 # P3.1 R3A — Comparative Ledger + Snapshot Prototype
 
-Date: 2026-10-26  
-Disposition: `P3_1_R3A_READY_FOR_INDEPENDENT_REVIEW`; experimental prototype only, owner architectural decision pending.  
-Repository: `https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git`  
-Production baseline: `92b442d7f5b605c7bc9c48fac2aceea9d71813aa` (PR #129 source).  
-Baseline direct parent: `073e9959fc8585322ac7efc12261e6ecc2bc953c`.  
-Current `origin/main` at preflight: `5997a76d345f45bf86edfe83f690336391e8be27`.  
+Date: 2026-10-26<br>
+Disposition: `P3_1_R3A_READY_FOR_INDEPENDENT_REVIEW`; experimental prototype only, owner architectural decision pending.<br>
+Repository: `https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git`<br>
+Production baseline: `92b442d7f5b605c7bc9c48fac2aceea9d71813aa` (PR #129 source).<br>
+Baseline direct parent: `073e9959fc8585322ac7efc12261e6ecc2bc953c`.<br>
+Current `origin/main` at preflight: `5997a76d345f45bf86edfe83f690336391e8be27`.<br>
 Worktree/branch: isolated `C:\Dev\sandbox-sim-p3-1-r3a-prototype`, `bench/p3-1-r3a-ledger-snapshots`; PR #129/#134 and user workspace not modified.
 
 ## Result summary
