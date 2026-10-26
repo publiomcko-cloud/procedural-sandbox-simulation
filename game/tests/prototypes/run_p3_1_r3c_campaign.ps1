@@ -58,7 +58,7 @@ foreach ($artifact in Get-ChildItem -LiteralPath $fixtureR3C -File | Where-Objec
 }
 foreach ($scenarioEntry in $r3cManifest.scenarios) {
     $commandPath = Join-Path $fixtureR3C $scenarioEntry.command_file
-    $sidecarPath = [IO.Path]::ChangeExtension($commandPath, $null) + '.sha256'
+    $sidecarPath = $commandPath.Substring(0, $commandPath.Length - 5) + '.sha256'
     $actualCommandHash = (Get-FileHash -LiteralPath $commandPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $commandSidecar = (Get-Content -LiteralPath $sidecarPath -Raw).Trim().ToLowerInvariant()
     if ($actualCommandHash -ne $scenarioEntry.command_sha256 -or $commandSidecar -ne $actualCommandHash) {
