@@ -1,8 +1,8 @@
 # P3.1 Storage — R2 Query and Append Corrections
 
-**Checkpoint date:** 2026-10-25 (America/Sao_Paulo)  
-**Event:** Issue #127 R2 implementation corrections and full validation  
-**Publication:** Existing draft PR #129; open and unmerged at checkpoint creation  
+**Checkpoint date:** 2026-10-25 (America/Sao_Paulo)
+**Event:** Issue #127 R2 implementation corrections and full validation
+**Publication:** Existing draft PR #129; open and unmerged at checkpoint creation
 **Immutable:** yes; subsequent review, GUI, or merge outcomes require a separate checkpoint.
 
 ## Repository identity
