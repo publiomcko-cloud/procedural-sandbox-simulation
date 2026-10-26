@@ -11,8 +11,8 @@ const MeshCache := preload("res://tests/prototypes/r3c_profile_cache.gd")
 
 const SEED := 131102026
 const R3B_SUMS_SHA := "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1"
-const R3C_SUMS_SHA := "82fef6e13f91112db1209306e44d2b1264a6e01839283b65d26ddffcf50023ec"
-const R3C_MANIFEST_SHA := "b3994d55b737d80bf81641713e73d99381c8cdabbad74ab286cb1678d8c75258"
+const R3C_SUMS_SHA := "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b"
+const R3C_MANIFEST_SHA := "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03"
 const RUNS_IN_PROCESS := 3
 const QUERY_PROBES := 64
 

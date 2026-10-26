@@ -95,7 +95,8 @@ foreach ($layout in @('CONCENTRATED', 'DISTRIBUTED')) {
     }
 }
 $manifest = [ordered]@{ schema = 1; generator = 'P31-R3C-NONPERIODIC-v1'; seed = $seed; hash_input = 'UTF8(P31-R3C-NONPERIODIC-v1|seed|layout|zero_based_sequence), SHA-256'; center_uniqueness = 'ordinal world-mm tuple; collision resolves by incrementing local X mm with wrap in [50,15949]'; scenarios = $allRows.ToArray() }
-$manifestBytes = $utf8.GetBytes((ConvertTo-Json -InputObject $manifest -Depth 10) + "`n")
+$manifestJson = (ConvertTo-Json -InputObject $manifest -Depth 10).Replace("`r`n", "`n")
+$manifestBytes = $utf8.GetBytes($manifestJson + "`n")
 [IO.File]::WriteAllBytes((Join-Path $root 'scenario-manifest.json'), $manifestBytes)
 $manifestSha = Get-BytesSha256 $manifestBytes
 [IO.File]::WriteAllText((Join-Path $root 'scenario-manifest.sha256'), "$manifestSha`n", $utf8)
