@@ -348,8 +348,9 @@ func _run() -> void:
 		adaptive_metrics["policy_end_to_end_us"] = int(policy_probe.total_usec)
 		adaptive_metrics["unconditional_cold_overhead_us"] = unconditional_overhead
 		adaptive_metrics["policy_cold_overhead_us"] = policy_overhead
-		adaptive_metrics["fresh_process_disk_hit_us"] = disk_hit_usec
-		adaptive_metrics["projected_net_benefit_us"] = int(adaptive_metrics.expected_reuse_count) * (canonical_lod1_us - disk_hit_usec) - unconditional_overhead
+		var fresh_process_disk_hit_us := cache_first_lookup_usec if String(cache_result.get("cache_layer", "")) == "disk" else -1
+		adaptive_metrics["fresh_process_disk_hit_us"] = fresh_process_disk_hit_us
+		adaptive_metrics["projected_net_benefit_us"] = int(adaptive_metrics.expected_reuse_count) * (canonical_lod1_us - fresh_process_disk_hit_us) - unconditional_overhead
 		adaptive_metrics["unconditional_exact"] = _mesh_exact(mesh_data, unconditional_probe.result)
 		adaptive_metrics["policy_exact"] = _mesh_exact(mesh_data, policy_probe.result)
 		adaptive_metrics["bypass_count"] = int(policy_probe.bypass_count)
