@@ -81,12 +81,22 @@ func _run() -> void:
 					break
 		var expected_region := [0, 0] if layout == "concentrated" else [-31, -64]
 		var expected_chunk := [0, 0] if layout == "concentrated" else [2, 2]
-		if manifest_match.is_empty() or String(manifest_match.get("command_file", "")) != input_stem + ".commands.json" \
-			or String(manifest_match.get("command_sha256", "")) != expected_input_hash \
-			or int(manifest_match.get("count", -1)) != count \
-			or manifest_match.get("selected_region", []) != expected_region \
-			or manifest_match.get("selected_chunk", []) != expected_chunk:
-			push_error("r3c_scenario_manifest_entry_mismatch")
+		var manifest_mismatches: Array[String] = []
+		if manifest_match.is_empty():
+			manifest_mismatches.append("scenario_id")
+		else:
+			if String(manifest_match.get("command_file", "")) != input_stem + ".commands.json":
+				manifest_mismatches.append("command_file")
+			if String(manifest_match.get("command_sha256", "")) != expected_input_hash:
+				manifest_mismatches.append("command_sha256")
+			if int(manifest_match.get("count", -1)) != count:
+				manifest_mismatches.append("count")
+			if not _integer_array_matches(manifest_match.get("selected_region", null), expected_region):
+				manifest_mismatches.append("selected_region")
+			if not _integer_array_matches(manifest_match.get("selected_chunk", null), expected_chunk):
+				manifest_mismatches.append("selected_chunk")
+		if not manifest_mismatches.is_empty():
+			push_error("r3c_scenario_manifest_entry_mismatch: " + ",".join(manifest_mismatches))
 			quit(1)
 			return
 	var parsed: Variant = JSON.parse_string(input_bytes.get_string_from_utf8())
@@ -350,6 +360,18 @@ func _valid_scenario(value: String) -> bool:
 	var selection := value.trim_prefix("NONPERIODIC-") if value.begins_with("NONPERIODIC-") else value
 	var pieces := selection.split("-")
 	return pieces.size() == 2 and ["CONCENTRATED", "DISTRIBUTED"].has(pieces[0]) and ["256", "640", "2048", "8192"].has(pieces[1])
+
+
+func _integer_array_matches(value: Variant, expected: Array) -> bool:
+	if typeof(value) != TYPE_ARRAY or (value as Array).size() != expected.size():
+		return false
+	for index in range(expected.size()):
+		var item: Variant = value[index]
+		if typeof(item) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(item)) or float(item) != floor(float(item)):
+			return false
+		if int(item) != int(expected[index]):
+			return false
+	return true
 
 
 func _probe(region: Vector2i, chunk: Vector2i, index: int) -> Vector3:
