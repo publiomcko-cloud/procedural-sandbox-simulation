@@ -1,0 +1,60 @@
+[
+  {
+    "process": {
+      "run_id": "CONCENTRATED-256-R01",
+      "source_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+      "scenario": "CONCENTRATED-256",
+      "repeat": 1,
+      "godot": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+      "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+      "godot_version": "4.7.2.stable.official.ed1daf0bf",
+      "command": [
+        "--headless",
+        "--path",
+        "C:\\Dev\\sandbox-sim-p3-1-r3b-experiment\\game",
+        "--script",
+        "res://tests/prototypes/p3_1_r3b_benchmark.gd"
+      ],
+      "started_utc": "2026-10-26T15:47:21.9728601Z",
+      "launcher_pid": 76508,
+      "engine_pid": 81416,
+      "exit_code": 1,
+      "duration_ms": 586.235,
+      "sampled_peak_working_set_bytes": 6762496,
+      "appdata": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3b-runner-smoke-212cf20d85574b8f8ace01eb86f484e7\\godot-profile\\roaming",
+      "localappdata": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3b-runner-smoke-212cf20d85574b8f8ace01eb86f484e7\\godot-profile\\local",
+      "status": "FAIL_RETAINED",
+      "ended_utc": "2026-10-26T15:47:22.5892798Z"
+    },
+    "result": null
+  },
+  {
+    "process": {
+      "run_id": "CONCENTRATED-256-R02",
+      "source_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+      "scenario": "CONCENTRATED-256",
+      "repeat": 2,
+      "godot": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+      "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+      "godot_version": "4.7.2.stable.official.ed1daf0bf",
+      "command": [
+        "--headless",
+        "--path",
+        "C:\\Dev\\sandbox-sim-p3-1-r3b-experiment\\game",
+        "--script",
+        "res://tests/prototypes/p3_1_r3b_benchmark.gd"
+      ],
+      "started_utc": "2026-10-26T15:47:22.6215760Z",
+      "launcher_pid": 76508,
+      "engine_pid": 61484,
+      "exit_code": 1,
+      "duration_ms": 646.284,
+      "sampled_peak_working_set_bytes": 6426624,
+      "appdata": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3b-runner-smoke-212cf20d85574b8f8ace01eb86f484e7\\godot-profile\\roaming",
+      "localappdata": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3b-runner-smoke-212cf20d85574b8f8ace01eb86f484e7\\godot-profile\\local",
+      "status": "FAIL_RETAINED",
+      "ended_utc": "2026-10-26T15:47:23.2748849Z"
+    },
+    "result": null
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\Dev\\sandbox-sim-p3-1-r3b-experiment\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r3b_benchmark.gd"
+  ],
+  "environment": {
+    "P31_R3B_SCENARIO": "CONCENTRATED-256",
+    "P31_R3B_REPEAT": 1,
+    "P31_R3B_SOURCE_SHA": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+    "P31_R3B_OUTPUT_DIR": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3b-runner-smoke-2068aae6741843008ae3901e16516047\\runs\\CONCENTRATED-256-R01\\output",
+    "P31_R3B_CACHE_DIR": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3b-runner-smoke-2068aae6741843008ae3901e16516047\\cache\\CONCENTRATED-256"
+  },
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe"
+}

@@ -1,0 +1,47 @@
+{
+  "campaign_root": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3b-final-campaign-2-4a1cace582ef400bb6c67fd644d88ba0",
+  "cache_file_count": 96,
+  "cache_disk_bytes": 18206528.0,
+  "scenario_inventory": [
+    {
+      "scenario": "CONCENTRATED-2048",
+      "files": 12,
+      "disk_bytes": 3145504.0
+    },
+    {
+      "scenario": "CONCENTRATED-256",
+      "files": 12,
+      "disk_bytes": 746560.0
+    },
+    {
+      "scenario": "CONCENTRATED-640",
+      "files": 12,
+      "disk_bytes": 1280800.0
+    },
+    {
+      "scenario": "CONCENTRATED-8192",
+      "files": 12,
+      "disk_bytes": 11400448.0
+    },
+    {
+      "scenario": "DISTRIBUTED-2048",
+      "files": 12,
+      "disk_bytes": 408304.0
+    },
+    {
+      "scenario": "DISTRIBUTED-256",
+      "files": 12,
+      "disk_bytes": 408304.0
+    },
+    {
+      "scenario": "DISTRIBUTED-640",
+      "files": 12,
+      "disk_bytes": 408304.0
+    },
+    {
+      "scenario": "DISTRIBUTED-8192",
+      "files": 12,
+      "disk_bytes": 408304.0
+    }
+  ]
+}

@@ -6,6 +6,7 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-10-26 | [P3.1 R3B exact SDF/cache experiment](2026-10-26-P3-1-R3B-EXPERIMENT.md) | 40 paired exactness runs and final Godot validation pass, but frozen distributed-8192 LOD1 and two cache cold-overhead gates fail; no production approval | Isolated branch `bench/p3-1-r3b-exact-dense-local-cache`; separate evidence PR publication pending; not integrated |
 | 2026-10-25 | [P3.1 storage R2 corrections](2026-10-25-P3-1-STORAGE-R2-CORRECTIONS.md) | Conservative ordered SDF query selection, verified append-only segment reuse, recovery preservation and 21,464/0 full Godot assertions; concentrated 8,192-operation latency remains exploratory | Source `ea18432c6f9cfc1912e1d4aeb5363bb8f5bc9731` on existing draft PR #129; independent review and owner GUI pending |
 | 2026-10-25 | [P3.0D precise entity placement](2026-10-25-P3-0D-ENTITY-PLACEMENT.md) | Reproduced center-aim selection mismatch; added visible-pointer SDF placement, shared target marker, consistent millimeter/region ownership, and 51 focused assertions; full Godot validation 18,204/0 | Draft PR #124; independent source review and owner GUI retest pending |
 | 2026-10-25 | [P3.0C persistent entity undo/redo](2026-10-25-P3-0C-IMPLEMENTATION.md) | Schema-3 bounded history, transactional undo/redo, exact DELETE/F7 restoration and F9 baseline semantics; complete Godot validation 18,153/0 | Feature candidate on `feat/p3-0c-transactional-undo-redo`; draft PR pending; independent source review and owner GUI pending |

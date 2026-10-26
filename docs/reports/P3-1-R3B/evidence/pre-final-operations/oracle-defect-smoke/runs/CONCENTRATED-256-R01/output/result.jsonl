@@ -1,0 +1,102 @@
+{
+	"array_mesh_build_us": 233,
+	"baseline_query_us": {
+		"count": 192,
+		"max": 167,
+		"p50": 116,
+		"p95": 123,
+		"p99": 143
+	},
+	"baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"cache_builder_us": 0,
+	"cache_disk_bytes": 247168,
+	"cache_first_lookup_us": 324452,
+	"cache_fresh_instance_disk_hit_us": 2416,
+	"cache_hits": 5,
+	"cache_local_edit_rebuild_us": 403046,
+	"cache_memory_bytes": 65744,
+	"cache_memory_hit_us": 594,
+	"cache_memory_peak_bytes": 65744,
+	"cache_misses": 4,
+	"cache_remote_edit_lookup_us": 2354,
+	"canonical_lod0_samples": 1323,
+	"canonical_lod1_samples": 964,
+	"command_sha256": "54a6f3a684f0d3b322a5eca491bac30d23f77c6dd56eb3fda88acd8d7fbc62c1",
+	"duration_usec": 4160666,
+	"failures": [],
+	"layout": "concentrated",
+	"lod0_baseline_build_us": {
+		"count": 3,
+		"max": 86598,
+		"p50": 75711,
+		"p95": 86598,
+		"p99": 86598
+	},
+	"lod0_cache_cold_total_us": 89378,
+	"lod0_cache_fresh_instance_disk_hit_us": 2918,
+	"lod0_cache_memory_hit_us": 612,
+	"lod0_mesh_equal": true,
+	"lod0_optimized_build_us": {
+		"count": 3,
+		"max": 119961,
+		"p50": 116977,
+		"p95": 119961,
+		"p99": 119961
+	},
+	"lod0_phase_timings_us": {
+		"array_mesh_build": 0,
+		"sdf_and_ledger": 54831,
+		"shared_gradient_normals": 18790,
+		"triangulation_and_face_normals": 9813
+	},
+	"lod1_baseline_build_us": {
+		"count": 3,
+		"max": 327022,
+		"p50": 314345,
+		"p95": 327022,
+		"p99": 327022
+	},
+	"lod1_mesh_equal": true,
+	"lod1_optimized_build_us": {
+		"count": 3,
+		"max": 419588,
+		"p50": 390765,
+		"p95": 419588,
+		"p99": 419588
+	},
+	"lod1_phase_timings_us": {
+		"array_mesh_build": 0,
+		"lod_transition_cell_assembly": 10983,
+		"sdf_and_ledger": 40428,
+		"shared_gradient_normals": 220864,
+		"triangulation_and_face_normals": 75795
+	},
+	"lod1_serialization_us": 29,
+	"lod1_serialized_bytes": 24328,
+	"meshing_candidate_count": 256,
+	"operation_count": 256,
+	"optimized_query_us": {
+		"count": 192,
+		"max": 101,
+		"p50": 46,
+		"p95": 47,
+		"p99": 101
+	},
+	"query_mismatches": 0,
+	"repeat": 1,
+	"replay_stats": {
+		"distance_evaluations": 65536,
+		"operation_visits": 65536,
+		"repeat_period": 256,
+		"repeat_tail": 0,
+		"replay_operations": 256,
+		"source_operations": 256,
+		"unique_brushes": 256
+	},
+	"run_id": "P31.R3B.CONCENTRATED-256.R01",
+	"scenario_id": "P31.R3B.CONCENTRATED-256.v1",
+	"seed": 131102026,
+	"source_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"static_memory_delta_bytes": 4390377,
+	"status": "PASS"
+}
