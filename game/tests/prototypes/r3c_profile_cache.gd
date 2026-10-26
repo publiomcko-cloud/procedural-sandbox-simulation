@@ -9,15 +9,20 @@ const MAX_DISK_ENTRIES := 128
 const MAX_MEMORY_BYTES := 16 * 1024 * 1024
 const MAX_MEMORY_ENTRIES := 32
 const MAGIC := "P31R3B-MESH-CACHE-1"
+const LOCK_TIMEOUT_MSEC := 5000
+const WRITE_LOCK_NAME := ".r3c-write-lock"
 
 var _root: String
 var _memory := {}
 var _memory_sizes := {}
 var _memory_order: Array[String] = []
 var _memory_bytes := 0
+var _disk_inventory: Array[Dictionary] = []
+var _write_lock_path: String
 var hit_count := 0
 var miss_count := 0
 var corrupt_count := 0
+var adaptive_bypass_count := 0
 var disk_bytes := 0
 var peak_memory_bytes := 0
 var last_builder_usec := 0
@@ -28,14 +33,31 @@ func _init(root_path: String) -> void:
 	var started := Time.get_ticks_usec()
 	_root = root_path
 	DirAccess.make_dir_recursive_absolute(_root)
-	_remove_orphan_temps()
-	disk_bytes = _scan_disk_bytes()
+	_disk_inventory = _cache_files()
+	disk_bytes = _inventory_bytes()
 	last_timings_usec = {"cache_init_scan": Time.get_ticks_usec() - started}
+	_write_lock_path = _root.path_join(WRITE_LOCK_NAME)
 
 
-func get_or_build(identity: Dictionary, builder: Callable) -> Dictionary:
+func get_or_build(identity: Dictionary, builder: Callable, expected_reuse_count: int = 1) -> Dictionary:
 	var total_started := Time.get_ticks_usec()
 	last_timings_usec = {}
+	if expected_reuse_count < 0:
+		return {"valid": false, "reason": "adaptive_reuse_count_invalid", "cache_hit": false}
+	if expected_reuse_count == 0:
+		adaptive_bypass_count += 1
+		miss_count += 1
+		var bypass_started := Time.get_ticks_usec()
+		var bypass_value: Variant = builder.call()
+		last_builder_usec = Time.get_ticks_usec() - bypass_started
+		last_timings_usec = {"builder": last_builder_usec, "adaptive_decision": 0}
+		if typeof(bypass_value) != TYPE_DICTIONARY or not bool(bypass_value.get("valid", false)) or not _valid_mesh(bypass_value):
+			return {"valid": false, "reason": "canonical_mesh_build_invalid", "cache_hit": false}
+		var bypass_result := _uncached_result(_mesh_payload(bypass_value), "adaptive_expected_reuse_zero")
+		bypass_result["cache_layer"] = "bypassed_no_expected_revisit"
+		bypass_result["adaptive_bypass"] = true
+		last_timings_usec["total"] = Time.get_ticks_usec() - total_started
+		return bypass_result
 	last_builder_usec = 0
 	var started := Time.get_ticks_usec()
 	var identity_bytes := var_to_bytes(identity)
@@ -65,8 +87,6 @@ func get_or_build(identity: Dictionary, builder: Callable) -> Dictionary:
 			last_timings_usec["total"] = Time.get_ticks_usec() - total_started
 			return loaded
 		corrupt_count += 1
-		DirAccess.remove_absolute(path)
-		disk_bytes = _scan_disk_bytes()
 	miss_count += 1
 	var builder_started_usec := Time.get_ticks_usec()
 	var build_value: Variant = builder.call()
@@ -92,37 +112,24 @@ func get_or_build(identity: Dictionary, builder: Callable) -> Dictionary:
 	last_timings_usec["envelope_encode_hash"] = Time.get_ticks_usec() - started
 	if envelope.size() > MAX_DISK_BYTES:
 		return _uncached_result(mesh, "cache_entry_exceeds_disk_quota")
-	started = Time.get_ticks_usec()
-	if not _make_disk_room(envelope.size()):
-		last_timings_usec["quota"] = Time.get_ticks_usec() - started
-		return _uncached_result(mesh, "cache_disk_quota_unavailable")
-	last_timings_usec["quota"] = Time.get_ticks_usec() - started
-	var temp := path + ".tmp-%d-%d" % [Time.get_ticks_usec(), randi()]
-	if FileAccess.file_exists(temp):
-		return _uncached_result(mesh, "cache_temp_collision")
-	var file := FileAccess.open(temp, FileAccess.WRITE)
-	if file == null:
-		return _uncached_result(mesh, "cache_temp_open_failed")
-	started = Time.get_ticks_usec()
-	file.store_buffer(envelope)
-	file.flush()
-	var write_error := file.get_error()
-	file.close()
-	last_timings_usec["disk_write_flush"] = Time.get_ticks_usec() - started
-	if write_error != OK:
-		DirAccess.remove_absolute(temp)
-		return _uncached_result(mesh, "cache_temp_write_failed")
-	# The entry path is unique to its content key. A failed rename leaves the
-	# canonical build available to the caller but never claims a cache hit.
-	started = Time.get_ticks_usec()
-	var publish_error := DirAccess.rename_absolute(temp, path)
-	last_timings_usec["atomic_publish"] = Time.get_ticks_usec() - started
-	if publish_error != OK:
-		DirAccess.remove_absolute(temp)
-		return _uncached_result(mesh, "cache_atomic_publish_failed")
-	started = Time.get_ticks_usec()
-	disk_bytes = _scan_disk_bytes()
-	last_timings_usec["post_publish_full_scan"] = Time.get_ticks_usec() - started
+	var publish_started := Time.get_ticks_usec()
+	var publish_result := _publish_entry(path, identity, key, envelope)
+	last_timings_usec["publish_transaction"] = Time.get_ticks_usec() - publish_started
+	for timing_name in publish_result.get("timings_usec", {}):
+		last_timings_usec[timing_name] = int(publish_result.timings_usec[timing_name])
+	if not bool(publish_result.get("stored", false)):
+		var winner: Variant = publish_result.get("winner", null)
+		if typeof(winner) == TYPE_DICTIONARY and bool(winner.get("valid", false)):
+			_remember(key, winner)
+			winner["cache_hit"] = true
+			winner["cache_layer"] = "disk_concurrent_publish"
+			winner["duplicate_build_discarded"] = true
+			hit_count += 1
+			last_timings_usec["total"] = Time.get_ticks_usec() - total_started
+			return winner
+		var publish_reason := String(publish_result.get("reason", "cache_publish_unavailable"))
+		last_timings_usec["total"] = Time.get_ticks_usec() - total_started
+		return _uncached_result(mesh, publish_reason)
 	_remember(key, mesh)
 	last_timings_usec["total"] = Time.get_ticks_usec() - total_started
 	var result := mesh.duplicate(true)
@@ -136,7 +143,8 @@ func get_or_build(identity: Dictionary, builder: Callable) -> Dictionary:
 func stats() -> Dictionary:
 	return {"hits": hit_count, "misses": miss_count, "corrupt_entries": corrupt_count,
 		"disk_bytes": disk_bytes, "memory_bytes": _memory_bytes, "memory_entries": _memory.size(),
-		"peak_memory_bytes": peak_memory_bytes, "last_builder_usec": last_builder_usec}
+		"peak_memory_bytes": peak_memory_bytes, "last_builder_usec": last_builder_usec,
+		"adaptive_bypass_count": adaptive_bypass_count, "disk_entries": _disk_inventory.size()}
 
 
 func _read_entry(path: String, identity: Dictionary, key: String) -> Dictionary:
@@ -213,17 +221,116 @@ func _remember(key: String, mesh: Dictionary) -> void:
 	peak_memory_bytes = maxi(peak_memory_bytes, _memory_bytes)
 
 
-func _make_disk_room(incoming: int) -> bool:
-	var files := _cache_files()
-	while disk_bytes + incoming > MAX_DISK_BYTES or files.size() >= MAX_DISK_ENTRIES:
-		if files.is_empty():
+func _mesh_payload(value: Dictionary) -> Dictionary:
+	return {"positions": value.get("positions", PackedVector3Array()),
+		"normals": value.get("normals", PackedVector3Array()),
+		"vertex_count": int(value.get("vertex_count", 0)),
+		"triangle_count": int(value.get("triangle_count", 0)),
+		"sample_count": int(value.get("sample_count", 0))}
+
+
+func _publish_entry(path: String, identity: Dictionary, key: String, envelope: PackedByteArray) -> Dictionary:
+	var timings := {}
+	var lock_started := Time.get_ticks_usec()
+	if not _acquire_write_lock():
+		timings["write_lock_wait"] = Time.get_ticks_usec() - lock_started
+		return {"stored": false, "reason": "cache_write_lock_timeout", "timings_usec": timings}
+	timings["write_lock_wait"] = Time.get_ticks_usec() - lock_started
+	var result := {"stored": false, "timings_usec": timings}
+	_remove_orphan_temps_locked()
+	var scan_started := Time.get_ticks_usec()
+	_disk_inventory = _cache_files()
+	disk_bytes = _inventory_bytes()
+	timings["quota_inventory_scan"] = Time.get_ticks_usec() - scan_started
+	if FileAccess.file_exists(path):
+		var existing := _read_entry(path, identity, key)
+		if bool(existing.get("valid", false)):
+			result["winner"] = existing
+			_release_write_lock()
+			return result
+		var existing_bytes := _file_size(path)
+		if DirAccess.remove_absolute(path) != OK:
+			result["reason"] = "cache_corrupt_entry_remove_failed"
+			_release_write_lock()
+			return result
+		_remove_inventory_path(path, existing_bytes)
+	var quota_started := Time.get_ticks_usec()
+	if not _make_disk_room_locked(envelope.size()):
+		timings["quota"] = Time.get_ticks_usec() - quota_started
+		result["reason"] = "cache_disk_quota_unavailable"
+		_release_write_lock()
+		return result
+	timings["quota"] = Time.get_ticks_usec() - quota_started
+	var temp := path + ".tmp-%d-%d-%d" % [OS.get_process_id(), Time.get_ticks_usec(), randi()]
+	if FileAccess.file_exists(temp):
+		result["reason"] = "cache_temp_collision"
+		_release_write_lock()
+		return result
+	var file := FileAccess.open(temp, FileAccess.WRITE)
+	if file == null:
+		result["reason"] = "cache_temp_open_failed"
+		_release_write_lock()
+		return result
+	var write_started := Time.get_ticks_usec()
+	file.store_buffer(envelope)
+	file.flush()
+	var write_error := file.get_error()
+	file.close()
+	timings["disk_write_flush"] = Time.get_ticks_usec() - write_started
+	if write_error != OK:
+		DirAccess.remove_absolute(temp)
+		result["reason"] = "cache_temp_write_failed"
+		_release_write_lock()
+		return result
+	var rename_started := Time.get_ticks_usec()
+	var publish_error := DirAccess.rename_absolute(temp, path)
+	timings["atomic_publish"] = Time.get_ticks_usec() - rename_started
+	if publish_error != OK:
+		DirAccess.remove_absolute(temp)
+		result["reason"] = "cache_atomic_publish_failed"
+		_release_write_lock()
+		return result
+	_disk_inventory.append({"path": path, "mtime": FileAccess.get_modified_time(path), "bytes": envelope.size()})
+	disk_bytes += envelope.size()
+	result["stored"] = true
+	_release_write_lock()
+	return result
+
+
+func _make_disk_room_locked(incoming: int) -> bool:
+	while disk_bytes + incoming > MAX_DISK_BYTES or _disk_inventory.size() >= MAX_DISK_ENTRIES:
+		if _disk_inventory.is_empty():
 			return false
-		files.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.mtime) < int(b.mtime))
-		var victim: Dictionary = files.pop_front()
+		_disk_inventory.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.mtime) < int(b.mtime))
+		var victim: Dictionary = _disk_inventory.pop_front()
 		if DirAccess.remove_absolute(String(victim.path)) != OK:
+			_disk_inventory.append(victim)
 			return false
-		disk_bytes = _scan_disk_bytes()
+		disk_bytes = maxi(0, disk_bytes - int(victim.bytes))
 	return true
+
+
+func _acquire_write_lock() -> bool:
+	var started := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - started < LOCK_TIMEOUT_MSEC:
+		if DirAccess.make_dir_absolute(_write_lock_path) == OK:
+			return true
+		OS.delay_msec(10)
+	return false
+
+
+func _release_write_lock() -> void:
+	DirAccess.remove_absolute(_write_lock_path)
+
+
+func _remove_inventory_path(path: String, bytes: int) -> void:
+	for index in range(_disk_inventory.size() - 1, -1, -1):
+		if String(_disk_inventory[index].path) == path:
+			var removed_bytes := int(_disk_inventory[index].bytes)
+			_disk_inventory.remove_at(index)
+			disk_bytes = maxi(0, disk_bytes - removed_bytes)
+			return
+	disk_bytes = maxi(0, disk_bytes - bytes)
 
 
 func _cache_files() -> Array[Dictionary]:
@@ -246,14 +353,23 @@ func _cache_files() -> Array[Dictionary]:
 	return result
 
 
-func _scan_disk_bytes() -> int:
+func _inventory_bytes() -> int:
 	var total := 0
-	for entry in _cache_files():
+	for entry in _disk_inventory:
 		total += int(entry.bytes)
 	return total
 
 
-func _remove_orphan_temps() -> void:
+func _file_size(path: String) -> int:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return 0
+	var result := file.get_length()
+	file.close()
+	return result
+
+
+func _remove_orphan_temps_locked() -> void:
 	var dir := DirAccess.open(_root)
 	if dir == null:
 		return

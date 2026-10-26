@@ -329,6 +329,38 @@ func _run() -> void:
 	var local_lod0_builder_usec := int(local_cache.last_builder_usec)
 	if edited_identity_lod0.key == identity_lod0.key or bool(local_lod0_result.get("cache_hit", true)) or not _mesh_exact(Mesher.build_chunk_cpu_data(SEED, region, chunk, false, edited_snapshot), local_lod0_result):
 		_failures.append("lod0_local_edit_cache_miss_or_rebuild_mismatch")
+	var adaptive_metrics := {"workload_id": "", "expected_reuse_count": -1, "bypass_count": 0,
+		"unconditional_end_to_end_us": -1, "policy_end_to_end_us": -1,
+		"canonical_lod1_build_us": int(_summary(mesh_samples.lod1.baseline).p50), "fresh_process_disk_hit_us": -1,
+		"unconditional_cold_overhead_us": -1, "policy_cold_overhead_us": -1,
+		"projected_net_benefit_us": -1, "cold_overhead_reduction_percent": -1.0,
+		"unconditional_exact": false, "policy_exact": false}
+	if nonperiodic and layout == "distributed" and count == 256:
+		adaptive_metrics["workload_id"] = "P31.R3C.NONPERIODIC.DISTRIBUTED.N0256.v1"
+		adaptive_metrics["expected_reuse_count"] = 0
+		var comparison_root := cache_root.path_join("adaptive-repeat-%02d" % repeat)
+		var unconditional_probe := _run_cache_admission_probe(comparison_root.path_join("unconditional"), snapshot, region, chunk, 1)
+		var policy_probe := _run_cache_admission_probe(comparison_root.path_join("policy-bypass"), snapshot, region, chunk, 0)
+		var canonical_lod1_us := int(adaptive_metrics.canonical_lod1_build_us)
+		var unconditional_overhead := int(unconditional_probe.total_usec) - canonical_lod1_us
+		var policy_overhead := int(policy_probe.total_usec) - canonical_lod1_us
+		adaptive_metrics["unconditional_end_to_end_us"] = int(unconditional_probe.total_usec)
+		adaptive_metrics["policy_end_to_end_us"] = int(policy_probe.total_usec)
+		adaptive_metrics["unconditional_cold_overhead_us"] = unconditional_overhead
+		adaptive_metrics["policy_cold_overhead_us"] = policy_overhead
+		adaptive_metrics["fresh_process_disk_hit_us"] = disk_hit_usec
+		adaptive_metrics["projected_net_benefit_us"] = int(adaptive_metrics.expected_reuse_count) * (canonical_lod1_us - disk_hit_usec) - unconditional_overhead
+		adaptive_metrics["unconditional_exact"] = _mesh_exact(mesh_data, unconditional_probe.result)
+		adaptive_metrics["policy_exact"] = _mesh_exact(mesh_data, policy_probe.result)
+		adaptive_metrics["bypass_count"] = int(policy_probe.bypass_count)
+		adaptive_metrics["policy_disk_bytes"] = int(policy_probe.disk_bytes)
+		if unconditional_overhead > 0:
+			adaptive_metrics["cold_overhead_reduction_percent"] = (float(unconditional_overhead - policy_overhead) / float(unconditional_overhead)) * 100.0
+		if not bool(adaptive_metrics.unconditional_exact) or not bool(adaptive_metrics.policy_exact):
+			_failures.append("adaptive_admission_geometry_mismatch")
+		if int(adaptive_metrics.bypass_count) != 1 or int(adaptive_metrics.policy_disk_bytes) != 0 \
+			or String(policy_probe.result.get("cache_layer", "")) != "bypassed_no_expected_revisit":
+			_failures.append("adaptive_zero_reuse_did_not_bypass")
 	var scenario_run_id := "P31.R3C.NONPERIODIC.%s.N%04d.R%02d" % [layout.to_upper(), count, repeat] if nonperiodic else "P31.R3B.%s.R%02d" % [scenario, repeat]
 	var row := {
 		"scenario_id": expected_scenario_id, "run_id": scenario_run_id, "repeat": repeat,
@@ -358,7 +390,9 @@ func _run() -> void:
 		"cache_local_edit_rebuild_us": local_rebuild_usec, "cache_local_edit_builder_us": local_builder_usec,
 		"cache_local_edit_lod0_builder_us": local_lod0_builder_usec,
 		"cache_disk_bytes": int(local_cache.stats().disk_bytes), "cache_memory_bytes": int(local_cache.stats().memory_bytes),
-		"cache_memory_peak_bytes": int(local_cache.stats().peak_memory_bytes), "cache_hits": int(cache.hit_count + disk_cache.hit_count + remote_cache.hit_count),
+		"cache_memory_peak_bytes": int(local_cache.stats().peak_memory_bytes),
+		"adaptive_policy": adaptive_metrics, "adaptive_probe_bypass_frequency": float(adaptive_metrics.bypass_count),
+		"cache_hits": int(cache.hit_count + disk_cache.hit_count + remote_cache.hit_count),
 		"cache_misses": int(cache.miss_count + local_cache.miss_count), "static_memory_delta_bytes": OS.get_static_memory_usage() - _memory_before,
 		"status": "PASS" if _failures.is_empty() else "FAIL", "failures": _failures,
 		"duration_usec": Time.get_ticks_usec() - start_usec,
@@ -458,6 +492,22 @@ func _mesh_exact(left: Dictionary, right: Dictionary) -> bool:
 		and var_to_bytes(left.get("normals", PackedVector3Array())) == var_to_bytes(right.get("normals", PackedVector3Array())) \
 		and int(left.get("triangle_count", -1)) == int(right.get("triangle_count", -2)) \
 		and int(left.get("sample_count", -1)) == int(right.get("sample_count", -2))
+
+
+func _run_cache_admission_probe(root: String, snapshot: Dictionary, region: Vector2i, chunk: Vector2i, expected_reuse_count: int) -> Dictionary:
+	var total_started := Time.get_ticks_usec()
+	var cache: RefCounted = MeshCache.new(root)
+	var identity_started := Time.get_ticks_usec()
+	var identity := _cache_identity(snapshot, region, chunk, 1)
+	var identity_usec := Time.get_ticks_usec() - identity_started
+	var builder := func() -> Dictionary:
+		return LodMesher.build_chunk_cpu_data(SEED, region, chunk, snapshot)
+	var result: Dictionary = cache.get_or_build(identity, builder, expected_reuse_count)
+	var total_usec := Time.get_ticks_usec() - total_started
+	return {"total_usec": total_usec, "identity_usec": identity_usec, "result": result,
+		"timings_usec": cache.last_timings_usec.duplicate(true),
+		"bypass_count": int(cache.stats().get("adaptive_bypass_count", 0)),
+		"disk_bytes": int(cache.stats().get("disk_bytes", 0))}
 
 
 func _cache_identity(snapshot: Dictionary, region: Vector2i, chunk: Vector2i, lod: int) -> Dictionary:
