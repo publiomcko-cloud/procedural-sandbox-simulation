@@ -20,6 +20,7 @@ var miss_count := 0
 var corrupt_count := 0
 var disk_bytes := 0
 var peak_memory_bytes := 0
+var last_builder_usec := 0
 
 
 func _init(root_path: String) -> void:
@@ -30,6 +31,7 @@ func _init(root_path: String) -> void:
 
 
 func get_or_build(identity: Dictionary, builder: Callable) -> Dictionary:
+	last_builder_usec = 0
 	var identity_bytes := var_to_bytes(identity)
 	var key := _sha256(identity_bytes)
 	if _memory.has(key):
@@ -50,7 +52,9 @@ func get_or_build(identity: Dictionary, builder: Callable) -> Dictionary:
 		DirAccess.remove_absolute(path)
 		disk_bytes = _scan_disk_bytes()
 	miss_count += 1
+	var builder_started_usec := Time.get_ticks_usec()
 	var build_value: Variant = builder.call()
+	last_builder_usec = Time.get_ticks_usec() - builder_started_usec
 	if typeof(build_value) != TYPE_DICTIONARY or not bool(build_value.get("valid", false)) or not _valid_mesh(build_value):
 		return {"valid": false, "reason": "canonical_mesh_build_invalid", "cache_hit": false}
 	var mesh := {
@@ -101,7 +105,7 @@ func get_or_build(identity: Dictionary, builder: Callable) -> Dictionary:
 func stats() -> Dictionary:
 	return {"hits": hit_count, "misses": miss_count, "corrupt_entries": corrupt_count,
 		"disk_bytes": disk_bytes, "memory_bytes": _memory_bytes, "memory_entries": _memory.size(),
-		"peak_memory_bytes": peak_memory_bytes}
+		"peak_memory_bytes": peak_memory_bytes, "last_builder_usec": last_builder_usec}
 
 
 func _read_entry(path: String, identity: Dictionary, key: String) -> Dictionary:

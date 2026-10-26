@@ -126,11 +126,14 @@ func _test_cache_locality_and_recovery(root: String) -> void:
 	var cache: RefCounted = Cache.new(cache_root)
 	var cold: Dictionary = cache.get_or_build(identity, mesh_builder)
 	_expect(bool(cold.valid) and not bool(cold.cache_hit), "cache_cold_build")
+	_expect(int(cache.last_builder_usec) > 0, "cache_records_cold_builder_duration")
 	var warm: Dictionary = cache.get_or_build(identity, mesh_builder)
 	_expect(bool(warm.valid) and bool(warm.cache_hit) and String(warm.cache_layer) == "memory", "cache_memory_hit")
+	_expect(int(cache.last_builder_usec) == 0, "memory_hit_does_not_report_builder_time")
 	var disk_cache: RefCounted = Cache.new(cache_root)
 	var disk_hit: Dictionary = disk_cache.get_or_build(identity, mesh_builder)
 	_expect(bool(disk_hit.valid) and bool(disk_hit.cache_hit) and String(disk_hit.cache_layer) == "disk", "cache_fresh_process_disk_hit")
+	_expect(int(disk_cache.last_builder_usec) == 0, "disk_hit_does_not_report_builder_time")
 	var remote_ledger: RefCounted = Brush.new(SEED, 1)
 	for operation in ledger.get_operations_snapshot():
 		_expect(remote_ledger.add_sphere(int(operation.mode), operation.center_world, float(operation.radius)), "cache_remote_copy")
@@ -148,6 +151,7 @@ func _test_cache_locality_and_recovery(root: String) -> void:
 	var local_cache: RefCounted = Cache.new(cache_root)
 	var local_result: Dictionary = local_cache.get_or_build(local_identity, func() -> Dictionary: return Mesher.build_chunk_cpu_data(SEED, region, chunk, false, local_snapshot))
 	_expect(bool(local_result.valid) and not bool(local_result.cache_hit), "local_edit_cache_miss_rebuild")
+	_expect(int(local_cache.last_builder_usec) > 0, "local_edit_records_builder_duration")
 	var path := cache_root.path_join(_sha256(var_to_bytes(identity)) + ".bin")
 	var corrupt_file := FileAccess.open(path, FileAccess.READ_WRITE)
 	if corrupt_file != null:
@@ -158,6 +162,7 @@ func _test_cache_locality_and_recovery(root: String) -> void:
 	var recovery_cache: RefCounted = Cache.new(cache_root)
 	var recovered: Dictionary = recovery_cache.get_or_build(identity, mesh_builder)
 	_expect(bool(recovered.get("valid", false)) and not bool(recovered.get("cache_hit", true)) and int(recovery_cache.corrupt_count) == 1, "corrupt_cache_falls_back_to_rebuild")
+	_expect(int(recovery_cache.last_builder_usec) > 0, "corrupt_fallback_records_builder_duration")
 	_expect(_mesh_equal(cold, recovered), "corrupt_rebuild_matches_authority")
 	var oversized_file := FileAccess.open(path, FileAccess.WRITE)
 	if oversized_file != null:

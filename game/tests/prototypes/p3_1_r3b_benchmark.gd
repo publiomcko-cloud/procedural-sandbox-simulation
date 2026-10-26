@@ -163,6 +163,7 @@ func _run() -> void:
 	var lod0_cache_start := Time.get_ticks_usec()
 	var lod0_cache_result: Dictionary = cache.get_or_build(identity_lod0, func() -> Dictionary: return Mesher.build_chunk_cpu_data(SEED, region, chunk, false, snapshot))
 	var lod0_cache_cold_usec := Time.get_ticks_usec() - lod0_cache_start
+	var lod0_cache_builder_usec := int(cache.last_builder_usec)
 	if not bool(lod0_cache_result.get("valid", false)) or not _mesh_exact(canonical_meshes.lod0, lod0_cache_result):
 		_failures.append("lod0_cache_cold_result_mismatch")
 	var lod0_warm_start := Time.get_ticks_usec()
@@ -176,15 +177,12 @@ func _run() -> void:
 	var lod0_disk_usec := Time.get_ticks_usec() - lod0_disk_start
 	if not bool(lod0_disk_hit.get("cache_hit", false)) or String(lod0_disk_hit.get("cache_layer", "")) != "disk":
 		_failures.append("lod0_fresh_instance_disk_hit_missing")
-	var cold_builder_usec := 0
 	var cold_total_start := Time.get_ticks_usec()
 	var cache_result: Dictionary = cache.get_or_build(identity, func() -> Dictionary:
-		var started := Time.get_ticks_usec()
-		var built: Dictionary = LodMesher.build_chunk_cpu_data(SEED, region, chunk, snapshot)
-		cold_builder_usec = Time.get_ticks_usec() - started
-		return built
+		return LodMesher.build_chunk_cpu_data(SEED, region, chunk, snapshot)
 	)
 	var cache_first_lookup_usec := Time.get_ticks_usec() - cold_total_start
+	var cold_builder_usec := int(cache.last_builder_usec)
 	if not bool(cache_result.get("valid", false)) or not _mesh_exact(mesh_data, cache_result):
 		_failures.append("cache_first_result_mismatch")
 	var memory_start := Time.get_ticks_usec()
@@ -228,12 +226,14 @@ func _run() -> void:
 	var local_start := Time.get_ticks_usec()
 	var local_result: Dictionary = local_cache.get_or_build(edited_identity, func() -> Dictionary: return LodMesher.build_chunk_cpu_data(SEED, region, chunk, edited_snapshot))
 	var local_rebuild_usec := Time.get_ticks_usec() - local_start
+	var local_builder_usec := int(local_cache.last_builder_usec)
 	if edited_identity.key == identity.key or not bool(local_result.get("valid", false)) or bool(local_result.get("cache_hit", true)):
 		_failures.append("local_edit_failed_to_invalidate_chunk_cache")
 	if not _mesh_exact(LodMesher.build_chunk_cpu_data(SEED, region, chunk, edited_snapshot), local_result):
 		_failures.append("post_edit_cache_mesh_mismatch")
 	var edited_identity_lod0 := _cache_identity(edited_snapshot, region, chunk, 0)
 	var local_lod0_result: Dictionary = local_cache.get_or_build(edited_identity_lod0, func() -> Dictionary: return Mesher.build_chunk_cpu_data(SEED, region, chunk, false, edited_snapshot))
+	var local_lod0_builder_usec := int(local_cache.last_builder_usec)
 	if edited_identity_lod0.key == identity_lod0.key or bool(local_lod0_result.get("cache_hit", true)) or not _mesh_exact(Mesher.build_chunk_cpu_data(SEED, region, chunk, false, edited_snapshot), local_lod0_result):
 		_failures.append("lod0_local_edit_cache_miss_or_rebuild_mismatch")
 	var row := {
@@ -250,11 +250,14 @@ func _run() -> void:
 		"canonical_lod0_samples": int(canonical_meshes.lod0.get("sample_count", 0)), "canonical_lod1_samples": int(canonical_meshes.lod1.get("sample_count", 0)),
 		"lod0_phase_timings_us": canonical_meshes.lod0.get("timings_usec", {}), "lod1_phase_timings_us": canonical_meshes.lod1.get("timings_usec", {}),
 		"lod1_serialization_us": mesh_serialization_usec, "lod1_serialized_bytes": serialized_mesh.size(), "array_mesh_build_us": array_mesh_usec,
-		"lod0_cache_cold_total_us": lod0_cache_cold_usec, "lod0_cache_memory_hit_us": lod0_warm_usec, "lod0_cache_fresh_instance_disk_hit_us": lod0_disk_usec,
+		"lod0_cache_cold_total_us": lod0_cache_cold_usec, "lod0_cache_builder_us": lod0_cache_builder_usec,
+		"lod0_cache_memory_hit_us": lod0_warm_usec, "lod0_cache_fresh_instance_disk_hit_us": lod0_disk_usec,
 		"lod0_cache_first_layer": String(lod0_cache_result.get("cache_layer", "")),
 		"cache_first_lookup_us": cache_first_lookup_usec, "cache_first_layer": String(cache_result.get("cache_layer", "")),
 		"cache_builder_us": cold_builder_usec, "cache_memory_hit_us": memory_hit_usec,
-		"cache_fresh_instance_disk_hit_us": disk_hit_usec, "cache_remote_edit_lookup_us": remote_lookup_usec, "cache_local_edit_rebuild_us": local_rebuild_usec,
+		"cache_fresh_instance_disk_hit_us": disk_hit_usec, "cache_remote_edit_lookup_us": remote_lookup_usec,
+		"cache_local_edit_rebuild_us": local_rebuild_usec, "cache_local_edit_builder_us": local_builder_usec,
+		"cache_local_edit_lod0_builder_us": local_lod0_builder_usec,
 		"cache_disk_bytes": int(local_cache.stats().disk_bytes), "cache_memory_bytes": int(local_cache.stats().memory_bytes),
 		"cache_memory_peak_bytes": int(local_cache.stats().peak_memory_bytes), "cache_hits": int(cache.hit_count + disk_cache.hit_count + remote_cache.hit_count),
 		"cache_misses": int(cache.miss_count + local_cache.miss_count), "static_memory_delta_bytes": OS.get_static_memory_usage() - _memory_before,

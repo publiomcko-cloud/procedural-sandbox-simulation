@@ -141,10 +141,12 @@ $csvRows = foreach ($entry in $campaign) {
         baseline_query_p50_us=$r.baseline_query_us.p50; optimized_query_p50_us=$r.optimized_query_us.p50
         lod0_baseline_p50_us=$r.lod0_baseline_build_us.p50; lod0_optimized_p50_us=$r.lod0_optimized_build_us.p50
         lod1_baseline_p50_us=$r.lod1_baseline_build_us.p50; lod1_optimized_p50_us=$r.lod1_optimized_build_us.p50
-        lod0_cache_cold_us=$r.lod0_cache_cold_total_us; lod0_cache_memory_hit_us=$r.lod0_cache_memory_hit_us; lod0_cache_disk_hit_us=$r.lod0_cache_fresh_instance_disk_hit_us
+        lod0_cache_cold_us=$r.lod0_cache_cold_total_us; lod0_cache_builder_us=$r.lod0_cache_builder_us
+        lod0_cache_memory_hit_us=$r.lod0_cache_memory_hit_us; lod0_cache_disk_hit_us=$r.lod0_cache_fresh_instance_disk_hit_us
         lod0_cache_first_layer=$r.lod0_cache_first_layer; cache_first_layer=$r.cache_first_layer
         cache_disk_hit_us=$r.cache_fresh_instance_disk_hit_us; cache_remote_edit_us=$r.cache_remote_edit_lookup_us
-        cache_local_rebuild_us=$r.cache_local_edit_rebuild_us; cache_disk_bytes=$r.cache_disk_bytes; cache_memory_bytes=$r.cache_memory_bytes
+        cache_local_rebuild_us=$r.cache_local_edit_rebuild_us; cache_local_builder_us=$r.cache_local_edit_builder_us
+        cache_disk_bytes=$r.cache_disk_bytes; cache_memory_bytes=$r.cache_memory_bytes
         memory_delta_bytes=$r.static_memory_delta_bytes; candidate_operations=$r.meshing_candidate_count; replay_operations=$r.replay_stats.replay_operations; failures=($r.failures -join ';')
     }
 }
