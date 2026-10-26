@@ -1,6 +1,6 @@
 # P3.1 R3C — Adaptive cache admission addendum R2
 
-**Frozen for the final campaign at source `042ff7b5d4e5ce8bb54e8ac146518e700854d36b`.** This version supersedes the preceding adaptive addendum before any final performance process was run. It corrects only the provenance of the fresh-process disk-hit term. The original R3C preregistration and all R3B acceptance gates remain unchanged.
+**Frozen before any final performance process.** The executable R3C benchmark/cache source is pinned to `042ff7b5d4e5ce8bb54e8ac146518e700854d36b`; this documentation-only preregistration follows that code commit, and the exact full Git HEAD will be captured by every final campaign run. This R2 version supersedes the preceding adaptive addendum before any final performance process was run. It corrects only the provenance of the fresh-process disk-hit term. The original R3C preregistration and all R3B acceptance gates remain unchanged.
 
 ## Frozen selected workload
 
