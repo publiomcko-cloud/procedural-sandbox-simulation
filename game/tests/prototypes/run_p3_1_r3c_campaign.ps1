@@ -112,6 +112,22 @@ foreach ($scenario in $scenarioNames) {
         $record.godot_wrapper_pid = $proc.Id
         $record.status = 'STARTED'
         $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'process.json') -Encoding utf8
+        # Catch short-lived/fast-failing Godot child processes before the first polling sleep.
+        try {
+            $engineProcess = Get-CimInstance -ClassName Win32_Process -Filter "ParentProcessId = $($proc.Id)" | Where-Object { [IO.Path]::GetFileName([string]$_.ExecutablePath) -eq [IO.Path]::GetFileName($engineImage) } | Select-Object -First 1
+            if ($engineProcess) {
+                $record.engine_pid = [int]$engineProcess.ProcessId
+                $record.engine_parent_pid = [int]$engineProcess.ParentProcessId
+                $record.engine_command_line = [string]$engineProcess.CommandLine
+                $record.last_sampled_working_set_bytes = [long]$engineProcess.WorkingSetSize
+                $record.sampled_peak_working_set_bytes = $record.last_sampled_working_set_bytes
+                $record.sampled_peak_private_bytes = [long]$engineProcess.PrivatePageCount
+                $record.working_set_sample_count++
+                $record.process_attribution = 'CIM_PARENT_CHILD_AND_IMAGE_PIN_VERIFIED'
+            }
+        } catch {
+            if (-not $proc.HasExited) { throw }
+        }
         $timedOut = $false
         while (-not $proc.HasExited) {
             $proc.Refresh()

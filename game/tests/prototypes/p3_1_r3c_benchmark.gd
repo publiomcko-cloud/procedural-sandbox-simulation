@@ -8,6 +8,7 @@ const Mesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const LodMesher := preload("res://scripts/terrain/lod01_chunk_mesher.gd")
 const ExactReplay := preload("res://tests/prototypes/r3c_exact_replay.gd")
 const MeshCache := preload("res://tests/prototypes/r3c_profile_cache.gd")
+const FixtureDigest := preload("res://tests/prototypes/r3c_fixture_digest.gd")
 
 const SEED := 131102026
 const R3B_SUMS_SHA := "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1"
@@ -60,9 +61,11 @@ func _run() -> void:
 		input_sha_path = "res://tests/fixtures/p3_1_r3b/issue131/" + input_stem + ".sha256"
 		sums_path = "res://tests/fixtures/p3_1_r3b/issue131/SHA256SUMS.txt"
 	var input_bytes := FileAccess.get_file_as_bytes(input_path)
-	var expected_input_hash := FileAccess.get_file_as_string(input_sha_path).strip_edges()
+	var sidecar_text := FileAccess.get_file_as_string(input_sha_path)
+	var expected_input_hash := sidecar_text.strip_edges().substr(0, 64)
+	var sidecar_valid := FixtureDigest.sidecar_matches(expected_input_hash, sidecar_text, input_path.get_file(), nonperiodic)
 	var expected_sums_hash := R3C_SUMS_SHA if nonperiodic else R3B_SUMS_SHA
-	if input_bytes.is_empty() or _sha256(input_bytes) != expected_input_hash or _sha256(FileAccess.get_file_as_bytes(sums_path)) != expected_sums_hash:
+	if input_bytes.is_empty() or not sidecar_valid or _sha256(input_bytes) != expected_input_hash or _sha256(FileAccess.get_file_as_bytes(sums_path)) != expected_sums_hash:
 		push_error("r3c_frozen_fixture_digest_mismatch")
 		quit(1)
 		return
