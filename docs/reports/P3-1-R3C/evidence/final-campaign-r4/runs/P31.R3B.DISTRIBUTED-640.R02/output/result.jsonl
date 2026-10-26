@@ -1,0 +1,160 @@
+{
+	"adaptive_policy": {
+		"bypass_count": 0,
+		"canonical_lod1_build_us": 103171,
+		"cold_overhead_reduction_percent": -1.0,
+		"expected_reuse_count": -1,
+		"fresh_process_disk_hit_us": -1,
+		"policy_cold_overhead_us": -1,
+		"policy_end_to_end_us": -1,
+		"policy_exact": false,
+		"projected_net_benefit_us": -1,
+		"unconditional_cold_overhead_us": -1,
+		"unconditional_end_to_end_us": -1,
+		"unconditional_exact": false,
+		"workload_id": ""
+	},
+	"adaptive_probe_bypass_frequency": 0.0,
+	"array_mesh_build_us": 237,
+	"baseline_query_us": {
+		"count": 192,
+		"max": 242,
+		"p50": 78,
+		"p95": 169,
+		"p99": 182
+	},
+	"baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"cache_builder_us": 0,
+	"cache_disk_bytes": 200368,
+	"cache_first_call_internal_timings": {
+		"disk_read_bytes": 311,
+		"disk_read_validate": 803,
+		"envelope_verify_hash": 136,
+		"identity_encode": 12,
+		"identity_hash": 7,
+		"memory_lookup_copy": 8,
+		"mesh_decode": 25,
+		"total": 973
+	},
+	"cache_first_layer": "disk",
+	"cache_first_lookup_us": 978,
+	"cache_fresh_instance_disk_hit_us": 962,
+	"cache_hits": 7,
+	"cache_identity_lod1_build_us": 42,
+	"cache_init_internal_timings": {
+		"cache_init_scan": 4628
+	},
+	"cache_local_edit_builder_us": 110527,
+	"cache_local_edit_lod0_builder_us": 19578,
+	"cache_local_edit_rebuild_us": 118068,
+	"cache_memory_bytes": 67328,
+	"cache_memory_hit_us": 35,
+	"cache_memory_peak_bytes": 67328,
+	"cache_misses": 2,
+	"cache_remote_edit_lookup_us": 1039,
+	"canonical_lod0_samples": 1323,
+	"canonical_lod1_samples": 964,
+	"command_sha256": "e9c48f89ccfd5d3bb9320b0ffb2617dceed9d17779ec56e7ac21da1870f29a46",
+	"duration_usec": 1886712,
+	"exact_full_query_init_us": 1828,
+	"exact_snapshot_init_us": 60,
+	"exact_world_snapshot_init_us": 14,
+	"failures": [],
+	"layout": "distributed",
+	"lod0_baseline_build_us": {
+		"count": 3,
+		"max": 18448,
+		"p50": 18283,
+		"p95": 18448,
+		"p99": 18448
+	},
+	"lod0_cache_builder_us": 0,
+	"lod0_cache_cold_total_us": 1348,
+	"lod0_cache_first_layer": "disk",
+	"lod0_cache_fresh_instance_disk_hit_us": 1276,
+	"lod0_cache_memory_hit_us": 40,
+	"lod0_mesh_equal": true,
+	"lod0_optimized_build_us": {
+		"count": 3,
+		"max": 21422,
+		"p50": 20955,
+		"p95": 21422,
+		"p99": 21422
+	},
+	"lod0_phase_timings_us": {
+		"array_mesh_build": 0,
+		"sdf_and_ledger": 4868,
+		"shared_gradient_normals": 1889,
+		"triangulation_and_face_normals": 8662
+	},
+	"lod1_baseline_build_us": {
+		"count": 3,
+		"max": 103284,
+		"p50": 103171,
+		"p95": 103284,
+		"p99": 103284
+	},
+	"lod1_mesh_equal": true,
+	"lod1_optimized_build_us": {
+		"count": 3,
+		"max": 128886,
+		"p50": 112221,
+		"p95": 128886,
+		"p99": 128886
+	},
+	"lod1_phase_timings_us": {
+		"array_mesh_build": 0,
+		"lod_transition_cell_assembly": 9123,
+		"sdf_and_ledger": 6702,
+		"shared_gradient_normals": 33367,
+		"triangulation_and_face_normals": 70212
+	},
+	"lod1_serialization_us": 29,
+	"lod1_serialized_bytes": 23896,
+	"mesh_strategy": "conservative_dominance_pruning",
+	"meshing_candidate_count": 1,
+	"normal_mismatches": 0,
+	"operation_count": 640,
+	"optimized_query_us": {
+		"count": 192,
+		"max": 1595,
+		"p50": 626,
+		"p95": 1164,
+		"p99": 1527
+	},
+	"picker_baseline_us": {
+		"count": 4,
+		"max": 4503,
+		"p50": 4450,
+		"p95": 4503,
+		"p99": 4503
+	},
+	"picker_mismatches": 0,
+	"picker_optimized_us": {
+		"count": 4,
+		"max": 44749,
+		"p50": 40593,
+		"p95": 44749,
+		"p99": 44749
+	},
+	"query_mismatches": 0,
+	"query_strategy": "conservative_dominance_pruning",
+	"repeat": 2,
+	"replay_stats": {
+		"distance_evaluations": 68,
+		"dominated_noop_operations": 558012,
+		"operation_visits": 558080,
+		"repeat_period": 640,
+		"repeat_tail": 0,
+		"replay_operations": 640,
+		"source_operations": 640,
+		"unique_brushes": 640,
+		"unique_geometry_count": 640
+	},
+	"run_id": "P31.R3B.DISTRIBUTED-640.R02",
+	"scenario_id": "P31.R3B.DISTRIBUTED-640.v1",
+	"seed": 131102026,
+	"source_sha": "a760597ea0cc4be6db24cee52f0da1c972103861",
+	"static_memory_delta_bytes": 6674358,
+	"status": "PASS"
+}

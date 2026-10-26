@@ -1,0 +1,160 @@
+{
+	"adaptive_policy": {
+		"bypass_count": 0,
+		"canonical_lod1_build_us": 103617,
+		"cold_overhead_reduction_percent": -1.0,
+		"expected_reuse_count": -1,
+		"fresh_process_disk_hit_us": -1,
+		"policy_cold_overhead_us": -1,
+		"policy_end_to_end_us": -1,
+		"policy_exact": false,
+		"projected_net_benefit_us": -1,
+		"unconditional_cold_overhead_us": -1,
+		"unconditional_end_to_end_us": -1,
+		"unconditional_exact": false,
+		"workload_id": ""
+	},
+	"adaptive_probe_bypass_frequency": 0.0,
+	"array_mesh_build_us": 228,
+	"baseline_query_us": {
+		"count": 192,
+		"max": 645,
+		"p50": 233,
+		"p95": 251,
+		"p99": 555
+	},
+	"baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"cache_builder_us": 0,
+	"cache_disk_bytes": 269680,
+	"cache_first_call_internal_timings": {
+		"disk_read_bytes": 309,
+		"disk_read_validate": 836,
+		"envelope_verify_hash": 150,
+		"identity_encode": 12,
+		"identity_hash": 8,
+		"memory_lookup_copy": 2,
+		"mesh_decode": 36,
+		"total": 997
+	},
+	"cache_first_layer": "disk",
+	"cache_first_lookup_us": 1003,
+	"cache_fresh_instance_disk_hit_us": 964,
+	"cache_hits": 7,
+	"cache_identity_lod1_build_us": 43,
+	"cache_init_internal_timings": {
+		"cache_init_scan": 5339
+	},
+	"cache_local_edit_builder_us": 125445,
+	"cache_local_edit_lod0_builder_us": 27205,
+	"cache_local_edit_rebuild_us": 133971,
+	"cache_memory_bytes": 67328,
+	"cache_memory_hit_us": 32,
+	"cache_memory_peak_bytes": 67328,
+	"cache_misses": 2,
+	"cache_remote_edit_lookup_us": 1069,
+	"canonical_lod0_samples": 1323,
+	"canonical_lod1_samples": 964,
+	"command_sha256": "bb7d44b91098ce9fb144e75f6d063cb51f9214d49b731a55eddb6e0a559d7d89",
+	"duration_usec": 1919704,
+	"exact_full_query_init_us": 5231,
+	"exact_snapshot_init_us": 63,
+	"exact_world_snapshot_init_us": 14,
+	"failures": [],
+	"layout": "distributed",
+	"lod0_baseline_build_us": {
+		"count": 3,
+		"max": 18442,
+		"p50": 18220,
+		"p95": 18442,
+		"p99": 18442
+	},
+	"lod0_cache_builder_us": 0,
+	"lod0_cache_cold_total_us": 1393,
+	"lod0_cache_first_layer": "disk",
+	"lod0_cache_fresh_instance_disk_hit_us": 1263,
+	"lod0_cache_memory_hit_us": 40,
+	"lod0_mesh_equal": true,
+	"lod0_optimized_build_us": {
+		"count": 3,
+		"max": 22199,
+		"p50": 21096,
+		"p95": 22199,
+		"p99": 22199
+	},
+	"lod0_phase_timings_us": {
+		"array_mesh_build": 0,
+		"sdf_and_ledger": 4786,
+		"shared_gradient_normals": 1809,
+		"triangulation_and_face_normals": 8989
+	},
+	"lod1_baseline_build_us": {
+		"count": 3,
+		"max": 109549,
+		"p50": 103617,
+		"p95": 109549,
+		"p99": 109549
+	},
+	"lod1_mesh_equal": true,
+	"lod1_optimized_build_us": {
+		"count": 3,
+		"max": 112520,
+		"p50": 108646,
+		"p95": 112520,
+		"p99": 112520
+	},
+	"lod1_phase_timings_us": {
+		"array_mesh_build": 0,
+		"lod_transition_cell_assembly": 9403,
+		"sdf_and_ledger": 6782,
+		"shared_gradient_normals": 34446,
+		"triangulation_and_face_normals": 71006
+	},
+	"lod1_serialization_us": 30,
+	"lod1_serialized_bytes": 23896,
+	"mesh_strategy": "conservative_dominance_pruning",
+	"meshing_candidate_count": 1,
+	"normal_mismatches": 0,
+	"operation_count": 2048,
+	"optimized_query_us": {
+		"count": 192,
+		"max": 944,
+		"p50": 333,
+		"p95": 359,
+		"p99": 903
+	},
+	"picker_baseline_us": {
+		"count": 4,
+		"max": 15690,
+		"p50": 13545,
+		"p95": 15690,
+		"p99": 15690
+	},
+	"picker_mismatches": 0,
+	"picker_optimized_us": {
+		"count": 4,
+		"max": 21296,
+		"p50": 19486,
+		"p95": 21296,
+		"p99": 21296
+	},
+	"query_mismatches": 0,
+	"query_strategy": "conservative_dominance_pruning",
+	"repeat": 3,
+	"replay_stats": {
+		"distance_evaluations": 1551288,
+		"dominated_noop_operations": 0,
+		"operation_visits": 1785856,
+		"repeat_period": 2048,
+		"repeat_tail": 0,
+		"replay_operations": 2048,
+		"source_operations": 2048,
+		"unique_brushes": 1779,
+		"unique_geometry_count": 1779
+	},
+	"run_id": "P31.R3B.DISTRIBUTED-2048.R03",
+	"scenario_id": "P31.R3B.DISTRIBUTED-2048.v1",
+	"seed": 131102026,
+	"source_sha": "a760597ea0cc4be6db24cee52f0da1c972103861",
+	"static_memory_delta_bytes": 19226687,
+	"status": "PASS"
+}

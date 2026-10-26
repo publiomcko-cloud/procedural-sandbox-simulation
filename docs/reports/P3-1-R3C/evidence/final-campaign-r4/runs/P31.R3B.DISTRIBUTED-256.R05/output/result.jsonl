@@ -1,0 +1,160 @@
+{
+	"adaptive_policy": {
+		"bypass_count": 0,
+		"canonical_lod1_build_us": 110910,
+		"cold_overhead_reduction_percent": -1.0,
+		"expected_reuse_count": -1,
+		"fresh_process_disk_hit_us": -1,
+		"policy_cold_overhead_us": -1,
+		"policy_end_to_end_us": -1,
+		"policy_exact": false,
+		"projected_net_benefit_us": -1,
+		"unconditional_cold_overhead_us": -1,
+		"unconditional_end_to_end_us": -1,
+		"unconditional_exact": false,
+		"workload_id": ""
+	},
+	"adaptive_probe_bypass_frequency": 0.0,
+	"array_mesh_build_us": 225,
+	"baseline_query_us": {
+		"count": 192,
+		"max": 124,
+		"p50": 35,
+		"p95": 72,
+		"p99": 116
+	},
+	"baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"cache_builder_us": 0,
+	"cache_disk_bytes": 408304,
+	"cache_first_call_internal_timings": {
+		"disk_read_bytes": 298,
+		"disk_read_validate": 799,
+		"envelope_verify_hash": 136,
+		"identity_encode": 11,
+		"identity_hash": 7,
+		"memory_lookup_copy": 3,
+		"mesh_decode": 25,
+		"total": 959
+	},
+	"cache_first_layer": "disk",
+	"cache_first_lookup_us": 963,
+	"cache_fresh_instance_disk_hit_us": 952,
+	"cache_hits": 7,
+	"cache_identity_lod1_build_us": 50,
+	"cache_init_internal_timings": {
+		"cache_init_scan": 6875
+	},
+	"cache_local_edit_builder_us": 140256,
+	"cache_local_edit_lod0_builder_us": 19361,
+	"cache_local_edit_rebuild_us": 150217,
+	"cache_memory_bytes": 67328,
+	"cache_memory_hit_us": 34,
+	"cache_memory_peak_bytes": 67328,
+	"cache_misses": 2,
+	"cache_remote_edit_lookup_us": 1085,
+	"canonical_lod0_samples": 1323,
+	"canonical_lod1_samples": 964,
+	"command_sha256": "c2178e3a2f95ba6b41110e4d2c22fde88fbf9e3e7cf7d603374fc44f283bface",
+	"duration_usec": 1509540,
+	"exact_full_query_init_us": 707,
+	"exact_snapshot_init_us": 63,
+	"exact_world_snapshot_init_us": 15,
+	"failures": [],
+	"layout": "distributed",
+	"lod0_baseline_build_us": {
+		"count": 3,
+		"max": 19919,
+		"p50": 18319,
+		"p95": 19919,
+		"p99": 19919
+	},
+	"lod0_cache_builder_us": 0,
+	"lod0_cache_cold_total_us": 1363,
+	"lod0_cache_first_layer": "disk",
+	"lod0_cache_fresh_instance_disk_hit_us": 1261,
+	"lod0_cache_memory_hit_us": 39,
+	"lod0_mesh_equal": true,
+	"lod0_optimized_build_us": {
+		"count": 3,
+		"max": 24281,
+		"p50": 20954,
+		"p95": 24281,
+		"p99": 24281
+	},
+	"lod0_phase_timings_us": {
+		"array_mesh_build": 0,
+		"sdf_and_ledger": 6090,
+		"shared_gradient_normals": 1860,
+		"triangulation_and_face_normals": 9107
+	},
+	"lod1_baseline_build_us": {
+		"count": 3,
+		"max": 132235,
+		"p50": 110910,
+		"p95": 132235,
+		"p99": 132235
+	},
+	"lod1_mesh_equal": true,
+	"lod1_optimized_build_us": {
+		"count": 3,
+		"max": 148445,
+		"p50": 108815,
+		"p95": 148445,
+		"p99": 148445
+	},
+	"lod1_phase_timings_us": {
+		"array_mesh_build": 0,
+		"lod_transition_cell_assembly": 11525,
+		"sdf_and_ledger": 8519,
+		"shared_gradient_normals": 44890,
+		"triangulation_and_face_normals": 89356
+	},
+	"lod1_serialization_us": 29,
+	"lod1_serialized_bytes": 23896,
+	"mesh_strategy": "conservative_dominance_pruning",
+	"meshing_candidate_count": 1,
+	"normal_mismatches": 0,
+	"operation_count": 256,
+	"optimized_query_us": {
+		"count": 192,
+		"max": 684,
+		"p50": 253,
+		"p95": 476,
+		"p99": 649
+	},
+	"picker_baseline_us": {
+		"count": 4,
+		"max": 2001,
+		"p50": 1949,
+		"p95": 2001,
+		"p99": 2001
+	},
+	"picker_mismatches": 0,
+	"picker_optimized_us": {
+		"count": 4,
+		"max": 17108,
+		"p50": 16583,
+		"p95": 17108,
+		"p99": 17108
+	},
+	"query_mismatches": 0,
+	"query_strategy": "conservative_dominance_pruning",
+	"repeat": 5,
+	"replay_stats": {
+		"distance_evaluations": 46,
+		"dominated_noop_operations": 223186,
+		"operation_visits": 223232,
+		"repeat_period": 256,
+		"repeat_tail": 0,
+		"replay_operations": 256,
+		"source_operations": 256,
+		"unique_brushes": 256,
+		"unique_geometry_count": 256
+	},
+	"run_id": "P31.R3B.DISTRIBUTED-256.R05",
+	"scenario_id": "P31.R3B.DISTRIBUTED-256.v1",
+	"seed": 131102026,
+	"source_sha": "a760597ea0cc4be6db24cee52f0da1c972103861",
+	"static_memory_delta_bytes": 3224849,
+	"status": "PASS"
+}

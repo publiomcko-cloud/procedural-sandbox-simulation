@@ -1,0 +1,160 @@
+{
+	"adaptive_policy": {
+		"bypass_count": 0,
+		"canonical_lod1_build_us": 1862729,
+		"cold_overhead_reduction_percent": -1.0,
+		"expected_reuse_count": -1,
+		"fresh_process_disk_hit_us": -1,
+		"policy_cold_overhead_us": -1,
+		"policy_end_to_end_us": -1,
+		"policy_exact": false,
+		"projected_net_benefit_us": -1,
+		"unconditional_cold_overhead_us": -1,
+		"unconditional_end_to_end_us": -1,
+		"unconditional_exact": false,
+		"workload_id": ""
+	},
+	"adaptive_probe_bypass_frequency": 0.0,
+	"array_mesh_build_us": 223,
+	"baseline_query_us": {
+		"count": 192,
+		"max": 703,
+		"p50": 233,
+		"p95": 522,
+		"p99": 691
+	},
+	"baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"cache_builder_us": 0,
+	"cache_disk_bytes": 2620832,
+	"cache_first_call_internal_timings": {
+		"disk_read_bytes": 471,
+		"disk_read_validate": 8629,
+		"envelope_verify_hash": 1378,
+		"identity_encode": 3257,
+		"identity_hash": 1207,
+		"memory_lookup_copy": 5,
+		"mesh_decode": 31,
+		"total": 13329
+	},
+	"cache_first_layer": "disk",
+	"cache_first_lookup_us": 13341,
+	"cache_fresh_instance_disk_hit_us": 11951,
+	"cache_hits": 7,
+	"cache_identity_lod1_build_us": 6666,
+	"cache_init_internal_timings": {
+		"cache_init_scan": 6047
+	},
+	"cache_local_edit_builder_us": 1823924,
+	"cache_local_edit_lod0_builder_us": 480997,
+	"cache_local_edit_rebuild_us": 1843396,
+	"cache_memory_bytes": 64160,
+	"cache_memory_hit_us": 4437,
+	"cache_memory_peak_bytes": 64160,
+	"cache_misses": 2,
+	"cache_remote_edit_lookup_us": 13664,
+	"canonical_lod0_samples": 1323,
+	"canonical_lod1_samples": 964,
+	"command_sha256": "ce3ac18c1b68e721b638993261e568a9758898d43cec3fd075881ac288b95cf5",
+	"duration_usec": 22175094,
+	"exact_full_query_init_us": 4751,
+	"exact_snapshot_init_us": 4759,
+	"exact_world_snapshot_init_us": 5023,
+	"failures": [],
+	"layout": "concentrated",
+	"lod0_baseline_build_us": {
+		"count": 3,
+		"max": 598109,
+		"p50": 546428,
+		"p95": 598109,
+		"p99": 598109
+	},
+	"lod0_cache_builder_us": 0,
+	"lod0_cache_cold_total_us": 14288,
+	"lod0_cache_first_layer": "disk",
+	"lod0_cache_fresh_instance_disk_hit_us": 12641,
+	"lod0_cache_memory_hit_us": 4398,
+	"lod0_mesh_equal": true,
+	"lod0_optimized_build_us": {
+		"count": 3,
+		"max": 661497,
+		"p50": 573138,
+		"p95": 661497,
+		"p99": 661497
+	},
+	"lod0_phase_timings_us": {
+		"array_mesh_build": 0,
+		"sdf_and_ledger": 327067,
+		"shared_gradient_normals": 245450,
+		"triangulation_and_face_normals": 19538
+	},
+	"lod1_baseline_build_us": {
+		"count": 3,
+		"max": 1893941,
+		"p50": 1862729,
+		"p95": 1893941,
+		"p99": 1893941
+	},
+	"lod1_mesh_equal": true,
+	"lod1_optimized_build_us": {
+		"count": 3,
+		"max": 2521835,
+		"p50": 2395334,
+		"p95": 2521835,
+		"p99": 2521835
+	},
+	"lod1_phase_timings_us": {
+		"array_mesh_build": 0,
+		"lod_transition_cell_assembly": 10847,
+		"sdf_and_ledger": 246466,
+		"shared_gradient_normals": 1543297,
+		"triangulation_and_face_normals": 82202
+	},
+	"lod1_serialization_us": 26,
+	"lod1_serialized_bytes": 23608,
+	"mesh_strategy": "conservative_dominance_pruning",
+	"meshing_candidate_count": 2048,
+	"normal_mismatches": 0,
+	"operation_count": 2048,
+	"optimized_query_us": {
+		"count": 192,
+		"max": 776,
+		"p50": 284,
+		"p95": 607,
+		"p99": 755
+	},
+	"picker_baseline_us": {
+		"count": 4,
+		"max": 13584,
+		"p50": 13472,
+		"p95": 13584,
+		"p99": 13584
+	},
+	"picker_mismatches": 0,
+	"picker_optimized_us": {
+		"count": 4,
+		"max": 18253,
+		"p50": 16613,
+		"p95": 18253,
+		"p99": 18253
+	},
+	"query_mismatches": 0,
+	"query_strategy": "conservative_dominance_pruning",
+	"repeat": 4,
+	"replay_stats": {
+		"distance_evaluations": 872872,
+		"dominated_noop_operations": 0,
+		"operation_visits": 1785856,
+		"repeat_period": 2002,
+		"repeat_tail": 46,
+		"replay_operations": 2048,
+		"source_operations": 2048,
+		"unique_brushes": 1001,
+		"unique_geometry_count": 1001
+	},
+	"run_id": "P31.R3B.CONCENTRATED-2048.R04",
+	"scenario_id": "P31.R3B.CONCENTRATED-2048.v1",
+	"seed": 131102026,
+	"source_sha": "a760597ea0cc4be6db24cee52f0da1c972103861",
+	"static_memory_delta_bytes": 27025420,
+	"status": "PASS"
+}

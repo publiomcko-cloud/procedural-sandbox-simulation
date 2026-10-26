@@ -1,0 +1,130 @@
+{
+	"array_mesh_build_us": 790,
+	"baseline_query_us": {
+		"count": 192,
+		"max": 2586,
+		"p50": 920,
+		"p95": 2128,
+		"p99": 2499
+	},
+	"baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"cache_builder_us": 22462788,
+	"cache_disk_bytes": 3450512,
+	"cache_first_call_internal_timings": {
+		"atomic_publish": 1285,
+		"builder": 22462788,
+		"disk_write_flush": 764,
+		"envelope_encode_hash": 15712,
+		"identity_encode": 12292,
+		"identity_hash": 4088,
+		"memory_lookup_copy": 14,
+		"mesh_encode": 84,
+		"post_publish_full_scan": 8612,
+		"quota": 1375,
+		"total": 22509227
+	},
+	"cache_first_layer": "rebuilt",
+	"cache_first_lookup_us": 22509254,
+	"cache_fresh_instance_disk_hit_us": 42738,
+	"cache_hits": 5,
+	"cache_identity_lod1_build_us": 21168,
+	"cache_init_internal_timings": {
+		"cache_init_scan": 4655
+	},
+	"cache_local_edit_builder_us": 22889792,
+	"cache_local_edit_lod0_builder_us": 2545436,
+	"cache_local_edit_rebuild_us": 22936447,
+	"cache_memory_bytes": 330200,
+	"cache_memory_hit_us": 14144,
+	"cache_memory_peak_bytes": 330200,
+	"cache_misses": 4,
+	"cache_remote_edit_lookup_us": 48845,
+	"canonical_lod0_samples": 1323,
+	"canonical_lod1_samples": 964,
+	"command_sha256": "fa4066ef3aab6d9fc7d01f2df846390eba14cdf15439f7df5cc30d22351b4d15",
+	"duration_usec": 230614713,
+	"exact_full_query_init_us": 24298,
+	"exact_snapshot_init_us": 16851,
+	"exact_world_snapshot_init_us": 17734,
+	"failures": [],
+	"layout": "concentrated",
+	"lod0_baseline_build_us": {
+		"count": 3,
+		"max": 2680653,
+		"p50": 2484711,
+		"p95": 2680653,
+		"p99": 2680653
+	},
+	"lod0_cache_builder_us": 2416867,
+	"lod0_cache_cold_total_us": 2461082,
+	"lod0_cache_first_layer": "rebuilt",
+	"lod0_cache_fresh_instance_disk_hit_us": 57377,
+	"lod0_cache_memory_hit_us": 13560,
+	"lod0_mesh_equal": true,
+	"lod0_optimized_build_us": {
+		"count": 3,
+		"max": 2541446,
+		"p50": 2532812,
+		"p95": 2541446,
+		"p99": 2541446
+	},
+	"lod0_phase_timings_us": {
+		"array_mesh_build": 0,
+		"sdf_and_ledger": 971147,
+		"shared_gradient_normals": 1668908,
+		"triangulation_and_face_normals": 19255
+	},
+	"lod1_baseline_build_us": {
+		"count": 3,
+		"max": 23065739,
+		"p50": 22564978,
+		"p95": 23065739,
+		"p99": 23065739
+	},
+	"lod1_mesh_equal": true,
+	"lod1_optimized_build_us": {
+		"count": 3,
+		"max": 23159357,
+		"p50": 23069278,
+		"p95": 23159357,
+		"p99": 23159357
+	},
+	"lod1_phase_timings_us": {
+		"array_mesh_build": 0,
+		"lod_transition_cell_assembly": 12535,
+		"sdf_and_ledger": 720590,
+		"shared_gradient_normals": 21713692,
+		"triangulation_and_face_normals": 139705
+	},
+	"lod1_serialization_us": 87,
+	"lod1_serialized_bytes": 114184,
+	"mesh_strategy": "canonical_fallback_no_reduction",
+	"meshing_candidate_count": 6228,
+	"operation_count": 8192,
+	"optimized_query_us": {
+		"count": 192,
+		"max": 3104,
+		"p50": 920,
+		"p95": 2172,
+		"p99": 3035
+	},
+	"query_mismatches": 0,
+	"query_strategy": "canonical_fallback_no_reduction",
+	"repeat": 1,
+	"replay_stats": {
+		"distance_evaluations": 524288,
+		"operation_visits": 524288,
+		"repeat_period": 8192,
+		"repeat_tail": 0,
+		"replay_operations": 8192,
+		"source_operations": 8192,
+		"unique_brushes": 8192,
+		"unique_geometry_count": 8192
+	},
+	"run_id": "P31.R3C.NONPERIODIC.CONCENTRATED.N8192.R01",
+	"scenario_id": "P31.R3C.NONPERIODIC.CONCENTRATED.N8192.v1",
+	"seed": 131102026,
+	"source_sha": "d445d12261c42650d7d6a2b7909c002afd0b2b33",
+	"static_memory_delta_bytes": 98743108,
+	"status": "PASS"
+}
