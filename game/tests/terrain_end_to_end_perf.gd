@@ -10,6 +10,7 @@ const CLICK_REPEATS := 5
 var assertions := 0
 var failures := 0
 var _test_scene_serial := 0
+var _last_frame_write_index := -1
 
 
 func _initialize() -> void:
@@ -30,6 +31,7 @@ func _run() -> void:
 	print("TERRAIN_PERF_SCENE: initial_window_regions=%d chunks=%d cold_start_ms=%.3f cpu_threads=%d" % [
 		scene.get("active_regions").size(), scene.get("chunk_nodes").size(), cold_elapsed, OS.get_processor_count(),
 	])
+	_print_window_frame_window(scene, "initial_stream")
 
 	var crossing_samples := PackedInt64Array()
 	for delta_x in [16.0, 16.0, 16.0, 16.0, 16.0]:
@@ -44,6 +46,7 @@ func _run() -> void:
 		crossing_metrics.get("frame_time_p95_ms", 0.0), crossing_metrics.get("frame_time_p99_ms", 0.0),
 		crossing_metrics.get("peak_process_work_ms", 0.0),
 	])
+	_print_window_frame_window(scene, "five_region_crossings")
 	# Return to region zero; click samples begin with an empty global command log.
 	var current_key: Vector2i = scene.get("focus_region_key")
 	scene.call("_move_focus", Vector3(-float(current_key.x) * Spatial.REGION_SIZE_X, 0.0, -float(current_key.y) * Spatial.REGION_SIZE_Z))
@@ -58,6 +61,7 @@ func _run() -> void:
 		_percentile(click_samples, 0.95) / 1000.0, _format_samples(click_samples),
 	])
 	_check(click_samples.size() == CLICK_REPEATS and scene.get("edit_ledger").get_edit_count() == CLICK_REPEATS, "real viewport input events accept and commit five visible edits")
+	_print_window_frame_window(scene, "single_region_clicks")
 
 	var seam_samples := PackedInt64Array()
 	var seam_support_counts := PackedInt32Array()
@@ -81,6 +85,7 @@ func _run() -> void:
 	for support_count in seam_support_counts:
 		every_seam_crosses = every_seam_crosses and support_count >= 2
 	_check(every_seam_crosses, "all near-seam viewport events exercise multi-region support operations")
+	_print_window_frame_window(scene, "two_region_seam_clicks")
 
 	var ledger: RefCounted = scene.get("edit_ledger")
 	while ledger.get_edit_count() < BrushState.MAX_EDITS - 1:
@@ -107,6 +112,7 @@ func _run() -> void:
 		full_ledger_metrics.get("frame_time_p95_ms", 0.0), full_ledger_metrics.get("frame_time_p99_ms", 0.0),
 	])
 	_check(ledger.get_edit_count() == BrushState.MAX_EDITS and full_ledger_metrics.get("last_rebuild_chunk_count", 0) > 0, "256th global operation commits through the same coherent rebuild path")
+	_print_window_frame_window(scene, "full_256_operation_ledger")
 
 	var old_region_start := Time.get_ticks_usec()
 	scene.call("_move_focus", Vector3(64.0, 0.0, 0.0))
@@ -119,6 +125,7 @@ func _run() -> void:
 		float(Time.get_ticks_usec() - edited_region_return_start) / 1000.0,
 		ledger.get_edit_count(),
 	])
+	_print_window_frame_window(scene, "unload_revisit_256_operations")
 	_check(scene.get("active_regions").has("0,0") and scene.get("active_regions").has("1,0"), "edited regions re-enter residency with their canonical global ledger")
 	scene.queue_free()
 	await process_frame
@@ -151,6 +158,36 @@ func _dispatch_click_to_visible(scene: Node, target: Vector3, camera_offset: Vec
 		await process_frame
 	_check(false, "accepted viewport edit becomes visible before timeout")
 	return -1
+
+
+func _print_window_frame_window(scene: Node, phase: String) -> void:
+	var ring_value: Variant = scene.get("_frame_time_samples")
+	var sample_count := int(scene.get("_frame_sample_count"))
+	if typeof(ring_value) != TYPE_ARRAY or sample_count <= 0:
+		print("P31_WINDOWED_FRAME_METRICS: phase=%s status=unavailable sample_count=%d" % [phase, sample_count])
+		return
+	var ring: Array = ring_value
+	var samples := PackedInt64Array()
+	var stalls_33 := 0
+	var stalls_50 := 0
+	var stalls_100 := 0
+	var write_index := int(scene.get("_frame_sample_write_index"))
+	var cursor := posmod(write_index - sample_count, ring.size()) if _last_frame_write_index < 0 else _last_frame_write_index
+	var sample_limit := sample_count if _last_frame_write_index < 0 else posmod(write_index - _last_frame_write_index, ring.size())
+	for _sample_index in range(sample_limit):
+		var frame_ms := float(ring[cursor])
+		samples.append(roundi(frame_ms * 1000.0))
+		stalls_33 += 1 if frame_ms > 33.0 else 0
+		stalls_50 += 1 if frame_ms > 50.0 else 0
+		stalls_100 += 1 if frame_ms > 100.0 else 0
+		cursor = (cursor + 1) % ring.size()
+	_last_frame_write_index = write_index
+	print("P31_WINDOWED_FRAME_METRICS: phase=%s display_server=%s viewport=%s renderer=%s samples=%d p50/p95/p99/pMax_ms=%.3f/%.3f/%.3f/%.3f stalls_gt33/50/100=%d/%d/%d" % [
+		phase, DisplayServer.get_name(), DisplayServer.window_get_size(), RenderingServer.get_video_adapter_name(), samples.size(),
+		float(_percentile(samples, 0.50)) / 1000.0, float(_percentile(samples, 0.95)) / 1000.0,
+		float(_percentile(samples, 0.99)) / 1000.0, float(_percentile(samples, 1.0)) / 1000.0,
+		stalls_33, stalls_50, stalls_100,
+	])
 
 
 func _surface_height(scene: Node, world_x: float, world_z: float) -> float:

@@ -1,0 +1,16 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+OpenGL API 3.3.0 NVIDIA 581.57 - Compatibility - Using Device: NVIDIA - NVIDIA GeForce GTX 1050 Ti
+
+TERRAIN_PERF_SCENE: initial_window_regions=9 chunks=144 cold_start_ms=1787.308 cpu_threads=28
+P31_WINDOWED_FRAME_METRICS: phase=initial_stream display_server=Windows viewport=(1152, 648) renderer=NVIDIA GeForce GTX 1050 Ti samples=83 p50/p95/p99/pMax_ms=16.674/53.816/150.000/150.000 stalls_gt33/50/100=9/6/3
+TERRAIN_PERF_REGION_CROSSING: samples=5 p50/p95_ms=552.244/565.679 values_ms=543.594,564.092,565.679,550.202,552.244 frame_p95/p99_ms=35.219/116.667 process_peak_ms=81.929
+P31_WINDOWED_FRAME_METRICS: phase=five_region_crossings display_server=Windows viewport=(1152, 648) renderer=NVIDIA GeForce GTX 1050 Ti samples=148 p50/p95/p99/pMax_ms=16.717/32.662/48.287/49.298 stalls_gt33/50/100=6/0/0
+TERRAIN_PERF_CLICK_VISIBLE: scenario=single_region ledger_before=0..4 samples=5 p50/p95_ms=80.840/83.086 values_ms=83.086,65.004,81.293,80.840,63.865
+P31_WINDOWED_FRAME_METRICS: phase=single_region_clicks display_server=Windows viewport=(1152, 648) renderer=NVIDIA GeForce GTX 1050 Ti samples=109 p50/p95/p99/pMax_ms=16.688/36.039/54.441/57.168 stalls_gt33/50/100=6/3/0
+TERRAIN_PERF_CLICK_VISIBLE: scenario=two_region_seam ledger_before=5..9 samples=5 p50/p95_ms=79.913/112.874 values_ms=78.720,80.622,79.913,79.721,112.874 support=2 rebuild_regions=4 chunks=6 queue/pool_p95_ms=46.472/0.207 upload_p50/publish_p95_ms=0.189/2.169 stage_ms={"array_mesh_build":1.139,"sdf_and_ledger":45.373,"shared_gradient_normals":22.509,"triangulation_and_face_normals":78.989} frame_p95/p99_ms=33.762/57.168
+P31_WINDOWED_FRAME_METRICS: phase=two_region_seam_clicks display_server=Windows viewport=(1152, 648) renderer=NVIDIA GeForce GTX 1050 Ti samples=27 p50/p95/p99/pMax_ms=16.667/16.667/16.667/16.667 stalls_gt33/50/100=0/0/0
+TERRAIN_PERF_ACCEPTED_TO_VISIBLE: scenario=two_region_seam ledger_before=256 latency_ms=129.339 support=2 rebuild_regions=2 chunks=4 queue/pool_p95_ms=7.739/2.099 upload_p50/publish_p95_ms=0.377/2.478 stage_ms={"array_mesh_build":1.413,"sdf_and_ledger":103.096,"shared_gradient_normals":56.223,"triangulation_and_face_normals":51.631} frame_p95/p99_ms=32.662/57.168
+P31_WINDOWED_FRAME_METRICS: phase=full_256_operation_ledger display_server=Windows viewport=(1152, 648) renderer=NVIDIA GeForce GTX 1050 Ti samples=106 p50/p95/p99/pMax_ms=16.667/16.667/16.759/130.376 stalls_gt33/50/100=1/1/1
+TERRAIN_PERF_EDITED_REGION_RETURN: unload_travel_ms=1682.875 return_to_edited_3x3_ms=2355.244 replayed_operations=256
+P31_WINDOWED_FRAME_METRICS: phase=unload_revisit_256_operations display_server=Windows viewport=(1152, 648) renderer=NVIDIA GeForce GTX 1050 Ti samples=189 p50/p95/p99/pMax_ms=16.686/46.900/91.071/96.377 stalls_gt33/50/100=16/9/0
+TERRAIN_E2E_PERF_PASS: assertions=251 failures=0
