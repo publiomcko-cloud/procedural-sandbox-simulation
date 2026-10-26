@@ -1,0 +1,107 @@
+{
+	"array_mesh_build_us": 212,
+	"baseline_query_us": {
+		"count": 192,
+		"max": 74,
+		"p50": 34,
+		"p95": 39,
+		"p99": 71
+	},
+	"baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"cache_builder_us": 0,
+	"cache_disk_bytes": 372016,
+	"cache_first_layer": "disk",
+	"cache_first_lookup_us": 2281,
+	"cache_fresh_instance_disk_hit_us": 2246,
+	"cache_hits": 7,
+	"cache_local_edit_rebuild_us": 334201,
+	"cache_memory_bytes": 65744,
+	"cache_memory_hit_us": 530,
+	"cache_memory_peak_bytes": 65744,
+	"cache_misses": 2,
+	"cache_remote_edit_lookup_us": 2385,
+	"canonical_lod0_samples": 1323,
+	"canonical_lod1_samples": 964,
+	"command_sha256": "54a6f3a684f0d3b322a5eca491bac30d23f77c6dd56eb3fda88acd8d7fbc62c1",
+	"duration_usec": 3340593,
+	"failures": [],
+	"layout": "concentrated",
+	"lod0_baseline_build_us": {
+		"count": 3,
+		"max": 84603,
+		"p50": 76720,
+		"p95": 84603,
+		"p99": 84603
+	},
+	"lod0_cache_cold_total_us": 2703,
+	"lod0_cache_first_layer": "disk",
+	"lod0_cache_fresh_instance_disk_hit_us": 2551,
+	"lod0_cache_memory_hit_us": 542,
+	"lod0_mesh_equal": true,
+	"lod0_optimized_build_us": {
+		"count": 3,
+		"max": 85573,
+		"p50": 79862,
+		"p95": 85573,
+		"p99": 85573
+	},
+	"lod0_phase_timings_us": {
+		"array_mesh_build": 0,
+		"sdf_and_ledger": 53353,
+		"shared_gradient_normals": 19057,
+		"triangulation_and_face_normals": 9040
+	},
+	"lod1_baseline_build_us": {
+		"count": 3,
+		"max": 310070,
+		"p50": 307465,
+		"p95": 310070,
+		"p99": 310070
+	},
+	"lod1_mesh_equal": true,
+	"lod1_optimized_build_us": {
+		"count": 3,
+		"max": 327082,
+		"p50": 322759,
+		"p95": 327082,
+		"p99": 327082
+	},
+	"lod1_phase_timings_us": {
+		"array_mesh_build": 0,
+		"lod_transition_cell_assembly": 9498,
+		"sdf_and_ledger": 36058,
+		"shared_gradient_normals": 212079,
+		"triangulation_and_face_normals": 67859
+	},
+	"lod1_serialization_us": 25,
+	"lod1_serialized_bytes": 24328,
+	"mesh_strategy": "canonical_fallback_no_reduction",
+	"meshing_candidate_count": 256,
+	"operation_count": 256,
+	"optimized_query_us": {
+		"count": 192,
+		"max": 109,
+		"p50": 34,
+		"p95": 36,
+		"p99": 94
+	},
+	"query_mismatches": 0,
+	"query_strategy": "canonical_fallback_no_reduction",
+	"repeat": 2,
+	"replay_stats": {
+		"distance_evaluations": 16384,
+		"operation_visits": 16384,
+		"repeat_period": 256,
+		"repeat_tail": 0,
+		"replay_operations": 256,
+		"source_operations": 256,
+		"unique_brushes": 256,
+		"unique_geometry_count": 256
+	},
+	"run_id": "P31.R3B.CONCENTRATED-256.R02",
+	"scenario_id": "P31.R3B.CONCENTRATED-256.v1",
+	"seed": 131102026,
+	"source_sha": "ca599e0ce5fe623eb2f683c4e8e975bca8c6958a",
+	"static_memory_delta_bytes": 3988709,
+	"status": "PASS"
+}

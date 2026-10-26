@@ -1,0 +1,20 @@
+{
+  "engine_image_sha256": "ab1824f85bfd8e0e4128182c000c4003a3e042245b2967848d089b2a04b22424",
+  "environment": {
+    "P31_R3B_SOURCE_SHA": "ca599e0ce5fe623eb2f683c4e8e975bca8c6958a",
+    "P31_R3B_OUTPUT_DIR": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3b-final-campaign-434780436b6c43419a99e824d52b13a9\\runs\\CONCENTRATED-640-R03\\output",
+    "P31_R3B_CACHE_DIR": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3b-final-campaign-434780436b6c43419a99e824d52b13a9\\cache\\CONCENTRATED-640",
+    "P31_R3B_REPEAT": 3,
+    "P31_R3B_SCENARIO": "CONCENTRATED-640"
+  },
+  "executable_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\Dev\\sandbox-sim-p3-1-r3b-experiment\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r3b_benchmark.gd"
+  ],
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "engine_image": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64.exe"
+}

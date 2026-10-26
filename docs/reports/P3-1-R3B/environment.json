@@ -1,0 +1,33 @@
+{
+  "repository": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "worktree": "C:\\Dev\\sandbox-sim-p3-1-r3b-experiment",
+  "branch": "bench/p3-1-r3b-exact-dense-local-cache",
+  "campaign_source_sha": "9ec3818e47b4f42027995b12e3d7a40a72cbf7ca",
+  "production_base": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+  "captured_utc": "2026-10-26T16:46:46.8218536Z",
+  "computer": "DESKTOP-SAFGO15",
+  "os": "Microsoft Windows 11 Pro",
+  "os_version": "10.0.22631",
+  "os_build": "22631",
+  "cpu": "Intel(R) Xeon(R) CPU E5-2690 v4 @ 2.60GHz",
+  "cpu_cores": 14,
+  "cpu_logical": 28,
+  "physical_memory_bytes": 68550852608,
+  "gpu": "NVIDIA GeForce GTX 1050 Ti",
+  "gpu_driver": "32.0.15.8157",
+  "godot_launcher": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_launcher_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "godot_engine_image": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64.exe",
+  "godot_engine_sha256": "ab1824f85bfd8e0e4128182c000c4003a3e042245b2967848d089b2a04b22424",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "campaign_evidence_root": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3b-final-campaign-2-4a1cace582ef400bb6c67fd644d88ba0",
+  "validation_evidence_root": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3b-final-validation-39aebec3e11a443eb299bd0975666b2f",
+  "focused_test_evidence_root": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3b-builder-focused-e85d2d4a9a67433e956d49e889003b99",
+  "concurrent_unrelated_godot_process": "one pre-existing separate process was observed; not modified",
+  "commands": [
+    "& .\\game\\tests\\prototypes\\run_p3_1_r3b_campaign.ps1 -RepeatCount 5 -ProcessTimeoutSeconds 900 -EvidenceRoot <fresh-temp-root>",
+    "& C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe --headless --editor --path <worktree>\\game --import",
+    "& C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe --headless --path <worktree>\\game --script res://tests/prototypes/p3_1_r3b_exact_cache_tests.gd",
+    "& .\\scripts\\validate.ps1 (with GODOT_BIN pinned and isolated APPDATA/LOCALAPPDATA)"
+  ]
+}

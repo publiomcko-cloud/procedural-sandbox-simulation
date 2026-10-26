@@ -1,0 +1,110 @@
+{
+	"array_mesh_build_us": 217,
+	"baseline_query_us": {
+		"count": 192,
+		"max": 221,
+		"p50": 76,
+		"p95": 87,
+		"p99": 168
+	},
+	"baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"cache_builder_us": 0,
+	"cache_disk_bytes": 338992,
+	"cache_first_layer": "disk",
+	"cache_first_lookup_us": 942,
+	"cache_fresh_instance_disk_hit_us": 954,
+	"cache_hits": 7,
+	"cache_local_edit_builder_us": 111259,
+	"cache_local_edit_lod0_builder_us": 19404,
+	"cache_local_edit_rebuild_us": 128886,
+	"cache_memory_bytes": 67328,
+	"cache_memory_hit_us": 29,
+	"cache_memory_peak_bytes": 67328,
+	"cache_misses": 2,
+	"cache_remote_edit_lookup_us": 1060,
+	"canonical_lod0_samples": 1323,
+	"canonical_lod1_samples": 964,
+	"command_sha256": "e9c48f89ccfd5d3bb9320b0ffb2617dceed9d17779ec56e7ac21da1870f29a46",
+	"duration_usec": 1222831,
+	"failures": [],
+	"layout": "distributed",
+	"lod0_baseline_build_us": {
+		"count": 3,
+		"max": 20065,
+		"p50": 18423,
+		"p95": 20065,
+		"p99": 20065
+	},
+	"lod0_cache_builder_us": 0,
+	"lod0_cache_cold_total_us": 1317,
+	"lod0_cache_first_layer": "disk",
+	"lod0_cache_fresh_instance_disk_hit_us": 1192,
+	"lod0_cache_memory_hit_us": 36,
+	"lod0_mesh_equal": true,
+	"lod0_optimized_build_us": {
+		"count": 3,
+		"max": 34773,
+		"p50": 19996,
+		"p95": 34773,
+		"p99": 34773
+	},
+	"lod0_phase_timings_us": {
+		"array_mesh_build": 0,
+		"sdf_and_ledger": 4760,
+		"shared_gradient_normals": 1869,
+		"triangulation_and_face_normals": 10480
+	},
+	"lod1_baseline_build_us": {
+		"count": 3,
+		"max": 102214,
+		"p50": 101942,
+		"p95": 102214,
+		"p99": 102214
+	},
+	"lod1_mesh_equal": true,
+	"lod1_optimized_build_us": {
+		"count": 3,
+		"max": 105961,
+		"p50": 104484,
+		"p95": 105961,
+		"p99": 105961
+	},
+	"lod1_phase_timings_us": {
+		"array_mesh_build": 0,
+		"lod_transition_cell_assembly": 9200,
+		"sdf_and_ledger": 6712,
+		"shared_gradient_normals": 33704,
+		"triangulation_and_face_normals": 69940
+	},
+	"lod1_serialization_us": 27,
+	"lod1_serialized_bytes": 23896,
+	"mesh_strategy": "canonical_fallback_no_reduction",
+	"meshing_candidate_count": 1,
+	"operation_count": 640,
+	"optimized_query_us": {
+		"count": 192,
+		"max": 171,
+		"p50": 76,
+		"p95": 78,
+		"p99": 169
+	},
+	"query_mismatches": 0,
+	"query_strategy": "canonical_fallback_no_reduction",
+	"repeat": 4,
+	"replay_stats": {
+		"distance_evaluations": 40960,
+		"operation_visits": 40960,
+		"repeat_period": 640,
+		"repeat_tail": 0,
+		"replay_operations": 640,
+		"source_operations": 640,
+		"unique_brushes": 640,
+		"unique_geometry_count": 640
+	},
+	"run_id": "P31.R3B.DISTRIBUTED-640.R04",
+	"scenario_id": "P31.R3B.DISTRIBUTED-640.v1",
+	"seed": 131102026,
+	"source_sha": "9ec3818e47b4f42027995b12e3d7a40a72cbf7ca",
+	"static_memory_delta_bytes": 6627914,
+	"status": "PASS"
+}

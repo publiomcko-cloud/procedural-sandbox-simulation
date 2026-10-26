@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot infer the type of "baseline_first" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r3b_benchmark.gd:125)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "run_baseline" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r3b_benchmark.gd:127)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r3b_benchmark.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
