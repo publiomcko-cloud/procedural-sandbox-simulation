@@ -1,3 +1,7 @@
+# Current evidence candidate — P3.1 Integration Gate / Issue #131 (2026-10-26)
+
+Draft evidence PR [#134](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/134) is stacked on the still-open, draft PR #129 branch and tests its exact production head `92b442d7f5b605c7bc9c48fac2aceea9d71813aa`. Evidence commit `e70475d7c32661568f3319658eb8347777677b34` adds only an opt-in test harness, test-only window-frame instrumentation, and retained benchmark artifacts; it changes no production behavior. Godot 4.7.2 full validation passed 21 suites / 21,464 assertions with zero failures. The integrated headless campaign passed 50 edit rows, 20 population rows, one 98-command entity/restart scenario, and zero full-replay mismatches. Five windowed runs show initial-stream p99 146.6–150 ms and 256-edit accepted-to-visible latency 119.6–140.0 ms; concentrated 8,192-command LOD1 CPU meshing p50 is 6.89 s. The initial smooth-playability goals are therefore **PERFORMANCE BLOCKED WITH EVIDENCE**; all measurements remain UNSCORED and not GPU-present evidence. PR #129 remains open/draft/unmerged. Issue #133 remains `NOT_REPRODUCED / CAUSE_UNKNOWN`; Issue #108 was not started. The five F2-G1 holds remain unchanged. See [Issue #131 report](../reports/P3-1-ISSUE-131/integration-gate-report.md) and [checkpoint](../checkpoints/2026-10-26-P3-1-ISSUE-131-INTEGRATION-GATE.md).
+
 # Current implementation candidate — P3.1 Storage R2 (2026-10-25)
 
 ## Newer candidate — P3.1 Storage R2 (2026-10-25)

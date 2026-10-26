@@ -1,0 +1,12 @@
+ERROR: P31 entity scenario failed: initial_region_reconstruction:legacy_population_rules_missing
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _fail_entity_row (res://tests/p3_1_integration_gate_benchmark.gd:659)
+       [1] _run_entity_command_sweep (res://tests/p3_1_integration_gate_benchmark.gd:445)
+       [2] _run (res://tests/p3_1_integration_gate_benchmark.gd:67)
+       [3] _run_population_sweep (res://tests/p3_1_integration_gate_benchmark.gd:404)
+ERROR: P31_INTEGRATION_BENCH_FAIL: edit_runs=50 population_targets=20 failures=1 duration_ms=362189.529
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tests/p3_1_integration_gate_benchmark.gd:73)
+       [1] _run_population_sweep (res://tests/p3_1_integration_gate_benchmark.gd:404)

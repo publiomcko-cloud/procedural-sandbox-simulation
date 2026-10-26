@@ -1,6 +1,6 @@
 # P3.1 Storage implementation gates
 
-Status: WORK STARTED / NO PRODUCTION CODE YET. Owner authorized implementing new scalable terrain save version with clean-start (no schema-1 import). Baseline `5997a76d345f45bf86edfe83f690336391e8be27`. Issue #127; design PR #128 stays independently draft. No merge approved.
+Status (2026-10-26): P3.1 implementation candidate remains on draft PR #129 at `92b442d7f5b605c7bc9c48fac2aceea9d71813aa`; no merge approved. The separate draft evidence PR [#134](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/134) completes the Issue #131 integration gate on an isolated benchmark branch. Functional replay/persistence cases passed at the measured sizes, but the initial playability goals are performance-blocked: concentrated 8,192-operation LOD1 construction p50 6.89 s; windowed initial-stream frame-loop p99 146.6–150 ms; 256-edit accepted-to-visible 119.6–140.0 ms. Results are UNSCORED and do not establish GPU presentation or owner visual acceptance. Recommend first optimizing dense local candidate evaluation/LOD meshing and command/save costs while retaining exact ordered-SDF parity; do not introduce snapshots or mesh caches without a separate exactness and invalidation decision. See [Issue #131 report](../reports/P3-1-ISSUE-131/integration-gate-report.md) and [checkpoint](../checkpoints/2026-10-26-P3-1-ISSUE-131-INTEGRATION-GATE.md). The P3.1 baseline, schema, five F2-G1 holds and no-schema-1-import restriction remain unchanged.
 
 ## Mandatory behavior
 

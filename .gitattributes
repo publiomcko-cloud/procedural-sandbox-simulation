@@ -3,3 +3,5 @@
 *.tscn text eol=lf
 *.md text eol=lf
 *.ps1 text eol=crlf
+docs/reports/P3-1-ISSUE-131/results/** -text
+*.svg text eol=lf
