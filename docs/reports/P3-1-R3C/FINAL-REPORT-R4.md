@@ -14,7 +14,8 @@ The exactness and recovery evidence is positive, and the frozen adaptive cache-a
 - Production baseline: `92b442d7f5b605c7bc9c48fac2aceea9d71813aa`.
 - R3C manifest SHA-256: `0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03`.
 - R3C `SHA256SUMS.txt` SHA-256: `cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b`.
-- Evidence inventory: `docs/reports/P3-1-R3C/evidence/SHA256SUMS.txt`, 626 entries, SHA-256 `d370fa943b740249d74424f2a6ff4cecba156cb460585ab1e0b7d291db997428`.
+- Complete R3C tracked code/fixture inventory: `docs/reports/P3-1-R3C/evidence/source-inventory.csv` contains physical SHA-256 and Git blob ID for all 29 changed `game/tests` paths at measured source `a760597...`.
+- Evidence inventory: `docs/reports/P3-1-R3C/evidence/SHA256SUMS.txt`, 627 entries, SHA-256 `c10d9daf7104c9c680c780432b2f1520dab7dad3ac9f47d0c8b5554bb033dc36`.
 - Physical source hashes at the measured HEAD:
 
 | File | SHA-256 | Git blob |
