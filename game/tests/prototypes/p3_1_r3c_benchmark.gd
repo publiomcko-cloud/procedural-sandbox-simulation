@@ -70,6 +70,25 @@ func _run() -> void:
 		push_error("r3c_manifest_digest_mismatch")
 		quit(1)
 		return
+	var expected_scenario_id := "P31.R3C.NONPERIODIC.%s.N%04d.v1" % [layout.to_upper(), count] if nonperiodic else "P31.R3B.%s.v1" % scenario
+	if nonperiodic:
+		var manifest_value: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/p3_1_r3c/nonperiodic/scenario-manifest.json"))
+		var manifest_match: Dictionary = {}
+		if typeof(manifest_value) == TYPE_DICTIONARY:
+			for entry_value in manifest_value.get("scenarios", []):
+				if typeof(entry_value) == TYPE_DICTIONARY and String(entry_value.get("scenario_id", "")) == expected_scenario_id:
+					manifest_match = entry_value
+					break
+		var expected_region := [0, 0] if layout == "concentrated" else [-31, -64]
+		var expected_chunk := [0, 0] if layout == "concentrated" else [2, 2]
+		if manifest_match.is_empty() or String(manifest_match.get("command_file", "")) != input_stem + ".commands.json" \
+			or String(manifest_match.get("command_sha256", "")) != expected_input_hash \
+			or int(manifest_match.get("count", -1)) != count \
+			or manifest_match.get("selected_region", []) != expected_region \
+			or manifest_match.get("selected_chunk", []) != expected_chunk:
+			push_error("r3c_scenario_manifest_entry_mismatch")
+			quit(1)
+			return
 	var parsed: Variant = JSON.parse_string(input_bytes.get_string_from_utf8())
 	if typeof(parsed) != TYPE_ARRAY or (parsed as Array).size() != count:
 		push_error("r3c_frozen_command_count_mismatch")
@@ -90,7 +109,7 @@ func _run() -> void:
 			break
 		if nonperiodic:
 			var center_key := "%d,%d,%d" % [int(center_mm[0]), int(center_mm[1]), int(center_mm[2])]
-			var token := "%s|%s|%s|%s" % [center_key, radius_mm, String(command.get("mode", "")), index]
+			var token := "%s|%d|%s" % [center_key, radius_mm, String(command.get("mode", ""))]
 			if unique_center_keys.has(center_key) or unique_command_tokens.has(token):
 				_failures.append("nonperiodic_duplicate_center_or_command_%d" % index)
 				break
@@ -282,8 +301,9 @@ func _run() -> void:
 	var local_lod0_builder_usec := int(local_cache.last_builder_usec)
 	if edited_identity_lod0.key == identity_lod0.key or bool(local_lod0_result.get("cache_hit", true)) or not _mesh_exact(Mesher.build_chunk_cpu_data(SEED, region, chunk, false, edited_snapshot), local_lod0_result):
 		_failures.append("lod0_local_edit_cache_miss_or_rebuild_mismatch")
+	var scenario_run_id := "P31.R3C.NONPERIODIC.%s.N%04d.R%02d" % [layout.to_upper(), count, repeat] if nonperiodic else "P31.R3B.%s.R%02d" % [scenario, repeat]
 	var row := {
-		"scenario_id": ("P31.R3C.NONPERIODIC.%s.v1" % scenario.replace("NONPERIODIC-", "") if nonperiodic else "P31.R3B.%s.v1" % scenario), "run_id": ("P31.R3C.NONPERIODIC.%s.R%02d" % [scenario.replace("NONPERIODIC-", ""), repeat] if nonperiodic else "P31.R3B.%s.R%02d" % [scenario, repeat]), "repeat": repeat,
+		"scenario_id": expected_scenario_id, "run_id": scenario_run_id, "repeat": repeat,
 		"source_sha": source_sha, "baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa", "seed": SEED,
 		"operation_count": count, "layout": layout, "command_sha256": _sha256(input_bytes),
 		"query_strategy": "exact_period_reduction" if exact_query.can_reduce_exact_replay() else "canonical_fallback_no_reduction",

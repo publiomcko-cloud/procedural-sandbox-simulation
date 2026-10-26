@@ -61,7 +61,17 @@ if ($ScenarioFilter) { $scenarioNames = @($ScenarioFilter) }
 $campaign = [Collections.Generic.List[object]]::new()
 foreach ($scenario in $scenarioNames) {
     for ($repeat = 1; $repeat -le $RepeatCount; $repeat++) {
-        $runId = "R3C-$scenario-R$('{0:D2}' -f $repeat)"
+        $isNonperiodic = $scenario.StartsWith('NONPERIODIC-', [StringComparison]::Ordinal)
+        $scenarioParts = $scenario.Replace('NONPERIODIC-', '').Split('-')
+        $scenarioLayout = $scenarioParts[0].ToLowerInvariant()
+        $scenarioCount = [int]$scenarioParts[1]
+        if ($isNonperiodic) {
+            $expectedScenarioId = 'P31.R3C.NONPERIODIC.{0}.N{1:D4}.v1' -f $scenarioLayout.ToUpperInvariant(), $scenarioCount
+            $runId = 'P31.R3C.NONPERIODIC.{0}.N{1:D4}.R{2:D2}' -f $scenarioLayout.ToUpperInvariant(), $scenarioCount, $repeat
+        } else {
+            $expectedScenarioId = 'P31.R3B.{0}.v1' -f $scenario
+            $runId = 'P31.R3B.{0}.R{1:D2}' -f $scenario, $repeat
+        }
         $runRoot = Join-Path $EvidenceRoot "runs\$runId"
         $outputRoot = Join-Path $runRoot 'output'
         $cacheRoot = Join-Path $EvidenceRoot "cache\$scenario"
@@ -133,13 +143,28 @@ foreach ($scenario in $scenarioNames) {
             $rawResult = Get-Content -LiteralPath $resultPath -Raw
             if (-not [string]::IsNullOrWhiteSpace($rawResult)) { try { $parsedResult = $rawResult | ConvertFrom-Json -ErrorAction Stop } catch { Write-Warning "Result JSON parse failed for $runId`: $_" } }
         }
+        $resultValid = $false
+        $resultValidation = 'MISSING_OR_UNPARSEABLE_RESULT'
+        if ($parsedResult) {
+            $resultValid = [string]$parsedResult.scenario_id -ceq $expectedScenarioId -and
+                [string]$parsedResult.run_id -ceq $runId -and
+                [string]$parsedResult.source_sha -ceq $sourceSha -and
+                [int]$parsedResult.operation_count -eq $scenarioCount -and
+                [string]$parsedResult.layout -ceq $scenarioLayout -and
+                [string]$parsedResult.status -ceq 'PASS' -and
+                @($parsedResult.failures).Count -eq 0
+            $resultValidation = if ($resultValid) { 'SCENARIO_RUN_SOURCE_AND_ZERO_FAILURES_VERIFIED' } else { 'RESULT_IDENTITY_OR_ACCEPTANCE_MISMATCH' }
+        }
+        $record.result_validation = $resultValidation
+        $record.expected_scenario_id = $expectedScenarioId
+        $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'process.json') -Encoding utf8
         $campaign.Add([pscustomobject]@{ process=$record; result=$parsedResult })
         if ($record.process_attribution -ne 'CIM_PARENT_CHILD_AND_IMAGE_PIN_VERIFIED') {
             $record.status = 'PROCESS_ATTRIBUTION_BLOCKED'
             $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'process.json') -Encoding utf8
             throw "Actual Godot engine process attribution failed; started run is retained and must not be repeated: $runId"
         }
-        if ($timedOut -or $proc.ExitCode -ne 0 -or -not $parsedResult -or $parsedResult.status -ne 'PASS') {
+        if ($timedOut -or $proc.ExitCode -ne 0 -or -not $resultValid) {
             $record.status = 'FAIL_RETAINED'
             $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'process.json') -Encoding utf8
             # Continue other independent repetitions/scenarios; never retry this launched run.
