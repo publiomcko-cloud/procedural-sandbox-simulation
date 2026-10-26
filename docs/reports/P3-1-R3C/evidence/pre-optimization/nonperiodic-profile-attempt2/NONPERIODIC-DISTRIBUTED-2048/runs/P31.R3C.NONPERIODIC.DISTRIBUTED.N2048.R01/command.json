@@ -1,0 +1,20 @@
+{
+  "environment": {
+    "P31_R3C_SCENARIO": "NONPERIODIC-DISTRIBUTED-2048",
+    "P31_R3C_OUTPUT_DIR": "C:\\Dev\\sandbox-sim-p3-1-r3c-experiment\\docs\\reports\\P3-1-R3C\\evidence\\pre-optimization\\nonperiodic-profile-attempt2\\NONPERIODIC-DISTRIBUTED-2048\\runs\\P31.R3C.NONPERIODIC.DISTRIBUTED.N2048.R01\\output",
+    "P31_R3C_SOURCE_SHA": "20e642caf4175278aa8cbdbfde99b2e23a074127",
+    "P31_R3C_REPEAT": 1,
+    "P31_R3C_CACHE_DIR": "C:\\Dev\\sandbox-sim-p3-1-r3c-experiment\\docs\\reports\\P3-1-R3C\\evidence\\pre-optimization\\nonperiodic-profile-attempt2\\NONPERIODIC-DISTRIBUTED-2048\\cache\\NONPERIODIC-DISTRIBUTED-2048"
+  },
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "engine_image_sha256": "ab1824f85bfd8e0e4128182c000c4003a3e042245b2967848d089b2a04b22424",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\Dev\\sandbox-sim-p3-1-r3c-experiment\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r3c_benchmark.gd"
+  ],
+  "executable_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "engine_image": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64.exe"
+}

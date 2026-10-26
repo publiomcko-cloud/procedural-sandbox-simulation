@@ -1,0 +1,160 @@
+{
+	"adaptive_policy": {
+		"bypass_count": 0,
+		"canonical_lod1_build_us": 6990521,
+		"cold_overhead_reduction_percent": -1.0,
+		"expected_reuse_count": -1,
+		"fresh_process_disk_hit_us": -1,
+		"policy_cold_overhead_us": -1,
+		"policy_end_to_end_us": -1,
+		"policy_exact": false,
+		"projected_net_benefit_us": -1,
+		"unconditional_cold_overhead_us": -1,
+		"unconditional_end_to_end_us": -1,
+		"unconditional_exact": false,
+		"workload_id": ""
+	},
+	"adaptive_probe_bypass_frequency": 0.0,
+	"array_mesh_build_us": 797,
+	"baseline_query_us": {
+		"count": 192,
+		"max": 802,
+		"p50": 237,
+		"p95": 280,
+		"p99": 542
+	},
+	"baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"cache_builder_us": 0,
+	"cache_disk_bytes": 4649776,
+	"cache_first_call_internal_timings": {
+		"disk_read_bytes": 488,
+		"disk_read_validate": 8804,
+		"envelope_verify_hash": 1754,
+		"identity_encode": 3274,
+		"identity_hash": 1205,
+		"memory_lookup_copy": 5,
+		"mesh_decode": 103,
+		"total": 13577
+	},
+	"cache_first_layer": "disk",
+	"cache_first_lookup_us": 13587,
+	"cache_fresh_instance_disk_hit_us": 13138,
+	"cache_hits": 7,
+	"cache_identity_lod1_build_us": 6620,
+	"cache_init_internal_timings": {
+		"cache_init_scan": 6734
+	},
+	"cache_local_edit_builder_us": 7124680,
+	"cache_local_edit_lod0_builder_us": 844862,
+	"cache_local_edit_rebuild_us": 7146315,
+	"cache_memory_bytes": 315008,
+	"cache_memory_hit_us": 4122,
+	"cache_memory_peak_bytes": 315008,
+	"cache_misses": 2,
+	"cache_remote_edit_lookup_us": 14753,
+	"canonical_lod0_samples": 1323,
+	"canonical_lod1_samples": 964,
+	"command_sha256": "d7260b168d4fca1ce5be55298a3a4a37e157635dd875658ccf82c198ff6eb5a5",
+	"duration_usec": 278414266,
+	"exact_full_query_init_us": 4928,
+	"exact_snapshot_init_us": 5226,
+	"exact_world_snapshot_init_us": 5089,
+	"failures": [],
+	"layout": "concentrated",
+	"lod0_baseline_build_us": {
+		"count": 3,
+		"max": 858092,
+		"p50": 814136,
+		"p95": 858092,
+		"p99": 858092
+	},
+	"lod0_cache_builder_us": 0,
+	"lod0_cache_cold_total_us": 16839,
+	"lod0_cache_first_layer": "disk",
+	"lod0_cache_fresh_instance_disk_hit_us": 15928,
+	"lod0_cache_memory_hit_us": 4158,
+	"lod0_mesh_equal": true,
+	"lod0_optimized_build_us": {
+		"count": 3,
+		"max": 7881457,
+		"p50": 7655989,
+		"p95": 7881457,
+		"p99": 7881457
+	},
+	"lod0_phase_timings_us": {
+		"array_mesh_build": 0,
+		"sdf_and_ledger": 365347,
+		"shared_gradient_normals": 455950,
+		"triangulation_and_face_normals": 18876
+	},
+	"lod1_baseline_build_us": {
+		"count": 3,
+		"max": 7193570,
+		"p50": 6990521,
+		"p95": 7193570,
+		"p99": 7193570
+	},
+	"lod1_mesh_equal": true,
+	"lod1_optimized_build_us": {
+		"count": 3,
+		"max": 71598269,
+		"p50": 70909531,
+		"p95": 71598269,
+		"p99": 71598269
+	},
+	"lod1_phase_timings_us": {
+		"array_mesh_build": 0,
+		"lod_transition_cell_assembly": 12044,
+		"sdf_and_ledger": 242178,
+		"shared_gradient_normals": 6853457,
+		"triangulation_and_face_normals": 107940
+	},
+	"lod1_serialization_us": 79,
+	"lod1_serialized_bytes": 107344,
+	"mesh_strategy": "conservative_dominance_pruning",
+	"meshing_candidate_count": 2048,
+	"normal_mismatches": 0,
+	"operation_count": 2048,
+	"optimized_query_us": {
+		"count": 192,
+		"max": 7423,
+		"p50": 2435,
+		"p95": 3422,
+		"p99": 6021
+	},
+	"picker_baseline_us": {
+		"count": 4,
+		"max": 13684,
+		"p50": 13536,
+		"p95": 13684,
+		"p99": 13684
+	},
+	"picker_mismatches": 0,
+	"picker_optimized_us": {
+		"count": 4,
+		"max": 134232,
+		"p50": 128713,
+		"p95": 134232,
+		"p99": 134232
+	},
+	"query_mismatches": 0,
+	"query_strategy": "conservative_dominance_pruning",
+	"repeat": 5,
+	"replay_stats": {
+		"distance_evaluations": 14240,
+		"dominated_noop_operations": 1716320,
+		"operation_visits": 1730560,
+		"repeat_period": 2048,
+		"repeat_tail": 0,
+		"replay_operations": 2048,
+		"source_operations": 2048,
+		"unique_brushes": 2048,
+		"unique_geometry_count": 2048
+	},
+	"run_id": "P31.R3C.NONPERIODIC.CONCENTRATED.N2048.R05",
+	"scenario_id": "P31.R3C.NONPERIODIC.CONCENTRATED.N2048.v1",
+	"seed": 131102026,
+	"source_sha": "a760597ea0cc4be6db24cee52f0da1c972103861",
+	"static_memory_delta_bytes": 28587315,
+	"status": "PASS"
+}

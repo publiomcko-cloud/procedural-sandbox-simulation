@@ -1,0 +1,161 @@
+{
+	"adaptive_policy": {
+		"bypass_count": 1,
+		"canonical_lod1_build_us": 103572,
+		"cold_overhead_reduction_percent": 72.4055855284037,
+		"expected_reuse_count": 0,
+		"fresh_process_disk_hit_us": 1057,
+		"policy_cold_overhead_us": 5217,
+		"policy_disk_bytes": 0,
+		"policy_end_to_end_us": 108789,
+		"policy_exact": true,
+		"projected_net_benefit_us": -18906,
+		"unconditional_cold_overhead_us": 18906,
+		"unconditional_end_to_end_us": 122478,
+		"unconditional_exact": true,
+		"workload_id": "P31.R3C.NONPERIODIC.DISTRIBUTED.N0256.v1"
+	},
+	"adaptive_probe_bypass_frequency": 1.0,
+	"array_mesh_build_us": 231,
+	"baseline_query_us": {
+		"count": 192,
+		"max": 118,
+		"p50": 35,
+		"p95": 109,
+		"p99": 118
+	},
+	"baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"cache_builder_us": 0,
+	"cache_disk_bytes": 338032,
+	"cache_first_call_internal_timings": {
+		"disk_read_bytes": 309,
+		"disk_read_validate": 869,
+		"envelope_verify_hash": 193,
+		"identity_encode": 20,
+		"identity_hash": 10,
+		"memory_lookup_copy": 2,
+		"mesh_decode": 24,
+		"total": 1052
+	},
+	"cache_first_layer": "disk",
+	"cache_first_lookup_us": 1057,
+	"cache_fresh_instance_disk_hit_us": 1000,
+	"cache_hits": 7,
+	"cache_identity_lod1_build_us": 49,
+	"cache_init_internal_timings": {
+		"cache_init_scan": 6253
+	},
+	"cache_local_edit_builder_us": 120324,
+	"cache_local_edit_lod0_builder_us": 19982,
+	"cache_local_edit_rebuild_us": 129739,
+	"cache_memory_bytes": 66464,
+	"cache_memory_hit_us": 41,
+	"cache_memory_peak_bytes": 66464,
+	"cache_misses": 2,
+	"cache_remote_edit_lookup_us": 1045,
+	"canonical_lod0_samples": 1323,
+	"canonical_lod1_samples": 964,
+	"command_sha256": "a61069eb72732db6ae2d12c80bc56f7d868cb9c4a2a0b3c9db0ee7a95df87cef",
+	"duration_usec": 1781031,
+	"exact_full_query_init_us": 679,
+	"exact_snapshot_init_us": 78,
+	"exact_world_snapshot_init_us": 25,
+	"failures": [],
+	"layout": "distributed",
+	"lod0_baseline_build_us": {
+		"count": 3,
+		"max": 19199,
+		"p50": 18919,
+		"p95": 19199,
+		"p99": 19199
+	},
+	"lod0_cache_builder_us": 0,
+	"lod0_cache_cold_total_us": 1375,
+	"lod0_cache_first_layer": "disk",
+	"lod0_cache_fresh_instance_disk_hit_us": 1293,
+	"lod0_cache_memory_hit_us": 58,
+	"lod0_mesh_equal": true,
+	"lod0_optimized_build_us": {
+		"count": 3,
+		"max": 27608,
+		"p50": 27178,
+		"p95": 27608,
+		"p99": 27608
+	},
+	"lod0_phase_timings_us": {
+		"array_mesh_build": 0,
+		"sdf_and_ledger": 5393,
+		"shared_gradient_normals": 2001,
+		"triangulation_and_face_normals": 8731
+	},
+	"lod1_baseline_build_us": {
+		"count": 3,
+		"max": 110091,
+		"p50": 103572,
+		"p95": 110091,
+		"p99": 110091
+	},
+	"lod1_mesh_equal": true,
+	"lod1_optimized_build_us": {
+		"count": 3,
+		"max": 133315,
+		"p50": 132128,
+		"p95": 133315,
+		"p99": 133315
+	},
+	"lod1_phase_timings_us": {
+		"array_mesh_build": 0,
+		"lod_transition_cell_assembly": 9730,
+		"sdf_and_ledger": 7635,
+		"shared_gradient_normals": 38087,
+		"triangulation_and_face_normals": 73222
+	},
+	"lod1_serialization_us": 28,
+	"lod1_serialized_bytes": 23608,
+	"mesh_strategy": "conservative_dominance_pruning",
+	"meshing_candidate_count": 4,
+	"normal_mismatches": 0,
+	"operation_count": 256,
+	"optimized_query_us": {
+		"count": 192,
+		"max": 773,
+		"p50": 271,
+		"p95": 667,
+		"p99": 756
+	},
+	"picker_baseline_us": {
+		"count": 4,
+		"max": 1981,
+		"p50": 1933,
+		"p95": 1981,
+		"p99": 1981
+	},
+	"picker_mismatches": 0,
+	"picker_optimized_us": {
+		"count": 4,
+		"max": 19241,
+		"p50": 16470,
+		"p95": 19241,
+		"p99": 19241
+	},
+	"query_mismatches": 0,
+	"query_strategy": "conservative_dominance_pruning",
+	"repeat": 4,
+	"replay_stats": {
+		"distance_evaluations": 71,
+		"dominated_noop_operations": 223161,
+		"operation_visits": 223232,
+		"repeat_period": 256,
+		"repeat_tail": 0,
+		"replay_operations": 256,
+		"source_operations": 256,
+		"unique_brushes": 256,
+		"unique_geometry_count": 256
+	},
+	"run_id": "P31.R3C.NONPERIODIC.DISTRIBUTED.N0256.R04",
+	"scenario_id": "P31.R3C.NONPERIODIC.DISTRIBUTED.N0256.v1",
+	"seed": 131102026,
+	"source_sha": "a760597ea0cc4be6db24cee52f0da1c972103861",
+	"static_memory_delta_bytes": 2978997,
+	"status": "PASS"
+}

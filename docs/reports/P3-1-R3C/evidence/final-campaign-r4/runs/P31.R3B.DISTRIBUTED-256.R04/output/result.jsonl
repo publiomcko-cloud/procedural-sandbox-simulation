@@ -1,0 +1,160 @@
+{
+	"adaptive_policy": {
+		"bypass_count": 0,
+		"canonical_lod1_build_us": 167130,
+		"cold_overhead_reduction_percent": -1.0,
+		"expected_reuse_count": -1,
+		"fresh_process_disk_hit_us": -1,
+		"policy_cold_overhead_us": -1,
+		"policy_end_to_end_us": -1,
+		"policy_exact": false,
+		"projected_net_benefit_us": -1,
+		"unconditional_cold_overhead_us": -1,
+		"unconditional_end_to_end_us": -1,
+		"unconditional_exact": false,
+		"workload_id": ""
+	},
+	"adaptive_probe_bypass_frequency": 0.0,
+	"array_mesh_build_us": 187,
+	"baseline_query_us": {
+		"count": 192,
+		"max": 104,
+		"p50": 34,
+		"p95": 40,
+		"p99": 96
+	},
+	"baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"cache_builder_us": 0,
+	"cache_disk_bytes": 338992,
+	"cache_first_call_internal_timings": {
+		"disk_read_bytes": 299,
+		"disk_read_validate": 789,
+		"envelope_verify_hash": 136,
+		"identity_encode": 11,
+		"identity_hash": 7,
+		"memory_lookup_copy": 2,
+		"mesh_decode": 26,
+		"total": 946
+	},
+	"cache_first_layer": "disk",
+	"cache_first_lookup_us": 950,
+	"cache_fresh_instance_disk_hit_us": 1011,
+	"cache_hits": 7,
+	"cache_identity_lod1_build_us": 52,
+	"cache_init_internal_timings": {
+		"cache_init_scan": 6003
+	},
+	"cache_local_edit_builder_us": 109508,
+	"cache_local_edit_lod0_builder_us": 19521,
+	"cache_local_edit_rebuild_us": 118719,
+	"cache_memory_bytes": 67328,
+	"cache_memory_hit_us": 34,
+	"cache_memory_peak_bytes": 67328,
+	"cache_misses": 2,
+	"cache_remote_edit_lookup_us": 994,
+	"canonical_lod0_samples": 1323,
+	"canonical_lod1_samples": 964,
+	"command_sha256": "c2178e3a2f95ba6b41110e4d2c22fde88fbf9e3e7cf7d603374fc44f283bface",
+	"duration_usec": 1569156,
+	"exact_full_query_init_us": 694,
+	"exact_snapshot_init_us": 56,
+	"exact_world_snapshot_init_us": 16,
+	"failures": [],
+	"layout": "distributed",
+	"lod0_baseline_build_us": {
+		"count": 3,
+		"max": 21084,
+		"p50": 18241,
+		"p95": 21084,
+		"p99": 21084
+	},
+	"lod0_cache_builder_us": 0,
+	"lod0_cache_cold_total_us": 1383,
+	"lod0_cache_first_layer": "disk",
+	"lod0_cache_fresh_instance_disk_hit_us": 1250,
+	"lod0_cache_memory_hit_us": 39,
+	"lod0_mesh_equal": true,
+	"lod0_optimized_build_us": {
+		"count": 3,
+		"max": 23805,
+		"p50": 22922,
+		"p95": 23805,
+		"p99": 23805
+	},
+	"lod0_phase_timings_us": {
+		"array_mesh_build": 0,
+		"sdf_and_ledger": 4720,
+		"shared_gradient_normals": 1850,
+		"triangulation_and_face_normals": 8796
+	},
+	"lod1_baseline_build_us": {
+		"count": 3,
+		"max": 187594,
+		"p50": 167130,
+		"p95": 187594,
+		"p99": 187594
+	},
+	"lod1_mesh_equal": true,
+	"lod1_optimized_build_us": {
+		"count": 3,
+		"max": 130334,
+		"p50": 118014,
+		"p95": 130334,
+		"p99": 130334
+	},
+	"lod1_phase_timings_us": {
+		"array_mesh_build": 0,
+		"lod_transition_cell_assembly": 9134,
+		"sdf_and_ledger": 6632,
+		"shared_gradient_normals": 33278,
+		"triangulation_and_face_normals": 69660
+	},
+	"lod1_serialization_us": 26,
+	"lod1_serialized_bytes": 23896,
+	"mesh_strategy": "conservative_dominance_pruning",
+	"meshing_candidate_count": 1,
+	"normal_mismatches": 0,
+	"operation_count": 256,
+	"optimized_query_us": {
+		"count": 192,
+		"max": 596,
+		"p50": 255,
+		"p95": 317,
+		"p99": 595
+	},
+	"picker_baseline_us": {
+		"count": 4,
+		"max": 1994,
+		"p50": 1945,
+		"p95": 1994,
+		"p99": 1994
+	},
+	"picker_mismatches": 0,
+	"picker_optimized_us": {
+		"count": 4,
+		"max": 16457,
+		"p50": 16237,
+		"p95": 16457,
+		"p99": 16457
+	},
+	"query_mismatches": 0,
+	"query_strategy": "conservative_dominance_pruning",
+	"repeat": 4,
+	"replay_stats": {
+		"distance_evaluations": 46,
+		"dominated_noop_operations": 223186,
+		"operation_visits": 223232,
+		"repeat_period": 256,
+		"repeat_tail": 0,
+		"replay_operations": 256,
+		"source_operations": 256,
+		"unique_brushes": 256,
+		"unique_geometry_count": 256
+	},
+	"run_id": "P31.R3B.DISTRIBUTED-256.R04",
+	"scenario_id": "P31.R3B.DISTRIBUTED-256.v1",
+	"seed": 131102026,
+	"source_sha": "a760597ea0cc4be6db24cee52f0da1c972103861",
+	"static_memory_delta_bytes": 3210305,
+	"status": "PASS"
+}

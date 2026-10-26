@@ -1,0 +1,23 @@
+﻿{
+    "campaign_root":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3c-final-a760597ea0cc4be6",
+    "source_sha":  "a760597ea0cc4be6db24cee52f0da1c972103861",
+    "expected_processes":  80,
+    "recorded_processes":  80,
+    "unique_run_ids":  80,
+    "exit_zero":  76,
+    "fail_retained":  4,
+    "timeout_censored":  4,
+    "valid_result_rows":  76,
+    "missing_results":  4,
+    "process_attribution_verified":  80,
+    "exact_query_mismatches":  0,
+    "normal_mismatches":  0,
+    "picker_mismatches":  0,
+    "cache_files":  190,
+    "cache_total_bytes":  33804808,
+    "max_process_working_set_bytes":  250834944,
+    "max_process_private_bytes":  206344192,
+    "godot_version":  "4.7.2.stable.official.ed1daf0bf",
+    "manifest_sha256":  "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+    "sidecar_sha256":  "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b"
+}

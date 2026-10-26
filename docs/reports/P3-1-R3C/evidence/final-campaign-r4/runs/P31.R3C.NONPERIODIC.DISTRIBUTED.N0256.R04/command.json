@@ -1,0 +1,20 @@
+﻿{
+    "arguments":  [
+                      "--headless",
+                      "--path",
+                      "C:\\Dev\\sandbox-sim-p3-1-r3c-experiment\\game",
+                      "--script",
+                      "res://tests/prototypes/p3_1_r3c_benchmark.gd"
+                  ],
+    "environment":  {
+                        "P31_R3C_CACHE_DIR":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3c-final-a760597ea0cc4be6\\cache\\NONPERIODIC-DISTRIBUTED-256",
+                        "P31_R3C_OUTPUT_DIR":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r3c-final-a760597ea0cc4be6\\runs\\P31.R3C.NONPERIODIC.DISTRIBUTED.N0256.R04\\output",
+                        "P31_R3C_SOURCE_SHA":  "a760597ea0cc4be6db24cee52f0da1c972103861",
+                        "P31_R3C_REPEAT":  4,
+                        "P31_R3C_SCENARIO":  "NONPERIODIC-DISTRIBUTED-256"
+                    },
+    "executable_sha256":  "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+    "engine_image":  "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64.exe",
+    "engine_image_sha256":  "ab1824f85bfd8e0e4128182c000c4003a3e042245b2967848d089b2a04b22424",
+    "executable":  "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe"
+}
