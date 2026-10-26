@@ -1,0 +1,13 @@
+{
+  "launcher_pid": 3184,
+  "observed_process_ids": [
+    3184,
+    58284,
+    57864
+  ],
+  "exit_code": 2,
+  "duration_seconds": 1.2277691,
+  "finished_utc": "2026-10-26T12:42:29.4394945Z",
+  "stdout_sha256": "83CF0B082206AF2AA236C83064FBCFA76BE1E00A4AA3558574B2F65965D9481C",
+  "stderr_sha256": "77EBDD4B84449BD1B63602E7360078814F2D8E956CA3622478F770867B9A00A1"
+}

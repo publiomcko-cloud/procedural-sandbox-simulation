@@ -1,0 +1,18 @@
+{
+  "godot_executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "validation_command": "& .\\scripts\\validate.ps1",
+  "worktree": "C:\\Dev\\sandbox-sim-p3-1-r3a-prototype",
+  "profile_roots": [
+    "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31_r3a_validation_20261026\\canonical-validation-final",
+    "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31_r3a_validation_20261026\\canonical-validation-retry-01"
+  ],
+  "first_run_exit": 1,
+  "focused_object_rerun_exit": 0,
+  "final_run_exit": 0,
+  "final_assertions": 21464,
+  "assertion_groups": 21,
+  "observed_warning": "ISSUE118_REPARSE_FIXTURE_UNAVAILABLE: DirAccess.create_link returned Failed; prepared Windows junction validation not supplied",
+  "nonfatal_warning": "Three existing camera look_at target/up colinearity warnings in procedural-object tests."
+}

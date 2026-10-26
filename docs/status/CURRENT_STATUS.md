@@ -1,4 +1,12 @@
-# Current implementation candidate — P3.1 Storage R2 (2026-10-25)
+# Current experimental evidence candidate — P3.1 R3A (2026-10-26)
+
+`main` was verified at `5997a76d345f45bf86edfe83f690336391e8be27`; P3.1 production source for this isolated experiment is PR #129 source `92b442d7f5b605c7bc9c48fac2aceea9d71813aa`. Prototype code commit `ffb5ccc4e59c03913b179f2b2db05cddd90ab1cd` (direct parent `92b442…`) adds only test prototypes, frozen Issue #131 inputs, and a fixture-scoped `-text` attribute. Draft evidence PR [#137](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/137) is open/unmerged, based on the PR #129 branch. No production storage/SDF/schema, PR #129/#134, user saves, native components, or Issue #108 work was changed.
+
+Final R3A headless matrix: 9/9, 23 reference SHA checks, zero failures. A's tested pruning was equivalent at sampled probes/selected vertices but regressed concentrated LOD reconstruction; reject this version. B cache tests recovered corruption and hit warm entries but use a global ledger key and can be slower than rebuilding distributed 8,192-operation chunks. C incrementally reproduces its sampled grid after append/reload, but trilinear interpolation is not the canonical continuous SDF: every edit case had off-grid mismatches, normals differ, and cave centerline continuity was lost. Ledger schema 2 remains sole authority; all prototypes are non-production derived data. See the [R3A report](../reports/P3-1-R3A/REPORT.md), [spec](../specs/P3-1-R3A-COMPARATIVE-PROTOTYPE.md), and [checkpoint](../checkpoints/2026-10-26-P3-1-R3A-COMPARATIVE-PROTOTYPE.md).
+
+Godot 4.7.2 `scripts/validate.ps1` final isolated rerun passed 21 groups / 21,464 assertions / zero failures. Its first full run had two existing procedural-object assertion failures; focused isolated rerun passed 638/638 and the subsequent complete rerun passed. Both outcomes are retained. A known junction fixture could not be created on this host; three nonfatal camera colinearity warnings remain. All results are headless. Independent source/evidence review is pending; there is no owner GUI, performance acceptance, production adoption, or merge authorization. All five F2-G1 holds remain unchanged.
+
+## Prior P3.1 Storage R2 source candidate (2026-10-25)
 
 ## Newer candidate — P3.1 Storage R2 (2026-10-25)
 

@@ -1,0 +1,16 @@
+{
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "executable_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\Dev\\sandbox-sim-p3-1-r3a-prototype\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r3a_benchmark.gd"
+  ],
+  "working_directory": "C:\\Dev\\sandbox-sim-p3-1-r3a-prototype",
+  "source_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+  "profile_root": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31_r3a_profile_20261026\\campaign-03",
+  "output_root": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31_r3a_validation_20261026\\campaign-03\\results",
+  "started_utc": "2026-10-26T12:42:28.2117254Z"
+}

@@ -1,0 +1,19 @@
+{
+  "pid": 50868,
+  "path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\Dev\\sandbox-sim-p3-1-r3a-prototype\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r3a_benchmark.gd"
+  ],
+  "command_line": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path C:\\Dev\\sandbox-sim-p3-1-r3a-prototype\\game --script res://tests/prototypes/p3_1_r3a_benchmark.gd",
+  "start_utc": "2026-10-26T12:33:19.2467092Z",
+  "end_utc": "2026-10-26T12:37:30.3454340Z",
+  "elapsed_seconds": 251.0987248,
+  "exit": 0,
+  "memory_samples": 2006,
+  "working_set_peak_bytes": 6430720.0,
+  "private_bytes_peak": 1343488.0
+}

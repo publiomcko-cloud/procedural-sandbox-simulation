@@ -1,0 +1,249 @@
+{
+	"alternative_a": "conservative squared-distance no-op pruning in exact ordered replay; GDScript test-only",
+	"alternative_b": "content-addressed persistent derived CPU mesh arrays with source-key and payload SHA256",
+	"alternative_c": "0.5-unit Float64 density lattice with trilinear interpolation; approximate between exact grid samples",
+	"cave_control": {
+		"canonical_centerline_samples": 9,
+		"chunk": [
+			0,
+			2
+		],
+		"region": [
+			0,
+			0
+		],
+		"scenario_id": "P31.R3A.CAVE.LOD0.N0000.v1"
+	},
+	"contract": "P3.1 R3A ledger/cache/snapshot prototype",
+	"measurement_repetitions": 3,
+	"metric_limits": {
+		"GPU": "not measured",
+		"memory": "Godot static-memory delta plus external process working-set sampling",
+		"mesh_publication": "not measured; CPU buffers only",
+		"presented_fps": "not measured"
+	},
+	"query_probes": [
+		"(-16.01, 2.5, -12.01)",
+		"(-16.0, 2.5, -12.0)",
+		"(-0.01, 2.5, -0.01)",
+		"(0.0, 0.0, 0.0)",
+		"(0.01, 2.5, 0.01)",
+		"(15.99, 2.5, 11.99)",
+		"(16.01, 2.5, 12.01)"
+	],
+	"reference_issue131_seed": 131102026,
+	"reference_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+	"reference_sha256sums_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+	"scenario_definitions": [
+		{
+			"brush_radius_mm": 580,
+			"command_artifact": "P31.EDIT.DISTRIBUTED.N0256.v1.R01.commands.json",
+			"command_artifact_sha256": "c2178e3a2f95ba6b41110e4d2c22fde88fbf9e3e7cf7d603374fc44f283bface",
+			"edit_revisit_restart_corruption": true,
+			"generator_version": 1,
+			"layout": "distributed",
+			"lod_levels": [
+				0,
+				1
+			],
+			"mesh_chunk": [
+				2,
+				2
+			],
+			"mesh_region": [
+				-31,
+				-64
+			],
+			"mesh_repeats": 3,
+			"mode_order": "CARVE even sequence; FILL odd sequence",
+			"operation_count": 256,
+			"scenario_id": "P31.R3A.DISTRIBUTED.N0256.v1",
+			"seed": 131102026,
+			"version": 1
+		},
+		{
+			"brush_radius_mm": 580,
+			"command_artifact": "P31.EDIT.DISTRIBUTED.N0640.v1.R01.commands.json",
+			"command_artifact_sha256": "e9c48f89ccfd5d3bb9320b0ffb2617dceed9d17779ec56e7ac21da1870f29a46",
+			"edit_revisit_restart_corruption": true,
+			"generator_version": 1,
+			"layout": "distributed",
+			"lod_levels": [
+				0,
+				1
+			],
+			"mesh_chunk": [
+				2,
+				2
+			],
+			"mesh_region": [
+				-31,
+				-64
+			],
+			"mesh_repeats": 3,
+			"mode_order": "CARVE even sequence; FILL odd sequence",
+			"operation_count": 640,
+			"scenario_id": "P31.R3A.DISTRIBUTED.N0640.v1",
+			"seed": 131102026,
+			"version": 1
+		},
+		{
+			"brush_radius_mm": 580,
+			"command_artifact": "P31.EDIT.DISTRIBUTED.N2048.v1.R01.commands.json",
+			"command_artifact_sha256": "bb7d44b91098ce9fb144e75f6d063cb51f9214d49b731a55eddb6e0a559d7d89",
+			"edit_revisit_restart_corruption": true,
+			"generator_version": 1,
+			"layout": "distributed",
+			"lod_levels": [
+				0,
+				1
+			],
+			"mesh_chunk": [
+				2,
+				2
+			],
+			"mesh_region": [
+				-31,
+				-64
+			],
+			"mesh_repeats": 3,
+			"mode_order": "CARVE even sequence; FILL odd sequence",
+			"operation_count": 2048,
+			"scenario_id": "P31.R3A.DISTRIBUTED.N2048.v1",
+			"seed": 131102026,
+			"version": 1
+		},
+		{
+			"brush_radius_mm": 580,
+			"command_artifact": "P31.EDIT.DISTRIBUTED.N8192.v1.R01.commands.json",
+			"command_artifact_sha256": "cc9bd392473c3049839f8a1cc8acee76a0c98607f55b489323c8b1278df701dc",
+			"edit_revisit_restart_corruption": true,
+			"generator_version": 1,
+			"layout": "distributed",
+			"lod_levels": [
+				0,
+				1
+			],
+			"mesh_chunk": [
+				2,
+				2
+			],
+			"mesh_region": [
+				-31,
+				-64
+			],
+			"mesh_repeats": 3,
+			"mode_order": "CARVE even sequence; FILL odd sequence",
+			"operation_count": 8192,
+			"scenario_id": "P31.R3A.DISTRIBUTED.N8192.v1",
+			"seed": 131102026,
+			"version": 1
+		},
+		{
+			"brush_radius_mm": 580,
+			"command_artifact": "P31.EDIT.CONCENTRATED.N0256.v1.R01.commands.json",
+			"command_artifact_sha256": "54a6f3a684f0d3b322a5eca491bac30d23f77c6dd56eb3fda88acd8d7fbc62c1",
+			"edit_revisit_restart_corruption": true,
+			"generator_version": 1,
+			"layout": "concentrated",
+			"lod_levels": [
+				0,
+				1
+			],
+			"mesh_chunk": [
+				0,
+				0
+			],
+			"mesh_region": [
+				0,
+				0
+			],
+			"mesh_repeats": 3,
+			"mode_order": "CARVE even sequence; FILL odd sequence",
+			"operation_count": 256,
+			"scenario_id": "P31.R3A.CONCENTRATED.N0256.v1",
+			"seed": 131102026,
+			"version": 1
+		},
+		{
+			"brush_radius_mm": 580,
+			"command_artifact": "P31.EDIT.CONCENTRATED.N0640.v1.R01.commands.json",
+			"command_artifact_sha256": "bb49bc70e93a732e234139b75d36886e93412ad553a51aa434680ccef0f48280",
+			"edit_revisit_restart_corruption": true,
+			"generator_version": 1,
+			"layout": "concentrated",
+			"lod_levels": [
+				0,
+				1
+			],
+			"mesh_chunk": [
+				0,
+				0
+			],
+			"mesh_region": [
+				0,
+				0
+			],
+			"mesh_repeats": 3,
+			"mode_order": "CARVE even sequence; FILL odd sequence",
+			"operation_count": 640,
+			"scenario_id": "P31.R3A.CONCENTRATED.N0640.v1",
+			"seed": 131102026,
+			"version": 1
+		},
+		{
+			"brush_radius_mm": 580,
+			"command_artifact": "P31.EDIT.CONCENTRATED.N2048.v1.R01.commands.json",
+			"command_artifact_sha256": "ce3ac18c1b68e721b638993261e568a9758898d43cec3fd075881ac288b95cf5",
+			"edit_revisit_restart_corruption": true,
+			"generator_version": 1,
+			"layout": "concentrated",
+			"lod_levels": [
+				0,
+				1
+			],
+			"mesh_chunk": [
+				0,
+				0
+			],
+			"mesh_region": [
+				0,
+				0
+			],
+			"mesh_repeats": 3,
+			"mode_order": "CARVE even sequence; FILL odd sequence",
+			"operation_count": 2048,
+			"scenario_id": "P31.R3A.CONCENTRATED.N2048.v1",
+			"seed": 131102026,
+			"version": 1
+		},
+		{
+			"brush_radius_mm": 580,
+			"command_artifact": "P31.EDIT.CONCENTRATED.N8192.v1.R01.commands.json",
+			"command_artifact_sha256": "0b30e1ce2605b3bab504f3f5648c7e63a84c9a22f905721b56defcfe0489f611",
+			"edit_revisit_restart_corruption": true,
+			"generator_version": 1,
+			"layout": "concentrated",
+			"lod_levels": [
+				0,
+				1
+			],
+			"mesh_chunk": [
+				0,
+				0
+			],
+			"mesh_region": [
+				0,
+				0
+			],
+			"mesh_repeats": 3,
+			"mode_order": "CARVE even sequence; FILL odd sequence",
+			"operation_count": 8192,
+			"scenario_id": "P31.R3A.CONCENTRATED.N8192.v1",
+			"seed": 131102026,
+			"version": 1
+		}
+	],
+	"source_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"version": 1
+}

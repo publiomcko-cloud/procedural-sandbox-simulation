@@ -1,0 +1,169 @@
+{
+	"contract": "P3.1 Issue 131 integration gate",
+	"edit_scenarios": [
+		{
+			"distribution_recipe": "global region lattice with signed coordinates; every fourth command is face/corner-adjacent",
+			"generator_version": 1,
+			"layout": "distributed",
+			"operation_count": 0,
+			"ordered_modes": "CARVE for even sequence, FILL for odd sequence",
+			"radius_mm": 580,
+			"scenario_id": "P31.EDIT.DISTRIBUTED.N0000.v1",
+			"scenario_version": 1,
+			"world_seed": 131102026
+		},
+		{
+			"distribution_recipe": "global region lattice with signed coordinates; every fourth command is face/corner-adjacent",
+			"generator_version": 1,
+			"layout": "distributed",
+			"operation_count": 256,
+			"ordered_modes": "CARVE for even sequence, FILL for odd sequence",
+			"radius_mm": 580,
+			"scenario_id": "P31.EDIT.DISTRIBUTED.N0256.v1",
+			"scenario_version": 1,
+			"world_seed": 131102026
+		},
+		{
+			"distribution_recipe": "global region lattice with signed coordinates; every fourth command is face/corner-adjacent",
+			"generator_version": 1,
+			"layout": "distributed",
+			"operation_count": 640,
+			"ordered_modes": "CARVE for even sequence, FILL for odd sequence",
+			"radius_mm": 580,
+			"scenario_id": "P31.EDIT.DISTRIBUTED.N0640.v1",
+			"scenario_version": 1,
+			"world_seed": 131102026
+		},
+		{
+			"distribution_recipe": "global region lattice with signed coordinates; every fourth command is face/corner-adjacent",
+			"generator_version": 1,
+			"layout": "distributed",
+			"operation_count": 2048,
+			"ordered_modes": "CARVE for even sequence, FILL for odd sequence",
+			"radius_mm": 580,
+			"scenario_id": "P31.EDIT.DISTRIBUTED.N2048.v1",
+			"scenario_version": 1,
+			"world_seed": 131102026
+		},
+		{
+			"distribution_recipe": "global region lattice with signed coordinates; every fourth command is face/corner-adjacent",
+			"generator_version": 1,
+			"layout": "distributed",
+			"operation_count": 8192,
+			"ordered_modes": "CARVE for even sequence, FILL for odd sequence",
+			"radius_mm": 580,
+			"scenario_id": "P31.EDIT.DISTRIBUTED.N8192.v1",
+			"scenario_version": 1,
+			"world_seed": 131102026
+		},
+		{
+			"distribution_recipe": "13x11x9-mm deterministic offsets concentrated around origin",
+			"generator_version": 1,
+			"layout": "concentrated",
+			"operation_count": 0,
+			"ordered_modes": "CARVE for even sequence, FILL for odd sequence",
+			"radius_mm": 580,
+			"scenario_id": "P31.EDIT.CONCENTRATED.N0000.v1",
+			"scenario_version": 1,
+			"world_seed": 131102026
+		},
+		{
+			"distribution_recipe": "13x11x9-mm deterministic offsets concentrated around origin",
+			"generator_version": 1,
+			"layout": "concentrated",
+			"operation_count": 256,
+			"ordered_modes": "CARVE for even sequence, FILL for odd sequence",
+			"radius_mm": 580,
+			"scenario_id": "P31.EDIT.CONCENTRATED.N0256.v1",
+			"scenario_version": 1,
+			"world_seed": 131102026
+		},
+		{
+			"distribution_recipe": "13x11x9-mm deterministic offsets concentrated around origin",
+			"generator_version": 1,
+			"layout": "concentrated",
+			"operation_count": 640,
+			"ordered_modes": "CARVE for even sequence, FILL for odd sequence",
+			"radius_mm": 580,
+			"scenario_id": "P31.EDIT.CONCENTRATED.N0640.v1",
+			"scenario_version": 1,
+			"world_seed": 131102026
+		},
+		{
+			"distribution_recipe": "13x11x9-mm deterministic offsets concentrated around origin",
+			"generator_version": 1,
+			"layout": "concentrated",
+			"operation_count": 2048,
+			"ordered_modes": "CARVE for even sequence, FILL for odd sequence",
+			"radius_mm": 580,
+			"scenario_id": "P31.EDIT.CONCENTRATED.N2048.v1",
+			"scenario_version": 1,
+			"world_seed": 131102026
+		},
+		{
+			"distribution_recipe": "13x11x9-mm deterministic offsets concentrated around origin",
+			"generator_version": 1,
+			"layout": "concentrated",
+			"operation_count": 8192,
+			"ordered_modes": "CARVE for even sequence, FILL for odd sequence",
+			"radius_mm": 580,
+			"scenario_id": "P31.EDIT.CONCENTRATED.N8192.v1",
+			"scenario_version": 1,
+			"world_seed": 131102026
+		}
+	],
+	"entity_command_scenario": {
+		"explicit_placed_objects": 16,
+		"first_party_and_example_data_only": true,
+		"per_object_order": [
+			"ENTITY_PLACE",
+			"ENTITY_SET_COMPONENT",
+			"ENTITY_DELETE",
+			"ENTITY_UNDO",
+			"ENTITY_REDO",
+			"ENTITY_UNDO"
+		],
+		"procedural_control_order": [
+			"ENTITY_SET_COMPONENT",
+			"ENTITY_RESTORE"
+		],
+		"region_key": [
+			0,
+			0
+		],
+		"scenario_id": "P31.ENTITIES.TRANSACTIONAL.COMMANDS.N0016.v1",
+		"schema": 3,
+		"seed": 131102026
+	},
+	"execution_phase": "all",
+	"godot_version": {
+		"build": "official",
+		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+		"hex": 263938,
+		"major": 4,
+		"minor": 7,
+		"patch": 2,
+		"status": "stable",
+		"string": "4.7.2-stable (official)",
+		"timestamp": 0
+	},
+	"manifest_version": 1,
+	"metric_semantics": {
+		"GPU": "not measured by this CPU harness",
+		"RAM": "Godot static memory in script; wrapper records process working-set sampling separately",
+		"SDF": "monotonic Time.get_ticks_usec; indexed source-backed evaluator compared exactly against full ordered CARVE/FILL replay",
+		"headless_frame_metrics": "not measured; do not infer FPS or GPU presentation",
+		"save_load": "includes segment verification and manifest/index processing performed by v2 store"
+	},
+	"population_repetitions": 5,
+	"population_rule": "registered production first-party and example packages; traverse signed regions, preserve 25-region resident cap; cumulative target records first published-region crossing",
+	"population_targets": [
+		100,
+		500,
+		1000,
+		2000
+	],
+	"repetitions": 5,
+	"seed": 131102026,
+	"source_sha": ""
+}
