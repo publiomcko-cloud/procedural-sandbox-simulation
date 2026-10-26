@@ -1,4 +1,10 @@
-# Current implementation candidate — P3.0D (2026-10-25)
+# Current implementation candidate — P3.1 Storage R2 (2026-10-25)
+
+## Newer candidate — P3.1 Storage R2 (2026-10-25)
+
+Verified `origin/main` remains the P3.1 baseline `5997a76d345f45bf86edfe83f690336391e8be27`; PR #129 starts from `db1c72fadd24e69f87f0eb2c5091cee1ac1b39da`. Source correction `ea18432c6f9cfc1912e1d4aeb5363bb8f5bc9731` on `feat/p3-1-scalable-terrain-storage` adds conservative spatial/min-max SDF candidate selection and append-only schema-v2 segment reuse without deleting historical generations or changing schema 1. Focused storage tests passed 3,516/0; isolated-profile `scripts/validate.ps1` passed 21 suites and 21,464 assertions with zero failures on Godot 4.7.2. Measurements are exploratory: 8,192 concentrated commands still yield 8,192 local candidates, ~49.1 ms point-query p99, ~63.2 ms ray-picker end-to-end p99 and ~6.45 s LOD1 reconstruction; saves rehash reused segment bytes. The reparse-junction fixture was unavailable on this host, and three camera colinearity warnings were non-fatal. PR #129 remains draft/unmerged; exact source review and owner GUI save/restart checks are pending. See [R2 checkpoint](../checkpoints/2026-10-25-P3-1-STORAGE-R2-CORRECTIONS.md). PRs #128/#130, P3.0D work, stash entries, and three pre-existing untracked `.gd.uid` files were preserved. All five F2-G1 holds remain unchanged.
+
+# Prior implementation candidate — P3.0D (2026-10-25)
 
 ## Newer candidate — P3.0D Issue #123 (2026-10-25)
 
