@@ -1,0 +1,9 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: R5E_FAIL lod1_exact_positions_normals_topology
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:111)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:85)
+P31_R5E_JSON {"assertions":8990,"candidate_operations":8192,"duration_usec":88627818,"exact_distance_fraction":0.0675487465181058,"failures":["lod1_exact_positions_normals_topology"],"fixture_sha256":"0b30e1ce2605b3bab504f3f5648c7e63a84c9a22f905721b56defcfe0489f611","inherited_r4_head":"051249642611a7fa9cd2006be450bad0e184e4ee","lod0_candidate_usec":13719070,"lod0_reference_usec":3282391,"lod1_candidate_usec":53381225,"lod1_reference_usec":11251316,"probe_count":789,"query_statistics":{"axis_dominance_skips":71299072,"exact_distance_evaluations":5165056,"ledger_operations":8192,"queries":9334},"scenario":"P31.R5E.CONCENTRATED.N8192.v1","source_baseline":"92b442d7f5b605c7bc9c48fac2aceea9d71813aa","status":"FAIL","timing_note":"single headless process; exploratory, no presented-frame/GPU claim"}
+P31_R5E_TESTS_FAIL assertions=8990 failures=1
