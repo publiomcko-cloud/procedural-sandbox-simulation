@@ -1,0 +1,360 @@
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)
+SCRIPT ERROR: Invalid access to property or key 'face' on a base object of type 'Dictionary'.
+   at: _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+   GDScript backtrace (most recent call first):
+       [0] _ray_mesh_reference (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:471)
+       [1] _physics_proxy_metrics (res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd:360)

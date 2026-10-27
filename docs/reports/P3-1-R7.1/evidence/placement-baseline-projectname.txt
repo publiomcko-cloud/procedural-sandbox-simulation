@@ -1,0 +1,4 @@
+Temporary archive only: application/config/name set to P3-1-R71-PLACEMENT-BASELINE-0867c0 to isolate Godot user://; all scripts and tests are exact baseline commit 0867c0c04b857fae1c71b274b8eac44c6e7dba4f.
+archive_project.godot_sha256_before=5790AF3AC8B1AA95E032F802FDC9F45BC1154A74709F0A9FB07740F238252CC4
+archive_project.godot_sha256_after=BD5EF32AAC64E77C2190D0B69B71438A4F1FEADD770B0DA81763990A8603B329
+source_commit=0867c0c04b857fae1c71b274b8eac44c6e7dba4f

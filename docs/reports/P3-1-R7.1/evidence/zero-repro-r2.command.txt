@@ -1,0 +1,1 @@
+"C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path C:\r71\game --script res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd -- --preflight-only

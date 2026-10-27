@@ -1,0 +1,4 @@
+validation_archive_source_commit=456adc16b2ecbef4e6342e3f6f8731455eb4a917
+project.godot_sha256_before=5790AF3AC8B1AA95E032F802FDC9F45BC1154A74709F0A9FB07740F238252CC4
+project.godot_sha256_after=D05112DF235CF9BC1249464F500CC99DF54689B13D971F18F1213D75BCD06F42
+isolation=temporary application/config/name change in disposable archive only; scripts/tests exact candidate commit
