@@ -1,7 +1,11 @@
 71350f8ca86b5080b20d853101c7db4c3f6f5be67e9b388b28c2b98966c93849  docs/checkpoints/2026-10-27-P3-1-R6V-CAVE-CAUSAL-INVESTIGATION.md
-fd0f709323e31eb044cef7fd3b570b0ecd06c193d40ab55d80c339d362ab62bc  docs/checkpoints/INDEX.md
-2eeae820cab844a1cc47150fb2aa72cd6dde0f67ec907acacbfe04b735ef224b  docs/reports/P3-1-R6V/evidence/attempt-index.md
-4ba6fa1c19823e754e4259399c8f272ea626458229a09c56a69ad059cf3f9c44  docs/reports/P3-1-R6V/evidence/evidence-hashes.txt
+b07832932d89e95ada9ba4d8da2810116d6f4bb76e1b3315c0204748570f2b2f  docs/checkpoints/2026-10-27-P3-1-R6V-FINAL-BYTES-VALIDATION.md
+67eda9bf0ffb1d8c447d0080d342e5ce1737ecaf0b85aa24359ec1140959deb3  docs/checkpoints/INDEX.md
+6d19f9ed7ad136a10718dc94ee2b94207add3271d6383e8dfcc5f8d49964f5ab  docs/reports/P3-1-R6V/evidence/attempt-index.md
+820e0ff7c3e2ec1a109c783f1af15e720a22892cba5c2d83c2f5bf69e0e81fde  docs/reports/P3-1-R6V/evidence/evidence-hashes.txt
+13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354  docs/reports/P3-1-R6V/evidence/final-bytes-validation-exit.txt
+722c9b6ec10534ddd642e223dbd5329b043b817bf774b25c094a6b9dafc5bc0e  docs/reports/P3-1-R6V/evidence/final-bytes-validation-identity.txt
+2ed43773cb53b6208357e38787e63b9f9db38c424f862908f375b97f67fe532a  docs/reports/P3-1-R6V/evidence/final-bytes-validation.log
 13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354  docs/reports/P3-1-R6V/evidence/final-source-check.exit.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  docs/reports/P3-1-R6V/evidence/final-source-check.stderr.log
 83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c  docs/reports/P3-1-R6V/evidence/final-source-check.stdout.log
@@ -62,8 +66,8 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  docs/reports/P
 c90f2f50d2493c175acf94538ea3d73dafd7a43bfba4cf370136699431548558  docs/reports/P3-1-R6V/evidence/validate-combined.log
 b435f19f94169c4b9244f64e342bcff1691b225f977fbad88ad496f205d8d367  docs/reports/P3-1-R6V/evidence/validation-environment.txt
 11195923a226d43965dd483742774daba343df9184d9bfd2836fb1bfbb45d685  docs/reports/P3-1-R6V/evidence/variant-summary.csv
-cc7a7c9627bd38a83e9d08879ffe42dbaf865761498a726e41d9b556978aab0c  docs/reports/P3-1-R6V/RESULTS.md
-ad5b94b02c35514d3fad68c84b796b245535f38ac8de61d6c8eef03fdebc855b  docs/status/CURRENT_STATUS.md
+aa598f9ae34e48b0359bcd0a78a85c8e40b1758d3960d59fdf7838623f7bd833  docs/reports/P3-1-R6V/RESULTS.md
+4c1a89a6ef5eeecee787a0386d72ad7e8bb23eb757b7d89f0456718e94650024  docs/status/CURRENT_STATUS.md
 f05bb682aae18ccdc81e31be662e717e66cec22bc5db55860c9fac7311ff652b  game/tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd
 08fdf81216113348a52105406a17ad3a26d3fcebe15070181b88297604132ba2  game/tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd.uid
 f4393a1791c762bf25b39165040d42c86f60303e1bed42eb59328ff7fc8357c4  game/tests/prototypes/r5_adaptive_voxel_snapshot.gd

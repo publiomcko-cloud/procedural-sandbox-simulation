@@ -1,0 +1,17 @@
+repo=C:\r6v
+commit=aef090871a7582ee5254511f55624d60882fa00d
+branch=bench/p3-1-r6v-cave
+godot_version=
+4.7.2.stable.official.ed1daf0bf
+godot_sha256=
+C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643
+APPDATA=
+C:\Users\PUBLI\AppData\Local\Temp\p31-r6v-finalbytes-9c83383cfc824e58b360888f0e0271a8\profile\roaming
+LOCALAPPDATA=
+C:\Users\PUBLI\AppData\Local\Temp\p31-r6v-finalbytes-9c83383cfc824e58b360888f0e0271a8\profile\local
+TEMP=
+C:\Users\PUBLI\AppData\Local\Temp\p31-r6v-finalbytes-9c83383cfc824e58b360888f0e0271a8\tmp
+started_utc=
+2026-10-27T11:35:15.2063849Z
+command=powershell -NoProfile -File scripts/validate.ps1
+exit=0; finished_utc=2026-10-27T11:44:07.7968705Z

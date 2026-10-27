@@ -10,6 +10,7 @@ Physical source hashes and base blob identities are listed in evidence/source-id
 
 - Repository origin: https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git
 - Isolated branch: bench/p3-1-r6v-cave
+- Final R6-V source HEAD tested: aef090871a7582ee5254511f55624d60882fa00d; direct parent: 234e73d0e39504559c4df6869ae302c74e58d8a5 (R5-V)
 - Experiment base / starting HEAD: 234e73d0e39504559c4df6869ae302c74e58d8a5 (R5-V)
 - Direct parent of that base: 051249642611a7fa9cd2006be450bad0e184e4ee (R4)
 - Production reference: 92b442d7f5b605c7bc9c48fac2aceea9d71813aa
@@ -53,7 +54,7 @@ The synthetic diagnostic has no collision provider. Collision discrepancy is exp
 - First focused run was invalid setup: sub-minimum brush radii were rejected and mesh-normal warnings were emitted. It is retained as failed evidence and excluded from results.
 - Second focused run accepted the two edits and passed 117 assertions but covered only 8 chunks; cross-section sampling fell back to canonical calls, so it was incomplete and excluded from final geometry comparisons.
 - Final focused R6-V run covered all 16 chunks with zero canonical fallback during candidate mesh sampling. Exit 0; R6V_RESULT PASS, 213 assertions, 3 snapshots x 4 variants, approximately 124.8 seconds process duration; stderr empty.
-- Godot import: exit 0. Final harness check-only: exit 0, clean. Full scripts/validate.ps1: exit 0, 21,464 assertions, zero failures, 507,647 ms. Three existing colinear camera look_at warnings occurred; there were no parser, script or runtime errors. The validator states that GUI pixels are not assessed. Full combined output and the isolated profile/environment record are under evidence/. A final check-only was run after removal of one trailing blank line from the diagnostic source; the full suite had run immediately before that whitespace-only normalization.
+- Godot import: exit 0. Final harness check-only: exit 0, clean. The first full `scripts/validate.ps1` run passed 21,464 assertions with zero failures in 507,647 ms. After removing one trailing blank line from the test-only diagnostic source, the full validation was rerun against the exact final source HEAD `aef090871a7582ee5254511f55624d60882fa00d` in a fresh isolated profile: exit 0, 21,464 assertions, zero failures, 532,590 ms (started `2026-10-27T11:35:15.2063849Z`, finished `2026-10-27T11:44:07.7968705Z`). Both runs emitted the same three existing colinear-camera `look_at` warnings and no parser, script, or runtime errors. The final-byte run's combined output, exit record, and environment/source identity are `evidence/final-bytes-validation.log`, `evidence/final-bytes-validation-exit.txt`, and `evidence/final-bytes-validation-identity.txt`. The validator states that GUI pixels are not assessed.
 
 ## Recommendation and required next gate
 
