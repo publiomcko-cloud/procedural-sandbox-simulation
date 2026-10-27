@@ -56,19 +56,25 @@ func sample_world(world_position: Vector3, show_cave_section: bool = false) -> f
 	if not bool(mapped.get("valid", false)):
 		return NAN
 	var density: float = Field.sample_density(world_seed, mapped["region_key"], mapped["local_position"])
+	# Match the canonical snapshot evaluator: command distances use the world
+	# position reconstructed from the mapped region/local pair. At negative and
+	# nonzero region coordinates this may differ by one or more Vector3 ULPs from
+	# the original query point; mixing the two coordinate paths breaks bitwise
+	# parity even when the base density is identical.
+	var sampled_world_position: Vector3 = Spatial.region_local_to_world(mapped["region_key"], mapped["local_position"])
 	var centers: PackedVector3Array = snapshot["centers"]
 	var radii: PackedFloat64Array = snapshot["radii"]
 	var modes: PackedByteArray = snapshot["modes"]
 	for index in range(centers.size()):
 		var center: Vector3 = centers[index]
-		var delta := world_position - center
+		var delta := sampled_world_position - center
 		var radius := float(radii[index])
 		var no_op_distance := density + radius if modes[index] == Brush.Mode.CARVE else radius - density
 		if no_op_distance <= 0.0 or _axis_proves_noop(delta, no_op_distance):
 			axis_dominance_skips += 1
 			continue
 		exact_distance_evaluations += 1
-		var distance_to_surface := world_position.distance_to(center) - radius
+		var distance_to_surface := sampled_world_position.distance_to(center) - radius
 		if modes[index] == Brush.Mode.CARVE:
 			density = minf(density, distance_to_surface)
 		else:
@@ -90,20 +96,22 @@ static func sample_world_optimized(seed: int, region_key: Vector2i, operation_sn
 	if not world_position.is_finite() or not bool(operation_snapshot.get("valid", true)):
 		return NAN
 	var density: float
+	var sampled_region := region_key
+	var sampled_local := world_position - Spatial.region_origin_world(region_key)
 	if remap_base_field_from_world:
 		var mapped: Dictionary = Spatial.world_to_region_local(world_position)
 		if not bool(mapped.get("valid", false)):
 			return NAN
-		density = Field.sample_density(seed, mapped["region_key"], mapped["local_position"])
-	else:
-		var local_position := world_position - Spatial.region_origin_world(region_key)
-		density = Field.sample_density(seed, region_key, local_position)
+		sampled_region = mapped["region_key"]
+		sampled_local = mapped["local_position"]
+	density = Field.sample_density(seed, sampled_region, sampled_local)
+	var sampled_world_position: Vector3 = Spatial.region_local_to_world(sampled_region, sampled_local)
 	var centers: PackedVector3Array = operation_snapshot["centers"]
 	var radii: PackedFloat64Array = operation_snapshot["radii"]
 	var modes: PackedByteArray = operation_snapshot["modes"]
 	for index in range(centers.size()):
 		var center: Vector3 = centers[index]
-		var delta := world_position - center
+		var delta := sampled_world_position - center
 		var radius := float(radii[index])
 		var cutoff := density + radius if modes[index] == Brush.Mode.CARVE else radius - density
 		if cutoff <= 0.0:
@@ -113,7 +121,7 @@ static func sample_world_optimized(seed: int, region_key: Vector2i, operation_sn
 		if absf(delta.x) > guarded_cutoff or absf(delta.y) > guarded_cutoff \
 			or absf(delta.z) > guarded_cutoff:
 			continue
-		var distance_to_surface := world_position.distance_to(center) - radius
+		var distance_to_surface := sampled_world_position.distance_to(center) - radius
 		if modes[index] == Brush.Mode.CARVE:
 			density = minf(density, distance_to_surface)
 		else:

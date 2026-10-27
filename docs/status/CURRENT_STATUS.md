@@ -1,3 +1,7 @@
+# Current isolated research — P3.1 R6 (2026-10-27)
+
+Issue #145 authorizes separate R6-E exact-density diagnosis and R6-V cave-shape diagnosis only. R6-E is isolated on `bench/p3-1-r6e-causal`, based on R5-E `7646dfdeb2e6cdfe51407f8f25957a61a75abe1b`. Its test-only correction reproduces the 16 prior R5-E density mismatches and makes 796 frozen probes bitwise equal; the R5 regression passed 8,998 assertions and full Godot validation passed 21,464/0. R6-V is separately isolated on `bench/p3-1-r6v-cave`; diagnosis/validation is still in progress. Neither experiment changes production or accepts approximate geometry. No merge or production adoption is authorized; independent review is pending. All five F2-G1 holds remain in force. Details: [R6-E report](../reports/P3-1-R6E/RESULTS.md).
+
 # Current implementation candidate — P3.1 Storage R2 (2026-10-25)
 
 ## 2026-10-26 — P3.1 R4 experimental campaign closeout
