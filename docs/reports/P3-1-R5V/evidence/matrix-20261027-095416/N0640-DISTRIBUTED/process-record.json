@@ -1,0 +1,13 @@
+{
+  "scenario": "P31.R5V.DISTRIBUTED.N0640.v1",
+  "count": 640,
+  "layout": "DISTRIBUTED",
+  "pid": 12916,
+  "started_utc": "2026-10-27T12:54:24.0112183Z",
+  "ended_utc": "2026-10-27T12:54:28.0536774Z",
+  "duration_seconds": 4.042,
+  "exit": 0,
+  "profile": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\godot-r5v-20261027-095416-N0640-DISTRIBUTED",
+  "stdout": "docs\\reports\\P3-1-R5V\\evidence\\matrix-20261027-095416\\N0640-DISTRIBUTED\\stdout.log",
+  "stderr": "docs\\reports\\P3-1-R5V\\evidence\\matrix-20261027-095416\\N0640-DISTRIBUTED\\stderr.log"
+}

@@ -1,0 +1,3 @@
+# P3.1 R5-V Checkpoint — 2026-10-27
+
+The R5-V selective-refinement prototype and frozen scenarios ran on the isolated research branch based on R4 final `051249642611a7fa9cd2006be450bad0e184e4ee`. Seven edited scenarios, a zero-edit tunnel control, and a concentrated 256-command retest completed; the prototype reported 22,409 assertions and zero test failures. `scripts/validate.ps1` also completed with exit 0. Results remain approximate: several normal-angle samples exceed the preregistered discussion envelope, and the cave opening expands to 4.875 units against a 1.75-unit canonical control. No geometry budget has owner approval. Preserve the prototype as research only; do not integrate it into production.

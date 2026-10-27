@@ -1,0 +1,27 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+SCRIPT ERROR: Parse Error: Cannot infer the type of "point" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/r5_adaptive_voxel_snapshot.gd:63)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "center" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/r5_adaptive_voxel_snapshot.gd:181)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r5v_adaptive_tests.gd:0)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r5v_adaptive_tests.gd" with error "Compilation failed".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
+SCRIPT ERROR: Invalid call. Nonexistent function 'new' in base 'GDScript'.
+   at: _build_adaptive (res://tests/prototypes/p3_1_r5v_adaptive_tests.gd:107)
+   GDScript backtrace (most recent call first):
+       [0] _build_adaptive (res://tests/prototypes/p3_1_r5v_adaptive_tests.gd:107)
+       [1] _run (res://tests/prototypes/p3_1_r5v_adaptive_tests.gd:46)
+SCRIPT ERROR: Invalid call. Nonexistent function 'new' in base 'GDScript'.
+   at: _build_adaptive (res://tests/prototypes/p3_1_r5v_adaptive_tests.gd:107)
+   GDScript backtrace (most recent call first):
+       [0] _build_adaptive (res://tests/prototypes/p3_1_r5v_adaptive_tests.gd:107)
+       [1] _run (res://tests/prototypes/p3_1_r5v_adaptive_tests.gd:47)
+ERROR: R5V_FAIL adaptive_materialization
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5v_adaptive_tests.gd:261)
+       [1] _run (res://tests/prototypes/p3_1_r5v_adaptive_tests.gd:48)
+P31_R5V_JSON {"assertions":259,"duration_usec":13342,"failures":["adaptive_materialization"]}
+P31_R5V_TESTS_FAIL assertions=259 failures=1
