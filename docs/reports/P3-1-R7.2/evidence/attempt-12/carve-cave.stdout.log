@@ -1,0 +1,3 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+R72_RESULT {"assertions":7,"failures":["cave_wall_carve_selected_A_repair_satisfies_all_local_invariants","cave_wall_carve_local_A_patch_replaces_only_selected_cells","patch:selected_local_strategy_invalid"],"note":"stopped during fail-closed preflight","scenario_count":0,"status":"FAIL","suite":"P3_1_R7_2_SCENARIO_GATE"}

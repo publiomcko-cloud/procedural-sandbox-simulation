@@ -1,0 +1,10 @@
+SCRIPT ERROR: Trying to assign an array of type "Array" to a variable of type "Array[Vector3]".
+   at: run_strategy (res://tests/prototypes/p3_1_r7_2_local_retriangulation.gd:50)
+   GDScript backtrace (most recent call first):
+       [0] run_strategy (res://tests/prototypes/p3_1_r7_2_local_retriangulation.gd:50)
+       [1] _run (res://tests/prototypes/p3_1_r7_2_topology_diagnostic.gd:43)
+SCRIPT ERROR: Invalid access to property or key 'strategy' on a base object of type 'Dictionary'.
+   at: _summaries (res://tests/prototypes/p3_1_r7_2_topology_diagnostic.gd:121)
+   GDScript backtrace (most recent call first):
+       [0] _summaries (res://tests/prototypes/p3_1_r7_2_topology_diagnostic.gd:121)
+       [1] _run (res://tests/prototypes/p3_1_r7_2_topology_diagnostic.gd:51)

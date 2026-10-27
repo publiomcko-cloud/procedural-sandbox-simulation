@@ -1,0 +1,6 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+SANDBOX_BOOTSTRAP_READY
+BOOTSTRAP_CAMERA_DIAGNOSTIC: position=(0.0, 4.0, 9.0) forward=(0.0, -0.406737, -0.913545) viewport=(1152.0, 648.0) projected_origin=(576.0, 323.7236)
+BOOTSTRAP_MESH_DIAGNOSTIC: visible=true mesh=():<BoxMesh#-9223372009877010986> bounds=[P: (-0.5, -0.5, -0.5), S: (1.0, 1.0, 1.0)] position=(0.0, 0.0, 0.0) material=<Object#null>
+BOOTSTRAP_STRUCTURE_PASS: assertions=18 failures=0; rendered pixels are not assessed

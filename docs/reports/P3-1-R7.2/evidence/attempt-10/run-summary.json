@@ -1,0 +1,11 @@
+{
+  "command": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe --headless --path ./game --script res://tests/prototypes/p3_1_r7_2_zero_edit_gate.gd",
+  "start_utc": "2026-10-27T17:58:29.0842332Z",
+  "duration_ms": 8179.7698,
+  "exit_code": 0,
+  "status": "PASS",
+  "assertions": 20,
+  "failures": [],
+  "stdout": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-10\\zero-edit-gate.stdout.log",
+  "stderr": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-10\\zero-edit-gate.stderr.log"
+}
