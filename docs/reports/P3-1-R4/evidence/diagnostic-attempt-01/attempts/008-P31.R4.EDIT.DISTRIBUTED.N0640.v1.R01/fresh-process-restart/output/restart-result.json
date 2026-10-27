@@ -1,0 +1,14 @@
+{
+	"command_sha256": "e9c48f89ccfd5d3bb9320b0ffb2617dceed9d17779ec56e7ac21da1870f29a46",
+	"expected_voxel_snapshots": 4,
+	"failures": [],
+	"fresh_process_restart": true,
+	"loaded_voxel_snapshots": 4,
+	"maximum_node_error_vs_rebuilt_canonical_chunk_projection": 0.000000237141652092987,
+	"operation_count": 640,
+	"result_sha256": "d9cce53cd6f15abde1b822f1e72d1f63fafeb589a9a7a88b821e68b57e19006e",
+	"run_id": "P31.R4.EDIT.DISTRIBUTED.N0640.v1.R01",
+	"scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0640.v1",
+	"source_sha": "8b76e778b0f282a37aa11a229b795c423f581467",
+	"status": "PASS"
+}

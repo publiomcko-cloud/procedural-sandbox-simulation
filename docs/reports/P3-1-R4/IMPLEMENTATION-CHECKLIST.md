@@ -1,0 +1,21 @@
+# P3.1 R4 implementation checklist
+
+Scope: isolated experiment for Issue #140; production baseline `92b442d7f5b605c7bc9c48fac2aceea9d71813aa`. The global schema-v2 ledger remains the only authority. This checklist tracks the current implementation/campaign status; historical attempt records are retained separately.
+
+| Work package | Status | Evidence / remaining gate |
+|---|---|---|
+| Provenance and frozen inputs | Complete | Branch `bench/p3-1-r4-subledger-snapshots`; 90-row, 18-scenario manifest and sidecar; R3B/R3C fixtures pinned by file and source-inventory digests. |
+| A — ordered chunk subledger | Implemented; focused tests pass | `r4_chunk_subledger.gd`; global sequence retained, exact projection from production snapshot, append rejects changed prefixes and requires rebuild, hashed disposable envelope and corruption validation. Final campaign must establish performance/restart outcomes. |
+| B — incremental float32 voxel materialization | Implemented; focused tests pass | `r4_voxel_snapshot.gd`; float32 samples and ordered full-grid min/max deltas; bounded dimensions/storage, revision provenance, interpolation explicitly approximate. Surface/error/cave/seam metrics are experimental only; no owner geometry tolerance exists. |
+| C — combined subledger, voxel, derived mesh cache | Implemented; focused tests pass | Combined benchmark path uses A projection as B input, post-checkpoint deltas, exact dependency-keyed derived mesh cache, bounded storage and canonical rebuild on invalid entries. `as_snapshot()` now returns detached packed-array copies so incremental append cannot mutate the earlier C-arm base snapshot; the regression recreates this aliasing failure and verifies the tail is applied once. |
+| Entity snapshot sharing model | Implemented; focused tests pass | Immutable content-addressed terrain snapshot is shared by resident logical entity views; entity mutable state/revisions remain separate. Sequential model only; not thread-safe or production entity storage. |
+| Frozen campaign and stop-loss | Complete | 90 unique rows, 18 scenarios × 5 process repeats, cold process/profile/storage roots; 600-second row timeout and scenario stop after timeout/functional failure. First failed attempt is not part of final measurements. |
+| Failure/root-cause corrections | Implemented; focused checks pass | R3B fixed-radius inputs remain 580 mm; R3C inputs use exact pinned varying radii within canonical bounds. Failure output carries operation count; runner validates identity for both PASS and FAIL, only requiring PASS-only geometric metrics for PASS rows, and classifies substantive failures without global-stop mislabeling. |
+| Focused R4 tests and parser/import | Complete | Godot 4.7.2 import exit 0; R4 architecture suite 199 assertions, zero failures after the snapshot-alias regression; PowerShell 5.1 parser pass; `git diff --check` pass. |
+| Full canonical validation | Pending | Run `scripts/validate.ps1` with pinned Godot 4.7.2 and isolated user profile after stabilization. |
+| Final 90-row campaign | Pending | Run once at frozen final source SHA; retain all rows, timeouts and functional failures. Produce per-process and per-scenario JSON/CSV and hash inventory. |
+| Recommendation and draft PR | Pending | Report exactness limits, architecture results, final validation and independent review boundary. Keep PR draft/unmerged and all F2-G1 holds. |
+
+## Preserved diagnostic attempt
+
+The first campaign attempt at source `8b76e778b0f282a37aa11a229b795c423f581467` is retained at `C:\Users\PUBLI\AppData\Local\Temp\p31-r4-campaign-312def8287844d5c90e563bca4fd4e9f`. It stopped after row 11: six PASS rows, four concentrated R3B functional failures caused by `as_snapshot()` exposing packed-array aliases that the subsequent append mutated; C then replayed its final operation twice, and one R3C input rejection caused by incorrectly requiring every frozen radius to be 580 mm. The old runner also treated that valid functional-failure record as invalid evidence because it required PASS-only diagnostics. The final campaign must use corrected source, fresh evidence paths, and the unchanged frozen input manifest/gates. This diagnostic attempt is not final performance evidence.

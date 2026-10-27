@@ -1,0 +1,19 @@
+{
+  "source_head": "8b76e778b0f282a37aa11a229b795c423f581467",
+  "manifest_sha256": "c6fd895685304795101968ed1104385d31c3f4b1cf303fb26582b16a22666c31",
+  "run_count": 90,
+  "status_counts": {
+    "INVALID_EVIDENCE": 1,
+    "FUNCTIONAL_FAIL": 4,
+    "PASS": 6,
+    "NOT_RUN_GLOBAL_STOP": 79
+  },
+  "completed_process_metrics": 90,
+  "summarized_scenario_arm_groups": 90,
+  "completed_utc": "2026-10-26T22:41:33.0723857Z",
+  "campaign_jsonl_sha256": "540755fb05f37049041e966424f89f128bb1160d61c484afbc15b371c36d8f5c",
+  "campaign_csv_sha256": "f7de9cdab5eeed649fdffd403d23fb271cbe47164e0d6d2b2deb6c8eeb391ddd",
+  "metrics_csv_sha256": "26494683577637427adb7ea91ef0cf23cab3dd9d1edbffefb0e95af2fac4ea69",
+  "scenario_summary_sha256": "223fadfffa40ac1f44ded2fc7ed38ae70d7a6fc8ad4c91d9136c6828474cd027",
+  "artifact_index_sha256": "484eb91e5f17fe0e2230a96007ebc1df48d1db2f690583042495ee0c70ba2b60"
+}

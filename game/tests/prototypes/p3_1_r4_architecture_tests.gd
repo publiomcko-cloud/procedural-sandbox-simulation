@@ -145,6 +145,10 @@ func _run() -> void:
 	_check(parity_after == 64, "projection_post_append_exact")
 	var sequence_replay := _verify_incremental_sequence_replay()
 	_check(bool(sequence_replay.get("valid", false)), "multi_revision_snapshot_and_subledger_replay")
+	var c_tail_capture := _verify_combined_tail_snapshot_capture()
+	if not bool(c_tail_capture.get("valid", false)):
+		print("P31_R4_C_TAIL_DIAGNOSTIC ", JSON.stringify(c_tail_capture))
+	_check(bool(c_tail_capture.get("valid", false)), "combined_c_tail_uses_pre_append_snapshot_once")
 
 	# Snapshot materialization is intentionally approximate: float32 storage and
 	# trilinear sampling are measured against the canonical continuous oracle.
@@ -430,6 +434,43 @@ func _verify_incremental_sequence_replay() -> Dictionary:
 		"projection_rebuild_fallbacks": projection_fallbacks,
 		"B_max_node_error": max_b_error, "C_max_node_error": max_c_error,
 		"final_revision": int(ledger.revision), "signed_region": [region.x, region.y]}
+
+
+func _verify_combined_tail_snapshot_capture() -> Dictionary:
+	var region := Vector2i(-1, -1)
+	var chunk := Vector2i(3, 3)
+	var ledger: RefCounted = Brush.new(131102026, 1)
+	var center := Spatial.region_origin_world(region) + Vector3(15.78, 2.3, 11.74)
+	if not ledger.add_sphere(Brush.Mode.CARVE, center, 0.58):
+		return {"valid": false, "reason": "tail_ledger_append_failed"}
+	var tail_operation: Dictionary = ledger.get_last_operation_snapshot()
+	var base_ledger: RefCounted = Brush.new(131102026, 1)
+	var base_projection: RefCounted = ChunkProjection.from_ledger(base_ledger, region, chunk)
+	if base_projection == null:
+		return {"valid": false, "reason": "base_projection_build_failed"}
+	var pre_append_snapshot: Dictionary = base_projection.as_snapshot()
+	var complete_projection: Dictionary = ledger.get_meshing_snapshot_for_chunk(region, chunk)
+	if not base_projection.append_snapshot(complete_projection):
+		return {"valid": false, "reason": "projection_append_failed"}
+	if int(pre_append_snapshot.revision) != 0 or not pre_append_snapshot.centers.is_empty() \
+		or int(base_projection.revision) != 1 or base_projection.centers.size() != 1:
+		return {"valid": false, "reason": "captured_projection_not_pre_append_state",
+			"captured_revision": int(pre_append_snapshot.revision), "captured_count": pre_append_snapshot.centers.size(),
+			"projection_revision": int(base_projection.revision), "projection_count": base_projection.centers.size(),
+			"sequence": int(tail_operation.sequence), "ledger_revision": int(ledger.revision)}
+	var c_incremental: RefCounted = Voxel.new()
+	if not c_incremental.materialize(131102026, region, chunk, pre_append_snapshot, 0.5) \
+		or not c_incremental.apply_operation(tail_operation):
+		return {"valid": false, "reason": "combined_tail_delta_failed"}
+	var c_rebuilt: RefCounted = Voxel.new()
+	if not c_rebuilt.materialize(131102026, region, chunk, complete_projection, 0.5):
+		return {"valid": false, "reason": "combined_complete_materialization_failed"}
+	if int(c_incremental.revision) != int(ledger.revision) \
+		or c_incremental.densities != c_rebuilt.densities:
+		return {"valid": false, "reason": "combined_tail_not_exactly_once"}
+	return {"valid": true, "base_revision": int(pre_append_snapshot.revision),
+		"published_projection_revision": int(base_projection.revision), "final_revision": int(ledger.revision),
+		"voxel_count": c_incremental.densities.size()}
 
 
 func _voxel_max_node_error(voxel: RefCounted, full_snapshot: Dictionary, region: Vector2i) -> float:

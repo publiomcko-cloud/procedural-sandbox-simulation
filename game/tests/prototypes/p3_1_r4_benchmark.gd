@@ -81,7 +81,10 @@ func _run() -> void:
 			_failures.append("frozen_sequence_revision_invalid_%d" % index)
 			break
 		var center_mm: Array = command.get("center_mm", [])
-		if center_mm.size() != 3 or int(command.get("radius_mm", -1)) != 580:
+		var radius_mm := int(command.get("radius_mm", -1))
+		var radius := float(radius_mm) / 1000.0
+		if center_mm.size() != 3 or radius < Brush.MIN_RADIUS or radius > Brush.MAX_RADIUS \
+			or (not nonperiodic and radius_mm != 580):
 			_failures.append("frozen_command_geometry_invalid_%d" % index)
 			break
 		var mode := Brush.Mode.CARVE if String(command.get("mode", "")) == "CARVE" else Brush.Mode.FILL
@@ -89,10 +92,10 @@ func _run() -> void:
 			_failures.append("frozen_mode_order_invalid_%d" % index)
 			break
 		var center := Vector3(float(center_mm[0]), float(center_mm[1]), float(center_mm[2])) / 1000.0
-		if index < count - 1 and not base_ledger.add_sphere(mode, center, 0.58):
+		if index < count - 1 and not base_ledger.add_sphere(mode, center, radius):
 			_failures.append("base_ledger_reject_%d" % index)
 			break
-		if not ledger.add_sphere(mode, center, 0.58):
+		if not ledger.add_sphere(mode, center, radius):
 			_failures.append("canonical_ledger_reject_%d" % index)
 			break
 	if not _failures.is_empty():
@@ -125,6 +128,7 @@ func _run() -> void:
 		_write_failure(output_root, scenario, repeat, command_sha, started)
 		quit(1)
 		return
+	var pre_append_projection_snapshot: Dictionary = base_projection.as_snapshot()
 	var incremental_projection_started := Time.get_ticks_usec()
 	var projection_append_ok: bool = true
 	if count > 0:
@@ -212,7 +216,7 @@ func _run() -> void:
 			b_delta_usec = Time.get_ticks_usec() - b_delta_started
 		var base_c := Voxel.new()
 		var c_started := Time.get_ticks_usec()
-		var c_materialized := base_c.materialize(SEED, region, chunk, base_projection.as_snapshot(), step)
+		var c_materialized := base_c.materialize(SEED, region, chunk, pre_append_projection_snapshot, step)
 		var c_materialize_usec := Time.get_ticks_usec() - c_started
 		var c_delta_usec := 0
 		var tail_projection_contains_operation: bool = count > 0 and projection_snapshot.sequences.has(int(last_operation.sequence))
@@ -732,7 +736,8 @@ func _directory_bytes(path: String) -> int:
 
 func _write_failure(root: String, scenario: String, repeat: int, command_sha: String, started: int) -> void:
 	var report := {"scenario_id": scenario, "repeat": repeat, "run_id": OS.get_environment("P31_R4_RUN_ID"), "source_sha": _source_sha,
-		"command_sha256": command_sha, "status": "FAIL", "failures": _failures,
+		"command_sha256": command_sha, "operation_count": _scenario_count(scenario),
+		"status": "FAIL", "failures": _failures,
 		"duration_usec": Time.get_ticks_usec() - started}
 	var file := FileAccess.open(root.path_join("result.json"), FileAccess.WRITE)
 	if file != null:

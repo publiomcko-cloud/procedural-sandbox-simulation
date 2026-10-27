@@ -1,0 +1,1014 @@
+{
+	"A_base_projection_build_usec": 19463,
+	"A_full_query_usec": {
+		"count": 64,
+		"max_usec": 288,
+		"p50_usec": 229,
+		"p95_usec": 258,
+		"p99_usec": 288
+	},
+	"A_incremental_append_usec": 431,
+	"A_lod0_exact": true,
+	"A_lod0_usec": 513939,
+	"A_lod1_exact": true,
+	"A_lod1_usec": 1801519,
+	"A_persist_bytes": 52004,
+	"A_persist_usec": 32737,
+	"A_projected_query_usec": {
+		"count": 64,
+		"max_usec": 249,
+		"p50_usec": 229,
+		"p95_usec": 233,
+		"p99_usec": 249
+	},
+	"A_projection_build_usec": 19141,
+	"A_projection_digest": "15b7cc059ab451618059353a1d8f06ceefde0aaf7ee3db3928c39d9f04df8749",
+	"A_projection_exact_probes": 64,
+	"A_query_pair_wall_usec": 29977,
+	"A_reload_usec": 2120,
+	"B_base_chunk_snapshot_usec": 21566,
+	"baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"candidate_operation_count": 2048,
+	"canonical_chunk_snapshot_usec": 18453,
+	"canonical_lod0_usec": 482884,
+	"canonical_lod1_usec": 1758692,
+	"cave_oracle": {
+		"centerline_samples": 9,
+		"chunks": [
+			[
+				0,
+				1
+			],
+			[
+				0,
+				2
+			]
+		],
+		"full_open_count": 9,
+		"projection_mismatches": 0,
+		"projection_open_count": 9,
+		"region": [
+			0,
+			0
+		],
+		"samples": [
+			{
+				"full": -0.919999802831113,
+				"projection": -0.919999802831113,
+				"voxel": -0.673308985974525,
+				"voxel_in_bounds": true,
+				"x": 0.0
+			},
+			{
+				"full": -0.91999992366687,
+				"projection": -0.91999992366687,
+				"voxel": -0.67457846434779,
+				"voxel_in_bounds": true,
+				"x": 0.5
+			},
+			{
+				"full": -0.919999947965758,
+				"projection": -0.919999947965758,
+				"voxel": -0.639351530802866,
+				"voxel_in_bounds": true,
+				"x": 1.0
+			},
+			{
+				"full": -0.919999896012007,
+				"projection": -0.919999896012007,
+				"voxel": -0.610781302195052,
+				"voxel_in_bounds": true,
+				"x": 1.5
+			},
+			{
+				"full": -0.919999932402524,
+				"projection": -0.919999932402524,
+				"voxel": -0.591599564898011,
+				"voxel_in_bounds": true,
+				"x": 2.0
+			},
+			{
+				"full": -0.919999836813316,
+				"projection": -0.919999836813316,
+				"voxel": -0.580774859758977,
+				"voxel_in_bounds": true,
+				"x": 2.5
+			},
+			{
+				"full": -0.919999880026849,
+				"projection": -0.919999880026849,
+				"voxel": -0.575620159602752,
+				"voxel_in_bounds": true,
+				"x": 3.0
+			},
+			{
+				"full": -0.919999773746836,
+				"projection": -0.919999773746836,
+				"voxel": -0.573447385610502,
+				"voxel_in_bounds": true,
+				"x": 3.5
+			},
+			{
+				"full": -0.919999808376046,
+				"projection": -0.919999808376046,
+				"voxel": -0.572413686407375,
+				"voxel_in_bounds": true,
+				"x": 4.0
+			}
+		],
+		"voxel_materialize_usec": 684681,
+		"voxel_open_count": 9,
+		"voxel_valid": true
+	},
+	"collision_queries": {
+		"reason": "baseline has no terrain collision provider",
+		"status": "NOT_MEASURED"
+	},
+	"command_sha256": "ce3ac18c1b68e721b638993261e568a9758898d43cec3fd075881ac288b95cf5",
+	"duration_usec": 21851443,
+	"failures": [
+		"C_snapshot_delta_failed_0.5",
+		"C_snapshot_delta_failed_0.25"
+	],
+	"layout": "concentrated",
+	"ledger_revision": 2048,
+	"mesh_cache_stats": {
+		"cold_builder_calls": 1,
+		"cold_lookup_usec": 6905,
+		"cold_result_exact": true,
+		"disk_builder_calls": 0,
+		"disk_hit": true,
+		"disk_layer": "disk",
+		"fresh_instance_disk_usec": 1050,
+		"input_content_sha256": "a596271a2cccd548efbbb674ce4750286ad8e97139b214a95480c2451e424ee6",
+		"stats": {
+			"adaptive_bypass_count": 0,
+			"corrupt_entries": 0,
+			"disk_bytes": 23788,
+			"disk_entries": 1,
+			"hits": 1,
+			"last_builder_usec": 0,
+			"memory_bytes": 22972,
+			"memory_entries": 1,
+			"misses": 1,
+			"peak_memory_bytes": 22972
+		},
+		"warm_builder_calls": 0,
+		"warm_hit": true,
+		"warm_memory_usec": 45
+	},
+	"operation_count": 2048,
+	"picker_resolutions": [
+		{
+			"metrics": {
+				"all_projection_hits_match": true,
+				"arms": {
+					"B": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"C": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"canonical": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"projection": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					}
+				},
+				"note": "headless SDF ray-picker timings; not input-to-presented-frame latency",
+				"rays": [
+					{
+						"B": {
+							"elapsed_usec": 100,
+							"hit": true,
+							"position": [
+								0.800000011920929,
+								2.76035213470459,
+								0.660000026226044
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.0000486373901367188,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 94,
+							"hit": true,
+							"position": [
+								0.800000011920929,
+								2.76035213470459,
+								0.660000026226044
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.0000486373901367188,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 4188,
+							"hit": true,
+							"position": [
+								0.800000011920929,
+								2.76040077209473,
+								0.660000026226044
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 4186,
+							"hit": true,
+							"position": [
+								0.800000011920929,
+								2.76040077209473,
+								0.660000026226044
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 0
+					},
+					{
+						"B": {
+							"elapsed_usec": 108,
+							"hit": true,
+							"position": [
+								2.0,
+								2.64978075027466,
+								1.47000002861023
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.00117206573486328,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 96,
+							"hit": true,
+							"position": [
+								2.0,
+								2.64978075027466,
+								1.47000002861023
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.00117206573486328,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 4289,
+							"hit": true,
+							"position": [
+								2.0,
+								2.64860868453979,
+								1.47000002861023
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 4179,
+							"hit": true,
+							"position": [
+								2.0,
+								2.64860868453979,
+								1.47000002861023
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 1
+					},
+					{
+						"B": {
+							"elapsed_usec": 102,
+							"hit": true,
+							"position": [
+								3.20000004768372,
+								2.61494159698486,
+								2.27999997138977
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.000585556030273438,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 94,
+							"hit": true,
+							"position": [
+								3.20000004768372,
+								2.61494159698486,
+								2.27999997138977
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.000585556030273438,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 4177,
+							"hit": true,
+							"position": [
+								3.20000004768372,
+								2.61435604095459,
+								2.27999997138977
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 4180,
+							"hit": true,
+							"position": [
+								3.20000004768372,
+								2.61435604095459,
+								2.27999997138977
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 2
+					}
+				]
+			},
+			"spacing": 0.5
+		},
+		{
+			"metrics": {
+				"all_projection_hits_match": true,
+				"arms": {
+					"B": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"C": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"canonical": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"projection": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					}
+				},
+				"note": "headless SDF ray-picker timings; not input-to-presented-frame latency",
+				"rays": [
+					{
+						"B": {
+							"elapsed_usec": 167,
+							"hit": true,
+							"position": [
+								0.800000011920929,
+								2.76042509078979,
+								0.660000026226044
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.0000243186950683594,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 155,
+							"hit": true,
+							"position": [
+								0.800000011920929,
+								2.76042509078979,
+								0.660000026226044
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.0000243186950683594,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 4381,
+							"hit": true,
+							"position": [
+								0.800000011920929,
+								2.76040077209473,
+								0.660000026226044
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 8913,
+							"hit": true,
+							"position": [
+								0.800000011920929,
+								2.76040077209473,
+								0.660000026226044
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 0
+					},
+					{
+						"B": {
+							"elapsed_usec": 99,
+							"hit": true,
+							"position": [
+								2.0,
+								2.64851093292236,
+								1.47000002861023
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.0000977516174316406,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 93,
+							"hit": true,
+							"position": [
+								2.0,
+								2.64851093292236,
+								1.47000002861023
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.0000977516174316406,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 4681,
+							"hit": true,
+							"position": [
+								2.0,
+								2.64860868453979,
+								1.47000002861023
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 4170,
+							"hit": true,
+							"position": [
+								2.0,
+								2.64860868453979,
+								1.47000002861023
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 1
+					},
+					{
+						"B": {
+							"elapsed_usec": 102,
+							"hit": true,
+							"position": [
+								3.20000004768372,
+								2.61460018157959,
+								2.27999997138977
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.000244140625,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 94,
+							"hit": true,
+							"position": [
+								3.20000004768372,
+								2.61460018157959,
+								2.27999997138977
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.000244140625,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 4212,
+							"hit": true,
+							"position": [
+								3.20000004768372,
+								2.61435604095459,
+								2.27999997138977
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 4187,
+							"hit": true,
+							"position": [
+								3.20000004768372,
+								2.61435604095459,
+								2.27999997138977
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 2
+					}
+				]
+			},
+			"spacing": 0.25
+		}
+	],
+	"repeat": 1,
+	"run_id": "P31.R4.EDIT.CONCENTRATED.N2048.v1.R01",
+	"scenario_id": "P31.R4.EDIT.CONCENTRATED.N2048.v1",
+	"selected_chunk": [
+		0,
+		0
+	],
+	"selected_region": [
+		0,
+		0
+	],
+	"sequence_end": 2047,
+	"sequence_start": 0,
+	"source_sha": "8b76e778b0f282a37aa11a229b795c423f581467",
+	"static_memory_delta_bytes": 12335399,
+	"status": "FAIL",
+	"storage_bytes": 0,
+	"subledger_artifact": {
+		"path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-campaign-312def8287844d5c90e563bca4fd4e9f\\attempts\\004-P31.R4.EDIT.CONCENTRATED.N2048.v1.R01\\storage/subledger/356760f45115ca282b97709e435c66e7df171689279d3135fbaa28b1ee33802f-r2048-d64907c381b64e7f93ed506c6f0a986020e75751ec78bb9adda1b8564b847081.subledger",
+		"sha256": "c0858e62971be95e60abcec2dbfd9ab9e6b4c75c847f09c086de890ab51c8745"
+	},
+	"voxel_artifacts": [
+		{
+			"B_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-campaign-312def8287844d5c90e563bca4fd4e9f\\attempts\\004-P31.R4.EDIT.CONCENTRATED.N2048.v1.R01\\storage/B-0.5/762c612284c6c6488ad0172503433f482f78d720eb54f989b2b0e899a3889dca-r2048-73e9a693d23b61f13bad1bf65d79ba4eb4d4660424f1bf52f6e67a630f0da9b9.vox",
+			"B_sha256": "b1277b65f687d813a53a660ae5a29352a52648e7d432f5208547f494456fc414",
+			"C_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-campaign-312def8287844d5c90e563bca4fd4e9f\\attempts\\004-P31.R4.EDIT.CONCENTRATED.N2048.v1.R01\\storage/C-0.5/762c612284c6c6488ad0172503433f482f78d720eb54f989b2b0e899a3889dca-r2048-73e9a693d23b61f13bad1bf65d79ba4eb4d4660424f1bf52f6e67a630f0da9b9.vox",
+			"C_sha256": "b1277b65f687d813a53a660ae5a29352a52648e7d432f5208547f494456fc414",
+			"spacing": 0.5
+		},
+		{
+			"B_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-campaign-312def8287844d5c90e563bca4fd4e9f\\attempts\\004-P31.R4.EDIT.CONCENTRATED.N2048.v1.R01\\storage/B-0.25/e8fec581731cbf56a7e4fa84a5be1df11acf557a2ec99117e15720e0cf4633ca-r2048-5efb7b23f528141dbfb48a48d6110012fab4a27e8dbde835f3923ae90364a021.vox",
+			"B_sha256": "72a3c239f802513aaaf1aae0340e50560d453a61d7c07119480efea4faf0d896",
+			"C_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-campaign-312def8287844d5c90e563bca4fd4e9f\\attempts\\004-P31.R4.EDIT.CONCENTRATED.N2048.v1.R01\\storage/C-0.25/e8fec581731cbf56a7e4fa84a5be1df11acf557a2ec99117e15720e0cf4633ca-r2048-5efb7b23f528141dbfb48a48d6110012fab4a27e8dbde835f3923ae90364a021.vox",
+			"C_sha256": "72a3c239f802513aaaf1aae0340e50560d453a61d7c07119480efea4faf0d896",
+			"spacing": 0.25
+		}
+	],
+	"voxel_resolutions": [
+		{
+			"B": {
+				"incremental_update_usec": 1014,
+				"load_usec": 988,
+				"lod0_build_usec": 21911,
+				"lod0_surface": {
+					"candidate_sample_step": 13,
+					"candidate_vertices": 1596,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 13,
+					"reference_vertices": 1602,
+					"sampled_normal_angle_deg": {
+						"count": 247,
+						"max": 72.8705437642465,
+						"p50": 0.116891363867709,
+						"p95": 15.8760319426224,
+						"p99": 61.0253496678544
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 247,
+						"max": 0.153420021048258,
+						"p50": 0.00121703135837877,
+						"p95": 0.0521579850668492,
+						"p99": 0.141379445259488
+					},
+					"valid": true
+				},
+				"lod1_build_usec": 89419,
+				"lod1_surface": {
+					"candidate_sample_step": 8,
+					"candidate_vertices": 951,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 8,
+					"reference_vertices": 963,
+					"sampled_normal_angle_deg": {
+						"count": 240,
+						"max": 107.170517511811,
+						"p50": 0.402816862964702,
+						"p95": 55.7819602911028,
+						"p99": 78.6079641387598
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 240,
+						"max": 0.16389524926579,
+						"p50": 0.00117880067244484,
+						"p95": 0.0608270262722593,
+						"p99": 0.161039620239864
+					},
+					"valid": true
+				},
+				"materialize_usec": 430099,
+				"node_error": {
+					"abs_error_quantiles": {
+						"count": 1760,
+						"max": 0.000000231736658307113,
+						"p50": 0.0000000166893004971413,
+						"p95": 0.000000153902036004183,
+						"p99": 0.000000214697118749996
+					},
+					"compared_nodes": 1760,
+					"exact_node_count": 504,
+					"max_abs_error": 0.000000231736658307113,
+					"mean_abs_error": 0.000000037784048717003,
+					"reference": "canonical_chunk_projection_with_separate_full-ledger probe and mesh parity",
+					"valid": true
+				},
+				"query_abs_error": {
+					"count": 64,
+					"max": 0.130240276862223,
+					"p50": 0.000681631557873319,
+					"p95": 0.0634149390482618,
+					"p99": 0.130240276862223
+				},
+				"query_usec": {
+					"count": 64,
+					"max_usec": 15,
+					"p50_usec": 5,
+					"p95_usec": 7,
+					"p99_usec": 15
+				},
+				"save_bytes": 7624,
+				"save_usec": 15812,
+				"snapshot": {
+					"dimensions": [
+						10,
+						22,
+						8
+					],
+					"payload_bytes": 7040,
+					"revision": 2048,
+					"spacing": 0.5,
+					"update_node_visits": 1760,
+					"voxel_count": 1760
+				}
+			},
+			"C": {
+				"incremental_update_usec": 20,
+				"load_usec": 886,
+				"lod0_build_usec": 21758,
+				"lod0_surface": {
+					"candidate_sample_step": 13,
+					"candidate_vertices": 1596,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 13,
+					"reference_vertices": 1602,
+					"sampled_normal_angle_deg": {
+						"count": 247,
+						"max": 72.8705437642465,
+						"p50": 0.116891363867709,
+						"p95": 15.8760319426224,
+						"p99": 61.0253496678544
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 247,
+						"max": 0.153420021048258,
+						"p50": 0.00121703135837877,
+						"p95": 0.0521579850668492,
+						"p99": 0.141379445259488
+					},
+					"valid": true
+				},
+				"lod1_build_usec": 90221,
+				"lod1_surface": {
+					"candidate_sample_step": 8,
+					"candidate_vertices": 951,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 8,
+					"reference_vertices": 963,
+					"sampled_normal_angle_deg": {
+						"count": 240,
+						"max": 107.170517511811,
+						"p50": 0.402816862964702,
+						"p95": 55.7819602911028,
+						"p99": 78.6079641387598
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 240,
+						"max": 0.16389524926579,
+						"p50": 0.00117880067244484,
+						"p95": 0.0608270262722593,
+						"p99": 0.161039620239864
+					},
+					"valid": true
+				},
+				"materialize_usec": 452547,
+				"node_error": {
+					"abs_error_quantiles": {
+						"count": 1760,
+						"max": 0.000000231736658307113,
+						"p50": 0.0000000166893004971413,
+						"p95": 0.000000153902036004183,
+						"p99": 0.000000214697118749996
+					},
+					"compared_nodes": 1760,
+					"exact_node_count": 504,
+					"max_abs_error": 0.000000231736658307113,
+					"mean_abs_error": 0.000000037784048717003,
+					"reference": "canonical_chunk_projection_with_separate_full-ledger probe and mesh parity",
+					"valid": true
+				},
+				"query_abs_error": {
+					"count": 64,
+					"max": 0.130240276862223,
+					"p50": 0.000681631557873319,
+					"p95": 0.0634149390482618,
+					"p99": 0.130240276862223
+				},
+				"query_usec": {
+					"count": 64,
+					"max_usec": 18,
+					"p50_usec": 4,
+					"p95_usec": 7,
+					"p99_usec": 18
+				},
+				"save_bytes": 7624,
+				"save_usec": 6915,
+				"snapshot": {
+					"dimensions": [
+						10,
+						22,
+						8
+					],
+					"payload_bytes": 7040,
+					"revision": 2048,
+					"spacing": 0.5,
+					"update_node_visits": 0,
+					"voxel_count": 1760
+				},
+				"tail_operation_in_projection": true
+			},
+			"spacing": 0.5
+		},
+		{
+			"B": {
+				"incremental_update_usec": 6930,
+				"load_usec": 1655,
+				"lod0_build_usec": 34997,
+				"lod0_surface": {
+					"candidate_sample_step": 13,
+					"candidate_vertices": 1602,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 13,
+					"reference_vertices": 1602,
+					"sampled_normal_angle_deg": {
+						"count": 248,
+						"max": 163.9362743453,
+						"p50": 0.111292409677084,
+						"p95": 3.05373126069239,
+						"p99": 57.7287725253261
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 248,
+						"max": 0.0,
+						"p50": 0.0,
+						"p95": 0.0,
+						"p99": 0.0
+					},
+					"valid": true
+				},
+				"lod1_build_usec": 96082,
+				"lod1_surface": {
+					"candidate_sample_step": 8,
+					"candidate_vertices": 963,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 8,
+					"reference_vertices": 963,
+					"sampled_normal_angle_deg": {
+						"count": 242,
+						"max": 151.144176973323,
+						"p50": 0.436961058666875,
+						"p95": 29.6885920199977,
+						"p99": 59.7965986361691
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 242,
+						"max": 0.000000238418579101563,
+						"p50": 0.0,
+						"p95": 0.0,
+						"p99": 0.0
+					},
+					"valid": true
+				},
+				"materialize_usec": 3093024,
+				"node_error": {
+					"abs_error_quantiles": {
+						"count": 12255,
+						"max": 0.000000238277864994529,
+						"p50": 0.0000000166893004971413,
+						"p95": 0.000000154154297327125,
+						"p99": 0.000000218461572387696
+					},
+					"compared_nodes": 12255,
+					"exact_node_count": 3434,
+					"max_abs_error": 0.000000238277864994529,
+					"mean_abs_error": 0.0000000375196266937794,
+					"reference": "canonical_chunk_projection_with_separate_full-ledger probe and mesh parity",
+					"valid": true
+				},
+				"query_abs_error": {
+					"count": 64,
+					"max": 0.102298719638702,
+					"p50": 0.000171013416799037,
+					"p95": 0.0104490885151519,
+					"p99": 0.102298719638702
+				},
+				"query_usec": {
+					"count": 64,
+					"max_usec": 16,
+					"p50_usec": 5,
+					"p95_usec": 6,
+					"p99_usec": 16
+				},
+				"save_bytes": 49604,
+				"save_usec": 16040,
+				"snapshot": {
+					"dimensions": [
+						19,
+						43,
+						15
+					],
+					"payload_bytes": 49020,
+					"revision": 2048,
+					"spacing": 0.25,
+					"update_node_visits": 12255,
+					"voxel_count": 12255
+				}
+			},
+			"C": {
+				"incremental_update_usec": 20,
+				"load_usec": 1548,
+				"lod0_build_usec": 21999,
+				"lod0_surface": {
+					"candidate_sample_step": 13,
+					"candidate_vertices": 1602,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 13,
+					"reference_vertices": 1602,
+					"sampled_normal_angle_deg": {
+						"count": 248,
+						"max": 163.9362743453,
+						"p50": 0.111292409677084,
+						"p95": 3.05373126069239,
+						"p99": 57.7287725253261
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 248,
+						"max": 0.0,
+						"p50": 0.0,
+						"p95": 0.0,
+						"p99": 0.0
+					},
+					"valid": true
+				},
+				"lod1_build_usec": 90194,
+				"lod1_surface": {
+					"candidate_sample_step": 8,
+					"candidate_vertices": 963,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 8,
+					"reference_vertices": 963,
+					"sampled_normal_angle_deg": {
+						"count": 242,
+						"max": 151.144176973323,
+						"p50": 0.436961058666875,
+						"p95": 29.6885920199977,
+						"p99": 59.7965986361691
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 242,
+						"max": 0.000000238418579101563,
+						"p50": 0.0,
+						"p95": 0.0,
+						"p99": 0.0
+					},
+					"valid": true
+				},
+				"materialize_usec": 3424523,
+				"node_error": {
+					"abs_error_quantiles": {
+						"count": 12255,
+						"max": 0.000000238277864994529,
+						"p50": 0.0000000166893004971413,
+						"p95": 0.000000154154297327125,
+						"p99": 0.000000218461572387696
+					},
+					"compared_nodes": 12255,
+					"exact_node_count": 3434,
+					"max_abs_error": 0.000000238277864994529,
+					"mean_abs_error": 0.0000000375196266937794,
+					"reference": "canonical_chunk_projection_with_separate_full-ledger probe and mesh parity",
+					"valid": true
+				},
+				"query_abs_error": {
+					"count": 64,
+					"max": 0.102298719638702,
+					"p50": 0.000171013416799037,
+					"p95": 0.0104490885151519,
+					"p99": 0.102298719638702
+				},
+				"query_usec": {
+					"count": 64,
+					"max_usec": 17,
+					"p50_usec": 5,
+					"p95_usec": 6,
+					"p99_usec": 17
+				},
+				"save_bytes": 49604,
+				"save_usec": 15298,
+				"snapshot": {
+					"dimensions": [
+						19,
+						43,
+						15
+					],
+					"payload_bytes": 49020,
+					"revision": 2048,
+					"spacing": 0.25,
+					"update_node_visits": 0,
+					"voxel_count": 12255
+				},
+				"tail_operation_in_projection": true
+			},
+			"spacing": 0.25
+		}
+	]
+}

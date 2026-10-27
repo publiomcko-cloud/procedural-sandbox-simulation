@@ -75,13 +75,16 @@ func _run() -> void:
 			_failures.append("restart_sequence_invalid_%d" % index)
 			break
 		var center_mm: Array = command.get("center_mm", [])
-		if center_mm.size() != 3 or int(command.get("radius_mm", -1)) != 580 \
+		var radius_mm := int(command.get("radius_mm", -1))
+		var radius := float(radius_mm) / 1000.0
+		if center_mm.size() != 3 or radius < Brush.MIN_RADIUS or radius > Brush.MAX_RADIUS \
+			or (not nonperiodic and radius_mm != 580) \
 			or String(command.get("mode", "")) != ("CARVE" if index % 2 == 0 else "FILL"):
 			_failures.append("restart_command_recipe_invalid_%d" % index)
 			break
 		var center := Vector3(float(center_mm[0]), float(center_mm[1]), float(center_mm[2])) / 1000.0
 		var mode := Brush.Mode.CARVE if String(command.mode) == "CARVE" else Brush.Mode.FILL
-		if not ledger.add_sphere(mode, center, 0.58):
+		if not ledger.add_sphere(mode, center, radius):
 			_failures.append("restart_ledger_replay_rejected_%d" % index)
 			break
 	if not _failures.is_empty():

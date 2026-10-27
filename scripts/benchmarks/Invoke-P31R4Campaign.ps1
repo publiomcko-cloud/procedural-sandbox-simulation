@@ -173,28 +173,34 @@ try {
         if (-not $timedOut -and (Test-Path -LiteralPath $resultPath)) {
             try {
                 $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
-                $status = [string]$result.status
-                if ($result.scenario_id -ne $scenario -or [int]$result.repeat -ne [int]$row.repeat -or $result.run_id -ne $runId) { $validationReasons.Add('result_identity_mismatch') }
-                if ([int]$result.operation_count -ne [int]$row.operation_count) { $validationReasons.Add('operation_count_mismatch') }
-                if ($result.source_sha -ne $head) { $validationReasons.Add('source_sha_mismatch') }
-                if (-not [bool]$result.cave_oracle.voxel_valid -or [int]$result.cave_oracle.centerline_samples -ne 9) { $validationReasons.Add('cave_diagnostic_invalid') }
-                if ([int]$result.cave_oracle.projection_mismatches -ne 0) { $validationReasons.Add('cave_projection_mismatch') }
-                foreach ($resolution in $result.picker_resolutions) {
-                    if (-not [bool]$resolution.metrics.all_projection_hits_match) { $validationReasons.Add('picker_projection_mismatch') }
-                }
-                foreach ($resolution in $result.voxel_resolutions) {
-                    if (-not [bool]$resolution.B.node_error.valid -or -not [bool]$resolution.C.node_error.valid) { $validationReasons.Add('voxel_node_oracle_invalid') }
-                }
                 $stdoutText = Get-Content -LiteralPath $stdoutPath -Raw
                 $stderrText = Get-Content -LiteralPath $stderrPath -Raw
                 $marker = "P31_R4_$($result.status) scenario=$scenario repeat=$($row.repeat)"
-                if ($result.status -notin @('PASS', 'FAIL') -or $stdoutText -notmatch [regex]::Escape($marker)) { $validationReasons.Add('terminal_marker_or_status_invalid') }
+                if ($result.status -notin @('PASS', 'FAIL')) { $validationReasons.Add('terminal_status_invalid') }
+                if ($result.scenario_id -ne $scenario -or [int]$result.repeat -ne [int]$row.repeat -or $result.run_id -ne $runId) { $validationReasons.Add('result_identity_mismatch') }
+                if ([int]$result.operation_count -ne [int]$row.operation_count) { $validationReasons.Add('operation_count_mismatch') }
+                if ($result.source_sha -ne $head -or $result.command_sha256 -ne [string]$row.input_sha256) { $validationReasons.Add('source_or_input_identity_mismatch') }
+                if ($stdoutText -notmatch [regex]::Escape($marker)) { $validationReasons.Add('terminal_marker_invalid') }
                 if (($stdoutText + $stderrText) -match 'SCRIPT ERROR:|Parse Error:|Invalid call|WARNING: `NaN`') { $validationReasons.Add('unexpected_engine_diagnostic') }
-                if ($result.status -eq 'PASS' -and $exitCode -ne 0) { $validationReasons.Add('pass_exit_code_nonzero') }
-                if ($result.status -eq 'FAIL' -and $exitCode -eq 0) { $validationReasons.Add('fail_exit_code_zero') }
+                if ($result.status -eq 'PASS') {
+                    if (-not [bool]$result.cave_oracle.voxel_valid -or [int]$result.cave_oracle.centerline_samples -ne 9) { $validationReasons.Add('cave_diagnostic_invalid') }
+                    if ([int]$result.cave_oracle.projection_mismatches -ne 0) { $validationReasons.Add('cave_projection_mismatch') }
+                    foreach ($resolution in $result.picker_resolutions) {
+                        if (-not [bool]$resolution.metrics.all_projection_hits_match) { $validationReasons.Add('picker_projection_mismatch') }
+                    }
+                    foreach ($resolution in $result.voxel_resolutions) {
+                        if (-not [bool]$resolution.B.node_error.valid -or -not [bool]$resolution.C.node_error.valid) { $validationReasons.Add('voxel_node_oracle_invalid') }
+                    }
+                    if ($exitCode -ne 0) { $validationReasons.Add('pass_exit_code_nonzero') }
+                    $status = if ($validationReasons.Count -gt 0) { 'INVALID_EVIDENCE' } else { 'PASS' }
+                } else {
+                    $failureNames = @($result.failures | ForEach-Object { [string]$_ })
+                    if ($exitCode -eq 0) { $validationReasons.Add('fail_exit_code_zero') }
+                    if ($failureNames.Count -eq 0) { $validationReasons.Add('failure_record_missing') }
+                    if ($failureNames -match 'fixture_digest_or_manifest_invalid|canonical_command_hash_mismatch|frozen_input_identity_invalid') { $validationReasons.Add('frozen_input_integrity_failure') }
+                    $status = if ($validationReasons.Count -gt 0) { 'INVALID_EVIDENCE' } else { 'FUNCTIONAL_FAIL' }
+                }
                 if ($validationReasons.Count -gt 0) { $status = 'INVALID_EVIDENCE' }
-                elseif ($result.status -eq 'FAIL') { $status = 'FUNCTIONAL_FAIL' }
-                else { $status = 'PASS' }
             } catch {
                 $status = 'INVALID_RESULT_JSON'
                 $validationReasons.Add($_.Exception.Message)

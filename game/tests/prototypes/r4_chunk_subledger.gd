@@ -108,8 +108,8 @@ func append_snapshot(snapshot: Dictionary) -> bool:
 
 func as_snapshot() -> Dictionary:
 	return {"valid": true, "revision": revision, "world_seed": world_seed,
-		"generator_version": generator_version, "centers": centers, "radii": radii,
-		"modes": modes, "sequences": sequences,
+		"generator_version": generator_version, "centers": centers.duplicate(), "radii": radii.duplicate(),
+		"modes": modes.duplicate(), "sequences": sequences.duplicate(),
 		"region": identity.get("region", Vector2i.ZERO), "chunk": identity.get("chunk", Vector2i.ZERO),
 		"candidate_operation_count": centers.size()}
 

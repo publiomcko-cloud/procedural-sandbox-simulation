@@ -34,7 +34,10 @@ arms and resolution schedule. A manifest row is one benchmark process; its
 resolution list is serialized as an array even when it contains only 0.5.
 Architecture-arm/resolution combinations are metric rows within that process,
 not separate process launches. This clarifies the preregistration's composite
-measurement identity. Each process has isolated profile, output,
+measurement identity. The Issue #131/R3B recipe uses a fixed 580 mm radius;
+the distinct R3C nonperiodic recipes retain their exact pinned per-command
+radii, after validation against the canonical ledger's allowed radius bounds.
+Each process has isolated profile, output,
 storage and derived-cache directories. The runner reserves the row before
 process creation, records process identity and raw streams, enforces one launch
 per row, and right-censors a timeout without retrying it. A scenario's later
