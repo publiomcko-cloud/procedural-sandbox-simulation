@@ -1,0 +1,11 @@
+{
+  "repo": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "head": "234e73d0e39504559c4df6869ae302c74e58d8a5",
+  "parent": "051249642611a7fa9cd2006be450bad0e184e4ee",
+  "branch": "bench/p3-1-r6v-cave",
+  "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "created_utc": "2026-10-27T11:06:49.6277740Z",
+  "diagnostic": "R6V",
+  "user_data_root": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r6v-causal-48f51ad9fd9e461d962eb52788179b68"
+}

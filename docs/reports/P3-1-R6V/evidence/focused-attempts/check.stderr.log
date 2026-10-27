@@ -1,0 +1,22 @@
+SCRIPT ERROR: Parse Error: Identifier "variant" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:65)
+SCRIPT ERROR: Parse Error: Identifier "cross_sections" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:65)
+SCRIPT ERROR: Parse Error: Identifier "cross_sections" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:66)
+SCRIPT ERROR: Parse Error: Identifier "cross_sections" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:66)
+SCRIPT ERROR: Parse Error: Identifier "cross_sections" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:67)
+SCRIPT ERROR: Parse Error: Identifier "chunk_seams" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:68)
+SCRIPT ERROR: Parse Error: Identifier "macro_seams" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:69)
+SCRIPT ERROR: Parse Error: Identifier "stats" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:70)
+SCRIPT ERROR: Parse Error: Identifier "stats" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:70)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "next_cell" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:263)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)

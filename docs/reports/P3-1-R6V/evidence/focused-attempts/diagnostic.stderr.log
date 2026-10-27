@@ -1,0 +1,896 @@
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
+WARNING: Vector3 cannot be normalized, the elements must be finite. Making (0, 0, 0) as a fallback.
+   at: normalize (./core/math/vector3.h:551)
+   GDScript backtrace (most recent call first):
+       [0] _sample_outward_normal (res://scripts/terrain/marching_tetrahedra.gd:251)
+       [1] _build_mesh_cells (res://scripts/terrain/marching_tetrahedra.gd:165)
+       [2] build_chunk_cpu_data (res://scripts/terrain/marching_tetrahedra.gd:62)
+       [3] _mesh_metrics (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:324)
+       [4] _run (res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd:49)
