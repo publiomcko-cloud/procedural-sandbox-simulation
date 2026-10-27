@@ -16,6 +16,8 @@ var base: RefCounted
 var refined_cells: Dictionary = {}
 var subdivisions := 4
 var refinement_threshold := 0.02
+var boundary_policy := "coarse"
+var refinement_policy := "center"
 var region := Vector2i.ZERO
 var chunk := Vector2i.ZERO
 var world_seed := 0
@@ -26,7 +28,9 @@ var last_reason := ""
 
 
 func materialize(seed: int, region_key: Vector2i, chunk_coordinate: Vector2i,
-		brush_snapshot: Dictionary, target_spacing: float, error_threshold: float = 0.02) -> bool:
+		brush_snapshot: Dictionary, target_spacing: float, error_threshold: float = 0.02,
+		requested_boundary_policy: String = "coarse",
+		requested_refinement_policy: String = "center") -> bool:
 	last_reason = ""
 	refined_cells.clear()
 	fine_samples = 0
@@ -37,11 +41,19 @@ func materialize(seed: int, region_key: Vector2i, chunk_coordinate: Vector2i,
 	if not is_finite(error_threshold) or error_threshold <= 0.0:
 		last_reason = "refinement_threshold_invalid"
 		return false
+	if requested_boundary_policy != "coarse" and requested_boundary_policy != "canonical":
+		last_reason = "boundary_policy_unsupported"
+		return false
+	if requested_refinement_policy != "center" and requested_refinement_policy != "curvature":
+		last_reason = "refinement_policy_unsupported"
+		return false
 	region = region_key
 	chunk = chunk_coordinate
 	world_seed = seed
 	revision = int(brush_snapshot.get("revision", -1))
 	refinement_threshold = error_threshold
+	boundary_policy = requested_boundary_policy
+	refinement_policy = requested_refinement_policy
 	subdivisions = roundi(COARSE_SPACING / target_spacing)
 	base = Voxel.new()
 	if not base.materialize(seed, region_key, chunk_coordinate, brush_snapshot, COARSE_SPACING):
@@ -50,7 +62,7 @@ func materialize(seed: int, region_key: Vector2i, chunk_coordinate: Vector2i,
 	for y in range(base.ny - 1):
 		for z in range(base.nz - 1):
 			for x in range(base.nx - 1):
-				if not _requires_refinement(x, y, z, brush_snapshot):
+				if not _requires_refinement(x, y, z, brush_snapshot, refinement_policy):
 					continue
 				if refined_cells.size() >= MAX_REFINED_CELLS:
 					last_reason = "adaptive_refinement_cell_quota_exceeded"
@@ -68,7 +80,7 @@ func materialize(seed: int, region_key: Vector2i, chunk_coordinate: Vector2i,
 								or fx == subdivisions or fy == subdivisions or fz == subdivisions
 							var density: float
 							if on_boundary:
-								density = base.sample_world(point)
+								density = _canonical_sample(point, brush_snapshot) if boundary_policy == "canonical" else base.sample_world(point)
 							else:
 								density = _canonical_sample(point, brush_snapshot)
 								fine_samples += 1
@@ -220,7 +232,7 @@ func _load_into(path: String, expected_digest: String) -> bool:
 	return digest() == expected_digest
 
 
-func _requires_refinement(x: int, y: int, z: int, snapshot: Dictionary) -> bool:
+func _requires_refinement(x: int, y: int, z: int, snapshot: Dictionary, policy: String) -> bool:
 	var minimum := INF
 	var maximum := -INF
 	for oy in range(2):
@@ -231,6 +243,23 @@ func _requires_refinement(x: int, y: int, z: int, snapshot: Dictionary) -> bool:
 				maximum = maxf(maximum, value)
 	if minimum <= 0.0 and maximum >= 0.0:
 		return true
+	if policy == "curvature":
+		# Exploratory a-posteriori interpolation-residual estimator: compare the
+		# canonical field with the coarse trilinear interpolant at the macro-cell
+		# center and six face centers. The existing 0.02 selection threshold is
+		# retained, but is not a geometry acceptance tolerance.
+		var center: Vector3 = base.world_min + Vector3(float(x) + 0.5, float(y) + 0.5, float(z) + 0.5) * COARSE_SPACING
+		var probes: Array[Vector3] = [center,
+			base.world_min + Vector3(float(x), float(y) + 0.5, float(z) + 0.5) * COARSE_SPACING,
+			base.world_min + Vector3(float(x) + 1.0, float(y) + 0.5, float(z) + 0.5) * COARSE_SPACING,
+			base.world_min + Vector3(float(x) + 0.5, float(y), float(z) + 0.5) * COARSE_SPACING,
+			base.world_min + Vector3(float(x) + 0.5, float(y) + 1.0, float(z) + 0.5) * COARSE_SPACING,
+			base.world_min + Vector3(float(x) + 0.5, float(y) + 0.5, float(z)) * COARSE_SPACING,
+			base.world_min + Vector3(float(x) + 0.5, float(y) + 0.5, float(z) + 1.0) * COARSE_SPACING]
+		for point in probes:
+			if absf(_canonical_sample(point, snapshot) - base.sample_world(point)) > refinement_threshold:
+				return true
+		return false
 	var center: Vector3 = base.world_min + Vector3(float(x) + 0.5, float(y) + 0.5, float(z) + 0.5) * COARSE_SPACING
 	var exact := _canonical_sample(center, snapshot)
 	return absf(exact - base.sample_world(center)) > refinement_threshold

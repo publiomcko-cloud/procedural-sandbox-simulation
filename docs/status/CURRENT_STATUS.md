@@ -1,3 +1,6 @@
+## 2026-10-27 — P3.1 R6-V cave-shape diagnosis (isolated R5-V experiment)
+
+On branch `bench/p3-1-r6v-cave`, test-only policies compare coarse versus canonical refined-cell boundary samples and center versus center-plus-face residual selection. The sixteen-chunk diagnostic identifies substantial coarse-boundary cave expansion and a scalar discontinuity when canonical samples are used only on refined-cell boundaries. Curvature selection increases work without correcting that shape. Focused R6-V passed 213/0 and full Godot validation passed 21,464/0, but the required collision-proxy discrepancy and complete extracted-mesh contour topology were not measured. Disposition is `P3_1_R6V_BLOCKED_WITH_EVIDENCE`; no geometry tolerance or production adoption is approved. Details/raw logs: [R6-V report](../reports/P3-1-R6V/RESULTS.md). Preserve all five F2-G1 holds.
 # Current implementation candidate — P3.1 Storage R2 (2026-10-25)
 
 ## 2026-10-26 — P3.1 R4 experimental campaign closeout

@@ -1,0 +1,16 @@
+Repository origin: https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git
+R6-V branch: bench/p3-1-r6v-cave
+R5-V base/starting commit: 234e73d0e39504559c4df6869ae302c74e58d8a5
+R5-V direct parent/R4: 051249642611a7fa9cd2006be450bad0e184e4ee
+Production reference: 92b442d7f5b605c7bc9c48fac2aceea9d71813aa
+Godot binary: C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe
+Godot version: 4.7.2.stable.official.ed1daf0bf
+Godot executable SHA-256: c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643
+Focused command: Godot --headless --path ./game --script res://tests/prototypes/p3_1_r6v_cave_causal_diagnostic.gd
+Validation command: powershell -NoProfile -File scripts/validate.ps1 with GODOT_BIN pinned and isolated APPDATA, LOCALAPPDATA, TEMP, TMP
+Validation started UTC: 2026-10-27T11:17:12.2555438Z
+Validation finished UTC: 2026-10-27T11:25:39.9023686Z
+Validation elapsed: 507647 ms
+Validation exit: 0
+Validation assertions: 21464, failures: 0
+Diagnostic R3 process id: 24068; exit 0; elapsed 124803 ms; diagnostic assertions 213, failures 0
