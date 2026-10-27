@@ -6,3 +6,4 @@
 game/tests/fixtures/p3_1_r4/** -text
 docs/reports/P3-1-R4/campaign-manifest.json -text
 docs/reports/P3-1-R4/campaign-manifest.json.sha256 -text
+docs/reports/P3-1-R7.1/evidence/** -text
