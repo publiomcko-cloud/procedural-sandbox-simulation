@@ -10,6 +10,7 @@ const Picker := preload("res://scripts/terrain/terrain_brush_picker.gd")
 const ChunkProjection := preload("res://tests/prototypes/r4_chunk_subledger.gd")
 const Voxel := preload("res://tests/prototypes/r4_voxel_snapshot.gd")
 const MeshCache := preload("res://tests/prototypes/r4_derived_mesh_cache.gd")
+const BenchmarkMetrics := preload("res://tests/prototypes/r4_benchmark_metrics.gd")
 
 const SEED := 131102026
 const R3B_SUMS_SHA := "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1"
@@ -505,7 +506,9 @@ func _run_picker_probes(region: Vector2i, chunk: Vector2i, full_snapshot: Dictio
 			var started_usec := Time.get_ticks_usec()
 			var hit: Dictionary = Picker.pick_sdf_v1_surface(ray_origin, direction, sampler)
 			var elapsed_usec := Time.get_ticks_usec() - started_usec
-			(elapsed[kind] as PackedInt64Array).append(elapsed_usec)
+			var elapsed_values: PackedInt64Array = elapsed[kind]
+			elapsed_values.append(elapsed_usec)
+			elapsed[kind] = elapsed_values
 			(counts[kind] as Array).append(int(counter.samples))
 			results[kind] = hit
 			per_ray[kind] = {"hit": bool(hit.get("hit", false)), "sample_count": int(counter.samples),
@@ -728,10 +731,7 @@ func _mean_float(values: PackedFloat64Array) -> float:
 
 
 func _directory_bytes(path: String) -> int:
-	var total := 0
-	for name in DirAccess.get_files_at(path):
-		total += int(FileAccess.get_file_as_bytes(path.path_join(name)).size())
-	return total
+	return BenchmarkMetrics.directory_bytes(path)
 
 
 func _write_failure(root: String, scenario: String, repeat: int, command_sha: String, started: int) -> void:

@@ -1,0 +1,30 @@
+{
+  "source_head": "83c7c091bcec0d10534d8638225d3d24d94b6334",
+  "manifest_sha256": "c6fd895685304795101968ed1104385d31c3f4b1cf303fb26582b16a22666c31",
+  "campaign_rows": 90,
+  "all_campaign_rows_pass": true,
+  "verified_result_files": 90,
+  "verified_artifacts": 560,
+  "metric_rows": 1230,
+  "summary_groups": 246,
+  "engine_os_rss": "NOT_MEASURED",
+  "storage_measurement": "recursive physical file byte sum of each run storage root",
+  "picker_percentiles": "nearest-rank over three raw rays per process and spacing; headless only",
+  "files": [
+    {
+      "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-final-campaign-83c7c091bcec0d10534d8638225d3d24d94b6334-e605644291a74adc975b3df0e64eddb9\\derived-report-r4\\metrics-per-run.corrected.csv",
+      "sha256": "6f5278d1b97c182512b55ee4304a23b3e6805c6887df6ee8735a16afe7fbb9e2",
+      "bytes": 380565
+    },
+    {
+      "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-final-campaign-83c7c091bcec0d10534d8638225d3d24d94b6334-e605644291a74adc975b3df0e64eddb9\\derived-report-r4\\artifact-integrity.csv",
+      "sha256": "bdfe4f3bf5bee5263454a02703f990e17f6f1f53ca4a266d4baf52d04e2f06fc",
+      "bytes": 250363
+    },
+    {
+      "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-final-campaign-83c7c091bcec0d10534d8638225d3d24d94b6334-e605644291a74adc975b3df0e64eddb9\\derived-report-r4\\scenario-summary.corrected.csv",
+      "sha256": "c9906d3df9910f11b14d4824690801d3f526c1a6c3373fb102b9e05ce5bda127",
+      "bytes": 124705
+    }
+  ]
+}

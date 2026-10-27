@@ -7,6 +7,18 @@ param(
     [switch]$PreflightOnly
 )
 $ErrorActionPreference = 'Stop'
+function Get-RecursiveFileBytes([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) { return 0L }
+    $total = [long]0
+    foreach ($file in Get-ChildItem -LiteralPath $Path -Recurse -File -Force) { $total += [long]$file.Length }
+    return $total
+}
+function Get-NearestRankPercentile([object[]]$Values, [double]$Quantile) {
+    $sorted = @($Values | ForEach-Object { [long]$_ } | Sort-Object)
+    if ($sorted.Count -eq 0) { return $null }
+    $index = [Math]::Max(0, [Math]::Min($sorted.Count - 1, [int][Math]::Ceiling($sorted.Count * $Quantile) - 1))
+    return [long]$sorted[$index]
+}
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $game = Join-Path $repo 'game'
 if (Test-Path -LiteralPath $EvidenceRoot) { throw "Evidence root already exists: $EvidenceRoot" }
@@ -272,7 +284,7 @@ try {
                 process_id = $restartPid; launcher_pid = $PID; cim_parent_process_id = if ($null -ne $restartCim) { [int]$restartCim.ParentProcessId } else { $null }
                 cim_command_line = if ($null -ne $restartCim) { [string]$restartCim.CommandLine } else { '' }; command_line = $restartCommand
                 launched_utc = $restartLaunchedUtc.ToString('o'); duration_ms = [long]$restartWatch.ElapsedMilliseconds
-                peak_working_set_bytes = $restartPeakWorkingSet; stdout_path = $restartStdout
+                launcher_peak_working_set_bytes = $restartPeakWorkingSet; engine_os_rss_bytes = $null; stdout_path = $restartStdout
                 stdout_sha256 = if (Test-Path $restartStdout) { (Get-FileHash -LiteralPath $restartStdout -Algorithm SHA256).Hash.ToLowerInvariant() } else { '' }
                 stderr_path = $restartStderr; stderr_sha256 = if (Test-Path $restartStderr) { (Get-FileHash -LiteralPath $restartStderr -Algorithm SHA256).Hash.ToLowerInvariant() } else { '' }
                 result_path = if (Test-Path $restartReportPath) { $restartReportPath } else { '' }
@@ -287,6 +299,7 @@ try {
         $stdoutHash = if (Test-Path $stdoutPath) { (Get-FileHash -LiteralPath $stdoutPath -Algorithm SHA256).Hash.ToLowerInvariant() } else { '' }
         $stderrHash = if (Test-Path $stderrPath) { (Get-FileHash -LiteralPath $stderrPath -Algorithm SHA256).Hash.ToLowerInvariant() } else { '' }
         $resultHash = if (Test-Path $resultPath) { (Get-FileHash -LiteralPath $resultPath -Algorithm SHA256).Hash.ToLowerInvariant() } else { '' }
+        $storageBytes = Get-RecursiveFileBytes (Join-Path $runRoot 'storage')
         $processRecord = [ordered]@{
             run_id = $runId; scenario_id = $scenario; repeat = [int]$row.repeat; order_index = [int]$row.order_index
             source_head = $head; manifest_sha256 = $manifestSha; input_sha256 = $row.input_sha256
@@ -294,7 +307,7 @@ try {
             process_id = $processId; launcher_pid = $PID; cim_parent_process_id = if ($null -ne $cim) { [int]$cim.ParentProcessId } else { $null }
             cim_command_line = if ($null -ne $cim) { [string]$cim.CommandLine } else { '' }
             command_line = $commandText; launched_utc = $launchUtc.ToString('o'); duration_ms = [long]$watch.ElapsedMilliseconds
-            peak_working_set_bytes = $peakWorkingSet; stdout_path = $stdoutPath; stdout_sha256 = $stdoutHash
+            launcher_peak_working_set_bytes = $peakWorkingSet; engine_os_rss_bytes = $null; stdout_path = $stdoutPath; stdout_sha256 = $stdoutHash
             stderr_path = $stderrPath; stderr_sha256 = $stderrHash; result_path = if (Test-Path $resultPath) { $resultPath } else { '' }
             result_sha256 = $resultHash; output_root = (Join-Path $runRoot 'output'); storage_root = (Join-Path $runRoot 'storage'); mesh_cache_root = (Join-Path $runRoot 'mesh-cache')
             restart = $restartRecord
@@ -310,48 +323,70 @@ try {
             $globalStopReason = "run $runId terminated as $status; inspect preserved evidence before any continuation"
         }
         if ($status -eq 'PASS' -and $null -ne $result) {
+            $cacheStats = $result.mesh_cache_stats.stats
             $metricRows.Add([pscustomobject]@{
                 run_id = $runId; scenario_id = $scenario; repeat = [int]$row.repeat; arm = 'A_CHUNK_SUBLEDGER'; resolution = 0.0
                 candidate_operations = [int]$result.candidate_operation_count; build_usec = [double]$result.A_projection_build_usec
                 incremental_usec = [double]$result.A_incremental_append_usec; save_usec = [double]$result.A_persist_usec
                 load_usec = [double]$result.A_reload_usec; query_p50_usec = [double]$result.A_projected_query_usec.p50_usec
                 query_p95_usec = [double]$result.A_projected_query_usec.p95_usec; query_p99_usec = [double]$result.A_projected_query_usec.p99_usec
+                canonical_query_p95_usec = [double]$result.A_full_query_usec.p95_usec
+                canonical_lod0_usec = [long]$result.canonical_lod0_usec; canonical_lod1_usec = [long]$result.canonical_lod1_usec
                 picker_sample_count = 0
                 lod0_usec = [double]$result.A_lod0_usec; lod1_usec = [double]$result.A_lod1_usec
                 node_error_max = 0.0; lod0_surface_p95 = 0.0; lod1_surface_p95 = 0.0; lod0_normal_p95_deg = 0.0; lod1_normal_p95_deg = 0.0
-                storage_bytes = [long]$result.storage_bytes; working_set_peak_bytes = [long]$peakWorkingSet
+                storage_bytes = [long]$storageBytes; mesh_cache_disk_bytes = [long]$cacheStats.disk_bytes
+                mesh_cache_cold_lookup_usec = [long]$result.mesh_cache_stats.cold_lookup_usec; mesh_cache_warm_memory_usec = [long]$result.mesh_cache_stats.warm_memory_usec
+                mesh_cache_fresh_instance_disk_usec = [long]$result.mesh_cache_stats.fresh_instance_disk_usec; mesh_cache_hits = [long]$cacheStats.hits
+                mesh_cache_misses = [long]$cacheStats.misses; mesh_cache_disk_entries = [long]$cacheStats.disk_entries; mesh_cache_memory_bytes = [long]$cacheStats.memory_bytes
+                launcher_peak_working_set_bytes = [long]$peakWorkingSet; engine_os_rss_bytes = $null
             })
             foreach ($resolution in $result.voxel_resolutions) {
-                foreach ($arm in @('B', 'C')) {
+                    foreach ($arm in @('B', 'C')) {
+                    $armMetrics = $resolution.PSObject.Properties[[string]$arm].Value
                     $metricRows.Add([pscustomobject]@{
                         run_id = $runId; scenario_id = $scenario; repeat = [int]$row.repeat; arm = if ($arm -eq 'B') { 'B_INCREMENTAL_FLOAT32_VOXEL' } else { 'C_SUBLEDGER_VOXEL_MESH_CACHE' }; resolution = [double]$resolution.spacing
-                        candidate_operations = [int]$result.candidate_operation_count; build_usec = [double]$resolution[$arm].materialize_usec
-                        incremental_usec = [double]$resolution[$arm].incremental_update_usec; save_usec = [double]$resolution[$arm].save_usec
-                        load_usec = [double]$resolution[$arm].load_usec; query_p50_usec = [double]$resolution[$arm].query_usec.p50_usec
-                        query_p95_usec = [double]$resolution[$arm].query_usec.p95_usec; query_p99_usec = [double]$resolution[$arm].query_usec.p99_usec
+                        candidate_operations = [int]$result.candidate_operation_count; build_usec = [double]$armMetrics.materialize_usec
+                        incremental_usec = [double]$armMetrics.incremental_update_usec; save_usec = [double]$armMetrics.save_usec
+                        load_usec = [double]$armMetrics.load_usec; query_p50_usec = [double]$armMetrics.query_usec.p50_usec
+                        query_p95_usec = [double]$armMetrics.query_usec.p95_usec; query_p99_usec = [double]$armMetrics.query_usec.p99_usec
+                        canonical_query_p95_usec = [double]$result.A_full_query_usec.p95_usec
+                        canonical_lod0_usec = [long]$result.canonical_lod0_usec; canonical_lod1_usec = [long]$result.canonical_lod1_usec
                         picker_sample_count = 0
-                        lod0_usec = [double]$resolution[$arm].lod0_build_usec; lod1_usec = [double]$resolution[$arm].lod1_build_usec
-                        node_error_max = [double]$resolution[$arm].node_error.max_abs_error
-                        lod0_surface_p95 = [double]$resolution[$arm].lod0_surface.sampled_symmetric_vertex_to_triangle_distance.p95
-                        lod1_surface_p95 = [double]$resolution[$arm].lod1_surface.sampled_symmetric_vertex_to_triangle_distance.p95
-                        lod0_normal_p95_deg = [double]$resolution[$arm].lod0_surface.sampled_normal_angle_deg.p95
-                        lod1_normal_p95_deg = [double]$resolution[$arm].lod1_surface.sampled_normal_angle_deg.p95
-                        storage_bytes = [long]$result.storage_bytes; working_set_peak_bytes = [long]$peakWorkingSet
+                        lod0_usec = [double]$armMetrics.lod0_build_usec; lod1_usec = [double]$armMetrics.lod1_build_usec
+                        node_error_max = [double]$armMetrics.node_error.max_abs_error
+                        lod0_surface_p95 = [double]$armMetrics.lod0_surface.sampled_symmetric_vertex_to_triangle_distance.p95
+                        lod1_surface_p95 = [double]$armMetrics.lod1_surface.sampled_symmetric_vertex_to_triangle_distance.p95
+                        lod0_normal_p95_deg = [double]$armMetrics.lod0_surface.sampled_normal_angle_deg.p95
+                        lod1_normal_p95_deg = [double]$armMetrics.lod1_surface.sampled_normal_angle_deg.p95
+                        storage_bytes = [long]$storageBytes; mesh_cache_disk_bytes = [long]$cacheStats.disk_bytes
+                        mesh_cache_cold_lookup_usec = [long]$result.mesh_cache_stats.cold_lookup_usec; mesh_cache_warm_memory_usec = [long]$result.mesh_cache_stats.warm_memory_usec
+                        mesh_cache_fresh_instance_disk_usec = [long]$result.mesh_cache_stats.fresh_instance_disk_usec; mesh_cache_hits = [long]$cacheStats.hits
+                        mesh_cache_misses = [long]$cacheStats.misses; mesh_cache_disk_entries = [long]$cacheStats.disk_entries; mesh_cache_memory_bytes = [long]$cacheStats.memory_bytes
+                        launcher_peak_working_set_bytes = [long]$peakWorkingSet; engine_os_rss_bytes = $null
                     })
                 }
             }
             foreach ($pickerResolution in $result.picker_resolutions) {
                 foreach ($pickerArm in @('canonical', 'projection', 'B', 'C')) {
-                    $pickerSamples = @($pickerResolution.metrics.arms[$pickerArm].samples | Measure-Object -Sum).Sum
+                    $pickerArmMetrics = $pickerResolution.metrics.arms.PSObject.Properties[[string]$pickerArm].Value
+                    $pickerElapsed = @($pickerResolution.metrics.rays | ForEach-Object { [long]$_.PSObject.Properties[[string]$pickerArm].Value.elapsed_usec })
+                    $pickerSamples = @($pickerArmMetrics.samples | Measure-Object -Sum).Sum
                     $metricRows.Add([pscustomobject]@{
                         run_id = $runId; scenario_id = $scenario; repeat = [int]$row.repeat; arm = ('PICKER_' + $pickerArm.ToUpperInvariant()); resolution = [double]$pickerResolution.spacing
                         candidate_operations = [int]$result.candidate_operation_count; build_usec = 0.0; incremental_usec = 0.0; save_usec = 0.0; load_usec = 0.0
-                        query_p50_usec = [double]$pickerResolution.metrics.arms[$pickerArm].elapsed_usec.p50_usec
-                        query_p95_usec = [double]$pickerResolution.metrics.arms[$pickerArm].elapsed_usec.p95_usec
-                        query_p99_usec = [double]$pickerResolution.metrics.arms[$pickerArm].elapsed_usec.p99_usec
+                        query_p50_usec = Get-NearestRankPercentile -Values $pickerElapsed -Quantile 0.50
+                        query_p95_usec = Get-NearestRankPercentile -Values $pickerElapsed -Quantile 0.95
+                        query_p99_usec = Get-NearestRankPercentile -Values $pickerElapsed -Quantile 0.99
+                        canonical_query_p95_usec = [double]$result.A_full_query_usec.p95_usec
+                        canonical_lod0_usec = [long]$result.canonical_lod0_usec; canonical_lod1_usec = [long]$result.canonical_lod1_usec
                         picker_sample_count = [int]$pickerSamples
-                        lod0_usec = 0.0; lod1_usec = 0.0; node_error_max = 0.0; lod0_surface_p95 = 0.0; lod1_surface_p95 = 0.0
-                        lod0_normal_p95_deg = 0.0; lod1_normal_p95_deg = 0.0; storage_bytes = [long]$result.storage_bytes; working_set_peak_bytes = [long]$peakWorkingSet
+                        lod0_usec = $null; lod1_usec = $null; node_error_max = $null; lod0_surface_p95 = $null; lod1_surface_p95 = $null
+                        lod0_normal_p95_deg = $null; lod1_normal_p95_deg = $null; storage_bytes = [long]$storageBytes; mesh_cache_disk_bytes = [long]$cacheStats.disk_bytes
+                        mesh_cache_cold_lookup_usec = [long]$result.mesh_cache_stats.cold_lookup_usec; mesh_cache_warm_memory_usec = [long]$result.mesh_cache_stats.warm_memory_usec
+                        mesh_cache_fresh_instance_disk_usec = [long]$result.mesh_cache_stats.fresh_instance_disk_usec; mesh_cache_hits = [long]$cacheStats.hits
+                        mesh_cache_misses = [long]$cacheStats.misses; mesh_cache_disk_entries = [long]$cacheStats.disk_entries; mesh_cache_memory_bytes = [long]$cacheStats.memory_bytes
+                        launcher_peak_working_set_bytes = [long]$peakWorkingSet; engine_os_rss_bytes = $null
                     })
                 }
             }
@@ -361,7 +396,7 @@ try {
     foreach ($name in $environmentNames) { [Environment]::SetEnvironmentVariable($name, $oldEnvironment[$name], 'Process') }
 }
 $csvRows = foreach ($record in $results) {
-    [pscustomobject]@{ run_id = $record.run_id; scenario_id = $record.scenario_id; repeat = $record.repeat; order_index = $record.order_index; status = $record.status; exit_code = $record.exit_code; duration_ms = $record.duration_ms; peak_working_set_bytes = $record.peak_working_set_bytes; result_sha256 = $record.result_sha256; stdout_sha256 = $record.stdout_sha256; stderr_sha256 = $record.stderr_sha256 }
+    [pscustomobject]@{ run_id = $record.run_id; scenario_id = $record.scenario_id; repeat = $record.repeat; order_index = $record.order_index; status = $record.status; exit_code = $record.exit_code; duration_ms = $record.duration_ms; launcher_peak_working_set_bytes = $record.launcher_peak_working_set_bytes; engine_os_rss_bytes = $record.engine_os_rss_bytes; result_sha256 = $record.result_sha256; stdout_sha256 = $record.stdout_sha256; stderr_sha256 = $record.stderr_sha256 }
 }
 $csvRows | Export-Csv -LiteralPath (Join-Path $EvidenceRoot 'campaign.csv') -NoTypeInformation -Encoding UTF8
 $metricRows | Export-Csv -LiteralPath (Join-Path $EvidenceRoot 'metrics-per-run.csv') -NoTypeInformation -Encoding UTF8
@@ -378,8 +413,8 @@ foreach ($group in $metricGroups) {
     $items = @($group.Group)
     $row = $items[0]
     $summaryRow = [ordered]@{ scenario_id = $row.scenario_id; arm = $row.arm; resolution = $row.resolution; completed_processes = $items.Count }
-    foreach ($metric in @('build_usec', 'incremental_usec', 'save_usec', 'load_usec', 'query_p50_usec', 'query_p95_usec', 'query_p99_usec', 'lod0_usec', 'lod1_usec', 'node_error_max', 'lod0_surface_p95', 'lod1_surface_p95', 'lod0_normal_p95_deg', 'lod1_normal_p95_deg', 'storage_bytes', 'working_set_peak_bytes')) {
-        $values = @($items | ForEach-Object { [double]$_.$metric })
+    foreach ($metric in @('build_usec', 'incremental_usec', 'save_usec', 'load_usec', 'query_p50_usec', 'query_p95_usec', 'query_p99_usec', 'canonical_query_p95_usec', 'canonical_lod0_usec', 'canonical_lod1_usec', 'lod0_usec', 'lod1_usec', 'node_error_max', 'lod0_surface_p95', 'lod1_surface_p95', 'lod0_normal_p95_deg', 'lod1_normal_p95_deg', 'storage_bytes', 'mesh_cache_disk_bytes', 'mesh_cache_cold_lookup_usec', 'mesh_cache_warm_memory_usec', 'mesh_cache_fresh_instance_disk_usec', 'mesh_cache_hits', 'mesh_cache_misses', 'mesh_cache_disk_entries', 'mesh_cache_memory_bytes', 'launcher_peak_working_set_bytes')) {
+        $values = @($items | ForEach-Object { $_.$metric } | Where-Object { $null -ne $_ -and $_ -ne '' } | ForEach-Object { [double]$_ })
         $summaryRow[$metric + '_median_across_processes'] = Get-MedianValue $values
         $summaryRow[$metric + '_min_across_processes'] = ($values | Measure-Object -Minimum).Minimum
         $summaryRow[$metric + '_max_across_processes'] = ($values | Measure-Object -Maximum).Maximum

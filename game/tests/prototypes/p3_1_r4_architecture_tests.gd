@@ -8,6 +8,7 @@ const DerivedCache := preload("res://tests/prototypes/r4_derived_mesh_cache.gd")
 const EntityViews := preload("res://tests/prototypes/r4_entity_snapshot_views.gd")
 const Mesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const LodMesher := preload("res://scripts/terrain/lod01_chunk_mesher.gd")
+const BenchmarkMetrics := preload("res://tests/prototypes/r4_benchmark_metrics.gd")
 
 var _assertions := 0
 var _failures: Array[String] = []
@@ -21,6 +22,17 @@ func _run() -> void:
 	var root := "user://p31-r4-test-" + str(Time.get_ticks_usec())
 	var absolute_root := ProjectSettings.globalize_path(root)
 	DirAccess.make_dir_recursive_absolute(absolute_root)
+	var byte_fixture := absolute_root.path_join("bytes")
+	DirAccess.make_dir_recursive_absolute(byte_fixture.path_join("nested/deeper"))
+	var top_file := FileAccess.open(byte_fixture.path_join("top.bin"), FileAccess.WRITE)
+	top_file.store_buffer(PackedByteArray([1, 2, 3]))
+	top_file.close()
+	var nested_file := FileAccess.open(byte_fixture.path_join("nested/deeper/child.bin"), FileAccess.WRITE)
+	nested_file.store_buffer(PackedByteArray([4, 5, 6, 7, 8]))
+	nested_file.close()
+	_check(BenchmarkMetrics.directory_bytes(byte_fixture) == 8, "recursive_storage_byte_accounting")
+	_check(BenchmarkMetrics.directory_bytes(byte_fixture.path_join("absent")) == 0,
+		"absent_storage_directory_is_zero")
 	var region := Vector2i(-1, -1)
 	var chunk := Vector2i(3, 3)
 	var ledger: RefCounted = Brush.new(131102026, 1)
