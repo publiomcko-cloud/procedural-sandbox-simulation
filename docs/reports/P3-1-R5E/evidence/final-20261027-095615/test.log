@@ -1,0 +1,84 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8965
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8966
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8967
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8968
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8969
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8970
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8971
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8974
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8975
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8976
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8977
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8978
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8979
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8980
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8981
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+ERROR: R5E_FAIL r5_axis_guard_density_equivalence_8983
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/prototypes/p3_1_r5e_exact_tests.gd:149)
+       [1] _run (res://tests/prototypes/p3_1_r5e_exact_tests.gd:78)
+P31_R5E_JSON {"assertions":8998,"candidate_operations":8192,"canonical_query_usec":{"count":796,"max":3818,"p50":928,"p95":2376,"p99":3243},"duration_usec":43713797,"exact_distance_fraction":0.168040826692054,"failures":["r5_axis_guard_density_equivalence_8965","r5_axis_guard_density_equivalence_8966","r5_axis_guard_density_equivalence_8967","r5_axis_guard_density_equivalence_8968","r5_axis_guard_density_equivalence_8969","r5_axis_guard_density_equivalence_8970","r5_axis_guard_density_equivalence_8971","r5_axis_guard_density_equivalence_8974","r5_axis_guard_density_equivalence_8975","r5_axis_guard_density_equivalence_8976","r5_axis_guard_density_equivalence_8977","r5_axis_guard_density_equivalence_8978","r5_axis_guard_density_equivalence_8979","r5_axis_guard_density_equivalence_8980","r5_axis_guard_density_equivalence_8981","r5_axis_guard_density_equivalence_8983"],"fixture_sha256":"0b30e1ce2605b3bab504f3f5648c7e63a84c9a22f905721b56defcfe0489f611","inherited_r4_head":"051249642611a7fa9cd2006be450bad0e184e4ee","lod0_candidate_usec":4286359,"lod0_reference_usec":2266264,"lod1_candidate_usec":24791933,"lod1_density_mismatches":0,"lod1_first_density_mismatch":{},"lod1_normals_equal":true,"lod1_positions_equal":true,"lod1_reference_usec":6833227,"lod1_topology_equal":true,"optimized_query_usec":{"count":796,"max":16125,"p50":4073,"p95":9881,"p99":14247},"probe_count":796,"query_statistics":{"axis_dominance_skips":5425066,"exact_distance_evaluations":1095766,"ledger_operations":8192,"queries":796},"scenario":"P31.R5E.CONCENTRATED.N8192.v1","source_baseline":"92b442d7f5b605c7bc9c48fac2aceea9d71813aa","status":"FAIL","timing_note":"single headless process; exploratory, no presented-frame/GPU claim"}
+P31_R5E_TESTS_FAIL assertions=8998 failures=16
