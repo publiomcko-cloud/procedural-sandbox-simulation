@@ -7,6 +7,7 @@
 - Repository: `https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git`
 - Reused worktree: `C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots`
 - Branch: `bench/p3-1-r4-subledger-snapshots`
+- Evidence PR: [#141](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/141), open/draft/unmerged against `feat/p3-1-scalable-terrain-storage` at the exact production candidate baseline.
 - Production baseline: `92b442d7f5b605c7bc9c48fac2aceea9d71813aa`
 - Campaign source SHA: `83c7c091bcec0d10534d8638225d3d24d94b6334`
 - Live `main` observed during finalization: `5997a76d345f45bf86edfe83f690336391e8be27`

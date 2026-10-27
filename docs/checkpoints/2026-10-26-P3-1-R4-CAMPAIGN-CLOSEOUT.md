@@ -4,14 +4,16 @@
 
 **Event type:** experimental campaign and evidence/report closeout
 
-**Publication state:** local feature branch; separate draft evidence PR not yet created
+**Publication state:** separate evidence PR #141 is open, draft and unmerged; base is the P3.1 storage candidate branch
 
 ## Identity and scope
 
 - Repository origin: `https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git`.
 - Production baseline: `92b442d7f5b605c7bc9c48fac2aceea9d71813aa`.
 - Worktree/branch: `C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots`, `bench/p3-1-r4-subledger-snapshots`.
+- Evidence PR: [#141](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/141), based on `feat/p3-1-scalable-terrain-storage` at `92b442d7f5b605c7bc9c48fac2aceea9d71813aa`; PR #129 remains open/draft/unmerged and unchanged.
 - Campaign source: `83c7c091bcec0d10534d8638225d3d24d94b6334`, parent `8b76e778b0f282a37aa11a229b795c423f581467`. Documentation/report corrections are being committed after the campaign; the benchmark data remain attributed to the campaign source SHA.
+- Evidence/report commit: `4c71f2b0b8e5e8c30a047626dd3a5e588aafe71e`, direct parent `83c7c091bcec0d10534d8638225d3d24d94b6334`.
 - Frozen manifest SHA-256: `c6fd895685304795101968ed1104385d31c3f4b1cf303fb26582b16a22666c31`.
 - Godot: `4.7.2.stable.official.ed1daf0bf`, executable SHA-256 `c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643`.
 - Only test/benchmark prototypes and evidence/documentation were changed. Production terrain, ledger, schemas, saves, PR #129 and Issue #108 were not modified.
@@ -38,6 +40,6 @@ The isolated validation log reports 21,464 assertions with zero failures, but th
 
 ## Recommendation and gates
 
-Keep the global schema-v2 ledger as the sole authority. Continue A only as an exact derived projection candidate and investigate the LOD0 p95 regression. Do not adopt B/C as production geometry absent owner-approved fidelity limits and cave/tunnel/picker behavior criteria. Independent exact-source/evidence review and owner GUI review remain outstanding. A separate draft evidence PR may be opened after final diff and identity checks; no merge is authorized.
+Keep the global schema-v2 ledger as the sole authority. Continue A only as an exact derived projection candidate and investigate the LOD0 p95 regression. Do not adopt B/C as production geometry absent owner-approved fidelity limits and cave/tunnel/picker behavior criteria. Independent exact-source/evidence review and owner GUI review remain outstanding. PR #141 is a separate draft evidence PR; no merge is authorized.
 
 All protected-state holds remain unchanged: `CURRENT_PROTECTED_STATE_UNKNOWN`, `V3_NOT_ATTESTED`, `ACL_REVIEW_REQUIRED`, `G1_BLOCKED_ENVIRONMENT`, `F2_G1_RELEASE_HOLD`.
