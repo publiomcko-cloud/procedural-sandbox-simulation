@@ -1,0 +1,36 @@
+{
+  "created_utc": "2026-10-27T19:58:32.2636704Z",
+  "scenario": "center_fill_then_wall_carve",
+  "scenario_id": "P3.1.R7.CENTER_FILL_THEN_WALL_CARVE.v1",
+  "scenario_invocation_count_reserved": 1,
+  "source_sha": "7ad45d8c817ecb0f54a8eec058babce65af287db",
+  "source_parent": "c54f337cb1f2b1e6d1f61de5c1b9d9f3031e892d",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "arguments": "--headless --path \"C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R73-Full-Carve-23baef7af9b941059154b9891e9f8c6c\\checkout\\game\" --script res://tests/prototypes/p3_1_r7_2_zero_edit_gate.gd -- --scenario-id=center_fill_then_wall_carve",
+  "working_directory": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R73-Full-Carve-23baef7af9b941059154b9891e9f8c6c\\checkout",
+  "appdata": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R73-Full-Carve-23baef7af9b941059154b9891e9f8c6c\\godot-profile\\AppData",
+  "localappdata": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R73-Full-Carve-23baef7af9b941059154b9891e9f8c6c\\godot-profile\\LocalAppData",
+  "stdout": "fill.stdout.log",
+  "stderr": "fill.stderr.log",
+  "timeout_seconds": 600,
+  "expected_order": [
+    {
+      "sequence": 0,
+      "name": "FILL",
+      "radius": 0.58,
+      "mode": 1
+    },
+    {
+      "sequence": 1,
+      "name": "CARVE",
+      "radius": 0.58,
+      "mode": 0,
+      "center_offset": "(0,0,0.82)"
+    }
+  ],
+  "status": "RESERVED_BEFORE_PROCESS_CREATION",
+  "preflight": "fill.preflight.json"
+}

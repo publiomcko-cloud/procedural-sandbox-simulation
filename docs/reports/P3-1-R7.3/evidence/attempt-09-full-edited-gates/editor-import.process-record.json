@@ -1,0 +1,16 @@
+{
+  "pid": 44484,
+  "process_creation_time": "2026-10-27T16:51:54.524756-03:00",
+  "started_utc": "2026-10-27T19:51:54.5037294Z",
+  "completed_utc": "2026-10-27T19:52:05.7370964Z",
+  "elapsed_ms": 11217.678,
+  "exit_code": 0,
+  "status": "PASS",
+  "timed_out": false,
+  "peak_working_set_bytes": 6430720.0,
+  "peak_cpu_ms": 0.0,
+  "sample_count": 86,
+  "stdout": "editor-import.stdout.log",
+  "stderr": "editor-import.stderr.log",
+  "godot_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643"
+}
