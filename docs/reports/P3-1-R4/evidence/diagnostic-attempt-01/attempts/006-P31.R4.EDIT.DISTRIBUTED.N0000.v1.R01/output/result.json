@@ -1,0 +1,1424 @@
+{
+	"A_base_projection_build_usec": 38,
+	"A_full_query_usec": {
+		"count": 64,
+		"max_usec": 6,
+		"p50_usec": 3,
+		"p95_usec": 3,
+		"p99_usec": 6
+	},
+	"A_incremental_append_usec": 47,
+	"A_lod0_exact": true,
+	"A_lod0_usec": 17807,
+	"A_lod1_exact": true,
+	"A_lod1_usec": 104222,
+	"A_persist_bytes": 804,
+	"A_persist_usec": 15366,
+	"A_projected_query_usec": {
+		"count": 64,
+		"max_usec": 4,
+		"p50_usec": 3,
+		"p95_usec": 3,
+		"p99_usec": 4
+	},
+	"A_projection_build_usec": 68,
+	"A_projection_digest": "b22c512a0a986e60338171bbd5ab18cba51b39816bbf5e45f4cd65f4588d59e4",
+	"A_projection_exact_probes": 64,
+	"A_query_pair_wall_usec": 583,
+	"A_reload_usec": 802,
+	"B_base_chunk_snapshot_usec": 54,
+	"baseline_sha": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+	"candidate_operation_count": 0,
+	"canonical_chunk_snapshot_usec": 19,
+	"canonical_lod0_usec": 17673,
+	"canonical_lod1_usec": 98230,
+	"cave_oracle": {
+		"centerline_samples": 9,
+		"chunks": [
+			[
+				0,
+				1
+			],
+			[
+				0,
+				2
+			]
+		],
+		"full_open_count": 9,
+		"projection_mismatches": 0,
+		"projection_open_count": 9,
+		"region": [
+			0,
+			0
+		],
+		"samples": [
+			{
+				"full": -0.919999802831113,
+				"projection": -0.919999802831113,
+				"voxel": -0.673308985974525,
+				"voxel_in_bounds": true,
+				"x": 0.0
+			},
+			{
+				"full": -0.91999992366687,
+				"projection": -0.91999992366687,
+				"voxel": -0.67457846434779,
+				"voxel_in_bounds": true,
+				"x": 0.5
+			},
+			{
+				"full": -0.919999947965758,
+				"projection": -0.919999947965758,
+				"voxel": -0.639351530802866,
+				"voxel_in_bounds": true,
+				"x": 1.0
+			},
+			{
+				"full": -0.919999896012007,
+				"projection": -0.919999896012007,
+				"voxel": -0.610781302195052,
+				"voxel_in_bounds": true,
+				"x": 1.5
+			},
+			{
+				"full": -0.919999932402524,
+				"projection": -0.919999932402524,
+				"voxel": -0.591599564898011,
+				"voxel_in_bounds": true,
+				"x": 2.0
+			},
+			{
+				"full": -0.919999836813316,
+				"projection": -0.919999836813316,
+				"voxel": -0.580774859758977,
+				"voxel_in_bounds": true,
+				"x": 2.5
+			},
+			{
+				"full": -0.919999880026849,
+				"projection": -0.919999880026849,
+				"voxel": -0.575620159602752,
+				"voxel_in_bounds": true,
+				"x": 3.0
+			},
+			{
+				"full": -0.919999773746836,
+				"projection": -0.919999773746836,
+				"voxel": -0.573447385610502,
+				"voxel_in_bounds": true,
+				"x": 3.5
+			},
+			{
+				"full": -0.919999808376046,
+				"projection": -0.919999808376046,
+				"voxel": -0.572413686407375,
+				"voxel_in_bounds": true,
+				"x": 4.0
+			}
+		],
+		"voxel_materialize_usec": 11065,
+		"voxel_open_count": 9,
+		"voxel_valid": true
+	},
+	"collision_queries": {
+		"reason": "baseline has no terrain collision provider",
+		"status": "NOT_MEASURED"
+	},
+	"command_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+	"duration_usec": 3748052,
+	"failures": [],
+	"layout": "distributed",
+	"ledger_revision": 0,
+	"mesh_cache_stats": {
+		"cold_builder_calls": 1,
+		"cold_lookup_usec": 6179,
+		"cold_result_exact": true,
+		"disk_builder_calls": 0,
+		"disk_hit": true,
+		"disk_layer": "disk",
+		"fresh_instance_disk_usec": 1070,
+		"input_content_sha256": "4a381a8c740b458012a25dd15b78fd5224f63ba47a8499298335594daad177a7",
+		"stats": {
+			"adaptive_bypass_count": 0,
+			"corrupt_entries": 0,
+			"disk_bytes": 24004,
+			"disk_entries": 1,
+			"hits": 1,
+			"last_builder_usec": 0,
+			"memory_bytes": 23188,
+			"memory_entries": 1,
+			"misses": 1,
+			"peak_memory_bytes": 23188
+		},
+		"warm_builder_calls": 0,
+		"warm_hit": true,
+		"warm_memory_usec": 45
+	},
+	"operation_count": 0,
+	"picker_resolutions": [
+		{
+			"metrics": {
+				"all_projection_hits_match": true,
+				"arms": {
+					"B": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"C": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"canonical": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"projection": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					}
+				},
+				"note": "headless SDF ray-picker timings; not input-to-presented-frame latency",
+				"rays": [
+					{
+						"B": {
+							"elapsed_usec": 97,
+							"hit": true,
+							"position": [
+								-487.200012207031,
+								2.07456111907959,
+								-761.340026855469
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.00178241729736328,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 94,
+							"hit": true,
+							"position": [
+								-487.200012207031,
+								2.07456111907959,
+								-761.340026855469
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.00178241729736328,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 83,
+							"hit": true,
+							"position": [
+								-487.200012207031,
+								2.07277870178223,
+								-761.340026855469
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 74,
+							"hit": true,
+							"position": [
+								-487.200012207031,
+								2.07277870178223,
+								-761.340026855469
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 0
+					},
+					{
+						"B": {
+							"elapsed_usec": 94,
+							"hit": true,
+							"position": [
+								-486.0,
+								2.03701210021973,
+								-760.530029296875
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.00351572036743164,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 91,
+							"hit": true,
+							"position": [
+								-486.0,
+								2.03701210021973,
+								-760.530029296875
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.00351572036743164,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 71,
+							"hit": true,
+							"position": [
+								-486.0,
+								2.03349637985229,
+								-760.530029296875
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 70,
+							"hit": true,
+							"position": [
+								-486.0,
+								2.03349637985229,
+								-760.530029296875
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 1
+					},
+					{
+						"B": {
+							"elapsed_usec": 95,
+							"hit": true,
+							"position": [
+								-484.799987792969,
+								2.11323261260986,
+								-759.719970703125
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.00100088119506836,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 91,
+							"hit": true,
+							"position": [
+								-484.799987792969,
+								2.11323261260986,
+								-759.719970703125
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.00100088119506836,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 69,
+							"hit": true,
+							"position": [
+								-484.799987792969,
+								2.11223173141479,
+								-759.719970703125
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 69,
+							"hit": true,
+							"position": [
+								-484.799987792969,
+								2.11223173141479,
+								-759.719970703125
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 2
+					}
+				]
+			},
+			"spacing": 0.5
+		},
+		{
+			"metrics": {
+				"all_projection_hits_match": true,
+				"arms": {
+					"B": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"C": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"canonical": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"projection": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					}
+				},
+				"note": "headless SDF ray-picker timings; not input-to-presented-frame latency",
+				"rays": [
+					{
+						"B": {
+							"elapsed_usec": 97,
+							"hit": true,
+							"position": [
+								-487.200012207031,
+								2.07348680496216,
+								-761.340026855469
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.000708103179931641,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 95,
+							"hit": true,
+							"position": [
+								-487.200012207031,
+								2.07348680496216,
+								-761.340026855469
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.000708103179931641,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 86,
+							"hit": true,
+							"position": [
+								-487.200012207031,
+								2.07277870178223,
+								-761.340026855469
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 74,
+							"hit": true,
+							"position": [
+								-487.200012207031,
+								2.07277870178223,
+								-761.340026855469
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 0
+					},
+					{
+						"B": {
+							"elapsed_usec": 94,
+							"hit": true,
+							"position": [
+								-486.0,
+								2.03369188308716,
+								-760.530029296875
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.000195503234863281,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 95,
+							"hit": true,
+							"position": [
+								-486.0,
+								2.03369188308716,
+								-760.530029296875
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.000195503234863281,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 71,
+							"hit": true,
+							"position": [
+								-486.0,
+								2.03349637985229,
+								-760.530029296875
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 68,
+							"hit": true,
+							"position": [
+								-486.0,
+								2.03349637985229,
+								-760.530029296875
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 1
+					},
+					{
+						"B": {
+							"elapsed_usec": 95,
+							"hit": true,
+							"position": [
+								-484.799987792969,
+								2.11269569396973,
+								-759.719970703125
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.000463962554931641,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 94,
+							"hit": true,
+							"position": [
+								-484.799987792969,
+								2.11269569396973,
+								-759.719970703125
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.000463962554931641,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 69,
+							"hit": true,
+							"position": [
+								-484.799987792969,
+								2.11223173141479,
+								-759.719970703125
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 69,
+							"hit": true,
+							"position": [
+								-484.799987792969,
+								2.11223173141479,
+								-759.719970703125
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 2
+					}
+				]
+			},
+			"spacing": 0.25
+		},
+		{
+			"metrics": {
+				"all_projection_hits_match": true,
+				"arms": {
+					"B": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"C": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"canonical": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					},
+					"projection": {
+						"elapsed_usec": {
+							"count": 0,
+							"max_usec": -1,
+							"p50_usec": -1,
+							"p95_usec": -1,
+							"p99_usec": -1
+						},
+						"samples": [
+							18,
+							18,
+							18
+						]
+					}
+				},
+				"note": "headless SDF ray-picker timings; not input-to-presented-frame latency",
+				"rays": [
+					{
+						"B": {
+							"elapsed_usec": 100,
+							"hit": true,
+							"position": [
+								-487.200012207031,
+								2.07297420501709,
+								-761.340026855469
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.000195503234863281,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 94,
+							"hit": true,
+							"position": [
+								-487.200012207031,
+								2.07297420501709,
+								-761.340026855469
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.000195503234863281,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 86,
+							"hit": true,
+							"position": [
+								-487.200012207031,
+								2.07277870178223,
+								-761.340026855469
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 74,
+							"hit": true,
+							"position": [
+								-487.200012207031,
+								2.07277870178223,
+								-761.340026855469
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 0
+					},
+					{
+						"B": {
+							"elapsed_usec": 97,
+							"hit": true,
+							"position": [
+								-486.0,
+								2.03359413146973,
+								-760.530029296875
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.0000977516174316406,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 94,
+							"hit": true,
+							"position": [
+								-486.0,
+								2.03359413146973,
+								-760.530029296875
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.0000977516174316406,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 70,
+							"hit": true,
+							"position": [
+								-486.0,
+								2.03349637985229,
+								-760.530029296875
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 69,
+							"hit": true,
+							"position": [
+								-486.0,
+								2.03349637985229,
+								-760.530029296875
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 1
+					},
+					{
+						"B": {
+							"elapsed_usec": 96,
+							"hit": true,
+							"position": [
+								-484.799987792969,
+								2.11242723464966,
+								-759.719970703125
+							],
+							"sample_count": 18
+						},
+						"B_hit_distance": 0.000195503234863281,
+						"B_hit_match": true,
+						"C": {
+							"elapsed_usec": 93,
+							"hit": true,
+							"position": [
+								-484.799987792969,
+								2.11242723464966,
+								-759.719970703125
+							],
+							"sample_count": 18
+						},
+						"C_hit_distance": 0.000195503234863281,
+						"C_hit_match": true,
+						"canonical": {
+							"elapsed_usec": 69,
+							"hit": true,
+							"position": [
+								-484.799987792969,
+								2.11223173141479,
+								-759.719970703125
+							],
+							"sample_count": 18
+						},
+						"projection": {
+							"elapsed_usec": 67,
+							"hit": true,
+							"position": [
+								-484.799987792969,
+								2.11223173141479,
+								-759.719970703125
+							],
+							"sample_count": 18
+						},
+						"projection_hit_distance": 0.0,
+						"projection_hit_match": true,
+						"ray_index": 2
+					}
+				]
+			},
+			"spacing": 0.125
+		}
+	],
+	"repeat": 1,
+	"run_id": "P31.R4.EDIT.DISTRIBUTED.N0000.v1.R01",
+	"scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0000.v1",
+	"selected_chunk": [
+		2,
+		2
+	],
+	"selected_region": [
+		-31,
+		-64
+	],
+	"sequence_end": -1,
+	"sequence_start": -1,
+	"source_sha": "8b76e778b0f282a37aa11a229b795c423f581467",
+	"static_memory_delta_bytes": 349730,
+	"status": "PASS",
+	"storage_bytes": 0,
+	"subledger_artifact": {
+		"path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-campaign-312def8287844d5c90e563bca4fd4e9f\\attempts\\006-P31.R4.EDIT.DISTRIBUTED.N0000.v1.R01\\storage/subledger/14b6caa0e039982ad2acc998f850fba5f86374b40b747a3f934952691bfb1c9e-r0-2e454fdde6d6123bfa153927af9f58a9d751268822304751f1c861fc536b3078.subledger",
+		"sha256": "18ef6408f5e20d8a5922877710a669ce42bad2cf18e02ee33dbdb6a5bbbeda25"
+	},
+	"voxel_artifacts": [
+		{
+			"B_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-campaign-312def8287844d5c90e563bca4fd4e9f\\attempts\\006-P31.R4.EDIT.DISTRIBUTED.N0000.v1.R01\\storage/B-0.5/bca2917e28cbc469cb812491679504485d0ab653a7d4194a8b1a1052af40eea4-r0-d722b5a923ea6a17d7163fa0737d8762cda989e3c51e0c7de0e645e9388c5305.vox",
+			"B_sha256": "19eb8a6466029d92f87fdb36c1064154d0a3ed73cbe67f0b0c5a1d0957165f7d",
+			"C_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-campaign-312def8287844d5c90e563bca4fd4e9f\\attempts\\006-P31.R4.EDIT.DISTRIBUTED.N0000.v1.R01\\storage/C-0.5/bca2917e28cbc469cb812491679504485d0ab653a7d4194a8b1a1052af40eea4-r0-d722b5a923ea6a17d7163fa0737d8762cda989e3c51e0c7de0e645e9388c5305.vox",
+			"C_sha256": "19eb8a6466029d92f87fdb36c1064154d0a3ed73cbe67f0b0c5a1d0957165f7d",
+			"spacing": 0.5
+		},
+		{
+			"B_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-campaign-312def8287844d5c90e563bca4fd4e9f\\attempts\\006-P31.R4.EDIT.DISTRIBUTED.N0000.v1.R01\\storage/B-0.25/c3d7f71148dcebf851acb74e298edef5cc4e1c86a3f7ab2bc803b7e6bb26bc20-r0-21ea19f8cebca6b3c00e17d2fb7a9abaf36fcf7406b18fbc06e475f623f0945d.vox",
+			"B_sha256": "267c2d2a36fc3c206e8af90f3bb9be0d7bebe12ec8f6f9ffb3e232c6f761347c",
+			"C_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-campaign-312def8287844d5c90e563bca4fd4e9f\\attempts\\006-P31.R4.EDIT.DISTRIBUTED.N0000.v1.R01\\storage/C-0.25/c3d7f71148dcebf851acb74e298edef5cc4e1c86a3f7ab2bc803b7e6bb26bc20-r0-21ea19f8cebca6b3c00e17d2fb7a9abaf36fcf7406b18fbc06e475f623f0945d.vox",
+			"C_sha256": "267c2d2a36fc3c206e8af90f3bb9be0d7bebe12ec8f6f9ffb3e232c6f761347c",
+			"spacing": 0.25
+		},
+		{
+			"B_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-campaign-312def8287844d5c90e563bca4fd4e9f\\attempts\\006-P31.R4.EDIT.DISTRIBUTED.N0000.v1.R01\\storage/B-0.125/f1f1d8d183b49e7146daa99de48388273d0e7c436c6e118baeb1433a582ae486-r0-c114d6b5ad7750e6262886638e2733d194b2a0db1df77b23272971fa55ec3ae6.vox",
+			"B_sha256": "3521ffa7aee16a207e294e702be63b1552e6763d1cb00338e92589137e66ac20",
+			"C_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p31-r4-campaign-312def8287844d5c90e563bca4fd4e9f\\attempts\\006-P31.R4.EDIT.DISTRIBUTED.N0000.v1.R01\\storage/C-0.125/f1f1d8d183b49e7146daa99de48388273d0e7c436c6e118baeb1433a582ae486-r0-c114d6b5ad7750e6262886638e2733d194b2a0db1df77b23272971fa55ec3ae6.vox",
+			"C_sha256": "3521ffa7aee16a207e294e702be63b1552e6763d1cb00338e92589137e66ac20",
+			"spacing": 0.125
+		}
+	],
+	"voxel_resolutions": [
+		{
+			"B": {
+				"incremental_update_usec": 0,
+				"load_usec": 967,
+				"lod0_build_usec": 31046,
+				"lod0_surface": {
+					"candidate_sample_step": 12,
+					"candidate_vertices": 1500,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 12,
+					"reference_vertices": 1488,
+					"sampled_normal_angle_deg": {
+						"count": 249,
+						"max": 1.9059723987417,
+						"p50": 0.0336789024051792,
+						"p95": 1.77447300780726,
+						"p99": 1.878215150285
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 249,
+						"max": 0.00398798936589646,
+						"p50": 0.00334049066700954,
+						"p95": 0.00390649330044564,
+						"p99": 0.00398331256552603
+					},
+					"valid": true
+				},
+				"lod1_build_usec": 92361,
+				"lod1_surface": {
+					"candidate_sample_step": 8,
+					"candidate_vertices": 960,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 8,
+					"reference_vertices": 957,
+					"sampled_normal_angle_deg": {
+						"count": 240,
+						"max": 2.14899415794875,
+						"p50": 0.371808711267343,
+						"p95": 1.2918820432969,
+						"p99": 1.94784337934458
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 240,
+						"max": 0.00398798936589646,
+						"p50": 0.0031650687694737,
+						"p95": 0.00391078360856866,
+						"p99": 0.0039642085929165
+					},
+					"valid": true
+				},
+				"materialize_usec": 5484,
+				"node_error": {
+					"abs_error_quantiles": {
+						"count": 1760,
+						"max": 0.00000023709795815563,
+						"p50": 0.0000000203594683334529,
+						"p95": 0.000000173694869154417,
+						"p99": 0.000000227462209068108
+					},
+					"compared_nodes": 1760,
+					"exact_node_count": 484,
+					"max_abs_error": 0.00000023709795815563,
+					"mean_abs_error": 0.0000000425010937162397,
+					"reference": "canonical_chunk_projection_with_separate_full-ledger probe and mesh parity",
+					"valid": true
+				},
+				"query_abs_error": {
+					"count": 64,
+					"max": 0.156425703310764,
+					"p50": 0.00195799031631161,
+					"p95": 0.0699529694515835,
+					"p99": 0.156425703310764
+				},
+				"query_usec": {
+					"count": 64,
+					"max_usec": 14,
+					"p50_usec": 4,
+					"p95_usec": 5,
+					"p99_usec": 14
+				},
+				"save_bytes": 7624,
+				"save_usec": 16031,
+				"snapshot": {
+					"dimensions": [
+						10,
+						22,
+						8
+					],
+					"payload_bytes": 7040,
+					"revision": 0,
+					"spacing": 0.5,
+					"update_node_visits": 0,
+					"voxel_count": 1760
+				}
+			},
+			"C": {
+				"incremental_update_usec": 0,
+				"load_usec": 885,
+				"lod0_build_usec": 21462,
+				"lod0_surface": {
+					"candidate_sample_step": 12,
+					"candidate_vertices": 1500,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 12,
+					"reference_vertices": 1488,
+					"sampled_normal_angle_deg": {
+						"count": 249,
+						"max": 1.9059723987417,
+						"p50": 0.0336789024051792,
+						"p95": 1.77447300780726,
+						"p99": 1.878215150285
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 249,
+						"max": 0.00398798936589646,
+						"p50": 0.00334049066700954,
+						"p95": 0.00390649330044564,
+						"p99": 0.00398331256552603
+					},
+					"valid": true
+				},
+				"lod1_build_usec": 93665,
+				"lod1_surface": {
+					"candidate_sample_step": 8,
+					"candidate_vertices": 960,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 8,
+					"reference_vertices": 957,
+					"sampled_normal_angle_deg": {
+						"count": 240,
+						"max": 2.14899415794875,
+						"p50": 0.371808711267343,
+						"p95": 1.2918820432969,
+						"p99": 1.94784337934458
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 240,
+						"max": 0.00398798936589646,
+						"p50": 0.0031650687694737,
+						"p95": 0.00391078360856866,
+						"p99": 0.0039642085929165
+					},
+					"valid": true
+				},
+				"materialize_usec": 5349,
+				"node_error": {
+					"abs_error_quantiles": {
+						"count": 1760,
+						"max": 0.00000023709795815563,
+						"p50": 0.0000000203594683334529,
+						"p95": 0.000000173694869154417,
+						"p99": 0.000000227462209068108
+					},
+					"compared_nodes": 1760,
+					"exact_node_count": 484,
+					"max_abs_error": 0.00000023709795815563,
+					"mean_abs_error": 0.0000000425010937162397,
+					"reference": "canonical_chunk_projection_with_separate_full-ledger probe and mesh parity",
+					"valid": true
+				},
+				"query_abs_error": {
+					"count": 64,
+					"max": 0.156425703310764,
+					"p50": 0.00195799031631161,
+					"p95": 0.0699529694515835,
+					"p99": 0.156425703310764
+				},
+				"query_usec": {
+					"count": 64,
+					"max_usec": 5,
+					"p50_usec": 4,
+					"p95_usec": 5,
+					"p99_usec": 5
+				},
+				"save_bytes": 7624,
+				"save_usec": 7188,
+				"snapshot": {
+					"dimensions": [
+						10,
+						22,
+						8
+					],
+					"payload_bytes": 7040,
+					"revision": 0,
+					"spacing": 0.5,
+					"update_node_visits": 0,
+					"voxel_count": 1760
+				},
+				"tail_operation_in_projection": false
+			},
+			"spacing": 0.5
+		},
+		{
+			"B": {
+				"incremental_update_usec": 0,
+				"load_usec": 1623,
+				"lod0_build_usec": 21655,
+				"lod0_surface": {
+					"candidate_sample_step": 12,
+					"candidate_vertices": 1488,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 12,
+					"reference_vertices": 1488,
+					"sampled_normal_angle_deg": {
+						"count": 248,
+						"max": 2.534271041764,
+						"p50": 1.21707727789839,
+						"p95": 2.23396683386558,
+						"p99": 2.53307554521584
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 248,
+						"max": 0.0,
+						"p50": 0.0,
+						"p95": 0.0,
+						"p99": 0.0
+					},
+					"valid": true
+				},
+				"lod1_build_usec": 92264,
+				"lod1_surface": {
+					"candidate_sample_step": 8,
+					"candidate_vertices": 957,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 8,
+					"reference_vertices": 957,
+					"sampled_normal_angle_deg": {
+						"count": 240,
+						"max": 1.94964526862499,
+						"p50": 0.343624522626667,
+						"p95": 1.22040966316142,
+						"p99": 1.9120696232364
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 240,
+						"max": 0.0,
+						"p50": 0.0,
+						"p95": 0.0,
+						"p99": 0.0
+					},
+					"valid": true
+				},
+				"materialize_usec": 38403,
+				"node_error": {
+					"abs_error_quantiles": {
+						"count": 12255,
+						"max": 0.000000237626659682633,
+						"p50": 0.0000000194171914102981,
+						"p95": 0.000000176730281076232,
+						"p99": 0.000000226132623737385
+					},
+					"compared_nodes": 12255,
+					"exact_node_count": 3339,
+					"max_abs_error": 0.000000237626659682633,
+					"mean_abs_error": 0.0000000422208423531744,
+					"reference": "canonical_chunk_projection_with_separate_full-ledger probe and mesh parity",
+					"valid": true
+				},
+				"query_abs_error": {
+					"count": 64,
+					"max": 0.0498996530684057,
+					"p50": 0.000539708381831261,
+					"p95": 0.000799145571823701,
+					"p99": 0.0498996530684057
+				},
+				"query_usec": {
+					"count": 64,
+					"max_usec": 13,
+					"p50_usec": 5,
+					"p95_usec": 5,
+					"p99_usec": 13
+				},
+				"save_bytes": 49604,
+				"save_usec": 15042,
+				"snapshot": {
+					"dimensions": [
+						19,
+						43,
+						15
+					],
+					"payload_bytes": 49020,
+					"revision": 0,
+					"spacing": 0.25,
+					"update_node_visits": 0,
+					"voxel_count": 12255
+				}
+			},
+			"C": {
+				"incremental_update_usec": 0,
+				"load_usec": 1590,
+				"lod0_build_usec": 21622,
+				"lod0_surface": {
+					"candidate_sample_step": 12,
+					"candidate_vertices": 1488,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 12,
+					"reference_vertices": 1488,
+					"sampled_normal_angle_deg": {
+						"count": 248,
+						"max": 2.534271041764,
+						"p50": 1.21707727789839,
+						"p95": 2.23396683386558,
+						"p99": 2.53307554521584
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 248,
+						"max": 0.0,
+						"p50": 0.0,
+						"p95": 0.0,
+						"p99": 0.0
+					},
+					"valid": true
+				},
+				"lod1_build_usec": 93283,
+				"lod1_surface": {
+					"candidate_sample_step": 8,
+					"candidate_vertices": 957,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 8,
+					"reference_vertices": 957,
+					"sampled_normal_angle_deg": {
+						"count": 240,
+						"max": 1.94964526862499,
+						"p50": 0.343624522626667,
+						"p95": 1.22040966316142,
+						"p99": 1.9120696232364
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 240,
+						"max": 0.0,
+						"p50": 0.0,
+						"p95": 0.0,
+						"p99": 0.0
+					},
+					"valid": true
+				},
+				"materialize_usec": 38790,
+				"node_error": {
+					"abs_error_quantiles": {
+						"count": 12255,
+						"max": 0.000000237626659682633,
+						"p50": 0.0000000194171914102981,
+						"p95": 0.000000176730281076232,
+						"p99": 0.000000226132623737385
+					},
+					"compared_nodes": 12255,
+					"exact_node_count": 3339,
+					"max_abs_error": 0.000000237626659682633,
+					"mean_abs_error": 0.0000000422208423531744,
+					"reference": "canonical_chunk_projection_with_separate_full-ledger probe and mesh parity",
+					"valid": true
+				},
+				"query_abs_error": {
+					"count": 64,
+					"max": 0.0498996530684057,
+					"p50": 0.000539708381831261,
+					"p95": 0.000799145571823701,
+					"p99": 0.0498996530684057
+				},
+				"query_usec": {
+					"count": 64,
+					"max_usec": 7,
+					"p50_usec": 4,
+					"p95_usec": 5,
+					"p99_usec": 7
+				},
+				"save_bytes": 49604,
+				"save_usec": 14192,
+				"snapshot": {
+					"dimensions": [
+						19,
+						43,
+						15
+					],
+					"payload_bytes": 49020,
+					"revision": 0,
+					"spacing": 0.25,
+					"update_node_visits": 0,
+					"voxel_count": 12255
+				},
+				"tail_operation_in_projection": false
+			},
+			"spacing": 0.25
+		},
+		{
+			"B": {
+				"incremental_update_usec": 0,
+				"load_usec": 6704,
+				"lod0_build_usec": 22235,
+				"lod0_surface": {
+					"candidate_sample_step": 12,
+					"candidate_vertices": 1488,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 12,
+					"reference_vertices": 1488,
+					"sampled_normal_angle_deg": {
+						"count": 248,
+						"max": 2.534271041764,
+						"p50": 1.21707727789839,
+						"p95": 2.23396683386558,
+						"p99": 2.53307554521584
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 248,
+						"max": 0.0,
+						"p50": 0.0,
+						"p95": 0.0,
+						"p99": 0.0
+					},
+					"valid": true
+				},
+				"lod1_build_usec": 94802,
+				"lod1_surface": {
+					"candidate_sample_step": 8,
+					"candidate_vertices": 957,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 8,
+					"reference_vertices": 957,
+					"sampled_normal_angle_deg": {
+						"count": 240,
+						"max": 1.94973384764079,
+						"p50": 0.343566012451473,
+						"p95": 1.21976997325696,
+						"p99": 1.90992558416725
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 240,
+						"max": 0.0,
+						"p50": 0.0,
+						"p95": 0.0,
+						"p99": 0.0
+					},
+					"valid": true
+				},
+				"materialize_usec": 289398,
+				"node_error": {
+					"abs_error_quantiles": {
+						"count": 91205,
+						"max": 0.000000238372297900469,
+						"p50": 0.0000000169485008250092,
+						"p95": 0.000000172785425078814,
+						"p99": 0.000000225163200084921
+					},
+					"compared_nodes": 91205,
+					"exact_node_count": 24642,
+					"max_abs_error": 0.000000238372297900469,
+					"mean_abs_error": 0.0000000410021114498259,
+					"reference": "canonical_chunk_projection_with_separate_full-ledger probe and mesh parity",
+					"valid": true
+				},
+				"query_abs_error": {
+					"count": 64,
+					"max": 0.00587099170574734,
+					"p50": 0.000152644487801279,
+					"p95": 0.00021635459485192,
+					"p99": 0.00587099170574734
+				},
+				"query_usec": {
+					"count": 64,
+					"max_usec": 14,
+					"p50_usec": 5,
+					"p95_usec": 6,
+					"p99_usec": 14
+				},
+				"save_bytes": 365404,
+				"save_usec": 22044,
+				"snapshot": {
+					"dimensions": [
+						37,
+						85,
+						29
+					],
+					"payload_bytes": 364820,
+					"revision": 0,
+					"spacing": 0.125,
+					"update_node_visits": 0,
+					"voxel_count": 91205
+				}
+			},
+			"C": {
+				"incremental_update_usec": 0,
+				"load_usec": 6754,
+				"lod0_build_usec": 23147,
+				"lod0_surface": {
+					"candidate_sample_step": 12,
+					"candidate_vertices": 1488,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 12,
+					"reference_vertices": 1488,
+					"sampled_normal_angle_deg": {
+						"count": 248,
+						"max": 2.534271041764,
+						"p50": 1.21707727789839,
+						"p95": 2.23396683386558,
+						"p99": 2.53307554521584
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 248,
+						"max": 0.0,
+						"p50": 0.0,
+						"p95": 0.0,
+						"p99": 0.0
+					},
+					"valid": true
+				},
+				"lod1_build_usec": 96175,
+				"lod1_surface": {
+					"candidate_sample_step": 8,
+					"candidate_vertices": 957,
+					"metric_note": "bounded symmetric vertex-sampled point-to-triangle estimate; not certified Hausdorff distance",
+					"reference_sample_step": 8,
+					"reference_vertices": 957,
+					"sampled_normal_angle_deg": {
+						"count": 240,
+						"max": 1.94973384764079,
+						"p50": 0.343566012451473,
+						"p95": 1.21976997325696,
+						"p99": 1.90992558416725
+					},
+					"sampled_symmetric_vertex_to_triangle_distance": {
+						"count": 240,
+						"max": 0.0,
+						"p50": 0.0,
+						"p95": 0.0,
+						"p99": 0.0
+					},
+					"valid": true
+				},
+				"materialize_usec": 315187,
+				"node_error": {
+					"abs_error_quantiles": {
+						"count": 91205,
+						"max": 0.000000238372297900469,
+						"p50": 0.0000000169485008250092,
+						"p95": 0.000000172785425078814,
+						"p99": 0.000000225163200084921
+					},
+					"compared_nodes": 91205,
+					"exact_node_count": 24642,
+					"max_abs_error": 0.000000238372297900469,
+					"mean_abs_error": 0.0000000410021114498259,
+					"reference": "canonical_chunk_projection_with_separate_full-ledger probe and mesh parity",
+					"valid": true
+				},
+				"query_abs_error": {
+					"count": 64,
+					"max": 0.00587099170574734,
+					"p50": 0.000152644487801279,
+					"p95": 0.00021635459485192,
+					"p99": 0.00587099170574734
+				},
+				"query_usec": {
+					"count": 64,
+					"max_usec": 7,
+					"p50_usec": 5,
+					"p95_usec": 6,
+					"p99_usec": 7
+				},
+				"save_bytes": 365404,
+				"save_usec": 18347,
+				"snapshot": {
+					"dimensions": [
+						37,
+						85,
+						29
+					],
+					"payload_bytes": 364820,
+					"revision": 0,
+					"spacing": 0.125,
+					"update_node_visits": 0,
+					"voxel_count": 91205
+				},
+				"tail_operation_in_projection": false
+			},
+			"spacing": 0.125
+		}
+	]
+}

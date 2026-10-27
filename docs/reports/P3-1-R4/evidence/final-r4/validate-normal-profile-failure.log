@@ -1,0 +1,559 @@
+L0 PASS: all project source files exist
+Godot found: 4.7.2.stable.official.ed1daf0bf
+Godot PASS: pinned version 4.7.2 stable
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --editor --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --import
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[   0% ] [90m[1mfirst_scan_filesystem[22m | Started Project initialization (5 steps)[39m[0m
+[   0% ] [90m[1mfirst_scan_filesystem[22m | Scanning file structure...[39m[0m
+[  16% ] [90m[1mfirst_scan_filesystem[22m | Loading global class names...[39m[0m
+[  33% ] [90m[1mfirst_scan_filesystem[22m | Verifying GDExtensions...[39m[0m
+[  50% ] [90m[1mfirst_scan_filesystem[22m | Creating autoload scripts...[39m[0m
+[  66% ] [90m[1mfirst_scan_filesystem[22m | Initializing plugins...[39m[0m
+[  83% ] [90m[1mfirst_scan_filesystem[22m | Starting file scan...[39m[0m
+[92m[ DONE ][39m [1mfirst_scan_filesystem[22m
+[0m
+[   0% ] [90m[1mupdate_scripts_classes[22m | Started Registering global classes... (3 steps)[39m[0m
+[   0% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[  25% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[  50% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[92m[ DONE ][39m [1mupdate_scripts_classes[22m
+[0m
+[   0% ] [90m[1mloading_editor_layout[22m | Started Loading editor (5 steps)[39m[0m
+[   0% ] [90m[1mloading_editor_layout[22m | Loading editor layout...[39m[0m
+[  16% ] [90m[1mloading_editor_layout[22m | Loading docks...[39m[0m
+[92m[ DONE ][39m [1mloading_editor_layout[22m
+[0m
+L1 PASS: Godot project import
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/smoke.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+SMOKE_PASS: assertions=52 failures=0
+L2 PASS: deterministic generation and failure-path checks
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/terrain_sdf_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_SDF_PASS: assertions=44 failures=0
+L2 PASS: deterministic SDF and mesh tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/terrain_brush_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_BRUSH_PASS: assertions=612 failures=0
+L2 PASS: bounded SDF brush edits and viewport interaction tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/terrain_chunk_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+CHUNK_EQUIVALENCE: full_triangles=10981 chunk_triangles=10981 full_samples=17325 chunk_samples=21168
+TERRAIN_CHUNK_BENCH: pattern=interior affected_chunks=1 repetitions=7 full_median_ms=439.338 full_spread_ms=35.371 local_median_ms=44.469 local_spread_ms=1.367
+TERRAIN_CHUNK_BENCH: pattern=border affected_chunks=2 repetitions=7 full_median_ms=443.367 full_spread_ms=21.200 local_median_ms=90.477 local_spread_ms=13.389
+TERRAIN_CHUNK_BENCH: pattern=corner affected_chunks=4 repetitions=7 full_median_ms=444.237 full_spread_ms=26.572 local_median_ms=194.925 local_spread_ms=13.759
+TERRAIN_CHUNK_PASS: assertions=179 failures=0
+L2 PASS: chunk partition, seam, localized rebuild and benchmark tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/terrain_multiregion_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+MULTIREGION_EQUIVALENCE: regions=9 chunks=144 full_triangles=87077 chunk_triangles=87077 reference_samples=148701
+GLOBAL_EDIT_EQUIVALENCE: regions=2 operations=2 full_triangles=23354 chunk_triangles=23354
+GLOBAL_EDIT_BENCH: elapsed_ms=50.636 dirty_regions=2 dirty_chunks=4 dirty_jobs=4 frame_p50/p95/p99_ms=6.900/6.944/134.374 resident_peak=9 ledger=1/65536
+GLOBAL_EDIT_STAGE_BENCH: queue_wait_p50/p95/total_ms=0.449/0.555/1.826 stages={"array_mesh_build":0.978,"sdf_and_ledger":32.611,"shared_gradient_normals":12.894,"triangulation_and_face_normals":73.826}
+TERRAIN_STREAM_INITIAL_METRICS: active=9 chunks=144 triangles=87077 queue_peak=144 mesh_job_queue_peak=144 elapsed_ms=1142.147 mesh_work_total_ms=3229.892 peak_mesh_ms=0.400 peak_process_work_ms=5.673
+TERRAIN_STREAM_STAGE_METRICS: queue_wait_p50/p95/total_ms=537.700/1062.205/79610.913 stages={"array_mesh_build":24.469,"sdf_and_ledger":931.543,"shared_gradient_normals":377.302,"triangulation_and_face_normals":1894.286}
+TERRAIN_STREAM_METRICS: active=12 peak_active=12 chunk_nodes=192 queued=0 peak_queued=192 peak_mesh_upload_ms=0.405 peak_process_work_ms=80.660 loads=81 unloads=33
+TERRAIN_MULTI_REGION_PASS: assertions=7637 failures=0
+L2 PASS: multi-region ownership, continuity, seam and viewport tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/terrain_perf_benchmark.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_PERF_BENCH: godot=4.7.2-stable (official) seed=424242 repeats=5 chunk=(1,1) levels=0,32,64,128,256
+TERRAIN_PERF_HISTORY: ops=0 samples=5 candidates=0 snapshot_bytes=0 static_memory_before/ledger/delta=26339212/26341600/2388 full_p50/p95_ms=25.329/30.749 accelerated_p50/p95_ms=22.902/32.954 worker_cpu_p50/p95_ms=21.526/24.425 pool_wait_p50/p95_ms=0.059/0.064 sdf_p50_ms=3.293 triangulation_p50_ms=11.076 normals_p50_ms=2.170 mesh_cpu_p50_ms=0.255
+TERRAIN_PERF_HISTORY: ops=32 samples=5 candidates=2 snapshot_bytes=74 static_memory_before/ledger/delta=26639200/26711508/72308 full_p50/p95_ms=172.272/182.050 accelerated_p50/p95_ms=26.135/29.218 worker_cpu_p50/p95_ms=25.552/25.767 pool_wait_p50/p95_ms=0.044/0.068 sdf_p50_ms=5.056 triangulation_p50_ms=11.236 normals_p50_ms=3.389 mesh_cpu_p50_ms=0.282
+TERRAIN_PERF_HISTORY: ops=64 samples=5 candidates=4 snapshot_bytes=148 static_memory_before/ledger/delta=26711942/26772974/61032 full_p50/p95_ms=309.838/318.630 accelerated_p50/p95_ms=26.390/31.366 worker_cpu_p50/p95_ms=26.106/31.777 pool_wait_p50/p95_ms=0.064/0.070 sdf_p50_ms=5.408 triangulation_p50_ms=11.286 normals_p50_ms=3.457 mesh_cpu_p50_ms=0.276
+TERRAIN_PERF_HISTORY: ops=128 samples=5 candidates=8 snapshot_bytes=296 static_memory_before/ledger/delta=26773305/26894785/121480 full_p50/p95_ms=581.811/615.356 accelerated_p50/p95_ms=28.440/36.694 worker_cpu_p50/p95_ms=27.295/34.851 pool_wait_p50/p95_ms=0.062/0.077 sdf_p50_ms=7.032 triangulation_p50_ms=11.269 normals_p50_ms=3.884 mesh_cpu_p50_ms=0.275
+TERRAIN_PERF_HISTORY: ops=256 samples=5 candidates=16 snapshot_bytes=592 static_memory_before/ledger/delta=26895116/27143036/247920 full_p50/p95_ms=1105.556/1121.670 accelerated_p50/p95_ms=30.573/33.799 worker_cpu_p50/p95_ms=29.166/37.049 pool_wait_p50/p95_ms=0.047/0.061 sdf_p50_ms=7.061 triangulation_p50_ms=11.780 normals_p50_ms=4.809 mesh_cpu_p50_ms=0.283
+TERRAIN_PERF_BENCH_PASS: assertions=11 failures=0
+L2 PASS: staged CPU mesh, ledger-size and worker equivalence benchmark
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/terrain_history_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_HISTORY_TEST: Godot=4.7.2-stable (official) target_edits=256 distributed_regions=16
+TERRAIN_HISTORY_FILTER: total_ops=256 max_chunk_candidates=40 process_static_bytes=31444658
+TERRAIN_HISTORY_E2E: accepted=256 regions=16 latency_p50/p95_ms=55.121/62.149 samples=256 memory_static_bytes=43669383 mesh_bytes_estimate=9795456 queue_peak=144 peak_workers=4 mesh_queue_p95_max_ms=7.632 worker_queue_p95_max_ms=1.315 publish_p95_max_ms=2.932 retries=0 frame_p95/p99_ms=7.407/8.333
+TERRAIN_HISTORY_PASS: assertions=907 failures=0
+L2 PASS: 256-operation history, replay equivalence and revision supersession tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/terrain_world_persistence_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+P3_1_STORAGE_QUERY_PROFILE: total=640 candidates=5 cold_segment_reads=1 warm_segment_reads=0 cache_hits=3
+P3_1_STORAGE_BENCH distributed_count=640 generation_ms=23.221 save_ms=163.567 verify_load_ms=57.171 lod0_chunk_ms=18.322 lod1_chunk_ms=98.089 segments=5 candidate_count=0
+P3_1_STORAGE_BENCH concentrated_count=2048 generation_ms=76.903 process_static_delta_generation_bytes=4260068 save_ms=590.376 verify_load_ms=177.102 four_probe_replay_ms=116.138 lod0_chunk_ms=487.545 lod1_chunk_ms=1773.989 candidates=2048 segments=16
+P3_1_STORAGE_R2_PROFILE: id=distributed-640 generator_ms=20.375 initial_save_ms=130.420 repeat_save_p50/p95/p99_ms=27.662/28.498/28.498 restart_verify_ms=58.673 sample_p50/p95/p99_ms=0.013/0.014/0.019 query_segment_reads=0 query_segment_bytes=0 query_cache_hits=0 query_candidates=0 cache_weight_bytes=0 reuse_verify_segment_count=18 reuse_verify_bytes=302181 ray_snapshot_p50/p95/p99_ms=0.054/0.072/0.078 picker_p50/p95/p99_ms=0.086/0.144/0.171 ray_e2e_p50/p95/p99_ms=0.142/0.218/0.248 ray_segment_reads=0 ray_segment_bytes=0 ray_cache_hits=0 ray_spatial_candidates=0 ray_retained_candidates=0 lod0_ms=17.793 lod1_ms=99.769 segments=5 disk_bytes=107547 process_memory_delta_bytes=713744
+P3_1_STORAGE_R2_PROFILE: id=concentrated-640 generator_ms=20.389 initial_save_ms=129.306 repeat_save_p50/p95/p99_ms=30.599/31.680/31.680 restart_verify_ms=56.396 sample_p50/p95/p99_ms=1.713/1.767/2.650 query_segment_reads=5 query_segment_bytes=86051 query_cache_hits=500 query_candidates=640 cache_weight_bytes=327680 reuse_verify_segment_count=18 reuse_verify_bytes=317475 ray_snapshot_p50/p95/p99_ms=2.419/3.441/4.148 picker_p50/p95/p99_ms=0.095/0.117/0.155 ray_e2e_p50/p95/p99_ms=2.517/3.544/4.307 ray_segment_reads=5 ray_segment_bytes=86051 ray_cache_hits=500 ray_spatial_candidates=640 ray_retained_candidates=0 lod0_ms=161.953 lod1_ms=719.050 segments=5 disk_bytes=112645 process_memory_delta_bytes=822414
+P3_1_STORAGE_R2_PROFILE: id=distributed-2048 generator_ms=62.790 initial_save_ms=354.068 repeat_save_p50/p95/p99_ms=35.322/46.298/46.298 restart_verify_ms=188.784 sample_p50/p95/p99_ms=0.013/0.015/0.021 query_segment_reads=0 query_segment_bytes=0 query_cache_hits=0 query_candidates=0 cache_weight_bytes=0 reuse_verify_segment_count=51 reuse_verify_bytes=978060 ray_snapshot_p50/p95/p99_ms=0.055/0.067/0.079 picker_p50/p95/p99_ms=0.086/0.096/0.175 ray_e2e_p50/p95/p99_ms=0.143/0.161/0.244 ray_segment_reads=0 ray_segment_bytes=0 ray_cache_hits=0 ray_spatial_candidates=0 ray_retained_candidates=0 lod0_ms=17.732 lod1_ms=97.014 segments=16 disk_bytes=343132 process_memory_delta_bytes=1888756
+P3_1_STORAGE_R2_PROFILE: id=concentrated-2048 generator_ms=65.292 initial_save_ms=354.933 repeat_save_p50/p95/p99_ms=30.451/31.183/31.183 restart_verify_ms=185.634 sample_p50/p95/p99_ms=5.635/6.465/10.106 query_segment_reads=16 query_segment_bytes=277909 query_cache_hits=1600 query_candidates=2048 cache_weight_bytes=1048576 reuse_verify_segment_count=51 reuse_verify_bytes=1053369 ray_snapshot_p50/p95/p99_ms=8.432/12.981/21.537 picker_p50/p95/p99_ms=0.112/0.172/0.230 ray_e2e_p50/p95/p99_ms=8.542/13.103/21.777 ray_segment_reads=16 ray_segment_bytes=277909 ray_cache_hits=1600 ray_spatial_candidates=2048 ray_retained_candidates=0 lod0_ms=460.871 lod1_ms=1808.429 segments=16 disk_bytes=368235 process_memory_delta_bytes=2687093
+P3_1_STORAGE_R2_PROFILE: id=distributed-8192 generator_ms=267.385 initial_save_ms=1452.496 repeat_save_p50/p95/p99_ms=117.403/122.764/122.764 restart_verify_ms=820.862 sample_p50/p95/p99_ms=0.182/0.306/0.312 query_segment_reads=3 query_segment_bytes=41025 query_cache_hits=300 query_candidates=5 cache_weight_bytes=851968 reuse_verify_segment_count=195 reuse_verify_bytes=3906045 ray_snapshot_p50/p95/p99_ms=0.616/0.701/1.435 picker_p50/p95/p99_ms=0.092/0.100/0.120 ray_e2e_p50/p95/p99_ms=0.711/0.799/1.552 ray_segment_reads=13 ray_segment_bytes=178721 ray_cache_hits=1300 ray_spatial_candidates=35 ray_retained_candidates=0 lod0_ms=18.681 lod1_ms=96.016 segments=64 disk_bytes=1364055 process_memory_delta_bytes=9499744
+P3_1_STORAGE_R2_PROFILE: id=concentrated-8192 generator_ms=268.269 initial_save_ms=1421.868 repeat_save_p50/p95/p99_ms=95.552/97.318/97.318 restart_verify_ms=732.146 sample_p50/p95/p99_ms=34.098/44.419/55.975 query_segment_reads=64 query_segment_bytes=1118288 query_cache_hits=6400 query_candidates=8192 cache_weight_bytes=4194304 reuse_verify_segment_count=195 reuse_verify_bytes=4311786 ray_snapshot_p50/p95/p99_ms=42.132/52.542/55.021 picker_p50/p95/p99_ms=0.124/0.160/0.181 ray_e2e_p50/p95/p99_ms=42.268/52.729/55.153 ray_segment_reads=64 ray_segment_bytes=1118288 ray_cache_hits=6400 ray_spatial_candidates=8192 ray_retained_candidates=0 lod0_ms=1861.594 lod1_ms=6548.198 segments=64 disk_bytes=1499302 process_memory_delta_bytes=8448949
+TERRAIN_WORLD_V2_STORAGE_PASS: assertions=3516 failures=0
+L2 PASS: versioned persistent world save, recovery, restart and LOD reconstruction tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/declarative_mod_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ISSUE118_REPARSE_FIXTURE_UNAVAILABLE: DirAccess.create_link returned Failed; prepared Windows junction validation not supplied
+ERROR: ASSERTION FAILED: empty, residual and nested non-package directories in optional user mods do not disable valid declared packages (duplicate_mod_id)
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/declarative_mod_tests.gd:405)
+       [1] _test_optional_user_mod_directories (res://tests/declarative_mod_tests.gd:70)
+       [2] _initialize (res://tests/declarative_mod_tests.gd:18)
+ERROR: ASSERTION FAILED: P0.3 registry applies the same exact user-root optional-directory policy
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/declarative_mod_tests.gd:405)
+       [1] _test_optional_user_mod_directories (res://tests/declarative_mod_tests.gd:74)
+       [2] _initialize (res://tests/declarative_mod_tests.gd:18)
+ERROR: ASSERTION FAILED: optional directory policy preserves deterministic package order regardless of root ordering
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/declarative_mod_tests.gd:405)
+       [1] _test_optional_user_mod_directories (res://tests/declarative_mod_tests.gd:90)
+       [2] _initialize (res://tests/declarative_mod_tests.gd:18)
+ERROR: DECLARATIVE_MOD_FAIL: assertions=66 failures=3
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://tests/declarative_mod_tests.gd:30)
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/procedural_object_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: FAIL: first-party and user:// external packages register through the P0.3 entrypoint
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_same_registry_pipeline (res://tests/procedural_object_tests.gd:64)
+       [2] _run (res://tests/procedural_object_tests.gd:40)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: both required packages are registered
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_same_registry_pipeline (res://tests/procedural_object_tests.gd:65)
+       [2] _run (res://tests/procedural_object_tests.gd:40)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: both namespaces resolve through the shared definition API
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_same_registry_pipeline (res://tests/procedural_object_tests.gd:68)
+       [2] _run (res://tests/procedural_object_tests.gd:40)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: first-party and external recipes use the same evaluator
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_same_registry_pipeline (res://tests/procedural_object_tests.gd:71)
+       [2] _run (res://tests/procedural_object_tests.gd:40)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: first-party granite uses the explicit geological schema/profile
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_same_registry_pipeline (res://tests/procedural_object_tests.gd:72)
+       [2] _run (res://tests/procedural_object_tests.gd:40)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: external basalt uses the same registry contract with its distinct versioned profile
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_same_registry_pipeline (res://tests/procedural_object_tests.gd:73)
+       [2] _run (res://tests/procedural_object_tests.gd:40)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: the basalt profile declares a denser fracture system
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_same_registry_pipeline (res://tests/procedural_object_tests.gd:74)
+       [2] _run (res://tests/procedural_object_tests.gd:40)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: the registry derives independent structure, fracture, wear and detail seeds
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_same_registry_pipeline (res://tests/procedural_object_tests.gd:75)
+       [2] _run (res://tests/procedural_object_tests.gd:40)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+SCRIPT ERROR: Invalid access to property or key 'id' on a base object of type 'Dictionary'.
+   at: _test_same_registry_pipeline (res://tests/procedural_object_tests.gd:76)
+   GDScript backtrace (most recent call first):
+       [0] _test_same_registry_pipeline (res://tests/procedural_object_tests.gd:76)
+       [1] _run (res://tests/procedural_object_tests.gd:40)
+       [2] _initialize (res://tests/procedural_object_tests.gd:27)
+PASS: schema-1 stacked_spheres_v1 retains its original declarative meaning
+PASS: schema-1 cannot silently reinterpret legacy fields as the geological algorithm
+PASS: legacy stacked-spheres data is not passed into the new geological adapter
+PASS: schema-2 geological parameters cannot be loaded under schema-1
+PASS: unregistered geological profiles fail schema validation
+ERROR: FAIL: mesh conversion fixture can load both package definitions
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_mesh_conversion (res://tests/procedural_object_tests.gd:132)
+       [2] _run (res://tests/procedural_object_tests.gd:42)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+PASS: seed gallery can register bundled granite and example basalt profiles
+PASS: firstparty.core_rocks:granite seed-gallery sample 01 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 01 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 02 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 02 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 03 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 03 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 04 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 04 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 05 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 05 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 06 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 06 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 07 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 07 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 08 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 08 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 09 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 09 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 10 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 10 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 11 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 11 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 12 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 12 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite produces all twelve requested independent gallery silhouettes
+ROCK_GALLERY_TEST_METRICS: family=firstparty.core_rocks:granite count=12 mean_triangles=364.00
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 01 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 01 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 02 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 02 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 03 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 03 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 04 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 04 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 05 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 05 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 06 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 06 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 07 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 07 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 08 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 08 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 09 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 09 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 10 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 10 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 11 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 11 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 12 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 12 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack produces all twelve requested independent gallery silhouettes
+ROCK_GALLERY_TEST_METRICS: family=official.example.procedural_rock:basalt_stack count=12 mean_triangles=376.00
+ERROR: FAIL: placement fixture registers common content
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_order_independent_records (res://tests/procedural_object_tests.gd:288)
+       [2] _run (res://tests/procedural_object_tests.gd:44)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: P0.3 registers two versioned compatibility rules and two generic package population rules
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_population_contracts_and_distribution (res://tests/procedural_object_tests.gd:322)
+       [2] _run (res://tests/procedural_object_tests.gd:45)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: population persistence fixture registers package rules
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_population_identity_persistence (res://tests/procedural_object_tests.gd:450)
+       [2] _run (res://tests/procedural_object_tests.gd:46)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: static batch fixture registers declarative package content
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_static_population_batch (res://tests/procedural_object_tests.gd:490)
+       [2] _run (res://tests/procedural_object_tests.gd:47)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: bounded population publication queue initializes through the declarative package loader
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_population_publication_queue (res://tests/procedural_object_tests.gd:522)
+       [2] _run (res://tests/procedural_object_tests.gd:48)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: density benchmark source packages remain valid (duplicate_mod_id)
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_population_density_benchmarks (res://tests/procedural_object_tests.gd:570)
+       [2] _run (res://tests/procedural_object_tests.gd:49)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: state round-trip fixture uses shared first-party and external data-only registry
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_persistent_instance_state (res://tests/procedural_object_tests.gd:792)
+       [2] _run (res://tests/procedural_object_tests.gd:50)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: stale publication guard fixture initializes independently
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_runtime_streaming_and_unload_reload (res://tests/procedural_object_tests.gd:644)
+       [2] _run (res://tests/procedural_object_tests.gd:51)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+PASS: superseded region token cannot publish an object root
+ERROR: FAIL: late stale completion cannot replace the current published region
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_runtime_streaming_and_unload_reload (res://tests/procedural_object_tests.gd:652)
+       [2] _run (res://tests/procedural_object_tests.gd:51)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: runtime adapter initializes from the common registry
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_runtime_streaming_and_unload_reload (res://tests/procedural_object_tests.gd:658)
+       [2] _run (res://tests/procedural_object_tests.gd:51)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: successful initialization has no hidden package or region errors
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_runtime_streaming_and_unload_reload (res://tests/procedural_object_tests.gd:659)
+       [2] _run (res://tests/procedural_object_tests.gd:51)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+ERROR: FAIL: seed-partition fixture initializes the shared object stream
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_seed_partition_isolation (res://tests/procedural_object_tests.gd:725)
+       [2] _run (res://tests/procedural_object_tests.gd:52)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+PASS: missing required external package fails with a meaningful identity
+PASS: required package failure remains visible to the HUD status adapter
+PASS: missing required content cannot produce a partially initialized object stream
+ERROR: FAIL: schema-1 external recipe cannot satisfy a schema-2 population rule and fails explicitly without silent reinterpretation
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_missing_and_incompatible_content (res://tests/procedural_object_tests.gd:773)
+       [2] _run (res://tests/procedural_object_tests.gd:53)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+PASS: incompatible external package is rejected through the existing loader
+PASS: incompatible content cannot be replaced by a fallback definition
+ERROR: FAIL: authority isolation fixture registers content
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_terrain_and_save_authority_isolation (res://tests/procedural_object_tests.gd:908)
+       [2] _run (res://tests/procedural_object_tests.gd:54)
+       [3] _initialize (res://tests/procedural_object_tests.gd:27)
+PASS: external example was copied only into the disposable isolated user-data test fixture
+PASS: playable scene includes the procedural-object stream adapter
+PASS: playable terrain scene publishes its focused region during streaming
+ERROR: FAIL: main scene initializes packages and displays the nonfatal optional-folder diagnostic
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_playable_scene_publication (res://tests/procedural_object_tests.gd:950)
+ERROR: FAIL: object visibility follows actually published active regions (objects=0 terrain=9 init=false status=Procedural object issue: package_discovery_failed:duplicate_mod_id)
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_playable_scene_publication (res://tests/procedural_object_tests.gd:956)
+ERROR: FAIL: scene publication creates both compatibility objects and declarative population from registered packages (instances=0 init=false error=package_discovery_failed:duplicate_mod_id)
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _test_playable_scene_publication (res://tests/procedural_object_tests.gd:958)
+ERROR: FAIL: test cleanup path is strictly contained under an owned disposable user:// fixture root
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/procedural_object_tests.gd:1241)
+       [1] _remove_tree (res://tests/procedural_object_tests.gd:1217)
+       [2] _run (res://tests/procedural_object_tests.gd:57)
+       [3] _test_playable_scene_publication (res://tests/procedural_object_tests.gd:962)
+ERROR: PROCEDURAL_OBJECT_FAIL: assertions=92 failures=27
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://tests/procedural_object_tests.gd:31)
+       [1] _run (res://tests/procedural_object_tests.gd:58)
+       [2] _test_playable_scene_publication (res://tests/procedural_object_tests.gd:962)
+WARNING: 3 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 1 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/entity_command_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: ASSERTION FAILED: first-party package discovery succeeds (duplicate_mod_id)
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/entity_command_tests.gd:341)
+       [1] _registry (res://tests/entity_command_tests.gd:231)
+       [2] _run (res://tests/entity_command_tests.gd:38)
+       [3] _initialize (res://tests/entity_command_tests.gd:26)
+ERROR: ASSERTION FAILED: first-party declarative package registers without executable mod code
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/entity_command_tests.gd:341)
+       [1] _run (res://tests/entity_command_tests.gd:39)
+       [2] _initialize (res://tests/entity_command_tests.gd:26)
+ERROR: ENTITY_COMMAND_FAIL: assertions=2 failures=2
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://tests/entity_command_tests.gd:30)
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/entity_history_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ASSERTION PASS: first-party declarative definitions register for disposable history tests
+ASSERTION PASS: P2 schema-1 object state opens in an isolated directory
+ASSERTION PASS: schema-1 migration preflight directly prepares schema 3 with an empty history
+ASSERTION PASS: preflight has no persistent or in-memory side effects
+ASSERTION PASS: explicit first migration commits schema 3 without changing terrain or object schema-1 files
+ASSERTION PASS: history dispatcher initializes only after explicit schema-3 migration
+ASSERTION PASS: canonical origin region reconstructs before commands (ok)
+ASSERTION PASS: Undo with no history fails without revision or receipt
+ASSERTION PASS: Redo with no unapplied entry fails without revision or receipt
+ASSERTION PASS: first component command and history entry commit in one snapshot (committed)
+ASSERTION PASS: appearance override is accepted after the transform
+ASSERTION PASS: replacing an existing component override appends one linear history entry
+ASSERTION PASS: Undo of an override replacement restores the exact prior component (committed)
+ASSERTION PASS: Undo exposes separate history-validation and persistence timing fields
+ASSERTION PASS: Redo rejects state that no longer matches its recorded prior component without changing the cursor or receipt set
+ASSERTION PASS: Redo reapplies the original component payload
+ASSERTION PASS: history navigation can reverse the same entry again with a new command ID
+ASSERTION PASS: Undo of a component created from absence removes only that component
+ASSERTION PASS: Redo restores the component whose prior state was absent
+ASSERTION PASS: schema-3 history and receipts satisfy the strict snapshot contract
+ASSERTION PASS: history cursor inconsistent with APPLIED/UNDONE flags is rejected
+ASSERTION PASS: history whose inverse metadata hash disagrees with its same-snapshot receipt is rejected
+ASSERTION PASS: delete fixture uses a separate world seed and directory
+ASSERTION PASS: delete fixture explicitly migrates to schema 3
+ASSERTION PASS: transform state is committed before deletion
+ASSERTION PASS: appearance state is committed before deletion
+ASSERTION PASS: logical component state is committed before deletion
+ASSERTION PASS: ENTITY_DELETE writes the tombstone and removes sparse overrides transactionally
+ASSERTION PASS: Undo Delete removes the tombstone and restores the entire pre-delete override set (committed)
+ASSERTION PASS: Undo Delete restores logical state as well as transform and appearance
+ASSERTION PASS: exact Undo command retry returns its persistent receipt without another cursor move
+ASSERTION PASS: reusing an Undo command ID for a different history entry is rejected
+ASSERTION PASS: Redo Delete reapplies only the logical deletion and preserves its inverse receipt
+ASSERTION PASS: repeated Redo/Undo Delete cycles restore the same exact component state
+ASSERTION PASS: delete is applied again before testing the distinct Restore operation
+ASSERTION PASS: ENTITY_RESTORE remains a baseline restore that discards overrides
+ASSERTION PASS: Undo Restore recreates the exact prior tombstone state rather than the pre-delete object state
+ASSERTION PASS: Redo Restore returns to the procedural baseline with no sparse overrides
+ASSERTION PASS: Undo Restore can be replayed with a new command ID
+ASSERTION PASS: Undo Delete still restores pre-delete state after Undo Restore and Undo Delete sequence
+ASSERTION PASS: unload/revisit after history navigation reconstructs the same stable entity state
+ASSERTION PASS: reinitialization persists history cursor, receipts and entity state
+ASSERTION PASS: history dispatcher resumes after restart and region reconstruction
+ASSERTION PASS: separate Godot process reloads schema-3 history, pending Redo and the exact pre-delete entity overrides (Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ENTITY_HISTORY_PROCESS_RESTART_PASS depth=5 cursor=3 revision=13)
+ASSERTION PASS: Redo after restart uses the persisted next history entry
+ASSERTION PASS: ENTITY_PLACE stores a stable explicit identity before undo
+ASSERTION PASS: Undo Place tombstones the explicit entity while reserving its original identity
+ASSERTION PASS: Redo Place restores the same command-derived identity without duplication
+ASSERTION PASS: place undo/redo preserves one identity and monotonic entity revisions
+ASSERTION PASS: active Restore fixture uses a separate schema-1 save root
+ASSERTION PASS: active Restore fixture explicitly migrates to history schema 3
+ASSERTION PASS: active Restore entity is reconstructed before mutation
+ASSERTION PASS: active Restore fixture commits a visible sparse override
+ASSERTION PASS: ENTITY_RESTORE clears active overrides and keeps the procedural identity active
+ASSERTION PASS: Undo Restore recovers the exact active pre-restore override without creating a tombstone
+ASSERTION PASS: Redo Restore returns the active entity to its procedural baseline
+ASSERTION PASS: Restore of an already-baseline active entity is rejected without a redundant history entry
+ASSERTION PASS: negative-region command becomes first history entry
+ASSERTION PASS: history entry can be undone before a new branch command
+ASSERTION PASS: linear cursor exposes exactly one redo candidate
+ASSERTION PASS: a new accepted command after Undo creates a new linear branch
+ASSERTION PASS: new forward command invalidates and removes the undone Redo branch
+ASSERTION PASS: stale global revision is rejected before cursor, receipt, or entity effects
+ASSERTION PASS: stale entity revision is independently rejected
+ASSERTION PASS: out-of-order or wrong-entity history references fail closed
+ASSERTION PASS: history command with another seed/world identity is rejected by the wire contract
+ASSERTION PASS: legacy direct state-service mutation paths cannot bypass schema-3 history
+ASSERTION PASS: legacy delete and restore writers are also blocked after history migration
+ASSERTION PASS: undo fails closed if the history entry's required definition pin is unavailable
+ASSERTION PASS: restoring the required registry allows the unchanged history operation
+ASSERTION PASS: Undo receipt replay remains idempotent after a subsequent cursor move
+ASSERTION PASS: same Undo command ID with different expected revision/payload is rejected
+ASSERTION PASS: a fresh operation on a negative-coordinate entity creates a new history entry
+ASSERTION PASS: undo works for a canonical negative-coordinate region
+ASSERTION PASS: schema-2 migration precondition uses the P3.0A compatibility upgrader
+ASSERTION PASS: a P3.0A command is persisted in schema 2 before history migration
+ASSERTION PASS: Undo is fail-closed until explicit schema-3 history migration
+ASSERTION PASS: schema-2 preflight accounts for and preserves every legacy command receipt
+ASSERTION PASS: schema-2 migration retains receipts verbatim and starts a non-retroactive empty history
+ASSERTION PASS: pre-migration operation remains idempotent but is not represented as undoable history
+ASSERTION PASS: legacy operations do not acquire invented reverse state during migration
+ASSERTION PASS: invalid source snapshot fails migration preflight without writing or normalization
+ASSERTION PASS: unsupported source schemas fail closed
+ASSERTION PASS: interrupted-migration fixture has a committed schema-2 source and passing no-write preflight
+ASSERTION PASS: schema-3 migration write interruption fails closed without publishing an in-memory candidate
+ASSERTION PASS: failed migration leaves the prior committed schema-2 generation available for explicit recovery
+ASSERTION PASS: uncertainty fixture commits a source command before injecting the later failure
+ASSERTION PASS: failure after durable generation rename is classified as uncertain and poisons the service
+ASSERTION PASS: uncertain commit does not publish candidate state or move the in-memory cursor before readback/reinitialization
+ASSERTION PASS: reinitialization resolves commit uncertainty by reading the committed Undo receipt and cursor
+ASSERTION PASS: reconciled history is usable only after service reconstruction
+ASSERTION PASS: retry after uncertain durable commit returns the exact receipt without applying Undo twice
+ASSERTION PASS: prewrite-failure fixture creates one reversible history entry
+ASSERTION PASS: prewrite persistence failure leaves the cursor and entity unchanged and forces reload before retry
+ASSERTION PASS: synthetic full-capacity history snapshot satisfies every schema-3 entry, receipt and cursor invariant (ok)
+ASSERTION PASS: forward edit at history capacity boundary commits (committed)
+ASSERTION PASS: history cap prunes exactly the oldest applied entry while retaining every idempotency receipt
+ASSERTION PASS: history remains navigable at capacity with the newest retained entry
+ASSERTION PASS: cap evicts only the oldest undo entry while preserving its idempotency receipt
+ASSERTION PASS: full receipt-capacity synthetic snapshot remains contract-valid without changing historic receipt policy
+ASSERTION PASS: full receipt capacity rejects forward and history-navigation commands without pruning prior receipts
+ENTITY_HISTORY_PASS: assertions=101 failures=0
+L2 PASS: transactional entity undo/redo, schema migration, crash recovery and retention tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/entity_command_harness_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+PASS: scene input test starts the real harness services
+PASS: scene starts empty so two P inputs create exactly two explicit entities
+PASS: two viewport P events create distinct identities
+PASS: two P events commit exactly two placements without a startup extra
+PASS: both placed entities have visible scene nodes
+PASS: most recently placed entity remains selected
+PASS: physical-key-only Delete reaches ENTITY_DELETE and persists its tombstone
+PASS: successful delete advances world and entity revisions once
+PASS: delete hides only the selected second entity
+PASS: delete retains the same node and selection for exact restoration
+PASS: HUD confirms committed logical deletion
+PASS: rejected duplicate delete reports its exact reason in the HUD
+PASS: rejected command leaves persistent and visual state unchanged
+PASS: physical-key-only R removes the exact selected tombstone
+PASS: restore advances revisions once without resetting entity history
+PASS: R restores the selected entity and leaves its sibling unchanged
+PASS: restore reuses the same Node3D without duplicating the entity
+PASS: HUD confirms successful restoration
+PASS: scene teardown removes only its unique harness state directory
+ENTITY_COMMAND_HARNESS_PASS: assertions=19 failures=0
+L2 PASS: transactional entity harness viewport input, delete and restore regression
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/playable_entity_command_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: FAIL: object stream uses registered first-party and external definitions with disposable state
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/playable_entity_command_tests.gd:351)
+       [1] _run (res://tests/playable_entity_command_tests.gd:31)
+ERROR: PLAYABLE_ENTITY_COMMAND_FAIL: assertions=1 failures=1
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _finish (res://tests/playable_entity_command_tests.gd:341)
+       [1] _run (res://tests/playable_entity_command_tests.gd:33)
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Dev\sandbox-sim-p3-1-r4-subledger-snapshots\game" --script res://tests/p3_0d_entity_placement_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+

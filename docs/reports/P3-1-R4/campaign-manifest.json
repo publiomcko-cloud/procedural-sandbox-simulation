@@ -1,0 +1,2367 @@
+{
+  "schema": "p3-1-r4-campaign-manifest-v1",
+  "campaign_id": "P3.1-R4-PREREGISTERED-EXPERIMENT-v1",
+  "production_baseline": "92b442d7f5b605c7bc9c48fac2aceea9d71813aa",
+  "seed": 131102026,
+  "generator_version": 1,
+  "radius_mm": 580,
+  "architecture_arms": [
+    "A_CHUNK_SUBLEDGER",
+    "B_INCREMENTAL_FLOAT32_VOXEL",
+    "C_SUBLEDGER_VOXEL_MESH_CACHE"
+  ],
+  "repeat_target": 5,
+  "maximum_row_duration_seconds": 600,
+  "rows": [
+    {
+      "order_index": 1,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0000.v1",
+      "repeat": 1,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 0,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0000.v1.R01.commands.json",
+      "input_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": -1,
+      "expected_sequence_end": -1
+    },
+    {
+      "order_index": 2,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0256.v1",
+      "repeat": 1,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0256.v1.R01.commands.json",
+      "input_sha256": "54a6f3a684f0d3b322a5eca491bac30d23f77c6dd56eb3fda88acd8d7fbc62c1",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 3,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0640.v1",
+      "repeat": 1,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0640.v1.R01.commands.json",
+      "input_sha256": "bb49bc70e93a732e234139b75d36886e93412ad553a51aa434680ccef0f48280",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 4,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N2048.v1",
+      "repeat": 1,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N2048.v1.R01.commands.json",
+      "input_sha256": "ce3ac18c1b68e721b638993261e568a9758898d43cec3fd075881ac288b95cf5",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 5,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N8192.v1",
+      "repeat": 1,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N8192.v1.R01.commands.json",
+      "input_sha256": "0b30e1ce2605b3bab504f3f5648c7e63a84c9a22f905721b56defcfe0489f611",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 6,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0000.v1",
+      "repeat": 1,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 0,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0000.v1.R01.commands.json",
+      "input_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": -1,
+      "expected_sequence_end": -1
+    },
+    {
+      "order_index": 7,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0256.v1",
+      "repeat": 1,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0256.v1.R01.commands.json",
+      "input_sha256": "c2178e3a2f95ba6b41110e4d2c22fde88fbf9e3e7cf7d603374fc44f283bface",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 8,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0640.v1",
+      "repeat": 1,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0640.v1.R01.commands.json",
+      "input_sha256": "e9c48f89ccfd5d3bb9320b0ffb2617dceed9d17779ec56e7ac21da1870f29a46",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 9,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N2048.v1",
+      "repeat": 1,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N2048.v1.R01.commands.json",
+      "input_sha256": "bb7d44b91098ce9fb144e75f6d063cb51f9214d49b731a55eddb6e0a559d7d89",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 10,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N8192.v1",
+      "repeat": 1,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N8192.v1.R01.commands.json",
+      "input_sha256": "cc9bd392473c3049839f8a1cc8acee76a0c98607f55b489323c8b1278df701dc",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 11,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N0256.v1",
+      "repeat": 1,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N0256.v1.commands.json",
+      "input_sha256": "ea24c592626c13479eb2c017876a92fe400e04d46aae4ab7e12ab74a0b302cbe",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 12,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N0640.v1",
+      "repeat": 1,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N0640.v1.commands.json",
+      "input_sha256": "d5e41de81bbace9efd34b0fb18693d84a2a9edfc8e3652a14674d97b0ec1524b",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 13,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N2048.v1",
+      "repeat": 1,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N2048.v1.commands.json",
+      "input_sha256": "d7260b168d4fca1ce5be55298a3a4a37e157635dd875658ccf82c198ff6eb5a5",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 14,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N8192.v1",
+      "repeat": 1,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N8192.v1.commands.json",
+      "input_sha256": "fa4066ef3aab6d9fc7d01f2df846390eba14cdf15439f7df5cc30d22351b4d15",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 15,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N0256.v1",
+      "repeat": 1,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N0256.v1.commands.json",
+      "input_sha256": "a61069eb72732db6ae2d12c80bc56f7d868cb9c4a2a0b3c9db0ee7a95df87cef",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 16,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N0640.v1",
+      "repeat": 1,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N0640.v1.commands.json",
+      "input_sha256": "2f015a2c23cc2a8a8d3aa0dbc52adeb864d270cf4e3f1425b27551d51a7d7970",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 17,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N2048.v1",
+      "repeat": 1,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N2048.v1.commands.json",
+      "input_sha256": "8e5cbe318557fb7c6316b2fe9fab82cdb2290c93c6ed80fa648d5b4e563755d7",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 18,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N8192.v1",
+      "repeat": 1,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N8192.v1.commands.json",
+      "input_sha256": "b0eb6c17cd0a92b9e90bce0393b63cfa5f7b153b6dcb0f80be93431d9782a760",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 19,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N8192.v1",
+      "repeat": 2,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N8192.v1.commands.json",
+      "input_sha256": "b0eb6c17cd0a92b9e90bce0393b63cfa5f7b153b6dcb0f80be93431d9782a760",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 20,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N2048.v1",
+      "repeat": 2,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N2048.v1.commands.json",
+      "input_sha256": "8e5cbe318557fb7c6316b2fe9fab82cdb2290c93c6ed80fa648d5b4e563755d7",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 21,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N0640.v1",
+      "repeat": 2,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N0640.v1.commands.json",
+      "input_sha256": "2f015a2c23cc2a8a8d3aa0dbc52adeb864d270cf4e3f1425b27551d51a7d7970",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 22,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N0256.v1",
+      "repeat": 2,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N0256.v1.commands.json",
+      "input_sha256": "a61069eb72732db6ae2d12c80bc56f7d868cb9c4a2a0b3c9db0ee7a95df87cef",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 23,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N8192.v1",
+      "repeat": 2,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N8192.v1.commands.json",
+      "input_sha256": "fa4066ef3aab6d9fc7d01f2df846390eba14cdf15439f7df5cc30d22351b4d15",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 24,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N2048.v1",
+      "repeat": 2,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N2048.v1.commands.json",
+      "input_sha256": "d7260b168d4fca1ce5be55298a3a4a37e157635dd875658ccf82c198ff6eb5a5",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 25,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N0640.v1",
+      "repeat": 2,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N0640.v1.commands.json",
+      "input_sha256": "d5e41de81bbace9efd34b0fb18693d84a2a9edfc8e3652a14674d97b0ec1524b",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 26,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N0256.v1",
+      "repeat": 2,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N0256.v1.commands.json",
+      "input_sha256": "ea24c592626c13479eb2c017876a92fe400e04d46aae4ab7e12ab74a0b302cbe",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 27,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N8192.v1",
+      "repeat": 2,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N8192.v1.R01.commands.json",
+      "input_sha256": "cc9bd392473c3049839f8a1cc8acee76a0c98607f55b489323c8b1278df701dc",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 28,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N2048.v1",
+      "repeat": 2,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N2048.v1.R01.commands.json",
+      "input_sha256": "bb7d44b91098ce9fb144e75f6d063cb51f9214d49b731a55eddb6e0a559d7d89",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 29,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0640.v1",
+      "repeat": 2,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0640.v1.R01.commands.json",
+      "input_sha256": "e9c48f89ccfd5d3bb9320b0ffb2617dceed9d17779ec56e7ac21da1870f29a46",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 30,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0256.v1",
+      "repeat": 2,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0256.v1.R01.commands.json",
+      "input_sha256": "c2178e3a2f95ba6b41110e4d2c22fde88fbf9e3e7cf7d603374fc44f283bface",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 31,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0000.v1",
+      "repeat": 2,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 0,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0000.v1.R01.commands.json",
+      "input_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": -1,
+      "expected_sequence_end": -1
+    },
+    {
+      "order_index": 32,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N8192.v1",
+      "repeat": 2,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N8192.v1.R01.commands.json",
+      "input_sha256": "0b30e1ce2605b3bab504f3f5648c7e63a84c9a22f905721b56defcfe0489f611",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 33,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N2048.v1",
+      "repeat": 2,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N2048.v1.R01.commands.json",
+      "input_sha256": "ce3ac18c1b68e721b638993261e568a9758898d43cec3fd075881ac288b95cf5",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 34,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0640.v1",
+      "repeat": 2,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0640.v1.R01.commands.json",
+      "input_sha256": "bb49bc70e93a732e234139b75d36886e93412ad553a51aa434680ccef0f48280",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 35,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0256.v1",
+      "repeat": 2,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0256.v1.R01.commands.json",
+      "input_sha256": "54a6f3a684f0d3b322a5eca491bac30d23f77c6dd56eb3fda88acd8d7fbc62c1",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 36,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0000.v1",
+      "repeat": 2,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 0,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0000.v1.R01.commands.json",
+      "input_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": -1,
+      "expected_sequence_end": -1
+    },
+    {
+      "order_index": 37,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0000.v1",
+      "repeat": 3,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 0,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0000.v1.R01.commands.json",
+      "input_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": -1,
+      "expected_sequence_end": -1
+    },
+    {
+      "order_index": 38,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0256.v1",
+      "repeat": 3,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0256.v1.R01.commands.json",
+      "input_sha256": "54a6f3a684f0d3b322a5eca491bac30d23f77c6dd56eb3fda88acd8d7fbc62c1",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 39,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0640.v1",
+      "repeat": 3,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0640.v1.R01.commands.json",
+      "input_sha256": "bb49bc70e93a732e234139b75d36886e93412ad553a51aa434680ccef0f48280",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 40,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N2048.v1",
+      "repeat": 3,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N2048.v1.R01.commands.json",
+      "input_sha256": "ce3ac18c1b68e721b638993261e568a9758898d43cec3fd075881ac288b95cf5",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 41,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N8192.v1",
+      "repeat": 3,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N8192.v1.R01.commands.json",
+      "input_sha256": "0b30e1ce2605b3bab504f3f5648c7e63a84c9a22f905721b56defcfe0489f611",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 42,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0000.v1",
+      "repeat": 3,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 0,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0000.v1.R01.commands.json",
+      "input_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": -1,
+      "expected_sequence_end": -1
+    },
+    {
+      "order_index": 43,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0256.v1",
+      "repeat": 3,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0256.v1.R01.commands.json",
+      "input_sha256": "c2178e3a2f95ba6b41110e4d2c22fde88fbf9e3e7cf7d603374fc44f283bface",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 44,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0640.v1",
+      "repeat": 3,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0640.v1.R01.commands.json",
+      "input_sha256": "e9c48f89ccfd5d3bb9320b0ffb2617dceed9d17779ec56e7ac21da1870f29a46",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 45,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N2048.v1",
+      "repeat": 3,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N2048.v1.R01.commands.json",
+      "input_sha256": "bb7d44b91098ce9fb144e75f6d063cb51f9214d49b731a55eddb6e0a559d7d89",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 46,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N8192.v1",
+      "repeat": 3,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N8192.v1.R01.commands.json",
+      "input_sha256": "cc9bd392473c3049839f8a1cc8acee76a0c98607f55b489323c8b1278df701dc",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 47,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N0256.v1",
+      "repeat": 3,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N0256.v1.commands.json",
+      "input_sha256": "ea24c592626c13479eb2c017876a92fe400e04d46aae4ab7e12ab74a0b302cbe",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 48,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N0640.v1",
+      "repeat": 3,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N0640.v1.commands.json",
+      "input_sha256": "d5e41de81bbace9efd34b0fb18693d84a2a9edfc8e3652a14674d97b0ec1524b",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 49,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N2048.v1",
+      "repeat": 3,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N2048.v1.commands.json",
+      "input_sha256": "d7260b168d4fca1ce5be55298a3a4a37e157635dd875658ccf82c198ff6eb5a5",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 50,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N8192.v1",
+      "repeat": 3,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N8192.v1.commands.json",
+      "input_sha256": "fa4066ef3aab6d9fc7d01f2df846390eba14cdf15439f7df5cc30d22351b4d15",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 51,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N0256.v1",
+      "repeat": 3,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N0256.v1.commands.json",
+      "input_sha256": "a61069eb72732db6ae2d12c80bc56f7d868cb9c4a2a0b3c9db0ee7a95df87cef",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 52,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N0640.v1",
+      "repeat": 3,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N0640.v1.commands.json",
+      "input_sha256": "2f015a2c23cc2a8a8d3aa0dbc52adeb864d270cf4e3f1425b27551d51a7d7970",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 53,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N2048.v1",
+      "repeat": 3,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N2048.v1.commands.json",
+      "input_sha256": "8e5cbe318557fb7c6316b2fe9fab82cdb2290c93c6ed80fa648d5b4e563755d7",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 54,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N8192.v1",
+      "repeat": 3,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N8192.v1.commands.json",
+      "input_sha256": "b0eb6c17cd0a92b9e90bce0393b63cfa5f7b153b6dcb0f80be93431d9782a760",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 55,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N8192.v1",
+      "repeat": 4,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N8192.v1.commands.json",
+      "input_sha256": "b0eb6c17cd0a92b9e90bce0393b63cfa5f7b153b6dcb0f80be93431d9782a760",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 56,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N2048.v1",
+      "repeat": 4,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N2048.v1.commands.json",
+      "input_sha256": "8e5cbe318557fb7c6316b2fe9fab82cdb2290c93c6ed80fa648d5b4e563755d7",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 57,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N0640.v1",
+      "repeat": 4,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N0640.v1.commands.json",
+      "input_sha256": "2f015a2c23cc2a8a8d3aa0dbc52adeb864d270cf4e3f1425b27551d51a7d7970",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 58,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N0256.v1",
+      "repeat": 4,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N0256.v1.commands.json",
+      "input_sha256": "a61069eb72732db6ae2d12c80bc56f7d868cb9c4a2a0b3c9db0ee7a95df87cef",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 59,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N8192.v1",
+      "repeat": 4,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N8192.v1.commands.json",
+      "input_sha256": "fa4066ef3aab6d9fc7d01f2df846390eba14cdf15439f7df5cc30d22351b4d15",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 60,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N2048.v1",
+      "repeat": 4,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N2048.v1.commands.json",
+      "input_sha256": "d7260b168d4fca1ce5be55298a3a4a37e157635dd875658ccf82c198ff6eb5a5",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 61,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N0640.v1",
+      "repeat": 4,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N0640.v1.commands.json",
+      "input_sha256": "d5e41de81bbace9efd34b0fb18693d84a2a9edfc8e3652a14674d97b0ec1524b",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 62,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N0256.v1",
+      "repeat": 4,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N0256.v1.commands.json",
+      "input_sha256": "ea24c592626c13479eb2c017876a92fe400e04d46aae4ab7e12ab74a0b302cbe",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 63,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N8192.v1",
+      "repeat": 4,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N8192.v1.R01.commands.json",
+      "input_sha256": "cc9bd392473c3049839f8a1cc8acee76a0c98607f55b489323c8b1278df701dc",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 64,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N2048.v1",
+      "repeat": 4,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N2048.v1.R01.commands.json",
+      "input_sha256": "bb7d44b91098ce9fb144e75f6d063cb51f9214d49b731a55eddb6e0a559d7d89",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 65,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0640.v1",
+      "repeat": 4,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0640.v1.R01.commands.json",
+      "input_sha256": "e9c48f89ccfd5d3bb9320b0ffb2617dceed9d17779ec56e7ac21da1870f29a46",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 66,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0256.v1",
+      "repeat": 4,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0256.v1.R01.commands.json",
+      "input_sha256": "c2178e3a2f95ba6b41110e4d2c22fde88fbf9e3e7cf7d603374fc44f283bface",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 67,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0000.v1",
+      "repeat": 4,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 0,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0000.v1.R01.commands.json",
+      "input_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": -1,
+      "expected_sequence_end": -1
+    },
+    {
+      "order_index": 68,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N8192.v1",
+      "repeat": 4,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N8192.v1.R01.commands.json",
+      "input_sha256": "0b30e1ce2605b3bab504f3f5648c7e63a84c9a22f905721b56defcfe0489f611",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 69,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N2048.v1",
+      "repeat": 4,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N2048.v1.R01.commands.json",
+      "input_sha256": "ce3ac18c1b68e721b638993261e568a9758898d43cec3fd075881ac288b95cf5",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 70,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0640.v1",
+      "repeat": 4,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0640.v1.R01.commands.json",
+      "input_sha256": "bb49bc70e93a732e234139b75d36886e93412ad553a51aa434680ccef0f48280",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 71,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0256.v1",
+      "repeat": 4,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0256.v1.R01.commands.json",
+      "input_sha256": "54a6f3a684f0d3b322a5eca491bac30d23f77c6dd56eb3fda88acd8d7fbc62c1",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 72,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0000.v1",
+      "repeat": 4,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 0,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0000.v1.R01.commands.json",
+      "input_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": -1,
+      "expected_sequence_end": -1
+    },
+    {
+      "order_index": 73,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0000.v1",
+      "repeat": 5,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 0,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0000.v1.R01.commands.json",
+      "input_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": -1,
+      "expected_sequence_end": -1
+    },
+    {
+      "order_index": 74,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0256.v1",
+      "repeat": 5,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0256.v1.R01.commands.json",
+      "input_sha256": "54a6f3a684f0d3b322a5eca491bac30d23f77c6dd56eb3fda88acd8d7fbc62c1",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 75,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N0640.v1",
+      "repeat": 5,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N0640.v1.R01.commands.json",
+      "input_sha256": "bb49bc70e93a732e234139b75d36886e93412ad553a51aa434680ccef0f48280",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 76,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N2048.v1",
+      "repeat": 5,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N2048.v1.R01.commands.json",
+      "input_sha256": "ce3ac18c1b68e721b638993261e568a9758898d43cec3fd075881ac288b95cf5",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 77,
+      "scenario_id": "P31.R4.EDIT.CONCENTRATED.N8192.v1",
+      "repeat": 5,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.CONCENTRATED.N8192.v1.R01.commands.json",
+      "input_sha256": "0b30e1ce2605b3bab504f3f5648c7e63a84c9a22f905721b56defcfe0489f611",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 78,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0000.v1",
+      "repeat": 5,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 0,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0000.v1.R01.commands.json",
+      "input_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": -1,
+      "expected_sequence_end": -1
+    },
+    {
+      "order_index": 79,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0256.v1",
+      "repeat": 5,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0256.v1.R01.commands.json",
+      "input_sha256": "c2178e3a2f95ba6b41110e4d2c22fde88fbf9e3e7cf7d603374fc44f283bface",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 80,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N0640.v1",
+      "repeat": 5,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N0640.v1.R01.commands.json",
+      "input_sha256": "e9c48f89ccfd5d3bb9320b0ffb2617dceed9d17779ec56e7ac21da1870f29a46",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 81,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N2048.v1",
+      "repeat": 5,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N2048.v1.R01.commands.json",
+      "input_sha256": "bb7d44b91098ce9fb144e75f6d063cb51f9214d49b731a55eddb6e0a559d7d89",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 82,
+      "scenario_id": "P31.R4.EDIT.DISTRIBUTED.N8192.v1",
+      "repeat": 5,
+      "source_kind": "ISSUE131_R3B_FROZEN",
+      "layout": "distributed",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/issue131/P31.EDIT.DISTRIBUTED.N8192.v1.R01.commands.json",
+      "input_sha256": "cc9bd392473c3049839f8a1cc8acee76a0c98607f55b489323c8b1278df701dc",
+      "source_manifest_sha256": "2dff9ccd5b98e1ea722051b25f961ff8f64c3ae698f3bc12102826e04ec3088d",
+      "source_inventory_sha256": "ac8a00cee024815dc55551c0ed5011ea2e9034d499b7846f7cf59b9b446d2be1",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 83,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N0256.v1",
+      "repeat": 5,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N0256.v1.commands.json",
+      "input_sha256": "ea24c592626c13479eb2c017876a92fe400e04d46aae4ab7e12ab74a0b302cbe",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 84,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N0640.v1",
+      "repeat": 5,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N0640.v1.commands.json",
+      "input_sha256": "d5e41de81bbace9efd34b0fb18693d84a2a9edfc8e3652a14674d97b0ec1524b",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 85,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N2048.v1",
+      "repeat": 5,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N2048.v1.commands.json",
+      "input_sha256": "d7260b168d4fca1ce5be55298a3a4a37e157635dd875658ccf82c198ff6eb5a5",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 86,
+      "scenario_id": "P31.R4.NONPERIODIC.CONCENTRATED.N8192.v1",
+      "repeat": 5,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "concentrated",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.CONCENTRATED.N8192.v1.commands.json",
+      "input_sha256": "fa4066ef3aab6d9fc7d01f2df846390eba14cdf15439f7df5cc30d22351b4d15",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        0,
+        0
+      ],
+      "chunk": [
+        0,
+        0
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    },
+    {
+      "order_index": 87,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N0256.v1",
+      "repeat": 5,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 256,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N0256.v1.commands.json",
+      "input_sha256": "a61069eb72732db6ae2d12c80bc56f7d868cb9c4a2a0b3c9db0ee7a95df87cef",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25,
+        0.125
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 255
+    },
+    {
+      "order_index": 88,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N0640.v1",
+      "repeat": 5,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 640,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N0640.v1.commands.json",
+      "input_sha256": "2f015a2c23cc2a8a8d3aa0dbc52adeb864d270cf4e3f1425b27551d51a7d7970",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 639
+    },
+    {
+      "order_index": 89,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N2048.v1",
+      "repeat": 5,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 2048,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N2048.v1.commands.json",
+      "input_sha256": "8e5cbe318557fb7c6316b2fe9fab82cdb2290c93c6ed80fa648d5b4e563755d7",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5,
+        0.25
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 2047
+    },
+    {
+      "order_index": 90,
+      "scenario_id": "P31.R4.NONPERIODIC.DISTRIBUTED.N8192.v1",
+      "repeat": 5,
+      "source_kind": "R3C_DISTINCT_NONPERIODIC_FROZEN",
+      "layout": "distributed",
+      "operation_count": 8192,
+      "input_path": "game/tests/fixtures/p3_1_r4/nonperiodic/P31.R3C.NONPERIODIC.DISTRIBUTED.N8192.v1.commands.json",
+      "input_sha256": "b0eb6c17cd0a92b9e90bce0393b63cfa5f7b153b6dcb0f80be93431d9782a760",
+      "source_manifest_sha256": "0facbab3b76bdbee78741d02f57bc8c631c3610cfb8758fd42ac868855a0ee03",
+      "source_inventory_sha256": "cd0026a32e50c24a8af3bec41044bbbdb4a7aa859754aeffd3ab1b0aa141200b",
+      "region": [
+        -31,
+        -64
+      ],
+      "chunk": [
+        2,
+        2
+      ],
+      "resolutions": [
+        0.5
+      ],
+      "expected_sequence_start": 0,
+      "expected_sequence_end": 8191
+    }
+  ]
+}
