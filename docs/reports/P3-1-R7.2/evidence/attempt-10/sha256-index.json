@@ -1,0 +1,14 @@
+[
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-10\\run-summary.json",
+    "Hash": "55061B2D2A5D5115F70DD5B7C5C92B703CE9172B637951B83DF285399E45A7B0"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-10\\zero-edit-gate.stderr.log",
+    "Hash": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-10\\zero-edit-gate.stdout.log",
+    "Hash": "E66FAD684C8C8B5A4E690F652308FA5674E8D72CCA248D24E4A9B7F608D6A469"
+  }
+]

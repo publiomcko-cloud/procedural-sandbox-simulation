@@ -1,0 +1,9 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_PERF_SCENE: initial_window_regions=9 chunks=144 cold_start_ms=1542.198 cpu_threads=28
+TERRAIN_PERF_REGION_CROSSING: samples=5 p50/p95_ms=494.796/521.385 values_ms=477.932,521.385,494.796,484.858,496.814 frame_p95/p99_ms=23.100/56.632 process_peak_ms=69.807
+TERRAIN_PERF_CLICK_VISIBLE: scenario=single_region ledger_before=0..4 samples=5 p50/p95_ms=52.695/54.463 values_ms=54.463,46.619,53.193,52.695,52.322
+TERRAIN_PERF_CLICK_VISIBLE: scenario=two_region_seam ledger_before=5..9 samples=5 p50/p95_ms=58.927/78.833 values_ms=52.435,59.161,58.927,50.668,78.833 support=2 rebuild_regions=4 chunks=6 queue/pool_p95_ms=37.468/0.206 upload_p50/publish_p95_ms=0.182/2.114 stage_ms={"array_mesh_build":0.962,"sdf_and_ledger":46.653,"shared_gradient_normals":21.036,"triangulation_and_face_normals":82.312} frame_p95/p99_ms=15.876/39.779
+TERRAIN_PERF_ACCEPTED_TO_VISIBLE: scenario=two_region_seam ledger_before=256 latency_ms=110.228 support=2 rebuild_regions=2 chunks=4 queue/pool_p95_ms=9.209/2.310 upload_p50/publish_p95_ms=0.232/2.385 stage_ms={"array_mesh_build":1.158,"sdf_and_ledger":110.637,"shared_gradient_normals":56.18,"triangulation_and_face_normals":50.649} frame_p95/p99_ms=9.425/39.779
+TERRAIN_PERF_EDITED_REGION_RETURN: unload_travel_ms=1616.616 return_to_edited_3x3_ms=2253.764 replayed_operations=256
+TERRAIN_E2E_PERF_PASS: assertions=251 failures=0

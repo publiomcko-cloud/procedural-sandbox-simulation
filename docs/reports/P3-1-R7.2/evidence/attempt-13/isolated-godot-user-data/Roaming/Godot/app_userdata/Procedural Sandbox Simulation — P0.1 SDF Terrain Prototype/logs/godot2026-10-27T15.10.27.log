@@ -1,0 +1,3 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_LOD_RUNTIME_PASS: assertions=53 failures=0 lod1_build_ms=207.685 shared_builder_ms=62.225 per_cell_reference_ms=81.817 same_chunk_triangles_lod0=384 lod1=244

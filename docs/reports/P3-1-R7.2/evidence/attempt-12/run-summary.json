@@ -1,0 +1,14 @@
+{
+  "command": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe --headless --path ./game --script res://tests/prototypes/p3_1_r7_2_zero_edit_gate.gd -- --scenario-id=cave_wall_carve",
+  "assertions": 7,
+  "failures": [
+    "cave_wall_carve_selected_A_repair_satisfies_all_local_invariants",
+    "cave_wall_carve_local_A_patch_replaces_only_selected_cells",
+    "patch:selected_local_strategy_invalid"
+  ],
+  "start_utc": "2026-10-27T18:00:52.4704277Z",
+  "status": "FAIL",
+  "scenario": null,
+  "exit_code": 1,
+  "duration_ms": 8654.9965
+}

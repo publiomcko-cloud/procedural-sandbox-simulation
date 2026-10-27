@@ -1,0 +1,26 @@
+[
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-06\\check-only.stderr.log",
+    "Hash": "1420C92D7CAA35252B015B2E8F1ABE1523169A669D7CBF7CD7DE0806264ABD99"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-06\\check-only.stdout.log",
+    "Hash": "83CF0B082206AF2AA236C83064FBCFA76BE1E00A4AA3558574B2F65965D9481C"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-06\\godot-version.txt",
+    "Hash": "BF8803022B574250BB04DEA65053A46B7C58570725316C1F7FE2AA6735706498"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-06\\minimal-topology.stderr.log",
+    "Hash": "F33FCBA7D89C01EA8FD3C9BD97E8DEA1E23ABD5A0A6E425CBDB65865A4643098"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-06\\minimal-topology.stdout.log",
+    "Hash": "83CF0B082206AF2AA236C83064FBCFA76BE1E00A4AA3558574B2F65965D9481C"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-06\\process-records.jsonl",
+    "Hash": "DFE769399705F8F236164FE8365245CD6ADCC950F651B1CE3DE1F86D273EB162"
+  }
+]

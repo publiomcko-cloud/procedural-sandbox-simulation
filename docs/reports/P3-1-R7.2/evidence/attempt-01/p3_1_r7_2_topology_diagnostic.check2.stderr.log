@@ -1,0 +1,12 @@
+SCRIPT ERROR: Parse Error: Cannot call non-static function "extract_local_mesh()" on the class "res://tests/prototypes/p3_1_r7_2_local_retriangulation.gd" directly. Make an instance instead.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r7_2_topology_diagnostic.gd:27)
+SCRIPT ERROR: Parse Error: Cannot call non-static function "metrics()" on the class "res://tests/prototypes/p3_1_r7_2_local_retriangulation.gd" directly. Make an instance instead.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r7_2_topology_diagnostic.gd:28)
+SCRIPT ERROR: Parse Error: Cannot call non-static function "extract_local_mesh()" on the class "res://tests/prototypes/p3_1_r7_2_local_retriangulation.gd" directly. Make an instance instead.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r7_2_topology_diagnostic.gd:34)
+SCRIPT ERROR: Parse Error: Cannot call non-static function "metrics()" on the class "res://tests/prototypes/p3_1_r7_2_local_retriangulation.gd" directly. Make an instance instead.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r7_2_topology_diagnostic.gd:35)
+SCRIPT ERROR: Parse Error: Cannot call non-static function "run_strategy()" on the class "res://tests/prototypes/p3_1_r7_2_local_retriangulation.gd" directly. Make an instance instead.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r7_2_topology_diagnostic.gd:40)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r7_2_topology_diagnostic.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)

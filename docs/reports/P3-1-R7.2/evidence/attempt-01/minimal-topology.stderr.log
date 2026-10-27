@@ -1,0 +1,4 @@
+SCRIPT ERROR: Invalid type in function 'extract_local_mesh' in base 'RefCounted (p3_1_r7_2_local_retriangulation.gd)'. The array of argument 3 (Array) does not have the same element type as the expected typed array argument.
+   at: _run (res://tests/prototypes/p3_1_r7_2_topology_diagnostic.gd:28)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tests/prototypes/p3_1_r7_2_topology_diagnostic.gd:28)

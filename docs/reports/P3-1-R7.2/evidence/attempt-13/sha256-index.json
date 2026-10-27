@@ -1,0 +1,46 @@
+[
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-13\\environment.json",
+    "Hash": "7A80BC129848DF1C0FD35561A2B75ACC75F4E7DF7F7FDD923F9416C4A5872F87"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-13\\process-record.json",
+    "Hash": "5B81712EFF7962003C7D38C021C40060D99FA5E5D8A6540258476D18C0796876"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-13\\validate.stderr.log",
+    "Hash": "01346ABC85002F006E3C4E7E8BFB7B02377283DBA88EA437319E45C3E8ED76C8"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-13\\validate.stdout.log",
+    "Hash": "71E8593D833878154CFF95FF9AFA4187160CEFF50DDB75434B491C8C944FC30B"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-13\\isolated-godot-user-data\\Local\\Godot\\editor_doc_cache-4.7.res",
+    "Hash": "62B449A0DFB3E240EA45FA538DADAF51E804053FD3404DFCD5FC1B69F0C418F5"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-13\\isolated-godot-user-data\\Roaming\\Godot\\editor_settings-4.7.tres",
+    "Hash": "87F94724967492D78A77B1BFD0578FA5603AAA4907F51EDF062839AC14168987"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-13\\isolated-godot-user-data\\Roaming\\Godot\\app_userdata\\Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype\\logs\\godot.log",
+    "Hash": "6D1C065383A27C36804949B6FFA4B09714470B112E5DACC0BD5AEB7B9C147C4E"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-13\\isolated-godot-user-data\\Roaming\\Godot\\app_userdata\\Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype\\logs\\godot2026-10-27T15.10.27.log",
+    "Hash": "4A917C01927D8F8117809F1BD62EB4B547074D05556875006E44ACBAF63F8491"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-13\\isolated-godot-user-data\\Roaming\\Godot\\app_userdata\\Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype\\logs\\godot2026-10-27T15.10.41.log",
+    "Hash": "4969452A9BF77815DC53A09A6399F72C1ABF5044B34416D509BA85427CD968B0"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-13\\isolated-godot-user-data\\Roaming\\Godot\\app_userdata\\Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype\\logs\\godot2026-10-27T15.10.46.log",
+    "Hash": "DFE31BE6C265497B8321783923D91A653BF749A126A3B08C04C4D375F3894EB7"
+  },
+  {
+    "Path": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-13\\isolated-godot-user-data\\Roaming\\Godot\\app_userdata\\Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype\\logs\\godot2026-10-27T15.10.47.log",
+    "Hash": "F3ED0B23638E839DCC46F750402B29CCD03BB2A688CB43FDC3F73546A4CB3F44"
+  }
+]

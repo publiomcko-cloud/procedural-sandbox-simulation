@@ -1,0 +1,12 @@
+{
+  "localappdata": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-13\\isolated-godot-user-data\\Local",
+  "godot_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "appdata": "C:\\r72\\docs\\reports\\P3-1-R7.2\\evidence\\attempt-13\\isolated-godot-user-data\\Roaming",
+  "godot_executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "head": "24d6580b9539b267ef59c209f765607071ee6f48",
+  "temp": "C:\\Users\\PUBLI\\AppData\\Local\\Temp",
+  "worktree": "C:\\r72",
+  "branch": "bench/p3-1-r7-2-topology-retriangulation",
+  "parent": "b32db270ad31d4eee60cbeffee10bdfaf21967fb"
+}
