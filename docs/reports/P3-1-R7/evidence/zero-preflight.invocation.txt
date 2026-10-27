@@ -1,0 +1,8 @@
+started=2026-10-27T10:01:21.8261994-03:00
+source=0867c0c04b857fae1c71b274b8eac44c6e7dba4f
+command="C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path .\game --script res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd -- --preflight-only
+exit_code=1
+duration_ms=7086
+ended=2026-10-27T10:01:28.9443360-03:00
+stdout=C:\Users\PUBLI\AppData\Local\Temp\p31-r7-20ee67476732465c9279cd7b5a9adb6c\r7-zero-preflight-gated-r2.stdout.log
+stderr=C:\Users\PUBLI\AppData\Local\Temp\p31-r7-20ee67476732465c9279cd7b5a9adb6c\r7-zero-preflight-gated-r2.stderr.log
