@@ -1,0 +1,85 @@
+SCRIPT ERROR: Invalid access to property or key 'sequences' on a base object of type 'Dictionary'.
+   at: _snapshots_equal (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:178)
+   GDScript backtrace (most recent call first):
+       [0] _snapshots_equal (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:178)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:65)
+SCRIPT ERROR: Invalid access of index '0' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '3' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '6' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '0' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '0' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '0' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '0' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '0' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '0' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '6' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '0' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '6' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '6' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '0' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '0' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
+SCRIPT ERROR: Invalid access of index '0' on a base object of type: 'PackedInt32Array'.
+   at: _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+   GDScript backtrace (most recent call first):
+       [0] _first_replay_divergence (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:130)
+       [1] _run (res://tests/prototypes/p3_1_r6e_causal_diagnostic.gd:77)
