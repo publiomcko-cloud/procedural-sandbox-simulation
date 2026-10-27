@@ -80,6 +80,8 @@ The harness constructs disposable `ConcavePolygonShape3D` proxies because the pi
 
 All three approaches reported the same sampled cave diameters: 31 radial samples, p50 1.836347, p95 1.838929, max 1.839777 units. The mesh-vertex proxy `abs(canonical SDF)/|gradient|` was p50 0.002400, p95 0.103077, max 0.251931 units over 509 vertices; this is not symmetric Hausdorff distance. Mesh-normal-to-canonical-gradient angle was p50 0.4227°, p95 8.3194°, max 11.3042°. The maximum cell-interface endpoint normal difference above is separately reported. No geometry threshold is approved, and these sampled metrics cannot be scored for acceptance.
 
+The field probe reported the centerline open at 31/31 samples and picker hit classification equal to canonical at 31/31 probes, with zero sampled picker-position error. These are field/picker checks, not connectivity checks on the extracted mesh. A separate maximum scalar jump and finite-difference gradient jump across shared interfaces was not emitted; the interface report contains extracted contour matching and mesh endpoint-normal differences only. Therefore shared scalar/gradient continuity remains unmeasured by this R7 output and cannot be claimed.
+
 One headless process measured one build per method. The fixture's internal build timing ends after sampling and extraction; the outer timing includes the approach's additional topology, canonical-surface and field diagnostics. These are one-run timings, not percentiles or cold/warm benchmarks.
 
 | Approach | Build through sampling/extraction | Whole approach incl. diagnostics | Fine scalar payload | Coarse scalar nodes | Triangles |
