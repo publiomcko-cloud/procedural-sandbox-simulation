@@ -1,0 +1,54 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+PASS: isolated scene is published and the schema-3 command service is ready
+PASS: off-center viewport rays hit deterministic, irregular terrain surfaces
+PASS: distinct screen points produce distinct quantized world-space hits
+PASS: ray targets lie on sampled non-flat SDF terrain rather than a placement constant
+PASS: both deterministic pointer-hit regions are published before their placements
+PASS: B input at the left pointer accepts one placement
+PASS: left-pointer command persists the exact millimeter-quantized SDF hit (expected=(3248, 2470, 2612) actual=(3248, 2470, 2612))
+PASS: visible-pointer placement reports pointer aim mode
+PASS: a second B creates a distinct identity
+PASS: right-pointer command persists its own SDF hit
+PASS: repeated aim is stable and allows intentional overlap without jitter
+PASS: each accepted placement publishes exactly one visual for its stable identity (counts=1/1/1 errors=)
+PASS: visual target indicator marks the same surface hit used by B
+PASS: visual node exists for sandbox-default/seed-424242/placed/6ade24d7-bdd3-29aa-4949-191b9f58f4a8
+PASS: persisted identity owner equals floor-based world owner
+PASS: region-local node position is global anchor minus region origin
+PASS: region root plus local node transform applies the world anchor exactly once
+PASS: scaled viewport coordinates round-trip through input, ray projection and persisted anchor
+PASS: Undo removes the latest placement transactionally (committed)
+PASS: Undo removes only the target identity's visual
+PASS: Redo reconstructs the same identity once (committed; count=1; errors=)
+PASS: Undo/redo preserves exact persisted placement bytes
+PASS: delete hides only the selected explicit entity
+PASS: restore recovers the same identity without a duplicate visual (committed; count=1; errors=)
+PASS: no-surface rejection has no command, revision, selection or persistent state side effect
+PASS: unpublished-region rejection fixture has a valid hit in an unpublished region
+PASS: valid but unpublished target is rejected without command, selection or persistent mutation
+PASS: positive boundary target region is fully published before placement
+PASS: quantized hit on the positive X region plane belongs to region (1,0)
+PASS: visual node exists for sandbox-default/seed-424242/placed/e97684c4-5564-2a38-9881-b9162985c4e5
+PASS: persisted identity owner equals floor-based world owner
+PASS: region-local node position is global anchor minus region origin
+PASS: region root plus local node transform applies the world anchor exactly once
+PASS: negative boundary region becomes fully published before placement
+PASS: hidden/captured cursor policy explicitly falls back to the viewport center
+PASS: captured-center hit at negative X/Z region planes uses floor-based owner (-1,-1)
+PASS: visual node exists for sandbox-default/seed-424242/placed/5721ba20-cc71-e460-a18b-ec9dfb0e3929
+PASS: persisted identity owner equals floor-based world owner
+PASS: region-local node position is global anchor minus region origin
+PASS: region root plus local node transform applies the world anchor exactly once
+PASS: streaming unload removes the negative-region visual while retaining its persistent identity
+PASS: unload/revisit reconstructs exactly one visual for the same placement ID
+PASS: unload/revisit preserves the exact world-space anchor
+PASS: fresh object-stream service reopens the isolated persisted entity store
+PASS: fresh stream reconstructs the persisted region from authoritative state
+PASS: restart publication contains exactly one visual for the same placement identity
+PASS: restart keeps the exact global millimeter anchor
+PASS: visual node exists for sandbox-default/seed-424242/placed/5721ba20-cc71-e460-a18b-ec9dfb0e3929
+PASS: persisted identity owner equals floor-based world owner
+PASS: region-local node position is global anchor minus region origin
+PASS: region root plus local node transform applies the world anchor exactly once
+P3_0D_PLACEMENT_PASS: assertions=51 failures=0

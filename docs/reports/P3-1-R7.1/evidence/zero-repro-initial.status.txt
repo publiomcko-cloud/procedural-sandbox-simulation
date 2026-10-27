@@ -1,0 +1,1 @@
+FAILED_INVALID_RUN: original R7 diagnostic script executed before editor import; SCRIPT ERROR reported unresolved static call despite source method being present; process exit capture interrupted after scenario result. Preserved stdout/stderr.

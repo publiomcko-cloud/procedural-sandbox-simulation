@@ -34,6 +34,27 @@ var refined_nodes_bytes := 0
 var initial_refined_count := 0
 var last_reason := ""
 var last_build_stats: Dictionary = {}
+var r71_interpolation_mode := "production"
+var r71_drop_mode := "production"
+var r71_tetra_mode := "production"
+var r71_triangle_attempts := 0
+var r71_triangle_dropped := 0
+
+
+func configure_r71_polygonizer(interpolation_mode: String, drop_mode: String = "production",
+		tetra_mode: String = "production") -> bool:
+	if not ["production", "mirror_production", "exact_denominator"].has(interpolation_mode):
+		return false
+	if not ["production", "mirror_production", "reject_only_exact_zero"].has(drop_mode):
+		return false
+	if not ["production", "mirror_x_diagonal"].has(tetra_mode):
+		return false
+	r71_interpolation_mode = interpolation_mode
+	r71_drop_mode = drop_mode
+	r71_tetra_mode = tetra_mode
+	r71_triangle_attempts = 0
+	r71_triangle_dropped = 0
+	return true
 
 
 func configure(seed: int, snapshot: Dictionary) -> bool:
@@ -154,6 +175,10 @@ func build_approach(approach: String) -> Dictionary:
 		"fine_payload_bytes": refined_nodes_bytes,
 		"coarse_node_bytes": coarse_nodes.size() * 4,
 		"triangle_count": triangle_count,
+		"r71_polygonizer": {"interpolation_mode": r71_interpolation_mode,
+			"drop_mode": r71_drop_mode, "tetrahedron_mode": r71_tetra_mode,
+			"candidate_triangle_count": r71_triangle_attempts,
+			"dropped_triangle_count": r71_triangle_dropped},
 		"vertex_count_triangle_soup": positions.size(),
 		"build_usec_including_sampling_and_extraction": build_usec,
 		"topology": topology,
@@ -311,7 +336,7 @@ func _build_fine_cell(cell: Vector3i, values: PackedFloat32Array) -> Dictionary:
 					cube_points.append(PATCH_MIN + Vector3(cell) * COARSE_STEP + Vector3(sample_index) * FINE_STEP)
 					cube_values.append(_fine_value(values, sample_index.x, sample_index.y, sample_index.z))
 				for tetra in Mesher.TETRAHEDRA:
-					Mesher._polygonize_tetra(tetra, cube_points, cube_values, positions, normals)
+					_polygonize_cell_tetra(tetra, cube_points, cube_values, positions, normals)
 	return {"vertices": positions, "normals": normals, "triangle_count": positions.size() / 3}
 
 
@@ -326,8 +351,96 @@ func _build_coarse_cell(cell: Vector3i) -> Dictionary:
 		cube_points.append(PATCH_MIN + Vector3(sample_index) * COARSE_STEP)
 		cube_values.append(_node_value(sample_index.x, sample_index.y, sample_index.z))
 	for tetra in Mesher.TETRAHEDRA:
-		Mesher._polygonize_tetra(tetra, cube_points, cube_values, positions, normals)
+		_polygonize_cell_tetra(tetra, cube_points, cube_values, positions, normals)
 	return {"vertices": positions, "normals": normals, "triangle_count": positions.size() / 3}
+
+
+func _polygonize_cell_tetra(tetra: Array, cube_points: Array[Vector3], cube_values: Array[float],
+		positions: PackedVector3Array, normals: PackedVector3Array) -> int:
+	if r71_interpolation_mode == "production" and r71_drop_mode == "production" and r71_tetra_mode == "production":
+		return Mesher._polygonize_tetra(tetra, cube_points, cube_values, positions, normals)
+	var effective_tetra := _r71_transform_tetra(tetra)
+	var inside: Array[int] = []
+	var outside: Array[int] = []
+	for corner_value in effective_tetra:
+		var corner := int(corner_value)
+		if cube_values[corner] >= 0.0:
+			inside.append(corner)
+		else:
+			outside.append(corner)
+	if inside.is_empty() or outside.is_empty():
+		return 0
+	var inside_center := Vector3.ZERO
+	var outside_center := Vector3.ZERO
+	for corner in inside: inside_center += cube_points[corner]
+	for corner in outside: outside_center += cube_points[corner]
+	inside_center /= float(inside.size())
+	outside_center /= float(outside.size())
+	var toward_empty := outside_center - inside_center
+	var made := 0
+	if inside.size() == 1:
+		made += _r71_add_interpolated_triangle(inside[0], outside[0], inside[0], outside[1], inside[0], outside[2],
+			cube_points, cube_values, toward_empty, positions, normals)
+	elif inside.size() == 3:
+		made += _r71_add_interpolated_triangle(outside[0], inside[0], outside[0], inside[1], outside[0], inside[2],
+			cube_points, cube_values, toward_empty, positions, normals)
+	else:
+		made += _r71_add_interpolated_triangle(inside[0], outside[0], inside[0], outside[1], inside[1], outside[1],
+			cube_points, cube_values, toward_empty, positions, normals)
+		made += _r71_add_interpolated_triangle(inside[0], outside[0], outside[1], inside[1], inside[1], outside[0],
+			cube_points, cube_values, toward_empty, positions, normals)
+	return made
+
+
+func _r71_transform_tetra(tetra: Array) -> Array:
+	if r71_tetra_mode == "production":
+		return tetra
+	# Mirror the globally consistent 0-6 body diagonal across X, yielding 1-7.
+	const X_MIRROR_CORNER := [1, 0, 3, 2, 5, 4, 7, 6]
+	var transformed: Array = []
+	for corner_value in tetra:
+		transformed.append(X_MIRROR_CORNER[int(corner_value)])
+	return transformed
+
+
+func _r71_add_interpolated_triangle(a0: int, a1: int, b0: int, b1: int, c0: int, c1: int,
+		cube_points: Array[Vector3], cube_values: Array[float], toward_empty: Vector3,
+		positions: PackedVector3Array, normals: PackedVector3Array) -> int:
+	var a := _r71_interpolate(a0, a1, cube_points, cube_values)
+	var b := _r71_interpolate(b0, b1, cube_points, cube_values)
+	var c := _r71_interpolate(c0, c1, cube_points, cube_values)
+	r71_triangle_attempts += 1
+	var normal := (b - a).cross(c - a)
+	var threshold := 0.000000000001 if r71_drop_mode != "reject_only_exact_zero" else 0.0
+	if normal.length_squared() <= threshold:
+		r71_triangle_dropped += 1
+		return 0
+	if normal.dot(toward_empty) < 0.0:
+		var swap := b
+		b = c
+		c = swap
+		normal = -normal
+	normal = normal.normalized()
+	positions.append(a)
+	positions.append(b)
+	positions.append(c)
+	normals.append(normal)
+	normals.append(normal)
+	normals.append(normal)
+	return 1
+
+
+func _r71_interpolate(a_index: int, b_index: int, cube_points: Array[Vector3], cube_values: Array[float]) -> Vector3:
+	var a_value := cube_values[a_index]
+	var b_value := cube_values[b_index]
+	var denominator := a_value - b_value
+	var weight := 0.5
+	if r71_interpolation_mode == "exact_denominator":
+		if denominator != 0.0:
+			weight = clampf(a_value / denominator, 0.0, 1.0)
+	else:
+		weight = 0.5 if is_zero_approx(denominator) else clampf(a_value / denominator, 0.0, 1.0)
+	return cube_points[a_index].lerp(cube_points[b_index], weight)
 
 
 func _build_transition_cell(cell: Vector3i, faces: Array[int], mask: Dictionary) -> Dictionary:
@@ -543,6 +656,7 @@ func _topology_metrics(cells: Dictionary, positions: PackedVector3Array) -> Dict
 	var internal_open_edges := 0
 	var nonmanifold_edges := 0
 	var internal_open_examples: Array[Dictionary] = []
+	var external_open_examples: Array[Dictionary] = []
 	var nearby_internal_open_examples: Array[Dictionary] = []
 	for edge in edge_counts:
 		var count := int(edge_counts[edge])
@@ -553,10 +667,17 @@ func _topology_metrics(cells: Dictionary, positions: PackedVector3Array) -> Dict
 			var point_b: Vector3 = welded_positions[int(endpoints[1])]
 			if _edge_on_patch_boundary_points(point_a, point_b):
 				external_open_edges += 1
+				if external_open_examples.size() < 12:
+					external_open_examples.append({"quantized_edge_id": String(edge),
+						"welded_vertex_ids": edge_geometry[edge], "a": point_a, "b": point_b,
+						"observed_incidence": count, "expected_incidence_for_patch_boundary": 1,
+						"owner_cells": edge_cell_owners.get(edge, [])})
 			else:
 				internal_open_edges += 1
 				if internal_open_examples.size() < 20:
-					internal_open_examples.append({"a": point_a, "b": point_b,
+					internal_open_examples.append({"quantized_edge_id": String(edge),
+						"welded_vertex_ids": edge_geometry[edge], "a": point_a, "b": point_b,
+						"observed_incidence": count, "expected_incidence_for_internal_edge": 2,
 						"canonical_density_a": _canonical_sample(point_a),
 						"canonical_density_b": _canonical_sample(point_b),
 						"owner_cells": edge_cell_owners.get(edge, [])})
@@ -583,6 +704,7 @@ func _topology_metrics(cells: Dictionary, positions: PackedVector3Array) -> Dict
 		"open_edge_count": open_edges, "expected_open_edge_count_at_patch_boundary": external_open_edges,
 		"internal_open_edge_crack_count": internal_open_edges, "nonmanifold_edge_count": nonmanifold_edges,
 		"degenerate_triangle_count": degenerate, "internal_open_edge_examples": internal_open_examples,
+		"external_open_edge_examples": external_open_examples,
 		"nearby_internal_open_edge_pairs_within_2x_weld_tolerance": nearby_internal_open_examples,
 		"interpretation": "triangle-soup vertices clustered by actual Euclidean distance <= 1e-5 world units using neighboring spatial-hash buckets; external fixture boundary edges are reported separately"}
 
