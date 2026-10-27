@@ -12,14 +12,21 @@ This does **not** qualify the full edited `cave_wall_carve` scenario. Issue #155
 
 - Repository: `publiomcko-cloud/procedural-sandbox-simulation`; origin verified as `https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git`.
 - R7.3 branch/worktree: `bench/p3-1-r7-3-edited-carve-diagnosis`, `C:\r73`.
-- R7.2 base: PR #153 head `c54f337cb1f2b1e6d1f61de5c1b9d9f3031e892d`; this is the R7.3 branch fork point. Its parent is R7.1 evidence head `24d6580b9539b267ef59c209f765607071ee6f48`.
+- Tested R7.3 source commit: `7ad45d8c817ecb0f54a8eec058babce65af287db`; direct parent and exact R7.2 base: PR #153 head `c54f337cb1f2b1e6d1f61de5c1b9d9f3031e892d`. R7.2's parent is R7.1 evidence head `24d6580b9539b267ef59c209f765607071ee6f48`.
 - Production reference: `92b442d7f5b605c7bc9c48fac2aceea9d71813aa`.
 - Live PR #153 and Issue #155 were verified open; PR #153 is draft and unmerged. PRs #149 and #151 remain separate, open, draft and unmerged.
 - Godot: `4.7.2.stable.official.ed1daf0bf`; executable `C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe`; SHA-256 `c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643`.
 - Godot was run with redirected `APPDATA`/`LOCALAPPDATA` under disposable profiles. No production terrain or user save was loaded.
 - The only code changes are experimental GDScript diagnostics/tests. Production SDF, ledger, mesher, scenes, schemas, dependencies and gameplay are unchanged. No PR #153/#149/#151 or F2-G1 protected state was modified.
 
-The source commit SHA and parent are recorded in the final Git commit that contains the tested source. Physical SHA-256 values for changed GDScript sources are listed below and in the raw diagnostic records.
+Physical SHA-256 values for tested GDScript sources are independently recorded below and in the raw diagnostic records. The follow-up documentation commit does not change tested source.
+
+| Tested source | Physical SHA-256 |
+| --- | --- |
+| `game/tests/prototypes/p3_1_r7_2_local_retriangulation.gd` | `9ea65149d45be9ef6e747156ea2984e8f75269cca03e11714d72e8354330f3d2` |
+| `game/tests/prototypes/p3_1_r7_2_zero_edit_gate.gd` | `04c3656e314ff1a21f10be2d3a034f8ee137e5024c5ea7fa50c5563de21e27d5` |
+| `game/tests/prototypes/p3_1_r7_3_minimal_carve_repair.gd` | `f74a51d8f93296181325aa876b442fc42c03ac64c6cf34728b8fe4c755f2b4bf` |
+| `game/tests/prototypes/p3_1_r7_conforming_mesh_fixture.gd` (unchanged oracle) | `65addfba047a093def229bd6e2c1c3ac363c8e559cf20cd178cdf7a1264966c7` |
 
 | Changed path | Purpose |
 | --- | --- |
@@ -28,7 +35,7 @@ The source commit SHA and parent are recorded in the final Git commit that conta
 | `game/tests/prototypes/p3_1_r7_3_minimal_carve_repair.gd` | Adds a deterministic single-focus-cell CARVE regression. It explicitly does not run the full edited scenario or collider gate. |
 | `.gitattributes` | Keeps the raw R7.3 evidence bytes unchanged in Git. |
 | `docs/reports/P3-1-R7.3/` | Full attempt logs, checksum inventory and this report. |
-| `docs/checkpoints/2026-10-27-P3-1-R7.3-EDITED-CARVE-DIAGNOSIS.md` | Immutable event checkpoint. |
+| `docs/checkpoints/2026-10-27-P3-1-R7.3-EDITED-CARVE-DIAGNOSIS.md` | Immutable event checkpoint added in the documentation follow-up commit. |
 | `docs/checkpoints/INDEX.md`, `docs/status/CURRENT_STATUS.md`, `README.md` | Index and current research-state reconciliation. |
 
 ## Failure reproduction and cause
