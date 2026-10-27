@@ -14,6 +14,7 @@
 - Evidence PR: [#141](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/141), based on `feat/p3-1-scalable-terrain-storage` at `92b442d7f5b605c7bc9c48fac2aceea9d71813aa`; PR #129 remains open/draft/unmerged and unchanged.
 - Campaign source: `83c7c091bcec0d10534d8638225d3d24d94b6334`, parent `8b76e778b0f282a37aa11a229b795c423f581467`. Documentation/report corrections are being committed after the campaign; the benchmark data remain attributed to the campaign source SHA.
 - Evidence/report commit: `4c71f2b0b8e5e8c30a047626dd3a5e588aafe71e`, direct parent `83c7c091bcec0d10534d8638225d3d24d94b6334`.
+- Final PR head after publication-record reconciliation: `991aaa7da6c14f4054361b56d1d4c56d8a4d654c`, direct parent `4c71f2b0b8e5e8c30a047626dd3a5e588aafe71e`. This last commit updates documentation only; executable campaign source remains the pinned `83c7c091...` commit.
 - Frozen manifest SHA-256: `c6fd895685304795101968ed1104385d31c3f4b1cf303fb26582b16a22666c31`.
 - Godot: `4.7.2.stable.official.ed1daf0bf`, executable SHA-256 `c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643`.
 - Only test/benchmark prototypes and evidence/documentation were changed. Production terrain, ledger, schemas, saves, PR #129 and Issue #108 were not modified.
