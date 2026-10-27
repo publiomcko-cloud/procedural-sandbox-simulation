@@ -1,0 +1,10 @@
+{
+  "pid": 45160,
+  "exit_code": 0,
+  "elapsed_ms": 9759.589,
+  "started_utc": "2026-10-27T19:24:00.9034837Z",
+  "completed_utc": "2026-10-27T19:24:10.6825980Z",
+  "scenario": "zero_edit",
+  "result_log": "zero-edit.stdout.log",
+  "stderr_log": "zero-edit.stderr.log"
+}

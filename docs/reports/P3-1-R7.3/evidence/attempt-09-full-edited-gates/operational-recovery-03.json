@@ -1,0 +1,9 @@
+{
+  "attempt": "operational-recovery-03",
+  "kind": "pre-scenario repository-context error",
+  "cause": "gh pr view was invoked from C:\\ rather than a repository context; GitHub CLI could not infer the repository",
+  "scenario_started": false,
+  "godot_process_created": false,
+  "corrective_action": "Use gh pr view --repo publiomcko-cloud/procedural-sandbox-simulation for explicit repository identity",
+  "next": "repeat read-only preflight only"
+}

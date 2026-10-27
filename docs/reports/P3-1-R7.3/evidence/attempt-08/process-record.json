@@ -1,0 +1,12 @@
+{
+  "launcher_pid": 45792,
+  "child_pid": 45556,
+  "exit_code": 0,
+  "elapsed_ms": 536044.242,
+  "launched_utc": "2026-10-27T19:24:38.2160405Z",
+  "completed_utc": "2026-10-27T19:33:34.3038703Z",
+  "godot_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "isolated_profile": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R73-full-validation-9154cb78cdee44c999209613a4701ef0",
+  "stdout": "validate.stdout.log",
+  "stderr": "validate.stderr.log"
+}

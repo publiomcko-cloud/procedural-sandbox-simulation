@@ -1,0 +1,32 @@
+{
+  "scenario": "zero_edit",
+  "scenario_invocation": "default selector (no user args)",
+  "args": [
+    "--headless",
+    "--path",
+    "./game",
+    "--script",
+    "res://tests/prototypes/p3_1_r7_2_zero_edit_gate.gd"
+  ],
+  "working_directory": "C:\\r73",
+  "source_branch": "bench/p3-1-r7-3-edited-carve-diagnosis",
+  "source_base": "c54f337cb1f2b1e6d1f61de5c1b9d9f3031e892d",
+  "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "isolated_profile": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R73-b33ea57af90540b488c83c9f582193e0",
+  "source_sha256": {
+    "game/tests/prototypes/p3_1_r7_2_zero_edit_gate.gd": "04C3656E314FF1A21F10BE2D3A034F8EE137E5024C5EA7FA50C5563DE21E27D5",
+    "game/tests/prototypes/p3_1_r7_2_local_retriangulation.gd": "9EA65149D45BE9EF6E747156EA2984E8F75269CCA03E11714D72E8354330F3D2",
+    "game/tests/prototypes/p3_1_r7_3_minimal_carve_repair.gd": "F74A51D8F93296181325AA876B442FC42C03AC64C6CF34728B8FE4C755F2B4BF",
+    "game/tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd": "BE05D2EB586B98DE8F8998DD231F3E3DC5646A8BDCF6EC1FA863A56C455BB75E",
+    "game/tests/prototypes/p3_1_r7_conforming_mesh_fixture.gd": "65ADDFBA047A093DEF229BD6E2C1C3AC363C8E559CF20CD178CDF7A1264966C7",
+    "game/scripts/terrain/sdf_brush_edit_state.gd": "9C715174770725FA0A45CFEAB0B2E3C442E25EAB8EF87B423F0DE51D6ECEDB44",
+    "game/scripts/terrain/sdf_world.gd": "A878E06D83652559C603E3E75BC3F704F1FE9222BB5F31BF6711D21B5612AC06",
+    "game/scripts/terrain/terrain_chunk_grid.gd": "D23E882BE578C5B063CDFF6AD2CFF5660FEEFF121623003E46826AEEFC5DC4D8",
+    "game/scripts/experiments/lod01_transition_fixture.gd": "26660008D576604546CF098C54DDC0B381B579B779B993E93A1F3C467209ED0F",
+    "game/scripts/terrain/marching_tetrahedra.gd": "23FBC6F94BA37D070D34924E85E9BBF1BDBBB26666ABA32345C0140DFC6DFFE3",
+    "game/scripts/terrain/terrain_brush_picker.gd": "41FE707CB7D3C87A5FBEDEDCA681BC8773D75FA4E32BCB97B7F583EFF1869CF4"
+  },
+  "launched_utc": "2026-10-27T19:24:00.9034837Z",
+  "full_edited_scenarios_authorized": false
+}

@@ -1,0 +1,12 @@
+{
+  "stdout": {
+    "file": "fill.stdout.log",
+    "length": 3564017,
+    "sha256": "758a285ae990a6084cc2066ac3d77b5d43a9aeb6975cf02c7e257de80775f397"
+  },
+  "stderr": {
+    "file": "fill.stderr.log",
+    "length": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

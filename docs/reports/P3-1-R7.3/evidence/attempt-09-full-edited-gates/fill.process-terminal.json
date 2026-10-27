@@ -1,0 +1,9 @@
+{
+  "pid": 2988,
+  "completed_utc": "2026-10-27T19:58:51.8703441Z",
+  "elapsed_ms": 8782.2376,
+  "exit_code": 0,
+  "timed_out": false,
+  "status": "PROCESS_EXIT_0_REQUIRES_OUTPUT_VERIFICATION",
+  "scenario_invocation_count": 1
+}

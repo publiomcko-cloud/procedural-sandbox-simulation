@@ -1,0 +1,19 @@
+{
+  "created_utc": "2026-10-27T19:51:54.4611674Z",
+  "source_sha": "7ad45d8c817ecb0f54a8eec058babce65af287db",
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "executable_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R73-Full-Carve-23baef7af9b941059154b9891e9f8c6c\\checkout\\game",
+    "--editor",
+    "--import"
+  ],
+  "working_directory": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R73-Full-Carve-23baef7af9b941059154b9891e9f8c6c\\checkout",
+  "appdata": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R73-Full-Carve-23baef7af9b941059154b9891e9f8c6c\\godot-profile\\AppData",
+  "localappdata": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R73-Full-Carve-23baef7af9b941059154b9891e9f8c6c\\godot-profile\\LocalAppData",
+  "stdout": "editor-import.stdout.log",
+  "stderr": "editor-import.stderr.log",
+  "status": "RESERVED_BEFORE_START"
+}
