@@ -1,0 +1,154 @@
+{
+  "source": {
+    "head": "7ad45d8c817ecb0f54a8eec058babce65af287db",
+    "expected_head": "7ad45d8c817ecb0f54a8eec058babce65af287db",
+    "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+    "source_hash_count": 11,
+    "source_hash_mismatches": {},
+    "source_hashes": {
+      "game/tests/prototypes/p3_1_r7_2_zero_edit_gate.gd": "04c3656e314ff1a21f10be2d3a034f8ee137e5024c5ea7fa50c5563de21e27d5",
+      "game/tests/prototypes/p3_1_r7_2_local_retriangulation.gd": "9ea65149d45be9ef6e747156ea2984e8f75269cca03e11714d72e8354330f3d2",
+      "game/tests/prototypes/p3_1_r7_3_minimal_carve_repair.gd": "f74a51d8f93296181325aa876b442fc42c03ac64c6cf34728b8fe4c755f2b4bf",
+      "game/tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd": "be05d2eb586b98de8f8998dd231f3e3dc5646a8bdcf6ec1fa863a56c455bb75e",
+      "game/tests/prototypes/p3_1_r7_conforming_mesh_fixture.gd": "65addfba047a093def229bd6e2c1c3ac363c8e559cf20cd178cdf7a1264966c7",
+      "game/scripts/terrain/sdf_brush_edit_state.gd": "9c715174770725fa0a45cfeab0b2e3c442e25eab8ef87b423f0de51d6ecedb44",
+      "game/scripts/terrain/sdf_world.gd": "a878e06d83652559c603e3e75bc3f704f1fe9222bb5f31bf6711d21b5612ac06",
+      "game/scripts/terrain/terrain_chunk_grid.gd": "d23e882be578c5b063cdff6ad2cff5660feeff121623003e46826aeefc5dc4d8",
+      "game/scripts/experiments/lod01_transition_fixture.gd": "26660008d576604546cf098c54ddc0b381b579b779b993e93a1f3c467209ed0f",
+      "game/scripts/terrain/marching_tetrahedra.gd": "23fbc6f94ba37d070d34924e85e9bbf1bdbbb26666aba32345c0140dfc6dffe3",
+      "game/scripts/terrain/terrain_brush_picker.gd": "41fe707cb7d3c87a5fbededca681bc8773d75fa4e32bcb97b7f583eff1869cf4"
+    }
+  },
+  "raw_stdout": {
+    "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R73-Full-Carve-23baef7af9b941059154b9891e9f8c6c\\evidence\\carve.stdout.log",
+    "bytes": 6678457,
+    "sha256": "acb6f2dda230d3403073884e8a46e9e21868237b0b0399b15885aeb002a9b9ee"
+  },
+  "result": {
+    "assertions": 21,
+    "duration_usec": 12016283,
+    "failures": [],
+    "note": "C is recorded as rejected for zero-edit; A is the selected full-mesh repair; collider runs preserve the frozen 72-query schedule",
+    "scenario_count": 1,
+    "status": "PASS",
+    "suite": "P3_1_R7_2_SCENARIO_GATE"
+  },
+  "scenario": {
+    "scenario": "cave_wall_carve",
+    "scenario_id": "P3.1.R7.CAVE_WALL_CARVE.v1",
+    "seed": 131102026,
+    "ledger_revision": 1,
+    "operation_count": 1,
+    "input_manifest_sha256": "47ec41f63338f98c5160f58aa71c86f6ec78412dbccad7ae86805fb115592411",
+    "repair_strategy": "A_edge_collapse",
+    "source_triangle_count_inclusive": 7192,
+    "face_component_count_before": 3,
+    "face_component_count_after": 3,
+    "two_sided_canonical_hit_mismatches": 0
+  },
+  "ordered_commands": [
+    {
+      "center": [
+        8.0,
+        1.17898154258728,
+        5.90309238433838
+      ],
+      "mode": 0,
+      "radius": 0.58,
+      "sequence": 0
+    }
+  ],
+  "strategy_A": {
+    "valid": true,
+    "disposition": "PASS_ALL_LOCAL_TOPOLOGY_INVARIANTS",
+    "external_boundary_unchanged": true
+  },
+  "local_before": {
+    "face_count": 526,
+    "degenerate_triangles": 10,
+    "nonzero_subthreshold_triangles": 10,
+    "internal_open_edges": 0,
+    "external_open_edges": 160,
+    "nonmanifold_edges": 0,
+    "same_winding_edges": 0,
+    "t_junctions": 0,
+    "threshold_cross_squared": 1e-12
+  },
+  "full_topology": {
+    "triangle_count": 7176,
+    "unique_undirected_edges": 10944,
+    "open_edge_count": 360,
+    "expected_open_edge_count_at_patch_boundary": 360,
+    "internal_open_edge_crack_count": 0,
+    "degenerate_triangle_count": 0,
+    "nonmanifold_edge_count": 0
+  },
+  "interfaces": {
+    "internal_cell_interfaces_checked": 1355,
+    "matching_contour_segments_compared": 2030,
+    "interfaces_with_nonmatching_extracted_contours": 0,
+    "duplicate_coplanar_surface_interfaces": 0,
+    "strict_t_junction_vertex_on_contour_segment_count": 0,
+    "maximum_shared_endpoint_normal_angle_degrees": 33.6211417365242
+  },
+  "winding": {
+    "face_count": 7176,
+    "edge_count": 10944,
+    "open_edges": 360,
+    "nonmanifold_edges": 0,
+    "same_winding_edges": 0
+  },
+  "collider": {
+    "status": "MEASURED_TEST_ONLY_CONCAVE_POLYGON_PROXIES",
+    "ray_query_count": 72,
+    "physics_vs_two_sided_triangle_hit_mismatches_with_shape_backface_collision_enabled": 0,
+    "physics_vs_two_sided_triangle_hit_mismatches_with_default_one_sided_shape": 33,
+    "outside_to_cave_ray_hit_outcome_mismatches": 0,
+    "cave_to_outside_ray_hit_outcome_mismatches": 33,
+    "sphere_probe_count": 36,
+    "sphere_contact_difference_world": {
+      "count": 36,
+      "max": 0.130000258982181,
+      "p50": 0.129999972879887,
+      "p95": 0.130000258982181
+    },
+    "limitations": "discrete 0.05-unit sphere sweep, no continuous collision/MTV or production terrain collider claim",
+    "production_terrain_collision_provider": "ABSENT_AT_PINNED_SOURCE"
+  },
+  "field_geometry": {
+    "centerline_open_samples": 31,
+    "centerline_total_samples": 31,
+    "picker_hit_outcomes_equal": 31,
+    "picker_queries": 31,
+    "picker_position_error_world": {
+      "count": 31,
+      "max": 0.0,
+      "p50": 0.0,
+      "p95": 0.0
+    },
+    "radial_diameter_world": {
+      "count": 31,
+      "max": 2.6579460144043,
+      "p50": 1.83666458129883,
+      "p95": 2.57026748657227
+    }
+  },
+  "timing_usec": {
+    "collider": 2211208,
+    "full_build": 1734045,
+    "local_repair": 5564664,
+    "total": 11248964
+  },
+  "gates": {
+    "source_identity": true,
+    "result": true,
+    "scenario": true,
+    "repair": true,
+    "local": true,
+    "full_topology": true,
+    "interfaces": true,
+    "winding": true,
+    "two_sided_collider": true
+  },
+  "all_gates_pass": true
+}

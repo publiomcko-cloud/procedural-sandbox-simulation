@@ -1,0 +1,240 @@
+{
+  "carve": {
+    "scenario": "cave_wall_carve",
+    "scenario_id": "P3.1.R7.CAVE_WALL_CARVE.v1",
+    "input_sha256": "47ec41f63338f98c5160f58aa71c86f6ec78412dbccad7ae86805fb115592411",
+    "commands": [
+      {
+        "center": [
+          8.0,
+          1.17898154258728,
+          5.90309238433838
+        ],
+        "mode": 0,
+        "radius": 0.58,
+        "sequence": 0
+      }
+    ],
+    "assertions": "from result record",
+    "source_triangle_count_inclusive": 7192,
+    "source_mesh_sha256": "71e34bd2446ccfa50a1b7df56dceace7eba85c3990a210007572dd601749a3f8",
+    "repaired_mesh_sha256": "e6e25ce6419a3ef9b62df2caed7296a0460ad6d0f070e665725c969c049c8d27",
+    "face_component_count_before": 3,
+    "face_component_count_after": 3,
+    "strategy_A": {
+      "valid": true,
+      "disposition": "PASS_ALL_LOCAL_TOPOLOGY_INVARIANTS",
+      "external_boundary_unchanged": true,
+      "attempt_key_count": 13,
+      "diagnostic_first_failed_invariant": ""
+    },
+    "local_patch_before": {
+      "face_count": 526,
+      "degenerate_triangles": 10,
+      "nonzero_subthreshold_triangles": 10,
+      "internal_open_edges": 0,
+      "external_open_edges": 160,
+      "nonmanifold_edges": 0,
+      "same_winding_edges": 0,
+      "t_junctions": 0,
+      "threshold_cross_squared": 1e-12
+    },
+    "full_topology": {
+      "triangle_count": 7176,
+      "unique_undirected_edges": 10944,
+      "open_edge_count": 360,
+      "expected_open_edge_count_at_patch_boundary": 360,
+      "internal_open_edge_crack_count": 0,
+      "degenerate_triangle_count": 0,
+      "nonmanifold_edge_count": 0
+    },
+    "interfaces": {
+      "internal_cell_interfaces_checked": 1355,
+      "matching_contour_segments_compared": 2030,
+      "interfaces_with_nonmatching_extracted_contours": 0,
+      "duplicate_coplanar_surface_interfaces": 0,
+      "strict_t_junction_vertex_on_contour_segment_count": 0,
+      "maximum_shared_endpoint_normal_angle_degrees": 33.6211417365242
+    },
+    "winding": {
+      "face_count": 7176,
+      "edge_count": 10944,
+      "open_edges": 360,
+      "nonmanifold_edges": 0,
+      "same_winding_edges": 0
+    },
+    "collider": {
+      "status": "MEASURED_TEST_ONLY_CONCAVE_POLYGON_PROXIES",
+      "ray_query_count": 72,
+      "physics_vs_two_sided_triangle_hit_mismatches_with_shape_backface_collision_enabled": 0,
+      "physics_vs_two_sided_triangle_hit_mismatches_with_default_one_sided_shape": 33,
+      "outside_to_cave_ray_hit_outcome_mismatches": 0,
+      "cave_to_outside_ray_hit_outcome_mismatches": 33,
+      "sphere_probe_count": 36,
+      "sphere_contact_difference_world": {
+        "count": 36,
+        "max": 0.130000258982181,
+        "p50": 0.129999972879887,
+        "p95": 0.130000258982181
+      },
+      "limitations": "discrete 0.05-unit sphere sweep, no continuous collision/MTV or production terrain collider claim",
+      "production_terrain_collision_provider": "ABSENT_AT_PINNED_SOURCE"
+    },
+    "field_geometry": {
+      "centerline_open_samples": 31,
+      "centerline_total_samples": 31,
+      "picker_hit_outcomes_equal": 31,
+      "picker_queries": 31,
+      "picker_position_error_world": {
+        "count": 31,
+        "max": 0.0,
+        "p50": 0.0,
+        "p95": 0.0
+      },
+      "radial_diameter_world": {
+        "count": 31,
+        "max": 2.6579460144043,
+        "p50": 1.83666458129883,
+        "p95": 2.57026748657227
+      }
+    },
+    "timing_usec": {
+      "collider": 2211208,
+      "full_build": 1734045,
+      "local_repair": 5564664,
+      "total": 11248964
+    },
+    "raw_stdout": {
+      "bytes": 6678457,
+      "sha256": "acb6f2dda230d3403073884e8a46e9e21868237b0b0399b15885aeb002a9b9ee"
+    },
+    "raw_stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "fill": {
+    "scenario": "center_fill_then_wall_carve",
+    "scenario_id": "P3.1.R7.CENTER_FILL_THEN_WALL_CARVE.v1",
+    "input_sha256": "55d45d387bd19829bb38c4e988da25a886765f26cc34e19dd07ed808faa1bd46",
+    "commands": [
+      {
+        "center": [
+          8.0,
+          1.17898154258728,
+          5.10309219360352
+        ],
+        "mode": 1,
+        "radius": 0.58,
+        "sequence": 0
+      },
+      {
+        "center": [
+          8.0,
+          1.17898154258728,
+          5.92309236526489
+        ],
+        "mode": 0,
+        "radius": 0.58,
+        "sequence": 1
+      }
+    ],
+    "assertions": "from result record",
+    "source_triangle_count_inclusive": 7448,
+    "source_mesh_sha256": "c015b232973724f5c410ae6def19539b904223b19acf371a2a28853e3a9b04af",
+    "repaired_mesh_sha256": "329eb2f908957058dc4c2b2cbdcd72dcfc52980dc93b580b86157322e47dbb35",
+    "face_component_count_before": 4,
+    "face_component_count_after": 4,
+    "strategy_A": {
+      "valid": true,
+      "disposition": "PASS_ALL_LOCAL_TOPOLOGY_INVARIANTS",
+      "external_boundary_unchanged": true,
+      "attempt_key_count": 13,
+      "diagnostic_first_failed_invariant": ""
+    },
+    "local_patch_before": {
+      "face_count": 374,
+      "degenerate_triangles": 8,
+      "nonzero_subthreshold_triangles": 8,
+      "internal_open_edges": 0,
+      "external_open_edges": 116,
+      "nonmanifold_edges": 0,
+      "same_winding_edges": 0,
+      "t_junctions": 0,
+      "threshold_cross_squared": 1e-12
+    },
+    "full_topology": {
+      "triangle_count": 7436,
+      "unique_undirected_edges": 11347,
+      "open_edge_count": 386,
+      "expected_open_edge_count_at_patch_boundary": 386,
+      "internal_open_edge_crack_count": 0,
+      "degenerate_triangle_count": 0,
+      "nonmanifold_edge_count": 0
+    },
+    "interfaces": {
+      "internal_cell_interfaces_checked": 1371,
+      "matching_contour_segments_compared": 2092,
+      "interfaces_with_nonmatching_extracted_contours": 0,
+      "duplicate_coplanar_surface_interfaces": 0,
+      "strict_t_junction_vertex_on_contour_segment_count": 0,
+      "maximum_shared_endpoint_normal_angle_degrees": 87.7357674738623
+    },
+    "winding": {
+      "face_count": 7436,
+      "edge_count": 11347,
+      "open_edges": 386,
+      "nonmanifold_edges": 0,
+      "same_winding_edges": 0
+    },
+    "collider": {
+      "status": "MEASURED_TEST_ONLY_CONCAVE_POLYGON_PROXIES",
+      "ray_query_count": 72,
+      "physics_vs_two_sided_triangle_hit_mismatches_with_shape_backface_collision_enabled": 0,
+      "physics_vs_two_sided_triangle_hit_mismatches_with_default_one_sided_shape": 33,
+      "outside_to_cave_ray_hit_outcome_mismatches": 0,
+      "cave_to_outside_ray_hit_outcome_mismatches": 33,
+      "sphere_probe_count": 36,
+      "sphere_contact_difference_world": {
+        "count": 36,
+        "max": 0.130000258982181,
+        "p50": 0.129999972879887,
+        "p95": 0.130000258982181
+      },
+      "limitations": "discrete 0.05-unit sphere sweep, no continuous collision/MTV or production terrain collider claim",
+      "production_terrain_collision_provider": "ABSENT_AT_PINNED_SOURCE"
+    },
+    "field_geometry": {
+      "centerline_open_samples": 27,
+      "centerline_total_samples": 31,
+      "picker_hit_outcomes_equal": 31,
+      "picker_queries": 31,
+      "picker_position_error_world": {
+        "count": 31,
+        "max": 0.0,
+        "p50": 0.0,
+        "p95": 0.0
+      },
+      "radial_diameter_world": {
+        "count": 27,
+        "max": 1.90722427368164,
+        "p50": 1.83636093139648,
+        "p95": 1.83977737426758
+      }
+    },
+    "timing_usec": {
+      "collider": 2053619,
+      "full_build": 1627308,
+      "local_repair": 2162280,
+      "total": 7460252
+    },
+    "raw_stdout": {
+      "bytes": 3564017,
+      "sha256": "758a285ae990a6084cc2066ac3d77b5d43a9aeb6975cf02c7e257de80775f397"
+    },
+    "raw_stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

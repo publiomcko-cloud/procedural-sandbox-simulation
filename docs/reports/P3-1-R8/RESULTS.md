@@ -10,6 +10,7 @@
 | Branch | `bench/p3-1-r8-geometry-quality` |
 | Measured R7.3 source HEAD | `7ad45d8c817ecb0f54a8eec058babce65af287db` |
 | Measured source parent | `c54f337cb1f2b1e6d1f61de5c1b9d9f3031e892d` |
+| R8 evidence PR | [#158](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/158), open/draft/unmerged |
 | R7.3 evidence HEAD | `87c9c6f30c613e73ad572670cadb253ab06483eb` |
 | Production reference only | `92b442d7f5b605c7bc9c48fac2aceea9d71813aa` |
 | Diagnostic harness | `game/tests/prototypes/p3_1_r8_geometry_quality_diagnostic.gd` |

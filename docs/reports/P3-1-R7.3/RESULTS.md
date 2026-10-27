@@ -12,14 +12,21 @@ This does **not** qualify the full edited `cave_wall_carve` scenario. Issue #155
 
 - Repository: `publiomcko-cloud/procedural-sandbox-simulation`; origin verified as `https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git`.
 - R7.3 branch/worktree: `bench/p3-1-r7-3-edited-carve-diagnosis`, `C:\r73`.
-- R7.2 base: PR #153 head `c54f337cb1f2b1e6d1f61de5c1b9d9f3031e892d`; this is the R7.3 branch fork point. Its parent is R7.1 evidence head `24d6580b9539b267ef59c209f765607071ee6f48`.
+- Tested R7.3 source commit: `7ad45d8c817ecb0f54a8eec058babce65af287db`; direct parent and exact R7.2 base: PR #153 head `c54f337cb1f2b1e6d1f61de5c1b9d9f3031e892d`. R7.2's parent is R7.1 evidence head `24d6580b9539b267ef59c209f765607071ee6f48`.
 - Production reference: `92b442d7f5b605c7bc9c48fac2aceea9d71813aa`.
 - Live PR #153 and Issue #155 were verified open; PR #153 is draft and unmerged. PRs #149 and #151 remain separate, open, draft and unmerged.
 - Godot: `4.7.2.stable.official.ed1daf0bf`; executable `C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe`; SHA-256 `c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643`.
 - Godot was run with redirected `APPDATA`/`LOCALAPPDATA` under disposable profiles. No production terrain or user save was loaded.
 - The only code changes are experimental GDScript diagnostics/tests. Production SDF, ledger, mesher, scenes, schemas, dependencies and gameplay are unchanged. No PR #153/#149/#151 or F2-G1 protected state was modified.
 
-The source commit SHA and parent are recorded in the final Git commit that contains the tested source. Physical SHA-256 values for changed GDScript sources are listed below and in the raw diagnostic records.
+Physical SHA-256 values for tested GDScript sources are independently recorded below and in the raw diagnostic records. The follow-up documentation commit does not change tested source.
+
+| Tested source | Physical SHA-256 |
+| --- | --- |
+| `game/tests/prototypes/p3_1_r7_2_local_retriangulation.gd` | `9ea65149d45be9ef6e747156ea2984e8f75269cca03e11714d72e8354330f3d2` |
+| `game/tests/prototypes/p3_1_r7_2_zero_edit_gate.gd` | `04c3656e314ff1a21f10be2d3a034f8ee137e5024c5ea7fa50c5563de21e27d5` |
+| `game/tests/prototypes/p3_1_r7_3_minimal_carve_repair.gd` | `f74a51d8f93296181325aa876b442fc42c03ac64c6cf34728b8fe4c755f2b4bf` |
+| `game/tests/prototypes/p3_1_r7_conforming_mesh_fixture.gd` (unchanged oracle) | `65addfba047a093def229bd6e2c1c3ac363c8e559cf20cd178cdf7a1264966c7` |
 
 | Changed path | Purpose |
 | --- | --- |
@@ -28,7 +35,7 @@ The source commit SHA and parent are recorded in the final Git commit that conta
 | `game/tests/prototypes/p3_1_r7_3_minimal_carve_repair.gd` | Adds a deterministic single-focus-cell CARVE regression. It explicitly does not run the full edited scenario or collider gate. |
 | `.gitattributes` | Keeps the raw R7.3 evidence bytes unchanged in Git. |
 | `docs/reports/P3-1-R7.3/` | Full attempt logs, checksum inventory and this report. |
-| `docs/checkpoints/2026-10-27-P3-1-R7.3-EDITED-CARVE-DIAGNOSIS.md` | Immutable event checkpoint. |
+| `docs/checkpoints/2026-10-27-P3-1-R7.3-EDITED-CARVE-DIAGNOSIS.md` | Immutable event checkpoint added in the documentation follow-up commit. |
 | `docs/checkpoints/INDEX.md`, `docs/status/CURRENT_STATUS.md`, `README.md` | Index and current research-state reconciliation. |
 
 ## Failure reproduction and cause
@@ -89,3 +96,26 @@ The minimal fixture records physical SHA-256 values for its own test, the R7.2 g
 - All holds remain: `CURRENT_PROTECTED_STATE_UNKNOWN`, `V3_NOT_ATTESTED`, `ACL_REVIEW_REQUIRED`, `G1_BLOCKED_ENVIRONMENT`, `F2_G1_RELEASE_HOLD`.
 
 Next, independently review the exact source/evidence commit. A separately documented gate decision is required before one complete frozen CARVE attempt. Only if that attempt passes may the ordered FILL/CARVE gate be considered.
+
+## 2026-10-27 — Full edited-scenario acceptance follow-up
+
+The owner-authorized gate decision allowed exactly one complete frozen `cave_wall_carve` run and, only if it passed, one complete frozen `center_fill_then_wall_carve` run. Both were executed once against the same pinned source `7ad45d8c817ecb0f54a8eec058babce65af287db` (parent `c54f337cb1f2b1e6d1f61de5c1b9d9f3031e892d`) in a fresh detached exact-SHA checkout. Each emitted one `R72_SCENARIO` and one `R72_RESULT`; both results were `PASS`, 21 assertions, zero failures, exit code 0. Neither scenario was retried.
+
+CARVE used frozen input SHA `47ec41f63338f98c5160f58aa71c86f6ec78412dbccad7ae86805fb115592411`, one CARVE command (sequence 0, radius 0.58), PID 46268, duration 13,270 ms. FILL/CARVE used canonical input SHA `55d45d387bd19829bb38c4e988da25a886765f26cc34e19dd07ed808faa1bd46`, independently recomputed from its emitted canonical JSON; it contains FILL mode 1 sequence 0 followed by CARVE mode 0 sequence 1, both radius 0.58, revision 2. FILL/CARVE ran as PID 2988 for 8,782 ms. Process and stream identities are preserved in the attempt-09 evidence folder.
+
+Both Strategy A repairs passed with unchanged external local-patch boundaries. At the unchanged squared-cross threshold `1e-12`, each repaired full mesh had zero internal cracks, degenerate triangles, nonmanifold edges, same-winding edges, interface contour mismatches, duplicate coplanar interfaces, and tested contour T-junctions. Expected external crop edges matched exactly: CARVE 360/360 and FILL/CARVE 386/386. Face component counts were preserved (3→3 and 4→4). There is no owner-approved normal-angle tolerance; observed maximum shared endpoint angles were 33.6211° and 87.7358° respectively.
+
+Both disposable collider runs retained all 72 rays and had zero mismatches against the independent two-sided triangle reference with backface collision enabled. The one-sided control retained 33 reverse-ray misses. Each run retained 36 sphere probes with about 0.13 world-unit contact difference. The pinned source has no production terrain collider; these tests do not establish continuous collision or MTV behavior. FILL/CARVE recorded 27/31 edited-field centerline samples open, all 31 picker hit outcomes matching with zero position error. This is reported without a connectivity threshold: the edited scenario gate does not assert full centerline openness and no product tolerance is approved.
+
+Single-run headless harness timings (not performance acceptance):
+
+| Scenario | Full build (µs) | Local repair (µs) | Collider proxy (µs) | Total (µs) |
+| --- | ---: | ---: | ---: | ---: |
+| CARVE | 1,734,045 | 5,564,664 | 2,211,208 | 11,248,964 |
+| FILL/CARVE | 1,627,308 | 2,162,280 | 2,053,619 | 7,460,252 |
+
+CARVE's external resource sampler returned constant 6,430,720-byte working-set and zero CPU-ms values; treat those process-level resource measurements as unavailable. No equivalent FILL/CARVE resource sampler, rendered FPS, GPU completion, GUI run, or visual owner acceptance was collected. The full project validation had already passed at the exact source SHA (21 suites, 21,464 assertions, zero failures; three non-fatal camera warnings) and was not rerun for these scenario gates. The exact Godot executable was `4.7.2.stable.official.ed1daf0bf`, SHA-256 `c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643`.
+
+Complete stdout/stderr, launch and process records, source/input hashes, raw parser attempts, and SHA-256 inventory are in [attempt 09](evidence/attempt-09-full-edited-gates/EVIDENCE_README.md). The 37-entry `SHA256SUMS.txt` verifies all copied evidence artifacts, excluding itself. Earlier diagnostic/parser errors are preserved and labeled; the complete raw process logs remain unchanged and authoritative.
+
+**Disposition:** `P3_1_R7_3_EDITED_GATES_READY_FOR_INDEPENDENT_REVIEW`. This is bounded experimental acceptance under the frozen harness, not production geometry qualification, a new geometry contract, GUI acceptance, or release authorization. PR #156 remains draft and unmerged. Preserve `CURRENT_PROTECTED_STATE_UNKNOWN`, `V3_NOT_ATTESTED`, `ACL_REVIEW_REQUIRED`, `G1_BLOCKED_ENVIRONMENT`, and `F2_G1_RELEASE_HOLD`.

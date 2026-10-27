@@ -1,0 +1,12 @@
+{
+  "attempt": "operational-recovery-01",
+  "kind": "pre-scenario launcher preparation failure",
+  "error": "Relative path evidence/preflight.json was resolved from C:\\r73 instead of the unique evidence root. Variables checkout/evidence/profile remained null; Start-Process rejected null WorkingDirectory before process creation. Follow-on null-reference messages resulted from missing launcher guard and did not create a child process.",
+  "scenario_started": false,
+  "processes_matching_checkout": [],
+  "existing_evidence_files": [
+    "preflight.json"
+  ],
+  "corrective_action": "Use absolute paths from the recorded unique root and ErrorActionPreference=Stop; durably write launch intent before process creation.",
+  "next": "fresh editor import only"
+}
