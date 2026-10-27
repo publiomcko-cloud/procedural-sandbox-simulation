@@ -1,0 +1,7 @@
+{
+  "stage": "prelaunch_provenance_hash_list",
+  "started_godot": false,
+  "failure": "Evidence-preparation source list contained nonexistent game/tests/prototypes/p3_1_r6v_adaptive_voxel_diagnostic.gd",
+  "resolution": "Corrected source dependency list using actual preload paths; no scenario process created",
+  "utc": "2026-10-27T19:24:00.7191340Z"
+}

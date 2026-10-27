@@ -1,0 +1,18 @@
+{
+  "command": [
+    "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    "C:\\r73\\scripts\\validate.ps1"
+  ],
+  "working_directory": "C:\\r73",
+  "godot": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "isolated_appdata": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R73-full-validation-9154cb78cdee44c999209613a4701ef0",
+  "isolated_localappdata": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R73-full-validation-9154cb78cdee44c999209613a4701ef0",
+  "launched_utc": "2026-10-27T19:24:38.2160405Z",
+  "scope": "authorized full scripts/validate.ps1 only; no complete edited CARVE or FILL/CARVE scenario"
+}

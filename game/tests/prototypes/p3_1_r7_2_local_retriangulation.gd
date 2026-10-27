@@ -7,8 +7,10 @@ const WELD_EPSILON := 1.0e-5
 
 func extract_local_mesh(fixture: RefCounted, cells: Dictionary, focus_ids: Array[int]) -> Dictionary:
 	var selected: Dictionary = {}
+	var focus_set: Dictionary = {}
 	for value in focus_ids:
 		selected[value] = true
+		focus_set[value] = true
 		var cell: Vector3i = fixture._cell_from_id(value)
 		for direction_value in fixture.FACE_DIRECTIONS:
 			var direction: Dictionary = direction_value
@@ -19,6 +21,7 @@ func extract_local_mesh(fixture: RefCounted, cells: Dictionary, focus_ids: Array
 	var vertices: Array[Vector3] = []
 	var buckets: Dictionary = {}
 	var faces: Array[Dictionary] = []
+	var source_face_counts: Dictionary = {}
 	for cell_id_value in selected:
 		var cell_id := int(cell_id_value)
 		if not cells.has(cell_id):
@@ -32,9 +35,25 @@ func extract_local_mesh(fixture: RefCounted, cells: Dictionary, focus_ids: Array
 			if ids[0] != ids[1] and ids[1] != ids[2] and ids[2] != ids[0]:
 				var face_normal: Vector3 = normals[index].normalized() if normals.size() == positions.size() else Vector3.ZERO
 				faces.append({"v": ids, "cell": cell_id, "original_v": ids.duplicate(), "source_normal": face_normal})
+		source_face_counts[cell_id] = positions.size() / 3
 	var original_vertices: Array[Vector3] = []
 	for point in vertices: original_vertices.append(point)
-	return {"vertices": vertices, "original_vertices": original_vertices, "faces": faces, "selected": selected}
+	var focus_sorted: Array[int] = focus_ids.duplicate()
+	focus_sorted.sort()
+	var selected_sorted: Array[int] = []
+	var ownership: Array[Dictionary] = []
+	for cell_id_value in selected:
+		var cell_id := int(cell_id_value)
+		selected_sorted.append(cell_id)
+		var cell: Vector3i = fixture._cell_from_id(cell_id)
+		ownership.append({"cell_id": cell_id, "cell_coordinate": [cell.x, cell.y, cell.z],
+			"selection_role": "focus" if focus_set.has(cell_id) else "one_face_neighbor",
+			"source_face_count": int(source_face_counts.get(cell_id, 0))})
+	selected_sorted.sort()
+	ownership.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.cell_id) < int(b.cell_id))
+	return {"vertices": vertices, "original_vertices": original_vertices, "faces": faces, "selected": selected,
+		"focus_ids": focus_sorted, "selected_ids": selected_sorted, "cell_ownership": ownership,
+		"source_face_counts": source_face_counts}
 
 
 func run_strategy(fixture: RefCounted, source: Dictionary, strategy: String) -> Dictionary:
@@ -63,9 +82,35 @@ func run_strategy(fixture: RefCounted, source: Dictionary, strategy: String) -> 
 		and int(after.nonmanifold_edges) == 0 and int(after.same_winding_edges) == 0 \
 		and int(after.t_junctions) == 0 \
 		and int(after.face_component_count) == int(before.face_component_count)
+	var first_failure := ""
+	if not bool(strategy_data.get("valid", false)):
+		first_failure = String(strategy_data.get("reason", "strategy_returned_invalid"))
+	elif not boundary_unchanged:
+		first_failure = "external_boundary_signature_changed"
+	else:
+		first_failure = _first_geometry_invariant(after, before)
+		if first_failure.is_empty() and int(after.degenerate_triangles) > 0:
+			first_failure = "degenerate_triangle_at_frozen_threshold"
+	var diagnostic := {"first_failed_invariant": first_failure,
+		"selected_focus_cell_ids": mesh.get("focus_ids", []), "selected_cell_ids": mesh.get("selected_ids", []),
+		"cell_ownership": mesh.get("cell_ownership", []),
+		"source_face_counts": mesh.get("source_face_counts", {}),
+		"original_patch_boundary_signature": before.get("boundary_signature", []),
+		"attempted_patch_boundary_signature": after.get("boundary_signature", []),
+		"original_patch_boundary_records": before.get("boundary_records", []),
+		"attempted_patch_boundary_records": after.get("boundary_records", []),
+		"candidate_edge_collapses": strategy_data.get("candidate_records", []),
+		"accepted_edge_collapses": strategy_data.get("accepted_records", []),
+		"strategy_rejection_reasons": strategy_data.get("rejected_reasons", strategy_data.get("rejections", [])),
+		"vertex_movements": strategy_data.get("changed_vertices", []),
+		"changed_triangles": strategy_data.get("changed_triangles", []),
+		"removed_triangle_ids": strategy_data.get("removed_triangle_ids", []),
+		"before_metrics": before, "after_metrics": after,
+		"face_component_change": int(after.face_component_count) - int(before.face_component_count),
+		"external_boundary_unchanged": boundary_unchanged}
 	return {"strategy": strategy, "valid": geometry_ok, "strategy_attempt": strategy_data,
 		"before": before, "after": after, "external_boundary_unchanged": boundary_unchanged,
-		"surface_metrics": surface,
+		"surface_metrics": surface, "diagnostic": diagnostic,
 		"disposition": "PASS_ALL_LOCAL_TOPOLOGY_INVARIANTS" if geometry_ok else "FAIL_LOCAL_TOPOLOGY_OR_GEOMETRY_INVARIANT"}
 
 
@@ -75,6 +120,7 @@ func metrics(fixture: RefCounted, mesh: Dictionary) -> Dictionary:
 	var edges: Dictionary = {}
 	var degenerate := 0
 	var exact_zero_area := 0
+	var degenerate_face_records: Array[Dictionary] = []
 	for face_index in range(faces.size()):
 		var face: Dictionary = faces[face_index]
 		var ids: Array = face.v
@@ -85,6 +131,11 @@ func metrics(fixture: RefCounted, mesh: Dictionary) -> Dictionary:
 		if cross_squared == 0.0: exact_zero_area += 1
 		if cross_squared <= AREA2_LIMIT_SQUARED:
 			degenerate += 1
+			degenerate_face_records.append({"face_id": face_index, "cell_id": int(face.cell),
+				"vertex_ids": [int(ids[0]), int(ids[1]), int(ids[2])],
+				"vertices_world": [_v3(a), _v3(b), _v3(c)], "cross_squared": cross_squared,
+				"exact_zero_area": cross_squared == 0.0,
+				"edge_ids": [_edge_key(int(ids[0]), int(ids[1])), _edge_key(int(ids[1]), int(ids[2])), _edge_key(int(ids[2]), int(ids[0]))]})
 		for edge_offset in range(3):
 			var first := int(ids[edge_offset])
 			var second := int(ids[(edge_offset + 1) % 3])
@@ -101,6 +152,7 @@ func metrics(fixture: RefCounted, mesh: Dictionary) -> Dictionary:
 	var nonmanifold := 0
 	var same_winding := 0
 	var boundary: Array[String] = []
+	var boundary_records: Array[Dictionary] = []
 	var open_examples: Array[Dictionary] = []
 	for key_value in edges:
 		var key := String(key_value)
@@ -112,6 +164,9 @@ func metrics(fixture: RefCounted, mesh: Dictionary) -> Dictionary:
 			if _is_selection_boundary(fixture, p0, p1, record.owners, mesh.selected):
 				external_open += 1
 				boundary.append(_edge_coord_key(p0, p1))
+				boundary_records.append({"vertex_ids": [int(record.a), int(record.b)],
+					"a": _v3(p0), "b": _v3(p1), "owner_cells": record.owners.duplicate(),
+					"edge_id": key})
 			else:
 				internal_open += 1
 				if open_examples.size() < 24:
@@ -122,11 +177,14 @@ func metrics(fixture: RefCounted, mesh: Dictionary) -> Dictionary:
 			same_winding += 1
 	var t_junctions := _count_t_junctions(vertices, edges)
 	boundary.sort()
+	boundary_records.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.edge_id) < String(b.edge_id))
 	return {"face_count": faces.size(), "edge_count": edges.size(), "internal_open_edges": internal_open,
 		"external_open_edges": external_open, "degenerate_triangles": degenerate,
 		"exact_zero_area_triangles": exact_zero_area, "nonzero_subthreshold_triangles": degenerate - exact_zero_area,
 		"nonmanifold_edges": nonmanifold, "same_winding_edges": same_winding,
 		"t_junctions": t_junctions, "face_component_count": _face_component_count(faces), "boundary_signature": boundary,
+		"boundary_records": boundary_records,
+		"degenerate_face_records": degenerate_face_records,
 		"open_edge_examples": open_examples,
 		"threshold_cross_squared": AREA2_LIMIT_SQUARED,
 		"oracle": "welded Euclidean positions <=1e-5; exposed selected-cell face edges are expected boundary; all other incidence must be 2"}
@@ -145,7 +203,8 @@ func _edge_collapse(fixture: RefCounted, mesh: Dictionary, before: Dictionary) -
 			for i in range(3):
 				var u := int(ids[i])
 				var v := int(ids[(i + 1) % 3])
-				candidates.append({"u": mini(u, v), "v": maxi(u, v), "length2": vertices[u].distance_squared_to(vertices[v])})
+				candidates.append({"u": mini(u, v), "v": maxi(u, v), "length2": vertices[u].distance_squared_to(vertices[v]),
+					"source_face_ids": [face_index]})
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if float(a.length2) == float(b.length2): return _edge_key(int(a.u), int(a.v)) < _edge_key(int(b.u), int(b.v))
 		return float(a.length2) < float(b.length2))
@@ -155,26 +214,62 @@ func _edge_collapse(fixture: RefCounted, mesh: Dictionary, before: Dictionary) -
 		var key := _edge_key(int(candidate.u), int(candidate.v))
 		if not seen.has(key):
 			seen[key] = true
+			candidate["edge_id"] = key
 			unique.append(candidate)
+		else:
+			for existing in unique:
+				if String(existing.edge_id) == key:
+					var source_faces: Array = existing.source_face_ids
+					source_faces.append_array(candidate.source_face_ids)
+					existing.source_face_ids = source_faces
+					break
 	var accepted := 0
 	var rejected: Dictionary = {}
+	var candidate_records: Array[Dictionary] = []
+	var accepted_records: Array[Dictionary] = []
 	var changed: Array[Vector3] = []
 	var maximum_vertex_displacement := 0.0
-	for candidate in unique:
+	for candidate_index in range(unique.size()):
+		var candidate: Dictionary = unique[candidate_index]
 		var attempt := _try_collapse(fixture, mesh, int(candidate.u), int(candidate.v))
+		var attempt_evidence: Dictionary = attempt.duplicate(true)
+		attempt_evidence.erase("mesh")
+		var record := {"edge_id": candidate.edge_id, "vertex_ids": [int(candidate.u), int(candidate.v)],
+			"endpoint_a": _v3(vertices[int(candidate.u)]), "endpoint_b": _v3(vertices[int(candidate.v)]),
+			"edge_length_squared": float(candidate.length2), "source_degenerate_face_ids": candidate.source_face_ids.duplicate(),
+			"status": "REJECTED", "attempt": attempt_evidence}
 		if bool(attempt.get("valid", false)):
 			mesh = attempt.mesh
 			accepted += 1
 			changed.append_array(attempt.changed_vertices)
 			maximum_vertex_displacement = maxf(maximum_vertex_displacement, float(attempt.max_vertex_displacement))
+			record.status = "ACCEPTED"
+			record["target_policy"] = attempt.get("target_policy", "")
+			record["moved_vertices"] = attempt.get("moved_vertices", [])
+			record["changed_triangles"] = attempt.get("changed_triangles", [])
+			record["removed_triangle_ids"] = attempt.get("removed_triangle_ids", [])
+			record["max_vertex_displacement_world"] = attempt.get("max_vertex_displacement", 0.0)
+			accepted_records.append(record.duplicate(true))
 		else:
 			var reason := String(attempt.get("reason", "rejected"))
 			rejected[reason] = int(rejected.get(reason, 0)) + 1
+		candidate_records.append(record)
 		if _degenerate_face_count(mesh) == 0:
+			for remaining_index in range(candidate_index + 1, unique.size()):
+				var remaining: Dictionary = unique[remaining_index]
+				candidate_records.append({"edge_id": remaining.edge_id,
+					"vertex_ids": [int(remaining.u), int(remaining.v)],
+					"endpoint_a": _v3(vertices[int(remaining.u)]), "endpoint_b": _v3(vertices[int(remaining.v)]),
+					"edge_length_squared": float(remaining.length2),
+					"source_degenerate_face_ids": remaining.source_face_ids.duplicate(),
+					"status": "NOT_ATTEMPTED_AFTER_DEGENERATE_COUNT_REACHED_ZERO"})
 			break
-	return {"valid": accepted > 0, "accepted_collapses": accepted,
-		"candidate_edges": unique.size(), "rejected_reasons": rejected,
+	var after: Dictionary = metrics(fixture, mesh)
+	return {"valid": accepted > 0 and int(after.degenerate_triangles) < int(before.degenerate_triangles), "accepted_collapses": accepted,
+		"candidate_edges": unique.size(), "accepted_records": accepted_records, "candidate_records": candidate_records,
+		"rejected_reasons": rejected, "before_metrics": before, "after_metrics": after,
 		"changed_vertices": changed, "max_vertex_displacement_world": maximum_vertex_displacement, "mesh": mesh,
+		"first_rejection": _first_rejection(candidate_records),
 		"note": "edge collapses require the manifold link condition, fixed selection boundary, no inverted or sub-threshold surviving face"}
 
 
@@ -200,17 +295,26 @@ func _try_collapse(fixture: RefCounted, mesh: Dictionary, u: int, v: int) -> Dic
 			for value in ids:
 				if int(value) != v: neighbors_v[int(value)] = true
 	if edge_faces.size() != 2 or common_expected.size() != 2:
-		return {"valid": false, "reason": "edge_not_two_manifold_faces"}
+		return {"valid": false, "reason": "edge_not_two_manifold_faces",
+			"edge_face_ids": edge_faces, "link_condition_expected": _sorted_ints(common_expected.keys()),
+			"vertex_neighbors_u": _sorted_ints(neighbors_u.keys()), "vertex_neighbors_v": _sorted_ints(neighbors_v.keys())}
 	var common_actual: Dictionary = {}
 	for neighbor in neighbors_u:
 		if int(neighbor) != v and neighbors_v.has(int(neighbor)): common_actual[int(neighbor)] = true
 	if common_actual.size() != 2 or not common_actual.has(common_expected.keys()[0]) or not common_actual.has(common_expected.keys()[1]):
-		return {"valid": false, "reason": "link_condition_failed"}
-	if _vertex_on_selection_boundary(fixture, vertices[u], mesh.selected) or _vertex_on_selection_boundary(fixture, vertices[v], mesh.selected):
-		return {"valid": false, "reason": "would_move_fixed_patch_boundary"}
+		return {"valid": false, "reason": "link_condition_failed", "edge_face_ids": edge_faces,
+			"link_condition_expected": _sorted_ints(common_expected.keys()), "link_condition_actual": _sorted_ints(common_actual.keys()),
+			"vertex_neighbors_u": _sorted_ints(neighbors_u.keys()), "vertex_neighbors_v": _sorted_ints(neighbors_v.keys())}
+	var boundary_vertex_u := _vertex_on_selection_boundary(fixture, vertices[u], mesh.selected)
+	var boundary_vertex_v := _vertex_on_selection_boundary(fixture, vertices[v], mesh.selected)
+	# Boundary-adjacent collapses are candidates, not automatic rejections. Each target
+	# is accepted only if the complete external boundary signature remains byte-for-byte
+	# equivalent under the frozen coordinate key. This allows an interior sliver vertex
+	# to collapse onto an existing boundary endpoint while preserving every boundary edge.
 	var original_metrics: Dictionary = metrics(fixture, mesh)
 	var targets: Array[Vector3] = [(vertices[u] + vertices[v]) * 0.5, vertices[u], vertices[v]]
 	var failures: Array[String] = []
+	var target_attempts: Array[Dictionary] = []
 	for target in targets:
 		var result := _copy_mesh(mesh)
 		var result_vertices: Array[Vector3] = result.vertices
@@ -218,6 +322,8 @@ func _try_collapse(fixture: RefCounted, mesh: Dictionary, u: int, v: int) -> Dic
 		var kept: Array[Dictionary] = []
 		var candidate_failed := false
 		var failure_reason := ""
+		var removed_triangle_ids: Array[int] = []
+		var changed_triangles: Array[Dictionary] = []
 		for i in range(faces.size()):
 			var old_face: Dictionary = faces[i]
 			var old_ids: Array = old_face.v
@@ -226,43 +332,76 @@ func _try_collapse(fixture: RefCounted, mesh: Dictionary, u: int, v: int) -> Dic
 				var id := int(value)
 				ids.append(u if id == v else id)
 			if ids[0] == ids[1] or ids[1] == ids[2] or ids[2] == ids[0]:
+				removed_triangle_ids.append(i)
 				continue
 			if ids != old_ids:
 				var old_cross := (vertices[int(old_ids[1])] - vertices[int(old_ids[0])]).cross(vertices[int(old_ids[2])] - vertices[int(old_ids[0])])
 				var new_cross := (result_vertices[ids[1]] - result_vertices[ids[0]]).cross(result_vertices[ids[2]] - result_vertices[ids[0]])
 				if new_cross.length_squared() <= AREA2_LIMIT_SQUARED:
-					candidate_failed = true; failure_reason = "collapse_creates_subthreshold_face"; break
+					candidate_failed = true; failure_reason = "collapse_creates_subthreshold_face"
+					changed_triangles.append({"face_id": i, "cell_id": int(old_face.cell), "old_vertex_ids": old_ids.duplicate(),
+						"new_vertex_ids": ids, "old_cross_squared": old_cross.length_squared(), "new_cross_squared": new_cross.length_squared(),
+						"first_failed_invariant": failure_reason}); break
 				if old_cross.dot(new_cross) <= 0.0:
-					candidate_failed = true; failure_reason = "collapse_inverts_winding"; break
+					candidate_failed = true; failure_reason = "collapse_inverts_winding"
+					changed_triangles.append({"face_id": i, "cell_id": int(old_face.cell), "old_vertex_ids": old_ids.duplicate(),
+						"new_vertex_ids": ids, "old_cross_squared": old_cross.length_squared(), "new_cross_squared": new_cross.length_squared(),
+						"first_failed_invariant": failure_reason}); break
 			var new_face := old_face.duplicate(true)
 			new_face.v = ids
+			if ids != old_ids:
+				changed_triangles.append({"face_id": i, "cell_id": int(old_face.cell), "old_vertex_ids": old_ids.duplicate(),
+					"new_vertex_ids": ids, "old_cross_squared": (vertices[int(old_ids[1])] - vertices[int(old_ids[0])]).cross(vertices[int(old_ids[2])] - vertices[int(old_ids[0])]).length_squared(),
+					"new_cross_squared": (result_vertices[ids[1]] - result_vertices[ids[0]]).cross(result_vertices[ids[2]] - result_vertices[ids[0]]).length_squared(),
+					"winding_dot": (vertices[int(old_ids[1])] - vertices[int(old_ids[0])]).cross(vertices[int(old_ids[2])] - vertices[int(old_ids[0])]).dot((result_vertices[ids[1]] - result_vertices[ids[0]]).cross(result_vertices[ids[2]] - result_vertices[ids[0]]))})
 			kept.append(new_face)
-		if candidate_failed:
+		var target_record := {"target": _v3(target), "target_policy": "midpoint" if target == targets[0] else ("keep_lower_id" if target == targets[1] else "keep_higher_id"),
+			"removed_triangle_ids": removed_triangle_ids, "changed_triangles": changed_triangles,
+			"rejected": candidate_failed, "reason": failure_reason,
+			"boundary_vertex_u": boundary_vertex_u, "boundary_vertex_v": boundary_vertex_v}
+		if not candidate_failed:
+			result.faces = kept
+			result.vertices = result_vertices
+			var candidate_metrics: Dictionary = metrics(fixture, result)
+			target_record["metrics"] = candidate_metrics
+			target_record["first_failed_invariant"] = _first_geometry_invariant(candidate_metrics, original_metrics)
+			target_record["before_metrics"] = original_metrics
+			target_record["boundary_signature_preserved"] = candidate_metrics.boundary_signature == original_metrics.boundary_signature
+			var displacement := maxf(vertices[u].distance_to(target), vertices[v].distance_to(target))
+			var moved: Array[Dictionary] = []
+			if vertices[u] != target: moved.append({"vertex_id": u, "from": _v3(vertices[u]), "to": _v3(target), "displacement": vertices[u].distance_to(target)})
+			if vertices[v] != target: moved.append({"vertex_id": v, "from": _v3(vertices[v]), "to": _v3(target), "displacement": vertices[v].distance_to(target)})
+			target_record["moved_vertices"] = moved
+			var invariant_failure := ""
+			if int(candidate_metrics.degenerate_triangles) >= int(original_metrics.degenerate_triangles): invariant_failure = "collapse_did_not_remove_subthreshold_faces"
+			elif int(candidate_metrics.internal_open_edges) > int(original_metrics.internal_open_edges): invariant_failure = "collapse_adds_internal_open_edge"
+			elif int(candidate_metrics.nonmanifold_edges) > int(original_metrics.nonmanifold_edges): invariant_failure = "collapse_adds_nonmanifold_edge"
+			elif int(candidate_metrics.same_winding_edges) > int(original_metrics.same_winding_edges): invariant_failure = "collapse_adds_same_winding_edge"
+			elif int(candidate_metrics.t_junctions) > int(original_metrics.t_junctions): invariant_failure = "collapse_adds_t_junction"
+			elif candidate_metrics.boundary_signature != original_metrics.boundary_signature: invariant_failure = "collapse_changes_fixed_boundary"
+			target_record["accepted"] = invariant_failure.is_empty()
+			target_record["first_failed_invariant"] = invariant_failure
+			target_attempts.append(target_record)
+			if invariant_failure.is_empty():
+				var moved_out: Array[Vector3] = []
+				for moved_record in moved: moved_out.append(vertices[u] if int(moved_record.vertex_id) == u else (vertices[v] if int(moved_record.vertex_id) == v else target))
+				moved_out.append(target)
+				return {"valid": true, "mesh": result, "changed_vertices": moved_out,
+					"moved_vertices": moved, "changed_triangles": changed_triangles, "removed_triangle_ids": removed_triangle_ids,
+					"target_attempts": target_attempts, "max_vertex_displacement": displacement,
+					"target_policy": target_record.target_policy,
+					"boundary_vertex_u": boundary_vertex_u, "boundary_vertex_v": boundary_vertex_v,
+					"boundary_signature_preserved": true}
+			else:
+				failures.append(invariant_failure)
+		else:
+			target_attempts.append(target_record)
 			failures.append(failure_reason)
-			continue
-		result.faces = kept
-		result.vertices = result_vertices
-		var candidate_metrics: Dictionary = metrics(fixture, result)
-		if int(candidate_metrics.degenerate_triangles) >= int(original_metrics.degenerate_triangles):
-			failures.append("collapse_did_not_remove_subthreshold_faces"); continue
-		if int(candidate_metrics.internal_open_edges) > int(original_metrics.internal_open_edges):
-			failures.append("collapse_adds_internal_open_edge"); continue
-		if int(candidate_metrics.nonmanifold_edges) > int(original_metrics.nonmanifold_edges):
-			failures.append("collapse_adds_nonmanifold_edge"); continue
-		if int(candidate_metrics.same_winding_edges) > int(original_metrics.same_winding_edges):
-			failures.append("collapse_adds_same_winding_edge"); continue
-		if int(candidate_metrics.t_junctions) > int(original_metrics.t_junctions):
-			failures.append("collapse_adds_t_junction"); continue
-		if candidate_metrics.boundary_signature != original_metrics.boundary_signature:
-			failures.append("collapse_changes_fixed_boundary"); continue
-		var displacement := maxf(vertices[u].distance_to(target), vertices[v].distance_to(target))
-		var moved: Array[Vector3] = []
-		if vertices[u] != target: moved.append(vertices[u])
-		if vertices[v] != target: moved.append(vertices[v])
-		moved.append(target)
-		return {"valid": true, "mesh": result, "changed_vertices": moved,
-			"max_vertex_displacement": displacement, "target_policy": "midpoint" if target == targets[0] else ("keep_lower_id" if target == targets[1] else "keep_higher_id")}
-	return {"valid": false, "reason": failures.back() if not failures.is_empty() else "no_collapse_candidate", "rejections": failures}
+	return {"valid": false, "reason": failures.back() if not failures.is_empty() else "no_collapse_candidate",
+		"rejections": failures, "target_attempts": target_attempts, "edge_face_ids": edge_faces,
+		"link_condition_expected": _sorted_ints(common_expected.keys()), "link_condition_actual": _sorted_ints(common_actual.keys()),
+		"vertex_neighbors_u": _sorted_ints(neighbors_u.keys()), "vertex_neighbors_v": _sorted_ints(neighbors_v.keys()),
+		"boundary_vertex_u": boundary_vertex_u, "boundary_vertex_v": boundary_vertex_v}
 
 
 func _cavity_retriangulate(fixture: RefCounted, mesh: Dictionary, expand_one_ring: bool) -> Dictionary:
@@ -619,8 +758,11 @@ func _copy_mesh(source: Dictionary) -> Dictionary:
 	for value in source.original_vertices: original_vertex_copy.append(value)
 	var face_copy: Array[Dictionary] = []
 	for value in source.faces: face_copy.append(value.duplicate(true))
-	return {"vertices": vertex_copy, "original_vertices": original_vertex_copy,
+	var copied := {"vertices": vertex_copy, "original_vertices": original_vertex_copy,
 		"faces": face_copy, "selected": source.selected.duplicate()}
+	for key in ["focus_ids", "selected_ids", "cell_ownership", "source_face_counts"]:
+		if source.has(key): copied[key] = source[key].duplicate(true)
+	return copied
 
 
 func _edge_key(a: int, b: int) -> String:
@@ -647,3 +789,28 @@ func _max_of(values: PackedFloat64Array) -> float:
 
 func _v3(point: Vector3) -> Array[float]:
 	return [point.x, point.y, point.z]
+
+
+func _sorted_ints(values: Array) -> Array[int]:
+	var output: Array[int] = []
+	for value in values: output.append(int(value))
+	output.sort()
+	return output
+
+
+func _first_rejection(records: Array[Dictionary]) -> Dictionary:
+	for record in records:
+		if String(record.get("status", "")) != "REJECTED": continue
+		var attempt: Dictionary = record.get("attempt", {})
+		return {"edge_id": record.get("edge_id", ""), "reason": attempt.get("reason", "rejected"),
+			"target_attempts": attempt.get("target_attempts", [])}
+	return {}
+
+
+func _first_geometry_invariant(after: Dictionary, before: Dictionary) -> String:
+	if int(after.get("internal_open_edges", 0)) > int(before.get("internal_open_edges", 0)): return "repair_added_internal_open_edge"
+	if int(after.get("nonmanifold_edges", 0)) > int(before.get("nonmanifold_edges", 0)): return "repair_added_nonmanifold_edge"
+	if int(after.get("same_winding_edges", 0)) > int(before.get("same_winding_edges", 0)): return "repair_added_same_winding_edge"
+	if int(after.get("t_junctions", 0)) > int(before.get("t_junctions", 0)): return "repair_added_t_junction"
+	if int(after.get("face_component_count", 0)) != int(before.get("face_component_count", 0)): return "face_component_count_changed"
+	return ""

@@ -10,6 +10,15 @@ const MAX_EDITED_FOCUS_CELLS_R72 := 64
 func _run() -> void:
 	var gate_start_usec := Time.get_ticks_usec()
 	var scenario := _requested_scenario()
+	var diagnostic_only := OS.get_cmdline_user_args().has("--diagnose-only")
+	var diagnostic_strategy := _requested_diagnostic_strategy()
+	if diagnostic_only and scenario != "cave_wall_carve":
+		_failures.append("diagnose_only_requires_frozen_cave_wall_carve")
+		_finish_diagnostic(false, {"reason": "unsupported_diagnostic_scenario", "scenario": scenario})
+		return
+	if diagnostic_only and not ["A_edge_collapse", "B_constrained_cavity"].has(diagnostic_strategy):
+		_finish_diagnostic(false, {"reason": "unsupported_diagnostic_strategy", "strategy": diagnostic_strategy})
+		return
 	if not ["zero_edit", "cave_wall_carve", "center_fill_then_wall_carve"].has(scenario):
 		_failures.append("unsupported_frozen_scenario:%s" % scenario)
 		_finish()
@@ -57,7 +66,10 @@ func _run() -> void:
 	var strategy_b: Dictionary = {"valid": true, "disposition": "NOT_RUN_OUTSIDE_ZERO_EDIT_STRATEGY_COMPARISON"}
 	var strategy_c: Dictionary = {"valid": true, "disposition": "NOT_RUN_OUTSIDE_ZERO_EDIT_STRATEGY_COMPARISON"}
 	if not focus_ids.is_empty():
-		strategy_a = repair.run_strategy(fixture, local_before, "A_edge_collapse")
+		if diagnostic_only and diagnostic_strategy == "B_constrained_cavity":
+			strategy_a = {"valid": true, "strategy": "B_constrained_cavity_DIAGNOSTIC_PENDING"}
+		else:
+			strategy_a = repair.run_strategy(fixture, local_before, "A_edge_collapse")
 		if scenario == "zero_edit":
 			strategy_b = repair.run_strategy(fixture, local_before, "B_constrained_cavity")
 			strategy_c = repair.run_strategy(fixture, local_before, "C_boundary_patch_remesh")
@@ -65,6 +77,18 @@ func _run() -> void:
 		strategy_a = {"valid": true, "no_op": true, "strategy": "A_edge_collapse",
 			"disposition": "NO_SUBTHRESHOLD_FACES_FOUND"}
 	var local_repair_elapsed_usec := Time.get_ticks_usec() - local_repair_start_usec
+	if diagnostic_only:
+		var selected_diagnostic_strategy: Dictionary = strategy_a
+		if diagnostic_strategy == "B_constrained_cavity":
+			var minimal_patch: Dictionary = repair.extract_local_mesh(fixture, built.cells, [720])
+			selected_diagnostic_strategy = repair.run_strategy(fixture, minimal_patch, diagnostic_strategy)
+		var diagnostic: Dictionary = _make_r73_failure_diagnostic(scenario, snapshot, input_payload,
+			input_canonical_json, fixture, built, focus_ids, local_before, local_metrics_before,
+			selected_diagnostic_strategy, gate_start_usec, build_elapsed_usec, local_repair_elapsed_usec)
+		diagnostic["repair_strategy"] = diagnostic_strategy
+		print("R73_FAILURE_DIAGNOSTIC " + JSON.stringify(diagnostic))
+		_finish_diagnostic(bool(diagnostic.get("complete", false)), diagnostic)
+		return
 	_check(bool(strategy_a.get("valid", false)), "%s_selected_A_repair_satisfies_all_local_invariants" % scenario)
 	var patched_cells_result := _replace_local_cells(built.cells, strategy_a, repair)
 	_check(bool(patched_cells_result.get("valid", false)), "%s_local_A_patch_replaces_only_selected_cells" % scenario)
@@ -210,12 +234,158 @@ func _finish() -> void:
 	print("R72_RESULT " + JSON.stringify(final))
 	quit(1)
 
+
+func _finish_diagnostic(complete: bool, diagnostic: Dictionary) -> void:
+	var result := {"suite": "P3_1_R7_3_CARVE_FAILURE_DIAGNOSTIC",
+		"status": "DIAGNOSTIC_COMPLETE" if complete else "DIAGNOSTIC_FAILED",
+		"scenario": "cave_wall_carve", "full_scenario_gate_executed": false,
+		"scenario_count": 0, "assertions": _assertions, "failure_diagnosed": diagnostic.get("first_failed_invariant", ""),
+		"note": "diagnostic-only frozen input reconstruction; no collider or full scenario acceptance gate was run"}
+	print("R73_DIAGNOSTIC_RESULT " + JSON.stringify(result))
+	quit(0 if complete else 1)
+
+
+func _make_r73_failure_diagnostic(scenario: String, snapshot: Dictionary, input_payload: Dictionary,
+		input_canonical_json: String, fixture: RefCounted, built: Dictionary, focus_ids: Array[int],
+		local_before: Dictionary, local_metrics_before: Dictionary, strategy_a: Dictionary,
+		gate_start_usec: int, build_elapsed_usec: int, repair_elapsed_usec: int) -> Dictionary:
+	var diagnostic: Dictionary = strategy_a.get("diagnostic", {})
+	var source_paths := [
+		"res://tests/prototypes/p3_1_r7_2_zero_edit_gate.gd",
+		"res://tests/prototypes/p3_1_r7_2_local_retriangulation.gd",
+		"res://tests/prototypes/p3_1_r7_conforming_adaptive_diagnostic.gd",
+		"res://tests/prototypes/p3_1_r7_conforming_mesh_fixture.gd",
+		"res://scripts/terrain/marching_tetrahedra.gd",
+		"res://scripts/terrain/sdf_world.gd",
+		"res://scripts/terrain/sdf_brush_edit_state.gd",
+		"res://scripts/experiments/lod01_transition_fixture.gd"]
+	var source_hashes: Dictionary = {}
+	var missing_sources: Array[String] = []
+	for path in source_paths:
+		var bytes := FileAccess.get_file_as_bytes(path)
+		if bytes.is_empty() and not FileAccess.file_exists(path):
+			missing_sources.append(path)
+		else:
+			source_hashes[path] = _sha256_bytes(bytes)
+	var patch_reduction: Dictionary = _reduce_failing_patch(fixture, built.cells, focus_ids) \
+		if String(strategy_a.get("strategy", "")) == "A_edge_collapse" else {
+			"status": "NOT_RUN_FOR_SEPARATE_B_ALTERNATIVE", "reduced_focus_ids": []}
+	var failed := String(diagnostic.get("first_failed_invariant", ""))
+	var command_centers: PackedVector3Array = snapshot.get("centers", PackedVector3Array())
+	var command_radii: PackedFloat64Array = snapshot.get("radii", PackedFloat64Array())
+	var command_modes: PackedByteArray = snapshot.get("modes", PackedByteArray())
+	var commands: Array[Dictionary] = []
+	for index in range(command_centers.size()):
+		var center: Vector3 = command_centers[index]
+		commands.append({"sequence": index, "mode_byte": int(command_modes[index]),
+			"center_world": [center.x, center.y, center.z], "radius_world": float(command_radii[index])})
+	return {"complete": failed != "" and missing_sources.is_empty(),
+		"scenario_id": "P3.1.R7.CAVE_WALL_CARVE.v1", "scenario_version": "P3.1.R7.CAVE_WALL_CARVE.v1",
+		"scenario": scenario, "seed": SEED, "generator_version": Field.GENERATOR_VERSION,
+		"region": [REGION.x, REGION.y], "revision": snapshot.get("revision", -1),
+		"operation_count": command_centers.size(), "ordered_commands": commands,
+		"input_canonical_json": input_canonical_json,
+		"input_sha256": _sha256_bytes(input_canonical_json.to_utf8_buffer()),
+		"source_sha256_by_path": source_hashes, "missing_source_paths": missing_sources,
+		"canonical_source_mesh_sha256": _mesh_sha256(built.positions, built.normals),
+		"source_triangle_count": built.triangle_count,
+		"scenario_wide_subthreshold_focus_cell_ids": focus_ids,
+		"selected_focus_cell_ids": diagnostic.get("selected_focus_cell_ids", focus_ids),
+		"selected_cell_ids": diagnostic.get("selected_cell_ids", []),
+		"cell_ownership": diagnostic.get("cell_ownership", []),
+		"source_face_counts": diagnostic.get("source_face_counts", {}),
+		"original_patch_boundary_signature": diagnostic.get("original_patch_boundary_signature", []),
+		"attempted_patch_boundary_signature": diagnostic.get("attempted_patch_boundary_signature", []),
+		"original_patch_boundary_records": diagnostic.get("original_patch_boundary_records", []),
+		"attempted_patch_boundary_records": diagnostic.get("attempted_patch_boundary_records", []),
+		"candidate_edge_collapses": diagnostic.get("candidate_edge_collapses", []),
+		"accepted_edge_collapses": diagnostic.get("accepted_edge_collapses", []),
+		"rejection_reasons": diagnostic.get("strategy_rejection_reasons", []),
+		"vertex_movements": diagnostic.get("vertex_movements", []),
+		"changed_triangles": diagnostic.get("changed_triangles", []),
+		"removed_triangle_ids": diagnostic.get("removed_triangle_ids", []),
+		"before_metrics": diagnostic.get("before_metrics", local_metrics_before), "after_metrics": diagnostic.get("after_metrics", {}),
+		"face_component_change": diagnostic.get("face_component_change", 0),
+		"first_failed_invariant": failed, "strategy_valid": bool(strategy_a.get("valid", false)),
+		"strategy_attempt_summary": _strategy_attempt_summary(strategy_a.get("strategy_attempt", {})),
+		"patch_reduction": patch_reduction,
+		"timing_usec": {"full_build": build_elapsed_usec, "local_repair": repair_elapsed_usec,
+			"diagnostic_total": Time.get_ticks_usec() - gate_start_usec},
+		"execution_boundary": "diagnostic only; did not run collider, full scenario acceptance, or retry prior complete scenario"}
+
+
+func _reduce_failing_patch(fixture: RefCounted, cells: Dictionary, original_focus: Array[int]) -> Dictionary:
+	var focus: Array[int] = original_focus.duplicate()
+	var attempts: Array[Dictionary] = []
+	var reducer := RepairR72.new()
+	var budget := 64
+	var removed_on_last_pass := true
+	while removed_on_last_pass and attempts.size() < budget:
+		removed_on_last_pass = false
+		var cursor := 0
+		while cursor < focus.size() and attempts.size() < budget:
+			var candidate := focus.duplicate()
+			var removed_focus_cell: int = int(candidate[cursor])
+			candidate.remove_at(cursor)
+			if candidate.is_empty():
+				attempts.append({"removed_focus_cell": removed_focus_cell, "trial_focus_ids": candidate,
+					"status": "NOT_A_REPRODUCING_PATCH", "reason": "empty_focus_set"})
+				cursor += 1
+				continue
+			var patch: Dictionary = reducer.extract_local_mesh(fixture, cells, candidate)
+			var patch_metrics: Dictionary = reducer.metrics(fixture, patch)
+			if int(patch_metrics.get("nonzero_subthreshold_triangles", 0)) == 0:
+				attempts.append({"removed_focus_cell": removed_focus_cell, "trial_focus_ids": candidate,
+					"status": "NOT_A_REPRODUCING_PATCH", "reason": "no_nonzero_subthreshold_source_face"})
+				cursor += 1
+				continue
+			var result: Dictionary = reducer.run_strategy(fixture, patch, "A_edge_collapse")
+			var details: Dictionary = result.get("diagnostic", {})
+			attempts.append({"removed_focus_cell": removed_focus_cell, "trial_focus_ids": candidate,
+				"status": "FAILURE_PRESERVED" if not bool(result.get("valid", false)) else "FAILURE_REMOVED",
+				"first_failed_invariant": details.get("first_failed_invariant", ""),
+				"source_face_count": patch.faces.size(), "selected_cell_ids": details.get("selected_cell_ids", []),
+				"before_metrics": details.get("before_metrics", {}), "after_metrics": details.get("after_metrics", {}),
+				"candidate_edge_collapses": details.get("candidate_edge_collapses", [])})
+			if not bool(result.get("valid", false)):
+				focus = candidate
+				removed_on_last_pass = true
+				break
+			cursor += 1
+	return {"original_focus_ids": original_focus, "reduced_focus_ids": focus,
+		"one_minimal_under_deterministic_single_cell_deletion": not removed_on_last_pass and attempts.size() < budget,
+		"attempt_count": attempts.size(), "attempt_budget": budget, "attempts": attempts,
+		"note": "greedy deletion minimality is bounded and does not claim a globally minimum patch"}
+
+
+func _strategy_attempt_summary(strategy_attempt: Dictionary) -> Dictionary:
+	var summary: Dictionary = {}
+	for key in ["valid", "reason", "accepted_collapses", "candidate_edges", "rejected_reasons",
+			"first_rejection", "max_vertex_displacement_world", "before_metrics", "after_metrics"]:
+		if strategy_attempt.has(key): summary[key] = strategy_attempt[key]
+	return summary
+
+
+func _sha256_bytes(bytes: PackedByteArray) -> String:
+	var context := HashingContext.new()
+	if context.start(HashingContext.HASH_SHA256) != OK: return "HASH_START_FAILED"
+	context.update(bytes)
+	return context.finish().hex_encode()
+
 func _requested_scenario() -> String:
 	for argument in OS.get_cmdline_user_args():
 		var value := String(argument)
 		if value.begins_with("--scenario-id="):
 			return value.trim_prefix("--scenario-id=")
 	return "zero_edit"
+
+
+func _requested_diagnostic_strategy() -> String:
+	for argument in OS.get_cmdline_user_args():
+		var value := String(argument)
+		if value.begins_with("--repair-strategy="):
+			return value.trim_prefix("--repair-strategy=")
+	return "A_edge_collapse"
 
 func _subthreshold_cell_ids(cells: Dictionary) -> Array[int]:
 	var ids: Array[int] = []
