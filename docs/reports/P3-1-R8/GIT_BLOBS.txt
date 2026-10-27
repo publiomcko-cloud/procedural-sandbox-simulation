@@ -1,0 +1,14 @@
+# Git blob IDs for the R8 evidence change set. This inventory excludes itself and SHA256SUMS.txt to avoid self-reference.
+93e4e2602c0c58c714166320772d7cf4ad1a16c1 *.gitattributes
+0c1c586f8ca7c2da4d64066036c0ea0b10a6b8a2 *README.md
+7a05abe21b2b669886a5b47dd6ca86c89c78e09e *docs/checkpoints/2026-10-27-P3-1-R8-GEOMETRY-QUALITY.md
+f8e1c3bd57456e8098d9e0e88a8071644f1aa316 *docs/checkpoints/INDEX.md
+26658a9a0bd4abe26e827a824e5323027aed2953 *docs/reports/P3-1-R8/RESULTS.md
+779de4b8e8f0fc776cd660b16f058151bb4b41c2 *docs/reports/P3-1-R8/SOURCE_SHA256SUMS.txt
+5c1a9e5d83af5c43e576a659f91b05e75cabe45c *docs/reports/P3-1-R8/evidence/.gitignore
+a81321b779641308b6bffc9d565687398c8df609 *docs/reports/P3-1-R8/evidence/README.md
+fce8b731d5f34cf94e7a414f5b684ec7fab5fa76 *docs/reports/P3-1-R8/evidence/SHA256SUMS.txt
+3c5216c860f273c819c4ba30a1cb6c7dfce7d1a3 *docs/reports/P3-1-R8/evidence/evidence-bundle.zip
+5a12810f43073962986e112b8af2ff79bb85dd22 *docs/specs/P3-1-R8-GEOMETRY-QUALITY-DIAGNOSTICS.md
+846988b1cd3e7856f20a04ace349829d6159f80a *docs/status/CURRENT_STATUS.md
+7d7d663456342e4b4cdd6d47af1822a49f4bf70d *game/tests/prototypes/p3_1_r8_geometry_quality_diagnostic.gd
