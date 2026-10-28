@@ -1,0 +1,7 @@
+{
+  "command": "& 'C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe' --headless --path C:\\w82\\game --check-only --script res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd",
+  "exit_code": 1,
+  "elapsed_ms": 448,
+  "stdout_bytes": 75,
+  "stderr_bytes": 359
+}

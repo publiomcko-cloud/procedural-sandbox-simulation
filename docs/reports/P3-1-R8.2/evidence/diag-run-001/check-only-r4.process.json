@@ -1,0 +1,14 @@
+{
+  "stage": "check-only-r4",
+  "exit_code": 0,
+  "elapsed_ms": 1121,
+  "pid": 47392,
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\w82\\game",
+    "--check-only",
+    "--script",
+    "res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd"
+  ]
+}

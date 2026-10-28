@@ -1,0 +1,16 @@
+{
+  "stage": "check-only-r5-after-harness-fix",
+  "process_id": 23300,
+  "start_utc": "2026-10-28T11:20:39.2976082Z",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\w82\\game",
+    "--check-only",
+    "--script",
+    "res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd"
+  ],
+  "elapsed_ms": 1340,
+  "completed": true,
+  "exit_code": 0
+}

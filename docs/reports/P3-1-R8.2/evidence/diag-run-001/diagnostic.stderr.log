@@ -1,0 +1,9 @@
+SCRIPT ERROR: Invalid call. Nonexistent 'Vector3' constructor.
+   at: _triangle_trace (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:55)
+   GDScript backtrace (most recent call first):
+       [0] _triangle_trace (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:55)
+       [1] _run (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:22)
+SCRIPT ERROR: Invalid access to property or key 'valid' on a base object of type 'Dictionary'.
+   at: _run (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:23)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:23)

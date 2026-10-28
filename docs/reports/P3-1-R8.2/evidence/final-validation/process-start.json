@@ -1,0 +1,21 @@
+﻿{
+    "identity":  {
+                     "source_head":  "d81f29237d47361139b02849a8215c30424be873",
+                     "validate_sha256":  "538A9149A2232E30CD6312DE97952BC56C1DBE3C54CABA6C0F29FFB675AE01C6",
+                     "godot_sha256":  "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+                     "godot_version":  "4.7.2.stable.official.ed1daf0bf"
+                 },
+    "pid":  15940,
+    "start_utc":  "2026-10-28T11:40:23.2227832+00:00",
+    "exe":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    "arguments":  [
+                      "-NoProfile",
+                      "-ExecutionPolicy",
+                      "Bypass",
+                      "-File",
+                      "C:\\w82\\scripts\\validate.ps1"
+                  ],
+    "stdout":  "C:\\w82\\docs\\reports\\P3-1-R8.2\\evidence\\final-validation\\stdout.log",
+    "stderr":  "C:\\w82\\docs\\reports\\P3-1-R8.2\\evidence\\final-validation\\stderr.log",
+    "profile":  "C:\\w82\\docs\\reports\\P3-1-R8.2\\evidence\\final-validation\\godot-profile"
+}

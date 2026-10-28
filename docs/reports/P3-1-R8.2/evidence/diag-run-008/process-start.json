@@ -1,0 +1,15 @@
+﻿{
+    "pid":  43052,
+    "start_utc":  "2026-10-28T11:37:21.5209560Z",
+    "exe":  "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "exe_sha256":  "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+    "args":  [
+                 "--headless",
+                 "--path",
+                 "C:\\w82\\game",
+                 "--script",
+                 "res://tests/prototypes/p3_1_r8_2_xplus_face_oracle.gd"
+             ],
+    "stdout":  "C:\\w82\\docs\\reports\\P3-1-R8.2\\evidence\\diag-run-008\\stdout.log",
+    "stderr":  "C:\\w82\\docs\\reports\\P3-1-R8.2\\evidence\\diag-run-008\\stderr.log"
+}

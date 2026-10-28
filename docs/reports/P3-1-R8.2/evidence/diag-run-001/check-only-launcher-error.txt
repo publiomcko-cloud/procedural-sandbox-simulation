@@ -1,0 +1,1 @@
+godot_literal=C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe exists=True
