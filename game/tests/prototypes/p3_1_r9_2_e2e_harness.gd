@@ -3,7 +3,6 @@ extends SceneTree
 const Core := preload("res://tests/prototypes/p3_1_r9_2_diagnostic_base.gd")
 const CandidateScript := preload("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd")
 const CANDIDATE_ID := "A"
-const REPEATS := 5
 var _candidate: Object
 var _manifest: Dictionary = {}
 var _source_sha := ""
@@ -61,7 +60,6 @@ func _run() -> void:
 	quit(0)
 
 func _run_row(row: Dictionary) -> void:
-	var setup: Dictionary = Core.make_snapshot(row)
 	var variants: Array = []
 	if row.has("roi"):
 		variants.append({"id": "default", "roi": row.roi})
@@ -79,106 +77,213 @@ func _run_row(row: Dictionary) -> void:
 			"case_id": case_id, "manifest_case_sha256": _manifest.case_digests[row.scenario_id],
 			"command_sha256": _manifest.command_digests[row.scenario_id], "command_count": row.commands.size(),
 			"monotonic_usec": case_start})
+		var scope: Dictionary = Core.candidate_scope(row, CANDIDATE_ID)
+		if not scope.get("valid", false):
+			_emit_result(row, variant, case_id, start_event, case_start, "FAIL", "FAILED_INVALID_CANDIDATE_SCOPE", "NOT_ASSESSED", "PARTIAL",
+				{"reason": scope.get("reason", "candidate_scope_invalid")}, [])
+			continue
+		if not scope.get("in_scope", false):
+			_emit_result(row, variant, case_id, start_event, case_start, "NOT_RUN", "NOT_APPLICABLE_OTHER_CANDIDATES", "NOT_ASSESSED", "NONE",
+				{"reason": "manifest_candidate_scope_excludes_candidate", "candidate_scope": row.get("candidate_scope", [])}, [])
+			continue
+		var counts: Dictionary = Core.iteration_counts(row, variant)
+		if not counts.get("valid", false):
+			_emit_result(row, variant, case_id, start_event, case_start, "FAIL", "FAILED_INVALID_REPETITION_CONTRACT", "NOT_ASSESSED", "PARTIAL",
+				{"reason": counts.get("reason", "iteration_contract_invalid")}, [])
+			continue
+		var hooks: Array = Core.diagnostic_hooks(String(row.get("kind", "")))
+		if hooks.is_empty():
+			_emit_result(row, variant, case_id, start_event, case_start, "FAIL", "FAILED_UNSUPPORTED_SCENARIO_KIND", "NOT_ASSESSED", "PARTIAL",
+				{"reason": "scenario_kind_has_no_registered_diagnostic_hooks", "kind": row.get("kind", "")}, [])
+			continue
+		if "canonical_sampled_cave_connectivity" in hooks:
+			var cave_times: Array[int] = []
+			var cave_values: Array[Dictionary] = []
+			var cave_failed := false
+			for sample_index in range(counts.repeats):
+				if Time.get_ticks_usec() - _campaign_started_usec >= Core.MAX_CANDIDATE_USEC:
+					cave_failed = true; _hard_stop = true; break
+				var sample_start := Time.get_ticks_usec()
+				var cave_setup: Dictionary = Core.make_snapshot(row)
+				if not cave_setup.get("valid", false):
+					cave_values.append({"valid": false, "reason": cave_setup.get("reason", "snapshot_invalid")})
+				else:
+					cave_values.append(Core.sampled_cave_connectivity(variant.get("roi", row.get("roi", {})), cave_setup.snapshot, int(row.seed)))
+				var cave_elapsed := Time.get_ticks_usec() - sample_start
+				cave_times.append(cave_elapsed)
+				if cave_elapsed > Core.MAX_SCENARIO_USEC:
+					cave_failed = true; break
+			var cave_valid := not cave_values.is_empty()
+			for cave_value in cave_values:
+				cave_valid = cave_valid and bool(cave_value.get("valid", false))
+			var cave_summary: Array[Dictionary] = []
+			for cave_value in cave_values:
+				cave_summary.append(_connectivity_summary(cave_value))
+			var cave_status := "CENSORED" if cave_failed else ("COMPLETE" if cave_valid else "FAIL")
+			_emit_result(row, variant, case_id, start_event, case_start, cave_status,
+				"SHARED_CANONICAL_REFERENCE_ONLY", "DIAGNOSTIC_ONLY", "COMPLETE" if cave_valid and not cave_failed else "PARTIAL",
+				{"sampled_connectivity": cave_summary, "requested_warmups": counts.warmups, "requested_repeats": counts.repeats,
+				"warmup_samples_usec": [], "repeat_attempt_count": cave_times.size(), "successful_repeat_count": cave_values.size()}, cave_times)
+			continue
+		var setup: Dictionary = Core.make_snapshot(row)
 		if not setup.get("valid", false):
 			_emit_result(row, variant, case_id, start_event, case_start, "FAIL", "FAILED", "NOT_ASSESSED", "PARTIAL",
-				{"reason": setup.get("reason", "snapshot_invalid")}, [])
+				{"reason": setup.get("reason", "snapshot_invalid"), "requested_warmups": counts.warmups, "requested_repeats": counts.repeats}, [])
 			continue
 		var roi: Dictionary = variant.get("roi", {})
 		if not Core.validate_roi(roi).get("valid", false):
 			_emit_result(row, variant, case_id, start_event, case_start, "FAIL", "FAILED", "NOT_ASSESSED", "PARTIAL",
-				{"reason": "roi_rejected_by_shared_contract"}, [])
-			continue
-		if String(row.get("kind", "")) == "sampled_cave_connectivity":
-			var connectivity: Dictionary = Core.sampled_cave_connectivity(roi, setup.snapshot, int(row.seed))
-			_emit_result(row, variant, case_id, start_event, case_start, "COMPLETE",
-				"SHARED_CANONICAL_REFERENCE_ONLY", "DIAGNOSTIC_ONLY", "COMPLETE",
-				{"sampled_connectivity": _connectivity_summary(connectivity)}, [])
+				{"reason": "roi_rejected_by_shared_contract", "requested_warmups": counts.warmups, "requested_repeats": counts.repeats}, [])
 			continue
 		_candidate.call("configure_roi", roi)
-		var warm_start := Time.get_ticks_usec()
-		var warm_value: Variant = _candidate.call("build", setup.snapshot, row, variant)
-		var warm_usec := Time.get_ticks_usec() - warm_start
-		if typeof(warm_value) != TYPE_DICTIONARY or not warm_value.get("valid", false):
-			var warm_reason := String(warm_value.get("reason", "candidate_build_failed")) if typeof(warm_value) == TYPE_DICTIONARY else "candidate_build_result_not_dictionary"
-			var warm_status := "CENSORED" if _is_stop_loss(warm_reason) or warm_usec >= Core.MAX_SCENARIO_USEC else "FAIL"
-			_emit_result(row, variant, case_id, start_event, case_start, warm_status, "EXECUTED_BUT_NO_MESH",
-				"NOT_ASSESSED", "PARTIAL", {"reason": warm_reason, "warmup_usec": warm_usec}, [])
-			continue
-		var warm: Dictionary = warm_value
-		var mesh: Dictionary = warm.mesh
+		var warmup_samples: Array[int] = []
 		var sample_times: Array[int] = []
 		var sample_hashes: Array[String] = []
 		var build_metrics: Array[Dictionary] = []
-		var failed_repeat := false
-		var repeat_reason := ""
-		for repeat_index in range(REPEATS):
+		var successful_repeat_count := 0
+		var mesh: Dictionary = {}
+		var mesh_available := false
+		var primary_metrics: Dictionary = {}
+		var failed := false
+		var failure_reason := ""
+		var failure_status := "FAIL"
+		for warmup_index in range(counts.warmups):
 			if Time.get_ticks_usec() - _campaign_started_usec >= Core.MAX_CANDIDATE_USEC:
-				failed_repeat = true
-				repeat_reason = "candidate_aggregate_runtime_stop_loss"
-				_hard_stop = true
-				break
+				failed = true; failure_reason = "candidate_aggregate_runtime_stop_loss"; failure_status = "CENSORED"; _hard_stop = true; break
+			var warm_start := Time.get_ticks_usec()
+			var warm_value: Variant = _candidate.call("build", setup.snapshot, row, variant)
+			var warm_usec := Time.get_ticks_usec() - warm_start
+			warmup_samples.append(warm_usec)
+			if typeof(warm_value) != TYPE_DICTIONARY or not warm_value.get("valid", false):
+				failure_reason = String(warm_value.get("reason", "candidate_warmup_failed")) if typeof(warm_value) == TYPE_DICTIONARY else "candidate_warmup_result_not_dictionary"
+				failure_status = "CENSORED" if _is_stop_loss(failure_reason) or warm_usec > Core.MAX_SCENARIO_USEC else "FAIL"
+				failed = true; break
+			var warm_result: Dictionary = warm_value
+			if typeof(warm_result.get("mesh", null)) == TYPE_DICTIONARY and not mesh_available:
+				mesh = warm_result.mesh; primary_metrics = warm_result.get("metrics", {}); mesh_available = true
+			if warm_usec > Core.MAX_SCENARIO_USEC:
+				failure_reason = "per_scenario_warmup_time_stop_loss"; failure_status = "CENSORED"; failed = true; break
+		var repeat_index := 0
+		while repeat_index < counts.repeats and not failed:
+			if Time.get_ticks_usec() - _campaign_started_usec >= Core.MAX_CANDIDATE_USEC:
+				failed = true; failure_reason = "candidate_aggregate_runtime_stop_loss"; failure_status = "CENSORED"; _hard_stop = true; break
 			var repeat_start := Time.get_ticks_usec()
 			var repeat_value: Variant = _candidate.call("build", setup.snapshot, row, variant)
 			var elapsed := Time.get_ticks_usec() - repeat_start
 			if typeof(repeat_value) != TYPE_DICTIONARY or not repeat_value.get("valid", false):
-				failed_repeat = true
-				repeat_reason = String(repeat_value.get("reason", "repeat_build_failed")) if typeof(repeat_value) == TYPE_DICTIONARY else "repeat_build_result_not_dictionary"
-				break
+				sample_times.append(elapsed); sample_hashes.append("")
+				failure_reason = String(repeat_value.get("reason", "candidate_repeat_failed")) if typeof(repeat_value) == TYPE_DICTIONARY else "candidate_repeat_result_not_dictionary"
+				failure_status = "CENSORED" if _is_stop_loss(failure_reason) or elapsed > Core.MAX_SCENARIO_USEC else "FAIL"
+				failed = true; break
 			var repeat_build: Dictionary = repeat_value
-			sample_times.append(elapsed)
-			sample_hashes.append(String(repeat_build.get("mesh_sha256", "")))
+			sample_times.append(elapsed); sample_hashes.append(String(repeat_build.get("mesh_sha256", "")))
+			successful_repeat_count += 1
 			build_metrics.append(repeat_build.get("metrics", {}))
+			if not mesh_available and typeof(repeat_build.get("mesh", null)) == TYPE_DICTIONARY:
+				mesh = repeat_build.mesh; primary_metrics = repeat_build.get("metrics", {}); mesh_available = true
 			if elapsed > Core.MAX_SCENARIO_USEC:
-				failed_repeat = true
-				repeat_reason = "per_scenario_repetition_time_stop_loss"
-				break
+				failure_reason = "per_scenario_repetition_time_stop_loss"; failure_status = "CENSORED"; failed = true; break
+			repeat_index += 1
+		if not mesh_available:
+			_emit_result(row, variant, case_id, start_event, case_start, failure_status if failed else "FAIL",
+				"EXECUTED_BUT_NO_MESH", "NOT_ASSESSED", "PARTIAL",
+				{"reason": failure_reason if not failure_reason.is_empty() else "candidate_returned_no_mesh",
+				"requested_warmups": counts.warmups, "requested_repeats": counts.repeats,
+				"warmup_samples_usec": warmup_samples, "build_samples_usec": sample_times,
+				"repeat_attempt_count": sample_times.size(), "successful_repeat_count": successful_repeat_count}, sample_times)
+			continue
 		var topo: Dictionary = Core.topology(mesh, Core.world_min(roi), Core.world_min(roi) + Vector3(Core.cell_counts(roi)) * Core.step(roi))
 		var residual: Dictionary = Core.surface_residual(mesh, setup.snapshot, int(row.seed))
 		var normals: Dictionary = Core.normal_deviation(mesh, setup.snapshot, int(row.seed))
 		var components: Dictionary = Core.mesh_components(mesh)
 		var diagnostics: Dictionary = {"topology": _topology_summary(topo), "surface_residual": residual,
-			"normal_deviation": normals, "mesh_components": components, "candidate_metrics": warm.get("metrics", {}),
-			"warmup_usec": warm_usec, "build_samples_usec": sample_times, "build_sample_sha256": sample_hashes,
-			"deterministic_hash_match": _all_hashes_match(sample_hashes), "candidate_metric_samples": build_metrics}
+			"normal_deviation": normals, "mesh_components": components, "candidate_metrics": primary_metrics,
+			"requested_warmups": counts.warmups, "requested_repeats": counts.repeats,
+			"warmup_samples_usec": warmup_samples, "warmup_usec_total": _sum_ints(warmup_samples),
+			"build_samples_usec": sample_times, "repeat_attempt_count": sample_times.size(),
+			"successful_repeat_count": successful_repeat_count,
+			"build_sample_sha256": sample_hashes, "deterministic_hash_match": _all_hashes_match(sample_hashes),
+			"determinism_scope": "same process and identical input; not independent process reconstruction",
+			"candidate_metric_samples": build_metrics, "memory_scope": "external process-tree peak only; not per-scenario RSS"}
+		var kind := String(row.get("kind", ""))
 		var capability := _capability_status(row, variant)
-		if String(row.get("kind", "")) in ["same_resolution_boundary", "mixed_lod_boundary", "negative_region_boundary", "historical_interface_defect"]:
+		if "single_roi_contour_proxy_not_chunk_join" in hooks:
 			diagnostics["seam_contour"] = _seam_diagnostic(mesh, setup.snapshot, roi, row, variant)
-		if String(row.get("kind", "")) == "ray_picker_parity":
+			diagnostics["seam_scope"] = "single ROI contour proxy; independent neighboring chunk join not performed"
+		if "canonical_cpu_mesh_ray_proxy_not_production_picker" in hooks:
 			var rays: Array[Dictionary] = Core.ray_grid(roi, row.ray_grid)
-			var ray_result: Dictionary = Core.compare_mesh_rays(rays, mesh, setup.snapshot, int(row.seed))
-			diagnostics["ray_picker"] = _ray_summary(ray_result)
-		if String(row.get("kind", "")) == "cpu_two_sided_triangle_proxy":
+			diagnostics["ray_picker"] = _ray_summary(Core.compare_mesh_rays(rays, mesh, setup.snapshot, int(row.seed)))
+		if "canonical_and_mesh_ray_proxy" in hooks:
+			diagnostics["historical_mesh_ray"] = _historical_ray_diagnostic(mesh, setup.snapshot, row)
+		if "offline_cpu_two_sided_triangle_proxy" in hooks:
 			var proxy_rays: Array[Dictionary] = _proxy_rays(row)
-			var proxy_result: Dictionary = Core.compare_mesh_rays(proxy_rays, mesh, setup.snapshot, int(row.seed))
-			diagnostics["two_sided_cpu_proxy"] = _ray_summary(proxy_result)
+			diagnostics["two_sided_cpu_proxy"] = _ray_summary(Core.compare_mesh_rays(proxy_rays, mesh, setup.snapshot, int(row.seed)))
 			diagnostics["physics_server"] = "NOT_RUN"
-		if String(row.get("kind", "")) == "historical_triangle_root":
+		if "local_cell_corner_probe_only" in hooks:
 			diagnostics["triangle_root_observation"] = _triangle_root_observation(mesh, setup.snapshot, roi, row)
-		if String(row.get("kind", "")) == "deterministic_rebuild":
+		if "same_process_repeats_only" in hooks:
 			diagnostics["rebuild_hashes"] = sample_hashes
-		if String(row.get("kind", "")) == "local_edit_rebuild":
+		if "full_snapshot_rebuild_only_no_per_edit_update" in hooks:
 			diagnostics["edit_to_candidate_mesh_usec"] = sample_times
-		if CANDIDATE_ID == "D" and String(row.get("kind", "")) == "corrupt_reload_recovery":
+			diagnostics["edit_path_scope"] = "one full frozen four-command snapshot build per measured repetition; no per-edit acceptance or incremental mesh publication"
+		if "single_roi_build_only_no_independent_chunk_pair" in hooks:
+			diagnostics["independent_chunk_pair"] = "NOT_IMPLEMENTED_SINGLE_ROI_BUILD"
+		if "mesh_components_only_cave_connectivity_unimplemented" in hooks:
+			diagnostics["extracted_mesh_cave_connectivity"] = "NOT_IMPLEMENTED; triangle connectivity does not establish empty-space cave connectivity"
+		if "candidate_reported_serialization_only_process_memory_external" in hooks:
+			diagnostics["serialization_observation"] = {"candidate_metrics": primary_metrics,
+				"serialized_bytes": _find_metric(primary_metrics, "serialized_bytes"),
+				"process_memory": "available only as campaign process-tree peak in external evidence"}
+		if CANDIDATE_ID == "D" and "actual_fresh_reader_corruption_reload" in hooks:
 			var corruption: Dictionary = _candidate.call("corruption_reload_probe", setup.snapshot)
 			diagnostics["corruption_reload"] = corruption
-		if CANDIDATE_ID == "A" and String(row.get("kind", "")) == "mixed_lod_boundary":
-			var local_probe: Dictionary = _candidate.call("_xplus_shared_face_probe", setup.snapshot)
-			var full_pair: Dictionary = _candidate.call("_build_xplus_chunk_pair", setup.snapshot)
-			diagnostics["candidate_a_mixed_lod"] = {"local_face_probe": local_probe, "complete_chunk_pair": full_pair}
+			if not corruption.get("valid", false) or not corruption.get("rejected", false):
+				failed = true; failure_status = "FAIL"; failure_reason = "materialized_volume_corruption_not_rejected_by_fresh_reader"
+		if CANDIDATE_ID == "A" and kind == "mixed_lod_boundary":
+			diagnostics["candidate_a_mixed_lod"] = {"local_face_probe": _candidate.call("_xplus_shared_face_probe", setup.snapshot),
+				"complete_chunk_pair": _candidate.call("_build_xplus_chunk_pair", setup.snapshot)}
 		var quality := _quality_status(topo)
-		var evidence := "COMPLETE"
-		if failed_repeat or not residual.get("valid", false) or not normals.get("valid", false):
-			evidence = "PARTIAL"
-		var execution := "COMPLETE" if not failed_repeat else ("CENSORED" if _is_stop_loss(repeat_reason) else "PARTIAL")
-		if failed_repeat:
-			diagnostics["repeat_failure"] = repeat_reason
-		if _has_unimplemented_capability(row, variant):
-			capability = "NOT_IMPLEMENTED_OR_PARTIAL_AS_REPORTED"
+		if kind == "memory_disk_serialization" and CANDIDATE_ID != "D":
+			capability = "NOT_IMPLEMENTED_SERIALIZED_CACHE_OR_VOLUME"
+		var partial_capabilities := ["SINGLE_ROI_CONTOUR_PROXY_NOT_CHUNK_JOIN", "NOT_IMPLEMENTED_INDEPENDENT_CHUNK_PAIR",
+			"FULL_SNAPSHOT_REBUILD_ONLY_NO_PER_EDIT_UPDATE", "SAME_PROCESS_REPEATS_ONLY", "LOCAL_CELL_CORNER_PROBE_ONLY",
+			"MESH_COMPONENTS_ONLY_CAVE_CONNECTIVITY_NOT_IMPLEMENTED", "CANONICAL_CPU_MESH_RAY_PROXY_NOT_PRODUCTION_PICKER",
+			"OFFLINE_CPU_TWO_SIDED_TRIANGLE_PROXY", "NOT_IMPLEMENTED_SERIALIZED_CACHE_OR_VOLUME",
+			"CANDIDATE_REPORTED_SERIALIZATION_ONLY_PROCESS_MEMORY_EXTERNAL"]
+		var evidence := "PARTIAL" if failed or not residual.get("valid", false) or not normals.get("valid", false) or partial_capabilities.has(capability) else "COMPLETE"
+		var execution := failure_status if failed else "COMPLETE"
+		if failed:
+			diagnostics["failure_reason"] = failure_reason
 		_emit_result(row, variant, case_id, start_event, case_start, execution, capability, quality, evidence, diagnostics, sample_times)
+
+func _sum_ints(values: Array[int]) -> int:
+	var total := 0
+	for value in values: total += value
+	return total
+
+func _find_metric(metrics: Variant, key: String) -> Variant:
+	if typeof(metrics) != TYPE_DICTIONARY:
+		return null
+	if metrics.has(key): return metrics[key]
+	for child in metrics.values():
+		var found: Variant = _find_metric(child, key)
+		if found != null: return found
+	return null
+
+func _historical_ray_diagnostic(mesh: Dictionary, snapshot: Dictionary, row: Dictionary) -> Dictionary:
+	var ray: Dictionary = row.get("ray", {})
+	var origin_values: Array = ray.get("origin", [])
+	var direction_values: Array = ray.get("direction", [])
+	if origin_values.size() != 3 or direction_values.size() != 3:
+		return {"valid": false, "reason": "historical_ray_definition_invalid"}
+	var rays: Array[Dictionary] = [{"origin": Vector3(origin_values[0], origin_values[1], origin_values[2]),
+		"direction": Vector3(direction_values[0], direction_values[1], direction_values[2]), "length": float(ray.get("length", 12.0))}]
+	return _ray_summary(Core.compare_mesh_rays(rays, mesh, snapshot, int(row.seed)))
 
 func _emit_result(row: Dictionary, variant: Dictionary, case_id: String, start_event: String, started_usec: int,
 		execution_status: String, capability_status: String, geometry_status: String, evidence_status: String,
 		diagnostics: Dictionary, samples_usec: Array) -> void:
+	var completed_usec := Time.get_ticks_usec()
 	var record: Dictionary = {"schema": "P3.1.R9.2.Result.v1", "event_type": "scenario_complete",
 		"event_id": start_event.trim_suffix(".started") + ".complete", "parent_event_id": start_event,
 		"run_id": _run_id, "source_sha": _source_sha, "candidate": CANDIDATE_ID,
@@ -189,7 +294,7 @@ func _emit_result(row: Dictionary, variant: Dictionary, case_id: String, start_e
 		"execution_status": execution_status, "capability_status": capability_status,
 		"geometry_quality_status": geometry_status, "evidence_completeness": evidence_status,
 		"production_eligibility": "NOT_ELIGIBLE_EXPERIMENT_ONLY", "scenario_start_usec": started_usec,
-		"scenario_end_usec": Time.get_ticks_usec(), "duration_usec": Time.get_ticks_usec() - started_usec,
+		"scenario_end_usec": completed_usec, "monotonic_usec": completed_usec, "duration_usec": completed_usec - started_usec,
 		"build_samples_usec": samples_usec, "diagnostics": diagnostics}
 	_emit(record)
 
@@ -210,37 +315,26 @@ func _emit_not_run(row: Dictionary, reason: String) -> void:
 
 func _capability_status(row: Dictionary, variant: Dictionary) -> String:
 	var kind := String(row.get("kind", ""))
-	if kind == "mixed_lod_boundary":
-		return "PARTIAL_LOCAL_TEMPLATE_ONLY" if CANDIDATE_ID == "A" else "NOT_IMPLEMENTED"
-	if variant.has("lod_pairs") and _has_mixed_lod(variant.lod_pairs):
-		return "NOT_IMPLEMENTED_MIXED_LOD_ORIENTATION"
-	if kind == "corrupt_reload_recovery":
-		return "IMPLEMENTED" if CANDIDATE_ID == "D" else "NOT_IMPLEMENTED_D_STORAGE_SCENARIO"
-	if kind == "sampled_cave_connectivity":
-		return "SHARED_CANONICAL_REFERENCE_ONLY"
-	if kind == "cpu_two_sided_triangle_proxy":
-		return "OFFLINE_CPU_TWO_SIDED_TRIANGLE_PROXY"
+	if kind == "neighboring_chunks": return "NOT_IMPLEMENTED_INDEPENDENT_CHUNK_PAIR"
+	if kind in ["equal_resolution_boundary", "mixed_lod_boundary", "negative_coordinate_region_boundaries", "historical_xplus_interface"]:
+		return "SINGLE_ROI_CONTOUR_PROXY_NOT_CHUNK_JOIN"
+	if kind == "historical_xminus_displacement": return "CANONICAL_CPU_MESH_RAY_PROXY_NOT_PRODUCTION_PICKER"
+	if kind == "historical_triangle_root": return "LOCAL_CELL_CORNER_PROBE_ONLY"
+	if kind == "sampled_cave_connectivity": return "SHARED_CANONICAL_REFERENCE_ONLY"
+	if kind == "extracted_mesh_cave_connectivity": return "MESH_COMPONENTS_ONLY_CAVE_CONNECTIVITY_NOT_IMPLEMENTED"
+	if kind == "ray_picker_parity": return "CANONICAL_CPU_MESH_RAY_PROXY_NOT_PRODUCTION_PICKER"
+	if kind == "cpu_two_sided_triangle_proxy": return "OFFLINE_CPU_TWO_SIDED_TRIANGLE_PROXY"
+	if kind == "local_edit_to_mesh_rebuild": return "FULL_SNAPSHOT_REBUILD_ONLY_NO_PER_EDIT_UPDATE"
+	if kind == "deterministic_mesh_reconstruction": return "SAME_PROCESS_REPEATS_ONLY"
+	if kind == "memory_disk_serialization": return "CANDIDATE_REPORTED_SERIALIZATION_ONLY_PROCESS_MEMORY_EXTERNAL"
+	if kind == "materialized_volume_corrupt_reload": return "ACTUAL_FRESH_READER_CORRUPTION_RELOAD" if CANDIDATE_ID == "D" else "NOT_APPLICABLE_OTHER_CANDIDATES"
 	return "EXECUTED_CANDIDATE_PATH"
-
-func _has_unimplemented_capability(row: Dictionary, variant: Dictionary) -> bool:
-	return String(row.get("kind", "")) == "mixed_lod_boundary" and CANDIDATE_ID != "A" or \
-		variant.has("lod_pairs") and _has_mixed_lod(variant.lod_pairs) or \
-		String(row.get("kind", "")) == "corrupt_reload_recovery" and CANDIDATE_ID != "D"
-
-func _has_mixed_lod(value: Variant) -> bool:
-	if typeof(value) != TYPE_ARRAY:
-		return false
-	for pair_value in value:
-		var pair: Array = pair_value
-		if pair.size() == 2 and int(pair[0]) != int(pair[1]):
-			return true
-	return false
 
 func _quality_status(topology: Dictionary) -> String:
 	if int(topology.get("internal_open_edges", 0)) > 0 or int(topology.get("nonmanifold_edges", 0)) > 0 or \
 		int(topology.get("degenerate_triangles", 0)) > 0 or int(topology.get("winding_inconsistencies", 0)) > 0:
-		return "DEFECT_RECORDED"
-	return "NO_DEFECT_OBSERVED_IN_RECORDED_CHECKS_NOT_ACCEPTANCE"
+		return "TOPOLOGY_DEFECT_RECORDED"
+	return "NO_TOPOLOGY_DEFECT_OBSERVED_NOT_ACCEPTANCE"
 
 func _is_stop_loss(reason: String) -> bool:
 	return reason.contains("stop_loss") or reason.contains("timeout") or reason.contains("resource")
