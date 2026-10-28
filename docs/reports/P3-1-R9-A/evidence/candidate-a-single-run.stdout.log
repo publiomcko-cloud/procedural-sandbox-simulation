@@ -1,0 +1,3 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+P3_1_R9A_RESULT {"algorithm":"root-aware marching tetrahedra with explicit 0.5 face grid ownership","assertions":3,"candidate":"A","duration_usec":525821,"failures":["zero_root_mt_build_within_stop_loss"],"gui":"NOT_RUN","manifest_sha256":"2b44cb52ef091c2527fa2f8b06859752cc7cfaa14bcafe94d4a4c55b0cdd908f","physics_server":"NOT_RUN","product_tolerance":"NONE_APPROVED","reason":"unique_sample_stop_loss","status":"BLOCKED"}

@@ -1,0 +1,54 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+SCRIPT ERROR: Parse Error: Preload file "res://tests/prototypes/p3_1_r9_experiment_base.gd" does not exist.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:6)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "Core" constant because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:6)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "zero_row" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:31)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "zero_setup" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:32)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "zero_topology" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:40)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "fill_row" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:46)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "fill_setup" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:47)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "d" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:73)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "mesh" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:77)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "ix" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:83)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "iy" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:83)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "iz" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:83)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "ka" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:127)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "kb" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:127)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "key" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:127)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "pk" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:131)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "mesh" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:144)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "da" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:175)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "db" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:175)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "akey" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:188)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "bkey" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:188)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "key" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:188)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "dm" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:195)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "ka" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:215)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "kb" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9a_conforming_mt.gd:215)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r9a_conforming_mt.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
