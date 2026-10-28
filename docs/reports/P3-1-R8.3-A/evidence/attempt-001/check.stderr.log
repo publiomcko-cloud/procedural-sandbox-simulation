@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Cannot infer the type of "passed" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3a_seam_experiment.gd:90)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r8_3a_seam_experiment.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
