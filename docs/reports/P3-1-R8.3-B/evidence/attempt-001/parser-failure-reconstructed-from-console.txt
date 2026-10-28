@@ -1,0 +1,33 @@
+CLASSIFICATION: reconstructed transcript from the Codex tool output; this is not the original process log. The initial check.stderr.log was overwritten by the successful parser check before the capture-retention issue was noticed.
+SCRIPT ERROR: Parse Error: Identifier "counts" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:129)
+SCRIPT ERROR: Parse Error: Identifier "counts" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:130)
+SCRIPT ERROR: Parse Error: Identifier "BrushR83" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:326)
+SCRIPT ERROR: Parse Error: Identifier "fine" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:518)
+SCRIPT ERROR: Parse Error: Identifier "coarse" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:519)
+SCRIPT ERROR: Parse Error: Identifier "only_fine" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:519)
+SCRIPT ERROR: Parse Error: Identifier "coarse" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:520)
+SCRIPT ERROR: Parse Error: Identifier "fine" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:521)
+SCRIPT ERROR: Parse Error: Identifier "only_fine" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:522)
+SCRIPT ERROR: Parse Error: Identifier "axis" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:524)
+SCRIPT ERROR: Parse Error: Identifier "plane" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:524)
+SCRIPT ERROR: Parse Error: Identifier "spec" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:524)
+SCRIPT ERROR: Parse Error: Identifier "fine" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:524)
+SCRIPT ERROR: Parse Error: Identifier "coarse" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:525)
+SCRIPT ERROR: Parse Error: Identifier "only_fine" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:525)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)

@@ -1,0 +1,11 @@
+{
+  "source_working_tree": "c788b8bd28dd4a0e469c78f06f6c7462abe1360b plus uncommitted bounded adaptive-selection correction",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "started_utc": "2026-10-28T14:59:51.7144446Z",
+  "ended_utc": "2026-10-28T15:00:39.2105400Z",
+  "elapsed_ms": 47487,
+  "exit_code": 0,
+  "stdout": "run.stdout.log",
+  "stderr": "run.stderr.log"
+}
