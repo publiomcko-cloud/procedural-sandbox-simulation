@@ -1,0 +1,24 @@
+{
+  "assertion_summary_records": 21,
+  "assertion_total": 21464,
+  "candidate": "B",
+  "duration_ms": 551022,
+  "exit": 0,
+  "global_validation_pass_marker_count": 1,
+  "nonzero_failure_records": [],
+  "script_or_parse_errors": [],
+  "source_sha": "6a42467b3378a436851257ace641eee04ebfc7c8",
+  "stderr_bytes_actual": 1220,
+  "stderr_sha256_actual": "01346abc85002f006e3c4e7e8bfb7b02377283dba88ea437319e45c3e8ed76c8",
+  "stderr_sha256_matches_wrapper": true,
+  "stderr_warning_count": 3,
+  "stderr_warning_lines": [
+    "WARNING: Target and up vectors are colinear. This is not advised as it may cause unwanted rotation around local Z axis.\r",
+    "WARNING: Target and up vectors are colinear. This is not advised as it may cause unwanted rotation around local Z axis.\r",
+    "WARNING: Target and up vectors are colinear. This is not advised as it may cause unwanted rotation around local Z axis.\r"
+  ],
+  "stdout_bytes_actual": 115977,
+  "stdout_sha256_actual": "671ada510d512f30a7a82b743472526c90dc6229ac1e037cfd5aca92f4104a69",
+  "stdout_sha256_matches_wrapper": true,
+  "validation_pass": true
+}

@@ -1,0 +1,50 @@
+{
+  "candidate": "B",
+  "source_sha": "6a42467b3378a436851257ace641eee04ebfc7c8",
+  "branch": "bench/p3-1-r9-2b-dual-contouring",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "engine": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "engine_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "engine_version": "4.7.2.stable.official.ed1daf0bf",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\r92b\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r9_2_e2e_harness.gd"
+  ],
+  "root_pid": 26096,
+  "root_start_time": "2026-10-28T16:53:58.2257643-03:00",
+  "root_process_metadata": {
+    "parent_pid": 10680,
+    "name": "Godot_v4.7.2-stable_win64_console.exe",
+    "command_line": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path C:\\r92b\\game --script res://tests/prototypes/p3_1_r9_2_e2e_harness.gd",
+    "creation_date": "2026-10-28T16:53:58.2257640-03:00"
+  },
+  "exit_code": 0,
+  "terminal_state": "PROCESS_COMPLETED",
+  "duration_ms": 9436,
+  "peak_aggregate_working_set_bytes": 104214528,
+  "memory_samples": 17,
+  "stop_reason": "",
+  "exception": "",
+  "process_tree": [
+    {
+      "pid": 26096,
+      "parent_pid": 10680,
+      "name": "Godot_v4.7.2-stable_win64_console.exe",
+      "command_line": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path C:\\r92b\\game --script res://tests/prototypes/p3_1_r9_2_e2e_harness.gd",
+      "creation_date": "2026-10-28T16:53:58.2257640-03:00",
+      "process_start_time": "2026-10-28T16:53:58.2257643-03:00"
+    },
+    {
+      "pid": 48572,
+      "parent_pid": 26096,
+      "name": "Godot_v4.7.2-stable_win64.exe",
+      "command_line": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64.exe --headless --path C:\\r92b\\game --script res://tests/prototypes/p3_1_r9_2_e2e_harness.gd"
+    }
+  ],
+  "stdout_sha256": "4e45b3661a170c13443795e29d10982e25b64df35f73f812933fe26b925e2a85",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

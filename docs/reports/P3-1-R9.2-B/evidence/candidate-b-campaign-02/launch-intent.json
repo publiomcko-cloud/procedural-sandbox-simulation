@@ -1,0 +1,19 @@
+{
+  "run_id": "R9.2.B.ebd664d9af59454a8836552b6155be4a",
+  "candidate": "B",
+  "source_sha": "6a42467b3378a436851257ace641eee04ebfc7c8",
+  "branch": "bench/p3-1-r9-2b-dual-contouring",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "engine": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "engine_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "engine_version": "4.7.2.stable.official.ed1daf0bf",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\r92b\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r9_2_e2e_harness.gd"
+  ],
+  "profile": "C:\\r92-evidence\\candidate-b-campaign-02\\profile"
+}
