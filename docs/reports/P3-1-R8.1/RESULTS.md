@@ -80,6 +80,6 @@ The 21 marker groups and assertion totals were: smoke 52; terrain SDF 44; brush 
 2. Trace the X+ unmatched segment and X− interior hit triangles to their source chunk cells and tetrahedra; compare their exact nodal values and interpolation edges on both sides. Keep the mixed-LOD and equal-LOD X+ controls.
 3. Only after those traces isolate a specific cause, prepare a minimal test-only candidate. Preserve the frozen input, sampled field, source positions, edge topology and existing tolerances; do not change production code or claim geometry acceptance.
 
-PR #158 remains untouched, open, draft and unmerged. PR #159 is a separate diagnostic-evidence draft. The owner must separately review the source/evidence and approve any later production or geometry-contract work.
+The measured R8.1 source/evidence commit is `e4b788f1024015a78c087deec78358969cc72972`, directly based on R8 HEAD `95a17b64aebfdba620ca949b1011c6b124792da6`. It is published as separate draft PR [#160](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/160), linked to Issue [#159](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/159), with base branch `bench/p3-1-r8-geometry-quality`. PR #158 remains untouched, open, draft and unmerged. The owner must separately review the source/evidence and approve any later production or geometry-contract work.
 
 All five security holds remain unchanged: `CURRENT_PROTECTED_STATE_UNKNOWN`, `V3_NOT_ATTESTED`, `ACL_REVIEW_REQUIRED`, `G1_BLOCKED_ENVIRONMENT`, `F2_G1_RELEASE_HOLD`.

@@ -1,3 +1,9 @@
+## 2026-10-28 — P3.1 R8.1 geometry causality evidence
+
+R8.1 is isolated test-only evidence on `bench/p3-1-r8-1-geometry-causality`, with measured source commit `e4b788f1024015a78c087deec78358969cc72972` (direct parent R8 HEAD `95a17b64aebfdba620ca949b1011c6b124792da6`). Draft evidence PR [#160](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/160) is linked to Issue #159 and stacked on the unchanged open/draft PR #158. Focused runs 003–005 completed and final Godot 4.7.2 `scripts/validate.ps1` passed 21 suites / 21,464 assertions / zero failures; three existing non-fatal camera colinearity warnings remain documented.
+
+The diagnostic reproduces: cell 712 triangle 3103 follows the sampled tetrahedral field winding but opposes the stable continuous-field outward gradient; X+ with negative-side LOD1 has a raw-edge-confirmed 33/35 contour mismatch despite 533 bitwise-equal shared density probes; X− same-ray picker is near the continuous SDF root while the first mesh hit is about 0.36609 units away on the canonical positive-density side. The exact low-level mesher causes are not fully isolated. No production correction, threshold change, geometry acceptance, GUI/PhysicsServer/GPU test, merge, or schema work occurred. See [R8.1 report](../reports/P3-1-R8.1/RESULTS.md) and [checkpoint](../checkpoints/2026-10-28-P3-1-R8.1-GEOMETRY-CAUSES.md). All five F2-G1 holds remain unchanged.
+
 ## 2026-10-27 — P3.1 R8 geometry quality diagnostics
 
 R8 is an isolated test-only evidence branch, `bench/p3-1-r8-geometry-quality`, measured on the exact R7.3 tested source `7ad45d8c817ecb0f54a8eec058babce65af287db` (parent `c54f337cb1f2b1e6d1f61de5c1b9d9f3031e892d`). The six diagnostic phases complete and the full Godot 4.7.2 validation passes 21 suites / 21,464 assertions / zero failures. This validates the diagnostic execution and regression baseline only.
