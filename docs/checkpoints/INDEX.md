@@ -6,6 +6,7 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-10-28 | [P3.1 R9 Candidate D volume topology block](2026-10-28-P3-1-R9-D-TOPOLOGY-BLOCK.md) | Zero-edit materialized float32 volume rebuilt/reloaded; MT extraction failed with 1,121 internal opens and 355 nonmanifold edges; common validation 21,464/0 | Candidate D evidence branch; blocked, no storage/geometry acceptance |
 | 2026-10-28 | [P3.1 R9 immutable preregistration](2026-10-28-P3-1-R9-PREREGISTRATION.md) | Frozen four-candidate test-only contract, nine scenario input records and resource/geometry gates before implementation; reconciles R8.4 raw validation to 21 suites / 21,464 assertions; no R9 candidates run yet | R9 preregistration branch; candidate PRs pending |
 | 2026-10-28 | [P3.1 R8.2 exact geometry provenance](2026-10-28-P3-1-R8.2-EXACT-GEOMETRY-PROVENANCE.md) | Triangle 3103 continuous-vs-sampled gradient, X+ LOD1 omitted interface facets, and X− mesh/root displacement traced; Godot validation 21,464/0; no geometry acceptance or production correction | Test-only draft PR [#162](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/162), open/unmerged on R8.1 branch; PR #160 unchanged |
 | 2026-10-27 | [P3.1 R8 geometry quality and conformance](2026-10-27-P3-1-R8-GEOMETRY-QUALITY.md) | Six diagnostic phases and full validation 21,464/0; cave FILL behavior characterized; 4/16 chunk contours mismatch, normal/winding and X− picker discrepancies retained | Draft evidence PR #158, open/unmerged; no production approval |
