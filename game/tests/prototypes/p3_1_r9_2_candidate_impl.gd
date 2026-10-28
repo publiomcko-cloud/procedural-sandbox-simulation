@@ -104,6 +104,17 @@ func _edge_root(ai:int,bi:int,points:Array[Vector3],values:Array[float],snapshot
 		var swap_value:=da;da=db;db=swap_value
 		var swap_key:=ka;ka=kb;kb=swap_key
 	var key:String=ka+"|"+kb
+	# Zero belongs to the solid side (the polygonizer classifies d >= 0 as
+	# inside). When the opposite endpoint is empty, the shared lattice node is
+	# already the exact interface root. Bisection would move that root inward by
+	# up to one of the fixed iterations and give incident edges distinct points
+	# for the same zero-valued node.
+	if da==0.0:
+		_root_cache[key]=a
+		return {"valid":true,"point":a,"root_kind":"exact_zero_endpoint"}
+	if db==0.0:
+		_root_cache[key]=b
+		return {"valid":true,"point":b,"root_kind":"exact_zero_endpoint"}
 	if _root_cache.has(key): return {"valid":true,"point":_root_cache[key]}
 	var low:=0.0; var high:=1.0; var low_value:=da
 	for iteration in range(ROOT_ITERATIONS):
@@ -143,13 +154,35 @@ func canonical_root_identity_probe(snapshot:Dictionary)->Dictionary:
 	if not found:return {"valid":false,"reason":"probe_crossing_edge_not_found"}
 	_root_cache.clear();var first:=_edge_root(0,1,[a,b],[da,db],snapshot)
 	_root_cache.clear();var reversed:=_edge_root(0,1,[b,a],[db,da],snapshot)
+	var zero_endpoint:=canonical_zero_endpoint_probe()
 	var p:Vector3=Vector3(8.0,1.0,2.0);var q:=p+Vector3(0.000001,0.0,0.0)
-	return {"valid":first.get("valid",false) and reversed.get("valid",false) and first.point==reversed.point,
+	return {"valid":first.get("valid",false) and reversed.get("valid",false) and first.point==reversed.point and zero_endpoint.get("valid",false),
 		"forward_root":first.get("point",Vector3.ZERO),"reverse_root":reversed.get("point",Vector3.ZERO),
+		"zero_endpoint":zero_endpoint,
 		"quantized_keys_collide":Core._point_key(p)==Core._point_key(q),
 		"exact_sample_keys_distinct":_sample_key(p)!=_sample_key(q),
 		"root_key":_global_lattice_key(Vector3i(roundi(a.x/STEP),roundi(a.y/STEP),roundi(a.z/STEP)))+"|"+
 			_global_lattice_key(Vector3i(roundi(b.x/STEP),roundi(b.y/STEP),roundi(b.z/STEP)))}
+
+func canonical_zero_endpoint_probe()->Dictionary:
+	# Exercise both endpoint orientations with no SDF access: a zero-valued
+	# lattice endpoint is the root exactly, independent of edge traversal order.
+	var a:=Vector3(8.0,1.0,5.0)
+	var b:=a+Vector3(STEP,0.0,0.0)
+	_root_cache.clear()
+	var a_forward:=_edge_root(0,1,[a,b],[0.0,-1.0],{})
+	_root_cache.clear()
+	var a_reverse:=_edge_root(0,1,[b,a],[-1.0,0.0],{})
+	_root_cache.clear()
+	var b_forward:=_edge_root(0,1,[a,b],[-1.0,0.0],{})
+	_root_cache.clear()
+	var b_reverse:=_edge_root(0,1,[b,a],[0.0,-1.0],{})
+	var valid:bool=bool(a_forward.get("valid",false)) and bool(a_reverse.get("valid",false)) and bool(b_forward.get("valid",false)) and bool(b_reverse.get("valid",false))
+	valid=valid and a_forward.get("point",Vector3.ZERO)==a and a_reverse.get("point",Vector3.ZERO)==a
+	valid=valid and b_forward.get("point",Vector3.ZERO)==b and b_reverse.get("point",Vector3.ZERO)==b
+	return {"valid":valid,"a_forward":a_forward.get("point",Vector3.ZERO),"a_reverse":a_reverse.get("point",Vector3.ZERO),
+		"b_forward":b_forward.get("point",Vector3.ZERO),"b_reverse":b_reverse.get("point",Vector3.ZERO),
+		"expected_a":a,"expected_b":b,"samples_performed":0}
 
 func _xplus_shared_face_probe(snapshot:Dictionary)->Dictionary:
 	var lattice:=Vector3i(30,4,14);var origin:=Vector3(lattice)*0.5;var center:=origin+Vector3.ONE*0.5

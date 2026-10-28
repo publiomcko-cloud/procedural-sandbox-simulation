@@ -1,19 +1,23 @@
 extends SceneTree
 
 const Core := preload("res://tests/prototypes/p3_1_r9_2_diagnostic_base.gd")
-const CandidateScript := preload("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd")
 
 func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	var candidate_script: Script = load("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd") as Script
+	if candidate_script == null or not candidate_script.can_instantiate():
+		print("R9_3_PROBE_BLOCKED " + JSON.stringify({"reason": "candidate_script_cannot_instantiate"}))
+		quit(2)
+		return
 	var manifest: Dictionary = Core.load_manifest()
 	var ids: PackedStringArray = OS.get_environment("R9_SCENARIO_IDS").split(",", false)
 	if not manifest.get("valid", false) or ids.is_empty():
 		print("R9_3_PROBE_BLOCKED " + JSON.stringify({"manifest": manifest.get("reason", "ok"), "scenario_ids": ids}))
 		quit(2)
 		return
-	var candidate: RefCounted = CandidateScript.new()
+	var candidate: RefCounted = candidate_script.new()
 	var failures := 0
 	for scenario_id in ids:
 		var row: Dictionary = Core.case_by_id(manifest.rows, scenario_id)
@@ -49,6 +53,7 @@ func _run() -> void:
 			lo -= Vector3.ONE * Core.step(roi) * 0.5
 			hi += Vector3.ONE * Core.step(roi) * 0.5
 		var topo: Dictionary = Core.topology(result.mesh, lo, hi)
+		var exact_topo: Dictionary = _exact_edge_topology(result.mesh, lo, hi)
 		var open_details: Array[Dictionary] = _open_edge_details(result.mesh, lo, hi, 64)
 		var root_identity:Dictionary={"status":"NOT_APPLICABLE"}
 		if OS.get_environment("R9_CANDIDATE_ID")=="A":
@@ -59,10 +64,46 @@ func _run() -> void:
 		print("R9_3_PROBE_RESULT " + JSON.stringify({"scenario_id": scenario_id, "candidate": OS.get_environment("R9_CANDIDATE_ID"),
 			"source_sha": OS.get_environment("R9_SOURCE_SHA"), "manifest_sha256": Core.EXPECTED_MANIFEST_SHA,
 			"mesh_sha256": result.get("mesh_sha256", ""), "metrics": result.get("metrics", {}),
-			"topology": topo, "open_edge_details_first_64": open_details,"canonical_root_identity":root_identity,
+			"topology": topo, "exact_edge_topology": exact_topo, "open_edge_details_first_64": open_details,"canonical_root_identity":root_identity,
 			"topology_bounds_min": [lo.x,lo.y,lo.z], "topology_bounds_max": [hi.x,hi.y,hi.z]}))
 	print("R9_3_PROBE_COMPLETE " + JSON.stringify({"scenario_count": ids.size(), "failures": failures}))
 	quit(1 if failures > 0 else 0)
+
+func _exact_edge_topology(mesh: Dictionary, lo: Vector3, hi: Vector3) -> Dictionary:
+	# Independent identity oracle: compare the packed binary32 endpoint bytes,
+	# not the production-style 1e-5 coordinate quantization in Core.topology.
+	var positions: PackedVector3Array = mesh.get("positions", PackedVector3Array())
+	if positions.size() % 3 != 0:
+		return {"valid": false, "reason": "triangle_position_count_invalid"}
+	var counts: Dictionary = {}
+	var endpoints: Dictionary = {}
+	for base in range(0, positions.size(), 3):
+		for edge in [Vector2i(0,1), Vector2i(1,2), Vector2i(2,0)]:
+			var a: Vector3 = positions[base + edge.x]
+			var b: Vector3 = positions[base + edge.y]
+			var ka: String = _exact_point_key(a)
+			var kb: String = _exact_point_key(b)
+			var key: String = ka + "|" + kb if ka < kb else kb + "|" + ka
+			counts[key] = int(counts.get(key, 0)) + 1
+			if not endpoints.has(key): endpoints[key] = [a, b]
+	var internal_open := 0
+	var boundary_open := 0
+	var nonmanifold := 0
+	for key_value in counts:
+		var count: int = int(counts[key_value])
+		if count > 2:
+			nonmanifold += 1
+		elif count == 1:
+			var edge: Array = endpoints[key_value]
+			if _on_boundary(edge[0], edge[1], lo, hi): boundary_open += 1
+			else: internal_open += 1
+	return {"valid": true, "identity": "exact packed Vector3 bytes", "internal_open_edges": internal_open,
+		"roi_boundary_open_edges": boundary_open, "nonmanifold_edges": nonmanifold}
+
+func _exact_point_key(point: Vector3) -> String:
+	var packed: PackedVector3Array = PackedVector3Array()
+	packed.append(point)
+	return packed.to_byte_array().hex_encode()
 
 func _open_edge_details(mesh: Dictionary, lo: Vector3, hi: Vector3, limit: int) -> Array[Dictionary]:
 	var positions: PackedVector3Array = mesh.get("positions", PackedVector3Array())
