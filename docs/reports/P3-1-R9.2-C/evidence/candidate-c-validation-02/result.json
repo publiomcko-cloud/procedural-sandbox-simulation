@@ -1,0 +1,15 @@
+{
+  "candidate": "C",
+  "source_sha": "3e314f927cff5ca8a52c853bc5b504b8b3d86109",
+  "pid": 36376,
+  "exit": 0,
+  "duration_ms": 545457,
+  "assertions": 21464,
+  "failures": 0,
+  "stdout_sha256": "14d39c89204b0185fae7bc8a9a5a7fd8a318a03609ebd1ab40e4c4a71da48276",
+  "stderr_sha256": "01346abc85002f006e3c4e7e8bfb7b02377283dba88ea437319e45c3e8ed76c8",
+  "stdout_bytes": 115959,
+  "stderr_bytes": 1220,
+  "validation_pass": true,
+  "suite_markers": 1
+}
