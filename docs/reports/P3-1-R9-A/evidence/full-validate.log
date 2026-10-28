@@ -1,0 +1,1117 @@
+L0 PASS: all project source files exist
+Godot found: 4.7.2.stable.official.ed1daf0bf
+Godot PASS: pinned version 4.7.2 stable
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --editor --path "C:\r9a\game" --import
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[   0% ] [90m[1mfirst_scan_filesystem[22m | Started Inicialização do Projeto (5 steps)[39m[0m
+[   0% ] [90m[1mfirst_scan_filesystem[22m | Escaneando estrutura de arquivos...[39m[0m
+[  16% ] [90m[1mfirst_scan_filesystem[22m | Carregando nomes de classe globais...[39m[0m
+[  33% ] [90m[1mfirst_scan_filesystem[22m | Verificando GDExtensions...[39m[0m
+[  50% ] [90m[1mfirst_scan_filesystem[22m | Criando scripts autoload...[39m[0m
+[  66% ] [90m[1mfirst_scan_filesystem[22m | Inicializando plugins...[39m[0m
+[  83% ] [90m[1mfirst_scan_filesystem[22m | Iniciando escaneamento de arquivos...[39m[0m
+[92m[ DONE ][39m [1mfirst_scan_filesystem[22m
+[0m
+[   0% ] [90m[1mloading_editor_layout[22m | Started Carregando editor (5 steps)[39m[0m
+[   0% ] [90m[1mloading_editor_layout[22m | Carregando layout do editor...[39m[0m
+[  16% ] [90m[1mloading_editor_layout[22m | Carregando abas...[39m[0m
+[92m[ DONE ][39m [1mloading_editor_layout[22m
+[0m
+L1 PASS: Godot project import
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/smoke.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+SMOKE_PASS: assertions=52 failures=0
+L2 PASS: deterministic generation and failure-path checks
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/terrain_sdf_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_SDF_PASS: assertions=44 failures=0
+L2 PASS: deterministic SDF and mesh tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/terrain_brush_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_BRUSH_PASS: assertions=612 failures=0
+L2 PASS: bounded SDF brush edits and viewport interaction tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/terrain_chunk_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+CHUNK_EQUIVALENCE: full_triangles=10981 chunk_triangles=10981 full_samples=17325 chunk_samples=21168
+TERRAIN_CHUNK_BENCH: pattern=interior affected_chunks=1 repetitions=7 full_median_ms=488.664 full_spread_ms=170.750 local_median_ms=49.327 local_spread_ms=22.896
+TERRAIN_CHUNK_BENCH: pattern=border affected_chunks=2 repetitions=7 full_median_ms=476.092 full_spread_ms=35.500 local_median_ms=91.103 local_spread_ms=28.779
+TERRAIN_CHUNK_BENCH: pattern=corner affected_chunks=4 repetitions=7 full_median_ms=473.336 full_spread_ms=43.972 local_median_ms=210.076 local_spread_ms=22.087
+TERRAIN_CHUNK_PASS: assertions=179 failures=0
+L2 PASS: chunk partition, seam, localized rebuild and benchmark tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/terrain_multiregion_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+MULTIREGION_EQUIVALENCE: regions=9 chunks=144 full_triangles=87077 chunk_triangles=87077 reference_samples=148701
+GLOBAL_EDIT_EQUIVALENCE: regions=2 operations=2 full_triangles=23354 chunk_triangles=23354
+GLOBAL_EDIT_BENCH: elapsed_ms=50.252 dirty_regions=2 dirty_chunks=4 dirty_jobs=4 frame_p50/p95/p99_ms=6.900/36.211/139.565 resident_peak=9 ledger=1/65536
+GLOBAL_EDIT_STAGE_BENCH: queue_wait_p50/p95/total_ms=0.830/0.996/3.366 stages={"array_mesh_build":0.966,"sdf_and_ledger":34.783,"shared_gradient_normals":14.095,"triangulation_and_face_normals":68.185}
+TERRAIN_STREAM_INITIAL_METRICS: active=9 chunks=144 triangles=87077 queue_peak=144 mesh_job_queue_peak=144 elapsed_ms=1425.303 mesh_work_total_ms=3341.577 peak_mesh_ms=0.353 peak_process_work_ms=67.388
+TERRAIN_STREAM_STAGE_METRICS: queue_wait_p50/p95/total_ms=670.613/1352.241/99163.075 stages={"array_mesh_build":22.933,"sdf_and_ledger":959.05,"shared_gradient_normals":384.355,"triangulation_and_face_normals":1973.28}
+TERRAIN_STREAM_METRICS: active=12 peak_active=12 chunk_nodes=192 queued=0 peak_queued=192 peak_mesh_upload_ms=0.406 peak_process_work_ms=73.606 loads=81 unloads=33
+TERRAIN_MULTI_REGION_PASS: assertions=7637 failures=0
+L2 PASS: multi-region ownership, continuity, seam and viewport tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/terrain_perf_benchmark.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_PERF_BENCH: godot=4.7.2-stable (official) seed=424242 repeats=5 chunk=(1,1) levels=0,32,64,128,256
+TERRAIN_PERF_HISTORY: ops=0 samples=5 candidates=0 snapshot_bytes=0 static_memory_before/ledger/delta=26345586/26347974/2388 full_p50/p95_ms=21.968/22.242 accelerated_p50/p95_ms=23.802/38.492 worker_cpu_p50/p95_ms=22.056/22.858 pool_wait_p50/p95_ms=0.060/0.068 sdf_p50_ms=3.348 triangulation_p50_ms=10.975 normals_p50_ms=2.204 mesh_cpu_p50_ms=0.261
+TERRAIN_PERF_HISTORY: ops=32 samples=5 candidates=2 snapshot_bytes=74 static_memory_before/ledger/delta=26645574/26717882/72308 full_p50/p95_ms=175.410/192.826 accelerated_p50/p95_ms=26.483/29.524 worker_cpu_p50/p95_ms=26.094/28.392 pool_wait_p50/p95_ms=0.067/0.081 sdf_p50_ms=5.115 triangulation_p50_ms=11.367 normals_p50_ms=3.514 mesh_cpu_p50_ms=0.277
+TERRAIN_PERF_HISTORY: ops=64 samples=5 candidates=4 snapshot_bytes=148 static_memory_before/ledger/delta=26718316/26779348/61032 full_p50/p95_ms=299.706/324.450 accelerated_p50/p95_ms=26.505/26.885 worker_cpu_p50/p95_ms=26.267/26.584 pool_wait_p50/p95_ms=0.061/0.070 sdf_p50_ms=5.498 triangulation_p50_ms=11.302 normals_p50_ms=3.576 mesh_cpu_p50_ms=0.252
+TERRAIN_PERF_HISTORY: ops=128 samples=5 candidates=8 snapshot_bytes=296 static_memory_before/ledger/delta=26779679/26901159/121480 full_p50/p95_ms=571.482/601.450 accelerated_p50/p95_ms=29.028/29.536 worker_cpu_p50/p95_ms=27.361/29.430 pool_wait_p50/p95_ms=0.064/0.101 sdf_p50_ms=6.415 triangulation_p50_ms=11.550 normals_p50_ms=4.078 mesh_cpu_p50_ms=0.271
+TERRAIN_PERF_HISTORY: ops=256 samples=5 candidates=16 snapshot_bytes=592 static_memory_before/ledger/delta=26901490/27149410/247920 full_p50/p95_ms=1077.618/1096.896 accelerated_p50/p95_ms=30.001/42.973 worker_cpu_p50/p95_ms=29.394/35.557 pool_wait_p50/p95_ms=0.048/0.074 sdf_p50_ms=7.144 triangulation_p50_ms=11.451 normals_p50_ms=4.766 mesh_cpu_p50_ms=0.281
+TERRAIN_PERF_BENCH_PASS: assertions=11 failures=0
+L2 PASS: staged CPU mesh, ledger-size and worker equivalence benchmark
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/terrain_history_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_HISTORY_TEST: Godot=4.7.2-stable (official) target_edits=256 distributed_regions=16
+TERRAIN_HISTORY_FILTER: total_ops=256 max_chunk_candidates=40 process_static_bytes=31451032
+TERRAIN_HISTORY_E2E: accepted=256 regions=16 latency_p50/p95_ms=55.152/62.100 samples=256 memory_static_bytes=47109117 mesh_bytes_estimate=9795456 queue_peak=144 peak_workers=4 mesh_queue_p95_max_ms=5.851 worker_queue_p95_max_ms=0.861 publish_p95_max_ms=3.081 retries=0 frame_p95/p99_ms=8.333/42.833
+TERRAIN_HISTORY_PASS: assertions=907 failures=0
+L2 PASS: 256-operation history, replay equivalence and revision supersession tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/terrain_world_persistence_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+P3_1_STORAGE_QUERY_PROFILE: total=640 candidates=5 cold_segment_reads=1 warm_segment_reads=0 cache_hits=3
+P3_1_STORAGE_BENCH distributed_count=640 generation_ms=20.430 save_ms=174.089 verify_load_ms=64.537 lod0_chunk_ms=21.634 lod1_chunk_ms=98.595 segments=5 candidate_count=0
+P3_1_STORAGE_BENCH concentrated_count=2048 generation_ms=87.583 process_static_delta_generation_bytes=4260068 save_ms=593.685 verify_load_ms=176.933 four_probe_replay_ms=125.980 lod0_chunk_ms=475.205 lod1_chunk_ms=1757.747 candidates=2048 segments=16
+P3_1_STORAGE_R2_PROFILE: id=distributed-640 generator_ms=19.718 initial_save_ms=133.740 repeat_save_p50/p95/p99_ms=20.892/28.289/28.289 restart_verify_ms=60.304 sample_p50/p95/p99_ms=0.013/0.028/0.028 query_segment_reads=0 query_segment_bytes=0 query_cache_hits=0 query_candidates=0 cache_weight_bytes=0 reuse_verify_segment_count=18 reuse_verify_bytes=302181 ray_snapshot_p50/p95/p99_ms=0.051/0.069/0.086 picker_p50/p95/p99_ms=0.080/0.098/0.114 ray_e2e_p50/p95/p99_ms=0.132/0.166/0.185 ray_segment_reads=0 ray_segment_bytes=0 ray_cache_hits=0 ray_spatial_candidates=0 ray_retained_candidates=0 lod0_ms=18.660 lod1_ms=96.455 segments=5 disk_bytes=107547 process_memory_delta_bytes=713752
+P3_1_STORAGE_R2_PROFILE: id=concentrated-640 generator_ms=23.251 initial_save_ms=127.329 repeat_save_p50/p95/p99_ms=19.734/26.902/26.902 restart_verify_ms=55.932 sample_p50/p95/p99_ms=1.737/1.840/2.000 query_segment_reads=5 query_segment_bytes=86051 query_cache_hits=500 query_candidates=640 cache_weight_bytes=327680 reuse_verify_segment_count=18 reuse_verify_bytes=317475 ray_snapshot_p50/p95/p99_ms=2.447/3.938/4.140 picker_p50/p95/p99_ms=0.095/0.154/0.160 ray_e2e_p50/p95/p99_ms=2.545/4.093/4.249 ray_segment_reads=5 ray_segment_bytes=86051 ray_cache_hits=500 ray_spatial_candidates=640 ray_retained_candidates=0 lod0_ms=183.823 lod1_ms=681.769 segments=5 disk_bytes=112645 process_memory_delta_bytes=822406
+P3_1_STORAGE_R2_PROFILE: id=distributed-2048 generator_ms=64.979 initial_save_ms=382.968 repeat_save_p50/p95/p99_ms=47.145/47.827/47.827 restart_verify_ms=191.532 sample_p50/p95/p99_ms=0.012/0.018/0.029 query_segment_reads=0 query_segment_bytes=0 query_cache_hits=0 query_candidates=0 cache_weight_bytes=0 reuse_verify_segment_count=51 reuse_verify_bytes=978060 ray_snapshot_p50/p95/p99_ms=0.054/0.069/0.084 picker_p50/p95/p99_ms=0.086/0.114/0.117 ray_e2e_p50/p95/p99_ms=0.143/0.174/0.204 ray_segment_reads=0 ray_segment_bytes=0 ray_cache_hits=0 ray_spatial_candidates=0 ray_retained_candidates=0 lod0_ms=18.759 lod1_ms=103.049 segments=16 disk_bytes=343132 process_memory_delta_bytes=1888764
+P3_1_STORAGE_R2_PROFILE: id=concentrated-2048 generator_ms=72.893 initial_save_ms=371.796 repeat_save_p50/p95/p99_ms=34.086/39.007/39.007 restart_verify_ms=181.088 sample_p50/p95/p99_ms=5.663/7.785/8.793 query_segment_reads=16 query_segment_bytes=277909 query_cache_hits=1600 query_candidates=2048 cache_weight_bytes=1048576 reuse_verify_segment_count=51 reuse_verify_bytes=1053369 ray_snapshot_p50/p95/p99_ms=8.698/15.142/22.353 picker_p50/p95/p99_ms=0.117/0.183/0.207 ray_e2e_p50/p95/p99_ms=8.828/15.355/22.483 ray_segment_reads=16 ray_segment_bytes=277909 ray_cache_hits=1600 ray_spatial_candidates=2048 ray_retained_candidates=0 lod0_ms=480.420 lod1_ms=1841.900 segments=16 disk_bytes=368235 process_memory_delta_bytes=2687085
+P3_1_STORAGE_R2_PROFILE: id=distributed-8192 generator_ms=255.076 initial_save_ms=1448.042 repeat_save_p50/p95/p99_ms=125.931/127.141/127.141 restart_verify_ms=830.412 sample_p50/p95/p99_ms=0.127/0.184/0.317 query_segment_reads=3 query_segment_bytes=41025 query_cache_hits=300 query_candidates=5 cache_weight_bytes=851968 reuse_verify_segment_count=195 reuse_verify_bytes=3906045 ray_snapshot_p50/p95/p99_ms=0.622/0.675/1.401 picker_p50/p95/p99_ms=0.093/0.108/0.113 ray_e2e_p50/p95/p99_ms=0.718/0.777/1.520 ray_segment_reads=13 ray_segment_bytes=178721 ray_cache_hits=1300 ray_spatial_candidates=35 ray_retained_candidates=0 lod0_ms=18.223 lod1_ms=110.090 segments=64 disk_bytes=1364055 process_memory_delta_bytes=9499752
+P3_1_STORAGE_R2_PROFILE: id=concentrated-8192 generator_ms=315.988 initial_save_ms=1435.195 repeat_save_p50/p95/p99_ms=95.888/95.993/95.993 restart_verify_ms=933.521 sample_p50/p95/p99_ms=34.810/41.069/46.726 query_segment_reads=64 query_segment_bytes=1118288 query_cache_hits=6400 query_candidates=8192 cache_weight_bytes=4194304 reuse_verify_segment_count=195 reuse_verify_bytes=4311786 ray_snapshot_p50/p95/p99_ms=44.542/54.411/61.552 picker_p50/p95/p99_ms=0.128/0.200/0.271 ray_e2e_p50/p95/p99_ms=44.684/54.548/61.832 ray_segment_reads=64 ray_segment_bytes=1118288 ray_cache_hits=6400 ray_spatial_candidates=8192 ray_retained_candidates=0 lod0_ms=1960.865 lod1_ms=6847.073 segments=64 disk_bytes=1499302 process_memory_delta_bytes=8448941
+TERRAIN_WORLD_V2_STORAGE_PASS: assertions=3516 failures=0
+L2 PASS: versioned persistent world save, recovery, restart and LOD reconstruction tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/declarative_mod_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ISSUE118_REPARSE_FIXTURE_UNAVAILABLE: DirAccess.create_link returned Failed; prepared Windows junction validation not supplied
+DECLARATIVE_MOD_PASS: assertions=66 failures=0
+L2 PASS: declarative package validation, content registry and deterministic recipe tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/procedural_object_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+PASS: first-party and user:// external packages register through the P0.3 entrypoint
+PASS: both required packages are registered
+PASS: both namespaces resolve through the shared definition API
+PASS: first-party and external recipes use the same evaluator
+PASS: first-party granite uses the explicit geological schema/profile
+PASS: external basalt uses the same registry contract with its distinct versioned profile
+PASS: the basalt profile declares a denser fracture system
+PASS: the registry derives independent structure, fracture, wear and detail seeds
+PASS: runtime object definitions carry P0.3 content version pins
+PASS: runtime discovers valid first-party and installed external packages despite an unmanifested user mod directory
+PASS: runtime reports the newly ignored residual folder alongside any pre-existing optional directories
+PASS: runtime discovery warning does not expose a private absolute path
+PASS: installed example takes precedence over its repository copy to avoid duplicate package IDs
+PASS: schema-1 stacked_spheres_v1 retains its original declarative meaning
+PASS: schema-1 cannot silently reinterpret legacy fields as the geological algorithm
+PASS: legacy stacked-spheres data is not passed into the new geological adapter
+PASS: schema-2 geological parameters cannot be loaded under schema-1
+PASS: unregistered geological profiles fail schema validation
+PASS: mesh conversion fixture can load both package definitions
+PASS: firstparty.core_rocks:granite recipe converts to visible mesh data
+PASS: firstparty.core_rocks:granite mesh has matched vertex and normal arrays
+PASS: firstparty.core_rocks:granite geometry conversion is deterministic
+PASS: firstparty.core_rocks:granite seed changes the irregular silhouette deterministically
+PASS: firstparty.core_rocks:granite stays within the exploratory 100-500 triangle closed-shell budget
+PASS: firstparty.core_rocks:granite has one registered geometry-adapter versioned surface
+PASS: firstparty.core_rocks:granite reports its explicit geometry algorithm and profile
+PASS: firstparty.core_rocks:granite reports finite positive volume and surface area
+PASS: firstparty.core_rocks:granite mesh positions and normals are finite and normalized
+PASS: firstparty.core_rocks:granite keeps its deterministic contact base at region-local y=0
+PASS: firstparty.core_rocks:granite has outward flat normals, nondegenerate faces, one connected shell and closed two-face edges (ok)
+PASS: firstparty.core_rocks:granite is clipped into a non-spherical asymmetric solid within its bounds
+PASS: firstparty.core_rocks:granite retains distinct flat facet normals rather than a smooth sphere surface
+PASS: firstparty.core_rocks:granite structure seed independently affects geometry
+PASS: firstparty.core_rocks:granite fracture seed independently affects geometry
+PASS: firstparty.core_rocks:granite wear seed independently affects geometry
+PASS: firstparty.core_rocks:granite detail seed independently affects geometry
+PASS: firstparty.core_rocks:granite repeated recipe conversion preserves deterministic geometry
+PASS: firstparty.core_rocks:granite invalid geometry seeds are rejected
+PASS: firstparty.core_rocks:granite rejects unsafe integer dimensions
+PASS: official.example.procedural_rock:basalt_stack recipe converts to visible mesh data
+PASS: official.example.procedural_rock:basalt_stack mesh has matched vertex and normal arrays
+PASS: official.example.procedural_rock:basalt_stack geometry conversion is deterministic
+PASS: official.example.procedural_rock:basalt_stack seed changes the irregular silhouette deterministically
+PASS: official.example.procedural_rock:basalt_stack stays within the exploratory 100-500 triangle closed-shell budget
+PASS: official.example.procedural_rock:basalt_stack has one registered geometry-adapter versioned surface
+PASS: official.example.procedural_rock:basalt_stack reports its explicit geometry algorithm and profile
+PASS: official.example.procedural_rock:basalt_stack reports finite positive volume and surface area
+PASS: official.example.procedural_rock:basalt_stack mesh positions and normals are finite and normalized
+PASS: official.example.procedural_rock:basalt_stack keeps its deterministic contact base at region-local y=0
+PASS: official.example.procedural_rock:basalt_stack has outward flat normals, nondegenerate faces, one connected shell and closed two-face edges (ok)
+PASS: official.example.procedural_rock:basalt_stack is clipped into a non-spherical asymmetric solid within its bounds
+PASS: official.example.procedural_rock:basalt_stack retains distinct flat facet normals rather than a smooth sphere surface
+PASS: official.example.procedural_rock:basalt_stack structure seed independently affects geometry
+PASS: official.example.procedural_rock:basalt_stack fracture seed independently affects geometry
+PASS: official.example.procedural_rock:basalt_stack wear seed independently affects geometry
+PASS: official.example.procedural_rock:basalt_stack detail seed independently affects geometry
+PASS: official.example.procedural_rock:basalt_stack repeated recipe conversion preserves deterministic geometry
+PASS: official.example.procedural_rock:basalt_stack invalid geometry seeds are rejected
+PASS: official.example.procedural_rock:basalt_stack rejects unsafe integer dimensions
+PASS: empty geological geometry recipe is rejected
+PASS: seed gallery can register bundled granite and example basalt profiles
+PASS: firstparty.core_rocks:granite seed-gallery sample 01 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 01 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 02 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 02 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 03 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 03 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 04 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 04 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 05 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 05 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 06 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 06 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 07 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 07 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 08 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 08 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 09 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 09 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 10 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 10 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 11 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 11 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite seed-gallery sample 12 builds (ok)
+PASS: firstparty.core_rocks:granite gallery seed 12 has a distinct deterministic silhouette
+PASS: firstparty.core_rocks:granite produces all twelve requested independent gallery silhouettes
+ROCK_GALLERY_TEST_METRICS: family=firstparty.core_rocks:granite count=12 mean_triangles=364.00
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 01 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 01 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 02 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 02 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 03 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 03 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 04 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 04 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 05 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 05 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 06 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 06 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 07 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 07 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 08 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 08 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 09 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 09 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 10 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 10 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 11 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 11 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack seed-gallery sample 12 builds (ok)
+PASS: official.example.procedural_rock:basalt_stack gallery seed 12 has a distinct deterministic silhouette
+PASS: official.example.procedural_rock:basalt_stack produces all twelve requested independent gallery silhouettes
+ROCK_GALLERY_TEST_METRICS: family=official.example.procedural_rock:basalt_stack count=12 mean_triangles=376.00
+PASS: placement fixture registers common content
+PASS: signed region (-2, -1) creates deterministic placements (ok)
+PASS: signed region (0, 0) creates deterministic placements (ok)
+PASS: signed region (1, -1) creates deterministic placements (ok)
+PASS: signed region (-1, 1) creates deterministic placements (ok)
+PASS: signed region (2, 1) creates deterministic placements (ok)
+PASS: region (-2, -1) placement is independent of region discovery order
+PASS: region (-2, -1) retains both legacy objects and adds bounded declarative population
+PASS: region (-2, -1) preserves the two exact P2.0B compatibility identities before additive population
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: region (0, 0) placement is independent of region discovery order
+PASS: region (0, 0) retains both legacy objects and adds bounded declarative population
+PASS: region (0, 0) preserves the two exact P2.0B compatibility identities before additive population
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: region (1, -1) placement is independent of region discovery order
+PASS: region (1, -1) retains both legacy objects and adds bounded declarative population
+PASS: region (1, -1) preserves the two exact P2.0B compatibility identities before additive population
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: region (-1, 1) placement is independent of region discovery order
+PASS: region (-1, 1) retains both legacy objects and adds bounded declarative population
+PASS: region (-1, 1) preserves the two exact P2.0B compatibility identities before additive population
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: region (2, 1) placement is independent of region discovery order
+PASS: region (2, 1) retains both legacy objects and adds bounded declarative population
+PASS: region (2, 1) preserves the two exact P2.0B compatibility identities before additive population
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: stable instance ID is unique across signed regions
+PASS: placement uses integer local millimeters and its canonical signed region
+PASS: instance pins its definition, recipe version, profile and independent stage seeds
+PASS: unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot
+PASS: surface placement is derived from canonical solid-to-empty density crossing
+PASS: P0.3 registers two versioned compatibility rules and two generic package population rules
+PASS: population rule enumeration is stable and independent of package discovery order
+PASS: population generation succeeds for signed region (-3, -2) (ok)
+PASS: region (-3, -2) output, lattice and surface sampling stay within explicit resource budgets
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 0 ID and seeds remain byte-for-byte derivable in region (-3, -2)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 1 ID and seeds remain byte-for-byte derivable in region (-3, -2)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: generated footprints respect minimum spacing and conservative rock clearance in region (-3, -2)
+PASS: population generation succeeds for signed region (-2, -1) (ok)
+PASS: region (-2, -1) output, lattice and surface sampling stay within explicit resource budgets
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 0 ID and seeds remain byte-for-byte derivable in region (-2, -1)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 1 ID and seeds remain byte-for-byte derivable in region (-2, -1)
+PASS: generated footprints respect minimum spacing and conservative rock clearance in region (-2, -1)
+PASS: population generation succeeds for signed region (-1, 0) (ok)
+PASS: region (-1, 0) output, lattice and surface sampling stay within explicit resource budgets
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 0 ID and seeds remain byte-for-byte derivable in region (-1, 0)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 1 ID and seeds remain byte-for-byte derivable in region (-1, 0)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: generated footprints respect minimum spacing and conservative rock clearance in region (-1, 0)
+PASS: population generation succeeds for signed region (0, 0) (ok)
+PASS: region (0, 0) output, lattice and surface sampling stay within explicit resource budgets
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 0 ID and seeds remain byte-for-byte derivable in region (0, 0)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 1 ID and seeds remain byte-for-byte derivable in region (0, 0)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: generated footprints respect minimum spacing and conservative rock clearance in region (0, 0)
+PASS: population generation succeeds for signed region (1, -1) (ok)
+PASS: region (1, -1) output, lattice and surface sampling stay within explicit resource budgets
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 0 ID and seeds remain byte-for-byte derivable in region (1, -1)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 1 ID and seeds remain byte-for-byte derivable in region (1, -1)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: generated footprints respect minimum spacing and conservative rock clearance in region (1, -1)
+PASS: population generation succeeds for signed region (2, 1) (ok)
+PASS: region (2, 1) output, lattice and surface sampling stay within explicit resource budgets
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 0 ID and seeds remain byte-for-byte derivable in region (2, 1)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 1 ID and seeds remain byte-for-byte derivable in region (2, 1)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: generated footprints respect minimum spacing and conservative rock clearance in region (2, 1)
+PASS: population generation succeeds for signed region (3, -2) (ok)
+PASS: region (3, -2) output, lattice and surface sampling stay within explicit resource budgets
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 0 ID and seeds remain byte-for-byte derivable in region (3, -2)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 1 ID and seeds remain byte-for-byte derivable in region (3, -2)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: generated footprints respect minimum spacing and conservative rock clearance in region (3, -2)
+PASS: population generation succeeds for signed region (-4, 3) (ok)
+PASS: region (-4, 3) output, lattice and surface sampling stay within explicit resource budgets
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 0 ID and seeds remain byte-for-byte derivable in region (-4, 3)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 1 ID and seeds remain byte-for-byte derivable in region (-4, 3)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: generated footprints respect minimum spacing and conservative rock clearance in region (-4, 3)
+PASS: population generation succeeds for signed region (4, 2) (ok)
+PASS: region (4, 2) output, lattice and surface sampling stay within explicit resource budgets
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 0 ID and seeds remain byte-for-byte derivable in region (4, 2)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 1 ID and seeds remain byte-for-byte derivable in region (4, 2)
+PASS: generated footprints respect minimum spacing and conservative rock clearance in region (4, 2)
+PASS: population generation succeeds for signed region (0, -3) (ok)
+PASS: region (0, -3) output, lattice and surface sampling stay within explicit resource budgets
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 0 ID and seeds remain byte-for-byte derivable in region (0, -3)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 1 ID and seeds remain byte-for-byte derivable in region (0, -3)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: generic population identity pins its namespaced rule and candidate index
+PASS: persistent population identity pins the exact declarative rule content
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: generated footprints respect minimum spacing and conservative rock clearance in region (0, -3)
+PASS: population generation succeeds for signed region (-1, -1) (ok)
+PASS: region (-1, -1) output, lattice and surface sampling stay within explicit resource budgets
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 0 ID and seeds remain byte-for-byte derivable in region (-1, -1)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 1 ID and seeds remain byte-for-byte derivable in region (-1, -1)
+PASS: generated footprints respect minimum spacing and conservative rock clearance in region (-1, -1)
+PASS: population generation succeeds for signed region (2, -3) (ok)
+PASS: region (2, -3) output, lattice and surface sampling stay within explicit resource budgets
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 0 ID and seeds remain byte-for-byte derivable in region (2, -3)
+PASS: population identity is collision-free across signed regions
+PASS: half-open ownership places each instance in its canonical positive or negative region
+PASS: declared scale and orientation constraints are represented in deterministic records
+PASS: P2.0B slot 1 ID and seeds remain byte-for-byte derivable in region (2, -3)
+PASS: generated footprints respect minimum spacing and conservative rock clearance in region (2, -3)
+PASS: adjacent positive and negative regions keep deterministic static footprints separated across their shared boundaries
+PASS: region visitation order does not change candidate selection, identities, transforms or records
+PASS: reversing package search roots does not change any generated content or stable identity
+PASS: seeded density tickets produce reproducible regional population variation rather than a fixed object count
+PASS: world seed participates in generated population instance identities
+PASS: unsupported package algorithm rejects transactionally without partial registration or script execution
+PASS: out-of-contract density is rejected at the package boundary
+PASS: compatibility rules reject changed fields that the identity-preserving legacy generator does not consume
+PASS: bounded fixture finds at least one declaratively populated object for persistence testing
+PASS: population state service starts without per-object baseline records
+PASS: population instance resolves from its deterministic rule and recipe seeds
+PASS: schema-2 population identity accepts a sparse P2.0B component override (ok)
+PASS: population override survives service restart using the exact pinned rule identity (ok)
+PASS: population candidate can be logically excluded without changing its procedural identity (ok)
+PASS: population candidate restoration accepts its previously pinned identity (ok / ok)
+PASS: restored population candidate returns to derived state with no per-object record
+PASS: generic population produces meshable static instances
+PASS: bounded static batch publishes declarative instances in one deterministic mesh
+PASS: batch ordering and geometry counts are deterministic across input order
+PASS: batched transformed vertices are bitwise stable
+PASS: batch output respects explicit vertex and triangle budgets
+PASS: invalid package mesh cannot produce a partial static batch
+PASS: bounded population publication queue initializes through the declarative package loader
+PASS: same-region queued work is replaced without duplicate queue entries
+PASS: a superseding token cancels pending work and rejects stale enqueue attempts
+PASS: current publication token is admitted after cancellation
+PASS: one explicit queue tick publishes at most one complete region batch
+PASS: unmodified population is batched while P2.0B compatibility objects remain individual and bounded
+PASS: mutable generic instance persists through the existing P2.0B state service
+PASS: mutated batched population candidate is republished as an individual stateful representative
+PASS: unloading an unpublished region releases its queued state and prevents later publication
+PASS: exploratory density 0 registry remains schema-valid
+PASS: density 0 publication sample 0 succeeds (ok)
+PASS: density 0 publication sample 1 succeeds (ok)
+PASS: density 0 publication sample 2 succeeds (ok)
+P2C_POPULATION_UNSCORED: density_milli=0 generation_samples=16 generation_p50_usec=566 generation_p95_usec=702 mean_objects=2.00 max_objects=2 mean_surface_anchors=2.00 publication_samples=3 publication_p50_usec=32838 publication_p95_usec=32838 mesh_build_p50_usec=32013 batch_build_p50_usec=33 batch_vertex_peak=0 static_memory_before_bytes=29859972 static_memory_after_bytes=29873044
+PASS: exploratory density 1000 registry remains schema-valid
+PASS: density 1000 publication sample 0 succeeds (ok)
+PASS: density 1000 publication sample 1 succeeds (ok)
+PASS: density 1000 publication sample 2 succeeds (ok)
+P2C_POPULATION_UNSCORED: density_milli=1000 generation_samples=16 generation_p50_usec=1127 generation_p95_usec=3708 mean_objects=2.88 max_objects=5 mean_surface_anchors=4.38 publication_samples=3 publication_p50_usec=34840 publication_p95_usec=34840 mesh_build_p50_usec=34006 batch_build_p50_usec=37 batch_vertex_peak=2304 static_memory_before_bytes=29866784 static_memory_after_bytes=29901712
+PASS: exploratory density 5000 registry remains schema-valid
+PASS: density 5000 publication sample 0 succeeds (ok)
+PASS: density 5000 publication sample 1 succeeds (ok)
+PASS: density 5000 publication sample 2 succeeds (ok)
+P2C_POPULATION_UNSCORED: density_milli=5000 generation_samples=16 generation_p50_usec=4356 generation_p95_usec=5741 mean_objects=6.75 max_objects=8 mean_surface_anchors=11.63 publication_samples=3 publication_p50_usec=54283 publication_p95_usec=54283 mesh_build_p50_usec=46547 batch_build_p50_usec=2156 batch_vertex_peak=6984 static_memory_before_bytes=29866796 static_memory_after_bytes=29923632
+PASS: exploratory density 10000 registry remains schema-valid
+PASS: density 10000 publication sample 0 succeeds (ok)
+PASS: density 10000 publication sample 1 succeeds (ok)
+PASS: density 10000 publication sample 2 succeeds (ok)
+P2C_POPULATION_UNSCORED: density_milli=10000 generation_samples=16 generation_p50_usec=8049 generation_p95_usec=10197 mean_objects=10.88 max_objects=12 mean_surface_anchors=21.75 publication_samples=3 publication_p50_usec=62441 publication_p95_usec=62441 mesh_build_p50_usec=49485 batch_build_p50_usec=3947 batch_vertex_peak=11592 static_memory_before_bytes=29866796 static_memory_after_bytes=29952224
+PASS: state round-trip fixture uses shared first-party and external data-only registry
+PASS: state fixture deterministically builds both legacy and additive instances in a negative region
+PASS: new world starts from derived procedural state without per-object disk records
+PASS: unmodified object reconstructs from recipe and seed with sparse empty state
+PASS: unsupported component schema is rejected without advancing revision
+PASS: bounded transform override persists as one sparse instance record
+PASS: appearance property override accepts bounded declarative values (ok)
+PASS: extensible logical state accepts bounded primitive fields (ok)
+PASS: logical state rejects executable/object values
+PASS: transform range overflow is rejected before persistence
+PASS: malformed appearance array is rejected
+PASS: fresh service instance reloads the committed snapshot and revision
+PASS: save/reload reconstructs all declared components
+PASS: overrides do not rewrite deterministic recipe, seeds or placement
+PASS: separate Godot process reconstructs persisted instance overrides (Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+OBJECT_STATE_PROCESS_RESTART_PASS revision=3 components=3 id=procedural-object-test-world/seed-424242/object/firstparty.core_rocks:granite/region/-2,3/slot/0)
+PASS: same ID with changed content pin is rejected rather than substituted
+PASS: interrupted transaction fixture leaves an incomplete temporary generation
+PASS: incomplete temporary write preserves the prior complete generation
+PASS: logical exclusion replaces overrides in one committed snapshot
+PASS: logical exclusion survives service restart
+PASS: explicit restore commits removal of exclusion and prior mutable overrides
+PASS: restored state reloads successfully
+PASS: restoration returns exact derived baseline without a per-object record
+PASS: complete temporary recovery fixture initializes in an isolated root
+PASS: complete temporary recovery fixture commits a baseline generation
+PASS: simulated interruption occurs after flush but before generation rename
+PASS: complete temporary generation independently validates before recovery (ok)
+PASS: complete temporary generation is recovered and finalized without losing accepted state (reason=ok gen=1 recovered=true revision=1)
+PASS: recovered generation becomes an immutable finalized object-state record
+PASS: save for a different world seed is rejected rather than merged
+PASS: failed-write fixture reserves its state directory path as a regular file
+PASS: failed-write service starts from derived state without touching the blocking file
+PASS: storage failure rejects the mutation without advancing authoritative in-memory state
+PASS: corruption fixture changes payload bytes while retaining its original digest
+PASS: corrupt finalized generation blocks object-state startup fail-closed
+PASS: unsupported object-state schema is rejected without migration or reinterpretation
+PASS: malformed revision metadata is rejected before serialization
+PASS: world identifiers cannot redirect the default object-state storage path
+PASS: signed region coordinates outside Vector2i range are rejected before identity normalization
+PASS: stable instance identity mismatch is rejected
+PASS: stale publication guard fixture initializes independently
+PASS: superseded region token cannot publish an object root
+PASS: late stale completion cannot replace the current published region
+PASS: runtime adapter initializes from the common registry
+PASS: successful initialization has no hidden package or region errors
+PASS: published negative region receives the two compatibility objects and any deterministic population
+PASS: visual object residency is bounded to explicitly published regions
+PASS: component override commits transactionally before visual publication
+PASS: published object carries only its sparse mutable component override
+PASS: mutable transform leaves recipe seeds and P2.0A content pins unchanged
+PASS: logical deletion is persisted and removes only its active representation
+PASS: restore removes tombstone and reconstructs the deterministic procedural baseline
+PASS: mutating one population instance promotes it out of the immutable static batch
+PASS: repeated publication does not create duplicate region or object nodes
+PASS: visibility toggle hides representations without changing domain records
+PASS: logical exclusion remains durable before region eviction
+PASS: region unload releases all object rendering nodes
+PASS: deleted object can be restored from its pinned deterministic identity while its region is unloaded
+PASS: region reload succeeds while object visualization is hidden
+PASS: streamed-in regions preserve the user's hidden-object setting
+PASS: reload recreates persistent overrides with identical IDs, pins, seeds and placements
+PASS: reloaded individual and batched mesh representations cover the exact original stable instance identities
+PASS: object publication does not mutate the canonical terrain ledger
+PASS: seed-partition fixture initializes the shared object stream
+PASS: same-seed neighboring region publications share one visual seed domain
+PASS: first seed override is stored only in its versioned seed partition
+PASS: changing world seed discards visual representatives from the prior seed domain
+PASS: new seed reconstructs a clean derived baseline without inheriting old overrides
+PASS: switching seeds preserves the previous save and derives the new seed without creating an unnecessary object-state file
+PASS: missing required external package fails with a meaningful identity
+PASS: required package failure remains visible to the HUD status adapter
+PASS: missing required content cannot produce a partially initialized object stream
+PASS: schema-1 external recipe cannot satisfy a schema-2 population rule and fails explicitly without silent reinterpretation
+PASS: incompatible external package is rejected through the existing loader
+PASS: incompatible content cannot be replaced by a fallback definition
+PASS: authority isolation fixture registers content
+PASS: disposable baseline terrain save command is accepted
+PASS: schema-1 preservation fixture is saved outside the user's world directory
+PASS: instance generation succeeds without requiring save access
+PASS: instance generation has no authority over terrain edits
+PASS: procedural object generation leaves existing schema-1 save bytes unchanged
+PASS: external example was copied only into the disposable isolated user-data test fixture
+PASS: playable scene includes the procedural-object stream adapter
+PASS: playable terrain scene publishes its focused region during streaming
+PASS: main scene initializes packages and displays the nonfatal optional-folder diagnostic
+PASS: object visibility follows actually published active regions (objects=1 terrain=1 init=true status=Procedural objects queued)
+PASS: scene publication creates both compatibility objects and declarative population from registered packages (instances=5 init=true error=)
+PASS: playable GUI path accepts and persists a transform override through the stream
+PASS: playable GUI path accepts a per-instance declarative appearance property
+PASS: published Node3D reflects the saved transform delta while remaining derived presentation
+PASS: playable stream commits a logical deletion and removes the representative
+PASS: playable stream restores the procedural baseline for a deleted object
+PASS: main-scene M input preflights without implicitly upgrading the legacy object save
+PASS: second main-scene M input explicitly commits the entity-history schema and waits for active regions to synchronize
+WARNING: Target and up vectors are colinear. This is not advised as it may cause unwanted rotation around local Z axis.
+   at: looking_at (core/math/basis.cpp:1045)
+   GDScript backtrace (most recent call first):
+       [0] _update_camera (res://scripts/terrain/terrain_demo.gd:1755)
+       [1] _test_playable_scene_publication (res://tests/procedural_object_tests.gd:991)
+PASS: B viewport input places a persistent explicit entity at the visible-pointer target
+PASS: Ctrl+left viewport event selects the placed entity through terrain-occlusion-aware picking
+PASS: F6 viewport input selects an entity for transactional commands
+PASS: F7 routes transform and appearance changes through two revision-checked entity commands (status=ENTITY_SET_COMPONENT transform + appearance committed (world revision 7; visual queued) world=5->7 entity=2)
+PASS: F8 viewport input commits ENTITY_DELETE and removes only the selected visual identity (status=ENTITY_DELETE committed at world revision 8; visual publication succeeded)
+PASS: rejected repeated F8 command leaves the visual representation unchanged and reports its reason
+PASS: Ctrl+Z transactionally undoes ENTITY_DELETE and restores the exact transform and appearance overrides
+PASS: Ctrl+Y transactionally redoes the deletion without losing its inverse data
+PASS: a second Ctrl+Z restores the same full pre-delete state
+PASS: committed Redo remains authoritative when mesh publication fails, and the HUD reports the visual failure separately
+PASS: a later Undo can publish and visually reconcile after the explicit failed publication
+PASS: F9 remains distinct from Undo Delete and restores the procedural baseline without overrides or duplication (status=ENTITY_RESTORE committed at world revision 14; visual publication succeeded)
+PASS: terrain publication creates one object root for the focused region
+WARNING: Target and up vectors are colinear. This is not advised as it may cause unwanted rotation around local Z axis.
+   at: looking_at (core/math/basis.cpp:1045)
+   GDScript backtrace (most recent call first):
+       [0] _update_camera (res://scripts/terrain/terrain_demo.gd:1755)
+       [1] _test_playable_scene_publication (res://tests/procedural_object_tests.gd:1060)
+       [2] _wait_for_entity_presence (res://tests/procedural_object_tests.gd:1117)
+PASS: camera-driven region eviction releases its procedural object representations
+WARNING: Target and up vectors are colinear. This is not advised as it may cause unwanted rotation around local Z axis.
+   at: looking_at (core/math/basis.cpp:1045)
+   GDScript backtrace (most recent call first):
+       [0] _update_camera (res://scripts/terrain/terrain_demo.gd:1755)
+       [1] _test_playable_scene_publication (res://tests/procedural_object_tests.gd:1069)
+PASS: camera-driven revisit republishes the original region
+PASS: playable stream revisit rebuilds the persisted override independent of visit order
+PROCEDURAL_OBJECT_PASS: assertions=638 failures=0
+L2 PASS: mod-first deterministic procedural objects and region streaming tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/entity_command_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+P3_COMMAND_TIMING_JSON:{"dispatch_and_persist_usec":19983,"operation":"ENTITY_PLACE","persist_usec":18810,"result":"committed"}
+P3_COMMAND_TIMING_JSON:{"dispatch_and_persist_usec":26163,"operation":"ENTITY_SET_COMPONENT","persist_usec":24977,"result":"committed"}
+P3_COMMAND_TIMING_JSON:{"dispatch_and_persist_usec":21901,"operation":"ENTITY_DELETE","persist_usec":20513,"result":"committed"}
+P3_COMMAND_TIMING_JSON:{"dispatch_and_persist_usec":31169,"operation":"ENTITY_RESTORE","persist_usec":29495,"result":"committed"}
+ENTITY_COMMAND_PASS: assertions=67 failures=0
+L2 PASS: transactional entity command contract and persistence tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/entity_history_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ASSERTION PASS: first-party declarative definitions register for disposable history tests
+ASSERTION PASS: P2 schema-1 object state opens in an isolated directory
+ASSERTION PASS: schema-1 migration preflight directly prepares schema 3 with an empty history
+ASSERTION PASS: preflight has no persistent or in-memory side effects
+ASSERTION PASS: explicit first migration commits schema 3 without changing terrain or object schema-1 files
+ASSERTION PASS: history dispatcher initializes only after explicit schema-3 migration
+ASSERTION PASS: canonical origin region reconstructs before commands (ok)
+ASSERTION PASS: Undo with no history fails without revision or receipt
+ASSERTION PASS: Redo with no unapplied entry fails without revision or receipt
+ASSERTION PASS: first component command and history entry commit in one snapshot (committed)
+ASSERTION PASS: appearance override is accepted after the transform
+ASSERTION PASS: replacing an existing component override appends one linear history entry
+ASSERTION PASS: Undo of an override replacement restores the exact prior component (committed)
+ASSERTION PASS: Undo exposes separate history-validation and persistence timing fields
+ASSERTION PASS: Redo rejects state that no longer matches its recorded prior component without changing the cursor or receipt set
+ASSERTION PASS: Redo reapplies the original component payload
+ASSERTION PASS: history navigation can reverse the same entry again with a new command ID
+ASSERTION PASS: Undo of a component created from absence removes only that component
+ASSERTION PASS: Redo restores the component whose prior state was absent
+ASSERTION PASS: schema-3 history and receipts satisfy the strict snapshot contract
+ASSERTION PASS: history cursor inconsistent with APPLIED/UNDONE flags is rejected
+ASSERTION PASS: history whose inverse metadata hash disagrees with its same-snapshot receipt is rejected
+ASSERTION PASS: delete fixture uses a separate world seed and directory
+ASSERTION PASS: delete fixture explicitly migrates to schema 3
+ASSERTION PASS: transform state is committed before deletion
+ASSERTION PASS: appearance state is committed before deletion
+ASSERTION PASS: logical component state is committed before deletion
+ASSERTION PASS: ENTITY_DELETE writes the tombstone and removes sparse overrides transactionally
+ASSERTION PASS: Undo Delete removes the tombstone and restores the entire pre-delete override set (committed)
+ASSERTION PASS: Undo Delete restores logical state as well as transform and appearance
+ASSERTION PASS: exact Undo command retry returns its persistent receipt without another cursor move
+ASSERTION PASS: reusing an Undo command ID for a different history entry is rejected
+ASSERTION PASS: Redo Delete reapplies only the logical deletion and preserves its inverse receipt
+ASSERTION PASS: repeated Redo/Undo Delete cycles restore the same exact component state
+ASSERTION PASS: delete is applied again before testing the distinct Restore operation
+ASSERTION PASS: ENTITY_RESTORE remains a baseline restore that discards overrides
+ASSERTION PASS: Undo Restore recreates the exact prior tombstone state rather than the pre-delete object state
+ASSERTION PASS: Redo Restore returns to the procedural baseline with no sparse overrides
+ASSERTION PASS: Undo Restore can be replayed with a new command ID
+ASSERTION PASS: Undo Delete still restores pre-delete state after Undo Restore and Undo Delete sequence
+ASSERTION PASS: unload/revisit after history navigation reconstructs the same stable entity state
+ASSERTION PASS: reinitialization persists history cursor, receipts and entity state
+ASSERTION PASS: history dispatcher resumes after restart and region reconstruction
+ASSERTION PASS: separate Godot process reloads schema-3 history, pending Redo and the exact pre-delete entity overrides (Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ENTITY_HISTORY_PROCESS_RESTART_PASS depth=5 cursor=3 revision=13)
+ASSERTION PASS: Redo after restart uses the persisted next history entry
+ASSERTION PASS: ENTITY_PLACE stores a stable explicit identity before undo
+ASSERTION PASS: Undo Place tombstones the explicit entity while reserving its original identity
+ASSERTION PASS: Redo Place restores the same command-derived identity without duplication
+ASSERTION PASS: place undo/redo preserves one identity and monotonic entity revisions
+ASSERTION PASS: active Restore fixture uses a separate schema-1 save root
+ASSERTION PASS: active Restore fixture explicitly migrates to history schema 3
+ASSERTION PASS: active Restore entity is reconstructed before mutation
+ASSERTION PASS: active Restore fixture commits a visible sparse override
+ASSERTION PASS: ENTITY_RESTORE clears active overrides and keeps the procedural identity active
+ASSERTION PASS: Undo Restore recovers the exact active pre-restore override without creating a tombstone
+ASSERTION PASS: Redo Restore returns the active entity to its procedural baseline
+ASSERTION PASS: Restore of an already-baseline active entity is rejected without a redundant history entry
+ASSERTION PASS: negative-region command becomes first history entry
+ASSERTION PASS: history entry can be undone before a new branch command
+ASSERTION PASS: linear cursor exposes exactly one redo candidate
+ASSERTION PASS: a new accepted command after Undo creates a new linear branch
+ASSERTION PASS: new forward command invalidates and removes the undone Redo branch
+ASSERTION PASS: stale global revision is rejected before cursor, receipt, or entity effects
+ASSERTION PASS: stale entity revision is independently rejected
+ASSERTION PASS: out-of-order or wrong-entity history references fail closed
+ASSERTION PASS: history command with another seed/world identity is rejected by the wire contract
+ASSERTION PASS: legacy direct state-service mutation paths cannot bypass schema-3 history
+ASSERTION PASS: legacy delete and restore writers are also blocked after history migration
+ASSERTION PASS: undo fails closed if the history entry's required definition pin is unavailable
+ASSERTION PASS: restoring the required registry allows the unchanged history operation
+ASSERTION PASS: Undo receipt replay remains idempotent after a subsequent cursor move
+ASSERTION PASS: same Undo command ID with different expected revision/payload is rejected
+ASSERTION PASS: a fresh operation on a negative-coordinate entity creates a new history entry
+ASSERTION PASS: undo works for a canonical negative-coordinate region
+ASSERTION PASS: schema-2 migration precondition uses the P3.0A compatibility upgrader
+ASSERTION PASS: a P3.0A command is persisted in schema 2 before history migration
+ASSERTION PASS: Undo is fail-closed until explicit schema-3 history migration
+ASSERTION PASS: schema-2 preflight accounts for and preserves every legacy command receipt
+ASSERTION PASS: schema-2 migration retains receipts verbatim and starts a non-retroactive empty history
+ASSERTION PASS: pre-migration operation remains idempotent but is not represented as undoable history
+ASSERTION PASS: legacy operations do not acquire invented reverse state during migration
+ASSERTION PASS: invalid source snapshot fails migration preflight without writing or normalization
+ASSERTION PASS: unsupported source schemas fail closed
+ASSERTION PASS: interrupted-migration fixture has a committed schema-2 source and passing no-write preflight
+ASSERTION PASS: schema-3 migration write interruption fails closed without publishing an in-memory candidate
+ASSERTION PASS: failed migration leaves the prior committed schema-2 generation available for explicit recovery
+ASSERTION PASS: uncertainty fixture commits a source command before injecting the later failure
+ASSERTION PASS: failure after durable generation rename is classified as uncertain and poisons the service
+ASSERTION PASS: uncertain commit does not publish candidate state or move the in-memory cursor before readback/reinitialization
+ASSERTION PASS: reinitialization resolves commit uncertainty by reading the committed Undo receipt and cursor
+ASSERTION PASS: reconciled history is usable only after service reconstruction
+ASSERTION PASS: retry after uncertain durable commit returns the exact receipt without applying Undo twice
+ASSERTION PASS: prewrite-failure fixture creates one reversible history entry
+ASSERTION PASS: prewrite persistence failure leaves the cursor and entity unchanged and forces reload before retry
+ASSERTION PASS: synthetic full-capacity history snapshot satisfies every schema-3 entry, receipt and cursor invariant (ok)
+ASSERTION PASS: forward edit at history capacity boundary commits (committed)
+ASSERTION PASS: history cap prunes exactly the oldest applied entry while retaining every idempotency receipt
+ASSERTION PASS: history remains navigable at capacity with the newest retained entry
+ASSERTION PASS: cap evicts only the oldest undo entry while preserving its idempotency receipt
+ASSERTION PASS: full receipt-capacity synthetic snapshot remains contract-valid without changing historic receipt policy
+ASSERTION PASS: full receipt capacity rejects forward and history-navigation commands without pruning prior receipts
+ENTITY_HISTORY_PASS: assertions=101 failures=0
+L2 PASS: transactional entity undo/redo, schema migration, crash recovery and retention tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/entity_command_harness_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+PASS: scene input test starts the real harness services
+PASS: scene starts empty so two P inputs create exactly two explicit entities
+PASS: two viewport P events create distinct identities
+PASS: two P events commit exactly two placements without a startup extra
+PASS: both placed entities have visible scene nodes
+PASS: most recently placed entity remains selected
+PASS: physical-key-only Delete reaches ENTITY_DELETE and persists its tombstone
+PASS: successful delete advances world and entity revisions once
+PASS: delete hides only the selected second entity
+PASS: delete retains the same node and selection for exact restoration
+PASS: HUD confirms committed logical deletion
+PASS: rejected duplicate delete reports its exact reason in the HUD
+PASS: rejected command leaves persistent and visual state unchanged
+PASS: physical-key-only R removes the exact selected tombstone
+PASS: restore advances revisions once without resetting entity history
+PASS: R restores the selected entity and leaves its sibling unchanged
+PASS: restore reuses the same Node3D without duplicating the entity
+PASS: HUD confirms successful restoration
+PASS: scene teardown removes only its unique harness state directory
+ENTITY_COMMAND_HARNESS_PASS: assertions=19 failures=0
+L2 PASS: transactional entity harness viewport input, delete and restore regression
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/playable_entity_command_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+PASS: object stream uses registered first-party and external definitions with disposable state
+PASS: positive and negative test regions publish through the existing object stream
+PASS: fixture exposes both a compatibility individual and a P2.0C static batch member
+PASS: ray selection resolves the stable ID of an individual procedural representative
+PASS: ray selection resolves a batch member ID without unbatching its static geometry
+PASS: P2 schema-1 override is written without an implicit P3 migration
+PASS: migration preflight validates schema, revision and the complete history candidate without committing
+PASS: preflight and ordinary initialization preserve the original schema-1 state
+PASS: new command controls fail closed before explicit migration
+PASS: explicit migration commits schema 3 and waits for all resident representations to synchronize
+PASS: schema migration preserves prior P2 sparse overrides
+PASS: commands fail closed while migration-triggered region publications are pending
+PASS: migration republishes the three resident regions before enabling the command path
+PASS: negative world anchor resolves through canonical floor-based ownership
+PASS: ENTITY_PLACE commits persistently before queuing the visual representative
+PASS: explicit placement identity is separate from deterministic procedural population IDs
+PASS: exact command retry returns the durable receipt without duplicating the entity
+PASS: reusing a command ID with a different payload is rejected
+PASS: successful committed placement receives a matching asynchronous visual-publication result
+PASS: explicitly placed entity remains selectable by its stable identity
+PASS: negative-region visual uses the persisted world anchor exactly once, not region origin twice
+PASS: region publication creates exactly one visual identity for the placement
+PASS: ENTITY_SET_COMPONENT accepts a valid transform at the current world and entity revisions
+PASS: committed transform is applied to the rebuilt individual representation
+PASS: appearance changes use the same persisted command contract
+PASS: stale world revision rejects before persistent or visual effects
+PASS: stale entity revision rejects without partial snapshot mutation
+PASS: transform crossing the negative region boundary is rejected without implicit identity migration
+PASS: missing content definition/pin rejects ENTITY_PLACE before commit
+PASS: unregistered mod origin cannot submit commands
+PASS: rejected revisions, ownership, pins and origins do not queue or alter any visual identity
+PASS: post-commit visual failure reports persisted state and does not imply rollback
+PASS: failed visual synchronization retains the previous complete region representation
+PASS: ENTITY_DELETE persists a tombstone and removes the batched or individual representation
+PASS: ENTITY_RESTORE commits the same identity while its region is unloaded
+PASS: unloaded negative region can be reconstructed after restore
+PASS: revisit reconstructs one restored explicit entity without duplication
+PASS: obsolete region publications are discarded without becoming visible
+PASS: failed persistence leaves authoritative memory unchanged and poisons the service until reload
+PASS: restart reopens schema-2 state and reinitializes the command service
+PASS: restarted stream republishes a signed region from the same isolated state store
+PASS: restart reconstructs the persisted placement once from its pin and explicit record
+PASS: durable idempotency receipt remains effective after process-style service restart
+PASS: entity reconstruction preserves the existing object residency and per-frame publication limits
+P3B_EXPLORATORY_METRICS: samples=6 values_usec={"batch_build_usec":{"count":5,"max":283,"p50":256,"p95":283},"command_total_usec":{"count":6,"max":63782,"p50":42819,"p95":63782},"logical_reconstruction_usec":{"count":5,"max":1591,"p50":1557,"p95":1591},"mesh_build_usec":{"count":5,"max":45888,"p50":44001,"p95":45888},"persistence_usec":{"count":6,"max":57087,"p50":39396,"p95":57087},"publication_usec":{"count":5,"max":47839,"p50":45543,"p95":47839},"visual_queue_usec":{"count":6,"max":32,"p50":16,"p95":32}}; headless fixture, not presented-frame/GPU acceptance
+PLAYABLE_ENTITY_COMMAND_PASS: assertions=44 failures=0
+L2 PASS: playable world transactional entity integration tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/p3_0d_entity_placement_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+PASS: isolated scene is published and the schema-3 command service is ready
+PASS: off-center viewport rays hit deterministic, irregular terrain surfaces
+PASS: distinct screen points produce distinct quantized world-space hits
+PASS: ray targets lie on sampled non-flat SDF terrain rather than a placement constant
+PASS: both deterministic pointer-hit regions are published before their placements
+PASS: B input at the left pointer accepts one placement
+PASS: left-pointer command persists the exact millimeter-quantized SDF hit (expected=(3248, 2470, 2612) actual=(3248, 2470, 2612))
+PASS: visible-pointer placement reports pointer aim mode
+PASS: a second B creates a distinct identity
+PASS: right-pointer command persists its own SDF hit
+PASS: repeated aim is stable and allows intentional overlap without jitter
+PASS: each accepted placement publishes exactly one visual for its stable identity (counts=1/1/1 errors=)
+PASS: visual target indicator marks the same surface hit used by B
+PASS: visual node exists for sandbox-default/seed-424242/placed/79e84cf7-50c6-1ccf-5adc-d4b7da7ac49b
+PASS: persisted identity owner equals floor-based world owner
+PASS: region-local node position is global anchor minus region origin
+PASS: region root plus local node transform applies the world anchor exactly once
+PASS: scaled viewport coordinates round-trip through input, ray projection and persisted anchor
+PASS: Undo removes the latest placement transactionally (committed)
+PASS: Undo removes only the target identity's visual
+PASS: Redo reconstructs the same identity once (committed; count=1; errors=)
+PASS: Undo/redo preserves exact persisted placement bytes
+PASS: delete hides only the selected explicit entity
+PASS: restore recovers the same identity without a duplicate visual (committed; count=1; errors=)
+PASS: no-surface rejection has no command, revision, selection or persistent state side effect
+PASS: unpublished-region rejection fixture has a valid hit in an unpublished region
+PASS: valid but unpublished target is rejected without command, selection or persistent mutation
+PASS: positive boundary target region is fully published before placement
+PASS: quantized hit on the positive X region plane belongs to region (1,0)
+PASS: visual node exists for sandbox-default/seed-424242/placed/e5aa67d7-5dc8-505f-6cb6-a046edf6fa02
+PASS: persisted identity owner equals floor-based world owner
+PASS: region-local node position is global anchor minus region origin
+PASS: region root plus local node transform applies the world anchor exactly once
+PASS: negative boundary region becomes fully published before placement
+PASS: hidden/captured cursor policy explicitly falls back to the viewport center
+PASS: captured-center hit at negative X/Z region planes uses floor-based owner (-1,-1)
+PASS: visual node exists for sandbox-default/seed-424242/placed/508ac3a0-831c-a135-b761-7cd74dc2de9a
+PASS: persisted identity owner equals floor-based world owner
+PASS: region-local node position is global anchor minus region origin
+PASS: region root plus local node transform applies the world anchor exactly once
+PASS: streaming unload removes the negative-region visual while retaining its persistent identity
+PASS: unload/revisit reconstructs exactly one visual for the same placement ID
+PASS: unload/revisit preserves the exact world-space anchor
+PASS: fresh object-stream service reopens the isolated persisted entity store
+PASS: fresh stream reconstructs the persisted region from authoritative state
+PASS: restart publication contains exactly one visual for the same placement identity
+PASS: restart keeps the exact global millimeter anchor
+PASS: visual node exists for sandbox-default/seed-424242/placed/508ac3a0-831c-a135-b761-7cd74dc2de9a
+PASS: persisted identity owner equals floor-based world owner
+PASS: region-local node position is global anchor minus region origin
+PASS: region root plus local node transform applies the world anchor exactly once
+P3_0D_PLACEMENT_PASS: assertions=51 failures=0
+L2 PASS: pointer-driven persistent entity placement and region reconstruction tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/terrain_picker_history_perf.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_PICK_HISTORY: Godot=4.7.2-stable (official) levels=0,32,128,255,256 repeats=5 path=Viewport.InputEvent->BrushPicker->SDF->mesh->publication
+TERRAIN_PICK_PROFILE: history_start=0 history_before=0,1,2,3,4 candidates_p50/p95=1/2 snapshot_p50/p95_ms=0.051/0.068 picker_loop_p50/p95_ms=0.235/0.291 picker_e2e_p50/p95_ms=0.315/0.330 event_terminal_p50/p95_ms=53.479/61.273 visible_p50/p95_ms=53.473/61.266 samples_p50/p95=32/43 frames_n=40 p95/p99/peak_ms=16.667/46.834/46.834 mesh_queue_wait_p50/p95_ms=3.981/4.959 worker_wait_p50/p95_ms=0.133/0.161 publish_p50/p95_ms=1.294/2.156 queue_peak=144 workers_peak=4
+TERRAIN_PICK_PROFILE: history_start=32 history_before=32,33,34,35,36 candidates_p50/p95=1/2 snapshot_p50/p95_ms=0.271/0.281 picker_loop_p50/p95_ms=0.212/0.293 picker_e2e_p50/p95_ms=0.501/0.529 event_terminal_p50/p95_ms=52.829/61.160 visible_p50/p95_ms=52.818/61.150 samples_p50/p95=32/43 frames_n=39 p95/p99/peak_ms=9.746/83.938/83.938 mesh_queue_wait_p50/p95_ms=4.486/5.260 worker_wait_p50/p95_ms=0.119/0.133 publish_p50/p95_ms=1.392/2.251 queue_peak=224 workers_peak=4
+TERRAIN_PICK_PROFILE: history_start=128 history_before=128,129,130,131,132 candidates_p50/p95=1/2 snapshot_p50/p95_ms=1.063/2.077 picker_loop_p50/p95_ms=0.264/0.532 picker_e2e_p50/p95_ms=1.309/2.630 event_terminal_p50/p95_ms=73.506/77.487 visible_p50/p95_ms=73.498/77.478 samples_p50/p95=32/43 frames_n=47 p95/p99/peak_ms=14.263/104.441/104.441 mesh_queue_wait_p50/p95_ms=8.153/8.936 worker_wait_p50/p95_ms=0.127/0.181 publish_p50/p95_ms=1.302/2.234 queue_peak=224 workers_peak=4
+TERRAIN_PICK_PROFILE: history_start=255 history_before=255,256,257,258,259 candidates_p50/p95=1/2 snapshot_p50/p95_ms=1.970/2.081 picker_loop_p50/p95_ms=0.220/0.254 picker_e2e_p50/p95_ms=2.189/2.310 event_terminal_p50/p95_ms=53.196/71.862 visible_p50/p95_ms=53.190/71.856 samples_p50/p95=32/43 frames_n=40 p95/p99/peak_ms=16.146/128.681/128.681 mesh_queue_wait_p50/p95_ms=7.826/14.055 worker_wait_p50/p95_ms=0.126/0.138 publish_p50/p95_ms=1.284/2.256 queue_peak=224 workers_peak=4
+TERRAIN_PICK_PROFILE: history_start=256 history_before=256,257,258,259,260 candidates_p50/p95=1/2 snapshot_p50/p95_ms=2.045/2.336 picker_loop_p50/p95_ms=0.225/0.271 picker_e2e_p50/p95_ms=2.280/2.618 event_terminal_p50/p95_ms=53.311/73.762 visible_p50/p95_ms=53.303/73.755 samples_p50/p95=32/43 frames_n=41 p95/p99/peak_ms=20.688/137.437/137.437 mesh_queue_wait_p50/p95_ms=8.530/14.695 worker_wait_p50/p95_ms=0.129/0.139 publish_p50/p95_ms=1.408/2.154 queue_peak=224 workers_peak=4
+TERRAIN_PICK_LOCAL_HISTORY: layouts=interior,positive_edge,positive_corner,negative_corner levels=0,32,128,255,256 repeats=5 clustered_same_region=true
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_interior history_requested=0 counts_before=0,0,0,0,0 repeats=5 candidates_p50/p95=0/0 snapshot_p50/p95_ms=0.014/0.016 picker_loop_p50/p95_ms=0.191/0.471 picker_e2e_p50/p95_ms=0.211/0.495 event_dispatch_p50/p95_ms=1.685/2.235 accept_p50/p95_ms=1.710/2.263 transaction_p50/p95_ms=59.434/72.490 visible_p50/p95_ms=61.475/74.753 frames_n=46 p95/p99/peak_ms=85.696/95.284/95.284 samples_p50/p95=33/43 mesh_queue_wait_p95_ms=4.831 worker_wait_p95_ms=0.129 array_mesh_upload_p50/p95_ms=0.237/0.275 publish_p95_ms=2.622 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_interior history_requested=32 counts_before=32,32,32,32,32 repeats=5 candidates_p50/p95=32/32 snapshot_p50/p95_ms=0.250/0.268 picker_loop_p50/p95_ms=0.382/0.447 picker_e2e_p50/p95_ms=0.620/0.722 event_dispatch_p50/p95_ms=9.439/10.855 accept_p50/p95_ms=9.479/10.890 transaction_p50/p95_ms=61.907/66.304 visible_p50/p95_ms=70.714/76.751 frames_n=47 p95/p99/peak_ms=134.464/148.214/148.214 samples_p50/p95=33/43 mesh_queue_wait_p95_ms=13.741 worker_wait_p95_ms=0.400 array_mesh_upload_p50/p95_ms=0.234/0.239 publish_p95_ms=2.290 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_interior history_requested=128 counts_before=128,128,128,128,128 repeats=5 candidates_p50/p95=128/128 snapshot_p50/p95_ms=1.048/1.198 picker_loop_p50/p95_ms=0.691/0.892 picker_e2e_p50/p95_ms=1.754/2.088 event_dispatch_p50/p95_ms=32.306/35.934 accept_p50/p95_ms=32.345/35.970 transaction_p50/p95_ms=85.614/98.886 visible_p50/p95_ms=121.512/129.803 frames_n=60 p95/p99/peak_ms=117.953/147.077/147.077 samples_p50/p95=33/43 mesh_queue_wait_p95_ms=40.061 worker_wait_p95_ms=1.214 array_mesh_upload_p50/p95_ms=0.218/0.239 publish_p95_ms=2.340 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_interior history_requested=255 counts_before=255,255,255,255,255 repeats=5 candidates_p50/p95=255/255 snapshot_p50/p95_ms=2.402/2.454 picker_loop_p50/p95_ms=0.942/2.014 picker_e2e_p50/p95_ms=3.410/4.469 event_dispatch_p50/p95_ms=46.569/53.780 accept_p50/p95_ms=46.613/53.820 transaction_p50/p95_ms=69.261/96.329 visible_p50/p95_ms=115.875/150.149 frames_n=56 p95/p99/peak_ms=123.830/139.600/139.600 samples_p50/p95=25/27 mesh_queue_wait_p95_ms=53.874 worker_wait_p95_ms=2.373 array_mesh_upload_p50/p95_ms=0.172/0.181 publish_p95_ms=1.269 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_interior history_requested=256 counts_before=256,256,256,256,256 repeats=5 candidates_p50/p95=256/256 snapshot_p50/p95_ms=2.184/2.271 picker_loop_p50/p95_ms=1.159/1.568 picker_e2e_p50/p95_ms=3.423/3.726 event_dispatch_p50/p95_ms=65.783/68.598 accept_p50/p95_ms=65.824/68.636 transaction_p50/p95_ms=124.173/162.960 visible_p50/p95_ms=189.998/222.030 frames_n=86 p95/p99/peak_ms=91.473/146.480/146.480 samples_p50/p95=33/43 mesh_queue_wait_p95_ms=73.256 worker_wait_p95_ms=2.693 array_mesh_upload_p50/p95_ms=0.248/0.260 publish_p95_ms=2.291 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_positive_edge history_requested=0 counts_before=0,0,0,0,0 repeats=5 candidates_p50/p95=0/0 snapshot_p50/p95_ms=0.014/0.017 picker_loop_p50/p95_ms=0.197/0.339 picker_e2e_p50/p95_ms=0.219/0.365 event_dispatch_p50/p95_ms=1.853/2.104 accept_p50/p95_ms=1.879/2.126 transaction_p50/p95_ms=52.777/59.304 visible_p50/p95_ms=54.603/61.431 frames_n=42 p95/p99/peak_ms=87.463/89.648/89.648 samples_p50/p95=29/34 mesh_queue_wait_p95_ms=4.710 worker_wait_p95_ms=0.128 array_mesh_upload_p50/p95_ms=0.189/0.211 publish_p95_ms=2.335 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_positive_edge history_requested=32 counts_before=32,32,32,32,32 repeats=5 candidates_p50/p95=32/32 snapshot_p50/p95_ms=0.255/0.285 picker_loop_p50/p95_ms=0.287/0.375 picker_e2e_p50/p95_ms=0.560/0.651 event_dispatch_p50/p95_ms=8.077/9.095 accept_p50/p95_ms=8.104/9.126 transaction_p50/p95_ms=61.540/82.042 visible_p50/p95_ms=70.667/90.146 frames_n=49 p95/p99/peak_ms=140.213/143.088/143.088 samples_p50/p95=29/34 mesh_queue_wait_p95_ms=12.113 worker_wait_p95_ms=0.368 array_mesh_upload_p50/p95_ms=0.217/0.237 publish_p95_ms=2.467 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_positive_edge history_requested=128 counts_before=128,128,128,128,128 repeats=5 candidates_p50/p95=128/128 snapshot_p50/p95_ms=1.033/1.087 picker_loop_p50/p95_ms=0.617/0.692 picker_e2e_p50/p95_ms=1.636/1.781 event_dispatch_p50/p95_ms=28.929/39.271 accept_p50/p95_ms=28.969/39.308 transaction_p50/p95_ms=96.480/117.540 visible_p50/p95_ms=125.990/146.510 frames_n=67 p95/p99/peak_ms=130.992/144.761/144.761 samples_p50/p95=29/34 mesh_queue_wait_p95_ms=42.994 worker_wait_p95_ms=1.179 array_mesh_upload_p50/p95_ms=0.214/0.260 publish_p95_ms=2.357 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_positive_edge history_requested=255 counts_before=255,255,255,255,255 repeats=5 candidates_p50/p95=255/255 snapshot_p50/p95_ms=2.198/2.628 picker_loop_p50/p95_ms=1.076/1.226 picker_e2e_p50/p95_ms=3.285/3.870 event_dispatch_p50/p95_ms=53.599/57.838 accept_p50/p95_ms=53.639/57.881 transaction_p50/p95_ms=127.873/130.283 visible_p50/p95_ms=183.588/186.753 frames_n=80 p95/p99/peak_ms=105.117/146.480/146.480 samples_p50/p95=29/34 mesh_queue_wait_p95_ms=62.213 worker_wait_p95_ms=2.167 array_mesh_upload_p50/p95_ms=0.213/0.235 publish_p95_ms=2.574 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_positive_edge history_requested=256 counts_before=256,256,256,256,256 repeats=5 candidates_p50/p95=256/256 snapshot_p50/p95_ms=2.137/2.196 picker_loop_p50/p95_ms=1.042/1.232 picker_e2e_p50/p95_ms=3.191/3.382 event_dispatch_p50/p95_ms=57.902/62.402 accept_p50/p95_ms=57.942/62.446 transaction_p50/p95_ms=130.549/142.679 visible_p50/p95_ms=192.996/202.627 frames_n=83 p95/p99/peak_ms=89.761/136.144/136.144 samples_p50/p95=29/34 mesh_queue_wait_p95_ms=67.777 worker_wait_p95_ms=2.377 array_mesh_upload_p50/p95_ms=0.244/0.291 publish_p95_ms=2.563 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_positive_corner history_requested=0 counts_before=0,0,0,0,0 repeats=5 candidates_p50/p95=0/0 snapshot_p50/p95_ms=0.013/0.015 picker_loop_p50/p95_ms=0.163/0.260 picker_e2e_p50/p95_ms=0.182/0.285 event_dispatch_p50/p95_ms=1.806/2.213 accept_p50/p95_ms=1.833/2.238 transaction_p50/p95_ms=60.579/75.613 visible_p50/p95_ms=62.413/77.852 frames_n=48 p95/p99/peak_ms=87.929/89.648/89.648 samples_p50/p95=27/28 mesh_queue_wait_p95_ms=36.328 worker_wait_p95_ms=0.138 array_mesh_upload_p50/p95_ms=0.189/0.192 publish_p95_ms=1.704 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_positive_corner history_requested=32 counts_before=32,32,32,32,32 repeats=5 candidates_p50/p95=32/32 snapshot_p50/p95_ms=0.261/0.325 picker_loop_p50/p95_ms=0.217/0.309 picker_e2e_p50/p95_ms=0.487/0.573 event_dispatch_p50/p95_ms=7.563/7.675 accept_p50/p95_ms=7.593/7.702 transaction_p50/p95_ms=54.746/59.356 visible_p50/p95_ms=62.388/66.993 frames_n=43 p95/p99/peak_ms=137.733/148.837/148.837 samples_p50/p95=21/22 mesh_queue_wait_p95_ms=10.544 worker_wait_p95_ms=0.382 array_mesh_upload_p50/p95_ms=0.169/0.171 publish_p95_ms=1.568 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_positive_corner history_requested=128 counts_before=128,128,128,128,128 repeats=5 candidates_p50/p95=128/128 snapshot_p50/p95_ms=1.059/1.910 picker_loop_p50/p95_ms=0.479/1.020 picker_e2e_p50/p95_ms=1.520/2.943 event_dispatch_p50/p95_ms=24.723/31.559 accept_p50/p95_ms=24.755/31.604 transaction_p50/p95_ms=99.297/119.615 visible_p50/p95_ms=123.966/150.747 frames_n=67 p95/p99/peak_ms=138.666/146.607/146.607 samples_p50/p95=21/23 mesh_queue_wait_p95_ms=34.732 worker_wait_p95_ms=1.699 array_mesh_upload_p50/p95_ms=0.187/0.206 publish_p95_ms=1.945 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_positive_corner history_requested=255 counts_before=255,255,255,255,255 repeats=5 candidates_p50/p95=255/255 snapshot_p50/p95_ms=2.303/3.561 picker_loop_p50/p95_ms=1.008/1.248 picker_e2e_p50/p95_ms=3.325/4.824 event_dispatch_p50/p95_ms=54.583/56.363 accept_p50/p95_ms=54.628/56.406 transaction_p50/p95_ms=176.319/201.535 visible_p50/p95_ms=230.947/257.941 frames_n=110 p95/p99/peak_ms=87.129/132.727/138.437 samples_p50/p95=28/29 mesh_queue_wait_p95_ms=138.835 worker_wait_p95_ms=3.844 array_mesh_upload_p50/p95_ms=0.193/0.199 publish_p95_ms=1.797 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_positive_corner history_requested=256 counts_before=256,256,256,256,256 repeats=5 candidates_p50/p95=256/256 snapshot_p50/p95_ms=2.245/2.572 picker_loop_p50/p95_ms=0.778/0.919 picker_e2e_p50/p95_ms=3.116/3.368 event_dispatch_p50/p95_ms=49.996/58.448 accept_p50/p95_ms=50.044/58.490 transaction_p50/p95_ms=120.811/129.889 visible_p50/p95_ms=170.624/188.380 frames_n=75 p95/p99/peak_ms=129.106/133.851/133.851 samples_p50/p95=21/23 mesh_queue_wait_p95_ms=65.194 worker_wait_p95_ms=3.107 array_mesh_upload_p50/p95_ms=0.193/0.205 publish_p95_ms=1.654 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_negative_corner history_requested=0 counts_before=0,0,0,0,0 repeats=5 candidates_p50/p95=0/0 snapshot_p50/p95_ms=0.014/0.027 picker_loop_p50/p95_ms=0.175/0.190 picker_e2e_p50/p95_ms=0.198/0.209 event_dispatch_p50/p95_ms=1.836/1.900 accept_p50/p95_ms=1.863/1.929 transaction_p50/p95_ms=67.193/80.507 visible_p50/p95_ms=69.083/82.371 frames_n=51 p95/p99/peak_ms=87.069/96.544/96.544 samples_p50/p95=27/29 mesh_queue_wait_p95_ms=40.850 worker_wait_p95_ms=0.153 array_mesh_upload_p50/p95_ms=0.188/0.210 publish_p95_ms=1.706 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_negative_corner history_requested=32 counts_before=32,32,32,32,32 repeats=5 candidates_p50/p95=32/32 snapshot_p50/p95_ms=0.284/0.304 picker_loop_p50/p95_ms=0.249/0.252 picker_e2e_p50/p95_ms=0.511/0.561 event_dispatch_p50/p95_ms=7.624/8.157 accept_p50/p95_ms=7.649/8.195 transaction_p50/p95_ms=75.583/82.793 visible_p50/p95_ms=83.023/90.853 frames_n=55 p95/p99/peak_ms=132.171/146.954/146.954 samples_p50/p95=23/24 mesh_queue_wait_p95_ms=49.028 worker_wait_p95_ms=0.487 array_mesh_upload_p50/p95_ms=0.185/0.207 publish_p95_ms=1.997 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_negative_corner history_requested=128 counts_before=128,128,128,128,128 repeats=5 candidates_p50/p95=128/128 snapshot_p50/p95_ms=1.022/1.107 picker_loop_p50/p95_ms=0.454/0.541 picker_e2e_p50/p95_ms=1.484/1.625 event_dispatch_p50/p95_ms=25.095/27.456 accept_p50/p95_ms=25.122/27.496 transaction_p50/p95_ms=119.776/126.964 visible_p50/p95_ms=144.898/154.461 frames_n=78 p95/p99/peak_ms=130.330/149.115/149.115 samples_p50/p95=23/24 mesh_queue_wait_p95_ms=90.627 worker_wait_p95_ms=1.459 array_mesh_upload_p50/p95_ms=0.180/0.210 publish_p95_ms=1.921 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_negative_corner history_requested=255 counts_before=255,255,255,255,255 repeats=5 candidates_p50/p95=255/255 snapshot_p50/p95_ms=2.260/2.659 picker_loop_p50/p95_ms=1.013/1.319 picker_e2e_p50/p95_ms=3.407/3.691 event_dispatch_p50/p95_ms=55.531/60.182 accept_p50/p95_ms=55.573/60.226 transaction_p50/p95_ms=176.376/189.452 visible_p50/p95_ms=231.718/249.678 frames_n=110 p95/p99/peak_ms=89.648/132.506/132.562 samples_p50/p95=29/30 mesh_queue_wait_p95_ms=156.811 worker_wait_p95_ms=2.902 array_mesh_upload_p50/p95_ms=0.189/0.227 publish_p95_ms=1.812 candidates_full_replay_checks=5
+TERRAIN_PICK_LOCAL_PROFILE: layout=local_negative_corner history_requested=256 counts_before=256,256,256,256,256 repeats=5 candidates_p50/p95=256/256 snapshot_p50/p95_ms=2.157/3.154 picker_loop_p50/p95_ms=0.845/1.770 picker_e2e_p50/p95_ms=2.982/4.932 event_dispatch_p50/p95_ms=50.407/55.712 accept_p50/p95_ms=50.447/55.749 transaction_p50/p95_ms=183.206/192.340 visible_p50/p95_ms=233.653/246.683 frames_n=113 p95/p99/peak_ms=83.333/126.091/146.496 samples_p50/p95=23/24 mesh_queue_wait_p95_ms=145.568 worker_wait_p95_ms=2.656 array_mesh_upload_p50/p95_ms=0.185/0.199 publish_p95_ms=2.006 candidates_full_replay_checks=5
+TERRAIN_PICK_256TH_COMMIT: repeats=5 history_before=255 picker_p50/p95_ms=0.165/0.192 visible_p50/p95_ms=60.394/62.563 frame_p95/p99/peak_ms=146.892/149.480/149.480 queue_peak=224 workers_peak=4
+TERRAIN_PICK_HISTORY_PASS: assertions=713 failures=0
+L2 PASS: real viewport picking at 0/32/128/256 history levels
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/lod01_transition_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+LOD01_TRANSITION_TEST: Godot=4.7.2-stable (official) seed=424242 generator=1
+LOD01_TOPOLOGY: case=negative_face triangles=32 samples=18 internal_edge_incidence=2
+LOD01_TOPOLOGY_INTERFACE: negative_face fine interface face 0 resolution=2 reference_segments=6 transition_segments=6
+LOD01_TOPOLOGY_INTERFACE: negative_face coarse interface face 1 resolution=1 reference_segments=2 transition_segments=2
+LOD01_TOPOLOGY: case=negative_edge triangles=38 samples=20 internal_edge_incidence=2
+LOD01_TOPOLOGY_INTERFACE: negative_edge fine interface face 0 resolution=2 reference_segments=6 transition_segments=6
+LOD01_TOPOLOGY_INTERFACE: negative_edge coarse interface face 1 resolution=1 reference_segments=2 transition_segments=2
+LOD01_TOPOLOGY_INTERFACE: negative_edge fine interface face 2 resolution=2 reference_segments=6 transition_segments=6
+LOD01_TOPOLOGY_INTERFACE: negative_edge coarse interface face 3 resolution=1 reference_segments=2 transition_segments=2
+LOD01_TOPOLOGY: case=negative_corner triangles=42 samples=21 internal_edge_incidence=2
+LOD01_TOPOLOGY_INTERFACE: negative_corner fine interface face 0 resolution=2 reference_segments=6 transition_segments=6
+LOD01_TOPOLOGY_INTERFACE: negative_corner coarse interface face 1 resolution=1 reference_segments=2 transition_segments=2
+LOD01_TOPOLOGY_INTERFACE: negative_corner fine interface face 2 resolution=2 reference_segments=6 transition_segments=6
+LOD01_TOPOLOGY_INTERFACE: negative_corner coarse interface face 3 resolution=1 reference_segments=2 transition_segments=2
+LOD01_TOPOLOGY_INTERFACE: negative_corner fine interface face 4 resolution=2 reference_segments=6 transition_segments=6
+LOD01_TOPOLOGY_INTERFACE: negative_corner coarse interface face 5 resolution=1 reference_segments=2 transition_segments=2
+LOD01_TOPOLOGY: case=positive_corner triangles=18 samples=21 internal_edge_incidence=2
+LOD01_TOPOLOGY_INTERFACE: positive_corner fine interface face 1 resolution=2 reference_segments=2 transition_segments=2
+LOD01_TOPOLOGY_INTERFACE: positive_corner coarse interface face 0 resolution=1 reference_segments=2 transition_segments=2
+LOD01_TOPOLOGY_INTERFACE: positive_corner fine interface face 3 resolution=2 reference_segments=2 transition_segments=2
+LOD01_TOPOLOGY_INTERFACE: positive_corner coarse interface face 2 resolution=1 reference_segments=2 transition_segments=2
+LOD01_TOPOLOGY_INTERFACE: positive_corner fine interface face 5 resolution=2 reference_segments=2 transition_segments=2
+LOD01_TOPOLOGY_INTERFACE: positive_corner coarse interface face 4 resolution=1 reference_segments=2 transition_segments=2
+LOD01_GEOMETRY: mode=exploratory seed=424242 max_abs_canonical_density_at_surface_vertices lod0=0.00244372 lod1=0.01061805 transition=0.00675345 triangles=40/8/22
+LOD01_BENCH: mode=exploratory headless; resolution=CPU fixture only; warmup=2 samples=12 workers=0 publication=ArrayMesh; CPU=local host, GPU/frame metrics unavailable
+LOD01_BENCH_RESULT: kind=transition ops=0 n=12 p50_us=3230 p95_us=7076 p99_us=7076 max_us=7076 transition_geometry_avg_us=121 sample_avg_us=132 triangulation_avg_us=853 normals_avg_us=2774 ArrayMesh_publish_avg_us=21 cpu_array_bytes_est=2160 triangles=22
+LOD01_BENCH_RESULT: kind=lod0_reference ops=0 n=12 p50_us=5036 p95_us=11121 p99_us=11121 max_us=11121 transition_geometry_avg_us=0 sample_avg_us=180 triangulation_avg_us=1077 normals_avg_us=4564 ArrayMesh_publish_avg_us=18 cpu_array_bytes_est=3744 triangles=40
+LOD01_BENCH_RESULT: kind=transition ops=1 n=12 p50_us=4305 p95_us=4345 p99_us=4345 max_us=4345 transition_geometry_avg_us=99 sample_avg_us=108 triangulation_avg_us=825 normals_avg_us=3217 ArrayMesh_publish_avg_us=13 cpu_array_bytes_est=2880 triangles=32
+LOD01_BENCH_RESULT: kind=lod0_reference ops=1 n=12 p50_us=6176 p95_us=6707 p99_us=6707 max_us=6707 transition_geometry_avg_us=0 sample_avg_us=165 triangulation_avg_us=1082 normals_avg_us=4907 ArrayMesh_publish_avg_us=22 cpu_array_bytes_est=4320 triangles=48
+LOD01_BENCH_RESULT: kind=transition ops=32 n=12 p50_us=4728 p95_us=5322 p99_us=5322 max_us=5322 transition_geometry_avg_us=100 sample_avg_us=180 triangulation_avg_us=737 normals_avg_us=3745 ArrayMesh_publish_avg_us=12 cpu_array_bytes_est=2160 triangles=22
+LOD01_BENCH_RESULT: kind=lod0_reference ops=32 n=12 p50_us=8013 p95_us=8775 p99_us=8775 max_us=8775 transition_geometry_avg_us=0 sample_avg_us=260 triangulation_avg_us=985 normals_avg_us=6734 ArrayMesh_publish_avg_us=18 cpu_array_bytes_est=3744 triangles=40
+LOD01_BENCH_RESULT: kind=transition ops=128 n=12 p50_us=9546 p95_us=15253 p99_us=15253 max_us=15253 transition_geometry_avg_us=111 sample_avg_us=431 triangulation_avg_us=767 normals_avg_us=8872 ArrayMesh_publish_avg_us=21 cpu_array_bytes_est=2160 triangles=22
+LOD01_BENCH_RESULT: kind=lod0_reference ops=128 n=12 p50_us=16950 p95_us=24600 p99_us=24600 max_us=24600 transition_geometry_avg_us=0 sample_avg_us=642 triangulation_avg_us=1075 normals_avg_us=16466 ArrayMesh_publish_avg_us=32 cpu_array_bytes_est=3744 triangles=40
+LOD01_BENCH_RESULT: kind=transition ops=256 n=12 p50_us=15278 p95_us=20465 p99_us=20465 max_us=20465 transition_geometry_avg_us=105 sample_avg_us=662 triangulation_avg_us=728 normals_avg_us=14008 ArrayMesh_publish_avg_us=20 cpu_array_bytes_est=2160 triangles=22
+LOD01_BENCH_RESULT: kind=lod0_reference ops=256 n=12 p50_us=26893 p95_us=27760 p99_us=27760 max_us=27760 transition_geometry_avg_us=0 sample_avg_us=960 triangulation_avg_us=998 normals_avg_us=24710 ArrayMesh_publish_avg_us=26 cpu_array_bytes_est=3744 triangles=40
+LOD01_TRANSITION_PASS: assertions=6474 failures=0
+L2 PASS: experimental deterministic LOD 0/1 transition fixture
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/terrain_lod_runtime_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_LOD_RUNTIME_PASS: assertions=53 failures=0 lod1_build_ms=209.906 shared_builder_ms=61.524 per_cell_reference_ms=70.538 same_chunk_triangles_lod0=384 lod1=244
+L2 PASS: playable LOD0/LOD1 selector, chunk assembly and seam tests
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/terrain_end_to_end_perf.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_PERF_SCENE: initial_window_regions=9 chunks=144 cold_start_ms=1512.634 cpu_threads=28
+TERRAIN_PERF_REGION_CROSSING: samples=5 p50/p95_ms=488.269/625.494 values_ms=483.113,504.774,478.025,625.494,488.269 frame_p95/p99_ms=21.415/58.435 process_peak_ms=72.241
+TERRAIN_PERF_CLICK_VISIBLE: scenario=single_region ledger_before=0..4 samples=5 p50/p95_ms=59.789/66.877 values_ms=61.381,46.634,66.877,59.789,51.150
+TERRAIN_PERF_CLICK_VISIBLE: scenario=two_region_seam ledger_before=5..9 samples=5 p50/p95_ms=52.443/78.910 values_ms=52.443,66.145,52.091,51.679,78.910 support=2 rebuild_regions=4 chunks=6 queue/pool_p95_ms=37.768/0.231 upload_p50/publish_p95_ms=0.154/2.055 stage_ms={"array_mesh_build":0.939,"sdf_and_ledger":43.571,"shared_gradient_normals":20.278,"triangulation_and_face_normals":78.255} frame_p95/p99_ms=16.667/41.727
+TERRAIN_PERF_ACCEPTED_TO_VISIBLE: scenario=two_region_seam ledger_before=256 latency_ms=150.677 support=2 rebuild_regions=2 chunks=4 queue/pool_p95_ms=8.612/2.016 upload_p50/publish_p95_ms=0.237/2.254 stage_ms={"array_mesh_build":1.145,"sdf_and_ledger":135.743,"shared_gradient_normals":106.022,"triangulation_and_face_normals":69.515} frame_p95/p99_ms=9.524/37.338
+TERRAIN_PERF_EDITED_REGION_RETURN: unload_travel_ms=1500.504 return_to_edited_3x3_ms=2227.536 replayed_operations=256
+TERRAIN_E2E_PERF_PASS: assertions=251 failures=0
+L2 PASS: viewport-click to visible commit and region traversal performance scenarios
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --script res://tests/terrain_concurrency_tests.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TERRAIN_CONCURRENCY_PASS: assertions=11 failures=0
+L2 PASS: worker concurrency, cancellation and transactional publication tests
+COMMAND: C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe --headless --path C:\r9a\game --script res://tests/bootstrap_visual_regression.gd
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+SANDBOX_BOOTSTRAP_READY
+BOOTSTRAP_CAMERA_DIAGNOSTIC: position=(0.0, 4.0, 9.0) forward=(0.0, -0.406737, -0.913545) viewport=(1152.0, 648.0) projected_origin=(576.0, 323.7236)
+BOOTSTRAP_MESH_DIAGNOSTIC: visible=true mesh=():<BoxMesh#-9223372009877010986> bounds=[P: (-0.5, -0.5, -0.5), S: (1.0, 1.0, 1.0)] position=(0.0, 0.0, 0.0) material=<Object#null>
+BOOTSTRAP_STRUCTURE_PASS: assertions=18 failures=0; rendered pixels are not assessed
+L2 PASS: instantiated bootstrap structure (pixels are not assessed)
+COMMAND: "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\r9a\game" --quit-after 2
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+L2 PASS: configured main scene startup
+VALIDATION_PASS: L0-L2; GUI visual test remains an owner task
