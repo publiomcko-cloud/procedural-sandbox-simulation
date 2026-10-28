@@ -1,0 +1,42 @@
+{
+  "candidate": "A",
+  "source_sha": "8b59f32a854a89826fbe2ecd7998ed2e6347ba0c",
+  "branch": "bench/p3-1-r9-2a-mt",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "engine": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "engine_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "engine_version": "4.7.2.stable.official.ed1daf0bf",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\r92a\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r9_2_e2e_harness.gd"
+  ],
+  "root_pid": 48700,
+  "root_start_time": "2026-10-28T16:52:13.4200086-03:00",
+  "exit_code": 0,
+  "terminal_state": "PROCESS_COMPLETED",
+  "duration_ms": 13424,
+  "peak_aggregate_working_set_bytes": 110022656,
+  "memory_samples": 28,
+  "stop_reason": "",
+  "exception": "",
+  "process_tree": [
+    {
+      "pid": 36668,
+      "parent_pid": 48700,
+      "name": "Godot_v4.7.2-stable_win64.exe",
+      "command_line": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64.exe --headless --path C:\\r92a\\game --script res://tests/prototypes/p3_1_r9_2_e2e_harness.gd"
+    },
+    {
+      "pid": 48700,
+      "parent_pid": null,
+      "name": "Godot console launcher",
+      "command_line": null
+    }
+  ],
+  "stdout_sha256": "6455e432dc2783e94faba0d0361b119273b41ade8a3f2b8816431aa52a18aaee",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
