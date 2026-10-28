@@ -1,8 +1,8 @@
 # P3.1 R9 — Four Architecture Prototypes: Frozen Experiment Contract
 
-**Contract version:** `P3.1.R9.contract.v1`  
-**Frozen from:** common R8.2 geometry baseline `4f08b67522507bd196a74a1089c773f272235343`  
-**Measured canonical source:** R8.1 source `d81f29237d47361139b02849a8215c30424be873`  
+**Contract version:** `P3.1.R9.contract.v1`\
+**Frozen from:** common R8.2 geometry baseline `4f08b67522507bd196a74a1089c773f272235343`\
+**Measured canonical source:** R8.1 source `d81f29237d47361139b02849a8215c30424be873`\
 **R8.4 is not a source parent of this contract.** Its evidence is considered only as historical evidence, not as an implementation dependency.
 
 This is a research contract for four isolated, test-only prototypes. It does not approve production geometry, a product tolerance, a save schema, Issue #108, release, or merge. The immutable scenario records are in [`p3_1_r9_frozen_inputs.jsonl`](../../game/tests/prototypes/p3_1_r9_frozen_inputs.jsonl); its physical SHA-256 is recorded in `p3_1_r9_frozen_inputs.sha256`.
