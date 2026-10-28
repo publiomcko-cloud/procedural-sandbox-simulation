@@ -34,6 +34,75 @@ static func sha256(bytes: PackedByteArray) -> String:
 	ctx.update(bytes)
 	return ctx.finish().hex_encode()
 
+static func diagnostic_hooks(kind: String) -> Array:
+	var generic: Array[String] = ["candidate_mesh", "topology", "surface_residual", "canonical_outward_normals"]
+	var known := ["zero_edit", "single_carve", "ordered_fill_then_carve", "repeated_local_excavation",
+		"repeated_local_fill", "neighboring_chunks", "equal_resolution_boundary", "mixed_lod_boundary",
+		"negative_coordinate_region_boundaries", "historical_xplus_interface", "historical_xminus_displacement",
+		"historical_triangle_root", "sampled_cave_connectivity", "extracted_mesh_cave_connectivity", "ray_picker_parity",
+		"cpu_two_sided_triangle_proxy", "local_edit_to_mesh_rebuild", "deterministic_mesh_reconstruction",
+		"memory_disk_serialization", "materialized_volume_corrupt_reload"]
+	if not known.has(kind):
+		return []
+	if kind == "sampled_cave_connectivity":
+		return ["canonical_sampled_cave_connectivity"]
+	if kind == "neighboring_chunks":
+		return generic + ["single_roi_build_only_no_independent_chunk_pair"]
+	if kind in ["equal_resolution_boundary", "mixed_lod_boundary", "negative_coordinate_region_boundaries",
+		"historical_xplus_interface"]:
+		return generic + ["single_roi_contour_proxy_not_chunk_join"]
+	if kind == "historical_xminus_displacement":
+		return generic + ["canonical_and_mesh_ray_proxy"]
+	if kind == "historical_triangle_root":
+		return generic + ["local_cell_corner_probe_only"]
+	if kind == "extracted_mesh_cave_connectivity":
+		return generic + ["mesh_components_only_cave_connectivity_unimplemented"]
+	if kind == "ray_picker_parity":
+		return generic + ["canonical_cpu_mesh_ray_proxy_not_production_picker"]
+	if kind == "cpu_two_sided_triangle_proxy":
+		return generic + ["offline_cpu_two_sided_triangle_proxy"]
+	if kind == "local_edit_to_mesh_rebuild":
+		return generic + ["full_snapshot_rebuild_only_no_per_edit_update"]
+	if kind == "deterministic_mesh_reconstruction":
+		return generic + ["same_process_repeats_only"]
+	if kind == "memory_disk_serialization":
+		return generic + ["candidate_reported_serialization_only_process_memory_external"]
+	if kind == "materialized_volume_corrupt_reload":
+		return generic + ["actual_fresh_reader_corruption_reload"]
+	return generic
+
+static func candidate_scope(row: Dictionary, candidate: String) -> Dictionary:
+	if not row.has("candidate_scope"):
+		return {"valid": true, "in_scope": true}
+	var value: Variant = row.get("candidate_scope")
+	if typeof(value) != TYPE_ARRAY or value.is_empty():
+		return {"valid": false, "reason": "candidate_scope_not_nonempty_array"}
+	var scope: Array = value
+	for item in scope:
+		if typeof(item) != TYPE_STRING or not ["A", "B", "C", "D"].has(item):
+			return {"valid": false, "reason": "candidate_scope_entry_invalid"}
+	return {"valid": true, "in_scope": scope.has(candidate)}
+
+static func iteration_counts(row: Dictionary, variant: Dictionary = {}) -> Dictionary:
+	var warm_value: Variant = variant.get("warmups", row.get("warmups", null))
+	var repeat_value: Variant = variant.get("repeats", row.get("repeats", null))
+	var warm_check := _manifest_integer(warm_value)
+	var repeat_check := _manifest_integer(repeat_value)
+	if not warm_check.valid or not repeat_check.valid:
+		return {"valid": false, "reason": "warmups_or_repeats_not_exact_integer"}
+	var warmups: int = warm_check.value
+	var repeats: int = repeat_check.value
+	if warmups < 0 or warmups > 5 or repeats < 1 or repeats > 5:
+		return {"valid": false, "reason": "warmups_or_repeats_outside_contract_bounds"}
+	return {"valid": true, "warmups": warmups, "repeats": repeats}
+
+static func _manifest_integer(value: Variant) -> Dictionary:
+	if typeof(value) == TYPE_INT:
+		return {"valid": true, "value": int(value)}
+	if typeof(value) == TYPE_FLOAT and is_finite(float(value)) and float(value) == floorf(float(value)) and absf(float(value)) <= 2147483647.0:
+		return {"valid": true, "value": int(value)}
+	return {"valid": false}
+
 static func load_manifest() -> Dictionary:
 	var bytes := FileAccess.get_file_as_bytes(MANIFEST_PATH)
 	if bytes.is_empty():
@@ -238,6 +307,13 @@ static func canonical_gradient(point: Vector3, snapshot: Dictionary, seed: int =
 		return {"valid": false, "reason": "gradient_singular_or_nonfinite"}
 	return {"valid": true, "gradient": gradient.normalized(), "delta": delta}
 
+static func canonical_outward_normal(point: Vector3, snapshot: Dictionary, seed: int = 131102026, delta: float = 0.01) -> Dictionary:
+	var gradient := canonical_gradient(point, snapshot, seed, delta)
+	if not gradient.get("valid", false):
+		return gradient
+	return {"valid": true, "outward_normal": -gradient.gradient, "gradient": gradient.gradient,
+		"delta": delta, "convention": "positive_density_solid; outward_is_negative_density_gradient"}
+
 static func normal_deviation(mesh: Dictionary, snapshot: Dictionary, seed: int = 131102026, delta: float = 0.01) -> Dictionary:
 	var positions: PackedVector3Array = mesh.get("positions", PackedVector3Array())
 	var normals: PackedVector3Array = mesh.get("normals", PackedVector3Array())
@@ -246,17 +322,18 @@ static func normal_deviation(mesh: Dictionary, snapshot: Dictionary, seed: int =
 	var angles: Array[float] = []
 	var unavailable := 0
 	for i in range(positions.size()):
-		var gradient := canonical_gradient(positions[i], snapshot, seed, delta)
-		if not gradient.valid or not normals[i].is_finite() or normals[i].length_squared() <= 1.0e-16:
+		var reference := canonical_outward_normal(positions[i], snapshot, seed, delta)
+		if not reference.get("valid", false) or not normals[i].is_finite() or normals[i].length_squared() <= 1.0e-16:
 			unavailable += 1
 			continue
-		var cosine := clampf(normals[i].normalized().dot(gradient.gradient), -1.0, 1.0)
+		var cosine := clampf(normals[i].normalized().dot(reference.outward_normal), -1.0, 1.0)
 		angles.append(rad_to_deg(acos(cosine)))
 	angles.sort()
 	return {"valid": true, "sample_count": angles.size(), "unavailable_count": unavailable,
 		"p50_degrees": _percentile(angles, 0.50) if not angles.is_empty() else null,
 		"p95_degrees": _percentile(angles, 0.95) if not angles.is_empty() else null,
-		"max_degrees": angles.back() if not angles.is_empty() else null, "gradient_delta": delta}
+		"max_degrees": angles.back() if not angles.is_empty() else null, "gradient_delta": delta,
+		"reference_convention": "positive_density_solid; outward_is_negative_density_gradient"}
 
 static func canonical_ray_roots(origin: Vector3, direction: Vector3, max_distance: float, snapshot: Dictionary, seed: int = 131102026, scan_steps: int = 256, bisection_steps: int = 32) -> Dictionary:
 	if direction.length_squared() <= 1.0e-16 or max_distance <= 0.0 or scan_steps <= 0:

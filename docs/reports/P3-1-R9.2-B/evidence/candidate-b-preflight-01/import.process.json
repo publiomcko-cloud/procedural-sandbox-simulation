@@ -1,0 +1,20 @@
+{
+  "candidate": "B",
+  "stage": "import",
+  "cwd": "C:\\r92b",
+  "engine_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "pid": 23180,
+  "start_time": "2026-10-28T15:31:16.7783676-03:00",
+  "args": [
+    "--headless",
+    "--path",
+    "C:\\r92b\\game",
+    "--editor",
+    "--import"
+  ],
+  "exit_code": 0,
+  "duration_ms": 10323,
+  "stdout_sha256": "0bbc9a25f9e413b741ff7a0dc67f91edf03a1cc98f258e44671aea6d007491fb",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "errors": false
+}

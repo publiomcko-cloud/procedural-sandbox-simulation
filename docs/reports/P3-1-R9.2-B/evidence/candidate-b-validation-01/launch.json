@@ -1,0 +1,14 @@
+{
+  "candidate": "B",
+  "source_sha": "4f272497fa2d947eae64cb8faa5e7f973b011b29",
+  "command": [
+    "C:\\Users\\PUBLI\\AppData\\Local\\Microsoft\\WindowsApps\\Microsoft.PowerShell_8wekyb3d8bbwe\\pwsh.exe",
+    "-NoLogo",
+    "-NoProfile",
+    "-File",
+    "C:\\r92b\\scripts\\validate.ps1"
+  ],
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "profile": "C:\\r92-evidence\\candidate-b-validation-01\\profile",
+  "start": "2026-10-28T16:36:42.7928350-03:00"
+}
