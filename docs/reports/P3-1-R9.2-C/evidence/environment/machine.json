@@ -1,0 +1,18 @@
+{
+  "captured_utc": "2026-10-28T20:36:50.2885679Z",
+  "os_caption": "Microsoft Windows 11 Pro",
+  "os_version": "10.0.22631",
+  "os_build": "22631",
+  "cpu_name": "Intel(R) Xeon(R) CPU E5-2690 v4 @ 2.60GHz",
+  "logical_processors": 28,
+  "physical_memory_bytes": 68550852608,
+  "gpu": {
+    "Name": "NVIDIA GeForce GTX 1050 Ti",
+    "DriverVersion": "32.0.15.8157",
+    "AdapterRAM": 4293918720
+  },
+  "execution_mode": "local Windows, Godot headless; no GPU/presented frame claims",
+  "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "powershell_version": "7.6.9"
+}

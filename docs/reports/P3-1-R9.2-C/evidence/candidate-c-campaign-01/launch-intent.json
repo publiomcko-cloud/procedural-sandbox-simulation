@@ -1,0 +1,19 @@
+{
+  "run_id": "R9.2.C.1c3c9fd696ac4652a7f4cae79eb14f56",
+  "candidate": "C",
+  "source_sha": "3109ae271a41131cde923f4f6bb486ccffa03d29",
+  "branch": "bench/p3-1-r9-2c-surface-nets",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "engine": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "engine_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "engine_version": "4.7.2.stable.official.ed1daf0bf",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\r92c\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r9_2_e2e_harness.gd"
+  ],
+  "profile": "C:\\r92-evidence\\candidate-c-campaign-01\\profile"
+}
