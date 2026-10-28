@@ -1,0 +1,20 @@
+{
+  "stage": "check-only",
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "args": [
+    "--headless",
+    "--path",
+    "C:\\r84\\game",
+    "--check-only",
+    "--script",
+    "res://tests/prototypes/p3_1_r8_4_conforming_root_aware.gd"
+  ],
+  "started_utc": "2026-10-28T15:40:52.8260915Z",
+  "duration_ms": 1464,
+  "exit_code": 0,
+  "pid": 612,
+  "profile_root": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P31-R84-parse-004-profile",
+  "stdout": "C:\\r84\\docs\\reports\\P3-1-R8.4\\evidence\\parse-004\\check-only.stdout.log",
+  "stderr": "C:\\r84\\docs\\reports\\P3-1-R8.4\\evidence\\parse-004\\check-only.stderr.log"
+}
