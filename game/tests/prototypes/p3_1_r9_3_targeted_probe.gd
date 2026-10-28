@@ -53,6 +53,9 @@ func _run() -> void:
 		var root_identity:Dictionary={"status":"NOT_APPLICABLE"}
 		if OS.get_environment("R9_CANDIDATE_ID")=="A":
 			root_identity=candidate.call("canonical_root_identity_probe",setup.snapshot)
+			if not root_identity.get("valid",false) or not root_identity.get("exact_sample_keys_distinct",false):
+				print("R9_3_PROBE_FAIL "+JSON.stringify({"scenario_id":scenario_id,"reason":"A_root_identity_regression","detail":root_identity}))
+				failures+=1
 		print("R9_3_PROBE_RESULT " + JSON.stringify({"scenario_id": scenario_id, "candidate": OS.get_environment("R9_CANDIDATE_ID"),
 			"source_sha": OS.get_environment("R9_SOURCE_SHA"), "manifest_sha256": Core.EXPECTED_MANIFEST_SHA,
 			"mesh_sha256": result.get("mesh_sha256", ""), "metrics": result.get("metrics", {}),

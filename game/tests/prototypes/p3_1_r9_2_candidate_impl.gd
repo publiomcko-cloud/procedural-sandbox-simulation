@@ -128,13 +128,17 @@ func canonical_root_identity_probe(snapshot:Dictionary)->Dictionary:
 	var a:=Vector3.ZERO;var b:=Vector3.ZERO;var da:=0.0;var db:=0.0;var found:=false
 	for y in range(ROI_CELLS.y+1):
 		for z in range(ROI_CELLS.z+1):
-			for x in range(ROI_CELLS.x):
-				var candidate_a:=ROI_MIN+Vector3(x,y,z)*STEP
-				var candidate_b:=candidate_a+Vector3(STEP,0.0,0.0)
-				var candidate_da:=Core.sample(candidate_a,snapshot);var candidate_db:=Core.sample(candidate_b,snapshot)
-				if (candidate_da<0.0)!=(candidate_db<0.0):
-					a=candidate_a;b=candidate_b;da=candidate_da;db=candidate_db;found=true;break
-			if found:break
+			for x in range(ROI_CELLS.x+1):
+				var node:=Vector3i(x,y,z)
+				for axis in range(3):
+					if node[axis]>=ROI_CELLS[axis]:continue
+					var next:=node;next[axis]+=1
+					var candidate_a:=ROI_MIN+Vector3(node)*STEP
+					var candidate_b:=ROI_MIN+Vector3(next)*STEP
+					var candidate_da:=Core.sample(candidate_a,snapshot);var candidate_db:=Core.sample(candidate_b,snapshot)
+					if (candidate_da<0.0)!=(candidate_db<0.0):
+						a=candidate_a;b=candidate_b;da=candidate_da;db=candidate_db;found=true;break
+				if found:break
 		if found:break
 	if not found:return {"valid":false,"reason":"probe_crossing_edge_not_found"}
 	_root_cache.clear();var first:=_edge_root(0,1,[a,b],[da,db],snapshot)
