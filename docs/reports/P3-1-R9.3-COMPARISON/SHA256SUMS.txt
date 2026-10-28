@@ -1,0 +1,4 @@
+433b5000fd4e71bf878a9fffd52998aa279b0bbefb6fd231db305cb5cdfe22f7  evidence/r9-3-campaign-summary.csv
+2acc0b61a0b10dc1d4ff756e9cf2abb059ceb085e6173b4bd3ca9c5eef05af5e  evidence/r9-3-scenario-results.csv
+01681c48baceb721cc3aee6034e47ca09b9724901743bd7a5c28d85199263c01  evidence/SHA256SUMS.txt
+f70e1e68aeaee9b23c3c9963996032232bed7bc1acf6d8a3242fb2a5daf8b267  SOURCE-IDENTITIES.txt

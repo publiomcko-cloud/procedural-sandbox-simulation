@@ -1,0 +1,8 @@
+R9.3 test-only campaign identities; candidate raw process records and JSONL are in each candidate evidence PR.
+Godot=4.7.2.stable.official.ed1daf0bf
+Godot_SHA256=C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643
+manifest_SHA256=1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972
+A measured_source=4f9925f6b87bb80eecc98acb25e9e385579b525e; parent=71e68101a67f9b75017e57644501fdf83ba9c637
+C implementation=0ea449b005c472ed7b9d68362551eb5a9671c21f; campaign_HEAD=a48c3849450cc35cebbe82998cdd62a5511116ff
+D implementation=6a42469e5c9feac351137c3255988d62b8712e6f; campaign_HEAD=5741107cd077942326df87f6e6533ff339446d3f
+A campaign 01 retained as blocked due null process exit; excluded from scenario-results.csv; included in campaign summary.
