@@ -1,0 +1,100 @@
+{
+  "branch": "bench/p3-1-r9-2d-materialized-volume",
+  "candidate": "D",
+  "changed_paths": [
+    "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd",
+    "game/tests/prototypes/p3_1_r9_2_contract_tests.gd",
+    "game/tests/prototypes/p3_1_r9_2_diagnostic_base.gd",
+    "game/tests/prototypes/p3_1_r9_2_e2e_harness.gd"
+  ],
+  "geometry_status_counts": {
+    "DIAGNOSTIC_ONLY": 2,
+    "NO_TOPOLOGY_DEFECT_OBSERVED_NOT_ACCEPTANCE": 2,
+    "TOPOLOGY_DEFECT_RECORDED": 38
+  },
+  "parent": "121e1a11a83076b23b25c6305484336b4b5a14a6",
+  "runs": [
+    {
+      "audit": {
+        "completes": 21,
+        "errors": [],
+        "expected_variants": 21,
+        "jsonl_events": 44,
+        "malformed": [],
+        "starts": 21
+      },
+      "elapsed_usec": 6404299,
+      "peak_process_tree_working_set_bytes": 106373120,
+      "process_duration_ms": 8255,
+      "run_id": "R9.2.D.ed9d02de79e847978d26c0fba015bbf2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "3d89c41f8044d3148360721d53edb11f52e9ce969bb42d905e3442e6f8765293"
+    },
+    {
+      "audit": {
+        "completes": 21,
+        "errors": [],
+        "expected_variants": 21,
+        "jsonl_events": 44,
+        "malformed": [],
+        "starts": 21
+      },
+      "elapsed_usec": 6541396,
+      "peak_process_tree_working_set_bytes": 104722432,
+      "process_duration_ms": 8195,
+      "run_id": "R9.2.D.848c74077b7041949cccdc0fac62ffc6",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "575d73bc23722e4ab9d6058cc1f6684b85bc8de828f566f49d2cb40709615f4c"
+    }
+  ],
+  "source_hashes": [
+    {
+      "git_blob": "69eb011d18c1c971e8d1d44bdf56a5af6eeda09c",
+      "path": "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd",
+      "physical_sha256": "42281d02e76ff546b4c611c6882c7655e474bc2d3c61f289935ff1555cc6f3b7"
+    },
+    {
+      "git_blob": "1820c0836ac9f443d8ea9e07036e4d98f907d99d",
+      "path": "game/tests/prototypes/p3_1_r9_2_contract_tests.gd",
+      "physical_sha256": "43b59f0aef016085295e4798df198a5291ec9fd496c85a0ac27fd46d9e241300"
+    },
+    {
+      "git_blob": "a31a7484ede9b325bcdc78fd8f761d1b308f12ac",
+      "path": "game/tests/prototypes/p3_1_r9_2_diagnostic_base.gd",
+      "physical_sha256": "7615b1cd5b0c7a143cf985e53127ec5948312aaa7003fa7b9f93afdf7b1a4866"
+    },
+    {
+      "git_blob": "2d3ee476670554b1bd57a5656bb631d3f961b425",
+      "path": "game/tests/prototypes/p3_1_r9_2_e2e_harness.gd",
+      "physical_sha256": "27ac366ad1c4b4b350c1f99c256830155f5db96f914cfa4a2f2bfd308f5364b6"
+    }
+  ],
+  "source_sha": "6f0a4b41349e228a546646f758d6992c2aca6f9e",
+  "status_counts": {
+    "COMPLETE": 42
+  },
+  "validation": {
+    "assertion_summary_records": 21,
+    "assertion_total": 21464,
+    "candidate": "D",
+    "duration_ms": 532998,
+    "exit": 0,
+    "global_validation_pass_marker_count": 1,
+    "nonzero_failure_records": [],
+    "script_or_parse_errors": [],
+    "source_sha": "6f0a4b41349e228a546646f758d6992c2aca6f9e",
+    "stderr_bytes_actual": 1220,
+    "stderr_sha256_actual": "01346abc85002f006e3c4e7e8bfb7b02377283dba88ea437319e45c3e8ed76c8",
+    "stderr_sha256_matches_wrapper": true,
+    "stderr_warning_count": 3,
+    "stderr_warning_lines": [
+      "WARNING: Target and up vectors are colinear. This is not advised as it may cause unwanted rotation around local Z axis.\r",
+      "WARNING: Target and up vectors are colinear. This is not advised as it may cause unwanted rotation around local Z axis.\r",
+      "WARNING: Target and up vectors are colinear. This is not advised as it may cause unwanted rotation around local Z axis.\r"
+    ],
+    "stdout_bytes_actual": 115956,
+    "stdout_sha256_actual": "33716afe26ec132c1d6afd5b9299358dd5071b33275b236be3d20ffee2270dec",
+    "stdout_sha256_matches_wrapper": true,
+    "validation_pass": true
+  }
+}

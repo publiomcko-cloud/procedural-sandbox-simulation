@@ -1,0 +1,23 @@
+{
+  "campaign_complete": [
+    {
+      "candidate": "D",
+      "duration_usec": 6541396,
+      "event_id": "R9.2.D.848c74077b7041949cccdc0fac62ffc6.campaign.complete",
+      "event_type": "campaign_complete",
+      "monotonic_usec": 7094045,
+      "parent_event_id": "R9.2.D.848c74077b7041949cccdc0fac62ffc6.campaign.started",
+      "run_id": "R9.2.D.848c74077b7041949cccdc0fac62ffc6",
+      "scenario_variant_count": 21,
+      "schema": "P3.1.R9.2.Event.v1",
+      "source_sha": "6f0a4b41349e228a546646f758d6992c2aca6f9e",
+      "status": "COMPLETE"
+    }
+  ],
+  "completes": 21,
+  "errors": [],
+  "expected_variants": 21,
+  "jsonl_events": 44,
+  "malformed": [],
+  "starts": 21
+}

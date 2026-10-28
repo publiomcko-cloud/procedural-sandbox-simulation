@@ -1,0 +1,50 @@
+{
+  "candidate": "D",
+  "source_sha": "6f0a4b41349e228a546646f758d6992c2aca6f9e",
+  "branch": "bench/p3-1-r9-2d-materialized-volume",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "engine": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "engine_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "engine_version": "4.7.2.stable.official.ed1daf0bf",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\r92d\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r9_2_e2e_harness.gd"
+  ],
+  "root_pid": 51464,
+  "root_start_time": "2026-10-28T16:55:22.0251631-03:00",
+  "root_process_metadata": {
+    "parent_pid": 42232,
+    "name": "Godot_v4.7.2-stable_win64_console.exe",
+    "command_line": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path C:\\r92d\\game --script res://tests/prototypes/p3_1_r9_2_e2e_harness.gd",
+    "creation_date": "2026-10-28T16:55:22.0251630-03:00"
+  },
+  "exit_code": 0,
+  "terminal_state": "PROCESS_COMPLETED",
+  "duration_ms": 8195,
+  "peak_aggregate_working_set_bytes": 104722432,
+  "memory_samples": 15,
+  "stop_reason": "",
+  "exception": "",
+  "process_tree": [
+    {
+      "pid": 51464,
+      "parent_pid": 42232,
+      "name": "Godot_v4.7.2-stable_win64_console.exe",
+      "command_line": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path C:\\r92d\\game --script res://tests/prototypes/p3_1_r9_2_e2e_harness.gd",
+      "creation_date": "2026-10-28T16:55:22.0251630-03:00",
+      "process_start_time": "2026-10-28T16:55:22.0251631-03:00"
+    },
+    {
+      "pid": 42792,
+      "parent_pid": 51464,
+      "name": "Godot_v4.7.2-stable_win64.exe",
+      "command_line": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64.exe --headless --path C:\\r92d\\game --script res://tests/prototypes/p3_1_r9_2_e2e_harness.gd"
+    }
+  ],
+  "stdout_sha256": "575d73bc23722e4ab9d6058cc1f6684b85bc8de828f566f49d2cb40709615f4c",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
