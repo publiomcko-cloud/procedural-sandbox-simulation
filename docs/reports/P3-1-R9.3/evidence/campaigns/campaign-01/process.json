@@ -1,0 +1,50 @@
+{
+  "repository": "C:\\r93c",
+  "candidate": "C",
+  "source_sha": "a48c3849450cc35cebbe82998cdd62a5511116ff",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "godot": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "command": [
+    "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "--headless",
+    "--path",
+    "./game",
+    "--script",
+    "res://tests/prototypes/p3_1_r9_2_e2e_harness.gd"
+  ],
+  "process_id": 27156,
+  "parent_process_id": 8060,
+  "process_command_line": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path ./game --script res://tests/prototypes/p3_1_r9_2_e2e_harness.gd",
+  "started_utc": "2026-10-28T22:34:09.6374708Z",
+  "elapsed_ms": 4670.5,
+  "exit_code": 0,
+  "process_final_has_exited": true,
+  "stop_reason": null,
+  "process_tree_sampled_peak_working_set_bytes": 105062400,
+  "jsonl_count": 44,
+  "starts": 21,
+  "completes": 21,
+  "campaign_result": {
+    "candidate": "C",
+    "duration_usec": 3771206,
+    "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+    "production_eligibility": "NOT_ELIGIBLE_EXPERIMENT_ONLY",
+    "scenario_variant_count": 21,
+    "source_sha": "a48c3849450cc35cebbe82998cdd62a5511116ff",
+    "status": "COMPLETE"
+  },
+  "audit_errors": [],
+  "stdout": "C:\\r93-evidence\\candidate-c-campaign-01\\stdout.log",
+  "stderr": "C:\\r93-evidence\\candidate-c-campaign-01\\stderr.log",
+  "output_hashes": [
+    {
+      "path": "C:\\r93-evidence\\candidate-c-campaign-01\\stdout.log",
+      "Hash": "F616B505B36BCBA19A590E21FCBC7F3BDA44414CEFF132F3A5790A1D554EAA8A"
+    },
+    {
+      "path": "C:\\r93-evidence\\candidate-c-campaign-01\\stderr.log",
+      "Hash": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    }
+  ]
+}
