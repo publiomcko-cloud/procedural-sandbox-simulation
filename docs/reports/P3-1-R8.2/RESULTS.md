@@ -9,11 +9,13 @@
 | --- | --- |
 | Repository origin | `https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git` |
 | R8.2 branch | `bench/p3-1-r8-2-exact-geometry-provenance` |
+| R8.2 source/evidence commit | `7c53782d96c603f3528acbc7ecdc02e2718ecb71` (diagnostics, raw evidence and initial report package) |
 | Measured source HEAD | `d81f29237d47361139b02849a8215c30424be873` |
 | Direct parent | `c331deeaa127d1b0e63e19e6582d5d1796c2fc8f` |
 | Ancestor diagnostic source | R8.1 `e4b788f1024015a78c087deec78358969cc72972` |
 | Pinned R7.3 geometry source | `7ad45d8c817ecb0f54a8eec058babce65af287db` |
 | R8.1 report PR | [#160](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/160), observed open/draft/unmerged at HEAD `d81f29237d47361139b02849a8215c30424be873` |
+| R8.2 evidence PR | [#162](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/162), open/draft/unmerged, linked to Issue #161, based on `bench/p3-1-r8-1-geometry-causality` |
 | Issue | [#161](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/161), observed open |
 | Godot | `4.7.2.stable.official.ed1daf0bf`; executable SHA-256 `C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643` |
 
