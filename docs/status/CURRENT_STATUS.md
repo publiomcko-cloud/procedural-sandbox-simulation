@@ -192,3 +192,7 @@ Godot `4.7.2.stable.official.ed1daf0bf` `scripts/validate.ps1` passed with **17,
 P2.0C provides schema-1 declarative distribution rules through the P0.3 data-only package loader, deterministic positive/negative-region candidates and identities, pinned persistence semantics, bounded combined static meshes, and bounded region-publication queues. The two P2.0B compatibility representatives remain unchanged as an additive transition; no silent migration is performed. Terrain save schema 1 remains untouched. Issue #108 terrain/rock conformance, physics, collision, time simulation, undo/redo, multiplayer and networking remain out of scope.
 
 **Next gate:** independent exact-SHA review of PR #112 and owner GUI retest using the P2.0C specification. Merge requires a separate owner decision. Preserve `CURRENT_PROTECTED_STATE_UNKNOWN`, `V3_NOT_ATTESTED`, `ACL_REVIEW_REQUIRED`, `G1_BLOCKED_ENVIRONMENT`, and `F2_G1_RELEASE_HOLD`; no protected-host operation or F2-G1 change occurred.
+
+## 2026-10-28 — P3.1 R9 Candidate C
+
+Candidate C's single frozen zero-edit Surface Nets build failed the exact topology gate with 110 internal open edges. It stopped before the second determinism build and all edit/seam cases. The output's quads/rejected-triangle instrumentation is limited as documented in [R9-C results](../reports/P3-1-R9-C/RESULTS.md). Shared Godot regression passed 21 suites/21,464 assertions/0 failures; this is not candidate geometry acceptance. No production or protected F2-G1 state changed.
