@@ -14,6 +14,7 @@ const ADAPT_MIN_B := Vector3(-0.5, 1.0, 5.5)
 const ADAPT_MAX_B := Vector3(0.5, 2.0, 6.5)
 const DENSE_RAY_STEP_B := 0.0001
 const EDGE_ROOT_SCAN_B := 4096
+const ADAPT_CELL_BUDGET_B := 4
 const AREA2_CUTOFF_B := 1.0e-12
 
 var _b_assertions: int = 0
@@ -87,7 +88,14 @@ func _run_r83b() -> void:
 		_finish_b("BLOCKED", "bounded_adaptive_mesh_build_failed")
 		return
 	var adaptive_metrics: Dictionary = _mesh_case_metrics(adaptive, zero_snapshot, oracle)
-	adaptive_metrics["policy"] = "0.5 base cells; replace cells wholly in x[-0.5,0.5], y[1,2], z[5.5,6.5] with 4x4x4 cells at 0.125; no transition templates"
+	var selection: Dictionary = adaptive.get("adaptive_selection", {})
+	var selected_rows: Array = selection.get("selected_candidates", [])
+	_check_b(int(selection.get("candidate_cell_count", 0)) == 8, "adaptive_policy_scores_frozen_roi_cells")
+	_check_b(selected_rows.size() == 4, "adaptive_policy_obeys_fixed_refinement_budget")
+	_check_b(not bool(selection.get("selection_is_product_threshold", true)), "adaptive_policy_is_exploratory_not_product_acceptance")
+	adaptive_metrics["policy"] = String(adaptive.get("adaptive_selection", {}).get("policy", "adaptive_selection_policy_missing"))
+	adaptive_metrics["adaptive_selection"] = selection
+	adaptive_metrics["refined_base_cell_count"] = selected_rows.size()
 	adaptive_metrics["sample_count"] = int(adaptive.get("sample_count", -1))
 	adaptive_metrics["sample_bytes_float32"] = int(adaptive.get("sample_count", -1)) * 4
 	adaptive_metrics["estimated_mesh_attribute_bytes_positions_normals"] = int(adaptive.get("positions", PackedVector3Array()).size()) * 24
@@ -96,7 +104,7 @@ func _run_r83b() -> void:
 	adaptive_metrics["mesh_sha256"] = String(adaptive.get("mesh_sha256", ""))
 	adaptive_metrics["adaptive_interfaces"] = _adaptive_interface_comparison(adaptive.get("cells", []), zero_snapshot)
 	adaptive_metrics["canonical_input_sha256"] = INPUT_SHA_ZERO
-	adaptive_metrics["limitation"] = "bounded nonconforming ROI diagnostic only; interface contour mismatches are measured, not repaired"
+	adaptive_metrics["limitation"] = "bounded score-driven cell-selection diagnostic; nonconforming transition interfaces are measured but not repaired"
 	_emit_b("adaptive_roi", adaptive_metrics)
 	var branch_record: Dictionary = _triangle_branch_refinement(edited_snapshot)
 	_check_b(bool(branch_record.get("valid", false)), "frozen_triangle_3103_edge_roots_are_compared")
@@ -138,23 +146,67 @@ func _build_uniform_mesh(snapshot: Dictionary, spacing: float, minimum: Vector3,
 
 func _build_adaptive_mesh(snapshot: Dictionary) -> Dictionary:
 	var base_step: float = 0.5
-	var cache: Dictionary = {}
-	var positions: PackedVector3Array = PackedVector3Array()
-	var normals: PackedVector3Array = PackedVector3Array()
-	var cells: Array[Dictionary] = []
-	var expected_facets: int = 0
-	var emitted_facets: int = 0
 	var coarse_dims: Vector3i = Vector3i(4, 3, 4)
+	var candidate_probe_cache: Dictionary = {}
+	var candidates: Array[Dictionary] = []
 	var started: int = Time.get_ticks_usec()
 	for y in range(coarse_dims.y):
 		for z in range(coarse_dims.z):
 			for x in range(coarse_dims.x):
 				var coarse_origin: Vector3 = DOMAIN_MIN_B + Vector3(x, y, z) * base_step
 				var coarse_max: Vector3 = coarse_origin + Vector3.ONE * base_step
-				var refine: bool = coarse_origin.x >= ADAPT_MIN_B.x and coarse_max.x <= ADAPT_MAX_B.x \
+				var within_roi: bool = coarse_origin.x >= ADAPT_MIN_B.x and coarse_max.x <= ADAPT_MAX_B.x \
 					and coarse_origin.y >= ADAPT_MIN_B.y and coarse_max.y <= ADAPT_MAX_B.y \
 					and coarse_origin.z >= ADAPT_MIN_B.z and coarse_max.z <= ADAPT_MAX_B.z
-				if refine:
+				if not within_roi:
+					continue
+				var candidate: Dictionary = _adaptive_probe_score(coarse_origin, base_step, snapshot, candidate_probe_cache)
+				if not bool(candidate.get("branch_trace_matches_canonical", false)):
+					return {"valid": false, "reason": "adaptive_branch_trace_disagrees_with_canonical_field", "coarse_xyz": [x, y, z]}
+				candidate["coarse_xyz"] = [x, y, z]
+				candidate["world_min"] = [coarse_origin.x, coarse_origin.y, coarse_origin.z]
+				candidates.append(candidate)
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_branches: int = int(a.get("branch_label_count", 0))
+		var b_branches: int = int(b.get("branch_label_count", 0))
+		if a_branches != b_branches:
+			return a_branches > b_branches
+		var a_error: float = float(a.get("center_interpolation_error", 0.0))
+		var b_error: float = float(b.get("center_interpolation_error", 0.0))
+		if a_error != b_error:
+			return a_error > b_error
+		var a_xyz: Array = a.get("coarse_xyz", [0, 0, 0])
+		var b_xyz: Array = b.get("coarse_xyz", [0, 0, 0])
+		if int(a_xyz[0]) != int(b_xyz[0]):
+			return int(a_xyz[0]) < int(b_xyz[0])
+		if int(a_xyz[1]) != int(b_xyz[1]):
+			return int(a_xyz[1]) < int(b_xyz[1])
+		return int(a_xyz[2]) < int(b_xyz[2])
+	)
+	var selected: Dictionary = {}
+	var selected_candidates: Array[Dictionary] = []
+	for candidate_index in range(candidates.size()):
+		var candidate: Dictionary = candidates[candidate_index]
+		var xyz: Array = candidate.get("coarse_xyz", [0, 0, 0])
+		var key: String = "%d,%d,%d" % [int(xyz[0]), int(xyz[1]), int(xyz[2])]
+		candidate["rank"] = candidate_index + 1
+		candidate["selected_for_refinement"] = candidate_index < ADAPT_CELL_BUDGET_B
+		if candidate_index < ADAPT_CELL_BUDGET_B:
+			selected[key] = true
+			selected_candidates.append(candidate)
+	var mesh_cache: Dictionary = {}
+	var positions: PackedVector3Array = PackedVector3Array()
+	var normals: PackedVector3Array = PackedVector3Array()
+	var cells: Array[Dictionary] = []
+	var expected_facets: int = 0
+	var emitted_facets: int = 0
+	for y in range(coarse_dims.y):
+		for z in range(coarse_dims.z):
+			for x in range(coarse_dims.x):
+				var coarse_origin: Vector3 = DOMAIN_MIN_B + Vector3(x, y, z) * base_step
+				var coarse_max: Vector3 = coarse_origin + Vector3.ONE * base_step
+				var refine_key: String = "%d,%d,%d" % [x, y, z]
+				if selected.has(refine_key):
 					var fine_step: float = 0.125
 					for fy in range(4):
 						for fz in range(4):
@@ -162,7 +214,7 @@ func _build_adaptive_mesh(snapshot: Dictionary) -> Dictionary:
 								var fine_origin: Vector3 = coarse_origin + Vector3(fx, fy, fz) * fine_step
 								var fine_pos: PackedVector3Array = PackedVector3Array()
 								var fine_norm: PackedVector3Array = PackedVector3Array()
-								var fine_counts: Dictionary = _append_sampled_cell(fine_origin, fine_step, snapshot, cache, fine_pos, fine_norm)
+								var fine_counts: Dictionary = _append_sampled_cell(fine_origin, fine_step, snapshot, mesh_cache, fine_pos, fine_norm)
 								positions.append_array(fine_pos)
 								normals.append_array(fine_norm)
 								expected_facets += int(fine_counts.get("expected", 0))
@@ -172,19 +224,52 @@ func _build_adaptive_mesh(snapshot: Dictionary) -> Dictionary:
 				else:
 					var coarse_pos: PackedVector3Array = PackedVector3Array()
 					var coarse_norm: PackedVector3Array = PackedVector3Array()
-					var coarse_counts: Dictionary = _append_sampled_cell(coarse_origin, base_step, snapshot, cache, coarse_pos, coarse_norm)
+					var coarse_counts: Dictionary = _append_sampled_cell(coarse_origin, base_step, snapshot, mesh_cache, coarse_pos, coarse_norm)
 					positions.append_array(coarse_pos)
 					normals.append_array(coarse_norm)
 					expected_facets += int(coarse_counts.get("expected", 0))
 					emitted_facets += int(coarse_counts.get("emitted", 0))
 					cells.append({"minimum": coarse_origin, "maximum": coarse_max, "spacing": base_step,
 						"refined": false, "positions": coarse_pos})
-	var elapsed: int = Time.get_ticks_usec() - started
-	return _finish_mesh(positions, normals, cache.size(), elapsed, expected_facets, emitted_facets,
-		{"valid": true, "cells": cells, "roi_min": ADAPT_MIN_B, "roi_max": ADAPT_MAX_B,
+	var selection: Dictionary = {
+		"policy": "within the frozen eight-cell cave ROI, rank candidates by distinct canonical winning-branch labels, then center-vs-eight-corner trilinear density residual, then lexicographic cell coordinate; refine top four cells to spacing 0.125",
+		"selection_probe_samples": candidate_probe_cache.size(),
+		"candidate_cell_count": candidates.size(),
+		"refined_base_cell_budget": ADAPT_CELL_BUDGET_B,
+		"selected_candidates": selected_candidates,
+		"candidate_scores": candidates,
+		"selection_is_product_threshold": false
+	}
+	return _finish_mesh(positions, normals, mesh_cache.size(), Time.get_ticks_usec() - started, expected_facets, emitted_facets,
+		{"valid": true, "cells": cells, "adaptive_selection": selection,
 		"coarse_cell_count": coarse_dims.x * coarse_dims.y * coarse_dims.z,
-		"refined_base_cell_count": 8, "fine_cells_per_refined_base_cell": 64})
+		"fine_cells_per_refined_base_cell": 64})
 
+func _adaptive_probe_score(origin: Vector3, spacing: float, snapshot: Dictionary, cache: Dictionary) -> Dictionary:
+	var corner_density_sum: float = 0.0
+	var branch_labels: Dictionary = {}
+	var trace_match: bool = true
+	for corner_value in MesherB.CORNERS:
+		var corner: Vector3i = corner_value
+		var point: Vector3 = origin + Vector3(corner) * spacing
+		corner_density_sum += _sample_cached_f32(point, snapshot, cache)
+		var corner_trace: Dictionary = _field_trace(point, snapshot)
+		var corner_branch: String = String(corner_trace.get("winning_branch", "unknown"))
+		branch_labels[corner_branch] = true
+		trace_match = trace_match and bool(corner_trace.get("matches_canonical", false))
+	var center: Vector3 = origin + Vector3.ONE * (spacing * 0.5)
+	var center_density: float = _sample_cached_f32(center, snapshot, cache)
+	var center_trace: Dictionary = _field_trace(center, snapshot)
+	var center_branch: String = String(center_trace.get("winning_branch", "unknown"))
+	branch_labels[center_branch] = true
+	trace_match = trace_match and bool(center_trace.get("matches_canonical", false))
+	var sorted_labels: Array[String] = []
+	for label in branch_labels.keys():
+		sorted_labels.append(String(label))
+	sorted_labels.sort()
+	return {"center_interpolation_error": absf(center_density - corner_density_sum / 8.0),
+		"branch_label_count": sorted_labels.size(), "branch_labels": sorted_labels,
+		"branch_trace_matches_canonical": trace_match}
 
 func _append_sampled_cell(origin: Vector3, spacing: float, snapshot: Dictionary, cache: Dictionary,
 		positions: PackedVector3Array, normals: PackedVector3Array) -> Dictionary:
