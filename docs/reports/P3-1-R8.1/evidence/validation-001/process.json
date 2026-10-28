@@ -1,0 +1,9 @@
+{
+  "pid": 47548,
+  "exit_code": 0,
+  "godot": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "appdata": "C:\\r81\\docs\\reports\\P3-1-R8.1\\evidence\\validation-001\\godot-profile\\Roaming",
+  "localappdata": "C:\\r81\\docs\\reports\\P3-1-R8.1\\evidence\\validation-001\\godot-profile\\Local",
+  "stdout": "C:\\r81\\docs\\reports\\P3-1-R8.1\\evidence\\validation-001\\validate.stdout.log",
+  "stderr": "C:\\r81\\docs\\reports\\P3-1-R8.1\\evidence\\validation-001\\validate.stderr.log"
+}

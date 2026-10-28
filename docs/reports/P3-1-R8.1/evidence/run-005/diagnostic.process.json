@@ -1,0 +1,15 @@
+{
+  "stage": "r8_1_boundary_mapping",
+  "pid": 12528,
+  "exit_code": 0,
+  "args": [
+    "--headless",
+    "--path",
+    "C:\\r81\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r8_1_geometry_causality.gd"
+  ],
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "appdata": "C:\\r81\\docs\\reports\\P3-1-R8.1\\evidence\\run-005\\godot-profile\\Roaming",
+  "localappdata": "C:\\r81\\docs\\reports\\P3-1-R8.1\\evidence\\run-005\\godot-profile\\Local"
+}

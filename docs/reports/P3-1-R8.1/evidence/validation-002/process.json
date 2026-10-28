@@ -1,0 +1,11 @@
+{
+  "stage": "full_validation",
+  "pid": 47500,
+  "exit_code": 0,
+  "godot": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "appdata": "C:\\r81\\docs\\reports\\P3-1-R8.1\\evidence\\validation-002\\godot-profile\\Roaming",
+  "localappdata": "C:\\r81\\docs\\reports\\P3-1-R8.1\\evidence\\validation-002\\godot-profile\\Local",
+  "script": "C:\\r81\\scripts\\validate.ps1",
+  "stdout": "C:\\r81\\docs\\reports\\P3-1-R8.1\\evidence\\validation-002\\validate.stdout.log",
+  "stderr": "C:\\r81\\docs\\reports\\P3-1-R8.1\\evidence\\validation-002\\validate.stderr.log"
+}
