@@ -1,0 +1,11 @@
+R9.3-C evidence inventory; SHA-256; paths relative to C:\r93c unless absolute.
+Candidate source commit: 0ea449b005c472ed7b9d68362551eb5a9671c21f
+Final report head at inventory creation: 1b99f98a3e8ed10a7aa9968c55376f2c7a95f1ee
+Godot binary: C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe
+C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643  C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe
+C3CC655581FA8B4AC6FFFD43C6219621D05BFAA36F7FDDD2BCD6D8822F725B4B  game/tests/prototypes/p3_1_r9_2_candidate_impl.gd
+B6BBFBA733A4A4A410F5C4C229556DDC494A3AB9786A175E73FFB4F06A26A7F9  game/tests/prototypes/p3_1_r9_3_targeted_probe.gd
+1610C535F98A11E26CA1890C0D99ADDF4316FBCAA7EC9CDB7DFAA71CF5BB3972  game/tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl
+F0EEF4ED322FBE9ED18DDDEE990C644DAC364F5F3A471A987D4FE6D212FABF42  game/tests/prototypes/p3_1_r9_2_e2e_inputs.sha256
+3AE7E5A56B2D1401A997A19022201CFAD4AF73884CFB55A2DC99EA13436D9087  C:\r93-evidence\candidate-c-validation-01\validate.log
+A9B81405B0407428AA810B16E6233AA1767443AE2C9FF26E6EAD181766D1EA7B  C:\r93-evidence\candidate-c-focused-final-02\probe.log
