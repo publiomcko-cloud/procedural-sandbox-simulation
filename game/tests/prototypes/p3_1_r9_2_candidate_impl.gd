@@ -193,4 +193,12 @@ func _build_xplus_chunk_pair(snapshot:Dictionary)->Dictionary:
 
 func _node_index(x:int,y:int,z:int,dims:Vector3i)->int:return (y*dims.z+z)*dims.x+x
 func _mesh_sha(mesh:Dictionary)->String:
-	var ctx:=HashingContext.new();ctx.start(HashingContext.HASH_SHA256);ctx.update((mesh.positions as PackedVector3Array).to_byte_array());ctx.update((mesh.normals as PackedVector3Array).to_byte_array());return ctx.finish().hex_encode()
+	var position_bytes:PackedByteArray=(mesh.positions as PackedVector3Array).to_byte_array()
+	var normal_bytes:PackedByteArray=(mesh.normals as PackedVector3Array).to_byte_array()
+	var ctx:=HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	# Prefix lengths so empty arrays remain distinguishable and never call update with zero bytes.
+	ctx.update(("%d:%d:" % [position_bytes.size(),normal_bytes.size()]).to_utf8_buffer())
+	if not position_bytes.is_empty():ctx.update(position_bytes)
+	if not normal_bytes.is_empty():ctx.update(normal_bytes)
+	return ctx.finish().hex_encode()
