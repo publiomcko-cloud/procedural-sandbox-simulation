@@ -1,0 +1,11 @@
+{
+  "candidate": "A",
+  "source_sha": "30dff47634cb1d1568bc5de6ed0149170d04ce08",
+  "pid": 17524,
+  "exit": 0,
+  "duration_ms": 522163,
+  "stdout_sha256": "1c6aea67aa5483557f7c7f801f4b6dd7181601cc3a060e60563ff2efa63d5523",
+  "stderr_sha256": "01346abc85002f006e3c4e7e8bfb7b02377283dba88ea437319e45c3e8ed76c8",
+  "stdout_bytes": 115954,
+  "stderr_bytes": 1220
+}
