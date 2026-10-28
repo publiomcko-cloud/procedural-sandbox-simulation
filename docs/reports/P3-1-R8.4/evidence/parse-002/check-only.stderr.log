@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Identifier "key" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_4_conforming_root_aware.gd:468)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r8_4_conforming_root_aware.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
