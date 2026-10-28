@@ -1,0 +1,13 @@
+{
+  "attempt": "contract-preflight-03",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "source_parent": "a60d38df4f96b9007162e8fd917b3d14f29dcb0f",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "isolated_profile_root": "C:\\r92-evidence\\contract-attempt-03\\profile",
+  "editor_import_exit_code": 0,
+  "script_process_exit_code": 0,
+  "script_terminal_marker_present": false,
+  "script_errors_present": true,
+  "disposition": "FAIL: SCRIPT ERROR in normal_deviation ray result type inference; exit 0 came from bounded --quit-after and does not qualify as a test PASS",
+  "scenario_execution": false
+}

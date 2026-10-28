@@ -1,0 +1,19 @@
+{
+  "stage": "harness_check_only",
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "pid": 49824,
+  "start_time": "2026-10-28T15:22:34.6097142-03:00",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\r92-contract\\game",
+    "--check-only",
+    "--script",
+    "res://tests/prototypes/p3_1_r9_2_contract_tests.gd"
+  ],
+  "exit_code": 0,
+  "duration_ms": 952,
+  "stdout_sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "parser_or_script_errors": false
+}

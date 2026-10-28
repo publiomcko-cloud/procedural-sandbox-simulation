@@ -1,0 +1,18 @@
+{
+  "stage": "editor_import",
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "executable_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\r92-contract\\game",
+    "--editor",
+    "--import"
+  ],
+  "pid": 44112,
+  "start_time": "2026-10-28T15:22:19.8309860-03:00",
+  "exit_code": 0,
+  "duration_ms": 7899,
+  "stdout_sha256": "cbed49ff3d4e729fb1e49af6ee70743b8026d8f54e7844e86af5f090d534c2e3",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

@@ -1,0 +1,20 @@
+{
+  "stage": "contract_suite",
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "pid": 2120,
+  "start_time": "2026-10-28T15:22:42.8267913-03:00",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\r92-contract\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r9_2_contract_tests.gd"
+  ],
+  "exit_code": 0,
+  "duration_ms": 908,
+  "marker_count": 1,
+  "stdout_sha256": "4230ab58cbadb251695f6732d4556f48ececd922f7d18098eb6ca12990c2792d",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "parser_or_script_errors": false,
+  "result": "{\"assertions\":48,\"expected_manifest_sha256\":\"1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972\",\"failures\":[],\"runtime_tests_only\":true,\"status\":\"PASS\"}"
+}

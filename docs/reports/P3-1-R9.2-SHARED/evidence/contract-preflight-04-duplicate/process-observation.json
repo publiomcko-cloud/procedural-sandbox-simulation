@@ -1,0 +1,40 @@
+{
+  "attempt": "04",
+  "classification": "INCONCLUSIVE_PROCESS_LIFECYCLE_AND_SHARED_OUTPUT",
+  "source_head": "a60d38df4f96b9007162e8fd917b3d14f29dcb0f",
+  "engine": "4.7.2.stable.official.ed1daf0bf",
+  "engine_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "observed_processes": [
+    {
+      "parent_pid": 14452,
+      "started": "2026-10-28T15:15:52-03:00",
+      "pid": 14836,
+      "image": "Godot_v4.7.2-stable_win64_console.exe"
+    },
+    {
+      "parent_pid": 14836,
+      "started": "2026-10-28T15:15:52-03:00",
+      "pid": 50896,
+      "image": "Godot_v4.7.2-stable_win64.exe"
+    },
+    {
+      "parent_pid": 47220,
+      "started": "2026-10-28T15:16:28-03:00",
+      "pid": 29456,
+      "image": "Godot_v4.7.2-stable_win64_console.exe"
+    },
+    {
+      "parent_pid": 29456,
+      "started": "2026-10-28T15:16:28-03:00",
+      "pid": 33048,
+      "image": "Godot_v4.7.2-stable_win64.exe"
+    }
+  ],
+  "stdout_marker": "P3_1_R9_2_CONTRACT_TESTS_RESULT",
+  "observed_assertions": 48,
+  "observed_failures": 0,
+  "exit_code": null,
+  "reason": "Two concurrent Godot process pairs used the same evidence path; marker output exists but per-invocation attribution and terminal process exit were not reliable. Both exact headless test process pairs were stopped after identity verification.",
+  "copied_raw_logs": true
+}

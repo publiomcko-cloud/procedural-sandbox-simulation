@@ -1,3 +1,13 @@
+## 2026-10-28 — P3.1 R9.2 contract gate recovery
+
+- [R9.2 contract gate recovery](2026-10-28-P3-1-R9.2-CONTRACT-GATE-RECOVERY.md) — attempts 03 and 04 preserved as failed/inconclusive; fresh serial attempt 05 passed isolated import, check-only, and 48/48 contract assertions. No candidate scenario ran.
+
+## 2026-10-28 — P3.1 R9.2 contract preflight correction
+
+- [R9.2 contract preflight correction](2026-10-28-P3-1-R9.2-CONTRACT-PREFLIGHT-CORRECTION.md) — attempt 01 retained; bytewise exact-command extraction corrected; import PASS and 48/48 contract assertions PASS; candidate scenarios remain NOT_RUN.
+## 2026-10-28 — P3.1 R9.2 non-gating E2E preregistration
+
+- [P3.1 R9.2 preregistration](2026-10-28-P3-1-R9.2-PREREGISTRATION.md) — Issue #175, contract P3.1.R9.2.contract.v1, 20 scenario rows, manifest SHA-256 1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972; candidate execution remains NOT_RUN.
 # Documentary checkpoint index — project recovery
 
 **Check live GitHub refs before action**; each checkpoint is a dated immutable evidence snapshot, never a real-time claim. A draft document is not merged or approved.
