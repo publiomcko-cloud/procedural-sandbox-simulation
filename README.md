@@ -59,3 +59,5 @@ Check exact executable paths and engine version on the machine. The integrated p
 The [charter](docs/PROJECT_CHARTER.md) targets a persistent expandable SDF world, procedural entities, modding, environmental systems (V1) and ecology (V2). The custom GDScript terrain is a **prototype**, not a final decision to reject Voxel Tools: ADR-0002 remains proposed/deferred. Multiplayer is **not planned for initial releases**, but keep deterministic/versioned region and ordered-operation data suitable for a future server-authoritative design; no networking is implemented.
 
 Older setup/bootstrap instructions and F2-G1 research are historical; consult [current status](docs/status/CURRENT_STATUS.md) before treating them as active tasks. No implicit permission to perform protected host/VM work or adopt native dependencies.
+
+Candidate B's R9 dual-contouring prototype is blocked at its zero-edit topology gate; see [R9-B results](docs/reports/P3-1-R9-B/RESULTS.md). It is incomplete research and does not authorize production adoption.
