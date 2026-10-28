@@ -6,6 +6,7 @@ extends RefCounted
 ## Extraction is fixed marching tetrahedra over volume samples, not the live
 ## production mesh path. It does not claim canonical continuous-SDF equality.
 const Core := preload("res://tests/prototypes/p3_1_r9_2_diagnostic_base.gd")
+const IndependentExtractor := preload("res://tests/prototypes/p3_1_r9_3d_reference_extractor.gd")
 var ROI_MIN: Vector3 = Vector3(8.0,-2.0,3.0)
 var CELLS: Vector3i = Vector3i(8,20,12)
 var STEP: float = 0.5
@@ -31,8 +32,19 @@ func build(snapshot: Dictionary, _row: Dictionary, _variant: Dictionary) -> Dict
 	var extracted: Dictionary = _extract(saved.values)
 	if not extracted.get("valid", false):
 		return extracted
+	var dims: Vector3i = CELLS + Vector3i.ONE
+	var reference: Dictionary = IndependentExtractor.new().extract(saved.values, dims, CELLS, ROI_MIN, STEP)
+	if not reference.get("valid", false):
+		return {"valid": false, "reason": "independent_reference_extractor_failed", "detail": reference}
+	var bounds_max: Vector3 = ROI_MIN + Vector3(CELLS) * STEP
+	var reference_topology: Dictionary = Core.topology(reference.mesh, ROI_MIN, bounds_max)
 	return {"valid": true, "mesh": extracted.mesh, "mesh_sha256": extracted.mesh_sha256,
-		"metrics": {"volume": volume.metrics, "extract": extracted.metrics}, "volume": volume}
+		"metrics": {"volume": volume.metrics, "extract": extracted.metrics,
+			"independent_reference": reference.metrics,
+			"candidate_topology": Core.topology(extracted.mesh, ROI_MIN, bounds_max),
+			"reference_topology": reference_topology,
+			"extractor_mesh_hashes_equal": extracted.mesh_sha256 == reference.mesh_sha256,
+			"reference_extractor_identity": "R9.3-D-test-only-angle-ordered-tetra-v1"}, "volume": volume}
 
 func corruption_reload_probe(snapshot: Dictionary) -> Dictionary:
 	var volume: Dictionary = _materialize(snapshot, int(snapshot.get("revision", 0)))

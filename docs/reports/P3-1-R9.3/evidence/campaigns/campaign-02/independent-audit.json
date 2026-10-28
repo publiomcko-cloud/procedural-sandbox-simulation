@@ -1,0 +1,26 @@
+{
+  "status": "PASS_EVIDENCE_STRUCTURE_AND_EXECUTION",
+  "candidate": "D",
+  "source_sha": "5741107cd077942326df87f6e6533ff339446d3f",
+  "run_id": "R9.3.D.2.14f25a8e031f4477b640fde3cd9f1b0d",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "event_count": 44,
+  "campaign_started": 1,
+  "scenario_started": 21,
+  "scenario_complete": 21,
+  "campaign_complete": 1,
+  "execution_counts": {
+    "NOT_RUN": 0,
+    "CENSORED": 0,
+    "FAIL": 0,
+    "COMPLETE": 21,
+    "OTHER": 0
+  },
+  "process_elapsed_ms": 11961.33,
+  "process_exit_code": 0,
+  "process_tree_sampled_peak_working_set_bytes": 106520576,
+  "errors": [],
+  "source_stdout_sha256": "8E4241B6C2B0609F87A50A3F919986F8B9EB109FED25994A0140E4CCE695A1B4",
+  "source_stderr_sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+  "jsonl_summary_csv": "C:\\r93-evidence\\candidate-d-campaign-02\\independent-audit-input\\scenario-summary.csv"
+}
