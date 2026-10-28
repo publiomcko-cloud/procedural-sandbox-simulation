@@ -1,0 +1,5 @@
+6903fbdb67749e17888be8883ceb4adba7e4246ada297e73884728af2fab75a2  docs/reports/P3-1-R9-COMPARISON/RESULTS.md
+5776117f73cec5b8b0ca5c078f1c872d7bbe1010eeca74c1cc6e8ead1db06766  docs/checkpoints/2026-10-28-P3-1-R9-COMPARISON.md
+8b2aa6bcafa27159c1c4e1c6fcd6b659a3a43f447d8ef2c0f8d0a98e40a1d7ff  docs/specs/P3-1-R9-FOUR-ARCHITECTURE-EXPERIMENT-CONTRACT.md
+2b44cb52ef091c2527fa2f8b06859752cc7cfaa14bcafe94d4a4c55b0cdd908f  game/tests/prototypes/p3_1_r9_frozen_inputs.jsonl
+ec55bbd3a2657da9f3c572977f7893e44d0ca78cf7bacfe9362a1f2252052ef1  game/tests/prototypes/p3_1_r9_frozen_inputs.sha256
