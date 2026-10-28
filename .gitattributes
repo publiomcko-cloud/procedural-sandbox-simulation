@@ -13,6 +13,7 @@ docs/reports/P3-1-R8/evidence/** -text
 docs/reports/P3-1-R8/*.txt text eol=lf
 docs/reports/P3-1-R8.1/evidence/** -text
 docs/reports/P3-1-R8.2/evidence/** -text
+docs/reports/P3-1-R8.3-B/evidence/** -text
 docs/reports/P3-1-R8.2/*.txt text eol=lf
 game/tests/prototypes/p3_1_r8_2_geometry_provenance.gd text eol=crlf
 game/tests/prototypes/p3_1_r8_2_xplus_face_oracle.gd text eol=crlf

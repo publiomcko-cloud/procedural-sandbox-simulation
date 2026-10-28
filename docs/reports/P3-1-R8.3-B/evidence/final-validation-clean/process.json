@@ -1,0 +1,14 @@
+{
+  "command": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File C:\\r83b\\scripts\\validate.ps1",
+  "working_directory": "C:\\r83b",
+  "source_sha": "c788b8bd28dd4a0e469c78f06f6c7462abe1360b",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "started_utc": "2026-10-28T14:43:52.0882505Z",
+  "ended_utc": "2026-10-28T14:52:31.6344501Z",
+  "elapsed_ms": 519537,
+  "exit_code": 0,
+  "stdout_file": "validate.stdout.log",
+  "stderr_file": "validate.stderr.log",
+  "isolated_environment": "APPDATA, LOCALAPPDATA, TEMP, TMP; Windows USERPROFILE retained"
+}

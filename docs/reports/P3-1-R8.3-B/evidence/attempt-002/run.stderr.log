@@ -1,0 +1,5 @@
+SCRIPT ERROR: Invalid access to property or key 't' on a base object of type 'Dictionary'.
+   at: _triangle_branch_refinement (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:558)
+   GDScript backtrace (most recent call first):
+       [0] _triangle_branch_refinement (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:558)
+       [1] _run_r83b (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:99)

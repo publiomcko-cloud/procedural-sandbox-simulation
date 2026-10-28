@@ -1,0 +1,17 @@
+{
+  "command": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts/validate.ps1",
+  "working_directory": "C:\\r83b",
+  "source_sha": "bbaf1950547a5cccb1d0e62fcd434a97373bcfee",
+  "source_parent": "c788b8bd28dd4a0e469c78f06f6c7462abe1360b",
+  "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "started_utc": "2026-10-28T15:03:31.3919235Z",
+  "ended_utc": "2026-10-28T15:12:17.4006279Z",
+  "elapsed_ms": 526004,
+  "powershell_pid": 42924,
+  "exit_code": 0,
+  "stdout_file": "validate.stdout.log",
+  "stderr_file": "validate.stderr.log",
+  "isolated_environment": "APPDATA, LOCALAPPDATA, TEMP, TMP, PSModuleAnalysisCachePath; Windows USERPROFILE retained"
+}

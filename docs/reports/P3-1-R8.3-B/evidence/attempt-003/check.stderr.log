@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot find member "reversed" in base "Array".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:310)
+SCRIPT ERROR: Parse Error: Function "reversed()" not found in base Array.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd:310)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r8_3b_adaptive_fidelity.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)

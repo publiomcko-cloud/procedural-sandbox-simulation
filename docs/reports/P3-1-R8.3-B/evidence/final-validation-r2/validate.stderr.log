@@ -1,0 +1,16 @@
+WARNING: Target and up vectors are colinear. This is not advised as it may cause unwanted rotation around local Z axis.
+   at: looking_at (core/math/basis.cpp:1045)
+   GDScript backtrace (most recent call first):
+       [0] _update_camera (res://scripts/terrain/terrain_demo.gd:1755)
+       [1] _test_playable_scene_publication (res://tests/procedural_object_tests.gd:991)
+WARNING: Target and up vectors are colinear. This is not advised as it may cause unwanted rotation around local Z axis.
+   at: looking_at (core/math/basis.cpp:1045)
+   GDScript backtrace (most recent call first):
+       [0] _update_camera (res://scripts/terrain/terrain_demo.gd:1755)
+       [1] _test_playable_scene_publication (res://tests/procedural_object_tests.gd:1060)
+       [2] _wait_for_entity_presence (res://tests/procedural_object_tests.gd:1117)
+WARNING: Target and up vectors are colinear. This is not advised as it may cause unwanted rotation around local Z axis.
+   at: looking_at (core/math/basis.cpp:1045)
+   GDScript backtrace (most recent call first):
+       [0] _update_camera (res://scripts/terrain/terrain_demo.gd:1755)
+       [1] _test_playable_scene_publication (res://tests/procedural_object_tests.gd:1069)
