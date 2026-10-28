@@ -83,4 +83,12 @@ func _cross(a:float,b:float)->bool:return (a>=0.0)!=(b>=0.0)
 func _idx(x:int,y:int,z:int,d:Vector3i)->int:return (y*d.z+z)*d.x+x
 func _key(x:int,y:int,z:int)->String:return "%d,%d,%d"%[x,y,z]
 func _hash_mesh(m:Dictionary)->String:
-	var c:=HashingContext.new();c.start(HashingContext.HASH_SHA256);c.update(m.positions.to_byte_array());c.update(m.normals.to_byte_array());return c.finish().hex_encode()
+	var position_bytes:PackedByteArray=m.positions.to_byte_array()
+	var normal_bytes:PackedByteArray=m.normals.to_byte_array()
+	var c:=HashingContext.new()
+	c.start(HashingContext.HASH_SHA256)
+	# Prefix lengths so empty arrays remain distinguishable and never call update with zero bytes.
+	c.update(("%d:%d:" % [position_bytes.size(),normal_bytes.size()]).to_utf8_buffer())
+	if not position_bytes.is_empty():c.update(position_bytes)
+	if not normal_bytes.is_empty():c.update(normal_bytes)
+	return c.finish().hex_encode()
