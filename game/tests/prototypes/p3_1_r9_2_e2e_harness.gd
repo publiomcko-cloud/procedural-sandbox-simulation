@@ -192,11 +192,22 @@ func _run_row(row: Dictionary) -> void:
 				"warmup_samples_usec": warmup_samples, "build_samples_usec": sample_times,
 				"repeat_attempt_count": sample_times.size(), "successful_repeat_count": successful_repeat_count}, sample_times)
 			continue
-		var topo: Dictionary = Core.topology(mesh, Core.world_min(roi), Core.world_min(roi) + Vector3(Core.cell_counts(roi)) * Core.step(roi))
+		var topology_min: Vector3 = Core.world_min(roi)
+		var topology_max: Vector3 = topology_min + Vector3(Core.cell_counts(roi)) * Core.step(roi)
+		if CANDIDATE_ID == "C":
+			# Surface Nets vertices are dual-cell representatives. Its finite
+			# extracted domain extends half a cell beyond the scalar ROI; the
+			# scalar halo supplies the neighboring cells needed at that boundary.
+			# Open edges on this dual-domain extent are crop boundaries, not holes.
+			topology_min -= Vector3.ONE * Core.step(roi) * 0.5
+			topology_max += Vector3.ONE * Core.step(roi) * 0.5
+		var topo: Dictionary = Core.topology(mesh, topology_min, topology_max)
 		var residual: Dictionary = Core.surface_residual(mesh, setup.snapshot, int(row.seed))
 		var normals: Dictionary = Core.normal_deviation(mesh, setup.snapshot, int(row.seed))
 		var components: Dictionary = Core.mesh_components(mesh)
-		var diagnostics: Dictionary = {"topology": _topology_summary(topo), "surface_residual": residual,
+		var diagnostics: Dictionary = {"topology": _topology_summary(topo),
+			"topology_bounds": {"min": [topology_min.x, topology_min.y, topology_min.z], "max": [topology_max.x, topology_max.y, topology_max.z], "halo_cells": 1 if CANDIDATE_ID == "C" else 0},
+			"surface_residual": residual,
 			"normal_deviation": normals, "mesh_components": components, "candidate_metrics": primary_metrics,
 			"requested_warmups": counts.warmups, "requested_repeats": counts.repeats,
 			"warmup_samples_usec": warmup_samples, "warmup_usec_total": _sum_ints(warmup_samples),
