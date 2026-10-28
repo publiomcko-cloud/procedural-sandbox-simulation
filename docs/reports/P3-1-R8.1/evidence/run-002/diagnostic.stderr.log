@@ -1,0 +1,5 @@
+SCRIPT ERROR: Invalid type in function '_field_branch_values' in base 'SceneTree (p3_1_r8_1_geometry_causality.gd)'. Cannot convert argument 1 from Array to Vector3.
+   at: _diagnose_r81_normals (res://tests/prototypes/p3_1_r8_1_geometry_causality.gd:98)
+   GDScript backtrace (most recent call first):
+       [0] _diagnose_r81_normals (res://tests/prototypes/p3_1_r8_1_geometry_causality.gd:98)
+       [1] _run_r81 (res://tests/prototypes/p3_1_r8_1_geometry_causality.gd:29)

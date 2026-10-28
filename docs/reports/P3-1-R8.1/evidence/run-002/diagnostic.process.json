@@ -1,0 +1,13 @@
+{
+  "stage": "r8_1_diagnostic",
+  "pid": 8876,
+  "exit_code": 1,
+  "elapsed_ms": 45680,
+  "args": [
+    "--headless",
+    "--path",
+    "C:\\r81\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r8_1_geometry_causality.gd"
+  ]
+}
