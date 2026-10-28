@@ -1,9 +1,13 @@
 # P3.1 R9 — Immutable preregistration checkpoint
 
-**Checkpoint ID/date:** `CHK-2026-10-28-P3-1-R9-PREREGISTRATION`, 2026-10-28  
-**Repository:** `publiomcko-cloud/procedural-sandbox-simulation`  
-**Common source base:** `4f08b67522507bd196a74a1089c773f272235343`  
-**Contract branch:** `bench/p3-1-r9-preregistration`  
+**Checkpoint ID/date:** `CHK-2026-10-28-P3-1-R9-PREREGISTRATION`, 2026-10-28
+
+**Repository:** `publiomcko-cloud/procedural-sandbox-simulation`
+
+**Common source base:** `4f08b67522507bd196a74a1089c773f272235343`
+
+**Contract branch:** `bench/p3-1-r9-preregistration`
+
 **Issue:** #169
 
 ## State at preregistration
