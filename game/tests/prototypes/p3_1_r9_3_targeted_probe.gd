@@ -51,7 +51,7 @@ func _run() -> void:
 		var topo: Dictionary = Core.topology(result.mesh, lo, hi)
 		var open_details: Array[Dictionary] = _open_edge_details(result.mesh, lo, hi, 64)
 		var root_identity:Dictionary={"status":"NOT_APPLICABLE"}
-		if OS.get_environment("R9_CANDIDATE_ID")=="A":
+		if OS.get_environment("R9_CANDIDATE_ID") in ["A","D"]:
 			root_identity=candidate.call("canonical_root_identity_probe",setup.snapshot)
 		print("R9_3_PROBE_RESULT " + JSON.stringify({"scenario_id": scenario_id, "candidate": OS.get_environment("R9_CANDIDATE_ID"),
 			"source_sha": OS.get_environment("R9_SOURCE_SHA"), "manifest_sha256": Core.EXPECTED_MANIFEST_SHA,
