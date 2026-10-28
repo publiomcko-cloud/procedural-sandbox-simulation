@@ -1,0 +1,66 @@
+[
+  {
+    "stage": "import",
+    "arguments": [
+      "--headless",
+      "--path",
+      "C:\\r92d\\game",
+      "--editor",
+      "--import"
+    ],
+    "pid": 15284,
+    "started": "2026-10-28T16:53:45.5849108-03:00",
+    "duration_ms": 7796,
+    "exit_code": 0,
+    "stdout_sha256": "a145fdc8fd37938697d3b201b4849bcac5b1b9c14928ee53998aa6c0358d0ce5",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_bytes": 1445,
+    "stderr_bytes": 0,
+    "contract_marker": null
+  },
+  {
+    "stage": "check_only",
+    "arguments": [
+      "--headless",
+      "--path",
+      "C:\\r92d\\game",
+      "--check-only",
+      "--script",
+      "res://tests/prototypes/p3_1_r9_2_e2e_harness.gd"
+    ],
+    "pid": 50008,
+    "started": "2026-10-28T16:53:53.3878531-03:00",
+    "duration_ms": 666,
+    "exit_code": 0,
+    "stdout_sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_bytes": 75,
+    "stderr_bytes": 0,
+    "contract_marker": null
+  },
+  {
+    "stage": "contract",
+    "arguments": [
+      "--headless",
+      "--path",
+      "C:\\r92d\\game",
+      "--script",
+      "res://tests/prototypes/p3_1_r9_2_contract_tests.gd"
+    ],
+    "pid": 5780,
+    "started": "2026-10-28T16:53:54.0596583-03:00",
+    "duration_ms": 657,
+    "exit_code": 0,
+    "stdout_sha256": "5dc59d1f33208d22a1f085d97c4c17d2a803ce66891b567c02db78fee411eef8",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_bytes": 277,
+    "stderr_bytes": 0,
+    "contract_marker": {
+      "assertions": 160,
+      "expected_manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+      "failures": [],
+      "runtime_tests_only": true,
+      "status": "PASS"
+    }
+  }
+]
