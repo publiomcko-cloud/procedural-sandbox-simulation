@@ -1,0 +1,3 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+P3_1_R9_2_JSONL {"event_type":"campaign_blocked","monotonic_usec":621205,"reason":"source_sha_env_missing_or_invalid","run_id":"R9.2.A.616028","schema":"P3.1.R9.2.Event.v1","source_sha":""}

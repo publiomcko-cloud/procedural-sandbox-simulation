@@ -1,0 +1,5 @@
+SCRIPT ERROR: Trying to assign an array of type "Array" to a variable of type "Array[String]".
+   at: _test_registered_diagnostics (res://tests/prototypes/p3_1_r9_2_contract_tests.gd:53)
+   GDScript backtrace (most recent call first):
+       [0] _test_registered_diagnostics (res://tests/prototypes/p3_1_r9_2_contract_tests.gd:53)
+       [1] _run (res://tests/prototypes/p3_1_r9_2_contract_tests.gd:37)
