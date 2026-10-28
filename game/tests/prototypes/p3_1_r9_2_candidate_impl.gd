@@ -40,7 +40,7 @@ func _build_mt(snapshot: Dictionary) -> Dictionary:
 				var d := Core.sample(p,snapshot)
 				if not is_finite(d): return {"valid":false,"reason":"nonfinite_grid_sample"}
 				values[_node_index(x,y,z,dims)] = d
-				_sample_cache[Core._point_key(p)] = d
+				_sample_cache[_sample_key(p)] = d
 	var mesh: Dictionary = Core.new_mesh(); var root_requests := 0; var dropped := 0
 	for y in range(ROI_CELLS.y):
 		for z in range(ROI_CELLS.z):
@@ -92,11 +92,22 @@ func _polygonize_tet(tet:Array,cube_points:Array[Vector3],cube_values:Array[floa
 func _edge_root(ai:int,bi:int,points:Array[Vector3],values:Array[float],snapshot:Dictionary)->Dictionary:
 	var a:Vector3=points[ai]; var b:Vector3=points[bi]; var da:float=values[ai]; var db:float=values[bi]
 	if (da<0.0)==(db<0.0):return {"valid":false}
-	var ka: String=Core._point_key(a); var kb: String=Core._point_key(b); var key: String=ka+"|"+kb if ka<kb else kb+"|"+ka
+	# The root-cache identity is the exact global scalar-lattice edge, not a
+	# quantized world-space position. Canonical endpoint order also gives fresh
+	# chunk builds the same bisection arithmetic when they traverse an edge in
+	# opposite directions.
+	var lattice_a:=Vector3i(roundi(a.x/STEP),roundi(a.y/STEP),roundi(a.z/STEP))
+	var lattice_b:=Vector3i(roundi(b.x/STEP),roundi(b.y/STEP),roundi(b.z/STEP))
+	var ka:String=_global_lattice_key(lattice_a);var kb:String=_global_lattice_key(lattice_b)
+	if ka>kb:
+		var swap_point:=a;a=b;b=swap_point
+		var swap_value:=da;da=db;db=swap_value
+		var swap_key:=ka;ka=kb;kb=swap_key
+	var key:String=ka+"|"+kb
 	if _root_cache.has(key): return {"valid":true,"point":_root_cache[key]}
 	var low:=0.0; var high:=1.0; var low_value:=da
 	for iteration in range(ROOT_ITERATIONS):
-		var t:float=(low+high)*0.5; var p:=a.lerp(b,t); var pk: String=Core._point_key(p)
+		var t:float=(low+high)*0.5; var p:=a.lerp(b,t); var pk:String=_sample_key(p)
 		var dm:float=float(_sample_cache.get(pk,NAN))
 		if not is_finite(dm): dm=Core.sample(p,snapshot); _sample_cache[pk]=dm
 		if not is_finite(dm):return {"valid":false,"reason":"nonfinite_root_sample"}
@@ -105,6 +116,36 @@ func _edge_root(ai:int,bi:int,points:Array[Vector3],values:Array[float],snapshot
 		else:high=t
 	var point:=a.lerp(b,(low+high)*0.5);_root_cache[key]=point
 	return {"valid":true,"point":point}
+
+func _global_lattice_key(index:Vector3i)->String:
+	return "%d,%d,%d"%[index.x,index.y,index.z]
+
+func _sample_key(point:Vector3)->String:
+	var packed:=PackedVector3Array();packed.append(point)
+	return packed.to_byte_array().hex_encode()
+
+func canonical_root_identity_probe(snapshot:Dictionary)->Dictionary:
+	var a:=Vector3.ZERO;var b:=Vector3.ZERO;var da:=0.0;var db:=0.0;var found:=false
+	for y in range(ROI_CELLS.y+1):
+		for z in range(ROI_CELLS.z+1):
+			for x in range(ROI_CELLS.x):
+				var candidate_a:=ROI_MIN+Vector3(x,y,z)*STEP
+				var candidate_b:=candidate_a+Vector3(STEP,0.0,0.0)
+				var candidate_da:=Core.sample(candidate_a,snapshot);var candidate_db:=Core.sample(candidate_b,snapshot)
+				if (candidate_da<0.0)!=(candidate_db<0.0):
+					a=candidate_a;b=candidate_b;da=candidate_da;db=candidate_db;found=true;break
+			if found:break
+		if found:break
+	if not found:return {"valid":false,"reason":"probe_crossing_edge_not_found"}
+	_root_cache.clear();var first:=_edge_root(0,1,[a,b],[da,db],snapshot)
+	_root_cache.clear();var reversed:=_edge_root(0,1,[b,a],[db,da],snapshot)
+	var p:Vector3=Vector3(8.0,1.0,2.0);var q:=p+Vector3(0.000001,0.0,0.0)
+	return {"valid":first.get("valid",false) and reversed.get("valid",false) and first.point==reversed.point,
+		"forward_root":first.get("point",Vector3.ZERO),"reverse_root":reversed.get("point",Vector3.ZERO),
+		"quantized_keys_collide":Core._point_key(p)==Core._point_key(q),
+		"exact_sample_keys_distinct":_sample_key(p)!=_sample_key(q),
+		"root_key":_global_lattice_key(Vector3i(roundi(a.x/STEP),roundi(a.y/STEP),roundi(a.z/STEP)))+"|"+
+			_global_lattice_key(Vector3i(roundi(b.x/STEP),roundi(b.y/STEP),roundi(b.z/STEP)))}
 
 func _xplus_shared_face_probe(snapshot:Dictionary)->Dictionary:
 	var lattice:=Vector3i(30,4,14);var origin:=Vector3(lattice)*0.5;var center:=origin+Vector3.ONE*0.5
