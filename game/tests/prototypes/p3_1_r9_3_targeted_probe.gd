@@ -50,10 +50,13 @@ func _run() -> void:
 			hi += Vector3.ONE * Core.step(roi) * 0.5
 		var topo: Dictionary = Core.topology(result.mesh, lo, hi)
 		var open_details: Array[Dictionary] = _open_edge_details(result.mesh, lo, hi, 64)
+		var root_identity:Dictionary={"status":"NOT_APPLICABLE"}
+		if OS.get_environment("R9_CANDIDATE_ID")=="A":
+			root_identity=candidate.call("canonical_root_identity_probe",setup.snapshot)
 		print("R9_3_PROBE_RESULT " + JSON.stringify({"scenario_id": scenario_id, "candidate": OS.get_environment("R9_CANDIDATE_ID"),
 			"source_sha": OS.get_environment("R9_SOURCE_SHA"), "manifest_sha256": Core.EXPECTED_MANIFEST_SHA,
 			"mesh_sha256": result.get("mesh_sha256", ""), "metrics": result.get("metrics", {}),
-			"topology": topo, "open_edge_details_first_64": open_details,
+			"topology": topo, "open_edge_details_first_64": open_details,"canonical_root_identity":root_identity,
 			"topology_bounds_min": [lo.x,lo.y,lo.z], "topology_bounds_max": [hi.x,hi.y,hi.z]}))
 	print("R9_3_PROBE_COMPLETE " + JSON.stringify({"scenario_count": ids.size(), "failures": failures}))
 	quit(1 if failures > 0 else 0)
