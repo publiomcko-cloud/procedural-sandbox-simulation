@@ -1,0 +1,28 @@
+﻿{
+    "status":  "PASS_EVIDENCE_STRUCTURE_AND_EXECUTION",
+    "candidate":  "A",
+    "source_sha":  "4f9925f6b87bb80eecc98acb25e9e385579b525e",
+    "run_id":  "R9.3.A.2.0d635ad8fa514ed7b6a5dd9327c93e76",
+    "manifest_sha256":  "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+    "event_count":  44,
+    "campaign_started":  1,
+    "scenario_started":  21,
+    "scenario_complete":  21,
+    "campaign_complete":  1,
+    "execution_counts":  {
+                             "OTHER":  0,
+                             "NOT_RUN":  1,
+                             "FAIL":  0,
+                             "CENSORED":  0,
+                             "COMPLETE":  20
+                         },
+    "process_elapsed_ms":  11632.04,
+    "process_exit_code":  0,
+    "process_tree_sampled_peak_working_set_bytes":  109686784,
+    "errors":  [
+
+               ],
+    "source_stdout_sha256":  "39CF37E4FDE1494616D89B246DE8A21DC2A9712F682A7388C91924F701AF2AFA",
+    "source_stderr_sha256":  "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+    "jsonl_summary_csv":  "C:\\r93-evidence\\candidate-a-campaign-02\\scenario-summary.csv"
+}

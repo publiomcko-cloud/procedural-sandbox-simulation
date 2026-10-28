@@ -1,0 +1,23 @@
+{
+  "source_head": "4f9925f6b87bb80eecc98acb25e9e385579b525e",
+  "parent": "71e68101a67f9b75017e57644501fdf83ba9c637",
+  "candidate_impl_sha256": "1772B4A3DE66C63D1E3FC7A73F3AD6CB92CCC093CB2D6DF55EAFF53F51843DFF",
+  "focused_probe_sha256": "F34D8BF1488A3E89CC71763750F1D310B03016EDA7464F39C35D6B6D1CC25A3F",
+  "godot_bin": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "started_utc": "2026-10-28T22:22:17.4249782Z",
+  "elapsed_seconds": 514.98,
+  "launcher_pid": 50944,
+  "exit_code": 0,
+  "timed_out": false,
+  "assertion_markers": 21,
+  "assertions": 21464,
+  "failures": 0,
+  "l2_pass_markers": 24,
+  "validation_pass_marker": true,
+  "stdout_sha256": "F60660823926B7820F9D2783048FA59BEDE60D7CCCC22A791570192522A91AEB",
+  "stderr_sha256": "01346ABC85002F006E3C4E7E8BFB7B02377283DBA88EA437319E45C3E8ED76C8",
+  "stdout": "C:\\r93-evidence\\candidate-a-validation-h2-01\\validate.stdout.log",
+  "stderr": "C:\\r93-evidence\\candidate-a-validation-h2-01\\validate.stderr.log"
+}

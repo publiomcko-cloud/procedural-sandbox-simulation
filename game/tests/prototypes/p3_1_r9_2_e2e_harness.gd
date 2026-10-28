@@ -221,6 +221,8 @@ func _run_row(row: Dictionary) -> void:
 			diagnostics["physics_server"] = "NOT_RUN"
 		if "local_cell_corner_probe_only" in hooks:
 			diagnostics["triangle_root_observation"] = _triangle_root_observation(mesh, setup.snapshot, roi, row)
+			if CANDIDATE_ID == "A":
+				diagnostics["canonical_root_identity"] = _candidate.call("canonical_root_identity_probe", setup.snapshot)
 		if "same_process_repeats_only" in hooks:
 			diagnostics["rebuild_hashes"] = sample_hashes
 		if "full_snapshot_rebuild_only_no_per_edit_update" in hooks:
