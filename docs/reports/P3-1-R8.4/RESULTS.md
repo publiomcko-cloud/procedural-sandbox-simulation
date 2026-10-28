@@ -18,6 +18,7 @@
 - Exact frozen input digests revalidated by the harness: zero edits `24f70884cb0ec4c2ea90daad77dd12987d8023deabd144c24ac4235635f0451b`; CARVE `47ec41f63338f98c5160f58aa71c86f6ec78412dbccad7ae86805fb115592411`; ordered FILL→CARVE `55d45d387bd19829bb38c4e988da25a886765f26cc34e19dd07ed808faa1bd46`.
 - The R8.2 source contract pin matched. The harness records the source SHA-256 values for the R8.2 canonical source/diagnostic dependencies in `01-source_and_frozen_input_preflight.json`.
 - R8.3-A PR #165 remains open/draft/unmerged at `ae09c279124cc1239f4bf93f0e2ebd9441b8c36b`; R8.3-B PR #166 remains open/draft/unmerged at `546150465fa6b2813db5d9251056a8bf20bd83ae`. Neither branch implementation was imported. R8.2 PR #162 remains open/draft/unmerged at its pinned baseline.
+- Evidence PR [#168](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/168) is open, draft and unmerged, based on `bench/p3-1-r8-2-exact-geometry-provenance` at the common R8.2 commit. Its verified head at publication is `49bb1bbe0991a10ca3b26eea602d6607ef7b4509`.
 - The pre-existing R8.2, R8.3-A and R8.3-B evidence inventories were independently rehashed before the candidate: respectively 140/140, 24/24 and 74/74 files matched; their source inventories matched 12/12, 13/13 and 12/12. Earlier worktrees, stashes and user saves were preserved.
 
 ## Frozen method and research limits
