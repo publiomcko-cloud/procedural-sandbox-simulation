@@ -1,0 +1,22 @@
+{
+  "stage": "diagnostic",
+  "source_head": "d81f29237d47361139b02849a8215c30424be873",
+  "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "process_id": 27352,
+  "process_start_utc": "2026-10-28T11:19:14.7146154Z",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\w82\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd"
+  ],
+  "elapsed_ms": 900053,
+  "wait_limit_ms": 900000,
+  "completed": false,
+  "exit_code": "TIMEOUT",
+  "terminal": "INDETERMINATE_TIMEOUT",
+  "stdout": "C:\\w82\\docs\\reports\\P3-1-R8.2\\evidence\\diag-run-001\\diagnostic.stdout.log",
+  "stderr": "C:\\w82\\docs\\reports\\P3-1-R8.2\\evidence\\diag-run-001\\diagnostic.stderr.log"
+}

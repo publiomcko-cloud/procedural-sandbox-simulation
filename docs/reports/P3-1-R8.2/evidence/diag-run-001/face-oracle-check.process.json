@@ -1,0 +1,16 @@
+{
+  "stage": "xplus-face-oracle-check-only",
+  "pid": 7192,
+  "start_utc": "2026-10-28T11:35:09.3880666Z",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\w82\\game",
+    "--check-only",
+    "--script",
+    "res://tests/prototypes/p3_1_r8_2_xplus_face_oracle.gd"
+  ],
+  "elapsed_ms": 1679,
+  "completed": true,
+  "exit_code": 0
+}

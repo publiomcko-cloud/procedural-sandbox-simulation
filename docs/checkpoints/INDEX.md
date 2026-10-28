@@ -6,6 +6,7 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-10-28 | [P3.1 R8.2 exact geometry provenance](2026-10-28-P3-1-R8.2-EXACT-GEOMETRY-PROVENANCE.md) | Triangle 3103 continuous-vs-sampled gradient, X+ LOD1 omitted interface facets, and X− mesh/root displacement traced; Godot validation 21,464/0; no geometry acceptance or production correction | Separate test-only evidence PR for Issue #161; publication pending; PR #160 unchanged |
 | 2026-10-27 | [P3.1 R8 geometry quality and conformance](2026-10-27-P3-1-R8-GEOMETRY-QUALITY.md) | Six diagnostic phases and full validation 21,464/0; cave FILL behavior characterized; 4/16 chunk contours mismatch, normal/winding and X− picker discrepancies retained | Draft evidence PR #158, open/unmerged; no production approval |
 | 2026-10-27 | [P3.1 R7.3 full edited gates](2026-10-27-P3-1-R7.3-EDITED-GATES.md) | Frozen CARVE and ordered FILL/CARVE each passed once, 21/21; topology, interface and two-sided proxy gates pass; field observations remain exploratory | Documentation-only evidence follow-up on existing draft PR #156; independent review pending; unmerged |
 | 2026-10-27 | [P3.1 R7.3 edited CARVE diagnosis](2026-10-27-P3-1-R7.3-EDITED-CARVE-DIAGNOSIS.md) | Minimal local A repair 16/16; zero-edit gate 24/24; full validation 21,464/0; complete edited CARVE remains gated and NOT_RUN | Separate test-only evidence PR #156, draft, unmerged |

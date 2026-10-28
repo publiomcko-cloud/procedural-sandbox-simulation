@@ -1,0 +1,22 @@
+SCRIPT ERROR: Parse Error: The function signature doesn't match the parent. Parent signature is "_finish() -> void".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:387)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "xminus" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:159)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "control" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:159)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "is_a" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:164)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "before" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:237)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "gi" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:241)
+SCRIPT ERROR: Parse Error: Identifier "origin_cell" not declared in the current scope.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:246)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "center" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:246)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "before2" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:252)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "gi2" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:256)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)

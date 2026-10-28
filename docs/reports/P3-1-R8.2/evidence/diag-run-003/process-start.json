@@ -1,0 +1,17 @@
+{
+  "source_head": "d81f29237d47361139b02849a8215c30424be873",
+  "script_sha256": "BF0BED9FE5DBF203672710F16D06959C67567033821E1FAD20B27A343F5309B6",
+  "godot_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "launcher_pid": 23532,
+  "child_pid": 30220,
+  "child_start_utc": "2026-10-28T11:24:30.8002491Z",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\w82\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd"
+  ],
+  "stdout": "C:\\w82\\docs\\reports\\P3-1-R8.2\\evidence\\diag-run-003\\diagnostic.stdout.log",
+  "stderr": "C:\\w82\\docs\\reports\\P3-1-R8.2\\evidence\\diag-run-003\\diagnostic.stderr.log"
+}

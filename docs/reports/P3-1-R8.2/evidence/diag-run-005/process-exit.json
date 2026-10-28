@@ -1,0 +1,12 @@
+{
+  "source_head": "d81f29237d47361139b02849a8215c30424be873",
+  "child_pid": 22516,
+  "child_start_utc": "2026-10-28T11:28:27.6718779Z",
+  "elapsed_ms": 49614,
+  "timeout_ms": 900000,
+  "completed": true,
+  "exit_code": 1,
+  "process_status": "EXIT_NONZERO",
+  "stdout_sha256": "97DE360E781B4C8A2D266483D5919995630CA0214BD34AC73DE7CE8E3505DBBF",
+  "stderr_sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+}

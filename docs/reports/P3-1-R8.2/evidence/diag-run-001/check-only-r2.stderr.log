@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Expected statement, found "else" instead.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd:245)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)

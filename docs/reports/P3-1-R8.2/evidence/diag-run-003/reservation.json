@@ -1,0 +1,16 @@
+{
+  "source_head": "d81f29237d47361139b02849a8215c30424be873",
+  "direct_parent": "c331deeaa127d1b0e63e19e6582d5d1796c2fc8f",
+  "script_sha256": "BF0BED9FE5DBF203672710F16D06959C67567033821E1FAD20B27A343F5309B6",
+  "godot_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\w82\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd"
+  ],
+  "launcher_pid": 23532,
+  "reserved_utc": "2026-10-28T11:24:30.7650663Z",
+  "evidence_root": "C:\\w82\\docs\\reports\\P3-1-R8.2\\evidence\\diag-run-003"
+}

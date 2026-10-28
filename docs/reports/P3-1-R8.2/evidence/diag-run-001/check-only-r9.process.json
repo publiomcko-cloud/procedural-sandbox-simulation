@@ -1,0 +1,16 @@
+{
+  "stage": "check-only-r9",
+  "pid": 11644,
+  "start_utc": "2026-10-28T11:28:16.2393232Z",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\w82\\game",
+    "--check-only",
+    "--script",
+    "res://tests/prototypes/p3_1_r8_2_geometry_provenance.gd"
+  ],
+  "elapsed_ms": 1333,
+  "completed": true,
+  "exit_code": 0
+}
