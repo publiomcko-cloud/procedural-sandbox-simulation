@@ -13,8 +13,8 @@ var ROI_CELLS: Vector3i = Vector3i(8,20,12)
 var STEP: float = 0.5
 # R9.4-A attempt 3: 20 bisections improved the neighboring seam but exceeded
 # the frozen 10,000 unique-sample stop loss on the negative-region pair. Twelve
-# iterations are an evidence-based bounded compromise: 20/8 of the old root
-# work, while retaining substantially finer roots than the original 8 passes.
+# iterations are an evidence-based bounded compromise: 50% more root bisections
+# than the original 8 passes, while staying below the frozen sample stop loss.
 const ROOT_ITERATIONS := 12
 var _manifest: Dictionary = {}
 var _failures: Array[String] = []
