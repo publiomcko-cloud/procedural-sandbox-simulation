@@ -9,6 +9,10 @@ const Mesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const LodMesher := preload("res://scripts/terrain/lod01_chunk_mesher.gd")
 const Topology := preload("res://tests/prototypes/p3_1_r9_6_surface_topology.gd")
 const SEED := 131102026
+const A2_BISECTION_ITERATIONS := 16
+const A2_ROOT_RESIDUAL_BOUND := 1.0e-4
+const A2_REFINE_TETS := {"60,8,25":[0,1,2,5],"61,8,25":[3,4],"62,9,24":[2]}
+const A2_TARGET_SCENARIOS := ["R9.2.SEAM.XPLUS_EQUAL.v1","R9.2.SEAM.XPLUS_MIXED_LOD.v1","R9.2.HIST.XPLUS_DEFECT.v1"]
 var ROI_MIN: Vector3 = Vector3(8,-2,3)
 var ROI_CELLS: Vector3i = Vector3i(8,20,12)
 var STEP: float = 0.5
@@ -26,18 +30,36 @@ var _started := 0
 var _quad_historical_selections:int=0
 var _quad_alternate_selections:int=0
 var _quad_pair_rejections:int=0
+var _a2_enabled: bool = false
+var _a2_refined_cells: Dictionary = {}
+var _a2_centroid_identities: Dictionary = {}
+var _a2_centroid_provenance: Dictionary = {}
+var _a2_recorded_surface_roots: Dictionary = {}
+var _a2_new_vertex_evidence: Array[Dictionary] = []
+var _a2_additional_sdf_evaluations: int = 0
+var _a2_steiner_vertices: int = 0
+var _a2_new_surface_roots: int = 0
+var _a2_refined_parent_tetrahedra: int = 0
+var _a2_refined_patch_emitted_triangles: int = 0
+var _a2_max_vertex_displacement: float = 0.0
+var _a2_max_root_residual: float = 0.0
 
 func configure_roi(roi: Dictionary) -> void:
 	ROI_MIN = Core.world_min(roi)
 	ROI_CELLS = Core.cell_counts(roi)
 	STEP = Core.step(roi)
 
-func build(snapshot: Dictionary, _row: Dictionary, _variant: Dictionary) -> Dictionary:
+func build(snapshot: Dictionary, row: Dictionary, _variant: Dictionary) -> Dictionary:
+	var scenario_id: String = String(row.get("scenario_id", ""))
+	_a2_enabled = A2_TARGET_SCENARIOS.has(scenario_id) and absf(ROI_MIN.x-15.0)<=1.0e-9 and absf(ROI_MIN.y-1.0)<=1.0e-9 and absf(ROI_MIN.z-6.0)<=1.0e-9 and absf(STEP-0.25)<=1.0e-9
 	return _build_mt(snapshot)
 func _build_mt(snapshot: Dictionary) -> Dictionary:
 	var begin := Time.get_ticks_usec()
 	_sample_cache.clear(); _root_cache.clear()
 	_quad_historical_selections=0;_quad_alternate_selections=0;_quad_pair_rejections=0
+	_a2_refined_cells.clear();_a2_centroid_identities.clear();_a2_centroid_provenance.clear();_a2_recorded_surface_roots.clear();_a2_new_vertex_evidence.clear()
+	_a2_additional_sdf_evaluations=0;_a2_steiner_vertices=0;_a2_new_surface_roots=0;_a2_refined_parent_tetrahedra=0;_a2_refined_patch_emitted_triangles=0
+	_a2_max_vertex_displacement=0.0;_a2_max_root_residual=0.0
 	var dims := ROI_CELLS+Vector3i.ONE
 	var total := dims.x*dims.y*dims.z
 	if total > Core.MAX_NODES: return {"valid":false,"reason":"sample_node_stop_loss"}
@@ -64,7 +86,11 @@ func _build_mt(snapshot: Dictionary) -> Dictionary:
 					cube_values.append(float(values[_node_index(ix,iy,iz,dims)]))
 				var cell_id := lattice_origin + Vector3i(x, y, z)
 				for tet_index in range(Core.TETS.size()):
-					var result := _polygonize_tet(Core.TETS[tet_index],cube_points,cube_values,snapshot,mesh,topology,cell_id,tet_index)
+					var result: Dictionary
+					if _a2_cell_tet_selected(cell_id,tet_index):
+						result=_polygonize_a2_parent_tet(Core.TETS[tet_index],cube_points,cube_values,snapshot,mesh,topology,cell_id,tet_index)
+					else:
+						result=_polygonize_tet(Core.TETS[tet_index],cube_points,cube_values,snapshot,mesh,topology,cell_id,tet_index)
 					root_requests += int(result.root_edges); dropped += int(result.dropped)
 					if not bool(result.get("topology_valid", true)):
 						return {"valid":false,"reason":"topology_ledger_rejected_geometry","detail":result.get("topology_reason","unknown"),"cell":cell_id,"tetrahedron":tet_index}
@@ -80,7 +106,70 @@ func _build_mt(snapshot: Dictionary) -> Dictionary:
 		"unique_canonical_samples_including_root_iterations":_sample_cache.size(),"root_iterations":ROOT_ITERATIONS,
 		"root_edge_requests":root_requests,"cached_root_edges":_root_cache.size(),"cutoff_drops":dropped,
 		"quad_historical_selections":_quad_historical_selections,"quad_alternate_selections":_quad_alternate_selections,"quad_pair_rejections":_quad_pair_rejections,
+		"a2_enabled":_a2_enabled,"a2_refinement_method":"four-child tetrahedron split at a canonical-SDF-sampled barycentric centroid; original parent faces are preserved",
+		"a2_root_bisection_iterations":A2_BISECTION_ITERATIONS,"a2_root_residual_bound":A2_ROOT_RESIDUAL_BOUND,
+		"a2_refined_cells":_a2_refined_cells.keys(),"a2_refined_cell_count":_a2_refined_cells.size(),"a2_refined_parent_tetrahedra":_a2_refined_parent_tetrahedra,
+		"a2_additional_sdf_evaluations":_a2_additional_sdf_evaluations,"a2_new_surface_roots":_a2_new_surface_roots,"a2_steiner_vertices":_a2_steiner_vertices,
+		"a2_refined_patch_emitted_triangles":_a2_refined_patch_emitted_triangles,"a2_max_vertex_displacement":_a2_max_vertex_displacement,
+		"a2_max_root_residual":_a2_max_root_residual,"a2_vertex_evidence":_a2_new_vertex_evidence,
 		"triangle_count":mesh.positions.size()/3,"build_usec":Time.get_ticks_usec()-begin}}
+
+func _a2_cell_tet_selected(cell_id: Vector3i, tet_index: int) -> bool:
+	if not _a2_enabled:
+		return false
+	var cell_key: String = "%d,%d,%d" % [cell_id.x,cell_id.y,cell_id.z]
+	if not A2_REFINE_TETS.has(cell_key):
+		return false
+	var selected: Array = A2_REFINE_TETS[cell_key]
+	return selected.has(tet_index)
+
+func _polygonize_a2_parent_tet(parent_tet: Array, parent_points: Array[Vector3], parent_values: Array[float], snapshot: Dictionary,
+		mesh: Dictionary, topology: Variant, cell_id: Vector3i, parent_tet_index: int) -> Dictionary:
+	var has_solid: bool = false
+	var has_empty: bool = false
+	var source_points: Array[Vector3] = []
+	var source_values: Array[float] = []
+	for value in parent_tet:
+		var index: int = int(value)
+		source_points.append(parent_points[index])
+		source_values.append(parent_values[index])
+		has_solid = has_solid or parent_values[index] >= 0.0
+		has_empty = has_empty or parent_values[index] < 0.0
+	if not has_solid or not has_empty:
+		return {"root_edges":0,"dropped":0,"topology_valid":true}
+	var centroid: Vector3 = Vector3.ZERO
+	for point in source_points:
+		centroid += point
+	centroid *= 0.25
+	var center_sample: Dictionary = _a2_sample(centroid, snapshot)
+	if not bool(center_sample.get("valid", false)):
+		return {"root_edges":0,"dropped":0,"topology_valid":false,"topology_reason":"a2_centroid_sample_invalid"}
+	var center_key: String = _sample_key(centroid)
+	var centroid_identity: String = "a2-centroid|%d,%d,%d|parent-tet:%d" % [cell_id.x,cell_id.y,cell_id.z,parent_tet_index]
+	_a2_centroid_identities[center_key] = centroid_identity
+	_a2_centroid_provenance[center_key] = {"source_cell":[cell_id.x,cell_id.y,cell_id.z],"source_tetrahedron":parent_tet_index,"construction":"arithmetic barycenter of the four original tetrahedron vertices","initial_construction_point":[centroid.x,centroid.y,centroid.z]}
+	_a2_refined_cells["%d,%d,%d" % [cell_id.x,cell_id.y,cell_id.z]] = true
+	_a2_refined_parent_tetrahedra += 1
+	_a2_steiner_vertices += 1
+	var child_points: Array[Vector3] = [centroid]
+	child_points.append_array(source_points)
+	var child_values: Array[float] = [float(center_sample.value)]
+	child_values.append_array(source_values)
+	var total_roots: int = 0
+	var total_dropped: int = 0
+	for omitted in range(4):
+		var child_tet: Array[int] = [0]
+		for source_index in range(4):
+			if source_index != omitted:
+				child_tet.append(source_index+1)
+		var before_triangles: int = mesh.positions.size()/3
+		var child_result: Dictionary = _polygonize_tet(child_tet,child_points,child_values,snapshot,mesh,topology,cell_id,100000+parent_tet_index*4+omitted)
+		total_roots += int(child_result.get("root_edges",0))
+		total_dropped += int(child_result.get("dropped",0))
+		_a2_refined_patch_emitted_triangles += mesh.positions.size()/3-before_triangles
+		if not bool(child_result.get("topology_valid",true)):
+			return {"root_edges":total_roots,"dropped":total_dropped,"topology_valid":false,"topology_reason":child_result.get("topology_reason","a2_child_tetrahedron_rejected"),"child":omitted}
+	return {"root_edges":total_roots,"dropped":total_dropped,"topology_valid":true}
 
 func _polygonize_tet(tet:Array,cube_points:Array[Vector3],cube_values:Array[float],snapshot:Dictionary,mesh:Dictionary,
 		topology:Variant=null,cell_id:Vector3i=Vector3i.ZERO,tet_index:int=0)->Dictionary:
@@ -238,9 +327,129 @@ func diagonal_selection_regression()->Dictionary:
 		"cutoff_squared":1.0e-12,"selected":"alternate" if not historical and alternate else "historical" if historical else "none",
 		"valid":not historical and alternate}
 
+func _a2_sample(point: Vector3, snapshot: Dictionary) -> Dictionary:
+	var key: String = _sample_key(point)
+	if _sample_cache.has(key):
+		var cached: float = float(_sample_cache[key])
+		return {"valid":is_finite(cached),"value":cached,"cached":true}
+	var value: float = Core.sample(point,snapshot)
+	_a2_additional_sdf_evaluations += 1
+	if not is_finite(value):
+		return {"valid":false,"reason":"a2_nonfinite_canonical_sample","point":[point.x,point.y,point.z]}
+	_sample_cache[key] = value
+	return {"valid":true,"value":value,"cached":false}
+
+func _a2_endpoint_identity(point: Vector3) -> String:
+	var sample_key: String = _sample_key(point)
+	if _a2_centroid_identities.has(sample_key):
+		return String(_a2_centroid_identities[sample_key])
+	var lattice: Vector3i = Vector3i(roundi(point.x/STEP),roundi(point.y/STEP),roundi(point.z/STEP))
+	return "grid-node|"+_global_lattice_key(lattice)
+
+func _a2_record_surface_root(root_identity: String, point: Vector3, initial_point: Vector3, bracket_a: Vector3,
+		bracket_b: Vector3, bracket_da: float, bracket_db: float, residual: float, iterations: int,
+		snapshot: Dictionary, source_identity: String) -> Dictionary:
+	if _a2_recorded_surface_roots.has(root_identity):
+		return {"valid":true}
+	var gradient_delta: float = 0.01
+	var xp: Dictionary = _a2_sample(point+Vector3(gradient_delta,0.0,0.0),snapshot)
+	var xm: Dictionary = _a2_sample(point-Vector3(gradient_delta,0.0,0.0),snapshot)
+	var yp: Dictionary = _a2_sample(point+Vector3(0.0,gradient_delta,0.0),snapshot)
+	var ym: Dictionary = _a2_sample(point-Vector3(0.0,gradient_delta,0.0),snapshot)
+	var zp: Dictionary = _a2_sample(point+Vector3(0.0,0.0,gradient_delta),snapshot)
+	var zm: Dictionary = _a2_sample(point-Vector3(0.0,0.0,gradient_delta),snapshot)
+	for sample in [xp,xm,yp,ym,zp,zm]:
+		if not bool(sample.get("valid",false)):
+			return {"valid":false,"reason":"a2_root_gradient_sample_invalid"}
+	var gradient: Vector3 = Vector3(float(xp.value)-float(xm.value),float(yp.value)-float(ym.value),float(zp.value)-float(zm.value))/(2.0*gradient_delta)
+	if not is_finite(gradient.x) or not is_finite(gradient.y) or not is_finite(gradient.z) or gradient.length_squared()<=1.0e-20:
+		return {"valid":false,"reason":"a2_root_gradient_invalid"}
+	var normal: Vector3 = gradient.normalized()
+	var provenance: Dictionary = {}
+	if source_identity.begins_with("a2-centroid|"):
+		for key in _a2_centroid_provenance:
+			if String(_a2_centroid_identities.get(key,""))==source_identity:
+				provenance=_a2_centroid_provenance[key]
+				break
+	var displacement: float = point.distance_to(initial_point)
+	_a2_max_vertex_displacement = maxf(_a2_max_vertex_displacement,displacement)
+	_a2_max_root_residual = maxf(_a2_max_root_residual,absf(residual))
+	_a2_new_surface_roots += 1
+	_a2_recorded_surface_roots[root_identity] = true
+	var source_cell: Variant = provenance.get("source_cell",[])
+	var source_tet: int = int(provenance.get("source_tetrahedron",-1))
+	var edge_kind: String = "centroid-to-grid-node" if source_identity.begins_with("a2-centroid|") else "centroid-surface-endpoint"
+	_a2_new_vertex_evidence.append({
+		"surface_root_identity":root_identity,"source_cell":source_cell,"source_tetrahedron":source_tet,
+		"source_topology_edge":edge_kind,"source_centroid_identity":source_identity,
+		"initial_construction_point_world":[initial_point.x,initial_point.y,initial_point.z],
+		"final_bracket_endpoints_world":[[bracket_a.x,bracket_a.y,bracket_a.z],[bracket_b.x,bracket_b.y,bracket_b.z]],
+		"final_bracket_density":[bracket_da,bracket_db],"root_method":"exact_zero_centroid_endpoint" if iterations==0 else "canonical continuous SDF bisection",
+		"iterations":iterations,"final_point_world":[point.x,point.y,point.z],"canonical_density_residual":residual,
+		"canonical_gradient": [gradient.x,gradient.y,gradient.z],"canonical_normal": [normal.x,normal.y,normal.z],
+		"displacement_from_linear_construction":displacement,"gradient_probe_delta":gradient_delta})
+	return {"valid":true}
+
+func _a2_refined_edge_root(a: Vector3, b: Vector3, da: float, db: float, snapshot: Dictionary) -> Dictionary:
+	if (da<0.0)==(db<0.0):
+		return {"valid":false,"reason":"a2_edge_does_not_cross_surface"}
+	var identity_a: String = _a2_endpoint_identity(a)
+	var identity_b: String = _a2_endpoint_identity(b)
+	if identity_a>identity_b:
+		var point_swap: Vector3=a;a=b;b=point_swap
+		var density_swap: float=da;da=db;db=density_swap
+		var identity_swap: String=identity_a;identity_a=identity_b;identity_b=identity_swap
+	var edge_key: String = "a2-edge|"+identity_a+"|"+identity_b
+	if da==0.0 or db==0.0:
+		var exact_point: Vector3 = a if da==0.0 else b
+		var exact_identity: String = "node|"+_sample_key(exact_point)
+		var exact_residual: float = 0.0
+		if _a2_centroid_identities.has(_sample_key(exact_point)):
+			var recorded: Dictionary = _a2_record_surface_root(exact_identity,exact_point,exact_point,exact_point,exact_point,0.0,0.0,exact_residual,0,snapshot,String(_a2_centroid_identities[_sample_key(exact_point)]))
+			if not bool(recorded.get("valid",false)):
+				return {"valid":false,"reason":recorded.get("reason","a2_exact_root_diagnostic_failed")}
+		_root_cache[edge_key]={"point":exact_point,"root_identity":exact_identity}
+		return {"valid":true,"point":exact_point,"root_kind":"exact_zero_endpoint","root_identity":exact_identity}
+	if _root_cache.has(edge_key):
+		var cached: Dictionary = _root_cache[edge_key]
+		return {"valid":true,"point":cached.point,"root_kind":"a2_canonical_edge_bisection","root_identity":cached.root_identity}
+	var initial_t: float = clampf(da/(da-db),0.0,1.0)
+	var initial_point: Vector3 = a.lerp(b,initial_t)
+	var low: float=0.0;var high: float=1.0;var low_value: float=da;var high_value: float=db;var iterations_run: int=0
+	for iteration in range(A2_BISECTION_ITERATIONS):
+		iterations_run=iteration+1
+		var t: float=(low+high)*0.5
+		var midpoint: Vector3=a.lerp(b,t)
+		var sample: Dictionary=_a2_sample(midpoint,snapshot)
+		if not bool(sample.get("valid",false)):
+			return {"valid":false,"reason":sample.get("reason","a2_root_sample_invalid")}
+		var midpoint_value: float=float(sample.value)
+		if midpoint_value==0.0:
+			low=t;high=t;low_value=0.0;high_value=0.0;break
+		if (midpoint_value<0.0)==(low_value<0.0):
+			low=t;low_value=midpoint_value
+		else:
+			high=t;high_value=midpoint_value
+	var point: Vector3=a.lerp(b,(low+high)*0.5)
+	var residual_sample: Dictionary=_a2_sample(point,snapshot)
+	if not bool(residual_sample.get("valid",false)):
+		return {"valid":false,"reason":"a2_root_residual_sample_invalid"}
+	var residual: float=float(residual_sample.value)
+	if absf(residual)>A2_ROOT_RESIDUAL_BOUND:
+		return {"valid":false,"reason":"a2_root_residual_bound_exceeded","residual":residual,"bound":A2_ROOT_RESIDUAL_BOUND,"edge":edge_key}
+	var root_identity: String=edge_key
+	var source_identity: String=identity_a if identity_a.begins_with("a2-centroid|") else identity_b
+	var recorded_root: Dictionary=_a2_record_surface_root(root_identity,point,initial_point,a.lerp(b,low),a.lerp(b,high),low_value,high_value,residual,iterations_run,snapshot,source_identity)
+	if not bool(recorded_root.get("valid",false)):
+		return {"valid":false,"reason":recorded_root.get("reason","a2_root_evidence_failed")}
+	_root_cache[edge_key]={"point":point,"root_identity":root_identity}
+	return {"valid":true,"point":point,"root_kind":"a2_canonical_edge_bisection","root_identity":root_identity}
+
 func _edge_root(ai:int,bi:int,points:Array[Vector3],values:Array[float],snapshot:Dictionary)->Dictionary:
 	var a:Vector3=points[ai]; var b:Vector3=points[bi]; var da:float=values[ai]; var db:float=values[bi]
 	if (da<0.0)==(db<0.0):return {"valid":false}
+	if _a2_centroid_identities.has(_sample_key(a)) or _a2_centroid_identities.has(_sample_key(b)):
+		return _a2_refined_edge_root(a,b,da,db,snapshot)
 	# The root-cache identity is the exact global scalar-lattice edge, not a
 	# quantized world-space position. Canonical endpoint order also gives fresh
 	# chunk builds the same bisection arithmetic when they traverse an edge in
