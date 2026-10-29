@@ -81,7 +81,7 @@ func _run() -> void:
 		"baseline_mesh_hash_inputs":_mesh_hash_inputs(baseline_mesh),
 		"attempt_classification":"D1_CONTROL_DIAGNOSTIC_ONLY; DOES_NOT_CONSUME_D2"
 	}
-	var valid: bool = bool(payload.volume_bytes_equal) and bool(root_diagnostic.get("valid", false)) and bool(root_diagnostic.get("baseline_equals_numeric_global", false)) and bool(payload.mesh_sha_equal) and bool(positions.get("exact_equal", false)) and bool(normals.get("exact_equal", false)) and bool(indices.get("exact_equal", false))
+	var valid: bool = bool(payload.get("volume_bytes_equal", false)) and bool(root_diagnostic.get("valid", false)) and bool(root_diagnostic.get("baseline_equals_numeric_global", false)) and bool(payload.get("mesh_sha_equal", false)) and bool(positions.get("exact_equal", false)) and bool(normals.get("exact_equal", false)) and bool(indices.get("exact_equal", false))
 	payload["valid"] = valid
 	payload["diagnosis"] = "NUMERIC_ORDERING_DRIFT_CORRECTED" if valid else "UNRESOLVED_REQUIRES_FURTHER_CONTROL_DIAGNOSIS"
 	_finish(payload)
