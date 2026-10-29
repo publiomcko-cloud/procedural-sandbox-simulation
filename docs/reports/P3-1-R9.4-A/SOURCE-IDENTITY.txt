@@ -3,7 +3,7 @@ Branch: bench/p3-1-r9-4a-root-aware
 Current source HEAD: f0c93415dd56886a1c05ff2e6a1340e420f22c59
 Expected source HEAD: f0c93415dd56886a1c05ff2e6a1340e420f22c59
 Direct parent: d5903242e41642a2633e18dc181c4389188c65b2
-R9.3 base: d5903242e41642a2633e18dc181c4389188c65b2
+R9.3 base: ce6d14d5c3d465ac5477e54354f2d1219171f6f0
 Implementation path: game/tests/prototypes/p3_1_r9_2_candidate_impl.gd
 Implementation physical SHA-256: 970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a
 Implementation Git blob: 5a19b05d3f39108e53c8b7ff47d28303ee7bfbb0
