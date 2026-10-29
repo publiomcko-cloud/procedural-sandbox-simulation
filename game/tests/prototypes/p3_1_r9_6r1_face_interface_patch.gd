@@ -210,13 +210,21 @@ func _graph_from_edges(edge_keys: Array[String], directed: Dictionary) -> Dictio
 				if not visited.has(neighbor):visited[neighbor]=true;queue.append(neighbor)
 		nodes.sort()
 		var endpoints:Array[String]=[];var valid_degrees:=true
+		var degree_histogram:Dictionary={};var invalid_degree_nodes:Array[Dictionary]=[];var degree_sum:=0
 		for node in nodes:
 			var degree:int=adjacency[node].size()
+			degree_sum+=degree
+			degree_histogram[degree]=int(degree_histogram.get(degree,0))+1
 			if degree==1:endpoints.append(node)
-			elif degree!=2:valid_degrees=false
+			elif degree!=2:
+				valid_degrees=false
+				invalid_degree_nodes.append({"node":node,"degree":degree,"neighbors":adjacency[node].duplicate()})
 		var closed:bool=endpoints.is_empty() and valid_degrees
 		if not valid_degrees or (not closed and endpoints.size()!=2):
-			return {"valid":false,"reason":"face_contour_branch_or_open_degree_invalid","nodes":nodes,"endpoint_count":endpoints.size()}
+			return {"valid":false,"reason":"face_contour_branch_or_open_degree_invalid","nodes":nodes,
+				"endpoint_count":endpoints.size(),"degree_histogram":degree_histogram,
+				"invalid_degree_nodes":invalid_degree_nodes,"component_edge_count":int(degree_sum/2),
+				"branch_diagnostic":"a boundary component may only be a simple open path or simple closed cycle"}
 		var ordered := _order_component(nodes,adjacency,endpoints,closed)
 		if not ordered.valid:return ordered
 		components.append({"closed":closed,"points":ordered.points,"node_keys":nodes,"edge_count":nodes.size() if closed else nodes.size()-1})
