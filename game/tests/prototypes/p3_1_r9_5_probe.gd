@@ -238,7 +238,8 @@ func _run_xplus(candidate:RefCounted,manifest:Dictionary)->void:
 		var mixed: bool = id.ends_with("MIXED_LOD.v1");var left_roi:Dictionary={"id":"L","min":[15.0,1.0,6.0],"cells":[2,4,4] if mixed else [4,8,8],"step":0.5 if mixed else 0.25};var right_roi:Dictionary={"id":"R","min":[16.0,1.0,6.0],"cells":[4,8,8],"step":0.25}
 		candidate.call("configure_roi",left_roi);var left:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"L","roi":left_roi});candidate.call("configure_roi",right_roi);var right:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"R","roi":right_roi})
 		if not left.get("valid",false) or not right.get("valid",false):print("R95_SPLIT_BLOCKED "+JSON.stringify({"id":id,"left":left.get("reason","ok"),"right":right.get("reason","ok")}));continue
-		var ls:=_boundary_segments(left.mesh,16.0);var rs:=_boundary_segments(right.mesh,16.0);var delta:=_dict_delta(ls,rs);var combined:=_combine(left.mesh,right.mesh)
+		var left_slice:Dictionary=_mesh_plane_segments(left.mesh,0,16.0);var right_slice:Dictionary=_mesh_plane_segments(right.mesh,0,16.0)
+		var ls:Dictionary=left_slice.segments;var rs:Dictionary=right_slice.segments;var delta:=_dict_delta(ls,rs);var combined:=_combine(left.mesh,right.mesh)
 		var left_values:PackedFloat32Array=left.get("volume",{}).get("values",PackedFloat32Array()) if cid=="D" else PackedFloat32Array()
 		var right_values:PackedFloat32Array=right.get("volume",{}).get("values",PackedFloat32Array()) if cid=="D" else PackedFloat32Array()
 		var oracle_l:Dictionary=_face_oracle(setup.snapshot,left_roi,1,int(row.seed),left_values,cid=="D")
@@ -248,7 +249,8 @@ func _run_xplus(candidate:RefCounted,manifest:Dictionary)->void:
 			failures+=1
 			continue
 		var ldiff:=_dict_delta(ls,oracle_l.segments);var rdiff:=_dict_delta(rs,oracle_r.segments)
-		print("R95_SPLIT_PAIR "+JSON.stringify({"scenario_id":id,"candidate":cid,"lod_pair":[1,0] if mixed else [0,0],"plane_x":16,"left_sha":left.get("mesh_sha256",""),"right_sha":right.get("mesh_sha256",""),"left_segments":ls.size(),"right_segments":rs.size(),"left_only":delta.left.size(),"right_only":delta.right.size(),"left_only_first_24":delta.left.slice(0,24),"right_only_first_24":delta.right.slice(0,24),"seam_incidence":_interface_incidence(combined,16.0),"combined_topology":_exact_topology(combined,Vector3(15,1,6),Vector3(17,3,8)),"independent_face_oracle":{"construction":"enumerate the two tetrahedral face triangles implied by Core.TETS on the requested cube side; no candidate helper is used","left_face_side":1,"right_face_side":0,"left_method":oracle_l.method,"right_method":oracle_r.method,"left_face_triangle_count":oracle_l.face_triangle_count,"right_face_triangle_count":oracle_r.face_triangle_count,"left_expected":oracle_l.segments.size(),"left_missing":ldiff.right.size(),"left_extra":ldiff.left.size(),"left_missing_first_16":ldiff.right.slice(0,16),"left_extra_first_16":ldiff.left.slice(0,16),"left_endpoint_delta":_segment_endpoint_deltas(ls,oracle_l.segment_rows),"right_expected":oracle_r.segments.size(),"right_missing":rdiff.right.size(),"right_extra":rdiff.left.size(),"right_missing_first_16":rdiff.right.slice(0,16),"right_extra_first_16":rdiff.left.slice(0,16),"right_endpoint_delta":_segment_endpoint_deltas(rs,oracle_r.segment_rows)},"scope":"candidate-generated separate ROIs; not production chunk acceptance"}))
+		var left_coplanar_edges:Dictionary=_boundary_segments(left.mesh,16.0);var right_coplanar_edges:Dictionary=_boundary_segments(right.mesh,16.0)
+		print("R95_SPLIT_PAIR "+JSON.stringify({"scenario_id":id,"candidate":cid,"lod_pair":[1,0] if mixed else [0,0],"plane_x":16,"left_sha":left.get("mesh_sha256",""),"right_sha":right.get("mesh_sha256",""),"left_segments":ls.size(),"right_segments":rs.size(),"left_only":delta.left.size(),"right_only":delta.right.size(),"left_only_first_24":delta.left.slice(0,24),"right_only_first_24":delta.right.slice(0,24),"left_plane_intersection":{"raw_segment_count":left_slice.raw_segment_count,"coplanar_triangle_count":left_slice.coplanar_triangle_count,"segment_count":ls.size()},"right_plane_intersection":{"raw_segment_count":right_slice.raw_segment_count,"coplanar_triangle_count":right_slice.coplanar_triangle_count,"segment_count":rs.size()},"coplanar_mesh_edges_on_plane":{"left":left_coplanar_edges.size(),"right":right_coplanar_edges.size()},"seam_incidence":_interface_incidence(combined,16.0),"combined_topology":_exact_topology(combined,Vector3(15,1,6),Vector3(17,3,8)),"independent_face_oracle":{"construction":"enumerate the two tetrahedral face triangles implied by Core.TETS on the requested cube side; no candidate helper is used","left_face_side":1,"right_face_side":0,"left_method":oracle_l.method,"right_method":oracle_r.method,"left_face_triangle_count":oracle_l.face_triangle_count,"right_face_triangle_count":oracle_r.face_triangle_count,"left_expected":oracle_l.segments.size(),"left_missing":ldiff.right.size(),"left_extra":ldiff.left.size(),"left_missing_first_16":ldiff.right.slice(0,16),"left_extra_first_16":ldiff.left.slice(0,16),"left_endpoint_delta":_segment_endpoint_deltas(ls,oracle_l.segment_rows),"right_expected":oracle_r.segments.size(),"right_missing":rdiff.right.size(),"right_extra":rdiff.left.size(),"right_missing_first_16":rdiff.right.slice(0,16),"right_extra_first_16":rdiff.left.slice(0,16),"right_endpoint_delta":_segment_endpoint_deltas(rs,oracle_r.segment_rows)},"scope":"candidate-generated separate ROIs; not production chunk acceptance"}))
 
 func _trace_a_cutoffs(candidate:RefCounted,snapshot:Dictionary,roi:Dictionary,mesh:Dictionary,reported_drops:int)->Dictionary:
 	var roi_min:Vector3=Core.world_min(roi);var cells:Vector3i=Core.cell_counts(roi);var step:float=Core.step(roi);var dims:Vector3i=cells+Vector3i.ONE;var values:=PackedFloat32Array();values.resize(dims.x*dims.y*dims.z)
@@ -464,6 +466,37 @@ func _boundary_segments(mesh:Dictionary,x:float)->Dictionary:
 			if absf(a.x-x)>1e-5 or absf(b.x-x)>1e-5:continue
 			var ka:=Core._point_key(a);var kb:=Core._point_key(b);out[ka+"|"+kb if ka<kb else kb+"|"+ka]=true
 	return out
+
+func _mesh_plane_segments(mesh:Dictionary,axis:int,plane:float)->Dictionary:
+	var segments:Dictionary={};var rows:Array[Dictionary]=[];var positions:PackedVector3Array=mesh.get("positions",PackedVector3Array());var raw_count:int=0;var coplanar_count:int=0;var plane_epsilon:float=1e-6
+	if axis<0 or axis>2 or positions.size()%3!=0:return {"valid":false,"reason":"mesh_plane_input_invalid","axis":axis,"position_count":positions.size()}
+	for i in range(0,positions.size(),3):
+		var triangle:Array[Vector3]=[positions[i],positions[i+1],positions[i+2]];var hits:Array[Vector3]=[];var coplanar_edges:Array[Vector2i]=[]
+		for edge in [Vector2i(0,1),Vector2i(1,2),Vector2i(2,0)]:
+			var a:Vector3=triangle[edge.x];var b:Vector3=triangle[edge.y];var da:float=a[axis]-plane;var db:float=b[axis]-plane;var a_on:bool=absf(da)<=plane_epsilon;var b_on:bool=absf(db)<=plane_epsilon
+			if a_on and b_on:
+				hits.append(a);hits.append(b);coplanar_edges.append(edge)
+			elif a_on:hits.append(a)
+			elif b_on:hits.append(b)
+			elif (da<0.0)!=(db<0.0):
+				var denominator:float=da-db
+				if denominator!=0.0 and is_finite(denominator):hits.append(a.lerp(b,clampf(da/denominator,0.0,1.0)))
+		var unique:Array[Vector3]=[]
+		for point in hits:
+			var duplicate:bool=false
+			for prior in unique:
+				if prior.distance_squared_to(point)<1e-12:duplicate=true;break
+			if not duplicate:unique.append(point)
+		if coplanar_edges.size()==3:
+			coplanar_count+=1
+			for edge in [Vector2i(0,1),Vector2i(1,2),Vector2i(2,0)]:_append_plane_segment(segments,rows,triangle[edge.x],triangle[edge.y],i/3,axis)
+		elif unique.size()==2:_append_plane_segment(segments,rows,unique[0],unique[1],i/3,axis)
+		raw_count+=1 if unique.size()==2 or coplanar_edges.size()==3 else 0
+	return {"valid":true,"segments":segments,"segment_rows":rows,"raw_segment_count":raw_count,"coplanar_triangle_count":coplanar_count,"axis":axis,"plane":plane,"classification_epsilon":plane_epsilon,"method":"independent triangle-plane slicing of emitted candidate positions"}
+
+func _append_plane_segment(segments:Dictionary,rows:Array[Dictionary],a:Vector3,b:Vector3,triangle_index:int,axis:int)->void:
+	var ka:String=Core._point_key(a);var kb:String=Core._point_key(b);var key:String=ka+"|"+kb if ka<kb else kb+"|"+ka
+	segments[key]=true;rows.append({"key":key,"a":a,"b":b,"triangle_index":triangle_index,"plane_axis":axis})
 
 func _interface_incidence(mesh:Dictionary,x:float)->Dictionary:
 	var counts:Dictionary={};var p:PackedVector3Array=mesh.get("positions",PackedVector3Array())
