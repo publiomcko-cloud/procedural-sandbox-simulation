@@ -10,7 +10,7 @@ All three candidates remain partial. **No candidate met every frozen R9.4 geomet
 
 | Candidate | Corrections | Tested source SHA (direct parent) | Current PR HEAD | Status |
 |---|---:|---|---|---|
-| A — root-aware marching tetrahedra | 3 | f0c93415dd56886a1c05ff2e6a1340e420f22c59 (d5903242e41642a2633e18dc181c4389188c65b2) | b109b4e3b38393b84bf66febe248ac01df9f6b72 | A_PARTIAL_CORRECTION |
+| A — root-aware marching tetrahedra | 3 | f0c93415dd56886a1c05ff2e6a1340e420f22c59 (d5903242e41642a2633e18dc181c4389188c65b2) | b41dc7207fae3911ecd7b082850535b7e965db5b | A_PARTIAL_CORRECTION |
 | C — Surface Nets | 2 | af4d6027d9d57c9f2b8023aa27b31d2dd2dcedf2 (5def207d7b1cff8d7f70476f1221c7b9c5771e27) | 2cbe572a1fd1e5ebf871e9b43b515ef2522f38c5 | C_PARTIAL_CORRECTION |
 | D — materialized volume / independent extraction | 2 | 6ea04229b5ff06090f346c8749c1f5a53994227c (51744eebf17646ca52612936146adeb0f9db001b) | 464087947da00a45090a289ade4917882ce0ada5 | D_PARTIAL_CORRECTION |
 
