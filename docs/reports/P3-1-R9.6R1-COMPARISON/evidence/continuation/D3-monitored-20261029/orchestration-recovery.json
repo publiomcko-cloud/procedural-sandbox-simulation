@@ -1,0 +1,60 @@
+{
+  "events": [
+    {
+      "kind": "runner_invocation_rejected_before_process",
+      "stage": "01_import",
+      "reason": "first monitored-runner attempt was blocked before Process.Start by free commit below 4GiB",
+      "runner_exit": 21
+    },
+    {
+      "kind": "orchestration_retry_rejected_before_process",
+      "stage": "01_import",
+      "reason": "attempt to reuse the same evidence/profile path hit profile root already exists; no Godot process and no evidence overwrite; exact timestamp not captured"
+    },
+    {
+      "kind": "runner_invocation_rejected_before_process",
+      "stage": "02_import_retry",
+      "reason": "free commit below 4GiB",
+      "runner_exit": 21
+    },
+    {
+      "kind": "process_started_then_resource_stopped",
+      "stage": "03_import_retry",
+      "reason": "4GiB R1 runtime cutoff; source import did not complete",
+      "process_id": 41288,
+      "runner_exit": 125
+    },
+    {
+      "kind": "process_started_then_resource_stopped",
+      "stage": "04_import_retry",
+      "reason": "4GiB R1 runtime cutoff; source import did not complete",
+      "process_id": 52624,
+      "runner_exit": 125
+    },
+    {
+      "kind": "completed",
+      "stage": "05_import_r2",
+      "result": "editor import PASS",
+      "process_id": 38372,
+      "runner_exit": 0
+    },
+    {
+      "kind": "completed",
+      "stage": "06_check_only",
+      "result": "harness check-only PASS",
+      "process_id": 38604,
+      "runner_exit": 0
+    },
+    {
+      "kind": "completed",
+      "stage": "07_D3_geometry",
+      "result": "D3 harness fail-closed pin mismatch before geometry; D attempt consumed",
+      "process_id": 55536,
+      "godot_exit": 2,
+      "runner_exit": 2
+    }
+  ],
+  "runner_r1_floor": "4GiB prelaunch/runtime",
+  "runner_r2_floor": "4GiB prelaunch; 2GiB runtime abort",
+  "original_attached_gate": "6GiB prelaunch, explicitly overridden by latest direct owner instruction for this D3 run"
+}

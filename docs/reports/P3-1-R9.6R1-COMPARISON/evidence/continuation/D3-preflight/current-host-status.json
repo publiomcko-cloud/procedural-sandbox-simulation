@@ -1,0 +1,15 @@
+{
+  "timestamp_utc": "2026-10-29T17:56:24.3060488Z",
+  "runner_equivalent_formatted_free_commit_bytes": 6061936640,
+  "raw_free_commit_bytes": 6057381888,
+  "physical_available_kb": 22894552,
+  "physical_total_kb": 66944192,
+  "disk_c_free_bytes": 126719180800,
+  "godot_process_count": 0,
+  "required_free_commit_bytes": 6442450944,
+  "required_physical_available_bytes": 8589934592,
+  "required_disk_free_bytes": 10737418240,
+  "runner_gate_passed": false,
+  "godot_scenario_started": false,
+  "classification": "OBSERVATIONAL_HOST_STATUS_NOT_A_LAUNCH_RESERVATION"
+}

@@ -1,0 +1,63 @@
+{
+	"attempt": "ATTEMPT_A3",
+	"boundary_edge_count": 0,
+	"candidate": "A",
+	"identity": {
+		"candidate": "A",
+		"edit_revision": 2,
+		"field_revision": 2,
+		"left_chunk_id": "L",
+		"lod_pair": [
+			0,
+			0
+		],
+		"right_chunk_id": "R",
+		"volume_payload_hashes": [
+			"canonical_sdf",
+			"canonical_sdf"
+		]
+	},
+	"identity_text": "candidate=A|face_axis=0|face_coordinate=16.000000000|left=L|right=R|lod=0,0|field_revision=2|edit_revision=2|volume_payloads=canonical_sdf,canonical_sdf",
+	"left_graph": {
+		"component_count": 1,
+		"components": [
+			{
+				"closed": false,
+				"edges": 22,
+				"vertices": 23
+			}
+		],
+		"degree_histogram": {
+			"1": 2,
+			"2": 21
+		},
+		"edge_count": 22
+	},
+	"mesh_sha256": "",
+	"mode": "shared_existing_contour",
+	"normals": [],
+	"patch_graph": {},
+	"patch_key_sha256": "c162cd7dc74a682d33f6360d3412f881782f87b581f66539a269dfe1fce652f4",
+	"right_graph": {
+		"component_count": 1,
+		"components": [
+			{
+				"closed": false,
+				"edges": 22,
+				"vertices": 23
+			}
+		],
+		"degree_histogram": {
+			"1": 2,
+			"2": 21
+		},
+		"edge_count": 22
+	},
+	"scenario_id": "R9.2.HIST.XPLUS_DEFECT.v1",
+	"schema": "P3.1.R9.6R1.InterfacePatch.v1",
+	"scope": "experimental shared face bridge; not production geometry",
+	"source_sha": "fc6690edb6ac0fd605de3e78814df724e9c72e47",
+	"triangle_count": 0,
+	"vertices": [],
+	"winding_compatible": true
+}

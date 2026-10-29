@@ -1,0 +1,43 @@
+{
+  "stage": "A3_CHECK_ONLY",
+  "source_sha": "577d22d6d7fa9c83d822a242cfaf7e002c78810f",
+  "status": "PROCESS_EXIT_0",
+  "scenario_started": true,
+  "process_id": 39948,
+  "observed_process": {
+    "ProcessId": 39948,
+    "ParentProcessId": 17952,
+    "CommandLine": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path ./game --check-only --script res://tests/prototypes/p3_1_r9_6r1_candidate_probe.gd",
+    "ExecutablePath": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "CreationDate": "2026-10-29T14:44:16.22667-03:00"
+  },
+  "started_utc": "2026-10-29T17:44:16.2217935Z",
+  "finished_utc": "2026-10-29T17:44:17.4814773Z",
+  "elapsed_ms": 1250.12,
+  "timeout_seconds": 120,
+  "timeout": false,
+  "exit_code": 0,
+  "exception": null,
+  "arguments": [
+    "--headless",
+    "--path",
+    "./game",
+    "--check-only",
+    "--script",
+    "res://tests/prototypes/p3_1_r9_6r1_candidate_probe.gd"
+  ],
+  "environment": {
+    "APPDATA": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\profiles\\A3_CHECK_ONLY\\APPDATA",
+    "LOCALAPPDATA": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\profiles\\A3_CHECK_ONLY\\LOCALAPPDATA",
+    "TEMP": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\profiles\\A3_CHECK_ONLY\\TEMP",
+    "TMP": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\profiles\\A3_CHECK_ONLY\\TMP",
+    "R96R1_ARTIFACT_DIR": ""
+  },
+  "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\A3_CHECK_ONLY\\stdout.txt",
+  "stdout_sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c",
+  "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\A3_CHECK_ONLY\\stderr.txt",
+  "stderr_sha256": "83e8abc7fb9318dc63b0471e812d13160b315f457f335f375e30027bb43838df",
+  "host_before": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\A3_CHECK_ONLY\\host-before.json",
+  "host_after": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\A3_CHECK_ONLY\\host-after.json",
+  "artifact_directory": ""
+}

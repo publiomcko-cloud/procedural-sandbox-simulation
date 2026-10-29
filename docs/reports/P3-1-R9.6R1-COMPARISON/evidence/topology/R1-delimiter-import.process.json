@@ -1,0 +1,40 @@
+{
+    "stage":  "R1-delimiter-import",
+    "source_sha":  "0f8cfcdc64ef43096ff9f6166d17605bb1c13aec",
+    "arguments":  [
+                      "--headless",
+                      "--path",
+                      "C:\\r96r1-topology-run2-20261029\\game",
+                      "--editor",
+                      "--import"
+                  ],
+    "command_line":  "--headless --path \"C:\\r96r1-topology-run2-20261029\\game\" --editor --import",
+    "executable":  "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "executable_sha256":  "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+    "working_directory":  "C:\\r96r1-topology-run2-20261029",
+    "process_id":  28748,
+    "process_created_utc":  "2026-10-29T12:58:26.9319155Z",
+    "process_ended_utc":  "2026-10-29T12:58:38.0137624Z",
+    "elapsed_ms":  10839.26,
+    "timeout_90s":  false,
+    "exit_code":  0,
+    "observed_process":  {
+                             "ProcessId":  28748,
+                             "ParentProcessId":  55216,
+                             "CommandLine":  "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path \"C:\\r96r1-topology-run2-20261029\\game\" --editor --import",
+                             "ExecutablePath":  "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+                             "CreationDate":  "\/Date(1793278706937)\/"
+                         },
+    "environment":  {
+                        "LOCALAPPDATA":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-import-profile\\profile\\LOCALAPPDATA",
+                        "TEMP":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-import-profile\\profile\\TEMP",
+                        "TMP":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-import-profile\\profile\\TMP",
+                        "APPDATA":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-import-profile\\profile\\APPDATA"
+                    },
+    "stdout_path":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-import.stdout.txt",
+    "stdout_sha256":  "6a024d6228285cea6b24a884a8386ad0c5a50112263d693a175ca9294ecb43b4",
+    "stderr_path":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-import.stderr.txt",
+    "stderr_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "host_before":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-import-host-before.json",
+    "host_after":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-import-host-after.json"
+}

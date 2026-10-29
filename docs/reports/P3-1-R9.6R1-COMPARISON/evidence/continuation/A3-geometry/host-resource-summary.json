@@ -1,0 +1,16 @@
+{
+  "stage": "A3_GEOMETRY_RETRY1",
+  "timestamp_utc": "2026-10-29T17:47:18.1998385Z",
+  "required_free_commit_bytes": 6442450944,
+  "free_commit_bytes_before": 6520283136,
+  "physical_available_kb_before": 22825380,
+  "disk_c_free_bytes_before": 126884179968,
+  "temp_drive_free_bytes_before": 126884179968,
+  "running_godot_count_before": 0,
+  "free_commit_bytes_after": 6533771264,
+  "physical_available_kb_after": 22790600,
+  "disk_c_free_bytes_after": 126879227904,
+  "temp_drive_free_bytes_after": 126879227904,
+  "running_godot_count_after": 0,
+  "full_raw_host_snapshots_retained_locally": true
+}

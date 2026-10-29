@@ -1,3 +1,5 @@
+| 2026-10-29 | [P3.1 R9.6R1 controlled recovery](2026-10-29-P3-1-R9.6R1-EXECUTION-GATE.md) | 50/50 topology gate; A/D topology-first attempts fail geometry; memory discrepancy reconciled as unsupported; freeze attribution unknown | Evidence PRs #202–#205; no production adoption |
+
 ## 2026-10-28 — P3.1 R9.2 contract gate recovery
 
 - [R9.2 contract gate recovery](2026-10-28-P3-1-R9.2-CONTRACT-GATE-RECOVERY.md) — attempts 03 and 04 preserved as failed/inconclusive; fresh serial attempt 05 passed isolated import, check-only, and 48/48 contract assertions. No candidate scenario ran.

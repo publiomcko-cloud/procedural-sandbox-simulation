@@ -1,0 +1,26 @@
+{
+  "stage": "07_D3_geometry",
+  "before": {
+    "timestamp_utc": "2026-10-29T19:14:26.9859182Z",
+    "free_commit_bytes": 4424720384,
+    "commit_limit_bytes": 78499172352,
+    "committed_bytes": 74074451968,
+    "physical_available_bytes": 25015484416,
+    "disk_c_free_bytes": 125900632064,
+    "temp_drive_free_bytes": 125900632064,
+    "godot_process_count": 0,
+    "raw_snapshot_sha256": "69066f13459b0b330957ee0efa74cd934faa5c3657c583093f806512476e8933"
+  },
+  "after": {
+    "timestamp_utc": "2026-10-29T19:14:29.455139Z",
+    "free_commit_bytes": 4730048512,
+    "commit_limit_bytes": 78499172352,
+    "committed_bytes": 73769123840,
+    "physical_available_bytes": 25015840768,
+    "disk_c_free_bytes": 125838843904,
+    "temp_drive_free_bytes": 125838843904,
+    "godot_process_count": 0,
+    "raw_snapshot_sha256": "43842d9f12a3ee09a76748d8dc829afd8389fd4dd394a802b4e169f068ff2df1"
+  },
+  "raw_host_process_inventories": "retained owner-local only; not published to avoid exposing unrelated process list"
+}

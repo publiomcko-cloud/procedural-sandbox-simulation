@@ -1,0 +1,40 @@
+{
+  "stage": "control2-import",
+  "source_sha": "895dbca3c6dd58bb9adacd63fb39c3ad524226ff",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\r96r1-control-20261029\\game",
+    "--editor",
+    "--import"
+  ],
+  "command_line": "--headless --path \"C:\\r96r1-control-20261029\\game\" --editor --import",
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "executable_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "working_directory": "C:\\r96r1-control-20261029",
+  "process_id": 25376,
+  "process_created_utc": "2026-10-29T12:19:48.8446405Z",
+  "process_ended_utc": "2026-10-29T12:20:00.8919252Z",
+  "elapsed_ms": 11782.44,
+  "timeout_90s": false,
+  "exit_code": 0,
+  "observed_process": {
+    "ProcessId": 25376,
+    "ParentProcessId": 43020,
+    "CommandLine": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path \"C:\\r96r1-control-20261029\\game\" --editor --import",
+    "ExecutablePath": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "CreationDate": "2026-10-29T09:19:48.85058-03:00"
+  },
+  "environment": {
+    "APPDATA": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\profiles\\control2\\profile\\APPDATA",
+    "TMP": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\profiles\\control2\\profile\\TMP",
+    "LOCALAPPDATA": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\profiles\\control2\\profile\\LOCALAPPDATA",
+    "TEMP": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\profiles\\control2\\profile\\TEMP"
+  },
+  "stdout_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\control2-import.stdout.txt",
+  "stdout_sha256": "4ec0225752ff685563adfb4de6b8e137b791f757a49667e83f0fbd39ac987701",
+  "stderr_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\control2-import.stderr.txt",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "host_before": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\control2-import-host-before.json",
+  "host_after": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\control2-import-host-after.json"
+}

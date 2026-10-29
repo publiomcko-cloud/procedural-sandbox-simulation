@@ -1,0 +1,14 @@
+{
+  "stage": "A3_RETRY2_CHECK_ONLY",
+  "source_sha": "fc6690edb6ac0fd605de3e78814df724e9c72e47",
+  "process_id": 42440,
+  "observed_process": {
+    "ProcessId": 42440,
+    "ParentProcessId": 15184,
+    "CommandLine": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path ./game --check-only --script res://tests/prototypes/p3_1_r9_6r1_candidate_probe.gd",
+    "ExecutablePath": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "CreationDate": "2026-10-29T14:46:02.158309-03:00"
+  },
+  "started_utc": "2026-10-29T17:46:02.1534433Z",
+  "created_utc": "2026-10-29T17:46:02.4628544Z"
+}

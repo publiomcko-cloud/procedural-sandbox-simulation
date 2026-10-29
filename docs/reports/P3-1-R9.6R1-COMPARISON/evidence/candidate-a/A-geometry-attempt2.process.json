@@ -1,0 +1,32 @@
+{
+    "stage":  "A-geometry-attempt2",
+    "candidate":  "A",
+    "source_sha":  "bf230c4916c66e2150f8725480d8ce3ca589b353",
+    "candidate_file_sha256":  "4ae2a981fbd8d5d9d2f39974754457d3459e9200e41a5186e9c6f84f633fe199",
+    "probe_sha256":  "497a5826e7d1006e12da97a71116bccc7a0f7f9c862ddf373a3d8b3fb31e6de5",
+    "run_id":  "92dc44331fdc49419124f09df282cb68",
+    "scenario_attempt":  1,
+    "scenario_started":  true,
+    "status":  "PROCESS_EXIT_0",
+    "started_utc":  "2026-10-29T13:24:56.5141716Z",
+    "finished_utc":  "2026-10-29T13:25:02.5060148Z",
+    "elapsed_ms":  5973.32,
+    "godot_process_id":  8808,
+    "observed_process":  {
+                             "ProcessId":  8808,
+                             "ParentProcessId":  44372,
+                             "CommandLine":  "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path \"C:\\r96r1-A-run12-20261029\\game\" --script res://tests/prototypes/p3_1_r9_6r1_candidate_probe.gd",
+                             "ExecutablePath":  "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+                             "CreationDate":  "\/Date(1793280296518)\/"
+                         },
+    "exit_code":  0,
+    "timeout_300s":  false,
+    "exception":  null,
+    "stdout":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\A-geometry-attempt2.stdout.txt",
+    "stderr":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\A-geometry-attempt2.stderr.txt",
+    "stdout_sha256":  "13b75eb994a730f2260c45b9258b99434f434cff162454117e950765ba737fa5",
+    "stderr_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "host_before":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\A-geometry-attempt2.host-before.json",
+    "host_after":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\A-geometry-attempt2.host-after.json",
+    "artifact_dir":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\A-geometry-attempt2-artifacts"
+}

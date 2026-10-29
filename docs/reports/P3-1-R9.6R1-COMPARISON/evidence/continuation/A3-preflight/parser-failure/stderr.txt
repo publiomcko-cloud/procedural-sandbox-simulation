@@ -1,0 +1,8 @@
+SCRIPT ERROR: Parse Error: Not all code paths return a value.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9_6r1_face_interface_patch.gd:315)
+SCRIPT ERROR: Parse Error: Not all code paths return a value.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9_6r1_face_interface_patch.gd:346)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r9_6r1_candidate_probe.gd:0)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r9_6r1_candidate_probe.gd" with error "Compilation failed".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)

@@ -1,0 +1,26 @@
+{
+  "stage": "04_import_retry",
+  "before": {
+    "timestamp_utc": "2026-10-29T19:12:32.909549Z",
+    "free_commit_bytes": 4518240256,
+    "commit_limit_bytes": 78499172352,
+    "committed_bytes": 73980932096,
+    "physical_available_bytes": 25079005184,
+    "disk_c_free_bytes": 125900423168,
+    "temp_drive_free_bytes": 125900423168,
+    "godot_process_count": 0,
+    "raw_snapshot_sha256": "f8c4755c4d2307727de33c9f6250b60cbbdabc03c73cc9ed8290fa646dbb48e7"
+  },
+  "after": {
+    "timestamp_utc": "2026-10-29T19:12:35.0349171Z",
+    "free_commit_bytes": 4433371136,
+    "commit_limit_bytes": 78499172352,
+    "committed_bytes": 74065801216,
+    "physical_available_bytes": 25067503616,
+    "disk_c_free_bytes": 125900660736,
+    "temp_drive_free_bytes": 125900660736,
+    "godot_process_count": 0,
+    "raw_snapshot_sha256": "0cbec4b828a57d33b9d889048aaf9ecaf3686fa3d207dac7ffc7f85a334dad9a"
+  },
+  "raw_host_process_inventories": "retained owner-local only; not published to avoid exposing unrelated process list"
+}

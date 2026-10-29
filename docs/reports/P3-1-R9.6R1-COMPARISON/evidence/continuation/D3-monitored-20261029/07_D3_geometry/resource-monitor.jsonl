@@ -1,0 +1,3 @@
+{"timestamp_utc":"2026-10-29T19:14:28.0163028Z","elapsed_ms":587.02,"free_commit_bytes":4645101568,"floor_bytes":2147483648,"godot_pid":55536,"godot_private_bytes":1359872,"godot_working_set_bytes":6438912}
+{"timestamp_utc":"2026-10-29T19:14:28.4350389Z","elapsed_ms":1005.77,"free_commit_bytes":4579028992,"floor_bytes":2147483648,"godot_pid":55536,"godot_private_bytes":1359872,"godot_working_set_bytes":6438912}
+{"timestamp_utc":"2026-10-29T19:14:28.8430896Z","elapsed_ms":1413.79,"free_commit_bytes":4727574528,"floor_bytes":2147483648,"godot_pid":55536,"godot_private_bytes":null,"godot_working_set_bytes":null}

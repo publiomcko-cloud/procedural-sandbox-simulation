@@ -1,0 +1,20 @@
+{
+  "created_utc": "2026-10-29T19:08:15.529553Z",
+  "source_sha": "7d058899abc1663ff7d4175b5a508532367cd5da",
+  "source_parent": "3d0e4c59c0e33e4c21e34bbd54d1771c3db83415",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "branch": "bench/p3-1-r9-6r1-candidate-d-evidence",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "manifest_sidecar": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972  p3_1_r9_2_e2e_inputs.jsonl",
+  "owner_authorized_override": "latest direct user instruction authorizes one monitored D3 run overriding the attached 6 GiB prestart gate",
+  "monitor_prelaunch_floor_bytes": 4294967296,
+  "runtime_abort_floor_bytes_final": 2147483648,
+  "monitor_interval_requested_ms": 100,
+  "initial_free_commit_bytes": 4382269440,
+  "initial_commit_limit_bytes": 78499172352,
+  "initial_committed_bytes": 74116902912,
+  "initial_physical_available_bytes": 23859617792,
+  "initial_godot_process_count": 0
+}

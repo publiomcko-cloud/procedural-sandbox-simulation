@@ -1,0 +1,49 @@
+{
+  "stage": "D3_IMPORT_FINAL",
+  "source_sha": "7d058899abc1663ff7d4175b5a508532367cd5da",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "status": "HOST_GATE_BLOCKED_NOT_STARTED",
+  "scenario_started": false,
+  "runner_exit_code": 21,
+  "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "command": [
+    "--headless",
+    "--path",
+    "./game",
+    "--editor",
+    "--import"
+  ],
+  "working_directory": "C:\\r96r1-D-publish-20261029",
+  "reservation": {
+    "timestamp_utc": "2026-10-29T18:40:14.896753Z",
+    "free_commit_bytes": 5658206208,
+    "commit_limit_bytes": 78499172352,
+    "committed_bytes": 72840966144,
+    "required_free_commit_bytes": 6442450944,
+    "shortfall_bytes": 784244736,
+    "physical_available_bytes": 22659325952,
+    "required_physical_available_bytes": 8589934592,
+    "pagefile_auto_managed": false,
+    "pagefile_usage": [
+      {
+        "allocated_base_size_mb": 9487,
+        "current_usage_mb": 1423,
+        "peak_usage_mb": 1958
+      }
+    ],
+    "disk_c_free_bytes": 125926252544,
+    "temp_free_bytes": 125926252544,
+    "godot_process_count": 0
+  },
+  "after_runner": {
+    "timestamp_utc": "2026-10-29T18:40:15.9036301Z",
+    "free_commit_bytes": 5649481728,
+    "godot_process_count": 0
+  },
+  "earlier_observation": {
+    "timestamp_utc": "2026-10-29T18:40:00.6896504Z",
+    "free_commit_bytes": 5695373312
+  },
+  "interpretation": "The runner uses CommitLimit minus CommittedBytes. Free commit was below the gate and decreased materially since the prior observation, so this single final runner reservation was justified; the runner blocked before process creation. The earlier AvailableBytes counter is not free-commit headroom. No process was stopped."
+}

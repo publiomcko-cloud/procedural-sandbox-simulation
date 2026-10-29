@@ -1,0 +1,16 @@
+{
+  "stage": "E2_CONTROL1_VERSION",
+  "source_sha": "895dbca3c6dd58bb9adacd63fb39c3ad524226ff",
+  "binary_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "binary_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "arguments": [
+    "--version"
+  ],
+  "working_directory": "C:\\r96r1-control-20261029",
+  "pid": 51124,
+  "process_start_utc": "2026-10-29T12:17:53.1482499Z",
+  "process_end_utc": "2026-10-29T12:17:53.2852770Z",
+  "exit_code": 0,
+  "stdout_sha256": "bf8803022b574250bb04dea65053a46b7c58570725316c1f7fe2aa6735706498",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

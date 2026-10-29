@@ -1,0 +1,42 @@
+{
+  "stage": "A3_RETRY1_IMPORT",
+  "source_sha": "fc6690edb6ac0fd605de3e78814df724e9c72e47",
+  "status": "PROCESS_EXIT_0",
+  "scenario_started": true,
+  "process_id": 20656,
+  "observed_process": {
+    "ProcessId": 20656,
+    "ParentProcessId": 32700,
+    "CommandLine": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path ./game --editor --import",
+    "ExecutablePath": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "CreationDate": "2026-10-29T14:44:59.191337-03:00"
+  },
+  "started_utc": "2026-10-29T17:44:59.1866301Z",
+  "finished_utc": "2026-10-29T17:45:09.9684199Z",
+  "elapsed_ms": 10773.12,
+  "timeout_seconds": 120,
+  "timeout": false,
+  "exit_code": 0,
+  "exception": null,
+  "arguments": [
+    "--headless",
+    "--path",
+    "./game",
+    "--editor",
+    "--import"
+  ],
+  "environment": {
+    "APPDATA": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\profiles\\A3_RETRY1_IMPORT\\APPDATA",
+    "LOCALAPPDATA": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\profiles\\A3_RETRY1_IMPORT\\LOCALAPPDATA",
+    "TEMP": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\profiles\\A3_RETRY1_IMPORT\\TEMP",
+    "TMP": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\profiles\\A3_RETRY1_IMPORT\\TMP",
+    "R96R1_ARTIFACT_DIR": ""
+  },
+  "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\A3_RETRY1_IMPORT\\stdout.txt",
+  "stdout_sha256": "ec6407e2cbb6f8d35caa7ea9f8e04c4c255ed6acae5f5883d4754e8525d3d97a",
+  "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\A3_RETRY1_IMPORT\\stderr.txt",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "host_before": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\A3_RETRY1_IMPORT\\host-before.json",
+  "host_after": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\A3_RETRY1_IMPORT\\host-after.json",
+  "artifact_directory": ""
+}

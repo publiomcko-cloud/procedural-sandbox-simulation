@@ -1,0 +1,41 @@
+{
+    "stage":  "R1-delimiter-topology",
+    "source_sha":  "0f8cfcdc64ef43096ff9f6166d17605bb1c13aec",
+    "test_source_sha256":  "7EB08CE47775FB82C11B4A87E4D67DED83091FB535E83A2600B479B98B20B46B",
+    "helper_source_sha256":  "fae8d232d4fb985ae5b9f8b141c215d45c1f436471b0ab9783c17bf40ca1f157",
+    "executable":  "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "executable_sha256":  "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+    "arguments":  [
+                      "--headless",
+                      "--path",
+                      "C:\\r96r1-topology-run2-20261029\\game",
+                      "--script",
+                      "res://tests/prototypes/p3_1_r9_6_topology_tests.gd"
+                  ],
+    "working_directory":  "C:\\r96r1-topology-run2-20261029",
+    "process_id":  41492,
+    "created_utc":  "2026-10-29T12:58:53.3654583Z",
+    "ended_utc":  "2026-10-29T12:58:53.8857646Z",
+    "elapsed_ms":  284.45,
+    "timeout_60s":  false,
+    "exit_code":  0,
+    "observed_process":  {
+                             "ProcessId":  41492,
+                             "ParentProcessId":  26936,
+                             "CommandLine":  "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path \"C:\\r96r1-topology-run2-20261029\\game\" --script res://tests/prototypes/p3_1_r9_6_topology_tests.gd",
+                             "ExecutablePath":  "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+                             "CreationDate":  "\/Date(1793278733371)\/"
+                         },
+    "environment":  {
+                        "LOCALAPPDATA":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-topology-profile\\LOCALAPPDATA",
+                        "TEMP":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-topology-profile\\TEMP",
+                        "TMP":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-topology-profile\\TMP",
+                        "APPDATA":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-topology-profile\\APPDATA"
+                    },
+    "stdout":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-topology.stdout.txt",
+    "stdout_sha256":  "4b5f49a96064b6d1c4a445ed3871cd100901d65ac3df8d2655621b6053b36271",
+    "stderr":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-topology.stderr.txt",
+    "stderr_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "host_before":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-topology-host-before.json",
+    "host_after":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\R1-delimiter-topology-host-after.json"
+}
