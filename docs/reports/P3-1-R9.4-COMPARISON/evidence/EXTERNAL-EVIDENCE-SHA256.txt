@@ -1,0 +1,244 @@
+04b555395d54f558cfd8efdc390f00366e42636a9e00236d44201bbf29494edc  attempt-ledgers/A.csv
+10ec5c7bc13711c911fd766a7c7550f68bd06edc5e0f8052cfa067454feb3fab  attempt-ledgers/C.csv
+81d81c3047b6e1f664d51028659878543c7dc94c97c2a1ee6ac40c9ed72e1f59  attempt-ledgers/D.csv
+d8a385476c7c18c570e056f16992cef89a6bba1a2344947338218665453874df  baseline/A/cold-checkout-invalid-attempt.json
+fa766761d39e9aa4d13916772431d6a564632048ceb7d0532da8824cbb91561c  baseline/A/focused.process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  baseline/A/focused.stderr.txt
+48bcd9461efd1b4a874cf4ccc6546393daf7e40071466ed97e5b483b416613c6  baseline/A/focused.stdout.txt
+eb17b2a72bd213df756a6914c5a1238f32743a82ad117a0c17f6a1d5ad2bfceb  baseline/A/import.process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  baseline/A/import.stderr.txt
+1e5254601a7d1373f4f6aa6506543ac7255da1420881ae4e9d313748b4f3f003  baseline/A/import.stdout.txt
+e0daeb58517cd03f7ee3715fa858b1b604daa5eb803501a588fe35eb2bc3e88d  baseline/A/stderr.txt
+e4c34759171a21f4ade8485d9272ab5ef9871acfc5e0c17defc58177efdf3faf  baseline/A/stdout.txt
+b1ff49ab0d19ad3e2cfa8217338f88ef5bd016971663f8db376d8dbf1c7dccfe  baseline/C-D-summary.json
+23aa62180403855ac81eb0aa15dc0b3ad9b27c812513e24fc7a5092ae04d2341  baseline/C/focused.process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  baseline/C/focused.stderr.txt
+aaae1f08fc377536efaf677cda900c8209cace1a05681f3f3b59f4b7c746d8c4  baseline/C/focused.stdout.txt
+fc308518ae6363cec91b84addea3dcb29ccb9abda82f673fd58aa31e4037c7b0  baseline/C/import.process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  baseline/C/import.stderr.txt
+1e5254601a7d1373f4f6aa6506543ac7255da1420881ae4e9d313748b4f3f003  baseline/C/import.stdout.txt
+75f753d68a18f3e4ad59f06c1c68e183f67037c16f4c863411a7bdafa0e581f9  baseline/D/focused.process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  baseline/D/focused.stderr.txt
+2364eb18654ed0fa014cc390427424372861f0c34b1cc34f2f78ffb95adfad45  baseline/D/focused.stdout.txt
+2a994e1691a45ed928cb6d87564dd49e6288707166f92122eedf2af30f9acee3  baseline/D/import.process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  baseline/D/import.stderr.txt
+e2b4d04c0984b5f08083cdafbe2f1a4994d397b63079fca7bf991ab63f172e84  baseline/D/import.stdout.txt
+a5d97fdd520f7ae288a65b1ad7f73a637d2dff5ef387438fba2b3e35366daa9e  baseline/focused-summary.json
+85b1051fef8e2817a429159321a41c11fd38df4a931513b594fee4191c6e5163  focused/A-attempt1-valid/command.txt
+7c61c677f434ac0e181d17f8e1bf1ccb761d804947de21333a198ae2bba9df25  focused/A-attempt1-valid/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/A-attempt1-valid/stderr.txt
+e724c2af910b74ff3480795ca6d85e4c3de2b90595d5d97a1b7150ce1c91f106  focused/A-attempt1-valid/stdout.txt
+175b342c6f62cc9711ae6da685d45e9401f806b0070199f27847c6922a547ac5  focused/A-attempt1/command.txt
+74fe07ebf44041126c950b6d03ff3274883cb60c7059cede40f4c8ad1e3ddb62  focused/A-attempt1/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/A-attempt1/stderr.txt
+8b2929438949fe3fbff0241c602ff15a6d915a24716f5d62dd77319be408194f  focused/A-attempt1/stdout.txt
+85b1051fef8e2817a429159321a41c11fd38df4a931513b594fee4191c6e5163  focused/A-attempt2-instrumented/command.txt
+b7ded23db1d38edcbc6488e4da1d3131cf51c4ad719c77ad95411d880b6eac83  focused/A-attempt2-instrumented/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/A-attempt2-instrumented/stderr.txt
+9cafdffab706be7fc3d34a34dcd18c38d8b5a5a53a0aa06090236628dbc89e0b  focused/A-attempt2-instrumented/stdout.txt
+85b1051fef8e2817a429159321a41c11fd38df4a931513b594fee4191c6e5163  focused/A-attempt2/command.txt
+8b82b7a5ebc9d949ff9a0aad1572b1fb6d9204ef57c3d7727650ce113079b7bc  focused/A-attempt2/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/A-attempt2/stderr.txt
+82f609a1223cf493f09eb651536d209aa9879b8e11472e65d8003904f5ee97bd  focused/A-attempt2/stdout.txt
+85b1051fef8e2817a429159321a41c11fd38df4a931513b594fee4191c6e5163  focused/A-attempt3/command.txt
+644b8452c960c4e472ab77f996e3840ddb09bea9a8b034611d9e04355b359b7e  focused/A-attempt3/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/A-attempt3/stderr.txt
+d3bd02e564b117815dc49887de37f26e2d78fa8a12a59fe312d7ed14f5ff8058  focused/A-attempt3/stdout.txt
+734c22d3165714067ddbe2d679706e0a68cb49a49ede99e645226ebf364b4a43  focused/C-attempt1/command.txt
+5069729d2377f099388c9dfdf7d1e64795402324a2bbb2b125b6e67f02b874ac  focused/C-attempt1/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/C-attempt1/stderr.txt
+68a2590ab7194553f2e29ffbd08b36e2fc38b05decf97ddf842f1a08fddd336f  focused/C-attempt1/stdout.txt
+734c22d3165714067ddbe2d679706e0a68cb49a49ede99e645226ebf364b4a43  focused/C-attempt2-face-regression/command.txt
+6d182a63c1fa9866a2d3ab9a75e06862c09866b3e84dffe5c6497af6f981928f  focused/C-attempt2-face-regression/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/C-attempt2-face-regression/stderr.txt
+65fd0a2843c34579f015e59852497e8575a3ee0f96c22dd75a8515a7892799c1  focused/C-attempt2-face-regression/stdout.txt
+734c22d3165714067ddbe2d679706e0a68cb49a49ede99e645226ebf364b4a43  focused/C-attempt2/command.txt
+df351353651492957b5121431621270751a911651914dbd20bba53c4bab10352  focused/C-attempt2/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/C-attempt2/stderr.txt
+921afc2e106da408e227defa22ac9f5de0928ace73896fd8cce02ead7c2a643a  focused/C-attempt2/stdout.txt
+ace7c970d59e841a1675ddfaf945e656751d58c74a38a88f27b3534978dd47a5  focused/D-attempt1/command.txt
+0da0e1d03ae01029760d3596ab1289ab36c7135bd2dd90d8898fceadfae4a1bb  focused/D-attempt1/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/D-attempt1/stderr.txt
+10c6420bbc5bc6629921288968d3ef814fa894ac3f060481987db430037b69ed  focused/D-attempt1/stdout.txt
+ace7c970d59e841a1675ddfaf945e656751d58c74a38a88f27b3534978dd47a5  focused/D-attempt2-retry/command.txt
+3de5437004390b81ae0e422c787223e14d86c59c697f6d36bea08f0facbf20e3  focused/D-attempt2-retry/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/D-attempt2-retry/stderr.txt
+5a7746ce4ab5d6a637c7908f0a04ac67e9fe64ff3ae1fb97fda513ef7b0ac572  focused/D-attempt2-retry/stdout.txt
+40350f4d168a1a4d603b189b38a006b325d4a4bea0ace4a77657fb758c619565  focused/D-attempt2-xplus-drop-diagnostic/command.txt
+a32f54002b1898e8953a450a33d3001eb343c53ae25bcaaa31b950223d999246  focused/D-attempt2-xplus-drop-diagnostic/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/D-attempt2-xplus-drop-diagnostic/stderr.txt
+55ea0c2558dfa4d2453c86b85ed0bf156cd62272447a92caac4166d821ea0d03  focused/D-attempt2-xplus-drop-diagnostic/stdout.txt
+2be5ee0fb71bf334d058337dedd454680c63bb2e7c9d80b30e83120ba9c5d2d8  focused/D-attempt2-xplus-drop-diagnostic/summary.json
+ace7c970d59e841a1675ddfaf945e656751d58c74a38a88f27b3534978dd47a5  focused/D-attempt2/command.txt
+62d2b817417598b7d18d72b01a4feaa51062bc962ae3516d76a179432405baf7  focused/D-attempt2/process.json
+116d07c3870a3ca0a55409db8255eb2234829c577c4b43262cc04e5dfb2d98c5  focused/D-attempt2/stderr.txt
+83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c  focused/D-attempt2/stdout.txt
+63eb8cc0f7417622cd30dbc702d6d5631f1aea081f1d7fee2657affc0c61ef93  focused/final-A/command.txt
+21b865388e9dd782b294724210f7e1063e63f1db56cb39aeb0d31b461d07656c  focused/final-A/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/final-A/stderr.txt
+edac1b27b4c9490ba80099f98cc55cbd6056ef23f293c7046f3e9820a97a1b39  focused/final-A/stdout.txt
+294bf929acf7711d7a1b82442ca0b25273bbae37494dcb73781edb78781e9db0  focused/final-A/summary.csv
+fd6c85d0cb43fda2af12b3590ca3719757280fb8eff9cb11fd3ef6355bc5cb5d  focused/final-A/terminal.txt
+3a315ec59bf0c2b9fd721f9745ad6a115fe2ac1b72478f41f15fc4c90fbf1f45  focused/final-C/command.txt
+5f90efb973805ff012a2136d9310f0ede08ef1daf33f7ad1451a0c9151672ef5  focused/final-C/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/final-C/stderr.txt
+67ce97a20e6ddd4592f6c3b23a676a9e4e14265761fcb442d7e81fc9777b39c5  focused/final-C/stdout.txt
+e6c560f2fbdc7990c87b6d7d2573260501e0c350b23c8e1a7639b2831a9a6ba0  focused/final-C/summary.csv
+fd6c85d0cb43fda2af12b3590ca3719757280fb8eff9cb11fd3ef6355bc5cb5d  focused/final-C/terminal.txt
+730866c3bc73be615c3fd2ab7f2adb26b130b56c27871969724d12e66bf81ed5  focused/final-D/command.txt
+d3b89324153933f9043760da1d6ca5915d2b179d5a8fde767ab9875df3e2ebe6  focused/final-D/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  focused/final-D/stderr.txt
+9d759b5cbd12afb8d4e4104d48a3a0fa05a049598bf205cfc3c964588419f171  focused/final-D/stdout.txt
+e7bdad0809195d1f6fc6b4a24ea195c9eab99ad4ff1bf085c54eb5217c7d89cc  focused/final-D/summary.csv
+fd6c85d0cb43fda2af12b3590ca3719757280fb8eff9cb11fd3ef6355bc5cb5d  focused/final-D/terminal.txt
+33c89b6031c64ee5ee29b6a09c2587058cc70385770d2ca1b55456b8fec3dd72  hashes/baseline-inventory.json
+8ebac8066431fb6b1ce66244c1db78c0e36e6aec01787bfb1b2dd361c408e98b  hashes/baseline-source-hashes.txt
+f248c83839b6940e9ed6ff4f42eeaab89cffc97bc5354a3ae5c2dd5b8a2f0d9c  package_r94.ps1
+c6571e7160fc27dae265d741d5c1db928fd5c85234792b0fd0a7bf23f300dda7  preregistration/R9.4-PREREGISTRATION.md
+9bfd8d25827819b4dfc3ceaee6a7e46684f6a95758cad8575875e935be0622d7  print_user_data_dir.gd
+32071c45f004a45e2aa1e2eb611ffa59ae0c70fb4ea716b11415f17cac0cbfc4  profiles/A-contract-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log
+536b2b49438ebe98bfa56c62c16b5690797f14e91d8b961c354a66ebf35e0973  profiles/A-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log
+ab4eeba764c166c1eb506777b57b9b341c15e72222a5193f7277bb41002c1219  profiles/A-final-focused/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log
+563eacc41547f8639c829ad6f1cbc600d51f6090dc3cac16da9e0314603c5ce6  profiles/A-validation/Local/Godot/editor_doc_cache-4.7.res
+6d1c065383a27c36804949b6ffa4b09714470b112e5dacc0bd5aeb7b9c147c4e  profiles/A-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log
+95135235c6842f09c7ad5386715ee21423279c5211c6b4a6ad7fceb34c445f42  profiles/A-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot2026-10-28T20.51.15.log
+cc18424ab19fb67f67c5de230a46bc100986f52e7cc13cb1587457256076d78c  profiles/A-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot2026-10-28T20.51.29.log
+dfe31be6c265497b8321783923d91a653bf749a126a3b08c04c4d375f3894eb7  profiles/A-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot2026-10-28T20.51.34.log
+f3ed0b23638e839dcc46f750402b29ccd03bb2a688cb43fdc3f73546a4cb3f44  profiles/A-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot2026-10-28T20.51.35.log
+7ba4af348f8fd39e68fd45703e65d2d99679e9f90ce6fbddbeb50c05f5e8130c  profiles/A-validation/Roaming/Godot/editor_settings-4.7.tres
+32071c45f004a45e2aa1e2eb611ffa59ae0c70fb4ea716b11415f17cac0cbfc4  profiles/C-contract-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log
+764501707c07983f7b16ae72bfd14d47af1daf2148bc65a5c09449a096b14de9  profiles/C-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log
+bf61cd2e949358c4ac835328e0e6bba250f0faef69b773b8e574ee645737c97b  profiles/C-validation/Local/Godot/editor_doc_cache-4.7.res
+6d1c065383a27c36804949b6ffa4b09714470b112e5dacc0bd5aeb7b9c147c4e  profiles/C-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log
+ea26eab5380e6b20641be1c907c999bd08ac14cfa331640b0c22ce71ce7809bf  profiles/C-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot2026-10-28T21.00.00.log
+01f9ffafc01a0837eb125aed9943b319d089c6febefb03dfdff0151c6dfaa5c8  profiles/C-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot2026-10-28T21.00.02.log
+23106ce4b79ef344a22a62cc00eca45894776983498b18d9aeebac066d289157  profiles/C-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot2026-10-28T21.00.15.log
+f3ed0b23638e839dcc46f750402b29ccd03bb2a688cb43fdc3f73546a4cb3f44  profiles/C-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot2026-10-28T21.00.21.log
+f6fae20b3051dee226fa352dbb7bc20b0db4e3c7af5dac1e69a161c49888e069  profiles/C-validation/Roaming/Godot/editor_settings-4.7.tres
+32071c45f004a45e2aa1e2eb611ffa59ae0c70fb4ea716b11415f17cac0cbfc4  profiles/D-contract-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log
+194516aae5ea5ecf0854aa0087b9b7ee3b0e872459fea06bb7c52f62d8900114  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log
+7c2169573450c55164bb7e4023dc2580b542aecd921b76a7299bb2f23f76a75b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1043678.bin
+472bd51d881205de47c48dfdb8260f3f0e818103eeabd547c2a1dc8698f97d22  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_10448443.bin
+472bd51d881205de47c48dfdb8260f3f0e818103eeabd547c2a1dc8698f97d22  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_10550939.bin
+472bd51d881205de47c48dfdb8260f3f0e818103eeabd547c2a1dc8698f97d22  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_10621763.bin
+472bd51d881205de47c48dfdb8260f3f0e818103eeabd547c2a1dc8698f97d22  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_10686262.bin
+472bd51d881205de47c48dfdb8260f3f0e818103eeabd547c2a1dc8698f97d22  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_10744713.bin
+4286469c51ea734432397f43530eaac1e266f83416f4e2647de0af878421ac6b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_10929795.bin
+7c2169573450c55164bb7e4023dc2580b542aecd921b76a7299bb2f23f76a75b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1093599.bin
+4286469c51ea734432397f43530eaac1e266f83416f4e2647de0af878421ac6b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_11099455.bin
+4286469c51ea734432397f43530eaac1e266f83416f4e2647de0af878421ac6b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_11268739.bin
+7c2169573450c55164bb7e4023dc2580b542aecd921b76a7299bb2f23f76a75b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1142325.bin
+4286469c51ea734432397f43530eaac1e266f83416f4e2647de0af878421ac6b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_11439877.bin
+4286469c51ea734432397f43530eaac1e266f83416f4e2647de0af878421ac6b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_11609063.bin
+4286469c51ea734432397f43530eaac1e266f83416f4e2647de0af878421ac6b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_12166446.bin
+e09fa0c3c2f5f20ade45c950e361f956af07083d06ad44c2202de65a6c6998c7  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_12737173.bin
+472bd51d881205de47c48dfdb8260f3f0e818103eeabd547c2a1dc8698f97d22  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1284623.bin
+472bd51d881205de47c48dfdb8260f3f0e818103eeabd547c2a1dc8698f97d22  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1342301.bin
+472bd51d881205de47c48dfdb8260f3f0e818103eeabd547c2a1dc8698f97d22  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1397899.bin
+472bd51d881205de47c48dfdb8260f3f0e818103eeabd547c2a1dc8698f97d22  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1456311.bin
+472bd51d881205de47c48dfdb8260f3f0e818103eeabd547c2a1dc8698f97d22  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1512487.bin
+472bd51d881205de47c48dfdb8260f3f0e818103eeabd547c2a1dc8698f97d22  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1569379.bin
+351887e5ebb00982481d3f4d4ed5052b414f418531c801276f7d134d079ffd49  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1744817.bin
+351887e5ebb00982481d3f4d4ed5052b414f418531c801276f7d134d079ffd49  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1913642.bin
+351887e5ebb00982481d3f4d4ed5052b414f418531c801276f7d134d079ffd49  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_2090004.bin
+351887e5ebb00982481d3f4d4ed5052b414f418531c801276f7d134d079ffd49  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_2267429.bin
+351887e5ebb00982481d3f4d4ed5052b414f418531c801276f7d134d079ffd49  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_2439828.bin
+351887e5ebb00982481d3f4d4ed5052b414f418531c801276f7d134d079ffd49  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_2608741.bin
+44062744cf108b6543645e33a9a541e263da5dc5f13fc917475117030222a419  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_3178216.bin
+44062744cf108b6543645e33a9a541e263da5dc5f13fc917475117030222a419  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_3337498.bin
+44062744cf108b6543645e33a9a541e263da5dc5f13fc917475117030222a419  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_3505506.bin
+44062744cf108b6543645e33a9a541e263da5dc5f13fc917475117030222a419  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_3667068.bin
+44062744cf108b6543645e33a9a541e263da5dc5f13fc917475117030222a419  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_3840633.bin
+44062744cf108b6543645e33a9a541e263da5dc5f13fc917475117030222a419  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_3992892.bin
+b6c47f4b36077dd6964cf7e476b4f008a13ee5ba5c3aae2ae3baeadf1c94880a  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_4487684.bin
+b6c47f4b36077dd6964cf7e476b4f008a13ee5ba5c3aae2ae3baeadf1c94880a  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_4609118.bin
+b6c47f4b36077dd6964cf7e476b4f008a13ee5ba5c3aae2ae3baeadf1c94880a  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_4741794.bin
+ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_5188245.bin
+ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_5291193.bin
+ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_5404475.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_542301.bin
+ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_5701941.bin
+ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_5799637.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_589280.bin
+ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_5897047.bin
+8b27477922574a73b6b2c04a619a16bdf877e27d4d5f1e6ba7284dc7e6a510a8  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_6190627.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_635405.bin
+8b27477922574a73b6b2c04a619a16bdf877e27d4d5f1e6ba7284dc7e6a510a8  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_6367085.bin
+8b27477922574a73b6b2c04a619a16bdf877e27d4d5f1e6ba7284dc7e6a510a8  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_6542917.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_682884.bin
+632c17a97991754e9ba4640938bbd9b8e84b25a32f0f7e16b0936311165893d9  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_7031777.bin
+632c17a97991754e9ba4640938bbd9b8e84b25a32f0f7e16b0936311165893d9  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_7058952.bin
+632c17a97991754e9ba4640938bbd9b8e84b25a32f0f7e16b0936311165893d9  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_7077539.bin
+ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_7106862.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_728824.bin
+8b27477922574a73b6b2c04a619a16bdf877e27d4d5f1e6ba7284dc7e6a510a8  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_7394844.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_774867.bin
+79c22500fe2bbbf895c7b71fd274b092fc12b461126dc579706c6869fcb912d1  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_7894887.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_8001289.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_8134425.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_8181092.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_8231367.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_8280572.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_8327711.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_8374741.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_8617884.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_8667323.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_8714959.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_8761773.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_8808217.bin
+56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_8854508.bin
+7c2169573450c55164bb7e4023dc2580b542aecd921b76a7299bb2f23f76a75b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_901353.bin
+4286469c51ea734432397f43530eaac1e266f83416f4e2647de0af878421ac6b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_9035702.bin
+4286469c51ea734432397f43530eaac1e266f83416f4e2647de0af878421ac6b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_9201187.bin
+4286469c51ea734432397f43530eaac1e266f83416f4e2647de0af878421ac6b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_9369911.bin
+7c2169573450c55164bb7e4023dc2580b542aecd921b76a7299bb2f23f76a75b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_948054.bin
+4286469c51ea734432397f43530eaac1e266f83416f4e2647de0af878421ac6b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_9539613.bin
+4286469c51ea734432397f43530eaac1e266f83416f4e2647de0af878421ac6b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_9706047.bin
+4286469c51ea734432397f43530eaac1e266f83416f4e2647de0af878421ac6b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_9878801.bin
+7c2169573450c55164bb7e4023dc2580b542aecd921b76a7299bb2f23f76a75b  profiles/D-e2e-final/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_996152.bin
+efe6106aabe3141ff7ef3fdf615a5cd1beac05461421076d64a706da39a8651b  profiles/D-validation/Local/Godot/editor_doc_cache-4.7.res
+6d1c065383a27c36804949b6ffa4b09714470b112e5dacc0bd5aeb7b9c147c4e  profiles/D-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log
+5c77c7e5cde8e9b9de33ca66ccc759bcdb3d8be5e4db7926d1c1d551993aec77  profiles/D-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot2026-10-28T21.08.44.log
+4392e66d7ce95a415588b366e96b97ce813de90ff3ce146b04f9786ce4f1b03b  profiles/D-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot2026-10-28T21.08.57.log
+dfe31be6c265497b8321783923d91a653bf749a126a3b08c04c4d375f3894eb7  profiles/D-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot2026-10-28T21.09.03.log
+f3ed0b23638e839dcc46f750402b29ccd03bb2a688cb43fdc3f73546a4cb3f44  profiles/D-validation/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot2026-10-28T21.09.04.log
+c435f7ccdc97c081a8076d914e8a49d3202c09bdd61da6432330d9904d497c02  profiles/D-validation/Roaming/Godot/editor_settings-4.7.tres
+0e443e45ed201888b646d75e0ab0c5df2c1c16cf7c0bdeb11f64360086f2eb4d  profiles/probe/Roaming/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log
+284fe28f570c1db89d463d767aecaccba2e82af0719d9f981025a02a9d3cbcad  run_godot_capture.ps1
+5909c15c85891f4494ae3c3e6241e15e674688d1c900ce515bbf3b6d05e36400  runs/A-contract-final/initial-hashes.json
+c8fab4e0bdd03e796ba781000ccae82f99cb36877e93773b5410cc19ecf61796  runs/A-contract-final/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  runs/A-contract-final/stderr.txt
+5dc59d1f33208d22a1f085d97c4c17d2a803ce66891b567c02db78fee411eef8  runs/A-contract-final/stdout.txt
+6b46c55b970ced9ae7ea78206b59cdc9db089e8e2226be9adf661a6ecd7db2e5  runs/A-e2e-final/initial-hashes.json
+b0bb3be3f96a1a276e7346b9745ca1c17f4d4999c64e960a7885cf9bc899e210  runs/A-e2e-final/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  runs/A-e2e-final/stderr.txt
+7fb589decd7b795cb1e4cd500370755c8920e76e6816117b86e95e15e86c9449  runs/A-e2e-final/stdout.txt
+7ee9a690b2a0b72ed7bff13a34720a2894fd48774a43adcebfe6c0333e4da731  runs/A-final-focused/initial-hashes.json
+e467c05cb1f0f8b6139339fced281a4ecad6471ab56a8fc0b16af718f048c7b8  runs/A-final-focused/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  runs/A-final-focused/stderr.txt
+457ef57ca3c0511aab1784b5cc9532d1e76d09de2dba6ba29f025136465ac2b3  runs/A-final-focused/stdout.txt
+907efafd421592b986cabf4225a5ababffe47a0f91decb9701a09586fe6a1887  runs/C-contract-final/initial-hashes.json
+048ed64ad0230c15e0452ccbd3064fb4b6a02ac8b84dc4a0db60fae3b3cd2b81  runs/C-contract-final/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  runs/C-contract-final/stderr.txt
+5dc59d1f33208d22a1f085d97c4c17d2a803ce66891b567c02db78fee411eef8  runs/C-contract-final/stdout.txt
+0ad1d1e92ec2b05dbdeeeb78888713b4696502af47c111ccc910152e03b32cdd  runs/C-e2e-final/initial-hashes.json
+36a03835e2c6db90ec7bc6ac047b58846e8565760e7cae8ef4a9fe5823949e7e  runs/C-e2e-final/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  runs/C-e2e-final/stderr.txt
+09dcd7c0d0426eed62bb8f91ee0f2d4af247f0210ccfe7660821f32dc5c09656  runs/C-e2e-final/stdout.txt
+eaab0e7cccb4e0ebeba6524f8d18099986d2919bd6554f11f84c441fb09f6ee2  runs/D-contract-final/initial-hashes.json
+65343ac66ffb5a0354468ad54c53cfd3092b2ac3fd190ae9bd638fe82a5567e6  runs/D-contract-final/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  runs/D-contract-final/stderr.txt
+5dc59d1f33208d22a1f085d97c4c17d2a803ce66891b567c02db78fee411eef8  runs/D-contract-final/stdout.txt
+8ac4e02eb6609c1709393bc9a26200b80c9056f550afb4150c8a51013e24f29a  runs/D-e2e-final/initial-hashes.json
+15b6cc6856b46a605f405e3ee1d1958933acd963822eb2c23f30eefb237ada72  runs/D-e2e-final/process.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  runs/D-e2e-final/stderr.txt
+8d26cb9ed62ff11f4256fd70de0e5620cf15550c8b02217ba05b3dbf172b51c5  runs/D-e2e-final/stdout.txt
+4ba6a4f9f967c03283320dd772a459661c06bdf2126bfc219da808b5391850c1  validation/A/process.json
+01346abc85002f006e3c4e7e8bfb7b02377283dba88ea437319e45c3e8ed76c8  validation/A/stderr.txt
+8891b0187b17b74f9e95bfebd569e3700682fd4b16d97a50d6ba6017bcbc5403  validation/A/stdout.txt
+92de993a7831f9d43e21f5dc7792696a27c4c3a077fc2b7ab52c14854fd48a68  validation/C/process.json
+01346abc85002f006e3c4e7e8bfb7b02377283dba88ea437319e45c3e8ed76c8  validation/C/stderr.txt
+a38e6fee451d215f82a2b95086cc97f75a7d3eb7787ce3782b0764da63dab2b6  validation/C/stdout.txt
+39ce4b4cb15707d41579c542c47213ca8f21326658887e2b31d40478a423511d  validation/D/process.json
+01346abc85002f006e3c4e7e8bfb7b02377283dba88ea437319e45c3e8ed76c8  validation/D/stderr.txt
+167c00ed0c0b158b51c2dd86d02590f90c199d46c5fe4a793a6e6e21095c876c  validation/D/stdout.txt

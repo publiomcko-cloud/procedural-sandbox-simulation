@@ -107,3 +107,7 @@ Every verified merge, material review/GUI verdict, scope authorization or revisi
 | 2026-10-27 | [CHK-2026-10-27-P3-1-R7-CONFORMING-ADAPTIVE](2026-10-27-P3-1-R7-CONFORMING-ADAPTIVE.md) | R7 zero-edit preflight fails: A/B/C each retain 14 internal open edges and test-only collider has 33 ray outcome mismatches; edited scenarios not run; full parent validation has five P3.0D failures | Draft evidence PR #149, based on R6-V; no production adoption |
 | 2026-10-28 | [CHK-2026-10-28-P3-1-R8.1-GEOMETRY-CAUSES](2026-10-28-P3-1-R8.1-GEOMETRY-CAUSES.md) | Bounded R8.1 diagnosis reproduces normal/continuous-field, X+ contour, and X− mesh/picker discrepancies; specific mesher branches remain UNKNOWN; Godot 4.7.2 full validation 21,464/0; no correction or geometry acceptance | Separate test-only evidence PR #160, linked to Issue #159; based on draft R8 PR #158 |
 | 2026-10-28 | [CHK-2026-10-28-P3-1-R9.3-COMPARATIVE-CLOSEOUT](2026-10-28-P3-1-R9.3-COMPARATIVE-CLOSEOUT.md) | Two audited E2E campaigns per candidate and full validation pass; A/C/D each remain PARTIAL_CORRECTION with geometry/ray limits; no architecture selected | `bench/p3-1-r9-3-comparison`, test-only comparison evidence PR pending; no production adoption |
+
+## 2026-10-28 — P3.1 R9.4 campaign closeout
+
+- [R9.4 consolidated experimental closeout](../reports/P3-1-R9.4-COMPARISON/RESULTS.md) — seven test-only corrections across A/C/D; exact-source full validation passed 21,464/0 on each; all remain partial and no architecture is selected. Evidence draft PRs #187–#190; open/unmerged.
