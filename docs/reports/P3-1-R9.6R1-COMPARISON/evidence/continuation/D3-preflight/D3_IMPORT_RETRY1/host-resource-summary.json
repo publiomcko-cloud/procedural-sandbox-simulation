@@ -1,0 +1,16 @@
+{
+  "stage": "D3_IMPORT_RETRY1",
+  "timestamp_utc": "2026-10-29T17:50:25.8144046Z",
+  "required_free_commit_bytes": 6442450944,
+  "free_commit_bytes_before": 6315536384,
+  "physical_available_kb_before": 22911004,
+  "disk_c_free_bytes_before": 126724792320,
+  "temp_drive_free_bytes_before": 126724792320,
+  "running_godot_count_before": 0,
+  "free_commit_bytes_after": 6294396928,
+  "physical_available_kb_after": 22873256,
+  "disk_c_free_bytes_after": 126728269824,
+  "temp_drive_free_bytes_after": 126728269824,
+  "running_godot_count_after": 0,
+  "full_raw_host_snapshots_retained_locally": true
+}

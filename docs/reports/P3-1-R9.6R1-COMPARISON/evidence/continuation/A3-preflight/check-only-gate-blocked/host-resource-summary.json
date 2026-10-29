@@ -1,0 +1,16 @@
+{
+  "stage": "A3_RETRY1_CHECK_ONLY",
+  "timestamp_utc": "2026-10-29T17:45:36.4748127Z",
+  "required_free_commit_bytes": 6442450944,
+  "free_commit_bytes_before": 6419267584,
+  "physical_available_kb_before": 22809916,
+  "disk_c_free_bytes_before": 126891335680,
+  "temp_drive_free_bytes_before": 126891335680,
+  "running_godot_count_before": 0,
+  "free_commit_bytes_after": 6407979008,
+  "physical_available_kb_after": 22805260,
+  "disk_c_free_bytes_after": 126891245568,
+  "temp_drive_free_bytes_after": 126891245568,
+  "running_godot_count_after": 0,
+  "full_raw_host_snapshots_retained_locally": true
+}

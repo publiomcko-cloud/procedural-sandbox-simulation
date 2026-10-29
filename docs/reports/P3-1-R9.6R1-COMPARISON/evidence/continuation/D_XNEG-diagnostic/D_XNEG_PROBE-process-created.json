@@ -1,0 +1,14 @@
+{
+  "stage": "D_XNEG_PROBE",
+  "source_sha": "0b9cbef4cf822be54a1dc1976222f8eee3eba255",
+  "process_id": 37552,
+  "observed_process": {
+    "ProcessId": 37552,
+    "ParentProcessId": 28768,
+    "CommandLine": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path C:\\r96r1-DXNEG-diagnostic2-20261029\\game --script res://tests/prototypes/p3_1_r9_6r1_d_xneg_diagnostic.gd",
+    "ExecutablePath": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "CreationDate": "2026-10-29T14:13:44.998256-03:00"
+  },
+  "started_utc": "2026-10-29T17:13:44.9908366Z",
+  "created_utc": "2026-10-29T17:13:45.3056206Z"
+}

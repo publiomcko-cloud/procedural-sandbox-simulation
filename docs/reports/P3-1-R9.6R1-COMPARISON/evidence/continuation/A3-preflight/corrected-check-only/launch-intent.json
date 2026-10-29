@@ -1,0 +1,28 @@
+{
+  "stage": "A3_RETRY2_CHECK_ONLY",
+  "source_sha": "fc6690edb6ac0fd605de3e78814df724e9c72e47",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "arguments": [
+    "--headless",
+    "--path",
+    "./game",
+    "--check-only",
+    "--script",
+    "res://tests/prototypes/p3_1_r9_6r1_candidate_probe.gd"
+  ],
+  "working_directory": "C:\\r96r1-A3-run2-20261029",
+  "profile_root": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\profiles\\A3_RETRY2_CHECK_ONLY",
+  "artifact_directory": "",
+  "environment": {
+    "APPDATA": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\profiles\\A3_RETRY2_CHECK_ONLY\\APPDATA",
+    "LOCALAPPDATA": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\profiles\\A3_RETRY2_CHECK_ONLY\\LOCALAPPDATA",
+    "TEMP": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\profiles\\A3_RETRY2_CHECK_ONLY\\TEMP",
+    "TMP": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\profiles\\A3_RETRY2_CHECK_ONLY\\TMP",
+    "R96R1_ARTIFACT_DIR": ""
+  },
+  "intent_utc": "2026-10-29T17:46:02.1471613Z"
+}

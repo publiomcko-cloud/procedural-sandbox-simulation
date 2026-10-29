@@ -76,3 +76,66 @@ The next technical step is to extract the actual failing cell/face patch and des
 - PRs #197–#200 remain open, draft and unmerged. New PRs #202–#205 are separate drafts. No production, schema, save, merge, release, Issue #108/#154, or F2-G1 action occurred. The five F2-G1 holds remain: `CURRENT_PROTECTED_STATE_UNKNOWN`, `V3_NOT_ATTESTED`, `ACL_REVIEW_REQUIRED`, `G1_BLOCKED_ENVIRONMENT`, `F2_G1_RELEASE_HOLD`.
 
 **Final status:** `P3_1_R9_6R1_BLOCKED_WITH_EVIDENCE`.
+
+---
+
+## Continuation addendum — A2, D2, A3 and D3 preflight (2026-10-29)
+
+This section is append-only and supersedes only the campaign status and attempt counters above. The preceding report remains the historical R1/A1/D1 checkpoint. It is not edited or erased.
+
+### Attempt matrix
+
+| Candidate | Attempt | Tested source / process | Result | Controls |
+|---|---|---|---|---|
+| A | A1 | Historical source `bf230c4916c66e2150f8725480d8ce3ca589b353`; process evidence remains in the original candidate-A attempt-1 files | Partial: equal X+ retained 8 internal opens, 7 triangles were dropped by the unchanged `cross_squared > 1e-12` cutoff and 15 required adjacencies were not realized; mixed boundary was 10 vs 22 with no shared contour identities | 6/6 frozen controls; 0/25 ROI hit/miss disagreements |
+| A | A2 | `4afc7ded4c083a78f3dd3d02709f34140e5f9a52`, parent `e6dd1fb63fb2d46dd8005017f544d7584cab0a7c`; PID 55556, exit 0, 6.801 s; run `0a082c315fdc4d4fac3127d9d4ebb7d8`; stdout SHA-256 `902d6db38883c19d758f207aa6323504aca9a9d4d8a55c02938187c24f2d5782`; stderr empty | The bounded centroid refinement examined 3 cells / 7 parent tetrahedra, evaluated 168 additional canonical-SDF samples, constructed 7 candidate roots/Steiner vertices, maximum recorded root residual `1.35421752933684e-06` against the experimental `1e-4` bound and maximum displacement `2.81657012237702e-05`; it emitted 0 refinement triangles. Candidate mesh hash stayed at baseline. Equal X+ remained 8 internal opens; mixed X+ combined ROI remained 32 opens, with no repaired contour pairing. | 6/6; root-identity probe pass; 0/25 ROI hit/miss disagreements |
+| A | A3 | Corrected source `fc6690edb6ac0fd605de3e78814df724e9c72e47`, parent `577d22d6d7fa9c83d822a242cfaf7e002c78810f`; PID 7512, exit 0, 6.502 s; run `3acd702d2b2e4805833f97cca85eebdb`; stdout SHA-256 `b396a3ff59dec7502eae24d5bf0244952e9f9834fa9ebe0c28ebf39dda8d810e`; stderr empty | Equal X+ selected `shared_existing_contour`, with 22 edges on each side, 0 new interface triangles, 8 internal opens and no nonmanifold edges. The canonical-surface diagnostic rejected the empty patch mesh. Mixed X+ remained 10 vs 22 edges; the interface zipper rejected a triangle with `cross_squared=1.44387658703197e-14`, below the unchanged `1e-12` cutoff, so no transition patch was produced; base combined ROI retained 32 opens. The historical X+ proxy also retained 8 opens. No new interface vertices were emitted. | 6/6; root identity pass; 0/25 ROI hit/miss disagreements |
+| D | D1 | Historical source `7115166067b7f6e9c68dd9425981259ae065c5bc`; process evidence remains in original candidate-D attempt-1 files | Partial with a negative-X strict mesh-hash control failure: 13 X+ equal-LOD opens, 8 cutoff drops, 19 required adjacencies missing; mixed 10 vs 22 with no shared transition | 5/6 before the isolated X_NEG diagnosis; 0/25 ROI hit/miss disagreements |
+| D | D2 | `3d0e4c59c0e33e4c21e34bbd54d1771c3db83415`, parent `c3482ff55deea4869d86119e65483f8cce17b767`; PID 6400, exit 0, 6.909 s; run `091f1e1d001e4b06b22bc64de3382492`; stdout SHA-256 `61759eefdd8770a1f13f63bbc26419fb6583af4c881047634487c925144e5b2a`; stderr empty | D2 refined 4 cells / 8 parent tetrahedra, used 8 additional volume-derived samples and 0 canonical-SDF resamples; 8 roots were recorded but 0 refinement patch triangles were emitted. Equal X+ topology remained 13 opens, with 43 required adjacencies missing and 24 triangles rejected below cutoff; mixed X+ combined ROI recorded 35 opens. Nonmanifold count remained 0. Full materialized-volume hash before/after/reload stayed `ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2`; payload hash stayed `2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0`. | 6/6; X_NEG mesh hash returned to exact baseline; 0/25 ROI hit/miss disagreements |
+| D | D3 | Pinned source `7d058899abc1663ff7d4175b5a508532367cd5da`, parent `3d0e4c59c0e33e4c21e34bbd54d1771c3db83415`; D2-only activation is gated to `ATTEMPT_D2` | Not started. Three distinct editor-import preflight reservations were durably blocked before process creation by the runner's required 6-GiB commit-headroom gate. No Godot PID, import, `--check-only`, or D3 geometry event exists. The D3 geometry attempt remains unused (not a geometry failure). | Not evaluated |
+
+A2's canonical roots satisfy only the experiment's recorded numerical residual bound; they do not establish seam closure because no candidate refinement triangles were emitted. A3's empty equal-LOD patch was written as an artifact but did not change the geometry. The JSONL `R96R1_COMPLETE` events with `failure_count=0` mean the probe completed; the topology artifacts are the acceptance oracle and fail the target.
+
+### D1 X_NEG causal reconciliation
+
+`evidence/continuation/D_XNEG-diagnostic/D_XNEG_PROBE-D_XNEG_root_order_diagnostic.json` and the raw process output classify the drift as `NUMERIC_ORDERING_DRIFT_CORRECTED`, not a volume or SDF change. Signed string ordering had reversed endpoint order relative to baseline numeric global endpoint ordering. The diagnostic records 129 binary64 interpolation-parameter differences and 28 binary32 root-coordinate differences in the pre-fix comparison. With the numeric global endpoint order restored, baseline and corrected X_NEG positions, normals, indices (3,444 elements each) and mesh digest `9f988ba69b8143ad46ebe6c5edcfa642743c6a5de09f7fb405f86ad42516f810` are exact matches. Volume payload is byte-identical: 3,021 bytes, SHA-256 `8b27477922574a73b6b2c04a619a16bdf877e27d4d5f1e6ba7284dc7e6a510a8`. D2's six controls then pass. No SDF, materialized volume, or cutoff change was made.
+
+### A3 preflight and D3 hard stop
+
+The first A3 `--check-only` at source `577d22d6d7fa9c83d822a242cfaf7e002c78810f` found two parser total-return errors in the new test helper functions. No geometry ran at that SHA. The correction added explicit terminal returns and updated the probe's physical helper pin; it was committed and pinned as `fc6690edb6ac0fd605de3e78814df724e9c72e47`. On that corrected SHA, import and `--check-only` passed before the single A3 geometry run.
+
+D3's three runner snapshots recorded free commit of 6,272,749,568; 6,315,536,384; and 6,184,431,616 bytes, each below the required 6,442,450,944 bytes. A later read-only current-status sample at `2026-10-29T17:56:24Z` measured 6,061,936,640 bytes using the runner-equivalent formatted CIM counter (380,514,304 bytes below the gate), 22,894,552 KB physical available, 126,719,180,800 bytes free on C:, and zero Godot processes. This sample is observational only, not a fourth runner reservation. No WSL or user process was terminated. The D3 resource precondition remains unmet; the campaign hard-stops here under the explicit safe-execution gate.
+
+### Aggregate final fields
+
+- `ENVIRONMENT_STATUS`: `HARD_STOP_RESOURCE_GATE`; physical RAM and disk requirements passed, but formatted Windows commit headroom remained below 6 GiB at all three D3 reservations and the final observational check.
+- `TOPOLOGY_GATE_STATUS`: `PASS` — previously pinned 50 assertions, 0 failures. It validates the shared topology diagnostic only; it does not certify either geometry candidate.
+- `A_ATTEMPTS_USED`: `3/3` geometry attempts (A1, A2, A3).
+- `D_ATTEMPTS_USED`: `2/3` geometry attempts (D1, D2); D3 source is pinned but D3 geometry is not started.
+- `A1_RESULT`: `PARTIAL`; controls pass, equal/mixed X+ fail as previously recorded.
+- `A2_RESULT`: `FAILED_TARGET`; 7 root candidates and bounded refinement evaluation, 0 refinement triangles, mesh unchanged, 8 equal X+ opens.
+- `A3_RESULT`: `FAILED_TARGET`; equal patch is a zero-triangle shared contour with 8 opens; mixed zipper rejects below cutoff and emits no bridge.
+- `D1_RESULT`: `PARTIAL_WITH_CONTROL_REGRESSION`; X_NEG hash issue diagnosed before D2.
+- `D2_RESULT`: `FAILED_TARGET`; exact materialized volume/reload preserved; 13 equal X+ opens, 43 missing required adjacencies, 24 cutoff drops; mixed combined ROI 35 opens.
+- `D3_RESULT`: `NOT_STARTED_RESOURCE_GATE`; not a geometric result.
+- `D_XNEG_DIAGNOSIS`: `NUMERIC_ORDERING_DRIFT_CORRECTED`; D2 X_NEG control hash matches baseline exactly.
+- `XPLUS_EQUAL_FINAL`: A=8 internal opens, 0 nonmanifold; D=13 internal opens, 0 nonmanifold.
+- `XPLUS_MIXED_FINAL`: A3 10/22 contour edges, no emitted patch, 32 combined base opens; D2 10/22 contour edges, no conforming interface, 35 combined opens.
+- `NEW_VERTEX_COUNT`: A2 recorded 7 root/Steiner candidates, D2 recorded 8 roots; neither produced refinement patch triangles. A3 emitted 0 new interface vertices/triangles. No new interface vertex is part of a successful final mesh.
+- `MAX_SDF_RESIDUAL`: `1.35421752933684e-06` in A2 candidate root diagnostics against a test-only bound of `1e-4`. D2 did not resample canonical SDF; A3 canonical surface checks invalidated the empty patch, so no residual is claimed for A3.
+- `MAX_VERTEX_DISPLACEMENT`: `2.81657012237702e-05` in the A2 test-only root construction. It is not a product geometry tolerance.
+- `NORMAL_DEVIATION`: `NOT_MEASURED_FOR_A_VALID_NEW_PATCH`; there was no conforming emitted patch to compare.
+- `NONMANIFOLD_COUNT`: zero in the reported equal-LOD target meshes; the target still fails because open edges and required adjacencies remain.
+- `RAY_ROI_RESULT`: A2, D2, A3 each 0/25 ROI hit/miss disagreements; no PhysicsServer result is claimed. D3 not run.
+- `CONTROL_MATRIX`: A attempts 6/6 per attempt; D1 5/6, D2 6/6 after isolated X_NEG numeric-order correction; D3 not evaluated.
+- `DETERMINISM_RESULT`: source, run IDs, root identity probes, artifact checksums and D2 volume-before/after/reload identity are verified within each run. No same-source repeated geometry run was performed; repeated-run determinism remains unmeasured.
+- `PERFORMANCE`: headless process elapsed A2 6.801 s, D2 6.909 s, A3 6.502 s. A3 interface helper measured 2,135 microseconds for equal shared-contour handling, 1,340 microseconds before mixed-strip rejection, and 1,644 microseconds for the historical X+ proxy. These are single-run diagnostic timings, not performance acceptance.
+- `FULL_VALIDATION_RESULT`: `NOT_RUN`; no candidate survived geometry acceptance. No full E2E or `scripts/validate.ps1` pass is claimed.
+- `EVIDENCE_INTEGRITY`: public evidence and local continuation evidence are inventoried by the adjacent SHA-256 manifests. Original R9.6/R9.6R1 evidence remains preserved.
+- `FINAL_A_STATUS`: `ATTEMPTS_EXHAUSTED_WITH_GEOMETRY_TARGET_UNMET`.
+- `FINAL_D_STATUS`: `HARD_STOP_BEFORE_D3_GEOMETRY`; two geometry attempts executed, D3 not started due the explicit resource gate.
+- `RECOMMENDED_ARCHITECTURAL_DECISION`: do not adopt A2, A3, or D2 in production. A2 creates no closure triangles; A3 does not bridge equal or mixed LOD; D2 preserves volume identity but leaves required topology unrealized. Resume D3 only on a later safe environment whose preflight passes; no production adoption follows from this evidence.
+
+The existing 50-assertion shared topology gate is not equivalent to the R9.6 geometry target. Full frozen E2E and `scripts/validate.ps1` remain NOT RUN. No production files, user saves, schemas, merges, releases, native components, Issue #108/#154, or F2-G1 state were changed. All five F2-G1 holds remain unchanged.
+
+**Continuation status:** `P3_1_R9_6R1_HARD_STOP_WITH_EVIDENCE`.
