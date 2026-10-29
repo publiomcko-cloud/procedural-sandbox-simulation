@@ -46,6 +46,7 @@ func _test_rejected_geometry_keeps_required_topology() -> void:
 	var report: Dictionary = topology.report(Vector3(0, 0, -1), Vector3(1, 1, 1))
 	_check(int(report.required_triangle_count) == 2, "rejected triangle remains in topology graph")
 	_check(int(report.rejected_triangle_count) == 1 and report.rejected_triangle_ids == ["t0"], "rejection is explicit")
+	_check(report.valid and not report.geometry_realization_complete, "well-formed topology does not imply emitted-geometry acceptance")
 	_check(not report.missing_required_adjacency.is_empty(), "missing realization is reported")
 	_check(not report.internal_open_edges.is_empty(), "cutoff omission exposes internal opens")
 	_check(report.rejection_reasons.get("below_frozen_cutoff", 0) == 1, "reason retained")

@@ -138,6 +138,7 @@ func report(roi_min: Vector3, roi_max: Vector3) -> Dictionary:
 	var canonical: String = JSON.stringify({"roots": root_rows, "triangles": triangle_rows})
 	return {
 		"valid": pending_triangles.is_empty(),
+		"geometry_realization_complete": rejected_triangles.is_empty() and missing_adjacency.is_empty() and internal_open_edges.is_empty() and nonmanifold_edges.is_empty(),
 		"reason": "unresolved_triangle_realization" if not pending_triangles.is_empty() else "",
 		"root_count": _roots.size(),
 		"required_triangle_count": _triangles.size(),
