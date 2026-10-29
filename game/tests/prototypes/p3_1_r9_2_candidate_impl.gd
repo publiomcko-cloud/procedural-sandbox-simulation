@@ -98,6 +98,7 @@ func _persist_and_reload(bytes:PackedByteArray,expected:String)->Dictionary:
 
 func _extract(values:PackedFloat32Array)->Dictionary:
 	var begin:int=Time.get_ticks_usec();var dims:Vector3i=CELLS+Vector3i.ONE;var mesh:Dictionary=Core.new_mesh();var drops:=0;var tets:=0
+	var root_cache:Dictionary={};var root_reuses:=0;var drops_three_point:=0;var drops_four_point:=0;var min_dropped_cross_squared:=INF
 	for y in range(CELLS.y):
 		for z in range(CELLS.z):
 			for x in range(CELLS.x):
@@ -110,21 +111,100 @@ func _extract(values:PackedFloat32Array)->Dictionary:
 				if ns==0 or ne==0:continue
 				var toward:Vector3=empty/float(ne)-solid/float(ns)
 				for tet in Core.TETS:
-					var hits:Array[Vector3]=[]
+					var hits:Array[Vector3]=[];var hit_identities:Dictionary={}
 					for edge in [[0,1],[0,2],[0,3],[1,2],[1,3],[2,3]]:
 						var a:int=int(tet[int(edge[0])]);var b:int=int(tet[int(edge[1])])
 						if (d[a]>=0.0)==(d[b]>=0.0):continue
-						var q:float=clampf(d[a]/(d[a]-d[b]),0.0,1.0);var h:Vector3=p[a].lerp(p[b],q);var dupe:=false
-						for old in hits:if old.distance_squared_to(h)<1.0e-14:dupe=true;break
-						if not dupe:hits.append(h)
-					if hits.size()==3:
-						if not Core.add_triangle(mesh,hits[0],hits[1],hits[2],toward,1.0e-12):drops+=1
-					elif hits.size()==4:
-						if not Core.add_triangle(mesh,hits[0],hits[1],hits[2],toward,1.0e-12):drops+=1
-						if not Core.add_triangle(mesh,hits[0],hits[2],hits[3],toward,1.0e-12):drops+=1
+						var node_a:Vector3i=Vector3i(x,y,z)+Core.GRID_CORNERS[a]
+						var node_b:Vector3i=Vector3i(x,y,z)+Core.GRID_CORNERS[b]
+						var root:Dictionary=_canonical_volume_root(root_cache,node_a,node_b,d[a],d[b],p[a],p[b])
+						if not root.get("valid",false):return {"valid":false,"reason":"canonical_volume_root_invalid","cell":[x,y,z]}
+						if bool(root.get("reused",false)):root_reuses+=1
+						var h:Vector3=root.point;var identity:String=String(root.get("root_identity",root.get("edge_key","")))
+						if identity.is_empty():return {"valid":false,"reason":"canonical_root_identity_missing","cell":[x,y,z]}
+						if not hit_identities.has(identity):hit_identities[identity]=true;hits.append(h)
+					if hits.size()>=3:
+						var tet_toward:Vector3=_tetra_toward_empty(p,d,tet)
+						var ordered:Array[Vector3]=_order_polygon(hits,tet_toward)
+						if ordered.size()!=hits.size():return {"valid":false,"reason":"tetra_intersection_order_failed","cell":[x,y,z],"hit_count":hits.size()}
+						for fan in range(1,ordered.size()-1):
+							if not Core.add_triangle(mesh,ordered[0],ordered[fan],ordered[fan+1],tet_toward,1.0e-12):
+								drops+=1
+								if hits.size()==3:drops_three_point+=1
+								else:drops_four_point+=1
+								var dropped_cross:Vector3=(ordered[fan]-ordered[0]).cross(ordered[fan+1]-ordered[0])
+								min_dropped_cross_squared=minf(min_dropped_cross_squared,dropped_cross.length_squared())
 					tets+=1
 					if mesh.positions.size()/3>MAX_TRIANGLES:return {"valid":false,"reason":"triangle_stop_loss","triangles":mesh.positions.size()/3}
-	return {"valid":true,"mesh":mesh,"mesh_sha256":_mesh_sha(mesh),"metrics":{"triangles":mesh.positions.size()/3,"active_tetrahedra":tets,"cutoff_drops":drops,"extract_usec":Time.get_ticks_usec()-begin,"source":"serialized/reloaded materialized volume"}}
+	return {"valid":true,"mesh":mesh,"mesh_sha256":_mesh_sha(mesh),"metrics":{"triangles":mesh.positions.size()/3,"active_tetrahedra":tets,"cutoff_drops":drops,"drops_from_three_root_polygons":drops_three_point,"drops_from_four_root_polygons":drops_four_point,"minimum_dropped_cross_squared":min_dropped_cross_squared if is_finite(min_dropped_cross_squared) else 0.0,"unique_lattice_roots":root_cache.size(),"cached_root_reuses":root_reuses,"extract_usec":Time.get_ticks_usec()-begin,"source":"serialized/reloaded materialized volume with canonical lattice-edge root cache"}}
+
+func _canonical_volume_root(cache:Dictionary,node_a:Vector3i,node_b:Vector3i,value_a:float,value_b:float,point_a:Vector3,point_b:Vector3)->Dictionary:
+	var key_a:String=_lattice_key(node_a);var key_b:String=_lattice_key(node_b)
+	if key_a>key_b:
+		var node_swap:Vector3i=node_a;node_a=node_b;node_b=node_swap
+		var value_swap:float=value_a;value_a=value_b;value_b=value_swap
+		var point_swap:Vector3=point_a;point_a=point_b;point_b=point_swap
+		var key_swap:String=key_a;key_a=key_b;key_b=key_swap
+	var edge_key:String=key_a+"|"+key_b
+	if cache.has(edge_key):
+		var cached:Dictionary=cache[edge_key]
+		return {"valid":true,"point":cached.point,"edge_key":edge_key,"root_identity":cached.root_identity,"reused":true}
+	var denominator:float=value_a-value_b
+	if denominator==0.0 or not is_finite(denominator):return {"valid":false,"reason":"edge_denominator_invalid"}
+	var t:float=clampf(value_a/denominator,0.0,1.0);var point:Vector3=point_a.lerp(point_b,t)
+	if not point.is_finite():return {"valid":false,"reason":"edge_root_nonfinite"}
+	var root_identity:String=edge_key
+	if value_a==0.0:point=point_a;root_identity="node|"+key_a
+	elif value_b==0.0:point=point_b;root_identity="node|"+key_b
+	cache[edge_key]={"point":point,"root_identity":root_identity}
+	return {"valid":true,"point":point,"edge_key":edge_key,"root_identity":root_identity,"reused":false}
+
+func _lattice_key(node:Vector3i)->String:
+	return "%d,%d,%d"%[node.x,node.y,node.z]
+
+func canonical_root_identity_probe(_snapshot:Dictionary)->Dictionary:
+	# Synthetic exact-root identity fixture, independent of whether a particular
+	# one-cell ROI contains a horizontal crossing. The same lattice edge is
+	# submitted in both endpoint orders; zero-node sharing is tested separately.
+	var node_a:=Vector3i(3,4,5);var node_b:=Vector3i(4,4,5)
+	var point_a:=ROI_MIN+Vector3(node_a)*STEP;var point_b:=ROI_MIN+Vector3(node_b)*STEP
+	var cache:Dictionary={}
+	var forward:Dictionary=_canonical_volume_root(cache,node_a,node_b,-1.0,1.0,point_a,point_b)
+	var reverse:Dictionary=_canonical_volume_root(cache,node_b,node_a,1.0,-1.0,point_b,point_a)
+	var zero_a:Dictionary=_canonical_volume_root(cache,node_a,node_b,0.0,-1.0,point_a,point_b)
+	var node_c:=Vector3i(3,5,5);var point_c:=ROI_MIN+Vector3(node_c)*STEP
+	var zero_b:Dictionary=_canonical_volume_root(cache,node_a,node_c,0.0,-2.0,point_a,point_c)
+	return {"valid":forward.get("valid",false) and reverse.get("valid",false) and forward.get("point")==reverse.get("point") and reverse.get("reused",false) and zero_a.get("root_identity")==zero_b.get("root_identity") and zero_a.get("point")==zero_b.get("point"),
+		"forward":forward.get("point",Vector3.ZERO),"reverse":reverse.get("point",Vector3.ZERO),
+		"reverse_was_cache_hit":reverse.get("reused",false),"edge_key":forward.get("edge_key",""),
+		"shared_zero_node_identity":zero_a.get("root_identity",""),"shared_zero_points_equal":zero_a.get("point")==zero_b.get("point"),"synthetic_samples":0}
+
+func _order_polygon(points:Array[Vector3],toward_empty:Vector3)->Array[Vector3]:
+	if points.size()<3 or not toward_empty.is_finite() or toward_empty.length_squared()<1.0e-16:return []
+	var center:=Vector3.ZERO
+	for point in points:center+=point
+	center/=float(points.size())
+	var normal:Vector3=toward_empty.normalized();var tangent:Vector3=(points[0]-center).normalized()
+	if normal.length_squared()<0.5 or tangent.length_squared()<0.5:return []
+	var bitangent:Vector3=normal.cross(tangent).normalized()
+	if bitangent.length_squared()<0.5:return []
+	var records:Array[Dictionary]=[]
+	for point in points:
+		var delta:Vector3=point-center
+		records.append({"angle":atan2(delta.dot(bitangent),delta.dot(tangent)),"point":point})
+	records.sort_custom(func(left:Dictionary,right:Dictionary)->bool:return float(left.angle)<float(right.angle))
+	var ordered:Array[Vector3]=[]
+	for record in records:ordered.append(record.point)
+	return ordered
+
+func _tetra_toward_empty(points:Array[Vector3],values:Array[float],tet:Array)->Vector3:
+	var p0:Vector3=points[int(tet[0])]
+	var e1:Vector3=points[int(tet[1])]-p0;var e2:Vector3=points[int(tet[2])]-p0;var e3:Vector3=points[int(tet[3])]-p0
+	var d1:float=values[int(tet[1])]-values[int(tet[0])];var d2:float=values[int(tet[2])]-values[int(tet[0])];var d3:float=values[int(tet[3])]-values[int(tet[0])]
+	var determinant:float=e1.dot(e2.cross(e3))
+	if not is_finite(determinant) or absf(determinant)<1.0e-12:return Vector3.ZERO
+	var gradient:Vector3=(d1*e2.cross(e3)+d2*e3.cross(e1)+d3*e1.cross(e2))/determinant
+	return -gradient
 
 func _idx(x:int,y:int,z:int,d:Vector3i)->int:return (y*d.z+z)*d.x+x
 func _mesh_sha(m:Dictionary)->String:
