@@ -1,0 +1,2 @@
+# Preserve report and captured evidence bytes exactly as hashed by SHA256SUMS.csv.
+* -text whitespace=cr-at-eol

@@ -1,0 +1,63 @@
+{
+	"attempt": "ATTEMPT_D3",
+	"boundary_edge_count": 0,
+	"candidate": "D",
+	"identity": {
+		"candidate": "D",
+		"edit_revision": 2,
+		"field_revision": 2,
+		"left_chunk_id": "L",
+		"lod_pair": [
+			0,
+			0
+		],
+		"right_chunk_id": "R",
+		"volume_payload_hashes": [
+			"dc19192d5e6e6fba6af794959cd6cca716f188f774db513a6baf64fdd4adedf6",
+			"03c6d478e6cf16d5801a0a0b042ed88e6b8522ca585f56f670e8c6ab50510fe1"
+		]
+	},
+	"identity_text": "candidate=D|face_axis=0|face_coordinate=16.000000000|left=L|right=R|lod=0,0|field_revision=2|edit_revision=2|volume_payloads=dc19192d5e6e6fba6af794959cd6cca716f188f774db513a6baf64fdd4adedf6,03c6d478e6cf16d5801a0a0b042ed88e6b8522ca585f56f670e8c6ab50510fe1",
+	"left_graph": {
+		"component_count": 1,
+		"components": [
+			{
+				"closed": false,
+				"edges": 22,
+				"vertices": 23
+			}
+		],
+		"degree_histogram": {
+			"1": 2,
+			"2": 21
+		},
+		"edge_count": 22
+	},
+	"mesh_sha256": "",
+	"mode": "shared_existing_contour",
+	"normals": [],
+	"patch_graph": {},
+	"patch_key_sha256": "1ff69f3ed1289b8515226719f21e9a2cd004d12761da497a38bcf88f4ce920d5",
+	"right_graph": {
+		"component_count": 1,
+		"components": [
+			{
+				"closed": false,
+				"edges": 22,
+				"vertices": 23
+			}
+		],
+		"degree_histogram": {
+			"1": 2,
+			"2": 21
+		},
+		"edge_count": 22
+	},
+	"scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+	"schema": "P3.1.R9.6R1.InterfacePatch.v1",
+	"scope": "experimental shared face bridge; not production geometry",
+	"source_sha": "7d058899abc1663ff7d4175b5a508532367cd5da",
+	"triangle_count": 0,
+	"vertices": [],
+	"winding_compatible": true
+}

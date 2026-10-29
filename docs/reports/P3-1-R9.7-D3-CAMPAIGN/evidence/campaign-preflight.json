@@ -1,0 +1,56 @@
+{
+  "campaign": "P3.1 R9.7 D3 Interface Convergence",
+  "authorization": "User instructed execution of attached procedure; document owner-authorization section applies",
+  "attached_procedure_sha256": "630b9439c41ae22d192fcad0397a53ea0e80b81ef11793e376f0f84f2070a158",
+  "repository_origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "worktree": "C:\\r97-d3-20261029",
+  "branch": "exp/p3-1-r9-7-d3-interface-convergence",
+  "source_sha": "7d058899abc1663ff7d4175b5a508532367cd5da",
+  "source_parent": "3d0e4c59c0e33e4c21e34bbd54d1771c3db83415",
+  "source_tree": "5c9ae7100f57dbf09ceff8a73828fd5d032136cb",
+  "source_candidate_file_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+  "expected_candidate_file_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+  "source_candidate_blob": "93afe39cb03383f2f18503e517abdd2d97a14159",
+  "hashes": {
+    "candidate": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+    "probe": "141efeb7d0d3157339d6ce25a88fcaaf212beb96c706dfb7236782b8ea97303e",
+    "interface_helper": "0e0033e07cb0a18a161584cb6288b5314314638e1379af4013f09fdf92913cc5",
+    "baseline_d": "a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6",
+    "manifest": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+    "godot": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643"
+  },
+  "expected_hashes": {
+    "probe": "141efeb7d0d3157339d6ce25a88fcaaf212beb96c706dfb7236782b8ea97303e",
+    "manifest": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+    "candidate": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+    "godot": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+    "baseline_d": "a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6",
+    "interface_helper": "0e0033e07cb0a18a161584cb6288b5314314638e1379af4013f09fdf92913cc5"
+  },
+  "manifest_sidecar": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972  p3_1_r9_2_e2e_inputs.jsonl",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "worktree_tracked_diff": null,
+  "candidate_eol_attributes": [
+    "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd: text: set",
+    "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd: eol: lf"
+  ],
+  "previous_campaign_pr205_head": "d89646ced9ec9797ebd5352d39fa8c5eab09e856",
+  "previous_campaign_state": "D3 consumed before geometry due CRLF pin mismatch; historical evidence preserved",
+  "resource_policy": "No resource-based prelaunch gate; warning at 3 GiB, abort at or predictive crossing of 2 GiB; only own Godot PID may be killed",
+  "runners": [
+    {
+      "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R97_D3_20261029_5eab760d7ce6486eaef7fb210741416e\\runner\\run_godot_stage_r97.ps1",
+      "sha256": "7f2bf165a3be41540cdd0c2ff00122698cf72c55fab90ded0c7e1e5f86aa6a80",
+      "disposition": "PowerShell parser failure in draft runner; no process launch",
+      "errors": "MissingCatchOrFinally; UnexpectedToken finally"
+    },
+    {
+      "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R97_D3_20261029_5eab760d7ce6486eaef7fb210741416e\\runner\\run_godot_stage_r97_v2.ps1",
+      "sha256": "0977ba6e1d625ca2ebaccc6cf442d12cc81af74728215cb1a87cc4620c6d091c",
+      "disposition": "Parser PASS; selected R9.7 runner"
+    }
+  ],
+  "timestamp_utc": "2026-10-29T19:44:30.9917578Z"
+}

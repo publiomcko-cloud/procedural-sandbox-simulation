@@ -111,3 +111,9 @@ Every verified merge, material review/GUI verdict, scope authorization or revisi
 ## 2026-10-28 — P3.1 R9.4 campaign closeout
 
 - [R9.4 consolidated experimental closeout](../reports/P3-1-R9.4-COMPARISON/RESULTS.md) — seven test-only corrections across A/C/D; exact-source full validation passed 21,464/0 on each; all remain partial and no architecture is selected. Evidence draft PRs #187–#190; open/unmerged.
+
+## 2026-10-29 — P3.1 R9.7 D3 interface-convergence campaign
+
+- [D3.1 first pinned geometry attempt](2026-10-29-P3-1-R9-7-D3-1.md) — at the first-attempt checkpoint, equal-LOD X+ retained 13 internal open edges and mixed-LOD X+ rejected a zipper candidate below the unchanged `1e-12` cutoff. The later campaign closeout supersedes its then-active next-step statement.
+- [D3 campaign closeout](../reports/P3-1-R9.7-D3-CAMPAIGN-CLOSEOUT.md) — all five bounded geometry hypotheses D3.1–D3.5 executed and were `FAILED_TARGET`; 6/6 controls and 0/25 ROI ray disagreements, no resource abort, no target candidate. Full E2E and full validation were not run because no candidate survived.
+- [D3 evidence publication](2026-10-29-P3-1-R9-7-D3-PUBLICATION.md) — draft PR #206 created against the exact Candidate D evidence branch; PR #204/#205 verified unchanged; unmerged and independent review pending.

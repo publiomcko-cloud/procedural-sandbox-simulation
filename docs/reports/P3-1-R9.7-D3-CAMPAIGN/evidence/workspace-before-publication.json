@@ -1,0 +1,127 @@
+{
+  "timestamp_utc": "2026-10-29T20:21:23.8169810Z",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "branch": "exp/p3-1-r9-7-d3-interface-convergence",
+  "head": "ca48ecdd6c1608118e9f9c6bbac7e2129f5c669a",
+  "parent": "faccf204a32c1887886e55867f8dcc84394ae215",
+  "main_remote": "5997a76d345f45bf86edfe83f690336391e8be27\trefs/heads/main",
+  "remote_campaign_branch": null,
+  "stashes": [
+    "stash@{0}: On feat/p3-0c-transactional-undo-redo: preserve P3.0C work before Issue 118 integration",
+    "stash@{1}: On fix/p1-0b-terrain-depth-lighting: preserve P1.0B local state before P1.0C"
+  ],
+  "untracked_uid_files": [
+    {
+      "path": "game/tests/p1_1b_benchmark_contract.gd.uid",
+      "sha256": "8440BAC3720996DB37943FFBB779F1E8974E6962C7D7E2CBB4BD2F05E1C49B18"
+    },
+    {
+      "path": "game/tests/p1_1b_benchmark_contract_tests.gd.uid",
+      "sha256": "98167AA02C8C21AD7C843F28559DAE679ABF29353236AB0F50CA63BCAA453CAE"
+    },
+    {
+      "path": "game/tests/p1_1b_benchmark_harness.gd.uid",
+      "sha256": "5B940F47B608963FD94498791AFD850CBD316F4D9D576C7A344392CAF9EFA84A"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r7_1_causal_diagnostic.gd.uid",
+      "sha256": "B2E94BBE0DD17ED4C2195D397D63DAEAC22DAC51C56B47E5E0461207AA9BB049"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r7_2_local_retriangulation.gd.uid",
+      "sha256": "AC1C0FAAE5E17CE8CC9C11CDD3E70657719DE3FEDD42BFE7A1F296EDDAC5070A"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r7_2_topology_diagnostic.gd.uid",
+      "sha256": "F5544977FE251760F5571C603D07E8AC21AC6BEE4B064CDF235F4ECA86395024"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r7_2_zero_edit_gate.gd.uid",
+      "sha256": "2DBA470301F2B45D5C45C84BD08DBBC9D30510441FA46ED2F770FCAE81985D06"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r7_3_minimal_carve_repair.gd.uid",
+      "sha256": "D96BC9999B831AB0F7EA1AA5FB61E1589095F63139BCDB5988F0E4EE2E1E10C0"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r8_1_geometry_causality.gd.uid",
+      "sha256": "1711B5ECB53092FD7D4894F25ACE35CE0CA662D4DFACA26C3FEA959CC73979F7"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r8_2_geometry_provenance.gd.uid",
+      "sha256": "D5F3D2C2D2ABF8EAA1647FFFF332690A783EF3B5CC459C3B923C57B20C30D033"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r8_2_xplus_face_oracle.gd.uid",
+      "sha256": "A5F4765DA606380D46A5584DE90459FBF8D5133F5E6AA6A0FEB8F9D3B15528B9"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r8_geometry_quality_diagnostic.gd.uid",
+      "sha256": "7F1A7013D3A5AFD5C7F89A1BD93445A02FFD8F3AB5DBA23F16925AAE9E6A446F"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd.uid",
+      "sha256": "90DA42B44D484473DA88F5E4DE517005F9061139C2217CF8D578C40BEFD35D46"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_2_contract_tests.gd.uid",
+      "sha256": "041E96636DFFA4DEB51454FA104C7670E326786C90880DB5C6656C0D57E1CEF0"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_2_diagnostic_base.gd.uid",
+      "sha256": "74058154EC8B71EE1724A42B9ECDE8350F7F448C6EE321FA852B3D8BB62C1F9B"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_3d_reference_extractor.gd.uid",
+      "sha256": "FAB7C774F147D9A1C45BEF7DBFF1DEFB34DBFB90E4F85096F6E3EAA335951B6F"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_5_probe.gd.uid",
+      "sha256": "9F493D3F92D19A07858C636388FE603E1B3F5B9DECC9B70FC84DB7C886AD42F1"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_6_surface_topology.gd.uid",
+      "sha256": "174E212FF4F586349632F1CE1E0DCD71BBC35EDB44641BA96EFFF28062A73173"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_6_topology_tests.gd.uid",
+      "sha256": "C5860625EC142EB07D8C889E00B8A58EEB492EB51157ACEFDB97A8E7846C0588"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_6r1_candidate_probe.gd.uid",
+      "sha256": "EE0A54E15C0D108F35F3EEA3ABA193D41FA61272D5B1F0BF7B4044AACEEAF20D"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_6r1_d_xneg_diagnostic.gd.uid",
+      "sha256": "C861FB560902FB866A83FB80249F9BF50408C765E9E5F76845E8DAD7FB39E6F8"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_6r1_face_interface_patch.gd.uid",
+      "sha256": "6A47109F78CBE5C37D7B0FB8D6FD2F0769D77D89000C0A677AA136D6A0DE776F"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_experiment_base.gd.uid",
+      "sha256": "69A6202E61ECA4F8C10C8B606844AA5A8450B790395BDCF96E7EE68250AEBC1A"
+    },
+    {
+      "path": "game/tests/prototypes/r9_5_source_snapshots/candidate_a.gd.uid",
+      "sha256": "EBE7716870A756660C1EF3AB1B57CD43E6568DA1B3BB8E38BB9E00F10F3C82EB"
+    },
+    {
+      "path": "game/tests/prototypes/r9_5_source_snapshots/candidate_c.gd.uid",
+      "sha256": "EA33D487A15BE68C378B578A8BF77F9AE952A98AC2E4163659AA7BF83A1AD85B"
+    },
+    {
+      "path": "game/tests/prototypes/r9_5_source_snapshots/candidate_d.gd.uid",
+      "sha256": "C28653064159129E64314B39095E04A3E0C16000E42021FE85D5E7FF30451D92"
+    }
+  ],
+  "tracked_status": [],
+  "f2_holds": [
+    "CURRENT_PROTECTED_STATE_UNKNOWN",
+    "V3_NOT_ATTESTED",
+    "ACL_REVIEW_REQUIRED",
+    "G1_BLOCKED_ENVIRONMENT",
+    "F2_G1_RELEASE_HOLD"
+  ]
+}

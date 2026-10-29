@@ -1,0 +1,110 @@
+{
+	"added_triangles": [],
+	"attempt": "ATTEMPT_D3_5",
+	"candidate": "D",
+	"geometry_claim": "bounded topology-only cap experiment using existing materialized-volume roots; no SDF volume mutation and no acceptance tolerance implied",
+	"interface_identity": {
+		"candidate": "D",
+		"edit_revision": 2,
+		"field_revision": 2,
+		"interface_roi_max": [
+			17.0,
+			3.0,
+			8.0
+		],
+		"interface_roi_min": [
+			15.0,
+			1.0,
+			6.0
+		],
+		"left_chunk_id": "L",
+		"lod_pair": [
+			0,
+			0
+		],
+		"right_chunk_id": "R",
+		"volume_payload_hashes": [
+			"dc19192d5e6e6fba6af794959cd6cca716f188f774db513a6baf64fdd4adedf6",
+			"03c6d478e6cf16d5801a0a0b042ed88e6b8522ca585f56f670e8c6ab50510fe1"
+		]
+	},
+	"repair": {
+		"added_triangle_count": 0,
+		"capped_loop_count": 0,
+		"fixed_cutoff_squared": 0.000000000001,
+		"input_internal_open_edge_count": 13,
+		"input_internal_open_edge_keys": [
+			"80fd73410000104000fbcf40|9cff734170fe0f4038ffcf40",
+			"79ff7341e6fd0f400000d040|9cff734170fe0f4038ffcf40",
+			"000074416ffe0f4037ffcf40|ca107441000010400000d040",
+			"0000744100001040c2facf40|000074416ffe0f4037ffcf40",
+			"0000744108fe0f400000d040|79ff7341e6fd0f400000d040",
+			"0000744108fe0f400000d040|ca107441000010400000d040",
+			"000078416e0e10400000c040|00007841711010403908c040",
+			"600378417e0d10400000c040|f7037841dc0f1040ee07c040",
+			"00007841711010403908c040|f7037841dc0f1040ee07c040",
+			"0000744100001040c2facf40|80fd73410000104000fbcf40",
+			"000084410000e03fda0ae840|000084412c1de03f4b07e840",
+			"000084412c1de03f4b07e840|fe018441de1fe03ff807e840",
+			"000084410000e03fda0ae840|fe018441de1fe03ff807e840"
+		],
+		"loops": [],
+		"max_local_cap_triangles": 128,
+		"reason": "internal_open_boundary_components_unresolved",
+		"scope": "test-only bounded topology cap; does not mutate Candidate D volumes",
+		"skipped_roi_boundary_edges": 73,
+		"triangle_rejections": 5,
+		"unresolved_components": [
+			{
+				"diagnostic": {
+					"reason": "no_cutoff_valid_simple_ear",
+					"rejected_triangles": 4,
+					"remaining_indices": [
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6
+					],
+					"valid": false
+				},
+				"node_count": 7,
+				"reason": "no_cutoff_valid_simple_ear"
+			},
+			{
+				"degree_histogram": {
+					"1": 2,
+					"2": 2
+				},
+				"node_count": 4,
+				"nodes": [
+					"000078416e0e10400000c040",
+					"00007841711010403908c040",
+					"f7037841dc0f1040ee07c040",
+					"600378417e0d10400000c040"
+				]
+			},
+			{
+				"diagnostic": {
+					"reason": "final_cap_triangle_below_fixed_cutoff",
+					"rejected_triangles": 1,
+					"remaining_indices": [
+						0,
+						1,
+						2
+					],
+					"valid": false
+				},
+				"node_count": 3,
+				"reason": "final_cap_triangle_below_fixed_cutoff"
+			}
+		],
+		"valid": false
+	},
+	"scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+	"schema": "P3.1.R9.7.MultiCellPatch.v1",
+	"source_sha": "ca48ecdd6c1608118e9f9c6bbac7e2129f5c669a",
+	"vertex_authority": "INTERPOLATED_VOLUME"
+}

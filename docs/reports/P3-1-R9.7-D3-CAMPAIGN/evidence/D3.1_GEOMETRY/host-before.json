@@ -1,0 +1,844 @@
+{
+  "timestamp_utc": "2026-10-29T19:46:09.9520702Z",
+  "physical_total_kb": 66944192,
+  "physical_available_kb": 24585736,
+  "committed_bytes": 74929491968,
+  "commit_limit_bytes": 79010316288,
+  "free_commit_bytes": 4080824320,
+  "commit_percent": 94.84,
+  "available_mbytes": 24003,
+  "automatic_managed_pagefile": false,
+  "pagefile_usage": [
+    {
+      "Name": "C:\\pagefile.sys",
+      "AllocatedBaseSize": 9974,
+      "CurrentUsage": 1701,
+      "PeakUsage": 1958
+    }
+  ],
+  "pagefile_setting": [
+    {
+      "Name": "c:\\pagefile.sys",
+      "InitialSize": 1000,
+      "MaximumSize": 10000
+    }
+  ],
+  "disk_c_free_bytes": 125140037632,
+  "temp_drive_free_bytes": 125140037632,
+  "top_private": [
+    {
+      "ProcessName": "vmmemWSL",
+      "Id": 20124,
+      "PrivateMemorySize64": 30840881152,
+      "WorkingSet64": 2149335040
+    },
+    {
+      "ProcessName": "XboxPcApp",
+      "Id": 28992,
+      "PrivateMemorySize64": 2960191488,
+      "WorkingSet64": 148832256
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 35224,
+      "PrivateMemorySize64": 1788866560,
+      "WorkingSet64": 328634368
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 30428,
+      "PrivateMemorySize64": 1557966848,
+      "WorkingSet64": 1333432320
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 7536,
+      "PrivateMemorySize64": 1541255168,
+      "WorkingSet64": 415252480
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 7068,
+      "PrivateMemorySize64": 1028411392,
+      "WorkingSet64": 162553856
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 52760,
+      "PrivateMemorySize64": 815177728,
+      "WorkingSet64": 590864384
+    },
+    {
+      "ProcessName": "brave",
+      "Id": 38544,
+      "PrivateMemorySize64": 703299584,
+      "WorkingSet64": 616042496
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 27176,
+      "PrivateMemorySize64": 688422912,
+      "WorkingSet64": 267759616
+    },
+    {
+      "ProcessName": "brave",
+      "Id": 27468,
+      "PrivateMemorySize64": 655876096,
+      "WorkingSet64": 533925888
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 2884,
+      "PrivateMemorySize64": 559689728,
+      "WorkingSet64": 490332160
+    },
+    {
+      "ProcessName": "vmmemCmZygote",
+      "Id": 25636,
+      "PrivateMemorySize64": 554188800,
+      "WorkingSet64": 12288
+    }
+  ],
+  "selected_processes": [
+    {
+      "ProcessName": "brave",
+      "Id": 3248,
+      "PrivateMemorySize64": 446103552,
+      "WorkingSet64": 386531328
+    },
+    {
+      "ProcessName": "brave",
+      "Id": 5872,
+      "PrivateMemorySize64": 21372928,
+      "WorkingSet64": 47017984
+    },
+    {
+      "ProcessName": "brave",
+      "Id": 11416,
+      "PrivateMemorySize64": 47329280,
+      "WorkingSet64": 62373888
+    },
+    {
+      "ProcessName": "brave",
+      "Id": 12896,
+      "PrivateMemorySize64": 2416640,
+      "WorkingSet64": 8241152
+    },
+    {
+      "ProcessName": "brave",
+      "Id": 27468,
+      "PrivateMemorySize64": 655876096,
+      "WorkingSet64": 533925888
+    },
+    {
+      "ProcessName": "brave",
+      "Id": 28312,
+      "PrivateMemorySize64": 8577024,
+      "WorkingSet64": 18665472
+    },
+    {
+      "ProcessName": "brave",
+      "Id": 28612,
+      "PrivateMemorySize64": 463798272,
+      "WorkingSet64": 351191040
+    },
+    {
+      "ProcessName": "brave",
+      "Id": 33068,
+      "PrivateMemorySize64": 216580096,
+      "WorkingSet64": 113291264
+    },
+    {
+      "ProcessName": "brave",
+      "Id": 38544,
+      "PrivateMemorySize64": 703299584,
+      "WorkingSet64": 616042496
+    },
+    {
+      "ProcessName": "brave",
+      "Id": 43760,
+      "PrivateMemorySize64": 9211904,
+      "WorkingSet64": 21622784
+    },
+    {
+      "ProcessName": "brave",
+      "Id": 44684,
+      "PrivateMemorySize64": 64974848,
+      "WorkingSet64": 80449536
+    },
+    {
+      "ProcessName": "brave",
+      "Id": 47784,
+      "PrivateMemorySize64": 16732160,
+      "WorkingSet64": 28344320
+    },
+    {
+      "ProcessName": "BraveCrashHandler",
+      "Id": 17216,
+      "PrivateMemorySize64": 1892352,
+      "WorkingSet64": 1105920
+    },
+    {
+      "ProcessName": "BraveCrashHandler64",
+      "Id": 17284,
+      "PrivateMemorySize64": 1867776,
+      "WorkingSet64": 1069056
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 1976,
+      "PrivateMemorySize64": 223232000,
+      "WorkingSet64": 127983616
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 2884,
+      "PrivateMemorySize64": 559689728,
+      "WorkingSet64": 490332160
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 2932,
+      "PrivateMemorySize64": 254189568,
+      "WorkingSet64": 193118208
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 5448,
+      "PrivateMemorySize64": 25772032,
+      "WorkingSet64": 64118784
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 6292,
+      "PrivateMemorySize64": 61075456,
+      "WorkingSet64": 82485248
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 6412,
+      "PrivateMemorySize64": 68190208,
+      "WorkingSet64": 42713088
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 9224,
+      "PrivateMemorySize64": 55615488,
+      "WorkingSet64": 70873088
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 11300,
+      "PrivateMemorySize64": 18571264,
+      "WorkingSet64": 35856384
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 12092,
+      "PrivateMemorySize64": 97484800,
+      "WorkingSet64": 86745088
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 17392,
+      "PrivateMemorySize64": 237555712,
+      "WorkingSet64": 206336000
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 17984,
+      "PrivateMemorySize64": 30478336,
+      "WorkingSet64": 74338304
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 18104,
+      "PrivateMemorySize64": 114982912,
+      "WorkingSet64": 164384768
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 21716,
+      "PrivateMemorySize64": 95756288,
+      "WorkingSet64": 78352384
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 22280,
+      "PrivateMemorySize64": 22401024,
+      "WorkingSet64": 48459776
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 27176,
+      "PrivateMemorySize64": 688422912,
+      "WorkingSet64": 267759616
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 29240,
+      "PrivateMemorySize64": 236515328,
+      "WorkingSet64": 125222912
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 30312,
+      "PrivateMemorySize64": 244940800,
+      "WorkingSet64": 242917376
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 30428,
+      "PrivateMemorySize64": 1557966848,
+      "WorkingSet64": 1333432320
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 30832,
+      "PrivateMemorySize64": 77742080,
+      "WorkingSet64": 81657856
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 32640,
+      "PrivateMemorySize64": 429760512,
+      "WorkingSet64": 399380480
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 33116,
+      "PrivateMemorySize64": 173613056,
+      "WorkingSet64": 182149120
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 33468,
+      "PrivateMemorySize64": 302379008,
+      "WorkingSet64": 170774528
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 33568,
+      "PrivateMemorySize64": 349368320,
+      "WorkingSet64": 317972480
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 33728,
+      "PrivateMemorySize64": 155570176,
+      "WorkingSet64": 100093952
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 34052,
+      "PrivateMemorySize64": 188944384,
+      "WorkingSet64": 120639488
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 34900,
+      "PrivateMemorySize64": 161386496,
+      "WorkingSet64": 175153152
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 35224,
+      "PrivateMemorySize64": 1788866560,
+      "WorkingSet64": 328634368
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 36616,
+      "PrivateMemorySize64": 71397376,
+      "WorkingSet64": 82690048
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 36852,
+      "PrivateMemorySize64": 14671872,
+      "WorkingSet64": 25128960
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 37052,
+      "PrivateMemorySize64": 118915072,
+      "WorkingSet64": 100499456
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 37132,
+      "PrivateMemorySize64": 392400896,
+      "WorkingSet64": 165187584
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 38224,
+      "PrivateMemorySize64": 97021952,
+      "WorkingSet64": 84164608
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 38832,
+      "PrivateMemorySize64": 87977984,
+      "WorkingSet64": 74297344
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 39300,
+      "PrivateMemorySize64": 60612608,
+      "WorkingSet64": 94576640
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 39644,
+      "PrivateMemorySize64": 430731264,
+      "WorkingSet64": 520601600
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 40144,
+      "PrivateMemorySize64": 261038080,
+      "WorkingSet64": 143863808
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 40604,
+      "PrivateMemorySize64": 273031168,
+      "WorkingSet64": 278638592
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 41284,
+      "PrivateMemorySize64": 97566720,
+      "WorkingSet64": 98316288
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 42044,
+      "PrivateMemorySize64": 457129984,
+      "WorkingSet64": 555831296
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 43184,
+      "PrivateMemorySize64": 201510912,
+      "WorkingSet64": 101552128
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 44932,
+      "PrivateMemorySize64": 226897920,
+      "WorkingSet64": 126836736
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 44960,
+      "PrivateMemorySize64": 170659840,
+      "WorkingSet64": 106291200
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 46048,
+      "PrivateMemorySize64": 319193088,
+      "WorkingSet64": 301010944
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 46128,
+      "PrivateMemorySize64": 228999168,
+      "WorkingSet64": 127782912
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 46212,
+      "PrivateMemorySize64": 339959808,
+      "WorkingSet64": 342011904
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 46768,
+      "PrivateMemorySize64": 95817728,
+      "WorkingSet64": 83529728
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 48112,
+      "PrivateMemorySize64": 546885632,
+      "WorkingSet64": 559529984
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 48164,
+      "PrivateMemorySize64": 18210816,
+      "WorkingSet64": 26685440
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 48884,
+      "PrivateMemorySize64": 192188416,
+      "WorkingSet64": 117596160
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 49548,
+      "PrivateMemorySize64": 7172096,
+      "WorkingSet64": 9515008
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 49684,
+      "PrivateMemorySize64": 412332032,
+      "WorkingSet64": 492630016
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 50504,
+      "PrivateMemorySize64": 68374528,
+      "WorkingSet64": 74231808
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 51736,
+      "PrivateMemorySize64": 173498368,
+      "WorkingSet64": 122265600
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 51932,
+      "PrivateMemorySize64": 315457536,
+      "WorkingSet64": 304496640
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 52108,
+      "PrivateMemorySize64": 85622784,
+      "WorkingSet64": 94380032
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 52268,
+      "PrivateMemorySize64": 122638336,
+      "WorkingSet64": 98496512
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 53692,
+      "PrivateMemorySize64": 82882560,
+      "WorkingSet64": 110022656
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 54608,
+      "PrivateMemorySize64": 342937600,
+      "WorkingSet64": 301920256
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 55300,
+      "PrivateMemorySize64": 399409152,
+      "WorkingSet64": 439951360
+    },
+    {
+      "ProcessName": "chrome",
+      "Id": 56208,
+      "PrivateMemorySize64": 106991616,
+      "WorkingSet64": 60694528
+    },
+    {
+      "ProcessName": "cloudcode_cli",
+      "Id": 55424,
+      "PrivateMemorySize64": 86941696,
+      "WorkingSet64": 57810944
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 7068,
+      "PrivateMemorySize64": 1028411392,
+      "WorkingSet64": 162553856
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 7536,
+      "PrivateMemorySize64": 1541255168,
+      "WorkingSet64": 415252480
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 12196,
+      "PrivateMemorySize64": 172810240,
+      "WorkingSet64": 197173248
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 14460,
+      "PrivateMemorySize64": 9728000,
+      "WorkingSet64": 30175232
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 16944,
+      "PrivateMemorySize64": 62169088,
+      "WorkingSet64": 176574464
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 23160,
+      "PrivateMemorySize64": 26091520,
+      "WorkingSet64": 107159552
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 35956,
+      "PrivateMemorySize64": 35889152,
+      "WorkingSet64": 110563328
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 36260,
+      "PrivateMemorySize64": 97984512,
+      "WorkingSet64": 109125632
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 39272,
+      "PrivateMemorySize64": 16003072,
+      "WorkingSet64": 54317056
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 41124,
+      "PrivateMemorySize64": 186793984,
+      "WorkingSet64": 123002880
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 41684,
+      "PrivateMemorySize64": 349798400,
+      "WorkingSet64": 294973440
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 42600,
+      "PrivateMemorySize64": 76427264,
+      "WorkingSet64": 115601408
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 42976,
+      "PrivateMemorySize64": 282587136,
+      "WorkingSet64": 317001728
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 43496,
+      "PrivateMemorySize64": 68812800,
+      "WorkingSet64": 117125120
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 48704,
+      "PrivateMemorySize64": 531243008,
+      "WorkingSet64": 381358080
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 50572,
+      "PrivateMemorySize64": 25624576,
+      "WorkingSet64": 118894592
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 51856,
+      "PrivateMemorySize64": 35454976,
+      "WorkingSet64": 118857728
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 52760,
+      "PrivateMemorySize64": 815177728,
+      "WorkingSet64": 590864384
+    },
+    {
+      "ProcessName": "Code",
+      "Id": 55264,
+      "PrivateMemorySize64": 26083328,
+      "WorkingSet64": 107003904
+    },
+    {
+      "ProcessName": "codex",
+      "Id": 34240,
+      "PrivateMemorySize64": 210534400,
+      "WorkingSet64": 241180672
+    },
+    {
+      "ProcessName": "codex-code-mode-host",
+      "Id": 30332,
+      "PrivateMemorySize64": 23154688,
+      "WorkingSet64": 29908992
+    },
+    {
+      "ProcessName": "msedge",
+      "Id": 11632,
+      "PrivateMemorySize64": 2830336,
+      "WorkingSet64": 14331904
+    },
+    {
+      "ProcessName": "msedge",
+      "Id": 51436,
+      "PrivateMemorySize64": 14655488,
+      "WorkingSet64": 41635840
+    },
+    {
+      "ProcessName": "msedge",
+      "Id": 52300,
+      "PrivateMemorySize64": 61845504,
+      "WorkingSet64": 41402368
+    },
+    {
+      "ProcessName": "msedge",
+      "Id": 54324,
+      "PrivateMemorySize64": 45039616,
+      "WorkingSet64": 113094656
+    },
+    {
+      "ProcessName": "msedge",
+      "Id": 54548,
+      "PrivateMemorySize64": 7675904,
+      "WorkingSet64": 22138880
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 11072,
+      "PrivateMemorySize64": 4722688,
+      "WorkingSet64": 18116608
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 13244,
+      "PrivateMemorySize64": 153100288,
+      "WorkingSet64": 71598080
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 13340,
+      "PrivateMemorySize64": 62713856,
+      "WorkingSet64": 87695360
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 24108,
+      "PrivateMemorySize64": 73687040,
+      "WorkingSet64": 136556544
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 24996,
+      "PrivateMemorySize64": 20250624,
+      "WorkingSet64": 48095232
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 25104,
+      "PrivateMemorySize64": 7757824,
+      "WorkingSet64": 23142400
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 25628,
+      "PrivateMemorySize64": 7696384,
+      "WorkingSet64": 23064576
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 25792,
+      "PrivateMemorySize64": 2945024,
+      "WorkingSet64": 14508032
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 26036,
+      "PrivateMemorySize64": 156631040,
+      "WorkingSet64": 169943040
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 26380,
+      "PrivateMemorySize64": 15495168,
+      "WorkingSet64": 46379008
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 26396,
+      "PrivateMemorySize64": 256741376,
+      "WorkingSet64": 110161920
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 26792,
+      "PrivateMemorySize64": 434745344,
+      "WorkingSet64": 410226688
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 30816,
+      "PrivateMemorySize64": 36110336,
+      "WorkingSet64": 5832704
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 30884,
+      "PrivateMemorySize64": 2924544,
+      "WorkingSet64": 14467072
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 31372,
+      "PrivateMemorySize64": 131690496,
+      "WorkingSet64": 4321280
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 31388,
+      "PrivateMemorySize64": 12861440,
+      "WorkingSet64": 2076672
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 31460,
+      "PrivateMemorySize64": 11169792,
+      "WorkingSet64": 1667072
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 31540,
+      "PrivateMemorySize64": 152244224,
+      "WorkingSet64": 1576960
+    },
+    {
+      "ProcessName": "msedgewebview2",
+      "Id": 45172,
+      "PrivateMemorySize64": 8175616,
+      "WorkingSet64": 26271744
+    },
+    {
+      "ProcessName": "pwsh",
+      "Id": 32996,
+      "PrivateMemorySize64": 39596032,
+      "WorkingSet64": 102817792
+    },
+    {
+      "ProcessName": "vmmemCmZygote",
+      "Id": 25636,
+      "PrivateMemorySize64": 554188800,
+      "WorkingSet64": 12288
+    },
+    {
+      "ProcessName": "vmmemWSL",
+      "Id": 20124,
+      "PrivateMemorySize64": 30840881152,
+      "WorkingSet64": 2149335040
+    }
+  ],
+  "running_godot_processes": [],
+  "wsl_running": "Distribui��es do Subsistema do Windows para Linux:\r\n\r\ndocker-desktop (Padr�o)\r\n\r\nUbuntu\r\n\r\n\r\n"
+}

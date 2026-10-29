@@ -1,0 +1,14 @@
+{
+  "stage": "D3.4_GEOMETRY_RUN1",
+  "source_sha": "406697793ac57fafe1da5ea64359815ff2d2bed7",
+  "process_id": 36764,
+  "observed_process": {
+    "ProcessId": 36764,
+    "ParentProcessId": 33292,
+    "CommandLine": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path ./game --script res://tests/prototypes/p3_1_r9_6r1_candidate_probe.gd",
+    "ExecutablePath": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "CreationDate": "2026-10-29T17:12:21.528223-03:00"
+  },
+  "started_utc": "2026-10-29T20:12:21.5235383Z",
+  "created_utc": "2026-10-29T20:12:21.7970377Z"
+}

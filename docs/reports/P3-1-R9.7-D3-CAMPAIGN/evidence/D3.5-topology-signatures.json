@@ -1,0 +1,88 @@
+{
+  "algorithm": "SHA-256 of sorted-key compact UTF-8 JSON with fields internal_open_edge_keys, internal_open_edges, nonmanifold_edges, roi_boundary_open_edges, triangle_count, valid; final counts have at most 24 edge examples so key lists are complete.",
+  "source": "captured D3.5 stdout and PowerShell-parsed topology artifact; no Godot rerun",
+  "base_candidate_mesh_sha256": "34c97d8e8145ee9cd6850a8fdc9bfa22087a7068cf5e77705f7bbb6f3bdf596b",
+  "base_required_surface_topology_sha256": "1279cbd6a4ab2c65310df57676daec67a4ac07febf12991c7c1416086032eaba",
+  "final_attempt_topologies": [
+    {
+      "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+      "topology_signature_scope": "complete_internal_open_edge_key_set",
+      "topology_signature": {
+        "internal_open_edge_keys": [
+          "0000744100001040c2facf40|000074416ffe0f4037ffcf40",
+          "0000744100001040c2facf40|80fd73410000104000fbcf40",
+          "0000744108fe0f400000d040|79ff7341e6fd0f400000d040",
+          "0000744108fe0f400000d040|ca107441000010400000d040",
+          "000074416ffe0f4037ffcf40|ca107441000010400000d040",
+          "000078416e0e10400000c040|00007841711010403908c040",
+          "00007841711010403908c040|f7037841dc0f1040ee07c040",
+          "000084410000e03fda0ae840|000084412c1de03f4b07e840",
+          "000084410000e03fda0ae840|fe018441de1fe03ff807e840",
+          "000084412c1de03f4b07e840|fe018441de1fe03ff807e840",
+          "600378417e0d10400000c040|f7037841dc0f1040ee07c040",
+          "79ff7341e6fd0f400000d040|9cff734170fe0f4038ffcf40",
+          "80fd73410000104000fbcf40|9cff734170fe0f4038ffcf40"
+        ],
+        "internal_open_edges": 13,
+        "nonmanifold_edges": 0,
+        "roi_boundary_open_edges": 73,
+        "triangle_count": 654,
+        "valid": true
+      },
+      "topology_signature_canonical_utf8_sha256": "7ade5a19ef14e343635773cfbbba495ebc1f3426bb459ea078d23eb16c23d882",
+      "patch_winding_compatible": true,
+      "interface_patch_artifact_sha256": "e045a774e424ac004e4ceafa0382609ce55872add57532f4bc1ee8501071d565",
+      "multi_cell_patch_artifact_sha256": "9f1a175ad945ae244ae30219a5e3386f0ac36d59dc209ed0d60009acc5f57f1e"
+    },
+    {
+      "scenario_id": "R9.2.SEAM.XPLUS_MIXED_LOD.v1",
+      "topology_signature_scope": "complete_internal_open_edge_key_set",
+      "topology_signature": {
+        "internal_open_edge_keys": [
+          "000084410000e03fda0ae840|000084412c1de03f4b07e840",
+          "000084410000e03fda0ae840|fe018441de1fe03ff807e840",
+          "000084412c1de03f4b07e840|fe018441de1fe03ff807e840"
+        ],
+        "internal_open_edges": 3,
+        "nonmanifold_edges": 0,
+        "roi_boundary_open_edges": 56,
+        "triangle_count": 453,
+        "valid": true
+      },
+      "topology_signature_canonical_utf8_sha256": "7e79fe370ebd7829dbcdf9f8d8d3a4314d7ad41e178c0ca9446cca93e5ded70c",
+      "patch_winding_compatible": false,
+      "interface_patch_artifact_sha256": "5ec6479e158c24636151ae4696eaea14682bed2ed7d20309e78d42b92feb79d8",
+      "multi_cell_patch_artifact_sha256": "85c07a31899cbd20fd30ede91cf521bf1c156c185081c965479bd9e71c978c44"
+    },
+    {
+      "scenario_id": "R9.2.HIST.XPLUS_DEFECT.v1",
+      "topology_signature_scope": "complete_internal_open_edge_key_set",
+      "topology_signature": {
+        "internal_open_edge_keys": [
+          "0000744100001040c2facf40|000074416ffe0f4037ffcf40",
+          "0000744100001040c2facf40|80fd73410000104000fbcf40",
+          "0000744108fe0f400000d040|79ff7341e6fd0f400000d040",
+          "0000744108fe0f400000d040|ca107441000010400000d040",
+          "000074416ffe0f4037ffcf40|ca107441000010400000d040",
+          "000078416e0e10400000c040|00007841711010403908c040",
+          "00007841711010403908c040|f7037841dc0f1040ee07c040",
+          "000084410000e03fda0ae840|000084412c1de03f4b07e840",
+          "000084410000e03fda0ae840|fe018441de1fe03ff807e840",
+          "000084412c1de03f4b07e840|fe018441de1fe03ff807e840",
+          "600378417e0d10400000c040|f7037841dc0f1040ee07c040",
+          "79ff7341e6fd0f400000d040|9cff734170fe0f4038ffcf40",
+          "80fd73410000104000fbcf40|9cff734170fe0f4038ffcf40"
+        ],
+        "internal_open_edges": 13,
+        "nonmanifold_edges": 0,
+        "roi_boundary_open_edges": 73,
+        "triangle_count": 654,
+        "valid": true
+      },
+      "topology_signature_canonical_utf8_sha256": "7ade5a19ef14e343635773cfbbba495ebc1f3426bb459ea078d23eb16c23d882",
+      "patch_winding_compatible": true,
+      "interface_patch_artifact_sha256": "cdd9034ee7f3c578ab0dc7d0ae3dccaede1e313c45874fcf17b38a005efbc6aa",
+      "multi_cell_patch_artifact_sha256": "b14bc76a2412b73c43a02cfc0e6e31fe22782fb794469a931dcaa4121e2c3572"
+    }
+  ]
+}

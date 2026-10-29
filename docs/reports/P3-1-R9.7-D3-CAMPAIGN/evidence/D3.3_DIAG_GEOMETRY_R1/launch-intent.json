@@ -1,0 +1,37 @@
+{
+  "stage": "D3.3_DIAG_GEOMETRY_R1",
+  "source_sha": "69ce753f7b34e8815b44063de33fd6470a0b4f61",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "arguments": [
+    "--headless",
+    "--path",
+    "./game",
+    "--script",
+    "res://tests/prototypes/p3_1_r9_6r1_candidate_probe.gd"
+  ],
+  "working_directory": "C:\\r97-d3-20261029",
+  "profile_root": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R97_D3_20261029_5eab760d7ce6486eaef7fb210741416e\\profiles\\D3.3_DIAG_GEOMETRY_R1",
+  "artifact_directory": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R97_D3_20261029_5eab760d7ce6486eaef7fb210741416e\\D3.3-diag-artifacts-run1",
+  "owner_authorized_override": "owner-authorized R9.7 monitored D3 campaign",
+  "prior_campaign_gate_reference_bytes": 6442450944,
+  "minimum_free_commit_bytes": 0,
+  "runtime_abort_floor_bytes": 2147483648,
+  "runtime_monitor_poll_ms": 100,
+  "environment": {
+    "APPDATA": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R97_D3_20261029_5eab760d7ce6486eaef7fb210741416e\\profiles\\D3.3_DIAG_GEOMETRY_R1\\APPDATA",
+    "LOCALAPPDATA": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R97_D3_20261029_5eab760d7ce6486eaef7fb210741416e\\profiles\\D3.3_DIAG_GEOMETRY_R1\\LOCALAPPDATA",
+    "TEMP": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R97_D3_20261029_5eab760d7ce6486eaef7fb210741416e\\profiles\\D3.3_DIAG_GEOMETRY_R1\\TEMP",
+    "TMP": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R97_D3_20261029_5eab760d7ce6486eaef7fb210741416e\\profiles\\D3.3_DIAG_GEOMETRY_R1\\TMP",
+    "R96R1_ARTIFACT_DIR": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R97_D3_20261029_5eab760d7ce6486eaef7fb210741416e\\D3.3-diag-artifacts-run1",
+    "R96R1_ATTEMPT": "ATTEMPT_D3_3",
+    "R95_CANDIDATE_ID": "D",
+    "R95_CANDIDATE_SOURCE_SHA": "69ce753f7b34e8815b44063de33fd6470a0b4f61",
+    "R95_ORACLE_SHA": "0f8cfcdc64ef43096ff9f6166d17605bb1c13aec",
+    "R95_RUN_ID": "R97-D3.3-diag-087fa194eb3b40efbc5ab7d52a1f1d15"
+  },
+  "intent_utc": "2026-10-29T20:07:59.1040612Z"
+}

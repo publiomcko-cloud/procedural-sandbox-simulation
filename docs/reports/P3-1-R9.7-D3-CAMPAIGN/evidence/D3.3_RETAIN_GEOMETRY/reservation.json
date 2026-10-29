@@ -1,0 +1,10 @@
+{
+  "stage": "D3.3_RETAIN_GEOMETRY",
+  "source_sha": "363bfd85134f708406b05eaff8450c98928bab3f",
+  "created_utc": "2026-10-29T20:09:58.3818699Z",
+  "owner_authorized_override": "owner-authorized R9.7 monitored D3 campaign",
+  "prior_campaign_gate_reference_bytes": 6442450944,
+  "prelaunch_floor_bytes": 0,
+  "runtime_abort_floor_bytes": 2147483648,
+  "status": "RESERVED"
+}
