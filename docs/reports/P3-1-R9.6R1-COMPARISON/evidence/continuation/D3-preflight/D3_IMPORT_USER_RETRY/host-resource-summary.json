@@ -1,0 +1,48 @@
+{
+  "stage": "D3_IMPORT_USER_RETRY",
+  "source_sha": "7d058899abc1663ff7d4175b5a508532367cd5da",
+  "status": "HOST_GATE_BLOCKED_NOT_STARTED",
+  "scenario_started": false,
+  "runner_exit_code": 21,
+  "command": [
+    "--headless",
+    "--path",
+    "./game",
+    "--editor",
+    "--import"
+  ],
+  "working_directory": "C:\\r96r1-D-publish-20261029",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "reservation": {
+    "timestamp_utc": "2026-10-29T18:55:43.6738775Z",
+    "commit_limit_bytes": 78499172352,
+    "committed_bytes": 73018421248,
+    "free_commit_bytes": 5480751104,
+    "required_free_commit_bytes": 6442450944,
+    "shortfall_bytes": 961699840,
+    "physical_available_bytes": 23372312576,
+    "pagefile_auto_managed": false,
+    "pagefile_usage": [
+      {
+        "allocated_base_size_mb": 9487,
+        "current_usage_mb": 1551,
+        "peak_usage_mb": 1958
+      }
+    ],
+    "disk_c_free_bytes": 125918076928,
+    "temp_free_bytes": 125918076928,
+    "godot_process_count": 0
+  },
+  "post_runner": {
+    "timestamp_utc": "2026-10-29T18:55:44.6617277Z",
+    "free_commit_bytes": 5453905920,
+    "godot_process_count": 0
+  },
+  "prior_observation": {
+    "timestamp_utc": "2026-10-29T18:55:28.7238452Z",
+    "free_commit_bytes": 5904932864,
+    "change_to_reservation_bytes": -424181760
+  },
+  "interpretation": "The explicit runner gate uses CommitLimit minus CommittedBytes; this retry was made after a materially changed observation and failed the gate before process creation. No Godot PID/process, import, check-only, or geometry process started. No unrelated process was terminated and no pagefile setting changed. No further repeated reservation is justified."
+}

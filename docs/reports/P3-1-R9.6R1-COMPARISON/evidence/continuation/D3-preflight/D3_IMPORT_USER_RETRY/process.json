@@ -1,0 +1,11 @@
+{
+  "stage": "D3_IMPORT_USER_RETRY",
+  "source_sha": "7d058899abc1663ff7d4175b5a508532367cd5da",
+  "scenario_started": false,
+  "status": "HOST_GATE_BLOCKED_NOT_STARTED",
+  "host_before": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_CONT_20261029_170704Z_e3cd7a9a994d427192a2dad12d99369c\\D3_IMPORT_USER_RETRY\\host-before.json",
+  "required_free_commit_bytes": 6442450944,
+  "required_physical_available_bytes": 8589934592,
+  "required_disk_free_bytes": 10737418240,
+  "required_temp_free_bytes": 10737418240
+}
