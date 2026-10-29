@@ -51,7 +51,11 @@ are acceptable only when they overlap an analytically identified tangent.
 Candidate intersections are compared against all canonical roots inside the
 candidate ROI, while a nearer global root outside that cropped ROI is reported
 separately. This avoids mislabeling a correctly cropped mesh as a missed global
-first surface.
+first surface. Roots that lie on an ROI boundary are recorded separately and
+are not treated as required interior mesh intersections. Same-sign terminal
+intervals within 5e-5 of an already isolated adaptive root are reported as
+adjacent-root intervals, not as unresolved tangencies. These are oracle
+bookkeeping classifications, not geometry tolerances or acceptance changes.
 
 Candidate intersections are computed independently with two-sided
 Moller-Trumbore and cross-checked against the existing CPU triangle helper.

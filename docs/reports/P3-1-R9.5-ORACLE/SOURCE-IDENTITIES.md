@@ -28,6 +28,16 @@ uses a complete-interval 1-Lipschitz exclusion, compares the analytical root
 set with the adaptive root set, records the legacy 256-step scan, and compares
 mesh hits with every canonical root inside the same ROI.
 
+The A run at oracle commit `51d35da17db3f65dace93774dd80f5384e78700b` also
+completed but remains non-qualifying. Its analytic and adaptive crossing roots
+matched; however, same-sign terminal intervals adjacent to those roots were
+mistakenly retained as unresolved tangencies, and exact lower ROI-boundary
+roots were counted as interior mesh expectations. The preserved output is at
+`C:\r95-evidence\oracle-A-51d35da`. The next pinned oracle revision filters
+only intervals already explained by an isolated root and accounts for ROI
+boundary roots separately; it does not change geometric tolerances or candidate
+sources.
+
 | Candidate | Measured source commit | Direct parent | Original candidate file SHA-256 | R9.5 snapshot |
 |---|---|---|---|---|
 | A | f0c93415dd56886a1c05ff2e6a1340e420f22c59 | d5903242e41642a2633e18dc181c4389188c65b2 | 970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a | game/tests/prototypes/r9_5_source_snapshots/candidate_a.gd |

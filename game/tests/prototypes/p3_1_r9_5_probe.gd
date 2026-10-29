@@ -43,10 +43,12 @@ func _run() -> void:
 		var lo: Vector3 = Core.world_min(ray_row.roi)
 		var hi: Vector3 = lo + Vector3(Core.cell_counts(ray_row.roi))*Core.step(ray_row.roi)
 		var roi_roots: Array[Dictionary] = []
+		var roi_boundary_roots: Array[Dictionary] = []
 		for root in exact.get("roots",[]):
 			var p: Vector3 = root.position
 			if p.x>=lo.x-1e-6 and p.x<=hi.x+1e-6 and p.y>=lo.y-1e-6 and p.y<=hi.y+1e-6 and p.z>=lo.z-1e-6 and p.z<=hi.z+1e-6:
-				roi_roots.append(root)
+				if absf(p.x-lo.x)<=1e-6 or absf(p.x-hi.x)<=1e-6 or absf(p.y-lo.y)<=1e-6 or absf(p.y-hi.y)<=1e-6 or absf(p.z-lo.z)<=1e-6 or absf(p.z-hi.z)<=1e-6: roi_boundary_roots.append(root)
+				else: roi_roots.append(root)
 		var hit_distances: Array[float] = _cluster_hit_distances(hits.get("hits",[]),1e-5)
 		var position_deltas: Array[Dictionary] = _mesh_root_deltas(roi_roots,hit_distances)
 		var first: Dictionary = exact.get("first",{})
@@ -63,7 +65,7 @@ func _run() -> void:
 		elif not position_deltas.is_empty(): classification="IN_ROI_DISTANCE_DIAGNOSTIC"
 		if not first_inside and not first.is_empty(): classification += "_GLOBAL_FIRST_ROOT_CROPPED"
 		classes[classification]=int(classes.get(classification,0))+1
-		print("R95_RAY " + JSON.stringify({"run_id":run_id,"candidate":cid,"source_sha":csha,"oracle_sha":oracle_sha,"ray_index":i,"ray":ray,"analytic":exact,"adaptive":adaptive,"finite_scan_256":finite,"root_comparison":root_comparison,"canonical_roots_inside_mesh_roi":roi_roots,"mesh_two_sided":hits,"unique_mesh_hit_distances_clustered_1e-5_for_dedup_only":hit_distances,"mesh_root_distance_deltas":position_deltas,"global_first_root_inside_mesh_roi":first_inside,"classification":classification}))
+		print("R95_RAY " + JSON.stringify({"run_id":run_id,"candidate":cid,"source_sha":csha,"oracle_sha":oracle_sha,"ray_index":i,"ray":ray,"analytic":exact,"adaptive":adaptive,"finite_scan_256":finite,"root_comparison":root_comparison,"canonical_roots_strictly_inside_mesh_roi":roi_roots,"canonical_roots_on_mesh_roi_boundary":roi_boundary_roots,"mesh_two_sided":hits,"unique_mesh_hit_distances_clustered_1e-5_for_dedup_only":hit_distances,"mesh_root_distance_deltas":position_deltas,"global_first_root_inside_mesh_roi":first_inside,"classification":classification}))
 	print("R95_RAY_SUMMARY " + JSON.stringify({"candidate":cid,"source_sha":csha,"manifest_sha":MANIFEST_SHA,"ray_count":rays.size(),"classifications":classes,"candidate_mesh_sha256":built.get("mesh_sha256",""),"roi":ray_row.roi,"metrics":built.get("metrics",{})}))
 	_print_shared_samples(setup.snapshot)
 	_run_xplus(candidate,manifest)
@@ -100,7 +102,15 @@ func _adaptive_roots(ray: Dictionary,snapshot: Dictionary)->Dictionary:
 	var f0:=_f(0.0,ctx);var f1:=_f(length,ctx);_visit(0.0,length,f0,f1,0,ctx)
 	if not String(ctx.failure).is_empty():return {"valid":false,"reason":ctx.failure,"evaluations":ctx.evaluations}
 	var roots:Array=ctx.roots;roots.sort_custom(func(a:Dictionary,b:Dictionary)->bool:return float(a.distance)<float(b.distance))
-	return {"valid":true,"roots":roots,"root_count":roots.size(),"unresolved_tangent_intervals":ctx.unresolved,"evaluations":ctx.evaluations,"distance_tolerance":1e-5,"bound":"1-Lipschitz exclusion only when an endpoint absolute value exceeds the complete interval width; unresolved same-sign candidates remain explicit","method":"bounded adaptive subdivision plus bisection; not claimed complete for tangencies"}
+	var unresolved:Array=[];var resolved_adjacent_same_sign:=0
+	for span in ctx.unresolved:
+		var explained_by_root:bool=false
+		for root in roots:
+			var t:float=float(root.distance)
+			if t>=float(span.lo)-5e-5 and t<=float(span.hi)+5e-5:explained_by_root=true;break
+		if explained_by_root:resolved_adjacent_same_sign+=1
+		else:unresolved.append(span)
+	return {"valid":true,"roots":roots,"root_count":roots.size(),"unresolved_tangent_intervals":unresolved,"same_sign_intervals_explained_by_neighboring_roots":resolved_adjacent_same_sign,"raw_same_sign_candidate_intervals":ctx.unresolved.size(),"evaluations":ctx.evaluations,"distance_tolerance":1e-5,"bound":"1-Lipschitz exclusion only when an endpoint absolute value exceeds the complete interval width; unresolved same-sign candidates remain explicit","method":"bounded adaptive subdivision plus bisection; not claimed complete for tangencies"}
 
 func _f(t:float,ctx:Dictionary)->float:
 	ctx.evaluations=int(ctx.evaluations)+1
