@@ -9,6 +9,7 @@ const Core := preload("res://tests/prototypes/p3_1_r9_2_diagnostic_base.gd")
 const CUTOFF_SQUARED := 1.0e-12
 const PLANE_EPSILON := 1.0e-6
 const ROOT_IDENTITY_SCHEME := "normalized_binary32_xyz"
+const MAX_LOCAL_CAP_TRIANGLES := 128
 
 func build(identity: Dictionary, left_mesh: Dictionary, right_mesh: Dictionary,
 		axis: int, plane: float) -> Dictionary:
@@ -127,6 +128,157 @@ func build(identity: Dictionary, left_mesh: Dictionary, right_mesh: Dictionary,
 		"root_identity_scheme":ROOT_IDENTITY_SCHEME,
 		"vertex_authority":"INTERPOLATED_VOLUME","endpoint_connector_count":endpoint_connectors.size(),
 		"cutoff_squared":CUTOFF_SQUARED,"patch_geometry_claim":"topological face bridge only; canonical surface residual is diagnostic and no SDF projection is performed"}
+
+func cap_internal_closed_loops(input_mesh:Dictionary,lo:Vector3,hi:Vector3)->Dictionary:
+	var input_positions:PackedVector3Array=input_mesh.get("positions",PackedVector3Array())
+	var input_normals:PackedVector3Array=input_mesh.get("normals",PackedVector3Array())
+	var mesh:Dictionary={"positions":input_positions.duplicate(),"normals":input_normals.duplicate()}
+	var positions:PackedVector3Array=mesh.positions;var normals:PackedVector3Array=mesh.normals
+	if positions.size()%3!=0 or (not normals.is_empty() and normals.size()!=positions.size()):return {"valid":false,"reason":"local_cap_mesh_arrays_invalid"}
+	var incidence:Dictionary={};var directed:Dictionary={};var point_by_key:Dictionary={};var edge_ends:Dictionary={}
+	for i in range(0,positions.size(),3):
+		for edge in [Vector2i(0,1),Vector2i(1,2),Vector2i(2,0)]:
+			var a:Vector3=positions[i+edge.x];var b:Vector3=positions[i+edge.y]
+			var ka:String=_exact_vertex_key(a);var kb:String=_exact_vertex_key(b);var key:String=_edge_key(ka,kb)
+			incidence[key]=int(incidence.get(key,0))+1
+			if not directed.has(key):directed[key]=[ka,kb]
+			point_by_key[ka]=a;point_by_key[kb]=b;edge_ends[key]=[ka,kb]
+	var adjacency:Dictionary={};var open_keys:Array[String]=[];var skipped_roi_edges:=0
+	for key_value in incidence.keys():
+		var key:String=String(key_value)
+		if int(incidence[key])!=1:continue
+		var ends:Array=edge_ends[key]
+		var a:Vector3=point_by_key[ends[0]];var b:Vector3=point_by_key[ends[1]]
+		if _edge_on_roi_boundary(a,b,lo,hi):skipped_roi_edges+=1;continue
+		open_keys.append(key)
+		for endpoint in ends:
+			if not adjacency.has(endpoint):adjacency[endpoint]=[]
+			var neighbors:Array=adjacency[endpoint]
+			var other:String=String(ends[1]) if endpoint==ends[0] else String(ends[0])
+			if not neighbors.has(other):neighbors.append(other)
+	for node in adjacency:adjacency[node].sort()
+	var seen:Dictionary={};var loops:Array=[];var unresolved:Array=[];var added_triangles:Array=[];var triangle_rejections:=0
+	var all_nodes:Array=adjacency.keys();all_nodes.sort()
+	for seed_value in all_nodes:
+		var seed:String=String(seed_value)
+		if seen.has(seed):continue
+		var queue:Array[String]=[seed];seen[seed]=true;var component:Array[String]=[];var head:=0
+		while head<queue.size():
+			var current:String=queue[head];head+=1;component.append(current)
+			for neighbor_value in adjacency[current]:
+				var neighbor:String=String(neighbor_value)
+				if not seen.has(neighbor):seen[neighbor]=true;queue.append(neighbor)
+		var degree_histogram:Dictionary={}
+		for node in component:
+			var degree:int=adjacency[node].size();degree_histogram[degree]=int(degree_histogram.get(degree,0))+1
+		if component.size()<3 or int(degree_histogram.get(2,0))!=component.size():
+			unresolved.append({"node_count":component.size(),"degree_histogram":degree_histogram,"nodes":component})
+			continue
+		var ordered:Array[String]=_order_cycle(component,adjacency)
+		if ordered.size()!=component.size():
+			unresolved.append({"node_count":component.size(),"reason":"cycle_order_failed","nodes":component});continue
+		var boundary_orientation_valid:=true
+		for i in range(ordered.size()):
+			var from_key:String=ordered[i];var to_key:String=ordered[(i+1)%ordered.size()]
+			var edge_key:String=_edge_key(from_key,to_key);var existing:Array=directed.get(edge_key,[])
+			if existing.size()!=2 or existing[0]!=to_key or existing[1]!=from_key:boundary_orientation_valid=false;break
+		if not boundary_orientation_valid:
+			ordered=_reverse_cycle(ordered)
+			boundary_orientation_valid=true
+			for i in range(ordered.size()):
+				var from_key:String=ordered[i];var to_key:String=ordered[(i+1)%ordered.size()]
+				var edge_key:String=_edge_key(from_key,to_key);var existing:Array=directed.get(edge_key,[])
+				if existing.size()!=2 or existing[0]!=to_key or existing[1]!=from_key:boundary_orientation_valid=false;break
+		if not boundary_orientation_valid:
+			unresolved.append({"node_count":component.size(),"reason":"boundary_winding_not_consistent","nodes":component});continue
+		var loop_points:Array[Vector3]=[]
+		for node in ordered:loop_points.append(point_by_key[node])
+		var tri_result:Dictionary=_ear_clip_loop(loop_points)
+		if not bool(tri_result.get("valid",false)):
+			triangle_rejections+=int(tri_result.get("rejected_triangles",0))
+			unresolved.append({"node_count":component.size(),"reason":tri_result.get("reason","loop_triangulation_failed"),"diagnostic":tri_result});continue
+		var tri_rows:Array=tri_result.triangles
+		if added_triangles.size()+tri_rows.size()>MAX_LOCAL_CAP_TRIANGLES:
+			unresolved.append({"node_count":component.size(),"reason":"local_cap_triangle_budget_exceeded"});continue
+		for row in tri_rows:
+			var a:Vector3=loop_points[int(row[0])];var b:Vector3=loop_points[int(row[1])];var c:Vector3=loop_points[int(row[2])]
+			var n:Vector3=(b-a).cross(c-a).normalized()
+			if (b-a).cross(c-a).length_squared()<=CUTOFF_SQUARED:
+				triangle_rejections+=1;unresolved.append({"node_count":component.size(),"reason":"local_cap_triangle_below_fixed_cutoff"});break
+			positions.append_array(PackedVector3Array([a,b,c]));normals.append_array(PackedVector3Array([n,n,n]))
+			added_triangles.append([[a.x,a.y,a.z],[b.x,b.y,b.z],[c.x,c.y,c.z]])
+		loops.append({"node_count":component.size(),"triangle_count":tri_rows.size(),"minimum_cross_squared":tri_result.minimum_cross_squared,"boundary_winding_opposed":true})
+	mesh.positions=positions;mesh.normals=normals
+	return {"valid":unresolved.is_empty() and not loops.is_empty(),"reason":"" if unresolved.is_empty() else "internal_open_boundary_components_unresolved",
+		"mesh":mesh,"added_triangles":added_triangles,"added_triangle_count":added_triangles.size(),"capped_loop_count":loops.size(),
+		"loops":loops,"unresolved_components":unresolved,"triangle_rejections":triangle_rejections,
+		"input_internal_open_edge_count":open_keys.size(),"input_internal_open_edge_keys":open_keys,"skipped_roi_boundary_edges":skipped_roi_edges,
+		"fixed_cutoff_squared":CUTOFF_SQUARED,"max_local_cap_triangles":MAX_LOCAL_CAP_TRIANGLES,"scope":"test-only bounded topology cap; does not mutate Candidate D volumes"}
+
+func _edge_on_roi_boundary(a:Vector3,b:Vector3,lo:Vector3,hi:Vector3)->bool:
+	for axis in range(3):
+		if (absf(a[axis]-lo[axis])<=2.0e-5 and absf(b[axis]-lo[axis])<=2.0e-5) or (absf(a[axis]-hi[axis])<=2.0e-5 and absf(b[axis]-hi[axis])<=2.0e-5):return true
+	return false
+
+func _order_cycle(nodes:Array[String],adjacency:Dictionary)->Array[String]:
+	if nodes.size()<3:return []
+	var start:String=nodes.duplicate().sorted()[0];var neighbors:Array=adjacency[start].duplicate();neighbors.sort()
+	var ordered:Array[String]=[start];var previous:String=start;var current:String=String(neighbors[0])
+	for _i in range(nodes.size()):
+		if current==start:break
+		ordered.append(current);var choices:Array=adjacency[current].duplicate();choices.erase(previous)
+		if choices.size()!=1:return []
+		previous=current;current=String(choices[0])
+	return ordered if ordered.size()==nodes.size() and current==start else []
+
+func _reverse_cycle(values:Array[String])->Array[String]:
+	if values.size()<3:return values
+	var out:Array[String]=[values[0]]
+	for i in range(values.size()-1,0,-1):out.append(values[i])
+	return out
+
+func _ear_clip_loop(points:Array[Vector3])->Dictionary:
+	if points.size()<3:return {"valid":false,"reason":"loop_has_fewer_than_three_vertices"}
+	var normal:=Vector3.ZERO
+	for i in range(points.size()):normal+=points[i].cross(points[(i+1)%points.size()])
+	if normal.length_squared()<=CUTOFF_SQUARED:return {"valid":false,"reason":"loop_projection_normal_degenerate"}
+	var drop_axis:=0
+	if absf(normal.y)>absf(normal.x):drop_axis=1
+	if absf(normal.z)>absf(normal[drop_axis]):drop_axis=2
+	var projected:Array[Vector2]=[]
+	for point in points:
+		if drop_axis==0:projected.append(Vector2(point.y,point.z))
+		elif drop_axis==1:projected.append(Vector2(point.x,point.z))
+		else:projected.append(Vector2(point.x,point.y))
+	var signed_area:=0.0
+	for i in range(projected.size()):signed_area+=projected[i].cross(projected[(i+1)%projected.size()])
+	if absf(signed_area)<=1.0e-15:return {"valid":false,"reason":"loop_projected_area_degenerate"}
+	var orientation:float=signf(signed_area);var remaining:Array[int]=[]
+	for i in range(points.size()):remaining.append(i)
+	var triangles:Array=[];var minimum_cross:=INF;var rejected:=0;var guard:=0
+	while remaining.size()>3 and guard<points.size()*points.size():
+		guard+=1;var clipped:=false
+		for ri in range(remaining.size()):
+			var prev:int=remaining[(ri-1+remaining.size())%remaining.size()];var cur:int=remaining[ri];var nxt:int=remaining[(ri+1)%remaining.size()]
+			var turn:float=(projected[cur]-projected[prev]).cross(projected[nxt]-projected[cur])*orientation
+			if turn<=1.0e-12:continue
+			var contains_point:=false
+			for test_index in remaining:
+				if test_index==prev or test_index==cur or test_index==nxt:continue
+				if _point_in_projected_triangle(projected[test_index],projected[prev],projected[cur],projected[nxt],orientation):contains_point=true;break
+			if contains_point:continue
+			var cross_squared:float=(points[cur]-points[prev]).cross(points[nxt]-points[prev]).length_squared()
+			if cross_squared<=CUTOFF_SQUARED:rejected+=1;continue
+			triangles.append([prev,cur,nxt]);minimum_cross=minf(minimum_cross,cross_squared);remaining.remove_at(ri);clipped=true;break
+		if not clipped:return {"valid":false,"reason":"no_cutoff_valid_simple_ear","rejected_triangles":rejected,"remaining_indices":remaining}
+	var final_cross:float=(points[remaining[1]]-points[remaining[0]]).cross(points[remaining[2]]-points[remaining[0]]).length_squared()
+	if final_cross<=CUTOFF_SQUARED:return {"valid":false,"reason":"final_cap_triangle_below_fixed_cutoff","rejected_triangles":rejected+1,"remaining_indices":remaining}
+	triangles.append([remaining[0],remaining[1],remaining[2]]);minimum_cross=minf(minimum_cross,final_cross)
+	return {"valid":true,"triangles":triangles,"minimum_cross_squared":minimum_cross,"rejected_triangles":rejected,"projection_drop_axis":drop_axis}
+
+func _point_in_projected_triangle(p:Vector2,a:Vector2,b:Vector2,c:Vector2,orientation:float)->bool:
+	var e0:float=(b-a).cross(p-a)*orientation;var e1:float=(c-b).cross(p-b)*orientation;var e2:float=(a-c).cross(p-c)*orientation
+	return e0>=-1.0e-12 and e1>=-1.0e-12 and e2>=-1.0e-12
 
 func _validate_identity(identity: Dictionary, axis: int, plane: float) -> Dictionary:
 	for key in ["left_chunk_id","right_chunk_id","lod_pair","field_revision","edit_revision","candidate","volume_payload_hashes"]:
