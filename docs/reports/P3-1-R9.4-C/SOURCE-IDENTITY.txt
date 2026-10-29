@@ -1,0 +1,15 @@
+Candidate C
+Branch: bench/p3-1-r9-4c-surface-nets
+Current source HEAD: af4d6027d9d57c9f2b8023aa27b31d2dd2dcedf2
+Expected source HEAD: af4d6027d9d57c9f2b8023aa27b31d2dd2dcedf2
+Direct parent: 5def207d7b1cff8d7f70476f1221c7b9c5771e27
+R9.3 base: 5def207d7b1cff8d7f70476f1221c7b9c5771e27
+Implementation path: game/tests/prototypes/p3_1_r9_2_candidate_impl.gd
+Implementation physical SHA-256: 7072f39b2c48dcb38048e2ee3d1687baa9377bcc99ca8250ac2c0f84cff17d24
+Implementation Git blob: d8cd7e32f88d864bef97bfb4d675b7d461bee4c7
+Probe path: game/tests/prototypes/p3_1_r9_3_targeted_probe.gd
+Probe physical SHA-256: bffa4ebb299ecfadc412ca23a19d3cecaba6d2f9b8d00a32e37322e965174d8c
+Probe Git blob: cc350ac32cc4e2d01cdf7c9873e6e8700beb2bf8
+Manifest SHA-256: 1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972
+Godot: 4.7.2.stable.official.ed1daf0bf
+Godot executable SHA-256: c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643

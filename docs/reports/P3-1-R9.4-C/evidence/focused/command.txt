@@ -1,0 +1,4 @@
+"C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path C:\r94c\game --script res://tests/prototypes/p3_1_r9_3_targeted_probe.gd
+source=af4d6027d9d57c9f2b8023aa27b31d2dd2dcedf2
+scenarios=R9.2.GEO.ZERO.v1,R9.2.GEO.CARVE.v1,R9.2.GEO.FILL_CARVE.v1,R9.2.CHUNK.NEIGHBOR_PAIR.v1,R9.2.SEAM.XPLUS_EQUAL.v1,R9.2.SEAM.XPLUS_MIXED_LOD.v1,R9.2.SEAM.NEGATIVE_REGIONS.v1,R9.2.HIST.XPLUS_DEFECT.v1,R9.2.HIST.TRIANGLE3103.v1
+root=C:\r94c
