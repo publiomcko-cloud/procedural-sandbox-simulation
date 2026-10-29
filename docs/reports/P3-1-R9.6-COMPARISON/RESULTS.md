@@ -13,8 +13,8 @@ The four R9.6 worktrees were created independently from their exact R9.5/source 
 | Workstream | Base / measured source | Measured implementation blob | Physical SHA-256 | R9.6 correction attempts |
 |---|---|---|---|---:|
 | Shared topology/oracle | R9.5 oracle `895dbca3c6dd58bb9adacd63fb39c3ad524226ff` | current topology helper `a585941a19d5477e4b45f3c01d9730946489401a` | `b7cac8b0c11cc57b4272ae6e105ff676fffe2cfb8621484b60a62218f27d3d29` | Diagnostic contract only; not an A/D attempt |
-| Candidate A | baseline HEAD `b41dc7207fae3911ecd7b082850535b7e965db5b`; measured source `f0c93415dd56886a1c05ff2e6a1340e420f22c59` | `5a19b05d3f39108e53c8b7ff47d28303ee7bfbb0` | `970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a` | 0/3 |
-| Candidate D | baseline HEAD `464087947da00a45090a289ade4917882ce0ada5`; measured source `6ea04229b5ff06090f346c8749c1f5a53994227c` | `33ac8bd1f7942ddd71610bd2e2b66f583fdbf3fd` | `a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6` | 0/3 |
+| Candidate A | R9.5 evidence HEAD `50d9571e4251ce41fe719ab48fffa1f90b2eb4b1`; measured source `f0c93415dd56886a1c05ff2e6a1340e420f22c59` | `5a19b05d3f39108e53c8b7ff47d28303ee7bfbb0` | `970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a` | 0/3 |
+| Candidate D | R9.5 evidence HEAD `0c6cf84302eceb973fb6b21d13c4e21d74bc31af`; measured source `6ea04229b5ff06090f346c8749c1f5a53994227c` | `33ac8bd1f7942ddd71610bd2e2b66f583fdbf3fd` | `a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6` | 0/3 |
 | Comparison | R9.5 comparison `2c8e9f621ee1b7e38da3cf34887c9d7cbd783657` | docs-only | see local checksum sidecar | N/A |
 
 Frozen manifest SHA-256: `1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972`. Godot binary SHA-256: `c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643`. The triangle cutoff remains `cross_squared > 1e-12`.
