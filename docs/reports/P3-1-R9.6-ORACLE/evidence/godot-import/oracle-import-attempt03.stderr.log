@@ -1,0 +1,35 @@
+ERROR: Parameter "mem" is null.
+   at: alloc_static (core/os/memory.cpp:104)
+
+================================================================
+CrashHandlerException: Program crashed with signal 11
+Engine version: Godot Engine v4.7.2.stable.official (ed1daf0bf001b61586d9930840f2f1394092c079)
+Dumping the backtrace. Please include this when reporting the bug on: https://github.com/godotengine/godot/issues
+Load address: 7ff5b01b0000
+
+[1] 7ff6f4284d61 (main+40d4d61) - no debug info in PE/COFF executable
+[2] 7ffd0057f846 (ntdll.dll+8f846) - no debug info in PE/COFF executable
+[3] 7ffd00595e9e (ntdll.dll+a5e9e) - no debug info in PE/COFF executable
+[4] 7ffd0050e8c5 (ntdll.dll+1e8c5) - no debug info in PE/COFF executable
+[5] 7ffd00594e9d (ntdll.dll+a4e9d) - no debug info in PE/COFF executable
+[6] 7ff6f56fbc7f (main+554bc7f) - no debug info in PE/COFF executable
+[7] 7ff6f4fcfbe3 (main+4e1fbe3) - no debug info in PE/COFF executable
+[8] 7ff6f25b6d89 (main+2406d89) - no debug info in PE/COFF executable
+[9] 7ff6f275f45d (main+25af45d) - no debug info in PE/COFF executable
+[10] 7ff6f2746c6c (main+2596c6c) - no debug info in PE/COFF executable
+[11] 7ff6f26d29ef (main+25229ef) - no debug info in PE/COFF executable
+[12] 7ff6f27bb936 (main+260b936) - no debug info in PE/COFF executable
+[13] 7ff6f214efd4 (main+1f9efd4) - no debug info in PE/COFF executable
+[14] 7ff6f2159b5e (main+1fa9b5e) - no debug info in PE/COFF executable
+[15] 7ff6f4d834bb (main+4bd34bb) - no debug info in PE/COFF executable
+[16] 7ff6f17cdb03 (main+161db03) - no debug info in PE/COFF executable
+[17] 7ff6f022cf52 (main+7cf52) - no debug info in PE/COFF executable
+[18] 7ff6f0202ac4 (main+52ac4) - no debug info in PE/COFF executable
+[19] 7ff6f0202b7d (main+52b7d) - no debug info in PE/COFF executable
+[20] 7ff6f01b10c8 (main+10c8) - no debug info in PE/COFF executable
+[21] 7ff6f01b13f5 (main+13f5) - no debug info in PE/COFF executable
+[22] 7ffcffdf259c (kernel32.dll+1259c) - no debug info in PE/COFF executable
+[23] 7ffd0054af77 (ntdll.dll+5af77) - no debug info in PE/COFF executable
+[24] -1 (main+-7ff6f01b0001) - no debug info in PE/COFF executable
+-- END OF C++ BACKTRACE --
+================================================================

@@ -1,0 +1,16 @@
+{
+  "attempt": 3,
+  "source_sha": "f69e39e0ed4a67fe7f26b771cdec7ce70f53ddda",
+  "source_parent": "895dbca3c6dd58bb9adacd63fb39c3ad524226ff",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "arguments": "--headless --path \"C:\\r96oracle\\game\" --editor --import",
+  "working_directory": "C:\\r96oracle\\game",
+  "profile": "C:\\r96-evidence\\isolated-profile-attempt03",
+  "pid": 50016,
+  "exit_code": -1073741819,
+  "elapsed_ms": 1497.3128,
+  "stdout_sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c",
+  "stderr_sha256": "2ac8fe2229758e5935413f14a6ac077032a1a8da38d88b06738cd174de57e459",
+  "pass": false
+}

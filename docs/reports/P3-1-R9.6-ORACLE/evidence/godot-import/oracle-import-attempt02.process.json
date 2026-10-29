@@ -1,0 +1,22 @@
+{
+  "attempt": 2,
+  "issue": "pre-scenario Godot import crash",
+  "source_sha": "f69e39e0ed4a67fe7f26b771cdec7ce70f53ddda",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\r96oracle\\game",
+    "--editor",
+    "--import"
+  ],
+  "working_directory": "C:\\r96oracle\\game",
+  "profile": "C:\\r96-evidence\\isolated-profile",
+  "pid": 14664,
+  "exit_code": -1073741819,
+  "elapsed_ms": 1632.7821,
+  "stdout_sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c",
+  "stderr_sha256": "94132cae67c371dac33aa6cab387cc4fcb76fd0aed64446a0fdcd70f9ac3b37d",
+  "pass": false
+}

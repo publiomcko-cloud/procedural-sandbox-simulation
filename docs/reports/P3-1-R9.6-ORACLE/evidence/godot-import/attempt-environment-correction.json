@@ -1,0 +1,6 @@
+{
+  "attempt02": "oracle-import-attempt02.process.json",
+  "correction": "The record profile path reflects directories created by the wrapper, but Start-Process did not override APPDATA, LOCALAPPDATA, TEMP, or TMP. The process inherited the host environment. Treat profile as NOT_ISOLATED. No project scene or benchmark scenario was run.",
+  "attempt01": "Inherited host environment; relative project path ./game; import only.",
+  "attempt03": "ProcessStartInfo set APPDATA, LOCALAPPDATA, TEMP, and TMP to isolated-profile-attempt03."
+}
