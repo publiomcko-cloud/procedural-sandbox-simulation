@@ -1,0 +1,9 @@
+# Curated D3 execution evidence
+
+This folder contains the campaign preflight, exact Git-blob source pins, preserved workspace state, all completed D3 geometry run process records and raw stream captures, resource monitor samples, plus the frozen X+ topology and patch diagnostics for each run. It is a review-sized selection from the complete evidence tree at `C:\Users\PUBLI\AppData\Local\Temp\P3_1_R97_D3_20261029_5eab760d7ce6486eaef7fb210741416e`. The original run captures in that tree were retained; supplemental checksum and post-processing sidecars were added after execution.
+
+`source-pins.json` is independently reproducible with `derive_source_pins.py` from the repository worktree. Git blob IDs are included separately from physical SHA-256 values. `workspace-before-publication.json` records the branch, HEAD, remote main, stashes and pre-publication hashes of untracked `.gd.uid` files. `D3.5-topology-signatures.json` records a derived final topology fingerprint from the complete open-edge key set in the captured D3.5 result; its algorithm and scope are explicit and it is not represented as a mesh hash. `D3.5-base-topology-identities.json` was parsed from the existing topology artifact; no Godot rerun was used for this calculation.
+
+All runner/process records distinguish process exit success from geometry-target status. `resource-monitor.jsonl` records free-commit samples and abort state. Empty `stderr.txt` files are retained as zero-byte evidence, not omitted.
+
+`campaign-closeout.json` and `../P3-1-R9.7-D3-CAMPAIGN-CLOSEOUT.md` summarize the outcomes. The parent directory's `SHA256SUMS.csv` hashes the report and this curated package; the checksum file is excluded from its own listing. The complete raw 66-MiB evidence root remains the authoritative source for any unbundled intermediate import, parser, runner-recovery, or diagnostic artifact.

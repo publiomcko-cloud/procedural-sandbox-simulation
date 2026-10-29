@@ -1,0 +1,132 @@
+{
+	"attempt": "ATTEMPT_D3_2",
+	"boundary_edge_count": 0,
+	"candidate": "D",
+	"component_pairs": [],
+	"correspondence_mode": "identity_shared_boundary",
+	"cutoff_squared": 0.000000000001,
+	"identity": {
+		"candidate": "D",
+		"edit_revision": 2,
+		"field_revision": 2,
+		"left_chunk_id": "L",
+		"lod_pair": [
+			0,
+			0
+		],
+		"right_chunk_id": "R",
+		"volume_payload_hashes": [
+			"dc19192d5e6e6fba6af794959cd6cca716f188f774db513a6baf64fdd4adedf6",
+			"03c6d478e6cf16d5801a0a0b042ed88e6b8522ca585f56f670e8c6ab50510fe1"
+		]
+	},
+	"identity_text": "candidate=D|face_axis=0|face_coordinate=16.000000000|left=L|right=R|lod=0,0|field_revision=2|edit_revision=2|volume_payloads=dc19192d5e6e6fba6af794959cd6cca716f188f774db513a6baf64fdd4adedf6,03c6d478e6cf16d5801a0a0b042ed88e6b8522ca585f56f670e8c6ab50510fe1",
+	"left_boundary_vertex_keys": [
+		{
+			"closed": false,
+			"component_index": 0,
+			"ordered_quantized_mesh_vertex_keys": [
+				"1600000,100000,719400",
+				"1600000,120837,725000",
+				"1600000,125000,726022",
+				"1600000,126004,726004",
+				"1600000,150000,725461",
+				"1600000,150375,725375",
+				"1600000,151606,725000",
+				"1600000,169749,719749",
+				"1600000,175000,717523",
+				"1600000,186249,711249",
+				"1600000,200000,700167",
+				"1600000,200091,700091",
+				"1600000,200169,700000",
+				"1600000,211419,686419",
+				"1600000,217954,675000",
+				"1600000,220117,670117",
+				"1600000,225000,653886",
+				"1600000,225936,650936",
+				"1600000,226159,650000",
+				"1600000,226903,626903",
+				"1600000,226951,625000",
+				"1600000,225000,616832",
+				"1600000,220604,600000"
+			]
+		}
+	],
+	"left_graph": {
+		"component_count": 1,
+		"components": [
+			{
+				"closed": false,
+				"edges": 22,
+				"vertices": 23
+			}
+		],
+		"degree_histogram": {
+			"1": 2,
+			"2": 21
+		},
+		"edge_count": 22
+	},
+	"mesh_sha256": "",
+	"minimum_cross_squared": null,
+	"mode": "shared_existing_contour",
+	"normals": [],
+	"patch_graph": {},
+	"patch_key_sha256": "1ff69f3ed1289b8515226719f21e9a2cd004d12761da497a38bcf88f4ce920d5",
+	"right_boundary_vertex_keys": [
+		{
+			"closed": false,
+			"component_index": 0,
+			"ordered_quantized_mesh_vertex_keys": [
+				"1600000,100000,719400",
+				"1600000,120837,725000",
+				"1600000,125000,726022",
+				"1600000,126004,726004",
+				"1600000,150000,725461",
+				"1600000,150375,725375",
+				"1600000,151606,725000",
+				"1600000,169749,719749",
+				"1600000,175000,717523",
+				"1600000,186249,711249",
+				"1600000,200000,700167",
+				"1600000,200091,700091",
+				"1600000,200169,700000",
+				"1600000,211419,686419",
+				"1600000,217954,675000",
+				"1600000,220117,670117",
+				"1600000,225000,653886",
+				"1600000,225936,650936",
+				"1600000,226159,650000",
+				"1600000,226903,626903",
+				"1600000,226951,625000",
+				"1600000,225000,616832",
+				"1600000,220604,600000"
+			]
+		}
+	],
+	"right_graph": {
+		"component_count": 1,
+		"components": [
+			{
+				"closed": false,
+				"edges": 22,
+				"vertices": 23
+			}
+		],
+		"degree_histogram": {
+			"1": 2,
+			"2": 21
+		},
+		"edge_count": 22
+	},
+	"scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+	"schema": "P3.1.R9.7.InterfacePatch.v1",
+	"scope": "experimental shared face bridge; not production geometry",
+	"shared_boundary_vertex_key_count": 23,
+	"source_sha": "709215e338b079457550265887393c247a6f15e8",
+	"triangle_count": 0,
+	"vertex_authority": "INTERPOLATED_VOLUME",
+	"vertex_sources": [],
+	"vertices": [],
+	"winding_compatible": true
+}

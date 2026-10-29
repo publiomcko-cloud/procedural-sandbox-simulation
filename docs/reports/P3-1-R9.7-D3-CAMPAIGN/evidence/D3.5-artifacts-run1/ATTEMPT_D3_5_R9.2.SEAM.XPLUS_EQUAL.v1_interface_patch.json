@@ -1,0 +1,146 @@
+{
+	"attempt": "ATTEMPT_D3_5",
+	"boundary_edge_count": 0,
+	"candidate": "D",
+	"component_pairs": [],
+	"correspondence_mode": "identity_shared_boundary",
+	"cutoff_squared": 0.000000000001,
+	"endpoint_connectors": [],
+	"failure_reason": "",
+	"identity": {
+		"candidate": "D",
+		"edit_revision": 2,
+		"field_revision": 2,
+		"interface_roi_max": [
+			17.0,
+			3.0,
+			8.0
+		],
+		"interface_roi_min": [
+			15.0,
+			1.0,
+			6.0
+		],
+		"left_chunk_id": "L",
+		"lod_pair": [
+			0,
+			0
+		],
+		"right_chunk_id": "R",
+		"volume_payload_hashes": [
+			"dc19192d5e6e6fba6af794959cd6cca716f188f774db513a6baf64fdd4adedf6",
+			"03c6d478e6cf16d5801a0a0b042ed88e6b8522ca585f56f670e8c6ab50510fe1"
+		]
+	},
+	"identity_text": "candidate=D|face_axis=0|face_coordinate=16.000000000|left=L|right=R|lod=0,0|field_revision=2|edit_revision=2|volume_payloads=dc19192d5e6e6fba6af794959cd6cca716f188f774db513a6baf64fdd4adedf6,03c6d478e6cf16d5801a0a0b042ed88e6b8522ca585f56f670e8c6ab50510fe1|roi_min=15.000000000,1.000000000,6.000000000|roi_max=17.000000000,3.000000000,8.000000000",
+	"left_boundary_vertex_keys": [
+		{
+			"closed": false,
+			"component_index": 0,
+			"ordered_quantized_mesh_vertex_keys": [
+				"000080410000803f4335e640",
+				"00008041d4ab9a3f0000e840",
+				"000080410000a03fb253e840",
+				"00008041f748a13f3e52e840",
+				"000080410000c03fcd25e840",
+				"00008041007bc03fc01ee840",
+				"00008041680ec23f0000e840",
+				"000080417747d93fde51e640",
+				"000080410000e03f859be540",
+				"00008041f865ee3f7e99e340",
+				"0000804100000040b60de040",
+				"00008041e20e00407107e040",
+				"00008041b11b00400000e040",
+				"00008041d14e074069a7db40",
+				"00008041957d0b400000d840",
+				"00008041e7df0c40f46fd640",
+				"0000804100001040583ed140",
+				"0000804169991040b54cd040",
+				"00008041eabd10400000d040",
+				"00008041cf371140e89bc840",
+				"00008041a33f11400000c840",
+				"0000804100001040d862c540",
+				"00008041d12f0d400000c040"
+			]
+		}
+	],
+	"left_graph": {
+		"component_count": 1,
+		"components": [
+			{
+				"closed": false,
+				"edges": 22,
+				"vertices": 23
+			}
+		],
+		"degree_histogram": {
+			"1": 2,
+			"2": 21
+		},
+		"edge_count": 22
+	},
+	"mesh_sha256": "",
+	"minimum_cross_squared": null,
+	"mode": "shared_existing_contour",
+	"normals": [],
+	"patch_graph": {},
+	"patch_key_sha256": "70b76cb3cfc025418f4428bce472dd9f4b1a5471222c55731bb2b525a6a7772d",
+	"right_boundary_vertex_keys": [
+		{
+			"closed": false,
+			"component_index": 0,
+			"ordered_quantized_mesh_vertex_keys": [
+				"000080410000803f4335e640",
+				"00008041d4ab9a3f0000e840",
+				"000080410000a03fb253e840",
+				"00008041f748a13f3e52e840",
+				"000080410000c03fcd25e840",
+				"00008041007bc03fc01ee840",
+				"00008041680ec23f0000e840",
+				"000080417747d93fde51e640",
+				"000080410000e03f859be540",
+				"00008041f865ee3f7e99e340",
+				"0000804100000040b60de040",
+				"00008041e20e00407107e040",
+				"00008041b11b00400000e040",
+				"00008041d14e074069a7db40",
+				"00008041957d0b400000d840",
+				"00008041e7df0c40f46fd640",
+				"0000804100001040583ed140",
+				"0000804169991040b54cd040",
+				"00008041eabd10400000d040",
+				"00008041cf371140e89bc840",
+				"00008041a33f11400000c840",
+				"0000804100001040d862c540",
+				"00008041d12f0d400000c040"
+			]
+		}
+	],
+	"right_graph": {
+		"component_count": 1,
+		"components": [
+			{
+				"closed": false,
+				"edges": 22,
+				"vertices": 23
+			}
+		],
+		"degree_histogram": {
+			"1": 2,
+			"2": 21
+		},
+		"edge_count": 22
+	},
+	"root_identity_scheme": "none",
+	"scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+	"schema": "P3.1.R9.7.InterfacePatch.v1",
+	"scope": "experimental shared face bridge; not production geometry",
+	"shared_boundary_vertex_key_count": 23,
+	"source_sha": "ca48ecdd6c1608118e9f9c6bbac7e2129f5c669a",
+	"triangle_count": 0,
+	"validation_status": "VALIDATED",
+	"vertex_authority": "INTERPOLATED_VOLUME",
+	"vertex_sources": [],
+	"vertices": [],
+	"winding_compatible": true
+}

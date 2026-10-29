@@ -1,0 +1,143 @@
+{
+	"attempt": "ATTEMPT_D3_3",
+	"boundary_edge_count": 0,
+	"candidate": "D",
+	"component_pairs": [],
+	"correspondence_mode": "identity_shared_boundary",
+	"cutoff_squared": 0.000000000001,
+	"endpoint_connectors": [],
+	"identity": {
+		"candidate": "D",
+		"edit_revision": 2,
+		"field_revision": 2,
+		"interface_roi_max": [
+			17.0,
+			3.0,
+			8.0
+		],
+		"interface_roi_min": [
+			15.0,
+			1.0,
+			6.0
+		],
+		"left_chunk_id": "L",
+		"lod_pair": [
+			0,
+			0
+		],
+		"right_chunk_id": "R",
+		"volume_payload_hashes": [
+			"dc19192d5e6e6fba6af794959cd6cca716f188f774db513a6baf64fdd4adedf6",
+			"03c6d478e6cf16d5801a0a0b042ed88e6b8522ca585f56f670e8c6ab50510fe1"
+		]
+	},
+	"identity_text": "candidate=D|face_axis=0|face_coordinate=16.000000000|left=L|right=R|lod=0,0|field_revision=2|edit_revision=2|volume_payloads=dc19192d5e6e6fba6af794959cd6cca716f188f774db513a6baf64fdd4adedf6,03c6d478e6cf16d5801a0a0b042ed88e6b8522ca585f56f670e8c6ab50510fe1|roi_min=15.000000000,1.000000000,6.000000000|roi_max=17.000000000,3.000000000,8.000000000",
+	"left_boundary_vertex_keys": [
+		{
+			"closed": false,
+			"component_index": 0,
+			"ordered_quantized_mesh_vertex_keys": [
+				"1600000,100000,719400",
+				"1600000,120837,725000",
+				"1600000,125000,726022",
+				"1600000,126004,726004",
+				"1600000,150000,725461",
+				"1600000,150375,725375",
+				"1600000,151606,725000",
+				"1600000,169749,719749",
+				"1600000,175000,717523",
+				"1600000,186249,711249",
+				"1600000,200000,700167",
+				"1600000,200091,700091",
+				"1600000,200169,700000",
+				"1600000,211419,686419",
+				"1600000,217954,675000",
+				"1600000,220117,670117",
+				"1600000,225000,653886",
+				"1600000,225936,650936",
+				"1600000,226159,650000",
+				"1600000,226903,626903",
+				"1600000,226951,625000",
+				"1600000,225000,616832",
+				"1600000,220604,600000"
+			]
+		}
+	],
+	"left_graph": {
+		"component_count": 1,
+		"components": [
+			{
+				"closed": false,
+				"edges": 22,
+				"vertices": 23
+			}
+		],
+		"degree_histogram": {
+			"1": 2,
+			"2": 21
+		},
+		"edge_count": 22
+	},
+	"mesh_sha256": "",
+	"minimum_cross_squared": null,
+	"mode": "shared_existing_contour",
+	"normals": [],
+	"patch_graph": {},
+	"patch_key_sha256": "70b76cb3cfc025418f4428bce472dd9f4b1a5471222c55731bb2b525a6a7772d",
+	"right_boundary_vertex_keys": [
+		{
+			"closed": false,
+			"component_index": 0,
+			"ordered_quantized_mesh_vertex_keys": [
+				"1600000,100000,719400",
+				"1600000,120837,725000",
+				"1600000,125000,726022",
+				"1600000,126004,726004",
+				"1600000,150000,725461",
+				"1600000,150375,725375",
+				"1600000,151606,725000",
+				"1600000,169749,719749",
+				"1600000,175000,717523",
+				"1600000,186249,711249",
+				"1600000,200000,700167",
+				"1600000,200091,700091",
+				"1600000,200169,700000",
+				"1600000,211419,686419",
+				"1600000,217954,675000",
+				"1600000,220117,670117",
+				"1600000,225000,653886",
+				"1600000,225936,650936",
+				"1600000,226159,650000",
+				"1600000,226903,626903",
+				"1600000,226951,625000",
+				"1600000,225000,616832",
+				"1600000,220604,600000"
+			]
+		}
+	],
+	"right_graph": {
+		"component_count": 1,
+		"components": [
+			{
+				"closed": false,
+				"edges": 22,
+				"vertices": 23
+			}
+		],
+		"degree_histogram": {
+			"1": 2,
+			"2": 21
+		},
+		"edge_count": 22
+	},
+	"scenario_id": "R9.2.HIST.XPLUS_DEFECT.v1",
+	"schema": "P3.1.R9.7.InterfacePatch.v1",
+	"scope": "experimental shared face bridge; not production geometry",
+	"shared_boundary_vertex_key_count": 23,
+	"source_sha": "69ce753f7b34e8815b44063de33fd6470a0b4f61",
+	"triangle_count": 0,
+	"vertex_authority": "INTERPOLATED_VOLUME",
+	"vertex_sources": [],
+	"vertices": [],
+	"winding_compatible": true
+}

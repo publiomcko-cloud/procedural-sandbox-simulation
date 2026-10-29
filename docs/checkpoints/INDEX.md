@@ -114,4 +114,5 @@ Every verified merge, material review/GUI verdict, scope authorization or revisi
 
 ## 2026-10-29 — P3.1 R9.7 D3 interface-convergence campaign
 
-- [D3.1 first pinned geometry attempt](2026-10-29-P3-1-R9-7-D3-1.md) — LF source pin passed and the exact D3 path executed. Equal-LOD X+ retained 13 internal open edges and emitted no interface triangles; mixed-LOD X+ rejected the first zipper candidate at `cross_squared=5.31475523787568e-15` under the unchanged `1e-12` cutoff. Controls 6/6 and ROI rays 0/25 disagreements. Campaign remains active; next bounded hypothesis is monotone correspondence search.
+- [D3.1 first pinned geometry attempt](2026-10-29-P3-1-R9-7-D3-1.md) — at the first-attempt checkpoint, equal-LOD X+ retained 13 internal open edges and mixed-LOD X+ rejected a zipper candidate below the unchanged `1e-12` cutoff. The later campaign closeout supersedes its then-active next-step statement.
+- [D3 campaign closeout](../reports/P3-1-R9.7-D3-CAMPAIGN-CLOSEOUT.md) — all five bounded geometry hypotheses D3.1–D3.5 executed and were `FAILED_TARGET`; 6/6 controls and 0/25 ROI ray disagreements, no resource abort, no target candidate. Full E2E and full validation were not run because no candidate survived.

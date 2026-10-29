@@ -1,0 +1,198 @@
+[
+  {
+    "label": "D3.1",
+    "commit": "7d058899abc1663ff7d4175b5a508532367cd5da",
+    "parent": "3d0e4c59c0e33e4c21e34bbd54d1771c3db83415",
+    "tree": "5c9ae7100f57dbf09ceff8a73828fd5d032136cb",
+    "files": {
+      "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd": {
+        "blob": "93afe39cb03383f2f18503e517abdd2d97a14159",
+        "physical_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "bytes": 36726
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_candidate_probe.gd": {
+        "blob": "5b147b824a938d734dbe106718e7668fef4e7d9c",
+        "physical_sha256": "141efeb7d0d3157339d6ce25a88fcaaf212beb96c706dfb7236782b8ea97303e",
+        "bytes": 75636
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_face_interface_patch.gd": {
+        "blob": "5195cde598600acb504a6f0fc899d07379fda7f9",
+        "physical_sha256": "0e0033e07cb0a18a161584cb6288b5314314638e1379af4013f09fdf92913cc5",
+        "bytes": 19457
+      },
+      "game/tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl": {
+        "blob": "05a74de876ea2f062737980017f1b71b7c0711a6",
+        "physical_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "bytes": 12686
+      }
+    }
+  },
+  {
+    "label": "D3.2",
+    "commit": "709215e338b079457550265887393c247a6f15e8",
+    "parent": "d2f222585f6f3883315f6deb6345a0b7117c69d4",
+    "tree": "dab5eda26181c88302154310541274cb4bffcee6",
+    "files": {
+      "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd": {
+        "blob": "93afe39cb03383f2f18503e517abdd2d97a14159",
+        "physical_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "bytes": 36726
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_candidate_probe.gd": {
+        "blob": "0b452ea31f0d6a5f9b223e2d111cd3fff265a438",
+        "physical_sha256": "a21c5fb4c24391b36182471ce5acd2bb6355704f2bf146c69e8364ed8f675767",
+        "bytes": 77625
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_face_interface_patch.gd": {
+        "blob": "ea50b4a9cfb25fca3f9412b09445b1555eee710f",
+        "physical_sha256": "842a5146e6b17472b11e3203c0a12f4808325de806725d99393b0fe28ba5ecb1",
+        "bytes": 29031
+      },
+      "game/tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl": {
+        "blob": "05a74de876ea2f062737980017f1b71b7c0711a6",
+        "physical_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "bytes": 12686
+      }
+    }
+  },
+  {
+    "label": "D3.3",
+    "commit": "b112384384eee4290d6da6e50abf2f96f4a5c33a",
+    "parent": "709215e338b079457550265887393c247a6f15e8",
+    "tree": "445526dc39976fb3daa3c575169a15ed5faffdd1",
+    "files": {
+      "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd": {
+        "blob": "93afe39cb03383f2f18503e517abdd2d97a14159",
+        "physical_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "bytes": 36726
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_candidate_probe.gd": {
+        "blob": "2460b01281a5baf8f7cf4b61451803fb13257af3",
+        "physical_sha256": "ccd70649623704a07666175a6dd2eb80a4a902d2b703baa1028434fef96e02ff",
+        "bytes": 78474
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_face_interface_patch.gd": {
+        "blob": "7c2bfe212647ab37008b19dd9e35e309ef21cde9",
+        "physical_sha256": "b26028b4d637ff90cb4b451cf010ff599bcdefef7c0dc3e1bdc4d9418e98ff8b",
+        "bytes": 33499
+      },
+      "game/tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl": {
+        "blob": "05a74de876ea2f062737980017f1b71b7c0711a6",
+        "physical_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "bytes": 12686
+      }
+    }
+  },
+  {
+    "label": "D3.3_DIAG",
+    "commit": "69ce753f7b34e8815b44063de33fd6470a0b4f61",
+    "parent": "b112384384eee4290d6da6e50abf2f96f4a5c33a",
+    "tree": "d5dde508136fa80ef1fc50a63eeeecc415c792b6",
+    "files": {
+      "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd": {
+        "blob": "93afe39cb03383f2f18503e517abdd2d97a14159",
+        "physical_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "bytes": 36726
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_candidate_probe.gd": {
+        "blob": "87d44facc62173d03d597feb9cc70f32075a1cd1",
+        "physical_sha256": "8f1902c3e72e9791746b763006496e8ccd8a8e4a3437058ad12cd444071f1086",
+        "bytes": 78474
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_face_interface_patch.gd": {
+        "blob": "ad1316f6134ac6ef9c361472a3450d4f3094133f",
+        "physical_sha256": "758393ae26d731dc669c9acd85d570142fac7be5840b9a986f305e15b0dcb210",
+        "bytes": 34029
+      },
+      "game/tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl": {
+        "blob": "05a74de876ea2f062737980017f1b71b7c0711a6",
+        "physical_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "bytes": 12686
+      }
+    }
+  },
+  {
+    "label": "D3.3_RETAIN",
+    "commit": "363bfd85134f708406b05eaff8450c98928bab3f",
+    "parent": "69ce753f7b34e8815b44063de33fd6470a0b4f61",
+    "tree": "d21f6823dd093eac151ee9bb192cb2d8346bd1d0",
+    "files": {
+      "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd": {
+        "blob": "93afe39cb03383f2f18503e517abdd2d97a14159",
+        "physical_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "bytes": 36726
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_candidate_probe.gd": {
+        "blob": "66238f05f91d6d529984a7126f8fa74b1c1059bf",
+        "physical_sha256": "cf8aaa153f7af4c440f45b878dba5a79728e8b324ac0972880bd7e6496489cd9",
+        "bytes": 78862
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_face_interface_patch.gd": {
+        "blob": "363676b21172a24358b16437263281cf5a90e162",
+        "physical_sha256": "193459b5d7555199938944f33828d44ad05697a466e1adfd8a0cd374b1744f75",
+        "bytes": 35231
+      },
+      "game/tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl": {
+        "blob": "05a74de876ea2f062737980017f1b71b7c0711a6",
+        "physical_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "bytes": 12686
+      }
+    }
+  },
+  {
+    "label": "D3.4",
+    "commit": "406697793ac57fafe1da5ea64359815ff2d2bed7",
+    "parent": "363bfd85134f708406b05eaff8450c98928bab3f",
+    "tree": "daf33db5c41ccd3e9897158fcadcb1071560a6a5",
+    "files": {
+      "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd": {
+        "blob": "93afe39cb03383f2f18503e517abdd2d97a14159",
+        "physical_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "bytes": 36726
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_candidate_probe.gd": {
+        "blob": "9af70958c5820643cff18f018cbf4dbd2cff305d",
+        "physical_sha256": "e6179e788daa0753b973ffb46c189a6d62485b5d8dc5e5bf68a6dfa0b94f8275",
+        "bytes": 79026
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_face_interface_patch.gd": {
+        "blob": "3f25f1e9178295423673fe53976138f652f89fb1",
+        "physical_sha256": "e04408366428ac35178b04e3046f4595d3a12786c3bafef55e4bfcac6ace5507",
+        "bytes": 36023
+      },
+      "game/tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl": {
+        "blob": "05a74de876ea2f062737980017f1b71b7c0711a6",
+        "physical_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "bytes": 12686
+      }
+    }
+  },
+  {
+    "label": "D3.5",
+    "commit": "ca48ecdd6c1608118e9f9c6bbac7e2129f5c669a",
+    "parent": "faccf204a32c1887886e55867f8dcc84394ae215",
+    "tree": "5d836d6fdfddb37d3cada740496c44f1c39611ce",
+    "files": {
+      "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd": {
+        "blob": "93afe39cb03383f2f18503e517abdd2d97a14159",
+        "physical_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "bytes": 36726
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_candidate_probe.gd": {
+        "blob": "ff2ed0e21ad31e7b18d22291abc8f56a7742ea1a",
+        "physical_sha256": "5f349918a32fb92d60971b04dc2035db120ba14eecc1aafca0d30c0de951bcce",
+        "bytes": 82450
+      },
+      "game/tests/prototypes/p3_1_r9_6r1_face_interface_patch.gd": {
+        "blob": "fe2aa5d9504d315bdaf97aed646103241ddb9f78",
+        "physical_sha256": "5d757e64857a9c73866578686b16352e26da2bd5ceea9e9310178b4d6597757b",
+        "bytes": 46428
+      },
+      "game/tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl": {
+        "blob": "05a74de876ea2f062737980017f1b71b7c0711a6",
+        "physical_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "bytes": 12686
+      }
+    }
+  }
+]
