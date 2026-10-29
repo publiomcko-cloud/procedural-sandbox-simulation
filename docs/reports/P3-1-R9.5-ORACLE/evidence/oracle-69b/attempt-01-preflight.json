@@ -1,0 +1,8 @@
+{
+  "attempt": 1,
+  "stage": "preflight",
+  "source_sha": "69b323efc3d6f9e86eba9ac1e199cbf932761398",
+  "result": "NOT_STARTED",
+  "cause": "Git identity lookup ran from C:\\ rather than the repository; git rev-parse returned no SHA; Godot was not launched",
+  "source_modified": false
+}

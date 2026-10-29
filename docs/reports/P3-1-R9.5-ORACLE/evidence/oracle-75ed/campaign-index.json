@@ -1,0 +1,77 @@
+[
+  {
+    "candidate": "A",
+    "candidate_source_commit": "f0c93415dd56886a1c05ff2e6a1340e420f22c59",
+    "candidate_source_blob": "33ac8bd1f7942ddd71610bd2e2b66f583fdbf3fd",
+    "candidate_snapshot_sha256": "970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a",
+    "oracle_source_sha": "75ed1a8d0ec16a321e2328456a48633fc72ca63e",
+    "oracle_script_sha256": "D784DF4ECAA49E17910D5F840B589057EBF4A5B7FABFC9E24352F0C931630EAD",
+    "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+    "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+    "argv": [
+      "--headless",
+      "--path",
+      "C:\\r95oracle\\game",
+      "--script",
+      "res://tests/prototypes/p3_1_r9_5_probe.gd"
+    ],
+    "pid": 53996,
+    "started_utc": "2026-10-29T01:57:24.3555675+00:00",
+    "elapsed_ms": 2401.5446,
+    "timed_out": false,
+    "exit_code": 0,
+    "stdout_sha256": "C2EF80589C244A9F464B659DFA79FFBD20ACFD396B779D5B5511311379F4980E",
+    "stderr_sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+  },
+  {
+    "candidate": "C",
+    "candidate_source_commit": "af4d6027d9d57c9f2b8023aa27b31d2dd2dcedf2",
+    "candidate_source_blob": "33ac8bd1f7942ddd71610bd2e2b66f583fdbf3fd",
+    "candidate_snapshot_sha256": "7072f39b2c48dcb38048e2ee3d1687baa9377bcc99ca8250ac2c0f84cff17d24",
+    "oracle_source_sha": "75ed1a8d0ec16a321e2328456a48633fc72ca63e",
+    "oracle_script_sha256": "D784DF4ECAA49E17910D5F840B589057EBF4A5B7FABFC9E24352F0C931630EAD",
+    "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+    "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+    "argv": [
+      "--headless",
+      "--path",
+      "C:\\r95oracle\\game",
+      "--script",
+      "res://tests/prototypes/p3_1_r9_5_probe.gd"
+    ],
+    "pid": 43324,
+    "started_utc": "2026-10-29T01:57:26.8351353+00:00",
+    "elapsed_ms": 1652.5654,
+    "timed_out": false,
+    "exit_code": 0,
+    "stdout_sha256": "B91A9B121E76FDA2609D8F6AC3EC18590789400D2CFDC04DD2DADAD0D0C03F29",
+    "stderr_sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+  },
+  {
+    "candidate": "D",
+    "candidate_source_commit": "6ea04229b5ff06090f346c8749c1f5a53994227c",
+    "candidate_source_blob": "33ac8bd1f7942ddd71610bd2e2b66f583fdbf3fd",
+    "candidate_snapshot_sha256": "a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6",
+    "oracle_source_sha": "75ed1a8d0ec16a321e2328456a48633fc72ca63e",
+    "oracle_script_sha256": "D784DF4ECAA49E17910D5F840B589057EBF4A5B7FABFC9E24352F0C931630EAD",
+    "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+    "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+    "argv": [
+      "--headless",
+      "--path",
+      "C:\\r95oracle\\game",
+      "--script",
+      "res://tests/prototypes/p3_1_r9_5_probe.gd"
+    ],
+    "pid": 14836,
+    "started_utc": "2026-10-29T01:57:28.5384119+00:00",
+    "elapsed_ms": 2301.4931,
+    "timed_out": false,
+    "exit_code": 0,
+    "stdout_sha256": "FEE222AEAD12B24C618D29BD48940BD65BB3F843D18E4E8823A53BA13BF68489",
+    "stderr_sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+  }
+]

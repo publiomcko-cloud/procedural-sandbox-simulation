@@ -1,0 +1,17 @@
+{
+  "candidate": "A",
+  "candidate_source_commit": "f0c93415dd56886a1c05ff2e6a1340e420f22c59",
+  "candidate_source_blob": "5a19b05d3f39108e53c8b7ff47d28303ee7bfbb0",
+  "candidate_snapshot_sha256": "970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a",
+  "oracle_source_sha": "69b323efc3d6f9e86eba9ac1e199cbf932761398",
+  "oracle_script_sha256": "c8c99eda8f6f8053fd2ddfce62597e634fa2ce11ff2f1e436f321236257518f4",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "run_id": "4563f454883f4b7d9985bf1e239eb205",
+  "pid": 19620,
+  "started_utc": "2026-10-29T02:06:28.1659924Z",
+  "elapsed_ms": 2664.3742,
+  "exit_code": 0,
+  "stdout_sha256": "6cb0fac7d760c15eec2b77a848fde782dbcf8b51e0afeebce5ba82d2ad243ac0",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
