@@ -21,4 +21,4 @@ game/tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl -text
 game/tests/prototypes/p3_1_r9_2_e2e_inputs.sha256 -text
 docs/reports/P3-1-R9.2-SHARED/evidence/** -text whitespace=cr-at-eol
 
-/docs/reports/P3-1-R9.6R1-COMPARISON/evidence/** -text whitespace=cr-at-eol
+/docs/reports/P3-1-R9.6R1-COMPARISON/evidence/** -text whitespace=-blank-at-eof,cr-at-eol
