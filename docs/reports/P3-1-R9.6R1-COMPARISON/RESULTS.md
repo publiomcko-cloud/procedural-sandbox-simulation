@@ -1,6 +1,6 @@
 # P3.1 R9.6R1 — Controlled Recovery and Geometry Attempt 1 Results
 
-**Disposition: `P3_1_R9_6R1_BLOCKED_WITH_EVIDENCE`**  
+**Disposition: `P3_1_R9_6R1_BLOCKED_WITH_EVIDENCE`**
 **Scope:** test-only; no production, persistence schema, user-save, release, Issue #108/#154, or protected-host changes.
 
 ## Executive result
