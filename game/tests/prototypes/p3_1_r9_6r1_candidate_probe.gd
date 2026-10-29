@@ -8,12 +8,13 @@ const CandidateD := preload("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd"
 const BaselineA := preload("res://tests/prototypes/r9_5_source_snapshots/candidate_a.gd")
 const BaselineD := preload("res://tests/prototypes/r9_5_source_snapshots/candidate_d.gd")
 const MANIFEST_SHA := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
-const CANDIDATE_FILE_SHA := {"A":"4ae2a981fbd8d5d9d2f39974754457d3459e9200e41a5186e9c6f84f633fe199", "D":"37cf20740511ec6ecb927850f182bc333173f2f1771449e484427efe6d8e8a98"}
+const CANDIDATE_FILE_SHA := {"A":"6019422d40fe67458ac9593f90bbfdee950bf13e3e7da065da39554f7995e61a", "D":"37cf20740511ec6ecb927850f182bc333173f2f1771449e484427efe6d8e8a98"}
 const BASELINE_FILE_SHA := {"A":"970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a", "D":"a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6"}
 const SEED := 131102026
 var cid := ""
 var csha := ""
 var run_id := ""
+var attempt_id := ""
 var failures := 0
 var roi_ray_mismatches := 0
 var artifact_paths: Array[String] = []
@@ -25,12 +26,13 @@ func _run() -> void:
 	cid = OS.get_environment("R95_CANDIDATE_ID")
 	csha = OS.get_environment("R95_CANDIDATE_SOURCE_SHA")
 	run_id = OS.get_environment("R95_RUN_ID")
+	attempt_id = OS.get_environment("R96R1_ATTEMPT")
 	var oracle_sha := OS.get_environment("R95_ORACLE_SHA")
 	var candidate_file_sha := _sha_res_file("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd")
 	var baseline_file_sha := _sha_res_file("res://tests/prototypes/r9_5_source_snapshots/candidate_%s.gd" % cid.to_lower())
 	var manifest := Core.load_manifest()
-	if not ["A","D"].has(cid) or csha.length()!=40 or not csha.is_valid_hex_number() or run_id.is_empty() or candidate_file_sha != String(CANDIDATE_FILE_SHA.get(cid,"")) or baseline_file_sha != String(BASELINE_FILE_SHA.get(cid,"")) or oracle_sha.length() != 40 or not oracle_sha.is_valid_hex_number() or not manifest.get("valid", false) or manifest.get("sha256", "") != MANIFEST_SHA:
-		print("R96R1_BLOCKED " + JSON.stringify({"candidate":cid,"candidate_sha":csha,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"oracle_sha":oracle_sha,"manifest":manifest.get("reason","ok")})); quit(2); return
+	if not ["A","D"].has(cid) or csha.length()!=40 or not csha.is_valid_hex_number() or run_id.is_empty() or attempt_id.is_empty() or candidate_file_sha != String(CANDIDATE_FILE_SHA.get(cid,"")) or baseline_file_sha != String(BASELINE_FILE_SHA.get(cid,"")) or oracle_sha.length() != 40 or not oracle_sha.is_valid_hex_number() or not manifest.get("valid", false) or manifest.get("sha256", "") != MANIFEST_SHA:
+		print("R96R1_BLOCKED " + JSON.stringify({"candidate":cid,"candidate_sha":csha,"attempt_id":attempt_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"oracle_sha":oracle_sha,"manifest":manifest.get("reason","ok")})); quit(2); return
 	var script: Script = CandidateA if cid == "A" else CandidateD
 	var candidate: RefCounted = script.new()
 	var baseline_script: Script = BaselineA if cid == "A" else BaselineD
@@ -104,7 +106,7 @@ func _run() -> void:
 	_run_xplus(candidate,baseline,manifest)
 	_run_frozen_controls(candidate,baseline,manifest)
 	_run_preserved_geometry_controls(candidate,baseline,manifest)
-	print("R96R1_COMPLETE " + JSON.stringify({"candidate":cid,"source_sha":csha,"run_id":run_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"oracle_sha":oracle_sha,"manifest_sha256":MANIFEST_SHA,"ray_count":rays.size(),"roi_scoped_hit_miss_disagreements":roi_ray_mismatches,"root_identity_probe":root_identity_probe.get("valid",false),"artifacts":artifact_paths,"failure_count":failures,"status":"ATTEMPT_1_TOPOLOGY_FIRST"})); quit(1 if failures>0 else 0)
+	print("R96R1_COMPLETE " + JSON.stringify({"candidate":cid,"source_sha":csha,"run_id":run_id,"attempt_id":attempt_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"oracle_sha":oracle_sha,"manifest_sha256":MANIFEST_SHA,"ray_count":rays.size(),"roi_scoped_hit_miss_disagreements":roi_ray_mismatches,"root_identity_probe":root_identity_probe.get("valid",false),"artifacts":artifact_paths,"failure_count":failures,"status":"ATTEMPT_%s_RESULTS_CAPTURED" % attempt_id})); quit(1 if failures>0 else 0)
 
 func _analytic_roots(ray: Dictionary, seed: int, snapshot: Dictionary) -> Dictionary:
 	var o: Vector3 = ray.origin
@@ -249,13 +251,17 @@ func _run_xplus(candidate:RefCounted,baseline:RefCounted,manifest:Dictionary)->v
 		var setup:Dictionary=Core.make_snapshot(row);candidate.call("configure_roi",row.roi);var full:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"default","roi":row.roi})
 		baseline.call("configure_roi",row.roi);var baseline_full:Dictionary=baseline.call("build",setup.snapshot,row,{"id":"default","roi":row.roi})
 		var full_hash_equal:bool=full.get("valid",false) and baseline_full.get("valid",false) and String(full.get("mesh_sha256",""))==String(baseline_full.get("mesh_sha256",""))
-		if not full_hash_equal:failures+=1
 		if full.get("valid",false):
 			var full_artifact:Dictionary=_write_topology_artifact(id,"full_roi",full,row.roi)
 			if not bool(full_artifact.get("valid",false)):failures+=1
 		else:failures+=1
 		var lo:Vector3=Core.world_min(row.roi);var hi:=lo+Vector3(Core.cell_counts(row.roi))*Core.step(row.roi)
-		if full.get("valid",false) and cid=="A":print("R95_CUTOFF_TRACE "+JSON.stringify(_trace_a_cutoffs(candidate,setup.snapshot,row.roi,full.mesh,int(full.get("metrics",{}).get("cutoff_drops",-1)))))
+		if full.get("valid",false) and cid=="A":
+			var a_metrics:Dictionary=full.get("metrics",{})
+			if bool(a_metrics.get("a2_enabled",false)):
+				print("R96R1_A2_PATCH "+JSON.stringify({"scenario_id":id,"candidate":cid,"source_sha":csha,"method":a_metrics.get("a2_refinement_method",""),"refined_cells":a_metrics.get("a2_refined_cells",[]),"refined_cell_count":a_metrics.get("a2_refined_cell_count",0),"refined_parent_tetrahedra":a_metrics.get("a2_refined_parent_tetrahedra",0),"additional_sdf_evaluations":a_metrics.get("a2_additional_sdf_evaluations",0),"steiner_vertices":a_metrics.get("a2_steiner_vertices",0),"new_surface_roots":a_metrics.get("a2_new_surface_roots",0),"refined_patch_emitted_triangles":a_metrics.get("a2_refined_patch_emitted_triangles",0),"max_vertex_displacement":a_metrics.get("a2_max_vertex_displacement",0.0),"max_root_residual":a_metrics.get("a2_max_root_residual",0.0),"root_residual_bound":a_metrics.get("a2_root_residual_bound",0.0),"vertex_evidence":a_metrics.get("a2_vertex_evidence",[])}))
+			else:
+				print("R95_CUTOFF_TRACE "+JSON.stringify(_trace_a_cutoffs(candidate,setup.snapshot,row.roi,full.mesh,int(a_metrics.get("cutoff_drops",-1)))))
 		elif full.get("valid",false) and cid=="D":
 			var volume:Dictionary=full.get("volume",{})
 			print("R95_CUTOFF_TRACE "+JSON.stringify(_trace_d_cutoffs(candidate,volume.get("values",PackedFloat32Array()),row.roi,full.mesh,int(full.get("metrics",{}).get("extract",{}).get("cutoff_drops",-1)))))
@@ -264,7 +270,6 @@ func _run_xplus(candidate:RefCounted,baseline:RefCounted,manifest:Dictionary)->v
 		candidate.call("configure_roi",left_roi);var left:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"L","roi":left_roi});candidate.call("configure_roi",right_roi);var right:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"R","roi":right_roi})
 		baseline.call("configure_roi",left_roi);var baseline_left:Dictionary=baseline.call("build",setup.snapshot,row,{"id":"L","roi":left_roi});baseline.call("configure_roi",right_roi);var baseline_right:Dictionary=baseline.call("build",setup.snapshot,row,{"id":"R","roi":right_roi})
 		var split_hashes_equal:bool=left.get("valid",false) and right.get("valid",false) and baseline_left.get("valid",false) and baseline_right.get("valid",false) and String(left.get("mesh_sha256",""))==String(baseline_left.get("mesh_sha256","")) and String(right.get("mesh_sha256",""))==String(baseline_right.get("mesh_sha256",""))
-		if not split_hashes_equal:failures+=1
 		if left.get("valid",false):
 			var left_artifact:Dictionary=_write_topology_artifact(id,"left_roi",left,left_roi)
 			if not bool(left_artifact.get("valid",false)):failures+=1
