@@ -1,0 +1,15 @@
+Candidate D
+Branch: bench/p3-1-r9-4d-materialized-volume
+Current source HEAD: 6ea04229b5ff06090f346c8749c1f5a53994227c
+Expected source HEAD: 6ea04229b5ff06090f346c8749c1f5a53994227c
+Direct parent: 51744eebf17646ca52612936146adeb0f9db001b
+R9.3 base: 51744eebf17646ca52612936146adeb0f9db001b
+Implementation path: game/tests/prototypes/p3_1_r9_2_candidate_impl.gd
+Implementation physical SHA-256: a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6
+Implementation Git blob: 33ac8bd1f7942ddd71610bd2e2b66f583fdbf3fd
+Probe path: game/tests/prototypes/p3_1_r9_3_targeted_probe.gd
+Probe physical SHA-256: 09d80b8d99c10778ca33028811270e03547b6214021c0d7d86cc7e169b5826fb
+Probe Git blob: bb4a2cebe7f68cdd01735a48e3cf57aa88e0a74c
+Manifest SHA-256: 1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972
+Godot: 4.7.2.stable.official.ed1daf0bf
+Godot executable SHA-256: c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643

@@ -1,0 +1,9 @@
+{
+  "candidate": "D",
+  "godot": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "exit_code": 0,
+  "pid": 23844,
+  "elapsed_ms": 1679,
+  "source_sha": "6ea04229b5ff06090f346c8749c1f5a53994227c",
+  "scenario_ids": "R9.2.GEO.ZERO.v1,R9.2.GEO.CARVE.v1,R9.2.GEO.FILL_CARVE.v1,R9.2.CHUNK.NEIGHBOR_PAIR.v1,R9.2.SEAM.XPLUS_EQUAL.v1,R9.2.SEAM.XPLUS_MIXED_LOD.v1,R9.2.SEAM.NEGATIVE_REGIONS.v1,R9.2.HIST.XPLUS_DEFECT.v1,R9.2.HIST.TRIANGLE3103.v1"
+}

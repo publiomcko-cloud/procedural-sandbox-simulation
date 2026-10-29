@@ -1,0 +1,10 @@
+"candidate","scenario","mesh_sha","triangles","internal_open","boundary_open","nonmanifold","degenerate","cutoff_drops","build_usec","candidate_vs_ref","reference_internal","correction"
+"D","R9.2.GEO.ZERO.v1","04c6ceb842b964caba4e254f94c9f4b32881dae79994b961ac01029a48f64553","318","0","66","0","0",,,"True","0",
+"D","R9.2.GEO.CARVE.v1","c286caff10765de8b51d60b2ca0b8e5400d9f2b7dda895b4e9a798c5c9f27503","324","0","68","0","0",,,"True","0",
+"D","R9.2.GEO.FILL_CARVE.v1","dc61ce8c971bfc1f920cde3b6175b5812360e7cb44000f0962f1a9713952e6e6","404","0","74","0","0",,,"True","0",
+"D","R9.2.CHUNK.NEIGHBOR_PAIR.v1","85134b069e05ccadcb1e2afb6ac14ce1e26524497fe5358614f3d1667227acce","870","0","50","0","0",,,"True","0",
+"D","R9.2.SEAM.XPLUS_EQUAL.v1","34c97d8e8145ee9cd6850a8fdc9bfa22087a7068cf5e77705f7bbb6f3bdf596b","654","13","73","0","0",,,"True","13",
+"D","R9.2.SEAM.XPLUS_MIXED_LOD.v1","34c97d8e8145ee9cd6850a8fdc9bfa22087a7068cf5e77705f7bbb6f3bdf596b","654","13","73","0","0",,,"True","13",
+"D","R9.2.SEAM.NEGATIVE_REGIONS.v1","9f988ba69b8143ad46ebe6c5edcfa642743c6a5de09f7fb405f86ad42516f810","1148","0","142","0","0",,,"True","0",
+"D","R9.2.HIST.XPLUS_DEFECT.v1","34c97d8e8145ee9cd6850a8fdc9bfa22087a7068cf5e77705f7bbb6f3bdf596b","654","13","73","0","0",,,"True","13",
+"D","R9.2.HIST.TRIANGLE3103.v1","6c2db2641e47358ca12ffb7af3a707e68ce2cfb5cfc9205adefc73ffb05c02d6","8","0","8","0","0",,,"True","0",
