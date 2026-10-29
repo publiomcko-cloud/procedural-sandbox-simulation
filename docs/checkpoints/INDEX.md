@@ -111,3 +111,7 @@ Every verified merge, material review/GUI verdict, scope authorization or revisi
 ## 2026-10-28 — P3.1 R9.4 campaign closeout
 
 - [R9.4 consolidated experimental closeout](../reports/P3-1-R9.4-COMPARISON/RESULTS.md) — seven test-only corrections across A/C/D; exact-source full validation passed 21,464/0 on each; all remain partial and no architecture is selected. Evidence draft PRs #187–#190; open/unmerged.
+
+## 2026-10-29 — P3.1 R9.7 D3 interface-convergence campaign
+
+- [D3.1 first pinned geometry attempt](2026-10-29-P3-1-R9-7-D3-1.md) — LF source pin passed and the exact D3 path executed. Equal-LOD X+ retained 13 internal open edges and emitted no interface triangles; mixed-LOD X+ rejected the first zipper candidate at `cross_squared=5.31475523787568e-15` under the unchanged `1e-12` cutoff. Controls 6/6 and ROI rays 0/25 disagreements. Campaign remains active; next bounded hypothesis is monotone correspondence search.
