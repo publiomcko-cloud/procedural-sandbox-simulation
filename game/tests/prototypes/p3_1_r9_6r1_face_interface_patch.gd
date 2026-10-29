@@ -32,25 +32,45 @@ func build(identity: Dictionary, left_mesh: Dictionary, right_mesh: Dictionary,
 			"right_boundary_edge_count":right.edge_keys.size(),"patch_boundary_edge_count":0,
 			"left_consumes_patch_key":true,"right_consumes_patch_key":true,
 			"contours_identical":true,"winding_compatible":direct_winding,
-			"left_graph":left.summary,"right_graph":right.summary,"triangles":0}
+			"left_graph":left.summary,"right_graph":right.summary,"triangles":0,
+			"left_boundary_vertex_keys":_component_vertex_keys(left.components),
+			"right_boundary_vertex_keys":_component_vertex_keys(right.components),
+			"shared_boundary_vertex_key_count":_shared_vertex_key_count(left.components,right.components),
+			"correspondence_mode":"identity_shared_boundary","interface_vertex_count":_graph_vertex_count(left.summary),
+			"triangle_count":0,"minimum_cross_squared":null,"cutoff_rejections":0,
+			"cutoff_rejected_candidates":0,"vertex_authority":"INTERPOLATED_VOLUME"}
 	if left.components.size() != right.components.size():
 		return {"valid":false,"reason":"interface_component_count_mismatch","patch_key_sha256":patch_key,
-			"left_graph":left.summary,"right_graph":right.summary}
+			"left_graph":left.summary,"right_graph":right.summary,
+			"left_boundary_vertex_keys":_component_vertex_keys(left.components),"right_boundary_vertex_keys":_component_vertex_keys(right.components),
+			"shared_boundary_vertex_key_count":_shared_vertex_key_count(left.components,right.components)}
 	var pairs := _pair_components(left.components, right.components)
 	if not pairs.valid:
-		return {"valid":false,"reason":"interface_component_pairing_failed","patch_key_sha256":patch_key,"detail":pairs}
+		return {"valid":false,"reason":"interface_component_pairing_failed","patch_key_sha256":patch_key,"detail":pairs,
+			"left_graph":left.summary,"right_graph":right.summary,
+			"left_boundary_vertex_keys":_component_vertex_keys(left.components),"right_boundary_vertex_keys":_component_vertex_keys(right.components),
+			"shared_boundary_vertex_key_count":_shared_vertex_key_count(left.components,right.components)}
 	var mesh := Core.new_mesh()
 	var emitted_components: Array[Dictionary] = []
 	for pair in pairs.pairs:
 		var aligned := _align_paths(pair.left, pair.right, bool(pair.closed))
 		if not aligned.valid:
-			return {"valid":false,"reason":"interface_path_alignment_failed","patch_key_sha256":patch_key,"detail":aligned}
+			return {"valid":false,"reason":"interface_path_alignment_failed","patch_key_sha256":patch_key,"detail":aligned,
+				"left_graph":left.summary,"right_graph":right.summary,
+				"left_boundary_vertex_keys":_component_vertex_keys(left.components),"right_boundary_vertex_keys":_component_vertex_keys(right.components),
+				"shared_boundary_vertex_key_count":_shared_vertex_key_count(left.components,right.components)}
 		var strip := _zipper(mesh, aligned.left, aligned.right, bool(pair.closed), Vector3.RIGHT)
 		if not strip.valid:
-			return {"valid":false,"reason":"interface_strip_generation_failed","patch_key_sha256":patch_key,"detail":strip}
+			return {"valid":false,"reason":"interface_strip_generation_failed","patch_key_sha256":patch_key,"detail":strip,
+				"left_graph":left.summary,"right_graph":right.summary,
+				"left_boundary_vertex_keys":_component_vertex_keys(left.components),"right_boundary_vertex_keys":_component_vertex_keys(right.components),
+				"shared_boundary_vertex_key_count":_shared_vertex_key_count(left.components,right.components)}
 		emitted_components.append({"closed":pair.closed,"left_vertices":aligned.left.size(),
 			"right_vertices":aligned.right.size(),"triangles":strip.triangles,
-			"alignment_cost":aligned.cost})
+			"alignment_cost":aligned.cost,"correspondence_mode":strip.correspondence_mode,
+			"correspondence_states":strip.correspondence_states,
+			"minimum_cross_squared":strip.minimum_cross_squared,
+			"cutoff_rejected_candidates":strip.cutoff_rejected_candidates})
 	var patch_edges := _mesh_boundary_graph(mesh, axis, plane)
 	if not patch_edges.valid:
 		return {"valid":false,"reason":"interface_patch_boundary_invalid","patch_key_sha256":patch_key,"detail":patch_edges}
@@ -75,7 +95,13 @@ func build(identity: Dictionary, left_mesh: Dictionary, right_mesh: Dictionary,
 		"right_boundary_edge_count":right.edge_keys.size(),"patch_boundary_edge_count":patch_edges.edge_keys.size(),
 		"left_consumes_patch_key":true,"right_consumes_patch_key":true,"contours_identical":false,
 		"winding_compatible":true,"left_graph":left.summary,"right_graph":right.summary,
+		"left_boundary_vertex_keys":_component_vertex_keys(left.components),
+		"right_boundary_vertex_keys":_component_vertex_keys(right.components),
+		"shared_boundary_vertex_key_count":_shared_vertex_key_count(left.components,right.components),
 		"patch_graph":patch_edges.summary,"component_pairs":emitted_components,"triangle_count":triangle_count,
+		"interface_vertex_count":_unique_vertex_count(mesh.positions),"minimum_cross_squared":_mesh_min_cross_squared(mesh.positions),
+		"cutoff_rejections":0,"cutoff_rejected_candidates":_component_candidate_rejections(emitted_components),
+		"correspondence_mode":"bounded_maximin_monotone_dp","vertex_authority":"INTERPOLATED_VOLUME",
 		"cutoff_squared":CUTOFF_SQUARED,"patch_geometry_claim":"topological face bridge only; canonical surface residual is diagnostic and no SDF projection is performed"}
 
 func _validate_identity(identity: Dictionary, axis: int, plane: float) -> Dictionary:
@@ -266,21 +292,104 @@ func _zipper(mesh: Dictionary, left: Array[Vector3], right: Array[Vector3], clos
 	var na:int=a.size()-1;var nb:int=b.size()-1
 	if na<1 or nb<1:return {"valid":false,"reason":"zipper_path_empty"}
 	var ca:=_normalized_cumulative(a);var cb:=_normalized_cumulative(b)
-	var i:=0;var j:=0;var triangle_count:=0
-	while i<na or j<nb:
-		var next_a:float=float(ca[i+1]) if i<na else INF
-		var next_b:float=float(cb[j+1]) if j<nb else INF
-		if i<na and j<nb and absf(next_a-next_b)<=1.0e-12:
-			if not Core.add_triangle(mesh,a[i],a[i+1],b[j],toward,CUTOFF_SQUARED):return {"valid":false,"reason":"interface_triangle_below_cutoff","side":"both","i":i,"j":j,"cross_squared":_cross_squared(a[i],a[i+1],b[j])}
-			if not Core.add_triangle(mesh,a[i+1],b[j+1],b[j],toward,CUTOFF_SQUARED):return {"valid":false,"reason":"interface_triangle_below_cutoff","side":"both","i":i,"j":j,"cross_squared":_cross_squared(a[i+1],b[j+1],b[j])}
-			i+=1;j+=1;triangle_count+=2
-		elif next_a<next_b:
-			if not Core.add_triangle(mesh,a[i],a[i+1],b[j],toward,CUTOFF_SQUARED):return {"valid":false,"reason":"interface_triangle_below_cutoff","side":"left","i":i,"j":j,"cross_squared":_cross_squared(a[i],a[i+1],b[j])}
-			i+=1;triangle_count+=1
-		else:
-			if not Core.add_triangle(mesh,a[i],b[j+1],b[j],toward,CUTOFF_SQUARED):return {"valid":false,"reason":"interface_triangle_below_cutoff","side":"right","i":i,"j":j,"cross_squared":_cross_squared(a[i],b[j+1],b[j])}
-			j+=1;triangle_count+=1
-	return {"valid":true,"triangles":triangle_count}
+	var shared_start:bool=Core._point_key(a[0])==Core._point_key(b[0])
+	var shared_end:bool=Core._point_key(a[na])==Core._point_key(b[nb])
+	if not closed and (not shared_start or not shared_end):
+		return {"valid":false,"reason":"open_contour_endpoints_do_not_share_root",
+			"left_start_root":Core._point_key(a[0]),"right_start_root":Core._point_key(b[0]),
+			"left_end_root":Core._point_key(a[na]),"right_end_root":Core._point_key(b[nb]),
+			"start_distance":a[0].distance_to(b[0]),"end_distance":a[na].distance_to(b[nb]),
+			"correspondence_mode":"bounded_maximin_monotone_dp"}
+	var best_quality:Array=[]
+	var best_alignment:Array=[]
+	var back:Array=[]
+	for _i in range(na+1):
+		var q_row:Array=[];var alignment_row:Array=[];var back_row:Array=[]
+		for _j in range(nb+1):q_row.append(-1.0);alignment_row.append(INF);back_row.append({})
+		best_quality.append(q_row);best_alignment.append(alignment_row);back.append(back_row)
+	best_quality[0][0]=INF;best_alignment[0][0]=0.0
+	var rejected_candidates:=0
+	var minimum_rejected_cross_squared:=INF
+	for i in range(na+1):
+		for j in range(nb+1):
+			if float(best_quality[i][j])<0.0:continue
+			if not closed and shared_start and i==0 and j==0:
+				var start_relax:=_relax_correspondence(best_quality,best_alignment,back,a,b,ca,cb,0,0,1,1,"START")
+				if not bool(start_relax.valid):rejected_candidates+=1;minimum_rejected_cross_squared=minf(minimum_rejected_cross_squared,float(start_relax.cross_squared))
+				continue
+			if not closed and shared_end and i==na-1 and j==nb-1:
+				var end_relax:=_relax_correspondence(best_quality,best_alignment,back,a,b,ca,cb,i,j,na,nb,"END")
+				if not bool(end_relax.valid):rejected_candidates+=1;minimum_rejected_cross_squared=minf(minimum_rejected_cross_squared,float(end_relax.cross_squared))
+				continue
+			if i<na:
+				var left_relax:=_relax_correspondence(best_quality,best_alignment,back,a,b,ca,cb,i,j,i+1,j,"A")
+				if not bool(left_relax.valid):rejected_candidates+=1;minimum_rejected_cross_squared=minf(minimum_rejected_cross_squared,float(left_relax.cross_squared))
+			if j<nb:
+				var right_relax:=_relax_correspondence(best_quality,best_alignment,back,a,b,ca,cb,i,j,i,j+1,"B")
+				if not bool(right_relax.valid):rejected_candidates+=1;minimum_rejected_cross_squared=minf(minimum_rejected_cross_squared,float(right_relax.cross_squared))
+	if float(best_quality[na][nb])<0.0:
+		return {"valid":false,"reason":"no_cutoff_valid_monotone_correspondence",
+			"correspondence_mode":"bounded_maximin_monotone_dp","cutoff_squared":CUTOFF_SQUARED,
+			"cutoff_rejected_candidates":rejected_candidates,
+			"minimum_rejected_cross_squared":minimum_rejected_cross_squared if is_finite(minimum_rejected_cross_squared) else null,
+			"left_vertices":a.size(),"right_vertices":b.size(),"shared_start_root":shared_start,"shared_end_root":shared_end}
+	var transitions:Array[Dictionary]=[];var state_i:=na;var state_j:=nb
+	while state_i!=0 or state_j!=0:
+		var previous:Dictionary=back[state_i][state_j]
+		if previous.is_empty():return {"valid":false,"reason":"correspondence_backtrack_incomplete","state":[state_i,state_j]}
+		transitions.append(previous)
+		state_i=int(previous.from_i);state_j=int(previous.from_j)
+	transitions.reverse()
+	var triangle_count:=0;var minimum_cross_squared:=INF
+	var correspondence_states:Array=[[0,0]]
+	for transition in transitions:
+		var triangle:Array[Vector3]=_transition_triangle(a,b,int(transition.from_i),int(transition.from_j),String(transition.kind))
+		if triangle.size()!=3:return {"valid":false,"reason":"correspondence_triangle_invalid","transition":transition}
+		if not Core.add_triangle(mesh,triangle[0],triangle[1],triangle[2],toward,CUTOFF_SQUARED):
+			return {"valid":false,"reason":"selected_transition_below_cutoff","transition":transition,"cross_squared":transition.cross_squared}
+		triangle_count+=1;minimum_cross_squared=minf(minimum_cross_squared,float(transition.cross_squared))
+		correspondence_states.append([int(transition.to_i),int(transition.to_j)])
+	return {"valid":true,"triangles":triangle_count,"correspondence_mode":"bounded_maximin_monotone_dp",
+		"correspondence_states":correspondence_states,"minimum_cross_squared":minimum_cross_squared,
+		"minimum_triangle_quality":float(best_quality[na][nb]),"cutoff_rejections":0,
+		"cutoff_rejected_candidates":rejected_candidates,
+		"minimum_rejected_cross_squared":minimum_rejected_cross_squared if is_finite(minimum_rejected_cross_squared) else null,
+		"shared_start_root":shared_start,"shared_end_root":shared_end}
+
+func _relax_correspondence(best_quality:Array,best_alignment:Array,back:Array,a:Array[Vector3],b:Array[Vector3],
+		ca:Array[float],cb:Array[float],from_i:int,from_j:int,to_i:int,to_j:int,kind:String)->Dictionary:
+	var triangle:Array[Vector3]=_transition_triangle(a,b,from_i,from_j,kind)
+	if triangle.size()!=3:return {"valid":false,"cross_squared":0.0}
+	var cross_squared:=_cross_squared(triangle[0],triangle[1],triangle[2])
+	if not is_finite(cross_squared) or cross_squared<=CUTOFF_SQUARED:return {"valid":false,"cross_squared":cross_squared}
+	var quality:=_triangle_quality(triangle[0],triangle[1],triangle[2],cross_squared)
+	var candidate_quality:=minf(float(best_quality[from_i][from_j]),quality)
+	var candidate_alignment:=float(best_alignment[from_i][from_j])+absf(float(ca[to_i])-float(cb[to_j]))
+	var current_quality:=float(best_quality[to_i][to_j]);var current_alignment:=float(best_alignment[to_i][to_j])
+	if _better_correspondence(candidate_quality,candidate_alignment,current_quality,current_alignment):
+		best_quality[to_i][to_j]=candidate_quality;best_alignment[to_i][to_j]=candidate_alignment
+		back[to_i][to_j]={"from_i":from_i,"from_j":from_j,"to_i":to_i,"to_j":to_j,"kind":kind,
+			"cross_squared":cross_squared,"triangle_quality":quality}
+	return {"valid":true,"cross_squared":cross_squared}
+
+func _transition_triangle(a:Array[Vector3],b:Array[Vector3],i:int,j:int,kind:String)->Array[Vector3]:
+	var triangle:Array[Vector3]=[]
+	match kind:
+		"A":triangle=[a[i],a[i+1],b[j]]
+		"B":triangle=[a[i],b[j+1],b[j]]
+		"START":triangle=[a[0],a[1],b[1]]
+		"END":triangle=[a[a.size()-2],a[a.size()-1],b[b.size()-2]]
+	return triangle
+
+func _better_correspondence(candidate_quality:float,candidate_alignment:float,current_quality:float,current_alignment:float)->bool:
+	if candidate_quality>current_quality+1.0e-15:return true
+	if absf(candidate_quality-current_quality)<=1.0e-15 and candidate_alignment<current_alignment-1.0e-15:return true
+	return false
+
+func _triangle_quality(a:Vector3,b:Vector3,c:Vector3,cross_squared:float)->float:
+	var max_edge_squared:=maxf((b-a).length_squared(),maxf((c-b).length_squared(),(a-c).length_squared()))
+	if max_edge_squared<=0.0:return 0.0
+	return cross_squared/(max_edge_squared*max_edge_squared)
 
 func _normalized_cumulative(points: Array[Vector3]) -> Array[float]:
 	var lengths:Array[float]=[];var total:=0.0
@@ -346,6 +455,39 @@ func _centroid(points:Array[Vector3])->Vector3:
 	for point in points:out+=point
 	return out/float(points.size()) if not points.is_empty() else out
 func _cross_squared(a:Vector3,b:Vector3,c:Vector3)->float:return (b-a).cross(c-a).length_squared()
+func _graph_vertex_count(summary:Dictionary)->int:
+	var total:=0
+	for component in summary.get("components",[]):total+=int(component.get("vertices",0))
+	return total
+func _component_vertex_keys(components:Array[Dictionary])->Array:
+	var rows:Array=[]
+	for index in range(components.size()):
+		var keys:Array=[]
+		for point in components[index].get("points",[]):keys.append(Core._point_key(point))
+		rows.append({"component_index":index,"closed":bool(components[index].get("closed",false)),"ordered_quantized_mesh_vertex_keys":keys})
+	return rows
+func _shared_vertex_key_count(left:Array[Dictionary],right:Array[Dictionary])->int:
+	var left_keys:Dictionary={};var shared:Dictionary={}
+	for component in left:
+		for point in component.get("points",[]):left_keys[Core._point_key(point)]=true
+	for component in right:
+		for point in component.get("points",[]):
+			var key:String=Core._point_key(point)
+			if left_keys.has(key):shared[key]=true
+	return shared.size()
+func _unique_vertex_count(positions:PackedVector3Array)->int:
+	var seen:Dictionary={}
+	for point in positions:seen[Core._point_key(point)]=true
+	return seen.size()
+func _mesh_min_cross_squared(positions:PackedVector3Array)->Variant:
+	if positions.is_empty() or positions.size()%3!=0:return null
+	var minimum:=INF
+	for i in range(0,positions.size(),3):minimum=minf(minimum,_cross_squared(positions[i],positions[i+1],positions[i+2]))
+	return minimum if is_finite(minimum) else null
+func _component_candidate_rejections(components:Array[Dictionary])->int:
+	var total:=0
+	for component in components:total+=int(component.get("cutoff_rejected_candidates",0))
+	return total
 func _degree_histogram(adjacency:Dictionary)->Dictionary:
 	var out:Dictionary={}
 	for node in adjacency:var degree:int=adjacency[node].size();out[degree]=int(out.get(degree,0))+1
