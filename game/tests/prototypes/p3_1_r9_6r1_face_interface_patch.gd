@@ -222,7 +222,8 @@ func _edge_on_roi_boundary(a:Vector3,b:Vector3,lo:Vector3,hi:Vector3)->bool:
 
 func _order_cycle(nodes:Array[String],adjacency:Dictionary)->Array[String]:
 	if nodes.size()<3:return []
-	var start:String=nodes.duplicate().sorted()[0];var neighbors:Array=adjacency[start].duplicate();neighbors.sort()
+	var ordered_nodes:Array[String]=nodes.duplicate();ordered_nodes.sort()
+	var start:String=ordered_nodes[0];var neighbors:Array=adjacency[start].duplicate();neighbors.sort()
 	var ordered:Array[String]=[start];var previous:String=start;var current:String=String(neighbors[0])
 	for _i in range(nodes.size()):
 		if current==start:break
