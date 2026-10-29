@@ -1,0 +1,17 @@
+{
+  "candidate": "A",
+  "source_sha": "f0c93415dd56886a1c05ff2e6a1340e420f22c59",
+  "git_head": "f0c93415dd56886a1c05ff2e6a1340e420f22c59",
+  "parent": "d5903242e41642a2633e18dc181c4389188c65b2",
+  "godot": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "process_id": 31132,
+  "exit_code": 0,
+  "timed_out": false,
+  "duration_ms": 516256,
+  "appdata": "C:\\r94-evidence\\profiles\\A-validation\\Roaming",
+  "logs": [
+    "stdout.txt",
+    "stderr.txt"
+  ]
+}

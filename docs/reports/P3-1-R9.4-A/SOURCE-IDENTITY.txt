@@ -1,0 +1,15 @@
+Candidate A
+Branch: bench/p3-1-r9-4a-root-aware
+Current source HEAD: f0c93415dd56886a1c05ff2e6a1340e420f22c59
+Expected source HEAD: f0c93415dd56886a1c05ff2e6a1340e420f22c59
+Direct parent: d5903242e41642a2633e18dc181c4389188c65b2
+R9.3 base: d5903242e41642a2633e18dc181c4389188c65b2
+Implementation path: game/tests/prototypes/p3_1_r9_2_candidate_impl.gd
+Implementation physical SHA-256: 970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a
+Implementation Git blob: 5a19b05d3f39108e53c8b7ff47d28303ee7bfbb0
+Probe path: game/tests/prototypes/p3_1_r9_3_targeted_probe.gd
+Probe physical SHA-256: a954024ff7494bdedf089b345c58cff8bf6202c99307dbb1a6a0597fee6f9baf
+Probe Git blob: 78e61b1198e1b2de4f5b4a1193f22c2510e26fbc
+Manifest SHA-256: 1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972
+Godot: 4.7.2.stable.official.ed1daf0bf
+Godot executable SHA-256: c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643
