@@ -139,3 +139,11 @@ D3's three runner snapshots recorded free commit of 6,272,749,568; 6,315,536,384
 The existing 50-assertion shared topology gate is not equivalent to the R9.6 geometry target. Full frozen E2E and `scripts/validate.ps1` remain NOT RUN. No production files, user saves, schemas, merges, releases, native components, Issue #108/#154, or F2-G1 state were changed. All five F2-G1 holds remain unchanged.
 
 **Continuation status:** `P3_1_R9_6R1_HARD_STOP_WITH_EVIDENCE`.
+
+### D3 resource-gate follow-up after continuation resume (2026-10-29)
+
+A fourth D3 import preflight reservation was made after an observational counter was initially misread as free commit. The runner itself is authoritative: it computes CommitLimit minus CommittedBytes. Reservation D3_IMPORT_RETRY3 records 6,063,943,680 bytes free commit, 378,507,264 bytes below the 6,442,450,944-byte gate. It wrote HOST_GATE_BLOCKED_NOT_STARTED before process creation (runner exit 21); no Godot PID, import, --check-only, or geometry process exists for this reservation. Physical RAM and C:/TEMP space passed their gates.
+
+A correctly computed read-only observation at 2026-10-29T18:05:56.7706917Z measured 6,221,414,400 free-commit bytes, still 221,036,544 below the threshold, with 21,880,569,856 physical-available bytes and zero Godot processes. The earlier formatted AvailableBytes value (21,970,006,016) is not the runner free-commit metric; it must not be interpreted as clearing the gate. No WSL or user process was terminated. D3 remains unstarted and its geometry attempt is unconsumed. This resource hard stop prevents safe D3 execution; it is not a D3 geometry failure.
+
+The local continuation inventory now covers 254 files (250 previously listed plus the four files from this blocked reservation), all hash-verified. The public evidence inventory adds the durable reservation, process record, and sanitized host-resource summary; raw host snapshots remain in the protected owner-local evidence root.
