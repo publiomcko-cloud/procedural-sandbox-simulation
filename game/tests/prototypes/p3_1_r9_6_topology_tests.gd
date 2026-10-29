@@ -8,7 +8,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	_test_closed_pair()
+	_test_adjacent_pair()
 	_test_rejected_geometry_keeps_required_topology()
 	_test_duplicate_and_unknown_id_fail_closed()
 	_test_stable_hash_and_shared_owner()
@@ -16,7 +16,7 @@ func _run() -> void:
 	print("R96_TOPOLOGY_TESTS_" + ("PASS" if failures.is_empty() else "FAIL"))
 	quit(0 if failures.is_empty() else 1)
 
-func _test_closed_pair() -> void:
+func _test_adjacent_pair() -> void:
 	var topology: Variant = Topology.new()
 	_add_root(topology, "a", Vector3(0, 0, 0))
 	_add_root(topology, "b", Vector3(1, 0, 0))
@@ -31,7 +31,14 @@ func _test_closed_pair() -> void:
 	_check(report.internal_open_edges.is_empty(), "interior diagonal is manifold")
 	_check(report.nonmanifold_edges.is_empty(), "closed pair has no nonmanifold edge")
 	_check(report.surface_components.size() == 1, "adjacent triangles form one surface component")
-	_check(report.surface_loops.is_empty(), "closed pair has no emitted open-edge loops")
+	_check(report.roi_boundary_open_edges.size() == 4, "quad perimeter remains four explicit ROI boundary edges")
+	var open_edge_components: Array = report.surface_loops
+	_check(open_edge_components.size() == 1, "quad perimeter forms one connected open-edge component")
+	if open_edge_components.size() == 1:
+		var perimeter: Dictionary = open_edge_components[0]
+		_check(not bool(perimeter.closed_loop) and bool(perimeter.touches_roi_boundary), "quad perimeter is a domain boundary, not an internal closed surface loop")
+	else:
+		_check(false, "quad perimeter component metadata unavailable")
 
 func _test_rejected_geometry_keeps_required_topology() -> void:
 	var topology: Variant = Topology.new()
