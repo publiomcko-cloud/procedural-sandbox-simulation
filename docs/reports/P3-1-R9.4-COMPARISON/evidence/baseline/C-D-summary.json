@@ -1,0 +1,56 @@
+[
+  {
+    "candidate": "C",
+    "source_sha": "5def207d7b1cff8d7f70476f1221c7b9c5771e27",
+    "source_file_sha256": "C3CC655581FA8B4AC6FFFD43C6219621D05BFAA36F7FDDD2BCD6D8822F725B4B",
+    "manifest_sha256": "1610C535F98A11E26CA1890C0D99ADDF4316FBCAA7EC9CDB7DFAA71CF5BB3972",
+    "command": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe --headless --path C:\\r94c\\game --script res://tests/prototypes/p3_1_r9_3_targeted_probe.gd",
+    "env": {
+      "R9_SOURCE_SHA": "5def207d7b1cff8d7f70476f1221c7b9c5771e27",
+      "R9_CANDIDATE_ID": "C",
+      "R9_SCENARIO_IDS": "R9.2.GEO.ZERO.v1,R9.2.GEO.CARVE.v1,R9.2.GEO.FILL_CARVE.v1,R9.2.CHUNK.NEIGHBOR_PAIR.v1,R9.2.SEAM.XPLUS_EQUAL.v1"
+    },
+    "launcher_pid": 45328,
+    "observed_processes": [
+      {
+        "pid": 45328,
+        "parent": 52168,
+        "name": "Godot_v4.7.2-stable_win64_console.exe",
+        "command": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path C:\\r94c\\game --script res://tests/prototypes/p3_1_r9_3_targeted_probe.gd"
+      }
+    ],
+    "elapsed_ms": 1445.994,
+    "exit_code": 0,
+    "tree_peak_working_set_bytes": 97439744,
+    "cap_bytes": 536870912,
+    "cap_triggered": false,
+    "timeout": false
+  },
+  {
+    "candidate": "D",
+    "source_sha": "51744eebf17646ca52612936146adeb0f9db001b",
+    "source_file_sha256": "82F27A12BB747FAC1FA36B3F5CA62D7EA17BD125E23BB99F777A851585C5C62F",
+    "manifest_sha256": "1610C535F98A11E26CA1890C0D99ADDF4316FBCAA7EC9CDB7DFAA71CF5BB3972",
+    "command": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe --headless --path C:\\r94d\\game --script res://tests/prototypes/p3_1_r9_3_targeted_probe.gd",
+    "env": {
+      "R9_SOURCE_SHA": "51744eebf17646ca52612936146adeb0f9db001b",
+      "R9_CANDIDATE_ID": "D",
+      "R9_SCENARIO_IDS": "R9.2.GEO.ZERO.v1,R9.2.GEO.CARVE.v1,R9.2.GEO.FILL_CARVE.v1,R9.2.CHUNK.NEIGHBOR_PAIR.v1,R9.2.SEAM.XPLUS_EQUAL.v1"
+    },
+    "launcher_pid": 55728,
+    "observed_processes": [
+      {
+        "pid": 55728,
+        "parent": 52168,
+        "name": "Godot_v4.7.2-stable_win64_console.exe",
+        "command": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path C:\\r94d\\game --script res://tests/prototypes/p3_1_r9_3_targeted_probe.gd"
+      }
+    ],
+    "elapsed_ms": 1684.253,
+    "exit_code": 0,
+    "tree_peak_working_set_bytes": 105279488,
+    "cap_bytes": 536870912,
+    "cap_triggered": false,
+    "timeout": false
+  }
+]
