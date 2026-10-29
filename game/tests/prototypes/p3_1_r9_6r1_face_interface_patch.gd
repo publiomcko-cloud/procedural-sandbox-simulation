@@ -313,9 +313,16 @@ func _same_keys(a: Array[String],b:Array[String])->bool:
 	return true
 
 func _union_keys(a:Array[String],b:Array[String])->Array[String]:
-	var out:Dictionary={};for key in a:out[key]=true
-	for key in b:out[key]=true
-	var keys:Array[String]=[];for key in out:keys.append(String(key));keys.sort();return keys
+	var out:Dictionary={}
+	for key in a:
+		out[key]=true
+	for key in b:
+		out[key]=true
+	var keys:Array[String]=[]
+	for key in out:
+		keys.append(String(key))
+	keys.sort()
+	return keys
 
 func _set_difference(a:Array[String],b:Array[String])->Array[String]:
 	var other:Dictionary={}
@@ -344,4 +351,11 @@ func _degree_histogram(adjacency:Dictionary)->Dictionary:
 	for node in adjacency:var degree:int=adjacency[node].size();out[degree]=int(out.get(degree,0))+1
 	return out
 func _mesh_sha(mesh:Dictionary)->String:
-	var position_bytes:PackedByteArray=mesh.positions.to_byte_array();var normal_bytes:PackedByteArray=mesh.normals.to_byte_array();var hash:=HashingContext.new();hash.start(HashingContext.HASH_SHA256);hash.update(("%d:%d:"%[position_bytes.size(),normal_bytes.size()]).to_utf8_buffer());if not position_bytes.is_empty():hash.update(position_bytes);if not normal_bytes.is_empty():hash.update(normal_bytes);return hash.finish().hex_encode()
+	var position_bytes:PackedByteArray=mesh.positions.to_byte_array()
+	var normal_bytes:PackedByteArray=mesh.normals.to_byte_array()
+	var hash:=HashingContext.new()
+	hash.start(HashingContext.HASH_SHA256)
+	hash.update(("%d:%d:"%[position_bytes.size(),normal_bytes.size()]).to_utf8_buffer())
+	if not position_bytes.is_empty():hash.update(position_bytes)
+	if not normal_bytes.is_empty():hash.update(normal_bytes)
+	return hash.finish().hex_encode()
