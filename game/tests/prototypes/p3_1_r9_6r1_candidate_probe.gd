@@ -11,7 +11,7 @@ const FaceInterfacePatch := preload("res://tests/prototypes/p3_1_r9_6r1_face_int
 const MANIFEST_SHA := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
 const CANDIDATE_FILE_SHA := {"A":"927994b97664778e0d77f62eba47ed09328e0664642936e5d2b1e89d8646ea91", "D":"334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a"}
 const BASELINE_FILE_SHA := {"A":"970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a", "D":"a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6"}
-const FACE_INTERFACE_PATCH_FILE_SHA := "193459b5d7555199938944f33828d44ad05697a466e1adfd8a0cd374b1744f75"
+const FACE_INTERFACE_PATCH_FILE_SHA := "e04408366428ac35178b04e3046f4595d3a12786c3bafef55e4bfcac6ace5507"
 const SEED := 131102026
 var cid := ""
 var csha := ""
@@ -37,7 +37,7 @@ func _run() -> void:
 	var manifest := Core.load_manifest()
 	var d3_attempt:bool=attempt_id.begins_with("ATTEMPT_D3")
 	var interface_patch_pin_valid:bool=not (attempt_id=="ATTEMPT_A3" or d3_attempt) or interface_patch_file_sha==FACE_INTERFACE_PATCH_FILE_SHA
-	if not ["A","D"].has(cid) or csha.length()!=40 or not csha.is_valid_hex_number() or run_id.is_empty() or not ["ATTEMPT_A2","ATTEMPT_A3","ATTEMPT_D2","ATTEMPT_D3","ATTEMPT_D3_2","ATTEMPT_D3_3","ATTEMPT_1_TOPOLOGY_FIRST"].has(attempt_id) or candidate_file_sha != String(CANDIDATE_FILE_SHA.get(cid,"")) or baseline_file_sha != String(BASELINE_FILE_SHA.get(cid,"")) or not interface_patch_pin_valid or oracle_sha.length() != 40 or not oracle_sha.is_valid_hex_number() or not manifest.get("valid", false) or manifest.get("sha256", "") != MANIFEST_SHA:
+	if not ["A","D"].has(cid) or csha.length()!=40 or not csha.is_valid_hex_number() or run_id.is_empty() or not ["ATTEMPT_A2","ATTEMPT_A3","ATTEMPT_D2","ATTEMPT_D3","ATTEMPT_D3_2","ATTEMPT_D3_3","ATTEMPT_D3_4","ATTEMPT_1_TOPOLOGY_FIRST"].has(attempt_id) or candidate_file_sha != String(CANDIDATE_FILE_SHA.get(cid,"")) or baseline_file_sha != String(BASELINE_FILE_SHA.get(cid,"")) or not interface_patch_pin_valid or oracle_sha.length() != 40 or not oracle_sha.is_valid_hex_number() or not manifest.get("valid", false) or manifest.get("sha256", "") != MANIFEST_SHA:
 		print("R96R1_BLOCKED " + JSON.stringify({"candidate":cid,"candidate_sha":csha,"attempt_id":attempt_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"interface_patch_file_sha256":interface_patch_file_sha,"interface_patch_pin_valid":interface_patch_pin_valid,"oracle_sha":oracle_sha,"manifest":manifest.get("reason","ok")})); quit(2); return
 	var script: Script = CandidateA if cid == "A" else CandidateD
 	var candidate: RefCounted = script.new()
@@ -347,6 +347,7 @@ func _run_xplus(candidate:RefCounted,baseline:RefCounted,manifest:Dictionary)->v
 				"patch_cutoff_rejections":patch_result.get("cutoff_rejections",0),
 				"patch_cutoff_rejected_candidates":patch_result.get("cutoff_rejected_candidates",0),
 				"patch_correspondence_mode":patch_result.get("correspondence_mode","none"),
+				"patch_root_identity_scheme":patch_result.get("root_identity_scheme","none"),
 				"patch_endpoint_connectors":patch_result.get("endpoint_connectors",[]),
 				"patch_winding_compatible":patch_result.get("winding_compatible",false),
 				"patch_failure_reason":patch_result.get("reason",""),"patch_failure_detail":patch_result.get("detail",{}),
@@ -413,6 +414,7 @@ func _write_interface_patch_artifact(scenario_id:String,patch:Dictionary,identit
 		"shared_boundary_vertex_key_count":patch.get("shared_boundary_vertex_key_count",0),
 		"endpoint_connectors":patch.get("endpoint_connectors",[]),
 		"correspondence_mode":patch.get("correspondence_mode","none"),"component_pairs":patch.get("component_pairs",[]),
+		"root_identity_scheme":patch.get("root_identity_scheme","none"),
 		"minimum_cross_squared":patch.get("minimum_cross_squared",null),"cutoff_squared":patch.get("cutoff_squared",1.0e-12),
 		"normals":normal_rows,"left_graph":patch.get("left_graph",{}),"right_graph":patch.get("right_graph",{}),
 		"patch_graph":patch.get("patch_graph",{}),"boundary_edge_count":patch.get("patch_boundary_edge_count",0),

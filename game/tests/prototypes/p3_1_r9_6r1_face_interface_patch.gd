@@ -8,6 +8,7 @@ extends RefCounted
 const Core := preload("res://tests/prototypes/p3_1_r9_2_diagnostic_base.gd")
 const CUTOFF_SQUARED := 1.0e-12
 const PLANE_EPSILON := 1.0e-6
+const ROOT_IDENTITY_SCHEME := "normalized_binary32_xyz"
 
 func build(identity: Dictionary, left_mesh: Dictionary, right_mesh: Dictionary,
 		axis: int, plane: float) -> Dictionary:
@@ -88,6 +89,7 @@ func build(identity: Dictionary, left_mesh: Dictionary, right_mesh: Dictionary,
 			"triangle_count":int(mesh.positions.size()/3),"interface_vertex_count":_unique_vertex_count(mesh.positions),
 			"minimum_cross_squared":_mesh_min_cross_squared(mesh.positions),"cutoff_squared":CUTOFF_SQUARED,
 			"cutoff_rejections":0,"cutoff_rejected_candidates":_component_candidate_rejections(emitted_components),
+			"root_identity_scheme":ROOT_IDENTITY_SCHEME,
 			"endpoint_connectors":endpoint_connectors,"left_graph":left.summary,"right_graph":right.summary,
 			"left_boundary_vertex_keys":_component_vertex_keys(left.components),
 			"right_boundary_vertex_keys":_component_vertex_keys(right.components),
@@ -122,6 +124,7 @@ func build(identity: Dictionary, left_mesh: Dictionary, right_mesh: Dictionary,
 		"interface_vertex_count":_unique_vertex_count(mesh.positions),"minimum_cross_squared":_mesh_min_cross_squared(mesh.positions),
 		"cutoff_rejections":0,"cutoff_rejected_candidates":_component_candidate_rejections(emitted_components),
 		"correspondence_mode":"bounded_maximin_monotone_dp_with_roi_edge_connectors",
+		"root_identity_scheme":ROOT_IDENTITY_SCHEME,
 		"vertex_authority":"INTERPOLATED_VOLUME","endpoint_connector_count":endpoint_connectors.size(),
 		"cutoff_squared":CUTOFF_SQUARED,"patch_geometry_claim":"topological face bridge only; canonical surface residual is diagnostic and no SDF projection is performed"}
 
@@ -167,14 +170,17 @@ func _mesh_boundary_graph(mesh: Dictionary, axis: int, plane: float) -> Dictiona
 		return {"valid":false,"reason":"boundary_mesh_invalid"}
 	var incidence: Dictionary = {}
 	var directed: Dictionary = {}
+	var vertex_positions:Dictionary={}
 	for i in range(0,positions.size(),3):
 		for edge in [Vector2i(0,1),Vector2i(1,2),Vector2i(2,0)]:
 			var a: Vector3 = positions[i+edge.x]
 			var b: Vector3 = positions[i+edge.y]
 			if absf(a[axis]-plane)>PLANE_EPSILON or absf(b[axis]-plane)>PLANE_EPSILON:
 				continue
-			var ka := Core._point_key(a)
-			var kb := Core._point_key(b)
+			var ka := _exact_vertex_key(a)
+			var kb := _exact_vertex_key(b)
+			if not vertex_positions.has(ka):vertex_positions[ka]=a
+			if not vertex_positions.has(kb):vertex_positions[kb]=b
 			var key := _edge_key(ka,kb)
 			incidence[key] = int(incidence.get(key,0))+1
 			if not directed.has(key):
@@ -192,9 +198,9 @@ func _mesh_boundary_graph(mesh: Dictionary, axis: int, plane: float) -> Dictiona
 	var boundary_directed: Dictionary = {}
 	for key in edge_keys:
 		boundary_directed[key] = directed[key]
-	return _graph_from_edges(edge_keys,boundary_directed)
+	return _graph_from_edges(edge_keys,boundary_directed,vertex_positions)
 
-func _graph_from_edges(edge_keys: Array[String], directed: Dictionary) -> Dictionary:
+func _graph_from_edges(edge_keys: Array[String], directed: Dictionary, vertex_positions:Dictionary) -> Dictionary:
 	var adjacency: Dictionary = {}
 	for key in edge_keys:
 		var ends := key.split("|")
@@ -238,7 +244,7 @@ func _graph_from_edges(edge_keys: Array[String], directed: Dictionary) -> Dictio
 				"invalid_degree_nodes":invalid_degree_nodes,"component_edge_count":int(degree_sum/2),
 				"edge_keys":edge_keys,"directed_edges":directed,
 				"branch_diagnostic":"a boundary component may only be a simple open path or simple closed cycle"}
-		var ordered := _order_component(nodes,adjacency,endpoints,closed)
+		var ordered := _order_component(nodes,adjacency,endpoints,closed,vertex_positions)
 		if not ordered.valid:return ordered
 		components.append({"closed":closed,"points":ordered.points,"node_keys":nodes,"edge_count":nodes.size() if closed else nodes.size()-1})
 	components.sort_custom(func(a:Dictionary,b:Dictionary)->bool:return String(a.node_keys[0])<String(b.node_keys[0]))
@@ -247,7 +253,7 @@ func _graph_from_edges(edge_keys: Array[String], directed: Dictionary) -> Dictio
 		"components":components.map(func(c:Dictionary)->Dictionary:return {"closed":c.closed,"vertices":c.points.size(),"edges":c.edge_count}),
 		"degree_histogram":_degree_histogram(adjacency)}}
 
-func _order_component(nodes: Array[String], adjacency: Dictionary, endpoints: Array[String], closed: bool) -> Dictionary:
+func _order_component(nodes: Array[String], adjacency: Dictionary, endpoints: Array[String], closed: bool, vertex_positions:Dictionary) -> Dictionary:
 	var start: String
 	if closed:start=nodes[0]
 	else:
@@ -257,7 +263,8 @@ func _order_component(nodes: Array[String], adjacency: Dictionary, endpoints: Ar
 	var previous:String=""
 	var max_steps:int=nodes.size()+1
 	for _step in range(max_steps):
-		points.append(Core._key_point(current))
+		if not vertex_positions.has(current):return {"valid":false,"reason":"face_contour_exact_vertex_position_missing","key":current}
+		points.append(vertex_positions[current])
 		var choices:Array=[]
 		for next_value in adjacency[current]:
 			var next:String=String(next_value)
@@ -334,8 +341,8 @@ func _zipper(mesh: Dictionary, left: Array[Vector3], right: Array[Vector3], clos
 	var na:int=a.size()-1;var nb:int=b.size()-1
 	if na<1 or nb<1:return {"valid":false,"reason":"zipper_path_empty"}
 	var ca:=_normalized_cumulative(a);var cb:=_normalized_cumulative(b)
-	var shared_start:bool=Core._point_key(a[0])==Core._point_key(b[0])
-	var shared_end:bool=Core._point_key(a[na])==Core._point_key(b[nb])
+	var shared_start:bool=_exact_vertex_key(a[0])==_exact_vertex_key(b[0])
+	var shared_end:bool=_exact_vertex_key(a[na])==_exact_vertex_key(b[nb])
 	var endpoint_connectors:Array[Dictionary]=[]
 	if not closed and not shared_start:
 		var start_connector:=_make_roi_edge_connector(a[0],b[0],"start",identity,axis,plane)
@@ -403,7 +410,7 @@ func _zipper(mesh: Dictionary, left: Array[Vector3], right: Array[Vector3], clos
 		"shared_start_root":shared_start,"shared_end_root":shared_end,"endpoint_connectors":endpoint_connectors}
 
 func _make_roi_edge_connector(a:Vector3,b:Vector3,label:String,identity:Dictionary,axis:int,plane:float)->Dictionary:
-	var key_a:String=Core._point_key(a);var key_b:String=Core._point_key(b)
+	var key_a:String=_exact_vertex_key(a);var key_b:String=_exact_vertex_key(b)
 	if key_a==key_b:return {"valid":true,"needed":false,"label":label}
 	if absf(a[axis]-plane)>PLANE_EPSILON or absf(b[axis]-plane)>PLANE_EPSILON:
 		return {"valid":false,"reason":"connector_endpoint_off_interface_plane","label":label}
@@ -524,6 +531,9 @@ func _flip_mesh(mesh:Dictionary)->void:
 	mesh.positions=positions;mesh.normals=normals
 
 func _edge_key(a:String,b:String)->String:return a+"|"+b if a<b else b+"|"+a
+func _exact_vertex_key(point:Vector3)->String:
+	var normalized:=Vector3(0.0 if point.x==0.0 else point.x,0.0 if point.y==0.0 else point.y,0.0 if point.z==0.0 else point.z)
+	return PackedVector3Array([normalized]).to_byte_array().hex_encode()
 func _centroid(points:Array[Vector3])->Vector3:
 	var out:=Vector3.ZERO
 	for point in points:out+=point
@@ -537,21 +547,21 @@ func _component_vertex_keys(components:Array[Dictionary])->Array:
 	var rows:Array=[]
 	for index in range(components.size()):
 		var keys:Array=[]
-		for point in components[index].get("points",[]):keys.append(Core._point_key(point))
+		for point in components[index].get("points",[]):keys.append(_exact_vertex_key(point))
 		rows.append({"component_index":index,"closed":bool(components[index].get("closed",false)),"ordered_quantized_mesh_vertex_keys":keys})
 	return rows
 func _shared_vertex_key_count(left:Array[Dictionary],right:Array[Dictionary])->int:
 	var left_keys:Dictionary={};var shared:Dictionary={}
 	for component in left:
-		for point in component.get("points",[]):left_keys[Core._point_key(point)]=true
+		for point in component.get("points",[]):left_keys[_exact_vertex_key(point)]=true
 	for component in right:
 		for point in component.get("points",[]):
-			var key:String=Core._point_key(point)
+			var key:String=_exact_vertex_key(point)
 			if left_keys.has(key):shared[key]=true
 	return shared.size()
 func _unique_vertex_count(positions:PackedVector3Array)->int:
 	var seen:Dictionary={}
-	for point in positions:seen[Core._point_key(point)]=true
+	for point in positions:seen[_exact_vertex_key(point)]=true
 	return seen.size()
 func _mesh_min_cross_squared(positions:PackedVector3Array)->Variant:
 	if positions.is_empty() or positions.size()%3!=0:return null
