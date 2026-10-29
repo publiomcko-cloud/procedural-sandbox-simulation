@@ -1,7 +1,9 @@
 # P3.1 R9.6 — Consolidated A/D Campaign Disposition
 
-Date: 2026-10-29  
-Issue: [#196](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/196)  
+Date: 2026-10-29
+
+Issue: [#196](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/196)
+
 Final disposition: **P3_1_R9_6_BLOCKED_WITH_EVIDENCE**
 
 ## Source and campaign identity
