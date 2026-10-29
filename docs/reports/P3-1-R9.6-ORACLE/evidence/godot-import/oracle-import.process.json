@@ -1,0 +1,22 @@
+{
+  "source_sha": "f69e39e0ed4a67fe7f26b771cdec7ce70f53ddda",
+  "source_parent": "895dbca3c6dd58bb9adacd63fb39c3ad524226ff",
+  "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "version_exit": 0,
+  "stage": "oracle_import",
+  "pid": 36184,
+  "arguments": [
+    "--headless",
+    "--path",
+    "./game",
+    "--editor",
+    "--import"
+  ],
+  "exit_code": -1073741819,
+  "elapsed_ms": 1231.9607,
+  "stdout_sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c",
+  "stderr_sha256": "30a291c0966922044ef57e9cb792ba5dde8de20e1883413bbd44f6d6ca11993b",
+  "pass": false
+}

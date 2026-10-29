@@ -1,0 +1,39 @@
+{
+  "captured_at": "2026-10-29",
+  "total_visible_memory_kb": 66944192,
+  "free_physical_memory_kb": 21131592,
+  "total_virtual_memory_kb": 74037908,
+  "free_virtual_memory_kb": 8702612,
+  "top_private_memory_processes": [
+    {
+      "pid": 20124,
+      "name": "vmmemWSL",
+      "private_bytes": 27668037632,
+      "working_set_bytes": 8321982464
+    },
+    {
+      "pid": 28992,
+      "name": "XboxPcApp",
+      "private_bytes": 3124326400,
+      "working_set_bytes": 96575488
+    },
+    {
+      "pid": 7536,
+      "name": "Code",
+      "private_bytes": 1860300800,
+      "working_set_bytes": 1113014272
+    },
+    {
+      "pid": 38544,
+      "name": "brave",
+      "private_bytes": 1214894080,
+      "working_set_bytes": 964251648
+    },
+    {
+      "pid": 7068,
+      "name": "Code",
+      "private_bytes": 1027010560,
+      "working_set_bytes": 890507264
+    }
+  ]
+}

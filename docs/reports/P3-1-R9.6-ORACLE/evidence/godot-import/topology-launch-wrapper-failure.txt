@@ -1,0 +1,5 @@
+R9.6 topology test invocation record
+
+The PowerShell execution wrapper terminated with an OutOfMemoryException followed by a stack overflow during runspace shutdown. No expected topology stdout/stderr/process JSON files were created under C:\r96-evidence. No process ID or exit code was captured, so process-start attribution is UNKNOWN. A later process snapshot showed no Godot console process, but that does not prove whether a short-lived process had started before the wrapper failed. The topology test result is NOT_RUN_OR_UNATTRIBUTED; no PASS is claimed.
+
+This note is a transcription of the tool-captured wrapper failure, not raw Godot stdout/stderr.
