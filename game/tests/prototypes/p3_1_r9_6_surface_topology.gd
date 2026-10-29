@@ -1,4 +1,5 @@
 extends RefCounted
+const EDGE_KEY_SEPARATOR: String = "\u001f"
 
 ## Test-only topology ledger for R9.6. It records required surface connectivity
 ## before a geometric quality test can omit a triangle. It is evidence tooling;
@@ -8,7 +9,7 @@ var _roots: Dictionary = {}
 var _triangles: Dictionary = {}
 
 func add_root(root_id: String, point: Vector3, owner_id: String) -> Dictionary:
-	if root_id.is_empty() or owner_id.is_empty() or not point.is_finite():
+	if root_id.is_empty() or root_id.contains(EDGE_KEY_SEPARATOR) or owner_id.is_empty() or not point.is_finite():
 		return {"valid": false, "reason": "root_identity_owner_or_point_invalid"}
 	if _roots.has(root_id):
 		var old: Dictionary = _roots[root_id]
@@ -22,8 +23,8 @@ func add_triangle(triangle_id: String, root_ids: Array[String], owner_id: String
 		cell_id: String, face_ids: Array[String]) -> Dictionary:
 	if triangle_id.is_empty() or owner_id.is_empty() or cell_id.is_empty():
 		return {"valid": false, "reason": "triangle_metadata_invalid"}
-	if root_ids.size() != 3 or root_ids[0] == root_ids[1] or root_ids[1] == root_ids[2] or root_ids[2] == root_ids[0]:
-		return {"valid": false, "reason": "triangle_root_count_or_identity_invalid"}
+	if root_ids.size() != 3:
+		return {"valid": false, "reason": "triangle_root_count_invalid"}
 	if _triangles.has(triangle_id):
 		return {"valid": false, "reason": "duplicate_triangle_id", "triangle_id": triangle_id}
 	for root_id in root_ids:
@@ -119,7 +120,7 @@ func report(roi_min: Vector3, roi_max: Vector3) -> Dictionary:
 				internal_open_edges.append(edge_key)
 	var arcs: Array = []
 	for edge_key in required_incidence:
-		var endpoints: Array = edge_key.split("|")
+		var endpoints: Array = edge_key.split(EDGE_KEY_SEPARATOR)
 		var p0: Vector3 = _roots[String(endpoints[0])].point
 		var p1: Vector3 = _roots[String(endpoints[1])].point
 		var incident_owners: Array[String] = []
@@ -210,7 +211,7 @@ func _open_edge_components(emitted_incidence: Dictionary, emitted_edge_triangles
 		var edge_key: String = String(raw_edge)
 		if int(emitted_incidence[edge_key]) != 1:
 			continue
-		var endpoints: Array = edge_key.split("|")
+		var endpoints: Array = edge_key.split(EDGE_KEY_SEPARATOR)
 		var a: String = String(endpoints[0])
 		var b: String = String(endpoints[1])
 		if not adjacency.has(a): adjacency[a] = []
@@ -259,7 +260,7 @@ func _open_edge_components(emitted_incidence: Dictionary, emitted_edge_triangles
 	return result
 
 func _edge_on_roi_boundary(edge_key: String, roi_min: Vector3, roi_max: Vector3) -> bool:
-	var endpoints: Array = edge_key.split("|")
+	var endpoints: Array = edge_key.split(EDGE_KEY_SEPARATOR)
 	var a: Vector3 = _roots[String(endpoints[0])].point
 	var b: Vector3 = _roots[String(endpoints[1])].point
 	for axis in range(3):
@@ -278,7 +279,7 @@ func _shared_face_owner(a: Vector3, b: Vector3, roi_min: Vector3, roi_max: Vecto
 	return "INTERIOR"
 
 func _edge_key(a: String, b: String) -> String:
-	return a + "|" + b if a < b else b + "|" + a
+	return a + EDGE_KEY_SEPARATOR + b if a < b else b + EDGE_KEY_SEPARATOR + a
 
 func _sha256(bytes: PackedByteArray) -> String:
 	var context := HashingContext.new()

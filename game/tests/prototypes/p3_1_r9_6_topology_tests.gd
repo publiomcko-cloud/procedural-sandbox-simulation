@@ -8,22 +8,23 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	_test_closed_pair()
+	_test_adjacent_pair()
 	_test_rejected_geometry_keeps_required_topology()
 	_test_duplicate_and_unknown_id_fail_closed()
+	_test_collapsed_root_triangle_is_retained()
 	_test_stable_hash_and_shared_owner()
 	print("R96_TOPOLOGY_TESTS " + JSON.stringify({"assertions": assertions, "failures": failures.size(), "failure_reasons": failures}))
 	print("R96_TOPOLOGY_TESTS_" + ("PASS" if failures.is_empty() else "FAIL"))
 	quit(0 if failures.is_empty() else 1)
 
-func _test_closed_pair() -> void:
+func _test_adjacent_pair() -> void:
 	var topology: Variant = Topology.new()
-	_add_root(topology, "a", Vector3(0, 0, 0))
-	_add_root(topology, "b", Vector3(1, 0, 0))
-	_add_root(topology, "c", Vector3(1, 1, 0))
-	_add_root(topology, "d", Vector3(0, 1, 0))
-	_check(topology.add_triangle("t0", ["a", "b", "c"], "cell0", "0,0,0", ["X_MAX"]), "first triangle recorded")
-	_check(topology.add_triangle("t1", ["a", "c", "d"], "cell1", "1,0,0", ["X_MAX"]), "second triangle recorded")
+	_add_root(topology, "node|a", Vector3(0, 0, 0))
+	_add_root(topology, "node|b", Vector3(1, 0, 0))
+	_add_root(topology, "node|c", Vector3(1, 1, 0))
+	_add_root(topology, "node|d", Vector3(0, 1, 0))
+	_check(topology.add_triangle("t0", _string_array(["node|a", "node|b", "node|c"]), "cell0", "0,0,0", _string_array(["X_MAX"])).valid, "first triangle recorded")
+	_check(topology.add_triangle("t1", _string_array(["node|a", "node|c", "node|d"]), "cell1", "1,0,0", _string_array(["X_MAX"])).valid, "second triangle recorded")
 	_check(topology.mark_realization("t0", true, 1.0).valid, "first triangle emitted")
 	_check(topology.mark_realization("t1", true, 1.0).valid, "second triangle emitted")
 	var report: Dictionary = topology.report(Vector3(0, 0, -1), Vector3(1, 1, 1))
@@ -31,7 +32,14 @@ func _test_closed_pair() -> void:
 	_check(report.internal_open_edges.is_empty(), "interior diagonal is manifold")
 	_check(report.nonmanifold_edges.is_empty(), "closed pair has no nonmanifold edge")
 	_check(report.surface_components.size() == 1, "adjacent triangles form one surface component")
-	_check(report.surface_loops.is_empty(), "closed pair has no emitted open-edge loops")
+	_check(report.roi_boundary_open_edges.size() == 4, "quad perimeter remains four explicit ROI boundary edges")
+	var open_edge_components: Array = report.surface_loops
+	_check(open_edge_components.size() == 1, "quad perimeter forms one connected open-edge component")
+	if open_edge_components.size() == 1:
+		var perimeter: Dictionary = open_edge_components[0]
+		_check(not bool(perimeter.closed_loop) and bool(perimeter.touches_roi_boundary), "quad perimeter is a domain boundary, not an internal closed surface loop")
+	else:
+		_check(false, "quad perimeter component metadata unavailable")
 
 func _test_rejected_geometry_keeps_required_topology() -> void:
 	var topology: Variant = Topology.new()
@@ -39,8 +47,8 @@ func _test_rejected_geometry_keeps_required_topology() -> void:
 	_add_root(topology, "b", Vector3(1, 0, 0))
 	_add_root(topology, "c", Vector3(1, 1, 0))
 	_add_root(topology, "d", Vector3(0, 1, 0))
-	topology.add_triangle("t0", ["a", "b", "c"], "cell0", "0,0,0", [])
-	topology.add_triangle("t1", ["a", "c", "d"], "cell1", "1,0,0", [])
+	topology.add_triangle("t0", _string_array(["a", "b", "c"]), "cell0", "0,0,0", _string_array([]))
+	topology.add_triangle("t1", _string_array(["a", "c", "d"]), "cell1", "1,0,0", _string_array([]))
 	topology.mark_realization("t0", false, 0.0, "below_frozen_cutoff")
 	topology.mark_realization("t1", true, 1.0)
 	var report: Dictionary = topology.report(Vector3(0, 0, -1), Vector3(1, 1, 1))
@@ -58,13 +66,24 @@ func _test_duplicate_and_unknown_id_fail_closed() -> void:
 	_check(topology.add_root("r", Vector3.ZERO, "owner").valid, "first root accepted")
 	var collision: Dictionary = topology.add_root("r", Vector3.RIGHT, "owner")
 	_check(not collision.valid and collision.reason == "root_identity_collision", "root identity collision rejected")
-	var unknown: Dictionary = topology.add_triangle("bad", ["r", "x", "y"], "cell", "0,0,0", [])
+	var unknown: Dictionary = topology.add_triangle("bad", _string_array(["r", "x", "y"]), "cell", "0,0,0", _string_array([]))
 	_check(not unknown.valid and unknown.reason == "triangle_references_unknown_root", "unknown root rejected")
 	_check(topology.add_root("x", Vector3.UP, "owner").valid, "second root added")
 	_check(topology.add_root("y", Vector3.BACK, "owner").valid, "third root added")
-	_check(topology.add_triangle("ok", ["r", "x", "y"], "cell", "0,0,0", []).valid, "valid triangle added")
-	var duplicate: Dictionary = topology.add_triangle("ok", ["r", "x", "y"], "cell", "0,0,0", [])
+	_check(topology.add_triangle("ok", _string_array(["r", "x", "y"]), "cell", "0,0,0", _string_array([])).valid, "valid triangle added")
+	var duplicate: Dictionary = topology.add_triangle("ok", _string_array(["r", "x", "y"]), "cell", "0,0,0", _string_array([]))
 	_check(not duplicate.valid and duplicate.reason == "duplicate_triangle_id", "duplicate triangle identity rejected")
+
+func _test_collapsed_root_triangle_is_retained() -> void:
+	var topology: Variant = Topology.new()
+	_check(topology.add_root("zero", Vector3.ZERO, "root/zero").valid, "collapsed fixture zero root inserted")
+	_check(topology.add_root("up", Vector3.UP, "root/up").valid, "collapsed fixture second root inserted")
+	var required: Dictionary = topology.add_triangle("collapsed", _string_array(["zero", "zero", "up"]), "cell", "0,0,0", _string_array([]))
+	_check(bool(required.get("valid", false)), "same-identity roots remain representable in required graph")
+	_check(topology.mark_realization("collapsed", false, 0.0, "below_frozen_cross_squared_cutoff").valid, "collapsed required triangle explicitly rejected")
+	var report: Dictionary = topology.report(Vector3(-1, -1, -1), Vector3(1, 1, 1))
+	_check(int(report.get("required_triangle_count", -1)) == 1 and int(report.get("rejected_triangle_count", -1)) == 1, "collapsed triangle remains in required and rejected counts")
+	_check(not bool(report.get("geometry_realization_complete", true)), "collapsed topology cannot imply geometry completeness")
 
 func _test_stable_hash_and_shared_owner() -> void:
 	var forward: Variant = _make_owned_face_topology(false)
@@ -91,12 +110,21 @@ func _make_owned_face_topology(reverse: bool) -> Variant:
 	if reverse:
 		triangles.reverse()
 	for row in triangles:
-		topology.add_triangle(String(row[0]), row[1], "x_face_owner", "face-cell", ["X_MAX"])
+		topology.add_triangle(String(row[0]), _string_array(row[1]), "x_face_owner", "face-cell", _string_array(["X_MAX"]))
 		topology.mark_realization(String(row[0]), true, 1.0)
 	return topology
 
 func _add_root(topology: Variant, root_id: String, point: Vector3) -> void:
 	_check(topology.add_root(root_id, point, "cell-owner").valid, "root " + root_id + " inserted")
+
+func _string_array(values: Array) -> Array[String]:
+	var result: Array[String] = []
+	for value in values:
+		if typeof(value) != TYPE_STRING:
+			failures.append("topology test fixture contains a non-string identity")
+			continue
+		result.append(String(value))
+	return result
 
 func _check(condition: bool, description: String) -> void:
 	assertions += 1
