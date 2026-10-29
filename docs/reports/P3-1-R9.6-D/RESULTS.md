@@ -1,7 +1,9 @@
 # P3.1 R9.6-D — Candidate D Corrective Disposition
 
-Date: 2026-10-29  
-Issue: [#196](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/196)  
+Date: 2026-10-29
+
+Issue: [#196](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/196)
+
 Status: **P3_1_R9_6_BLOCKED_WITH_EVIDENCE**
 
 ## Exact candidate and scope
