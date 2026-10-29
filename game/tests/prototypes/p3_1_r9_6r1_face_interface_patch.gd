@@ -75,13 +75,25 @@ func build(identity: Dictionary, left_mesh: Dictionary, right_mesh: Dictionary,
 			"endpoint_connectors":strip.endpoint_connectors})
 		for connector in strip.endpoint_connectors:endpoint_connectors.append(connector)
 	var patch_edges := _mesh_boundary_graph(mesh, axis, plane)
-	if not patch_edges.valid:
-		return {"valid":false,"reason":"interface_patch_boundary_invalid","patch_key_sha256":patch_key,"detail":patch_edges}
 	var expected := _union_keys(left.edge_keys, right.edge_keys)
 	for connector in endpoint_connectors:
 		var connector_key:String=String(connector.get("edge_key",""))
 		if not connector_key.is_empty() and not expected.has(connector_key):expected.append(connector_key)
 	expected.sort()
+	if not patch_edges.valid:
+		var actual_edges:Array=patch_edges.get("edge_keys",[])
+		var diagnostic_winding:Dictionary=_winding_report(patch_edges.get("directed_edges",{}),left.directed_edges,right.directed_edges)
+		return {"valid":false,"reason":"interface_patch_boundary_invalid","patch_key_sha256":patch_key,
+			"diagnostic_only":true,"mode":"diagnostic_branch_candidate","mesh":mesh,"mesh_sha256":_mesh_sha(mesh),
+			"triangle_count":int(mesh.positions.size()/3),"interface_vertex_count":_unique_vertex_count(mesh.positions),
+			"minimum_cross_squared":_mesh_min_cross_squared(mesh.positions),"cutoff_squared":CUTOFF_SQUARED,
+			"cutoff_rejections":0,"cutoff_rejected_candidates":_component_candidate_rejections(emitted_components),
+			"endpoint_connectors":endpoint_connectors,"left_graph":left.summary,"right_graph":right.summary,
+			"left_boundary_vertex_keys":_component_vertex_keys(left.components),
+			"right_boundary_vertex_keys":_component_vertex_keys(right.components),
+			"shared_boundary_vertex_key_count":_shared_vertex_key_count(left.components,right.components),
+			"expected_boundary_edge_keys":expected,"actual_boundary_edge_keys":actual_edges,
+			"boundary_edges_match_inputs":_same_keys(actual_edges,expected),"diagnostic_winding":diagnostic_winding,"detail":patch_edges}
 	if not _same_keys(patch_edges.edge_keys, expected):
 		return {"valid":false,"reason":"interface_patch_boundary_does_not_match_inputs","patch_key_sha256":patch_key,
 			"expected_count":expected.size(),"actual_count":patch_edges.edge_keys.size(),
@@ -224,6 +236,7 @@ func _graph_from_edges(edge_keys: Array[String], directed: Dictionary) -> Dictio
 			return {"valid":false,"reason":"face_contour_branch_or_open_degree_invalid","nodes":nodes,
 				"endpoint_count":endpoints.size(),"degree_histogram":degree_histogram,
 				"invalid_degree_nodes":invalid_degree_nodes,"component_edge_count":int(degree_sum/2),
+				"edge_keys":edge_keys,"directed_edges":directed,
 				"branch_diagnostic":"a boundary component may only be a simple open path or simple closed cycle"}
 		var ordered := _order_component(nodes,adjacency,endpoints,closed)
 		if not ordered.valid:return ordered

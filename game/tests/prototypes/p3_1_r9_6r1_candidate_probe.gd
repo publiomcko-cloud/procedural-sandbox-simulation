@@ -11,7 +11,7 @@ const FaceInterfacePatch := preload("res://tests/prototypes/p3_1_r9_6r1_face_int
 const MANIFEST_SHA := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
 const CANDIDATE_FILE_SHA := {"A":"927994b97664778e0d77f62eba47ed09328e0664642936e5d2b1e89d8646ea91", "D":"334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a"}
 const BASELINE_FILE_SHA := {"A":"970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a", "D":"a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6"}
-const FACE_INTERFACE_PATCH_FILE_SHA := "758393ae26d731dc669c9acd85d570142fac7be5840b9a986f305e15b0dcb210"
+const FACE_INTERFACE_PATCH_FILE_SHA := "193459b5d7555199938944f33828d44ad05697a466e1adfd8a0cd374b1744f75"
 const SEED := 131102026
 var cid := ""
 var csha := ""
@@ -321,8 +321,9 @@ func _run_xplus(candidate:RefCounted,baseline:RefCounted,manifest:Dictionary)->v
 			var patched_topology:Dictionary={"valid":false,"reason":"patch_not_generated"}
 			var patch_field:Dictionary={"valid":false,"reason":"patch_not_generated"}
 			var patch_artifact:Dictionary={"valid":false,"reason":"patch_not_generated"}
-			if bool(patch_result.get("valid",false)):
-				var patch_mesh:Dictionary=patch_result.mesh
+			var diagnostic_patch_geometry:bool=bool(patch_result.get("diagnostic_only",false))
+			if bool(patch_result.get("valid",false)) or diagnostic_patch_geometry:
+				var patch_mesh:Dictionary=patch_result.get("mesh",{})
 				patched_combined.positions.append_array(patch_mesh.get("positions",PackedVector3Array()))
 				patched_combined.normals.append_array(patch_mesh.get("normals",PackedVector3Array()))
 				patched_topology=_exact_topology(patched_combined,Vector3(15,1,6),Vector3(17,3,8))
@@ -341,7 +342,7 @@ func _run_xplus(candidate:RefCounted,baseline:RefCounted,manifest:Dictionary)->v
 				"left_boundary_vertex_keys":patch_result.get("left_boundary_vertex_keys",[]),
 				"right_boundary_vertex_keys":patch_result.get("right_boundary_vertex_keys",[]),
 				"patch_vertex_count":patch_result.get("interface_vertex_count",0) if patch_result.get("mode","")!="shared_existing_contour" else 0,
-				"patch_triangle_count":patch_result.get("triangle_count",0),
+				"patch_triangle_count":patch_result.get("triangle_count",0),"diagnostic_patch_geometry_in_combined":diagnostic_patch_geometry,
 				"patch_minimum_cross_squared":patch_result.get("minimum_cross_squared",null),
 				"patch_cutoff_rejections":patch_result.get("cutoff_rejections",0),
 				"patch_cutoff_rejected_candidates":patch_result.get("cutoff_rejected_candidates",0),
@@ -403,6 +404,8 @@ func _write_interface_patch_artifact(scenario_id:String,patch:Dictionary,identit
 		vertex_sources.append({"position":[p.x,p.y,p.z],"root_identity":Core._point_key(p),"authority":"INTERPOLATED_VOLUME"})
 	var normal_rows:Array=[];for n in normals:normal_rows.append([n.x,n.y,n.z])
 	var body:Dictionary={"schema":"P3.1.R9.7.InterfacePatch.v1","attempt":attempt_id,"candidate":cid,"source_sha":csha,
+		"validation_status":"DIAGNOSTIC_ONLY" if bool(patch.get("diagnostic_only",false)) else ("VALIDATED" if bool(patch.get("valid",false)) else "REJECTED"),
+		"failure_reason":patch.get("reason",""),
 		"scenario_id":scenario_id,"patch_key_sha256":patch.get("patch_key_sha256",""),"identity":identity,"identity_text":patch.get("identity_text",""),
 		"mode":patch.get("mode",""),"mesh_sha256":patch.get("mesh_sha256",""),"triangle_count":patch.get("triangle_count",0),
 		"vertices":vertices,"vertex_sources":vertex_sources,"vertex_authority":"INTERPOLATED_VOLUME",
