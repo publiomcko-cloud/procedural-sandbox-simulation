@@ -1,0 +1,40 @@
+{
+    "stage":  "A-geometry2-import",
+    "source_sha":  "bf230c4916c66e2150f8725480d8ce3ca589b353",
+    "arguments":  [
+                      "--headless",
+                      "--path",
+                      "C:\\r96r1-A-run12-20261029\\game",
+                      "--editor",
+                      "--import"
+                  ],
+    "command_line":  "--headless --path \"C:\\r96r1-A-run12-20261029\\game\" --editor --import",
+    "executable":  "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "executable_sha256":  "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+    "working_directory":  "C:\\r96r1-A-run12-20261029",
+    "process_id":  36820,
+    "process_created_utc":  "2026-10-29T13:24:12.5178008Z",
+    "process_ended_utc":  "2026-10-29T13:24:22.4889177Z",
+    "elapsed_ms":  9740.68,
+    "timeout_90s":  false,
+    "exit_code":  0,
+    "observed_process":  {
+                             "ProcessId":  36820,
+                             "ParentProcessId":  35252,
+                             "CommandLine":  "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path \"C:\\r96r1-A-run12-20261029\\game\" --editor --import",
+                             "ExecutablePath":  "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+                             "CreationDate":  "\/Date(1793280252524)\/"
+                         },
+    "environment":  {
+                        "LOCALAPPDATA":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\A-geometry2-import-profile\\profile\\LOCALAPPDATA",
+                        "TEMP":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\A-geometry2-import-profile\\profile\\TEMP",
+                        "TMP":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\A-geometry2-import-profile\\profile\\TMP",
+                        "APPDATA":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\A-geometry2-import-profile\\profile\\APPDATA"
+                    },
+    "stdout_path":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\A-geometry2-import.stdout.txt",
+    "stdout_sha256":  "b817e07c6bf31b336e7b596e2307d913cb2eb70a73ef38b85335167163dc1a19",
+    "stderr_path":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\A-geometry2-import.stderr.txt",
+    "stderr_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "host_before":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\A-geometry2-import-host-before.json",
+    "host_after":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\A-geometry2-import-host-after.json"
+}

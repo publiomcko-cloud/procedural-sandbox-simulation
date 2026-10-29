@@ -1,0 +1,42 @@
+{
+    "stage":  "D-attempt2-checkonly",
+    "source_sha":  "7115166067b7f6e9c68dd9425981259ae065c5bc",
+    "test_source_sha256":  "9A9B6FA55B2D461F9176852C3A526CE35552A382A63662F071279991772D2C3C",
+    "helper_source_sha256":  "fae8d232d4fb985ae5b9f8b141c215d45c1f436471b0ab9783c17bf40ca1f157",
+    "executable":  "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+    "executable_sha256":  "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+    "arguments":  [
+                      "--headless",
+                      "--path",
+                      "C:\\r96r1-D-run11-20261029\\game",
+                      "--check-only",
+                      "--script",
+                      "res://tests/prototypes/p3_1_r9_6r1_candidate_probe.gd"
+                  ],
+    "working_directory":  "C:\\r96r1-D-run11-20261029",
+    "process_id":  24708,
+    "created_utc":  "2026-10-29T13:17:10.9122244Z",
+    "ended_utc":  "2026-10-29T13:17:12.0024095Z",
+    "elapsed_ms":  841.2,
+    "timeout_60s":  false,
+    "exit_code":  0,
+    "observed_process":  {
+                             "ProcessId":  24708,
+                             "ParentProcessId":  44588,
+                             "CommandLine":  "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path \"C:\\r96r1-D-run11-20261029\\game\" --check-only --script res://tests/prototypes/p3_1_r9_6r1_candidate_probe.gd",
+                             "ExecutablePath":  "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+                             "CreationDate":  "\/Date(1793279830917)\/"
+                         },
+    "environment":  {
+                        "LOCALAPPDATA":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\D-attempt2-checkonly-profile\\LOCALAPPDATA",
+                        "TEMP":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\D-attempt2-checkonly-profile\\TEMP",
+                        "TMP":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\D-attempt2-checkonly-profile\\TMP",
+                        "APPDATA":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\D-attempt2-checkonly-profile\\APPDATA"
+                    },
+    "stdout":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\D-attempt2-checkonly.stdout.txt",
+    "stdout_sha256":  "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c",
+    "stderr":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\D-attempt2-checkonly.stderr.txt",
+    "stderr_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "host_before":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\D-attempt2-checkonly-host-before.json",
+    "host_after":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\D-attempt2-checkonly-host-after.json"
+}

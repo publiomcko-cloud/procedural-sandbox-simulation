@@ -1,0 +1,32 @@
+{
+    "stage":  "D-attempt2-run",
+    "candidate":  "D",
+    "source_sha":  "7115166067b7f6e9c68dd9425981259ae065c5bc",
+    "candidate_file_sha256":  "37cf20740511ec6ecb927850f182bc333173f2f1771449e484427efe6d8e8a98",
+    "probe_sha256":  "9a9b6fa55b2d461f9176852c3a526ce35552a382a63662f071279991772d2c3c",
+    "run_id":  "e0155b57b3ae427c808f262487a2c418",
+    "scenario_attempt":  1,
+    "scenario_started":  true,
+    "status":  "PROCESS_NONZERO",
+    "started_utc":  "2026-10-29T13:17:18.6554827Z",
+    "finished_utc":  "2026-10-29T13:17:24.2805635Z",
+    "elapsed_ms":  5602.53,
+    "godot_process_id":  32072,
+    "observed_process":  {
+                             "ProcessId":  32072,
+                             "ParentProcessId":  36776,
+                             "CommandLine":  "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path \"C:\\r96r1-D-run11-20261029\\game\" --script res://tests/prototypes/p3_1_r9_6r1_candidate_probe.gd",
+                             "ExecutablePath":  "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+                             "CreationDate":  "\/Date(1793279838660)\/"
+                         },
+    "exit_code":  1,
+    "timeout_300s":  false,
+    "exception":  null,
+    "stdout":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\D-attempt2-run.stdout.txt",
+    "stderr":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\D-attempt2-run.stderr.txt",
+    "stdout_sha256":  "23705bb259e0995fa431818099750593265aabfb63f047558b7ed0f77b4dab4c",
+    "stderr_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "host_before":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\D-attempt2-run.host-before.json",
+    "host_after":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\D-attempt2-run.host-after.json",
+    "artifact_dir":  "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\P3_1_R96R1_20261029_1217Z_0fbfecd9baea4e8ba9bbf4cee419a3d2\\D-attempt2-run-artifacts"
+}

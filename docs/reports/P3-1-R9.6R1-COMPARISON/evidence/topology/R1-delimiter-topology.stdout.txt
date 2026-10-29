@@ -1,0 +1,4 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+R96_TOPOLOGY_TESTS {"assertions":50,"failure_reasons":[],"failures":0}
+R96_TOPOLOGY_TESTS_PASS

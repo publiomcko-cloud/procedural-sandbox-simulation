@@ -1,3 +1,7 @@
+## 2026-10-29 — P3.1 R9.6R1 controlled recovery
+
+The shared topology gate passes 50/50 assertions on R1 source `0f8cfcdc64ef43096ff9f6166d17605bb1c13aec`. One topology-first attempt each for Candidate A and D did not meet equal-/mixed-LOD geometry invariants. A2/D2 and A3/D3 are not run; no candidate is accepted, so full E2E and `scripts/validate.ps1` are not run. Historical 89,908 KB free memory is unsupported; retain `HOST_FREEZE_OBSERVED_UNKNOWN_ATTRIBUTION`. Details: `docs/reports/P3-1-R9.6R1-COMPARISON/RESULTS.md`. PRs #202–#205 are evidence-only drafts. All five F2-G1 holds remain.
+
 ## 2026-10-28 — R9.2 contract gate recovered
 
 Attempts 03 and 04 remain preserved: #03 logged a parser error despite exit 0; #04 had duplicate Godot process pairs sharing logs and is inconclusive. Fresh serial attempt 05 used an isolated profile and passed Godot 4.7.2 import (0), harness `--check-only` (0), and the contract suite (0; 48 assertions, zero failures, one explicit marker; empty stderr). No candidate scenario or full `scripts/validate.ps1` ran. Exact captures and process/hash records are under `docs/reports/P3-1-R9.2-SHARED/evidence/contract-preflight-05/`; see the recovery checkpoint. All five F2-G1 holds remain.
