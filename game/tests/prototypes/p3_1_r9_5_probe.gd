@@ -276,7 +276,7 @@ func _trace_a_cutoffs(candidate:RefCounted,snapshot:Dictionary,roi:Dictionary,me
 			if edge.is_internal_open_edge:explained[edge.key]=true
 	var unexplained:Array=[];for key in internal_open:
 		if not explained.has(key):unexplained.append(key)
-	return {"candidate":"A","candidate_source_sha":SOURCE.A,"roi":roi,"reported_cutoff_drop_count":reported_drops,"traced_cutoff_drop_count":dropped_count,"cutoff_squared":1e-12,"dropped_tetrahedra":records,"full_mesh_internal_open_edge_count":internal_open.size(),"unique_internal_open_edges_explained_by_cutoff_perimeters":explained.size(),"unexplained_internal_open_edges_first_32":unexplained.slice(0,32),"trace_matches_reported_metric":dropped_count==reported_drops,"mesh_incidence_source":"exact binary32 position keys from full candidate mesh"}
+	return {"candidate":"A","candidate_source_sha":SOURCE.A,"roi":roi,"reported_cutoff_drop_count":reported_drops,"traced_cutoff_drop_count":dropped_count,"cutoff_squared":1e-12,"dropped_tetrahedra":records,"full_mesh_internal_open_edge_count":internal_open.size(),"internal_open_edges":_internal_open_edge_records(mesh,roi_min,roi_min+Vector3(cells)*step),"unique_internal_open_edges_explained_by_cutoff_perimeters":explained.size(),"unexplained_internal_open_edges_first_32":unexplained.slice(0,32),"trace_matches_reported_metric":dropped_count==reported_drops,"mesh_incidence_source":"exact binary32 position keys from full candidate mesh"}
 
 func _a_cutoff_tet(candidate:RefCounted,tet:Array,points:Array[Vector3],densities:Array[float],snapshot:Dictionary,step:float)->Dictionary:
 	var inside:Array[int]=[];var outside:Array[int]=[];var samples:Array[Dictionary]=[]
@@ -333,6 +333,20 @@ func _internal_open_edge_keys(mesh:Dictionary,lo:Vector3,hi:Vector3)->Dictionary
 		if not on_roi_boundary:out[key]=true
 	return out
 
+func _internal_open_edge_records(mesh:Dictionary,lo:Vector3,hi:Vector3)->Array[Dictionary]:
+	var incidence:Dictionary=_mesh_edge_incidence(mesh);var p:PackedVector3Array=mesh.get("positions",PackedVector3Array());var ends:Dictionary={};var out:Array[Dictionary]=[]
+	for i in range(0,p.size(),3):
+		for e in [Vector2i(0,1),Vector2i(1,2),Vector2i(2,0)]:
+			var a:Vector3=p[i+e.x];var b:Vector3=p[i+e.y];var ka:String=_exact_key(a);var kb:String=_exact_key(b);var key:String=ka+"|"+kb if ka<kb else kb+"|"+ka
+			if not ends.has(key):ends[key]=[a,b]
+	for key in incidence:
+		if int(incidence[key])!=1:continue
+		var edge:Array=ends[key];var on_roi_boundary:bool=false
+		for axis in range(3):
+			if (absf(edge[0][axis]-lo[axis])<2e-5 and absf(edge[1][axis]-lo[axis])<2e-5) or (absf(edge[0][axis]-hi[axis])<2e-5 and absf(edge[1][axis]-hi[axis])<2e-5):on_roi_boundary=true
+		if not on_roi_boundary:out.append({"key":key,"a":edge[0],"b":edge[1],"incidence":int(incidence[key])})
+	return out
+
 func _trace_d_cutoffs(candidate:RefCounted,values:PackedFloat32Array,roi:Dictionary,mesh:Dictionary,reported_drops:int)->Dictionary:
 	var roi_min:Vector3=Core.world_min(roi);var cells:Vector3i=Core.cell_counts(roi);var step:float=Core.step(roi);var dims:Vector3i=cells+Vector3i.ONE;var incidence:Dictionary=_mesh_edge_incidence(mesh);var internal_open:Dictionary=_internal_open_edge_keys(mesh,roi_min,roi_min+Vector3(cells)*step);var records:Array[Dictionary]=[];var root_cache:Dictionary={};var dropped_count:int=0
 	if values.size()!=dims.x*dims.y*dims.z:return {"candidate":"D","valid":false,"reason":"materialized_volume_size_mismatch","actual":values.size(),"expected":dims.x*dims.y*dims.z}
@@ -370,7 +384,7 @@ func _trace_d_cutoffs(candidate:RefCounted,values:PackedFloat32Array,roi:Diction
 			if edge.is_internal_open_edge:explained[edge.key]=true
 	var unexplained:Array=[];for key in internal_open:
 		if not explained.has(key):unexplained.append(key)
-	return {"candidate":"D","valid":true,"candidate_source_sha":SOURCE.D,"roi":roi,"reported_cutoff_drop_count":reported_drops,"traced_cutoff_drop_count":dropped_count,"threshold_squared":1e-12,"dropped_triangles":records,"full_mesh_internal_open_edge_count":internal_open.size(),"unique_internal_open_edges_explained_by_cutoff_triangle_edges":explained.size(),"unexplained_internal_open_edges_first_32":unexplained.slice(0,32),"trace_matches_reported_metric":dropped_count==reported_drops,"mesh_incidence_source":"exact binary32 position keys from full candidate mesh","volume_authority":"candidate D returned materialized float32 samples from canonical SDF plus ordered frozen ledger"}
+	return {"candidate":"D","valid":true,"candidate_source_sha":SOURCE.D,"roi":roi,"reported_cutoff_drop_count":reported_drops,"traced_cutoff_drop_count":dropped_count,"threshold_squared":1e-12,"dropped_triangles":records,"full_mesh_internal_open_edge_count":internal_open.size(),"internal_open_edges":_internal_open_edge_records(mesh,roi_min,roi_min+Vector3(cells)*step),"unique_internal_open_edges_explained_by_cutoff_triangle_edges":explained.size(),"unexplained_internal_open_edges_first_32":unexplained.slice(0,32),"trace_matches_reported_metric":dropped_count==reported_drops,"mesh_incidence_source":"exact binary32 position keys from full candidate mesh","volume_authority":"candidate D returned materialized float32 samples from canonical SDF plus ordered frozen ledger"}
 
 func _face_oracle(snapshot:Dictionary,roi:Dictionary,face_side:int,seed:int,materialized_values:PackedFloat32Array=PackedFloat32Array(),require_materialized:bool=false)->Dictionary:
 	var lo:Vector3=Core.world_min(roi);var cells:Vector3i=Core.cell_counts(roi);var h:float=Core.step(roi);var dims:Vector3i=cells+Vector3i.ONE
