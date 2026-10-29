@@ -197,7 +197,10 @@ func _order_root_ids(ordered:Array[Vector3],points:Array[Vector3],root_ids:Array
 func _canonical_volume_root(cache:Dictionary,node_a:Vector3i,node_b:Vector3i,value_a:float,value_b:float,point_a:Vector3,point_b:Vector3)->Dictionary:
 	var lattice_origin:=Vector3i(roundi(ROI_MIN.x/STEP),roundi(ROI_MIN.y/STEP),roundi(ROI_MIN.z/STEP))
 	var key_a:String=_lattice_key(lattice_origin+node_a);var key_b:String=_lattice_key(lattice_origin+node_b)
-	if key_a>key_b:
+	# Order numerically by the signed global lattice tuple. String comparison of
+	# negative coordinates is not numeric (for example, "-31" sorts before
+	# "-32"), and reversing endpoints changes the floating-point lerp path.
+	if _lattice_before(lattice_origin+node_b,lattice_origin+node_a):
 		var node_swap:Vector3i=node_a;node_a=node_b;node_b=node_swap
 		var value_swap:float=value_a;value_a=value_b;value_b=value_swap
 		var point_swap:Vector3=point_a;point_a=point_b;point_b=point_swap
@@ -222,6 +225,11 @@ func _canonical_volume_root(cache:Dictionary,node_a:Vector3i,node_b:Vector3i,val
 
 func _lattice_key(node:Vector3i)->String:
 	return "%d,%d,%d"%[node.x,node.y,node.z]
+
+func _lattice_before(a:Vector3i,b:Vector3i)->bool:
+	if a.x!=b.x:return a.x<b.x
+	if a.y!=b.y:return a.y<b.y
+	return a.z<b.z
 
 func _world_point_key(point:Vector3)->String:
 	var packed:=PackedVector3Array();packed.append(point)
