@@ -45,6 +45,8 @@ func _run() -> void:
 	var candidate_volume: Dictionary = candidate_build.get("volume", {})
 	var baseline_volume: Dictionary = baseline_build.get("volume", {})
 	var values: PackedFloat32Array = candidate_volume.get("values", PackedFloat32Array())
+	var candidate_volume_bytes: PackedByteArray = candidate_volume.get("bytes", PackedByteArray())
+	var baseline_volume_bytes: PackedByteArray = baseline_volume.get("bytes", PackedByteArray())
 	var dims: Vector3i = Core.cell_counts(roi) + Vector3i.ONE
 	var root_diagnostic: Dictionary = _compare_crossing_roots(values, dims, Core.world_min(roi), Core.step(roi))
 	var candidate_mesh: Dictionary = candidate_build.get("mesh", {})
@@ -69,7 +71,8 @@ func _run() -> void:
 		"roi":roi,"revision":int(setup.get("revision", -1)),"command_count":row.get("commands", []).size(),
 		"volume_sha256_candidate":String(candidate_volume.get("sha256", "")),
 		"volume_sha256_baseline":String(baseline_volume.get("sha256", "")),
-		"volume_bytes_equal":String(candidate_volume.get("sha256", "")) == String(baseline_volume.get("sha256", "")),
+		"volume_bytes_equal":candidate_volume_bytes == baseline_volume_bytes,
+		"volume_byte_count_candidate":candidate_volume_bytes.size(),"volume_byte_count_baseline":baseline_volume_bytes.size(),
 		"root_arithmetic":root_diagnostic,
 		"candidate_mesh_sha256":String(candidate_build.get("mesh_sha256", "")),
 		"baseline_mesh_sha256":String(baseline_build.get("mesh_sha256", "")),
@@ -116,6 +119,8 @@ func _compare_crossing_roots(values: PackedFloat32Array, dims: Vector3i, roi_min
 	var baseline_current_order_differences: int = 0
 	var baseline_numeric_root_bit_differences: int = 0
 	var current_numeric_root_bit_differences: int = 0
+	var baseline_numeric_t_bit_differences: int = 0
+	var current_numeric_t_bit_differences: int = 0
 	var examples: Array[Dictionary] = []
 	var sorted_edges: Array = edges.keys()
 	sorted_edges.sort()
@@ -144,9 +149,14 @@ func _compare_crossing_roots(values: PackedFloat32Array, dims: Vector3i, roi_min
 			baseline_numeric_root_bit_differences += 1
 		if String(pre_fix_root.point_hex) != String(fixed_root.point_hex):
 			current_numeric_root_bit_differences += 1
+		if String(old_root.t_hex) != String(fixed_root.t_hex):
+			baseline_numeric_t_bit_differences += 1
+		if String(pre_fix_root.t_hex) != String(fixed_root.t_hex):
+			current_numeric_t_bit_differences += 1
 		if order_changed or String(old_root.point_hex) != String(pre_fix_root.point_hex):
 			if examples.size() < 32:
-				examples.append({"baseline_edge_id":String(old_root.edge_id),"pre_fix_d1_edge_id":String(pre_fix_root.edge_id),"fixed_global_edge_id":String(fixed_root.edge_id),"baseline_root_identity":String(old_root.root_identity),"pre_fix_d1_root_identity":String(pre_fix_root.root_identity),"fixed_root_identity":String(fixed_root.root_identity),"local_endpoints":[a,b],"global_endpoints":[global_a,global_b],"original_endpoint_order":[a,b],"baseline_order":[old_root.ordered_nodes[0],old_root.ordered_nodes[1]],"pre_fix_d1_order":[pre_fix_root.ordered_nodes[0],pre_fix_root.ordered_nodes[1]],"fixed_order":[fixed_root.ordered_nodes[0],fixed_root.ordered_nodes[1]],"endpoint_float32":[va,vb],"baseline_t_float64_hex":old_root.t_hex,"pre_fix_d1_t_float64_hex":pre_fix_root.t_hex,"fixed_t_float64_hex":fixed_root.t_hex,"baseline_point_float32_hex":old_root.point_hex,"pre_fix_d1_point_float32_hex":pre_fix_root.point_hex,"fixed_point_float32_hex":fixed_root.point_hex,"baseline_vs_fixed_equal":String(old_root.point_hex)==String(fixed_root.point_hex),"pre_fix_vs_fixed_equal":String(pre_fix_root.point_hex)==String(fixed_root.point_hex)})	return {"valid":true,"unique_crossing_tetra_edges":edges.size(),"baseline_lexical_vs_pre_fix_global_lexical_order_differences":baseline_current_order_differences,"baseline_root_binary32_vs_fixed_numeric_global_mismatches":baseline_numeric_root_bit_differences,"pre_fix_root_binary32_vs_fixed_numeric_mismatches":current_numeric_root_bit_differences,"baseline_equals_numeric_global":baseline_numeric_root_bit_differences==0,"examples":examples}
+				examples.append({"baseline_edge_id":String(old_root.edge_id),"pre_fix_d1_edge_id":String(pre_fix_root.edge_id),"fixed_global_edge_id":String(fixed_root.edge_id),"baseline_root_identity":String(old_root.root_identity),"pre_fix_d1_root_identity":String(pre_fix_root.root_identity),"fixed_root_identity":String(fixed_root.root_identity),"local_endpoints":[a,b],"global_endpoints":[global_a,global_b],"original_endpoint_order":[a,b],"baseline_order":[old_root.ordered_nodes[0],old_root.ordered_nodes[1]],"pre_fix_d1_order":[pre_fix_root.ordered_nodes[0],pre_fix_root.ordered_nodes[1]],"fixed_order":[fixed_root.ordered_nodes[0],fixed_root.ordered_nodes[1]],"endpoint_float32":[va,vb],"baseline_t_float64_hex":old_root.t_hex,"pre_fix_d1_t_float64_hex":pre_fix_root.t_hex,"fixed_t_float64_hex":fixed_root.t_hex,"baseline_point_float32_hex":old_root.point_hex,"pre_fix_d1_point_float32_hex":pre_fix_root.point_hex,"fixed_point_float32_hex":fixed_root.point_hex,"baseline_vs_fixed_equal":String(old_root.point_hex)==String(fixed_root.point_hex),"pre_fix_vs_fixed_equal":String(pre_fix_root.point_hex)==String(fixed_root.point_hex)})
+	return {"valid":true,"unique_crossing_tetra_edges":edges.size(),"baseline_lexical_vs_pre_fix_global_lexical_order_differences":baseline_current_order_differences,"baseline_t_binary64_vs_fixed_numeric_global_mismatches":baseline_numeric_t_bit_differences,"pre_fix_t_binary64_vs_fixed_numeric_mismatches":current_numeric_t_bit_differences,"baseline_root_binary32_vs_fixed_numeric_global_mismatches":baseline_numeric_root_bit_differences,"pre_fix_root_binary32_vs_fixed_numeric_mismatches":current_numeric_root_bit_differences,"baseline_equals_numeric_global":baseline_numeric_root_bit_differences==0 and baseline_numeric_t_bit_differences==0,"examples":examples}
 
 func _ordered_root(reverse: bool, a: Vector3i, b: Vector3i, va: float, vb: float, pa: Vector3, pb: Vector3, lattice_origin: Vector3i, identity_mode: String) -> Dictionary:
 	var first_node: Vector3i = b if reverse else a
