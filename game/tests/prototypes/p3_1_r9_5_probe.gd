@@ -33,6 +33,11 @@ func _run() -> void:
 	if not built.get("valid",false): print("R95_BLOCKED " + JSON.stringify({"reason":"ray_mesh_build_failed","detail":built.get("reason","unknown")})); quit(2); return
 	var rays: Array[Dictionary] = Core.ray_grid(ray_row.roi,ray_row.ray_grid)
 	var classes := {}
+	var legacy: Dictionary = Core.compare_mesh_rays(rays,built.mesh,setup.snapshot,int(ray_row.seed),256)
+	var legacy_hit_miss_indices:Array[int]=[]
+	for ray_index in range(legacy.get("rays",[]).size()):
+		var legacy_row:Dictionary=legacy.rays[ray_index]
+		if bool(legacy_row.reference_hit)!=bool(legacy_row.mesh_hit):legacy_hit_miss_indices.append(ray_index)
 	for i in range(rays.size()):
 		var ray: Dictionary = rays[i]
 		var exact: Dictionary = _analytic_roots(ray,int(ray_row.seed),setup.snapshot)
@@ -40,15 +45,24 @@ func _run() -> void:
 		var finite: Dictionary = Core.canonical_ray_roots(ray.origin,ray.direction,float(ray.length),setup.snapshot,int(ray_row.seed),256,32)
 		var hits: Dictionary = _mesh_hits(ray,built.mesh)
 		var root_comparison: Dictionary = _compare_root_sets(exact,adaptive)
+		var finite_root_comparison: Dictionary = _compare_root_sets(exact,finite)
 		var lo: Vector3 = Core.world_min(ray_row.roi)
 		var hi: Vector3 = lo + Vector3(Core.cell_counts(ray_row.roi))*Core.step(ray_row.roi)
 		var roi_roots: Array[Dictionary] = []
 		var roi_boundary_roots: Array[Dictionary] = []
+		var roi_side_face_roots: Array[Dictionary] = []
 		for root in exact.get("roots",[]):
 			var p: Vector3 = root.position
 			if p.x>=lo.x-1e-6 and p.x<=hi.x+1e-6 and p.y>=lo.y-1e-6 and p.y<=hi.y+1e-6 and p.z>=lo.z-1e-6 and p.z<=hi.z+1e-6:
-				if absf(p.x-lo.x)<=1e-6 or absf(p.x-hi.x)<=1e-6 or absf(p.y-lo.y)<=1e-6 or absf(p.y-hi.y)<=1e-6 or absf(p.z-lo.z)<=1e-6 or absf(p.z-hi.z)<=1e-6: roi_boundary_roots.append(root)
-				else: roi_roots.append(root)
+				if absf(p.y-lo.y)<=1e-6 or absf(p.y-hi.y)<=1e-6: roi_boundary_roots.append({"root":root,"boundary":"ray_axis_y_cropped_endpoint","mesh_intersection_required":false})
+				else:
+					roi_roots.append(root)
+					var side_faces:Array[String]=[]
+					if absf(p.x-lo.x)<=1e-6:side_faces.append("X_MIN")
+					if absf(p.x-hi.x)<=1e-6:side_faces.append("X_MAX")
+					if absf(p.z-lo.z)<=1e-6:side_faces.append("Z_MIN")
+					if absf(p.z-hi.z)<=1e-6:side_faces.append("Z_MAX")
+					if not side_faces.is_empty():roi_side_face_roots.append({"root":root,"faces":side_faces,"mesh_intersection_required":true})
 		var hit_distances: Array[float] = _cluster_hit_distances(hits.get("hits",[]),1e-5)
 		var position_deltas: Array[Dictionary] = _mesh_root_deltas(roi_roots,hit_distances)
 		var first: Dictionary = exact.get("first",{})
@@ -63,10 +77,12 @@ func _run() -> void:
 			failures += 1
 		elif hit_miss_disagrees: classification="IN_ROI_HIT_MISS"
 		elif not position_deltas.is_empty(): classification="IN_ROI_DISTANCE_DIAGNOSTIC"
+		else: classification="IN_ROI_HIT_STATE_MATCH"
 		if not first_inside and not first.is_empty(): classification += "_GLOBAL_FIRST_ROOT_CROPPED"
 		classes[classification]=int(classes.get(classification,0))+1
-		print("R95_RAY " + JSON.stringify({"run_id":run_id,"candidate":cid,"source_sha":csha,"oracle_sha":oracle_sha,"ray_index":i,"ray":ray,"analytic":exact,"adaptive":adaptive,"finite_scan_256":finite,"root_comparison":root_comparison,"canonical_roots_strictly_inside_mesh_roi":roi_roots,"canonical_roots_on_mesh_roi_boundary":roi_boundary_roots,"mesh_two_sided":hits,"unique_mesh_hit_distances_clustered_1e-5_for_dedup_only":hit_distances,"mesh_root_distance_deltas":position_deltas,"global_first_root_inside_mesh_roi":first_inside,"classification":classification}))
+		print("R95_RAY " + JSON.stringify({"run_id":run_id,"candidate":cid,"source_sha":csha,"oracle_sha":oracle_sha,"ray_index":i,"ray":ray,"analytic":exact,"adaptive":adaptive,"finite_scan_256":finite,"finite_vs_analytic_root_comparison":finite_root_comparison,"analytic_vs_adaptive_root_comparison":root_comparison,"canonical_roots_in_closed_roi_excluding_y_end_faces":roi_roots,"canonical_roots_on_roi_y_end_faces_cropped_not_required":roi_boundary_roots,"canonical_roots_on_xz_side_faces_still_expected":roi_side_face_roots,"mesh_two_sided":hits,"unique_mesh_hit_distances_clustered_1e-5_for_dedup_only":hit_distances,"mesh_root_distance_deltas":position_deltas,"roi_hit_miss_disagrees":hit_miss_disagrees,"global_first_root_inside_mesh_roi":first_inside,"classification":classification}))
 	print("R95_RAY_SUMMARY " + JSON.stringify({"candidate":cid,"source_sha":csha,"manifest_sha":MANIFEST_SHA,"ray_count":rays.size(),"classifications":classes,"candidate_mesh_sha256":built.get("mesh_sha256",""),"roi":ray_row.roi,"metrics":built.get("metrics",{})}))
+	print("R95_LEGACY_SCAN_COMPARISON " + JSON.stringify({"candidate":cid,"source_sha":csha,"ray_count":legacy.get("ray_count",0),"finite_scan_hit_miss_disagreements":legacy.get("hit_miss_disagreements",-1),"finite_scan_disagreement_indices":legacy_hit_miss_indices,"absolute_position_error_p50":legacy.get("position_error_abs_p50",null),"absolute_position_error_p95":legacy.get("position_error_abs_p95",null),"absolute_position_error_max":legacy.get("position_error_abs_max",null),"completeness":legacy.get("root_scan_completeness","unknown")}))
 	_print_shared_samples(setup.snapshot)
 	_run_xplus(candidate,manifest)
 	_run_frozen_controls(candidate,manifest)
@@ -214,43 +230,231 @@ func _run_xplus(candidate:RefCounted,manifest:Dictionary)->void:
 		var row:Dictionary=Core.case_by_id(manifest.rows,id);if row.is_empty():continue
 		var setup:Dictionary=Core.make_snapshot(row);candidate.call("configure_roi",row.roi);var full:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"default","roi":row.roi})
 		var lo:Vector3=Core.world_min(row.roi);var hi:=lo+Vector3(Core.cell_counts(row.roi))*Core.step(row.roi)
+		if full.get("valid",false) and cid=="A":print("R95_CUTOFF_TRACE "+JSON.stringify(_trace_a_cutoffs(candidate,setup.snapshot,row.roi,full.mesh,int(full.get("metrics",{}).get("cutoff_drops",-1)))))
+		elif full.get("valid",false) and cid=="D":
+			var volume:Dictionary=full.get("volume",{})
+			print("R95_CUTOFF_TRACE "+JSON.stringify(_trace_d_cutoffs(candidate,volume.get("values",PackedFloat32Array()),row.roi,full.mesh,int(full.get("metrics",{}).get("extract",{}).get("cutoff_drops",-1)))))
 		print("R95_XPLUS "+JSON.stringify({"scenario_id":id,"candidate":cid,"source_sha":csha,"scope":"single-ROI historical proxy, not chunk join","mesh_sha256":full.get("mesh_sha256",""),"metrics":full.get("metrics",{}),"exact_topology":_exact_topology(full.get("mesh",Core.new_mesh()),lo,hi) if full.get("valid",false) else {}, "valid":full.get("valid",false)}))
 		var mixed: bool = id.ends_with("MIXED_LOD.v1");var left_roi:Dictionary={"id":"L","min":[15.0,1.0,6.0],"cells":[2,4,4] if mixed else [4,8,8],"step":0.5 if mixed else 0.25};var right_roi:Dictionary={"id":"R","min":[16.0,1.0,6.0],"cells":[4,8,8],"step":0.25}
 		candidate.call("configure_roi",left_roi);var left:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"L","roi":left_roi});candidate.call("configure_roi",right_roi);var right:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"R","roi":right_roi})
 		if not left.get("valid",false) or not right.get("valid",false):print("R95_SPLIT_BLOCKED "+JSON.stringify({"id":id,"left":left.get("reason","ok"),"right":right.get("reason","ok")}));continue
 		var ls:=_boundary_segments(left.mesh,16.0);var rs:=_boundary_segments(right.mesh,16.0);var delta:=_dict_delta(ls,rs);var combined:=_combine(left.mesh,right.mesh)
-		var oracle_l:=_face_oracle(setup.snapshot,left_roi,16.0,int(row.seed));var oracle_r:=_face_oracle(setup.snapshot,right_roi,16.0,int(row.seed))
+		var left_values:PackedFloat32Array=left.get("volume",{}).get("values",PackedFloat32Array()) if cid=="D" else PackedFloat32Array()
+		var right_values:PackedFloat32Array=right.get("volume",{}).get("values",PackedFloat32Array()) if cid=="D" else PackedFloat32Array()
+		var oracle_l:Dictionary=_face_oracle(setup.snapshot,left_roi,1,int(row.seed),left_values,cid=="D")
+		var oracle_r:Dictionary=_face_oracle(setup.snapshot,right_roi,0,int(row.seed),right_values,cid=="D")
+		if not oracle_l.get("valid",false) or not oracle_r.get("valid",false):
+			print("R95_FACE_ORACLE_BLOCKED "+JSON.stringify({"scenario_id":id,"candidate":cid,"left":oracle_l,"right":oracle_r}))
+			failures+=1
+			continue
 		var ldiff:=_dict_delta(ls,oracle_l.segments);var rdiff:=_dict_delta(rs,oracle_r.segments)
-		print("R95_SPLIT_PAIR "+JSON.stringify({"scenario_id":id,"candidate":cid,"lod_pair":[1,0] if mixed else [0,0],"plane_x":16,"left_sha":left.get("mesh_sha256",""),"right_sha":right.get("mesh_sha256",""),"left_segments":ls.size(),"right_segments":rs.size(),"left_only":delta.left.size(),"right_only":delta.right.size(),"left_only_first_24":delta.left.slice(0,24),"right_only_first_24":delta.right.slice(0,24),"seam_incidence":_interface_incidence(combined,16.0),"combined_topology":_exact_topology(combined,Vector3(15,1,6),Vector3(17,3,8)),"independent_face_oracle":{"left_expected":oracle_l.segments.size(),"left_missing":ldiff.right.size(),"left_extra":ldiff.left.size(),"left_missing_first_16":ldiff.right.slice(0,16),"left_extra_first_16":ldiff.left.slice(0,16),"right_expected":oracle_r.segments.size(),"right_missing":rdiff.right.size(),"right_extra":rdiff.left.size(),"right_missing_first_16":rdiff.right.slice(0,16),"right_extra_first_16":rdiff.left.slice(0,16),"definition":"canonical SDF over an independently fixed 2D face triangulation; edge roots bisected on the continuous field"},"scope":"candidate-generated separate ROIs; not production chunk acceptance"}))
+		print("R95_SPLIT_PAIR "+JSON.stringify({"scenario_id":id,"candidate":cid,"lod_pair":[1,0] if mixed else [0,0],"plane_x":16,"left_sha":left.get("mesh_sha256",""),"right_sha":right.get("mesh_sha256",""),"left_segments":ls.size(),"right_segments":rs.size(),"left_only":delta.left.size(),"right_only":delta.right.size(),"left_only_first_24":delta.left.slice(0,24),"right_only_first_24":delta.right.slice(0,24),"seam_incidence":_interface_incidence(combined,16.0),"combined_topology":_exact_topology(combined,Vector3(15,1,6),Vector3(17,3,8)),"independent_face_oracle":{"construction":"enumerate the two tetrahedral face triangles implied by Core.TETS on the requested cube side; no candidate helper is used","left_face_side":1,"right_face_side":0,"left_method":oracle_l.method,"right_method":oracle_r.method,"left_face_triangle_count":oracle_l.face_triangle_count,"right_face_triangle_count":oracle_r.face_triangle_count,"left_expected":oracle_l.segments.size(),"left_missing":ldiff.right.size(),"left_extra":ldiff.left.size(),"left_missing_first_16":ldiff.right.slice(0,16),"left_extra_first_16":ldiff.left.slice(0,16),"left_endpoint_delta":_segment_endpoint_deltas(ls,oracle_l.segment_rows),"right_expected":oracle_r.segments.size(),"right_missing":rdiff.right.size(),"right_extra":rdiff.left.size(),"right_missing_first_16":rdiff.right.slice(0,16),"right_extra_first_16":rdiff.left.slice(0,16),"right_endpoint_delta":_segment_endpoint_deltas(rs,oracle_r.segment_rows)},"scope":"candidate-generated separate ROIs; not production chunk acceptance"}))
 
-func _face_oracle(snapshot:Dictionary,roi:Dictionary,plane:float,seed:int)->Dictionary:
-	var lo:Vector3=Core.world_min(roi);var cells:Vector3i=Core.cell_counts(roi);var h:float=Core.step(roi);var segments:Dictionary={}
+func _trace_a_cutoffs(candidate:RefCounted,snapshot:Dictionary,roi:Dictionary,mesh:Dictionary,reported_drops:int)->Dictionary:
+	var roi_min:Vector3=Core.world_min(roi);var cells:Vector3i=Core.cell_counts(roi);var step:float=Core.step(roi);var dims:Vector3i=cells+Vector3i.ONE;var values:=PackedFloat32Array();values.resize(dims.x*dims.y*dims.z)
+	for y in range(dims.y):
+		for z in range(dims.z):
+			for x in range(dims.x):values[(y*dims.z+z)*dims.x+x]=Core.sample(roi_min+Vector3(x,y,z)*step,snapshot)
+	var incidence:Dictionary=_mesh_edge_incidence(mesh);var internal_open:Dictionary=_internal_open_edge_keys(mesh,roi_min,roi_min+Vector3(cells)*step);var records:Array[Dictionary]=[];var dropped_count:int=0
 	for y in range(cells.y):
 		for z in range(cells.z):
-			var p00:=Vector3(plane,lo.y+float(y)*h,lo.z+float(z)*h);var p10:=p00+Vector3(0,h,0);var p11:=p00+Vector3(0,h,h);var p01:=p00+Vector3(0,0,h)
-			for tri in [[p00,p10,p11],[p00,p11,p01]]:
-				var hits:Array[Vector3]=[]
-				for e in [Vector2i(0,1),Vector2i(1,2),Vector2i(2,0)]:
-					var a:Vector3=tri[e.x];var b:Vector3=tri[e.y];var da:float=Core.sample(a,snapshot,seed);var db:float=Core.sample(b,snapshot,seed)
-					if da==0.0:hits.append(a)
-					elif db==0.0:hits.append(b)
+			for x in range(cells.x):
+				var points:Array[Vector3]=[];var densities:Array[float]=[]
+				for corner in Core.GRID_CORNERS:
+					var ix:int=x+corner.x;var iy:int=y+corner.y;var iz:int=z+corner.z;points.append(roi_min+Vector3(ix,iy,iz)*step);densities.append(float(values[(iy*dims.z+iz)*dims.x+ix]))
+				for tet_index in range(Core.TETS.size()):
+					var tet:Array=Core.TETS[tet_index];var scratch:Dictionary=Core.new_mesh();var outcome:Dictionary=candidate.call("_polygonize_tet",tet,points,densities,snapshot,scratch);var dropped:int=int(outcome.get("dropped",0))
+					if dropped<=0:continue
+					dropped_count+=dropped;var trace:Dictionary=_a_cutoff_tet(candidate,tet,points,densities,snapshot,step)
+					for edge in trace.get("removed_polygon_edges",[]):
+						var key:String=String(edge.key);edge["full_mesh_incidence"]=int(incidence.get(key,0));edge["is_internal_open_edge"]=internal_open.has(key)
+					records.append({"cell_index":[x,y,z],"cell_world_min":points[0],"tetrahedron_index":tet_index,"tetrahedron_corner_indices":tet,"tetrahedron_source_samples":trace.get("source_samples",[]),"cutoff_drop_count":dropped,"reason":trace.get("reason","polygonizer_cutoff"),"crossing_edges_and_roots":trace.get("root_edges",[]),"candidate_polygon":trace.get("polygon",[]),"candidate_area_tests":trace.get("area_tests",[]),"removed_polygon_edges":trace.get("removed_polygon_edges",[])})
+	var explained:Dictionary={};for record in records:
+		for edge in record.removed_polygon_edges:
+			if edge.is_internal_open_edge:explained[edge.key]=true
+	var unexplained:Array=[];for key in internal_open:
+		if not explained.has(key):unexplained.append(key)
+	return {"candidate":"A","candidate_source_sha":SOURCE.A,"roi":roi,"reported_cutoff_drop_count":reported_drops,"traced_cutoff_drop_count":dropped_count,"cutoff_squared":1e-12,"dropped_tetrahedra":records,"full_mesh_internal_open_edge_count":internal_open.size(),"unique_internal_open_edges_explained_by_cutoff_perimeters":explained.size(),"unexplained_internal_open_edges_first_32":unexplained.slice(0,32),"trace_matches_reported_metric":dropped_count==reported_drops,"mesh_incidence_source":"exact binary32 position keys from full candidate mesh"}
+
+func _a_cutoff_tet(candidate:RefCounted,tet:Array,points:Array[Vector3],densities:Array[float],snapshot:Dictionary,step:float)->Dictionary:
+	var inside:Array[int]=[];var outside:Array[int]=[];var samples:Array[Dictionary]=[]
+	for raw in tet:
+		var i:int=int(raw);if densities[i]>=0.0:inside.append(i)
+		else:outside.append(i)
+		samples.append({"corner_index":i,"position":points[i],"density":densities[i],"binary32_hex":PackedFloat32Array([densities[i]]).to_byte_array().hex_encode(),"side":"solid" if densities[i]>=0.0 else "empty"})
+	var roots:Array[Vector3]=[];var root_edges:Array[Dictionary]=[];var polygon:Array[Vector3]=[];var areas:Array[Dictionary]=[];var reason:String="single_triangle_cutoff"
+	if inside.is_empty() or outside.is_empty():return {"source_samples":samples,"reason":"no_crossing_not_a_cutoff"}
+	if inside.size()==1 or outside.size()==1:
+		var pivot:int=inside[0] if inside.size()==1 else outside[0];var others:Array=outside if inside.size()==1 else inside
+		for other in others:
+			var other_index:int=int(other);var root:Dictionary=candidate.call("_edge_root",pivot,other_index,points,densities,snapshot);roots.append(root.point);root_edges.append(_a_root_edge_record(pivot,other_index,points,root.point,step))
+		polygon=roots.duplicate();areas.append(_a_area_record(polygon[0],polygon[1],polygon[2],"single"))
+	else:
+		var edge_pairs:Array[Vector2i]=[Vector2i(inside[0],outside[0]),Vector2i(inside[0],outside[1]),Vector2i(inside[1],outside[0]),Vector2i(inside[1],outside[1])]
+		for pair in edge_pairs:
+			var root:Dictionary=candidate.call("_edge_root",pair.x,pair.y,points,densities,snapshot);roots.append(root.point);root_edges.append(_a_root_edge_record(pair.x,pair.y,points,root.point,step))
+		var a:Vector3=roots[0];var b:Vector3=roots[1];var c:Vector3=roots[2];var d:Vector3=roots[3];polygon=[a,b,d,c]
+		areas=[_a_area_record(a,b,d,"historical_1"),_a_area_record(a,d,c,"historical_2"),_a_area_record(a,b,c,"alternate_1"),_a_area_record(b,d,c,"alternate_2")]
+		reason="both_complete_quad_diagonals_contain_sub_cutoff_triangle"
+	return {"source_samples":samples,"root_edges":root_edges,"polygon_kind":"quad" if roots.size()==4 else "triangle","polygon":polygon,"area_tests":areas,"reason":reason,"removed_polygon_edges":_polygon_edge_records(polygon)}
+
+func _a_root_edge_record(ai:int,bi:int,points:Array[Vector3],root:Vector3,step:float)->Dictionary:
+	var a:Vector3=points[ai];var b:Vector3=points[bi];var na:Vector3i=Vector3i(roundi(a.x/step),roundi(a.y/step),roundi(a.z/step));var nb:Vector3i=Vector3i(roundi(b.x/step),roundi(b.y/step),roundi(b.z/step))
+	return {"corner_indices":[ai,bi],"world_endpoints":[a,b],"lattice_endpoint_indices":[na,nb],"root":root}
+
+func _a_area_record(a:Vector3,b:Vector3,c:Vector3,label:String)->Dictionary:
+	var cross:Vector3=(b-a).cross(c-a);return {"triangle":label,"cross_squared":cross.length_squared(),"finite":cross.is_finite(),"passes_unchanged_cutoff":cross.is_finite() and cross.length_squared()>1e-12}
+
+func _polygon_edge_records(polygon:Array[Vector3])->Array[Dictionary]:
+	var edges:Array[Dictionary]=[]
+	for i in range(polygon.size()):
+		var a:Vector3=polygon[i];var b:Vector3=polygon[(i+1)%polygon.size()];var ka:String=_exact_key(a);var kb:String=_exact_key(b);edges.append({"key":ka+"|"+kb if ka<kb else kb+"|"+ka,"a":a,"b":b})
+	return edges
+
+func _mesh_edge_incidence(mesh:Dictionary)->Dictionary:
+	var counts:Dictionary={};var p:PackedVector3Array=mesh.get("positions",PackedVector3Array())
+	for i in range(0,p.size(),3):
+		for e in [Vector2i(0,1),Vector2i(1,2),Vector2i(2,0)]:
+			var ka:String=_exact_key(p[i+e.x]);var kb:String=_exact_key(p[i+e.y]);var key:String=ka+"|"+kb if ka<kb else kb+"|"+ka;counts[key]=int(counts.get(key,0))+1
+	return counts
+
+func _internal_open_edge_keys(mesh:Dictionary,lo:Vector3,hi:Vector3)->Dictionary:
+	var incidence:Dictionary=_mesh_edge_incidence(mesh);var p:PackedVector3Array=mesh.get("positions",PackedVector3Array());var ends:Dictionary={};var out:Dictionary={}
+	for i in range(0,p.size(),3):
+		for e in [Vector2i(0,1),Vector2i(1,2),Vector2i(2,0)]:
+			var a:Vector3=p[i+e.x];var b:Vector3=p[i+e.y];var ka:String=_exact_key(a);var kb:String=_exact_key(b);var key:String=ka+"|"+kb if ka<kb else kb+"|"+ka;ends[key]=[a,b]
+	for key in incidence:
+		if int(incidence[key])!=1:continue
+		var edge:Array=ends[key];var on_roi_boundary:bool=false
+		for axis in range(3):
+			if (absf(edge[0][axis]-lo[axis])<2e-5 and absf(edge[1][axis]-lo[axis])<2e-5) or (absf(edge[0][axis]-hi[axis])<2e-5 and absf(edge[1][axis]-hi[axis])<2e-5):on_roi_boundary=true
+		if not on_roi_boundary:out[key]=true
+	return out
+
+func _trace_d_cutoffs(candidate:RefCounted,values:PackedFloat32Array,roi:Dictionary,mesh:Dictionary,reported_drops:int)->Dictionary:
+	var roi_min:Vector3=Core.world_min(roi);var cells:Vector3i=Core.cell_counts(roi);var step:float=Core.step(roi);var dims:Vector3i=cells+Vector3i.ONE;var incidence:Dictionary=_mesh_edge_incidence(mesh);var internal_open:Dictionary=_internal_open_edge_keys(mesh,roi_min,roi_min+Vector3(cells)*step);var records:Array[Dictionary]=[];var root_cache:Dictionary={};var dropped_count:int=0
+	if values.size()!=dims.x*dims.y*dims.z:return {"candidate":"D","valid":false,"reason":"materialized_volume_size_mismatch","actual":values.size(),"expected":dims.x*dims.y*dims.z}
+	for y in range(cells.y):
+		for z in range(cells.z):
+			for x in range(cells.x):
+				var points:Array[Vector3]=[];var densities:Array[float]=[];var source_samples:Array[Dictionary]=[];var solid:Vector3=Vector3.ZERO;var empty:Vector3=Vector3.ZERO;var solid_count:int=0;var empty_count:int=0
+				for corner in Core.GRID_CORNERS:
+					var ix:int=x+corner.x;var iy:int=y+corner.y;var iz:int=z+corner.z;var point:Vector3=roi_min+Vector3(ix,iy,iz)*step;var density:float=values[(iy*dims.z+iz)*dims.x+ix]
+					points.append(point);densities.append(density);source_samples.append({"corner_index":points.size()-1,"position":point,"density_float32":density,"binary32_hex":PackedFloat32Array([density]).to_byte_array().hex_encode()})
+					if density>=0.0:solid+=point;solid_count+=1
+					else:empty+=point;empty_count+=1
+				if solid_count==0 or empty_count==0:continue
+				var toward_empty:Vector3=empty/float(empty_count)-solid/float(solid_count)
+				for tet_index in range(Core.TETS.size()):
+					var tet:Array=Core.TETS[tet_index];var hits:Array[Vector3]=[];var identities:Array[String]=[];var root_edges:Array[Dictionary]=[];var identity_seen:Dictionary={}
+					for edge in [Vector2i(0,1),Vector2i(0,2),Vector2i(0,3),Vector2i(1,2),Vector2i(1,3),Vector2i(2,3)]:
+						var a:int=int(tet[edge.x]);var b:int=int(tet[edge.y]);if (densities[a]>=0.0)==(densities[b]>=0.0):continue
+						var node_a:Vector3i=Vector3i(x,y,z)+Core.GRID_CORNERS[a];var node_b:Vector3i=Vector3i(x,y,z)+Core.GRID_CORNERS[b];var root:Dictionary=candidate.call("_canonical_volume_root",root_cache,node_a,node_b,densities[a],densities[b],points[a],points[b])
+						if not root.get("valid",false):continue
+						var identity:String=String(root.get("root_identity",root.get("edge_key","")));if identity_seen.has(identity):continue
+						identity_seen[identity]=true;identities.append(identity);hits.append(root.point);root_edges.append({"tet_edge_corners":[a,b],"lattice_nodes":[node_a,node_b],"root_identity":identity,"root":root.point,"reused":root.get("reused",false)})
+					if hits.size()<3:continue
+					var tet_toward:Vector3=candidate.call("_tetra_toward_empty",points,densities,tet);var ordered:Array[Vector3]=candidate.call("_order_polygon",hits,tet_toward)
+					if ordered.size()!=hits.size():continue
+					for fan in range(1,ordered.size()-1):
+						var tri:Array[Vector3]=[ordered[0],ordered[fan],ordered[fan+1]];var cross:Vector3=(tri[1]-tri[0]).cross(tri[2]-tri[0]);var scratch:Dictionary=Core.new_mesh();var passes:bool=Core.add_triangle(scratch,tri[0],tri[1],tri[2],tet_toward,1e-12)
+						if passes:continue
+						dropped_count+=1;var tri_edges:Array[Dictionary]=_polygon_edge_records(tri)
+						for edge_record in tri_edges:
+							var key:String=String(edge_record.key);edge_record["full_mesh_incidence"]=int(incidence.get(key,0));edge_record["is_internal_open_edge"]=internal_open.has(key)
+						records.append({"cell_index":[x,y,z],"cell_world_min":points[0],"tetrahedron_index":tet_index,"tetrahedron_corner_indices":tet,"tetrahedron_source_samples":source_samples,"crossing_edge_roots":root_edges,"ordered_polygon_roots":ordered,"dropped_fan_index":fan,"dropped_triangle":tri,"cross_vector":cross,"cross_squared":cross.length_squared(),"threshold_squared":1e-12,"reason":"nonfinite_cross" if not cross.is_finite() else "cross_squared_at_or_below_1e-12","removed_triangle_edges":tri_edges})
+	var explained:Dictionary={};for record in records:
+		for edge in record.removed_triangle_edges:
+			if edge.is_internal_open_edge:explained[edge.key]=true
+	var unexplained:Array=[];for key in internal_open:
+		if not explained.has(key):unexplained.append(key)
+	return {"candidate":"D","valid":true,"candidate_source_sha":SOURCE.D,"roi":roi,"reported_cutoff_drop_count":reported_drops,"traced_cutoff_drop_count":dropped_count,"threshold_squared":1e-12,"dropped_triangles":records,"full_mesh_internal_open_edge_count":internal_open.size(),"unique_internal_open_edges_explained_by_cutoff_triangle_edges":explained.size(),"unexplained_internal_open_edges_first_32":unexplained.slice(0,32),"trace_matches_reported_metric":dropped_count==reported_drops,"mesh_incidence_source":"exact binary32 position keys from full candidate mesh","volume_authority":"candidate D returned materialized float32 samples from canonical SDF plus ordered frozen ledger"}
+
+func _face_oracle(snapshot:Dictionary,roi:Dictionary,face_side:int,seed:int,materialized_values:PackedFloat32Array=PackedFloat32Array(),require_materialized:bool=false)->Dictionary:
+	var lo:Vector3=Core.world_min(roi);var cells:Vector3i=Core.cell_counts(roi);var h:float=Core.step(roi);var dims:Vector3i=cells+Vector3i.ONE
+	var expected_values:int=dims.x*dims.y*dims.z;var use_materialized:bool=not materialized_values.is_empty()
+	if face_side!=0 and face_side!=1:return {"valid":false,"reason":"face_side_must_be_zero_or_one"}
+	if require_materialized and not use_materialized:return {"valid":false,"reason":"required_materialized_face_volume_missing"}
+	if use_materialized and materialized_values.size()!=expected_values:return {"valid":false,"reason":"materialized_face_volume_size_mismatch","actual":materialized_values.size(),"expected":expected_values}
+	var segments:Dictionary={};var segment_rows:Array[Dictionary]=[];var triangle_count:int=0;var triangle_records:Array[Dictionary]=[]
+	var local_x:int=cells.x if face_side==1 else 0;var plane_x:float=lo.x+float(local_x)*h
+	for y in range(cells.y):
+		for z in range(cells.z):
+			for tet_index in range(Core.TETS.size()):
+				var face_corners:Array[int]=[]
+				for raw_corner in Core.TETS[tet_index]:
+					var corner_index:int=int(raw_corner)
+					if Core.GRID_CORNERS[corner_index].x==face_side:face_corners.append(corner_index)
+				if face_corners.size()!=3:continue
+				triangle_count+=1;var tri_points:Array[Vector3]=[];var tri_values:Array[float]=[]
+				for corner_index in face_corners:
+					var corner:Vector3i=Core.GRID_CORNERS[corner_index]
+					var point:=Vector3(plane_x,lo.y+float(y+corner.y)*h,lo.z+float(z+corner.z)*h)
+					var lattice_x:int=local_x;var lattice_y:int=y+corner.y;var lattice_z:int=z+corner.z
+					var value:float=materialized_values[(lattice_y*dims.z+lattice_z)*dims.x+lattice_x] if use_materialized else Core.sample(point,snapshot,seed)
+					tri_points.append(point);tri_values.append(value)
+				var crossings:Array[Vector3]=[];var tri_edges:Array[Vector2i]=[Vector2i(0,1),Vector2i(1,2),Vector2i(2,0)]
+				for edge in tri_edges:
+					var ia:int=edge.x;var ib:int=edge.y;var da:float=tri_values[ia];var db:float=tri_values[ib];var hit:Vector3=Vector3.ZERO;var has_hit:bool=false
+					if da==0.0 and db<0.0:
+						hit=tri_points[ia];has_hit=true
+					elif db==0.0 and da<0.0:
+						hit=tri_points[ib];has_hit=true
 					elif (da<0.0)!=(db<0.0):
-						var low:=0.0;var high:=1.0;var lv:=da
-						for _i in range(32):
-							var mid:float=(low+high)*0.5;var dm:float=Core.sample(a.lerp(b,mid),snapshot,seed)
-							if dm==0.0:low=mid;high=mid;break
-							if (dm<0.0)==(lv<0.0):low=mid;lv=dm
-							else:high=mid
-						hits.append(a.lerp(b,(low+high)*0.5))
-				var unique:Array[Vector3]=[]
-				for p in hits:
-					var duplicate:=false
-					for q in unique:
-						if p.distance_squared_to(q)<1e-12:duplicate=true;break
-					if not duplicate:unique.append(p)
-				if unique.size()==2:
-					var ka:=Core._point_key(unique[0]);var kb:=Core._point_key(unique[1]);segments[ka+"|"+kb if ka<kb else kb+"|"+ka]=true
-	return {"segments":segments}
+						if use_materialized:
+							var denom:float=da-db
+							if denom!=0.0 and is_finite(denom):
+								hit=tri_points[ia].lerp(tri_points[ib],clampf(da/denom,0.0,1.0));has_hit=true
+						else:
+							var low:float=0.0;var high:float=1.0;var low_value:float=da
+							for _iteration in range(32):
+								var mid:float=(low+high)*0.5;var mid_value:float=Core.sample(tri_points[ia].lerp(tri_points[ib],mid),snapshot,seed)
+								if mid_value==0.0:low=mid;high=mid;break
+								if (mid_value<0.0)==(low_value<0.0):low=mid;low_value=mid_value
+								else:high=mid
+								hit=tri_points[ia].lerp(tri_points[ib],(low+high)*0.5)
+								has_hit=true
+					if has_hit:
+						var duplicate:bool=false
+						for prior in crossings:
+							if prior.distance_squared_to(hit)<1e-12:duplicate=true;break
+						if not duplicate:crossings.append(hit)
+				if crossings.size()==2:
+					var a:Vector3=crossings[0];var b:Vector3=crossings[1];var ka:String=Core._point_key(a);var kb:String=Core._point_key(b);var key:String=ka+"|"+kb if ka<kb else kb+"|"+ka
+					segments[key]=true;segment_rows.append({"key":key,"a":a,"b":b,"cell_y":y,"cell_z":z,"tetrahedron_index":tet_index,"face_corner_indices":face_corners,"triangle_points":tri_points,"triangle_values":tri_values})
+				triangle_records.append({"cell_y":y,"cell_z":z,"tetrahedron_index":tet_index,"face_corner_indices":face_corners,"triangle_points":tri_points,"triangle_values":tri_values,"contour_segments_emitted":1 if crossings.size()==2 else 0})
+	return {"valid":true,"segments":segments,"segment_rows":segment_rows,"face_triangle_count":triangle_count,"triangle_records":triangle_records,"face_side":face_side,"plane_x":plane_x,"method":"induced_face_triangles_from_frozen_Core.TETS_with_materialized_linear_edges" if use_materialized else "induced_face_triangles_from_frozen_Core.TETS_with_32step_canonical_edge_bisection","node_source":"candidate_D_returned_float32_volume" if use_materialized else "canonical_continuous_SDF"}
+
+func _segment_endpoint_deltas(actual:Dictionary,expected_rows:Array[Dictionary])->Dictionary:
+	var actual_rows:Array[Dictionary]=[]
+	for key in actual:
+		var parsed:Array=String(key).split("|")
+		if parsed.size()!=2:continue
+		var a:=_point_from_key(String(parsed[0]));var b:=_point_from_key(String(parsed[1]));actual_rows.append({"key":String(key),"a":a,"b":b})
+	var forward:Array[float]=[];var reverse:Array[float]=[];var unmatched_actual:int=0;var unmatched_expected:int=0
+	for row in actual_rows:
+		var best:float=INF
+		for expected in expected_rows:
+			best=minf(best,_segment_endpoint_pair_delta(row,expected))
+		forward.append(best);if is_inf(best):unmatched_actual+=1
+	for expected in expected_rows:
+		var best:float=INF
+		for row in actual_rows:best=minf(best,_segment_endpoint_pair_delta(row,expected))
+		reverse.append(best);if is_inf(best):unmatched_expected+=1
+	forward.sort();reverse.sort()
+	return {"actual_segment_count":actual_rows.size(),"expected_segment_count":expected_rows.size(),"actual_to_expected_endpoint_pair_distance":{"p50":_percentile(forward,0.5),"p95":_percentile(forward,0.95),"max":forward.back() if not forward.is_empty() else null},"expected_to_actual_endpoint_pair_distance":{"p50":_percentile(reverse,0.5),"p95":_percentile(reverse,0.95),"max":reverse.back() if not reverse.is_empty() else null},"unmatched_actual_count":unmatched_actual,"unmatched_expected_count":unmatched_expected,"metric":"minimum of direct/reversed max endpoint Euclidean distance per segment; diagnostic only; no acceptance tolerance"}
+
+func _segment_endpoint_pair_delta(a:Dictionary,b:Dictionary)->float:
+	var aa:Vector3=a.get("a",Vector3.ZERO);var ab:Vector3=a.get("b",Vector3.ZERO);var ba:Vector3=b.get("a",Vector3.ZERO);var bb:Vector3=b.get("b",Vector3.ZERO)
+	return minf(maxf(aa.distance_to(ba),ab.distance_to(bb)),maxf(aa.distance_to(bb),ab.distance_to(ba)))
+
+func _point_from_key(key:String)->Vector3:
+	return Core._key_point(key)
+
+func _percentile(values:Array[float],q:float)->Variant:
+	if values.is_empty():return null
+	var index:=clampi(int(ceil((values.size()-1)*q)),0,values.size()-1)
+	return values[index]
 
 func _boundary_segments(mesh:Dictionary,x:float)->Dictionary:
 	var out:Dictionary={};var p:PackedVector3Array=mesh.get("positions",PackedVector3Array())
