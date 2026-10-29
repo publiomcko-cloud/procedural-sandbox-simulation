@@ -17,7 +17,7 @@ This branch adds a test-only topology ledger and its focused GDScript checks. It
 | Diagnostic import direct parent | `895dbca3c6dd58bb9adacd63fb39c3ad524226ff` |
 | Diagnostic helper blob at import | `8f0f08b76f1d1a21089061c163858b43bd924918` |
 | Diagnostic helper physical SHA-256 at import | `1a3a1caa4e4edfe7de78d697cbd2272c89368e489a125a57e91044fafb7228ff` |
-| Current oracle HEAD | `9319c7d21cab4febda2a2f0f75f31cc7826eac8d` |
+| Topology diagnostic source HEAD (before report commits) | `9319c7d21cab4febda2a2f0f75f31cc7826eac8d` |
 | Current HEAD parent | `bc99419f4894b26889b2c290f84a741454784ceb` |
 | Current helper blob / physical SHA-256 | `a585941a19d5477e4b45f3c01d9730946489401a` / `b7cac8b0c11cc57b4272ae6e105ff676fffe2cfb8621484b60a62218f27d3d29` |
 | Current topology-test blob / physical SHA-256 | `442c9aa2f17991eefd50d454bbe31f1023376a33` / `6ab30612056a6723280e83acacb486ed97b2980c5811562ca63e0430710f2270` |
