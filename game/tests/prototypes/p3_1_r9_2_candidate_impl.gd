@@ -41,7 +41,7 @@ func configure_roi(roi: Dictionary) -> void:
 func build(snapshot: Dictionary, row: Dictionary, _variant: Dictionary) -> Dictionary:
 	var scenario_id: String=String(row.get("scenario_id",""))
 	_d2_scenario_id=scenario_id
-	_d2_enabled=D2_TARGET_SCENARIOS.has(scenario_id) and absf(ROI_MIN.x-15.0)<=1.0e-9 and absf(ROI_MIN.y-1.0)<=1.0e-9 and absf(ROI_MIN.z-6.0)<=1.0e-9 and absf(STEP-0.25)<=1.0e-9
+	_d2_enabled=OS.get_environment("R96R1_ATTEMPT")=="ATTEMPT_D2" and D2_TARGET_SCENARIOS.has(scenario_id) and absf(ROI_MIN.x-15.0)<=1.0e-9 and absf(ROI_MIN.y-1.0)<=1.0e-9 and absf(ROI_MIN.z-6.0)<=1.0e-9 and absf(STEP-0.25)<=1.0e-9
 	var volume: Dictionary = _materialize(snapshot, int(snapshot.get("revision", 0)))
 	if not volume.get("valid", false):
 		return volume

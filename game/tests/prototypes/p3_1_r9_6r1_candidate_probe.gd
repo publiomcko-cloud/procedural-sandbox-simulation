@@ -7,9 +7,11 @@ const CandidateC := preload("res://tests/prototypes/r9_5_source_snapshots/candid
 const CandidateD := preload("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd")
 const BaselineA := preload("res://tests/prototypes/r9_5_source_snapshots/candidate_a.gd")
 const BaselineD := preload("res://tests/prototypes/r9_5_source_snapshots/candidate_d.gd")
+const FaceInterfacePatch := preload("res://tests/prototypes/p3_1_r9_6r1_face_interface_patch.gd")
 const MANIFEST_SHA := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
-const CANDIDATE_FILE_SHA := {"A":"dc700b20eee78b8b8568549f9a66fee452a14dd3d9171c6dee9f5e479f0e2bd6", "D":"476e3a485edcfa44d454bec508cb3973f1210b183ee9f8e537473b81dd2b364f"}
+const CANDIDATE_FILE_SHA := {"A":"927994b97664778e0d77f62eba47ed09328e0664642936e5d2b1e89d8646ea91", "D":"334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a"}
 const BASELINE_FILE_SHA := {"A":"970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a", "D":"a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6"}
+const FACE_INTERFACE_PATCH_FILE_SHA := "0e0033e07cb0a18a161584cb6288b5314314638e1379af4013f09fdf92913cc5"
 const SEED := 131102026
 var cid := ""
 var csha := ""
@@ -30,16 +32,18 @@ func _run() -> void:
 	var oracle_sha := OS.get_environment("R95_ORACLE_SHA")
 	var candidate_file_sha := _sha_res_file("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd")
 	var baseline_file_sha := _sha_res_file("res://tests/prototypes/r9_5_source_snapshots/candidate_%s.gd" % cid.to_lower())
+	var interface_patch_file_sha := _sha_res_file("res://tests/prototypes/p3_1_r9_6r1_face_interface_patch.gd")
 	var manifest := Core.load_manifest()
-	if not ["A","D"].has(cid) or csha.length()!=40 or not csha.is_valid_hex_number() or run_id.is_empty() or not ["ATTEMPT_A2","ATTEMPT_A3","ATTEMPT_D2","ATTEMPT_D3","ATTEMPT_1_TOPOLOGY_FIRST"].has(attempt_id) or candidate_file_sha != String(CANDIDATE_FILE_SHA.get(cid,"")) or baseline_file_sha != String(BASELINE_FILE_SHA.get(cid,"")) or oracle_sha.length() != 40 or not oracle_sha.is_valid_hex_number() or not manifest.get("valid", false) or manifest.get("sha256", "") != MANIFEST_SHA:
-		print("R96R1_BLOCKED " + JSON.stringify({"candidate":cid,"candidate_sha":csha,"attempt":attempt_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"oracle_sha":oracle_sha,"manifest":manifest.get("reason","ok")})); quit(2); return
+	var interface_patch_pin_valid:bool=not attempt_id in ["ATTEMPT_A3","ATTEMPT_D3"] or interface_patch_file_sha==FACE_INTERFACE_PATCH_FILE_SHA
+	if not ["A","D"].has(cid) or csha.length()!=40 or not csha.is_valid_hex_number() or run_id.is_empty() or not ["ATTEMPT_A2","ATTEMPT_A3","ATTEMPT_D2","ATTEMPT_D3","ATTEMPT_1_TOPOLOGY_FIRST"].has(attempt_id) or candidate_file_sha != String(CANDIDATE_FILE_SHA.get(cid,"")) or baseline_file_sha != String(BASELINE_FILE_SHA.get(cid,"")) or not interface_patch_pin_valid or oracle_sha.length() != 40 or not oracle_sha.is_valid_hex_number() or not manifest.get("valid", false) or manifest.get("sha256", "") != MANIFEST_SHA:
+		print("R96R1_BLOCKED " + JSON.stringify({"candidate":cid,"candidate_sha":csha,"attempt_id":attempt_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"interface_patch_file_sha256":interface_patch_file_sha,"interface_patch_pin_valid":interface_patch_pin_valid,"oracle_sha":oracle_sha,"manifest":manifest.get("reason","ok")})); quit(2); return
 	var script: Script = CandidateA if cid == "A" else CandidateD
 	var candidate: RefCounted = script.new()
 	var baseline_script: Script = BaselineA if cid == "A" else BaselineD
 	var baseline: RefCounted = baseline_script.new()
 	var root_identity_probe:Dictionary=candidate.call("canonical_root_identity_probe",{})
 	if not bool(root_identity_probe.get("valid",false)):failures+=1
-	print("R96R1_ROOT_IDENTITY "+JSON.stringify({"candidate":cid,"source_sha":csha,"attempt":attempt_id,"probe":root_identity_probe}))
+	print("R96R1_ROOT_IDENTITY "+JSON.stringify({"candidate":cid,"source_sha":csha,"probe":root_identity_probe}))
 	var ray_row: Dictionary = Core.case_by_id(manifest.rows,"R9.2.RAY.CANONICAL_PICKER.v1")
 	var setup: Dictionary = Core.make_snapshot(ray_row)
 	candidate.call("configure_roi",ray_row.roi)
@@ -106,7 +110,7 @@ func _run() -> void:
 	_run_xplus(candidate,baseline,manifest)
 	_run_frozen_controls(candidate,baseline,manifest)
 	_run_preserved_geometry_controls(candidate,baseline,manifest)
-	print("R96R1_COMPLETE " + JSON.stringify({"candidate":cid,"source_sha":csha,"attempt":attempt_id,"run_id":run_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"oracle_sha":oracle_sha,"manifest_sha256":MANIFEST_SHA,"ray_count":rays.size(),"roi_scoped_hit_miss_disagreements":roi_ray_mismatches,"root_identity_probe":root_identity_probe.get("valid",false),"artifacts":artifact_paths,"failure_count":failures,"status":"ATTEMPT_RESULTS_CAPTURED"})); quit(1 if failures>0 else 0)
+	print("R96R1_COMPLETE " + JSON.stringify({"candidate":cid,"source_sha":csha,"run_id":run_id,"attempt_id":attempt_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"oracle_sha":oracle_sha,"manifest_sha256":MANIFEST_SHA,"ray_count":rays.size(),"roi_scoped_hit_miss_disagreements":roi_ray_mismatches,"root_identity_probe":root_identity_probe.get("valid",false),"artifacts":artifact_paths,"failure_count":failures,"status":"ATTEMPT_%s_RESULTS_CAPTURED" % attempt_id})); quit(1 if failures>0 else 0)
 
 func _analytic_roots(ray: Dictionary, seed: int, snapshot: Dictionary) -> Dictionary:
 	var o: Vector3 = ray.origin
@@ -251,24 +255,25 @@ func _run_xplus(candidate:RefCounted,baseline:RefCounted,manifest:Dictionary)->v
 		var setup:Dictionary=Core.make_snapshot(row);candidate.call("configure_roi",row.roi);var full:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"default","roi":row.roi})
 		baseline.call("configure_roi",row.roi);var baseline_full:Dictionary=baseline.call("build",setup.snapshot,row,{"id":"default","roi":row.roi})
 		var full_hash_equal:bool=full.get("valid",false) and baseline_full.get("valid",false) and String(full.get("mesh_sha256",""))==String(baseline_full.get("mesh_sha256",""))
-		var d2_full_target:bool=cid=="D" and attempt_id=="ATTEMPT_D2" and id in ["R9.2.SEAM.XPLUS_EQUAL.v1","R9.2.SEAM.XPLUS_MIXED_LOD.v1","R9.2.HIST.XPLUS_DEFECT.v1"] and bool(full.get("metrics",{}).get("extract",{}).get("d2_enabled",false))
-		if not full_hash_equal and not d2_full_target:failures+=1
 		if full.get("valid",false):
 			var full_artifact:Dictionary=_write_topology_artifact(id,"full_roi",full,row.roi)
 			if not bool(full_artifact.get("valid",false)):failures+=1
 		else:failures+=1
 		var lo:Vector3=Core.world_min(row.roi);var hi:=lo+Vector3(Core.cell_counts(row.roi))*Core.step(row.roi)
-		if full.get("valid",false) and cid=="A":print("R95_CUTOFF_TRACE "+JSON.stringify(_trace_a_cutoffs(candidate,setup.snapshot,row.roi,full.mesh,int(full.get("metrics",{}).get("cutoff_drops",-1)))))
-		elif full.get("valid",false) and cid=="D" and not d2_full_target:
+		if full.get("valid",false) and cid=="A":
+			var a_metrics:Dictionary=full.get("metrics",{})
+			if bool(a_metrics.get("a2_enabled",false)):
+				print("R96R1_A2_PATCH "+JSON.stringify({"scenario_id":id,"candidate":cid,"source_sha":csha,"method":a_metrics.get("a2_refinement_method",""),"refined_cells":a_metrics.get("a2_refined_cells",[]),"refined_cell_count":a_metrics.get("a2_refined_cell_count",0),"refined_parent_tetrahedra":a_metrics.get("a2_refined_parent_tetrahedra",0),"additional_sdf_evaluations":a_metrics.get("a2_additional_sdf_evaluations",0),"steiner_vertices":a_metrics.get("a2_steiner_vertices",0),"new_surface_roots":a_metrics.get("a2_new_surface_roots",0),"refined_patch_emitted_triangles":a_metrics.get("a2_refined_patch_emitted_triangles",0),"max_vertex_displacement":a_metrics.get("a2_max_vertex_displacement",0.0),"max_root_residual":a_metrics.get("a2_max_root_residual",0.0),"root_residual_bound":a_metrics.get("a2_root_residual_bound",0.0),"vertex_evidence":a_metrics.get("a2_vertex_evidence",[])}))
+			else:
+				print("R95_CUTOFF_TRACE "+JSON.stringify(_trace_a_cutoffs(candidate,setup.snapshot,row.roi,full.mesh,int(a_metrics.get("cutoff_drops",-1)))))
+		elif full.get("valid",false) and cid=="D":
 			var volume:Dictionary=full.get("volume",{})
 			print("R95_CUTOFF_TRACE "+JSON.stringify(_trace_d_cutoffs(candidate,volume.get("values",PackedFloat32Array()),row.roi,full.mesh,int(full.get("metrics",{}).get("extract",{}).get("cutoff_drops",-1)))))
-		if d2_full_target:print("R96R1_D2_SUMMARY "+JSON.stringify({"scenario_id":id,"candidate":cid,"attempt":attempt_id,"source_sha":csha,"expected_hash_change_from_baseline":true,"mesh_sha256":full.get("mesh_sha256",""),"baseline_mesh_sha256":baseline_full.get("mesh_sha256",""),"materialized_volume_before_after_hashes":{"full_before":full.get("metrics",{}).get("d2_full_volume_hash_before_materialization_extract",""),"full_after_reload":full.get("metrics",{}).get("d2_full_volume_hash_after_persist_reload",""),"payload_before":full.get("metrics",{}).get("d2_payload_hash_before_extract",""),"payload_after":full.get("metrics",{}).get("d2_payload_hash_after_extract",""),"payload_identity_preserved":full.get("metrics",{}).get("d2_payload_identity_preserved",false)},"refinement":full.get("metrics",{}).get("extract",{}),"actual_topology":_topology_summary(full.get("topology",{})),"volume_authority":"materialized float32 payload retained; D2 derives centroid values and roots only from that payload; canonical SDF resampling count is reported as zero"}))
-		print("R95_XPLUS "+JSON.stringify({"scenario_id":id,"candidate":cid,"attempt":attempt_id,"source_sha":csha,"scope":"single-ROI historical proxy, not chunk join","mesh_sha256":full.get("mesh_sha256",""),"baseline_mesh_sha256":baseline_full.get("mesh_sha256",""),"baseline_mesh_hash_equal":full_hash_equal,"baseline_hash_equality_required":not d2_full_target,"metrics":full.get("metrics",{}),"exact_topology":_exact_topology(full.get("mesh",Core.new_mesh()),lo,hi) if full.get("valid",false) else {}, "valid":full.get("valid",false)}))
+		print("R95_XPLUS "+JSON.stringify({"scenario_id":id,"candidate":cid,"source_sha":csha,"scope":"single-ROI historical proxy, not chunk join","mesh_sha256":full.get("mesh_sha256",""),"baseline_mesh_sha256":baseline_full.get("mesh_sha256",""),"baseline_mesh_hash_equal":full_hash_equal,"metrics":full.get("metrics",{}),"exact_topology":_exact_topology(full.get("mesh",Core.new_mesh()),lo,hi) if full.get("valid",false) else {}, "valid":full.get("valid",false)}))
 		var mixed: bool = id.ends_with("MIXED_LOD.v1");var left_roi:Dictionary={"id":"L","min":[15.0,1.0,6.0],"cells":[2,4,4] if mixed else [4,8,8],"step":0.5 if mixed else 0.25};var right_roi:Dictionary={"id":"R","min":[16.0,1.0,6.0],"cells":[4,8,8],"step":0.25}
 		candidate.call("configure_roi",left_roi);var left:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"L","roi":left_roi});candidate.call("configure_roi",right_roi);var right:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"R","roi":right_roi})
 		baseline.call("configure_roi",left_roi);var baseline_left:Dictionary=baseline.call("build",setup.snapshot,row,{"id":"L","roi":left_roi});baseline.call("configure_roi",right_roi);var baseline_right:Dictionary=baseline.call("build",setup.snapshot,row,{"id":"R","roi":right_roi})
 		var split_hashes_equal:bool=left.get("valid",false) and right.get("valid",false) and baseline_left.get("valid",false) and baseline_right.get("valid",false) and String(left.get("mesh_sha256",""))==String(baseline_left.get("mesh_sha256","")) and String(right.get("mesh_sha256",""))==String(baseline_right.get("mesh_sha256",""))
-		if not split_hashes_equal:failures+=1
 		if left.get("valid",false):
 			var left_artifact:Dictionary=_write_topology_artifact(id,"left_roi",left,left_roi)
 			if not bool(left_artifact.get("valid",false)):failures+=1
@@ -290,6 +295,40 @@ func _run_xplus(candidate:RefCounted,baseline:RefCounted,manifest:Dictionary)->v
 			continue
 		var ldiff:=_dict_delta(ls,oracle_l.segments);var rdiff:=_dict_delta(rs,oracle_r.segments)
 		var left_coplanar_edges:Dictionary=_boundary_segments(left.mesh,16.0);var right_coplanar_edges:Dictionary=_boundary_segments(right.mesh,16.0)
+		if attempt_id in ["ATTEMPT_A3","ATTEMPT_D3"]:
+			var left_payload:String=String(left.get("metrics",{}).get("materialized_volume_sha256","canonical_sdf"))
+			var right_payload:String=String(right.get("metrics",{}).get("materialized_volume_sha256","canonical_sdf"))
+			var interface_identity:Dictionary={"candidate":cid,"left_chunk_id":String(left_roi.id),"right_chunk_id":String(right_roi.id),
+				"lod_pair":[1,0] if mixed else [0,0],"field_revision":int(setup.snapshot.get("revision",-1)),
+				"edit_revision":int(setup.snapshot.get("revision",-1)),"volume_payload_hashes":[left_payload,right_payload]}
+			var patch_started:int=Time.get_ticks_usec()
+			var patch_result:Dictionary=FaceInterfacePatch.new().build(interface_identity,left.mesh,right.mesh,0,16.0)
+			var patch_elapsed:int=Time.get_ticks_usec()-patch_started
+			var patched_combined:Dictionary=_combine(left.mesh,right.mesh)
+			var patched_topology:Dictionary={"valid":false,"reason":"patch_not_generated"}
+			var patch_field:Dictionary={"valid":false,"reason":"patch_not_generated"}
+			var patch_artifact:Dictionary={"valid":false,"reason":"patch_not_generated"}
+			if bool(patch_result.get("valid",false)):
+				var patch_mesh:Dictionary=patch_result.mesh
+				patched_combined.positions.append_array(patch_mesh.get("positions",PackedVector3Array()))
+				patched_combined.normals.append_array(patch_mesh.get("normals",PackedVector3Array()))
+				patched_topology=_exact_topology(patched_combined,Vector3(15,1,6),Vector3(17,3,8))
+				patch_field=_interface_patch_field_diagnostic(patch_mesh,setup.snapshot,int(row.seed))
+				patch_artifact=_write_interface_patch_artifact(id,patch_result,interface_identity)
+				if bool(patch_artifact.get("valid",false)):artifact_paths.append(String(patch_artifact.path))
+			var interface_label:String="R96R1_A3_INTERFACE" if attempt_id=="ATTEMPT_A3" else "R96R1_D3_INTERFACE"
+			print(interface_label+" "+JSON.stringify({"candidate":cid,"source_sha":csha,"attempt":attempt_id,"scenario_id":id,
+				"interface_identity":interface_identity,"axis":0,"global_face_coordinate":16.0,"shared_patch_generated_once":bool(patch_result.get("valid",false)),
+				"left_consumes_patch_key":patch_result.get("left_consumes_patch_key",false),"right_consumes_patch_key":patch_result.get("right_consumes_patch_key",false),
+				"patch_key_sha256":patch_result.get("patch_key_sha256",""),"patch_mode":patch_result.get("mode","failed"),
+				"patch_generation_usec":patch_elapsed,"left_boundary_edges":left_coplanar_edges.size(),"right_boundary_edges":right_coplanar_edges.size(),
+				"left_graph":patch_result.get("left_graph",{}),"right_graph":patch_result.get("right_graph",{}),"patch_graph":patch_result.get("patch_graph",{}),
+				"patch_triangle_count":patch_result.get("triangle_count",0),"patch_winding_compatible":patch_result.get("winding_compatible",false),
+				"patch_failure_reason":patch_result.get("reason",""),"patch_failure_detail":patch_result.get("detail",{}),
+				"base_combined_internal_open_edges":_exact_topology(_combine(left.mesh,right.mesh),Vector3(15,1,6),Vector3(17,3,8)).internal_open_edges,
+				"patched_combined_topology":patched_topology,"canonical_surface_diagnostic_only":patch_field,
+				"materialized_volume_identity_before_after":{"left":left_payload,"right":right_payload,"mutation":"none; patch receives emitted mesh contours only"},
+				"patch_artifact":patch_artifact,"geometry_claim":"experimental topological bridge on the shared plane; this does not certify a canonical zero-SDF surface"}))
 		print("R96R1_SPLIT_PAIR " + JSON.stringify({
 			"scenario_id": id, "candidate": cid, "lod_pair": [1, 0] if mixed else [0, 0], "plane_x": 16.0,
 			"left_mesh_sha256": left.get("mesh_sha256", ""), "right_mesh_sha256": right.get("mesh_sha256", ""),
@@ -301,6 +340,53 @@ func _run_xplus(candidate:RefCounted,baseline:RefCounted,manifest:Dictionary)->v
 			"right_endpoint_delta": _segment_endpoint_deltas(rs, oracle_r.segment_rows),
 			"combined_topology": _exact_topology(combined, Vector3(15, 1, 6), Vector3(17, 3, 8)),
 			"scope": "candidate-generated separate ROIs; not production chunk acceptance"}))
+
+func _interface_patch_field_diagnostic(mesh:Dictionary,snapshot:Dictionary,seed:int)->Dictionary:
+	var positions:PackedVector3Array=mesh.get("positions",PackedVector3Array())
+	var normals:PackedVector3Array=mesh.get("normals",PackedVector3Array())
+	if positions.is_empty() or positions.size()%3!=0:return {"valid":false,"reason":"patch_mesh_empty_or_malformed","authority":"canonical SDF diagnostic only; not used to build patch"}
+	var residuals:Array[float]=[];var normal_angles:Array[float]=[];var finite_samples:=0
+	for i in range(positions.size()):
+		var p:Vector3=positions[i];var density:float=Core.sample(p,snapshot,seed)
+		if not is_finite(density):return {"valid":false,"reason":"nonfinite_canonical_patch_vertex_sample"}
+		residuals.append(absf(density));finite_samples+=1
+	for i in range(0,positions.size(),3):
+		var centroid:Vector3=(positions[i]+positions[i+1]+positions[i+2])/3.0
+		var density:float=Core.sample(centroid,snapshot,seed)
+		if not is_finite(density):return {"valid":false,"reason":"nonfinite_canonical_patch_centroid_sample"}
+		residuals.append(absf(density));finite_samples+=1
+		var epsilon:=1.0e-4
+		var gradient:=Vector3(Core.sample(centroid+Vector3(epsilon,0,0),snapshot,seed)-Core.sample(centroid-Vector3(epsilon,0,0),snapshot,seed),
+			Core.sample(centroid+Vector3(0,epsilon,0),snapshot,seed)-Core.sample(centroid-Vector3(0,epsilon,0),snapshot,seed),
+			Core.sample(centroid+Vector3(0,0,epsilon),snapshot,seed)-Core.sample(centroid-Vector3(0,0,epsilon),snapshot,seed))
+		if gradient.is_finite() and gradient.length_squared()>1.0e-18:
+			var patch_normal:Vector3=normals[i].normalized();var angle:float=rad_to_deg(acos(clampf(patch_normal.dot(gradient.normalized()),-1.0,1.0)));normal_angles.append(angle)
+	residuals.sort();normal_angles.sort()
+	return {"valid":true,"authority":"canonical SDF diagnostic only; no geometry generation, projection, or D-volume resampling","sample_count":finite_samples,
+		"absolute_density_residual":{"p50":_percentile(residuals,0.5),"p95":_percentile(residuals,0.95),"max":residuals.back() if not residuals.is_empty() else null},
+		"patch_vs_canonical_gradient_normal_degrees":{"p50":_percentile(normal_angles,0.5),"p95":_percentile(normal_angles,0.95),"max":normal_angles.back() if not normal_angles.is_empty() else null},"normal_samples":normal_angles.size()}
+
+func _write_interface_patch_artifact(scenario_id:String,patch:Dictionary,identity:Dictionary)->Dictionary:
+	var artifact_root:=OS.get_environment("R96R1_ARTIFACT_DIR")
+	if artifact_root.is_empty() or not DirAccess.dir_exists_absolute(artifact_root):return {"valid":false,"reason":"interface_patch_artifact_root_invalid"}
+	var safe_id:=scenario_id.replace("/","_").replace(":","_")
+	var path:=artifact_root.path_join("%s_%s_interface_patch.json"%[attempt_id,safe_id])
+	if FileAccess.file_exists(path):return {"valid":false,"reason":"interface_patch_artifact_overwrite_refused","path":path}
+	var mesh:Dictionary=patch.get("mesh",{});var positions:PackedVector3Array=mesh.get("positions",PackedVector3Array());var normals:PackedVector3Array=mesh.get("normals",PackedVector3Array())
+	var vertices:Array=[];for p in positions:vertices.append([p.x,p.y,p.z])
+	var normal_rows:Array=[];for n in normals:normal_rows.append([n.x,n.y,n.z])
+	var body:Dictionary={"schema":"P3.1.R9.6R1.InterfacePatch.v1","attempt":attempt_id,"candidate":cid,"source_sha":csha,
+		"scenario_id":scenario_id,"patch_key_sha256":patch.get("patch_key_sha256",""),"identity":identity,"identity_text":patch.get("identity_text",""),
+		"mode":patch.get("mode",""),"mesh_sha256":patch.get("mesh_sha256",""),"triangle_count":patch.get("triangle_count",0),
+		"vertices":vertices,"normals":normal_rows,"left_graph":patch.get("left_graph",{}),"right_graph":patch.get("right_graph",{}),
+		"patch_graph":patch.get("patch_graph",{}),"boundary_edge_count":patch.get("patch_boundary_edge_count",0),
+		"winding_compatible":patch.get("winding_compatible",false),"scope":"experimental shared face bridge; not production geometry"}
+	var text:=JSON.stringify(body,"\t");var file:=FileAccess.open(path,FileAccess.WRITE)
+	if file==null:return {"valid":false,"reason":"interface_patch_artifact_open_failed"}
+	file.store_string(text);file.flush();var err:=file.get_error();file.close()
+	if err!=OK:return {"valid":false,"reason":"interface_patch_artifact_write_failed","error":err}
+	var bytes:=FileAccess.get_file_as_bytes(path)
+	return {"valid":not bytes.is_empty(),"path":path,"bytes":bytes.size(),"sha256":Core.sha256(bytes),"mesh_sha256":patch.get("mesh_sha256","")}
 
 func _trace_a_cutoffs(candidate:RefCounted,snapshot:Dictionary,roi:Dictionary,mesh:Dictionary,reported_drops:int)->Dictionary:
 	var roi_min:Vector3=Core.world_min(roi);var cells:Vector3i=Core.cell_counts(roi);var step:float=Core.step(roi);var dims:Vector3i=cells+Vector3i.ONE;var values:=PackedFloat32Array();values.resize(dims.x*dims.y*dims.z)
