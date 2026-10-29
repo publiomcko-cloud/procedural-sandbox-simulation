@@ -11,7 +11,7 @@ const FaceInterfacePatch := preload("res://tests/prototypes/p3_1_r9_6r1_face_int
 const MANIFEST_SHA := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
 const CANDIDATE_FILE_SHA := {"A":"927994b97664778e0d77f62eba47ed09328e0664642936e5d2b1e89d8646ea91", "D":"334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a"}
 const BASELINE_FILE_SHA := {"A":"970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a", "D":"a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6"}
-const FACE_INTERFACE_PATCH_FILE_SHA := "842a5146e6b17472b11e3203c0a12f4808325de806725d99393b0fe28ba5ecb1"
+const FACE_INTERFACE_PATCH_FILE_SHA := "b26028b4d637ff90cb4b451cf010ff599bcdefef7c0dc3e1bdc4d9418e98ff8b"
 const SEED := 131102026
 var cid := ""
 var csha := ""
@@ -37,7 +37,7 @@ func _run() -> void:
 	var manifest := Core.load_manifest()
 	var d3_attempt:bool=attempt_id.begins_with("ATTEMPT_D3")
 	var interface_patch_pin_valid:bool=not (attempt_id=="ATTEMPT_A3" or d3_attempt) or interface_patch_file_sha==FACE_INTERFACE_PATCH_FILE_SHA
-	if not ["A","D"].has(cid) or csha.length()!=40 or not csha.is_valid_hex_number() or run_id.is_empty() or not ["ATTEMPT_A2","ATTEMPT_A3","ATTEMPT_D2","ATTEMPT_D3","ATTEMPT_D3_2","ATTEMPT_1_TOPOLOGY_FIRST"].has(attempt_id) or candidate_file_sha != String(CANDIDATE_FILE_SHA.get(cid,"")) or baseline_file_sha != String(BASELINE_FILE_SHA.get(cid,"")) or not interface_patch_pin_valid or oracle_sha.length() != 40 or not oracle_sha.is_valid_hex_number() or not manifest.get("valid", false) or manifest.get("sha256", "") != MANIFEST_SHA:
+	if not ["A","D"].has(cid) or csha.length()!=40 or not csha.is_valid_hex_number() or run_id.is_empty() or not ["ATTEMPT_A2","ATTEMPT_A3","ATTEMPT_D2","ATTEMPT_D3","ATTEMPT_D3_2","ATTEMPT_D3_3","ATTEMPT_1_TOPOLOGY_FIRST"].has(attempt_id) or candidate_file_sha != String(CANDIDATE_FILE_SHA.get(cid,"")) or baseline_file_sha != String(BASELINE_FILE_SHA.get(cid,"")) or not interface_patch_pin_valid or oracle_sha.length() != 40 or not oracle_sha.is_valid_hex_number() or not manifest.get("valid", false) or manifest.get("sha256", "") != MANIFEST_SHA:
 		print("R96R1_BLOCKED " + JSON.stringify({"candidate":cid,"candidate_sha":csha,"attempt_id":attempt_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"interface_patch_file_sha256":interface_patch_file_sha,"interface_patch_pin_valid":interface_patch_pin_valid,"oracle_sha":oracle_sha,"manifest":manifest.get("reason","ok")})); quit(2); return
 	var script: Script = CandidateA if cid == "A" else CandidateD
 	var candidate: RefCounted = script.new()
@@ -304,9 +304,16 @@ func _run_xplus(candidate:RefCounted,baseline:RefCounted,manifest:Dictionary)->v
 			interface_attempts_executed+=1
 			var left_payload:String=String(left.get("metrics",{}).get("materialized_volume_sha256","canonical_sdf"))
 			var right_payload:String=String(right.get("metrics",{}).get("materialized_volume_sha256","canonical_sdf"))
+			var left_min:Vector3=Core.world_min(left_roi);var right_min:Vector3=Core.world_min(right_roi)
+			var left_max:Vector3=left_min+Vector3(Core.cell_counts(left_roi))*Core.step(left_roi)
+			var right_max:Vector3=right_min+Vector3(Core.cell_counts(right_roi))*Core.step(right_roi)
+			var interface_roi_min:=Vector3(minf(left_min.x,right_min.x),minf(left_min.y,right_min.y),minf(left_min.z,right_min.z))
+			var interface_roi_max:=Vector3(maxf(left_max.x,right_max.x),maxf(left_max.y,right_max.y),maxf(left_max.z,right_max.z))
 			var interface_identity:Dictionary={"candidate":cid,"left_chunk_id":String(left_roi.id),"right_chunk_id":String(right_roi.id),
 				"lod_pair":[1,0] if mixed else [0,0],"field_revision":int(setup.snapshot.get("revision",-1)),
-				"edit_revision":int(setup.snapshot.get("revision",-1)),"volume_payload_hashes":[left_payload,right_payload]}
+				"edit_revision":int(setup.snapshot.get("revision",-1)),"volume_payload_hashes":[left_payload,right_payload],
+				"interface_roi_min":[interface_roi_min.x,interface_roi_min.y,interface_roi_min.z],
+				"interface_roi_max":[interface_roi_max.x,interface_roi_max.y,interface_roi_max.z]}
 			var patch_started:int=Time.get_ticks_usec()
 			var patch_result:Dictionary=FaceInterfacePatch.new().build(interface_identity,left.mesh,right.mesh,0,16.0)
 			var patch_elapsed:int=Time.get_ticks_usec()-patch_started
@@ -339,6 +346,7 @@ func _run_xplus(candidate:RefCounted,baseline:RefCounted,manifest:Dictionary)->v
 				"patch_cutoff_rejections":patch_result.get("cutoff_rejections",0),
 				"patch_cutoff_rejected_candidates":patch_result.get("cutoff_rejected_candidates",0),
 				"patch_correspondence_mode":patch_result.get("correspondence_mode","none"),
+				"patch_endpoint_connectors":patch_result.get("endpoint_connectors",[]),
 				"patch_winding_compatible":patch_result.get("winding_compatible",false),
 				"patch_failure_reason":patch_result.get("reason",""),"patch_failure_detail":patch_result.get("detail",{}),
 				"base_combined_internal_open_edges":_exact_topology(_combine(left.mesh,right.mesh),Vector3(15,1,6),Vector3(17,3,8)).internal_open_edges,
@@ -400,6 +408,7 @@ func _write_interface_patch_artifact(scenario_id:String,patch:Dictionary,identit
 		"vertices":vertices,"vertex_sources":vertex_sources,"vertex_authority":"INTERPOLATED_VOLUME",
 		"left_boundary_vertex_keys":patch.get("left_boundary_vertex_keys",[]),"right_boundary_vertex_keys":patch.get("right_boundary_vertex_keys",[]),
 		"shared_boundary_vertex_key_count":patch.get("shared_boundary_vertex_key_count",0),
+		"endpoint_connectors":patch.get("endpoint_connectors",[]),
 		"correspondence_mode":patch.get("correspondence_mode","none"),"component_pairs":patch.get("component_pairs",[]),
 		"minimum_cross_squared":patch.get("minimum_cross_squared",null),"cutoff_squared":patch.get("cutoff_squared",1.0e-12),
 		"normals":normal_rows,"left_graph":patch.get("left_graph",{}),"right_graph":patch.get("right_graph",{}),

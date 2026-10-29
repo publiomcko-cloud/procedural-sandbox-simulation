@@ -52,6 +52,7 @@ func build(identity: Dictionary, left_mesh: Dictionary, right_mesh: Dictionary,
 			"shared_boundary_vertex_key_count":_shared_vertex_key_count(left.components,right.components)}
 	var mesh := Core.new_mesh()
 	var emitted_components: Array[Dictionary] = []
+	var endpoint_connectors:Array[Dictionary]=[]
 	for pair in pairs.pairs:
 		var aligned := _align_paths(pair.left, pair.right, bool(pair.closed))
 		if not aligned.valid:
@@ -59,7 +60,7 @@ func build(identity: Dictionary, left_mesh: Dictionary, right_mesh: Dictionary,
 				"left_graph":left.summary,"right_graph":right.summary,
 				"left_boundary_vertex_keys":_component_vertex_keys(left.components),"right_boundary_vertex_keys":_component_vertex_keys(right.components),
 				"shared_boundary_vertex_key_count":_shared_vertex_key_count(left.components,right.components)}
-		var strip := _zipper(mesh, aligned.left, aligned.right, bool(pair.closed), Vector3.RIGHT)
+		var strip := _zipper(mesh, aligned.left, aligned.right, bool(pair.closed), Vector3.RIGHT, axis, plane, identity)
 		if not strip.valid:
 			return {"valid":false,"reason":"interface_strip_generation_failed","patch_key_sha256":patch_key,"detail":strip,
 				"left_graph":left.summary,"right_graph":right.summary,
@@ -70,11 +71,17 @@ func build(identity: Dictionary, left_mesh: Dictionary, right_mesh: Dictionary,
 			"alignment_cost":aligned.cost,"correspondence_mode":strip.correspondence_mode,
 			"correspondence_states":strip.correspondence_states,
 			"minimum_cross_squared":strip.minimum_cross_squared,
-			"cutoff_rejected_candidates":strip.cutoff_rejected_candidates})
+			"cutoff_rejected_candidates":strip.cutoff_rejected_candidates,
+			"endpoint_connectors":strip.endpoint_connectors})
+		for connector in strip.endpoint_connectors:endpoint_connectors.append(connector)
 	var patch_edges := _mesh_boundary_graph(mesh, axis, plane)
 	if not patch_edges.valid:
 		return {"valid":false,"reason":"interface_patch_boundary_invalid","patch_key_sha256":patch_key,"detail":patch_edges}
 	var expected := _union_keys(left.edge_keys, right.edge_keys)
+	for connector in endpoint_connectors:
+		var connector_key:String=String(connector.get("edge_key",""))
+		if not connector_key.is_empty() and not expected.has(connector_key):expected.append(connector_key)
+	expected.sort()
 	if not _same_keys(patch_edges.edge_keys, expected):
 		return {"valid":false,"reason":"interface_patch_boundary_does_not_match_inputs","patch_key_sha256":patch_key,
 			"expected_count":expected.size(),"actual_count":patch_edges.edge_keys.size(),
@@ -98,10 +105,12 @@ func build(identity: Dictionary, left_mesh: Dictionary, right_mesh: Dictionary,
 		"left_boundary_vertex_keys":_component_vertex_keys(left.components),
 		"right_boundary_vertex_keys":_component_vertex_keys(right.components),
 		"shared_boundary_vertex_key_count":_shared_vertex_key_count(left.components,right.components),
+		"endpoint_connectors":endpoint_connectors,
 		"patch_graph":patch_edges.summary,"component_pairs":emitted_components,"triangle_count":triangle_count,
 		"interface_vertex_count":_unique_vertex_count(mesh.positions),"minimum_cross_squared":_mesh_min_cross_squared(mesh.positions),
 		"cutoff_rejections":0,"cutoff_rejected_candidates":_component_candidate_rejections(emitted_components),
-		"correspondence_mode":"bounded_maximin_monotone_dp","vertex_authority":"INTERPOLATED_VOLUME",
+		"correspondence_mode":"bounded_maximin_monotone_dp_with_roi_edge_connectors",
+		"vertex_authority":"INTERPOLATED_VOLUME","endpoint_connector_count":endpoint_connectors.size(),
 		"cutoff_squared":CUTOFF_SQUARED,"patch_geometry_claim":"topological face bridge only; canonical surface residual is diagnostic and no SDF projection is performed"}
 
 func _validate_identity(identity: Dictionary, axis: int, plane: float) -> Dictionary:
@@ -116,15 +125,26 @@ func _validate_identity(identity: Dictionary, axis: int, plane: float) -> Dictio
 		return {"valid":false,"reason":"interface_revision_invalid"}
 	if typeof(identity.lod_pair) != TYPE_ARRAY or identity.lod_pair.size() != 2:
 		return {"valid":false,"reason":"interface_lod_pair_invalid"}
+	for key in ["interface_roi_min","interface_roi_max"]:
+		if not identity.has(key) or typeof(identity[key])!=TYPE_ARRAY or identity[key].size()!=3:
+			return {"valid":false,"reason":"interface_roi_bounds_invalid","field":key}
+		for coordinate in identity[key]:
+			if not is_finite(float(coordinate)):return {"valid":false,"reason":"interface_roi_bounds_nonfinite","field":key}
+	var roi_min:Vector3=Vector3(float(identity.interface_roi_min[0]),float(identity.interface_roi_min[1]),float(identity.interface_roi_min[2]))
+	var roi_max:Vector3=Vector3(float(identity.interface_roi_max[0]),float(identity.interface_roi_max[1]),float(identity.interface_roi_max[2]))
+	if roi_min.x>=roi_max.x or roi_min.y>=roi_max.y or roi_min.z>=roi_max.z:return {"valid":false,"reason":"interface_roi_bounds_order_invalid"}
+	if plane<roi_min[axis]-PLANE_EPSILON or plane>roi_max[axis]+PLANE_EPSILON:return {"valid":false,"reason":"interface_plane_outside_roi"}
 	return {"valid":true}
 
 func _identity_text(identity: Dictionary, axis: int, plane: float) -> String:
 	var lod: Array = identity.lod_pair
 	var hashes: Array = identity.volume_payload_hashes
-	return "candidate=%s|face_axis=%d|face_coordinate=%.9f|left=%s|right=%s|lod=%s,%s|field_revision=%d|edit_revision=%d|volume_payloads=%s,%s" % [
+	var roi_min:Array=identity.interface_roi_min;var roi_max:Array=identity.interface_roi_max
+	return "candidate=%s|face_axis=%d|face_coordinate=%.9f|left=%s|right=%s|lod=%s,%s|field_revision=%d|edit_revision=%d|volume_payloads=%s,%s|roi_min=%.9f,%.9f,%.9f|roi_max=%.9f,%.9f,%.9f" % [
 		String(identity.candidate),axis,plane,String(identity.left_chunk_id),String(identity.right_chunk_id),
 		str(lod[0]),str(lod[1]),int(identity.field_revision),int(identity.edit_revision),
-		String(hashes[0]) if hashes.size()>0 else "canonical",String(hashes[1]) if hashes.size()>1 else "canonical"]
+		String(hashes[0]) if hashes.size()>0 else "canonical",String(hashes[1]) if hashes.size()>1 else "canonical",
+		float(roi_min[0]),float(roi_min[1]),float(roi_min[2]),float(roi_max[0]),float(roi_max[1]),float(roi_max[2])]
 
 func _boundary_graph(mesh: Dictionary, axis: int, plane: float) -> Dictionary:
 	return _mesh_boundary_graph(mesh, axis, plane)
@@ -286,7 +306,8 @@ func _sample_path(points: Array[Vector3], t: float, closed: bool) -> Vector3:
 		cumulative+=lengths[i]
 	return points.back()
 
-func _zipper(mesh: Dictionary, left: Array[Vector3], right: Array[Vector3], closed: bool, toward: Vector3) -> Dictionary:
+func _zipper(mesh: Dictionary, left: Array[Vector3], right: Array[Vector3], closed: bool, toward: Vector3,
+		axis:int,plane:float,identity:Dictionary) -> Dictionary:
 	var a:Array[Vector3]=left.duplicate();var b:Array[Vector3]=right.duplicate()
 	if closed:a.append(a[0]);b.append(b[0])
 	var na:int=a.size()-1;var nb:int=b.size()-1
@@ -294,12 +315,15 @@ func _zipper(mesh: Dictionary, left: Array[Vector3], right: Array[Vector3], clos
 	var ca:=_normalized_cumulative(a);var cb:=_normalized_cumulative(b)
 	var shared_start:bool=Core._point_key(a[0])==Core._point_key(b[0])
 	var shared_end:bool=Core._point_key(a[na])==Core._point_key(b[nb])
-	if not closed and (not shared_start or not shared_end):
-		return {"valid":false,"reason":"open_contour_endpoints_do_not_share_root",
-			"left_start_root":Core._point_key(a[0]),"right_start_root":Core._point_key(b[0]),
-			"left_end_root":Core._point_key(a[na]),"right_end_root":Core._point_key(b[nb]),
-			"start_distance":a[0].distance_to(b[0]),"end_distance":a[na].distance_to(b[nb]),
-			"correspondence_mode":"bounded_maximin_monotone_dp"}
+	var endpoint_connectors:Array[Dictionary]=[]
+	if not closed and not shared_start:
+		var start_connector:=_make_roi_edge_connector(a[0],b[0],"start",identity,axis,plane)
+		if not bool(start_connector.get("valid",false)):return {"valid":false,"reason":"open_start_roots_not_on_common_roi_edge","detail":start_connector}
+		endpoint_connectors.append(start_connector)
+	if not closed and not shared_end:
+		var end_connector:=_make_roi_edge_connector(a[na],b[nb],"end",identity,axis,plane)
+		if not bool(end_connector.get("valid",false)):return {"valid":false,"reason":"open_end_roots_not_on_common_roi_edge","detail":end_connector}
+		endpoint_connectors.append(end_connector)
 	var best_quality:Array=[]
 	var best_alignment:Array=[]
 	var back:Array=[]
@@ -329,10 +353,11 @@ func _zipper(mesh: Dictionary, left: Array[Vector3], right: Array[Vector3], clos
 				if not bool(right_relax.valid):rejected_candidates+=1;minimum_rejected_cross_squared=minf(minimum_rejected_cross_squared,float(right_relax.cross_squared))
 	if float(best_quality[na][nb])<0.0:
 		return {"valid":false,"reason":"no_cutoff_valid_monotone_correspondence",
-			"correspondence_mode":"bounded_maximin_monotone_dp","cutoff_squared":CUTOFF_SQUARED,
+			"correspondence_mode":"bounded_maximin_monotone_dp_with_roi_edge_connectors","cutoff_squared":CUTOFF_SQUARED,
 			"cutoff_rejected_candidates":rejected_candidates,
 			"minimum_rejected_cross_squared":minimum_rejected_cross_squared if is_finite(minimum_rejected_cross_squared) else null,
-			"left_vertices":a.size(),"right_vertices":b.size(),"shared_start_root":shared_start,"shared_end_root":shared_end}
+			"left_vertices":a.size(),"right_vertices":b.size(),"shared_start_root":shared_start,"shared_end_root":shared_end,
+			"endpoint_connectors":endpoint_connectors}
 	var transitions:Array[Dictionary]=[];var state_i:=na;var state_j:=nb
 	while state_i!=0 or state_j!=0:
 		var previous:Dictionary=back[state_i][state_j]
@@ -349,12 +374,40 @@ func _zipper(mesh: Dictionary, left: Array[Vector3], right: Array[Vector3], clos
 			return {"valid":false,"reason":"selected_transition_below_cutoff","transition":transition,"cross_squared":transition.cross_squared}
 		triangle_count+=1;minimum_cross_squared=minf(minimum_cross_squared,float(transition.cross_squared))
 		correspondence_states.append([int(transition.to_i),int(transition.to_j)])
-	return {"valid":true,"triangles":triangle_count,"correspondence_mode":"bounded_maximin_monotone_dp",
+	return {"valid":true,"triangles":triangle_count,"correspondence_mode":"bounded_maximin_monotone_dp_with_roi_edge_connectors",
 		"correspondence_states":correspondence_states,"minimum_cross_squared":minimum_cross_squared,
 		"minimum_triangle_quality":float(best_quality[na][nb]),"cutoff_rejections":0,
 		"cutoff_rejected_candidates":rejected_candidates,
 		"minimum_rejected_cross_squared":minimum_rejected_cross_squared if is_finite(minimum_rejected_cross_squared) else null,
-		"shared_start_root":shared_start,"shared_end_root":shared_end}
+		"shared_start_root":shared_start,"shared_end_root":shared_end,"endpoint_connectors":endpoint_connectors}
+
+func _make_roi_edge_connector(a:Vector3,b:Vector3,label:String,identity:Dictionary,axis:int,plane:float)->Dictionary:
+	var key_a:String=Core._point_key(a);var key_b:String=Core._point_key(b)
+	if key_a==key_b:return {"valid":true,"needed":false,"label":label}
+	if absf(a[axis]-plane)>PLANE_EPSILON or absf(b[axis]-plane)>PLANE_EPSILON:
+		return {"valid":false,"reason":"connector_endpoint_off_interface_plane","label":label}
+	var roi_min:Vector3=Vector3(float(identity.interface_roi_min[0]),float(identity.interface_roi_min[1]),float(identity.interface_roi_min[2]))
+	var roi_max:Vector3=Vector3(float(identity.interface_roi_max[0]),float(identity.interface_roi_max[1]),float(identity.interface_roi_max[2]))
+	var common_boundary_axis:=-1;var varying_axes:=0
+	for coordinate_axis in range(3):
+		if a[coordinate_axis]<roi_min[coordinate_axis]-PLANE_EPSILON or a[coordinate_axis]>roi_max[coordinate_axis]+PLANE_EPSILON or b[coordinate_axis]<roi_min[coordinate_axis]-PLANE_EPSILON or b[coordinate_axis]>roi_max[coordinate_axis]+PLANE_EPSILON:
+			return {"valid":false,"reason":"connector_endpoint_outside_interface_roi","label":label,"axis":coordinate_axis,
+				"left_coordinate":a[coordinate_axis],"right_coordinate":b[coordinate_axis],
+				"roi_min":roi_min[coordinate_axis],"roi_max":roi_max[coordinate_axis]}
+		if coordinate_axis==axis:continue
+		if absf(a[coordinate_axis]-b[coordinate_axis])>PLANE_EPSILON:
+			varying_axes+=1
+			continue
+		if absf(a[coordinate_axis]-roi_min[coordinate_axis])<=PLANE_EPSILON or absf(a[coordinate_axis]-roi_max[coordinate_axis])<=PLANE_EPSILON:
+			common_boundary_axis=coordinate_axis
+	if common_boundary_axis<0 or varying_axes!=1:
+		return {"valid":false,"reason":"connector_not_on_single_outer_roi_edge","label":label,
+			"left_root":key_a,"right_root":key_b,"varying_axes":varying_axes,"common_boundary_axis":common_boundary_axis}
+	if absf(a[common_boundary_axis]-b[common_boundary_axis])>PLANE_EPSILON:
+		return {"valid":false,"reason":"connector_endpoints_do_not_share_roi_boundary","label":label,"axis":common_boundary_axis}
+	return {"valid":true,"needed":true,"label":label,"edge_key":_edge_key(key_a,key_b),
+		"left_root":key_a,"right_root":key_b,"boundary_axis":common_boundary_axis,
+		"boundary_coordinate":a[common_boundary_axis],"authority":"INTERPOLATED_VOLUME_ENDPOINTS"}
 
 func _relax_correspondence(best_quality:Array,best_alignment:Array,back:Array,a:Array[Vector3],b:Array[Vector3],
 		ca:Array[float],cb:Array[float],from_i:int,from_j:int,to_i:int,to_j:int,kind:String)->Dictionary:
