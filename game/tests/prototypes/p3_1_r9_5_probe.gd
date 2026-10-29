@@ -276,7 +276,8 @@ func _trace_a_cutoffs(candidate:RefCounted,snapshot:Dictionary,roi:Dictionary,me
 			if edge.is_internal_open_edge:explained[edge.key]=true
 	var unexplained:Array=[];for key in internal_open:
 		if not explained.has(key):unexplained.append(key)
-	return {"candidate":"A","candidate_source_sha":SOURCE.A,"roi":roi,"reported_cutoff_drop_count":reported_drops,"traced_cutoff_drop_count":dropped_count,"cutoff_squared":1e-12,"dropped_tetrahedra":records,"full_mesh_internal_open_edge_count":internal_open.size(),"internal_open_edges":_internal_open_edge_records(mesh,roi_min,roi_min+Vector3(cells)*step),"unique_internal_open_edges_explained_by_cutoff_perimeters":explained.size(),"unexplained_internal_open_edges_first_32":unexplained.slice(0,32),"trace_matches_reported_metric":dropped_count==reported_drops,"mesh_incidence_source":"exact binary32 position keys from full candidate mesh"}
+	var open_records:Array[Dictionary]=_internal_open_edge_records(mesh,roi_min,roi_min+Vector3(cells)*step)
+	return {"candidate":"A","candidate_source_sha":SOURCE.A,"roi":roi,"reported_cutoff_drop_count":reported_drops,"traced_cutoff_drop_count":dropped_count,"cutoff_squared":1e-12,"dropped_tetrahedra":records,"full_mesh_internal_open_edge_count":internal_open.size(),"internal_open_edges":open_records,"cutoff_loop_patch_feasibility":_open_cycle_triangulation_probe(open_records,1e-12),"unique_internal_open_edges_explained_by_cutoff_perimeters":explained.size(),"unexplained_internal_open_edges_first_32":unexplained.slice(0,32),"trace_matches_reported_metric":dropped_count==reported_drops,"mesh_incidence_source":"exact binary32 position keys from full candidate mesh"}
 
 func _a_cutoff_tet(candidate:RefCounted,tet:Array,points:Array[Vector3],densities:Array[float],snapshot:Dictionary,step:float)->Dictionary:
 	var inside:Array[int]=[];var outside:Array[int]=[];var samples:Array[Dictionary]=[]
@@ -347,6 +348,77 @@ func _internal_open_edge_records(mesh:Dictionary,lo:Vector3,hi:Vector3)->Array[D
 		if not on_roi_boundary:out.append({"key":key,"a":edge[0],"b":edge[1],"incidence":int(incidence[key])})
 	return out
 
+func _open_cycle_triangulation_probe(edge_rows:Array[Dictionary],cutoff_squared:float)->Dictionary:
+	var adjacency:Dictionary={};var point_by_key:Dictionary={}
+	for row in edge_rows:
+		var a:Vector3=row.a;var b:Vector3=row.b;var ka:String=_exact_key(a);var kb:String=_exact_key(b)
+		point_by_key[ka]=a;point_by_key[kb]=b
+		if not adjacency.has(ka):adjacency[ka]=[]
+		if not adjacency.has(kb):adjacency[kb]=[]
+		if not adjacency[ka].has(kb):adjacency[ka].append(kb)
+		if not adjacency[kb].has(ka):adjacency[kb].append(ka)
+	var keys:Array[String]=[]
+	for key in adjacency:keys.append(String(key))
+	keys.sort()
+	var visited:Dictionary={};var cycles:Array[Dictionary]=[];var open_or_branch_components:Array[Dictionary]=[]
+	for start in keys:
+		if visited.has(start):continue
+		var stack:Array[String]=[start];var component:Array[String]=[];visited[start]=true
+		while not stack.is_empty():
+			var current:String=stack.pop_back();component.append(current)
+			for neighbor_value in adjacency[current]:
+				var neighbor:String=String(neighbor_value)
+				if not visited.has(neighbor):visited[neighbor]=true;stack.append(neighbor)
+		var degree_two:bool=component.size()>=3
+		for vertex in component:
+			if adjacency[vertex].size()!=2:degree_two=false
+		if not degree_two:
+			var degree_sum:int=0
+			for vertex in component:degree_sum+=adjacency[vertex].size()
+			open_or_branch_components.append({"vertex_count":component.size(),"edge_count":degree_sum/2,"degree_sequence":_component_degrees(component,adjacency)})
+			continue
+		component.sort();var ordered:Array[String]=[component[0]];var first_neighbors:Array[String]=[]
+		for neighbor_value in adjacency[component[0]]:first_neighbors.append(String(neighbor_value))
+		first_neighbors.sort();var previous:String=component[0];var current:String=first_neighbors[0]
+		while current!=component[0] and ordered.size()<=component.size():
+			ordered.append(current);var choices:Array[String]=[]
+			for neighbor_value in adjacency[current]:
+				var neighbor:String=String(neighbor_value)
+				if neighbor!=previous:choices.append(neighbor)
+			previous=current;current=choices[0] if not choices.is_empty() else component[0]
+		var points:Array[Vector3]=[]
+		for key in ordered:points.append(point_by_key[key])
+		var best_min:float=_max_min_cycle_triangulation(points)
+		var diameter:float=0.0
+		for a in points:
+			for b in points:diameter=maxf(diameter,a.distance_to(b))
+		cycles.append({"vertex_count":points.size(),"edge_count":points.size(),"ordered_boundary_vertices":points,"diameter":diameter,"maximum_possible_minimum_cross_squared_over_all_polygon_triangulations":best_min,"unchanged_cutoff_squared":cutoff_squared,"vertex_preserving_cutoff_pass_possible":best_min>cutoff_squared,"method":"dynamic-programming maximum bottleneck triangle area over every triangulation of the ordered boundary polygon; feasibility only, does not validate winding, planarity, manifold join, or SDF deviation"})
+	return {"closed_internal_cycles":cycles,"open_or_branch_components":open_or_branch_components,"scope":"internal-open-edge boundary vertices only; ROI-cropped boundary portions excluded","cutoff_squared":cutoff_squared}
+
+func _component_degrees(component:Array[String],adjacency:Dictionary)->Array[int]:
+	var out:Array[int]=[]
+	for key in component:out.append(adjacency[key].size())
+	out.sort()
+	return out
+
+func _max_min_cycle_triangulation(points:Array[Vector3])->float:
+	var count:int=points.size()
+	if count<3:return -1.0
+	var dp:Array=[]
+	for i in range(count):
+		var row:Array[float]=[];row.resize(count)
+		for j in range(count):row[j]=-INF
+		dp.append(row)
+	for i in range(count-1):dp[i][i+1]=INF
+	for span in range(2,count):
+		for i in range(count-span):
+			var j:int=i+span
+			for k in range(i+1,j):
+				var cross:Vector3=(points[k]-points[i]).cross(points[j]-points[i]);var score:float=cross.length_squared() if cross.is_finite() else -INF
+				var bottleneck:float=minf(minf(dp[i][k],dp[k][j]),score)
+				dp[i][j]=maxf(dp[i][j],bottleneck)
+	return dp[0][count-1]
+
 func _trace_d_cutoffs(candidate:RefCounted,values:PackedFloat32Array,roi:Dictionary,mesh:Dictionary,reported_drops:int)->Dictionary:
 	var roi_min:Vector3=Core.world_min(roi);var cells:Vector3i=Core.cell_counts(roi);var step:float=Core.step(roi);var dims:Vector3i=cells+Vector3i.ONE;var incidence:Dictionary=_mesh_edge_incidence(mesh);var internal_open:Dictionary=_internal_open_edge_keys(mesh,roi_min,roi_min+Vector3(cells)*step);var records:Array[Dictionary]=[];var root_cache:Dictionary={};var dropped_count:int=0
 	if values.size()!=dims.x*dims.y*dims.z:return {"candidate":"D","valid":false,"reason":"materialized_volume_size_mismatch","actual":values.size(),"expected":dims.x*dims.y*dims.z}
@@ -384,7 +456,8 @@ func _trace_d_cutoffs(candidate:RefCounted,values:PackedFloat32Array,roi:Diction
 			if edge.is_internal_open_edge:explained[edge.key]=true
 	var unexplained:Array=[];for key in internal_open:
 		if not explained.has(key):unexplained.append(key)
-	return {"candidate":"D","valid":true,"candidate_source_sha":SOURCE.D,"roi":roi,"reported_cutoff_drop_count":reported_drops,"traced_cutoff_drop_count":dropped_count,"threshold_squared":1e-12,"dropped_triangles":records,"full_mesh_internal_open_edge_count":internal_open.size(),"internal_open_edges":_internal_open_edge_records(mesh,roi_min,roi_min+Vector3(cells)*step),"unique_internal_open_edges_explained_by_cutoff_triangle_edges":explained.size(),"unexplained_internal_open_edges_first_32":unexplained.slice(0,32),"trace_matches_reported_metric":dropped_count==reported_drops,"mesh_incidence_source":"exact binary32 position keys from full candidate mesh","volume_authority":"candidate D returned materialized float32 samples from canonical SDF plus ordered frozen ledger"}
+	var open_records:Array[Dictionary]=_internal_open_edge_records(mesh,roi_min,roi_min+Vector3(cells)*step)
+	return {"candidate":"D","valid":true,"candidate_source_sha":SOURCE.D,"roi":roi,"reported_cutoff_drop_count":reported_drops,"traced_cutoff_drop_count":dropped_count,"threshold_squared":1e-12,"dropped_triangles":records,"full_mesh_internal_open_edge_count":internal_open.size(),"internal_open_edges":open_records,"cutoff_loop_patch_feasibility":_open_cycle_triangulation_probe(open_records,1e-12),"unique_internal_open_edges_explained_by_cutoff_triangle_edges":explained.size(),"unexplained_internal_open_edges_first_32":unexplained.slice(0,32),"trace_matches_reported_metric":dropped_count==reported_drops,"mesh_incidence_source":"exact binary32 position keys from full candidate mesh","volume_authority":"candidate D returned materialized float32 samples from canonical SDF plus ordered frozen ledger"}
 
 func _face_oracle(snapshot:Dictionary,roi:Dictionary,face_side:int,seed:int,materialized_values:PackedFloat32Array=PackedFloat32Array(),require_materialized:bool=false)->Dictionary:
 	var lo:Vector3=Core.world_min(roi);var cells:Vector3i=Core.cell_counts(roi);var h:float=Core.step(roi);var dims:Vector3i=cells+Vector3i.ONE
