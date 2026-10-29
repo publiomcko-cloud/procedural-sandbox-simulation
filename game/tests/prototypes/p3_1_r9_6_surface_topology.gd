@@ -22,8 +22,8 @@ func add_triangle(triangle_id: String, root_ids: Array[String], owner_id: String
 		cell_id: String, face_ids: Array[String]) -> Dictionary:
 	if triangle_id.is_empty() or owner_id.is_empty() or cell_id.is_empty():
 		return {"valid": false, "reason": "triangle_metadata_invalid"}
-	if root_ids.size() != 3 or root_ids[0] == root_ids[1] or root_ids[1] == root_ids[2] or root_ids[2] == root_ids[0]:
-		return {"valid": false, "reason": "triangle_root_count_or_identity_invalid"}
+	if root_ids.size() != 3:
+		return {"valid": false, "reason": "triangle_root_count_invalid"}
 	if _triangles.has(triangle_id):
 		return {"valid": false, "reason": "duplicate_triangle_id", "triangle_id": triangle_id}
 	for root_id in root_ids:

@@ -11,6 +11,7 @@ func _run() -> void:
 	_test_adjacent_pair()
 	_test_rejected_geometry_keeps_required_topology()
 	_test_duplicate_and_unknown_id_fail_closed()
+	_test_collapsed_root_triangle_is_retained()
 	_test_stable_hash_and_shared_owner()
 	print("R96_TOPOLOGY_TESTS " + JSON.stringify({"assertions": assertions, "failures": failures.size(), "failure_reasons": failures}))
 	print("R96_TOPOLOGY_TESTS_" + ("PASS" if failures.is_empty() else "FAIL"))
@@ -72,6 +73,17 @@ func _test_duplicate_and_unknown_id_fail_closed() -> void:
 	_check(topology.add_triangle("ok", _string_array(["r", "x", "y"]), "cell", "0,0,0", _string_array([])).valid, "valid triangle added")
 	var duplicate: Dictionary = topology.add_triangle("ok", _string_array(["r", "x", "y"]), "cell", "0,0,0", _string_array([]))
 	_check(not duplicate.valid and duplicate.reason == "duplicate_triangle_id", "duplicate triangle identity rejected")
+
+func _test_collapsed_root_triangle_is_retained() -> void:
+	var topology: Variant = Topology.new()
+	_check(topology.add_root("zero", Vector3.ZERO, "root/zero").valid, "collapsed fixture zero root inserted")
+	_check(topology.add_root("up", Vector3.UP, "root/up").valid, "collapsed fixture second root inserted")
+	var required: Dictionary = topology.add_triangle("collapsed", _string_array(["zero", "zero", "up"]), "cell", "0,0,0", _string_array([]))
+	_check(bool(required.get("valid", false)), "same-identity roots remain representable in required graph")
+	_check(topology.mark_realization("collapsed", false, 0.0, "below_frozen_cross_squared_cutoff").valid, "collapsed required triangle explicitly rejected")
+	var report: Dictionary = topology.report(Vector3(-1, -1, -1), Vector3(1, 1, 1))
+	_check(int(report.get("required_triangle_count", -1)) == 1 and int(report.get("rejected_triangle_count", -1)) == 1, "collapsed triangle remains in required and rejected counts")
+	_check(not bool(report.get("geometry_realization_complete", true)), "collapsed topology cannot imply geometry completeness")
 
 func _test_stable_hash_and_shared_owner() -> void:
 	var forward: Variant = _make_owned_face_topology(false)
