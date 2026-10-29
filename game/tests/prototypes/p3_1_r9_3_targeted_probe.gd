@@ -15,6 +15,12 @@ func _run() -> void:
 		return
 	var candidate: RefCounted = CandidateScript.new()
 	var failures := 0
+	var correction_regression:Dictionary={"status":"NOT_APPLICABLE"}
+	if candidate.has_method("checkerboard_decider_regression"):
+		correction_regression=candidate.call("checkerboard_decider_regression")
+		if not correction_regression.get("valid",false):
+			print("R9_3_PROBE_FAIL "+JSON.stringify({"reason":"C_checkerboard_decider_regression_failed","detail":correction_regression}))
+			failures+=1
 	for scenario_id in ids:
 		var row: Dictionary = Core.case_by_id(manifest.rows, scenario_id)
 		if row.is_empty():
@@ -56,7 +62,7 @@ func _run() -> void:
 		print("R9_3_PROBE_RESULT " + JSON.stringify({"scenario_id": scenario_id, "candidate": OS.get_environment("R9_CANDIDATE_ID"),
 			"source_sha": OS.get_environment("R9_SOURCE_SHA"), "manifest_sha256": Core.EXPECTED_MANIFEST_SHA,
 			"mesh_sha256": result.get("mesh_sha256", ""), "metrics": result.get("metrics", {}),
-			"topology": topo, "open_edge_details_first_64": open_details,"canonical_root_identity":root_identity,
+			"topology": topo, "open_edge_details_first_64": open_details,"canonical_root_identity":root_identity,"correction_regression":correction_regression,
 			"topology_bounds_min": [lo.x,lo.y,lo.z], "topology_bounds_max": [hi.x,hi.y,hi.z]}))
 	print("R9_3_PROBE_COMPLETE " + JSON.stringify({"scenario_count": ids.size(), "failures": failures}))
 	quit(1 if failures > 0 else 0)
