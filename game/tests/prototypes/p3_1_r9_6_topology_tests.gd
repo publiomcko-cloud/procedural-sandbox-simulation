@@ -19,12 +19,12 @@ func _run() -> void:
 
 func _test_adjacent_pair() -> void:
 	var topology: Variant = Topology.new()
-	_add_root(topology, "a", Vector3(0, 0, 0))
-	_add_root(topology, "b", Vector3(1, 0, 0))
-	_add_root(topology, "c", Vector3(1, 1, 0))
-	_add_root(topology, "d", Vector3(0, 1, 0))
-	_check(topology.add_triangle("t0", _string_array(["a", "b", "c"]), "cell0", "0,0,0", _string_array(["X_MAX"])).valid, "first triangle recorded")
-	_check(topology.add_triangle("t1", _string_array(["a", "c", "d"]), "cell1", "1,0,0", _string_array(["X_MAX"])).valid, "second triangle recorded")
+	_add_root(topology, "node|a", Vector3(0, 0, 0))
+	_add_root(topology, "node|b", Vector3(1, 0, 0))
+	_add_root(topology, "node|c", Vector3(1, 1, 0))
+	_add_root(topology, "node|d", Vector3(0, 1, 0))
+	_check(topology.add_triangle("t0", _string_array(["node|a", "node|b", "node|c"]), "cell0", "0,0,0", _string_array(["X_MAX"])).valid, "first triangle recorded")
+	_check(topology.add_triangle("t1", _string_array(["node|a", "node|c", "node|d"]), "cell1", "1,0,0", _string_array(["X_MAX"])).valid, "second triangle recorded")
 	_check(topology.mark_realization("t0", true, 1.0).valid, "first triangle emitted")
 	_check(topology.mark_realization("t1", true, 1.0).valid, "second triangle emitted")
 	var report: Dictionary = topology.report(Vector3(0, 0, -1), Vector3(1, 1, 1))
