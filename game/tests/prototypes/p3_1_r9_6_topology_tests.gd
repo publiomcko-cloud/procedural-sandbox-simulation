@@ -17,7 +17,7 @@ func _run() -> void:
 	quit(0 if failures.is_empty() else 1)
 
 func _test_closed_pair() -> void:
-	var topology: RefCounted = Topology.new()
+	var topology: Variant = Topology.new()
 	_add_root(topology, "a", Vector3(0, 0, 0))
 	_add_root(topology, "b", Vector3(1, 0, 0))
 	_add_root(topology, "c", Vector3(1, 1, 0))
@@ -34,7 +34,7 @@ func _test_closed_pair() -> void:
 	_check(report.surface_loops.is_empty(), "closed pair has no emitted open-edge loops")
 
 func _test_rejected_geometry_keeps_required_topology() -> void:
-	var topology: RefCounted = Topology.new()
+	var topology: Variant = Topology.new()
 	_add_root(topology, "a", Vector3(0, 0, 0))
 	_add_root(topology, "b", Vector3(1, 0, 0))
 	_add_root(topology, "c", Vector3(1, 1, 0))
@@ -54,7 +54,7 @@ func _test_rejected_geometry_keeps_required_topology() -> void:
 	_check(not report.surface_loops.is_empty(), "partial realization is grouped into open-edge diagnostics")
 
 func _test_duplicate_and_unknown_id_fail_closed() -> void:
-	var topology: RefCounted = Topology.new()
+	var topology: Variant = Topology.new()
 	_check(topology.add_root("r", Vector3.ZERO, "owner").valid, "first root accepted")
 	var collision: Dictionary = topology.add_root("r", Vector3.RIGHT, "owner")
 	_check(not collision.valid and collision.reason == "root_identity_collision", "root identity collision rejected")
@@ -67,8 +67,8 @@ func _test_duplicate_and_unknown_id_fail_closed() -> void:
 	_check(not duplicate.valid and duplicate.reason == "duplicate_triangle_id", "duplicate triangle identity rejected")
 
 func _test_stable_hash_and_shared_owner() -> void:
-	var forward: RefCounted = _make_owned_face_topology(false)
-	var reverse: RefCounted = _make_owned_face_topology(true)
+	var forward: Variant = _make_owned_face_topology(false)
+	var reverse: Variant = _make_owned_face_topology(true)
 	var bounds_min := Vector3(-1, -1, -1)
 	var bounds_max := Vector3(0, 1, 1)
 	var a: Dictionary = forward.report(bounds_min, bounds_max)
@@ -80,8 +80,8 @@ func _test_stable_hash_and_shared_owner() -> void:
 			owner_found = true
 	_check(owner_found, "shared ROI face ownership is recorded")
 
-func _make_owned_face_topology(reverse: bool) -> RefCounted:
-	var topology: RefCounted = Topology.new()
+func _make_owned_face_topology(reverse: bool) -> Variant:
+	var topology: Variant = Topology.new()
 	var roots := [["a", Vector3(0, 0, 0)], ["b", Vector3(0, 1, 0)], ["c", Vector3(0, 1, 1)], ["d", Vector3(0, 0, 1)]]
 	if reverse:
 		roots.reverse()
@@ -95,7 +95,7 @@ func _make_owned_face_topology(reverse: bool) -> RefCounted:
 		topology.mark_realization(String(row[0]), true, 1.0)
 	return topology
 
-func _add_root(topology: RefCounted, root_id: String, point: Vector3) -> void:
+func _add_root(topology: Variant, root_id: String, point: Vector3) -> void:
 	_check(topology.add_root(root_id, point, "cell-owner").valid, "root " + root_id + " inserted")
 
 func _check(condition: bool, description: String) -> void:
