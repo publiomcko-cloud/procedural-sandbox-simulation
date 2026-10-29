@@ -30,6 +30,8 @@ func _test_closed_pair() -> void:
 	_check(report.valid and int(report.emitted_triangle_count) == 2, "closed pair summary valid")
 	_check(report.internal_open_edges.is_empty(), "interior diagonal is manifold")
 	_check(report.nonmanifold_edges.is_empty(), "closed pair has no nonmanifold edge")
+	_check(report.surface_components.size() == 1, "adjacent triangles form one surface component")
+	_check(report.surface_loops.is_empty(), "closed pair has no emitted open-edge loops")
 
 func _test_rejected_geometry_keeps_required_topology() -> void:
 	var topology: RefCounted = Topology.new()
@@ -47,6 +49,8 @@ func _test_rejected_geometry_keeps_required_topology() -> void:
 	_check(not report.missing_required_adjacency.is_empty(), "missing realization is reported")
 	_check(not report.internal_open_edges.is_empty(), "cutoff omission exposes internal opens")
 	_check(report.rejection_reasons.get("below_frozen_cutoff", 0) == 1, "reason retained")
+	_check(report.surface_components.size() == 1, "required topology remains one surface component")
+	_check(not report.surface_loops.is_empty(), "partial realization is grouped into open-edge diagnostics")
 
 func _test_duplicate_and_unknown_id_fail_closed() -> void:
 	var topology: RefCounted = Topology.new()
@@ -71,7 +75,7 @@ func _test_stable_hash_and_shared_owner() -> void:
 	_check(a.topology_sha256 == b.topology_sha256, "topology hash independent of insertion order")
 	var owner_found := false
 	for arc in a.required_surface_arcs:
-		if String(arc.face_owner) == "ROI_MAX_AXIS_0":
+		if String(arc.shared_face_key) == "ROI_MAX_AXIS_0" and String(arc.canonical_owner) == "x_face_owner":
 			owner_found = true
 	_check(owner_found, "shared ROI face ownership is recorded")
 

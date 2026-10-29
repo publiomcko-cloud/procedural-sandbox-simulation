@@ -71,6 +71,8 @@ func report(roi_min: Vector3, roi_max: Vector3) -> Dictionary:
 	triangle_keys.sort()
 	var required_incidence: Dictionary = {}
 	var emitted_incidence: Dictionary = {}
+	var edge_triangles: Dictionary = {}
+	var emitted_edge_triangles: Dictionary = {}
 	var rejected_triangles: Array[String] = []
 	var pending_triangles: Array[String] = []
 	var rejection_reasons: Dictionary = {}
@@ -91,8 +93,14 @@ func report(roi_min: Vector3, roi_max: Vector3) -> Dictionary:
 			var b: String = String(roots[(edge_index + 1) % 3])
 			var edge_key: String = _edge_key(a, b)
 			required_incidence[edge_key] = int(required_incidence.get(edge_key, 0)) + 1
+			if not edge_triangles.has(edge_key):
+				edge_triangles[edge_key] = []
+			edge_triangles[edge_key].append(triangle_id)
 			if triangle.realization == "EMITTED":
 				emitted_incidence[edge_key] = int(emitted_incidence.get(edge_key, 0)) + 1
+				if not emitted_edge_triangles.has(edge_key):
+					emitted_edge_triangles[edge_key] = []
+				emitted_edge_triangles[edge_key].append(triangle_id)
 	var missing_adjacency: Array = []
 	var internal_open_edges: Array = []
 	var boundary_open_edges: Array = []
@@ -114,8 +122,19 @@ func report(roi_min: Vector3, roi_max: Vector3) -> Dictionary:
 		var endpoints: Array = edge_key.split("|")
 		var p0: Vector3 = _roots[String(endpoints[0])].point
 		var p1: Vector3 = _roots[String(endpoints[1])].point
+		var incident_owners: Array[String] = []
+		for incident_id in edge_triangles[edge_key]:
+			var incident: Dictionary = _triangles[String(incident_id)]
+			var incident_owner: String = String(incident.owner_id)
+			if not incident_owners.has(incident_owner):
+				incident_owners.append(incident_owner)
+		incident_owners.sort()
 		arcs.append({"edge": edge_key, "required_incidence": required_incidence[edge_key],
-			"face_owner": _shared_face_owner(p0, p1, roi_min, roi_max)})
+			"incident_triangles": edge_triangles[edge_key],
+			"shared_face_key": _shared_face_owner(p0, p1, roi_min, roi_max),
+			"canonical_owner": incident_owners[0] if not incident_owners.is_empty() else ""})
+	var components: Array = _surface_components(triangle_keys, edge_triangles)
+	var loops: Array = _open_edge_components(emitted_incidence, emitted_edge_triangles, roi_min, roi_max)
 	var canonical: String = JSON.stringify({"roots": root_rows, "triangles": triangle_rows})
 	return {
 		"valid": pending_triangles.is_empty(),
@@ -128,6 +147,8 @@ func report(roi_min: Vector3, roi_max: Vector3) -> Dictionary:
 		"pending_triangle_ids": pending_triangles,
 		"rejection_reasons": rejection_reasons,
 		"required_surface_arcs": arcs,
+		"surface_components": components,
+		"surface_loops": loops,
 		"missing_required_adjacency": missing_adjacency,
 		"internal_open_edges": internal_open_edges,
 		"roi_boundary_open_edges": boundary_open_edges,
@@ -141,6 +162,100 @@ func _count_realized(state: String) -> int:
 		if String(triangle.realization) == state:
 			count += 1
 	return count
+
+func _surface_components(triangle_keys: Array, edge_triangles: Dictionary) -> Array:
+	var adjacency: Dictionary = {}
+	for raw_id in triangle_keys:
+		adjacency[String(raw_id)] = []
+	for incident_ids in edge_triangles.values():
+		for i in range(incident_ids.size()):
+			for j in range(i + 1, incident_ids.size()):
+				var a: String = String(incident_ids[i])
+				var b: String = String(incident_ids[j])
+				if not adjacency[a].has(b):
+					adjacency[a].append(b)
+				if not adjacency[b].has(a):
+					adjacency[b].append(a)
+	var visited: Dictionary = {}
+	var components: Array = []
+	var ordered_ids: Array = triangle_keys.duplicate()
+	ordered_ids.sort()
+	for raw_start in ordered_ids:
+		var start: String = String(raw_start)
+		if visited.has(start):
+			continue
+		var queue: Array[String] = [start]
+		visited[start] = true
+		var members: Array[String] = []
+		while not queue.is_empty():
+			var current: String = queue.pop_front()
+			members.append(current)
+			var neighbors: Array = adjacency[current]
+			neighbors.sort()
+			for neighbor_value in neighbors:
+				var neighbor: String = String(neighbor_value)
+				if not visited.has(neighbor):
+					visited[neighbor] = true
+					queue.append(neighbor)
+		members.sort()
+		components.append(members)
+	return components
+
+func _open_edge_components(emitted_incidence: Dictionary, emitted_edge_triangles: Dictionary,
+		roi_min: Vector3, roi_max: Vector3) -> Array:
+	var adjacency: Dictionary = {}
+	var edge_records: Dictionary = {}
+	for raw_edge in emitted_incidence:
+		var edge_key: String = String(raw_edge)
+		if int(emitted_incidence[edge_key]) != 1:
+			continue
+		var endpoints: Array = edge_key.split("|")
+		var a: String = String(endpoints[0])
+		var b: String = String(endpoints[1])
+		if not adjacency.has(a): adjacency[a] = []
+		if not adjacency.has(b): adjacency[b] = []
+		adjacency[a].append(b)
+		adjacency[b].append(a)
+		edge_records[edge_key] = {"edge": edge_key,
+			"triangle": emitted_edge_triangles[edge_key][0],
+			"roi_boundary": _edge_on_roi_boundary(edge_key, roi_min, roi_max)}
+	var visited_vertices: Dictionary = {}
+	var result: Array = []
+	var vertices: Array = adjacency.keys()
+	vertices.sort()
+	for raw_start in vertices:
+		var start: String = String(raw_start)
+		if visited_vertices.has(start):
+			continue
+		var queue: Array[String] = [start]
+		visited_vertices[start] = true
+		var component_vertices: Array[String] = []
+		var component_edges: Dictionary = {}
+		var all_degree_two: bool = true
+		var touches_roi_boundary: bool = false
+		while not queue.is_empty():
+			var current: String = queue.pop_front()
+			component_vertices.append(current)
+			if adjacency[current].size() != 2:
+				all_degree_two = false
+			for neighbor_value in adjacency[current]:
+				var neighbor: String = String(neighbor_value)
+				var edge_key: String = _edge_key(current, neighbor)
+				component_edges[edge_key] = true
+				if not visited_vertices.has(neighbor):
+					visited_vertices[neighbor] = true
+					queue.append(neighbor)
+		for edge_key in component_edges:
+			if bool(edge_records[edge_key].roi_boundary):
+				touches_roi_boundary = true
+		var sorted_edges: Array = component_edges.keys()
+		var sorted_vertices: Array = component_vertices.duplicate()
+		sorted_edges.sort()
+		sorted_vertices.sort()
+		result.append({"edge_keys": sorted_edges, "root_ids": sorted_vertices,
+			"closed_loop": all_degree_two and not touches_roi_boundary,
+			"touches_roi_boundary": touches_roi_boundary})
+	return result
 
 func _edge_on_roi_boundary(edge_key: String, roi_min: Vector3, roi_max: Vector3) -> bool:
 	var endpoints: Array = edge_key.split("|")
