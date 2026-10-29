@@ -1,0 +1,42 @@
+{
+  "kind": "R9.5 source attribution correction",
+  "scope": "corrects the source-blob field serialization in immutable process.json records; does not modify raw logs or process records",
+  "oracle_sha": "75ed1a8d0ec16a321e2328456a48633fc72ca63e",
+  "oracle_script_sha256": "D784DF4ECAA49E17910D5F840B589057EBF4A5B7FABFC9E24352F0C931630EAD",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "candidates": [
+    {
+      "stdout_sha256": "c2ef80589c244a9f464b659dfa79ffbd20acfd396b779d5b5511311379f4980e",
+      "candidate_snapshot_sha256": "970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a",
+      "correct_git_blob": "5a19b05d3f39108e53c8b7ff47d28303ee7bfbb0",
+      "candidate_source_commit": "f0c93415dd56886a1c05ff2e6a1340e420f22c59",
+      "candidate": "A",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "process_json_sha256": "1670f17d43c69b75a3c082af3c75f6bb94171bd57d80a27b1e7fdd37148000e9",
+      "process_record_has_wrong_source_blob": true,
+      "recorded_process_source_blob": "33ac8bd1f7942ddd71610bd2e2b66f583fdbf3fd"
+    },
+    {
+      "stdout_sha256": "b91a9b121e76fda2609d8f6ac3ec18590789400d2cfdc04dd2dadad0d0c03f29",
+      "candidate_snapshot_sha256": "7072f39b2c48dcb38048e2ee3d1687baa9377bcc99ca8250ac2c0f84cff17d24",
+      "correct_git_blob": "d8cd7e32f88d864bef97bfb4d675b7d461bee4c7",
+      "candidate_source_commit": "af4d6027d9d57c9f2b8023aa27b31d2dd2dcedf2",
+      "candidate": "C",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "process_json_sha256": "7029c9ef30a4301daf74fa3da0ac4b4d0109cefa910b4633c7888cc058dd64bc",
+      "process_record_has_wrong_source_blob": true,
+      "recorded_process_source_blob": "33ac8bd1f7942ddd71610bd2e2b66f583fdbf3fd"
+    },
+    {
+      "stdout_sha256": "fee222aead12b24c618d29bd48940bd65bb3f843d18e4e8823a53ba13bf68489",
+      "candidate_snapshot_sha256": "a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6",
+      "correct_git_blob": "33ac8bd1f7942ddd71610bd2e2b66f583fdbf3fd",
+      "candidate_source_commit": "6ea04229b5ff06090f346c8749c1f5a53994227c",
+      "candidate": "D",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "process_json_sha256": "3adea5a085878326fbe6a69301dfe451840ccc642d7756650fd72b1e077f5f0e",
+      "process_record_has_wrong_source_blob": false,
+      "recorded_process_source_blob": "33ac8bd1f7942ddd71610bd2e2b66f583fdbf3fd"
+    }
+  ]
+}

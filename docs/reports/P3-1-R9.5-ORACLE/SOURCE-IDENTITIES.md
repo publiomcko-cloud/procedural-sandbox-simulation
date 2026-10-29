@@ -57,3 +57,16 @@ c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643.
 Snapshot physical hashes are computed from the committed R9.5 paths before
 execution and included in the run evidence inventory. Git blob identities
 are recorded after staging.
+
+## Final R9.5 execution identities
+
+The causal diagnostics are pinned to these exact committed oracle revisions:
+
+| Oracle commit | Parent | Script Git blob | Script physical SHA-256 | Work performed |
+|---|---|---|---|---|
+| 75ed1a8d0ec16a321e2328456a48633fc72ca63e | c7acc848a8fbf01461d3f6408e0cd9c60693d3ab | f5ac4c825e8062c948a2fdd38af72ab0869c3409 | D784DF4ECAA49E17910D5F840B589057EBF4A5B7FABFC9E24352F0C931630EAD | Independent 25-ray A/C/D oracle, X+ seam pairs, X- and triangle witness. |
+| 69b323efc3d6f9e86eba9ac1e199cbf932761398 | 01fb62569bb3ce7249f4e9058371934c7e83c83e | ea63a537e396dadcba02c8140005f7b54e63122e | c8c99eda8f6f8053fd2ddfce62597e634fa2ce11ff2f1e436f321236257518f4 | Exact cutoff tracing, per-open-edge attribution and vertex-preserving loop-patch feasibility. |
+
+The 69b A process was PID 19620, exit 0, 2,664.3742 ms; D was PID 8896, exit 0, 2,363.175 ms. Their stdout SHA-256 values are in the committed raw `process.json` files and `evidence/SHA256SUMS.txt`; stderr was empty. The 75ed A/C/D PIDs, timestamps, durations and raw stream hashes are likewise preserved under `evidence/oracle-75ed/`. The campaign index source-blob serialization defect is not corrected in place; the adjacent raw-preserving attribution sidecar is authoritative for the 75ed source mapping.
+
+An initial 69b preflight attempt record is retained; it failed before process creation and did not execute Godot. Corrected `--check-only` then exited 0. No candidate source was mutated or executed from an uncommitted corrective worktree.

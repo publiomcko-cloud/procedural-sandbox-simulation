@@ -1,0 +1,7 @@
+"candidate","scenario_id","lod_pair","left_segments","right_segments","left_only","right_only","combined_internal_open_edges","nonmanifold_edges","scope"
+"A","R9.2.SEAM.XPLUS_EQUAL.v1","0/0","22","22","0","0","8","0","candidate-generated separate ROIs; not production chunk acceptance"
+"A","R9.2.SEAM.XPLUS_MIXED_LOD.v1","1/0","10","22","10","22","32","0","candidate-generated separate ROIs; not production chunk acceptance"
+"A","R9.2.HIST.XPLUS_DEFECT.v1","0/0","22","22","0","0","8","0","candidate-generated separate ROIs; not production chunk acceptance"
+"D","R9.2.SEAM.XPLUS_EQUAL.v1","0/0","22","22","0","0","13","0","candidate-generated separate ROIs; not production chunk acceptance"
+"D","R9.2.SEAM.XPLUS_MIXED_LOD.v1","1/0","10","22","10","22","35","0","candidate-generated separate ROIs; not production chunk acceptance"
+"D","R9.2.HIST.XPLUS_DEFECT.v1","0/0","22","22","0","0","13","0","candidate-generated separate ROIs; not production chunk acceptance"
