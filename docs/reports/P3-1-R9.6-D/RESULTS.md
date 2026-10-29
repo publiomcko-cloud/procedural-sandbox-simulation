@@ -8,7 +8,7 @@ Status: **P3_1_R9_6_BLOCKED_WITH_EVIDENCE**
 
 ## Exact candidate and scope
 
-- R9.6 branch baseline / prior Candidate D evidence HEAD: `464087947da00a45090a289ade4917882ce0ada5`.
+- R9.6 branch baseline / prior R9.5 Candidate D evidence HEAD: `0c6cf84302eceb973fb6b21d13c4e21d74bc31af`.
 - Measured Candidate D source commit: `6ea04229b5ff06090f346c8749c1f5a53994227c`; the source commit parent is `51744eebf17646ca52612936146adeb0f9db001b`.
 - Candidate implementation blob: `33ac8bd1f7942ddd71610bd2e2b66f583fdbf3fd`.
 - Physical SHA-256: `a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6`.
