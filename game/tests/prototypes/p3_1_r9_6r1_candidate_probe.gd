@@ -19,6 +19,7 @@ var run_id := ""
 var attempt_id := ""
 var failures := 0
 var roi_ray_mismatches := 0
+var interface_attempts_executed := 0
 var artifact_paths: Array[String] = []
 
 func _initialize() -> void:
@@ -111,7 +112,10 @@ func _run() -> void:
 	_run_xplus(candidate,baseline,manifest)
 	_run_frozen_controls(candidate,baseline,manifest)
 	_run_preserved_geometry_controls(candidate,baseline,manifest)
-	print("R96R1_COMPLETE " + JSON.stringify({"candidate":cid,"source_sha":csha,"run_id":run_id,"attempt_id":attempt_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"oracle_sha":oracle_sha,"manifest_sha256":MANIFEST_SHA,"ray_count":rays.size(),"roi_scoped_hit_miss_disagreements":roi_ray_mismatches,"root_identity_probe":root_identity_probe.get("valid",false),"artifacts":artifact_paths,"failure_count":failures,"status":"ATTEMPT_%s_RESULTS_CAPTURED" % attempt_id})); quit(1 if failures>0 else 0)
+	if cid=="D" and d3_attempt and interface_attempts_executed!=3:
+		failures+=1
+		print("R96R1_BLOCKED "+JSON.stringify({"reason":"expected_D3_interface_probe_count_not_reached","attempt_id":attempt_id,"expected":3,"actual":interface_attempts_executed}))
+	print("R96R1_COMPLETE " + JSON.stringify({"candidate":cid,"source_sha":csha,"run_id":run_id,"attempt_id":attempt_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"oracle_sha":oracle_sha,"manifest_sha256":MANIFEST_SHA,"ray_count":rays.size(),"roi_scoped_hit_miss_disagreements":roi_ray_mismatches,"root_identity_probe":root_identity_probe.get("valid",false),"interface_attempts_executed":interface_attempts_executed,"artifacts":artifact_paths,"failure_count":failures,"status":"ATTEMPT_%s_RESULTS_CAPTURED" % attempt_id})); quit(1 if failures>0 else 0)
 
 func _analytic_roots(ray: Dictionary, seed: int, snapshot: Dictionary) -> Dictionary:
 	var o: Vector3 = ray.origin
@@ -296,7 +300,8 @@ func _run_xplus(candidate:RefCounted,baseline:RefCounted,manifest:Dictionary)->v
 			continue
 		var ldiff:=_dict_delta(ls,oracle_l.segments);var rdiff:=_dict_delta(rs,oracle_r.segments)
 		var left_coplanar_edges:Dictionary=_boundary_segments(left.mesh,16.0);var right_coplanar_edges:Dictionary=_boundary_segments(right.mesh,16.0)
-		if attempt_id in ["ATTEMPT_A3","ATTEMPT_D3"]:
+		if attempt_id=="ATTEMPT_A3" or (cid=="D" and attempt_id.begins_with("ATTEMPT_D3")):
+			interface_attempts_executed+=1
 			var left_payload:String=String(left.get("metrics",{}).get("materialized_volume_sha256","canonical_sdf"))
 			var right_payload:String=String(right.get("metrics",{}).get("materialized_volume_sha256","canonical_sdf"))
 			var interface_identity:Dictionary={"candidate":cid,"left_chunk_id":String(left_roi.id),"right_chunk_id":String(right_roi.id),
