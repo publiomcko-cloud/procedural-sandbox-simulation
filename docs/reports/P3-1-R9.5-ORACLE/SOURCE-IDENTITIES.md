@@ -7,6 +7,14 @@ Oracle starts at R9.4 comparison 9bdfcd59241d76bd57b95b9e2bb5c1982834071b.
 Exact oracle source HEAD is written in the run logs and checksum inventory
 after this preregistration commit.
 
+Preflight attempt `R95.ORACLE.A.c3a2a48` (source A pinned to the identities
+above) exited before scenario execution because Godot 4.7.2 could not infer
+the type of the test-only `mixed` local in the oracle harness. The complete
+failure is preserved under
+`C:\r95-evidence\oracle-A-c3a2a48\logs`. The harness local was made
+explicitly `bool`; no candidate source, frozen input, or expected result was
+changed. Any subsequent execution uses a new committed oracle identity.
+
 | Candidate | Measured source commit | Direct parent | Original candidate file SHA-256 | R9.5 snapshot |
 |---|---|---|---|---|
 | A | f0c93415dd56886a1c05ff2e6a1340e420f22c59 | d5903242e41642a2633e18dc181c4389188c65b2 | 970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a | game/tests/prototypes/r9_5_source_snapshots/candidate_a.gd |
