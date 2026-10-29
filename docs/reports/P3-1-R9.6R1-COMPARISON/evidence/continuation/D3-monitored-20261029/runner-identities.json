@@ -1,0 +1,20 @@
+[
+  {
+    "name": "run_godot_stage_r1.ps1",
+    "sha256": "0f9f7b418f045a6a5dfac6c28863d8c63910f0d774930b526f503355482386d7",
+    "bytes": 10954,
+    "purpose": "original 6GiB gate runner"
+  },
+  {
+    "name": "run_godot_stage_monitored_owner_override.ps1",
+    "sha256": "5a04f75bd5ea2f1ca896aa9632da2dc1a46232d14dc6560b9d62fe13064b8bef",
+    "bytes": 14101,
+    "purpose": "4GiB launch and runtime stop runner, used only for two bounded import attempts"
+  },
+  {
+    "name": "run_godot_stage_monitored_owner_override_r2.ps1",
+    "sha256": "4f3f15ec3b7af308122d3d31ae2481a0f4031796ec574cdddb12620a0bda7feb",
+    "bytes": 14233,
+    "purpose": "4GiB launch floor, 2GiB runtime abort, 100ms requested poll; used for passing import/check and single geometry invocation"
+  }
+]

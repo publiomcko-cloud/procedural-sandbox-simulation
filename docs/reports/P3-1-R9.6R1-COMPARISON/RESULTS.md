@@ -162,3 +162,64 @@ After the direct request to execute the attached procedure, a bounded current-st
 The runner recorded D3_IMPORT_USER_RETRY and exited 21 with HOST_GATE_BLOCKED_NOT_STARTED before Process.Start. Post-runner free commit was 5,453,905,920 bytes. No D3 process/PID, import, check-only, or geometry run exists. The resource state declined by 424,181,760 bytes from the immediately preceding observation. No process was terminated, and no pagefile setting was changed. This was the single bounded retry after a material resource change; no further identical retry is appropriate. D3 remains unconsumed and not a geometry failure.
 
 The continuation-local inventory now covers 262 files (258 prior plus four runner records/snapshots); public evidence adds its reservation, process record, and sanitized summary. The original evidence root remains unchanged.
+
+### Final D3 monitored execution and campaign closure (2026-10-29)
+
+This section supersedes the earlier D3 statements that the attempt remained unstarted. The owner's latest direct instruction authorized one monitored continuation overriding the attached 6 GiB prelaunch gate. D3 was invoked once as the final geometry attempt. The process started but the harness fail-closed on the pinned candidate-file byte hash before entering geometry. D3 is consumed (3/3); no D4 or repeat is authorized.
+
+#### Stage outcomes
+
+| Stage | Result | Evidence |
+|---|---|---|
+| Editor import | PASS, exit 0, 9.263 s, PID 38372 | Isolated profile; 93 global class registration steps; TerrainChunkGrid and TerrainSpatialOwnership present; no error/warning matches, stderr empty |
+| Harness --check-only | PASS, exit 0, 1.389 s, PID 38604 | Pinned candidate probe parser check; stderr empty |
+| D3 geometry invocation | BLOCKED before geometry, Godot exit 2, 1.421 s, PID 55536 | Exactly one invocation; harness printed R96R1_BLOCKED because candidate-file SHA did not match its frozen pin; no geometry artifacts were emitted |
+
+Two early import reservations were blocked before Process.Start at 4,241,117,184 and 4,274,704,384 bytes free commit. Two later import processes (PIDs 41288 and 52624) were stopped by the initial 4 GiB runtime floor during transient host commit drops; neither reached import completion. The final runner retained a 4 GiB prelaunch floor and used a 2 GiB runtime abort floor, polling global commit at a requested 100 ms. A profile-reuse orchestration retry was rejected because its isolated profile already existed; no process started and no evidence was overwritten. All these attempts are retained in the owner-local evidence root and summarized in the evidence package.
+
+The successful import's 23 monitor samples observed minimum free commit 3,801,432,064 bytes; the check-only and D3 invocations remained above the 2 GiB runtime floor. Actual sample intervals were approximately 387–419 ms (the 100 ms interval was the requested wait; CIM query latency made observations slower). Reported per-process private-memory values peaked near 1.36 MiB and are implausibly low for Godot, so they are not treated as valid process peak-memory measurements. Global CommitLimit minus CommittedBytes samples and the runner's stop events are preserved; no unrelated processes were stopped and no pagefile settings were changed.
+
+#### D3 pin mismatch and root cause
+
+The frozen probe declares expected Candidate D source-file SHA-256 334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a. The D3 process reported bc43838eae9973604c6aa0b12f8e84dbcf23aeb99a21d15ba03962b8a7f5ca57. Independent physical-byte analysis confirms the latter is the checked-out CRLF file digest (37,188 bytes, 462 CRLF line endings). Removing CR from CRLF yields 36,726 LF bytes and exactly the expected 334db9... digest. .gitattributes reports text and eol=lf for the candidate file while the active Git configuration has core.autocrlf=true; the Git tree/working diff remained clean because Git normalizes the line endings, but Godot reads the physical bytes via FileAccess.get_file_as_bytes() (p3_1_r9_6r1_candidate_probe.gd:829-831). The source pin guard therefore correctly rejected the runtime bytes.
+
+This is a checkout-byte reproducibility failure, not a D3 geometry result. D3 did not produce an equal-LOD mesh, mixed-LOD transition, interface patch, topology report, volume reload, control matrix, ray fixture, or determinism result. The D3 artifact directory is empty. The correction for any separately authorized future experiment is to prepare a new exact-SHA checkout with physical LF bytes (for example, disable autocrlf for that checkout), verify the actual candidate-file SHA against 334db9... before process launch, and use a new authorization/campaign. No further attempt is made here.
+
+#### Required final fields
+
+- D3_SOURCE_SHA: 7d058899abc1663ff7d4175b5a508532367cd5da
+- D3_SOURCE_PARENT: 3d0e4c59c0e33e4c21e34bbd54d1771c3db83415
+- D3_IMPORT_RESULT: PASS (final successful import; prior resource-stopped imports retained)
+- D3_CHECK_ONLY_RESULT: PASS
+- D3_GEOMETRY_PROCESS: STARTED_ONCE; EXIT_2_BLOCKED_CANDIDATE_FILE_PIN_BEFORE_GEOMETRY
+- D_ATTEMPTS_USED: 3/3
+- D3_RESULT: BLOCKED_SOURCE_PIN_MISMATCH; GEOMETRY_NOT_EVALUATED
+- D3_EQUAL_LOD_RESULT: NOT_RUN
+- D3_MIXED_LOD_RESULT: NOT_RUN
+- INTERFACE_VERTEX_COUNT: NOT_GENERATED
+- INTERFACE_TRIANGLE_COUNT: NOT_GENERATED
+- INTERFACE_CUTOFF_REJECTIONS: NOT_RUN
+- MIN_INTERFACE_CROSS_SQUARED: NOT_RUN
+- REQUIRED_ADJACENCY_RESULT: NOT_RUN
+- INTERNAL_OPEN_EDGES: NOT_RUN
+- NONMANIFOLD_COUNT: NOT_RUN
+- WINDING_RESULT: NOT_RUN
+- VOLUME_IDENTITY_RESULT: NOT_RUN for D3; prior D2 materialized volume integrity remains valid per its separate preserved evidence
+- XNEG_CONTROL_RESULT: NOT_RUN for D3; prior D2 X_NEG exact baseline control remains valid separately
+- CONTROL_MATRIX: NOT_RUN for D3; prior D2 matrix was 6/6
+- RAY_ROI_RESULT: NOT_RUN for D3; prior D2 ROI was 0/25 hit/miss disagreements
+- DETERMINISM_RESULT: NOT_RUN
+- PERFORMANCE_RESULT: UNSCORED; import 9.263 s, check-only 1.389 s, D3 pin-guard exit 1.421 s; no geometry timing or reliable process-memory peak
+- FULL_E2E_RESULT: NOT_RUN_NO_SURVIVING_GEOMETRY_CANDIDATE
+- FULL_VALIDATION_RESULT: NOT_RUN_NO_SURVIVING_GEOMETRY_CANDIDATE
+- EVIDENCE_INTEGRITY: local and public SHA-256 inventories recorded and verified; raw host process inventories remain owner-local
+- FINAL_A_STATUS: ATTEMPTS_EXHAUSTED_WITH_GEOMETRY_TARGET_UNMET
+- FINAL_D_STATUS: ATTEMPTS_EXHAUSTED_WITH_EVIDENCE; D3 consumed before geometry by the fail-closed pin guard
+- FINAL_ARCHITECTURAL_RECOMMENDATION: no production adoption; no experimental geometry candidate is qualified. Resolve exact physical source-byte materialization in a separately authorized research effort, then reassess the architecture outside this exhausted campaign.
+- FINAL_COMPARISON_COMMIT: this docs/evidence-only closure commit on the existing PR #205 branch; exact SHA is recorded by GitHub PR metadata.
+
+#### Evidence and repository state
+
+The owner-local evidence root is C:\Users\PUBLI\AppData\Local\Temp\P3_1_R96R1_D3_MONITORED_OVERRIDE_20261029_5eab760d7ce6486eaef7fb210741416e. Its raw before/after host snapshots, stdout/stderr, process records, resource-monitor JSONL, runner scripts, isolated profiles and generated artifacts are retained there and covered by local-evidence-inventory.jsonl. The reviewable sanitized process records, raw Godot stdout/stderr and resource-monitor logs are in [the D3 evidence package](evidence/continuation/D3-monitored-20261029/); host process inventories are intentionally not published. Public package inventory: EVIDENCE_SHA256SUMS.txt; its SHA-256 is recorded in the repository-wide evidence checksum list.
+
+No production source or frozen input changed. The D publisher worktree remains on the pinned source with no tracked edits; Godot generated untracked .gd.uid sidecars remain preserved. No D3 geometry artifact exists, no later scenario ran, and the five F2-G1 holds remain unchanged.

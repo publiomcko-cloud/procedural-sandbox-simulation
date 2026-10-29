@@ -1,0 +1,22 @@
+{
+  "source_sha": "7d058899abc1663ff7d4175b5a508532367cd5da",
+  "file": "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd",
+  "git_blob_id": "93afe39cb03383f2f18503e517abdd2d97a14159",
+  "physical_bytes": 37188,
+  "physical_sha256": "bc43838eae9973604c6aa0b12f8e84dbcf23aeb99a21d15ba03962b8a7f5ca57",
+  "lf_bytes": 36726,
+  "lf_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+  "line_feed_bytes": 462,
+  "crlf_sequences": 462,
+  "bare_lf": 0,
+  "expected_candidate_pin": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+  "godot_reported_candidate_sha256": "bc43838eae9973604c6aa0b12f8e84dbcf23aeb99a21d15ba03962b8a7f5ca57",
+  "gitattributes": [
+    "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd: text: set",
+    "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd: eol: lf"
+  ],
+  "core_autocrlf_enabled": true,
+  "hash_source": "p3_1_r9_6r1_candidate_probe.gd:829-831: FileAccess.get_file_as_bytes",
+  "result": "Godot fail-closed pin guard; physical CRLF hash matches Godot output; LF-normalized hash matches expected pin; no D3 geometry was evaluated",
+  "interpretation": "Git commit identity and normalized worktree diff do not ensure exact runtime bytes under this checkout line-ending conversion"
+}

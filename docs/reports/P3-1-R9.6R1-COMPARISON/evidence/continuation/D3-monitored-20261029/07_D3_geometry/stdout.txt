@@ -1,0 +1,3 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+R96R1_BLOCKED {"attempt_id":"ATTEMPT_D3","baseline_file_sha256":"a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6","candidate":"D","candidate_file_sha256":"bc43838eae9973604c6aa0b12f8e84dbcf23aeb99a21d15ba03962b8a7f5ca57","candidate_sha":"7d058899abc1663ff7d4175b5a508532367cd5da","interface_patch_file_sha256":"0e0033e07cb0a18a161584cb6288b5314314638e1379af4013f09fdf92913cc5","interface_patch_pin_valid":true,"manifest":"ok","oracle_sha":"0f8cfcdc64ef43096ff9f6166d17605bb1c13aec"}

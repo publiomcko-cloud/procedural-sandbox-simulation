@@ -1,0 +1,10 @@
+{
+  "stage": "06_check_only",
+  "source_sha": "7d058899abc1663ff7d4175b5a508532367cd5da",
+  "created_utc": "2026-10-29T19:13:50.1590031Z",
+  "owner_authorized_override": "monitored D3 only",
+  "original_gate_bytes": 6442450944,
+  "prelaunch_floor_bytes": 4294967296,
+  "runtime_abort_floor_bytes": 2147483648,
+  "status": "RESERVED"
+}
