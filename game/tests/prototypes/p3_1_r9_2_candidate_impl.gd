@@ -11,13 +11,20 @@ const SEED := 131102026
 var ROI_MIN: Vector3 = Vector3(8,-2,3)
 var ROI_CELLS: Vector3i = Vector3i(8,20,12)
 var STEP: float = 0.5
-const ROOT_ITERATIONS := 8
+# R9.4-A attempt 3: 20 bisections improved the neighboring seam but exceeded
+# the frozen 10,000 unique-sample stop loss on the negative-region pair. Twelve
+# iterations are an evidence-based bounded compromise: 50% more root bisections
+# than the original 8 passes, while staying below the frozen sample stop loss.
+const ROOT_ITERATIONS := 12
 var _manifest: Dictionary = {}
 var _failures: Array[String] = []
 var _assertions := 0
 var _sample_cache: Dictionary = {}
 var _root_cache: Dictionary = {}
 var _started := 0
+var _quad_historical_selections:int=0
+var _quad_alternate_selections:int=0
+var _quad_pair_rejections:int=0
 
 func configure_roi(roi: Dictionary) -> void:
 	ROI_MIN = Core.world_min(roi)
@@ -29,6 +36,7 @@ func build(snapshot: Dictionary, _row: Dictionary, _variant: Dictionary) -> Dict
 func _build_mt(snapshot: Dictionary) -> Dictionary:
 	var begin := Time.get_ticks_usec()
 	_sample_cache.clear(); _root_cache.clear()
+	_quad_historical_selections=0;_quad_alternate_selections=0;_quad_pair_rejections=0
 	var dims := ROI_CELLS+Vector3i.ONE
 	var total := dims.x*dims.y*dims.z
 	if total > Core.MAX_NODES: return {"valid":false,"reason":"sample_node_stop_loss"}
@@ -60,6 +68,7 @@ func _build_mt(snapshot: Dictionary) -> Dictionary:
 	return {"valid":true,"mesh":mesh,"mesh_sha256":_mesh_sha(mesh),"metrics":{"grid_nodes":total,
 		"unique_canonical_samples_including_root_iterations":_sample_cache.size(),"root_iterations":ROOT_ITERATIONS,
 		"root_edge_requests":root_requests,"cached_root_edges":_root_cache.size(),"cutoff_drops":dropped,
+		"quad_historical_selections":_quad_historical_selections,"quad_alternate_selections":_quad_alternate_selections,"quad_pair_rejections":_quad_pair_rejections,
 		"triangle_count":mesh.positions.size()/3,"build_usec":Time.get_ticks_usec()-begin}}
 
 func _polygonize_tet(tet:Array,cube_points:Array[Vector3],cube_values:Array[float],snapshot:Dictionary,mesh:Dictionary)->Dictionary:
@@ -83,11 +92,55 @@ func _polygonize_tet(tet:Array,cube_points:Array[Vector3],cube_values:Array[floa
 		var c:=_edge_root(inside[1],outside[0],cube_points,cube_values,snapshot); var d:=_edge_root(inside[1],outside[1],cube_points,cube_values,snapshot)
 		edges=4
 		if not a.valid or not b.valid or not c.valid or not d.valid:return {"root_edges":edges,"dropped":0}
-		faces.append([a.point,b.point,d.point]); faces.append([a.point,d.point,c.point])
+		# The tetrahedron/zero-plane intersection is a convex quad in cyclic order
+		# a,b,d,c. Keep the historical diagonal when both of its triangles pass;
+		# otherwise use the alternate diagonal only when its complete pair passes
+		# the unchanged squared-cross cutoff. Never emit half a quad.
+		var emitted: Dictionary = _emit_quad(a.point,b.point,d.point,c.point,empty_dir,mesh)
+		return {"root_edges":edges,"dropped":int(emitted.get("dropped",0))}
 	var dropped:=0
 	for tri in faces:
 		if not Core.add_triangle(mesh,tri[0],tri[1],tri[2],empty_dir,1.0e-12): dropped+=1
 	return {"root_edges":edges,"dropped":dropped}
+
+func _emit_quad(a:Vector3,b:Vector3,d:Vector3,c:Vector3,toward_empty:Vector3,mesh:Dictionary)->Dictionary:
+	var old_diagonal:=_triangle_passes_cutoff(a,b,d) and _triangle_passes_cutoff(a,d,c)
+	var alternate_diagonal:=_triangle_passes_cutoff(a,b,c) and _triangle_passes_cutoff(b,d,c)
+	var old_positions:int=mesh.positions.size();var old_normals:int=mesh.normals.size();var old_indices:int=mesh.indices.size()
+	if old_diagonal:
+		if Core.add_triangle(mesh,a,b,d,toward_empty,1.0e-12) and Core.add_triangle(mesh,a,d,c,toward_empty,1.0e-12):
+			_quad_historical_selections+=1
+			return {"emitted":2,"dropped":0,"diagonal":"historical"}
+		_rollback_triangles(mesh,old_positions,old_normals,old_indices)
+	if alternate_diagonal:
+		if Core.add_triangle(mesh,a,b,c,toward_empty,1.0e-12) and Core.add_triangle(mesh,b,d,c,toward_empty,1.0e-12):
+			_quad_alternate_selections+=1
+			return {"emitted":2,"dropped":0,"diagonal":"alternate"}
+		_rollback_triangles(mesh,old_positions,old_normals,old_indices)
+	# A failed second insertion must not leave half of the quad published.
+	_quad_pair_rejections+=1
+	return {"emitted":0,"dropped":2,"diagonal":"no_complete_valid_pair"}
+
+func _rollback_triangles(mesh:Dictionary,positions_size:int,normals_size:int,indices_size:int)->void:
+	var positions:PackedVector3Array=mesh.positions;positions.resize(positions_size);mesh.positions=positions
+	var normals:PackedVector3Array=mesh.normals;normals.resize(normals_size);mesh.normals=normals
+	var indices:PackedInt32Array=mesh.indices;indices.resize(indices_size);mesh.indices=indices
+
+func _triangle_passes_cutoff(a:Vector3,b:Vector3,c:Vector3)->bool:
+	var cross:Vector3=(b-a).cross(c-a)
+	return cross.is_finite() and cross.length_squared()>1.0e-12
+
+func diagonal_selection_regression()->Dictionary:
+	# The historical diagonal A-D contains one sub-cutoff triangle, while B-C
+	# produces two valid triangles. This is a routing regression, not a relaxed
+	# degeneracy threshold.
+	var a:=Vector3(0.0,0.0,0.0);var b:=Vector3(1.0,0.0,0.0)
+	var d:=Vector3(2.0,1.0e-8,0.0);var c:=Vector3(0.0,1.0,0.0)
+	var historical:=_triangle_passes_cutoff(a,b,d) and _triangle_passes_cutoff(a,d,c)
+	var alternate:=_triangle_passes_cutoff(a,b,c) and _triangle_passes_cutoff(b,d,c)
+	return {"historical_pair_valid":historical,"alternate_pair_valid":alternate,
+		"cutoff_squared":1.0e-12,"selected":"alternate" if not historical and alternate else "historical" if historical else "none",
+		"valid":not historical and alternate}
 
 func _edge_root(ai:int,bi:int,points:Array[Vector3],values:Array[float],snapshot:Dictionary)->Dictionary:
 	var a:Vector3=points[ai]; var b:Vector3=points[bi]; var da:float=values[ai]; var db:float=values[bi]
