@@ -15,6 +15,19 @@ failure is preserved under
 explicitly `bool`; no candidate source, frozen input, or expected result was
 changed. Any subsequent execution uses a new committed oracle identity.
 
+The first A diagnostic at oracle commit `44efe3b0df998b83be5afff94e6db7f03ea6db40`
+completed but is not valid ray-oracle evidence. It exposed an unsound adaptive
+prune: child visitation used a quarter-parent-width test, although a possible
+root may lie as far as half the parent width from the midpoint sample. This
+missed two analytic roots on ray indices 0, 5, 6, 10 and 11. The initial ray
+classification also compared only the global first root, even when that root
+lay outside the cropped mesh ROI. The full attempt is preserved at
+`C:\r95-evidence\oracle-A-44efe3b`; its candidate geometry counts are retained
+as unqualified diagnostics, not conclusions. The next pinned oracle revision
+uses a complete-interval 1-Lipschitz exclusion, compares the analytical root
+set with the adaptive root set, records the legacy 256-step scan, and compares
+mesh hits with every canonical root inside the same ROI.
+
 | Candidate | Measured source commit | Direct parent | Original candidate file SHA-256 | R9.5 snapshot |
 |---|---|---|---|---|
 | A | f0c93415dd56886a1c05ff2e6a1340e420f22c59 | d5903242e41642a2633e18dc181c4389188c65b2 | 970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a | game/tests/prototypes/r9_5_source_snapshots/candidate_a.gd |

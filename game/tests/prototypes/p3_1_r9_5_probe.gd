@@ -37,23 +37,33 @@ func _run() -> void:
 		var ray: Dictionary = rays[i]
 		var exact: Dictionary = _analytic_roots(ray,int(ray_row.seed),setup.snapshot)
 		var adaptive: Dictionary = _adaptive_roots(ray,setup.snapshot)
+		var finite: Dictionary = Core.canonical_ray_roots(ray.origin,ray.direction,float(ray.length),setup.snapshot,int(ray_row.seed),256,32)
 		var hits: Dictionary = _mesh_hits(ray,built.mesh)
-		var first: Dictionary = exact.get("first",{})
+		var root_comparison: Dictionary = _compare_root_sets(exact,adaptive)
 		var lo: Vector3 = Core.world_min(ray_row.roi)
 		var hi: Vector3 = lo + Vector3(Core.cell_counts(ray_row.roi))*Core.step(ray_row.roi)
-		var inside := false
+		var roi_roots: Array[Dictionary] = []
+		for root in exact.get("roots",[]):
+			var p: Vector3 = root.position
+			if p.x>=lo.x-1e-6 and p.x<=hi.x+1e-6 and p.y>=lo.y-1e-6 and p.y<=hi.y+1e-6 and p.z>=lo.z-1e-6 and p.z<=hi.z+1e-6:
+				roi_roots.append(root)
+		var hit_distances: Array[float] = _cluster_hit_distances(hits.get("hits",[]),1e-5)
+		var position_deltas: Array[Dictionary] = _mesh_root_deltas(roi_roots,hit_distances)
+		var first: Dictionary = exact.get("first",{})
+		var first_inside := false
 		if not first.is_empty():
-			var p: Vector3 = first.position
-			inside = p.x>=lo.x-1e-6 and p.x<=hi.x+1e-6 and p.y>=lo.y-1e-6 and p.y<=hi.y+1e-6 and p.z>=lo.z-1e-6 and p.z<=hi.z+1e-6
-		var classification := "ANALYTIC_ADAPTIVE_AGREE"
-		if not exact.valid or not adaptive.valid: classification="ROOT_ORACLE_INCOMPLETE"
-		elif int(exact.root_count) != int(adaptive.root_count) or (not first.is_empty() and absf(float(adaptive.roots[0].distance)-float(first.distance))>5e-5):
-			classification="ANALYTIC_ADAPTIVE_ROOT_MISMATCH"; failures += 1
-		elif not inside: classification="FIRST_ROOT_OUTSIDE_CROPPED_MESH_ROI"
-		elif bool(hits.hit)!=(not first.is_empty()): classification="IN_ROI_HIT_MISS"
-		elif not first.is_empty() and absf(float(hits.distance)-float(first.distance))>0.01: classification="IN_ROI_POSITION"
+			var first_position: Vector3 = first.position
+			first_inside=first_position.x>=lo.x-1e-6 and first_position.x<=hi.x+1e-6 and first_position.y>=lo.y-1e-6 and first_position.y<=hi.y+1e-6 and first_position.z>=lo.z-1e-6 and first_position.z<=hi.z+1e-6
+		var hit_miss_disagrees := (not roi_roots.is_empty()) != (not hit_distances.is_empty())
+		var classification := "ROOT_ORACLES_CONCORDANT"
+		if not exact.valid or not adaptive.valid or not root_comparison.valid:
+			classification="ROOT_ORACLE_INCOMPLETE_OR_DISAGREEMENT"
+			failures += 1
+		elif hit_miss_disagrees: classification="IN_ROI_HIT_MISS"
+		elif not position_deltas.is_empty(): classification="IN_ROI_DISTANCE_DIAGNOSTIC"
+		if not first_inside and not first.is_empty(): classification += "_GLOBAL_FIRST_ROOT_CROPPED"
 		classes[classification]=int(classes.get(classification,0))+1
-		print("R95_RAY " + JSON.stringify({"run_id":run_id,"candidate":cid,"source_sha":csha,"oracle_sha":oracle_sha,"ray_index":i,"ray":ray,"analytic":exact,"adaptive":adaptive,"mesh_two_sided":hits,"first_root_inside_roi":inside,"classification":classification}))
+		print("R95_RAY " + JSON.stringify({"run_id":run_id,"candidate":cid,"source_sha":csha,"oracle_sha":oracle_sha,"ray_index":i,"ray":ray,"analytic":exact,"adaptive":adaptive,"finite_scan_256":finite,"root_comparison":root_comparison,"canonical_roots_inside_mesh_roi":roi_roots,"mesh_two_sided":hits,"unique_mesh_hit_distances_clustered_1e-5_for_dedup_only":hit_distances,"mesh_root_distance_deltas":position_deltas,"global_first_root_inside_mesh_roi":first_inside,"classification":classification}))
 	print("R95_RAY_SUMMARY " + JSON.stringify({"candidate":cid,"source_sha":csha,"manifest_sha":MANIFEST_SHA,"ray_count":rays.size(),"classifications":classes,"candidate_mesh_sha256":built.get("mesh_sha256",""),"roi":ray_row.roi,"metrics":built.get("metrics",{})}))
 	_print_shared_samples(setup.snapshot)
 	_run_xplus(candidate,manifest)
@@ -90,7 +100,7 @@ func _adaptive_roots(ray: Dictionary,snapshot: Dictionary)->Dictionary:
 	var f0:=_f(0.0,ctx);var f1:=_f(length,ctx);_visit(0.0,length,f0,f1,0,ctx)
 	if not String(ctx.failure).is_empty():return {"valid":false,"reason":ctx.failure,"evaluations":ctx.evaluations}
 	var roots:Array=ctx.roots;roots.sort_custom(func(a:Dictionary,b:Dictionary)->bool:return float(a.distance)<float(b.distance))
-	return {"valid":true,"roots":roots,"root_count":roots.size(),"unresolved_tangent_intervals":ctx.unresolved,"evaluations":ctx.evaluations,"distance_tolerance":1e-5,"bound":"1-Lipschitz interval exclusion; unresolved same-sign candidates remain explicit","method":"bounded adaptive subdivision plus bisection; not claimed complete for tangencies"}
+	return {"valid":true,"roots":roots,"root_count":roots.size(),"unresolved_tangent_intervals":ctx.unresolved,"evaluations":ctx.evaluations,"distance_tolerance":1e-5,"bound":"1-Lipschitz exclusion only when an endpoint absolute value exceeds the complete interval width; unresolved same-sign candidates remain explicit","method":"bounded adaptive subdivision plus bisection; not claimed complete for tangencies"}
 
 func _f(t:float,ctx:Dictionary)->float:
 	ctx.evaluations=int(ctx.evaluations)+1
@@ -99,15 +109,54 @@ func _f(t:float,ctx:Dictionary)->float:
 
 func _visit(a:float,b:float,fa:float,fb:float,depth:int,ctx:Dictionary)->void:
 	if not String(ctx.failure).is_empty():return
+	var width:=b-a
+	# For a 1-Lipschitz field, |f(endpoint)| greater than the complete interval
+	# width proves that zero cannot occur anywhere in this interval. Using half
+	# a child width here is unsound when a root lies near that child's far end.
+	if absf(fa)>width+1e-7 or absf(fb)>width+1e-7:return
 	var m:=(a+b)*0.5;var fm:=_f(m,ctx);if not is_finite(fm):ctx.failure="nonfinite_density";return
-	var left_change:=(fa<0.0)!=(fm<0.0);var right_change:=(fm<0.0)!=(fb<0.0);var width:=b-a
+	var left_change:=(fa<0.0)!=(fm<0.0);var right_change:=(fm<0.0)!=(fb<0.0)
 	if width<=1e-5 or depth>=24:
+		if fa==0.0:_record_root(a,ctx,"exact_endpoint")
 		if left_change:_bisect(a,m,fa,ctx)
+		if fm==0.0:_record_root(m,ctx,"exact_midpoint")
 		if right_change:_bisect(m,b,fm,ctx)
-		if not left_change and not right_change and absf(fm)<=width*0.5+1e-7:ctx.unresolved.append({"lo":a,"hi":b,"sample_abs":absf(fm)})
+		if fb==0.0:_record_root(b,ctx,"exact_endpoint")
+		if not left_change and not right_change and fa!=0.0 and fm!=0.0 and fb!=0.0 and minf(absf(fa),minf(absf(fm),absf(fb)))<=width+1e-7:
+			ctx.unresolved.append({"lo":a,"hi":b,"sample_abs_min":minf(absf(fa),minf(absf(fm),absf(fb)))})
 		return
-	if left_change or absf(fm)<=(m-a)*0.5+1e-7:_visit(a,m,fa,fm,depth+1,ctx)
-	if right_change or absf(fm)<=(b-m)*0.5+1e-7:_visit(m,b,fm,fb,depth+1,ctx)
+	_visit(a,m,fa,fm,depth+1,ctx)
+	_visit(m,b,fm,fb,depth+1,ctx)
+
+func _record_root(t:float,ctx:Dictionary,kind:String)->void:
+	for old in ctx.roots:
+		if absf(float(old.distance)-t)<2e-5:return
+	ctx.roots.append({"distance":t,"interval":[t,t],"residual":_f(t,ctx),"kind":kind})
+
+func _compare_root_sets(exact:Dictionary,adaptive:Dictionary)->Dictionary:
+	var missing:Array=[];var matched:Array=[];var tangent_unresolved:Array=[];var extras:Array=[];var unmatched_unresolved:Array=[]
+	var exact_roots:Array=exact.get("roots",[]);var adaptive_roots:Array=adaptive.get("roots",[]);var unresolved:Array=adaptive.get("unresolved_tangent_intervals",[])
+	for expected in exact_roots:
+		var t:float=float(expected.distance);var nearest:float=INF
+		for actual in adaptive_roots:nearest=minf(nearest,absf(float(actual.distance)-t))
+		if nearest<=5e-5:matched.append({"distance":t,"adaptive_delta":nearest})
+		else:
+			var interval_match:bool=false
+			if bool(expected.tangent_candidate):
+				for span in unresolved:
+					if t>=float(span.lo)-1e-5 and t<=float(span.hi)+1e-5:interval_match=true;break
+			if interval_match:tangent_unresolved.append(t)
+			else:missing.append({"distance":t,"branch":expected.branch,"nearest_adaptive_delta":nearest})
+	for actual in adaptive_roots:
+		var nearest:float=INF
+		for expected in exact_roots:nearest=minf(nearest,absf(float(expected.distance)-float(actual.distance)))
+		if nearest>5e-5:extras.append({"distance":actual.distance,"nearest_analytic_delta":nearest})
+	for span in unresolved:
+		var belongs_to_tangent:bool=false
+		for expected in exact_roots:
+			if bool(expected.tangent_candidate) and float(expected.distance)>=float(span.lo)-1e-5 and float(expected.distance)<=float(span.hi)+1e-5:belongs_to_tangent=true;break
+		if not belongs_to_tangent:unmatched_unresolved.append(span)
+	return {"valid":missing.is_empty() and extras.is_empty() and unmatched_unresolved.is_empty(),"matched":matched,"tangent_unresolved_matches":tangent_unresolved,"missing":missing,"extras":extras,"unresolved_interval_count":unresolved.size(),"unmatched_unresolved_count":unmatched_unresolved.size(),"unresolved_intervals_first_8":unresolved.slice(0,8)}
 
 func _bisect(a:float,b:float,fa:float,ctx:Dictionary)->void:
 	var lo:=a;var hi:=b;var low:=fa
@@ -120,6 +169,23 @@ func _bisect(a:float,b:float,fa:float,ctx:Dictionary)->void:
 	for old in ctx.roots:
 		if absf(float(old.distance)-root)<2e-5:return
 	ctx.roots.append({"distance":root,"interval":[lo,hi],"residual":_f(root,ctx)})
+
+func _cluster_hit_distances(hits:Array,tolerance:float)->Array[float]:
+	var ordered:Array[float]=[]
+	for hit in hits:ordered.append(float(hit.distance))
+	ordered.sort()
+	var unique:Array[float]=[]
+	for t in ordered:
+		if unique.is_empty() or absf(t-unique[unique.size()-1])>tolerance:unique.append(t)
+	return unique
+
+func _mesh_root_deltas(roots:Array[Dictionary],hit_distances:Array[float])->Array[Dictionary]:
+	var rows:Array[Dictionary]=[]
+	for root in roots:
+		var nearest:=INF
+		for t in hit_distances:nearest=minf(nearest,absf(t-float(root.distance)))
+		rows.append({"canonical_branch":root.branch,"canonical_distance":root.distance,"nearest_two_sided_mesh_distance":null if nearest==INF else nearest,"nearest_absolute_distance_error":null if nearest==INF else nearest})
+	return rows
 
 func _mesh_hits(ray:Dictionary,mesh:Dictionary)->Dictionary:
 	var p:PackedVector3Array=mesh.get("positions",PackedVector3Array());var d:Vector3=ray.direction.normalized();var hits:Array[Dictionary]=[]

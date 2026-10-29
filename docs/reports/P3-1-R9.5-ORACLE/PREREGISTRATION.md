@@ -41,6 +41,18 @@ are bisected; same-sign possible tangent intervals remain explicitly
 unresolved. It has a 50,000 density-evaluation cap per ray and 1e-5 interval
 width. No completeness claim is made for unresolved tangencies.
 
+The adaptive implementation applies interval exclusion only when the absolute
+density at an interval endpoint exceeds the complete interval width (with a
+small arithmetic guard); this follows directly from the 1-Lipschitz bound.
+It recursively checks both halves otherwise. A separately recorded 256-step
+finite scan remains a comparison method, never the completeness oracle. The
+analytic and adaptive root sets are compared; unresolved same-sign intervals
+are acceptable only when they overlap an analytically identified tangent.
+Candidate intersections are compared against all canonical roots inside the
+candidate ROI, while a nearer global root outside that cropped ROI is reported
+separately. This avoids mislabeling a correctly cropped mesh as a missed global
+first surface.
+
 Candidate intersections are computed independently with two-sided
 Moller-Trumbore and cross-checked against the existing CPU triangle helper.
 Every full-field first root is classified against the mesh ROI before comparing
