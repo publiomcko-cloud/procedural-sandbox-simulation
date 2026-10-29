@@ -8,12 +8,13 @@ const CandidateD := preload("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd"
 const BaselineA := preload("res://tests/prototypes/r9_5_source_snapshots/candidate_a.gd")
 const BaselineD := preload("res://tests/prototypes/r9_5_source_snapshots/candidate_d.gd")
 const MANIFEST_SHA := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
-const CANDIDATE_FILE_SHA := {"A":"dc700b20eee78b8b8568549f9a66fee452a14dd3d9171c6dee9f5e479f0e2bd6", "D":"37cf20740511ec6ecb927850f182bc333173f2f1771449e484427efe6d8e8a98"}
+const CANDIDATE_FILE_SHA := {"A":"dc700b20eee78b8b8568549f9a66fee452a14dd3d9171c6dee9f5e479f0e2bd6", "D":"a0b5a38bcc4a76eaf48401ec79baacc627e6ea2c677f231dcce41ad39cadc6fd"}
 const BASELINE_FILE_SHA := {"A":"970fe99f192ea2a3fea3e682072ed3562e6f57c843561dd4440e46381a384d8a", "D":"a33b464ea569f54fb39b72d2198fa971796c0cb5370a64a9696362cd0313f2a6"}
 const SEED := 131102026
 var cid := ""
 var csha := ""
 var run_id := ""
+var attempt_id := ""
 var failures := 0
 var roi_ray_mismatches := 0
 var artifact_paths: Array[String] = []
@@ -25,19 +26,20 @@ func _run() -> void:
 	cid = OS.get_environment("R95_CANDIDATE_ID")
 	csha = OS.get_environment("R95_CANDIDATE_SOURCE_SHA")
 	run_id = OS.get_environment("R95_RUN_ID")
+	attempt_id = OS.get_environment("R96R1_ATTEMPT")
 	var oracle_sha := OS.get_environment("R95_ORACLE_SHA")
 	var candidate_file_sha := _sha_res_file("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd")
 	var baseline_file_sha := _sha_res_file("res://tests/prototypes/r9_5_source_snapshots/candidate_%s.gd" % cid.to_lower())
 	var manifest := Core.load_manifest()
-	if not ["A","D"].has(cid) or csha.length()!=40 or not csha.is_valid_hex_number() or run_id.is_empty() or candidate_file_sha != String(CANDIDATE_FILE_SHA.get(cid,"")) or baseline_file_sha != String(BASELINE_FILE_SHA.get(cid,"")) or oracle_sha.length() != 40 or not oracle_sha.is_valid_hex_number() or not manifest.get("valid", false) or manifest.get("sha256", "") != MANIFEST_SHA:
-		print("R96R1_BLOCKED " + JSON.stringify({"candidate":cid,"candidate_sha":csha,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"oracle_sha":oracle_sha,"manifest":manifest.get("reason","ok")})); quit(2); return
+	if not ["A","D"].has(cid) or csha.length()!=40 or not csha.is_valid_hex_number() or run_id.is_empty() or not ["ATTEMPT_A2","ATTEMPT_A3","ATTEMPT_D2","ATTEMPT_D3","ATTEMPT_1_TOPOLOGY_FIRST"].has(attempt_id) or candidate_file_sha != String(CANDIDATE_FILE_SHA.get(cid,"")) or baseline_file_sha != String(BASELINE_FILE_SHA.get(cid,"")) or oracle_sha.length() != 40 or not oracle_sha.is_valid_hex_number() or not manifest.get("valid", false) or manifest.get("sha256", "") != MANIFEST_SHA:
+		print("R96R1_BLOCKED " + JSON.stringify({"candidate":cid,"candidate_sha":csha,"attempt":attempt_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"oracle_sha":oracle_sha,"manifest":manifest.get("reason","ok")})); quit(2); return
 	var script: Script = CandidateA if cid == "A" else CandidateD
 	var candidate: RefCounted = script.new()
 	var baseline_script: Script = BaselineA if cid == "A" else BaselineD
 	var baseline: RefCounted = baseline_script.new()
 	var root_identity_probe:Dictionary=candidate.call("canonical_root_identity_probe",{})
 	if not bool(root_identity_probe.get("valid",false)):failures+=1
-	print("R96R1_ROOT_IDENTITY "+JSON.stringify({"candidate":cid,"source_sha":csha,"probe":root_identity_probe}))
+	print("R96R1_ROOT_IDENTITY "+JSON.stringify({"candidate":cid,"source_sha":csha,"attempt":attempt_id,"probe":root_identity_probe}))
 	var ray_row: Dictionary = Core.case_by_id(manifest.rows,"R9.2.RAY.CANONICAL_PICKER.v1")
 	var setup: Dictionary = Core.make_snapshot(ray_row)
 	candidate.call("configure_roi",ray_row.roi)
@@ -104,7 +106,7 @@ func _run() -> void:
 	_run_xplus(candidate,baseline,manifest)
 	_run_frozen_controls(candidate,baseline,manifest)
 	_run_preserved_geometry_controls(candidate,baseline,manifest)
-	print("R96R1_COMPLETE " + JSON.stringify({"candidate":cid,"source_sha":csha,"run_id":run_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"oracle_sha":oracle_sha,"manifest_sha256":MANIFEST_SHA,"ray_count":rays.size(),"roi_scoped_hit_miss_disagreements":roi_ray_mismatches,"root_identity_probe":root_identity_probe.get("valid",false),"artifacts":artifact_paths,"failure_count":failures,"status":"ATTEMPT_1_TOPOLOGY_FIRST"})); quit(1 if failures>0 else 0)
+	print("R96R1_COMPLETE " + JSON.stringify({"candidate":cid,"source_sha":csha,"attempt":attempt_id,"run_id":run_id,"candidate_file_sha256":candidate_file_sha,"baseline_file_sha256":baseline_file_sha,"oracle_sha":oracle_sha,"manifest_sha256":MANIFEST_SHA,"ray_count":rays.size(),"roi_scoped_hit_miss_disagreements":roi_ray_mismatches,"root_identity_probe":root_identity_probe.get("valid",false),"artifacts":artifact_paths,"failure_count":failures,"status":"ATTEMPT_RESULTS_CAPTURED"})); quit(1 if failures>0 else 0)
 
 func _analytic_roots(ray: Dictionary, seed: int, snapshot: Dictionary) -> Dictionary:
 	var o: Vector3 = ray.origin
@@ -249,17 +251,19 @@ func _run_xplus(candidate:RefCounted,baseline:RefCounted,manifest:Dictionary)->v
 		var setup:Dictionary=Core.make_snapshot(row);candidate.call("configure_roi",row.roi);var full:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"default","roi":row.roi})
 		baseline.call("configure_roi",row.roi);var baseline_full:Dictionary=baseline.call("build",setup.snapshot,row,{"id":"default","roi":row.roi})
 		var full_hash_equal:bool=full.get("valid",false) and baseline_full.get("valid",false) and String(full.get("mesh_sha256",""))==String(baseline_full.get("mesh_sha256",""))
-		if not full_hash_equal:failures+=1
+		var d2_full_target:bool=cid=="D" and attempt_id=="ATTEMPT_D2" and id in ["R9.2.SEAM.XPLUS_EQUAL.v1","R9.2.SEAM.XPLUS_MIXED_LOD.v1","R9.2.HIST.XPLUS_DEFECT.v1"] and bool(full.get("metrics",{}).get("extract",{}).get("d2_enabled",false))
+		if not full_hash_equal and not d2_full_target:failures+=1
 		if full.get("valid",false):
 			var full_artifact:Dictionary=_write_topology_artifact(id,"full_roi",full,row.roi)
 			if not bool(full_artifact.get("valid",false)):failures+=1
 		else:failures+=1
 		var lo:Vector3=Core.world_min(row.roi);var hi:=lo+Vector3(Core.cell_counts(row.roi))*Core.step(row.roi)
 		if full.get("valid",false) and cid=="A":print("R95_CUTOFF_TRACE "+JSON.stringify(_trace_a_cutoffs(candidate,setup.snapshot,row.roi,full.mesh,int(full.get("metrics",{}).get("cutoff_drops",-1)))))
-		elif full.get("valid",false) and cid=="D":
+		elif full.get("valid",false) and cid=="D" and not d2_full_target:
 			var volume:Dictionary=full.get("volume",{})
 			print("R95_CUTOFF_TRACE "+JSON.stringify(_trace_d_cutoffs(candidate,volume.get("values",PackedFloat32Array()),row.roi,full.mesh,int(full.get("metrics",{}).get("extract",{}).get("cutoff_drops",-1)))))
-		print("R95_XPLUS "+JSON.stringify({"scenario_id":id,"candidate":cid,"source_sha":csha,"scope":"single-ROI historical proxy, not chunk join","mesh_sha256":full.get("mesh_sha256",""),"baseline_mesh_sha256":baseline_full.get("mesh_sha256",""),"baseline_mesh_hash_equal":full_hash_equal,"metrics":full.get("metrics",{}),"exact_topology":_exact_topology(full.get("mesh",Core.new_mesh()),lo,hi) if full.get("valid",false) else {}, "valid":full.get("valid",false)}))
+		if d2_full_target:print("R96R1_D2_SUMMARY "+JSON.stringify({"scenario_id":id,"candidate":cid,"attempt":attempt_id,"source_sha":csha,"expected_hash_change_from_baseline":true,"mesh_sha256":full.get("mesh_sha256",""),"baseline_mesh_sha256":baseline_full.get("mesh_sha256",""),"materialized_volume_before_after_hashes":{"full_before":full.get("metrics",{}).get("d2_full_volume_hash_before_materialization_extract",""),"full_after_reload":full.get("metrics",{}).get("d2_full_volume_hash_after_persist_reload",""),"payload_before":full.get("metrics",{}).get("d2_payload_hash_before_extract",""),"payload_after":full.get("metrics",{}).get("d2_payload_hash_after_extract",""),"payload_identity_preserved":full.get("metrics",{}).get("d2_payload_identity_preserved",false)},"refinement":full.get("metrics",{}).get("extract",{}),"actual_topology":_topology_summary(full.get("topology",{})),"volume_authority":"materialized float32 payload retained; D2 derives centroid values and roots only from that payload; canonical SDF resampling count is reported as zero"}))
+		print("R95_XPLUS "+JSON.stringify({"scenario_id":id,"candidate":cid,"attempt":attempt_id,"source_sha":csha,"scope":"single-ROI historical proxy, not chunk join","mesh_sha256":full.get("mesh_sha256",""),"baseline_mesh_sha256":baseline_full.get("mesh_sha256",""),"baseline_mesh_hash_equal":full_hash_equal,"baseline_hash_equality_required":not d2_full_target,"metrics":full.get("metrics",{}),"exact_topology":_exact_topology(full.get("mesh",Core.new_mesh()),lo,hi) if full.get("valid",false) else {}, "valid":full.get("valid",false)}))
 		var mixed: bool = id.ends_with("MIXED_LOD.v1");var left_roi:Dictionary={"id":"L","min":[15.0,1.0,6.0],"cells":[2,4,4] if mixed else [4,8,8],"step":0.5 if mixed else 0.25};var right_roi:Dictionary={"id":"R","min":[16.0,1.0,6.0],"cells":[4,8,8],"step":0.25}
 		candidate.call("configure_roi",left_roi);var left:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"L","roi":left_roi});candidate.call("configure_roi",right_roi);var right:Dictionary=candidate.call("build",setup.snapshot,row,{"id":"R","roi":right_roi})
 		baseline.call("configure_roi",left_roi);var baseline_left:Dictionary=baseline.call("build",setup.snapshot,row,{"id":"L","roi":left_roi});baseline.call("configure_roi",right_roi);var baseline_right:Dictionary=baseline.call("build",setup.snapshot,row,{"id":"R","roi":right_roi})
