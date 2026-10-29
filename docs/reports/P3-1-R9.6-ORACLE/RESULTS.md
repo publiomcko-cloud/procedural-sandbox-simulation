@@ -17,17 +17,17 @@ This branch adds a test-only topology ledger and its focused GDScript checks. It
 | Diagnostic import direct parent | `895dbca3c6dd58bb9adacd63fb39c3ad524226ff` |
 | Diagnostic helper blob at import | `8f0f08b76f1d1a21089061c163858b43bd924918` |
 | Diagnostic helper physical SHA-256 at import | `1a3a1caa4e4edfe7de78d697cbd2272c89368e489a125a57e91044fafb7228ff` |
-| Topology diagnostic source HEAD (before report commits) | `9319c7d21cab4febda2a2f0f75f31cc7826eac8d` |
-| Current HEAD parent | `bc99419f4894b26889b2c290f84a741454784ceb` |
+| Topology diagnostic source HEAD at first failed import | `f69e39e0ed4a67fe7f26b771cdec7ce70f53ddda` (parent `895dbca3c6dd58bb9adacd63fb39c3ad524226ff`) |
+| Final topology-test typing correction | `ead621be9a01b9aa711c6121839369ebefc671b8` (parent `e30a5acb2f120184fb0b6902b9df3aa45fb9925e`) |
 | Current helper blob / physical SHA-256 | `a585941a19d5477e4b45f3c01d9730946489401a` / `b7cac8b0c11cc57b4272ae6e105ff676fffe2cfb8621484b60a62218f27d3d29` |
-| Current topology-test blob / physical SHA-256 | `442c9aa2f17991eefd50d454bbe31f1023376a33` / `6ab30612056a6723280e83acacb486ed97b2980c5811562ca63e0430710f2270` |
+| Current topology-test blob / physical SHA-256 | `24a51059fd07fae39a636d241fe44346dcab7961` / `bc297e82890ba438b3a773dad4e6e5feda60b442bb8524ec59ba6b8704952f9d` |
 | Godot 4.7.2 binary | `C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe`, SHA-256 `c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643` |
 
 ## Topology-first diagnostic artifact
 
 `p3_1_r9_6_surface_topology.gd` stores stable root identities, points and owners; triangle-to-root connectivity; face arcs; per-edge required/emitted incidence; a deterministic topology hash; connected surface components; ROI-boundary ownership labels; and connected open-edge loop diagnostics. Geometry rejection is recorded separately from graph validity. A valid graph with rejected triangles explicitly reports `geometry_realization_complete=false`, so recording required connectivity cannot be mistaken for a mesh fix.
 
-The test script includes positive closed-pair/component cases, deterministic insertion-order hashing, boundary ownership, duplicate-root and duplicate-triangle rejection, and a negative partial-realization case proving that a cutoff-rejected triangle stays in the required graph and exposes missing adjacency/open edges. It contains **38 assertion call sites by static count; none has executed**. It does not yet capture A/D tetrahedron root identities or produce replacement geometry. It is a shared diagnostic contract, not Attempt 1 for either candidate.
+The test script includes positive closed-pair/component cases, deterministic insertion-order hashing, boundary ownership, duplicate-root and duplicate-triangle rejection, and a negative partial-realization case proving that a cutoff-rejected triangle stays in the required graph and exposes missing adjacency/open edges. A final static audit changed test-local dynamic API annotations from `RefCounted` to `Variant`; this compiler-safety correction does not change geometry or count as a candidate attempt. The script contains **38 assertion call sites by static count; none has executed**. It does not yet capture A/D tetrahedron root identities or produce replacement geometry. It is a shared diagnostic contract, not Attempt 1 for either candidate.
 
 ## Execution evidence and stop reason
 
