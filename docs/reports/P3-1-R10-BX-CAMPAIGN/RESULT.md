@@ -160,4 +160,4 @@ Existing workspace worktrees, both stashes, user saves, and F2-G1 holds were lef
 
 ## Publication
 
-This report is intended for a new draft evidence PR stacked on R10-B PR #208. The final publication commit and new PR URL are recorded in the response after push/creation. The draft remains unmerged.
+Draft evidence PR: [#209](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/209), stacked on [R10-B PR #208](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/208). At publication verification, #209 was open, draft, unmerged, based on `exp/p3-1-r10-b-constrained-realization` at `4e032085da53c43e78fe6b7ca3af1f569ede03d8`; its remote branch matched the locally published source/report commits. The measured code identity remains `42012b476adb1369a5b281dfe8dac2a38b700751`; publication adds report-only commits after that source. PRs #207 and #208 remain open, draft, and unmerged.
