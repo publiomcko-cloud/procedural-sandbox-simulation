@@ -1,5 +1,5 @@
 param(
-	[Parameter(Mandatory = $true)][ValidateSet('import', 'check-only', 'geometry')][string]$Stage,
+	[Parameter(Mandatory = $true)][ValidateSet('import', 'check-only', 'check-authority', 'geometry')][string]$Stage,
 	[Parameter(Mandatory = $true)][string]$AttemptId,
 	[Parameter(Mandatory = $true)][string]$Hypothesis,
 	[Parameter(Mandatory = $true)][string]$EvidenceRoot
@@ -25,6 +25,7 @@ if ($candidateSha -ne $expectedCandidateSha) { throw "Candidate D byte pin misma
 $arguments = switch ($Stage) {
 	'import' { @('--headless', '--path', './game', '--editor', '--import') }
 	'check-only' { @('--headless', '--path', './game', '--check-only', '--script', 'res://tests/prototypes/p3_1_r10_a_campaign.gd') }
+	'check-authority' { @('--headless', '--path', './game', '--check-only', '--script', 'res://tests/prototypes/p3_1_r10_a_topology_authority.gd') }
 	'geometry' { @('--headless', '--path', './game', '--script', 'res://tests/prototypes/p3_1_r10_a_campaign.gd') }
 }
 $commandLine = $arguments -join ' '
@@ -118,7 +119,7 @@ $terminalResult = 'NOT_AVAILABLE'
 if ($completionMatches.Count -eq 1) {
 	try { $terminalResult = [string](($completionMatches[0].Groups[1].Value | ConvertFrom-Json -ErrorAction Stop).result) } catch { $terminalResult = 'INVALID_COMPLETION_JSON' }
 }
-$validationStatus = if ($resourceAbort) { 'RUNTIME_ABORT_RESOURCE_SAFETY' } elseif ($timeoutAbort) { 'RUNTIME_ABORT_TIMEOUT' } elseif ($scriptErrorDetected) { 'GODOT_SCRIPT_ERROR' } elseif ($exitCode -ne 0) { 'PROCESS_NONZERO_EXIT' } elseif ($Stage -eq 'geometry' -and ($preflightMarkerCount -ne 1 -or $completionMatches.Count -ne 1 -or $terminalResult -notin @('PASS', 'FAILED_TARGET', 'PARTIAL', 'FAILED_WITH_REGRESSION'))) { 'GEOMETRY_TERMINAL_EVIDENCE_INVALID' } elseif ($Stage -eq 'import') { 'IMPORT_PROCESS_PASS' } elseif ($Stage -eq 'check-only') { 'CHECK_ONLY_PROCESS_PASS' } else { 'GEOMETRY_RESULT_RECORDED' }
+$validationStatus = if ($resourceAbort) { 'RUNTIME_ABORT_RESOURCE_SAFETY' } elseif ($timeoutAbort) { 'RUNTIME_ABORT_TIMEOUT' } elseif ($scriptErrorDetected) { 'GODOT_SCRIPT_ERROR' } elseif ($exitCode -ne 0) { 'PROCESS_NONZERO_EXIT' } elseif ($Stage -eq 'geometry' -and ($preflightMarkerCount -ne 1 -or $completionMatches.Count -ne 1 -or $terminalResult -notin @('PASS', 'FAILED_TARGET', 'PARTIAL', 'FAILED_WITH_REGRESSION'))) { 'GEOMETRY_TERMINAL_EVIDENCE_INVALID' } elseif ($Stage -eq 'import') { 'IMPORT_PROCESS_PASS' } elseif ($Stage -in @('check-only', 'check-authority')) { 'CHECK_ONLY_PROCESS_PASS' } else { 'GEOMETRY_RESULT_RECORDED' }
 $afterMemory = Get-CimInstance Win32_PerfRawData_PerfOS_Memory
 $after = [ordered]@{ timestamp_utc = [DateTime]::UtcNow.ToString('o'); committed_bytes = [int64]$afterMemory.CommittedBytes; commit_limit_bytes = [int64]$afterMemory.CommitLimit; free_commit_bytes = ([int64]$afterMemory.CommitLimit - [int64]$afterMemory.CommittedBytes); available_mbytes = [int64]$afterMemory.AvailableMBytes }
 [IO.File]::WriteAllText((Join-Path $attemptRoot 'host-after.json'), ($after | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
