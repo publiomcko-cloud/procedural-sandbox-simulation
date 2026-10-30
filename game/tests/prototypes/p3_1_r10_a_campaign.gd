@@ -144,7 +144,7 @@ func _run_case_from_setup(candidate: RefCounted, authority: RefCounted, snapshot
 	var volume: Dictionary = baseline.get("volume", {})
 	var values: PackedFloat32Array = volume.get("values", PackedFloat32Array())
 	authority.call("configure_roi", roi)
-	var geometry: Dictionary = authority.call("realize_topology", values, hypothesis)
+	var geometry: Dictionary = authority.call("realize_topology", values, hypothesis, snapshot, int(row.get("seed", 131102026)))
 	var volume_metrics: Dictionary = baseline.get("metrics", {}).get("volume", {})
 	var volume_identity: bool = String(volume.get("sha256", "")) == Core.sha256(volume.get("bytes", PackedByteArray())) and String(volume.get("sha256", "")) == String(baseline.get("metrics", {}).get("persisted_reloaded_volume_sha256", ""))
 	return {"valid": bool(geometry.get("valid", false)) and volume_identity, "reason": String(geometry.get("reason", "")), "geometry": geometry,

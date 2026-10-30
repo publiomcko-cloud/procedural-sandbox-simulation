@@ -1,5 +1,8 @@
 extends "res://tests/prototypes/p3_1_r9_2_candidate_impl.gd"
 
+const Field := preload("res://scripts/terrain/sdf_world.gd")
+const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
+
 ## R10-A test-only topology-first realization over Candidate D's reloaded
 ## materialized float32 volume.  The polygon/root/arc graph is complete before
 ## any triangle is emitted and is the authority for this experiment.
@@ -8,7 +11,7 @@ const ARC_SEPARATOR: String = "\u001f"
 const A2_CAUSAL_A1_CASE_SHA256: String = "700c59861d8011f61553848c195e10bb4b2e66cc42433185a56a4720af1f83be"
 const A2_REFINE_CELLS: Dictionary = {"60,8,25": true, "61,8,25": true, "62,9,24": true, "66,7,29": true}
 
-func realize_topology(values: PackedFloat32Array, hypothesis: String) -> Dictionary:
+func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: Dictionary = {}, seed: int = 131102026) -> Dictionary:
 	var dims: Vector3i = CELLS + Vector3i.ONE
 	if values.size() != dims.x * dims.y * dims.z:
 		return {"valid": false, "reason": "materialized_volume_dimension_mismatch"}
@@ -100,8 +103,8 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String) -> Diction
 						arc.required_incidence += 1
 						arcs[arc_key] = arc
 					polygons.append({"id": polygon_id, "cell": [cell_id.x, cell_id.y, cell_id.z], "tet_index": tet_index, "root_ids": ordered_ids, "points": ordered_points, "face_ids": face_ids, "toward_empty": toward_empty, "realization": "PENDING"})
-	if hypothesis == "R10A2_CENTROID_TRIANGLE_SUBDIVISION":
-		var refinement_result: Dictionary = _apply_a2_triangle_subdivision(polygons, roots, root_sources)
+	if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER"]:
+		var refinement_result: Dictionary = _apply_triangle_subdivision(polygons, roots, root_sources, hypothesis, snapshot, seed)
 		if bool(refinement_result.get("valid", false)):
 			polygons = refinement_result.polygons
 			arcs = refinement_result.arcs
@@ -166,12 +169,12 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String) -> Diction
 		"unresolved_obligations": unresolved, "cutoff_rejections": cutoff_rejections, "required_adjacency_obligations": adjacency_obligations,
 		"required_adjacency_missing_count": missing_count, "required_adjacency_nonmanifold_count": nonmanifold_count,
 		"geometry_realization_complete": geometry_complete, "required_topology_complete": required_complete, "winding_valid": winding_valid,
-		"local_refinement": {"enabled": hypothesis == "R10A2_CENTROID_TRIANGLE_SUBDIVISION", "source_a1_equal_case_sha256": A2_CAUSAL_A1_CASE_SHA256 if hypothesis == "R10A2_CENTROID_TRIANGLE_SUBDIVISION" else "", "target_parent_cells": A2_REFINE_CELLS.keys() if hypothesis == "R10A2_CENTROID_TRIANGLE_SUBDIVISION" else [], "subdivided_parent_polygons": local_refinement, "subdivided_count": local_refinement.size(), "field_authority": "Candidate D piecewise-linear tetrahedral field; root-triangle centroid lies on source triangle plane; scalar samples unchanged"},
+		"local_refinement": {"enabled": hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER"], "source_a1_equal_case_sha256": A2_CAUSAL_A1_CASE_SHA256 if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER"] else "", "target_parent_cells": A2_REFINE_CELLS.keys() if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER"] else [], "subdivided_parent_polygons": local_refinement, "subdivided_count": local_refinement.size(), "field_authority": "Candidate D piecewise-linear tetrahedral field for A2; canonical SDF plus ordered snapshot for A3; scalar volume unchanged"},
 		"metrics": {"root_count": roots.size(), "polygon_count": polygons.size(), "required_arc_count": arcs.size(), "emitted_triangle_count": emitted_triangles.size(),
 			"unresolved_polygon_count": unresolved.size(), "cutoff_rejection_count": cutoff_rejections.size(), "topology_build_realize_usec": Time.get_ticks_usec() - begin_usec,
 			"fixed_cross_squared_cutoff": CUTOFF_SQUARED, "field_authority": "Candidate D serialized/reloaded float32 materialized volume; no sample mutation"}}
 
-func _apply_a2_triangle_subdivision(source_polygons: Array[Dictionary], roots: Dictionary, root_sources: Dictionary) -> Dictionary:
+func _apply_triangle_subdivision(source_polygons: Array[Dictionary], roots: Dictionary, root_sources: Dictionary, hypothesis: String, snapshot: Dictionary, seed: int) -> Dictionary:
 	var expanded: Array[Dictionary] = []
 	var evidence: Array[Dictionary] = []
 	for polygon in source_polygons:
@@ -189,17 +192,25 @@ func _apply_a2_triangle_subdivision(source_polygons: Array[Dictionary], roots: D
 		var a: Vector3 = points[0]
 		var b: Vector3 = points[1]
 		var c: Vector3 = points[2]
-		var center: Vector3 = (a + b + c) / 3.0
+		var canonical_assisted: bool = hypothesis == "R10A3_CANONICAL_FIELD_STEINER"
+		var initial_center: Vector3 = (a + b + c) / 3.0
+		var center: Vector3 = initial_center
+		var field_projection: Dictionary = {"valid": true, "canonical_field_used": false, "initial_density": null, "final_density": null, "iterations": 0, "reason": "AFFINE_TRIANGLE_CENTROID"}
+		if hypothesis == "R10A3_CANONICAL_FIELD_STEINER":
+			field_projection = _project_steiner_to_canonical(initial_center, snapshot, seed)
+			if not bool(field_projection.get("valid", false)):
+				return {"valid": false, "reason": "a3_field_constrained_steiner_projection_failed", "polygon_id": polygon.get("id", ""), "detail": field_projection}
+			center = field_projection.point
 		if not center.is_finite():
 			return {"valid": false, "reason": "a2_centroid_nonfinite", "polygon_id": polygon.get("id", "")}
 		var parent_id: String = String(polygon.get("id", ""))
-		var center_id: String = "a2-centroid|" + parent_id
+		var center_id: String = ("a3-steiner|" if canonical_assisted else "a2-centroid|") + parent_id
 		if roots.has(center_id):
 			return {"valid": false, "reason": "a2_centroid_identity_collision", "polygon_id": parent_id}
 		roots[center_id] = center
 		var plane_cross: Vector3 = (b - a).cross(c - a)
 		var plane_residual: float = absf((center - a).dot(plane_cross.normalized())) if plane_cross.length_squared() > 0.0 else INF
-		root_sources[center_id] = {"authority": "PIECEWISE_LINEAR_TETRA_SURFACE_CENTROID", "source_polygon_id": parent_id, "source_cell": cell, "source_tetrahedron": polygon.get("tet_index", -1), "construction": "arithmetic_mean_of_three_existing_surface_roots", "initial_point": [center.x, center.y, center.z], "final_point": [center.x, center.y, center.z], "displacement": 0.0, "source_triangle_plane_residual_world_units": plane_residual, "canonical_sdf_resampled": false, "materialized_samples_mutated": false}
+		root_sources[center_id] = {"authority": "CANONICAL_SDF_ASSISTED_STEINER" if canonical_assisted else "PIECEWISE_LINEAR_TETRA_SURFACE_CENTROID", "source_polygon_id": parent_id, "source_cell": cell, "source_tetrahedron": polygon.get("tet_index", -1), "construction": "canonical_sdf_projected_triangle_centroid" if canonical_assisted else "arithmetic_mean_of_three_existing_surface_roots", "initial_point": [initial_center.x, initial_center.y, initial_center.z], "final_point": [center.x, center.y, center.z], "displacement": initial_center.distance_to(center), "source_triangle_plane_residual_world_units": plane_residual, "canonical_sdf_projection": field_projection, "materialized_samples_mutated": false}
 		var parent_faces: Array = polygon.get("face_ids", [])
 		if parent_faces.size() != 3:
 			return {"valid": false, "reason": "a2_parent_face_arity_invalid", "polygon_id": parent_id}
@@ -217,7 +228,7 @@ func _apply_a2_triangle_subdivision(source_polygons: Array[Dictionary], roots: D
 		var child_ids: Array[String] = []
 		for child in child_rows:
 			child_ids.append(String(child.get("id", "")))
-		evidence.append({"parent_polygon_id": parent_id, "cell": cell.duplicate(), "tet_index": polygon.get("tet_index", -1), "original_cross_squared": original_cross_squared, "centroid_id": center_id, "centroid": [center.x, center.y, center.z], "source_triangle_plane_residual_world_units": plane_residual, "child_cross_squared": [_cross_squared(a, b, center), _cross_squared(b, c, center), _cross_squared(c, a, center)], "child_ids": child_ids, "topology_policy": "retain_all_three_child_obligations_even_if_fixed_cutoff_rejects_them"})
+		evidence.append({"parent_polygon_id": parent_id, "cell": cell.duplicate(), "tet_index": polygon.get("tet_index", -1), "original_cross_squared": original_cross_squared, "construction": "canonical_sdf_assisted_steiner" if canonical_assisted else "affine_triangle_centroid_subdivision", "initial_point": [initial_center.x, initial_center.y, initial_center.z], "centroid_id": center_id, "final_point": [center.x, center.y, center.z], "displacement": initial_center.distance_to(center), "canonical_field_projection": field_projection, "source_triangle_plane_residual_world_units": plane_residual, "child_cross_squared": [_cross_squared(a, b, center), _cross_squared(b, c, center), _cross_squared(c, a, center)], "child_ids": child_ids, "topology_policy": "retain_all_three_child_obligations_even_if_fixed_cutoff_rejects_them"})
 	var rebuilt_arcs: Dictionary = {}
 	for polygon in expanded:
 		var ordered_ids: Array = polygon.get("root_ids", [])
@@ -236,6 +247,69 @@ func _apply_a2_triangle_subdivision(source_polygons: Array[Dictionary], roots: D
 			arc.required_incidence += 1
 			rebuilt_arcs[arc_key] = arc
 	return {"valid": true, "polygons": expanded, "arcs": rebuilt_arcs, "evidence": evidence}
+
+func _project_steiner_to_canonical(initial: Vector3, snapshot: Dictionary, seed: int) -> Dictionary:
+	if not initial.is_finite() or snapshot.is_empty():
+		return {"valid": false, "reason": "initial_point_or_snapshot_invalid"}
+	var position: Vector3 = initial
+	var sample_step: float = maxf(STEP * 0.01, 0.0001)
+	var convergence_epsilon: float = 1.0e-5
+	var initial_density: float = _sample_snapshot_density(position, snapshot, seed)
+	if not is_finite(initial_density):
+		return {"valid": false, "reason": "initial_canonical_density_nonfinite"}
+	var final_density: float = initial_density
+	var iterations: int = 0
+	var converged: bool = false
+	for iteration in range(12):
+		iterations = iteration + 1
+		final_density = _sample_snapshot_density(position, snapshot, seed)
+		if not is_finite(final_density):
+			return {"valid": false, "reason": "canonical_density_nonfinite", "iteration": iteration}
+		if absf(final_density) <= convergence_epsilon:
+			converged = true
+			break
+		var ex: Vector3 = Vector3(sample_step, 0.0, 0.0)
+		var ey: Vector3 = Vector3(0.0, sample_step, 0.0)
+		var ez: Vector3 = Vector3(0.0, 0.0, sample_step)
+		var gradient: Vector3 = Vector3(
+			(_sample_snapshot_density(position + ex, snapshot, seed) - _sample_snapshot_density(position - ex, snapshot, seed)) / (2.0 * sample_step),
+			(_sample_snapshot_density(position + ey, snapshot, seed) - _sample_snapshot_density(position - ey, snapshot, seed)) / (2.0 * sample_step),
+			(_sample_snapshot_density(position + ez, snapshot, seed) - _sample_snapshot_density(position - ez, snapshot, seed)) / (2.0 * sample_step)
+		)
+		var gradient_squared: float = gradient.length_squared()
+		if not gradient.is_finite() or not is_finite(gradient_squared) or gradient_squared <= 1.0e-12:
+			return {"valid": false, "reason": "canonical_gradient_invalid", "iteration": iteration, "density": final_density}
+		var delta: Vector3 = gradient * (final_density / gradient_squared)
+		if not delta.is_finite():
+			return {"valid": false, "reason": "newton_delta_nonfinite", "iteration": iteration}
+		var accepted: bool = false
+		var alpha: float = 1.0
+		for line_search in range(8):
+			var candidate: Vector3 = position - delta * alpha
+			var candidate_density: float = _sample_snapshot_density(candidate, snapshot, seed)
+			if candidate.is_finite() and is_finite(candidate_density) and absf(candidate_density) < absf(final_density):
+				position = candidate
+				final_density = candidate_density
+				accepted = true
+				break
+			alpha *= 0.5
+		if not accepted:
+			return {"valid": false, "reason": "canonical_projection_line_search_stalled", "iteration": iteration, "density": final_density}
+		if position.distance_to(initial) > STEP:
+			return {"valid": false, "reason": "steiner_displacement_bound_exceeded", "displacement": position.distance_to(initial), "maximum": STEP}
+	if not converged:
+		final_density = _sample_snapshot_density(position, snapshot, seed)
+		converged = is_finite(final_density) and absf(final_density) <= convergence_epsilon
+	return {"valid": converged and position.is_finite(), "reason": "" if converged else "canonical_projection_did_not_converge", "point": position,
+		"canonical_field_used": true, "field_authority": "SDF_GENERATOR_V1_PLUS_ORDERED_SNAPSHOT", "initial_density": initial_density,
+		"final_density": final_density, "iterations": iterations, "finite_difference_step": sample_step,
+		"convergence_epsilon": convergence_epsilon, "displacement": position.distance_to(initial), "maximum_displacement": STEP,
+		"acceptance_tolerance_owner_approved": false}
+
+func _sample_snapshot_density(world_point: Vector3, snapshot: Dictionary, seed: int) -> float:
+	var region_key: Vector2i = Vector2i(floori(world_point.x / Field.REGION_SIZE_X), floori(world_point.z / Field.REGION_SIZE_Z))
+	var local_position: Vector3 = Vector3(world_point.x - float(region_key.x) * Field.REGION_SIZE_X, world_point.y, world_point.z - float(region_key.y) * Field.REGION_SIZE_Z)
+	return BrushState.sample_density_snapshot(seed, region_key, local_position, false, snapshot)
 
 func _triangulate_polygon(polygon: Dictionary, hypothesis: String) -> Dictionary:
 	var ids: Array = polygon.root_ids
