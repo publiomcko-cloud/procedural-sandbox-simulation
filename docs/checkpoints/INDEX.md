@@ -16,6 +16,7 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-10-29 | [P3.1 R10-A campaign closeout](2026-10-29-P3-1-R10-A-CAMPAIGN-CLOSEOUT.md) | Six equal-LOD topology-authority hypotheses A1–A6 exhausted; A6 retains 10 opens/21 missing adjacencies; mixed LOD and full validation not run after gate failure | Isolated R10-A evidence branch; draft PR creation pending at checkpoint time |
 | 2026-10-28 | [P3.1 R9 immutable preregistration](2026-10-28-P3-1-R9-PREREGISTRATION.md) | Frozen four-candidate test-only contract, nine scenario input records and resource/geometry gates before implementation; reconciles R8.4 raw validation to 21 suites / 21,464 assertions; no R9 candidates run yet | R9 preregistration branch; candidate PRs pending |
 | 2026-10-28 | [P3.1 R8.2 exact geometry provenance](2026-10-28-P3-1-R8.2-EXACT-GEOMETRY-PROVENANCE.md) | Triangle 3103 continuous-vs-sampled gradient, X+ LOD1 omitted interface facets, and X− mesh/root displacement traced; Godot validation 21,464/0; no geometry acceptance or production correction | Test-only draft PR [#162](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/162), open/unmerged on R8.1 branch; PR #160 unchanged |
 | 2026-10-27 | [P3.1 R8 geometry quality and conformance](2026-10-27-P3-1-R8-GEOMETRY-QUALITY.md) | Six diagnostic phases and full validation 21,464/0; cave FILL behavior characterized; 4/16 chunk contours mismatch, normal/winding and X− picker discrepancies retained | Draft evidence PR #158, open/unmerged; no production approval |
@@ -117,3 +118,7 @@ Every verified merge, material review/GUI verdict, scope authorization or revisi
 - [D3.1 first pinned geometry attempt](2026-10-29-P3-1-R9-7-D3-1.md) — at the first-attempt checkpoint, equal-LOD X+ retained 13 internal open edges and mixed-LOD X+ rejected a zipper candidate below the unchanged `1e-12` cutoff. The later campaign closeout supersedes its then-active next-step statement.
 - [D3 campaign closeout](../reports/P3-1-R9.7-D3-CAMPAIGN-CLOSEOUT.md) — all five bounded geometry hypotheses D3.1–D3.5 executed and were `FAILED_TARGET`; 6/6 controls and 0/25 ROI ray disagreements, no resource abort, no target candidate. Full E2E and full validation were not run because no candidate survived.
 - [D3 evidence publication](2026-10-29-P3-1-R9-7-D3-PUBLICATION.md) — draft PR #206 created against the exact Candidate D evidence branch; PR #204/#205 verified unchanged; unmerged and independent review pending.
+
+| 2026-10-29 | [P3.1 R10-A PR #207 publication](2026-10-29-P3-1-R10-A-PR-207-PUBLICATION.md) | Six equal-LOD topology hypotheses exhausted with evidence; exact trees/blobs mirrored; draft evidence PR #207 verified open and unmerged | Branch exp/p3-1-r10-a-topology-authority; remote head 989816512e3aa325f9400865ab12994fca615979 |
+
+| 2026-10-29 | [P3.1 R10-A archive hash erratum](2026-10-29-P3-1-R10-A-ARCHIVE-HASH-ERRATUM.md) | Corrects one transcribed ZIP SHA-256 character; archive bytes and all campaign results unchanged | Draft PR #207; hash reverified from the preserved archive |
