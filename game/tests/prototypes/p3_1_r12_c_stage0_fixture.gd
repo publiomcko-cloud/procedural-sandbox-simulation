@@ -74,16 +74,26 @@ func _run() -> void:
 	if not bool(source_graph.get("valid", false)) or String(source_graph.get("topology_sha256", "")) != TOPOLOGY_SHA:
 		_fail("source_topology_not_reproduced", {"valid": source_graph.get("valid", false), "topology_sha": source_graph.get("topology_sha256", ""), "roots": source_graph.get("root_count", -1), "polygons": source_graph.get("polygon_count", -1), "arcs": source_graph.get("arc_count", -1)})
 		return
-	var component: Dictionary = _component(source_graph.get("surface_components", []))
+	var a6_result: Dictionary = authority.call("realize_topology", values, "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", snapshot, int(row.get("seed", 131102026)))
+	var a6: Dictionary = _historical_a6_result(a6_result, source_graph)
+	if not bool(a6.get("valid", false)):
+		_fail("historical_a6_mismatch", a6)
+		return
+	var component: Dictionary = _target_patch(a6_result.get("component_reconstruction", {}).get("patches", []))
 	if component.is_empty():
-		_fail("target_component_missing", {"target_polygon_id": COMPONENT, "available_components": _component_diagnostics(source_graph.get("surface_components", []))})
+		_fail("target_component_missing", {"target_component_id": COMPONENT, "available_patches": _patch_diagnostics(a6_result.get("component_reconstruction", {}).get("patches", []))})
 		return
 	var canonical: Dictionary = source_graph.get("canonical", {})
-	var root_ids: Array[String] = _strings(component.get("root_ids", []))
-	var polygon_ids: Array[String] = _strings(component.get("polygon_ids", []))
+	var polygon_ids: Array[String] = _strings(component.get("source_polygon_ids", []))
+	var root_set: Dictionary = {}
+	for polygon in _filter_polygons(canonical.get("polygons", []), polygon_ids):
+		for root_id in polygon[3]:
+			root_set[String(root_id)] = true
+	var root_ids: Array[String] = _strings(root_set.keys())
+	root_ids.sort()
 	var roots: Array = _filter_roots(canonical.get("roots", []), root_ids)
 	var polygons: Array = _filter_polygons(canonical.get("polygons", []), polygon_ids)
-	var arcs: Array = _filter_arcs(canonical.get("arcs", []), polygon_ids)
+	var arcs: Array = _component_arcs(polygons, canonical.get("arcs", []))
 	if root_ids.size() != 73 or roots.size() != 73 or polygon_ids.size() != 84 or polygons.size() != 84:
 		_fail("component_counts_mismatch", {"root_ids": root_ids.size(), "roots": roots.size(), "polygon_ids": polygon_ids.size(), "polygons": polygons.size()})
 		return
@@ -124,6 +134,12 @@ func _run() -> void:
 		return
 	var degrees: Array[Dictionary] = _degrees(roots, arcs, boundary_set)
 	var ownership: Array[Dictionary] = _ownership_transitions(arcs, polygons)
+	var all_roots: Array = canonical.get("roots", [])
+	var all_polygons: Array = canonical.get("polygons", [])
+	var all_arcs: Array = canonical.get("arcs", [])
+	var all_boundary_roots: Dictionary = _global_boundary_roots(all_arcs)
+	var all_degrees: Array[Dictionary] = _degrees(all_roots, all_arcs, all_boundary_roots)
+	var all_ownership: Array[Dictionary] = _ownership_transitions(all_arcs, all_polygons)
 	var transition_roots: Dictionary = {}
 	for entry in ownership:
 		for id in entry.get("roots", []):
@@ -137,27 +153,27 @@ func _run() -> void:
 			junctions.append(id)
 		if not bool(entry.boundary) and degree == 2 and not transition_roots.has(id):
 			transit.append(id)
-	var a6: Dictionary = _historical_a6(authority, values, snapshot, int(row.get("seed", 131102026)), source_graph)
-	if not bool(a6.get("valid", false)):
-		_fail("historical_a6_mismatch", a6)
-		return
-	var signature_payload: Dictionary = {"schema": canonical.get("schema", ""), "component_id": COMPONENT, "root_ids": root_ids, "polygon_ids": polygon_ids, "roots": roots, "polygons": polygons, "arcs": arcs}
-	var signature_sha: String = Core.sha256(JSON.stringify(signature_payload).to_utf8_buffer())
+	var component_signature_payload: Dictionary = {"schema": canonical.get("schema", ""), "component_id": COMPONENT, "root_ids": root_ids, "polygon_ids": polygon_ids, "roots": roots, "polygons": polygons, "arcs": arcs}
+	var component_signature_sha: String = Core.sha256(JSON.stringify(component_signature_payload).to_utf8_buffer())
 	var fixture: Dictionary = {
 		"schema": "P3.1.R12C.TopologyRealizationFixture.v1",
 		"fixture_id": "R12C.XPLUS_EQUAL.COMPONENT_60_8_25_TET0.v1",
 		"source_sha": source_sha,
 		"source_topology_sha256": TOPOLOGY_SHA,
-		"topology_signature": {"sha256": signature_sha, "payload": signature_payload},
+		"topology_signature": {"sha256": TOPOLOGY_SHA, "payload": canonical},
+		"target_component_signature": {"sha256": component_signature_sha, "payload": component_signature_payload},
 		"component_id": COMPONENT,
-		"counts": {"roots": 73, "boundary_roots": 34, "interior_roots": 39, "polygons": 84, "arcs": arcs.size(), "boundary_arcs": 34},
+		"counts": {"topology_roots": all_roots.size(), "topology_polygons": all_polygons.size(), "topology_arcs": all_arcs.size(), "target_roots": 73, "boundary_roots": 34, "interior_roots": 39, "target_polygons": 84, "target_arcs": arcs.size(), "boundary_arcs": 34},
+		"topology_authority": canonical,
+		"all_root_degrees": all_degrees,
+		"all_ownership_transitions": all_ownership,
 		"topology_roots": roots,
 		"root_degrees": degrees,
 		"topology_arcs": arcs,
 		"arc_orientation_contract": "authoritative ordered root pair plus polygon and tetra-face provenance",
 		"component_membership": {"root_ids": root_ids, "polygon_ids": polygon_ids},
 		"boundary": {"ordered_root_cycle": ordered_boundary, "boundary_arcs": boundary_arcs, "domain_edge_indices": domain.get("required_boundary_edges", [])},
-		"source_provenance": {"polygons": polygons, "ownership": canonical.get("ownership", {}), "neighbor_region_relations": canonical.get("neighbor_region_relations", []), "lod_relations": canonical.get("lod_relations", [])},
+		"source_provenance": {"all_polygons": all_polygons, "component_polygons": polygons, "ownership": canonical.get("ownership", {}), "neighbor_region_relations": canonical.get("neighbor_region_relations", []), "lod_relations": canonical.get("lod_relations", [])},
 		"ownership_transitions": ownership,
 		"junction_roots": junctions,
 		"degree2_transit_candidates": transit,
@@ -183,21 +199,21 @@ func _run() -> void:
 	print("R12C_STAGE0_COMPLETE " + JSON.stringify({"status": "PASS", "source_sha": source_sha, "fixture_sha256": Core.sha256(FileAccess.get_file_as_bytes(output_path)), "topology_sha256": TOPOLOGY_SHA, "component_roots": 73, "component_polygons": 84, "component_arcs": arcs.size(), "boundary_roots": 34, "interior_roots": 39, "junction_roots": junctions.size(), "degree2_transit_candidates": transit.size(), "a6_mesh_sha256": a6.mesh_sha256, "a6_internal_open_edges": a6.mesh_topology.internal_open_edges}))
 	quit(0)
 
-func _component(components: Array) -> Dictionary:
-	for value in components:
+func _target_patch(patches: Array) -> Dictionary:
+	for value in patches:
 		if typeof(value) != TYPE_DICTIONARY:
 			continue
 		var candidate: Dictionary = value
-		if String(candidate.get("id", "")) == COMPONENT or candidate.get("polygon_ids", []).has(COMPONENT):
+		if String(candidate.get("component_id", "")) == COMPONENT:
 			return candidate
 	return {}
 
-func _component_diagnostics(components: Array) -> Array[Dictionary]:
+func _patch_diagnostics(patches: Array) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	for value in components:
+	for value in patches:
 		if typeof(value) == TYPE_DICTIONARY:
-			var component: Dictionary = value
-			result.append({"id": String(component.get("id", "")), "root_count": component.get("root_ids", []).size(), "polygon_count": component.get("polygon_ids", []).size(), "contains_target_polygon": component.get("polygon_ids", []).has(COMPONENT)})
+			var patch: Dictionary = value
+			result.append({"component_id": String(patch.get("component_id", "")), "root_count": patch.get("source_root_count", -1), "boundary_root_count": patch.get("boundary_root_count", -1), "polygon_count": patch.get("source_polygon_ids", []).size(), "status": String(patch.get("status", "")), "reason": String(patch.get("reason", ""))})
 	return result
 
 func _strings(value: Variant) -> Array[String]:
@@ -239,6 +255,47 @@ func _filter_arcs(rows: Array, polygon_ids: Array[String]) -> Array:
 			if allowed.has(String(owner)):
 				result.append(row)
 				break
+	return result
+
+func _component_arcs(polygons: Array, authority_arcs: Array) -> Array:
+	var authority_by_pair: Dictionary = {}
+	for arc in authority_arcs:
+		if not (arc is Array) or arc.size() < 8 or not (arc[1] is Array) or arc[1].size() != 2:
+			return []
+		authority_by_pair[_edge_key(String(arc[1][0]), String(arc[1][1]))] = arc
+	var occurrences: Dictionary = {}
+	for polygon in polygons:
+		if not (polygon is Array) or polygon.size() < 9 or not (polygon[3] is Array) or not (polygon[4] is Array) or polygon[3].size() != polygon[4].size():
+			return []
+		var root_ids: Array = polygon[3]
+		var face_ids: Array = polygon[4]
+		for index in range(root_ids.size()):
+			var left: String = String(root_ids[index])
+			var right: String = String(root_ids[(index + 1) % root_ids.size()])
+			var key: String = _edge_key(left, right)
+			if not occurrences.has(key):
+				occurrences[key] = {"roots": [left, right], "polygon_ids": [], "face_ids": []}
+			occurrences[key].polygon_ids.append(String(polygon[0]))
+			occurrences[key].face_ids.append(String(face_ids[index]))
+	var keys: Array = occurrences.keys()
+	keys.sort()
+	var result: Array = []
+	for key in keys:
+		if not authority_by_pair.has(String(key)):
+			return []
+		var local: Dictionary = occurrences[String(key)]
+		var authority: Array = authority_by_pair[String(key)]
+		local.polygon_ids.sort()
+		local.face_ids.sort()
+		result.append([authority[0], local.roots, local.polygon_ids.size(), local.polygon_ids, local.face_ids, local.polygon_ids.size() == 1, authority[6], authority[7], int(authority[2]), bool(authority[5])])
+	return result
+
+func _global_boundary_roots(arcs: Array) -> Dictionary:
+	var result: Dictionary = {}
+	for arc in arcs:
+		if arc is Array and arc.size() >= 6 and bool(arc[5]) and arc[1] is Array:
+			for root_id in arc[1]:
+				result[String(root_id)] = true
 	return result
 
 func _boundary_arcs(arcs: Array) -> Array[Dictionary]:
@@ -359,14 +416,15 @@ func _ownership_transitions(arcs: Array, polygons: Array) -> Array[Dictionary]:
 			result.append({"arc_key": String(arc[0]), "roots": arc[1], "polygon_ids": arc[3], "region_transition": region_change, "lod_transition": lod_change, "region_keys": region_keys, "lod_steps": lods})
 	return result
 
-func _historical_a6(authority: RefCounted, values: PackedFloat32Array, snapshot: Dictionary, seed: int, source_graph: Dictionary) -> Dictionary:
-	var result: Dictionary = authority.call("realize_topology", values, "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", snapshot, seed)
+func _historical_a6_result(result: Dictionary, source_graph: Dictionary) -> Dictionary:
 	var proof: Dictionary = result.get("source_topology_graph_proof", {})
 	var valid: bool = bool(proof.get("valid", false)) and String(proof.get("topology_sha256", "")) == String(source_graph.get("topology_sha256", "")) and String(result.get("mesh_sha256", "")) == A6_MESH_SHA
 	var metrics: Dictionary = result.get("metrics", {})
 	var mesh_topology: Dictionary = result.get("mesh_topology", {})
 	valid = valid and int(metrics.get("emitted_triangle_count", -1)) == 655 and int(mesh_topology.get("internal_open_edges", -1)) == 10 and int(result.get("required_adjacency_missing_count", -1)) == 21 and int(mesh_topology.get("nonmanifold_edges", -1)) == 0 and int(mesh_topology.get("winding_inconsistencies", -1)) == 0 and result.get("cutoff_rejections", []).size() == 7
-	return {"valid": valid, "hypothesis": "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", "source_topology_proof": proof, "mesh_sha256": result.get("mesh_sha256", ""), "triangle_count": metrics.get("emitted_triangle_count", -1), "mesh_topology": mesh_topology, "required_adjacency_missing_count": result.get("required_adjacency_missing_count", -1), "unresolved_obligations": result.get("unresolved_obligations", []), "cutoff_rejections": result.get("cutoff_rejections", []), "component_reconstruction": result.get("component_reconstruction", {}), "metrics": metrics}
+	var patches: Array = result.get("component_reconstruction", {}).get("patches", [])
+	var target_patch: Dictionary = _target_patch(patches)
+	return {"valid": valid, "hypothesis": "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", "source_topology_proof": proof, "mesh_sha256": result.get("mesh_sha256", ""), "triangle_count": metrics.get("emitted_triangle_count", -1), "mesh_topology": mesh_topology, "required_adjacency_missing_count": result.get("required_adjacency_missing_count", -1), "unresolved_obligations": result.get("unresolved_obligations", []), "cutoff_rejections": result.get("cutoff_rejections", []), "target_patch": target_patch, "patch_summaries": _patch_diagnostics(patches), "component_reconstruction": result.get("component_reconstruction", {}), "metrics": metrics}
 
 func _fail(reason: String, details: Dictionary) -> void:
 	var root: String = OS.get_environment("R12C_ARTIFACT_DIR")
