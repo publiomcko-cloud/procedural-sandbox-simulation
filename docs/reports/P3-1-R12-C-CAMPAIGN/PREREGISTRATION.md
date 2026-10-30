@@ -45,7 +45,7 @@ Stage 0 passed on source `d63394d3c0e255d7d0af547a258aa847700e2f44`; the create-
 
 The initial copied A6 digest discrepancy was resolved against primary raw evidence before any C hypothesis: the R10-A6 archive entry identifies `de53e9fa...`; the `1f21af7c...` value belongs to a distinct R10-B6 attempt record. The correction is documented above and both original records remain preserved.
 
-## C2 — graph-face anchor-cycle realization (preregistered, not executed)
+## C2 — graph-face anchor-cycle realization (executed)
 
 **Differentiator.** Build output triangles directly from the authoritative source polygon cycles in the Stage 0 graph. Do not run R10A6 component reconstruction, any edge-flip/beam search, or B1R candidate search. This is a loop/face realization, not a search over complete mesh states.
 
@@ -56,7 +56,30 @@ The initial copied A6 digest discrepancy was resolved against primary raw eviden
 - Build full ROI geometry from the full graph, not just the target component. Compute topology from emitted triangles, cutoff rejections and edge incidence against the 870 source arcs. A missing emitted incidence is a geometry failure even if the abstract realization map round-trips.
 - Frozen field, input, ROI, seed, volume/revision, controls and ray contracts remain unchanged. C2 geometry, six controls and ROI ray diagnostics are separate records; mixed LOD stays gated on equal LOD + controls + ray + volume.
 
-The C2 algorithm is bounded by the frozen 369 roots, 870 arcs, 502 source faces, 20,000 emitted triangles, 10-minute process limit and 2-GiB free-commit abort. It does not introduce a global combinatorial search. C2 has not executed; its first runtime requires a new exact source pin and Stage 0 fixture hash verification.
+The C2 algorithm is bounded by the frozen 369 roots, 870 arcs, 502 source faces, 20,000 emitted triangles, 10-minute process limit and 2-GiB free-commit abort. It does not introduce a global combinatorial search.
+
+### C2 result (2026-10-30)
+
+C2 was validly executed once on source `f5b421a0f0e4a020a7fc1a8d00847a8e32f93234` (parent `d936203c5b769c0c022699d6ad5fad12a85b6e40`, tree `27f21a7279bde20f08a7141ff03f729e4599bb29`). The attempt `C2GEO006` reached `R12C_GEOMETRY_BEGIN`, emitted a complete classified artifact and is consumed as `FAILED_TARGET`; it was not rerun. The artifact `r12c_C2_C2GEO006.json` is SHA-256 `469be6d2b18c52cdb6bece2db378de1f8d6a81dd27aaa10fd47c652d3b8ecf25`.
+
+The map retained 369 anchors, 870 arcs and 502 ordered faces; no path events or supports were used. It emitted 654 triangles. Eight triangular faces were rejected by the unchanged `cross_squared > 1e-12` cutoff (minimum accepted cross-squared was `1.34662257473411e-12`); the mesh had 13 internal open edges, 19 missing required arc incidences, zero nonmanifold edges, zero winding inconsistencies and zero emitted degenerate triangles. The target volume and payload SHA/revision checks passed. ROI ray parity was 0/25. Four controls passed; two negative-region controls failed before geometry because the harness used the parent scenario's missing ROI instead of the variant ROI. Their stderr contains Godot `SCRIPT ERROR` records. Thus C2's target failure is established, but the six-control gate is recorded as 4/6 and not passed. The 25 ROI ray result is still diagnostic evidence, not a complete C2 qualification. No mixed LOD, determinism repeat, full E2E or full validation ran.
+
+The 8 cutoff rejections all came from 3-root source faces. This is evidence against the C2 one-cycle/one-anchor triangulation for this input, not a proof that all exact Candidate D realizations are impossible. The attempt's monitor recorded 13 samples, minimum free commit 13.51 GiB, and maximum observed Godot working set 6.14 MiB; working-set sampling is an estimate and does not imply GPU or presented-frame performance.
+
+Four earlier `C2GEO001`–`C2GEO005` processes terminated in pre-geometry identity/setup gates; none emitted `R12C_GEOMETRY_BEGIN`, so they did not consume C2. Causes were exact graph-fingerprint handling after JSON parsing, a misplaced materialized-volume identity lookup, and numeric/serialized graph comparison. Their raw attempts remain under the immutable R12 evidence root. C2's final valid process completed despite the two negative-control script errors; this limitation is explicitly retained rather than hidden by the process wrapper's exit code.
+
+## C3 — field-constrained per-face support fan (preregistered after C2)
+
+**Differentiator and rationale.** C2's eight cutoff rejects were all 3-root source faces. C3 tests whether an explicit, deterministic geometry-only support record plus a face fan yields a useful topology-to-geometry realization map while keeping the exact same Candidate D piecewise-linear zero set. C3 is materially different from C2's direct triangle/quad triangulation. It does not change the cutoff or move source roots. Because a support point inside a rejected triangle cannot increase its area, C3 may produce additional cutoff failures; such a result is still informative and must not be concealed.
+
+- Retain all source roots as `ANCHOR_VERTEX`, all 870 topology arcs, polygon cycles, ownership and incidence. No `PATH_EVENT` is used. Create exactly one deterministic geometry-only `SUPPORT_VERTEX` per source polygon (502 maximum for the full graph), with ID `support|<polygon_id>|centroid`.
+- Compute each support point as the arithmetic centroid of its ordered source-cycle roots. Every source face is the zero-set polygon of one Candidate D tetrahedron; the centroid is a convex combination of its vertices and remains on that same piecewise-linear face. Independently compute and record tetrahedral barycentric coordinates, interpolated scalar residual, source cell/tetra, parent face, neighboring arc IDs and insertion reason. Do not introduce a residual tolerance or treat numerical residual evidence as product approval.
+- Fan each source cycle edge to its support point: three triangles for a triangle and four for a quad. This keeps each original root-root topology arc as an actual boundary edge of one triangle per incident source face; each support spoke is geometry-only. Preserve source winding by the existing tetrahedral field orientation. Any fan triangle at or below the unchanged `1e-12` cross-squared cutoff is rejected and reported; no sub-cutoff triangle may be emitted.
+- Require complete root/arc/face/support maps, exact graph-source identity, topology round-trip, 0 internal open edges, 0 missing obligations, 0 nonmanifold edges, valid winding, 0 degenerates and 0 cutoff rejections. No topology arc can be dropped because its face fan is rejected.
+- Bound output to 2,008 triangles and 502 supports for the frozen 502-face graph, within the existing 20,000 triangle stop-loss. Preserve the 10-minute timeout and 2-GiB free-commit hard stop. Run the fixed target, six frozen controls (with each negative variant's actual ROI), the 25-ray ROI gate and volume identity. Mixed LOD remains gated on all equal-LOD gates.
+- C3 source and realization hashes must be pinned after implementation. The frozen fixture SHA remains `33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d`; no input or acceptance threshold changes are authorized.
+
+The C2 negative-region harness defect is corrected only in the C3 test-only campaign: the requested ROI variant must be passed into Candidate D volume construction. The process wrapper will also classify `SCRIPT ERROR`/`ERROR:` in Godot output as a captured runtime-error record, even when a script incorrectly exits zero. These are harness-integrity controls, not geometry hypothesis changes.
 
 ## C1 — degree-2 transit-root path realization
 
@@ -90,9 +113,9 @@ Before a valid C1 attempt: exact source/parent/tree/blob and physical hashes, is
 
 A complete C1 map and completed target geometry with failed frozen invariants consumes C1 as FAILED_TARGET. A parser, runner, fixture, evidence, or resource failure before complete map+geometry does not consume C1; preserve it and correct tooling with a new attempt ID. No C1 result can authorize production adoption.
 
-## C2–C6 reservation
+## C1–C6 reservation status
 
-C2–C6 remain unused. Each will receive a separate immutable preregistration after reviewing the preceding completed hypothesis and before its first execution. C2 will follow the frozen anchor-cycle polygon realization family; C3 field-constrained supports; C4 local topology-preserving remesh; C5 face-owned/interface-aware realization; C6 evidence-directed final architecture. No C7 is authorized.
+C1 is not applicable under the preregistered degree-2 rule and remains unconsumed. C2 is consumed as `FAILED_TARGET`. C3 is preregistered above and not yet implemented/executed. C4–C6 remain unused and require separate evidence-directed preregistration before implementation. No C7 is authorized.
 
 ## Safety and interpretation
 
