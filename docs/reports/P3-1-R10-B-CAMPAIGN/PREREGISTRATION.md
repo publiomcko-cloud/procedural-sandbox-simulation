@@ -1,6 +1,6 @@
 # P3.1 R10-B — Campaign preregistration and Stage 0 causal freeze
 
-**Status at this commit:** Stage 0 fixture frozen; diagnostic ray source is prepared. No R10-B geometry hypothesis has executed. This report is experimental evidence only.
+**Status at this commit:** Stage 0 fixture and ray-scope correction are frozen. B1 was invoked once at source SHA `eae562eb310d44cd6b5208eaee744d893a4139e7`, but the run emitted GDScript runtime errors in the experimental harness and is classified `BLOCKED_HARNESS_ERROR`; it is not usable geometry evidence and will not be rerun. B2 is the next distinct hypothesis. This report is experimental evidence only.
 
 ## Authority boundary
 

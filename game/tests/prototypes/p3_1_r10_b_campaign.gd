@@ -4,6 +4,7 @@ const Core := preload("res://tests/prototypes/p3_1_r9_2_diagnostic_base.gd")
 const CandidateD := preload("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd")
 const Authority := preload("res://tests/prototypes/p3_1_r10_a_topology_authority.gd")
 const B1Realizer := preload("res://tests/prototypes/p3_1_r10_b_realizer.gd")
+const B2Realizer := preload("res://tests/prototypes/p3_1_r10_b2_realizer.gd")
 const MANIFEST_SHA := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
 const CANDIDATE_D_SHA := "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a"
 const RAY_FIXTURE_SHA := "9780bea4b1609bbc89db45e21d8671170198ca01d1ad3e252b9f877a64eb62c7"
@@ -69,13 +70,13 @@ func _run() -> void:
 		print("R10B_GRAPH_CONTRACT_COMPLETE " + JSON.stringify({"status": "PASS", "attempt_id": attempt_id, "source_sha": source_sha, "source_topology_graph_proof": graph_result.source_topology_graph_proof, "geometry_topology": graph_result.mesh_topology, "volume_identity_preserved": volume_case.volume_identity_preserved}))
 		quit(0)
 		return
-	if hypothesis != "R10B1_NONMONOTONIC_CONSTRAINED_FLIP_BFS":
+	if hypothesis not in ["R10B1_NONMONOTONIC_CONSTRAINED_FLIP_BFS", "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION"]:
 		_blocked("unimplemented_geometry_hypothesis", {"hypothesis": hypothesis})
 		return
-	var b1_authority: RefCounted = B1Realizer.new()
-	b1_authority.call("configure_roi", row.roi)
+	var hypothesis_realizer: RefCounted = _new_hypothesis_realizer(hypothesis)
+	hypothesis_realizer.call("configure_roi", row.roi)
 	var solve_started: int = Time.get_ticks_usec()
-	var geometry: Dictionary = b1_authority.call("realize_topology", values, "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", setup.snapshot, int(row.get("seed", 131102026)))
+	var geometry: Dictionary = hypothesis_realizer.call("realize_topology", values, "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", setup.snapshot, int(row.get("seed", 131102026)))
 	var solve_usec: int = Time.get_ticks_usec() - solve_started
 	var patch: Dictionary = _find_patch(geometry)
 	if patch.is_empty():
@@ -83,11 +84,15 @@ func _run() -> void:
 		return
 	var search: Dictionary = patch.get("triangulation", {}).get("edge_flip_optimization", {}).get("search", {})
 	var target_topology: Dictionary = geometry.get("mesh_topology", {})
-	var ray_result: Dictionary = _run_roi_rays(row, setup.snapshot, geometry.get("mesh", Core.new_mesh()), geometry.get("emitted_triangles", []))
+	var ray_case: Dictionary = _run_frozen_ray_case(manifest.get("rows", []))
+	var ray_result: Dictionary = ray_case.get("rays", {})
+	ray_result["candidate_geometry_complete"] = bool(ray_case.get("geometry_complete", false))
+	ray_result["candidate_mesh_sha256"] = String(ray_case.get("mesh_sha256", ""))
+	ray_result["candidate_volume_sha256"] = String(ray_case.get("volume_sha256", ""))
 	var controls: Dictionary = _run_controls(manifest.get("rows", []), setup.snapshot)
 	var volume_gate: bool = bool(volume_case.volume_identity_preserved) and String(volume_case.volume.sha256) == A6_VOLUME_SHA and String(volume_case.volume.metrics.payload_sha256) == A6_PAYLOAD_SHA and int(volume_case.volume.revision) == 2
 	var equal_gate: bool = bool(geometry.get("geometry_realization_complete", false)) and int(target_topology.get("internal_open_edges", -1)) == 0 and int(target_topology.get("nonmanifold_edges", -1)) == 0 and int(target_topology.get("degenerate_triangles", -1)) == 0 and int(target_topology.get("winding_inconsistencies", -1)) == 0 and int(geometry.get("required_adjacency_missing_count", -1)) == 0 and int(geometry.get("required_adjacency_nonmanifold_count", -1)) == 0 and geometry.get("cutoff_rejections", []).is_empty()
-	var ray_gate: bool = bool(ray_result.get("valid", false)) and int(ray_result.get("roi_scoped_hit_miss_disagreements", -1)) == 0
+	var ray_gate: bool = bool(ray_case.get("valid", false)) and bool(ray_result.get("valid", false)) and bool(ray_case.get("geometry_complete", false)) and int(ray_result.get("roi_scoped_hit_miss_disagreements", -1)) == 0
 	var mixed_gate: Dictionary = {"status": "SKIPPED_EQUAL_LOD_OR_RAY_GATE_FAILED", "conforming": false}
 	if equal_gate and ray_gate:
 		mixed_gate = _run_mixed_lod_gate(manifest.get("rows", []), hypothesis)
@@ -101,6 +106,7 @@ func _run() -> void:
 		"source_topology": geometry.get("source_topology_graph_proof", {}),
 		"b1_search": search, "equal_lod": {"complete": equal_gate, "realization_complete": geometry.get("geometry_realization_complete", false), "mesh_sha256": geometry.get("mesh_sha256", ""), "metrics": target_topology, "required_adjacency_missing_count": geometry.get("required_adjacency_missing_count", -1), "required_adjacency_nonmanifold_count": geometry.get("required_adjacency_nonmanifold_count", -1), "cutoff_rejection_count": geometry.get("cutoff_rejections", []).size(), "unresolved_obligations": geometry.get("unresolved_obligations", []), "patch": patch},
 		"ray_gate": ray_result, "controls": controls, "mixed_lod": mixed_gate,
+		"ray_candidate": ray_case,
 		"volume_gate": volume_gate, "solver_elapsed_usec": solve_usec, "failures": _failures, "result": status
 	}
 	var write: Dictionary = _write_json(artifact_root.path_join(attempt_id + "_attempt.json"), result)
@@ -109,6 +115,23 @@ func _run() -> void:
 		result.result = "FAILED_EVIDENCE"
 	print("R10B_ATTEMPT_COMPLETE " + JSON.stringify({"attempt_id": attempt_id, "hypothesis": hypothesis, "source_sha": source_sha, "result": result.result, "equal_lod_complete": equal_gate, "internal_open_edges": target_topology.get("internal_open_edges", -1), "missing_adjacencies": geometry.get("required_adjacency_missing_count", -1), "nonmanifold": target_topology.get("nonmanifold_edges", -1), "winding_inconsistencies": target_topology.get("winding_inconsistencies", -1), "cutoff_rejections": geometry.get("cutoff_rejections", []).size(), "ray_roi_disagreements": ray_result.get("roi_scoped_hit_miss_disagreements", -1), "ray_roi_count": ray_result.get("ray_count", -1), "controls": "%d/6" % controls_pass, "volume_identity_preserved": volume_gate, "artifact": write.get("path", ""), "failures": _failures}))
 	quit(0 if _failures.is_empty() else 3)
+
+func _new_hypothesis_realizer(hypothesis: String) -> RefCounted:
+	if hypothesis == "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION": return B2Realizer.new()
+	return B1Realizer.new()
+
+func _run_frozen_ray_case(rows: Array) -> Dictionary:
+	var ray_row: Dictionary = Core.case_by_id(rows, RAY_ID)
+	if ray_row.is_empty(): return {"valid": false, "reason": "frozen_ray_scenario_missing", "rays": {"valid": false, "reason": "frozen_ray_scenario_missing"}}
+	var setup: Dictionary = Core.make_snapshot(ray_row)
+	if not bool(setup.get("valid", false)): return {"valid": false, "reason": "frozen_ray_snapshot_invalid", "rays": {"valid": false, "reason": "frozen_ray_snapshot_invalid"}}
+	var volume_case: Dictionary = _build_volume(ray_row, ray_row.roi, setup.snapshot)
+	if not bool(volume_case.get("valid", false)): return {"valid": false, "reason": "frozen_ray_volume_invalid", "volume_reason": volume_case.get("reason", ""), "rays": {"valid": false, "reason": "frozen_ray_volume_invalid"}}
+	var authority: RefCounted = Authority.new()
+	authority.call("configure_roi", ray_row.roi)
+	var geometry: Dictionary = authority.call("realize_topology", volume_case.volume.values, "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", setup.snapshot, int(ray_row.get("seed", 131102026)))
+	var rays: Dictionary = _run_roi_rays(ray_row, setup.snapshot, geometry.get("mesh", Core.new_mesh()), geometry.get("emitted_triangles", []))
+	return {"valid": bool(volume_case.get("volume_identity_preserved", false)) and bool(geometry.get("valid", false)), "reason": "" if bool(geometry.get("valid", false)) else String(geometry.get("reason", "ray_candidate_mesh_invalid")), "scenario_id": RAY_ID, "mesh_sha256": geometry.get("mesh_sha256", ""), "volume_sha256": volume_case.volume.sha256, "geometry_complete": geometry.get("geometry_realization_complete", false), "mesh_topology": geometry.get("mesh_topology", {}), "volume_identity_preserved": volume_case.volume_identity_preserved, "rays": rays}
 
 func _build_volume(row: Dictionary, roi: Dictionary, snapshot: Dictionary) -> Dictionary:
 	var candidate: RefCounted = CandidateD.new()
@@ -204,7 +227,7 @@ func _run_mixed_lod_gate(rows: Array, hypothesis: String) -> Dictionary:
 	var fine_volume: Dictionary = _build_volume(row, fine_roi, setup.snapshot)
 	if not bool(coarse_volume.get("valid", false)) or not bool(fine_volume.get("valid", false)):
 		return {"status": "FAILED_MIXED_VOLUME_PRECONDITION", "conforming": false, "coarse_volume": coarse_volume.get("reason", ""), "fine_volume": fine_volume.get("reason", "")}
-	var authority: RefCounted = B1Realizer.new()
+	var authority: RefCounted = _new_hypothesis_realizer(hypothesis)
 	authority.call("configure_roi", coarse_roi)
 	var coarse_geometry: Dictionary = authority.call("realize_topology", coarse_volume.volume.values, "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", setup.snapshot, int(row.get("seed", 131102026)))
 	authority.call("configure_roi", fine_roi)

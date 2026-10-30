@@ -9,6 +9,21 @@ const B1_MAX_FRONTIER: int = 4096
 const B1_MAX_EDGE_CANDIDATES: int = 15000
 const B1_MAX_SOLVER_MSEC: int = 90000
 
+var _active_cavity_triangle_indices: Dictionary = {}
+var _search_limit_override: Dictionary = {}
+
+func _search_limit(name: String) -> int:
+	if _search_limit_override.has(name): return int(_search_limit_override[name])
+	match name:
+		"unique_states": return B1_MAX_UNIQUE_STATES
+		"frontier": return B1_MAX_FRONTIER
+		"edge_candidates": return B1_MAX_EDGE_CANDIDATES
+		"solver_msec": return B1_MAX_SOLVER_MSEC
+	return 0
+
+func _candidate_flip_allowed(first_index: int, second_index: int) -> bool:
+	return _active_cavity_triangle_indices.is_empty() or (_active_cavity_triangle_indices.has(first_index) and _active_cavity_triangle_indices.has(second_index))
+
 func _optimize_triangulation_edge_flips(input_triangles: Array[Dictionary], boundary_root_ids: Array, projection_axis: int) -> Dictionary:
 	var begin_msec: int = Time.get_ticks_msec()
 	var boundary_edges: Dictionary = {}
@@ -32,7 +47,7 @@ func _optimize_triangulation_edge_flips(input_triangles: Array[Dictionary], boun
 	var stop_reason: String = ""
 	var exhausted: bool = false
 	while queue_head < queue.size():
-		if Time.get_ticks_msec() - begin_msec >= B1_MAX_SOLVER_MSEC:
+		if Time.get_ticks_msec() - begin_msec >= _search_limit("solver_msec"):
 			stop_reason = "solver_wall_time_limit"
 			break
 		var state: Dictionary = queue[queue_head]
@@ -50,10 +65,10 @@ func _optimize_triangulation_edge_flips(input_triangles: Array[Dictionary], boun
 		var edge_keys: Array = edges.keys()
 		edge_keys.sort()
 		for raw_edge_key in edge_keys:
-			if Time.get_ticks_msec() - begin_msec >= B1_MAX_SOLVER_MSEC:
+			if Time.get_ticks_msec() - begin_msec >= _search_limit("solver_msec"):
 				stop_reason = "solver_wall_time_limit"
 				break
-			if candidate_count >= B1_MAX_EDGE_CANDIDATES:
+			if candidate_count >= _search_limit("edge_candidates"):
 				stop_reason = "edge_candidate_limit"
 				break
 			candidate_count += 1
@@ -68,6 +83,9 @@ func _optimize_triangulation_edge_flips(input_triangles: Array[Dictionary], boun
 				continue
 			var first_index: int = int(owners[0])
 			var second_index: int = int(owners[1])
+			if not _candidate_flip_allowed(first_index, second_index):
+				_inc(pruned, "outside_expanding_cavity")
+				continue
 			var first: Dictionary = triangles[first_index]
 			var second: Dictionary = triangles[second_index]
 			var a_id: String = String(edge.a)
@@ -118,7 +136,7 @@ func _optimize_triangulation_edge_flips(input_triangles: Array[Dictionary], boun
 			if parents.has(next_key):
 				_inc(pruned, "duplicate_state_or_cycle")
 				continue
-			if parents.size() >= B1_MAX_UNIQUE_STATES or queue.size() - queue_head >= B1_MAX_FRONTIER:
+			if parents.size() >= _search_limit("unique_states") or queue.size() - queue_head >= _search_limit("frontier"):
 				stop_reason = "unique_state_or_frontier_limit"
 				break
 			var next_quality: Dictionary = _quality(next)
@@ -155,9 +173,9 @@ func _optimize_triangulation_edge_flips(input_triangles: Array[Dictionary], boun
 			"best_state_key": best_key, "best_minimum_cross_squared": best_quality.minimum_cross_squared,
 			"best_subcutoff_face_count": best_quality.subcutoff_count,
 			"search_exhausted": exhausted, "search_limit_hit": not stop_reason.is_empty() and not exhausted and solution_key.is_empty(),
-			"stop_reason": stop_reason, "max_unique_states": B1_MAX_UNIQUE_STATES,
-			"max_frontier": B1_MAX_FRONTIER, "max_edge_candidates": B1_MAX_EDGE_CANDIDATES,
-			"max_solver_msec": B1_MAX_SOLVER_MSEC, "solver_elapsed_msec": Time.get_ticks_msec() - begin_msec,
+			"stop_reason": stop_reason, "max_unique_states": _search_limit("unique_states"),
+			"max_frontier": _search_limit("frontier"), "max_edge_candidates": _search_limit("edge_candidates"),
+			"max_solver_msec": _search_limit("solver_msec"), "solver_elapsed_msec": Time.get_ticks_msec() - begin_msec,
 			"solution_path": path, "best_state_triangles": best_triangles.map(func(t: Dictionary) -> Dictionary: return {"root_ids": t.root_ids, "cross_squared": t.cross_squared})}
 	}
 
@@ -181,7 +199,8 @@ func _state_contract_valid(triangles: Array[Dictionary], boundary_edges: Diction
 			edge_incidence[edge_key] = int(edge_incidence.get(edge_key, 0)) + 1
 		var projected_area: float = _projected_double_area(points, projection_axis)
 		if not is_finite(projected_area) or projected_area * orientation <= 0.0: return false
-	var actual_roots: Array[String] = root_set.keys()
+	var actual_roots: Array[String] = []
+	for root_id in root_set.keys(): actual_roots.append(String(root_id))
 	actual_roots.sort()
 	if actual_roots != expected_roots: return false
 	for raw_edge in boundary_edges.keys():
@@ -250,7 +269,8 @@ func _sorted_root_set(triangles: Array[Dictionary]) -> Array[String]:
 	var seen: Dictionary = {}
 	for triangle in triangles:
 		for raw_id in triangle.get("root_ids", []): seen[String(raw_id)] = true
-	var result: Array[String] = seen.keys()
+	var result: Array[String] = []
+	for key in seen.keys(): result.append(String(key))
 	result.sort()
 	return result
 
