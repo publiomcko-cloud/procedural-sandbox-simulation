@@ -120,3 +120,5 @@ Every verified merge, material review/GUI verdict, scope authorization or revisi
 - [D3 evidence publication](2026-10-29-P3-1-R9-7-D3-PUBLICATION.md) — draft PR #206 created against the exact Candidate D evidence branch; PR #204/#205 verified unchanged; unmerged and independent review pending.
 
 | 2026-10-29 | [P3.1 R10-A PR #207 publication](2026-10-29-P3-1-R10-A-PR-207-PUBLICATION.md) | Six equal-LOD topology hypotheses exhausted with evidence; exact trees/blobs mirrored; draft evidence PR #207 verified open and unmerged | Branch exp/p3-1-r10-a-topology-authority; remote head 989816512e3aa325f9400865ab12994fca615979 |
+
+| 2026-10-29 | [P3.1 R10-A archive hash erratum](2026-10-29-P3-1-R10-A-ARCHIVE-HASH-ERRATUM.md) | Corrects one transcribed ZIP SHA-256 character; archive bytes and all campaign results unchanged | Draft PR #207; hash reverified from the preserved archive |
