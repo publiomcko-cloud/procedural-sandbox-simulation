@@ -69,12 +69,25 @@ func build_candidate_domain(geometry: Dictionary, identity: Dictionary, roi: Dic
 		if not root_index.has(root_id) or boundary_seen.has(root_id): return {"valid": false, "reason": "boundary_root_missing_or_duplicated", "root_id": root_id}
 		boundary_seen[root_id] = true
 		boundary_cycle.append(int(root_index[root_id]))
+	var source_polygon_set: Dictionary = {}
+	for source_polygon_id in patch.get("source_polygon_ids", []): source_polygon_set[String(source_polygon_id)] = true
+	if source_polygon_set.size() != 84: return {"valid": false, "reason": "source_polygon_owner_set_invalid", "count": source_polygon_set.size()}
 	var orientation: Vector3 = Vector3.ZERO
+	var orientation_samples: int = 0
 	for raw_emitted in geometry.get("emitted_triangles", []):
-		if not raw_emitted is Dictionary or String(raw_emitted.get("patch_id", "")) != component_id: continue
+		if not raw_emitted is Dictionary: continue
+		var contributes_to_source: bool = source_polygon_set.has(String(raw_emitted.get("polygon_id", "")))
+		if not contributes_to_source:
+			for source_polygon_id in raw_emitted.get("source_polygon_ids", []):
+				if source_polygon_set.has(String(source_polygon_id)):
+					contributes_to_source = true
+					break
+		if not contributes_to_source: continue
 		var normal: Variant = raw_emitted.get("normal", Vector3.ZERO)
-		if normal is Vector3 and normal.is_finite(): orientation += normal
-	if not orientation.is_finite() or orientation.length_squared() == 0.0: return {"valid": false, "reason": "component_orientation_authority_invalid"}
+		if normal is Vector3 and normal.is_finite():
+			orientation += normal
+			orientation_samples += 1
+	if orientation_samples == 0 or not orientation.is_finite() or orientation.length_squared() == 0.0: return {"valid": false, "reason": "component_orientation_authority_invalid", "sample_count": orientation_samples, "source_polygon_count": source_polygon_set.size()}
 	orientation = orientation.normalized()
 	var candidate_config: RefCounted = CandidateD.new()
 	candidate_config.call("configure_roi", roi)
@@ -124,6 +137,8 @@ func build_candidate_domain(geometry: Dictionary, identity: Dictionary, roi: Dic
 		"component_id": component_id,
 		"source_polygon_ids": source_polygon_ids,
 		"source_polygon_count": source_polygon_ids.size(),
+		"orientation_sample_count": orientation_samples,
+		"orientation_sample_count": orientation_samples,
 		"source_cell_owners": source_cell_rows,
 		"grid_step": grid_step,
 		"source_root_count": root_rows.size(),
@@ -354,6 +369,7 @@ func _load_solver_domain(domain: Dictionary, expected_identity: Dictionary) -> D
 	if domain.get("identity", {}) != expected_identity: return {"valid": false, "reason": "candidate_domain_identity_mismatch"}
 	if int(domain.get("source_root_count", -1)) != 73 or int(domain.get("source_boundary_root_count", -1)) != 34 or int(domain.get("source_interior_root_count", -1)) != 39:
 		return {"valid": false, "reason": "candidate_domain_frozen_counts_mismatch"}
+	if int(domain.get("orientation_sample_count", 0)) <= 0: return {"valid": false, "reason": "candidate_domain_orientation_sample_count_invalid"}
 	var raw_roots: Variant = domain.get("root_rows", [])
 	var raw_candidates: Variant = domain.get("candidate_triplets_oriented", [])
 	var raw_owners: Variant = domain.get("candidate_owner_cells", [])
@@ -736,5 +752,5 @@ func _sha256(bytes: PackedByteArray) -> String:
 	return context.finish().hex_encode().to_lower()
 
 func _domain_identity_sha(domain: Dictionary) -> String:
-	var identity: Dictionary = {"schema": domain.schema, "identity": domain.identity, "component_id": domain.component_id, "source_polygon_ids": domain.source_polygon_ids, "source_polygon_count": domain.source_polygon_count, "source_cell_owners": domain.source_cell_owners, "grid_step": domain.grid_step, "source_root_count": domain.source_root_count, "source_boundary_root_count": domain.source_boundary_root_count, "source_interior_root_count": domain.source_interior_root_count, "projection_axis_dropped": domain.projection_axis_dropped, "projection_orientation_sign": domain.projection_orientation_sign, "orientation_toward_empty": domain.orientation_toward_empty, "root_rows": domain.root_rows, "boundary_cycle": domain.boundary_cycle, "required_boundary_edges": domain.required_boundary_edges, "prohibited_edges": domain.prohibited_edges, "candidate_count": domain.candidate_count, "candidate_triplets_oriented": domain.candidate_triplets_oriented, "candidate_owner_cells": domain.candidate_owner_cells, "rejection_counts": domain.rejection_counts, "edge_rejection_counts": domain.edge_rejection_counts, "limits": domain.limits, "search_contract": domain.search_contract}
+	var identity: Dictionary = {"schema": domain.schema, "identity": domain.identity, "component_id": domain.component_id, "source_polygon_ids": domain.source_polygon_ids, "source_polygon_count": domain.source_polygon_count, "orientation_sample_count": domain.orientation_sample_count, "source_cell_owners": domain.source_cell_owners, "grid_step": domain.grid_step, "source_root_count": domain.source_root_count, "source_boundary_root_count": domain.source_boundary_root_count, "source_interior_root_count": domain.source_interior_root_count, "projection_axis_dropped": domain.projection_axis_dropped, "projection_orientation_sign": domain.projection_orientation_sign, "orientation_toward_empty": domain.orientation_toward_empty, "root_rows": domain.root_rows, "boundary_cycle": domain.boundary_cycle, "required_boundary_edges": domain.required_boundary_edges, "prohibited_edges": domain.prohibited_edges, "candidate_count": domain.candidate_count, "candidate_triplets_oriented": domain.candidate_triplets_oriented, "candidate_owner_cells": domain.candidate_owner_cells, "rejection_counts": domain.rejection_counts, "edge_rejection_counts": domain.edge_rejection_counts, "limits": domain.limits, "search_contract": domain.search_contract}
 	return _sha256(JSON.stringify(identity).to_utf8_buffer())

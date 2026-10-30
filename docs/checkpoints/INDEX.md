@@ -124,3 +124,5 @@ Every verified merge, material review/GUI verdict, scope authorization or revisi
 | 2026-10-29 | [P3.1 R10-A archive hash erratum](2026-10-29-P3-1-R10-A-ARCHIVE-HASH-ERRATUM.md) | Corrects one transcribed ZIP SHA-256 character; archive bytes and all campaign results unchanged | Draft PR #207; hash reverified from the preserved archive |
 
 | 2026-10-30 | [P3.1 R10-B1R preregistration](2026-10-30-P3-1-R10-B1R-PREREGISTRATION.md) | Owner-authorized sixth and final R10-B geometry slot preregistered as direct constrained triangulation; original B1 remains a preserved harness error; B1R geometry not yet run at checkpoint | Existing draft PR #208; test-only, no production adoption; all five F2-G1 holds remain |
+
+| 2026-10-30 | [P3.1 R10-B1R domain-audit correction](2026-10-30-P3-1-R10-B1R-DOMAIN-AUDIT-CORRECTION.md) | Preserves the first exact-source domain-audit failure: orientation authority selector returned zero normals before solver invocation; bounded selector correction recorded; B1R remains unconsumed | Existing draft PR #208; exact-source gates and corrected domain audit pending |
