@@ -1,7 +1,7 @@
 # R10-B2 attempt result — local cavity did not resolve the fixed A6 defect
 
-Attempt: `B2-CAVITY-20261030-F32193A`  
-Source SHA: `823b76111c46d7f640a59c70059c2838d7182b22`  
+Attempt: `B2-CAVITY-20261030-F32193A`
+Source SHA: `823b76111c46d7f640a59c70059c2838d7182b22`
 Result: `FAILED_TARGET`; no script error, process exit 0. The result is a geometry failure, not an execution failure.
 
 The exact frozen volume and root graph passed their identity checks. B2 exhausted each of the five frozen face-adjacency cavities (rings 0–4) from the original A6 triangulation. The face counts were 3, 10, 18, 23, and 25. Each ring visited only its initial state; total 5 unique states, 910 edge keys examined (182 per state), and 65 ms solver time. No legal flip state was generated within any allowed cavity; 3 sub-cutoff triangles remained. The result only excludes the registered internal diagonal-flip move family within these five bounded cavities. It does not establish global infeasibility.

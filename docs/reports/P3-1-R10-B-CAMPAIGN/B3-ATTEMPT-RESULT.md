@@ -1,7 +1,7 @@
 # R10-B3 attempt result — constrained-Delaunay local optimum retains the defect
 
-Attempt: `B3-LAWSON-20261030-E4BA97C`  
-Source SHA: `c4d60e93e38a17d4b27be8e2f86e61ddf67481a1`  
+Attempt: `B3-LAWSON-20261030-E4BA97C`
+Source SHA: `c4d60e93e38a17d4b27be8e2f86e61ddf67481a1`
 Result: `FAILED_TARGET`; process exit 0, no script errors.
 
 B3's frozen 25-ray control and all six controls passed, but the equal-LOD target did not change: the deterministic Lawson scan examined 182 edge keys, made zero flips, and stopped at `CONSTRAINED_DELAUNAY_LOCAL_OPTIMUM_RETAINS_SUBCUTOFF` in 33 ms. The emitted target mesh was 655 triangles with 10 internal open edges, 73 ROI-boundary edges, no nonmanifold edges, no degenerate emitted triangles and no winding errors; 21 required adjacencies were missing and 7 fixed-cutoff required triangles were rejected. The minimum cross-squared remained `1.67075673894024e-16`, below the unchanged `1e-12` cutoff. The source graph and revision-2 A6 volume identities passed. The mixed-LOD gate was correctly skipped because the equal-LOD gate failed.
