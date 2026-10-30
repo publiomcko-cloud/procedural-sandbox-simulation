@@ -138,7 +138,6 @@ func build_candidate_domain(geometry: Dictionary, identity: Dictionary, roi: Dic
 		"source_polygon_ids": source_polygon_ids,
 		"source_polygon_count": source_polygon_ids.size(),
 		"orientation_sample_count": orientation_samples,
-		"orientation_sample_count": orientation_samples,
 		"source_cell_owners": source_cell_rows,
 		"grid_step": grid_step,
 		"source_root_count": root_rows.size(),
