@@ -1,6 +1,6 @@
 # P3.1 R10-B — Campaign preregistration and Stage 0 causal freeze
 
-**Status at this commit:** Stage 0 fixture and ray-scope correction are frozen. B1 was invoked once at source SHA `eae562eb310d44cd6b5208eaee744d893a4139e7`, but emitted GDScript runtime errors and is `BLOCKED_HARNESS_ERROR`; it is not valid geometry evidence and was not rerun. B2 ran once and returned `FAILED_TARGET` with a completed bounded cavity search and unchanged topology failure. B3 is the next distinct hypothesis. This report is experimental evidence only.
+**Status at this commit:** Stage 0 fixture and ray-scope correction are frozen. B1 was invoked once at source SHA `eae562eb310d44cd6b5208eaee744d893a4139e7`, but emitted GDScript runtime errors and is `BLOCKED_HARNESS_ERROR`; it is not valid geometry evidence and was not rerun. B2 exhausted its registered ring-0-to-4 cavity search without an alternate state and returned `FAILED_TARGET`. B3 performed zero Lawson flips, reached a constrained-Delaunay local optimum with the same fixed-cutoff failure, and returned `FAILED_TARGET`. B4 is the next distinct hypothesis. This report is experimental evidence only.
 
 ## Authority boundary
 

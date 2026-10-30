@@ -71,19 +71,20 @@ func _run() -> void:
 		print("R10B_GRAPH_CONTRACT_COMPLETE " + JSON.stringify({"status": "PASS", "attempt_id": attempt_id, "source_sha": source_sha, "source_topology_graph_proof": graph_result.source_topology_graph_proof, "geometry_topology": graph_result.mesh_topology, "volume_identity_preserved": volume_case.volume_identity_preserved}))
 		quit(0)
 		return
-	if hypothesis not in ["R10B1_NONMONOTONIC_CONSTRAINED_FLIP_BFS", "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION", "R10B3_CONSTRAINED_DELAUNAY_LAWSON_FLIPS"]:
+	if hypothesis not in ["R10B1_NONMONOTONIC_CONSTRAINED_FLIP_BFS", "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION", "R10B3_CONSTRAINED_DELAUNAY_LAWSON_FLIPS", "R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION"]:
 		_blocked("unimplemented_geometry_hypothesis", {"hypothesis": hypothesis})
 		return
 	var hypothesis_realizer: RefCounted = _new_hypothesis_realizer(hypothesis)
 	hypothesis_realizer.call("configure_roi", row.roi)
 	var solve_started: int = Time.get_ticks_usec()
-	var geometry: Dictionary = hypothesis_realizer.call("realize_topology", values, "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", setup.snapshot, int(row.get("seed", 131102026)))
+	var realization_mode: String = _realization_mode(hypothesis)
+	var geometry: Dictionary = hypothesis_realizer.call("realize_topology", values, realization_mode, setup.snapshot, int(row.get("seed", 131102026)))
 	var solve_usec: int = Time.get_ticks_usec() - solve_started
 	var patch: Dictionary = _find_patch(geometry)
-	if patch.is_empty():
+	if patch.is_empty() and hypothesis != "R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION":
 		_blocked("b1_target_component_record_missing", {"component_reconstruction": geometry.get("component_reconstruction", {})})
 		return
-	var search: Dictionary = patch.get("triangulation", {}).get("edge_flip_optimization", {}).get("search", {})
+	var search: Dictionary = patch.get("triangulation", {}).get("search", {}) if not patch.is_empty() else {"status": "FIELD_STEINER_EVIDENCE_ONLY", "search_exhausted": false}
 	var target_topology: Dictionary = geometry.get("mesh_topology", {})
 	var ray_case: Dictionary = _run_frozen_ray_case(manifest.get("rows", []))
 	var ray_result: Dictionary = ray_case.get("rays", {})
@@ -105,7 +106,7 @@ func _run() -> void:
 		"godot": Engine.get_version_info(), "cutoff_squared": 1.0e-12,
 		"target": {"scenario_id": EQUAL_ID, "volume_sha256": volume_case.volume.sha256, "payload_sha256": volume_case.volume.metrics.payload_sha256, "revision": volume_case.volume.revision, "volume_identity_preserved": volume_gate},
 		"source_topology": geometry.get("source_topology_graph_proof", {}),
-		"b1_search": search, "equal_lod": {"complete": equal_gate, "realization_complete": geometry.get("geometry_realization_complete", false), "mesh_sha256": geometry.get("mesh_sha256", ""), "metrics": target_topology, "required_adjacency_missing_count": geometry.get("required_adjacency_missing_count", -1), "required_adjacency_nonmanifold_count": geometry.get("required_adjacency_nonmanifold_count", -1), "cutoff_rejection_count": geometry.get("cutoff_rejections", []).size(), "unresolved_obligations": geometry.get("unresolved_obligations", []), "patch": patch},
+		"b1_search": search, "realization_search": search, "field_steiner_evidence": geometry.get("local_refinement", []), "equal_lod": {"complete": equal_gate, "realization_complete": geometry.get("geometry_realization_complete", false), "mesh_sha256": geometry.get("mesh_sha256", ""), "metrics": target_topology, "required_adjacency_missing_count": geometry.get("required_adjacency_missing_count", -1), "required_adjacency_nonmanifold_count": geometry.get("required_adjacency_nonmanifold_count", -1), "cutoff_rejection_count": geometry.get("cutoff_rejections", []).size(), "unresolved_obligations": geometry.get("unresolved_obligations", []), "patch": patch},
 		"ray_gate": ray_result, "controls": controls, "mixed_lod": mixed_gate,
 		"ray_candidate": ray_case,
 		"volume_gate": volume_gate, "solver_elapsed_usec": solve_usec, "failures": _failures, "result": status
@@ -120,7 +121,12 @@ func _run() -> void:
 func _new_hypothesis_realizer(hypothesis: String) -> RefCounted:
 	if hypothesis == "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION": return B2Realizer.new()
 	if hypothesis == "R10B3_CONSTRAINED_DELAUNAY_LAWSON_FLIPS": return B3Realizer.new()
+	if hypothesis == "R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION": return Authority.new()
 	return B1Realizer.new()
+
+func _realization_mode(hypothesis: String) -> String:
+	if hypothesis == "R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION": return "R10A3_CANONICAL_FIELD_STEINER"
+	return "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION"
 
 func _run_frozen_ray_case(rows: Array) -> Dictionary:
 	var ray_row: Dictionary = Core.case_by_id(rows, RAY_ID)
@@ -231,9 +237,9 @@ func _run_mixed_lod_gate(rows: Array, hypothesis: String) -> Dictionary:
 		return {"status": "FAILED_MIXED_VOLUME_PRECONDITION", "conforming": false, "coarse_volume": coarse_volume.get("reason", ""), "fine_volume": fine_volume.get("reason", "")}
 	var authority: RefCounted = _new_hypothesis_realizer(hypothesis)
 	authority.call("configure_roi", coarse_roi)
-	var coarse_geometry: Dictionary = authority.call("realize_topology", coarse_volume.volume.values, "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", setup.snapshot, int(row.get("seed", 131102026)))
+	var coarse_geometry: Dictionary = authority.call("realize_topology", coarse_volume.volume.values, _realization_mode(hypothesis), setup.snapshot, int(row.get("seed", 131102026)))
 	authority.call("configure_roi", fine_roi)
-	var fine_geometry: Dictionary = authority.call("realize_topology", fine_volume.volume.values, "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", setup.snapshot, int(row.get("seed", 131102026)))
+	var fine_geometry: Dictionary = authority.call("realize_topology", fine_volume.volume.values, _realization_mode(hypothesis), setup.snapshot, int(row.get("seed", 131102026)))
 	var plane: float = 16.0
 	var coarse_segments: Dictionary = _plane_segments(coarse_geometry.get("mesh", Core.new_mesh()), 0, plane)
 	var fine_segments: Dictionary = _plane_segments(fine_geometry.get("mesh", Core.new_mesh()), 0, plane)
