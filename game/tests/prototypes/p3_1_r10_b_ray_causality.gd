@@ -52,8 +52,21 @@ func _run() -> void:
 		return
 	var fixture: Dictionary = fixture_parse
 	var historical_d0: Dictionary = fixture.get("historical_r9_7", {})
-	if int(historical_d0.get("recorded_ray_count", -1)) != 25 or int(historical_d0.get("roi_scoped_hit_miss_disagreements", -1)) != 0 or int(historical_d0.get("full_ray_finite_scan_hit_miss_disagreements", -1)) != 9 or historical_d0.get("full_ray_finite_scan_disagreement_indices", []) != [2, 8, 9, 13, 14, 18, 19, 23, 24] or int(historical_d0.get("roi_scoped_ray_records", []).size()) != 25 or String(historical_d0.get("candidate_mesh_sha256", "")) != EXPECTED_R9_7_D_MESH_SHA:
-		_emit_blocked("historical_r9_7_ray_scope_record_invalid", {"historical_d0": historical_d0})
+	var historical_indices: Array = historical_d0.get("full_ray_finite_scan_disagreement_indices", [])
+	var expected_historical_indices: Array[int] = [2, 8, 9, 13, 14, 18, 19, 23, 24]
+	var indices_match: bool = historical_indices.size() == expected_historical_indices.size()
+	if indices_match:
+		for index in range(expected_historical_indices.size()):
+			if not (historical_indices[index] is float or historical_indices[index] is int):
+				indices_match = false
+				break
+			if float(historical_indices[index]) != float(expected_historical_indices[index]):
+				indices_match = false
+				break
+	var historical_rows: Array = historical_d0.get("roi_scoped_ray_records", [])
+	var historical_record_valid: bool = int(historical_d0.get("recorded_ray_count", -1)) == 25 and int(historical_d0.get("roi_scoped_hit_miss_disagreements", -1)) == 0 and int(historical_d0.get("full_ray_finite_scan_hit_miss_disagreements", -1)) == 9 and indices_match and historical_rows.size() == 25 and String(historical_d0.get("candidate_mesh_sha256", "")) == EXPECTED_R9_7_D_MESH_SHA
+	if not historical_record_valid:
+		_emit_blocked("historical_r9_7_ray_scope_record_invalid", {"recorded_ray_count": historical_d0.get("recorded_ray_count"), "roi_mismatches": historical_d0.get("roi_scoped_hit_miss_disagreements"), "global_mismatches": historical_d0.get("full_ray_finite_scan_hit_miss_disagreements"), "observed_indices": historical_indices, "indices_match": indices_match, "roi_record_count": historical_rows.size(), "candidate_mesh_sha256": historical_d0.get("candidate_mesh_sha256")})
 		return
 	var row: Dictionary = Core.case_by_id(manifest.get("rows", []), "R9.2.RAY.CANONICAL_PICKER.v1")
 	if row.is_empty():
