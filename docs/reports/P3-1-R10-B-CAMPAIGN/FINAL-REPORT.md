@@ -8,7 +8,9 @@
 
 **R10-A baseline:** final R10-A publication source and frozen R9.2 inputs as pinned in `PREREGISTRATION.md`; source branch remains separate from production.
 
-**PR base:** `exp/p3-1-r10-a-topology-authority` at `f6f4a47bcb9f98ee7b8648f88a4db2ccf8317294`; this is a stacked evidence PR and leaves PR #207 unchanged. The R10-B draft PR URL is recorded after publication; no production integration or merge.
+**Draft evidence PR:** [#208](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/208), open/draft/unmerged.
+
+**PR base:** `exp/p3-1-r10-a-topology-authority` at `f6f4a47bcb9f98ee7b8648f88a4db2ccf8317294`; this is a stacked evidence PR and leaves PR #207 unchanged. No production integration or merge.
 
 ## Result
 
