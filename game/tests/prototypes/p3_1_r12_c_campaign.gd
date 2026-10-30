@@ -69,7 +69,7 @@ func _run() -> void:
 	var target_geometry: Dictionary = target_case.geometry
 	var controls: Dictionary = _run_controls(manifest.get("rows", []))
 	var ray_result: Dictionary = _run_ray_gate(manifest.get("rows", []))
-	var volume_gate: Dictionary = bool(target_case.volume_identity_preserved) and String(target_case.volume_sha256) == VolumeSha and String(target_case.payload_sha256) == PayloadSha and int(target_case.revision) == 2
+	var volume_gate: bool = bool(target_case.volume_identity_preserved) and String(target_case.volume_sha256) == VolumeSha and String(target_case.payload_sha256) == PayloadSha and int(target_case.revision) == 2
 	var target_complete: bool = bool(target_geometry.get("geometry_complete", false)) and bool(target_geometry.get("topology_signature_match", false))
 	var controls_pass: bool = int(controls.get("passed", 0)) == 6 and int(controls.get("count", 0)) == 6
 	var ray_pass: bool = bool(ray_result.get("valid", false)) and int(ray_result.get("roi_scoped_hit_miss_disagreements", -1)) == 0
