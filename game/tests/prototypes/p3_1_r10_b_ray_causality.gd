@@ -9,7 +9,7 @@ const AUTHORITY_BLOB := "732f143939ac6980e1c7e77703dd7ee549206c0e"
 const AUTHORITY_WORKTREE_SHA := "feea8237160c90a049d9f0ab63ad7ff86f46604f9d57112278d25fda20a08216"
 const A6_HYPOTHESIS := "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION"
 const EXPECTED_R9_7_D_MESH_SHA := "04c6ceb842b964caba4e254f94c9f4b32881dae79994b961ac01029a48f64553"
-const RAY_FIXTURE_PATH := "res://docs/reports/P3-1-R10-B-CAMPAIGN/fixtures/ray_reference_fixture.json"
+const RAY_FIXTURE_RELATIVE_PATH := "docs/reports/P3-1-R10-B-CAMPAIGN/fixtures/ray_reference_fixture.json"
 
 var _problems: Array[String] = []
 
@@ -20,14 +20,15 @@ func _run() -> void:
 	var source_sha: String = OS.get_environment("R10B_SOURCE_SHA")
 	var source_file_sha: String = OS.get_environment("R10B_RAY_SOURCE_SHA256")
 	var artifact_root: String = OS.get_environment("R10B_ARTIFACT_DIR")
+	var repo_root: String = OS.get_environment("R10B_REPO_ROOT")
 	var fixture_sha_expected: String = OS.get_environment("R10B_RAY_FIXTURE_SHA256")
 	var manifest: Dictionary = Core.load_manifest()
 	var observed_candidate_sha: String = _sha_res_file("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd")
 	var observed_manifest_sha: String = _sha_res_file("res://tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl")
 	var observed_authority_sha: String = _sha_res_file("res://tests/prototypes/p3_1_r10_a_topology_authority.gd")
 	var observed_source_sha: String = _sha_res_file("res://tests/prototypes/p3_1_r10_b_ray_causality.gd")
-	if source_sha.length() != 40 or not source_sha.is_valid_hex_number() or artifact_root.is_empty() or not DirAccess.dir_exists_absolute(artifact_root):
-		_emit_blocked("source_or_artifact_identity_invalid", {"source_sha": source_sha, "artifact_root": artifact_root})
+	if source_sha.length() != 40 or not source_sha.is_valid_hex_number() or artifact_root.is_empty() or not DirAccess.dir_exists_absolute(artifact_root) or repo_root.is_empty() or not DirAccess.dir_exists_absolute(repo_root):
+		_emit_blocked("source_or_artifact_identity_invalid", {"source_sha": source_sha, "artifact_root": artifact_root, "repo_root": repo_root})
 		return
 	if observed_candidate_sha != CANDIDATE_D_SHA or observed_manifest_sha != MANIFEST_SHA or observed_authority_sha != AUTHORITY_WORKTREE_SHA:
 		_emit_blocked("frozen_source_pin_mismatch", {"candidate_d": observed_candidate_sha, "manifest": observed_manifest_sha, "authority": observed_authority_sha})
@@ -35,9 +36,10 @@ func _run() -> void:
 	if observed_source_sha != source_file_sha or not bool(manifest.get("valid", false)) or String(manifest.get("sha256", "")) != MANIFEST_SHA:
 		_emit_blocked("r10b_source_or_manifest_pin_mismatch", {"ray_source": observed_source_sha, "expected_ray_source": source_file_sha, "manifest_reason": manifest.get("reason", ""), "manifest_sha": manifest.get("sha256", "")})
 		return
-	var fixture_file: FileAccess = FileAccess.open(RAY_FIXTURE_PATH, FileAccess.READ)
+	var fixture_path: String = repo_root.path_join(RAY_FIXTURE_RELATIVE_PATH)
+	var fixture_file: FileAccess = FileAccess.open(fixture_path, FileAccess.READ)
 	if fixture_file == null:
-		_emit_blocked("ray_reference_fixture_open_failed", {})
+		_emit_blocked("ray_reference_fixture_open_failed", {"fixture_path": fixture_path})
 		return
 	var fixture_bytes: PackedByteArray = fixture_file.get_buffer(fixture_file.get_length())
 	fixture_file.close()

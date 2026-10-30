@@ -82,6 +82,7 @@ $psi.EnvironmentVariables['R10B_ATTEMPT'] = $AttemptId
 $psi.EnvironmentVariables['R10B_HYPOTHESIS'] = $Hypothesis
 $psi.EnvironmentVariables['R10B_SOURCE_SHA'] = $sourceSha
 $psi.EnvironmentVariables['R10B_ARTIFACT_DIR'] = $attemptRoot
+$psi.EnvironmentVariables['R10B_REPO_ROOT'] = $repo
 if ($Stage -in @('check-only', 'check-ray', 'ray-causality')) {
 	$raySourcePath = Join-Path $repo 'game\tests\prototypes\p3_1_r10_b_ray_causality.gd'
 	$fixturePath = Join-Path $repo 'docs\reports\P3-1-R10-B-CAMPAIGN\fixtures\ray_reference_fixture.json'
