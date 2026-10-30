@@ -214,7 +214,10 @@ func _apply_a2_triangle_subdivision(source_polygons: Array[Dictionary], roots: D
 		]
 		for child in child_rows:
 			expanded.append({"id": child.id, "cell": cell.duplicate(), "tet_index": polygon.get("tet_index", -1), "parent_polygon_id": parent_id, "subdivision_child": child.child_index, "root_ids": child.root_ids, "points": child.points, "face_ids": child.face_ids, "toward_empty": polygon.get("toward_empty", Vector3.ZERO), "realization": "PENDING"})
-		evidence.append({"parent_polygon_id": parent_id, "cell": cell.duplicate(), "tet_index": polygon.get("tet_index", -1), "original_cross_squared": original_cross_squared, "centroid_id": center_id, "centroid": [center.x, center.y, center.z], "source_triangle_plane_residual_world_units": plane_residual, "child_cross_squared": [_cross_squared(a, b, center), _cross_squared(b, c, center), _cross_squared(c, a, center)], "child_ids": [child.id for child in child_rows], "topology_policy": "retain_all_three_child_obligations_even_if_fixed_cutoff_rejects_them"})
+		var child_ids: Array[String] = []
+		for child in child_rows:
+			child_ids.append(String(child.get("id", "")))
+		evidence.append({"parent_polygon_id": parent_id, "cell": cell.duplicate(), "tet_index": polygon.get("tet_index", -1), "original_cross_squared": original_cross_squared, "centroid_id": center_id, "centroid": [center.x, center.y, center.z], "source_triangle_plane_residual_world_units": plane_residual, "child_cross_squared": [_cross_squared(a, b, center), _cross_squared(b, c, center), _cross_squared(c, a, center)], "child_ids": child_ids, "topology_policy": "retain_all_three_child_obligations_even_if_fixed_cutoff_rejects_them"})
 	var rebuilt_arcs: Dictionary = {}
 	for polygon in expanded:
 		var ordered_ids: Array = polygon.get("root_ids", [])
