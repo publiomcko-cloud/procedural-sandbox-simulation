@@ -3,7 +3,6 @@ extends "res://tests/prototypes/p3_1_r9_2_candidate_impl.gd"
 ## R10-A test-only topology-first realization over Candidate D's reloaded
 ## materialized float32 volume.  The polygon/root/arc graph is complete before
 ## any triangle is emitted and is the authority for this experiment.
-const Core := preload("res://tests/prototypes/p3_1_r9_2_diagnostic_base.gd")
 const CUTOFF_SQUARED: float = 1.0e-12
 const ARC_SEPARATOR: String = "\u001f"
 
@@ -66,13 +65,13 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String) -> Diction
 							continue
 						if not roots.has(root_id):
 							roots[root_id] = root.point
-					if not root_sources.has(root_id):
-						root_sources[root_id] = {"authority": "CANDIDATE_D_MATERIALIZED_FLOAT32_VOLUME", "node_a": [nodes[ia].x, nodes[ia].y, nodes[ia].z], "node_b": [nodes[ib].x, nodes[ib].y, nodes[ib].z]}
-					if not seen_ids.has(root_id):
-						seen_ids[root_id] = true
-						hit_points.append(root.point)
-						hit_ids.append(root_id)
-						hit_edges[root_id] = [ia, ib]
+						if not root_sources.has(root_id):
+							root_sources[root_id] = {"authority": "CANDIDATE_D_MATERIALIZED_FLOAT32_VOLUME", "node_a": [nodes[ia].x, nodes[ia].y, nodes[ia].z], "node_b": [nodes[ib].x, nodes[ib].y, nodes[ib].z]}
+						if not seen_ids.has(root_id):
+							seen_ids[root_id] = true
+							hit_points.append(root.point)
+							hit_ids.append(root_id)
+							hit_edges[root_id] = [int(local_edge[0]), int(local_edge[1])]
 				if hit_ids.size() < 3:
 					continue
 				var toward_empty: Vector3 = _tetra_toward_empty(points, samples, tet)
@@ -91,7 +90,7 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String) -> Diction
 					face_ids.append(face_id)
 					var arc_key: String = _arc_key(ordered_ids[edge_index], ordered_ids[(edge_index + 1) % ordered_ids.size()])
 					if not arcs.has(arc_key):
-						arcs[arc_key] = {"roots": [ordered_ids[edge_index], ordered_ids[(edge_index + 1) % ordered_ids.size()],], "polygon_ids": [], "face_ids": [], "required_incidence": 0}
+						arcs[arc_key] = {"roots": [ordered_ids[edge_index], ordered_ids[(edge_index + 1) % ordered_ids.size()]], "polygon_ids": [], "face_ids": [], "required_incidence": 0}
 					var arc: Dictionary = arcs[arc_key]
 					arc.polygon_ids.append(polygon_id)
 					arc.face_ids.append(face_id)
