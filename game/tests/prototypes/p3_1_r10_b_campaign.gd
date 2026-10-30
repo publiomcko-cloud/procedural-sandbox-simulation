@@ -19,6 +19,7 @@ const CONTROL_IDS: Array[String] = ["R9.2.GEO.ZERO.v1", "R9.2.GEO.CARVE.v1", "R9
 const NEGATIVE_ID := "R9.2.SEAM.NEGATIVE_REGIONS.v1"
 const EQUAL_ID := "R9.2.SEAM.XPLUS_EQUAL.v1"
 const RAY_ID := "R9.2.RAY.CANONICAL_PICKER.v1"
+const B1R_HYPOTHESIS_ID := "R10B1R_DIRECT_CONSTRAINED_TRIANGULATION_FEASIBILITY"
 
 var _failures: Array[String] = []
 
@@ -76,7 +77,7 @@ func _run() -> void:
 		quit(0)
 		return
 	if OS.get_environment("R10B_B1R_DOMAIN_ONLY") == "1":
-		if hypothesis != "R10B1R_DIRECT_CONSTRAINED_TRIANGULATION_FEASIBILITY":
+		if not _is_b1r_hypothesis(hypothesis):
 			_blocked("candidate_domain_stage_requires_b1r", {"hypothesis": hypothesis})
 			return
 		var domain_builder: RefCounted = B1RRealizer.new()
@@ -106,7 +107,7 @@ func _run() -> void:
 		print("R10B_B1R_DOMAIN_COMPLETE " + JSON.stringify({"status": "PASS", "attempt_id": attempt_id, "source_sha": source_sha, "domain_artifact": domain_path, "domain_sha256": domain_result.domain_sha256, "domain_identity_sha256": domain_result.identity_sha256, "self_test": domain_self_test, "metrics": domain_result.metrics, "source_topology_graph_proof": graph_result.source_topology_graph_proof}))
 		quit(0)
 		return
-	if hypothesis not in ["R10B1_NONMONOTONIC_CONSTRAINED_FLIP_BFS", "R10B1R_DIRECT_CONSTRAINED_TRIANGULATION", "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION", "R10B3_CONSTRAINED_DELAUNAY_LAWSON_FLIPS", "R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION", "R10B5_NESTED_LOCAL_FIELD_REFINEMENT", "R10B6_CUTOFF_DIRECTED_BOUNDED_BEAM"]:
+	if hypothesis not in ["R10B1_NONMONOTONIC_CONSTRAINED_FLIP_BFS", B1R_HYPOTHESIS_ID, "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION", "R10B3_CONSTRAINED_DELAUNAY_LAWSON_FLIPS", "R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION", "R10B5_NESTED_LOCAL_FIELD_REFINEMENT", "R10B6_CUTOFF_DIRECTED_BOUNDED_BEAM"]:
 		_blocked("unimplemented_geometry_hypothesis", {"hypothesis": hypothesis})
 		return
 	var solve_started: int = Time.get_ticks_usec()
@@ -114,7 +115,7 @@ func _run() -> void:
 	var refinement_result: Dictionary = {}
 	var b1r_result: Dictionary = {}
 	var geometry: Dictionary = {}
-	if hypothesis == "R10B1R_DIRECT_CONSTRAINED_TRIANGULATION":
+	if _is_b1r_hypothesis(hypothesis):
 		var domain_loaded: Dictionary = _load_b1r_domain(volume_case, graph_result, source_sha, b1r_realizer_sha, row.roi)
 		if not bool(domain_loaded.get("valid", false)):
 			_blocked("b1r_domain_integrity_or_identity_failed", domain_loaded)
@@ -155,7 +156,7 @@ func _run() -> void:
 	if patch.is_empty() and hypothesis not in ["R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION", "R10B5_NESTED_LOCAL_FIELD_REFINEMENT"]:
 		_blocked("b1_target_component_record_missing", {"component_reconstruction": geometry.get("component_reconstruction", {})})
 		return
-	var search: Dictionary = b1r_result if hypothesis == "R10B1R_DIRECT_CONSTRAINED_TRIANGULATION" else (patch.get("triangulation", {}).get("search", {}) if not patch.is_empty() else ({"status": "NESTED_FIELD_REFINEMENT_WITHOUT_ROOT_FLIP_SEARCH", "search_exhausted": false} if hypothesis == "R10B5_NESTED_LOCAL_FIELD_REFINEMENT" else {"status": "FIELD_STEINER_EVIDENCE_ONLY", "search_exhausted": false}))
+	var search: Dictionary = b1r_result if _is_b1r_hypothesis(hypothesis) else (patch.get("triangulation", {}).get("search", {}) if not patch.is_empty() else ({"status": "NESTED_FIELD_REFINEMENT_WITHOUT_ROOT_FLIP_SEARCH", "search_exhausted": false} if hypothesis == "R10B5_NESTED_LOCAL_FIELD_REFINEMENT" else {"status": "FIELD_STEINER_EVIDENCE_ONLY", "search_exhausted": false}))
 	var target_topology: Dictionary = geometry.get("mesh_topology", {})
 	var ray_case: Dictionary = _run_frozen_ray_case(manifest.get("rows", []))
 	var ray_result: Dictionary = ray_case.get("rays", {})
@@ -166,7 +167,7 @@ func _run() -> void:
 	var volume_gate: bool = bool(volume_case.volume_identity_preserved) and String(volume_case.volume.sha256) == A6_VOLUME_SHA and String(volume_case.volume.metrics.payload_sha256) == A6_PAYLOAD_SHA and int(volume_case.volume.revision) == 2
 	if hypothesis == "R10B5_NESTED_LOCAL_FIELD_REFINEMENT": volume_gate = volume_gate and bool(refinement_result.get("derived_volume_integrity_preserved", false))
 	var equal_gate: bool = bool(geometry.get("geometry_realization_complete", false)) and int(target_topology.get("internal_open_edges", -1)) == 0 and int(target_topology.get("nonmanifold_edges", -1)) == 0 and int(target_topology.get("degenerate_triangles", -1)) == 0 and int(target_topology.get("winding_inconsistencies", -1)) == 0 and int(geometry.get("required_adjacency_missing_count", -1)) == 0 and int(geometry.get("required_adjacency_nonmanifold_count", -1)) == 0 and geometry.get("cutoff_rejections", []).is_empty()
-	if hypothesis == "R10B1R_DIRECT_CONSTRAINED_TRIANGULATION": equal_gate = equal_gate and bool(b1r_result.get("valid", false)) and bool(b1r_result.get("deterministic_repeat", false))
+	if _is_b1r_hypothesis(hypothesis): equal_gate = equal_gate and bool(b1r_result.get("valid", false)) and bool(b1r_result.get("deterministic_repeat", false))
 	if hypothesis == "R10B5_NESTED_LOCAL_FIELD_REFINEMENT": equal_gate = equal_gate and bool(refinement_result.get("valid", false)) and bool(refinement_result.get("nested_sample_values_bitwise_equal", false)) and bool(refinement_result.get("all_six_outer_contours_match", false))
 	var ray_gate: bool = bool(ray_case.get("valid", false)) and bool(ray_result.get("valid", false)) and bool(ray_case.get("geometry_complete", false)) and int(ray_result.get("roi_scoped_hit_miss_disagreements", -1)) == 0
 	var mixed_gate: Dictionary = {"status": "SKIPPED_EQUAL_LOD_OR_RAY_GATE_FAILED", "conforming": false}
@@ -204,6 +205,9 @@ func _new_hypothesis_realizer(hypothesis: String) -> RefCounted:
 func _realization_mode(hypothesis: String) -> String:
 	if hypothesis == "R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION": return "R10A3_CANONICAL_FIELD_STEINER"
 	return "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION"
+
+func _is_b1r_hypothesis(hypothesis: String) -> bool:
+	return hypothesis == B1R_HYPOTHESIS_ID
 
 func _run_frozen_ray_case(rows: Array) -> Dictionary:
 	var ray_row: Dictionary = Core.case_by_id(rows, RAY_ID)
@@ -522,7 +526,7 @@ func _run_b5_nested_field_refinement(row: Dictionary, snapshot: Dictionary, coar
 	return {"valid": bool(fine_volume_case.get("volume_identity_preserved", false)) and bool(geometry.get("valid", false)), "reason": "" if bool(geometry.get("valid", false)) else String(geometry.get("reason", "fine_realization_invalid")), "geometry": geometry, "derived_volume_integrity_preserved": fine_volume_case.get("volume_identity_preserved", false), "derived_volume": {"sha256": fine_volume_case.volume.sha256, "payload_sha256": fine_volume_case.volume.metrics.payload_sha256, "revision": fine_volume_case.volume.revision, "step": fine_roi.step, "cells": fine_roi.cells, "sample_count": fine_values.size()}, "source_volume": {"sha256": coarse_volume.volume.sha256, "payload_sha256": coarse_volume.volume.metrics.payload_sha256, "revision": coarse_volume.volume.revision, "step": coarse_roi.step, "cells": coarse_roi.cells}, "nested_sample_values_bitwise_equal": nested_samples_equal, "nested_sample_count": nested_samples_checked, "first_nested_sample_mismatch": first_sample_mismatch, "outer_face_interfaces": face_rows, "all_six_outer_contours_match": all_faces_match, "outer_contour_oracle": "independent coarse-vs-fine mesh plane segments, endpoint quantization 1e-6 world units; not a product tolerance", "canonical_source_mapping": "every coarse grid node maps to fine index 2x,2y,2z; compare float32 samples exactly"}
 
 func _run_mixed_lod_gate(rows: Array, hypothesis: String) -> Dictionary:
-	if hypothesis == "R10B1R_DIRECT_CONSTRAINED_TRIANGULATION":
+	if _is_b1r_hypothesis(hypothesis):
 		return {"status": "NOT_GENERALIZED_TO_MIXED_LOD_INPUT_DOMAIN", "conforming": false, "boundary": "B1R frozen candidate domain covers only the equal-LOD A6 component; no transition interface was silently synthesized"}
 	var row: Dictionary = Core.case_by_id(rows, "R9.2.SEAM.XPLUS_MIXED_LOD.v1")
 	var setup: Dictionary = Core.make_snapshot(row)
