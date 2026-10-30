@@ -153,8 +153,8 @@ func _run_control_case(authority: RefCounted, row: Dictionary, roi: Dictionary, 
 	authority.call("configure_roi", roi)
 	var geometry: Dictionary = authority.call("realize_topology", volume_case.volume.values, "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", snapshot, int(row.get("seed", 131102026)))
 	var topology: Dictionary = geometry.get("mesh_topology", {})
-	var pass: bool = bool(geometry.get("valid", false)) and bool(geometry.get("geometry_realization_complete", false)) and bool(volume_case.get("volume_identity_preserved", false)) and int(topology.get("internal_open_edges", -1)) == 0 and int(topology.get("nonmanifold_edges", -1)) == 0 and int(topology.get("winding_inconsistencies", -1)) == 0 and int(geometry.get("required_adjacency_missing_count", -1)) == 0
-	return {"scenario_id": label, "pass": pass, "geometry_complete": geometry.get("geometry_realization_complete", false), "mesh_sha256": geometry.get("mesh_sha256", ""), "mesh_topology": topology, "missing_adjacencies": geometry.get("required_adjacency_missing_count", -1), "volume_sha256": volume_case.volume.sha256, "volume_identity_preserved": volume_case.volume_identity_preserved}
+	var control_passed: bool = bool(geometry.get("valid", false)) and bool(geometry.get("geometry_realization_complete", false)) and bool(volume_case.get("volume_identity_preserved", false)) and int(topology.get("internal_open_edges", -1)) == 0 and int(topology.get("nonmanifold_edges", -1)) == 0 and int(topology.get("winding_inconsistencies", -1)) == 0 and int(geometry.get("required_adjacency_missing_count", -1)) == 0
+	return {"scenario_id": label, "pass": control_passed, "geometry_complete": geometry.get("geometry_realization_complete", false), "mesh_sha256": geometry.get("mesh_sha256", ""), "mesh_topology": topology, "missing_adjacencies": geometry.get("required_adjacency_missing_count", -1), "volume_sha256": volume_case.volume.sha256, "volume_identity_preserved": volume_case.volume_identity_preserved}
 
 func _run_roi_rays(row: Dictionary, snapshot: Dictionary, mesh: Dictionary, emitted: Array) -> Dictionary:
 	var rays: Array[Dictionary] = Core.ray_grid(row.roi, row.ray_grid)
