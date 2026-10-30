@@ -1,8 +1,8 @@
 # P3.1 R10-B1R candidate-domain audit correction
 
-Date: 2026-10-30  
-Experiment branch: `exp/p3-1-r10-b-constrained-realization`  
-Existing PR: #208, draft and unmerged  
+Date: 2026-10-30
+Experiment branch: `exp/p3-1-r10-b-constrained-realization`
+Existing PR: #208, draft and unmerged
 Pre-correction source HEAD: `992e3f332dd951b5456eea7731a8e1feee58e425`
 
 ## Preserved failure
