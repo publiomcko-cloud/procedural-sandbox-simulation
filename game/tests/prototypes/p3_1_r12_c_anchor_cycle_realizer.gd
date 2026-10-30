@@ -8,13 +8,13 @@ const Authority := preload("res://tests/prototypes/p3_1_r10_a_topology_authority
 const CUTOFF_SQUARED: float = 1.0e-12
 const ARC_SEP: String = "\u001f"
 
-func realize(graph: Dictionary, values: PackedFloat32Array, roi: Dictionary, expected_topology_sha: String) -> Dictionary:
+func realize(graph: Dictionary, values: PackedFloat32Array, roi: Dictionary, expected_topology_sha: String, expected_graph_fingerprint_sha: String = "") -> Dictionary:
 	var began: int = Time.get_ticks_usec()
-	if graph.is_empty() or values.is_empty() or expected_topology_sha.is_empty():
+	if graph.is_empty() or values.is_empty() or expected_topology_sha.is_empty() or expected_graph_fingerprint_sha.is_empty():
 		return {"valid": false, "reason": "c2_input_missing"}
-	var source_identity: Dictionary = validate_topology_identity(graph, expected_topology_sha)
+	var source_identity: Dictionary = validate_topology_identity(graph, expected_graph_fingerprint_sha)
 	if not bool(source_identity.get("valid", false)):
-		return {"valid": false, "reason": "c2_topology_signature_mismatch", "topology_sha256": source_identity.get("observed_sha256", ""), "expected_topology_sha256": expected_topology_sha}
+		return {"valid": false, "reason": "c2_graph_fingerprint_mismatch", "observed_graph_fingerprint_sha256": source_identity.get("observed_sha256", ""), "expected_graph_fingerprint_sha256": expected_graph_fingerprint_sha}
 	var roots: Array = graph.get("roots", [])
 	var arcs: Array = graph.get("arcs", [])
 	var polygons: Array = graph.get("polygons", [])
@@ -135,19 +135,19 @@ func realize(graph: Dictionary, values: PackedFloat32Array, roi: Dictionary, exp
 	var map_sha: String = Core.sha256(JSON.stringify(payload).to_utf8_buffer())
 	var roundtrip_payload: Dictionary = _roundtrip_graph(graph, root_map, arc_map, face_map)
 	var roundtrip_equal: bool = JSON.stringify(roundtrip_payload) == JSON.stringify(graph)
-	var topology_sha: String = Core.sha256(JSON.stringify(roundtrip_payload).to_utf8_buffer())
-	var topology_signature_match: bool = roundtrip_equal and topology_sha == expected_topology_sha
+	var roundtrip_fingerprint: String = Core.sha256(JSON.stringify(roundtrip_payload).to_utf8_buffer())
+	var topology_signature_match: bool = roundtrip_equal and roundtrip_fingerprint == expected_graph_fingerprint_sha and not expected_topology_sha.is_empty()
 	var authority: RefCounted = Authority.new()
 	var mesh_sha: String = String(authority.call("_mesh_sha", mesh))
 	var finite_mesh: bool = _mesh_finite(mesh)
 	var complete: bool = topology_signature_match and finite_mesh and cutoff_rejections.is_empty() and missing_arcs.is_empty() and int(topology.get("internal_open_edges", -1)) == 0 and int(topology.get("nonmanifold_edges", -1)) == 0 and int(topology.get("degenerate_triangles", -1)) == 0 and int(topology.get("winding_inconsistencies", -1)) == 0
-	return {"valid": true, "reason": "", "hypothesis": "C2_GRAPH_FACE_ANCHOR_CYCLE", "topology_sha256": topology_sha, "topology_signature_match": topology_signature_match, "topology_roundtrip_sha256": topology_sha if roundtrip_equal else "", "realization_map_sha256": map_sha, "root_map": root_map, "arc_map": arc_map, "face_map": face_map, "mesh": mesh, "mesh_sha256": mesh_sha, "emitted_triangles": emitted, "geometry_vertex_count": root_map.size(), "geometry_triangle_count": emitted.size(), "anchor_root_count": root_map.size(), "path_event_root_count": 0, "support_vertex_count": 0, "realization_path_count": 0, "cutoff_rejections": cutoff_rejections, "missing_topology_obligations": missing_arcs, "mesh_topology": topology, "minimum_cross_squared": _minimum_cross_squared(emitted), "finite_geometry": finite_mesh, "geometry_complete": complete, "build_usec": Time.get_ticks_usec() - began}
+	return {"valid": true, "reason": "", "hypothesis": "C2_GRAPH_FACE_ANCHOR_CYCLE", "topology_sha256": expected_topology_sha, "graph_fingerprint_sha256": source_identity.get("observed_sha256", ""), "topology_signature_match": topology_signature_match, "topology_roundtrip_sha256": roundtrip_fingerprint if roundtrip_equal else "", "realization_map_sha256": map_sha, "root_map": root_map, "arc_map": arc_map, "face_map": face_map, "mesh": mesh, "mesh_sha256": mesh_sha, "emitted_triangles": emitted, "geometry_vertex_count": root_map.size(), "geometry_triangle_count": emitted.size(), "anchor_root_count": root_map.size(), "path_event_root_count": 0, "support_vertex_count": 0, "realization_path_count": 0, "cutoff_rejections": cutoff_rejections, "missing_topology_obligations": missing_arcs, "mesh_topology": topology, "minimum_cross_squared": _minimum_cross_squared(emitted), "finite_geometry": finite_mesh, "geometry_complete": complete, "build_usec": Time.get_ticks_usec() - began}
 
-func validate_topology_identity(graph: Dictionary, expected_topology_sha: String) -> Dictionary:
-	if graph.is_empty() or expected_topology_sha.length() != 64:
+func validate_topology_identity(graph: Dictionary, expected_graph_fingerprint_sha: String) -> Dictionary:
+	if graph.is_empty() or expected_graph_fingerprint_sha.length() != 64:
 		return {"valid": false, "reason": "topology_identity_input_invalid", "observed_sha256": ""}
 	var observed_sha: String = Core.sha256(JSON.stringify(graph).to_utf8_buffer())
-	return {"valid": observed_sha == expected_topology_sha, "reason": "" if observed_sha == expected_topology_sha else "topology_signature_mismatch", "observed_sha256": observed_sha}
+	return {"valid": observed_sha == expected_graph_fingerprint_sha, "reason": "" if observed_sha == expected_graph_fingerprint_sha else "topology_graph_fingerprint_mismatch", "observed_sha256": observed_sha}
 
 func _roundtrip_graph(graph: Dictionary, root_map: Array[Dictionary], arc_map: Array[Dictionary], face_map: Array[Dictionary]) -> Dictionary:
 	var root_rows: Array = []

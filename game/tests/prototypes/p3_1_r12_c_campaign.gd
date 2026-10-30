@@ -8,6 +8,7 @@ const ManifestSha := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5
 const CandidateSha := "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a"
 const FixtureSha := "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d"
 const TopologySha := "4ecbb2496fb34f1cf3c05a60192f76bdce7a52ec3148d02ba041510b804a8c95"
+const FixtureGraphFingerprintSha := "a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9"
 const VolumeSha := "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2"
 const PayloadSha := "2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0"
 const TARGET_ID := "R9.2.SEAM.XPLUS_EQUAL.v1"
@@ -46,9 +47,9 @@ func _run() -> void:
 		_fail("c2_fixture_identity_invalid", attempt_id, source_sha)
 		return
 	var source_graph: Dictionary = fixture.get("topology_authority", {})
-	var source_identity: Dictionary = Realizer.new().call("validate_topology_identity", source_graph, TopologySha)
+	var source_identity: Dictionary = Realizer.new().call("validate_topology_identity", source_graph, FixtureGraphFingerprintSha)
 	if not bool(source_identity.get("valid", false)):
-		_fail("c2_fixture_topology_hash_revalidation_failed", attempt_id, source_sha, source_identity)
+		_fail("c2_fixture_graph_fingerprint_mismatch", attempt_id, source_sha, source_identity)
 		return
 	var manifest: Dictionary = Core.load_manifest()
 	if not bool(manifest.get("valid", false)) or String(manifest.get("sha256", "")) != ManifestSha:
@@ -69,8 +70,12 @@ func _run() -> void:
 	if not target_volume_gate:
 		_fail("c2_target_volume_identity_preflight_failed", attempt_id, source_sha, {"volume_sha256": target_prepared.get("volume_sha256", ""), "payload_sha256": target_prepared.get("payload_sha256", ""), "revision": target_prepared.get("revision", -1), "volume_identity_preserved": target_prepared.get("volume_identity_preserved", false)})
 		return
+	var authority_graph_identity: Dictionary = _verify_reference_graph(target_row, target_prepared, source_graph)
+	if not bool(authority_graph_identity.get("valid", false)):
+		_fail("c2_reference_authority_reproduction_failed", attempt_id, source_sha, authority_graph_identity)
+		return
 	print("R12C_GEOMETRY_BEGIN " + JSON.stringify({"attempt_id": attempt_id, "source_sha": source_sha, "hypothesis": "C2_GRAPH_FACE_ANCHOR_CYCLE", "scenario_id": TARGET_ID, "fixture_sha256": fixture_hash}))
-	var target_case: Dictionary = _build_case(target_row, target_row.get("roi", {}), null, source_graph, TopologySha, target_prepared)
+	var target_case: Dictionary = _build_case(target_row, target_row.get("roi", {}), null, source_graph, TopologySha, target_prepared, FixtureGraphFingerprintSha)
 	var target_geometry: Dictionary = target_case.get("geometry", {})
 	if not bool(target_case.get("valid", false)):
 		target_geometry = target_case.get("detail", {"reason": target_case.get("reason", "target_geometry_unavailable")}).duplicate(true)
@@ -90,6 +95,7 @@ func _run() -> void:
 		"hypothesis": "C2_GRAPH_FACE_ANCHOR_CYCLE", "result_class": status,
 		"fixture_sha256": fixture_hash, "manifest_sha256": ManifestSha, "candidate_d_sha256": CandidateSha,
 		"realizer_sha256": realizer_file_sha, "campaign_sha256": campaign_file_sha, "topology_sha256": TopologySha,
+		"fixture_graph_fingerprint_sha256": FixtureGraphFingerprintSha, "reference_authority_reproduction": authority_graph_identity,
 		"target": {"scenario_id": TARGET_ID, "volume_sha256": target_prepared.volume_sha256, "payload_sha256": target_prepared.payload_sha256, "revision": target_prepared.revision, "volume_identity_preserved": target_prepared.volume_identity_preserved, "volume_build_usec": target_prepared.volume_build_usec, "geometry_realizer_valid": target_case.get("valid", false)},
 		"realization_map": {"root_count": target_geometry.get("anchor_root_count", -1), "arc_count": target_geometry.get("arc_map", []).size(), "face_count": target_geometry.get("face_map", []).size(), "anchor_count": target_geometry.get("anchor_root_count", -1), "path_event_count": 0, "support_vertex_count": 0, "path_count": 0, "sha256": target_geometry.get("realization_map_sha256", ""), "topology_roundtrip_sha256": target_geometry.get("topology_roundtrip_sha256", ""), "topology_signature_match": target_geometry.get("topology_signature_match", false)},
 		"geometry": {"complete": target_geometry.get("geometry_complete", false), "mesh_sha256": target_geometry.get("mesh_sha256", ""), "vertex_count": target_geometry.get("geometry_vertex_count", -1), "triangle_count": target_geometry.get("geometry_triangle_count", -1), "minimum_cross_squared": target_geometry.get("minimum_cross_squared", null), "cutoff_rejections": target_geometry.get("cutoff_rejections", []), "missing_topology_obligations": target_geometry.get("missing_topology_obligations", []), "mesh_topology": target_geometry.get("mesh_topology", {}), "build_usec": target_geometry.get("build_usec", -1)},
@@ -134,7 +140,7 @@ func _prepare_volume(row: Dictionary, snapshot_override: Variant) -> Dictionary:
 	var volume_metrics: Dictionary = volume_case.get("metrics", {}).get("volume", {})
 	return {"valid": true, "snapshot": snapshot, "values": values, "volume": volume, "volume_sha256": volume.get("sha256", ""), "payload_sha256": volume_metrics.get("payload_sha256", ""), "revision": volume.get("revision", -1), "volume_identity_preserved": bool(volume_case.get("volume_identity_preserved", false)), "row": row, "roi": roi, "volume_build_usec": volume_case.get("metrics", {}).get("elapsed_usec", -1)}
 
-func _build_case(row: Dictionary, roi: Dictionary, snapshot_override: Variant, supplied_graph: Dictionary = {}, expected_sha: String = "", prepared_override: Dictionary = {}) -> Dictionary:
+func _build_case(row: Dictionary, roi: Dictionary, snapshot_override: Variant, supplied_graph: Dictionary = {}, expected_sha: String = "", prepared_override: Dictionary = {}, expected_graph_fingerprint_sha: String = "") -> Dictionary:
 	var prepared: Dictionary = prepared_override if not prepared_override.is_empty() else _prepare_volume(row, snapshot_override)
 	if not bool(prepared.get("valid", false)): return prepared
 	var volume: Dictionary = prepared.get("volume", {})
@@ -147,8 +153,9 @@ func _build_case(row: Dictionary, roi: Dictionary, snapshot_override: Variant, s
 		var graph_wrapper: Dictionary = graph_result.get("topology_graph", {})
 		graph = graph_wrapper.get("canonical", {})
 		expected_sha = String(graph_wrapper.get("topology_sha256", ""))
+		expected_graph_fingerprint_sha = Core.sha256(JSON.stringify(graph).to_utf8_buffer())
 	if graph.is_empty() or expected_sha.is_empty(): return {"valid": false, "reason": "topology_graph_missing"}
-	var geometry: Dictionary = Realizer.new().call("realize", graph, values, roi, expected_sha)
+	var geometry: Dictionary = Realizer.new().call("realize", graph, values, roi, expected_sha, expected_graph_fingerprint_sha)
 	if not bool(geometry.get("valid", false)): return {"valid": false, "reason": "realizer_invalid", "detail": geometry}
 	return {"valid": true, "geometry": geometry, "volume_sha256": prepared.get("volume_sha256", ""), "payload_sha256": prepared.get("payload_sha256", ""), "revision": prepared.get("revision", -1), "volume_identity_preserved": prepared.get("volume_identity_preserved", false), "snapshot": prepared.get("snapshot", {}), "values": values, "row": row, "roi": roi, "volume_build_usec": prepared.get("volume_build_usec", -1)}
 
@@ -159,8 +166,8 @@ func _run_contract_preflight(source_graph: Dictionary, roi: Dictionary) -> bool:
 	var roots: Array = mutated_graph.get("roots", [])
 	if roots.is_empty(): return false
 	roots[0][1] = float(roots[0][1]) + 0.125
-	var mutated_identity: Dictionary = realizer.call("validate_topology_identity", mutated_graph, TopologySha)
-	if bool(mutated_identity.get("valid", true)) or String(mutated_identity.get("observed_sha256", "")) == TopologySha: return false
+	var mutated_identity: Dictionary = realizer.call("validate_topology_identity", mutated_graph, FixtureGraphFingerprintSha)
+	if bool(mutated_identity.get("valid", true)) or String(mutated_identity.get("observed_sha256", "")) == FixtureGraphFingerprintSha: return false
 	var test_values: PackedFloat32Array = PackedFloat32Array()
 	var dims: Vector3i = Core.cell_counts(roi) + Vector3i.ONE
 	test_values.resize(dims.x * dims.y * dims.z)
@@ -168,17 +175,27 @@ func _run_contract_preflight(source_graph: Dictionary, roi: Dictionary) -> bool:
 	var duplicate_roots: Array = duplicate_root_graph.get("roots", [])
 	duplicate_roots.append(duplicate_roots[0].duplicate(true))
 	var duplicate_sha: String = Core.sha256(JSON.stringify(duplicate_root_graph).to_utf8_buffer())
-	var duplicate_result: Dictionary = realizer.call("realize", duplicate_root_graph, test_values, roi, duplicate_sha)
+	var duplicate_result: Dictionary = realizer.call("realize", duplicate_root_graph, test_values, roi, "R12C_TEST_TOPOLOGY_AUTHORITY", duplicate_sha)
 	if bool(duplicate_result.get("valid", true)) or String(duplicate_result.get("reason", "")) != "c2_root_identity_or_coordinate_invalid": return false
 	var malformed_arc_graph: Dictionary = source_graph.duplicate(true)
 	var arcs: Array = malformed_arc_graph.get("arcs", [])
 	if arcs.is_empty(): return false
 	arcs[0][1][0] = "R12C_TEST_MISSING_ROOT"
 	var malformed_sha: String = Core.sha256(JSON.stringify(malformed_arc_graph).to_utf8_buffer())
-	var malformed_result: Dictionary = realizer.call("realize", malformed_arc_graph, test_values, roi, malformed_sha)
+	var malformed_result: Dictionary = realizer.call("realize", malformed_arc_graph, test_values, roi, "R12C_TEST_TOPOLOGY_AUTHORITY", malformed_sha)
 	if bool(malformed_result.get("valid", true)) or String(malformed_result.get("reason", "")) != "c2_arc_identity_or_endpoint_invalid": return false
-	print("R12C_GEOMETRY_PREFLIGHT_PASS " + JSON.stringify({"source_signature_revalidated": true, "mutated_signature_rejected": true, "duplicate_root_rejected": true, "malformed_arc_endpoint_rejected": true}))
+	print("R12C_GEOMETRY_PREFLIGHT_PASS " + JSON.stringify({"source_graph_fingerprint_revalidated": true, "mutated_graph_rejected": true, "duplicate_root_rejected": true, "malformed_arc_endpoint_rejected": true}))
 	return true
+
+func _verify_reference_graph(row: Dictionary, prepared: Dictionary, fixture_graph: Dictionary) -> Dictionary:
+	var authority: RefCounted = Authority.new()
+	authority.call("configure_roi", row.get("roi", {}))
+	var result: Dictionary = authority.call("realize_topology", prepared.get("values", PackedFloat32Array()), "R10A1_ALT_DIAGONAL_MAX_MIN_AREA", prepared.get("snapshot", {}), int(row.get("seed", 131102026)))
+	var wrapper: Dictionary = result.get("topology_graph", {})
+	var canonical: Dictionary = wrapper.get("canonical", {})
+	var same_graph: bool = JSON.stringify(canonical) == JSON.stringify(fixture_graph)
+	var valid: bool = bool(result.get("valid", false)) and String(wrapper.get("topology_sha256", "")) == TopologySha and same_graph
+	return {"valid": valid, "authority_valid": result.get("valid", false), "authority_topology_sha256": wrapper.get("topology_sha256", ""), "expected_topology_sha256": TopologySha, "fixture_graph_fingerprint_sha256": FixtureGraphFingerprintSha, "reproduced_graph_fingerprint_sha256": Core.sha256(JSON.stringify(canonical).to_utf8_buffer()), "graph_exact_serialized_match": same_graph, "root_count": canonical.get("roots", []).size(), "arc_count": canonical.get("arcs", []).size(), "polygon_count": canonical.get("polygons", []).size()}
 
 func _run_controls(rows: Array) -> Dictionary:
 	var results: Array[Dictionary] = []
