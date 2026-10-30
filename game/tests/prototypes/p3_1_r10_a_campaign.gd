@@ -150,6 +150,26 @@ func _topology_graph_contract_checks(authority: RefCounted) -> Dictionary:
 	var open_edges: Array[Dictionary] = [{"edge_key": "e", "roots": ["4", "5"]}, {"edge_key": "f", "roots": ["5", "6"]}]
 	var closed_result: Dictionary = authority._extract_edge_loops(closed_edges)
 	var open_result: Dictionary = authority._extract_edge_loops(open_edges)
+	var roi_min: Vector3 = authority.get("ROI_MIN")
+	var roi_cells: Vector3i = authority.get("CELLS")
+	var roi_step: float = authority.get("STEP")
+	var roi_max: Vector3 = roi_min + Vector3(roi_cells) * roi_step
+	var face_cases: Array[Dictionary] = [
+		{"face": "X_NEG", "a": roi_min, "b": roi_min + Vector3(0.0, roi_step, 0.0)},
+		{"face": "X_POS", "a": roi_max, "b": roi_max + Vector3(0.0, -roi_step, 0.0)},
+		{"face": "Y_NEG", "a": roi_min, "b": roi_min + Vector3(roi_step, 0.0, 0.0)},
+		{"face": "Y_POS", "a": roi_max, "b": roi_max + Vector3(-roi_step, 0.0, 0.0)},
+		{"face": "Z_NEG", "a": roi_min, "b": roi_min + Vector3(0.0, roi_step, 0.0)},
+		{"face": "Z_POS", "a": roi_max, "b": roi_max + Vector3(0.0, -roi_step, 0.0)}
+	]
+	var face_owner_checks: Array[Dictionary] = []
+	var face_owners_valid: bool = true
+	for face_case in face_cases:
+		var observed_faces: Array[String] = authority._roi_boundary_faces(face_case.a, face_case.b)
+		var expected_face: String = String(face_case.face)
+		var contains_expected: bool = observed_faces.has(expected_face)
+		face_owner_checks.append({"face": expected_face, "observed_faces": observed_faces, "valid": contains_expected})
+		face_owners_valid = face_owners_valid and contains_expected
 	var roots: Dictionary = {"r0": Vector3(15.5, 2.0, 4.0), "r1": Vector3(16.0, 2.0, 4.0), "r2": Vector3(16.0, 2.0, 5.0), "r3": Vector3(16.5, 2.0, 4.0)}
 	var polygon_left: Dictionary = {"id": "left", "cell": [31, 4, 8], "tet_index": 0, "root_ids": ["r0", "r1", "r2"], "face_ids": ["f0"], "points": [roots.r0, roots.r1, roots.r2]}
 	var polygon_right: Dictionary = {"id": "right", "cell": [32, 4, 8], "tet_index": 1, "root_ids": ["r1", "r3", "r2"], "face_ids": ["f1"], "points": [roots.r1, roots.r3, roots.r2]}
@@ -169,7 +189,8 @@ func _topology_graph_contract_checks(authority: RefCounted) -> Dictionary:
 	valid = valid and int(open_result.get("closed_loop_count", 0)) == 0 and int(open_result.get("open_path_count", 0)) == 1
 	valid = valid and components.size() == 1 and relations.size() == 1 and owners.size() == 2
 	valid = valid and String(owners.get("left", {}).get("owner_kind", "")) == "half_open_world_region_and_source_tetrahedron"
-	return {"valid": valid, "closed_loop_fixture": closed_result, "open_path_fixture": open_result, "component_count": components.size(), "neighbor_region_relation_count": relations.size(), "owner_count": owners.size(), "lod_relations": graph.get("lod_relations", []), "topology_sha256": graph.get("topology_sha256", "")}
+	valid = valid and graph.get("lod_relations", []).has("SAME_STEP") and face_owners_valid
+	return {"valid": valid, "closed_loop_fixture": closed_result, "open_path_fixture": open_result, "face_owner_checks": face_owner_checks, "component_count": components.size(), "neighbor_region_relation_count": relations.size(), "owner_count": owners.size(), "lod_relations": graph.get("lod_relations", []), "topology_sha256": graph.get("topology_sha256", "")}
 
 func _run_case(candidate: RefCounted, authority: RefCounted, row: Dictionary, roi: Dictionary, hypothesis: String) -> Dictionary:
 	var setup: Dictionary = Core.make_snapshot(row)
