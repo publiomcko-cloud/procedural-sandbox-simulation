@@ -72,31 +72,31 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String) -> Diction
 							hit_points.append(root.point)
 							hit_ids.append(root_id)
 							hit_edges[root_id] = [int(local_edge[0]), int(local_edge[1])]
-				if hit_ids.size() < 3:
-					continue
-				var toward_empty: Vector3 = _tetra_toward_empty(points, samples, tet)
-				var ordered_points: Array[Vector3] = _order_polygon(hit_points, toward_empty)
-				var ordered_ids: Array[String] = _order_root_ids(ordered_points, hit_points, hit_ids)
-				if ordered_points.size() != hit_ids.size() or ordered_ids.size() != ordered_points.size():
-					geometry_errors.append({"cell": _cell_key(cell_id), "tet": tet_index, "reason": "canonical_polygon_order_failed", "root_count": hit_ids.size()})
-					continue
-				var polygon_id: String = "%d,%d,%d|tet:%d" % [cell_id.x, cell_id.y, cell_id.z, tet_index]
-				var face_ids: Array[String] = []
-				for edge_index in range(ordered_ids.size()):
-					var first_edge: Array = hit_edges[ordered_ids[edge_index]]
-					var second_edge: Array = hit_edges[ordered_ids[(edge_index + 1) % ordered_ids.size()]]
-					var local_face: Array[int] = _shared_tetra_face(first_edge, second_edge)
-					var face_id: String = "tet-face:%s:%d:%s" % [_cell_key(cell_id), tet_index, _int_list_key(local_face)]
-					face_ids.append(face_id)
-					var arc_key: String = _arc_key(ordered_ids[edge_index], ordered_ids[(edge_index + 1) % ordered_ids.size()])
-					if not arcs.has(arc_key):
-						arcs[arc_key] = {"roots": [ordered_ids[edge_index], ordered_ids[(edge_index + 1) % ordered_ids.size()]], "polygon_ids": [], "face_ids": [], "required_incidence": 0}
-					var arc: Dictionary = arcs[arc_key]
-					arc.polygon_ids.append(polygon_id)
-					arc.face_ids.append(face_id)
-					arc.required_incidence += 1
-					arcs[arc_key] = arc
-				polygons.append({"id": polygon_id, "cell": [cell_id.x, cell_id.y, cell_id.z], "tet_index": tet_index, "root_ids": ordered_ids, "points": ordered_points, "face_ids": face_ids, "toward_empty": toward_empty, "realization": "PENDING"})
+					if hit_ids.size() < 3:
+						continue
+					var toward_empty: Vector3 = _tetra_toward_empty(points, samples, tet)
+					var ordered_points: Array[Vector3] = _order_polygon(hit_points, toward_empty)
+					var ordered_ids: Array[String] = _order_root_ids(ordered_points, hit_points, hit_ids)
+					if ordered_points.size() != hit_ids.size() or ordered_ids.size() != ordered_points.size():
+						geometry_errors.append({"cell": _cell_key(cell_id), "tet": tet_index, "reason": "canonical_polygon_order_failed", "root_count": hit_ids.size()})
+						continue
+					var polygon_id: String = "%d,%d,%d|tet:%d" % [cell_id.x, cell_id.y, cell_id.z, tet_index]
+					var face_ids: Array[String] = []
+					for edge_index in range(ordered_ids.size()):
+						var first_edge: Array = hit_edges[ordered_ids[edge_index]]
+						var second_edge: Array = hit_edges[ordered_ids[(edge_index + 1) % ordered_ids.size()]]
+						var local_face: Array[int] = _shared_tetra_face(first_edge, second_edge)
+						var face_id: String = "tet-face:%s:%d:%s" % [_cell_key(cell_id), tet_index, _int_list_key(local_face)]
+						face_ids.append(face_id)
+						var arc_key: String = _arc_key(ordered_ids[edge_index], ordered_ids[(edge_index + 1) % ordered_ids.size()])
+						if not arcs.has(arc_key):
+							arcs[arc_key] = {"roots": [ordered_ids[edge_index], ordered_ids[(edge_index + 1) % ordered_ids.size()]], "polygon_ids": [], "face_ids": [], "required_incidence": 0}
+						var arc: Dictionary = arcs[arc_key]
+						arc.polygon_ids.append(polygon_id)
+						arc.face_ids.append(face_id)
+						arc.required_incidence += 1
+						arcs[arc_key] = arc
+					polygons.append({"id": polygon_id, "cell": [cell_id.x, cell_id.y, cell_id.z], "tet_index": tet_index, "root_ids": ordered_ids, "points": ordered_points, "face_ids": face_ids, "toward_empty": toward_empty, "realization": "PENDING"})
 	var graph: Dictionary = _topology_graph(roots, root_sources, polygons, arcs, geometry_errors)
 	var mesh: Dictionary = Core.new_mesh()
 	var emitted_triangles: Array[Dictionary] = []
