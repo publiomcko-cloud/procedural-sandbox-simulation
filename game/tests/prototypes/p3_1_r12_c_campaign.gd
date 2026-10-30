@@ -61,15 +61,25 @@ func _run() -> void:
 	if not _run_contract_preflight(source_graph, target_row.get("roi", {})):
 		_fail("c2_realization_contract_preflight_failed", attempt_id, source_sha)
 		return
-	print("R12C_GEOMETRY_BEGIN " + JSON.stringify({"attempt_id": attempt_id, "source_sha": source_sha, "hypothesis": "C2_GRAPH_FACE_ANCHOR_CYCLE", "scenario_id": TARGET_ID, "fixture_sha256": fixture_hash}))
-	var target_case: Dictionary = _build_case(target_row, target_row.get("roi", {}), null, source_graph, TopologySha)
-	if not bool(target_case.get("valid", false)):
-		_fail("c2_target_setup_failed_before_geometry_classification", attempt_id, source_sha, target_case)
+	var target_prepared: Dictionary = _prepare_volume(target_row, null)
+	if not bool(target_prepared.get("valid", false)):
+		_fail("c2_target_volume_preflight_failed", attempt_id, source_sha, target_prepared)
 		return
-	var target_geometry: Dictionary = target_case.geometry
+	var target_volume_gate: bool = bool(target_prepared.get("volume_identity_preserved", false)) and String(target_prepared.get("volume_sha256", "")) == VolumeSha and String(target_prepared.get("payload_sha256", "")) == PayloadSha and int(target_prepared.get("revision", -1)) == 2
+	if not target_volume_gate:
+		_fail("c2_target_volume_identity_preflight_failed", attempt_id, source_sha, {"volume_sha256": target_prepared.get("volume_sha256", ""), "payload_sha256": target_prepared.get("payload_sha256", ""), "revision": target_prepared.get("revision", -1), "volume_identity_preserved": target_prepared.get("volume_identity_preserved", false)})
+		return
+	print("R12C_GEOMETRY_BEGIN " + JSON.stringify({"attempt_id": attempt_id, "source_sha": source_sha, "hypothesis": "C2_GRAPH_FACE_ANCHOR_CYCLE", "scenario_id": TARGET_ID, "fixture_sha256": fixture_hash}))
+	var target_case: Dictionary = _build_case(target_row, target_row.get("roi", {}), null, source_graph, TopologySha, target_prepared)
+	var target_geometry: Dictionary = target_case.get("geometry", {})
+	if not bool(target_case.get("valid", false)):
+		target_geometry = target_case.get("detail", {"reason": target_case.get("reason", "target_geometry_unavailable")}).duplicate(true)
+		target_geometry["geometry_complete"] = false
+		target_geometry["topology_signature_match"] = false
+		target_geometry["realizer_failure_reason"] = target_case.get("reason", "target_geometry_unavailable")
 	var controls: Dictionary = _run_controls(manifest.get("rows", []))
 	var ray_result: Dictionary = _run_ray_gate(manifest.get("rows", []))
-	var volume_gate: bool = bool(target_case.volume_identity_preserved) and String(target_case.volume_sha256) == VolumeSha and String(target_case.payload_sha256) == PayloadSha and int(target_case.revision) == 2
+	var volume_gate: bool = target_volume_gate
 	var target_complete: bool = bool(target_geometry.get("geometry_complete", false)) and bool(target_geometry.get("topology_signature_match", false))
 	var controls_pass: bool = int(controls.get("passed", 0)) == 6 and int(controls.get("count", 0)) == 6
 	var ray_pass: bool = bool(ray_result.get("valid", false)) and int(ray_result.get("roi_scoped_hit_miss_disagreements", -1)) == 0
@@ -80,11 +90,11 @@ func _run() -> void:
 		"hypothesis": "C2_GRAPH_FACE_ANCHOR_CYCLE", "result_class": status,
 		"fixture_sha256": fixture_hash, "manifest_sha256": ManifestSha, "candidate_d_sha256": CandidateSha,
 		"realizer_sha256": realizer_file_sha, "campaign_sha256": campaign_file_sha, "topology_sha256": TopologySha,
-		"target": {"scenario_id": TARGET_ID, "volume_sha256": target_case.volume_sha256, "payload_sha256": target_case.payload_sha256, "revision": target_case.revision, "volume_identity_preserved": target_case.volume_identity_preserved},
+		"target": {"scenario_id": TARGET_ID, "volume_sha256": target_prepared.volume_sha256, "payload_sha256": target_prepared.payload_sha256, "revision": target_prepared.revision, "volume_identity_preserved": target_prepared.volume_identity_preserved, "volume_build_usec": target_prepared.volume_build_usec, "geometry_realizer_valid": target_case.get("valid", false)},
 		"realization_map": {"root_count": target_geometry.get("anchor_root_count", -1), "arc_count": target_geometry.get("arc_map", []).size(), "face_count": target_geometry.get("face_map", []).size(), "anchor_count": target_geometry.get("anchor_root_count", -1), "path_event_count": 0, "support_vertex_count": 0, "path_count": 0, "sha256": target_geometry.get("realization_map_sha256", ""), "topology_roundtrip_sha256": target_geometry.get("topology_roundtrip_sha256", ""), "topology_signature_match": target_geometry.get("topology_signature_match", false)},
 		"geometry": {"complete": target_geometry.get("geometry_complete", false), "mesh_sha256": target_geometry.get("mesh_sha256", ""), "vertex_count": target_geometry.get("geometry_vertex_count", -1), "triangle_count": target_geometry.get("geometry_triangle_count", -1), "minimum_cross_squared": target_geometry.get("minimum_cross_squared", null), "cutoff_rejections": target_geometry.get("cutoff_rejections", []), "missing_topology_obligations": target_geometry.get("missing_topology_obligations", []), "mesh_topology": target_geometry.get("mesh_topology", {}), "build_usec": target_geometry.get("build_usec", -1)},
 		"controls": controls, "ray_roi": ray_result, "volume_gate": volume_gate, "mixed_lod": "NOT_RUN_EQUAL_LOD_OR_GATES_FAILED", "determinism": "NOT_RUN_EQUAL_LOD_OR_GATES_FAILED", "full_e2e": "NOT_RUN_NO_SURVIVING_GEOMETRY_CANDIDATE", "full_validation": "NOT_RUN_NO_SURVIVING_GEOMETRY_CANDIDATE",
-		"failed_invariant": _first_failed_invariant(target_geometry, controls, ray_result, volume_gate),
+		"failed_invariant": String(target_geometry.get("realizer_failure_reason", _first_failed_invariant(target_geometry, controls, ray_result, volume_gate))),
 		"topology_map": {"roots": target_geometry.get("root_map", []), "arcs": target_geometry.get("arc_map", []), "faces": target_geometry.get("face_map", [])}
 	}
 	var output_path: String = root.path_join("r12c_C2_" + attempt_id + ".json")
@@ -106,7 +116,7 @@ func _run() -> void:
 	print("R12C_GEOMETRY_COMPLETE " + JSON.stringify({"attempt_id": attempt_id, "source_sha": source_sha, "hypothesis": "C2_GRAPH_FACE_ANCHOR_CYCLE", "status": status, "fixture_sha256": fixture_hash, "result_sha256": Core.sha256(output_bytes), "result_path": output_path, "root_count": target_geometry.get("anchor_root_count", -1), "arc_count": target_geometry.get("arc_map", []).size(), "face_count": target_geometry.get("face_map", []).size(), "triangle_count": target_geometry.get("geometry_triangle_count", -1), "cutoff_rejections": target_geometry.get("cutoff_rejections", []).size(), "internal_open_edges": target_geometry.get("mesh_topology", {}).get("internal_open_edges", -1), "controls": controls_pass, "roi_ray_disagreements": ray_result.get("roi_scoped_hit_miss_disagreements", -1), "volume": volume_gate, "failed_invariant": result.failed_invariant}))
 	quit(0)
 
-func _build_case(row: Dictionary, roi: Dictionary, snapshot_override: Variant, supplied_graph: Dictionary = {}, expected_sha: String = "") -> Dictionary:
+func _prepare_volume(row: Dictionary, snapshot_override: Variant) -> Dictionary:
 	var snapshot: Dictionary
 	if snapshot_override is Dictionary and not snapshot_override.is_empty():
 		snapshot = snapshot_override
@@ -115,27 +125,36 @@ func _build_case(row: Dictionary, roi: Dictionary, snapshot_override: Variant, s
 		if not bool(snapshot_result.get("valid", false)): return {"valid": false, "reason": "snapshot_invalid", "detail": snapshot_result}
 		snapshot = snapshot_result.snapshot
 	var candidate: RefCounted = CandidateD.new()
+	var roi: Dictionary = row.get("roi", {})
 	candidate.call("configure_roi", roi)
 	var volume_case: Dictionary = candidate.call("build", snapshot, row, {"id": "R12C_C2"})
 	if not bool(volume_case.get("valid", false)): return {"valid": false, "reason": "candidate_volume_invalid", "detail": volume_case}
 	var volume: Dictionary = volume_case.get("volume", {})
 	var values: PackedFloat32Array = volume.get("values", PackedFloat32Array())
+	var volume_metrics: Dictionary = volume_case.get("metrics", {}).get("volume", {})
+	return {"valid": true, "snapshot": snapshot, "values": values, "volume": volume, "volume_sha256": volume.get("sha256", ""), "payload_sha256": volume_metrics.get("payload_sha256", ""), "revision": volume.get("revision", -1), "volume_identity_preserved": bool(volume_case.get("volume_identity_preserved", false)), "row": row, "roi": roi, "volume_build_usec": volume_case.get("metrics", {}).get("elapsed_usec", -1)}
+
+func _build_case(row: Dictionary, roi: Dictionary, snapshot_override: Variant, supplied_graph: Dictionary = {}, expected_sha: String = "", prepared_override: Dictionary = {}) -> Dictionary:
+	var prepared: Dictionary = prepared_override if not prepared_override.is_empty() else _prepare_volume(row, snapshot_override)
+	if not bool(prepared.get("valid", false)): return prepared
+	var volume: Dictionary = prepared.get("volume", {})
+	var values: PackedFloat32Array = prepared.get("values", PackedFloat32Array())
 	var graph: Dictionary = supplied_graph
 	if graph.is_empty():
 		var authority: RefCounted = Authority.new()
 		authority.call("configure_roi", roi)
-		var graph_result: Dictionary = authority.call("realize_topology", values, "R10A1_ALT_DIAGONAL_MAX_MIN_AREA", snapshot, int(row.get("seed", 131102026)))
+		var graph_result: Dictionary = authority.call("realize_topology", values, "R10A1_ALT_DIAGONAL_MAX_MIN_AREA", prepared.get("snapshot", {}), int(row.get("seed", 131102026)))
 		var graph_wrapper: Dictionary = graph_result.get("topology_graph", {})
 		graph = graph_wrapper.get("canonical", {})
 		expected_sha = String(graph_wrapper.get("topology_sha256", ""))
 	if graph.is_empty() or expected_sha.is_empty(): return {"valid": false, "reason": "topology_graph_missing"}
 	var geometry: Dictionary = Realizer.new().call("realize", graph, values, roi, expected_sha)
 	if not bool(geometry.get("valid", false)): return {"valid": false, "reason": "realizer_invalid", "detail": geometry}
-	var volume_metrics: Dictionary = volume_case.get("metrics", {}).get("volume", {})
-	return {"valid": true, "geometry": geometry, "volume_sha256": volume.get("sha256", ""), "payload_sha256": volume_metrics.get("payload_sha256", ""), "revision": volume.get("revision", -1), "volume_identity_preserved": bool(volume_case.get("volume_identity_preserved", false)), "snapshot": snapshot, "values": values, "row": row, "roi": roi}
+	return {"valid": true, "geometry": geometry, "volume_sha256": prepared.get("volume_sha256", ""), "payload_sha256": prepared.get("payload_sha256", ""), "revision": prepared.get("revision", -1), "volume_identity_preserved": prepared.get("volume_identity_preserved", false), "snapshot": prepared.get("snapshot", {}), "values": values, "row": row, "roi": roi, "volume_build_usec": prepared.get("volume_build_usec", -1)}
 
 func _run_contract_preflight(source_graph: Dictionary, roi: Dictionary) -> bool:
 	var realizer: RefCounted = Realizer.new()
+	if source_graph.get("roots", []).size() != 369 or source_graph.get("arcs", []).size() != 870 or source_graph.get("polygons", []).size() != 502: return false
 	var mutated_graph: Dictionary = source_graph.duplicate(true)
 	var roots: Array = mutated_graph.get("roots", [])
 	if roots.is_empty(): return false
