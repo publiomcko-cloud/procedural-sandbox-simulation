@@ -76,7 +76,7 @@ func _run() -> void:
 		quit(0)
 		return
 	if OS.get_environment("R10B_B1R_DOMAIN_ONLY") == "1":
-		if hypothesis != "R10B1R_DIRECT_CONSTRAINED_TRIANGULATION":
+		if hypothesis != "R10B1R_DIRECT_CONSTRAINED_TRIANGULATION_FEASIBILITY":
 			_blocked("candidate_domain_stage_requires_b1r", {"hypothesis": hypothesis})
 			return
 		var domain_builder: RefCounted = B1RRealizer.new()
