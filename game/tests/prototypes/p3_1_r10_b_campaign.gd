@@ -4,6 +4,7 @@ const Core := preload("res://tests/prototypes/p3_1_r9_2_diagnostic_base.gd")
 const CandidateD := preload("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd")
 const Authority := preload("res://tests/prototypes/p3_1_r10_a_topology_authority.gd")
 const B1Realizer := preload("res://tests/prototypes/p3_1_r10_b_realizer.gd")
+const B6Realizer := preload("res://tests/prototypes/p3_1_r10_b6_area_guided_realizer.gd")
 const B2Realizer := preload("res://tests/prototypes/p3_1_r10_b2_realizer.gd")
 const B3Realizer := preload("res://tests/prototypes/p3_1_r10_b3_realizer.gd")
 const MANIFEST_SHA := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
@@ -71,7 +72,7 @@ func _run() -> void:
 		print("R10B_GRAPH_CONTRACT_COMPLETE " + JSON.stringify({"status": "PASS", "attempt_id": attempt_id, "source_sha": source_sha, "source_topology_graph_proof": graph_result.source_topology_graph_proof, "geometry_topology": graph_result.mesh_topology, "volume_identity_preserved": volume_case.volume_identity_preserved}))
 		quit(0)
 		return
-	if hypothesis not in ["R10B1_NONMONOTONIC_CONSTRAINED_FLIP_BFS", "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION", "R10B3_CONSTRAINED_DELAUNAY_LAWSON_FLIPS", "R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION", "R10B5_NESTED_LOCAL_FIELD_REFINEMENT"]:
+	if hypothesis not in ["R10B1_NONMONOTONIC_CONSTRAINED_FLIP_BFS", "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION", "R10B3_CONSTRAINED_DELAUNAY_LAWSON_FLIPS", "R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION", "R10B5_NESTED_LOCAL_FIELD_REFINEMENT", "R10B6_CUTOFF_DIRECTED_BOUNDED_BEAM"]:
 		_blocked("unimplemented_geometry_hypothesis", {"hypothesis": hypothesis})
 		return
 	var solve_started: int = Time.get_ticks_usec()
@@ -132,6 +133,7 @@ func _run() -> void:
 func _new_hypothesis_realizer(hypothesis: String) -> RefCounted:
 	if hypothesis == "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION": return B2Realizer.new()
 	if hypothesis == "R10B3_CONSTRAINED_DELAUNAY_LAWSON_FLIPS": return B3Realizer.new()
+	if hypothesis == "R10B6_CUTOFF_DIRECTED_BOUNDED_BEAM": return B6Realizer.new()
 	if hypothesis == "R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION": return Authority.new()
 	return B1Realizer.new()
 
