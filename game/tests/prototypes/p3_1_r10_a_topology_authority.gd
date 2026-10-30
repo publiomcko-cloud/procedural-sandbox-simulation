@@ -10,6 +10,9 @@ const CUTOFF_SQUARED: float = 1.0e-12
 const ARC_SEPARATOR: String = "\u001f"
 const A2_CAUSAL_A1_CASE_SHA256: String = "700c59861d8011f61553848c195e10bb4b2e66cc42433185a56a4720af1f83be"
 const A2_REFINE_CELLS: Dictionary = {"60,8,25": true, "61,8,25": true, "62,9,24": true, "66,7,29": true}
+const A4_PATCH_HALO_CELLS: int = 1
+const A4_PATCH_MAX_POLYGONS: int = 512
+const A4_PATCH_MAX_BOUNDARY_ROOTS: int = 96
 
 func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: Dictionary = {}, seed: int = 131102026) -> Dictionary:
 	var dims: Vector3i = CELLS + Vector3i.ONE
@@ -103,6 +106,9 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: 
 						arc.required_incidence += 1
 						arcs[arc_key] = arc
 					polygons.append({"id": polygon_id, "cell": [cell_id.x, cell_id.y, cell_id.z], "tet_index": tet_index, "root_ids": ordered_ids, "points": ordered_points, "face_ids": face_ids, "toward_empty": toward_empty, "realization": "PENDING"})
+	var source_polygons: Array[Dictionary] = polygons.duplicate(true)
+	var source_arcs: Dictionary = arcs.duplicate(true)
+	var a4_component_reconstruction: Dictionary = {"valid": true, "applied": false, "source_obligations_valid": true, "patches": [], "reason": "NOT_APPLICABLE"}
 	if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER"]:
 		var refinement_result: Dictionary = _apply_triangle_subdivision(polygons, roots, root_sources, hypothesis, snapshot, seed)
 		if bool(refinement_result.get("valid", false)):
@@ -111,7 +117,20 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: 
 			local_refinement = refinement_result.evidence
 		else:
 			geometry_errors.append({"reason": "a2_local_refinement_failed", "detail": refinement_result})
+	elif hypothesis == "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION":
+		a4_component_reconstruction = _apply_multi_cell_component_reconstruction(polygons, roots, source_arcs, values, dims)
+		if bool(a4_component_reconstruction.get("valid", false)):
+			polygons = a4_component_reconstruction.get("polygons", polygons)
+			arcs = a4_component_reconstruction.get("arcs", arcs)
+			local_refinement = a4_component_reconstruction.get("patches", [])
+		else:
+			geometry_errors.append({"reason": "a4_component_reconstruction_failed", "detail": a4_component_reconstruction})
 	var graph: Dictionary = _topology_graph(roots, root_sources, polygons, arcs, geometry_errors)
+	var source_graph: Dictionary = _topology_graph(roots, root_sources, source_polygons, source_arcs, []) if hypothesis == "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION" else {}
+	var source_graph_proof: Dictionary = {"schema": source_graph.get("schema", ""), "topology_sha256": source_graph.get("topology_sha256", ""), "valid": source_graph.get("valid", false), "root_count": source_graph.get("root_count", 0), "polygon_count": source_graph.get("polygon_count", 0), "arc_count": source_graph.get("arc_count", 0), "unresolved_required_arc_count": source_graph.get("unresolved_required_arcs", []).size(), "nonmanifold_required_arc_count": source_graph.get("nonmanifold_required_arcs", []).size()}
+	if hypothesis == "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION":
+		a4_component_reconstruction["source_graph_valid"] = bool(source_graph.get("valid", false))
+		a4_component_reconstruction["source_obligations_valid"] = bool(a4_component_reconstruction.get("source_obligations_valid", false)) and bool(source_graph.get("valid", false))
 	var mesh: Dictionary = Core.new_mesh()
 	var emitted_triangles: Array[Dictionary] = []
 	var unresolved: Array[Dictionary] = []
@@ -141,7 +160,7 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: 
 				emitted_all = false
 				cutoff_rejections.append({"polygon_id": polygon.id, "triangle_root_ids": row.root_ids, "cross_squared": emitted.get("cross_squared", -1.0), "reason": emitted.get("reason", "emit_rejected")})
 				continue
-			emitted_triangles.append({"polygon_id": polygon.id, "root_ids": emitted.root_ids, "normal": emitted.normal, "cross_squared": emitted.cross_squared, "construction": triangulation.get("construction", "existing_root_triangulation")})
+			emitted_triangles.append({"polygon_id": polygon.id, "source_polygon_ids": polygon.get("source_polygon_ids", [polygon.id]), "patch_id": polygon.get("patch_id", ""), "root_ids": emitted.root_ids, "normal": emitted.normal, "cross_squared": emitted.cross_squared, "construction": triangulation.get("construction", "existing_root_triangulation")})
 		polygon.realization = "EMITTED" if emitted_all else "PARTIAL"
 		if not emitted_all:
 			unresolved.append({"polygon_id": polygon.id, "reason": "required_polygon_triangles_not_all_emitted"})
@@ -162,14 +181,15 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: 
 	var mesh_topology: Dictionary = Core.topology(mesh, ROI_MIN, ROI_MIN + Vector3(CELLS) * STEP)
 	var topology_hash: String = String(graph.get("topology_sha256", ""))
 	var winding_valid: bool = int(mesh_topology.get("winding_inconsistencies", -1)) == 0
-	var required_complete: bool = unresolved.is_empty() and geometry_errors.is_empty() and missing_count == 0
+	var source_obligations_valid: bool = bool(a4_component_reconstruction.get("source_obligations_valid", true))
+	var required_complete: bool = unresolved.is_empty() and geometry_errors.is_empty() and missing_count == 0 and source_obligations_valid
 	var geometry_complete: bool = required_complete and int(mesh_topology.get("internal_open_edges", -1)) == 0 and int(mesh_topology.get("nonmanifold_edges", -1)) == 0 and winding_valid
-	return {"valid": geometry_errors.is_empty(), "hypothesis": hypothesis, "mesh": mesh, "mesh_sha256": _mesh_sha(mesh), "topology_graph": graph,
+	return {"valid": geometry_errors.is_empty(), "hypothesis": hypothesis, "mesh": mesh, "mesh_sha256": _mesh_sha(mesh), "topology_graph": graph, "source_topology_graph_proof": source_graph_proof, "a4_component_reconstruction": a4_component_reconstruction,
 		"topology_sha256": topology_hash, "mesh_topology": mesh_topology, "emitted_triangles": emitted_triangles,
 		"unresolved_obligations": unresolved, "cutoff_rejections": cutoff_rejections, "required_adjacency_obligations": adjacency_obligations,
 		"required_adjacency_missing_count": missing_count, "required_adjacency_nonmanifold_count": nonmanifold_count,
 		"geometry_realization_complete": geometry_complete, "required_topology_complete": required_complete, "winding_valid": winding_valid,
-		"local_refinement": {"enabled": hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER"], "source_a1_equal_case_sha256": A2_CAUSAL_A1_CASE_SHA256 if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER"] else "", "target_parent_cells": A2_REFINE_CELLS.keys() if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER"] else [], "subdivided_parent_polygons": local_refinement, "subdivided_count": local_refinement.size(), "field_authority": "Candidate D piecewise-linear tetrahedral field for A2; canonical SDF plus ordered snapshot for A3; scalar volume unchanged"},
+		"local_refinement": {"enabled": hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION"], "source_a1_equal_case_sha256": A2_CAUSAL_A1_CASE_SHA256 if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION"] else "", "target_parent_cells": A2_REFINE_CELLS.keys() if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION"] else [], "subdivided_parent_polygons": local_refinement, "subdivided_count": local_refinement.size(), "field_authority": "Candidate D piecewise-linear tetrahedral field for A2 and A4; canonical SDF plus ordered snapshot for A3; scalar volume unchanged"},
 		"metrics": {"root_count": roots.size(), "polygon_count": polygons.size(), "required_arc_count": arcs.size(), "emitted_triangle_count": emitted_triangles.size(),
 			"unresolved_polygon_count": unresolved.size(), "cutoff_rejection_count": cutoff_rejections.size(), "topology_build_realize_usec": Time.get_ticks_usec() - begin_usec,
 			"fixed_cross_squared_cutoff": CUTOFF_SQUARED, "field_authority": "Candidate D serialized/reloaded float32 materialized volume; no sample mutation"}}
@@ -247,6 +267,376 @@ func _apply_triangle_subdivision(source_polygons: Array[Dictionary], roots: Dict
 			arc.required_incidence += 1
 			rebuilt_arcs[arc_key] = arc
 	return {"valid": true, "polygons": expanded, "arcs": rebuilt_arcs, "evidence": evidence}
+
+func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionary], roots: Dictionary, source_arcs: Dictionary, values: PackedFloat32Array, dims: Vector3i) -> Dictionary:
+	var selected: Dictionary = {}
+	for polygon in source_polygons:
+		var cell: Array = polygon.get("cell", [])
+		if cell.size() != 3: continue
+		for raw_target in A2_REFINE_CELLS.keys():
+			var target_parts: PackedStringArray = String(raw_target).split(",")
+			if target_parts.size() != 3: continue
+			var within_halo: bool = true
+			for axis in range(3):
+				if absi(int(cell[axis]) - int(target_parts[axis])) > A4_PATCH_HALO_CELLS: within_halo = false
+			if within_halo:
+				selected[String(polygon.get("id", ""))] = polygon
+				break
+	if selected.is_empty():
+		return {"valid": true, "applied": false, "source_obligations_valid": true, "reason": "no_polygons_in_bounded_target_patch", "polygons": source_polygons, "arcs": source_arcs, "patches": []}
+	if selected.size() > A4_PATCH_MAX_POLYGONS:
+		return {"valid": true, "applied": false, "source_obligations_valid": true, "reason": "bounded_patch_polygon_limit_exceeded", "selected_polygon_count": selected.size(), "limit": A4_PATCH_MAX_POLYGONS, "polygons": source_polygons, "arcs": source_arcs, "patches": []}
+	var selected_ids: Array = selected.keys(); selected_ids.sort()
+	var parent: Dictionary = {}
+	var edge_members: Dictionary = {}
+	for polygon_id in selected_ids:
+		parent[String(polygon_id)] = String(polygon_id)
+		var polygon: Dictionary = selected[String(polygon_id)]
+		var ids: Array = polygon.get("root_ids", [])
+		for edge_index in range(ids.size()):
+			var edge_key: String = _arc_key(String(ids[edge_index]), String(ids[(edge_index + 1) % ids.size()]))
+			if not edge_members.has(edge_key): edge_members[edge_key] = []
+			edge_members[edge_key].append(String(polygon_id))
+	for edge_key in edge_members.keys():
+		var members: Array = edge_members[edge_key]
+		members.sort()
+		for member_index in range(1, members.size()): _union_polygon_owners(parent, String(members[0]), String(members[member_index]))
+	var component_members: Dictionary = {}
+	for polygon_id in selected_ids:
+		var component_id: String = _find_polygon_owner(parent, String(polygon_id))
+		if not component_members.has(component_id): component_members[component_id] = []
+		component_members[component_id].append(String(polygon_id))
+	var component_ids: Array = component_members.keys(); component_ids.sort()
+	var patches: Array[Dictionary] = []
+	var source_obligations_valid: bool = true
+	for component_id in component_ids:
+		var members: Array = component_members[component_id]; members.sort()
+		var group_polygons: Array[Dictionary] = []
+		var needs_reconstruction: bool = false
+		for member in members:
+			var polygon: Dictionary = selected[String(member)]
+			group_polygons.append(polygon)
+			if _authority_polygon_has_cutoff_triangle(polygon): needs_reconstruction = true
+		if not needs_reconstruction: continue
+		var record: Dictionary = {"component_id": String(component_id), "source_polygon_ids": members, "source_cell_count": _unique_polygon_cell_count(group_polygons), "status": "PENDING", "source_authority": "CANDIDATE_D_MATERIALIZED_FLOAT32_SCALAR_VOLUME", "construction": "BOUNDED_MULTI_CELL_BOUNDARY_PRESERVING_RETRIANGULATION"}
+		if members.size() < 2:
+			record.status = "UNRESOLVED"
+			record.reason = "cutoff_polygon_has_no_adjacent_polygon_inside_bounded_patch"
+			patches.append(record)
+			continue
+		var edge_occurrences: Dictionary = {}
+		var source_root_set: Dictionary = {}
+		for polygon in group_polygons:
+			var ids: Array = polygon.get("root_ids", [])
+			var faces: Array = polygon.get("face_ids", [])
+			if ids.size() < 3 or ids.size() != faces.size():
+				record.status = "UNRESOLVED"
+				record.reason = "source_polygon_root_face_arity_invalid"
+				break
+			for root_id in ids: source_root_set[String(root_id)] = true
+			for edge_index in range(ids.size()):
+				var left: String = String(ids[edge_index])
+				var right: String = String(ids[(edge_index + 1) % ids.size()])
+				var edge_key: String = _arc_key(left, right)
+				if not edge_occurrences.has(edge_key): edge_occurrences[edge_key] = []
+				edge_occurrences[edge_key].append({"roots": [left, right], "polygon_id": String(polygon.get("id", "")), "face_id": String(faces[edge_index])})
+		if String(record.get("status", "")) == "UNRESOLVED":
+			patches.append(record)
+			continue
+		var boundary_rows: Array[Dictionary] = []
+		var boundary_face_ids: Dictionary = {}
+		var internal_arc_keys: Array[String] = []
+		var invalid_edge_multiplicity: Array[String] = []
+		for raw_edge_key in edge_occurrences.keys():
+			var edge_key: String = String(raw_edge_key)
+			var occurrences: Array = edge_occurrences[edge_key]
+			if occurrences.size() == 1:
+				var occurrence: Dictionary = occurrences[0]
+				boundary_rows.append({"edge_key": edge_key, "roots": occurrence.roots})
+				boundary_face_ids[edge_key] = occurrence.face_id
+			elif occurrences.size() == 2:
+				internal_arc_keys.append(edge_key)
+			else:
+				invalid_edge_multiplicity.append(edge_key)
+		boundary_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.edge_key) < String(b.edge_key))
+		internal_arc_keys.sort()
+		if not invalid_edge_multiplicity.is_empty():
+			record.status = "UNRESOLVED"
+			record.reason = "source_component_has_nonmanifold_edge_multiplicity"
+			record.nonmanifold_source_edges = invalid_edge_multiplicity
+			patches.append(record)
+			continue
+		var boundary: Dictionary = _extract_edge_loops(boundary_rows)
+		record.boundary = boundary
+		if int(boundary.get("closed_loop_count", 0)) != 1 or int(boundary.get("open_path_count", 0)) != 0 or boundary.get("paths", []).size() != 1:
+			record.status = "UNRESOLVED"
+			record.reason = "bounded_component_boundary_is_not_one_closed_loop"
+			patches.append(record)
+			continue
+		var boundary_roots: Array = boundary.paths[0].get("root_ids", [])
+		if boundary_roots.size() < 3 or boundary_roots.size() > A4_PATCH_MAX_BOUNDARY_ROOTS:
+			record.status = "UNRESOLVED"
+			record.reason = "boundary_root_count_outside_bounded_triangulator"
+			record.boundary_root_count = boundary_roots.size()
+			patches.append(record)
+			continue
+		var all_roots_on_boundary: bool = source_root_set.size() == boundary_roots.size()
+		for boundary_root in boundary_roots:
+			if not source_root_set.has(String(boundary_root)): all_roots_on_boundary = false
+		if not all_roots_on_boundary:
+			record.status = "UNRESOLVED"
+			record.reason = "component_contains_interior_roots_not_supported_by_boundary_only_patch"
+			record.source_root_count = source_root_set.size()
+			record.boundary_root_count = boundary_roots.size()
+			patches.append(record)
+			continue
+		var source_edge_count: int = edge_occurrences.size()
+		var euler_characteristic: int = source_root_set.size() - source_edge_count + group_polygons.size()
+		record.source_euler_characteristic = euler_characteristic
+		if euler_characteristic != 1:
+			record.status = "UNRESOLVED"
+			record.reason = "bounded_source_component_is_not_a_topological_disk"
+			patches.append(record)
+			continue
+		var triangulation: Dictionary = _triangulate_boundary_cycle(boundary_roots, roots)
+		record.triangulation = triangulation
+		if not bool(triangulation.get("valid", false)):
+			record.status = "UNRESOLVED"
+			record.reason = "boundary_loop_triangulation_failed_under_fixed_cutoff"
+			patches.append(record)
+			continue
+		var average_empty: Vector3 = Vector3.ZERO
+		for polygon in group_polygons: average_empty += polygon.get("toward_empty", Vector3.ZERO)
+		if not average_empty.is_finite() or average_empty.length_squared() == 0.0:
+			record.status = "UNRESOLVED"
+			record.reason = "source_component_has_no_finite_orientation_authority"
+			patches.append(record)
+			continue
+		average_empty = average_empty.normalized()
+		var component_key: String = String(component_id)
+		var replacement_polygons: Array[Dictionary] = []
+		var replacement_ids: Array[String] = []
+		var replacement_edge_occurrences: Dictionary = {}
+		var field_residual_rows: Array[Dictionary] = []
+		var triangle_rows: Array[Dictionary] = triangulation.get("triangles", [])
+		for triangle_index in range(triangle_rows.size()):
+			var triangle: Dictionary = triangle_rows[triangle_index]
+			var triangle_ids: Array = triangle.get("root_ids", [])
+			var triangle_points: Array = triangle.get("points", [])
+			var face_ids: Array[String] = []
+			for edge_index in range(3):
+				var edge_key: String = _arc_key(String(triangle_ids[edge_index]), String(triangle_ids[(edge_index + 1) % 3]))
+				if boundary_face_ids.has(edge_key): face_ids.append(String(boundary_face_ids[edge_key]))
+				else: face_ids.append("r10a4-patch|" + component_key + "|" + edge_key)
+			var centroid: Vector3 = (triangle_points[0] + triangle_points[1] + triangle_points[2]) / 3.0
+			var sampled_field: Dictionary = _sample_materialized_piecewise_field(centroid, values, dims)
+			if not bool(sampled_field.get("valid", false)):
+				record.status = "UNRESOLVED"
+				record.reason = "replacement_triangle_centroid_outside_materialized_tetrahedral_domain"
+				record.failed_centroid = [centroid.x, centroid.y, centroid.z]
+				break
+			field_residual_rows.append({"triangle_index": triangle_index, "centroid": [centroid.x, centroid.y, centroid.z], "piecewise_materialized_density": sampled_field.density, "field_residual": absf(float(sampled_field.density)), "source_tetrahedron": sampled_field.tetrahedron_index})
+			var owner_cell: Array[int] = [floori(centroid.x / STEP), floori(centroid.y / STEP), floori(centroid.z / STEP)]
+			var triangle_id: String = "r10a4-patch|" + component_key + "|triangle:" + str(triangle_index)
+			replacement_ids.append(triangle_id)
+			replacement_polygons.append({"id": triangle_id, "cell": owner_cell, "tet_index": -1, "root_ids": triangle_ids, "points": triangle_points, "face_ids": face_ids, "toward_empty": average_empty, "realization": "PENDING", "patch_id": component_key, "source_polygon_ids": members.duplicate()})
+			for edge_index in range(3):
+				var edge_key: String = _arc_key(String(triangle_ids[edge_index]), String(triangle_ids[(edge_index + 1) % 3]))
+				if not replacement_edge_occurrences.has(edge_key): replacement_edge_occurrences[edge_key] = 0
+				replacement_edge_occurrences[edge_key] += 1
+		if String(record.get("status", "")) == "UNRESOLVED":
+			patches.append(record)
+			continue
+		var boundary_arc_preservation: Array[Dictionary] = []
+		var boundary_preserved: bool = true
+		for edge in boundary_rows:
+			var edge_key: String = String(edge.edge_key)
+			var expected: int = int(source_arcs.get(edge_key, {}).get("required_incidence", 0))
+			var observed: int = int(replacement_edge_occurrences.get(edge_key, 0))
+			boundary_arc_preservation.append({"edge_key": edge_key, "expected_source_incidence": expected, "replacement_incidence": observed})
+			if observed != 1 or expected < 1: boundary_preserved = false
+		if not boundary_preserved:
+			record.status = "UNRESOLVED"
+			record.reason = "patch_changes_or_drops_source_boundary_arc"
+			record.boundary_arc_preservation = boundary_arc_preservation
+			patches.append(record)
+			continue
+		record.status = "RECONSTRUCTED"
+		record.source_boundary_arc_keys = boundary_rows.map(func(edge: Dictionary) -> String: return String(edge.edge_key))
+		record.superseded_internal_arc_keys = internal_arc_keys
+		record.replacement_polygon_ids = replacement_ids
+		record.source_to_replacement = {"source_polygon_ids": members.duplicate(), "replacement_polygon_ids": replacement_ids, "equivalence_basis": "one connected Euler-characteristic-one polygon disk replaced by an n-2 triangulation of the identical ordered boundary root loop; boundary vertices/arcs fixed; no Steiner vertices"}
+		record.boundary_arc_preservation = boundary_arc_preservation
+		record.replacement_cross_squared = triangle_rows.map(func(row: Dictionary) -> float: return _cross_squared(row.points[0], row.points[1], row.points[2]))
+		record.piecewise_materialized_field_centroid_residuals = field_residual_rows
+		record.replacement_polygons = replacement_polygons
+		patches.append(record)
+		if not boundary_preserved: source_obligations_valid = false
+	var expanded: Array[Dictionary] = []
+	var emitted_components: Dictionary = {}
+	for polygon in source_polygons:
+		var polygon_id: String = String(polygon.get("id", ""))
+		var replacement_key: String = ""
+		for component_record in patches:
+			if String(component_record.get("status", "")) == "RECONSTRUCTED" and component_record.get("source_polygon_ids", []).has(polygon_id):
+				replacement_key = String(component_record.get("component_id", ""))
+				break
+		if replacement_key.is_empty():
+			expanded.append(polygon)
+		elif not emitted_components.has(replacement_key):
+			emitted_components[replacement_key] = true
+			for record in patches:
+				if String(record.get("component_id", "")) == replacement_key and String(record.get("status", "")) == "RECONSTRUCTED":
+					expanded.append_array(record.get("replacement_polygons", []))
+	var rebuilt_arcs: Dictionary = _build_arcs_from_polygons(expanded)
+	for record in patches:
+		if String(record.get("status", "")) == "RECONSTRUCTED":
+			var boundary_preserved: bool = true
+			for edge_key in record.get("source_boundary_arc_keys", []):
+				var source_expected: int = int(source_arcs.get(String(edge_key), {}).get("required_incidence", 0))
+				var replacement_incidence: int = int(rebuilt_arcs.get(String(edge_key), {}).get("required_incidence", 0))
+				if source_expected != replacement_incidence: boundary_preserved = false
+			record["global_source_boundary_obligations_preserved"] = boundary_preserved
+			if not boundary_preserved: source_obligations_valid = false
+	return {"valid": true, "applied": not emitted_components.is_empty(), "source_obligations_valid": source_obligations_valid, "reason": "bounded_component_patch_attempted", "selected_polygon_count": selected.size(), "polygons": expanded, "arcs": rebuilt_arcs, "patches": patches}
+
+func _authority_polygon_has_cutoff_triangle(polygon: Dictionary) -> bool:
+	var points: Array = polygon.get("points", [])
+	if points.size() == 3: return _cross_squared(points[0], points[1], points[2]) <= CUTOFF_SQUARED
+	if points.size() != 4: return false
+	var first_valid: bool = _cross_squared(points[0], points[1], points[2]) > CUTOFF_SQUARED and _cross_squared(points[0], points[2], points[3]) > CUTOFF_SQUARED
+	var second_valid: bool = _cross_squared(points[0], points[1], points[3]) > CUTOFF_SQUARED and _cross_squared(points[1], points[2], points[3]) > CUTOFF_SQUARED
+	return not first_valid and not second_valid
+
+func _unique_polygon_cell_count(polygons: Array[Dictionary]) -> int:
+	var cells: Dictionary = {}
+	for polygon in polygons:
+		var cell: Array = polygon.get("cell", [])
+		cells["%s" % [cell]] = true
+	return cells.size()
+
+func _build_arcs_from_polygons(polygons: Array[Dictionary]) -> Dictionary:
+	var result: Dictionary = {}
+	for polygon in polygons:
+		var ids: Array = polygon.get("root_ids", [])
+		var faces: Array = polygon.get("face_ids", [])
+		if ids.size() < 3 or ids.size() != faces.size(): continue
+		for edge_index in range(ids.size()):
+			var first_id: String = String(ids[edge_index])
+			var second_id: String = String(ids[(edge_index + 1) % ids.size()])
+			var arc_key: String = _arc_key(first_id, second_id)
+			if not result.has(arc_key): result[arc_key] = {"roots": [first_id, second_id], "polygon_ids": [], "face_ids": [], "required_incidence": 0}
+			var arc: Dictionary = result[arc_key]
+			arc.polygon_ids.append(String(polygon.get("id", "")))
+			arc.face_ids.append(String(faces[edge_index]))
+			arc.required_incidence += 1
+			result[arc_key] = arc
+	return result
+
+func _triangulate_boundary_cycle(root_ids: Array, roots: Dictionary) -> Dictionary:
+	if root_ids.size() < 3 or root_ids.size() > A4_PATCH_MAX_BOUNDARY_ROOTS:
+		return {"valid": false, "reason": "boundary_cycle_size_unsupported", "root_count": root_ids.size()}
+	var points: Array[Vector3] = []
+	for root_id in root_ids:
+		if not roots.has(String(root_id)): return {"valid": false, "reason": "boundary_cycle_root_missing", "root_id": root_id}
+		points.append(roots[String(root_id)])
+	var newell: Vector3 = Vector3.ZERO
+	for point_index in range(points.size()):
+		var current: Vector3 = points[point_index]
+		var next: Vector3 = points[(point_index + 1) % points.size()]
+		newell.x += (current.y - next.y) * (current.z + next.z)
+		newell.y += (current.z - next.z) * (current.x + next.x)
+		newell.z += (current.x - next.x) * (current.y + next.y)
+	if not newell.is_finite() or newell.length_squared() == 0.0:
+		return {"valid": false, "reason": "boundary_cycle_projection_normal_degenerate"}
+	var dominant_axis: int = 0
+	if absf(newell.y) > absf(newell.x): dominant_axis = 1
+	if absf(newell.z) > absf(newell[dominant_axis]): dominant_axis = 2
+	var projected: Array[Vector2] = []
+	for point in points:
+		if dominant_axis == 0: projected.append(Vector2(point.y, point.z))
+		elif dominant_axis == 1: projected.append(Vector2(point.x, point.z))
+		else: projected.append(Vector2(point.x, point.y))
+	var signed_area_twice: float = 0.0
+	for index in range(projected.size()): signed_area_twice += projected[index].cross(projected[(index + 1) % projected.size()])
+	if not is_finite(signed_area_twice) or signed_area_twice == 0.0:
+		return {"valid": false, "reason": "boundary_cycle_projected_area_degenerate"}
+	var orientation: float = 1.0 if signed_area_twice > 0.0 else -1.0
+	var remaining: Array[int] = []
+	for index in range(points.size()): remaining.append(index)
+	var triangles: Array[Dictionary] = []
+	while remaining.size() > 3:
+		var ears: Array[Dictionary] = []
+		for slot in range(remaining.size()):
+			var previous_index: int = remaining[(slot - 1 + remaining.size()) % remaining.size()]
+			var current_index: int = remaining[slot]
+			var next_index: int = remaining[(slot + 1) % remaining.size()]
+			var turn: float = (projected[current_index] - projected[previous_index]).cross(projected[next_index] - projected[current_index])
+			if turn * orientation <= 0.0: continue
+			var contains_other: bool = false
+			for test_index in remaining:
+				if test_index == previous_index or test_index == current_index or test_index == next_index: continue
+				if _point_in_projected_triangle(projected[test_index], projected[previous_index], projected[current_index], projected[next_index], orientation):
+					contains_other = true
+					break
+			if contains_other: continue
+			var cross_squared: float = _cross_squared(points[previous_index], points[current_index], points[next_index])
+			if not is_finite(cross_squared) or cross_squared <= CUTOFF_SQUARED: continue
+			ears.append({"slot": slot, "indices": [previous_index, current_index, next_index], "cross_squared": cross_squared})
+		if ears.is_empty():
+			return {"valid": false, "reason": "no_valid_ear_without_degeneracy_or_boundary_inversion", "remaining_indices": remaining, "triangles": triangles}
+		ears.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			if float(a.cross_squared) != float(b.cross_squared): return float(a.cross_squared) > float(b.cross_squared)
+			return int(a.indices[1]) < int(b.indices[1]))
+		var ear: Dictionary = ears[0]
+		var ear_indices: Array = ear.indices
+		triangles.append({"root_ids": [root_ids[int(ear_indices[0])], root_ids[int(ear_indices[1])], root_ids[int(ear_indices[2])]], "points": [points[int(ear_indices[0])], points[int(ear_indices[1])], points[int(ear_indices[2])]], "cross_squared": ear.cross_squared})
+		remaining.remove_at(int(ear.slot))
+	var final_cross_squared: float = _cross_squared(points[remaining[0]], points[remaining[1]], points[remaining[2]])
+	if not is_finite(final_cross_squared) or final_cross_squared <= CUTOFF_SQUARED:
+		return {"valid": false, "reason": "final_boundary_triangle_below_frozen_cutoff", "cross_squared": final_cross_squared, "triangles": triangles}
+	triangles.append({"root_ids": [root_ids[remaining[0]], root_ids[remaining[1]], root_ids[remaining[2]]], "points": [points[remaining[0]], points[remaining[1]], points[remaining[2]]], "cross_squared": final_cross_squared})
+	return {"valid": true, "construction": "deterministic_boundary_preserving_ear_clipping_max_area_first", "orientation": orientation, "projection_axis": dominant_axis, "triangles": triangles, "boundary_root_ids": root_ids.duplicate(), "boundary_area_twice": signed_area_twice}
+
+func _point_in_projected_triangle(point: Vector2, a: Vector2, b: Vector2, c: Vector2, orientation: float) -> bool:
+	var ab: float = (b - a).cross(point - a) * orientation
+	var bc: float = (c - b).cross(point - b) * orientation
+	var ca: float = (a - c).cross(point - c) * orientation
+	return ab >= 0.0 and bc >= 0.0 and ca >= 0.0
+
+func _sample_materialized_piecewise_field(world_point: Vector3, values: PackedFloat32Array, dims: Vector3i) -> Dictionary:
+	if not world_point.is_finite() or values.size() != dims.x * dims.y * dims.z: return {"valid": false, "reason": "invalid_query_or_volume"}
+	var grid_position: Vector3 = (world_point - ROI_MIN) / STEP
+	var cell: Vector3i = Vector3i(floori(grid_position.x), floori(grid_position.y), floori(grid_position.z))
+	cell.x = clampi(cell.x, 0, CELLS.x - 1)
+	cell.y = clampi(cell.y, 0, CELLS.y - 1)
+	cell.z = clampi(cell.z, 0, CELLS.z - 1)
+	var local_point: Vector3 = grid_position - Vector3(cell)
+	var best: Dictionary = {}
+	var best_violation: float = INF
+	for tetrahedron_index in range(Core.TETS.size()):
+		var corners: Array = Core.TETS[tetrahedron_index]
+		var p0: Vector3 = Vector3(Core.GRID_CORNERS[int(corners[0])])
+		var p1: Vector3 = Vector3(Core.GRID_CORNERS[int(corners[1])])
+		var p2: Vector3 = Vector3(Core.GRID_CORNERS[int(corners[2])])
+		var p3: Vector3 = Vector3(Core.GRID_CORNERS[int(corners[3])])
+		var basis: Basis = Basis(p1 - p0, p2 - p0, p3 - p0)
+		if basis.determinant() == 0.0: continue
+		var coordinates: Vector3 = basis.inverse() * (local_point - p0)
+		var weights: Array[float] = [1.0 - coordinates.x - coordinates.y - coordinates.z, coordinates.x, coordinates.y, coordinates.z]
+		var violation: float = 0.0
+		for weight in weights:
+			if weight < 0.0: violation += -weight
+			elif weight > 1.0: violation += weight - 1.0
+		if violation > best_violation: continue
+		var density: float = 0.0
+		for corner_index in range(4):
+			var corner: Vector3i = Core.GRID_CORNERS[int(corners[corner_index])]
+			var sample: float = values[_idx(cell.x + corner.x, cell.y + corner.y, cell.z + corner.z, dims)]
+			density += sample * weights[corner_index]
+		best_violation = violation
+		best = {"valid": true, "density": density, "tetrahedron_index": tetrahedron_index, "barycentric_weights": weights, "barycentric_outside_residual": violation}
+	return best
 
 func _project_steiner_to_canonical(initial: Vector3, snapshot: Dictionary, seed: int) -> Dictionary:
 	if not initial.is_finite() or snapshot.is_empty():
@@ -407,11 +797,13 @@ func _topology_graph(roots: Dictionary, root_sources: Dictionary, polygons: Arra
 		var point_count: int = polygon.get("points", []).size()
 		if point_count > 0: center /= float(point_count)
 		var region_key: Vector2i = Vector2i(floori(center.x / Field.REGION_SIZE_X), floori(center.z / Field.REGION_SIZE_Z))
-		var owner: Dictionary = {"owner_kind": "half_open_world_region_and_source_tetrahedron", "region_key": [region_key.x, region_key.y], "cell": cell.duplicate(), "tetrahedron": polygon.get("tet_index", -1), "face_ids": polygon.get("face_ids", []).duplicate(), "lod_step": STEP}
+		var owner_kind: String = "half_open_world_region_and_source_tetrahedron"
+		if not String(polygon.get("patch_id", "")).is_empty(): owner_kind = "half_open_world_region_and_r10a4_component_patch"
+		var owner: Dictionary = {"owner_kind": owner_kind, "region_key": [region_key.x, region_key.y], "cell": cell.duplicate(), "tetrahedron": polygon.get("tet_index", -1), "face_ids": polygon.get("face_ids", []).duplicate(), "patch_id": polygon.get("patch_id", ""), "source_polygon_ids": polygon.get("source_polygon_ids", [polygon_id]).duplicate(), "lod_step": STEP}
 		polygon_owners[polygon_id] = owner
 		polygon_data_by_id[polygon_id] = polygon
 		polygon_parent[polygon_id] = polygon_id
-		polygon_rows.append([polygon_id, cell, polygon.get("tet_index", -1), polygon.get("root_ids", []), polygon.get("face_ids", []), owner, "CANDIDATE_D_VOLUME"])
+		polygon_rows.append([polygon_id, cell, polygon.get("tet_index", -1), polygon.get("root_ids", []), polygon.get("face_ids", []), polygon.get("source_polygon_ids", [polygon_id]), polygon.get("patch_id", ""), owner, "CANDIDATE_D_VOLUME"])
 	var arc_rows: Array = []
 	var arc_keys: Array = arcs.keys()
 	arc_keys.sort()
