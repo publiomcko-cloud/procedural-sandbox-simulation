@@ -1,6 +1,6 @@
 # P3.1 R10-B — Campaign preregistration and Stage 0 causal freeze
 
-**Status at this commit:** Stage 0 fixture and ray-scope correction are frozen. B1 is `BLOCKED_HARNESS_ERROR` and not rerun. B2 exhausted the registered ring-0-to-4 cavity search without an alternate state and returned `FAILED_TARGET`. B3 performed zero Lawson flips and retained the fixed-cutoff failure. B4's eight canonical-field Steiner projections completed, but all 24 resulting child triangles remained below the fixed cutoff and topology worsened; B4 returned `FAILED_TARGET`. B5 is the next distinct hypothesis. This report is experimental evidence only.
+**Status at this commit:** Stage 0 fixture and ray-scope correction are frozen. B1 is `BLOCKED_HARNESS_ERROR` and not rerun. B2 exhausted the registered ring-0-to-4 cavity search without an alternate state and returned `FAILED_TARGET`. B3 performed zero Lawson flips and retained the fixed-cutoff failure. B4's eight canonical-field Steiner projections completed, but all 24 resulting child triangles remained below the fixed cutoff and topology worsened; B4 returned `FAILED_TARGET`. B5's nested 0.125 field matched all 729 shared scalar samples but produced 27 internal open edges, 16 fixed-cutoff rejections, and mismatched contours on four outer faces; it returned `FAILED_TARGET`. B6 is the final evidence-directed hypothesis. This report is experimental evidence only.
 
 ## Authority boundary
 
