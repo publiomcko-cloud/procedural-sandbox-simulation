@@ -365,7 +365,7 @@ func _build_candidates(points: Array[Vector3], projected: Array[Vector2], bounda
 
 func _load_solver_domain(domain: Dictionary, expected_identity: Dictionary) -> Dictionary:
 	if String(domain.get("schema", "")) != DOMAIN_SCHEMA: return {"valid": false, "reason": "candidate_domain_schema_mismatch"}
-	if domain.get("identity", {}) != expected_identity: return {"valid": false, "reason": "candidate_domain_identity_mismatch"}
+	if not _identity_matches(domain.get("identity", {}), expected_identity): return {"valid": false, "reason": "candidate_domain_identity_mismatch"}
 	if int(domain.get("source_root_count", -1)) != 73 or int(domain.get("source_boundary_root_count", -1)) != 34 or int(domain.get("source_interior_root_count", -1)) != 39:
 		return {"valid": false, "reason": "candidate_domain_frozen_counts_mismatch"}
 	if int(domain.get("orientation_sample_count", 0)) <= 0: return {"valid": false, "reason": "candidate_domain_orientation_sample_count_invalid"}
@@ -496,6 +496,37 @@ func _load_solver_domain(domain: Dictionary, expected_identity: Dictionary) -> D
 	var estimate: int = _candidates.size() * 192 + int(_edge_to_candidates.size()) * 96
 	if estimate > int(LIMITS.estimated_state_bytes): return {"valid": false, "reason": "estimated_solver_state_memory_limit", "estimated_bytes": estimate, "limit": LIMITS.estimated_state_bytes}
 	return {"valid": true, "candidate_count": _candidates.size(), "root_count": root_points.size(), "estimated_state_bytes": estimate}
+
+func _identity_matches(observed: Variant, expected: Variant) -> bool:
+	var expected_type: int = typeof(expected)
+	var observed_type: int = typeof(observed)
+	if expected_type == TYPE_DICTIONARY:
+		if observed_type != TYPE_DICTIONARY: return false
+		var observed_dictionary: Dictionary = observed
+		var expected_dictionary: Dictionary = expected
+		if observed_dictionary.size() != expected_dictionary.size(): return false
+		for key in expected_dictionary.keys():
+			if not observed_dictionary.has(key) or not _identity_matches(observed_dictionary[key], expected_dictionary[key]): return false
+		return true
+	if expected_type == TYPE_ARRAY:
+		if observed_type != TYPE_ARRAY: return false
+		var observed_array: Array = observed
+		var expected_array: Array = expected
+		if observed_array.size() != expected_array.size(): return false
+		for index in range(expected_array.size()):
+			if not _identity_matches(observed_array[index], expected_array[index]): return false
+		return true
+	if expected_type == TYPE_INT:
+		if observed_type != TYPE_INT and observed_type != TYPE_FLOAT: return false
+		var observed_integer_value: float = float(observed)
+		if not is_finite(observed_integer_value) or observed_integer_value != floor(observed_integer_value) or absf(observed_integer_value) > 9007199254740991.0:
+			return false
+		return observed_integer_value == float(expected)
+	if expected_type == TYPE_FLOAT:
+		if observed_type != TYPE_INT and observed_type != TYPE_FLOAT: return false
+		var observed_float_value: float = float(observed)
+		return is_finite(observed_float_value) and observed_float_value == float(expected)
+	return observed_type == expected_type and observed == expected
 
 func _reset_solver_state() -> void:
 	_domain.clear(); _candidates.clear(); _edge_to_candidates.clear(); _boundary_directions.clear(); _edge_counts.clear(); _edge_directions.clear(); _root_used.clear(); _selected.clear(); _selected_flags.clear(); _edge_points.clear(); _projected.clear()

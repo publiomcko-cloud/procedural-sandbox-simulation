@@ -270,24 +270,34 @@ func _load_b1r_domain(volume_case: Dictionary, geometry: Dictionary, source_sha:
 	if parse_error != OK or not parser.data is Dictionary: return {"valid": false, "reason": "candidate_domain_json_invalid", "line": parser.get_error_line(), "message": parser.get_error_message()}
 	var domain: Dictionary = parser.data
 	var identity: Dictionary = _b1r_identity(source_sha, b1r_realizer_sha, volume_case, geometry, roi)
-	if domain.get("identity", {}) != identity: return {"valid": false, "reason": "candidate_domain_identity_not_bound_to_current_run", "expected": identity, "observed": domain.get("identity", {})}
-	return {"valid": true, "domain": domain, "path": path, "sha256": actual_sha, "identity_sha256": String(B1RRealizer.new().call("_domain_identity_sha", domain))}
+	var verifier: RefCounted = B1RRealizer.new()
+	if not bool(verifier.call("_identity_matches", domain.get("identity", {}), identity)): return {"valid": false, "reason": "candidate_domain_identity_not_bound_to_current_run", "expected": identity, "observed": domain.get("identity", {})}
+	return {"valid": true, "domain": domain, "path": path, "sha256": actual_sha, "identity_sha256": String(verifier.call("_domain_identity_sha", domain))}
 
 func _audit_b1r_domain(domain: Dictionary, identity: Dictionary) -> Dictionary:
 	var verifier: RefCounted = B1RRealizer.new()
-	var positive: Dictionary = verifier.call("_load_solver_domain", domain, identity)
+	var json_parser: JSON = JSON.new()
+	var json_parse_error: Error = json_parser.parse(JSON.stringify(domain))
+	if json_parse_error != OK or not json_parser.data is Dictionary: return {"valid": false, "reason": "candidate_domain_json_roundtrip_failed", "line": json_parser.get_error_line()}
+	var roundtripped_domain: Dictionary = json_parser.data
+	var positive: Dictionary = verifier.call("_load_solver_domain", roundtripped_domain, identity)
 	if not bool(positive.get("valid", false)):
 		return {"valid": false, "reason": "valid_domain_rejected", "detail": positive}
-	var candidate_owner_cells: Variant = domain.get("candidate_owner_cells", [])
+	var identity_tampered: Dictionary = roundtripped_domain.duplicate(true)
+	identity_tampered.identity.revision = float(identity_tampered.identity.revision) + 0.5
+	var identity_negative: Dictionary = verifier.call("_load_solver_domain", identity_tampered, identity)
+	if bool(identity_negative.get("valid", true)) or String(identity_negative.get("reason", "")) != "candidate_domain_identity_mismatch":
+		return {"valid": false, "reason": "fractional_identity_tamper_not_rejected", "detail": identity_negative}
+	var candidate_owner_cells: Variant = roundtripped_domain.get("candidate_owner_cells", [])
 	if not candidate_owner_cells is Array or candidate_owner_cells.is_empty():
 		return {"valid": false, "reason": "candidate_owner_rows_missing"}
-	var tampered: Dictionary = domain.duplicate(true)
+	var tampered: Dictionary = roundtripped_domain.duplicate(true)
 	tampered.candidate_owner_cells[0][0] = int(tampered.candidate_owner_cells[0][0]) + 1000
 	var negative_verifier: RefCounted = B1RRealizer.new()
 	var negative: Dictionary = negative_verifier.call("_load_solver_domain", tampered, identity)
 	if bool(negative.get("valid", true)) or String(negative.get("reason", "")) != "candidate_domain_half_open_owner_mismatch":
 		return {"valid": false, "reason": "tampered_owner_not_rejected", "detail": negative}
-	return {"valid": true, "positive": positive, "negative_reason": negative.reason, "validated_candidates": positive.candidate_count}
+	return {"valid": true, "positive": positive, "identity_negative_reason": identity_negative.reason, "negative_reason": negative.reason, "validated_candidates": positive.candidate_count}
 
 func _replace_target_patch_geometry(base: Dictionary, domain: Dictionary, solve: Dictionary, roi: Dictionary) -> Dictionary:
 	if not bool(solve.get("valid", false)) or solve.get("triangles", []).size() != 110:
