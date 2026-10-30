@@ -194,9 +194,51 @@ func _verify_reference_graph(row: Dictionary, prepared: Dictionary, fixture_grap
 	var result: Dictionary = authority.call("realize_topology", prepared.get("values", PackedFloat32Array()), "R10A1_ALT_DIAGONAL_MAX_MIN_AREA", prepared.get("snapshot", {}), int(row.get("seed", 131102026)))
 	var wrapper: Dictionary = result.get("topology_graph", {})
 	var canonical: Dictionary = wrapper.get("canonical", {})
-	var same_graph: bool = canonical == fixture_graph
+	var same_graph: bool = _semantic_json_equal(canonical, fixture_graph)
 	var valid: bool = bool(result.get("valid", false)) and String(wrapper.get("topology_sha256", "")) == TopologySha and same_graph
-	return {"valid": valid, "authority_valid": result.get("valid", false), "authority_topology_sha256": wrapper.get("topology_sha256", ""), "expected_topology_sha256": TopologySha, "fixture_graph_fingerprint_sha256": FixtureGraphFingerprintSha, "reproduced_graph_fingerprint_sha256": Core.sha256(JSON.stringify(canonical).to_utf8_buffer()), "graph_semantic_match": same_graph, "root_count": canonical.get("roots", []).size(), "arc_count": canonical.get("arcs", []).size(), "polygon_count": canonical.get("polygons", []).size()}
+	return {"valid": valid, "authority_valid": result.get("valid", false), "authority_topology_sha256": wrapper.get("topology_sha256", ""), "expected_topology_sha256": TopologySha, "fixture_graph_fingerprint_sha256": FixtureGraphFingerprintSha, "reproduced_graph_fingerprint_sha256": Core.sha256(JSON.stringify(canonical).to_utf8_buffer()), "graph_semantic_match": same_graph, "first_graph_difference": {} if same_graph else _first_semantic_difference(canonical, fixture_graph, "$"), "root_count": canonical.get("roots", []).size(), "arc_count": canonical.get("arcs", []).size(), "polygon_count": canonical.get("polygons", []).size()}
+
+func _semantic_json_equal(left: Variant, right: Variant) -> bool:
+	var left_type: int = typeof(left)
+	var right_type: int = typeof(right)
+	if left_type in [TYPE_INT, TYPE_FLOAT] and right_type in [TYPE_INT, TYPE_FLOAT]: return float(left) == float(right)
+	if left_type != right_type: return false
+	if left is Dictionary:
+		if left.size() != right.size(): return false
+		for key in left.keys():
+			if not right.has(key) or not _semantic_json_equal(left[key], right[key]): return false
+		return true
+	if left is Array:
+		if left.size() != right.size(): return false
+		for index in range(left.size()):
+			if not _semantic_json_equal(left[index], right[index]): return false
+		return true
+	return left == right
+
+func _first_semantic_difference(left: Variant, right: Variant, path: String) -> Dictionary:
+	var left_type: int = typeof(left)
+	var right_type: int = typeof(right)
+	if left_type in [TYPE_INT, TYPE_FLOAT] and right_type in [TYPE_INT, TYPE_FLOAT]:
+		if float(left) == float(right): return {}
+		return {"path": path, "left": left, "right": right, "left_type": left_type, "right_type": right_type}
+	if left_type != right_type: return {"path": path, "left": left, "right": right, "left_type": left_type, "right_type": right_type}
+	if left is Dictionary:
+		if left.size() != right.size(): return {"path": path, "left_size": left.size(), "right_size": right.size()}
+		for key in left.keys():
+			if not right.has(key): return {"path": path + "." + String(key), "reason": "missing_right_key"}
+			var difference: Dictionary = _first_semantic_difference(left[key], right[key], path + "." + String(key))
+			if not difference.is_empty(): return difference
+		for key in right.keys():
+			if not left.has(key): return {"path": path + "." + String(key), "reason": "extra_right_key"}
+		return {}
+	if left is Array:
+		if left.size() != right.size(): return {"path": path, "left_size": left.size(), "right_size": right.size()}
+		for index in range(left.size()):
+			var difference: Dictionary = _first_semantic_difference(left[index], right[index], path + "[" + str(index) + "]")
+			if not difference.is_empty(): return difference
+		return {}
+	if left != right: return {"path": path, "left": left, "right": right, "left_type": left_type, "right_type": right_type}
+	return {}
 
 func _run_controls(rows: Array) -> Dictionary:
 	var results: Array[Dictionary] = []
