@@ -88,8 +88,11 @@ func _run() -> void:
 	var volume_gate: bool = bool(volume_case.volume_identity_preserved) and String(volume_case.volume.sha256) == A6_VOLUME_SHA and String(volume_case.volume.metrics.payload_sha256) == A6_PAYLOAD_SHA and int(volume_case.volume.revision) == 2
 	var equal_gate: bool = bool(geometry.get("geometry_realization_complete", false)) and int(target_topology.get("internal_open_edges", -1)) == 0 and int(target_topology.get("nonmanifold_edges", -1)) == 0 and int(target_topology.get("degenerate_triangles", -1)) == 0 and int(target_topology.get("winding_inconsistencies", -1)) == 0 and int(geometry.get("required_adjacency_missing_count", -1)) == 0 and int(geometry.get("required_adjacency_nonmanifold_count", -1)) == 0 and geometry.get("cutoff_rejections", []).is_empty()
 	var ray_gate: bool = bool(ray_result.get("valid", false)) and int(ray_result.get("roi_scoped_hit_miss_disagreements", -1)) == 0
+	var mixed_gate: Dictionary = {"status": "SKIPPED_EQUAL_LOD_OR_RAY_GATE_FAILED", "conforming": false}
+	if equal_gate and ray_gate:
+		mixed_gate = _run_mixed_lod_gate(manifest.get("rows", []), hypothesis)
 	var controls_pass: int = int(controls.get("passed", 0))
-	var status: String = "PASS" if equal_gate and ray_gate and controls_pass == 6 and volume_gate else ("PARTIAL" if String(search.get("status", "")) == "EXACT_ROOT_REALIZATION_INCONCLUSIVE" else ("FAILED_WITH_REGRESSION" if ray_result.get("roi_scoped_hit_miss_disagreements", 0) > 0 and ray_result.get("ray_count", 0) == 25 else "FAILED_TARGET"))
+	var status: String = "PASS" if equal_gate and ray_gate and bool(mixed_gate.get("conforming", false)) and controls_pass == 6 and volume_gate else ("PARTIAL" if String(search.get("status", "")) == "EXACT_ROOT_REALIZATION_INCONCLUSIVE" else ("FAILED_WITH_REGRESSION" if ray_result.get("roi_scoped_hit_miss_disagreements", 0) > 0 and ray_result.get("ray_count", 0) == 25 else "FAILED_TARGET"))
 	var result: Dictionary = {
 		"schema": "P3.1.R10B.GeometryAttempt.v1", "attempt_id": attempt_id, "hypothesis": hypothesis, "source_sha": source_sha,
 		"source_physical_sha256": {"campaign": campaign_sha, "realizer": realizer_sha, "r10a_authority": authority_sha, "candidate_d": candidate_sha, "manifest": MANIFEST_SHA, "ray_fixture": ray_fixture_sha},
@@ -97,7 +100,7 @@ func _run() -> void:
 		"target": {"scenario_id": EQUAL_ID, "volume_sha256": volume_case.volume.sha256, "payload_sha256": volume_case.volume.metrics.payload_sha256, "revision": volume_case.volume.revision, "volume_identity_preserved": volume_gate},
 		"source_topology": geometry.get("source_topology_graph_proof", {}),
 		"b1_search": search, "equal_lod": {"complete": equal_gate, "realization_complete": geometry.get("geometry_realization_complete", false), "mesh_sha256": geometry.get("mesh_sha256", ""), "metrics": target_topology, "required_adjacency_missing_count": geometry.get("required_adjacency_missing_count", -1), "required_adjacency_nonmanifold_count": geometry.get("required_adjacency_nonmanifold_count", -1), "cutoff_rejection_count": geometry.get("cutoff_rejections", []).size(), "unresolved_obligations": geometry.get("unresolved_obligations", []), "patch": patch},
-		"ray_gate": ray_result, "controls": controls, "mixed_lod": {"status": "SKIPPED_EQUAL_LOD_OR_RAY_GATE_FAILED" if not (equal_gate and ray_gate) else "READY_FOR_FROZEN_MIXED_LOD_GATE"},
+		"ray_gate": ray_result, "controls": controls, "mixed_lod": mixed_gate,
 		"volume_gate": volume_gate, "solver_elapsed_usec": solve_usec, "failures": _failures, "result": status
 	}
 	var write: Dictionary = _write_json(artifact_root.path_join(attempt_id + "_attempt.json"), result)
@@ -190,6 +193,62 @@ func _run_roi_rays(row: Dictionary, snapshot: Dictionary, mesh: Dictionary, emit
 		rows.append({"ray_index": index, "origin": [ray.origin.x, ray.origin.y, ray.origin.z], "direction": [ray.direction.x, ray.direction.y, ray.direction.z], "canonical_global_roots": roots.roots, "canonical_roi_root_count": roi_roots.size(), "canonical_roi_hit": canonical_hit, "mesh_hit": mesh_hit, "mesh_hit_distance": hit.get("distance", null), "mesh_hit_position": hit.get("position_array", []), "first_hit_triangle": hit.get("triangle_index", -1), "triangle_component_id": triangle.get("patch_id", ""), "triangle_source_polygons": triangle.get("source_polygon_ids", []), "density_at_hit": density, "distance_to_nearest_roi_root": nearest_delta, "roi_scoped_hit_miss_disagreement": disagreement})
 	position_errors.sort()
 	return {"valid": rays.size() == 25, "ray_count": rays.size(), "roi_scoped_hit_miss_disagreements": mismatches, "root_scope": "closed ROI with 1e-6 bounds tolerance; cropped Y end-face roots excluded", "completeness": "finite 256-step sign-change scan plus 32 bisections; tangent and sub-step roots may be missed", "position_error_p50": _percentile(position_errors, 0.50), "position_error_p95": _percentile(position_errors, 0.95), "position_error_max": position_errors.back() if not position_errors.is_empty() else null, "rays": rows}
+
+func _run_mixed_lod_gate(rows: Array, hypothesis: String) -> Dictionary:
+	var row: Dictionary = Core.case_by_id(rows, "R9.2.SEAM.XPLUS_MIXED_LOD.v1")
+	var setup: Dictionary = Core.make_snapshot(row)
+	if row.is_empty() or not bool(setup.get("valid", false)): return {"status": "FAILED_MIXED_INPUT_PRECONDITION", "conforming": false}
+	var coarse_roi: Dictionary = {"id": "R10B_MIXED_COARSE", "min": [15.0, 1.0, 6.0], "cells": [2, 4, 4], "step": 0.5}
+	var fine_roi: Dictionary = {"id": "R10B_MIXED_FINE", "min": [16.0, 1.0, 6.0], "cells": [4, 8, 8], "step": 0.25}
+	var coarse_volume: Dictionary = _build_volume(row, coarse_roi, setup.snapshot)
+	var fine_volume: Dictionary = _build_volume(row, fine_roi, setup.snapshot)
+	if not bool(coarse_volume.get("valid", false)) or not bool(fine_volume.get("valid", false)):
+		return {"status": "FAILED_MIXED_VOLUME_PRECONDITION", "conforming": false, "coarse_volume": coarse_volume.get("reason", ""), "fine_volume": fine_volume.get("reason", "")}
+	var authority: RefCounted = B1Realizer.new()
+	authority.call("configure_roi", coarse_roi)
+	var coarse_geometry: Dictionary = authority.call("realize_topology", coarse_volume.volume.values, "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", setup.snapshot, int(row.get("seed", 131102026)))
+	authority.call("configure_roi", fine_roi)
+	var fine_geometry: Dictionary = authority.call("realize_topology", fine_volume.volume.values, "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", setup.snapshot, int(row.get("seed", 131102026)))
+	var plane: float = 16.0
+	var coarse_segments: Dictionary = _plane_segments(coarse_geometry.get("mesh", Core.new_mesh()), 0, plane)
+	var fine_segments: Dictionary = _plane_segments(fine_geometry.get("mesh", Core.new_mesh()), 0, plane)
+	var unmatched: Array[String] = []
+	for key in coarse_segments.keys():
+		if not fine_segments.has(key): unmatched.append("coarse:" + String(key))
+	for key in fine_segments.keys():
+		if not coarse_segments.has(key): unmatched.append("fine:" + String(key))
+	return {"status": "FAILED_NO_FACE_OWNED_TRANSITION_GENERATOR", "conforming": false, "left_lod1": {"valid": coarse_geometry.get("geometry_realization_complete", false), "mesh_sha256": coarse_geometry.get("mesh_sha256", ""), "volume_sha256": coarse_volume.volume.sha256, "boundary_segment_count": coarse_segments.size(), "internal_open_edges": coarse_geometry.get("mesh_topology", {}).get("internal_open_edges", -1)}, "right_lod0": {"valid": fine_geometry.get("geometry_realization_complete", false), "mesh_sha256": fine_geometry.get("mesh_sha256", ""), "volume_sha256": fine_volume.volume.sha256, "boundary_segment_count": fine_segments.size(), "internal_open_edges": fine_geometry.get("mesh_topology", {}).get("internal_open_edges", -1)}, "unmatched_independent_segments": unmatched.size(), "unmatched_examples": unmatched.slice(0, 16), "historical_expected_boundary_segments": {"coarse_lod1": 10, "fine_lod0": 22}, "face_owned_interface": "NOT_IMPLEMENTED_BY_B1_EQUAL_LOD_REALIZER", "hypothesis": hypothesis, "cutoff_squared": 1.0e-12}
+
+func _plane_segments(mesh: Dictionary, axis: int, plane: float) -> Dictionary:
+	var output: Dictionary = {}
+	var positions: PackedVector3Array = mesh.get("positions", PackedVector3Array())
+	for index in range(0, positions.size(), 3):
+		var points: Array[Vector3] = [positions[index], positions[index + 1], positions[index + 2]]
+		var intersections: Array[Vector3] = []
+		for edge in [[0, 1], [1, 2], [2, 0]]:
+			var a: Vector3 = points[int(edge[0])]
+			var b: Vector3 = points[int(edge[1])]
+			if absf(a[axis] - plane) <= 1.0e-6: intersections.append(a)
+			if (a[axis] < plane and b[axis] > plane) or (a[axis] > plane and b[axis] < plane): intersections.append(a.lerp(b, (plane - a[axis]) / (b[axis] - a[axis])))
+		var unique: Array[Vector3] = []
+		for point in intersections:
+			var found: bool = false
+			for existing in unique:
+				if point.distance_squared_to(existing) <= 1.0e-12: found = true; break
+			if not found: unique.append(point)
+		if unique.size() != 2: continue
+		var first_key: String = _quantized_point_key(unique[0], axis)
+		var second_key: String = _quantized_point_key(unique[1], axis)
+		var key: String = first_key + "|" + second_key if first_key < second_key else second_key + "|" + first_key
+		output[key] = true
+	return output
+
+func _quantized_point_key(point: Vector3, plane_axis: int) -> String:
+	var coordinates: Array[int] = []
+	for axis in range(3):
+		if axis == plane_axis: continue
+		coordinates.append(roundi(point[axis] * 1000000.0))
+	return "%d,%d" % [coordinates[0], coordinates[1]]
 
 func _first_mesh_hit(origin: Vector3, direction: Vector3, max_distance: float, mesh: Dictionary, emitted: Array) -> Dictionary:
 	var positions: PackedVector3Array = mesh.get("positions", PackedVector3Array())
