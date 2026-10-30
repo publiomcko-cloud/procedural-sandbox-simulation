@@ -87,9 +87,7 @@ $psi.EnvironmentVariables['R10B_ARTIFACT_DIR'] = $attemptRoot
 $psi.EnvironmentVariables['R10B_REPO_ROOT'] = $repo
 $psi.EnvironmentVariables['R10B_CAMPAIGN_SOURCE_SHA256'] = $campaignSha
 $psi.EnvironmentVariables['R10B_REALIZER_SOURCE_SHA256'] = $realizerSha
-if ($Stage -in @('check-only', 'check-ray', 'ray-causality')) {
-	$raySourcePath = Join-Path $repo 'game\tests\prototypes\p3_1_r10_b_ray_causality.gd'
-	$fixturePath = Join-Path $repo 'docs\reports\P3-1-R10-B-CAMPAIGN\fixtures\ray_reference_fixture_r2.json'
+if ($Stage -in @('check-only', 'check-ray', 'ray-causality', 'graph-contract', 'geometry')) {
 	$psi.EnvironmentVariables['R10B_RAY_SOURCE_SHA256'] = $rayScriptSha
 	$psi.EnvironmentVariables['R10B_RAY_FIXTURE_SHA256'] = $rayFixtureSha
 }
