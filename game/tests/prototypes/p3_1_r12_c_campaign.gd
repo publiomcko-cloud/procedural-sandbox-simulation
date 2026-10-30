@@ -194,9 +194,12 @@ func _verify_reference_graph(row: Dictionary, prepared: Dictionary, fixture_grap
 	var result: Dictionary = authority.call("realize_topology", prepared.get("values", PackedFloat32Array()), "R10A1_ALT_DIAGONAL_MAX_MIN_AREA", prepared.get("snapshot", {}), int(row.get("seed", 131102026)))
 	var wrapper: Dictionary = result.get("topology_graph", {})
 	var canonical: Dictionary = wrapper.get("canonical", {})
-	var same_graph: bool = _semantic_json_equal(canonical, fixture_graph)
+	var normalized_variant: Variant = JSON.parse_string(JSON.stringify(canonical))
+	if typeof(normalized_variant) != TYPE_DICTIONARY: return {"valid": false, "reason": "authority_graph_json_roundtrip_invalid"}
+	var normalized_graph: Dictionary = normalized_variant
+	var same_graph: bool = _semantic_json_equal(normalized_graph, fixture_graph)
 	var valid: bool = bool(result.get("valid", false)) and String(wrapper.get("topology_sha256", "")) == TopologySha and same_graph
-	return {"valid": valid, "authority_valid": result.get("valid", false), "authority_topology_sha256": wrapper.get("topology_sha256", ""), "expected_topology_sha256": TopologySha, "fixture_graph_fingerprint_sha256": FixtureGraphFingerprintSha, "reproduced_graph_fingerprint_sha256": Core.sha256(JSON.stringify(canonical).to_utf8_buffer()), "graph_semantic_match": same_graph, "first_graph_difference": {} if same_graph else _first_semantic_difference(canonical, fixture_graph, "$"), "root_count": canonical.get("roots", []).size(), "arc_count": canonical.get("arcs", []).size(), "polygon_count": canonical.get("polygons", []).size()}
+	return {"valid": valid, "authority_valid": result.get("valid", false), "authority_topology_sha256": wrapper.get("topology_sha256", ""), "expected_topology_sha256": TopologySha, "fixture_graph_fingerprint_sha256": FixtureGraphFingerprintSha, "reproduced_authority_topology_sha256": Core.sha256(JSON.stringify(canonical).to_utf8_buffer()), "reproduced_parsed_graph_fingerprint_sha256": Core.sha256(JSON.stringify(normalized_graph).to_utf8_buffer()), "graph_semantic_match": same_graph, "first_graph_difference": {} if same_graph else _first_semantic_difference(normalized_graph, fixture_graph, "$"), "root_count": canonical.get("roots", []).size(), "arc_count": canonical.get("arcs", []).size(), "polygon_count": canonical.get("polygons", []).size()}
 
 func _semantic_json_equal(left: Variant, right: Variant) -> bool:
 	var left_type: int = typeof(left)
