@@ -9,7 +9,7 @@ const AUTHORITY_BLOB := "732f143939ac6980e1c7e77703dd7ee549206c0e"
 const AUTHORITY_WORKTREE_SHA := "feea8237160c90a049d9f0ab63ad7ff86f46604f9d57112278d25fda20a08216"
 const A6_HYPOTHESIS := "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION"
 const EXPECTED_R9_7_D_MESH_SHA := "04c6ceb842b964caba4e254f94c9f4b32881dae79994b961ac01029a48f64553"
-const RAY_FIXTURE_RELATIVE_PATH := "docs/reports/P3-1-R10-B-CAMPAIGN/fixtures/ray_reference_fixture.json"
+const RAY_FIXTURE_RELATIVE_PATH := "docs/reports/P3-1-R10-B-CAMPAIGN/fixtures/ray_reference_fixture_r2.json"
 
 var _problems: Array[String] = []
 
@@ -51,6 +51,10 @@ func _run() -> void:
 		_emit_blocked("ray_reference_fixture_schema_invalid", {})
 		return
 	var fixture: Dictionary = fixture_parse
+	var historical_d0: Dictionary = fixture.get("historical_r9_7", {})
+	if int(historical_d0.get("recorded_ray_count", -1)) != 25 or int(historical_d0.get("roi_scoped_hit_miss_disagreements", -1)) != 0 or int(historical_d0.get("full_ray_finite_scan_hit_miss_disagreements", -1)) != 9 or historical_d0.get("full_ray_finite_scan_disagreement_indices", []) != [2, 8, 9, 13, 14, 18, 19, 23, 24] or int(historical_d0.get("roi_scoped_ray_records", []).size()) != 25 or String(historical_d0.get("candidate_mesh_sha256", "")) != EXPECTED_R9_7_D_MESH_SHA:
+		_emit_blocked("historical_r9_7_ray_scope_record_invalid", {"historical_d0": historical_d0})
+		return
 	var row: Dictionary = Core.case_by_id(manifest.get("rows", []), "R9.2.RAY.CANONICAL_PICKER.v1")
 	if row.is_empty():
 		_emit_blocked("frozen_ray_row_missing", {})
@@ -88,15 +92,18 @@ func _run() -> void:
 		if metadata.get("source_polygon_ids", []).is_empty() or String(metadata.get("component_id", "")) == "UNMAPPED_COMPONENT":
 			_emit_blocked("candidate_triangle_source_provenance_incomplete", metadata)
 			return
-	var d3: Dictionary = _compare_all_rays(rays, candidate_mesh, candidate_meta, snapshot, int(row.get("seed", 131102026)), "RAY-D3_CANDIDATE_D_PRE_R10")
+	var d3: Dictionary = _compare_all_rays(rays, candidate_mesh, candidate_meta, snapshot, int(row.get("seed", 131102026)), row.roi, "RAY-D3_CANDIDATE_D_PRE_R10")
 	var d0: Dictionary = {
 		"source": "R9.7 closeout plus preserved D3.5 Candidate D artifact",
-		"reported_hit_miss_disagreements": fixture.get("historical_r9_7", {}).get("recorded_hit_miss_disagreements"),
-		"reported_ray_count": fixture.get("historical_r9_7", {}).get("recorded_ray_count"),
-		"raw_per_ray_outcomes_available": fixture.get("historical_r9_7", {}).get("raw_per_ray_outcomes_available"),
-		"raw_candidate_artifact_sha256": fixture.get("historical_r9_7", {}).get("raw_candidate_artifact_sha256"),
-		"historical_mesh_sha256": fixture.get("historical_r9_7", {}).get("candidate_mesh_sha256"),
-		"historical_claim_grade": "REPORT_RECORDED_NOT_RAW_PER_RAY",
+		"roi_scoped_hit_miss_disagreements": historical_d0.get("roi_scoped_hit_miss_disagreements"),
+		"full_ray_finite_scan_hit_miss_disagreements": historical_d0.get("full_ray_finite_scan_hit_miss_disagreements"),
+		"full_ray_disagreement_indices": historical_d0.get("full_ray_finite_scan_disagreement_indices", []),
+		"reported_ray_count": historical_d0.get("recorded_ray_count"),
+		"raw_per_ray_outcomes_available": historical_d0.get("raw_per_ray_outcomes_available"),
+		"raw_candidate_artifact_sha256": historical_d0.get("raw_candidate_artifact_sha256"),
+		"historical_mesh_sha256": historical_d0.get("candidate_mesh_sha256"),
+		"historical_claim_grade": "RAW_STDOUT_PER_RAY_ROWS_AND_TWO_SEPARATE_SCOPE_SUMMARIES",
+		"roi_scoped_ray_records": historical_d0.get("roi_scoped_ray_records", []),
 		"replay": d3,
 	}
 
@@ -121,9 +128,11 @@ func _run() -> void:
 	if a6_meta.size() != int(a6_mesh.get("positions", PackedVector3Array()).size() / 3):
 		_emit_blocked("a6_triangle_metadata_count_mismatch", {"metadata_count": a6_meta.size(), "triangle_count": int(a6_mesh.get("positions", PackedVector3Array()).size() / 3)})
 		return
-	var d1: Dictionary = _compare_all_rays(rays, a6_mesh, a6_meta, snapshot, int(row.get("seed", 131102026)), "RAY-D1_R10A6_FINAL_EMITTED")
+	var d1: Dictionary = _compare_all_rays(rays, a6_mesh, a6_meta, snapshot, int(row.get("seed", 131102026)), row.roi, "RAY-D1_R10A6_FINAL_EMITTED")
 	var historical_d1_outcomes: Array = d1_reference.get("ray_outcomes", [])
 	var d1_outcome_match: bool = _outcomes_match(d1, historical_d1_outcomes)
+	var historical_d0_records: Array = fixture.get("historical_r9_7", {}).get("roi_scoped_ray_records", [])
+	var d0_roi_outcome_match: bool = _outcomes_match_r97_roi(d3, historical_d0_records)
 	var unresolved_source_ids: Dictionary = {}
 	for raw_patch in a6.get("component_reconstruction", {}).get("patches", []):
 		var source_patch: Dictionary = raw_patch
@@ -186,7 +195,7 @@ func _run() -> void:
 			d2_meta.append({"triangle_index": start, "root_ids": root_ids.duplicate(), "source_polygon_ids": patch.get("source_polygon_ids", []).duplicate(), "patch_id": String(patch.get("component_id", "")), "construction": "DIAGNOSTIC_ONLY_SUBCUTOFF_GEOMETRY_NOT_QUALIFIED", "cross_squared": cross.length_squared()})
 			added += 1
 		unresolved_patch_summaries.append({"component_id": patch.get("component_id", ""), "source_polygon_ids": patch.get("source_polygon_ids", []), "triangles_added": added, "subcutoff": triangulation.get("remaining_subcutoff_triangles", [])})
-	var d2: Dictionary = _compare_all_rays(rays, d2_mesh, d2_meta, snapshot, int(row.get("seed", 131102026)), "RAY-D2_DIAGNOSTIC_ONLY_SUBCUTOFF_GEOMETRY_NOT_QUALIFIED")
+	var d2: Dictionary = _compare_all_rays(rays, d2_mesh, d2_meta, snapshot, int(row.get("seed", 131102026)), row.roi, "RAY-D2_DIAGNOSTIC_ONLY_SUBCUTOFF_GEOMETRY_NOT_QUALIFIED")
 	_annotate_unresolved_ray_hits(d2, unresolved_source_ids)
 	d2["unresolved_patch_summaries"] = unresolved_patch_summaries
 	d2["replaced_partial_unresolved_triangle_count"] = d2_replaced_partial_triangle_count
@@ -208,6 +217,9 @@ func _run() -> void:
 		"classification": classification,
 		"ray_geometry_mesh_hashes": {"D3_candidate_D": candidate_mesh_sha, "D1_A6": a6.get("mesh_sha256", ""), "D2_diagnostic": _mesh_sha(d2_mesh)},
 		"historical_R9_7_candidate_artifact_mesh_sha256": fixture.get("historical_r9_7", {}).get("candidate_mesh_sha256", ""),
+		"historical_R9_7_roi_scoped_mismatches": fixture.get("historical_r9_7", {}).get("roi_scoped_hit_miss_disagreements", -1),
+		"historical_R9_7_full_ray_legacy_mismatches": fixture.get("historical_r9_7", {}).get("full_ray_finite_scan_hit_miss_disagreements", -1),
+		"RAY_D0_historical_roi_outcomes_match_D3_replay": d0_roi_outcome_match,
 		"R10A6_expected_mesh_sha256": d1_reference.get("mesh_sha256", ""),
 		"target_gate": "ray causality only; does not qualify geometry",
 	}
@@ -218,7 +230,9 @@ func _run() -> void:
 		_problems.append("volume_identity_not_preserved")
 	if not _write_json_no_overwrite(artifact_root.path_join("ray_causality.json"), summary):
 		_problems.append("ray_artifact_write_failed")
-	print("R10B_RAY_DIAGNOSTIC_COMPLETE " + JSON.stringify({"status": "PASS" if _problems.is_empty() else "DIAGNOSTIC_MISMATCH", "source_sha": source_sha, "classification": classification, "D0_reported": d0.reported_hit_miss_disagreements, "D3": d3.hit_miss_disagreements, "D1": d1.hit_miss_disagreements, "D2": d2.hit_miss_disagreements, "D1_mesh_sha": a6.get("mesh_sha256", ""), "D3_mesh_sha": candidate_mesh_sha, "D1_historical_outcomes_match": d1_outcome_match, "failures": _problems}))
+	if not d1_outcome_match: _problems.append("R10A6_full_ray_outcomes_differ_from_exact_source_replay")
+	if not d0_roi_outcome_match: _problems.append("R9_7_roi_scoped_outcomes_differ_from_D3_candidate_replay")
+	print("R10B_RAY_DIAGNOSTIC_COMPLETE " + JSON.stringify({"status": "PASS" if _problems.is_empty() else "DIAGNOSTIC_MISMATCH", "source_sha": source_sha, "classification": classification, "D0_roi_scoped": d0.get("roi_scoped_hit_miss_disagreements", -1), "D0_full_ray_legacy": d0.get("full_ray_finite_scan_hit_miss_disagreements", -1), "D3_roi_scoped": d3.roi_scoped_hit_miss_disagreements, "D3_full_ray": d3.global_full_ray_hit_miss_disagreements, "D1_roi_scoped": d1.roi_scoped_hit_miss_disagreements, "D1_full_ray": d1.global_full_ray_hit_miss_disagreements, "D2_roi_scoped": d2.roi_scoped_hit_miss_disagreements, "D2_full_ray": d2.global_full_ray_hit_miss_disagreements, "D0_roi_outcomes_match_D3": d0_roi_outcome_match, "D1_historical_full_outcomes_match": d1_outcome_match, "D1_mesh_sha": a6.get("mesh_sha256", ""), "D3_mesh_sha": candidate_mesh_sha, "failures": _problems}))
 	quit(0 if _problems.is_empty() else 4)
 
 func _a6_geometry_summary(geometry: Dictionary) -> Dictionary:
@@ -334,9 +348,10 @@ func _union(parent: Array[int], left: int, right: int) -> void:
 	if root_left < root_right: parent[root_right] = root_left
 	else: parent[root_left] = root_right
 
-func _compare_all_rays(rays: Array[Dictionary], mesh: Dictionary, triangle_meta: Array[Dictionary], snapshot: Dictionary, seed: int, label: String) -> Dictionary:
+func _compare_all_rays(rays: Array[Dictionary], mesh: Dictionary, triangle_meta: Array[Dictionary], snapshot: Dictionary, seed: int, roi: Dictionary, label: String) -> Dictionary:
 	var rows: Array[Dictionary] = []
-	var mismatch_count: int = 0
+	var roi_mismatch_count: int = 0
+	var global_mismatch_count: int = 0
 	var position_error_abs: Array[float] = []
 	for ray_index in range(rays.size()):
 		var ray: Dictionary = rays[ray_index]
@@ -349,9 +364,17 @@ func _compare_all_rays(rays: Array[Dictionary], mesh: Dictionary, triangle_meta:
 			return {"valid": false, "reason": "canonical_ray_failed", "ray_index": ray_index}
 		var roots: Array = canonical.get("roots", [])
 		var reference_hit: bool = not roots.is_empty()
+		var roi_roots: Array[Dictionary] = _roots_inside_roi_excluding_ray_end_faces(roots, roi)
+		var roi_reference_hit: bool = not roi_roots.is_empty()
 		var mesh_hit: bool = bool(first_hit.get("hit", false))
-		if reference_hit != mesh_hit: mismatch_count += 1
-		if reference_hit and mesh_hit: position_error_abs.append(absf(float(first_hit.distance) - float(roots[0].distance)))
+		var global_disagreement: bool = reference_hit != mesh_hit
+		var roi_disagreement: bool = roi_reference_hit != mesh_hit
+		if global_disagreement: global_mismatch_count += 1
+		if roi_disagreement: roi_mismatch_count += 1
+		if roi_reference_hit and mesh_hit:
+			var nearest_roi_root_distance: float = INF
+			for roi_root in roi_roots: nearest_roi_root_distance = minf(nearest_roi_root_distance, absf(float(first_hit.distance) - float(roi_root.distance)))
+			position_error_abs.append(nearest_roi_root_distance)
 		var density_at_hit: Variant = null
 		var nearest_root_distance: Variant = null
 		if mesh_hit:
@@ -361,17 +384,20 @@ func _compare_all_rays(rays: Array[Dictionary], mesh: Dictionary, triangle_meta:
 			for root in roots: nearest = minf(nearest, hit_position.distance_to(root.position))
 			nearest_root_distance = nearest if nearest < INF else null
 		rows.append({"ray_index": ray_index, "origin": [origin.x, origin.y, origin.z], "direction": [direction.x, direction.y, direction.z], "length": max_distance,
-			"canonical_hit": reference_hit, "canonical_roots": roots.map(func(r: Dictionary) -> Dictionary: return {"distance": r.distance, "position": [r.position.x, r.position.y, r.position.z]}),
+			"canonical_hit": reference_hit, "canonical_global_roots": roots.map(func(r: Dictionary) -> Dictionary: return {"distance": r.distance, "position": [r.position.x, r.position.y, r.position.z]}),
+			"canonical_roi_roots": roi_roots.map(func(r: Dictionary) -> Dictionary: return {"distance": r.distance, "position": [r.position.x, r.position.y, r.position.z]}), "canonical_roi_hit": roi_reference_hit,
 			"mesh_hit": mesh_hit, "mesh_hit_count": first_hit.get("hit_count", 0), "first_hit_triangle": first_hit.get("triangle_index", -1),
 			"first_hit_distance": first_hit.get("distance", null), "first_hit_position": first_hit.get("position_array", []), "triangle_root_ids": first_hit.get("root_ids", []),
 			"triangle_component_id": first_hit.get("component_id", -1), "source_polygon_ids": first_hit.get("source_polygon_ids", []), "patch_id": first_hit.get("patch_id", ""),
 			"construction": first_hit.get("construction", ""), "canonical_density_at_mesh_hit": density_at_hit,
-			"distance_to_nearest_canonical_ray_root": nearest_root_distance,
-			"hit_miss_disagreement": reference_hit != mesh_hit})
+			"distance_to_nearest_canonical_roi_ray_root": nearest_root_distance,
+			"global_full_ray_hit_miss_disagreement": global_disagreement,
+			"roi_scoped_hit_miss_disagreement": roi_disagreement,
+			"hit_miss_disagreement": roi_disagreement})
 	position_error_abs.sort()
 	var oracle_summary: Dictionary = Core.compare_mesh_rays(rays, mesh, snapshot, seed, 256)
 	var oracle_rows: Array = oracle_summary.get("rays", [])
-	var oracle_match: bool = bool(oracle_summary.get("valid", false)) and int(oracle_summary.get("ray_count", -1)) == rows.size() and int(oracle_summary.get("hit_miss_disagreements", -2)) == mismatch_count and oracle_rows.size() == rows.size()
+	var oracle_match: bool = bool(oracle_summary.get("valid", false)) and int(oracle_summary.get("ray_count", -1)) == rows.size() and int(oracle_summary.get("hit_miss_disagreements", -2)) == global_mismatch_count and oracle_rows.size() == rows.size()
 	for ray_index in range(mini(rows.size(), oracle_rows.size())):
 		var observed_row: Dictionary = rows[ray_index]
 		var oracle_row: Dictionary = oracle_rows[ray_index]
@@ -384,11 +410,36 @@ func _compare_all_rays(rays: Array[Dictionary], mesh: Dictionary, triangle_meta:
 		observed_row["custom_core_distance_delta"] = float(actual_distance) - float(expected_distance) if actual_distance != null and expected_distance != null else null
 		observed_row["custom_first_hit_matches_core"] = same_hit and same_distance
 		if not same_hit or not same_distance: oracle_match = false
-	return {"valid": true, "label": label, "ray_count": rows.size(), "hit_miss_disagreements": mismatch_count,
+	return {"valid": true, "label": label, "ray_count": rows.size(), "hit_miss_disagreements": roi_mismatch_count, "roi_scoped_hit_miss_disagreements": roi_mismatch_count, "global_full_ray_hit_miss_disagreements": global_mismatch_count,
 		"position_error_count": position_error_abs.size(), "position_error_abs_p50": _percentile(position_error_abs, 0.50),
 		"position_error_abs_p95": _percentile(position_error_abs, 0.95), "position_error_abs_max": position_error_abs.back() if not position_error_abs.is_empty() else null,
 		"rays": rows, "core_oracle_summary": oracle_summary, "custom_first_hit_matches_core_hit_map": oracle_match,
-		"completeness": "canonical picker uses finite 256-step sign scan plus 32 bisections; tangent and sub-step roots may be missed"}
+		"completeness": "two explicitly separate scopes: full finite 256-step global root scan and ROI-filtered roots excluding Y end-face crop; both inherit finite-scan tangent/sub-step limitations"}
+
+func _roots_inside_roi_excluding_ray_end_faces(roots: Array, roi: Dictionary) -> Array[Dictionary]:
+	var minimum: Vector3 = Core.world_min(roi)
+	var maximum: Vector3 = minimum + Vector3(Core.cell_counts(roi)) * Core.step(roi)
+	var result: Array[Dictionary] = []
+	for raw_root in roots:
+		var root: Dictionary = raw_root
+		var position: Vector3 = root.get("position", Vector3.INF)
+		var inside: bool = position.x >= minimum.x - 1.0e-6 and position.x <= maximum.x + 1.0e-6 and position.y >= minimum.y - 1.0e-6 and position.y <= maximum.y + 1.0e-6 and position.z >= minimum.z - 1.0e-6 and position.z <= maximum.z + 1.0e-6
+		if not inside: continue
+		if absf(position.y - minimum.y) <= 1.0e-6 or absf(position.y - maximum.y) <= 1.0e-6: continue
+		result.append(root)
+	return result
+
+func _outcomes_match_r97_roi(actual: Dictionary, expected: Array) -> bool:
+	if expected.size() != 25 or actual.get("rays", []).size() != 25: return false
+	for index in range(25):
+		var actual_row: Dictionary = actual.rays[index]
+		var expected_row: Dictionary = expected[index]
+		if int(actual_row.get("ray_index", -1)) != index or int(expected_row.get("ray_index", -1)) != index: return false
+		if bool(expected_row.get("roi_hit_miss_disagrees", true)): return false
+		var expected_roi_hit: bool = not expected_row.get("canonical_roots_in_closed_roi_excluding_y_end_faces", []).is_empty()
+		if bool(actual_row.get("canonical_roi_hit", false)) != expected_roi_hit or bool(actual_row.get("mesh_hit", false)) != bool(expected_row.get("mesh_two_sided", {}).get("hit", false)):
+			return false
+	return true
 
 func _first_mesh_hit(origin: Vector3, direction: Vector3, max_distance: float, mesh: Dictionary, meta: Array[Dictionary]) -> Dictionary:
 	var positions: PackedVector3Array = mesh.get("positions", PackedVector3Array())
@@ -454,8 +505,10 @@ func _outcomes_match(actual: Dictionary, expected: Array) -> bool:
 
 func _classify_ray_regression(d1: Dictionary, d2: Dictionary, d3: Dictionary) -> String:
 	if not bool(d1.get("valid", false)) or not bool(d2.get("valid", false)) or not bool(d3.get("valid", false)): return "RAY_REGRESSION_CAUSE_UNRESOLVED"
-	if int(d1.get("hit_miss_disagreements", -1)) == 0:
-		return "RAY_REGRESSION_NOT_REPRODUCED" if int(d3.get("hit_miss_disagreements", -1)) == 0 else "RAY_REGRESSION_D3_ONLY_REPRODUCED_CAUSE_UNRESOLVED"
+	if int(d1.get("roi_scoped_hit_miss_disagreements", -1)) == 0 and int(d3.get("roi_scoped_hit_miss_disagreements", -1)) == 0:
+		if int(d1.get("global_full_ray_hit_miss_disagreements", -1)) > 0 and int(d3.get("global_full_ray_hit_miss_disagreements", -1)) > 0:
+			return "RAY_SCOPE_DIFFERENCE_CONFIRMED_ROI_CROPPING_EXPLAINS_GLOBAL_MISMATCHES"
+		return "RAY_REGRESSION_NOT_REPRODUCED"
 	var d1_rows: Array = d1.get("rays", [])
 	var d2_rows: Array = d2.get("rays", [])
 	var d3_rows: Array = d3.get("rays", [])
@@ -465,7 +518,7 @@ func _classify_ray_regression(d1: Dictionary, d2: Dictionary, d3: Dictionary) ->
 		var one: Dictionary = d1_rows[index]; var two: Dictionary = d2_rows[index]
 		if not bool(one.get("hit_miss_disagreement", false)): continue
 		if bool(one.get("patch_involved", false)): d1_unresolved_hits += 1
-		if bool(two.get("canonical_hit", false)) == bool(two.get("mesh_hit", false)): d1_resolved_by_d2 += 1
+		if bool(two.get("canonical_roi_hit", false)) == bool(two.get("mesh_hit", false)): d1_resolved_by_d2 += 1
 	if d1_resolved_by_d2 == int(d1.get("hit_miss_disagreements", -1)) and d1_resolved_by_d2 > 0: return "RAY_REGRESSION_CAUSED_BY_UNEMITTED_TOPOLOGY"
 	if d1_resolved_by_d2 > 0: return "RAY_REGRESSION_MULTICAUSAL"
 	if d1_unresolved_hits == 0 and _same_hit_map(d1_rows, d3_rows): return "RAY_REGRESSION_OUTSIDE_A6_UNRESOLVED_COMPONENT"

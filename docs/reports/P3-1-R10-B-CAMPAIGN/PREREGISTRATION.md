@@ -48,16 +48,16 @@ The fixture's extraction script fails closed on any mismatch in raw hash, scenar
 
 ## Mandatory ray diagnostic preregistration
 
-The 25 fixed rays are generated from the frozen manifest row `R9.2.RAY.CANONICAL_PICKER.v1` in `x_major_z_minor` order. The derived `fixtures/ray_reference_fixture.json` is SHA-256 `33f9e1e15ef3e868efcd9c97d56490e0728bc7822791b7516eb32c7c2360e314`.
+The 25 fixed rays are generated from the frozen manifest row `R9.2.RAY.CANONICAL_PICKER.v1` in `x_major_z_minor` order. Initial fixture `fixtures/ray_reference_fixture.json` (SHA-256 `33f9e1e15ef3e868efcd9c97d56490e0728bc7822791b7516eb32c7c2360e314`) is retained as the first diagnostic attempt; its D0 evidence classification was incomplete. Corrected fixture `fixtures/ray_reference_fixture_r2.json` (SHA-256 `9780bea4b1609bbc89db45e21d8671170198ca01d1ad3e252b9f877a64eb62c7`) includes the preserved R9.7 per-ray stdout and separate ROI/global semantics. `RAY-CAUSE-CORRECTION.md` documents why R2 supersedes the initial interpretation.
 
 | Track | Frozen evidence / execution | Interpretation limit |
 |---|---|---|
-| D0 | R9.7 report records 0/25; preserved D3.5 Candidate D artifact SHA `87623cd4a55f27a0677d522056b02f847e24409755eb4a227cbde57c77d579ec`; mesh SHA `04c6ceb842b964caba4e254f94c9f4b32881dae79994b961ac01029a48f64553` | The raw Candidate D artifact has no per-ray outcomes. The 0/25 value is report-recorded, not a preserved ray-row capture. |
+| D0 | R9.7 D3.5 preserved stdout contains 25 per-ray `R95_RAY` rows; ROI-scoped result 0/25 and legacy global finite-scan result 9/25. Candidate artifact SHA `87623cd4a55f27a0677d522056b02f847e24409755eb4a227cbde57c77d579ec`; mesh SHA `04c6ceb842b964caba4e254f94c9f4b32881dae79994b961ac01029a48f64553` | The two counts use different root-scope rules. See `RAY-CAUSE-CORRECTION.md`; that correction supersedes the original scope interpretation below. |
 | D1 | Re-run R10-A6 final emitted topology on the same zero-edit ray input; expected captured result 9/25 and mesh SHA `04c6…` | Geometry remains unqualified. |
 | D2 | Add the complete unresolved A6 patch triangles, including sub-cutoff faces, to a separate diagnostic-only mesh | `DIAGNOSTIC_ONLY_SUBCUTOFF_GEOMETRY_NOT_QUALIFIED`; never a candidate. |
 | D3 | Rebuild Candidate D from frozen source/manifest and execute the same ray grid; require mesh SHA `04c6…` to match preserved D3.5 artifact | This is the live reproducibility check of D0, not a new qualification. |
 
-For each ray, the script records input origin/direction/length, finite canonical scan/bisection roots, first mesh-hit triangle, triangle root IDs, source polygons/patch/component, distance, density at the hit, distance to a canonical ray root and hit/miss disagreement. It cross-checks the custom first-hit routine against the existing Core oracle. The classifier remains provisional until D0/D1/D2/D3 results and per-ray identities are compared. If the same D1/D3 mesh hash yields inconsistent ray maps, the campaign records an oracle/provenance inconsistency rather than attributing a geometry change.
+For each ray, the script records input origin/direction/length, finite canonical scan/bisection roots, first mesh-hit triangle, triangle root IDs, source polygons/patch/component, distance, density at the hit, distance to a canonical ray root and two separate hit/miss results: global full-ray scan and ROI-filtered roots excluding cropped Y end faces. It cross-checks the custom first-hit routine against the existing Core oracle. The historical R9.7 ROI rows are compared with the R10-B replay; the R10-A full-ray rows are compared separately. See `RAY-CAUSE-CORRECTION.md` for the raw-evidence basis.
 
 ## R10-B1 hypothesis preregistration
 
@@ -82,6 +82,10 @@ These are strategy families, not permission for parameter sweeps. Each will be f
 | B6 | Evidence-directed bounded solver based on prior failure evidence | No arbitrary parameter sweep; may not relax any frozen gate. |
 
 No mixed-LOD work, deterministic repeat, frozen full E2E, or `scripts/validate.ps1` runs until an equal-LOD candidate passes topology and the ray oracle reaches 0/25. If B1–B6 are exhausted without such a candidate, E2E and full validation remain `NOT_RUN_NO_SURVIVING_GEOMETRY_CANDIDATE`.
+
+## Ray-scope correction (superseding the original D0 interpretation)
+
+`RAY-CAUSE-CORRECTION.md` records the verified raw R9.7 D3.5 per-ray source, exact outputs and matching R10-A global-scope indices. The preserved D0 records establish 0/25 for the ROI-scoped oracle and 9/25 for the separate global full-ray finite scan. R10-B retains both metrics; only ROI-scoped matching is the comparison to the R9.7 gate. The R10-A `Core.compare_mesh_rays` 9/25 value remains a valid global-scope measurement, but is not a contradiction to the R9.7 0/25 ROI result.
 
 ## Resource and evidence rules
 

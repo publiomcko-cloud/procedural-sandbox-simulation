@@ -28,7 +28,7 @@ if ($manifestSha -ne $expectedManifestSha) { throw "Frozen manifest byte pin mis
 $authoritySha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'game\tests\prototypes\p3_1_r10_a_topology_authority.gd')).Hash.ToLowerInvariant()
 if ($authoritySha -ne $expectedAuthoritySha) { throw "R10-A authority byte pin mismatch: $authoritySha" }
 $rayScriptSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'game\tests\prototypes\p3_1_r10_b_ray_causality.gd')).Hash.ToLowerInvariant()
-$rayFixtureSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'docs\reports\P3-1-R10-B-CAMPAIGN\fixtures\ray_reference_fixture.json')).Hash.ToLowerInvariant()
+$rayFixtureSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'docs\reports\P3-1-R10-B-CAMPAIGN\fixtures\ray_reference_fixture_r2.json')).Hash.ToLowerInvariant()
 
 $arguments = switch ($Stage) {
 	'import' { @('--headless', '--path', './game', '--editor', '--import') }
@@ -85,7 +85,7 @@ $psi.EnvironmentVariables['R10B_ARTIFACT_DIR'] = $attemptRoot
 $psi.EnvironmentVariables['R10B_REPO_ROOT'] = $repo
 if ($Stage -in @('check-only', 'check-ray', 'ray-causality')) {
 	$raySourcePath = Join-Path $repo 'game\tests\prototypes\p3_1_r10_b_ray_causality.gd'
-	$fixturePath = Join-Path $repo 'docs\reports\P3-1-R10-B-CAMPAIGN\fixtures\ray_reference_fixture.json'
+	$fixturePath = Join-Path $repo 'docs\reports\P3-1-R10-B-CAMPAIGN\fixtures\ray_reference_fixture_r2.json'
 	$psi.EnvironmentVariables['R10B_RAY_SOURCE_SHA256'] = $rayScriptSha
 	$psi.EnvironmentVariables['R10B_RAY_FIXTURE_SHA256'] = $rayFixtureSha
 }
