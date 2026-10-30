@@ -44,6 +44,10 @@ func _run() -> void:
 	print("R10A_PREFLIGHT " + JSON.stringify({"attempt_id": attempt_id, "hypothesis": hypothesis, "source_sha": source_sha, "candidate_d_sha256": candidate_sha, "manifest_sha256": manifest.sha256, "godot": Engine.get_version_info(), "cutoff_squared": 1.0e-12}))
 	var candidate: RefCounted = CandidateD.new()
 	var authority: RefCounted = Authority.new()
+	var graph_contract: Dictionary = _topology_graph_contract_checks(authority)
+	print("R10A_TOPOLOGY_GRAPH_CONTRACT " + JSON.stringify(graph_contract))
+	if not bool(graph_contract.get("valid", false)):
+		_failures.append("topology_graph_contract_check_failed")
 	var result_rows: Array[Dictionary] = []
 	for control_id in CONTROL_IDS:
 		var row: Dictionary = Core.case_by_id(manifest.rows, control_id)
@@ -131,6 +135,34 @@ func _run() -> void:
 	print("R10A_ATTEMPT_COMPLETE " + JSON.stringify(summary))
 	print("R10A_ARTIFACTS " + JSON.stringify({"paths": _artifact_paths, "summary": summary_write.get("path", "")}))
 	quit(0 if _failures.is_empty() else 3)
+
+func _topology_graph_contract_checks(authority: RefCounted) -> Dictionary:
+	var closed_edges: Array[Dictionary] = [
+		{"edge_key": "a", "roots": ["0", "1"]}, {"edge_key": "b", "roots": ["1", "2"]},
+		{"edge_key": "c", "roots": ["2", "3"]}, {"edge_key": "d", "roots": ["3", "0"]}
+	]
+	var open_edges: Array[Dictionary] = [{"edge_key": "e", "roots": ["4", "5"]}, {"edge_key": "f", "roots": ["5", "6"]}]
+	var closed_result: Dictionary = authority._extract_edge_loops(closed_edges)
+	var open_result: Dictionary = authority._extract_edge_loops(open_edges)
+	var roots: Dictionary = {"r0": Vector3(15.5, 2.0, 4.0), "r1": Vector3(16.0, 2.0, 4.0), "r2": Vector3(16.0, 2.0, 5.0), "r3": Vector3(16.5, 2.0, 4.0)}
+	var polygon_left: Dictionary = {"id": "left", "cell": [31, 4, 8], "tet_index": 0, "root_ids": ["r0", "r1", "r2"], "face_ids": ["f0"], "points": [roots.r0, roots.r1, roots.r2]}
+	var polygon_right: Dictionary = {"id": "right", "cell": [32, 4, 8], "tet_index": 1, "root_ids": ["r1", "r3", "r2"], "face_ids": ["f1"], "points": [roots.r1, roots.r3, roots.r2]}
+	var polygons: Array[Dictionary] = [polygon_left, polygon_right]
+	var arcs: Dictionary = {}
+	var edge_specs: Array = [["r0", "r1", ["left"]], ["r1", "r2", ["left", "right"]], ["r2", "r0", ["left"]], ["r1", "r3", ["right"]], ["r3", "r2", ["right"]]]
+	for edge_spec in edge_specs:
+		var edge_key: String = authority._arc_key(String(edge_spec[0]), String(edge_spec[1]))
+		arcs[edge_key] = {"roots": [String(edge_spec[0]), String(edge_spec[1])], "required_incidence": 2, "polygon_ids": edge_spec[2], "face_ids": ["fixture_face"]}
+	var graph: Dictionary = authority._topology_graph(roots, {}, polygons, arcs, [])
+	var components: Array = graph.get("surface_components", [])
+	var relations: Array = graph.get("neighbor_region_relations", [])
+	var ownership: Dictionary = graph.get("ownership", {})
+	var owners: Dictionary = ownership.get("owner_rows", {})
+	var valid: bool = int(closed_result.get("closed_loop_count", 0)) == 1 and int(closed_result.get("open_path_count", 0)) == 0
+	valid = valid and int(open_result.get("closed_loop_count", 0)) == 0 and int(open_result.get("open_path_count", 0)) == 1
+	valid = valid and components.size() == 1 and relations.size() == 1 and owners.size() == 2
+	valid = valid and String(owners.get("left", {}).get("owner_kind", "")) == "half_open_world_region_and_source_tetrahedron"
+	return {"valid": valid, "closed_loop_fixture": closed_result, "open_path_fixture": open_result, "component_count": components.size(), "neighbor_region_relation_count": relations.size(), "owner_count": owners.size(), "lod_relations": graph.get("lod_relations", []), "topology_sha256": graph.get("topology_sha256", "")}
 
 func _run_case(candidate: RefCounted, authority: RefCounted, row: Dictionary, roi: Dictionary, hypothesis: String) -> Dictionary:
 	var setup: Dictionary = Core.make_snapshot(row)

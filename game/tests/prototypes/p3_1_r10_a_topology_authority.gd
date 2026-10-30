@@ -394,34 +394,200 @@ func _topology_graph(roots: Dictionary, root_sources: Dictionary, polygons: Arra
 		var point: Vector3 = roots[root_id]
 		root_rows.append([root_id, point.x, point.y, point.z, root_sources.get(root_id, {})])
 	var polygon_rows: Array = []
+	var polygon_owners: Dictionary = {}
+	var polygon_data_by_id: Dictionary = {}
+	var polygon_parent: Dictionary = {}
 	var sorted_polygons: Array[Dictionary] = polygons.duplicate()
 	sorted_polygons.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.id) < String(b.id))
 	for polygon in sorted_polygons:
-		polygon_rows.append([polygon.id, polygon.cell, polygon.tet_index, polygon.root_ids, polygon.face_ids, "CANDIDATE_D_VOLUME"])
+		var polygon_id: String = String(polygon.get("id", ""))
+		var cell: Array = polygon.get("cell", [])
+		var center: Vector3 = Vector3.ZERO
+		for point in polygon.get("points", []): center += point
+		var point_count: int = polygon.get("points", []).size()
+		if point_count > 0: center /= float(point_count)
+		var region_key: Vector2i = Vector2i(floori(center.x / Field.REGION_SIZE_X), floori(center.z / Field.REGION_SIZE_Z))
+		var owner: Dictionary = {"owner_kind": "half_open_world_region_and_source_tetrahedron", "region_key": [region_key.x, region_key.y], "cell": cell.duplicate(), "tetrahedron": polygon.get("tet_index", -1), "face_ids": polygon.get("face_ids", []).duplicate(), "lod_step": STEP}
+		polygon_owners[polygon_id] = owner
+		polygon_data_by_id[polygon_id] = polygon
+		polygon_parent[polygon_id] = polygon_id
+		polygon_rows.append([polygon_id, cell, polygon.get("tet_index", -1), polygon.get("root_ids", []), polygon.get("face_ids", []), owner, "CANDIDATE_D_VOLUME"])
 	var arc_rows: Array = []
 	var arc_keys: Array = arcs.keys()
 	arc_keys.sort()
 	var unresolved_arcs: Array = []
 	var nonmanifold_arcs: Array = []
+	var region_relation_set: Dictionary = {}
+	var lod_relation_set: Dictionary = {}
+	var boundary_edge_rows: Array[Dictionary] = []
+	var interior_open_edge_rows: Array[Dictionary] = []
 	for raw_key in arc_keys:
 		var arc_key: String = String(raw_key)
 		var arc: Dictionary = arcs[arc_key]
 		var a: Vector3 = roots[String(arc.roots[0])]
 		var b: Vector3 = roots[String(arc.roots[1])]
 		var roi_boundary: bool = _arc_on_roi_boundary(a, b)
+		var roi_faces: Array[String] = _roi_boundary_faces(a, b)
 		var owners: Array = arc.polygon_ids.duplicate()
 		owners.sort()
-		arc_rows.append([arc_key, arc.roots, arc.required_incidence, owners, arc.face_ids, roi_boundary, owners[0] if not owners.is_empty() else ""])
+		arc_rows.append([arc_key, arc.roots, arc.required_incidence, owners, arc.face_ids, roi_boundary, roi_faces, owners[0] if not owners.is_empty() else ""])
+		for owner_index in range(1, owners.size()):
+			var first_owner: Dictionary = polygon_owners.get(String(owners[0]), {})
+			var other_owner: Dictionary = polygon_owners.get(String(owners[owner_index]), {})
+			var first_region: Array = first_owner.get("region_key", [])
+			var other_region: Array = other_owner.get("region_key", [])
+			if first_region.size() == 2 and other_region.size() == 2 and first_region != other_region:
+				var first_key: String = "%d,%d" % [int(first_region[0]), int(first_region[1])]
+				var other_key: String = "%d,%d" % [int(other_region[0]), int(other_region[1])]
+				var pair_key: String = first_key + "|" + other_key if first_key < other_key else other_key + "|" + first_key
+				if not region_relation_set.has(pair_key): region_relation_set[pair_key] = {"region_pair": pair_key.split("|"), "shared_arcs": [], "polygon_owners": []}
+				region_relation_set[pair_key].shared_arcs.append(arc_key)
+				for polygon_owner in owners:
+					if not region_relation_set[pair_key].polygon_owners.has(String(polygon_owner)): region_relation_set[pair_key].polygon_owners.append(String(polygon_owner))
+			var first_lod: float = float(first_owner.get("lod_step", STEP))
+			var other_lod: float = float(other_owner.get("lod_step", STEP))
+			var lod_relation: String = "SAME_STEP" if is_equal_approx(first_lod, other_lod) else "MIXED_STEP"
+			lod_relation_set[lod_relation] = true
+			_union_polygon_owners(polygon_parent, String(owners[0]), String(owners[owner_index]))
+		if roi_boundary:
+			boundary_edge_rows.append({"edge_key": arc_key, "roots": arc.roots})
+		elif int(arc.required_incidence) != 2:
+			interior_open_edge_rows.append({"edge_key": arc_key, "roots": arc.roots})
 		if int(arc.required_incidence) > (1 if roi_boundary else 2):
 			nonmanifold_arcs.append(arc_key)
 		elif int(arc.required_incidence) < (1 if roi_boundary else 2):
 			unresolved_arcs.append(arc_key)
-	var canonical: Dictionary = {"schema": "P3.1.R10A.TopologyGraph.v1", "roots": root_rows, "polygons": polygon_rows, "arcs": arc_rows, "geometry_errors": geometry_errors}
+	var component_members: Dictionary = {}
+	for polygon_id in polygon_parent.keys():
+		var component_id: String = _find_polygon_owner(polygon_parent, String(polygon_id))
+		if not component_members.has(component_id): component_members[component_id] = []
+		component_members[component_id].append(String(polygon_id))
+	var component_rows: Array[Dictionary] = []
+	var component_ids: Array = component_members.keys()
+	component_ids.sort()
+	for component_id in component_ids:
+		var members: Array = component_members[component_id]
+		members.sort()
+		var component_roots: Dictionary = {}
+		var component_regions: Dictionary = {}
+		for member in members:
+			var member_polygon: Dictionary = polygon_data_by_id.get(String(member), {})
+			for component_root in member_polygon.get("root_ids", []): component_roots[String(component_root)] = true
+			var member_region: Array = polygon_owners[String(member)].get("region_key", [])
+			if member_region.size() == 2: component_regions["%d,%d" % [int(member_region[0]), int(member_region[1])]] = true
+		var sorted_component_roots: Array = component_roots.keys(); sorted_component_roots.sort()
+		var sorted_component_regions: Array = component_regions.keys(); sorted_component_regions.sort()
+		component_rows.append({"id": String(component_id), "polygon_ids": members, "root_ids": sorted_component_roots, "region_owners": sorted_component_regions})
+	var boundary_loops: Dictionary = _extract_edge_loops(boundary_edge_rows)
+	var interior_loops: Dictionary = _extract_edge_loops(interior_open_edge_rows)
+	if not polygons.is_empty() and lod_relation_set.is_empty(): lod_relation_set["SAME_STEP"] = true
+	var region_relations: Array = region_relation_set.values()
+	for relation in region_relations:
+		relation.shared_arcs.sort()
+		relation.polygon_owners.sort()
+	region_relations.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return JSON.stringify(a.region_pair) < JSON.stringify(b.region_pair))
+	var lod_relations: Array = lod_relation_set.keys(); lod_relations.sort()
+	var ownership: Dictionary = {"polygon_owner_count": polygon_owners.size(), "owner_rows": polygon_owners, "contract": "signed world-space half-open region ownership; source tetrahedron owns each polygon; shared arcs are recorded once"}
+	var canonical: Dictionary = {"schema": "P3.1.R10A.TopologyGraph.v2", "roots": root_rows, "polygons": polygon_rows, "arcs": arc_rows, "surface_components": component_rows, "boundary_loops": boundary_loops, "interior_loops": interior_loops, "ownership": ownership, "neighbor_region_relations": region_relations, "lod_relations": lod_relations, "geometry_errors": geometry_errors}
 	var canonical_bytes: PackedByteArray = JSON.stringify(canonical).to_utf8_buffer()
 	return {"valid": unresolved_arcs.is_empty() and nonmanifold_arcs.is_empty() and geometry_errors.is_empty(), "schema": canonical.schema,
 		"root_count": roots.size(), "polygon_count": polygons.size(), "arc_count": arcs.size(), "unresolved_required_arcs": unresolved_arcs,
-		"nonmanifold_required_arcs": nonmanifold_arcs, "geometry_errors": geometry_errors, "canonical": canonical,
+		"nonmanifold_required_arcs": nonmanifold_arcs, "geometry_errors": geometry_errors, "surface_components": component_rows, "boundary_loops": boundary_loops, "interior_loops": interior_loops, "ownership": ownership, "neighbor_region_relations": region_relations, "lod_relations": lod_relations, "canonical": canonical,
 		"topology_sha256": Core.sha256(canonical_bytes), "authority": "topology graph built from exact Candidate D materialized scalar edge roots before triangle realization"}
+
+func _find_polygon_owner(parent: Dictionary, polygon_id: String) -> String:
+	var current: String = polygon_id
+	while String(parent.get(current, current)) != current:
+		current = String(parent[current])
+	var root: String = current
+	current = polygon_id
+	while String(parent.get(current, current)) != current:
+		var next: String = String(parent[current])
+		parent[current] = root
+		current = next
+	return root
+
+func _union_polygon_owners(parent: Dictionary, left: String, right: String) -> void:
+	if not parent.has(left) or not parent.has(right): return
+	var left_root: String = _find_polygon_owner(parent, left)
+	var right_root: String = _find_polygon_owner(parent, right)
+	if left_root == right_root: return
+	if left_root < right_root:
+		parent[right_root] = left_root
+	else:
+		parent[left_root] = right_root
+
+func _extract_edge_loops(edges: Array[Dictionary]) -> Dictionary:
+	var adjacency: Dictionary = {}
+	var edge_by_key: Dictionary = {}
+	for edge in edges:
+		var roots: Array = edge.get("roots", [])
+		if roots.size() != 2: continue
+		var left: String = String(roots[0])
+		var right: String = String(roots[1])
+		var edge_key: String = String(edge.get("edge_key", _arc_key(left, right)))
+		edge_by_key[edge_key] = [left, right]
+		if not adjacency.has(left): adjacency[left] = []
+		if not adjacency.has(right): adjacency[right] = []
+		adjacency[left].append({"neighbor": right, "edge_key": edge_key})
+		adjacency[right].append({"neighbor": left, "edge_key": edge_key})
+	for vertex in adjacency.keys():
+		adjacency[vertex].sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			if String(a.neighbor) == String(b.neighbor): return String(a.edge_key) < String(b.edge_key)
+			return String(a.neighbor) < String(b.neighbor))
+	var unused: Dictionary = {}
+	for edge_key in edge_by_key.keys(): unused[String(edge_key)] = true
+	var paths: Array[Dictionary] = []
+	while not unused.is_empty():
+		var sorted_vertices: Array = adjacency.keys(); sorted_vertices.sort()
+		var start: String = ""
+		for vertex in sorted_vertices:
+			var active_degree: int = 0
+			for adjacent in adjacency[vertex]:
+				if unused.has(String(adjacent.edge_key)): active_degree += 1
+			if active_degree > 0 and active_degree != 2:
+				start = String(vertex)
+				break
+		if start.is_empty():
+			var sorted_edge_keys: Array = unused.keys(); sorted_edge_keys.sort()
+			var first_edge: String = String(sorted_edge_keys[0])
+			var endpoints: Array = edge_by_key[first_edge]
+			start = String(endpoints[0]) if String(endpoints[0]) < String(endpoints[1]) else String(endpoints[1])
+		var current: String = start
+		var previous_edge: String = ""
+		var ordered_vertices: Array[String] = [start]
+		var ordered_edges: Array[String] = []
+		var closed: bool = false
+		var guard: int = edge_by_key.size() + 1
+		while guard > 0:
+			guard -= 1
+			var next_choice: Dictionary = {}
+			for adjacent in adjacency.get(current, []):
+				var candidate_edge: String = String(adjacent.edge_key)
+				if candidate_edge == previous_edge or not unused.has(candidate_edge): continue
+				next_choice = adjacent
+				break
+			if next_choice.is_empty(): break
+			var used_edge: String = String(next_choice.edge_key)
+			var next_vertex: String = String(next_choice.neighbor)
+			unused.erase(used_edge)
+			ordered_edges.append(used_edge)
+			previous_edge = used_edge
+			current = next_vertex
+			if current == start:
+				closed = true
+				break
+			ordered_vertices.append(current)
+		var branch_vertices: Array[String] = []
+		for vertex in ordered_vertices:
+			if adjacency.get(vertex, []).size() != 2: branch_vertices.append(vertex)
+		paths.append({"closed": closed, "root_ids": ordered_vertices, "edge_keys": ordered_edges, "branch_vertices": branch_vertices})
+	var closed_count: int = 0
+	var open_count: int = 0
+	for path in paths:
+		if bool(path.closed): closed_count += 1
+		else: open_count += 1
+	return {"path_count": paths.size(), "closed_loop_count": closed_count, "open_path_count": open_count, "paths": paths}
 
 func _triangle_edge_incidence(triangles: Array[Dictionary]) -> Dictionary:
 	var result: Dictionary = {}
@@ -454,6 +620,17 @@ func _arc_on_roi_boundary(a: Vector3, b: Vector3) -> bool:
 		if absf(a[axis] - b[axis]) <= 2.0e-6 and (absf(a[axis] - ROI_MIN[axis]) <= 2.0e-6 or absf(a[axis] - (ROI_MIN + Vector3(CELLS) * STEP)[axis]) <= 2.0e-6):
 			return true
 	return false
+
+func _roi_boundary_faces(a: Vector3, b: Vector3) -> Array[String]:
+	var result: Array[String] = []
+	var roi_max: Vector3 = ROI_MIN + Vector3(CELLS) * STEP
+	for axis in range(3):
+		if absf(a[axis] - b[axis]) > 2.0e-6: continue
+		var face_axis: String = ["X", "Y", "Z"][axis]
+		if absf(a[axis] - ROI_MIN[axis]) <= 2.0e-6: result.append(face_axis + "_NEG")
+		if absf(a[axis] - roi_max[axis]) <= 2.0e-6: result.append(face_axis + "_POS")
+	result.sort()
+	return result
 
 func _cell_key(cell: Vector3i) -> String:
 	return "%d,%d,%d" % [cell.x, cell.y, cell.z]
