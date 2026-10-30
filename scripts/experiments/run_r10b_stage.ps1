@@ -29,10 +29,12 @@ $authoritySha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'g
 if ($authoritySha -ne $expectedAuthoritySha) { throw "R10-A authority byte pin mismatch: $authoritySha" }
 $rayScriptSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'game\tests\prototypes\p3_1_r10_b_ray_causality.gd')).Hash.ToLowerInvariant()
 $rayFixtureSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'docs\reports\P3-1-R10-B-CAMPAIGN\fixtures\ray_reference_fixture_r2.json')).Hash.ToLowerInvariant()
+$campaignSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'game\tests\prototypes\p3_1_r10_b_campaign.gd')).Hash.ToLowerInvariant()
+$realizerSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'game\tests\prototypes\p3_1_r10_b_realizer.gd')).Hash.ToLowerInvariant()
 
 $arguments = switch ($Stage) {
 	'import' { @('--headless', '--path', './game', '--editor', '--import') }
-	'check-only' { @('--headless', '--path', './game', '--check-only', '--script', 'res://tests/prototypes/p3_1_r10_b_ray_causality.gd') }
+	'check-only' { @('--headless', '--path', './game', '--check-only', '--script', 'res://tests/prototypes/p3_1_r10_b_campaign.gd') }
 	'check-ray' { @('--headless', '--path', './game', '--check-only', '--script', 'res://tests/prototypes/p3_1_r10_b_ray_causality.gd') }
 	'ray-causality' { @('--headless', '--path', './game', '--script', 'res://tests/prototypes/p3_1_r10_b_ray_causality.gd') }
 	'check-authority' { @('--headless', '--path', './game', '--check-only', '--script', 'res://tests/prototypes/p3_1_r10_a_topology_authority.gd') }
@@ -45,7 +47,7 @@ $intent = [ordered]@{
 	schema = 'P3.1.R10B.LaunchIntent.v1'; run_id = $runId; stage = $Stage; attempt_id = $AttemptId; hypothesis = $Hypothesis
 	repository = $repo; origin = 'https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git'; source_sha = $sourceSha
 	godot_path = $godot; godot_sha256 = $observedGodotSha; candidate_d_sha256 = $candidateSha; arguments = $arguments
-	command_line = $commandLine; profile_root = $profileRoot; artifact_root = $attemptRoot; runner_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $PSCommandPath).Hash.ToLowerInvariant(); source_physical_hashes = @{ candidate_d = $candidateSha; manifest = $manifestSha; r10a_authority = $authoritySha; ray_script = $rayScriptSha; ray_fixture = $rayFixtureSha }; created_utc = [DateTime]::UtcNow.ToString('o')
+	command_line = $commandLine; profile_root = $profileRoot; artifact_root = $attemptRoot; runner_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $PSCommandPath).Hash.ToLowerInvariant(); source_physical_hashes = @{ candidate_d = $candidateSha; manifest = $manifestSha; r10a_authority = $authoritySha; ray_script = $rayScriptSha; ray_fixture = $rayFixtureSha; campaign = $campaignSha; realizer = $realizerSha }; created_utc = [DateTime]::UtcNow.ToString('o')
 }
 $intentPath = Join-Path $attemptRoot 'launch-intent.json'
 $intentJson = $intent | ConvertTo-Json -Depth 8
@@ -83,6 +85,8 @@ $psi.EnvironmentVariables['R10B_HYPOTHESIS'] = $Hypothesis
 $psi.EnvironmentVariables['R10B_SOURCE_SHA'] = $sourceSha
 $psi.EnvironmentVariables['R10B_ARTIFACT_DIR'] = $attemptRoot
 $psi.EnvironmentVariables['R10B_REPO_ROOT'] = $repo
+$psi.EnvironmentVariables['R10B_CAMPAIGN_SOURCE_SHA256'] = $campaignSha
+$psi.EnvironmentVariables['R10B_REALIZER_SOURCE_SHA256'] = $realizerSha
 if ($Stage -in @('check-only', 'check-ray', 'ray-causality')) {
 	$raySourcePath = Join-Path $repo 'game\tests\prototypes\p3_1_r10_b_ray_causality.gd'
 	$fixturePath = Join-Path $repo 'docs\reports\P3-1-R10-B-CAMPAIGN\fixtures\ray_reference_fixture_r2.json'
@@ -146,9 +150,9 @@ $stderr = $stderrTask.GetAwaiter().GetResult()
 $exitCode = if ($resourceAbort -or $timeoutAbort) { $null } else { $proc.ExitCode }
 $combinedOutput = $stdout + "`n" + $stderr
 $scriptErrorDetected = $combinedOutput -match '(?m)^(SCRIPT ERROR:|ERROR:|Parse Error:|Compile Error:)'
-$preflightMarkerCount = [regex]::Matches($stdout, '(?m)^R10A_PREFLIGHT ').Count
-$completionMatches = [regex]::Matches($stdout, '(?m)^R10A_ATTEMPT_COMPLETE (.+)$')
-$graphContractMatches = [regex]::Matches($stdout, '(?m)^R10A_GRAPH_CONTRACT_COMPLETE (.+)$')
+$preflightMarkerCount = [regex]::Matches($stdout, '(?m)^R10B_PREFLIGHT ').Count
+$completionMatches = [regex]::Matches($stdout, '(?m)^R10B_ATTEMPT_COMPLETE (.+)$')
+$graphContractMatches = [regex]::Matches($stdout, '(?m)^R10B_GRAPH_CONTRACT_COMPLETE (.+)$')
 $rayCompletionMatches = [regex]::Matches($stdout, '(?m)^R10B_RAY_DIAGNOSTIC_COMPLETE (.+)$')
 $rayBlockedMatches = [regex]::Matches($stdout, '(?m)^R10B_RAY_BLOCKED (.+)$')
 $terminalResult = 'NOT_AVAILABLE'
@@ -163,7 +167,7 @@ $validationStatus = if ($resourceAbort) { 'RUNTIME_ABORT_RESOURCE_SAFETY' } else
 $afterMemory = Get-CimInstance Win32_PerfRawData_PerfOS_Memory
 $after = [ordered]@{ timestamp_utc = [DateTime]::UtcNow.ToString('o'); committed_bytes = [int64]$afterMemory.CommittedBytes; commit_limit_bytes = [int64]$afterMemory.CommitLimit; free_commit_bytes = ([int64]$afterMemory.CommitLimit - [int64]$afterMemory.CommittedBytes); available_mbytes = [int64]$afterMemory.AvailableMBytes }
 [IO.File]::WriteAllText((Join-Path $attemptRoot 'host-after.json'), ($after | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
-$processRecord = [ordered]@{ schema = 'P3.1.R10B.ProcessRecord.v1'; run_id = $runId; stage = $Stage; pid = $godotProcessId; parent_pid = $launcherProcessId; command_line = $commandLine; source_sha = $sourceSha; exit_code = $exitCode; elapsed_ms = $elapsedMs; resource_abort = $resourceAbort; timeout_abort = $timeoutAbort; validation_status = $validationStatus; script_error_detected = $scriptErrorDetected; preflight_marker_count = $preflightMarkerCount; graph_contract_marker_count = $graphContractMatches.Count; graph_contract_status = $graphContractStatus; ray_completion_marker_count = $rayCompletionMatches.Count; ray_blocked_marker_count = $rayBlockedMatches.Count; ray_status = $rayStatus; completion_marker_count = $completionMatches.Count; terminal_result = $terminalResult; min_free_commit_bytes = $minFreeCommit; warning_samples = $warningCount; stdout_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $attemptRoot 'stdout.txt')).Hash.ToLowerInvariant(); stderr_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $attemptRoot 'stderr.txt')).Hash.ToLowerInvariant(); monitor_sha256 = (Get-FileHash -Algorithm SHA256 $monitorPath).Hash.ToLowerInvariant() }
+$processRecord = [ordered]@{ schema = 'P3.1.R10B.ProcessRecord.v1'; run_id = $runId; stage = $Stage; pid = $godotProcessId; parent_pid = $launcherProcessId; command_line = $commandLine; source_sha = $sourceSha; source_physical_hashes = @{ candidate_d = $candidateSha; manifest = $manifestSha; r10a_authority = $authoritySha; ray_script = $rayScriptSha; ray_fixture = $rayFixtureSha; campaign = $campaignSha; realizer = $realizerSha }; exit_code = $exitCode; elapsed_ms = $elapsedMs; resource_abort = $resourceAbort; timeout_abort = $timeoutAbort; validation_status = $validationStatus; script_error_detected = $scriptErrorDetected; preflight_marker_count = $preflightMarkerCount; graph_contract_marker_count = $graphContractMatches.Count; graph_contract_status = $graphContractStatus; ray_completion_marker_count = $rayCompletionMatches.Count; ray_blocked_marker_count = $rayBlockedMatches.Count; ray_status = $rayStatus; completion_marker_count = $completionMatches.Count; terminal_result = $terminalResult; min_free_commit_bytes = $minFreeCommit; warning_samples = $warningCount; stdout_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $attemptRoot 'stdout.txt')).Hash.ToLowerInvariant(); stderr_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $attemptRoot 'stderr.txt')).Hash.ToLowerInvariant(); monitor_sha256 = (Get-FileHash -Algorithm SHA256 $monitorPath).Hash.ToLowerInvariant() }
 [IO.File]::WriteAllText((Join-Path $attemptRoot 'process.json'), ($processRecord | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
 $processRecord | ConvertTo-Json -Depth 6
 if ($resourceAbort) { exit 75 }
