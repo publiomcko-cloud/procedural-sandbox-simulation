@@ -71,18 +71,21 @@ func _run() -> void:
 	equal_result["role"] = "required_equal_lod_gate_full_roi"
 	result_rows.append(equal_result)
 	_emit_result(equal_result, artifact_root)
-	var mixed_row: Dictionary = Core.case_by_id(manifest.rows, MIXED_ID)
-	var setup: Dictionary = Core.make_snapshot(mixed_row)
-	var left_roi: Dictionary = {"id": "L", "min": [15.0, 1.0, 6.0], "cells": [2, 4, 4], "step": 0.5}
-	var right_roi: Dictionary = {"id": "R", "min": [16.0, 1.0, 6.0], "cells": [4, 8, 8], "step": 0.25}
-	var left_result: Dictionary = _run_case_from_setup(candidate, authority, setup.snapshot, mixed_row, left_roi, hypothesis)
-	left_result["scenario_id"] = MIXED_ID
-	left_result["role"] = "mixed_lod_left_lod1"
-	var right_result: Dictionary = _run_case_from_setup(candidate, authority, setup.snapshot, mixed_row, right_roi, hypothesis)
-	right_result["scenario_id"] = MIXED_ID
-	right_result["role"] = "mixed_lod_right_lod0"
-	var interface_diagnostic: Dictionary = _compare_interface(left_result, right_result)
-	var mixed_result: Dictionary = {"scenario_id": MIXED_ID, "role": "required_mixed_lod_gate", "left": left_result, "right": right_result, "interface": interface_diagnostic}
+	var equal_gate: bool = bool(equal_result.get("geometry", {}).get("geometry_realization_complete", false))
+	var mixed_result: Dictionary = {"scenario_id": MIXED_ID, "role": "required_mixed_lod_gate", "status": "SKIPPED_EQUAL_LOD_GATE_FAILED", "interface": {"conforming": false, "realization": "NOT_RUN_EQUAL_LOD_GATE_FAILED"}}
+	if equal_gate:
+		var mixed_row: Dictionary = Core.case_by_id(manifest.rows, MIXED_ID)
+		var setup: Dictionary = Core.make_snapshot(mixed_row)
+		var left_roi: Dictionary = {"id": "L", "min": [15.0, 1.0, 6.0], "cells": [2, 4, 4], "step": 0.5}
+		var right_roi: Dictionary = {"id": "R", "min": [16.0, 1.0, 6.0], "cells": [4, 8, 8], "step": 0.25}
+		var left_result: Dictionary = _run_case_from_setup(candidate, authority, setup.snapshot, mixed_row, left_roi, hypothesis)
+		left_result["scenario_id"] = MIXED_ID
+		left_result["role"] = "mixed_lod_left_lod1"
+		var right_result: Dictionary = _run_case_from_setup(candidate, authority, setup.snapshot, mixed_row, right_roi, hypothesis)
+		right_result["scenario_id"] = MIXED_ID
+		right_result["role"] = "mixed_lod_right_lod0"
+		var interface_diagnostic: Dictionary = _compare_interface(left_result, right_result)
+		mixed_result = {"scenario_id": MIXED_ID, "role": "required_mixed_lod_gate", "status": "EXECUTED", "left": left_result, "right": right_result, "interface": interface_diagnostic}
 	result_rows.append(mixed_result)
 	_emit_result(mixed_result, artifact_root)
 	var ray_row: Dictionary = Core.case_by_id(manifest.rows, RAY_ID)
@@ -98,11 +101,12 @@ func _run() -> void:
 	for row in result_rows:
 		if String(row.get("role", "")) == "frozen_control" and bool(row.get("valid", false)):
 			controls_pass += 1
-	var equal_gate: bool = bool(equal_result.get("geometry", {}).get("geometry_realization_complete", false))
-	var mixed_gate: bool = bool(interface_diagnostic.get("conforming", false))
+	var mixed_gate: bool = bool(mixed_result.get("interface", {}).get("conforming", false))
 	var ray_mismatches: int = int(ray_compare.get("hit_miss_disagreements", -1))
 	var ray_gate: bool = bool(ray_compare.get("valid", false)) and int(ray_compare.get("ray_count", -1)) == 25 and ray_mismatches == 0
-	var volume_gate: bool = bool(equal_result.get("volume_identity_preserved", false)) and bool(left_result.get("volume_identity_preserved", false)) and bool(right_result.get("volume_identity_preserved", false))
+	var volume_gate: bool = bool(equal_result.get("volume_identity_preserved", false))
+	if String(mixed_result.get("status", "")) == "EXECUTED":
+		volume_gate = volume_gate and bool(mixed_result.get("left", {}).get("volume_identity_preserved", false)) and bool(mixed_result.get("right", {}).get("volume_identity_preserved", false))
 	for control in result_rows:
 		if String(control.get("role", "")) == "frozen_control":
 			volume_gate = volume_gate and bool(control.get("volume_identity_preserved", false))
@@ -113,7 +117,7 @@ func _run() -> void:
 	var summary: Dictionary = {"schema": "P3.1.R10A.AttemptResult.v1", "attempt_id": attempt_id, "hypothesis": hypothesis, "source_sha": source_sha,
 		"candidate_d_source_sha256": candidate_sha, "manifest_sha256": EXPECTED_MANIFEST_SHA, "result": "PASS" if target_pass else "FAILED_TARGET",
 		"equal_lod": equal_result.get("geometry", {}).get("summary", {}), "equal_lod_complete": equal_gate,
-		"mixed_lod": interface_diagnostic, "required_adjacency_unresolved": int(equal_result.get("geometry", {}).get("required_adjacency_missing_count", -1)),
+		"mixed_lod": mixed_result.get("interface", {}), "mixed_lod_status": mixed_result.get("status", ""), "required_adjacency_unresolved": int(equal_result.get("geometry", {}).get("required_adjacency_missing_count", -1)),
 		"internal_open_edges": int(equal_result.get("geometry", {}).get("mesh_topology", {}).get("internal_open_edges", -1)),
 		"nonmanifold": int(equal_result.get("geometry", {}).get("mesh_topology", {}).get("nonmanifold_edges", -1)),
 		"winding_valid": bool(equal_result.get("geometry", {}).get("winding_valid", false)), "controls_pass": "%d/%d" % [controls_pass, control_runs],
