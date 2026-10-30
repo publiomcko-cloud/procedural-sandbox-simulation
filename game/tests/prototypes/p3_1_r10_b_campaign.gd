@@ -5,6 +5,7 @@ const CandidateD := preload("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd"
 const Authority := preload("res://tests/prototypes/p3_1_r10_a_topology_authority.gd")
 const B1Realizer := preload("res://tests/prototypes/p3_1_r10_b_realizer.gd")
 const B2Realizer := preload("res://tests/prototypes/p3_1_r10_b2_realizer.gd")
+const B3Realizer := preload("res://tests/prototypes/p3_1_r10_b3_realizer.gd")
 const MANIFEST_SHA := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
 const CANDIDATE_D_SHA := "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a"
 const RAY_FIXTURE_SHA := "9780bea4b1609bbc89db45e21d8671170198ca01d1ad3e252b9f877a64eb62c7"
@@ -70,7 +71,7 @@ func _run() -> void:
 		print("R10B_GRAPH_CONTRACT_COMPLETE " + JSON.stringify({"status": "PASS", "attempt_id": attempt_id, "source_sha": source_sha, "source_topology_graph_proof": graph_result.source_topology_graph_proof, "geometry_topology": graph_result.mesh_topology, "volume_identity_preserved": volume_case.volume_identity_preserved}))
 		quit(0)
 		return
-	if hypothesis not in ["R10B1_NONMONOTONIC_CONSTRAINED_FLIP_BFS", "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION"]:
+	if hypothesis not in ["R10B1_NONMONOTONIC_CONSTRAINED_FLIP_BFS", "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION", "R10B3_CONSTRAINED_DELAUNAY_LAWSON_FLIPS"]:
 		_blocked("unimplemented_geometry_hypothesis", {"hypothesis": hypothesis})
 		return
 	var hypothesis_realizer: RefCounted = _new_hypothesis_realizer(hypothesis)
@@ -118,6 +119,7 @@ func _run() -> void:
 
 func _new_hypothesis_realizer(hypothesis: String) -> RefCounted:
 	if hypothesis == "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION": return B2Realizer.new()
+	if hypothesis == "R10B3_CONSTRAINED_DELAUNAY_LAWSON_FLIPS": return B3Realizer.new()
 	return B1Realizer.new()
 
 func _run_frozen_ray_case(rows: Array) -> Dictionary:
