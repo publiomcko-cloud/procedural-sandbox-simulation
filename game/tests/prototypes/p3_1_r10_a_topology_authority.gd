@@ -108,7 +108,7 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: 
 					polygons.append({"id": polygon_id, "cell": [cell_id.x, cell_id.y, cell_id.z], "tet_index": tet_index, "root_ids": ordered_ids, "points": ordered_points, "face_ids": face_ids, "toward_empty": toward_empty, "realization": "PENDING"})
 	var source_polygons: Array[Dictionary] = polygons.duplicate(true)
 	var source_arcs: Dictionary = arcs.duplicate(true)
-	var a4_component_reconstruction: Dictionary = {"valid": true, "applied": false, "source_obligations_valid": true, "patches": [], "reason": "NOT_APPLICABLE"}
+	var component_reconstruction: Dictionary = {"valid": true, "applied": false, "source_obligations_valid": true, "patches": [], "reason": "NOT_APPLICABLE"}
 	if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER"]:
 		var refinement_result: Dictionary = _apply_triangle_subdivision(polygons, roots, root_sources, hypothesis, snapshot, seed)
 		if bool(refinement_result.get("valid", false)):
@@ -117,27 +117,29 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: 
 			local_refinement = refinement_result.evidence
 		else:
 			geometry_errors.append({"reason": "a2_local_refinement_failed", "detail": refinement_result})
-	elif hypothesis == "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION":
-		a4_component_reconstruction = _apply_multi_cell_component_reconstruction(polygons, roots, source_arcs, values, dims)
-		if bool(a4_component_reconstruction.get("valid", false)):
-			polygons = a4_component_reconstruction.get("polygons", polygons)
-			arcs = a4_component_reconstruction.get("arcs", arcs)
+	elif hypothesis in ["R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION"]:
+		var preserve_interior_roots: bool = hypothesis == "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION"
+		component_reconstruction = _apply_multi_cell_component_reconstruction(polygons, roots, source_arcs, values, dims, preserve_interior_roots)
+		if bool(component_reconstruction.get("valid", false)):
+			polygons = component_reconstruction.get("polygons", polygons)
+			arcs = component_reconstruction.get("arcs", arcs)
 			local_refinement.clear()
-			var raw_a4_patches: Variant = a4_component_reconstruction.get("patches", [])
-			if raw_a4_patches is Array:
-				for raw_patch in raw_a4_patches:
+			var raw_component_patches: Variant = component_reconstruction.get("patches", [])
+			if raw_component_patches is Array:
+				for raw_patch in raw_component_patches:
 					if raw_patch is Dictionary: local_refinement.append(raw_patch)
-				if local_refinement.size() != raw_a4_patches.size(): geometry_errors.append({"reason": "a4_patch_rows_failed_dictionary_validation"})
+				if local_refinement.size() != raw_component_patches.size(): geometry_errors.append({"reason": "component_patch_rows_failed_dictionary_validation"})
 			else:
-				geometry_errors.append({"reason": "a4_patch_rows_not_array"})
+				geometry_errors.append({"reason": "component_patch_rows_not_array"})
 		else:
-			geometry_errors.append({"reason": "a4_component_reconstruction_failed", "detail": a4_component_reconstruction})
+			geometry_errors.append({"reason": "component_reconstruction_failed", "detail": component_reconstruction})
 	var graph: Dictionary = _topology_graph(roots, root_sources, polygons, arcs, geometry_errors)
-	var source_graph: Dictionary = _topology_graph(roots, root_sources, source_polygons, source_arcs, []) if hypothesis == "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION" else {}
+	var component_reconstruction_enabled: bool = hypothesis in ["R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION"]
+	var source_graph: Dictionary = _topology_graph(roots, root_sources, source_polygons, source_arcs, []) if component_reconstruction_enabled else {}
 	var source_graph_proof: Dictionary = {"schema": source_graph.get("schema", ""), "topology_sha256": source_graph.get("topology_sha256", ""), "valid": source_graph.get("valid", false), "root_count": source_graph.get("root_count", 0), "polygon_count": source_graph.get("polygon_count", 0), "arc_count": source_graph.get("arc_count", 0), "unresolved_required_arc_count": source_graph.get("unresolved_required_arcs", []).size(), "nonmanifold_required_arc_count": source_graph.get("nonmanifold_required_arcs", []).size()}
-	if hypothesis == "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION":
-		a4_component_reconstruction["source_graph_valid"] = bool(source_graph.get("valid", false))
-		a4_component_reconstruction["source_obligations_valid"] = bool(a4_component_reconstruction.get("source_obligations_valid", false)) and bool(source_graph.get("valid", false))
+	if component_reconstruction_enabled:
+		component_reconstruction["source_graph_valid"] = bool(source_graph.get("valid", false))
+		component_reconstruction["source_obligations_valid"] = bool(component_reconstruction.get("source_obligations_valid", false)) and bool(source_graph.get("valid", false))
 	var mesh: Dictionary = Core.new_mesh()
 	var emitted_triangles: Array[Dictionary] = []
 	var unresolved: Array[Dictionary] = []
@@ -188,15 +190,15 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: 
 	var mesh_topology: Dictionary = Core.topology(mesh, ROI_MIN, ROI_MIN + Vector3(CELLS) * STEP)
 	var topology_hash: String = String(graph.get("topology_sha256", ""))
 	var winding_valid: bool = int(mesh_topology.get("winding_inconsistencies", -1)) == 0
-	var source_obligations_valid: bool = bool(a4_component_reconstruction.get("source_obligations_valid", true))
+	var source_obligations_valid: bool = bool(component_reconstruction.get("source_obligations_valid", true))
 	var required_complete: bool = unresolved.is_empty() and geometry_errors.is_empty() and missing_count == 0 and source_obligations_valid
 	var geometry_complete: bool = required_complete and int(mesh_topology.get("internal_open_edges", -1)) == 0 and int(mesh_topology.get("nonmanifold_edges", -1)) == 0 and winding_valid
-	return {"valid": geometry_errors.is_empty(), "hypothesis": hypothesis, "mesh": mesh, "mesh_sha256": _mesh_sha(mesh), "topology_graph": graph, "source_topology_graph_proof": source_graph_proof, "a4_component_reconstruction": a4_component_reconstruction,
+	return {"valid": geometry_errors.is_empty(), "hypothesis": hypothesis, "mesh": mesh, "mesh_sha256": _mesh_sha(mesh), "topology_graph": graph, "source_topology_graph_proof": source_graph_proof, "component_reconstruction": component_reconstruction,
 		"topology_sha256": topology_hash, "mesh_topology": mesh_topology, "emitted_triangles": emitted_triangles,
 		"unresolved_obligations": unresolved, "cutoff_rejections": cutoff_rejections, "required_adjacency_obligations": adjacency_obligations,
 		"required_adjacency_missing_count": missing_count, "required_adjacency_nonmanifold_count": nonmanifold_count,
 		"geometry_realization_complete": geometry_complete, "required_topology_complete": required_complete, "winding_valid": winding_valid,
-		"local_refinement": {"enabled": hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION"], "source_a1_equal_case_sha256": A2_CAUSAL_A1_CASE_SHA256 if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION"] else "", "target_parent_cells": A2_REFINE_CELLS.keys() if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION"] else [], "subdivided_parent_polygons": local_refinement, "subdivided_count": local_refinement.size(), "field_authority": "Candidate D piecewise-linear tetrahedral field for A2 and A4; canonical SDF plus ordered snapshot for A3; scalar volume unchanged"},
+		"local_refinement": {"enabled": hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION"], "source_a1_equal_case_sha256": A2_CAUSAL_A1_CASE_SHA256 if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION"] else "", "target_parent_cells": A2_REFINE_CELLS.keys() if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION"] else [], "subdivided_parent_polygons": local_refinement, "subdivided_count": local_refinement.size(), "field_authority": "Candidate D piecewise-linear tetrahedral field for A2, A4 and A5; canonical SDF plus ordered snapshot for A3; scalar volume unchanged"},
 		"metrics": {"root_count": roots.size(), "polygon_count": polygons.size(), "required_arc_count": arcs.size(), "emitted_triangle_count": emitted_triangles.size(),
 			"unresolved_polygon_count": unresolved.size(), "cutoff_rejection_count": cutoff_rejections.size(), "topology_build_realize_usec": Time.get_ticks_usec() - begin_usec,
 			"fixed_cross_squared_cutoff": CUTOFF_SQUARED, "field_authority": "Candidate D serialized/reloaded float32 materialized volume; no sample mutation"}}
@@ -275,7 +277,7 @@ func _apply_triangle_subdivision(source_polygons: Array[Dictionary], roots: Dict
 			rebuilt_arcs[arc_key] = arc
 	return {"valid": true, "polygons": expanded, "arcs": rebuilt_arcs, "evidence": evidence}
 
-func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionary], roots: Dictionary, source_arcs: Dictionary, values: PackedFloat32Array, dims: Vector3i) -> Dictionary:
+func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionary], roots: Dictionary, source_arcs: Dictionary, values: PackedFloat32Array, dims: Vector3i, preserve_interior_roots: bool) -> Dictionary:
 	var selected: Dictionary = {}
 	for polygon in source_polygons:
 		var cell: Array = polygon.get("cell", [])
@@ -325,7 +327,7 @@ func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionar
 			group_polygons.append(polygon)
 			if _authority_polygon_has_cutoff_triangle(polygon): needs_reconstruction = true
 		if not needs_reconstruction: continue
-		var record: Dictionary = {"component_id": String(component_id), "source_polygon_ids": members, "source_cell_count": _unique_polygon_cell_count(group_polygons), "status": "PENDING", "source_authority": "CANDIDATE_D_MATERIALIZED_FLOAT32_SCALAR_VOLUME", "construction": "BOUNDED_MULTI_CELL_BOUNDARY_PRESERVING_RETRIANGULATION"}
+		var record: Dictionary = {"component_id": String(component_id), "source_polygon_ids": members, "source_cell_count": _unique_polygon_cell_count(group_polygons), "status": "PENDING", "source_authority": "CANDIDATE_D_MATERIALIZED_FLOAT32_SCALAR_VOLUME", "construction": "BOUNDED_MULTI_CELL_INTERIOR_ROOT_PRESERVING_RETRIANGULATION" if preserve_interior_roots else "BOUNDED_MULTI_CELL_BOUNDARY_ONLY_RETRIANGULATION", "preserve_interior_roots": preserve_interior_roots}
 		if members.size() < 2:
 			record.status = "UNRESOLVED"
 			record.reason = "cutoff_polygon_has_no_adjacent_polygon_inside_bounded_patch"
@@ -390,13 +392,20 @@ func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionar
 		var all_roots_on_boundary: bool = source_root_set.size() == boundary_roots.size()
 		for boundary_root in boundary_roots:
 			if not source_root_set.has(String(boundary_root)): all_roots_on_boundary = false
-		if not all_roots_on_boundary:
+		if not all_roots_on_boundary and not preserve_interior_roots:
 			record.status = "UNRESOLVED"
 			record.reason = "component_contains_interior_roots_not_supported_by_boundary_only_patch"
 			record.source_root_count = source_root_set.size()
 			record.boundary_root_count = boundary_roots.size()
 			patches.append(record)
 			continue
+		var interior_root_ids: Array[String] = []
+		for source_root in source_root_set.keys():
+			if not boundary_roots.has(String(source_root)): interior_root_ids.append(String(source_root))
+		interior_root_ids.sort()
+		record.source_root_count = source_root_set.size()
+		record.boundary_root_count = boundary_roots.size()
+		record.interior_root_count = interior_root_ids.size()
 		var source_edge_count: int = edge_occurrences.size()
 		var euler_characteristic: int = source_root_set.size() - source_edge_count + group_polygons.size()
 		record.source_euler_characteristic = euler_characteristic
@@ -406,10 +415,25 @@ func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionar
 			patches.append(record)
 			continue
 		var triangulation: Dictionary = _triangulate_boundary_cycle(boundary_roots, roots)
+		if bool(triangulation.get("valid", false)) and preserve_interior_roots and not interior_root_ids.is_empty():
+			var insertion: Dictionary = _insert_interior_roots_into_triangulation(triangulation, interior_root_ids, roots)
+			triangulation = insertion
 		record.triangulation = triangulation
 		if not bool(triangulation.get("valid", false)):
 			record.status = "UNRESOLVED"
-			record.reason = "boundary_loop_triangulation_failed_under_fixed_cutoff"
+			record.reason = "component_triangulation_failed_under_fixed_cutoff"
+			patches.append(record)
+			continue
+		var realized_source_roots: Dictionary = {}
+		for triangle_row in triangulation.get("triangles", []):
+			for triangle_root in triangle_row.get("root_ids", []): realized_source_roots[String(triangle_root)] = true
+		var all_source_roots_realized: bool = realized_source_roots.size() == source_root_set.size()
+		for source_root in source_root_set.keys():
+			if not realized_source_roots.has(String(source_root)): all_source_roots_realized = false
+		if not all_source_roots_realized:
+			record.status = "UNRESOLVED"
+			record.reason = "component_retriangulation_dropped_or_duplicated_source_root"
+			record.realized_source_root_count = realized_source_roots.size()
 			patches.append(record)
 			continue
 		var average_empty: Vector3 = Vector3.ZERO
@@ -425,7 +449,21 @@ func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionar
 		var replacement_ids: Array[String] = []
 		var replacement_edge_occurrences: Dictionary = {}
 		var field_residual_rows: Array[Dictionary] = []
-		var triangle_rows: Array[Dictionary] = triangulation.get("triangles", [])
+		var triangle_rows: Array[Dictionary] = []
+		var raw_triangulation_rows: Variant = triangulation.get("triangles", [])
+		if raw_triangulation_rows is Array:
+			for raw_triangle_row in raw_triangulation_rows:
+				if raw_triangle_row is Dictionary: triangle_rows.append(raw_triangle_row)
+			if triangle_rows.size() != raw_triangulation_rows.size():
+				record.status = "UNRESOLVED"
+				record.reason = "component_triangulation_rows_not_dictionary_array"
+				patches.append(record)
+				continue
+		else:
+			record.status = "UNRESOLVED"
+			record.reason = "component_triangulation_rows_not_array"
+			patches.append(record)
+			continue
 		for triangle_index in range(triangle_rows.size()):
 			var triangle: Dictionary = triangle_rows[triangle_index]
 			var triangle_ids: Array = triangle.get("root_ids", [])
@@ -472,7 +510,7 @@ func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionar
 		record.source_boundary_arc_keys = boundary_rows.map(func(edge: Dictionary) -> String: return String(edge.edge_key))
 		record.superseded_internal_arc_keys = internal_arc_keys
 		record.replacement_polygon_ids = replacement_ids
-		record.source_to_replacement = {"source_polygon_ids": members.duplicate(), "replacement_polygon_ids": replacement_ids, "equivalence_basis": "one connected Euler-characteristic-one polygon disk replaced by an n-2 triangulation of the identical ordered boundary root loop; boundary vertices/arcs fixed; no Steiner vertices"}
+		record.source_to_replacement = {"source_polygon_ids": members.duplicate(), "replacement_polygon_ids": replacement_ids, "equivalence_basis": "one connected Euler-characteristic-one polygon disk replaced by a boundary-loop triangulation with all source root identities retained; boundary vertices/arcs fixed; no new or moved vertices" if preserve_interior_roots else "one connected Euler-characteristic-one polygon disk replaced by an n-2 triangulation of the identical ordered boundary root loop; boundary vertices/arcs fixed; no Steiner vertices"}
 		record.boundary_arc_preservation = boundary_arc_preservation
 		record.replacement_cross_squared = triangle_rows.map(func(row: Dictionary) -> float: return _cross_squared(row.points[0], row.points[1], row.points[2]))
 		record.piecewise_materialized_field_centroid_residuals = field_residual_rows
@@ -604,6 +642,115 @@ func _triangulate_boundary_cycle(root_ids: Array, roots: Dictionary) -> Dictiona
 		return {"valid": false, "reason": "final_boundary_triangle_below_frozen_cutoff", "cross_squared": final_cross_squared, "triangles": triangles}
 	triangles.append({"root_ids": [root_ids[remaining[0]], root_ids[remaining[1]], root_ids[remaining[2]]], "points": [points[remaining[0]], points[remaining[1]], points[remaining[2]]], "cross_squared": final_cross_squared})
 	return {"valid": true, "construction": "deterministic_boundary_preserving_ear_clipping_max_area_first", "orientation": orientation, "projection_axis": dominant_axis, "triangles": triangles, "boundary_root_ids": root_ids.duplicate(), "boundary_area_twice": signed_area_twice}
+
+func _insert_interior_roots_into_triangulation(base: Dictionary, interior_root_ids: Array[String], roots: Dictionary) -> Dictionary:
+	var triangles: Array[Dictionary] = []
+	var raw_base_triangles: Variant = base.get("triangles", [])
+	if not raw_base_triangles is Array: return {"valid": false, "reason": "initial_boundary_triangulation_not_array"}
+	for raw_triangle in raw_base_triangles:
+		if not raw_triangle is Dictionary: return {"valid": false, "reason": "initial_boundary_triangulation_row_invalid"}
+		triangles.append(raw_triangle)
+	var projection_axis: int = int(base.get("projection_axis", -1))
+	if projection_axis < 0 or projection_axis > 2: return {"valid": false, "reason": "initial_boundary_projection_axis_invalid"}
+	var insertion_rows: Array[Dictionary] = []
+	for root_id in interior_root_ids:
+		var point: Vector3 = roots[String(root_id)]
+		var point2: Vector2 = _project_world_point(point, projection_axis)
+		var strict_containing: Array[int] = []
+		var edge_matches: Array[Dictionary] = []
+		var duplicate_vertex: bool = false
+		for triangle_index in range(triangles.size()):
+			var triangle: Dictionary = triangles[triangle_index]
+			var ids: Array = triangle.get("root_ids", [])
+			var points: Array = triangle.get("points", [])
+			if ids.size() != 3 or points.size() != 3: return {"valid": false, "reason": "interior_insertion_found_malformed_triangle"}
+			var p2: Array[Vector2] = [_project_world_point(points[0], projection_axis), _project_world_point(points[1], projection_axis), _project_world_point(points[2], projection_axis)]
+			for vertex_index in range(3):
+				if point2 == p2[vertex_index]: duplicate_vertex = true
+			var orient_value: float = (p2[1] - p2[0]).cross(p2[2] - p2[0])
+			if orient_value == 0.0: continue
+			var orientation: float = 1.0 if orient_value > 0.0 else -1.0
+			var side_values: Array[float] = [
+				(p2[1] - p2[0]).cross(point2 - p2[0]) * orientation,
+				(p2[2] - p2[1]).cross(point2 - p2[1]) * orientation,
+				(p2[0] - p2[2]).cross(point2 - p2[2]) * orientation
+			]
+			if side_values[0] < 0.0 or side_values[1] < 0.0 or side_values[2] < 0.0: continue
+			var zero_sides: Array[int] = []
+			for side_index in range(3):
+				if side_values[side_index] == 0.0: zero_sides.append(side_index)
+			if zero_sides.is_empty(): strict_containing.append(triangle_index)
+			else:
+				for side_index in zero_sides:
+					var left2: Vector2 = p2[side_index]
+					var right2: Vector2 = p2[(side_index + 1) % 3]
+					if (point2 - left2).dot(point2 - right2) <= 0.0:
+						edge_matches.append({"triangle_index": triangle_index, "edge_index": side_index, "edge_key": _arc_key(String(ids[side_index]), String(ids[(side_index + 1) % 3]))})
+		if duplicate_vertex:
+			return {"valid": false, "reason": "interior_root_projects_to_existing_vertex", "root_id": root_id}
+		if not edge_matches.is_empty():
+			var unique_edge_keys: Dictionary = {}
+			for edge_match in edge_matches: unique_edge_keys[String(edge_match.edge_key)] = true
+			if unique_edge_keys.size() != 1 or edge_matches.size() != 2:
+				return {"valid": false, "reason": "interior_root_lies_on_unshared_or_ambiguous_edge", "root_id": root_id, "edge_matches": edge_matches}
+			var edge_key: String = String(edge_matches[0].edge_key)
+			var replacement_by_index: Dictionary = {}
+			for edge_match in edge_matches:
+				var triangle_index: int = int(edge_match.triangle_index)
+				var old_triangle: Dictionary = triangles[triangle_index]
+				var old_ids: Array = old_triangle.root_ids
+				var old_points: Array = old_triangle.points
+				var edge_index: int = int(edge_match.edge_index)
+				var left_id: String = String(old_ids[edge_index])
+				var right_id: String = String(old_ids[(edge_index + 1) % 3])
+				var opposite_id: String = String(old_ids[(edge_index + 2) % 3])
+				var left_point: Vector3 = old_points[edge_index]
+				var right_point: Vector3 = old_points[(edge_index + 1) % 3]
+				var opposite_point: Vector3 = old_points[(edge_index + 2) % 3]
+				var first_cross: float = _cross_squared(left_point, point, opposite_point)
+				var second_cross: float = _cross_squared(point, right_point, opposite_point)
+				if first_cross <= CUTOFF_SQUARED or second_cross <= CUTOFF_SQUARED:
+					return {"valid": false, "reason": "edge_root_insertion_children_below_frozen_cutoff", "root_id": root_id, "source_edge": edge_key, "child_cross_squared": [first_cross, second_cross]}
+				replacement_by_index[triangle_index] = [
+					{"root_ids": [left_id, String(root_id), opposite_id], "points": [left_point, point, opposite_point], "cross_squared": first_cross},
+					{"root_ids": [String(root_id), right_id, opposite_id], "points": [point, right_point, opposite_point], "cross_squared": second_cross}
+				]
+			var edge_split: Array[Dictionary] = []
+			for triangle_index in range(triangles.size()):
+				if replacement_by_index.has(triangle_index): edge_split.append_array(replacement_by_index[triangle_index])
+				else: edge_split.append(triangles[triangle_index])
+			triangles = edge_split
+			insertion_rows.append({"root_id": root_id, "construction": "shared_edge_split", "source_edge": edge_key, "affected_triangle_count": edge_matches.size()})
+			continue
+		if strict_containing.size() != 1:
+			return {"valid": false, "reason": "interior_root_not_in_exactly_one_projected_triangle", "root_id": root_id, "containing_triangle_indices": strict_containing}
+		var containing_index: int = strict_containing[0]
+		var parent_triangle: Dictionary = triangles[containing_index]
+		var parent_ids: Array = parent_triangle.root_ids
+		var parent_points: Array = parent_triangle.points
+		var children: Array[Dictionary] = [
+			{"root_ids": [parent_ids[0], parent_ids[1], String(root_id)], "points": [parent_points[0], parent_points[1], point]},
+			{"root_ids": [parent_ids[1], parent_ids[2], String(root_id)], "points": [parent_points[1], parent_points[2], point]},
+			{"root_ids": [parent_ids[2], parent_ids[0], String(root_id)], "points": [parent_points[2], parent_points[0], point]}
+		]
+		var child_cross_squared: Array[float] = []
+		for child in children:
+			var cross_squared: float = _cross_squared(child.points[0], child.points[1], child.points[2])
+			child.cross_squared = cross_squared
+			child_cross_squared.append(cross_squared)
+			if not is_finite(cross_squared) or cross_squared <= CUTOFF_SQUARED:
+				return {"valid": false, "reason": "interior_root_insertion_children_below_frozen_cutoff", "root_id": root_id, "parent_triangle_index": containing_index, "child_cross_squared": child_cross_squared}
+		triangles.remove_at(containing_index)
+		triangles.insert(containing_index, children[2])
+		triangles.insert(containing_index, children[1])
+		triangles.insert(containing_index, children[0])
+		insertion_rows.append({"root_id": root_id, "construction": "strict_triangle_interior_split", "parent_triangle_index": containing_index, "child_cross_squared": child_cross_squared})
+	return {"valid": true, "construction": "boundary_ear_clipping_then_deterministic_source_root_insertion", "projection_axis": projection_axis, "orientation": base.get("orientation", 1.0), "boundary_root_ids": base.get("boundary_root_ids", []), "triangles": triangles, "interior_root_insertions": insertion_rows, "inserted_root_count": insertion_rows.size(), "input_triangle_count": base.get("triangles", []).size(), "output_triangle_count": triangles.size(), "all_requested_roots_inserted": insertion_rows.size() == interior_root_ids.size()}
+
+func _project_world_point(point: Vector3, projection_axis: int) -> Vector2:
+	if projection_axis == 0: return Vector2(point.y, point.z)
+	if projection_axis == 1: return Vector2(point.x, point.z)
+	return Vector2(point.x, point.y)
 
 func _point_in_projected_triangle(point: Vector2, a: Vector2, b: Vector2, c: Vector2, orientation: float) -> bool:
 	var ab: float = (b - a).cross(point - a) * orientation
