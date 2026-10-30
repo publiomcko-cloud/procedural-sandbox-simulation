@@ -39,6 +39,25 @@ Before any C hypothesis, the fixture builder shall:
 
 Stage 0 is infrastructure and does not consume C1.
 
+### Stage 0 result and C1 applicability (2026-10-30)
+
+Stage 0 passed on source `d63394d3c0e255d7d0af547a258aa847700e2f44`; the create-new fixture is SHA-256 `33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d0` (2,885,492 bytes). It verifies the 369/502/870 graph and target component 73 roots, 84 polygons, 156 incident arcs, 34 boundary roots, 39 interior roots. The root-degree histogram is 2:2, 3:19, 4:30, 5:1, 6:21; both degree-2 roots are boundary anchors. Therefore the frozen C1 rule has zero eligible interior PATH_EVENT roots and cannot alter this target's geometry. C1 is `NOT_APPLICABLE_NO_ELIGIBLE_INTERIOR_DEGREE2_ROOTS`, is not executed, and is not consumed. It will not be widened after observing this result.
+
+The initial copied A6 digest discrepancy was resolved against primary raw evidence before any C hypothesis: the R10-A6 archive entry identifies `de53e9fa...`; the `1f21af7c...` value belongs to a distinct R10-B6 attempt record. The correction is documented above and both original records remain preserved.
+
+## C2 — graph-face anchor-cycle realization (preregistered, not executed)
+
+**Differentiator.** Build output triangles directly from the authoritative source polygon cycles in the Stage 0 graph. Do not run R10A6 component reconstruction, any edge-flip/beam search, or B1R candidate search. This is a loop/face realization, not a search over complete mesh states.
+
+- Every source topology root is an `ANCHOR_VERTEX` with its frozen ID and Candidate D root position. The 369-root graph and all 870 arcs remain authoritative; for the target component this is 73 anchors and 156 incident arcs. No PATH_EVENT or SUPPORT_VERTEX is generated.
+- Each canonical source polygon row supplies one ordered face cycle and source cell/tetra/face ownership. Validate that every consecutive cycle pair corresponds to its declared topology arc and that each arc has the exact source-face incidence from the graph.
+- Triangles emit as one face if finite and `cross_squared > 1e-12`. Quads independently evaluate their two cycle-preserving diagonals; choose only a diagonal whose two triangles both exceed the unchanged cutoff, maximizing the smaller cross-squared value with a frozen lexicographic diagonal tie-break. Reject polygons above four roots or quads for which neither diagonal qualifies. No vertex moves or support points are allowed.
+- The realization map records one root-to-anchor row per root, one arc-to-anchor-edge row per arc, and one face-cycle-to-triangle list per polygon. Reconstruct and hash the canonical root/arc/owner signature from that map; require byte-identical topology signature before geometry qualification.
+- Build full ROI geometry from the full graph, not just the target component. Compute topology from emitted triangles, cutoff rejections and edge incidence against the 870 source arcs. A missing emitted incidence is a geometry failure even if the abstract realization map round-trips.
+- Frozen field, input, ROI, seed, volume/revision, controls and ray contracts remain unchanged. C2 geometry, six controls and ROI ray diagnostics are separate records; mixed LOD stays gated on equal LOD + controls + ray + volume.
+
+The C2 algorithm is bounded by the frozen 369 roots, 870 arcs, 502 source faces, 20,000 emitted triangles, 10-minute process limit and 2-GiB free-commit abort. It does not introduce a global combinatorial search. C2 has not executed; its first runtime requires a new exact source pin and Stage 0 fixture hash verification.
+
 ## C1 — degree-2 transit-root path realization
 
 ### Distinct hypothesis
