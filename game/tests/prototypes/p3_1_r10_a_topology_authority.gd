@@ -13,6 +13,7 @@ const A2_REFINE_CELLS: Dictionary = {"60,8,25": true, "61,8,25": true, "62,9,24"
 const A4_PATCH_HALO_CELLS: int = 1
 const A4_PATCH_MAX_POLYGONS: int = 512
 const A4_PATCH_MAX_BOUNDARY_ROOTS: int = 96
+const A6_MAX_EDGE_FLIPS: int = 512
 
 func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: Dictionary = {}, seed: int = 131102026) -> Dictionary:
 	var dims: Vector3i = CELLS + Vector3i.ONE
@@ -117,9 +118,10 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: 
 			local_refinement = refinement_result.evidence
 		else:
 			geometry_errors.append({"reason": "a2_local_refinement_failed", "detail": refinement_result})
-	elif hypothesis in ["R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION"]:
-		var preserve_interior_roots: bool = hypothesis == "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION"
-		component_reconstruction = _apply_multi_cell_component_reconstruction(polygons, roots, source_arcs, values, dims, preserve_interior_roots)
+	elif hypothesis in ["R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION", "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION"]:
+		var preserve_interior_roots: bool = hypothesis in ["R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION", "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION"]
+		var optimize_edge_flips: bool = hypothesis == "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION"
+		component_reconstruction = _apply_multi_cell_component_reconstruction(polygons, roots, source_arcs, values, dims, preserve_interior_roots, optimize_edge_flips)
 		if bool(component_reconstruction.get("valid", false)):
 			polygons = component_reconstruction.get("polygons", polygons)
 			arcs = component_reconstruction.get("arcs", arcs)
@@ -134,7 +136,7 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: 
 		else:
 			geometry_errors.append({"reason": "component_reconstruction_failed", "detail": component_reconstruction})
 	var graph: Dictionary = _topology_graph(roots, root_sources, polygons, arcs, geometry_errors)
-	var component_reconstruction_enabled: bool = hypothesis in ["R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION"]
+	var component_reconstruction_enabled: bool = hypothesis in ["R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION", "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION"]
 	var source_graph: Dictionary = _topology_graph(roots, root_sources, source_polygons, source_arcs, []) if component_reconstruction_enabled else {}
 	var source_graph_proof: Dictionary = {"schema": source_graph.get("schema", ""), "topology_sha256": source_graph.get("topology_sha256", ""), "valid": source_graph.get("valid", false), "root_count": source_graph.get("root_count", 0), "polygon_count": source_graph.get("polygon_count", 0), "arc_count": source_graph.get("arc_count", 0), "unresolved_required_arc_count": source_graph.get("unresolved_required_arcs", []).size(), "nonmanifold_required_arc_count": source_graph.get("nonmanifold_required_arcs", []).size()}
 	if component_reconstruction_enabled:
@@ -198,7 +200,7 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: 
 		"unresolved_obligations": unresolved, "cutoff_rejections": cutoff_rejections, "required_adjacency_obligations": adjacency_obligations,
 		"required_adjacency_missing_count": missing_count, "required_adjacency_nonmanifold_count": nonmanifold_count,
 		"geometry_realization_complete": geometry_complete, "required_topology_complete": required_complete, "winding_valid": winding_valid,
-		"local_refinement": {"enabled": hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION"], "source_a1_equal_case_sha256": A2_CAUSAL_A1_CASE_SHA256 if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION"] else "", "target_parent_cells": A2_REFINE_CELLS.keys() if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION"] else [], "subdivided_parent_polygons": local_refinement, "subdivided_count": local_refinement.size(), "field_authority": "Candidate D piecewise-linear tetrahedral field for A2, A4 and A5; canonical SDF plus ordered snapshot for A3; scalar volume unchanged"},
+		"local_refinement": {"enabled": hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION", "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION"], "source_a1_equal_case_sha256": A2_CAUSAL_A1_CASE_SHA256 if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION", "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION"] else "", "target_parent_cells": A2_REFINE_CELLS.keys() if hypothesis in ["R10A2_CENTROID_TRIANGLE_SUBDIVISION", "R10A3_CANONICAL_FIELD_STEINER", "R10A4_MULTI_CELL_COMPONENT_RECONSTRUCTION", "R10A5_INTERIOR_ROOT_PRESERVING_RETRIANGULATION", "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION"] else [], "subdivided_parent_polygons": local_refinement, "subdivided_count": local_refinement.size(), "field_authority": "Candidate D piecewise-linear tetrahedral field for A2, A4, A5 and A6; canonical SDF plus ordered snapshot for A3; scalar volume unchanged"},
 		"metrics": {"root_count": roots.size(), "polygon_count": polygons.size(), "required_arc_count": arcs.size(), "emitted_triangle_count": emitted_triangles.size(),
 			"unresolved_polygon_count": unresolved.size(), "cutoff_rejection_count": cutoff_rejections.size(), "topology_build_realize_usec": Time.get_ticks_usec() - begin_usec,
 			"fixed_cross_squared_cutoff": CUTOFF_SQUARED, "field_authority": "Candidate D serialized/reloaded float32 materialized volume; no sample mutation"}}
@@ -277,7 +279,7 @@ func _apply_triangle_subdivision(source_polygons: Array[Dictionary], roots: Dict
 			rebuilt_arcs[arc_key] = arc
 	return {"valid": true, "polygons": expanded, "arcs": rebuilt_arcs, "evidence": evidence}
 
-func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionary], roots: Dictionary, source_arcs: Dictionary, values: PackedFloat32Array, dims: Vector3i, preserve_interior_roots: bool) -> Dictionary:
+func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionary], roots: Dictionary, source_arcs: Dictionary, values: PackedFloat32Array, dims: Vector3i, preserve_interior_roots: bool, optimize_edge_flips: bool = false) -> Dictionary:
 	var selected: Dictionary = {}
 	for polygon in source_polygons:
 		var cell: Array = polygon.get("cell", [])
@@ -327,7 +329,7 @@ func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionar
 			group_polygons.append(polygon)
 			if _authority_polygon_has_cutoff_triangle(polygon): needs_reconstruction = true
 		if not needs_reconstruction: continue
-		var record: Dictionary = {"component_id": String(component_id), "source_polygon_ids": members, "source_cell_count": _unique_polygon_cell_count(group_polygons), "status": "PENDING", "source_authority": "CANDIDATE_D_MATERIALIZED_FLOAT32_SCALAR_VOLUME", "construction": "BOUNDED_MULTI_CELL_INTERIOR_ROOT_PRESERVING_RETRIANGULATION" if preserve_interior_roots else "BOUNDED_MULTI_CELL_BOUNDARY_ONLY_RETRIANGULATION", "preserve_interior_roots": preserve_interior_roots}
+		var record: Dictionary = {"component_id": String(component_id), "source_polygon_ids": members, "source_cell_count": _unique_polygon_cell_count(group_polygons), "status": "PENDING", "source_authority": "CANDIDATE_D_MATERIALIZED_FLOAT32_SCALAR_VOLUME", "construction": "BOUNDED_MULTI_CELL_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION" if optimize_edge_flips else ("BOUNDED_MULTI_CELL_INTERIOR_ROOT_PRESERVING_RETRIANGULATION" if preserve_interior_roots else "BOUNDED_MULTI_CELL_BOUNDARY_ONLY_RETRIANGULATION"), "preserve_interior_roots": preserve_interior_roots, "optimize_edge_flips": optimize_edge_flips}
 		if members.size() < 2:
 			record.status = "UNRESOLVED"
 			record.reason = "cutoff_polygon_has_no_adjacent_polygon_inside_bounded_patch"
@@ -416,7 +418,7 @@ func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionar
 			continue
 		var triangulation: Dictionary = _triangulate_boundary_cycle(boundary_roots, roots)
 		if bool(triangulation.get("valid", false)) and preserve_interior_roots and not interior_root_ids.is_empty():
-			var insertion: Dictionary = _insert_interior_roots_into_triangulation(triangulation, interior_root_ids, roots)
+			var insertion: Dictionary = _insert_interior_roots_into_triangulation(triangulation, interior_root_ids, roots, optimize_edge_flips)
 			triangulation = insertion
 		record.triangulation = triangulation
 		if not bool(triangulation.get("valid", false)):
@@ -445,6 +447,7 @@ func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionar
 			continue
 		average_empty = average_empty.normalized()
 		var component_key: String = String(component_id)
+		var patch_prefix: String = "r10a6-patch|" if optimize_edge_flips else ("r10a5-patch|" if preserve_interior_roots else "r10a4-patch|")
 		var replacement_polygons: Array[Dictionary] = []
 		var replacement_ids: Array[String] = []
 		var replacement_edge_occurrences: Dictionary = {}
@@ -482,7 +485,7 @@ func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionar
 				break
 			field_residual_rows.append({"triangle_index": triangle_index, "centroid": [centroid.x, centroid.y, centroid.z], "piecewise_materialized_density": sampled_field.density, "field_residual": absf(float(sampled_field.density)), "source_tetrahedron": sampled_field.tetrahedron_index})
 			var owner_cell: Array[int] = [floori(centroid.x / STEP), floori(centroid.y / STEP), floori(centroid.z / STEP)]
-			var triangle_id: String = "r10a4-patch|" + component_key + "|triangle:" + str(triangle_index)
+			var triangle_id: String = patch_prefix + component_key + "|triangle:" + str(triangle_index)
 			replacement_ids.append(triangle_id)
 			replacement_polygons.append({"id": triangle_id, "cell": owner_cell, "tet_index": -1, "root_ids": triangle_ids, "points": triangle_points, "face_ids": face_ids, "toward_empty": average_empty, "realization": "PENDING", "patch_id": component_key, "source_polygon_ids": members.duplicate()})
 			for edge_index in range(3):
@@ -510,7 +513,7 @@ func _apply_multi_cell_component_reconstruction(source_polygons: Array[Dictionar
 		record.source_boundary_arc_keys = boundary_rows.map(func(edge: Dictionary) -> String: return String(edge.edge_key))
 		record.superseded_internal_arc_keys = internal_arc_keys
 		record.replacement_polygon_ids = replacement_ids
-		record.source_to_replacement = {"source_polygon_ids": members.duplicate(), "replacement_polygon_ids": replacement_ids, "equivalence_basis": "one connected Euler-characteristic-one polygon disk replaced by a boundary-loop triangulation with all source root identities retained; boundary vertices/arcs fixed; no new or moved vertices" if preserve_interior_roots else "one connected Euler-characteristic-one polygon disk replaced by an n-2 triangulation of the identical ordered boundary root loop; boundary vertices/arcs fixed; no Steiner vertices"}
+		record.source_to_replacement = {"source_polygon_ids": members.duplicate(), "replacement_polygon_ids": replacement_ids, "equivalence_basis": "one connected Euler-characteristic-one polygon disk replaced by a boundary-loop triangulation with all source root identities retained; bounded internal diagonal flips preserve the exact boundary; no new or moved vertices" if optimize_edge_flips else ("one connected Euler-characteristic-one polygon disk replaced by a boundary-loop triangulation with all source root identities retained; boundary vertices/arcs fixed; no new or moved vertices" if preserve_interior_roots else "one connected Euler-characteristic-one polygon disk replaced by an n-2 triangulation of the identical ordered boundary root loop; boundary vertices/arcs fixed; no Steiner vertices")}
 		record.boundary_arc_preservation = boundary_arc_preservation
 		record.replacement_cross_squared = triangle_rows.map(func(row: Dictionary) -> float: return _cross_squared(row.points[0], row.points[1], row.points[2]))
 		record.piecewise_materialized_field_centroid_residuals = field_residual_rows
@@ -643,7 +646,7 @@ func _triangulate_boundary_cycle(root_ids: Array, roots: Dictionary) -> Dictiona
 	triangles.append({"root_ids": [root_ids[remaining[0]], root_ids[remaining[1]], root_ids[remaining[2]]], "points": [points[remaining[0]], points[remaining[1]], points[remaining[2]]], "cross_squared": final_cross_squared})
 	return {"valid": true, "construction": "deterministic_boundary_preserving_ear_clipping_max_area_first", "orientation": orientation, "projection_axis": dominant_axis, "triangles": triangles, "boundary_root_ids": root_ids.duplicate(), "boundary_area_twice": signed_area_twice}
 
-func _insert_interior_roots_into_triangulation(base: Dictionary, interior_root_ids: Array[String], roots: Dictionary) -> Dictionary:
+func _insert_interior_roots_into_triangulation(base: Dictionary, interior_root_ids: Array[String], roots: Dictionary, allow_temporary_subcutoff: bool = false) -> Dictionary:
 	var triangles: Array[Dictionary] = []
 	var raw_base_triangles: Variant = base.get("triangles", [])
 	if not raw_base_triangles is Array: return {"valid": false, "reason": "initial_boundary_triangulation_not_array"}
@@ -709,7 +712,7 @@ func _insert_interior_roots_into_triangulation(base: Dictionary, interior_root_i
 				var opposite_point: Vector3 = old_points[(edge_index + 2) % 3]
 				var first_cross: float = _cross_squared(left_point, point, opposite_point)
 				var second_cross: float = _cross_squared(point, right_point, opposite_point)
-				if first_cross <= CUTOFF_SQUARED or second_cross <= CUTOFF_SQUARED:
+				if not is_finite(first_cross) or not is_finite(second_cross) or (not allow_temporary_subcutoff and (first_cross <= CUTOFF_SQUARED or second_cross <= CUTOFF_SQUARED)):
 					return {"valid": false, "reason": "edge_root_insertion_children_below_frozen_cutoff", "root_id": root_id, "source_edge": edge_key, "child_cross_squared": [first_cross, second_cross]}
 				replacement_by_index[triangle_index] = [
 					{"root_ids": [left_id, String(root_id), opposite_id], "points": [left_point, point, opposite_point], "cross_squared": first_cross},
@@ -738,14 +741,139 @@ func _insert_interior_roots_into_triangulation(base: Dictionary, interior_root_i
 			var cross_squared: float = _cross_squared(child.points[0], child.points[1], child.points[2])
 			child.cross_squared = cross_squared
 			child_cross_squared.append(cross_squared)
-			if not is_finite(cross_squared) or cross_squared <= CUTOFF_SQUARED:
+			if not is_finite(cross_squared) or (not allow_temporary_subcutoff and cross_squared <= CUTOFF_SQUARED):
 				return {"valid": false, "reason": "interior_root_insertion_children_below_frozen_cutoff", "root_id": root_id, "parent_triangle_index": containing_index, "child_cross_squared": child_cross_squared}
 		triangles.remove_at(containing_index)
 		triangles.insert(containing_index, children[2])
 		triangles.insert(containing_index, children[1])
 		triangles.insert(containing_index, children[0])
 		insertion_rows.append({"root_id": root_id, "construction": "strict_triangle_interior_split", "parent_triangle_index": containing_index, "child_cross_squared": child_cross_squared})
+	if allow_temporary_subcutoff:
+		var optimized: Dictionary = _optimize_triangulation_edge_flips(triangles, base.get("boundary_root_ids", []), projection_axis)
+		if not bool(optimized.get("valid", false)):
+			optimized["interior_root_insertions"] = insertion_rows
+			optimized["inserted_root_count"] = insertion_rows.size()
+			optimized["all_requested_roots_inserted"] = insertion_rows.size() == interior_root_ids.size()
+			return optimized
+		triangles = optimized.get("triangles", [])
+		return {"valid": true, "construction": "boundary_root_insertion_then_bounded_min_area_improving_internal_edge_flips", "projection_axis": projection_axis, "orientation": base.get("orientation", 1.0), "boundary_root_ids": base.get("boundary_root_ids", []), "triangles": triangles, "interior_root_insertions": insertion_rows, "inserted_root_count": insertion_rows.size(), "all_requested_roots_inserted": insertion_rows.size() == interior_root_ids.size(), "edge_flip_optimization": optimized}
 	return {"valid": true, "construction": "boundary_ear_clipping_then_deterministic_source_root_insertion", "projection_axis": projection_axis, "orientation": base.get("orientation", 1.0), "boundary_root_ids": base.get("boundary_root_ids", []), "triangles": triangles, "interior_root_insertions": insertion_rows, "inserted_root_count": insertion_rows.size(), "input_triangle_count": base.get("triangles", []).size(), "output_triangle_count": triangles.size(), "all_requested_roots_inserted": insertion_rows.size() == interior_root_ids.size()}
+
+func _optimize_triangulation_edge_flips(input_triangles: Array[Dictionary], boundary_root_ids: Array, projection_axis: int) -> Dictionary:
+	var triangles: Array[Dictionary] = input_triangles.duplicate(true)
+	var boundary_edges: Dictionary = {}
+	for index in range(boundary_root_ids.size()):
+		boundary_edges[_arc_key(String(boundary_root_ids[index]), String(boundary_root_ids[(index + 1) % boundary_root_ids.size()]))] = true
+	var flip_rows: Array[Dictionary] = []
+	var seen_states: Dictionary = {}
+	seen_states[_triangulation_state_key(triangles)] = true
+	var stopped_by_cycle: bool = false
+	while flip_rows.size() < A6_MAX_EDGE_FLIPS:
+		var edge_rows: Dictionary = {}
+		for triangle_index in range(triangles.size()):
+			var ids: Array = triangles[triangle_index].get("root_ids", [])
+			if ids.size() != 3: return {"valid": false, "reason": "edge_flip_triangle_root_arity_invalid", "triangle_index": triangle_index}
+			for edge_index in range(3):
+				var left_id: String = String(ids[edge_index])
+				var right_id: String = String(ids[(edge_index + 1) % 3])
+				var edge_key: String = _arc_key(left_id, right_id)
+				if not edge_rows.has(edge_key): edge_rows[edge_key] = {"a": left_id, "b": right_id, "triangle_indices": []}
+				edge_rows[edge_key].triangle_indices.append(triangle_index)
+		var edge_keys: Array = edge_rows.keys()
+		edge_keys.sort()
+		var best_flip: Dictionary = {}
+		for raw_edge_key in edge_keys:
+			var edge_key: String = String(raw_edge_key)
+			if boundary_edges.has(edge_key): continue
+			var edge_row: Dictionary = edge_rows[edge_key]
+			var owners: Array = edge_row.triangle_indices
+			if owners.size() != 2: continue
+			var first_index: int = int(owners[0])
+			var second_index: int = int(owners[1])
+			var first_triangle: Dictionary = triangles[first_index]
+			var second_triangle: Dictionary = triangles[second_index]
+			var first_ids: Array = first_triangle.root_ids
+			var second_ids: Array = second_triangle.root_ids
+			var a_id: String = String(edge_row.a)
+			var b_id: String = String(edge_row.b)
+			var c_id: String = _opposite_triangle_root(first_ids, a_id, b_id)
+			var d_id: String = _opposite_triangle_root(second_ids, a_id, b_id)
+			if c_id.is_empty() or d_id.is_empty() or c_id == d_id: continue
+			var new_edge_key: String = _arc_key(c_id, d_id)
+			if edge_rows.has(new_edge_key) or boundary_edges.has(new_edge_key): continue
+			var a_point: Vector3 = _triangle_root_point(first_triangle, a_id)
+			var b_point: Vector3 = _triangle_root_point(first_triangle, b_id)
+			var c_point: Vector3 = _triangle_root_point(first_triangle, c_id)
+			var d_point: Vector3 = _triangle_root_point(second_triangle, d_id)
+			if not _segments_properly_intersect(_project_world_point(a_point, projection_axis), _project_world_point(b_point, projection_axis), _project_world_point(c_point, projection_axis), _project_world_point(d_point, projection_axis)):
+				continue
+			var old_min: float = minf(_cross_squared_from_triangle(first_triangle), _cross_squared_from_triangle(second_triangle))
+			var first_new_cross: float = _cross_squared(c_point, d_point, a_point)
+			var second_new_cross: float = _cross_squared(d_point, c_point, b_point)
+			if not is_finite(first_new_cross) or not is_finite(second_new_cross): continue
+			var new_min: float = minf(first_new_cross, second_new_cross)
+			if new_min <= old_min: continue
+			if not best_flip.is_empty() and new_min <= float(best_flip.get("new_min", -1.0)): continue
+			best_flip = {"old_edge_key": edge_key, "new_edge_key": new_edge_key, "first_index": first_index, "second_index": second_index, "a_id": a_id, "b_id": b_id, "c_id": c_id, "d_id": d_id, "a_point": a_point, "b_point": b_point, "c_point": c_point, "d_point": d_point, "old_min": old_min, "new_min": new_min, "first_new_cross": first_new_cross, "second_new_cross": second_new_cross}
+		if best_flip.is_empty(): break
+		var first_triangle_after: Dictionary = {"root_ids": [String(best_flip.c_id), String(best_flip.d_id), String(best_flip.a_id)], "points": [best_flip.c_point, best_flip.d_point, best_flip.a_point], "cross_squared": best_flip.first_new_cross}
+		var second_triangle_after: Dictionary = {"root_ids": [String(best_flip.d_id), String(best_flip.c_id), String(best_flip.b_id)], "points": [best_flip.d_point, best_flip.c_point, best_flip.b_point], "cross_squared": best_flip.second_new_cross}
+		triangles[int(best_flip.first_index)] = first_triangle_after
+		triangles[int(best_flip.second_index)] = second_triangle_after
+		var state_key: String = _triangulation_state_key(triangles)
+		flip_rows.append({"removed_edge": best_flip.old_edge_key, "added_edge": best_flip.new_edge_key, "old_min_cross_squared": best_flip.old_min, "new_min_cross_squared": best_flip.new_min, "new_triangle_cross_squared": [best_flip.first_new_cross, best_flip.second_new_cross]})
+		if seen_states.has(state_key):
+			stopped_by_cycle = true
+			break
+		seen_states[state_key] = true
+	var subcutoff: Array[Dictionary] = []
+	var minimum_cross_squared: float = INF
+	for triangle_index in range(triangles.size()):
+		var cross_squared: float = _cross_squared_from_triangle(triangles[triangle_index])
+		minimum_cross_squared = minf(minimum_cross_squared, cross_squared)
+		if not is_finite(cross_squared) or cross_squared <= CUTOFF_SQUARED:
+			subcutoff.append({"triangle_index": triangle_index, "cross_squared": cross_squared, "root_ids": triangles[triangle_index].get("root_ids", [])})
+	return {"valid": subcutoff.is_empty(), "reason": "" if subcutoff.is_empty() else ("edge_flip_state_cycle_detected" if stopped_by_cycle else "no_quality_improving_flip_can_resolve_frozen_cutoff"), "triangles": triangles, "flip_count": flip_rows.size(), "flips": flip_rows, "minimum_cross_squared": minimum_cross_squared, "remaining_subcutoff_triangles": subcutoff, "max_flip_limit": A6_MAX_EDGE_FLIPS, "limit_reached": flip_rows.size() >= A6_MAX_EDGE_FLIPS}
+
+func _opposite_triangle_root(ids: Array, first_id: String, second_id: String) -> String:
+	for raw_id in ids:
+		var root_id: String = String(raw_id)
+		if root_id != first_id and root_id != second_id: return root_id
+	return ""
+
+func _triangle_root_point(triangle: Dictionary, root_id: String) -> Vector3:
+	var ids: Array = triangle.get("root_ids", [])
+	var points: Array = triangle.get("points", [])
+	for index in range(mini(ids.size(), points.size())):
+		if String(ids[index]) == root_id and points[index] is Vector3: return points[index]
+	return Vector3(NAN, NAN, NAN)
+
+func _cross_squared_from_triangle(triangle: Dictionary) -> float:
+	var points: Array = triangle.get("points", [])
+	if points.size() != 3: return NAN
+	return _cross_squared(points[0], points[1], points[2])
+
+func _segments_properly_intersect(a: Vector2, b: Vector2, c: Vector2, d: Vector2) -> bool:
+	var ab_c: float = (b - a).cross(c - a)
+	var ab_d: float = (b - a).cross(d - a)
+	var cd_a: float = (d - c).cross(a - c)
+	var cd_b: float = (d - c).cross(b - c)
+	return ab_c * ab_d < 0.0 and cd_a * cd_b < 0.0
+
+func _triangulation_state_key(triangles: Array[Dictionary]) -> String:
+	var rows: Array[String] = []
+	for triangle in triangles:
+		var ids: Array = triangle.get("root_ids", [])
+		if ids.size() != 3: return "INVALID"
+		var edge_keys: Array[String] = [
+			_arc_key(String(ids[0]), String(ids[1])),
+			_arc_key(String(ids[1]), String(ids[2])),
+			_arc_key(String(ids[2]), String(ids[0]))
+		]
+		edge_keys.sort()
+		rows.append("|".join(edge_keys))
+	rows.sort()
+	return "\n".join(rows)
 
 func _project_world_point(point: Vector3, projection_axis: int) -> Vector2:
 	if projection_axis == 0: return Vector2(point.y, point.z)
