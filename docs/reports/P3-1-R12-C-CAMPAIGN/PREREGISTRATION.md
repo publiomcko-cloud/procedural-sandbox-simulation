@@ -11,13 +11,17 @@ Frozen scientific inputs:
 - materialized volume: `ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2`
 - volume payload: `2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0`
 - R10-A source topology: `4ecbb2496fb34f1cf3c05a60192f76bdce7a52ec3148d02ba041510b804a8c95`
-- R10-A6 historical mesh: `1f21af7c3856ae72080e3e0c5ad44a3c608703470b5563212902bed08ad0f7d4`
+- R10-A6 historical mesh: `de53e9fa326e451ac202beb49c0ef1e56b70500ce1ca3dd9c43565d85e7c5f74` (primary R10-A raw result; see provenance note below)
 - cutoff remains `cross_squared > 1e-12`
 - frozen candidate domain: `30c89e9ca26c5c6550b6662fc6ccb46f566cfff7eb29b9e740f8ec1b1b7c9c22`
 - candidate-domain identity: `b3c5de9786a078a6568650ef62e2150524f1b387e9e979cba5a060723d990feb`
 - target component: `60,8,25|tet:0`
 
 Target scenario: `R9.2.SEAM.XPLUS_EQUAL.v1`, seed 131102026, ROI minimum [15,1,6], 8×8×8 cells, step 0.25, ordered FILL then CARVE. Candidate D remains the geometry field authority.
+
+### Frozen hash provenance correction (R12-C pre-hypothesis)
+
+The previously copied `1f21af7c...` digest is present in the R10-B6 attempt record (`B6-ATTEMPT-RESULT.md` / B6 JSONL), not in the primary R10-A6 geometry result. The authoritative source is the `R10-A6_geometry/required_equal_lod_gate_full_roi_R9.2.SEAM.XPLUS_EQUAL.v1.json` entry in `docs/reports/P3-1-R10-A-CAMPAIGN/evidence/R10-A-raw-evidence.zip` (archive SHA-256 `ac630bd3b6b8be3494b33367e1896030de541a88ae16e8fdcf8b7ac83ac58e6`); its `geometry.mesh_sha256` is `de53e9fa...`, with 655 triangles, 10 internal opens, 21 missing required adjacencies, zero nonmanifold edges, valid winding, and seven cutoff rejections. The R10-B6 result reports `1f21af7c...` with matching summary counts, but it is a separate R10-B6 attempt output and is not an R10-A6 output pin. R12 Stage 0 now uses the primary R10-A6 artifact digest and still checks every frozen topology metric; this corrects provenance rather than relaxing an acceptance criterion.
 
 ## Stage 0 — fixture contract
 

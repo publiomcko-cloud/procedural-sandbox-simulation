@@ -11,7 +11,7 @@ const B1R_SOURCE_SHA := "6f28273d0113f93678034b9e482140e73e765721"
 const TOPOLOGY_SHA := "4ecbb2496fb34f1cf3c05a60192f76bdce7a52ec3148d02ba041510b804a8c95"
 const VOLUME_SHA := "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2"
 const PAYLOAD_SHA := "2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0"
-const A6_MESH_SHA := "1f21af7c3856ae72080e3e0c5ad44a3c608703470b5563212902bed08ad0f7d4"
+const A6_MESH_SHA := "de53e9fa326e451ac202beb49c0ef1e56b70500ce1ca3dd9c43565d85e7c5f74"
 const COMPONENT := "60,8,25|tet:0"
 const FIXTURE_FILE := "r12c_stage0_topology_fixture.json"
 
@@ -424,7 +424,7 @@ func _historical_a6_result(result: Dictionary, source_graph: Dictionary) -> Dict
 	valid = valid and int(metrics.get("emitted_triangle_count", -1)) == 655 and int(mesh_topology.get("internal_open_edges", -1)) == 10 and int(result.get("required_adjacency_missing_count", -1)) == 21 and int(mesh_topology.get("nonmanifold_edges", -1)) == 0 and int(mesh_topology.get("winding_inconsistencies", -1)) == 0 and result.get("cutoff_rejections", []).size() == 7
 	var patches: Array = result.get("component_reconstruction", {}).get("patches", [])
 	var target_patch: Dictionary = _target_patch(patches)
-	return {"valid": valid, "hypothesis": "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", "source_topology_proof": proof, "mesh_sha256": result.get("mesh_sha256", ""), "triangle_count": metrics.get("emitted_triangle_count", -1), "mesh_topology": mesh_topology, "required_adjacency_missing_count": result.get("required_adjacency_missing_count", -1), "unresolved_obligations": result.get("unresolved_obligations", []), "cutoff_rejections": result.get("cutoff_rejections", []), "target_patch": target_patch, "patch_summaries": _patch_diagnostics(patches), "component_reconstruction": result.get("component_reconstruction", {}), "metrics": metrics}
+	return {"valid": valid, "hypothesis": "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", "source_topology_proof": proof, "mesh_sha256": result.get("mesh_sha256", ""), "triangle_count": metrics.get("emitted_triangle_count", -1), "mesh_topology": mesh_topology, "required_adjacency_missing_count": result.get("required_adjacency_missing_count", -1), "unresolved_obligation_count": result.get("unresolved_obligations", []).size(), "cutoff_rejection_count": result.get("cutoff_rejections", []).size(), "target_patch": target_patch, "patch_summaries": _patch_diagnostics(patches), "metrics": metrics}
 
 func _fail(reason: String, details: Dictionary) -> void:
 	var root: String = OS.get_environment("R12C_ARTIFACT_DIR")
@@ -433,7 +433,11 @@ func _fail(reason: String, details: Dictionary) -> void:
 		attempt_id = str(Time.get_ticks_usec())
 	var path: String = root.path_join("r12c_stage0_failure_" + attempt_id + ".json")
 	var failure: Dictionary = {"schema": "P3.1.R12C.Stage0Failure.v1", "attempt_id": attempt_id, "reason": reason, "source_sha": OS.get_environment("R12C_SOURCE_SHA"), "details": details}
-	print("R12C_STAGE0_COMPLETE " + JSON.stringify({"status": "BLOCKED", "attempt_id": attempt_id, "reason": reason, "source_sha": OS.get_environment("R12C_SOURCE_SHA"), "details": details}))
+	var marker_details: Dictionary = details.duplicate()
+	if marker_details.has("a6") and typeof(marker_details.a6) == TYPE_DICTIONARY:
+		var marker_a6: Dictionary = marker_details.a6
+		marker_details["a6"] = {"valid": marker_a6.get("valid", false), "mesh_sha256": marker_a6.get("mesh_sha256", ""), "triangle_count": marker_a6.get("triangle_count", -1), "mesh_topology": marker_a6.get("mesh_topology", {}), "required_adjacency_missing_count": marker_a6.get("required_adjacency_missing_count", -1), "cutoff_rejection_count": marker_a6.get("cutoff_rejection_count", marker_a6.get("cutoff_rejections", []).size()), "target_patch": marker_a6.get("target_patch", {}), "patch_summaries": marker_a6.get("patch_summaries", [])}
+	print("R12C_STAGE0_COMPLETE " + JSON.stringify({"status": "BLOCKED", "attempt_id": attempt_id, "reason": reason, "source_sha": OS.get_environment("R12C_SOURCE_SHA"), "details": marker_details}))
 	if not FileAccess.file_exists(path):
 		var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 		if file != null:
