@@ -47,7 +47,13 @@ func _run() -> void:
 	var graph_contract: Dictionary = _topology_graph_contract_checks(authority)
 	print("R10A_TOPOLOGY_GRAPH_CONTRACT " + JSON.stringify(graph_contract))
 	if not bool(graph_contract.get("valid", false)):
-		_failures.append("topology_graph_contract_check_failed")
+		print("R10A_BLOCKED " + JSON.stringify({"reason": "topology_graph_contract_check_failed", "diagnostics": graph_contract}))
+		quit(2)
+		return
+	if OS.get_environment("R10A_GRAPH_ONLY") == "1":
+		print("R10A_GRAPH_CONTRACT_COMPLETE " + JSON.stringify({"status": "PASS", "attempt_id": attempt_id, "source_sha": source_sha, "diagnostics": graph_contract}))
+		quit(0)
+		return
 	var result_rows: Array[Dictionary] = []
 	for control_id in CONTROL_IDS:
 		var row: Dictionary = Core.case_by_id(manifest.rows, control_id)
@@ -153,7 +159,8 @@ func _topology_graph_contract_checks(authority: RefCounted) -> Dictionary:
 	for edge_spec in edge_specs:
 		var edge_key: String = authority._arc_key(String(edge_spec[0]), String(edge_spec[1]))
 		arcs[edge_key] = {"roots": [String(edge_spec[0]), String(edge_spec[1])], "required_incidence": 2, "polygon_ids": edge_spec[2], "face_ids": ["fixture_face"]}
-	var graph: Dictionary = authority._topology_graph(roots, {}, polygons, arcs, [])
+	var no_geometry_errors: Array[Dictionary] = []
+	var graph: Dictionary = authority._topology_graph(roots, {}, polygons, arcs, no_geometry_errors)
 	var components: Array = graph.get("surface_components", [])
 	var relations: Array = graph.get("neighbor_region_relations", [])
 	var ownership: Dictionary = graph.get("ownership", {})

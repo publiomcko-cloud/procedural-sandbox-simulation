@@ -1,5 +1,5 @@
 param(
-	[Parameter(Mandatory = $true)][ValidateSet('import', 'check-only', 'check-authority', 'geometry')][string]$Stage,
+	[Parameter(Mandatory = $true)][ValidateSet('import', 'check-only', 'check-authority', 'graph-contract', 'geometry')][string]$Stage,
 	[Parameter(Mandatory = $true)][string]$AttemptId,
 	[Parameter(Mandatory = $true)][string]$Hypothesis,
 	[Parameter(Mandatory = $true)][string]$EvidenceRoot
@@ -26,6 +26,7 @@ $arguments = switch ($Stage) {
 	'import' { @('--headless', '--path', './game', '--editor', '--import') }
 	'check-only' { @('--headless', '--path', './game', '--check-only', '--script', 'res://tests/prototypes/p3_1_r10_a_campaign.gd') }
 	'check-authority' { @('--headless', '--path', './game', '--check-only', '--script', 'res://tests/prototypes/p3_1_r10_a_topology_authority.gd') }
+	'graph-contract' { @('--headless', '--path', './game', '--script', 'res://tests/prototypes/p3_1_r10_a_campaign.gd') }
 	'geometry' { @('--headless', '--path', './game', '--script', 'res://tests/prototypes/p3_1_r10_a_campaign.gd') }
 }
 $commandLine = $arguments -join ' '
@@ -58,6 +59,7 @@ $psi.EnvironmentVariables['R10A_ATTEMPT'] = $AttemptId
 $psi.EnvironmentVariables['R10A_HYPOTHESIS'] = $Hypothesis
 $psi.EnvironmentVariables['R10A_SOURCE_SHA'] = $sourceSha
 $psi.EnvironmentVariables['R10A_ARTIFACT_DIR'] = $attemptRoot
+if ($Stage -eq 'graph-contract') { $psi.EnvironmentVariables['R10A_GRAPH_ONLY'] = '1' }
 
 $proc = [Diagnostics.Process]::new()
 $proc.StartInfo = $psi
@@ -115,18 +117,21 @@ $exitCode = if ($resourceAbort -or $timeoutAbort) { $null } else { $proc.ExitCod
 $scriptErrorDetected = $stderr -match '(?m)^(SCRIPT ERROR:|ERROR:|Parse Error:|Compile Error:)'
 $preflightMarkerCount = [regex]::Matches($stdout, '(?m)^R10A_PREFLIGHT ').Count
 $completionMatches = [regex]::Matches($stdout, '(?m)^R10A_ATTEMPT_COMPLETE (.+)$')
+$graphContractMatches = [regex]::Matches($stdout, '(?m)^R10A_GRAPH_CONTRACT_COMPLETE (.+)$')
 $terminalResult = 'NOT_AVAILABLE'
 if ($completionMatches.Count -eq 1) {
 	try { $terminalResult = [string](($completionMatches[0].Groups[1].Value | ConvertFrom-Json -ErrorAction Stop).result) } catch { $terminalResult = 'INVALID_COMPLETION_JSON' }
 }
-$validationStatus = if ($resourceAbort) { 'RUNTIME_ABORT_RESOURCE_SAFETY' } elseif ($timeoutAbort) { 'RUNTIME_ABORT_TIMEOUT' } elseif ($scriptErrorDetected) { 'GODOT_SCRIPT_ERROR' } elseif ($exitCode -ne 0) { 'PROCESS_NONZERO_EXIT' } elseif ($Stage -eq 'geometry' -and ($preflightMarkerCount -ne 1 -or $completionMatches.Count -ne 1 -or $terminalResult -notin @('PASS', 'FAILED_TARGET', 'PARTIAL', 'FAILED_WITH_REGRESSION'))) { 'GEOMETRY_TERMINAL_EVIDENCE_INVALID' } elseif ($Stage -eq 'import') { 'IMPORT_PROCESS_PASS' } elseif ($Stage -in @('check-only', 'check-authority')) { 'CHECK_ONLY_PROCESS_PASS' } else { 'GEOMETRY_RESULT_RECORDED' }
+$graphContractStatus = 'NOT_AVAILABLE'
+if ($graphContractMatches.Count -eq 1) { try { $graphContractStatus = [string](($graphContractMatches[0].Groups[1].Value | ConvertFrom-Json -ErrorAction Stop).status) } catch { $graphContractStatus = 'INVALID_GRAPH_CONTRACT_JSON' } }
+$validationStatus = if ($resourceAbort) { 'RUNTIME_ABORT_RESOURCE_SAFETY' } elseif ($timeoutAbort) { 'RUNTIME_ABORT_TIMEOUT' } elseif ($scriptErrorDetected) { 'GODOT_SCRIPT_ERROR' } elseif ($exitCode -ne 0) { 'PROCESS_NONZERO_EXIT' } elseif ($Stage -eq 'geometry' -and ($preflightMarkerCount -ne 1 -or $completionMatches.Count -ne 1 -or $terminalResult -notin @('PASS', 'FAILED_TARGET', 'PARTIAL', 'FAILED_WITH_REGRESSION'))) { 'GEOMETRY_TERMINAL_EVIDENCE_INVALID' } elseif ($Stage -eq 'graph-contract' -and ($preflightMarkerCount -ne 1 -or $graphContractMatches.Count -ne 1 -or $graphContractStatus -ne 'PASS' -or $completionMatches.Count -ne 0)) { 'GRAPH_CONTRACT_EVIDENCE_INVALID' } elseif ($Stage -eq 'graph-contract') { 'GRAPH_CONTRACT_PASS' } elseif ($Stage -eq 'import') { 'IMPORT_PROCESS_PASS' } elseif ($Stage -in @('check-only', 'check-authority')) { 'CHECK_ONLY_PROCESS_PASS' } else { 'GEOMETRY_RESULT_RECORDED' }
 $afterMemory = Get-CimInstance Win32_PerfRawData_PerfOS_Memory
 $after = [ordered]@{ timestamp_utc = [DateTime]::UtcNow.ToString('o'); committed_bytes = [int64]$afterMemory.CommittedBytes; commit_limit_bytes = [int64]$afterMemory.CommitLimit; free_commit_bytes = ([int64]$afterMemory.CommitLimit - [int64]$afterMemory.CommittedBytes); available_mbytes = [int64]$afterMemory.AvailableMBytes }
 [IO.File]::WriteAllText((Join-Path $attemptRoot 'host-after.json'), ($after | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
-$processRecord = [ordered]@{ schema = 'P3.1.R10A.ProcessRecord.v1'; run_id = $runId; stage = $Stage; pid = $godotProcessId; parent_pid = $launcherProcessId; command_line = $commandLine; source_sha = $sourceSha; exit_code = $exitCode; elapsed_ms = $elapsedMs; resource_abort = $resourceAbort; timeout_abort = $timeoutAbort; validation_status = $validationStatus; script_error_detected = $scriptErrorDetected; preflight_marker_count = $preflightMarkerCount; completion_marker_count = $completionMatches.Count; terminal_result = $terminalResult; min_free_commit_bytes = $minFreeCommit; warning_samples = $warningCount; stdout_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $attemptRoot 'stdout.txt')).Hash.ToLowerInvariant(); stderr_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $attemptRoot 'stderr.txt')).Hash.ToLowerInvariant(); monitor_sha256 = (Get-FileHash -Algorithm SHA256 $monitorPath).Hash.ToLowerInvariant() }
+$processRecord = [ordered]@{ schema = 'P3.1.R10A.ProcessRecord.v1'; run_id = $runId; stage = $Stage; pid = $godotProcessId; parent_pid = $launcherProcessId; command_line = $commandLine; source_sha = $sourceSha; exit_code = $exitCode; elapsed_ms = $elapsedMs; resource_abort = $resourceAbort; timeout_abort = $timeoutAbort; validation_status = $validationStatus; script_error_detected = $scriptErrorDetected; preflight_marker_count = $preflightMarkerCount; graph_contract_marker_count = $graphContractMatches.Count; graph_contract_status = $graphContractStatus; completion_marker_count = $completionMatches.Count; terminal_result = $terminalResult; min_free_commit_bytes = $minFreeCommit; warning_samples = $warningCount; stdout_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $attemptRoot 'stdout.txt')).Hash.ToLowerInvariant(); stderr_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $attemptRoot 'stderr.txt')).Hash.ToLowerInvariant(); monitor_sha256 = (Get-FileHash -Algorithm SHA256 $monitorPath).Hash.ToLowerInvariant() }
 [IO.File]::WriteAllText((Join-Path $attemptRoot 'process.json'), ($processRecord | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
 $processRecord | ConvertTo-Json -Depth 6
 if ($resourceAbort) { exit 75 }
 if ($timeoutAbort) { exit 76 }
-if ($scriptErrorDetected -or $validationStatus -eq 'GEOMETRY_TERMINAL_EVIDENCE_INVALID') { exit 2 }
+if ($scriptErrorDetected -or $validationStatus -in @('GEOMETRY_TERMINAL_EVIDENCE_INVALID', 'GRAPH_CONTRACT_EVIDENCE_INVALID')) { exit 2 }
 if ($exitCode -ne 0) { exit 1 }
