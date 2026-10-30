@@ -1,9 +1,13 @@
 # P3.1 R10-B — Final constrained-realization and ray-causality report
 
-**Campaign status:** `P3_1_R10_B_ATTEMPTS_EXHAUSTED_WITH_EVIDENCE`  
-**Branch:** `exp/p3-1-r10-b-constrained-realization`  
-**Measured source:** B6 execution HEAD `b1dd90ca7adb6ef941f3dc933008648fd1a91de6` (B6 code commit `abe1d54dc8986fec2513b8ce261197867f4b8095`, parent `f622468dd750775c51394ae595fa5019114e7a1c`).  
-**R10-A baseline:** final R10-A publication source and frozen R9.2 inputs as pinned in `PREREGISTRATION.md`; source branch remains separate from production.  
+**Campaign status:** `P3_1_R10_B_ATTEMPTS_EXHAUSTED_WITH_EVIDENCE`
+
+**Branch:** `exp/p3-1-r10-b-constrained-realization`
+
+**Measured source:** B6 execution HEAD `b1dd90ca7adb6ef941f3dc933008648fd1a91de6` (B6 code commit `abe1d54dc8986fec2513b8ce261197867f4b8095`, parent `f622468dd750775c51394ae595fa5019114e7a1c`).
+
+**R10-A baseline:** final R10-A publication source and frozen R9.2 inputs as pinned in `PREREGISTRATION.md`; source branch remains separate from production.
+
 **PR base:** `exp/p3-1-r10-a-topology-authority` at `f6f4a47bcb9f98ee7b8648f88a4db2ccf8317294`; this is a stacked evidence PR and leaves PR #207 unchanged. The R10-B draft PR URL is recorded after publication; no production integration or merge.
 
 ## Result
