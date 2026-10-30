@@ -1,8 +1,10 @@
 param(
-	[Parameter(Mandatory = $true)][ValidateSet('import', 'check-only', 'check-ray', 'ray-causality', 'check-authority', 'graph-contract', 'geometry')][string]$Stage,
+	[Parameter(Mandatory = $true)][ValidateSet('import', 'check-only', 'check-ray', 'ray-causality', 'check-authority', 'check-b1r', 'graph-contract', 'domain-audit', 'geometry', 'geometry-b1r')][string]$Stage,
 	[Parameter(Mandatory = $true)][string]$AttemptId,
 	[Parameter(Mandatory = $true)][string]$Hypothesis,
-	[Parameter(Mandatory = $true)][string]$EvidenceRoot
+	[Parameter(Mandatory = $true)][string]$EvidenceRoot,
+	[string]$CandidateDomainPath = '',
+	[string]$ExpectedCandidateDomainSha256 = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,6 +33,17 @@ $rayScriptSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'g
 $rayFixtureSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'docs\reports\P3-1-R10-B-CAMPAIGN\fixtures\ray_reference_fixture_r2.json')).Hash.ToLowerInvariant()
 $campaignSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'game\tests\prototypes\p3_1_r10_b_campaign.gd')).Hash.ToLowerInvariant()
 $realizerSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'game\tests\prototypes\p3_1_r10_b_realizer.gd')).Hash.ToLowerInvariant()
+$b1rRealizerSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'game\tests\prototypes\p3_1_r10_b1r_direct_triangulator.gd')).Hash.ToLowerInvariant()
+$resolvedDomain = ''
+$candidateDomainSha = ''
+if ($Stage -eq 'geometry-b1r') {
+	if ([string]::IsNullOrWhiteSpace($CandidateDomainPath) -or $ExpectedCandidateDomainSha256 -notmatch '^[0-9a-f]{64}$') { throw 'B1R geometry requires an exact candidate-domain path and SHA-256.' }
+	$resolvedDomain = (Resolve-Path -LiteralPath $CandidateDomainPath).Path
+	$resolvedEvidenceRoot = [IO.Path]::GetFullPath($EvidenceRoot).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+	if (-not $resolvedDomain.StartsWith($resolvedEvidenceRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'B1R candidate-domain file must be inside this run evidence root.' }
+	$candidateDomainSha = (Get-FileHash -Algorithm SHA256 -LiteralPath $resolvedDomain).Hash.ToLowerInvariant()
+	if ($candidateDomainSha -ne $ExpectedCandidateDomainSha256) { throw "B1R candidate-domain SHA-256 mismatch: $candidateDomainSha" }
+}
 
 $arguments = switch ($Stage) {
 	'import' { @('--headless', '--path', './game', '--editor', '--import') }
@@ -38,8 +51,11 @@ $arguments = switch ($Stage) {
 	'check-ray' { @('--headless', '--path', './game', '--check-only', '--script', 'res://tests/prototypes/p3_1_r10_b_ray_causality.gd') }
 	'ray-causality' { @('--headless', '--path', './game', '--script', 'res://tests/prototypes/p3_1_r10_b_ray_causality.gd') }
 	'check-authority' { @('--headless', '--path', './game', '--check-only', '--script', 'res://tests/prototypes/p3_1_r10_a_topology_authority.gd') }
+	'check-b1r' { @('--headless', '--path', './game', '--check-only', '--script', 'res://tests/prototypes/p3_1_r10_b1r_direct_triangulator.gd') }
 	'graph-contract' { @('--headless', '--path', './game', '--script', 'res://tests/prototypes/p3_1_r10_b_campaign.gd') }
+	'domain-audit' { @('--headless', '--path', './game', '--script', 'res://tests/prototypes/p3_1_r10_b_campaign.gd') }
 	'geometry' { @('--headless', '--path', './game', '--script', 'res://tests/prototypes/p3_1_r10_b_campaign.gd') }
+	'geometry-b1r' { @('--headless', '--path', './game', '--script', 'res://tests/prototypes/p3_1_r10_b_campaign.gd') }
 }
 $commandLine = $arguments -join ' '
 $runId = [guid]::NewGuid().ToString('N')
@@ -47,7 +63,7 @@ $intent = [ordered]@{
 	schema = 'P3.1.R10B.LaunchIntent.v1'; run_id = $runId; stage = $Stage; attempt_id = $AttemptId; hypothesis = $Hypothesis
 	repository = $repo; origin = 'https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git'; source_sha = $sourceSha
 	godot_path = $godot; godot_sha256 = $observedGodotSha; candidate_d_sha256 = $candidateSha; arguments = $arguments
-	command_line = $commandLine; profile_root = $profileRoot; artifact_root = $attemptRoot; runner_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $PSCommandPath).Hash.ToLowerInvariant(); source_physical_hashes = @{ candidate_d = $candidateSha; manifest = $manifestSha; r10a_authority = $authoritySha; ray_script = $rayScriptSha; ray_fixture = $rayFixtureSha; campaign = $campaignSha; realizer = $realizerSha }; created_utc = [DateTime]::UtcNow.ToString('o')
+	command_line = $commandLine; profile_root = $profileRoot; artifact_root = $attemptRoot; candidate_domain_path = $resolvedDomain; candidate_domain_sha256 = $candidateDomainSha; runner_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $PSCommandPath).Hash.ToLowerInvariant(); source_physical_hashes = @{ candidate_d = $candidateSha; manifest = $manifestSha; r10a_authority = $authoritySha; ray_script = $rayScriptSha; ray_fixture = $rayFixtureSha; campaign = $campaignSha; realizer = $realizerSha; b1r_realizer = $b1rRealizerSha }; created_utc = [DateTime]::UtcNow.ToString('o')
 }
 $intentPath = Join-Path $attemptRoot 'launch-intent.json'
 $intentJson = $intent | ConvertTo-Json -Depth 8
@@ -87,11 +103,17 @@ $psi.EnvironmentVariables['R10B_ARTIFACT_DIR'] = $attemptRoot
 $psi.EnvironmentVariables['R10B_REPO_ROOT'] = $repo
 $psi.EnvironmentVariables['R10B_CAMPAIGN_SOURCE_SHA256'] = $campaignSha
 $psi.EnvironmentVariables['R10B_REALIZER_SOURCE_SHA256'] = $realizerSha
-if ($Stage -in @('check-only', 'check-ray', 'ray-causality', 'graph-contract', 'geometry')) {
+$psi.EnvironmentVariables['R10B_B1R_REALIZER_SOURCE_SHA256'] = $b1rRealizerSha
+if ($Stage -in @('check-only', 'check-ray', 'ray-causality', 'check-b1r', 'graph-contract', 'domain-audit', 'geometry', 'geometry-b1r')) {
 	$psi.EnvironmentVariables['R10B_RAY_SOURCE_SHA256'] = $rayScriptSha
 	$psi.EnvironmentVariables['R10B_RAY_FIXTURE_SHA256'] = $rayFixtureSha
 }
 if ($Stage -eq 'graph-contract') { $psi.EnvironmentVariables['R10B_GRAPH_ONLY'] = '1' }
+if ($Stage -eq 'domain-audit') { $psi.EnvironmentVariables['R10B_B1R_DOMAIN_ONLY'] = '1' }
+if ($Stage -eq 'geometry-b1r') {
+	$psi.EnvironmentVariables['R10B_B1R_DOMAIN_PATH'] = $resolvedDomain
+	$psi.EnvironmentVariables['R10B_B1R_DOMAIN_SHA256'] = $candidateDomainSha
+}
 
 $proc = [Diagnostics.Process]::new()
 $proc.StartInfo = $psi
@@ -151,6 +173,7 @@ $scriptErrorDetected = $combinedOutput -match '(?m)^(SCRIPT ERROR:|ERROR:|Parse 
 $preflightMarkerCount = [regex]::Matches($stdout, '(?m)^R10B_PREFLIGHT ').Count
 $completionMatches = [regex]::Matches($stdout, '(?m)^R10B_ATTEMPT_COMPLETE (.+)$')
 $graphContractMatches = [regex]::Matches($stdout, '(?m)^R10B_GRAPH_CONTRACT_COMPLETE (.+)$')
+$domainMatches = [regex]::Matches($stdout, '(?m)^R10B_B1R_DOMAIN_COMPLETE (.+)$')
 $rayCompletionMatches = [regex]::Matches($stdout, '(?m)^R10B_RAY_DIAGNOSTIC_COMPLETE (.+)$')
 $rayBlockedMatches = [regex]::Matches($stdout, '(?m)^R10B_RAY_BLOCKED (.+)$')
 $terminalResult = 'NOT_AVAILABLE'
@@ -159,13 +182,24 @@ if ($completionMatches.Count -eq 1) {
 }
 $graphContractStatus = 'NOT_AVAILABLE'
 if ($graphContractMatches.Count -eq 1) { try { $graphContractStatus = [string](($graphContractMatches[0].Groups[1].Value | ConvertFrom-Json -ErrorAction Stop).status) } catch { $graphContractStatus = 'INVALID_GRAPH_CONTRACT_JSON' } }
+$domainStatus = 'NOT_AVAILABLE'
+$domainArtifactStatus = 'NOT_AVAILABLE'
+if ($domainMatches.Count -eq 1) {
+	try {
+		$domainRecord = $domainMatches[0].Groups[1].Value | ConvertFrom-Json -ErrorAction Stop
+		$domainStatus = [string]$domainRecord.status
+		$domainPathFull = [IO.Path]::GetFullPath([string]$domainRecord.domain_artifact)
+		$attemptRootFull = [IO.Path]::GetFullPath($attemptRoot).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+		if ($domainPathFull.StartsWith($attemptRootFull, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $domainPathFull -PathType Leaf) -and (Get-FileHash -Algorithm SHA256 -LiteralPath $domainPathFull).Hash.ToLowerInvariant() -eq [string]$domainRecord.domain_sha256) { $domainArtifactStatus = 'VERIFIED' } else { $domainArtifactStatus = 'INVALID_OR_OUTSIDE_ATTEMPT_ROOT' }
+	} catch { $domainStatus = 'INVALID_DOMAIN_JSON'; $domainArtifactStatus = 'INVALID' }
+}
 $rayStatus = 'NOT_AVAILABLE'
 if ($rayCompletionMatches.Count -eq 1) { try { $rayStatus = [string](($rayCompletionMatches[0].Groups[1].Value | ConvertFrom-Json -ErrorAction Stop).status) } catch { $rayStatus = 'INVALID_RAY_RESULT_JSON' } }
-$validationStatus = if ($resourceAbort) { 'RUNTIME_ABORT_RESOURCE_SAFETY' } elseif ($timeoutAbort) { 'RUNTIME_ABORT_TIMEOUT' } elseif ($scriptErrorDetected) { 'GODOT_SCRIPT_ERROR' } elseif ($Stage -eq 'ray-causality' -and ($exitCode -ne 0 -or $rayCompletionMatches.Count -ne 1 -or $rayBlockedMatches.Count -ne 0 -or $rayStatus -notin @('PASS', 'DIAGNOSTIC_MISMATCH'))) { 'RAY_DIAGNOSTIC_EVIDENCE_INVALID' } elseif ($exitCode -ne 0) { 'PROCESS_NONZERO_EXIT' } elseif ($Stage -eq 'geometry' -and ($preflightMarkerCount -ne 1 -or $completionMatches.Count -ne 1 -or $terminalResult -notin @('PASS', 'FAILED_TARGET', 'PARTIAL', 'FAILED_WITH_REGRESSION'))) { 'GEOMETRY_TERMINAL_EVIDENCE_INVALID' } elseif ($Stage -eq 'graph-contract' -and ($preflightMarkerCount -ne 1 -or $graphContractMatches.Count -ne 1 -or $graphContractStatus -ne 'PASS' -or $completionMatches.Count -ne 0)) { 'GRAPH_CONTRACT_EVIDENCE_INVALID' } elseif ($Stage -eq 'graph-contract') { 'GRAPH_CONTRACT_PASS' } elseif ($Stage -eq 'import') { 'IMPORT_PROCESS_PASS' } elseif ($Stage -in @('check-only', 'check-ray', 'check-authority')) { 'CHECK_ONLY_PROCESS_PASS' } elseif ($Stage -eq 'ray-causality') { 'RAY_DIAGNOSTIC_CAPTURED' } else { 'GEOMETRY_RESULT_RECORDED' }
+$validationStatus = if ($resourceAbort) { 'RUNTIME_ABORT_RESOURCE_SAFETY' } elseif ($timeoutAbort) { 'RUNTIME_ABORT_TIMEOUT' } elseif ($scriptErrorDetected) { 'GODOT_SCRIPT_ERROR' } elseif ($Stage -eq 'ray-causality' -and ($exitCode -ne 0 -or $rayCompletionMatches.Count -ne 1 -or $rayBlockedMatches.Count -ne 0 -or $rayStatus -notin @('PASS', 'DIAGNOSTIC_MISMATCH'))) { 'RAY_DIAGNOSTIC_EVIDENCE_INVALID' } elseif ($exitCode -ne 0) { 'PROCESS_NONZERO_EXIT' } elseif ($Stage -in @('geometry', 'geometry-b1r') -and ($preflightMarkerCount -ne 1 -or $completionMatches.Count -ne 1 -or $terminalResult -notin @('PASS', 'FAILED_TARGET', 'PARTIAL', 'FAILED_WITH_REGRESSION'))) { 'GEOMETRY_TERMINAL_EVIDENCE_INVALID' } elseif ($Stage -eq 'domain-audit' -and ($preflightMarkerCount -ne 1 -or $graphContractMatches.Count -ne 1 -or $graphContractStatus -ne 'PASS' -or $domainMatches.Count -ne 1 -or $domainStatus -ne 'PASS' -or $domainArtifactStatus -ne 'VERIFIED' -or $completionMatches.Count -ne 0)) { 'DOMAIN_AUDIT_EVIDENCE_INVALID' } elseif ($Stage -eq 'domain-audit') { 'B1R_DOMAIN_AUDIT_PASS' } elseif ($Stage -eq 'graph-contract' -and ($preflightMarkerCount -ne 1 -or $graphContractMatches.Count -ne 1 -or $graphContractStatus -ne 'PASS' -or $completionMatches.Count -ne 0)) { 'GRAPH_CONTRACT_EVIDENCE_INVALID' } elseif ($Stage -eq 'graph-contract') { 'GRAPH_CONTRACT_PASS' } elseif ($Stage -eq 'import') { 'IMPORT_PROCESS_PASS' } elseif ($Stage -in @('check-only', 'check-ray', 'check-authority', 'check-b1r')) { 'CHECK_ONLY_PROCESS_PASS' } elseif ($Stage -eq 'ray-causality') { 'RAY_DIAGNOSTIC_CAPTURED' } else { 'GEOMETRY_RESULT_RECORDED' }
 $afterMemory = Get-CimInstance Win32_PerfRawData_PerfOS_Memory
 $after = [ordered]@{ timestamp_utc = [DateTime]::UtcNow.ToString('o'); committed_bytes = [int64]$afterMemory.CommittedBytes; commit_limit_bytes = [int64]$afterMemory.CommitLimit; free_commit_bytes = ([int64]$afterMemory.CommitLimit - [int64]$afterMemory.CommittedBytes); available_mbytes = [int64]$afterMemory.AvailableMBytes }
 [IO.File]::WriteAllText((Join-Path $attemptRoot 'host-after.json'), ($after | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
-$processRecord = [ordered]@{ schema = 'P3.1.R10B.ProcessRecord.v1'; run_id = $runId; stage = $Stage; pid = $godotProcessId; parent_pid = $launcherProcessId; command_line = $commandLine; source_sha = $sourceSha; source_physical_hashes = @{ candidate_d = $candidateSha; manifest = $manifestSha; r10a_authority = $authoritySha; ray_script = $rayScriptSha; ray_fixture = $rayFixtureSha; campaign = $campaignSha; realizer = $realizerSha }; exit_code = $exitCode; elapsed_ms = $elapsedMs; resource_abort = $resourceAbort; timeout_abort = $timeoutAbort; validation_status = $validationStatus; script_error_detected = $scriptErrorDetected; preflight_marker_count = $preflightMarkerCount; graph_contract_marker_count = $graphContractMatches.Count; graph_contract_status = $graphContractStatus; ray_completion_marker_count = $rayCompletionMatches.Count; ray_blocked_marker_count = $rayBlockedMatches.Count; ray_status = $rayStatus; completion_marker_count = $completionMatches.Count; terminal_result = $terminalResult; min_free_commit_bytes = $minFreeCommit; warning_samples = $warningCount; stdout_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $attemptRoot 'stdout.txt')).Hash.ToLowerInvariant(); stderr_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $attemptRoot 'stderr.txt')).Hash.ToLowerInvariant(); monitor_sha256 = (Get-FileHash -Algorithm SHA256 $monitorPath).Hash.ToLowerInvariant() }
+$processRecord = [ordered]@{ schema = 'P3.1.R10B.ProcessRecord.v1'; run_id = $runId; stage = $Stage; pid = $godotProcessId; parent_pid = $launcherProcessId; command_line = $commandLine; source_sha = $sourceSha; candidate_domain_path = $resolvedDomain; candidate_domain_sha256 = $candidateDomainSha; domain_marker_count = $domainMatches.Count; domain_status = $domainStatus; domain_artifact_status = $domainArtifactStatus; source_physical_hashes = @{ candidate_d = $candidateSha; manifest = $manifestSha; r10a_authority = $authoritySha; ray_script = $rayScriptSha; ray_fixture = $rayFixtureSha; campaign = $campaignSha; realizer = $realizerSha; b1r_realizer = $b1rRealizerSha }; exit_code = $exitCode; elapsed_ms = $elapsedMs; resource_abort = $resourceAbort; timeout_abort = $timeoutAbort; validation_status = $validationStatus; script_error_detected = $scriptErrorDetected; preflight_marker_count = $preflightMarkerCount; graph_contract_marker_count = $graphContractMatches.Count; graph_contract_status = $graphContractStatus; ray_completion_marker_count = $rayCompletionMatches.Count; ray_blocked_marker_count = $rayBlockedMatches.Count; ray_status = $rayStatus; completion_marker_count = $completionMatches.Count; terminal_result = $terminalResult; min_free_commit_bytes = $minFreeCommit; warning_samples = $warningCount; stdout_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $attemptRoot 'stdout.txt')).Hash.ToLowerInvariant(); stderr_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $attemptRoot 'stderr.txt')).Hash.ToLowerInvariant(); monitor_sha256 = (Get-FileHash -Algorithm SHA256 $monitorPath).Hash.ToLowerInvariant() }
 [IO.File]::WriteAllText((Join-Path $attemptRoot 'process.json'), ($processRecord | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
 $processRecord | ConvertTo-Json -Depth 6
 if ($resourceAbort) { exit 75 }
