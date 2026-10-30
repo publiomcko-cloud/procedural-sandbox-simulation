@@ -137,8 +137,9 @@ func _prepare_volume(row: Dictionary, snapshot_override: Variant) -> Dictionary:
 	if not bool(volume_case.get("valid", false)): return {"valid": false, "reason": "candidate_volume_invalid", "detail": volume_case}
 	var volume: Dictionary = volume_case.get("volume", {})
 	var values: PackedFloat32Array = volume.get("values", PackedFloat32Array())
-	var volume_metrics: Dictionary = volume_case.get("metrics", {}).get("volume", {})
-	return {"valid": true, "snapshot": snapshot, "values": values, "volume": volume, "volume_sha256": volume.get("sha256", ""), "payload_sha256": volume_metrics.get("payload_sha256", ""), "revision": volume.get("revision", -1), "volume_identity_preserved": bool(volume_case.get("volume_identity_preserved", false)), "row": row, "roi": roi, "volume_build_usec": volume_case.get("metrics", {}).get("elapsed_usec", -1)}
+	var metrics: Dictionary = volume_case.get("metrics", {})
+	var volume_metrics: Dictionary = metrics.get("volume", {})
+	return {"valid": true, "snapshot": snapshot, "values": values, "volume": volume, "volume_sha256": volume.get("sha256", ""), "payload_sha256": volume_metrics.get("payload_sha256", ""), "revision": volume.get("revision", -1), "volume_identity_preserved": bool(metrics.get("materialized_volume_identity_preserved", false)), "row": row, "roi": roi, "volume_build_usec": volume_metrics.get("materialize_usec", -1)}
 
 func _build_case(row: Dictionary, roi: Dictionary, snapshot_override: Variant, supplied_graph: Dictionary = {}, expected_sha: String = "", prepared_override: Dictionary = {}, expected_graph_fingerprint_sha: String = "") -> Dictionary:
 	var prepared: Dictionary = prepared_override if not prepared_override.is_empty() else _prepare_volume(row, snapshot_override)
