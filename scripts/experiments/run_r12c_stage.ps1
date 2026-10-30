@@ -86,6 +86,7 @@ $psi.EnvironmentVariables['LOCALAPPDATA']=$profileLocal
 $psi.EnvironmentVariables['TEMP']=$profileTemp
 $psi.EnvironmentVariables['TMP']=$profileTemp
 $psi.EnvironmentVariables['R12C_SOURCE_SHA']=$sourceSha
+$psi.EnvironmentVariables['R12C_ATTEMPT_ID']=$AttemptId
 $psi.EnvironmentVariables['R12C_ARTIFACT_DIR']=$EvidenceRoot
 $psi.EnvironmentVariables['R12C_DOMAIN_PATH']=$domainFull
 $proc = [Diagnostics.Process]::new()

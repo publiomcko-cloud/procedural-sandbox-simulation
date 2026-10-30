@@ -370,12 +370,16 @@ func _historical_a6(authority: RefCounted, values: PackedFloat32Array, snapshot:
 
 func _fail(reason: String, details: Dictionary) -> void:
 	var root: String = OS.get_environment("R12C_ARTIFACT_DIR")
-	var path: String = root.path_join("r12c_stage0_failure.json")
-	var failure: Dictionary = {"schema": "P3.1.R12C.Stage0Failure.v1", "reason": reason, "source_sha": OS.get_environment("R12C_SOURCE_SHA"), "details": details}
-	print("R12C_STAGE0_COMPLETE " + JSON.stringify({"status": "BLOCKED", "reason": reason, "source_sha": OS.get_environment("R12C_SOURCE_SHA")}))
+	var attempt_id: String = OS.get_environment("R12C_ATTEMPT_ID")
+	if attempt_id.is_empty():
+		attempt_id = str(Time.get_ticks_usec())
+	var path: String = root.path_join("r12c_stage0_failure_" + attempt_id + ".json")
+	var failure: Dictionary = {"schema": "P3.1.R12C.Stage0Failure.v1", "attempt_id": attempt_id, "reason": reason, "source_sha": OS.get_environment("R12C_SOURCE_SHA"), "details": details}
+	print("R12C_STAGE0_COMPLETE " + JSON.stringify({"status": "BLOCKED", "attempt_id": attempt_id, "reason": reason, "source_sha": OS.get_environment("R12C_SOURCE_SHA"), "details": details}))
 	if not FileAccess.file_exists(path):
 		var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 		if file != null:
 			file.store_string(JSON.stringify(failure))
+			file.flush()
 			file.close()
 	quit(2)
