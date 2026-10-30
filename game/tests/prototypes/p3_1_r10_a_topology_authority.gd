@@ -122,7 +122,14 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String, snapshot: 
 		if bool(a4_component_reconstruction.get("valid", false)):
 			polygons = a4_component_reconstruction.get("polygons", polygons)
 			arcs = a4_component_reconstruction.get("arcs", arcs)
-			local_refinement = a4_component_reconstruction.get("patches", [])
+			local_refinement.clear()
+			var raw_a4_patches: Variant = a4_component_reconstruction.get("patches", [])
+			if raw_a4_patches is Array:
+				for raw_patch in raw_a4_patches:
+					if raw_patch is Dictionary: local_refinement.append(raw_patch)
+				if local_refinement.size() != raw_a4_patches.size(): geometry_errors.append({"reason": "a4_patch_rows_failed_dictionary_validation"})
+			else:
+				geometry_errors.append({"reason": "a4_patch_rows_not_array"})
 		else:
 			geometry_errors.append({"reason": "a4_component_reconstruction_failed", "detail": a4_component_reconstruction})
 	var graph: Dictionary = _topology_graph(roots, root_sources, polygons, arcs, geometry_errors)
