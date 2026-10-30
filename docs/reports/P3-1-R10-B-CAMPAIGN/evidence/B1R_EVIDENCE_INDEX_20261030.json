@@ -1,0 +1,953 @@
+{
+  "schema": "P3.1.R10B.B1R.EvidenceIndex.v1",
+  "source_sha": "6f28273d0113f93678034b9e482140e73e765721",
+  "source_parent": "9d0217758c84ebd6031fbb1c533943894d1dac10",
+  "source_tree": "7630f95a2c72c0692f52d1dda8b7cbfdcdfd4efc",
+  "branch": "exp/p3-1-r10-b-constrained-realization",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_exe_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "hypothesis": "R10B1R_DIRECT_CONSTRAINED_TRIANGULATION_FEASIBILITY",
+  "terminal_result": "PARTIAL",
+  "search_status": "INCOMPLETE_LIMIT",
+  "search_complete": "False",
+  "search_limit": "intersection_check_limit",
+  "candidate_domain_sha256": "30c89e9ca26c5c6550b6662fc6ccb46f566cfff7eb29b9e740f8ec1b1b7c9c22",
+  "attempt_artifact_sha256": "b67d6d18db596ee19310973d03ac691646f8a3a1189d52b89945718aa581f7ac",
+  "process_records": [
+    {
+      "schema": "P3.1.R10B.ProcessRecord.v1",
+      "run_id": "f826977c3b91433983a9a36eac0cdd89",
+      "stage": "geometry-b1r",
+      "pid": 20972,
+      "parent_pid": 28248,
+      "command_line": "--headless --path ./game --script res://tests/prototypes/p3_1_r10_b_campaign.gd",
+      "source_sha": "6f28273d0113f93678034b9e482140e73e765721",
+      "candidate_domain_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p3_1_r10b1r_6f28273d0113f93678034b9e482140e73e765721_16cc932006f14a34a0b09dc0c4583238\\b1r-hypfix-domain-audit_domain-audit\\b1r_candidate_domain.json",
+      "candidate_domain_sha256": "30c89e9ca26c5c6550b6662fc6ccb46f566cfff7eb29b9e740f8ec1b1b7c9c22",
+      "domain_marker_count": 0,
+      "domain_status": "NOT_AVAILABLE",
+      "domain_artifact_status": "NOT_AVAILABLE",
+      "domain_graph_status": "NOT_AVAILABLE",
+      "domain_topology_sha256": "",
+      "domain_self_test_status": "NOT_AVAILABLE",
+      "source_physical_hashes": {
+        "r10a_authority": "feea8237160c90a049d9f0ab63ad7ff86f46604f9d57112278d25fda20a08216",
+        "ray_script": "b61dab953ee3048e1e1a666daf32ddb21d964b3ccd44c3616825b13360097af1",
+        "b1r_realizer": "31fc01c78e273aede396a7596c3827f4520f45259d2c7e0f2ef9663d73ebcb5e",
+        "candidate_d": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "ray_fixture": "9780bea4b1609bbc89db45e21d8671170198ca01d1ad3e252b9f877a64eb62c7",
+        "manifest": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "campaign": "2fa58b0296abfc37182048d7db08a38fcf66ee3d0c7e4f94d3992b306f0fa15a",
+        "realizer": "3601d45652efc420429b5306b1c1102af1e2d008e9d5d73b3004c44bd1667eb9"
+      },
+      "exit_code": 0,
+      "elapsed_ms": 15746.3174,
+      "resource_abort": false,
+      "timeout_abort": false,
+      "validation_status": "GEOMETRY_RESULT_RECORDED",
+      "script_error_detected": false,
+      "preflight_marker_count": 1,
+      "graph_contract_marker_count": 0,
+      "graph_contract_status": "NOT_AVAILABLE",
+      "ray_completion_marker_count": 0,
+      "ray_blocked_marker_count": 0,
+      "ray_status": "NOT_AVAILABLE",
+      "completion_marker_count": 1,
+      "terminal_result": "PARTIAL",
+      "min_free_commit_bytes": 19082887168,
+      "warning_samples": 0,
+      "stdout_sha256": "d52c2aba2a0f98c236f3f65fb8af88646866406debab9cc133efcdd995669086",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "monitor_sha256": "c1cb8974e2ce261ee70eff0f97c021a35b760535e67ae688986ac3e8c8ea37e0"
+    },
+    {
+      "schema": "P3.1.R10B.ProcessRecord.v1",
+      "run_id": "2be2b19c69af407ea57b7aba9f6ab5de",
+      "stage": "check-authority",
+      "pid": 25756,
+      "parent_pid": 39712,
+      "command_line": "--headless --path ./game --check-only --script res://tests/prototypes/p3_1_r10_a_topology_authority.gd",
+      "source_sha": "6f28273d0113f93678034b9e482140e73e765721",
+      "candidate_domain_path": "",
+      "candidate_domain_sha256": "",
+      "domain_marker_count": 0,
+      "domain_status": "NOT_AVAILABLE",
+      "domain_artifact_status": "NOT_AVAILABLE",
+      "domain_graph_status": "NOT_AVAILABLE",
+      "domain_topology_sha256": "",
+      "domain_self_test_status": "NOT_AVAILABLE",
+      "source_physical_hashes": {
+        "ray_fixture": "9780bea4b1609bbc89db45e21d8671170198ca01d1ad3e252b9f877a64eb62c7",
+        "realizer": "3601d45652efc420429b5306b1c1102af1e2d008e9d5d73b3004c44bd1667eb9",
+        "r10a_authority": "feea8237160c90a049d9f0ab63ad7ff86f46604f9d57112278d25fda20a08216",
+        "candidate_d": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "campaign": "2fa58b0296abfc37182048d7db08a38fcf66ee3d0c7e4f94d3992b306f0fa15a",
+        "b1r_realizer": "31fc01c78e273aede396a7596c3827f4520f45259d2c7e0f2ef9663d73ebcb5e",
+        "ray_script": "b61dab953ee3048e1e1a666daf32ddb21d964b3ccd44c3616825b13360097af1",
+        "manifest": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
+      },
+      "exit_code": 0,
+      "elapsed_ms": 1219.0411,
+      "resource_abort": false,
+      "timeout_abort": false,
+      "validation_status": "CHECK_ONLY_PROCESS_PASS",
+      "script_error_detected": false,
+      "preflight_marker_count": 0,
+      "graph_contract_marker_count": 0,
+      "graph_contract_status": "NOT_AVAILABLE",
+      "ray_completion_marker_count": 0,
+      "ray_blocked_marker_count": 0,
+      "ray_status": "NOT_AVAILABLE",
+      "completion_marker_count": 0,
+      "terminal_result": "NOT_AVAILABLE",
+      "min_free_commit_bytes": 19512115200,
+      "warning_samples": 0,
+      "stdout_sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "monitor_sha256": "f274fd7ace13e571849efbe32d504364e3d8275500de1f06189ea684331a8ab6"
+    },
+    {
+      "schema": "P3.1.R10B.ProcessRecord.v1",
+      "run_id": "3bb677ad4e634cca82e960797a169719",
+      "stage": "check-only",
+      "pid": 2820,
+      "parent_pid": 24752,
+      "command_line": "--headless --path ./game --check-only --script res://tests/prototypes/p3_1_r10_b_campaign.gd",
+      "source_sha": "6f28273d0113f93678034b9e482140e73e765721",
+      "candidate_domain_path": "",
+      "candidate_domain_sha256": "",
+      "domain_marker_count": 0,
+      "domain_status": "NOT_AVAILABLE",
+      "domain_artifact_status": "NOT_AVAILABLE",
+      "domain_graph_status": "NOT_AVAILABLE",
+      "domain_topology_sha256": "",
+      "domain_self_test_status": "NOT_AVAILABLE",
+      "source_physical_hashes": {
+        "ray_fixture": "9780bea4b1609bbc89db45e21d8671170198ca01d1ad3e252b9f877a64eb62c7",
+        "realizer": "3601d45652efc420429b5306b1c1102af1e2d008e9d5d73b3004c44bd1667eb9",
+        "r10a_authority": "feea8237160c90a049d9f0ab63ad7ff86f46604f9d57112278d25fda20a08216",
+        "manifest": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "b1r_realizer": "31fc01c78e273aede396a7596c3827f4520f45259d2c7e0f2ef9663d73ebcb5e",
+        "campaign": "2fa58b0296abfc37182048d7db08a38fcf66ee3d0c7e4f94d3992b306f0fa15a",
+        "ray_script": "b61dab953ee3048e1e1a666daf32ddb21d964b3ccd44c3616825b13360097af1",
+        "candidate_d": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a"
+      },
+      "exit_code": 0,
+      "elapsed_ms": 1602.7157,
+      "resource_abort": false,
+      "timeout_abort": false,
+      "validation_status": "CHECK_ONLY_PROCESS_PASS",
+      "script_error_detected": false,
+      "preflight_marker_count": 0,
+      "graph_contract_marker_count": 0,
+      "graph_contract_status": "NOT_AVAILABLE",
+      "ray_completion_marker_count": 0,
+      "ray_blocked_marker_count": 0,
+      "ray_status": "NOT_AVAILABLE",
+      "completion_marker_count": 0,
+      "terminal_result": "NOT_AVAILABLE",
+      "min_free_commit_bytes": 19670462464,
+      "warning_samples": 0,
+      "stdout_sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "monitor_sha256": "5b193655908843ad1a2c762d16759a0ad459153e276c06b285d8330876db5aaa"
+    },
+    {
+      "schema": "P3.1.R10B.ProcessRecord.v1",
+      "run_id": "15ffedc1eaa74b099897e6a911107a4f",
+      "stage": "domain-audit",
+      "pid": 21820,
+      "parent_pid": 22364,
+      "command_line": "--headless --path ./game --script res://tests/prototypes/p3_1_r10_b_campaign.gd",
+      "source_sha": "6f28273d0113f93678034b9e482140e73e765721",
+      "candidate_domain_path": "",
+      "candidate_domain_sha256": "",
+      "domain_marker_count": 1,
+      "domain_status": "PASS",
+      "domain_artifact_status": "VERIFIED",
+      "domain_graph_status": "PASS",
+      "domain_topology_sha256": "4ecbb2496fb34f1cf3c05a60192f76bdce7a52ec3148d02ba041510b804a8c95",
+      "domain_self_test_status": "PASS",
+      "source_physical_hashes": {
+        "realizer": "3601d45652efc420429b5306b1c1102af1e2d008e9d5d73b3004c44bd1667eb9",
+        "candidate_d": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "manifest": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "ray_fixture": "9780bea4b1609bbc89db45e21d8671170198ca01d1ad3e252b9f877a64eb62c7",
+        "b1r_realizer": "31fc01c78e273aede396a7596c3827f4520f45259d2c7e0f2ef9663d73ebcb5e",
+        "r10a_authority": "feea8237160c90a049d9f0ab63ad7ff86f46604f9d57112278d25fda20a08216",
+        "ray_script": "b61dab953ee3048e1e1a666daf32ddb21d964b3ccd44c3616825b13360097af1",
+        "campaign": "2fa58b0296abfc37182048d7db08a38fcf66ee3d0c7e4f94d3992b306f0fa15a"
+      },
+      "exit_code": 0,
+      "elapsed_ms": 14148.2534,
+      "resource_abort": false,
+      "timeout_abort": false,
+      "validation_status": "B1R_DOMAIN_AUDIT_PASS",
+      "script_error_detected": false,
+      "preflight_marker_count": 1,
+      "graph_contract_marker_count": 0,
+      "graph_contract_status": "NOT_AVAILABLE",
+      "ray_completion_marker_count": 0,
+      "ray_blocked_marker_count": 0,
+      "ray_status": "NOT_AVAILABLE",
+      "completion_marker_count": 0,
+      "terminal_result": "NOT_AVAILABLE",
+      "min_free_commit_bytes": 19393134592,
+      "warning_samples": 0,
+      "stdout_sha256": "dc7d4e1010dc2b381ec101e3258b7c4e8e750ef5729082572968e697e90c3416",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "monitor_sha256": "06e36bb9a8e2b856530df08d7e6e334dd9df830afd3861ce1bae084c6ac9f207"
+    },
+    {
+      "schema": "P3.1.R10B.ProcessRecord.v1",
+      "run_id": "3df537747e7740f394d6e35e894462e3",
+      "stage": "graph-contract",
+      "pid": 9440,
+      "parent_pid": 8820,
+      "command_line": "--headless --path ./game --script res://tests/prototypes/p3_1_r10_b_campaign.gd",
+      "source_sha": "6f28273d0113f93678034b9e482140e73e765721",
+      "candidate_domain_path": "",
+      "candidate_domain_sha256": "",
+      "domain_marker_count": 0,
+      "domain_status": "NOT_AVAILABLE",
+      "domain_artifact_status": "NOT_AVAILABLE",
+      "domain_graph_status": "NOT_AVAILABLE",
+      "domain_topology_sha256": "",
+      "domain_self_test_status": "NOT_AVAILABLE",
+      "source_physical_hashes": {
+        "realizer": "3601d45652efc420429b5306b1c1102af1e2d008e9d5d73b3004c44bd1667eb9",
+        "candidate_d": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "manifest": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "campaign": "2fa58b0296abfc37182048d7db08a38fcf66ee3d0c7e4f94d3992b306f0fa15a",
+        "r10a_authority": "feea8237160c90a049d9f0ab63ad7ff86f46604f9d57112278d25fda20a08216",
+        "ray_fixture": "9780bea4b1609bbc89db45e21d8671170198ca01d1ad3e252b9f877a64eb62c7",
+        "b1r_realizer": "31fc01c78e273aede396a7596c3827f4520f45259d2c7e0f2ef9663d73ebcb5e",
+        "ray_script": "b61dab953ee3048e1e1a666daf32ddb21d964b3ccd44c3616825b13360097af1"
+      },
+      "exit_code": 0,
+      "elapsed_ms": 2003.4693,
+      "resource_abort": false,
+      "timeout_abort": false,
+      "validation_status": "GRAPH_CONTRACT_PASS",
+      "script_error_detected": false,
+      "preflight_marker_count": 1,
+      "graph_contract_marker_count": 1,
+      "graph_contract_status": "PASS",
+      "ray_completion_marker_count": 0,
+      "ray_blocked_marker_count": 0,
+      "ray_status": "NOT_AVAILABLE",
+      "completion_marker_count": 0,
+      "terminal_result": "NOT_AVAILABLE",
+      "min_free_commit_bytes": 19721715712,
+      "warning_samples": 0,
+      "stdout_sha256": "d7462275c8fd3ec95247929f66aa0972182af26b2648341f5ed92635adf7f48a",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "monitor_sha256": "4e40125227ffc2f923990200d6945f9cd041cde9c155385f6dcddab1bd4ed587"
+    },
+    {
+      "schema": "P3.1.R10B.ProcessRecord.v1",
+      "run_id": "659dc3c1bd8c47f1aa9a1161ff23aa42",
+      "stage": "import",
+      "pid": 18104,
+      "parent_pid": 30876,
+      "command_line": "--headless --path ./game --editor --import",
+      "source_sha": "6f28273d0113f93678034b9e482140e73e765721",
+      "candidate_domain_path": "",
+      "candidate_domain_sha256": "",
+      "domain_marker_count": 0,
+      "domain_status": "NOT_AVAILABLE",
+      "domain_artifact_status": "NOT_AVAILABLE",
+      "domain_graph_status": "NOT_AVAILABLE",
+      "domain_topology_sha256": "",
+      "domain_self_test_status": "NOT_AVAILABLE",
+      "source_physical_hashes": {
+        "ray_fixture": "9780bea4b1609bbc89db45e21d8671170198ca01d1ad3e252b9f877a64eb62c7",
+        "b1r_realizer": "31fc01c78e273aede396a7596c3827f4520f45259d2c7e0f2ef9663d73ebcb5e",
+        "r10a_authority": "feea8237160c90a049d9f0ab63ad7ff86f46604f9d57112278d25fda20a08216",
+        "ray_script": "b61dab953ee3048e1e1a666daf32ddb21d964b3ccd44c3616825b13360097af1",
+        "realizer": "3601d45652efc420429b5306b1c1102af1e2d008e9d5d73b3004c44bd1667eb9",
+        "candidate_d": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "manifest": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "campaign": "2fa58b0296abfc37182048d7db08a38fcf66ee3d0c7e4f94d3992b306f0fa15a"
+      },
+      "exit_code": 0,
+      "elapsed_ms": 7538.6915,
+      "resource_abort": false,
+      "timeout_abort": false,
+      "validation_status": "IMPORT_PROCESS_PASS",
+      "script_error_detected": false,
+      "preflight_marker_count": 0,
+      "graph_contract_marker_count": 0,
+      "graph_contract_status": "NOT_AVAILABLE",
+      "ray_completion_marker_count": 0,
+      "ray_blocked_marker_count": 0,
+      "ray_status": "NOT_AVAILABLE",
+      "completion_marker_count": 0,
+      "terminal_result": "NOT_AVAILABLE",
+      "min_free_commit_bytes": 18898857984,
+      "warning_samples": 0,
+      "stdout_sha256": "cbed49ff3d4e729fb1e49af6ee70743b8026d8f54e7844e86af5f090d534c2e3",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "monitor_sha256": "515ded9c3d88f945f0620c54c0c91df2a3209869ea09c95ea6a066ac192f72a9"
+    },
+    {
+      "schema": "P3.1.R10B.ProcessRecord.v1",
+      "run_id": "478632a9def74e43a9b4f95e7e122ae7",
+      "stage": "ray-causality",
+      "pid": 38048,
+      "parent_pid": 25740,
+      "command_line": "--headless --path ./game --script res://tests/prototypes/p3_1_r10_b_ray_causality.gd",
+      "source_sha": "6f28273d0113f93678034b9e482140e73e765721",
+      "candidate_domain_path": "",
+      "candidate_domain_sha256": "",
+      "domain_marker_count": 0,
+      "domain_status": "NOT_AVAILABLE",
+      "domain_artifact_status": "NOT_AVAILABLE",
+      "domain_graph_status": "NOT_AVAILABLE",
+      "domain_topology_sha256": "",
+      "domain_self_test_status": "NOT_AVAILABLE",
+      "source_physical_hashes": {
+        "candidate_d": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "campaign": "2fa58b0296abfc37182048d7db08a38fcf66ee3d0c7e4f94d3992b306f0fa15a",
+        "ray_fixture": "9780bea4b1609bbc89db45e21d8671170198ca01d1ad3e252b9f877a64eb62c7",
+        "b1r_realizer": "31fc01c78e273aede396a7596c3827f4520f45259d2c7e0f2ef9663d73ebcb5e",
+        "manifest": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "r10a_authority": "feea8237160c90a049d9f0ab63ad7ff86f46604f9d57112278d25fda20a08216",
+        "ray_script": "b61dab953ee3048e1e1a666daf32ddb21d964b3ccd44c3616825b13360097af1",
+        "realizer": "3601d45652efc420429b5306b1c1102af1e2d008e9d5d73b3004c44bd1667eb9"
+      },
+      "exit_code": 0,
+      "elapsed_ms": 2005.8694,
+      "resource_abort": false,
+      "timeout_abort": false,
+      "validation_status": "RAY_DIAGNOSTIC_CAPTURED",
+      "script_error_detected": false,
+      "preflight_marker_count": 0,
+      "graph_contract_marker_count": 0,
+      "graph_contract_status": "NOT_AVAILABLE",
+      "ray_completion_marker_count": 1,
+      "ray_blocked_marker_count": 0,
+      "ray_status": "PASS",
+      "completion_marker_count": 0,
+      "terminal_result": "NOT_AVAILABLE",
+      "min_free_commit_bytes": 19492397056,
+      "warning_samples": 0,
+      "stdout_sha256": "3a5630b9407e55ac1d8c55e5384fb1a69d0d44594155544443b5e2d29d3f14c3",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "monitor_sha256": "87bf60f0be907d8db4946c171f5cab034019f560756b2bd81cd26e672978e512"
+    },
+    {
+      "schema": "P3.1.R10B.ProcessRecord.v1",
+      "run_id": "769106d9d1ff4b0fa68c0d177fe952d6",
+      "stage": "check-ray",
+      "pid": 28236,
+      "parent_pid": 37584,
+      "command_line": "--headless --path ./game --check-only --script res://tests/prototypes/p3_1_r10_b_ray_causality.gd",
+      "source_sha": "6f28273d0113f93678034b9e482140e73e765721",
+      "candidate_domain_path": "",
+      "candidate_domain_sha256": "",
+      "domain_marker_count": 0,
+      "domain_status": "NOT_AVAILABLE",
+      "domain_artifact_status": "NOT_AVAILABLE",
+      "domain_graph_status": "NOT_AVAILABLE",
+      "domain_topology_sha256": "",
+      "domain_self_test_status": "NOT_AVAILABLE",
+      "source_physical_hashes": {
+        "candidate_d": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "realizer": "3601d45652efc420429b5306b1c1102af1e2d008e9d5d73b3004c44bd1667eb9",
+        "manifest": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "r10a_authority": "feea8237160c90a049d9f0ab63ad7ff86f46604f9d57112278d25fda20a08216",
+        "b1r_realizer": "31fc01c78e273aede396a7596c3827f4520f45259d2c7e0f2ef9663d73ebcb5e",
+        "ray_script": "b61dab953ee3048e1e1a666daf32ddb21d964b3ccd44c3616825b13360097af1",
+        "ray_fixture": "9780bea4b1609bbc89db45e21d8671170198ca01d1ad3e252b9f877a64eb62c7",
+        "campaign": "2fa58b0296abfc37182048d7db08a38fcf66ee3d0c7e4f94d3992b306f0fa15a"
+      },
+      "exit_code": 0,
+      "elapsed_ms": 1224.0816,
+      "resource_abort": false,
+      "timeout_abort": false,
+      "validation_status": "CHECK_ONLY_PROCESS_PASS",
+      "script_error_detected": false,
+      "preflight_marker_count": 0,
+      "graph_contract_marker_count": 0,
+      "graph_contract_status": "NOT_AVAILABLE",
+      "ray_completion_marker_count": 0,
+      "ray_blocked_marker_count": 0,
+      "ray_status": "NOT_AVAILABLE",
+      "completion_marker_count": 0,
+      "terminal_result": "NOT_AVAILABLE",
+      "min_free_commit_bytes": 19685232640,
+      "warning_samples": 0,
+      "stdout_sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "monitor_sha256": "9802296eb1b4c5144af378726318410829639cf08a14b3154d02e2bbac90f01e"
+    },
+    {
+      "schema": "P3.1.R10B.ProcessRecord.v1",
+      "run_id": "2557cd19a09f43fab79331a023d32d93",
+      "stage": "check-b1r",
+      "pid": 17044,
+      "parent_pid": 20432,
+      "command_line": "--headless --path ./game --check-only --script res://tests/prototypes/p3_1_r10_b1r_direct_triangulator.gd",
+      "source_sha": "6f28273d0113f93678034b9e482140e73e765721",
+      "candidate_domain_path": "",
+      "candidate_domain_sha256": "",
+      "domain_marker_count": 0,
+      "domain_status": "NOT_AVAILABLE",
+      "domain_artifact_status": "NOT_AVAILABLE",
+      "domain_graph_status": "NOT_AVAILABLE",
+      "domain_topology_sha256": "",
+      "domain_self_test_status": "NOT_AVAILABLE",
+      "source_physical_hashes": {
+        "ray_fixture": "9780bea4b1609bbc89db45e21d8671170198ca01d1ad3e252b9f877a64eb62c7",
+        "ray_script": "b61dab953ee3048e1e1a666daf32ddb21d964b3ccd44c3616825b13360097af1",
+        "r10a_authority": "feea8237160c90a049d9f0ab63ad7ff86f46604f9d57112278d25fda20a08216",
+        "candidate_d": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+        "realizer": "3601d45652efc420429b5306b1c1102af1e2d008e9d5d73b3004c44bd1667eb9",
+        "campaign": "2fa58b0296abfc37182048d7db08a38fcf66ee3d0c7e4f94d3992b306f0fa15a",
+        "manifest": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+        "b1r_realizer": "31fc01c78e273aede396a7596c3827f4520f45259d2c7e0f2ef9663d73ebcb5e"
+      },
+      "exit_code": 0,
+      "elapsed_ms": 1240.7483,
+      "resource_abort": false,
+      "timeout_abort": false,
+      "validation_status": "CHECK_ONLY_PROCESS_PASS",
+      "script_error_detected": false,
+      "preflight_marker_count": 0,
+      "graph_contract_marker_count": 0,
+      "graph_contract_status": "NOT_AVAILABLE",
+      "ray_completion_marker_count": 0,
+      "ray_blocked_marker_count": 0,
+      "ray_status": "NOT_AVAILABLE",
+      "completion_marker_count": 0,
+      "terminal_result": "NOT_AVAILABLE",
+      "min_free_commit_bytes": 19648126976,
+      "warning_samples": 0,
+      "stdout_sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "monitor_sha256": "f9e15f6a0af388b0889731d2a591f7b25089243c428b8eeadc28cfa3717928d8"
+    }
+  ],
+  "preserved_prior_evidence_pointers": [
+    {
+      "pointer": "b1r_evidence_root_current.txt",
+      "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p3_1_r10b1r_c2788509cea44d55abe0cfed1a37493e"
+    },
+    {
+      "pointer": "b1r_final_evidence_root_r2.txt",
+      "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p3_1_r10b1r_9d0217758c84ebd6031fbb1c533943894d1dac10_da1fc565c09e4b6c9118d8a3761269f4"
+    },
+    {
+      "pointer": "b1r_final_evidence_root.txt",
+      "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p3_1_r10b1r_992e3f332dd951b5456eea7731a8e1feee58e425_f82b19e3cc0c440a9130bc43efefbe9f"
+    },
+    {
+      "pointer": "b1r_hypfix_evidence_root.txt",
+      "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p3_1_r10b1r_6f28273d0113f93678034b9e482140e73e765721_16cc932006f14a34a0b09dc0c4583238"
+    },
+    {
+      "pointer": "b1r_jsonfix_evidence_root.txt",
+      "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p3_1_r10b1r_45a05d75de983d2452f87bf2df8a9910bea51446_9392f6832a244c6a9029485480e05384"
+    },
+    {
+      "pointer": "b1r_latest_evidence_root.txt",
+      "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p3_1_r10b1r_66b4c13522511a5c6d1fd2c083d659f63042d4d7_cd1cd76cdaac42459aeb2cdcd3c9e066"
+    },
+    {
+      "pointer": "b1r_preflight_root_current.txt",
+      "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p3_1_r10b1r_preflight_e1ca7b5576794da295aa83e98e802b15"
+    },
+    {
+      "pointer": "b1r_verified_evidence_root.txt",
+      "path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\p3_1_r10b1r_ba8882daf422a761822c6da9df22f4a0d638ea72_73f5b517f5d140148f375407c7a48c86"
+    }
+  ],
+  "files": [
+    {
+      "path": "B1R_DOMAIN_PIN_RECEIPT.json",
+      "bytes": 2273,
+      "sha256": "9c641e53e353c4d3544e003dfd5c2d7ebf186258aa6524496f7ce4de722547ce"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/b1r-final-final-direct-triangulation-01_attempt.json",
+      "bytes": 656757,
+      "sha256": "b67d6d18db596ee19310973d03ac691646f8a3a1189d52b89945718aa581f7ac"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/host-after.json",
+      "bytes": 195,
+      "sha256": "0b7aa5d10eed42b69767879dedc26ce3c84bd730e2e17879689dda91b7280e03"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/host-before.json",
+      "bytes": 195,
+      "sha256": "f4c872a82b84aec541b9f9b053485a50795727c99f99fd0e18fd563320dd2e47"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/launch-intent.json",
+      "bytes": 2546,
+      "sha256": "f1a1d40f3ac067d0bd3aa932297ae450ea35802bd3c32eea5a13d68655babb0b"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/process-created.json",
+      "bytes": 432,
+      "sha256": "ac8532f94025de5f0e47e6c9514d4b20a28bd2bb1ce92e5efbdad7a619b39f31"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/process.json",
+      "bytes": 2422,
+      "sha256": "7f4e01590c10a43e102ab80b718742aade282bcb5cbb5443f6ddeb9a0d2c54e7"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/resource-monitor.jsonl",
+      "bytes": 12354,
+      "sha256": "c1cb8974e2ce261ee70eff0f97c021a35b760535e67ae688986ac3e8c8ea37e0"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/stdout.txt",
+      "bytes": 1910,
+      "sha256": "d52c2aba2a0f98c236f3f65fb8af88646866406debab9cc133efcdd995669086"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1091975.bin",
+      "bytes": 3021,
+      "sha256": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_12914667.bin",
+      "bytes": 1365,
+      "sha256": "56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_13247519.bin",
+      "bytes": 1365,
+      "sha256": "56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_13463994.bin",
+      "bytes": 1365,
+      "sha256": "7c2169573450c55164bb7e4023dc2580b542aecd921b76a7299bb2f23f76a75b"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_13694337.bin",
+      "bytes": 1365,
+      "sha256": "472bd51d881205de47c48dfdb8260f3f0e818103eeabd547c2a1dc8698f97d22"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_13987663.bin",
+      "bytes": 3021,
+      "sha256": "b6c47f4b36077dd6964cf7e476b4f008a13ee5ba5c3aae2ae3baeadf1c94880a"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_14569018.bin",
+      "bytes": 3021,
+      "sha256": "8b27477922574a73b6b2c04a619a16bdf877e27d4d5f1e6ba7284dc7e6a510a8"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_15331929.bin",
+      "bytes": 3021,
+      "sha256": "632c17a97991754e9ba4640938bbd9b8e84b25a32f0f7e16b0936311165893d9"
+    },
+    {
+      "path": "b1r-final-final-direct-triangulation-01_geometry-b1r/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log",
+      "bytes": 1906,
+      "sha256": "2bfb3b3b5aa655654a9070f16775303bcb6200c3121a50480a16a301f96d2610"
+    },
+    {
+      "path": "b1r-hypfix-authority-check_check-authority/host-after.json",
+      "bytes": 195,
+      "sha256": "31c73f6a19beb847b8a61b362f0768fda7b4447589ed96bf05607bb1b6703c92"
+    },
+    {
+      "path": "b1r-hypfix-authority-check_check-authority/host-before.json",
+      "bytes": 195,
+      "sha256": "4735b236213c700bdc99abcc6536f9fab33ec00f5b4ef4d0b228acca727caf2d"
+    },
+    {
+      "path": "b1r-hypfix-authority-check_check-authority/launch-intent.json",
+      "bytes": 2316,
+      "sha256": "2668bca369829179f0a7ddbcac7dab49aa640aaeb89593525a4dee57a983e676"
+    },
+    {
+      "path": "b1r-hypfix-authority-check_check-authority/process-created.json",
+      "bytes": 458,
+      "sha256": "2ab457956488c10daed35b5353758c2d44b178a221b194482096a9837dc2bba2"
+    },
+    {
+      "path": "b1r-hypfix-authority-check_check-authority/process.json",
+      "bytes": 2198,
+      "sha256": "2f35156ada93087f4dfb07e175833e088073334eba5b7c7d1d686e9e050d956c"
+    },
+    {
+      "path": "b1r-hypfix-authority-check_check-authority/resource-monitor.jsonl",
+      "bytes": 924,
+      "sha256": "f274fd7ace13e571849efbe32d504364e3d8275500de1f06189ea684331a8ab6"
+    },
+    {
+      "path": "b1r-hypfix-authority-check_check-authority/stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "b1r-hypfix-authority-check_check-authority/stdout.txt",
+      "bytes": 75,
+      "sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c"
+    },
+    {
+      "path": "b1r-hypfix-authority-check_check-authority/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log",
+      "bytes": 73,
+      "sha256": "6d1c065383a27c36804949b6ffa4b09714470b112e5dacc0bd5aeb7b9c147c4e"
+    },
+    {
+      "path": "b1r-hypfix-campaign-check_check-only/host-after.json",
+      "bytes": 195,
+      "sha256": "a8cce1f9a522db06a81bf4559cb1878d82b58b6674d37a6a63a6dac2da606242"
+    },
+    {
+      "path": "b1r-hypfix-campaign-check_check-only/host-before.json",
+      "bytes": 195,
+      "sha256": "e73f1666c913d2c5868f8df2b569c5993da214a784ed3d352f51285dbee07173"
+    },
+    {
+      "path": "b1r-hypfix-campaign-check_check-only/launch-intent.json",
+      "bytes": 2278,
+      "sha256": "585a35ae3a0646b3d69b69ecd43e6a34a92bb3ade5cb76305e561ab72bdecc99"
+    },
+    {
+      "path": "b1r-hypfix-campaign-check_check-only/process-created.json",
+      "bytes": 442,
+      "sha256": "c47fba3b29ed248f6bb0f11da5cef1264b5d238ba3bdf44ee2b8151c4551a17d"
+    },
+    {
+      "path": "b1r-hypfix-campaign-check_check-only/process.json",
+      "bytes": 2182,
+      "sha256": "038611415b6b1be93ce030e84323ab25b549b23b13abc06c6302e77d3b0364d6"
+    },
+    {
+      "path": "b1r-hypfix-campaign-check_check-only/resource-monitor.jsonl",
+      "bytes": 1272,
+      "sha256": "5b193655908843ad1a2c762d16759a0ad459153e276c06b285d8330876db5aaa"
+    },
+    {
+      "path": "b1r-hypfix-campaign-check_check-only/stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "b1r-hypfix-campaign-check_check-only/stdout.txt",
+      "bytes": 75,
+      "sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c"
+    },
+    {
+      "path": "b1r-hypfix-campaign-check_check-only/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log",
+      "bytes": 73,
+      "sha256": "6d1c065383a27c36804949b6ffa4b09714470b112e5dacc0bd5aeb7b9c147c4e"
+    },
+    {
+      "path": "b1r-hypfix-domain-audit_domain-audit/b1r_candidate_domain.json",
+      "bytes": 181753,
+      "sha256": "30c89e9ca26c5c6550b6662fc6ccb46f566cfff7eb29b9e740f8ec1b1b7c9c22"
+    },
+    {
+      "path": "b1r-hypfix-domain-audit_domain-audit/host-after.json",
+      "bytes": 195,
+      "sha256": "5b9795ae2e64b7d11c56a33a5400fbee5f5d41b4ecd52da8a0412dab81c1c074"
+    },
+    {
+      "path": "b1r-hypfix-domain-audit_domain-audit/host-before.json",
+      "bytes": 195,
+      "sha256": "4ee4c58caa51d82eac00b82b0c9214e3e5b9cfdb797f572505411025e670d968"
+    },
+    {
+      "path": "b1r-hypfix-domain-audit_domain-audit/launch-intent.json",
+      "bytes": 2244,
+      "sha256": "a1a1b0cbbc8dfa8b91c2cf9adc710f6393803ffd4967cd80a0610095c7fc3408"
+    },
+    {
+      "path": "b1r-hypfix-domain-audit_domain-audit/process-created.json",
+      "bytes": 432,
+      "sha256": "d98e26d5148ee852a20f13d628801d041fa12ea0d26f82912e9013ecaa0d978c"
+    },
+    {
+      "path": "b1r-hypfix-domain-audit_domain-audit/process.json",
+      "bytes": 2203,
+      "sha256": "6ea8bfe1ecac1c72c4087c3c400e8095c3cdfdeca5923e9f6dd7bf59e3d1c882"
+    },
+    {
+      "path": "b1r-hypfix-domain-audit_domain-audit/resource-monitor.jsonl",
+      "bytes": 11119,
+      "sha256": "06e36bb9a8e2b856530df08d7e6e334dd9df830afd3861ce1bae084c6ac9f207"
+    },
+    {
+      "path": "b1r-hypfix-domain-audit_domain-audit/stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "b1r-hypfix-domain-audit_domain-audit/stdout.txt",
+      "bytes": 2604,
+      "sha256": "dc7d4e1010dc2b381ec101e3258b7c4e8e750ef5729082572968e697e90c3416"
+    },
+    {
+      "path": "b1r-hypfix-domain-audit_domain-audit/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1024039.bin",
+      "bytes": 3021,
+      "sha256": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2"
+    },
+    {
+      "path": "b1r-hypfix-domain-audit_domain-audit/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log",
+      "bytes": 2600,
+      "sha256": "a449ba5a0dbc034358ccca5c5ea70959c400e3fc605b6794a97911d75a66d839"
+    },
+    {
+      "path": "b1r-hypfix-graph-contract_graph-contract/host-after.json",
+      "bytes": 195,
+      "sha256": "fb06556cdbd3afa8a08cff52fce2d94cc414a5f95223efd906388a1889231a88"
+    },
+    {
+      "path": "b1r-hypfix-graph-contract_graph-contract/host-before.json",
+      "bytes": 195,
+      "sha256": "8b77bd0d1ce9a80fc005360fa50665c2281bdc2680d13a229bdaafa2c096c24f"
+    },
+    {
+      "path": "b1r-hypfix-graph-contract_graph-contract/launch-intent.json",
+      "bytes": 2256,
+      "sha256": "cfa2336b60a30bb3c14cb896e49f8d625dcb0b5ff0c92678b3da79499437c865"
+    },
+    {
+      "path": "b1r-hypfix-graph-contract_graph-contract/process-created.json",
+      "bytes": 432,
+      "sha256": "268af96ca045ac836bf49af5242894e47eb51a23d56a658eda974aacd0f4352d"
+    },
+    {
+      "path": "b1r-hypfix-graph-contract_graph-contract/process.json",
+      "bytes": 2159,
+      "sha256": "6daadfd8fe31628e3181c821595d7fcc0bdb9b1269360966fb211189742d2961"
+    },
+    {
+      "path": "b1r-hypfix-graph-contract_graph-contract/resource-monitor.jsonl",
+      "bytes": 1538,
+      "sha256": "4e40125227ffc2f923990200d6945f9cd041cde9c155385f6dcddab1bd4ed587"
+    },
+    {
+      "path": "b1r-hypfix-graph-contract_graph-contract/stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "b1r-hypfix-graph-contract_graph-contract/stdout.txt",
+      "bytes": 1816,
+      "sha256": "d7462275c8fd3ec95247929f66aa0972182af26b2648341f5ed92635adf7f48a"
+    },
+    {
+      "path": "b1r-hypfix-graph-contract_graph-contract/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_1021419.bin",
+      "bytes": 3021,
+      "sha256": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2"
+    },
+    {
+      "path": "b1r-hypfix-graph-contract_graph-contract/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log",
+      "bytes": 1812,
+      "sha256": "7d2502ea5cba38e908b7bc7275d1680ecc8af467f8f8d38adc8d100eaf867ef3"
+    },
+    {
+      "path": "b1r-hypfix-import_import/host-after.json",
+      "bytes": 195,
+      "sha256": "15f40657e55b4aa91ae3f742da3fd49994d7e585d62f713d58d0f718c3886729"
+    },
+    {
+      "path": "b1r-hypfix-import_import/host-before.json",
+      "bytes": 195,
+      "sha256": "b963830ae6bba8ff240b92b1c076640fe4395d9aaa6966043a3ef703c5d15aae"
+    },
+    {
+      "path": "b1r-hypfix-import_import/launch-intent.json",
+      "bytes": 2134,
+      "sha256": "997b62634de5c43329fcbaac5064635402bd851944f684c02e098562ee7f0d9a"
+    },
+    {
+      "path": "b1r-hypfix-import_import/process-created.json",
+      "bytes": 389,
+      "sha256": "7422c4fc2dc39b00458bffc534789b3cf52d2a8785676389d9b5c011d87d9706"
+    },
+    {
+      "path": "b1r-hypfix-import_import/process.json",
+      "bytes": 2125,
+      "sha256": "3ac0b62f474592c1e259b9aa0a0d34e1981cc531e4a127443ce7426f8d1ee9db"
+    },
+    {
+      "path": "b1r-hypfix-import_import/resource-monitor.jsonl",
+      "bytes": 5865,
+      "sha256": "515ded9c3d88f945f0620c54c0c91df2a3209869ea09c95ea6a066ac192f72a9"
+    },
+    {
+      "path": "b1r-hypfix-import_import/stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "b1r-hypfix-import_import/stdout.txt",
+      "bytes": 1083,
+      "sha256": "cbed49ff3d4e729fb1e49af6ee70743b8026d8f54e7844e86af5f090d534c2e3"
+    },
+    {
+      "path": "b1r-hypfix-import_import/profile/APPDATA/Godot/editor_settings-4.7.tres",
+      "bytes": 17974,
+      "sha256": "1ddb6d280d20503d15c4494f6505734de12578296823b4ae36d334ddc6dd2375"
+    },
+    {
+      "path": "b1r-hypfix-import_import/profile/LOCALAPPDATA/Godot/editor_doc_cache-4.7.res",
+      "bytes": 3269687,
+      "sha256": "5a44fb06e5a27397b0b28671af86debc984910f7f50f59aba1429321af46efc0"
+    },
+    {
+      "path": "b1r-hypfix-ray-causality_ray-causality/host-after.json",
+      "bytes": 195,
+      "sha256": "333a7a21a971682b23a8b38fa4357d1c71a3044d57064f397fa1af80fc1f3652"
+    },
+    {
+      "path": "b1r-hypfix-ray-causality_ray-causality/host-before.json",
+      "bytes": 195,
+      "sha256": "743d48a9f99e8144cab5800a23fa2015e1c666d4cf195a25752f0d20bdcca6c5"
+    },
+    {
+      "path": "b1r-hypfix-ray-causality_ray-causality/launch-intent.json",
+      "bytes": 2260,
+      "sha256": "3fa1a643c2e135563283169aeed6c3dcb2626ee9e8541a9c1c021095641013a9"
+    },
+    {
+      "path": "b1r-hypfix-ray-causality_ray-causality/process-created.json",
+      "bytes": 438,
+      "sha256": "bd6f0004e50acc3c7c636ea69e904995afa2802f50f2f7b652992c438ce90baa"
+    },
+    {
+      "path": "b1r-hypfix-ray-causality_ray-causality/process.json",
+      "bytes": 2169,
+      "sha256": "0baf2e0c7bda2a57c15282cbce2e58c5d1e63caa3030aa6080fd58cde82f8515"
+    },
+    {
+      "path": "b1r-hypfix-ray-causality_ray-causality/ray_causality.json",
+      "bytes": 376080,
+      "sha256": "b2b64780feaf7d6759fe21553f715162cb4b0ab27b36b6e70d4b0b98d4ba303f"
+    },
+    {
+      "path": "b1r-hypfix-ray-causality_ray-causality/resource-monitor.jsonl",
+      "bytes": 1543,
+      "sha256": "87bf60f0be907d8db4946c171f5cab034019f560756b2bd81cd26e672978e512"
+    },
+    {
+      "path": "b1r-hypfix-ray-causality_ray-causality/stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "b1r-hypfix-ray-causality_ray-causality/stdout.txt",
+      "bytes": 665,
+      "sha256": "3a5630b9407e55ac1d8c55e5384fb1a69d0d44594155544443b5e2d29d3f14c3"
+    },
+    {
+      "path": "b1r-hypfix-ray-causality_ray-causality/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/r9d_volume_828809.bin",
+      "bytes": 1365,
+      "sha256": "56e024f5361be827db246d9cddd5ddec2bf0cd12da4007288617f8ce43884946"
+    },
+    {
+      "path": "b1r-hypfix-ray-causality_ray-causality/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log",
+      "bytes": 662,
+      "sha256": "e7413e40f81500bdb6dc0d53910182bda256ebcb77737ed110df29aeedd878cf"
+    },
+    {
+      "path": "b1r-hypfix-ray-check_check-ray/host-after.json",
+      "bytes": 195,
+      "sha256": "93a03f3c1c7ca9ecdedcfb94c02b87ac26ade04825faf13232d0555cabd8e9bf"
+    },
+    {
+      "path": "b1r-hypfix-ray-check_check-ray/host-before.json",
+      "bytes": 195,
+      "sha256": "b6fb51b7e4e98dc73e0bf6ec11c3cd7fe6fba45bfcb7e0c289058dd564c51b7b"
+    },
+    {
+      "path": "b1r-hypfix-ray-check_check-ray/launch-intent.json",
+      "bytes": 2270,
+      "sha256": "4e2db0ca57d89fb74d76e6da61d134a0438c5c46795936281538f533e06a71d0"
+    },
+    {
+      "path": "b1r-hypfix-ray-check_check-ray/process-created.json",
+      "bytes": 447,
+      "sha256": "1e12ecb8098750b5434feb4bb8b1332754a7d121e8c4fe46dcf1787d6e5d728b"
+    },
+    {
+      "path": "b1r-hypfix-ray-check_check-ray/process.json",
+      "bytes": 2187,
+      "sha256": "33933743bbcf6c6ec77c3c2e3a88b2df9c049c621015a22f44cdacf37e027189"
+    },
+    {
+      "path": "b1r-hypfix-ray-check_check-ray/resource-monitor.jsonl",
+      "bytes": 924,
+      "sha256": "9802296eb1b4c5144af378726318410829639cf08a14b3154d02e2bbac90f01e"
+    },
+    {
+      "path": "b1r-hypfix-ray-check_check-ray/stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "b1r-hypfix-ray-check_check-ray/stdout.txt",
+      "bytes": 75,
+      "sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c"
+    },
+    {
+      "path": "b1r-hypfix-ray-check_check-ray/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log",
+      "bytes": 73,
+      "sha256": "6d1c065383a27c36804949b6ffa4b09714470b112e5dacc0bd5aeb7b9c147c4e"
+    },
+    {
+      "path": "b1r-hypfix-solver-check_check-b1r/host-after.json",
+      "bytes": 195,
+      "sha256": "1abb2d369715a1899736ee20753c4cc1165b58ceef5dd4ef196c6b7f350c4ae6"
+    },
+    {
+      "path": "b1r-hypfix-solver-check_check-b1r/host-before.json",
+      "bytes": 195,
+      "sha256": "e17b0d89b1f4d141820e95aac54706d059a387bb7bcbace187bac2f614e483be"
+    },
+    {
+      "path": "b1r-hypfix-solver-check_check-b1r/launch-intent.json",
+      "bytes": 2295,
+      "sha256": "90f59f9a05feda448b3a0dca4bb53191da5f9849f91e9f3ab7194fdf0ad609e2"
+    },
+    {
+      "path": "b1r-hypfix-solver-check_check-b1r/process-created.json",
+      "bytes": 455,
+      "sha256": "15b652684f0a63fe6660fd7c5f544219c2ad1329215eb575bba5f50e5bc1ad0a"
+    },
+    {
+      "path": "b1r-hypfix-solver-check_check-b1r/process.json",
+      "bytes": 2195,
+      "sha256": "17fd113eb567b772a557d62deea1103d81d88d03d87f5f354da6b07bbfb9a8a5"
+    },
+    {
+      "path": "b1r-hypfix-solver-check_check-b1r/resource-monitor.jsonl",
+      "bytes": 912,
+      "sha256": "f9e15f6a0af388b0889731d2a591f7b25089243c428b8eeadc28cfa3717928d8"
+    },
+    {
+      "path": "b1r-hypfix-solver-check_check-b1r/stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "b1r-hypfix-solver-check_check-b1r/stdout.txt",
+      "bytes": 75,
+      "sha256": "83cf0b082206af2aa236c83064fbcfa76be1e00a4aa3558574b2f65965d9481c"
+    },
+    {
+      "path": "b1r-hypfix-solver-check_check-b1r/profile/APPDATA/Godot/app_userdata/Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype/logs/godot.log",
+      "bytes": 73,
+      "sha256": "6d1c065383a27c36804949b6ffa4b09714470b112e5dacc0bd5aeb7b9c147c4e"
+    }
+  ]
+}
