@@ -109,7 +109,17 @@ func realize_topology(values: PackedFloat32Array, hypothesis: String) -> Diction
 			unresolved.append({"polygon_id": polygon.id, "reason": triangulation.get("reason", "triangulation_unresolved"), "candidates": triangulation.get("candidates", [])})
 			cutoff_rejections.append_array(triangulation.get("rejections", []))
 			continue
-		var polygon_rows: Array[Dictionary] = triangulation.get("triangles", [])
+		var polygon_rows: Array[Dictionary] = []
+		var raw_polygon_rows: Variant = triangulation.get("triangles", [])
+		if raw_polygon_rows is Array:
+			for raw_polygon_row in raw_polygon_rows:
+				if raw_polygon_row is Dictionary:
+					polygon_rows.append(raw_polygon_row)
+		var raw_row_count: int = raw_polygon_rows.size() if raw_polygon_rows is Array else -1
+		if polygon_rows.size() != raw_row_count:
+			polygon.realization = "UNRESOLVED"
+			unresolved.append({"polygon_id": polygon.id, "reason": "triangulation_rows_not_dictionary_array", "raw_count": raw_row_count, "accepted_count": polygon_rows.size()})
+			continue
 		var emitted_all: bool = true
 		for row in polygon_rows:
 			var emitted: Dictionary = _emit_triangle(mesh, row.root_ids, row.points, polygon.toward_empty)
@@ -183,7 +193,11 @@ func _triangulate_polygon(polygon: Dictionary, hypothesis: String) -> Dictionary
 				return bool(a.accepted)
 			if float(a.minimum_cross_squared) != float(b.minimum_cross_squared):
 				return float(a.minimum_cross_squared) > float(b.minimum_cross_squared)
-			return String(a.diagonal) < String(b.diagonal))
+			var a_diagonal: Array = a.diagonal
+			var b_diagonal: Array = b.diagonal
+			if int(a_diagonal[0]) != int(b_diagonal[0]):
+				return int(a_diagonal[0]) < int(b_diagonal[0])
+			return int(a_diagonal[1]) < int(b_diagonal[1]))
 	else:
 		candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.diagonal) < String(b.diagonal))
 	for candidate in candidates:
