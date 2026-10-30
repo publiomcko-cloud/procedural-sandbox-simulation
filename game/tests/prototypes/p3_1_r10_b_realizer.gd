@@ -151,7 +151,7 @@ func _optimize_triangulation_edge_flips(input_triangles: Array[Dictionary], boun
 		"minimum_cross_squared": best_quality.minimum_cross_squared,
 		"search": {"status": "EXACT_ROOT_REALIZATION_FOUND" if not solution_key.is_empty() else ("EXACT_ROOT_REALIZATION_INFEASIBLE_FOR_EXHAUSTED_BOUNDED_DOMAIN" if exhausted else "EXACT_ROOT_REALIZATION_INCONCLUSIVE"),
 			"explored_state_count": queue_head, "unique_state_count": parents.size(), "frontier_peak": frontier_peak,
-			"edge_candidates_evaluated": candidate_count, "pruned_by_reason": pruned,
+			"edge_candidates_examined": candidate_count, "pruned_by_reason": pruned,
 			"best_state_key": best_key, "best_minimum_cross_squared": best_quality.minimum_cross_squared,
 			"best_subcutoff_face_count": best_quality.subcutoff_count,
 			"search_exhausted": exhausted, "search_limit_hit": not stop_reason.is_empty() and not exhausted and solution_key.is_empty(),
