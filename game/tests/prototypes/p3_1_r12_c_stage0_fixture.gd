@@ -76,7 +76,7 @@ func _run() -> void:
 		return
 	var component: Dictionary = _component(source_graph.get("surface_components", []))
 	if component.is_empty():
-		_fail("target_component_missing", {})
+		_fail("target_component_missing", {"target_polygon_id": COMPONENT, "available_components": _component_diagnostics(source_graph.get("surface_components", []))})
 		return
 	var canonical: Dictionary = source_graph.get("canonical", {})
 	var root_ids: Array[String] = _strings(component.get("root_ids", []))
@@ -185,9 +185,20 @@ func _run() -> void:
 
 func _component(components: Array) -> Dictionary:
 	for value in components:
-		if typeof(value) == TYPE_DICTIONARY and String(value.get("id", "")) == COMPONENT:
-			return value
+		if typeof(value) != TYPE_DICTIONARY:
+			continue
+		var candidate: Dictionary = value
+		if String(candidate.get("id", "")) == COMPONENT or candidate.get("polygon_ids", []).has(COMPONENT):
+			return candidate
 	return {}
+
+func _component_diagnostics(components: Array) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for value in components:
+		if typeof(value) == TYPE_DICTIONARY:
+			var component: Dictionary = value
+			result.append({"id": String(component.get("id", "")), "root_count": component.get("root_ids", []).size(), "polygon_count": component.get("polygon_ids", []).size(), "contains_target_polygon": component.get("polygon_ids", []).has(COMPONENT)})
+	return result
 
 func _strings(value: Variant) -> Array[String]:
 	var result: Array[String] = []
