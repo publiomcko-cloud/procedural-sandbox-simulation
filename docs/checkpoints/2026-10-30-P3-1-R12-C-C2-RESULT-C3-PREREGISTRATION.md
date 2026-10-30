@@ -1,8 +1,11 @@
 # P3.1 R12-C — C2 Result and C3 Preregistration
 
-Date: 2026-10-30  
-Repository: `publiomcko-cloud/procedural-sandbox-simulation`  
-Branch: `exp/p3-1-r12-c-topology-geometry-realization`  
+Date: 2026-10-30
+
+Repository: `publiomcko-cloud/procedural-sandbox-simulation`
+
+Branch: `exp/p3-1-r12-c-topology-geometry-realization`
+
 Evidence root: `C:\Users\PUBLI\AppData\Local\Temp\p3_1_r12c_20261030_0a53ac9c6d5245f4a4faffb14089c8be`
 
 ## Scope and preserved gates
