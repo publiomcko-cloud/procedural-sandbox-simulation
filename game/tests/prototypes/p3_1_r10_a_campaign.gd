@@ -9,9 +9,9 @@ const CONTROL_IDS: Array[String] = [
 	"R9.2.GEO.ZERO.v1",
 	"R9.2.GEO.CARVE.v1",
 	"R9.2.GEO.FILL_CARVE.v1",
-	"R9.2.CHUNK.NEIGHBOR_PAIR.v1",
-	"R9.2.SEAM.NEGATIVE_REGIONS.v1"
+	"R9.2.CHUNK.NEIGHBOR_PAIR.v1"
 ]
+const NEGATIVE_CONTROL_ID: String = "R9.2.SEAM.NEGATIVE_REGIONS.v1"
 const EQUAL_ID: String = "R9.2.SEAM.XPLUS_EQUAL.v1"
 const MIXED_ID: String = "R9.2.SEAM.XPLUS_MIXED_LOD.v1"
 const RAY_ID: String = "R9.2.RAY.CANONICAL_PICKER.v1"
@@ -55,6 +55,16 @@ func _run() -> void:
 		control_result["role"] = "frozen_control"
 		result_rows.append(control_result)
 		_emit_result(control_result, artifact_root)
+	var negative_row: Dictionary = Core.case_by_id(manifest.rows, NEGATIVE_CONTROL_ID)
+	var negative_setup: Dictionary = Core.make_snapshot(negative_row)
+	for variant in negative_row.get("variants", []):
+		var variant_roi: Dictionary = variant.get("roi", {})
+		var negative_result: Dictionary = _run_case_from_setup(candidate, authority, negative_setup.snapshot, negative_row, variant_roi, hypothesis)
+		negative_result["scenario_id"] = NEGATIVE_CONTROL_ID
+		negative_result["variant_id"] = String(variant.get("id", ""))
+		negative_result["role"] = "frozen_control"
+		result_rows.append(negative_result)
+		_emit_result(negative_result, artifact_root)
 	var equal_row: Dictionary = Core.case_by_id(manifest.rows, EQUAL_ID)
 	var equal_result: Dictionary = _run_case(candidate, authority, equal_row, equal_row.roi, hypothesis)
 	equal_result["scenario_id"] = EQUAL_ID
@@ -90,21 +100,30 @@ func _run() -> void:
 			controls_pass += 1
 	var equal_gate: bool = bool(equal_result.get("geometry", {}).get("geometry_realization_complete", false))
 	var mixed_gate: bool = bool(interface_diagnostic.get("conforming", false))
-	var ray_mismatches: int = int(ray_compare.get("hit_miss_mismatches", -1))
+	var ray_mismatches: int = int(ray_compare.get("hit_miss_disagreements", -1))
+	var ray_gate: bool = bool(ray_compare.get("valid", false)) and int(ray_compare.get("ray_count", -1)) == 25 and ray_mismatches == 0
 	var volume_gate: bool = bool(equal_result.get("volume_identity_preserved", false)) and bool(left_result.get("volume_identity_preserved", false)) and bool(right_result.get("volume_identity_preserved", false))
-	var target_pass: bool = equal_gate and mixed_gate and controls_pass == 5 and ray_mismatches == 0 and volume_gate and _failures.is_empty()
+	for control in result_rows:
+		if String(control.get("role", "")) == "frozen_control":
+			volume_gate = volume_gate and bool(control.get("volume_identity_preserved", false))
+	var control_runs: int = 0
+	for row in result_rows:
+		if String(row.get("role", "")) == "frozen_control": control_runs += 1
+	var target_pass: bool = equal_gate and mixed_gate and controls_pass == 6 and control_runs == 6 and ray_gate and volume_gate and _failures.is_empty()
 	var summary: Dictionary = {"schema": "P3.1.R10A.AttemptResult.v1", "attempt_id": attempt_id, "hypothesis": hypothesis, "source_sha": source_sha,
 		"candidate_d_source_sha256": candidate_sha, "manifest_sha256": EXPECTED_MANIFEST_SHA, "result": "PASS" if target_pass else "FAILED_TARGET",
 		"equal_lod": equal_result.get("geometry", {}).get("summary", {}), "equal_lod_complete": equal_gate,
 		"mixed_lod": interface_diagnostic, "required_adjacency_unresolved": int(equal_result.get("geometry", {}).get("required_adjacency_missing_count", -1)),
 		"internal_open_edges": int(equal_result.get("geometry", {}).get("mesh_topology", {}).get("internal_open_edges", -1)),
 		"nonmanifold": int(equal_result.get("geometry", {}).get("mesh_topology", {}).get("nonmanifold_edges", -1)),
-		"winding_valid": bool(equal_result.get("geometry", {}).get("winding_valid", false)), "controls_pass": "%d/5" % controls_pass,
-		"ray": {"mismatches": ray_mismatches, "query_count": rays.size()}, "volume_identity_preserved": volume_gate, "failures": _failures,
+		"winding_valid": bool(equal_result.get("geometry", {}).get("winding_valid", false)), "controls_pass": "%d/%d" % [controls_pass, control_runs],
+		"ray": {"valid": bool(ray_compare.get("valid", false)), "mismatches": ray_mismatches, "query_count": rays.size()}, "volume_identity_preserved": volume_gate, "failures": _failures,
 		"case_count": result_rows.size(), "geometry_cutoff_squared": 1.0e-12}
 	var summary_write: Dictionary = _write_json(artifact_root.path_join(attempt_id + "_summary.json"), summary)
 	if not bool(summary_write.get("valid", false)):
 		_failures.append(String(summary_write.get("reason", "summary_write_failed")))
+		summary["result"] = "FAILED_EVIDENCE"
+		summary["failures"] = _failures.duplicate()
 	print("R10A_ATTEMPT_COMPLETE " + JSON.stringify(summary))
 	print("R10A_ARTIFACTS " + JSON.stringify({"paths": _artifact_paths, "summary": summary_write.get("path", "")}))
 	quit(0 if _failures.is_empty() else 3)
@@ -166,6 +185,7 @@ func _plane_segments(mesh: Dictionary, axis: int, plane: float) -> Dictionary:
 
 func _emit_result(result: Dictionary, root: String) -> void:
 	var id: String = String(result.get("role", "case")) + "_" + String(result.get("scenario_id", "unknown")).replace("/", "_").replace(":", "_")
+	if not String(result.get("variant_id", "")).is_empty(): id += "_" + String(result.variant_id)
 	var written: Dictionary = _write_json(root.path_join(id + ".json"), result)
 	if not bool(written.get("valid", false)):
 		_failures.append(String(written.get("reason", "case_artifact_write_failed")))
