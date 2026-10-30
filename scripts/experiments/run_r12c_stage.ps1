@@ -34,7 +34,8 @@ $unexpected = @($untracked | Where-Object { -not $_.EndsWith('.gd.uid', [StringC
 if ($origin -ne $originExpected -or $branch -ne $branchExpected -or $sourceSha -ne $ExpectedSourceSha.ToLowerInvariant() -or ($parentExpected -and $parentSha -ne $parentExpected) -or $tracked.Count -ne 0 -or $staged.Count -ne 0 -or $unexpected.Count -ne 0) {
 	throw "Source gate failed: origin=$origin branch=$branch source=$sourceSha parent=$parentSha tracked=$($tracked.Count) staged=$($staged.Count) unexpected_untracked=$($unexpected.Count)"
 }
-if (-not (& git -C $repo merge-base --is-ancestor 6f28273d0113f93678034b9e482140e73e765721 HEAD)) { throw 'R10-B1R measured source is not an ancestor.' }
+& git -C $repo merge-base --is-ancestor 6f28273d0113f93678034b9e482140e73e765721 HEAD
+if ($LASTEXITCODE -ne 0) { throw 'R10-B1R measured source is not an ancestor.' }
 $godotSha = (Get-FileHash -Algorithm SHA256 -LiteralPath $godot).Hash.ToLowerInvariant()
 $candidateSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'game\tests\prototypes\p3_1_r9_2_candidate_impl.gd')).Hash.ToLowerInvariant()
 $manifestSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'game\tests\prototypes\p3_1_r9_2_e2e_inputs.jsonl')).Hash.ToLowerInvariant()
@@ -121,7 +122,7 @@ $sampleBytes=[Text.UTF8Encoding]::new($false).GetBytes(($records|ConvertTo-Json 
 [IO.File]::WriteAllBytes((Join-Path $attemptRoot 'monitor.json'),$sampleBytes)
 $markerLines=@($stdout -split '\r?\n' | Where-Object { $_ -like 'R12C_STAGE0_COMPLETE *' })
 $marker=$null
-if ($markerLines.Count -eq 1) { try { $marker=$markerLines[0].Substring('R12C_STAGE0_COMPLETE '.Length)|ConvertFrom-Json -AsHashtable } catch {} }
+if ($markerLines.Count -eq 1) { try { $marker=$markerLines[0].Substring('R12C_STAGE0_COMPLETE '.Length)|ConvertFrom-Json } catch {} }
 $exitCode=$null
 if ($proc.HasExited) { $exitCode=$proc.ExitCode }
 $status='FAILED'
