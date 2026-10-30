@@ -277,7 +277,12 @@ func _triangulate_polygon(polygon: Dictionary, hypothesis: String) -> Dictionary
 				return int(a_diagonal[0]) < int(b_diagonal[0])
 			return int(a_diagonal[1]) < int(b_diagonal[1]))
 	else:
-		candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.diagonal) < String(b.diagonal))
+		candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			var a_diagonal: Array = a.diagonal
+			var b_diagonal: Array = b.diagonal
+			if int(a_diagonal[0]) != int(b_diagonal[0]):
+				return int(a_diagonal[0]) < int(b_diagonal[0])
+			return int(a_diagonal[1]) < int(b_diagonal[1]))
 	for candidate in candidates:
 		if bool(candidate.accepted):
 			return {"valid": true, "construction": "alternate_quad_diagonal_maximize_min_cross_squared", "triangles": candidate.rows, "candidates": candidates}
