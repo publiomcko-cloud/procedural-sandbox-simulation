@@ -67,7 +67,7 @@ For each ray, the script records input origin/direction/length, finite canonical
 
 **Deterministic solver:** breadth-first queue; candidate internal edges sorted by canonical root-edge key; two new oriented triangles derived from the adjacent oriented pair; reject repeated diagonals, non-convex projected quads, projected crossings, invalid manifold incidence, wrong boundary cycle or wrong source-root set. State identity hashes sorted unoriented triangle-root triplets. A final state is accepted only after full 3D area cutoff, exact boundary, all roots represented, manifold incidence and component winding checks.
 
-**Predeclared bounds:** at most 4,096 unique states, queue peak 4,096, 90 seconds solver wall time, and 15,000 legal flip candidates evaluated. Hitting any bound is `PARTIAL / EXACT_ROOT_REALIZATION_INCONCLUSIVE`, not proof of infeasibility. A completed finite search may claim only bounded-domain infeasibility if every state was enumerated. All gates and the `1e-12` cutoff remain unchanged.
+**Predeclared bounds:** at most 4,096 unique states, queue peak 4,096, 90 seconds solver wall time, and 15,000 edge keys examined. The implementation increments the last counter before checking legality, so it counts every encountered edge key, including boundary and rejected edges; it is not a count of legal flips. Hitting any bound is `PARTIAL / EXACT_ROOT_REALIZATION_INCONCLUSIVE`, not proof of infeasibility. A completed finite search may claim only bounded-domain infeasibility if every state was enumerated. All gates and the `1e-12` cutoff remain unchanged.
 
 ## Remaining hypothesis sequence (not yet consumed)
 
