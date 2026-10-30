@@ -71,20 +71,29 @@ func _run() -> void:
 		print("R10B_GRAPH_CONTRACT_COMPLETE " + JSON.stringify({"status": "PASS", "attempt_id": attempt_id, "source_sha": source_sha, "source_topology_graph_proof": graph_result.source_topology_graph_proof, "geometry_topology": graph_result.mesh_topology, "volume_identity_preserved": volume_case.volume_identity_preserved}))
 		quit(0)
 		return
-	if hypothesis not in ["R10B1_NONMONOTONIC_CONSTRAINED_FLIP_BFS", "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION", "R10B3_CONSTRAINED_DELAUNAY_LAWSON_FLIPS", "R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION"]:
+	if hypothesis not in ["R10B1_NONMONOTONIC_CONSTRAINED_FLIP_BFS", "R10B2_EXPANDING_LOCAL_CAVITY_EXACT_RETRIANGULATION", "R10B3_CONSTRAINED_DELAUNAY_LAWSON_FLIPS", "R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION", "R10B5_NESTED_LOCAL_FIELD_REFINEMENT"]:
 		_blocked("unimplemented_geometry_hypothesis", {"hypothesis": hypothesis})
 		return
-	var hypothesis_realizer: RefCounted = _new_hypothesis_realizer(hypothesis)
-	hypothesis_realizer.call("configure_roi", row.roi)
 	var solve_started: int = Time.get_ticks_usec()
 	var realization_mode: String = _realization_mode(hypothesis)
-	var geometry: Dictionary = hypothesis_realizer.call("realize_topology", values, realization_mode, setup.snapshot, int(row.get("seed", 131102026)))
+	var refinement_result: Dictionary = {}
+	var geometry: Dictionary = {}
+	if hypothesis == "R10B5_NESTED_LOCAL_FIELD_REFINEMENT":
+		refinement_result = _run_b5_nested_field_refinement(row, setup.snapshot, volume_case, graph_result)
+		if not bool(refinement_result.get("valid", false)):
+			_blocked("b5_derived_field_precondition_failed", refinement_result)
+			return
+		geometry = refinement_result.geometry
+	else:
+		var hypothesis_realizer: RefCounted = _new_hypothesis_realizer(hypothesis)
+		hypothesis_realizer.call("configure_roi", row.roi)
+		geometry = hypothesis_realizer.call("realize_topology", values, realization_mode, setup.snapshot, int(row.get("seed", 131102026)))
 	var solve_usec: int = Time.get_ticks_usec() - solve_started
 	var patch: Dictionary = _find_patch(geometry)
-	if patch.is_empty() and hypothesis != "R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION":
+	if patch.is_empty() and hypothesis not in ["R10B4_CANONICAL_FIELD_STEINER_SUBDIVISION", "R10B5_NESTED_LOCAL_FIELD_REFINEMENT"]:
 		_blocked("b1_target_component_record_missing", {"component_reconstruction": geometry.get("component_reconstruction", {})})
 		return
-	var search: Dictionary = patch.get("triangulation", {}).get("search", {}) if not patch.is_empty() else {"status": "FIELD_STEINER_EVIDENCE_ONLY", "search_exhausted": false}
+	var search: Dictionary = patch.get("triangulation", {}).get("search", {}) if not patch.is_empty() else ({"status": "NESTED_FIELD_REFINEMENT_WITHOUT_ROOT_FLIP_SEARCH", "search_exhausted": false} if hypothesis == "R10B5_NESTED_LOCAL_FIELD_REFINEMENT" else {"status": "FIELD_STEINER_EVIDENCE_ONLY", "search_exhausted": false})
 	var target_topology: Dictionary = geometry.get("mesh_topology", {})
 	var ray_case: Dictionary = _run_frozen_ray_case(manifest.get("rows", []))
 	var ray_result: Dictionary = ray_case.get("rays", {})
@@ -93,7 +102,9 @@ func _run() -> void:
 	ray_result["candidate_volume_sha256"] = String(ray_case.get("volume_sha256", ""))
 	var controls: Dictionary = _run_controls(manifest.get("rows", []), setup.snapshot)
 	var volume_gate: bool = bool(volume_case.volume_identity_preserved) and String(volume_case.volume.sha256) == A6_VOLUME_SHA and String(volume_case.volume.metrics.payload_sha256) == A6_PAYLOAD_SHA and int(volume_case.volume.revision) == 2
+	if hypothesis == "R10B5_NESTED_LOCAL_FIELD_REFINEMENT": volume_gate = volume_gate and bool(refinement_result.get("derived_volume_integrity_preserved", false))
 	var equal_gate: bool = bool(geometry.get("geometry_realization_complete", false)) and int(target_topology.get("internal_open_edges", -1)) == 0 and int(target_topology.get("nonmanifold_edges", -1)) == 0 and int(target_topology.get("degenerate_triangles", -1)) == 0 and int(target_topology.get("winding_inconsistencies", -1)) == 0 and int(geometry.get("required_adjacency_missing_count", -1)) == 0 and int(geometry.get("required_adjacency_nonmanifold_count", -1)) == 0 and geometry.get("cutoff_rejections", []).is_empty()
+	if hypothesis == "R10B5_NESTED_LOCAL_FIELD_REFINEMENT": equal_gate = equal_gate and bool(refinement_result.get("valid", false)) and bool(refinement_result.get("nested_sample_values_bitwise_equal", false)) and bool(refinement_result.get("all_six_outer_contours_match", false))
 	var ray_gate: bool = bool(ray_case.get("valid", false)) and bool(ray_result.get("valid", false)) and bool(ray_case.get("geometry_complete", false)) and int(ray_result.get("roi_scoped_hit_miss_disagreements", -1)) == 0
 	var mixed_gate: Dictionary = {"status": "SKIPPED_EQUAL_LOD_OR_RAY_GATE_FAILED", "conforming": false}
 	if equal_gate and ray_gate:
@@ -106,7 +117,7 @@ func _run() -> void:
 		"godot": Engine.get_version_info(), "cutoff_squared": 1.0e-12,
 		"target": {"scenario_id": EQUAL_ID, "volume_sha256": volume_case.volume.sha256, "payload_sha256": volume_case.volume.metrics.payload_sha256, "revision": volume_case.volume.revision, "volume_identity_preserved": volume_gate},
 		"source_topology": geometry.get("source_topology_graph_proof", {}),
-		"b1_search": search, "realization_search": search, "field_steiner_evidence": geometry.get("local_refinement", []), "equal_lod": {"complete": equal_gate, "realization_complete": geometry.get("geometry_realization_complete", false), "mesh_sha256": geometry.get("mesh_sha256", ""), "metrics": target_topology, "required_adjacency_missing_count": geometry.get("required_adjacency_missing_count", -1), "required_adjacency_nonmanifold_count": geometry.get("required_adjacency_nonmanifold_count", -1), "cutoff_rejection_count": geometry.get("cutoff_rejections", []).size(), "unresolved_obligations": geometry.get("unresolved_obligations", []), "patch": patch},
+		"b1_search": search, "realization_search": search, "field_steiner_evidence": geometry.get("local_refinement", []), "nested_field_refinement": refinement_result, "equal_lod": {"complete": equal_gate, "realization_complete": geometry.get("geometry_realization_complete", false), "mesh_sha256": geometry.get("mesh_sha256", ""), "metrics": target_topology, "required_adjacency_missing_count": geometry.get("required_adjacency_missing_count", -1), "required_adjacency_nonmanifold_count": geometry.get("required_adjacency_nonmanifold_count", -1), "cutoff_rejection_count": geometry.get("cutoff_rejections", []).size(), "unresolved_obligations": geometry.get("unresolved_obligations", []), "patch": patch},
 		"ray_gate": ray_result, "controls": controls, "mixed_lod": mixed_gate,
 		"ray_candidate": ray_case,
 		"volume_gate": volume_gate, "solver_elapsed_usec": solve_usec, "failures": _failures, "result": status
@@ -224,6 +235,52 @@ func _run_roi_rays(row: Dictionary, snapshot: Dictionary, mesh: Dictionary, emit
 		rows.append({"ray_index": index, "origin": [ray.origin.x, ray.origin.y, ray.origin.z], "direction": [ray.direction.x, ray.direction.y, ray.direction.z], "canonical_global_roots": roots.roots, "canonical_roi_root_count": roi_roots.size(), "canonical_roi_hit": canonical_hit, "mesh_hit": mesh_hit, "mesh_hit_distance": hit.get("distance", null), "mesh_hit_position": hit.get("position_array", []), "first_hit_triangle": hit.get("triangle_index", -1), "triangle_component_id": triangle.get("patch_id", ""), "triangle_source_polygons": triangle.get("source_polygon_ids", []), "density_at_hit": density, "distance_to_nearest_roi_root": nearest_delta, "roi_scoped_hit_miss_disagreement": disagreement})
 	position_errors.sort()
 	return {"valid": rays.size() == 25, "ray_count": rays.size(), "roi_scoped_hit_miss_disagreements": mismatches, "root_scope": "closed ROI with 1e-6 bounds tolerance; cropped Y end-face roots excluded", "completeness": "finite 256-step sign-change scan plus 32 bisections; tangent and sub-step roots may be missed", "position_error_p50": _percentile(position_errors, 0.50), "position_error_p95": _percentile(position_errors, 0.95), "position_error_max": position_errors.back() if not position_errors.is_empty() else null, "rays": rows}
+
+func _run_b5_nested_field_refinement(row: Dictionary, snapshot: Dictionary, coarse_volume: Dictionary, coarse_geometry: Dictionary) -> Dictionary:
+	var coarse_roi: Dictionary = row.roi.duplicate(true)
+	var fine_roi: Dictionary = coarse_roi.duplicate(true)
+	fine_roi.id = "R10B5_DERIVED_LOCAL_FINE_0_125"
+	fine_roi.cells = [int(coarse_roi.cells[0]) * 2, int(coarse_roi.cells[1]) * 2, int(coarse_roi.cells[2]) * 2]
+	fine_roi.step = float(coarse_roi.step) * 0.5
+	var fine_volume_case: Dictionary = _build_volume(row, fine_roi, snapshot)
+	if not bool(fine_volume_case.get("valid", false)): return {"valid": false, "reason": "fine_derived_volume_integrity_failed", "detail": fine_volume_case}
+	var authority: RefCounted = Authority.new()
+	authority.call("configure_roi", fine_roi)
+	var geometry: Dictionary = authority.call("realize_topology", fine_volume_case.volume.values, "R10A6_INTERIOR_ROOT_EDGE_FLIP_OPTIMIZATION", snapshot, int(row.get("seed", 131102026)))
+	var coarse_dims: Vector3i = Vector3i(coarse_roi.cells[0], coarse_roi.cells[1], coarse_roi.cells[2]) + Vector3i.ONE
+	var fine_dims: Vector3i = Vector3i(fine_roi.cells[0], fine_roi.cells[1], fine_roi.cells[2]) + Vector3i.ONE
+	var coarse_values: PackedFloat32Array = coarse_volume.volume.values
+	var fine_values: PackedFloat32Array = fine_volume_case.volume.values
+	var nested_samples_equal: bool = true
+	var nested_samples_checked: int = 0
+	var first_sample_mismatch: Dictionary = {}
+	for y in range(coarse_dims.y):
+		for z in range(coarse_dims.z):
+			for x in range(coarse_dims.x):
+				var coarse_index: int = (y * coarse_dims.z + z) * coarse_dims.x + x
+				var fine_index: int = ((y * 2) * fine_dims.z + z * 2) * fine_dims.x + x * 2
+				nested_samples_checked += 1
+				if coarse_values[coarse_index] != fine_values[fine_index]:
+					nested_samples_equal = false
+					if first_sample_mismatch.is_empty(): first_sample_mismatch = {"coarse_lattice": [x, y, z], "coarse_value": coarse_values[coarse_index], "fine_value": fine_values[fine_index]}
+	var face_rows: Array[Dictionary] = []
+	var all_faces_match: bool = true
+	var minimum: Vector3 = Core.world_min(coarse_roi)
+	var maximum: Vector3 = minimum + Vector3(coarse_dims - Vector3i.ONE) * float(coarse_roi.step)
+	for axis in range(3):
+		for positive in [false, true]:
+			var plane: float = maximum[axis] if positive else minimum[axis]
+			var coarse_segments: Dictionary = _plane_segments(coarse_geometry.get("mesh", Core.new_mesh()), axis, plane)
+			var fine_segments: Dictionary = _plane_segments(geometry.get("mesh", Core.new_mesh()), axis, plane)
+			var unmatched: Array[String] = []
+			for key in coarse_segments.keys():
+				if not fine_segments.has(key): unmatched.append("coarse:" + String(key))
+			for key in fine_segments.keys():
+				if not coarse_segments.has(key): unmatched.append("fine:" + String(key))
+			var match: bool = unmatched.is_empty() and coarse_segments.size() == fine_segments.size()
+			all_faces_match = all_faces_match and match
+			face_rows.append({"axis": ["X", "Y", "Z"][axis], "orientation": "POS" if positive else "NEG", "plane": plane, "coarse_segment_count": coarse_segments.size(), "fine_segment_count": fine_segments.size(), "unmatched_count": unmatched.size(), "unmatched_examples": unmatched.slice(0, 12), "exact_segment_match": match})
+	return {"valid": bool(fine_volume_case.get("volume_identity_preserved", false)) and bool(geometry.get("valid", false)), "reason": "" if bool(geometry.get("valid", false)) else String(geometry.get("reason", "fine_realization_invalid")), "geometry": geometry, "derived_volume_integrity_preserved": fine_volume_case.get("volume_identity_preserved", false), "derived_volume": {"sha256": fine_volume_case.volume.sha256, "payload_sha256": fine_volume_case.volume.metrics.payload_sha256, "revision": fine_volume_case.volume.revision, "step": fine_roi.step, "cells": fine_roi.cells, "sample_count": fine_values.size()}, "source_volume": {"sha256": coarse_volume.volume.sha256, "payload_sha256": coarse_volume.volume.metrics.payload_sha256, "revision": coarse_volume.volume.revision, "step": coarse_roi.step, "cells": coarse_roi.cells}, "nested_sample_values_bitwise_equal": nested_samples_equal, "nested_sample_count": nested_samples_checked, "first_nested_sample_mismatch": first_sample_mismatch, "outer_face_interfaces": face_rows, "all_six_outer_contours_match": all_faces_match, "outer_contour_oracle": "independent coarse-vs-fine mesh plane segments, endpoint quantization 1e-6 world units; not a product tolerance", "canonical_source_mapping": "every coarse grid node maps to fine index 2x,2y,2z; compare float32 samples exactly"}
 
 func _run_mixed_lod_gate(rows: Array, hypothesis: String) -> Dictionary:
 	var row: Dictionary = Core.case_by_id(rows, "R9.2.SEAM.XPLUS_MIXED_LOD.v1")
