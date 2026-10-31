@@ -97,6 +97,11 @@ func _test_t_junction_oracle() -> void:
 
 func _test_fixture_identity() -> void:
 	var realizer: RefCounted = Realizer.new()
+	var residual_bytes: PackedByteArray = FileAccess.get_file_as_bytes("res://tests/prototypes/p3_1_r12_cx_residual_fixture.json")
+	var residual_fixture: Variant = JSON.parse_string(residual_bytes.get_string_from_utf8())
+	_check(Core.sha256(residual_bytes) == Realizer.EXPECTED_RESIDUAL_FIXTURE_SHA and residual_fixture is Dictionary, "tracked residual fixture bytes match the immutable physical digest")
+	if residual_fixture is Dictionary:
+		_check(String(residual_fixture.get("volume_payload_sha256", "")) == "2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0", "campaign schema field matches the frozen volume payload pin")
 	var base: Dictionary = {"mesh_sha256":Realizer.EXPECTED_C6_MESH_SHA}
 	var fixture: Dictionary = {"schema":"P3.1.R12CX.ResidualCutoffFixture.v1", "c6_artifact_sha256":"0c6ae06d368f1a789ddc16fae429700c109d09fc019082fe6356c58fee12c6de", "c6_mesh_sha256":"wrong", "volume_sha256":Realizer.EXPECTED_C6_VOLUME_SHA, "residual_triangle_count":3}
 	_check(String(realizer.call("_validate_residual_fixture", fixture, base)) == "cx_c6_mesh_identity_mismatch", "mismatched residual fixture identity fails closed")

@@ -41,7 +41,7 @@ The search preserves cavity boundary signature, blocks required topology arcs an
 
 ## Sequential gates
 
-P1 exact source/commit/tree and physical hashes; P2 topology fixture; P3 exact C6 artifact reproduction; P4 residual fixture; P5 cold import; P6 campaign `check-only`; P7 realizer `check-only`; P8 25-assertion contract suite. None consumes CX.
+P1 exact source/commit/tree and physical hashes; P2 topology fixture; P3 exact C6 artifact reproduction; P4 residual fixture; P5 cold import; P6 campaign `check-only`; P7 realizer `check-only`; P8 27-assertion contract suite, including physical residual-fixture digest/schema assertions. None consumes CX.
 
 Only after P1–P8 pass on one exact committed source may the reserved `R9.2.SEAM.XPLUS_EQUAL.v1` target be invoked once. The machine-readable terminal geometry result consumes CX even if it is `PARTIAL`, `FAILED_TARGET`, or `FAILED_WITH_REGRESSION`. No rerun is allowed after such a result.
 

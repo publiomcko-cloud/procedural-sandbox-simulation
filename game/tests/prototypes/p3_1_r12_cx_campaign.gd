@@ -65,7 +65,7 @@ func _run() -> void:
 		_fail("cx_residual_fixture_json_invalid", attempt_id, source_sha)
 		return
 	var residual_fixture: Dictionary = parsed_residual
-	if residual_fixture.get("schema", "") != "P3.1.R12CX.ResidualCutoffFixture.v1" or residual_fixture.get("c6_mesh_sha256", "") != Realizer.EXPECTED_C6_MESH_SHA or residual_fixture.get("residuals", []).size() != 3 or residual_fixture.get("volume_sha256", "") != VolumeSha or residual_fixture.get("payload_sha256", "") != PayloadSha:
+	if residual_fixture.get("schema", "") != "P3.1.R12CX.ResidualCutoffFixture.v1" or residual_fixture.get("c6_mesh_sha256", "") != Realizer.EXPECTED_C6_MESH_SHA or residual_fixture.get("residuals", []).size() != 3 or residual_fixture.get("volume_sha256", "") != VolumeSha or residual_fixture.get("volume_payload_sha256", "") != PayloadSha:
 		_fail("cx_residual_fixture_identity_invalid", attempt_id, source_sha)
 		return
 	var parsed_fixture: Variant = JSON.parse_string(fixture_bytes.get_string_from_utf8())
