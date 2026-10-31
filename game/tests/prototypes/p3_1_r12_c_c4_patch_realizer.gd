@@ -3,9 +3,6 @@ extends "res://tests/prototypes/p3_1_r12_c_anchor_cycle_realizer.gd"
 ## R12-C4: bounded exact-coplanar local 2-2 remeshing of the frozen source faces.
 ## This is an isolated experiment; source roots and scalar samples remain fixed.
 
-const Core := preload("res://tests/prototypes/p3_1_r9_2_diagnostic_base.gd")
-const Authority := preload("res://tests/prototypes/p3_1_r10_a_topology_authority.gd")
-const CUTOFF_SQUARED: float = 1.0e-12
 const MAX_FLIPS: int = 128
 
 func realize(graph: Dictionary, values: PackedFloat32Array, roi: Dictionary, expected_topology_sha: String, expected_graph_fingerprint_sha: String = "") -> Dictionary:
