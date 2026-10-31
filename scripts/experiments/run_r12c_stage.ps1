@@ -1,5 +1,5 @@
 param(
-	[Parameter(Mandatory = $true)][ValidateSet('import', 'check-stage0', 'stage0', 'check-geometry', 'geometry', 'check-c3', 'c3', 'check-c4', 'c4')][string]$Stage,
+	[Parameter(Mandatory = $true)][ValidateSet('import', 'check-stage0', 'stage0', 'check-geometry', 'geometry', 'check-c3', 'c3', 'check-c4', 'c4', 'check-c5', 'c5')][string]$Stage,
 	[Parameter(Mandatory = $true)][ValidatePattern('^[A-Za-z0-9_-]{1,80}$')][string]$AttemptId,
 	[Parameter(Mandatory = $true)][string]$EvidenceRoot,
 	[Parameter(Mandatory = $true)][string]$PinnedDomainPath,
@@ -46,8 +46,9 @@ $authoritySha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'g
 $stage0Sha = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'game\tests\prototypes\p3_1_r12_c_stage0_fixture.gd')).Hash.ToLowerInvariant()
 $isC3 = $Stage -in @('check-c3', 'c3')
 $isC4 = $Stage -in @('check-c4', 'c4')
-$campaignRel = if ($isC4) { 'game\tests\prototypes\p3_1_r12_c_c4_campaign.gd' } elseif ($isC3) { 'game\tests\prototypes\p3_1_r12_c_c3_campaign.gd' } else { 'game\tests\prototypes\p3_1_r12_c_campaign.gd' }
-$realizerRel = if ($isC4) { 'game\tests\prototypes\p3_1_r12_c_c4_patch_realizer.gd' } elseif ($isC3) { 'game\tests\prototypes\p3_1_r12_c_support_realizer.gd' } else { 'game\tests\prototypes\p3_1_r12_c_anchor_cycle_realizer.gd' }
+$isC5 = $Stage -in @('check-c5', 'c5')
+$campaignRel = if ($isC5) { 'game\tests\prototypes\p3_1_r12_c_c5_campaign.gd' } elseif ($isC4) { 'game\tests\prototypes\p3_1_r12_c_c4_campaign.gd' } elseif ($isC3) { 'game\tests\prototypes\p3_1_r12_c_c3_campaign.gd' } else { 'game\tests\prototypes\p3_1_r12_c_campaign.gd' }
+$realizerRel = if ($isC5) { 'game\tests\prototypes\p3_1_r12_c_c5_face_owned_realizer.gd' } elseif ($isC4) { 'game\tests\prototypes\p3_1_r12_c_c4_patch_realizer.gd' } elseif ($isC3) { 'game\tests\prototypes\p3_1_r12_c_support_realizer.gd' } else { 'game\tests\prototypes\p3_1_r12_c_anchor_cycle_realizer.gd' }
 $campaignPath = Join-Path $repo $campaignRel
 $realizerPath = Join-Path $repo $realizerRel
 $campaignSha = if (Test-Path -LiteralPath $campaignPath) { (Get-FileHash -Algorithm SHA256 -LiteralPath $campaignPath).Hash.ToLowerInvariant() } else { '' }
@@ -55,7 +56,7 @@ $realizerSha = if (Test-Path -LiteralPath $realizerPath) { (Get-FileHash -Algori
 if ($godotSha -ne $godotExpected -or $candidateSha -ne $candidateExpected -or $manifestSha -ne $manifestExpected -or $authoritySha -ne $authorityExpected) { throw "Pinned input mismatch: godot=$godotSha candidate=$candidateSha manifest=$manifestSha authority=$authoritySha" }
 $fixturePath = Join-Path $EvidenceRoot 'r12c_stage0_topology_fixture.json'
 $fixtureSha = ''
-if ($Stage -in @('check-geometry', 'geometry', 'check-c3', 'c3', 'check-c4', 'c4')) {
+if ($Stage -in @('check-geometry', 'geometry', 'check-c3', 'c3', 'check-c4', 'c4', 'check-c5', 'c5')) {
 	if ($ExpectedCampaignSha256 -notmatch '^[0-9a-fA-F]{64}$' -or $ExpectedRealizerSha256 -notmatch '^[0-9a-fA-F]{64}$' -or $ExpectedFixtureSha256 -notmatch '^[0-9a-fA-F]{64}$') { throw 'Geometry stages require pinned campaign, realizer and fixture SHA-256 values.' }
 	if ($campaignSha -ne $ExpectedCampaignSha256.ToLowerInvariant() -or $realizerSha -ne $ExpectedRealizerSha256.ToLowerInvariant()) { throw "Geometry source pin mismatch: campaign=$campaignSha realizer=$realizerSha" }
 	if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) { throw 'Stage 0 fixture is missing.' }
@@ -82,6 +83,8 @@ $argv = switch ($Stage) {
 	'c3' { @('--headless', '--path', './game', '--script', 'res://tests/prototypes/p3_1_r12_c_c3_campaign.gd') }
 	'check-c4' { @('--headless', '--path', './game', '--check-only', '--script', 'res://tests/prototypes/p3_1_r12_c_c4_campaign.gd') }
 	'c4' { @('--headless', '--path', './game', '--script', 'res://tests/prototypes/p3_1_r12_c_c4_campaign.gd') }
+	'check-c5' { @('--headless', '--path', './game', '--check-only', '--script', 'res://tests/prototypes/p3_1_r12_c_c5_campaign.gd') }
+	'c5' { @('--headless', '--path', './game', '--script', 'res://tests/prototypes/p3_1_r12_c_c5_campaign.gd') }
 }
 $intent = [ordered]@{
 	schema='P3.1.R12C.LaunchIntent.v1'; attempt_id=$AttemptId; stage=$Stage
@@ -117,7 +120,7 @@ $psi.EnvironmentVariables['R12C_ARTIFACT_DIR']=$EvidenceRoot
 $psi.EnvironmentVariables['R12C_DOMAIN_PATH']=$domainFull
 $psi.EnvironmentVariables['R12C_PARENT_SHA']=$parentSha
 $psi.EnvironmentVariables['R12C_TREE_SHA']=$treeSha
-if ($Stage -in @('check-geometry', 'geometry', 'check-c3', 'c3', 'check-c4', 'c4')) {
+if ($Stage -in @('check-geometry', 'geometry', 'check-c3', 'c3', 'check-c4', 'c4', 'check-c5', 'c5')) {
 	$psi.EnvironmentVariables['R12C_FIXTURE_PATH']=$fixturePath
 	$psi.EnvironmentVariables['R12C_EXPECTED_CAMPAIGN_SHA256']=$campaignSha
 	$psi.EnvironmentVariables['R12C_EXPECTED_REALIZER_SHA256']=$realizerSha
@@ -154,7 +157,7 @@ $stderrPath = Join-Path $attemptRoot 'stderr.txt'
 [IO.File]::WriteAllText($stderrPath,$stderr,[Text.UTF8Encoding]::new($false))
 $sampleBytes=[Text.UTF8Encoding]::new($false).GetBytes(($records|ConvertTo-Json -Depth 8))
 [IO.File]::WriteAllBytes((Join-Path $attemptRoot 'monitor.json'),$sampleBytes)
-$markerPrefix = if ($Stage -in @('check-geometry', 'geometry', 'check-c3', 'c3', 'check-c4', 'c4')) { 'R12C_GEOMETRY_COMPLETE ' } else { 'R12C_STAGE0_COMPLETE ' }
+$markerPrefix = if ($Stage -in @('check-geometry', 'geometry', 'check-c3', 'c3', 'check-c4', 'c4', 'check-c5', 'c5')) { 'R12C_GEOMETRY_COMPLETE ' } else { 'R12C_STAGE0_COMPLETE ' }
 $markerLines=@($stdout -split '\r?\n' | Where-Object { $_.StartsWith($markerPrefix, [StringComparison]::Ordinal) })
 $marker=$null
 if ($markerLines.Count -eq 1) { try { $marker=$markerLines[0].Substring($markerPrefix.Length)|ConvertFrom-Json } catch {} }
@@ -166,11 +169,11 @@ if ($hardAbort) { $status='RESOURCE_ABORT_FREE_COMMIT_2GB' }
 elseif ($timedOut) { $status='TIMEOUT_INCOMPLETE' }
 elseif ($runtimeErrorLines.Count -gt 0) { $status='CAPTURED_WITH_RUNTIME_ERRORS' }
 elseif ($Stage -eq 'stage0' -and $exitCode -eq 0 -and $null -ne $marker -and $marker.status -eq 'PASS') { $status='PASS' }
-elseif ($Stage -in @('geometry', 'c3', 'c4') -and $exitCode -eq 0 -and $null -ne $marker -and $marker.status -in @('PASS', 'FAILED_TARGET')) {
+elseif ($Stage -in @('geometry', 'c3', 'c4', 'c5') -and $exitCode -eq 0 -and $null -ne $marker -and $marker.status -in @('PASS', 'FAILED_TARGET')) {
 	$resultFull = [IO.Path]::GetFullPath([string]$marker.result_path)
 	if ($resultFull.StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $resultFull -PathType Leaf) -and (Get-FileHash -Algorithm SHA256 -LiteralPath $resultFull).Hash.ToLowerInvariant() -eq [string]$marker.result_sha256) { $status='PASS' }
 }
-elseif ($Stage -in @('import', 'check-stage0', 'check-geometry', 'check-c3', 'check-c4') -and $exitCode -eq 0) { $status='PASS' }
+elseif ($Stage -in @('import', 'check-stage0', 'check-geometry', 'check-c3', 'check-c4', 'check-c5') -and $exitCode -eq 0) { $status='PASS' }
 $record=[ordered]@{
 	schema='P3.1.R12C.ProcessRecord.v1'; attempt_id=$AttemptId; stage=$Stage; status=$status
 	source_sha=$sourceSha; parent_sha=$parentSha; tree_sha=$treeSha; godot_pid=$godotPid; launcher_pid=$PID
