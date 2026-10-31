@@ -1,3 +1,7 @@
+## 2026-10-31 — P3.1 R12-CXR R3 prelaunch fixture-path correction
+
+- [R3 prelaunch path correction](2026-10-31-P3-1-R12-CXR-R3-PRELAUNCH-PATH-CORRECTION.md) — wrong generator-script path rejected before reservation or process creation; correct archived fixture matches the frozen SHA; target remains unstarted.
+
 ## 2026-10-31 — P3.1 R12-CXR R3 pre-target freeze; target not started
 
 - [R12-CXR R3 pre-target freeze](2026-10-31-P3-1-R12-CXR-R3-PRETARGET-FROZEN.md) — R3 source `64ce92c`; exact-source import/check-only and 131/131 contract assertions passed; durable one-shot dispatcher control passed; frozen target remains NOT_STARTED pending this checkpoint commit.

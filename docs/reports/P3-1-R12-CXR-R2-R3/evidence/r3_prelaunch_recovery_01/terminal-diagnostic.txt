@@ -1,0 +1,7 @@
+Captured dispatcher preflight diagnostic (pre-scenario; no Godot process was created):
+
+Exception:
+C:\r12cxr-convergence-20261031\docs\reports\P3-1-R12-CXR-R2-R3\evidence\r3_pretarget_01\r3_target_dispatcher.ps1:66
+Line 66: Stage-0 fixture pin mismatch.
+
+The supplied argument named game/tests/prototypes/p3_1_r12_c_stage0_fixture.gd, which is the generator script and has SHA-256 83da52c770a16c6fb89dc7708553b7e6df7276865cefb1e2065483cedd1be988. The frozen expected input is the archived JSON fixture at docs/reports/P3-1-R12-CXR-R2-R3/evidence/r2_attempt_01/r12c_stage0_topology_fixture.json, SHA-256 33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d. The corrected path was confirmed byte-for-byte by SHA-256. The fresh attempt evidence directory remained empty; there is no reservation, process-start intent, child PID, Godot output, or target marker.
