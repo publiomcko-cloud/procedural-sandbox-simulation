@@ -26,21 +26,21 @@ func realize_cx(graph: Dictionary, values: PackedFloat32Array, roi: Dictionary, 
 	var begin_usec: int = Time.get_ticks_usec()
 	var result: Dictionary = super.realize(graph, values, roi, expected_topology_sha, expected_graph_fingerprint_sha)
 	if not bool(result.get("valid", false)):
-		return {"valid": false, "reason": "cx_c6_base_realizer_invalid", "details": result}
+		return {"valid": false, "cx_algorithm_started": false, "reason": "cx_c6_base_realizer_invalid", "details": result}
 	var fixture_error: String = _validate_residual_fixture(residual_fixture, result)
 	if not fixture_error.is_empty():
-		return {"valid": false, "reason": fixture_error, "details": {"expected_fixture_sha256": EXPECTED_RESIDUAL_FIXTURE_SHA}}
+		return {"valid": false, "cx_algorithm_started": false, "reason": fixture_error, "details": {"expected_fixture_sha256": EXPECTED_RESIDUAL_FIXTURE_SHA}}
 	var residuals: Array = result.get("cutoff_rejections", [])
 	if residuals.size() != 3:
-		return {"valid": false, "reason": "cx_unexpected_c6_cutoff_count", "details": {"count": residuals.size()}}
+		return {"valid": false, "cx_algorithm_started": false, "reason": "cx_unexpected_c6_cutoff_count", "details": {"count": residuals.size()}}
 	var built: Dictionary = _build_triangles(result, residual_fixture)
 	if not bool(built.get("valid", false)):
-		return {"valid": false, "reason": "cx_c6_triangle_reconstruction_failed", "details": built}
+		return {"valid": false, "cx_algorithm_started": false, "reason": "cx_c6_triangle_reconstruction_failed", "details": built}
 	var triangles: Array[Dictionary] = built.triangles
 	_root_positions = built.root_positions
 	var baseline_emitted: Array[Dictionary] = _accepted_triangle_rows(triangles)
 	if _mesh_sha(_mesh_from_triangles(baseline_emitted)) != EXPECTED_C6_MESH_SHA or result.get("mesh_sha256", "") != EXPECTED_C6_MESH_SHA:
-		return {"valid": false, "reason": "cx_reconstructed_c6_mesh_hash_mismatch", "expected": EXPECTED_C6_MESH_SHA, "reconstructed": _mesh_sha(_mesh_from_triangles(baseline_emitted)), "realizer": result.get("mesh_sha256", "")}
+		return {"valid": false, "cx_algorithm_started": false, "reason": "cx_reconstructed_c6_mesh_hash_mismatch", "expected": EXPECTED_C6_MESH_SHA, "reconstructed": _mesh_sha(_mesh_from_triangles(baseline_emitted)), "realizer": result.get("mesh_sha256", "")}
 	_required_arc_keys.clear()
 	for arc_value in result.get("arc_map", []):
 		var arc: Dictionary = arc_value
@@ -52,18 +52,24 @@ func realize_cx(graph: Dictionary, values: PackedFloat32Array, roi: Dictionary, 
 	_orient_rejected_triangles(triangles, adjacency)
 	var original_triangles: Array[Dictionary] = triangles.duplicate(true)
 	var groups: Array[Array] = _overlapping_defect_groups(residual_fixture.get("residuals", []), adjacency)
+	if groups.is_empty():
+		return {"valid": false, "cx_algorithm_started": false, "reason": "cx_residual_cavity_set_empty"}
 	if groups.size() > MAX_RESIDUAL_CAVITIES:
-		return {"valid": false, "reason": "cx_residual_cavity_count_cap_exceeded", "cavity_count": groups.size(), "cap": MAX_RESIDUAL_CAVITIES, "limits": _limits()}
+		return {"valid": false, "cx_algorithm_started": false, "reason": "cx_residual_cavity_count_cap_exceeded", "cavity_count": groups.size(), "cap": MAX_RESIDUAL_CAVITIES, "limits": _limits()}
 	_search_started_usec = Time.get_ticks_usec()
 	_search_state_count = 0
 	_cavity_search_state_count = 0
 	var patches: Array[Dictionary] = []
 	var replacements: Dictionary = {}
+	var cx_algorithm_started: bool = false
 	for group_index in range(groups.size()):
 		var group: Array = groups[group_index]
+		cx_algorithm_started = true
+		if group_index == 0:
+			print("R12CX_LOCAL_PATCH_SEARCH_BEGIN " + JSON.stringify({"residual_cavities": groups.size(), "limits": _limits(), "residual_fixture_sha256": EXPECTED_RESIDUAL_FIXTURE_SHA}))
 		var level_result: Dictionary = _find_smallest_patch(group, triangles, adjacency, snapshot)
 		if not bool(level_result.get("valid", false)):
-			return {"valid": false, "reason": "cx_bounded_patch_search_failed", "details": {"group_index": group_index, "group": group, "search": level_result, "limits": _limits()}}
+			return {"valid": false, "cx_algorithm_started": true, "reason": "cx_bounded_patch_search_failed", "details": {"group_index": group_index, "group": group, "search": level_result, "limits": _limits()}}
 		var patch_ids: Array = level_result.get("patch_triangle_ids", [])
 		for triangle_id in patch_ids:
 			replacements[String(triangle_id)] = true
@@ -79,7 +85,7 @@ func realize_cx(graph: Dictionary, values: PackedFloat32Array, roi: Dictionary, 
 			final_triangles.append(triangle_value)
 	var validation: Dictionary = _validate_final_mesh(final_triangles, triangles, patches, result, roi, snapshot)
 	if not bool(validation.get("valid", false)):
-		return {"valid": false, "reason": "cx_final_geometry_validation_failed", "details": validation, "patches": patches, "limits": _limits()}
+		return {"valid": false, "cx_algorithm_started": true, "reason": "cx_final_geometry_validation_failed", "details": validation, "patches": patches, "limits": _limits()}
 	var rebuilt_mesh: Dictionary = _mesh_from_triangles(final_triangles)
 	var topology: Dictionary = Core.topology(rebuilt_mesh, Core.world_min(roi), Core.world_min(roi) + Vector3(Core.cell_counts(roi)) * Core.step(roi))
 	var c6_paths: Dictionary = _validate_c6_paths(final_triangles, result.get("applied_flips", []))
@@ -92,6 +98,7 @@ func realize_cx(graph: Dictionary, values: PackedFloat32Array, roi: Dictionary, 
 	for patch in patches:
 		if not bool(patch.get("search_complete", false)): local_search_complete = false
 	result["hypothesis"] = "CX_BOUNDED_RESIDUAL_CAVITY_MICROPATCH"
+	result["cx_algorithm_started"] = cx_algorithm_started
 	result["mesh"] = rebuilt_mesh
 	result["mesh_sha256"] = _mesh_sha(rebuilt_mesh)
 	result["mesh_topology"] = topology
@@ -159,7 +166,14 @@ func _build_triangles(geometry: Dictionary, fixture: Dictionary) -> Dictionary:
 	for root_value in geometry.get("root_map", []):
 		var root: Dictionary = root_value
 		var root_id: String = String(root.get("root_id", ""))
-		var position: Vector3 = root.get("position", Vector3.ZERO)
+		var position_value: Variant = root.get("position", null)
+		var position: Vector3
+		if position_value is Vector3:
+			position = position_value
+		elif position_value is Array and (position_value as Array).size() == 3:
+			position = _array_vec3(position_value)
+		else:
+			return {"valid": false, "reason": "cx_root_position_representation_invalid", "root_id": root_id}
 		if root_id.is_empty() or not position.is_finite(): return {"valid": false, "reason": "cx_root_position_invalid", "root_id": root_id}
 		root_positions[root_id] = position
 	var triangles: Array[Dictionary] = []

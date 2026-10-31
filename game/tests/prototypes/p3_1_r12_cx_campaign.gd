@@ -31,7 +31,7 @@ func _run() -> void:
 	var residual_path: String = OS.get_environment("R12CX_RESIDUAL_FIXTURE_PATH")
 	var expected_source: String = OS.get_environment("R12C_EXPECTED_CAMPAIGN_SHA256")
 	var expected_realizer: String = OS.get_environment("R12C_EXPECTED_REALIZER_SHA256")
-	if not ["check-only", "campaign"].has(mode) or attempt_id.is_empty() or source_sha.length() != 40 or root.is_empty() or not DirAccess.dir_exists_absolute(root) or fixture_path.is_empty() or not FileAccess.file_exists(fixture_path) or residual_path.is_empty() or not FileAccess.file_exists(residual_path):
+	if not ["check-only", "campaign"].has(mode) or not _attempt_id_is_safe(attempt_id) or source_sha.length() != 40 or root.is_empty() or not DirAccess.dir_exists_absolute(root) or fixture_path.is_empty() or not FileAccess.file_exists(fixture_path) or residual_path.is_empty() or not FileAccess.file_exists(residual_path):
 		_fail("cx_preflight_environment_invalid", attempt_id, source_sha)
 		return
 	var fixture_bytes: PackedByteArray = FileAccess.get_file_as_bytes(fixture_path)
@@ -108,13 +108,43 @@ func _run() -> void:
 	if not bool(authority_graph_identity.get("valid", false)):
 		_fail("cx_reference_authority_reproduction_failed", attempt_id, source_sha, authority_graph_identity)
 		return
-	print("R12CX_GEOMETRY_BEGIN " + JSON.stringify({"attempt_id": attempt_id, "source_sha": source_sha, "hypothesis": "R12CX_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH", "scenario_id": TARGET_ID, "fixture_sha256": fixture_hash, "residual_fixture_sha256": residual_sha}))
+	print("R12CX_TARGET_INVOCATION_BEGIN " + JSON.stringify({"attempt_id": attempt_id, "source_sha": source_sha, "hypothesis": "R12CX_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH", "scenario_id": TARGET_ID, "fixture_sha256": fixture_hash, "residual_fixture_sha256": residual_sha}))
 	var target_case: Dictionary = _build_cx_target(target_row, source_graph, target_prepared, residual_fixture)
+	if not bool(target_case.get("valid", false)) and not cx_algorithm_started(target_case):
+		var pre_geometry_record: Dictionary = {
+			"schema": "P3.1.R12CX.PreGeometryFailure.v1", "attempt_id": attempt_id, "source_sha": source_sha,
+			"scenario_id": TARGET_ID, "stage": "BEFORE_LOCAL_PATCH_SEARCH", "consumes_cx_hypothesis": false,
+			"failure_reason": String(target_case.get("reason", "target_geometry_unavailable")),
+			"details": target_case.get("detail", {}), "fixture_sha256": fixture_hash,
+			"residual_fixture_sha256": residual_sha, "campaign_sha256": campaign_file_sha,
+			"realizer_sha256": realizer_file_sha, "process_monotonic_usec": Time.get_ticks_usec()
+		}
+		var pre_geometry_path: String = root.path_join("pre_geometry_failure_" + attempt_id + ".json")
+		if FileAccess.file_exists(pre_geometry_path):
+			printerr("R12CX_PRE_GEOMETRY_RECEIPT_FAILED " + JSON.stringify({"attempt_id": attempt_id, "reason": "no_overwrite", "path": pre_geometry_path}))
+			quit(2)
+			return
+		var pre_geometry_bytes: PackedByteArray = JSON.stringify(pre_geometry_record, "\t", false).to_utf8_buffer()
+		var pre_geometry_file: FileAccess = FileAccess.open(pre_geometry_path, FileAccess.WRITE)
+		if pre_geometry_file == null:
+			printerr("R12CX_PRE_GEOMETRY_RECEIPT_FAILED " + JSON.stringify({"attempt_id": attempt_id, "reason": "open_failed", "path": pre_geometry_path}))
+			quit(2)
+			return
+		pre_geometry_file.store_buffer(pre_geometry_bytes)
+		pre_geometry_file.flush()
+		var pre_geometry_error: Error = pre_geometry_file.get_error()
+		pre_geometry_file.close()
+		if pre_geometry_error != OK:
+			printerr("R12CX_PRE_GEOMETRY_RECEIPT_FAILED " + JSON.stringify({"attempt_id": attempt_id, "reason": "write_failed", "error": pre_geometry_error, "path": pre_geometry_path}))
+			quit(2)
+			return
+		print("R12CX_PRE_GEOMETRY_TOOLING_FAILURE " + JSON.stringify({"attempt_id": attempt_id, "source_sha": source_sha, "reason": pre_geometry_record.failure_reason, "consumes_cx_hypothesis": false, "receipt_path": pre_geometry_path, "receipt_sha256": Core.sha256(pre_geometry_bytes)}))
+		quit(2)
+		return
 	var target_geometry: Dictionary = target_case.get("geometry", {})
 	if not bool(target_case.get("valid", false)):
 		target_geometry = target_case.get("detail", {"reason": target_case.get("reason", "target_geometry_unavailable")}).duplicate(true)
 		target_geometry["geometry_complete"] = false
-		target_geometry["topology_signature_match"] = false
 		target_geometry["realizer_failure_reason"] = target_case.get("reason", "target_geometry_unavailable")
 	var controls: Dictionary = {"valid": false, "status": "NOT_RUN_EQUAL_LOD_GATE_FAILED", "passed": -1, "count": -1}
 	var ray_result: Dictionary = {"valid": false, "status": "NOT_RUN_EQUAL_LOD_GATE_FAILED", "roi_scoped_hit_miss_disagreements": -1, "global_diagnostic": {"disagreements": -1}}
@@ -149,7 +179,7 @@ func _run() -> void:
 		"fixture_sha256": fixture_hash, "manifest_sha256": ManifestSha, "candidate_d_sha256": CandidateSha,
 		"realizer_sha256": realizer_file_sha, "campaign_sha256": campaign_file_sha, "topology_sha256": TopologySha,
 		"fixture_graph_fingerprint_sha256": FixtureGraphFingerprintSha, "reference_authority_reproduction": authority_graph_identity,
-		"target": {"scenario_id": TARGET_ID, "volume_sha256": target_prepared.volume_sha256, "payload_sha256": target_prepared.payload_sha256, "revision": target_prepared.revision, "volume_identity_preserved": target_prepared.volume_identity_preserved, "volume_build_usec": target_prepared.volume_build_usec, "geometry_realizer_valid": target_case.get("valid", false)},
+		"target": {"scenario_id": TARGET_ID, "volume_sha256": target_prepared.volume_sha256, "payload_sha256": target_prepared.payload_sha256, "revision": target_prepared.revision, "volume_identity_preserved": target_prepared.volume_identity_preserved, "volume_build_usec": target_prepared.volume_build_usec, "geometry_realizer_valid": target_case.get("valid", false), "cx_algorithm_started": cx_algorithm_started(target_case)},
 		"realization_map": {"root_count": target_geometry.get("anchor_root_count", -1), "arc_count": target_geometry.get("arc_map", []).size(), "face_count": target_geometry.get("face_map", []).size(), "anchor_count": target_geometry.get("anchor_root_count", -1), "path_event_count": target_geometry.get("path_event_root_count", -1), "support_vertex_count": target_geometry.get("support_vertex_count", -1), "path_count": target_geometry.get("realization_path_count", -1), "sha256": target_geometry.get("realization_map_sha256", ""), "topology_roundtrip_sha256": target_geometry.get("topology_roundtrip_sha256", ""), "topology_signature_match": target_geometry.get("topology_signature_match", false)},
 		"geometry": {"error_contract": target_geometry.get("geometry_error_contract", "NOT_FULLY_MEASURED_NO_APPROVED_TOLERANCE"), "canonical_surface_deviation_measured": target_geometry.get("canonical_surface_deviation_measured", false), "maximum_diagonal_midpoint_displacement": target_geometry.get("maximum_diagonal_midpoint_displacement", null), "complete": target_geometry.get("geometry_complete", false), "mesh_sha256": target_geometry.get("mesh_sha256", ""), "vertex_count": target_geometry.get("geometry_vertex_count", -1), "triangle_count": target_geometry.get("geometry_triangle_count", -1), "initial_triangle_count": target_geometry.get("initial_triangle_count", -1), "initial_cutoff_rejections": target_geometry.get("initial_cutoff_rejections", []), "minimum_cross_squared": target_geometry.get("minimum_cross_squared", null), "cutoff_rejections": target_geometry.get("cutoff_rejections", []), "applied_flips": target_geometry.get("applied_flips", []), "rejected_flip_candidates": target_geometry.get("rejected_flip_candidates", []), "flip_cap": target_geometry.get("flip_cap", -1), "flip_cap_exhausted": target_geometry.get("flip_cap_exhausted", false), "missing_topology_obligations": target_geometry.get("missing_topology_obligations", []), "mesh_topology": target_geometry.get("mesh_topology", {}), "build_usec": target_geometry.get("build_usec", -1)},
 		"scope": "EQUAL_LOD_EXPERIMENT_ONLY", "equal_lod_gates_pass": equal_lod_gates_pass,
@@ -225,11 +255,25 @@ func _target_search_partial(target_case: Dictionary, geometry: Dictionary) -> bo
 	return not bool(search.get("complete", true)) or reason.contains("partial") or reason.contains("bound_exhausted") or reason.contains("cap_exceeded")
 
 func _target_has_structural_regression(geometry: Dictionary) -> bool:
-	if not bool(geometry.get("topology_signature_match", true)): return true
+	if geometry.has("topology_signature_match") and not bool(geometry.get("topology_signature_match", true)): return true
 	var topology: Dictionary = geometry.get("mesh_topology", {})
-	if int(topology.get("internal_open_edges", 0)) != 0 or int(topology.get("nonmanifold_edges", 0)) != 0 or int(topology.get("winding_inconsistencies", 0)) != 0: return true
+	if not topology.is_empty() and (int(topology.get("internal_open_edges", 0)) != 0 or int(topology.get("nonmanifold_edges", 0)) != 0 or int(topology.get("winding_inconsistencies", 0)) != 0): return true
 	if not geometry.get("missing_topology_obligations", []).is_empty(): return true
 	return false
+
+static func cx_algorithm_started(target_case: Dictionary) -> bool:
+	if target_case.has("cx_algorithm_started"):
+		return bool(target_case.get("cx_algorithm_started", false))
+	var detail: Variant = target_case.get("detail", {})
+	return detail is Dictionary and bool((detail as Dictionary).get("cx_algorithm_started", false))
+
+func _attempt_id_is_safe(attempt_id: String) -> bool:
+	if attempt_id.is_empty() or attempt_id.length() > 96:
+		return false
+	var safe_pattern: RegEx = RegEx.new()
+	if safe_pattern.compile("^[A-Za-z0-9_-]+$") != OK:
+		return false
+	return safe_pattern.search(attempt_id) != null
 
 func _run_mixed_lod_gate(rows: Array) -> Dictionary:
 	var input_bytes: PackedByteArray = FileAccess.get_file_as_bytes("res://tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl")
@@ -287,8 +331,8 @@ func _build_cx_target(row: Dictionary, graph: Dictionary, prepared: Dictionary, 
 	var realizer: RefCounted = Realizer.new()
 	var geometry: Dictionary = realizer.call("realize_cx", graph, values, prepared.get("roi", row.get("roi", {})), TopologySha, FixtureGraphFingerprintSha, residual_fixture, prepared.get("snapshot", {}))
 	if not bool(geometry.get("valid", false)):
-		return {"valid": false, "reason": String(geometry.get("reason", "cx_realizer_invalid")), "detail": geometry.get("details", geometry)}
-	return {"valid": true, "geometry": geometry, "volume_sha256": prepared.get("volume_sha256", ""), "payload_sha256": prepared.get("payload_sha256", ""), "revision": prepared.get("revision", -1), "volume_identity_preserved": prepared.get("volume_identity_preserved", false), "snapshot": prepared.get("snapshot", {}), "values": values, "row": row, "roi": row.get("roi", {}), "volume_build_usec": prepared.get("volume_build_usec", -1)}
+		return {"valid": false, "cx_algorithm_started": bool(geometry.get("cx_algorithm_started", false)), "reason": String(geometry.get("reason", "cx_realizer_invalid")), "detail": geometry}
+	return {"valid": true, "cx_algorithm_started": bool(geometry.get("cx_algorithm_started", false)), "geometry": geometry, "volume_sha256": prepared.get("volume_sha256", ""), "payload_sha256": prepared.get("payload_sha256", ""), "revision": prepared.get("revision", -1), "volume_identity_preserved": prepared.get("volume_identity_preserved", false), "snapshot": prepared.get("snapshot", {}), "values": values, "row": row, "roi": row.get("roi", {}), "volume_build_usec": prepared.get("volume_build_usec", -1)}
 
 func _run_contract_preflight(source_graph: Dictionary, roi: Dictionary) -> bool:
 	var realizer: RefCounted = Realizer.new()

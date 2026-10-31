@@ -2,6 +2,7 @@ extends SceneTree
 
 const Core := preload("res://tests/prototypes/p3_1_r9_2_diagnostic_base.gd")
 const Realizer := preload("res://tests/prototypes/p3_1_r12_cx_micropatch_realizer.gd")
+const Campaign := preload("res://tests/prototypes/p3_1_r12_cx_campaign.gd")
 
 var assertions: int = 0
 var failures: Array[String] = []
@@ -15,6 +16,8 @@ func _run() -> void:
 	_test_cutoff_and_topology_guards()
 	_test_t_junction_oracle()
 	_test_fixture_identity()
+	_test_json_root_position_reconstruction()
+	_test_cx_start_classification()
 	if failures.is_empty():
 		print("R12CX_CONTRACT_TESTS_PASS " + JSON.stringify({"assertions": assertions, "failures": 0, "suite": "bounded_cx_contract"}))
 		quit(0)
@@ -137,6 +140,34 @@ func _test_fixture_identity() -> void:
 	tampered_support["source_primitive"] = "tampered-primitive"
 	_check(not bool(realizer.call("validate_support_record", tampered_support).get("valid", true)), "tampered support provenance is rejected")
 	_check(not bool(realizer.call("validate_support_records", [support_record], {}).get("valid", true)), "profile cap prevents selecting supports in edge-flip-only search")
+
+func _test_json_root_position_reconstruction() -> void:
+	var realizer: RefCounted = Realizer.new()
+	var geometry: Dictionary = {
+		"root_map": [
+			{"root_id": "a", "position": [0.25, -1.5, 2.0]},
+			{"root_id": "b", "position": [1.25, -1.5, 2.0]},
+			{"root_id": "c", "position": [0.25, -0.5, 2.0]}
+		],
+		"emitted_triangles": [{"polygon_id": "fixture-face", "root_ids": ["a", "b", "c"]}],
+		"cutoff_rejections": []
+	}
+	var built: Dictionary = realizer.call("_build_triangles", geometry, {"residuals": []})
+	_check(bool(built.get("valid", false)), "JSON array root positions reconstruct without Variant-to-Vector3 assignment failure")
+	if bool(built.get("valid", false)):
+		var points: Array = built.triangles[0].points
+		_check(points.size() == 3 and points[0] is Vector3 and points[1] is Vector3 and points[2] is Vector3, "reconstructed C6 triangle positions have concrete Vector3 values")
+		_check(points[0] == Vector3(0.25, -1.5, 2.0) and points[1] == Vector3(1.25, -1.5, 2.0) and points[2] == Vector3(0.25, -0.5, 2.0), "JSON root position components preserve their exact world coordinates")
+	var malformed: Dictionary = geometry.duplicate(true)
+	malformed["root_map"][0]["position"] = [0.25, -1.5]
+	var rejected: Dictionary = realizer.call("_build_triangles", malformed, {"residuals": []})
+	_check(not bool(rejected.get("valid", true)) and String(rejected.get("reason", "")) == "cx_root_position_representation_invalid", "malformed JSON root position fails closed before patch search")
+
+func _test_cx_start_classification() -> void:
+	_check(not Campaign.cx_algorithm_started({"valid": false, "reason": "fixture_reconstruction_failed"}), "missing algorithm marker is classified as pre-geometry tooling failure")
+	_check(not Campaign.cx_algorithm_started({"valid": false, "cx_algorithm_started": false, "detail": {"cx_algorithm_started": true}}), "explicit top-level false marker overrides nested incidental detail")
+	_check(Campaign.cx_algorithm_started({"valid": false, "detail": {"cx_algorithm_started": true}}), "started local patch search is recognized from preserved realizer detail")
+	_check(Campaign.cx_algorithm_started({"valid": true, "cx_algorithm_started": true}), "completed target retains local patch search start marker")
 
 func _triangle(id: String, root_ids: Array, points_by_id: Dictionary, rejected: bool) -> Dictionary:
 	var points: Array[Vector3] = [points_by_id[root_ids[0]], points_by_id[root_ids[1]], points_by_id[root_ids[2]]]
