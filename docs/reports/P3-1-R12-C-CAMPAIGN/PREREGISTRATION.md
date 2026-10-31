@@ -127,7 +127,7 @@ The target retained 369 anchor roots, 870 arcs, 502 faces, and added 502 determi
 
 The campaign must report rejected flip candidates and reasons, applied flips, pre/post cutoff counts, changed triangle owners, all six controls with nested failure details, path-to-arc coverage, topology round-trip, mesh topology, ROI rays, global ray diagnostic, volume identity, and the original geometric coordinates. C4 does not claim that noncoplanar patches can be remeshed exactly. The exact-coplanar requirement can make the strategy inapplicable; this is an expected informative outcome. Equal-LOD failure consumes C4 as `FAILED_TARGET` only after complete realization and machine-readable classification. Mixed LOD and later gates remain conditional on all equal-LOD gates passing.
 
-## C4 result and C5 preregistration (2026-10-30)
+## C4 result, C5 preregistration, and C5 result/C6 preregistration (2026-10-30)
 
 C4 `C4_EXACT_COPLANAR_LOCAL_2TO2_PATCH` executed once as `C4GEO001` on source `01856f529df0a0f8c0bf62be5684d86fd923d071` (parent `db130481d79b5ad88fc3e705695bb1530cfadd61`, tree `1b361cd8ab0fc4502605956710560abc81939d6e`). Import, check-only and the single geometry attempt were clean; a prior C4 check-only on `db13048` found inherited duplicate constant declarations before geometry and did not consume the hypothesis. Campaign and realizer physical SHA-256 values for the valid attempt were `a904b9aca601473f1aab152fb8c2b43b71e252bd92c2ac245ee899962206e70c` and `1dcdf7d1374d95d05dce488d5fc91e577ed26f8926dce5818300d8080146017e`. The Stage 0 fixture remained `33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d`; artifact `r12c_C4_C4GEO001.json` SHA-256 is `8cd8de0e49016b8cbfe8014d0372047295f6641a9cceb364f80068262d2edc1e`.
 
@@ -141,9 +141,23 @@ Every flip is owned by the ordinally first source polygon ID. Both replacement f
 
 Because no equal-LOD candidate has yet passed, C5 is an equal-LOD face-owned experiment. Mixed LOD and later qualification gates remain conditional on equal-LOD + controls + ROI rays + volume passing. If those gates pass, the campaign must implement and execute the frozen conforming interface ownership/correspondence gate before any PASS classification; a `NOT_RUN` value cannot be promoted.
 
+### C5 result
+
+C5 `C5_FACE_OWNED_NONCOPLANAR_LOCAL_PATCH` executed once as `C5GEO001` on source `40ee966d1cda2ccf5ef42f5e747083d022849fbc` (parent `95d8477cd180fd760571643859d024f63361b41d`, tree `59d18abac9aa69d592c816028d35f790521e50d3`). Campaign and realizer physical SHA-256 values were `c2ea5a8b9d231ff149fc8929514c74c9322fcc621528e3cc9ce174bc1d34e48f` and `0c053bee8709609e69e880aa9ff264b6c88735ff52f7ca097eebbc9e3f1c471f`; fixture SHA remained `33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d`. The artifact SHA-256 is `401741531a75b7129005120bf3ac67aa5cd74efda02fc48f8dea1c9a045f17e1`. Godot process exit was 0, no runtime errors, and terminal classification was `FAILED_TARGET`; C5 was not rerun.
+
+C5 retained 369 anchors, 870 arcs and 502 faces. It applied four flips and rejected 35 candidates: 22 replacement-cutoff failures, nine patches with more than two source faces, and four orientation conflicts. The four remaining cutoff faces have `cross_squared` values `8.90332212726756e-17`, `2.77538984903934e-15`, `1.11996851137781e-13`, and `6.55420975739091e-13`; the fixed cutoff remains `1e-12`. Minimum cross-squared is `8.90332212726756e-17`. Topology round-trip remains exact (`a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9`), realization-map SHA is `96d710211a630bb1105fc20598fae2225a7d8fb58e73fc95704358df60bb48e3`, internal opens/missing obligations/nonmanifold/winding are 0/0/0/0, and the four remaining sub-cutoff faces are degenerate. Controls passed 6/6, ROI rays were 0/25, global ray diagnostic 9/25, and volume identity passed. The largest old-versus-new diagonal-midpoint displacement among the four applied flips was `0.131427302956581`; this local diagnostic is not a surface-error bound. Canonical surface deviation was not fully measured. The failed invariant was `fixed_cutoff`; mixed LOD and all downstream gates were not run.
+
+### C6 — bounded multi-face noncoplanar patch ownership (preregistered)
+
+C5 directly identified nine rejected local proposals whose accumulated source-triangle ownership set exceeded two faces. C6 tests that single structural limitation by allowing a bounded 2–2 flip patch to span two or more source polygons, while keeping all C5 geometric predicates: finite coordinates/diagnostics, convex opposite-side test, no existing alternate diagonal, orientation agreement with every source face, unchanged `cross_squared > 1e-12`, sorted deterministic edge selection, and the same 128-flip cap. It does not change root coordinates, scalar values, volume, or topology authority.
+
+C6 separates (a) the complete sorted patch-face owner set for replacement triangles from (b) the exact source-face owner set of a removed topology arc. The deterministic patch owner is the ordinally first patch polygon. Each replacement triangle records the complete patch owner set; source-face provenance includes every polygon/cell/tetrahedron. The removed arc path record uses only that arc's exact authoritative owner set and corresponding provenance, so expanding a geometric patch cannot silently expand topology-arc ownership. Non-topology diagonals carry full patch provenance. Each flip records the noncoplanarity scalar triple and old/replacement diagonal-midpoint displacement. No surface-error tolerance is introduced.
+
+C6 executes only the frozen equal-LOD target and its existing controls/ray/volume gates. If all equal-LOD gates pass, the preregistered R12 sequence requires a separate conforming mixed-LOD interface realization and its checks before deterministic repeat, full E2E, or full validation. If C6 fails, it is consumed as `FAILED_TARGET`; the six allowed C slots are then exhausted. The result cannot imply mathematical impossibility or product adoption.
+
 ## C1–C6 reservation status
 
-C1 is not applicable under the preregistered degree-2 rule and remains unconsumed. C2, C3 and C4 are consumed as `FAILED_TARGET`. C5 is preregistered above and not yet implemented/executed. C6 remains unused and requires evidence-directed preregistration before implementation. No C7 is authorized.
+C1 is not applicable under the preregistered degree-2 rule and remains unconsumed. C2, C3, C4 and C5 are consumed as `FAILED_TARGET`. C6 is preregistered above and not yet implemented/executed. No C7 is authorized.
 
 ## Safety and interpretation
 
