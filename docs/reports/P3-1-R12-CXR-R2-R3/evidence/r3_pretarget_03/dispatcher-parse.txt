@@ -1,0 +1,5 @@
+Parser=Windows PowerShell AST parser
+PowerShell=7.6.9
+ParserErrors=0
+DispatcherSha256=713df38f7f32abd152b17daa28448d2fdd09f996a4f0e89d81d746cb7f49e8dc
+

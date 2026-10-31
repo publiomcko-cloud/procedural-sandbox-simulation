@@ -1,0 +1,3 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+R12CXR_GEOMETRY_COMPLETE {"attempt_id":"R3_CHECK_20261031_06","details":{"observed":"ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23"},"reason":"cx_residual_fixture_hash_mismatch","source_sha":"c1dce7e2a410e439dbf82e5252a8e333d0621642","status":"BLOCKED"}

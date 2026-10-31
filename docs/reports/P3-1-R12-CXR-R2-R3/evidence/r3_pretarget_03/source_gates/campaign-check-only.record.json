@@ -1,0 +1,12 @@
+{
+  "stage": "campaign_check_only",
+  "source_sha": "c1dce7e2a410e439dbf82e5252a8e333d0621642",
+  "parent_sha": "55562aec07c546f918b3dfdf67d770f92e5418b5",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "pid": 31244,
+  "started_utc": "2026-10-31T21:13:15.9432209Z",
+  "ended_utc": "2026-10-31T21:13:17.8126557Z",
+  "exit_code": 2,
+  "stdout_sha256": "b6ed65b006302196920f8ea4a66e12aa8be0062dd4d534be1dac7e9d6d515d1a",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

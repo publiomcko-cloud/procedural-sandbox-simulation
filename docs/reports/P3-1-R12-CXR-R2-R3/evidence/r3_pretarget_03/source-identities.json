@@ -1,0 +1,21 @@
+{
+  "repository": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "branch": "exp/p3-1-r12-cxr-per-cavity-continuation",
+  "code_source_sha": "c1dce7e2a410e439dbf82e5252a8e333d0621642",
+  "code_source_parent": "55562aec07c546f918b3dfdf67d770f92e5418b5",
+  "code_source_tree": "e1ab7ca07629cdd1989c62d64a2582c5d0b82349",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "pr213": "OPEN_DRAFT_UNMERGED",
+  "pr214": "OPEN_DRAFT_UNMERGED",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "campaign_sha256": "1b3a73845ef5bafec6d16fe2a7928ee3599c5e70ba5310070cb845af3687145b",
+  "realizer_sha256": "cf57013623d0e86952ab6aa1a8d7a9d2eee6c2ecfeb76b80d71f0f75a4e48591",
+  "contract_tests_sha256": "ccd29810ffcc4caaeced60f49cdf816a174b576c64f19ee1a58cbd8674eb9384",
+  "c6_campaign_sha256": "9a695705c47ad6473b773bbfaeaf35d88306cee6804113a0b1a71c6faca2f348",
+  "c6_realizer_sha256": "31947e1944a017442ad14cc4f098e67db800d4f5e196d07e047b93dc0fe9d2ac",
+  "residual_fixture_sha256": "ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23",
+  "dispatcher_sha256": "713df38f7f32abd152b17daa28448d2fdd09f996a4f0e89d81d746cb7f49e8dc",
+  "attempt_02": "R12_CXR_PRE_GEOMETRY_TOOLING_FAILURE_NOT_HYPOTHESIS_CONSUMED",
+  "attempt_03": "R3_TARGET_20261031_03_NOT_STARTED"
+}
