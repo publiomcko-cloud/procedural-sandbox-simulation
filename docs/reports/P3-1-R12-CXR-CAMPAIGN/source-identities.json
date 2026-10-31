@@ -1,0 +1,104 @@
+{
+  "schema": "p3.1-r12-cxr-source-identities-v1",
+  "campaign_status": "R12_CXR_PARTIAL_WITH_EVIDENCE",
+  "measured_source": {
+    "repository": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+    "branch": "exp/p3-1-r12-cxr-field-support-micropatch",
+    "commit": "0a967c996476e9bf4376b1e55dbb835cf5a31ee6",
+    "parent": "ebb4e990b71df0ded64939152b273ea092f07e4f",
+    "tree": "34fc37357a60a1adfd3e2e5fbd43dbdfc47dc8c5",
+    "prerequisite_evidence_head": "209e301fc4576d0b7ef713a1b2ab3f86996f9db3"
+  },
+  "engine": {
+    "version": "4.7.2.stable.official.ed1daf0bf",
+    "executable_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643"
+  },
+  "measured_source_files": [
+    {
+      "path": "game/tests/prototypes/p3_1_r12_cxr_campaign.gd",
+      "git_blob": "6eb0c256dd3b64dc1a7c4eca6b7f17f25966aacc",
+      "physical_sha256": "ec62706e516116f287dc2f11eeec30519c06ab7c950b4601ee609b591afbc664"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd",
+      "git_blob": "0cf24e4b2e5a4fab310ea4d7774cca06fe14a6b5",
+      "physical_sha256": "232ed428b2dbc8ab764cf864df407f4984e6b81904beeb9770a9a7d77c81f668"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r12_cxr_contract_tests.gd",
+      "git_blob": "138b009adbf56082add606dfa114ae1560856878",
+      "physical_sha256": "3af88af6a3394ff72fc4670d82480ff47494e52b94811c7bd1351aec3024ef4f"
+    }
+  ],
+  "frozen_preregistration_files": [
+    {
+      "path": "docs/checkpoints/2026-10-31-P3-1-R12-CXR-PREREGISTRATION.md",
+      "git_blob": "62f95a347a101b223222fecda3ca8f40de82c421",
+      "physical_sha256": "9540b98239955c1e34376c2429ccdacc58f0be145c42f1ed08bcc3aa7ed952e7"
+    },
+    {
+      "path": "docs/specs/P3-1-R12-CXR-FIELD-SUPPORT-PREREGISTRATION.md",
+      "git_blob": "19d605a9a81f9434e6481e7bb184e6bca69932e2",
+      "physical_sha256": "441ffd018ecd2821977ebe01b42dbb99005a0d4f5ceb462f9335a78e8061e1f4"
+    }
+  ],
+  "frozen_inputs": [
+    {
+      "path": "game/tests/prototypes/p3_1_r12_cx_residual_fixture.json",
+      "git_blob": "2feafb65f279cf35bb47b0033cdd79fa2d528b1f",
+      "physical_sha256": "ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl",
+      "git_blob": "05a74de876ea2f062737980017f1b71b7c0711a6",
+      "physical_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_2_e2e_inputs.sha256",
+      "git_blob": "20fbb22142f28151176f0e3b57d209d6e12966fa",
+      "physical_sha256": "f0eef4ed322fbe9ed18dddee990c644dac364f5f3a471a987d4fe6d212fabf42"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd",
+      "git_blob": "93afe39cb03383f2f18503e517abdd2d97a14159",
+      "physical_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r10_a_topology_authority.gd",
+      "git_blob": "732f143939ac6980e1c7e77703dd7ee549206c0e",
+      "physical_sha256": "feea8237160c90a049d9f0ab63ad7ff86f46604f9d57112278d25fda20a08216"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r12_c_c6_campaign.gd",
+      "git_blob": "ae7a380f757510d19e9b400f3243b4fe97e39339",
+      "physical_sha256": "9a695705c47ad6473b773bbfaeaf35d88306cee6804113a0b1a71c6faca2f348"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r12_c_c6_multiface_realizer.gd",
+      "git_blob": "a5944afe7a29df4e6fc3eaf6da88dadbcad71a33",
+      "physical_sha256": "31947e1944a017442ad14cc4f098e67db800d4f5e196d7d047b93dc0fe9d2ac"
+    },
+    {
+      "artifact": "extracted frozen Stage 0 fixture from prior R12-C raw archive",
+      "path": "r12c_stage0_topology_fixture.json",
+      "physical_sha256": "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d",
+      "source_archive_sha256": "6550788363d1e0ea23df7ed2f560dbf0558fb6c45d769dc642661516c39b4dcb"
+    }
+  ],
+  "one_shot_target": {
+    "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+    "attempt_id": "r12cxr-target-20261031-01",
+    "result_status": "PARTIAL",
+    "result_sha256": "c7db29fa1fbd42e9bf48f9c2bd24cae8b724e1c74ac0814773507308756df664",
+    "stdout_sha256": "40fffef05c7cf8df1f58b653583458f92c50fba4f6c40375d9a1cd3b2bb8c841",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "process_exit_code": 0
+  },
+  "evidence_archive": {
+    "path": "docs/reports/P3-1-R12-CXR-CAMPAIGN/evidence/r12cxr_partial_evidence.zip",
+    "physical_sha256": "3a7b5d810fa260abf94975ff098e05c3e7bff6587eee9fdc7fd5376950e0c837",
+    "index_path": "docs/reports/P3-1-R12-CXR-CAMPAIGN/evidence/evidence-index.json",
+    "index_sha256": "6e8792968234af0f93af3b3ebb64dcd3803acf0850a618a1b21b57ce10dbc619",
+    "member_count": 39
+  }
+}
