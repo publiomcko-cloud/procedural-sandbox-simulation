@@ -24,7 +24,7 @@ func _run() -> void:
 	_test_cxr_field_candidate_enumeration()
 	_test_cxr_r1_level_and_cavity_continuation()
 	_test_cxr_r2_constrained_triangulation()
-	_test_cxr_r3_remaining_boundary_and_joint_patch()
+	_test_cxr_r3_remaining_boundary_and_separate_cavities()
 	if failures.is_empty():
 		print("R12CXR_CONTRACT_TESTS_PASS " + JSON.stringify({"assertions": assertions, "failures": 0, "suite": "bounded_cxr_contract"}))
 		quit(0)
@@ -468,7 +468,7 @@ func _test_cxr_r2_constrained_triangulation() -> void:
 	_check(Realizer.CXR_R2_MAX_CANDIDATE_TRIANGLES_PER_CAVITY == 65536 and Realizer.CXR_R2_MAX_CANDIDATE_TRIANGLES_TOTAL == 131072 and Realizer.CXR_R2_MAX_SEARCH_STATES_PER_CAVITY == 32768 and Realizer.CXR_R2_MAX_SEARCH_STATES_TOTAL == 65536, "R2 resource caps match the pre-registered design bounds")
 
 
-func _test_cxr_r3_remaining_boundary_and_joint_patch() -> void:
+func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	var realizer: RefCounted = Realizer.new()
 	var points: Dictionary = {"a": Vector3.ZERO, "b": Vector3.RIGHT, "c": Vector3.UP, "d": Vector3(0.0, 0.0, 1.0)}
 	var patch_triangle: Dictionary = _triangle("r3-patch", ["a", "c", "b"], points, false)
@@ -481,8 +481,8 @@ func _test_cxr_r3_remaining_boundary_and_joint_patch() -> void:
 	all.append_array(outside)
 	var derived: Dictionary = realizer.call("derive_remaining_boundary_for_test", all, ["r3-patch"])
 	var direct: Dictionary = realizer.call("_boundary_state", [patch_triangle])
-	_check(bool(derived.get("valid", false)), "R3 derives a single closed joint boundary from surviving C6 edge incidence")
-	_check(String(derived.get("boundary_source", "")) == "remaining_C6_edge_incidence_after_joint_patch_removal" and derived.get("signature", "") == direct.get("signature", ""), "R3 replacement boundary orientation and signature match the remaining mesh interface")
+	_check(bool(derived.get("valid", false)), "R3 derives a single closed cavity boundary from surviving C6 edge incidence")
+	_check(String(derived.get("boundary_source", "")) == "remaining_C6_edge_incidence_after_cavity_patch_removal" and derived.get("signature", "") == direct.get("signature", ""), "R3 replacement boundary orientation and signature match the remaining mesh interface")
 	_check(derived.get("incidence_diagnostics", []).size() == 3, "R3 records all three removed-to-remaining interface edge incidences")
 	var wrong_winding: Array[Dictionary] = all.duplicate(true)
 	var outside_face: Dictionary = wrong_winding[1]
@@ -498,27 +498,49 @@ func _test_cxr_r3_remaining_boundary_and_joint_patch() -> void:
 	outside_face["points"] = outside_points
 	wrong_winding[1] = outside_face
 	var wrong: Dictionary = realizer.call("derive_remaining_boundary_for_test", wrong_winding, ["r3-patch"])
-	_check(not bool(wrong.get("valid", true)) and String(wrong.get("reason", "")) == "r3_joint_boundary_source_winding_same_direction", "R3 rejects a joint boundary whose removed and surviving source faces wind the same way")
+	_check(not bool(wrong.get("valid", true)) and String(wrong.get("reason", "")) == "r3_cavity_boundary_source_winding_same_direction", "R3 rejects a cavity boundary whose removed and surviving source faces wind the same way")
 	var open_source: Array[Dictionary] = [patch_triangle]
 	var open: Dictionary = realizer.call("derive_remaining_boundary_for_test", open_source, ["r3-patch"])
 	_check(not bool(open.get("valid", true)) and String(open.get("reason", "")) == "r3_patch_open_edge_has_no_remaining_owner", "R3 refuses to invent cavity boundary edges without a surviving C6 owner")
 	var disconnected: Array[Dictionary] = [patch_triangle, _triangle("r3-island", ["x", "y", "z"], {"x": Vector3(3,0,0), "y": Vector3(4,0,0), "z": Vector3(3,1,0)}, false)]
 	var connectivity: Dictionary = realizer.call("_r3_patch_connectivity", disconnected)
-	_check(not bool(connectivity.get("valid", true)) and int(connectivity.get("component_count", -1)) == 2, "R3 joint replacement requires one edge-connected patch")
+	_check(not bool(connectivity.get("valid", true)) and int(connectivity.get("component_count", -1)) == 2, "R3 replacement requires one edge-connected per-cavity patch")
+	var adjacency: Dictionary = {"residual-a": {"residual-b": true}, "residual-b": {"residual-a": true}, "residual-c": {}}
+	var residual_rows: Array = [{"triangle_id": "residual-c"}, {"triangle_id": "residual-b"}, {"triangle_id": "residual-a"}]
+	var grouped: Array = realizer.call("_overlapping_defect_groups", residual_rows, adjacency)
+	var canonical_groups: Array = realizer.call("_canonicalize_defect_groups", grouped)
+	_check(canonical_groups.size() == 2 and canonical_groups[0] == ["residual-a", "residual-b"] and canonical_groups[1] == ["residual-c"], "R3 preserves two original overlap groups instead of merging all residual faces")
+	var reordered_rows: Array = [residual_rows[2], residual_rows[0], residual_rows[1]]
+	var reordered_groups: Array = realizer.call("_canonicalize_defect_groups", realizer.call("_overlapping_defect_groups", reordered_rows, adjacency))
+	_check(JSON.stringify(canonical_groups) == JSON.stringify(reordered_groups), "R3 per-cavity group ordering is stable under residual discovery order")
 	realizer.set("_cxr_active_phase", "r3")
 	var r3_limits: Dictionary = realizer.call("_cxr_limits")
-	_check(int(r3_limits.get("max_cavities", -1)) == 1 and int(r3_limits.get("joint_residual_face_count", -1)) == 3, "R3 freezes one joint cavity over exactly three residual faces")
-	_check(String(r3_limits.get("joint_boundary_source", "")) == "remaining_C6_edge_incidence_after_joint_patch_removal" and String(r3_limits.get("support_source", "")) == "original_frozen_residual_faces_only", "R3 limit contract pins remaining-mesh boundary and original residual-only support provenance")
+	_check(int(r3_limits.get("max_cavities", -1)) == 3 and String(r3_limits.get("cavity_policy", "")) == "original_overlapping_defect_groups_searched_separately", "R3 permits the preregistered cavity cap and preserves original groups separately")
+	_check(String(r3_limits.get("boundary_source", "")) == "remaining_C6_edge_incidence_after_cavity_patch_removal" and String(r3_limits.get("support_source", "")) == "original_frozen_residual_faces_only", "R3 limit contract pins per-cavity remaining-mesh boundary and original residual-only support provenance")
 	_check(int(r3_limits.get("max_candidate_triangles_per_cavity", -1)) == 65536 and int(r3_limits.get("max_search_states_total", -1)) == 65536 and float(r3_limits.get("cross_squared_cutoff", 0.0)) == 1.0e-12, "R3 inherits bounded R2 search caps and the unchanged strict geometry cutoff")
+	_check(int(r3_limits.get("max_candidate_attempts_per_cavity", -1)) == 8192 and int(r3_limits.get("max_support_candidates_per_cavity", -1)) == 256 and int(r3_limits.get("max_selected_supports", -1)) == 4 and int(r3_limits.get("max_patch_triangles", -1)) == 64, "R3 retains preregistered per-cavity candidate, support, selection and patch-size limits")
+	_check(int(r3_limits.get("max_candidate_triangles_total", -1)) == 131072 and int(r3_limits.get("max_search_states_per_cavity", -1)) == 32768 and int(r3_limits.get("max_search_usec_per_cavity", -1)) == 10000000 and int(r3_limits.get("max_search_usec_total", -1)) == 20000000, "R3 retains preregistered aggregate geometry, search-state and wall-time caps")
+	_check(int(r3_limits.get("max_retained_solutions_per_cavity", -1)) == 32 and int(r3_limits.get("max_realize_usec", -1)) == 30000000 and float(r3_limits.get("max_support_distance", -1.0)) == 0.5, "R3 retains preregistered retained-solution, realization-time and support-distance bounds")
 	var boundary_failure_reason: String = realizer.call("_r3_invalid_level_reason", {"valid": true, "reason": ""}, {"valid": false, "reason": "cx_patch_nonmanifold_edge"})
 	_check(boundary_failure_reason == "cx_patch_nonmanifold_edge", "R3 preserves the boundary failure when patch connectivity itself is valid")
-	var no_domain_terminal: String = realizer.call("_cxr_failure_terminal_reason", "r3", [{"terminal_reason": "r3_no_valid_joint_boundary_level"}], 1, "")
-	var exhausted_terminal: String = realizer.call("_cxr_failure_terminal_reason", "r3", [{"terminal_reason": "r3_all_valid_joint_cavity_levels_exhausted_no_solution"}], 1, "")
-	_check(no_domain_terminal == "r3_no_valid_joint_boundary_level", "R3 reports invalid-domain construction instead of false finite exhaustion")
-	_check(exhausted_terminal == "r3_all_valid_joint_cavity_levels_exhausted_no_solution", "R3 retains an explicit finite-domain terminal reason only after valid domains exhaust")
-	var no_domain_reasons: Array[String] = ["r3_no_valid_joint_boundary_level"]
+	var no_domain_terminal: String = realizer.call("_cxr_failure_terminal_reason", "r3", [{"search_complete": false, "search_exhaustive": false, "terminal_reason": "r3_no_valid_cavity_boundary_level"}], 1, "")
+	var exhausted_terminal: String = realizer.call("_cxr_failure_terminal_reason", "r3", [{"search_complete": true, "search_exhaustive": true, "terminal_reason": "r3_all_valid_cavity_levels_exhausted_no_solution"}], 1, "")
+	var mixed_terminal: String = realizer.call("_cxr_failure_terminal_reason", "r3", [{"search_complete": false, "search_exhaustive": false, "terminal_reason": "r3_no_valid_cavity_boundary_level"}, {"search_complete": true, "search_exhaustive": true, "terminal_reason": "r3_all_valid_cavity_levels_exhausted_no_solution"}], 2, "")
+	var solved_then_unsolved: String = realizer.call("_cxr_failure_terminal_reason", "r3", [{"valid": true, "search_complete": true, "search_exhaustive": true, "terminal_reason": "minimum_valid_cavity_solution"}, {"valid": false, "search_complete": true, "search_exhaustive": true, "terminal_reason": "r3_all_valid_cavity_levels_exhausted_no_solution"}], 2, "")
+	var overlap_terminal: String = realizer.call("_cxr_failure_terminal_reason", "r3", [{"valid": true, "search_complete": true, "search_exhaustive": true, "terminal_reason": "minimum_valid_cavity_solution"}], 1, "", true)
+	_check(no_domain_terminal == "r3_cavity_boundary_domains_invalid:1/1", "R3 reports invalid per-cavity domain construction instead of false finite exhaustion")
+	_check(exhausted_terminal == "r3_all_cavity_domains_finitely_exhausted_no_solution", "R3 reports finite-domain exhaustion only after every valid cavity domain exhausts")
+	_check(mixed_terminal == "r3_cavity_boundary_domains_invalid:1/2", "R3 aggregation preserves a partial disposition when any cavity lacks a valid boundary domain")
+	_check(solved_then_unsolved == "r3_unsolved_cavity_domain_exhausted_after_other_cavity_solution", "R3 reports an unsolved cavity separately when another cavity already has a solution")
+	_check(overlap_terminal == "r3_selected_patch_overlap_requires_alternative_solution_search", "R3 does not claim exhaustion when selected per-cavity patches overlap")
+	var one_triangle: Array[Dictionary] = [patch_triangle]
+	var not_started: Dictionary = realizer.call("_search_cxr_cavity_r3", ["r3-patch"], one_triangle, {}, {"residuals": [{"triangle_id": "r3-patch"}]}, PackedFloat32Array(), {})
+	var not_started_report: Dictionary = not_started.get("cavity_report", {})
+	_check(not bool(not_started.get("search_started", true)) and not bool(not_started_report.get("search_started", true)), "R3 invalid-boundary-only processing is not mislabeled as a started support search")
+	_check(String(not_started_report.get("candidate_attempt_count", "")) == "NOT_RUN" and String(not_started_report.get("candidate_triangle_count", "")) == "NOT_RUN", "R3 reports unmeasured support and triangle counts as NOT_RUN rather than zero")
+	var no_domain_reasons: Array[String] = ["r3_no_valid_cavity_boundary_level"]
 	var no_domain_reason: String = realizer.call("_cxr_failure_reason", "r3", false, no_domain_reasons)
-	_check(no_domain_reason == "cxr_r3_no_joint_boundary_domain", "R3 distinguishes invalid boundary-domain construction from generic partial search")
+	_check(no_domain_reason == "cxr_r3_cavity_boundary_domain_invalid", "R3 distinguishes invalid per-cavity boundary domains from generic partial search")
 	var partial_target: Dictionary = {"reason": "cx_bounded_patch_search_failed", "detail": {"search": {"complete": false, "search_exhaustive": false, "reason": no_domain_reason}}}
 	_check(Campaign._target_search_partial(partial_target, {"cxr_local_search_complete": false}), "R3 invalid-domain result remains classified as PARTIAL by the campaign gate")
 func _sequence_probe_local_failure(cavity_ids: Array) -> Dictionary:
