@@ -1,5 +1,7 @@
 # P3.1 R12-CX Campaign Closeout
 
+Evidence PR: [#211](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/211), draft and unmerged, stacked on [#210](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/210).
+
 Date: 2026-10-31
 Campaign status: `P3_1_R12_C_ATTEMPTS_EXHAUSTED_WITH_EVIDENCE`
 Measured source: `a9c1353db49a7bb5607ce8eaf91d8032c7dc4bea`
