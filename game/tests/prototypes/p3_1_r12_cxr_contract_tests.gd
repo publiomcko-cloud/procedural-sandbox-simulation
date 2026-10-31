@@ -6,6 +6,7 @@ const Campaign := preload("res://tests/prototypes/p3_1_r12_cxr_campaign.gd")
 
 var assertions: int = 0
 var failures: Array[String] = []
+var _sequence_probe_calls: Array[Array] = []
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -21,6 +22,7 @@ func _run() -> void:
 	_test_cx_start_classification()
 	_test_cxr_field_support_invariants()
 	_test_cxr_field_candidate_enumeration()
+	_test_cxr_r1_level_and_cavity_continuation()
 	if failures.is_empty():
 		print("R12CXR_CONTRACT_TESTS_PASS " + JSON.stringify({"assertions": assertions, "failures": 0, "suite": "bounded_cxr_contract"}))
 		quit(0)
@@ -258,6 +260,104 @@ func _test_cxr_field_candidate_enumeration() -> void:
 	_check(attempts.size() > 1, "CXR candidate enumeration tests multiple frozen tetrahedron intersections instead of exiting the loop body")
 	_check(not candidate_pool.is_empty(), "CXR retains support candidates derived from the synthetic frozen-field zero set")
 	_check(not bool(first.get("attempt_cap_hit", true)) and bool(first.get("source_valid", false)), "bounded CXR candidate fixture completes without an attempt cap or invalid source tetrahedron")
+	_check(int(first.get("candidate_unique_count", -1)) >= candidate_pool.size() and candidate_pool.size() == int(first.get("candidate_count", -1)), "candidate evidence distinguishes all unique supports from the bounded retained pool")
+	var capped: Dictionary = realizer.call("_generate_field_candidates", residual, patch, values, roi, 0, 0, 128, "fixture-cavity-cap", {"triangle_id": "fixture-residual"})
+	var capped_evidence: Dictionary = realizer.call("_validate_candidate_generation_evidence", capped)
+	_check(bool(capped_evidence.get("valid", false)) and capped.candidate_pool.size() == 0 and int(capped.candidate_unique_count) > 0 and bool(capped.candidate_cap_hit), "candidate retention cap bounds the searchable pool while preserving candidate attempt evidence")
+
+func _test_cxr_r1_level_and_cavity_continuation() -> void:
+	var realizer: RefCounted = Realizer.new()
+	var nonmanifold: Array[Dictionary] = [
+		{"triangle_id":"a", "root_ids":["u","v","w"]},
+		{"triangle_id":"b", "root_ids":["v","u","x"]},
+		{"triangle_id":"c", "root_ids":["u","v","y"]}
+	]
+	var boundary: Dictionary = realizer.call("_boundary_state", nonmanifold)
+	var shared_edge: String = String(realizer.call("_edge_key", "u", "v"))
+	var shared_incidence: int = -1
+	for incidence_value in boundary.get("edge_incidence", []):
+		var incidence: Dictionary = incidence_value
+		if String(incidence.get("edge", "")) == shared_edge:
+			shared_incidence = int(incidence.get("incidence_count", -1))
+	_check(not bool(boundary.get("valid", true)) and shared_incidence == 3, "invalid boundary reports complete incidence including nonmanifold edge")
+	_check(int(boundary.get("edge_count", -1)) == 7 and boundary.has("diagnostic_sha256"), "invalid boundary diagnostics retain every unique edge and a stable digest")
+	var cavity_report: Dictionary = {"levels": [], "residual_triangle_ids": ["a", "b", "c"]}
+	var level_report: Dictionary = realizer.call("_new_cxr_level_report", 1, ["a", "b", "c"], 3)
+	var continue_after_invalid: bool = bool(realizer.call("_record_invalid_cxr_boundary_level", cavity_report, level_report, boundary))
+	_check(continue_after_invalid, "invalid patch boundary is a recoverable level result and allows L2 or L3")
+	_check(cavity_report.levels.size() == 1 and String(cavity_report.levels[0].candidate_generation_status) == "NOT_RUN_INVALID_BOUNDARY", "invalid boundary records candidate generation as not run instead of an invented timing")
+	_check(String(cavity_report.levels[0].candidate_attempt_count) == "NOT_RUN_INVALID_BOUNDARY" and String(cavity_report.levels[0].candidate_triangle_count) == "NOT_RUN_INVALID_BOUNDARY", "invalid boundary marks unrun candidate metrics explicitly instead of inventing zero measurements")
+	_check(String(cavity_report.levels[0].candidate_unique_count_by_residual["b"]) == "NOT_RUN_INVALID_BOUNDARY" and String(cavity_report.levels[0].search_nodes) == "NOT_RUN_INVALID_BOUNDARY", "invalid boundary explicitly accounts for every residual and unrun search counters")
+	realizer.call("_append_unrun_cxr_levels", cavity_report, 2, "NOT_RUN_CAVITY_LIMIT", "synthetic_stop_limit")
+	_check(cavity_report.levels.size() == 3 and cavity_report.levels[1].level == 2 and cavity_report.levels[2].level == 3, "stopped cavity explicitly records every later unrun level")
+	_check(String(cavity_report.levels[1].candidate_generation_usec) == "NOT_RUN_CAVITY_LIMIT", "unrun-level time is not fabricated as zero")
+	_sequence_probe_calls.clear()
+	realizer.set("_cxr_search_started_usec", Time.get_ticks_usec())
+	realizer.set("_cxr_search_nodes_total", 0)
+	var groups: Array[Array] = [["cavity-a"], ["cavity-b"], ["cavity-c"]]
+	var sequence: Dictionary = realizer.call("_run_cxr_cavity_sequence", groups, Callable(self, "_sequence_probe_local_failure"))
+	_check(_sequence_probe_calls.size() == 3 and sequence.cavity_results.size() == 3, "a locally failed cavity does not suppress later cavity searches")
+	_check(bool(sequence.search_complete) and bool(sequence.search_exhaustive) and sequence.failure_reasons.size() == 3, "all complete local failures are represented without claiming a solution")
+	_sequence_probe_calls.clear()
+	var partial_groups: Array[Array] = [["partial-cavity"], ["complete-cavity"]]
+	var partial_sequence: Dictionary = realizer.call("_run_cxr_cavity_sequence", partial_groups, Callable(self, "_sequence_probe_candidate"))
+	_check(_sequence_probe_calls.size() == 2 and partial_sequence.failure_reasons.is_empty(), "a valid candidate retained before a local limit does not suppress another cavity")
+	_check(not bool(partial_sequence.search_complete) and not bool(partial_sequence.search_exhaustive), "retained candidates preserve partial rather than exhaustive search status")
+	var partial_candidate: Dictionary = realizer.call("_finish_cxr_cavity_search", {"levels": [], "selected_supports": []}, {"solution": {"selected_supports": [{"support_id":"support-r1"}]}, "patch_ids": ["patch-r1"], "patch_record": {}, "replacement_triangles": [], "level": 2}, false, false, "limit_candidate_search")
+	_check(bool(partial_candidate.valid) and not bool(partial_candidate.search_complete) and String(partial_candidate.selected_supports[0].support_id) == "support-r1", "best candidate remains available to downstream geometry gates while retaining partial status")
+	_sequence_probe_calls.clear()
+	realizer.set("_cxr_search_started_usec", 1)
+	var limited_sequence: Dictionary = realizer.call("_run_cxr_cavity_sequence", groups, Callable(self, "_sequence_probe_local_failure"), Realizer.CXR_MAX_SEARCH_USEC_TOTAL + 2)
+	_check(_sequence_probe_calls.is_empty() and limited_sequence.cavity_results.size() == 3, "a reached global time cap prevents subsequent cavity execution")
+	_check(String(limited_sequence.cavity_results[0].get("status", "")) == "NOT_RUN_GLOBAL_LIMIT" and not bool(limited_sequence.search_complete), "global cap marks all skipped cavities and makes the sequence incomplete")
+	_sequence_probe_calls.clear()
+	var incomplete_evidence: Dictionary = realizer.call("_validate_candidate_generation_evidence", {"attempts": [], "candidate_pool": [], "candidates": [], "candidate_attempt_count": 0, "candidate_count": 0, "source_valid": true, "limit_hit": false, "limits_hit": []})
+	_check(not bool(incomplete_evidence.get("valid", true)) and String(incomplete_evidence.get("reason", "")) == "required_candidate_generation_fields_missing", "candidate-generation records missing runtime or provenance fields fail closed")
+	var partial_attempts: Array[Dictionary] = [{"candidate_id": "preserve-attempt"}]
+	var partial_pool: Array[Dictionary] = [{"candidate_id": "preserve-support"}]
+	var failed_cavity: Dictionary = {"levels": [], "candidate_attempts": [], "support_candidates": [], "support_candidates_retained": [], "terminal_reason": "UNKNOWN_NOT_CAPTURED"}
+	var failed_level: Dictionary = realizer.call("_new_cxr_level_report", 0, ["patch"], 1)
+	failed_level["candidate_generation_usec"] = 0
+	var failed_residuals: Array[Dictionary] = [{"triangle_id": "residual-0"}, {"triangle_id": "residual-1"}]
+	realizer.call("_preserve_incomplete_candidate_generation", {"attempts": partial_attempts, "candidate_pool": partial_pool, "candidates": partial_pool, "candidate_generation_usec": 7}, incomplete_evidence, failed_cavity, failed_level, failed_residuals, failed_residuals[0], "residual-0", 0)
+	_check(failed_cavity.candidate_attempts.size() == 1 and failed_cavity.support_candidates.size() == 1 and failed_cavity.support_candidates_retained.size() == 1 and failed_level.candidate_generation_usec == 7, "incomplete candidate metadata does not discard captured attempts, supports or elapsed time")
+	_check(failed_level.candidate_count_by_residual["residual-0"] == 1 and failed_level.candidate_generation_unvalidated.candidates.size() == 1, "evidence failure preserves generated but unvalidated candidate rows without claiming they were tested")
+	_check(String(failed_level.candidate_count_by_residual["residual-1"]) == "NOT_RUN_EVIDENCE_FAILURE", "remaining residual faces are explicitly marked unrun after evidence failure")
+	var inconsistent_evidence: Dictionary = realizer.call("_validate_candidate_generation_evidence", {"attempts": [], "candidate_pool": [], "candidates": [], "candidate_attempt_count": 1, "candidate_count": 0, "candidate_unique_count": 0, "candidate_cap_hit": false, "attempt_cap_hit": false, "time_cap_reason": "", "candidate_generation_usec": 1, "source_valid": true, "source_failure_reason": "", "source_tetrahedron_count": 0, "invalid_tetrahedron_count": 0, "cell_bounds": {}, "limit_hit": false, "limits_hit": []})
+	_check(not bool(inconsistent_evidence.get("valid", true)) and String(inconsistent_evidence.get("reason", "")) == "candidate_attempt_count_mismatch", "candidate-generation counters must match the retained attempt rows")
+	var complete_no_solution: Dictionary = {"reason": "cx_bounded_patch_search_failed", "detail": {"details": {"search": {"reason": "cxr_no_valid_field_support_solution", "complete": true, "search_exhaustive": true}}}}
+	var bounded_failure: Dictionary = {"reason": "cx_bounded_patch_search_failed", "detail": {"details": {"search": {"reason": "limit_MAX_SEARCH_STATES_TOTAL", "complete": false, "search_exhaustive": false}}}}
+	var overlapping_best: Dictionary = {"reason": "cx_bounded_patch_search_failed", "detail": {"details": {"search": {"reason": "cxr_joint_patch_overlap", "complete": true, "search_exhaustive": false}}}}
+	_check(not Campaign._target_search_partial(complete_no_solution, {}), "R2 advancement gate accepts only a complete exhaustive R1 no-solution result")
+	_check(Campaign._target_search_partial(bounded_failure, {}) and Campaign._target_search_partial(overlapping_best, {}), "caps and overlapping cavity choices remain partial rather than proving R1 infeasibility")
+	_check(Campaign._result_class("PARTIAL") == "R12_CXR_PARTIAL_WITH_EVIDENCE" and Campaign._result_class("FAILED_TARGET") == "R12_CXR_FAILED_TARGET_WITH_EVIDENCE", "terminal classes retain the preregistered R12-CXR result vocabulary")
+	_check(Campaign._campaign_disposition("R12_CXR_PARTIAL_WITH_EVIDENCE", {}, true, {"status": "FAIL"}) == "R12_CXR_PARTIAL_WITH_EVIDENCE", "partial search cannot be overwritten by a later interface failure")
+	_check(Campaign._campaign_disposition("R12_CXR_FAILED_TARGET_WITH_EVIDENCE", complete_no_solution, false, {}) == "R12_CXR_R1_COMPLETE_NO_SOLUTION_R2_ELIGIBLE", "only exhaustive R1 failure enables the next architecture phase")
+	_check(Campaign._campaign_disposition("R12_CXR_FAILED_TARGET_WITH_EVIDENCE", {}, true, {"status": "FAIL"}) == "R12_CXR_EQUAL_LOD_QUALIFIED_INTERFACE_BLOCKED_WITH_EVIDENCE", "equal-LOD success followed by interface failure has a distinct disposition")
+	_check(Campaign._target_search_partial({"reason": "cx_bounded_patch_search_failed", "detail": "malformed"}, {}) and Campaign._target_search_partial({}, {"cxr_local_search_complete": "UNKNOWN_NOT_CAPTURED"}), "ambiguous or malformed search-completion metadata remains partial")
+	_check(Campaign._target_search_partial({"reason": "cxr_realize_time_limit"}, {}), "realizer wall-time exhaustion is classified as partial rather than target infeasibility")
+	_check(not Campaign._target_has_structural_regression({"mesh_topology": "UNKNOWN_NOT_CAPTURED", "missing_topology_obligations": "UNKNOWN_NOT_CAPTURED"}), "unknown structural measurements are not misread as geometry regression or zero")
+	var within_deadline: Dictionary = realizer.call("_apply_realizer_deadline", {"valid": false, "reason": "synthetic_geometry_failure", "details": {"search_complete": true}}, 1)
+	_check(String(within_deadline.get("reason", "")) == "synthetic_geometry_failure" and int(within_deadline.get("realizer_wall_usec", -1)) == 1, "within-budget early failures retain their original classification and wall-time evidence")
+	var over_deadline: Dictionary = realizer.call("_apply_realizer_deadline", {"valid": true, "geometry": {"geometry_complete": true, "cxr_local_search_complete": true}}, Realizer.CXR_MAX_REALIZE_USEC + 1)
+	_check(bool(over_deadline.get("valid", false)) and not bool(over_deadline.geometry.geometry_complete) and String(over_deadline.geometry.realizer_failure_reason) == "cxr_realize_time_limit", "over-budget candidate geometry is preserved but cannot be marked complete")
+	var failed_over_deadline: Dictionary = realizer.call("_apply_realizer_deadline", {"valid": false, "cx_algorithm_started": true, "reason": "synthetic_search_failure", "details": {"search": {"complete": false}}}, Realizer.CXR_MAX_REALIZE_USEC + 1)
+	_check(String(failed_over_deadline.get("reason", "")) == "cxr_realize_time_limit" and failed_over_deadline.details.prior_result.details.search.complete == false, "over-budget early failure preserves the complete prior failure evidence")
+	var empty_patch: Array[Dictionary] = []
+	var no_values: PackedFloat32Array = PackedFloat32Array()
+	var invalid_candidate_output: Dictionary = realizer.call("_generate_field_candidates", {"points": []}, empty_patch, no_values, {}, 0, 4, 4, "invalid-cavity", {})
+	var invalid_candidate_evidence: Dictionary = realizer.call("_validate_candidate_generation_evidence", invalid_candidate_output)
+	_check(bool(invalid_candidate_evidence.get("valid", false)) and String(invalid_candidate_output.get("source_failure_reason", "")) == "residual_point_arity_invalid" and int(invalid_candidate_output.get("candidate_generation_usec", -1)) >= 0, "early invalid-input returns retain complete, measured failure evidence")
+
+func _sequence_probe_local_failure(cavity_ids: Array) -> Dictionary:
+	_sequence_probe_calls.append(cavity_ids.duplicate())
+	return {"valid": false, "search_started": true, "search_complete": true, "search_exhaustive": true, "terminal_reason": "synthetic_local_failure"}
+
+func _sequence_probe_candidate(cavity_ids: Array) -> Dictionary:
+	_sequence_probe_calls.append(cavity_ids.duplicate())
+	var is_partial: bool = String(cavity_ids[0]) == "partial-cavity"
+	return {"valid": true, "search_started": true, "search_complete": not is_partial, "search_exhaustive": not is_partial, "terminal_reason": "limit_candidate_search" if is_partial else "finite_domain_exhausted_with_candidate"}
+
 func _triangle(id: String, root_ids: Array, points_by_id: Dictionary, rejected: bool) -> Dictionary:
 	var points: Array[Vector3] = [points_by_id[root_ids[0]], points_by_id[root_ids[1]], points_by_id[root_ids[2]]]
 	var cross: Vector3 = (points[1] - points[0]).cross(points[2] - points[0])

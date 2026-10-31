@@ -146,22 +146,24 @@ func _run() -> void:
 		target_geometry = target_case.get("detail", {"reason": target_case.get("reason", "target_geometry_unavailable")}).duplicate(true)
 		target_geometry["geometry_complete"] = false
 		target_geometry["realizer_failure_reason"] = target_case.get("reason", "target_geometry_unavailable")
-	var controls: Dictionary = {"valid": false, "status": "NOT_RUN_EQUAL_LOD_GATE_FAILED", "passed": -1, "count": -1}
-	var ray_result: Dictionary = {"valid": false, "status": "NOT_RUN_EQUAL_LOD_GATE_FAILED", "roi_scoped_hit_miss_disagreements": -1, "global_diagnostic": {"disagreements": -1}}
+	var controls: Dictionary = {"valid": false, "status": "NOT_RUN_EQUAL_LOD_GATE_FAILED", "passed": "UNKNOWN_NOT_CAPTURED", "count": "UNKNOWN_NOT_CAPTURED"}
+	var ray_result: Dictionary = {"valid": false, "status": "NOT_RUN_EQUAL_LOD_GATE_FAILED", "roi_scoped_hit_miss_disagreements": "UNKNOWN_NOT_CAPTURED", "global_diagnostic": {"disagreements": "UNKNOWN_NOT_CAPTURED"}}
 	if bool(target_geometry.get("geometry_complete", false)) and bool(target_geometry.get("topology_signature_match", false)):
 		controls = _run_controls(manifest.get("rows", []))
 		ray_result = _run_ray_gate(manifest.get("rows", []))
 	var volume_gate: bool = target_volume_gate
 	var target_complete: bool = bool(target_geometry.get("geometry_complete", false)) and bool(target_geometry.get("topology_signature_match", false))
-	var controls_pass: bool = bool(controls.get("valid", false)) and int(controls.get("passed", 0)) == 6 and int(controls.get("count", 0)) == 6
-	var ray_pass: bool = bool(ray_result.get("valid", false)) and int(ray_result.get("roi_scoped_hit_miss_disagreements", -1)) == 0
-	var target_status: String = "PASS" if target_complete else "PARTIAL" if _target_search_partial(target_case, target_geometry) else "FAILED_WITH_REGRESSION" if _target_has_structural_regression(target_geometry) else "FAILED_TARGET"
+	var controls_pass: bool = target_complete and bool(controls.get("valid", false)) and int(controls.get("passed", -1)) == 6 and int(controls.get("count", -1)) == 6
+	var ray_pass: bool = target_complete and bool(ray_result.get("valid", false)) and int(ray_result.get("roi_scoped_hit_miss_disagreements", -1)) == 0
+	var target_status: String = "PARTIAL" if _target_search_partial(target_case, target_geometry) else "PASS" if target_complete else "FAILED_WITH_REGRESSION" if _target_has_structural_regression(target_geometry) else "FAILED_TARGET"
 	var status: String = target_status if target_status != "PASS" else "PASS" if controls_pass and ray_pass and volume_gate else "FAILED_WITH_REGRESSION"
 	var equal_lod_gates_pass: bool = target_complete and controls_pass and ray_pass and volume_gate
 	var mixed_lod: Dictionary = {"status": "NOT_RUN_EQUAL_LOD_GATE_FAILED"}
 	if equal_lod_gates_pass:
 		mixed_lod = _run_mixed_lod_gate(manifest.get("rows", []))
-		if String(mixed_lod.get("status", "")) != "PASS": status = "FAILED_TARGET"
+		if status == "PASS" and String(mixed_lod.get("status", "")) != "PASS": status = "FAILED_TARGET"
+	var result_class: String = _result_class(status)
+	var campaign_disposition: String = _campaign_disposition(result_class, target_case, equal_lod_gates_pass, mixed_lod)
 	var downstream_gate_state: String = "NOT_RUN_MIXED_LOD_GATE_FAILED" if equal_lod_gates_pass and String(mixed_lod.get("status", "")) != "PASS" else "PENDING_SEPARATE_GATE" if equal_lod_gates_pass else "NOT_RUN_EQUAL_LOD_GATE_FAILED"
 	var failed_invariant: String = String(target_geometry.get("realizer_failure_reason", _first_failed_invariant(target_geometry, controls, ray_result, volume_gate)))
 	if target_complete and not controls_pass:
@@ -173,22 +175,25 @@ func _run() -> void:
 	elif equal_lod_gates_pass and String(mixed_lod.get("status", "")) != "PASS":
 		failed_invariant = "mixed_lod_gate_failed:" + String(mixed_lod.get("reason", "unspecified"))
 	var failed_realizer: Dictionary = target_case.get("detail", {})
-	var failure_details: Dictionary = failed_realizer.get("details", {})
-	var cavity_evidence: Array = target_geometry.get("cxr_cavity_results", failure_details.get("cxr_cavity_results", []))
+	var failure_details_value: Variant = failed_realizer.get("details", "UNKNOWN_NOT_CAPTURED")
+	var failure_details: Dictionary = failure_details_value if typeof(failure_details_value) == TYPE_DICTIONARY else {}
+	var cavity_evidence: Variant = _present_value_or_unknown(target_geometry, "cxr_cavity_results")
+	if typeof(cavity_evidence) != TYPE_ARRAY and failure_details.has("cxr_cavity_results"):
+		cavity_evidence = failure_details.get("cxr_cavity_results")
 	var result: Dictionary = {
 		"schema": "P3.1.R12CXR.GeometryAttempt.v1", "attempt_id": attempt_id, "source_sha": source_sha,
 		"parent_sha": OS.get_environment("R12CXR_PARENT_SHA"), "tree_sha": OS.get_environment("R12CXR_TREE_SHA"),
-		"hypothesis": "R12CXR_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH", "result_class": status,
+		"hypothesis": "R12CXR_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH", "gate_status": status, "result_class": result_class, "campaign_disposition": campaign_disposition,
 		"fixture_sha256": fixture_hash, "manifest_sha256": ManifestSha, "candidate_d_sha256": CandidateSha,
 		"realizer_sha256": realizer_file_sha, "campaign_sha256": campaign_file_sha, "topology_sha256": TopologySha,
 		"fixture_graph_fingerprint_sha256": FixtureGraphFingerprintSha, "reference_authority_reproduction": authority_graph_identity,
 		"target": {"scenario_id": TARGET_ID, "volume_sha256": target_prepared.volume_sha256, "payload_sha256": target_prepared.payload_sha256, "revision": target_prepared.revision, "volume_identity_preserved": target_prepared.volume_identity_preserved, "volume_build_usec": target_prepared.volume_build_usec, "geometry_realizer_valid": target_case.get("valid", false), "cx_algorithm_started": cx_algorithm_started(target_case)},
-		"realization_map": {"root_count": target_geometry.get("anchor_root_count", -1), "arc_count": target_geometry.get("arc_map", []).size(), "face_count": target_geometry.get("face_map", []).size(), "anchor_count": target_geometry.get("anchor_root_count", -1), "path_event_count": target_geometry.get("path_event_root_count", -1), "support_vertex_count": target_geometry.get("support_vertex_count", -1), "path_count": target_geometry.get("realization_path_count", -1), "sha256": target_geometry.get("realization_map_sha256", ""), "topology_roundtrip_sha256": target_geometry.get("topology_roundtrip_sha256", ""), "topology_signature_match": target_geometry.get("topology_signature_match", false)},
-		"geometry": {"error_contract": target_geometry.get("geometry_error_contract", "NOT_FULLY_MEASURED_NO_APPROVED_TOLERANCE"), "canonical_surface_deviation_measured": target_geometry.get("canonical_surface_deviation_measured", false), "maximum_diagonal_midpoint_displacement": target_geometry.get("maximum_diagonal_midpoint_displacement", null), "complete": target_geometry.get("geometry_complete", false), "mesh_sha256": target_geometry.get("mesh_sha256", ""), "vertex_count": target_geometry.get("geometry_vertex_count", -1), "triangle_count": target_geometry.get("geometry_triangle_count", -1), "initial_triangle_count": target_geometry.get("initial_triangle_count", -1), "initial_cutoff_rejections": target_geometry.get("initial_cutoff_rejections", []), "minimum_cross_squared": target_geometry.get("minimum_cross_squared", null), "cutoff_rejections": target_geometry.get("cutoff_rejections", []), "applied_flips": target_geometry.get("applied_flips", []), "rejected_flip_candidates": target_geometry.get("rejected_flip_candidates", []), "flip_cap": target_geometry.get("flip_cap", -1), "flip_cap_exhausted": target_geometry.get("flip_cap_exhausted", false), "missing_topology_obligations": target_geometry.get("missing_topology_obligations", []), "mesh_topology": target_geometry.get("mesh_topology", {}), "build_usec": target_geometry.get("build_usec", -1)},
+		"realization_map": {"root_count": target_geometry.get("anchor_root_count", "UNKNOWN_NOT_CAPTURED"), "arc_count": _array_size_or_unknown(target_geometry.get("arc_map", null)), "face_count": _array_size_or_unknown(target_geometry.get("face_map", null)), "anchor_count": target_geometry.get("anchor_root_count", "UNKNOWN_NOT_CAPTURED"), "path_event_count": target_geometry.get("path_event_root_count", "UNKNOWN_NOT_CAPTURED"), "support_vertex_count": target_geometry.get("support_vertex_count", "UNKNOWN_NOT_CAPTURED"), "path_count": target_geometry.get("realization_path_count", "UNKNOWN_NOT_CAPTURED"), "sha256": target_geometry.get("realization_map_sha256", "UNKNOWN_NOT_CAPTURED"), "topology_roundtrip_sha256": target_geometry.get("topology_roundtrip_sha256", "UNKNOWN_NOT_CAPTURED"), "topology_signature_match": target_geometry.get("topology_signature_match", "UNKNOWN_NOT_CAPTURED")},
+		"geometry": {"error_contract": target_geometry.get("geometry_error_contract", "NOT_FULLY_MEASURED_NO_APPROVED_TOLERANCE"), "canonical_surface_deviation_measured": target_geometry.get("canonical_surface_deviation_measured", "UNKNOWN_NOT_CAPTURED"), "maximum_diagonal_midpoint_displacement": target_geometry.get("maximum_diagonal_midpoint_displacement", "UNKNOWN_NOT_CAPTURED"), "complete": target_geometry.get("geometry_complete", false), "mesh_sha256": target_geometry.get("mesh_sha256", "UNKNOWN_NOT_CAPTURED"), "vertex_count": target_geometry.get("geometry_vertex_count", "UNKNOWN_NOT_CAPTURED"), "triangle_count": target_geometry.get("geometry_triangle_count", "UNKNOWN_NOT_CAPTURED"), "initial_triangle_count": target_geometry.get("initial_triangle_count", "UNKNOWN_NOT_CAPTURED"), "initial_cutoff_rejections": target_geometry.get("initial_cutoff_rejections", "UNKNOWN_NOT_CAPTURED"), "minimum_cross_squared": target_geometry.get("minimum_cross_squared", "UNKNOWN_NOT_CAPTURED"), "cutoff_rejections": _array_size_or_unknown(target_geometry.get("cutoff_rejections", null)), "applied_flips": target_geometry.get("applied_flips", "UNKNOWN_NOT_CAPTURED"), "rejected_flip_candidates": target_geometry.get("rejected_flip_candidates", "UNKNOWN_NOT_CAPTURED"), "flip_cap": target_geometry.get("flip_cap", "UNKNOWN_NOT_CAPTURED"), "flip_cap_exhausted": target_geometry.get("flip_cap_exhausted", "UNKNOWN_NOT_CAPTURED"), "missing_topology_obligations": target_geometry.get("missing_topology_obligations", "UNKNOWN_NOT_CAPTURED"), "mesh_topology": target_geometry.get("mesh_topology", "UNKNOWN_NOT_CAPTURED"), "build_usec": target_geometry.get("build_usec", "UNKNOWN_NOT_CAPTURED")},
 		"scope": "EQUAL_LOD_EXPERIMENT_ONLY", "equal_lod_gates_pass": equal_lod_gates_pass,
-		"controls": controls, "ray_roi": ray_result, "volume_gate": volume_gate, "mixed_lod": mixed_lod if equal_lod_gates_pass else downstream_gate_state, "determinism": downstream_gate_state, "full_e2e": "NOT_RUN_MIXED_LOD_GATE_FAILED" if equal_lod_gates_pass and String(mixed_lod.get("status", "")) != "PASS" else "NOT_RUN_NO_SURVIVING_GEOMETRY_CANDIDATE", "full_validation": "NOT_RUN_MIXED_LOD_GATE_FAILED" if equal_lod_gates_pass and String(mixed_lod.get("status", "")) != "PASS" else "NOT_RUN_NO_SURVIVING_GEOMETRY_CANDIDATE",
+		"controls": controls, "ray_roi": ray_result, "volume_gate": volume_gate, "mixed_lod": mixed_lod if equal_lod_gates_pass else downstream_gate_state, "determinism": downstream_gate_state, "full_e2e": "NOT_RUN_MIXED_LOD_GATE_FAILED" if equal_lod_gates_pass and String(mixed_lod.get("status", "")) != "PASS" else "PENDING_SEPARATE_GATE" if equal_lod_gates_pass else "NOT_RUN_EQUAL_LOD_GATE_FAILED", "full_validation": "NOT_RUN_MIXED_LOD_GATE_FAILED" if equal_lod_gates_pass and String(mixed_lod.get("status", "")) != "PASS" else "PENDING_SEPARATE_GATE" if equal_lod_gates_pass else "NOT_RUN_EQUAL_LOD_GATE_FAILED",
 		"failed_invariant": failed_invariant,
-		"topology_map": {"roots": target_geometry.get("root_map", []), "arcs": target_geometry.get("arc_map", []), "faces": target_geometry.get("face_map", []), "supports": target_geometry.get("cx_support_provenance", []), "flips": target_geometry.get("applied_flips", [])}
+		"topology_map": {"roots": _present_value_or_unknown(target_geometry, "root_map"), "arcs": _present_value_or_unknown(target_geometry, "arc_map"), "faces": _present_value_or_unknown(target_geometry, "face_map"), "supports": _present_value_or_unknown(target_geometry, "cx_support_provenance"), "flips": _present_value_or_unknown(target_geometry, "applied_flips")}
 	}
 	result["cxr"] = {
 		"hypothesis": "R12CXR_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH",
@@ -196,41 +201,41 @@ func _run() -> void:
 		"topology_fixture_sha256": TopologySha,
 		"residual_fixture_sha256": residual_sha,
 		"residual_face_count": 3,
-		"cavity_count": cavity_evidence.size(),
+		"cavity_count": _array_size_or_unknown(cavity_evidence),
 		"cavity_results": cavity_evidence,
 		"support_candidates": target_geometry.get("cx_support_candidate_count", "UNKNOWN_NOT_CAPTURED"),
 		"support_vertices_selected": target_geometry.get("cx_support_vertex_count", "UNKNOWN_NOT_CAPTURED"),
 		"support_provenance_sha256": target_geometry.get("cx_support_provenance_sha256", "UNKNOWN_NOT_CAPTURED"),
 		"candidate_attempt_count": target_geometry.get("cxr_candidate_attempt_count", failure_details.get("cxr_search_counters", {}).get("candidate_attempts", "UNKNOWN_NOT_CAPTURED")),
 		"candidate_triangle_count": target_geometry.get("cxr_candidate_triangle_count", failure_details.get("cxr_search_counters", {}).get("candidate_triangles", "UNKNOWN_NOT_CAPTURED")),
-		"local_search_limits": target_geometry.get("cxr_local_search_limits", failure_details.get("cxr_limits", {})),
+		"local_search_limits": target_geometry.get("cxr_local_search_limits", failure_details.get("cxr_limits", "UNKNOWN_NOT_CAPTURED")),
 		"local_search_nodes": target_geometry.get("cxr_local_search_nodes", failure_details.get("cxr_search_counters", {}).get("search_nodes", "UNKNOWN_NOT_CAPTURED")),
-		"local_search_complete": target_geometry.get("cxr_local_search_complete", false),
-		"local_search_exhaustive": target_geometry.get("cxr_local_search_exhaustive", false),
-		"search_counters": target_geometry.get("cxr_search_counters", failure_details.get("cxr_search_counters", {})),
-		"local_search_result": target_geometry.get("cx_patch_records", []),
+		"local_search_complete": target_geometry.get("cxr_local_search_complete", "UNKNOWN_NOT_CAPTURED"),
+		"local_search_exhaustive": target_geometry.get("cxr_local_search_exhaustive", "UNKNOWN_NOT_CAPTURED"),
+		"search_counters": target_geometry.get("cxr_search_counters", failure_details.get("cxr_search_counters", "UNKNOWN_NOT_CAPTURED")),
+		"local_search_result": _present_value_or_unknown(target_geometry, "cx_patch_records"),
 		"terminal_reason": target_case.get("reason", target_geometry.get("realizer_failure_reason", "UNKNOWN_NOT_CAPTURED")),
-		"realizer_failure_details": failure_details,
-		"changed_triangles": target_geometry.get("cx_changed_triangle_ids", []),
-		"final_triangle_count": target_geometry.get("geometry_triangle_count", -1),
-		"realization_map_sha256": target_geometry.get("realization_map_sha256", ""),
-		"topology_roundtrip_sha256": target_geometry.get("topology_roundtrip_sha256", ""),
+		"realizer_failure_details": failure_details_value,
+		"changed_triangles": _present_value_or_unknown(target_geometry, "cx_changed_triangle_ids"),
+		"final_triangle_count": target_geometry.get("geometry_triangle_count", "UNKNOWN_NOT_CAPTURED"),
+		"realization_map_sha256": target_geometry.get("realization_map_sha256", "UNKNOWN_NOT_CAPTURED"),
+		"topology_roundtrip_sha256": target_geometry.get("topology_roundtrip_sha256", "UNKNOWN_NOT_CAPTURED"),
 		"topology_signature_match": target_geometry.get("topology_signature_match", false),
 		"minimum_cross_squared": target_geometry.get("minimum_cross_squared", null),
-		"cutoff_rejections": target_geometry.get("cutoff_rejections", []),
-		"missing_topology_obligations": target_geometry.get("missing_topology_obligations", []),
-		"internal_open_edges": target_geometry.get("mesh_topology", {}).get("internal_open_edges", -1),
-		"nonmanifold": target_geometry.get("mesh_topology", {}).get("nonmanifold_edges", -1),
-		"winding": target_geometry.get("mesh_topology", {}).get("winding_inconsistencies", -1),
+		"cutoff_rejections": _present_value_or_unknown(target_geometry, "cutoff_rejections"),
+		"missing_topology_obligations": _present_value_or_unknown(target_geometry, "missing_topology_obligations"),
+		"internal_open_edges": target_geometry.get("mesh_topology", {}).get("internal_open_edges", "UNKNOWN_NOT_CAPTURED"),
+		"nonmanifold": target_geometry.get("mesh_topology", {}).get("nonmanifold_edges", "UNKNOWN_NOT_CAPTURED"),
+		"winding": target_geometry.get("mesh_topology", {}).get("winding_inconsistencies", "UNKNOWN_NOT_CAPTURED"),
 		"controls": controls,
-		"ray_roi": ray_result.get("roi_scoped_hit_miss_disagreements", -1),
-		"ray_global_diagnostic": ray_result.get("global_diagnostic", {}).get("disagreements", -1),
+		"ray_roi": ray_result.get("roi_scoped_hit_miss_disagreements", "UNKNOWN_NOT_CAPTURED"),
+		"ray_global_diagnostic": ray_result.get("global_diagnostic", {}).get("disagreements", "UNKNOWN_NOT_CAPTURED"),
 		"volume": {"pass": volume_gate, "sha256": target_prepared.get("volume_sha256", ""), "payload_sha256": target_prepared.get("payload_sha256", ""), "revision": target_prepared.get("revision", -1)},
-		"surface_deviation_diagnostics": target_geometry.get("cx_field_diagnostics", {}),
+		"surface_deviation_diagnostics": _present_value_or_unknown(target_geometry, "cx_field_diagnostics"),
 		"mixed_lod": mixed_lod if equal_lod_gates_pass else "NOT_RUN_EQUAL_LOD_GATE_FAILED",
 		"determinism": "NOT_RUN_EQUAL_LOD_GATE_FAILED" if not equal_lod_gates_pass else "PENDING_DETERMINISTIC_REPEAT",
 		"resource_aborts": "UNKNOWN_NOT_CAPTURED",
-		"result_class": status
+		"gate_status": status, "result_class": result_class, "campaign_disposition": campaign_disposition
 	}
 	if attempt_id.contains("/") or attempt_id.contains("\\") or attempt_id.contains(".."):
 		_fail("cx_attempt_id_invalid", attempt_id, source_sha)
@@ -251,25 +256,60 @@ func _run() -> void:
 	if write_error != OK:
 		_fail("cx_output_write_failed", attempt_id, source_sha, {"error": write_error})
 		return
-	print("R12CXR_GEOMETRY_COMPLETE " + JSON.stringify({"attempt_id": attempt_id, "source_sha": source_sha, "hypothesis": "R12CXR_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH", "status": status, "fixture_sha256": fixture_hash, "residual_fixture_sha256": residual_sha, "result_sha256": Core.sha256(output_bytes), "result_path": output_path, "root_count": target_geometry.get("anchor_root_count", -1), "arc_count": target_geometry.get("arc_map", []).size(), "face_count": target_geometry.get("face_map", []).size(), "support_count": target_geometry.get("cx_support_vertex_count", -1), "triangle_count": target_geometry.get("geometry_triangle_count", -1), "cutoff_rejections": target_geometry.get("cutoff_rejections", []).size(), "internal_open_edges": target_geometry.get("mesh_topology", {}).get("internal_open_edges", -1), "controls": controls_pass, "roi_ray_disagreements": ray_result.get("roi_scoped_hit_miss_disagreements", -1), "global_ray_disagreements_diagnostic": ray_result.get("global_diagnostic", {}).get("disagreements", -1), "volume": volume_gate, "failed_invariant": result.failed_invariant}))
+	print("R12CXR_GEOMETRY_COMPLETE " + JSON.stringify({"attempt_id": attempt_id, "source_sha": source_sha, "hypothesis": "R12CXR_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH", "gate_status": status, "result_class": result_class, "campaign_disposition": campaign_disposition, "fixture_sha256": fixture_hash, "residual_fixture_sha256": residual_sha, "result_sha256": Core.sha256(output_bytes), "result_path": output_path, "root_count": target_geometry.get("anchor_root_count", "UNKNOWN_NOT_CAPTURED"), "arc_count": _array_size_or_unknown(target_geometry.get("arc_map", null)), "face_count": _array_size_or_unknown(target_geometry.get("face_map", null)), "support_count": target_geometry.get("cx_support_vertex_count", "UNKNOWN_NOT_CAPTURED"), "triangle_count": target_geometry.get("geometry_triangle_count", "UNKNOWN_NOT_CAPTURED"), "cutoff_rejections": _array_size_or_unknown(target_geometry.get("cutoff_rejections", null)), "internal_open_edges": target_geometry.get("mesh_topology", {}).get("internal_open_edges", "UNKNOWN_NOT_CAPTURED"), "controls": "NOT_RUN" if not target_complete else controls_pass, "roi_ray_disagreements": ray_result.get("roi_scoped_hit_miss_disagreements", "UNKNOWN_NOT_CAPTURED"), "global_ray_disagreements_diagnostic": ray_result.get("global_diagnostic", {}).get("disagreements", "UNKNOWN_NOT_CAPTURED"), "volume": volume_gate, "failed_invariant": result.failed_invariant}))
 	quit(0)
 
-func _target_search_partial(target_case: Dictionary, geometry: Dictionary) -> bool:
-	if geometry.has("cxr_local_search_complete") and not bool(geometry.get("cxr_local_search_complete", false)): return true
-	if String(geometry.get("realizer_failure_reason", "")).contains("cap_exceeded"): return true
-	if String(target_case.get("reason", "")) != "cx_bounded_patch_search_failed": return false
-	var detail: Dictionary = target_case.get("detail", {})
+static func _target_search_partial(target_case: Dictionary, geometry: Dictionary) -> bool:
+	var target_reason: String = String(target_case.get("reason", ""))
+	if target_reason.contains("time_limit") or target_reason.contains("limit_exceeded"): return true
+	if geometry.has("cxr_local_search_complete"):
+		var geometry_complete_value: Variant = geometry.get("cxr_local_search_complete")
+		if typeof(geometry_complete_value) != TYPE_BOOL or not bool(geometry_complete_value): return true
+	var geometry_failure: String = String(geometry.get("realizer_failure_reason", ""))
+	if geometry_failure.contains("cap_exceeded") or geometry_failure.contains("time_limit"): return true
+	if target_reason != "cx_bounded_patch_search_failed": return false
+	var detail_value: Variant = target_case.get("detail", {})
+	if typeof(detail_value) != TYPE_DICTIONARY: return true
+	var detail: Dictionary = detail_value
 	var details: Dictionary = detail.get("details", detail)
 	var search: Dictionary = details.get("search", {})
 	var reason: String = String(search.get("reason", ""))
 	if typeof(search.get("complete", null)) != TYPE_BOOL: return true
-	return not bool(search.get("complete", false)) or reason.contains("partial") or reason.contains("bound_exhausted") or reason.contains("cap_exceeded") or reason.contains("limit")
+	if typeof(search.get("search_exhaustive", null)) != TYPE_BOOL: return true
+	return not bool(search.get("complete", false)) or not bool(search.get("search_exhaustive", false)) or reason.contains("partial") or reason.contains("bound_exhausted") or reason.contains("cap_exceeded") or reason.contains("limit")
 
-func _target_has_structural_regression(geometry: Dictionary) -> bool:
-	if geometry.has("topology_signature_match") and not bool(geometry.get("topology_signature_match", true)): return true
-	var topology: Dictionary = geometry.get("mesh_topology", {})
-	if not topology.is_empty() and (int(topology.get("internal_open_edges", 0)) != 0 or int(topology.get("nonmanifold_edges", 0)) != 0 or int(topology.get("winding_inconsistencies", 0)) != 0): return true
-	if not geometry.get("missing_topology_obligations", []).is_empty(): return true
+static func _result_class(gate_status: String) -> String:
+	if gate_status == "PARTIAL": return "R12_CXR_PARTIAL_WITH_EVIDENCE"
+	if gate_status == "PASS": return "R12_CXR_EXPERIMENTAL_TARGET_PASS"
+	return "R12_CXR_FAILED_TARGET_WITH_EVIDENCE"
+
+static func _campaign_disposition(result_class: String, target_case: Dictionary, equal_lod_gates_pass: bool, mixed_lod: Dictionary) -> String:
+	if result_class == "R12_CXR_PARTIAL_WITH_EVIDENCE": return "R12_CXR_PARTIAL_WITH_EVIDENCE"
+	if equal_lod_gates_pass and String(mixed_lod.get("status", "")) != "PASS":
+		return "R12_CXR_EQUAL_LOD_QUALIFIED_INTERFACE_BLOCKED_WITH_EVIDENCE"
+	if result_class == "R12_CXR_EXPERIMENTAL_TARGET_PASS": return "R12_CXR_DOWNSTREAM_GATES_PENDING"
+	if String(target_case.get("reason", "")) == "cx_bounded_patch_search_failed":
+		var detail_value: Variant = target_case.get("detail", {})
+		if typeof(detail_value) != TYPE_DICTIONARY: return "R12_CXR_FAILED_TARGET_WITH_EVIDENCE"
+		var detail: Dictionary = detail_value
+		var details: Dictionary = detail.get("details", detail)
+		var search: Dictionary = details.get("search", {})
+		if typeof(search.get("complete", null)) == TYPE_BOOL and typeof(search.get("search_exhaustive", null)) == TYPE_BOOL and bool(search.get("complete", false)) and bool(search.get("search_exhaustive", false)) and String(search.get("reason", "")) == "cxr_no_valid_field_support_solution":
+			return "R12_CXR_R1_COMPLETE_NO_SOLUTION_R2_ELIGIBLE"
+	return "R12_CXR_FAILED_TARGET_WITH_EVIDENCE"
+
+static func _target_has_structural_regression(geometry: Dictionary) -> bool:
+	if geometry.has("topology_signature_match"):
+		var topology_match_value: Variant = geometry.get("topology_signature_match")
+		if typeof(topology_match_value) == TYPE_BOOL and not bool(topology_match_value): return true
+	var topology_value: Variant = geometry.get("mesh_topology", {})
+	if typeof(topology_value) == TYPE_DICTIONARY:
+		var topology: Dictionary = topology_value
+		for metric_name in ["internal_open_edges", "nonmanifold_edges", "winding_inconsistencies"]:
+			var metric_value: Variant = topology.get(metric_name, null)
+			if typeof(metric_value) == TYPE_INT and int(metric_value) != 0: return true
+	var missing_value: Variant = geometry.get("missing_topology_obligations", [])
+	if typeof(missing_value) == TYPE_ARRAY and not missing_value.is_empty(): return true
 	return false
 
 static func cx_algorithm_started(target_case: Dictionary) -> bool:
@@ -459,7 +499,18 @@ func _case_geometry_pass(outcome: Dictionary) -> bool:
 	return bool(geometry.get("geometry_complete", false)) and bool(geometry.get("topology_signature_match", false)) and bool(outcome.get("volume_identity_preserved", false))
 
 func _geometry_summary(geometry: Dictionary) -> Dictionary:
-	return {"topology_signature_match": geometry.get("topology_signature_match", false), "geometry_complete": geometry.get("geometry_complete", false), "mesh_sha256": geometry.get("mesh_sha256", ""), "triangle_count": geometry.get("geometry_triangle_count", -1), "cutoff_rejections": geometry.get("cutoff_rejections", []).size(), "missing_obligations": geometry.get("missing_topology_obligations", []).size(), "mesh_topology": geometry.get("mesh_topology", {})}
+	return {"topology_signature_match": geometry.get("topology_signature_match", false), "geometry_complete": geometry.get("geometry_complete", false), "mesh_sha256": geometry.get("mesh_sha256", "UNKNOWN_NOT_CAPTURED"), "triangle_count": geometry.get("geometry_triangle_count", "UNKNOWN_NOT_CAPTURED"), "cutoff_rejections": _array_size_or_unknown(geometry.get("cutoff_rejections", null)), "missing_obligations": _array_size_or_unknown(geometry.get("missing_topology_obligations", null)), "mesh_topology": geometry.get("mesh_topology", "UNKNOWN_NOT_CAPTURED")}
+
+func _array_size_or_unknown(value: Variant) -> Variant:
+	if typeof(value) != TYPE_ARRAY:
+		return "UNKNOWN_NOT_CAPTURED"
+	var values: Array = value
+	return values.size()
+
+func _present_value_or_unknown(source: Dictionary, key: String) -> Variant:
+	if not source.has(key):
+		return "UNKNOWN_NOT_CAPTURED"
+	return source[key]
 
 func _run_ray_gate(rows: Array) -> Dictionary:
 	var ray_row: Dictionary = Core.case_by_id(rows, RAY_ID)
