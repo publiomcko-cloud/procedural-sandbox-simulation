@@ -202,7 +202,8 @@ func _build_triangles(geometry: Dictionary, fixture: Dictionary) -> Dictionary:
 		var matched: bool = false
 		for c6_reject_value in c6_rejections:
 			var c6_reject: Dictionary = c6_reject_value
-			if String(c6_reject.get("polygon_id", "")) == polygon_id and _same_id_set(c6_reject.get("triangle_root_ids", []), root_ids): matched = true
+			var c6_polygon_ids: Array = c6_reject.get("source_polygon_ids", [])
+			if String(c6_reject.get("triangle_id", "")) == triangle_id and c6_polygon_ids.has(polygon_id) and _same_id_set(c6_reject.get("root_ids", []), root_ids): matched = true
 		if not matched: return {"valid": false, "reason": "cx_fixture_to_base_rejection_mismatch", "triangle_id": triangle_id}
 		var residual_triangle: Dictionary = _triangle(triangle_id, polygon_id, root_ids, points, "C6_REJECTED_CUTOFF", true)
 		var observed_cross: float = float(reject.get("cross_squared", -1.0))

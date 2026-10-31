@@ -17,6 +17,7 @@ func _run() -> void:
 	_test_t_junction_oracle()
 	_test_fixture_identity()
 	_test_json_root_position_reconstruction()
+	_test_c6_rejection_schema_reconstruction()
 	_test_cx_start_classification()
 	if failures.is_empty():
 		print("R12CX_CONTRACT_TESTS_PASS " + JSON.stringify({"assertions": assertions, "failures": 0, "suite": "bounded_cx_contract"}))
@@ -168,6 +169,30 @@ func _test_cx_start_classification() -> void:
 	_check(not Campaign.cx_algorithm_started({"valid": false, "cx_algorithm_started": false, "detail": {"cx_algorithm_started": true}}), "explicit top-level false marker overrides nested incidental detail")
 	_check(Campaign.cx_algorithm_started({"valid": false, "detail": {"cx_algorithm_started": true}}), "started local patch search is recognized from preserved realizer detail")
 	_check(Campaign.cx_algorithm_started({"valid": true, "cx_algorithm_started": true}), "completed target retains local patch search start marker")
+
+func _test_c6_rejection_schema_reconstruction() -> void:
+	var realizer: RefCounted = Realizer.new()
+	var root_ids: Array = ["a", "b", "c"]
+	var expected_cross_squared: float = Vector3.RIGHT.cross(Vector3(0.0, 1.0e-8, 0.0)).length_squared()
+	var geometry: Dictionary = {
+		"root_map": [
+			{"root_id": "a", "position": [0.0, 0.0, 0.0]},
+			{"root_id": "b", "position": [1.0, 0.0, 0.0]},
+			{"root_id": "c", "position": [0.0, 1.0e-8, 0.0]}
+		],
+		"emitted_triangles": [],
+		"cutoff_rejections": [{"triangle_id": "triangle-a", "source_polygon_ids": ["source-face"], "root_ids": root_ids.duplicate(), "cross_squared": expected_cross_squared}]
+	}
+	var fixture: Dictionary = {"residuals": [{"triangle_id": "triangle-a", "source_polygon_id": "source-face", "triangle_root_ids": root_ids.duplicate(), "rejection": {"source_polygon_ids": ["source-face"], "root_ids": root_ids.duplicate(), "cross_squared": expected_cross_squared}}]}
+	var built: Dictionary = realizer.call("_build_triangles", geometry, fixture)
+	_check(bool(built.get("valid", false)), "C6 source_polygon_ids/root_ids rejection schema matches the residual fixture")
+	if bool(built.get("valid", false)):
+		_check(built.triangles.size() == 1 and bool(built.triangles[0].get("rejected", false)), "matched C6 cutoff face is reconstructed as the single rejected source triangle")
+		_check(float(built.triangles[0].get("cross_squared", INF)) == expected_cross_squared and expected_cross_squared <= 1.0e-12, "reconstructed rejection retains its measured sub-cutoff area")
+	var wrong_roots: Dictionary = geometry.duplicate(true)
+	wrong_roots["cutoff_rejections"][0]["root_ids"] = ["a", "b", "missing"]
+	var mismatch: Dictionary = realizer.call("_build_triangles", wrong_roots, fixture)
+	_check(not bool(mismatch.get("valid", true)) and String(mismatch.get("reason", "")) == "cx_fixture_to_base_rejection_mismatch", "C6 rejection with different roots is rejected before geometry search")
 
 func _triangle(id: String, root_ids: Array, points_by_id: Dictionary, rejected: bool) -> Dictionary:
 	var points: Array[Vector3] = [points_by_id[root_ids[0]], points_by_id[root_ids[1]], points_by_id[root_ids[2]]]
