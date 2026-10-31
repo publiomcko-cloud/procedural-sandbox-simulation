@@ -23,6 +23,7 @@ func _run() -> void:
 	_test_cxr_field_support_invariants()
 	_test_cxr_field_candidate_enumeration()
 	_test_cxr_r1_level_and_cavity_continuation()
+	_test_cxr_r2_constrained_triangulation()
 	if failures.is_empty():
 		print("R12CXR_CONTRACT_TESTS_PASS " + JSON.stringify({"assertions": assertions, "failures": 0, "suite": "bounded_cxr_contract"}))
 		quit(0)
@@ -325,7 +326,7 @@ func _test_cxr_r1_level_and_cavity_continuation() -> void:
 	_check(String(failed_level.candidate_count_by_residual["residual-1"]) == "NOT_RUN_EVIDENCE_FAILURE", "remaining residual faces are explicitly marked unrun after evidence failure")
 	var inconsistent_evidence: Dictionary = realizer.call("_validate_candidate_generation_evidence", {"attempts": [], "candidate_pool": [], "candidates": [], "candidate_attempt_count": 1, "candidate_count": 0, "candidate_unique_count": 0, "candidate_cap_hit": false, "attempt_cap_hit": false, "time_cap_reason": "", "candidate_generation_usec": 1, "source_valid": true, "source_failure_reason": "", "source_tetrahedron_count": 0, "invalid_tetrahedron_count": 0, "cell_bounds": {}, "limit_hit": false, "limits_hit": []})
 	_check(not bool(inconsistent_evidence.get("valid", true)) and String(inconsistent_evidence.get("reason", "")) == "candidate_attempt_count_mismatch", "candidate-generation counters must match the retained attempt rows")
-	var complete_no_solution: Dictionary = {"reason": "cx_bounded_patch_search_failed", "detail": {"details": {"search": {"reason": "cxr_no_valid_field_support_solution", "complete": true, "search_exhaustive": true}}}}
+	var complete_no_solution: Dictionary = {"reason": "cx_bounded_patch_search_failed", "detail": {"details": {"search": {"phase": "r1", "reason": "cxr_no_valid_field_support_solution", "complete": true, "search_exhaustive": true}}}}
 	var bounded_failure: Dictionary = {"reason": "cx_bounded_patch_search_failed", "detail": {"details": {"search": {"reason": "limit_MAX_SEARCH_STATES_TOTAL", "complete": false, "search_exhaustive": false}}}}
 	var overlapping_best: Dictionary = {"reason": "cx_bounded_patch_search_failed", "detail": {"details": {"search": {"reason": "cxr_joint_patch_overlap", "complete": true, "search_exhaustive": false}}}}
 	_check(not Campaign._target_search_partial(complete_no_solution, {}), "R2 advancement gate accepts only a complete exhaustive R1 no-solution result")
@@ -333,6 +334,10 @@ func _test_cxr_r1_level_and_cavity_continuation() -> void:
 	_check(Campaign._result_class("PARTIAL") == "R12_CXR_PARTIAL_WITH_EVIDENCE" and Campaign._result_class("FAILED_TARGET") == "R12_CXR_FAILED_TARGET_WITH_EVIDENCE", "terminal classes retain the preregistered R12-CXR result vocabulary")
 	_check(Campaign._campaign_disposition("R12_CXR_PARTIAL_WITH_EVIDENCE", {}, true, {"status": "FAIL"}) == "R12_CXR_PARTIAL_WITH_EVIDENCE", "partial search cannot be overwritten by a later interface failure")
 	_check(Campaign._campaign_disposition("R12_CXR_FAILED_TARGET_WITH_EVIDENCE", complete_no_solution, false, {}) == "R12_CXR_R1_COMPLETE_NO_SOLUTION_R2_ELIGIBLE", "only exhaustive R1 failure enables the next architecture phase")
+	var r2_complete_no_solution: Dictionary = {"reason": "cx_bounded_patch_search_failed", "detail": {"cx_algorithm_started": true, "details": {"search": {"phase": "r2", "reason": "cxr_r2_no_valid_constrained_triangulation", "complete": true, "search_exhaustive": true}}}}
+	var r2_partial_no_solution: Dictionary = {"reason": "cx_bounded_patch_search_failed", "detail": {"cx_algorithm_started": true, "details": {"search": {"phase": "r2", "reason": "R2_MAX_SEARCH_STATES_PER_CAVITY", "complete": false, "search_exhaustive": false}}}}
+	_check(Campaign._campaign_disposition("R12_CXR_FAILED_TARGET_WITH_EVIDENCE", r2_complete_no_solution, false, {}) == "R12_CXR_R2_COMPLETE_NO_SOLUTION_R3_ELIGIBLE", "only a complete exhaustive R2 no-solution result enables R3")
+	_check(Campaign._campaign_disposition("R12_CXR_PARTIAL_WITH_EVIDENCE", r2_partial_no_solution, false, {}) == "R12_CXR_PARTIAL_WITH_EVIDENCE", "partial R2 resource exhaustion never enables R3")
 	_check(Campaign._campaign_disposition("R12_CXR_FAILED_TARGET_WITH_EVIDENCE", {}, true, {"status": "FAIL"}) == "R12_CXR_EQUAL_LOD_QUALIFIED_INTERFACE_BLOCKED_WITH_EVIDENCE", "equal-LOD success followed by interface failure has a distinct disposition")
 	_check(Campaign._target_search_partial({"reason": "cx_bounded_patch_search_failed", "detail": "malformed"}, {}) and Campaign._target_search_partial({}, {"cxr_local_search_complete": "UNKNOWN_NOT_CAPTURED"}), "ambiguous or malformed search-completion metadata remains partial")
 	_check(Campaign._target_search_partial({"reason": "cxr_realize_time_limit"}, {}), "realizer wall-time exhaustion is classified as partial rather than target infeasibility")
@@ -348,6 +353,117 @@ func _test_cxr_r1_level_and_cavity_continuation() -> void:
 	var invalid_candidate_output: Dictionary = realizer.call("_generate_field_candidates", {"points": []}, empty_patch, no_values, {}, 0, 4, 4, "invalid-cavity", {})
 	var invalid_candidate_evidence: Dictionary = realizer.call("_validate_candidate_generation_evidence", invalid_candidate_output)
 	_check(bool(invalid_candidate_evidence.get("valid", false)) and String(invalid_candidate_output.get("source_failure_reason", "")) == "residual_point_arity_invalid" and int(invalid_candidate_output.get("candidate_generation_usec", -1)) >= 0, "early invalid-input returns retain complete, measured failure evidence")
+
+func _test_cxr_r2_constrained_triangulation() -> void:
+	var realizer: RefCounted = Realizer.new()
+	var points: Dictionary = {"a": Vector3(0.0, 0.0, 0.0), "b": Vector3(1.0, 0.0, 0.0), "c": Vector3(1.0, 1.0, 0.0), "d": Vector3(0.0, 1.0, 0.0)}
+	var boundary: Array[Dictionary] = [_triangle("owner-left", ["a", "b", "c"], points, false), _triangle("owner-right", ["a", "c", "d"], points, false)]
+	for triangle in boundary:
+		triangle["polygon_id"] = "frozen-owner"
+		triangle["source_polygon_ids"] = ["frozen-owner"]
+	var required_diagonal: Array[Dictionary] = [{"arc_id": "frozen-diagonal-a-c", "root_ids": ["a", "c"], "expected_incidence": 2}]
+	var exact_boundary: Dictionary = realizer.call("_boundary_state", boundary)
+	var no_supports: Array[Dictionary] = []
+	var support_free: Dictionary = realizer.call("solve_r2_fixture_for_test", boundary, no_supports, 0, required_diagonal)
+	_check(bool(support_free.get("valid", false)) and bool(support_free.get("search_complete", false)) and bool(support_free.get("search_exhaustive", false)), "R2 finite constrained search finds and exhausts the valid support-free disk triangulation")
+	_check(realizer.call("_boundary_state", support_free.get("best_solution", {}).get("replacement_triangles", [])).get("signature", "") == exact_boundary.get("signature", ""), "R2 support-free output preserves exact cavity boundary signature")
+	var support: Dictionary = {"support_id": "support-center-off-diagonal", "accepted": true, "supported": true, "frozen_field_interpolated_residual": 0.0, "world_position": Vector3(0.25, 0.2, 0.0), "source_polygon_ids": ["frozen-owner"], "binary32_position_identity": var_to_bytes(Vector3(0.25, 0.2, 0.0)).hex_encode()}
+	var one_support: Array[Dictionary] = [support]
+	var supported: Dictionary = realizer.call("solve_r2_fixture_for_test", boundary, one_support, 1, required_diagonal)
+	_check(bool(supported.get("valid", false)) and bool(supported.get("search_complete", false)) and bool(supported.get("search_exhaustive", false)), "R2 general triangulation can insert one frozen-field support and exhaust that support-count domain")
+	var supported_solution: Dictionary = supported.get("best_solution", {})
+	var supported_triangles: Array[Dictionary] = []
+	for triangle_value in supported_solution.get("replacement_triangles", []):
+		supported_triangles.append(triangle_value)
+	_check(supported_solution.get("support_ids", []) == ["support-center-off-diagonal"] and supported_triangles.size() == 4, "R2 support insertion preserves disk Euler count and exact selected identity")
+	_check(realizer.call("_boundary_state", supported_triangles).get("signature", "") == exact_boundary.get("signature", ""), "R2 support insertion preserves exact directed exterior boundary")
+	_check(bool(realizer.call("_validate_required_arcs", supported_triangles, required_diagonal, []).get("valid", false)), "R2 support insertion retains frozen internal ownership arc")
+	var owner_ids: Dictionary = {"frozen-owner": true}
+	var owners_preserved: bool = true
+	for triangle in supported_triangles:
+		owners_preserved = owners_preserved and owner_ids.has(String(triangle.get("polygon_id", ""))) and triangle.get("source_polygon_ids", []).has("frozen-owner")
+	_check(owners_preserved, "R2 candidate triangles preserve frozen source polygon ownership metadata")
+	var repeated: Dictionary = realizer.call("solve_r2_fixture_for_test", boundary, one_support, 1, required_diagonal)
+	_check(bool(repeated.get("valid", false)) and String(repeated.get("best_solution", {}).get("stable_geometry_key", "")) == String(supported_solution.get("stable_geometry_key", "")), "R2 selected support triangulation is deterministic across identical inputs")
+	var outside_support: Dictionary = support.duplicate(true)
+	outside_support["support_id"] = "outside-support"
+	outside_support["world_position"] = Vector3(2.0, 2.0, 0.0)
+	outside_support["binary32_position_identity"] = var_to_bytes(outside_support.world_position).hex_encode()
+	var outside_supports: Array[Dictionary] = [outside_support]
+	var outside: Dictionary = realizer.call("solve_r2_fixture_for_test", boundary, outside_supports, 1, required_diagonal)
+	_check(not bool(outside.get("valid", false)) and bool(outside.get("search_complete", false)) and bool(outside.get("search_exhaustive", false)), "R2 completes a finite no-solution proof when the only frozen support lies outside the cavity")
+	var malformed_support: Dictionary = support.duplicate(true)
+	malformed_support["support_id"] = "nonfinite-support"
+	malformed_support["world_position"] = Vector3(NAN, 0.2, 0.0)
+	var malformed_supports: Array[Dictionary] = [malformed_support]
+	var malformed: Dictionary = realizer.call("solve_r2_fixture_for_test", boundary, malformed_supports, 1, required_diagonal)
+	_check(not bool(malformed.get("valid", false)) and not bool(malformed.get("search_complete", true)) and String(malformed.get("reason", "")) == "r2_support_identity_or_position_invalid", "R2 rejects malformed nonfinite support input before search")
+	var boundary_duplicate_support: Dictionary = support.duplicate(true)
+	boundary_duplicate_support["support_id"] = "boundary-root-duplicate"
+	boundary_duplicate_support["world_position"] = points.a
+	var boundary_duplicate_rows: Array[Dictionary] = [boundary_duplicate_support]
+	var duplicate_boundary: Dictionary = realizer.call("solve_r2_fixture_for_test", boundary, boundary_duplicate_rows, 1, required_diagonal)
+	_check(not bool(duplicate_boundary.get("valid", false)) and String(duplicate_boundary.get("reason", "")) == "r2_support_position_duplicates_frozen_boundary_root", "R2 rejects a support whose coordinates duplicate a frozen boundary root")
+	var arc_points: Dictionary = {"a": Vector3(0.0, 0.0, 0.0), "b": Vector3(1.0, 0.0, 0.0), "c": Vector3(1.0, 1.0, 0.0), "d": Vector3(0.0, 1.0, 0.0), "q": Vector3(0.75, 0.5, 0.0), "outside": Vector3(2.0, 2.0, 0.0)}
+	var arc_cycle: Array[String] = ["a", "b", "c", "d"]
+	var arc_polygon: Array[Vector2] = [Vector2(0.0, 0.0), Vector2(1.0, 0.0), Vector2(1.0, 1.0), Vector2(0.0, 1.0)]
+	var arc_projection: Dictionary = {"a": Vector2(0.0, 0.0), "b": Vector2(1.0, 0.0), "c": Vector2(1.0, 1.0), "d": Vector2(0.0, 1.0), "q": Vector2(0.75, 0.5), "outside": Vector2(2.0, 2.0)}
+	var arc_local_positions: Dictionary = {"a": arc_points.a, "b": arc_points.b, "c": arc_points.c, "d": arc_points.d}
+	var local_arc: Dictionary = {"arc_id": "internal-a-q", "root_ids": ["a", "q"], "expected_incidence": 2}
+	var localized_arc: Dictionary = realizer.call("_r2_localize_topology_arcs", [local_arc], {"a": true}, arc_cycle, arc_points, arc_local_positions, arc_projection, arc_polygon, Vector3.ZERO, Vector3.RIGHT, Vector3.UP)
+	_check(bool(localized_arc.get("valid", false)) and localized_arc.get("topology_root_ids", {}).has("q") and localized_arc.get("arc_map", []).size() == 1, "R2 localizes authoritative topology arcs and retains their interior topology roots")
+	var split_owner_triangles: Array[Dictionary] = []
+	for boundary_triangle in boundary:
+		split_owner_triangles.append(boundary_triangle.duplicate(true))
+	split_owner_triangles[1]["polygon_id"] = "frozen-owner-right"
+	split_owner_triangles[1]["source_polygon_ids"] = ["frozen-owner-right"]
+	var owner_arcs: Dictionary = realizer.call("_r2_residual_owner_boundary_arcs", split_owner_triangles)
+	_check(bool(owner_arcs.get("valid", false)) and owner_arcs.get("arc_map", []).size() == 1 and owner_arcs.arc_map[0].get("root_ids", []) == ["a", "c"], "R2 derives a constrained arc where adjacent residual faces have different frozen owners")
+	var nonmanifold_owner_points: Dictionary = points.duplicate(true)
+	nonmanifold_owner_points["e"] = Vector3(0.5, 0.75, 0.0)
+	var nonmanifold_owner_rows: Array[Dictionary] = []
+	for owner_triangle in split_owner_triangles:
+		nonmanifold_owner_rows.append(owner_triangle.duplicate(true))
+	nonmanifold_owner_rows.append(_triangle("owner-extra", ["a", "c", "e"], nonmanifold_owner_points, false))
+	var nonmanifold_owner: Dictionary = realizer.call("_r2_residual_owner_boundary_arcs", nonmanifold_owner_rows)
+	_check(not bool(nonmanifold_owner.get("valid", true)) and String(nonmanifold_owner.get("reason", "")) == "r2_source_owner_edge_nonmanifold", "R2 refuses an exhaustive search over nonmanifold frozen owner-edge incidence")
+	var conflicting_arcs: Dictionary = realizer.call("_r2_merge_arc_constraints", [{"arc_id": "one", "root_ids": ["a", "c"], "expected_incidence": 1}], [{"arc_id": "two", "root_ids": ["c", "a"], "expected_incidence": 2}])
+	_check(not bool(conflicting_arcs.get("valid", true)) and String(conflicting_arcs.get("reason", "")) == "r2_arc_constraint_expected_incidence_conflict", "R2 fails closed when canonical and owner-derived arc incidence requirements conflict")
+	var arc_cross_context: Dictionary = {"projected_positions": arc_projection, "residual_fixture": {"arc_map": [{"arc_id": "d-q", "root_ids": ["d", "q"], "expected_incidence": 2}]}}
+	var crossing_triangle_ids: Array[String] = ["a", "b", "c"]
+	var crossing_arc: Dictionary = realizer.call("_r2_triangle_respects_required_arcs", crossing_triangle_ids, arc_cross_context)
+	_check(not bool(crossing_arc.get("valid", true)) and String(crossing_arc.get("reason", "")) in ["candidate_edge_crosses_required_topology_arc", "required_arc_endpoint_inside_candidate_triangle"], "R2 rejects candidate geometry that crosses or covers a frozen internal topology arc")
+	var exact_arc_context: Dictionary = {"projected_positions": arc_projection, "residual_fixture": {"arc_map": [required_diagonal[0]]}}
+	var exact_arc_triangle_ids: Array[String] = ["a", "b", "c"]
+	_check(bool(realizer.call("_r2_triangle_respects_required_arcs", exact_arc_triangle_ids, exact_arc_context).get("valid", false)), "R2 permits a candidate triangle to use the exact frozen topology arc as an edge")
+	var crossing_boundary_arc: Dictionary = realizer.call("_r2_localize_topology_arcs", [{"arc_id": "crossing-boundary", "root_ids": ["a", "outside"], "expected_incidence": 2}], {"a": true}, arc_cycle, arc_points, arc_local_positions, arc_projection, arc_polygon, Vector3.ZERO, Vector3.RIGHT, Vector3.UP)
+	_check(not bool(crossing_boundary_arc.get("valid", true)) and String(crossing_boundary_arc.get("reason", "")) == "r2_topology_arc_crosses_cavity_boundary", "R2 refuses an exhaustive local search when an authoritative arc crosses the cavity boundary")
+	var l_points: Dictionary = {"la": Vector3(0.0, 0.0, 0.0), "lb": Vector3(2.0, 0.0, 0.0), "lc": Vector3(2.0, 1.0, 0.0), "ld": Vector3(1.0, 1.0, 0.0), "le": Vector3(1.0, 2.0, 0.0), "lf": Vector3(0.0, 2.0, 0.0)}
+	var l_boundary: Array[Dictionary] = [_triangle("l0", ["la", "lb", "ld"], l_points, false), _triangle("l1", ["lb", "lc", "ld"], l_points, false), _triangle("l2", ["la", "ld", "lf"], l_points, false), _triangle("l3", ["ld", "le", "lf"], l_points, false)]
+	for l_triangle in l_boundary:
+		l_triangle["polygon_id"] = "frozen-L-owner"
+		l_triangle["source_polygon_ids"] = ["frozen-L-owner"]
+	realizer.set("_root_positions", l_points)
+	var l_boundary_state: Dictionary = realizer.call("_boundary_state", l_boundary)
+	var l_ids: Array = ["l0", "l1", "l2", "l3"]
+	var l_context_result: Dictionary = realizer.call("_r2_make_search_context", l_boundary, l_ids, l_boundary, no_supports, l_boundary_state, l_boundary, {"arc_map": [], "applied_flips": []}, 0)
+	var concave_triangle_ids: Array[String] = ["lb", "le", "la"]
+	var concave_crossing: Dictionary = realizer.call("_r2_triangle_inside_domain", concave_triangle_ids, l_context_result.get("context", {})) if bool(l_context_result.get("valid", false)) else {"valid": true, "reason": "context_not_tested"}
+	_check(bool(l_boundary_state.get("valid", false)) and bool(l_context_result.get("valid", false)) and not bool(concave_crossing.get("valid", true)), "R2 rejects a candidate triangle whose edge exits a concave frozen boundary")
+	var cap_probe: RefCounted = Realizer.new()
+	cap_probe.set("_cxr_active_phase", "r2")
+	cap_probe.set("_cxr_search_started_usec", Time.get_ticks_usec())
+	cap_probe.set("_cxr_search_nodes_total", Realizer.CXR_R2_MAX_SEARCH_STATES_TOTAL)
+	_check(String(cap_probe.call("_cxr_global_limit_reason")) == "MAX_SEARCH_STATES_TOTAL", "R2 total state cap produces a finite-limit stop")
+	var intersection_points: Dictionary = {"o": Vector3.ZERO, "ax": Vector3(2.0, 0.0, 0.0), "ay": Vector3(0.0, 2.0, 0.0), "bx": Vector3(2.0, 2.0, 0.0), "by": Vector3(-1.0, 1.0, 0.0), "adjacent": Vector3(-1.0, 0.0, 0.0), "overlap": Vector3(1.0, 0.5, 0.0)}
+	var triangle_a: Dictionary = _triangle("intersection-a", ["o", "ax", "ay"], intersection_points, false)
+	var shared_vertex_cross: Dictionary = _triangle("intersection-shared-vertex", ["o", "bx", "by"], intersection_points, false)
+	var valid_shared_edge: Dictionary = _triangle("intersection-valid-edge", ["o", "ay", "adjacent"], intersection_points, false)
+	var overlap_shared_edge: Dictionary = _triangle("intersection-overlap-edge", ["o", "ay", "overlap"], intersection_points, false)
+	_check(bool(realizer.call("_triangles_intersect", triangle_a.points, shared_vertex_cross.points)) and not bool(realizer.call("_r2_intersection_only_shared_simplex", triangle_a, shared_vertex_cross)), "R2 rejects triangles that cross beyond one shared vertex")
+	_check(bool(realizer.call("_triangles_intersect", triangle_a.points, valid_shared_edge.points)) and bool(realizer.call("_r2_intersection_only_shared_simplex", triangle_a, valid_shared_edge)), "R2 permits legitimate adjacent triangles whose only intersection is their shared edge")
+	_check(not bool(realizer.call("_r2_intersection_only_shared_simplex", triangle_a, overlap_shared_edge)), "R2 rejects coplanar triangles that overlap beyond a shared edge")
+	_check(Realizer.CXR_R2_MAX_CANDIDATE_TRIANGLES_PER_CAVITY == 65536 and Realizer.CXR_R2_MAX_CANDIDATE_TRIANGLES_TOTAL == 131072 and Realizer.CXR_R2_MAX_SEARCH_STATES_PER_CAVITY == 32768 and Realizer.CXR_R2_MAX_SEARCH_STATES_TOTAL == 65536, "R2 resource caps match the pre-registered design bounds")
 
 func _sequence_probe_local_failure(cavity_ids: Array) -> Dictionary:
 	_sequence_probe_calls.append(cavity_ids.duplicate())

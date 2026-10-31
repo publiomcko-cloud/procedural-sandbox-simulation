@@ -108,7 +108,9 @@ func _run() -> void:
 	if not bool(authority_graph_identity.get("valid", false)):
 		_fail("cx_reference_authority_reproduction_failed", attempt_id, source_sha, authority_graph_identity)
 		return
-	print("R12CXR_TARGET_INVOCATION_BEGIN " + JSON.stringify({"attempt_id": attempt_id, "source_sha": source_sha, "hypothesis": "R12CXR_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH", "scenario_id": TARGET_ID, "fixture_sha256": fixture_hash, "residual_fixture_sha256": residual_sha}))
+	var active_phase: String = OS.get_environment("R12CXR_PHASE")
+	if active_phase.is_empty(): active_phase = "r1"
+	print("R12CXR_TARGET_INVOCATION_BEGIN " + JSON.stringify({"attempt_id": attempt_id, "source_sha": source_sha, "phase": active_phase, "hypothesis": "R12CXR_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH", "scenario_id": TARGET_ID, "fixture_sha256": fixture_hash, "residual_fixture_sha256": residual_sha}))
 	var target_case: Dictionary = _build_cxr_target(target_row, source_graph, target_prepared, residual_fixture)
 	if not bool(target_case.get("valid", false)) and not cx_algorithm_started(target_case):
 		var pre_geometry_record: Dictionary = {
@@ -181,7 +183,7 @@ func _run() -> void:
 	if typeof(cavity_evidence) != TYPE_ARRAY and failure_details.has("cxr_cavity_results"):
 		cavity_evidence = failure_details.get("cxr_cavity_results")
 	var result: Dictionary = {
-		"schema": "P3.1.R12CXR.GeometryAttempt.v1", "attempt_id": attempt_id, "source_sha": source_sha,
+		"schema": "P3.1.R12CXR.GeometryAttempt.v1", "phase": active_phase, "attempt_id": attempt_id, "source_sha": source_sha,
 		"parent_sha": OS.get_environment("R12CXR_PARENT_SHA"), "tree_sha": OS.get_environment("R12CXR_TREE_SHA"),
 		"hypothesis": "R12CXR_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH", "gate_status": status, "result_class": result_class, "campaign_disposition": campaign_disposition,
 		"fixture_sha256": fixture_hash, "manifest_sha256": ManifestSha, "candidate_d_sha256": CandidateSha,
@@ -196,6 +198,7 @@ func _run() -> void:
 		"topology_map": {"roots": _present_value_or_unknown(target_geometry, "root_map"), "arcs": _present_value_or_unknown(target_geometry, "arc_map"), "faces": _present_value_or_unknown(target_geometry, "face_map"), "supports": _present_value_or_unknown(target_geometry, "cx_support_provenance"), "flips": _present_value_or_unknown(target_geometry, "applied_flips")}
 	}
 	result["cxr"] = {
+		"phase": active_phase,
 		"hypothesis": "R12CXR_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH",
 		"c6_source_sha": OS.get_environment("R12CXR_C6_SOURCE_SHA"),
 		"topology_fixture_sha256": TopologySha,
@@ -294,8 +297,11 @@ static func _campaign_disposition(result_class: String, target_case: Dictionary,
 		var detail: Dictionary = detail_value
 		var details: Dictionary = detail.get("details", detail)
 		var search: Dictionary = details.get("search", {})
-		if typeof(search.get("complete", null)) == TYPE_BOOL and typeof(search.get("search_exhaustive", null)) == TYPE_BOOL and bool(search.get("complete", false)) and bool(search.get("search_exhaustive", false)) and String(search.get("reason", "")) == "cxr_no_valid_field_support_solution":
-			return "R12_CXR_R1_COMPLETE_NO_SOLUTION_R2_ELIGIBLE"
+		if typeof(search.get("complete", null)) == TYPE_BOOL and typeof(search.get("search_exhaustive", null)) == TYPE_BOOL and bool(search.get("complete", false)) and bool(search.get("search_exhaustive", false)):
+			if String(search.get("phase", "")) == "r1" and String(search.get("reason", "")) == "cxr_no_valid_field_support_solution":
+				return "R12_CXR_R1_COMPLETE_NO_SOLUTION_R2_ELIGIBLE"
+			if String(search.get("phase", "")) == "r2" and String(search.get("reason", "")) == "cxr_r2_no_valid_constrained_triangulation":
+				return "R12_CXR_R2_COMPLETE_NO_SOLUTION_R3_ELIGIBLE"
 	return "R12_CXR_FAILED_TARGET_WITH_EVIDENCE"
 
 static func _target_has_structural_regression(geometry: Dictionary) -> bool:
