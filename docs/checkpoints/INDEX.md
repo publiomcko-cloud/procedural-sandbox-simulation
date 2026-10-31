@@ -1,3 +1,7 @@
+## 2026-10-31 — P3.1 R12-CXR R3 attempt 02 execution checkout clarified; target not started
+
+- [R3 attempt 02 execution-checkout addendum](2026-10-31-P3-1-R12-CXR-R3-ATTEMPT-02-EXECUTION-CHECKOUT.md) — keeps code source `fdab3b8`; dispatcher records the documentation-only execution checkout while verifying the pinned source paths before launch.
+
 ## 2026-10-31 — P3.1 R12-CXR R3 attempt 02 dispatcher frozen; target not started
 
 - [R3 attempt 02 dispatcher freeze](2026-10-31-P3-1-R12-CXR-R3-ATTEMPT-02-DISPATCHER-FROZEN.md) — exact dispatcher SHA `da4c5e39...`; controlled-child capture, exclusive reservation, no-overwrite and fresh-root checks passed; the new equal-LOD target remains NOT_STARTED.
