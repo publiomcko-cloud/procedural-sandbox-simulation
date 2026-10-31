@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-31",
+  "dispatcher": "r3_target_dispatcher.ps1",
+  "dispatcher_sha256": "da4c5e39cedd7e62388fedef6a1e9b9d308e2a2961dccf9759d11d3b94641033",
+  "target_attempt_id": "R3_TARGET_20261031_02",
+  "target_scenario": "R9.2.SEAM.XPLUS_EQUAL.v1",
+  "target_phase": "r3",
+  "target_code_source_sha": "fdab3b8f16b615077aa44a7901b9555aebd3d80d",
+  "execution_checkout_head_before_target": "e289340bce273234e3722aa87089b2ce38487fc8",
+  "profile_isolation": [
+    "APPDATA",
+    "LOCALAPPDATA",
+    "TEMP",
+    "TMP"
+  ],
+  "process_timeout_seconds": 45,
+  "prelaunch_min_free_commit_bytes": 2147483648,
+  "control_test": {
+    "attempt": "dispatcher_control_02",
+    "exit_code": 0,
+    "expected_child_exit": 23,
+    "observed_child_exit": 23,
+    "stdout_exact": true,
+    "stderr_exact": true,
+    "duplicate_reservation_denied": true,
+    "output_overwrite_denied": true,
+    "scenario_started": false,
+    "process_start_record_written": true
+  },
+  "preserved_operational_preflights": [
+    {
+      "classification": "RECOVERABLE_DISPATCHER_TEST_SETUP_ERROR",
+      "attempt": "dispatcher_control_01",
+      "detail": "The wrapper redirected outer stdout/stderr into the directory reserved as the control evidence root, so the dispatcher correctly rejected the nonempty root before reservation or child creation."
+    },
+    {
+      "classification": "RECOVERABLE_CAMPAIGN_PREFLIGHT_CONFIGURATION",
+      "attempt": "campaign_check_only_20261031_04",
+      "detail": "Required environment was absent; check-only exited 2 before target invocation. Corrected check-only passed under attempt R3_CHECK_20261031_05."
+    }
+  ]
+}

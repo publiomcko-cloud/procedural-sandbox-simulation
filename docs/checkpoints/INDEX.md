@@ -1,3 +1,7 @@
+## 2026-10-31 — P3.1 R12-CXR R3 attempt 02 dispatcher frozen; target not started
+
+- [R3 attempt 02 dispatcher freeze](2026-10-31-P3-1-R12-CXR-R3-ATTEMPT-02-DISPATCHER-FROZEN.md) — exact dispatcher SHA `da4c5e39...`; controlled-child capture, exclusive reservation, no-overwrite and fresh-root checks passed; the new equal-LOD target remains NOT_STARTED.
+
 ## 2026-10-31 — P3.1 R12-CXR R3 per-cavity correction frozen before target attempt 02
 
 - [R3 per-cavity pre-target freeze](2026-10-31-P3-1-R12-CXR-R3-PER-CAVITY-PRETARGET-FROZEN.md) — source `fdab3b8`; the original two-cavity partition is searched separately; exact-source import, 141/141 contract suite and corrected check-only passed; attempt 02 remains NOT_STARTED at checkpoint time.
