@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-31",
+  "repository": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "branch": "exp/p3-1-r12-cxr-per-cavity-continuation",
+  "measured_code_source_sha": "fdab3b8f16b615077aa44a7901b9555aebd3d80d",
+  "measured_code_source_parent_sha": "121f499cf6c03daba0f24f907fd7a6dbeed59659",
+  "measured_code_source_tree_sha": "42877cc35bccb72ea569e1c5758ca52dea3282ff",
+  "continuation_base_pr": 213,
+  "continuation_base_sha": "121f499cf6c03daba0f24f907fd7a6dbeed59659",
+  "new_attempt_id": "R3_TARGET_20261031_02",
+  "target_scenario": "R9.2.SEAM.XPLUS_EQUAL.v1",
+  "target_status": "NOT_STARTED",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_executable_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "source_sha256": {
+    "campaign": "1b3a73845ef5bafec6d16fe2a7928ee3599c5e70ba5310070cb845af3687145b",
+    "realizer": "927cf631c430f817ba0b460840ba54d31b4df2dfdda79c3bee6b7ceab93694e1",
+    "contract_tests": "759cbaaa88e9e63f1f98e408279cb136b372e6f1a7cda35c49cb3dd0b5af8712",
+    "c6_campaign": "9a695705c47ad6473b773bbfaeaf35d88306cee6804113a0b1a71c6faca2f348",
+    "c6_realizer": "31947e1944a017442ad14cc4f098e67db800d4f5e196d07e047b93dc0fe9d2ac",
+    "stage0_fixture": "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d",
+    "residual_fixture": "ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23",
+    "topology_source": "4ecbb2496fb34f1cf3c05a60192f76bdce7a52ec3148d02ba041510b804a8c95",
+    "frozen_volume": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2",
+    "frozen_payload": "2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0",
+    "manifest": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
+  },
+  "pretarget_gates": {
+    "editor_import": "PASS exit 0",
+    "contract_tests": "PASS 141 assertions, 0 failures",
+    "campaign_check_only": "PASS attempt R3_CHECK_20261031_05 exit 0",
+    "prior_check_only_attempt": "RECOVERED operational missing-environment error, exit 2; no geometry started"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "classification": "RECOVERABLE_PREFLIGHT_ENVIRONMENT_MISSING",
+  "source_commit": "fdab3b8f16b615077aa44a7901b9555aebd3d80d",
+  "reason": "Campaign check-only exited 2 with cx_preflight_environment_invalid because its required R12CXR_* environment variables were absent; no target marker was emitted and no geometry ran.",
+  "process": {
+    "name": "campaign-check-only",
+    "args": [
+      "--headless",
+      "--path",
+      "C:\\r12cxr-convergence-20261031\\game",
+      "--script",
+      "res://tests/prototypes/p3_1_r12_cxr_campaign.gd"
+    ],
+    "pid": 10756,
+    "start_utc": "2026-10-31T20:59:18.1651902Z",
+    "end_utc": "2026-10-31T20:59:19.8720158Z",
+    "elapsed_ms": 1706.8256,
+    "exit_code": 2,
+    "stdout_sha256": "af70c992dbe88309d28d8211edea295497cf301b960244e56531cb84fa43c81a",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "corrected_attempt": "campaign-check-only-r3-corrected",
+  "correction": "Provided the complete frozen check-only environment and exact source/input SHA-256 pins; corrected check-only passed."
+}

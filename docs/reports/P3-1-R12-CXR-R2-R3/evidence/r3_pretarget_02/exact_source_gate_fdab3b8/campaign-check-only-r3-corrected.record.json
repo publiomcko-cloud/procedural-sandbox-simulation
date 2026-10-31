@@ -1,0 +1,32 @@
+{
+  "name": "campaign-check-only-r3-corrected",
+  "commit": "fdab3b8f16b615077aa44a7901b9555aebd3d80d",
+  "parent": "121f499cf6c03daba0f24f907fd7a6dbeed59659",
+  "arguments": [
+    "--headless",
+    "--path",
+    "C:\\r12cxr-convergence-20261031\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r12_cxr_campaign.gd"
+  ],
+  "required_environment": {
+    "R12CXR_ARTIFACT_DIR": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r3_source_gate_20261031_per_cavity_01\\check-only-artifacts",
+    "R12CXR_FIXTURE_PATH": "C:\\r12cxr-convergence-20261031\\docs\\reports\\P3-1-R12-CXR-R2-R3\\evidence\\r2_attempt_01\\r12c_stage0_topology_fixture.json",
+    "R12CXR_EXPECTED_C6_CAMPAIGN_SHA256": "9a695705c47ad6473b773bbfaeaf35d88306cee6804113a0b1a71c6faca2f348",
+    "R12CXR_EXPECTED_CAMPAIGN_SHA256": "1b3a73845ef5bafec6d16fe2a7928ee3599c5e70ba5310070cb845af3687145b",
+    "R12CXR_RESIDUAL_FIXTURE_PATH": "C:\\r12cxr-convergence-20261031\\game\\tests\\prototypes\\p3_1_r12_cx_residual_fixture.json",
+    "R12CXR_ATTEMPT_ID": "R3_CHECK_20261031_05",
+    "R12CXR_EXPECTED_C6_REALIZER_SHA256": "31947e1944a017442ad14cc4f098e67db800d4f5e196d07e047b93dc0fe9d2ac",
+    "R12CXR_EXPECTED_RESIDUAL_FIXTURE_SHA256": "ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23",
+    "R12CXR_EXPECTED_REALIZER_SHA256": "927cf631c430f817ba0b460840ba54d31b4df2dfdda79c3bee6b7ceab93694e1",
+    "R12CXR_MODE": "check-only",
+    "R12CXR_SOURCE_SHA": "fdab3b8f16b615077aa44a7901b9555aebd3d80d"
+  },
+  "pid": 26868,
+  "start_utc": "2026-10-31T21:02:35.9026982Z",
+  "end_utc": "2026-10-31T21:02:38.2753853Z",
+  "elapsed_ms": 2372.6871,
+  "exit_code": 0,
+  "stdout_sha256": "6b3d5868357698002de64537092da0ef6d0ba5472e164e7e435bdb280861ac5c",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

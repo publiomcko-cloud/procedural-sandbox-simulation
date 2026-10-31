@@ -1,3 +1,7 @@
+## 2026-10-31 — P3.1 R12-CXR R3 per-cavity correction frozen before target attempt 02
+
+- [R3 per-cavity pre-target freeze](2026-10-31-P3-1-R12-CXR-R3-PER-CAVITY-PRETARGET-FROZEN.md) — source `fdab3b8`; the original two-cavity partition is searched separately; exact-source import, 141/141 contract suite and corrected check-only passed; attempt 02 remains NOT_STARTED at checkpoint time.
+
 ## 2026-10-31 — P3.1 R12-CXR R3 attempt 01 partial; field-support search not reached
 
 - [R3 attempt 01 partial result](2026-10-31-P3-1-R12-CXR-R3-ATTEMPT-01-PARTIAL.md) — target ran once and exited 0, but a three-seed joint patch remained disconnected at L0-L3; no support candidates or search nodes were generated; result is PARTIAL, not no-solution.
