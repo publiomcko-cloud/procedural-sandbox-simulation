@@ -1,0 +1,302 @@
+{
+  "schema": "P3.1.R12CXR.R2ResultSummary.v2",
+  "source_sha": "998fc4cfa1638a02710e7a2708b436935c7b74ab",
+  "parent_sha": "ddc761006765527f48b63719523ec83fa6d6ce9a",
+  "tree_sha": "f10f5e1d43d6b1f18e75f313c95df502f80409fb",
+  "phase": "r2",
+  "attempt_id": "r12cxr_r2_target_20261031_01",
+  "scenario_id": null,
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "process_exit_code": 0,
+  "process_elapsed_ms": 4335,
+  "engine_pid": 44760,
+  "gate_status": "FAILED_TARGET",
+  "target_geometry_valid": false,
+  "campaign_disposition": "R12_CXR_R2_COMPLETE_NO_SOLUTION_R3_ELIGIBLE",
+  "search": {
+    "phase": "r2",
+    "reason": "cxr_r2_no_valid_constrained_triangulation",
+    "complete": true,
+    "search_exhaustive": true,
+    "cavities_expected": 2,
+    "cavities_processed": 2,
+    "nodes": 10,
+    "candidate_attempts": 558,
+    "candidate_triangles": 61,
+    "limits_hit": []
+  },
+  "limits": {
+    "phase": "r2",
+    "max_cavity_level": 3,
+    "max_cavities": 3,
+    "max_patch_triangles": 64,
+    "max_candidate_attempts_per_cavity": 8192,
+    "max_support_candidates_per_cavity": 256,
+    "max_selected_supports": 4,
+    "max_retained_solutions_per_cavity": 32,
+    "max_search_usec_per_cavity": 10000000,
+    "max_search_usec_total": 20000000,
+    "max_realize_usec": 30000000,
+    "max_support_distance": 0.5,
+    "barycentric_epsilon": 1E-07,
+    "field_residual_epsilon": 1E-07,
+    "cross_squared_cutoff": 1E-12,
+    "max_candidate_triangles_per_cavity": 65536,
+    "max_candidate_triangles_total": 131072,
+    "max_search_states_per_cavity": 32768,
+    "max_search_states_total": 65536
+  },
+  "counters": {
+    "search_nodes": 10,
+    "candidate_attempts": 558,
+    "candidate_triangles": 61,
+    "branches": {},
+    "prunes": {}
+  },
+  "cavities": [
+    {
+      "cavity_id": "e89d7e6444ead8c6",
+      "residual_triangle_ids": [
+        "60,8,25|tet:1|c4-source:0",
+        "60,8,25|tet:2|c4-source:0"
+      ],
+      "search_complete": true,
+      "search_exhaustive": true,
+      "terminal_reason": "r2_all_levels_exhausted_no_solution",
+      "candidate_attempts": 492,
+      "unique_supports": 43,
+      "candidate_triangles": 45,
+      "search_nodes": 5,
+      "levels": [
+        {
+          "level": 0,
+          "patch_triangle_count": 2,
+          "patch_triangle_ids": [
+            "60,8,25|tet:1|c4-source:0",
+            "60,8,25|tet:2|c4-source:0"
+          ],
+          "boundary_valid": true,
+          "boundary_signature": "0ceeb3ad0da58ec9e48499f33a7bc3d2af4f646c6aa09fdd9a9f9120bd484dd5",
+          "boundary_invalid_reasons": [],
+          "search_status": "COMPLETE_NO_SOLUTION",
+          "candidate_attempts": 492,
+          "candidate_triangles": 45,
+          "search_nodes": 5,
+          "limits_hit": [
+            null
+          ]
+        },
+        {
+          "level": 1,
+          "patch_triangle_count": 8,
+          "patch_triangle_ids": [
+            "60,8,25|tet:1|c4-source:0",
+            "60,8,25|tet:2|c4-source:0",
+            "C6||117|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+            "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+            "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+            "C6||42|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040",
+            "C6||655|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040",
+            "C6||70|edge|00007041000010400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000020400000d040|edge|00007441000010400000c840|00007441000010400000d040"
+          ],
+          "boundary_valid": false,
+          "boundary_signature": "5614a509b229085ca5a819701878e5e0e505f077aeb2790a124ea79c0d7c11d0",
+          "boundary_invalid_reasons": [
+            "cx_patch_nonmanifold_edge"
+          ],
+          "search_status": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_attempts": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_triangles": "NOT_RUN_INVALID_BOUNDARY",
+          "search_nodes": "NOT_RUN_INVALID_BOUNDARY",
+          "limits_hit": [
+            null
+          ]
+        },
+        {
+          "level": 2,
+          "patch_triangle_count": 13,
+          "patch_triangle_ids": [
+            "60,8,25|tet:1|c4-source:0",
+            "60,8,25|tet:2|c4-source:0",
+            "C6||117|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+            "C6||148|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007841000020400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+            "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+            "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+            "C6||42|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040",
+            "C6||43|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000010400000c840|00007041000010400000d040|edge|00007041000010400000c840|00007441000010400000d040",
+            "C6||655|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040",
+            "C6||657|edge|00007041000000400000c840|00007041000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+            "C6||69|edge|00007041000010400000c840|00007441000020400000d040|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000020400000d040",
+            "C6||70|edge|00007041000010400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000020400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+            "C6||76|edge|00007041000010400000c840|00007041000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000020400000d040"
+          ],
+          "boundary_valid": false,
+          "boundary_signature": "09ebb7587d11e80efa8d0f126611a8cea1864d03b58e947bb0d7b2613e73b28d",
+          "boundary_invalid_reasons": [
+            "cx_patch_nonmanifold_edge"
+          ],
+          "search_status": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_attempts": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_triangles": "NOT_RUN_INVALID_BOUNDARY",
+          "search_nodes": "NOT_RUN_INVALID_BOUNDARY",
+          "limits_hit": [
+            null
+          ]
+        },
+        {
+          "level": 3,
+          "patch_triangle_count": 18,
+          "patch_triangle_ids": [
+            "60,8,25|tet:1|c4-source:0",
+            "60,8,25|tet:2|c4-source:0",
+            "C6||117|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+            "C6||146|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000020400000d040|edge|00007441000010400000c840|00007841000020400000d040",
+            "C6||147|edge|00007441000010400000c840|00007841000020400000d040|edge|00007441000010400000d040|00007841000010400000d040|edge|00007841000010400000d040|00007841000020400000d040",
+            "C6||148|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007841000020400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+            "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+            "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+            "C6||42|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040",
+            "C6||43|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000010400000c840|00007041000010400000d040|edge|00007041000010400000c840|00007441000010400000d040",
+            "C6||655|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040",
+            "C6||656|edge|00007041000000400000c840|00007041000010400000d040|edge|00007441000000400000d040|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+            "C6||657|edge|00007041000000400000c840|00007041000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+            "C6||69|edge|00007041000010400000c840|00007441000020400000d040|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000020400000d040",
+            "C6||70|edge|00007041000010400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000020400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+            "C6||72|edge|00007041000010400000c840|00007441000020400000d040|edge|00007441000010400000c840|00007441000020400000c840|edge|00007441000010400000c840|00007441000020400000d040",
+            "C6||75|edge|00007041000010400000c840|00007041000010400000d040|edge|00007041000010400000c840|00007041000020400000d040|edge|00007041000010400000c840|00007441000020400000d040",
+            "C6||76|edge|00007041000010400000c840|00007041000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000020400000d040"
+          ],
+          "boundary_valid": false,
+          "boundary_signature": "307899dccd5f91faece2196c012223be3a49fc9e8a6538956dd6471bfdda0548",
+          "boundary_invalid_reasons": [
+            "cx_patch_nonmanifold_edge"
+          ],
+          "search_status": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_attempts": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_triangles": "NOT_RUN_INVALID_BOUNDARY",
+          "search_nodes": "NOT_RUN_INVALID_BOUNDARY",
+          "limits_hit": [
+            null
+          ]
+        }
+      ]
+    },
+    {
+      "cavity_id": "aefae75e246e6d28",
+      "residual_triangle_ids": [
+        "62,9,24|tet:2|c4-source:0"
+      ],
+      "search_complete": true,
+      "search_exhaustive": true,
+      "terminal_reason": "r2_all_levels_exhausted_no_solution",
+      "candidate_attempts": 66,
+      "unique_supports": 15,
+      "candidate_triangles": 16,
+      "search_nodes": 5,
+      "levels": [
+        {
+          "level": 0,
+          "patch_triangle_count": 1,
+          "patch_triangle_ids": [
+            "62,9,24|tet:2|c4-source:0"
+          ],
+          "boundary_valid": true,
+          "boundary_signature": "26be36de80dfb36ab5582da3b6cbbee9bce4e6c1565b47c15a0629a269161234",
+          "boundary_invalid_reasons": [],
+          "search_status": "COMPLETE_NO_SOLUTION",
+          "candidate_attempts": 66,
+          "candidate_triangles": 16,
+          "search_nodes": 5,
+          "limits_hit": [
+            null
+          ]
+        },
+        {
+          "level": 1,
+          "patch_triangle_count": 4,
+          "patch_triangle_ids": [
+            "62,9,24|tet:2|c4-source:0",
+            "C6||211|edge|00007841000010400000c040|00007c41000010400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+            "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+            "C6||658|edge|00007441000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840"
+          ],
+          "boundary_valid": false,
+          "boundary_signature": "da3dc4833a18397093d51cb215bda4e7ff2cece511e35004bcf49df7f8c5361e",
+          "boundary_invalid_reasons": [
+            "cx_patch_nonmanifold_edge"
+          ],
+          "search_status": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_attempts": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_triangles": "NOT_RUN_INVALID_BOUNDARY",
+          "search_nodes": "NOT_RUN_INVALID_BOUNDARY",
+          "limits_hit": [
+            null
+          ]
+        },
+        {
+          "level": 2,
+          "patch_triangle_count": 6,
+          "patch_triangle_ids": [
+            "62,9,24|tet:2|c4-source:0",
+            "C6||209|edge|00007841000010400000c040|00007c41000010400000c040|edge|00007841000010400000c040|00007c41000020400000c840|edge|00007c41000010400000c840|00007c41000020400000c840",
+            "C6||211|edge|00007841000010400000c040|00007c41000010400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+            "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+            "C6||658|edge|00007441000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+            "C6||659|edge|00007441000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007841000020400000c840|edge|00007841000010400000c040|00007c41000020400000c840"
+          ],
+          "boundary_valid": false,
+          "boundary_signature": "4feab24550020af9e2b2348e5b312dcc34af4a806c4bfecf1031c5e65fd3dd70",
+          "boundary_invalid_reasons": [
+            "cx_patch_nonmanifold_edge"
+          ],
+          "search_status": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_attempts": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_triangles": "NOT_RUN_INVALID_BOUNDARY",
+          "search_nodes": "NOT_RUN_INVALID_BOUNDARY",
+          "limits_hit": [
+            null
+          ]
+        },
+        {
+          "level": 3,
+          "patch_triangle_count": 10,
+          "patch_triangle_ids": [
+            "62,9,24|tet:2|c4-source:0",
+            "C6||135|edge|00007441000010400000c040|00007841000020400000c040|edge|00007441000010400000c040|00007841000020400000c840|edge|00007841000010400000c040|00007841000020400000c840",
+            "C6||209|edge|00007841000010400000c040|00007c41000010400000c040|edge|00007841000010400000c040|00007c41000020400000c840|edge|00007c41000010400000c840|00007c41000020400000c840",
+            "C6||210|edge|00007841000010400000c040|00007c41000010400000c040|edge|00007c41000010400000c040|00007c41000010400000c840|edge|00007c41000010400000c840|00007c41000020400000c840",
+            "C6||211|edge|00007841000010400000c040|00007c41000010400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+            "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+            "C6||214|edge|00007841000010400000c040|00007841000020400000c840|edge|00007841000010400000c040|00007c41000020400000c840|edge|00007841000010400000c840|00007c41000020400000c840",
+            "C6||215|edge|00007841000010400000c040|00007c41000020400000c840|edge|00007841000010400000c840|00007c41000020400000c840|edge|00007c41000010400000c840|00007c41000020400000c840",
+            "C6||658|edge|00007441000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+            "C6||659|edge|00007441000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007841000020400000c840|edge|00007841000010400000c040|00007c41000020400000c840"
+          ],
+          "boundary_valid": false,
+          "boundary_signature": "04a3d6f5ec624dd8f5232c9ccf5ecfc6a4a437571be083db978bfb851266b6d5",
+          "boundary_invalid_reasons": [
+            "cx_patch_nonmanifold_edge"
+          ],
+          "search_status": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_attempts": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_triangles": "NOT_RUN_INVALID_BOUNDARY",
+          "search_nodes": "NOT_RUN_INVALID_BOUNDARY",
+          "limits_hit": [
+            null
+          ]
+        }
+      ]
+    }
+  ],
+  "downstream": {
+    "equal_lod": "FAILED_TARGET",
+    "controls": "NOT_RUN",
+    "roi_rays": "NOT_RUN",
+    "volume": "NOT_RUN",
+    "mixed_lod": "NOT_RUN",
+    "determinism": "NOT_RUN",
+    "full_e2e": "NOT_RUN",
+    "project_validation": "NOT_RUN"
+  }
+}

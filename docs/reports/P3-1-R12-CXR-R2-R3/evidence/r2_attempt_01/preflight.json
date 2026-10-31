@@ -1,0 +1,23 @@
+{
+  "source_sha": "998fc4cfa1638a02710e7a2708b436935c7b74ab",
+  "godot_path": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "free_commit_bytes": 10459283456,
+  "evidence_root": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r2_final_preflight_1b0256f790574676b0f86021e946304b",
+  "profile": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r2_final_preflight_1b0256f790574676b0f86021e946304b\\profile",
+  "stages": [
+    {
+      "stage": "editor_import",
+      "command": " --headless --path ./game --editor --import",
+      "pid": 40184,
+      "exit_code": 0,
+      "duration_ms": 7348,
+      "stdout_sha256": "97d3a98b638bde96129f72c0aa2c73756b531bcc790e7a75a73508fdf8f980e1",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r2_final_preflight_1b0256f790574676b0f86021e946304b\\import.stdout.txt",
+      "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r2_final_preflight_1b0256f790574676b0f86021e946304b\\import.stderr.txt",
+      "pass": false
+    }
+  ]
+}

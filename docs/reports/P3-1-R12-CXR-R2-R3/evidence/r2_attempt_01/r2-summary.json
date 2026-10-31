@@ -1,0 +1,197 @@
+{
+  "schema": "P3.1.R12CXR.R2ResultSummary.v1",
+  "source_sha": "998fc4cfa1638a02710e7a2708b436935c7b74ab",
+  "parent_sha": "ddc761006765527f48b63719523ec83fa6d6ce9a",
+  "tree_sha": "f10f5e1d43d6b1f18e75f313c95df502f80409fb",
+  "phase": "r2",
+  "attempt_id": "r12cxr_r2_target_20261031_01",
+  "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+  "gate_status": "FAILED_TARGET",
+  "result_class": "R12_CXR_FAILED_TARGET_WITH_EVIDENCE",
+  "campaign_disposition": "R12_CXR_R2_COMPLETE_NO_SOLUTION_R3_ELIGIBLE",
+  "search": {
+    "phase": "r2",
+    "reason": "cxr_r2_no_valid_constrained_triangulation",
+    "complete": true,
+    "search_exhaustive": true,
+    "cavity_count_expected": 2,
+    "cavity_count_processed": 2,
+    "cavity_failure_reasons": [
+      "r2_all_levels_exhausted_no_solution",
+      "r2_all_levels_exhausted_no_solution"
+    ],
+    "nodes": 10,
+    "candidate_attempts": 558,
+    "candidate_triangles": 61,
+    "terminal_reason": "finite_domain_exhausted_no_joint_solution"
+  },
+  "cavity_count_expected": 2,
+  "cavity_count_observed": 2,
+  "cavities": [
+    {
+      "search_complete": true,
+      "cavity_id": "e89d7e6444ead8c6",
+      "search_exhaustive": true,
+      "unique_support_count": 43,
+      "candidate_triangle_count": 45,
+      "search_nodes": 5,
+      "terminal_reason": "r2_all_levels_exhausted_no_solution",
+      "levels": [
+        {
+          "boundary_invalid_reasons": [],
+          "patch_triangle_count": 2,
+          "search_nodes": 5,
+          "search_status": "COMPLETE_NO_SOLUTION",
+          "terminal_reason": "r2_finite_triangulation_domain_exhausted",
+          "candidate_support_count": "NOT_RUN",
+          "candidate_triangle_count": 45,
+          "candidate_attempt_count": 492,
+          "level": 0,
+          "boundary_valid": true
+        },
+        {
+          "boundary_invalid_reasons": [
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge"
+          ],
+          "patch_triangle_count": 8,
+          "search_nodes": "NOT_RUN_INVALID_BOUNDARY",
+          "search_status": "NOT_RUN_INVALID_BOUNDARY",
+          "terminal_reason": "patch_boundary_invalid_continue_next_level",
+          "candidate_support_count": "NOT_RUN",
+          "candidate_triangle_count": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_attempt_count": "NOT_RUN_INVALID_BOUNDARY",
+          "level": 1,
+          "boundary_valid": false
+        },
+        {
+          "boundary_invalid_reasons": [
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge"
+          ],
+          "patch_triangle_count": 13,
+          "search_nodes": "NOT_RUN_INVALID_BOUNDARY",
+          "search_status": "NOT_RUN_INVALID_BOUNDARY",
+          "terminal_reason": "patch_boundary_invalid_continue_next_level",
+          "candidate_support_count": "NOT_RUN",
+          "candidate_triangle_count": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_attempt_count": "NOT_RUN_INVALID_BOUNDARY",
+          "level": 2,
+          "boundary_valid": false
+        },
+        {
+          "boundary_invalid_reasons": [
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge"
+          ],
+          "patch_triangle_count": 18,
+          "search_nodes": "NOT_RUN_INVALID_BOUNDARY",
+          "search_status": "NOT_RUN_INVALID_BOUNDARY",
+          "terminal_reason": "patch_boundary_invalid_continue_next_level",
+          "candidate_support_count": "NOT_RUN",
+          "candidate_triangle_count": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_attempt_count": "NOT_RUN_INVALID_BOUNDARY",
+          "level": 3,
+          "boundary_valid": false
+        }
+      ],
+      "limits_hit": [],
+      "residual_triangle_ids": [
+        "60,8,25|tet:1|c4-source:0",
+        "60,8,25|tet:2|c4-source:0"
+      ],
+      "candidate_triangle_rejections": {
+        "candidate_cross_squared_at_or_below_frozen_cutoff": 15,
+        "triangle_vertex_outside_boundary": 30
+      },
+      "candidate_attempt_count": 492
+    },
+    {
+      "search_complete": true,
+      "cavity_id": "aefae75e246e6d28",
+      "search_exhaustive": true,
+      "unique_support_count": 15,
+      "candidate_triangle_count": 16,
+      "search_nodes": 5,
+      "terminal_reason": "r2_all_levels_exhausted_no_solution",
+      "levels": [
+        {
+          "boundary_invalid_reasons": [],
+          "patch_triangle_count": 1,
+          "search_nodes": 5,
+          "search_status": "COMPLETE_NO_SOLUTION",
+          "terminal_reason": "r2_finite_triangulation_domain_exhausted",
+          "candidate_support_count": "NOT_RUN",
+          "candidate_triangle_count": 16,
+          "candidate_attempt_count": 66,
+          "level": 0,
+          "boundary_valid": true
+        },
+        {
+          "boundary_invalid_reasons": [
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge"
+          ],
+          "patch_triangle_count": 4,
+          "search_nodes": "NOT_RUN_INVALID_BOUNDARY",
+          "search_status": "NOT_RUN_INVALID_BOUNDARY",
+          "terminal_reason": "patch_boundary_invalid_continue_next_level",
+          "candidate_support_count": "NOT_RUN",
+          "candidate_triangle_count": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_attempt_count": "NOT_RUN_INVALID_BOUNDARY",
+          "level": 1,
+          "boundary_valid": false
+        },
+        {
+          "boundary_invalid_reasons": [
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge"
+          ],
+          "patch_triangle_count": 6,
+          "search_nodes": "NOT_RUN_INVALID_BOUNDARY",
+          "search_status": "NOT_RUN_INVALID_BOUNDARY",
+          "terminal_reason": "patch_boundary_invalid_continue_next_level",
+          "candidate_support_count": "NOT_RUN",
+          "candidate_triangle_count": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_attempt_count": "NOT_RUN_INVALID_BOUNDARY",
+          "level": 2,
+          "boundary_valid": false
+        },
+        {
+          "boundary_invalid_reasons": [
+            "cx_patch_nonmanifold_edge",
+            "cx_patch_nonmanifold_edge"
+          ],
+          "patch_triangle_count": 10,
+          "search_nodes": "NOT_RUN_INVALID_BOUNDARY",
+          "search_status": "NOT_RUN_INVALID_BOUNDARY",
+          "terminal_reason": "patch_boundary_invalid_continue_next_level",
+          "candidate_support_count": "NOT_RUN",
+          "candidate_triangle_count": "NOT_RUN_INVALID_BOUNDARY",
+          "candidate_attempt_count": "NOT_RUN_INVALID_BOUNDARY",
+          "level": 3,
+          "boundary_valid": false
+        }
+      ],
+      "limits_hit": [],
+      "residual_triangle_ids": [
+        "62,9,24|tet:2|c4-source:0"
+      ],
+      "candidate_triangle_rejections": {
+        "candidate_cross_squared_at_or_below_frozen_cutoff": 7,
+        "triangle_vertex_outside_boundary": 9
+      },
+      "candidate_attempt_count": 66
+    }
+  ],
+  "limits": null
+}

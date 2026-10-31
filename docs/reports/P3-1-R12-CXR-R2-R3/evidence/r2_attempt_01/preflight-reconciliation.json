@@ -1,0 +1,19 @@
+{
+  "source_sha": "998fc4cfa1638a02710e7a2708b436935c7b74ab",
+  "import_disposition": "PASS_RECONCILED_EMPTY_STDERR_WRAPPER_FALSE_NEGATIVE",
+  "import_exit_code": 0,
+  "import_stdout_sha256": "97d3a98b638bde96129f72c0aa2c73756b531bcc790e7a75a73508fdf8f980e1",
+  "import_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "contract": {
+    "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r2_final_preflight_1b0256f790574676b0f86021e946304b\\contract.stdout.txt",
+    "exit_code": 0,
+    "pass": true,
+    "pid": 44768,
+    "failures": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "assertions": 117,
+    "stdout_sha256": "4a53a734f03f4b55b901becce102486add4d7e3a08dac13383663e120ceb25f5",
+    "duration_ms": 2006,
+    "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r2_final_preflight_1b0256f790574676b0f86021e946304b\\contract.stderr.txt"
+  }
+}

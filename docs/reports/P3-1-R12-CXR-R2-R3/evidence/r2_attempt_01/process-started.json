@@ -1,0 +1,10 @@
+{
+  "schema": "R12CXR.ProcessStarted.v1",
+  "attempt_id": "r12cxr_r2_target_20261031_01",
+  "launcher_pid": 36168,
+  "engine_pid": 44760,
+  "parent_process_id": 36168,
+  "command_line": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path ./game --script res://tests/prototypes/p3_1_r12_cxr_campaign.gd",
+  "start_time": "2026-10-31T20:20:24.0126198Z",
+  "captured_utc": "2026-10-31T20:20:24.3190300Z"
+}
