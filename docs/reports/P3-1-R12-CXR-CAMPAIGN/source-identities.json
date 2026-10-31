@@ -76,7 +76,7 @@
     {
       "path": "game/tests/prototypes/p3_1_r12_c_c6_multiface_realizer.gd",
       "git_blob": "a5944afe7a29df4e6fc3eaf6da88dadbcad71a33",
-      "physical_sha256": "31947e1944a017442ad14cc4f098e67db800d4f5e196d7d047b93dc0fe9d2ac"
+      "physical_sha256": "31947e1944a017442ad14cc4f098e67db800d4f5e196d07e047b93dc0fe9d2ac"
     },
     {
       "artifact": "extracted frozen Stage 0 fixture from prior R12-C raw archive",
