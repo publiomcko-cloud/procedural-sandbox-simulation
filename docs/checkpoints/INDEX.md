@@ -10,6 +10,10 @@
 - [P3.1 R9.2 preregistration](2026-10-28-P3-1-R9.2-PREREGISTRATION.md) — Issue #175, contract P3.1.R9.2.contract.v1, 20 scenario rows, manifest SHA-256 1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972; candidate execution remains NOT_RUN.
 # Documentary checkpoint index — project recovery
 
+## 2026-10-30 — P3.1 R12-C Stage 0 passed; C1 not applicable
+
+- [R12-C Stage 0 result and A6 provenance correction](2026-10-30-P3-1-R12-C-STAGE0-RESULT.md) — primary R10-A6 raw archive pins `de53e9fa...`; Stage 0 exact topology/volume/component fixture passes; C1 has zero eligible interior degree-2 roots and is unconsumed; C2 preregistered before execution.
+
 **Check live GitHub refs before action**; each checkpoint is a dated immutable evidence snapshot, never a real-time claim. A draft document is not merged or approved.
 
 ## Latest feature event
@@ -135,3 +139,15 @@ Every verified merge, material review/GUI verdict, scope authorization or revisi
 
 | 2026-10-30 | [P3.1 R10-B1R geometry hypothesis guard correction](2026-10-30-P3-1-R10-B1R-GEOMETRY-HYPOTHESIS-GUARD-CORRECTION.md) | Pinned domain passed audit, but one geometry-stage launch was rejected before domain load because remaining dispatch/qualification guards used the shortened ID; slot remains unconsumed | Existing draft PR #208; centralized ID guards require a fresh exact-source gate set |
 | 2026-10-30 | [P3.1 R10-B1R final result](2026-10-30-P3-1-R10-B1R-RESULT.md) | The sixth valid geometry hypothesis ended PARTIAL at the frozen intersection-check limit; exact-root feasibility is inconclusive, equal-LOD gate fails, and campaign is exhausted with evidence. Raw index and archive are pinned in PR #208 | Existing PR #208 remains open/draft/unmerged; no production adoption; five F2-G1 holds remain |
+
+| 2026-10-30 | [P3.1 R12-C Stage 0 and C1 preregistration](2026-10-30-P3-1-R12-C-STAGE0-PREREGISTRATION.md) | Isolated test-only topology-to-geometry campaign branched from final R10-BX evidence state; Stage 0 and C1 preregistered; no runtime result yet | exp/p3-1-r12-c-topology-geometry-realization; no production adoption; PR pending |
+
+| 2026-10-30 | [P3.1 R12-C C2 result and C3 preregistration](2026-10-30-P3-1-R12-C-C2-RESULT-C3-PREREGISTRATION.md) | C2 graph-face anchor-cycle executed once and failed the fixed cutoff/topology gate; preserves negative-control ROI harness errors; preregisters the bounded field-constrained support-fan C3 hypothesis | Isolated R12-C branch; C2 not rerun; no production adoption; all five F2-G1 holds remain |
+
+| 2026-10-30 | [P3.1 R12-C C3 result and C4 preregistration](2026-10-30-P3-1-R12-C-C3-RESULT-C4-PREREGISTRATION.md) | C3 support-fan executed once and failed the fixed cutoff/topology gate; records 502 support vertices, 45 cutoff rejects, 33 missing obligations, 20 internal opens, ROI ray parity 0/25, and preregisters exact-coplanar local patch flips as C4 | Isolated R12-C branch; C2/C3 preserved and not rerun; no production adoption; all five F2-G1 holds remain |
+
+| 2026-10-30 | [P3.1 R12-C C4 result and C5 preregistration](2026-10-30-P3-1-R12-C-C4-RESULT-C5-PREREGISTRATION.md) | C4 retained exact topology, passed six controls, ROI rays and volume, but all 18 patch flips were rejected as noncoplanar and eight faces remained below the fixed cutoff; preregisters a bounded face-owned noncoplanar patch attempt with explicit deviation diagnostics | Isolated R12-C branch; C2–C4 preserved and not rerun; no production adoption; all five F2-G1 holds remain |
+
+| 2026-10-30 | [P3.1 R12-C C5 result and C6 preregistration](2026-10-30-P3-1-R12-C-C5-RESULT-C6-PREREGISTRATION.md) | C5 applied four noncoplanar local flips and reduced cutoff failures from eight to four, while topology, controls, ROI rays and volume passed; preregisters the bounded multi-face ownership extension required to address nine rejected proposals | Isolated R12-C branch; C2–C5 preserved and not rerun; no production adoption; all five F2-G1 holds remain |
+
+| 2026-10-30 | [P3.1 R12-C campaign closeout](2026-10-30-P3-1-R12-C-CAMPAIGN-CLOSEOUT.md) | C6 applied five bounded multi-face flips and reduced fixed-cutoff faces to three, but equal-LOD remains FAILED_TARGET; C1 is not applicable and C2–C6 are exhausted; 311 raw evidence files are archived and hash-verified | R12-C experimental branch; no production adoption, mixed-LOD or full validation; all five F2-G1 holds remain |
