@@ -169,7 +169,7 @@ func _realize_cxr_impl(graph: Dictionary, values: PackedFloat32Array, roi: Dicti
 	if not cavity_failure_reasons.is_empty() or cavity_results.size() != groups.size():
 		var search_complete: bool = cavity_search_complete and cavity_results.size() == groups.size()
 		var search_exhaustive: bool = cavity_search_exhaustive and search_complete and not has_patch_overlap
-		var failure_reason: String = "cxr_search_partial" if not search_complete else "cxr_r3_no_joint_boundary_domain" if _cxr_active_phase == "r3" and cavity_failure_reasons.has("r3_no_valid_joint_boundary_level") else "cxr_r3_no_valid_constrained_triangulation" if _cxr_active_phase == "r3" else "cxr_r2_no_valid_constrained_triangulation" if _cxr_active_phase == "r2" else "cxr_no_valid_field_support_solution"
+		var failure_reason: String = _cxr_failure_reason(_cxr_active_phase, search_complete, cavity_failure_reasons)
 		if has_patch_overlap:
 			failure_reason = "cxr_joint_patch_overlap"
 			search_exhaustive = false
@@ -725,6 +725,17 @@ func _cxr_failure_terminal_reason(phase: String, cavity_results: Array, expected
 			return "UNKNOWN_NOT_CAPTURED"
 		return String(cavity_results[0].get("terminal_reason", "UNKNOWN_NOT_CAPTURED"))
 	return "finite_domain_exhausted_no_joint_solution"
+
+func _cxr_failure_reason(phase: String, search_complete: bool, cavity_failure_reasons: Array[String]) -> String:
+	if phase == "r3" and cavity_failure_reasons.has("r3_no_valid_joint_boundary_level"):
+		return "cxr_r3_no_joint_boundary_domain"
+	if not search_complete:
+		return "cxr_search_partial"
+	if phase == "r3":
+		return "cxr_r3_no_valid_constrained_triangulation"
+	if phase == "r2":
+		return "cxr_r2_no_valid_constrained_triangulation"
+	return "cxr_no_valid_field_support_solution"
 
 func _r3_unrun_seed_metrics(seed_ids: Array, status: String) -> Dictionary:
 	var result: Dictionary = {}

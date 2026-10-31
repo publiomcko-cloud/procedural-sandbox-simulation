@@ -516,6 +516,11 @@ func _test_cxr_r3_remaining_boundary_and_joint_patch() -> void:
 	var exhausted_terminal: String = realizer.call("_cxr_failure_terminal_reason", "r3", [{"terminal_reason": "r3_all_valid_joint_cavity_levels_exhausted_no_solution"}], 1, "")
 	_check(no_domain_terminal == "r3_no_valid_joint_boundary_level", "R3 reports invalid-domain construction instead of false finite exhaustion")
 	_check(exhausted_terminal == "r3_all_valid_joint_cavity_levels_exhausted_no_solution", "R3 retains an explicit finite-domain terminal reason only after valid domains exhaust")
+	var no_domain_reasons: Array[String] = ["r3_no_valid_joint_boundary_level"]
+	var no_domain_reason: String = realizer.call("_cxr_failure_reason", "r3", false, no_domain_reasons)
+	_check(no_domain_reason == "cxr_r3_no_joint_boundary_domain", "R3 distinguishes invalid boundary-domain construction from generic partial search")
+	var partial_target: Dictionary = {"reason": "cx_bounded_patch_search_failed", "detail": {"search": {"complete": false, "search_exhaustive": false, "reason": no_domain_reason}}}
+	_check(Campaign._target_search_partial(partial_target, {"cxr_local_search_complete": false}), "R3 invalid-domain result remains classified as PARTIAL by the campaign gate")
 func _sequence_probe_local_failure(cavity_ids: Array) -> Dictionary:
 	_sequence_probe_calls.append(cavity_ids.duplicate())
 	return {"valid": false, "search_started": true, "search_complete": true, "search_exhaustive": true, "terminal_reason": "synthetic_local_failure"}
