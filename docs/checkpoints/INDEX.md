@@ -1,3 +1,7 @@
+## 2026-10-31 — P3.1 R12-CXR R3 attempt 01 partial; field-support search not reached
+
+- [R3 attempt 01 partial result](2026-10-31-P3-1-R12-CXR-R3-ATTEMPT-01-PARTIAL.md) — target ran once and exited 0, but a three-seed joint patch remained disconnected at L0-L3; no support candidates or search nodes were generated; result is PARTIAL, not no-solution.
+
 ## 2026-10-31 — P3.1 R12-CXR R3 prelaunch fixture-path correction
 
 - [R3 prelaunch path correction](2026-10-31-P3-1-R12-CXR-R3-PRELAUNCH-PATH-CORRECTION.md) — wrong generator-script path rejected before reservation or process creation; correct archived fixture matches the frozen SHA; target remains unstarted.

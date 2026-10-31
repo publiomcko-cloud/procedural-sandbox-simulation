@@ -1,0 +1,147 @@
+{
+  "schema": "P3.1.R12CXR.R3AttemptSummary.v1",
+  "attempt_id": "R3_TARGET_20261031_01",
+  "source_sha": "64ce92c909c0b5871303a787baeba84e28477c77",
+  "execution_checkout_head": "45607bfd511d9fbb966388b36657941eac3a5645",
+  "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+  "phase": "r3",
+  "process_pid": 44284,
+  "process_parent_pid": 42876,
+  "process_exit_code": 0,
+  "process_timeout": false,
+  "process_duration_ms": 3826.0955,
+  "target_marker": true,
+  "result_class": "R12_CXR_PARTIAL_WITH_EVIDENCE",
+  "gate_status": "PARTIAL",
+  "campaign_disposition": "R12_CXR_PARTIAL_WITH_EVIDENCE",
+  "failed_invariant": "cx_bounded_patch_search_failed",
+  "target_volume_identity_preserved": true,
+  "volume_gate_pass": true,
+  "equal_lod_gates_pass": false,
+  "residual_face_count": 3,
+  "cavity_count": 1,
+  "cavity_id": "09ff86410e9969c6",
+  "seed_faces": [
+    "60,8,25|tet:1|c4-source:0",
+    "60,8,25|tet:2|c4-source:0",
+    "62,9,24|tet:2|c4-source:0"
+  ],
+  "levels": [
+    {
+      "level": 0,
+      "patch_triangle_count": 3,
+      "component_count": 2,
+      "component_sizes": [
+        2,
+        1
+      ],
+      "connectivity_reason": "r3_joint_patch_disconnected",
+      "boundary_valid": false,
+      "boundary_reason": "r3_joint_boundary_incidence_not_one_to_one",
+      "boundary_invalid_reason": "r3_joint_patch_disconnected",
+      "boundary_diagnostic_count": 8,
+      "candidate_generation": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "search_status": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "candidate_attempt_count": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "candidate_triangle_count": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "search_nodes": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "terminal_reason": "r3_joint_patch_disconnected"
+    },
+    {
+      "level": 1,
+      "patch_triangle_count": 12,
+      "component_count": 2,
+      "component_sizes": [
+        8,
+        4
+      ],
+      "connectivity_reason": "r3_joint_patch_disconnected",
+      "boundary_valid": false,
+      "boundary_reason": "r3_joint_boundary_source_winding_same_direction",
+      "boundary_invalid_reason": "r3_joint_patch_disconnected",
+      "boundary_diagnostic_count": 19,
+      "candidate_generation": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "search_status": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "candidate_attempt_count": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "candidate_triangle_count": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "search_nodes": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "terminal_reason": "r3_joint_patch_disconnected"
+    },
+    {
+      "level": 2,
+      "patch_triangle_count": 19,
+      "component_count": 2,
+      "component_sizes": [
+        13,
+        6
+      ],
+      "connectivity_reason": "r3_joint_patch_disconnected",
+      "boundary_valid": false,
+      "boundary_reason": "r3_patch_open_edge_has_no_remaining_owner",
+      "boundary_invalid_reason": "r3_joint_patch_disconnected",
+      "boundary_diagnostic_count": 31,
+      "candidate_generation": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "search_status": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "candidate_attempt_count": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "candidate_triangle_count": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "search_nodes": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "terminal_reason": "r3_joint_patch_disconnected"
+    },
+    {
+      "level": 3,
+      "patch_triangle_count": 28,
+      "component_count": 2,
+      "component_sizes": [
+        18,
+        10
+      ],
+      "connectivity_reason": "r3_joint_patch_disconnected",
+      "boundary_valid": false,
+      "boundary_reason": "r3_patch_open_edge_has_no_remaining_owner",
+      "boundary_invalid_reason": "r3_joint_patch_disconnected",
+      "boundary_diagnostic_count": 47,
+      "candidate_generation": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "search_status": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "candidate_attempt_count": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "candidate_triangle_count": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "search_nodes": "NOT_RUN_INVALID_JOINT_BOUNDARY",
+      "terminal_reason": "r3_joint_patch_disconnected"
+    }
+  ],
+  "candidate_generation_attempts": 0,
+  "support_candidates": 0,
+  "candidate_triangles": 0,
+  "selected_supports": 0,
+  "search_nodes": 0,
+  "search_complete": false,
+  "search_exhaustive": false,
+  "terminal_reason": "r3_no_valid_joint_boundary_level",
+  "controls": {
+    "valid": false,
+    "status": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+    "passed": "UNKNOWN_NOT_CAPTURED",
+    "count": "UNKNOWN_NOT_CAPTURED"
+  },
+  "roi_ray": {
+    "valid": false,
+    "status": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+    "roi_scoped_hit_miss_disagreements": "UNKNOWN_NOT_CAPTURED",
+    "global_diagnostic": {
+      "disagreements": "UNKNOWN_NOT_CAPTURED"
+    }
+  },
+  "mixed_lod": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+  "determinism": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+  "full_e2e": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+  "full_validation": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+  "result_sha256": "8692824368adfaffa500e1fd9af454d29c49ac40e62960da42b415fa9e7b37f8",
+  "classification": "R12_CXR_PARTIAL_WITH_EVIDENCE",
+  "interpretation": "Joint patch was disconnected for L0-L3; boundary construction failed; candidate support generation and triangulation did not run. This is not a finite no-solution result.",
+  "duration_calculation": {
+    "start_utc": "2026-10-31T20:47:16.1465154Z",
+    "end_utc": "2026-10-31T20:47:19.9726109Z",
+    "elapsed_ms": 3826.0955,
+    "source": "raw process-started.json and process-completion.json"
+  },
+  "supersedes": "independent-summary.json duration only; v1 parsed time-of-day without fractional seconds"
+}
