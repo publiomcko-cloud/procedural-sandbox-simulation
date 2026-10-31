@@ -1,0 +1,13 @@
+{
+  "name": "contract-suite",
+  "command": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe \"--headless\" \"--path\" \"C:\\r12cxr-convergence-20261031\\game\" \"--script\" \"res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd\"",
+  "pid": 44676,
+  "start_utc": "2026-10-31T20:37:51.3435720Z",
+  "end_utc": "2026-10-31T20:37:53.1150526Z",
+  "duration_ms": 1769,
+  "exit_code": 0,
+  "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r3_source_gate_09550e894e8440208471d53e41a8ac81\\contract-suite.stdout.txt",
+  "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r3_source_gate_09550e894e8440208471d53e41a8ac81\\contract-suite.stderr.txt",
+  "stdout_sha256": "a204eeaad82868b778d9df113c7f95c020dabf7c52f426772914d11cc4dde481",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

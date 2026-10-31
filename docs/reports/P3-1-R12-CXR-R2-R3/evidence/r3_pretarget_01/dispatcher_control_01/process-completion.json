@@ -1,0 +1,14 @@
+{
+  "attempt_id": "R3_DISPATCHER_CONTROL_01",
+  "pid": 44784,
+  "end_utc": "2026-10-31T20:42:17.2894493Z",
+  "timeout_seconds": 10,
+  "timed_out": false,
+  "exit_code": 23,
+  "status": "PROCESS_EXITED",
+  "stdout_sha256": "a73f4057a88603277a9d6239f0877e585f21e7046f89ba54ab83fb4d4a1e8282",
+  "stderr_sha256": "7ac4a4ee12e5e5d70e588d137d6db159dec618420c6a57b9736437a42a6fec0e",
+  "scenario_started": false,
+  "process_start_record_error": "",
+  "raw_output_write_error": ""
+}

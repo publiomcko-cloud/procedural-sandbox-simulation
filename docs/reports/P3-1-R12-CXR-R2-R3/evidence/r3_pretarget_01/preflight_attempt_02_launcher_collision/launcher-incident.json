@@ -1,0 +1,10 @@
+{
+  "classification": "HOST_LAUNCHER_ARGUMENT_VARIABLE_COLLISION",
+  "scenario_started": false,
+  "engine_pid": 43628,
+  "engine_parent_pid": 45000,
+  "engine_command_line": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\"",
+  "cause": "PowerShell function parameter named $args collided with automatic variable; StartInfo.Arguments became empty",
+  "action": "terminated only this verified child created by the failed preflight",
+  "target_attempt_consumed": false
+}

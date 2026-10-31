@@ -1,0 +1,10 @@
+{
+  "expected_exit": 23,
+  "observed_exit": 23,
+  "stdout_exact": true,
+  "stderr_exact": true,
+  "duplicate_reservation_denied": true,
+  "output_overwrite_denied": true,
+  "scenario_started": false,
+  "process_start_record_written": true
+}

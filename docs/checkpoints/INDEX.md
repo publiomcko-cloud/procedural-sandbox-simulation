@@ -1,3 +1,7 @@
+## 2026-10-31 — P3.1 R12-CXR R3 pre-target freeze; target not started
+
+- [R12-CXR R3 pre-target freeze](2026-10-31-P3-1-R12-CXR-R3-PRETARGET-FROZEN.md) — R3 source `64ce92c`; exact-source import/check-only and 131/131 contract assertions passed; durable one-shot dispatcher control passed; frozen target remains NOT_STARTED pending this checkpoint commit.
+
 ## 2026-10-28 — P3.1 R9.2 contract gate recovery
 
 - [R9.2 contract gate recovery](2026-10-28-P3-1-R9.2-CONTRACT-GATE-RECOVERY.md) — attempts 03 and 04 preserved as failed/inconclusive; fresh serial attempt 05 passed isolated import, check-only, and 48/48 contract assertions. No candidate scenario ran.

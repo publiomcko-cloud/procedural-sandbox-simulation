@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Expected indented block after "if" block.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd:612)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)

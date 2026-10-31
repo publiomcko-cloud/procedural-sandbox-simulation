@@ -1,0 +1,13 @@
+{
+  "classification": "HOST_LAUNCHER_ARGUMENT_VARIABLE_COLLISION",
+  "engine_pid": 43628,
+  "engine_parent_pid": 45000,
+  "parent_process_name_at_observation": "pwsh.exe",
+  "engine_command_line": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\"",
+  "engine_process_confirmed_stopped": true,
+  "scenario_script_argument_observed": false,
+  "scenario_started": false,
+  "attempt_id": "R3_CHECK_20261031_03",
+  "recovery": "ProcessStartInfo argument parameter renamed to argVector; fresh preflight attempt R3_CHECK_20261031_04 passed",
+  "parent_exit_after_capture": "parent process exited before structured command-line archive could be added"
+}

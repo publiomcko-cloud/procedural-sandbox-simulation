@@ -1,0 +1,50 @@
+SCRIPT ERROR: Parse Error: Could not preload resource script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:4)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:4)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "Realizer" constant because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:4)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:112)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:115)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:116)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:118)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:230)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:233)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:237)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:242)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:242)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:242)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:243)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:243)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:243)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:312)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:348)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:350)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:458)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:468)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:468)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:468)
+SCRIPT ERROR: Parse Error: Could not resolve script "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd".
+   at: GDScript::reload (res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd:468)
+ERROR: Failed to load script "res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)

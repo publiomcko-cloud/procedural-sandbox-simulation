@@ -1,0 +1,13 @@
+{
+  "name": "editor-import",
+  "command": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe \"--headless\" \"--path\" \"C:\\r12cxr-convergence-20261031\\game\" \"--editor\" \"--import\"",
+  "pid": 4084,
+  "start_utc": "2026-10-31T20:34:43.9328144Z",
+  "end_utc": "2026-10-31T20:34:51.4291155Z",
+  "duration_ms": 7493,
+  "exit_code": 0,
+  "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r3_exact_source_validation_761926decbe240739fde96c050c8fa0e\\editor-import.stdout.txt",
+  "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r3_exact_source_validation_761926decbe240739fde96c050c8fa0e\\editor-import.stderr.txt",
+  "stdout_sha256": "e970b3ddb734fc8a8d4f5aa139093068174d15641ffb213a8f1ec47bada6100b",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

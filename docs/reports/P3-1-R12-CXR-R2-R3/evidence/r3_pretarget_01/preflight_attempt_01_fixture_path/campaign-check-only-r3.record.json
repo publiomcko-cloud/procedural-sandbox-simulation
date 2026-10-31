@@ -1,0 +1,13 @@
+{
+  "name": "campaign-check-only-r3",
+  "command": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe \"--headless\" \"--path\" \"C:\\r12cxr-convergence-20261031\\game\" \"--script\" \"res://tests/prototypes/p3_1_r12_cxr_campaign.gd\"",
+  "pid": 42152,
+  "start_utc": "2026-10-31T20:34:51.4589195Z",
+  "end_utc": "2026-10-31T20:34:52.9678827Z",
+  "duration_ms": 1506,
+  "exit_code": 2,
+  "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r3_exact_source_validation_761926decbe240739fde96c050c8fa0e\\campaign-check-only-r3.stdout.txt",
+  "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r3_exact_source_validation_761926decbe240739fde96c050c8fa0e\\campaign-check-only-r3.stderr.txt",
+  "stdout_sha256": "a670c4e87f816834140168678443b311aaf56f672aae5e4362f2b24b6f749df8",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
