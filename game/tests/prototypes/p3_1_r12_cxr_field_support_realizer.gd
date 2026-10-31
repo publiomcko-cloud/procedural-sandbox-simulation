@@ -77,7 +77,7 @@ func _realize_cxr_impl(graph: Dictionary, values: PackedFloat32Array, roi: Dicti
 	_cxr_active_phase = OS.get_environment("R12CXR_PHASE")
 	if _cxr_active_phase.is_empty():
 		_cxr_active_phase = "r1"
-	if not ["r1", "r2"].has(_cxr_active_phase):
+	if not ["r1", "r2", "r3"].has(_cxr_active_phase):
 		return {"valid": false, "cx_algorithm_started": false, "reason": "cxr_phase_invalid", "phase": _cxr_active_phase}
 	_cxr_active_snapshot = snapshot
 	_cxr_local_search_marker_emitted = false
@@ -109,7 +109,7 @@ func _realize_cxr_impl(graph: Dictionary, values: PackedFloat32Array, roi: Dicti
 	# base realization owns topology arcs. Give R2 that authoritative arc map;
 	# the local context below narrows it to obligations in each cavity.
 	var search_residual_fixture: Dictionary = residual_fixture
-	if _cxr_active_phase == "r2":
+	if ["r2", "r3"].has(_cxr_active_phase):
 		search_residual_fixture = residual_fixture.duplicate(true)
 		search_residual_fixture["arc_map"] = base.get("arc_map", []).duplicate(true)
 		search_residual_fixture["applied_flips"] = base.get("applied_flips", []).duplicate(true)
@@ -118,6 +118,19 @@ func _realize_cxr_impl(graph: Dictionary, values: PackedFloat32Array, roi: Dicti
 	_orient_rejected_triangles(triangles, adjacency)
 	var original_triangles: Array[Dictionary] = triangles.duplicate(true)
 	var groups: Array[Array] = _overlapping_defect_groups(residual_rows, adjacency)
+	if _cxr_active_phase == "r3":
+		# R3 freezes one joint cavity over all three C6 residual faces. R1 and R2
+		# retain their prior overlapping-group partition unchanged.
+		var joint_ids: Array[String] = []
+		for residual_value in residual_rows:
+			if typeof(residual_value) != TYPE_DICTIONARY:
+				return {"valid": false, "cx_algorithm_started": false, "reason": "cxr_r3_residual_row_invalid"}
+			joint_ids.append(String(residual_value.get("triangle_id", "")))
+		joint_ids.sort()
+		groups.clear()
+		var joint_group: Array = []
+		for joint_id in joint_ids: joint_group.append(joint_id)
+		groups.append(joint_group)
 	if groups.is_empty() or groups.size() > CXR_MAX_CAVITIES:
 		return {"valid": false, "cx_algorithm_started": false, "reason": "cxr_cavity_set_invalid", "cavity_count": groups.size(), "cap": CXR_MAX_CAVITIES}
 	_cxr_search_started_usec = Time.get_ticks_usec()
@@ -135,7 +148,7 @@ func _realize_cxr_impl(graph: Dictionary, values: PackedFloat32Array, roi: Dicti
 	var cavity_failure_reasons: Array[String] = []
 	var global_limit_reason: String = ""
 	var has_patch_overlap: bool = false
-	var search_method: String = "_search_cxr_cavity_r2" if _cxr_active_phase == "r2" else "_search_cxr_cavity"
+	var search_method: String = "_search_cxr_joint_cavity_r3" if _cxr_active_phase == "r3" else "_search_cxr_cavity_r2" if _cxr_active_phase == "r2" else "_search_cxr_cavity"
 	var search_callable: Callable = Callable(self, search_method).bind(triangles, adjacency, search_residual_fixture, values, roi)
 	var cavity_sequence: Dictionary = _run_cxr_cavity_sequence(groups, search_callable)
 	cavity_results = cavity_sequence.get("cavity_results", [])
@@ -156,11 +169,12 @@ func _realize_cxr_impl(graph: Dictionary, values: PackedFloat32Array, roi: Dicti
 	if not cavity_failure_reasons.is_empty() or cavity_results.size() != groups.size():
 		var search_complete: bool = cavity_search_complete and cavity_results.size() == groups.size()
 		var search_exhaustive: bool = cavity_search_exhaustive and search_complete and not has_patch_overlap
-		var failure_reason: String = "cxr_search_partial" if not search_complete else "cxr_r2_no_valid_constrained_triangulation" if _cxr_active_phase == "r2" else "cxr_no_valid_field_support_solution"
+		var failure_reason: String = "cxr_search_partial" if not search_complete else "cxr_r3_no_joint_boundary_domain" if _cxr_active_phase == "r3" and cavity_failure_reasons.has("r3_no_valid_joint_boundary_level") else "cxr_r3_no_valid_constrained_triangulation" if _cxr_active_phase == "r3" else "cxr_r2_no_valid_constrained_triangulation" if _cxr_active_phase == "r2" else "cxr_no_valid_field_support_solution"
 		if has_patch_overlap:
 			failure_reason = "cxr_joint_patch_overlap"
 			search_exhaustive = false
-		return {"valid": false, "cx_algorithm_started": search_started, "reason": "cx_bounded_patch_search_failed", "details": {"search": {"phase": _cxr_active_phase, "reason": failure_reason, "complete": search_complete, "search_exhaustive": search_exhaustive, "cavity_count_expected": groups.size(), "cavity_count_processed": cavity_results.size(), "cavity_failure_reasons": cavity_failure_reasons, "nodes": _cxr_search_nodes_total, "candidate_attempts": _cxr_candidate_attempts_total, "candidate_triangles": _cxr_candidate_triangles_total, "terminal_reason": global_limit_reason if not global_limit_reason.is_empty() else "finite_domain_exhausted_no_joint_solution"}, "cxr_cavity_results": cavity_results, "cxr_limits": _cxr_limits(), "cxr_search_counters": _cxr_counters()}}
+		var terminal_reason: String = _cxr_failure_terminal_reason(_cxr_active_phase, cavity_results, groups.size(), global_limit_reason)
+		return {"valid": false, "cx_algorithm_started": search_started, "reason": "cx_bounded_patch_search_failed", "details": {"search": {"phase": _cxr_active_phase, "reason": failure_reason, "complete": search_complete, "search_exhaustive": search_exhaustive, "cavity_count_expected": groups.size(), "cavity_count_processed": cavity_results.size(), "cavity_failure_reasons": cavity_failure_reasons, "nodes": _cxr_search_nodes_total, "candidate_attempts": _cxr_candidate_attempts_total, "candidate_triangles": _cxr_candidate_triangles_total, "terminal_reason": terminal_reason}, "cxr_cavity_results": cavity_results, "cxr_limits": _cxr_limits(), "cxr_search_counters": _cxr_counters()}}
 	var removed_patch_ids: Dictionary = used_patch_ids.duplicate()
 	var updated_triangles: Array[Dictionary] = []
 	for triangle in original_triangles:
@@ -473,6 +487,381 @@ func _search_cxr_cavity(cavity_ids: Array, all_triangles: Array[Dictionary], adj
 			_append_unrun_cxr_levels(cavity_report, level + 1, "NOT_RUN_CAVITY_LIMIT", cavity_report.terminal_reason)
 			return _finish_cxr_cavity_search(cavity_report, best_solution, false, false, cavity_report.terminal_reason)
 	return _finish_cxr_cavity_search(cavity_report, best_solution, true, true, "all_levels_exhausted")
+
+func _search_cxr_joint_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], adjacency: Dictionary, residual_fixture: Dictionary, values: PackedFloat32Array, roi: Dictionary) -> Dictionary:
+	_cxr_cavity_started_usec = Time.get_ticks_usec()
+	_cxr_search_nodes_cavity = 0
+	_cxr_candidate_triangles_cavity = 0
+	_cxr_active_cavity_branches = {}
+	_cxr_active_cavity_prunes = {}
+	var seed_ids: Array = cavity_ids.duplicate()
+	seed_ids.sort()
+	var cavity_id: String = Core.sha256(("R3_JOINT|" + JSON.stringify(seed_ids)).to_utf8_buffer()).substr(0, 16)
+	var report: Dictionary = {"phase": "r3", "cavity_id": cavity_id, "residual_triangle_ids": seed_ids, "joint_cavity": true, "levels": [], "candidate_attempts": [], "support_candidates": [], "support_candidates_retained": [], "candidate_triangles": [], "candidate_edges": [], "retained_solutions": [], "selected_supports": [], "selected_solution": {}, "selected_level": -1, "solution_found_levels": [], "boundary_provenance": "derived_from_remaining_c6_edge_incidence", "search_nodes": 0, "branches": _cxr_active_cavity_branches, "prunes": _cxr_active_cavity_prunes, "limits_hit": [], "search_complete": false, "search_exhaustive": false, "terminal_reason": "UNKNOWN_NOT_CAPTURED"}
+	var residual_by_id: Dictionary = {}
+	for residual_value in residual_fixture.get("residuals", []):
+		if typeof(residual_value) == TYPE_DICTIONARY:
+			var residual_row: Dictionary = residual_value
+			residual_by_id[String(residual_row.get("triangle_id", ""))] = residual_row
+	var seed_triangles: Array[Dictionary] = []
+	for triangle in all_triangles:
+		if seed_ids.has(String(triangle.get("triangle_id", ""))):
+			seed_triangles.append(triangle)
+	seed_triangles.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.triangle_id) < String(b.triangle_id))
+	if seed_ids.size() != 3 or seed_triangles.size() != 3 or residual_by_id.size() != 3:
+		_append_unrun_cxr_levels(report, 0, "NOT_RUN_INVALID_JOINT_SEEDS", "r3_requires_exactly_three_frozen_residual_faces")
+		return _finish_cxr_cavity_search(report, {}, false, false, "r3_joint_seed_identity_invalid")
+	var support_by_position: Dictionary = {}
+	var any_valid_boundary_search: bool = false
+	for level in range(CXR_MAX_CAVITY_LEVEL + 1):
+		var patch_map: Dictionary = {}
+		for seed_id_value in seed_ids:
+			for triangle_id in _radius_ids(String(seed_id_value), adjacency, level):
+				patch_map[String(triangle_id)] = true
+		var patch_ids: Array = _sorted_keys(patch_map)
+		var patch: Array[Dictionary] = []
+		for triangle in all_triangles:
+			if patch_map.has(String(triangle.get("triangle_id", ""))):
+				patch.append(triangle)
+		patch.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.triangle_id) < String(b.triangle_id))
+		var level_report: Dictionary = _new_cxr_level_report(level, patch_ids, patch.size())
+		level_report["joint_seed_ids"] = seed_ids.duplicate()
+		level_report["patch_selection"] = {"policy": "union_of_dual_graph_radius_layers", "radius": level, "max_radius": CXR_MAX_CAVITY_LEVEL, "max_patch_triangles": CXR_MAX_PATCH_TRIANGLES}
+		if patch.size() > CXR_MAX_PATCH_TRIANGLES:
+			level_report.terminal_reason = "limit_source_triangle_cap"
+			level_report.candidate_generation_status = "NOT_RUN_PATCH_CAP"
+			level_report.search_status = "NOT_RUN_PATCH_CAP"
+			level_report.boundary_before = "NOT_RUN_PATCH_CAP"
+			level_report.boundary_diagnostics = {"patch_triangle_count": patch.size(), "cap": CXR_MAX_PATCH_TRIANGLES, "patch_triangle_ids": patch_ids}
+			report.levels.append(level_report)
+			report.limits_hit.append("MAX_PATCH_TRIANGLES")
+			_append_unrun_cxr_levels(report, level + 1, "NOT_RUN_CAVITY_LIMIT", "limit_max_patch_triangles")
+			return _finish_cxr_cavity_search(report, {}, false, false, "limit_max_patch_triangles")
+		var connectivity: Dictionary = _r3_patch_connectivity(patch)
+		var boundary: Dictionary = _r3_derive_remaining_boundary(all_triangles, patch_ids)
+		level_report["patch_connectivity"] = connectivity
+		level_report["boundary_before"] = boundary.duplicate(true)
+		level_report["boundary_signature"] = String(boundary.get("signature", boundary.get("observed_boundary_signature", "UNKNOWN_NOT_CAPTURED")))
+		level_report["boundary_provenance"] = "C6_all_triangles_minus_selected_joint_patch"
+		level_report["boundary_diagnostics"] = boundary.get("incidence_diagnostics", [])
+		if not bool(connectivity.get("valid", false)) or not bool(boundary.get("valid", false)):
+			var invalid_reason: String = _r3_invalid_level_reason(connectivity, boundary)
+			level_report.candidate_count_by_residual = _r3_unrun_seed_metrics(seed_ids, "NOT_RUN_INVALID_JOINT_BOUNDARY")
+			level_report.candidate_unique_count_by_residual = level_report.candidate_count_by_residual.duplicate()
+			level_report.candidate_pool_retained_count_by_residual = level_report.candidate_count_by_residual.duplicate()
+			level_report.candidate_fan_status_by_residual = level_report.candidate_count_by_residual.duplicate()
+			level_report.candidate_attempt_count = "NOT_RUN_INVALID_JOINT_BOUNDARY"
+			level_report.candidate_attempt_ids = "NOT_RUN_INVALID_JOINT_BOUNDARY"
+			level_report.candidate_triangle_count = "NOT_RUN_INVALID_JOINT_BOUNDARY"
+			level_report.candidate_generation_usec = "NOT_RUN_INVALID_JOINT_BOUNDARY"
+			level_report.candidate_generation_status = "NOT_RUN_INVALID_JOINT_BOUNDARY"
+			level_report.search_nodes = "NOT_RUN_INVALID_JOINT_BOUNDARY"
+			level_report.search_status = "NOT_RUN_INVALID_JOINT_BOUNDARY"
+			level_report.terminal_reason = invalid_reason
+			level_report["boundary_invalid_reason"] = invalid_reason
+			report.levels.append(level_report)
+			continue
+		any_valid_boundary_search = true
+		var generation_started: int = Time.get_ticks_usec()
+		var level_candidate_counts: Dictionary = {}
+		var level_candidate_unique: Dictionary = {}
+		var level_candidate_retained: Dictionary = {}
+		var remaining_global_attempts: int = CXR_MAX_CANDIDATE_ATTEMPTS_PER_CAVITY - report.candidate_attempts.size()
+		var max_per_seed: int = maxi(1, int(floor(float(CXR_MAX_SUPPORT_CANDIDATES_PER_CAVITY) / float(seed_triangles.size()))))
+		var generation_failed: bool = false
+		var generation_reason: String = ""
+		for seed_index in range(seed_triangles.size()):
+			var seed_triangle: Dictionary = seed_triangles[seed_index]
+			var seed_id: String = String(seed_triangle.get("triangle_id", ""))
+			var fixture_row: Dictionary = residual_by_id.get(seed_id, {})
+			var attempts_remaining: int = CXR_MAX_CANDIDATE_ATTEMPTS_PER_CAVITY - report.candidate_attempts.size()
+			if attempts_remaining <= 0:
+				generation_failed = true
+				generation_reason = "MAX_CANDIDATE_ATTEMPTS_PER_CAVITY"
+				break
+			var candidate_data: Dictionary = _generate_field_candidates(seed_triangle, patch, values, roi, level, max_per_seed, mini(remaining_global_attempts, attempts_remaining), cavity_id, fixture_row)
+			var evidence_check: Dictionary = _validate_candidate_generation_evidence(candidate_data)
+			if not bool(evidence_check.get("valid", false)):
+				generation_failed = true
+				generation_reason = "candidate_generation_evidence_incomplete"
+				level_report["candidate_generation_evidence_failure"] = evidence_check
+				break
+			var attempts: Array = candidate_data.get("attempts", [])
+			report.candidate_attempts.append_array(attempts)
+			for attempt_value in attempts:
+				level_report.candidate_attempt_ids.append(String(attempt_value.get("attempt_id", attempt_value.get("candidate_id", "UNKNOWN_NOT_CAPTURED"))) if typeof(attempt_value) == TYPE_DICTIONARY else "UNKNOWN_NOT_CAPTURED")
+			level_report.candidate_attempt_count = int(level_report.candidate_attempt_count) + attempts.size()
+			level_candidate_counts[seed_id] = candidate_data.get("candidate_count", "UNKNOWN_NOT_CAPTURED")
+			level_candidate_unique[seed_id] = candidate_data.get("candidate_unique_count", "UNKNOWN_NOT_CAPTURED")
+			level_candidate_retained[seed_id] = candidate_data.get("candidate_pool", []).size()
+			for candidate_value in candidate_data.get("candidate_pool", []):
+				report.support_candidates.append(candidate_value.duplicate(true))
+			if not bool(candidate_data.get("source_valid", false)) or bool(candidate_data.get("limit_hit", false)):
+				generation_failed = true
+				generation_reason = String(candidate_data.get("source_failure_reason", "candidate_generation_limit")) if not bool(candidate_data.get("limit_hit", false)) else "candidate_generation_limit:" + ",".join(candidate_data.get("limits_hit", []))
+				break
+			for candidate_value in candidate_data.get("candidate_pool", []):
+				var candidate: Dictionary = candidate_value
+				var identity: String = String(candidate.get("binary32_position_identity", ""))
+				if identity.is_empty() or String(candidate.get("support_id", "")).is_empty():
+					generation_failed = true
+					generation_reason = "support_candidate_identity_invalid"
+					break
+				var prior: Dictionary = support_by_position.get(identity, {})
+				if prior.is_empty():
+					if support_by_position.size() >= CXR_MAX_SUPPORT_CANDIDATES_PER_CAVITY:
+						generation_failed = true
+						generation_reason = "MAX_SUPPORT_CANDIDATES_PER_CAVITY"
+						break
+					support_by_position[identity] = candidate.duplicate(true)
+				else:
+					var provenance: Array = prior.get("coalesced_candidate_ids", [])
+					var candidate_id: String = String(candidate.get("candidate_id", ""))
+					if not provenance.has(candidate_id): provenance.append(candidate_id)
+					provenance.sort()
+					if _candidate_less(candidate, prior):
+						candidate["coalesced_candidate_ids"] = provenance
+						support_by_position[identity] = candidate.duplicate(true)
+					else:
+						prior["coalesced_candidate_ids"] = provenance
+						support_by_position[identity] = prior
+			if generation_failed:
+				break
+		if generation_failed:
+			level_report.candidate_count_by_residual = level_candidate_counts
+			level_report.candidate_unique_count_by_residual = level_candidate_unique
+			level_report.candidate_pool_retained_count_by_residual = level_candidate_retained
+			_mark_unrun_cxr_residuals(level_report, seed_triangles, level_candidate_counts.size(), "NOT_RUN_GENERATION_FAILURE")
+			level_report.candidate_generation_usec = Time.get_ticks_usec() - generation_started
+			level_report.candidate_generation_status = "FAILED_SOURCE_OR_CANDIDATE_LIMIT"
+			level_report.search_status = "NOT_RUN_SOURCE_OR_CANDIDATE_LIMIT"
+			level_report.terminal_reason = generation_reason
+			report.levels.append(level_report)
+			if generation_reason.contains("MAX_") or generation_reason.contains("limit"):
+				report.limits_hit.append(generation_reason)
+			_append_unrun_cxr_levels(report, level + 1, "NOT_RUN_CAVITY_LIMIT", generation_reason)
+			return _finish_cxr_cavity_search(report, {}, false, false, generation_reason)
+		level_report.candidate_count_by_residual = level_candidate_counts
+		level_report.candidate_unique_count_by_residual = level_candidate_unique
+		level_report.candidate_pool_retained_count_by_residual = level_candidate_retained
+		for seed_id_value in seed_ids:
+			level_report.candidate_fan_status_by_residual[String(seed_id_value)] = "NOT_RUN_R3_JOINT_TRIANGULATION"
+		level_report.candidate_generation_usec = Time.get_ticks_usec() - generation_started
+		level_report.candidate_generation_status = "COMPLETE_R3_FROZEN_RESIDUAL_SUPPORT_SET"
+		var support_ids: Array = support_by_position.keys()
+		support_ids.sort()
+		var support_rows: Array[Dictionary] = []
+		for identity_value in support_ids:
+			support_rows.append(support_by_position[identity_value].duplicate(true))
+		support_rows.sort_custom(Callable(self, "_candidate_less"))
+		report.support_candidates_retained = []
+		for support_row in support_rows:
+			report.support_candidates_retained.append(support_row.duplicate(true))
+		var context_result: Dictionary = _r2_make_search_context(patch, patch_ids, patch, support_rows, boundary, all_triangles, residual_fixture, level)
+		if not bool(context_result.get("valid", false)):
+			level_report.search_status = "NOT_RUN_R3_CONTEXT_INVALID"
+			level_report.terminal_reason = String(context_result.get("reason", "r3_context_invalid"))
+			level_report["context_failure"] = context_result
+			report.levels.append(level_report)
+			_append_unrun_cxr_levels(report, level + 1, "NOT_RUN_CONTEXT_FAILURE", level_report.terminal_reason)
+			return _finish_cxr_cavity_search(report, {}, false, false, level_report.terminal_reason)
+		var context: Dictionary = context_result.context
+		context["phase"] = "r3"
+		context["joint_boundary"] = boundary.duplicate(true)
+		context["support_generation_usec"] = level_report.candidate_generation_usec
+		print("R12CXR_R3_JOINT_SEARCH_BEGIN " + JSON.stringify({"attempt_id": OS.get_environment("R12CXR_ATTEMPT_ID"), "source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1", "cavity_id": cavity_id, "level": level, "joint_seed_ids": seed_ids, "patch_triangle_count": patch.size(), "boundary_signature": boundary.get("signature", ""), "candidate_supports": support_rows.size(), "limits": _cxr_limits()}))
+		var triangles_before: int = _cxr_candidate_triangles_total
+		var search_result: Dictionary = _r2_search_level(context)
+		level_report.candidate_triangle_count = _cxr_candidate_triangles_total - triangles_before
+		level_report.search_nodes = int(search_result.get("search_nodes", context.get("search_nodes", 0)))
+		level_report.branches = int(context.get("branches", 0))
+		level_report.solutions = int(search_result.get("solution_count", 0))
+		level_report.retained_solutions = search_result.get("retained_solutions", [])
+		level_report.search_status = "COMPLETE_SOLUTION" if bool(search_result.get("valid", false)) else "COMPLETE_NO_SOLUTION" if bool(search_result.get("search_complete", false)) else "PARTIAL_LIMIT"
+		level_report.terminal_reason = String(search_result.get("terminal_reason", "UNKNOWN_NOT_CAPTURED"))
+		report.candidate_triangles.append_array(context.get("candidate_triangle_rows", []))
+		var candidate_edge_keys: Array = context.get("candidate_edges", {}).keys()
+		candidate_edge_keys.sort()
+		for edge_key_value in candidate_edge_keys:
+			report.candidate_edges.append(context.candidate_edges[edge_key_value])
+		if bool(search_result.get("valid", false)):
+			var selected: Dictionary = search_result.get("best_solution", {})
+			var selected_supports: Array = selected.get("selected_supports", [])
+			var replacement: Array[Dictionary] = selected.get("final_replacement_triangles", [])
+			var patch_record: Dictionary = {"group_index": 0, "level": level, "patch_triangle_ids": patch_ids.duplicate(), "joint_seed_triangle_ids": seed_ids.duplicate(), "replacement_triangles": replacement.duplicate(true), "selected_supports": selected_supports.duplicate(true), "search_nodes": level_report.search_nodes, "search_usec": search_result.get("search_usec", "UNKNOWN_NOT_CAPTURED"), "search_phase": "r3", "boundary_signature": String(boundary.get("signature", "")), "boundary_provenance": "remaining_c6_edge_incidence", "boundary_diagnostics": boundary.get("incidence_diagnostics", []), "surface_diagnostics": selected.get("surface_diagnostics", "UNKNOWN_NOT_CAPTURED"), "candidate_triangle_count": level_report.candidate_triangle_count}
+			var best: Dictionary = {"solution": {"selected_supports": selected_supports, "support_ids": selected.get("support_ids", []), "minimum_cross_squared": selected.get("minimum_cross_squared", "UNKNOWN_NOT_CAPTURED"), "surface_diagnostics": selected.get("surface_diagnostics", "UNKNOWN_NOT_CAPTURED"), "stable_score_key": selected.get("stable_score_key", "")}, "patch_ids": patch_ids.duplicate(), "patch_record": patch_record, "replacement_triangles": replacement.duplicate(true), "level": level}
+			report.levels.append(level_report)
+			report.solution_found_levels.append(level)
+			report.search_nodes = _cxr_search_nodes_cavity
+			report.branches = _cxr_active_cavity_branches
+			report.prunes = _cxr_active_cavity_prunes
+			report.retained_solutions.append_array(search_result.get("retained_solutions", []))
+			return _finish_cxr_cavity_search(report, best, bool(search_result.get("search_complete", false)), bool(search_result.get("search_exhaustive", false)), "minimum_valid_joint_cavity_solution" if bool(search_result.get("search_complete", false)) else String(search_result.get("terminal_reason", "r3_search_partial")))
+		report.search_nodes = _cxr_search_nodes_cavity
+		report.branches = _cxr_active_cavity_branches
+		report.prunes = _cxr_active_cavity_prunes
+		report.levels.append(level_report)
+		if not bool(search_result.get("search_complete", false)):
+			report.limits_hit.append(String(search_result.get("terminal_reason", "R3_SEARCH_PARTIAL")))
+			_append_unrun_cxr_levels(report, level + 1, "NOT_RUN_SEARCH_LIMIT", String(search_result.get("terminal_reason", "r3_search_partial")))
+			return _finish_cxr_cavity_search(report, {}, false, false, String(search_result.get("terminal_reason", "r3_search_partial")))
+	if not any_valid_boundary_search:
+		return _finish_cxr_cavity_search(report, {}, false, false, "r3_no_valid_joint_boundary_level")
+	return _finish_cxr_cavity_search(report, {}, true, true, "r3_all_valid_joint_cavity_levels_exhausted_no_solution")
+
+func _r3_invalid_level_reason(connectivity: Dictionary, boundary: Dictionary) -> String:
+	if not bool(connectivity.get("valid", false)):
+		var connectivity_reason: String = String(connectivity.get("reason", ""))
+		if not connectivity_reason.is_empty():
+			return connectivity_reason
+	var boundary_reason: String = String(boundary.get("reason", ""))
+	return boundary_reason if not boundary_reason.is_empty() else "r3_joint_boundary_invalid"
+
+func _cxr_failure_terminal_reason(phase: String, cavity_results: Array, expected_cavity_count: int, global_limit_reason: String) -> String:
+	if not global_limit_reason.is_empty():
+		return global_limit_reason
+	if phase == "r3":
+		if cavity_results.size() != expected_cavity_count or cavity_results.is_empty():
+			return "UNKNOWN_NOT_CAPTURED"
+		return String(cavity_results[0].get("terminal_reason", "UNKNOWN_NOT_CAPTURED"))
+	return "finite_domain_exhausted_no_joint_solution"
+
+func _r3_unrun_seed_metrics(seed_ids: Array, status: String) -> Dictionary:
+	var result: Dictionary = {}
+	for seed_id in seed_ids:
+		result[String(seed_id)] = status
+	return result
+
+func _r3_patch_connectivity(patch: Array[Dictionary]) -> Dictionary:
+	if patch.is_empty():
+		return {"valid": false, "reason": "r3_joint_patch_empty", "component_count": 0}
+	var edge_triangles: Dictionary = {}
+	for triangle_index in range(patch.size()):
+		var ids: Array = patch[triangle_index].get("root_ids", [])
+		if ids.size() != 3:
+			return {"valid": false, "reason": "r3_joint_patch_triangle_arity_invalid", "triangle_id": patch[triangle_index].get("triangle_id", "")}
+		for edge_index in range(3):
+			var key: String = _edge_key(String(ids[edge_index]), String(ids[(edge_index + 1) % 3]))
+			if not edge_triangles.has(key): edge_triangles[key] = []
+			edge_triangles[key].append(triangle_index)
+	var adjacency_rows: Array[Array] = []
+	for triangle_index in range(patch.size()): adjacency_rows.append([])
+	for rows_value in edge_triangles.values():
+		var rows: Array = rows_value
+		for first_index in range(rows.size()):
+			for second_index in range(first_index + 1, rows.size()):
+				var first_triangle: int = int(rows[first_index])
+				var second_triangle: int = int(rows[second_index])
+				if not adjacency_rows[first_triangle].has(second_triangle): adjacency_rows[first_triangle].append(second_triangle)
+				if not adjacency_rows[second_triangle].has(first_triangle): adjacency_rows[second_triangle].append(first_triangle)
+	var visited: Dictionary = {}
+	var components: Array[Array] = []
+	for triangle_index in range(patch.size()):
+		if visited.has(triangle_index): continue
+		var queue: Array[int] = [triangle_index]
+		visited[triangle_index] = true
+		var component: Array[int] = []
+		while not queue.is_empty():
+			var current: int = queue.pop_front()
+			component.append(current)
+			for neighbor_value in adjacency_rows[current]:
+				var neighbor: int = int(neighbor_value)
+				if not visited.has(neighbor):
+					visited[neighbor] = true
+					queue.append(neighbor)
+		component.sort()
+		components.append(component)
+	var component_ids: Array = []
+	for component in components:
+		var ids: Array[String] = []
+		for index in component: ids.append(String(patch[int(index)].get("triangle_id", "")))
+		ids.sort()
+		component_ids.append(ids)
+	return {"valid": components.size() == 1, "reason": "" if components.size() == 1 else "r3_joint_patch_disconnected", "component_count": components.size(), "components": component_ids}
+
+func _r3_derive_remaining_boundary(all_triangles: Array[Dictionary], patch_ids: Array) -> Dictionary:
+	if patch_ids.is_empty():
+		return {"valid": false, "reason": "r3_joint_patch_empty"}
+	var patch_set: Dictionary = {}
+	for triangle_id in patch_ids: patch_set[String(triangle_id)] = true
+	var edge_rows: Dictionary = {}
+	var missing_patch_ids: Array[String] = []
+	var found_patch_ids: Dictionary = {}
+	var seen_triangle_ids: Dictionary = {}
+	for triangle in all_triangles:
+		var triangle_id: String = String(triangle.get("triangle_id", ""))
+		if triangle_id.is_empty() or seen_triangle_ids.has(triangle_id):
+			return {"valid": false, "reason": "r3_c6_triangle_identity_invalid", "triangle_id": triangle_id, "duplicate": seen_triangle_ids.has(triangle_id)}
+		seen_triangle_ids[triangle_id] = true
+		var ids: Array = triangle.get("root_ids", [])
+		if ids.size() != 3:
+			return {"valid": false, "reason": "r3_c6_triangle_arity_invalid", "triangle_id": triangle_id}
+		var is_removed: bool = patch_set.has(triangle_id)
+		if is_removed: found_patch_ids[triangle_id] = true
+		for edge_index in range(3):
+			var a_id: String = String(ids[edge_index])
+			var b_id: String = String(ids[(edge_index + 1) % 3])
+			if a_id.is_empty() or b_id.is_empty() or a_id == b_id:
+				return {"valid": false, "reason": "r3_c6_edge_identity_invalid", "triangle_id": triangle_id}
+			var edge_key: String = _edge_key(a_id, b_id)
+			if not edge_rows.has(edge_key): edge_rows[edge_key] = {"removed": [], "remaining": []}
+			var row: Dictionary = {"triangle_id": triangle_id, "a": a_id, "b": b_id}
+			var owner: String = "removed" if is_removed else "remaining"
+			edge_rows[edge_key][owner].append(row)
+	for triangle_id_value in patch_set.keys():
+		if not found_patch_ids.has(String(triangle_id_value)): missing_patch_ids.append(String(triangle_id_value))
+	missing_patch_ids.sort()
+	if not missing_patch_ids.is_empty():
+		return {"valid": false, "reason": "r3_joint_patch_triangles_missing", "missing_patch_triangle_ids": missing_patch_ids}
+	var boundary_edges: Array[String] = []
+	var incidence_diagnostics: Array[Dictionary] = []
+	var invalid: Array[Dictionary] = []
+	var internal_removed_nonmanifold: Array[String] = []
+	var edge_keys: Array = edge_rows.keys()
+	edge_keys.sort()
+	for edge_key_value in edge_keys:
+		var edge_key: String = String(edge_key_value)
+		var owners: Dictionary = edge_rows[edge_key]
+		var removed_rows: Array = owners.removed
+		var remaining_rows: Array = owners.remaining
+		if removed_rows.is_empty(): continue
+		incidence_diagnostics.append({"edge_key": edge_key, "removed_incidence": removed_rows.size(), "remaining_incidence": remaining_rows.size(), "removed_rows": removed_rows.duplicate(true), "remaining_rows": remaining_rows.duplicate(true)})
+		if remaining_rows.is_empty():
+			if removed_rows.size() == 1:
+				invalid.append({"reason": "r3_patch_open_edge_has_no_remaining_owner", "edge_key": edge_key, "removed_incidence": 1})
+			elif removed_rows.size() > 2:
+				internal_removed_nonmanifold.append(edge_key)
+			continue
+		if remaining_rows.size() != 1 or removed_rows.size() != 1:
+			invalid.append({"reason": "r3_joint_boundary_incidence_not_one_to_one", "edge_key": edge_key, "removed_incidence": removed_rows.size(), "remaining_incidence": remaining_rows.size(), "removed_rows": removed_rows.duplicate(true), "remaining_rows": remaining_rows.duplicate(true)})
+			continue
+		var removed_row: Dictionary = removed_rows[0]
+		var remaining_row: Dictionary = remaining_rows[0]
+		if String(removed_row.a) == String(remaining_row.a) and String(removed_row.b) == String(remaining_row.b):
+			invalid.append({"reason": "r3_joint_boundary_source_winding_same_direction", "edge_key": edge_key, "removed": removed_row, "remaining": remaining_row})
+			continue
+		# New cavity orientation is the reverse of the surviving C6 face edge.
+		boundary_edges.append(String(remaining_row.b) + "->" + String(remaining_row.a))
+	boundary_edges.sort()
+	var boundary: Dictionary = {"valid": invalid.is_empty(), "directed_edges": boundary_edges.duplicate(), "boundary_edge_count": boundary_edges.size(), "incidence_diagnostics": incidence_diagnostics, "internal_removed_nonmanifold_edges": internal_removed_nonmanifold, "missing_patch_triangle_ids": missing_patch_ids, "boundary_source": "remaining_C6_edge_incidence_after_joint_patch_removal", "invalid_reasons": invalid}
+	if invalid.is_empty():
+		var cycle: Dictionary = _r2_boundary_cycle(boundary)
+		if not bool(cycle.get("valid", false)):
+			boundary["valid"] = false
+			boundary["reason"] = String(cycle.get("reason", "r3_joint_boundary_cycle_invalid"))
+			boundary["cycle_diagnostics"] = cycle
+		else:
+			boundary["cycle"] = cycle.get("cycle", [])
+			boundary["signature"] = Core.sha256(JSON.stringify(boundary_edges).to_utf8_buffer())
+			boundary["observed_boundary_signature"] = boundary.signature
+			boundary["vertex_count"] = boundary.cycle.size()
+	if not bool(boundary.get("valid", false)) and not boundary.has("reason"):
+		boundary["reason"] = String(invalid[0].get("reason", "r3_joint_boundary_invalid")) if not invalid.is_empty() else "r3_joint_boundary_invalid"
+	boundary["diagnostic_sha256"] = Core.sha256(JSON.stringify(boundary).to_utf8_buffer())
+	return boundary
+
+func derive_remaining_boundary_for_test(all_triangles: Array[Dictionary], patch_ids: Array) -> Dictionary:
+	return _r3_derive_remaining_boundary(all_triangles, patch_ids)
 
 func _search_cxr_cavity_r2(cavity_ids: Array, all_triangles: Array[Dictionary], adjacency: Dictionary, residual_fixture: Dictionary, values: PackedFloat32Array, roi: Dictionary) -> Dictionary:
 	_cxr_cavity_started_usec = Time.get_ticks_usec()
@@ -828,7 +1217,7 @@ func _r2_make_search_context(patch: Array[Dictionary], patch_ids: Array, residua
 			level_patch.append(triangle)
 	var local_residual_fixture: Dictionary = residual_fixture.duplicate(true)
 	local_residual_fixture["arc_map"] = local_arc_result.get("arc_map", []).duplicate(true)
-	var context: Dictionary = {"phase": "r2", "level": level, "patch": patch.duplicate(), "level_patch": level_patch, "patch_ids": patch_ids.duplicate(), "all_triangles": all_triangles.duplicate(), "residual_triangles": residual_triangles.duplicate(), "residual_id_set": residual_id_set, "owner_polygon_ids": owner_polygon_ids, "source_polygon_ids": source_polygon_ids, "residual_fixture": local_residual_fixture, "global_arc_map": constraint_arcs.duplicate(true), "global_applied_flips": residual_fixture.get("applied_flips", []).duplicate(true), "support_by_id": support_by_id, "vertex_positions": vertex_positions, "source_root_ids": source_root_ids, "required_topology_root_ids": required_topology_root_ids, "local_required_arc_count": local_arc_result.get("arc_map", []).size(), "source_owner_boundary_arc_count": owner_arc_result.get("arc_map", []).size(), "vertex_ids": all_vertex_ids, "boundary_cycle": cycle, "boundary_edge_map": boundary_edge_map, "boundary_signature": String(boundary.get("signature", "")), "projected_positions": projected_positions, "polygon": polygon, "projection_origin": origin, "projection_u": axis_u, "projection_v": axis_v, "reference_normal": normal, "candidate_triangle_rows": [], "candidate_triangle_cache": {}, "candidate_edges": {}, "search_complete": true, "search_exhaustive": true, "limit_reason": "", "limits_hit": [], "search_nodes": 0, "branches": 0, "prunes": {}, "solution_rejections": [], "branch_counts": {}, "candidate_triangle_count": 0, "solution_count": 0, "retained_solutions": [], "best_solution": {}, "visited_by_support_count": {}, "start_usec": Time.get_ticks_usec(), "solution_scoring_enabled": not _cxr_active_snapshot.is_empty()}
+	var context: Dictionary = {"phase": _cxr_active_phase, "level": level, "patch": patch.duplicate(), "level_patch": level_patch, "patch_ids": patch_ids.duplicate(), "all_triangles": all_triangles.duplicate(), "residual_triangles": residual_triangles.duplicate(), "residual_id_set": residual_id_set, "owner_polygon_ids": owner_polygon_ids, "source_polygon_ids": source_polygon_ids, "residual_fixture": local_residual_fixture, "global_arc_map": constraint_arcs.duplicate(true), "global_applied_flips": residual_fixture.get("applied_flips", []).duplicate(true), "support_by_id": support_by_id, "vertex_positions": vertex_positions, "source_root_ids": source_root_ids, "required_topology_root_ids": required_topology_root_ids, "local_required_arc_count": local_arc_result.get("arc_map", []).size(), "source_owner_boundary_arc_count": owner_arc_result.get("arc_map", []).size(), "vertex_ids": all_vertex_ids, "boundary_cycle": cycle, "boundary_edge_map": boundary_edge_map, "boundary_signature": String(boundary.get("signature", "")), "joint_boundary": boundary.duplicate(true) if _cxr_active_phase == "r3" else {}, "projected_positions": projected_positions, "polygon": polygon, "projection_origin": origin, "projection_u": axis_u, "projection_v": axis_v, "reference_normal": normal, "candidate_triangle_rows": [], "candidate_triangle_cache": {}, "candidate_edges": {}, "search_complete": true, "search_exhaustive": true, "limit_reason": "", "limits_hit": [], "search_nodes": 0, "branches": 0, "prunes": {}, "solution_rejections": [], "branch_counts": {}, "candidate_triangle_count": 0, "solution_count": 0, "retained_solutions": [], "best_solution": {}, "visited_by_support_count": {}, "start_usec": Time.get_ticks_usec(), "solution_scoring_enabled": not _cxr_active_snapshot.is_empty()}
 	return {"valid": true, "context": context}
 
 func _r2_localize_topology_arcs(arcs: Array, local_root_ids: Dictionary, boundary_cycle: Array[String], root_positions: Dictionary, vertex_positions: Dictionary, projected_positions: Dictionary, polygon: Array[Vector2], origin: Vector3, axis_u: Vector3, axis_v: Vector3) -> Dictionary:
@@ -1410,7 +1799,8 @@ func _r2_get_candidate_triangle(ids_input: Array, context: Dictionary) -> Dictio
 		var rejected: Dictionary = {"valid": false, "reason": row.rejection_reason, "owner_diagnostics": owner}
 		context.candidate_triangle_cache[cache_key] = rejected
 		return rejected
-	var triangle_id: String = "R12CXR2_" + Core.sha256(cache_key.to_utf8_buffer()).substr(0, 24)
+	var triangle_prefix: String = "R12CXR3_" if String(context.get("phase", "")) == "r3" else "R12CXR2_"
+	var triangle_id: String = triangle_prefix + Core.sha256(cache_key.to_utf8_buffer()).substr(0, 24)
 	var triangle: Dictionary = _triangle(triangle_id, String(owner.get("polygon_id", "")), ids, points, "r2_constrained_support_triangulation", false, CXR_CUTOFF_SQUARED)
 	triangle["source_polygon_ids"] = owner.get("source_polygon_ids", [owner.get("polygon_id", "")]).duplicate()
 	triangle["r2_owner_source_triangle_id"] = String(owner.get("source_triangle_id", ""))
@@ -1695,6 +2085,8 @@ func _r2_validate_solution(triangles: Array[Dictionary], selected_support_ids: A
 			replacement.append(triangle)
 	replacement.append_array(triangles)
 	var level_boundary_before: Dictionary = _boundary_state(context.level_patch)
+	if String(context.get("phase", "")) == "r3":
+		level_boundary_before = context.get("joint_boundary", {})
 	var level_boundary_after: Dictionary = _boundary_state(replacement)
 	if not bool(level_boundary_before.get("valid", false)) or not bool(level_boundary_after.get("valid", false)) or String(level_boundary_before.get("signature", "")) != String(level_boundary_after.get("signature", "")):
 		return {"valid": false, "reason": "level_patch_boundary_changed", "before": level_boundary_before, "after": level_boundary_after}
@@ -2309,7 +2701,7 @@ func _cxr_global_limit_reason_at(now_usec: int) -> String:
 	var elapsed_usec: int = now_usec - _cxr_search_started_usec
 	if elapsed_usec >= CXR_MAX_SEARCH_USEC_TOTAL:
 		return "MAX_SEARCH_USEC_TOTAL"
-	var total_state_limit: int = CXR_R2_MAX_SEARCH_STATES_TOTAL if _cxr_active_phase == "r2" else CXR_MAX_SEARCH_STATES_TOTAL
+	var total_state_limit: int = CXR_R2_MAX_SEARCH_STATES_TOTAL if ["r2", "r3"].has(_cxr_active_phase) else CXR_MAX_SEARCH_STATES_TOTAL
 	if _cxr_search_nodes_total >= total_state_limit:
 		return "MAX_SEARCH_STATES_TOTAL"
 	return ""
@@ -2545,7 +2937,8 @@ func _search_cxr_combinations(index: int, options_by_residual: Array[Array], sel
 func _generate_field_candidates(residual: Dictionary, patch: Array[Dictionary], values: PackedFloat32Array, roi: Dictionary, level: int, max_candidates: int, max_attempts: int, cavity_id: String, fixture_row: Dictionary) -> Dictionary:
 	var generation_started_usec: int = Time.get_ticks_usec()
 	if not _cxr_local_search_marker_emitted:
-		print("R12CXR_LOCAL_PATCH_SEARCH_BEGIN " + JSON.stringify({"attempt_id": OS.get_environment("R12CXR_ATTEMPT_ID"), "source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1", "cavity_id": cavity_id, "level": level, "preregistered_limits": _cxr_limits()}))
+		var marker: String = "R12CXR_R3_SUPPORT_GENERATION_BEGIN " if _cxr_active_phase == "r3" else "R12CXR_LOCAL_PATCH_SEARCH_BEGIN "
+		print(marker + JSON.stringify({"attempt_id": OS.get_environment("R12CXR_ATTEMPT_ID"), "source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1", "cavity_id": cavity_id, "level": level, "support_source": "original_frozen_residual_faces_only" if _cxr_active_phase == "r3" else "phase_defined_residual_set", "preregistered_limits": _cxr_limits()}))
 		_cxr_local_search_marker_emitted = true
 	var attempts: Array[Dictionary] = []
 	var candidates_by_identity: Dictionary = {}
@@ -2840,11 +3233,17 @@ func _cxr_record_attempt(attempts: Array[Dictionary], candidate_id: String, acce
 
 func _cxr_limits() -> Dictionary:
 	var limits: Dictionary = {"phase": _cxr_active_phase, "max_cavity_level": CXR_MAX_CAVITY_LEVEL, "max_cavities": CXR_MAX_CAVITIES, "max_patch_triangles": CXR_MAX_PATCH_TRIANGLES, "max_candidate_attempts_per_cavity": CXR_MAX_CANDIDATE_ATTEMPTS_PER_CAVITY, "max_support_candidates_per_cavity": CXR_MAX_SUPPORT_CANDIDATES_PER_CAVITY, "max_selected_supports": CXR_MAX_SELECTED_SUPPORTS, "max_retained_solutions_per_cavity": CXR_MAX_RETAINED_SOLUTIONS, "max_search_usec_per_cavity": CXR_MAX_SEARCH_USEC_PER_CAVITY, "max_search_usec_total": CXR_MAX_SEARCH_USEC_TOTAL, "max_realize_usec": CXR_MAX_REALIZE_USEC, "max_support_distance": CXR_MAX_SUPPORT_DISTANCE, "barycentric_epsilon": CXR_BARYCENTRIC_EPSILON, "field_residual_epsilon": CXR_FIELD_RESIDUAL_EPSILON, "cross_squared_cutoff": CXR_CUTOFF_SQUARED}
-	if _cxr_active_phase == "r2":
+	if ["r2", "r3"].has(_cxr_active_phase):
 		limits["max_candidate_triangles_per_cavity"] = CXR_R2_MAX_CANDIDATE_TRIANGLES_PER_CAVITY
 		limits["max_candidate_triangles_total"] = CXR_R2_MAX_CANDIDATE_TRIANGLES_TOTAL
 		limits["max_search_states_per_cavity"] = CXR_R2_MAX_SEARCH_STATES_PER_CAVITY
 		limits["max_search_states_total"] = CXR_R2_MAX_SEARCH_STATES_TOTAL
+		if _cxr_active_phase == "r3":
+			limits["max_cavities"] = 1
+			limits["joint_residual_face_count"] = 3
+			limits["joint_patch_policy"] = "union_of_dual_graph_radius_layers_0_through_3"
+			limits["joint_boundary_source"] = "remaining_C6_edge_incidence_after_joint_patch_removal"
+			limits["support_source"] = "original_frozen_residual_faces_only"
 	else:
 		limits["max_candidate_triangles_per_cavity"] = CXR_MAX_CANDIDATE_TRIANGLES_PER_CAVITY
 		limits["max_search_states_per_cavity"] = CXR_MAX_SEARCH_STATES_PER_CAVITY

@@ -302,6 +302,8 @@ static func _campaign_disposition(result_class: String, target_case: Dictionary,
 				return "R12_CXR_R1_COMPLETE_NO_SOLUTION_R2_ELIGIBLE"
 			if String(search.get("phase", "")) == "r2" and String(search.get("reason", "")) == "cxr_r2_no_valid_constrained_triangulation":
 				return "R12_CXR_R2_COMPLETE_NO_SOLUTION_R3_ELIGIBLE"
+			if String(search.get("phase", "")) == "r3" and String(search.get("reason", "")) == "cxr_r3_no_valid_constrained_triangulation":
+				return "R12_CXR_R3_COMPLETE_NO_SOLUTION_FINITE_DOMAIN_EXHAUSTED"
 	return "R12_CXR_FAILED_TARGET_WITH_EVIDENCE"
 
 static func _target_has_structural_regression(geometry: Dictionary) -> bool:

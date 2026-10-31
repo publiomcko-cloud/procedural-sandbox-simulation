@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_cxr_field_candidate_enumeration()
 	_test_cxr_r1_level_and_cavity_continuation()
 	_test_cxr_r2_constrained_triangulation()
+	_test_cxr_r3_remaining_boundary_and_joint_patch()
 	if failures.is_empty():
 		print("R12CXR_CONTRACT_TESTS_PASS " + JSON.stringify({"assertions": assertions, "failures": 0, "suite": "bounded_cxr_contract"}))
 		quit(0)
@@ -450,6 +451,7 @@ func _test_cxr_r2_constrained_triangulation() -> void:
 	var concave_triangle_ids: Array[String] = ["lb", "le", "la"]
 	var concave_crossing: Dictionary = realizer.call("_r2_triangle_inside_domain", concave_triangle_ids, l_context_result.get("context", {})) if bool(l_context_result.get("valid", false)) else {"valid": true, "reason": "context_not_tested"}
 	_check(bool(l_boundary_state.get("valid", false)) and bool(l_context_result.get("valid", false)) and not bool(concave_crossing.get("valid", true)), "R2 rejects a candidate triangle whose edge exits a concave frozen boundary")
+
 	var cap_probe: RefCounted = Realizer.new()
 	cap_probe.set("_cxr_active_phase", "r2")
 	cap_probe.set("_cxr_search_started_usec", Time.get_ticks_usec())
@@ -465,6 +467,55 @@ func _test_cxr_r2_constrained_triangulation() -> void:
 	_check(not bool(realizer.call("_r2_intersection_only_shared_simplex", triangle_a, overlap_shared_edge)), "R2 rejects coplanar triangles that overlap beyond a shared edge")
 	_check(Realizer.CXR_R2_MAX_CANDIDATE_TRIANGLES_PER_CAVITY == 65536 and Realizer.CXR_R2_MAX_CANDIDATE_TRIANGLES_TOTAL == 131072 and Realizer.CXR_R2_MAX_SEARCH_STATES_PER_CAVITY == 32768 and Realizer.CXR_R2_MAX_SEARCH_STATES_TOTAL == 65536, "R2 resource caps match the pre-registered design bounds")
 
+
+func _test_cxr_r3_remaining_boundary_and_joint_patch() -> void:
+	var realizer: RefCounted = Realizer.new()
+	var points: Dictionary = {"a": Vector3.ZERO, "b": Vector3.RIGHT, "c": Vector3.UP, "d": Vector3(0.0, 0.0, 1.0)}
+	var patch_triangle: Dictionary = _triangle("r3-patch", ["a", "c", "b"], points, false)
+	var outside: Array[Dictionary] = [
+		_triangle("r3-out-ab", ["a", "b", "d"], points, false),
+		_triangle("r3-out-ac", ["a", "d", "c"], points, false),
+		_triangle("r3-out-bc", ["b", "c", "d"], points, false)
+	]
+	var all: Array[Dictionary] = [patch_triangle]
+	all.append_array(outside)
+	var derived: Dictionary = realizer.call("derive_remaining_boundary_for_test", all, ["r3-patch"])
+	var direct: Dictionary = realizer.call("_boundary_state", [patch_triangle])
+	_check(bool(derived.get("valid", false)), "R3 derives a single closed joint boundary from surviving C6 edge incidence")
+	_check(String(derived.get("boundary_source", "")) == "remaining_C6_edge_incidence_after_joint_patch_removal" and derived.get("signature", "") == direct.get("signature", ""), "R3 replacement boundary orientation and signature match the remaining mesh interface")
+	_check(derived.get("incidence_diagnostics", []).size() == 3, "R3 records all three removed-to-remaining interface edge incidences")
+	var wrong_winding: Array[Dictionary] = all.duplicate(true)
+	var outside_face: Dictionary = wrong_winding[1]
+	var outside_ids: Array = outside_face.root_ids.duplicate()
+	var outside_points: Array = outside_face.points.duplicate()
+	var swap_id: Variant = outside_ids[0]
+	outside_ids[0] = outside_ids[1]
+	outside_ids[1] = swap_id
+	var swap_point: Variant = outside_points[0]
+	outside_points[0] = outside_points[1]
+	outside_points[1] = swap_point
+	outside_face["root_ids"] = outside_ids
+	outside_face["points"] = outside_points
+	wrong_winding[1] = outside_face
+	var wrong: Dictionary = realizer.call("derive_remaining_boundary_for_test", wrong_winding, ["r3-patch"])
+	_check(not bool(wrong.get("valid", true)) and String(wrong.get("reason", "")) == "r3_joint_boundary_source_winding_same_direction", "R3 rejects a joint boundary whose removed and surviving source faces wind the same way")
+	var open_source: Array[Dictionary] = [patch_triangle]
+	var open: Dictionary = realizer.call("derive_remaining_boundary_for_test", open_source, ["r3-patch"])
+	_check(not bool(open.get("valid", true)) and String(open.get("reason", "")) == "r3_patch_open_edge_has_no_remaining_owner", "R3 refuses to invent cavity boundary edges without a surviving C6 owner")
+	var disconnected: Array[Dictionary] = [patch_triangle, _triangle("r3-island", ["x", "y", "z"], {"x": Vector3(3,0,0), "y": Vector3(4,0,0), "z": Vector3(3,1,0)}, false)]
+	var connectivity: Dictionary = realizer.call("_r3_patch_connectivity", disconnected)
+	_check(not bool(connectivity.get("valid", true)) and int(connectivity.get("component_count", -1)) == 2, "R3 joint replacement requires one edge-connected patch")
+	realizer.set("_cxr_active_phase", "r3")
+	var r3_limits: Dictionary = realizer.call("_cxr_limits")
+	_check(int(r3_limits.get("max_cavities", -1)) == 1 and int(r3_limits.get("joint_residual_face_count", -1)) == 3, "R3 freezes one joint cavity over exactly three residual faces")
+	_check(String(r3_limits.get("joint_boundary_source", "")) == "remaining_C6_edge_incidence_after_joint_patch_removal" and String(r3_limits.get("support_source", "")) == "original_frozen_residual_faces_only", "R3 limit contract pins remaining-mesh boundary and original residual-only support provenance")
+	_check(int(r3_limits.get("max_candidate_triangles_per_cavity", -1)) == 65536 and int(r3_limits.get("max_search_states_total", -1)) == 65536 and float(r3_limits.get("cross_squared_cutoff", 0.0)) == 1.0e-12, "R3 inherits bounded R2 search caps and the unchanged strict geometry cutoff")
+	var boundary_failure_reason: String = realizer.call("_r3_invalid_level_reason", {"valid": true, "reason": ""}, {"valid": false, "reason": "cx_patch_nonmanifold_edge"})
+	_check(boundary_failure_reason == "cx_patch_nonmanifold_edge", "R3 preserves the boundary failure when patch connectivity itself is valid")
+	var no_domain_terminal: String = realizer.call("_cxr_failure_terminal_reason", "r3", [{"terminal_reason": "r3_no_valid_joint_boundary_level"}], 1, "")
+	var exhausted_terminal: String = realizer.call("_cxr_failure_terminal_reason", "r3", [{"terminal_reason": "r3_all_valid_joint_cavity_levels_exhausted_no_solution"}], 1, "")
+	_check(no_domain_terminal == "r3_no_valid_joint_boundary_level", "R3 reports invalid-domain construction instead of false finite exhaustion")
+	_check(exhausted_terminal == "r3_all_valid_joint_cavity_levels_exhausted_no_solution", "R3 retains an explicit finite-domain terminal reason only after valid domains exhaust")
 func _sequence_probe_local_failure(cavity_ids: Array) -> Dictionary:
 	_sequence_probe_calls.append(cavity_ids.duplicate())
 	return {"valid": false, "search_started": true, "search_complete": true, "search_exhaustive": true, "terminal_reason": "synthetic_local_failure"}
