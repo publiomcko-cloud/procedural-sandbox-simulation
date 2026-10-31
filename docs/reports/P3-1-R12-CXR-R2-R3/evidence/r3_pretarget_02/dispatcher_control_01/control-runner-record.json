@@ -1,0 +1,21 @@
+{
+  "command": [
+    "-NoLogo",
+    "-NoProfile",
+    "-File",
+    "C:\\r12cxr-convergence-20261031\\docs\\reports\\P3-1-R12-CXR-R2-R3\\evidence\\r3_pretarget_02\\r3_target_dispatcher.ps1",
+    "-ControlOnly",
+    "-EvidenceRoot",
+    "C:\\r12cxr-convergence-20261031\\docs\\reports\\P3-1-R12-CXR-R2-R3\\evidence\\r3_pretarget_02\\dispatcher_control_01"
+  ],
+  "launcher_pid": 39880,
+  "control_process_pid": 2584,
+  "start_utc": "2026-10-31T21:05:08.8821456Z",
+  "end_utc": "2026-10-31T21:05:09.9530328Z",
+  "elapsed_ms": 1070.8872,
+  "exit_code": 1,
+  "dispatcher_sha256": "da4c5e39cedd7e62388fedef6a1e9b9d308e2a2961dccf9759d11d3b94641033",
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "7ae9a134176bca97276a2564feb15c3c03cd0450b97a12ef85ecc5b20a2d1fee",
+  "parser_errors": 0
+}

@@ -1,0 +1,16 @@
+{
+  "attempt_id": "R3_DISPATCHER_CONTROL_01",
+  "executable": "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.9.0_x64__8wekyb3d8bbwe\\pwsh.exe",
+  "argv": [
+    "-NoLogo",
+    "-NoProfile",
+    "-Command",
+    "[Console]::Out.WriteLine('R3_CONTROL_STDOUT');[Console]::Error.WriteLine('R3_CONTROL_STDERR');Start-Sleep -Milliseconds 250;exit 23"
+  ],
+  "scenario_id": "NONE",
+  "phase": "NONE",
+  "status": "PROCESS_START_CALL_IMMINENT",
+  "created_utc": "2026-10-31T21:05:24.7580364Z",
+  "source_sha": "",
+  "execution_checkout_head": ""
+}

@@ -1,0 +1,23 @@
+{
+  "attempt_id": "R3_DISPATCHER_CONTROL_01",
+  "executable": "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.9.0_x64__8wekyb3d8bbwe\\pwsh.exe",
+  "argv": [
+    "-NoLogo",
+    "-NoProfile",
+    "-Command",
+    "[Console]::Out.WriteLine('R3_CONTROL_STDOUT');[Console]::Error.WriteLine('R3_CONTROL_STDERR');Start-Sleep -Milliseconds 250;exit 23"
+  ],
+  "pid": 20500,
+  "parent_pid": 44416,
+  "os_command_line": "\"C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.9.0_x64__8wekyb3d8bbwe\\pwsh.exe\" -NoLogo -NoProfile -Command \"[Console]::Out.WriteLine('R3_CONTROL_STDOUT');[Console]::Error.WriteLine('R3_CONTROL_STDERR');Start-Sleep -Milliseconds 250;exit 23\"",
+  "creation_date": "10/31/2026 18:05:24",
+  "process_start_utc": "2026-10-31T21:05:24.7626258Z",
+  "source_sha": "",
+  "execution_checkout_head": "",
+  "scenario_id": "NONE",
+  "phase": "NONE",
+  "free_commit_bytes": null,
+  "appdata": "NOT_APPLICABLE",
+  "status": "PROCESS_STARTED",
+  "post_start_telemetry_error": ""
+}
