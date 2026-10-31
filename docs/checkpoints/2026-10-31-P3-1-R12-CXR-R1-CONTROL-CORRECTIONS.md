@@ -1,8 +1,8 @@
 # P3.1 R12-CXR R1 control corrections — pre-target checkpoint
 
-**Date/time:** 2026-10-31, America/Sao_Paulo  
-**Event type:** bounded source correction and test evidence  
-**Publication state:** recorded in isolated feature branch; no PR created yet  
+**Date/time:** 2026-10-31, America/Sao_Paulo
+**Event type:** bounded source correction and test evidence
+**Publication state:** recorded in isolated feature branch; no PR created yet
 **Status:** `R1_SOURCE_CORRECTED / TARGET_NOT_STARTED`
 
 ## Verified repository identity

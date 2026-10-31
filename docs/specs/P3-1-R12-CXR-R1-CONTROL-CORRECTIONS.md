@@ -1,6 +1,6 @@
 # P3.1 R12-CXR R1 control correction addendum
 
-Date: 2026-10-31  
+Date: 2026-10-31
 State: preregistered source correction; target geometry not started.
 
 This addendum records control-flow and evidence-capture corrections to the already frozen R12-CXR R1 field-support micro-patch method. It does not alter Candidate D, source scalar samples, topology authority, roots, cutoff, ROI ray oracle, volume, candidate ordering, acceptance gates, or any preregistered limit in [the original contract](P3-1-R12-CXR-FIELD-SUPPORT-PREREGISTRATION.md).
