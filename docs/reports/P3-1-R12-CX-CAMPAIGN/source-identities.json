@@ -1,0 +1,117 @@
+{
+  "schema": "P3.1.R12CX.SourceIdentity.v1",
+  "repository": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "branch": "exp/p3-1-r12-cx-residual-micropatch",
+  "measured_head": "a9c1353db49a7bb5607ce8eaf91d8032c7dc4bea",
+  "direct_parent": "07c93797fa3f26d3c9143433638f193e7c5cef00",
+  "tree": "c270eb914ebd8d1a2248505bbc6f59fefdff529a",
+  "baseline": "619a43a795cae3e2e9926a5a29554da009fbe2c1",
+  "worktree_clean": true,
+  "preserved_untracked_uid_count": 54,
+  "changed_paths": [
+    ".gitattributes",
+    "docs/checkpoints/2026-10-31-P3-1-R12-CX-PREREGISTRATION.md",
+    "docs/checkpoints/INDEX.md",
+    "docs/specs/P3-1-R12-CX-RESIDUAL-CUTOFF-MICROPATCH.md",
+    "docs/status/CURRENT_STATUS.md",
+    "game/tests/prototypes/p3_1_r12_cx_campaign.gd",
+    "game/tests/prototypes/p3_1_r12_cx_contract_tests.gd",
+    "game/tests/prototypes/p3_1_r12_cx_fixture_builder.gd",
+    "game/tests/prototypes/p3_1_r12_cx_micropatch_realizer.gd",
+    "game/tests/prototypes/p3_1_r12_cx_realizer_check.gd",
+    "game/tests/prototypes/p3_1_r12_cx_residual_fixture.json"
+  ],
+  "physical_source_files": [
+    {
+      "path": ".gitattributes",
+      "blob": "0c97e47bcbb840f9b15776d73be138de5938e9c5",
+      "sha256": "fae57cacca71da421af2187861d0d136a216d45b51135348037614e9c3f70bee"
+    },
+    {
+      "path": "docs/checkpoints/2026-10-31-P3-1-R12-CX-PREREGISTRATION.md",
+      "blob": "4be406846b3f4db1cbe2adf43261d32e81471bc4",
+      "sha256": "87e5f6d0350313fef7d91f93268d71f4d6f194d08ce1f8b61a340a990251afc2"
+    },
+    {
+      "path": "docs/checkpoints/INDEX.md",
+      "blob": "4ef8e1493a862063011384a282c4676824508fda",
+      "sha256": "2062c91dd67407411d3c89955ca1c01db32c366539d2ffe6069c3072dfa2f610"
+    },
+    {
+      "path": "docs/specs/P3-1-R12-CX-RESIDUAL-CUTOFF-MICROPATCH.md",
+      "blob": "96b8a143e423cf400e0584e27c1d5210551e4e48",
+      "sha256": "5d80a9b11ec5ea3c73a29c235a4fe873968577b310067c9fc06c985020d5f910"
+    },
+    {
+      "path": "docs/status/CURRENT_STATUS.md",
+      "blob": "dbc4a6ab5d8f9d44e911366cc66fc5a5dae1b356",
+      "sha256": "26c91dfb84fe290a4863c5e3a911b4e743fc0f2a17770260c1c54c8e2b69534f"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r12_cx_campaign.gd",
+      "blob": "2fbbb5d7388c07803213ce8c33b60006f1bdaf4e",
+      "sha256": "853858f68fb2b07937eb16bb014e58f33aaf165e7fa47dd7ba9eafda5732d606"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r12_cx_contract_tests.gd",
+      "blob": "8290582d89f2f389b34aba54f7e84d54c7eff71b",
+      "sha256": "5c40fc5e9bba554addc353aed9123d6dfcb842aded8585e62eecf03bad22e260"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r12_cx_fixture_builder.gd",
+      "blob": "8292382e093289bbb1a8eb12b8a0662d0e59da5f",
+      "sha256": "676ab2d6a0cffd622fc357b3226a4f8b8a27be4dd6e21c1e8ff3f2419439c453"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r12_cx_micropatch_realizer.gd",
+      "blob": "d660b97d439850b99ccd666786a5b0f61797fca8",
+      "sha256": "ca024bac21a33a2e37c03de4b7a9718a2dd726458a4e6e510eb15a259380be5c"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r12_cx_realizer_check.gd",
+      "blob": "1324c330347cf2a9c8a6b2244130d6458dd6c27c",
+      "sha256": "d61624472d27673cdd16c93559445374956831cf45a7330079048c415d44f52a"
+    },
+    {
+      "path": "game/tests/prototypes/p3_1_r12_cx_residual_fixture.json",
+      "blob": "2feafb65f279cf35bb47b0033cdd79fa2d528b1f",
+      "sha256": "ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23"
+    }
+  ],
+  "frozen_inputs": {
+    "stage0_fixture_sha256": "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d",
+    "c6_source_sha": "4535f4c965db67adab7c93e448492c54be916c92",
+    "c6_artifact_sha256": "e207685388a1690eebad20ce0ae4f9ae1887b47b2113ca98be7008c992b7a367",
+    "residual_fixture_sha256": "ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23",
+    "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+    "candidate_d_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+    "authority_sha256": "feea8237160c90a049d9f0ab63ad7ff86f46604f9d57112278d25fda20a08216"
+  },
+  "runtime": {
+    "godot_version": "4.7.2.stable.official.ed1daf0bf",
+    "godot_executable_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+    "p8_contract_exit_code": 0,
+    "p8_contract_stdout_sha256": "321a792c447118c777b9ca10380282f8146ada8cc59238ed23d2903e634804ec",
+    "p8_assertions": 44,
+    "p8_failures": 0,
+    "target_attempt": "CX_GEOMETRY_FINAL04",
+    "target_result": "FAILED_TARGET",
+    "failed_invariant": "cx_bounded_patch_search_failed",
+    "target_result_sha256": "9c5b4ef8611bb1a91aa3d9e2deaa8f2fcca06bc5246d362b515fe8f9d10b2d10"
+  },
+  "evidence": {
+    "index_path": "evidence-index.json",
+    "index_sha256": "7c3158cf1a052b04f7b1a5cda6c1787ec59f95abe05267730f21a754d37cf6da",
+    "index_entry_count": 42,
+    "archive_path": "evidence/P3.1-R12CX-FINAL-EVIDENCE.zip",
+    "archive_sha256": "62740d552875ba2af6b6e59eb678323461d53405e11f4ba3788481f88872cfe6",
+    "archive_reextraction_verification": "42 of 42 indexed files matched size and SHA-256"
+  },
+  "limitations": [
+    "The target result wrapper omitted nested local-search details; local_search_nodes=0 is not a measured count.",
+    "Search completion and exhaustive coverage are unestablished; no mathematical infeasibility claim.",
+    "Equal-LOD failed; controls, ROI rays, mixed LOD, deterministic repeat, E2E and full scripts/validate.ps1 were not run.",
+    "Performance remains UNSCORED; headless timing is not presented-frame or GPU evidence.",
+    "No production adoption, GUI acceptance, release approval or protected-host attestation."
+  ]
+}

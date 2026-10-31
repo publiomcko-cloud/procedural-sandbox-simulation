@@ -1,0 +1,219 @@
+{
+  "schema": "P3.1.R12CX.EvidenceIndex.v1",
+  "source_sha": "a9c1353db49a7bb5607ce8eaf91d8032c7dc4bea",
+  "attempt_id": "CX_GEOMETRY_FINAL04",
+  "entry_count": 42,
+  "index_excludes_itself": true,
+  "entries": [
+    {
+      "sha256": "7ea1bd725827ec48d7396be137a7ce99a61db0a5166d5ee49d54d7ae26398e86",
+      "bytes": 154,
+      "path": "attempts/CX_GEOMETRY_FINAL01/command.txt"
+    },
+    {
+      "sha256": "e5a4a2d13a597f5fcdfc4e9d0cc05276fb0a8a69f73b6bf910a671f3ec3d9f85",
+      "bytes": 5118,
+      "path": "attempts/CX_GEOMETRY_FINAL01/launch-intent.json"
+    },
+    {
+      "sha256": "81293e7ca0af1dc2973ee5ad2ec4d34724f6d1b5603fcc408e13883e1203a306",
+      "bytes": 819,
+      "path": "attempts/CX_GEOMETRY_FINAL01/process-record.json"
+    },
+    {
+      "sha256": "128efde615c2e8b408af67de1d4e04e737460fb24ddc958a642e46d425abd720",
+      "bytes": 5244,
+      "path": "attempts/CX_GEOMETRY_FINAL01/r12cx_CX_GEOMETRY_FINAL01.json"
+    },
+    {
+      "sha256": "2078f4f7b2ed9385d1945acd50e6dd588af94f98e76b87e910d96083e97643e5",
+      "bytes": 1214,
+      "path": "attempts/CX_GEOMETRY_FINAL01/resource-monitor.json"
+    },
+    {
+      "sha256": "95075a4540761ee150e0839e2bb2e0e768eef51c9231f101f9dbd10cd413ebc1",
+      "bytes": 556,
+      "path": "attempts/CX_GEOMETRY_FINAL01/stderr.txt"
+    },
+    {
+      "sha256": "33413b7b4e4b8c6b43d752218cd3c38ce3d94c343ab48872760f433dd5c11392",
+      "bytes": 1563,
+      "path": "attempts/CX_GEOMETRY_FINAL01/stdout.txt"
+    },
+    {
+      "sha256": "c3341de8fc9c816eb74a164660b405b9f20aeb2c94cf09e97a273e62012b4068",
+      "bytes": 149,
+      "path": "attempts/CX_GEOMETRY_FINAL02/command.txt"
+    },
+    {
+      "sha256": "8e51efd3dd1cd57052a22380fc2e7f0ae0d1c60b421008a2376842ce35201fa6",
+      "bytes": 2325,
+      "path": "attempts/CX_GEOMETRY_FINAL02/launch-intent.json"
+    },
+    {
+      "sha256": "20bc4eb8ecdbab9bb1bbdfbeebd0ff4a5fc45cd60e2c579b26ad7ecb1e6948e1",
+      "bytes": 976,
+      "path": "attempts/CX_GEOMETRY_FINAL02/pre_geometry_failure_CX_GEOMETRY_FINAL02.json"
+    },
+    {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "path": "attempts/CX_GEOMETRY_FINAL02/stderr.txt"
+    },
+    {
+      "sha256": "03cb490d7c34eb5630739ad85f0c7a43689668d088296dbb1654079d987e5eba",
+      "bytes": 1129,
+      "path": "attempts/CX_GEOMETRY_FINAL02/stdout.txt"
+    },
+    {
+      "sha256": "03ec6e1257526d2a405527afc746221d477a1efef5942d4cdc3cacd30f24b769",
+      "bytes": 441,
+      "path": "attempts/CX_GEOMETRY_FINAL03/launch-intent-amendment.json"
+    },
+    {
+      "sha256": "81234b6be0b2127f0d456574723637184d60fb09153a0e676fce22ef426916c2",
+      "bytes": 2186,
+      "path": "attempts/CX_GEOMETRY_FINAL03/launch-intent.json"
+    },
+    {
+      "sha256": "3a0065b6fd06b1e986f443c62323b44da4271fd0c9d70595205cc2afd1f6135e",
+      "bytes": 1056,
+      "path": "attempts/CX_GEOMETRY_FINAL03/pre_geometry_failure_CX_GEOMETRY_FINAL03.json"
+    },
+    {
+      "sha256": "05dccb6f4e9432478cb3f9d5f59b75b351835649df896c1b571ed23cbc2e4a75",
+      "bytes": 397,
+      "path": "attempts/CX_GEOMETRY_FINAL03/process-complete.json"
+    },
+    {
+      "sha256": "655139a05047f2af47eb0e286870ac12cefb986737d6b23f858f3d72aaec100d",
+      "bytes": 600,
+      "path": "attempts/CX_GEOMETRY_FINAL03/process-start.json"
+    },
+    {
+      "sha256": "91c9865cd5834330f2a50336535b69e7fcd62d802067c2169d30922f02737a1e",
+      "bytes": 1058,
+      "path": "attempts/CX_GEOMETRY_FINAL03/resource_samples.jsonl"
+    },
+    {
+      "sha256": "927d3c10ef52670ca0ffa3d999adcda77814dd47d61033c63d47d08c9b31c24b",
+      "bytes": 4311,
+      "path": "attempts/CX_GEOMETRY_FINAL03/runner.ps1"
+    },
+    {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "path": "attempts/CX_GEOMETRY_FINAL03/stderr.txt"
+    },
+    {
+      "sha256": "b2179681549a268972e513e18ff4fdaf5197a3035765fe1e4289f810bb0dfde2",
+      "bytes": 1107,
+      "path": "attempts/CX_GEOMETRY_FINAL03/stdout.txt"
+    },
+    {
+      "sha256": "4c85c86c6dd5c5195b263efc8c95e89658c1451e906895a909b6c5ce74114418",
+      "bytes": 266,
+      "path": "attempts/CX_GEOMETRY_FINAL04/launch-intent-amendment.json"
+    },
+    {
+      "sha256": "00ba8fa8eb509f0efec772be4c6654847d8566b57e91d49658df92a024b24f79",
+      "bytes": 2596,
+      "path": "attempts/CX_GEOMETRY_FINAL04/launch-intent.json"
+    },
+    {
+      "sha256": "a4ebcb9eb59ec02a6c83e6f8ac5c35ec6b460e493f81e06c6dd6abb45ee7983f",
+      "bytes": 397,
+      "path": "attempts/CX_GEOMETRY_FINAL04/process-complete.json"
+    },
+    {
+      "sha256": "00fa938bacf6bb8c9923062b04455cf4203a054f18960cee4ab75ef67a563083",
+      "bytes": 600,
+      "path": "attempts/CX_GEOMETRY_FINAL04/process-start.json"
+    },
+    {
+      "sha256": "9c5b4ef8611bb1a91aa3d9e2deaa8f2fcca06bc5246d362b515fe8f9d10b2d10",
+      "bytes": 5252,
+      "path": "attempts/CX_GEOMETRY_FINAL04/r12cx_CX_GEOMETRY_FINAL04.json"
+    },
+    {
+      "sha256": "8a5fec520ff7982927da9924f4ba4b251ad1b2bffb0047db9dd50f48018b5c0a",
+      "bytes": 798,
+      "path": "attempts/CX_GEOMETRY_FINAL04/resource_samples.jsonl"
+    },
+    {
+      "sha256": "8b196f12dc37863356f1b998caddff249d67b8d24696bd67fdca1b3b13033ccb",
+      "bytes": 4381,
+      "path": "attempts/CX_GEOMETRY_FINAL04/runner.ps1"
+    },
+    {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "path": "attempts/CX_GEOMETRY_FINAL04/stderr.txt"
+    },
+    {
+      "sha256": "57e7033477626da0cba821ebafb087a93b99412eacb902ea4b9794e72de6d15f",
+      "bytes": 2186,
+      "path": "attempts/CX_GEOMETRY_FINAL04/stdout.txt"
+    },
+    {
+      "sha256": "bf3bdb457e2f13dc0a67134c0f4433886e09a8ac341d8e5c7d9d9aae172008f7",
+      "bytes": 1337,
+      "path": "operational-recoveries.json"
+    },
+    {
+      "sha256": "c0df45fcd4f7886c6334094a510bf26bf8ef73c4830b9bbb7b1d05e220356718",
+      "bytes": 4210,
+      "path": "preflight/P1_P4.json"
+    },
+    {
+      "sha256": "f48d5bb52d919ef73dd6a3dbb483af85b90d5d346785bc5ff16031eb1676eb06",
+      "bytes": 788,
+      "path": "preflight/P5_IMPORT.json"
+    },
+    {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "path": "preflight/P5_IMPORT.stderr.txt"
+    },
+    {
+      "sha256": "295fbb8380857f50ef660fb874358a1b5efb858d8e9b2592edb4cb390d934de5",
+      "bytes": 8944,
+      "path": "preflight/P5_IMPORT.stdout.txt"
+    },
+    {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "path": "preflight/P6_CAMPAIGN_CHECK.stderr.txt"
+    },
+    {
+      "sha256": "3697fc388d84e15d63abd7fd876dedbbc70b33aa1da1ede8d206e19f76d9d21f",
+      "bytes": 1203,
+      "path": "preflight/P6_CAMPAIGN_CHECK.stdout.txt"
+    },
+    {
+      "sha256": "cfc42989c29e9428211d24618e1b3affb8e8d37bd0f709a3c7448383c8703ee7",
+      "bytes": 1006,
+      "path": "preflight/P6_P8.jsonl"
+    },
+    {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "path": "preflight/P7_REALIZER_CHECK.stderr.txt"
+    },
+    {
+      "sha256": "260dab8b006aa5899c0bce564222dc3afae858f8cec7539087899bd4efe324c5",
+      "bytes": 1766,
+      "path": "preflight/P7_REALIZER_CHECK.stdout.txt"
+    },
+    {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "path": "preflight/P8_CONTRACT.stderr.txt"
+    },
+    {
+      "sha256": "321a792c447118c777b9ca10380282f8146ada8cc59238ed23d2903e634804ec",
+      "bytes": 163,
+      "path": "preflight/P8_CONTRACT.stdout.txt"
+    }
+  ]
+}

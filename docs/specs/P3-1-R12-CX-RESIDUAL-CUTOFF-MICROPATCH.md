@@ -2,7 +2,7 @@
 
 Date: 2026-10-31
 
-Status: experimental, pre-geometry; CX remains unconsumed until the frozen campaign emits one machine-readable target result.
+Status: closed with `P3_1_R12_C_ATTEMPTS_EXHAUSTED_WITH_EVIDENCE`; CX was consumed by one terminal `FAILED_TARGET` result on source `a9c1353db49a7bb5607ce8eaf91d8032c7dc4bea`.
 Base: R12-C final source `619a43a795cae3e2e9926a5a29554da009fbe2c1`; parent `4535f4c965db67adab7c93e448492c54be916c92`.
 
 ## Scope and hypotheses
@@ -53,8 +53,14 @@ The third invocation (`CX_GEOMETRY_FINAL03`, source `07c93797…`) reached C6 tr
 
 After a complete equal-LOD pass, the campaign runs the six frozen controls, the 25-ray ROI oracle, and verifies unchanged volume identity. Mixed LOD is gated after those checks. The frozen input currently lacks an explicit shared interface owner/path; the harness fails closed rather than publishing independently extracted coincident surfaces. If that blocker remains, R12-C closes exhausted and deterministic repeat, full E2E and full validation do not run, per the approved gate order.
 
+## Final execution outcome
+
+This section supersedes the preregistered pending status above. Exact-source P1–P8 passed on `a9c1353db49a7bb5607ce8eaf91d8032c7dc4bea` (P8: 44 assertions, zero failures). The one target `CX_GEOMETRY_FINAL04` emitted `R12CX_LOCAL_PATCH_SEARCH_BEGIN` for two merged cavities and terminal `FAILED_TARGET` / `cx_bounded_patch_search_failed`. This consumes CX and closes the six-hypothesis R12-C budget as `P3_1_R12_C_ATTEMPTS_EXHAUSTED_WITH_EVIDENCE`.
+
+The equal-LOD gate failed before a final candidate existed. The terminal artifact does not preserve nested local-search details; its `local_search_nodes: 0` is not an authoritative count and does not prove zero search work. Search completion is unestablished. No controls, ROI rays, mixed LOD, deterministic repeat, full E2E, or `scripts/validate.ps1` were run after this failure. The frozen volume gate passed. Results, attempt disposition, and raw evidence hashes are recorded in [campaign results](../reports/P3-1-R12-CX-CAMPAIGN/RESULTS.md).
+
 All timing/resource values remain diagnostic and `UNSCORED`; headless timings are not presented-frame or GPU evidence. No product geometry tolerance is claimed.
 
 ## Safety and status
 
-No production path, save/schema, user data, PR #207–#210, native dependency, or protected F2-G1 state is changed. The five protected-state holds remain active. This preregistration alone authorizes no geometry execution; the user authorization for the bounded R12-CX campaign is in the attached task.
+No production path, save/schema, user data, PR #210, native dependency, or protected F2-G1 state was changed. The experiment remains test-only and performance `UNSCORED`; it does not approve production adoption, GUI behavior, release, or any later hypothesis. The five protected-state holds remain active.
