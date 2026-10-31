@@ -1,14 +1,14 @@
 # P3.1 R12-CXR — Field-Constrained Support Micro-Patch Preregistration
 
-Date: 2026-10-31  
+Date: 2026-10-31
 Status: preregistered; geometry execution has not started.
 
 ## Identity and scope
 
-Repository: `publiomcko-cloud/procedural-sandbox-simulation`  
-Experimental branch: `exp/p3-1-r12-cxr-field-support-micropatch`  
-Parent stack: draft PR #211 at `209e301fc4576d0b7ef713a1b2ab3f86996f9db3`, itself stacked on draft PR #210.  
-Frozen C6 measured source: `4535f4c965db67adab7c93e448492c54be916c92`.  
+Repository: `publiomcko-cloud/procedural-sandbox-simulation`
+Experimental branch: `exp/p3-1-r12-cxr-field-support-micropatch`
+Parent stack: draft PR #211 at `209e301fc4576d0b7ef713a1b2ab3f86996f9db3`, itself stacked on draft PR #210.
+Frozen C6 measured source: `4535f4c965db67adab7c93e448492c54be916c92`.
 R12-CX source/reference: `a9c1353db49a7bb5607ce8eaf91d8032c7dc4bea`.
 
 This is the corrected execution of the original CX hypothesis. It is not C7, a new architecture family, production integration, geometry-contract adoption, or authorization for Issues #108/#154. R12-CXR may modify only test-only experiment code and its documentation/evidence. Frozen C6 topology authority, original root coordinates, Candidate D field and volume, residual fixture, cutoff, controls, ROI ray oracle, and all pins remain unchanged.
@@ -27,7 +27,7 @@ The prior CX attempt exercised edge-flip search with support candidate and suppo
 
 ## Deterministic field-constrained candidate method
 
-For each cavity at levels L0 through L3, enumerate the bounded source tetrahedra intersecting the residual/cavity domain expanded by that level, using the frozen `Core.GRID_CORNERS`, `Core.TETS`, and exact pinned `PackedFloat32Array` samples. Enumerate tetrahedra by signed global cell coordinate then tetrahedron index.
+For each cavity at levels L0 through L3, enumerate the bounded source tetrahedra intersecting the residual/cavity domain expanded by that level, using the frozen `Core.GRID_CORNERS`, `Core.TETS`, and exact pinned `PackedFloat32Array` samples. Enumerate tetrahedra by signed global cell coordinate then tetrahedron index. Support candidates are partitioned across residual faces in stable residual-ID order; with the frozen two-face cavity, no face may retain more than 128 candidates.
 
 Generate candidates from (a) exact linear zero crossings on the six tetrahedron edges and deterministic pairwise/interior points on the resulting piecewise-linear zero polygon, and (b) bounded orthogonal projection of fixed residual-root, residual-edge-midpoint, and residual-face-centroid seeds onto that tetrahedron's four-sample linear zero plane. Projection candidates are accepted only when their tetrahedral barycentric coordinates lie in the closed tetrahedron and the recomputed interpolated scalar residual is finite and within the preregistered arithmetic verification bound `1e-7` in the frozen field's stored units. These are field intersections/projections, not unconstrained centroid insertion. A projected point must also be within `0.5` world units of its residual face and distinct from every topology root.
 
@@ -42,9 +42,10 @@ A selected support replaces only its associated rejected face with a determinist
 | Residual cavities | 3 (frozen observed count is 2) |
 | Cavity expansion | L0–L3 |
 | Source triangles per cavity | 64 |
-| Field-derived candidates retained per cavity | 96 |
+| Field-derived candidate attempts per cavity | 8,192 |
+| Field-derived candidates retained per cavity | 256 |
 | Selected support vertices total | 4 |
-| Candidate fan triangles tested per cavity | 1,024 |
+| Candidate fan triangles tested per cavity | 2,048 |
 | Search states per cavity | 16,384 |
 | Search states total | 32,768 |
 | Solutions retained per cavity | 32 |
