@@ -19,4 +19,5 @@ game/tests/prototypes/p3_1_r8_2_xplus_face_oracle.gd text eol=crlf
 game/tests/prototypes/p3_1_r9_frozen_inputs.jsonl -text
 game/tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl -text
 game/tests/prototypes/p3_1_r9_2_e2e_inputs.sha256 -text
+game/tests/prototypes/p3_1_r12_cx_residual_fixture.json -text
 docs/reports/P3-1-R9.2-SHARED/evidence/** -text whitespace=cr-at-eol
