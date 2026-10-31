@@ -1,0 +1,17 @@
+{
+  "name": "contract-suite",
+  "args": [
+    "--headless",
+    "--path",
+    "C:\\r12cxr-convergence-20261031\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd"
+  ],
+  "pid": 44984,
+  "start_utc": "2026-10-31T21:10:04.7416941Z",
+  "end_utc": "2026-10-31T21:10:06.7447890Z",
+  "elapsed_ms": 2003.0949,
+  "exit_code": 0,
+  "stdout_sha256": "b1d4df47f86093b093d31fdd04ec188ac9a0c093b5736cbd242fe8f9f0ce385e",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

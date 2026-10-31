@@ -484,6 +484,22 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	_check(bool(derived.get("valid", false)), "R3 derives a single closed cavity boundary from surviving C6 edge incidence")
 	_check(String(derived.get("boundary_source", "")) == "remaining_C6_edge_incidence_after_cavity_patch_removal" and derived.get("signature", "") == direct.get("signature", ""), "R3 replacement boundary orientation and signature match the remaining mesh interface")
 	_check(derived.get("incidence_diagnostics", []).size() == 3, "R3 records all three removed-to-remaining interface edge incidences")
+	var reversed_patch: Array[Dictionary] = all.duplicate(true)
+	var reversed_patch_face: Dictionary = reversed_patch[0]
+	var reversed_patch_ids: Array = reversed_patch_face.root_ids.duplicate()
+	var reversed_patch_points: Array = reversed_patch_face.points.duplicate()
+	var patch_swap_id: Variant = reversed_patch_ids[1]
+	reversed_patch_ids[1] = reversed_patch_ids[2]
+	reversed_patch_ids[2] = patch_swap_id
+	var patch_swap_point: Variant = reversed_patch_points[1]
+	reversed_patch_points[1] = reversed_patch_points[2]
+	reversed_patch_points[2] = patch_swap_point
+	reversed_patch_face["root_ids"] = reversed_patch_ids
+	reversed_patch_face["points"] = reversed_patch_points
+	reversed_patch[0] = reversed_patch_face
+	var removed_face_mismatch: Dictionary = realizer.call("derive_remaining_boundary_for_test", reversed_patch, ["r3-patch"])
+	_check(bool(removed_face_mismatch.get("valid", false)) and removed_face_mismatch.get("signature", "") == direct.get("signature", ""), "R3 derives replacement orientation from surviving owners when the removed face itself is reversed")
+	_check(removed_face_mismatch.get("removed_source_winding_mismatches", []).size() == 3, "R3 preserves diagnostics for each removed-face winding mismatch without using removed winding as boundary authority")
 	var wrong_winding: Array[Dictionary] = all.duplicate(true)
 	var outside_face: Dictionary = wrong_winding[1]
 	var outside_ids: Array = outside_face.root_ids.duplicate()
@@ -498,7 +514,7 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	outside_face["points"] = outside_points
 	wrong_winding[1] = outside_face
 	var wrong: Dictionary = realizer.call("derive_remaining_boundary_for_test", wrong_winding, ["r3-patch"])
-	_check(not bool(wrong.get("valid", true)) and String(wrong.get("reason", "")) == "r3_cavity_boundary_source_winding_same_direction", "R3 rejects a cavity boundary whose removed and surviving source faces wind the same way")
+	_check(not bool(wrong.get("valid", true)) and String(wrong.get("reason", "")) == "boundary_cycle_degree_invalid", "R3 rejects inconsistent surviving-owner winding when it cannot form one oriented cavity boundary cycle")
 	var open_source: Array[Dictionary] = [patch_triangle]
 	var open: Dictionary = realizer.call("derive_remaining_boundary_for_test", open_source, ["r3-patch"])
 	_check(not bool(open.get("valid", true)) and String(open.get("reason", "")) == "r3_patch_open_edge_has_no_remaining_owner", "R3 refuses to invent cavity boundary edges without a surviving C6 owner")

@@ -1,0 +1,15 @@
+{
+  "attempt_id": "R3_TARGET_20261031_02",
+  "pid": 29672,
+  "end_utc": "2026-10-31T21:08:08.8451942Z",
+  "timeout_seconds": 45,
+  "timed_out": false,
+  "exit_code": 2,
+  "status": "PROCESS_EXITED",
+  "stdout_sha256": "951cee593a3e9c3daa62f9810396b3147d8dda43e6c1318b769e62bc95866e07",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "scenario_started": true,
+  "process_start_record_error": "",
+  "raw_output_write_error": "",
+  "post_start_telemetry_error": ""
+}

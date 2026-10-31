@@ -1,0 +1,17 @@
+{
+  "name": "editor-import",
+  "args": [
+    "--headless",
+    "--path",
+    "C:\\r12cxr-convergence-20261031\\game",
+    "--editor",
+    "--import"
+  ],
+  "pid": 12980,
+  "start_utc": "2026-10-31T21:09:56.6800160Z",
+  "end_utc": "2026-10-31T21:10:04.5957913Z",
+  "elapsed_ms": 7915.7753,
+  "exit_code": 0,
+  "stdout_sha256": "e970b3ddb734fc8a8d4f5aa139093068174d15641ffb213a8f1ec47bada6100b",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

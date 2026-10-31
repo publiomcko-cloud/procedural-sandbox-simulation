@@ -1,0 +1,17 @@
+{
+  "attempt_id": "R3_TARGET_20261031_02",
+  "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+  "phase": "r3",
+  "argv": [
+    "--headless",
+    "--path",
+    "C:\\r12cxr-convergence-20261031\\game",
+    "--script",
+    "res://tests/prototypes/p3_1_r12_cxr_campaign.gd"
+  ],
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "intent_utc": "2026-10-31T21:08:04.9681487Z",
+  "process_start_attempted": false,
+  "source_sha": "fdab3b8f16b615077aa44a7901b9555aebd3d80d",
+  "execution_checkout_head": "55562aec07c546f918b3dfdf67d770f92e5418b5"
+}

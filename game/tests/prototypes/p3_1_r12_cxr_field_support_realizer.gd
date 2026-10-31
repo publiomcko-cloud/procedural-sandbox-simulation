@@ -899,6 +899,7 @@ func _r3_derive_remaining_boundary(all_triangles: Array[Dictionary], patch_ids: 
 	var boundary_edges: Array[String] = []
 	var incidence_diagnostics: Array[Dictionary] = []
 	var invalid: Array[Dictionary] = []
+	var removed_source_winding_mismatches: Array[Dictionary] = []
 	var internal_removed_nonmanifold: Array[String] = []
 	var edge_keys: Array = edge_rows.keys()
 	edge_keys.sort()
@@ -921,12 +922,14 @@ func _r3_derive_remaining_boundary(all_triangles: Array[Dictionary], patch_ids: 
 		var removed_row: Dictionary = removed_rows[0]
 		var remaining_row: Dictionary = remaining_rows[0]
 		if String(removed_row.a) == String(remaining_row.a) and String(removed_row.b) == String(remaining_row.b):
-			invalid.append({"reason": "r3_cavity_boundary_source_winding_same_direction", "edge_key": edge_key, "removed": removed_row, "remaining": remaining_row})
-			continue
+			# The removed face is not an orientation authority for its replacement.
+			# The surviving C6 owner defines the cavity boundary direction; the final
+			# mesh winding gate checks that the new realization conforms to it.
+			removed_source_winding_mismatches.append({"edge_key": edge_key, "removed": removed_row.duplicate(true), "remaining": remaining_row.duplicate(true), "resolution": "boundary_oriented_from_surviving_C6_owner"})
 		# New cavity orientation is the reverse of the surviving C6 face edge.
 		boundary_edges.append(String(remaining_row.b) + "->" + String(remaining_row.a))
 	boundary_edges.sort()
-	var boundary: Dictionary = {"valid": invalid.is_empty(), "directed_edges": boundary_edges.duplicate(), "boundary_edge_count": boundary_edges.size(), "incidence_diagnostics": incidence_diagnostics, "internal_removed_nonmanifold_edges": internal_removed_nonmanifold, "missing_patch_triangle_ids": missing_patch_ids, "boundary_source": "remaining_C6_edge_incidence_after_cavity_patch_removal", "invalid_reasons": invalid}
+	var boundary: Dictionary = {"valid": invalid.is_empty(), "directed_edges": boundary_edges.duplicate(), "boundary_edge_count": boundary_edges.size(), "incidence_diagnostics": incidence_diagnostics, "removed_source_winding_mismatches": removed_source_winding_mismatches, "internal_removed_nonmanifold_edges": internal_removed_nonmanifold, "missing_patch_triangle_ids": missing_patch_ids, "boundary_source": "remaining_C6_edge_incidence_after_cavity_patch_removal", "invalid_reasons": invalid}
 	if invalid.is_empty():
 		var cycle: Dictionary = _r2_boundary_cycle(boundary)
 		if not bool(cycle.get("valid", false)):
