@@ -54,6 +54,6 @@ The raw evidence archive is [r12cxr_partial_evidence.zip](evidence/r12cxr_partia
 
 ## Protected state and next boundary
 
-PRs #207–#211 remain untouched; #207–#211 were verified open, draft, and unmerged before the new CXR publication. No merge or production adoption is authorized. Preserve `CURRENT_PROTECTED_STATE_UNKNOWN`, `V3_NOT_ATTESTED`, `ACL_REVIEW_REQUIRED`, `G1_BLOCKED_ENVIRONMENT`, and `F2_G1_RELEASE_HOLD`.
+PRs #207–#211 remain untouched and unmerged; their open/draft status was checked before CXR publication. The result is published in [draft PR #212](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/212), stacked on #211's branch and still unmerged. The first publication head was `e99de6b4863743037e7991c036b07ec41a0748a4`; subsequent closeout metadata commits are documentation-only and leave measured source `0a967c9` unchanged. No merge or production adoption is authorized. Preserve `CURRENT_PROTECTED_STATE_UNKNOWN`, `V3_NOT_ATTESTED`, `ACL_REVIEW_REQUIRED`, `G1_BLOCKED_ENVIRONMENT`, and `F2_G1_RELEASE_HOLD`.
 
 Because local candidate generation started, this target cannot be retried in this campaign. The source-level correction and any new target run require independent review of the exact resulting source and separate authorization; do not treat this partial attempt as a failed-valid or exhausted R12-C line.

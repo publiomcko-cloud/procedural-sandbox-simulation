@@ -36,3 +36,7 @@ The archived C6 Stage 0 fixture and R12-CX residual fixture/manifest identities 
 ## Boundaries preserved
 
 No production, persistence, schema, native backend, Issue #108/#154, protected host, or F2-G1 operation was performed. PRs #207–#211 remain untouched and unmerged. Preserve all five holds: `CURRENT_PROTECTED_STATE_UNKNOWN`, `V3_NOT_ATTESTED`, `ACL_REVIEW_REQUIRED`, `G1_BLOCKED_ENVIRONMENT`, and `F2_G1_RELEASE_HOLD`.
+
+## Publication
+
+The evidence is in [draft PR #212](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/212), stacked on the R12-CX evidence branch at base SHA `209e301fc4576d0b7ef713a1b2ab3f86996f9db3`. PR #212 is open, draft, and unmerged. Its first publication head was `e99de6b4863743037e7991c036b07ec41a0748a4`; subsequent closeout metadata commits are documentation-only and leave measured source `0a967c996476e9bf4376b1e55dbb835cf5a31ee6` unchanged.
