@@ -1,9 +1,9 @@
 # P3.1 R12-C C4 result and C5 preregistration
 
-Date: 2026-10-30  
-Branch: `exp/p3-1-r12-c-topology-geometry-realization`  
-C4 source: `01856f529df0a0f8c0bf62be5684d86fd923d071`  
-Parent: `db130481d79b5ad88fc3e705695bb1530cfadd61`  
+Date: 2026-10-30
+Branch: `exp/p3-1-r12-c-topology-geometry-realization`
+C4 source: `01856f529df0a0f8c0bf62be5684d86fd923d071`
+Parent: `db130481d79b5ad88fc3e705695bb1530cfadd61`
 Tree: `1b361cd8ab0fc4502605956710560abc81939d6e`
 
 ## C4 immutable execution
@@ -42,10 +42,10 @@ C5 runs equal-LOD target, six controls, ROI rays and volume. If those gates pass
 
 ## Campaign accounting
 
-C1: not applicable, unconsumed.  
-C2/C3/C4: consumed `FAILED_TARGET`.  
-C5: preregistered, not yet implemented/executed.  
-C6: unused; preregistration required.  
+C1: not applicable, unconsumed.
+C2/C3/C4: consumed `FAILED_TARGET`.
+C5: preregistered, not yet implemented/executed.
+C6: unused; preregistration required.
 C7: not authorized.
 
 No production code, schema, save, PR #207–#209, or F2-G1 state changed. All five protected-state holds remain unchanged.
