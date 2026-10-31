@@ -193,6 +193,26 @@ func _test_c6_rejection_schema_reconstruction() -> void:
 	wrong_roots["cutoff_rejections"][0]["root_ids"] = ["a", "b", "missing"]
 	var mismatch: Dictionary = realizer.call("_build_triangles", wrong_roots, fixture)
 	_check(not bool(mismatch.get("valid", true)) and String(mismatch.get("reason", "")) == "cx_fixture_to_base_rejection_mismatch", "C6 rejection with different roots is rejected before geometry search")
+	var rounded_fixture: Dictionary = fixture.duplicate(true)
+	rounded_fixture["residuals"][0]["rejection"]["cross_squared"] = expected_cross_squared * 0.998
+	var rounded: Dictionary = realizer.call("_build_triangles", geometry, rounded_fixture)
+	_check(bool(rounded.get("valid", false)), "pinned residual diagnostic rounded by less than the documented 0.5 percent is accepted against exact C6 area")
+	var stale_fixture: Dictionary = fixture.duplicate(true)
+	stale_fixture["residuals"][0]["rejection"]["cross_squared"] = expected_cross_squared * 0.98
+	var stale: Dictionary = realizer.call("_build_triangles", geometry, stale_fixture)
+	_check(not bool(stale.get("valid", true)) and String(stale.get("reason", "")) == "cx_fixture_cutoff_area_mismatch", "residual diagnostic outside its bounded rounding envelope is rejected")
+	var wrong_c6_area: Dictionary = geometry.duplicate(true)
+	wrong_c6_area["cutoff_rejections"][0]["cross_squared"] = expected_cross_squared * 2.0
+	var c6_mismatch: Dictionary = realizer.call("_build_triangles", wrong_c6_area, fixture)
+	_check(not bool(c6_mismatch.get("valid", true)) and String(c6_mismatch.get("reason", "")) == "cx_c6_cutoff_area_mismatch", "exact C6 area disagreement is rejected even when residual metadata remains pinned")
+	var nonfinite_fixture: Dictionary = fixture.duplicate(true)
+	nonfinite_fixture["residuals"][0]["rejection"]["cross_squared"] = NAN
+	var bad_fixture_area: Dictionary = realizer.call("_build_triangles", geometry, nonfinite_fixture)
+	_check(not bool(bad_fixture_area.get("valid", true)) and String(bad_fixture_area.get("reason", "")) == "cx_fixture_cutoff_area_mismatch", "nonfinite residual annotation fails closed")
+	var nonfinite_c6: Dictionary = geometry.duplicate(true)
+	nonfinite_c6["cutoff_rejections"][0]["cross_squared"] = NAN
+	var bad_c6_area: Dictionary = realizer.call("_build_triangles", nonfinite_c6, fixture)
+	_check(not bool(bad_c6_area.get("valid", true)) and String(bad_c6_area.get("reason", "")) == "cx_c6_cutoff_area_mismatch", "nonfinite canonical C6 cutoff area fails closed")
 
 func _triangle(id: String, root_ids: Array, points_by_id: Dictionary, rejected: bool) -> Dictionary:
 	var points: Array[Vector3] = [points_by_id[root_ids[0]], points_by_id[root_ids[1]], points_by_id[root_ids[2]]]

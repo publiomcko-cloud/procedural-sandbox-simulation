@@ -199,16 +199,26 @@ func _build_triangles(geometry: Dictionary, fixture: Dictionary) -> Dictionary:
 		var root_ids: Array = residual.get("triangle_root_ids", [])
 		var points: Array[Vector3] = _points_for_ids(root_ids, root_positions)
 		if triangle_id.is_empty() or polygon_id.is_empty() or points.size() != 3: return {"valid": false, "reason": "cx_fixture_residual_invalid", "triangle_id": triangle_id}
-		var matched: bool = false
+		var matched_c6_rejection: Dictionary = {}
 		for c6_reject_value in c6_rejections:
 			var c6_reject: Dictionary = c6_reject_value
 			var c6_polygon_ids: Array = c6_reject.get("source_polygon_ids", [])
-			if String(c6_reject.get("triangle_id", "")) == triangle_id and c6_polygon_ids.has(polygon_id) and _same_id_set(c6_reject.get("root_ids", []), root_ids): matched = true
-		if not matched: return {"valid": false, "reason": "cx_fixture_to_base_rejection_mismatch", "triangle_id": triangle_id}
+			if String(c6_reject.get("triangle_id", "")) == triangle_id and c6_polygon_ids.has(polygon_id) and _same_id_set(c6_reject.get("root_ids", []), root_ids):
+				if not matched_c6_rejection.is_empty(): return {"valid": false, "reason": "cx_duplicate_c6_rejection_identity", "triangle_id": triangle_id}
+				matched_c6_rejection = c6_reject
+		if matched_c6_rejection.is_empty(): return {"valid": false, "reason": "cx_fixture_to_base_rejection_mismatch", "triangle_id": triangle_id}
 		var residual_triangle: Dictionary = _triangle(triangle_id, polygon_id, root_ids, points, "C6_REJECTED_CUTOFF", true)
 		var observed_cross: float = float(reject.get("cross_squared", -1.0))
-		if observed_cross < 0.0 or absf(float(residual_triangle.cross_squared) - observed_cross) > maxf(1.0e-24, absf(observed_cross) * 1.0e-12):
-			return {"valid": false, "reason": "cx_fixture_cutoff_area_mismatch", "triangle_id": triangle_id, "observed": observed_cross, "recomputed": residual_triangle.cross_squared}
+		var c6_cross: float = float(matched_c6_rejection.get("cross_squared", -1.0))
+		var recomputed_cross: float = float(residual_triangle.cross_squared)
+		if not is_finite(c6_cross) or c6_cross <= 0.0 or absf(recomputed_cross - c6_cross) > maxf(1.0e-24, absf(c6_cross) * 1.0e-12):
+			return {"valid": false, "reason": "cx_c6_cutoff_area_mismatch", "triangle_id": triangle_id, "c6": c6_cross, "recomputed": recomputed_cross}
+		# The pinned residual fixture stores rounded diagnostic scalars. C6's
+		# exact rejection value above is authoritative for the reconstructed
+		# geometry; this bounded check only verifies that the frozen annotation
+		# still describes the same sub-cutoff residual.
+		if not is_finite(observed_cross) or observed_cross <= 0.0 or observed_cross > FIXED_CUTOFF_SQUARED or absf(observed_cross - c6_cross) > maxf(1.0e-24, absf(c6_cross) * 5.0e-3):
+			return {"valid": false, "reason": "cx_fixture_cutoff_area_mismatch", "triangle_id": triangle_id, "fixture": observed_cross, "c6": c6_cross, "recomputed": recomputed_cross}
 		triangles.append(residual_triangle)
 	return {"valid": true, "triangles": triangles, "root_positions": root_positions}
 
