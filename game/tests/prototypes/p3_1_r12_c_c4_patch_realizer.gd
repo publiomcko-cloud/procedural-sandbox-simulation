@@ -20,7 +20,7 @@ func realize(graph: Dictionary, values: PackedFloat32Array, roi: Dictionary, exp
 	var polygon_by_id: Dictionary = {}
 	var polygon_toward: Dictionary = {}
 	var topology_arc_keys: Dictionary = {}
-	for arc in graph.get("arcs", []): topology_arc_keys[String(arc[0])] = true
+	for arc in graph.get("arcs", []): topology_arc_keys[String(arc[0])] = {"source_polygon_ids": arc[3].duplicate(), "expected_incidence": int(arc[2])}
 	var dims: Vector3i = Core.cell_counts(roi) + Vector3i.ONE
 	for polygon in polygons:
 		var polygon_id: String = String(polygon[0])
