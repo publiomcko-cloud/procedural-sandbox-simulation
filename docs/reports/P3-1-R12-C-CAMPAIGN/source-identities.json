@@ -1,0 +1,77 @@
+{
+  "schema": "p3.1.r12c.source-identities.v1",
+  "repository": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "branch": "exp/p3-1-r12-c-topology-geometry-realization",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_binary_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "frozen_inputs": {
+    "candidate_d_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+    "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+    "topology_fixture_sha256": "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d",
+    "fixture_graph_fingerprint_sha256": "a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9",
+    "topology_sha256": "4ecbb2496fb34f1cf3c05a60192f76bdce7a52ec3148d02ba041510b804a8c95",
+    "volume_sha256": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2",
+    "volume_payload_sha256": "2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0",
+    "volume_revision": 2,
+    "cross_squared_cutoff": 1e-12
+  },
+  "attempt_sources": [
+    {
+      "slot": "C2",
+      "attempt_id": "C2GEO006",
+      "commit": "f5b421a0f0e4a020a7fc1a8d00847a8e32f93234",
+      "parent": "d936203c5b769c0c022699d6ad5fad12a85b6e40",
+      "tree": "27f21a7279bde20f08a7141ff03f729e4599bb29",
+      "campaign": {"path":"game/tests/prototypes/p3_1_r12_c_campaign.gd","git_blob":"702ee2811363ef2e93f2fae8e41637e6939a11aa","physical_sha256":"36a7ae8e13a932b429e3a251bcf68204b1497019638ae83cc1dd558dacc40286"},
+      "realizer": {"path":"game/tests/prototypes/p3_1_r12_c_anchor_cycle_realizer.gd","git_blob":"03dac15b644a75279e9f28b255027025c9ff638e","physical_sha256":"656e558eefbf5b3cdada663c8252843bbcf391a568127c240a92bc01f430edb8"},
+      "result_sha256":"469be6d2b18c52cdb6bece2db378de1f8d6a81dd27aaa10fd47c652d3b8ecf25",
+      "realization_map_sha256":"64cddc36dce07dc71fe09f7eaab12909c6140ba956a1bc1fc35c44f645b6a236",
+      "topology_roundtrip_sha256":"a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9"
+    },
+    {
+      "slot":"C3","attempt_id":"C3GEO001","commit":"e9bc9637a9aeadefc4385959c7ff2cf786c35997","parent":"1edb73316876e20a20367c4c88de8b20689eb8f5","tree":"ffc460cf507f083ce8cd6f62e39074ac2f6973ee",
+      "campaign":{"path":"game/tests/prototypes/p3_1_r12_c_c3_campaign.gd","git_blob":"33c2ebefb70918094bb50fe5847dcc15e787dd66","physical_sha256":"e2981b34f2cdbf101bfe71840dffba2f2e31ac21a91fd868342c8ad9a64e7926"},
+      "realizer":{"path":"game/tests/prototypes/p3_1_r12_c_support_realizer.gd","git_blob":"91904497cd3cd2b2d6177b469507790ae4bfd78a","physical_sha256":"8b8e818feec87daddb7a90ae2ee45a9e91357aa368828485254f017cd848b7d2"},
+      "result_sha256":"81b01ce3f41c6dcbf37965429fc39d54316c8c947a6d88faff4efe7eda8ac80a",
+      "realization_map_sha256":"fbe6e385738b86e4a54490ef5c8768bd682e2199eb450c3db892ba7786fb9518",
+      "topology_roundtrip_sha256":"a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9"
+    },
+    {
+      "slot":"C4","attempt_id":"C4GEO001","commit":"01856f529df0a0f8c0bf62be5684d86fd923d071","parent":"db130481d79b5ad88fc3e705695bb1530cfadd61","tree":"1b361cd8ab0fc4502605956710560abc81939d6e",
+      "campaign":{"path":"game/tests/prototypes/p3_1_r12_c_c4_campaign.gd","git_blob":"fce50b7d7c38db7a6bc7e3b41d369028cc35a871","physical_sha256":"a904b9aca601473f1aab152fb8c2b43b71e252bd92c2ac245ee899962206e70c"},
+      "realizer":{"path":"game/tests/prototypes/p3_1_r12_c_c4_patch_realizer.gd","git_blob":"8eddd2dc4bfc5ae8ecabe659054f9de9270fb41a","physical_sha256":"1dcdf7d1374d95d05dce488d5fc91e577ed26f8926dce5818300d8080146017e"},
+      "result_sha256":"8cd8de0e49016b8cbfe8014d0372047295f6641a9cceb364f80068262d2edc1e",
+      "realization_map_sha256":"7c713782d0de575bc73a8fe8d5f955e5d5b4c6e022d40fcaee091fe056528e28",
+      "topology_roundtrip_sha256":"a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9"
+    },
+    {
+      "slot":"C5","attempt_id":"C5GEO001","commit":"40ee966d1cda2ccf5ef42f5e747083d022849fbc","parent":"95d8477cd180fd760571643859d024f63361b41d","tree":"59d18abac9aa69d592c816028d35f790521e50d3",
+      "campaign":{"path":"game/tests/prototypes/p3_1_r12_c_c5_campaign.gd","git_blob":"5f2dc893ab97367f9531bc7350873d5a241d9cbb","physical_sha256":"c2ea5a8b9d231ff149fc8929514c74c9322fcc621528e3cc9ce174bc1d34e48f"},
+      "realizer":{"path":"game/tests/prototypes/p3_1_r12_c_c5_face_owned_realizer.gd","git_blob":"be61de1c001d85f87d7cbc715e968e155cec34a7","physical_sha256":"0c053bee8709609e69e880aa9ff264b6c88735ff52f7ca097eebbc9e3f1c471f"},
+      "result_sha256":"401741531a75b7129005120bf3ac67aa5cd74efda02fc48f8dea1c9a045f17e1",
+      "realization_map_sha256":"96d710211a630bb1105fc20598fae2225a7d8fb58e73fc95704358df60bb48e3",
+      "topology_roundtrip_sha256":"a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9"
+    },
+    {
+      "slot":"C6","attempt_id":"C6GEO001","commit":"4535f4c965db67adab7c93e448492c54be916c92","parent":"289feddccc5a71bd8f9d1f5ff66051d8d4140657","tree":"1c8af8c4050a7b89976331fa1ad20c666d67e3a8",
+      "campaign":{"path":"game/tests/prototypes/p3_1_r12_c_c6_campaign.gd","git_blob":"ae7a380f757510d19e9b400f3243b4fe97e39339","physical_sha256":"9a695705c47ad6473b773bbfaeaf35d88306cee6804113a0b1a71c6faca2f348"},
+      "realizer":{"path":"game/tests/prototypes/p3_1_r12_c_c6_multiface_realizer.gd","git_blob":"a5944afe7a29df4e6fc3eaf6da88dadbcad71a33","physical_sha256":"31947e1944a017442ad14cc4f098e67db800d4f5e196d07e047b93dc0fe9d2ac"},
+      "helper_at_C6":{"path":"game/tests/prototypes/p3_1_r12_c_c4_patch_realizer.gd","git_blob":"b582eca7e4ce2d5dda6526c007a6998f47bfe016","physical_sha256":"5515141c7de3bb0edee9d62adc1f67da37b30274931914cee94f9ae51f6d575f"},
+      "inherited_C5_realizer":{"path":"game/tests/prototypes/p3_1_r12_c_c5_face_owned_realizer.gd","git_blob":"be61de1c001d85f87d7cbc715e968e155cec34a7","physical_sha256":"0c053bee8709609e69e880aa9ff264b6c88735ff52f7ca097eebbc9e3f1c471f"},
+      "runner_at_C6":{"path":"scripts/experiments/run_r12c_stage.ps1","git_blob":"f0acf812b981ba3ab98f67c6af82e27742925384","physical_sha256":"ac967d0b8d86f7cd10a1deec8d70b055db7fabc99785e32eac3390e5f2d9209e"},
+      "result_sha256":"0c6ae06d368f1a789ddc16fae429700c109d09fc019082fe6356c58fee12c6de",
+      "realization_map_sha256":"e7cf00e11cde52e7dd29810a16542aaa7fd20fa3a74ff185c7e8a159158f96dc",
+      "topology_roundtrip_sha256":"a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9"
+    }
+  ],
+  "evidence_archive": {
+    "path": "evidence/r12c_raw_campaign_evidence.zip",
+    "sha256": "6550788363d1e0ea23df7ed2f560dbf0558fb6c45d769dc642661516c39b4dcb",
+    "bytes": 1342535,
+    "indexed_raw_files": 311,
+    "index_path": "evidence/evidence-sha256-index.txt",
+    "index_sha256": "a876444ef103cd7288894fb35066d1f501a61eb5dc45beaead14d94e6145e2a9",
+    "index_sidecar_sha256": "00e8c536dee8dee4e114cf2d2a92be2415ad32bceffab3d767a1cb65045741a7",
+    "archive_sidecar_sha256": "d311e871b95b7d0315c0f8638ff97c61f83ade2fed751528eff6bf9e82d48b60"
+  }
+}

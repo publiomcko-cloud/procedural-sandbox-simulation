@@ -157,7 +157,17 @@ C6 executes only the frozen equal-LOD target and its existing controls/ray/volum
 
 ## C1–C6 reservation status
 
-C1 is not applicable under the preregistered degree-2 rule and remains unconsumed. C2, C3, C4 and C5 are consumed as `FAILED_TARGET`. C6 is preregistered above and not yet implemented/executed. No C7 is authorized.
+C1 is `NOT_APPLICABLE_NO_ELIGIBLE_INTERIOR_DEGREE2_ROOTS` and remains unconsumed. C2, C3, C4, C5 and C6 are consumed as `FAILED_TARGET`, each after a valid frozen-target geometry attempt. No C7 is authorized. The terminal accounting and evidence references are recorded in [campaign results](RESULTS.md) and the [final campaign checkpoint](../../../checkpoints/2026-10-30-P3-1-R12-C-CAMPAIGN-CLOSEOUT.md).
+
+## C6 result and R12-C campaign closeout (2026-10-30)
+
+C6 `C6_MULTIFACE_NONCOPLANAR_PATCH_WITH_SEPARATE_ARC_OWNERSHIP` ran once as `C6GEO001` on source `4535f4c965db67adab7c93e448492c54be916c92` (parent `289feddccc5a71bd8f9d1f5ff66051d8d4140657`, tree `1c8af8c4050a7b89976331fa1ad20c666d67e3a8`). Import, check-only and the exact-source frozen input gates passed. The process produced a complete geometry artifact; no retry occurred. It is consumed as `FAILED_TARGET` because three final triangles remain at or below the unchanged `cross_squared > 1e-12` cutoff.
+
+C6 retained 369 anchor roots, 870 topology arcs and 502 source faces; it applied five bounded noncoplanar flips and rejected 27 candidates (18 replacement-cutoff failures, five source-face orientation conflicts, and four opposite-side failures). It emitted 662 triangles. Required topology round-trip matched exactly; 0 internal open edges, 0 missing obligations, 0 nonmanifold edges and 0 winding inconsistencies were observed, but 3 sub-cutoff/degenerate faces remained and minimum cross-squared was `2.77538984903934e-15`. All six controls passed; ROI ray disagreements were 0/25; frozen volume, payload and revision-2 reload identity passed. Global ray diagnostic remained 9/25 and was not the frozen ROI gate. Maximum old-versus-new diagonal-midpoint displacement was `0.125083565711975` world units; canonical surface deviation remains incompletely measured and no geometric tolerance is approved.
+
+The full attempt matrix, earlier C2–C6 tool/preflight failures, source and result hashes, process observations, gate disposition and limitations are in [RESULTS.md](RESULTS.md). Raw evidence is preserved in the indexed archive under `evidence/`; the index covers 311 raw files. The archive and index SHA-256 values are `6550788363d1e0ea23df7ed2f560dbf0558fb6c45d769dc642661516c39b4dcb` and `a876444ef103cd7288894fb35066d1f501a61eb5dc45beaead14d94e6145e2a9`.
+
+Final status: `P3_1_R12_C_ATTEMPTS_EXHAUSTED_WITH_EVIDENCE`. Equal-LOD failed, so mixed-LOD, deterministic-repeat, full-E2E and `scripts/validate.ps1` gates were not run. This finite campaign does not establish mathematical impossibility, production readiness, or a product geometry acceptance threshold. No production files, schemas, saves, PRs #207–#209, or protected F2-G1 state were modified; all five F2-G1 holds remain unchanged.
 
 ## Safety and interpretation
 

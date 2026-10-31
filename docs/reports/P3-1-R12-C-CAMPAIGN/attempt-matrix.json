@@ -1,0 +1,867 @@
+{
+  "schema": "p3.1.r12c.attempt-matrix.v1",
+  "notes": [
+    "Extracted from immutable raw attempt JSON and process records; result artifact SHA-256 binds each row to archived evidence.",
+    "Resource abort and timeout fields reflect the preserved process monitor records; they are not product resource qualification.",
+    "All timings are headless and UNSCORED."
+  ],
+  "attempts": [
+    {
+      "slot": "C2",
+      "attempt_id": "C2GEO006",
+      "source_sha": "f5b421a0f0e4a020a7fc1a8d00847a8e32f93234",
+      "parent_sha": "d936203c5b769c0c022699d6ad5fad12a85b6e40",
+      "tree_sha": "27f21a7279bde20f08a7141ff03f729e4599bb29",
+      "hypothesis": "C2_GRAPH_FACE_ANCHOR_CYCLE",
+      "realization_architecture": "Direct source polygon cycles triangulated with all roots as anchors; no events or supports.",
+      "topology_fixture_sha256": "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d",
+      "topology_root_count": 369,
+      "anchor_root_count": 369,
+      "path_event_root_count": 0,
+      "support_vertex_count": 0,
+      "realization_path_count": 0,
+      "realization_map_sha256": "64cddc36dce07dc71fe09f7eaab12909c6140ba956a1bc1fc35c44f645b6a236",
+      "topology_roundtrip_sha256": "a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9",
+      "topology_signature_match": true,
+      "geometry_complete": false,
+      "geometry_vertex_count": 369,
+      "geometry_triangle_count": 654,
+      "minimum_cross_squared": 1.34662257473411E-12,
+      "cutoff_rejection_count": 8,
+      "cutoff_rejections": [
+        {
+          "polygon_id": "60,8,25|tet:0",
+          "cross_squared": 8.90332212726756E-17,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:1",
+          "cross_squared": 2.77538984903934E-15,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:2",
+          "cross_squared": 1.11996851137781E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:5",
+          "cross_squared": 1.67075673894024E-16,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "61,8,25|tet:4",
+          "cross_squared": 1.64599779119146E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "62,9,24|tet:2",
+          "cross_squared": 6.55420975739091E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "62,9,24|tet:3",
+          "cross_squared": 9.59113973138248E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "66,7,29|tet:4",
+          "cross_squared": 9.40420376120688E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        }
+      ],
+      "missing_topology_obligations": 19,
+      "internal_open_edges": 13,
+      "nonmanifold": 0,
+      "winding_inconsistencies": 0,
+      "degenerate_triangles": 0,
+      "controls": {
+        "passed": 4,
+        "total": 6,
+        "cases": [
+          {
+            "scenario_id": "R9.2.GEO.ZERO.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": null
+          },
+          {
+            "scenario_id": "R9.2.GEO.CARVE.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": null
+          },
+          {
+            "scenario_id": "R9.2.GEO.FILL_CARVE.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": null
+          },
+          {
+            "scenario_id": "R9.2.CHUNK.NEIGHBOR_PAIR.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": null
+          },
+          {
+            "scenario_id": "R9.2.SEAM.NEGATIVE_REGIONS.v1.X_NEG",
+            "status": "FAIL",
+            "reason": "candidate_volume_invalid",
+            "failure_detail": null
+          },
+          {
+            "scenario_id": "R9.2.SEAM.NEGATIVE_REGIONS.v1.Z_NEG",
+            "status": "FAIL",
+            "reason": "candidate_volume_invalid",
+            "failure_detail": null
+          }
+        ]
+      },
+      "ray_roi": {
+        "disagreements": 0,
+        "total": 25
+      },
+      "ray_global_diagnostic": null,
+      "volume": {
+        "status": "PASS",
+        "volume_sha256": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2",
+        "payload_sha256": "2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0",
+        "revision": 2,
+        "reload_identity": "PASS"
+      },
+      "mixed_lod": "NOT_RUN_EQUAL_LOD_OR_GATES_FAILED",
+      "determinism": "NOT_RUN_EQUAL_LOD_OR_GATES_FAILED",
+      "resource_abort": false,
+      "timeout": false,
+      "runtime_error_count": 1,
+      "process": {
+        "godot_pid": 32164,
+        "launcher_pid": 24792,
+        "exit_code": 0,
+        "elapsed_ms": 5110,
+        "stdout_sha256": "43aa03e1eee1a016d87afc5da17e5224dda5dc1c8ad869a24a42db6e2dfb487b",
+        "stderr_sha256": "12ba32e9475f69448eb2513773197508e7027148301730390981995e935ed565"
+      },
+      "result_class": "FAILED_TARGET",
+      "failed_invariant": "fixed_cutoff",
+      "next_hypothesis_rationale": "C3 introduced deterministic per-face supports because all eight C2 cutoff rejects came from triangular source faces.",
+      "result_artifact_sha256": "469be6d2b18c52cdb6bece2db378de1f8d6a81dd27aaa10fd47c652d3b8ecf25"
+    },
+    {
+      "slot": "C3",
+      "attempt_id": "C3GEO001",
+      "source_sha": "e9bc9637a9aeadefc4385959c7ff2cf786c35997",
+      "parent_sha": "1edb73316876e20a20367c4c88de8b20689eb8f5",
+      "tree_sha": "ffc460cf507f083ce8cd6f62e39074ac2f6973ee",
+      "hypothesis": "C3_FIELD_CONSTRAINED_SUPPORT_FAN",
+      "realization_architecture": "One field-constrained centroid support per source polygon, fanned to the cycle.",
+      "topology_fixture_sha256": "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d",
+      "topology_root_count": 369,
+      "anchor_root_count": 369,
+      "path_event_root_count": 0,
+      "support_vertex_count": 502,
+      "realization_path_count": 0,
+      "realization_map_sha256": "fbe6e385738b86e4a54490ef5c8768bd682e2199eb450c3db892ba7786fb9518",
+      "topology_roundtrip_sha256": "a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9",
+      "topology_signature_match": true,
+      "geometry_complete": false,
+      "geometry_vertex_count": 871,
+      "geometry_triangle_count": 1621,
+      "minimum_cross_squared": 2.48140180278411E-12,
+      "cutoff_rejection_count": 45,
+      "cutoff_rejections": [
+        {
+          "polygon_id": "60,8,25|tet:0",
+          "cross_squared": 9.90483022673553E-18,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:0",
+          "cross_squared": 1.00790534888933E-17,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:0",
+          "cross_squared": 9.69596215898221E-18,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:1",
+          "cross_squared": 3.08371847098805E-16,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:1",
+          "cross_squared": 3.14579778039011E-16,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:1",
+          "cross_squared": 3.02239990305174E-16,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:2",
+          "cross_squared": 1.24870164596304E-14,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:2",
+          "cross_squared": 1.24264824030219E-14,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:2",
+          "cross_squared": 1.24188438599035E-14,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:5",
+          "cross_squared": 1.79741863788853E-17,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:5",
+          "cross_squared": 1.90065888470515E-17,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "60,8,25|tet:5",
+          "cross_squared": 1.87191535103567E-17,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "61,8,25|tet:3",
+          "cross_squared": 5.72104321382161E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "61,8,25|tet:3",
+          "cross_squared": 5.69539966403798E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "61,8,25|tet:3",
+          "cross_squared": 5.68562232884651E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "61,8,25|tet:4",
+          "cross_squared": 1.82719778977353E-14,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "61,8,25|tet:4",
+          "cross_squared": 1.82574190954379E-14,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "61,8,25|tet:4",
+          "cross_squared": 1.83382395911331E-14,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "62,9,24|tet:2",
+          "cross_squared": 7.28976408859335E-14,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "62,9,24|tet:2",
+          "cross_squared": 7.25012023615641E-14,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "62,9,24|tet:2",
+          "cross_squared": 7.30754161609032E-14,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "62,9,24|tet:3",
+          "cross_squared": 1.06987322104866E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "62,9,24|tet:3",
+          "cross_squared": 1.06371725663856E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "62,9,24|tet:3",
+          "cross_squared": 1.06346219807749E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "64,8,28|tet:2",
+          "cross_squared": 6.1629835349658E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "64,8,28|tet:2",
+          "cross_squared": 6.1629835349658E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "64,8,28|tet:2",
+          "cross_squared": 6.1629835349658E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "64,8,28|tet:3",
+          "cross_squared": 1.52326095530578E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "64,8,28|tet:3",
+          "cross_squared": 1.52326095530578E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "64,8,28|tet:3",
+          "cross_squared": 1.52326095530578E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "64,8,28|tet:4",
+          "cross_squared": 1.49624751607721E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "64,8,28|tet:4",
+          "cross_squared": 1.49624751607721E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "64,8,28|tet:4",
+          "cross_squared": 1.49624751607721E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "64,8,28|tet:5",
+          "cross_squared": 7.24536858461022E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "64,8,28|tet:5",
+          "cross_squared": 7.25634830001098E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "64,8,28|tet:5",
+          "cross_squared": 7.25524566640157E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "66,7,29|tet:3",
+          "cross_squared": 2.74690860335713E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "66,7,29|tet:3",
+          "cross_squared": 2.74896425067617E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "66,7,29|tet:3",
+          "cross_squared": 2.74368554134888E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "66,7,29|tet:4",
+          "cross_squared": 1.04478369857518E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "66,7,29|tet:4",
+          "cross_squared": 1.04491786859402E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "66,7,29|tet:4",
+          "cross_squared": 1.04503428480229E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "66,7,29|tet:5",
+          "cross_squared": 3.25771419389109E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "66,7,29|tet:5",
+          "cross_squared": 3.2623361477524E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": "66,7,29|tet:5",
+          "cross_squared": 3.24702504467256E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        }
+      ],
+      "missing_topology_obligations": 33,
+      "internal_open_edges": 20,
+      "nonmanifold": 0,
+      "winding_inconsistencies": 0,
+      "degenerate_triangles": 0,
+      "controls": {
+        "passed": 4,
+        "total": 6,
+        "cases": [
+          {
+            "scenario_id": "R9.2.GEO.ZERO.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": null
+          },
+          {
+            "scenario_id": "R9.2.GEO.CARVE.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": null
+          },
+          {
+            "scenario_id": "R9.2.GEO.FILL_CARVE.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": null
+          },
+          {
+            "scenario_id": "R9.2.CHUNK.NEIGHBOR_PAIR.v1",
+            "status": "FAIL",
+            "reason": "realizer_invalid",
+            "failure_detail": null
+          },
+          {
+            "scenario_id": "R9.2.SEAM.NEGATIVE_REGIONS.v1.X_NEG",
+            "status": "FAIL",
+            "reason": "realizer_invalid",
+            "failure_detail": null
+          },
+          {
+            "scenario_id": "R9.2.SEAM.NEGATIVE_REGIONS.v1.Z_NEG",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": null
+          }
+        ]
+      },
+      "ray_roi": {
+        "disagreements": 0,
+        "total": 25
+      },
+      "ray_global_diagnostic": {
+        "disagreements": 9,
+        "meaning": "diagnostic only; full-field canonical hit compared with ROI mesh hit"
+      },
+      "volume": {
+        "status": "PASS",
+        "volume_sha256": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2",
+        "payload_sha256": "2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0",
+        "revision": 2,
+        "reload_identity": "PASS"
+      },
+      "mixed_lod": "NOT_RUN_EQUAL_LOD_OR_GATES_FAILED",
+      "determinism": "NOT_RUN_EQUAL_LOD_OR_GATES_FAILED",
+      "resource_abort": false,
+      "timeout": false,
+      "runtime_error_count": 0,
+      "process": {
+        "godot_pid": 26308,
+        "launcher_pid": 24596,
+        "exit_code": 0,
+        "elapsed_ms": 6316,
+        "stdout_sha256": "ad1779987318ba9599bbfb7ded018ee254aff18c54e3882429ea0f13653cda8b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result_class": "FAILED_TARGET",
+      "failed_invariant": "fixed_cutoff",
+      "next_hypothesis_rationale": "C4 tested local exact-coplanar 2-2 flips after C3 increased cutoff failures and missed obligations.",
+      "result_artifact_sha256": "81b01ce3f41c6dcbf37965429fc39d54316c8c947a6d88faff4efe7eda8ac80a"
+    },
+    {
+      "slot": "C4",
+      "attempt_id": "C4GEO001",
+      "source_sha": "01856f529df0a0f8c0bf62be5684d86fd923d071",
+      "parent_sha": "db130481d79b5ad88fc3e705695bb1530cfadd61",
+      "tree_sha": "1b361cd8ab0fc4502605956710560abc81939d6e",
+      "hypothesis": "C4_EXACT_COPLANAR_LOCAL_2TO2_PATCH",
+      "realization_architecture": "Bounded local exact-coplanar 2-2 patches; no moved roots or samples.",
+      "topology_fixture_sha256": "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d",
+      "topology_root_count": 369,
+      "anchor_root_count": 369,
+      "path_event_root_count": 0,
+      "support_vertex_count": 0,
+      "realization_path_count": 0,
+      "realization_map_sha256": "7c713782d0de575bc73a8fe8d5f955e5d5b4c6e022d40fcaee091fe056528e28",
+      "topology_roundtrip_sha256": "a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9",
+      "topology_signature_match": true,
+      "geometry_complete": false,
+      "geometry_vertex_count": 369,
+      "geometry_triangle_count": 662,
+      "minimum_cross_squared": 8.90332212726756E-17,
+      "cutoff_rejection_count": 8,
+      "cutoff_rejections": [
+        {
+          "polygon_id": null,
+          "cross_squared": 8.90332212726756E-17,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": null,
+          "cross_squared": 2.77538984903934E-15,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": null,
+          "cross_squared": 1.11996851137781E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": null,
+          "cross_squared": 1.67075673894024E-16,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": null,
+          "cross_squared": 1.64599779119146E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": null,
+          "cross_squared": 6.55420975739091E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": null,
+          "cross_squared": 9.59113973138248E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": null,
+          "cross_squared": 9.40420376120688E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        }
+      ],
+      "missing_topology_obligations": 0,
+      "internal_open_edges": 0,
+      "nonmanifold": 0,
+      "winding_inconsistencies": 0,
+      "degenerate_triangles": 8,
+      "controls": {
+        "passed": 6,
+        "total": 6,
+        "cases": [
+          {
+            "scenario_id": "R9.2.GEO.ZERO.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.GEO.CARVE.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.GEO.FILL_CARVE.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.CHUNK.NEIGHBOR_PAIR.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.SEAM.NEGATIVE_REGIONS.v1.X_NEG",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.SEAM.NEGATIVE_REGIONS.v1.Z_NEG",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          }
+        ]
+      },
+      "ray_roi": {
+        "disagreements": 0,
+        "total": 25
+      },
+      "ray_global_diagnostic": {
+        "disagreements": 9,
+        "meaning": "diagnostic only; full-field canonical hit compared with ROI mesh hit"
+      },
+      "volume": {
+        "status": "PASS",
+        "volume_sha256": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2",
+        "payload_sha256": "2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0",
+        "revision": 2,
+        "reload_identity": "PASS"
+      },
+      "mixed_lod": "NOT_RUN_EQUAL_LOD_OR_GATES_FAILED",
+      "determinism": "NOT_RUN_EQUAL_LOD_OR_GATES_FAILED",
+      "resource_abort": false,
+      "timeout": false,
+      "runtime_error_count": 0,
+      "process": {
+        "godot_pid": 41740,
+        "launcher_pid": 43500,
+        "exit_code": 0,
+        "elapsed_ms": 9132,
+        "stdout_sha256": "fd31631a8806ebf0be262b1863d4caff10720ebf5068dd28bbee6432bf0c7be8",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result_class": "FAILED_TARGET",
+      "failed_invariant": "fixed_cutoff",
+      "next_hypothesis_rationale": "C5 relaxed only exact-coplanarity to bounded noncoplanar face-owned patches after all C4 proposals failed the exact predicate.",
+      "result_artifact_sha256": "8cd8de0e49016b8cbfe8014d0372047295f6641a9cceb364f80068262d2edc1e"
+    },
+    {
+      "slot": "C5",
+      "attempt_id": "C5GEO001",
+      "source_sha": "40ee966d1cda2ccf5ef42f5e747083d022849fbc",
+      "parent_sha": "95d8477cd180fd760571643859d024f63361b41d",
+      "tree_sha": "59d18abac9aa69d592c816028d35f790521e50d3",
+      "hypothesis": "C5_FACE_OWNED_NONCOPLANAR_LOCAL_PATCH",
+      "realization_architecture": "Bounded two-source-face noncoplanar 2-2 patches with face ownership and arc path provenance.",
+      "topology_fixture_sha256": "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d",
+      "topology_root_count": 369,
+      "anchor_root_count": 369,
+      "path_event_root_count": 0,
+      "support_vertex_count": 0,
+      "realization_path_count": 4,
+      "realization_map_sha256": "96d710211a630bb1105fc20598fae2225a7d8fb58e73fc95704358df60bb48e3",
+      "topology_roundtrip_sha256": "a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9",
+      "topology_signature_match": true,
+      "geometry_complete": false,
+      "geometry_vertex_count": 369,
+      "geometry_triangle_count": 662,
+      "minimum_cross_squared": 8.90332212726756E-17,
+      "cutoff_rejection_count": 4,
+      "cutoff_rejections": [
+        {
+          "polygon_id": null,
+          "cross_squared": 8.90332212726756E-17,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": null,
+          "cross_squared": 2.77538984903934E-15,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": null,
+          "cross_squared": 1.11996851137781E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": null,
+          "cross_squared": 6.55420975739091E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        }
+      ],
+      "missing_topology_obligations": 0,
+      "internal_open_edges": 0,
+      "nonmanifold": 0,
+      "winding_inconsistencies": 0,
+      "degenerate_triangles": 4,
+      "controls": {
+        "passed": 6,
+        "total": 6,
+        "cases": [
+          {
+            "scenario_id": "R9.2.GEO.ZERO.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.GEO.CARVE.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.GEO.FILL_CARVE.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.CHUNK.NEIGHBOR_PAIR.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.SEAM.NEGATIVE_REGIONS.v1.X_NEG",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.SEAM.NEGATIVE_REGIONS.v1.Z_NEG",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          }
+        ]
+      },
+      "ray_roi": {
+        "disagreements": 0,
+        "total": 25
+      },
+      "ray_global_diagnostic": {
+        "disagreements": 9,
+        "meaning": "diagnostic only; full-field canonical hit compared with ROI mesh hit"
+      },
+      "volume": {
+        "status": "PASS",
+        "volume_sha256": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2",
+        "payload_sha256": "2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0",
+        "revision": 2,
+        "reload_identity": "PASS"
+      },
+      "mixed_lod": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+      "determinism": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+      "resource_abort": false,
+      "timeout": false,
+      "runtime_error_count": 0,
+      "process": {
+        "godot_pid": 43808,
+        "launcher_pid": 36024,
+        "exit_code": 0,
+        "elapsed_ms": 9118,
+        "stdout_sha256": "6ddfc1c8a3764285d0e96e0bbcf08122fa4c834751ed0a820c094ddde33d1993",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result_class": "FAILED_TARGET",
+      "failed_invariant": "fixed_cutoff",
+      "next_hypothesis_rationale": "C6 addressed nine otherwise relevant proposals excluded by the two-source-face ownership cap.",
+      "result_artifact_sha256": "401741531a75b7129005120bf3ac67aa5cd74efda02fc48f8dea1c9a045f17e1"
+    },
+    {
+      "slot": "C6",
+      "attempt_id": "C6GEO001",
+      "source_sha": "4535f4c965db67adab7c93e448492c54be916c92",
+      "parent_sha": "289feddccc5a71bd8f9d1f5ff66051d8d4140657",
+      "tree_sha": "1c8af8c4050a7b89976331fa1ad20c666d67e3a8",
+      "hypothesis": "C6_MULTI_FACE_NONCOPLANAR_PATCH",
+      "realization_architecture": "Bounded multi-face noncoplanar 2-2 patches with full patch ownership separate from exact topology-arc owners.",
+      "topology_fixture_sha256": "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d",
+      "topology_root_count": 369,
+      "anchor_root_count": 369,
+      "path_event_root_count": 0,
+      "support_vertex_count": 0,
+      "realization_path_count": 5,
+      "realization_map_sha256": "e7cf00e11cde52e7dd29810a16542aaa7fd20fa3a74ff185c7e8a159158f96dc",
+      "topology_roundtrip_sha256": "a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9",
+      "topology_signature_match": true,
+      "geometry_complete": false,
+      "geometry_vertex_count": 369,
+      "geometry_triangle_count": 662,
+      "minimum_cross_squared": 2.77538984903934E-15,
+      "cutoff_rejection_count": 3,
+      "cutoff_rejections": [
+        {
+          "polygon_id": null,
+          "cross_squared": 2.77538984903934E-15,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": null,
+          "cross_squared": 1.11996851137781E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        },
+        {
+          "polygon_id": null,
+          "cross_squared": 6.55420975739091E-13,
+          "reason": "frozen_cross_squared_cutoff"
+        }
+      ],
+      "missing_topology_obligations": 0,
+      "internal_open_edges": 0,
+      "nonmanifold": 0,
+      "winding_inconsistencies": 0,
+      "degenerate_triangles": 3,
+      "controls": {
+        "passed": 6,
+        "total": 6,
+        "cases": [
+          {
+            "scenario_id": "R9.2.GEO.ZERO.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.GEO.CARVE.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.GEO.FILL_CARVE.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.CHUNK.NEIGHBOR_PAIR.v1",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.SEAM.NEGATIVE_REGIONS.v1.X_NEG",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          },
+          {
+            "scenario_id": "R9.2.SEAM.NEGATIVE_REGIONS.v1.Z_NEG",
+            "status": "PASS",
+            "reason": "",
+            "failure_detail": {}
+          }
+        ]
+      },
+      "ray_roi": {
+        "disagreements": 0,
+        "total": 25
+      },
+      "ray_global_diagnostic": {
+        "disagreements": 9,
+        "meaning": "diagnostic only; full-field canonical hit compared with ROI mesh hit"
+      },
+      "volume": {
+        "status": "PASS",
+        "volume_sha256": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2",
+        "payload_sha256": "2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0",
+        "revision": 2,
+        "reload_identity": "PASS"
+      },
+      "mixed_lod": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+      "determinism": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+      "resource_abort": false,
+      "timeout": false,
+      "runtime_error_count": 0,
+      "process": {
+        "godot_pid": 34224,
+        "launcher_pid": 1444,
+        "exit_code": 0,
+        "elapsed_ms": 8623,
+        "stdout_sha256": "9b8b2713190568c5ddec4ec2a5fe3f046ad4d20c874810bce625dde6e6d5f715",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result_class": "FAILED_TARGET",
+      "failed_invariant": "fixed_cutoff",
+      "next_hypothesis_rationale": "No next hypothesis is authorized; the C1-C6 budget is exhausted.",
+      "result_artifact_sha256": "0c6ae06d368f1a789ddc16fae429700c109d09fc019082fe6356c58fee12c6de"
+    }
+  ]
+}
