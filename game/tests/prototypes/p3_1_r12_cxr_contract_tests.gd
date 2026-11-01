@@ -521,6 +521,26 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	var disconnected: Array[Dictionary] = [patch_triangle, _triangle("r3-island", ["x", "y", "z"], {"x": Vector3(3,0,0), "y": Vector3(4,0,0), "z": Vector3(3,1,0)}, false)]
 	var connectivity: Dictionary = realizer.call("_r3_patch_connectivity", disconnected)
 	_check(not bool(connectivity.get("valid", true)) and int(connectivity.get("component_count", -1)) == 2, "R3 replacement requires one edge-connected per-cavity patch")
+	var all_tetra_ids: Array = ["r3-patch", "r3-out-ab", "r3-out-ac", "r3-out-bc"]
+	var full_union_boundary: Dictionary = realizer.call("derive_remaining_boundary_for_test", all, all_tetra_ids)
+	var tetra_adjacency: Dictionary = realizer.call("_adjacency", all)
+	realizer.set("_cxr_active_phase", "r3")
+	realizer.set("_cxr_search_started_usec", Time.get_ticks_usec())
+	realizer.set("_cxr_cavity_started_usec", Time.get_ticks_usec())
+	realizer.set("_cxr_search_nodes_total", 0)
+	realizer.set("_cxr_search_nodes_cavity", 0)
+	realizer.set("_cxr_patch_selection_nodes_total", 0)
+	var minimal_subset: Dictionary = realizer.call("_r3_select_boundary_patch", ["r3-patch"], all_tetra_ids, all, tetra_adjacency, 1)
+	_check(not bool(full_union_boundary.get("valid", true)) and bool(minimal_subset.get("valid", false)), "R3 finds a boundary-valid connected subset even when the full radius union is invalid")
+	_check(minimal_subset.get("patch_triangle_ids", []) == ["r3-patch"] and int(minimal_subset.get("search_nodes", 0)) <= Realizer.CXR_R2_MAX_SEARCH_STATES_PER_CAVITY, "R3 selects the minimum-cardinality subset deterministically within the bounded neighborhood")
+	_check(int(realizer.get("_cxr_patch_selection_nodes_total")) == int(minimal_subset.get("search_nodes", -1)) and int(realizer.get("_cxr_search_nodes_total")) == int(minimal_subset.get("search_nodes", -1)), "R3 charges subset states to the existing per-cavity and total counters")
+	var capped_selector: RefCounted = Realizer.new()
+	capped_selector.set("_cxr_active_phase", "r3")
+	capped_selector.set("_cxr_search_started_usec", Time.get_ticks_usec())
+	capped_selector.set("_cxr_cavity_started_usec", Time.get_ticks_usec())
+	capped_selector.set("_cxr_search_nodes_cavity", Realizer.CXR_R2_MAX_SEARCH_STATES_PER_CAVITY)
+	var capped_subset: Dictionary = capped_selector.call("_r3_select_boundary_patch", ["r3-patch"], all_tetra_ids, all, tetra_adjacency, 1)
+	_check(not bool(capped_subset.get("complete", true)) and String(capped_subset.get("limit_reason", "")) == "R2_MAX_SEARCH_STATES", "R3 fails closed when the shared search-state budget is exhausted")
 	var adjacency: Dictionary = {"residual-a": {"residual-b": true}, "residual-b": {"residual-a": true}, "residual-c": {}}
 	var residual_rows: Array = [{"triangle_id": "residual-c"}, {"triangle_id": "residual-b"}, {"triangle_id": "residual-a"}]
 	var grouped: Array = realizer.call("_overlapping_defect_groups", residual_rows, adjacency)
@@ -532,6 +552,8 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	realizer.set("_cxr_active_phase", "r3")
 	var r3_limits: Dictionary = realizer.call("_cxr_limits")
 	_check(int(r3_limits.get("max_cavities", -1)) == 3 and String(r3_limits.get("cavity_policy", "")) == "original_overlapping_defect_groups_searched_separately", "R3 permits the preregistered cavity cap and preserves original groups separately")
+	_check(String(r3_limits.get("patch_policy", "")) == "minimum_cardinality_connected_subsets_within_dual_graph_radius_layers_0_through_3_per_cavity", "R3 pins deterministic minimum-cardinality subset selection within bounded neighborhoods")
+	_check(int(r3_limits.get("patch_selection_state_cap_per_cavity", -1)) == 32768 and int(r3_limits.get("patch_selection_state_cap_total", -1)) == 65536, "R3 patch selection shares existing per-cavity and total search-state limits")
 	_check(String(r3_limits.get("boundary_source", "")) == "remaining_C6_edge_incidence_after_cavity_patch_removal" and String(r3_limits.get("support_source", "")) == "original_frozen_residual_faces_only", "R3 limit contract pins per-cavity remaining-mesh boundary and original residual-only support provenance")
 	_check(int(r3_limits.get("max_candidate_triangles_per_cavity", -1)) == 65536 and int(r3_limits.get("max_search_states_total", -1)) == 65536 and float(r3_limits.get("cross_squared_cutoff", 0.0)) == 1.0e-12, "R3 inherits bounded R2 search caps and the unchanged strict geometry cutoff")
 	_check(int(r3_limits.get("max_candidate_attempts_per_cavity", -1)) == 8192 and int(r3_limits.get("max_support_candidates_per_cavity", -1)) == 256 and int(r3_limits.get("max_selected_supports", -1)) == 4 and int(r3_limits.get("max_patch_triangles", -1)) == 64, "R3 retains preregistered per-cavity candidate, support, selection and patch-size limits")
@@ -550,6 +572,7 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	_check(solved_then_unsolved == "r3_unsolved_cavity_domain_exhausted_after_other_cavity_solution", "R3 reports an unsolved cavity separately when another cavity already has a solution")
 	_check(overlap_terminal == "r3_selected_patch_overlap_requires_alternative_solution_search", "R3 does not claim exhaustion when selected per-cavity patches overlap")
 	var one_triangle: Array[Dictionary] = [patch_triangle]
+	realizer.set("_cxr_search_started_usec", Time.get_ticks_usec())
 	var not_started: Dictionary = realizer.call("_search_cxr_cavity_r3", ["r3-patch"], one_triangle, {}, {"residuals": [{"triangle_id": "r3-patch"}]}, PackedFloat32Array(), {})
 	var not_started_report: Dictionary = not_started.get("cavity_report", {})
 	_check(not bool(not_started.get("search_started", true)) and not bool(not_started_report.get("search_started", true)), "R3 invalid-boundary-only processing is not mislabeled as a started support search")
