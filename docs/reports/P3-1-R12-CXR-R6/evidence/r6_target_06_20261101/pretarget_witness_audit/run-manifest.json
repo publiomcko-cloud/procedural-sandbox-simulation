@@ -1,0 +1,14 @@
+{
+  "phase": "R6-D0-boundary-witness-audit",
+  "source_sha": "7f556927e95329ac8ff84e467e79ca66a6ee8122",
+  "parent_sha": "836a2cd8e681dfb35f0bbaa5f1f55b1bfcc59b0f",
+  "tree_sha": "a39ea0a5b83831436b9a6d2a464cca2ade5e4be9",
+  "branch": "exp/p3-1-r12-cxr-r6-realization-map-cavity",
+  "tracked_worktree_clean": false,
+  "mode": "boundary-audit",
+  "attempt_consumed": false,
+  "output_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\R6_D0_WitnessAudit_7f556927\\result.json",
+  "stdout_stderr_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\R6_D0_WitnessAudit_7f556927\\stdout-stderr.log",
+  "exit_code": 0,
+  "godot_bin": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe"
+}

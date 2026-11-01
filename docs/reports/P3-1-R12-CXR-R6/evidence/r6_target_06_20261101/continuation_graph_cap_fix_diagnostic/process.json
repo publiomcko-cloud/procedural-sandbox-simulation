@@ -1,0 +1,16 @@
+{
+  "phase": "R6-06 continuation after graph-cap gate correction",
+  "attempt_id": "R6-06-20261101-aa16d87",
+  "source_sha": "c025db46aefe0b7020832bb8ae4ed70a6014734b",
+  "parent_sha": "aa16d87d674e2af35a1b445203a82497ab049831",
+  "tree_sha": "e283e8b619dd259898155312a5c90f47270f9191",
+  "branch": "exp/p3-1-r12-cxr-r6-realization-map-cavity",
+  "original_target_source_sha": "aa16d87d674e2af35a1b445203a82497ab049831",
+  "original_target_result_sha256": "d2c20f7844059cbbb6ae58b00f98b22e4994135ef39e2d15e1befa4dcd20ad4a",
+  "additional_target_attempts_consumed": 0,
+  "continuation_mode": "resume-r6-06",
+  "exit_code": 2,
+  "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\R6-06-Continuation_c025db46\\stdout.txt",
+  "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\R6-06-Continuation_c025db46\\stderr.txt",
+  "result": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\R6-06-Continuation_c025db46\\continuation-result.json"
+}

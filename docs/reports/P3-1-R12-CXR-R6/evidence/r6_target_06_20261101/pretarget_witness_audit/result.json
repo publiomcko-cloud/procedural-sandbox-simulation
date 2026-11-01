@@ -1,0 +1,315 @@
+{
+	"boundary_audit": {
+		"boundary_edge_count": 6,
+		"boundary_edges": [
+			{
+				"clipped_zero_facet_piece_count": 81,
+				"continuous_upper_bound_cross_squared": 0.000000019287648811428,
+				"cutoff_margin": 0.000000019286648811428,
+				"edge_id": "edge|00007041000000400000c840|00007041000010400000d040edge|00007041000000400000c840|00007441000010400000d040",
+				"feasibility_state": "FEASIBLE_WITNESS",
+				"feasibility_unresolved": false,
+				"feasible_incident_triangle_witness": {
+					"analytic_lambda_interval": [
+						0.0,
+						1.0
+					],
+					"continuous_field_residual": 0.0000000577043327287807,
+					"continuous_upper_bound_cross_squared": 0.000000019287648811428,
+					"cross_squared": 0.0000000162197739683734,
+					"domain_barycentric_weights": [
+						0.0434917506332649,
+						0.0397478496767484,
+						0.916760399689987
+					],
+					"facet_index": 0,
+					"source": "CLIPPED_ZERO_FACET_INTERIOR",
+					"tetra_barycentric_weights": [
+						0.0000152587890625,
+						0.0000162124633789063,
+						0.00234699249267578,
+						0.997621536254883
+					],
+					"tetrahedron_id": "60,8,25|tet:1",
+					"valid": true,
+					"witness_construction": "ANALYTIC_QUADRATIC_AND_DOMAIN_INTERVAL",
+					"world_position": [
+						15.2499961853027,
+						2.24999213218689,
+						6.49940538406372
+					]
+				},
+				"geometrically_unrealizable_boundary_edge": false,
+				"root_ids": [
+					"edge|00007041000000400000c840|00007041000010400000d040",
+					"edge|00007041000000400000c840|00007441000010400000d040"
+				],
+				"strictly_above_frozen_cutoff": true,
+				"witness_cutoff_margin": 0.0000000162187739683734
+			},
+			{
+				"clipped_zero_facet_piece_count": 81,
+				"continuous_upper_bound_cross_squared": 0.00000000000147609105927843,
+				"cutoff_margin": 0.000000000000476091059278428,
+				"edge_id": "edge|00007041000000400000c840|00007441000010400000d040edge|00007441000000400000c840|00007441000010400000d040",
+				"feasibility_state": "FEASIBLE_WITNESS",
+				"feasibility_unresolved": false,
+				"feasible_incident_triangle_witness": {
+					"analytic_lambda_interval": [
+						0.0,
+						0.265805674333461
+					],
+					"continuous_field_residual": -0.00000000363163793482002,
+					"continuous_upper_bound_cross_squared": 0.00000000000147609105927843,
+					"cross_squared": 0.00000000000141157224797794,
+					"domain_barycentric_weights": [
+						0.0198889929769277,
+						0.00191414762240066,
+						0.978196859400672
+					],
+					"facet_index": 1,
+					"source": "CLIPPED_ZERO_FACET_INTERIOR",
+					"tetra_barycentric_weights": [
+						0.0319299697875977,
+						0.00000286102294921875,
+						0.945938110351563,
+						0.0221290588378906
+					],
+					"tetrahedron_id": "60,8,25|tet:3",
+					"valid": true,
+					"witness_construction": "ANALYTIC_QUADRATIC_AND_DOMAIN_INTERVAL",
+					"world_position": [
+						15.0055322647095,
+						2.2420175075531,
+						6.49201679229736
+					]
+				},
+				"geometrically_unrealizable_boundary_edge": false,
+				"root_ids": [
+					"edge|00007041000000400000c840|00007441000010400000d040",
+					"edge|00007441000000400000c840|00007441000010400000d040"
+				],
+				"strictly_above_frozen_cutoff": true,
+				"witness_cutoff_margin": 0.000000000000411572247977944
+			},
+			{
+				"clipped_zero_facet_piece_count": 81,
+				"continuous_upper_bound_cross_squared": 0.000000000166631847209331,
+				"cutoff_margin": 0.000000000165631847209331,
+				"edge_id": "edge|00007441000000400000c840|00007441000010400000d040edge|00007441000010400000d040|00007841000010400000d040",
+				"feasibility_state": "FEASIBLE_WITNESS",
+				"feasibility_unresolved": false,
+				"feasible_incident_triangle_witness": {
+					"analytic_lambda_interval": [
+						0.0,
+						1.0
+					],
+					"continuous_field_residual": 0.00000000278040512835531,
+					"continuous_upper_bound_cross_squared": 0.000000000166631847209331,
+					"cross_squared": 0.000000000146444439907967,
+					"domain_barycentric_weights": [
+						0.937509530874745,
+						0.0274750381710419,
+						0.0350154309542131
+					],
+					"facet_index": 0,
+					"source": "CLIPPED_ZERO_FACET_INTERIOR",
+					"tetra_barycentric_weights": [
+						0.0306282043457031,
+						0.906894683837891,
+						0.0,
+						0.0624771118164063
+					],
+					"tetrahedron_id": "60,8,25|tet:4",
+					"valid": true,
+					"witness_construction": "ANALYTIC_QUADRATIC_AND_DOMAIN_INTERVAL",
+					"world_position": [
+						15.0156192779541,
+						2.24234294891357,
+						6.49234294891357
+					]
+				},
+				"geometrically_unrealizable_boundary_edge": false,
+				"root_ids": [
+					"edge|00007441000000400000c840|00007441000010400000d040",
+					"edge|00007441000010400000d040|00007841000010400000d040"
+				],
+				"strictly_above_frozen_cutoff": true,
+				"witness_cutoff_margin": 0.000000000145444439907967
+			},
+			{
+				"clipped_zero_facet_piece_count": 81,
+				"continuous_upper_bound_cross_squared": 0.00000000112846887390106,
+				"cutoff_margin": 0.00000000112746887390106,
+				"edge_id": "edge|00007441000000400000d040|00007441000010400000d040edge|00007441000010400000d040|00007841000010400000d040",
+				"feasibility_state": "FEASIBLE_WITNESS",
+				"feasibility_unresolved": false,
+				"feasible_incident_triangle_witness": {
+					"analytic_lambda_interval": [
+						0.0,
+						1.0
+					],
+					"continuous_field_residual": 0.00000000278040512835531,
+					"continuous_upper_bound_cross_squared": 0.00000000112846887390106,
+					"cross_squared": 0.000000000993338966637225,
+					"domain_barycentric_weights": [
+						0.937509530874745,
+						0.0274750381710419,
+						0.0350154309542131
+					],
+					"facet_index": 0,
+					"source": "CLIPPED_ZERO_FACET_INTERIOR",
+					"tetra_barycentric_weights": [
+						0.0306282043457031,
+						0.906894683837891,
+						0.0,
+						0.0624771118164063
+					],
+					"tetrahedron_id": "60,8,25|tet:4",
+					"valid": true,
+					"witness_construction": "ANALYTIC_QUADRATIC_AND_DOMAIN_INTERVAL",
+					"world_position": [
+						15.0156192779541,
+						2.24234294891357,
+						6.49234294891357
+					]
+				},
+				"geometrically_unrealizable_boundary_edge": false,
+				"root_ids": [
+					"edge|00007441000010400000d040|00007841000010400000d040",
+					"edge|00007441000000400000d040|00007441000010400000d040"
+				],
+				"strictly_above_frozen_cutoff": true,
+				"witness_cutoff_margin": 0.000000000992338966637225
+			},
+			{
+				"clipped_zero_facet_piece_count": 81,
+				"continuous_upper_bound_cross_squared": 0.00000000000209107991339108,
+				"cutoff_margin": 0.00000000000109107991339108,
+				"edge_id": "edge|00007041000000400000d040|00007441000010400000d040edge|00007441000000400000d040|00007441000010400000d040",
+				"feasibility_state": "FEASIBLE_WITNESS",
+				"feasibility_unresolved": false,
+				"feasible_incident_triangle_witness": {
+					"analytic_lambda_interval": [
+						0.0,
+						0.462776688863846
+					],
+					"continuous_field_residual": 0.000000070295872678372,
+					"continuous_upper_bound_cross_squared": 0.00000000000209107991339108,
+					"cross_squared": 0.00000000000193289568378718,
+					"domain_barycentric_weights": [
+						0.00340360957583496,
+						0.0351582583875213,
+						0.961438132036644
+					],
+					"facet_index": 0,
+					"source": "CLIPPED_ZERO_FACET_INTERIOR",
+					"tetra_barycentric_weights": [
+						0.0313854217529297,
+						0.930050849914551,
+						0.0000200271606445313,
+						0.038543701171875
+					],
+					"tetrahedron_id": "60,8,25|tet:4",
+					"valid": true,
+					"witness_construction": "ANALYTIC_QUADRATIC_AND_DOMAIN_INTERVAL",
+					"world_position": [
+						15.009635925293,
+						2.24214863777161,
+						6.49215364456177
+					]
+				},
+				"geometrically_unrealizable_boundary_edge": false,
+				"root_ids": [
+					"edge|00007441000000400000d040|00007441000010400000d040",
+					"edge|00007041000000400000d040|00007441000010400000d040"
+				],
+				"strictly_above_frozen_cutoff": true,
+				"witness_cutoff_margin": 0.000000000000932895683787184
+			},
+			{
+				"clipped_zero_facet_piece_count": 81,
+				"continuous_upper_bound_cross_squared": 0.000000026904304561981,
+				"cutoff_margin": 0.000000026903304561981,
+				"edge_id": "edge|00007041000000400000c840|00007041000010400000d040edge|00007041000000400000d040|00007441000010400000d040",
+				"feasibility_state": "FEASIBLE_WITNESS",
+				"feasibility_unresolved": false,
+				"feasible_incident_triangle_witness": {
+					"analytic_lambda_interval": [
+						0.0,
+						1.0
+					],
+					"continuous_field_residual": 0.0000000577043327287807,
+					"continuous_upper_bound_cross_squared": 0.000000026904304561981,
+					"cross_squared": 0.0000000232581527370712,
+					"domain_barycentric_weights": [
+						0.0434917506332649,
+						0.0397478496767484,
+						0.916760399689987
+					],
+					"facet_index": 0,
+					"source": "CLIPPED_ZERO_FACET_INTERIOR",
+					"tetra_barycentric_weights": [
+						0.0000152587890625,
+						0.0000162124633789063,
+						0.00234699249267578,
+						0.997621536254883
+					],
+					"tetrahedron_id": "60,8,25|tet:1",
+					"valid": true,
+					"witness_construction": "ANALYTIC_QUADRATIC_AND_DOMAIN_INTERVAL",
+					"world_position": [
+						15.2499961853027,
+						2.24999213218689,
+						6.49940538406372
+					]
+				},
+				"geometrically_unrealizable_boundary_edge": false,
+				"root_ids": [
+					"edge|00007041000000400000d040|00007441000010400000d040",
+					"edge|00007041000000400000c840|00007041000010400000d040"
+				],
+				"strictly_above_frozen_cutoff": true,
+				"witness_cutoff_margin": 0.0000000232571527370712
+			}
+		],
+		"clipped_piece_cache_hits": 0,
+		"edges_requiring_expansion": [],
+		"face_edge_metric_cache_hits": 0,
+		"face_edge_metric_evaluations": 36,
+		"geometrically_unrealizable_boundary_edges": [],
+		"minimum_cutoff_margin": 0.000000000000476091059278428,
+		"minimum_feasible_witness_margin": 0.000000000000411572247977944,
+		"unresolved_boundary_edges": [],
+		"valid": true,
+		"zero_facet_clip_evaluations": 3972
+	},
+	"boundary_cycle": [
+		"edge|00007041000000400000c840|00007041000010400000d040",
+		"edge|00007041000000400000c840|00007441000010400000d040",
+		"edge|00007441000000400000c840|00007441000010400000d040",
+		"edge|00007441000010400000d040|00007841000010400000d040",
+		"edge|00007441000000400000d040|00007441000010400000d040",
+		"edge|00007041000000400000d040|00007441000010400000d040"
+	],
+	"frozen_cavity_sha256": "a54a407ac84b3fd7d64108f41457d5ecc7ff335abaee6899819de579ebeae6a6",
+	"frozen_payload_sha256": "2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0",
+	"frozen_volume_sha256": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2",
+	"graph_sha256": "a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9",
+	"patch_face_ids": [
+		"60,8,25|tet:1|c4-source:0",
+		"60,8,25|tet:2|c4-source:0",
+		"C6||654|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000d040|00007441000010400000d040|edge|00007441000000400000d040|00007441000010400000d040",
+		"C6||655|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040",
+		"C6||656|edge|00007041000000400000c840|00007041000010400000d040|edge|00007441000000400000d040|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+		"C6||657|edge|00007041000000400000c840|00007041000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040"
+	],
+	"schema": "P3.1.R12CXR.R6.D0BoundaryWitnessAudit.v1",
+	"source_sha": "7f556927e95329ac8ff84e467e79ca66a6ee8122",
+	"status": "DIAGNOSTIC_COMPLETE",
+	"target_attempt_consumed": false,
+	"target_attempt_phase": "R6-D0",
+	"target_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+	"topology_sha256": "4ecbb2496fb34f1cf3c05a60192f76bdce7a52ec3148d02ba041510b804a8c95",
+	"zero_facet_count": -1
+}

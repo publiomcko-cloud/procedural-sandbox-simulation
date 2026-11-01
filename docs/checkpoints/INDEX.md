@@ -80,4 +80,6 @@
 
 | 2026-10-25 | [P3.0A Delete owner-GUI failure correction](2026-10-25-P3-0A-ENTITY-DELETE-GUI-CORRECTION.md) | Owner reported Delete did not hide the last entity; reproduced `keycode=0` / `physical_keycode=KEY_DELETE` input omission, corrected viewport handler and authoritative visual sync; full Godot 4.7.2 validation 17,969/0 | Source `3da4bc6f7272ed838da7438c43312227e32ae59e` on draft PR #114; owner GUI retest and independent review pending |
 
+
+| 2026-11-01 | [P3.1 R12-CXR R6-06 finite support graph result](2026-11-01-P3-1-R12-CXR-R6-06-FINITE-GRAPH-RESULT.md) | R6-06 exhausted the complete finite 23-support/selected-cavity graph with 0 D3 solutions; no global infeasibility claim; downstream equal-LOD gates lacked a mesh; full validation exited 1 on five non-R6 suites | Raw evidence SHA-indexed; PR #219 draft/unmerged; PR #220 untouched; five target attempts consumed; alternate cavity/support domains remain untested |
 Every verified merge, material review/GUI verdict, scope authorization or revision, blocker, architecture decision or major handoff gets a **new file** and a row here. Keep past checkpoints unchanged after integration. For historical evidence and recovery, start with [CURRENT_STATUS](../status/CURRENT_STATUS.md), [AGENT_RECOVERY](../workflow/AGENT_RECOVERY.md), and [template](../templates/CHECKPOINT_TEMPLATE.md).

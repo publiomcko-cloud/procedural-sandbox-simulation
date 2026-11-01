@@ -1,0 +1,1 @@
+R6_CAMPAIGN_FAIL {"details":{"continued_fingerprint_sha256":"8712e3f10ffa5dcb8b122250cc76ef93784dbbee77d97be937e8c209b26c1e67","continued_valid":true,"previous_fingerprint_sha256":"2e869a886d390dc3a7e233053ffe5ed970a630adb9e92884dcb39f2cce641cbb"},"reason":"r6_continuation_support_set_changed"}

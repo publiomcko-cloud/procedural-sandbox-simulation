@@ -1,0 +1,17 @@
+{
+  "phase": "R6 full target",
+  "attempt_id": "R6-06-20261101-aa16d87",
+  "source_sha": "aa16d87d674e2af35a1b445203a82497ab049831",
+  "parent_sha": "9f159855fd243a78d64c060f32e2be9cb88c22b8",
+  "tree_sha": "2b0f2489ca95ea5421bacbcbcf6ef3bdd6802315",
+  "branch": "exp/p3-1-r12-cxr-r6-realization-map-cavity",
+  "mode": "synthesize",
+  "target_attempt_count_before": 4,
+  "target_attempt_count_after": 5,
+  "attempt_consumed": true,
+  "godot_bin": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "exit_code": 0,
+  "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\R6-06-20261101-aa16d87_target\\stdout.txt",
+  "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\R6-06-20261101-aa16d87_target\\stderr.txt",
+  "result": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\R6-06-20261101-aa16d87_target\\result.json"
+}
