@@ -3,6 +3,7 @@ extends SceneTree
 const Core := preload("res://tests/prototypes/p3_1_r9_2_diagnostic_base.gd")
 const CandidateD := preload("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd")
 const Realizer := preload("res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd")
+const Synthesizer := preload("res://tests/prototypes/p3_1_r12_cxr_r5_support_synthesizer.gd")
 const ManifestSha := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
 const Stage0Sha := "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d"
 const ResidualSha := "ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23"
@@ -19,12 +20,18 @@ const R4SourceSha := "f48990e25ffb1d377e02a9182240cabe35c815eb"
 const R4D1ResultSha := "927ec58f8f4e7821d9acb27a46068a4fa5fccf4f354f22b24be9cf88f90970c4"
 const R4CavitySignature := "90be2d27d3c08ccb2fe93ebf6b8a0da0d8955d3c4d533a4496809b4d07bd363b"
 const R5CavitySha := "a54a407ac84b3fd7d64108f41457d5ecc7ff335abaee6899819de579ebeae6a6"
+const FROZEN_CROSS_SQUARED_CUTOFF: float = 1.0e-12
 
 func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
 	var output_path: String = OS.get_environment("R12CXR_R5_OUTPUT")
+	var mode: String = OS.get_environment("R12CXR_R5_MODE")
+	if mode.is_empty(): mode = "freeze"
+	if mode not in ["freeze", "synthesize"]:
+		_fail("r5_mode_invalid", {"mode": mode})
+		return
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
 		_fail("r5_output_path_invalid_or_exists", {})
 		return
@@ -250,6 +257,10 @@ func _run() -> void:
 	if Core.sha256(pinned_cavity_bytes) != R5CavitySha or pinned_cavity_bytes != fixture_bytes:
 		_fail("r5_frozen_cavity_fixture_pin_or_reconstruction_mismatch", {"observed_sha256": Core.sha256(pinned_cavity_bytes), "expected_sha256": R5CavitySha, "reconstructed_sha256": Core.sha256(fixture_bytes), "exact_bytes_match": pinned_cavity_bytes == fixture_bytes})
 		return
+	if mode == "synthesize":
+		var synthesis_result: Dictionary = _run_constraint_synthesis(realizer, volume.get("values", PackedFloat32Array()), roi, r4_context, analysis_patch, analysis_patch_ids, seed_triangles, analysis_boundary, triangles, search_residual_fixture, base, snapshot, support_fixture, residual_fixture.get("residuals", []), output_path)
+		if synthesis_result.is_empty(): return
+		return
 	var output_file: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
 	if output_file == null:
 		_fail("r5_frozen_cavity_output_open_failed", {"error": FileAccess.get_open_error()})
@@ -264,6 +275,263 @@ func _run() -> void:
 	print("R12CXR_R5_CAVITY_FROZEN " + JSON.stringify({"source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "r4_source_sha": R4SourceSha, "cavity_sha256": Core.sha256(fixture_bytes), "boundary_signature": R4CavitySignature, "patch_faces": analysis_patch_ids.size(), "boundary_edges": analysis_boundary.get("boundary_edge_count", -1), "local_required_arcs": r4_context.get("local_required_arc_count", -1), "output_path": output_path}))
 	quit(0)
 	return
+
+func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, base_context: Dictionary, patch: Array[Dictionary], patch_ids: Array, seed_triangles: Array[Dictionary], boundary: Dictionary, original_triangles: Array[Dictionary], residual_fixture: Dictionary, base: Dictionary, snapshot: Dictionary, support_fixture: Dictionary, residual_triangles: Array, output_path: String) -> Dictionary:
+	var cavity_id: String = String(support_fixture.get("cavity_id", ""))
+	if cavity_id.is_empty():
+		_fail("r5_cavity_identity_missing", {})
+		return {}
+	var boundary_cycle: Array[String] = []
+	for root_id_value in base_context.get("boundary_cycle", []): boundary_cycle.append(String(root_id_value))
+	var boundary_edges: Array = []
+	for edge_key_value in base_context.get("boundary_edge_map", {}).keys():
+		var edge_key: String = String(edge_key_value)
+		boundary_edges.append(base_context.boundary_edge_map[edge_key].duplicate(true))
+	boundary_edges.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.get("edge_key", "")) < String(b.get("edge_key", "")))
+	var eligible_pairs: Array = []
+	var sorted_boundary_ids: Array[String] = boundary_cycle.duplicate()
+	sorted_boundary_ids.sort()
+	for first_index in range(sorted_boundary_ids.size()):
+		for second_index in range(first_index + 1, sorted_boundary_ids.size()):
+			var pair: Array[String] = [sorted_boundary_ids[first_index], sorted_boundary_ids[second_index]]
+			eligible_pairs.append({"root_ids": pair, "edge_key": String(realizer.call("_edge_key", pair[0], pair[1])), "is_boundary_edge": base_context.get("boundary_edge_map", {}).has(String(realizer.call("_edge_key", pair[0], pair[1])))})
+	var required_roots: Array = base_context.get("required_topology_root_ids", {}).keys()
+	required_roots.sort()
+	var r5a_analysis: Dictionary = {
+		"cavity_id": cavity_id,
+		"frozen_boundary_cycle": boundary_cycle,
+		"frozen_directed_boundary_edges": boundary_edges,
+		"required_topology_root_ids": required_roots,
+		"required_topology_arcs": residual_fixture.get("arc_map", []).duplicate(true),
+		"projection_origin": base_context.get("projection_origin", Vector3.ZERO),
+		"projection_u": base_context.get("projection_u", Vector3.ZERO),
+		"projection_v": base_context.get("projection_v", Vector3.ZERO),
+		"projected_cavity_polygon": base_context.get("polygon", []).duplicate(),
+		"eligible_boundary_root_pairs": eligible_pairs,
+		"eligible_boundary_root_pair_count": eligible_pairs.size(),
+		"r4_d1_reference": {"retained_supports": 115, "legal_candidate_edges": 18, "supports_with_one_or_more_legal_edges": 5, "supports_with_two_or_more_legal_edges": 5, "legal_candidate_triangles": 0, "d3_candidate_rows": 329, "d3_branches": 5, "d3_complete": true, "d3_solution_count": 0},
+		"support_need": "R4 finite candidate graph had zero legal triangles; R5 seeks field-derived points within this frozen six-face cavity for all 15 boundary-root pairs. This is a finite synthesis search, not a continuum infeasibility proof."
+	}
+	var synthesizer: RefCounted = Synthesizer.new()
+	var synthesis: Dictionary = synthesizer.call("synthesize", realizer, values, roi, base_context, residual_triangles, cavity_id)
+	if not bool(synthesis.get("valid", false)):
+		_fail("r5_constraint_synthesis_input_invalid", synthesis)
+		return {}
+	var support_rows: Array[Dictionary] = synthesis.get("supports", [])
+	var result: Dictionary = {
+		"schema": "P3.1.R12CXR.R5.Result.v1",
+		"status": "R5_SUPPORT_SYNTHESIS_PARTIAL",
+		"source_sha": OS.get_environment("R12CXR_SOURCE_SHA"),
+		"r4_source_sha": R4SourceSha,
+		"r4_d1_result_sha256": R4D1ResultSha,
+		"frozen_cavity_sha256": R5CavitySha,
+		"candidate_d_sha256": CandidateSha,
+		"manifest_sha256": ManifestSha,
+		"scenario_id": TargetId,
+		"cavity_id": cavity_id,
+		"r5a_constraint_analysis": r5a_analysis,
+		"d2_signature": R4CavitySignature,
+		"cross_squared_cutoff": FROZEN_CROSS_SQUARED_CUTOFF,
+		"synthesis": synthesis,
+		"graph_gate": {"started": false, "reason": "NOT_RUN_NO_SYNTHESIZED_SUPPORTS"},
+		"d3": {"started": false, "reason": "NOT_RUN_NO_LEGAL_TRIANGLES"},
+		"downstream": {"started": false, "reason": "NOT_RUN_NO_VALID_D3_SOLUTION"},
+		"continuum_domain_exhausted": false,
+		"timing_classification": "UNSCORED_EXPERIMENTAL_CPU_TIME_ONLY"
+	}
+	if support_rows.is_empty():
+		result["terminal_reason"] = "NO_SUPPORTS_WITHIN_FROZEN_FIELD_DOMAIN_AND_EXISTING_CAPS"
+		_write_result(output_path, result, "R12CXR_R5_SUPPORT_SYNTHESIS_RESULT")
+		return result
+	var context_result: Dictionary = realizer.call("_r3_make_expanded_patch_context", patch, patch_ids, seed_triangles, support_rows, boundary, original_triangles, residual_fixture, 2, false)
+	if not bool(context_result.get("valid", false)):
+		result["terminal_reason"] = "SYNTHESIZED_SUPPORT_CONTEXT_REJECTED"
+		result["context_rejection"] = context_result
+		_write_result(output_path, result, "R12CXR_R5_SUPPORT_SYNTHESIS_RESULT")
+		return result
+	var context: Dictionary = context_result.get("context", {})
+	if context.is_empty():
+		_fail("r5_synthesized_context_missing", {})
+		return {}
+	result["graph_gate"] = {"started": true, "context_valid": true, "vertex_count": context.get("vertex_ids", []).size(), "support_count": support_rows.size()}
+	var vertex_ids: Array = context.get("vertex_ids", []).duplicate()
+	vertex_ids.sort()
+	var maximum_triangles: int = int(realizer.call("_cxr_limits").get("max_candidate_triangles_per_cavity", 0))
+	var maximum_total: int = int(realizer.call("_cxr_limits").get("max_candidate_triangles_total", 0))
+	var graph_probe_cap: int = mini(maximum_triangles, maximum_total)
+	var possible_triangle_count: int = int(vertex_ids.size() * maxi(0, vertex_ids.size() - 1) * maxi(0, vertex_ids.size() - 2) / 6)
+	result["graph_gate"]["possible_triplets"] = possible_triangle_count
+	result["graph_gate"]["probe_cap"] = graph_probe_cap
+	if graph_probe_cap <= 0 or possible_triangle_count > graph_probe_cap:
+		result["graph_gate"]["complete"] = false
+		result["graph_gate"]["reason"] = "PREREGISTERED_R2_CANDIDATE_TRIANGLE_CAP_EXCEEDED"
+		result["terminal_reason"] = "FINITE_GRAPH_GATE_PARTIAL"
+		_write_result(output_path, result, "R12CXR_R5_SUPPORT_SYNTHESIS_RESULT")
+		return result
+	var candidate_triangles: Array[Dictionary] = []
+	var rejection_histogram: Dictionary = {}
+	var graph_probe_rows: Array[String] = []
+	var graph_limited: bool = false
+	var graph_limit_reason: String = ""
+	var graph_started_usec: int = Time.get_ticks_usec()
+	realizer.set("_cxr_candidate_triangles_total", 0)
+	realizer.set("_cxr_candidate_triangles_cavity", 0)
+	realizer.set("_cxr_search_nodes_total", 0)
+	realizer.set("_cxr_search_nodes_cavity", 0)
+	realizer.set("_cxr_search_started_usec", graph_started_usec)
+	realizer.set("_cxr_cavity_started_usec", graph_started_usec)
+	for first_index in range(vertex_ids.size()):
+		for second_index in range(first_index + 1, vertex_ids.size()):
+			for third_index in range(second_index + 1, vertex_ids.size()):
+				var ids: Array = [String(vertex_ids[first_index]), String(vertex_ids[second_index]), String(vertex_ids[third_index])]
+				var triangle_result: Dictionary = realizer.call("_r2_get_candidate_triangle", ids, context)
+				var row_key: String = "|".join(ids)
+				if bool(triangle_result.get("limit", false)):
+					graph_limited = true
+					graph_limit_reason = String(triangle_result.get("reason", "R2_CANDIDATE_GATE_LIMIT"))
+					graph_probe_rows.append("%s|LIMIT|%s" % [row_key, graph_limit_reason])
+					break
+				if bool(triangle_result.get("valid", false)):
+					var triangle: Dictionary = triangle_result.get("triangle", {})
+					candidate_triangles.append(triangle)
+					graph_probe_rows.append("%s|PASS|%s" % [row_key, String(triangle.get("triangle_id", ""))])
+				else:
+					var reason: String = String(triangle_result.get("reason", "UNKNOWN_NOT_CAPTURED"))
+					rejection_histogram[reason] = int(rejection_histogram.get(reason, 0)) + 1
+					graph_probe_rows.append("%s|REJECT|%s" % [row_key, reason])
+				if graph_probe_rows.size() >= graph_probe_cap:
+					result["graph_gate"]["complete"] = graph_probe_rows.size() == possible_triangle_count
+					break
+			if graph_limited or graph_probe_rows.size() >= graph_probe_cap: break
+		if graph_limited or graph_probe_rows.size() >= graph_probe_cap: break
+	var graph_complete: bool = graph_probe_rows.size() == possible_triangle_count and not graph_limited
+	var graph_summary: Dictionary = synthesizer.call("_candidate_graph_summary", candidate_triangles, context.get("candidate_edges", {}), context.get("support_by_id", {}))
+	result["graph_gate"] = {
+		"started": true,
+		"complete": graph_complete,
+		"vertex_count": vertex_ids.size(),
+		"support_count": support_rows.size(),
+		"possible_triplets": possible_triangle_count,
+		"probed_triplets": graph_probe_rows.size(),
+		"legal_triangle_count": candidate_triangles.size(),
+		"rejection_histogram": rejection_histogram,
+		"limit_reason": graph_limit_reason,
+		"audit_sha256": Synthesizer.new().call("_candidate_graph_sha256", graph_probe_rows),
+		"candidate_graph_summary": graph_summary,
+		"supports_retained": support_rows.size(),
+		"in_domain_supports": support_rows.size(),
+		"legal_candidate_triangles": candidate_triangles.size(),
+		"graph_gate_usec": Time.get_ticks_usec() - graph_started_usec,
+		"preregistered_probe_cap": graph_probe_cap
+	}
+	if not graph_complete or candidate_triangles.is_empty():
+		result["terminal_reason"] = "NO_LEGAL_TRIANGLES_IN_COMPLETE_FINITE_GRAPH" if graph_complete else "FINITE_GRAPH_GATE_PARTIAL"
+		result["continuum_domain_exhausted"] = false
+		_write_result(output_path, result, "R12CXR_R5_SUPPORT_SYNTHESIS_RESULT")
+		return result
+	var d3: Dictionary = realizer.call("_r2_search_level", context)
+	d3["started"] = true
+	result["d3"] = d3
+	if not bool(d3.get("valid", false)):
+		result["status"] = "R5_TRIANGULATION_PARTIAL" if not bool(d3.get("search_complete", false)) else "R5_SUPPORT_SYNTHESIS_PARTIAL"
+		result["terminal_reason"] = String(d3.get("terminal_reason", "R2_SEARCH_PARTIAL")) if not bool(d3.get("search_complete", false)) else "NO_SOLUTION_ON_FINITE_SYNTHESIZED_SUPPORT_GRAPH"
+		_write_result(output_path, result, "R12CXR_R5_SUPPORT_SYNTHESIS_RESULT")
+		return result
+	var solution: Dictionary = d3.get("best_solution", {})
+	var replacement_value: Variant = solution.get("final_replacement_triangles", null)
+	if typeof(replacement_value) != TYPE_ARRAY:
+		result["terminal_reason"] = "D3_SOLUTION_REPLACEMENT_MISSING"
+		_write_result(output_path, result, "R12CXR_R5_SUPPORT_SYNTHESIS_RESULT")
+		return result
+	var replacement: Array[Dictionary] = []
+	for triangle_value in replacement_value:
+		if typeof(triangle_value) != TYPE_DICTIONARY:
+			result["terminal_reason"] = "D3_REPLACEMENT_TRIANGLE_INVALID"
+			_write_result(output_path, result, "R12CXR_R5_SUPPORT_SYNTHESIS_RESULT")
+			return result
+		replacement.append(triangle_value)
+	var selected_supports: Array = solution.get("selected_supports", [])
+	var allowed_support_ids: Dictionary = realizer.get("_cxr_allowed_support_ids")
+	for support_value in selected_supports:
+		var support: Dictionary = support_value
+		allowed_support_ids[String(support.get("support_id", ""))] = true
+	realizer.set("_cxr_allowed_support_ids", allowed_support_ids)
+	var replacement_ids: Dictionary = {}
+	for id_value in patch_ids: replacement_ids[String(id_value)] = true
+	var final_triangles: Array[Dictionary] = []
+	for triangle in original_triangles:
+		if not replacement_ids.has(String(triangle.get("triangle_id", ""))): final_triangles.append(triangle)
+	final_triangles.append_array(replacement)
+	var patch_record: Dictionary = {"patch_triangle_ids": patch_ids.duplicate(), "replacement_triangles": replacement.duplicate(true), "residual_triangle_ids": residual_fixture.get("residuals", []).map(func(row: Dictionary) -> String: return String(row.get("triangle_id", ""))), "selected_supports": selected_supports.duplicate(true), "level": 2}
+	var final_validation: Dictionary = realizer.call("_validate_final_mesh", final_triangles, original_triangles, [patch_record], base, roi, snapshot)
+	result["downstream"] = {"started": true, "final_patch_validation": final_validation}
+	if not bool(final_validation.get("valid", false)):
+		result["terminal_reason"] = String(final_validation.get("reason", "FINAL_PATCH_VALIDATION_FAILED"))
+		_write_result(output_path, result, "R12CXR_R5_SUPPORT_SYNTHESIS_RESULT")
+		return result
+	var mesh: Dictionary = realizer.call("_mesh_from_triangles", final_triangles)
+	var topology: Dictionary = Core.topology(mesh, Core.world_min(roi), Core.world_min(roi) + Vector3(Core.cell_counts(roi)) * Core.step(roi))
+	var paths: Dictionary = realizer.call("_validate_c6_paths", final_triangles, base.get("applied_flips", []))
+	var obligations: Dictionary = realizer.call("_validate_required_arcs", final_triangles, base.get("arc_map", []), base.get("applied_flips", []))
+	var cutoff_rows: Array = realizer.call("_cutoff_rows", final_triangles)
+	var minimum_cross_squared: float = float(realizer.call("_minimum_cross_squared", final_triangles))
+	var topology_roundtrip: bool = bool(base.get("topology_signature_match", false)) and not String(base.get("topology_roundtrip_sha256", "")).is_empty()
+	var topology_pass: bool = topology_roundtrip and cutoff_rows.is_empty() and int(obligations.get("missing", -1)) == 0 and int(obligations.get("nonmanifold", -1)) == 0 and bool(paths.get("valid", false))
+	var mesh_pass: bool = topology_pass and int(topology.get("internal_open_edges", -1)) == 0 and int(topology.get("nonmanifold_edges", -1)) == 0 and int(topology.get("winding_inconsistencies", -1)) == 0 and int(topology.get("degenerate_triangles", -1)) == 0 and minimum_cross_squared > FROZEN_CROSS_SQUARED_CUTOFF
+	result["downstream"] = {"started": true, "final_patch_validation": final_validation, "topology_roundtrip": topology_roundtrip, "topology_complete": topology_pass, "mesh_complete": mesh_pass, "mesh_sha256": String(realizer.call("_mesh_sha", mesh)), "mesh_topology": topology, "minimum_cross_squared": minimum_cross_squared, "cutoff_rows": cutoff_rows, "required_arcs": obligations, "preserved_c6_paths": paths, "triangle_count": final_triangles.size(), "support_count": selected_supports.size()}
+	result["status"] = "R5_DOWNSTREAM_GATES_PASS" if mesh_pass else "R5_DOWNSTREAM_GATE_FAIL"
+	result["terminal_reason"] = "all_equal_lod_downstream_gates_passed" if mesh_pass else "existing_topology_or_mesh_gate_failed"
+	_write_result(output_path, result, "R12CXR_R5_SUPPORT_SYNTHESIS_RESULT")
+	return result
+
+func _write_result(output_path: String, result: Dictionary, marker: String) -> bool:
+	if output_path.is_empty() or FileAccess.file_exists(output_path):
+		_fail("r5_result_output_path_invalid_or_exists", {"path": output_path})
+		return false
+	var bytes: PackedByteArray = JSON.stringify(_json_safe(result), "\t", false).to_utf8_buffer()
+	var file: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
+	if file == null:
+		_fail("r5_result_output_open_failed", {"error": FileAccess.get_open_error()})
+		return false
+	file.store_buffer(bytes)
+	file.flush()
+	var write_error: Error = file.get_error()
+	file.close()
+	if write_error != OK:
+		_fail("r5_result_output_write_failed", {"error": write_error})
+		return false
+	print(marker + " " + JSON.stringify({"status": result.get("status", "UNKNOWN_NOT_CAPTURED"), "terminal_reason": result.get("terminal_reason", "UNKNOWN_NOT_CAPTURED"), "supports": result.get("synthesis", {}).get("retained_support_count", "UNKNOWN_NOT_CAPTURED"), "legal_triangles": result.get("graph_gate", {}).get("legal_triangle_count", "NOT_RUN"), "d3_started": result.get("d3", {}).get("started", false), "result_sha256": Core.sha256(bytes), "output_path": output_path}))
+	return true
+
+func _json_safe(value: Variant) -> Variant:
+	match typeof(value):
+		TYPE_VECTOR2:
+			var point: Vector2 = value
+			return [point.x, point.y]
+		TYPE_VECTOR3:
+			var point3: Vector3 = value
+			return [point3.x, point3.y, point3.z]
+		TYPE_VECTOR3I:
+			var cell: Vector3i = value
+			return [cell.x, cell.y, cell.z]
+		TYPE_PACKED_FLOAT32_ARRAY:
+			var floats: Array = []
+			for number in value: floats.append(number)
+			return floats
+		TYPE_PACKED_BYTE_ARRAY:
+			return (value as PackedByteArray).hex_encode()
+		TYPE_ARRAY:
+			var rows: Array = []
+			for item in value: rows.append(_json_safe(item))
+			return rows
+		TYPE_DICTIONARY:
+			var out: Dictionary = {}
+			var keys: Array = value.keys()
+			keys.sort()
+			for key in keys: out[key] = _json_safe(value[key])
+			return out
+		_:
+			return value
 
 func _compare_support_rows(regenerated: Array[Dictionary], stored: Array[Dictionary]) -> Dictionary:
 	if regenerated.size() != stored.size(): return {"valid": false, "reason": "support_count_mismatch", "regenerated": regenerated.size(), "stored": stored.size()}
