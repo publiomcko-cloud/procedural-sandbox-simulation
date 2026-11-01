@@ -5,6 +5,7 @@
 ## 2026-11-01 — P3.1 R12-CXR R6 D0 blocker
 
 - [R6 D0 blocker](2026-11-01-P3-1-R12-CXR-R6-D0-BLOCKER.md) — Issue #218 authorized the R6 experiment; corrected D0 confirms 570/1,666 binary32 zero-set residual failures, zero-area seed-owner overlap, and five frozen-cavity boundary edges below the unchanged cutoff; zero target attempts consumed; no global infeasibility claim.
+- [R6 evidence byte-preservation correction](2026-11-01-P3-1-R12-CXR-R6-EVIDENCE-BYTE-PRESERVATION.md) — post-commit raw-blob audit found line-ending normalization in 17 evidence files; a path-specific binary rule is added and the unchanged source bytes must reverify against the existing manifest.
 
 ## 2026-11-01 — P3.1 R12-CXR R5-4 execution ID transcription correction
 

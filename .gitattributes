@@ -27,3 +27,4 @@ docs/reports/P3-1-R9.2-SHARED/evidence/** -text whitespace=cr-at-eol
 docs/reports/P3-1-R12-CXR-R2-R3/evidence/** -text whitespace=cr-at-eol,-blank-at-eof
 docs/reports/P3-1-R12-CXR-R4/evidence/** -text whitespace=cr-at-eol,-blank-at-eof
 docs/reports/P3-1-R12-CXR-R5/evidence/attempt-04-scientific-20261101/** -text whitespace=cr-at-eol
+docs/reports/P3-1-R12-CXR-R6/evidence/** -text whitespace=cr-at-eol,-blank-at-eof

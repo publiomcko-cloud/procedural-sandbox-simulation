@@ -1,8 +1,6 @@
 # P3.1 R12-CXR R6 results
 
-**Issue:** [#218](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/218)  
-**State:** D0 complete; R6-A–F implementation and target attempts pending.  
-**Target attempts consumed:** 0 of 5.
+**Issue:** [#218](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/218); **state:** D0 complete, R6-A–F implementation and target attempts pending; **target attempts consumed:** 0 of 5.
 
 ## D0 — frozen R5 baseline diagnosis
 
