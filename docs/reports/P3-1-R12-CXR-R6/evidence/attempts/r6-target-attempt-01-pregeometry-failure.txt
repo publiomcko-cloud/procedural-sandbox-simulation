@@ -1,0 +1,14 @@
+R6-01 pre-geometry failure record
+Date: 2026-11-01 (America/Sao_Paulo)
+Source SHA: 63a4c44f1dc18eaffdd42c1b54f969973ae88012
+Attempt ID supplied: R6-01
+Godot: 4.7.2.stable.official.ed1daf0bf
+Command: Godot --headless --path game --script res://tests/prototypes/p3_1_r12_cxr_r6_campaign.gd with R12CXR_R6_MODE=synthesize, R12CXR_R6_ATTEMPT_ID=R6-01 and pinned source SHA.
+Observed output:
+R6_R5_POOL_BASELINE_COMPARISON {"candidate_attempt_count":8192,"difference_reason":"","r5_fixture_count":115,"r5_fixture_exact_match":true,"r5_regenerated_count":115}
+R6_FROZEN_CAVITY_RECONSTRUCTED {"exact_bytes_match":true,"fixture_sha256":"a54a407ac84b3fd7d64108f41457d5ecc7ff335abaee6899819de579ebeae6a6"}
+R12CXR_LOCAL_PATCH_SEARCH_BEGIN {"attempt_id":"","cavity_id":"e89d7e6444ead8c6","level":2,"preregistered_limits":{"barycentric_epsilon":0.0000001,"cross_squared_cutoff":0.000000000001,"field_residual_epsilon":0.0000001,"max_candidate_attempts_per_cavity":8192,"max_candidate_triangles_per_cavity":2048,"max_cavities":3,"max_cavity_level":3,"max_patch_triangles":64,"max_realize_usec":30000000,"max_retained_solutions_per_cavity":32,"max_search_states_per_cavity":16384,"max_search_states_total":32768,"max_search_usec_per_cavity":10000000,"max_search_usec_total":20000000,"max_selected_supports":4,"max_support_candidates_per_cavity":256,"max_support_distance":0.5,"phase":"r6"},"scenario_id":"R9.2.SEAM.XPLUS_EQUAL.v1","source_sha":"63a4c44f1dc18eaffdd42c1b54f969973ae88012","support_source":"phase_defined_residual_set"}
+R6_A_REGENERATED_SUPPORT_POOL {"candidate_attempt_count":8192,"difference_reason":"","r5_fixture_count":115,"r5_fixture_exact_match":true,"r6_regenerated_count":134,"source":"R6_A_CORRECTED_REGENERATION"}
+R6_CAMPAIGN_FAIL {"details":{"cell":"(0, 0, 4)","reason":"zero_vertex_inventory_disagrees_with_frozen_constructor","tet_index":0,"valid":false},"reason":"r6_zero_facet_inventory_failed"}
+Exit code: 2. No R6 result JSON was written.
+Classification: pre-geometry inventory-model defect; target cavity search, R6-E/F, and downstream gates did not start. Count: zero of five valid target attempts. This process is not rerun; fix is recorded at the next source SHA.
