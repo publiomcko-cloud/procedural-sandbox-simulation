@@ -1,3 +1,7 @@
+## 2026-11-01 — P3.1 R12-CXR R5-4 detached execution correction
+
+- [R5-4 execution checkout correction](2026-11-01-P3-1-R12-CXR-R5-ATTEMPT-04-EXECUTION-CHECKOUT-CORRECTION.md) — first executor precheck was rejected before launcher/Godot; exact source now uses a detached checkout, fresh gates pass 348/0 and 216/0, corrected one-shot dispatcher and ID are frozen; target remains NOT_STARTED.
+
 ## 2026-11-01 — P3.1 R12-CXR R5-4 pretarget freeze
 
 - [R5-4 pretarget freeze](2026-11-01-P3-1-R12-CXR-R5-ATTEMPT-04-PRETARGET-FROZEN.md) — measured source `8e5211e`; 348 R5 and 216 R12 contracts pass; frozen cavity and inputs reverified; target `R9.2.SEAM.XPLUS_EQUAL.v1` is NOT_STARTED, slot 4/5.

@@ -1,0 +1,23 @@
+{
+  "stage": "realizer-check",
+  "source_sha": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "executable_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "arguments": [
+    "--headless",
+    "--path",
+    "./game",
+    "--check-only",
+    "--script",
+    "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd"
+  ],
+  "environment_overrides": {},
+  "pid": 41700,
+  "start_utc": "2026-11-01T14:57:52.2349542Z",
+  "end_utc": "2026-11-01T14:57:53.8612386Z",
+  "duration_ms": 1626.284,
+  "exit_code": 0,
+  "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\realizer-check.stdout.log",
+  "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\realizer-check.stderr.log",
+  "stderr_bytes": 0
+}

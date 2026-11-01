@@ -1,0 +1,10 @@
+{
+  "event": "preflight_evidence_assembly_error",
+  "status": "PRETARGET_ONLY",
+  "error": "The PowerShell token false was used instead of the automatic literal $false while building a diagnostic JSON record. This happened after preflight logs were copied, before any dispatcher invocation.",
+  "godot_started": false,
+  "dispatcher_started": false,
+  "enumeration_marker": false,
+  "target_root_exists": false,
+  "valid_target_slot_consumed": false
+}

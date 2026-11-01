@@ -1,0 +1,214 @@
+{
+  "status": "R5_POSTCOMMIT_PREFLIGHT_PASS",
+  "source_sha": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+  "parent_sha": "0543cd1ca3c438b68f58799e1eb5f49963bbf09f",
+  "executable_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "frozen_cavity_sha256": "a54a407ac84b3fd7d64108f41457d5ecc7ff335abaee6899819de579ebeae6a6",
+  "free_physical_mib_preflight": 30750.3,
+  "process_records": [
+    {
+      "stage": "version",
+      "source_sha": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+      "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+      "executable_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+      "arguments": [
+        "--version"
+      ],
+      "environment_overrides": {},
+      "pid": 46580,
+      "start_utc": "2026-11-01T14:57:38.8025473Z",
+      "end_utc": "2026-11-01T14:57:38.9699666Z",
+      "duration_ms": 167.419,
+      "exit_code": 0,
+      "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\version.stdout.log",
+      "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\version.stderr.log",
+      "stderr_bytes": 0
+    },
+    {
+      "stage": "cold-import",
+      "source_sha": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+      "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+      "executable_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+      "arguments": [
+        "--headless",
+        "--path",
+        "./game",
+        "--editor",
+        "--import"
+      ],
+      "environment_overrides": {},
+      "pid": 40228,
+      "start_utc": "2026-11-01T14:57:39.0210785Z",
+      "end_utc": "2026-11-01T14:57:52.2271463Z",
+      "duration_ms": 13206.068,
+      "exit_code": 0,
+      "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\cold-import.stdout.log",
+      "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\cold-import.stderr.log",
+      "stderr_bytes": 0
+    },
+    {
+      "stage": "realizer-check",
+      "source_sha": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+      "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+      "executable_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+      "arguments": [
+        "--headless",
+        "--path",
+        "./game",
+        "--check-only",
+        "--script",
+        "res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd"
+      ],
+      "environment_overrides": {},
+      "pid": 41700,
+      "start_utc": "2026-11-01T14:57:52.2349542Z",
+      "end_utc": "2026-11-01T14:57:53.8612386Z",
+      "duration_ms": 1626.284,
+      "exit_code": 0,
+      "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\realizer-check.stdout.log",
+      "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\realizer-check.stderr.log",
+      "stderr_bytes": 0
+    },
+    {
+      "stage": "campaign-check",
+      "source_sha": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+      "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+      "executable_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+      "arguments": [
+        "--headless",
+        "--path",
+        "./game",
+        "--check-only",
+        "--script",
+        "res://tests/prototypes/p3_1_r12_cxr_r5_campaign.gd"
+      ],
+      "environment_overrides": {},
+      "pid": 45540,
+      "start_utc": "2026-11-01T14:57:53.8697598Z",
+      "end_utc": "2026-11-01T14:57:55.6750537Z",
+      "duration_ms": 1805.294,
+      "exit_code": 0,
+      "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\campaign-check.stdout.log",
+      "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\campaign-check.stderr.log",
+      "stderr_bytes": 0
+    },
+    {
+      "stage": "synthesizer-check",
+      "source_sha": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+      "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+      "executable_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+      "arguments": [
+        "--headless",
+        "--path",
+        "./game",
+        "--check-only",
+        "--script",
+        "res://tests/prototypes/p3_1_r12_cxr_r5_support_synthesizer.gd"
+      ],
+      "environment_overrides": {},
+      "pid": 45596,
+      "start_utc": "2026-11-01T14:57:55.6816786Z",
+      "end_utc": "2026-11-01T14:57:56.3761584Z",
+      "duration_ms": 694.48,
+      "exit_code": 0,
+      "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\synthesizer-check.stdout.log",
+      "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\synthesizer-check.stderr.log",
+      "stderr_bytes": 0
+    },
+    {
+      "stage": "contract-check",
+      "source_sha": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+      "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+      "executable_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+      "arguments": [
+        "--headless",
+        "--path",
+        "./game",
+        "--check-only",
+        "--script",
+        "res://tests/prototypes/p3_1_r12_cxr_r5_contract_tests.gd"
+      ],
+      "environment_overrides": {},
+      "pid": 45308,
+      "start_utc": "2026-11-01T14:57:56.3825139Z",
+      "end_utc": "2026-11-01T14:57:58.1928786Z",
+      "duration_ms": 1810.365,
+      "exit_code": 0,
+      "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\contract-check.stdout.log",
+      "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\contract-check.stderr.log",
+      "stderr_bytes": 0
+    },
+    {
+      "stage": "r5-contract",
+      "source_sha": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+      "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+      "executable_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+      "arguments": [
+        "--headless",
+        "--path",
+        "./game",
+        "--script",
+        "res://tests/prototypes/p3_1_r12_cxr_r5_contract_tests.gd"
+      ],
+      "environment_overrides": {},
+      "pid": 40536,
+      "start_utc": "2026-11-01T14:57:58.1986665Z",
+      "end_utc": "2026-11-01T14:58:00.2082284Z",
+      "duration_ms": 2009.562,
+      "exit_code": 0,
+      "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\r5-contract.stdout.log",
+      "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\r5-contract.stderr.log",
+      "stderr_bytes": 0
+    },
+    {
+      "stage": "r12-contract",
+      "source_sha": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+      "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+      "executable_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+      "arguments": [
+        "--headless",
+        "--path",
+        "./game",
+        "--script",
+        "res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd"
+      ],
+      "environment_overrides": {},
+      "pid": 38548,
+      "start_utc": "2026-11-01T14:58:00.2290165Z",
+      "end_utc": "2026-11-01T14:58:02.3168887Z",
+      "duration_ms": 2087.872,
+      "exit_code": 0,
+      "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\r12-contract.stdout.log",
+      "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\r12-contract.stderr.log",
+      "stderr_bytes": 0
+    },
+    {
+      "stage": "freeze-cavity",
+      "source_sha": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+      "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+      "executable_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+      "arguments": [
+        "--headless",
+        "--path",
+        "./game",
+        "--script",
+        "res://tests/prototypes/p3_1_r12_cxr_r5_campaign.gd"
+      ],
+      "environment_overrides": {
+        "R12CXR_R5_MODE": "freeze",
+        "R12CXR_SOURCE_SHA": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+        "R12CXR_R5_OUTPUT": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\frozen-cavity.json"
+      },
+      "pid": 29156,
+      "start_utc": "2026-11-01T14:58:02.3324038Z",
+      "end_utc": "2026-11-01T14:58:06.3693934Z",
+      "duration_ms": 4036.99,
+      "exit_code": 0,
+      "stdout": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\freeze-cavity.stdout.log",
+      "stderr": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-target-preflight-a\\run\\logs\\freeze-cavity.stderr.log",
+      "stderr_bytes": 0
+    }
+  ]
+}
