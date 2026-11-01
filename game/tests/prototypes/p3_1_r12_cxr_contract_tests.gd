@@ -26,6 +26,7 @@ func _run() -> void:
 	_test_cxr_r2_constrained_triangulation()
 	_test_cxr_r3_remaining_boundary_and_separate_cavities()
 	_test_cxr_r3_capped_pool_triangulation_and_valid_witness()
+	_test_r3_expanded_patch_owner_and_replacement_sets()
 	if failures.is_empty():
 		print("R12CXR_CONTRACT_TESTS_PASS " + JSON.stringify({"assertions": assertions, "failures": 0, "suite": "bounded_cxr_contract"}))
 		quit(0)
@@ -650,6 +651,42 @@ func _test_cxr_r3_capped_pool_triangulation_and_valid_witness() -> void:
 	_check(Campaign._target_search_partial({"valid": false, "reason": "cx_bounded_patch_search_failed"}, witness_geometry), "campaign keeps incomplete search partial when no valid geometry witness exists")
 	_check(Campaign._target_search_partial({"valid": true, "reason": "cxr_realize_time_limit"}, witness_geometry), "campaign does not let a valid-witness disposition mask an explicit realization timeout")
 	_check(Campaign._target_search_partial({"valid": true, "reason": ""}, {"geometry_complete": true, "topology_signature_match": false, "cxr_local_search_complete": false}), "campaign does not let a valid-witness disposition mask a topology mismatch")
+
+func _test_r3_expanded_patch_owner_and_replacement_sets() -> void:
+	var realizer: RefCounted = Realizer.new()
+	var points: Dictionary = {
+		"a": Vector3(0.0, 0.0, 0.0),
+		"b": Vector3(1.0, 0.0, 0.0),
+		"c": Vector3(1.0, 1.0, 0.0),
+		"d": Vector3(0.0, 1.0, 0.0)
+	}
+	var seed: Dictionary = _triangle("r3-owned-residual-seed", ["a", "b", "c"], points, true)
+	seed["polygon_id"] = "frozen-seed-owner"
+	seed["source_polygon_ids"] = ["frozen-seed-owner"]
+	var adjacent_c6: Dictionary = _triangle("C6-ownerless-adjacent-face", ["a", "c", "d"], points, false)
+	adjacent_c6["polygon_id"] = ""
+	adjacent_c6["source_polygon_ids"] = []
+	var patch: Array[Dictionary] = [seed, adjacent_c6]
+	var patch_ids: Array[String] = ["C6-ownerless-adjacent-face", "r3-owned-residual-seed"]
+	var owned_residual_rows: Array[Dictionary] = [seed]
+	var no_support_rows: Array[Dictionary] = []
+	realizer.set("_root_positions", points)
+	var boundary: Dictionary = realizer.call("_boundary_state", patch)
+	var fixture: Dictionary = {"arc_map": [], "applied_flips": []}
+	var incorrectly_scoped: Dictionary = realizer.call("_r2_make_search_context", patch, patch_ids, patch, no_support_rows, boundary, patch, fixture, 2)
+	_check(bool(boundary.get("valid", false)) and not bool(incorrectly_scoped.get("valid", true)) and String(incorrectly_scoped.get("reason", "")) == "r2_owner_boundary_polygon_id_missing", "R3 regression reproduces expanded ownerless C6 face rejecting the R2 owner-provenance context")
+	var context_result: Dictionary = realizer.call("_r3_make_expanded_patch_context", patch, patch_ids, owned_residual_rows, no_support_rows, boundary, patch, fixture, 2)
+	var context: Dictionary = context_result.get("context", {})
+	var removed_ids: Dictionary = context.get("residual_id_set", {})
+	var owners: Dictionary = context.get("owner_polygon_ids", {})
+	_check(bool(context_result.get("valid", false)), "R3 context accepts frozen seed ownership without fabricating an owner for adjacent C6 faces")
+	_check(removed_ids.size() == 2 and removed_ids.has("r3-owned-residual-seed") and removed_ids.has("C6-ownerless-adjacent-face"), "R3 replacement set still removes every face in the selected connected patch")
+	_check(owners.size() == 1 and owners.has("frozen-seed-owner") and context.get("level_patch", []).size() == 2, "R3 owner provenance stays limited to original residual seeds while the full patch remains the replacement domain")
+	var outside_seed: Dictionary = seed.duplicate(true)
+	outside_seed["triangle_id"] = "not-in-selected-patch"
+	var invalid_seed_rows: Array[Dictionary] = [outside_seed]
+	var invalid_seed: Dictionary = realizer.call("_r2_make_search_context", patch, patch_ids, invalid_seed_rows, no_support_rows, boundary, patch, fixture, 2)
+	_check(not bool(invalid_seed.get("valid", true)) and String(invalid_seed.get("reason", "")) == "r2_residual_owner_outside_selected_patch", "R3 context rejects owner provenance that is not part of the selected replacement patch")
 
 func _sequence_probe_local_failure(cavity_ids: Array) -> Dictionary:
 	_sequence_probe_calls.append(cavity_ids.duplicate())

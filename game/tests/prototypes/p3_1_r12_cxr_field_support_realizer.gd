@@ -739,7 +739,10 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 		report.support_candidates_retained = []
 		for support_row in support_rows:
 			report.support_candidates_retained.append(support_row.duplicate(true))
-		var context_result: Dictionary = _r2_make_search_context(patch, patch_ids, patch, support_rows, boundary, all_triangles, residual_fixture, level)
+		# The selected patch is the complete removal/replacement domain. Owner
+		# provenance, however, comes only from the original cutoff residual seed
+		# faces; adjacent C6 faces may not carry polygon ownership metadata.
+		var context_result: Dictionary = _r3_make_expanded_patch_context(patch, patch_ids, seed_triangles, support_rows, boundary, all_triangles, residual_fixture, level)
 		if not bool(context_result.get("valid", false)):
 			level_report.candidate_triangle_count = _cxr_candidate_triangles_total - candidate_triangles_before_level
 			report["candidate_triangle_count"] = int(report.get("candidate_triangle_count", 0)) + int(level_report.candidate_triangle_count)
@@ -1328,7 +1331,24 @@ func _search_cxr_cavity_r2(cavity_ids: Array, all_triangles: Array[Dictionary], 
 	report.search_nodes = _cxr_search_nodes_cavity
 	return _finish_cxr_cavity_search(report, {}, true, true, "r2_all_levels_exhausted_no_solution")
 
+func _r3_make_expanded_patch_context(patch: Array[Dictionary], patch_ids: Array, cavity_seed_triangles: Array[Dictionary], support_rows: Array[Dictionary], boundary: Dictionary, all_triangles: Array[Dictionary], residual_fixture: Dictionary, level: int) -> Dictionary:
+	# Cavity seed faces own candidate provenance. The selected connected patch
+	# is the larger removal domain and can contain unowned adjacent C6 faces.
+	return _r2_make_search_context(patch, patch_ids, cavity_seed_triangles, support_rows, boundary, all_triangles, residual_fixture, level)
+
 func _r2_make_search_context(patch: Array[Dictionary], patch_ids: Array, residual_triangles: Array[Dictionary], support_rows: Array[Dictionary], boundary: Dictionary, all_triangles: Array[Dictionary], residual_fixture: Dictionary, level: int) -> Dictionary:
+	var selected_patch_id_set: Dictionary = {}
+	for patch_id_value in patch_ids:
+		var patch_id: String = String(patch_id_value)
+		if patch_id.is_empty() or selected_patch_id_set.has(patch_id):
+			return {"valid": false, "reason": "r2_selected_patch_identity_invalid", "triangle_id": patch_id}
+		selected_patch_id_set[patch_id] = true
+	if selected_patch_id_set.is_empty():
+		return {"valid": false, "reason": "r2_selected_patch_empty"}
+	for triangle in residual_triangles:
+		var residual_id: String = String(triangle.get("triangle_id", ""))
+		if residual_id.is_empty() or not selected_patch_id_set.has(residual_id):
+			return {"valid": false, "reason": "r2_residual_owner_outside_selected_patch", "triangle_id": residual_id}
 	var cycle_result: Dictionary = _r2_boundary_cycle(boundary)
 	if not bool(cycle_result.get("valid", false)):
 		return {"valid": false, "reason": String(cycle_result.get("reason", "r2_boundary_cycle_invalid"))}
@@ -1469,11 +1489,13 @@ func _r2_make_search_context(patch: Array[Dictionary], patch_ids: Array, residua
 		var topology_root_id: String = String(topology_root_id_value)
 		if not all_vertex_ids.has(topology_root_id):
 			all_vertex_ids.append(topology_root_id)
-	var residual_id_set: Dictionary = {}
+	# Every selected face is removed from the current level patch before the
+	# candidate is published. Keep this replacement set distinct from the
+	# smaller owner-provenance set in residual_triangles.
+	var residual_id_set: Dictionary = selected_patch_id_set.duplicate()
 	var owner_polygon_ids: Dictionary = {}
 	var source_polygon_ids: Dictionary = {}
 	for triangle in residual_triangles:
-		residual_id_set[String(triangle.get("triangle_id", ""))] = true
 		var polygon_id: String = String(triangle.get("polygon_id", ""))
 		if polygon_id.is_empty():
 			return {"valid": false, "reason": "r2_source_polygon_owner_missing", "triangle_id": triangle.get("triangle_id", "")}
@@ -1481,12 +1503,11 @@ func _r2_make_search_context(patch: Array[Dictionary], patch_ids: Array, residua
 		for source_polygon_id_value in triangle.get("source_polygon_ids", [polygon_id]):
 			source_polygon_ids[String(source_polygon_id_value)] = true
 	var level_patch: Array[Dictionary] = []
-	var patch_id_set: Dictionary = {}
-	for patch_id_value in patch_ids:
-		patch_id_set[String(patch_id_value)] = true
 	for triangle in all_triangles:
-		if patch_id_set.has(String(triangle.get("triangle_id", ""))):
+		if selected_patch_id_set.has(String(triangle.get("triangle_id", ""))):
 			level_patch.append(triangle)
+	if level_patch.size() != selected_patch_id_set.size():
+		return {"valid": false, "reason": "r2_selected_patch_face_missing", "expected": selected_patch_id_set.size(), "observed": level_patch.size()}
 	var local_residual_fixture: Dictionary = residual_fixture.duplicate(true)
 	local_residual_fixture["arc_map"] = local_arc_result.get("arc_map", []).duplicate(true)
 	var context: Dictionary = {"phase": _cxr_active_phase, "level": level, "patch": patch.duplicate(), "level_patch": level_patch, "patch_ids": patch_ids.duplicate(), "all_triangles": all_triangles.duplicate(), "residual_triangles": residual_triangles.duplicate(), "residual_id_set": residual_id_set, "owner_polygon_ids": owner_polygon_ids, "source_polygon_ids": source_polygon_ids, "residual_fixture": local_residual_fixture, "global_arc_map": constraint_arcs.duplicate(true), "global_applied_flips": residual_fixture.get("applied_flips", []).duplicate(true), "support_by_id": support_by_id, "vertex_positions": vertex_positions, "source_root_ids": source_root_ids, "required_topology_root_ids": required_topology_root_ids, "local_required_arc_count": local_arc_result.get("arc_map", []).size(), "source_owner_boundary_arc_count": owner_arc_result.get("arc_map", []).size(), "vertex_ids": all_vertex_ids, "boundary_cycle": cycle, "boundary_edge_map": boundary_edge_map, "boundary_signature": String(boundary.get("signature", "")), "r3_cavity_boundary": boundary.duplicate(true) if _cxr_active_phase == "r3" else {}, "projected_positions": projected_positions, "polygon": polygon, "projection_origin": origin, "projection_u": axis_u, "projection_v": axis_v, "reference_normal": normal, "candidate_triangle_rows": [], "candidate_triangle_cache": {}, "candidate_edges": {}, "search_complete": true, "search_exhaustive": true, "limit_reason": "", "limits_hit": [], "search_nodes": 0, "branches": 0, "prunes": {}, "solution_rejections": [], "branch_counts": {}, "candidate_triangle_count": 0, "solution_count": 0, "retained_solutions": [], "best_solution": {}, "visited_by_support_count": {}, "start_usec": Time.get_ticks_usec(), "solution_scoring_enabled": not _cxr_active_snapshot.is_empty()}
