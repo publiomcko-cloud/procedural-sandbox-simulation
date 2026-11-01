@@ -1,3 +1,7 @@
+## 2026-10-31 — P3.1 R12-CXR R3 attempt 04 pretarget freeze
+
+- [R3 attempt 04 pretarget freeze](2026-10-31-P3-1-R12-CXR-R3-ATTEMPT-04-PRETARGET-FROZEN.md) — source 2964bd55; import, 149/149 contracts and campaign check-only passed; dispatcher/control is frozen; equal-LOD target remains NOT_STARTED.
+
 ## 2026-10-31 — P3.1 R12-CXR R3 attempt 02 execution checkout clarified; target not started
 
 - [R3 attempt 02 execution-checkout addendum](2026-10-31-P3-1-R12-CXR-R3-ATTEMPT-02-EXECUTION-CHECKOUT.md) — keeps code source `fdab3b8`; dispatcher records the documentation-only execution checkout while verifying the pinned source paths before launch.

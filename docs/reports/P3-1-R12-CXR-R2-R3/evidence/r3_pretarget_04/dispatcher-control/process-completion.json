@@ -1,0 +1,19 @@
+{
+  "attempt_id": "R3_DISPATCHER_CONTROL_04",
+  "pid": 43312,
+  "end_utc": "2026-11-01T00:56:17.5777748Z",
+  "timeout_seconds": 10,
+  "timed_out": false,
+  "exit_code": 23,
+  "status": "PROCESS_EXITED",
+  "stdout_sha256": "a73f4057a88603277a9d6239f0877e585f21e7046f89ba54ab83fb4d4a1e8282",
+  "stderr_sha256": "7ac4a4ee12e5e5d70e588d137d6db159dec618420c6a57b9736437a42a6fec0e",
+  "scenario_started": false,
+  "resource_stop_reason": "",
+  "resource_sample_count": 1,
+  "resource_samples_sha256": "f603d39dd63813b14c79fe53a0462fcabfdde72e37a7d3cf314e0b94773a2f9f",
+  "termination_confirmed": true,
+  "process_start_record_error": "",
+  "raw_output_write_error": "",
+  "post_start_telemetry_error": ""
+}

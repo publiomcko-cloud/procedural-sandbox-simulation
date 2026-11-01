@@ -1,0 +1,66 @@
+{
+  "schema": "P3.1.R12CXR.PretargetEvidence.v1",
+  "source_sha": "2964bd55b5691081bfe4db9c421f3b982fee167b",
+  "direct_parent": "27c88a78aff8aef0af8a69c041f90ddcf2ac502e",
+  "execution_checkout": "C:\\r12cxr-attempt04-2964bd5",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "isolated_user_profile": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r3_preflight04_profile_2964bd55",
+  "preserved_serialization_failure": {
+    "classification": "PRETARGET_EVIDENCE_SERIALIZATION_ERROR_NO_SCENARIO_STARTED",
+    "path": "pretarget-summary.json",
+    "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+    "length": 4
+  },
+  "stages": [
+    {
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit_code": 0,
+      "name": "editor_import",
+      "stdout_sha256": "5394fe6e1ab6053e4ffa572cf1a02d65d414ae600b10fef96cbf1c6cf38ac526",
+      "command": [
+        "--headless",
+        "--path",
+        "<checkout>\\game",
+        "--editor",
+        "--import"
+      ]
+    },
+    {
+      "command": [
+        "--headless",
+        "--path",
+        "<checkout>\\game",
+        "--script",
+        "res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd"
+      ],
+      "failures": 0,
+      "stdout_sha256": "9314978fff452c8083932702d703f0e785aa6e9e7d858fba8878489583c3c44b",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "cxr_contracts",
+      "pass_marker": "R12CXR_CONTRACT_TESTS_PASS",
+      "assertions": 149,
+      "exit_code": 0
+    },
+    {
+      "pass_marker": "R12CXR_CAMPAIGN_CHECK_ONLY_PASS",
+      "name": "campaign_check_only",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "7c2101490014a297f2d55204b3f360e7dd044cb87786d847ed6f6d11648b12e9",
+      "command": [
+        "--headless",
+        "--path",
+        "<checkout>\\game",
+        "--script",
+        "res://tests/prototypes/p3_1_r12_cxr_campaign.gd"
+      ],
+      "attempt_id": "R3_CHECK_20261031_08",
+      "source_sha256": "1b3a73845ef5bafec6d16fe2a7928ee3599c5e70ba5310070cb845af3687145b",
+      "residual_fixture_sha256": "ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23",
+      "realizer_sha256": "6200b9e337a39a23bb57ce9b8bcddf09b0e955365673a2b2825389e6322e6271",
+      "exit_code": 0
+    }
+  ],
+  "terminal": "PRETARGET_GATES_PASS"
+}
