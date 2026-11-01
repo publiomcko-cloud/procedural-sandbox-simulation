@@ -283,7 +283,9 @@ func _run() -> void:
 			return
 		var r6_regenerated_rows: Array[Dictionary] = r6_pool_result.get("rows", [])
 		print("R6_A_REGENERATED_SUPPORT_POOL " + JSON.stringify({"r5_fixture_exact_match": pool_match.get("valid", false), "r6_regenerated_count": r6_regenerated_rows.size(), "r5_fixture_count": stored_rows.size(), "candidate_attempt_count": r6_pool_result.get("candidate_attempt_count", 0), "difference_reason": pool_match.get("reason", ""), "source": "R6_A_CORRECTED_REGENERATION"}))
-		var zero_inventory: Dictionary = diagnostics.call("collect_zero_facet_inventory", r6_realizer, volume.get("values", PackedFloat32Array()), roi)
+		# R6-D bounds the continuous zero surface from raw tetrahedral interpolation;
+		# R6-E separately consumes only accepted, corrected binary32 support roots.
+		var zero_inventory: Dictionary = diagnostics.call("collect_zero_facet_inventory", realizer, volume.get("values", PackedFloat32Array()), roi)
 		if not bool(zero_inventory.get("valid", false)):
 			_fail("r6_zero_facet_inventory_failed", zero_inventory)
 			return
