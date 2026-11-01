@@ -648,6 +648,8 @@ func _test_cxr_r3_capped_pool_triangulation_and_valid_witness() -> void:
 	var witness_geometry: Dictionary = {"geometry_complete": true, "topology_signature_match": true, "cxr_local_search_complete": false}
 	_check(not Campaign._target_search_partial({"valid": true, "reason": ""}, witness_geometry), "campaign accepts a topology-validated complete geometry witness despite non-exhaustive search")
 	_check(Campaign._target_search_partial({"valid": false, "reason": "cx_bounded_patch_search_failed"}, witness_geometry), "campaign keeps incomplete search partial when no valid geometry witness exists")
+	_check(Campaign._target_search_partial({"valid": true, "reason": "cxr_realize_time_limit"}, witness_geometry), "campaign does not let a valid-witness disposition mask an explicit realization timeout")
+	_check(Campaign._target_search_partial({"valid": true, "reason": ""}, {"geometry_complete": true, "topology_signature_match": false, "cxr_local_search_complete": false}), "campaign does not let a valid-witness disposition mask a topology mismatch")
 
 func _sequence_probe_local_failure(cavity_ids: Array) -> Dictionary:
 	_sequence_probe_calls.append(cavity_ids.duplicate())
