@@ -112,7 +112,7 @@ func _search_representable_zero(original: Vector3, tet_data: Dictionary) -> Dict
 					_step_binary32(original.z, step_z)
 				)
 				var evaluation: Dictionary = _evaluate_zero_point(candidate, tet_data)
-				if not bool(evaluation.get("accepted", false)):
+				if not bool(evaluation.get("barycentric_gate_pass", false)) or not is_finite(float(evaluation.get("field_residual", NAN))):
 					continue
 				var absolute_residual: float = absf(float(evaluation.get("field_residual", INF)))
 				var step_norm: int = absi(step_x) + absi(step_y) + absi(step_z)
@@ -129,7 +129,7 @@ func _search_representable_zero(original: Vector3, tet_data: Dictionary) -> Dict
 		before["search_state"] = "no_valid_point_within_plus_minus_2_ulp_per_coordinate"
 		before["reason"] = "R6_A_REPRESENTABLE_ZERO_NOT_FOUND_WITHIN_BOUND"
 		return before
-	best["search_state"] = "corrected_within_plus_minus_2_ulp_per_coordinate"
+	best["search_state"] = "corrected_within_plus_minus_2_ulp_per_coordinate" if bool(best.get("accepted", false)) else "best_same_tetra_residual_within_plus_minus_2_ulp_per_coordinate_gate_failed"
 	best["reason"] = "R6_A_MINIMUM_ABSOLUTE_RESIDUAL_THEN_MINIMUM_ULP_STEP_COUNT"
 	return best
 

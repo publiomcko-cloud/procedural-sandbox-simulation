@@ -147,6 +147,7 @@ func audit_r6a_representability(realizer: RefCounted, values: PackedFloat32Array
 	var corrected_count: int = 0
 	var changed_count: int = 0
 	var unresolved_count: int = 0
+	var best_candidate_count: int = 0
 	var barycentric_gate_failure_count: int = 0
 	var corrected_barycentric_gate_failure_count: int = 0
 	var unique_corrected_positions: Dictionary = {}
@@ -184,14 +185,16 @@ func audit_r6a_representability(realizer: RefCounted, values: PackedFloat32Array
 				corrected_count += 1
 				var corrected: Vector3 = Vector3(row.corrected_position)
 				unique_corrected_positions[_position_identity(corrected)] = true
-				if corrected != Vector3(row.original_position):
-					changed_count += 1
-			else:
+			if Vector3(row.corrected_position) != Vector3(row.original_position):
+				changed_count += 1
+			if String(row.get("correction_search_state", "")).begins_with("best_same_tetra_residual"):
+				best_candidate_count += 1
+			if String(row.get("correction_search_state", "")).begins_with("no_valid_point"):
 				unresolved_count += 1
 			row["original_position_f32_hex"] = _position_bytes_hex(Vector3(row.original_position))
 			row["corrected_position_f32_hex"] = _position_bytes_hex(Vector3(row.corrected_position))
 			rows.append(row)
-	return {"valid": true, "tetrahedra_visited": tetrahedron_count, "zero_vertex_occurrences": rows.size(), "unique_corrected_binary32_positions": unique_corrected_positions.size(), "original_residual_histogram": before_histogram, "corrected_residual_histogram": after_histogram, "original_residual_over_epsilon_count": int(before_histogram.get("abs_gt_1e-7", 0)), "corrected_residual_over_epsilon_count": int(after_histogram.get("abs_gt_1e-7", 0)), "original_barycentric_gate_failure_count": barycentric_gate_failure_count, "corrected_barycentric_gate_failure_count": corrected_barycentric_gate_failure_count, "corrected_occurrence_count": corrected_count, "corrected_gate_failure_count": rows.size() - corrected_count, "changed_occurrence_count": changed_count, "unresolved_occurrence_count": unresolved_count, "vertices": rows}
+	return {"valid": true, "tetrahedra_visited": tetrahedron_count, "zero_vertex_occurrences": rows.size(), "unique_corrected_binary32_positions": unique_corrected_positions.size(), "original_residual_histogram": before_histogram, "corrected_residual_histogram": after_histogram, "original_residual_over_epsilon_count": int(before_histogram.get("abs_gt_1e-7", 0)), "corrected_residual_over_epsilon_count": int(after_histogram.get("abs_gt_1e-7", 0)), "original_barycentric_gate_failure_count": barycentric_gate_failure_count, "corrected_barycentric_gate_failure_count": corrected_barycentric_gate_failure_count, "corrected_occurrence_count": corrected_count, "corrected_gate_failure_count": rows.size() - corrected_count, "best_same_tetra_candidate_count": best_candidate_count, "changed_occurrence_count": changed_count, "unresolved_occurrence_count": unresolved_count, "vertices": rows}
 
 func _residual_histogram_bin(barycentric_valid: bool, residual: float) -> String:
 	if not barycentric_valid or not is_finite(residual):
