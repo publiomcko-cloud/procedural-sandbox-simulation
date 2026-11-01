@@ -170,10 +170,10 @@ func audit_r6a_representability(realizer: RefCounted, values: PackedFloat32Array
 			row["tetrahedron_id"] = "%d,%d,%d|tet:%d" % [int(tet_data.global_cell.x), int(tet_data.global_cell.y), int(tet_data.global_cell.z), tet_index]
 			var before_residual: float = float(row.get("original_field_residual", NAN))
 			var after_residual: float = float(row.get("corrected_field_residual", NAN))
-			var before_valid: bool = bool(row.get("original_barycentric_gate_pass", false)) and is_finite(before_residual)
+			var before_valid: bool = bool(row.get("original_barycentric_valid", false)) and is_finite(before_residual)
 			var after_valid: bool = bool(row.get("accepted", false)) and bool(row.get("corrected_barycentric_gate_pass", false)) and is_finite(after_residual)
 			var before_bin: String = _residual_histogram_bin(before_valid, before_residual)
-			var after_bin: String = _residual_histogram_bin(bool(row.get("corrected_barycentric_gate_pass", false)), after_residual)
+			var after_bin: String = _residual_histogram_bin(bool(row.get("corrected_barycentric_valid", false)), after_residual)
 			before_histogram[before_bin] = int(before_histogram.get(before_bin, 0)) + 1
 			after_histogram[after_bin] = int(after_histogram.get(after_bin, 0)) + 1
 			if not bool(row.get("original_barycentric_gate_pass", false)):

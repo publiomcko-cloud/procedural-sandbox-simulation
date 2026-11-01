@@ -52,6 +52,7 @@ func corrected_tetra_zero_sources(tet_data: Dictionary) -> Array[Dictionary]:
 			"barycentric_valid": before.get("barycentric_valid", false),
 			"barycentric_gate_pass": before.get("barycentric_gate_pass", false),
 			"residual_gate_pass": before.get("residual_gate_pass", false),
+			"accepted": before.get("accepted", false),
 			"ulp_steps": [0, 0, 0],
 			"search_state": "unchanged"
 		}
@@ -71,12 +72,14 @@ func corrected_tetra_zero_sources(tet_data: Dictionary) -> Array[Dictionary]:
 			"original_position_f32_hex": _position_bytes_hex(original),
 			"original_barycentric_weights": before.get("weights", []),
 			"original_field_residual": before.get("field_residual", "UNKNOWN_NOT_CAPTURED"),
+			"original_barycentric_valid": before.get("barycentric_valid", false),
 			"original_barycentric_gate_pass": before.get("barycentric_gate_pass", false),
 			"original_residual_gate_pass": before.get("residual_gate_pass", false),
 			"corrected_position": corrected,
 			"corrected_position_f32_hex": _position_bytes_hex(corrected),
 			"corrected_barycentric_weights": selected.get("weights", []),
 			"corrected_field_residual": selected.get("field_residual", "UNKNOWN_NOT_CAPTURED"),
+			"corrected_barycentric_valid": selected.get("barycentric_valid", false),
 			"corrected_barycentric_gate_pass": selected.get("barycentric_gate_pass", false),
 			"corrected_residual_gate_pass": selected.get("residual_gate_pass", false),
 			"coordinate_ulp_steps": selected.get("ulp_steps", [0, 0, 0]),
