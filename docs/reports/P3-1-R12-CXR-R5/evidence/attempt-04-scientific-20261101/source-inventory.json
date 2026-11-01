@@ -1,0 +1,37 @@
+[
+  {
+    "path": ".gitattributes",
+    "git_blob": "6329574393b4c3244efa79a15fc4c231e4dd3efc",
+    "physical_sha256": "273399d8eda394155672f583cb7fe0e537b7a71ee6b8d3737662e77b78f1ee8f"
+  },
+  {
+    "path": "docs/specs/P3-1-R12-CXR-R5-CONSTRAINT-GUIDED-SYNTHESIS.md",
+    "git_blob": "1c32c67c7339092d0391a40b8c22324d42bb265c",
+    "physical_sha256": "e9cc3d46c6d807ac7ecc461f997603d55cf703a9d1b2eafbbc58a40f67d1ec0f"
+  },
+  {
+    "path": "game/tests/prototypes/fixtures/r12_cxr_r5/frozen-cavity.json",
+    "git_blob": "645bef08c35d25864751e1fce5a4a2e37e7b0cde",
+    "physical_sha256": "a54a407ac84b3fd7d64108f41457d5ecc7ff335abaee6899819de579ebeae6a6"
+  },
+  {
+    "path": "game/tests/prototypes/fixtures/r12_cxr_r5/r4-d1-result.json",
+    "git_blob": "dd783b5a77fba1e881a8f8c0f35fe6ddbee46e67",
+    "physical_sha256": "927ec58f8f4e7821d9acb27a46068a4fa5fccf4f354f22b24be9cf88f90970c4"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_cxr_r5_campaign.gd",
+    "git_blob": "df1321c333ec3503cd71d9e84552bf048db70eac",
+    "physical_sha256": "9c362b77c1c30d895d61050f63d810d8cb22cb236919485815cbfe8630d87ec3"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_cxr_r5_contract_tests.gd",
+    "git_blob": "c36c142c01708a9b7bd2f21ddc9d4f0c11b6c3da",
+    "physical_sha256": "4b4f563340e32f447ad4744fc9daf2a778e43c751636fad6a4a158de6d118d28"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_cxr_r5_support_synthesizer.gd",
+    "git_blob": "001f5d51b168e099822469f94e2891ef135cb6ce",
+    "physical_sha256": "da10e96968a5c93c273c8a0125277edc0fb911d73cb8e9df57c568bb354db94e"
+  }
+]

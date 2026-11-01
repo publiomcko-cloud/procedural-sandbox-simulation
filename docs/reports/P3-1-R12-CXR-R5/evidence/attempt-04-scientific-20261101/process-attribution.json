@@ -1,0 +1,7 @@
+{
+  "pid": 34224,
+  "launcher_process_id": 41284,
+  "parent_process_id": 41284,
+  "creation_date": "01/11/2026 12:01:20",
+  "command_line": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path ./game --script res://tests/prototypes/p3_1_r12_cxr_r5_campaign.gd"
+}

@@ -1,0 +1,14 @@
+{
+  "execution_id": "r5target2026110104a91e4f3e7c8f4f8f9a",
+  "pid": 34224,
+  "launcher_process_id": 41284,
+  "start_time": "2026-11-01T15:01:20.5733325Z",
+  "status": "STARTED",
+  "arguments": [
+    "--headless",
+    "--path",
+    "./game",
+    "--script",
+    "res://tests/prototypes/p3_1_r12_cxr_r5_campaign.gd"
+  ]
+}

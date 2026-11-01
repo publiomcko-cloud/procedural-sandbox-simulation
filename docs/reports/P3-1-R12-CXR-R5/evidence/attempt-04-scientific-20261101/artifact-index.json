@@ -1,0 +1,71 @@
+{
+  "schema": "P3.1.R12CXR.R5.AttemptEvidenceIndex.v1",
+  "execution_id": "r5target2026110104a91e4f3e7c8f4f8f9a",
+  "source_sha": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+  "scenario": "R9.2.SEAM.XPLUS_EQUAL.v1",
+  "valid_execution": true,
+  "result_status": "R5_SUPPORT_SYNTHESIS_PARTIAL",
+  "terminal_reason": "NO_SUPPORTS_WITHIN_FROZEN_FIELD_DOMAIN_AND_EXISTING_CAPS",
+  "artifacts": [
+    {
+      "path": "launch-intent.json",
+      "bytes": 1283,
+      "sha256": "0a4901f9880e0126b5f1904d7130c4aa996fd18465d3403b425f5150299bb56f"
+    },
+    {
+      "path": "process-attribution.json",
+      "bytes": 294,
+      "sha256": "f9bd20343de94300ec83878dd7d281c4ba7be2c7f2957b16913af234eb85db60"
+    },
+    {
+      "path": "process-start.json",
+      "bytes": 333,
+      "sha256": "c21e19bf68fd944cc210a1c31c62556150fae86b17bc8ecc54719c4fb215669c"
+    },
+    {
+      "path": "r5-synthesis-result.json",
+      "bytes": 1178250,
+      "sha256": "019607e1d3c4f980a31b8104b16d1263d687ff6c88ddb5731b83cefe2681d094"
+    },
+    {
+      "path": "source-inventory.json",
+      "bytes": 1617,
+      "sha256": "e3e7e501ff28e4d6bfb1119ad256c7687305f0d2e05e3d004d0ff4411db26538"
+    },
+    {
+      "path": "synthesis-enumeration-start.json",
+      "bytes": 261,
+      "sha256": "c69165a685ae7de45e818f453a72d75becbf86ff86b2269c5c084796e2f5535f"
+    },
+    {
+      "path": "terminal-record.json",
+      "bytes": 1694,
+      "sha256": "0aedefa6c1b606affe5ced102f91660712b958b172fc6e66010f2614f5badfd9"
+    },
+    {
+      "path": "logs\\godot.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "logs\\godot.stdout.log",
+      "bytes": 659,
+      "sha256": "8e7687bea0f09e8b59ae029d1fb4c683ea23e9ba766cce61d034e602469cbbe7"
+    },
+    {
+      "path": "logs\\resource-samples.csv",
+      "bytes": 379,
+      "sha256": "cd3c2d1bb5642834240e3b9d3198385da8ae23e87f95258564368997579312d9"
+    },
+    {
+      "path": "profile\\Roaming\\Godot\\app_userdata\\Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype\\r9d_volume_1939680.bin",
+      "bytes": 3021,
+      "sha256": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2"
+    },
+    {
+      "path": "profile\\Roaming\\Godot\\app_userdata\\Procedural Sandbox Simulation — P0.1 SDF Terrain Prototype\\logs\\godot.log",
+      "bytes": 655,
+      "sha256": "428c3fc34813d3bf23cff5d7e76f8052dbb6f070c66c881bd38b2e9e18cfea93"
+    }
+  ]
+}
