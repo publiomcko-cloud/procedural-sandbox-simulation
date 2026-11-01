@@ -8,6 +8,7 @@ R4 reproduced the frozen support pool, replaced radius/subset cavity selection w
 
 - Repository: `publiomcko-cloud/procedural-sandbox-simulation`; origin `https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git`.
 - R4 branch: `exp/p3-1-r12-cxr-r4-boundary-first-realizer`.
+- Evidence PR: [#216](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/216), open/draft/unmerged, stacked on the R3AB head branch from PR #215.
 - R4 source commit: `f48990e25ffb1d377e02a9182240cabe35c815eb`; direct parent `b2480bc71fe9c9616426d378feb00e3e33e785f2`.
 - R4 base: R3AB evidence PR #215 head `58f946c857f419dd80b8ab703f4138894aee455c`, parent `78cbe7a45a85c65042c607e683abcd24f977db26`.
 - At validation time, main was `5997a76d345f45bf86edfe83f690336391e8be27`; PR #215 was open/draft/unmerged. R4 did not modify PR #215 or production paths.

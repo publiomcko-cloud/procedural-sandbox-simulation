@@ -1,6 +1,6 @@
 ## 2026-11-01 — P3.1 R12-CXR R4 triangulation partial
 
-- [R4 boundary-first realizer results](2026-11-01-P3-1-R12-CXR-R4-TRIANGULATION-PARTIAL.md) — exact source `f48990e2`; 216/216 contracts; D1/D2 complete, D3 finite candidate graph exhausted with zero legal triangles; no target or downstream gates run.
+- [R4 boundary-first realizer results](2026-11-01-P3-1-R12-CXR-R4-TRIANGULATION-PARTIAL.md) — draft PR #216; exact source `f48990e2`; 216/216 contracts; D1/D2 complete, D3 finite candidate graph exhausted with zero legal triangles; no target or downstream gates run.
 
 ## 2026-11-01 — P3.1 R12-CXR R3-A/R3-B partial closeout
 
