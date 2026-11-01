@@ -333,9 +333,21 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		"d2_signature": R4CavitySignature,
 		"cross_squared_cutoff": FROZEN_CROSS_SQUARED_CUTOFF,
 		"synthesis": synthesis,
+		"feasible_region_count": "UNKNOWN_NOT_CAPTURED_FINITE_WITNESS_MODEL_DOES_NOT_ENUMERATE_ALL_REGIONS",
+		"empty_feasible_region_count": "UNKNOWN_NOT_CAPTURED_FINITE_WITNESS_MODEL_DOES_NOT_ENUMERATE_ALL_REGIONS",
 		"graph_gate": {"started": false, "reason": "NOT_RUN_NO_SYNTHESIZED_SUPPORTS"},
 		"d3": {"started": false, "reason": "NOT_RUN_NO_LEGAL_TRIANGLES"},
-		"downstream": {"started": false, "reason": "NOT_RUN_NO_VALID_D3_SOLUTION"},
+		"downstream": {
+			"started": false,
+			"reason": "NOT_RUN_NO_VALID_D3_SOLUTION",
+			"controls": "NOT_RUN_PENDING_EQUAL_LOD_PASS",
+			"roi_rays": "NOT_RUN_PENDING_EQUAL_LOD_PASS",
+			"volume_reconfirmation": "NOT_RUN_PENDING_EQUAL_LOD_PASS",
+			"mixed_lod": "NOT_RUN_PENDING_EQUAL_LOD_PASS",
+			"deterministic_repeat": "NOT_RUN_PENDING_EQUAL_LOD_PASS",
+			"full_e2e": "NOT_RUN_PENDING_EQUAL_LOD_PASS",
+			"full_validation": "NOT_RUN_PENDING_EQUAL_LOD_PASS"
+		},
 		"continuum_domain_exhausted": false,
 		"timing_classification": "UNSCORED_EXPERIMENTAL_CPU_TIME_ONLY"
 	}
@@ -479,8 +491,10 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	var topology_pass: bool = topology_roundtrip and cutoff_rows.is_empty() and int(obligations.get("missing", -1)) == 0 and int(obligations.get("nonmanifold", -1)) == 0 and bool(paths.get("valid", false))
 	var mesh_pass: bool = topology_pass and int(topology.get("internal_open_edges", -1)) == 0 and int(topology.get("nonmanifold_edges", -1)) == 0 and int(topology.get("winding_inconsistencies", -1)) == 0 and int(topology.get("degenerate_triangles", -1)) == 0 and minimum_cross_squared > FROZEN_CROSS_SQUARED_CUTOFF
 	result["downstream"] = {"started": true, "final_patch_validation": final_validation, "topology_roundtrip": topology_roundtrip, "topology_complete": topology_pass, "mesh_complete": mesh_pass, "mesh_sha256": String(realizer.call("_mesh_sha", mesh)), "mesh_topology": topology, "minimum_cross_squared": minimum_cross_squared, "cutoff_rows": cutoff_rows, "required_arcs": obligations, "preserved_c6_paths": paths, "triangle_count": final_triangles.size(), "support_count": selected_supports.size()}
-	result["status"] = "R5_DOWNSTREAM_GATES_PASS" if mesh_pass else "R5_DOWNSTREAM_GATE_FAIL"
-	result["terminal_reason"] = "all_equal_lod_downstream_gates_passed" if mesh_pass else "existing_topology_or_mesh_gate_failed"
+	result["status"] = "R5_EQUAL_LOD_PASS_DOWNSTREAM_PENDING" if mesh_pass else "R5_EQUAL_LOD_GATE_FAIL"
+	result["terminal_reason"] = "equal_lod_gates_passed_downstream_required" if mesh_pass else "existing_topology_or_mesh_gate_failed"
+	result["downstream"]["started"] = false
+	result["downstream"]["reason"] = "SEPARATE_R5_Q_REQUIRED_AFTER_EQUAL_LOD_PASS" if mesh_pass else "NOT_RUN_EQUAL_LOD_GATE_FAILED"
 	_write_result(output_path, result, "R12CXR_R5_SUPPORT_SYNTHESIS_RESULT")
 	return result
 

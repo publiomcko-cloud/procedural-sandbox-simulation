@@ -20,6 +20,7 @@ func _run() -> void:
 	_test_support_identity_and_graph_digest(synth)
 	_test_r2_candidate_gates()
 	_test_constraint_guided_support_r2_triangulation(synth)
+	_test_campaign_result_scope()
 	if failures.is_empty():
 		print("R12CXR_R5_CONTRACT_TESTS_PASS assertions=%d failures=0" % assertions)
 		quit(0)
@@ -230,6 +231,11 @@ func _test_constraint_guided_support_r2_triangulation(synth: RefCounted) -> void
 		var best: Dictionary = d3.get("best_solution", {})
 		_expect(best.get("selected_supports", []).size() == 1, "d3_uses_the_synthesized_interior_support")
 		_expect(best.get("replacement_triangles", []).size() == 4, "d3_emits_complete_four_triangle_fan")
+
+func _test_campaign_result_scope() -> void:
+	var campaign_source: String = FileAccess.get_file_as_string("res://tests/prototypes/p3_1_r12_cxr_r5_campaign.gd")
+	_expect(campaign_source.contains("R5_EQUAL_LOD_PASS_DOWNSTREAM_PENDING"), "equal_lod_pass_does_not_claim_full_downstream_qualification")
+	_expect(campaign_source.contains("UNKNOWN_NOT_CAPTURED_FINITE_WITNESS_MODEL_DOES_NOT_ENUMERATE_ALL_REGIONS"), "unmodeled_feasible_region_counts_are_not_reported_as_zero")
 
 func _expect(condition: bool, name: String) -> void:
 	assertions += 1
