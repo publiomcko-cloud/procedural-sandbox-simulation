@@ -2,6 +2,7 @@ extends "res://tests/prototypes/p3_1_r12_cx_micropatch_realizer.gd"
 
 const CXR_CUTOFF_SQUARED: float = 1.0e-12
 const CXR_MAX_CAVITY_LEVEL: int = 3
+const CXR_R3_MAX_CAVITY_LEVEL: int = 4
 const CXR_MAX_CAVITIES: int = 3
 const CXR_MAX_PATCH_TRIANGLES: int = 64
 const CXR_MAX_CANDIDATE_ATTEMPTS_PER_CAVITY: int = 8192
@@ -541,7 +542,7 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 	var any_valid_boundary_search: bool = false
 	var support_generation_exhaustive: bool = true
 	var patch_selection_node_total: int = 0
-	for level in range(CXR_MAX_CAVITY_LEVEL + 1):
+	for level in range(CXR_R3_MAX_CAVITY_LEVEL + 1):
 		var patch_map: Dictionary = {}
 		for seed_id_value in seed_ids:
 			for triangle_id in _radius_ids(String(seed_id_value), adjacency, level):
@@ -555,7 +556,7 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 		var patch_selection: Dictionary = _r3_select_boundary_patch(seed_ids, allowed_ids, all_triangles, adjacency, level, seed_triangles, residual_fixture)
 		patch_selection_node_total += int(patch_selection.get("search_nodes", 0))
 		report["patch_selection_nodes"] = patch_selection_node_total
-		level_report["patch_selection"] = {"policy": "minimum_cardinality_connected_subsets_with_manifold_boundary_and_r2_domain_preflight_within_original_defect_group_radius_neighborhood", "radius": level, "max_radius": CXR_MAX_CAVITY_LEVEL, "max_patch_triangles": CXR_MAX_PATCH_TRIANGLES, "search_nodes": patch_selection.get("search_nodes", 0), "candidate_subsets_examined": patch_selection.get("candidate_subsets_examined", 0), "rejection_counts": patch_selection.get("rejection_counts", {}), "context_rejection_count": patch_selection.get("context_rejection_count", 0), "context_rejections": patch_selection.get("context_rejections", []), "selected_patch_triangle_ids": patch_selection.get("patch_triangle_ids", []), "context_preflight_valid": patch_selection.get("context_preflight_valid", false), "neighborhood_triangle_ids": allowed_ids.duplicate(), "complete": patch_selection.get("complete", false), "limit_reason": patch_selection.get("limit_reason", "")}
+		level_report["patch_selection"] = {"policy": "minimum_cardinality_connected_subsets_with_manifold_boundary_and_r2_domain_preflight_within_original_defect_group_radius_neighborhood", "radius": level, "max_radius": CXR_R3_MAX_CAVITY_LEVEL, "max_patch_triangles": CXR_MAX_PATCH_TRIANGLES, "search_nodes": patch_selection.get("search_nodes", 0), "candidate_subsets_examined": patch_selection.get("candidate_subsets_examined", 0), "rejection_counts": patch_selection.get("rejection_counts", {}), "context_rejection_count": patch_selection.get("context_rejection_count", 0), "context_rejections": patch_selection.get("context_rejections", []), "selected_patch_triangle_ids": patch_selection.get("patch_triangle_ids", []), "context_preflight_valid": patch_selection.get("context_preflight_valid", false), "neighborhood_triangle_ids": allowed_ids.duplicate(), "complete": patch_selection.get("complete", false), "limit_reason": patch_selection.get("limit_reason", "")}
 		if not bool(patch_selection.get("complete", false)):
 			var selection_limit: String = String(patch_selection.get("limit_reason", "R3_PATCH_SELECTION_INCOMPLETE"))
 			level_report["patch_triangle_ids"] = "NOT_RUN_PATCH_SELECTION_LIMIT"
@@ -933,7 +934,7 @@ func _r3_select_boundary_patch(seed_ids: Array, allowed_ids: Array, all_triangle
 			if limit_reason.is_empty() and (_cxr_search_nodes_cavity >= CXR_R2_MAX_SEARCH_STATES_PER_CAVITY or _cxr_search_nodes_total >= CXR_R2_MAX_SEARCH_STATES_TOTAL):
 				limit_reason = "R2_MAX_SEARCH_STATES"
 			if not limit_reason.is_empty():
-				return {"valid": false, "complete": false, "limit_reason": limit_reason, "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "states_generated": generated_nodes}
+				return {"valid": false, "complete": false, "limit_reason": limit_reason, "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "states_generated": generated_nodes}
 			var subset: Array = subset_value.duplicate()
 			var contains_all_seeds: bool = true
 			for seed_id in sorted_seeds:
@@ -951,7 +952,7 @@ func _r3_select_boundary_patch(seed_ids: Array, allowed_ids: Array, all_triangle
 					# A manifold boundary can still be unusable by R2's planar domain.
 					# Reject only that candidate subset and continue bounded connected
 					# expansion; source/provenance defects remain fatal below.
-					var preflight: Dictionary = _r3_make_expanded_patch_context(patch, subset, residual_triangles, [], boundary, all_triangles, residual_fixture, radius)
+					var preflight: Dictionary = _r3_make_expanded_patch_context(patch, subset, residual_triangles, [], boundary, all_triangles, residual_fixture, radius, true)
 					if bool(preflight.get("valid", false)):
 						return {"valid": true, "complete": true, "radius": radius, "patch_triangle_ids": subset.duplicate(), "patch_triangles": patch, "connectivity": connectivity, "boundary": boundary, "context_preflight_valid": true, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "states_generated": generated_nodes}
 					var preflight_reason: String = String(preflight.get("reason", "r3_context_preflight_invalid"))
@@ -1001,7 +1002,7 @@ func _r3_select_boundary_patch(seed_ids: Array, allowed_ids: Array, all_triangle
 					if limit_reason.is_empty() and (_cxr_search_nodes_cavity >= CXR_R2_MAX_SEARCH_STATES_PER_CAVITY or _cxr_search_nodes_total >= CXR_R2_MAX_SEARCH_STATES_TOTAL):
 						limit_reason = "R2_MAX_SEARCH_STATES"
 					if not limit_reason.is_empty():
-						return {"valid": false, "complete": false, "limit_reason": limit_reason, "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "states_generated": generated_nodes}
+						return {"valid": false, "complete": false, "limit_reason": limit_reason, "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "states_generated": generated_nodes}
 					seen[expanded_key] = true
 					generated_nodes += 1
 					_cxr_search_nodes_total += 1
@@ -1365,12 +1366,12 @@ func _search_cxr_cavity_r2(cavity_ids: Array, all_triangles: Array[Dictionary], 
 	report.search_nodes = _cxr_search_nodes_cavity
 	return _finish_cxr_cavity_search(report, {}, true, true, "r2_all_levels_exhausted_no_solution")
 
-func _r3_make_expanded_patch_context(patch: Array[Dictionary], patch_ids: Array, cavity_seed_triangles: Array[Dictionary], support_rows: Array[Dictionary], boundary: Dictionary, all_triangles: Array[Dictionary], residual_fixture: Dictionary, level: int) -> Dictionary:
+func _r3_make_expanded_patch_context(patch: Array[Dictionary], patch_ids: Array, cavity_seed_triangles: Array[Dictionary], support_rows: Array[Dictionary], boundary: Dictionary, all_triangles: Array[Dictionary], residual_fixture: Dictionary, level: int, preflight_only: bool = false) -> Dictionary:
 	# Cavity seed faces own candidate provenance. The selected connected patch
 	# is the larger removal domain and can contain unowned adjacent C6 faces.
-	return _r2_make_search_context(patch, patch_ids, cavity_seed_triangles, support_rows, boundary, all_triangles, residual_fixture, level)
+	return _r2_make_search_context(patch, patch_ids, cavity_seed_triangles, support_rows, boundary, all_triangles, residual_fixture, level, preflight_only)
 
-func _r2_make_search_context(patch: Array[Dictionary], patch_ids: Array, residual_triangles: Array[Dictionary], support_rows: Array[Dictionary], boundary: Dictionary, all_triangles: Array[Dictionary], residual_fixture: Dictionary, level: int) -> Dictionary:
+func _r2_make_search_context(patch: Array[Dictionary], patch_ids: Array, residual_triangles: Array[Dictionary], support_rows: Array[Dictionary], boundary: Dictionary, all_triangles: Array[Dictionary], residual_fixture: Dictionary, level: int, preflight_only: bool = false) -> Dictionary:
 	var selected_patch_id_set: Dictionary = {}
 	for patch_id_value in patch_ids:
 		var patch_id: String = String(patch_id_value)
@@ -1511,6 +1512,8 @@ func _r2_make_search_context(patch: Array[Dictionary], patch_ids: Array, residua
 	if not bool(local_arc_result.get("valid", false)):
 		return {"valid": false, "reason": String(local_arc_result.get("reason", "r2_local_topology_arcs_invalid")), "arc_diagnostics": local_arc_result}
 	var required_topology_root_ids: Dictionary = local_arc_result.get("topology_root_ids", {})
+	if preflight_only:
+		return {"valid": true, "preflight_only": true, "boundary_signature": String(boundary.get("signature", "")), "local_required_arc_count": local_arc_result.get("arc_map", []).size(), "source_owner_boundary_arc_count": owner_arc_result.get("arc_map", []).size(), "required_topology_root_ids": required_topology_root_ids.duplicate()}
 	for support_id_value in support_by_id.keys():
 		var support_id: String = String(support_id_value)
 		for topology_root_id_value in required_topology_root_ids.keys():
@@ -3585,9 +3588,10 @@ func _cxr_limits() -> Dictionary:
 		limits["max_search_states_per_cavity"] = CXR_R2_MAX_SEARCH_STATES_PER_CAVITY
 		limits["max_search_states_total"] = CXR_R2_MAX_SEARCH_STATES_TOTAL
 		if _cxr_active_phase == "r3":
+			limits["max_cavity_level"] = CXR_R3_MAX_CAVITY_LEVEL
 			limits["max_cavities"] = CXR_MAX_CAVITIES
 			limits["cavity_policy"] = "original_overlapping_defect_groups_searched_separately"
-			limits["patch_policy"] = "minimum_cardinality_connected_subsets_within_dual_graph_radius_layers_0_through_3_per_cavity"
+			limits["patch_policy"] = "minimum_cardinality_connected_subsets_within_dual_graph_radius_layers_0_through_4_per_cavity"
 			limits["patch_selection_state_cap_per_cavity"] = CXR_R2_MAX_SEARCH_STATES_PER_CAVITY
 			limits["patch_selection_state_cap_total"] = CXR_R2_MAX_SEARCH_STATES_TOTAL
 			limits["boundary_source"] = "remaining_C6_edge_incidence_after_cavity_patch_removal"

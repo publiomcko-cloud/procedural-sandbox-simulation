@@ -597,7 +597,7 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	realizer.set("_cxr_active_phase", "r3")
 	var r3_limits: Dictionary = realizer.call("_cxr_limits")
 	_check(int(r3_limits.get("max_cavities", -1)) == 3 and String(r3_limits.get("cavity_policy", "")) == "original_overlapping_defect_groups_searched_separately", "R3 permits the preregistered cavity cap and preserves original groups separately")
-	_check(String(r3_limits.get("patch_policy", "")) == "minimum_cardinality_connected_subsets_within_dual_graph_radius_layers_0_through_3_per_cavity", "R3 pins deterministic minimum-cardinality subset selection within bounded neighborhoods")
+	_check(int(r3_limits.get("max_cavity_level", -1)) == 4 and String(r3_limits.get("patch_policy", "")) == "minimum_cardinality_connected_subsets_within_dual_graph_radius_layers_0_through_4_per_cavity", "R3 pins deterministic minimum-cardinality subset selection within the evidence-directed four-ring bound")
 	_check(int(r3_limits.get("patch_selection_state_cap_per_cavity", -1)) == 32768 and int(r3_limits.get("patch_selection_state_cap_total", -1)) == 65536, "R3 patch selection shares existing per-cavity and total search-state limits")
 	_check(String(r3_limits.get("boundary_source", "")) == "remaining_C6_edge_incidence_after_cavity_patch_removal" and String(r3_limits.get("support_source", "")) == "original_frozen_residual_faces_only", "R3 limit contract pins per-cavity remaining-mesh boundary and original residual-only support provenance")
 	_check(int(r3_limits.get("max_candidate_triangles_per_cavity", -1)) == 65536 and int(r3_limits.get("max_search_states_total", -1)) == 65536 and float(r3_limits.get("cross_squared_cutoff", 0.0)) == 1.0e-12, "R3 inherits bounded R2 search caps and the unchanged strict geometry cutoff")
@@ -658,7 +658,8 @@ func _test_r3_expanded_patch_owner_and_replacement_sets() -> void:
 		"a": Vector3(0.0, 0.0, 0.0),
 		"b": Vector3(1.0, 0.0, 0.0),
 		"c": Vector3(1.0, 1.0, 0.0),
-		"d": Vector3(0.0, 1.0, 0.0)
+		"d": Vector3(0.0, 1.0, 0.0),
+		"outside": Vector3(-1.0, 1.0, 0.0)
 	}
 	var seed: Dictionary = _triangle("r3-owned-residual-seed", ["a", "b", "c"], points, true)
 	seed["polygon_id"] = "frozen-seed-owner"
@@ -677,6 +678,8 @@ func _test_r3_expanded_patch_owner_and_replacement_sets() -> void:
 	_check(bool(boundary.get("valid", false)) and not bool(incorrectly_scoped.get("valid", true)) and String(incorrectly_scoped.get("reason", "")) == "r2_owner_boundary_polygon_id_missing", "R3 regression reproduces expanded ownerless C6 face rejecting the R2 owner-provenance context")
 	var context_result: Dictionary = realizer.call("_r3_make_expanded_patch_context", patch, patch_ids, owned_residual_rows, no_support_rows, boundary, patch, fixture, 2)
 	var context: Dictionary = context_result.get("context", {})
+	var preflight_result: Dictionary = realizer.call("_r3_make_expanded_patch_context", patch, patch_ids, owned_residual_rows, no_support_rows, boundary, patch, fixture, 2, true)
+	_check(bool(preflight_result.get("valid", false)) and bool(preflight_result.get("preflight_only", false)) and not preflight_result.has("context"), "R3 subset preflight validates the same accepted domain without retaining full search context")
 	var removed_ids: Dictionary = context.get("residual_id_set", {})
 	var owners: Dictionary = context.get("owner_polygon_ids", {})
 	_check(bool(context_result.get("valid", false)), "R3 context accepts frozen seed ownership without fabricating an owner for adjacent C6 faces")
@@ -687,6 +690,12 @@ func _test_r3_expanded_patch_owner_and_replacement_sets() -> void:
 	var invalid_seed_rows: Array[Dictionary] = [outside_seed]
 	var invalid_seed: Dictionary = realizer.call("_r2_make_search_context", patch, patch_ids, invalid_seed_rows, no_support_rows, boundary, patch, fixture, 2)
 	_check(not bool(invalid_seed.get("valid", true)) and String(invalid_seed.get("reason", "")) == "r2_residual_owner_outside_selected_patch", "R3 context rejects owner provenance that is not part of the selected replacement patch")
+	var crossing_fixture: Dictionary = fixture.duplicate(true)
+	crossing_fixture["arc_map"] = [{"arc_id": "R3_TEST_CROSSING_ARC", "root_ids": ["b", "outside"], "expected_incidence": 2, "constraint_source": "synthetic_topology"}]
+	var crossing_preflight: Dictionary = realizer.call("_r3_make_expanded_patch_context", patch, patch_ids, owned_residual_rows, no_support_rows, boundary, patch, crossing_fixture, 2, true)
+	var crossing_full: Dictionary = realizer.call("_r3_make_expanded_patch_context", patch, patch_ids, owned_residual_rows, no_support_rows, boundary, patch, crossing_fixture, 2)
+	_check(not bool(crossing_preflight.get("valid", true)) and String(crossing_preflight.get("reason", "")) == "r2_topology_arc_crosses_cavity_boundary", "R3 cheap preflight still rejects a mandatory topology arc crossing the candidate cavity")
+	_check(not bool(crossing_full.get("valid", true)) and String(crossing_full.get("reason", "")) == String(crossing_preflight.get("reason", "")), "R3 cheap preflight and full context agree on crossing-arc rejection")
 	_test_r3_context_domain_preflight()
 
 func _test_r3_context_domain_preflight() -> void:
