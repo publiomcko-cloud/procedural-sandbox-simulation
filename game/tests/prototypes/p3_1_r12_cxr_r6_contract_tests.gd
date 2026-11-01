@@ -99,6 +99,10 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	var already_valid: Array[Dictionary] = realizer.call("corrected_tetra_zero_sources", {"positions": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP, Vector3.BACK], "samples": [-1.0, 1.0, 1.0, 1.0]})
 	_expect(already_valid.size() == 3 and already_valid.all(func(row: Dictionary) -> bool: return bool(row.get("accepted", false))), "R6 correction retains passing roots without searching")
 	_expect(already_valid.all(func(row: Dictionary) -> bool: return String(row.get("correction_search_state", "")) == "unchanged"), "R6 correction records unchanged passing-root provenance")
+	var degenerate: Dictionary = {"positions": [Vector3.ZERO, Vector3.ZERO, Vector3.UP, Vector3.BACK], "samples": [-1.0, 1.0, 1.0, 1.0]}
+	var rejected_sources: Array[Dictionary] = realizer.call("corrected_tetra_zero_sources", degenerate)
+	_expect(rejected_sources.all(func(row: Dictionary) -> bool: return not bool(row.get("accepted", false))), "R6 correction marks unrepairable representable roots rejected")
+	_expect(realizer.call("_tetra_zero_points", degenerate).is_empty(), "R6 correction never emits rejected roots into geometry")
 
 func _test_patch_owner_and_ordered_arc_paths() -> void:
 	var realizer: RefCounted = R6Realizer.new()

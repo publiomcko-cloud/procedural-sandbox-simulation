@@ -92,6 +92,8 @@ func corrected_tetra_zero_sources(tet_data: Dictionary) -> Array[Dictionary]:
 func _tetra_zero_points(tet_data: Dictionary) -> Array[Vector3]:
 	var points: Array[Vector3] = []
 	for row in corrected_tetra_zero_sources(tet_data):
+		if not bool(row.get("accepted", false)):
+			continue
 		var point: Vector3 = Vector3(row.get("corrected_position", Vector3.ZERO))
 		if not points.has(point):
 			points.append(point)
