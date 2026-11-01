@@ -204,8 +204,6 @@ func audit_r6a_representability(realizer: RefCounted, values: PackedFloat32Array
 			for step_x in range(-2, 3):
 				for step_y in range(-2, 3):
 					for step_z in range(-2, 3):
-						if step_x == 0 and step_y == 0 and step_z == 0:
-							continue
 						var candidate: Vector3 = Vector3(realizer.call("_step_binary32", original.x, step_x), realizer.call("_step_binary32", original.y, step_y), realizer.call("_step_binary32", original.z, step_z))
 						var candidate_evaluations: Array[Dictionary] = []
 						var candidate_is_same_tetra: bool = true
