@@ -1,0 +1,12 @@
+{
+  "stage": "cxr-contracts",
+  "source_sha": "4734e6cb0c80cde086ea86e7d8afcda983e3a24b",
+  "exit_code": 0,
+  "pass_marker": "R12CXR_CONTRACT_TESTS_PASS",
+  "actual_assertions": 153,
+  "failures": 0,
+  "runner_guard_expected_assertions": 152,
+  "classification": "PASS_TESTS_GATE_COUNT_GUARD_MISCONFIGURED",
+  "dependent_check_only_started": false,
+  "scenario_started": false
+}

@@ -1,0 +1,14 @@
+{
+  "stage": "editor-import",
+  "pid": 25856,
+  "start_utc": "2026-11-01T01:04:34.7989136Z",
+  "duration_ms": 11950,
+  "timeout_seconds": 120,
+  "timed_out": false,
+  "kill_confirmed": false,
+  "exit_code": 0,
+  "stdout_sha256": "5394fe6e1ab6053e4ffa572cf1a02d65d414ae600b10fef96cbf1c6cf38ac526",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_length": 9119,
+  "stderr_length": 0
+}

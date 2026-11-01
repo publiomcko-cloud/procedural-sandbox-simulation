@@ -1,0 +1,10 @@
+{
+  "attempt_id": "R3_DISPATCHER_CONTROL_05",
+  "mode": "CONTROL_ONLY",
+  "scenario_id": "NONE",
+  "phase": "NONE",
+  "created_utc": "2026-11-01T01:05:55.7650065Z",
+  "status": "RESERVED_NOT_STARTED",
+  "source_sha": "",
+  "execution_checkout_head": ""
+}

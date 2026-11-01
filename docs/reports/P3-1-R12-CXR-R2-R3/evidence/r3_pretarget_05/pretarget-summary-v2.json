@@ -1,0 +1,21 @@
+{
+  "schema": "P3.1.R12CXR.PretargetEvidence.v1",
+  "source_sha": "4734e6cb0c80cde086ea86e7d8afcda983e3a24b",
+  "direct_parent": "43afc868c9d86678834b3469feef6fd5b8b83180",
+  "execution_checkout": "C:\\r12cxr-attempt05-4734e6c",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "isolated_user_profile": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r3_preflight05_profile_4734e6cb",
+  "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+  "target_attempt_id": "R3_TARGET_20261031_05",
+  "contract_assertions": 153,
+  "contract_failures": 0,
+  "contract_marker": "R12CXR_CONTRACT_TESTS_PASS",
+  "external_guard_misclassification": "guard expected 152 but observed 153; tests themselves exited 0 with pass marker and zero failures; check-only proceeded after recording this",
+  "dispatcher_sha256": "b935c0dc34364ca85e2147968341bded9cf254404b6295319713263799243af0",
+  "wrapper_sha256": "aa882be39cf393bc0f0d8345c488efb2410fc0fe59f3343e31137124a5d0468d",
+  "dispatcher_control_pass": true,
+  "target_started": false,
+  "full_scripts_validate": "NOT_RUN; deferred until geometry gates pass"
+}

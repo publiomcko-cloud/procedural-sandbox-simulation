@@ -1,0 +1,4 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+R12CXR_LOCAL_PATCH_SEARCH_BEGIN {"attempt_id":"","cavity_id":"invalid-cavity","level":0,"preregistered_limits":{"barycentric_epsilon":0.0000001,"cross_squared_cutoff":0.000000000001,"field_residual_epsilon":0.0000001,"max_candidate_attempts_per_cavity":8192,"max_candidate_triangles_per_cavity":2048,"max_cavities":3,"max_cavity_level":3,"max_patch_triangles":64,"max_realize_usec":30000000,"max_retained_solutions_per_cavity":32,"max_search_states_per_cavity":16384,"max_search_states_total":32768,"max_search_usec_per_cavity":10000000,"max_search_usec_total":20000000,"max_selected_supports":4,"max_support_candidates_per_cavity":256,"max_support_distance":0.5,"phase":"r1"},"scenario_id":"R9.2.SEAM.XPLUS_EQUAL.v1","source_sha":"","support_source":"phase_defined_residual_set"}
+R12CXR_CONTRACT_TESTS_PASS {"assertions":153,"failures":0,"suite":"bounded_cxr_contract"}

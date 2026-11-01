@@ -1,0 +1,17 @@
+{
+  "source": "4734e6cb0c80cde086ea86e7d8afcda983e3a24b",
+  "parent": "43afc868c9d86678834b3469feef6fd5b8b83180",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "godot": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "hashes": {
+    "game\\tests\\prototypes\\p3_1_r12_cxr_campaign.gd": "1b3a73845ef5bafec6d16fe2a7928ee3599c5e70ba5310070cb845af3687145b",
+    "game\\tests\\prototypes\\p3_1_r12_cxr_field_support_realizer.gd": "a96cc49aeb162381c13f972ef66ad1ece076f1244689362cc8f0a4c7d3d1f7c2",
+    "game\\tests\\prototypes\\p3_1_r12_cxr_contract_tests.gd": "25d86eb5e91a7096ad73244d0710e14379283b757c343673af637e22bcd3e8b7"
+  },
+  "isolated_profile": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r3_preflight05_profile_4734e6cb",
+  "stage0": "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d",
+  "residual": "ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23",
+  "manifest": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+  "target": "R9.2.SEAM.XPLUS_EQUAL.v1",
+  "target_attempt_id": "R3_TARGET_20261031_05"
+}

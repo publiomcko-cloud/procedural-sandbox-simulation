@@ -1,0 +1,12 @@
+{
+  "stage": "editor-import",
+  "executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "argv": [
+    "--headless",
+    "--path",
+    "C:\\r12cxr-attempt05-4734e6c\\game",
+    "--editor",
+    "--import"
+  ],
+  "intent_utc": "2026-11-01T01:04:22.7219253Z"
+}

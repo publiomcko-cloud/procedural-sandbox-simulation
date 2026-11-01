@@ -1,0 +1,13 @@
+{
+  "expected_exit": 23,
+  "observed_exit": 23,
+  "stdout_exact": true,
+  "stderr_exact": true,
+  "duplicate_reservation_denied": true,
+  "output_overwrite_denied": true,
+  "scenario_started": false,
+  "process_start_record_written": true,
+  "resource_samples_captured": 1,
+  "resource_samples_sha256": "cb17638591b840f3dd3de83b2064adeab13f5ed78ace554d4e0a41be275ec3d7",
+  "process_termination_confirmed": true
+}

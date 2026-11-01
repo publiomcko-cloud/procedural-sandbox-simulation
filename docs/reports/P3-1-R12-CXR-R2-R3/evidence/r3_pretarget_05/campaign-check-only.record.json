@@ -1,0 +1,12 @@
+{
+  "stage": "campaign-check-only",
+  "pid": 43132,
+  "duration_ms": 2318,
+  "timeout_seconds": 90,
+  "timed_out": false,
+  "kill_confirmed": false,
+  "exit_code": 0,
+  "stdout_sha256": "0ecfbb9d866e3323f4b30d62154d2152b3b68a876ab4b6ea39a4fe9b9eb0686a",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "attempt_id": "R3_CHECK_20261031_09"
+}

@@ -1,0 +1,18 @@
+{
+  "dispatcher_pid": 45812,
+  "parent_pid": 10068,
+  "executable": "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.9.0_x64__8wekyb3d8bbwe\\pwsh.exe",
+  "argv": [
+    "-NoLogo",
+    "-NoProfile",
+    "-File",
+    "C:\\r12cxr-convergence-20261031\\docs\\reports\\P3-1-R12-CXR-R2-R3\\evidence\\r3_pretarget_05\\r3_target_dispatcher.ps1",
+    "-ControlOnly",
+    "-EvidenceRoot",
+    "C:\\r12cxr-convergence-20261031\\docs\\reports\\P3-1-R12-CXR-R2-R3\\evidence\\r3_pretarget_05\\dispatcher-control\\evidence"
+  ],
+  "duration_ms": 1786,
+  "exit_code": 0,
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
