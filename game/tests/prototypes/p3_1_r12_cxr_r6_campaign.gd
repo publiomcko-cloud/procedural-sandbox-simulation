@@ -541,8 +541,7 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	var vertex_ids: Array = context.get("vertex_ids", []).duplicate()
 	vertex_ids.sort()
 	var maximum_triangles: int = int(realizer.call("_cxr_limits").get("max_candidate_triangles_per_cavity", 0))
-	var maximum_total: int = int(realizer.call("_cxr_limits").get("max_candidate_triangles_total", 0))
-	var graph_candidate_cap: int = mini(maximum_triangles, maximum_total)
+	var graph_candidate_cap: int = maximum_triangles
 	var possible_triangle_count: int = int(vertex_ids.size() * maxi(0, vertex_ids.size() - 1) * maxi(0, vertex_ids.size() - 2) / 6)
 	result["graph_gate"]["possible_triplets"] = possible_triangle_count
 	result["graph_gate"]["legal_candidate_triangle_cap"] = graph_candidate_cap
