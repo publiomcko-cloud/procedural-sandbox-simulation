@@ -198,6 +198,7 @@ func audit_r6a_representability(realizer: RefCounted, values: PackedFloat32Array
 		var reason: String = "" if original_passes else "R6_A_REPRESENTABLE_ZERO_NOT_FOUND_WITHIN_BOUND"
 		var best_maximum_residual: float = INF
 		var best_sum_residual: float = INF
+		var best_residual_failure_count: int = 2147483647
 		var best_step_norm: int = 2147483647
 		var found_same_tetra_candidate: bool = false
 		if not original_passes:
@@ -209,6 +210,7 @@ func audit_r6a_representability(realizer: RefCounted, values: PackedFloat32Array
 						var candidate_is_same_tetra: bool = true
 						var maximum_residual: float = 0.0
 						var sum_residual: float = 0.0
+						var residual_failure_count: int = 0
 						for context_value in contexts:
 							var context: Dictionary = context_value
 							var evaluation: Dictionary = realizer.call("_evaluate_zero_point", candidate, context.tetrahedron_data)
@@ -218,12 +220,15 @@ func audit_r6a_representability(realizer: RefCounted, values: PackedFloat32Array
 							var absolute_residual: float = absf(float(evaluation.field_residual))
 							maximum_residual = maxf(maximum_residual, absolute_residual)
 							sum_residual += absolute_residual
+							if absolute_residual > RESIDUAL_EPSILON:
+								residual_failure_count += 1
 							candidate_evaluations.append(evaluation)
 						if not candidate_is_same_tetra:
 							continue
 						var step_norm: int = absi(step_x) + absi(step_y) + absi(step_z)
-						if not found_same_tetra_candidate or maximum_residual < best_maximum_residual or (maximum_residual == best_maximum_residual and sum_residual < best_sum_residual) or (maximum_residual == best_maximum_residual and sum_residual == best_sum_residual and step_norm < best_step_norm):
+						if not found_same_tetra_candidate or residual_failure_count < best_residual_failure_count or (residual_failure_count == best_residual_failure_count and maximum_residual < best_maximum_residual) or (residual_failure_count == best_residual_failure_count and maximum_residual == best_maximum_residual and sum_residual < best_sum_residual) or (residual_failure_count == best_residual_failure_count and maximum_residual == best_maximum_residual and sum_residual == best_sum_residual and step_norm < best_step_norm):
 							found_same_tetra_candidate = true
+							best_residual_failure_count = residual_failure_count
 							best_maximum_residual = maximum_residual
 							best_sum_residual = sum_residual
 							best_step_norm = step_norm
@@ -232,7 +237,7 @@ func audit_r6a_representability(realizer: RefCounted, values: PackedFloat32Array
 							selected_steps = [step_x, step_y, step_z]
 			if found_same_tetra_candidate:
 				search_state = "corrected_within_plus_minus_2_ulp_per_coordinate" if best_maximum_residual <= RESIDUAL_EPSILON else "best_same_tetra_residual_within_plus_minus_2_ulp_per_coordinate_gate_failed"
-				reason = "R6_A_MINIMUM_MAXIMUM_RESIDUAL_THEN_SUM_RESIDUAL_THEN_ULP_STEP_COUNT"
+				reason = "R6_A_MAXIMUM_PASSING_TETRAHEDRA_THEN_MINIMUM_MAXIMUM_RESIDUAL_THEN_SUM_THEN_ULP_STEP_COUNT"
 		global_correction_map[source_id] = selected_position
 		unique_corrected_positions[_position_identity(selected_position)] = true
 		if search_state.begins_with("best_same_tetra_residual"):
