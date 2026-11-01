@@ -908,7 +908,11 @@ func _r3_select_boundary_patch(seed_ids: Array, allowed_ids: Array, all_triangle
 			for triangle_id_value in subset:
 				subset_ids.append(String(triangle_id_value))
 			for triangle_id in subset_ids:
-				var neighbors: Array = adjacency.get(triangle_id, [])
+				var neighbor_row_value: Variant = adjacency.get(triangle_id, {})
+				if not (neighbor_row_value is Dictionary):
+					return {"valid": false, "complete": true, "reason": "r3_patch_adjacency_row_invalid", "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "states_generated": generated_nodes}
+				var neighbor_map: Dictionary = neighbor_row_value
+				var neighbors: Array = neighbor_map.keys()
 				neighbors.sort()
 				for neighbor_value in neighbors:
 					var neighbor_id: String = String(neighbor_value)

@@ -534,6 +534,48 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	_check(not bool(full_union_boundary.get("valid", true)) and bool(minimal_subset.get("valid", false)), "R3 finds a boundary-valid connected subset even when the full radius union is invalid")
 	_check(minimal_subset.get("patch_triangle_ids", []) == ["r3-patch"] and int(minimal_subset.get("search_nodes", 0)) <= Realizer.CXR_R2_MAX_SEARCH_STATES_PER_CAVITY, "R3 selects the minimum-cardinality subset deterministically within the bounded neighborhood")
 	_check(int(realizer.get("_cxr_patch_selection_nodes_total")) == int(minimal_subset.get("search_nodes", -1)) and int(realizer.get("_cxr_search_nodes_total")) == int(minimal_subset.get("search_nodes", -1)), "R3 charges subset states to the existing per-cavity and total counters")
+	var expanded_selector: RefCounted = Realizer.new()
+	expanded_selector.set("_cxr_active_phase", "r3")
+	expanded_selector.set("_cxr_search_started_usec", Time.get_ticks_usec())
+	expanded_selector.set("_cxr_cavity_started_usec", Time.get_ticks_usec())
+	expanded_selector.set("_cxr_search_nodes_total", 0)
+	expanded_selector.set("_cxr_search_nodes_cavity", 0)
+	expanded_selector.set("_cxr_patch_selection_nodes_total", 0)
+	var expanded_subset: Dictionary = expanded_selector.call("_r3_select_boundary_patch", ["r3-patch", "r3-out-ab"], all_tetra_ids, all, tetra_adjacency, 1)
+	var expected_expanded_ids: Array = ["r3-out-ab", "r3-patch"]
+	_check(bool(expanded_subset.get("valid", false)) and expanded_subset.get("patch_triangle_ids", []) == expected_expanded_ids, "R3 expands multi-triangle seeded patches through Dictionary adjacency rows")
+	_check(int(expanded_subset.get("search_nodes", 0)) > 1 and int(expanded_subset.get("candidate_subsets_examined", 0)) == 1, "R3 records connected-subset expansion before field-support generation")
+	var reversed_adjacency: Dictionary = {}
+	var reversed_triangle_ids: Array = all_tetra_ids.duplicate()
+	reversed_triangle_ids.reverse()
+	for triangle_id_value in reversed_triangle_ids:
+		var original_row: Dictionary = tetra_adjacency.get(String(triangle_id_value), {}).duplicate()
+		var reversed_neighbor_ids: Array = original_row.keys()
+		reversed_neighbor_ids.reverse()
+		var reversed_neighbor_row: Dictionary = {}
+		for neighbor_id_value in reversed_neighbor_ids:
+			reversed_neighbor_row[String(neighbor_id_value)] = true
+		reversed_adjacency[String(triangle_id_value)] = reversed_neighbor_row
+	var reordered_selector: RefCounted = Realizer.new()
+	reordered_selector.set("_cxr_active_phase", "r3")
+	reordered_selector.set("_cxr_search_started_usec", Time.get_ticks_usec())
+	reordered_selector.set("_cxr_cavity_started_usec", Time.get_ticks_usec())
+	reordered_selector.set("_cxr_search_nodes_total", 0)
+	reordered_selector.set("_cxr_search_nodes_cavity", 0)
+	reordered_selector.set("_cxr_patch_selection_nodes_total", 0)
+	var reordered_subset: Dictionary = reordered_selector.call("_r3_select_boundary_patch", ["r3-out-ab", "r3-patch"], all_tetra_ids, all, reversed_adjacency, 1)
+	_check(reordered_subset.get("patch_triangle_ids", []) == expanded_subset.get("patch_triangle_ids", []) and int(reordered_subset.get("search_nodes", -1)) == int(expanded_subset.get("search_nodes", -2)), "R3 subset selection is stable under reordered seed and adjacency insertion")
+	var malformed_adjacency: Dictionary = tetra_adjacency.duplicate(true)
+	malformed_adjacency["r3-out-ab"] = ["not-a-neighbor-map"]
+	var malformed_selector: RefCounted = Realizer.new()
+	malformed_selector.set("_cxr_active_phase", "r3")
+	malformed_selector.set("_cxr_search_started_usec", Time.get_ticks_usec())
+	malformed_selector.set("_cxr_cavity_started_usec", Time.get_ticks_usec())
+	malformed_selector.set("_cxr_search_nodes_total", 0)
+	malformed_selector.set("_cxr_search_nodes_cavity", 0)
+	malformed_selector.set("_cxr_patch_selection_nodes_total", 0)
+	var malformed_subset: Dictionary = malformed_selector.call("_r3_select_boundary_patch", ["r3-out-ab", "r3-patch"], all_tetra_ids, all, malformed_adjacency, 1)
+	_check(not bool(malformed_subset.get("valid", true)) and String(malformed_subset.get("reason", "")) == "r3_patch_adjacency_row_invalid", "R3 rejects malformed adjacency rows deterministically instead of raising a script error")
 	var capped_selector: RefCounted = Realizer.new()
 	capped_selector.set("_cxr_active_phase", "r3")
 	capped_selector.set("_cxr_search_started_usec", Time.get_ticks_usec())
