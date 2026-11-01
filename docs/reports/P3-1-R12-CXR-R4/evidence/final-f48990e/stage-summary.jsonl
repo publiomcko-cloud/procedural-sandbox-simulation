@@ -1,0 +1,5 @@
+{"stage":"import","exit":0,"timeout":false,"resource_stop":false,"bad":false}
+{"stage":"realizer-check","exit":0,"timeout":false,"resource_stop":false,"bad":false}
+{"stage":"d1-check","exit":0,"timeout":false,"resource_stop":false,"bad":false}
+{"stage":"contracts","exit":0,"timeout":false,"resource_stop":false,"bad":false}
+{"stage":"d1-d2-d3","exit":0,"timeout":false,"resource_stop":false,"bad":false}

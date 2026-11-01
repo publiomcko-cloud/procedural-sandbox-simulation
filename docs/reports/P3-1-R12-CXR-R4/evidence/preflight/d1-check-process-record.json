@@ -1,0 +1,28 @@
+{
+  "stage": "d1-check",
+  "source_sha": "b2480bc71fe9c9616426d378feb00e3e33e785f2",
+  "source_tree": "d2cb56478d761eaaa2e8fa24c0b32938034315a4",
+  "working_tree_dirty": true,
+  "godot": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_sha256": "C8F0A6BC45A19B33541501E57F6F7CD972AB18453743266339D495CBBE846643",
+  "args": [
+    "--headless",
+    "--path",
+    "./game",
+    "--check-only",
+    "--script",
+    "res://tests/prototypes/p3_1_r12_cxr_r4_d1.gd"
+  ],
+  "process_id": 22412,
+  "parent_process_id": 46900,
+  "command_line": "\"C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe\" --headless --path ./game --check-only --script res://tests/prototypes/p3_1_r12_cxr_r4_d1.gd",
+  "started_utc": "2026-11-01T12:35:36.8945332Z",
+  "ended_utc": "2026-11-01T12:35:39.7171408Z",
+  "free_commit_gib_before": 8.174766540527344,
+  "free_commit_gib_after": 8.233226776123047,
+  "exit_code": 0,
+  "timed_out": false,
+  "terminated_for_resource": false,
+  "stdout": "stdout.log",
+  "stderr": "stderr.log"
+}

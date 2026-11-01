@@ -1,0 +1,12 @@
+{
+  "godot_started": false,
+  "corrected_invocation_process_id": 28976,
+  "corrected_source_sha": "b2480bc71fe9c9616426d378feb00e3e33e785f2",
+  "correction": "Use distinct d1-d3-run stage directory",
+  "corrected_invocation_exit_code": 0,
+  "target_attempts_consumed": 0,
+  "first_invocation": "D1 stage wrapper stopped before Start-Process because New-Item refused an already-created d1-d3 directory",
+  "corrected_result": "d1-result.json",
+  "schema": "R12CXR.R4.OrchestrationRecovery.v1",
+  "scenario_started": false
+}

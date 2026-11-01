@@ -1,0 +1,21 @@
+{
+  "branch": "exp/p3-1-r12-cxr-r4-boundary-first-realizer",
+  "head": "f48990e25ffb1d377e02a9182240cabe35c815eb",
+  "parent": "b2480bc71fe9c9616426d378feb00e3e33e785f2",
+  "tree": "d71218724e6fdff0099822ec60be057abb04be10",
+  "origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "tracked_tree_clean": true,
+  "non_uid_untracked_count": 17,
+  "untracked_uid_count": 58,
+  "stash_entries": [
+    "stash@{0}: On feat/p3-0c-transactional-undo-redo: preserve P3.0C work before Issue 118 integration",
+    "stash@{1}: On fix/p1-0b-terrain-depth-lighting: preserve P1.0B local state before P1.0C"
+  ],
+  "protected_state_holds": [
+    "CURRENT_PROTECTED_STATE_UNKNOWN",
+    "V3_NOT_ATTESTED",
+    "ACL_REVIEW_REQUIRED",
+    "G1_BLOCKED_ENVIRONMENT",
+    "F2_G1_RELEASE_HOLD"
+  ]
+}

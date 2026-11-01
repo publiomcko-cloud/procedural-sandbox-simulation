@@ -1,0 +1,13 @@
+{
+  "godot_started": false,
+  "target_attempts_consumed": 0,
+  "observed_utc": "2026-11-01",
+  "corrected_exit_code": 0,
+  "error": "New-Item refused an already-existing d1-d3 folder",
+  "target_started": false,
+  "first_invocation": "Wrapper stopped before process creation: stage folder d1-d3 had already been pre-created, and Invoke-Stage requires a new folder.",
+  "schema": "R12CXR.R4.OrchestrationRecovery.v1",
+  "corrected_source_sha": "f48990e25ffb1d377e02a9182240cabe35c815eb",
+  "corrected_stage": "d1-d2-d3",
+  "corrected_process_id": 40688
+}
