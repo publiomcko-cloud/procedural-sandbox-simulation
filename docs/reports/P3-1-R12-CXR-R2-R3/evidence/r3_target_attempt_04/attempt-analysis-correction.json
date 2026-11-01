@@ -1,0 +1,24 @@
+{
+  "schema": "P3.1.R12CXR.AttemptAnalysisCorrection.v1",
+  "attempt_id": "R3_TARGET_20261031_04",
+  "source_sha": "2964bd55b5691081bfe4db9c421f3b982fee167b",
+  "raw_result_sha256": "29b8e9987f0bef05c8fec79c7d545efb1943a0abd2388e536e0248228ffa4c61",
+  "status": "R12_CXR_PARTIAL_WITH_EVIDENCE",
+  "algorithm_started": true,
+  "patch_subset_search_started": true,
+  "cavities_started": 2,
+  "patch_selection_nodes": 2,
+  "field_support_candidate_attempts": 0,
+  "generated_candidate_triangles": 0,
+  "cavity_candidate_attempt_counts": [
+    "NOT_RUN",
+    "NOT_RUN"
+  ],
+  "cavity_support_candidate_counts": [
+    "NOT_RUN",
+    "NOT_RUN"
+  ],
+  "script_error": "Dictionary adjacency row was assigned to typed Array at p3_1_r12_cxr_field_support_realizer.gd:911.",
+  "classification": "Partial runtime failure in the new R3 connected patch-subset expansion. The target and subset search started; however no field-support candidate attempts or candidate triangles were produced. This is not evidence of geometric success/failure for the constrained support realization. The failed target attempt is preserved and will not be rerun.",
+  "next_step": "A bounded fix may use a new source SHA and new attempt ID under the existing continuation procedure: convert adjacency row keys to a deterministically sorted array, add a multi-node subset-expansion regression, rerun only pretarget gates, and never re-execute attempt 04."
+}

@@ -1,0 +1,20 @@
+SCRIPT ERROR: Trying to assign value of type 'Dictionary' to a variable of type 'Array'.
+   at: _r3_select_boundary_patch (res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd:911)
+   GDScript backtrace (most recent call first):
+       [0] _r3_select_boundary_patch (res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd:911)
+       [1] _search_cxr_cavity_r3 (res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd:554)
+       [2] _run_cxr_cavity_sequence (res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd:2961)
+       [3] _realize_cxr_impl (res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd:154)
+       [4] realize_cxr (res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd:44)
+       [5] _build_cxr_target (res://tests/prototypes/p3_1_r12_cxr_campaign.gd:391)
+       [6] _run (res://tests/prototypes/p3_1_r12_cxr_campaign.gd:114)
+SCRIPT ERROR: Trying to assign value of type 'Dictionary' to a variable of type 'Array'.
+   at: _r3_select_boundary_patch (res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd:911)
+   GDScript backtrace (most recent call first):
+       [0] _r3_select_boundary_patch (res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd:911)
+       [1] _search_cxr_cavity_r3 (res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd:554)
+       [2] _run_cxr_cavity_sequence (res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd:2961)
+       [3] _realize_cxr_impl (res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd:154)
+       [4] realize_cxr (res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd:44)
+       [5] _build_cxr_target (res://tests/prototypes/p3_1_r12_cxr_campaign.gd:391)
+       [6] _run (res://tests/prototypes/p3_1_r12_cxr_campaign.gd:114)

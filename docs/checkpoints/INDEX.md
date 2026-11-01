@@ -1,3 +1,7 @@
+## 2026-10-31 — P3.1 R12-CXR R3 attempt 04 PARTIAL; patch-expansion type defect
+
+- [R3 attempt 04 partial result](2026-10-31-P3-1-R12-CXR-R3-ATTEMPT-04-PARTIAL.md) — target started once and exited 0 but emitted a GDScript type error in patch expansion; two subset-search nodes, zero field-support candidate attempts/triangles; no geometry gate passed; attempt will not be rerun.
+
 ## 2026-10-31 — P3.1 R12-CXR R3 attempt 04 pretarget freeze
 
 - [R3 attempt 04 pretarget freeze](2026-10-31-P3-1-R12-CXR-R3-ATTEMPT-04-PRETARGET-FROZEN.md) — source 2964bd55; import, 149/149 contracts and campaign check-only passed; dispatcher/control is frozen; equal-LOD target remains NOT_STARTED.

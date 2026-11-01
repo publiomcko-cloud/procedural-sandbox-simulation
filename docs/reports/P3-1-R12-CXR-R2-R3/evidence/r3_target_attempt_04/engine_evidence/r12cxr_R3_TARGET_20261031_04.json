@@ -1,0 +1,2037 @@
+{
+	"schema": "P3.1.R12CXR.GeometryAttempt.v1",
+	"phase": "r3",
+	"attempt_id": "R3_TARGET_20261031_04",
+	"source_sha": "2964bd55b5691081bfe4db9c421f3b982fee167b",
+	"parent_sha": "",
+	"tree_sha": "",
+	"hypothesis": "R12CXR_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH",
+	"gate_status": "PARTIAL",
+	"result_class": "R12_CXR_PARTIAL_WITH_EVIDENCE",
+	"campaign_disposition": "R12_CXR_PARTIAL_WITH_EVIDENCE",
+	"fixture_sha256": "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d",
+	"manifest_sha256": "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972",
+	"candidate_d_sha256": "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a",
+	"realizer_sha256": "6200b9e337a39a23bb57ce9b8bcddf09b0e955365673a2b2825389e6322e6271",
+	"campaign_sha256": "1b3a73845ef5bafec6d16fe2a7928ee3599c5e70ba5310070cb845af3687145b",
+	"topology_sha256": "4ecbb2496fb34f1cf3c05a60192f76bdce7a52ec3148d02ba041510b804a8c95",
+	"fixture_graph_fingerprint_sha256": "a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9",
+	"reference_authority_reproduction": {
+		"valid": true,
+		"authority_valid": true,
+		"authority_topology_sha256": "4ecbb2496fb34f1cf3c05a60192f76bdce7a52ec3148d02ba041510b804a8c95",
+		"expected_topology_sha256": "4ecbb2496fb34f1cf3c05a60192f76bdce7a52ec3148d02ba041510b804a8c95",
+		"fixture_graph_fingerprint_sha256": "a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9",
+		"reproduced_authority_topology_sha256": "4ecbb2496fb34f1cf3c05a60192f76bdce7a52ec3148d02ba041510b804a8c95",
+		"reproduced_parsed_graph_fingerprint_sha256": "a5dd11828284aaaa9ee5204a667b1c4b39e7f584de34205b236413682e7dddb9",
+		"graph_semantic_match": true,
+		"first_graph_difference": {},
+		"root_count": 369,
+		"arc_count": 870,
+		"polygon_count": 502
+	},
+	"target": {
+		"scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+		"volume_sha256": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2",
+		"payload_sha256": "2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0",
+		"revision": 2,
+		"volume_identity_preserved": true,
+		"volume_build_usec": 8581,
+		"geometry_realizer_valid": false,
+		"cx_algorithm_started": true
+	},
+	"realization_map": {
+		"root_count": "UNKNOWN_NOT_CAPTURED",
+		"arc_count": "UNKNOWN_NOT_CAPTURED",
+		"face_count": "UNKNOWN_NOT_CAPTURED",
+		"anchor_count": "UNKNOWN_NOT_CAPTURED",
+		"path_event_count": "UNKNOWN_NOT_CAPTURED",
+		"support_vertex_count": "UNKNOWN_NOT_CAPTURED",
+		"path_count": "UNKNOWN_NOT_CAPTURED",
+		"sha256": "UNKNOWN_NOT_CAPTURED",
+		"topology_roundtrip_sha256": "UNKNOWN_NOT_CAPTURED",
+		"topology_signature_match": "UNKNOWN_NOT_CAPTURED"
+	},
+	"geometry": {
+		"error_contract": "NOT_FULLY_MEASURED_NO_APPROVED_TOLERANCE",
+		"canonical_surface_deviation_measured": "UNKNOWN_NOT_CAPTURED",
+		"maximum_diagonal_midpoint_displacement": "UNKNOWN_NOT_CAPTURED",
+		"complete": false,
+		"mesh_sha256": "UNKNOWN_NOT_CAPTURED",
+		"vertex_count": "UNKNOWN_NOT_CAPTURED",
+		"triangle_count": "UNKNOWN_NOT_CAPTURED",
+		"initial_triangle_count": "UNKNOWN_NOT_CAPTURED",
+		"initial_cutoff_rejections": "UNKNOWN_NOT_CAPTURED",
+		"minimum_cross_squared": "UNKNOWN_NOT_CAPTURED",
+		"cutoff_rejections": "UNKNOWN_NOT_CAPTURED",
+		"applied_flips": "UNKNOWN_NOT_CAPTURED",
+		"rejected_flip_candidates": "UNKNOWN_NOT_CAPTURED",
+		"flip_cap": "UNKNOWN_NOT_CAPTURED",
+		"flip_cap_exhausted": "UNKNOWN_NOT_CAPTURED",
+		"missing_topology_obligations": "UNKNOWN_NOT_CAPTURED",
+		"mesh_topology": "UNKNOWN_NOT_CAPTURED",
+		"build_usec": "UNKNOWN_NOT_CAPTURED"
+	},
+	"scope": "EQUAL_LOD_EXPERIMENT_ONLY",
+	"equal_lod_gates_pass": false,
+	"controls": {
+		"valid": false,
+		"status": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+		"passed": "UNKNOWN_NOT_CAPTURED",
+		"count": "UNKNOWN_NOT_CAPTURED"
+	},
+	"ray_roi": {
+		"valid": false,
+		"status": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+		"roi_scoped_hit_miss_disagreements": "UNKNOWN_NOT_CAPTURED",
+		"global_diagnostic": {
+			"disagreements": "UNKNOWN_NOT_CAPTURED"
+		}
+	},
+	"volume_gate": true,
+	"mixed_lod": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+	"determinism": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+	"full_e2e": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+	"full_validation": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+	"failed_invariant": "cx_bounded_patch_search_failed",
+	"topology_map": {
+		"roots": "UNKNOWN_NOT_CAPTURED",
+		"arcs": "UNKNOWN_NOT_CAPTURED",
+		"faces": "UNKNOWN_NOT_CAPTURED",
+		"supports": "UNKNOWN_NOT_CAPTURED",
+		"flips": "UNKNOWN_NOT_CAPTURED"
+	},
+	"cxr": {
+		"phase": "r3",
+		"hypothesis": "R12CXR_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH",
+		"c6_source_sha": "",
+		"topology_fixture_sha256": "4ecbb2496fb34f1cf3c05a60192f76bdce7a52ec3148d02ba041510b804a8c95",
+		"residual_fixture_sha256": "ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23",
+		"residual_face_count": 3,
+		"cavity_count": 2,
+		"cavity_results": [
+			{
+				"valid": false,
+				"search_started": true,
+				"search_complete": false,
+				"search_exhaustive": false,
+				"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE",
+				"cavity_report": {
+					"phase": "r3",
+					"cavity_id": "e89d7e6444ead8c6",
+					"residual_triangle_ids": [
+						"60,8,25|tet:1|c4-source:0",
+						"60,8,25|tet:2|c4-source:0"
+					],
+					"cavity_policy": "original_overlapping_defect_group",
+					"seed_face_count": 2,
+					"levels": [
+						{
+							"level": 0,
+							"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_before": {
+								"valid": false,
+								"directed_edges": [],
+								"boundary_edge_count": 0,
+								"incidence_diagnostics": [
+									{
+										"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007041000010400000c840|00007441000010400000d040",
+										"removed_incidence": 1,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "60,8,25|tet:2|c4-source:0",
+												"a": "edge|00007041000000400000c840|00007441000010400000d040",
+												"b": "edge|00007041000010400000c840|00007441000010400000d040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007041000000400000c840|00007441000010400000d040",
+												"b": "edge|00007041000010400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||42|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040",
+												"a": "edge|00007041000010400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											}
+										]
+									},
+									{
+										"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007441000000400000c840|00007441000010400000d040",
+										"removed_incidence": 1,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "60,8,25|tet:1|c4-source:0",
+												"a": "edge|00007441000000400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007441000000400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||655|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040",
+												"a": "edge|00007441000000400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											}
+										]
+									},
+									{
+										"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+										"removed_incidence": 2,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "60,8,25|tet:1|c4-source:0",
+												"a": "edge|00007041000000400000c840|00007441000010400000d040",
+												"b": "edge|00007441000010400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "60,8,25|tet:2|c4-source:0",
+												"a": "edge|00007441000010400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007041000000400000c840|00007441000010400000d040",
+												"b": "edge|00007441000010400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007441000010400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											}
+										]
+									},
+									{
+										"edge_key": "edge|00007041000010400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+										"removed_incidence": 1,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "60,8,25|tet:2|c4-source:0",
+												"a": "edge|00007041000010400000c840|00007441000010400000d040",
+												"b": "edge|00007441000010400000c840|00007441000010400000d040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007041000010400000c840|00007441000010400000d040",
+												"b": "edge|00007441000010400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||70|edge|00007041000010400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000020400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007441000010400000c840|00007441000010400000d040",
+												"b": "edge|00007041000010400000c840|00007441000010400000d040"
+											}
+										]
+									},
+									{
+										"edge_key": "edge|00007441000000400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+										"removed_incidence": 1,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "60,8,25|tet:1|c4-source:0",
+												"a": "edge|00007441000010400000c840|00007441000010400000d040",
+												"b": "edge|00007441000000400000c840|00007441000010400000d040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007441000010400000c840|00007441000010400000d040",
+												"b": "edge|00007441000000400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||117|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+												"a": "edge|00007441000000400000c840|00007441000010400000d040",
+												"b": "edge|00007441000010400000c840|00007441000010400000d040"
+											}
+										]
+									}
+								],
+								"removed_source_winding_mismatches": [],
+								"closed_remaining_edges": [
+									{
+										"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007041000010400000c840|00007441000010400000d040",
+										"removed_incidence": 1,
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007041000000400000c840|00007441000010400000d040",
+												"b": "edge|00007041000010400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||42|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040",
+												"a": "edge|00007041000010400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											}
+										],
+										"resolution": "opposed_surviving_owners_form_closed_edge"
+									},
+									{
+										"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+										"removed_incidence": 2,
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007041000000400000c840|00007441000010400000d040",
+												"b": "edge|00007441000010400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007441000010400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											}
+										],
+										"resolution": "opposed_surviving_owners_form_closed_edge"
+									},
+									{
+										"edge_key": "edge|00007041000010400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+										"removed_incidence": 1,
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007041000010400000c840|00007441000010400000d040",
+												"b": "edge|00007441000010400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||70|edge|00007041000010400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000020400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007441000010400000c840|00007441000010400000d040",
+												"b": "edge|00007041000010400000c840|00007441000010400000d040"
+											}
+										],
+										"resolution": "opposed_surviving_owners_form_closed_edge"
+									},
+									{
+										"edge_key": "edge|00007441000000400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+										"removed_incidence": 1,
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007441000010400000c840|00007441000010400000d040",
+												"b": "edge|00007441000000400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||117|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+												"a": "edge|00007441000000400000c840|00007441000010400000d040",
+												"b": "edge|00007441000010400000c840|00007441000010400000d040"
+											}
+										],
+										"resolution": "opposed_surviving_owners_form_closed_edge"
+									}
+								],
+								"removed_only_internal_edges": [],
+								"internal_removed_nonmanifold_edges": [],
+								"missing_patch_triangle_ids": [],
+								"boundary_source": "remaining_C6_edge_incidence_after_cavity_patch_removal",
+								"invalid_reasons": [
+									{
+										"reason": "r3_surviving_edge_winding_inconsistent",
+										"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007441000000400000c840|00007441000010400000d040",
+										"removed_incidence": 1,
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007441000000400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||655|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040",
+												"a": "edge|00007441000000400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											}
+										]
+									}
+								],
+								"reason": "r3_surviving_edge_winding_inconsistent",
+								"diagnostic_sha256": "d08b9692877fe34b91caf4c9c1b6ebdb481d7966e22e2e89feb781592b55aab6"
+							},
+							"boundary_signature": "UNKNOWN_NOT_CAPTURED",
+							"candidate_count_by_residual": {},
+							"candidate_unique_count_by_residual": {},
+							"candidate_pool_retained_count_by_residual": {},
+							"candidate_fan_status_by_residual": {},
+							"candidate_attempt_count": 0,
+							"candidate_attempt_ids": [],
+							"candidate_triangle_count": 0,
+							"candidate_generation_usec": "NOT_RUN",
+							"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_nodes": 0,
+							"branches": 0,
+							"solutions": 0,
+							"retained_solutions": [],
+							"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE",
+							"cavity_seed_ids": [
+								"60,8,25|tet:1|c4-source:0",
+								"60,8,25|tet:2|c4-source:0"
+							],
+							"patch_selection": {
+								"policy": "minimum_cardinality_connected_subsets_within_original_defect_group_radius_neighborhood",
+								"radius": 0,
+								"max_radius": 3,
+								"max_patch_triangles": 64,
+								"search_nodes": 0,
+								"candidate_subsets_examined": 0,
+								"rejection_counts": {},
+								"selected_patch_triangle_ids": [],
+								"neighborhood_triangle_ids": [
+									"60,8,25|tet:1|c4-source:0",
+									"60,8,25|tet:2|c4-source:0"
+								],
+								"complete": false,
+								"limit_reason": ""
+							},
+							"patch_connectivity": {
+								"valid": true,
+								"reason": "",
+								"component_count": 1,
+								"components": [
+									[
+										"60,8,25|tet:1|c4-source:0",
+										"60,8,25|tet:2|c4-source:0"
+									]
+								]
+							},
+							"boundary_diagnostics": [
+								{
+									"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007041000010400000c840|00007441000010400000d040",
+									"removed_incidence": 1,
+									"remaining_incidence": 2,
+									"removed_rows": [
+										{
+											"triangle_id": "60,8,25|tet:2|c4-source:0",
+											"a": "edge|00007041000000400000c840|00007441000010400000d040",
+											"b": "edge|00007041000010400000c840|00007441000010400000d040"
+										}
+									],
+									"remaining_rows": [
+										{
+											"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+											"a": "edge|00007041000000400000c840|00007441000010400000d040",
+											"b": "edge|00007041000010400000c840|00007441000010400000d040"
+										},
+										{
+											"triangle_id": "C6||42|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040",
+											"a": "edge|00007041000010400000c840|00007441000010400000d040",
+											"b": "edge|00007041000000400000c840|00007441000010400000d040"
+										}
+									]
+								},
+								{
+									"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007441000000400000c840|00007441000010400000d040",
+									"removed_incidence": 1,
+									"remaining_incidence": 2,
+									"removed_rows": [
+										{
+											"triangle_id": "60,8,25|tet:1|c4-source:0",
+											"a": "edge|00007441000000400000c840|00007441000010400000d040",
+											"b": "edge|00007041000000400000c840|00007441000010400000d040"
+										}
+									],
+									"remaining_rows": [
+										{
+											"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+											"a": "edge|00007441000000400000c840|00007441000010400000d040",
+											"b": "edge|00007041000000400000c840|00007441000010400000d040"
+										},
+										{
+											"triangle_id": "C6||655|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040",
+											"a": "edge|00007441000000400000c840|00007441000010400000d040",
+											"b": "edge|00007041000000400000c840|00007441000010400000d040"
+										}
+									]
+								},
+								{
+									"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+									"removed_incidence": 2,
+									"remaining_incidence": 2,
+									"removed_rows": [
+										{
+											"triangle_id": "60,8,25|tet:1|c4-source:0",
+											"a": "edge|00007041000000400000c840|00007441000010400000d040",
+											"b": "edge|00007441000010400000c840|00007441000010400000d040"
+										},
+										{
+											"triangle_id": "60,8,25|tet:2|c4-source:0",
+											"a": "edge|00007441000010400000c840|00007441000010400000d040",
+											"b": "edge|00007041000000400000c840|00007441000010400000d040"
+										}
+									],
+									"remaining_rows": [
+										{
+											"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+											"a": "edge|00007041000000400000c840|00007441000010400000d040",
+											"b": "edge|00007441000010400000c840|00007441000010400000d040"
+										},
+										{
+											"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+											"a": "edge|00007441000010400000c840|00007441000010400000d040",
+											"b": "edge|00007041000000400000c840|00007441000010400000d040"
+										}
+									]
+								},
+								{
+									"edge_key": "edge|00007041000010400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+									"removed_incidence": 1,
+									"remaining_incidence": 2,
+									"removed_rows": [
+										{
+											"triangle_id": "60,8,25|tet:2|c4-source:0",
+											"a": "edge|00007041000010400000c840|00007441000010400000d040",
+											"b": "edge|00007441000010400000c840|00007441000010400000d040"
+										}
+									],
+									"remaining_rows": [
+										{
+											"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+											"a": "edge|00007041000010400000c840|00007441000010400000d040",
+											"b": "edge|00007441000010400000c840|00007441000010400000d040"
+										},
+										{
+											"triangle_id": "C6||70|edge|00007041000010400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000020400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+											"a": "edge|00007441000010400000c840|00007441000010400000d040",
+											"b": "edge|00007041000010400000c840|00007441000010400000d040"
+										}
+									]
+								},
+								{
+									"edge_key": "edge|00007441000000400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+									"removed_incidence": 1,
+									"remaining_incidence": 2,
+									"removed_rows": [
+										{
+											"triangle_id": "60,8,25|tet:1|c4-source:0",
+											"a": "edge|00007441000010400000c840|00007441000010400000d040",
+											"b": "edge|00007441000000400000c840|00007441000010400000d040"
+										}
+									],
+									"remaining_rows": [
+										{
+											"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+											"a": "edge|00007441000010400000c840|00007441000010400000d040",
+											"b": "edge|00007441000000400000c840|00007441000010400000d040"
+										},
+										{
+											"triangle_id": "C6||117|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+											"a": "edge|00007441000000400000c840|00007441000010400000d040",
+											"b": "edge|00007441000010400000c840|00007441000010400000d040"
+										}
+									]
+								}
+							]
+						},
+						{
+							"level": 1,
+							"status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_before": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_signature": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_unique_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_pool_retained_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_fan_status_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_attempt_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_attempt_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_generation_usec": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_nodes": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"branches": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"retained_solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE"
+						},
+						{
+							"level": 2,
+							"status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_before": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_signature": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_unique_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_pool_retained_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_fan_status_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_attempt_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_attempt_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_generation_usec": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_nodes": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"branches": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"retained_solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE"
+						},
+						{
+							"level": 3,
+							"status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_before": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_signature": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_unique_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_pool_retained_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_fan_status_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_attempt_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_attempt_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_generation_usec": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_nodes": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"branches": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"retained_solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE"
+						}
+					],
+					"candidate_attempts": [],
+					"candidate_attempt_count": "NOT_RUN",
+					"support_candidates": [],
+					"support_candidate_count": "NOT_RUN",
+					"support_candidates_unique_count": "NOT_RUN",
+					"support_candidates_retained": [],
+					"candidate_triangles": [],
+					"candidate_triangle_count": "NOT_RUN",
+					"candidate_edges": [],
+					"retained_solutions": [],
+					"selected_supports": [],
+					"selected_solution": {},
+					"selected_level": -1,
+					"solution_found_levels": [],
+					"boundary_provenance": "derived_from_remaining_c6_edge_incidence",
+					"search_nodes": "NOT_RUN",
+					"branches": "NOT_RUN",
+					"prunes": "NOT_RUN",
+					"limits_hit": [
+						"R3_PATCH_SELECTION_INCOMPLETE"
+					],
+					"search_started": true,
+					"search_complete": false,
+					"search_exhaustive": false,
+					"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE",
+					"patch_selection_nodes": 0,
+					"cavity_index": 0
+				},
+				"cavity_index": 0
+			},
+			{
+				"valid": false,
+				"search_started": true,
+				"search_complete": false,
+				"search_exhaustive": false,
+				"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE",
+				"cavity_report": {
+					"phase": "r3",
+					"cavity_id": "aefae75e246e6d28",
+					"residual_triangle_ids": [
+						"62,9,24|tet:2|c4-source:0"
+					],
+					"cavity_policy": "original_overlapping_defect_group",
+					"seed_face_count": 1,
+					"levels": [
+						{
+							"level": 0,
+							"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_before": {
+								"valid": false,
+								"directed_edges": [
+									"edge|00007841000010400000c040|00007c41000020400000c040->edge|00007841000010400000c040|00007841000020400000c040"
+								],
+								"boundary_edge_count": 1,
+								"incidence_diagnostics": [
+									{
+										"edge_key": "edge|00007841000010400000c040|00007841000020400000c040edge|00007841000010400000c040|00007c41000020400000c040",
+										"removed_incidence": 1,
+										"remaining_incidence": 1,
+										"removed_rows": [
+											{
+												"triangle_id": "62,9,24|tet:2|c4-source:0",
+												"a": "edge|00007841000010400000c040|00007841000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007841000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+											}
+										]
+									},
+									{
+										"edge_key": "edge|00007841000010400000c040|00007841000020400000c040edge|00007841000010400000c040|00007c41000020400000c840",
+										"removed_incidence": 1,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "62,9,24|tet:2|c4-source:0",
+												"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+												"b": "edge|00007841000010400000c040|00007841000020400000c040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+												"b": "edge|00007841000010400000c040|00007841000020400000c040"
+											},
+											{
+												"triangle_id": "C6||658|edge|00007441000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007841000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+											}
+										]
+									},
+									{
+										"edge_key": "edge|00007841000010400000c040|00007c41000020400000c040edge|00007841000010400000c040|00007c41000020400000c840",
+										"removed_incidence": 1,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "62,9,24|tet:2|c4-source:0",
+												"a": "edge|00007841000010400000c040|00007c41000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||211|edge|00007841000010400000c040|00007c41000010400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+											},
+											{
+												"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007c41000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+											}
+										]
+									}
+								],
+								"removed_source_winding_mismatches": [
+									{
+										"edge_key": "edge|00007841000010400000c040|00007841000020400000c040edge|00007841000010400000c040|00007c41000020400000c040",
+										"removed": {
+											"triangle_id": "62,9,24|tet:2|c4-source:0",
+											"a": "edge|00007841000010400000c040|00007841000020400000c040",
+											"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+										},
+										"remaining": {
+											"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+											"a": "edge|00007841000010400000c040|00007841000020400000c040",
+											"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+										},
+										"resolution": "boundary_oriented_from_surviving_C6_owner"
+									}
+								],
+								"closed_remaining_edges": [
+									{
+										"edge_key": "edge|00007841000010400000c040|00007841000020400000c040edge|00007841000010400000c040|00007c41000020400000c840",
+										"removed_incidence": 1,
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+												"b": "edge|00007841000010400000c040|00007841000020400000c040"
+											},
+											{
+												"triangle_id": "C6||658|edge|00007441000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007841000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+											}
+										],
+										"resolution": "opposed_surviving_owners_form_closed_edge"
+									},
+									{
+										"edge_key": "edge|00007841000010400000c040|00007c41000020400000c040edge|00007841000010400000c040|00007c41000020400000c840",
+										"removed_incidence": 1,
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||211|edge|00007841000010400000c040|00007c41000010400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+											},
+											{
+												"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007c41000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+											}
+										],
+										"resolution": "opposed_surviving_owners_form_closed_edge"
+									}
+								],
+								"removed_only_internal_edges": [],
+								"internal_removed_nonmanifold_edges": [],
+								"missing_patch_triangle_ids": [],
+								"boundary_source": "remaining_C6_edge_incidence_after_cavity_patch_removal",
+								"invalid_reasons": [],
+								"reason": "boundary_cycle_vertex_count_invalid",
+								"cycle_diagnostics": {
+									"valid": false,
+									"reason": "boundary_cycle_vertex_count_invalid"
+								},
+								"diagnostic_sha256": "bbe8682d82eab531dd0d894b3961aee8eec968449a82b94c197346b315484268"
+							},
+							"boundary_signature": "UNKNOWN_NOT_CAPTURED",
+							"candidate_count_by_residual": {},
+							"candidate_unique_count_by_residual": {},
+							"candidate_pool_retained_count_by_residual": {},
+							"candidate_fan_status_by_residual": {},
+							"candidate_attempt_count": 0,
+							"candidate_attempt_ids": [],
+							"candidate_triangle_count": 0,
+							"candidate_generation_usec": "NOT_RUN",
+							"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_nodes": 0,
+							"branches": 0,
+							"solutions": 0,
+							"retained_solutions": [],
+							"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE",
+							"cavity_seed_ids": [
+								"62,9,24|tet:2|c4-source:0"
+							],
+							"patch_selection": {
+								"policy": "minimum_cardinality_connected_subsets_within_original_defect_group_radius_neighborhood",
+								"radius": 0,
+								"max_radius": 3,
+								"max_patch_triangles": 64,
+								"search_nodes": 0,
+								"candidate_subsets_examined": 0,
+								"rejection_counts": {},
+								"selected_patch_triangle_ids": [],
+								"neighborhood_triangle_ids": [
+									"62,9,24|tet:2|c4-source:0"
+								],
+								"complete": false,
+								"limit_reason": ""
+							},
+							"patch_connectivity": {
+								"valid": true,
+								"reason": "",
+								"component_count": 1,
+								"components": [
+									[
+										"62,9,24|tet:2|c4-source:0"
+									]
+								]
+							},
+							"boundary_diagnostics": [
+								{
+									"edge_key": "edge|00007841000010400000c040|00007841000020400000c040edge|00007841000010400000c040|00007c41000020400000c040",
+									"removed_incidence": 1,
+									"remaining_incidence": 1,
+									"removed_rows": [
+										{
+											"triangle_id": "62,9,24|tet:2|c4-source:0",
+											"a": "edge|00007841000010400000c040|00007841000020400000c040",
+											"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+										}
+									],
+									"remaining_rows": [
+										{
+											"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+											"a": "edge|00007841000010400000c040|00007841000020400000c040",
+											"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+										}
+									]
+								},
+								{
+									"edge_key": "edge|00007841000010400000c040|00007841000020400000c040edge|00007841000010400000c040|00007c41000020400000c840",
+									"removed_incidence": 1,
+									"remaining_incidence": 2,
+									"removed_rows": [
+										{
+											"triangle_id": "62,9,24|tet:2|c4-source:0",
+											"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+											"b": "edge|00007841000010400000c040|00007841000020400000c040"
+										}
+									],
+									"remaining_rows": [
+										{
+											"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+											"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+											"b": "edge|00007841000010400000c040|00007841000020400000c040"
+										},
+										{
+											"triangle_id": "C6||658|edge|00007441000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+											"a": "edge|00007841000010400000c040|00007841000020400000c040",
+											"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+										}
+									]
+								},
+								{
+									"edge_key": "edge|00007841000010400000c040|00007c41000020400000c040edge|00007841000010400000c040|00007c41000020400000c840",
+									"removed_incidence": 1,
+									"remaining_incidence": 2,
+									"removed_rows": [
+										{
+											"triangle_id": "62,9,24|tet:2|c4-source:0",
+											"a": "edge|00007841000010400000c040|00007c41000020400000c040",
+											"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+										}
+									],
+									"remaining_rows": [
+										{
+											"triangle_id": "C6||211|edge|00007841000010400000c040|00007c41000010400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+											"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+											"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+										},
+										{
+											"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+											"a": "edge|00007841000010400000c040|00007c41000020400000c040",
+											"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+										}
+									]
+								}
+							]
+						},
+						{
+							"level": 1,
+							"status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_before": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_signature": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_unique_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_pool_retained_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_fan_status_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_attempt_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_attempt_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_generation_usec": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_nodes": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"branches": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"retained_solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE"
+						},
+						{
+							"level": 2,
+							"status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_before": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_signature": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_unique_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_pool_retained_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_fan_status_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_attempt_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_attempt_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_generation_usec": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_nodes": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"branches": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"retained_solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE"
+						},
+						{
+							"level": 3,
+							"status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_before": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"boundary_signature": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_unique_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_pool_retained_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_fan_status_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_attempt_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_attempt_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_generation_usec": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_nodes": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"branches": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"retained_solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+							"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE"
+						}
+					],
+					"candidate_attempts": [],
+					"candidate_attempt_count": "NOT_RUN",
+					"support_candidates": [],
+					"support_candidate_count": "NOT_RUN",
+					"support_candidates_unique_count": "NOT_RUN",
+					"support_candidates_retained": [],
+					"candidate_triangles": [],
+					"candidate_triangle_count": "NOT_RUN",
+					"candidate_edges": [],
+					"retained_solutions": [],
+					"selected_supports": [],
+					"selected_solution": {},
+					"selected_level": -1,
+					"solution_found_levels": [],
+					"boundary_provenance": "derived_from_remaining_c6_edge_incidence",
+					"search_nodes": "NOT_RUN",
+					"branches": "NOT_RUN",
+					"prunes": "NOT_RUN",
+					"limits_hit": [
+						"R3_PATCH_SELECTION_INCOMPLETE"
+					],
+					"search_started": true,
+					"search_complete": false,
+					"search_exhaustive": false,
+					"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE",
+					"patch_selection_nodes": 0,
+					"cavity_index": 1
+				},
+				"cavity_index": 1
+			}
+		],
+		"support_candidates": "UNKNOWN_NOT_CAPTURED",
+		"support_vertices_selected": "UNKNOWN_NOT_CAPTURED",
+		"support_provenance_sha256": "UNKNOWN_NOT_CAPTURED",
+		"candidate_attempt_count": 0,
+		"candidate_triangle_count": 0,
+		"local_search_limits": {
+			"phase": "r3",
+			"max_cavity_level": 3,
+			"max_cavities": 3,
+			"max_patch_triangles": 64,
+			"max_candidate_attempts_per_cavity": 8192,
+			"max_support_candidates_per_cavity": 256,
+			"max_selected_supports": 4,
+			"max_retained_solutions_per_cavity": 32,
+			"max_search_usec_per_cavity": 10000000,
+			"max_search_usec_total": 20000000,
+			"max_realize_usec": 30000000,
+			"max_support_distance": 0.5,
+			"barycentric_epsilon": 0.0000001,
+			"field_residual_epsilon": 0.0000001,
+			"cross_squared_cutoff": 0.000000000001,
+			"max_candidate_triangles_per_cavity": 65536,
+			"max_candidate_triangles_total": 131072,
+			"max_search_states_per_cavity": 32768,
+			"max_search_states_total": 65536,
+			"cavity_policy": "original_overlapping_defect_groups_searched_separately",
+			"patch_policy": "minimum_cardinality_connected_subsets_within_dual_graph_radius_layers_0_through_3_per_cavity",
+			"patch_selection_state_cap_per_cavity": 32768,
+			"patch_selection_state_cap_total": 65536,
+			"boundary_source": "remaining_C6_edge_incidence_after_cavity_patch_removal",
+			"support_source": "original_frozen_residual_faces_only"
+		},
+		"local_search_nodes": 2,
+		"local_search_complete": "UNKNOWN_NOT_CAPTURED",
+		"local_search_exhaustive": "UNKNOWN_NOT_CAPTURED",
+		"search_counters": {
+			"search_nodes": 2,
+			"patch_selection_nodes": 2,
+			"candidate_attempts": 0,
+			"candidate_triangles": 0,
+			"branches": {},
+			"prunes": {}
+		},
+		"local_search_result": "UNKNOWN_NOT_CAPTURED",
+		"terminal_reason": "cx_bounded_patch_search_failed",
+		"realizer_failure_details": {
+			"search": {
+				"phase": "r3",
+				"reason": "cxr_search_partial",
+				"complete": false,
+				"search_exhaustive": false,
+				"cavity_count_expected": 2,
+				"cavity_count_processed": 2,
+				"cavity_failure_reasons": [
+					"R3_PATCH_SELECTION_INCOMPLETE",
+					"R3_PATCH_SELECTION_INCOMPLETE"
+				],
+				"nodes": 2,
+				"candidate_attempts": 0,
+				"candidate_triangles": 0,
+				"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE"
+			},
+			"cxr_cavity_results": [
+				{
+					"valid": false,
+					"search_started": true,
+					"search_complete": false,
+					"search_exhaustive": false,
+					"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE",
+					"cavity_report": {
+						"phase": "r3",
+						"cavity_id": "e89d7e6444ead8c6",
+						"residual_triangle_ids": [
+							"60,8,25|tet:1|c4-source:0",
+							"60,8,25|tet:2|c4-source:0"
+						],
+						"cavity_policy": "original_overlapping_defect_group",
+						"seed_face_count": 2,
+						"levels": [
+							{
+								"level": 0,
+								"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_before": {
+									"valid": false,
+									"directed_edges": [],
+									"boundary_edge_count": 0,
+									"incidence_diagnostics": [
+										{
+											"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007041000010400000c840|00007441000010400000d040",
+											"removed_incidence": 1,
+											"remaining_incidence": 2,
+											"removed_rows": [
+												{
+													"triangle_id": "60,8,25|tet:2|c4-source:0",
+													"a": "edge|00007041000000400000c840|00007441000010400000d040",
+													"b": "edge|00007041000010400000c840|00007441000010400000d040"
+												}
+											],
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007041000000400000c840|00007441000010400000d040",
+													"b": "edge|00007041000010400000c840|00007441000010400000d040"
+												},
+												{
+													"triangle_id": "C6||42|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040",
+													"a": "edge|00007041000010400000c840|00007441000010400000d040",
+													"b": "edge|00007041000000400000c840|00007441000010400000d040"
+												}
+											]
+										},
+										{
+											"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007441000000400000c840|00007441000010400000d040",
+											"removed_incidence": 1,
+											"remaining_incidence": 2,
+											"removed_rows": [
+												{
+													"triangle_id": "60,8,25|tet:1|c4-source:0",
+													"a": "edge|00007441000000400000c840|00007441000010400000d040",
+													"b": "edge|00007041000000400000c840|00007441000010400000d040"
+												}
+											],
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007441000000400000c840|00007441000010400000d040",
+													"b": "edge|00007041000000400000c840|00007441000010400000d040"
+												},
+												{
+													"triangle_id": "C6||655|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040",
+													"a": "edge|00007441000000400000c840|00007441000010400000d040",
+													"b": "edge|00007041000000400000c840|00007441000010400000d040"
+												}
+											]
+										},
+										{
+											"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+											"removed_incidence": 2,
+											"remaining_incidence": 2,
+											"removed_rows": [
+												{
+													"triangle_id": "60,8,25|tet:1|c4-source:0",
+													"a": "edge|00007041000000400000c840|00007441000010400000d040",
+													"b": "edge|00007441000010400000c840|00007441000010400000d040"
+												},
+												{
+													"triangle_id": "60,8,25|tet:2|c4-source:0",
+													"a": "edge|00007441000010400000c840|00007441000010400000d040",
+													"b": "edge|00007041000000400000c840|00007441000010400000d040"
+												}
+											],
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007041000000400000c840|00007441000010400000d040",
+													"b": "edge|00007441000010400000c840|00007441000010400000d040"
+												},
+												{
+													"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007441000010400000c840|00007441000010400000d040",
+													"b": "edge|00007041000000400000c840|00007441000010400000d040"
+												}
+											]
+										},
+										{
+											"edge_key": "edge|00007041000010400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+											"removed_incidence": 1,
+											"remaining_incidence": 2,
+											"removed_rows": [
+												{
+													"triangle_id": "60,8,25|tet:2|c4-source:0",
+													"a": "edge|00007041000010400000c840|00007441000010400000d040",
+													"b": "edge|00007441000010400000c840|00007441000010400000d040"
+												}
+											],
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007041000010400000c840|00007441000010400000d040",
+													"b": "edge|00007441000010400000c840|00007441000010400000d040"
+												},
+												{
+													"triangle_id": "C6||70|edge|00007041000010400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000020400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007441000010400000c840|00007441000010400000d040",
+													"b": "edge|00007041000010400000c840|00007441000010400000d040"
+												}
+											]
+										},
+										{
+											"edge_key": "edge|00007441000000400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+											"removed_incidence": 1,
+											"remaining_incidence": 2,
+											"removed_rows": [
+												{
+													"triangle_id": "60,8,25|tet:1|c4-source:0",
+													"a": "edge|00007441000010400000c840|00007441000010400000d040",
+													"b": "edge|00007441000000400000c840|00007441000010400000d040"
+												}
+											],
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007441000010400000c840|00007441000010400000d040",
+													"b": "edge|00007441000000400000c840|00007441000010400000d040"
+												},
+												{
+													"triangle_id": "C6||117|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+													"a": "edge|00007441000000400000c840|00007441000010400000d040",
+													"b": "edge|00007441000010400000c840|00007441000010400000d040"
+												}
+											]
+										}
+									],
+									"removed_source_winding_mismatches": [],
+									"closed_remaining_edges": [
+										{
+											"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007041000010400000c840|00007441000010400000d040",
+											"removed_incidence": 1,
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007041000000400000c840|00007441000010400000d040",
+													"b": "edge|00007041000010400000c840|00007441000010400000d040"
+												},
+												{
+													"triangle_id": "C6||42|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040",
+													"a": "edge|00007041000010400000c840|00007441000010400000d040",
+													"b": "edge|00007041000000400000c840|00007441000010400000d040"
+												}
+											],
+											"resolution": "opposed_surviving_owners_form_closed_edge"
+										},
+										{
+											"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+											"removed_incidence": 2,
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007041000000400000c840|00007441000010400000d040",
+													"b": "edge|00007441000010400000c840|00007441000010400000d040"
+												},
+												{
+													"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007441000010400000c840|00007441000010400000d040",
+													"b": "edge|00007041000000400000c840|00007441000010400000d040"
+												}
+											],
+											"resolution": "opposed_surviving_owners_form_closed_edge"
+										},
+										{
+											"edge_key": "edge|00007041000010400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+											"removed_incidence": 1,
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007041000010400000c840|00007441000010400000d040",
+													"b": "edge|00007441000010400000c840|00007441000010400000d040"
+												},
+												{
+													"triangle_id": "C6||70|edge|00007041000010400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000020400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007441000010400000c840|00007441000010400000d040",
+													"b": "edge|00007041000010400000c840|00007441000010400000d040"
+												}
+											],
+											"resolution": "opposed_surviving_owners_form_closed_edge"
+										},
+										{
+											"edge_key": "edge|00007441000000400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+											"removed_incidence": 1,
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007441000010400000c840|00007441000010400000d040",
+													"b": "edge|00007441000000400000c840|00007441000010400000d040"
+												},
+												{
+													"triangle_id": "C6||117|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+													"a": "edge|00007441000000400000c840|00007441000010400000d040",
+													"b": "edge|00007441000010400000c840|00007441000010400000d040"
+												}
+											],
+											"resolution": "opposed_surviving_owners_form_closed_edge"
+										}
+									],
+									"removed_only_internal_edges": [],
+									"internal_removed_nonmanifold_edges": [],
+									"missing_patch_triangle_ids": [],
+									"boundary_source": "remaining_C6_edge_incidence_after_cavity_patch_removal",
+									"invalid_reasons": [
+										{
+											"reason": "r3_surviving_edge_winding_inconsistent",
+											"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007441000000400000c840|00007441000010400000d040",
+											"removed_incidence": 1,
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+													"a": "edge|00007441000000400000c840|00007441000010400000d040",
+													"b": "edge|00007041000000400000c840|00007441000010400000d040"
+												},
+												{
+													"triangle_id": "C6||655|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040",
+													"a": "edge|00007441000000400000c840|00007441000010400000d040",
+													"b": "edge|00007041000000400000c840|00007441000010400000d040"
+												}
+											]
+										}
+									],
+									"reason": "r3_surviving_edge_winding_inconsistent",
+									"diagnostic_sha256": "d08b9692877fe34b91caf4c9c1b6ebdb481d7966e22e2e89feb781592b55aab6"
+								},
+								"boundary_signature": "UNKNOWN_NOT_CAPTURED",
+								"candidate_count_by_residual": {},
+								"candidate_unique_count_by_residual": {},
+								"candidate_pool_retained_count_by_residual": {},
+								"candidate_fan_status_by_residual": {},
+								"candidate_attempt_count": 0,
+								"candidate_attempt_ids": [],
+								"candidate_triangle_count": 0,
+								"candidate_generation_usec": "NOT_RUN",
+								"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_nodes": 0,
+								"branches": 0,
+								"solutions": 0,
+								"retained_solutions": [],
+								"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE",
+								"cavity_seed_ids": [
+									"60,8,25|tet:1|c4-source:0",
+									"60,8,25|tet:2|c4-source:0"
+								],
+								"patch_selection": {
+									"policy": "minimum_cardinality_connected_subsets_within_original_defect_group_radius_neighborhood",
+									"radius": 0,
+									"max_radius": 3,
+									"max_patch_triangles": 64,
+									"search_nodes": 0,
+									"candidate_subsets_examined": 0,
+									"rejection_counts": {},
+									"selected_patch_triangle_ids": [],
+									"neighborhood_triangle_ids": [
+										"60,8,25|tet:1|c4-source:0",
+										"60,8,25|tet:2|c4-source:0"
+									],
+									"complete": false,
+									"limit_reason": ""
+								},
+								"patch_connectivity": {
+									"valid": true,
+									"reason": "",
+									"component_count": 1,
+									"components": [
+										[
+											"60,8,25|tet:1|c4-source:0",
+											"60,8,25|tet:2|c4-source:0"
+										]
+									]
+								},
+								"boundary_diagnostics": [
+									{
+										"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007041000010400000c840|00007441000010400000d040",
+										"removed_incidence": 1,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "60,8,25|tet:2|c4-source:0",
+												"a": "edge|00007041000000400000c840|00007441000010400000d040",
+												"b": "edge|00007041000010400000c840|00007441000010400000d040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007041000000400000c840|00007441000010400000d040",
+												"b": "edge|00007041000010400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||42|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040",
+												"a": "edge|00007041000010400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											}
+										]
+									},
+									{
+										"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007441000000400000c840|00007441000010400000d040",
+										"removed_incidence": 1,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "60,8,25|tet:1|c4-source:0",
+												"a": "edge|00007441000000400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007441000000400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||655|edge|00007041000000400000c840|00007041000010400000d040|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040",
+												"a": "edge|00007441000000400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											}
+										]
+									},
+									{
+										"edge_key": "edge|00007041000000400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+										"removed_incidence": 2,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "60,8,25|tet:1|c4-source:0",
+												"a": "edge|00007041000000400000c840|00007441000010400000d040",
+												"b": "edge|00007441000010400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "60,8,25|tet:2|c4-source:0",
+												"a": "edge|00007441000010400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007041000000400000c840|00007441000010400000d040",
+												"b": "edge|00007441000010400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007441000010400000c840|00007441000010400000d040",
+												"b": "edge|00007041000000400000c840|00007441000010400000d040"
+											}
+										]
+									},
+									{
+										"edge_key": "edge|00007041000010400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+										"removed_incidence": 1,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "60,8,25|tet:2|c4-source:0",
+												"a": "edge|00007041000010400000c840|00007441000010400000d040",
+												"b": "edge|00007441000010400000c840|00007441000010400000d040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||41|edge|00007041000000400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007041000010400000c840|00007441000010400000d040",
+												"b": "edge|00007441000010400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||70|edge|00007041000010400000c840|00007441000010400000d040|edge|00007041000010400000c840|00007441000020400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007441000010400000c840|00007441000010400000d040",
+												"b": "edge|00007041000010400000c840|00007441000010400000d040"
+											}
+										]
+									},
+									{
+										"edge_key": "edge|00007441000000400000c840|00007441000010400000d040edge|00007441000010400000c840|00007441000010400000d040",
+										"removed_incidence": 1,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "60,8,25|tet:1|c4-source:0",
+												"a": "edge|00007441000010400000c840|00007441000010400000d040",
+												"b": "edge|00007441000000400000c840|00007441000010400000d040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||40|edge|00007041000000400000c840|00007441000010400000d040|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040",
+												"a": "edge|00007441000010400000c840|00007441000010400000d040",
+												"b": "edge|00007441000000400000c840|00007441000010400000d040"
+											},
+											{
+												"triangle_id": "C6||117|edge|00007441000000400000c840|00007441000010400000d040|edge|00007441000010400000c840|00007441000010400000d040|edge|00007441000010400000d040|00007841000010400000d040",
+												"a": "edge|00007441000000400000c840|00007441000010400000d040",
+												"b": "edge|00007441000010400000c840|00007441000010400000d040"
+											}
+										]
+									}
+								]
+							},
+							{
+								"level": 1,
+								"status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_before": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_signature": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_unique_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_pool_retained_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_fan_status_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_attempt_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_attempt_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_generation_usec": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_nodes": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"branches": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"retained_solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE"
+							},
+							{
+								"level": 2,
+								"status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_before": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_signature": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_unique_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_pool_retained_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_fan_status_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_attempt_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_attempt_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_generation_usec": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_nodes": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"branches": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"retained_solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE"
+							},
+							{
+								"level": 3,
+								"status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_before": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_signature": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_unique_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_pool_retained_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_fan_status_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_attempt_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_attempt_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_generation_usec": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_nodes": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"branches": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"retained_solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE"
+							}
+						],
+						"candidate_attempts": [],
+						"candidate_attempt_count": "NOT_RUN",
+						"support_candidates": [],
+						"support_candidate_count": "NOT_RUN",
+						"support_candidates_unique_count": "NOT_RUN",
+						"support_candidates_retained": [],
+						"candidate_triangles": [],
+						"candidate_triangle_count": "NOT_RUN",
+						"candidate_edges": [],
+						"retained_solutions": [],
+						"selected_supports": [],
+						"selected_solution": {},
+						"selected_level": -1,
+						"solution_found_levels": [],
+						"boundary_provenance": "derived_from_remaining_c6_edge_incidence",
+						"search_nodes": "NOT_RUN",
+						"branches": "NOT_RUN",
+						"prunes": "NOT_RUN",
+						"limits_hit": [
+							"R3_PATCH_SELECTION_INCOMPLETE"
+						],
+						"search_started": true,
+						"search_complete": false,
+						"search_exhaustive": false,
+						"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE",
+						"patch_selection_nodes": 0,
+						"cavity_index": 0
+					},
+					"cavity_index": 0
+				},
+				{
+					"valid": false,
+					"search_started": true,
+					"search_complete": false,
+					"search_exhaustive": false,
+					"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE",
+					"cavity_report": {
+						"phase": "r3",
+						"cavity_id": "aefae75e246e6d28",
+						"residual_triangle_ids": [
+							"62,9,24|tet:2|c4-source:0"
+						],
+						"cavity_policy": "original_overlapping_defect_group",
+						"seed_face_count": 1,
+						"levels": [
+							{
+								"level": 0,
+								"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_before": {
+									"valid": false,
+									"directed_edges": [
+										"edge|00007841000010400000c040|00007c41000020400000c040->edge|00007841000010400000c040|00007841000020400000c040"
+									],
+									"boundary_edge_count": 1,
+									"incidence_diagnostics": [
+										{
+											"edge_key": "edge|00007841000010400000c040|00007841000020400000c040edge|00007841000010400000c040|00007c41000020400000c040",
+											"removed_incidence": 1,
+											"remaining_incidence": 1,
+											"removed_rows": [
+												{
+													"triangle_id": "62,9,24|tet:2|c4-source:0",
+													"a": "edge|00007841000010400000c040|00007841000020400000c040",
+													"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+												}
+											],
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+													"a": "edge|00007841000010400000c040|00007841000020400000c040",
+													"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+												}
+											]
+										},
+										{
+											"edge_key": "edge|00007841000010400000c040|00007841000020400000c040edge|00007841000010400000c040|00007c41000020400000c840",
+											"removed_incidence": 1,
+											"remaining_incidence": 2,
+											"removed_rows": [
+												{
+													"triangle_id": "62,9,24|tet:2|c4-source:0",
+													"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+													"b": "edge|00007841000010400000c040|00007841000020400000c040"
+												}
+											],
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+													"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+													"b": "edge|00007841000010400000c040|00007841000020400000c040"
+												},
+												{
+													"triangle_id": "C6||658|edge|00007441000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+													"a": "edge|00007841000010400000c040|00007841000020400000c040",
+													"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+												}
+											]
+										},
+										{
+											"edge_key": "edge|00007841000010400000c040|00007c41000020400000c040edge|00007841000010400000c040|00007c41000020400000c840",
+											"removed_incidence": 1,
+											"remaining_incidence": 2,
+											"removed_rows": [
+												{
+													"triangle_id": "62,9,24|tet:2|c4-source:0",
+													"a": "edge|00007841000010400000c040|00007c41000020400000c040",
+													"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+												}
+											],
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||211|edge|00007841000010400000c040|00007c41000010400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+													"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+													"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+												},
+												{
+													"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+													"a": "edge|00007841000010400000c040|00007c41000020400000c040",
+													"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+												}
+											]
+										}
+									],
+									"removed_source_winding_mismatches": [
+										{
+											"edge_key": "edge|00007841000010400000c040|00007841000020400000c040edge|00007841000010400000c040|00007c41000020400000c040",
+											"removed": {
+												"triangle_id": "62,9,24|tet:2|c4-source:0",
+												"a": "edge|00007841000010400000c040|00007841000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+											},
+											"remaining": {
+												"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007841000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+											},
+											"resolution": "boundary_oriented_from_surviving_C6_owner"
+										}
+									],
+									"closed_remaining_edges": [
+										{
+											"edge_key": "edge|00007841000010400000c040|00007841000020400000c040edge|00007841000010400000c040|00007c41000020400000c840",
+											"removed_incidence": 1,
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+													"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+													"b": "edge|00007841000010400000c040|00007841000020400000c040"
+												},
+												{
+													"triangle_id": "C6||658|edge|00007441000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+													"a": "edge|00007841000010400000c040|00007841000020400000c040",
+													"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+												}
+											],
+											"resolution": "opposed_surviving_owners_form_closed_edge"
+										},
+										{
+											"edge_key": "edge|00007841000010400000c040|00007c41000020400000c040edge|00007841000010400000c040|00007c41000020400000c840",
+											"removed_incidence": 1,
+											"remaining_rows": [
+												{
+													"triangle_id": "C6||211|edge|00007841000010400000c040|00007c41000010400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+													"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+													"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+												},
+												{
+													"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+													"a": "edge|00007841000010400000c040|00007c41000020400000c040",
+													"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+												}
+											],
+											"resolution": "opposed_surviving_owners_form_closed_edge"
+										}
+									],
+									"removed_only_internal_edges": [],
+									"internal_removed_nonmanifold_edges": [],
+									"missing_patch_triangle_ids": [],
+									"boundary_source": "remaining_C6_edge_incidence_after_cavity_patch_removal",
+									"invalid_reasons": [],
+									"reason": "boundary_cycle_vertex_count_invalid",
+									"cycle_diagnostics": {
+										"valid": false,
+										"reason": "boundary_cycle_vertex_count_invalid"
+									},
+									"diagnostic_sha256": "bbe8682d82eab531dd0d894b3961aee8eec968449a82b94c197346b315484268"
+								},
+								"boundary_signature": "UNKNOWN_NOT_CAPTURED",
+								"candidate_count_by_residual": {},
+								"candidate_unique_count_by_residual": {},
+								"candidate_pool_retained_count_by_residual": {},
+								"candidate_fan_status_by_residual": {},
+								"candidate_attempt_count": 0,
+								"candidate_attempt_ids": [],
+								"candidate_triangle_count": 0,
+								"candidate_generation_usec": "NOT_RUN",
+								"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_nodes": 0,
+								"branches": 0,
+								"solutions": 0,
+								"retained_solutions": [],
+								"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE",
+								"cavity_seed_ids": [
+									"62,9,24|tet:2|c4-source:0"
+								],
+								"patch_selection": {
+									"policy": "minimum_cardinality_connected_subsets_within_original_defect_group_radius_neighborhood",
+									"radius": 0,
+									"max_radius": 3,
+									"max_patch_triangles": 64,
+									"search_nodes": 0,
+									"candidate_subsets_examined": 0,
+									"rejection_counts": {},
+									"selected_patch_triangle_ids": [],
+									"neighborhood_triangle_ids": [
+										"62,9,24|tet:2|c4-source:0"
+									],
+									"complete": false,
+									"limit_reason": ""
+								},
+								"patch_connectivity": {
+									"valid": true,
+									"reason": "",
+									"component_count": 1,
+									"components": [
+										[
+											"62,9,24|tet:2|c4-source:0"
+										]
+									]
+								},
+								"boundary_diagnostics": [
+									{
+										"edge_key": "edge|00007841000010400000c040|00007841000020400000c040edge|00007841000010400000c040|00007c41000020400000c040",
+										"removed_incidence": 1,
+										"remaining_incidence": 1,
+										"removed_rows": [
+											{
+												"triangle_id": "62,9,24|tet:2|c4-source:0",
+												"a": "edge|00007841000010400000c040|00007841000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007841000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+											}
+										]
+									},
+									{
+										"edge_key": "edge|00007841000010400000c040|00007841000020400000c040edge|00007841000010400000c040|00007c41000020400000c840",
+										"removed_incidence": 1,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "62,9,24|tet:2|c4-source:0",
+												"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+												"b": "edge|00007841000010400000c040|00007841000020400000c040"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+												"b": "edge|00007841000010400000c040|00007841000020400000c040"
+											},
+											{
+												"triangle_id": "C6||658|edge|00007441000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007841000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+											}
+										]
+									},
+									{
+										"edge_key": "edge|00007841000010400000c040|00007c41000020400000c040edge|00007841000010400000c040|00007c41000020400000c840",
+										"removed_incidence": 1,
+										"remaining_incidence": 2,
+										"removed_rows": [
+											{
+												"triangle_id": "62,9,24|tet:2|c4-source:0",
+												"a": "edge|00007841000010400000c040|00007c41000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+											}
+										],
+										"remaining_rows": [
+											{
+												"triangle_id": "C6||211|edge|00007841000010400000c040|00007c41000010400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007c41000020400000c840",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c040"
+											},
+											{
+												"triangle_id": "C6||212|edge|00007841000010400000c040|00007841000020400000c040|edge|00007841000010400000c040|00007c41000020400000c040|edge|00007841000010400000c040|00007c41000020400000c840",
+												"a": "edge|00007841000010400000c040|00007c41000020400000c040",
+												"b": "edge|00007841000010400000c040|00007c41000020400000c840"
+											}
+										]
+									}
+								]
+							},
+							{
+								"level": 1,
+								"status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_before": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_signature": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_unique_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_pool_retained_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_fan_status_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_attempt_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_attempt_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_generation_usec": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_nodes": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"branches": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"retained_solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE"
+							},
+							{
+								"level": 2,
+								"status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_before": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_signature": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_unique_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_pool_retained_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_fan_status_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_attempt_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_attempt_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_generation_usec": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_nodes": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"branches": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"retained_solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE"
+							},
+							{
+								"level": 3,
+								"status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"patch_triangle_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"source_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_before": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"boundary_signature": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_unique_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_pool_retained_count_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_fan_status_by_residual": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_attempt_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_attempt_ids": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_triangle_count": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_generation_usec": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"candidate_generation_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_nodes": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"branches": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"retained_solutions": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"search_status": "NOT_RUN_PATCH_SELECTION_LIMIT",
+								"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE"
+							}
+						],
+						"candidate_attempts": [],
+						"candidate_attempt_count": "NOT_RUN",
+						"support_candidates": [],
+						"support_candidate_count": "NOT_RUN",
+						"support_candidates_unique_count": "NOT_RUN",
+						"support_candidates_retained": [],
+						"candidate_triangles": [],
+						"candidate_triangle_count": "NOT_RUN",
+						"candidate_edges": [],
+						"retained_solutions": [],
+						"selected_supports": [],
+						"selected_solution": {},
+						"selected_level": -1,
+						"solution_found_levels": [],
+						"boundary_provenance": "derived_from_remaining_c6_edge_incidence",
+						"search_nodes": "NOT_RUN",
+						"branches": "NOT_RUN",
+						"prunes": "NOT_RUN",
+						"limits_hit": [
+							"R3_PATCH_SELECTION_INCOMPLETE"
+						],
+						"search_started": true,
+						"search_complete": false,
+						"search_exhaustive": false,
+						"terminal_reason": "R3_PATCH_SELECTION_INCOMPLETE",
+						"patch_selection_nodes": 0,
+						"cavity_index": 1
+					},
+					"cavity_index": 1
+				}
+			],
+			"cxr_limits": {
+				"phase": "r3",
+				"max_cavity_level": 3,
+				"max_cavities": 3,
+				"max_patch_triangles": 64,
+				"max_candidate_attempts_per_cavity": 8192,
+				"max_support_candidates_per_cavity": 256,
+				"max_selected_supports": 4,
+				"max_retained_solutions_per_cavity": 32,
+				"max_search_usec_per_cavity": 10000000,
+				"max_search_usec_total": 20000000,
+				"max_realize_usec": 30000000,
+				"max_support_distance": 0.5,
+				"barycentric_epsilon": 0.0000001,
+				"field_residual_epsilon": 0.0000001,
+				"cross_squared_cutoff": 0.000000000001,
+				"max_candidate_triangles_per_cavity": 65536,
+				"max_candidate_triangles_total": 131072,
+				"max_search_states_per_cavity": 32768,
+				"max_search_states_total": 65536,
+				"cavity_policy": "original_overlapping_defect_groups_searched_separately",
+				"patch_policy": "minimum_cardinality_connected_subsets_within_dual_graph_radius_layers_0_through_3_per_cavity",
+				"patch_selection_state_cap_per_cavity": 32768,
+				"patch_selection_state_cap_total": 65536,
+				"boundary_source": "remaining_C6_edge_incidence_after_cavity_patch_removal",
+				"support_source": "original_frozen_residual_faces_only"
+			},
+			"cxr_search_counters": {
+				"search_nodes": 2,
+				"patch_selection_nodes": 2,
+				"candidate_attempts": 0,
+				"candidate_triangles": 0,
+				"branches": {},
+				"prunes": {}
+			}
+		},
+		"changed_triangles": "UNKNOWN_NOT_CAPTURED",
+		"final_triangle_count": "UNKNOWN_NOT_CAPTURED",
+		"realization_map_sha256": "UNKNOWN_NOT_CAPTURED",
+		"topology_roundtrip_sha256": "UNKNOWN_NOT_CAPTURED",
+		"topology_signature_match": false,
+		"minimum_cross_squared": null,
+		"cutoff_rejections": "UNKNOWN_NOT_CAPTURED",
+		"missing_topology_obligations": "UNKNOWN_NOT_CAPTURED",
+		"internal_open_edges": "UNKNOWN_NOT_CAPTURED",
+		"nonmanifold": "UNKNOWN_NOT_CAPTURED",
+		"winding": "UNKNOWN_NOT_CAPTURED",
+		"controls": {
+			"valid": false,
+			"status": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+			"passed": "UNKNOWN_NOT_CAPTURED",
+			"count": "UNKNOWN_NOT_CAPTURED"
+		},
+		"ray_roi": "UNKNOWN_NOT_CAPTURED",
+		"ray_global_diagnostic": "UNKNOWN_NOT_CAPTURED",
+		"volume": {
+			"pass": true,
+			"sha256": "ecf86bce57e82cd0949d4576e7b7ebe4d1ef8d0633ac7f6d540fd56df6573be2",
+			"payload_sha256": "2ff3685296a8d035967a8c723bc42cb8320a9500dc699538a731490d089203d0",
+			"revision": 2
+		},
+		"surface_deviation_diagnostics": "UNKNOWN_NOT_CAPTURED",
+		"mixed_lod": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+		"determinism": "NOT_RUN_EQUAL_LOD_GATE_FAILED",
+		"resource_aborts": "UNKNOWN_NOT_CAPTURED",
+		"gate_status": "PARTIAL",
+		"result_class": "R12_CXR_PARTIAL_WITH_EVIDENCE",
+		"campaign_disposition": "R12_CXR_PARTIAL_WITH_EVIDENCE"
+	}
+}

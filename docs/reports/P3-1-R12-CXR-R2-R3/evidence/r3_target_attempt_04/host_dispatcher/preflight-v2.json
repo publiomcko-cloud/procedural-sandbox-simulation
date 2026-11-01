@@ -1,0 +1,18 @@
+{
+  "attempt_id": "R3_TARGET_20261031_04",
+  "target": "R9.2.SEAM.XPLUS_EQUAL.v1",
+  "source_sha": "2964bd55b5691081bfe4db9c421f3b982fee167b",
+  "dispatcher_sha256": "697f6593bf1fdce4640123248518857d480689803ec188123768feea9b5d86b9",
+  "wrapper_sha256": "3ce8b7ef681ecf27d0ba74ca59f248c9246a816e98b16364bc16d0d8540767e7",
+  "dispatcher_parse_errors": 0,
+  "wrapper_parse_errors": 0,
+  "execution_checkout_head": "2964bd55b5691081bfe4db9c421f3b982fee167b",
+  "execution_origin": "https://github.com/publiomcko-cloud/procedural-sandbox-simulation.git",
+  "tracked_worktree_clean": true,
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "stage0_sha256": "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d",
+  "residual_sha256": "ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23",
+  "prelaunch_free_commit_bytes": 9784504320,
+  "engine_evidence_empty": true,
+  "target_not_started": true
+}
