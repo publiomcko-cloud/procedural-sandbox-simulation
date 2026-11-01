@@ -1,0 +1,4 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+R5_SYNTHESIS_ENUMERATION_BEGIN {"cavity_id":"e89d7e6444ead8c6","execution_id":"r5target2026110104a91e4f3e7c8f4f8f9a","owner_origin_count":3,"tetrahedron_count":3072}
+R12CXR_R5_SUPPORT_SYNTHESIS_RESULT {"d3_started":false,"legal_triangles":"NOT_RUN","output_path":"C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\scientific-05\\r5-synthesis-result.json","result_sha256":"019607e1d3c4f980a31b8104b16d1263d687ff6c88ddb5731b83cefe2681d094","status":"R5_SUPPORT_SYNTHESIS_PARTIAL","supports":0,"terminal_reason":"NO_SUPPORTS_WITHIN_FROZEN_FIELD_DOMAIN_AND_EXISTING_CAPS"}
