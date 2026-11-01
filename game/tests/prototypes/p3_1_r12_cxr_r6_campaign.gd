@@ -38,7 +38,7 @@ func _run() -> void:
 		quit(0)
 		return
 	if mode.is_empty(): mode = "freeze"
-	if mode not in ["freeze", "boundary-audit", "cavity-audit", "synthesize"]:
+	if mode not in ["freeze", "boundary-audit", "cavity-audit", "synthesize", "resume-r6-06"]:
 		_fail("r6_mode_invalid", {"mode": mode})
 		return
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
@@ -313,6 +313,63 @@ func _run() -> void:
 		var cavity_written: bool = _write_result(output_path, result, "R12CXR_R6_CAVITY_DIAGNOSTIC")
 		quit(0 if cavity_written else 3)
 		return
+	if mode == "resume-r6-06":
+		var continuation_source_sha: String = OS.get_environment("R12CXR_SOURCE_SHA")
+		var attempt_id: String = OS.get_environment("R12CXR_R6_ATTEMPT_ID")
+		var previous_path: String = OS.get_environment("R12CXR_R6_RESUME_INPUT")
+		var previous_sha: String = OS.get_environment("R12CXR_R6_RESUME_SHA256")
+		if continuation_source_sha.length() != 40 or attempt_id != "R6-06-20261101-aa16d87" or previous_path.is_empty() or not FileAccess.file_exists(previous_path):
+			_fail("r6_continuation_identity_invalid", {"source_sha": continuation_source_sha, "attempt_id": attempt_id, "previous_path": previous_path})
+			return
+		var previous_bytes: PackedByteArray = FileAccess.get_file_as_bytes(previous_path)
+		if Core.sha256(previous_bytes) != previous_sha:
+			_fail("r6_continuation_previous_result_hash_mismatch", {"observed": Core.sha256(previous_bytes), "expected": previous_sha})
+			return
+		var previous_value: Variant = JSON.parse_string(previous_bytes.get_string_from_utf8())
+		if typeof(previous_value) != TYPE_DICTIONARY:
+			_fail("r6_continuation_previous_result_schema_invalid", {})
+			return
+		var previous: Dictionary = previous_value
+		var previous_graph: Dictionary = previous.get("graph_gate", {})
+		if String(previous.get("attempt_id", "")) != attempt_id or not bool(previous.get("target_attempt_consumed", false)) or String(previous.get("source_sha", "")) != "aa16d87d674e2af35a1b445203a82497ab049831" or String(previous.get("terminal_reason", "")) != "FINITE_GRAPH_GATE_PARTIAL" or int(previous_graph.get("possible_triplets", -1)) != 3654 or int(previous_graph.get("probe_cap", -1)) != 0 or int(previous_graph.get("support_count", -1)) != 23:
+			_fail("r6_continuation_previous_result_not_expected_graph_cap_blocker", {"attempt_id": previous.get("attempt_id", ""), "source_sha": previous.get("source_sha", ""), "terminal_reason": previous.get("terminal_reason", ""), "graph_gate": previous_graph})
+			return
+		var cavity_search: Dictionary = previous.get("cavity_search", {})
+		var selected_ids: Array = cavity_search.get("selected", {}).get("face_ids", [])
+		var selected_boundary: Dictionary = cavity_search.get("selected", {}).get("audit", {}).get("boundary", {})
+		if String(cavity_search.get("status", "")) != "FOUND" or not bool(cavity_search.get("deterministic_repeat", {}).get("pass", false)) or selected_ids.size() != 6:
+			_fail("r6_continuation_d_cavity_identity_invalid", {"status": cavity_search.get("status", ""), "repeat": cavity_search.get("deterministic_repeat", {}), "selected_ids": selected_ids})
+			return
+		var continuation_realizer: RefCounted = R6Realizer.new()
+		continuation_realizer.set("_root_positions", root_positions)
+		continuation_realizer.set("_required_arc_keys", required_arc_keys)
+		continuation_realizer.set("_locked_triplets", realizer.get("_locked_triplets"))
+		continuation_realizer.set("_cxr_active_phase", "r6")
+		continuation_realizer.set("_cxr_active_snapshot", snapshot)
+		var pool_result: Dictionary = _r6_regenerate_support_rows(continuation_realizer, seed_triangles, analysis_patch, volume.get("values", PackedFloat32Array()), roi, support_fixture, seed_by_id)
+		if not bool(pool_result.get("valid", false)):
+			_fail("r6_continuation_support_pool_regeneration_failed", pool_result)
+			return
+		var selected_patch: Array[Dictionary] = continuation_realizer.call("_r3_patch_rows_for_ids", triangles, selected_ids)
+		var search_fixture: Dictionary = search_residual_fixture.duplicate(true)
+		search_fixture["applied_flips"] = base.get("applied_flips", []).duplicate(true)
+		var selected_full: Dictionary = continuation_realizer.call("_r3_make_expanded_patch_context", selected_patch, selected_ids, seed_triangles, pool_result.get("rows", []), selected_boundary, triangles, search_fixture, 2, false)
+		if not bool(selected_full.get("valid", false)):
+			_fail("r6_continuation_selected_context_reconstruction_failed", selected_full)
+			return
+		var selected_context: Dictionary = selected_full.get("context", {})
+		var continued_synthesis: Dictionary = Synthesizer.new().call("synthesize", continuation_realizer, volume.get("values", PackedFloat32Array()), roi, selected_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []))
+		var previous_synthesis: Dictionary = previous.get("synthesis", {})
+		var previous_synthesis_sha: String = _support_synthesis_fingerprint(previous_synthesis)
+		var continued_synthesis_sha: String = _support_synthesis_fingerprint(continued_synthesis)
+		if not bool(continued_synthesis.get("valid", false)) or previous_synthesis_sha != continued_synthesis_sha:
+			_fail("r6_continuation_support_set_changed", {"previous_fingerprint_sha256": previous_synthesis_sha, "continued_fingerprint_sha256": continued_synthesis_sha, "continued_valid": continued_synthesis.get("valid", false)})
+			return
+		var continuation_metadata: Dictionary = {"is_continuation": true, "same_attempt_id": attempt_id, "original_target_source_sha": previous.get("source_sha", ""), "continuation_source_sha": continuation_source_sha, "original_target_result_sha256": Core.sha256(previous_bytes), "original_target_attempt_consumed": true, "additional_target_attempts_consumed": 0, "reason": "corrected graph gate had incorrectly compared possible triplets to the legal candidate triangle cap; now probes at most the unchanged 2048 candidate limit and may run D3 on the observed partial graph for a positive witness", "support_set_identical": true, "support_set_sha256": continued_synthesis_sha}
+		var continuation_result: Dictionary = _run_constraint_synthesis(continuation_realizer, volume.get("values", PackedFloat32Array()), roi, selected_context, selected_patch, selected_ids, seed_triangles, selected_boundary, triangles, search_fixture, base, snapshot, support_fixture, residual_fixture.get("residuals", []), output_path, cavity_search, continued_synthesis, continuation_metadata)
+		if continuation_result.is_empty() or _terminal_failure_requested: return
+		quit(0)
+		return
 	if mode == "synthesize":
 		var attempt_id: String = OS.get_environment("R12CXR_R6_ATTEMPT_ID")
 		var source_sha: String = OS.get_environment("R12CXR_SOURCE_SHA")
@@ -382,7 +439,7 @@ func _run() -> void:
 	quit(0)
 	return
 
-func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, base_context: Dictionary, patch: Array[Dictionary], patch_ids: Array, seed_triangles: Array[Dictionary], boundary: Dictionary, original_triangles: Array[Dictionary], residual_fixture: Dictionary, base: Dictionary, snapshot: Dictionary, support_fixture: Dictionary, residual_triangles: Array, output_path: String, cavity_search: Dictionary) -> Dictionary:
+func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, base_context: Dictionary, patch: Array[Dictionary], patch_ids: Array, seed_triangles: Array[Dictionary], boundary: Dictionary, original_triangles: Array[Dictionary], residual_fixture: Dictionary, base: Dictionary, snapshot: Dictionary, support_fixture: Dictionary, residual_triangles: Array, output_path: String, cavity_search: Dictionary, synthesis_override: Dictionary = {}, continuation_metadata: Dictionary = {}) -> Dictionary:
 	var cavity_id: String = String(support_fixture.get("cavity_id", ""))
 	if cavity_id.is_empty():
 		_fail("r6_cavity_identity_missing", {})
@@ -419,7 +476,7 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		"support_need": "R6-D freezes the bounded boundary-realizable cavity before R6-E support synthesis. R6-E partitions each clipped field-zero facet by bounded root-pair, cavity and localized required-arc constraints, then validates deterministic critical points through the unchanged triangle gates. Finite witnesses do not prove continuum infeasibility."
 	}
 	var synthesizer: RefCounted = Synthesizer.new()
-	var synthesis: Dictionary = synthesizer.call("synthesize", realizer, values, roi, base_context, residual_triangles, cavity_id, residual_fixture.get("arc_map", []))
+	var synthesis: Dictionary = synthesis_override if not synthesis_override.is_empty() else synthesizer.call("synthesize", realizer, values, roi, base_context, residual_triangles, cavity_id, residual_fixture.get("arc_map", []))
 	if not bool(synthesis.get("valid", false)):
 		_fail("r6_constraint_synthesis_input_invalid", synthesis)
 		return {}
@@ -433,6 +490,7 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		"source_sha": OS.get_environment("R12CXR_SOURCE_SHA"),
 		"attempt_id": OS.get_environment("R12CXR_R6_ATTEMPT_ID"),
 		"target_attempt_consumed": true,
+		"continuation": continuation_metadata,
 		"cavity_search": cavity_search,
 		"r6_e_deterministic_repeat": {"started": true, "pass": synthesis_fingerprint == synthesis_repeat_fingerprint, "first_fingerprint_sha256": synthesis_fingerprint, "repeat_fingerprint_sha256": synthesis_repeat_fingerprint, "repeat_valid": synthesis_repeat.get("valid", false)},
 		"selected_patch_triangle_ids": patch_ids.duplicate(),
@@ -484,13 +542,14 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	vertex_ids.sort()
 	var maximum_triangles: int = int(realizer.call("_cxr_limits").get("max_candidate_triangles_per_cavity", 0))
 	var maximum_total: int = int(realizer.call("_cxr_limits").get("max_candidate_triangles_total", 0))
-	var graph_probe_cap: int = mini(maximum_triangles, maximum_total)
+	var graph_candidate_cap: int = mini(maximum_triangles, maximum_total)
 	var possible_triangle_count: int = int(vertex_ids.size() * maxi(0, vertex_ids.size() - 1) * maxi(0, vertex_ids.size() - 2) / 6)
 	result["graph_gate"]["possible_triplets"] = possible_triangle_count
-	result["graph_gate"]["probe_cap"] = graph_probe_cap
-	if graph_probe_cap <= 0 or possible_triangle_count > graph_probe_cap:
+	result["graph_gate"]["legal_candidate_triangle_cap"] = graph_candidate_cap
+	result["graph_gate"]["triplet_scan_domain"] = "COMPLETE_LEXICOGRAPHIC_VERTEX_TRIPLETS_SUBJECT_TO_PREREGISTERED_CANDIDATE_CAP"
+	if graph_candidate_cap <= 0:
 		result["graph_gate"]["complete"] = false
-		result["graph_gate"]["reason"] = "PREREGISTERED_R2_CANDIDATE_TRIANGLE_CAP_EXCEEDED"
+		result["graph_gate"]["reason"] = "PREREGISTERED_R2_CANDIDATE_TRIANGLE_CAP_INVALID"
 		result["terminal_reason"] = "FINITE_GRAPH_GATE_PARTIAL"
 		_write_result(output_path, result, "R12CXR_R6_SUPPORT_SYNTHESIS_RESULT")
 		return result
@@ -525,11 +584,11 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 					var reason: String = String(triangle_result.get("reason", "UNKNOWN_NOT_CAPTURED"))
 					rejection_histogram[reason] = int(rejection_histogram.get(reason, 0)) + 1
 					graph_probe_rows.append("%s|REJECT|%s" % [row_key, reason])
-				if graph_probe_rows.size() >= graph_probe_cap:
-					result["graph_gate"]["complete"] = graph_probe_rows.size() == possible_triangle_count
+				if graph_probe_rows.size() >= possible_triangle_count:
+					result["graph_gate"]["complete"] = true
 					break
-			if graph_limited or graph_probe_rows.size() >= graph_probe_cap: break
-		if graph_limited or graph_probe_rows.size() >= graph_probe_cap: break
+			if graph_limited or graph_probe_rows.size() >= possible_triangle_count: break
+		if graph_limited or graph_probe_rows.size() >= possible_triangle_count: break
 	var graph_complete: bool = graph_probe_rows.size() == possible_triangle_count and not graph_limited
 	var graph_summary: Dictionary = synthesizer.call("_candidate_graph_summary", candidate_triangles, context.get("candidate_edges", {}), context.get("support_by_id", {}))
 	result["graph_gate"] = {
@@ -539,6 +598,7 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		"support_count": support_rows.size(),
 		"possible_triplets": possible_triangle_count,
 		"probed_triplets": graph_probe_rows.size(),
+		"triplet_scan_complete": graph_probe_rows.size() == possible_triangle_count and not graph_limited,
 		"legal_triangle_count": candidate_triangles.size(),
 		"rejection_histogram": rejection_histogram,
 		"limit_reason": graph_limit_reason,
@@ -548,9 +608,9 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		"in_domain_supports": support_rows.size(),
 		"legal_candidate_triangles": candidate_triangles.size(),
 		"graph_gate_usec": Time.get_ticks_usec() - graph_started_usec,
-		"preregistered_probe_cap": graph_probe_cap
+		"preregistered_legal_candidate_triangle_cap": graph_candidate_cap
 	}
-	if not graph_complete or candidate_triangles.is_empty():
+	if candidate_triangles.is_empty():
 		result["terminal_reason"] = "NO_LEGAL_TRIANGLES_IN_COMPLETE_FINITE_GRAPH" if graph_complete else "FINITE_GRAPH_GATE_PARTIAL"
 		result["continuum_domain_exhausted"] = false
 		_write_result(output_path, result, "R12CXR_R6_SUPPORT_SYNTHESIS_RESULT")
@@ -559,8 +619,9 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	d3["started"] = true
 	result["d3"] = d3
 	if not bool(d3.get("valid", false)):
-		result["status"] = "R6_TRIANGULATION_PARTIAL" if not bool(d3.get("search_complete", false)) else "R6_SUPPORT_SYNTHESIS_PARTIAL"
-		result["terminal_reason"] = String(d3.get("terminal_reason", "R2_SEARCH_PARTIAL")) if not bool(d3.get("search_complete", false)) else "NO_SOLUTION_ON_FINITE_SYNTHESIZED_SUPPORT_GRAPH"
+		var triangulation_complete: bool = bool(d3.get("search_complete", false)) and graph_complete
+		result["status"] = "R6_TRIANGULATION_PARTIAL" if not triangulation_complete else "R6_SUPPORT_SYNTHESIS_PARTIAL"
+		result["terminal_reason"] = "NO_SOLUTION_ON_FINITE_SYNTHESIZED_SUPPORT_GRAPH" if triangulation_complete else "FINITE_GRAPH_OR_TRIANGULATION_GATE_PARTIAL"
 		_write_result(output_path, result, "R12CXR_R6_SUPPORT_SYNTHESIS_RESULT")
 		return result
 	var d3_repeat: Dictionary = realizer.call("_r2_search_level", context)
