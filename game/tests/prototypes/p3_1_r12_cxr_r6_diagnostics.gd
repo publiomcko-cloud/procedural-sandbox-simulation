@@ -314,6 +314,7 @@ func _zero_vertex_sources(tet_data: Dictionary) -> Array[Dictionary]:
 
 func _clip_world_triangle_to_region(source_points: Array, region: Array[Vector2], origin: Vector3, axis_u: Vector3, axis_v: Vector3) -> Array[Vector3]:
 	var polygon: Array[Vector3] = [Vector3(source_points[0]), Vector3(source_points[1]), Vector3(source_points[2])]
+	var orientation: float = 1.0 if _signed_area(region) >= 0.0 else -1.0
 	for edge_index in range(region.size()):
 		var edge_a: Vector2 = region[edge_index]
 		var edge_b: Vector2 = region[(edge_index + 1) % region.size()]
@@ -321,11 +322,11 @@ func _clip_world_triangle_to_region(source_points: Array, region: Array[Vector2]
 		if polygon.is_empty():
 			return next_polygon
 		var previous: Vector3 = polygon[polygon.size() - 1]
-		var previous_d: float = (edge_b - edge_a).cross(_project(previous, origin, axis_u, axis_v) - edge_a)
+		var previous_d: float = orientation * (edge_b - edge_a).cross(_project(previous, origin, axis_u, axis_v) - edge_a)
 		var previous_inside: bool = previous_d >= -1.0e-12
 		for current in polygon:
 			var current_point: Vector3 = Vector3(current)
-			var current_d: float = (edge_b - edge_a).cross(_project(current_point, origin, axis_u, axis_v) - edge_a)
+			var current_d: float = orientation * (edge_b - edge_a).cross(_project(current_point, origin, axis_u, axis_v) - edge_a)
 			var current_inside: bool = current_d >= -1.0e-12
 			if current_inside != previous_inside:
 				var denominator: float = previous_d - current_d

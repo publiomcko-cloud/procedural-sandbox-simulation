@@ -54,11 +54,12 @@ func _test_convex_region_clipping(diagnostics: RefCounted) -> void:
 
 func _test_cross_squared_and_barycentric(diagnostics: RefCounted) -> void:
 	_expect(is_equal_approx(float(diagnostics.call("_cross_squared", Vector3.ZERO, Vector3.RIGHT, Vector3.UP)), 1.0), "cross squared uses frozen area measure")
-	var weights: Array = diagnostics.call("_triangle_barycentric", Vector2(1.0 / 3.0, 1.0 / 3.0), [Vector2.ZERO, Vector2.RIGHT, Vector2.UP])
+	var triangle: Array[Vector2] = [Vector2.ZERO, Vector2.RIGHT, Vector2.UP]
+	var weights: Array = diagnostics.call("_triangle_barycentric", Vector2(1.0 / 3.0, 1.0 / 3.0), triangle)
 	_expect(weights.size() == 3, "triangle barycentric arity")
 	_expect(absf(float(weights[0]) - 1.0 / 3.0) < 1.0e-6 and absf(float(weights[1]) - 1.0 / 3.0) < 1.0e-6 and absf(float(weights[2]) - 1.0 / 3.0) < 1.0e-6, "triangle barycentric values")
-	_expect(bool(diagnostics.call("_strictly_inside_triangle", Vector2(0.25, 0.25), [Vector2.ZERO, Vector2.RIGHT, Vector2.UP])), "strict interior witness admitted")
-	_expect(not bool(diagnostics.call("_strictly_inside_triangle", Vector2(0.5, 0.5), [Vector2.ZERO, Vector2.RIGHT, Vector2.UP])), "boundary witness rejected")
+	_expect(bool(diagnostics.call("_strictly_inside_triangle", Vector2(0.25, 0.25), triangle)), "strict interior witness admitted")
+	_expect(not bool(diagnostics.call("_strictly_inside_triangle", Vector2(0.5, 0.5), triangle)), "boundary witness rejected")
 
 func _test_boundary_edge_classification(diagnostics: RefCounted) -> void:
 	var rows: Array[Dictionary] = []
