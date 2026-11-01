@@ -1,6 +1,6 @@
 ## 2026-11-01 — P3.1 R12-CXR R6 bounded search exhausted
 
-- [R6-D finite-search exhaustion](2026-11-01-P3-1-R12-CXR-R6-D-FINITE-SEARCH-EXHAUSTED.md) — Issue #218; candidate `836a2cd8`; four of five valid target attempts consumed; R6-05 exhausted 844 states/1,254 generated without a feasible cavity; bounded fixture/search-policy result only, not global infeasibility; E/F and downstream gates not run; draft PR #219 and docs evidence PR pending; no owner GUI or merge.
+- [R6-D finite-search exhaustion](2026-11-01-P3-1-R12-CXR-R6-D-FINITE-SEARCH-EXHAUSTED.md) — Issue #218; candidate `836a2cd8`; four of five valid target attempts consumed; R6-05 exhausted 844 states/1,254 generated without a feasible cavity; bounded fixture/search-policy result only, not global infeasibility; E/F and downstream gates not run; draft code PR #219 and docs evidence PR #220; no owner GUI or merge.
 ## 2026-11-01 — P3.1 R12-CXR R5-4 synthesis result
 
 - [R5-4 synthesis result](2026-11-01-P3-1-R12-CXR-R5-ATTEMPT-04-SYNTHESIS-RESULT.md) — one valid frozen target run returned PARTIAL with 2,416 finite critical candidates and zero retained supports; D3/downstream skipped; no continuum-exhaustion or structural-incompatibility claim.

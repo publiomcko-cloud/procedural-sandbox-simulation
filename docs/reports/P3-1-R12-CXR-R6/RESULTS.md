@@ -4,6 +4,8 @@
 
 **Issue:** [#218 — R6 realization-map cavity](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/218)  
 **Source branch:** `exp/p3-1-r12-cxr-r6-realization-map-cavity`  
+**Draft code PR:** [#219](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/219)  
+**Draft docs/evidence PR:** [#220](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/220)  
 **Source SHA:** `836a2cd8e681dfb35f0bbaa5f1f55b1bfcc59b0f`  
 **Parent:** `69648002dc961301cbf789107453a718a206ca64`  
 **R5 baseline:** `64a14d7bc8ddf024933129767b6889146d4645c4` (PR #217 head at observation)

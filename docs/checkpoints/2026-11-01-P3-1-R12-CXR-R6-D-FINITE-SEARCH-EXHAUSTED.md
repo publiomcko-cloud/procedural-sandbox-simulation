@@ -2,14 +2,14 @@
 
 **Checkpoint ID/date and timezone:** `2026-11-01-P3-1-R12-CXR-R6-D-FINITE-SEARCH-EXHAUSTED`; 2026-11-01, UTC  
 **Event type:** blocker; major handoff  
-**Publication state:** pending repo publication; intended for a separate docs-only draft PR based on the R6 candidate branch  
+**Publication state:** recorded on draft docs PR #220; NOT_INTEGRATED  
 **Immutable once integrated:** yes; add a new checkpoint for later events.
 
 ## Verified repository identity
 
 - Repo: `publiomcko-cloud/procedural-sandbox-simulation`; `main` SHA `5997a76d345f45bf86edfe83f690336391e8be27`, tree `40181fe289a6f70f88e4a39a06db0c353c91e268`; verified 2026-11-01 20:50 UTC.
 - Scope of last accepted merge: no merge occurred in this event. Candidate `836a2cd8e681dfb35f0bbaa5f1f55b1bfcc59b0f`, parent `69648002dc961301cbf789107453a718a206ca64`; draft code PR #219 is based on draft R5 PR #217 head `64a14d7bc8ddf024933129767b6889146d4645c4`.
-- Other relevant open branches inspected: R5 PR #217 and its R4/R3 lineage (#216 and earlier); new R6 code PR #219. No existing open R6 docs PR was present when checked. No existing docs branch was changed.
+- Other relevant open branches inspected: R5 PR #217 and its R4/R3 lineage (#216 and earlier); new R6 code PR #219 and docs-only evidence PR #220, based on #219. No existing docs branch was changed.
 
 ## Decision and approval ledger
 
