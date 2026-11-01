@@ -4,6 +4,7 @@ const Diagnostics := preload("res://tests/prototypes/p3_1_r12_cxr_r6_diagnostics
 const R6Realizer := preload("res://tests/prototypes/p3_1_r12_cxr_r6_realizer.gd")
 const CXRDownstream := preload("res://tests/prototypes/p3_1_r12_cxr_campaign.gd")
 const R6Campaign := preload("res://tests/prototypes/p3_1_r12_cxr_r6_campaign.gd")
+const R5Synthesizer := preload("res://tests/prototypes/p3_1_r12_cxr_r5_support_synthesizer.gd")
 
 var assertions: int = 0
 var failures: Array[String] = []
@@ -23,6 +24,7 @@ func _run() -> void:
 	_test_boundary_edge_classification(diagnostics)
 	_test_stable_region_partition(diagnostics)
 	_test_serialized_support_fingerprint()
+	_test_candidate_graph_summary_numeric_formatting()
 	_test_binary32_ulp_correction(diagnostics)
 	_test_patch_owner_and_ordered_arc_paths()
 	_test_bounded_causal_cavity_search(diagnostics)
@@ -57,6 +59,14 @@ func _test_serialized_support_fingerprint() -> void:
 	_expect(first == round_trip, "JSON numeric formatting preserves support synthesis fingerprint")
 	serialized.supports[0].binary32_position_identity = "bf32:010204"
 	_expect(R6Campaign._support_synthesis_fingerprint(base) != R6Campaign._support_synthesis_fingerprint(serialized), "support fingerprint detects exact binary32 position identity change")
+
+func _test_candidate_graph_summary_numeric_formatting() -> void:
+	var synthesizer: RefCounted = R5Synthesizer.new()
+	var edges: Dictionary = {"A|B": {"vertex_ids": ["A", "B"], "candidate_ids": ["t0"]}, "A|S": {"vertex_ids": ["A", "S"], "candidate_ids": ["t0"]}}
+	var triangles: Array[Dictionary] = [{"triangle_id": "t0", "root_ids": ["A", "B", "S"], "cross_squared": 1.0}]
+	var summary: Dictionary = synthesizer.call("_candidate_graph_summary", triangles, edges, {"S": {"support_id": "S"}})
+	_expect(String(summary.get("candidate_graph_sha256", "")).length() == 64, "candidate graph summary hashes root and support edges without integer cast error")
+	_expect(int(summary.get("legal_root_root_edges", 0)) == 1 and int(summary.get("legal_root_support_edges", 0)) == 1, "candidate graph summary classifies root and support edges")
 
 func _test_convex_region_clipping(diagnostics: RefCounted) -> void:
 	var source: Array[Vector3] = [Vector3(-1.0, 0.0, 0.0), Vector3(1.0, 0.0, 0.0), Vector3(0.0, 1.0, 0.0)]

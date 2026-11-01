@@ -429,7 +429,7 @@ func _candidate_graph_summary(triangles: Array[Dictionary], edges: Dictionary, s
 		for id_value in ids:
 			var id: String = String(id_value)
 			if support_by_id.has(id): support_degree[id] = int(support_degree.get(id, 0)) + 1
-		canonical_lines.append("edge|%s|%s|%s" % [edge_key, String(edges[edge_key].get("candidate_ids", []).size()), "support" if first_support or second_support else "root"])
+		canonical_lines.append("edge|%s|%s|%s" % [edge_key, str(edges[edge_key].get("candidate_ids", []).size()), "support" if first_support or second_support else "root"])
 	var ordered_triangles: Array[Dictionary] = triangles.duplicate(true)
 	ordered_triangles.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.get("triangle_id", "")) < String(b.get("triangle_id", "")))
 	var supports_with_triangle: Dictionary = {}
