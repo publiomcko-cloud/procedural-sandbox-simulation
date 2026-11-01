@@ -3,6 +3,7 @@ extends SceneTree
 const Diagnostics := preload("res://tests/prototypes/p3_1_r12_cxr_r6_diagnostics.gd")
 const R6Realizer := preload("res://tests/prototypes/p3_1_r12_cxr_r6_realizer.gd")
 const CXRDownstream := preload("res://tests/prototypes/p3_1_r12_cxr_campaign.gd")
+const R6Campaign := preload("res://tests/prototypes/p3_1_r12_cxr_r6_campaign.gd")
 
 var assertions: int = 0
 var failures: Array[String] = []
@@ -21,6 +22,7 @@ func _run() -> void:
 	_test_cross_squared_and_barycentric(diagnostics)
 	_test_boundary_edge_classification(diagnostics)
 	_test_stable_region_partition(diagnostics)
+	_test_serialized_support_fingerprint()
 	_test_binary32_ulp_correction(diagnostics)
 	_test_patch_owner_and_ordered_arc_paths()
 	_test_bounded_causal_cavity_search(diagnostics)
@@ -46,6 +48,15 @@ func _test_zero_vertex_provenance(diagnostics: RefCounted) -> void:
 	_expect(endpoint[0].interpolation_parameter == 0.0, "exact zero endpoint parameter")
 	_expect(String(diagnostics.call("_position_bytes_hex", Vector3.ZERO)).length() == 24, "binary32 position byte identity")
 	_expect(diagnostics.call("json_safe", Vector3(1.0, 2.0, 3.0)) == [1.0, 2.0, 3.0], "JSON evidence encodes world vectors as arrays")
+
+func _test_serialized_support_fingerprint() -> void:
+	var base: Dictionary = {"valid": true, "retained_support_count": 1, "raw_unique_support_count": 1, "support_cap_hit": false, "finite_candidate_enumeration_complete": true, "supports": [{"candidate_id": "cand-1", "support_id": "support-1", "binary32_position_identity": "bf32:010203", "residual_triangle_id": "tri-1", "source_cell_global_lattice": [60, 8, 25], "source_cell_local": [0, 0, 0], "source_tetrahedron": 2, "method": "tetrahedron_barycentric", "level": 2, "frozen_field_interpolated_residual": -8.161480885e-8, "barycentric_weights": [0.125, 0.375, 0.50000000000001], "tetrahedron_sample_values": [-1.0, 1.0, 1.0, 1.0], "constraint_clearance": 0.2, "max_constraint_cross_squared": 0.0}]}
+	var serialized: Dictionary = {"valid": true, "retained_support_count": 1.0, "raw_unique_support_count": 1.0, "support_cap_hit": false, "finite_candidate_enumeration_complete": true, "supports": [{"candidate_id": "cand-1", "support_id": "support-1", "binary32_position_identity": "bf32:010203", "residual_triangle_id": "tri-1", "source_cell_global_lattice": [60.0, 8.0, 25.0], "source_cell_local": [0.0, 0.0, 0.0], "source_tetrahedron": 2.0, "method": "tetrahedron_barycentric", "level": 2.0, "frozen_field_interpolated_residual": -8.16148088499999e-8, "barycentric_weights": [0.12500000000000003, 0.375, 0.50000000000001], "tetrahedron_sample_values": [-1.0, 1.0, 1.0, 1.0], "constraint_clearance": 0.2, "max_constraint_cross_squared": 0.0}]}
+	var first: String = R6Campaign._support_synthesis_fingerprint(base)
+	var round_trip: String = R6Campaign._support_synthesis_fingerprint(serialized)
+	_expect(first == round_trip, "JSON numeric formatting preserves support synthesis fingerprint")
+	serialized.supports[0].binary32_position_identity = "bf32:010204"
+	_expect(R6Campaign._support_synthesis_fingerprint(base) != R6Campaign._support_synthesis_fingerprint(serialized), "support fingerprint detects exact binary32 position identity change")
 
 func _test_convex_region_clipping(diagnostics: RefCounted) -> void:
 	var source: Array[Vector3] = [Vector3(-1.0, 0.0, 0.0), Vector3(1.0, 0.0, 0.0), Vector3(0.0, 1.0, 0.0)]

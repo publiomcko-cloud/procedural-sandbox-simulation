@@ -734,11 +734,25 @@ func _reconfirm_r6_volume(row: Dictionary, snapshot: Dictionary) -> Dictionary:
 	var identity: bool = String(volume.get("sha256", "")) == VolumeSha and String(metrics.get("payload_sha256", "")) == PayloadSha and expected_revision == 2 and bool(rebuilt.get("metrics", {}).get("materialized_volume_identity_preserved", false))
 	return {"valid": identity, "reason": "" if identity else "frozen_volume_or_payload_identity_mismatch", "volume_sha256": volume.get("sha256", "UNKNOWN_NOT_CAPTURED"), "payload_sha256": metrics.get("payload_sha256", "UNKNOWN_NOT_CAPTURED"), "revision": expected_revision, "value_count": values.size(), "value_bytes_sha256": Core.sha256(values.to_byte_array()), "materialized_volume_identity_preserved": rebuilt.get("metrics", {}).get("materialized_volume_identity_preserved", false)}
 
-func _stable_evidence_sha(value: Variant) -> String:
+static func _stable_evidence_sha(value: Variant) -> String:
 	return Core.sha256(JSON.stringify(_json_safe(value)).to_utf8_buffer())
 
-func _support_synthesis_fingerprint(synthesis: Dictionary) -> String:
-	return _stable_evidence_sha({"valid": synthesis.get("valid", false), "supports": synthesis.get("supports", []), "candidate_attempt_count": synthesis.get("candidate_attempt_count", -1), "candidate_rejection_histogram": synthesis.get("candidate_rejection_histogram", {}), "retained_support_count": synthesis.get("retained_support_count", -1), "provenance_sha256": synthesis.get("provenance_sha256", "UNKNOWN_NOT_CAPTURED")})
+static func _support_synthesis_fingerprint(synthesis: Dictionary) -> String:
+	var canonical_supports: Array[Dictionary] = []
+	for support_value in synthesis.get("supports", []):
+		var support: Dictionary = support_value
+		canonical_supports.append({"candidate_id": String(support.get("candidate_id", "")), "support_id": String(support.get("support_id", "")), "binary32_position_identity": String(support.get("binary32_position_identity", "")), "residual_triangle_id": String(support.get("residual_triangle_id", "")), "source_cell_global_lattice": _normalize_lattice(support.get("source_cell_global_lattice", null)), "source_cell_local": _normalize_lattice(support.get("source_cell_local", null)), "source_tetrahedron": int(support.get("source_tetrahedron", -1)), "method": String(support.get("method", "")), "level": int(support.get("level", -1)), "frozen_field_interpolated_residual": _round_report_number(support.get("frozen_field_interpolated_residual", INF)), "barycentric_weights": _round_report_array(support.get("barycentric_weights", [])), "tetrahedron_sample_values": _round_report_array(support.get("tetrahedron_sample_values", [])), "constraint_clearance": _round_report_number(support.get("constraint_clearance", INF)), "max_constraint_cross_squared": _round_report_number(support.get("max_constraint_cross_squared", INF))})
+	return _stable_evidence_sha({"valid": synthesis.get("valid", false), "supports": canonical_supports, "retained_support_count": int(synthesis.get("retained_support_count", -1)), "raw_unique_support_count": int(synthesis.get("raw_unique_support_count", -1)), "support_cap_hit": synthesis.get("support_cap_hit", false), "finite_candidate_enumeration_complete": synthesis.get("finite_candidate_enumeration_complete", false)})
+
+static func _round_report_number(value: Variant) -> Variant:
+	if typeof(value) not in [TYPE_FLOAT, TYPE_INT] or not is_finite(float(value)): return value
+	return roundf(float(value) * 1.0e12) / 1.0e12
+
+static func _round_report_array(value: Variant) -> Array:
+	var result: Array = []
+	if value is Array or value is PackedFloat32Array or value is PackedFloat64Array:
+		for item in value: result.append(_round_report_number(item))
+	return result
 
 func _support_summary_for_diagnostic(synthesis: Dictionary) -> Dictionary:
 	var supports: Array = synthesis.get("supports", [])
@@ -786,7 +800,7 @@ func _write_result(output_path: String, result: Dictionary, marker: String) -> b
 	print(marker + " " + JSON.stringify({"status": result.get("status", "UNKNOWN_NOT_CAPTURED"), "terminal_reason": result.get("terminal_reason", "UNKNOWN_NOT_CAPTURED"), "supports": result.get("synthesis", {}).get("retained_support_count", "UNKNOWN_NOT_CAPTURED"), "legal_triangles": result.get("graph_gate", {}).get("legal_triangle_count", "NOT_RUN"), "d3_started": result.get("d3", {}).get("started", false), "result_sha256": Core.sha256(bytes), "output_path": output_path}))
 	return true
 
-func _json_safe(value: Variant) -> Variant:
+static func _json_safe(value: Variant) -> Variant:
 	match typeof(value):
 		TYPE_VECTOR2:
 			var point: Vector2 = value
@@ -853,7 +867,7 @@ func _compare_support_rows(regenerated: Array[Dictionary], stored: Array[Diction
 			return {"valid": false, "reason": "support_position_bitwise_mismatch", "index": index, "support_id": current.get("support_id", "")}
 	return {"valid": true, "count": regenerated.size()}
 
-func _normalize_lattice(value: Variant) -> Variant:
+static func _normalize_lattice(value: Variant) -> Variant:
 	if value is Vector3i:
 		return [value.x, value.y, value.z]
 	if value is Array and value.size() == 3:
