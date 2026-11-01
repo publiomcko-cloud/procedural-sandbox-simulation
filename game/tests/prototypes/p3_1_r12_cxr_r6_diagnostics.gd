@@ -131,6 +131,78 @@ func collect_zero_facet_inventory(realizer: RefCounted, values: PackedFloat32Arr
 			triangulated_facets += 1
 	return {"valid": true, "tetrahedra_visited": tetrahedron_count, "tetrahedra_with_zero_facets": tetrahedra_with_facets, "primitive_classes": primitive_classes, "triangulated_zero_facets": triangulated_facets, "tetra_zero_vertex_occurrences": vertex_records.size(), "unique_binary32_position_count": unique_position_ids.size(), "residual_histogram": histogram, "residual_over_epsilon_count": int(histogram.get("abs_gt_1e-7", 0)), "barycentric_gate_failure_count": barycentric_gate_failure_count, "vertex_records": vertex_records, "facets": facets}
 
+func audit_r6a_representability(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary) -> Dictionary:
+	if values.is_empty() or roi.is_empty():
+		return {"valid": false, "reason": "r6a_input_missing"}
+	var roi_min: Vector3 = Core.world_min(roi)
+	var cells: Vector3i = Core.cell_counts(roi)
+	var step: float = Core.step(roi)
+	var dims: Vector3i = cells + Vector3i.ONE
+	var tetrahedron_count: int = cells.x * cells.y * cells.z * Core.TETS.size()
+	if values.size() != dims.x * dims.y * dims.z or tetrahedron_count != MAX_TETRAHEDRA:
+		return {"valid": false, "reason": "r6a_grid_identity_invalid", "tetrahedra": tetrahedron_count, "value_count": values.size()}
+	var rows: Array[Dictionary] = []
+	var before_histogram: Dictionary = {"abs_le_1e-8": 0, "abs_gt_1e-8_le_1e-7": 0, "abs_gt_1e-7": 0, "invalid_barycentric": 0}
+	var after_histogram: Dictionary = {"abs_le_1e-8": 0, "abs_gt_1e-8_le_1e-7": 0, "abs_gt_1e-7": 0, "invalid_barycentric": 0}
+	var corrected_count: int = 0
+	var changed_count: int = 0
+	var unresolved_count: int = 0
+	var barycentric_gate_failure_count: int = 0
+	var corrected_barycentric_gate_failure_count: int = 0
+	var unique_corrected_positions: Dictionary = {}
+	for flat_index in range(tetrahedron_count):
+		var tet_index: int = flat_index % Core.TETS.size()
+		var cell_index: int = floori(float(flat_index) / float(Core.TETS.size()))
+		var z: int = cell_index % cells.z
+		var y: int = floori(float(cell_index) / float(cells.z)) % cells.y
+		var x: int = floori(float(cell_index) / float(cells.z * cells.y))
+		var cell: Vector3i = Vector3i(x, y, z)
+		var tet_data: Dictionary = realizer.call("_tetra_data", cell, tet_index, values, dims, roi_min, step)
+		if not bool(tet_data.get("valid", false)):
+			return {"valid": false, "reason": "r6a_source_tetrahedron_invalid", "cell": cell, "tet_index": tet_index, "detail": tet_data}
+		for source_value in realizer.call("corrected_tetra_zero_sources", tet_data):
+			if typeof(source_value) != TYPE_DICTIONARY:
+				return {"valid": false, "reason": "r6a_source_row_invalid", "cell": cell, "tet_index": tet_index}
+			var row: Dictionary = source_value.duplicate(true)
+			row["cell_local"] = [cell.x, cell.y, cell.z]
+			row["cell_global"] = [int(tet_data.global_cell.x), int(tet_data.global_cell.y), int(tet_data.global_cell.z)]
+			row["tetrahedron_index"] = tet_index
+			row["tetrahedron_id"] = "%d,%d,%d|tet:%d" % [int(tet_data.global_cell.x), int(tet_data.global_cell.y), int(tet_data.global_cell.z), tet_index]
+			var before_residual: float = float(row.get("original_field_residual", NAN))
+			var after_residual: float = float(row.get("corrected_field_residual", NAN))
+			var before_valid: bool = bool(row.get("original_barycentric_gate_pass", false)) and is_finite(before_residual)
+			var after_valid: bool = bool(row.get("accepted", false)) and bool(row.get("corrected_barycentric_gate_pass", false)) and is_finite(after_residual)
+			var before_bin: String = _residual_histogram_bin(before_valid, before_residual)
+			var after_bin: String = _residual_histogram_bin(bool(row.get("corrected_barycentric_gate_pass", false)), after_residual)
+			before_histogram[before_bin] = int(before_histogram.get(before_bin, 0)) + 1
+			after_histogram[after_bin] = int(after_histogram.get(after_bin, 0)) + 1
+			if not bool(row.get("original_barycentric_gate_pass", false)):
+				barycentric_gate_failure_count += 1
+			if not bool(row.get("corrected_barycentric_gate_pass", false)):
+				corrected_barycentric_gate_failure_count += 1
+			if after_valid:
+				corrected_count += 1
+				var corrected: Vector3 = Vector3(row.corrected_position)
+				unique_corrected_positions[_position_identity(corrected)] = true
+				if corrected != Vector3(row.original_position):
+					changed_count += 1
+			else:
+				unresolved_count += 1
+			row["original_position_f32_hex"] = _position_bytes_hex(Vector3(row.original_position))
+			row["corrected_position_f32_hex"] = _position_bytes_hex(Vector3(row.corrected_position))
+			rows.append(row)
+	return {"valid": true, "tetrahedra_visited": tetrahedron_count, "zero_vertex_occurrences": rows.size(), "unique_corrected_binary32_positions": unique_corrected_positions.size(), "original_residual_histogram": before_histogram, "corrected_residual_histogram": after_histogram, "original_residual_over_epsilon_count": int(before_histogram.get("abs_gt_1e-7", 0)), "corrected_residual_over_epsilon_count": int(after_histogram.get("abs_gt_1e-7", 0)), "original_barycentric_gate_failure_count": barycentric_gate_failure_count, "corrected_barycentric_gate_failure_count": corrected_barycentric_gate_failure_count, "corrected_occurrence_count": corrected_count, "corrected_gate_failure_count": rows.size() - corrected_count, "changed_occurrence_count": changed_count, "unresolved_occurrence_count": unresolved_count, "vertices": rows}
+
+func _residual_histogram_bin(barycentric_valid: bool, residual: float) -> String:
+	if not barycentric_valid or not is_finite(residual):
+		return "invalid_barycentric"
+	var absolute_residual: float = absf(residual)
+	if absolute_residual <= 1.0e-8:
+		return "abs_le_1e-8"
+	if absolute_residual <= RESIDUAL_EPSILON:
+		return "abs_gt_1e-8_le_1e-7"
+	return "abs_gt_1e-7"
+
 func analyze_owner_overlap(fixture: Dictionary) -> Dictionary:
 	var cavity_polygon: PackedVector2Array = _vector2_polygon(fixture.get("projection", {}).get("polygon", []))
 	if cavity_polygon.size() < 3:

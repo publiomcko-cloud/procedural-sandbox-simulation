@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Diagnostics := preload("res://tests/prototypes/p3_1_r12_cxr_r6_diagnostics.gd")
+const R6Realizer := preload("res://tests/prototypes/p3_1_r12_cxr_r6_realizer.gd")
 
 var assertions: int = 0
 var failures: Array[String] = []
@@ -19,6 +20,7 @@ func _run() -> void:
 	_test_cross_squared_and_barycentric(diagnostics)
 	_test_boundary_edge_classification(diagnostics)
 	_test_stable_region_partition(diagnostics)
+	_test_binary32_ulp_correction(diagnostics)
 	if failures.is_empty():
 		print("R12CXR_R6_CONTRACTS assertions=%d failures=0" % assertions)
 		quit(0)
@@ -78,6 +80,19 @@ func _test_stable_region_partition(_diagnostics: RefCounted) -> void:
 	for row in Diagnostics.REGION_SPECS:
 		actual.append(String(row.get("id", "")))
 	_expect(actual == expected, "four preregistered direct-arc subregions remain stable")
+
+func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
+	var realizer: RefCounted = R6Realizer.new()
+	var one_up: float = realizer.call("_step_binary32", 1.0, 1)
+	var one_down: float = realizer.call("_step_binary32", 1.0, -1)
+	var negative_up: float = realizer.call("_step_binary32", -1.0, 1)
+	var positive_zero_up: float = realizer.call("_step_binary32", 0.0, 1)
+	var negative_zero_down: float = realizer.call("_step_binary32", 0.0, -1)
+	_expect(one_up > 1.0 and one_down < 1.0, "binary32 ULP stepping brackets positive one")
+	_expect(negative_up > -1.0, "binary32 ULP stepping follows numeric direction for negative values")
+	_expect(positive_zero_up > 0.0 and negative_zero_down < 0.0, "binary32 ULP stepping handles signed zero")
+	var exact_zero: Dictionary = realizer.call("_evaluate_zero_point", Vector3(0.5, 0.0, 0.0), {"positions": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP, Vector3.BACK], "samples": [-2.0e-7, 2.0e-7, 0.0, 0.0]})
+	_expect(bool(exact_zero.get("accepted", false)) and is_equal_approx(float(exact_zero.get("field_residual", NAN)), 0.0), "R6 correction rechecks unchanged field and barycentric gates")
 
 func _expect(condition: bool, name: String) -> void:
 	assertions += 1
