@@ -54,16 +54,10 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		domain_triangles.append(domain_triangle)
 	var vertex_positions: Dictionary = context.get("vertex_positions", {})
 	var projected_positions: Dictionary = context.get("projected_positions", {})
-	var source_origins: Array[Dictionary] = []
-	for residual_value in residual_triangles:
-		if typeof(residual_value) != TYPE_DICTIONARY: continue
-		var residual: Dictionary = residual_value
-		var points: Array = residual.get("points", [])
-		if points.size() != 3: continue
-		var center: Vector3 = (Vector3(points[0]) + Vector3(points[1]) + Vector3(points[2])) / 3.0
-		if center.is_finite(): source_origins.append({"id": String(residual.get("triangle_id", "")), "center": center})
-	if source_origins.is_empty():
-		return {"valid": false, "reason": "residual_owner_centroids_unavailable"}
+	var owner_origin_result: Dictionary = _source_origins(residual_triangles)
+	if not bool(owner_origin_result.get("valid", false)):
+		return owner_origin_result
+	var source_origins: Array[Dictionary] = owner_origin_result.get("origins", [])
 	var raw_by_identity: Dictionary = {}
 	var zero_tetrahedra: int = 0
 	var zero_volume_tetrahedra_skipped: int = 0
@@ -232,6 +226,8 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		"skipped_boundary_or_root": skipped_boundary_or_root,
 		"synthesis_usec": total_usec,
 		"eligible_boundary_source_pairs": possible_source_pairs,
+		"owner_origin_count": source_origins.size(),
+		"owner_origin_triangle_ids": source_origins.map(func(row: Dictionary) -> String: return String(row.get("id", ""))),
 		"max_witnesses_per_clipped_fragment": MAX_WITNESSES_PER_CLIPPED_FRAGMENT,
 		"limits": {"max_tetrahedra": MAX_TETRAHEDRA, "max_zero_facets": MAX_ZERO_FACETS, "max_clip_fragments": MAX_CLIP_FRAGMENTS, "max_raw_supports": MAX_RAW_SUPPORTS, "max_supports": MAX_SUPPORTS, "max_synthesis_usec": MAX_SYNTHESIS_USEC, "max_source_pairs": MAX_BOUNDARY_SOURCE_PAIRS, "max_witnesses_per_clipped_fragment": MAX_WITNESSES_PER_CLIPPED_FRAGMENT, "existing_cross_squared_cutoff": cutoff, "existing_max_support_distance": max_support_distance}
 	}
@@ -283,6 +279,35 @@ func _binary32_position_identity(point: Vector3) -> String:
 
 func _support_id(point: Vector3) -> String:
 	return "R5SUP_" + Core.sha256(_binary32_position_identity(point).to_utf8_buffer()).substr(0, 24)
+
+func _source_origins(residual_rows: Array) -> Dictionary:
+	if residual_rows.is_empty(): return {"valid": false, "reason": "residual_owner_rows_missing"}
+	var origins: Array[Dictionary] = []
+	var seen_ids: Dictionary = {}
+	for row_value in residual_rows:
+		if typeof(row_value) != TYPE_DICTIONARY: return {"valid": false, "reason": "residual_owner_row_invalid"}
+		var row: Dictionary = row_value
+		var triangle_id: String = String(row.get("triangle_id", ""))
+		if triangle_id.is_empty() or seen_ids.has(triangle_id): return {"valid": false, "reason": "residual_owner_triangle_id_invalid_or_duplicate", "triangle_id": triangle_id}
+		var points_value: Variant = row.get("points", row.get("triangle_vertices_world", null))
+		if typeof(points_value) != TYPE_ARRAY or points_value.size() != 3: return {"valid": false, "reason": "residual_owner_vertices_invalid", "triangle_id": triangle_id}
+		var points: Array[Vector3] = []
+		for point_value in points_value:
+			var point: Vector3
+			if point_value is Vector3:
+				point = Vector3(point_value)
+			elif point_value is Array and point_value.size() == 3:
+				point = Vector3(float(point_value[0]), float(point_value[1]), float(point_value[2]))
+			else:
+				return {"valid": false, "reason": "residual_owner_vertex_encoding_invalid", "triangle_id": triangle_id}
+			if not point.is_finite(): return {"valid": false, "reason": "residual_owner_vertex_nonfinite", "triangle_id": triangle_id}
+			points.append(point)
+		var center: Vector3 = (points[0] + points[1] + points[2]) / 3.0
+		if not center.is_finite(): return {"valid": false, "reason": "residual_owner_centroid_nonfinite", "triangle_id": triangle_id}
+		seen_ids[triangle_id] = true
+		origins.append({"id": triangle_id, "center": center})
+	origins.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.get("id", "")) < String(b.get("id", "")))
+	return {"valid": true, "origins": origins, "owner_origin_count": origins.size()}
 
 func _insert_support_by_identity(table: Dictionary, support: Dictionary) -> void:
 	var identity: String = String(support.get("binary32_position_identity", ""))

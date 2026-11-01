@@ -21,6 +21,7 @@ func _run() -> void:
 	_test_r2_candidate_gates()
 	_test_constraint_guided_support_r2_triangulation(synth)
 	_test_campaign_result_scope()
+	_test_residual_owner_normalization(synth)
 	if failures.is_empty():
 		print("R12CXR_R5_CONTRACT_TESTS_PASS assertions=%d failures=0" % assertions)
 		quit(0)
@@ -236,6 +237,16 @@ func _test_campaign_result_scope() -> void:
 	var campaign_source: String = FileAccess.get_file_as_string("res://tests/prototypes/p3_1_r12_cxr_r5_campaign.gd")
 	_expect(campaign_source.contains("R5_EQUAL_LOD_PASS_DOWNSTREAM_PENDING"), "equal_lod_pass_does_not_claim_full_downstream_qualification")
 	_expect(campaign_source.contains("UNKNOWN_NOT_CAPTURED_FINITE_WITNESS_MODEL_DOES_NOT_ENUMERATE_ALL_REGIONS"), "unmodeled_feasible_region_counts_are_not_reported_as_zero")
+
+func _test_residual_owner_normalization(synth: RefCounted) -> void:
+	var frozen_row: Dictionary = {"triangle_id": "FROZEN_OWNER", "triangle_vertices_world": [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [0.0, 3.0, 0.0]]}
+	var frozen: Dictionary = synth.call("_source_origins", [frozen_row])
+	_expect(bool(frozen.get("valid", false)) and frozen.get("origins", []).size() == 1, "r4_triangle_vertices_world_owner_shape_is_supported")
+	if bool(frozen.get("valid", false)):
+		_expect(Vector3(frozen.origins[0].center) == Vector3(1.0, 1.0, 0.0), "r4_owner_centroid_is_reconstructed_from_frozen_vertices")
+	var normalized_row: Dictionary = {"triangle_id": "NORMALIZED_OWNER", "points": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP]}
+	_expect(bool(synth.call("_source_origins", [normalized_row]).get("valid", false)), "normalized_point_owner_shape_remains_supported")
+	_expect(not bool(synth.call("_source_origins", [frozen_row, frozen_row.duplicate(true)]).get("valid", false)), "duplicate_residual_owner_identity_fails_closed")
 
 func _expect(condition: bool, name: String) -> void:
 	assertions += 1
