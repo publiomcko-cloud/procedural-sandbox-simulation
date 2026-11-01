@@ -1,0 +1,54 @@
+{
+  "name": "r6-d0-diagnostic",
+  "started_utc": "2026-11-01T20:12:20.1368006Z",
+  "completed_utc": "2026-11-01T20:12:24.1269159Z",
+  "pid": 47556,
+  "process_still_running": false,
+  "exit_code": 0,
+  "arguments": [
+    "--headless",
+    "--path",
+    ".",
+    "--script",
+    "res://tests/prototypes/p3_1_r12_cxr_r6_d0_campaign.gd"
+  ],
+  "env": {
+    "R12CXR_R6_D0_OUTPUT": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r6_20261101_c389e23\\evidence\\r6-d0-result.json",
+    "R12CXR_R6_D0_SOURCE_SHA": "7c4444315e739859c21d1eecb786b649e9b93352",
+    "R12CXR_R6_D0_MODE": "diagnose"
+  },
+  "working_directory": "C:\\Dev\\sandbox-sim-dev\\game",
+  "source_sha": "7c4444315e739859c21d1eecb786b649e9b93352",
+  "parent_sha": "a9d1f50a59c36f46ad453d34b4450baf8176ee93",
+  "engine_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "stdout_sha256": "4ba3f66cf26b38e7c33b24fa405a4709c9e1e0794a587f690993c747418c5eba",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 581,
+  "stderr_bytes": 0,
+  "stdout": "Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org\r\n\r\nR12CXR_R6_D0_COMPLETE {\"cavity_area\":0.0000118685684531578,\"markers\":[\"SEED_ONLY_GEOMETRY_OWNER_DOMAIN_INCOMPATIBLE\",\"DIRECT_ARC_GEOMETRY_REALIZATION_BLOCKED_BY_CUTOFF\",\"GEOMETRICALLY_UNREALIZABLE_BOUNDARY_EDGES\"],\"output_sha256\":\"ce7ea18d2fce3e2fda09299639c98e2d20f61f916beaa8602c6613ef32b96189\",\"residual_over_epsilon\":0,\"source_sha\":\"7c4444315e739859c21d1eecb786b649e9b93352\",\"target_attempt_consumed\":false,\"unrealizable_boundary_edges\":[\"1-2\",\"2-3\",\"3-4\",\"4-5\",\"0-5\"],\"zero_vertex_occurrences\":1666}\r\n",
+  "stderr": null,
+  "result_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r6_20261101_c389e23\\evidence\\r6-d0-result.json",
+  "result_sha256": "ce7ea18d2fce3e2fda09299639c98e2d20f61f916beaa8602c6613ef32b96189",
+  "result_bytes": 2374713,
+  "resource_samples": [
+    {
+      "timestamp_utc": "2026-11-01T20:12:20.4542963Z",
+      "free_commit_bytes": 7274012672,
+      "available_physical_mb": 30331,
+      "godot_working_set_bytes": 6447104
+    },
+    {
+      "timestamp_utc": "2026-11-01T20:12:21.7923654Z",
+      "free_commit_bytes": 7150915584,
+      "available_physical_mb": 30222,
+      "godot_working_set_bytes": 6447104
+    },
+    {
+      "timestamp_utc": "2026-11-01T20:12:23.0820779Z",
+      "free_commit_bytes": 7214256128,
+      "available_physical_mb": 30310,
+      "godot_working_set_bytes": 0
+    }
+  ],
+  "target_attempts_consumed": 0
+}

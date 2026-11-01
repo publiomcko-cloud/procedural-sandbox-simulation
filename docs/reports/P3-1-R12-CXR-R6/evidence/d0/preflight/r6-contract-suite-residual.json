@@ -1,0 +1,27 @@
+{
+  "name": "r6-contract-suite-residual",
+  "started_utc": "2026-11-01T20:13:21.3896846Z",
+  "completed_utc": "2026-11-01T20:13:22.4785897Z",
+  "pid": 47372,
+  "exit_code": 0,
+  "arguments": [
+    "--headless",
+    "--path",
+    ".",
+    "--script",
+    "res://tests/prototypes/p3_1_r12_cxr_r6_contract_tests.gd"
+  ],
+  "env": {},
+  "working_directory": "C:\\Dev\\sandbox-sim-dev\\game",
+  "source_sha": "b09c3b552246aa49cc27189b3756981683a067aa",
+  "parent_sha": "7c4444315e739859c21d1eecb786b649e9b93352",
+  "engine_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "stdout_sha256": "26c952db8f3a96ac7f9b66e7b39aee184ecd34dccb3276d08919b0a11e55a341",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 121,
+  "stderr_bytes": 0,
+  "stdout": "Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org\r\n\r\nR12CXR_R6_CONTRACTS assertions=23 failures=0\r\n",
+  "stderr": null,
+  "free_commit_before": 7180410880,
+  "free_commit_after": 7209598976
+}

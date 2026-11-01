@@ -2,6 +2,10 @@
 
 - [R5-4 synthesis result](2026-11-01-P3-1-R12-CXR-R5-ATTEMPT-04-SYNTHESIS-RESULT.md) — one valid frozen target run returned PARTIAL with 2,416 finite critical candidates and zero retained supports; D3/downstream skipped; no continuum-exhaustion or structural-incompatibility claim.
 
+## 2026-11-01 — P3.1 R12-CXR R6 D0 blocker
+
+- [R6 D0 blocker](2026-11-01-P3-1-R12-CXR-R6-D0-BLOCKER.md) — Issue #218 authorized the R6 experiment; corrected D0 confirms 570/1,666 binary32 zero-set residual failures, zero-area seed-owner overlap, and five frozen-cavity boundary edges below the unchanged cutoff; zero target attempts consumed; no global infeasibility claim.
+
 ## 2026-11-01 — P3.1 R12-CXR R5-4 execution ID transcription correction
 
 - [R5-4 execution ID correction](2026-11-01-P3-1-R12-CXR-R5-ATTEMPT-04-EXECUTION-ID-CORRECTION.md) — direct source extraction found a missing `8` in the preceding checkpoint transcription; corrected ID is frozen before launch; target remains NOT_STARTED.

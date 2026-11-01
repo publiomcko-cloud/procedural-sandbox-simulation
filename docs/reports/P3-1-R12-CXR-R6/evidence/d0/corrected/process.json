@@ -1,0 +1,54 @@
+{
+  "name": "r6-d0-diagnostic-corrected",
+  "started_utc": "2026-11-01T20:13:30.2782869Z",
+  "completed_utc": "2026-11-01T20:13:34.2892670Z",
+  "pid": 42808,
+  "process_still_running": false,
+  "exit_code": 0,
+  "arguments": [
+    "--headless",
+    "--path",
+    ".",
+    "--script",
+    "res://tests/prototypes/p3_1_r12_cxr_r6_d0_campaign.gd"
+  ],
+  "env": {
+    "R12CXR_R6_D0_SOURCE_SHA": "b09c3b552246aa49cc27189b3756981683a067aa",
+    "R12CXR_R6_D0_OUTPUT": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r6_20261101_c389e23\\evidence\\r6-d0-result-corrected.json",
+    "R12CXR_R6_D0_MODE": "diagnose"
+  },
+  "working_directory": "C:\\Dev\\sandbox-sim-dev\\game",
+  "source_sha": "b09c3b552246aa49cc27189b3756981683a067aa",
+  "parent_sha": "7c4444315e739859c21d1eecb786b649e9b93352",
+  "engine_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "stdout_sha256": "f7f647a1693fd89b44381bf3bcbf9222ae3ee4b4624f3018cb296d7a92588dea",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 637,
+  "stderr_bytes": 0,
+  "stdout": "Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org\r\n\r\nR12CXR_R6_D0_COMPLETE {\"cavity_area\":0.0000118685684531578,\"markers\":[\"ZERO_SET_BINARY32_REPRESENTATION_MISMATCH_CONFIRMED\",\"SEED_ONLY_GEOMETRY_OWNER_DOMAIN_INCOMPATIBLE\",\"DIRECT_ARC_GEOMETRY_REALIZATION_BLOCKED_BY_CUTOFF\",\"GEOMETRICALLY_UNREALIZABLE_BOUNDARY_EDGES\"],\"output_sha256\":\"a9c2d7e5ba96437f7f470e278141d53e98194ab6720a3591e5b9fe67d66a691e\",\"residual_over_epsilon\":570,\"source_sha\":\"b09c3b552246aa49cc27189b3756981683a067aa\",\"target_attempt_consumed\":false,\"unrealizable_boundary_edges\":[\"1-2\",\"2-3\",\"3-4\",\"4-5\",\"0-5\"],\"zero_vertex_occurrences\":1666}\r\n",
+  "stderr": null,
+  "result_path": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r6_20261101_c389e23\\evidence\\r6-d0-result-corrected.json",
+  "result_sha256": "a9c2d7e5ba96437f7f470e278141d53e98194ab6720a3591e5b9fe67d66a691e",
+  "result_bytes": 2487941,
+  "resource_samples": [
+    {
+      "timestamp_utc": "2026-11-01T20:13:30.5960405Z",
+      "free_commit_bytes": 7198584832,
+      "available_physical_mb": 30268,
+      "godot_working_set_bytes": 6426624
+    },
+    {
+      "timestamp_utc": "2026-11-01T20:13:31.9380379Z",
+      "free_commit_bytes": 7164620800,
+      "available_physical_mb": 30224,
+      "godot_working_set_bytes": 6426624
+    },
+    {
+      "timestamp_utc": "2026-11-01T20:13:33.2492544Z",
+      "free_commit_bytes": 7268057088,
+      "available_physical_mb": 30352,
+      "godot_working_set_bytes": 0
+    }
+  ],
+  "target_attempts_consumed": 0
+}

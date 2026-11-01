@@ -1,0 +1,29 @@
+{
+  "name": "r6-campaign-check-residual",
+  "started_utc": "2026-11-01T20:13:17.5752745Z",
+  "completed_utc": "2026-11-01T20:13:19.6919508Z",
+  "pid": 47844,
+  "exit_code": 0,
+  "arguments": [
+    "--headless",
+    "--path",
+    ".",
+    "--script",
+    "res://tests/prototypes/p3_1_r12_cxr_r6_d0_campaign.gd"
+  ],
+  "env": {
+    "R12CXR_R6_D0_MODE": "check-only"
+  },
+  "working_directory": "C:\\Dev\\sandbox-sim-dev\\game",
+  "source_sha": "b09c3b552246aa49cc27189b3756981683a067aa",
+  "parent_sha": "7c4444315e739859c21d1eecb786b649e9b93352",
+  "engine_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "stdout_sha256": "2baae2a91ca9688e59eb6683239ad44ba329ef5e5727ee8759fa878535da4a72",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 98,
+  "stderr_bytes": 0,
+  "stdout": "Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org\r\n\r\nR6_D0_CHECK_ONLY=PASS\r\n",
+  "stderr": null,
+  "free_commit_before": 7474978816,
+  "free_commit_after": 7279284224
+}

@@ -1,0 +1,1 @@
+R12CXR_R6_CONTRACTS assertions=21 failures=3 details=["clipping retains positive-area overlap","triangle barycentric values","strict interior witness admitted"]

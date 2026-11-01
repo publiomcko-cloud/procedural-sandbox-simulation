@@ -1,0 +1,28 @@
+{
+  "name": "cold-import-r6-residual",
+  "started_utc": "2026-11-01T20:13:09.7233701Z",
+  "completed_utc": "2026-11-01T20:13:17.2291841Z",
+  "pid": 1280,
+  "exit_code": 0,
+  "arguments": [
+    "--headless",
+    "--editor",
+    "--path",
+    ".",
+    "--import",
+    "--quit"
+  ],
+  "env": {},
+  "working_directory": "C:\\Dev\\sandbox-sim-dev\\game",
+  "source_sha": "b09c3b552246aa49cc27189b3756981683a067aa",
+  "parent_sha": "7c4444315e739859c21d1eecb786b649e9b93352",
+  "engine_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "stdout_sha256": "cea9877c9fc6a6183f0f73d2cc562539b5098ed584ebde0b46a7d9b9682052dd",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 1719,
+  "stderr_bytes": 0,
+  "stdout": "Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org\r\n\r\n[   0% ] \u001b[90m\u001b[1mfirst_scan_filesystem\u001b[22m | Started Inicialização do Projeto (5 steps)\u001b[39m\u001b[0m\r\n[   0% ] \u001b[90m\u001b[1mfirst_scan_filesystem\u001b[22m | Escaneando estrutura de arquivos...\u001b[39m\u001b[0m\r\n[  16% ] \u001b[90m\u001b[1mfirst_scan_filesystem\u001b[22m | Carregando nomes de classe globais...\u001b[39m\u001b[0m\r\n[  33% ] \u001b[90m\u001b[1mfirst_scan_filesystem\u001b[22m | Verificando GDExtensions...\u001b[39m\u001b[0m\r\n[  50% ] \u001b[90m\u001b[1mfirst_scan_filesystem\u001b[22m | Criando scripts autoload...\u001b[39m\u001b[0m\r\n[  66% ] \u001b[90m\u001b[1mfirst_scan_filesystem\u001b[22m | Inicializando plugins...\u001b[39m\u001b[0m\r\n[  83% ] \u001b[90m\u001b[1mfirst_scan_filesystem\u001b[22m | Iniciando escaneamento de arquivos...\u001b[39m\u001b[0m\r\n\u001b[92m[ DONE ]\u001b[39m \u001b[1mfirst_scan_filesystem\u001b[22m\r\n\u001b[0m\r\n[   0% ] \u001b[90m\u001b[1mupdate_scripts_classes\u001b[22m | Started Registrando classes globais... (2 steps)\u001b[39m\u001b[0m\r\n[   0% ] \u001b[90m\u001b[1mupdate_scripts_classes\u001b[22m | \u001b[39m\u001b[0m\r\n[  33% ] \u001b[90m\u001b[1mupdate_scripts_classes\u001b[22m | \u001b[39m\u001b[0m\r\n\u001b[92m[ DONE ]\u001b[39m \u001b[1mupdate_scripts_classes\u001b[22m\r\n\u001b[0m\r\n[   0% ] \u001b[90m\u001b[1mloading_editor_layout\u001b[22m | Started Carregando editor (5 steps)\u001b[39m\u001b[0m\r\n[   0% ] \u001b[90m\u001b[1mloading_editor_layout\u001b[22m | Carregando layout do editor...\u001b[39m\u001b[0m\r\n[  16% ] \u001b[90m\u001b[1mloading_editor_layout\u001b[22m | Carregando abas...\u001b[39m\u001b[0m\r\n[  33% ] \u001b[90m\u001b[1mloading_editor_layout\u001b[22m | Reabrindo cenas...\u001b[39m\u001b[0m\r\n[  50% ] \u001b[90m\u001b[1mloading_editor_layout\u001b[22m | Carregando layout do editor central...\u001b[39m\u001b[0m\r\n[  66% ] \u001b[90m\u001b[1mloading_editor_layout\u001b[22m | Carregando layout da janela de plugins...\u001b[39m\u001b[0m\r\n[  83% ] \u001b[90m\u001b[1mloading_editor_layout\u001b[22m | Layout do editor pronto.\u001b[39m\u001b[0m\r\n\u001b[92m[ DONE ]\u001b[39m \u001b[1mloading_editor_layout\u001b[22m\r\n\u001b[0m\r\n",
+  "stderr": null,
+  "free_commit_before": 7275134976,
+  "free_commit_after": 7395950592
+}

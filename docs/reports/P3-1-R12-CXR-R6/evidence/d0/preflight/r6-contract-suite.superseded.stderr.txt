@@ -1,0 +1,6 @@
+SCRIPT ERROR: Invalid type in function '_triangle_barycentric (via call)' in base 'RefCounted (p3_1_r12_cxr_r6_diagnostics.gd)'. The array of argument 3 (Array) does not have the same element type as the expected typed array argument.
+   at: _test_cross_squared_and_barycentric (res://tests/prototypes/p3_1_r12_cxr_r6_contract_tests.gd:57)
+   GDScript backtrace (most recent call first):
+       [0] _test_cross_squared_and_barycentric (res://tests/prototypes/p3_1_r12_cxr_r6_contract_tests.gd:57)
+       [1] _run (res://tests/prototypes/p3_1_r12_cxr_r6_contract_tests.gd:19)
+R12CXR_R6_CONTRACTS assertions=15 failures=2 details=["clipping retains positive-area overlap","convex clipping is orientation stable"]
