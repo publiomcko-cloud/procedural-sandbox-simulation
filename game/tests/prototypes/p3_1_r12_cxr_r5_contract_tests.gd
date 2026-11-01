@@ -2,6 +2,7 @@ extends SceneTree
 
 const Synthesizer := preload("res://tests/prototypes/p3_1_r12_cxr_r5_support_synthesizer.gd")
 const Realizer := preload("res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd")
+const Core := preload("res://tests/prototypes/p3_1_r9_2_diagnostic_base.gd")
 
 var assertions: int = 0
 var failures: Array[String] = []
@@ -247,6 +248,13 @@ func _test_residual_owner_normalization(synth: RefCounted) -> void:
 	var normalized_row: Dictionary = {"triangle_id": "NORMALIZED_OWNER", "points": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP]}
 	_expect(bool(synth.call("_source_origins", [normalized_row]).get("valid", false)), "normalized_point_owner_shape_remains_supported")
 	_expect(not bool(synth.call("_source_origins", [frozen_row, frozen_row.duplicate(true)]).get("valid", false)), "duplicate_residual_owner_identity_fails_closed")
+	var frozen_bytes: PackedByteArray = FileAccess.get_file_as_bytes("res://tests/prototypes/fixtures/r12_cxr_r4/residual-c6.json")
+	_expect(Core.sha256(frozen_bytes) == "ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23", "actual_r4_residual_fixture_remains_pinned")
+	var frozen_value: Variant = JSON.parse_string(frozen_bytes.get_string_from_utf8())
+	var frozen_rows: Array = frozen_value.get("residuals", []) if typeof(frozen_value) == TYPE_DICTIONARY else []
+	var frozen_result: Dictionary = synth.call("_source_origins", frozen_rows)
+	_expect(bool(frozen_result.get("valid", false)), "actual_r4_residual_rows_normalize")
+	_expect(frozen_result.get("origins", []).size() == frozen_rows.size(), "every_actual_r4_owner_row_is_retained")
 
 func _expect(condition: bool, name: String) -> void:
 	assertions += 1
