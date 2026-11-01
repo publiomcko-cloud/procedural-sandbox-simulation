@@ -107,7 +107,9 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 				cap_reason = "R5_MAX_ZERO_FACETS"
 				break
 			zero_facets += 1
-			var world_triangle: Array[Vector3] = facets[facet_index]
+			var world_triangle: Array[Vector3] = _validated_facet_triangle(facets[facet_index])
+			if world_triangle.size() != 3:
+				return {"valid": false, "reason": "zero_facet_geometry_invalid", "cell": cell, "tet_index": tet_index, "facet_index": facet_index}
 			var source_triangle_2d: Array[Vector2] = []
 			for world_point in world_triangle: source_triangle_2d.append(_project(world_point, context))
 			if _signed_area(source_triangle_2d) == 0.0:
@@ -455,6 +457,22 @@ func _triangulate_zero_polygon(points: Array[Vector3]) -> Array[Array]:
 	var result: Array[Array] = []
 	for i in range(1, points.size() - 1): result.append([points[0], points[i], points[i + 1]])
 	return result
+
+func _validated_facet_triangle(facet_value: Variant) -> Array[Vector3]:
+	var vertices: Array[Vector3] = []
+	if typeof(facet_value) != TYPE_ARRAY:
+		return vertices
+	var raw_vertices: Array = facet_value
+	if raw_vertices.size() != 3:
+		return vertices
+	for raw_point in raw_vertices:
+		if typeof(raw_point) != TYPE_VECTOR3:
+			return []
+		var point: Vector3 = raw_point
+		if not point.is_finite():
+			return []
+		vertices.append(point)
+	return vertices
 
 func _interior_witnesses(clipped: Array[Vector2], domain: Array[Vector2]) -> Array[Vector2]:
 	var result: Array[Vector2] = []

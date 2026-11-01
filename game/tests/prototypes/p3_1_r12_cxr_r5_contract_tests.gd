@@ -15,6 +15,7 @@ func _run() -> void:
 	_test_convex_clipping(synth)
 	_test_projection_mapping(synth)
 	_test_zero_primitive_ordering(synth)
+	_test_validated_facet_triangle(synth)
 	_test_zero_volume_classification(synth)
 	_test_field_zero_edge_intersections()
 	_test_constraint_intervals_and_cross_objective(synth)
@@ -76,6 +77,17 @@ func _test_zero_primitive_ordering(synth: RefCounted) -> void:
 	var line_input: Array[Vector3] = [Vector3.ZERO, Vector3.RIGHT]
 	var line_result: Array[Vector3] = synth.call("_order_zero_polygon", line_input)
 	_expect(line_result.is_empty(), "lower_dimensional_zero_primitive_rejected")
+
+func _test_validated_facet_triangle(synth: RefCounted) -> void:
+	var raw_triangle: Array = [Vector3.ZERO, Vector3.RIGHT, Vector3.UP]
+	var typed_triangle: Array[Vector3] = synth.call("_validated_facet_triangle", raw_triangle)
+	_expect(typed_triangle.size() == 3 and typed_triangle == raw_triangle, "untyped_facet_array_converts_to_typed_triangle")
+	var wrong_arity: Array[Vector3] = synth.call("_validated_facet_triangle", [Vector3.ZERO, Vector3.RIGHT])
+	_expect(wrong_arity.is_empty(), "facet_with_wrong_arity_rejected")
+	var wrong_type: Array[Vector3] = synth.call("_validated_facet_triangle", [Vector3.ZERO, "not-a-vector", Vector3.UP])
+	_expect(wrong_type.is_empty(), "facet_with_non_vector_rejected")
+	var nonfinite_point: Array[Vector3] = synth.call("_validated_facet_triangle", [Vector3.ZERO, Vector3(NAN, 0.0, 0.0), Vector3.UP])
+	_expect(nonfinite_point.is_empty(), "facet_with_nonfinite_vertex_rejected")
 
 func _test_zero_volume_classification(synth: RefCounted) -> void:
 	_expect(bool(synth.call("_all_samples_zero", [0.0, 0.0, 0.0, 0.0])), "all_zero_tetra_is_not_a_surface_facet")
