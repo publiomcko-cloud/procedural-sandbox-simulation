@@ -729,6 +729,8 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 		patch_selection_node_total += int(patch_selection.get("search_nodes", 0))
 		report["patch_selection_nodes"] = patch_selection_node_total
 		level_report["patch_selection"] = {"policy": "minimum_cardinality_connected_subsets_with_manifold_boundary_and_r2_domain_preflight_within_original_defect_group_radius_neighborhood", "radius": level, "max_radius": CXR_R3_MAX_CAVITY_LEVEL, "max_patch_triangles": CXR_MAX_PATCH_TRIANGLES, "search_nodes": patch_selection.get("search_nodes", 0), "candidate_subsets_examined": patch_selection.get("candidate_subsets_examined", 0), "rejection_counts": patch_selection.get("rejection_counts", {}), "context_rejection_count": patch_selection.get("context_rejection_count", 0), "context_rejections": patch_selection.get("context_rejections", []), "selected_patch_triangle_ids": patch_selection.get("patch_triangle_ids", []), "context_preflight_valid": patch_selection.get("context_preflight_valid", false), "neighborhood_triangle_ids": allowed_ids.duplicate(), "complete": patch_selection.get("complete", false), "limit_reason": patch_selection.get("limit_reason", "")}
+		level_report["patch_selection"]["offending_expansion_candidate_ids"] = patch_selection.get("offending_expansion_candidate_ids", [])
+		level_report["patch_selection"]["boundary_screen_policy"] = "compact_diagnostics_for_invalid_subsets_full_c6_incidence_diagnostics_for_valid_boundaries"
 		if not bool(patch_selection.get("complete", false)):
 			var selection_limit: String = String(patch_selection.get("limit_reason", "R3_PATCH_SELECTION_INCOMPLETE"))
 			level_report["patch_triangle_ids"] = "NOT_RUN_PATCH_SELECTION_LIMIT"
@@ -1052,19 +1054,24 @@ func _r3_unrun_seed_metrics(seed_ids: Array, status: String) -> Dictionary:
 	return result
 
 func _r3_patch_rows_for_ids(all_triangles: Array[Dictionary], patch_ids: Array, triangles_by_id: Dictionary = {}) -> Array[Dictionary]:
-	var selected: Dictionary = {}
-	for triangle_id_value in patch_ids:
-		selected[String(triangle_id_value)] = true
 	var rows: Array[Dictionary] = []
 	if not triangles_by_id.is_empty():
-		for triangle_id_value in selected.keys():
+		for triangle_id_value in patch_ids:
 			var triangle: Dictionary = triangles_by_id.get(String(triangle_id_value), {})
 			if not triangle.is_empty(): rows.append(triangle)
 	else:
+		var selected: Dictionary = {}
+		for triangle_id_value in patch_ids: selected[String(triangle_id_value)] = true
 		for triangle in all_triangles:
 			if selected.has(String(triangle.get("triangle_id", ""))):
 				rows.append(triangle)
-	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.get("triangle_id", "")) < String(b.get("triangle_id", "")))
+	var already_sorted: bool = true
+	for row_index in range(1, rows.size()):
+		if String(rows[row_index - 1].get("triangle_id", "")) > String(rows[row_index].get("triangle_id", "")):
+			already_sorted = false
+			break
+	if not already_sorted:
+		rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.get("triangle_id", "")) < String(b.get("triangle_id", "")))
 	return rows
 
 func _r3_build_boundary_index(all_triangles: Array[Dictionary]) -> Dictionary:
@@ -1149,37 +1156,42 @@ func _r3_select_boundary_patch(seed_ids: Array, allowed_ids: Array, all_triangle
 			if contains_all_seeds:
 				candidate_subsets_examined += 1
 				var patch: Array[Dictionary] = _r3_patch_rows_for_ids(all_triangles, subset, triangles_by_id)
-				var connectivity: Dictionary = _r3_patch_connectivity(patch)
-				var boundary: Dictionary = _r3_derive_remaining_boundary(all_triangles, subset, boundary_index)
-				boundary_for_expansion = boundary
-				if bool(connectivity.get("valid", false)) and bool(boundary.get("valid", false)):
-					if residual_triangles.is_empty():
-						return {"valid": true, "complete": true, "radius": radius, "patch_triangle_ids": subset.duplicate(), "patch_triangles": patch, "connectivity": connectivity, "boundary": boundary, "context_preflight_valid": false, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "states_generated": generated_nodes, "offending_expansion_candidate_ids": _sorted_keys(observed_offending_expansion_ids)}
-					# A manifold boundary can still be unusable by R2's planar domain.
-					# Reject only that candidate subset and continue bounded connected
-					# expansion; source/provenance defects remain fatal below.
-					var preflight: Dictionary = _r3_make_expanded_patch_context(patch, subset, residual_triangles, [], boundary, all_triangles, residual_fixture, radius, true)
-					if bool(preflight.get("valid", false)):
-						return {"valid": true, "complete": true, "radius": radius, "patch_triangle_ids": subset.duplicate(), "patch_triangles": patch, "connectivity": connectivity, "boundary": boundary, "context_preflight_valid": true, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "states_generated": generated_nodes, "offending_expansion_candidate_ids": _sorted_keys(observed_offending_expansion_ids)}
-					var preflight_reason: String = String(preflight.get("reason", "r3_context_preflight_invalid"))
-					if not _r3_context_failure_is_patch_domain_limited(preflight_reason):
-						return {"valid": false, "complete": false, "limit_reason": "r3_context_preflight_source_invalid:" + preflight_reason, "reason": preflight_reason, "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "states_generated": generated_nodes}
-					context_rejection_count += 1
-					_cxr_count(rejection_counts, preflight_reason)
-					if context_rejections.size() < 64:
-						var context_diagnostic: Dictionary = {"patch_triangle_ids": subset.duplicate(), "reason": preflight_reason}
-						if preflight.has("arc_diagnostics"):
-							var arc_diagnostic: Dictionary = preflight.get("arc_diagnostics", {})
-							for key in ["arc_id", "root_ids"]:
-								if arc_diagnostic.has(key): context_diagnostic[key] = arc_diagnostic[key]
-						context_rejections.append(context_diagnostic)
-					var context_limit: String = _cxr_time_limit_reason()
-					if context_limit.is_empty(): context_limit = _cxr_global_limit_reason()
-					if not context_limit.is_empty():
-						return {"valid": false, "complete": false, "limit_reason": context_limit, "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "states_generated": generated_nodes}
+				var boundary_screen: Dictionary = _r3_derive_remaining_boundary(all_triangles, subset, boundary_index, false)
+				boundary_for_expansion = boundary_screen
+				if bool(boundary_screen.get("valid", false)):
+					var boundary: Dictionary = _r3_derive_remaining_boundary(all_triangles, subset, boundary_index, true)
+					if not bool(boundary.get("valid", false)) or String(boundary.get("reason", "")) != String(boundary_screen.get("reason", "")) or boundary.get("directed_edges", []) != boundary_screen.get("directed_edges", []) or String(boundary.get("signature", "")) != String(boundary_screen.get("signature", "")):
+						return {"valid": false, "complete": false, "limit_reason": "r3_boundary_screen_full_diagnostic_mismatch", "reason": "r3_boundary_screen_full_diagnostic_mismatch", "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "states_generated": generated_nodes, "offending_expansion_candidate_ids": _sorted_keys(observed_offending_expansion_ids)}
+					var connectivity: Dictionary = _r3_patch_connectivity(patch)
+					if bool(connectivity.get("valid", false)):
+						if residual_triangles.is_empty():
+							return {"valid": true, "complete": true, "radius": radius, "patch_triangle_ids": subset.duplicate(), "patch_triangles": patch, "connectivity": connectivity, "boundary": boundary, "context_preflight_valid": false, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "states_generated": generated_nodes, "offending_expansion_candidate_ids": _sorted_keys(observed_offending_expansion_ids)}
+						# A manifold boundary can still be unusable by R2's planar domain.
+						# Reject only that candidate subset and continue bounded connected
+						# expansion; source/provenance defects remain fatal below.
+						var preflight: Dictionary = _r3_make_expanded_patch_context(patch, subset, residual_triangles, [], boundary, all_triangles, residual_fixture, radius, true)
+						if bool(preflight.get("valid", false)):
+							return {"valid": true, "complete": true, "radius": radius, "patch_triangle_ids": subset.duplicate(), "patch_triangles": patch, "connectivity": connectivity, "boundary": boundary, "context_preflight_valid": true, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "states_generated": generated_nodes, "offending_expansion_candidate_ids": _sorted_keys(observed_offending_expansion_ids)}
+						var preflight_reason: String = String(preflight.get("reason", "r3_context_preflight_invalid"))
+						if not _r3_context_failure_is_patch_domain_limited(preflight_reason):
+							return {"valid": false, "complete": false, "limit_reason": "r3_context_preflight_source_invalid:" + preflight_reason, "reason": preflight_reason, "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "states_generated": generated_nodes}
+						context_rejection_count += 1
+						_cxr_count(rejection_counts, preflight_reason)
+						if context_rejections.size() < 64:
+							var context_diagnostic: Dictionary = {"patch_triangle_ids": subset.duplicate(), "reason": preflight_reason}
+							if preflight.has("arc_diagnostics"):
+								var arc_diagnostic: Dictionary = preflight.get("arc_diagnostics", {})
+								for key in ["arc_id", "root_ids"]:
+									if arc_diagnostic.has(key): context_diagnostic[key] = arc_diagnostic[key]
+							context_rejections.append(context_diagnostic)
+						var context_limit: String = _cxr_time_limit_reason()
+						if context_limit.is_empty(): context_limit = _cxr_global_limit_reason()
+						if not context_limit.is_empty():
+							return {"valid": false, "complete": false, "limit_reason": context_limit, "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "states_generated": generated_nodes}
+					else:
+						_cxr_count(rejection_counts, String(connectivity.get("reason", "r3_cavity_patch_disconnected")))
 				else:
-					var rejection_key: String = String(connectivity.get("reason", "")) if not bool(connectivity.get("valid", false)) else String(boundary.get("reason", "r3_cavity_boundary_invalid"))
-					_cxr_count(rejection_counts, rejection_key)
+					_cxr_count(rejection_counts, String(boundary_screen.get("reason", "r3_cavity_boundary_invalid")))
 			var subset_ids: Array[String] = []
 			for triangle_id_value in subset:
 				subset_ids.append(String(triangle_id_value))
@@ -1344,7 +1356,7 @@ func _r3_patch_connectivity(patch: Array[Dictionary]) -> Dictionary:
 		component_ids.append(ids)
 	return {"valid": components.size() == 1, "reason": "" if components.size() == 1 else "r3_cavity_patch_disconnected", "component_count": components.size(), "components": component_ids}
 
-func _r3_derive_remaining_boundary(all_triangles: Array[Dictionary], patch_ids: Array, prebuilt_index: Dictionary = {}) -> Dictionary:
+func _r3_derive_remaining_boundary(all_triangles: Array[Dictionary], patch_ids: Array, prebuilt_index: Dictionary = {}, include_full_diagnostics: bool = true) -> Dictionary:
 	if patch_ids.is_empty():
 		return {"valid": false, "reason": "r3_cavity_patch_empty"}
 	var patch_set: Dictionary = {}
@@ -1419,7 +1431,7 @@ func _r3_derive_remaining_boundary(all_triangles: Array[Dictionary], patch_ids: 
 		var removed_rows: Array = owners.removed
 		var remaining_rows: Array = owners.remaining
 		if removed_rows.is_empty(): continue
-		incidence_diagnostics.append({"edge_key": edge_key, "removed_incidence": removed_rows.size(), "remaining_incidence": remaining_rows.size(), "removed_rows": removed_rows.duplicate(true), "remaining_rows": remaining_rows.duplicate(true)})
+		incidence_diagnostics.append({"edge_key": edge_key, "removed_incidence": removed_rows.size(), "remaining_incidence": remaining_rows.size(), "removed_rows": removed_rows.duplicate(true) if include_full_diagnostics else removed_rows, "remaining_rows": remaining_rows.duplicate(true) if include_full_diagnostics else remaining_rows})
 		if remaining_rows.is_empty():
 			if removed_rows.size() == 1:
 				invalid.append({"reason": "r3_patch_open_edge_has_no_remaining_owner", "edge_key": edge_key, "removed_incidence": 1})
@@ -1435,7 +1447,7 @@ func _r3_derive_remaining_boundary(all_triangles: Array[Dictionary], patch_ids: 
 				if String(removed_row.a) == String(remaining_row.a) and String(removed_row.b) == String(remaining_row.b):
 					# The removed face is not an orientation authority. Preserve this
 					# mismatch only as evidence; the surviving C6 owner orients the patch.
-					removed_source_winding_mismatches.append({"edge_key": edge_key, "removed": removed_row.duplicate(true), "remaining": remaining_row.duplicate(true), "resolution": "boundary_oriented_from_surviving_C6_owner"})
+					if include_full_diagnostics: removed_source_winding_mismatches.append({"edge_key": edge_key, "removed": removed_row.duplicate(true), "remaining": remaining_row.duplicate(true), "resolution": "boundary_oriented_from_surviving_C6_owner"})
 			boundary_edges.append(String(remaining_row.b) + "->" + String(remaining_row.a))
 			continue
 		if remaining_rows.size() == 2:
@@ -1445,11 +1457,11 @@ func _r3_derive_remaining_boundary(all_triangles: Array[Dictionary], patch_ids: 
 				# A pair of oppositely directed surviving owners is already closed.
 				# It is not part of the replacement interface, even if the removed
 				# patch also contained one or more coincident source faces.
-				closed_remaining_edges.append({"edge_key": edge_key, "removed_incidence": removed_rows.size(), "remaining_rows": remaining_rows.duplicate(true), "resolution": "opposed_surviving_owners_form_closed_edge"})
+				closed_remaining_edges.append({"edge_key": edge_key, "removed_incidence": removed_rows.size(), "remaining_rows": remaining_rows.duplicate(true) if include_full_diagnostics else remaining_rows, "resolution": "opposed_surviving_owners_form_closed_edge"})
 			else:
-				invalid.append({"reason": "r3_surviving_edge_winding_inconsistent", "edge_key": edge_key, "removed_incidence": removed_rows.size(), "remaining_rows": remaining_rows.duplicate(true)})
+				invalid.append({"reason": "r3_surviving_edge_winding_inconsistent", "edge_key": edge_key, "removed_incidence": removed_rows.size(), "remaining_rows": remaining_rows.duplicate(true) if include_full_diagnostics else remaining_rows})
 			continue
-		invalid.append({"reason": "r3_surviving_edge_nonmanifold", "edge_key": edge_key, "removed_incidence": removed_rows.size(), "remaining_incidence": remaining_rows.size(), "remaining_rows": remaining_rows.duplicate(true)})
+		invalid.append({"reason": "r3_surviving_edge_nonmanifold", "edge_key": edge_key, "removed_incidence": removed_rows.size(), "remaining_incidence": remaining_rows.size(), "remaining_rows": remaining_rows.duplicate(true) if include_full_diagnostics else remaining_rows})
 	boundary_edges.sort()
 	var boundary: Dictionary = {"valid": invalid.is_empty(), "directed_edges": boundary_edges.duplicate(), "boundary_edge_count": boundary_edges.size(), "incidence_diagnostics": incidence_diagnostics, "removed_source_winding_mismatches": removed_source_winding_mismatches, "closed_remaining_edges": closed_remaining_edges, "removed_only_internal_edges": removed_only_internal_edges, "internal_removed_nonmanifold_edges": internal_removed_nonmanifold, "missing_patch_triangle_ids": missing_patch_ids, "boundary_source": "remaining_C6_edge_incidence_after_cavity_patch_removal", "invalid_reasons": invalid}
 	if invalid.is_empty():
