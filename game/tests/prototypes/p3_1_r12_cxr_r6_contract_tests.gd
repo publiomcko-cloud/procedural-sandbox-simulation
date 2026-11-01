@@ -164,6 +164,7 @@ func _test_patch_boundary_upper_bound(diagnostics: RefCounted) -> void:
 		_expect(float(result.get("boundary_edges", [])[0].get("continuous_upper_bound_cross_squared", 0.0)) > 1.0e-12, "R6-D records the continuous cross-squared upper bound")
 	var repeated: Dictionary = diagnostics.call("analyze_patch_boundary", realizer, patch, ["A", "B", "C"], root_positions, projection, facets)
 	_expect(int(result.get("zero_facet_clip_evaluations", 0)) == 1 and int(repeated.get("zero_facet_clip_evaluations", -1)) == 0, "R6-D reuses facet clipping for repeated cavity faces")
+	_expect(int(result.get("face_edge_metric_evaluations", 0)) == 3 and int(repeated.get("face_edge_metric_cache_hits", 0)) == 3, "R6-D reuses edge metrics across repeated cavity states")
 	_expect(repeated.get("boundary_edges", []) == result.get("boundary_edges", []), "R6-D clipping cache preserves boundary audit results")
 
 func _expect(condition: bool, name: String) -> void:

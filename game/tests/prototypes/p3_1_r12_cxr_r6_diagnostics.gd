@@ -15,6 +15,7 @@ const REGION_SPECS: Array[Dictionary] = [
 ]
 
 var _r6_clipped_piece_cache: Dictionary = {}
+var _r6_face_edge_metric_cache: Dictionary = {}
 var _r6_active_facet_signature: String = ""
 
 func json_safe(value: Variant) -> Variant:
@@ -370,7 +371,7 @@ func analyze_patch_boundary(realizer: RefCounted, patch: Array[Dictionary], boun
 	if not origin.is_finite() or not axis_u.is_finite() or not axis_v.is_finite() or axis_u.length_squared() <= 1.0e-20 or axis_v.length_squared() <= 1.0e-20:
 		return {"valid": false, "reason": "r6_projection_basis_invalid"}
 	if _r6_active_facet_signature.is_empty(): _r6_active_facet_signature = _r6_facets_signature(facets)
-	var clipped_pieces: Array[Dictionary] = []; var cache_hits: int = 0; var clip_evaluations: int = 0
+	var patch_face_pieces: Dictionary = {}; var cache_hits: int = 0; var clip_evaluations: int = 0; var metric_cache_hits: int = 0; var metric_evaluations: int = 0
 	var projection_key: String = PackedFloat32Array([origin.x, origin.y, origin.z, axis_u.x, axis_u.y, axis_u.z, axis_v.x, axis_v.y, axis_v.z]).to_byte_array().hex_encode()
 	for patch_triangle in patch:
 		var patch_points: Array = patch_triangle.get("points", [])
@@ -379,7 +380,7 @@ func analyze_patch_boundary(realizer: RefCounted, patch: Array[Dictionary], boun
 		for point_value in patch_points: patch_projected.append(_project(Vector3(point_value), origin, axis_u, axis_v))
 		var face_clip_key: String = String(patch_triangle.get("triangle_id", "")) + "|" + projection_key + "|" + _r6_vector2_array_key(patch_projected) + "|" + _r6_active_facet_signature
 		if _r6_clipped_piece_cache.has(face_clip_key):
-			clipped_pieces.append_array(_r6_clipped_piece_cache[face_clip_key]); cache_hits += 1
+			patch_face_pieces[String(patch_triangle.get("triangle_id", ""))] = _r6_clipped_piece_cache[face_clip_key]; cache_hits += 1
 			continue
 		var face_pieces: Array[Dictionary] = []
 		for facet in facets:
@@ -389,28 +390,48 @@ func analyze_patch_boundary(realizer: RefCounted, patch: Array[Dictionary], boun
 			var clipped: Array[Vector3] = _clip_world_triangle_to_region([Vector3(facet_points[0]), Vector3(facet_points[1]), Vector3(facet_points[2])], patch_projected, origin, axis_u, axis_v)
 			if not clipped.is_empty(): face_pieces.append({"points": clipped, "facet": facet, "domain_triangle": patch_projected})
 		_r6_clipped_piece_cache[face_clip_key] = face_pieces
-		clipped_pieces.append_array(face_pieces)
+		patch_face_pieces[String(patch_triangle.get("triangle_id", ""))] = face_pieces
 	var boundary_rows: Array[Dictionary] = []; var minimum_margin: float = INF
 	for edge_index in range(boundary_cycle.size()):
 		var a_id: String = String(boundary_cycle[edge_index]); var b_id: String = String(boundary_cycle[(edge_index + 1) % boundary_cycle.size()])
 		if not root_positions.has(a_id) or not root_positions.has(b_id): return {"valid": false, "reason": "r6_boundary_root_position_missing", "edge": [a_id, b_id]}
-		var a: Vector3 = Vector3(root_positions[a_id]); var b: Vector3 = Vector3(root_positions[b_id]); var maximum: float = -INF; var maximum_point: Vector3 = Vector3.ZERO; var maximum_facet: Dictionary = {}; var maximum_piece: Array[Vector3] = []; var maximum_domain: Array[Vector2] = []; var piece_count: int = 0
-		for piece_row in clipped_pieces:
-			var clipped: Array = piece_row.get("points", []); var facet: Dictionary = piece_row.get("facet", {}); var domain_triangle: Array = piece_row.get("domain_triangle", [])
-			piece_count += 1
-			for point_value in clipped:
-				var point: Vector3 = Vector3(point_value)
-				var cross_squared: float = _cross_squared(a, b, point)
-				if cross_squared > maximum:
-					maximum = cross_squared; maximum_point = point; maximum_facet = facet; maximum_piece = clipped; maximum_domain = domain_triangle
-		var witness: Dictionary = _patch_edge_witness(realizer, a, b, maximum, maximum_point, maximum_piece, maximum_domain, maximum_facet, origin, axis_u, axis_v)
+		var a: Vector3 = Vector3(root_positions[a_id]); var b: Vector3 = Vector3(root_positions[b_id]); var maximum: float = -INF; var maximum_point: Vector3 = Vector3.ZERO; var maximum_facet: Dictionary = {}; var maximum_piece: Array[Vector3] = []; var maximum_domain: Array[Vector2] = []; var maximum_witness: Dictionary = {}; var piece_count: int = 0; var edge_id: String = String(realizer.call("_edge_key", a_id, b_id))
+		for patch_triangle in patch:
+			var face_id: String = String(patch_triangle.get("triangle_id", "")); var face_pieces: Array = patch_face_pieces.get(face_id, [])
+			var metric: Dictionary = _r6_face_edge_metric(realizer, edge_id, a, b, face_id, face_pieces, origin, axis_u, axis_v)
+			if bool(metric.get("cache_hit", false)): metric_cache_hits += 1
+			else: metric_evaluations += 1
+			piece_count += int(metric.get("piece_count", 0))
+			if float(metric.get("maximum", -INF)) > maximum:
+				maximum = float(metric.maximum); maximum_point = Vector3(metric.maximum_point); maximum_facet = metric.facet; maximum_piece = metric.piece; maximum_domain = metric.domain; maximum_witness = metric.witness
+		var witness: Dictionary = maximum_witness
 		var margin: float = maximum - CUTOFF_SQUARED if is_finite(maximum) else -INF
 		minimum_margin = minf(minimum_margin, margin)
 		boundary_rows.append({"edge_id": String(realizer.call("_edge_key", a_id, b_id)), "root_ids": [a_id, b_id], "continuous_upper_bound_cross_squared": maximum if is_finite(maximum) else "UNKNOWN_NOT_CAPTURED", "cutoff_margin": margin if is_finite(margin) else "UNKNOWN_NOT_CAPTURED", "strictly_above_frozen_cutoff": is_finite(maximum) and maximum > CUTOFF_SQUARED, "clipped_zero_facet_piece_count": piece_count, "feasible_incident_triangle_witness": witness, "geometrically_unrealizable_boundary_edge": not bool(witness.get("valid", false))})
 	var blocked: Array[String] = []
 	for row in boundary_rows:
 		if bool(row.geometrically_unrealizable_boundary_edge): blocked.append(String(row.edge_id))
-	return {"valid": true, "boundary_edges": boundary_rows, "geometrically_unrealizable_boundary_edges": blocked, "minimum_cutoff_margin": minimum_margin if is_finite(minimum_margin) else "UNKNOWN_NOT_CAPTURED", "boundary_edge_count": boundary_rows.size(), "clipped_piece_cache_hits": cache_hits, "zero_facet_clip_evaluations": clip_evaluations}
+	return {"valid": true, "boundary_edges": boundary_rows, "geometrically_unrealizable_boundary_edges": blocked, "minimum_cutoff_margin": minimum_margin if is_finite(minimum_margin) else "UNKNOWN_NOT_CAPTURED", "boundary_edge_count": boundary_rows.size(), "clipped_piece_cache_hits": cache_hits, "zero_facet_clip_evaluations": clip_evaluations, "face_edge_metric_cache_hits": metric_cache_hits, "face_edge_metric_evaluations": metric_evaluations}
+
+func _r6_face_edge_metric(realizer: RefCounted, edge_id: String, a: Vector3, b: Vector3, face_id: String, pieces: Array, origin: Vector3, axis_u: Vector3, axis_v: Vector3) -> Dictionary:
+	var edge_positions: String = _position_bytes_hex(a) + "|" + _position_bytes_hex(b)
+	var projection_key: String = PackedFloat32Array([origin.x, origin.y, origin.z, axis_u.x, axis_u.y, axis_u.z, axis_v.x, axis_v.y, axis_v.z]).to_byte_array().hex_encode()
+	var cache_key: String = face_id + "|" + edge_id + "|" + edge_positions + "|" + projection_key + "|" + _r6_active_facet_signature
+	if _r6_face_edge_metric_cache.has(cache_key):
+		var cached: Dictionary = _r6_face_edge_metric_cache[cache_key].duplicate()
+		cached["cache_hit"] = true
+		return cached
+	var maximum: float = -INF; var maximum_point: Vector3 = Vector3.ZERO; var maximum_facet: Dictionary = {}; var maximum_piece: Array[Vector3] = []; var maximum_domain: Array[Vector2] = []
+	for piece_row in pieces:
+		var clipped: Array = piece_row.get("points", []); var facet: Dictionary = piece_row.get("facet", {}); var domain_triangle: Array[Vector2] = piece_row.get("domain_triangle", [])
+		for point_value in clipped:
+			var point: Vector3 = Vector3(point_value); var cross_squared: float = _cross_squared(a, b, point)
+			if cross_squared > maximum:
+				maximum = cross_squared; maximum_point = point; maximum_facet = facet; maximum_piece = clipped; maximum_domain = domain_triangle
+	var witness: Dictionary = _patch_edge_witness(realizer, a, b, maximum, maximum_point, maximum_piece, maximum_domain, maximum_facet, origin, axis_u, axis_v)
+	var metric: Dictionary = {"maximum": maximum, "maximum_point": maximum_point, "facet": maximum_facet, "piece": maximum_piece, "domain": maximum_domain, "witness": witness, "piece_count": pieces.size(), "cache_hit": false}
+	_r6_face_edge_metric_cache[cache_key] = metric.duplicate()
+	return metric
 
 func _r6_facets_signature(facets: Array[Dictionary]) -> String:
 	var parts: Array[String] = []
@@ -509,6 +530,7 @@ func _edge_key_ids(a: String, b: String) -> String:
 
 func search_patch_cavities(realizer: RefCounted, all_triangles: Array[Dictionary], initial_face_ids: Array, root_positions: Dictionary, projection: Dictionary, facets: Array[Dictionary], limits: Dictionary = {}) -> Dictionary:
 	_r6_clipped_piece_cache.clear()
+	_r6_face_edge_metric_cache.clear()
 	_r6_active_facet_signature = _r6_facets_signature(facets)
 	var evaluate: Callable = func(face_ids: Array) -> Dictionary:
 		var patch: Array[Dictionary] = realizer.call("_r3_patch_rows_for_ids", all_triangles, face_ids)
