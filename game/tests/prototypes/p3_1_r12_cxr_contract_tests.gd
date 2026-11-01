@@ -482,8 +482,13 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	var all: Array[Dictionary] = [patch_triangle]
 	all.append_array(outside)
 	var derived: Dictionary = realizer.call("derive_remaining_boundary_for_test", all, ["r3-patch"])
+	var indexed_derived: Dictionary = realizer.call("derive_remaining_boundary_indexed_for_test", all, ["r3-patch"])
+	var patch_rows_full: Array[Dictionary] = realizer.call("_r3_patch_rows_for_ids", all, ["r3-patch"])
+	var patch_rows_indexed: Array[Dictionary] = realizer.call("_r3_patch_rows_for_ids_indexed_for_test", all, ["r3-patch"])
 	var direct: Dictionary = realizer.call("_boundary_state", [patch_triangle])
 	_check(bool(derived.get("valid", false)), "R3 derives a single closed cavity boundary from surviving C6 edge incidence")
+	_check(indexed_derived == derived, "R3 indexed edge incidence exactly matches the full-scan boundary oracle")
+	_check(patch_rows_indexed == patch_rows_full, "R3 indexed patch lookup preserves full-scan triangle identity and ordering")
 	_check(String(derived.get("boundary_source", "")) == "remaining_C6_edge_incidence_after_cavity_patch_removal" and derived.get("signature", "") == direct.get("signature", ""), "R3 replacement boundary orientation and signature match the remaining mesh interface")
 	_check(derived.get("incidence_diagnostics", []).size() == 3, "R3 records all three removed-to-remaining interface edge incidences")
 	var reversed_patch: Array[Dictionary] = all.duplicate(true)
@@ -500,7 +505,9 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	reversed_patch_face["points"] = reversed_patch_points
 	reversed_patch[0] = reversed_patch_face
 	var removed_face_mismatch: Dictionary = realizer.call("derive_remaining_boundary_for_test", reversed_patch, ["r3-patch"])
+	var indexed_removed_face_mismatch: Dictionary = realizer.call("derive_remaining_boundary_indexed_for_test", reversed_patch, ["r3-patch"])
 	_check(bool(removed_face_mismatch.get("valid", false)) and removed_face_mismatch.get("signature", "") == direct.get("signature", ""), "R3 derives replacement orientation from surviving owners when the removed face itself is reversed")
+	_check(indexed_removed_face_mismatch == removed_face_mismatch, "R3 indexed boundary preserves reversed removed-face diagnostics exactly")
 	_check(removed_face_mismatch.get("removed_source_winding_mismatches", []).size() == 3, "R3 preserves diagnostics for each removed-face winding mismatch without using removed winding as boundary authority")
 	var wrong_winding: Array[Dictionary] = all.duplicate(true)
 	var outside_face: Dictionary = wrong_winding[1]
@@ -516,16 +523,35 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	outside_face["points"] = outside_points
 	wrong_winding[1] = outside_face
 	var wrong: Dictionary = realizer.call("derive_remaining_boundary_for_test", wrong_winding, ["r3-patch"])
+	var indexed_wrong: Dictionary = realizer.call("derive_remaining_boundary_indexed_for_test", wrong_winding, ["r3-patch"])
 	_check(not bool(wrong.get("valid", true)) and String(wrong.get("reason", "")) == "boundary_cycle_degree_invalid", "R3 rejects inconsistent surviving-owner winding when it cannot form one oriented cavity boundary cycle")
+	_check(indexed_wrong == wrong, "R3 indexed boundary preserves invalid surviving-winding diagnostics exactly")
 	var open_source: Array[Dictionary] = [patch_triangle]
 	var open: Dictionary = realizer.call("derive_remaining_boundary_for_test", open_source, ["r3-patch"])
+	var indexed_open: Dictionary = realizer.call("derive_remaining_boundary_indexed_for_test", open_source, ["r3-patch"])
 	_check(not bool(open.get("valid", true)) and String(open.get("reason", "")) == "r3_patch_open_edge_has_no_remaining_owner", "R3 refuses to invent cavity boundary edges without a surviving C6 owner")
+	_check(indexed_open == open, "R3 indexed boundary preserves open-edge rejection exactly")
+	var missing_patch: Dictionary = realizer.call("derive_remaining_boundary_for_test", all, ["missing-patch"])
+	var indexed_missing_patch: Dictionary = realizer.call("derive_remaining_boundary_indexed_for_test", all, ["missing-patch"])
+	_check(indexed_missing_patch == missing_patch and String(indexed_missing_patch.get("reason", "")) == "r3_cavity_patch_triangles_missing", "R3 indexed boundary rejects absent patch identities with the full-scan diagnostic")
+	var duplicate_source: Array[Dictionary] = all.duplicate(true)
+	duplicate_source.append(all[0].duplicate(true))
+	var duplicate_full: Dictionary = realizer.call("derive_remaining_boundary_for_test", duplicate_source, ["r3-patch"])
+	var duplicate_indexed: Dictionary = realizer.call("derive_remaining_boundary_indexed_for_test", duplicate_source, ["r3-patch"])
+	_check(String(duplicate_indexed.get("reason", "")) == String(duplicate_full.get("reason", "")) and String(duplicate_indexed.get("reason", "")) == "r3_c6_triangle_identity_invalid", "R3 boundary index rejects duplicate C6 identities before using an index")
+	var malformed_source: Array[Dictionary] = [patch_triangle.duplicate(true)]
+	malformed_source[0]["root_ids"] = ["a", "b"]
+	var malformed_full: Dictionary = realizer.call("derive_remaining_boundary_for_test", malformed_source, ["r3-patch"])
+	var malformed_indexed: Dictionary = realizer.call("derive_remaining_boundary_indexed_for_test", malformed_source, ["r3-patch"])
+	_check(String(malformed_indexed.get("reason", "")) == String(malformed_full.get("reason", "")) and String(malformed_indexed.get("reason", "")) == "r3_c6_triangle_arity_invalid", "R3 boundary index rejects malformed C6 triangles consistently")
 	var disconnected: Array[Dictionary] = [patch_triangle, _triangle("r3-island", ["x", "y", "z"], {"x": Vector3(3,0,0), "y": Vector3(4,0,0), "z": Vector3(3,1,0)}, false)]
 	var connectivity: Dictionary = realizer.call("_r3_patch_connectivity", disconnected)
 	_check(not bool(connectivity.get("valid", true)) and int(connectivity.get("component_count", -1)) == 2, "R3 replacement requires one edge-connected per-cavity patch")
 	var all_tetra_ids: Array = ["r3-patch", "r3-out-ab", "r3-out-ac", "r3-out-bc"]
 	var full_union_boundary: Dictionary = realizer.call("derive_remaining_boundary_for_test", all, all_tetra_ids)
+	var indexed_full_union_boundary: Dictionary = realizer.call("derive_remaining_boundary_indexed_for_test", all, all_tetra_ids)
 	var tetra_adjacency: Dictionary = realizer.call("_adjacency", all)
+	_check(indexed_full_union_boundary == full_union_boundary, "R3 indexed boundary exactly matches full-scan output when the removed patch covers the complete fixture")
 	realizer.set("_cxr_active_phase", "r3")
 	realizer.set("_cxr_search_started_usec", Time.get_ticks_usec())
 	realizer.set("_cxr_cavity_started_usec", Time.get_ticks_usec())

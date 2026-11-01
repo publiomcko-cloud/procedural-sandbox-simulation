@@ -879,22 +879,54 @@ func _r3_unrun_seed_metrics(seed_ids: Array, status: String) -> Dictionary:
 		result[String(seed_id)] = status
 	return result
 
-func _r3_patch_rows_for_ids(all_triangles: Array[Dictionary], patch_ids: Array) -> Array[Dictionary]:
+func _r3_patch_rows_for_ids(all_triangles: Array[Dictionary], patch_ids: Array, triangles_by_id: Dictionary = {}) -> Array[Dictionary]:
 	var selected: Dictionary = {}
 	for triangle_id_value in patch_ids:
 		selected[String(triangle_id_value)] = true
 	var rows: Array[Dictionary] = []
-	for triangle in all_triangles:
-		if selected.has(String(triangle.get("triangle_id", ""))):
-			rows.append(triangle)
+	if not triangles_by_id.is_empty():
+		for triangle_id_value in selected.keys():
+			var triangle: Dictionary = triangles_by_id.get(String(triangle_id_value), {})
+			if not triangle.is_empty(): rows.append(triangle)
+	else:
+		for triangle in all_triangles:
+			if selected.has(String(triangle.get("triangle_id", ""))):
+				rows.append(triangle)
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.get("triangle_id", "")) < String(b.get("triangle_id", "")))
 	return rows
 
+func _r3_build_boundary_index(all_triangles: Array[Dictionary]) -> Dictionary:
+	var triangles_by_id: Dictionary = {}
+	var edge_rows_by_key: Dictionary = {}
+	for triangle in all_triangles:
+		var triangle_id: String = String(triangle.get("triangle_id", ""))
+		if triangle_id.is_empty() or triangles_by_id.has(triangle_id):
+			return {"valid": false, "reason": "r3_c6_triangle_identity_invalid", "triangle_id": triangle_id, "duplicate": triangles_by_id.has(triangle_id)}
+		var ids: Array = triangle.get("root_ids", [])
+		if ids.size() != 3:
+			return {"valid": false, "reason": "r3_c6_triangle_arity_invalid", "triangle_id": triangle_id}
+		triangles_by_id[triangle_id] = triangle
+		for edge_index in range(3):
+			var a_id: String = String(ids[edge_index])
+			var b_id: String = String(ids[(edge_index + 1) % 3])
+			if a_id.is_empty() or b_id.is_empty() or a_id == b_id:
+				return {"valid": false, "reason": "r3_c6_edge_identity_invalid", "triangle_id": triangle_id}
+			var edge_key: String = _edge_key(a_id, b_id)
+			if not edge_rows_by_key.has(edge_key): edge_rows_by_key[edge_key] = []
+			edge_rows_by_key[edge_key].append({"triangle_id": triangle_id, "a": a_id, "b": b_id})
+	return {"valid": true, "triangles_by_id": triangles_by_id, "edge_rows_by_key": edge_rows_by_key, "triangle_count": all_triangles.size()}
+
+func _r3_patch_rows_for_ids_indexed_for_test(all_triangles: Array[Dictionary], patch_ids: Array) -> Array[Dictionary]:
+	var index: Dictionary = _r3_build_boundary_index(all_triangles)
+	if not bool(index.get("valid", false)): return []
+	return _r3_patch_rows_for_ids(all_triangles, patch_ids, index.get("triangles_by_id", {}))
+
 func _r3_select_boundary_patch(seed_ids: Array, allowed_ids: Array, all_triangles: Array[Dictionary], adjacency: Dictionary, radius: int, residual_triangles: Array[Dictionary] = [], residual_fixture: Dictionary = {}) -> Dictionary:
 	var allowed: Dictionary = {}
-	var triangles_by_id: Dictionary = {}
-	for triangle in all_triangles:
-		triangles_by_id[String(triangle.get("triangle_id", ""))] = triangle
+	var boundary_index: Dictionary = _r3_build_boundary_index(all_triangles)
+	if not bool(boundary_index.get("valid", false)):
+		return {"valid": false, "complete": false, "reason": String(boundary_index.get("reason", "r3_c6_boundary_index_invalid")), "search_nodes": 0, "candidate_subsets_examined": 0, "rejection_counts": {}}
+	var triangles_by_id: Dictionary = boundary_index.get("triangles_by_id", {})
 	for triangle_id_value in allowed_ids:
 		allowed[String(triangle_id_value)] = true
 	var sorted_seeds: Array[String] = []
@@ -943,9 +975,9 @@ func _r3_select_boundary_patch(seed_ids: Array, allowed_ids: Array, all_triangle
 					break
 			if contains_all_seeds:
 				candidate_subsets_examined += 1
-				var patch: Array[Dictionary] = _r3_patch_rows_for_ids(all_triangles, subset)
+				var patch: Array[Dictionary] = _r3_patch_rows_for_ids(all_triangles, subset, triangles_by_id)
 				var connectivity: Dictionary = _r3_patch_connectivity(patch)
-				var boundary: Dictionary = _r3_derive_remaining_boundary(all_triangles, subset)
+				var boundary: Dictionary = _r3_derive_remaining_boundary(all_triangles, subset, boundary_index)
 				if bool(connectivity.get("valid", false)) and bool(boundary.get("valid", false)):
 					if residual_triangles.is_empty():
 						return {"valid": true, "complete": true, "radius": radius, "patch_triangle_ids": subset.duplicate(), "patch_triangles": patch, "connectivity": connectivity, "boundary": boundary, "context_preflight_valid": false, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "states_generated": generated_nodes}
@@ -1072,7 +1104,7 @@ func _r3_patch_connectivity(patch: Array[Dictionary]) -> Dictionary:
 		component_ids.append(ids)
 	return {"valid": components.size() == 1, "reason": "" if components.size() == 1 else "r3_cavity_patch_disconnected", "component_count": components.size(), "components": component_ids}
 
-func _r3_derive_remaining_boundary(all_triangles: Array[Dictionary], patch_ids: Array) -> Dictionary:
+func _r3_derive_remaining_boundary(all_triangles: Array[Dictionary], patch_ids: Array, prebuilt_index: Dictionary = {}) -> Dictionary:
 	if patch_ids.is_empty():
 		return {"valid": false, "reason": "r3_cavity_patch_empty"}
 	var patch_set: Dictionary = {}
@@ -1080,27 +1112,53 @@ func _r3_derive_remaining_boundary(all_triangles: Array[Dictionary], patch_ids: 
 	var edge_rows: Dictionary = {}
 	var missing_patch_ids: Array[String] = []
 	var found_patch_ids: Dictionary = {}
-	var seen_triangle_ids: Dictionary = {}
-	for triangle in all_triangles:
-		var triangle_id: String = String(triangle.get("triangle_id", ""))
-		if triangle_id.is_empty() or seen_triangle_ids.has(triangle_id):
-			return {"valid": false, "reason": "r3_c6_triangle_identity_invalid", "triangle_id": triangle_id, "duplicate": seen_triangle_ids.has(triangle_id)}
-		seen_triangle_ids[triangle_id] = true
-		var ids: Array = triangle.get("root_ids", [])
-		if ids.size() != 3:
-			return {"valid": false, "reason": "r3_c6_triangle_arity_invalid", "triangle_id": triangle_id}
-		var is_removed: bool = patch_set.has(triangle_id)
-		if is_removed: found_patch_ids[triangle_id] = true
-		for edge_index in range(3):
-			var a_id: String = String(ids[edge_index])
-			var b_id: String = String(ids[(edge_index + 1) % 3])
-			if a_id.is_empty() or b_id.is_empty() or a_id == b_id:
-				return {"valid": false, "reason": "r3_c6_edge_identity_invalid", "triangle_id": triangle_id}
-			var edge_key: String = _edge_key(a_id, b_id)
-			if not edge_rows.has(edge_key): edge_rows[edge_key] = {"removed": [], "remaining": []}
-			var row: Dictionary = {"triangle_id": triangle_id, "a": a_id, "b": b_id}
-			var owner: String = "removed" if is_removed else "remaining"
-			edge_rows[edge_key][owner].append(row)
+	if prebuilt_index.is_empty():
+		var seen_triangle_ids: Dictionary = {}
+		for triangle in all_triangles:
+			var triangle_id: String = String(triangle.get("triangle_id", ""))
+			if triangle_id.is_empty() or seen_triangle_ids.has(triangle_id):
+				return {"valid": false, "reason": "r3_c6_triangle_identity_invalid", "triangle_id": triangle_id, "duplicate": seen_triangle_ids.has(triangle_id)}
+			seen_triangle_ids[triangle_id] = true
+			var ids: Array = triangle.get("root_ids", [])
+			if ids.size() != 3:
+				return {"valid": false, "reason": "r3_c6_triangle_arity_invalid", "triangle_id": triangle_id}
+			var is_removed: bool = patch_set.has(triangle_id)
+			if is_removed: found_patch_ids[triangle_id] = true
+			for edge_index in range(3):
+				var a_id: String = String(ids[edge_index])
+				var b_id: String = String(ids[(edge_index + 1) % 3])
+				if a_id.is_empty() or b_id.is_empty() or a_id == b_id:
+					return {"valid": false, "reason": "r3_c6_edge_identity_invalid", "triangle_id": triangle_id}
+				var edge_key: String = _edge_key(a_id, b_id)
+				if not edge_rows.has(edge_key): edge_rows[edge_key] = {"removed": [], "remaining": []}
+				var row: Dictionary = {"triangle_id": triangle_id, "a": a_id, "b": b_id}
+				var owner: String = "removed" if is_removed else "remaining"
+				edge_rows[edge_key][owner].append(row)
+	else:
+		if not bool(prebuilt_index.get("valid", false)):
+			return {"valid": false, "reason": String(prebuilt_index.get("reason", "r3_c6_boundary_index_invalid"))}
+		var triangles_by_id: Dictionary = prebuilt_index.get("triangles_by_id", {})
+		var indexed_edges: Dictionary = prebuilt_index.get("edge_rows_by_key", {})
+		var affected_edges: Dictionary = {}
+		for triangle_id_value in patch_set.keys():
+			var triangle_id: String = String(triangle_id_value)
+			if not triangles_by_id.has(triangle_id):
+				continue
+			found_patch_ids[triangle_id] = true
+			var triangle: Dictionary = triangles_by_id[triangle_id]
+			var ids: Array = triangle.get("root_ids", [])
+			for edge_index in range(3):
+				affected_edges[_edge_key(String(ids[edge_index]), String(ids[(edge_index + 1) % 3]))] = true
+		var affected_keys: Array = affected_edges.keys()
+		affected_keys.sort()
+		for edge_key_value in affected_keys:
+			var edge_key: String = String(edge_key_value)
+			var owners: Dictionary = {"removed": [], "remaining": []}
+			for row_value in indexed_edges.get(edge_key, []):
+				var row: Dictionary = row_value
+				var owner: String = "removed" if patch_set.has(String(row.triangle_id)) else "remaining"
+				owners[owner].append(row)
+			edge_rows[edge_key] = owners
 	for triangle_id_value in patch_set.keys():
 		if not found_patch_ids.has(String(triangle_id_value)): missing_patch_ids.append(String(triangle_id_value))
 	missing_patch_ids.sort()
@@ -1172,6 +1230,11 @@ func _r3_derive_remaining_boundary(all_triangles: Array[Dictionary], patch_ids: 
 
 func derive_remaining_boundary_for_test(all_triangles: Array[Dictionary], patch_ids: Array) -> Dictionary:
 	return _r3_derive_remaining_boundary(all_triangles, patch_ids)
+
+func derive_remaining_boundary_indexed_for_test(all_triangles: Array[Dictionary], patch_ids: Array) -> Dictionary:
+	var index: Dictionary = _r3_build_boundary_index(all_triangles)
+	if not bool(index.get("valid", false)): return {"valid": false, "reason": String(index.get("reason", "r3_c6_boundary_index_invalid"))}
+	return _r3_derive_remaining_boundary(all_triangles, patch_ids, index)
 
 func _search_cxr_cavity_r2(cavity_ids: Array, all_triangles: Array[Dictionary], adjacency: Dictionary, residual_fixture: Dictionary, values: PackedFloat32Array, roi: Dictionary) -> Dictionary:
 	_cxr_cavity_started_usec = Time.get_ticks_usec()
