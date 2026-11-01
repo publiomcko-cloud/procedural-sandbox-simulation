@@ -1,3 +1,7 @@
+## 2026-11-01 — P3.1 R12-CXR R5-4 execution ID transcription correction
+
+- [R5-4 execution ID correction](2026-11-01-P3-1-R12-CXR-R5-ATTEMPT-04-EXECUTION-ID-CORRECTION.md) — direct source extraction found a missing `8` in the preceding checkpoint transcription; corrected ID is frozen before launch; target remains NOT_STARTED.
+
 ## 2026-11-01 — P3.1 R12-CXR R5-4 detached execution correction
 
 - [R5-4 execution checkout correction](2026-11-01-P3-1-R12-CXR-R5-ATTEMPT-04-EXECUTION-CHECKOUT-CORRECTION.md) — first executor precheck was rejected before launcher/Godot; exact source now uses a detached checkout, fresh gates pass 348/0 and 216/0, corrected one-shot dispatcher and ID are frozen; target remains NOT_STARTED.
