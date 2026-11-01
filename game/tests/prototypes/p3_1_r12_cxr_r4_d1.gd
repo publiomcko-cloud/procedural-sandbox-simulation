@@ -27,8 +27,12 @@ func _run() -> void:
 	var stage0_bytes: PackedByteArray = FileAccess.get_file_as_bytes("res://tests/prototypes/fixtures/r12_cxr_r4/stage0-topology.json")
 	var residual_bytes: PackedByteArray = FileAccess.get_file_as_bytes("res://tests/prototypes/fixtures/r12_cxr_r4/residual-c6.json")
 	var pool_bytes: PackedByteArray = FileAccess.get_file_as_bytes("res://tests/prototypes/fixtures/r12_cxr_r4/support-pool-attempt07.json")
+	var candidate_bytes: PackedByteArray = FileAccess.get_file_as_bytes("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd")
 	if Core.sha256(stage0_bytes) != Stage0Sha or Core.sha256(residual_bytes) != ResidualSha or Core.sha256(pool_bytes) != SupportPoolSha:
 		_fail("r4_d1_frozen_fixture_hash_mismatch", {"stage0": Core.sha256(stage0_bytes), "residual": Core.sha256(residual_bytes), "support_pool": Core.sha256(pool_bytes)})
+		return
+	if Core.sha256(candidate_bytes) != CandidateSha:
+		_fail("r4_d1_candidate_d_source_hash_mismatch", {"observed": Core.sha256(candidate_bytes), "expected": CandidateSha})
 		return
 	var stage0_value: Variant = JSON.parse_string(stage0_bytes.get_string_from_utf8())
 	var residual_value: Variant = JSON.parse_string(residual_bytes.get_string_from_utf8())
@@ -355,6 +359,7 @@ func _run() -> void:
 		"source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "scenario_id": TargetId,
 		"frozen_source_sha": String(support_fixture.get("original_source_sha", "")), "frozen_target_result_sha256": String(support_fixture.get("target_result_sha256", "")),
 		"stage0_sha256": Stage0Sha, "residual_fixture_sha256": ResidualSha, "support_pool_fixture_sha256": SupportPoolSha,
+		"candidate_d_source_sha256": Core.sha256(candidate_bytes),
 		"manifest_sha256": ManifestSha, "topology_sha256": TopologySha, "graph_fingerprint_sha256": GraphSha,
 		"volume_sha256": VolumeSha, "payload_sha256": PayloadSha, "revision": 2,
 		"c6_mesh_sha256": C6MeshSha, "cavity_id": String(support_fixture.get("cavity_id", "")),

@@ -111,6 +111,8 @@ func _test_t_junction_oracle() -> void:
 
 func _test_fixture_identity() -> void:
 	var realizer: RefCounted = Realizer.new()
+	var candidate_d_bytes: PackedByteArray = FileAccess.get_file_as_bytes("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd")
+	_check(Core.sha256(candidate_d_bytes) == "334db9e3e9dfe3aca4a590845ba6b792629d204c0f1d6a3fc8a3898e7cbb020a", "R4 pins the exact Candidate D implementation bytes used to reconstruct the frozen field")
 	var residual_bytes: PackedByteArray = FileAccess.get_file_as_bytes("res://tests/prototypes/p3_1_r12_cx_residual_fixture.json")
 	var residual_fixture: Variant = JSON.parse_string(residual_bytes.get_string_from_utf8())
 	_check(Core.sha256(residual_bytes) == Realizer.EXPECTED_RESIDUAL_FIXTURE_SHA and residual_fixture is Dictionary, "tracked residual fixture bytes match the immutable physical digest")
