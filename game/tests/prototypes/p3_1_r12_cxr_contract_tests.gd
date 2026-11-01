@@ -25,6 +25,7 @@ func _run() -> void:
 	_test_cxr_r1_level_and_cavity_continuation()
 	_test_cxr_r2_constrained_triangulation()
 	_test_cxr_r3_remaining_boundary_and_separate_cavities()
+	_test_cxr_r3_capped_pool_triangulation_and_valid_witness()
 	if failures.is_empty():
 		print("R12CXR_CONTRACT_TESTS_PASS " + JSON.stringify({"assertions": assertions, "failures": 0, "suite": "bounded_cxr_contract"}))
 		quit(0)
@@ -588,6 +589,7 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	var grouped: Array = realizer.call("_overlapping_defect_groups", residual_rows, adjacency)
 	var canonical_groups: Array = realizer.call("_canonicalize_defect_groups", grouped)
 	_check(canonical_groups.size() == 2 and canonical_groups[0] == ["residual-a", "residual-b"] and canonical_groups[1] == ["residual-c"], "R3 preserves two original overlap groups instead of merging all residual faces")
+
 	var reordered_rows: Array = [residual_rows[2], residual_rows[0], residual_rows[1]]
 	var reordered_groups: Array = realizer.call("_canonicalize_defect_groups", realizer.call("_overlapping_defect_groups", reordered_rows, adjacency))
 	_check(JSON.stringify(canonical_groups) == JSON.stringify(reordered_groups), "R3 per-cavity group ordering is stable under residual discovery order")
@@ -624,6 +626,29 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	_check(no_domain_reason == "cxr_r3_cavity_boundary_domain_invalid", "R3 distinguishes invalid per-cavity boundary domains from generic partial search")
 	var partial_target: Dictionary = {"reason": "cx_bounded_patch_search_failed", "detail": {"search": {"complete": false, "search_exhaustive": false, "reason": no_domain_reason}}}
 	_check(Campaign._target_search_partial(partial_target, {"cxr_local_search_complete": false}), "R3 invalid-domain result remains classified as PARTIAL by the campaign gate")
+
+func _test_cxr_r3_capped_pool_triangulation_and_valid_witness() -> void:
+	var realizer: RefCounted = Realizer.new()
+	var continue_with_pool: bool = not bool(realizer.call("_r3_generation_requires_partial_stop", false, true, 1))
+	_check(continue_with_pool, "R3 continues to constrained triangulation when generation is capped but a valid support pool is retained")
+	_check(bool(realizer.call("_r3_generation_requires_partial_stop", false, true, 0)), "R3 remains partial when a generation cap leaves no support candidate to triangulate")
+	_check(bool(realizer.call("_r3_generation_requires_partial_stop", true, true, 1)), "R3 fails closed on invalid source evidence even when earlier supports were retained")
+	var points: Dictionary = {"a": Vector3(0.0, 0.0, 0.0), "b": Vector3(1.0, 0.0, 0.0), "c": Vector3(1.0, 1.0, 0.0), "d": Vector3(0.0, 1.0, 0.0)}
+	var boundary: Array[Dictionary] = [_triangle("capped-owner-left", ["a", "b", "c"], points, false), _triangle("capped-owner-right", ["a", "c", "d"], points, false)]
+	for triangle in boundary:
+		triangle["polygon_id"] = "capped-owner"
+		triangle["source_polygon_ids"] = ["capped-owner"]
+	var support_position: Vector3 = Vector3(0.25, 0.2, 0.0)
+	var support: Dictionary = {"support_id": "retained-capped-support", "accepted": true, "supported": true, "frozen_field_interpolated_residual": 0.0, "world_position": support_position, "source_polygon_ids": ["capped-owner"], "binary32_position_identity": var_to_bytes(support_position).hex_encode()}
+	var support_rows: Array[Dictionary] = [support]
+	var triangulated: Dictionary = realizer.call("solve_r2_fixture_for_test", boundary, support_rows, 1, [])
+	_check(continue_with_pool and bool(triangulated.get("valid", false)) and int(triangulated.get("candidate_triangle_count", 0)) > 0, "R3 retained-pool regression exercises actual R2 candidate triangle generation and constrained triangulation")
+	var disposition: Dictionary = realizer.call("_r3_search_disposition", {"valid": true, "search_complete": true, "search_exhaustive": true}, false)
+	_check(bool(disposition.get("valid_geometry", false)) and not bool(disposition.get("complete", true)) and not bool(disposition.get("exhaustive", true)), "R3 distinguishes a concrete valid geometry witness from incomplete support enumeration")
+	var witness_geometry: Dictionary = {"geometry_complete": true, "topology_signature_match": true, "cxr_local_search_complete": false}
+	_check(not Campaign._target_search_partial({"valid": true, "reason": ""}, witness_geometry), "campaign accepts a topology-validated complete geometry witness despite non-exhaustive search")
+	_check(Campaign._target_search_partial({"valid": false, "reason": "cx_bounded_patch_search_failed"}, witness_geometry), "campaign keeps incomplete search partial when no valid geometry witness exists")
+
 func _sequence_probe_local_failure(cavity_ids: Array) -> Dictionary:
 	_sequence_probe_calls.append(cavity_ids.duplicate())
 	return {"valid": false, "search_started": true, "search_complete": true, "search_exhaustive": true, "terminal_reason": "synthetic_local_failure"}

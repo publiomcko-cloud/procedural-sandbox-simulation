@@ -265,6 +265,13 @@ func _run() -> void:
 static func _target_search_partial(target_case: Dictionary, geometry: Dictionary) -> bool:
 	var target_reason: String = String(target_case.get("reason", ""))
 	if target_reason.contains("time_limit") or target_reason.contains("limit_exceeded"): return true
+	# A bounded/incomplete candidate search does not invalidate a concrete geometry
+	# witness. The independent mesh/topology gates still decide whether that witness
+	# can qualify; this branch only prevents search exhaustiveness from vetoing it.
+	var observed_topology_match: Variant = geometry.get("topology_signature_match", null)
+	var observed_geometry_complete: Variant = geometry.get("geometry_complete", null)
+	if bool(target_case.get("valid", false)) and typeof(observed_topology_match) == TYPE_BOOL and bool(observed_topology_match) and typeof(observed_geometry_complete) == TYPE_BOOL and bool(observed_geometry_complete):
+		return false
 	if geometry.has("cxr_local_search_complete"):
 		var geometry_complete_value: Variant = geometry.get("cxr_local_search_complete")
 		if typeof(geometry_complete_value) != TYPE_BOOL or not bool(geometry_complete_value): return true

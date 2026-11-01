@@ -539,6 +539,7 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 		return _finish_cxr_cavity_search(report, {}, false, false, "r3_cavity_seed_identity_invalid")
 	var support_by_position: Dictionary = {}
 	var any_valid_boundary_search: bool = false
+	var support_generation_exhaustive: bool = true
 	var patch_selection_node_total: int = 0
 	for level in range(CXR_MAX_CAVITY_LEVEL + 1):
 		var patch_map: Dictionary = {}
@@ -622,14 +623,16 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 		var max_per_seed: int = maxi(1, int(floor(float(CXR_MAX_SUPPORT_CANDIDATES_PER_CAVITY) / float(seed_triangles.size()))))
 		var generation_failed: bool = false
 		var generation_reason: String = ""
+		var generation_limited: bool = false
+		var generation_limit_reasons: Array[String] = []
 		for seed_index in range(seed_triangles.size()):
 			var seed_triangle: Dictionary = seed_triangles[seed_index]
 			var seed_id: String = String(seed_triangle.get("triangle_id", ""))
 			var fixture_row: Dictionary = residual_by_id.get(seed_id, {})
 			var attempts_remaining: int = CXR_MAX_CANDIDATE_ATTEMPTS_PER_CAVITY - report.candidate_attempts.size()
 			if attempts_remaining <= 0:
-				generation_failed = true
-				generation_reason = "MAX_CANDIDATE_ATTEMPTS_PER_CAVITY"
+				generation_limited = true
+				generation_limit_reasons.append("MAX_CANDIDATE_ATTEMPTS_PER_CAVITY")
 				break
 			var candidate_data: Dictionary = _generate_field_candidates(seed_triangle, patch, values, roi, level, max_per_seed, mini(remaining_global_attempts, attempts_remaining), cavity_id, fixture_row)
 			var evidence_check: Dictionary = _validate_candidate_generation_evidence(candidate_data)
@@ -650,9 +653,9 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 			for candidate_value in candidate_data.get("candidate_pool", []):
 				report.support_candidates.append(candidate_value.duplicate(true))
 			report["support_candidate_count"] = report.support_candidates.size()
-			if not bool(candidate_data.get("source_valid", false)) or bool(candidate_data.get("limit_hit", false)):
+			if not bool(candidate_data.get("source_valid", false)):
 				generation_failed = true
-				generation_reason = String(candidate_data.get("source_failure_reason", "candidate_generation_limit")) if not bool(candidate_data.get("limit_hit", false)) else "candidate_generation_limit:" + ",".join(candidate_data.get("limits_hit", []))
+				generation_reason = String(candidate_data.get("source_failure_reason", "candidate_source_invalid"))
 				break
 			for candidate_value in candidate_data.get("candidate_pool", []):
 				var candidate: Dictionary = candidate_value
@@ -682,7 +685,15 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 			if generation_failed:
 				break
 			report["support_candidates_unique_count"] = support_by_position.size()
-		if generation_failed:
+			if bool(candidate_data.get("limit_hit", false)):
+				generation_limited = true
+				for limit_value in candidate_data.get("limits_hit", []):
+					var limit_reason: String = String(limit_value)
+					if not limit_reason.is_empty() and not generation_limit_reasons.has(limit_reason):
+						generation_limit_reasons.append(limit_reason)
+				break
+		var stop_for_generation: bool = _r3_generation_requires_partial_stop(generation_failed, generation_limited, support_by_position.size())
+		if stop_for_generation:
 			level_report.candidate_triangle_count = _cxr_candidate_triangles_total - candidate_triangles_before_level
 			report["candidate_triangle_count"] = int(report.get("candidate_triangle_count", 0)) + int(level_report.candidate_triangle_count)
 			level_report.candidate_count_by_residual = level_candidate_counts
@@ -690,21 +701,35 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 			level_report.candidate_pool_retained_count_by_residual = level_candidate_retained
 			_mark_unrun_cxr_residuals(level_report, seed_triangles, level_candidate_counts.size(), "NOT_RUN_GENERATION_FAILURE")
 			level_report.candidate_generation_usec = Time.get_ticks_usec() - generation_started
-			level_report.candidate_generation_status = "FAILED_SOURCE_OR_CANDIDATE_LIMIT"
-			level_report.search_status = "NOT_RUN_SOURCE_OR_CANDIDATE_LIMIT"
-			level_report.terminal_reason = generation_reason
+			level_report.candidate_generation_status = "FAILED_SOURCE_EVIDENCE" if generation_failed else "LIMIT_REACHED_EMPTY_SUPPORT_POOL"
+			level_report["candidate_generation_complete"] = false
+			level_report["candidate_generation_exhaustive"] = false
+			level_report["generation_limit_reasons"] = generation_limit_reasons.duplicate()
+			level_report.search_status = "NOT_RUN_SOURCE_FAILURE" if generation_failed else "NOT_RUN_LIMIT_WITHOUT_SUPPORTS"
+			level_report.terminal_reason = generation_reason if generation_failed else "candidate_generation_limit_without_valid_supports:" + ",".join(generation_limit_reasons)
 			report.levels.append(level_report)
-			if generation_reason.contains("MAX_") or generation_reason.contains("limit"):
+			var stop_reason: String = String(level_report.terminal_reason)
+			if generation_failed and not generation_reason.is_empty():
 				report.limits_hit.append(generation_reason)
-			_append_unrun_cxr_levels(report, level + 1, "NOT_RUN_CAVITY_LIMIT", generation_reason)
-			return _finish_cxr_cavity_search(report, {}, false, false, generation_reason)
+			else:
+				for limit_reason in generation_limit_reasons:
+					if not report.limits_hit.has(limit_reason): report.limits_hit.append(limit_reason)
+			_append_unrun_cxr_levels(report, level + 1, "NOT_RUN_CAVITY_LIMIT", stop_reason)
+			return _finish_cxr_cavity_search(report, {}, false, false, stop_reason)
 		level_report.candidate_count_by_residual = level_candidate_counts
 		level_report.candidate_unique_count_by_residual = level_candidate_unique
 		level_report.candidate_pool_retained_count_by_residual = level_candidate_retained
 		for seed_id_value in seed_ids:
 			level_report.candidate_fan_status_by_residual[String(seed_id_value)] = "NOT_RUN_R3_CAVITY_TRIANGULATION"
 		level_report.candidate_generation_usec = Time.get_ticks_usec() - generation_started
-		level_report.candidate_generation_status = "COMPLETE_R3_FROZEN_RESIDUAL_SUPPORT_SET"
+		level_report.candidate_generation_status = "LIMITED_POOL_RETAINED_FOR_TRIANGULATION" if generation_limited else "COMPLETE_R3_FROZEN_RESIDUAL_SUPPORT_SET"
+		level_report["candidate_generation_complete"] = not generation_limited
+		level_report["candidate_generation_exhaustive"] = not generation_limited
+		level_report["generation_limit_reasons"] = generation_limit_reasons.duplicate()
+		if generation_limited:
+			support_generation_exhaustive = false
+			for limit_reason in generation_limit_reasons:
+				if not report.limits_hit.has(limit_reason): report.limits_hit.append(limit_reason)
 		var support_ids: Array = support_by_position.keys()
 		support_ids.sort()
 		var support_rows: Array[Dictionary] = []
@@ -730,6 +755,7 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 		context["support_generation_usec"] = level_report.candidate_generation_usec
 		print("R12CXR_R3_CAVITY_SEARCH_BEGIN " + JSON.stringify({"attempt_id": OS.get_environment("R12CXR_ATTEMPT_ID"), "source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1", "cavity_id": cavity_id, "level": level, "cavity_seed_ids": seed_ids, "patch_triangle_count": patch.size(), "boundary_signature": boundary.get("signature", ""), "candidate_supports": support_rows.size(), "limits": _cxr_limits()}))
 		var search_result: Dictionary = _r2_search_level(context)
+		var search_disposition: Dictionary = _r3_search_disposition(search_result, support_generation_exhaustive)
 		level_report.candidate_triangle_count = _cxr_candidate_triangles_total - candidate_triangles_before_level
 		report["candidate_triangle_count"] = int(report.get("candidate_triangle_count", 0)) + int(level_report.candidate_triangle_count)
 		level_report.search_nodes = int(search_result.get("search_nodes", context.get("search_nodes", 0)))
@@ -758,7 +784,7 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 			report["branches"] = _cxr_active_cavity_branches.duplicate(true)
 			report["prunes"] = _cxr_active_cavity_prunes.duplicate(true)
 			report.retained_solutions.append_array(search_result.get("retained_solutions", []))
-			return _finish_cxr_cavity_search(report, best, bool(search_result.get("search_complete", false)), bool(search_result.get("search_exhaustive", false)), "minimum_valid_cavity_solution" if bool(search_result.get("search_complete", false)) else String(search_result.get("terminal_reason", "r3_search_partial")))
+			return _finish_cxr_cavity_search(report, best, bool(search_disposition.get("complete", false)), bool(search_disposition.get("exhaustive", false)), String(search_disposition.get("terminal_reason", "valid_geometry_from_non_exhaustive_support_pool")))
 		report.search_nodes = _cxr_search_nodes_cavity
 		report.branches = _cxr_active_cavity_branches
 		report.prunes = _cxr_active_cavity_prunes
@@ -772,7 +798,19 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 			return _finish_cxr_cavity_search(report, {}, false, false, String(search_result.get("terminal_reason", "r3_search_partial")))
 	if not any_valid_boundary_search:
 		return _finish_cxr_cavity_search(report, {}, false, false, "r3_no_valid_cavity_boundary_level", false)
+	if not support_generation_exhaustive:
+		return _finish_cxr_cavity_search(report, {}, false, false, "r3_no_solution_with_non_exhaustive_support_generation")
 	return _finish_cxr_cavity_search(report, {}, true, true, "r3_all_valid_cavity_levels_exhausted_no_solution")
+
+func _r3_generation_requires_partial_stop(source_failed: bool, generation_limited: bool, retained_support_count: int) -> bool:
+	return source_failed or (generation_limited and retained_support_count <= 0)
+
+func _r3_search_disposition(search_result: Dictionary, support_generation_exhaustive: bool) -> Dictionary:
+	var valid_geometry: bool = bool(search_result.get("valid", false))
+	var complete: bool = bool(search_result.get("search_complete", false)) and support_generation_exhaustive
+	var exhaustive: bool = bool(search_result.get("search_exhaustive", false)) and complete
+	var reason: String = "minimum_valid_cavity_solution" if complete else "valid_geometry_from_non_exhaustive_support_pool" if valid_geometry else String(search_result.get("terminal_reason", "r3_search_partial"))
+	return {"valid_geometry": valid_geometry, "complete": complete, "exhaustive": exhaustive, "terminal_reason": reason}
 
 func _r3_invalid_level_reason(connectivity: Dictionary, boundary: Dictionary) -> String:
 	if not bool(connectivity.get("valid", false)):
