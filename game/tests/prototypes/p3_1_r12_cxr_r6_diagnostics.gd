@@ -366,26 +366,30 @@ func analyze_patch_boundary(realizer: RefCounted, patch: Array[Dictionary], boun
 	var origin: Vector3 = _as_vector3(projection.get("origin", [])); var axis_u: Vector3 = _as_vector3(projection.get("axis_u", [])); var axis_v: Vector3 = _as_vector3(projection.get("axis_v", []))
 	if not origin.is_finite() or not axis_u.is_finite() or not axis_v.is_finite() or axis_u.length_squared() <= 1.0e-20 or axis_v.length_squared() <= 1.0e-20:
 		return {"valid": false, "reason": "r6_projection_basis_invalid"}
+	var clipped_pieces: Array[Dictionary] = []
+	for patch_triangle in patch:
+		var patch_points: Array = patch_triangle.get("points", [])
+		if patch_points.size() != 3: continue
+		var patch_projected: Array[Vector2] = []
+		for point_value in patch_points: patch_projected.append(_project(Vector3(point_value), origin, axis_u, axis_v))
+		for facet in facets:
+			var facet_points: Array = facet.get("points", [])
+			if facet_points.size() != 3: return {"valid": false, "reason": "r6_zero_facet_invalid"}
+			var clipped: Array[Vector3] = _clip_world_triangle_to_region([Vector3(facet_points[0]), Vector3(facet_points[1]), Vector3(facet_points[2])], patch_projected, origin, axis_u, axis_v)
+			if not clipped.is_empty(): clipped_pieces.append({"points": clipped, "facet": facet, "domain_triangle": patch_projected})
 	var boundary_rows: Array[Dictionary] = []; var minimum_margin: float = INF
 	for edge_index in range(boundary_cycle.size()):
 		var a_id: String = String(boundary_cycle[edge_index]); var b_id: String = String(boundary_cycle[(edge_index + 1) % boundary_cycle.size()])
 		if not root_positions.has(a_id) or not root_positions.has(b_id): return {"valid": false, "reason": "r6_boundary_root_position_missing", "edge": [a_id, b_id]}
 		var a: Vector3 = Vector3(root_positions[a_id]); var b: Vector3 = Vector3(root_positions[b_id]); var maximum: float = -INF; var maximum_point: Vector3 = Vector3.ZERO; var maximum_facet: Dictionary = {}; var maximum_piece: Array[Vector3] = []; var maximum_domain: Array[Vector2] = []; var piece_count: int = 0
-		for patch_triangle in patch:
-			var patch_points: Array = patch_triangle.get("points", [])
-			if patch_points.size() != 3: continue
-			var patch_projected: Array[Vector2] = []
-			for point_value in patch_points: patch_projected.append(_project(Vector3(point_value), origin, axis_u, axis_v))
-			for facet in facets:
-				var facet_points: Array = facet.get("points", [])
-				if facet_points.size() != 3: return {"valid": false, "reason": "r6_zero_facet_invalid"}
-				var clipped: Array[Vector3] = _clip_world_triangle_to_region([Vector3(facet_points[0]), Vector3(facet_points[1]), Vector3(facet_points[2])], patch_projected, origin, axis_u, axis_v)
-				if clipped.is_empty(): continue
-				piece_count += 1
-				for point in clipped:
-					var cross_squared: float = _cross_squared(a, b, point)
-					if cross_squared > maximum:
-						maximum = cross_squared; maximum_point = point; maximum_facet = facet; maximum_piece = clipped; maximum_domain = patch_projected
+		for piece_row in clipped_pieces:
+			var clipped: Array = piece_row.get("points", []); var facet: Dictionary = piece_row.get("facet", {}); var domain_triangle: Array = piece_row.get("domain_triangle", [])
+			piece_count += 1
+			for point_value in clipped:
+				var point: Vector3 = Vector3(point_value)
+				var cross_squared: float = _cross_squared(a, b, point)
+				if cross_squared > maximum:
+					maximum = cross_squared; maximum_point = point; maximum_facet = facet; maximum_piece = clipped; maximum_domain = domain_triangle
 		var witness: Dictionary = _patch_edge_witness(realizer, a, b, maximum, maximum_point, maximum_piece, maximum_domain, maximum_facet, origin, axis_u, axis_v)
 		var margin: float = maximum - CUTOFF_SQUARED if is_finite(maximum) else -INF
 		minimum_margin = minf(minimum_margin, margin)
