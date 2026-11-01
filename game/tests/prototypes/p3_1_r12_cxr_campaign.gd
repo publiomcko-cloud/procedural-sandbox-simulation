@@ -341,20 +341,62 @@ func _attempt_id_is_safe(attempt_id: String) -> bool:
 		return false
 	return safe_pattern.search(attempt_id) != null
 
-func _run_mixed_lod_gate(rows: Array) -> Dictionary:
+static func _run_mixed_lod_gate(rows: Array) -> Dictionary:
 	var input_bytes: PackedByteArray = FileAccess.get_file_as_bytes("res://tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl")
 	var input_sha: String = Core.sha256(input_bytes)
 	if input_sha != E2EInputsSha:
 		return {"status": "FAIL", "reason": "frozen_mixed_lod_input_hash_mismatch", "observed_input_sha256": input_sha, "expected_input_sha256": E2EInputsSha}
 	var row: Dictionary = Core.case_by_id(rows, "R9.2.SEAM.XPLUS_MIXED_LOD.v1")
 	if row.is_empty(): return {"status": "FAIL", "reason": "frozen_mixed_lod_case_missing", "scenario_id": "R9.2.SEAM.XPLUS_MIXED_LOD.v1"}
-	var has_shared_owner: bool = row.has("shared_interface_owner") and not String(row.get("shared_interface_owner", "")).is_empty()
-	var has_shared_path: bool = row.has("shared_topology_interface_path") and not String(row.get("shared_topology_interface_path", "")).is_empty()
-	if not has_shared_owner or not has_shared_path:
-		return {"status": "FAIL", "reason": "shared_mixed_lod_transition_realization_unavailable_in_frozen_candidate_scope", "scenario_id": "R9.2.SEAM.XPLUS_MIXED_LOD.v1", "input_sha256": input_sha, "interface_owner": "NOT_SPECIFIED" if not has_shared_owner else row.shared_interface_owner, "shared_topology_interface_path": "NOT_SPECIFIED" if not has_shared_path else row.shared_topology_interface_path, "coarse_correspondence": "NOT_BUILT", "fine_correspondence": "NOT_BUILT", "support_provenance": "NOT_APPLICABLE_NO_SUPPORT_SELECTED", "unmatched_topology": -1, "independent_coincident_extraction": "NOT_RUN_BY_DESIGN", "required_gate": "FAIL_CLOSED"}
-	return {"status": "FAIL", "reason": "shared_interface_realizer_requires_explicit_implementation_and_validation", "scenario_id": "R9.2.SEAM.XPLUS_MIXED_LOD.v1", "input_sha256": input_sha, "interface_owner": row.shared_interface_owner, "shared_topology_interface_path": row.shared_topology_interface_path, "coarse_correspondence": "NOT_BUILT", "fine_correspondence": "NOT_BUILT", "unmatched_topology": -1, "independent_coincident_extraction": "NOT_RUN_BY_DESIGN", "required_gate": "FAIL_CLOSED"}
+	var setup: Dictionary = Core.make_snapshot(row)
+	if not bool(setup.get("valid", false)): return {"status": "FAIL", "reason": "mixed_lod_snapshot_invalid", "detail": setup, "input_sha256": input_sha}
+	var left_roi: Dictionary = {"id": "R6_MIXED_LEFT_LOD1", "min": [15.0, 1.0, 6.0], "cells": [2, 4, 4], "step": 0.5}
+	var right_roi: Dictionary = {"id": "R6_MIXED_RIGHT_LOD0", "min": [16.0, 1.0, 6.0], "cells": [4, 8, 8], "step": 0.25}
+	var left_result: Dictionary = _build_case(row, left_roi, setup.get("snapshot", {}))
+	var right_result: Dictionary = _build_case(row, right_roi, setup.get("snapshot", {}))
+	if not bool(left_result.get("valid", false)) or not bool(right_result.get("valid", false)):
+		return {"status": "FAIL", "reason": "mixed_lod_side_realization_failed", "scenario_id": row.get("scenario_id", ""), "input_sha256": input_sha, "left": {"valid": left_result.get("valid", false), "detail": left_result.get("detail", {})}, "right": {"valid": right_result.get("valid", false), "detail": right_result.get("detail", {})}}
+	var interface_audit: Dictionary = _compare_mixed_lod_interface(left_result.get("geometry", {}).get("mesh", Core.new_mesh()), right_result.get("geometry", {}).get("mesh", Core.new_mesh()), 0, float(row.get("plane", 16.0)))
+	var volume_identity: bool = bool(left_result.get("volume_identity_preserved", false)) and bool(right_result.get("volume_identity_preserved", false))
+	var conforming: bool = bool(interface_audit.get("conforming", false)) and volume_identity
+	return {"status": "PASS" if conforming else "FAIL", "reason": "" if conforming else "mixed_lod_shared_interface_or_volume_identity_failed", "scenario_id": row.get("scenario_id", ""), "input_sha256": input_sha, "left": {"roi": left_roi, "volume_sha256": left_result.get("volume_sha256", ""), "payload_sha256": left_result.get("payload_sha256", ""), "volume_identity_preserved": left_result.get("volume_identity_preserved", false), "geometry": _geometry_summary(left_result.get("geometry", {}))}, "right": {"roi": right_roi, "volume_sha256": right_result.get("volume_sha256", ""), "payload_sha256": right_result.get("payload_sha256", ""), "volume_identity_preserved": right_result.get("volume_identity_preserved", false), "geometry": _geometry_summary(right_result.get("geometry", {}))}, "interface": interface_audit, "volume_identity_preserved": volume_identity, "required_gate": "PASS_ONLY_IF_SHARED_INTERFACE_EXACTLY_CONFORMS"}
 
-func _prepare_volume(row: Dictionary, snapshot_override: Variant, roi_override: Dictionary) -> Dictionary:
+static func _compare_mixed_lod_interface(left_mesh: Dictionary, right_mesh: Dictionary, axis: int, plane: float) -> Dictionary:
+	var left: Dictionary = _mixed_lod_plane_segments(left_mesh, axis, plane)
+	var right: Dictionary = _mixed_lod_plane_segments(right_mesh, axis, plane)
+	if not bool(left.get("valid", false)) or not bool(right.get("valid", false)):
+		return {"valid": false, "conforming": false, "reason": "interface_segment_extraction_invalid", "left": left, "right": right}
+	var left_keys: Array = left.get("segments", {}).keys(); var right_keys: Array = right.get("segments", {}).keys(); left_keys.sort(); right_keys.sort()
+	var unmatched: Array[String] = []
+	for key in left_keys:
+		if not right.get("segments", {}).has(key): unmatched.append("L:" + String(key))
+	for key in right_keys:
+		if not left.get("segments", {}).has(key): unmatched.append("R:" + String(key))
+	return {"valid": true, "conforming": unmatched.is_empty() and left_keys.size() > 0, "realization": "EXACT_SHARED_INTERFACE_SEGMENT_SET", "plane_axis": axis, "plane_coordinate": plane, "left_boundary_segment_count": left_keys.size(), "right_boundary_segment_count": right_keys.size(), "shared_segment_count": left_keys.size() - int(unmatched.filter(func(item: String) -> bool: return item.begins_with("L:")).size()), "unmatched_segment_entries": unmatched.size(), "unmatched_examples": unmatched.slice(0, 20), "left_segment_sha256": Core.sha256("\n".join(left_keys).to_utf8_buffer()), "right_segment_sha256": Core.sha256("\n".join(right_keys).to_utf8_buffer()), "topology_owner": "coarse_lod1_left", "interface_path_provenance": "DERIVED_FROM_EXACT_MESH_PLANE_INTERSECTION"}
+
+static func _mixed_lod_plane_segments(mesh: Dictionary, axis: int, plane: float) -> Dictionary:
+	var positions: PackedVector3Array = mesh.get("positions", PackedVector3Array())
+	if positions.is_empty() or positions.size() % 3 != 0: return {"valid": false, "reason": "mesh_triangle_position_buffer_invalid", "position_count": positions.size()}
+	var segments: Dictionary = {}
+	for index in range(0, positions.size(), 3):
+		var triangle: Array[Vector3] = [positions[index], positions[index + 1], positions[index + 2]]
+		var intersections: Array[Vector3] = []
+		for edge in [[0, 1], [1, 2], [2, 0]]:
+			var a: Vector3 = triangle[int(edge[0])]; var b: Vector3 = triangle[int(edge[1])]
+			if absf(a[axis] - plane) <= 1.0e-6: intersections.append(a)
+			if (a[axis] < plane and b[axis] > plane) or (a[axis] > plane and b[axis] < plane): intersections.append(a.lerp(b, (plane - a[axis]) / (b[axis] - a[axis])))
+		var unique: Array[Vector3] = []
+		for point in intersections:
+			var seen: bool = false
+			for existing in unique:
+				if existing.distance_squared_to(point) <= 1.0e-12: seen = true; break
+			if not seen: unique.append(point)
+		if unique.size() == 2:
+			var first: String = Core._point_key(unique[0]); var second: String = Core._point_key(unique[1]); var key: String = first + "|" + second if first < second else second + "|" + first
+			segments[key] = true
+	return {"valid": true, "segments": segments}
+
+static func _prepare_volume(row: Dictionary, snapshot_override: Variant, roi_override: Dictionary) -> Dictionary:
 	var snapshot: Dictionary
 	if snapshot_override is Dictionary and not snapshot_override.is_empty():
 		snapshot = snapshot_override
@@ -373,7 +415,7 @@ func _prepare_volume(row: Dictionary, snapshot_override: Variant, roi_override: 
 	var volume_metrics: Dictionary = metrics.get("volume", {})
 	return {"valid": true, "snapshot": snapshot, "values": values, "volume": volume, "volume_sha256": volume.get("sha256", ""), "payload_sha256": volume_metrics.get("payload_sha256", ""), "revision": volume.get("revision", -1), "volume_identity_preserved": bool(metrics.get("materialized_volume_identity_preserved", false)), "row": row, "roi": roi, "volume_build_usec": volume_metrics.get("materialize_usec", -1)}
 
-func _build_case(row: Dictionary, roi: Dictionary, snapshot_override: Variant, supplied_graph: Dictionary = {}, expected_sha: String = "", prepared_override: Dictionary = {}, expected_graph_fingerprint_sha: String = "") -> Dictionary:
+static func _build_case(row: Dictionary, roi: Dictionary, snapshot_override: Variant, supplied_graph: Dictionary = {}, expected_sha: String = "", prepared_override: Dictionary = {}, expected_graph_fingerprint_sha: String = "") -> Dictionary:
 	var prepared: Dictionary = prepared_override if not prepared_override.is_empty() else _prepare_volume(row, snapshot_override, roi)
 	if not bool(prepared.get("valid", false)): return prepared
 	var volume: Dictionary = prepared.get("volume", {})
@@ -483,7 +525,7 @@ func _first_semantic_difference(left: Variant, right: Variant, path: String) -> 
 	if left != right: return {"path": path, "left": left, "right": right, "left_type": left_type, "right_type": right_type}
 	return {}
 
-func _run_controls(rows: Array) -> Dictionary:
+static func _run_controls(rows: Array) -> Dictionary:
 	var results: Array[Dictionary] = []
 	for scenario_id in CONTROL_IDS:
 		var row: Dictionary = Core.case_by_id(rows, scenario_id)
@@ -508,26 +550,26 @@ func _run_controls(rows: Array) -> Dictionary:
 		if bool(row.get("pass", false)): passed += 1
 	return {"valid": results.size() == 6, "passed": passed, "count": results.size(), "rows": results}
 
-func _case_geometry_pass(outcome: Dictionary) -> bool:
+static func _case_geometry_pass(outcome: Dictionary) -> bool:
 	if not bool(outcome.get("valid", false)): return false
 	var geometry: Dictionary = outcome.get("geometry", {})
 	return bool(geometry.get("geometry_complete", false)) and bool(geometry.get("topology_signature_match", false)) and bool(outcome.get("volume_identity_preserved", false))
 
-func _geometry_summary(geometry: Dictionary) -> Dictionary:
+static func _geometry_summary(geometry: Dictionary) -> Dictionary:
 	return {"topology_signature_match": geometry.get("topology_signature_match", false), "geometry_complete": geometry.get("geometry_complete", false), "mesh_sha256": geometry.get("mesh_sha256", "UNKNOWN_NOT_CAPTURED"), "triangle_count": geometry.get("geometry_triangle_count", "UNKNOWN_NOT_CAPTURED"), "cutoff_rejections": _array_size_or_unknown(geometry.get("cutoff_rejections", null)), "missing_obligations": _array_size_or_unknown(geometry.get("missing_topology_obligations", null)), "mesh_topology": geometry.get("mesh_topology", "UNKNOWN_NOT_CAPTURED")}
 
-func _array_size_or_unknown(value: Variant) -> Variant:
+static func _array_size_or_unknown(value: Variant) -> Variant:
 	if typeof(value) != TYPE_ARRAY:
 		return "UNKNOWN_NOT_CAPTURED"
 	var values: Array = value
 	return values.size()
 
-func _present_value_or_unknown(source: Dictionary, key: String) -> Variant:
+static func _present_value_or_unknown(source: Dictionary, key: String) -> Variant:
 	if not source.has(key):
 		return "UNKNOWN_NOT_CAPTURED"
 	return source[key]
 
-func _run_ray_gate(rows: Array) -> Dictionary:
+static func _run_ray_gate(rows: Array) -> Dictionary:
 	var ray_row: Dictionary = Core.case_by_id(rows, RAY_ID)
 	if ray_row.is_empty(): return {"valid": false, "reason": "frozen_ray_case_missing", "ray_count": 0, "roi_scoped_hit_miss_disagreements": -1}
 	var built: Dictionary = _build_case(ray_row, ray_row.get("roi", {}), null)
@@ -558,7 +600,7 @@ func _run_ray_gate(rows: Array) -> Dictionary:
 		records.append({"ray_index": index, "origin": [ray.origin.x, ray.origin.y, ray.origin.z], "direction": [ray.direction.x, ray.direction.y, ray.direction.z], "canonical_roi_hit": canonical_roi_hit, "canonical_global_hit_diagnostic": canonical_global_hit, "mesh_hit": mesh_hit, "mesh_hit_distance": hit.get("distance", null), "mesh_hit_position": hit.get("position", []), "triangle_index": hit.get("triangle_index", -1), "roi_disagreement": mismatch, "global_disagreement_diagnostic": canonical_global_hit != mesh_hit})
 	return {"valid": rays.size() == 25, "ray_count": rays.size(), "roi_scoped_hit_miss_disagreements": disagreements, "global_diagnostic": {"disagreements": global_disagreements, "meaning": "diagnostic only; full-field canonical hit compared with ROI mesh hit"}, "scope": "closed ROI with 1e-6 bounds tolerance; cropped Y face roots excluded", "completeness": "finite 256-step sign-change scan plus 32 bisections; tangent roots can be missed", "rays": records}
 
-func _first_mesh_hit(origin: Vector3, direction: Vector3, max_distance: float, mesh: Dictionary) -> Dictionary:
+static func _first_mesh_hit(origin: Vector3, direction: Vector3, max_distance: float, mesh: Dictionary) -> Dictionary:
 	var positions: PackedVector3Array = mesh.get("positions", PackedVector3Array())
 	var best: float = INF
 	var best_index: int = -1
@@ -571,7 +613,7 @@ func _first_mesh_hit(origin: Vector3, direction: Vector3, max_distance: float, m
 	var point: Vector3 = origin + direction * best
 	return {"hit": true, "distance": best, "position": [point.x, point.y, point.z], "triangle_index": best_index}
 
-func _ray_triangle(origin: Vector3, direction: Vector3, a: Vector3, b: Vector3, c: Vector3) -> float:
+static func _ray_triangle(origin: Vector3, direction: Vector3, a: Vector3, b: Vector3, c: Vector3) -> float:
 	var edge1: Vector3 = b - a
 	var edge2: Vector3 = c - a
 	var h: Vector3 = direction.cross(edge2)

@@ -2,6 +2,7 @@ extends SceneTree
 
 const Diagnostics := preload("res://tests/prototypes/p3_1_r12_cxr_r6_diagnostics.gd")
 const R6Realizer := preload("res://tests/prototypes/p3_1_r12_cxr_r6_realizer.gd")
+const CXRDownstream := preload("res://tests/prototypes/p3_1_r12_cxr_campaign.gd")
 
 var assertions: int = 0
 var failures: Array[String] = []
@@ -25,6 +26,7 @@ func _run() -> void:
 	_test_bounded_causal_cavity_search(diagnostics)
 	_test_patch_boundary_upper_bound(diagnostics)
 	_test_analytic_edge_witness_not_sampling_limited(diagnostics)
+	_test_mixed_lod_interface_oracle()
 	if failures.is_empty():
 		print("R12CXR_R6_CONTRACTS assertions=%d failures=0" % assertions)
 		quit(0)
@@ -187,6 +189,15 @@ func _test_analytic_edge_witness_not_sampling_limited(diagnostics: RefCounted) -
 	_expect(bool(witness.get("valid", false)), "analytic interval construction finds an interior witness missed by the former fixed lambda samples")
 	_expect(String(witness.get("witness_construction", "")) == "ANALYTIC_QUADRATIC_AND_DOMAIN_INTERVAL", "witness records its analytic interval construction")
 	_expect(float(witness.get("cross_squared", 0.0)) > 1.0e-12 and float(witness.get("continuous_field_residual", INF)) <= 1.0e-7, "constructed witness preserves the exact cutoff and field epsilon")
+
+func _test_mixed_lod_interface_oracle() -> void:
+	var shared: PackedVector3Array = PackedVector3Array([Vector3(16.0, 0.0, 0.0), Vector3(16.0, 1.0, 0.0), Vector3(15.0, 0.0, 0.0), Vector3(16.0, 0.0, 0.0), Vector3(16.0, 1.0, 0.0), Vector3(17.0, 0.0, 0.0)])
+	var matching: Dictionary = CXRDownstream._compare_mixed_lod_interface({"positions": shared}, {"positions": shared}, 0, 16.0)
+	_expect(bool(matching.get("conforming", false)) and int(matching.get("shared_segment_count", 0)) == 1, "mixed-LOD interface oracle accepts exact shared segment ownership")
+	var mismatch: PackedVector3Array = PackedVector3Array([Vector3(16.0, 0.0, 0.0), Vector3(16.0, 2.0, 0.0), Vector3(15.0, 0.0, 0.0), Vector3(16.0, 0.0, 0.0), Vector3(16.0, 2.0, 0.0), Vector3(17.0, 0.0, 0.0)])
+	var rejected: Dictionary = CXRDownstream._compare_mixed_lod_interface({"positions": shared}, {"positions": mismatch}, 0, 16.0)
+	_expect(not bool(rejected.get("conforming", true)) and int(rejected.get("unmatched_segment_entries", 0)) == 2, "mixed-LOD interface oracle rejects unmatched segment sets")
+
 
 func _expect(condition: bool, name: String) -> void:
 	assertions += 1

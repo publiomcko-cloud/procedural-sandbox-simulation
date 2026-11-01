@@ -6,6 +6,7 @@ const Realizer := preload("res://tests/prototypes/p3_1_r12_cxr_field_support_rea
 const R6Realizer := preload("res://tests/prototypes/p3_1_r12_cxr_r6_realizer.gd")
 const Synthesizer := preload("res://tests/prototypes/p3_1_r12_cxr_r5_support_synthesizer.gd")
 const Diagnostics := preload("res://tests/prototypes/p3_1_r12_cxr_r6_diagnostics.gd")
+const CXRDownstream := preload("res://tests/prototypes/p3_1_r12_cxr_campaign.gd")
 const ManifestSha := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
 const Stage0Sha := "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d"
 const ResidualSha := "ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23"
@@ -339,6 +340,10 @@ func _run() -> void:
 			return
 		var projection: Dictionary = {"origin": _vector3_array(Vector3(r4_context.get("projection_origin", Vector3.ZERO))), "axis_u": _vector3_array(Vector3(r4_context.get("projection_u", Vector3.ZERO))), "axis_v": _vector3_array(Vector3(r4_context.get("projection_v", Vector3.ZERO)))}
 		var cavity_search: Dictionary = diagnostics.call("search_patch_cavities", r6_realizer, triangles, analysis_patch_ids, root_positions, projection, zero_inventory.get("facets", []), {"max_faces": 12, "max_states": 10000, "max_queue": 2000, "max_ms": 30000})
+		var cavity_search_repeat: Dictionary = Diagnostics.new().call("search_patch_cavities", r6_realizer, triangles, analysis_patch_ids, root_positions, projection, zero_inventory.get("facets", []), {"max_faces": 12, "max_states": 10000, "max_queue": 2000, "max_ms": 30000})
+		var first_cavity_fingerprint: String = _stable_evidence_sha({"status": cavity_search.get("status", ""), "selected_face_ids": cavity_search.get("selected", {}).get("face_ids", []), "selected_boundary_edges": cavity_search.get("selected", {}).get("audit", {}).get("edge_audits", [])})
+		var repeat_cavity_fingerprint: String = _stable_evidence_sha({"status": cavity_search_repeat.get("status", ""), "selected_face_ids": cavity_search_repeat.get("selected", {}).get("face_ids", []), "selected_boundary_edges": cavity_search_repeat.get("selected", {}).get("audit", {}).get("edge_audits", [])})
+		cavity_search["deterministic_repeat"] = {"started": true, "pass": first_cavity_fingerprint == repeat_cavity_fingerprint, "first_fingerprint_sha256": first_cavity_fingerprint, "repeat_fingerprint_sha256": repeat_cavity_fingerprint, "repeat_status": cavity_search_repeat.get("status", "UNKNOWN_NOT_CAPTURED"), "repeat_selected_face_ids": cavity_search_repeat.get("selected", {}).get("face_ids", [])}
 		if String(cavity_search.get("status", "")) != "FOUND":
 			var pregeometry: Dictionary = {"schema": "P3.1.R12CXR.R6.CavitySearch.v1", "status": cavity_search.get("status", "UNKNOWN_NOT_CAPTURED"), "terminal_reason": cavity_search.get("terminal_reason", cavity_search.get("reason", "UNKNOWN_NOT_CAPTURED")), "source_sha": source_sha, "attempt_id": attempt_id, "target_attempt_consumed": true, "target_attempt_phase": "R6-D", "initial_patch_ids": analysis_patch_ids, "limits": {"max_faces": 12, "max_states": 10000, "max_queue": 2000, "max_ms": 30000}, "search": cavity_search}
 			_write_result(output_path, pregeometry, "R12CXR_R6_CAVITY_SEARCH_RESULT")
@@ -418,6 +423,9 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	if not bool(synthesis.get("valid", false)):
 		_fail("r6_constraint_synthesis_input_invalid", synthesis)
 		return {}
+	var synthesis_repeat: Dictionary = Synthesizer.new().call("synthesize", realizer, values, roi, base_context, residual_triangles, cavity_id, residual_fixture.get("arc_map", []))
+	var synthesis_fingerprint: String = _support_synthesis_fingerprint(synthesis)
+	var synthesis_repeat_fingerprint: String = _support_synthesis_fingerprint(synthesis_repeat)
 	var support_rows: Array[Dictionary] = synthesis.get("supports", [])
 	var result: Dictionary = {
 		"schema": "P3.1.R12CXR.R6.Result.v1",
@@ -426,6 +434,7 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		"attempt_id": OS.get_environment("R12CXR_R6_ATTEMPT_ID"),
 		"target_attempt_consumed": true,
 		"cavity_search": cavity_search,
+		"r6_e_deterministic_repeat": {"started": true, "pass": synthesis_fingerprint == synthesis_repeat_fingerprint, "first_fingerprint_sha256": synthesis_fingerprint, "repeat_fingerprint_sha256": synthesis_repeat_fingerprint, "repeat_valid": synthesis_repeat.get("valid", false)},
 		"selected_patch_triangle_ids": patch_ids.duplicate(),
 		"r4_source_sha": R4SourceSha,
 		"r4_d1_result_sha256": R4D1ResultSha,
@@ -554,6 +563,10 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		result["terminal_reason"] = String(d3.get("terminal_reason", "R2_SEARCH_PARTIAL")) if not bool(d3.get("search_complete", false)) else "NO_SOLUTION_ON_FINITE_SYNTHESIZED_SUPPORT_GRAPH"
 		_write_result(output_path, result, "R12CXR_R6_SUPPORT_SYNTHESIS_RESULT")
 		return result
+	var d3_repeat: Dictionary = realizer.call("_r2_search_level", context)
+	var d3_first_fingerprint: String = _stable_evidence_sha({"valid": d3.get("valid", false), "best_solution": d3.get("best_solution", {}), "solution_count": d3.get("solution_count", -1), "search_complete": d3.get("search_complete", false)})
+	var d3_repeat_fingerprint: String = _stable_evidence_sha({"valid": d3_repeat.get("valid", false), "best_solution": d3_repeat.get("best_solution", {}), "solution_count": d3_repeat.get("solution_count", -1), "search_complete": d3_repeat.get("search_complete", false)})
+	result["r6_f_deterministic_repeat"] = {"started": true, "pass": d3_first_fingerprint == d3_repeat_fingerprint, "first_fingerprint_sha256": d3_first_fingerprint, "repeat_fingerprint_sha256": d3_repeat_fingerprint, "repeat_valid": d3_repeat.get("valid", false), "repeat_search_complete": d3_repeat.get("search_complete", false)}
 	var solution: Dictionary = d3.get("best_solution", {})
 	var replacement_value: Variant = solution.get("final_replacement_triangles", null)
 	if typeof(replacement_value) != TYPE_ARRAY:
@@ -595,13 +608,76 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	var topology_roundtrip: bool = bool(base.get("topology_signature_match", false)) and not String(base.get("topology_roundtrip_sha256", "")).is_empty()
 	var topology_pass: bool = topology_roundtrip and cutoff_rows.is_empty() and int(obligations.get("missing", -1)) == 0 and int(obligations.get("nonmanifold", -1)) == 0 and bool(paths.get("valid", false))
 	var mesh_pass: bool = topology_pass and int(topology.get("internal_open_edges", -1)) == 0 and int(topology.get("nonmanifold_edges", -1)) == 0 and int(topology.get("winding_inconsistencies", -1)) == 0 and int(topology.get("degenerate_triangles", -1)) == 0 and minimum_cross_squared > FROZEN_CROSS_SQUARED_CUTOFF
-	result["downstream"] = {"started": true, "final_patch_validation": final_validation, "topology_roundtrip": topology_roundtrip, "topology_complete": topology_pass, "mesh_complete": mesh_pass, "mesh_sha256": String(realizer.call("_mesh_sha", mesh)), "mesh_topology": topology, "minimum_cross_squared": minimum_cross_squared, "cutoff_rows": cutoff_rows, "required_arcs": obligations, "preserved_c6_paths": paths, "triangle_count": final_triangles.size(), "support_count": selected_supports.size()}
-	result["status"] = "R6_EQUAL_LOD_PASS_DOWNSTREAM_PENDING" if mesh_pass else "R6_EQUAL_LOD_GATE_FAIL"
-	result["terminal_reason"] = "equal_lod_gates_passed_downstream_required" if mesh_pass else "existing_topology_or_mesh_gate_failed"
-	result["downstream"]["started"] = false
-	result["downstream"]["reason"] = "SEPARATE_R6_Q_REQUIRED_AFTER_EQUAL_LOD_PASS" if mesh_pass else "NOT_RUN_EQUAL_LOD_GATE_FAILED"
+	var equal_lod: Dictionary = {"started": true, "final_patch_validation": final_validation, "topology_roundtrip": topology_roundtrip, "topology_complete": topology_pass, "mesh_complete": mesh_pass, "mesh_sha256": String(realizer.call("_mesh_sha", mesh)), "mesh_topology": topology, "minimum_cross_squared": minimum_cross_squared, "cutoff_rows": cutoff_rows, "required_arcs": obligations, "preserved_c6_paths": paths, "triangle_count": final_triangles.size(), "support_count": selected_supports.size()}
+	result["equal_lod"] = equal_lod
+	if mesh_pass:
+		var r6_determinism: Dictionary = {"r6_d_cavity": cavity_search.get("deterministic_repeat", {}), "r6_e_supports": result.get("r6_e_deterministic_repeat", {}), "r6_f_solver": result.get("r6_f_deterministic_repeat", {})}
+		var rematerialized_mesh: Dictionary = realizer.call("_mesh_from_triangles", final_triangles)
+		var rematerialized_mesh_sha: String = String(realizer.call("_mesh_sha", rematerialized_mesh))
+		r6_determinism["equal_lod_mesh"] = {"started": true, "pass": rematerialized_mesh_sha == String(realizer.call("_mesh_sha", mesh)), "first_mesh_sha256": String(realizer.call("_mesh_sha", mesh)), "repeat_mesh_sha256": rematerialized_mesh_sha}
+		var downstream: Dictionary = _run_r6_downstream_gates(r6_determinism)
+		result["downstream"] = downstream
+		if bool(downstream.get("all_gates_pass", false)):
+			result["status"] = "R12_CXR_R6_EQUAL_LOD_DOWNSTREAM_PASS_VALIDATE_PENDING"
+			result["terminal_reason"] = "all_equal_lod_and_downstream_gates_passed_scripts_validate_ps1_pending"
+		else:
+			var mixed_status: String = String(downstream.get("mixed_lod", {}).get("status", "UNKNOWN_NOT_CAPTURED"))
+			result["status"] = "R12_CXR_R6_EQUAL_LOD_QUALIFIED_INTERFACE_BLOCKED_WITH_EVIDENCE" if mixed_status == "FAIL" else "R12_CXR_R6_REALIZATION_PARTIAL_WITH_EVIDENCE"
+			result["terminal_reason"] = String(downstream.get("terminal_reason", "downstream_gate_failed_with_evidence"))
+	else:
+		result["downstream"] = {"started": false, "reason": "NOT_RUN_EQUAL_LOD_GATE_FAILED", "all_gates_pass": false}
+		result["status"] = "R6_EQUAL_LOD_GATE_FAIL"
+		result["terminal_reason"] = "existing_topology_or_mesh_gate_failed"
 	_write_result(output_path, result, "R12CXR_R6_SUPPORT_SYNTHESIS_RESULT")
 	return result
+
+func _run_r6_downstream_gates(r6_determinism: Dictionary) -> Dictionary:
+	var manifest: Dictionary = Core.load_manifest()
+	if not bool(manifest.get("valid", false)): return {"started": false, "all_gates_pass": false, "terminal_reason": "frozen_manifest_invalid", "manifest": manifest}
+	var rows: Array = manifest.get("rows", [])
+	var target_row: Dictionary = Core.case_by_id(rows, TargetId)
+	var snapshot_result: Dictionary = Core.make_snapshot(target_row)
+	if target_row.is_empty() or not bool(snapshot_result.get("valid", false)): return {"started": false, "all_gates_pass": false, "terminal_reason": "target_snapshot_reconfirmation_failed", "snapshot": snapshot_result}
+	var controls_first: Dictionary = CXRDownstream._run_controls(rows)
+	var rays_first: Dictionary = CXRDownstream._run_ray_gate(rows)
+	var mixed_first: Dictionary = CXRDownstream._run_mixed_lod_gate(rows)
+	var volume_first: Dictionary = _reconfirm_r6_volume(target_row, snapshot_result.get("snapshot", {}))
+	var controls_repeat: Dictionary = CXRDownstream._run_controls(rows)
+	var rays_repeat: Dictionary = CXRDownstream._run_ray_gate(rows)
+	var mixed_repeat: Dictionary = CXRDownstream._run_mixed_lod_gate(rows)
+	var volume_repeat: Dictionary = _reconfirm_r6_volume(target_row, snapshot_result.get("snapshot", {}))
+	var first_hashes: Dictionary = {"controls": _stable_evidence_sha(controls_first), "roi_rays": _stable_evidence_sha(rays_first), "mixed_lod": _stable_evidence_sha(mixed_first), "volume": _stable_evidence_sha(volume_first)}
+	var repeat_hashes: Dictionary = {"controls": _stable_evidence_sha(controls_repeat), "roi_rays": _stable_evidence_sha(rays_repeat), "mixed_lod": _stable_evidence_sha(mixed_repeat), "volume": _stable_evidence_sha(volume_repeat)}
+	var r6_repeat_pass: bool = true
+	for phase in ["r6_d_cavity", "r6_e_supports", "r6_f_solver", "equal_lod_mesh"]:
+		if not bool(r6_determinism.get(phase, {}).get("pass", false)): r6_repeat_pass = false
+	var deterministic: bool = first_hashes == repeat_hashes and r6_repeat_pass
+	var controls_pass: bool = bool(controls_first.get("valid", false)) and int(controls_first.get("passed", -1)) == 6 and int(controls_first.get("count", -1)) == 6
+	var rays_pass: bool = bool(rays_first.get("valid", false)) and int(rays_first.get("ray_count", -1)) == 25 and int(rays_first.get("roi_scoped_hit_miss_disagreements", -1)) == 0
+	var volume_pass: bool = bool(volume_first.get("valid", false))
+	var mixed_pass: bool = String(mixed_first.get("status", "")) == "PASS"
+	var all_pass: bool = controls_pass and rays_pass and volume_pass and mixed_pass and deterministic
+	var terminal: String = "all_controls_rays_volume_mixed_lod_and_repeat_gates_passed" if all_pass else "mixed_lod_interface_gate_failed" if not mixed_pass else "downstream_control_ray_volume_or_repeat_gate_failed"
+	return {"started": true, "controls": controls_first, "roi_rays": rays_first, "volume_reconfirmation": volume_first, "mixed_lod": mixed_first, "deterministic_repeat": {"pass": deterministic, "first_sha256": first_hashes, "repeat_sha256": repeat_hashes, "r6_realization_repeats": r6_determinism, "controls": controls_repeat, "roi_rays": rays_repeat, "volume_reconfirmation": volume_repeat, "mixed_lod": mixed_repeat}, "full_e2e": {"started": true, "equal_lod_mesh_sha256": r6_determinism.get("equal_lod_mesh", {}).get("first_mesh_sha256", "UNKNOWN_NOT_CAPTURED"), "controls_6_of_6": controls_pass, "roi_rays_0_of_25": rays_pass, "volume_identity": volume_pass, "mixed_lod": mixed_pass, "deterministic_repeat": deterministic, "pass": all_pass}, "full_validation": "PENDING_EXTERNAL_SCRIPTS_VALIDATE_PS1", "controls_pass": controls_pass, "roi_rays_pass": rays_pass, "volume_pass": volume_pass, "mixed_lod_pass": mixed_pass, "determinism_pass": deterministic, "all_gates_pass": all_pass, "terminal_reason": terminal}
+
+func _reconfirm_r6_volume(row: Dictionary, snapshot: Dictionary) -> Dictionary:
+	var candidate: RefCounted = CandidateD.new()
+	var roi: Dictionary = row.get("roi", {})
+	candidate.call("configure_roi", roi)
+	var rebuilt: Dictionary = candidate.call("build", snapshot, row, {"id": "R12CXR_R6_VOLUME_RECONFIRM"})
+	if not bool(rebuilt.get("valid", false)): return {"valid": false, "reason": "volume_rebuild_invalid", "detail": rebuilt}
+	var volume: Dictionary = rebuilt.get("volume", {})
+	var metrics: Dictionary = rebuilt.get("metrics", {}).get("volume", {})
+	var values: PackedFloat32Array = volume.get("values", PackedFloat32Array())
+	var expected_revision: int = int(volume.get("revision", -1))
+	var identity: bool = String(volume.get("sha256", "")) == VolumeSha and String(metrics.get("payload_sha256", "")) == PayloadSha and expected_revision == 2 and bool(rebuilt.get("metrics", {}).get("materialized_volume_identity_preserved", false))
+	return {"valid": identity, "reason": "" if identity else "frozen_volume_or_payload_identity_mismatch", "volume_sha256": volume.get("sha256", "UNKNOWN_NOT_CAPTURED"), "payload_sha256": metrics.get("payload_sha256", "UNKNOWN_NOT_CAPTURED"), "revision": expected_revision, "value_count": values.size(), "value_bytes_sha256": Core.sha256(values.to_byte_array()), "materialized_volume_identity_preserved": rebuilt.get("metrics", {}).get("materialized_volume_identity_preserved", false)}
+
+func _stable_evidence_sha(value: Variant) -> String:
+	return Core.sha256(JSON.stringify(_json_safe(value)).to_utf8_buffer())
+
+func _support_synthesis_fingerprint(synthesis: Dictionary) -> String:
+	return _stable_evidence_sha({"valid": synthesis.get("valid", false), "supports": synthesis.get("supports", []), "candidate_attempt_count": synthesis.get("candidate_attempt_count", -1), "candidate_rejection_histogram": synthesis.get("candidate_rejection_histogram", {}), "retained_support_count": synthesis.get("retained_support_count", -1), "provenance_sha256": synthesis.get("provenance_sha256", "UNKNOWN_NOT_CAPTURED")})
 
 func _write_result(output_path: String, result: Dictionary, marker: String) -> bool:
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
