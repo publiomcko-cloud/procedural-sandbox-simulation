@@ -41,12 +41,12 @@ func _test_zero_vertex_provenance(diagnostics: RefCounted) -> void:
 
 func _test_convex_region_clipping(diagnostics: RefCounted) -> void:
 	var source: Array[Vector3] = [Vector3(-1.0, 0.0, 0.0), Vector3(1.0, 0.0, 0.0), Vector3(0.0, 1.0, 0.0)]
-	var region: Array[Vector2] = [Vector2.ZERO, Vector2.RIGHT, Vector2.UP]
+	var region: Array[Vector2] = [Vector2.ZERO, Vector2.RIGHT, Vector2(0.0, 1.0)]
 	var clipped: Array[Vector3] = diagnostics.call("_clip_world_triangle_to_region", source, region, Vector3.ZERO, Vector3.RIGHT, Vector3.UP)
 	_expect(clipped.size() >= 3, "clipping retains positive-area overlap")
 	for point in clipped:
 		_expect(float(point.x) >= -1.0e-6 and float(point.y) >= -1.0e-6 and float(point.x + point.y) <= 1.0 + 1.0e-6, "clipped extreme lies in region")
-	var reversed_region: Array[Vector2] = [Vector2.ZERO, Vector2.UP, Vector2.RIGHT]
+	var reversed_region: Array[Vector2] = [Vector2.ZERO, Vector2(0.0, 1.0), Vector2.RIGHT]
 	var reversed: Array[Vector3] = diagnostics.call("_clip_world_triangle_to_region", source, reversed_region, Vector3.ZERO, Vector3.RIGHT, Vector3.UP)
 	_expect(reversed.size() == clipped.size(), "convex clipping is orientation stable")
 	var outside: Array[Vector3] = diagnostics.call("_clip_world_triangle_to_region", [Vector3(2.0, 2.0, 0.0), Vector3(3.0, 2.0, 0.0), Vector3(2.0, 3.0, 0.0)], region, Vector3.ZERO, Vector3.RIGHT, Vector3.UP)
@@ -54,7 +54,7 @@ func _test_convex_region_clipping(diagnostics: RefCounted) -> void:
 
 func _test_cross_squared_and_barycentric(diagnostics: RefCounted) -> void:
 	_expect(is_equal_approx(float(diagnostics.call("_cross_squared", Vector3.ZERO, Vector3.RIGHT, Vector3.UP)), 1.0), "cross squared uses frozen area measure")
-	var triangle: Array[Vector2] = [Vector2.ZERO, Vector2.RIGHT, Vector2.UP]
+	var triangle: Array[Vector2] = [Vector2.ZERO, Vector2.RIGHT, Vector2(0.0, 1.0)]
 	var weights: Array = diagnostics.call("_triangle_barycentric", Vector2(1.0 / 3.0, 1.0 / 3.0), triangle)
 	_expect(weights.size() == 3, "triangle barycentric arity")
 	_expect(absf(float(weights[0]) - 1.0 / 3.0) < 1.0e-6 and absf(float(weights[1]) - 1.0 / 3.0) < 1.0e-6 and absf(float(weights[2]) - 1.0 / 3.0) < 1.0e-6, "triangle barycentric values")
