@@ -21,6 +21,9 @@ func _run() -> void:
 	_test_boundary_edge_classification(diagnostics)
 	_test_stable_region_partition(diagnostics)
 	_test_binary32_ulp_correction(diagnostics)
+	_test_patch_owner_and_ordered_arc_paths()
+	_test_bounded_causal_cavity_search(diagnostics)
+	_test_patch_boundary_upper_bound(diagnostics)
 	if failures.is_empty():
 		print("R12CXR_R6_CONTRACTS assertions=%d failures=0" % assertions)
 		quit(0)
@@ -96,6 +99,65 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	var already_valid: Array[Dictionary] = realizer.call("corrected_tetra_zero_sources", {"positions": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP, Vector3.BACK], "samples": [-1.0, 1.0, 1.0, 1.0]})
 	_expect(already_valid.size() == 3 and already_valid.all(func(row: Dictionary) -> bool: return bool(row.get("accepted", false))), "R6 correction retains passing roots without searching")
 	_expect(already_valid.all(func(row: Dictionary) -> bool: return String(row.get("correction_search_state", "")) == "unchanged"), "R6 correction records unchanged passing-root provenance")
+
+func _test_patch_owner_and_ordered_arc_paths() -> void:
+	var realizer: RefCounted = R6Realizer.new()
+	var source: Dictionary = {"triangle_id": "face-02", "polygon_id": "poly-02", "source_polygon_ids": ["poly-02", "poly-source"], "root_ids": ["A", "B", "C"], "points": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP]}
+	var context: Dictionary = {"projection_origin": Vector3.ZERO, "projection_u": Vector3.RIGHT, "projection_v": Vector3.UP, "projected_positions": {"A": Vector2.ZERO, "B": Vector2.RIGHT, "C": Vector2.UP}, "patch": [source]}
+	var owner_result: Dictionary = realizer.call("_r2_owner_for_triangle", Vector3(0.25, 0.25, 0.0), context)
+	_expect(bool(owner_result.get("valid", false)), "R6-B resolves owner from removed patch")
+	_expect(String(owner_result.get("owner", {}).get("polygon_id", "")) == "poly-02", "R6-B preserves source polygon provenance")
+	_expect(String(owner_result.get("selection_rule", "")).begins_with("PATCH_CONTAINMENT"), "R6-B records deterministic containment ownership")
+	var support_id: String = "R5SUP_000000000000000000000000"
+	var mesh: Array[Dictionary] = [
+		{"triangle_id": "replacement-1", "root_ids": ["A", support_id, "C"], "points": [Vector3.ZERO, Vector3(0.5, 0.1, 0.0), Vector3.UP]},
+		{"triangle_id": "replacement-2", "root_ids": [support_id, "B", "C"], "points": [Vector3(0.5, 0.1, 0.0), Vector3.RIGHT, Vector3.UP]}
+	]
+	var arc_result: Dictionary = realizer.call("_validate_required_arcs", mesh, [{"arc_id": "arc-ab", "root_ids": ["A", "B"], "expected_incidence": 1}], [])
+	_expect(bool(arc_result.get("valid", false)), "R6-C accepts a valid ordered derived-vertex path")
+	_expect(String(arc_result.get("paths", [])[0].get("method", "")) == "PIECEWISE_PATH", "R6-C labels non-edge obligation as a piecewise path")
+	_expect(arc_result.get("paths", [])[0].get("ordered_mesh_vertex_ids", []) == ["A", support_id, "B"], "R6-C records ordered path with unchanged endpoints")
+	var direct: Array[Dictionary] = [{"triangle_id": "anchor", "root_ids": ["A", "B", "C"], "points": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP]}]
+	var anchor_result: Dictionary = realizer.call("_validate_required_arcs", direct, [{"arc_id": "arc-ab", "root_ids": ["A", "B"], "expected_incidence": 1}], [])
+	_expect(bool(anchor_result.get("valid", false)) and String(anchor_result.get("paths", [])[0].get("method", "")) == "ANCHOR_EDGE", "R6-C retains exact anchor-edge realization")
+	var shared_support_mesh: Array[Dictionary] = [
+		{"triangle_id": "fan-1", "root_ids": ["A", support_id, "C"], "points": [Vector3.ZERO, Vector3(0.5, 0.5, 0.0), Vector3.UP]},
+		{"triangle_id": "fan-2", "root_ids": ["C", support_id, "B"], "points": [Vector3.UP, Vector3(0.5, 0.5, 0.0), Vector3.RIGHT]},
+		{"triangle_id": "fan-3", "root_ids": ["B", support_id, "D"], "points": [Vector3.RIGHT, Vector3(0.5, 0.5, 0.0), Vector3.DOWN]},
+		{"triangle_id": "fan-4", "root_ids": ["D", support_id, "A"], "points": [Vector3.DOWN, Vector3(0.5, 0.5, 0.0), Vector3.ZERO]}
+	]
+	var merge_result: Dictionary = realizer.call("_validate_required_arcs", shared_support_mesh, [{"arc_id": "arc-ab", "root_ids": ["A", "B"], "expected_incidence": 2}, {"arc_id": "arc-cd", "root_ids": ["C", "D"], "expected_incidence": 2}], [])
+	_expect(not bool(merge_result.get("valid", true)) and merge_result.get("intersection_audit", {}).get("failures", []).any(func(row: Dictionary) -> bool: return String(row.get("reason", "")) == "topology_paths_merge_at_derived_vertex"), "R6-C rejects topology paths that merge at a derived vertex")
+
+func _test_bounded_causal_cavity_search(diagnostics: RefCounted) -> void:
+	var faces: Array[Dictionary] = [
+		{"triangle_id": "T0", "root_ids": ["A", "B", "C"], "points": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP]},
+		{"triangle_id": "T1", "root_ids": ["B", "A", "D"], "points": [Vector3.RIGHT, Vector3.ZERO, Vector3.BACK]},
+		{"triangle_id": "T2", "root_ids": ["A", "B", "E"], "points": [Vector3.ZERO, Vector3.RIGHT, Vector3.BACK]}
+	]
+	var edge_key: String = "A\u001fB"
+	var evaluator: Callable = func(ids: Array) -> Dictionary:
+		if ids.size() > 1: return {"valid": true, "manifold": true, "unrealizable_edges": [], "minimum_cutoff_margin": 0.5, "boundary_components": 1}
+		return {"valid": true, "manifold": true, "unrealizable_edges": [edge_key], "minimum_cutoff_margin": -1.0, "boundary_components": 1}
+	var search: Dictionary = diagnostics.call("bounded_cavity_search", ["T0"], faces, {}, evaluator, {"max_faces": 3, "max_states": 100, "max_queue": 20, "max_ms": 30000})
+	_expect(String(search.get("status", "")) == "FOUND", "R6-D bounded search finds a feasible causally adjacent cavity")
+	_expect(search.get("selected", {}).get("face_ids", []) == ["T0", "T1"], "R6-D tie-breaks by stable face-ID sequence")
+	var capped: Dictionary = diagnostics.call("bounded_cavity_search", ["T0"], faces, {}, evaluator, {"max_faces": 3, "max_states": 1, "max_queue": 20, "max_ms": 30000})
+	_expect(String(capped.get("status", "")) == "PARTIAL" and String(capped.get("terminal_reason", "")) == "VISITED_STATE_CAP", "R6-D state cap reports PARTIAL")
+	_expect(int(capped.get("examined_states", 0)) <= 1, "R6-D state cap is enforced")
+
+func _test_patch_boundary_upper_bound(diagnostics: RefCounted) -> void:
+	var realizer: RefCounted = R6Realizer.new()
+	var patch: Array[Dictionary] = [{"triangle_id": "patch", "root_ids": ["A", "B", "C"], "points": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP]}]
+	var facet: Dictionary = {"tetrahedron_id": "tet-1", "facet_index": 0, "points": [Vector3.ZERO, Vector3(0.5, 0.0, 0.0), Vector3(0.0, 0.5, 0.0)], "tetrahedron_positions": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP, Vector3.BACK], "tetrahedron_samples": [-1.0, 1.0, 1.0, 1.0]}
+	var facets: Array[Dictionary] = [facet]
+	var root_positions: Dictionary = {"A": Vector3.ZERO, "B": Vector3.RIGHT, "C": Vector3.UP}
+	var projection: Dictionary = {"origin": [0.0, 0.0, 0.0], "axis_u": [1.0, 0.0, 0.0], "axis_v": [0.0, 1.0, 0.0]}
+	var result: Dictionary = diagnostics.call("analyze_patch_boundary", realizer, patch, ["A", "B", "C"], root_positions, projection, facets)
+	_expect(bool(result.get("valid", false)) and result.get("boundary_edges", []).size() == 3, "R6-D audits every boundary edge over clipped zero facets")
+	if result.get("boundary_edges", []).size() == 3:
+		_expect(bool(result.get("boundary_edges", [])[0].get("feasible_incident_triangle_witness", {}).get("valid", false)), "R6-D accepts strict in-domain witness above frozen cutoff")
+		_expect(float(result.get("boundary_edges", [])[0].get("continuous_upper_bound_cross_squared", 0.0)) > 1.0e-12, "R6-D records the continuous cross-squared upper bound")
 
 func _expect(condition: bool, name: String) -> void:
 	assertions += 1

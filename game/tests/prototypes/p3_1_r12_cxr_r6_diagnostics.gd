@@ -358,6 +358,147 @@ func boundary_realizability(subregions: Dictionary, boundary_cycle: Array) -> Di
 		boundary_rows.append({"edge_id": edge_key, "adjacent_subregion": region_id, "continuous_upper_bound_cross_squared": edge_row.get("continuous_max_cross_squared", "UNKNOWN_NOT_CAPTURED"), "upper_bound_complete_over_clipped_piecewise_linear_zero_set": true, "strictly_above_frozen_cutoff": bool(edge_row.get("strictly_above_frozen_cutoff", false)), "feasible_incident_triangle_witness": witness, "geometrically_unrealizable_boundary_edge": not bool(witness.get("valid", false))})
 	return {"valid": true, "boundary_edges": boundary_rows, "geometrically_unrealizable_boundary_edges": boundary_rows.filter(func(row: Dictionary) -> bool: return bool(row.geometrically_unrealizable_boundary_edge)).map(func(row: Dictionary) -> String: return String(row.edge_id))}
 
+## General R6-D edge audit. Each zero facet is clipped against every removed
+## patch triangle, so the upper bound covers the entire projected cavity domain.
+func analyze_patch_boundary(realizer: RefCounted, patch: Array[Dictionary], boundary_cycle: Array, root_positions: Dictionary, projection: Dictionary, facets: Array[Dictionary]) -> Dictionary:
+	if patch.is_empty() or boundary_cycle.size() < 3:
+		return {"valid": false, "reason": "r6_patch_boundary_input_invalid"}
+	var origin: Vector3 = _as_vector3(projection.get("origin", [])); var axis_u: Vector3 = _as_vector3(projection.get("axis_u", [])); var axis_v: Vector3 = _as_vector3(projection.get("axis_v", []))
+	if not origin.is_finite() or not axis_u.is_finite() or not axis_v.is_finite() or axis_u.length_squared() <= 1.0e-20 or axis_v.length_squared() <= 1.0e-20:
+		return {"valid": false, "reason": "r6_projection_basis_invalid"}
+	var boundary_rows: Array[Dictionary] = []; var minimum_margin: float = INF
+	for edge_index in range(boundary_cycle.size()):
+		var a_id: String = String(boundary_cycle[edge_index]); var b_id: String = String(boundary_cycle[(edge_index + 1) % boundary_cycle.size()])
+		if not root_positions.has(a_id) or not root_positions.has(b_id): return {"valid": false, "reason": "r6_boundary_root_position_missing", "edge": [a_id, b_id]}
+		var a: Vector3 = Vector3(root_positions[a_id]); var b: Vector3 = Vector3(root_positions[b_id]); var maximum: float = -INF; var maximum_point: Vector3 = Vector3.ZERO; var maximum_facet: Dictionary = {}; var maximum_piece: Array[Vector3] = []; var maximum_domain: Array[Vector2] = []; var piece_count: int = 0
+		for patch_triangle in patch:
+			var patch_points: Array = patch_triangle.get("points", [])
+			if patch_points.size() != 3: continue
+			var patch_projected: Array[Vector2] = []
+			for point_value in patch_points: patch_projected.append(_project(Vector3(point_value), origin, axis_u, axis_v))
+			for facet in facets:
+				var facet_points: Array = facet.get("points", [])
+				if facet_points.size() != 3: return {"valid": false, "reason": "r6_zero_facet_invalid"}
+				var clipped: Array[Vector3] = _clip_world_triangle_to_region([Vector3(facet_points[0]), Vector3(facet_points[1]), Vector3(facet_points[2])], patch_projected, origin, axis_u, axis_v)
+				if clipped.is_empty(): continue
+				piece_count += 1
+				for point in clipped:
+					var cross_squared: float = _cross_squared(a, b, point)
+					if cross_squared > maximum:
+						maximum = cross_squared; maximum_point = point; maximum_facet = facet; maximum_piece = clipped; maximum_domain = patch_projected
+		var witness: Dictionary = _patch_edge_witness(realizer, a, b, maximum, maximum_point, maximum_piece, maximum_domain, maximum_facet, origin, axis_u, axis_v)
+		var margin: float = maximum - CUTOFF_SQUARED if is_finite(maximum) else -INF
+		minimum_margin = minf(minimum_margin, margin)
+		boundary_rows.append({"edge_id": String(realizer.call("_edge_key", a_id, b_id)), "root_ids": [a_id, b_id], "continuous_upper_bound_cross_squared": maximum if is_finite(maximum) else "UNKNOWN_NOT_CAPTURED", "cutoff_margin": margin if is_finite(margin) else "UNKNOWN_NOT_CAPTURED", "strictly_above_frozen_cutoff": is_finite(maximum) and maximum > CUTOFF_SQUARED, "clipped_zero_facet_piece_count": piece_count, "feasible_incident_triangle_witness": witness, "geometrically_unrealizable_boundary_edge": not bool(witness.get("valid", false))})
+	var blocked: Array[String] = []
+	for row in boundary_rows:
+		if bool(row.geometrically_unrealizable_boundary_edge): blocked.append(String(row.edge_id))
+	return {"valid": true, "boundary_edges": boundary_rows, "geometrically_unrealizable_boundary_edges": blocked, "minimum_cutoff_margin": minimum_margin if is_finite(minimum_margin) else "UNKNOWN_NOT_CAPTURED", "boundary_edge_count": boundary_rows.size()}
+
+func _patch_edge_witness(realizer: RefCounted, a: Vector3, b: Vector3, maximum: float, maximum_point: Vector3, clipped_piece: Array[Vector3], domain_triangle: Array[Vector2], facet: Dictionary, origin: Vector3, axis_u: Vector3, axis_v: Vector3) -> Dictionary:
+	if not is_finite(maximum) or maximum <= CUTOFF_SQUARED or clipped_piece.is_empty() or facet.is_empty(): return {"valid": false, "reason": "continuous_upper_bound_not_above_cutoff"}
+	var centroid: Vector3 = Vector3.ZERO
+	for point in clipped_piece: centroid += point
+	centroid /= float(clipped_piece.size())
+	for lambda_value in [0.0, 1.0e-12, 1.0e-11, 1.0e-10, 1.0e-9, 1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1]:
+		var point: Vector3 = maximum_point.lerp(centroid, float(lambda_value)); var cross_squared: float = _cross_squared(a, b, point)
+		if cross_squared <= CUTOFF_SQUARED: continue
+		if not _strictly_inside_triangle(_project(point, origin, axis_u, axis_v), domain_triangle): continue
+		var bary: Dictionary = realizer.call("_tetra_barycentric", point, facet.get("tetrahedron_positions", [])); var weights: Array = bary.get("weights", [])
+		if not bool(bary.get("valid", false)) or weights.size() != 4: continue
+		var residual: float = 0.0
+		for i in range(4): residual += float(weights[i]) * float(facet.get("tetrahedron_samples", [])[i])
+		if not is_finite(residual) or absf(residual) > RESIDUAL_EPSILON: continue
+		var projected: Vector2 = _project(point, origin, axis_u, axis_v)
+		return {"valid": true, "world_position": _vector3_array(point), "cross_squared": cross_squared, "continuous_field_residual": residual, "tetrahedron_id": String(facet.get("tetrahedron_id", "")), "facet_index": int(facet.get("facet_index", -1)), "source": "CLIPPED_ZERO_FACET_INTERIOR"}
+	return {"valid": false, "reason": "no_strict_interior_witness_above_cutoff", "continuous_upper_bound_cross_squared": maximum}
+
+## Best-first bounded search over causally adjacent face additions. The caller's
+## evaluator must return a complete manifold and boundary-feasibility audit.
+func bounded_cavity_search(initial_face_ids: Array, all_triangles: Array[Dictionary], adjacency: Dictionary, evaluator: Callable, limits: Dictionary = {}) -> Dictionary:
+	var max_faces: int = int(limits.get("max_faces", 12)); var max_states: int = int(limits.get("max_states", 10000)); var max_queue: int = int(limits.get("max_queue", 2000)); var max_ms: int = int(limits.get("max_ms", 30000))
+	if initial_face_ids.is_empty() or max_faces < initial_face_ids.size() or max_states < 1 or max_queue < 1 or max_ms < 1 or not evaluator.is_valid(): return {"status": "INVALID_INPUT", "reason": "r6_cavity_search_preflight_invalid"}
+	var face_by_id: Dictionary = {}; var edge_faces: Dictionary = {}
+	for triangle in all_triangles:
+		var face_id: String = String(triangle.get("triangle_id", "")); var ids: Array = triangle.get("root_ids", [])
+		if face_id.is_empty() or ids.size() != 3: return {"status": "INVALID_INPUT", "reason": "r6_mesh_face_identity_invalid"}
+		face_by_id[face_id] = triangle
+		for i in range(3):
+			var key: String = _edge_key_ids(String(ids[i]), String(ids[(i + 1) % 3]))
+			if not edge_faces.has(key): edge_faces[key] = []
+			edge_faces[key].append(face_id)
+	var initial: Array[String] = []; for value in initial_face_ids: initial.append(String(value))
+	initial.sort()
+	for face_id in initial:
+		if not face_by_id.has(face_id): return {"status": "INVALID_INPUT", "reason": "r6_initial_face_missing", "face_id": face_id}
+	var initial_audit: Dictionary = evaluator.call(initial)
+	if not bool(initial_audit.get("valid", false)): return {"status": "INVALID_INPUT", "reason": "r6_initial_cavity_invalid", "audit": initial_audit}
+	var queue: Array[Dictionary] = [{"face_ids": initial, "audit": initial_audit}]; var visited: Dictionary = {"|".join(initial): true}; var examined: int = 0; var generated: int = 1; var started: int = Time.get_ticks_msec(); var best: Dictionary = queue[0]
+	while not queue.is_empty():
+		if examined >= max_states: return {"status": "PARTIAL", "terminal_reason": "VISITED_STATE_CAP", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
+		if Time.get_ticks_msec() - started >= max_ms: return {"status": "PARTIAL", "terminal_reason": "WALL_TIME_CAP", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
+		queue.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return _r6_cavity_state_less(a, b))
+		var state: Dictionary = queue.pop_front(); examined += 1; var audit: Dictionary = state.audit
+		if bool(audit.get("manifold", false)) and int(audit.get("boundary_components", 2147483647)) == 1 and audit.get("unrealizable_edges", []).is_empty(): return {"status": "FOUND", "selected": state, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
+		var ids: Array[String] = state.face_ids
+		if ids.size() >= max_faces: continue
+		var candidate_set: Dictionary = {}
+		for edge_value in audit.get("unrealizable_edges", []):
+			var edge_key: String = String(edge_value)
+			for face_id_value in edge_faces.get(edge_key, []):
+				var face_id: String = String(face_id_value)
+				if not ids.has(face_id): candidate_set[face_id] = true
+		var candidates: Array[String] = []; for value in candidate_set.keys(): candidates.append(String(value)); candidates.sort()
+		for face_id in candidates:
+			var next_ids: Array[String] = ids.duplicate(); next_ids.append(face_id); next_ids.sort(); var signature: String = "|".join(next_ids)
+			if visited.has(signature): continue
+			if generated >= max_states: return {"status": "PARTIAL", "terminal_reason": "VISITED_STATE_CAP", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
+			visited[signature] = true; generated += 1
+			var next_audit: Dictionary = evaluator.call(next_ids)
+			if not bool(next_audit.get("valid", false)): continue
+			var next_state: Dictionary = {"face_ids": next_ids, "audit": next_audit}
+			if _r6_cavity_state_less(next_state, best): best = next_state
+			if queue.size() >= max_queue: return {"status": "PARTIAL", "terminal_reason": "PRIORITY_QUEUE_CAP", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
+			queue.append(next_state)
+	return {"status": "EXHAUSTED", "terminal_reason": "FINITE_CAUSAL_SEARCH_EXHAUSTED", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": 0, "elapsed_ms": Time.get_ticks_msec() - started}
+
+func _r6_cavity_state_less(a: Dictionary, b: Dictionary) -> bool:
+	var af: Array = a.get("face_ids", []); var bf: Array = b.get("face_ids", [])
+	if af.size() != bf.size(): return af.size() < bf.size()
+	var aa: Dictionary = a.get("audit", {}); var ba: Dictionary = b.get("audit", {})
+	var au: int = aa.get("unrealizable_edges", []).size(); var bu: int = ba.get("unrealizable_edges", []).size()
+	if au != bu: return au < bu
+	var am: float = float(aa.get("minimum_cutoff_margin", -INF)); var bm: float = float(ba.get("minimum_cutoff_margin", -INF))
+	if am != bm: return am > bm
+	var ac: int = int(aa.get("boundary_components", 2147483647)); var bc: int = int(ba.get("boundary_components", 2147483647))
+	if ac != bc: return ac < bc
+	return "|".join(af) < "|".join(bf)
+
+func _edge_key_ids(a: String, b: String) -> String:
+	return a + "\u001f" + b if a < b else b + "\u001f" + a
+
+func search_patch_cavities(realizer: RefCounted, all_triangles: Array[Dictionary], initial_face_ids: Array, root_positions: Dictionary, projection: Dictionary, facets: Array[Dictionary], limits: Dictionary = {}) -> Dictionary:
+	var evaluate: Callable = func(face_ids: Array) -> Dictionary:
+		var patch: Array[Dictionary] = realizer.call("_r3_patch_rows_for_ids", all_triangles, face_ids)
+		if patch.size() != face_ids.size(): return {"valid": false, "reason": "r6_candidate_patch_reconstruction_invalid"}
+		var connectivity: Dictionary = realizer.call("_r3_patch_connectivity", patch)
+		var boundary: Dictionary = realizer.call("_r3_derive_remaining_boundary", all_triangles, face_ids)
+		if not bool(connectivity.get("valid", false)) or not bool(boundary.get("valid", false)): return {"valid": false, "reason": "r6_candidate_boundary_nonmanifold", "connectivity": connectivity, "boundary": boundary}
+		var cycles: Dictionary = realizer.call("_r4_boundary_cycle_set", boundary)
+		if not bool(cycles.get("valid", false)): return {"valid": false, "reason": "r6_candidate_boundary_cycles_invalid", "cycles": cycles}
+		var cycle_rows: Array = cycles.get("cycles", []); var blocked: Array[String] = []; var minimum_margin: float = INF; var edge_audits: Array[Dictionary] = []
+		for cycle_row in cycle_rows:
+			var cycle: Array = cycle_row.get("root_ids", [])
+			var edge_audit: Dictionary = analyze_patch_boundary(realizer, patch, cycle, root_positions, projection, facets)
+			if not bool(edge_audit.get("valid", false)): return {"valid": false, "reason": "r6_candidate_edge_audit_invalid", "edge_audit": edge_audit}
+			for edge in edge_audit.get("geometrically_unrealizable_boundary_edges", []): blocked.append(String(edge))
+			minimum_margin = minf(minimum_margin, float(edge_audit.get("minimum_cutoff_margin", -INF)))
+			edge_audits.append(edge_audit)
+		blocked.sort()
+		return {"valid": true, "manifold": true, "boundary_components": cycle_rows.size(), "unrealizable_edges": blocked, "minimum_cutoff_margin": minimum_margin, "boundary": boundary, "cycles": cycles, "edge_audits": edge_audits}
+	var adjacency: Dictionary = realizer.call("_adjacency", all_triangles)
+	return bounded_cavity_search(initial_face_ids, all_triangles, adjacency, evaluate, limits)
+
 func _zero_vertex_sources(tet_data: Dictionary) -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
 	var positions: Array = tet_data.get("positions", [])
