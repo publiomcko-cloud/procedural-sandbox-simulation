@@ -1,0 +1,10 @@
+{
+  "attempt_id": "R3_TARGET_20261031_05",
+  "dispatcher_pid": 45136,
+  "parent_pid": 45936,
+  "executable": "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.9.0_x64__8wekyb3d8bbwe\\pwsh.exe",
+  "process_start_utc": "2026-11-01T01:08:07.9026495Z",
+  "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+  "source_sha": "4734e6cb0c80cde086ea86e7d8afcda983e3a24b",
+  "status": "DISPATCHER_STARTED"
+}
