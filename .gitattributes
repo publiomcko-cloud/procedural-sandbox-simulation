@@ -21,6 +21,7 @@ game/tests/prototypes/p3_1_r9_2_e2e_inputs.jsonl -text
 game/tests/prototypes/p3_1_r9_2_e2e_inputs.sha256 -text
 game/tests/prototypes/p3_1_r12_cx_residual_fixture.json -text
 game/tests/prototypes/fixtures/r12_cxr_r4/** -text
+game/tests/prototypes/fixtures/r12_cxr_r5/** -text
 docs/reports/P3-1-R9.2-SHARED/evidence/** -text whitespace=cr-at-eol
 docs/reports/P3-1-R12-CXR-R2-R3/evidence/** -text whitespace=cr-at-eol,-blank-at-eof
 docs/reports/P3-1-R12-CXR-R4/evidence/** -text whitespace=cr-at-eol,-blank-at-eof
