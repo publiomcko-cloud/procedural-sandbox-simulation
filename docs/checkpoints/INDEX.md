@@ -1,3 +1,7 @@
+## 2026-11-01 — P3.1 R12-CXR R3-A/R3-B partial closeout
+
+- [R3-A/R3-B implementation closeout](2026-11-01-P3-1-R12-CXR-R3AB-CLOSEOUT.md) — six frozen target attempts consumed; contract 193/193 passed; R3-A candidate geometry and R3-B manifold boundary remain partial; no infeasibility or downstream qualification claimed.
+
 ## 2026-10-31 — P3.1 R12-CXR R3 attempt 05 launcher recovery; target not started
 
 - [R3 attempt 05 launcher recovery](2026-10-31-P3-1-R12-CXR-R3-ATTEMPT-05-LAUNCHER-RECOVERY.md) — first wrapper failed before reservation/process creation because attempt directories were absent; corrected fail-if-exists directory setup parses cleanly; target remains NOT_STARTED.

@@ -1,0 +1,8 @@
+{
+  "attempt": "pretarget_16c3dbe_01",
+  "status": "BLOCKED_BEFORE_GODOT",
+  "cause": "PowerShell metadata collector called Trim() on empty branch name in detached worktree",
+  "gates_started": 0,
+  "scenario_started": false,
+  "time_utc": "2026-11-01T03:28:52.8458865Z"
+}
