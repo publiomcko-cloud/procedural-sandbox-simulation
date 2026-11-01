@@ -7,6 +7,7 @@ const Campaign := preload("res://tests/prototypes/p3_1_r12_cxr_campaign.gd")
 var assertions: int = 0
 var failures: Array[String] = []
 var _sequence_probe_calls: Array[Array] = []
+var _joint_probe_calls: Array[Array] = []
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -526,6 +527,18 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	var indexed_wrong: Dictionary = realizer.call("derive_remaining_boundary_indexed_for_test", wrong_winding, ["r3-patch"])
 	_check(not bool(wrong.get("valid", true)) and String(wrong.get("reason", "")) == "boundary_cycle_degree_invalid", "R3 rejects inconsistent surviving-owner winding when it cannot form one oriented cavity boundary cycle")
 	_check(indexed_wrong == wrong, "R3 indexed boundary preserves invalid surviving-winding diagnostics exactly")
+	var wrong_adjacency: Dictionary = realizer.call("_adjacency", wrong_winding)
+	var offending_expansions: Array[String] = realizer.call("_r3_boundary_expansion_candidate_ids", wrong, ["r3-patch"], wrong_adjacency, ["r3-patch", "r3-out-ab", "r3-out-ac", "r3-out-bc"])
+	_check(offending_expansions.has("r3-out-ac"), "R3 winding conflict identifies the surviving C6 owner face on the offending boundary edge")
+	var offending_selector: RefCounted = Realizer.new()
+	offending_selector.set("_cxr_active_phase", "r3")
+	offending_selector.set("_cxr_search_started_usec", Time.get_ticks_usec())
+	offending_selector.set("_cxr_cavity_started_usec", Time.get_ticks_usec())
+	offending_selector.set("_cxr_search_nodes_total", 0)
+	offending_selector.set("_cxr_search_nodes_cavity", 0)
+	offending_selector.set("_cxr_patch_selection_nodes_total", 0)
+	var offending_repair: Dictionary = offending_selector.call("_r3_select_boundary_patch", ["r3-patch"], ["r3-patch", "r3-out-ab", "r3-out-ac", "r3-out-bc"], wrong_winding, wrong_adjacency, 1)
+	_check(bool(offending_repair.get("valid", false)) and offending_repair.get("offending_expansion_candidate_ids", []).has("r3-out-ac"), "R3 uses the surviving face adjacent to a winding-defective edge as a deterministic cavity expansion candidate")
 	var open_source: Array[Dictionary] = [patch_triangle]
 	var open: Dictionary = realizer.call("derive_remaining_boundary_for_test", open_source, ["r3-patch"])
 	var indexed_open: Dictionary = realizer.call("derive_remaining_boundary_indexed_for_test", open_source, ["r3-patch"])
@@ -622,7 +635,7 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	_check(JSON.stringify(canonical_groups) == JSON.stringify(reordered_groups), "R3 per-cavity group ordering is stable under residual discovery order")
 	realizer.set("_cxr_active_phase", "r3")
 	var r3_limits: Dictionary = realizer.call("_cxr_limits")
-	_check(int(r3_limits.get("max_cavities", -1)) == 3 and String(r3_limits.get("cavity_policy", "")) == "original_overlapping_defect_groups_searched_separately", "R3 permits the preregistered cavity cap and preserves original groups separately")
+	_check(int(r3_limits.get("max_cavities", -1)) == 3 and String(r3_limits.get("cavity_policy", "")) == "search_original_groups_independently_then_joint_search_only_intersecting_minimum_patches", "R3 permits the preregistered cavity cap, preserves initial groups, and merges only proven patch conflicts")
 	_check(int(r3_limits.get("max_cavity_level", -1)) == 4 and String(r3_limits.get("patch_policy", "")) == "minimum_cardinality_connected_subsets_within_dual_graph_radius_layers_0_through_4_per_cavity", "R3 pins deterministic minimum-cardinality subset selection within the evidence-directed four-ring bound")
 	_check(int(r3_limits.get("patch_selection_state_cap_per_cavity", -1)) == 32768 and int(r3_limits.get("patch_selection_state_cap_total", -1)) == 65536, "R3 patch selection shares existing per-cavity and total search-state limits")
 	_check(String(r3_limits.get("boundary_source", "")) == "remaining_C6_edge_incidence_after_cavity_patch_removal" and String(r3_limits.get("support_source", "")) == "original_frozen_residual_faces_only", "R3 limit contract pins per-cavity remaining-mesh boundary and original residual-only support provenance")
@@ -642,6 +655,22 @@ func _test_cxr_r3_remaining_boundary_and_separate_cavities() -> void:
 	_check(mixed_terminal == "r3_cavity_boundary_domains_invalid:1/2", "R3 aggregation preserves a partial disposition when any cavity lacks a valid boundary domain")
 	_check(solved_then_unsolved == "r3_unsolved_cavity_domain_exhausted_after_other_cavity_solution", "R3 reports an unsolved cavity separately when another cavity already has a solution")
 	_check(overlap_terminal == "r3_selected_patch_overlap_requires_alternative_solution_search", "R3 does not claim exhaustion when selected per-cavity patches overlap")
+	var joint_groups: Array = [["seed-a"], ["seed-b"], ["seed-c"]]
+	var joint_results: Array[Dictionary] = [
+		{"valid": true, "patch_triangle_ids": ["seed-a", "shared-ab"]},
+		{"valid": true, "patch_triangle_ids": ["seed-b", "shared-ab"]},
+		{"valid": true, "patch_triangle_ids": ["seed-c", "independent"]}
+	]
+	var joint_plan: Dictionary = realizer.call("_r3_joint_cavity_plan", joint_groups, joint_results)
+	_check(bool(joint_plan.get("valid", false)) and String(joint_plan.get("reason", "")) == "r3_minimal_manifold_expansion_patches_intersected", "R3 creates a joint cavity plan only after selected minimal patches intersect")
+	_check(joint_plan.get("groups", []) == [["seed-a", "seed-b"], ["seed-c"]] and joint_plan.get("components", [])[0].get("intersection_patch_ids", []) == ["shared-ab"], "R3 preserves frozen residual seeds, records the exact shared patch face, and leaves unrelated cavities separate")
+	_joint_probe_calls.clear()
+	var joint_execution: Dictionary = realizer.call("_r3_execute_joint_cavity_plan", joint_groups, joint_results, Callable(self, "_joint_cavity_probe_search"))
+	_check(bool(joint_execution.get("valid", false)) and _joint_probe_calls == [["seed-a", "seed-b"]], "R3 reruns exactly one union-seed cavity search for the intersecting group component")
+	_check(joint_execution.get("cavity_results", []).size() == 2 and bool(joint_execution.get("cavity_results", [])[0].get("joint_cavity_merge", {}).get("merged_frozen_residual_ids", []).has("seed-a")) and joint_execution.get("cavity_results", [])[1].get("patch_triangle_ids", []) == ["seed-c", "independent"], "R3 preserves joint seed identity and the unrelated cavity's original solution")
+	var disjoint_results: Array[Dictionary] = [{"valid": true, "patch_triangle_ids": ["seed-a", "face-a"]}, {"valid": true, "patch_triangle_ids": ["seed-b", "face-b"]}]
+	var disjoint_plan: Dictionary = realizer.call("_r3_joint_cavity_plan", [["seed-a"], ["seed-b"]], disjoint_results)
+	_check(not bool(disjoint_plan.get("valid", true)) and String(disjoint_plan.get("reason", "")) == "r3_joint_cavity_no_selected_patch_intersection", "R3 refuses to merge disjoint minimal cavity patches for convenience")
 	var one_triangle: Array[Dictionary] = [patch_triangle]
 	realizer.set("_cxr_search_started_usec", Time.get_ticks_usec())
 	var not_started: Dictionary = realizer.call("_search_cxr_cavity_r3", ["r3-patch"], one_triangle, {}, {"residuals": [{"triangle_id": "r3-patch"}]}, PackedFloat32Array(), {})
@@ -750,6 +779,10 @@ func _sequence_probe_candidate(cavity_ids: Array) -> Dictionary:
 	_sequence_probe_calls.append(cavity_ids.duplicate())
 	var is_partial: bool = String(cavity_ids[0]) == "partial-cavity"
 	return {"valid": true, "search_started": true, "search_complete": not is_partial, "search_exhaustive": not is_partial, "terminal_reason": "limit_candidate_search" if is_partial else "finite_domain_exhausted_with_candidate"}
+
+func _joint_cavity_probe_search(seed_ids: Array) -> Dictionary:
+	_joint_probe_calls.append(seed_ids.duplicate())
+	return {"valid": true, "search_started": true, "search_complete": true, "search_exhaustive": true, "terminal_reason": "minimum_valid_cavity_solution", "patch_triangle_ids": seed_ids.duplicate()}
 
 func _triangle(id: String, root_ids: Array, points_by_id: Dictionary, rejected: bool) -> Dictionary:
 	var points: Array[Vector3] = [points_by_id[root_ids[0]], points_by_id[root_ids[1]], points_by_id[root_ids[2]]]
