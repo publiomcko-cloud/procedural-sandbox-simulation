@@ -22,6 +22,8 @@ const R4CavitySignature := "90be2d27d3c08ccb2fe93ebf6b8a0da0d8955d3c4d533a449680
 const R5CavitySha := "a54a407ac84b3fd7d64108f41457d5ecc7ff335abaee6899819de579ebeae6a6"
 const FROZEN_CROSS_SQUARED_CUTOFF: float = 1.0e-12
 
+var _terminal_failure_requested: bool = false
+
 func _initialize() -> void:
 	call_deferred("_run")
 
@@ -259,7 +261,8 @@ func _run() -> void:
 		return
 	if mode == "synthesize":
 		var synthesis_result: Dictionary = _run_constraint_synthesis(realizer, volume.get("values", PackedFloat32Array()), roi, r4_context, analysis_patch, analysis_patch_ids, seed_triangles, analysis_boundary, triangles, search_residual_fixture, base, snapshot, support_fixture, residual_fixture.get("residuals", []), output_path)
-		if synthesis_result.is_empty(): return
+		if synthesis_result.is_empty() or _terminal_failure_requested: return
+		quit(0)
 		return
 	var output_file: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
 	if output_file == null:
@@ -653,6 +656,7 @@ func _string_array(value: Variant) -> Array[String]:
 	return result
 
 func _fail(reason: String, details: Dictionary) -> void:
+	_terminal_failure_requested = true
 	printerr("R5_CAMPAIGN_FAIL " + JSON.stringify({"reason": reason, "details": details}))
 	quit(2)
 

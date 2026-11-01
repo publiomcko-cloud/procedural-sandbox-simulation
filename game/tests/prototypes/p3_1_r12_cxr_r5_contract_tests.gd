@@ -19,6 +19,7 @@ func _run() -> void:
 	_test_zero_volume_classification(synth)
 	_test_field_zero_edge_intersections()
 	_test_constraint_intervals_and_cross_objective(synth)
+	_test_active_boundary_critical_candidates(synth)
 	_test_support_identity_and_graph_digest(synth)
 	_test_r2_candidate_gates()
 	_test_constraint_guided_support_r2_triangulation(synth)
@@ -131,6 +132,26 @@ func _test_constraint_intervals_and_cross_objective(synth: RefCounted) -> void:
 	_expect(bool(maximum.get("valid", false)) and Vector3(maximum.get("position", Vector3.ZERO)) == Vector3(0.25, 0.8, 0) and is_equal_approx(float(maximum.get("cross_squared", -1.0)), 0.64), "cross_squared_maximum_on_zero_set_segment")
 	_expect(is_equal_approx(float(synth.call("_support_pair_objective", Vector3.ZERO, Vector3.RIGHT, Vector3(0.25, 0.8, 0))), 0.64), "support_pair_objective_matches_cutoff_metric")
 
+func _test_active_boundary_critical_candidates(synth: RefCounted) -> void:
+	var domain: Array[Vector2] = [Vector2(0, 0), Vector2(2, 0), Vector2(2, 0.000002), Vector2(0, 0.000002)]
+	var clipped: Array[Vector2] = [Vector2(0, 0), Vector2(2, 0), Vector2(2, 0.000002)]
+	var records: Array[Dictionary] = synth.call("_interior_witness_records", clipped, domain)
+	var records_again: Array[Dictionary] = synth.call("_interior_witness_records", clipped, domain)
+	_expect(records == records_again, "active_boundary_critical_candidates_are_deterministic")
+	_expect(records.size() <= 7, "active_boundary_candidates_preserve_preregistered_witness_cap")
+	var centroid: Vector2 = synth.call("_polygon_centroid", clipped)
+	var centroid_score: float = float(synth.call("_support_pair_objective", Vector3.ZERO, Vector3.RIGHT, Vector3(centroid.x, centroid.y, 0)))
+	var active_count: int = 0
+	var maximum_score: float = -INF
+	for record in records:
+		var point: Vector2 = Vector2(record.get("position", Vector2.ZERO))
+		_expect(bool(synth.call("_point_strictly_inside", point, domain)), "critical_candidate_remains_strictly_inside_frozen_domain")
+		if String(record.get("method", "")) == "ACTIVE_DOMAIN_BOUNDARY_INWARD_LIMIT":
+			active_count += 1
+			maximum_score = maxf(maximum_score, float(synth.call("_support_pair_objective", Vector3.ZERO, Vector3.RIGHT, Vector3(point.x, point.y, 0))))
+	_expect(active_count > 0, "active_domain_boundary_generates_inward_critical_candidate")
+	_expect(centroid_score <= 1.0e-12 and maximum_score > 1.0e-12, "critical_inward_candidate_finds_frozen_cutoff_triangle_missed_by_centroid")
+
 func _test_support_identity_and_graph_digest(synth: RefCounted) -> void:
 	var point: Vector3 = Vector3(0.25, -0.5, 0.75)
 	_expect(String(synth.call("_binary32_position_identity", point)) == String(synth.call("_binary32_position_identity", point)), "binary_position_identity_deterministic")
@@ -147,6 +168,14 @@ func _test_support_identity_and_graph_digest(synth: RefCounted) -> void:
 	var digest_a: String = synth.call("_candidate_graph_sha256", digest_rows_a)
 	var digest_b: String = synth.call("_candidate_graph_sha256", digest_rows_b)
 	_expect(digest_a == digest_b, "candidate_graph_digest_order_independent")
+	var empty_sha256: String = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	var empty_probe_rows: Array[String] = []
+	var empty_graph_triangles: Array[Dictionary] = []
+	var empty_graph_edges: Dictionary = {}
+	var empty_graph_supports: Dictionary = {}
+	_expect(String(synth.call("_candidate_graph_sha256", empty_probe_rows)) == empty_sha256, "empty_probe_rows_have_canonical_sha256")
+	var empty_graph: Dictionary = synth.call("_candidate_graph_summary", empty_graph_triangles, empty_graph_edges, empty_graph_supports)
+	_expect(String(empty_graph.get("candidate_graph_sha256", "")) == empty_sha256, "empty_candidate_graph_has_canonical_sha256")
 
 func _test_r2_candidate_gates() -> void:
 	var realizer: RefCounted = Realizer.new()
@@ -252,6 +281,8 @@ func _test_campaign_result_scope() -> void:
 	_expect(campaign_source.contains("R5_EQUAL_LOD_PASS_DOWNSTREAM_PENDING"), "equal_lod_pass_does_not_claim_full_downstream_qualification")
 	_expect(campaign_source.contains("UNKNOWN_NOT_CAPTURED_FINITE_WITNESS_MODEL_DOES_NOT_ENUMERATE_ALL_REGIONS"), "unmodeled_feasible_region_counts_are_not_reported_as_zero")
 	_expect(synthesizer_source.contains("R5_SYNTHESIS_ENUMERATION_BEGIN") and synthesizer_source.contains("R12CXR_R5_EXECUTION_ID"), "target_attempt_marker_is_execution_scoped")
+	_expect(campaign_source.contains("if synthesis_result.is_empty() or _terminal_failure_requested: return") and campaign_source.contains("_terminal_failure_requested = true"), "synthesis_failure_preserves_nonzero_exit_request")
+	_expect(campaign_source.contains("if synthesis_result.is_empty() or _terminal_failure_requested: return\n\t\tquit(0)"), "written_synthesis_result_requests_clean_success_exit")
 
 func _test_residual_owner_normalization(synth: RefCounted) -> void:
 	var frozen_row: Dictionary = {"triangle_id": "FROZEN_OWNER", "triangle_vertices_world": [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [0.0, 3.0, 0.0]]}

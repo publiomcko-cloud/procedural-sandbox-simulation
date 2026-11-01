@@ -11,6 +11,7 @@ const MAX_SYNTHESIS_USEC: int = 30000000
 const MAX_BOUNDARY_SOURCE_PAIRS: int = 15
 const MAX_WITNESSES_PER_CLIPPED_FRAGMENT: int = 7
 const FROZEN_CROSS_SQUARED_CUTOFF: float = 1.0e-12
+const SHA256_EMPTY_BYTES: String = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String) -> Dictionary:
 	var started_usec: int = Time.get_ticks_usec()
@@ -125,9 +126,9 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 					cap_reason = "R5_MAX_CLIP_FRAGMENTS"
 					break
 				clip_fragments += 1
-				var witnesses: Array[Vector2] = _interior_witnesses(clipped, polygon)
-				if witnesses.is_empty(): continue
-				if witnesses.size() > MAX_WITNESSES_PER_CLIPPED_FRAGMENT:
+				var witness_records: Array[Dictionary] = _interior_witness_records(clipped, polygon)
+				if witness_records.is_empty(): continue
+				if witness_records.size() > MAX_WITNESSES_PER_CLIPPED_FRAGMENT:
 					cap_reason = "R5_MAX_WITNESSES_PER_CLIPPED_FRAGMENT"
 					break
 				for pair_i in range(boundary_ids.size()):
@@ -142,7 +143,8 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 						var b: Vector3 = vertex_positions[id_b]
 						var best_witness: Dictionary = {}
 						var best_cross_squared: float = -1.0
-						for witness in witnesses:
+						for witness_record in witness_records:
+							var witness: Vector2 = Vector2(witness_record.get("position", Vector2.ZERO))
 							var witness_check: Dictionary = _validate_witness(realizer, witness, source_triangle_2d, world_triangle, tet_data, polygon, vertex_positions, source_origins, max_support_distance, residual_epsilon, barycentric_epsilon)
 							if not bool(witness_check.get("valid", false)):
 								var witness_reason: String = String(witness_check.get("reason", "UNKNOWN_NOT_CAPTURED"))
@@ -150,6 +152,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 								elif witness_reason == "support_field_residual_invalid": skipped_field_residual += 1
 								elif witness_reason in ["support_on_cavity_boundary", "support_duplicates_topology_root"]: skipped_boundary_or_root += 1
 								continue
+							witness_check["critical_candidate_method"] = String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED"))
 							var cross: Vector3 = (b - a).cross(Vector3(witness_check.get("world", Vector3.ZERO)) - a)
 							var cross_squared: float = cross.length_squared()
 							if is_finite(cross_squared) and cross_squared > best_cross_squared:
@@ -186,7 +189,8 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 							"world_position": point,
 							"distance_to_face_centroid": distance,
 							"binary32_position_identity": binary_identity,
-							"max_constraint_cross_squared": best_cross_squared
+							"max_constraint_cross_squared": best_cross_squared,
+							"critical_candidate_method": String(best_witness.get("critical_candidate_method", "UNKNOWN_NOT_CAPTURED"))
 						}
 						if not raw_by_identity.has(binary_identity) and raw_by_identity.size() >= MAX_RAW_SUPPORTS:
 							cap_reason = "R5_MAX_RAW_SUPPORTS"
@@ -337,7 +341,13 @@ func _insert_support_by_identity(table: Dictionary, support: Dictionary) -> void
 func _candidate_graph_sha256(probe_rows: Array[String]) -> String:
 	var ordered: Array[String] = probe_rows.duplicate()
 	ordered.sort()
-	return Core.sha256("\n".join(ordered).to_utf8_buffer())
+	return _sha256_allow_empty("\n".join(ordered).to_utf8_buffer())
+
+func _sha256_allow_empty(bytes: PackedByteArray) -> String:
+	# HashingContext.update rejects a zero-length update in the pinned Godot build.
+	# SHA-256 of the empty byte sequence is fixed and must not emit a runtime error.
+	if bytes.is_empty(): return SHA256_EMPTY_BYTES
+	return Core.sha256(bytes)
 
 func _support_pair_objective(a: Vector3, b: Vector3, point: Vector3) -> float:
 	var cross: Vector3 = (b - a).cross(point - a)
@@ -407,7 +417,7 @@ func _candidate_graph_summary(triangles: Array[Dictionary], edges: Dictionary, s
 		if degree >= 2: supports_ge_2 += 1
 		if supports_with_triangle.has(support_id): supports_with_legal_triangle += 1
 	canonical_lines.sort()
-	return {"legal_root_root_edges": int(edge_types.root_root), "legal_root_support_edges": int(edge_types.root_support), "legal_support_support_edges": int(edge_types.support_support), "support_degree_ge_1": supports_ge_1, "support_degree_ge_2": supports_ge_2, "supports_with_legal_triangle": supports_with_legal_triangle, "minimum_legal_cross_squared": minimum_cross if minimum_cross < INF else "NO_LEGAL_TRIANGLES", "maximum_legal_cross_squared": maximum_cross if maximum_cross > -INF else "NO_LEGAL_TRIANGLES", "candidate_graph_sha256": Core.sha256("\n".join(canonical_lines).to_utf8_buffer())}
+	return {"legal_root_root_edges": int(edge_types.root_root), "legal_root_support_edges": int(edge_types.root_support), "legal_support_support_edges": int(edge_types.support_support), "support_degree_ge_1": supports_ge_1, "support_degree_ge_2": supports_ge_2, "supports_with_legal_triangle": supports_with_legal_triangle, "minimum_legal_cross_squared": minimum_cross if minimum_cross < INF else "NO_LEGAL_TRIANGLES", "maximum_legal_cross_squared": maximum_cross if maximum_cross > -INF else "NO_LEGAL_TRIANGLES", "candidate_graph_sha256": _sha256_allow_empty("\n".join(canonical_lines).to_utf8_buffer())}
 
 func _project(point: Vector3, context: Dictionary) -> Vector2:
 	var delta: Vector3 = point - Vector3(context.get("projection_origin", Vector3.ZERO))
@@ -485,6 +495,54 @@ func _interior_witnesses(clipped: Array[Vector2], domain: Array[Vector2]) -> Arr
 		return a.y < b.y
 	)
 	return result
+
+func _interior_witness_records(clipped: Array[Vector2], domain: Array[Vector2]) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if clipped.size() < 3 or domain.size() < 3: return result
+	var centroid: Vector2 = _polygon_centroid(clipped)
+	if _point_strictly_inside(centroid, domain):
+		_insert_witness_record(result, centroid, "CLIPPED_ZERO_PRIMITIVE_CENTROID")
+	for boundary_point in clipped:
+		var candidate: Vector2 = boundary_point
+		var method: String = "CLIPPED_ZERO_PRIMITIVE_VERTEX"
+		if not _point_strictly_inside(candidate, domain):
+			var inset: Dictionary = _nearest_strict_interior_point(boundary_point, centroid, domain)
+			if not bool(inset.get("valid", false)): continue
+			candidate = Vector2(inset.get("position", Vector2.ZERO))
+			method = "ACTIVE_DOMAIN_BOUNDARY_INWARD_LIMIT"
+		if _point_strictly_inside(candidate, domain): _insert_witness_record(result, candidate, method)
+	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var point_a: Vector2 = Vector2(a.get("position", Vector2.ZERO))
+		var point_b: Vector2 = Vector2(b.get("position", Vector2.ZERO))
+		if point_a.x != point_b.x: return point_a.x < point_b.x
+		if point_a.y != point_b.y: return point_a.y < point_b.y
+		return String(a.get("method", "")) < String(b.get("method", ""))
+	)
+	return result
+
+func _insert_witness_record(records: Array[Dictionary], position: Vector2, method: String) -> void:
+	for record in records:
+		if Vector2(record.get("position", Vector2.ZERO)) == position:
+			if method < String(record.get("method", "")): record["method"] = method
+			return
+	records.append({"position": position, "method": method})
+
+func _nearest_strict_interior_point(boundary_point: Vector2, interior_point: Vector2, domain: Array[Vector2]) -> Dictionary:
+	if not boundary_point.is_finite() or not interior_point.is_finite() or not _point_strictly_inside(interior_point, domain):
+		return {"valid": false, "reason": "active_boundary_interior_endpoint_invalid"}
+	var lower: float = 0.0
+	var upper: float = 1.0
+	var best: Vector2 = interior_point
+	for _iteration in range(32):
+		var parameter: float = (lower + upper) * 0.5
+		var candidate: Vector2 = boundary_point.lerp(interior_point, parameter)
+		if _point_strictly_inside(candidate, domain):
+			upper = parameter
+			best = candidate
+		else:
+			lower = parameter
+	if not _point_strictly_inside(best, domain): return {"valid": false, "reason": "active_boundary_interior_search_unresolved"}
+	return {"valid": true, "position": best, "parameter": upper, "iterations": 32, "method": "BINARY_SEARCH_FIRST_STRICT_INTERIOR_ALONG_ZERO_PRIMITIVE_SEGMENT"}
 
 func _polygon_centroid(points: Array[Vector2]) -> Vector2:
 	var twice_area: float = 0.0
