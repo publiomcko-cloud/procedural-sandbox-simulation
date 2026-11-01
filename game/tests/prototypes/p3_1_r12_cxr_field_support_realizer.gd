@@ -22,6 +22,11 @@ const CXR_R2_MAX_CANDIDATE_TRIANGLES_PER_CAVITY: int = 65536
 const CXR_R2_MAX_CANDIDATE_TRIANGLES_TOTAL: int = 131072
 const CXR_R2_MAX_SEARCH_STATES_PER_CAVITY: int = 32768
 const CXR_R2_MAX_SEARCH_STATES_TOTAL: int = 65536
+const CXR_R4_MAX_REMOVED_FACES: int = 64
+const CXR_R4_MAX_BOUNDARY_STATES: int = 20000
+const CXR_R4_MAX_QUEUE_SIZE: int = 4096
+const CXR_R4_MAX_BOUNDARY_COMPONENTS: int = 8
+const CXR_R4_MAX_BOUNDARY_USEC: int = 10000000
 
 var _cxr_search_started_usec: int = 0
 var _cxr_cavity_started_usec: int = 0
@@ -79,7 +84,7 @@ func _realize_cxr_impl(graph: Dictionary, values: PackedFloat32Array, roi: Dicti
 	_cxr_active_phase = OS.get_environment("R12CXR_PHASE")
 	if _cxr_active_phase.is_empty():
 		_cxr_active_phase = "r1"
-	if not ["r1", "r2", "r3"].has(_cxr_active_phase):
+	if not ["r1", "r2", "r3", "r4"].has(_cxr_active_phase):
 		return {"valid": false, "cx_algorithm_started": false, "reason": "cxr_phase_invalid", "phase": _cxr_active_phase}
 	_cxr_active_snapshot = snapshot
 	_cxr_local_search_marker_emitted = false
@@ -111,7 +116,7 @@ func _realize_cxr_impl(graph: Dictionary, values: PackedFloat32Array, roi: Dicti
 	# base realization owns topology arcs. Give R2 that authoritative arc map;
 	# the local context below narrows it to obligations in each cavity.
 	var search_residual_fixture: Dictionary = residual_fixture
-	if ["r2", "r3"].has(_cxr_active_phase):
+	if ["r2", "r3", "r4"].has(_cxr_active_phase):
 		search_residual_fixture = residual_fixture.duplicate(true)
 		search_residual_fixture["arc_map"] = base.get("arc_map", []).duplicate(true)
 		search_residual_fixture["applied_flips"] = base.get("applied_flips", []).duplicate(true)
@@ -119,7 +124,7 @@ func _realize_cxr_impl(graph: Dictionary, values: PackedFloat32Array, roi: Dicti
 	var adjacency: Dictionary = _adjacency(triangles)
 	_orient_rejected_triangles(triangles, adjacency)
 	var original_triangles: Array[Dictionary] = triangles.duplicate(true)
-	if _cxr_active_phase == "r3":
+	if _cxr_active_phase in ["r3", "r4"]:
 		var residual_ids_seen: Dictionary = {}
 		for residual_value in residual_rows:
 			if typeof(residual_value) != TYPE_DICTIONARY:
@@ -130,7 +135,7 @@ func _realize_cxr_impl(graph: Dictionary, values: PackedFloat32Array, roi: Dicti
 				return {"valid": false, "cx_algorithm_started": false, "reason": "cxr_r3_residual_identity_invalid", "triangle_id": residual_id, "duplicate": residual_ids_seen.has(residual_id)}
 			residual_ids_seen[residual_id] = true
 	var groups: Array[Array] = _overlapping_defect_groups(residual_rows, adjacency)
-	if _cxr_active_phase == "r3":
+	if _cxr_active_phase in ["r3", "r4"]:
 		groups = _canonicalize_defect_groups(groups)
 	if groups.is_empty() or groups.size() > CXR_MAX_CAVITIES:
 		return {"valid": false, "cx_algorithm_started": false, "reason": "cxr_cavity_set_invalid", "cavity_count": groups.size(), "cap": CXR_MAX_CAVITIES}
@@ -152,7 +157,7 @@ func _realize_cxr_impl(graph: Dictionary, values: PackedFloat32Array, roi: Dicti
 	var has_patch_overlap: bool = false
 	var joint_cavity_attempts: Array[Dictionary] = []
 	var joint_cavity_failure: Dictionary = {}
-	var search_method: String = "_search_cxr_cavity_r3" if _cxr_active_phase == "r3" else "_search_cxr_cavity_r2" if _cxr_active_phase == "r2" else "_search_cxr_cavity"
+	var search_method: String = "_search_cxr_cavity_r3" if _cxr_active_phase in ["r3", "r4"] else "_search_cxr_cavity_r2" if _cxr_active_phase == "r2" else "_search_cxr_cavity"
 	var search_callable: Callable = Callable(self, search_method).bind(triangles, adjacency, search_residual_fixture, values, roi)
 	var cavity_sequence: Dictionary = _run_cxr_cavity_sequence(groups, search_callable)
 	cavity_results = cavity_sequence.get("cavity_results", [])
@@ -170,7 +175,7 @@ func _realize_cxr_impl(graph: Dictionary, values: PackedFloat32Array, roi: Dicti
 				has_patch_overlap = true
 			used_patch_ids[String(triangle_id)] = true
 		patch_records.append(cavity_result.get("patch_record", {}))
-	if has_patch_overlap and _cxr_active_phase == "r3":
+	if has_patch_overlap and _cxr_active_phase in ["r3", "r4"]:
 		var joint_execution: Dictionary = _r3_execute_joint_cavity_plan(groups, cavity_results, search_callable)
 		var raw_joint_attempts: Variant = joint_execution.get("joint_attempts", [])
 		if raw_joint_attempts is Array:
@@ -229,7 +234,7 @@ func _realize_cxr_impl(graph: Dictionary, values: PackedFloat32Array, roi: Dicti
 		var search_exhaustive: bool = cavity_search_exhaustive and search_complete and not has_patch_overlap
 		var failure_reason: String = _cxr_failure_reason(_cxr_active_phase, search_complete, cavity_failure_reasons)
 		if has_patch_overlap:
-			failure_reason = "cxr_per_cavity_patch_overlap" if _cxr_active_phase == "r3" else "cxr_joint_patch_overlap"
+			failure_reason = "cxr_per_cavity_patch_overlap" if _cxr_active_phase in ["r3", "r4"] else "cxr_joint_patch_overlap"
 			search_exhaustive = false
 		var terminal_reason: String = _cxr_failure_terminal_reason(_cxr_active_phase, cavity_results, groups.size(), global_limit_reason, has_patch_overlap)
 		var search_counters_observed: bool = search_started or _cxr_search_nodes_total > 0
@@ -681,7 +686,7 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 	var seed_ids: Array = cavity_ids.duplicate()
 	seed_ids.sort()
 	var cavity_id: String = Core.sha256(JSON.stringify(seed_ids).to_utf8_buffer()).substr(0, 16)
-	var report: Dictionary = {"phase": "r3", "cavity_id": cavity_id, "residual_triangle_ids": seed_ids, "cavity_policy": "original_overlapping_defect_group", "seed_face_count": seed_ids.size(), "levels": [], "candidate_attempts": [], "candidate_attempt_count": "NOT_RUN", "support_candidates": [], "support_candidate_count": "NOT_RUN", "support_candidates_unique_count": "NOT_RUN", "support_candidates_retained": [], "candidate_triangles": [], "candidate_triangle_count": "NOT_RUN", "candidate_edges": [], "retained_solutions": [], "selected_supports": [], "selected_solution": {}, "selected_level": -1, "solution_found_levels": [], "boundary_provenance": "derived_from_remaining_c6_edge_incidence", "search_nodes": "NOT_RUN", "branches": "NOT_RUN", "prunes": "NOT_RUN", "limits_hit": [], "search_started": false, "search_complete": false, "search_exhaustive": false, "terminal_reason": "UNKNOWN_NOT_CAPTURED"}
+	var report: Dictionary = {"phase": "r3" if _cxr_active_phase != "r4" else "r4", "cavity_id": cavity_id, "residual_triangle_ids": seed_ids, "cavity_policy": "original_overlapping_defect_group", "seed_face_count": seed_ids.size(), "levels": [], "candidate_attempts": [], "candidate_attempt_count": "NOT_RUN", "support_candidates": [], "support_candidate_count": "NOT_RUN", "support_candidates_unique_count": "NOT_RUN", "support_candidates_retained": [], "candidate_triangles": [], "candidate_triangle_count": "NOT_RUN", "candidate_edges": [], "retained_solutions": [], "selected_supports": [], "selected_solution": {}, "selected_level": -1, "solution_found_levels": [], "boundary_provenance": "derived_from_remaining_c6_edge_incidence", "search_nodes": "NOT_RUN", "branches": "NOT_RUN", "prunes": "NOT_RUN", "limits_hit": [], "search_started": false, "search_complete": false, "search_exhaustive": false, "terminal_reason": "UNKNOWN_NOT_CAPTURED"}
 	var residual_by_id: Dictionary = {}
 	var residual_all_by_id: Dictionary = {}
 	var residual_rows_value: Variant = residual_fixture.get("residuals", null)
@@ -714,18 +719,30 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 	var any_valid_boundary_search: bool = false
 	var support_generation_exhaustive: bool = true
 	var patch_selection_node_total: int = 0
-	for level in range(CXR_R3_MAX_CAVITY_LEVEL + 1):
+	var boundary_first: bool = _cxr_active_phase == "r4"
+	var levels: Array = [0] if boundary_first else []
+	if not boundary_first:
+		for level_index in range(CXR_R3_MAX_CAVITY_LEVEL + 1): levels.append(level_index)
+	for level in levels:
 		var patch_map: Dictionary = {}
-		for seed_id_value in seed_ids:
-			for triangle_id in _radius_ids(String(seed_id_value), adjacency, level):
-				patch_map[String(triangle_id)] = true
+		if boundary_first:
+			for seed_id_value in seed_ids: patch_map[String(seed_id_value)] = true
+		else:
+			for seed_id_value in seed_ids:
+				for triangle_id in _radius_ids(String(seed_id_value), adjacency, level):
+					patch_map[String(triangle_id)] = true
 		var allowed_ids: Array = _sorted_keys(patch_map)
+		var search_allowed_ids: Array = allowed_ids
+		if boundary_first:
+			search_allowed_ids = []
+			for triangle in all_triangles: search_allowed_ids.append(String(triangle.get("triangle_id", "")))
+			search_allowed_ids.sort()
 		var union_patch: Array[Dictionary] = _r3_patch_rows_for_ids(all_triangles, allowed_ids)
 		var union_connectivity: Dictionary = _r3_patch_connectivity(union_patch)
 		var union_boundary: Dictionary = _r3_derive_remaining_boundary(all_triangles, allowed_ids)
 		var level_report: Dictionary = _new_cxr_level_report(level, allowed_ids, allowed_ids.size())
 		level_report["cavity_seed_ids"] = seed_ids.duplicate()
-		var patch_selection: Dictionary = _r3_select_boundary_patch(seed_ids, allowed_ids, all_triangles, adjacency, level, seed_triangles, residual_fixture)
+		var patch_selection: Dictionary = _r4_select_boundary_first_patch(seed_ids, search_allowed_ids, all_triangles, adjacency, seed_triangles, [], residual_fixture, level) if boundary_first else _r3_select_boundary_patch(seed_ids, allowed_ids, all_triangles, adjacency, level, seed_triangles, residual_fixture)
 		patch_selection_node_total += int(patch_selection.get("search_nodes", 0))
 		report["patch_selection_nodes"] = patch_selection_node_total
 		level_report["patch_selection"] = {"policy": "minimum_cardinality_connected_subsets_with_manifold_boundary_and_r2_domain_preflight_within_original_defect_group_radius_neighborhood", "radius": level, "max_radius": CXR_R3_MAX_CAVITY_LEVEL, "max_patch_triangles": CXR_MAX_PATCH_TRIANGLES, "search_nodes": patch_selection.get("search_nodes", 0), "candidate_subsets_examined": patch_selection.get("candidate_subsets_examined", 0), "rejection_counts": patch_selection.get("rejection_counts", {}), "context_rejection_count": patch_selection.get("context_rejection_count", 0), "context_rejections": patch_selection.get("context_rejections", []), "selected_patch_triangle_ids": patch_selection.get("patch_triangle_ids", []), "context_preflight_valid": patch_selection.get("context_preflight_valid", false), "neighborhood_triangle_ids": allowed_ids.duplicate(), "complete": patch_selection.get("complete", false), "limit_reason": patch_selection.get("limit_reason", "")}
@@ -1003,11 +1020,12 @@ func _r3_invalid_level_reason(connectivity: Dictionary, boundary: Dictionary) ->
 func _cxr_failure_terminal_reason(phase: String, cavity_results: Array, expected_cavity_count: int, global_limit_reason: String, patch_overlap: bool = false) -> String:
 	if not global_limit_reason.is_empty():
 		return global_limit_reason
-	if phase == "r3":
+	if phase in ["r3", "r4"]:
+		var phase_prefix: String = "r4" if phase == "r4" else "r3"
 		if cavity_results.size() != expected_cavity_count or cavity_results.is_empty():
 			return "UNKNOWN_NOT_CAPTURED"
 		if patch_overlap:
-			return "r3_selected_patch_overlap_requires_alternative_solution_search"
+			return phase_prefix + "_selected_patch_overlap_requires_alternative_solution_search"
 		var invalid_boundary_count: int = 0
 		var all_finite_exhausted: bool = true
 		var all_results_complete: bool = true
@@ -1016,7 +1034,7 @@ func _cxr_failure_terminal_reason(phase: String, cavity_results: Array, expected
 		for cavity_result in cavity_results:
 			var cavity_reason: String = String(cavity_result.get("terminal_reason", "UNKNOWN_NOT_CAPTURED"))
 			all_results_complete = all_results_complete and bool(cavity_result.get("search_complete", false)) and bool(cavity_result.get("search_exhaustive", false))
-			if cavity_reason == "r3_no_valid_cavity_boundary_level":
+			if cavity_reason in ["r3_no_valid_cavity_boundary_level", "r4_boundary_domain_exhausted_within_declared_caps"]:
 				invalid_boundary_count += 1
 				all_finite_exhausted = false
 			elif cavity_reason == "r3_all_valid_cavity_levels_exhausted_no_solution":
@@ -1028,21 +1046,21 @@ func _cxr_failure_terminal_reason(phase: String, cavity_results: Array, expected
 				all_finite_exhausted = false
 				if first_nonfinite_reason.is_empty(): first_nonfinite_reason = cavity_reason
 		if invalid_boundary_count > 0:
-			return "r3_cavity_boundary_domains_invalid:%d/%d" % [invalid_boundary_count, expected_cavity_count]
+			return "%s_cavity_boundary_domains_invalid:%d/%d" % [phase_prefix, invalid_boundary_count, expected_cavity_count]
 		if all_finite_exhausted and all_results_complete:
-			return "r3_all_cavity_domains_finitely_exhausted_no_solution"
+			return phase_prefix + "_all_cavity_domains_finitely_exhausted_no_solution"
 		if valid_solution_count > 0 and all_results_complete and first_nonfinite_reason.is_empty():
-			return "r3_unsolved_cavity_domain_exhausted_after_other_cavity_solution"
+			return phase_prefix + "_unsolved_cavity_domain_exhausted_after_other_cavity_solution"
 		return first_nonfinite_reason if not first_nonfinite_reason.is_empty() else "UNKNOWN_NOT_CAPTURED"
 	return "finite_domain_exhausted_no_joint_solution"
 
 func _cxr_failure_reason(phase: String, search_complete: bool, cavity_failure_reasons: Array[String]) -> String:
-	if phase == "r3" and cavity_failure_reasons.has("r3_no_valid_cavity_boundary_level"):
-		return "cxr_r3_cavity_boundary_domain_invalid"
+	if phase in ["r3", "r4"] and (cavity_failure_reasons.has("r3_no_valid_cavity_boundary_level") or cavity_failure_reasons.has("r4_boundary_domain_exhausted_within_declared_caps")):
+		return "cxr_r4_cavity_boundary_domain_invalid" if phase == "r4" else "cxr_r3_cavity_boundary_domain_invalid"
 	if not search_complete:
 		return "cxr_search_partial"
-	if phase == "r3":
-		return "cxr_r3_no_valid_constrained_triangulation"
+	if phase in ["r3", "r4"]:
+		return "cxr_r4_no_valid_constrained_triangulation" if phase == "r4" else "cxr_r3_no_valid_constrained_triangulation"
 	if phase == "r2":
 		return "cxr_r2_no_valid_constrained_triangulation"
 	return "cxr_no_valid_field_support_solution"
@@ -1248,6 +1266,458 @@ func _r3_select_boundary_patch(seed_ids: Array, allowed_ids: Array, all_triangle
 		layer = next_layer
 	var terminal_reason: String = "r3_no_context_valid_patch_subset" if context_rejection_count > 0 else "r3_no_boundary_valid_patch_subset"
 	return {"valid": false, "complete": true, "reason": terminal_reason, "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "states_generated": generated_nodes, "offending_expansion_candidate_ids": _sorted_keys(observed_offending_expansion_ids)}
+
+func select_boundary_first_patch_for_test(seed_ids: Array, all_triangles: Array[Dictionary], adjacency: Dictionary, residual_triangles: Array[Dictionary], support_rows: Array[Dictionary], residual_fixture: Dictionary, level: int = 2) -> Dictionary:
+	return _r4_select_boundary_first_patch(seed_ids, _r3_sorted_triangle_ids(all_triangles), all_triangles, adjacency, residual_triangles, support_rows, residual_fixture, level)
+
+func _r3_sorted_triangle_ids(all_triangles: Array[Dictionary]) -> Array[String]:
+	var ids: Array[String] = []
+	for triangle in all_triangles:
+		ids.append(String(triangle.get("triangle_id", "")))
+	ids.sort()
+	return ids
+
+func _r4_select_boundary_first_patch(seed_ids: Array, allowed_ids: Array, all_triangles: Array[Dictionary], adjacency: Dictionary, residual_triangles: Array[Dictionary], support_rows: Array[Dictionary], residual_fixture: Dictionary, level: int) -> Dictionary:
+	var index: Dictionary = _r3_build_boundary_index(all_triangles)
+	if not bool(index.get("valid", false)):
+		return {"valid": false, "complete": true, "reason": String(index.get("reason", "r4_boundary_index_invalid")), "search_nodes": 0}
+	var allowed: Dictionary = {}
+	for id_value in allowed_ids: allowed[String(id_value)] = true
+	var normalized_seeds: Array[String] = []
+	for id_value in seed_ids:
+		var seed_id: String = String(id_value)
+		if seed_id.is_empty() or not allowed.has(seed_id) or normalized_seeds.has(seed_id):
+			return {"valid": false, "complete": true, "reason": "r4_boundary_seed_identity_invalid", "seed_id": seed_id, "search_nodes": 0}
+		normalized_seeds.append(seed_id)
+	normalized_seeds.sort()
+	if normalized_seeds.is_empty() or normalized_seeds.size() > CXR_R4_MAX_REMOVED_FACES:
+		return {"valid": false, "complete": true, "reason": "r4_boundary_seed_count_invalid", "search_nodes": 0}
+	var queue: Array[Dictionary] = [{"patch_ids": normalized_seeds, "expansion_causes": []}]
+	var visited: Dictionary = {JSON.stringify(normalized_seeds): true}
+	var rejection_counts: Dictionary = {}
+	var expansion_log: Array[Dictionary] = []
+	var states: int = 0
+	var queue_peak: int = 1
+	var began_usec: int = Time.get_ticks_usec()
+	var best_multi_loop: Dictionary = {}
+	while not queue.is_empty():
+		if Time.get_ticks_usec() - began_usec >= CXR_R4_MAX_BOUNDARY_USEC:
+			return {"valid": false, "complete": false, "reason": "r4_boundary_wall_time_limit", "search_nodes": states, "queue_peak": queue_peak, "rejection_counts": rejection_counts, "expansion_log": expansion_log}
+		if states >= CXR_R4_MAX_BOUNDARY_STATES:
+			return {"valid": false, "complete": false, "reason": "r4_boundary_state_limit", "search_nodes": states, "queue_peak": queue_peak, "rejection_counts": rejection_counts, "expansion_log": expansion_log}
+		queue.sort_custom(Callable(self, "_r4_boundary_state_less"))
+		var state: Dictionary = queue.pop_front()
+		var patch_ids: Array[String] = state.get("patch_ids", []).duplicate()
+		states += 1
+		_cxr_search_nodes_total += 1
+		_cxr_search_nodes_cavity += 1
+		if patch_ids.size() > CXR_R4_MAX_REMOVED_FACES:
+			_r4_count(rejection_counts, "max_removed_faces")
+			continue
+		var patch: Array[Dictionary] = _r3_patch_rows_for_ids(all_triangles, patch_ids)
+		if patch.size() != patch_ids.size():
+			return {"valid": false, "complete": true, "reason": "r4_patch_face_missing", "patch_ids": patch_ids, "search_nodes": states}
+		var boundary: Dictionary = _r3_derive_remaining_boundary(all_triangles, patch_ids, index, true)
+		if not bool(boundary.get("valid", false)) and typeof(boundary.get("invalid_reasons", [])) == TYPE_ARRAY and not boundary.get("invalid_reasons", []).is_empty():
+			var invalid_edges: Array[String] = _r4_boundary_invalid_edges(boundary)
+			_r4_count(rejection_counts, "boundary_incidence_invalid")
+			var candidates: Array[String] = _r4_boundary_candidate_faces(boundary, patch_ids, adjacency, allowed, invalid_edges)
+			var expansion: Dictionary = {"cause": "boundary_incidence_defect", "patch_ids": patch_ids, "offending_edges": invalid_edges, "candidate_face_ids": candidates}
+			if expansion_log.size() < 512: expansion_log.append(expansion)
+			_r4_enqueue_boundary_candidates(candidates, patch_ids, state, queue, visited)
+		else:
+			var cycles: Dictionary = _r4_boundary_cycle_set(boundary)
+			if not bool(cycles.get("valid", false)):
+				_r4_count(rejection_counts, String(cycles.get("reason", "boundary_cycle_invalid")))
+				var cycle_candidates: Array[String] = _r4_cycle_defect_candidate_faces(cycles, boundary, patch_ids, adjacency, allowed)
+				if expansion_log.size() < 512: expansion_log.append({"cause": "boundary_cycle_defect", "patch_ids": patch_ids, "cycle_diagnostics": cycles, "candidate_face_ids": cycle_candidates})
+				_r4_enqueue_boundary_candidates(cycle_candidates, patch_ids, state, queue, visited)
+			elif int(cycles.get("component_count", 0)) > CXR_R4_MAX_BOUNDARY_COMPONENTS:
+				return {"valid": false, "complete": false, "reason": "r4_boundary_component_limit", "search_nodes": states, "queue_peak": queue_peak, "boundary_components": cycles.get("component_count", 0), "expansion_log": expansion_log}
+			else:
+				var projected_cycles: Dictionary = _r4_project_boundary_cycles(cycles.get("cycles", []), patch)
+				var nesting: Dictionary = {"valid": false, "reason": String(projected_cycles.get("reason", "r4_boundary_projection_invalid"))}
+				if bool(projected_cycles.get("valid", false)):
+					nesting = _r4_classify_boundary_cycle_nesting(cycles.get("cycles", []), projected_cycles.get("projected_positions", {}))
+				if not bool(nesting.get("valid", false)):
+					var nesting_reason: String = String(nesting.get("reason", "r4_boundary_nesting_invalid"))
+					_r4_count(rejection_counts, nesting_reason)
+					var nesting_edges: Array[String] = []
+					for cycle_value in cycles.get("cycles", []):
+						var cycle_row: Dictionary = cycle_value
+						var cycle_ids: Array = cycle_row.get("root_ids", [])
+						for cycle_index in range(cycle_ids.size()):
+							nesting_edges.append(_edge_key(String(cycle_ids[cycle_index]), String(cycle_ids[(cycle_index + 1) % cycle_ids.size()])))
+					nesting_edges.sort()
+					var nesting_candidates: Array[String] = _r4_boundary_candidate_faces(boundary, patch_ids, adjacency, allowed, nesting_edges)
+					if expansion_log.size() < 512:
+						expansion_log.append({"cause": "boundary_projected_cycle_invalid:" + nesting_reason, "patch_ids": patch_ids, "cycle_diagnostics": nesting, "candidate_face_ids": nesting_candidates})
+					_r4_enqueue_boundary_candidates(nesting_candidates, patch_ids, state, queue, visited)
+					if queue.size() > queue_peak: queue_peak = queue.size()
+					continue
+				cycles["cycles"] = nesting.get("cycles", [])
+				cycles["nesting"] = nesting.get("nesting", "UNKNOWN_NOT_CAPTURED")
+				boundary["valid"] = true
+				boundary["reason"] = ""
+				boundary["cycle_set"] = cycles.get("cycles", [])
+				boundary["boundary_component_count"] = cycles.get("component_count", 0)
+				if String(boundary.get("signature", "")).is_empty(): boundary["signature"] = String(cycles.get("signature", ""))
+				if int(cycles.get("component_count", 0)) > 1:
+					if best_multi_loop.is_empty():
+						best_multi_loop = {"patch_ids": patch_ids.duplicate(), "patch": patch.duplicate(true), "boundary": boundary.duplicate(true), "cycles": cycles.duplicate(true), "expansion_causes": state.get("expansion_causes", []).duplicate(true)}
+					_r4_count(rejection_counts, "valid_multi_loop_boundary_requires_hole_aware_triangulator")
+				else:
+					var context: Dictionary = _r3_make_expanded_patch_context(patch, patch_ids, residual_triangles, support_rows, boundary, all_triangles, residual_fixture, level, true)
+					if bool(context.get("valid", false)):
+						return {"valid": true, "complete": true, "reason": "", "patch_triangle_ids": patch_ids, "patch_triangles": patch, "connectivity": _r3_patch_connectivity(patch), "boundary": boundary, "context_preflight": context, "search_nodes": states, "queue_peak": queue_peak, "rejection_counts": rejection_counts, "expansion_log": expansion_log, "expansion_causes": state.get("expansion_causes", []).duplicate(true), "boundary_cycles": cycles.get("cycles", [])}
+					var context_reason: String = String(context.get("reason", "r4_context_preflight_invalid"))
+					_r4_count(rejection_counts, context_reason)
+					var context_candidates: Array[String] = []
+					var arc_expansion: Dictionary = {}
+					if context_reason == "r2_topology_arc_crosses_cavity_boundary":
+						arc_expansion = _r4_arc_crossing_boundary_candidates(context, patch, boundary, patch_ids, adjacency, allowed)
+						context_candidates = arc_expansion.get("candidate_face_ids", [])
+					if expansion_log.size() < 512: expansion_log.append({"cause": "context_preflight:" + context_reason, "patch_ids": patch_ids, "context": context, "arc_expansion": arc_expansion, "candidate_face_ids": context_candidates})
+					_r4_enqueue_boundary_candidates(context_candidates, patch_ids, state, queue, visited)
+			if queue.size() > queue_peak: queue_peak = queue.size()
+		if queue.size() > CXR_R4_MAX_QUEUE_SIZE:
+			return {"valid": false, "complete": false, "reason": "r4_boundary_queue_limit", "search_nodes": states, "queue_peak": queue_peak, "rejection_counts": rejection_counts, "expansion_log": expansion_log}
+	if not best_multi_loop.is_empty():
+		return {"valid": true, "complete": true, "reason": "r4_valid_multi_loop_boundary_d3_hole_support_required", "patch_triangle_ids": best_multi_loop.patch_ids, "patch_triangles": best_multi_loop.patch, "connectivity": _r3_patch_connectivity(best_multi_loop.patch), "boundary": best_multi_loop.boundary, "boundary_cycles": best_multi_loop.cycles, "search_nodes": states, "queue_peak": queue_peak, "rejection_counts": rejection_counts, "expansion_log": expansion_log, "expansion_causes": best_multi_loop.expansion_causes, "triangulation_supported": false}
+	return {"valid": false, "complete": true, "reason": "r4_boundary_domain_exhausted_within_declared_caps", "search_nodes": states, "queue_peak": queue_peak, "rejection_counts": rejection_counts, "expansion_log": expansion_log, "domain_face_cap": CXR_R4_MAX_REMOVED_FACES}
+
+func _r4_boundary_state_less(a: Dictionary, b: Dictionary) -> bool:
+	var a_ids: Array = a.get("patch_ids", [])
+	var b_ids: Array = b.get("patch_ids", [])
+	if a_ids.size() != b_ids.size(): return a_ids.size() < b_ids.size()
+	var a_defects: int = int(a.get("defect_count", 0))
+	var b_defects: int = int(b.get("defect_count", 0))
+	if a_defects != b_defects: return a_defects < b_defects
+	var a_components: int = int(a.get("component_count", 0))
+	var b_components: int = int(b.get("component_count", 0))
+	if a_components != b_components: return a_components < b_components
+	return JSON.stringify(a_ids) < JSON.stringify(b_ids)
+
+func _r4_count(counts: Dictionary, key: String) -> void:
+	counts[key] = int(counts.get(key, 0)) + 1
+
+func _r4_enqueue_boundary_candidates(candidates: Array[String], patch_ids: Array[String], state: Dictionary, queue: Array[Dictionary], visited: Dictionary) -> void:
+	for candidate_id in candidates:
+		var next_ids: Array[String] = patch_ids.duplicate()
+		if next_ids.has(candidate_id): continue
+		next_ids.append(candidate_id)
+		next_ids.sort()
+		if next_ids.size() > CXR_R4_MAX_REMOVED_FACES: continue
+		var key: String = JSON.stringify(next_ids)
+		if visited.has(key): continue
+		visited[key] = true
+		var causes: Array = state.get("expansion_causes", []).duplicate(true)
+		causes.append(candidate_id)
+		queue.append({"patch_ids": next_ids, "expansion_causes": causes, "defect_count": maxi(0, candidates.size() - 1)})
+
+func _r4_boundary_invalid_edges(boundary: Dictionary) -> Array[String]:
+	var edges: Dictionary = {}
+	for value in boundary.get("invalid_reasons", []):
+		if value is Dictionary and not String(value.get("edge_key", "")).is_empty(): edges[String(value.edge_key)] = true
+		if value is Dictionary and not String(value.get("vertex", "")).is_empty():
+			var vertex: String = String(value.vertex)
+			for incidence_value in boundary.get("incidence_diagnostics", []):
+				var incidence: Dictionary = incidence_value
+				for row_value in incidence.get("removed_rows", []) + incidence.get("remaining_rows", []):
+					var row: Dictionary = row_value
+					if String(row.get("a", "")) == vertex or String(row.get("b", "")) == vertex: edges[String(incidence.get("edge_key", ""))] = true
+	var result: Array[String] = []
+	for edge in edges.keys(): result.append(String(edge))
+	result.sort()
+	return result
+
+func _r4_boundary_cycle_set(boundary: Dictionary) -> Dictionary:
+	var directed_edges: Array = boundary.get("directed_edges", [])
+	if directed_edges.is_empty(): return {"valid": false, "reason": "r4_boundary_empty", "offending_edges": []}
+	var successors: Dictionary = {}
+	var incoming: Dictionary = {}
+	var outgoing_edges_by_vertex: Dictionary = {}
+	var incoming_edges_by_vertex: Dictionary = {}
+	for edge_value in directed_edges:
+		var split: PackedStringArray = String(edge_value).split("->")
+		if split.size() != 2 or split[0].is_empty() or split[1].is_empty(): return {"valid": false, "reason": "r4_boundary_directed_edge_invalid", "offending_edges": [String(edge_value)]}
+		var a: String = String(split[0]); var b: String = String(split[1])
+		if successors.has(a) or incoming.has(b):
+			var offending_edges: Array[String] = []
+			if successors.has(a):
+				for existing_outgoing_value in outgoing_edges_by_vertex.get(a, []): offending_edges.append(String(existing_outgoing_value))
+			if incoming.has(b):
+				for existing_incoming_value in incoming_edges_by_vertex.get(b, []): offending_edges.append(String(existing_incoming_value))
+			offending_edges.append(String(edge_value))
+			offending_edges.sort()
+			return {"valid": false, "reason": "r4_boundary_vertex_degree_not_one_in_one_out", "vertex": a if successors.has(a) else b, "offending_edges": offending_edges}
+		successors[a] = b; incoming[b] = a
+		if not outgoing_edges_by_vertex.has(a): outgoing_edges_by_vertex[a] = []
+		if not incoming_edges_by_vertex.has(b): incoming_edges_by_vertex[b] = []
+		outgoing_edges_by_vertex[a].append(String(edge_value)); incoming_edges_by_vertex[b].append(String(edge_value))
+	if successors.size() != incoming.size(): return {"valid": false, "reason": "r4_boundary_vertex_degree_mismatch", "offending_edges": directed_edges.duplicate()}
+	var starts: Array = successors.keys(); starts.sort()
+	var visited_vertices: Dictionary = {}
+	var cycles: Array = []
+	for start_value in starts:
+		var start: String = String(start_value)
+		if visited_vertices.has(start): continue
+		var current: String = start
+		var cycle: Array[String] = []
+		while not visited_vertices.has(current):
+			visited_vertices[current] = true; cycle.append(current)
+			if not successors.has(current): return {"valid": false, "reason": "r4_boundary_open_chain", "vertex": current, "offending_edges": outgoing_edges_by_vertex.get(current, [])}
+			current = String(successors[current])
+		if current != start or cycle.size() < 3: return {"valid": false, "reason": "r4_boundary_cycle_invalid", "vertex": current, "offending_edges": directed_edges.duplicate()}
+		var minimum_id: String = String(cycle[0]); var minimum_index: int = 0
+		for index in range(1, cycle.size()):
+			if String(cycle[index]) < minimum_id: minimum_id = String(cycle[index]); minimum_index = index
+		var rotated: Array[String] = []
+		for offset in range(cycle.size()): rotated.append(String(cycle[(minimum_index + offset) % cycle.size()]))
+		cycles.append({"root_ids": rotated, "orientation": "remaining_face_directed_boundary", "nesting": "UNCLASSIFIED_NO_PROJECTED_GEOMETRY"})
+	cycles.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return JSON.stringify(a.root_ids) < JSON.stringify(b.root_ids))
+	var normalized_edges: Array[String] = []
+	for edge_value in directed_edges: normalized_edges.append(String(edge_value))
+	normalized_edges.sort()
+	return {"valid": true, "reason": "", "cycles": cycles, "component_count": cycles.size(), "signature": Core.sha256(JSON.stringify(normalized_edges).to_utf8_buffer()), "orientation_source": "remaining_C6_face_winding", "nesting": "UNCLASSIFIED_REQUIRES_PROJECTED_GEOMETRY"}
+
+func _r4_project_boundary_cycles(cycles: Array, patch: Array[Dictionary]) -> Dictionary:
+	if cycles.is_empty() or patch.is_empty(): return {"valid": false, "reason": "r4_boundary_projection_inputs_empty"}
+	var normal: Vector3 = Vector3.ZERO
+	for triangle in patch:
+		var triangle_normal: Vector3 = Vector3(triangle.get("normal", Vector3.ZERO))
+		if triangle_normal.length_squared() <= 1e-20:
+			var points: Array = triangle.get("points", [])
+			if points.size() != 3: return {"valid": false, "reason": "r4_boundary_projection_triangle_geometry_invalid", "triangle_id": triangle.get("triangle_id", "")}
+			triangle_normal = (Vector3(points[1]) - Vector3(points[0])).cross(Vector3(points[2]) - Vector3(points[0]))
+		if not triangle_normal.is_finite() or triangle_normal.length_squared() <= 1e-20: return {"valid": false, "reason": "r4_boundary_projection_triangle_normal_invalid", "triangle_id": triangle.get("triangle_id", "")}
+		normal += triangle_normal.normalized()
+	if not normal.is_finite() or normal.length_squared() <= 1e-20: return {"valid": false, "reason": "r4_boundary_projection_normal_ambiguous"}
+	normal = normal.normalized()
+	var first_cycle: Dictionary = cycles[0]
+	var first_ids: Array = first_cycle.get("root_ids", [])
+	if first_ids.size() < 3: return {"valid": false, "reason": "r4_boundary_projection_cycle_invalid"}
+	var origin_id: String = String(first_ids[0])
+	if not _root_positions.has(origin_id): return {"valid": false, "reason": "r4_boundary_projection_root_missing", "root_id": origin_id}
+	var origin: Vector3 = Vector3(_root_positions[origin_id])
+	var axis_u: Vector3 = Vector3.ZERO
+	for cycle_index in range(first_ids.size()):
+		var next_id: String = String(first_ids[(cycle_index + 1) % first_ids.size()])
+		if not _root_positions.has(next_id): return {"valid": false, "reason": "r4_boundary_projection_root_missing", "root_id": next_id}
+		var edge: Vector3 = Vector3(_root_positions[next_id]) - origin
+		edge -= normal * edge.dot(normal)
+		if edge.length_squared() > 1e-20:
+			axis_u = edge.normalized()
+			break
+	if axis_u.length_squared() <= 1e-20: return {"valid": false, "reason": "r4_boundary_projection_axis_missing"}
+	var axis_v: Vector3 = normal.cross(axis_u).normalized()
+	if axis_v.length_squared() <= 1e-20: return {"valid": false, "reason": "r4_boundary_projection_second_axis_missing"}
+	var projected_positions: Dictionary = {}
+	for cycle_value in cycles:
+		var cycle: Dictionary = cycle_value
+		for root_id_value in cycle.get("root_ids", []):
+			var root_id: String = String(root_id_value)
+			if projected_positions.has(root_id): continue
+			if not _root_positions.has(root_id): return {"valid": false, "reason": "r4_boundary_projection_root_missing", "root_id": root_id}
+			var delta: Vector3 = Vector3(_root_positions[root_id]) - origin
+			var projected: Vector2 = Vector2(delta.dot(axis_u), delta.dot(axis_v))
+			if not projected.is_finite(): return {"valid": false, "reason": "r4_boundary_projection_nonfinite_root", "root_id": root_id}
+			projected_positions[root_id] = projected
+	return {"valid": true, "origin": origin, "normal": normal, "axis_u": axis_u, "axis_v": axis_v, "projected_positions": projected_positions, "projection": "patch_normal_orthonormal_plane"}
+
+func _r4_classify_boundary_cycle_nesting(cycles: Array, projected_positions: Dictionary) -> Dictionary:
+	if cycles.is_empty(): return {"valid": false, "reason": "r4_nesting_cycle_set_empty"}
+	var polygons: Array[Array] = []
+	var signed_areas: Array[float] = []
+	for cycle_value in cycles:
+		if typeof(cycle_value) != TYPE_DICTIONARY: return {"valid": false, "reason": "r4_nesting_cycle_record_invalid"}
+		var cycle: Dictionary = cycle_value
+		var root_ids: Array = cycle.get("root_ids", [])
+		if root_ids.size() < 3: return {"valid": false, "reason": "r4_nesting_cycle_arity_invalid"}
+		var polygon: Array[Vector2] = []
+		for root_id_value in root_ids:
+			var root_id: String = String(root_id_value)
+			if not projected_positions.has(root_id): return {"valid": false, "reason": "r4_nesting_projected_root_missing", "root_id": root_id}
+			var point_value: Variant = projected_positions[root_id]
+			if typeof(point_value) != TYPE_VECTOR2 or not Vector2(point_value).is_finite(): return {"valid": false, "reason": "r4_nesting_projected_root_invalid", "root_id": root_id}
+			polygon.append(Vector2(point_value))
+		var area: float = _r2_polygon_signed_area(polygon)
+		if not is_finite(area) or area == 0.0: return {"valid": false, "reason": "r4_nesting_cycle_area_zero_or_nonfinite", "root_ids": root_ids}
+		for first_edge in range(polygon.size()):
+			var first_next: int = (first_edge + 1) % polygon.size()
+			if polygon[first_edge] == polygon[first_next]: return {"valid": false, "reason": "r4_nesting_zero_length_cycle_edge", "root_ids": root_ids, "edge_index": first_edge}
+			for second_edge in range(first_edge + 1, polygon.size()):
+				var second_next: int = (second_edge + 1) % polygon.size()
+				if first_edge == second_edge or first_next == second_edge or second_next == first_edge: continue
+				if _r4_segments_touch_or_cross(polygon[first_edge], polygon[first_next], polygon[second_edge], polygon[second_next]): return {"valid": false, "reason": "r4_nesting_cycle_self_intersection", "root_ids": root_ids, "edge_indices": [first_edge, second_edge]}
+		polygons.append(polygon)
+		signed_areas.append(area)
+	for first_cycle_index in range(polygons.size()):
+		for second_cycle_index in range(first_cycle_index + 1, polygons.size()):
+			var first_polygon: Array[Vector2] = polygons[first_cycle_index]
+			var second_polygon: Array[Vector2] = polygons[second_cycle_index]
+			for first_edge in range(first_polygon.size()):
+				for second_edge in range(second_polygon.size()):
+					if _r4_segments_touch_or_cross(first_polygon[first_edge], first_polygon[(first_edge + 1) % first_polygon.size()], second_polygon[second_edge], second_polygon[(second_edge + 1) % second_polygon.size()]):
+						return {"valid": false, "reason": "r4_nesting_cycles_touch_or_cross", "cycle_indices": [first_cycle_index, second_cycle_index], "edge_indices": [first_edge, second_edge]}
+	var parent_indices: Array[int] = []
+	for cycle_index in range(polygons.size()):
+		var parent_index: int = -1
+		var parent_area: float = INF
+		for candidate_index in range(polygons.size()):
+			if candidate_index == cycle_index: continue
+			if not _r2_point_in_polygon(polygons[cycle_index][0], polygons[candidate_index], 0.0): continue
+			var candidate_area: float = absf(signed_areas[candidate_index])
+			if candidate_area <= absf(signed_areas[cycle_index]): return {"valid": false, "reason": "r4_nesting_containment_area_order_invalid", "cycle_indices": [cycle_index, candidate_index]}
+			if candidate_area < parent_area:
+				parent_area = candidate_area
+				parent_index = candidate_index
+		parent_indices.append(parent_index)
+	var depths: Array[int] = []
+	for cycle_index in range(polygons.size()):
+		var depth: int = 0
+		var parent: int = parent_indices[cycle_index]
+		var walked: Dictionary = {cycle_index: true}
+		while parent >= 0:
+			if walked.has(parent): return {"valid": false, "reason": "r4_nesting_parent_cycle", "cycle_index": cycle_index}
+			walked[parent] = true
+			depth += 1
+			parent = parent_indices[parent]
+		depths.append(depth)
+	var outer_sign: float = 0.0
+	for cycle_index in range(depths.size()):
+		if depths[cycle_index] == 0:
+			outer_sign = signf(signed_areas[cycle_index])
+			break
+	if outer_sign == 0.0: return {"valid": false, "reason": "r4_nesting_no_outer_cycle"}
+	var classified_cycles: Array[Dictionary] = []
+	for cycle_index in range(cycles.size()):
+		var cycle: Dictionary = cycles[cycle_index].duplicate(true)
+		var depth: int = depths[cycle_index]
+		var role: String = "OUTER" if depth == 0 else "HOLE" if depth % 2 == 1 else "ISLAND"
+		var expected_sign: float = outer_sign if depth % 2 == 0 else -outer_sign
+		if signf(signed_areas[cycle_index]) != expected_sign: return {"valid": false, "reason": "r4_nesting_orientation_conflicts_with_parity", "cycle_index": cycle_index, "role": role, "signed_area": signed_areas[cycle_index], "depth": depth}
+		cycle["nesting"] = role
+		cycle["nesting_depth"] = depth
+		cycle["parent_cycle_index"] = parent_indices[cycle_index]
+		cycle["signed_projected_area"] = signed_areas[cycle_index]
+		cycle["projected_orientation"] = "CCW" if signed_areas[cycle_index] > 0.0 else "CW"
+		classified_cycles.append(cycle)
+	return {"valid": true, "reason": "", "cycles": classified_cycles, "component_count": cycles.size(), "nesting": "PROJECTED_CONTAINMENT_PARITY", "parent_indices": parent_indices, "depths": depths, "projection_basis": "caller_supplied_patch_plane"}
+
+func _r4_segments_touch_or_cross(a: Vector2, b: Vector2, c: Vector2, d: Vector2) -> bool:
+	if _r2_proper_segments_intersect(a, b, c, d): return true
+	if a == c or a == d or b == c or b == d: return true
+	return _r2_endpoint_strictly_inside_segment_2d(a, c, d) or _r2_endpoint_strictly_inside_segment_2d(b, c, d) or _r2_endpoint_strictly_inside_segment_2d(c, a, b) or _r2_endpoint_strictly_inside_segment_2d(d, a, b)
+
+func _r4_boundary_candidate_faces(boundary: Dictionary, patch_ids: Array[String], adjacency: Dictionary, allowed: Dictionary, edge_keys: Array[String]) -> Array[String]:
+	var patch_set: Dictionary = {}
+	for id in patch_ids: patch_set[id] = true
+	var edge_set: Dictionary = {}
+	for edge in edge_keys: edge_set[edge] = true
+	var candidates: Dictionary = {}
+	for incidence_value in boundary.get("incidence_diagnostics", []):
+		var incidence: Dictionary = incidence_value
+		if not edge_set.has(String(incidence.get("edge_key", ""))): continue
+		for row_value in incidence.get("remaining_rows", []):
+			var row: Dictionary = row_value
+			var candidate_id: String = String(row.get("triangle_id", ""))
+			if candidate_id.is_empty() or patch_set.has(candidate_id) or not allowed.has(candidate_id): continue
+			for patch_id in patch_ids:
+				var adjacent: Variant = adjacency.get(patch_id, {})
+				if adjacent is Dictionary and adjacent.has(candidate_id): candidates[candidate_id] = true
+	var result: Array[String] = []
+	for id_value in candidates.keys(): result.append(String(id_value))
+	result.sort()
+	return result
+
+func _r4_cycle_defect_candidate_faces(cycle_result: Dictionary, boundary: Dictionary, patch_ids: Array[String], adjacency: Dictionary, allowed: Dictionary) -> Array[String]:
+	var edge_keys: Array[String] = []
+	var seen_edges: Dictionary = {}
+	var offending_value: Variant = cycle_result.get("offending_edges", [])
+	if offending_value is Array:
+		for edge_value in offending_value:
+			var edge_text: String = String(edge_value)
+			var split: PackedStringArray = edge_text.split("->")
+			var edge_key: String = _edge_key(String(split[0]), String(split[1])) if split.size() == 2 else edge_text
+			if not edge_key.is_empty() and not seen_edges.has(edge_key):
+				seen_edges[edge_key] = true
+				edge_keys.append(edge_key)
+	edge_keys.sort()
+	return _r4_boundary_candidate_faces(boundary, patch_ids, adjacency, allowed, edge_keys)
+
+func _r4_probe_support_edge(a_id: String, b_id: String, context: Dictionary) -> Dictionary:
+	var edge_key: String = _edge_key(a_id, b_id)
+	if a_id == b_id: return {"valid": false, "edge_key": edge_key, "reason": "repeated_vertex"}
+	if not context.vertex_positions.has(a_id) or not context.vertex_positions.has(b_id):
+		return {"valid": false, "edge_key": edge_key, "reason": "vertex_position_missing"}
+	if not context.projected_positions.has(a_id) or not context.projected_positions.has(b_id):
+		return {"valid": false, "edge_key": edge_key, "reason": "vertex_projection_missing"}
+	var a3: Vector3 = Vector3(context.vertex_positions[a_id])
+	var b3: Vector3 = Vector3(context.vertex_positions[b_id])
+	if not a3.is_finite() or not b3.is_finite(): return {"valid": false, "edge_key": edge_key, "reason": "nonfinite_geometry"}
+	if var_to_bytes(a3) == var_to_bytes(b3): return {"valid": false, "edge_key": edge_key, "reason": "duplicate_geometry"}
+	var a2: Vector2 = context.projected_positions[a_id]
+	var b2: Vector2 = context.projected_positions[b_id]
+	if not _r2_point_in_polygon(a2, context.polygon) or not _r2_point_in_polygon(b2, context.polygon):
+		return {"valid": false, "edge_key": edge_key, "reason": "endpoint_outside_domain"}
+	if not _r2_segment_inside_polygon(a_id, b_id, a2, b2, context):
+		return {"valid": false, "edge_key": edge_key, "reason": "segment_outside_or_crosses_boundary"}
+	var required_arcs: Array = context.residual_fixture.get("arc_map", [])
+	for arc_value in required_arcs:
+		if typeof(arc_value) != TYPE_DICTIONARY: return {"valid": false, "edge_key": edge_key, "reason": "required_arc_malformed"}
+		var arc: Dictionary = arc_value
+		var ids: Array = arc.get("root_ids", [])
+		if ids.size() != 2: continue
+		var arc_a_id: String = String(ids[0]); var arc_b_id: String = String(ids[1])
+		if edge_key == _edge_key(arc_a_id, arc_b_id): continue
+		if not context.projected_positions.has(arc_a_id) or not context.projected_positions.has(arc_b_id):
+			return {"valid": false, "edge_key": edge_key, "reason": "required_arc_projection_missing", "arc_id": arc.get("arc_id", "")}
+		var arc_a: Vector2 = context.projected_positions[arc_a_id]; var arc_b: Vector2 = context.projected_positions[arc_b_id]
+		if a_id != arc_a_id and a_id != arc_b_id and b_id != arc_a_id and b_id != arc_b_id and _r2_proper_segments_intersect(a2, b2, arc_a, arc_b):
+			return {"valid": false, "edge_key": edge_key, "reason": "crosses_required_topology_arc", "arc_id": arc.get("arc_id", "")}
+		if _r2_endpoint_strictly_inside_segment_2d(a2, arc_a, arc_b) or _r2_endpoint_strictly_inside_segment_2d(b2, arc_a, arc_b) or _r2_endpoint_strictly_inside_segment_2d(arc_a, a2, b2) or _r2_endpoint_strictly_inside_segment_2d(arc_b, a2, b2):
+			return {"valid": false, "edge_key": edge_key, "reason": "topology_edge_t_junction", "arc_id": arc.get("arc_id", "")}
+	for vertex_id_value in context.vertex_ids:
+		var vertex_id: String = String(vertex_id_value)
+		if vertex_id == a_id or vertex_id == b_id or not context.projected_positions.has(vertex_id): continue
+		if _r2_endpoint_strictly_inside_segment_2d(Vector2(context.projected_positions[vertex_id]), a2, b2):
+			return {"valid": false, "edge_key": edge_key, "reason": "candidate_vertex_t_junction", "vertex_id": vertex_id}
+	return {"valid": true, "edge_key": edge_key, "reason": "", "scope": "intrinsic_domain_topology_duplicate_and_t_junction_preflight"}
+
+func _r4_arc_crossing_boundary_candidates(context: Dictionary, patch: Array[Dictionary], boundary: Dictionary, patch_ids: Array[String], adjacency: Dictionary, allowed: Dictionary) -> Dictionary:
+	var diagnostics: Dictionary = context.get("arc_diagnostics", {})
+	var root_ids: Array = diagnostics.get("root_ids", [])
+	var cycle_result: Dictionary = _r4_boundary_cycle_set(boundary)
+	if root_ids.size() != 2 or int(cycle_result.get("component_count", 0)) != 1: return {"valid": false, "reason": "r4_arc_expansion_requires_two_roots_and_one_boundary_cycle", "candidate_face_ids": []}
+	var a_id: String = String(root_ids[0]); var b_id: String = String(root_ids[1])
+	if not _root_positions.has(a_id) or not _root_positions.has(b_id): return {"valid": false, "reason": "r4_arc_expansion_root_position_missing", "candidate_face_ids": []}
+	var normal: Vector3 = Vector3.ZERO
+	for triangle in patch:
+		var value: Variant = triangle.get("normal", null)
+		if value is Vector3: normal += Vector3(value)
+	if normal.length_squared() <= 1e-20: return {"valid": false, "reason": "r4_arc_expansion_normal_missing", "candidate_face_ids": []}
+	normal = normal.normalized()
+	var cycle: Array = cycle_result.cycles[0].root_ids
+	var origin: Vector3 = Vector3(_root_positions[String(cycle[0])])
+	var axis_u: Vector3 = Vector3.ZERO
+	for index in range(1, cycle.size()):
+		var candidate: Vector3 = Vector3(_root_positions[String(cycle[index])]) - origin
+		candidate -= normal * candidate.dot(normal)
+		if candidate.length_squared() > 1e-20: axis_u = candidate.normalized(); break
+	if axis_u.length_squared() <= 1e-20: return {"valid": false, "reason": "r4_arc_expansion_projection_axis_missing", "candidate_face_ids": []}
+	var axis_v: Vector3 = normal.cross(axis_u).normalized()
+	var a3: Vector3 = Vector3(_root_positions[a_id]); var b3: Vector3 = Vector3(_root_positions[b_id])
+	var a2: Vector2 = Vector2((a3 - origin).dot(axis_u), (a3 - origin).dot(axis_v))
+	var b2: Vector2 = Vector2((b3 - origin).dot(axis_u), (b3 - origin).dot(axis_v))
+	var crossed_edges: Array[String] = []
+	for index in range(cycle.size()):
+		var c3: Vector3 = Vector3(_root_positions[String(cycle[index])]); var d3: Vector3 = Vector3(_root_positions[String(cycle[(index + 1) % cycle.size()])])
+		var c2: Vector2 = Vector2((c3 - origin).dot(axis_u), (c3 - origin).dot(axis_v)); var d2: Vector2 = Vector2((d3 - origin).dot(axis_u), (d3 - origin).dot(axis_v))
+		if _r2_proper_segments_intersect(a2, b2, c2, d2): crossed_edges.append(_edge_key(String(cycle[index]), String(cycle[(index + 1) % cycle.size()])))
+	crossed_edges.sort()
+	var candidates: Array[String] = _r4_boundary_candidate_faces(boundary, patch_ids, adjacency, allowed, crossed_edges)
+	return {"valid": not crossed_edges.is_empty() and not candidates.is_empty(), "reason": "" if not crossed_edges.is_empty() and not candidates.is_empty() else "r4_arc_boundary_crossing_not_expandable", "arc_id": diagnostics.get("arc_id", ""), "root_ids": root_ids, "crossed_boundary_edges": crossed_edges, "candidate_face_ids": candidates}
 
 func _r3_boundary_expansion_candidate_ids(boundary: Dictionary, patch_ids: Array, adjacency: Dictionary, allowed_ids: Array) -> Array[String]:
 	var patch_set: Dictionary = {}
@@ -2444,7 +2914,7 @@ func _r2_get_candidate_triangle(ids_input: Array, context: Dictionary) -> Dictio
 		var rejected: Dictionary = {"valid": false, "reason": row.rejection_reason, "owner_diagnostics": owner}
 		context.candidate_triangle_cache[cache_key] = rejected
 		return rejected
-	var triangle_prefix: String = "R12CXR3_" if String(context.get("phase", "")) == "r3" else "R12CXR2_"
+	var triangle_prefix: String = "R12CXR4_" if String(context.get("phase", "")) == "r4" else "R12CXR3_" if String(context.get("phase", "")) == "r3" else "R12CXR2_"
 	var triangle_id: String = triangle_prefix + Core.sha256(cache_key.to_utf8_buffer()).substr(0, 24)
 	var triangle: Dictionary = _triangle(triangle_id, String(owner.get("polygon_id", "")), ids, points, "r2_constrained_support_triangulation", false, CXR_CUTOFF_SQUARED)
 	triangle["source_polygon_ids"] = owner.get("source_polygon_ids", [owner.get("polygon_id", "")]).duplicate()
@@ -2730,7 +3200,7 @@ func _r2_validate_solution(triangles: Array[Dictionary], selected_support_ids: A
 			replacement.append(triangle)
 	replacement.append_array(triangles)
 	var level_boundary_before: Dictionary = _boundary_state(context.level_patch)
-	if String(context.get("phase", "")) == "r3":
+	if String(context.get("phase", "")) in ["r3", "r4"]:
 		level_boundary_before = context.get("r3_cavity_boundary", {})
 	var level_boundary_after: Dictionary = _boundary_state(replacement)
 	if not bool(level_boundary_before.get("valid", false)) or not bool(level_boundary_after.get("valid", false)) or String(level_boundary_before.get("signature", "")) != String(level_boundary_after.get("signature", "")):
@@ -3347,7 +3817,7 @@ func _cxr_global_limit_reason_at(now_usec: int) -> String:
 	var elapsed_usec: int = now_usec - _cxr_search_started_usec
 	if elapsed_usec >= CXR_MAX_SEARCH_USEC_TOTAL:
 		return "MAX_SEARCH_USEC_TOTAL"
-	var total_state_limit: int = CXR_R2_MAX_SEARCH_STATES_TOTAL if ["r2", "r3"].has(_cxr_active_phase) else CXR_MAX_SEARCH_STATES_TOTAL
+	var total_state_limit: int = CXR_R2_MAX_SEARCH_STATES_TOTAL if ["r2", "r3", "r4"].has(_cxr_active_phase) else CXR_MAX_SEARCH_STATES_TOTAL
 	if _cxr_search_nodes_total >= total_state_limit:
 		return "MAX_SEARCH_STATES_TOTAL"
 	return ""
@@ -3601,8 +4071,8 @@ func _search_cxr_combinations(index: int, options_by_residual: Array[Array], sel
 func _generate_field_candidates(residual: Dictionary, patch: Array[Dictionary], values: PackedFloat32Array, roi: Dictionary, level: int, max_candidates: int, max_attempts: int, cavity_id: String, fixture_row: Dictionary) -> Dictionary:
 	var generation_started_usec: int = Time.get_ticks_usec()
 	if not _cxr_local_search_marker_emitted:
-		var marker: String = "R12CXR_R3_SUPPORT_GENERATION_BEGIN " if _cxr_active_phase == "r3" else "R12CXR_LOCAL_PATCH_SEARCH_BEGIN "
-		print(marker + JSON.stringify({"attempt_id": OS.get_environment("R12CXR_ATTEMPT_ID"), "source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1", "cavity_id": cavity_id, "level": level, "support_source": "original_frozen_residual_faces_only" if _cxr_active_phase == "r3" else "phase_defined_residual_set", "preregistered_limits": _cxr_limits()}))
+		var marker: String = "R12CXR_R3_SUPPORT_GENERATION_BEGIN " if _cxr_active_phase == "r3" else "R12CXR_R4_BOUNDARY_SEARCH_BEGIN " if _cxr_active_phase == "r4" else "R12CXR_LOCAL_PATCH_SEARCH_BEGIN "
+		print(marker + JSON.stringify({"attempt_id": OS.get_environment("R12CXR_ATTEMPT_ID"), "source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1", "cavity_id": cavity_id, "level": level, "support_source": "original_frozen_residual_faces_only" if _cxr_active_phase in ["r3", "r4"] else "phase_defined_residual_set", "preregistered_limits": _cxr_limits()}))
 		_cxr_local_search_marker_emitted = true
 	var attempts: Array[Dictionary] = []
 	var candidates_by_identity: Dictionary = {}
@@ -3897,12 +4367,12 @@ func _cxr_record_attempt(attempts: Array[Dictionary], candidate_id: String, acce
 
 func _cxr_limits() -> Dictionary:
 	var limits: Dictionary = {"phase": _cxr_active_phase, "max_cavity_level": CXR_MAX_CAVITY_LEVEL, "max_cavities": CXR_MAX_CAVITIES, "max_patch_triangles": CXR_MAX_PATCH_TRIANGLES, "max_candidate_attempts_per_cavity": CXR_MAX_CANDIDATE_ATTEMPTS_PER_CAVITY, "max_support_candidates_per_cavity": CXR_MAX_SUPPORT_CANDIDATES_PER_CAVITY, "max_selected_supports": CXR_MAX_SELECTED_SUPPORTS, "max_retained_solutions_per_cavity": CXR_MAX_RETAINED_SOLUTIONS, "max_search_usec_per_cavity": CXR_MAX_SEARCH_USEC_PER_CAVITY, "max_search_usec_total": CXR_MAX_SEARCH_USEC_TOTAL, "max_realize_usec": CXR_MAX_REALIZE_USEC, "max_support_distance": CXR_MAX_SUPPORT_DISTANCE, "barycentric_epsilon": CXR_BARYCENTRIC_EPSILON, "field_residual_epsilon": CXR_FIELD_RESIDUAL_EPSILON, "cross_squared_cutoff": CXR_CUTOFF_SQUARED}
-	if ["r2", "r3"].has(_cxr_active_phase):
+	if ["r2", "r3", "r4"].has(_cxr_active_phase):
 		limits["max_candidate_triangles_per_cavity"] = CXR_R2_MAX_CANDIDATE_TRIANGLES_PER_CAVITY
 		limits["max_candidate_triangles_total"] = CXR_R2_MAX_CANDIDATE_TRIANGLES_TOTAL
 		limits["max_search_states_per_cavity"] = CXR_R2_MAX_SEARCH_STATES_PER_CAVITY
 		limits["max_search_states_total"] = CXR_R2_MAX_SEARCH_STATES_TOTAL
-		if _cxr_active_phase == "r3":
+		if _cxr_active_phase in ["r3", "r4"]:
 			limits["max_cavity_level"] = CXR_R3_MAX_CAVITY_LEVEL
 			limits["max_cavities"] = CXR_MAX_CAVITIES
 			limits["cavity_policy"] = "search_original_groups_independently_then_joint_search_only_intersecting_minimum_patches"
@@ -3915,6 +4385,13 @@ func _cxr_limits() -> Dictionary:
 		limits["max_candidate_triangles_per_cavity"] = CXR_MAX_CANDIDATE_TRIANGLES_PER_CAVITY
 		limits["max_search_states_per_cavity"] = CXR_MAX_SEARCH_STATES_PER_CAVITY
 		limits["max_search_states_total"] = CXR_MAX_SEARCH_STATES_TOTAL
+	if _cxr_active_phase == "r4":
+		limits["boundary_first_policy"] = "lexicographic_boundary_defect_driven_best_first_connected_face_expansion"
+		limits["max_removed_faces"] = CXR_R4_MAX_REMOVED_FACES
+		limits["max_boundary_first_states"] = CXR_R4_MAX_BOUNDARY_STATES
+		limits["max_boundary_first_queue"] = CXR_R4_MAX_QUEUE_SIZE
+		limits["max_boundary_components"] = CXR_R4_MAX_BOUNDARY_COMPONENTS
+		limits["max_boundary_first_usec_per_cavity"] = CXR_R4_MAX_BOUNDARY_USEC
 	return limits
 
 func _cxr_counters(search_started: bool = true) -> Dictionary:

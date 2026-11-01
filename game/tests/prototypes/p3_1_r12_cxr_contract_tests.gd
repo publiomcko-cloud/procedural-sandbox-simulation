@@ -28,6 +28,7 @@ func _run() -> void:
 	_test_cxr_r3_remaining_boundary_and_separate_cavities()
 	_test_cxr_r3_capped_pool_triangulation_and_valid_witness()
 	_test_r3_expanded_patch_owner_and_replacement_sets()
+	_test_r4_boundary_cycle_sets_and_causal_candidates()
 	if failures.is_empty():
 		print("R12CXR_CONTRACT_TESTS_PASS " + JSON.stringify({"assertions": assertions, "failures": 0, "suite": "bounded_cxr_contract"}))
 		quit(0)
@@ -791,10 +792,127 @@ func _joint_cavity_probe_search(seed_ids: Array) -> Dictionary:
 	_joint_probe_calls.append(seed_ids.duplicate())
 	return {"valid": true, "search_started": true, "search_complete": true, "search_exhaustive": true, "terminal_reason": "minimum_valid_cavity_solution", "patch_triangle_ids": seed_ids.duplicate()}
 
+func _test_r4_boundary_cycle_sets_and_causal_candidates() -> void:
+	var realizer: RefCounted = Realizer.new()
+	var one: Dictionary = {"directed_edges": ["b->c", "c->a", "a->b"]}
+	var one_result: Dictionary = realizer.call("_r4_boundary_cycle_set", one)
+	_check(bool(one_result.get("valid", false)) and int(one_result.get("component_count", 0)) == 1, "R4 accepts one closed directed boundary cycle")
+	var reordered: Dictionary = {"directed_edges": ["a->b", "b->c", "c->a"]}
+	var reordered_result: Dictionary = realizer.call("_r4_boundary_cycle_set", reordered)
+	_check(one_result.get("signature", "") == reordered_result.get("signature", "") and one_result.get("cycles", []) == reordered_result.get("cycles", []), "R4 boundary cycle ordering and signature are deterministic")
+	var two: Dictionary = {"directed_edges": ["d->e", "e->f", "f->d", "a->b", "b->c", "c->a"]}
+	var two_result: Dictionary = realizer.call("_r4_boundary_cycle_set", two)
+	_check(bool(two_result.get("valid", false)) and int(two_result.get("component_count", 0)) == 2, "R4 preserves multiple closed boundary components")
+	_check(String(two_result.get("nesting", "")) == "UNCLASSIFIED_REQUIRES_PROJECTED_GEOMETRY", "R4 keeps cycle-only topology output explicitly unclassified until projected geometry is available")
+	var projected: Dictionary = {
+		"o0": Vector2(0, 0), "o1": Vector2(10, 0), "o2": Vector2(10, 10), "o3": Vector2(0, 10),
+		"h0": Vector2(2, 2), "h1": Vector2(2, 8), "h2": Vector2(8, 8), "h3": Vector2(8, 2),
+		"i0": Vector2(4, 4), "i1": Vector2(6, 4), "i2": Vector2(6, 6), "i3": Vector2(4, 6),
+		"x0": Vector2(20, 0), "x1": Vector2(21, 0), "x2": Vector2(21, 1), "x3": Vector2(20, 1)
+	}
+	var single_cycles: Array[Dictionary] = [{"root_ids": ["o0", "o1", "o2", "o3"], "orientation": "remaining_face_directed_boundary"}]
+	var single_nesting: Dictionary = realizer.call("_r4_classify_boundary_cycle_nesting", single_cycles, projected)
+	_check(bool(single_nesting.get("valid", false)) and single_nesting.cycles[0].nesting == "OUTER" and int(single_nesting.cycles[0].nesting_depth) == 0, "R4 classifies a projected single cycle as an outer boundary")
+	var projection_geometry: Dictionary = {}
+	for root_id in projected.keys():
+		var point: Vector2 = projected[root_id]
+		projection_geometry[String(root_id)] = Vector3(point.x, point.y, 0.0)
+	realizer.set("_root_positions", projection_geometry)
+	var outer_points: Dictionary = {"o0": projection_geometry.o0, "o1": projection_geometry.o1, "o2": projection_geometry.o2}
+	var projection_patch: Array[Dictionary] = [_triangle("projection-plane", ["o0", "o1", "o2"], outer_points, false)]
+	var projected_cycle_result: Dictionary = realizer.call("_r4_project_boundary_cycles", single_cycles, projection_patch)
+	var projected_cycle_classification: Dictionary = realizer.call("_r4_classify_boundary_cycle_nesting", single_cycles, projected_cycle_result.get("projected_positions", {})) if bool(projected_cycle_result.get("valid", false)) else {"valid": false}
+	_check(bool(projected_cycle_result.get("valid", false)) and bool(projected_cycle_classification.get("valid", false)) and projected_cycle_classification.cycles[0].nesting == "OUTER", "R4 derives a deterministic projection plane from the selected patch before classifying boundary nesting")
+	var disjoint_cycles: Array[Dictionary] = [
+		{"root_ids": ["x0", "x1", "x2", "x3"], "orientation": "remaining_face_directed_boundary"},
+		{"root_ids": ["o0", "o1", "o2", "o3"], "orientation": "remaining_face_directed_boundary"}
+	]
+	var disjoint_nesting: Dictionary = realizer.call("_r4_classify_boundary_cycle_nesting", disjoint_cycles, projected)
+	_check(bool(disjoint_nesting.get("valid", false)) and disjoint_nesting.cycles[0].nesting == "OUTER" and disjoint_nesting.cycles[1].nesting == "OUTER", "R4 classifies disjoint projected loops independently as outer boundaries")
+	var nested_cycles: Array[Dictionary] = [
+		{"root_ids": ["h0", "h1", "h2", "h3"], "orientation": "remaining_face_directed_boundary"},
+		{"root_ids": ["i0", "i1", "i2", "i3"], "orientation": "remaining_face_directed_boundary"},
+		{"root_ids": ["o0", "o1", "o2", "o3"], "orientation": "remaining_face_directed_boundary"}
+	]
+	var nested_nesting: Dictionary = realizer.call("_r4_classify_boundary_cycle_nesting", nested_cycles, projected)
+	_check(bool(nested_nesting.get("valid", false)) and nested_nesting.cycles[0].nesting == "HOLE" and int(nested_nesting.cycles[0].nesting_depth) == 1 and nested_nesting.cycles[1].nesting == "ISLAND" and int(nested_nesting.cycles[1].nesting_depth) == 2 and nested_nesting.cycles[2].nesting == "OUTER", "R4 records outer, hole and nested-island parity with explicit depth")
+	var crossing_positions: Dictionary = {"a0": Vector2(0, 0), "a1": Vector2(3, 0), "a2": Vector2(3, 3), "a3": Vector2(0, 3), "b0": Vector2(2, -1), "b1": Vector2(4, -1), "b2": Vector2(4, 2), "b3": Vector2(2, 2)}
+	var crossing_cycles: Array[Dictionary] = [{"root_ids": ["a0", "a1", "a2", "a3"]}, {"root_ids": ["b0", "b1", "b2", "b3"]}]
+	var crossing_nesting: Dictionary = realizer.call("_r4_classify_boundary_cycle_nesting", crossing_cycles, crossing_positions)
+	_check(not bool(crossing_nesting.get("valid", true)) and String(crossing_nesting.get("reason", "")) == "r4_nesting_cycles_touch_or_cross", "R4 rejects projected boundary components that cross instead of assigning false nesting")
+	var reversed_nested_cycles: Array[Dictionary] = nested_cycles.duplicate(true)
+	reversed_nested_cycles[0].root_ids = ["h0", "h3", "h2", "h1"]
+	var wrong_winding: Dictionary = realizer.call("_r4_classify_boundary_cycle_nesting", reversed_nested_cycles, projected)
+	_check(not bool(wrong_winding.get("valid", true)) and String(wrong_winding.get("reason", "")) == "r4_nesting_orientation_conflicts_with_parity", "R4 rejects a hole cycle whose directed winding conflicts with its nesting parity")
+	var degree_invalid: Dictionary = realizer.call("_r4_boundary_cycle_set", {"directed_edges": ["a->b", "a->c", "b->a", "c->a"]})
+	_check(not bool(degree_invalid.get("valid", false)) and not Array(degree_invalid.get("offending_edges", [])).is_empty(), "R4 rejects a boundary vertex with non-unit degree and exposes offending edges")
+	_check(Array(degree_invalid.get("offending_edges", [])).size() == 2, "R4 degree diagnostics retain both the existing and newly conflicting directed edges")
+	var degree_boundary: Dictionary = {"incidence_diagnostics": [
+		{"edge_key": "a\u001fb", "remaining_rows": [{"triangle_id": "neighbor_ab"}]},
+		{"edge_key": "a\u001fc", "remaining_rows": [{"triangle_id": "neighbor_ac"}], "unrelated_rows": [{"triangle_id": "not_selected"}]}
+	]}
+	var degree_adjacency: Dictionary = {"patch": {"neighbor_ab": true, "neighbor_ac": true}}
+	var degree_allowed: Dictionary = {"neighbor_ab": true, "neighbor_ac": true}
+	var degree_patch_ids: Array[String] = ["patch"]
+	var degree_candidates: Array[String] = realizer.call("_r4_cycle_defect_candidate_faces", degree_invalid, degree_boundary, degree_patch_ids, degree_adjacency, degree_allowed)
+	_check(degree_candidates == ["neighbor_ab", "neighbor_ac"], "R4 converts directed degree-defect edges into canonical support edges and proposes only adjacent allowed faces")
+	var edge_context: Dictionary = {
+		"vertex_positions": {"s": Vector3(0.1, 0.2, 0.0), "t": Vector3(0.9, 0.2, 0.0)},
+		"projected_positions": {"s": Vector2(0.1, 0.2), "t": Vector2(0.9, 0.2)},
+		"polygon": _r4_test_polygon(),
+		"vertex_ids": ["s", "t"], "residual_fixture": {"arc_map": []}
+	}
+	var edge_valid: Dictionary = realizer.call("_r4_probe_support_edge", "s", "t", edge_context)
+	_check(bool(edge_valid.get("valid", false)), "R4 edge preflight accepts a finite, in-domain segment with no topology crossing or T-junction")
+	var outside_context: Dictionary = edge_context.duplicate(true)
+	outside_context.vertex_positions["out"] = Vector3(1.2, 0.2, 0.0)
+	outside_context.projected_positions["out"] = Vector2(1.2, 0.2)
+	outside_context.vertex_ids.append("out")
+	var outside_edge: Dictionary = realizer.call("_r4_probe_support_edge", "s", "out", outside_context)
+	_check(not bool(outside_edge.get("valid", false)) and String(outside_edge.get("reason", "")) == "endpoint_outside_domain", "R4 edge preflight rejects a segment with an endpoint outside the cavity")
+	var t_context: Dictionary = edge_context.duplicate(true)
+	t_context.vertex_positions["mid"] = Vector3(0.5, 0.2, 0.0)
+	t_context.projected_positions["mid"] = Vector2(0.5, 0.2)
+	t_context.vertex_ids.append("mid")
+	var t_edge: Dictionary = realizer.call("_r4_probe_support_edge", "s", "t", t_context)
+	_check(not bool(t_edge.get("valid", false)) and String(t_edge.get("reason", "")) == "candidate_vertex_t_junction", "R4 edge preflight rejects an interior candidate vertex T-junction")
+	var duplicate_context: Dictionary = edge_context.duplicate(true)
+	duplicate_context.vertex_positions["same_position"] = Vector3(edge_context.vertex_positions["s"])
+	duplicate_context.projected_positions["same_position"] = Vector2(edge_context.projected_positions["s"])
+	duplicate_context.vertex_ids.append("same_position")
+	var duplicate_edge: Dictionary = realizer.call("_r4_probe_support_edge", "s", "same_position", duplicate_context)
+	_check(not bool(duplicate_edge.get("valid", true)) and String(duplicate_edge.get("reason", "")) == "duplicate_geometry", "R4 edge preflight rejects distinct identities with coincident frozen geometry")
+	var crossing_context: Dictionary = edge_context.duplicate(true)
+	crossing_context.vertex_positions["arc_a"] = Vector3(0.5, 0.1, 0.0)
+	crossing_context.vertex_positions["arc_b"] = Vector3(0.5, 0.3, 0.0)
+	crossing_context.projected_positions["arc_a"] = Vector2(0.5, 0.1)
+	crossing_context.projected_positions["arc_b"] = Vector2(0.5, 0.3)
+	crossing_context.vertex_ids.append_array(["arc_a", "arc_b"])
+	crossing_context.residual_fixture = {"arc_map": [{"arc_id": "frozen-crossing", "root_ids": ["arc_a", "arc_b"]}]}
+	var crossing_edge: Dictionary = realizer.call("_r4_probe_support_edge", "s", "t", crossing_context)
+	_check(not bool(crossing_edge.get("valid", false)) and String(crossing_edge.get("reason", "")) == "crosses_required_topology_arc", "R4 edge preflight rejects crossing a required frozen topology arc")
+	var patch_ids: Array[String] = ["seed"]
+	var adjacency: Dictionary = {"seed": {"neighbor": true}}
+	var boundary: Dictionary = {"incidence_diagnostics": [{"edge_key": "a|b", "remaining_rows": [{"triangle_id": "neighbor"}, {"triangle_id": "unrelated"}]}]}
+	var allowed: Dictionary = {"neighbor": true, "unrelated": true}
+	var edge_keys: Array[String] = ["a|b"]
+	var candidates: Array[String] = realizer.call("_r4_boundary_candidate_faces", boundary, patch_ids, adjacency, allowed, edge_keys)
+	_check(candidates == ["neighbor"], "R4 expands only through an offending edge to a face adjacent to the current patch")
+	var rank_a: Dictionary = {"patch_ids": ["a", "b"], "defect_count": 2, "component_count": 1}
+	var rank_b: Dictionary = {"patch_ids": ["a", "c"], "defect_count": 1, "component_count": 1}
+	_check(bool(realizer.call("_r4_boundary_state_less", rank_b, rank_a)), "R4 deterministic state rank prefers fewer unresolved defects at equal removed-face count")
+	realizer.set("_cxr_active_phase", "r4")
+	var limits: Dictionary = realizer.call("_cxr_limits")
+	_check(int(limits.get("max_removed_faces", 0)) == 64 and int(limits.get("max_boundary_first_states", 0)) == 20000, "R4 reports frozen face and state caps")
+	_check(int(limits.get("max_boundary_first_queue", 0)) == 4096 and int(limits.get("max_boundary_components", 0)) == 8 and int(limits.get("max_boundary_first_usec_per_cavity", 0)) == 10000000, "R4 reports queue, component and time caps")
+
 func _triangle(id: String, root_ids: Array, points_by_id: Dictionary, rejected: bool) -> Dictionary:
 	var points: Array[Vector3] = [points_by_id[root_ids[0]], points_by_id[root_ids[1]], points_by_id[root_ids[2]]]
 	var cross: Vector3 = (points[1] - points[0]).cross(points[2] - points[0])
 	return {"triangle_id":id, "polygon_id":id, "root_ids":root_ids.duplicate(), "points":points, "normal":cross.normalized() if cross.length_squared() > 0.0 else Vector3.ZERO, "cross_squared":cross.length_squared(), "rejected":rejected, "construction":"synthetic"}
+
+func _r4_test_polygon() -> Array[Vector2]:
+	return [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
 
 func _check(condition: bool, label: String) -> void:
 	assertions += 1
