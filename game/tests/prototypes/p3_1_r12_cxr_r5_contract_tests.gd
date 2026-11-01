@@ -236,8 +236,10 @@ func _test_constraint_guided_support_r2_triangulation(synth: RefCounted) -> void
 
 func _test_campaign_result_scope() -> void:
 	var campaign_source: String = FileAccess.get_file_as_string("res://tests/prototypes/p3_1_r12_cxr_r5_campaign.gd")
+	var synthesizer_source: String = FileAccess.get_file_as_string("res://tests/prototypes/p3_1_r12_cxr_r5_support_synthesizer.gd")
 	_expect(campaign_source.contains("R5_EQUAL_LOD_PASS_DOWNSTREAM_PENDING"), "equal_lod_pass_does_not_claim_full_downstream_qualification")
 	_expect(campaign_source.contains("UNKNOWN_NOT_CAPTURED_FINITE_WITNESS_MODEL_DOES_NOT_ENUMERATE_ALL_REGIONS"), "unmodeled_feasible_region_counts_are_not_reported_as_zero")
+	_expect(synthesizer_source.contains("R5_SYNTHESIS_ENUMERATION_BEGIN") and synthesizer_source.contains("R12CXR_R5_EXECUTION_ID"), "target_attempt_marker_is_execution_scoped")
 
 func _test_residual_owner_normalization(synth: RefCounted) -> void:
 	var frozen_row: Dictionary = {"triangle_id": "FROZEN_OWNER", "triangle_vertices_world": [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [0.0, 3.0, 0.0]]}

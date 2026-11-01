@@ -51,6 +51,8 @@ The campaign emits an R5-A constraint report with the exact frozen cavity cycle,
 
 The frozen R4 residual fixture encodes owner-face geometry as `triangle_vertices_world`; normalized synthetic rows may use `points`. R5 validates either representation with strict three-vertex and finite-coordinate checks, derives centroids in stable triangle-ID order, and fails before tetrahedron enumeration if any owner row is malformed. The regression suite checks the actual pinned R4 residual fixture hash and normalizes every owner row. The first post-commit target launch exposed the fixture-field mismatch before scanning the zero-set; it is retained as a pre-geometry tooling/source failure and does not count as a valid scientific synthesis execution. Its process exit code was not captured by the first launcher and remains `UNKNOWN_NOT_CAPTURED`.
 
+For one-shot attempt accounting, the synthesizer emits `R5_SYNTHESIS_ENUMERATION_BEGIN` only after all synthesis preconditions (including frozen owner-row normalization) pass and immediately before entering the bounded tetrahedron loop. The launcher supplies a unique execution ID, allowing crashes or resource stops after geometry enumeration starts to be distinguished from pre-geometry failures.
+
 ## Attempt policy and classification
 
 Import, `--check-only`, R5 contract tests, and exact R4 cavity reconstitution are preflight, not scientific target executions. A valid `synthesize` invocation of the frozen target consumes one of the procedure's maximum five scientific executions. No automatic retry is allowed after that target process starts. A process/fixture failure before synthesis is recorded and may be corrected under the procedure's recovery rules.

@@ -70,6 +70,9 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 	var skipped_boundary_or_root: int = 0
 	var cap_reason: String = ""
 	var tetrahedra_visited: int = 0
+	var execution_id: String = OS.get_environment("R12CXR_R5_EXECUTION_ID")
+	if not execution_id.is_empty():
+		print("R5_SYNTHESIS_ENUMERATION_BEGIN " + JSON.stringify({"execution_id": execution_id, "cavity_id": cavity_id, "tetrahedron_count": tetra_count, "owner_origin_count": source_origins.size()}))
 	for flat_index in range(tetra_count):
 		if Time.get_ticks_usec() - started_usec >= MAX_SYNTHESIS_USEC:
 			cap_reason = "R5_MAX_SYNTHESIS_USEC"
