@@ -141,30 +141,6 @@ func audit_r6a_representability(realizer: RefCounted, values: PackedFloat32Array
 	var tetrahedron_count: int = cells.x * cells.y * cells.z * Core.TETS.size()
 	if values.size() != dims.x * dims.y * dims.z or tetrahedron_count != MAX_TETRAHEDRA:
 		return {"valid": false, "reason": "r6a_grid_identity_invalid", "tetrahedra": tetrahedron_count, "value_count": values.size()}
-	var source_groups: Dictionary = {}
-	for flat_index in range(tetrahedron_count):
-		var tet_index: int = flat_index % Core.TETS.size()
-		var cell_index: int = floori(float(flat_index) / float(Core.TETS.size()))
-		var z: int = cell_index % cells.z
-		var y: int = floori(float(cell_index) / float(cells.z)) % cells.y
-		var x: int = floori(float(cell_index) / float(cells.z * cells.y))
-		var cell: Vector3i = Vector3i(x, y, z)
-		var tet_data: Dictionary = realizer.call("_tetra_data", cell, tet_index, values, dims, roi_min, step)
-		if not bool(tet_data.get("valid", false)):
-			return {"valid": false, "reason": "r6a_source_tetrahedron_invalid", "cell": cell, "tet_index": tet_index, "detail": tet_data}
-		for source_value in realizer.call("corrected_tetra_zero_sources", tet_data, false):
-			if typeof(source_value) != TYPE_DICTIONARY:
-				return {"valid": false, "reason": "r6a_source_row_invalid", "cell": cell, "tet_index": tet_index}
-			var source_row: Dictionary = source_value
-			var original: Vector3 = Vector3(source_row.get("original_position", Vector3.ZERO))
-			var source_id: String = _position_identity(original)
-			if not source_groups.has(source_id):
-				source_groups[source_id] = {"original_position": original, "contexts": []}
-			var group: Dictionary = source_groups[source_id]
-			var context_rows: Array = group.get("contexts", [])
-			context_rows.append({"source_row": source_row, "tetrahedron_data": tet_data.duplicate(true), "tetrahedron_id": "%d,%d,%d|tet:%d" % [int(tet_data.global_cell.x), int(tet_data.global_cell.y), int(tet_data.global_cell.z), tet_index], "cell_local": [cell.x, cell.y, cell.z], "cell_global": [int(tet_data.global_cell.x), int(tet_data.global_cell.y), int(tet_data.global_cell.z)], "tetrahedron_index": tet_index})
-			group["contexts"] = context_rows
-			source_groups[source_id] = group
 	var rows: Array[Dictionary] = []
 	var before_histogram: Dictionary = {"abs_le_1e-8": 0, "abs_gt_1e-8_le_1e-7": 0, "abs_gt_1e-7": 0, "invalid_barycentric": 0}
 	var after_histogram: Dictionary = {"abs_le_1e-8": 0, "abs_gt_1e-8_le_1e-7": 0, "abs_gt_1e-7": 0, "invalid_barycentric": 0}
@@ -175,120 +151,50 @@ func audit_r6a_representability(realizer: RefCounted, values: PackedFloat32Array
 	var barycentric_gate_failure_count: int = 0
 	var corrected_barycentric_gate_failure_count: int = 0
 	var unique_corrected_positions: Dictionary = {}
-	var global_correction_map: Dictionary = {}
-	var source_ids: Array = source_groups.keys()
-	source_ids.sort()
-	for source_id_value in source_ids:
-		var source_id: String = String(source_id_value)
-		var group: Dictionary = source_groups[source_id]
-		var original: Vector3 = Vector3(group.original_position)
-		var contexts: Array = group.contexts
-		var original_evaluations: Array[Dictionary] = []
-		var original_passes: bool = true
-		for context_value in contexts:
-			var context: Dictionary = context_value
-			var before: Dictionary = realizer.call("_evaluate_zero_point", original, context.tetrahedron_data)
-			original_evaluations.append(before)
-			if not bool(before.get("accepted", false)):
-				original_passes = false
-		var selected_position: Vector3 = original
-		var selected_evaluations: Array[Dictionary] = original_evaluations.duplicate(true)
-		var selected_steps: Array[int] = [0, 0, 0]
-		var search_state: String = "unchanged" if original_passes else "no_valid_point_within_plus_minus_2_ulp_per_coordinate"
-		var reason: String = "" if original_passes else "R6_A_REPRESENTABLE_ZERO_NOT_FOUND_WITHIN_BOUND"
-		var best_maximum_residual: float = INF
-		var best_sum_residual: float = INF
-		var best_residual_failure_count: int = 2147483647
-		var best_step_norm: int = 2147483647
-		var found_same_tetra_candidate: bool = false
-		if not original_passes:
-			for step_x in range(-2, 3):
-				for step_y in range(-2, 3):
-					for step_z in range(-2, 3):
-						var candidate: Vector3 = Vector3(realizer.call("_step_binary32", original.x, step_x), realizer.call("_step_binary32", original.y, step_y), realizer.call("_step_binary32", original.z, step_z))
-						var candidate_evaluations: Array[Dictionary] = []
-						var candidate_is_same_tetra: bool = true
-						var maximum_residual: float = 0.0
-						var sum_residual: float = 0.0
-						var residual_failure_count: int = 0
-						for context_value in contexts:
-							var context: Dictionary = context_value
-							var evaluation: Dictionary = realizer.call("_evaluate_zero_point", candidate, context.tetrahedron_data)
-							if not bool(evaluation.get("barycentric_gate_pass", false)) or not is_finite(float(evaluation.get("field_residual", NAN))):
-								candidate_is_same_tetra = false
-								break
-							var absolute_residual: float = absf(float(evaluation.field_residual))
-							maximum_residual = maxf(maximum_residual, absolute_residual)
-							sum_residual += absolute_residual
-							if absolute_residual > RESIDUAL_EPSILON:
-								residual_failure_count += 1
-							candidate_evaluations.append(evaluation)
-						if not candidate_is_same_tetra:
-							continue
-						var step_norm: int = absi(step_x) + absi(step_y) + absi(step_z)
-						if not found_same_tetra_candidate or residual_failure_count < best_residual_failure_count or (residual_failure_count == best_residual_failure_count and maximum_residual < best_maximum_residual) or (residual_failure_count == best_residual_failure_count and maximum_residual == best_maximum_residual and sum_residual < best_sum_residual) or (residual_failure_count == best_residual_failure_count and maximum_residual == best_maximum_residual and sum_residual == best_sum_residual and step_norm < best_step_norm):
-							found_same_tetra_candidate = true
-							best_residual_failure_count = residual_failure_count
-							best_maximum_residual = maximum_residual
-							best_sum_residual = sum_residual
-							best_step_norm = step_norm
-							selected_position = candidate
-							selected_evaluations = candidate_evaluations
-							selected_steps = [step_x, step_y, step_z]
-			if found_same_tetra_candidate:
-				search_state = "corrected_within_plus_minus_2_ulp_per_coordinate" if best_maximum_residual <= RESIDUAL_EPSILON else "best_same_tetra_residual_within_plus_minus_2_ulp_per_coordinate_gate_failed"
-				reason = "R6_A_MAXIMUM_PASSING_TETRAHEDRA_THEN_MINIMUM_MAXIMUM_RESIDUAL_THEN_SUM_THEN_ULP_STEP_COUNT"
-		global_correction_map[source_id] = selected_position
-		unique_corrected_positions[_position_identity(selected_position)] = true
-		if search_state.begins_with("best_same_tetra_residual"):
-			best_candidate_count += 1
-		var occurrence_index: int = 0
-		for context_value in contexts:
-			var context: Dictionary = context_value
-			var source_row: Dictionary = context.source_row.duplicate(true)
-			var before: Dictionary = original_evaluations[occurrence_index]
-			var after: Dictionary = selected_evaluations[occurrence_index]
-			var before_residual: float = float(before.get("field_residual", NAN))
-			var after_residual: float = float(after.get("field_residual", NAN))
-			before_histogram[_residual_histogram_bin(bool(before.get("barycentric_valid", false)), before_residual)] += 1
-			after_histogram[_residual_histogram_bin(bool(after.get("barycentric_valid", false)), after_residual)] += 1
-			if not bool(before.get("barycentric_gate_pass", false)):
+	for flat_index in range(tetrahedron_count):
+		var tet_index: int = flat_index % Core.TETS.size()
+		var cell_index: int = floori(float(flat_index) / float(Core.TETS.size()))
+		var z: int = cell_index % cells.z
+		var y: int = floori(float(cell_index) / float(cells.z)) % cells.y
+		var x: int = floori(float(cell_index) / float(cells.z * cells.y))
+		var cell: Vector3i = Vector3i(x, y, z)
+		var tet_data: Dictionary = realizer.call("_tetra_data", cell, tet_index, values, dims, roi_min, step)
+		if not bool(tet_data.get("valid", false)):
+			return {"valid": false, "reason": "r6a_source_tetrahedron_invalid", "cell": cell, "tet_index": tet_index, "detail": tet_data}
+		for source_value in realizer.call("corrected_tetra_zero_sources", tet_data):
+			if typeof(source_value) != TYPE_DICTIONARY:
+				return {"valid": false, "reason": "r6a_source_row_invalid", "cell": cell, "tet_index": tet_index}
+			var row: Dictionary = source_value.duplicate(true)
+			row["cell_local"] = [cell.x, cell.y, cell.z]
+			row["cell_global"] = [int(tet_data.global_cell.x), int(tet_data.global_cell.y), int(tet_data.global_cell.z)]
+			row["tetrahedron_index"] = tet_index
+			row["tetrahedron_id"] = "%d,%d,%d|tet:%d" % [int(tet_data.global_cell.x), int(tet_data.global_cell.y), int(tet_data.global_cell.z), tet_index]
+			var before_residual: float = float(row.get("original_field_residual", NAN))
+			var after_residual: float = float(row.get("corrected_field_residual", NAN))
+			var before_valid: bool = bool(row.get("original_barycentric_valid", false)) and is_finite(before_residual)
+			var after_valid: bool = bool(row.get("accepted", false)) and bool(row.get("corrected_barycentric_gate_pass", false)) and is_finite(after_residual)
+			var before_bin: String = _residual_histogram_bin(before_valid, before_residual)
+			var after_bin: String = _residual_histogram_bin(bool(row.get("corrected_barycentric_valid", false)), after_residual)
+			before_histogram[before_bin] = int(before_histogram.get(before_bin, 0)) + 1
+			after_histogram[after_bin] = int(after_histogram.get(after_bin, 0)) + 1
+			if not bool(row.get("original_barycentric_gate_pass", false)):
 				barycentric_gate_failure_count += 1
-			if not bool(after.get("barycentric_gate_pass", false)):
+			if not bool(row.get("corrected_barycentric_gate_pass", false)):
 				corrected_barycentric_gate_failure_count += 1
-			var accepted: bool = bool(after.get("accepted", false))
-			if accepted:
+			if after_valid:
 				corrected_count += 1
-			if selected_position != original:
+				var corrected: Vector3 = Vector3(row.corrected_position)
+				unique_corrected_positions[_position_identity(corrected)] = true
+			if Vector3(row.corrected_position) != Vector3(row.original_position):
 				changed_count += 1
-			if search_state.begins_with("no_valid_point"):
+			if String(row.get("correction_search_state", "")).begins_with("best_same_tetra_residual"):
+				best_candidate_count += 1
+			if String(row.get("correction_search_state", "")).begins_with("no_valid_point"):
 				unresolved_count += 1
-			source_row["cell_local"] = context.cell_local
-			source_row["cell_global"] = context.cell_global
-			source_row["tetrahedron_index"] = context.tetrahedron_index
-			source_row["tetrahedron_id"] = context.tetrahedron_id
-			source_row["original_position_f32_hex"] = _position_bytes_hex(original)
-			source_row["original_barycentric_weights"] = before.get("weights", [])
-			source_row["original_barycentric_valid"] = before.get("barycentric_valid", false)
-			source_row["original_barycentric_gate_pass"] = before.get("barycentric_gate_pass", false)
-			source_row["original_field_residual"] = before.get("field_residual", "UNKNOWN_NOT_CAPTURED")
-			source_row["original_residual_gate_pass"] = before.get("residual_gate_pass", false)
-			source_row["corrected_position"] = selected_position
-			source_row["corrected_position_f32_hex"] = _position_bytes_hex(selected_position)
-			source_row["corrected_barycentric_weights"] = after.get("weights", [])
-			source_row["corrected_barycentric_valid"] = after.get("barycentric_valid", false)
-			source_row["corrected_barycentric_gate_pass"] = after.get("barycentric_gate_pass", false)
-			source_row["corrected_field_residual"] = after.get("field_residual", "UNKNOWN_NOT_CAPTURED")
-			source_row["corrected_residual_gate_pass"] = after.get("residual_gate_pass", false)
-			source_row["coordinate_ulp_steps"] = selected_steps
-			source_row["correction_search_state"] = search_state
-			source_row["accepted"] = accepted
-			source_row["correction_reason"] = reason
-			rows.append(source_row)
-			occurrence_index += 1
-	if realizer.has_method("set_global_correction_map"):
-		realizer.call("set_global_correction_map", global_correction_map)
-	return {"valid": true, "tetrahedra_visited": tetrahedron_count, "zero_vertex_occurrences": rows.size(), "unique_original_binary32_positions": source_groups.size(), "unique_corrected_binary32_positions": unique_corrected_positions.size(), "original_residual_histogram": before_histogram, "corrected_residual_histogram": after_histogram, "original_residual_over_epsilon_count": int(before_histogram.get("abs_gt_1e-7", 0)), "corrected_residual_over_epsilon_count": int(after_histogram.get("abs_gt_1e-7", 0)), "original_barycentric_gate_failure_count": barycentric_gate_failure_count, "corrected_barycentric_gate_failure_count": corrected_barycentric_gate_failure_count, "corrected_occurrence_count": corrected_count, "corrected_gate_failure_count": rows.size() - corrected_count, "best_same_tetra_candidate_count": best_candidate_count, "changed_occurrence_count": changed_count, "unresolved_occurrence_count": unresolved_count, "vertices": rows}
+			row["original_position_f32_hex"] = _position_bytes_hex(Vector3(row.original_position))
+			row["corrected_position_f32_hex"] = _position_bytes_hex(Vector3(row.corrected_position))
+			rows.append(row)
+	return {"valid": true, "tetrahedra_visited": tetrahedron_count, "zero_vertex_occurrences": rows.size(), "unique_corrected_binary32_positions": unique_corrected_positions.size(), "original_residual_histogram": before_histogram, "corrected_residual_histogram": after_histogram, "original_residual_over_epsilon_count": int(before_histogram.get("abs_gt_1e-7", 0)), "corrected_residual_over_epsilon_count": int(after_histogram.get("abs_gt_1e-7", 0)), "original_barycentric_gate_failure_count": barycentric_gate_failure_count, "corrected_barycentric_gate_failure_count": corrected_barycentric_gate_failure_count, "corrected_occurrence_count": corrected_count, "corrected_gate_failure_count": rows.size() - corrected_count, "best_same_tetra_candidate_count": best_candidate_count, "changed_occurrence_count": changed_count, "unresolved_occurrence_count": unresolved_count, "vertices": rows}
 
 func _residual_histogram_bin(barycentric_valid: bool, residual: float) -> String:
 	if not barycentric_valid or not is_finite(residual):

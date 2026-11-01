@@ -4,12 +4,7 @@ const R6_RESIDUAL_EPSILON: float = 1.0e-7
 const R6_BARYCENTRIC_EPSILON: float = 1.0e-7
 const MAX_ULP_STEPS_PER_COORDINATE: int = 2
 
-var _r6a_global_correction_map: Dictionary = {}
-
-func set_global_correction_map(correction_map: Dictionary) -> void:
-	_r6a_global_correction_map = correction_map.duplicate(true)
-
-func corrected_tetra_zero_sources(tet_data: Dictionary, local_search: bool = true) -> Array[Dictionary]:
+func corrected_tetra_zero_sources(tet_data: Dictionary) -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
 	var positions: Array = tet_data.get("positions", [])
 	var samples: Array = tet_data.get("samples", [])
@@ -61,7 +56,7 @@ func corrected_tetra_zero_sources(tet_data: Dictionary, local_search: bool = tru
 			"ulp_steps": [0, 0, 0],
 			"search_state": "unchanged"
 		}
-		if local_search and not bool(before.get("accepted", false)):
+		if not bool(before.get("accepted", false)):
 			selected = _search_representable_zero(original, tet_data)
 		var corrected: Vector3 = Vector3(selected.get("position", original))
 		if not emitted_positions.has(corrected):
@@ -96,11 +91,8 @@ func corrected_tetra_zero_sources(tet_data: Dictionary, local_search: bool = tru
 
 func _tetra_zero_points(tet_data: Dictionary) -> Array[Vector3]:
 	var points: Array[Vector3] = []
-	for row in corrected_tetra_zero_sources(tet_data, false):
-		var source_id: String = _position_bytes_hex(Vector3(row.get("original_position", Vector3.ZERO)))
-		if not _r6a_global_correction_map.has(source_id):
-			continue
-		var point: Vector3 = Vector3(_r6a_global_correction_map[source_id])
+	for row in corrected_tetra_zero_sources(tet_data):
+		var point: Vector3 = Vector3(row.get("corrected_position", Vector3.ZERO))
 		if not points.has(point):
 			points.append(point)
 	return points
