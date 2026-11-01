@@ -1,0 +1,10 @@
+{
+  "pid": 30192,
+  "executable": "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.9.0_x64__8wekyb3d8bbwe\\pwsh.exe",
+  "command_line": "\"C:\\Users\\PUBLI\\AppData\\Local\\Microsoft\\WindowsApps\\Microsoft.PowerShell_8wekyb3d8bbwe\\pwsh.exe\" -NoLogo -NoProfile -File C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r3_target_03_outer_d63cfb1ac0754ea990cf6dbf2153a3b2\\launch-target.ps1",
+  "parent_pid": 44024,
+  "created_utc": "2026-10-31T21:20:57.9741820Z",
+  "target": "R9.2.SEAM.XPLUS_EQUAL.v1",
+  "attempt_id": "R3_TARGET_20261031_03",
+  "evidence_root": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r3_target_03_076f7eb922724f079cb7dc6bc811a6e4"
+}

@@ -1,0 +1,10 @@
+{
+  "attempt_id": "R3_TARGET_20261031_03",
+  "mode": "FROZEN_R3_TARGET",
+  "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+  "phase": "r3",
+  "created_utc": "2026-10-31T21:20:58.4083608Z",
+  "status": "RESERVED_NOT_STARTED",
+  "source_sha": "c1dce7e2a410e439dbf82e5252a8e333d0621642",
+  "execution_checkout_head": "aa9a6dc5c562cd707cacde3e95364941ded076d9"
+}

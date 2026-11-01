@@ -1,0 +1,5 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+R12CXR_GEOMETRY_PREFLIGHT_PASS {"duplicate_root_rejected":true,"malformed_arc_endpoint_rejected":true,"mutated_graph_rejected":true,"source_graph_fingerprint_revalidated":true}
+R12CXR_TARGET_INVOCATION_BEGIN {"attempt_id":"R3_TARGET_20261031_03","fixture_sha256":"33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d","hypothesis":"R12CXR_RESIDUAL_FIELD_CONSTRAINED_MICROPATCH","phase":"r3","residual_fixture_sha256":"ad000594b25a82459da824b7488b2a553392a86e117eb64535b182463847ff23","scenario_id":"R9.2.SEAM.XPLUS_EQUAL.v1","source_sha":"c1dce7e2a410e439dbf82e5252a8e333d0621642"}
+R12CXR_PRE_GEOMETRY_TOOLING_FAILURE {"attempt_id":"R3_TARGET_20261031_03","consumes_cx_hypothesis":false,"reason":"cx_bounded_patch_search_failed","receipt_path":"C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r3_target_03_076f7eb922724f079cb7dc6bc811a6e4/pre_geometry_failure_R3_TARGET_20261031_03.json","receipt_sha256":"bf62c075ae149030f170a10b84337498aab460a952b74f12f9edc4df3d872d33","source_sha":"c1dce7e2a410e439dbf82e5252a8e333d0621642"}

@@ -1,0 +1,19 @@
+{
+  "attempt_id": "R3_TARGET_20261031_03",
+  "pid": 38020,
+  "end_utc": "2026-10-31T21:21:02.4152893Z",
+  "timeout_seconds": 45,
+  "timed_out": false,
+  "exit_code": 2,
+  "status": "PROCESS_EXITED",
+  "stdout_sha256": "2ad5cb749b7b6b56dd5247933b91b2b01d8054ab3f4b65339dd6827d9a9d3431",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "scenario_started": true,
+  "resource_stop_reason": "",
+  "resource_sample_count": 7,
+  "resource_samples_sha256": "e0c38c2a11055764d97309f3fa7f839580c5728fa1d06a5d1e09ac085b6977ee",
+  "termination_confirmed": true,
+  "process_start_record_error": "",
+  "raw_output_write_error": "",
+  "post_start_telemetry_error": ""
+}

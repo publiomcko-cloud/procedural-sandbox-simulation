@@ -1,0 +1,230 @@
+[
+  {
+    "path": "game/tests/p1_1b_benchmark_contract.gd.uid",
+    "sha256": "8440bac3720996db37943ffbb779f1e8974e6962c7d7e2cbb4bd2f05e1c49b18"
+  },
+  {
+    "path": "game/tests/p1_1b_benchmark_contract_tests.gd.uid",
+    "sha256": "98167aa02c8c21ad7c843f28559dae679abf29353236ab0f50ca63bcaa453cae"
+  },
+  {
+    "path": "game/tests/p1_1b_benchmark_harness.gd.uid",
+    "sha256": "5b940f47b608963fd94498791afd850cbd316f4d9d576c7a344392caf9efa84a"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r10_a_campaign.gd.uid",
+    "sha256": "c4311c114ae325476c7e373f4eafd7b736c3dfe6a9b4d891d247c653e50e10e4"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r10_a_topology_authority.gd.uid",
+    "sha256": "2a193e648944bfe750e1e1b17be451850afd0a53f529ecece0f6c52419b7f23e"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r10_b1r_direct_triangulator.gd.uid",
+    "sha256": "c8d7f53b8023bc60afdc38b51e271cebcbb8454aa16621ce6b20cf6367ddf0c1"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r10_b2_realizer.gd.uid",
+    "sha256": "b7f2949785733f29e61257d3990ef971005846c362298284365f97c943577eeb"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r10_b3_realizer.gd.uid",
+    "sha256": "83cadfae51672729c8c623aedabd0762916325bf048e6713eb582aa420ccf824"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r10_b6_area_guided_realizer.gd.uid",
+    "sha256": "3035796fce3d453028ae88fce2b8493fdfeebf19cbd0068a86d7d112125b7de4"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r10_b_campaign.gd.uid",
+    "sha256": "6fc494dba64a464e8e317ff1eb44b722ed66ca8a14ccdecccdb04852c1fea1fb"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r10_b_ray_causality.gd.uid",
+    "sha256": "0906acc1d5532bb175f60cc130a6f7af3129dbdb269d6dec0e8067a8b2fb9623"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r10_b_realizer.gd.uid",
+    "sha256": "d4c618b716f1df8dc234d97d0e94440608554dd8744f1753d92b087dadb9bdbc"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r10_bx_campaign.gd.uid",
+    "sha256": "2002a7deec8895ce9f2e2d7f9e2d0cd8c16dba4dcad89a1a5638fe73829464f2"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r10_bx_conflict_solver.gd.uid",
+    "sha256": "f61e66b2424b00d913d069515f760796d4ec8698dfbe5754ac331f331507cfcb"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r10_bx_tests.gd.uid",
+    "sha256": "d21867defbe5fabaefde821e4a03189c07590bfdb3927d8de07f08ed80ae396a"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_c_anchor_cycle_realizer.gd.uid",
+    "sha256": "6f768995aa612ad22e01acd6fd9ebeef6201434f4cf18d4e0a772ab5b7df8f3f"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_c_c3_campaign.gd.uid",
+    "sha256": "349da2a423c81291b0ecb6e8cae1c361770ac190c59c9a4c4800a2da61691032"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_c_c4_campaign.gd.uid",
+    "sha256": "9ac47122685177fe7ccd5666e9a287a9b7913b04dbd17dffd5ba40cb5ba84f9f"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_c_c4_patch_realizer.gd.uid",
+    "sha256": "07de7097b8ff10343fe674fac8a7727e4db41659c1900e98b08624aa3063623d"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_c_c5_campaign.gd.uid",
+    "sha256": "24e9cf681c6004319ba76385eda7fc7d83ad61826cca7226d99c3d908f7ce048"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_c_c5_face_owned_realizer.gd.uid",
+    "sha256": "60df9b31efda1688278f68732c87f77ea02a866e11fae0a401d9da20d65a4a05"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_c_c6_campaign.gd.uid",
+    "sha256": "7bb2254c56785174d88fed6e14b36c33000ddf8976394fe3c97fe0c640f2ea09"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_c_c6_multiface_realizer.gd.uid",
+    "sha256": "b091b8fc19414b8bfab639455a4d38d572f0f4080abba60ccf259604330bf846"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_c_campaign.gd.uid",
+    "sha256": "6d82c643fab9a03f06c920d064720712e606b8dc04070322bf8a56ec38d0252a"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_c_stage0_fixture.gd.uid",
+    "sha256": "0deba68c0a3294b3996a09a65660ba756f5590c1767f7b6a422a9a693fb6d4ff"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_c_support_realizer.gd.uid",
+    "sha256": "4b387cff24fad0ed466eedcc738da8894af44b78b2e17d26c2546efdebfffb51"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_cx_campaign.gd.uid",
+    "sha256": "e1729c955692f08b626e1c28ea27ff55d1f3179aa42ae181e1c2f9d624690e9b"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_cx_contract_tests.gd.uid",
+    "sha256": "aa7587c3b39859350269c698ccfad3ddc135fa5adeb295a72a23ab6bc952eae1"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_cx_fixture_builder.gd.uid",
+    "sha256": "e8c547196cbd109966b545af74bfa3c66235beddd93791d537501fec646abe77"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_cx_micropatch_realizer.gd.uid",
+    "sha256": "ac93c1ab07b663681aa72fedcfd0fe83017150987b96d1e13cda0487c07e5352"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_cx_realizer_check.gd.uid",
+    "sha256": "672bf53e1c77852b3f9c72eb31e5877faf5f055bed462a1e4dd93f0c1bd2841c"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_cxr_campaign.gd.uid",
+    "sha256": "38384203f1a8f4331e88c6d1e4c91e21d29d577d1aeb839881c6dd3a8279f8b4"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_cxr_contract_tests.gd.uid",
+    "sha256": "b3896ea57bb5a0a3d49b40720189842c149bc87ae5fb754eb117d800e9ecd7ca"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd.uid",
+    "sha256": "44172d2648ecb6cabc89682017ac89ef33dae18756d41d02288fc4494883860c"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r7_1_causal_diagnostic.gd.uid",
+    "sha256": "b2e94bbe0dd17ed4c2195d397d63daeac22dac51c56b47e5e0461207aa9bb049"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r7_2_local_retriangulation.gd.uid",
+    "sha256": "ac1c0faae5e17ce8cc9c11cdd3e70657719de3fedd42bfe7a1f296eddac5070a"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r7_2_topology_diagnostic.gd.uid",
+    "sha256": "f5544977fe251760f5571c603d07e8ac21ac6bee4b064cdf235f4eca86395024"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r7_2_zero_edit_gate.gd.uid",
+    "sha256": "2dba470301f2b45d5c45c84bd08dbbc9d30510441fa46ed2f770fcae81985d06"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r7_3_minimal_carve_repair.gd.uid",
+    "sha256": "d96bc9999b831ab0f7ea1aa5fb61e1589095f63139bcdb5988f0e4ee2e1e10c0"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r8_1_geometry_causality.gd.uid",
+    "sha256": "1711b5ecb53092fd7d4894f25ace35ce0ca662d4dfaca26c3fea959cc73979f7"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r8_2_geometry_provenance.gd.uid",
+    "sha256": "d5f3d2c2d2abf8eaa1647ffff332690a783ef3b5cc459c3b923c57b20c30d033"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r8_2_xplus_face_oracle.gd.uid",
+    "sha256": "a5f4765da606380d46a5584de90459fbf8d5133f5e6aa6a0feb8f9d3b15528b9"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r8_geometry_quality_diagnostic.gd.uid",
+    "sha256": "7f1a7013d3a5afd5c7f89a1bd93445a02ffd8f3ab5dba23f16925aae9e6a446f"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r9_2_candidate_impl.gd.uid",
+    "sha256": "90da42b44d484473da88f5e4de517005f9061139c2217cf8d578c40befd35d46"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r9_2_contract_tests.gd.uid",
+    "sha256": "041e96636dffa4deb51454fa104c7670e326786c90880db5c6656c0d57e1cef0"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r9_2_diagnostic_base.gd.uid",
+    "sha256": "74058154ec8b71ee1724a42b9ecde8350f7f448c6ee321fa852b3d8bb62c1f9b"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r9_3d_reference_extractor.gd.uid",
+    "sha256": "fab7c774f147d9a1c45bef7dbff1defb34dbfb90e4f85096f6e3eaa335951b6f"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r9_5_probe.gd.uid",
+    "sha256": "9f493d3f92d19a07858c636388fe603e1b3f5b9decc9b70fc84db7c886ad42f1"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r9_6_surface_topology.gd.uid",
+    "sha256": "174e212ff4f586349632f1ce1e0dcd71bbc35edb44641ba96efff28062a73173"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r9_6_topology_tests.gd.uid",
+    "sha256": "c5860625ec142eb07d8c889e00b8a58eeb492eb51157acefdb97a8e7846c0588"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r9_6r1_candidate_probe.gd.uid",
+    "sha256": "7f7e87d5cf2ee3e006a17041dcd391972667f1e60ff297033307cfa8612d36a3"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r9_6r1_d_xneg_diagnostic.gd.uid",
+    "sha256": "c861fb560902fb866a83fb80249f9bf50408c765e9e5f76845e8dad7fb39e6f8"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r9_6r1_face_interface_patch.gd.uid",
+    "sha256": "6d94b22d9d6b3c8b59ce8dcee1a2b967a52ab3f21329d031b48c3dae7f90b8ea"
+  },
+  {
+    "path": "game/tests/prototypes/p3_1_r9_experiment_base.gd.uid",
+    "sha256": "69a6202e61eca4f8c10c8b606844aa5a8450b790395bdcf96e7ee68250aebc1a"
+  },
+  {
+    "path": "game/tests/prototypes/r9_5_source_snapshots/candidate_a.gd.uid",
+    "sha256": "ebe7716870a756660c1ef3ab1b57cd43e6568da1b3bb8e38bb9e00f10f3c82eb"
+  },
+  {
+    "path": "game/tests/prototypes/r9_5_source_snapshots/candidate_c.gd.uid",
+    "sha256": "ea33d487a15be68c378b578a8bf77f9ae952a98ac2e4163659aa7bf83a1ad85b"
+  },
+  {
+    "path": "game/tests/prototypes/r9_5_source_snapshots/candidate_d.gd.uid",
+    "sha256": "c28653064159129e64314b39095e04a3e0c16000e42021fe85d5e7ff30451d92"
+  }
+]

@@ -1,0 +1,106 @@
+{
+  "schema": "P3.1.R12CXR.AttemptDisposition.v1",
+  "attempt_id": "R3_TARGET_20261031_03",
+  "scenario_id": "R9.2.SEAM.XPLUS_EQUAL.v1",
+  "source_sha": "c1dce7e2a410e439dbf82e5252a8e333d0621642",
+  "execution_checkout_head": "aa9a6dc5c562cd707cacde3e95364941ded076d9",
+  "process_started": true,
+  "godot_pid": 38020,
+  "godot_parent_pid": 30192,
+  "godot_exit_code": 2,
+  "timed_out": false,
+  "resource_stop_reason": "",
+  "resource_sample_count": 7,
+  "scenario_marker": true,
+  "failure_stage": "BEFORE_LOCAL_PATCH_SEARCH",
+  "failure_reason": "cx_bounded_patch_search_failed",
+  "cx_algorithm_started": false,
+  "consumes_cx_hypothesis": false,
+  "support_candidates": "UNKNOWN_NOT_CAPTURED",
+  "search_reason": "cxr_r3_cavity_boundary_domain_invalid",
+  "terminal_reason": "r3_cavity_boundary_domains_invalid:2/2",
+  "per_cavity": [
+    {
+      "cavity_id": "e89d7e6444ead8c6",
+      "terminal_reason": "r3_no_valid_cavity_boundary_level",
+      "search_started": false,
+      "search_complete": false,
+      "search_exhaustive": false,
+      "levels": [
+        {
+          "level": 0,
+          "patch_count": 2,
+          "boundary_valid": false,
+          "boundary_reason": "r3_cavity_boundary_incidence_not_one_to_one",
+          "candidate_generation_status": "NOT_RUN_INVALID_CAVITY_BOUNDARY"
+        },
+        {
+          "level": 1,
+          "patch_count": 8,
+          "boundary_valid": false,
+          "boundary_reason": "boundary_cycle_degree_invalid",
+          "candidate_generation_status": "NOT_RUN_INVALID_CAVITY_BOUNDARY"
+        },
+        {
+          "level": 2,
+          "patch_count": 13,
+          "boundary_valid": false,
+          "boundary_reason": "r3_patch_open_edge_has_no_remaining_owner",
+          "candidate_generation_status": "NOT_RUN_INVALID_CAVITY_BOUNDARY"
+        },
+        {
+          "level": 3,
+          "patch_count": 18,
+          "boundary_valid": false,
+          "boundary_reason": "r3_patch_open_edge_has_no_remaining_owner",
+          "candidate_generation_status": "NOT_RUN_INVALID_CAVITY_BOUNDARY"
+        }
+      ]
+    },
+    {
+      "cavity_id": "aefae75e246e6d28",
+      "terminal_reason": "r3_no_valid_cavity_boundary_level",
+      "search_started": false,
+      "search_complete": false,
+      "search_exhaustive": false,
+      "levels": [
+        {
+          "level": 0,
+          "patch_count": 1,
+          "boundary_valid": false,
+          "boundary_reason": "r3_cavity_boundary_incidence_not_one_to_one",
+          "candidate_generation_status": "NOT_RUN_INVALID_CAVITY_BOUNDARY"
+        },
+        {
+          "level": 1,
+          "patch_count": 4,
+          "boundary_valid": false,
+          "boundary_reason": "r3_patch_open_edge_has_no_remaining_owner",
+          "candidate_generation_status": "NOT_RUN_INVALID_CAVITY_BOUNDARY"
+        },
+        {
+          "level": 2,
+          "patch_count": 6,
+          "boundary_valid": false,
+          "boundary_reason": "r3_patch_open_edge_has_no_remaining_owner",
+          "candidate_generation_status": "NOT_RUN_INVALID_CAVITY_BOUNDARY"
+        },
+        {
+          "level": 3,
+          "patch_count": 10,
+          "boundary_valid": false,
+          "boundary_reason": "r3_patch_open_edge_has_no_remaining_owner",
+          "candidate_generation_status": "NOT_RUN_INVALID_CAVITY_BOUNDARY"
+        }
+      ]
+    }
+  ],
+  "classification": "PRE_GEOMETRY_TOOLING_FAILURE_HYPOTHESIS_NOT_TESTED",
+  "wrapper_observed_exit": 0,
+  "wrapper_exit_discrepancy": "Outer pwsh wrapper exited 0 although inner dispatcher process-completion reports Godot exit 2; raw inner records and hashes are intact. Correct wrapper propagation and run controlled-child check before next target.",
+  "minimum_free_commit_bytes": 9830916096,
+  "stop_loss_bytes": 2147483648,
+  "user_uid_preexisting_count": 57,
+  "preexisting_uid_changed_or_missing": 0,
+  "additional_generated_uid_count": 67
+}
