@@ -58,6 +58,7 @@ func _test_cross_squared_and_barycentric(diagnostics: RefCounted) -> void:
 	var weights: Array = diagnostics.call("_triangle_barycentric", Vector2(1.0 / 3.0, 1.0 / 3.0), triangle)
 	_expect(weights.size() == 3, "triangle barycentric arity")
 	_expect(absf(float(weights[0]) - 1.0 / 3.0) < 1.0e-6 and absf(float(weights[1]) - 1.0 / 3.0) < 1.0e-6 and absf(float(weights[2]) - 1.0 / 3.0) < 1.0e-6, "triangle barycentric values")
+	_expect(is_equal_approx(float(diagnostics.call("_weighted_field_residual", [0.5, 0.5, 0.0, 0.0], [-1.0, 1.0, 7.0, 9.0])), 0.0), "frozen field residual is independently recomputed")
 	_expect(bool(diagnostics.call("_strictly_inside_triangle", Vector2(0.25, 0.25), triangle)), "strict interior witness admitted")
 	_expect(not bool(diagnostics.call("_strictly_inside_triangle", Vector2(0.5, 0.5), triangle)), "boundary witness rejected")
 

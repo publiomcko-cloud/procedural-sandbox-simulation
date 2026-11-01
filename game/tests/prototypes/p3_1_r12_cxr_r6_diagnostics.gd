@@ -50,6 +50,7 @@ func collect_zero_facet_inventory(realizer: RefCounted, values: PackedFloat32Arr
 	var facets: Array[Dictionary] = []
 	var vertex_records: Array[Dictionary] = []
 	var histogram: Dictionary = {"abs_le_1e-8": 0, "abs_gt_1e-8_le_1e-7": 0, "abs_gt_1e-7": 0, "invalid_barycentric": 0}
+	var barycentric_gate_failure_count: int = 0
 	var primitive_classes: Dictionary = {"empty": 0, "point": 0, "segment": 0, "triangle": 0, "quad": 0}
 	var tetrahedra_with_facets: int = 0
 	var triangulated_facets: int = 0
@@ -82,20 +83,27 @@ func collect_zero_facet_inventory(realizer: RefCounted, values: PackedFloat32Arr
 		tetrahedra_with_facets += 1
 		for index in range(source_rows.size()):
 			var row: Dictionary = source_rows[index]
-			var check: Dictionary = synth.call("_validate_field_point", realizer, Vector3(row.position), tet_data.positions, tet_data.samples, RESIDUAL_EPSILON, BARYCENTRIC_EPSILON)
-			var residual: float = float(check.get("field_residual", NAN))
-			var weights: Array = check.get("weights", [])
-			var valid_barycentric: bool = bool(check.get("valid", false))
+			var position: Vector3 = Vector3(row.position)
+			var bary_result: Dictionary = realizer.call("_tetra_barycentric", position, tet_data.positions)
+			var weights: Array = bary_result.get("weights", [])
+			var valid_barycentric: bool = bool(bary_result.get("valid", false)) and weights.size() == 4
+			var barycentric_gate_pass: bool = valid_barycentric
+			for weight_value in weights:
+				var weight: float = float(weight_value)
+				if not is_finite(weight) or weight < -BARYCENTRIC_EPSILON or weight > 1.0 + BARYCENTRIC_EPSILON:
+					barycentric_gate_pass = false
+			var residual: float = _weighted_field_residual(weights, tet_data.samples)
 			var absolute_residual: float = absf(residual) if is_finite(residual) else INF
 			var bin_name: String = "invalid_barycentric"
-			if valid_barycentric and absolute_residual <= 1.0e-8:
+			if valid_barycentric and is_finite(residual) and absolute_residual <= 1.0e-8:
 				bin_name = "abs_le_1e-8"
-			elif valid_barycentric and absolute_residual <= RESIDUAL_EPSILON:
+			elif valid_barycentric and is_finite(residual) and absolute_residual <= RESIDUAL_EPSILON:
 				bin_name = "abs_gt_1e-8_le_1e-7"
-			elif valid_barycentric:
+			elif valid_barycentric and is_finite(residual):
 				bin_name = "abs_gt_1e-7"
 			histogram[bin_name] = int(histogram.get(bin_name, 0)) + 1
-			var position: Vector3 = Vector3(row.position)
+			if valid_barycentric and not barycentric_gate_pass:
+				barycentric_gate_failure_count += 1
 			var identity: String = _position_identity(position)
 			unique_position_ids[identity] = true
 			row["cell_local"] = [cell.x, cell.y, cell.z]
@@ -106,8 +114,9 @@ func collect_zero_facet_inventory(realizer: RefCounted, values: PackedFloat32Arr
 			row["barycentric_weights"] = weights.duplicate()
 			row["frozen_field_residual"] = residual if is_finite(residual) else "UNKNOWN_NOT_CAPTURED"
 			row["absolute_residual"] = absolute_residual if is_finite(absolute_residual) else "UNKNOWN_NOT_CAPTURED"
-			row["residual_gate_pass"] = bool(check.get("valid", false)) and is_finite(residual) and absolute_residual <= RESIDUAL_EPSILON
-			row["validator_reason"] = String(check.get("reason", ""))
+			row["residual_gate_pass"] = is_finite(residual) and absolute_residual <= RESIDUAL_EPSILON
+			row["barycentric_gate_pass"] = barycentric_gate_pass
+			row["validator_reason"] = "" if barycentric_gate_pass and is_finite(residual) and absolute_residual <= RESIDUAL_EPSILON else "support_field_residual_invalid"
 			row["binary32_position_identity"] = identity
 			vertex_records.append(row)
 		var ordered: Array[Vector3] = synth.call("_order_zero_polygon", points)
@@ -120,7 +129,7 @@ func collect_zero_facet_inventory(realizer: RefCounted, values: PackedFloat32Arr
 				return {"valid": false, "reason": "zero_facet_triangle_arity_invalid", "cell": cell, "tet_index": tet_index, "facet_index": facet_index}
 			facets.append({"cell_local": [cell.x, cell.y, cell.z], "cell_global": [int(tet_data.global_cell.x), int(tet_data.global_cell.y), int(tet_data.global_cell.z)], "tetrahedron_index": tet_index, "tetrahedron_id": "%d,%d,%d|tet:%d" % [int(tet_data.global_cell.x), int(tet_data.global_cell.y), int(tet_data.global_cell.z), tet_index], "facet_index": facet_index, "points": [Vector3(triangle[0]), Vector3(triangle[1]), Vector3(triangle[2])], "tetrahedron_positions": tet_data.positions.duplicate(), "tetrahedron_samples": tet_data.samples.duplicate()})
 			triangulated_facets += 1
-	return {"valid": true, "tetrahedra_visited": tetrahedron_count, "tetrahedra_with_zero_facets": tetrahedra_with_facets, "primitive_classes": primitive_classes, "triangulated_zero_facets": triangulated_facets, "tetra_zero_vertex_occurrences": vertex_records.size(), "unique_binary32_position_count": unique_position_ids.size(), "residual_histogram": histogram, "residual_over_epsilon_count": int(histogram.get("abs_gt_1e-7", 0)), "vertex_records": vertex_records, "facets": facets}
+	return {"valid": true, "tetrahedra_visited": tetrahedron_count, "tetrahedra_with_zero_facets": tetrahedra_with_facets, "primitive_classes": primitive_classes, "triangulated_zero_facets": triangulated_facets, "tetra_zero_vertex_occurrences": vertex_records.size(), "unique_binary32_position_count": unique_position_ids.size(), "residual_histogram": histogram, "residual_over_epsilon_count": int(histogram.get("abs_gt_1e-7", 0)), "barycentric_gate_failure_count": barycentric_gate_failure_count, "vertex_records": vertex_records, "facets": facets}
 
 func analyze_owner_overlap(fixture: Dictionary) -> Dictionary:
 	var cavity_polygon: PackedVector2Array = _vector2_polygon(fixture.get("projection", {}).get("polygon", []))
@@ -437,6 +446,18 @@ func _project(point: Vector3, origin: Vector3, axis_u: Vector3, axis_v: Vector3)
 
 func _cross_squared(a: Vector3, b: Vector3, point: Vector3) -> float:
 	return (b - a).cross(point - a).length_squared()
+
+func _weighted_field_residual(weights: Array, samples: Array) -> float:
+	if weights.size() != 4 or samples.size() != 4:
+		return NAN
+	var residual: float = 0.0
+	for index in range(4):
+		var weight: float = float(weights[index])
+		var sample: float = float(samples[index])
+		if not is_finite(weight) or not is_finite(sample):
+			return NAN
+		residual += weight * sample
+	return residual if is_finite(residual) else NAN
 
 func _edge_key(a: int, b: int) -> String:
 	return "%d-%d" % [mini(a, b), maxi(a, b)]
