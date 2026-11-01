@@ -1,3 +1,7 @@
+## 2026-11-01 — P3.1 R12-CXR R5-4 pretarget freeze
+
+- [R5-4 pretarget freeze](2026-11-01-P3-1-R12-CXR-R5-ATTEMPT-04-PRETARGET-FROZEN.md) — measured source `8e5211e`; 348 R5 and 216 R12 contracts pass; frozen cavity and inputs reverified; target `R9.2.SEAM.XPLUS_EQUAL.v1` is NOT_STARTED, slot 4/5.
+
 ## 2026-11-01 — P3.1 R12-CXR R4 triangulation partial
 
 - [R4 boundary-first realizer results](2026-11-01-P3-1-R12-CXR-R4-TRIANGULATION-PARTIAL.md) — draft PR #216; exact source `f48990e2`; 216/216 contracts; D1/D2 complete, D3 finite candidate graph exhausted with zero legal triangles; no target or downstream gates run.

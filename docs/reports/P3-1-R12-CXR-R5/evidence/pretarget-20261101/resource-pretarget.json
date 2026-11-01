@@ -1,0 +1,10 @@
+{
+  "utc": "2026-11-01T14:54:59.2816336Z",
+  "free_commit_mib": 8216.8,
+  "available_physical_mib": 31176.3,
+  "drive_c_free_gib": 114.26,
+  "godot_process_count": 0,
+  "godot_process_ids": [],
+  "warning_threshold_mib": 3072,
+  "hard_stop_mib": 2048
+}

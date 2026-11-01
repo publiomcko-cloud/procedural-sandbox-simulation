@@ -1,0 +1,8 @@
+{
+  "event": "preflight_script_guard_failure_before_runtime",
+  "when_utc": "2026-11-01T14:52Z",
+  "error": "Postcommit preflight R8 directory already exists; refusing overwrite.",
+  "source_sha": "8e5211e0665b6f57839d5c7eeae51c28c64325f6",
+  "godot_process_started": false,
+  "preserved_original_root": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\r12cxr_r5_20261101_a1\\exact-preflight-8e5211e-20261101-r2"
+}
