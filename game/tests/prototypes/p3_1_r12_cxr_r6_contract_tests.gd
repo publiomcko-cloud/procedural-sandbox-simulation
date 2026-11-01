@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_patch_owner_and_ordered_arc_paths()
 	_test_bounded_causal_cavity_search(diagnostics)
 	_test_patch_boundary_upper_bound(diagnostics)
+	_test_analytic_edge_witness_not_sampling_limited(diagnostics)
 	if failures.is_empty():
 		print("R12CXR_R6_CONTRACTS assertions=%d failures=0" % assertions)
 		quit(0)
@@ -72,10 +73,12 @@ func _test_boundary_edge_classification(diagnostics: RefCounted) -> void:
 	var adjacent: Dictionary = {"0-1": "R015", "1-2": "R124", "2-3": "R234", "3-4": "R234", "4-5": "R145", "0-5": "R015"}
 	for edge_key in adjacent:
 		var witness: Dictionary = {"valid": edge_key == "0-1", "reason": "synthetic"}
-		rows.append({"region_id": adjacent[edge_key], "edge_id": edge_key, "continuous_max_cross_squared": 0.0, "strictly_above_frozen_cutoff": false, "interior_witness": witness})
+		var upper_bound: float = 2.0e-12 if edge_key == "1-2" else 0.0
+		rows.append({"region_id": adjacent[edge_key], "edge_id": edge_key, "continuous_max_cross_squared": upper_bound, "strictly_above_frozen_cutoff": upper_bound > 1.0e-12, "interior_witness": witness})
 	var result: Dictionary = diagnostics.call("boundary_realizability", {"edge_maxima": rows}, ["a", "b", "c", "d", "e", "f"])
 	_expect(bool(result.get("valid", false)), "all six boundary edges receive an upper bound")
-	_expect(result.get("geometrically_unrealizable_boundary_edges", []).size() == 5, "only missing witnesses classify as unrealizable")
+	_expect(result.get("geometrically_unrealizable_boundary_edges", []).size() == 4, "only continuous upper bounds at or below cutoff prove unrealizability")
+	_expect(result.get("unresolved_boundary_edges", []) == ["1-2"], "an above-cutoff edge without a constructed witness remains unresolved")
 
 func _test_stable_region_partition(_diagnostics: RefCounted) -> void:
 	var expected: Array[String] = ["R015", "R145", "R124", "R234"]
@@ -149,6 +152,11 @@ func _test_bounded_causal_cavity_search(diagnostics: RefCounted) -> void:
 	var capped: Dictionary = diagnostics.call("bounded_cavity_search", ["T0"], faces, {}, evaluator, {"max_faces": 3, "max_states": 1, "max_queue": 20, "max_ms": 30000})
 	_expect(String(capped.get("status", "")) == "PARTIAL" and String(capped.get("terminal_reason", "")) == "VISITED_STATE_CAP", "R6-D state cap reports PARTIAL")
 	_expect(int(capped.get("examined_states", 0)) <= 1, "R6-D state cap is enforced")
+	var face_capped: Dictionary = diagnostics.call("bounded_cavity_search", ["T0"], faces, {}, evaluator, {"max_faces": 1, "max_states": 100, "max_queue": 20, "max_ms": 30000})
+	_expect(String(face_capped.get("status", "")) == "PARTIAL" and String(face_capped.get("terminal_reason", "")) == "MAX_REMOVED_FACE_BOUND", "R6-D removed-face bound cannot be reported as finite exhaustion")
+	var unknown_evaluator: Callable = func(_ids: Array) -> Dictionary: return {"valid": true, "manifold": true, "unrealizable_edges": [], "unresolved_edges": [edge_key], "edges_requiring_expansion": [edge_key], "minimum_feasible_witness_margin": -INF, "boundary_components": 1}
+	var unresolved_search: Dictionary = diagnostics.call("bounded_cavity_search", ["T0"], faces, {}, unknown_evaluator, {"max_faces": 3, "max_states": 100, "max_queue": 20, "max_ms": 30000})
+	_expect(String(unresolved_search.get("status", "")) == "PARTIAL" and String(unresolved_search.get("terminal_reason", "")) == "FINITE_CANDIDATE_GRAPH_EXHAUSTED_WITH_UNRESOLVED_FEASIBILITY", "R6-D finite graph exhaustion preserves unresolved witness feasibility as PARTIAL")
 
 func _test_patch_boundary_upper_bound(diagnostics: RefCounted) -> void:
 	var realizer: RefCounted = R6Realizer.new()
@@ -166,6 +174,19 @@ func _test_patch_boundary_upper_bound(diagnostics: RefCounted) -> void:
 	_expect(int(result.get("zero_facet_clip_evaluations", 0)) == 1 and int(repeated.get("zero_facet_clip_evaluations", -1)) == 0, "R6-D reuses facet clipping for repeated cavity faces")
 	_expect(int(result.get("face_edge_metric_evaluations", 0)) == 3 and int(repeated.get("face_edge_metric_cache_hits", 0)) == 3, "R6-D reuses edge metrics across repeated cavity states")
 	_expect(repeated.get("boundary_edges", []) == result.get("boundary_edges", []), "R6-D clipping cache preserves boundary audit results")
+
+func _test_analytic_edge_witness_not_sampling_limited(diagnostics: RefCounted) -> void:
+	var realizer: RefCounted = R6Realizer.new()
+	var domain: Array[Vector2] = [Vector2.ZERO, Vector2.RIGHT, Vector2(0.0, 1.0)]
+	var p0: Vector3 = Vector3(0.0, 1.0000001e-6, 0.0)
+	var polygon: Array[Vector3] = [p0, Vector3(0.2, 0.0, 0.0), Vector3.ZERO]
+	var facet: Dictionary = {"tetrahedron_id": "synthetic-facet", "facet_index": 0, "tetrahedron_positions": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP, Vector3.BACK], "tetrahedron_samples": [0.0, 0.0, 0.0, 1.0]}
+	var maximum: float = float(diagnostics.call("_cross_squared", Vector3.ZERO, Vector3.RIGHT, p0))
+	var witness: Dictionary = diagnostics.call("_patch_edge_witness", realizer, Vector3.ZERO, Vector3.RIGHT, maximum, p0, polygon, domain, facet, Vector3.ZERO, Vector3.RIGHT, Vector3.UP)
+	_expect(maximum > 1.0e-12, "synthetic analytic-witness case begins strictly above the frozen cutoff")
+	_expect(bool(witness.get("valid", false)), "analytic interval construction finds an interior witness missed by the former fixed lambda samples")
+	_expect(String(witness.get("witness_construction", "")) == "ANALYTIC_QUADRATIC_AND_DOMAIN_INTERVAL", "witness records its analytic interval construction")
+	_expect(float(witness.get("cross_squared", 0.0)) > 1.0e-12 and float(witness.get("continuous_field_residual", INF)) <= 1.0e-7, "constructed witness preserves the exact cutoff and field epsilon")
 
 func _expect(condition: bool, name: String) -> void:
 	assertions += 1

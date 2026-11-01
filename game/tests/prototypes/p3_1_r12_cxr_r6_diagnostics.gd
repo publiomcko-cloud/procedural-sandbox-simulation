@@ -319,20 +319,29 @@ func analyze_subregions(realizer: RefCounted, fixture: Dictionary, facets: Array
 			var best_point: Vector3 = Vector3.ZERO
 			var best_facet: Dictionary = {}
 			var best_polygon: Array[Vector3] = []
+			var best_witness: Dictionary = {}
 			for clipped_value in clipped_facets:
 				var clipped: Dictionary = clipped_value
 				var facet: Dictionary = clipped.facet
 				var polygon: Array = clipped.points
+				var piece_maximum: float = -INF
+				var piece_maximum_point: Vector3 = Vector3.ZERO
 				for extreme_index in range(polygon.size()):
 					var point: Vector3 = Vector3(polygon[extreme_index])
 					var cross_squared: float = _cross_squared(a, b, point)
 					extreme_rows.append({"tetrahedron_id": String(facet.tetrahedron_id), "facet_index": int(facet.facet_index), "extreme_index": extreme_index, "world_position": _vector3_array(point), "cross_squared": cross_squared})
+					if cross_squared > piece_maximum:
+						piece_maximum = cross_squared
+						piece_maximum_point = point
 					if cross_squared > maximum:
 						maximum = cross_squared
 						best_point = point
 						best_facet = facet
 						best_polygon = polygon
-			var witness: Dictionary = _interior_witness(realizer, a, b, best_point, best_polygon, region_projected, origin, axis_u, axis_v, best_facet, maximum)
+				if piece_maximum > CUTOFF_SQUARED:
+					var piece_witness: Dictionary = _patch_edge_witness(realizer, a, b, piece_maximum, piece_maximum_point, polygon, region_projected, facet, origin, axis_u, axis_v)
+					if bool(piece_witness.get("valid", false)) and (best_witness.is_empty() or float(piece_witness.get("cross_squared", -INF)) > float(best_witness.get("cross_squared", -INF))): best_witness = piece_witness
+			var witness: Dictionary = best_witness
 			var edge_row: Dictionary = {"region_id": String(region_spec.id), "edge_id": edge_key, "boundary_indices": [local_a, local_b], "world_edge": [_vector3_array(a), _vector3_array(b)], "is_direct_topology_arc": direct_arc_edges.has(edge_key), "clipped_zero_facet_count": clipped_facets.size(), "extreme_point_count": extreme_rows.size(), "extreme_point_evaluations": extreme_rows, "continuous_max_cross_squared": maximum if is_finite(maximum) else "UNKNOWN_NOT_CAPTURED", "strictly_above_frozen_cutoff": is_finite(maximum) and maximum > CUTOFF_SQUARED, "cutoff_margin": maximum - CUTOFF_SQUARED if is_finite(maximum) else "UNKNOWN_NOT_CAPTURED", "maximizing_tetrahedron_id": String(best_facet.get("tetrahedron_id", "")), "maximizing_facet_index": int(best_facet.get("facet_index", -1)), "maximizing_point": _vector3_array(best_point) if is_finite(maximum) else "UNKNOWN_NOT_CAPTURED", "interior_witness": witness}
 			region_edge_rows.append(edge_row)
 			all_edge_rows.append(edge_row)
@@ -359,8 +368,20 @@ func boundary_realizability(subregions: Dictionary, boundary_cycle: Array) -> Di
 			return {"valid": false, "reason": "boundary_edge_subregion_maximum_missing", "edge_id": edge_key, "region_id": region_id}
 		var edge_row: Dictionary = by_key[row_key]
 		var witness: Dictionary = edge_row.get("interior_witness", {})
-		boundary_rows.append({"edge_id": edge_key, "adjacent_subregion": region_id, "continuous_upper_bound_cross_squared": edge_row.get("continuous_max_cross_squared", "UNKNOWN_NOT_CAPTURED"), "upper_bound_complete_over_clipped_piecewise_linear_zero_set": true, "strictly_above_frozen_cutoff": bool(edge_row.get("strictly_above_frozen_cutoff", false)), "feasible_incident_triangle_witness": witness, "geometrically_unrealizable_boundary_edge": not bool(witness.get("valid", false))})
-	return {"valid": true, "boundary_edges": boundary_rows, "geometrically_unrealizable_boundary_edges": boundary_rows.filter(func(row: Dictionary) -> bool: return bool(row.geometrically_unrealizable_boundary_edge)).map(func(row: Dictionary) -> String: return String(row.edge_id))}
+		var upper_value: Variant = edge_row.get("continuous_max_cross_squared", "UNKNOWN_NOT_CAPTURED")
+		var upper_bound: float = float(upper_value) if typeof(upper_value) in [TYPE_FLOAT, TYPE_INT] else NAN
+		var witness_valid: bool = bool(witness.get("valid", false))
+		var no_clipped_zero_set: bool = (typeof(upper_value) == TYPE_STRING and String(upper_value) == "NO_CLIPPED_ZERO_SET") or int(edge_row.get("clipped_zero_facet_piece_count", -1)) == 0
+		var proven_unrealizable: bool = not witness_valid and (no_clipped_zero_set or (is_finite(upper_bound) and upper_bound <= CUTOFF_SQUARED))
+		var unresolved: bool = not witness_valid and not proven_unrealizable
+		var feasibility_state: String = "FEASIBLE_WITNESS" if witness_valid else "PROVEN_NO_FIELD_DERIVED_POINT_IN_CAVITY" if no_clipped_zero_set else "PROVEN_UNREALIZABLE_BY_CONTINUOUS_UPPER_BOUND" if proven_unrealizable else "UNKNOWN_WITNESS_NOT_CONSTRUCTED"
+		boundary_rows.append({"edge_id": edge_key, "adjacent_subregion": region_id, "continuous_upper_bound_cross_squared": upper_value, "upper_bound_complete_over_clipped_piecewise_linear_zero_set": true, "strictly_above_frozen_cutoff": bool(edge_row.get("strictly_above_frozen_cutoff", false)), "feasible_incident_triangle_witness": witness, "feasibility_state": feasibility_state, "geometrically_unrealizable_boundary_edge": proven_unrealizable, "feasibility_unresolved": unresolved})
+	var blocked: Array[String] = []; var unresolved_edges: Array[String] = []
+	for row in boundary_rows:
+		if bool(row.geometrically_unrealizable_boundary_edge): blocked.append(String(row.edge_id))
+		if bool(row.feasibility_unresolved): unresolved_edges.append(String(row.edge_id))
+	blocked.sort(); unresolved_edges.sort()
+	return {"valid": true, "boundary_edges": boundary_rows, "geometrically_unrealizable_boundary_edges": blocked, "unresolved_boundary_edges": unresolved_edges}
 
 ## General R6-D edge audit. Each zero facet is clipped against every removed
 ## patch triangle, so the upper bound covers the entire projected cavity domain.
@@ -391,11 +412,11 @@ func analyze_patch_boundary(realizer: RefCounted, patch: Array[Dictionary], boun
 			if not clipped.is_empty(): face_pieces.append({"points": clipped, "facet": facet, "domain_triangle": patch_projected})
 		_r6_clipped_piece_cache[face_clip_key] = face_pieces
 		patch_face_pieces[String(patch_triangle.get("triangle_id", ""))] = face_pieces
-	var boundary_rows: Array[Dictionary] = []; var minimum_margin: float = INF
+	var boundary_rows: Array[Dictionary] = []; var minimum_margin: float = INF; var minimum_witness_margin: float = INF
 	for edge_index in range(boundary_cycle.size()):
 		var a_id: String = String(boundary_cycle[edge_index]); var b_id: String = String(boundary_cycle[(edge_index + 1) % boundary_cycle.size()])
 		if not root_positions.has(a_id) or not root_positions.has(b_id): return {"valid": false, "reason": "r6_boundary_root_position_missing", "edge": [a_id, b_id]}
-		var a: Vector3 = Vector3(root_positions[a_id]); var b: Vector3 = Vector3(root_positions[b_id]); var maximum: float = -INF; var maximum_point: Vector3 = Vector3.ZERO; var maximum_facet: Dictionary = {}; var maximum_piece: Array[Vector3] = []; var maximum_domain: Array[Vector2] = []; var maximum_witness: Dictionary = {}; var piece_count: int = 0; var edge_id: String = String(realizer.call("_edge_key", a_id, b_id))
+		var a: Vector3 = Vector3(root_positions[a_id]); var b: Vector3 = Vector3(root_positions[b_id]); var maximum: float = -INF; var maximum_point: Vector3 = Vector3.ZERO; var maximum_facet: Dictionary = {}; var maximum_piece: Array[Vector3] = []; var maximum_domain: Array[Vector2] = []; var feasible_witness: Dictionary = {}; var piece_count: int = 0; var edge_id: String = String(realizer.call("_edge_key", a_id, b_id))
 		for patch_triangle in patch:
 			var face_id: String = String(patch_triangle.get("triangle_id", "")); var face_pieces: Array = patch_face_pieces.get(face_id, [])
 			var metric: Dictionary = _r6_face_edge_metric(realizer, edge_id, a, b, face_id, face_pieces, origin, axis_u, axis_v)
@@ -403,15 +424,30 @@ func analyze_patch_boundary(realizer: RefCounted, patch: Array[Dictionary], boun
 			else: metric_evaluations += 1
 			piece_count += int(metric.get("piece_count", 0))
 			if float(metric.get("maximum", -INF)) > maximum:
-				maximum = float(metric.maximum); maximum_point = Vector3(metric.maximum_point); maximum_facet = metric.facet; maximum_piece = metric.piece; maximum_domain = metric.domain; maximum_witness = metric.witness
-		var witness: Dictionary = maximum_witness
+				maximum = float(metric.maximum); maximum_point = Vector3(metric.maximum_point); maximum_facet = metric.facet; maximum_piece = metric.piece; maximum_domain = metric.domain
+			var metric_witness: Dictionary = metric.get("witness", {})
+			if bool(metric_witness.get("valid", false)) and (feasible_witness.is_empty() or float(metric_witness.get("cross_squared", -INF)) > float(feasible_witness.get("cross_squared", -INF))):
+				feasible_witness = metric_witness.duplicate(true)
+		var witness: Dictionary = feasible_witness
 		var margin: float = maximum - CUTOFF_SQUARED if is_finite(maximum) else -INF
 		minimum_margin = minf(minimum_margin, margin)
-		boundary_rows.append({"edge_id": String(realizer.call("_edge_key", a_id, b_id)), "root_ids": [a_id, b_id], "continuous_upper_bound_cross_squared": maximum if is_finite(maximum) else "UNKNOWN_NOT_CAPTURED", "cutoff_margin": margin if is_finite(margin) else "UNKNOWN_NOT_CAPTURED", "strictly_above_frozen_cutoff": is_finite(maximum) and maximum > CUTOFF_SQUARED, "clipped_zero_facet_piece_count": piece_count, "feasible_incident_triangle_witness": witness, "geometrically_unrealizable_boundary_edge": not bool(witness.get("valid", false))})
+		var witness_valid: bool = bool(witness.get("valid", false))
+		var proven_unrealizable: bool = not witness_valid and (maximum == -INF or (is_finite(maximum) and maximum <= CUTOFF_SQUARED))
+		var witness_margin: float = float(witness.get("cross_squared", -INF)) - CUTOFF_SQUARED if witness_valid else -INF
+		minimum_witness_margin = minf(minimum_witness_margin, witness_margin)
+		var feasibility_state: String = "FEASIBLE_WITNESS" if witness_valid else "PROVEN_NO_FIELD_DERIVED_POINT_IN_CAVITY" if maximum == -INF else "PROVEN_UNREALIZABLE_BY_CONTINUOUS_UPPER_BOUND" if proven_unrealizable else "UNKNOWN_WITNESS_NOT_CONSTRUCTED"
+		var upper_bound: Variant = "NO_CLIPPED_ZERO_SET" if maximum == -INF else maximum if is_finite(maximum) else "UNKNOWN_NOT_CAPTURED"
+		boundary_rows.append({"edge_id": String(realizer.call("_edge_key", a_id, b_id)), "root_ids": [a_id, b_id], "continuous_upper_bound_cross_squared": upper_bound, "cutoff_margin": margin if is_finite(margin) else "NO_CLIPPED_ZERO_SET" if maximum == -INF else "UNKNOWN_NOT_CAPTURED", "strictly_above_frozen_cutoff": is_finite(maximum) and maximum > CUTOFF_SQUARED, "clipped_zero_facet_piece_count": piece_count, "feasible_incident_triangle_witness": witness, "witness_cutoff_margin": witness_margin if witness_valid else "UNKNOWN_NOT_CAPTURED", "feasibility_state": feasibility_state, "geometrically_unrealizable_boundary_edge": proven_unrealizable, "feasibility_unresolved": not witness_valid and not proven_unrealizable})
 	var blocked: Array[String] = []
+	var unresolved: Array[String] = []
 	for row in boundary_rows:
 		if bool(row.geometrically_unrealizable_boundary_edge): blocked.append(String(row.edge_id))
-	return {"valid": true, "boundary_edges": boundary_rows, "geometrically_unrealizable_boundary_edges": blocked, "minimum_cutoff_margin": minimum_margin if is_finite(minimum_margin) else "UNKNOWN_NOT_CAPTURED", "boundary_edge_count": boundary_rows.size(), "clipped_piece_cache_hits": cache_hits, "zero_facet_clip_evaluations": clip_evaluations, "face_edge_metric_cache_hits": metric_cache_hits, "face_edge_metric_evaluations": metric_evaluations}
+		if bool(row.feasibility_unresolved): unresolved.append(String(row.edge_id))
+	var expansion_edges: Array[String] = blocked.duplicate()
+	for edge in unresolved:
+		if not expansion_edges.has(edge): expansion_edges.append(edge)
+	expansion_edges.sort(); blocked.sort(); unresolved.sort()
+	return {"valid": true, "boundary_edges": boundary_rows, "geometrically_unrealizable_boundary_edges": blocked, "unresolved_boundary_edges": unresolved, "edges_requiring_expansion": expansion_edges, "minimum_cutoff_margin": minimum_margin if is_finite(minimum_margin) else "UNKNOWN_NOT_CAPTURED", "minimum_feasible_witness_margin": minimum_witness_margin if is_finite(minimum_witness_margin) else "UNKNOWN_NOT_CAPTURED", "boundary_edge_count": boundary_rows.size(), "clipped_piece_cache_hits": cache_hits, "zero_facet_clip_evaluations": clip_evaluations, "face_edge_metric_cache_hits": metric_cache_hits, "face_edge_metric_evaluations": metric_evaluations}
 
 func _r6_face_edge_metric(realizer: RefCounted, edge_id: String, a: Vector3, b: Vector3, face_id: String, pieces: Array, origin: Vector3, axis_u: Vector3, axis_v: Vector3) -> Dictionary:
 	var edge_positions: String = _position_bytes_hex(a) + "|" + _position_bytes_hex(b)
@@ -421,15 +457,22 @@ func _r6_face_edge_metric(realizer: RefCounted, edge_id: String, a: Vector3, b: 
 		var cached: Dictionary = _r6_face_edge_metric_cache[cache_key].duplicate()
 		cached["cache_hit"] = true
 		return cached
-	var maximum: float = -INF; var maximum_point: Vector3 = Vector3.ZERO; var maximum_facet: Dictionary = {}; var maximum_piece: Array[Vector3] = []; var maximum_domain: Array[Vector2] = []
+	var maximum: float = -INF; var maximum_point: Vector3 = Vector3.ZERO; var maximum_facet: Dictionary = {}; var maximum_piece: Array[Vector3] = []; var maximum_domain: Array[Vector2] = []; var witness: Dictionary = {}
 	for piece_row in pieces:
 		var clipped: Array = piece_row.get("points", []); var facet: Dictionary = piece_row.get("facet", {}); var domain_triangle: Array[Vector2] = piece_row.get("domain_triangle", [])
+		var piece_maximum: float = -INF; var piece_maximum_point: Vector3 = Vector3.ZERO
 		for point_value in clipped:
 			var point: Vector3 = Vector3(point_value); var cross_squared: float = _cross_squared(a, b, point)
+			if cross_squared > piece_maximum:
+				piece_maximum = cross_squared; piece_maximum_point = point
 			if cross_squared > maximum:
 				maximum = cross_squared; maximum_point = point; maximum_facet = facet; maximum_piece = clipped; maximum_domain = domain_triangle
-	var witness: Dictionary = _patch_edge_witness(realizer, a, b, maximum, maximum_point, maximum_piece, maximum_domain, maximum_facet, origin, axis_u, axis_v)
-	var metric: Dictionary = {"maximum": maximum, "maximum_point": maximum_point, "facet": maximum_facet, "piece": maximum_piece, "domain": maximum_domain, "witness": witness, "piece_count": pieces.size(), "cache_hit": false}
+		if piece_maximum > CUTOFF_SQUARED:
+			var piece_witness: Dictionary = _patch_edge_witness(realizer, a, b, piece_maximum, piece_maximum_point, clipped, domain_triangle, facet, origin, axis_u, axis_v)
+			if bool(piece_witness.get("valid", false)) and (witness.is_empty() or float(piece_witness.get("cross_squared", -INF)) > float(witness.get("cross_squared", -INF))):
+				witness = piece_witness
+	var feasibility_state: String = "FEASIBLE_WITNESS" if bool(witness.get("valid", false)) else "PROVEN_UNREALIZABLE_BY_CONTINUOUS_UPPER_BOUND" if maximum <= CUTOFF_SQUARED else "UNKNOWN_WITNESS_NOT_CONSTRUCTED"
+	var metric: Dictionary = {"maximum": maximum, "maximum_point": maximum_point, "facet": maximum_facet, "piece": maximum_piece, "domain": maximum_domain, "witness": witness, "feasibility_state": feasibility_state, "piece_count": pieces.size(), "cache_hit": false}
 	_r6_face_edge_metric_cache[cache_key] = metric.duplicate()
 	return metric
 
@@ -448,21 +491,128 @@ func _r6_vector2_array_key(points: Array[Vector2]) -> String:
 
 func _patch_edge_witness(realizer: RefCounted, a: Vector3, b: Vector3, maximum: float, maximum_point: Vector3, clipped_piece: Array[Vector3], domain_triangle: Array[Vector2], facet: Dictionary, origin: Vector3, axis_u: Vector3, axis_v: Vector3) -> Dictionary:
 	if not is_finite(maximum) or maximum <= CUTOFF_SQUARED or clipped_piece.is_empty() or facet.is_empty(): return {"valid": false, "reason": "continuous_upper_bound_not_above_cutoff"}
-	var centroid: Vector3 = Vector3.ZERO
-	for point in clipped_piece: centroid += point
-	centroid /= float(clipped_piece.size())
-	for lambda_value in [0.0, 1.0e-12, 1.0e-11, 1.0e-10, 1.0e-9, 1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1]:
-		var point: Vector3 = maximum_point.lerp(centroid, float(lambda_value)); var cross_squared: float = _cross_squared(a, b, point)
-		if cross_squared <= CUTOFF_SQUARED: continue
-		if not _strictly_inside_triangle(_project(point, origin, axis_u, axis_v), domain_triangle): continue
-		var bary: Dictionary = realizer.call("_tetra_barycentric", point, facet.get("tetrahedron_positions", [])); var weights: Array = bary.get("weights", [])
-		if not bool(bary.get("valid", false)) or weights.size() != 4: continue
-		var residual: float = 0.0
-		for i in range(4): residual += float(weights[i]) * float(facet.get("tetrahedron_samples", [])[i])
-		if not is_finite(residual) or absf(residual) > RESIDUAL_EPSILON: continue
-		var projected: Vector2 = _project(point, origin, axis_u, axis_v)
-		return {"valid": true, "world_position": _vector3_array(point), "cross_squared": cross_squared, "continuous_field_residual": residual, "tetrahedron_id": String(facet.get("tetrahedron_id", "")), "facet_index": int(facet.get("facet_index", -1)), "source": "CLIPPED_ZERO_FACET_INTERIOR"}
-	return {"valid": false, "reason": "no_strict_interior_witness_above_cutoff", "continuous_upper_bound_cross_squared": maximum}
+	var centroid_x: float = 0.0; var centroid_y: float = 0.0; var centroid_z: float = 0.0
+	for point in clipped_piece:
+		centroid_x += float(point.x); centroid_y += float(point.y); centroid_z += float(point.z)
+	var count: float = float(clipped_piece.size())
+	var centroid: Vector3 = Vector3(centroid_x / count, centroid_y / count, centroid_z / count)
+	var starts: Array[Vector3] = []
+	if clipped_piece.has(maximum_point): starts.append(maximum_point)
+	for point in clipped_piece:
+		var candidate_start: Vector3 = Vector3(point)
+		if _cross_squared(a, b, candidate_start) > CUTOFF_SQUARED and not starts.has(candidate_start): starts.append(candidate_start)
+	var destinations: Array[Vector3] = [centroid]
+	for point in clipped_piece:
+		var destination: Vector3 = Vector3(point)
+		if not destinations.has(destination): destinations.append(destination)
+	var intervals: Array[Dictionary] = []
+	for start_index in range(starts.size()):
+		var start: Vector3 = starts[start_index]
+		if _cross_squared(a, b, start) <= CUTOFF_SQUARED: continue
+		for destination_index in range(destinations.size()):
+			var destination: Vector3 = destinations[destination_index]
+			if destination == start: continue
+			var domain_interval: Dictionary = _strict_domain_lambda_interval(start, destination, domain_triangle, origin, axis_u, axis_v)
+			if not bool(domain_interval.get("valid", false)): continue
+			var positive_intervals: Array[Dictionary] = _positive_cross_squared_intervals(a, b, start, destination)
+			for positive_interval in positive_intervals:
+				var low: float = maxf(float(domain_interval.lower), float(positive_interval.lower))
+				var high: float = minf(float(domain_interval.upper), float(positive_interval.upper))
+				if high > low:
+					intervals.append({"lower": low, "upper": high, "start": start, "destination": destination, "start_index": start_index, "destination_index": destination_index})
+	intervals.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		var left_width: float = float(left.upper) - float(left.lower)
+		var right_width: float = float(right.upper) - float(right.lower)
+		if left_width != right_width: return left_width > right_width
+		if int(left.start_index) != int(right.start_index): return int(left.start_index) < int(right.start_index)
+		return int(left.destination_index) < int(right.destination_index)
+	)
+	for interval in intervals:
+		var low: float = float(interval.lower); var high: float = float(interval.upper)
+		for fraction in [0.125, 0.25, 0.5, 0.75, 0.875]:
+			var lambda_value: float = low + (high - low) * float(fraction)
+			var start: Vector3 = Vector3(interval.start); var destination: Vector3 = Vector3(interval.destination)
+			var point: Vector3 = Vector3(float(start.x) + (float(destination.x) - float(start.x)) * lambda_value, float(start.y) + (float(destination.y) - float(start.y)) * lambda_value, float(start.z) + (float(destination.z) - float(start.z)) * lambda_value)
+			var validation: Dictionary = _validate_patch_edge_witness(realizer, a, b, point, domain_triangle, facet, origin, axis_u, axis_v)
+			if bool(validation.get("valid", false)):
+				validation["continuous_upper_bound_cross_squared"] = maximum
+				validation["analytic_lambda_interval"] = [low, high]
+				validation["witness_construction"] = "ANALYTIC_QUADRATIC_AND_DOMAIN_INTERVAL"
+				return validation
+	return {"valid": false, "reason": "continuous_bound_above_cutoff_but_no_valid_binary32_witness_constructed", "feasibility_state": "UNKNOWN_WITNESS_CONSTRUCTION", "continuous_upper_bound_cross_squared": maximum, "analytic_interval_count": intervals.size()}
+
+func _strict_domain_lambda_interval(start: Vector3, destination: Vector3, domain_triangle: Array[Vector2], origin: Vector3, axis_u: Vector3, axis_v: Vector3) -> Dictionary:
+	var start_weights: Array[float] = _triangle_barycentric(_project(start, origin, axis_u, axis_v), domain_triangle)
+	var end_weights: Array[float] = _triangle_barycentric(_project(destination, origin, axis_u, axis_v), domain_triangle)
+	if start_weights.size() != 3 or end_weights.size() != 3: return {"valid": false, "reason": "domain_triangle_degenerate"}
+	var lower: float = 0.0; var upper: float = 1.0
+	for index in range(3):
+		var first: float = float(start_weights[index]); var delta: float = float(end_weights[index]) - first
+		if delta > 0.0:
+			lower = maxf(lower, -first / delta)
+		elif delta < 0.0:
+			upper = minf(upper, -first / delta)
+		elif first <= 0.0:
+			return {"valid": false, "reason": "segment_never_enters_strict_domain"}
+	lower = maxf(lower, 0.0); upper = minf(upper, 1.0)
+	return {"valid": upper > lower, "lower": lower, "upper": upper, "start_barycentric": start_weights, "end_barycentric": end_weights}
+
+func _positive_cross_squared_intervals(a: Vector3, b: Vector3, start: Vector3, destination: Vector3) -> Array[Dictionary]:
+	var coefficients: Array[float] = _cross_squared_coefficients(a, b, start, destination)
+	var quadratic: float = coefficients[0]; var linear: float = coefficients[1]; var constant: float = coefficients[2]
+	var cuts: Array[float] = [0.0, 1.0]
+	if quadratic == 0.0:
+		if linear != 0.0:
+			var root: float = -constant / linear
+			if root > 0.0 and root < 1.0: cuts.append(root)
+	else:
+		var discriminant: float = linear * linear - 4.0 * quadratic * constant
+		if discriminant >= 0.0:
+			var root_delta: float = sqrt(discriminant)
+			var root_a: float = (-linear - root_delta) / (2.0 * quadratic)
+			var root_b: float = (-linear + root_delta) / (2.0 * quadratic)
+			if root_a > 0.0 and root_a < 1.0: cuts.append(root_a)
+			if root_b > 0.0 and root_b < 1.0: cuts.append(root_b)
+	cuts.sort()
+	var result: Array[Dictionary] = []
+	for index in range(cuts.size() - 1):
+		var low: float = cuts[index]; var high: float = cuts[index + 1]
+		if high <= low: continue
+		var midpoint: float = (low + high) * 0.5
+		if _quadratic_value(quadratic, linear, constant, midpoint) > 0.0:
+			result.append({"lower": low, "upper": high})
+	return result
+
+func _cross_squared_coefficients(a: Vector3, b: Vector3, start: Vector3, destination: Vector3) -> Array[float]:
+	var ex: float = float(b.x) - float(a.x); var ey: float = float(b.y) - float(a.y); var ez: float = float(b.z) - float(a.z)
+	var rx: float = float(start.x) - float(a.x); var ry: float = float(start.y) - float(a.y); var rz: float = float(start.z) - float(a.z)
+	var dx: float = float(destination.x) - float(start.x); var dy: float = float(destination.y) - float(start.y); var dz: float = float(destination.z) - float(start.z)
+	var ux: float = ey * rz - ez * ry; var uy: float = ez * rx - ex * rz; var uz: float = ex * ry - ey * rx
+	var vx: float = ey * dz - ez * dy; var vy: float = ez * dx - ex * dz; var vz: float = ex * dy - ey * dx
+	var quadratic: float = vx * vx + vy * vy + vz * vz
+	var linear: float = 2.0 * (ux * vx + uy * vy + uz * vz)
+	var constant: float = ux * ux + uy * uy + uz * uz - CUTOFF_SQUARED
+	return [quadratic, linear, constant]
+
+func _quadratic_value(quadratic: float, linear: float, constant: float, lambda_value: float) -> float:
+	return (quadratic * lambda_value + linear) * lambda_value + constant
+
+func _validate_patch_edge_witness(realizer: RefCounted, a: Vector3, b: Vector3, point: Vector3, domain_triangle: Array[Vector2], facet: Dictionary, origin: Vector3, axis_u: Vector3, axis_v: Vector3) -> Dictionary:
+	var domain_weights: Array[float] = _triangle_barycentric(_project(point, origin, axis_u, axis_v), domain_triangle)
+	if domain_weights.size() != 3 or domain_weights.any(func(value: float) -> bool: return not is_finite(value) or value <= 0.0): return {"valid": false, "reason": "candidate_outside_strict_patch_interior"}
+	var cross_squared: float = _cross_squared(a, b, point)
+	if not is_finite(cross_squared) or cross_squared <= CUTOFF_SQUARED: return {"valid": false, "reason": "candidate_not_strictly_above_frozen_cutoff", "cross_squared": cross_squared}
+	var bary: Dictionary = realizer.call("_tetra_barycentric", point, facet.get("tetrahedron_positions", [])); var weights: Array = bary.get("weights", [])
+	if not bool(bary.get("valid", false)) or weights.size() != 4: return {"valid": false, "reason": "candidate_tetra_barycentric_invalid"}
+	var samples: Array = facet.get("tetrahedron_samples", [])
+	if samples.size() != 4: return {"valid": false, "reason": "candidate_tetra_field_samples_missing"}
+	var residual: float = 0.0
+	for index in range(4):
+		var weight: float = float(weights[index])
+		if not is_finite(weight) or weight < -BARYCENTRIC_EPSILON or weight > 1.0 + BARYCENTRIC_EPSILON: return {"valid": false, "reason": "candidate_barycentric_gate_failed"}
+		residual += weight * float(samples[index])
+	if not is_finite(residual) or absf(residual) > RESIDUAL_EPSILON: return {"valid": false, "reason": "candidate_field_residual_gate_failed", "field_residual": residual}
+	return {"valid": true, "world_position": _vector3_array(point), "cross_squared": cross_squared, "continuous_field_residual": residual, "tetra_barycentric_weights": weights, "domain_barycentric_weights": domain_weights, "tetrahedron_id": String(facet.get("tetrahedron_id", "")), "facet_index": int(facet.get("facet_index", -1)), "source": "CLIPPED_ZERO_FACET_INTERIOR"}
 
 ## Best-first bounded search over causally adjacent face additions. The caller's
 ## evaluator must return a complete manifold and boundary-feasibility audit.
@@ -484,22 +634,29 @@ func bounded_cavity_search(initial_face_ids: Array, all_triangles: Array[Diction
 		if not face_by_id.has(face_id): return {"status": "INVALID_INPUT", "reason": "r6_initial_face_missing", "face_id": face_id}
 	var initial_audit: Dictionary = evaluator.call(initial)
 	if not bool(initial_audit.get("valid", false)): return {"status": "INVALID_INPUT", "reason": "r6_initial_cavity_invalid", "audit": initial_audit}
-	var queue: Array[Dictionary] = [{"face_ids": initial, "audit": initial_audit}]; var visited: Dictionary = {"|".join(initial): true}; var examined: int = 0; var generated: int = 1; var started: int = Time.get_ticks_msec(); var best: Dictionary = queue[0]
+	var queue: Array[Dictionary] = [{"face_ids": initial, "audit": initial_audit}]; var visited: Dictionary = {"|".join(initial): true}; var examined: int = 0; var generated: int = 1; var started: int = Time.get_ticks_msec(); var best: Dictionary = queue[0]; var removed_face_bound_hit: bool = false; var unresolved_dead_end: bool = false
 	while not queue.is_empty():
 		if examined >= max_states: return {"status": "PARTIAL", "terminal_reason": "VISITED_STATE_CAP", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
 		if Time.get_ticks_msec() - started >= max_ms: return {"status": "PARTIAL", "terminal_reason": "WALL_TIME_CAP", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
 		queue.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return _r6_cavity_state_less(a, b))
 		var state: Dictionary = queue.pop_front(); examined += 1; var audit: Dictionary = state.audit
-		if bool(audit.get("manifold", false)) and int(audit.get("boundary_components", 2147483647)) == 1 and audit.get("unrealizable_edges", []).is_empty(): return {"status": "FOUND", "selected": state, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
+		var proven_blocked: Array = audit.get("unrealizable_edges", [])
+		var unresolved: Array = audit.get("unresolved_edges", [])
+		if bool(audit.get("manifold", false)) and int(audit.get("boundary_components", 2147483647)) == 1 and proven_blocked.is_empty() and unresolved.is_empty(): return {"status": "FOUND", "selected": state, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
 		var ids: Array[String] = state.face_ids
-		if ids.size() >= max_faces: continue
 		var candidate_set: Dictionary = {}
-		for edge_value in audit.get("unrealizable_edges", []):
+		var expansion_edges: Array = audit.get("edges_requiring_expansion", proven_blocked + unresolved)
+		for edge_value in expansion_edges:
 			var edge_key: String = String(edge_value)
 			for face_id_value in edge_faces.get(edge_key, []):
 				var face_id: String = String(face_id_value)
 				if not ids.has(face_id): candidate_set[face_id] = true
 		var candidates: Array[String] = []; for value in candidate_set.keys(): candidates.append(String(value)); candidates.sort()
+		if ids.size() >= max_faces:
+			if not candidates.is_empty(): removed_face_bound_hit = true
+			elif not unresolved.is_empty(): unresolved_dead_end = true
+			continue
+		var generated_extension: bool = false
 		for face_id in candidates:
 			var next_ids: Array[String] = ids.duplicate(); next_ids.append(face_id); next_ids.sort(); var signature: String = "|".join(next_ids)
 			if visited.has(signature): continue
@@ -511,6 +668,10 @@ func bounded_cavity_search(initial_face_ids: Array, all_triangles: Array[Diction
 			if _r6_cavity_state_less(next_state, best): best = next_state
 			if queue.size() >= max_queue: return {"status": "PARTIAL", "terminal_reason": "PRIORITY_QUEUE_CAP", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
 			queue.append(next_state)
+			generated_extension = true
+		if not generated_extension and not unresolved.is_empty(): unresolved_dead_end = true
+	if removed_face_bound_hit: return {"status": "PARTIAL", "terminal_reason": "MAX_REMOVED_FACE_BOUND", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": 0, "elapsed_ms": Time.get_ticks_msec() - started}
+	if unresolved_dead_end: return {"status": "PARTIAL", "terminal_reason": "FINITE_CANDIDATE_GRAPH_EXHAUSTED_WITH_UNRESOLVED_FEASIBILITY", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": 0, "elapsed_ms": Time.get_ticks_msec() - started}
 	return {"status": "EXHAUSTED", "terminal_reason": "FINITE_CAUSAL_SEARCH_EXHAUSTED", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": 0, "elapsed_ms": Time.get_ticks_msec() - started}
 
 func _r6_cavity_state_less(a: Dictionary, b: Dictionary) -> bool:
@@ -519,7 +680,7 @@ func _r6_cavity_state_less(a: Dictionary, b: Dictionary) -> bool:
 	var aa: Dictionary = a.get("audit", {}); var ba: Dictionary = b.get("audit", {})
 	var au: int = aa.get("unrealizable_edges", []).size(); var bu: int = ba.get("unrealizable_edges", []).size()
 	if au != bu: return au < bu
-	var am: float = float(aa.get("minimum_cutoff_margin", -INF)); var bm: float = float(ba.get("minimum_cutoff_margin", -INF))
+	var am: float = float(aa.get("minimum_feasible_witness_margin", aa.get("minimum_cutoff_margin", -INF))); var bm: float = float(ba.get("minimum_feasible_witness_margin", ba.get("minimum_cutoff_margin", -INF)))
 	if am != bm: return am > bm
 	var ac: int = int(aa.get("boundary_components", 2147483647)); var bc: int = int(ba.get("boundary_components", 2147483647))
 	if ac != bc: return ac < bc
@@ -540,16 +701,22 @@ func search_patch_cavities(realizer: RefCounted, all_triangles: Array[Dictionary
 		if not bool(connectivity.get("valid", false)) or not bool(boundary.get("valid", false)): return {"valid": false, "reason": "r6_candidate_boundary_nonmanifold", "connectivity": connectivity, "boundary": boundary}
 		var cycles: Dictionary = realizer.call("_r4_boundary_cycle_set", boundary)
 		if not bool(cycles.get("valid", false)): return {"valid": false, "reason": "r6_candidate_boundary_cycles_invalid", "cycles": cycles}
-		var cycle_rows: Array = cycles.get("cycles", []); var blocked: Array[String] = []; var minimum_margin: float = INF; var edge_audits: Array[Dictionary] = []
+		var cycle_rows: Array = cycles.get("cycles", []); var blocked: Array[String] = []; var unresolved: Array[String] = []; var expansion_edges: Array[String] = []; var minimum_margin: float = INF; var minimum_witness_margin: float = INF; var edge_audits: Array[Dictionary] = []
 		for cycle_row in cycle_rows:
 			var cycle: Array = cycle_row.get("root_ids", [])
 			var edge_audit: Dictionary = analyze_patch_boundary(realizer, patch, cycle, root_positions, projection, facets)
 			if not bool(edge_audit.get("valid", false)): return {"valid": false, "reason": "r6_candidate_edge_audit_invalid", "edge_audit": edge_audit}
 			for edge in edge_audit.get("geometrically_unrealizable_boundary_edges", []): blocked.append(String(edge))
-			minimum_margin = minf(minimum_margin, float(edge_audit.get("minimum_cutoff_margin", -INF)))
+			for edge in edge_audit.get("unresolved_boundary_edges", []): unresolved.append(String(edge))
+			for edge in edge_audit.get("edges_requiring_expansion", []): expansion_edges.append(String(edge))
+			var edge_margin: Variant = edge_audit.get("minimum_cutoff_margin", "UNKNOWN_NOT_CAPTURED")
+			if typeof(edge_margin) in [TYPE_FLOAT, TYPE_INT]: minimum_margin = minf(minimum_margin, float(edge_margin))
+			var witness_margin: Variant = edge_audit.get("minimum_feasible_witness_margin", "UNKNOWN_NOT_CAPTURED")
+			if typeof(witness_margin) in [TYPE_FLOAT, TYPE_INT]: minimum_witness_margin = minf(minimum_witness_margin, float(witness_margin))
+			else: minimum_witness_margin = -INF
 			edge_audits.append(edge_audit)
-		blocked.sort()
-		return {"valid": true, "manifold": true, "boundary_components": cycle_rows.size(), "unrealizable_edges": blocked, "minimum_cutoff_margin": minimum_margin, "boundary": boundary, "cycles": cycles, "edge_audits": edge_audits}
+		blocked.sort(); unresolved.sort(); expansion_edges.sort()
+		return {"valid": true, "manifold": true, "boundary_components": cycle_rows.size(), "unrealizable_edges": blocked, "unresolved_edges": unresolved, "edges_requiring_expansion": expansion_edges, "minimum_cutoff_margin": minimum_margin if is_finite(minimum_margin) else -INF, "minimum_feasible_witness_margin": minimum_witness_margin, "boundary": boundary, "cycles": cycles, "edge_audits": edge_audits}
 	var adjacency: Dictionary = realizer.call("_adjacency", all_triangles)
 	return bounded_cavity_search(initial_face_ids, all_triangles, adjacency, evaluate, limits)
 
@@ -621,30 +788,7 @@ func _clip_world_triangle_to_region(source_points: Array, region: Array[Vector2]
 	return polygon
 
 func _interior_witness(realizer: RefCounted, a: Vector3, b: Vector3, maximum_point: Vector3, clipped_polygon: Array[Vector3], region: Array[Vector2], origin: Vector3, axis_u: Vector3, axis_v: Vector3, facet: Dictionary, maximum: float) -> Dictionary:
-	if not is_finite(maximum) or maximum <= CUTOFF_SQUARED or clipped_polygon.is_empty():
-		return {"valid": false, "reason": "continuous_upper_bound_not_above_cutoff"}
-	var centroid: Vector3 = Vector3.ZERO
-	for point in clipped_polygon:
-		centroid += Vector3(point)
-	centroid /= float(clipped_polygon.size())
-	var lambdas: Array[float] = [0.0, 1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1]
-	for lambda_value in lambdas:
-		var point: Vector3 = maximum_point.lerp(centroid, lambda_value)
-		var projected: Vector2 = _project(point, origin, axis_u, axis_v)
-		if not _strictly_inside_triangle(projected, region):
-			continue
-		var cross_squared: float = _cross_squared(a, b, point)
-		if cross_squared <= CUTOFF_SQUARED:
-			continue
-		var weights_result: Dictionary = realizer.call("_tetra_barycentric", point, facet.tetrahedron_positions)
-		var field_residual: float = NAN
-		var weights: Array = weights_result.get("weights", [])
-		if bool(weights_result.get("valid", false)) and weights.size() == 4:
-			field_residual = 0.0
-			for index in range(4):
-				field_residual += float(weights[index]) * float(facet.tetrahedron_samples[index])
-		return {"valid": true, "world_position": _vector3_array(point), "cross_squared": cross_squared, "continuous_field_residual": field_residual if is_finite(field_residual) else "UNKNOWN_NOT_CAPTURED", "tetrahedron_id": String(facet.tetrahedron_id), "facet_index": int(facet.facet_index), "region_barycentric": _triangle_barycentric(projected, region)}
-	return {"valid": false, "reason": "no_strict_interior_witness_above_cutoff", "continuous_upper_bound_cross_squared": maximum}
+	return _patch_edge_witness(realizer, a, b, maximum, maximum_point, clipped_polygon, region, facet, origin, axis_u, axis_v)
 
 func _strictly_inside_triangle(point: Vector2, triangle: Array[Vector2]) -> bool:
 	var weights: Array[float] = _triangle_barycentric(point, triangle)

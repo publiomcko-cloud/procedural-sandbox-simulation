@@ -37,7 +37,7 @@ func _run() -> void:
 		quit(0)
 		return
 	if mode.is_empty(): mode = "freeze"
-	if mode not in ["freeze", "synthesize"]:
+	if mode not in ["freeze", "boundary-audit", "synthesize"]:
 		_fail("r6_mode_invalid", {"mode": mode})
 		return
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
@@ -264,6 +264,27 @@ func _run() -> void:
 		_fail("r6_frozen_cavity_geometry_reconstruction_mismatch", {"observed_sha256": Core.sha256(pinned_cavity_bytes), "expected_sha256": R5CavitySha, "reconstructed_sha256": Core.sha256(fixture_bytes), "exact_bytes_match": pinned_cavity_bytes == fixture_bytes})
 		return
 	print("R6_FROZEN_CAVITY_RECONSTRUCTED " + JSON.stringify({"fixture_sha256": Core.sha256(pinned_cavity_bytes), "exact_bytes_match": pinned_cavity_bytes == fixture_bytes}))
+	if mode == "boundary-audit":
+		var source_sha: String = OS.get_environment("R12CXR_SOURCE_SHA")
+		if source_sha.length() != 40 or not source_sha.is_valid_hex_number():
+			_fail("r6_boundary_audit_source_identity_invalid", {"source_sha": source_sha})
+			return
+		var boundary_diagnostics: RefCounted = Diagnostics.new()
+		var boundary_realizer: RefCounted = R6Realizer.new()
+		boundary_realizer.set("_root_positions", root_positions)
+		boundary_realizer.set("_required_arc_keys", required_arc_keys)
+		boundary_realizer.set("_locked_triplets", realizer.get("_locked_triplets"))
+		boundary_realizer.set("_cxr_active_snapshot", snapshot)
+		var zero_inventory: Dictionary = boundary_diagnostics.call("collect_zero_facet_inventory", realizer, volume.get("values", PackedFloat32Array()), roi)
+		if not bool(zero_inventory.get("valid", false)):
+			_fail("r6_boundary_audit_zero_inventory_invalid", zero_inventory)
+			return
+		var projection: Dictionary = {"origin": _vector3_array(Vector3(r4_context.get("projection_origin", Vector3.ZERO))), "axis_u": _vector3_array(Vector3(r4_context.get("projection_u", Vector3.ZERO))), "axis_v": _vector3_array(Vector3(r4_context.get("projection_v", Vector3.ZERO)))}
+		var audit: Dictionary = boundary_diagnostics.call("analyze_patch_boundary", boundary_realizer, analysis_patch, cycle, root_positions, projection, zero_inventory.get("facets", []))
+		var result: Dictionary = {"schema": "P3.1.R12CXR.R6.D0BoundaryWitnessAudit.v1", "status": "DIAGNOSTIC_COMPLETE" if bool(audit.get("valid", false)) else "DIAGNOSTIC_FAILED", "source_sha": source_sha, "target_id": TargetId, "target_attempt_consumed": false, "target_attempt_phase": "R6-D0", "frozen_cavity_sha256": Core.sha256(pinned_cavity_bytes), "frozen_volume_sha256": VolumeSha, "frozen_payload_sha256": PayloadSha, "topology_sha256": TopologySha, "graph_sha256": GraphSha, "boundary_cycle": cycle.duplicate(), "patch_face_ids": analysis_patch_ids.duplicate(), "zero_facet_count": zero_inventory.get("facet_count", -1), "boundary_audit": audit}
+		var audit_written: bool = _write_result(output_path, result, "R12CXR_R6_D0_BOUNDARY_WITNESS_AUDIT")
+		quit(0 if bool(audit.get("valid", false)) and audit_written else 3)
+		return
 	if mode == "synthesize":
 		var attempt_id: String = OS.get_environment("R12CXR_R6_ATTEMPT_ID")
 		var source_sha: String = OS.get_environment("R12CXR_SOURCE_SHA")
