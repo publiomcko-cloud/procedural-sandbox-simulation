@@ -37,7 +37,7 @@ func _run() -> void:
 		quit(0)
 		return
 	if mode.is_empty(): mode = "freeze"
-	if mode not in ["freeze", "boundary-audit", "synthesize"]:
+	if mode not in ["freeze", "boundary-audit", "cavity-audit", "synthesize"]:
 		_fail("r6_mode_invalid", {"mode": mode})
 		return
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
@@ -279,11 +279,38 @@ func _run() -> void:
 		if not bool(zero_inventory.get("valid", false)):
 			_fail("r6_boundary_audit_zero_inventory_invalid", zero_inventory)
 			return
+		var zero_facets: Array[Dictionary] = zero_inventory.get("facets", [])
 		var projection: Dictionary = {"origin": _vector3_array(Vector3(r4_context.get("projection_origin", Vector3.ZERO))), "axis_u": _vector3_array(Vector3(r4_context.get("projection_u", Vector3.ZERO))), "axis_v": _vector3_array(Vector3(r4_context.get("projection_v", Vector3.ZERO)))}
-		var audit: Dictionary = boundary_diagnostics.call("analyze_patch_boundary", boundary_realizer, analysis_patch, cycle, root_positions, projection, zero_inventory.get("facets", []))
-		var result: Dictionary = {"schema": "P3.1.R12CXR.R6.D0BoundaryWitnessAudit.v1", "status": "DIAGNOSTIC_COMPLETE" if bool(audit.get("valid", false)) else "DIAGNOSTIC_FAILED", "source_sha": source_sha, "target_id": TargetId, "target_attempt_consumed": false, "target_attempt_phase": "R6-D0", "frozen_cavity_sha256": Core.sha256(pinned_cavity_bytes), "frozen_volume_sha256": VolumeSha, "frozen_payload_sha256": PayloadSha, "topology_sha256": TopologySha, "graph_sha256": GraphSha, "boundary_cycle": cycle.duplicate(), "patch_face_ids": analysis_patch_ids.duplicate(), "zero_facet_count": zero_inventory.get("facet_count", -1), "boundary_audit": audit}
+		var audit: Dictionary = boundary_diagnostics.call("analyze_patch_boundary", boundary_realizer, analysis_patch, cycle, root_positions, projection, zero_facets)
+		var result: Dictionary = {"schema": "P3.1.R12CXR.R6.D0BoundaryWitnessAudit.v1", "status": "DIAGNOSTIC_COMPLETE" if bool(audit.get("valid", false)) else "DIAGNOSTIC_FAILED", "source_sha": source_sha, "target_id": TargetId, "target_attempt_consumed": false, "target_attempt_phase": "R6-D0", "frozen_cavity_sha256": Core.sha256(pinned_cavity_bytes), "frozen_volume_sha256": VolumeSha, "frozen_payload_sha256": PayloadSha, "topology_sha256": TopologySha, "graph_sha256": GraphSha, "boundary_cycle": cycle.duplicate(), "patch_face_ids": analysis_patch_ids.duplicate(), "zero_facet_count": zero_facets.size(), "zero_facet_inventory_sha256": boundary_diagnostics.call("_r6_facets_signature", zero_facets), "boundary_audit": audit}
 		var audit_written: bool = _write_result(output_path, result, "R12CXR_R6_D0_BOUNDARY_WITNESS_AUDIT")
 		quit(0 if bool(audit.get("valid", false)) and audit_written else 3)
+		return
+	if mode == "cavity-audit":
+		var source_sha: String = OS.get_environment("R12CXR_SOURCE_SHA")
+		if source_sha.length() != 40 or not source_sha.is_valid_hex_number():
+			_fail("r6_cavity_audit_source_identity_invalid", {"source_sha": source_sha})
+			return
+		var cavity_diagnostics: RefCounted = Diagnostics.new()
+		var cavity_realizer: RefCounted = R6Realizer.new()
+		cavity_realizer.set("_root_positions", root_positions)
+		cavity_realizer.set("_required_arc_keys", required_arc_keys)
+		cavity_realizer.set("_locked_triplets", realizer.get("_locked_triplets"))
+		cavity_realizer.set("_cxr_active_phase", "r6")
+		cavity_realizer.set("_cxr_active_snapshot", snapshot)
+		var pool_result: Dictionary = _r6_regenerate_support_rows(cavity_realizer, seed_triangles, analysis_patch, volume.get("values", PackedFloat32Array()), roi, support_fixture, seed_by_id)
+		if not bool(pool_result.get("valid", false)):
+			_fail("r6_cavity_audit_support_regeneration_failed", pool_result)
+			return
+		var zero_inventory: Dictionary = cavity_diagnostics.call("collect_zero_facet_inventory", realizer, volume.get("values", PackedFloat32Array()), roi)
+		if not bool(zero_inventory.get("valid", false)):
+			_fail("r6_cavity_audit_zero_inventory_invalid", zero_inventory)
+			return
+		var projection: Dictionary = {"origin": _vector3_array(Vector3(r4_context.get("projection_origin", Vector3.ZERO))), "axis_u": _vector3_array(Vector3(r4_context.get("projection_u", Vector3.ZERO))), "axis_v": _vector3_array(Vector3(r4_context.get("projection_v", Vector3.ZERO)))}
+		var cavity_search: Dictionary = cavity_diagnostics.call("search_patch_cavities", cavity_realizer, triangles, analysis_patch_ids, root_positions, projection, zero_inventory.get("facets", []), {"max_faces": 12, "max_states": 10000, "max_queue": 2000, "max_ms": 30000})
+		var result: Dictionary = {"schema": "P3.1.R12CXR.R6.CavityDiagnostic.v1", "status": cavity_search.get("status", "UNKNOWN_NOT_CAPTURED"), "terminal_reason": cavity_search.get("terminal_reason", cavity_search.get("reason", "UNKNOWN_NOT_CAPTURED")), "source_sha": source_sha, "target_id": TargetId, "target_attempt_consumed": false, "target_attempt_phase": "R6-D-DIAGNOSTIC", "frozen_cavity_sha256": Core.sha256(pinned_cavity_bytes), "frozen_volume_sha256": VolumeSha, "frozen_payload_sha256": PayloadSha, "topology_sha256": TopologySha, "graph_sha256": GraphSha, "zero_facet_count": zero_inventory.get("facets", []).size(), "support_regeneration": {"valid": pool_result.get("valid", false), "candidate_attempt_count": pool_result.get("candidate_attempt_count", -1), "row_count": pool_result.get("rows", []).size(), "r5_fixture_exact_match": pool_match.get("valid", false)}, "limits": {"max_faces": 12, "max_states": 10000, "max_queue": 2000, "max_ms": 30000}, "topology_path_policy": "DIRECT_ARC_BARRIERS_NOT_IMPOSED; PIECEWISE_PATH_FEASIBILITY_REMAINS_A_R6-C/E/F_GATE", "search": cavity_search}
+		var cavity_written: bool = _write_result(output_path, result, "R12CXR_R6_CAVITY_DIAGNOSTIC")
+		quit(0 if cavity_written else 3)
 		return
 	if mode == "synthesize":
 		var attempt_id: String = OS.get_environment("R12CXR_R6_ATTEMPT_ID")
