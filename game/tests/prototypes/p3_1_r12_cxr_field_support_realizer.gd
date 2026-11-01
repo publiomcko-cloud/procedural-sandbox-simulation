@@ -552,10 +552,10 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 		var union_boundary: Dictionary = _r3_derive_remaining_boundary(all_triangles, allowed_ids)
 		var level_report: Dictionary = _new_cxr_level_report(level, allowed_ids, allowed_ids.size())
 		level_report["cavity_seed_ids"] = seed_ids.duplicate()
-		var patch_selection: Dictionary = _r3_select_boundary_patch(seed_ids, allowed_ids, all_triangles, adjacency, level)
+		var patch_selection: Dictionary = _r3_select_boundary_patch(seed_ids, allowed_ids, all_triangles, adjacency, level, seed_triangles, residual_fixture)
 		patch_selection_node_total += int(patch_selection.get("search_nodes", 0))
 		report["patch_selection_nodes"] = patch_selection_node_total
-		level_report["patch_selection"] = {"policy": "minimum_cardinality_connected_subsets_within_original_defect_group_radius_neighborhood", "radius": level, "max_radius": CXR_MAX_CAVITY_LEVEL, "max_patch_triangles": CXR_MAX_PATCH_TRIANGLES, "search_nodes": patch_selection.get("search_nodes", 0), "candidate_subsets_examined": patch_selection.get("candidate_subsets_examined", 0), "rejection_counts": patch_selection.get("rejection_counts", {}), "selected_patch_triangle_ids": patch_selection.get("patch_triangle_ids", []), "neighborhood_triangle_ids": allowed_ids.duplicate(), "complete": patch_selection.get("complete", false), "limit_reason": patch_selection.get("limit_reason", "")}
+		level_report["patch_selection"] = {"policy": "minimum_cardinality_connected_subsets_with_manifold_boundary_and_r2_domain_preflight_within_original_defect_group_radius_neighborhood", "radius": level, "max_radius": CXR_MAX_CAVITY_LEVEL, "max_patch_triangles": CXR_MAX_PATCH_TRIANGLES, "search_nodes": patch_selection.get("search_nodes", 0), "candidate_subsets_examined": patch_selection.get("candidate_subsets_examined", 0), "rejection_counts": patch_selection.get("rejection_counts", {}), "context_rejection_count": patch_selection.get("context_rejection_count", 0), "context_rejections": patch_selection.get("context_rejections", []), "selected_patch_triangle_ids": patch_selection.get("patch_triangle_ids", []), "context_preflight_valid": patch_selection.get("context_preflight_valid", false), "neighborhood_triangle_ids": allowed_ids.duplicate(), "complete": patch_selection.get("complete", false), "limit_reason": patch_selection.get("limit_reason", "")}
 		if not bool(patch_selection.get("complete", false)):
 			var selection_limit: String = String(patch_selection.get("limit_reason", "R3_PATCH_SELECTION_INCOMPLETE"))
 			level_report["patch_triangle_ids"] = "NOT_RUN_PATCH_SELECTION_LIMIT"
@@ -572,14 +572,16 @@ func _search_cxr_cavity_r3(cavity_ids: Array, all_triangles: Array[Dictionary], 
 			return _finish_cxr_cavity_search(report, {}, false, false, selection_limit)
 		if not bool(patch_selection.get("valid", false)):
 			var invalid_reason: String = String(patch_selection.get("reason", "r3_no_boundary_valid_patch_subset"))
-			level_report["patch_triangle_ids"] = "NO_BOUNDARY_VALID_SUBSET"
+			var context_blocked: bool = invalid_reason == "r3_no_context_valid_patch_subset"
+			level_report["patch_triangle_ids"] = "NO_CONTEXT_VALID_SUBSET" if context_blocked else "NO_BOUNDARY_VALID_SUBSET"
 			level_report["source_triangle_count"] = allowed_ids.size()
 			level_report["patch_connectivity"] = union_connectivity
 			level_report["boundary_before"] = union_boundary.duplicate(true)
 			level_report["boundary_signature"] = String(union_boundary.get("observed_boundary_signature", "UNKNOWN_NOT_CAPTURED"))
 			level_report["boundary_provenance"] = "remaining_C6_edge_incidence_after_candidate_patch_subset_removal"
 			level_report["boundary_diagnostics"] = union_boundary.get("incidence_diagnostics", [])
-			level_report.candidate_count_by_residual = _r3_unrun_seed_metrics(seed_ids, "NOT_RUN_NO_BOUNDARY_VALID_SUBSET")
+			var unrun_reason: String = "NOT_RUN_CONTEXT_PREFLIGHT_REJECT" if context_blocked else "NOT_RUN_NO_BOUNDARY_VALID_SUBSET"
+			level_report.candidate_count_by_residual = _r3_unrun_seed_metrics(seed_ids, unrun_reason)
 			level_report.candidate_unique_count_by_residual = level_report.candidate_count_by_residual.duplicate()
 			level_report.candidate_pool_retained_count_by_residual = level_report.candidate_count_by_residual.duplicate()
 			level_report.candidate_fan_status_by_residual = level_report.candidate_count_by_residual.duplicate()
@@ -887,7 +889,7 @@ func _r3_patch_rows_for_ids(all_triangles: Array[Dictionary], patch_ids: Array) 
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.get("triangle_id", "")) < String(b.get("triangle_id", "")))
 	return rows
 
-func _r3_select_boundary_patch(seed_ids: Array, allowed_ids: Array, all_triangles: Array[Dictionary], adjacency: Dictionary, radius: int) -> Dictionary:
+func _r3_select_boundary_patch(seed_ids: Array, allowed_ids: Array, all_triangles: Array[Dictionary], adjacency: Dictionary, radius: int, residual_triangles: Array[Dictionary] = [], residual_fixture: Dictionary = {}) -> Dictionary:
 	var allowed: Dictionary = {}
 	var triangles_by_id: Dictionary = {}
 	for triangle in all_triangles:
@@ -919,6 +921,8 @@ func _r3_select_boundary_patch(seed_ids: Array, allowed_ids: Array, all_triangle
 	_cxr_patch_selection_nodes_total += 1
 	var candidate_subsets_examined: int = 0
 	var rejection_counts: Dictionary = {}
+	var context_rejection_count: int = 0
+	var context_rejections: Array[Dictionary] = []
 	while not layer.is_empty():
 		layer.sort_custom(func(a: Array, b: Array) -> bool: return _r3_patch_subset_key(a) < _r3_patch_subset_key(b))
 		var next_layer: Array = []
@@ -942,9 +946,33 @@ func _r3_select_boundary_patch(seed_ids: Array, allowed_ids: Array, all_triangle
 				var connectivity: Dictionary = _r3_patch_connectivity(patch)
 				var boundary: Dictionary = _r3_derive_remaining_boundary(all_triangles, subset)
 				if bool(connectivity.get("valid", false)) and bool(boundary.get("valid", false)):
-					return {"valid": true, "complete": true, "radius": radius, "patch_triangle_ids": subset.duplicate(), "patch_triangles": patch, "connectivity": connectivity, "boundary": boundary, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "states_generated": generated_nodes}
-				var rejection_key: String = String(connectivity.get("reason", "")) if not bool(connectivity.get("valid", false)) else String(boundary.get("reason", "r3_cavity_boundary_invalid"))
-				_cxr_count(rejection_counts, rejection_key)
+					if residual_triangles.is_empty():
+						return {"valid": true, "complete": true, "radius": radius, "patch_triangle_ids": subset.duplicate(), "patch_triangles": patch, "connectivity": connectivity, "boundary": boundary, "context_preflight_valid": false, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "states_generated": generated_nodes}
+					# A manifold boundary can still be unusable by R2's planar domain.
+					# Reject only that candidate subset and continue bounded connected
+					# expansion; source/provenance defects remain fatal below.
+					var preflight: Dictionary = _r3_make_expanded_patch_context(patch, subset, residual_triangles, [], boundary, all_triangles, residual_fixture, radius)
+					if bool(preflight.get("valid", false)):
+						return {"valid": true, "complete": true, "radius": radius, "patch_triangle_ids": subset.duplicate(), "patch_triangles": patch, "connectivity": connectivity, "boundary": boundary, "context_preflight_valid": true, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "states_generated": generated_nodes}
+					var preflight_reason: String = String(preflight.get("reason", "r3_context_preflight_invalid"))
+					if not _r3_context_failure_is_patch_domain_limited(preflight_reason):
+						return {"valid": false, "complete": false, "limit_reason": "r3_context_preflight_source_invalid:" + preflight_reason, "reason": preflight_reason, "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "states_generated": generated_nodes}
+					context_rejection_count += 1
+					_cxr_count(rejection_counts, preflight_reason)
+					if context_rejections.size() < 64:
+						var context_diagnostic: Dictionary = {"patch_triangle_ids": subset.duplicate(), "reason": preflight_reason}
+						if preflight.has("arc_diagnostics"):
+							var arc_diagnostic: Dictionary = preflight.get("arc_diagnostics", {})
+							for key in ["arc_id", "root_ids"]:
+								if arc_diagnostic.has(key): context_diagnostic[key] = arc_diagnostic[key]
+						context_rejections.append(context_diagnostic)
+					var context_limit: String = _cxr_time_limit_reason()
+					if context_limit.is_empty(): context_limit = _cxr_global_limit_reason()
+					if not context_limit.is_empty():
+						return {"valid": false, "complete": false, "limit_reason": context_limit, "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "states_generated": generated_nodes}
+				else:
+					var rejection_key: String = String(connectivity.get("reason", "")) if not bool(connectivity.get("valid", false)) else String(boundary.get("reason", "r3_cavity_boundary_invalid"))
+					_cxr_count(rejection_counts, rejection_key)
 			var subset_ids: Array[String] = []
 			for triangle_id_value in subset:
 				subset_ids.append(String(triangle_id_value))
@@ -981,7 +1009,13 @@ func _r3_select_boundary_patch(seed_ids: Array, allowed_ids: Array, all_triangle
 					_cxr_patch_selection_nodes_total += 1
 					next_layer.append(expanded)
 		layer = next_layer
-	return {"valid": false, "complete": true, "reason": "r3_no_boundary_valid_patch_subset", "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "states_generated": generated_nodes}
+	var terminal_reason: String = "r3_no_context_valid_patch_subset" if context_rejection_count > 0 else "r3_no_boundary_valid_patch_subset"
+	return {"valid": false, "complete": true, "reason": terminal_reason, "radius": radius, "search_nodes": generated_nodes, "candidate_subsets_examined": candidate_subsets_examined, "rejection_counts": rejection_counts, "context_rejection_count": context_rejection_count, "context_rejections": context_rejections, "states_generated": generated_nodes}
+
+func _r3_context_failure_is_patch_domain_limited(reason: String) -> bool:
+	# These failures describe this subset's projected domain. The existing
+	# radius, patch-size, search-state and wall-clock caps bound any expansion.
+	return reason in ["r2_topology_arc_crosses_cavity_boundary", "r2_topology_arc_leaves_concave_cavity_domain", "r2_boundary_projection_self_intersects", "r2_boundary_polygon_degenerate", "r2_projection_axis_unavailable", "r2_projection_basis_invalid"]
 
 func _r3_patch_subset_key(ids: Array) -> String:
 	var normalized: Array[String] = []

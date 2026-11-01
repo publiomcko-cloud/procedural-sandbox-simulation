@@ -687,6 +687,25 @@ func _test_r3_expanded_patch_owner_and_replacement_sets() -> void:
 	var invalid_seed_rows: Array[Dictionary] = [outside_seed]
 	var invalid_seed: Dictionary = realizer.call("_r2_make_search_context", patch, patch_ids, invalid_seed_rows, no_support_rows, boundary, patch, fixture, 2)
 	_check(not bool(invalid_seed.get("valid", true)) and String(invalid_seed.get("reason", "")) == "r2_residual_owner_outside_selected_patch", "R3 context rejects owner provenance that is not part of the selected replacement patch")
+	_test_r3_context_domain_preflight()
+
+func _test_r3_context_domain_preflight() -> void:
+	var realizer: RefCounted = Realizer.new()
+	var root_positions: Dictionary = {
+		"a": Vector3(0.0, 0.0, 0.0),
+		"b": Vector3(1.0, 0.0, 0.0),
+		"c": Vector3(0.0, 1.0, 0.0),
+		"outside": Vector3(-1.0, 1.0, 0.0)
+	}
+	var projected_positions: Dictionary = {"a": Vector2.ZERO, "b": Vector2.RIGHT, "c": Vector2(0.0, 1.0)}
+	var polygon: Array[Vector2] = [Vector2.ZERO, Vector2.RIGHT, Vector2(0.0, 1.0)]
+	var boundary_cycle: Array[String] = ["a", "b", "c"]
+	var crossing_arc: Array[Dictionary] = [{"arc_id": "b\u001foutside", "root_ids": ["b", "outside"]}]
+	var crossing: Dictionary = realizer.call("_r2_localize_topology_arcs", crossing_arc, {}, boundary_cycle, root_positions, root_positions.duplicate(), projected_positions, polygon, Vector3.ZERO, Vector3.RIGHT, Vector3(0.0, 1.0, 0.0))
+	_check(not bool(crossing.get("valid", true)) and String(crossing.get("reason", "")) == "r2_topology_arc_crosses_cavity_boundary", "projection preflight still rejects a topology arc that crosses the candidate cavity domain")
+	_check(bool(realizer.call("_r3_context_failure_is_patch_domain_limited", String(crossing.get("reason", "")))), "R3 may seek a larger bounded patch for a domain-crossing arc instead of discarding it")
+	_check(bool(realizer.call("_r3_context_failure_is_patch_domain_limited", "r2_topology_arc_leaves_concave_cavity_domain")), "R3 classifies concave-domain incompatibility as a bounded patch-selection rejection")
+	_check(not bool(realizer.call("_r3_context_failure_is_patch_domain_limited", "r2_owner_boundary_polygon_id_missing")), "R3 does not treat missing owner provenance as a geometric patch expansion opportunity")
 
 func _sequence_probe_local_failure(cavity_ids: Array) -> Dictionary:
 	_sequence_probe_calls.append(cavity_ids.duplicate())
