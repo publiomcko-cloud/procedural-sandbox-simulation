@@ -1,0 +1,11 @@
+{
+  "event": "R3_TARGET_20261031_05 first launcher invocation failed before dispatcher process start",
+  "utc": "2026-11-01T01:07:21.7176330Z",
+  "stage": "wrapper durable intent creation",
+  "error": "Could not create dispatcher-launch-intent.json because the attempt parent directory had not been created.",
+  "reservation_written": false,
+  "dispatcher_started": false,
+  "godot_started": false,
+  "target_status": "NOT_STARTED",
+  "correction": "Create a new unique attempt root and child evidence directories before writing the intent; fail if root already exists."
+}

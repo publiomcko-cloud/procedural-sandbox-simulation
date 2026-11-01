@@ -1,3 +1,7 @@
+## 2026-10-31 — P3.1 R12-CXR R3 attempt 05 launcher recovery; target not started
+
+- [R3 attempt 05 launcher recovery](2026-10-31-P3-1-R12-CXR-R3-ATTEMPT-05-LAUNCHER-RECOVERY.md) — first wrapper failed before reservation/process creation because attempt directories were absent; corrected fail-if-exists directory setup parses cleanly; target remains NOT_STARTED.
+
 ## 2026-10-31 — P3.1 R12-CXR R3 attempt 05 pretarget freeze
 
 - [R3 attempt 05 pretarget freeze](2026-10-31-P3-1-R12-CXR-R3-ATTEMPT-05-PRETARGET-FROZEN.md) — source 4734e6cb; import, 153/153 contracts, campaign check-only and dispatcher control passed; attempt 04 remains preserved PARTIAL; target 05 is NOT_STARTED.
