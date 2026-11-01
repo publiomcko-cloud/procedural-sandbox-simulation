@@ -313,10 +313,10 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		"eligible_boundary_root_pairs": eligible_pairs,
 		"eligible_boundary_root_pair_count": eligible_pairs.size(),
 		"r4_d1_reference": {"retained_supports": 115, "legal_candidate_edges": 18, "supports_with_one_or_more_legal_edges": 5, "supports_with_two_or_more_legal_edges": 5, "legal_candidate_triangles": 0, "d3_candidate_rows": 329, "d3_branches": 5, "d3_complete": true, "d3_solution_count": 0},
-		"support_need": "R4 finite candidate graph had zero legal triangles; R5 seeks field-derived points within this frozen six-face cavity for all 15 boundary-root pairs. This is a finite synthesis search, not a continuum infeasibility proof."
+		"support_need": "R4 finite candidate graph had zero legal triangles; R5-4 partitions each clipped field-zero facet by bounded root-pair, cavity and localized required-arc constraint lines, then validates deterministic critical points through the unchanged R4 triangle gates. This finite candidate synthesis is not a continuum infeasibility proof."
 	}
 	var synthesizer: RefCounted = Synthesizer.new()
-	var synthesis: Dictionary = synthesizer.call("synthesize", realizer, values, roi, base_context, residual_triangles, cavity_id)
+	var synthesis: Dictionary = synthesizer.call("synthesize", realizer, values, roi, base_context, residual_triangles, cavity_id, residual_fixture.get("arc_map", []))
 	if not bool(synthesis.get("valid", false)):
 		_fail("r5_constraint_synthesis_input_invalid", synthesis)
 		return {}

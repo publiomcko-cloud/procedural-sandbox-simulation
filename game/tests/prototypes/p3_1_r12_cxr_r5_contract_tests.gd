@@ -20,8 +20,10 @@ func _run() -> void:
 	_test_field_zero_edge_intersections()
 	_test_constraint_intervals_and_cross_objective(synth)
 	_test_active_boundary_critical_candidates(synth)
+	_test_triangle_first_constraint_regions(synth)
 	_test_support_identity_and_graph_digest(synth)
 	_test_r2_candidate_gates()
+	_test_single_support_pair_gate(synth)
 	_test_constraint_guided_support_r2_triangulation(synth)
 	_test_campaign_result_scope()
 	_test_residual_owner_normalization(synth)
@@ -152,6 +154,38 @@ func _test_active_boundary_critical_candidates(synth: RefCounted) -> void:
 	_expect(active_count > 0, "active_domain_boundary_generates_inward_critical_candidate")
 	_expect(centroid_score <= 1.0e-12 and maximum_score > 1.0e-12, "critical_inward_candidate_finds_frozen_cutoff_triangle_missed_by_centroid")
 
+func _test_triangle_first_constraint_regions(synth: RefCounted) -> void:
+	var square: Array[Vector2] = [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]
+	var source_2d: Array[Vector2] = [Vector2(-2, -2), Vector2(2, -2), Vector2(0, 2)]
+	var source_world: Array[Vector3] = [Vector3(-2, -2, 0), Vector3(2, -2, 0), Vector3(0, 2, 0)]
+	var arcs: Array[Dictionary] = [{"a": Vector2(0.25, -2), "b": Vector2(0.25, 2), "arc_id": "SPLIT_X"}]
+	var first: Dictionary = synth.call("_triangle_first_critical_candidates", square, square, Vector2(-2, 0), Vector2(2, 0), Vector3(-2, 0, 0), Vector3(2, 0, 0), source_2d, source_world, arcs, 0, "CONTRACT_REGION_FIXTURE")
+	var repeat: Dictionary = synth.call("_triangle_first_critical_candidates", square, square, Vector2(-2, 0), Vector2(2, 0), Vector3(-2, 0, 0), Vector3(2, 0, 0), source_2d, source_world, arcs, 0, "CONTRACT_REGION_FIXTURE")
+	_expect(bool(first.get("valid", false)) and int(first.get("region_count", 0)) > 1, "required_arc_arrangement_splits_support_domain")
+	_expect(first == repeat, "feasible_regions_and_critical_points_are_deterministic")
+	var candidates: Array[Dictionary] = first.get("candidates", [])
+	_expect(not candidates.is_empty() and candidates.size() <= int(first.get("region_count", 0)) * 7, "candidate_count_obeys_per_region_cap")
+	var candidate_methods: Dictionary = {}
+	for candidate in candidates:
+		var point: Vector2 = Vector2(candidate.get("position", Vector2.ZERO))
+		var mapped: Dictionary = synth.call("_map_projected_point", point, source_2d, source_world)
+		_expect(bool(synth.call("_point_strictly_inside", point, square)), "critical_support_stays_inside_cavity")
+		var objective: float = float(synth.call("_support_pair_objective", Vector3(-2, 0, 0), Vector3(2, 0, 0), Vector3(mapped.get("world", Vector3.ZERO))))
+		_expect(bool(mapped.get("valid", false)) and is_finite(objective) and is_equal_approx(float(candidate.get("cross_squared", NAN)), objective), "critical_support_maps_to_zero_facet_and_pair_objective")
+		for role_value in candidate.get("critical_roles", []): candidate_methods[String(role_value)] = true
+	_expect(candidate_methods.has("MAX_CROSS_SQUARED_CRITICAL_CANDIDATE"), "critical_regions_include_pair_objective_extreme")
+	_expect(candidate_methods.has("MAX_BOUNDARY_ARC_CLEARANCE_CRITICAL_CANDIDATE"), "critical_regions_include_clearance_extreme")
+	_expect(candidate_methods.has("FEASIBLE_REGION_CENTROID"), "critical_regions_include_centroid")
+	_expect(candidate_methods.has("FEASIBLE_REGION_EDGE_MIDPOINT"), "critical_regions_include_edge_midpoint")
+	var capped: Dictionary = synth.call("_triangle_first_critical_candidates", square, square, Vector2(-2, 0), Vector2(2, 0), Vector3(-2, 0, 0), Vector3(2, 0, 0), source_2d, source_world, arcs, 4095, "CONTRACT_REGION_CAP")
+	_expect(not bool(capped.get("valid", false)) and String(capped.get("reason", "")) == "R5_MAX_FEASIBLE_REGION_COMPONENTS", "region_component_cap_fails_closed")
+	var candidate_capped: Dictionary = synth.call("_triangle_first_critical_candidates", square, square, Vector2(-2, 0), Vector2(2, 0), Vector3(-2, 0, 0), Vector3(2, 0, 0), source_2d, source_world, arcs, 0, "CONTRACT_CANDIDATE_CAP", 4096)
+	_expect(not bool(candidate_capped.get("valid", false)) and String(candidate_capped.get("reason", "")) == "R5_MAX_CRITICAL_CANDIDATES_TOTAL", "critical_candidate_cap_fails_closed_before_publication")
+	var arc_projection_context: Dictionary = {"projection_origin": Vector3.ZERO, "projection_u": Vector3.RIGHT, "projection_v": Vector3.UP, "projected_positions": {"X": Vector2(-0.5, 0.0), "Y": Vector2(0.5, 0.0)}}
+	var projected_arcs: Dictionary = synth.call("_project_required_arc_segments", [{"arc_id": "ROOT_SEGMENT", "root_ids": ["X", "Y"], "geometry_path_positions": [[9.0, 9.0, 9.0], [10.0, 10.0, 10.0]]}], arc_projection_context)
+	var projected_segments: Array[Dictionary] = projected_arcs.get("segments", [])
+	_expect(bool(projected_arcs.get("valid", false)) and projected_segments.size() == 1 and projected_segments[0].a == Vector2(-0.5, 0.0) and projected_segments[0].b == Vector2(0.5, 0.0), "arrangement_uses_exact_r4_root_segment_not_auxiliary_path_geometry")
+
 func _test_support_identity_and_graph_digest(synth: RefCounted) -> void:
 	var point: Vector3 = Vector3(0.25, -0.5, 0.75)
 	_expect(String(synth.call("_binary32_position_identity", point)) == String(synth.call("_binary32_position_identity", point)), "binary_position_identity_deterministic")
@@ -230,6 +264,23 @@ func _make_candidate_context(realizer: RefCounted, positions: Dictionary, suppor
 	realizer.set("_cxr_candidate_triangles_cavity", 0)
 	return {"phase": "r4", "vertex_positions": all_positions, "projected_positions": projected, "support_by_id": support_by_id, "candidate_triangle_cache": {}, "candidate_triangle_rows": [], "candidate_edges": {}, "candidate_triangle_count": 0, "polygon": candidate_domain, "residual_fixture": {"arc_map": []}, "residual_triangles": [owner_triangle], "projection_origin": Vector3.ZERO, "projection_u": Vector3.RIGHT, "projection_v": Vector3.UP, "reference_normal": Vector3.BACK}
 
+func _test_single_support_pair_gate(synth: RefCounted) -> void:
+	var realizer: RefCounted = Realizer.new()
+	var positions: Dictionary = {"A": Vector3(-1, 0, 0), "B": Vector3(1, 0, 0)}
+	var context: Dictionary = _make_candidate_context(realizer, positions, [])
+	var accepted: Dictionary = synth.call("_single_support_pair_gate", realizer, context, "A", "B", Vector3(0, 1, 0), Vector2(0, 1), 1.0e-12)
+	_expect(bool(accepted.get("valid", false)) and float(accepted.get("cross_squared", 0.0)) > 1.0e-12, "triangle_first_single_support_passes_exact_r2_gates")
+	var below_cutoff: Dictionary = synth.call("_single_support_pair_gate", realizer, context, "A", "B", Vector3(0, 1.0e-7, 0), Vector2(0, 1.0e-7), 1.0e-12)
+	_expect(not bool(below_cutoff.get("valid", false)) and String(below_cutoff.get("reason", "")) == "candidate_cross_squared_at_or_below_frozen_cutoff", "triangle_first_gate_preserves_exact_frozen_cutoff")
+	var arc_context: Dictionary = context.duplicate(true)
+	arc_context.vertex_positions["X"] = Vector3(0, 0.5, 0)
+	arc_context.vertex_positions["Y"] = Vector3(1.5, 0.5, 0)
+	arc_context.projected_positions["X"] = Vector2(0, 0.5)
+	arc_context.projected_positions["Y"] = Vector2(1.5, 0.5)
+	arc_context.residual_fixture["arc_map"] = [{"root_ids": ["X", "Y"], "arc_id": "CROSSING_ARC"}]
+	var crossing: Dictionary = synth.call("_single_support_pair_gate", realizer, arc_context, "A", "B", Vector3(0, 1, 0), Vector2(0, 1), 1.0e-12)
+	_expect(not bool(crossing.get("valid", false)) and String(crossing.get("reason", "")).begins_with("candidate_"), "single_support_gate_rejects_required_arc_conflict")
+
 func _test_constraint_guided_support_r2_triangulation(synth: RefCounted) -> void:
 	var realizer: RefCounted = Realizer.new()
 	var tetra_positions: Array[Vector3] = [Vector3(1, 1, 1), Vector3(-1, -1, 1), Vector3(1, -1, -1), Vector3(-1, 1, -1)]
@@ -283,6 +334,8 @@ func _test_campaign_result_scope() -> void:
 	_expect(synthesizer_source.contains("R5_SYNTHESIS_ENUMERATION_BEGIN") and synthesizer_source.contains("R12CXR_R5_EXECUTION_ID"), "target_attempt_marker_is_execution_scoped")
 	_expect(campaign_source.contains("if synthesis_result.is_empty() or _terminal_failure_requested: return") and campaign_source.contains("_terminal_failure_requested = true"), "synthesis_failure_preserves_nonzero_exit_request")
 	_expect(campaign_source.contains("if synthesis_result.is_empty() or _terminal_failure_requested: return\n\t\tquit(0)"), "written_synthesis_result_requests_clean_success_exit")
+	_expect(campaign_source.contains("residual_fixture.get(\"arc_map\", [])"), "campaign_passes_frozen_required_arc_set_to_synthesis")
+	_expect(synthesizer_source.contains("R5_TRIANGLE_FIRST_FEASIBLE_ZERO_REGION") and synthesizer_source.contains("MAX_FEASIBLE_REGION_COMPONENTS"), "triangle_first_feasible_region_model_and_cap_are_explicit")
 
 func _test_residual_owner_normalization(synth: RefCounted) -> void:
 	var frozen_row: Dictionary = {"triangle_id": "FROZEN_OWNER", "triangle_vertices_world": [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [0.0, 3.0, 0.0]]}
