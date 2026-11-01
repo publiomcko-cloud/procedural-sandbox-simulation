@@ -363,7 +363,7 @@ func _run() -> void:
 		var previous_synthesis_sha: String = _support_synthesis_fingerprint(previous_synthesis)
 		var continued_synthesis_sha: String = _support_synthesis_fingerprint(continued_synthesis)
 		if not bool(continued_synthesis.get("valid", false)) or previous_synthesis_sha != continued_synthesis_sha:
-			_fail("r6_continuation_support_set_changed", {"previous_fingerprint_sha256": previous_synthesis_sha, "continued_fingerprint_sha256": continued_synthesis_sha, "continued_valid": continued_synthesis.get("valid", false)})
+			_fail("r6_continuation_support_set_changed", {"previous_fingerprint_sha256": previous_synthesis_sha, "continued_fingerprint_sha256": continued_synthesis_sha, "continued_valid": continued_synthesis.get("valid", false), "previous_support_summary": _support_summary_for_diagnostic(previous_synthesis), "continued_support_summary": _support_summary_for_diagnostic(continued_synthesis), "support_differences": _support_row_differences(previous_synthesis.get("supports", []), continued_synthesis.get("supports", []), 12)})
 			return
 		var continuation_metadata: Dictionary = {"is_continuation": true, "same_attempt_id": attempt_id, "original_target_source_sha": previous.get("source_sha", ""), "continuation_source_sha": continuation_source_sha, "original_target_result_sha256": Core.sha256(previous_bytes), "original_target_attempt_consumed": true, "additional_target_attempts_consumed": 0, "reason": "corrected graph gate had incorrectly compared possible triplets to the legal candidate triangle cap; now probes at most the unchanged 2048 candidate limit and may run D3 on the observed partial graph for a positive witness", "support_set_identical": true, "support_set_sha256": continued_synthesis_sha}
 		var continuation_result: Dictionary = _run_constraint_synthesis(continuation_realizer, volume.get("values", PackedFloat32Array()), roi, selected_context, selected_patch, selected_ids, seed_triangles, selected_boundary, triangles, search_fixture, base, snapshot, support_fixture, residual_fixture.get("residuals", []), output_path, cavity_search, continued_synthesis, continuation_metadata)
@@ -739,6 +739,33 @@ func _stable_evidence_sha(value: Variant) -> String:
 
 func _support_synthesis_fingerprint(synthesis: Dictionary) -> String:
 	return _stable_evidence_sha({"valid": synthesis.get("valid", false), "supports": synthesis.get("supports", []), "candidate_attempt_count": synthesis.get("candidate_attempt_count", -1), "candidate_rejection_histogram": synthesis.get("candidate_rejection_histogram", {}), "retained_support_count": synthesis.get("retained_support_count", -1), "provenance_sha256": synthesis.get("provenance_sha256", "UNKNOWN_NOT_CAPTURED")})
+
+func _support_summary_for_diagnostic(synthesis: Dictionary) -> Dictionary:
+	var supports: Array = synthesis.get("supports", [])
+	var ids: Array[String] = []
+	for row_value in supports:
+		var row: Dictionary = row_value
+		ids.append(String(row.get("support_id", "UNKNOWN_NOT_CAPTURED")))
+	return {"valid": synthesis.get("valid", false), "support_count": supports.size(), "retained_support_count": synthesis.get("retained_support_count", "UNKNOWN_NOT_CAPTURED"), "raw_unique_support_count": synthesis.get("raw_unique_support_count", "UNKNOWN_NOT_CAPTURED"), "candidate_model": synthesis.get("candidate_model", "UNKNOWN_NOT_CAPTURED"), "support_ids": ids, "support_ids_sha256": _stable_evidence_sha(ids)}
+
+func _support_row_differences(previous_rows: Array, continued_rows: Array, limit: int) -> Array[Dictionary]:
+	var differences: Array[Dictionary] = []
+	var shared_count: int = mini(previous_rows.size(), continued_rows.size())
+	for index in range(shared_count):
+		var previous_row: Dictionary = previous_rows[index]
+		var continued_row: Dictionary = continued_rows[index]
+		var keys: Array = previous_row.keys()
+		for key in continued_row.keys():
+			if not keys.has(key): keys.append(key)
+		keys.sort()
+		for key in keys:
+			var previous_value: Variant = previous_row.get(key, "MISSING")
+			var continued_value: Variant = continued_row.get(key, "MISSING")
+			if JSON.stringify(_json_safe(previous_value)) != JSON.stringify(_json_safe(continued_value)):
+				differences.append({"row_index": index, "support_id": previous_row.get("support_id", "UNKNOWN_NOT_CAPTURED"), "key": String(key), "previous": _json_safe(previous_value), "continued": _json_safe(continued_value)})
+				if differences.size() >= limit: return differences
+	if previous_rows.size() != continued_rows.size(): differences.append({"previous_count": previous_rows.size(), "continued_count": continued_rows.size()})
+	return differences
 
 func _write_result(output_path: String, result: Dictionary, marker: String) -> bool:
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
