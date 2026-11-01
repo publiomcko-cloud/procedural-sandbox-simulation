@@ -478,4 +478,3 @@ func _vector3_array(value: Vector3) -> Array[float]:
 
 func _vector2_array(value: Vector2) -> Array[float]:
 	return [value.x, value.y]
-
