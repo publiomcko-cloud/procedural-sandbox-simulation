@@ -514,7 +514,7 @@ func _run() -> void:
 		print("R12CXR_R6_X3_ALTERNATIVE_REALIZED " + JSON.stringify({"attempt_id": attempt_id, "status": x3_result.get("status", ""), "terminal_reason": x3_result.get("terminal_reason", ""), "result_sha256": Core.sha256(x3_result_bytes), "target_attempt_consumed": true}))
 		quit(0)
 		return
-	if mode in ["x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "y1-complete-support"]:
+	if mode in ["x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "y1-complete-support", "y1-graph-partial"]:
 		var x6_representability: bool = mode in ["x6-representability", "x6-representability-evidence"]
 		var y1_complete_support: bool = mode in ["y1-complete-support", "y1-graph-partial"]
 		var y1_graph_partial: bool = mode == "y1-graph-partial"
