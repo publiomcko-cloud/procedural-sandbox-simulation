@@ -230,6 +230,73 @@ func _float_from_ordered_key(key: int) -> float:
 	bytes.encode_u32(0, bits)
 	return bytes.decode_float(0)
 
+## Enumerates a deterministic Chebyshev shell around the requested binary32
+## point. Every representable triple inside the tetrahedron's coordinate AABB
+## is visited exactly once if this finite search reaches max_radius. Resource
+## interruption returns PARTIAL_LIMIT with the next shell/offset preserved.
+func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dictionary, max_search_usec: int = 25000) -> Dictionary:
+	var positions: Array = tet_data.get("positions", [])
+	if positions.size() != 4 or not original.is_finite():
+		return {"position": original, "accepted": false, "search_state": "INVALID_TETRA_DOMAIN", "finite_domain_complete": false}
+	var original_bytes: PackedByteArray = PackedFloat32Array([original.x, original.y, original.z]).to_byte_array()
+	var original_keys: Array[int] = []
+	var minimum_keys: Array[int] = [0xffffffff, 0xffffffff, 0xffffffff]
+	var maximum_keys: Array[int] = [0, 0, 0]
+	for axis in range(3):
+		original_keys.append(_ordered_float32_key(int(original_bytes.decode_u32(axis * 4))))
+	for position_value in positions:
+		var corner: Vector3 = Vector3(position_value)
+		var coordinates: Array[float] = [corner.x, corner.y, corner.z]
+		for axis in range(3):
+			var corner_bytes: PackedByteArray = PackedFloat32Array([coordinates[axis]]).to_byte_array()
+			var key: int = _ordered_float32_key(int(corner_bytes.decode_u32(0)))
+			minimum_keys[axis] = mini(minimum_keys[axis], key)
+			maximum_keys[axis] = maxi(maximum_keys[axis], key)
+	var maximum_radius: int = 0
+	for axis in range(3):
+		maximum_radius = maxi(maximum_radius, maxi(absi(original_keys[axis] - minimum_keys[axis]), absi(maximum_keys[axis] - original_keys[axis])))
+	var started_usec: int = Time.get_ticks_usec()
+	var tested: int = 0
+	var frontier: Dictionary = {"radius": 0, "dx": 0, "dy": 0, "dz": 0, "tested_triples": 0}
+	for radius in range(maximum_radius + 1):
+		for dx in range(-radius, radius + 1):
+			for dy in range(-radius, radius + 1):
+				for dz in range(-radius, radius + 1):
+					if maxi(maxi(absi(dx), absi(dy)), absi(dz)) != radius:
+						continue
+					frontier = {"radius": radius, "dx": dx, "dy": dy, "dz": dz, "tested_triples": tested}
+					if Time.get_ticks_usec() - started_usec >= max_search_usec:
+						var partial: Dictionary = _evaluate_zero_point(original, tet_data)
+						partial["position"] = original
+						partial["search_state"] = "PARTIAL_LIMIT"
+						partial["finite_domain_complete"] = false
+						partial["search_frontier"] = frontier
+						partial["maximum_radius"] = maximum_radius
+						partial["reason"] = "MULTICOORDINATE_FLOAT32_SEARCH_TIME_LIMIT"
+						return partial
+					var keys: Array[int] = [original_keys[0] + dx, original_keys[1] + dy, original_keys[2] + dz]
+					if keys[0] < minimum_keys[0] or keys[0] > maximum_keys[0] or keys[1] < minimum_keys[1] or keys[1] > maximum_keys[1] or keys[2] < minimum_keys[2] or keys[2] > maximum_keys[2]:
+						continue
+					var candidate: Vector3 = Vector3(_float_from_ordered_key(keys[0]), _float_from_ordered_key(keys[1]), _float_from_ordered_key(keys[2]))
+					var evaluation: Dictionary = _evaluate_zero_point(candidate, tet_data)
+					tested += 1
+					if bool(evaluation.get("accepted", false)):
+						evaluation["position"] = candidate
+						evaluation["ulp_steps"] = [dx, dy, dz]
+						evaluation["search_state"] = "MULTICOORDINATE_BINARY32_WITNESS"
+						evaluation["finite_domain_complete"] = false
+						evaluation["search_frontier"] = frontier
+						evaluation["tested_triples"] = tested
+						return evaluation
+	var exhausted: Dictionary = _evaluate_zero_point(original, tet_data)
+	exhausted["position"] = original
+	exhausted["search_state"] = "EXHAUSTED_NO_VALID_BINARY32_POINT_IN_TETRA_AABB"
+	exhausted["finite_domain_complete"] = true
+	exhausted["maximum_radius"] = maximum_radius
+	exhausted["tested_triples"] = tested
+	exhausted["reason"] = "EXHAUSTIVE_MULTICOORDINATE_BINARY32_TETRA_DOMAIN"
+	return exhausted
+
 func _axis_step_point(original: Vector3, axis: int, step: int) -> Vector3:
 	var point: Vector3 = original
 	var original_value: float = original.x if axis == 0 else original.y if axis == 1 else original.z

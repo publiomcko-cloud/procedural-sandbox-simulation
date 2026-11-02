@@ -36,6 +36,10 @@ var _cxr_patch_selection_nodes_total: int = 0
 var _cxr_candidate_attempts_total: int = 0
 var _cxr_candidate_triangles_total: int = 0
 var _cxr_candidate_triangles_cavity: int = 0
+## R6 finite-domain audit switch. It removes only the legacy implementation
+## counter cap; the caller must still stop on an explicit resource limit and
+## report the unvisited triplet frontier as PARTIAL_LIMIT.
+var _cxr_full_finite_graph_mode: bool = false
 var _cxr_branch_counts: Dictionary = {}
 var _cxr_prune_counts: Dictionary = {}
 var _cxr_active_cavity_branches: Dictionary = {}
@@ -2856,7 +2860,7 @@ func _r2_get_candidate_triangle(ids_input: Array, context: Dictionary) -> Dictio
 	var time_limit: String = _cxr_time_limit_reason()
 	if not time_limit.is_empty():
 		return {"valid": false, "limit": true, "reason": time_limit}
-	if _cxr_candidate_triangles_cavity >= CXR_R2_MAX_CANDIDATE_TRIANGLES_PER_CAVITY or _cxr_candidate_triangles_total >= CXR_R2_MAX_CANDIDATE_TRIANGLES_TOTAL:
+	if not _cxr_full_finite_graph_mode and (_cxr_candidate_triangles_cavity >= CXR_R2_MAX_CANDIDATE_TRIANGLES_PER_CAVITY or _cxr_candidate_triangles_total >= CXR_R2_MAX_CANDIDATE_TRIANGLES_TOTAL):
 		return {"valid": false, "limit": true, "reason": "R2_MAX_CANDIDATE_TRIANGLES"}
 	context.candidate_triangle_count = int(context.candidate_triangle_count) + 1
 	_cxr_candidate_triangles_total += 1
@@ -4418,6 +4422,8 @@ func _cxr_count_prune(key: String) -> void:
 	_cxr_count(_cxr_active_cavity_prunes, key)
 
 func _cxr_time_limit_reason() -> String:
+	if _cxr_full_finite_graph_mode:
+		return ""
 	var now_usec: int = Time.get_ticks_usec()
 	if now_usec - _cxr_search_started_usec >= CXR_MAX_SEARCH_USEC_TOTAL: return "MAX_SEARCH_USEC_TOTAL"
 	if now_usec - _cxr_cavity_started_usec >= CXR_MAX_SEARCH_USEC_PER_CAVITY: return "MAX_SEARCH_USEC_PER_CAVITY"

@@ -12,6 +12,8 @@ const MAX_BOUNDARY_SOURCE_PAIRS: int = 15
 const MAX_R6X3_BOUNDARY_SOURCE_PAIRS: int = 28
 const MAX_FEASIBLE_REGION_COMPONENTS: int = 4096
 const MAX_CRITICAL_CANDIDATES_PER_PAIR_REGION: int = 7
+## Retained only for historical bounded R5 runs. R6 complete-domain runs must
+## never turn this constant into a scientific-domain boundary.
 const MAX_CRITICAL_CANDIDATES_TOTAL: int = 4096
 const MAX_CONSTRAINT_LINES_PER_PAIR_REGION: int = 256
 const FROZEN_CROSS_SQUARED_CUTOFF: float = 1.0e-12
@@ -25,8 +27,25 @@ func _boundary_source_domain_gate(polygon: Array[Vector2], boundary_ids: Array[S
 		return {"valid": false, "reason": "cavity_polygon_or_boundary_invalid", "polygon_vertex_count": polygon.size(), "boundary_vertex_count": boundary_ids.size(), "possible_source_pairs": pair_count, "max_source_pairs": max_source_pairs}
 	return {"valid": true, "boundary_vertex_count": boundary_ids.size(), "possible_source_pairs": pair_count, "max_source_pairs": max_source_pairs}
 
-func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = [], x2_target_pairs: Array = [], enumerate_all_critical_vertices: bool = false, max_boundary_source_pairs: int = MAX_BOUNDARY_SOURCE_PAIRS, directed_axis_bracket: bool = false) -> Dictionary:
+func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = [], x2_target_pairs: Array = [], enumerate_all_critical_vertices: bool = false, max_boundary_source_pairs: int = MAX_BOUNDARY_SOURCE_PAIRS, directed_axis_bracket: bool = false, complete_support_domain: bool = false, stream_evidence_path: String = "") -> Dictionary:
 	var started_usec: int = Time.get_ticks_usec()
+	var synthesis_budget_usec: int = MAX_SYNTHESIS_USEC
+	if complete_support_domain:
+		var requested_budget_raw: String = OS.get_environment("R12CXR_R6_SYNTHESIS_BUDGET_SECONDS")
+		var requested_budget_seconds: int = maxi(1, requested_budget_raw.to_int()) if not requested_budget_raw.is_empty() else 1800
+		synthesis_budget_usec = requested_budget_seconds * 1000000
+	var memory_setting: String = OS.get_environment("R12CXR_R6_MEMORY_BUDGET_BYTES")
+	var memory_budget_bytes: int = (2147483648 if memory_setting.is_empty() else maxi(268435456, memory_setting.to_int())) if complete_support_domain else 0
+	var enumeration_frontier: Dictionary = {"tetrahedron": 0, "facet": 0, "domain": 0, "source_pair": 0, "region": 0, "candidate": 0, "completed_critical_candidates": 0, "completed_support_rows": 0}
+	var numeric_search_frontier: Dictionary = {}
+	var continuous_region_bounds: Array[Dictionary] = []
+	var witnessed_region_ids: Dictionary = {}
+	var projected_region_polygons: Dictionary = {}
+	var stream_file: FileAccess = null
+	var stream_row_count: int = 0
+	if complete_support_domain:
+		if stream_evidence_path.is_empty() or FileAccess.file_exists(stream_evidence_path):
+			return {"valid": false, "reason": "R6_COMPLETE_SUPPORT_AUDIT_STREAM_PATH_MISSING_OR_EXISTS", "stream_path": stream_evidence_path}
 	var limits: Dictionary = realizer.call("_cxr_limits")
 	var cutoff: float = float(limits.get("cross_squared_cutoff", NAN))
 	if not is_finite(cutoff) or cutoff != FROZEN_CROSS_SQUARED_CUTOFF:
@@ -77,6 +96,10 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 	if not bool(arc_segment_result.get("valid", false)):
 		return arc_segment_result
 	var arc_segments: Array[Dictionary] = arc_segment_result.get("segments", [])
+	if complete_support_domain:
+		stream_file = FileAccess.open(stream_evidence_path, FileAccess.WRITE)
+		if stream_file == null:
+			return {"valid": false, "reason": "R6_COMPLETE_SUPPORT_AUDIT_STREAM_OPEN_FAILED", "stream_path": stream_evidence_path, "error": FileAccess.get_open_error()}
 	var raw_by_identity: Dictionary = {}
 	var zero_tetrahedra: int = 0
 	var zero_volume_tetrahedra_skipped: int = 0
@@ -101,8 +124,8 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 	if not execution_id.is_empty():
 		print("R5_SYNTHESIS_ENUMERATION_BEGIN " + JSON.stringify({"execution_id": execution_id, "cavity_id": cavity_id, "tetrahedron_count": tetra_count, "owner_origin_count": source_origins.size()}))
 	for flat_index in range(tetra_count):
-		if Time.get_ticks_usec() - started_usec >= MAX_SYNTHESIS_USEC:
-			cap_reason = "R5_MAX_SYNTHESIS_USEC"
+		if Time.get_ticks_usec() - started_usec >= synthesis_budget_usec:
+			cap_reason = "PARTIAL_LIMIT_SYNTHESIS_TIME" if complete_support_domain else "R5_MAX_SYNTHESIS_USEC"
 			break
 		tetrahedra_visited += 1
 		var tet_index: int = flat_index % Core.TETS.size()
@@ -130,7 +153,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 			continue
 		var facets: Array[Array] = _triangulate_zero_polygon(ordered)
 		for facet_index in range(facets.size()):
-			if zero_facets >= MAX_ZERO_FACETS:
+			if not complete_support_domain and zero_facets >= MAX_ZERO_FACETS:
 				cap_reason = "R5_MAX_ZERO_FACETS"
 				break
 			zero_facets += 1
@@ -143,127 +166,183 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 				skipped_projection_degenerate += 1
 				continue
 			for domain_index in range(domain_triangles.size()):
-				if Time.get_ticks_usec() - started_usec >= MAX_SYNTHESIS_USEC:
-					cap_reason = "R5_MAX_SYNTHESIS_USEC"
+				if Time.get_ticks_usec() - started_usec >= synthesis_budget_usec:
+					cap_reason = "PARTIAL_LIMIT_SYNTHESIS_TIME" if complete_support_domain else "R5_MAX_SYNTHESIS_USEC"
 					break
 				var clipped: Array[Vector2] = _clip_convex(source_triangle_2d, domain_triangles[domain_index])
 				if clipped.size() < 3 or _signed_area(clipped) == 0.0: continue
-				if clip_fragments >= MAX_CLIP_FRAGMENTS:
+				if not complete_support_domain and clip_fragments >= MAX_CLIP_FRAGMENTS:
 					cap_reason = "R5_MAX_CLIP_FRAGMENTS"
 					break
 				clip_fragments += 1
+				var source_pairs: Array[Dictionary] = []
 				for pair_i in range(boundary_ids.size()):
-					if Time.get_ticks_usec() - started_usec >= MAX_SYNTHESIS_USEC:
-						cap_reason = "R5_MAX_SYNTHESIS_USEC"
-						break
 					for pair_j in range(pair_i + 1, boundary_ids.size()):
-						var id_a: String = boundary_ids[pair_i]
-						var id_b: String = boundary_ids[pair_j]
-						if enumerate_all_critical_vertices and not _x2_pair_is_target(id_a, id_b, x2_target_pairs): continue
-						if not vertex_positions.has(id_a) or not vertex_positions.has(id_b): continue
-						var a: Vector3 = vertex_positions[id_a]
-						var b: Vector3 = vertex_positions[id_b]
-						var root_a_2d: Vector2 = Vector2(projected_positions.get(id_a, Vector2.ZERO))
-						var root_b_2d: Vector2 = Vector2(projected_positions.get(id_b, Vector2.ZERO))
-						var region_key: String = "%s|%06d|%02d|%02d|%s|%s" % [str(tet_data.global_cell), tet_index, facet_index, domain_index, id_a, id_b]
-						var region_result: Dictionary = _triangle_first_critical_candidates(clipped, polygon, root_a_2d, root_b_2d, a, b, source_triangle_2d, world_triangle, arc_segments, feasible_region_count, region_key, critical_candidate_count, enumerate_all_critical_vertices)
-						if not bool(region_result.get("valid", false)):
-							cap_reason = String(region_result.get("reason", "R5_FEASIBLE_REGION_INVALID"))
+						var pair_a: String = boundary_ids[pair_i]
+						var pair_b: String = boundary_ids[pair_j]
+						if enumerate_all_critical_vertices and not _x2_pair_is_target(pair_a, pair_b, x2_target_pairs): continue
+						source_pairs.append({"a": pair_a, "b": pair_b, "priority": 0 if _x2_pair_is_target(pair_a, pair_b, x2_target_pairs) else 1, "key": pair_a + "|" + pair_b})
+				source_pairs.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+					if int(left.priority) != int(right.priority): return int(left.priority) < int(right.priority)
+					return String(left.key) < String(right.key)
+				)
+				for pair_record in source_pairs:
+					if Time.get_ticks_usec() - started_usec >= synthesis_budget_usec:
+						cap_reason = "PARTIAL_LIMIT_SYNTHESIS_TIME" if complete_support_domain else "R5_MAX_SYNTHESIS_USEC"
+						break
+					var id_a: String = String(pair_record.a)
+					var id_b: String = String(pair_record.b)
+					if enumerate_all_critical_vertices and not _x2_pair_is_target(id_a, id_b, x2_target_pairs): continue
+					if not vertex_positions.has(id_a) or not vertex_positions.has(id_b): continue
+					var a: Vector3 = vertex_positions[id_a]
+					var b: Vector3 = vertex_positions[id_b]
+					var root_a_2d: Vector2 = Vector2(projected_positions.get(id_a, Vector2.ZERO))
+					var root_b_2d: Vector2 = Vector2(projected_positions.get(id_b, Vector2.ZERO))
+					var region_key: String = "%s|%06d|%02d|%02d|%s|%s" % [str(tet_data.global_cell), tet_index, facet_index, domain_index, id_a, id_b]
+					enumeration_frontier = {"tetrahedron": tet_index, "facet": facet_index, "domain": domain_index, "source_pair": [id_a, id_b], "region": feasible_region_count, "candidate": 0, "completed_critical_candidates": critical_candidate_count, "completed_support_rows": raw_by_identity.size()}
+					var region_result: Dictionary = _triangle_first_critical_candidates(clipped, polygon, root_a_2d, root_b_2d, a, b, source_triangle_2d, world_triangle, arc_segments, feasible_region_count, region_key, critical_candidate_count, enumerate_all_critical_vertices, complete_support_domain, started_usec, synthesis_budget_usec, memory_budget_bytes)
+					if not bool(region_result.get("valid", false)):
+						cap_reason = String(region_result.get("reason", "R5_FEASIBLE_REGION_INVALID"))
+						enumeration_frontier["arrangement_frontier"] = region_result.get("arrangement_frontier", {})
+						if not complete_support_domain: break
+					feasible_region_count += int(region_result.get("region_count", 0))
+					constraint_line_count += int(region_result.get("constraint_line_count", 0))
+					for continuous_bound_value in region_result.get("continuous_region_bounds", []):
+						var continuous_bound: Dictionary = continuous_bound_value
+						continuous_bound["source_pair"] = [id_a, id_b]
+						continuous_bound["source_cell_global_lattice"] = tet_data.global_cell
+						continuous_bound["source_tetrahedron"] = tet_index
+						continuous_bound["source_facet"] = facet_index
+						continuous_region_bounds.append(continuous_bound)
+						projected_region_polygons[String(continuous_bound.get("region_id", ""))] = continuous_bound.get("projected_polygon", [])
+						if complete_support_domain:
+							_stream_write_record(stream_file, {"record_type": "continuous_zero_set_region_bound", "record": continuous_bound}, stream_row_count + 1)
+							stream_row_count += 1
+					var witness_records: Array[Dictionary] = region_result.get("candidates", [])
+					if not complete_support_domain and critical_candidate_count + witness_records.size() > MAX_CRITICAL_CANDIDATES_TOTAL:
+						cap_reason = "R5_MAX_CRITICAL_CANDIDATES_TOTAL"
+						break
+					for witness_index in range(witness_records.size()):
+						var witness_record: Dictionary = witness_records[witness_index]
+						if Time.get_ticks_usec() - started_usec >= synthesis_budget_usec:
+							cap_reason = "PARTIAL_LIMIT_SYNTHESIS_TIME" if complete_support_domain else "R5_MAX_SYNTHESIS_USEC"
 							break
-						feasible_region_count += int(region_result.get("region_count", 0))
-						constraint_line_count += int(region_result.get("constraint_line_count", 0))
-						var witness_records: Array[Dictionary] = region_result.get("candidates", [])
-						if critical_candidate_count + witness_records.size() > MAX_CRITICAL_CANDIDATES_TOTAL:
-							cap_reason = "R5_MAX_CRITICAL_CANDIDATES_TOTAL"
+						if complete_support_domain and Performance.get_monitor(Performance.MEMORY_STATIC) >= memory_budget_bytes:
+							cap_reason = "PARTIAL_LIMIT_SYNTHESIS_MEMORY"
 							break
-						critical_candidate_count += witness_records.size()
-						for witness_record in witness_records:
-							if Time.get_ticks_usec() - started_usec >= MAX_SYNTHESIS_USEC:
-								cap_reason = "R5_MAX_SYNTHESIS_USEC"
+						critical_candidate_count += 1
+						enumeration_frontier["candidate"] = witness_index
+						enumeration_frontier["completed_critical_candidates"] = critical_candidate_count
+						var witness: Vector2 = Vector2(witness_record.get("position", Vector2.ZERO))
+						var witness_check: Dictionary = _validate_witness(realizer, witness, source_triangle_2d, world_triangle, tet_data, polygon, vertex_positions, source_origins, max_support_distance, residual_epsilon, barycentric_epsilon, enumerate_all_critical_vertices, context, directed_axis_bracket, complete_support_domain)
+						var x2_audit_row: Dictionary = {"boundary_pair": [id_a, id_b], "source_cell_global_lattice": tet_data.global_cell, "source_tetrahedron": tet_index, "source_facet": facet_index, "arrangement_region_id": String(witness_record.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED")), "critical_candidate_method": String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), "projected_position": witness, "pre_correction_world_position": witness_check.get("pre_correction_world_position", witness_check.get("world", Vector3.ZERO)), "world_position": witness_check.get("world", Vector3.ZERO), "field_residual": witness_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "barycentric_weights": witness_check.get("tetra_weights", []), "binary32_representability_correction": witness_check.get("binary32_representability_correction", {}), "witness_valid": bool(witness_check.get("valid", false)), "reason": witness_check.get("reason", "")}
+						if enumerate_all_critical_vertices and witness_check.has("binary32_representability_correction"):
+							var correction_record: Dictionary = witness_check.binary32_representability_correction
+							if bool(correction_record.get("attempted", false)):
+								if bool(correction_record.get("accepted", false)): x2_representability_correction_count += 1
+								else: x2_representability_correction_failure_count += 1
+						if not bool(witness_check.get("valid", false)):
+							var witness_reason: String = String(witness_check.get("reason", "UNKNOWN_NOT_CAPTURED"))
+							var correction_state: String = String(witness_check.get("binary32_representability_correction", {}).get("search_state", ""))
+							if correction_state == "PARTIAL_LIMIT":
+								numeric_search_frontier = witness_check.get("binary32_representability_correction", {}).get("search_frontier", {})
+								cap_reason = "PARTIAL_LIMIT_BINARY32_REPRESENTABLE_SEARCH"
+								x2_audit_row["terminal_gate"] = "PARTIAL_LIMIT_BINARY32_REPRESENTABLE_SEARCH"
+								x2_audit_row["numeric_search_frontier"] = numeric_search_frontier
+								_record_candidate_audit(stream_file, x2_witness_audit, x2_audit_row, complete_support_domain, stream_row_count + 1)
+								if complete_support_domain: stream_row_count += 1
 								break
-							var witness: Vector2 = Vector2(witness_record.get("position", Vector2.ZERO))
-							var witness_check: Dictionary = _validate_witness(realizer, witness, source_triangle_2d, world_triangle, tet_data, polygon, vertex_positions, source_origins, max_support_distance, residual_epsilon, barycentric_epsilon, enumerate_all_critical_vertices, context, directed_axis_bracket)
-							var x2_audit_row: Dictionary = {"boundary_pair": [id_a, id_b], "source_cell_global_lattice": tet_data.global_cell, "source_tetrahedron": tet_index, "source_facet": facet_index, "arrangement_region_id": String(witness_record.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED")), "critical_candidate_method": String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), "projected_position": witness, "pre_correction_world_position": witness_check.get("pre_correction_world_position", witness_check.get("world", Vector3.ZERO)), "world_position": witness_check.get("world", Vector3.ZERO), "field_residual": witness_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "barycentric_weights": witness_check.get("tetra_weights", []), "binary32_representability_correction": witness_check.get("binary32_representability_correction", {}), "witness_valid": bool(witness_check.get("valid", false)), "reason": witness_check.get("reason", "")}
-							if enumerate_all_critical_vertices and witness_check.has("binary32_representability_correction"):
-								var correction_record: Dictionary = witness_check.binary32_representability_correction
-								if bool(correction_record.get("attempted", false)):
-									if bool(correction_record.get("accepted", false)): x2_representability_correction_count += 1
-									else: x2_representability_correction_failure_count += 1
-							if not bool(witness_check.get("valid", false)):
-								var witness_reason: String = String(witness_check.get("reason", "UNKNOWN_NOT_CAPTURED"))
-								if witness_reason == "support_outside_support_distance": skipped_outside_support_distance += 1
-								elif witness_reason == "support_field_residual_invalid": skipped_field_residual += 1
-								elif witness_reason in ["support_on_cavity_boundary", "support_duplicates_topology_root"]: skipped_boundary_or_root += 1
-								_add_rejection(candidate_triangle_rejections, witness_reason)
-								if enumerate_all_critical_vertices:
-									x2_audit_row["terminal_gate"] = "FIELD_BARYCENTRIC_DISTANCE_OR_BOUNDARY_WITNESS_GATE"
-									x2_witness_audit.append(x2_audit_row)
-								continue
-							witness_check["critical_candidate_method"] = String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED"))
-							var point: Vector3 = Vector3(witness_check.get("world", Vector3.ZERO))
-							var cross_squared: float = _support_pair_objective(a, b, point)
-							if not is_finite(cross_squared) or cross_squared <= cutoff:
-								_add_rejection(candidate_triangle_rejections, "candidate_cross_squared_at_or_below_frozen_cutoff")
-								if enumerate_all_critical_vertices:
-									x2_audit_row["terminal_gate"] = "FROZEN_CROSS_SQUARED_CUTOFF"
-									x2_audit_row["cross_squared"] = cross_squared
-								x2_witness_audit.append(x2_audit_row)
-								continue
-							var exact_gate: Dictionary = _single_support_pair_gate(realizer, context, id_a, id_b, point, _project(point, context), cutoff)
-							if not bool(exact_gate.get("valid", false)):
-								_add_rejection(candidate_triangle_rejections, String(exact_gate.get("reason", "UNKNOWN_NOT_CAPTURED")))
-								if enumerate_all_critical_vertices:
-									x2_audit_row["terminal_gate"] = "EXACT_SINGLE_SUPPORT_PAIR_GATE"
-									x2_audit_row["cross_squared"] = cross_squared
-									x2_audit_row["exact_gate"] = exact_gate.duplicate(true)
-									x2_witness_audit.append(x2_audit_row)
-								continue
-							feasible_single_support_count += 1
+							if witness_reason == "support_outside_support_distance": skipped_outside_support_distance += 1
+							elif witness_reason == "support_field_residual_invalid": skipped_field_residual += 1
+							elif witness_reason in ["support_on_cavity_boundary", "support_duplicates_topology_root"]: skipped_boundary_or_root += 1
+							_add_rejection(candidate_triangle_rejections, witness_reason)
 							if enumerate_all_critical_vertices:
-								x2_audit_row["terminal_gate"] = "SINGLE_SUPPORT_PAIR_PASS"
+								x2_audit_row["terminal_gate"] = "FIELD_BARYCENTRIC_DISTANCE_OR_BOUNDARY_WITNESS_GATE"
+								_record_candidate_audit(stream_file, x2_witness_audit, x2_audit_row, complete_support_domain, stream_row_count + 1)
+								if complete_support_domain: stream_row_count += 1
+							continue
+						witness_check["critical_candidate_method"] = String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED"))
+						var point: Vector3 = Vector3(witness_check.get("world", Vector3.ZERO))
+						if complete_support_domain:
+							var candidate_region_id: String = String(witness_record.get("constraint_arrangement_region_id", ""))
+							var projected_polygon: Array[Vector2] = []
+							for projected_vertex in projected_region_polygons.get(candidate_region_id, []): projected_polygon.append(Vector2(projected_vertex))
+							if projected_polygon.size() < 3 or not _point_strictly_inside(_project(point, context), projected_polygon):
+								_add_rejection(candidate_triangle_rejections, "binary32_correction_left_source_arrangement_region")
+								if enumerate_all_critical_vertices:
+									x2_audit_row["terminal_gate"] = "SOURCE_ARRANGEMENT_REGION_MEMBERSHIP"
+									x2_audit_row["corrected_projected_position"] = _project(point, context)
+									_record_candidate_audit(stream_file, x2_witness_audit, x2_audit_row, complete_support_domain, stream_row_count + 1)
+									if complete_support_domain: stream_row_count += 1
+								continue
+						var cross_squared: float = _support_pair_objective(a, b, point)
+						if not is_finite(cross_squared) or cross_squared <= cutoff:
+							_add_rejection(candidate_triangle_rejections, "candidate_cross_squared_at_or_below_frozen_cutoff")
+							if enumerate_all_critical_vertices:
+								x2_audit_row["terminal_gate"] = "FROZEN_CROSS_SQUARED_CUTOFF"
+								x2_audit_row["cross_squared"] = cross_squared
+							_record_candidate_audit(stream_file, x2_witness_audit, x2_audit_row, complete_support_domain, stream_row_count + 1)
+							if complete_support_domain: stream_row_count += 1
+							continue
+						var exact_gate: Dictionary = _single_support_pair_gate(realizer, context, id_a, id_b, point, _project(point, context), cutoff)
+						if not bool(exact_gate.get("valid", false)):
+							_add_rejection(candidate_triangle_rejections, String(exact_gate.get("reason", "UNKNOWN_NOT_CAPTURED")))
+							if enumerate_all_critical_vertices:
+								x2_audit_row["terminal_gate"] = "EXACT_SINGLE_SUPPORT_PAIR_GATE"
 								x2_audit_row["cross_squared"] = cross_squared
 								x2_audit_row["exact_gate"] = exact_gate.duplicate(true)
-								x2_witness_audit.append(x2_audit_row)
-							var origin: Dictionary = witness_check.origin
-							var distance: float = float(witness_check.distance)
-							var tetra_weights: Array = witness_check.tetra_weights
-							var field_residual: float = float(witness_check.field_residual)
-							var binary_identity: String = _binary32_position_identity(point)
-							var support_id: String = _support_id(point)
-							var arrangement_region_id: String = String(witness_record.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED"))
-							var source_key: String = "%s|%06d|%02d|%02d|%s|%s|%s|%s" % [str(tet_data.global_cell), tet_index, facet_index, domain_index, id_a, id_b, arrangement_region_id, String(witness_record.get("method", ""))]
-							var support: Dictionary = {
-								"candidate_id": "R5C_" + Core.sha256(source_key.to_utf8_buffer()).substr(0, 24),
-								"support_id": support_id,
-								"cavity_id": cavity_id,
-								"residual_triangle_id": String(origin.get("id", "")),
-								"accepted": true,
-								"supported": true,
-								"rejection_reason": "",
-								"method": "R5_TRIANGLE_FIRST_FEASIBLE_ZERO_REGION",
-								"level": 2,
-								"source_cell_local": cell,
-								"source_cell_global_lattice": tet_data.global_cell,
-								"source_tetrahedron": tet_index,
-								"tetrahedron_sample_values": tet_data.samples.duplicate(),
-								"tetrahedron_corner_world": tet_data.positions.duplicate(),
-								"zero_primitive_id": "%s|tet:%d|facet:%d" % [str(tet_data.global_cell), tet_index, facet_index],
-								"constraint_boundary_pair": [id_a, id_b],
-								"constraint_arrangement_region_id": arrangement_region_id,
-								"constraint_clearance": float(witness_record.get("clearance", 0.0)),
-								"barycentric_weights": tetra_weights.duplicate(),
-								"frozen_field_interpolated_residual": field_residual,
-								"world_position": point,
-								"distance_to_face_centroid": distance,
-								"binary32_position_identity": binary_identity,
-								"max_constraint_cross_squared": cross_squared,
-								"critical_candidate_method": String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED"))
-							}
-							if not raw_by_identity.has(binary_identity) and raw_by_identity.size() >= MAX_RAW_SUPPORTS:
-								cap_reason = "R5_MAX_RAW_SUPPORTS"
-								break
-							support["source_key"] = source_key
-							_insert_support_by_identity(raw_by_identity, support)
+								_record_candidate_audit(stream_file, x2_witness_audit, x2_audit_row, complete_support_domain, stream_row_count + 1)
+								if complete_support_domain: stream_row_count += 1
+							continue
+						feasible_single_support_count += 1
+						witnessed_region_ids[String(witness_record.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED"))] = true
+						if enumerate_all_critical_vertices:
+							x2_audit_row["terminal_gate"] = "SINGLE_SUPPORT_PAIR_PASS"
+							x2_audit_row["cross_squared"] = cross_squared
+							x2_audit_row["exact_gate"] = exact_gate.duplicate(true)
+							_record_candidate_audit(stream_file, x2_witness_audit, x2_audit_row, complete_support_domain, stream_row_count + 1)
+							if complete_support_domain: stream_row_count += 1
+						var origin: Dictionary = witness_check.origin
+						var distance: float = float(witness_check.distance)
+						var tetra_weights: Array = witness_check.tetra_weights
+						var field_residual: float = float(witness_check.field_residual)
+						var binary_identity: String = _binary32_position_identity(point)
+						var support_id: String = _support_id(point)
+						var arrangement_region_id: String = String(witness_record.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED"))
+						var source_key: String = "%s|%06d|%02d|%02d|%s|%s|%s|%s" % [str(tet_data.global_cell), tet_index, facet_index, domain_index, id_a, id_b, arrangement_region_id, String(witness_record.get("method", ""))]
+						var support: Dictionary = {
+							"candidate_id": "R5C_" + Core.sha256(source_key.to_utf8_buffer()).substr(0, 24),
+							"support_id": support_id,
+							"cavity_id": cavity_id,
+							"residual_triangle_id": String(origin.get("id", "")),
+							"accepted": true,
+							"supported": true,
+							"rejection_reason": "",
+							"method": "R5_TRIANGLE_FIRST_FEASIBLE_ZERO_REGION",
+							"level": 2,
+							"source_cell_local": cell,
+							"source_cell_global_lattice": tet_data.global_cell,
+							"source_tetrahedron": tet_index,
+							"tetrahedron_sample_values": tet_data.samples.duplicate(),
+							"tetrahedron_corner_world": tet_data.positions.duplicate(),
+							"zero_primitive_id": "%s|tet:%d|facet:%d" % [str(tet_data.global_cell), tet_index, facet_index],
+							"constraint_boundary_pair": [id_a, id_b],
+							"constraint_arrangement_region_id": arrangement_region_id,
+							"constraint_clearance": float(witness_record.get("clearance", 0.0)),
+							"barycentric_weights": tetra_weights.duplicate(),
+							"frozen_field_interpolated_residual": field_residual,
+							"world_position": point,
+							"distance_to_face_centroid": distance,
+							"binary32_position_identity": binary_identity,
+							"max_constraint_cross_squared": cross_squared,
+							"critical_candidate_method": String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED"))
+						}
+						if not complete_support_domain and not raw_by_identity.has(binary_identity) and raw_by_identity.size() >= MAX_RAW_SUPPORTS:
+							cap_reason = "R5_MAX_RAW_SUPPORTS"
+							break
+						support["source_key"] = source_key
+						_insert_support_by_identity(raw_by_identity, support)
+						enumeration_frontier["completed_support_rows"] = raw_by_identity.size()
 				if not cap_reason.is_empty(): break
 			if not cap_reason.is_empty(): break
 		if not cap_reason.is_empty(): break
@@ -275,12 +354,34 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		if cross_a != cross_b: return cross_a > cross_b
 		return String(a.get("support_id", "")) < String(b.get("support_id", ""))
 	)
-	var truncated: bool = ranked.size() > MAX_SUPPORTS
+	var truncated: bool = not complete_support_domain and ranked.size() > MAX_SUPPORTS
 	if truncated:
 		ranked.resize(MAX_SUPPORTS)
 		if cap_reason.is_empty(): cap_reason = "R5_MAX_SUPPORTS"
 	for support in ranked: support.erase("source_key")
+	var continuous_region_outcomes: Array[Dictionary] = []
+	var unresolved_continuous_region_count: int = 0
+	for bound_value in continuous_region_bounds:
+		var bound: Dictionary = bound_value
+		var region_id: String = String(bound.get("region_id", ""))
+		var maximum_cross_squared: float = float(bound.get("continuous_upper_bound_cross_squared", INF))
+		var all_extremes_mapped: bool = int(bound.get("projected_extreme_count", 0)) == int(bound.get("region_vertex_count", -1))
+		var outcome: String = "ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF" if all_extremes_mapped and maximum_cross_squared <= cutoff else "VALID_REPRESENTABLE_SUPPORT_WITNESS" if witnessed_region_ids.has(region_id) else "UNRESOLVED_REGION_REQUIRES_FURTHER_PROOF_OR_WITNESS"
+		if outcome == "UNRESOLVED_REGION_REQUIRES_FURTHER_PROOF_OR_WITNESS": unresolved_continuous_region_count += 1
+		bound["resolution"] = outcome
+		bound["support_witness_found"] = witnessed_region_ids.has(region_id)
+		continuous_region_outcomes.append(bound)
+		if complete_support_domain:
+			_stream_write_record(stream_file, {"record_type": "continuous_zero_set_region_resolution", "record": bound}, stream_row_count + 1)
+			stream_row_count += 1
 	var total_usec: int = Time.get_ticks_usec() - started_usec
+	var stream_identity: Dictionary = {}
+	if complete_support_domain:
+		stream_file.flush()
+		var stream_error: Error = stream_file.get_error()
+		stream_file.close()
+		var stream_bytes: PackedByteArray = FileAccess.get_file_as_bytes(stream_evidence_path)
+		stream_identity = {"path": stream_evidence_path, "rows": stream_row_count, "bytes": stream_bytes.size(), "sha256": Core.sha256(stream_bytes), "write_error": stream_error, "format": "JSONL_SOURCE_PAIR_AND_REGION_STREAM"}
 	return {
 		"valid": true,
 		"supports": ranked,
@@ -304,6 +405,15 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		"support_cap_hit": truncated,
 		"cap_reason": cap_reason,
 		"finite_candidate_enumeration_complete": cap_reason.is_empty() and not truncated,
+		"continuous_region_resolution_complete": cap_reason.is_empty() and unresolved_continuous_region_count == 0,
+		"unresolved_continuous_region_count": unresolved_continuous_region_count,
+		"continuous_region_resolution_histogram": {"ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF": continuous_region_outcomes.filter(func(row: Dictionary) -> bool: return String(row.get("resolution", "")) == "ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF").size(), "VALID_REPRESENTABLE_SUPPORT_WITNESS": continuous_region_outcomes.filter(func(row: Dictionary) -> bool: return String(row.get("resolution", "")) == "VALID_REPRESENTABLE_SUPPORT_WITNESS").size(), "UNRESOLVED_REGION_REQUIRES_FURTHER_PROOF_OR_WITNESS": unresolved_continuous_region_count},
+		"continuous_region_bounds": [] if complete_support_domain else continuous_region_outcomes,
+		"continuous_region_stream": stream_identity,
+		"execution_state": "COMPLETE" if cap_reason.is_empty() and not truncated else "PARTIAL_LIMIT" if complete_support_domain else "PARTIAL",
+		"enumeration_frontier": enumeration_frontier,
+		"numeric_search_frontier": numeric_search_frontier,
+		"enumeration_mode": "DETERMINISTIC_SOURCE_PAIR_REGION_STREAM" if complete_support_domain else "LEGACY_BOUNDED_R5",
 		"analytic_feasible_support_domain_exhausted": false,
 		"skipped_projection_degenerate": skipped_projection_degenerate,
 		"skipped_field_residual": skipped_field_residual,
@@ -317,10 +427,10 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		"x2_targeted_continuous_completion": enumerate_all_critical_vertices,
 		"x2_target_pairs": x2_target_pairs.duplicate(true) if enumerate_all_critical_vertices else [],
 		"max_critical_candidates_per_pair_region": "ALL_REGION_VERTICES_WITH_GLOBAL_TOTAL_CAP" if enumerate_all_critical_vertices else MAX_CRITICAL_CANDIDATES_PER_PAIR_REGION,
-		"max_critical_candidates_total": MAX_CRITICAL_CANDIDATES_TOTAL,
-		"max_constraint_lines_per_pair_region": MAX_CONSTRAINT_LINES_PER_PAIR_REGION,
-		"max_feasible_region_components": MAX_FEASIBLE_REGION_COMPONENTS,
-		"limits": {"max_tetrahedra": MAX_TETRAHEDRA, "max_zero_facets": MAX_ZERO_FACETS, "max_clip_fragments": MAX_CLIP_FRAGMENTS, "max_raw_supports": MAX_RAW_SUPPORTS, "max_supports": MAX_SUPPORTS, "max_synthesis_usec": MAX_SYNTHESIS_USEC, "max_source_pairs": max_boundary_source_pairs, "max_critical_candidates_per_pair_region": "ALL_REGION_VERTICES_WITH_GLOBAL_TOTAL_CAP" if enumerate_all_critical_vertices else MAX_CRITICAL_CANDIDATES_PER_PAIR_REGION, "max_critical_candidates_total": MAX_CRITICAL_CANDIDATES_TOTAL, "max_constraint_lines_per_pair_region": MAX_CONSTRAINT_LINES_PER_PAIR_REGION, "max_feasible_region_components": MAX_FEASIBLE_REGION_COMPONENTS, "existing_cross_squared_cutoff": cutoff, "existing_max_support_distance": max_support_distance}
+		"max_critical_candidates_total": "NONE" if complete_support_domain else MAX_CRITICAL_CANDIDATES_TOTAL,
+		"max_constraint_lines_per_pair_region": "NONE" if complete_support_domain else MAX_CONSTRAINT_LINES_PER_PAIR_REGION,
+		"max_feasible_region_components": "NONE" if complete_support_domain else MAX_FEASIBLE_REGION_COMPONENTS,
+		"limits": {"max_tetrahedra": MAX_TETRAHEDRA, "max_zero_facets": "NONE" if complete_support_domain else MAX_ZERO_FACETS, "max_clip_fragments": "NONE" if complete_support_domain else MAX_CLIP_FRAGMENTS, "max_raw_supports": "NONE" if complete_support_domain else MAX_RAW_SUPPORTS, "max_supports": "NONE" if complete_support_domain else MAX_SUPPORTS, "max_synthesis_usec": synthesis_budget_usec, "memory_budget_bytes": memory_budget_bytes if complete_support_domain else "LEGACY_NOT_APPLICABLE", "max_source_pairs": max_boundary_source_pairs, "max_critical_candidates_per_pair_region": "ALL_REGION_VERTICES" if enumerate_all_critical_vertices else MAX_CRITICAL_CANDIDATES_PER_PAIR_REGION, "max_critical_candidates_total": "NONE" if complete_support_domain else MAX_CRITICAL_CANDIDATES_TOTAL, "max_constraint_lines_per_pair_region": "NONE" if complete_support_domain else MAX_CONSTRAINT_LINES_PER_PAIR_REGION, "max_feasible_region_components": "NONE" if complete_support_domain else MAX_FEASIBLE_REGION_COMPONENTS, "existing_cross_squared_cutoff": cutoff, "existing_max_support_distance": max_support_distance}
 	}
 
 func _clip_linear_interval(lower: float, upper: float, value_at_lower: float, value_at_upper: float) -> Dictionary:
@@ -623,7 +733,7 @@ func _project_required_arc_segments(required_arcs: Array, context: Dictionary) -
 	)
 	return {"valid": true, "segments": segments}
 
-func _triangle_first_critical_candidates(clipped: Array[Vector2], cavity: Array[Vector2], root_a: Vector2, root_b: Vector2, root_a_world: Vector3, root_b_world: Vector3, source_2d: Array[Vector2], source_world: Array[Vector3], arc_segments: Array[Dictionary], prior_region_count: int, region_source_key: String, prior_candidate_count: int = 0, enumerate_all_critical_vertices: bool = false) -> Dictionary:
+func _triangle_first_critical_candidates(clipped: Array[Vector2], cavity: Array[Vector2], root_a: Vector2, root_b: Vector2, root_a_world: Vector3, root_b_world: Vector3, source_2d: Array[Vector2], source_world: Array[Vector3], arc_segments: Array[Dictionary], prior_region_count: int, region_source_key: String, prior_candidate_count: int = 0, enumerate_all_critical_vertices: bool = false, capture_continuous_bounds: bool = false, synthesis_started_usec: int = 0, synthesis_budget_usec: int = MAX_SYNTHESIS_USEC, memory_budget_bytes: int = 0) -> Dictionary:
 	var lines: Array[Dictionary] = []
 	_add_constraint_line(lines, root_a, root_b, "ROOT_PAIR")
 	for edge_index in range(cavity.size()):
@@ -642,12 +752,18 @@ func _triangle_first_critical_candidates(clipped: Array[Vector2], cavity: Array[
 		_add_constraint_line(lines, root_b, arc_b, "ROOT_B_TO_ARC_ENDPOINT")
 		_add_constraint_line(lines, arc_a, arc_b, "REQUIRED_ARC_SUPPORTING_LINE")
 	lines.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.get("key", "")) < String(b.get("key", "")))
-	if lines.size() > MAX_CONSTRAINT_LINES_PER_PAIR_REGION:
+	if not capture_continuous_bounds and lines.size() > MAX_CONSTRAINT_LINES_PER_PAIR_REGION:
 		return {"valid": false, "reason": "R5_MAX_CONSTRAINT_LINES_PER_PAIR_REGION", "line_count": lines.size()}
 	var regions: Array[Array] = [clipped.duplicate()]
-	if prior_region_count + regions.size() > MAX_FEASIBLE_REGION_COMPONENTS:
+	var all_candidates: Array[Dictionary] = []
+	var continuous_bounds: Array[Dictionary] = []
+	if not capture_continuous_bounds and prior_region_count + regions.size() > MAX_FEASIBLE_REGION_COMPONENTS:
 		return {"valid": false, "reason": "R5_MAX_FEASIBLE_REGION_COMPONENTS"}
 	for line in lines:
+		if capture_continuous_bounds and Time.get_ticks_usec() - synthesis_started_usec >= synthesis_budget_usec:
+			return {"valid": false, "reason": "PARTIAL_LIMIT_ARRANGEMENT_TIME", "arrangement_frontier": {"stage": "constraint_line", "line_key": line.key, "completed_lines": lines.find(line), "completed_regions": regions.size()}}
+		if capture_continuous_bounds and memory_budget_bytes > 0 and Performance.get_monitor(Performance.MEMORY_STATIC) >= memory_budget_bytes:
+			return {"valid": false, "reason": "PARTIAL_LIMIT_ARRANGEMENT_MEMORY", "arrangement_frontier": {"stage": "constraint_line", "line_key": line.key, "completed_lines": lines.find(line), "completed_regions": regions.size()}}
 		var next_regions: Array[Array] = []
 		for region in regions:
 			var split: Dictionary = _split_polygon_by_line(region, Vector2(line.a), Vector2(line.b))
@@ -657,19 +773,42 @@ func _triangle_first_critical_candidates(clipped: Array[Vector2], cavity: Array[
 					if half.size() >= 3 and absf(_signed_area(half)) > 0.0: next_regions.append(half)
 			else:
 				next_regions.append(region)
-			if prior_region_count + next_regions.size() > MAX_FEASIBLE_REGION_COMPONENTS:
+			if not capture_continuous_bounds and prior_region_count + next_regions.size() > MAX_FEASIBLE_REGION_COMPONENTS:
 				return {"valid": false, "reason": "R5_MAX_FEASIBLE_REGION_COMPONENTS", "line_key": line.key}
+			if capture_continuous_bounds and (Time.get_ticks_usec() - synthesis_started_usec >= synthesis_budget_usec or (memory_budget_bytes > 0 and Performance.get_monitor(Performance.MEMORY_STATIC) >= memory_budget_bytes)):
+				return {"valid": false, "reason": "PARTIAL_LIMIT_ARRANGEMENT_MEMORY" if memory_budget_bytes > 0 and Performance.get_monitor(Performance.MEMORY_STATIC) >= memory_budget_bytes else "PARTIAL_LIMIT_ARRANGEMENT_TIME", "arrangement_frontier": {"stage": "region_split", "line_key": line.key, "completed_lines": lines.find(line), "completed_regions": next_regions.size(), "candidates": all_candidates}}
 		regions = next_regions
 		if regions.is_empty(): return {"valid": false, "reason": "R5_CONSTRAINT_ARRANGEMENT_ELIMINATED_SOURCE_POLYGON", "line_key": line.key}
-	var all_candidates: Array[Dictionary] = []
 	for region_index in range(regions.size()):
+		if capture_continuous_bounds and Time.get_ticks_usec() - synthesis_started_usec >= synthesis_budget_usec:
+			return {"valid": false, "reason": "PARTIAL_LIMIT_REGION_ENUMERATION_TIME", "region_count": region_index, "candidates": all_candidates, "continuous_region_bounds": continuous_bounds, "arrangement_frontier": {"stage": "region_candidates", "region_index": region_index, "unvisited_region_count": regions.size() - region_index}}
+		if capture_continuous_bounds and memory_budget_bytes > 0 and Performance.get_monitor(Performance.MEMORY_STATIC) >= memory_budget_bytes:
+			return {"valid": false, "reason": "PARTIAL_LIMIT_REGION_ENUMERATION_MEMORY", "region_count": region_index, "candidates": all_candidates, "continuous_region_bounds": continuous_bounds, "arrangement_frontier": {"stage": "region_candidates", "region_index": region_index, "unvisited_region_count": regions.size() - region_index}}
 		var region: Array[Vector2] = regions[region_index]
 		var region_id: String = "R5REG_" + Core.sha256((region_source_key + "|" + str(region_index) + "|" + _polygon_identity(region)).to_utf8_buffer()).substr(0, 24)
+		if capture_continuous_bounds:
+			var continuous_maximum: float = -INF
+			var maximum_vertex: Vector2 = Vector2.ZERO
+			var mapped_vertex_count: int = 0
+			for vertex in region:
+				var mapped_vertex: Dictionary = _map_projected_point(vertex, source_2d, source_world)
+				if not bool(mapped_vertex.get("valid", false)): continue
+				var vertex_cross_squared: float = _support_pair_objective(root_a_world, root_b_world, Vector3(mapped_vertex.world))
+				mapped_vertex_count += 1
+				if vertex_cross_squared > continuous_maximum:
+					continuous_maximum = vertex_cross_squared
+					maximum_vertex = vertex
+			var numeric_bound_margin: float = maxf(absf(continuous_maximum) * 1.0e-12, 1.0e-30)
+			continuous_bounds.append({"region_id": region_id, "projected_polygon": region, "projected_extreme_count": mapped_vertex_count, "region_vertex_count": region.size(), "maximum_cross_squared_vertex": maximum_vertex, "observed_vertex_maximum_cross_squared": continuous_maximum, "numeric_outward_margin": numeric_bound_margin, "continuous_upper_bound_cross_squared": continuous_maximum + numeric_bound_margin, "proof_method": "CONVEX_CROSS_SQUARED_MAXIMUM_AT_CLOSED_ARRANGEMENT_POLYGON_EXTREMES_WITH_CONSERVATIVE_NUMERIC_MARGIN", "cutoff_squared": FROZEN_CROSS_SQUARED_CUTOFF, "strict_interior_witness_required": true})
 		var region_candidates: Array[Dictionary] = _critical_candidates_for_region(region, cavity, source_2d, source_world, root_a_world, root_b_world, arc_segments, region_id, enumerate_all_critical_vertices)
 		all_candidates.append_array(region_candidates)
-		if prior_candidate_count + all_candidates.size() > MAX_CRITICAL_CANDIDATES_TOTAL:
+		if capture_continuous_bounds and memory_budget_bytes > 0 and Performance.get_monitor(Performance.MEMORY_STATIC) >= memory_budget_bytes:
+			return {"valid": false, "reason": "PARTIAL_LIMIT_REGION_CANDIDATE_MEMORY", "region_count": region_index + 1, "candidates": all_candidates, "continuous_region_bounds": continuous_bounds, "arrangement_frontier": {"stage": "region_candidate_page", "region_index": region_index + 1, "unvisited_region_count": regions.size() - region_index - 1}}
+		if not capture_continuous_bounds and prior_candidate_count + all_candidates.size() > MAX_CRITICAL_CANDIDATES_TOTAL:
 			return {"valid": false, "reason": "R5_MAX_CRITICAL_CANDIDATES_TOTAL"}
-	return {"valid": true, "region_count": regions.size(), "constraint_line_count": lines.size(), "candidates": all_candidates}
+		# R6 complete-domain mode consumes deterministic source-pair batches
+		# without a global candidate-count boundary.
+	return {"valid": true, "region_count": regions.size(), "constraint_line_count": lines.size(), "candidates": all_candidates, "continuous_region_bounds": continuous_bounds}
 
 func _add_constraint_line(lines: Array[Dictionary], a: Vector2, b: Vector2, source: String) -> void:
 	if not a.is_finite() or not b.is_finite() or a == b: return
@@ -982,7 +1121,7 @@ func _map_projected_point(point: Vector2, source: Array[Vector2], world: Array[V
 	if not position.is_finite(): return {"valid": false, "reason": "mapped_world_point_nonfinite"}
 	return {"valid": true, "world": position, "weights": weights}
 
-func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Array[Vector2], source_world: Array[Vector3], tet_data: Dictionary, domain_polygon: Array[Vector2], topology_positions: Dictionary, source_origins: Array[Dictionary], max_distance: float, residual_epsilon: float, barycentric_epsilon: float, correct_binary32: bool = false, projection_context: Dictionary = {}, directed_axis_bracket: bool = false) -> Dictionary:
+func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Array[Vector2], source_world: Array[Vector3], tet_data: Dictionary, domain_polygon: Array[Vector2], topology_positions: Dictionary, source_origins: Array[Dictionary], max_distance: float, residual_epsilon: float, barycentric_epsilon: float, correct_binary32: bool = false, projection_context: Dictionary = {}, directed_axis_bracket: bool = false, multi_coordinate_search: bool = false) -> Dictionary:
 	if _point_on_polygon_boundary(projected, domain_polygon): return {"valid": false, "reason": "support_on_cavity_boundary"}
 	var mapped: Dictionary = _map_projected_point(projected, source_2d, source_world)
 	if not bool(mapped.get("valid", false)): return mapped
@@ -991,8 +1130,17 @@ func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Arra
 	var field_check: Dictionary = _validate_field_point(realizer, point, tet_data.get("positions", []), tet_data.get("samples", []), residual_epsilon, barycentric_epsilon)
 	var correction: Dictionary = {"attempted": false, "accepted": false}
 	if not bool(field_check.get("valid", false)) and correct_binary32:
-		var searched: Dictionary = realizer.call("_search_representable_zero_axis_bracket" if directed_axis_bracket else "_search_representable_zero", point, tet_data)
-		correction = {"attempted": true, "method": "FULL_SAME_TETRA_AXIS_BRACKET" if directed_axis_bracket else "BOUNDED_PLUS_MINUS_2_ULP_CUBE", "accepted": bool(searched.get("accepted", false)), "pre_correction_position": pre_correction_point, "pre_correction_field_residual": field_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "post_correction_position": searched.get("position", pre_correction_point), "post_correction_field_residual": searched.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "coordinate_ulp_steps": searched.get("ulp_steps", [0, 0, 0]), "search_state": searched.get("search_state", "UNKNOWN_NOT_CAPTURED"), "reason": searched.get("reason", "")}
+		var searched: Dictionary
+		var representation_method: String
+		if multi_coordinate_search:
+			var search_budget_raw: String = OS.get_environment("R12CXR_R6_BINARY32_SEARCH_BUDGET_MS")
+			var search_budget_ms: int = maxi(1, search_budget_raw.to_int()) if not search_budget_raw.is_empty() else 100
+			searched = realizer.call("_search_representable_zero_multicoordinate", point, tet_data, search_budget_ms * 1000)
+			representation_method = "COMPLETE_MULTICOORDINATE_BINARY32_TETRA_ENUMERATION_WITH_RESOURCE_FRONTIER"
+		else:
+			searched = realizer.call("_search_representable_zero_axis_bracket" if directed_axis_bracket else "_search_representable_zero", point, tet_data)
+			representation_method = "FULL_SAME_TETRA_AXIS_BRACKET" if directed_axis_bracket else "BOUNDED_PLUS_MINUS_2_ULP_CUBE"
+		correction = {"attempted": true, "method": representation_method, "accepted": bool(searched.get("accepted", false)), "pre_correction_position": pre_correction_point, "pre_correction_field_residual": field_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "post_correction_position": searched.get("position", pre_correction_point), "post_correction_field_residual": searched.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "coordinate_ulp_steps": searched.get("ulp_steps", [0, 0, 0]), "search_state": searched.get("search_state", "UNKNOWN_NOT_CAPTURED"), "search_frontier": searched.get("search_frontier", {}), "finite_domain_complete": searched.get("finite_domain_complete", false), "tested_triples": searched.get("tested_triples", 0), "reason": searched.get("reason", "")}
 		if bool(searched.get("accepted", false)):
 			point = Vector3(searched.get("position", pre_correction_point))
 			field_check = {"valid": true, "weights": searched.get("weights", []), "field_residual": searched.get("field_residual", NAN)}
@@ -1064,3 +1212,41 @@ func _append_unique(points: Array[Vector2], point: Vector2) -> void:
 func _remove_duplicate_end(points: Array[Vector2]) -> Array[Vector2]:
 	if points.size() > 1 and points[0] == points[points.size() - 1]: points.pop_back()
 	return points
+
+func _record_candidate_audit(stream_file: FileAccess, legacy_rows: Array[Dictionary], row: Dictionary, streaming: bool, row_number: int) -> void:
+	if streaming:
+		_stream_write_record(stream_file, {"record_type": "critical_candidate_gate_audit", "record": row}, row_number)
+	else:
+		legacy_rows.append(row)
+
+func _stream_write_record(file: FileAccess, row: Dictionary, row_number: int) -> void:
+	file.store_string(JSON.stringify(_stream_json_safe(row)) + "\n")
+	if row_number % 256 == 0: file.flush()
+
+static func _stream_json_safe(value: Variant) -> Variant:
+	match typeof(value):
+		TYPE_VECTOR2:
+			var point: Vector2 = value
+			return [point.x, point.y]
+		TYPE_VECTOR3:
+			var point3: Vector3 = value
+			return [point3.x, point3.y, point3.z]
+		TYPE_VECTOR3I:
+			var cell: Vector3i = value
+			return [cell.x, cell.y, cell.z]
+		TYPE_PACKED_FLOAT32_ARRAY:
+			var floats: Array = []
+			for number in value: floats.append(number)
+			return floats
+		TYPE_ARRAY:
+			var rows: Array = []
+			for item in value: rows.append(_stream_json_safe(item))
+			return rows
+		TYPE_DICTIONARY:
+			var output: Dictionary = {}
+			var keys: Array = value.keys()
+			keys.sort()
+			for key in keys: output[key] = _stream_json_safe(value[key])
+			return output
+		_:
+			return value

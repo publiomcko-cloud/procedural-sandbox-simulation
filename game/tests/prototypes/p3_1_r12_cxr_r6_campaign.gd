@@ -46,7 +46,7 @@ func _run() -> void:
 		_run_evidence_writer_check()
 		return
 	if mode.is_empty(): mode = "freeze"
-	if mode not in ["freeze", "boundary-audit", "cavity-audit", "x3-cavity-search", "x3-cavity-realize", "x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "synthesize", "resume-r6-06", "resume-x2-graph"]:
+	if mode not in ["freeze", "boundary-audit", "cavity-audit", "x3-cavity-search", "x3-cavity-realize", "x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "y1-complete-support", "synthesize", "resume-r6-06", "resume-x2-graph"]:
 		_fail("r6_mode_invalid", {"mode": mode})
 		return
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
@@ -514,8 +514,9 @@ func _run() -> void:
 		print("R12CXR_R6_X3_ALTERNATIVE_REALIZED " + JSON.stringify({"attempt_id": attempt_id, "status": x3_result.get("status", ""), "terminal_reason": x3_result.get("terminal_reason", ""), "result_sha256": Core.sha256(x3_result_bytes), "target_attempt_consumed": true}))
 		quit(0)
 		return
-	if mode in ["x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence"]:
+	if mode in ["x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "y1-complete-support"]:
 		var x6_representability: bool = mode in ["x6-representability", "x6-representability-evidence"]
+		var y1_complete_support: bool = mode == "y1-complete-support"
 		var x4_evidence_only: bool = mode in ["x4-targeted-evidence", "x6-representability-evidence"]
 		var directed_axis_bracket: bool = x6_representability
 		var x4_source_sha: String = OS.get_environment("R12CXR_SOURCE_SHA")
@@ -523,7 +524,7 @@ func _run() -> void:
 		var x4_previous_path: String = OS.get_environment("R12CXR_R6_X4_PREVIOUS_INPUT")
 		var x4_previous_sha: String = OS.get_environment("R12CXR_R6_X4_PREVIOUS_SHA256")
 		var x4_previous_bytes: PackedByteArray = FileAccess.get_file_as_bytes(x4_previous_path) if FileAccess.file_exists(x4_previous_path) else PackedByteArray()
-		var expected_x4_run_id: String = "R6-X6-REPRESENTABILITY-EVIDENCE-20261102-01" if mode == "x6-representability-evidence" else "R6-X6-REPRESENTABILITY-20261102-01" if x6_representability else "R6-X4-EVIDENCE-20261102-01" if x4_evidence_only else "R6-X4-20261102-01"
+		var expected_x4_run_id: String = "R6-Y1-COMPLETE-SUPPORT-20261102-01" if y1_complete_support else "R6-X6-REPRESENTABILITY-EVIDENCE-20261102-01" if mode == "x6-representability-evidence" else "R6-X6-REPRESENTABILITY-20261102-01" if x6_representability else "R6-X4-EVIDENCE-20261102-01" if x4_evidence_only else "R6-X4-20261102-01"
 		if x4_source_sha.length() != 40 or not x4_source_sha.is_valid_hex_number() or x4_attempt_id != expected_x4_run_id or x4_previous_sha != "f7fd6ba64df9fb2b515930c245b2c59c50a24e7fa77fcc835bd83d38ce8b2661" or Core.sha256(x4_previous_bytes) != x4_previous_sha:
 			_fail("r6_x4_previous_x3_result_identity_invalid", {"source_sha": x4_source_sha, "attempt_id": x4_attempt_id, "previous_sha256": Core.sha256(x4_previous_bytes), "expected_previous_sha256": x4_previous_sha})
 			return
@@ -590,6 +591,64 @@ func _run() -> void:
 		var x4_base_repeat_sha: String = _support_synthesis_fingerprint(x4_base_synthesis_repeat)
 		if not bool(x4_base_synthesis.get("valid", false)) or not bool(x4_base_synthesis_repeat.get("valid", false)) or x4_base_sha != String(x4_previous.get("continuation", {}).get("expected_support_set_sha256", "")) or x4_base_sha != x4_base_repeat_sha:
 			_fail("r6_x4_x3_base_support_repeat_mismatch", {"valid": x4_base_synthesis.get("valid", false), "repeat_valid": x4_base_synthesis_repeat.get("valid", false), "support_sha256": x4_base_sha, "repeat_sha256": x4_base_repeat_sha, "expected_sha256": x4_previous.get("continuation", {}).get("expected_support_set_sha256", "")})
+			return
+		if y1_complete_support:
+			var y_boundary_cycle: Dictionary = x4_realizer.call("_r4_boundary_cycle_set", x4_boundary)
+			var y_cycle_rows: Array = y_boundary_cycle.get("cycles", [])
+			if not bool(y_boundary_cycle.get("valid", false)) or y_cycle_rows.size() != 1:
+				_fail("r6_y1_single_boundary_cycle_preflight_failed", y_boundary_cycle)
+				return
+			var y_boundary_ids: Array[String] = []
+			for root_id_value in y_cycle_rows[0].get("root_ids", []): y_boundary_ids.append(String(root_id_value))
+			var y_pairs: Array = []
+			var y_pair_seen: Dictionary = {}
+			for pair_value in x4_obligations.get("target_pairs", []):
+				var pair: Array = [String(pair_value[0]), String(pair_value[1])]
+				pair.sort()
+				var key: String = "|".join(pair)
+				if not y_pair_seen.has(key): y_pair_seen[key] = true; y_pairs.append(pair)
+			for first_index in range(y_boundary_ids.size()):
+				for second_index in range(first_index + 1, y_boundary_ids.size()):
+					var pair: Array = [y_boundary_ids[first_index], y_boundary_ids[second_index]]
+					pair.sort()
+					var key: String = "|".join(pair)
+					if not y_pair_seen.has(key): y_pair_seen[key] = true; y_pairs.append(pair)
+			if y_pairs.size() != y_boundary_ids.size() * (y_boundary_ids.size() - 1) / 2:
+				_fail("r6_y1_boundary_pair_domain_incomplete", {"boundary_ids": y_boundary_ids, "pair_count": y_pairs.size(), "zero_obligations": x4_obligations.get("target_pairs", [])})
+				return
+			var y_stream_path: String = output_path + ".support-domain.jsonl"
+			var y_synthesis: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), y_pairs, true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, false, true, y_stream_path)
+			var y_synthesis_sha: String = _support_synthesis_fingerprint(y_synthesis)
+			var y_support_domain_complete: bool = bool(y_synthesis.get("finite_candidate_enumeration_complete", false)) and bool(y_synthesis.get("continuous_region_resolution_complete", false)) and bool(y_synthesis.get("valid", false))
+			if not y_support_domain_complete:
+				var y_partial_reason: String = String(y_synthesis.get("cap_reason", ""))
+				if y_partial_reason.is_empty(): y_partial_reason = "CONTINUOUS_REGIONS_WITHOUT_VALID_WITNESS_OR_ANALYTIC_CUTOFF_PROOF"
+				var y_partial: Dictionary = {"schema": "P3.1.R12CXR.R6.Y1Result.v1", "campaign_id": "P3.1.R12CXR.R6Y.COMPLETE_SUPPORT_DOMAIN", "status": "R6_Y1_SUPPORT_DOMAIN_PARTIAL_LIMIT" if not String(y_synthesis.get("cap_reason", "")).is_empty() else "R6_Y1_CONTINUOUS_REGION_FEASIBILITY_UNKNOWN", "terminal_reason": y_partial_reason, "source_sha": x4_source_sha, "parent_sha": OS.get_environment("R12CXR_PARENT_SHA"), "attempt_id": x4_attempt_id, "target_attempt_consumed": true, "target_attempt_phase": "R6-Y1-COMPLETE-SUPPORT-DOMAIN", "prior_x3_result_sha256": x4_previous_sha, "prior_x3_attempt_id": x4_previous.get("attempt_id", ""), "selected_cavity_face_ids": x4_selected_ids, "selected_cavity_boundary_signature": x4_boundary.get("signature", ""), "zero_option_boundary_obligations": x4_obligations, "boundary_pair_domain": y_pairs, "support_synthesis": y_synthesis, "support_synthesis_fingerprint_sha256": y_synthesis_sha, "support_domain_complete": false, "continuous_region_resolution": "PARTIAL_LIMIT_OR_UNKNOWN; region-by-region analytic bounds and witness outcomes are retained; no sampling-based infeasibility claim", "attempt_accounting": {"previous_valid_attempts_consumed": 6, "r6_y1_attempts_consumed": 1, "cumulative_valid_scientific_target_attempts": 7, "attempt_id": x4_attempt_id}}
+				_write_result(output_path, y_partial, "R12CXR_R6_Y1_SUPPORT_DOMAIN_PARTIAL_LIMIT")
+				quit(0)
+				return
+			var y_repeat_stream_path: String = output_path + ".support-domain.repeat.jsonl"
+			var y_synthesis_repeat: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), y_pairs, true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, false, true, y_repeat_stream_path)
+			var y_repeat_sha: String = _support_synthesis_fingerprint(y_synthesis_repeat)
+			if not bool(y_synthesis_repeat.get("finite_candidate_enumeration_complete", false)) or not bool(y_synthesis_repeat.get("continuous_region_resolution_complete", false)) or y_synthesis_sha != y_repeat_sha:
+				var y_repeat_partial: Dictionary = {"schema": "P3.1.R12CXR.R6.Y1Result.v1", "campaign_id": "P3.1.R12CXR.R6Y.COMPLETE_SUPPORT_DOMAIN", "status": "R6_Y1_SUPPORT_REPEAT_PARTIAL_LIMIT", "terminal_reason": "complete support synthesis repeat did not finish identically", "source_sha": x4_source_sha, "attempt_id": x4_attempt_id, "target_attempt_consumed": true, "selected_cavity_face_ids": x4_selected_ids, "zero_option_boundary_obligations": x4_obligations, "boundary_pair_domain": y_pairs, "first_support_synthesis": y_synthesis, "repeat_support_synthesis": y_synthesis_repeat, "first_fingerprint_sha256": y_synthesis_sha, "repeat_fingerprint_sha256": y_repeat_sha, "support_domain_complete": false, "attempt_accounting": {"previous_valid_attempts_consumed": 6, "r6_y1_attempts_consumed": 1, "cumulative_valid_scientific_target_attempts": 7, "attempt_id": x4_attempt_id}}
+				_write_result(output_path, y_repeat_partial, "R12CXR_R6_Y1_SUPPORT_REPEAT_PARTIAL_LIMIT")
+				quit(0)
+				return
+			var y_metadata: Dictionary = {"domain_extension": "R6-Y1", "complete_support_domain": true, "resume_completed_extension": true, "expected_support_count": y_synthesis.get("supports", []).size(), "expected_support_set_sha256": y_synthesis_sha, "completed_extension_summary": {"support_domain_complete": true, "deterministic_repeat_pass": true, "support_set_sha256": y_synthesis_sha}, "original_target_source_sha": String(x4_previous.get("source_sha", "")), "original_target_result_sha256": x4_previous_sha, "original_target_attempt_consumed": true, "additional_target_attempts_consumed": 1, "reason": "enumerate every deterministic arrangement-critical support candidate for every boundary root pair of the complete seven-face cavity, prioritizing the three solver zero-option obligations; use multicoordinate same-tetra binary32 enumeration and preserve every frozen gate", "zero_option_target_pairs": x4_obligations.get("target_pairs", []), "all_boundary_pairs": y_pairs, "support_domain_fingerprint_sha256": y_synthesis_sha}
+			var y_result: Dictionary = _run_constraint_synthesis(x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, x4_patch, x4_selected_ids, seed_triangles, x4_boundary, triangles, x4_search_fixture, base, snapshot, support_fixture, residual_fixture.get("residuals", []), output_path, x4_previous.get("cavity_search", {}), y_synthesis, y_metadata, x4_previous, realizer, y_synthesis_repeat)
+			if y_result.is_empty() or _terminal_failure_requested: return
+			y_result["r6_y1_complete_support_domain"] = {"started": true, "prior_x3_result_sha256": x4_previous_sha, "selected_cavity_face_ids": x4_selected_ids, "selected_cavity_boundary_signature": x4_boundary.get("signature", ""), "zero_option_boundary_obligations": x4_obligations, "all_boundary_pairs": y_pairs, "first_support_synthesis_sha256": y_synthesis_sha, "repeat_support_synthesis_sha256": y_repeat_sha, "support_domain_complete": true, "deterministic_repeat_pass": true, "attempt_domain_changed": true, "attempt_target_consumed": true}
+			y_result["attempt_accounting"] = {"previous_valid_attempts_consumed": 6, "r6_y1_attempts_consumed": 1, "cumulative_valid_scientific_target_attempts": 7, "attempt_id": x4_attempt_id}
+			var y_result_bytes: PackedByteArray = JSON.stringify(y_result, "\t", false).to_utf8_buffer()
+			var y_result_file: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
+			if y_result_file == null:
+				_fail("r6_y1_result_final_write_failed", {"error": FileAccess.get_open_error()})
+				return
+			y_result_file.store_buffer(y_result_bytes)
+			y_result_file.close()
+			print("R12CXR_R6_Y1_COMPLETE_SUPPORT_DOMAIN " + JSON.stringify({"attempt_id": x4_attempt_id, "status": y_result.get("status", ""), "terminal_reason": y_result.get("terminal_reason", ""), "support_count": y_synthesis.get("supports", []).size(), "support_domain_complete": y_synthesis.get("finite_candidate_enumeration_complete", false), "result_sha256": Core.sha256(y_result_bytes), "target_attempt_consumed": true}))
+			quit(0)
 			return
 		var x4_targeted: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), x4_obligations.get("target_pairs", []), true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, directed_axis_bracket)
 		var x4_targeted_repeat: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), x4_obligations.get("target_pairs", []), true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, directed_axis_bracket)
@@ -799,6 +858,7 @@ func _run() -> void:
 	return
 
 func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, base_context: Dictionary, patch: Array[Dictionary], patch_ids: Array, seed_triangles: Array[Dictionary], boundary: Dictionary, original_triangles: Array[Dictionary], residual_fixture: Dictionary, base: Dictionary, snapshot: Dictionary, support_fixture: Dictionary, residual_triangles: Array, output_path: String, cavity_search: Dictionary, synthesis_override: Dictionary = {}, continuation_metadata: Dictionary = {}, previous_result: Dictionary = {}, inventory_realizer: RefCounted = null, synthesis_repeat_override: Dictionary = {}) -> Dictionary:
+	var complete_y_domain: bool = bool(continuation_metadata.get("complete_support_domain", false)) and String(continuation_metadata.get("domain_extension", "")) == "R6-Y1"
 	var cavity_id: String = String(support_fixture.get("cavity_id", ""))
 	if cavity_id.is_empty():
 		_fail("r6_cavity_identity_missing", {})
@@ -906,11 +966,11 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	var vertex_ids: Array = context.get("vertex_ids", []).duplicate()
 	vertex_ids.sort()
 	var maximum_triangles: int = int(realizer.call("_cxr_limits").get("max_candidate_triangles_per_cavity", 0))
-	var graph_candidate_cap: int = maximum_triangles
 	var possible_triangle_count: int = int(vertex_ids.size() * maxi(0, vertex_ids.size() - 1) * maxi(0, vertex_ids.size() - 2) / 6)
+	var graph_candidate_cap: int = possible_triangle_count if complete_y_domain else maximum_triangles
 	result["graph_gate"]["possible_triplets"] = possible_triangle_count
 	result["graph_gate"]["legal_candidate_triangle_cap"] = graph_candidate_cap
-	result["graph_gate"]["triplet_scan_domain"] = "COMPLETE_LEXICOGRAPHIC_VERTEX_TRIPLETS_SUBJECT_TO_PREREGISTERED_CANDIDATE_CAP"
+	result["graph_gate"]["triplet_scan_domain"] = "COMPLETE_LEXICOGRAPHIC_VERTEX_TRIPLETS_WITH_EXECUTION_RESOURCE_FRONTIER" if complete_y_domain else "COMPLETE_LEXICOGRAPHIC_VERTEX_TRIPLETS_SUBJECT_TO_PREREGISTERED_CANDIDATE_CAP"
 	if graph_candidate_cap <= 0:
 		result["graph_gate"]["complete"] = false
 		result["graph_gate"]["reason"] = "PREREGISTERED_R2_CANDIDATE_TRIANGLE_CAP_INVALID"
@@ -923,6 +983,11 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	var graph_limited: bool = false
 	var graph_limit_reason: String = ""
 	var graph_started_usec: int = Time.get_ticks_usec()
+	var graph_budget_seconds: int = maxi(1, OS.get_environment("R12CXR_R6_GRAPH_BUDGET_SECONDS").to_int()) if complete_y_domain else 0
+	var graph_budget_usec: int = graph_budget_seconds * 1000000
+	var graph_memory_setting: String = OS.get_environment("R12CXR_R6_MEMORY_BUDGET_BYTES")
+	var graph_memory_budget: int = (2147483648 if graph_memory_setting.is_empty() else maxi(268435456, graph_memory_setting.to_int())) if complete_y_domain else 0
+	if complete_y_domain: realizer.set("_cxr_full_finite_graph_mode", true)
 	realizer.set("_cxr_candidate_triangles_total", 0)
 	realizer.set("_cxr_candidate_triangles_cavity", 0)
 	realizer.set("_cxr_search_nodes_total", 0)
@@ -932,6 +997,14 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	for first_index in range(vertex_ids.size()):
 		for second_index in range(first_index + 1, vertex_ids.size()):
 			for third_index in range(second_index + 1, vertex_ids.size()):
+				if complete_y_domain and Time.get_ticks_usec() - graph_started_usec >= graph_budget_usec:
+					graph_limited = true
+					graph_limit_reason = "PARTIAL_LIMIT_COMPLETE_FINITE_GRAPH_TIME"
+					break
+				if complete_y_domain and Performance.get_monitor(Performance.MEMORY_STATIC) >= graph_memory_budget:
+					graph_limited = true
+					graph_limit_reason = "PARTIAL_LIMIT_COMPLETE_FINITE_GRAPH_MEMORY"
+					break
 				var ids: Array = [String(vertex_ids[first_index]), String(vertex_ids[second_index]), String(vertex_ids[third_index])]
 				var triangle_result: Dictionary = realizer.call("_r2_get_candidate_triangle", ids, context)
 				var row_key: String = "|".join(ids)
@@ -984,12 +1057,13 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	var observed_support_set_sha: String = _support_synthesis_fingerprint(synthesis)
 	var observed_candidate_graph_sha: String = String(graph_summary.get("candidate_graph_sha256", ""))
 	var observed_graph_audit_sha: String = String(result.graph_gate.get("audit_sha256", ""))
+	var y1_extension: bool = String(continuation_metadata.get("domain_extension", "")) == "R6-Y1"
 	var x1_extension: bool = String(continuation_metadata.get("domain_extension", "")) == "R6-X1"
 	var x2_extension: bool = String(continuation_metadata.get("domain_extension", "")) == "R6-X2"
 	var x3_extension: bool = String(continuation_metadata.get("domain_extension", "")) == "R6-X3"
 	var x4_extension: bool = String(continuation_metadata.get("domain_extension", "")) == "R6-X4"
 	var x6_extension: bool = String(continuation_metadata.get("domain_extension", "")) == "R6-X6"
-	var alternative_graph_extension: bool = x3_extension or x4_extension or x6_extension
+	var alternative_graph_extension: bool = x3_extension or x4_extension or x6_extension or y1_extension
 	var support_extension: bool = x1_extension or x2_extension
 	var resume_completed_extension: bool = bool(continuation_metadata.get("resume_completed_extension", false))
 	var expected_support_count: int = int(continuation_metadata.get("expected_support_count", 23)) if resume_completed_extension else 23
@@ -997,7 +1071,7 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	var expected_triangle_count: int = int(continuation_metadata.get("expected_candidate_triangle_count", FrozenCandidateTriangleCount)) if resume_completed_extension else FrozenCandidateTriangleCount
 	var expected_graph_sha: String = String(continuation_metadata.get("expected_candidate_graph_sha256", FrozenCandidateGraphSha)) if resume_completed_extension else FrozenCandidateGraphSha
 	var expected_graph_audit_sha: String = String(continuation_metadata.get("expected_candidate_graph_audit_sha256", FrozenCandidateGraphAuditSha)) if resume_completed_extension else FrozenCandidateGraphAuditSha
-	var identity_scope: String = "R6_X3_CAVITY_GRAPH" if x3_extension else "R6_X4_JOINT_SUPPORT_GRAPH" if x4_extension else "R6_X6_REPRESENTABILITY_GRAPH" if x6_extension else "RESUMED_COMPLETED_EXTENSION" if resume_completed_extension else "FROZEN_R6_GRAPH"
+	var identity_scope: String = "R6_Y1_COMPLETE_SUPPORT_GRAPH" if y1_extension else "R6_X3_CAVITY_GRAPH" if x3_extension else "R6_X4_JOINT_SUPPORT_GRAPH" if x4_extension else "R6_X6_REPRESENTABILITY_GRAPH" if x6_extension else "RESUMED_COMPLETED_EXTENSION" if resume_completed_extension else "FROZEN_R6_GRAPH"
 	var frozen_identity_check: Dictionary = {"expected_support_count": expected_support_count, "observed_support_count": support_rows.size(), "expected_support_set_sha256": expected_support_sha, "observed_support_set_sha256": observed_support_set_sha, "expected_candidate_triangle_count": expected_triangle_count if not alternative_graph_extension else "GENERATED_IN_COMPLETE_GRAPH_AUDIT", "observed_candidate_triangle_count": candidate_triangles.size(), "expected_candidate_graph_sha256": expected_graph_sha if not alternative_graph_extension else "GENERATED_IN_COMPLETE_GRAPH_AUDIT", "observed_candidate_graph_sha256": observed_candidate_graph_sha, "expected_candidate_graph_audit_sha256": expected_graph_audit_sha if not alternative_graph_extension else "GENERATED_IN_COMPLETE_GRAPH_AUDIT", "observed_candidate_graph_audit_sha256": observed_graph_audit_sha, "identity_scope": identity_scope}
 	var frozen_identity_matches: bool = false
 	if alternative_graph_extension:
@@ -1006,7 +1080,7 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		frozen_identity_matches = support_rows.size() == expected_support_count and observed_support_set_sha == expected_support_sha and candidate_triangles.size() == expected_triangle_count and observed_candidate_graph_sha == expected_graph_sha and observed_graph_audit_sha == expected_graph_audit_sha
 	result["frozen_graph_identity_check"] = frozen_identity_check
 	if not graph_complete or not frozen_identity_matches:
-		result["status"] = ("R6_X3_GRAPH_PARTIAL" if x3_extension else "R6_X4_GRAPH_PARTIAL" if x4_extension else "R6_X6_GRAPH_PARTIAL" if x6_extension else "R6_FROZEN_GRAPH_PARTIAL") if not graph_complete else ("R6_X3_GRAPH_IDENTITY_INVALID" if x3_extension else "R6_X4_GRAPH_IDENTITY_INVALID" if x4_extension else "R6_X6_GRAPH_IDENTITY_INVALID" if x6_extension else "R6_FROZEN_GRAPH_IDENTITY_MISMATCH")
+		result["status"] = ("R6_Y1_GRAPH_PARTIAL_LIMIT" if y1_extension else "R6_X3_GRAPH_PARTIAL" if x3_extension else "R6_X4_GRAPH_PARTIAL" if x4_extension else "R6_X6_GRAPH_PARTIAL" if x6_extension else "R6_FROZEN_GRAPH_PARTIAL") if not graph_complete else ("R6_Y1_GRAPH_IDENTITY_INVALID" if y1_extension else "R6_X3_GRAPH_IDENTITY_INVALID" if x3_extension else "R6_X4_GRAPH_IDENTITY_INVALID" if x4_extension else "R6_X6_GRAPH_IDENTITY_INVALID" if x6_extension else "R6_FROZEN_GRAPH_IDENTITY_MISMATCH")
 		result["terminal_reason"] = "candidate graph scan incomplete before solver" if not graph_complete else "candidate graph or support identity did not match the selected extension scope"
 		result["d3"] = {"started": false, "reason": "NOT_RUN_FROZEN_GRAPH_GATE_FAILED"}
 		_write_result(output_path, result, "R12CXR_R6_SUPPORT_SYNTHESIS_RESULT")
@@ -1154,7 +1228,7 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		frozen_identity_check["baseline_triangle_rows_match_pre_extension"] = baseline_rows_match
 		result["frozen_graph_identity_check"] = frozen_identity_check
 	var frozen_solver: RefCounted = R6FrozenSolver.new()
-	var frozen_solver_limits: Dictionary = {"candidate_graph_sha256": observed_candidate_graph_sha, "support_set_sha256": observed_support_set_sha, "expected_candidate_triangles": candidate_triangles.size(), "max_search_states_per_cavity": 16384, "max_search_usec_per_cavity": 10000000, "max_patch_triangles": 64}
+	var frozen_solver_limits: Dictionary = {"candidate_graph_sha256": observed_candidate_graph_sha, "support_set_sha256": observed_support_set_sha, "expected_candidate_triangles": candidate_triangles.size(), "max_search_states_per_cavity": 1000000 if y1_extension else 16384, "max_search_usec_per_cavity": 300000000 if y1_extension else 10000000, "max_patch_triangles": 64}
 	var solver_mode: String = OS.get_environment("R12CXR_R6_SOLVER_MODE")
 	var d3: Dictionary
 	if solver_mode == "legacy-f0":
@@ -1177,6 +1251,12 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		elif solver_mode == "legacy-f0":
 			result["status"] = "R6_F0_REPRODUCTION_PARTIAL"
 			result["terminal_reason"] = "legacy bounded solver did not complete its 0..4 support search"
+		elif y1_extension and triangulation_complete and bool(synthesis.get("finite_candidate_enumeration_complete", false)):
+			result["status"] = "R6_Y1_COMPLETE_SUPPORT_GRAPH_UNSAT_COMPLETE"
+			result["terminal_reason"] = "the complete deterministic critical-support domain for every selected-cavity boundary pair and its complete finite triangle graph were UNSAT; continuous regions without representable witnesses remain unresolved unless their analytic bounds prove infeasibility"
+		elif y1_extension:
+			result["status"] = "R6_Y1_COMPUTATION_PARTIAL_LIMIT"
+			result["terminal_reason"] = "support, graph, or solver execution reached a declared resource limit; preserved frontier is not infeasibility evidence"
 		elif x3_extension and triangulation_complete and bool(x1_support_completion.get("support_domain_complete", false)):
 			result["status"] = "R6_X3_FROZEN_GRAPH_UNSAT_COMPLETE"
 			result["terminal_reason"] = "R6-X3 alternative cavity completed its support, graph, and triangulation audits and the selected finite graph is UNSAT; this is bounded to the selected alternative cavity and does not imply continuum or global impossibility"
