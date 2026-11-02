@@ -263,6 +263,10 @@ func _test_r6_unbounded_frozen_graph_solver() -> void:
 	unsat_limits.expected_candidate_triangles = incomplete.size()
 	var unsat: Dictionary = solver.call("solve", context, incomplete, null, unsat_limits, validator)
 	_expect(String(unsat.get("status", "")) == "UNSAT_COMPLETE" and bool(unsat.get("search_exhaustive", false)), "R6-F distinguishes a fully explored synthetic finite-graph UNSAT")
+	var disconnected_context: Dictionary = context.duplicate(true)
+	disconnected_context["global_arc_map"] = [{"arc_id": "unreachable", "root_ids": ["B0", "X16"]}]
+	var topology_unsat: Dictionary = solver.call("solve", disconnected_context, graph, null, limits, validator)
+	_expect(String(topology_unsat.get("status", "")) == "UNSAT_COMPLETE" and int(topology_unsat.get("prune_histogram", {}).get("topology_path_unreachable_in_frozen_candidate_graph", 0)) == 1, "R6-F prunes a topology path disconnected in the entire candidate graph")
 	var bounded_limits: Dictionary = limits.duplicate(true)
 	bounded_limits.max_search_states_per_cavity = 1
 	var partial: Dictionary = solver.call("solve", context, graph, null, bounded_limits, validator)

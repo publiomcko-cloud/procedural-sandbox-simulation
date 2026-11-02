@@ -14,6 +14,7 @@ var _vertex_positions: Dictionary
 var _boundary_edge_map: Dictionary
 var _topology_obligations: Array
 var _topology_adjacency: Dictionary
+var _topology_path_audit: Dictionary
 var _base_mesh: Array[Dictionary]
 var _base_compatibility: Dictionary
 var _pair_compatibility: Dictionary
@@ -40,6 +41,7 @@ func solve(context: Dictionary, candidate_triangles: Array[Dictionary], realizer
 	_topology_obligations = context.get("global_arc_map", [])
 	_base_mesh = _build_unmodified_mesh(context)
 	_topology_adjacency = _build_topology_adjacency(candidate_triangles, _base_mesh)
+	_topology_path_audit = {}
 	_base_compatibility = {}
 	_pair_compatibility = {}
 	_visited = {}
@@ -155,14 +157,19 @@ func _build_topology_adjacency(candidates: Array[Dictionary], base_mesh: Array[D
 	return adjacency
 
 func _topology_paths_remain_possible() -> Dictionary:
+	if not _topology_path_audit.is_empty(): return _topology_path_audit
+	var path_rows: Array[Dictionary] = []
 	for arc_value in _topology_obligations:
 		if typeof(arc_value) != TYPE_DICTIONARY: continue
 		var arc: Dictionary = arc_value
 		var ids: Array = arc.get("root_ids", [])
 		if ids.size() != 2: continue
 		if not _topology_nodes_connected(String(ids[0]), String(ids[1])):
-			return {"valid": false, "arc_id": String(arc.get("arc_id", "")), "root_ids": ids.duplicate()}
-	return {"valid": true}
+			_topology_path_audit = {"valid": false, "arc_id": String(arc.get("arc_id", "")), "root_ids": ids.duplicate(), "paths": path_rows}
+			return _topology_path_audit
+		path_rows.append({"arc_id": String(arc.get("arc_id", "")), "root_ids": ids.duplicate(), "candidate_graph_path_reachable": true, "candidate_graph_path_model": "undirected_connectivity_over_frozen_candidate_and_unmodified_mesh_edges; final_ordered_path_and_no_merge_checked_by_frozen_validator"})
+	_topology_path_audit = {"valid": true, "paths": path_rows}
+	return _topology_path_audit
 
 func _topology_nodes_connected(start_id: String, target_id: String) -> bool:
 	if start_id == target_id: return false
@@ -465,14 +472,7 @@ func _internal_candidate_counts() -> Dictionary:
 	return result
 
 func _topology_path_candidate_counts() -> Variant:
-	var result: Array[Dictionary] = []
-	for arc_value in _topology_obligations:
-		if typeof(arc_value) != TYPE_DICTIONARY: continue
-		var arc: Dictionary = arc_value
-		var ids: Array = arc.get("root_ids", [])
-		if ids.size() != 2: continue
-		result.append({"arc_id": String(arc.get("arc_id", "")), "root_ids": ids.duplicate(), "candidate_graph_path_reachable": _topology_nodes_connected(String(ids[0]), String(ids[1])), "candidate_graph_path_model": "undirected_connectivity_over_frozen_candidate_and_unmodified_mesh_edges; final_ordered_path_and_no_merge_checked_by_frozen_validator"})
-	return result
+	return _topology_paths_remain_possible().get("paths", [])
 
 func _obligation_less(a: Dictionary, b: Dictionary) -> bool:
 	var a_count: int = a.candidate_options.size(); var b_count: int = b.candidate_options.size()
