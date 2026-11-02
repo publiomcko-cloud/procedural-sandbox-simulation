@@ -1845,6 +1845,7 @@ func _load_y1_resume_state(result_path: String, expected_result_sha256: String, 
 				var cell: Array = record.get("source_cell_global_lattice", [])
 				var projected: Array = record.get("projected_position", [])
 				if not frontier.is_empty() and pair.size() == 2 and cell.size() == 3 and projected.size() == 2:
+					frontier["arrangement_region_id"] = region_id
 					frontier["boundary_pair"] = record.get("boundary_pair", [])
 					frontier["source_cell_global_lattice"] = record.get("source_cell_global_lattice", [])
 					frontier["source_tetrahedron"] = record.get("source_tetrahedron", -1)
@@ -1909,7 +1910,15 @@ func _run_y1_resume_check() -> void:
 	var source_result: Dictionary = result_value
 	var resumed: Dictionary = _load_y1_resume_state(result_path, OS.get_environment("R12CXR_R6_Y1_RESUME_SHA256"), OS.get_environment("R12CXR_R6_Y1_RESUME_STREAM_SHA256"), OS.get_environment("R12CXR_R6_ATTEMPT_ID"), source_result.get("boundary_pair_domain", []))
 	var valid: bool = bool(resumed.get("valid", false)) and int(resumed.get("metadata", {}).get("resumed_region_count", 0)) > 0 and int(resumed.get("metadata", {}).get("resumed_support_count", 0)) > 0
-	print("R6_Y1_RESUME_CHECK=" + ("PASS" if valid else "FAIL") + " " + JSON.stringify(resumed.get("metadata", resumed)))
+	var resume_report: Dictionary = resumed.get("metadata", resumed).duplicate(true)
+	var diagnostic_region: String = OS.get_environment("R12CXR_R6_Y1_DIAGNOSTIC_REGION")
+	if bool(resumed.get("valid", false)) and not diagnostic_region.is_empty():
+		var diagnostic_frontiers: Array = []
+		for frontier_value in resumed.get("numeric_frontiers", {}).values():
+			if String(frontier_value.get("arrangement_region_id", "")) == diagnostic_region:
+				diagnostic_frontiers.append(frontier_value)
+		resume_report["diagnostic_region_frontiers"] = diagnostic_frontiers
+	print("R6_Y1_RESUME_CHECK=" + ("PASS" if valid else "FAIL") + " " + JSON.stringify(resume_report))
 	quit(0 if valid else 1)
 
 func _r6_parse_vector3(value: Variant) -> Dictionary:

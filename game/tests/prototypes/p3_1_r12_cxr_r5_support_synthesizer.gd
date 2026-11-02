@@ -259,11 +259,14 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 						var candidate_region_id: String = String(witness_record.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED"))
 						var candidate_region_polygon: Array[Vector2] = []
 						for projected_vertex in projected_region_polygons.get(candidate_region_id, []): candidate_region_polygon.append(Vector2(projected_vertex))
+						var resume_key: String = _numeric_resume_key(candidate_region_id, id_a, id_b, tet_data.global_cell, tet_index, facet_index, String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), witness)
 						var complete_numeric_gate: Callable = Callable()
-						var resolve_region_numerically: bool = complete_support_domain and not region_numeric_search_attempted.has(complete_region_key) and not witnessed_region_ids.has(complete_region_key) and not resumed_region_ids.has(complete_region_key)
+						# Numeric search frontiers are candidate-specific. A region-wide guard
+						# caused later seeds with persisted frontiers to be silently skipped
+						# after the first seed was processed in a segment.
+						var resolve_region_numerically: bool = complete_support_domain and not region_numeric_search_attempted.has(resume_key) and not witnessed_region_ids.has(complete_region_key) and not resumed_region_ids.has(complete_region_key)
 						if resolve_region_numerically:
 							complete_numeric_gate = Callable(self, "_complete_binary32_candidate_gate").bind(realizer, context, id_a, id_b, candidate_region_polygon, cutoff, polygon, vertex_positions, source_origins, max_support_distance)
-						var resume_key: String = _numeric_resume_key(candidate_region_id, id_a, id_b, tet_data.global_cell, tet_index, facet_index, String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), witness)
 						var resume_frontier: Dictionary = resume_numeric_frontiers.get(resume_key, {}) if resolve_region_numerically else {}
 						if not resume_frontier.is_empty() and not _resume_frontier_matches_candidate(resume_frontier, id_a, id_b, tet_data.global_cell, tet_index, facet_index, String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), witness):
 							cap_reason = "PARTIAL_LIMIT_RESUME_FRONTIER_IDENTITY_MISMATCH"
@@ -273,7 +276,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 						if enumerate_all_critical_vertices and witness_check.has("binary32_representability_correction"):
 							var correction_record: Dictionary = witness_check.binary32_representability_correction
 							if bool(correction_record.get("attempted", false)):
-								if complete_support_domain: region_numeric_search_attempted[complete_region_key] = true
+								if complete_support_domain: region_numeric_search_attempted[resume_key] = true
 								if bool(correction_record.get("accepted", false)): x2_representability_correction_count += 1
 								else: x2_representability_correction_failure_count += 1
 						if not bool(witness_check.get("valid", false)):
