@@ -45,6 +45,9 @@ func _run() -> void:
 	if mode == "writer-check":
 		_run_evidence_writer_check()
 		return
+	if mode == "y1-resume-check":
+		_run_y1_resume_check()
+		return
 	if mode.is_empty(): mode = "freeze"
 	if mode not in ["freeze", "boundary-audit", "cavity-audit", "x3-cavity-search", "x3-cavity-realize", "x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "y1-complete-support", "y1-graph-partial", "synthesize", "resume-r6-06", "resume-x2-graph"]:
 		_fail("r6_mode_invalid", {"mode": mode})
@@ -349,7 +352,7 @@ func _run() -> void:
 		resumed_result["r6_x2_support_completion"] = resumed_completion
 		resumed_result["r6_x2_graph_resume"] = {"started": true, "same_attempt_continuation": true, "original_target_source_sha": prior_result.get("source_sha", ""), "original_target_result_sha256": prior_sha, "continuation_source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "reused_support_set_sha256": resume_metadata.support_set_sha256, "stale_timer_diagnosis": "the baseline candidate-graph enumeration left the original per-cavity clock expired; the X2 extension graph scan inherited that clock and stopped on its first triplet", "geometry_domain_changed": false}
 		resumed_result["attempt_accounting"] = {"baseline_r6_06_attempts_consumed": 1, "r6_x1_attempts_consumed": 1, "r6_x2_attempts_consumed": 1, "cumulative_valid_scientific_target_attempts": 3, "unconsumed_tooling_failures_preserved": 3, "attempt_id": String(prior_result.get("attempt_id", "")), "continuation_additional_attempts_consumed": 0}
-		var resumed_bytes: PackedByteArray = JSON.stringify(resumed_result, "\t", false).to_utf8_buffer()
+		var resumed_bytes: PackedByteArray = _json_evidence_bytes(resumed_result)
 		var resumed_file: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
 		if resumed_file == null:
 			_fail("r6_x2_graph_resume_final_write_failed", {"path": output_path, "error": FileAccess.get_open_error()})
@@ -367,7 +370,7 @@ func _run() -> void:
 	if not bool(fixture_result.get("valid", false)):
 		_fail("r6_frozen_cavity_fixture_build_failed", fixture_result)
 		return
-	var fixture_bytes: PackedByteArray = JSON.stringify(fixture_result.get("fixture", {}), "\t", false).to_utf8_buffer()
+	var fixture_bytes: PackedByteArray = _json_evidence_bytes(fixture_result.get("fixture", {}))
 	var pinned_cavity_bytes: PackedByteArray = FileAccess.get_file_as_bytes("res://tests/prototypes/fixtures/r12_cxr_r5/frozen-cavity.json")
 	if Core.sha256(pinned_cavity_bytes) != R5CavitySha or pinned_cavity_bytes != fixture_bytes:
 		_fail("r6_frozen_cavity_geometry_reconstruction_mismatch", {"observed_sha256": Core.sha256(pinned_cavity_bytes), "expected_sha256": R5CavitySha, "reconstructed_sha256": Core.sha256(fixture_bytes), "exact_bytes_match": pinned_cavity_bytes == fixture_bytes})
@@ -504,7 +507,7 @@ func _run() -> void:
 		if x3_result.is_empty() or _terminal_failure_requested: return
 		x3_result["r6_x3_alternative_cavity"] = {"started": true, "attempt_id": attempt_id, "search_source_sha": x3_diagnostic.get("source_sha", ""), "search_result_sha256": x3_search_sha, "search_status": x3_diagnostic.get("status", ""), "search_terminal_reason": x3_diagnostic.get("terminal_reason", ""), "search_finite_domain_exhausted": x3_search.get("finite_domain_exhausted", false), "search_examined_states": x3_search.get("examined_states", -1), "search_generated_states": x3_search.get("generated_states", -1), "search_queue_depth": x3_search.get("queue_depth", -1), "search_limits": x3_diagnostic.get("limits", {}), "selected_face_ids": selected_ids.duplicate(), "selected_face_count": selected_ids.size(), "selected_cavity_boundary_signature": x3_boundary.get("signature", ""), "selected_cavity_audit": selected_audit, "support_pool_exact_match": pool_match.get("valid", false), "attempt_domain_changed": true, "attempt_target_consumed": true}
 		x3_result["attempt_accounting"] = {"baseline_r6_06_attempts_consumed": 1, "r6_x1_attempts_consumed": 1, "r6_x2_attempts_consumed": 1, "r6_x3_attempts_consumed": 1, "cumulative_valid_scientific_target_attempts": 4, "unconsumed_tooling_failures_preserved": 3, "attempt_id": attempt_id}
-		var x3_result_bytes: PackedByteArray = JSON.stringify(x3_result, "\t", false).to_utf8_buffer()
+		var x3_result_bytes: PackedByteArray = _json_evidence_bytes(x3_result)
 		var x3_result_file: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
 		if x3_result_file == null:
 			_fail("r6_x3_result_final_write_failed", {"error": FileAccess.get_open_error()})
@@ -655,9 +658,18 @@ func _run() -> void:
 				_write_result(output_path, partial_graph_wrapper, "R12CXR_R6_Y1_PARTIAL_SUPPORT_GRAPH")
 				quit(0)
 				return
+			var y_resume: Dictionary = {"valid": true, "region_states": {}, "supports": [], "metadata": {"resumed_region_count": 0, "resumed_support_count": 0, "source_result_sha256": "", "source_stream_sha256": ""}}
+			var y_resume_input_path: String = OS.get_environment("R12CXR_R6_Y1_RESUME_INPUT")
+			if not y_resume_input_path.is_empty():
+				y_resume = _load_y1_resume_state(y_resume_input_path, OS.get_environment("R12CXR_R6_Y1_RESUME_SHA256"), OS.get_environment("R12CXR_R6_Y1_RESUME_STREAM_SHA256"), x4_attempt_id, y_pairs)
+				if not bool(y_resume.get("valid", false)):
+					_fail("r6_y1_resume_input_not_qualified", y_resume)
+					return
 			var y_stream_path: String = output_path + ".support-domain.jsonl"
-			var y_synthesis: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), y_pairs, true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, false, true, y_stream_path)
-			var y_support_merge: Dictionary = _merge_y1_support_domain_supports(y_synthesis, x4_previous_synthesis.get("supports", []), x4_realizer)
+			var y_synthesis: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), y_pairs, true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, false, true, y_stream_path, y_resume.get("region_states", {}))
+			var y_prior_supports: Array = x4_previous_synthesis.get("supports", []).duplicate(true)
+			for resume_support in y_resume.get("supports", []): y_prior_supports.append(resume_support)
+			var y_support_merge: Dictionary = _merge_y1_support_domain_supports(y_synthesis, y_prior_supports, x4_realizer)
 			if not bool(y_support_merge.get("valid", false)):
 				_fail("r6_y1_support_union_invalid", y_support_merge)
 				return
@@ -667,13 +679,13 @@ func _run() -> void:
 			if not y_support_domain_complete:
 				var y_partial_reason: String = String(y_synthesis.get("cap_reason", ""))
 				if y_partial_reason.is_empty(): y_partial_reason = "CONTINUOUS_REGIONS_WITHOUT_VALID_WITNESS_OR_ANALYTIC_CUTOFF_PROOF"
-				var y_partial: Dictionary = {"schema": "P3.1.R12CXR.R6.Y1Result.v1", "campaign_id": "P3.1.R12CXR.R6Y.COMPLETE_SUPPORT_DOMAIN", "status": "R6_Y1_SUPPORT_DOMAIN_PARTIAL_LIMIT" if not String(y_synthesis.get("cap_reason", "")).is_empty() else "R6_Y1_CONTINUOUS_REGION_FEASIBILITY_UNKNOWN", "terminal_reason": y_partial_reason, "source_sha": x4_source_sha, "parent_sha": OS.get_environment("R12CXR_PARENT_SHA"), "attempt_id": x4_attempt_id, "target_attempt_consumed": true, "target_attempt_phase": "R6-Y1-COMPLETE-SUPPORT-DOMAIN", "prior_x3_result_sha256": x4_previous_sha, "prior_x3_attempt_id": x4_previous.get("attempt_id", ""), "selected_cavity_face_ids": x4_selected_ids, "selected_cavity_boundary_signature": x4_boundary.get("signature", ""), "zero_option_boundary_obligations": x4_obligations, "boundary_pair_domain": y_pairs, "support_synthesis": y_synthesis, "support_synthesis_fingerprint_sha256": y_synthesis_sha, "support_domain_complete": false, "continuous_region_resolution": "PARTIAL_LIMIT_OR_UNKNOWN; region-by-region analytic bounds and witness outcomes are retained; no sampling-based infeasibility claim", "attempt_accounting": {"previous_valid_attempts_consumed": 6, "r6_y1_attempts_consumed": 1, "cumulative_valid_scientific_target_attempts": 7, "attempt_id": x4_attempt_id}}
+				var y_partial: Dictionary = {"schema": "P3.1.R12CXR.R6.Y1Result.v1", "campaign_id": "P3.1.R12CXR.R6Y.COMPLETE_SUPPORT_DOMAIN", "status": "R6_Y1_SUPPORT_DOMAIN_PARTIAL_LIMIT" if not String(y_synthesis.get("cap_reason", "")).is_empty() else "R6_Y1_CONTINUOUS_REGION_FEASIBILITY_UNKNOWN", "terminal_reason": y_partial_reason, "source_sha": x4_source_sha, "parent_sha": OS.get_environment("R12CXR_PARENT_SHA"), "attempt_id": x4_attempt_id, "target_attempt_consumed": true, "target_attempt_phase": "R6-Y1-COMPLETE-SUPPORT-DOMAIN", "prior_x3_result_sha256": x4_previous_sha, "prior_x3_attempt_id": x4_previous.get("attempt_id", ""), "selected_cavity_face_ids": x4_selected_ids, "selected_cavity_boundary_signature": x4_boundary.get("signature", ""), "zero_option_boundary_obligations": x4_obligations, "boundary_pair_domain": y_pairs, "resume_metadata": y_resume.get("metadata", {}), "support_synthesis": y_synthesis, "support_synthesis_fingerprint_sha256": y_synthesis_sha, "support_domain_complete": false, "continuous_region_resolution": "PARTIAL_LIMIT_OR_UNKNOWN; region-by-region analytic bounds and witness outcomes are retained; no sampling-based infeasibility claim", "attempt_accounting": {"previous_valid_attempts_consumed": 6, "r6_y1_attempts_consumed": 1, "cumulative_valid_scientific_target_attempts": 7, "attempt_id": x4_attempt_id}}
 				_write_result(output_path, y_partial, "R12CXR_R6_Y1_SUPPORT_DOMAIN_PARTIAL_LIMIT")
 				quit(0)
 				return
 			var y_repeat_stream_path: String = output_path + ".support-domain.repeat.jsonl"
-			var y_synthesis_repeat: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), y_pairs, true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, false, true, y_repeat_stream_path)
-			var y_repeat_support_merge: Dictionary = _merge_y1_support_domain_supports(y_synthesis_repeat, x4_previous_synthesis.get("supports", []), x4_realizer)
+			var y_synthesis_repeat: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), y_pairs, true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, false, true, y_repeat_stream_path, y_resume.get("region_states", {}))
+			var y_repeat_support_merge: Dictionary = _merge_y1_support_domain_supports(y_synthesis_repeat, y_prior_supports, x4_realizer)
 			if not bool(y_repeat_support_merge.get("valid", false)):
 				_fail("r6_y1_repeat_support_union_invalid", y_repeat_support_merge)
 				return
@@ -684,12 +696,12 @@ func _run() -> void:
 				_write_result(output_path, y_repeat_partial, "R12CXR_R6_Y1_SUPPORT_REPEAT_PARTIAL_LIMIT")
 				quit(0)
 				return
-			var y_metadata: Dictionary = {"domain_extension": "R6-Y1", "complete_support_domain": true, "resume_completed_extension": true, "expected_support_count": y_synthesis.get("supports", []).size(), "expected_support_set_sha256": y_synthesis_sha, "completed_extension_summary": {"support_domain_complete": true, "deterministic_repeat_pass": true, "support_set_sha256": y_synthesis_sha}, "original_target_source_sha": String(x4_previous.get("source_sha", "")), "original_target_result_sha256": x4_previous_sha, "original_target_attempt_consumed": true, "additional_target_attempts_consumed": 1, "reason": "enumerate every deterministic arrangement-critical support candidate for every boundary root pair of the complete seven-face cavity, prioritizing the three solver zero-option obligations; use multicoordinate same-tetra binary32 enumeration and preserve every frozen gate", "zero_option_target_pairs": x4_obligations.get("target_pairs", []), "all_boundary_pairs": y_pairs, "support_domain_fingerprint_sha256": y_synthesis_sha}
+			var y_metadata: Dictionary = {"domain_extension": "R6-Y1", "complete_support_domain": true, "resume_completed_extension": true, "expected_support_count": y_synthesis.get("supports", []).size(), "expected_support_set_sha256": y_synthesis_sha, "completed_extension_summary": {"support_domain_complete": true, "deterministic_repeat_pass": true, "support_set_sha256": y_synthesis_sha}, "original_target_source_sha": String(x4_previous.get("source_sha", "")), "original_target_result_sha256": x4_previous_sha, "original_target_attempt_consumed": true, "additional_target_attempts_consumed": 1, "resume_metadata": y_resume.get("metadata", {}), "reason": "enumerate the complete deterministic critical candidate domain for every boundary root pair of the seven-face cavity; resolve each continuous region by a representable witness or complete finite/analytic proof while preserving every frozen gate", "zero_option_target_pairs": x4_obligations.get("target_pairs", []), "all_boundary_pairs": y_pairs, "support_domain_fingerprint_sha256": y_synthesis_sha}
 			var y_result: Dictionary = _run_constraint_synthesis(x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, x4_patch, x4_selected_ids, seed_triangles, x4_boundary, triangles, x4_search_fixture, base, snapshot, support_fixture, residual_fixture.get("residuals", []), output_path, x4_previous.get("cavity_search", {}), y_synthesis, y_metadata, x4_previous, realizer, y_synthesis_repeat)
 			if y_result.is_empty() or _terminal_failure_requested: return
-			y_result["r6_y1_complete_support_domain"] = {"started": true, "prior_x3_result_sha256": x4_previous_sha, "selected_cavity_face_ids": x4_selected_ids, "selected_cavity_boundary_signature": x4_boundary.get("signature", ""), "zero_option_boundary_obligations": x4_obligations, "all_boundary_pairs": y_pairs, "first_support_synthesis_sha256": y_synthesis_sha, "repeat_support_synthesis_sha256": y_repeat_sha, "support_domain_complete": true, "deterministic_repeat_pass": true, "attempt_domain_changed": true, "attempt_target_consumed": true}
+			y_result["r6_y1_complete_support_domain"] = {"started": true, "prior_x3_result_sha256": x4_previous_sha, "selected_cavity_face_ids": x4_selected_ids, "selected_cavity_boundary_signature": x4_boundary.get("signature", ""), "zero_option_boundary_obligations": x4_obligations, "all_boundary_pairs": y_pairs, "resume_metadata": y_resume.get("metadata", {}), "first_support_synthesis_sha256": y_synthesis_sha, "repeat_support_synthesis_sha256": y_repeat_sha, "support_domain_complete": true, "deterministic_repeat_pass": true, "attempt_domain_changed": true, "attempt_target_consumed": true}
 			y_result["attempt_accounting"] = {"previous_valid_attempts_consumed": 6, "r6_y1_attempts_consumed": 1, "cumulative_valid_scientific_target_attempts": 7, "attempt_id": x4_attempt_id}
-			var y_result_bytes: PackedByteArray = JSON.stringify(y_result, "\t", false).to_utf8_buffer()
+			var y_result_bytes: PackedByteArray = _json_evidence_bytes(y_result)
 			var y_result_file: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
 			if y_result_file == null:
 				_fail("r6_y1_result_final_write_failed", {"error": FileAccess.get_open_error()})
@@ -741,7 +753,7 @@ func _run() -> void:
 			return
 		x4_result["r6_x6_representability_completion" if x6_representability else "r6_x4_joint_support_completion"] = {"started": true, "prior_attempt_id": x4_previous.get("attempt_id", ""), "prior_result_sha256": x4_previous_sha, "baseline_x3_support_sha256": x4_base_sha, "alternative_support_pool_candidate_count": x4_support_pool.get("candidate_attempt_count", -1), "alternative_support_pool_rows": x4_support_pool.get("rows", []).size(), "alternative_support_pool_repeat_sha256": x4_support_pool_repeat_sha, "baseline_fixture_exact_match_applicable": false, "zero_boundary_obligations": x4_obligations, "targeted_support_generation_sha256": x4_targeted_sha, "targeted_support_generation_repeat_sha256": x4_targeted_repeat_sha, "targeted_candidate_domain_complete": x4_targeted.get("finite_candidate_enumeration_complete", false), "targeted_support_candidate_count": x4_targeted_supports.size(), "selected_new_supports": x4_merged.get("selected_new_supports", []), "merged_support_count": x4_merged.get("support_count", 0), "support_domain_complete": x4_synthesis.get("finite_candidate_enumeration_complete", false), "deterministic_repeat_pass": x4_support_repeat_pass, "representation_strategy": "FULL_SAME_TETRA_AXIS_BRACKET" if x6_representability else "BOUNDED_PLUS_MINUS_2_ULP_CUBE", "attempt_domain_changed": true, "attempt_target_consumed": true, "additional_target_attempts_consumed": 1}
 		x4_result["attempt_accounting"] = {"baseline_r6_06_attempts_consumed": 1, "r6_x1_attempts_consumed": 1, "r6_x2_attempts_consumed": 1, "r6_x3_attempts_consumed": 1, "r6_x4_attempts_consumed": 1, "r6_x6_attempts_consumed": 1 if x6_representability else 0, "cumulative_valid_scientific_target_attempts": 6 if x6_representability else 5, "unconsumed_tooling_failures_preserved": 5, "attempt_id": x4_attempt_id}
-		var x4_result_bytes: PackedByteArray = JSON.stringify(x4_result, "\t", false).to_utf8_buffer()
+		var x4_result_bytes: PackedByteArray = _json_evidence_bytes(x4_result)
 		var x4_result_file: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
 		if x4_result_file == null:
 			_fail("r6_x4_result_final_write_failed", {"error": FileAccess.get_open_error()})
@@ -1794,6 +1806,69 @@ func _r6_rehydrate_support_geometry(source_support: Dictionary) -> Dictionary:
 	support["tetrahedron_corner_world"] = corners
 	return {"valid": true, "support": support}
 
+func _load_y1_resume_state(result_path: String, expected_result_sha256: String, expected_stream_sha256: String, attempt_id: String, expected_boundary_pairs: Array) -> Dictionary:
+	var result_bytes: PackedByteArray = FileAccess.get_file_as_bytes(result_path) if FileAccess.file_exists(result_path) else PackedByteArray()
+	var observed_result_sha256: String = Core.sha256(result_bytes)
+	if expected_result_sha256.length() != 64 or observed_result_sha256 != expected_result_sha256:
+		return {"valid": false, "reason": "RESUME_RESULT_SHA256_MISMATCH", "path": result_path, "observed_sha256": observed_result_sha256, "expected_sha256": expected_result_sha256}
+	var result_text: String = result_bytes.get_string_from_utf8().replace(String.chr(31), "\\u001f").replace(String.chr(30), "\\u001e")
+	var result_value: Variant = JSON.parse_string(result_text)
+	if typeof(result_value) != TYPE_DICTIONARY:
+		return {"valid": false, "reason": "RESUME_RESULT_SCHEMA_INVALID", "path": result_path}
+	var result: Dictionary = result_value
+	var synthesis: Dictionary = result.get("support_synthesis", {})
+	var stream: Dictionary = synthesis.get("continuous_region_stream", {})
+	var stream_path: String = String(stream.get("path", ""))
+	var observed_stream_sha256: String = Core.sha256(FileAccess.get_file_as_bytes(stream_path)) if FileAccess.file_exists(stream_path) else ""
+	if String(result.get("attempt_id", "")) != attempt_id or not bool(result.get("target_attempt_consumed", false)) or bool(result.get("support_domain_complete", false)) or String(result.get("status", "")) not in ["R6_Y1_SUPPORT_DOMAIN_PARTIAL_LIMIT", "R6_Y1_CONTINUOUS_REGION_FEASIBILITY_UNKNOWN"] or String(stream.get("sha256", "")) != expected_stream_sha256 or observed_stream_sha256 != expected_stream_sha256:
+		return {"valid": false, "reason": "RESUME_RESULT_OR_STREAM_IDENTITY_INVALID", "attempt_id": result.get("attempt_id", ""), "status": result.get("status", ""), "target_attempt_consumed": result.get("target_attempt_consumed", false), "support_domain_complete": result.get("support_domain_complete", false), "stream_path": stream_path, "stream_sha256": stream.get("sha256", ""), "observed_stream_sha256": observed_stream_sha256, "expected_stream_sha256": expected_stream_sha256}
+	var prior_pairs: Array = result.get("boundary_pair_domain", [])
+	if JSON.stringify(prior_pairs) != JSON.stringify(expected_boundary_pairs):
+		return {"valid": false, "reason": "RESUME_BOUNDARY_PAIR_DOMAIN_MISMATCH", "prior_pair_count": prior_pairs.size(), "current_pair_count": expected_boundary_pairs.size()}
+	var region_states: Dictionary = {}
+	var resolution_counts: Dictionary = {}
+	var stream_text: String = FileAccess.get_file_as_string(stream_path)
+	for line_value in stream_text.split("\n", false):
+		var row_value: Variant = JSON.parse_string(line_value)
+		if typeof(row_value) != TYPE_DICTIONARY: continue
+		var row: Dictionary = row_value
+		if String(row.get("record_type", "")) != "continuous_zero_set_region_resolution": continue
+		var record_value: Variant = row.get("record", {})
+		if typeof(record_value) != TYPE_DICTIONARY: continue
+		var record: Dictionary = record_value
+		var resolution: String = String(record.get("resolution", ""))
+		if resolution not in ["ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF", "VALID_REPRESENTABLE_SUPPORT_WITNESS"]: continue
+		var region_id: String = String(record.get("region_id", ""))
+		if region_id.is_empty(): continue
+		region_states[region_id] = record
+		resolution_counts[resolution] = int(resolution_counts.get(resolution, 0)) + 1
+	var witnessed_region_ids: Dictionary = {}
+	for region_id_value in region_states.keys():
+		var resolution_row: Dictionary = region_states[region_id_value]
+		if String(resolution_row.get("resolution", "")) == "VALID_REPRESENTABLE_SUPPORT_WITNESS": witnessed_region_ids[String(region_id_value)] = true
+	var resume_supports: Array = []
+	for support_value in synthesis.get("supports", []):
+		if typeof(support_value) != TYPE_DICTIONARY: continue
+		var support: Dictionary = support_value
+		if witnessed_region_ids.has(String(support.get("constraint_arrangement_region_id", ""))) and bool(support.get("accepted", false)) and bool(support.get("supported", false)):
+			resume_supports.append(support)
+	return {"valid": true, "region_states": region_states, "supports": resume_supports, "metadata": {"source_result_path": result_path, "source_result_sha256": observed_result_sha256, "source_stream_path": stream_path, "source_stream_sha256": observed_stream_sha256, "resumed_region_count": region_states.size(), "resumed_resolution_histogram": resolution_counts, "resumed_support_count": resume_supports.size(), "prior_attempt_id": result.get("attempt_id", ""), "same_scientific_attempt": true}}
+
+func _run_y1_resume_check() -> void:
+	var result_path: String = OS.get_environment("R12CXR_R6_Y1_RESUME_INPUT")
+	var result_bytes: PackedByteArray = FileAccess.get_file_as_bytes(result_path) if FileAccess.file_exists(result_path) else PackedByteArray()
+	var result_text: String = result_bytes.get_string_from_utf8().replace(String.chr(31), "\\u001f").replace(String.chr(30), "\\u001e")
+	var result_value: Variant = JSON.parse_string(result_text)
+	if typeof(result_value) != TYPE_DICTIONARY:
+		printerr("R6_Y1_RESUME_CHECK=FAIL invalid source result")
+		quit(1)
+		return
+	var source_result: Dictionary = result_value
+	var resumed: Dictionary = _load_y1_resume_state(result_path, OS.get_environment("R12CXR_R6_Y1_RESUME_SHA256"), OS.get_environment("R12CXR_R6_Y1_RESUME_STREAM_SHA256"), OS.get_environment("R12CXR_R6_ATTEMPT_ID"), source_result.get("boundary_pair_domain", []))
+	var valid: bool = bool(resumed.get("valid", false)) and int(resumed.get("metadata", {}).get("resumed_region_count", 0)) > 0 and int(resumed.get("metadata", {}).get("resumed_support_count", 0)) > 0
+	print("R6_Y1_RESUME_CHECK=" + ("PASS" if valid else "FAIL") + " " + JSON.stringify(resumed.get("metadata", resumed)))
+	quit(0 if valid else 1)
+
 func _r6_parse_vector3(value: Variant) -> Dictionary:
 	if value is Vector3: return {"valid": true, "point": Vector3(value)}
 	if value is Vector3i: return {"valid": true, "point": Vector3(value)}
@@ -1851,12 +1926,12 @@ func _support_row_differences(previous_rows: Array, continued_rows: Array, limit
 
 func _run_evidence_writer_check() -> void:
 	var output_path: String = OS.get_environment("TEMP").path_join("R6-evidence-writer-%d.json" % Time.get_ticks_usec())
-	var test_result: Dictionary = {"schema": "R6.EvidenceWriterCheck.v1", "status": "WRITER_TEST", "vector": Vector3(1.0, 2.0, 3.0)}
+	var test_result: Dictionary = {"schema": "R6.EvidenceWriterCheck.v1", "status": "WRITER_TEST", "vector": Vector3(1.0, 2.0, 3.0), "edge_key": "edge|left" + String.chr(31) + "edge|right"}
 	if not _write_result(output_path, test_result, "R6_EVIDENCE_WRITER_CHECK"):
 		quit(1)
 		return
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(output_path))
-	var passed: bool = typeof(parsed) == TYPE_DICTIONARY and parsed.get("schema", "") == "R6.EvidenceWriterCheck.v1" and parsed.get("vector", []) == [1.0, 2.0, 3.0]
+	var passed: bool = typeof(parsed) == TYPE_DICTIONARY and parsed.get("schema", "") == "R6.EvidenceWriterCheck.v1" and parsed.get("vector", []) == [1.0, 2.0, 3.0] and String(parsed.get("edge_key", "")) == String(test_result.edge_key)
 	var output_sha256: String = Core.sha256(FileAccess.get_file_as_bytes(output_path))
 	DirAccess.remove_absolute(output_path)
 	if not passed:
@@ -1866,11 +1941,16 @@ func _run_evidence_writer_check() -> void:
 	print("R6_EVIDENCE_WRITER_CHECK=PASS sha256=%s" % output_sha256)
 	quit(0)
 
+func _json_evidence_bytes(value: Variant) -> PackedByteArray:
+	var serialized: String = JSON.stringify(_json_safe(value), "\t", false)
+	serialized = serialized.replace(String.chr(31), "\\u001f").replace(String.chr(30), "\\u001e")
+	return serialized.to_utf8_buffer()
+
 func _write_result(output_path: String, result: Dictionary, marker: String) -> bool:
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
 		_fail("r6_result_output_path_invalid_or_exists", {"path": output_path})
 		return false
-	var bytes: PackedByteArray = JSON.stringify(_json_safe(result), "\t", false).to_utf8_buffer()
+	var bytes: PackedByteArray = _json_evidence_bytes(result)
 	var file: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
 	if file == null:
 		_fail("r6_result_output_open_failed", {"error": FileAccess.get_open_error()})

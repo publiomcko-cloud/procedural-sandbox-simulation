@@ -27,7 +27,7 @@ func _boundary_source_domain_gate(polygon: Array[Vector2], boundary_ids: Array[S
 		return {"valid": false, "reason": "cavity_polygon_or_boundary_invalid", "polygon_vertex_count": polygon.size(), "boundary_vertex_count": boundary_ids.size(), "possible_source_pairs": pair_count, "max_source_pairs": max_source_pairs}
 	return {"valid": true, "boundary_vertex_count": boundary_ids.size(), "possible_source_pairs": pair_count, "max_source_pairs": max_source_pairs}
 
-func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = [], x2_target_pairs: Array = [], enumerate_all_critical_vertices: bool = false, max_boundary_source_pairs: int = MAX_BOUNDARY_SOURCE_PAIRS, directed_axis_bracket: bool = false, complete_support_domain: bool = false, stream_evidence_path: String = "") -> Dictionary:
+func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = [], x2_target_pairs: Array = [], enumerate_all_critical_vertices: bool = false, max_boundary_source_pairs: int = MAX_BOUNDARY_SOURCE_PAIRS, directed_axis_bracket: bool = false, complete_support_domain: bool = false, stream_evidence_path: String = "", resume_region_states: Dictionary = {}) -> Dictionary:
 	var started_usec: int = Time.get_ticks_usec()
 	var synthesis_budget_usec: int = MAX_SYNTHESIS_USEC
 	if complete_support_domain:
@@ -40,6 +40,17 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 	var numeric_search_frontier: Dictionary = {}
 	var continuous_region_bounds: Array[Dictionary] = []
 	var witnessed_region_ids: Dictionary = {}
+	var region_numeric_search_attempted: Dictionary = {}
+	var resumed_region_ids: Dictionary = {}
+	var resumed_region_resolution_histogram: Dictionary = {"ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF": 0, "VALID_REPRESENTABLE_SUPPORT_WITNESS": 0}
+	for resume_region_key in resume_region_states.keys():
+		var resume_region: Dictionary = resume_region_states[resume_region_key]
+		var resume_resolution: String = String(resume_region.get("resolution", ""))
+		if resume_resolution not in ["ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF", "VALID_REPRESENTABLE_SUPPORT_WITNESS"]: continue
+		resumed_region_ids[String(resume_region_key)] = resume_resolution
+		region_numeric_search_attempted[String(resume_region_key)] = true
+		if resume_resolution == "VALID_REPRESENTABLE_SUPPORT_WITNESS": witnessed_region_ids[String(resume_region_key)] = true
+		resumed_region_resolution_histogram[resume_resolution] = int(resumed_region_resolution_histogram.get(resume_resolution, 0)) + 1
 	var projected_region_polygons: Dictionary = {}
 	var exhausted_region_proofs: Array[Dictionary] = []
 	var stream_file: FileAccess = null
@@ -240,13 +251,15 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 						var candidate_region_polygon: Array[Vector2] = []
 						for projected_vertex in projected_region_polygons.get(candidate_region_id, []): candidate_region_polygon.append(Vector2(projected_vertex))
 						var complete_numeric_gate: Callable = Callable()
-						if complete_support_domain:
+						var resolve_region_numerically: bool = complete_support_domain and not region_numeric_search_attempted.has(candidate_region_id) and not witnessed_region_ids.has(candidate_region_id) and not resumed_region_ids.has(candidate_region_id)
+						if resolve_region_numerically:
 							complete_numeric_gate = Callable(self, "_complete_binary32_candidate_gate").bind(realizer, context, id_a, id_b, candidate_region_polygon, cutoff, polygon, vertex_positions, source_origins, max_support_distance)
-						var witness_check: Dictionary = _validate_witness(realizer, witness, source_triangle_2d, world_triangle, tet_data, polygon, vertex_positions, source_origins, max_support_distance, residual_epsilon, barycentric_epsilon, enumerate_all_critical_vertices, context, directed_axis_bracket, complete_support_domain, complete_numeric_gate)
+						var witness_check: Dictionary = _validate_witness(realizer, witness, source_triangle_2d, world_triangle, tet_data, polygon, vertex_positions, source_origins, max_support_distance, residual_epsilon, barycentric_epsilon, enumerate_all_critical_vertices and (not complete_support_domain or resolve_region_numerically), context, directed_axis_bracket, resolve_region_numerically, complete_numeric_gate)
 						var x2_audit_row: Dictionary = {"boundary_pair": [id_a, id_b], "source_cell_global_lattice": tet_data.global_cell, "source_cell_local": cell, "source_tetrahedron": tet_index, "source_facet": facet_index, "arrangement_region_id": candidate_region_id, "critical_candidate_method": String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), "projected_position": witness, "pre_correction_world_position": witness_check.get("pre_correction_world_position", witness_check.get("world", Vector3.ZERO)), "world_position": witness_check.get("world", Vector3.ZERO), "field_residual": witness_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "barycentric_weights": witness_check.get("tetra_weights", []), "binary32_representability_correction": witness_check.get("binary32_representability_correction", {}), "witness_valid": bool(witness_check.get("valid", false)), "reason": witness_check.get("reason", "")}
 						if enumerate_all_critical_vertices and witness_check.has("binary32_representability_correction"):
 							var correction_record: Dictionary = witness_check.binary32_representability_correction
 							if bool(correction_record.get("attempted", false)):
+								if complete_support_domain: region_numeric_search_attempted[candidate_region_id] = true
 								if bool(correction_record.get("accepted", false)): x2_representability_correction_count += 1
 								else: x2_representability_correction_failure_count += 1
 						if not bool(witness_check.get("valid", false)):
@@ -403,7 +416,11 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 			_stream_write_record(stream_file, {"record_type": "continuous_zero_set_region_resolution", "record": bound}, stream_row_count + 1)
 			stream_row_count += 1
 	var total_usec: int = Time.get_ticks_usec() - started_usec
-	if complete_support_domain and cap_reason.is_empty() and not numeric_search_frontiers.is_empty():
+	var unresolved_numeric_search_frontier_count: int = 0
+	for frontier_value in numeric_search_frontiers:
+		var frontier_record: Dictionary = frontier_value
+		if not witnessed_region_ids.has(String(frontier_record.get("arrangement_region_id", ""))): unresolved_numeric_search_frontier_count += 1
+	if complete_support_domain and cap_reason.is_empty() and unresolved_numeric_search_frontier_count > 0:
 		cap_reason = "PARTIAL_LIMIT_BINARY32_REPRESENTABLE_SEARCH"
 	var stream_identity: Dictionary = {}
 	if complete_support_domain:
@@ -440,10 +457,12 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		"continuous_region_resolution_histogram": {"ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF": continuous_region_outcomes.filter(func(row: Dictionary) -> bool: return String(row.get("resolution", "")) == "ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF").size(), "ANALYTIC_NO_STRICT_REGION_CAVITY_INTERSECTION": continuous_region_outcomes.filter(func(row: Dictionary) -> bool: return String(row.get("resolution", "")) == "ANALYTIC_NO_STRICT_REGION_CAVITY_INTERSECTION").size(), "VALID_REPRESENTABLE_SUPPORT_WITNESS": continuous_region_outcomes.filter(func(row: Dictionary) -> bool: return String(row.get("resolution", "")) == "VALID_REPRESENTABLE_SUPPORT_WITNESS").size(), "EXHAUSTIVE_NO_VALID_REPRESENTABLE_SUPPORT_IN_TETRA_DOMAIN": continuous_region_outcomes.filter(func(row: Dictionary) -> bool: return String(row.get("resolution", "")) == "EXHAUSTIVE_NO_VALID_REPRESENTABLE_SUPPORT_IN_TETRA_DOMAIN").size(), "UNRESOLVED_REGION_REQUIRES_FURTHER_PROOF_OR_WITNESS": unresolved_continuous_region_count},
 		"continuous_region_bounds": [] if complete_support_domain else continuous_region_outcomes,
 		"continuous_region_stream": stream_identity,
+		"resumed_region_resolution_count": resumed_region_ids.size(),
+		"resumed_region_resolution_histogram": resumed_region_resolution_histogram,
 		"execution_state": "COMPLETE" if cap_reason.is_empty() and not truncated else "PARTIAL_LIMIT" if complete_support_domain else "PARTIAL",
 		"enumeration_frontier": enumeration_frontier,
 		"numeric_search_frontier": numeric_search_frontier,
-		"numeric_search_frontier_count": numeric_search_frontiers.size(),
+		"numeric_search_frontier_count": unresolved_numeric_search_frontier_count,
 		"numeric_search_frontiers": numeric_search_frontiers,
 		"enumeration_mode": "DETERMINISTIC_SOURCE_PAIR_REGION_STREAM" if complete_support_domain else "LEGACY_BOUNDED_R5",
 		"analytic_feasible_support_domain_exhausted": false,
