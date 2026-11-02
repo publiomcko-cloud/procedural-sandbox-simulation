@@ -46,7 +46,7 @@ func _run() -> void:
 		_run_evidence_writer_check()
 		return
 	if mode.is_empty(): mode = "freeze"
-	if mode not in ["freeze", "boundary-audit", "cavity-audit", "synthesize", "resume-r6-06"]:
+	if mode not in ["freeze", "boundary-audit", "cavity-audit", "synthesize", "resume-r6-06", "resume-x2-graph"]:
 		_fail("r6_mode_invalid", {"mode": mode})
 		return
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
@@ -262,6 +262,55 @@ func _run() -> void:
 	var derived_patch_ids: Array[String] = _string_array(analysis_patch_ids)
 	if frozen_patch_ids != derived_patch_ids or String(frozen_d2.get("boundary", {}).get("signature", "")) != R4CavitySignature or String(r4_context.get("boundary_signature", "")) != R4CavitySignature:
 		_fail("r6_r4_cavity_reconstruction_mismatch", {"frozen_patch_ids": frozen_patch_ids, "derived_patch_ids": derived_patch_ids, "frozen_signature": frozen_d2.get("boundary", {}).get("signature", ""), "derived_signature": r4_context.get("boundary_signature", "")})
+		return
+	if mode == "resume-x2-graph":
+		var prior_path: String = OS.get_environment("R12CXR_R6_RESUME_INPUT")
+		var prior_sha: String = OS.get_environment("R12CXR_R6_RESUME_SHA256")
+		var prior_bytes: PackedByteArray = FileAccess.get_file_as_bytes(prior_path) if FileAccess.file_exists(prior_path) else PackedByteArray()
+		if prior_bytes.is_empty() or Core.sha256(prior_bytes) != prior_sha or prior_sha != "0228d8706b3f953053ef56da9ca6ea149e265e66811499ce2f7e30e7637aabae":
+			_fail("r6_x2_graph_resume_raw_result_identity_invalid", {"path": prior_path, "observed_sha256": Core.sha256(prior_bytes), "expected_sha256": prior_sha})
+			return
+		var prior_value: Variant = JSON.parse_string(prior_bytes.get_string_from_utf8())
+		if typeof(prior_value) != TYPE_DICTIONARY:
+			_fail("r6_x2_graph_resume_raw_result_schema_invalid", {})
+			return
+		var prior_result: Dictionary = prior_value
+		var prior_synthesis: Dictionary = prior_result.get("synthesis", {})
+		var prior_completion: Dictionary = prior_result.get("r6_x2_support_completion", {})
+		if String(prior_result.get("attempt_id", "")) != "R6-X2-20261102-02" or String(prior_result.get("source_sha", "")) != "9f581bb54aac8e204817f004de4e8cf8584225e9" or String(prior_result.get("status", "")) != "R6_X2_EXTENDED_GRAPH_PARTIAL" or not bool(prior_result.get("target_attempt_consumed", false)) or not bool(prior_synthesis.get("valid", false)) or not bool(prior_completion.get("support_domain_complete", false)) or not bool(prior_completion.get("deterministic_repeat_pass", false)) or int(prior_completion.get("support_count_added", 0)) != 3:
+			_fail("r6_x2_graph_resume_source_stage_invalid", {"attempt_id": prior_result.get("attempt_id", ""), "source_sha": prior_result.get("source_sha", ""), "status": prior_result.get("status", ""), "target_attempt_consumed": prior_result.get("target_attempt_consumed", false), "synthesis_valid": prior_synthesis.get("valid", false), "support_domain_complete": prior_completion.get("support_domain_complete", false), "deterministic_repeat_pass": prior_completion.get("deterministic_repeat_pass", false), "support_count_added": prior_completion.get("support_count_added", 0)})
+			return
+		var prior_supports: Array[Dictionary] = []
+		for support_value in prior_synthesis.get("supports", []):
+			if typeof(support_value) != TYPE_DICTIONARY:
+				_fail("r6_x2_graph_resume_support_row_invalid", {})
+				return
+			prior_supports.append(support_value)
+		var resumed_synthesis: Dictionary = prior_synthesis.duplicate(true)
+		var resumed_context_result: Dictionary = realizer.call("_r3_make_expanded_patch_context", analysis_patch, analysis_patch_ids, seed_triangles, prior_supports, analysis_boundary, triangles, search_residual_fixture, 2, false)
+		if not bool(resumed_context_result.get("valid", false)) or resumed_context_result.get("context", {}).is_empty():
+			_fail("r6_x2_graph_resume_context_rebuild_failed", resumed_context_result)
+			return
+		var resumed_context: Dictionary = resumed_context_result.get("context", {})
+		var resume_metadata: Dictionary = {"is_continuation": true, "same_attempt_id": String(prior_result.get("attempt_id", "")), "original_target_source_sha": String(prior_result.get("source_sha", "")), "continuation_source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "original_target_result_sha256": prior_sha, "original_target_attempt_consumed": true, "additional_target_attempts_consumed": 0, "reason": "resume the same consumed R6-X2 geometry from its preserved complete support-domain and deterministic-repeat evidence; prior graph gate used a stale per-cavity clock after the baseline graph pass", "support_set_identical": true, "support_set_sha256": _support_synthesis_fingerprint(resumed_synthesis)}
+		var resumed_result: Dictionary = _run_constraint_synthesis(realizer, volume.get("values", PackedFloat32Array()), roi, resumed_context, analysis_patch, analysis_patch_ids, seed_triangles, analysis_boundary, triangles, search_residual_fixture, base, snapshot, support_fixture, residual_fixture.get("residuals", []), output_path, prior_result.get("cavity_search", {}), resumed_synthesis, resume_metadata)
+		if resumed_result.is_empty() or _terminal_failure_requested: return
+		resumed_result["r6_x2_support_completion"] = prior_completion.duplicate(true)
+		resumed_result["r6_x2_graph_resume"] = {"started": true, "same_attempt_continuation": true, "original_target_source_sha": prior_result.get("source_sha", ""), "original_target_result_sha256": prior_sha, "continuation_source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "reused_support_set_sha256": resume_metadata.support_set_sha256, "stale_timer_diagnosis": "the baseline candidate-graph enumeration left the original per-cavity clock expired; the X2 extension graph scan inherited that clock and stopped on its first triplet", "geometry_domain_changed": false}
+		resumed_result["attempt_accounting"] = {"baseline_r6_06_attempts_consumed": 1, "r6_x1_attempts_consumed": 1, "r6_x2_attempts_consumed": 1, "cumulative_valid_scientific_target_attempts": 3, "unconsumed_tooling_failures_preserved": 3, "attempt_id": String(prior_result.get("attempt_id", "")), "continuation_additional_attempts_consumed": 0}
+		var resumed_bytes: PackedByteArray = JSON.stringify(resumed_result, "\t", false).to_utf8_buffer()
+		var resumed_file: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
+		if resumed_file == null:
+			_fail("r6_x2_graph_resume_final_write_failed", {"path": output_path, "error": FileAccess.get_open_error()})
+			return
+		resumed_file.store_buffer(resumed_bytes)
+		resumed_file.close()
+		if FileAccess.get_open_error() != OK:
+			_fail("r6_x2_graph_resume_final_close_failed", {"path": output_path})
+			return
+		var resume_result_sha: String = Core.sha256(resumed_bytes)
+		print("R12CXR_R6_X2_GRAPH_RESUMED " + JSON.stringify({"attempt_id": prior_result.get("attempt_id", ""), "source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "original_result_sha256": prior_sha, "result_sha256": resume_result_sha, "status": resumed_result.get("status", ""), "terminal_reason": resumed_result.get("terminal_reason", ""), "additional_target_attempts_consumed": 0}))
+		quit(0)
 		return
 	var fixture_result: Dictionary = _build_frozen_cavity_fixture(realizer, r4_context, analysis_patch, analysis_patch_ids, analysis_boundary, cycle, boundary_first_result, root_positions, frozen_r4_result)
 	if not bool(fixture_result.get("valid", false)):
