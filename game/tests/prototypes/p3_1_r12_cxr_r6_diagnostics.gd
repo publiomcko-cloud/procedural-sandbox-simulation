@@ -617,9 +617,9 @@ func _validate_patch_edge_witness(realizer: RefCounted, a: Vector3, b: Vector3, 
 ## Best-first bounded search over causally adjacent face additions. The caller's
 ## evaluator must return a complete manifold and boundary-feasibility audit.
 func bounded_cavity_search(initial_face_ids: Array, all_triangles: Array[Dictionary], adjacency: Dictionary, evaluator: Callable, limits: Dictionary = {}) -> Dictionary:
-	var max_faces: int = int(limits.get("max_faces", 12)); var max_states: int = int(limits.get("max_states", 10000)); var max_queue: int = int(limits.get("max_queue", 2000)); var max_ms: int = int(limits.get("max_ms", 30000)); var enumerate_alternatives: bool = bool(limits.get("enumerate_alternatives", false)); var max_atomic_faces: int = int(limits.get("max_atomic_faces", 4)); var max_bundles_per_state: int = int(limits.get("max_bundles_per_state", 4096))
+	var max_faces: int = int(limits.get("max_faces", 12)); var max_states: int = int(limits.get("max_states", 10000)); var max_queue: int = int(limits.get("max_queue", 2000)); var max_ms: int = int(limits.get("max_ms", 30000)); var enumerate_alternatives: bool = bool(limits.get("enumerate_alternatives", false)); var max_atomic_faces: int = int(limits.get("max_atomic_faces", 4)); var max_bundles_per_state: int = int(limits.get("max_bundles_per_state", 4096)); var max_bundles_total: int = int(limits.get("max_bundles_total", 16384))
 	if initial_face_ids.is_empty() or max_faces < initial_face_ids.size() or max_states < 1 or max_queue < 1 or max_ms < 1 or not evaluator.is_valid(): return {"status": "INVALID_INPUT", "reason": "r6_cavity_search_preflight_invalid"}
-	if enumerate_alternatives and (max_atomic_faces < 1 or max_bundles_per_state < 1): return {"status": "INVALID_INPUT", "reason": "r6_alternative_cavity_limits_invalid"}
+	if enumerate_alternatives and (max_atomic_faces < 1 or max_bundles_per_state < 1 or max_bundles_total < 1): return {"status": "INVALID_INPUT", "reason": "r6_alternative_cavity_limits_invalid"}
 	var face_by_id: Dictionary = {}; var edge_faces: Dictionary = {}
 	for triangle in all_triangles:
 		var face_id: String = String(triangle.get("triangle_id", "")); var ids: Array = triangle.get("root_ids", [])
@@ -684,10 +684,13 @@ func bounded_cavity_search(initial_face_ids: Array, all_triangles: Array[Diction
 			if bool(bundle_state.get("limit_hit", false)):
 				return _cavity_search_result("PARTIAL", "ATOMIC_EXPANSION_BUNDLE_CAP", best, best_alternative, examined, generated, queue.size(), candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, true)
 		bundles.sort_custom(Callable(self, "_r6_face_bundle_less"))
-		var generated_extension: bool = false
+		var generated_extension: bool = false; var state_bundles_examined: int = 0
 		for bundle in bundles:
-			if candidate_bundles_examined >= max_bundles_per_state and enumerate_alternatives:
-				return _cavity_search_result("PARTIAL", "ATOMIC_EXPANSION_BUNDLE_CAP", best, best_alternative, examined, generated, queue.size(), candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, true)
+			if state_bundles_examined >= max_bundles_per_state and enumerate_alternatives:
+				return _cavity_search_result("PARTIAL", "ATOMIC_EXPANSION_BUNDLE_CAP_PER_STATE", best, best_alternative, examined, generated, queue.size(), candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, true)
+			if candidate_bundles_examined >= max_bundles_total and enumerate_alternatives:
+				return _cavity_search_result("PARTIAL", "ATOMIC_EXPANSION_BUNDLE_CAP_TOTAL", best, best_alternative, examined, generated, queue.size(), candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, true)
+			state_bundles_examined += 1
 			candidate_bundles_examined += 1
 			if ids.size() + bundle.size() > max_faces: removed_face_bound_hit = true; continue
 			var next_ids: Array[String] = ids.duplicate()
