@@ -761,7 +761,7 @@ func search_patch_cavities(realizer: RefCounted, all_triangles: Array[Dictionary
 		var cycles: Dictionary = realizer.call("_r4_boundary_cycle_set", boundary)
 		if not bool(cycles.get("valid", false)): return {"valid": false, "reason": "r6_candidate_boundary_cycles_invalid", "cycles": cycles}
 		var cycle_rows: Array = cycles.get("cycles", []); var blocked: Array[String] = []; var unresolved: Array[String] = []; var expansion_edges: Array[String] = []; var minimum_margin: float = INF; var minimum_witness_margin: float = INF; var edge_audits: Array[Dictionary] = []; var projected_area: float = 0.0
-		var origin: Vector3 = Vector3(projection.get("origin", Vector3.ZERO)); var axis_u: Vector3 = Vector3(projection.get("axis_u", Vector3.RIGHT)); var axis_v: Vector3 = Vector3(projection.get("axis_v", Vector3.UP))
+		var origin: Vector3 = _as_vector3(projection.get("origin", [])); var axis_u: Vector3 = _as_vector3(projection.get("axis_u", [])); var axis_v: Vector3 = _as_vector3(projection.get("axis_v", []))
 		for face in patch:
 			var points: Array = face.get("points", [])
 			if points.size() == 3:
