@@ -1443,7 +1443,6 @@ static func _r6_x4_zero_boundary_targets(boundary_edge_candidate_counts: Diction
 		if halves.size() != 2 or halves[0].is_empty() or halves[1].is_empty():
 			return {"valid": false, "reason": "R6_X4_ZERO_BOUNDARY_EDGE_KEY_INVALID", "edge_key": edge_key, "zero_edge_keys": zero_edge_keys}
 		var pair: Array[String] = [String(halves[0]), String(halves[1])]
-		pair.sort()
 		target_pairs.append(pair)
 	return {"valid": not target_pairs.is_empty(), "reason": "" if not target_pairs.is_empty() else "R6_X4_NO_ZERO_BOUNDARY_OBLIGATIONS", "zero_edge_keys": zero_edge_keys, "target_pairs": target_pairs}
 

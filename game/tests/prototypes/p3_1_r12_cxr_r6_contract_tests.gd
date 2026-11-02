@@ -101,6 +101,8 @@ func _test_x4_zero_boundary_obligations() -> void:
 	_expect(pairs.size() == 2 and pairs[0] == ["edge|a|d", "edge|c|d"] and pairs[1] == ["edge|b|c", "edge|c|d"], "R6-X4 target pairs are canonical and deterministically ordered")
 	var malformed: Dictionary = R6Campaign._r6_x4_zero_boundary_targets({"malformed": 0})
 	_expect(not bool(malformed.get("valid", false)) and String(malformed.get("reason", "")) == "R6_X4_ZERO_BOUNDARY_EDGE_KEY_INVALID", "R6-X4 rejects malformed boundary obligations")
+	var oriented: Dictionary = R6Campaign._r6_x4_zero_boundary_targets({"edge|z|z\u001fedge|a|a": 0})
+	_expect(oriented.get("target_pairs", [])[0] == ["edge|z|z", "edge|a|a"], "R6-X4 preserves frozen boundary obligation endpoint orientation")
 	var base_supports: Array[Dictionary] = [{"support_id": "base", "binary32_position_identity": "p0"}]
 	var generated: Array[Dictionary] = [
 		{"support_id": "a1", "binary32_position_identity": "p1", "constraint_boundary_pair": ["edge|a", "edge|b"], "max_constraint_cross_squared": 9.0},
