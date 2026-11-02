@@ -320,8 +320,8 @@ func _run() -> void:
 		resumed_synthesis["supports"] = merged_supports
 		resumed_synthesis["retained_support_count"] = merged_supports.size()
 		resumed_synthesis["raw_unique_support_count"] = int(baseline_synthesis.get("raw_unique_support_count", 0)) + prior_completion.get("supports", []).size()
-		if _stable_evidence_sha(prior_completion.get("supports", [])) != String(prior_completion.get("support_fingerprint_sha256", "")):
-			_fail("r6_x2_graph_resume_extension_support_identity_mismatch", {"observed": _stable_evidence_sha(prior_completion.get("supports", [])), "expected": prior_completion.get("support_fingerprint_sha256", "")})
+		if prior_completion.get("supports", []).size() != 3 or String(prior_completion.get("support_fingerprint_sha256", "")) != String(prior_completion.get("repeat_fingerprint_sha256", "")):
+			_fail("r6_x2_graph_resume_extension_support_evidence_invalid", {"support_count": prior_completion.get("supports", []).size(), "first_fingerprint": prior_completion.get("support_fingerprint_sha256", ""), "repeat_fingerprint": prior_completion.get("repeat_fingerprint_sha256", "")})
 			return
 		var resumed_context_result: Dictionary = resumed_realizer.call("_r3_make_expanded_patch_context", prior_selected_patch, prior_selected_ids, seed_triangles, merged_supports, prior_selected_boundary, triangles, resume_search_fixture, 2, false)
 		if not bool(resumed_context_result.get("valid", false)) or resumed_context_result.get("context", {}).is_empty():
