@@ -25,7 +25,7 @@ func _boundary_source_domain_gate(polygon: Array[Vector2], boundary_ids: Array[S
 		return {"valid": false, "reason": "cavity_polygon_or_boundary_invalid", "polygon_vertex_count": polygon.size(), "boundary_vertex_count": boundary_ids.size(), "possible_source_pairs": pair_count, "max_source_pairs": max_source_pairs}
 	return {"valid": true, "boundary_vertex_count": boundary_ids.size(), "possible_source_pairs": pair_count, "max_source_pairs": max_source_pairs}
 
-func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = [], x2_target_pairs: Array = [], enumerate_all_critical_vertices: bool = false, max_boundary_source_pairs: int = MAX_BOUNDARY_SOURCE_PAIRS) -> Dictionary:
+func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = [], x2_target_pairs: Array = [], enumerate_all_critical_vertices: bool = false, max_boundary_source_pairs: int = MAX_BOUNDARY_SOURCE_PAIRS, directed_axis_bracket: bool = false) -> Dictionary:
 	var started_usec: int = Time.get_ticks_usec()
 	var limits: Dictionary = realizer.call("_cxr_limits")
 	var cutoff: float = float(limits.get("cross_squared_cutoff", NAN))
@@ -182,7 +182,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 								cap_reason = "R5_MAX_SYNTHESIS_USEC"
 								break
 							var witness: Vector2 = Vector2(witness_record.get("position", Vector2.ZERO))
-							var witness_check: Dictionary = _validate_witness(realizer, witness, source_triangle_2d, world_triangle, tet_data, polygon, vertex_positions, source_origins, max_support_distance, residual_epsilon, barycentric_epsilon, enumerate_all_critical_vertices, context)
+							var witness_check: Dictionary = _validate_witness(realizer, witness, source_triangle_2d, world_triangle, tet_data, polygon, vertex_positions, source_origins, max_support_distance, residual_epsilon, barycentric_epsilon, enumerate_all_critical_vertices, context, directed_axis_bracket)
 							var x2_audit_row: Dictionary = {"boundary_pair": [id_a, id_b], "source_cell_global_lattice": tet_data.global_cell, "source_tetrahedron": tet_index, "source_facet": facet_index, "arrangement_region_id": String(witness_record.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED")), "critical_candidate_method": String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), "projected_position": witness, "pre_correction_world_position": witness_check.get("pre_correction_world_position", witness_check.get("world", Vector3.ZERO)), "world_position": witness_check.get("world", Vector3.ZERO), "field_residual": witness_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "barycentric_weights": witness_check.get("tetra_weights", []), "binary32_representability_correction": witness_check.get("binary32_representability_correction", {}), "witness_valid": bool(witness_check.get("valid", false)), "reason": witness_check.get("reason", "")}
 							if enumerate_all_critical_vertices and witness_check.has("binary32_representability_correction"):
 								var correction_record: Dictionary = witness_check.binary32_representability_correction
@@ -982,7 +982,7 @@ func _map_projected_point(point: Vector2, source: Array[Vector2], world: Array[V
 	if not position.is_finite(): return {"valid": false, "reason": "mapped_world_point_nonfinite"}
 	return {"valid": true, "world": position, "weights": weights}
 
-func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Array[Vector2], source_world: Array[Vector3], tet_data: Dictionary, domain_polygon: Array[Vector2], topology_positions: Dictionary, source_origins: Array[Dictionary], max_distance: float, residual_epsilon: float, barycentric_epsilon: float, correct_binary32: bool = false, projection_context: Dictionary = {}) -> Dictionary:
+func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Array[Vector2], source_world: Array[Vector3], tet_data: Dictionary, domain_polygon: Array[Vector2], topology_positions: Dictionary, source_origins: Array[Dictionary], max_distance: float, residual_epsilon: float, barycentric_epsilon: float, correct_binary32: bool = false, projection_context: Dictionary = {}, directed_axis_bracket: bool = false) -> Dictionary:
 	if _point_on_polygon_boundary(projected, domain_polygon): return {"valid": false, "reason": "support_on_cavity_boundary"}
 	var mapped: Dictionary = _map_projected_point(projected, source_2d, source_world)
 	if not bool(mapped.get("valid", false)): return mapped
@@ -991,8 +991,8 @@ func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Arra
 	var field_check: Dictionary = _validate_field_point(realizer, point, tet_data.get("positions", []), tet_data.get("samples", []), residual_epsilon, barycentric_epsilon)
 	var correction: Dictionary = {"attempted": false, "accepted": false}
 	if not bool(field_check.get("valid", false)) and correct_binary32:
-		var searched: Dictionary = realizer.call("_search_representable_zero", point, tet_data)
-		correction = {"attempted": true, "accepted": bool(searched.get("accepted", false)), "pre_correction_position": pre_correction_point, "pre_correction_field_residual": field_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "post_correction_position": searched.get("position", pre_correction_point), "post_correction_field_residual": searched.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "coordinate_ulp_steps": searched.get("ulp_steps", [0, 0, 0]), "search_state": searched.get("search_state", "UNKNOWN_NOT_CAPTURED"), "reason": searched.get("reason", "")}
+		var searched: Dictionary = realizer.call("_search_representable_zero_axis_bracket" if directed_axis_bracket else "_search_representable_zero", point, tet_data)
+		correction = {"attempted": true, "method": "FULL_SAME_TETRA_AXIS_BRACKET" if directed_axis_bracket else "BOUNDED_PLUS_MINUS_2_ULP_CUBE", "accepted": bool(searched.get("accepted", false)), "pre_correction_position": pre_correction_point, "pre_correction_field_residual": field_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "post_correction_position": searched.get("position", pre_correction_point), "post_correction_field_residual": searched.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "coordinate_ulp_steps": searched.get("ulp_steps", [0, 0, 0]), "search_state": searched.get("search_state", "UNKNOWN_NOT_CAPTURED"), "reason": searched.get("reason", "")}
 		if bool(searched.get("accepted", false)):
 			point = Vector3(searched.get("position", pre_correction_point))
 			field_check = {"valid": true, "weights": searched.get("weights", []), "field_residual": searched.get("field_residual", NAN)}

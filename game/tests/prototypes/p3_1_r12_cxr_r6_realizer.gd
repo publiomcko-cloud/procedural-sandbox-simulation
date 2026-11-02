@@ -135,6 +135,112 @@ func _search_representable_zero(original: Vector3, tet_data: Dictionary) -> Dict
 	best["reason"] = "R6_A_MINIMUM_ABSOLUTE_RESIDUAL_THEN_MINIMUM_ULP_STEP_COUNT"
 	return best
 
+func _search_representable_zero_axis_bracket(original: Vector3, tet_data: Dictionary) -> Dictionary:
+	var origin_eval: Dictionary = _evaluate_zero_point(original, tet_data)
+	var origin_residual: float = float(origin_eval.get("field_residual", NAN))
+	var positions: Array = tet_data.get("positions", [])
+	if positions.size() != 4 or not is_finite(origin_residual):
+		origin_eval["position"] = original
+		origin_eval["search_state"] = "axis_bracket_tetra_or_residual_invalid"
+		origin_eval["reason"] = "R6_X6_AXIS_BRACKET_SOURCE_INVALID"
+		return origin_eval
+	var best: Dictionary = {}
+	var best_residual: float = INF
+	var best_step_count: int = 2147483647
+	var original_bytes: PackedByteArray = PackedFloat32Array([original.x, original.y, original.z]).to_byte_array()
+	var original_bits: Array[int] = [int(original_bytes.decode_u32(0)), int(original_bytes.decode_u32(4)), int(original_bytes.decode_u32(8))]
+	for axis in range(3):
+		var minimum: float = INF
+		var maximum: float = -INF
+		for corner_value in positions:
+			var corner: Vector3 = Vector3(corner_value)
+			var coordinate: float = corner.x if axis == 0 else corner.y if axis == 1 else corner.z
+			minimum = minf(minimum, coordinate)
+			maximum = maxf(maximum, coordinate)
+		for direction in [-1, 1]:
+			var start_key: int = _ordered_float32_key(original_bits[axis])
+			var end_value: float = minimum if direction < 0 else maximum
+			var end_bytes: PackedByteArray = PackedFloat32Array([end_value]).to_byte_array()
+			var end_key: int = _ordered_float32_key(int(end_bytes.decode_u32(0)))
+			var max_steps: int = absi(end_key - start_key)
+			if max_steps <= 0: continue
+			var legal_steps: int = 0
+			var illegal_steps: int = max_steps
+			while legal_steps + 1 < illegal_steps:
+				var middle: int = legal_steps + (illegal_steps - legal_steps) / 2
+				var probe: Vector3 = _axis_step_point(original, axis, direction * middle)
+				var probe_eval: Dictionary = _evaluate_zero_point(probe, tet_data)
+				if bool(probe_eval.get("barycentric_gate_pass", false)): legal_steps = middle
+				else: illegal_steps = middle
+			var end_point: Vector3 = _axis_step_point(original, axis, direction * legal_steps)
+			var end_eval: Dictionary = _evaluate_zero_point(end_point, tet_data)
+			if not bool(end_eval.get("barycentric_gate_pass", false)): continue
+			var end_residual: float = float(end_eval.get("field_residual", NAN))
+			var candidates: Array[Dictionary] = [end_eval.duplicate(true)]
+			candidates[0]["position"] = end_point
+			candidates[0]["ulp_steps"] = [direction * legal_steps if axis == 0 else 0, direction * legal_steps if axis == 1 else 0, direction * legal_steps if axis == 2 else 0]
+			if is_finite(end_residual) and signf(end_residual) != signf(origin_residual):
+				var same_sign_step: int = 0
+				var opposite_sign_step: int = legal_steps
+				while same_sign_step + 1 < opposite_sign_step:
+					var middle: int = same_sign_step + (opposite_sign_step - same_sign_step) / 2
+					var probe: Vector3 = _axis_step_point(original, axis, direction * middle)
+					var probe_eval: Dictionary = _evaluate_zero_point(probe, tet_data)
+					var probe_residual: float = float(probe_eval.get("field_residual", NAN))
+					if not bool(probe_eval.get("barycentric_gate_pass", false)) or not is_finite(probe_residual):
+						break
+					probe_eval["position"] = probe
+					probe_eval["ulp_steps"] = [direction * middle if axis == 0 else 0, direction * middle if axis == 1 else 0, direction * middle if axis == 2 else 0]
+					candidates.append(probe_eval)
+					if signf(probe_residual) == signf(origin_residual): same_sign_step = middle
+					else: opposite_sign_step = middle
+					if bool(probe_eval.get("accepted", false)): break
+					var adjacent: int = same_sign_step + 1
+					var adjacent_point: Vector3 = _axis_step_point(original, axis, direction * adjacent)
+					var adjacent_eval: Dictionary = _evaluate_zero_point(adjacent_point, tet_data)
+					adjacent_eval["position"] = adjacent_point
+					adjacent_eval["ulp_steps"] = [direction * adjacent if axis == 0 else 0, direction * adjacent if axis == 1 else 0, direction * adjacent if axis == 2 else 0]
+					candidates.append(adjacent_eval)
+			for candidate in candidates:
+				if not bool(candidate.get("accepted", false)): continue
+				var residual_abs: float = absf(float(candidate.get("field_residual", INF)))
+				var steps: Array = candidate.get("ulp_steps", [0, 0, 0])
+				var step_count: int = absi(int(steps[0])) + absi(int(steps[1])) + absi(int(steps[2]))
+				if step_count < best_step_count or (step_count == best_step_count and residual_abs < best_residual):
+					best = candidate.duplicate(true)
+					best_residual = residual_abs
+					best_step_count = step_count
+	if best.is_empty():
+		origin_eval["position"] = original
+		origin_eval["ulp_steps"] = [0, 0, 0]
+		origin_eval["search_state"] = "no_accepted_root_on_any_full_same_tetra_axis_interval"
+		origin_eval["reason"] = "R6_X6_AXIS_BRACKET_NO_ACCEPTED_POINT"
+		return origin_eval
+	best["search_state"] = "accepted_via_full_same_tetra_axis_interval_bracket"
+	best["reason"] = "R6_X6_AXIS_BRACKET_MINIMUM_ULP_STEP_COUNT_THEN_MINIMUM_RESIDUAL"
+	return best
+
+func _ordered_float32_key(bits: int) -> int:
+	return (~bits) & 0xffffffff if (bits & 0x80000000) != 0 else bits | 0x80000000
+
+func _float_from_ordered_key(key: int) -> float:
+	var bits: int = key & 0x7fffffff if (key & 0x80000000) != 0 else (~key) & 0xffffffff
+	var bytes: PackedByteArray = PackedByteArray()
+	bytes.resize(4)
+	bytes.encode_u32(0, bits)
+	return bytes.decode_float(0)
+
+func _axis_step_point(original: Vector3, axis: int, step: int) -> Vector3:
+	var point: Vector3 = original
+	var original_value: float = original.x if axis == 0 else original.y if axis == 1 else original.z
+	var bytes: PackedByteArray = PackedFloat32Array([original_value]).to_byte_array()
+	var key: int = _ordered_float32_key(int(bytes.decode_u32(0)))
+	var stepped: float = _float_from_ordered_key(key + step)
+	if axis == 0: point.x = stepped
+	elif axis == 1: point.y = stepped
+	else: point.z = stepped
+	return point
+
 func _evaluate_zero_point(point: Vector3, tet_data: Dictionary) -> Dictionary:
 	var bary_result: Dictionary = _tetra_barycentric(point, tet_data.get("positions", []))
 	var weights: Array = bary_result.get("weights", [])
