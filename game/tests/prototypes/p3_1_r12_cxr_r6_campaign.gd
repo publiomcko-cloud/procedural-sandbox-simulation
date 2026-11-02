@@ -370,7 +370,7 @@ func _run() -> void:
 	if not bool(fixture_result.get("valid", false)):
 		_fail("r6_frozen_cavity_fixture_build_failed", fixture_result)
 		return
-	var fixture_bytes: PackedByteArray = _json_evidence_bytes(fixture_result.get("fixture", {}))
+	var fixture_bytes: PackedByteArray = JSON.stringify(fixture_result.get("fixture", {}), "\t", false).to_utf8_buffer()
 	var pinned_cavity_bytes: PackedByteArray = FileAccess.get_file_as_bytes("res://tests/prototypes/fixtures/r12_cxr_r5/frozen-cavity.json")
 	if Core.sha256(pinned_cavity_bytes) != R5CavitySha or pinned_cavity_bytes != fixture_bytes:
 		_fail("r6_frozen_cavity_geometry_reconstruction_mismatch", {"observed_sha256": Core.sha256(pinned_cavity_bytes), "expected_sha256": R5CavitySha, "reconstructed_sha256": Core.sha256(fixture_bytes), "exact_bytes_match": pinned_cavity_bytes == fixture_bytes})
