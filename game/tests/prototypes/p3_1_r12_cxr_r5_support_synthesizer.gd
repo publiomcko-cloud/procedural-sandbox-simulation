@@ -232,6 +232,13 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 							_stream_write_record(stream_file, {"record_type": "continuous_zero_set_region_bound", "record": continuous_bound}, stream_row_count + 1)
 							stream_row_count += 1
 					var witness_records: Array[Dictionary] = region_result.get("candidates", [])
+					if complete_support_domain:
+						witness_records.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+							var left_priority: int = _critical_candidate_search_priority(left)
+							var right_priority: int = _critical_candidate_search_priority(right)
+							if left_priority != right_priority: return left_priority < right_priority
+							return var_to_bytes(Vector2(left.get("position", Vector2.ZERO))).hex_encode() < var_to_bytes(Vector2(right.get("position", Vector2.ZERO))).hex_encode()
+						)
 					if not complete_support_domain and critical_candidate_count + witness_records.size() > MAX_CRITICAL_CANDIDATES_TOTAL:
 						cap_reason = "R5_MAX_CRITICAL_CANDIDATES_TOTAL"
 						break
@@ -1086,6 +1093,15 @@ func _x2_pair_is_target(id_a: String, id_b: String, target_pairs: Array) -> bool
 		observed.sort()
 		if observed == wanted: return true
 	return false
+
+func _critical_candidate_search_priority(candidate: Dictionary) -> int:
+	var method: String = String(candidate.get("method", ""))
+	if method.begins_with("CAVITY_ARRANGEMENT_INTERSECTION_CENTROID"): return 0
+	if method.begins_with("FEASIBLE_REGION_CENTROID"): return 1
+	if method.contains("STRICT_REGION_INTERIOR"): return 2
+	if method.contains("EDGE_MIDPOINT"): return 3
+	if method.contains("ACTIVE_CONSTRAINT"): return 4
+	return 5
 
 func _add_selected_critical(selected: Array[Dictionary], selected_ids: Dictionary, row: Dictionary, method: String) -> void:
 	var identity: String = var_to_bytes(Vector2(row.position)).hex_encode()
