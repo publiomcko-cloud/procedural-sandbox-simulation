@@ -36,6 +36,7 @@ func _run() -> void:
 	_test_r6_unbounded_frozen_graph_solver()
 	_test_x2_all_arrangement_vertices()
 	_test_alternative_cavity_boundary_pair_domain()
+	_test_x4_zero_boundary_obligations()
 	if failures.is_empty():
 		print("R12CXR_R6_CONTRACTS assertions=%d failures=0" % assertions)
 		quit(0)
@@ -91,6 +92,27 @@ func _test_alternative_cavity_boundary_pair_domain() -> void:
 	_expect(not bool(legacy_rejects_extension.get("valid", false)), "legacy synthesis does not silently expand beyond six vertices")
 	_expect(bool(x3_extension.get("valid", false)) and int(x3_extension.get("possible_source_pairs", 0)) == 21, "R6-X3 admits a seven-vertex cavity with all 21 source pairs")
 	_expect(not bool(over_cap.get("valid", false)) and int(over_cap.get("possible_source_pairs", 0)) == 36, "alternative cavity pair cap remains finite and fail-closed")
+
+func _test_x4_zero_boundary_obligations() -> void:
+	var counts: Dictionary = {"edge|b|c\u001fedge|c|d": 0, "edge|a|b\u001fedge|b|c": 4, "edge|a|d\u001fedge|c|d": 0}
+	var targets: Dictionary = R6Campaign._r6_x4_zero_boundary_targets(counts)
+	var pairs: Array = targets.get("target_pairs", [])
+	_expect(bool(targets.get("valid", false)) and targets.get("zero_edge_keys", []).size() == 2, "R6-X4 selects only zero-option boundary obligations")
+	_expect(pairs.size() == 2 and pairs[0] == ["edge|a|d", "edge|c|d"] and pairs[1] == ["edge|b|c", "edge|c|d"], "R6-X4 target pairs are canonical and deterministically ordered")
+	var malformed: Dictionary = R6Campaign._r6_x4_zero_boundary_targets({"malformed": 0})
+	_expect(not bool(malformed.get("valid", false)) and String(malformed.get("reason", "")) == "R6_X4_ZERO_BOUNDARY_EDGE_KEY_INVALID", "R6-X4 rejects malformed boundary obligations")
+	var base_supports: Array[Dictionary] = [{"support_id": "base", "binary32_position_identity": "p0"}]
+	var generated: Array[Dictionary] = [
+		{"support_id": "a1", "binary32_position_identity": "p1", "constraint_boundary_pair": ["edge|a", "edge|b"], "max_constraint_cross_squared": 9.0},
+		{"support_id": "a2", "binary32_position_identity": "p2", "constraint_boundary_pair": ["edge|a", "edge|b"], "max_constraint_cross_squared": 8.0},
+		{"support_id": "b1", "binary32_position_identity": "p3", "constraint_boundary_pair": ["edge|c", "edge|d"], "max_constraint_cross_squared": 2.0},
+		{"support_id": "b2", "binary32_position_identity": "p4", "constraint_boundary_pair": ["edge|c", "edge|d"], "max_constraint_cross_squared": 1.0}
+	]
+	var merged: Dictionary = R6Campaign._r6_x4_merge_support_rows(base_supports, generated, [["edge|a", "edge|b"], ["edge|c", "edge|d"]], 3)
+	var selected: Array = merged.get("selected_new_supports", [])
+	_expect(bool(merged.get("valid", false)) and int(merged.get("support_count", 0)) == 3 and selected.size() == 2, "R6-X4 merged support count respects the frozen total-support cap")
+	_expect(String(selected[0].get("support_id", "")) == "a1" and String(selected[1].get("support_id", "")) == "b1", "R6-X4 round-robin selection addresses every zero-option pair before adding a second witness")
+	_expect(bool(merged.get("candidate_cap_or_selection_loss", false)), "R6-X4 records when resource-bound selection omits generated candidates")
 
 func _test_x2_all_arrangement_vertices() -> void:
 	var synthesizer: RefCounted = R5Synthesizer.new()
