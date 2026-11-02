@@ -46,7 +46,7 @@ func _run() -> void:
 		_run_evidence_writer_check()
 		return
 	if mode.is_empty(): mode = "freeze"
-	if mode not in ["freeze", "boundary-audit", "cavity-audit", "synthesize", "resume-r6-06", "resume-x2-graph"]:
+	if mode not in ["freeze", "boundary-audit", "cavity-audit", "x3-cavity-search", "synthesize", "resume-r6-06", "resume-x2-graph"]:
 		_fail("r6_mode_invalid", {"mode": mode})
 		return
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
@@ -395,7 +395,7 @@ func _run() -> void:
 		var audit_written: bool = _write_result(output_path, result, "R12CXR_R6_D0_BOUNDARY_WITNESS_AUDIT")
 		quit(0 if bool(audit.get("valid", false)) and audit_written else 3)
 		return
-	if mode == "cavity-audit":
+	if mode in ["cavity-audit", "x3-cavity-search"]:
 		var source_sha: String = OS.get_environment("R12CXR_SOURCE_SHA")
 		if source_sha.length() != 40 or not source_sha.is_valid_hex_number():
 			_fail("r6_cavity_audit_source_identity_invalid", {"source_sha": source_sha})
@@ -416,9 +416,15 @@ func _run() -> void:
 			_fail("r6_cavity_audit_zero_inventory_invalid", zero_inventory)
 			return
 		var projection: Dictionary = {"origin": _vector3_array(Vector3(r4_context.get("projection_origin", Vector3.ZERO))), "axis_u": _vector3_array(Vector3(r4_context.get("projection_u", Vector3.ZERO))), "axis_v": _vector3_array(Vector3(r4_context.get("projection_v", Vector3.ZERO)))}
-		var cavity_search: Dictionary = cavity_diagnostics.call("search_patch_cavities", cavity_realizer, triangles, analysis_patch_ids, root_positions, projection, zero_inventory.get("facets", []), {"max_faces": 12, "max_states": 10000, "max_queue": 2000, "max_ms": 30000})
-		var result: Dictionary = {"schema": "P3.1.R12CXR.R6.CavityDiagnostic.v1", "status": cavity_search.get("status", "UNKNOWN_NOT_CAPTURED"), "terminal_reason": cavity_search.get("terminal_reason", cavity_search.get("reason", "UNKNOWN_NOT_CAPTURED")), "source_sha": source_sha, "target_id": TargetId, "target_attempt_consumed": false, "target_attempt_phase": "R6-D-DIAGNOSTIC", "frozen_cavity_sha256": Core.sha256(pinned_cavity_bytes), "frozen_volume_sha256": VolumeSha, "frozen_payload_sha256": PayloadSha, "topology_sha256": TopologySha, "graph_sha256": GraphSha, "zero_facet_count": zero_inventory.get("facets", []).size(), "support_regeneration": {"valid": pool_result.get("valid", false), "candidate_attempt_count": pool_result.get("candidate_attempt_count", -1), "row_count": pool_result.get("rows", []).size(), "r5_fixture_exact_match": pool_match.get("valid", false)}, "limits": {"max_faces": 12, "max_states": 10000, "max_queue": 2000, "max_ms": 30000}, "topology_path_policy": "DIRECT_ARC_BARRIERS_NOT_IMPOSED; PIECEWISE_PATH_FEASIBILITY_REMAINS_A_R6-C/E/F_GATE", "search": cavity_search}
-		var cavity_written: bool = _write_result(output_path, result, "R12CXR_R6_CAVITY_DIAGNOSTIC")
+		var x3_search: bool = mode == "x3-cavity-search"
+		var search_limits: Dictionary = {"max_faces": 12, "max_states": 10000, "max_queue": 2000, "max_ms": 30000}
+		if x3_search:
+			search_limits["enumerate_alternatives"] = true
+			search_limits["max_atomic_faces"] = 4
+			search_limits["max_bundles_per_state"] = 4096
+		var cavity_search: Dictionary = cavity_diagnostics.call("search_patch_cavities", cavity_realizer, triangles, analysis_patch_ids, root_positions, projection, zero_inventory.get("facets", []), search_limits)
+		var result: Dictionary = {"schema": "P3.1.R12CXR.R6.CavityDiagnostic.v1", "status": cavity_search.get("status", "UNKNOWN_NOT_CAPTURED"), "terminal_reason": cavity_search.get("terminal_reason", cavity_search.get("reason", "UNKNOWN_NOT_CAPTURED")), "source_sha": source_sha, "target_id": TargetId, "target_attempt_consumed": false, "target_attempt_phase": "R6-X3-ALTERNATIVE-CAVITY-DIAGNOSTIC" if x3_search else "R6-D-DIAGNOSTIC", "frozen_cavity_sha256": Core.sha256(pinned_cavity_bytes), "frozen_volume_sha256": VolumeSha, "frozen_payload_sha256": PayloadSha, "topology_sha256": TopologySha, "graph_sha256": GraphSha, "zero_facet_count": zero_inventory.get("facets", []).size(), "support_regeneration": {"valid": pool_result.get("valid", false), "candidate_attempt_count": pool_result.get("candidate_attempt_count", -1), "row_count": pool_result.get("rows", []).size(), "r5_fixture_exact_match": pool_match.get("valid", false)}, "limits": search_limits, "topology_path_policy": "DIRECT_ARC_BARRIERS_NOT_IMPOSED; PIECEWISE_PATH_FEASIBILITY_REMAINS_A_R6-C/E/F-GATE", "search": cavity_search}
+		var cavity_written: bool = _write_result(output_path, result, "R12CXR_R6_X3_ALTERNATIVE_CAVITY" if x3_search else "R12CXR_R6_CAVITY_DIAGNOSTIC")
 		quit(0 if cavity_written else 3)
 		return
 	if mode == "resume-r6-06":

@@ -617,8 +617,9 @@ func _validate_patch_edge_witness(realizer: RefCounted, a: Vector3, b: Vector3, 
 ## Best-first bounded search over causally adjacent face additions. The caller's
 ## evaluator must return a complete manifold and boundary-feasibility audit.
 func bounded_cavity_search(initial_face_ids: Array, all_triangles: Array[Dictionary], adjacency: Dictionary, evaluator: Callable, limits: Dictionary = {}) -> Dictionary:
-	var max_faces: int = int(limits.get("max_faces", 12)); var max_states: int = int(limits.get("max_states", 10000)); var max_queue: int = int(limits.get("max_queue", 2000)); var max_ms: int = int(limits.get("max_ms", 30000))
+	var max_faces: int = int(limits.get("max_faces", 12)); var max_states: int = int(limits.get("max_states", 10000)); var max_queue: int = int(limits.get("max_queue", 2000)); var max_ms: int = int(limits.get("max_ms", 30000)); var enumerate_alternatives: bool = bool(limits.get("enumerate_alternatives", false)); var max_atomic_faces: int = int(limits.get("max_atomic_faces", 4)); var max_bundles_per_state: int = int(limits.get("max_bundles_per_state", 4096))
 	if initial_face_ids.is_empty() or max_faces < initial_face_ids.size() or max_states < 1 or max_queue < 1 or max_ms < 1 or not evaluator.is_valid(): return {"status": "INVALID_INPUT", "reason": "r6_cavity_search_preflight_invalid"}
+	if enumerate_alternatives and (max_atomic_faces < 1 or max_bundles_per_state < 1): return {"status": "INVALID_INPUT", "reason": "r6_alternative_cavity_limits_invalid"}
 	var face_by_id: Dictionary = {}; var edge_faces: Dictionary = {}
 	for triangle in all_triangles:
 		var face_id: String = String(triangle.get("triangle_id", "")); var ids: Array = triangle.get("root_ids", [])
@@ -634,18 +635,33 @@ func bounded_cavity_search(initial_face_ids: Array, all_triangles: Array[Diction
 		if not face_by_id.has(face_id): return {"status": "INVALID_INPUT", "reason": "r6_initial_face_missing", "face_id": face_id}
 	var initial_audit: Dictionary = evaluator.call(initial)
 	if not bool(initial_audit.get("valid", false)): return {"status": "INVALID_INPUT", "reason": "r6_initial_cavity_invalid", "audit": initial_audit}
-	var queue: Array[Dictionary] = [{"face_ids": initial, "audit": initial_audit}]; var visited: Dictionary = {"|".join(initial): true}; var examined: int = 0; var generated: int = 1; var started: int = Time.get_ticks_msec(); var best: Dictionary = queue[0]; var removed_face_bound_hit: bool = false; var unresolved_dead_end: bool = false
+	var initial_signature: String = "|".join(initial)
+	var queue: Array[Dictionary] = [{"face_ids": initial, "audit": initial_audit}]; var visited: Dictionary = {initial_signature: true}; var examined: int = 0; var generated: int = 1; var candidate_bundles_examined: int = 0; var invalid_candidate_patches: int = 0; var started: int = Time.get_ticks_msec(); var best: Dictionary = queue[0]; var best_alternative: Dictionary = {}; var removed_face_bound_hit: bool = false; var unresolved_dead_end: bool = false
 	while not queue.is_empty():
-		if examined >= max_states: return {"status": "PARTIAL", "terminal_reason": "VISITED_STATE_CAP", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
-		if Time.get_ticks_msec() - started >= max_ms: return {"status": "PARTIAL", "terminal_reason": "WALL_TIME_CAP", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
+		if examined >= max_states: return _cavity_search_result("PARTIAL", "VISITED_STATE_CAP", best, best_alternative, examined, generated, queue.size(), candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, enumerate_alternatives)
+		if Time.get_ticks_msec() - started >= max_ms: return _cavity_search_result("PARTIAL", "WALL_TIME_CAP", best, best_alternative, examined, generated, queue.size(), candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, enumerate_alternatives)
 		queue.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return _r6_cavity_state_less(a, b))
 		var state: Dictionary = queue.pop_front(); examined += 1; var audit: Dictionary = state.audit
 		var proven_blocked: Array = audit.get("unrealizable_edges", [])
 		var unresolved: Array = audit.get("unresolved_edges", [])
-		if bool(audit.get("manifold", false)) and int(audit.get("boundary_components", 2147483647)) == 1 and proven_blocked.is_empty() and unresolved.is_empty(): return {"status": "FOUND", "selected": state, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
+		var state_is_feasible: bool = bool(audit.get("manifold", false)) and int(audit.get("boundary_components", 2147483647)) == 1 and proven_blocked.is_empty() and unresolved.is_empty()
+		if state_is_feasible and (not enumerate_alternatives or "|".join(state.face_ids) != initial_signature):
+			if not enumerate_alternatives: return _cavity_search_result("FOUND", "", state, state, examined, generated, queue.size(), candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, false)
+			if best_alternative.is_empty() or _r6_cavity_state_less(state, best_alternative): best_alternative = state
 		var ids: Array[String] = state.face_ids
 		var candidate_set: Dictionary = {}
 		var expansion_edges: Array = audit.get("edges_requiring_expansion", proven_blocked + unresolved)
+		if enumerate_alternatives and state_is_feasible:
+			var cycle_set: Dictionary = audit.get("cycles", {})
+			for cycle_value in cycle_set.get("cycles", []):
+				var cycle_ids: Array = cycle_value.get("root_ids", [])
+				for cycle_index in range(cycle_ids.size()):
+					expansion_edges.append(_edge_key_ids(String(cycle_ids[cycle_index]), String(cycle_ids[(cycle_index + 1) % cycle_ids.size()])))
+		var unique_expansion_edges: Dictionary = {}
+		for edge_value in expansion_edges: unique_expansion_edges[String(edge_value)] = true
+		expansion_edges.clear()
+		for edge_value in unique_expansion_edges.keys(): expansion_edges.append(String(edge_value))
+		expansion_edges.sort()
 		for edge_value in expansion_edges:
 			var edge_key: String = String(edge_value)
 			for face_id_value in edge_faces.get(edge_key, []):
@@ -656,34 +672,77 @@ func bounded_cavity_search(initial_face_ids: Array, all_triangles: Array[Diction
 			if not candidates.is_empty(): removed_face_bound_hit = true
 			elif not unresolved.is_empty(): unresolved_dead_end = true
 			continue
+		var bundles: Array[Array] = []
+		for face_id in candidates: bundles.append([face_id])
+		if enumerate_alternatives and max_atomic_faces > 1:
+			var chosen: Array[String] = []
+			for face_id in candidates: chosen.append(face_id)
+			var bundle_state: Dictionary = {"limit_hit": false}
+			for bundle_size in range(2, maxi(2, max_atomic_faces + 1)):
+				_collect_face_bundles(chosen, bundle_size, 0, [], bundles, max_bundles_per_state, bundle_state)
+				if bool(bundle_state.get("limit_hit", false)): break
+			if bool(bundle_state.get("limit_hit", false)):
+				return _cavity_search_result("PARTIAL", "ATOMIC_EXPANSION_BUNDLE_CAP", best, best_alternative, examined, generated, queue.size(), candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, true)
+		bundles.sort_custom(Callable(self, "_r6_face_bundle_less"))
 		var generated_extension: bool = false
-		for face_id in candidates:
-			var next_ids: Array[String] = ids.duplicate(); next_ids.append(face_id); next_ids.sort(); var signature: String = "|".join(next_ids)
+		for bundle in bundles:
+			if candidate_bundles_examined >= max_bundles_per_state and enumerate_alternatives:
+				return _cavity_search_result("PARTIAL", "ATOMIC_EXPANSION_BUNDLE_CAP", best, best_alternative, examined, generated, queue.size(), candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, true)
+			candidate_bundles_examined += 1
+			if ids.size() + bundle.size() > max_faces: removed_face_bound_hit = true; continue
+			var next_ids: Array[String] = ids.duplicate()
+			for face_value in bundle:
+				next_ids.append(String(face_value))
+			next_ids.sort()
+			var signature: String = "|".join(next_ids)
 			if visited.has(signature): continue
-			if generated >= max_states: return {"status": "PARTIAL", "terminal_reason": "VISITED_STATE_CAP", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
+			if generated >= max_states: return _cavity_search_result("PARTIAL", "VISITED_STATE_CAP", best, best_alternative, examined, generated, queue.size(), candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, enumerate_alternatives)
 			visited[signature] = true; generated += 1
 			var next_audit: Dictionary = evaluator.call(next_ids)
-			if not bool(next_audit.get("valid", false)): continue
+			if not bool(next_audit.get("valid", false)): invalid_candidate_patches += 1; continue
 			var next_state: Dictionary = {"face_ids": next_ids, "audit": next_audit}
 			if _r6_cavity_state_less(next_state, best): best = next_state
-			if queue.size() >= max_queue: return {"status": "PARTIAL", "terminal_reason": "PRIORITY_QUEUE_CAP", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": queue.size(), "elapsed_ms": Time.get_ticks_msec() - started}
+			if queue.size() >= max_queue: return _cavity_search_result("PARTIAL", "PRIORITY_QUEUE_CAP", best, best_alternative, examined, generated, queue.size(), candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, enumerate_alternatives)
 			queue.append(next_state)
 			generated_extension = true
 		if not generated_extension and not unresolved.is_empty(): unresolved_dead_end = true
-	if removed_face_bound_hit: return {"status": "PARTIAL", "terminal_reason": "MAX_REMOVED_FACE_BOUND", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": 0, "elapsed_ms": Time.get_ticks_msec() - started}
-	if unresolved_dead_end: return {"status": "PARTIAL", "terminal_reason": "FINITE_CANDIDATE_GRAPH_EXHAUSTED_WITH_UNRESOLVED_FEASIBILITY", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": 0, "elapsed_ms": Time.get_ticks_msec() - started}
-	return {"status": "EXHAUSTED", "terminal_reason": "FINITE_CAUSAL_SEARCH_EXHAUSTED", "selected": best, "examined_states": examined, "generated_states": generated, "queue_depth": 0, "elapsed_ms": Time.get_ticks_msec() - started}
+	if removed_face_bound_hit: return _cavity_search_result("PARTIAL", "MAX_REMOVED_FACE_BOUND", best, best_alternative, examined, generated, 0, candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, enumerate_alternatives)
+	if unresolved_dead_end: return _cavity_search_result("PARTIAL", "FINITE_CANDIDATE_GRAPH_EXHAUSTED_WITH_UNRESOLVED_FEASIBILITY", best, best_alternative, examined, generated, 0, candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, enumerate_alternatives)
+	if enumerate_alternatives and not best_alternative.is_empty(): return _cavity_search_result("FOUND_ALTERNATIVE", "FINITE_ALTERNATIVE_CAVITY_SET_EXHAUSTED", best, best_alternative, examined, generated, 0, candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, true)
+	if enumerate_alternatives: return _cavity_search_result("EXHAUSTED", "FINITE_ALTERNATIVE_CAVITY_SET_EXHAUSTED", best, {}, examined, generated, 0, candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, true)
+	return _cavity_search_result("EXHAUSTED", "FINITE_CAUSAL_SEARCH_EXHAUSTED", best, {}, examined, generated, 0, candidate_bundles_examined, invalid_candidate_patches, Time.get_ticks_msec() - started, false)
+
+func _collect_face_bundles(candidates: Array[String], target_size: int, start_index: int, current: Array[String], bundles: Array[Array], limit: int, state: Dictionary) -> void:
+	if bool(state.get("limit_hit", false)): return
+	if current.size() == target_size:
+		if bundles.size() >= limit: state["limit_hit"] = true; return
+		bundles.append(current.duplicate())
+		return
+	var remaining: int = target_size - current.size()
+	for index in range(start_index, candidates.size() - remaining + 1):
+		current.append(candidates[index])
+		_collect_face_bundles(candidates, target_size, index + 1, current, bundles, limit, state)
+		current.pop_back()
+		if bool(state.get("limit_hit", false)): return
+
+func _r6_face_bundle_less(a: Array, b: Array) -> bool:
+	if a.size() != b.size(): return a.size() < b.size()
+	return "|".join(a) < "|".join(b)
+
+func _cavity_search_result(status: String, terminal_reason: String, best: Dictionary, best_alternative: Dictionary, examined: int, generated: int, queue_depth: int, candidate_bundles_examined: int, invalid_candidate_patches: int, elapsed_ms: int, alternative_mode: bool) -> Dictionary:
+	var selected: Dictionary = best_alternative if not best_alternative.is_empty() else best
+	return {"status": status, "terminal_reason": terminal_reason, "selected": selected, "best_seen": best, "best_alternative": best_alternative, "alternative_mode": alternative_mode, "examined_states": examined, "generated_states": generated, "queue_depth": queue_depth, "candidate_bundles_examined": candidate_bundles_examined, "invalid_candidate_patches": invalid_candidate_patches, "elapsed_ms": elapsed_ms, "finite_domain_exhausted": queue_depth == 0 and not status.begins_with("PARTIAL")}
 
 func _r6_cavity_state_less(a: Dictionary, b: Dictionary) -> bool:
 	var af: Array = a.get("face_ids", []); var bf: Array = b.get("face_ids", [])
 	if af.size() != bf.size(): return af.size() < bf.size()
 	var aa: Dictionary = a.get("audit", {}); var ba: Dictionary = b.get("audit", {})
-	var au: int = aa.get("unrealizable_edges", []).size(); var bu: int = ba.get("unrealizable_edges", []).size()
-	if au != bu: return au < bu
+	var ac: int = int(aa.get("topology_complications", aa.get("boundary_components", 2147483647) + aa.get("unrealizable_edges", []).size() * 100 + aa.get("unresolved_edges", []).size() * 10)); var bc: int = int(ba.get("topology_complications", ba.get("boundary_components", 2147483647) + ba.get("unrealizable_edges", []).size() * 100 + ba.get("unresolved_edges", []).size() * 10))
+	if ac != bc: return ac < bc
 	var am: float = float(aa.get("minimum_feasible_witness_margin", aa.get("minimum_cutoff_margin", -INF))); var bm: float = float(ba.get("minimum_feasible_witness_margin", ba.get("minimum_cutoff_margin", -INF)))
 	if am != bm: return am > bm
-	var ac: int = int(aa.get("boundary_components", 2147483647)); var bc: int = int(ba.get("boundary_components", 2147483647))
-	if ac != bc: return ac < bc
+	var area_a: float = float(aa.get("projected_area", INF)); var area_b: float = float(ba.get("projected_area", INF))
+	if area_a != area_b: return area_a < area_b
 	return "|".join(af) < "|".join(bf)
 
 func _edge_key_ids(a: String, b: String) -> String:
@@ -701,7 +760,13 @@ func search_patch_cavities(realizer: RefCounted, all_triangles: Array[Dictionary
 		if not bool(connectivity.get("valid", false)) or not bool(boundary.get("valid", false)): return {"valid": false, "reason": "r6_candidate_boundary_nonmanifold", "connectivity": connectivity, "boundary": boundary}
 		var cycles: Dictionary = realizer.call("_r4_boundary_cycle_set", boundary)
 		if not bool(cycles.get("valid", false)): return {"valid": false, "reason": "r6_candidate_boundary_cycles_invalid", "cycles": cycles}
-		var cycle_rows: Array = cycles.get("cycles", []); var blocked: Array[String] = []; var unresolved: Array[String] = []; var expansion_edges: Array[String] = []; var minimum_margin: float = INF; var minimum_witness_margin: float = INF; var edge_audits: Array[Dictionary] = []
+		var cycle_rows: Array = cycles.get("cycles", []); var blocked: Array[String] = []; var unresolved: Array[String] = []; var expansion_edges: Array[String] = []; var minimum_margin: float = INF; var minimum_witness_margin: float = INF; var edge_audits: Array[Dictionary] = []; var projected_area: float = 0.0
+		var origin: Vector3 = Vector3(projection.get("origin", Vector3.ZERO)); var axis_u: Vector3 = Vector3(projection.get("axis_u", Vector3.RIGHT)); var axis_v: Vector3 = Vector3(projection.get("axis_v", Vector3.UP))
+		for face in patch:
+			var points: Array = face.get("points", [])
+			if points.size() == 3:
+				var p0: Vector2 = _project(Vector3(points[0]), origin, axis_u, axis_v); var p1: Vector2 = _project(Vector3(points[1]), origin, axis_u, axis_v); var p2: Vector2 = _project(Vector3(points[2]), origin, axis_u, axis_v)
+				projected_area += absf((p1 - p0).cross(p2 - p0)) * 0.5
 		for cycle_row in cycle_rows:
 			var cycle: Array = cycle_row.get("root_ids", [])
 			var edge_audit: Dictionary = analyze_patch_boundary(realizer, patch, cycle, root_positions, projection, facets)
@@ -716,7 +781,7 @@ func search_patch_cavities(realizer: RefCounted, all_triangles: Array[Dictionary
 			else: minimum_witness_margin = -INF
 			edge_audits.append(edge_audit)
 		blocked.sort(); unresolved.sort(); expansion_edges.sort()
-		return {"valid": true, "manifold": true, "boundary_components": cycle_rows.size(), "unrealizable_edges": blocked, "unresolved_edges": unresolved, "edges_requiring_expansion": expansion_edges, "minimum_cutoff_margin": minimum_margin if is_finite(minimum_margin) else -INF, "minimum_feasible_witness_margin": minimum_witness_margin, "boundary": boundary, "cycles": cycles, "edge_audits": edge_audits}
+		return {"valid": true, "manifold": true, "boundary_components": cycle_rows.size(), "topology_complications": maxi(0, cycle_rows.size() - 1) * 1000 + blocked.size() * 100 + unresolved.size() * 10, "projected_area": projected_area, "unrealizable_edges": blocked, "unresolved_edges": unresolved, "edges_requiring_expansion": expansion_edges, "minimum_cutoff_margin": minimum_margin if is_finite(minimum_margin) else -INF, "minimum_feasible_witness_margin": minimum_witness_margin, "boundary": boundary, "cycles": cycles, "edge_audits": edge_audits}
 	var adjacency: Dictionary = realizer.call("_adjacency", all_triangles)
 	return bounded_cavity_search(initial_face_ids, all_triangles, adjacency, evaluate, limits)
 

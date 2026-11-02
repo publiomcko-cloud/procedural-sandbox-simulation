@@ -29,6 +29,7 @@ func _run() -> void:
 	_test_binary32_ulp_correction(diagnostics)
 	_test_patch_owner_and_ordered_arc_paths()
 	_test_bounded_causal_cavity_search(diagnostics)
+	_test_atomic_alternative_cavity_search(diagnostics)
 	_test_patch_boundary_upper_bound(diagnostics)
 	_test_analytic_edge_witness_not_sampling_limited(diagnostics)
 	_test_mixed_lod_interface_oracle()
@@ -210,6 +211,20 @@ func _test_bounded_causal_cavity_search(diagnostics: RefCounted) -> void:
 	var unknown_evaluator: Callable = func(_ids: Array) -> Dictionary: return {"valid": true, "manifold": true, "unrealizable_edges": [], "unresolved_edges": [edge_key], "edges_requiring_expansion": [edge_key], "minimum_feasible_witness_margin": -INF, "boundary_components": 1}
 	var unresolved_search: Dictionary = diagnostics.call("bounded_cavity_search", ["T0"], faces, {}, unknown_evaluator, {"max_faces": 3, "max_states": 100, "max_queue": 20, "max_ms": 30000})
 	_expect(String(unresolved_search.get("status", "")) == "PARTIAL" and String(unresolved_search.get("terminal_reason", "")) == "FINITE_CANDIDATE_GRAPH_EXHAUSTED_WITH_UNRESOLVED_FEASIBILITY", "R6-D finite graph exhaustion preserves unresolved witness feasibility as PARTIAL")
+
+func _test_atomic_alternative_cavity_search(diagnostics: RefCounted) -> void:
+	var faces: Array[Dictionary] = [
+		{"triangle_id": "T0", "root_ids": ["A", "B", "C"]},
+		{"triangle_id": "T1", "root_ids": ["A", "B", "D"]},
+		{"triangle_id": "T2", "root_ids": ["A", "C", "E"]}
+	]
+	var evaluator: Callable = func(ids: Array) -> Dictionary:
+		if ids.size() == 2: return {"valid": false, "reason": "one_face_transition_not_manifold"}
+		return {"valid": true, "manifold": true, "unrealizable_edges": [], "unresolved_edges": [], "boundary_components": 1, "cycles": {"cycles": [{"root_ids": ["A", "B", "C"]}]}, "minimum_feasible_witness_margin": 0.25}
+	var search: Dictionary = diagnostics.call("bounded_cavity_search", ["T0"], faces, {}, evaluator, {"enumerate_alternatives": true, "max_faces": 4, "max_states": 32, "max_queue": 16, "max_ms": 1000, "max_atomic_faces": 2, "max_bundles_per_state": 64})
+	_expect(String(search.get("status", "")) == "FOUND_ALTERNATIVE", "R6-X3 enumerates alternatives after the initial cavity passes")
+	_expect(search.get("selected", {}).get("face_ids", []) == ["T0", "T1", "T2"], "R6-X3 admits a causally adjacent atomic two-face expansion when one-face intermediates fail")
+	_expect(int(search.get("invalid_candidate_patches", 0)) == 2, "R6-X3 retains the rejected one-face intermediate evidence")
 
 func _test_patch_boundary_upper_bound(diagnostics: RefCounted) -> void:
 	var realizer: RefCounted = R6Realizer.new()
