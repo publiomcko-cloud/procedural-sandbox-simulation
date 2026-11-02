@@ -476,7 +476,7 @@ func _run() -> void:
 			_fail("r6_x3_candidate_support_context_invalid", x3_context_full)
 			return
 		var x3_context: Dictionary = x3_context_full.get("context", {})
-		var x3_synthesis: Dictionary = Synthesizer.new().call("synthesize", x3_realizer, volume.get("values", PackedFloat32Array()), roi, x3_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []))
+		var x3_synthesis: Dictionary = Synthesizer.new().call("synthesize", x3_realizer, volume.get("values", PackedFloat32Array()), roi, x3_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), [], false, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS)
 		if not bool(x3_synthesis.get("valid", false)):
 			_fail("r6_x3_support_synthesis_invalid", x3_synthesis)
 			return

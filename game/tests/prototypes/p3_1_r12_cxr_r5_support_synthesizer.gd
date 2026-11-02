@@ -9,6 +9,7 @@ const MAX_RAW_SUPPORTS: int = 4096
 const MAX_SUPPORTS: int = 64
 const MAX_SYNTHESIS_USEC: int = 30000000
 const MAX_BOUNDARY_SOURCE_PAIRS: int = 15
+const MAX_R6X3_BOUNDARY_SOURCE_PAIRS: int = 28
 const MAX_FEASIBLE_REGION_COMPONENTS: int = 4096
 const MAX_CRITICAL_CANDIDATES_PER_PAIR_REGION: int = 7
 const MAX_CRITICAL_CANDIDATES_TOTAL: int = 4096
@@ -16,7 +17,15 @@ const MAX_CONSTRAINT_LINES_PER_PAIR_REGION: int = 256
 const FROZEN_CROSS_SQUARED_CUTOFF: float = 1.0e-12
 const SHA256_EMPTY_BYTES: String = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
-func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = [], x2_target_pairs: Array = [], enumerate_all_critical_vertices: bool = false) -> Dictionary:
+func _boundary_source_domain_gate(polygon: Array[Vector2], boundary_ids: Array[String], max_source_pairs: int) -> Dictionary:
+	var pair_count: int = boundary_ids.size() * maxi(0, boundary_ids.size() - 1) / 2
+	var legacy_six_vertex_domain: bool = max_source_pairs == MAX_BOUNDARY_SOURCE_PAIRS
+	var authorized_pair_cap: bool = legacy_six_vertex_domain or max_source_pairs == MAX_R6X3_BOUNDARY_SOURCE_PAIRS
+	if not authorized_pair_cap or polygon.size() != boundary_ids.size() or boundary_ids.size() < 3 or pair_count > max_source_pairs or (legacy_six_vertex_domain and boundary_ids.size() != 6):
+		return {"valid": false, "reason": "cavity_polygon_or_boundary_invalid", "polygon_vertex_count": polygon.size(), "boundary_vertex_count": boundary_ids.size(), "possible_source_pairs": pair_count, "max_source_pairs": max_source_pairs}
+	return {"valid": true, "boundary_vertex_count": boundary_ids.size(), "possible_source_pairs": pair_count, "max_source_pairs": max_source_pairs}
+
+func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = [], x2_target_pairs: Array = [], enumerate_all_critical_vertices: bool = false, max_boundary_source_pairs: int = MAX_BOUNDARY_SOURCE_PAIRS) -> Dictionary:
 	var started_usec: int = Time.get_ticks_usec()
 	var limits: Dictionary = realizer.call("_cxr_limits")
 	var cutoff: float = float(limits.get("cross_squared_cutoff", NAN))
@@ -43,8 +52,9 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 	for id_value in context.get("cycle", context.get("boundary_cycle", [])): boundary_ids.append(String(id_value))
 	boundary_ids.sort()
 	var possible_source_pairs: int = boundary_ids.size() * maxi(0, boundary_ids.size() - 1) / 2
-	if polygon.size() != 6 or boundary_ids.size() != 6 or possible_source_pairs != MAX_BOUNDARY_SOURCE_PAIRS:
-		return {"valid": false, "reason": "cavity_polygon_or_boundary_invalid"}
+	var boundary_gate: Dictionary = _boundary_source_domain_gate(polygon, boundary_ids, max_boundary_source_pairs)
+	if not bool(boundary_gate.get("valid", false)):
+		return boundary_gate
 	var triangulation: PackedInt32Array = Geometry2D.triangulate_polygon(PackedVector2Array(polygon))
 	if triangulation.is_empty() or triangulation.size() % 3 != 0:
 		return {"valid": false, "reason": "cavity_polygon_triangulation_invalid", "index_count": triangulation.size()}
@@ -310,7 +320,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		"max_critical_candidates_total": MAX_CRITICAL_CANDIDATES_TOTAL,
 		"max_constraint_lines_per_pair_region": MAX_CONSTRAINT_LINES_PER_PAIR_REGION,
 		"max_feasible_region_components": MAX_FEASIBLE_REGION_COMPONENTS,
-		"limits": {"max_tetrahedra": MAX_TETRAHEDRA, "max_zero_facets": MAX_ZERO_FACETS, "max_clip_fragments": MAX_CLIP_FRAGMENTS, "max_raw_supports": MAX_RAW_SUPPORTS, "max_supports": MAX_SUPPORTS, "max_synthesis_usec": MAX_SYNTHESIS_USEC, "max_source_pairs": MAX_BOUNDARY_SOURCE_PAIRS, "max_critical_candidates_per_pair_region": "ALL_REGION_VERTICES_WITH_GLOBAL_TOTAL_CAP" if enumerate_all_critical_vertices else MAX_CRITICAL_CANDIDATES_PER_PAIR_REGION, "max_critical_candidates_total": MAX_CRITICAL_CANDIDATES_TOTAL, "max_constraint_lines_per_pair_region": MAX_CONSTRAINT_LINES_PER_PAIR_REGION, "max_feasible_region_components": MAX_FEASIBLE_REGION_COMPONENTS, "existing_cross_squared_cutoff": cutoff, "existing_max_support_distance": max_support_distance}
+		"limits": {"max_tetrahedra": MAX_TETRAHEDRA, "max_zero_facets": MAX_ZERO_FACETS, "max_clip_fragments": MAX_CLIP_FRAGMENTS, "max_raw_supports": MAX_RAW_SUPPORTS, "max_supports": MAX_SUPPORTS, "max_synthesis_usec": MAX_SYNTHESIS_USEC, "max_source_pairs": max_boundary_source_pairs, "max_critical_candidates_per_pair_region": "ALL_REGION_VERTICES_WITH_GLOBAL_TOTAL_CAP" if enumerate_all_critical_vertices else MAX_CRITICAL_CANDIDATES_PER_PAIR_REGION, "max_critical_candidates_total": MAX_CRITICAL_CANDIDATES_TOTAL, "max_constraint_lines_per_pair_region": MAX_CONSTRAINT_LINES_PER_PAIR_REGION, "max_feasible_region_components": MAX_FEASIBLE_REGION_COMPONENTS, "existing_cross_squared_cutoff": cutoff, "existing_max_support_distance": max_support_distance}
 	}
 
 func _clip_linear_interval(lower: float, upper: float, value_at_lower: float, value_at_upper: float) -> Dictionary:

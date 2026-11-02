@@ -35,6 +35,7 @@ func _run() -> void:
 	_test_mixed_lod_interface_oracle()
 	_test_r6_unbounded_frozen_graph_solver()
 	_test_x2_all_arrangement_vertices()
+	_test_alternative_cavity_boundary_pair_domain()
 	if failures.is_empty():
 		print("R12CXR_R6_CONTRACTS assertions=%d failures=0" % assertions)
 		quit(0)
@@ -71,6 +72,25 @@ func _test_candidate_graph_summary_numeric_formatting() -> void:
 	var summary: Dictionary = synthesizer.call("_candidate_graph_summary", triangles, edges, {"S": {"support_id": "S"}})
 	_expect(String(summary.get("candidate_graph_sha256", "")).length() == 64, "candidate graph summary hashes root and support edges without integer cast error")
 	_expect(int(summary.get("legal_root_root_edges", 0)) == 1 and int(summary.get("legal_root_support_edges", 0)) == 1, "candidate graph summary classifies root and support edges")
+
+func _test_alternative_cavity_boundary_pair_domain() -> void:
+	var synthesizer: RefCounted = R5Synthesizer.new()
+	var six_ids: Array[String] = ["a", "b", "c", "d", "e", "f"]
+	var six_polygon: Array[Vector2] = [Vector2.ZERO, Vector2.RIGHT, Vector2(2.0, 1.0), Vector2(2.0, 2.0), Vector2(1.0, 3.0), Vector2(-1.0, 2.0)]
+	var seven_ids: Array[String] = ["a", "b", "c", "d", "e", "f", "g"]
+	var seven_polygon: Array[Vector2] = [Vector2.ZERO, Vector2.RIGHT, Vector2(2.0, 0.5), Vector2(2.0, 1.5), Vector2(1.0, 2.0), Vector2.ZERO + Vector2(0.0, 2.0), Vector2(-1.0, 1.0)]
+	var legacy: Dictionary = synthesizer.call("_boundary_source_domain_gate", six_polygon, six_ids, 15)
+	var legacy_rejects_extension: Dictionary = synthesizer.call("_boundary_source_domain_gate", seven_polygon, seven_ids, 15)
+	var x3_extension: Dictionary = synthesizer.call("_boundary_source_domain_gate", seven_polygon, seven_ids, R5Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS)
+	var nine_ids: Array[String] = seven_ids.duplicate()
+	nine_ids.append_array(["h", "i"])
+	var nine_polygon: Array[Vector2] = seven_polygon.duplicate()
+	nine_polygon.append_array([Vector2(-2.0, 1.0), Vector2(-2.0, 0.0)])
+	var over_cap: Dictionary = synthesizer.call("_boundary_source_domain_gate", nine_polygon, nine_ids, R5Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS)
+	_expect(bool(legacy.get("valid", false)) and int(legacy.get("possible_source_pairs", 0)) == 15, "legacy six-vertex cavity retains the 15-pair domain")
+	_expect(not bool(legacy_rejects_extension.get("valid", false)), "legacy synthesis does not silently expand beyond six vertices")
+	_expect(bool(x3_extension.get("valid", false)) and int(x3_extension.get("possible_source_pairs", 0)) == 21, "R6-X3 admits a seven-vertex cavity with all 21 source pairs")
+	_expect(not bool(over_cap.get("valid", false)) and int(over_cap.get("possible_source_pairs", 0)) == 36, "alternative cavity pair cap remains finite and fail-closed")
 
 func _test_x2_all_arrangement_vertices() -> void:
 	var synthesizer: RefCounted = R5Synthesizer.new()
