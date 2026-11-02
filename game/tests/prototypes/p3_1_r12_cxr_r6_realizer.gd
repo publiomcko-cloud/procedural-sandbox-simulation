@@ -234,7 +234,7 @@ func _float_from_ordered_key(key: int) -> float:
 ## point. Every representable triple inside the tetrahedron's coordinate AABB
 ## is visited exactly once if this finite search reaches max_radius. Resource
 ## interruption returns PARTIAL_LIMIT with the next shell/offset preserved.
-func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dictionary, max_search_usec: int = 25000, acceptance_gate: Callable = Callable()) -> Dictionary:
+func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dictionary, max_search_usec: int = 25000, acceptance_gate: Callable = Callable(), resume_frontier: Dictionary = {}) -> Dictionary:
 	var positions: Array = tet_data.get("positions", [])
 	if positions.size() != 4 or not original.is_finite():
 		return {"position": original, "accepted": false, "search_state": "INVALID_TETRA_DOMAIN", "finite_domain_complete": false}
@@ -256,20 +256,30 @@ func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dic
 	for axis in range(3):
 		maximum_radius = maxi(maximum_radius, maxi(absi(original_keys[axis] - minimum_keys[axis]), absi(maximum_keys[axis] - original_keys[axis])))
 	var started_usec: int = Time.get_ticks_usec()
-	var tested: int = 0
+	var tested: int = int(resume_frontier.get("tested_triples", 0))
 	var acceptance_rejection_count: int = 0
-	var frontier: Dictionary = {"radius": 0, "dx": 0, "dy": 0, "dz": 0, "tested_triples": 0}
+	var frontier: Dictionary = resume_frontier.duplicate(true) if not resume_frontier.is_empty() else {"radius": 0, "dx": 0, "dy": 0, "dz": 0, "tested_triples": 0}
+	var resume_radius: int = int(frontier.get("radius", 0))
+	var resume_dx: int = int(frontier.get("dx", -resume_radius))
+	var resume_dy: int = int(frontier.get("dy", -resume_radius))
+	var resume_dz: int = int(frontier.get("dz", -resume_radius))
+	var resume_active: bool = not resume_frontier.is_empty()
 	for radius in range(maximum_radius + 1):
+		if resume_active and radius < resume_radius: continue
 		frontier = {"stage": "shell", "radius": radius, "dx": -radius, "dy": -radius, "dz": -radius, "tested_triples": tested}
+		if resume_active and radius == resume_radius and _binary32_frontier_before(radius, -radius, -radius, -radius, resume_radius, resume_dx, resume_dy, resume_dz):
+			frontier = resume_frontier.duplicate(true)
 		if Time.get_ticks_usec() - started_usec >= max_search_usec:
 			return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested, acceptance_rejection_count)
 		for dx in range(-radius, radius + 1):
+			if resume_active and radius == resume_radius and dx < resume_dx: continue
 			frontier = {"stage": "x_offset", "radius": radius, "dx": dx, "dy": -radius, "dz": -radius, "tested_triples": tested}
 			if Time.get_ticks_usec() - started_usec >= max_search_usec:
 				return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested, acceptance_rejection_count)
 			var x_key: int = original_keys[0] + dx
 			if x_key < minimum_keys[0] or x_key > maximum_keys[0]: continue
 			for dy in range(-radius, radius + 1):
+				if resume_active and radius == resume_radius and dx == resume_dx and dy < resume_dy: continue
 				frontier = {"stage": "y_offset", "radius": radius, "dx": dx, "dy": dy, "dz": -radius, "tested_triples": tested}
 				if Time.get_ticks_usec() - started_usec >= max_search_usec:
 					return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested, acceptance_rejection_count)
@@ -281,9 +291,11 @@ func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dic
 				else:
 					z_offsets = [-radius, radius]
 				for dz in z_offsets:
+					if resume_active and radius == resume_radius and dx == resume_dx and dy == resume_dy and dz < resume_dz: continue
 					var z_key: int = original_keys[2] + dz
 					if z_key < minimum_keys[2] or z_key > maximum_keys[2]: continue
 					frontier = {"radius": radius, "dx": dx, "dy": dy, "dz": dz, "tested_triples": tested}
+					resume_active = false
 					if Time.get_ticks_usec() - started_usec >= max_search_usec:
 						return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested, acceptance_rejection_count)
 					var candidate: Vector3 = Vector3(_float_from_ordered_key(x_key), _float_from_ordered_key(y_key), _float_from_ordered_key(z_key))
@@ -311,9 +323,18 @@ func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dic
 	exhausted["reason"] = "EXHAUSTIVE_MULTICOORDINATE_BINARY32_TETRA_DOMAIN"
 	return exhausted
 
+func _binary32_frontier_before(radius: int, dx: int, dy: int, dz: int, target_radius: int, target_dx: int, target_dy: int, target_dz: int) -> bool:
+	if radius != target_radius: return radius < target_radius
+	if dx != target_dx: return dx < target_dx
+	if dy != target_dy: return dy < target_dy
+	return dz < target_dz
+
 func _binary32_search_partial(original: Vector3, tet_data: Dictionary, frontier: Dictionary, maximum_radius: int, tested: int, acceptance_rejection_count: int) -> Dictionary:
 	var partial: Dictionary = _evaluate_zero_point(original, tet_data)
 	partial["position"] = original
+	# A valid seed only proves field representability. It has not passed the
+	# candidate acceptance gate and must never escape as a numeric witness.
+	partial["accepted"] = false
 	partial["search_state"] = "PARTIAL_LIMIT"
 	partial["finite_domain_complete"] = false
 	partial["search_frontier"] = frontier.duplicate(true)

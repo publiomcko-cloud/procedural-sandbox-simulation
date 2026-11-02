@@ -27,7 +27,7 @@ func _boundary_source_domain_gate(polygon: Array[Vector2], boundary_ids: Array[S
 		return {"valid": false, "reason": "cavity_polygon_or_boundary_invalid", "polygon_vertex_count": polygon.size(), "boundary_vertex_count": boundary_ids.size(), "possible_source_pairs": pair_count, "max_source_pairs": max_source_pairs}
 	return {"valid": true, "boundary_vertex_count": boundary_ids.size(), "possible_source_pairs": pair_count, "max_source_pairs": max_source_pairs}
 
-func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = [], x2_target_pairs: Array = [], enumerate_all_critical_vertices: bool = false, max_boundary_source_pairs: int = MAX_BOUNDARY_SOURCE_PAIRS, directed_axis_bracket: bool = false, complete_support_domain: bool = false, stream_evidence_path: String = "", resume_region_states: Dictionary = {}) -> Dictionary:
+func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = [], x2_target_pairs: Array = [], enumerate_all_critical_vertices: bool = false, max_boundary_source_pairs: int = MAX_BOUNDARY_SOURCE_PAIRS, directed_axis_bracket: bool = false, complete_support_domain: bool = false, stream_evidence_path: String = "", resume_region_states: Dictionary = {}, resume_numeric_frontiers: Dictionary = {}) -> Dictionary:
 	var started_usec: int = Time.get_ticks_usec()
 	var synthesis_budget_usec: int = MAX_SYNTHESIS_USEC
 	if complete_support_domain:
@@ -261,7 +261,11 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 						var resolve_region_numerically: bool = complete_support_domain and not region_numeric_search_attempted.has(candidate_region_id) and not witnessed_region_ids.has(candidate_region_id) and not resumed_region_ids.has(candidate_region_id)
 						if resolve_region_numerically:
 							complete_numeric_gate = Callable(self, "_complete_binary32_candidate_gate").bind(realizer, context, id_a, id_b, candidate_region_polygon, cutoff, polygon, vertex_positions, source_origins, max_support_distance)
-						var witness_check: Dictionary = _validate_witness(realizer, witness, source_triangle_2d, world_triangle, tet_data, polygon, vertex_positions, source_origins, max_support_distance, residual_epsilon, barycentric_epsilon, enumerate_all_critical_vertices and (not complete_support_domain or resolve_region_numerically), context, directed_axis_bracket, resolve_region_numerically, complete_numeric_gate)
+						var resume_frontier: Dictionary = resume_numeric_frontiers.get(candidate_region_id, {}) if resolve_region_numerically else {}
+						if not resume_frontier.is_empty() and not _resume_frontier_matches_candidate(resume_frontier, id_a, id_b, tet_data.global_cell, tet_index, facet_index, String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), witness):
+							cap_reason = "PARTIAL_LIMIT_RESUME_FRONTIER_IDENTITY_MISMATCH"
+							break
+						var witness_check: Dictionary = _validate_witness(realizer, witness, source_triangle_2d, world_triangle, tet_data, polygon, vertex_positions, source_origins, max_support_distance, residual_epsilon, barycentric_epsilon, enumerate_all_critical_vertices and (not complete_support_domain or resolve_region_numerically), context, directed_axis_bracket, resolve_region_numerically, complete_numeric_gate, resume_frontier)
 						var x2_audit_row: Dictionary = {"boundary_pair": [id_a, id_b], "source_cell_global_lattice": tet_data.global_cell, "source_cell_local": cell, "source_tetrahedron": tet_index, "source_facet": facet_index, "arrangement_region_id": candidate_region_id, "critical_candidate_method": String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), "projected_position": witness, "pre_correction_world_position": witness_check.get("pre_correction_world_position", witness_check.get("world", Vector3.ZERO)), "world_position": witness_check.get("world", Vector3.ZERO), "field_residual": witness_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "barycentric_weights": witness_check.get("tetra_weights", []), "binary32_representability_correction": witness_check.get("binary32_representability_correction", {}), "witness_valid": bool(witness_check.get("valid", false)), "reason": witness_check.get("reason", "")}
 						if enumerate_all_critical_vertices and witness_check.has("binary32_representability_correction"):
 							var correction_record: Dictionary = witness_check.binary32_representability_correction
@@ -1248,6 +1252,17 @@ func _map_projected_point(point: Vector2, source: Array[Vector2], world: Array[V
 	if not position.is_finite(): return {"valid": false, "reason": "mapped_world_point_nonfinite"}
 	return {"valid": true, "world": position, "weights": weights}
 
+func _resume_frontier_matches_candidate(frontier: Dictionary, id_a: String, id_b: String, global_cell: Vector3i, tet_index: int, facet_index: int, method: String, projected: Vector2) -> bool:
+	if JSON.stringify(frontier.get("boundary_pair", [])) != JSON.stringify([id_a, id_b]): return false
+	var cell_value: Variant = frontier.get("source_cell_global_lattice", [])
+	if typeof(cell_value) != TYPE_ARRAY or cell_value.size() != 3: return false
+	if Vector3i(int(cell_value[0]), int(cell_value[1]), int(cell_value[2])) != global_cell: return false
+	if int(frontier.get("source_tetrahedron", -1)) != tet_index or int(frontier.get("source_facet", -1)) != facet_index: return false
+	if String(frontier.get("critical_candidate_method", "")) != method: return false
+	var seed_value: Variant = frontier.get("seed_projected_position", [])
+	if typeof(seed_value) != TYPE_ARRAY or seed_value.size() != 2: return false
+	return Vector2(float(seed_value[0]), float(seed_value[1])) == projected
+
 func _complete_binary32_candidate_gate(point: Vector3, realizer: RefCounted, projection_context: Dictionary, id_a: String, id_b: String, arrangement_region: Array[Vector2], cutoff: float, cavity_polygon: Array[Vector2], topology_positions: Dictionary, source_origins: Array[Dictionary], max_distance: float) -> bool:
 	var projected: Vector2 = _project(point, projection_context)
 	if arrangement_region.size() < 3 or not _point_strictly_inside(projected, arrangement_region): return false
@@ -1261,7 +1276,7 @@ func _complete_binary32_candidate_gate(point: Vector3, realizer: RefCounted, pro
 	var exact_gate: Dictionary = _single_support_pair_gate(realizer, projection_context, id_a, id_b, point, projected, cutoff)
 	return bool(exact_gate.get("valid", false))
 
-func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Array[Vector2], source_world: Array[Vector3], tet_data: Dictionary, domain_polygon: Array[Vector2], topology_positions: Dictionary, source_origins: Array[Dictionary], max_distance: float, residual_epsilon: float, barycentric_epsilon: float, correct_binary32: bool = false, projection_context: Dictionary = {}, directed_axis_bracket: bool = false, multi_coordinate_search: bool = false, acceptance_gate: Callable = Callable()) -> Dictionary:
+func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Array[Vector2], source_world: Array[Vector3], tet_data: Dictionary, domain_polygon: Array[Vector2], topology_positions: Dictionary, source_origins: Array[Dictionary], max_distance: float, residual_epsilon: float, barycentric_epsilon: float, correct_binary32: bool = false, projection_context: Dictionary = {}, directed_axis_bracket: bool = false, multi_coordinate_search: bool = false, acceptance_gate: Callable = Callable(), resume_numeric_frontier: Dictionary = {}) -> Dictionary:
 	if _point_on_polygon_boundary(projected, domain_polygon): return {"valid": false, "reason": "support_on_cavity_boundary"}
 	var mapped: Dictionary = _map_projected_point(projected, source_2d, source_world)
 	if not bool(mapped.get("valid", false)): return mapped
@@ -1275,7 +1290,7 @@ func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Arra
 		if multi_coordinate_search:
 			var search_budget_raw: String = OS.get_environment("R12CXR_R6_BINARY32_SEARCH_BUDGET_MS")
 			var search_budget_ms: int = maxi(1, search_budget_raw.to_int()) if not search_budget_raw.is_empty() else 100
-			searched = realizer.call("_search_representable_zero_multicoordinate", point, tet_data, search_budget_ms * 1000, acceptance_gate)
+			searched = realizer.call("_search_representable_zero_multicoordinate", point, tet_data, search_budget_ms * 1000, acceptance_gate, resume_numeric_frontier)
 			representation_method = "COMPLETE_MULTICOORDINATE_BINARY32_TETRA_ENUMERATION_WITH_FULL_SUPPORT_ACCEPTANCE_GATE_AND_RESOURCE_FRONTIER"
 		else:
 			searched = realizer.call("_search_representable_zero_axis_bracket" if directed_axis_bracket else "_search_representable_zero", point, tet_data)

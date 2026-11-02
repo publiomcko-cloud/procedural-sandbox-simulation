@@ -181,6 +181,9 @@ func _test_stable_region_partition(_diagnostics: RefCounted) -> void:
 
 func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	var realizer: RefCounted = R6Realizer.new()
+	var frontier_identity: Dictionary = {"boundary_pair": ["edge:a", "edge:b"], "source_cell_global_lattice": [60, 8, 25], "source_tetrahedron": 2, "source_facet": 1, "critical_candidate_method": "FEASIBLE_REGION_CENTROID", "seed_projected_position": [0.25, 0.5]}
+	_expect(bool(R5Synthesizer.new().call("_resume_frontier_matches_candidate", frontier_identity, "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, "FEASIBLE_REGION_CENTROID", Vector2(0.25, 0.5))), "R6-Y resumes a numeric frontier only for its exact source candidate")
+	_expect(not bool(R5Synthesizer.new().call("_resume_frontier_matches_candidate", frontier_identity, "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, "FEASIBLE_REGION_CENTROID", Vector2(0.25, 0.5001))), "R6-Y rejects a numeric frontier when its seed identity differs")
 	var one_up: float = realizer.call("_step_binary32", 1.0, 1)
 	var one_down: float = realizer.call("_step_binary32", 1.0, -1)
 	var negative_up: float = realizer.call("_step_binary32", -1.0, 1)
@@ -213,6 +216,8 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	var excluded_first_witness: Vector3 = Vector3(multicoordinate.get("position", Vector3.ZERO))
 	var acceptance_gated_search: Dictionary = realizer.call("_search_representable_zero_multicoordinate", multicoordinate_origin, multicoordinate_tet, 1000000, Callable(func(candidate: Vector3) -> bool: return candidate != excluded_first_witness))
 	_expect(bool(acceptance_gated_search.get("accepted", false)) and Vector3(acceptance_gated_search.get("position", excluded_first_witness)) != excluded_first_witness and int(acceptance_gated_search.get("acceptance_gate_rejection_count", 0)) > 0, "R6-Y binary32 enumeration continues after a field-valid candidate fails the complete support acceptance gate")
+	var partial_acceptance: Dictionary = realizer.call("_search_representable_zero_multicoordinate", Vector3(0.5, 0.0, 0.0), representability_tet, 1, Callable(func(_candidate: Vector3) -> bool: return false))
+	_expect(String(partial_acceptance.get("search_state", "")) == "PARTIAL_LIMIT" and not bool(partial_acceptance.get("accepted", true)) and not bool(partial_acceptance.get("finite_domain_complete", true)), "R6-Y numeric timeout never promotes its field-valid seed to a support witness")
 	var single_point_tet: Dictionary = {"positions": [Vector3.ONE, Vector3.ONE, Vector3.ONE, Vector3.ONE], "samples": [0.0, 0.0, 0.0, 0.0]}
 	var exhausted_representation: Dictionary = realizer.call("_search_representable_zero_multicoordinate", Vector3.ONE, single_point_tet, 1000000, Callable(func(_candidate: Vector3) -> bool: return false))
 	_expect(not bool(exhausted_representation.get("accepted", false)) and bool(exhausted_representation.get("finite_domain_complete", false)) and String(exhausted_representation.get("search_state", "")) == "EXHAUSTED_NO_VALID_BINARY32_POINT_IN_TETRA_AABB", "R6-Y binary32 enumeration distinguishes complete finite AABB exhaustion from a resource frontier")

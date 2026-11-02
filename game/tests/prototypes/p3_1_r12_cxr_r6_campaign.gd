@@ -666,7 +666,7 @@ func _run() -> void:
 					_fail("r6_y1_resume_input_not_qualified", y_resume)
 					return
 			var y_stream_path: String = output_path + ".support-domain.jsonl"
-			var y_synthesis: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), y_pairs, true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, false, true, y_stream_path, y_resume.get("region_states", {}))
+			var y_synthesis: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), y_pairs, true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, false, true, y_stream_path, y_resume.get("region_states", {}), y_resume.get("numeric_frontiers", {}))
 			var y_prior_supports: Array = x4_previous_synthesis.get("supports", []).duplicate(true)
 			for resume_support in y_resume.get("supports", []): y_prior_supports.append(resume_support)
 			var y_support_merge: Dictionary = _merge_y1_support_domain_supports(y_synthesis, y_prior_supports, x4_realizer)
@@ -1827,15 +1827,32 @@ func _load_y1_resume_state(result_path: String, expected_result_sha256: String, 
 		return {"valid": false, "reason": "RESUME_BOUNDARY_PAIR_DOMAIN_MISMATCH", "prior_pair_count": prior_pairs.size(), "current_pair_count": expected_boundary_pairs.size()}
 	var region_states: Dictionary = {}
 	var resolution_counts: Dictionary = {}
+	var numeric_frontiers: Dictionary = {}
 	var stream_text: String = FileAccess.get_file_as_string(stream_path)
 	for line_value in stream_text.split("\n", false):
-		var row_value: Variant = JSON.parse_string(line_value)
+		var row_value: Variant = JSON.parse_string(line_value.replace(String.chr(31), "\\u001f").replace(String.chr(30), "\\u001e"))
 		if typeof(row_value) != TYPE_DICTIONARY: continue
 		var row: Dictionary = row_value
-		if String(row.get("record_type", "")) != "continuous_zero_set_region_resolution": continue
 		var record_value: Variant = row.get("record", {})
 		if typeof(record_value) != TYPE_DICTIONARY: continue
 		var record: Dictionary = record_value
+		if String(row.get("record_type", "")) == "critical_candidate_gate_audit":
+			var correction: Dictionary = record.get("binary32_representability_correction", {})
+			var region_id: String = String(record.get("arrangement_region_id", ""))
+			if String(correction.get("search_state", "")) == "PARTIAL_LIMIT" and not region_id.is_empty():
+				var frontier: Dictionary = correction.get("search_frontier", {})
+				if not frontier.is_empty():
+					frontier["boundary_pair"] = record.get("boundary_pair", [])
+					frontier["source_cell_global_lattice"] = record.get("source_cell_global_lattice", [])
+					frontier["source_tetrahedron"] = record.get("source_tetrahedron", -1)
+					frontier["source_facet"] = record.get("source_facet", -1)
+					frontier["critical_candidate_method"] = record.get("critical_candidate_method", "UNKNOWN_NOT_CAPTURED")
+					frontier["seed_projected_position"] = record.get("projected_position", [])
+					var prior_frontier: Dictionary = numeric_frontiers.get(region_id, {})
+					if int(frontier.get("tested_triples", 0)) > int(prior_frontier.get("tested_triples", -1)):
+						numeric_frontiers[region_id] = frontier
+			continue
+		if String(row.get("record_type", "")) != "continuous_zero_set_region_resolution": continue
 		var resolution: String = String(record.get("resolution", ""))
 		if resolution not in ["ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF", "VALID_REPRESENTABLE_SUPPORT_WITNESS"]: continue
 		var region_id: String = String(record.get("region_id", ""))
@@ -1852,7 +1869,7 @@ func _load_y1_resume_state(result_path: String, expected_result_sha256: String, 
 		var support: Dictionary = support_value
 		if witnessed_region_ids.has(String(support.get("constraint_arrangement_region_id", ""))) and bool(support.get("accepted", false)) and bool(support.get("supported", false)):
 			resume_supports.append(support)
-	return {"valid": true, "region_states": region_states, "supports": resume_supports, "metadata": {"source_result_path": result_path, "source_result_sha256": observed_result_sha256, "source_stream_path": stream_path, "source_stream_sha256": observed_stream_sha256, "resumed_region_count": region_states.size(), "resumed_resolution_histogram": resolution_counts, "resumed_support_count": resume_supports.size(), "prior_attempt_id": result.get("attempt_id", ""), "same_scientific_attempt": true}}
+	return {"valid": true, "region_states": region_states, "numeric_frontiers": numeric_frontiers, "supports": resume_supports, "metadata": {"source_result_path": result_path, "source_result_sha256": observed_result_sha256, "source_stream_path": stream_path, "source_stream_sha256": observed_stream_sha256, "resumed_region_count": region_states.size(), "resumed_resolution_histogram": resolution_counts, "resumed_numeric_frontier_count": numeric_frontiers.size(), "resumed_numeric_tested_triples": numeric_frontiers.values().reduce(func(total: int, frontier: Dictionary) -> int: return total + int(frontier.get("tested_triples", 0)), 0), "resumed_support_count": resume_supports.size(), "prior_attempt_id": result.get("attempt_id", ""), "same_scientific_attempt": true}}
 
 func _run_y1_resume_check() -> void:
 	var result_path: String = OS.get_environment("R12CXR_R6_Y1_RESUME_INPUT")
