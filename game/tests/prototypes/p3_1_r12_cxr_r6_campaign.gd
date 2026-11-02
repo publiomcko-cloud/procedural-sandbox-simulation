@@ -1737,9 +1737,12 @@ func _merge_y1_support_domain_supports(synthesis_value: Dictionary, prior_suppor
 			return {"valid": false, "reason": "R6_Y1_GENERATED_SUPPORT_IDENTITY_MISSING", "support": support}
 		if seen_positions.has(position_identity) or seen_ids.has(support_id):
 			return {"valid": false, "reason": "R6_Y1_GENERATED_SUPPORT_DOMAIN_DUPLICATE_IDENTITY", "support_id": support_id, "position_identity": position_identity}
+		var generated_geometry: Dictionary = _r6_rehydrate_support_geometry(support)
+		if not bool(generated_geometry.get("valid", false)):
+			return {"valid": false, "reason": "R6_Y1_GENERATED_SUPPORT_GEOMETRY_REHYDRATION_FAILED", "support_id": support_id, "geometry": generated_geometry}
 		seen_positions[position_identity] = true
 		seen_ids[support_id] = true
-		supports.append(support.duplicate(true))
+		supports.append(generated_geometry.get("support", {}))
 	var generated_support_count: int = supports.size()
 	var carried_forward_count: int = 0
 	for prior_value in prior_support_values:
@@ -1754,22 +1757,10 @@ func _merge_y1_support_domain_supports(synthesis_value: Dictionary, prior_suppor
 			return {"valid": false, "reason": "R6_Y1_PRIOR_SUPPORT_ID_COLLIDES_AT_DISTINCT_POSITION", "support_id": prior_support_id, "position_identity": prior_position_identity}
 		seen_positions[prior_position_identity] = true
 		seen_ids[prior_support_id] = true
-		var carried: Dictionary = prior_support.duplicate(true)
-		var global_cell_value: Dictionary = _r6_parse_vector3(prior_support.get("source_cell_global_lattice", null))
-		var local_cell_value: Dictionary = _r6_parse_vector3(prior_support.get("source_cell_local", null))
-		var world_position_value: Dictionary = _r6_parse_vector3(prior_support.get("world_position", null))
-		if not bool(global_cell_value.get("valid", false)) or not bool(local_cell_value.get("valid", false)) or not bool(world_position_value.get("valid", false)):
-			return {"valid": false, "reason": "R6_Y1_PRIOR_SUPPORT_GEOMETRY_REHYDRATION_FAILED", "support_id": prior_support_id, "global_cell": global_cell_value, "local_cell": local_cell_value, "world_position": world_position_value}
-		carried["source_cell_global_lattice"] = Vector3i(roundi(float(global_cell_value.point.x)), roundi(float(global_cell_value.point.y)), roundi(float(global_cell_value.point.z)))
-		carried["source_cell_local"] = Vector3i(roundi(float(local_cell_value.point.x)), roundi(float(local_cell_value.point.y)), roundi(float(local_cell_value.point.z)))
-		carried["world_position"] = Vector3(world_position_value.point)
-		var corners: Array[Vector3] = []
-		for corner_value in prior_support.get("tetrahedron_corner_world", []):
-			var corner_result: Dictionary = _r6_parse_vector3(corner_value)
-			if not bool(corner_result.get("valid", false)):
-				return {"valid": false, "reason": "R6_Y1_PRIOR_SUPPORT_TETRA_CORNER_REHYDRATION_FAILED", "support_id": prior_support_id, "corner": corner_value}
-			corners.append(Vector3(corner_result.point))
-		carried["tetrahedron_corner_world"] = corners
+		var prior_geometry: Dictionary = _r6_rehydrate_support_geometry(prior_support)
+		if not bool(prior_geometry.get("valid", false)):
+			return {"valid": false, "reason": "R6_Y1_PRIOR_SUPPORT_GEOMETRY_REHYDRATION_FAILED", "support_id": prior_support_id, "geometry": prior_geometry}
+		var carried: Dictionary = prior_geometry.get("support", {})
 		carried["carried_forward_from_accepted_prior_domain"] = true
 		supports.append(carried)
 		carried_forward_count += 1
@@ -1782,8 +1773,28 @@ func _merge_y1_support_domain_supports(synthesis_value: Dictionary, prior_suppor
 	synthesis["support_cap_hit"] = false
 	return {"valid": true, "synthesis": synthesis, "generated_support_count": generated_support_count, "carried_forward_support_count": carried_forward_count, "merged_support_count": supports.size(), "deduplication_key": "BINARY32_POSITION_IDENTITY", "prior_support_domain_preserved": true}
 
+func _r6_rehydrate_support_geometry(source_support: Dictionary) -> Dictionary:
+	var support: Dictionary = source_support.duplicate(true)
+	var global_cell_value: Dictionary = _r6_parse_vector3(support.get("source_cell_global_lattice", null))
+	var local_cell_value: Dictionary = _r6_parse_vector3(support.get("source_cell_local", null))
+	var world_position_value: Dictionary = _r6_parse_vector3(support.get("world_position", null))
+	if not bool(global_cell_value.get("valid", false)) or not bool(local_cell_value.get("valid", false)) or not bool(world_position_value.get("valid", false)):
+		return {"valid": false, "reason": "support_cell_or_position_invalid", "global_cell": global_cell_value, "local_cell": local_cell_value, "world_position": world_position_value}
+	support["source_cell_global_lattice"] = Vector3i(roundi(float(global_cell_value.point.x)), roundi(float(global_cell_value.point.y)), roundi(float(global_cell_value.point.z)))
+	support["source_cell_local"] = Vector3i(roundi(float(local_cell_value.point.x)), roundi(float(local_cell_value.point.y)), roundi(float(local_cell_value.point.z)))
+	support["world_position"] = Vector3(world_position_value.point)
+	var corners: Array[Vector3] = []
+	for corner_value in support.get("tetrahedron_corner_world", []):
+		var corner_result: Dictionary = _r6_parse_vector3(corner_value)
+		if not bool(corner_result.get("valid", false)):
+			return {"valid": false, "reason": "tetra_corner_invalid", "corner": corner_value}
+		corners.append(Vector3(corner_result.point))
+	support["tetrahedron_corner_world"] = corners
+	return {"valid": true, "support": support}
+
 func _r6_parse_vector3(value: Variant) -> Dictionary:
 	if value is Vector3: return {"valid": true, "point": Vector3(value)}
+	if value is Vector3i: return {"valid": true, "point": Vector3(value)}
 	var coordinates: Array = []
 	if value is Array:
 		coordinates = value.duplicate()
