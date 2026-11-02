@@ -46,10 +46,11 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 	for resume_region_key in resume_region_states.keys():
 		var resume_region: Dictionary = resume_region_states[resume_region_key]
 		var resume_resolution: String = String(resume_region.get("resolution", ""))
-		if resume_resolution not in ["ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF", "VALID_REPRESENTABLE_SUPPORT_WITNESS"]: continue
+		if resume_resolution not in ["ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF", "ANALYTIC_NO_STRICT_REGION_CAVITY_INTERSECTION", "VALID_REPRESENTABLE_SUPPORT_WITNESS", "EXHAUSTIVE_NO_VALID_REPRESENTABLE_SUPPORT_IN_TETRA_DOMAIN"]: continue
 		resumed_region_ids[String(resume_region_key)] = resume_resolution
 		region_numeric_search_attempted[String(resume_region_key)] = true
 		if resume_resolution == "VALID_REPRESENTABLE_SUPPORT_WITNESS": witnessed_region_ids[String(resume_region_key)] = true
+		if not resumed_region_resolution_histogram.has(resume_resolution): resumed_region_resolution_histogram[resume_resolution] = 0
 		resumed_region_resolution_histogram[resume_resolution] = int(resumed_region_resolution_histogram.get(resume_resolution, 0)) + 1
 	var projected_region_polygons: Dictionary = {}
 	var exhausted_region_proofs: Array[Dictionary] = []
@@ -212,6 +213,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 					var root_a_2d: Vector2 = Vector2(projected_positions.get(id_a, Vector2.ZERO))
 					var root_b_2d: Vector2 = Vector2(projected_positions.get(id_b, Vector2.ZERO))
 					var region_key: String = "%s|%06d|%02d|%02d|%s|%s" % [str(tet_data.global_cell), tet_index, facet_index, domain_index, id_a, id_b]
+					var complete_region_key: String = _region_resume_key(region_key, id_a, id_b, tet_data.global_cell, tet_index, facet_index)
 					enumeration_frontier = {"tetrahedron": tet_index, "facet": facet_index, "domain": domain_index, "source_pair": [id_a, id_b], "region": feasible_region_count, "candidate": 0, "completed_critical_candidates": critical_candidate_count, "completed_support_rows": raw_by_identity.size()}
 					var region_result: Dictionary = _triangle_first_critical_candidates(clipped, polygon, root_a_2d, root_b_2d, a, b, source_triangle_2d, world_triangle, arc_segments, feasible_region_count, region_key, critical_candidate_count, enumerate_all_critical_vertices, complete_support_domain, started_usec, synthesis_budget_usec, memory_budget_bytes)
 					if not bool(region_result.get("valid", false)):
@@ -258,10 +260,11 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 						var candidate_region_polygon: Array[Vector2] = []
 						for projected_vertex in projected_region_polygons.get(candidate_region_id, []): candidate_region_polygon.append(Vector2(projected_vertex))
 						var complete_numeric_gate: Callable = Callable()
-						var resolve_region_numerically: bool = complete_support_domain and not region_numeric_search_attempted.has(candidate_region_id) and not witnessed_region_ids.has(candidate_region_id) and not resumed_region_ids.has(candidate_region_id)
+						var resolve_region_numerically: bool = complete_support_domain and not region_numeric_search_attempted.has(complete_region_key) and not witnessed_region_ids.has(complete_region_key) and not resumed_region_ids.has(complete_region_key)
 						if resolve_region_numerically:
 							complete_numeric_gate = Callable(self, "_complete_binary32_candidate_gate").bind(realizer, context, id_a, id_b, candidate_region_polygon, cutoff, polygon, vertex_positions, source_origins, max_support_distance)
-						var resume_frontier: Dictionary = resume_numeric_frontiers.get(candidate_region_id, {}) if resolve_region_numerically else {}
+						var resume_key: String = _numeric_resume_key(candidate_region_id, id_a, id_b, tet_data.global_cell, tet_index, facet_index, String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), witness)
+						var resume_frontier: Dictionary = resume_numeric_frontiers.get(resume_key, {}) if resolve_region_numerically else {}
 						if not resume_frontier.is_empty() and not _resume_frontier_matches_candidate(resume_frontier, id_a, id_b, tet_data.global_cell, tet_index, facet_index, String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), witness):
 							cap_reason = "PARTIAL_LIMIT_RESUME_FRONTIER_IDENTITY_MISMATCH"
 							break
@@ -270,7 +273,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 						if enumerate_all_critical_vertices and witness_check.has("binary32_representability_correction"):
 							var correction_record: Dictionary = witness_check.binary32_representability_correction
 							if bool(correction_record.get("attempted", false)):
-								if complete_support_domain: region_numeric_search_attempted[candidate_region_id] = true
+								if complete_support_domain: region_numeric_search_attempted[complete_region_key] = true
 								if bool(correction_record.get("accepted", false)): x2_representability_correction_count += 1
 								else: x2_representability_correction_failure_count += 1
 						if not bool(witness_check.get("valid", false)):
@@ -339,7 +342,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 								if complete_support_domain: stream_row_count += 1
 							continue
 						feasible_single_support_count += 1
-						witnessed_region_ids[String(witness_record.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED"))] = true
+						witnessed_region_ids[complete_region_key] = true
 						if enumerate_all_critical_vertices:
 							x2_audit_row["terminal_gate"] = "SINGLE_SUPPORT_PAIR_PASS"
 							x2_audit_row["cross_squared"] = cross_squared
@@ -417,10 +420,11 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 			if String(proof.get("arrangement_region_id", "")) == region_id:
 				exhaustion_proof = proof
 				break
-		var outcome: String = "ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF" if all_extremes_mapped and maximum_cross_squared <= cutoff else "ANALYTIC_NO_STRICT_REGION_CAVITY_INTERSECTION" if strict_cavity_intersection_empty else "VALID_REPRESENTABLE_SUPPORT_WITNESS" if witnessed_region_ids.has(region_id) else "EXHAUSTIVE_NO_VALID_REPRESENTABLE_SUPPORT_IN_TETRA_DOMAIN" if not exhaustion_proof.is_empty() else "UNRESOLVED_REGION_REQUIRES_FURTHER_PROOF_OR_WITNESS"
+		var bound_region_key: String = _region_resume_key(region_id, String(bound.get("source_pair", ["", ""])[0]), String(bound.get("source_pair", ["", ""])[1]), Vector3i(bound.get("source_cell_global_lattice", Vector3i.ZERO)), int(bound.get("source_tetrahedron", -1)), int(bound.get("source_facet", -1)))
+		var outcome: String = "ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF" if all_extremes_mapped and maximum_cross_squared <= cutoff else "ANALYTIC_NO_STRICT_REGION_CAVITY_INTERSECTION" if strict_cavity_intersection_empty else "VALID_REPRESENTABLE_SUPPORT_WITNESS" if witnessed_region_ids.has(bound_region_key) else "EXHAUSTIVE_NO_VALID_REPRESENTABLE_SUPPORT_IN_TETRA_DOMAIN" if not exhaustion_proof.is_empty() else "UNRESOLVED_REGION_REQUIRES_FURTHER_PROOF_OR_WITNESS"
 		if outcome == "UNRESOLVED_REGION_REQUIRES_FURTHER_PROOF_OR_WITNESS": unresolved_continuous_region_count += 1
 		bound["resolution"] = outcome
-		bound["support_witness_found"] = witnessed_region_ids.has(region_id)
+		bound["support_witness_found"] = witnessed_region_ids.has(bound_region_key)
 		if not exhaustion_proof.is_empty(): bound["binary32_exhaustion_proof"] = exhaustion_proof
 		continuous_region_outcomes.append(bound)
 		if complete_support_domain:
@@ -430,7 +434,10 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 	var unresolved_numeric_search_frontier_count: int = 0
 	for frontier_value in numeric_search_frontiers:
 		var frontier_record: Dictionary = frontier_value
-		if not witnessed_region_ids.has(String(frontier_record.get("arrangement_region_id", ""))): unresolved_numeric_search_frontier_count += 1
+		var frontier_pair: Array = frontier_record.get("boundary_pair", ["", ""])
+		var frontier_cell: Vector3i = Vector3i(frontier_record.get("source_cell_global_lattice", Vector3i.ZERO))
+		var frontier_region_key: String = _region_resume_key(String(frontier_record.get("arrangement_region_id", "")), String(frontier_pair[0]), String(frontier_pair[1]), frontier_cell, int(frontier_record.get("source_tetrahedron", -1)), int(frontier_record.get("source_facet", -1)))
+		if not witnessed_region_ids.has(frontier_region_key): unresolved_numeric_search_frontier_count += 1
 	if complete_support_domain and cap_reason.is_empty() and unresolved_numeric_search_frontier_count > 0:
 		cap_reason = "PARTIAL_LIMIT_BINARY32_REPRESENTABLE_SEARCH"
 	var stream_identity: Dictionary = {}
@@ -1262,6 +1269,12 @@ func _resume_frontier_matches_candidate(frontier: Dictionary, id_a: String, id_b
 	var seed_value: Variant = frontier.get("seed_projected_position", [])
 	if typeof(seed_value) != TYPE_ARRAY or seed_value.size() != 2: return false
 	return Vector2(float(seed_value[0]), float(seed_value[1])) == projected
+
+func _numeric_resume_key(region_id: String, id_a: String, id_b: String, global_cell: Vector3i, tet_index: int, facet_index: int, method: String, projected: Vector2) -> String:
+	return JSON.stringify([region_id, id_a, id_b, [global_cell.x, global_cell.y, global_cell.z], tet_index, facet_index, method, [projected.x, projected.y]])
+
+func _region_resume_key(region_id: String, id_a: String, id_b: String, global_cell: Vector3i, tet_index: int, facet_index: int) -> String:
+	return JSON.stringify([region_id, id_a, id_b, [global_cell.x, global_cell.y, global_cell.z], tet_index, facet_index])
 
 func _complete_binary32_candidate_gate(point: Vector3, realizer: RefCounted, projection_context: Dictionary, id_a: String, id_b: String, arrangement_region: Array[Vector2], cutoff: float, cavity_polygon: Array[Vector2], topology_positions: Dictionary, source_origins: Array[Dictionary], max_distance: float) -> bool:
 	var projected: Vector2 = _project(point, projection_context)

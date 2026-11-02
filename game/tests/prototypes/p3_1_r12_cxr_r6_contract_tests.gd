@@ -181,9 +181,13 @@ func _test_stable_region_partition(_diagnostics: RefCounted) -> void:
 
 func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	var realizer: RefCounted = R6Realizer.new()
+	var synthesizer: RefCounted = R5Synthesizer.new()
 	var frontier_identity: Dictionary = {"boundary_pair": ["edge:a", "edge:b"], "source_cell_global_lattice": [60, 8, 25], "source_tetrahedron": 2, "source_facet": 1, "critical_candidate_method": "FEASIBLE_REGION_CENTROID", "seed_projected_position": [0.25, 0.5]}
-	_expect(bool(R5Synthesizer.new().call("_resume_frontier_matches_candidate", frontier_identity, "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, "FEASIBLE_REGION_CENTROID", Vector2(0.25, 0.5))), "R6-Y resumes a numeric frontier only for its exact source candidate")
-	_expect(not bool(R5Synthesizer.new().call("_resume_frontier_matches_candidate", frontier_identity, "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, "FEASIBLE_REGION_CENTROID", Vector2(0.25, 0.5001))), "R6-Y rejects a numeric frontier when its seed identity differs")
+	_expect(bool(synthesizer.call("_resume_frontier_matches_candidate", frontier_identity, "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, "FEASIBLE_REGION_CENTROID", Vector2(0.25, 0.5))), "R6-Y resumes a numeric frontier only for its exact source candidate")
+	_expect(not bool(synthesizer.call("_resume_frontier_matches_candidate", frontier_identity, "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, "FEASIBLE_REGION_CENTROID", Vector2(0.25, 0.5001))), "R6-Y rejects a numeric frontier when its seed identity differs")
+	var resume_key: String = synthesizer.call("_numeric_resume_key", "region", "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, "FEASIBLE_REGION_CENTROID", Vector2(0.25, 0.5))
+	var collision_key: String = synthesizer.call("_numeric_resume_key", "region", "edge:c", "edge:d", Vector3i(60, 8, 25), 2, 1, "FEASIBLE_REGION_CENTROID", Vector2(0.25, 0.5))
+	_expect(resume_key != collision_key, "R6-Y numeric resume identity includes the boundary pair and disambiguates region ID collisions")
 	var one_up: float = realizer.call("_step_binary32", 1.0, 1)
 	var one_down: float = realizer.call("_step_binary32", 1.0, -1)
 	var negative_up: float = realizer.call("_step_binary32", -1.0, 1)

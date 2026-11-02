@@ -1841,35 +1841,61 @@ func _load_y1_resume_state(result_path: String, expected_result_sha256: String, 
 			var region_id: String = String(record.get("arrangement_region_id", ""))
 			if String(correction.get("search_state", "")) == "PARTIAL_LIMIT" and not region_id.is_empty():
 				var frontier: Dictionary = correction.get("search_frontier", {})
-				if not frontier.is_empty():
+				var pair: Array = record.get("boundary_pair", [])
+				var cell: Array = record.get("source_cell_global_lattice", [])
+				var projected: Array = record.get("projected_position", [])
+				if not frontier.is_empty() and pair.size() == 2 and cell.size() == 3 and projected.size() == 2:
 					frontier["boundary_pair"] = record.get("boundary_pair", [])
 					frontier["source_cell_global_lattice"] = record.get("source_cell_global_lattice", [])
 					frontier["source_tetrahedron"] = record.get("source_tetrahedron", -1)
 					frontier["source_facet"] = record.get("source_facet", -1)
 					frontier["critical_candidate_method"] = record.get("critical_candidate_method", "UNKNOWN_NOT_CAPTURED")
 					frontier["seed_projected_position"] = record.get("projected_position", [])
-					var prior_frontier: Dictionary = numeric_frontiers.get(region_id, {})
+					var resume_key: String = JSON.stringify([region_id, String(pair[0]), String(pair[1]), cell, int(record.get("source_tetrahedron", -1)), int(record.get("source_facet", -1)), String(record.get("critical_candidate_method", "UNKNOWN_NOT_CAPTURED")), projected])
+					frontier["resume_key"] = resume_key
+					var prior_frontier: Dictionary = numeric_frontiers.get(resume_key, {})
 					if int(frontier.get("tested_triples", 0)) > int(prior_frontier.get("tested_triples", -1)):
-						numeric_frontiers[region_id] = frontier
+						numeric_frontiers[resume_key] = frontier
 			continue
 		if String(row.get("record_type", "")) != "continuous_zero_set_region_resolution": continue
 		var resolution: String = String(record.get("resolution", ""))
-		if resolution not in ["ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF", "VALID_REPRESENTABLE_SUPPORT_WITNESS"]: continue
+		if resolution not in ["ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF", "ANALYTIC_NO_STRICT_REGION_CAVITY_INTERSECTION", "VALID_REPRESENTABLE_SUPPORT_WITNESS", "EXHAUSTIVE_NO_VALID_REPRESENTABLE_SUPPORT_IN_TETRA_DOMAIN"]: continue
 		var region_id: String = String(record.get("region_id", ""))
-		if region_id.is_empty(): continue
-		region_states[region_id] = record
+		var pair: Array = record.get("source_pair", [])
+		var cell: Array = record.get("source_cell_global_lattice", [])
+		if region_id.is_empty() or pair.size() != 2 or cell.size() != 3: continue
+		var region_key: String = JSON.stringify([region_id, String(pair[0]), String(pair[1]), cell, int(record.get("source_tetrahedron", -1)), int(record.get("source_facet", -1))])
+		region_states[region_key] = record
 		resolution_counts[resolution] = int(resolution_counts.get(resolution, 0)) + 1
-	var witnessed_region_ids: Dictionary = {}
-	for region_id_value in region_states.keys():
-		var resolution_row: Dictionary = region_states[region_id_value]
-		if String(resolution_row.get("resolution", "")) == "VALID_REPRESENTABLE_SUPPORT_WITNESS": witnessed_region_ids[String(region_id_value)] = true
-	var resume_supports: Array = []
+	var resume_support_by_identity: Dictionary = {}
 	for support_value in synthesis.get("supports", []):
 		if typeof(support_value) != TYPE_DICTIONARY: continue
 		var support: Dictionary = support_value
-		if witnessed_region_ids.has(String(support.get("constraint_arrangement_region_id", ""))) and bool(support.get("accepted", false)) and bool(support.get("supported", false)):
-			resume_supports.append(support)
-	return {"valid": true, "region_states": region_states, "numeric_frontiers": numeric_frontiers, "supports": resume_supports, "metadata": {"source_result_path": result_path, "source_result_sha256": observed_result_sha256, "source_stream_path": stream_path, "source_stream_sha256": observed_stream_sha256, "resumed_region_count": region_states.size(), "resumed_resolution_histogram": resolution_counts, "resumed_numeric_frontier_count": numeric_frontiers.size(), "resumed_numeric_tested_triples": numeric_frontiers.values().reduce(func(total: int, frontier: Dictionary) -> int: return total + int(frontier.get("tested_triples", 0)), 0), "resumed_support_count": resume_supports.size(), "prior_attempt_id": result.get("attempt_id", ""), "same_scientific_attempt": true}}
+		if bool(support.get("accepted", false)) and bool(support.get("supported", false)):
+			var support_identity: String = String(support.get("binary32_position_identity", support.get("support_id", "")))
+			if not support_identity.is_empty(): resume_support_by_identity[support_identity] = support
+	var merged_prior_source: String = ""
+	var resume_metadata: Dictionary = result.get("resume_metadata", synthesis.get("resume_metadata", {}))
+	var prior_result_path: String = String(resume_metadata.get("source_result_path", ""))
+	var prior_result_sha256: String = String(resume_metadata.get("source_result_sha256", ""))
+	var prior_stream_sha256: String = String(resume_metadata.get("source_stream_sha256", ""))
+	if not prior_result_path.is_empty() and prior_result_path != result_path and FileAccess.file_exists(prior_result_path):
+		var prior_resume: Dictionary = _load_y1_resume_state(prior_result_path, prior_result_sha256, prior_stream_sha256, attempt_id, expected_boundary_pairs)
+		if not bool(prior_resume.get("valid", false)):
+			return {"valid": false, "reason": "RESUME_CHAIN_SOURCE_INVALID", "prior_result_path": prior_result_path, "prior_resume": prior_resume}
+		merged_prior_source = prior_result_path
+		for prior_key in prior_resume.get("region_states", {}).keys():
+			if not region_states.has(prior_key): region_states[prior_key] = prior_resume.region_states[prior_key]
+		for prior_key in prior_resume.get("numeric_frontiers", {}).keys():
+			var prior_frontier: Dictionary = prior_resume.numeric_frontiers[prior_key]
+			var current_frontier: Dictionary = numeric_frontiers.get(prior_key, {})
+			if int(prior_frontier.get("tested_triples", 0)) > int(current_frontier.get("tested_triples", -1)): numeric_frontiers[prior_key] = prior_frontier
+		for prior_support in prior_resume.get("supports", []):
+			var prior_identity: String = String(prior_support.get("binary32_position_identity", prior_support.get("support_id", "")))
+			if not prior_identity.is_empty() and not resume_support_by_identity.has(prior_identity): resume_support_by_identity[prior_identity] = prior_support
+	var resume_supports: Array = []
+	for support_identity in resume_support_by_identity.keys(): resume_supports.append(resume_support_by_identity[support_identity])
+	return {"valid": true, "region_states": region_states, "numeric_frontiers": numeric_frontiers, "supports": resume_supports, "metadata": {"source_result_path": result_path, "source_result_sha256": observed_result_sha256, "source_stream_path": stream_path, "source_stream_sha256": observed_stream_sha256, "merged_prior_source_result_path": merged_prior_source, "resumed_region_count": region_states.size(), "resumed_resolution_histogram": resolution_counts, "resumed_numeric_frontier_count": numeric_frontiers.size(), "resumed_numeric_tested_triples": numeric_frontiers.values().reduce(func(total: int, frontier: Dictionary) -> int: return total + int(frontier.get("tested_triples", 0)), 0), "resumed_support_count": resume_supports.size(), "prior_attempt_id": result.get("attempt_id", ""), "same_scientific_attempt": true}}
 
 func _run_y1_resume_check() -> void:
 	var result_path: String = OS.get_environment("R12CXR_R6_Y1_RESUME_INPUT")
