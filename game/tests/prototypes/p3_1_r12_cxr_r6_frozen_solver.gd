@@ -71,7 +71,7 @@ func solve(context: Dictionary, candidate_triangles: Array[Dictionary], realizer
 	var status: String = "SAT" if not _solution.is_empty() else "PARTIAL_LIMIT" if not _limit_hit.is_empty() else "UNSAT_COMPLETE"
 	var reason: String = "VALID_TRIANGULATION_FOUND" if status == "SAT" else _limit_hit if status == "PARTIAL_LIMIT" else "R6_F_FROZEN_GRAPH_UNSAT_COMPLETE"
 	_stats.peak_memory_bytes = maxi(int(_stats.peak_memory_bytes), int(Performance.get_monitor(Performance.MEMORY_STATIC)))
-	var details: Dictionary = {"candidate_graph_sha256": String(limits.get("candidate_graph_sha256", "UNKNOWN_NOT_CAPTURED")), "support_set_sha256": String(limits.get("support_set_sha256", "UNKNOWN_NOT_CAPTURED")), "candidate_triangle_count": candidate_triangles.size(), "indexed_triangle_count": int(_stats.indexed_triangles), "vertex_count": context.get("vertex_ids", []).size(), "support_count": _support_by_id.size(), "support_cardinality_bound": "NONE", "branches": int(_stats.branches), "nodes": int(_stats.nodes), "prune_histogram": _stats.prune_histogram.duplicate(true), "max_depth": int(_stats.max_depth), "selected_support_cardinality_distribution_explored": _stats.support_cardinality_distribution.duplicate(true), "candidate_triangle_edge_index_entries": int(_stats.candidate_triangle_edge_index_entries), "candidate_triangle_reuse_count": int(_stats.candidate_triangle_reuse_count), "candidate_triangle_option_evaluations": int(_stats.triangle_option_evaluations), "triangle_conflict_checks": int(_stats.triangle_conflict_checks), "triangle_conflict_rejections": int(_stats.triangle_conflict_rejections), "base_mesh_conflict_rejections": int(_stats.base_mesh_conflict_rejections), "boundary_edge_candidate_counts": _boundary_candidate_counts(), "internal_edge_candidate_counts": _internal_candidate_counts(), "topology_path_candidate_counts": _topology_path_candidate_counts(), "zero_candidate_obligation_events": int(_stats.zero_candidate_obligation_events), "zero_candidate_obligation_edge_histogram": _stats.zero_candidate_obligation_edge_histogram.duplicate(true), "first_zero_candidate_obligation": _stats.first_zero_candidate_obligation.duplicate(true), "selected_component_count_at_terminal": int(_stats.get("selected_component_count", 0)), "deterministic_order": "minimum_compatible_edge_options_then_boundary_priority_then_edge_key_then_triangle_id", "search_usec": Time.get_ticks_usec() - _started_usec, "peak_memory_bytes": int(_stats.peak_memory_bytes), "complete": status != "PARTIAL_LIMIT", "search_exhaustive": status == "UNSAT_COMPLETE", "frontier": _frontier.duplicate(true), "best_solution": _solution.duplicate(true)}
+	var details: Dictionary = {"candidate_graph_sha256": String(limits.get("candidate_graph_sha256", "UNKNOWN_NOT_CAPTURED")), "support_set_sha256": String(limits.get("support_set_sha256", "UNKNOWN_NOT_CAPTURED")), "candidate_triangle_count": candidate_triangles.size(), "indexed_triangle_count": int(_stats.indexed_triangles), "vertex_count": context.get("vertex_ids", []).size(), "support_count": _support_by_id.size(), "support_cardinality_bound": "NONE", "branches": int(_stats.branches), "nodes": int(_stats.nodes), "prune_histogram": _stats.prune_histogram.duplicate(true), "max_depth": int(_stats.max_depth), "selected_support_cardinality_distribution_explored": _stats.support_cardinality_distribution.duplicate(true), "candidate_triangle_edge_index_entries": int(_stats.candidate_triangle_edge_index_entries), "candidate_triangle_reuse_count": int(_stats.candidate_triangle_reuse_count), "candidate_triangle_option_evaluations": int(_stats.triangle_option_evaluations), "triangle_conflict_checks": int(_stats.triangle_conflict_checks), "triangle_conflict_rejections": int(_stats.triangle_conflict_rejections), "base_mesh_conflict_rejections": int(_stats.base_mesh_conflict_rejections), "boundary_edge_candidate_counts": _boundary_candidate_counts(), "internal_edge_candidate_counts": _internal_candidate_counts(), "topology_path_candidate_counts": _topology_path_candidate_counts(), "zero_candidate_obligation_events": int(_stats.zero_candidate_obligation_events), "zero_candidate_obligation_edge_histogram": _stats.zero_candidate_obligation_edge_histogram.duplicate(true), "first_zero_candidate_obligation": _stats.first_zero_candidate_obligation.duplicate(true), "selected_component_count_at_terminal": int(_stats.get("selected_component_count", 0)), "deterministic_order": "minimum_compatible_edge_options_then_boundary_priority_then_edge_key_then_triangle_id", "search_resource_limits": _limits.duplicate(true), "search_usec": Time.get_ticks_usec() - _started_usec, "peak_memory_bytes": int(_stats.peak_memory_bytes), "complete": status != "PARTIAL_LIMIT", "search_exhaustive": status == "UNSAT_COMPLETE", "frontier": _frontier.duplicate(true), "best_solution": _solution.duplicate(true)}
 	return _terminal(status, reason, status != "PARTIAL_LIMIT", details)
 
 func _terminal(status: String, reason: String, complete: bool, details: Dictionary) -> Dictionary:
@@ -265,13 +265,21 @@ func _coverage_area_audit(triangles: Array[Dictionary]) -> Dictionary:
 
 func _search(selected: Array[Dictionary], selected_ids: Dictionary, edge_state: Dictionary, validator: Callable) -> bool:
 	if not _limit_hit.is_empty() or not _solution.is_empty(): return false
-	if int(_stats.nodes) >= int(_limits.max_search_states_per_cavity):
+	var state_limit: int = int(_limits.get("max_search_states_per_cavity", 16384))
+	if state_limit > 0 and int(_stats.nodes) >= state_limit:
 		_limit_hit = "R6_F_MAX_SEARCH_STATES_PER_CAVITY"
 		_frontier = _frontier_record(selected, edge_state, "state_limit")
 		return false
 	if Time.get_ticks_usec() - _started_usec >= int(_limits.max_search_usec_per_cavity):
 		_limit_hit = "R6_F_MAX_SEARCH_USEC_PER_CAVITY"
 		_frontier = _frontier_record(selected, edge_state, "time_limit")
+		return false
+	var memory_limit: int = int(_limits.get("max_memory_bytes", 0))
+	var current_memory: int = int(Performance.get_monitor(Performance.MEMORY_STATIC))
+	if memory_limit > 0 and current_memory >= memory_limit:
+		_stats.peak_memory_bytes = maxi(int(_stats.peak_memory_bytes), current_memory)
+		_limit_hit = "R6_F_MAX_MEMORY_BYTES"
+		_frontier = _frontier_record(selected, edge_state, "memory_limit")
 		return false
 	var state_key: String = _state_key(selected)
 	if _visited.has(state_key):

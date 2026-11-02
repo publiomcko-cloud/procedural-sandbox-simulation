@@ -983,7 +983,8 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	var graph_limited: bool = false
 	var graph_limit_reason: String = ""
 	var graph_started_usec: int = Time.get_ticks_usec()
-	var graph_budget_seconds: int = maxi(1, OS.get_environment("R12CXR_R6_GRAPH_BUDGET_SECONDS").to_int()) if complete_y_domain else 0
+	var graph_budget_raw: String = OS.get_environment("R12CXR_R6_GRAPH_BUDGET_SECONDS")
+	var graph_budget_seconds: int = (maxi(1, graph_budget_raw.to_int()) if not graph_budget_raw.is_empty() else 28800) if complete_y_domain else 0
 	var graph_budget_usec: int = graph_budget_seconds * 1000000
 	var graph_memory_setting: String = OS.get_environment("R12CXR_R6_MEMORY_BUDGET_BYTES")
 	var graph_memory_budget: int = (2147483648 if graph_memory_setting.is_empty() else maxi(268435456, graph_memory_setting.to_int())) if complete_y_domain else 0
@@ -1228,7 +1229,13 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		frozen_identity_check["baseline_triangle_rows_match_pre_extension"] = baseline_rows_match
 		result["frozen_graph_identity_check"] = frozen_identity_check
 	var frozen_solver: RefCounted = R6FrozenSolver.new()
-	var frozen_solver_limits: Dictionary = {"candidate_graph_sha256": observed_candidate_graph_sha, "support_set_sha256": observed_support_set_sha, "expected_candidate_triangles": candidate_triangles.size(), "max_search_states_per_cavity": 1000000 if y1_extension else 16384, "max_search_usec_per_cavity": 300000000 if y1_extension else 10000000, "max_patch_triangles": 64}
+	var y_solver_time_raw: String = OS.get_environment("R12CXR_R6_SOLVER_BUDGET_SECONDS")
+	var y_solver_time_seconds: int = maxi(1, y_solver_time_raw.to_int()) if not y_solver_time_raw.is_empty() else 28800
+	var y_solver_memory_raw: String = OS.get_environment("R12CXR_R6_SOLVER_MEMORY_BUDGET_BYTES")
+	var y_solver_memory_bytes: int = maxi(268435456, y_solver_memory_raw.to_int()) if not y_solver_memory_raw.is_empty() else 17179869184
+	var y_solver_node_raw: String = OS.get_environment("R12CXR_R6_SOLVER_MAX_NODES")
+	var y_solver_max_nodes: int = maxi(1, y_solver_node_raw.to_int()) if not y_solver_node_raw.is_empty() else 0
+	var frozen_solver_limits: Dictionary = {"candidate_graph_sha256": observed_candidate_graph_sha, "support_set_sha256": observed_support_set_sha, "expected_candidate_triangles": candidate_triangles.size(), "max_search_states_per_cavity": y_solver_max_nodes if y1_extension else 16384, "max_search_usec_per_cavity": y_solver_time_seconds * 1000000 if y1_extension else 10000000, "max_memory_bytes": y_solver_memory_bytes if y1_extension else 0, "max_patch_triangles": 64}
 	var solver_mode: String = OS.get_environment("R12CXR_R6_SOLVER_MODE")
 	var d3: Dictionary
 	if solver_mode == "legacy-f0":
