@@ -335,10 +335,18 @@ func _run() -> void:
 			_fail("r6_x2_graph_resume_context_rebuild_failed", resumed_context_result)
 			return
 		var resumed_context: Dictionary = resumed_context_result.get("context", {})
-		var resume_metadata: Dictionary = {"is_continuation": true, "same_attempt_id": String(prior_result.get("attempt_id", "")), "original_target_source_sha": String(prior_result.get("source_sha", "")), "continuation_source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "original_target_result_sha256": prior_sha, "original_target_attempt_consumed": true, "additional_target_attempts_consumed": 0, "reason": "resume the same consumed R6-X2 geometry from its preserved complete support-domain and deterministic-repeat evidence; prior graph gate used a stale per-cavity clock after the baseline graph pass", "support_set_identical": true, "support_set_sha256": _support_synthesis_fingerprint(resumed_synthesis)}
+		var resumed_support_sha: String = _support_synthesis_fingerprint(resumed_synthesis)
+		if resumed_support_sha != "a6c9ea20d53a1cd49c5bf0c0ac86fcb63a6163dd4e3aefba146dadd6b4ecedc5" or String(prior_completion.get("baseline_candidate_graph_sha256", "")) != "a975ef820773f09106c9adafb2186345d41d7ea8955a60dcf92a235bdbfa9363" or String(prior_completion.get("baseline_solver_status", "")) != "UNSAT_COMPLETE":
+			_fail("r6_x2_graph_resume_completed_extension_identity_invalid", {"support_set_sha256": resumed_support_sha, "baseline_candidate_graph_sha256": prior_completion.get("baseline_candidate_graph_sha256", ""), "baseline_solver_status": prior_completion.get("baseline_solver_status", "")})
+			return
+		var completed_extension_summary: Dictionary = {"support_domain_complete": bool(prior_completion.get("support_domain_complete", false)), "deterministic_repeat_pass": bool(prior_completion.get("deterministic_repeat_pass", false)), "baseline_solver_status": String(prior_completion.get("baseline_solver_status", "")), "support_set_sha256": resumed_support_sha}
+		var resume_metadata: Dictionary = {"is_continuation": true, "same_attempt_id": String(prior_result.get("attempt_id", "")), "domain_extension": "R6-X2", "resume_completed_extension": true, "completed_extension_summary": completed_extension_summary, "expected_support_count": 26, "expected_support_set_sha256": resumed_support_sha, "expected_candidate_triangle_count": 1261, "expected_candidate_graph_sha256": "a975ef820773f09106c9adafb2186345d41d7ea8955a60dcf92a235bdbfa9363", "expected_candidate_graph_audit_sha256": "cc76ced73db084674837980792a67b95bbc1cdcba0a07ab2da6b6866e8748aa2", "original_target_source_sha": String(prior_result.get("source_sha", "")), "continuation_source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "original_target_result_sha256": prior_sha, "original_target_attempt_consumed": true, "additional_target_attempts_consumed": 0, "reason": "resume the same consumed R6-X2 geometry from its preserved complete support-domain and deterministic-repeat evidence; prior graph gate used a stale per-cavity clock after the baseline graph pass and its complete graph identity matches the already complete R6-X1 graph", "support_set_identical": true, "support_set_sha256": resumed_support_sha}
 		var resumed_result: Dictionary = _run_constraint_synthesis(resumed_realizer, volume.get("values", PackedFloat32Array()), roi, resumed_context, prior_selected_patch, prior_selected_ids, seed_triangles, prior_selected_boundary, triangles, resume_search_fixture, base, snapshot, support_fixture, residual_fixture.get("residuals", []), output_path, prior_cavity, resumed_synthesis, resume_metadata)
 		if resumed_result.is_empty() or _terminal_failure_requested: return
-		resumed_result["r6_x2_support_completion"] = prior_completion.duplicate(true)
+		var resumed_completion: Dictionary = prior_completion.duplicate(true)
+		resumed_completion["extended_graph"] = {"complete": bool(resumed_result.get("graph_gate", {}).get("complete", false)), "vertex_count": resumed_result.get("graph_gate", {}).get("vertex_count", -1), "possible_triplets": resumed_result.get("graph_gate", {}).get("possible_triplets", -1), "probed_triplets": resumed_result.get("graph_gate", {}).get("probed_triplets", -1), "legal_triangle_count": resumed_result.get("graph_gate", {}).get("legal_triangle_count", -1), "candidate_graph_sha256": resumed_result.get("d3", {}).get("candidate_graph_sha256", resumed_result.get("frozen_graph_identity_check", {}).get("observed_candidate_graph_sha256", "")), "audit_sha256": resumed_result.get("graph_gate", {}).get("audit_sha256", ""), "limit_reason": resumed_result.get("graph_gate", {}).get("limit_reason", ""), "graph_gate_usec": resumed_result.get("graph_gate", {}).get("graph_gate_usec", -1), "resumed_from_same_attempt": true, "additional_target_attempts_consumed": 0}
+		resumed_completion["extended_candidate_triangle_rows"] = resumed_result.get("candidate_triangle_rows", []).duplicate(true)
+		resumed_result["r6_x2_support_completion"] = resumed_completion
 		resumed_result["r6_x2_graph_resume"] = {"started": true, "same_attempt_continuation": true, "original_target_source_sha": prior_result.get("source_sha", ""), "original_target_result_sha256": prior_sha, "continuation_source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "reused_support_set_sha256": resume_metadata.support_set_sha256, "stale_timer_diagnosis": "the baseline candidate-graph enumeration left the original per-cavity clock expired; the X2 extension graph scan inherited that clock and stopped on its first triplet", "geometry_domain_changed": false}
 		resumed_result["attempt_accounting"] = {"baseline_r6_06_attempts_consumed": 1, "r6_x1_attempts_consumed": 1, "r6_x2_attempts_consumed": 1, "cumulative_valid_scientific_target_attempts": 3, "unconsumed_tooling_failures_preserved": 3, "attempt_id": String(prior_result.get("attempt_id", "")), "continuation_additional_attempts_consumed": 0}
 		var resumed_bytes: PackedByteArray = JSON.stringify(resumed_result, "\t", false).to_utf8_buffer()
@@ -744,6 +752,8 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		"graph_gate_usec": Time.get_ticks_usec() - graph_started_usec,
 		"preregistered_legal_candidate_triangle_cap": graph_candidate_cap
 	}
+	result["candidate_triangle_rows"] = candidate_triangles.duplicate(true)
+	result["candidate_triangle_rows_sha256"] = _stable_evidence_sha(candidate_triangles)
 	if candidate_triangles.is_empty():
 		result["terminal_reason"] = "NO_LEGAL_TRIANGLES_IN_COMPLETE_FINITE_GRAPH" if graph_complete else "FINITE_GRAPH_GATE_PARTIAL"
 		result["continuum_domain_exhausted"] = false
@@ -752,8 +762,17 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	var observed_support_set_sha: String = _support_synthesis_fingerprint(synthesis)
 	var observed_candidate_graph_sha: String = String(graph_summary.get("candidate_graph_sha256", ""))
 	var observed_graph_audit_sha: String = String(result.graph_gate.get("audit_sha256", ""))
-	var frozen_identity_check: Dictionary = {"expected_support_count": 23, "observed_support_count": support_rows.size(), "expected_support_set_sha256": FrozenSupportSetSha, "observed_support_set_sha256": observed_support_set_sha, "expected_candidate_triangle_count": FrozenCandidateTriangleCount, "observed_candidate_triangle_count": candidate_triangles.size(), "expected_candidate_graph_sha256": FrozenCandidateGraphSha, "observed_candidate_graph_sha256": observed_candidate_graph_sha, "expected_candidate_graph_audit_sha256": FrozenCandidateGraphAuditSha, "observed_candidate_graph_audit_sha256": observed_graph_audit_sha}
-	var frozen_identity_matches: bool = support_rows.size() == 23 and observed_support_set_sha == FrozenSupportSetSha and candidate_triangles.size() == FrozenCandidateTriangleCount and observed_candidate_graph_sha == FrozenCandidateGraphSha and observed_graph_audit_sha == FrozenCandidateGraphAuditSha
+	var x1_extension: bool = String(continuation_metadata.get("domain_extension", "")) == "R6-X1"
+	var x2_extension: bool = String(continuation_metadata.get("domain_extension", "")) == "R6-X2"
+	var support_extension: bool = x1_extension or x2_extension
+	var resume_completed_extension: bool = bool(continuation_metadata.get("resume_completed_extension", false))
+	var expected_support_count: int = int(continuation_metadata.get("expected_support_count", 23)) if resume_completed_extension else 23
+	var expected_support_sha: String = String(continuation_metadata.get("expected_support_set_sha256", FrozenSupportSetSha)) if resume_completed_extension else FrozenSupportSetSha
+	var expected_triangle_count: int = int(continuation_metadata.get("expected_candidate_triangle_count", FrozenCandidateTriangleCount)) if resume_completed_extension else FrozenCandidateTriangleCount
+	var expected_graph_sha: String = String(continuation_metadata.get("expected_candidate_graph_sha256", FrozenCandidateGraphSha)) if resume_completed_extension else FrozenCandidateGraphSha
+	var expected_graph_audit_sha: String = String(continuation_metadata.get("expected_candidate_graph_audit_sha256", FrozenCandidateGraphAuditSha)) if resume_completed_extension else FrozenCandidateGraphAuditSha
+	var frozen_identity_check: Dictionary = {"expected_support_count": expected_support_count, "observed_support_count": support_rows.size(), "expected_support_set_sha256": expected_support_sha, "observed_support_set_sha256": observed_support_set_sha, "expected_candidate_triangle_count": expected_triangle_count, "observed_candidate_triangle_count": candidate_triangles.size(), "expected_candidate_graph_sha256": expected_graph_sha, "observed_candidate_graph_sha256": observed_candidate_graph_sha, "expected_candidate_graph_audit_sha256": expected_graph_audit_sha, "observed_candidate_graph_audit_sha256": observed_graph_audit_sha, "identity_scope": "RESUMED_COMPLETED_EXTENSION" if resume_completed_extension else "FROZEN_R6_GRAPH"}
+	var frozen_identity_matches: bool = support_rows.size() == expected_support_count and observed_support_set_sha == expected_support_sha and candidate_triangles.size() == expected_triangle_count and observed_candidate_graph_sha == expected_graph_sha and observed_graph_audit_sha == expected_graph_audit_sha
 	result["frozen_graph_identity_check"] = frozen_identity_check
 	if not graph_complete or not frozen_identity_matches:
 		result["status"] = "R6_FROZEN_GRAPH_PARTIAL" if not graph_complete else "R6_FROZEN_GRAPH_IDENTITY_MISMATCH"
@@ -761,14 +780,11 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		result["d3"] = {"started": false, "reason": "NOT_RUN_FROZEN_GRAPH_GATE_FAILED"}
 		_write_result(output_path, result, "R12CXR_R6_SUPPORT_SYNTHESIS_RESULT")
 		return result
-	var x1_extension: bool = String(continuation_metadata.get("domain_extension", "")) == "R6-X1"
-	var x2_extension: bool = String(continuation_metadata.get("domain_extension", "")) == "R6-X2"
-	var support_extension: bool = x1_extension or x2_extension
 	var baseline_candidate_triangle_rows: Array[Dictionary] = candidate_triangles.duplicate(true)
 	var baseline_vertex_ids: Array = context.get("vertex_ids", []).duplicate()
 	var baseline_graph_row_export_sha: String = _stable_evidence_sha(baseline_candidate_triangle_rows)
-	var x1_support_completion: Dictionary = {}
-	if support_extension:
+	var x1_support_completion: Dictionary = continuation_metadata.get("completed_extension_summary", {}).duplicate(true) if resume_completed_extension else {}
+	if support_extension and not resume_completed_extension:
 		var previous_d3: Dictionary = previous_result.get("d3", {})
 		var zero_set_realizer: RefCounted = inventory_realizer if inventory_realizer != null else realizer
 		var first_completion: Dictionary
