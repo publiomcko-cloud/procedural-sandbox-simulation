@@ -222,6 +222,23 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	_expect(bool(acceptance_gated_search.get("accepted", false)) and Vector3(acceptance_gated_search.get("position", excluded_first_witness)) != excluded_first_witness and int(acceptance_gated_search.get("acceptance_gate_rejection_count", 0)) > 0, "R6-Y binary32 enumeration continues after a field-valid candidate fails the complete support acceptance gate")
 	var partial_acceptance: Dictionary = realizer.call("_search_representable_zero_multicoordinate", Vector3(0.5, 0.0, 0.0), representability_tet, 1, Callable(func(_candidate: Vector3) -> bool: return false))
 	_expect(String(partial_acceptance.get("search_state", "")) == "PARTIAL_LIMIT" and not bool(partial_acceptance.get("accepted", true)) and not bool(partial_acceptance.get("finite_domain_complete", true)), "R6-Y numeric timeout never promotes its field-valid seed to a support witness")
+	var far_seed: Vector3 = Vector3(10.0, 10.0, 10.0)
+	var far_origin_bytes: PackedByteArray = PackedFloat32Array([far_seed.x, far_seed.y, far_seed.z]).to_byte_array()
+	var far_minimum_radius: int = 0
+	for axis in range(3):
+		var origin_key: int = int(realizer.call("_ordered_float32_key", int(far_origin_bytes.decode_u32(axis * 4))))
+		var axis_minimum: int = 0xffffffff
+		var axis_maximum: int = 0
+		for corner_value in representability_tet.get("positions", []):
+			var corner: Vector3 = Vector3(corner_value)
+			var coordinate: float = [corner.x, corner.y, corner.z][axis]
+			var corner_key: int = int(realizer.call("_ordered_float32_key", int(PackedFloat32Array([coordinate]).to_byte_array().decode_u32(0))))
+			axis_minimum = mini(axis_minimum, corner_key)
+			axis_maximum = maxi(axis_maximum, corner_key)
+		if origin_key < axis_minimum: far_minimum_radius = maxi(far_minimum_radius, axis_minimum - origin_key)
+		elif origin_key > axis_maximum: far_minimum_radius = maxi(far_minimum_radius, origin_key - axis_maximum)
+	var far_seed_partial: Dictionary = realizer.call("_search_representable_zero_multicoordinate", far_seed, representability_tet, 1)
+	_expect(String(far_seed_partial.get("search_state", "")) == "PARTIAL_LIMIT" and int(far_seed_partial.get("search_frontier", {}).get("radius", -1)) == far_minimum_radius and far_minimum_radius > 0 and int(far_seed_partial.get("tested_triples", -1)) == 0, "R6-Y skips analytically empty float32 shells up to the nearest tetra-AABB representable coordinate")
 	var single_point_tet: Dictionary = {"positions": [Vector3.ONE, Vector3.ONE, Vector3.ONE, Vector3.ONE], "samples": [0.0, 0.0, 0.0, 0.0]}
 	var exhausted_representation: Dictionary = realizer.call("_search_representable_zero_multicoordinate", Vector3.ONE, single_point_tet, 1000000, Callable(func(_candidate: Vector3) -> bool: return false))
 	_expect(not bool(exhausted_representation.get("accepted", false)) and bool(exhausted_representation.get("finite_domain_complete", false)) and String(exhausted_representation.get("search_state", "")) == "EXHAUSTED_NO_VALID_BINARY32_POINT_IN_TETRA_AABB", "R6-Y binary32 enumeration distinguishes complete finite AABB exhaustion from a resource frontier")

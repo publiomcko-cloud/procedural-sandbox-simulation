@@ -253,47 +253,61 @@ func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dic
 			minimum_keys[axis] = mini(minimum_keys[axis], key)
 			maximum_keys[axis] = maxi(maximum_keys[axis], key)
 	var maximum_radius: int = 0
+	var minimum_radius: int = 0
 	for axis in range(3):
 		maximum_radius = maxi(maximum_radius, maxi(absi(original_keys[axis] - minimum_keys[axis]), absi(maximum_keys[axis] - original_keys[axis])))
+		if original_keys[axis] < minimum_keys[axis]: minimum_radius = maxi(minimum_radius, minimum_keys[axis] - original_keys[axis])
+		elif original_keys[axis] > maximum_keys[axis]: minimum_radius = maxi(minimum_radius, original_keys[axis] - maximum_keys[axis])
 	var started_usec: int = Time.get_ticks_usec()
 	var tested: int = int(resume_frontier.get("tested_triples", 0))
 	var acceptance_rejection_count: int = 0
-	var frontier: Dictionary = resume_frontier.duplicate(true) if not resume_frontier.is_empty() else {"radius": 0, "dx": 0, "dy": 0, "dz": 0, "tested_triples": 0}
+	var frontier: Dictionary = resume_frontier.duplicate(true) if not resume_frontier.is_empty() else {"stage": "shell", "radius": minimum_radius, "dx": -minimum_radius, "dy": -minimum_radius, "dz": -minimum_radius, "tested_triples": 0}
 	var resume_radius: int = int(frontier.get("radius", 0))
 	var resume_dx: int = int(frontier.get("dx", -resume_radius))
 	var resume_dy: int = int(frontier.get("dy", -resume_radius))
 	var resume_dz: int = int(frontier.get("dz", -resume_radius))
 	var resume_active: bool = not resume_frontier.is_empty()
-	for radius in range(maximum_radius + 1):
+	# If the seed is outside the tetrahedron AABB, every shell below this exact
+	# ordered-float32 distance is empty. Skipping those shells preserves the
+	# Chebyshev ordering and finite-domain completeness while avoiding millions
+	# of iterations that cannot contain a candidate.
+	if resume_active and resume_radius < minimum_radius:
+		resume_active = false
+		frontier = {"stage": "shell", "radius": minimum_radius, "dx": -minimum_radius, "dy": -minimum_radius, "dz": -minimum_radius, "tested_triples": tested}
+	for radius in range(minimum_radius, maximum_radius + 1):
 		if resume_active and radius < resume_radius: continue
 		frontier = {"stage": "shell", "radius": radius, "dx": -radius, "dy": -radius, "dz": -radius, "tested_triples": tested}
 		if resume_active and radius == resume_radius and _binary32_frontier_before(radius, -radius, -radius, -radius, resume_radius, resume_dx, resume_dy, resume_dz):
 			frontier = resume_frontier.duplicate(true)
 		if Time.get_ticks_usec() - started_usec >= max_search_usec:
 			return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested, acceptance_rejection_count)
-		for dx in range(-radius, radius + 1):
+		var dx_start: int = maxi(-radius, minimum_keys[0] - original_keys[0])
+		var dx_end: int = mini(radius, maximum_keys[0] - original_keys[0])
+		for dx in range(dx_start, dx_end + 1):
 			if resume_active and radius == resume_radius and dx < resume_dx: continue
-			frontier = {"stage": "x_offset", "radius": radius, "dx": dx, "dy": -radius, "dz": -radius, "tested_triples": tested}
+			var dy_start: int = maxi(-radius, minimum_keys[1] - original_keys[1])
+			var dy_end: int = mini(radius, maximum_keys[1] - original_keys[1])
+			var dz_start: int = maxi(-radius, minimum_keys[2] - original_keys[2])
+			var dz_end: int = mini(radius, maximum_keys[2] - original_keys[2])
+			frontier = {"stage": "x_offset", "radius": radius, "dx": dx, "dy": dy_start, "dz": dz_start, "tested_triples": tested}
 			if Time.get_ticks_usec() - started_usec >= max_search_usec:
 				return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested, acceptance_rejection_count)
 			var x_key: int = original_keys[0] + dx
-			if x_key < minimum_keys[0] or x_key > maximum_keys[0]: continue
-			for dy in range(-radius, radius + 1):
+			for dy in range(dy_start, dy_end + 1):
 				if resume_active and radius == resume_radius and dx == resume_dx and dy < resume_dy: continue
-				frontier = {"stage": "y_offset", "radius": radius, "dx": dx, "dy": dy, "dz": -radius, "tested_triples": tested}
+				frontier = {"stage": "y_offset", "radius": radius, "dx": dx, "dy": dy, "dz": dz_start, "tested_triples": tested}
 				if Time.get_ticks_usec() - started_usec >= max_search_usec:
 					return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested, acceptance_rejection_count)
 				var y_key: int = original_keys[1] + dy
-				if y_key < minimum_keys[1] or y_key > maximum_keys[1]: continue
 				var z_offsets: Array[int] = []
 				if maxi(absi(dx), absi(dy)) == radius:
-					for dz_shell in range(-radius, radius + 1): z_offsets.append(dz_shell)
+					for dz_shell in range(dz_start, dz_end + 1): z_offsets.append(dz_shell)
 				else:
-					z_offsets = [-radius, radius]
+					if -radius >= dz_start and -radius <= dz_end: z_offsets.append(-radius)
+					if radius >= dz_start and radius <= dz_end: z_offsets.append(radius)
 				for dz in z_offsets:
 					if resume_active and radius == resume_radius and dx == resume_dx and dy == resume_dy and dz < resume_dz: continue
 					var z_key: int = original_keys[2] + dz
-					if z_key < minimum_keys[2] or z_key > maximum_keys[2]: continue
 					frontier = {"radius": radius, "dx": dx, "dy": dy, "dz": dz, "tested_triples": tested}
 					resume_active = false
 					if Time.get_ticks_usec() - started_usec >= max_search_usec:
