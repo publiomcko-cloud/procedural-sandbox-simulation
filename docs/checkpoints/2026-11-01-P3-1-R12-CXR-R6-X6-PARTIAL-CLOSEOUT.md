@@ -2,7 +2,7 @@
 
 **Checkpoint ID/date and timezone:** R6-X6 partial closeout; 2026-11-01 22:54 America/Sao_Paulo (2026-11-02 01:54 UTC)
 **Event type:** blocker / major handoff
-**Publication state:** pending publication on a new docs-only draft PR
+**Publication state:** recorded on draft docs PR #222; not integrated
 **Immutable once integrated:** yes; later events require a new checkpoint.
 
 ## Verified repository identity
@@ -51,4 +51,4 @@ No SAT mesh exists. Equal-LOD, controls, ROI rays, volume reconfirmation, mixed 
 
 ## Event significance and decision
 
-The X6 attempt and complete finite-graph UNSAT result are verified at exact source `896e78b9614f0a4bf4dad51dddaee31b2ced7d99`; the inherited support-domain cap prevents a terminal global claim. The blocker is evidence-backed and bounded: no supports in the complete targeted X6 witness set, plus an uncompleted cavity-wide support domain and no SAT mesh. Publication remains pending until the new docs-only PR is opened. This checkpoint is not integrated, owner-accepted, or merge-authorized.
+The X6 attempt and complete finite-graph UNSAT result are verified at exact source `896e78b9614f0a4bf4dad51dddaee31b2ced7d99`; the inherited support-domain cap prevents a terminal global claim. The blocker is evidence-backed and bounded: no supports in the complete targeted X6 witness set, plus an uncompleted cavity-wide support domain and no SAT mesh. Publication is recorded on draft docs PR #222 (open, unmerged). This checkpoint is not integrated, owner-accepted, or merge-authorized.
