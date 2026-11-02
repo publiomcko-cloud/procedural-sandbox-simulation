@@ -387,7 +387,7 @@ func _run() -> void:
 			continuation_metadata = {"is_continuation": false, "domain_extension": "R6-X1", "attempt_id": attempt_id, "parent_f1_source_sha": previous.get("source_sha", ""), "parent_f1_result_sha256": Core.sha256(previous_bytes), "parent_f1_attempt_id": previous.get("attempt_id", ""), "parent_f1_attempt_consumed": true, "additional_target_attempts_consumed": 1, "reason": "add deterministic exact piecewise-linear zero-set witnesses only for boundary obligations with zero candidate options in the complete frozen graph", "baseline_support_set_sha256": continued_synthesis_sha}
 		else:
 			continuation_metadata = {"is_continuation": true, "same_attempt_id": attempt_id, "original_target_source_sha": previous.get("source_sha", ""), "continuation_source_sha": continuation_source_sha, "original_target_result_sha256": Core.sha256(previous_bytes), "original_target_attempt_consumed": true, "additional_target_attempts_consumed": 0, "reason": "continuation from the already-consumed R6-06 target; preserve the exact support identities and cavity, complete the finite 1058-triangle graph audit, and capture the required bounded legacy F0 telemetry before corrected F1", "support_set_identical": true, "support_set_sha256": continued_synthesis_sha}
-		var continuation_result: Dictionary = _run_constraint_synthesis(continuation_realizer, volume.get("values", PackedFloat32Array()), roi, selected_context, selected_patch, selected_ids, seed_triangles, selected_boundary, triangles, search_fixture, base, snapshot, support_fixture, residual_fixture.get("residuals", []), output_path, cavity_search, continued_synthesis, continuation_metadata, previous if x1_extension else {})
+		var continuation_result: Dictionary = _run_constraint_synthesis(continuation_realizer, volume.get("values", PackedFloat32Array()), roi, selected_context, selected_patch, selected_ids, seed_triangles, selected_boundary, triangles, search_fixture, base, snapshot, support_fixture, residual_fixture.get("residuals", []), output_path, cavity_search, continued_synthesis, continuation_metadata, previous if x1_extension else {}, realizer if x1_extension else null)
 		if continuation_result.is_empty() or _terminal_failure_requested: return
 		quit(0)
 		return
@@ -460,7 +460,7 @@ func _run() -> void:
 	quit(0)
 	return
 
-func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, base_context: Dictionary, patch: Array[Dictionary], patch_ids: Array, seed_triangles: Array[Dictionary], boundary: Dictionary, original_triangles: Array[Dictionary], residual_fixture: Dictionary, base: Dictionary, snapshot: Dictionary, support_fixture: Dictionary, residual_triangles: Array, output_path: String, cavity_search: Dictionary, synthesis_override: Dictionary = {}, continuation_metadata: Dictionary = {}, previous_result: Dictionary = {}) -> Dictionary:
+func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, base_context: Dictionary, patch: Array[Dictionary], patch_ids: Array, seed_triangles: Array[Dictionary], boundary: Dictionary, original_triangles: Array[Dictionary], residual_fixture: Dictionary, base: Dictionary, snapshot: Dictionary, support_fixture: Dictionary, residual_triangles: Array, output_path: String, cavity_search: Dictionary, synthesis_override: Dictionary = {}, continuation_metadata: Dictionary = {}, previous_result: Dictionary = {}, inventory_realizer: RefCounted = null) -> Dictionary:
 	var cavity_id: String = String(support_fixture.get("cavity_id", ""))
 	if cavity_id.is_empty():
 		_fail("r6_cavity_identity_missing", {})
@@ -660,16 +660,19 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	var x1_support_completion: Dictionary = {}
 	if x1_extension:
 		var previous_d3: Dictionary = previous_result.get("d3", {})
-		var first_completion: Dictionary = _r6_x1_boundary_support_completion(realizer, values, roi, base_context, patch, support_rows, previous_d3.get("boundary_edge_candidate_counts", {}))
-		var repeated_completion: Dictionary = _r6_x1_boundary_support_completion(realizer, values, roi, base_context, patch, support_rows, previous_d3.get("boundary_edge_candidate_counts", {}))
+		var zero_set_realizer: RefCounted = inventory_realizer if inventory_realizer != null else realizer
+		var first_completion: Dictionary = _r6_x1_boundary_support_completion(realizer, zero_set_realizer, values, roi, base_context, patch, support_rows, previous_d3.get("boundary_edge_candidate_counts", {}))
+		var repeated_completion: Dictionary = _r6_x1_boundary_support_completion(realizer, zero_set_realizer, values, roi, base_context, patch, support_rows, previous_d3.get("boundary_edge_candidate_counts", {}))
 		var first_support_fingerprint: String = _stable_evidence_sha(first_completion.get("supports", []))
 		var repeat_support_fingerprint: String = _stable_evidence_sha(repeated_completion.get("supports", []))
-		x1_support_completion = {"started": true, "hypothesis": "add only accepted binary32 exact-PL-zero-set witnesses for boundary obligations having zero options in the complete 23-support graph", "changed_domain": "support_vertex_set_only; frozen six-face cavity, topology arcs and authority, Candidate-D field, volume, roots, cutoff, epsilons, ROI oracle and controls remain fixed", "baseline_attempt_id": previous_result.get("attempt_id", ""), "baseline_result_sha256": continuation_metadata.get("parent_f1_result_sha256", "UNKNOWN_NOT_CAPTURED"), "baseline_solver_status": previous_d3.get("status", "UNKNOWN_NOT_CAPTURED"), "baseline_candidate_graph_sha256": previous_d3.get("candidate_graph_sha256", "UNKNOWN_NOT_CAPTURED"), "baseline_support_set_sha256": previous_d3.get("support_set_sha256", "UNKNOWN_NOT_CAPTURED"), "baseline_graph_rows_sha256": baseline_graph_row_export_sha, "baseline_vertex_ids": baseline_vertex_ids.duplicate(), "baseline_graph_rows": baseline_candidate_triangle_rows, "boundary_audit": first_completion.get("boundary_audit", {}), "zero_option_edges": first_completion.get("zero_option_edges", []), "supports": first_completion.get("supports", []), "support_count_before": support_rows.size(), "support_count_added": first_completion.get("supports", []).size(), "support_fingerprint_sha256": first_support_fingerprint, "repeat_fingerprint_sha256": repeat_support_fingerprint, "deterministic_repeat_pass": bool(first_completion.get("valid", false)) and bool(repeated_completion.get("valid", false)) and first_support_fingerprint == repeat_support_fingerprint, "additional_target_attempts_consumed": 1}
+		x1_support_completion = {"started": true, "hypothesis": "add only accepted binary32 exact-PL-zero-set witnesses for boundary obligations having zero options in the complete 23-support graph", "changed_domain": "support_vertex_set_only; frozen six-face cavity, topology arcs and authority, Candidate-D field, volume, roots, cutoff, epsilons, ROI oracle and controls remain fixed", "baseline_attempt_id": previous_result.get("attempt_id", ""), "baseline_result_sha256": continuation_metadata.get("parent_f1_result_sha256", "UNKNOWN_NOT_CAPTURED"), "baseline_solver_status": previous_d3.get("status", "UNKNOWN_NOT_CAPTURED"), "baseline_candidate_graph_sha256": previous_d3.get("candidate_graph_sha256", "UNKNOWN_NOT_CAPTURED"), "baseline_support_set_sha256": previous_d3.get("support_set_sha256", "UNKNOWN_NOT_CAPTURED"), "baseline_graph_rows_sha256": baseline_graph_row_export_sha, "baseline_vertex_ids": baseline_vertex_ids.duplicate(), "baseline_graph_rows": baseline_candidate_triangle_rows, "boundary_audit": first_completion.get("boundary_audit", {}), "zero_option_edges": first_completion.get("zero_option_edges", []), "supports": first_completion.get("supports", []), "support_count_before": support_rows.size(), "support_count_added": first_completion.get("supports", []).size(), "support_fingerprint_sha256": first_support_fingerprint, "repeat_fingerprint_sha256": repeat_support_fingerprint, "deterministic_repeat_pass": bool(first_completion.get("valid", false)) and bool(repeated_completion.get("valid", false)) and first_support_fingerprint == repeat_support_fingerprint, "first_completion_reason": first_completion.get("reason", ""), "first_completion_diagnostics": first_completion.get("inventory", first_completion.get("boundary_audit", {})), "additional_target_attempts_consumed": 1}
 		if not bool(first_completion.get("valid", false)) or not bool(repeated_completion.get("valid", false)) or first_completion.get("supports", []).is_empty() or first_support_fingerprint != repeat_support_fingerprint:
 			result["r6_x1_support_completion"] = x1_support_completion
 			result["status"] = "R6_X1_PREREQUISITE_OR_DETERMINISM_BLOCKED"
 			result["terminal_reason"] = String(first_completion.get("reason", "R6-X1 witness construction or deterministic repeat failed"))
 			result["target_attempt_consumed"] = false
+			result["continuation"]["additional_target_attempts_consumed"] = 0
+			result["continuation"]["target_attempt_consumed"] = false
 			_write_result(output_path, result, "R12CXR_R6_X1_SUPPORT_COMPLETION")
 			return result
 		var all_support_ids: Dictionary = {}
@@ -681,6 +684,8 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 				result["status"] = "R6_X1_SUPPORT_IDENTITY_COLLISION"
 				result["terminal_reason"] = "D0 critical witness duplicates an existing support identity; no new geometric domain was exercised"
 				result["target_attempt_consumed"] = false
+				result["continuation"]["additional_target_attempts_consumed"] = 0
+				result["continuation"]["target_attempt_consumed"] = false
 				_write_result(output_path, result, "R12CXR_R6_X1_SUPPORT_COMPLETION")
 				return result
 			all_support_ids[String(support.get("support_id", ""))] = true
@@ -696,6 +701,9 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 			result["status"] = "R6_X1_SUPPORT_CONTEXT_REJECTED"
 			result["terminal_reason"] = String(extended_context_result.get("reason", "extended support context rejected"))
 			result["context_rejection"] = extended_context_result
+			result["target_attempt_consumed"] = false
+			result["continuation"]["additional_target_attempts_consumed"] = 0
+			result["continuation"]["target_attempt_consumed"] = false
 			_write_result(output_path, result, "R12CXR_R6_X1_SUPPORT_COMPLETION")
 			return result
 		context = extended_context_result.get("context", {})
@@ -703,6 +711,9 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 			result["r6_x1_support_completion"] = x1_support_completion
 			result["status"] = "R6_X1_SUPPORT_CONTEXT_MISSING"
 			result["terminal_reason"] = "extended support context missing after successful preflight"
+			result["target_attempt_consumed"] = false
+			result["continuation"]["additional_target_attempts_consumed"] = 0
+			result["continuation"]["target_attempt_consumed"] = false
 			_write_result(output_path, result, "R12CXR_R6_X1_SUPPORT_COMPLETION")
 			return result
 		var x1_vertex_ids: Array = context.get("vertex_ids", []).duplicate()
@@ -715,6 +726,10 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		var x1_limited: bool = false
 		var x1_limit_reason: String = ""
 		var x1_started_usec: int = Time.get_ticks_usec()
+		result["target_attempt_consumed"] = true
+		result["continuation"]["target_attempt_consumed"] = true
+		result["continuation"]["additional_target_attempts_consumed"] = 1
+		result["attempt_accounting"] = {"baseline_r6_06_attempts_consumed": 1, "tooling_failures_unconsumed": 1, "r6_x1_attempts_consumed": 1, "cumulative_valid_scientific_target_attempts": 2, "attempt_id": continuation_metadata.get("attempt_id", "")}
 		for first_index in range(x1_vertex_ids.size()):
 			for second_index in range(first_index + 1, x1_vertex_ids.size()):
 				for third_index in range(second_index + 1, x1_vertex_ids.size()):
@@ -889,7 +904,7 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	_write_result(output_path, result, "R12CXR_R6_SUPPORT_SYNTHESIS_RESULT")
 	return result
 
-func _r6_x1_boundary_support_completion(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, patch: Array[Dictionary], existing_supports: Array[Dictionary], boundary_candidate_counts: Dictionary) -> Dictionary:
+func _r6_x1_boundary_support_completion(realizer: RefCounted, inventory_realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, patch: Array[Dictionary], existing_supports: Array[Dictionary], boundary_candidate_counts: Dictionary) -> Dictionary:
 	var zero_option_edges: Array[String] = []
 	var count_keys: Array = boundary_candidate_counts.keys()
 	count_keys.sort()
@@ -898,7 +913,7 @@ func _r6_x1_boundary_support_completion(realizer: RefCounted, values: PackedFloa
 		if int(boundary_candidate_counts[edge_key]) == 0: zero_option_edges.append(edge_key)
 	if zero_option_edges.is_empty(): return {"valid": false, "reason": "R6_X1_HAS_NO_ZERO_OPTION_BOUNDARY_OBLIGATION"}
 	var diagnostics: RefCounted = Diagnostics.new()
-	var inventory: Dictionary = diagnostics.call("collect_zero_facet_inventory", realizer, values, roi)
+	var inventory: Dictionary = diagnostics.call("collect_zero_facet_inventory", inventory_realizer, values, roi)
 	if not bool(inventory.get("valid", false)): return {"valid": false, "reason": "R6_X1_ZERO_FACET_INVENTORY_INVALID", "inventory": inventory}
 	var projection: Dictionary = {"origin": context.get("projection_origin", Vector3.ZERO), "axis_u": context.get("projection_u", Vector3.ZERO), "axis_v": context.get("projection_v", Vector3.ZERO)}
 	var root_positions: Dictionary = context.get("vertex_positions", {})
