@@ -399,9 +399,10 @@ func _candidate_can_extend(candidate: Dictionary, edge_state: Dictionary) -> boo
 func _geometry_compatible(candidate: Dictionary, selected: Array[Dictionary]) -> bool:
 	if _realizer == null: return true
 	var candidate_id: String = String(candidate.get("triangle_id", ""))
+	var candidate_only: Array[Dictionary] = [candidate]
 	if not _base_compatibility.has(candidate_id):
 		_stats.triangle_conflict_checks = int(_stats.triangle_conflict_checks) + _base_mesh.size()
-		var base_ok: bool = bool(_realizer.call("_r2_intersections_clear", [candidate], _base_mesh)) and int(_realizer.call("_new_t_junction_count", [candidate], _base_mesh)) == 0
+		var base_ok: bool = bool(_realizer.call("_r2_intersections_clear", candidate_only, _base_mesh)) and int(_realizer.call("_new_t_junction_count", candidate_only, _base_mesh)) == 0
 		_base_compatibility[candidate_id] = base_ok
 		if not base_ok: _stats.base_mesh_conflict_rejections = int(_stats.base_mesh_conflict_rejections) + 1
 	if not bool(_base_compatibility[candidate_id]): return false
@@ -410,7 +411,8 @@ func _geometry_compatible(candidate: Dictionary, selected: Array[Dictionary]) ->
 		var pair_key: String = candidate_id + "|" + selected_id if candidate_id < selected_id else selected_id + "|" + candidate_id
 		if not _pair_compatibility.has(pair_key):
 			_stats.triangle_conflict_checks = int(_stats.triangle_conflict_checks) + 1
-			var compatible: bool = bool(_realizer.call("_r2_intersections_clear", [candidate], [selected_triangle])) and int(_realizer.call("_new_t_junction_count", [candidate], [selected_triangle])) == 0 and int(_realizer.call("_new_t_junction_count", [selected_triangle], [candidate])) == 0
+			var selected_only: Array[Dictionary] = [selected_triangle]
+			var compatible: bool = bool(_realizer.call("_r2_intersections_clear", candidate_only, selected_only)) and int(_realizer.call("_new_t_junction_count", candidate_only, selected_only)) == 0 and int(_realizer.call("_new_t_junction_count", selected_only, candidate_only)) == 0
 			_pair_compatibility[pair_key] = compatible
 			if not compatible: _stats.triangle_conflict_rejections = int(_stats.triangle_conflict_rejections) + 1
 		if not bool(_pair_compatibility[pair_key]): return false

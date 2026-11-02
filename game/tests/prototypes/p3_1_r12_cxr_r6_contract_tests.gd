@@ -254,6 +254,10 @@ func _test_r6_unbounded_frozen_graph_solver() -> void:
 	var repeated: Dictionary = solver.call("solve", context, graph, null, limits, validator)
 	var repeated_ids: Array = repeated.get("best_solution", {}).get("selected_triangle_ids", []).duplicate()
 	_expect(String(repeated.get("status", "")) == "SAT" and first_ids == repeated_ids, "R6-F deterministic repeat selects the same ordered solution")
+	var geometry_solver: RefCounted = R6FrozenSolver.new()
+	var geometry_realizer: RefCounted = R6Realizer.new()
+	var geometry_sat: Dictionary = geometry_solver.call("solve", context, graph, geometry_realizer, limits, validator)
+	_expect(String(geometry_sat.get("status", "")) == "SAT" and int(geometry_sat.get("triangle_conflict_checks", 0)) > 0, "R6-F invokes typed intersection and T-junction geometry oracles without tooling errors")
 	var incomplete: Array[Dictionary] = graph.duplicate(true)
 	for index in range(incomplete.size()):
 		if String(incomplete[index].triangle_id) == "syn-inner-2":
