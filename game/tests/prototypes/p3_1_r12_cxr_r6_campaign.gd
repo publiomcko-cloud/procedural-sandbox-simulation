@@ -314,7 +314,14 @@ func _run() -> void:
 			if typeof(support_value) != TYPE_DICTIONARY:
 				_fail("r6_x2_graph_resume_extension_support_row_invalid", {})
 				return
-			merged_supports.append(support_value.duplicate(true))
+			var restored_support: Dictionary = support_value.duplicate(true)
+			var restored_position: Variant = restored_support.get("world_position", null)
+			if restored_position is Array and restored_position.size() == 3:
+				restored_support["world_position"] = Vector3(float(restored_position[0]), float(restored_position[1]), float(restored_position[2]))
+			if not (restored_support.get("world_position", null) is Vector3):
+				_fail("r6_x2_graph_resume_extension_support_position_invalid", {"support_id": restored_support.get("support_id", ""), "world_position": restored_position})
+				return
+			merged_supports.append(restored_support)
 		merged_supports.sort_custom(Callable(resumed_realizer, "_candidate_less"))
 		var resumed_synthesis: Dictionary = baseline_synthesis.duplicate(true)
 		resumed_synthesis["supports"] = merged_supports
