@@ -1755,6 +1755,21 @@ func _merge_y1_support_domain_supports(synthesis_value: Dictionary, prior_suppor
 		seen_positions[prior_position_identity] = true
 		seen_ids[prior_support_id] = true
 		var carried: Dictionary = prior_support.duplicate(true)
+		var global_cell_value: Dictionary = _r6_parse_vector3(prior_support.get("source_cell_global_lattice", null))
+		var local_cell_value: Dictionary = _r6_parse_vector3(prior_support.get("source_cell_local", null))
+		var world_position_value: Dictionary = _r6_parse_vector3(prior_support.get("world_position", null))
+		if not bool(global_cell_value.get("valid", false)) or not bool(local_cell_value.get("valid", false)) or not bool(world_position_value.get("valid", false)):
+			return {"valid": false, "reason": "R6_Y1_PRIOR_SUPPORT_GEOMETRY_REHYDRATION_FAILED", "support_id": prior_support_id, "global_cell": global_cell_value, "local_cell": local_cell_value, "world_position": world_position_value}
+		carried["source_cell_global_lattice"] = Vector3i(roundi(float(global_cell_value.point.x)), roundi(float(global_cell_value.point.y)), roundi(float(global_cell_value.point.z)))
+		carried["source_cell_local"] = Vector3i(roundi(float(local_cell_value.point.x)), roundi(float(local_cell_value.point.y)), roundi(float(local_cell_value.point.z)))
+		carried["world_position"] = Vector3(world_position_value.point)
+		var corners: Array[Vector3] = []
+		for corner_value in prior_support.get("tetrahedron_corner_world", []):
+			var corner_result: Dictionary = _r6_parse_vector3(corner_value)
+			if not bool(corner_result.get("valid", false)):
+				return {"valid": false, "reason": "R6_Y1_PRIOR_SUPPORT_TETRA_CORNER_REHYDRATION_FAILED", "support_id": prior_support_id, "corner": corner_value}
+			corners.append(Vector3(corner_result.point))
+		carried["tetrahedron_corner_world"] = corners
 		carried["carried_forward_from_accepted_prior_domain"] = true
 		supports.append(carried)
 		carried_forward_count += 1
@@ -1766,6 +1781,23 @@ func _merge_y1_support_domain_supports(synthesis_value: Dictionary, prior_suppor
 	synthesis["raw_unique_support_count"] = maxi(int(synthesis.get("raw_unique_support_count", generated_support_count)), supports.size())
 	synthesis["support_cap_hit"] = false
 	return {"valid": true, "synthesis": synthesis, "generated_support_count": generated_support_count, "carried_forward_support_count": carried_forward_count, "merged_support_count": supports.size(), "deduplication_key": "BINARY32_POSITION_IDENTITY", "prior_support_domain_preserved": true}
+
+func _r6_parse_vector3(value: Variant) -> Dictionary:
+	if value is Vector3: return {"valid": true, "point": Vector3(value)}
+	var coordinates: Array = []
+	if value is Array:
+		coordinates = value.duplicate()
+	elif typeof(value) == TYPE_STRING:
+		var source: String = String(value).strip_edges()
+		if source.begins_with("(") and source.ends_with(")"): source = source.substr(1, source.length() - 2)
+		coordinates = source.split(",")
+	if coordinates.size() != 3: return {"valid": false, "reason": "vector3_evidence_shape_invalid", "value": value}
+	var parsed: Array[float] = []
+	for coordinate in coordinates:
+		var numeric: float = float(String(coordinate).strip_edges()) if typeof(coordinate) == TYPE_STRING else float(coordinate)
+		if not is_finite(numeric): return {"valid": false, "reason": "vector3_evidence_nonfinite", "value": value}
+		parsed.append(numeric)
+	return {"valid": true, "point": Vector3(parsed[0], parsed[1], parsed[2])}
 
 static func _round_report_number(value: Variant) -> Variant:
 	if typeof(value) not in [TYPE_FLOAT, TYPE_INT] or not is_finite(float(value)): return value
