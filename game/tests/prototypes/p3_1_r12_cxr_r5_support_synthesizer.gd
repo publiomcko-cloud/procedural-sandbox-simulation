@@ -1134,6 +1134,10 @@ func _critical_candidate_resume_before(left: Dictionary, right: Dictionary, id_a
 	var right_key: String = _numeric_resume_key(right_region, id_a, id_b, global_cell, tet_index, facet_index, right_method, right_position)
 	var left_frontier: Dictionary = resume_numeric_frontiers.get(left_key, {})
 	var right_frontier: Dictionary = resume_numeric_frontiers.get(right_key, {})
+	var left_region_tested: int = _critical_candidate_region_tested(left_region, id_a, id_b, global_cell, tet_index, facet_index, resume_numeric_frontiers)
+	var right_region_tested: int = _critical_candidate_region_tested(right_region, id_a, id_b, global_cell, tet_index, facet_index, resume_numeric_frontiers)
+	if (left_region_tested >= 0) != (right_region_tested >= 0): return left_region_tested >= 0
+	if left_region_tested >= 0 and right_region_tested >= 0 and left_region_tested != right_region_tested: return left_region_tested < right_region_tested
 	if left_frontier.is_empty() != right_frontier.is_empty(): return not left_frontier.is_empty()
 	if not left_frontier.is_empty() and not right_frontier.is_empty():
 		var left_tested: int = int(left_frontier.get("tested_triples", 0))
@@ -1143,6 +1147,19 @@ func _critical_candidate_resume_before(left: Dictionary, right: Dictionary, id_a
 	var right_priority: int = _critical_candidate_search_priority(right)
 	if left_priority != right_priority: return left_priority < right_priority
 	return var_to_bytes(left_position).hex_encode() < var_to_bytes(right_position).hex_encode()
+
+func _critical_candidate_region_tested(region_id: String, id_a: String, id_b: String, global_cell: Vector3i, tet_index: int, facet_index: int, resume_numeric_frontiers: Dictionary) -> int:
+	var pair: Array = [id_a, id_b]
+	var maximum_tested: int = -1
+	for frontier_value in resume_numeric_frontiers.values():
+		if typeof(frontier_value) != TYPE_DICTIONARY: continue
+		var frontier: Dictionary = frontier_value
+		if String(frontier.get("arrangement_region_id", "")) != region_id: continue
+		if JSON.stringify(frontier.get("boundary_pair", [])) != JSON.stringify(pair): continue
+		if JSON.stringify(frontier.get("source_cell_global_lattice", [])) != JSON.stringify([global_cell.x, global_cell.y, global_cell.z]): continue
+		if int(frontier.get("source_tetrahedron", -1)) != tet_index or int(frontier.get("source_facet", -1)) != facet_index: continue
+		maximum_tested = maxi(maximum_tested, maxi(0, int(frontier.get("tested_triples", 0))))
+	return maximum_tested
 
 func _add_selected_critical(selected: Array[Dictionary], selected_ids: Dictionary, row: Dictionary, method: String) -> void:
 	var identity: String = var_to_bytes(Vector2(row.position)).hex_encode()

@@ -195,6 +195,13 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	var resumed_candidate_key: String = synthesizer.call("_numeric_resume_key", "region", "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, "ACTIVE_CONSTRAINT_TRANSITION", Vector2(0.25, 0.5))
 	var candidate_frontiers: Dictionary = {resumed_candidate_key: {"tested_triples": 99}}
 	_expect(bool(synthesizer.call("_critical_candidate_resume_before", resumed_candidate, fresh_candidate, "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, candidate_frontiers)), "R6-Y resumes the most advanced exact candidate frontier before a fresh seed in the same region")
+	var low_progress_candidate: Dictionary = {"constraint_arrangement_region_id": "region-low", "method": "FEASIBLE_REGION_CENTROID", "position": Vector2(0.25, 0.5)}
+	var high_progress_candidate: Dictionary = {"constraint_arrangement_region_id": "region-high", "method": "FEASIBLE_REGION_CENTROID", "position": Vector2(0.25, 0.5)}
+	var progress_frontiers: Dictionary = {
+		"low": {"arrangement_region_id": "region-low", "boundary_pair": ["edge:a", "edge:b"], "source_cell_global_lattice": [60, 8, 25], "source_tetrahedron": 2, "source_facet": 1, "tested_triples": 10},
+		"high": {"arrangement_region_id": "region-high", "boundary_pair": ["edge:a", "edge:b"], "source_cell_global_lattice": [60, 8, 25], "source_tetrahedron": 2, "source_facet": 1, "tested_triples": 20}
+	}
+	_expect(bool(synthesizer.call("_critical_candidate_resume_before", low_progress_candidate, high_progress_candidate, "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, progress_frontiers)), "R6-Y schedules the least-advanced continuous region first to prevent frontier starvation")
 	var one_up: float = realizer.call("_step_binary32", 1.0, 1)
 	var one_down: float = realizer.call("_step_binary32", 1.0, -1)
 	var negative_up: float = realizer.call("_step_binary32", -1.0, 1)
