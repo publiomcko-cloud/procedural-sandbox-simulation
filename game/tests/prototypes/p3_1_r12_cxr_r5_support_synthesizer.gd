@@ -213,7 +213,6 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 					var root_a_2d: Vector2 = Vector2(projected_positions.get(id_a, Vector2.ZERO))
 					var root_b_2d: Vector2 = Vector2(projected_positions.get(id_b, Vector2.ZERO))
 					var region_key: String = "%s|%06d|%02d|%02d|%s|%s" % [str(tet_data.global_cell), tet_index, facet_index, domain_index, id_a, id_b]
-					var complete_region_key: String = _region_resume_key(region_key, id_a, id_b, tet_data.global_cell, tet_index, facet_index)
 					enumeration_frontier = {"tetrahedron": tet_index, "facet": facet_index, "domain": domain_index, "source_pair": [id_a, id_b], "region": feasible_region_count, "candidate": 0, "completed_critical_candidates": critical_candidate_count, "completed_support_rows": raw_by_identity.size()}
 					var region_result: Dictionary = _triangle_first_critical_candidates(clipped, polygon, root_a_2d, root_b_2d, a, b, source_triangle_2d, world_triangle, arc_segments, feasible_region_count, region_key, critical_candidate_count, enumerate_all_critical_vertices, complete_support_domain, started_usec, synthesis_budget_usec, memory_budget_bytes)
 					if not bool(region_result.get("valid", false)):
@@ -236,10 +235,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 					var witness_records: Array[Dictionary] = region_result.get("candidates", [])
 					if complete_support_domain:
 						witness_records.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
-							var left_priority: int = _critical_candidate_search_priority(left)
-							var right_priority: int = _critical_candidate_search_priority(right)
-							if left_priority != right_priority: return left_priority < right_priority
-							return var_to_bytes(Vector2(left.get("position", Vector2.ZERO))).hex_encode() < var_to_bytes(Vector2(right.get("position", Vector2.ZERO))).hex_encode()
+							return _critical_candidate_resume_before(left, right, id_a, id_b, tet_data.global_cell, tet_index, facet_index, resume_numeric_frontiers)
 						)
 					if not complete_support_domain and critical_candidate_count + witness_records.size() > MAX_CRITICAL_CANDIDATES_TOTAL:
 						cap_reason = "R5_MAX_CRITICAL_CANDIDATES_TOTAL"
@@ -260,11 +256,12 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 						var candidate_region_polygon: Array[Vector2] = []
 						for projected_vertex in projected_region_polygons.get(candidate_region_id, []): candidate_region_polygon.append(Vector2(projected_vertex))
 						var resume_key: String = _numeric_resume_key(candidate_region_id, id_a, id_b, tet_data.global_cell, tet_index, facet_index, String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), witness)
+						var numeric_region_key: String = _region_resume_key(candidate_region_id, id_a, id_b, tet_data.global_cell, tet_index, facet_index)
 						var complete_numeric_gate: Callable = Callable()
-						# Numeric search frontiers are candidate-specific. A region-wide guard
-						# caused later seeds with persisted frontiers to be silently skipped
-						# after the first seed was processed in a segment.
-						var resolve_region_numerically: bool = complete_support_domain and not region_numeric_search_attempted.has(resume_key) and not witnessed_region_ids.has(complete_region_key) and not resumed_region_ids.has(complete_region_key)
+						# One full AABB enumeration proves the representable domain for this
+						# continuous region. Prefer its most advanced persisted seed so a
+						# region-wide guard never skips a saved frontier from another seed.
+						var resolve_region_numerically: bool = complete_support_domain and not region_numeric_search_attempted.has(numeric_region_key) and not witnessed_region_ids.has(numeric_region_key) and not resumed_region_ids.has(numeric_region_key)
 						if resolve_region_numerically:
 							complete_numeric_gate = Callable(self, "_complete_binary32_candidate_gate").bind(realizer, context, id_a, id_b, candidate_region_polygon, cutoff, polygon, vertex_positions, source_origins, max_support_distance)
 						var resume_frontier: Dictionary = resume_numeric_frontiers.get(resume_key, {}) if resolve_region_numerically else {}
@@ -276,7 +273,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 						if enumerate_all_critical_vertices and witness_check.has("binary32_representability_correction"):
 							var correction_record: Dictionary = witness_check.binary32_representability_correction
 							if bool(correction_record.get("attempted", false)):
-								if complete_support_domain: region_numeric_search_attempted[resume_key] = true
+								if complete_support_domain: region_numeric_search_attempted[numeric_region_key] = true
 								if bool(correction_record.get("accepted", false)): x2_representability_correction_count += 1
 								else: x2_representability_correction_failure_count += 1
 						if not bool(witness_check.get("valid", false)):
@@ -292,6 +289,8 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 								numeric_frontier_record["source_facet"] = facet_index
 								numeric_frontier_record["arrangement_region_id"] = candidate_region_id
 								numeric_frontier_record["critical_candidate_method"] = String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED"))
+								numeric_frontier_record["seed_projected_position"] = [witness.x, witness.y]
+								numeric_frontier_record["seed_world_position"] = witness_check.get("pre_correction_world_position", witness_check.get("world", Vector3.ZERO))
 								numeric_search_frontiers.append(numeric_frontier_record)
 								x2_audit_row["terminal_gate"] = "PARTIAL_LIMIT_BINARY32_REPRESENTABLE_SEARCH"
 								x2_audit_row["numeric_search_frontier"] = numeric_search_frontier
@@ -345,7 +344,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 								if complete_support_domain: stream_row_count += 1
 							continue
 						feasible_single_support_count += 1
-						witnessed_region_ids[complete_region_key] = true
+						witnessed_region_ids[numeric_region_key] = true
 						if enumerate_all_critical_vertices:
 							x2_audit_row["terminal_gate"] = "SINGLE_SUPPORT_PAIR_PASS"
 							x2_audit_row["cross_squared"] = cross_squared
@@ -1123,6 +1122,27 @@ func _critical_candidate_search_priority(candidate: Dictionary) -> int:
 	if method.contains("EDGE_MIDPOINT"): return 3
 	if method.contains("ACTIVE_CONSTRAINT"): return 4
 	return 5
+
+func _critical_candidate_resume_before(left: Dictionary, right: Dictionary, id_a: String, id_b: String, global_cell: Vector3i, tet_index: int, facet_index: int, resume_numeric_frontiers: Dictionary) -> bool:
+	var left_method: String = String(left.get("method", "UNKNOWN_NOT_CAPTURED"))
+	var right_method: String = String(right.get("method", "UNKNOWN_NOT_CAPTURED"))
+	var left_position: Vector2 = Vector2(left.get("position", Vector2.ZERO))
+	var right_position: Vector2 = Vector2(right.get("position", Vector2.ZERO))
+	var left_region: String = String(left.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED"))
+	var right_region: String = String(right.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED"))
+	var left_key: String = _numeric_resume_key(left_region, id_a, id_b, global_cell, tet_index, facet_index, left_method, left_position)
+	var right_key: String = _numeric_resume_key(right_region, id_a, id_b, global_cell, tet_index, facet_index, right_method, right_position)
+	var left_frontier: Dictionary = resume_numeric_frontiers.get(left_key, {})
+	var right_frontier: Dictionary = resume_numeric_frontiers.get(right_key, {})
+	if left_frontier.is_empty() != right_frontier.is_empty(): return not left_frontier.is_empty()
+	if not left_frontier.is_empty() and not right_frontier.is_empty():
+		var left_tested: int = int(left_frontier.get("tested_triples", 0))
+		var right_tested: int = int(right_frontier.get("tested_triples", 0))
+		if left_tested != right_tested: return left_tested > right_tested
+	var left_priority: int = _critical_candidate_search_priority(left)
+	var right_priority: int = _critical_candidate_search_priority(right)
+	if left_priority != right_priority: return left_priority < right_priority
+	return var_to_bytes(left_position).hex_encode() < var_to_bytes(right_position).hex_encode()
 
 func _add_selected_critical(selected: Array[Dictionary], selected_ids: Dictionary, row: Dictionary, method: String) -> void:
 	var identity: String = var_to_bytes(Vector2(row.position)).hex_encode()

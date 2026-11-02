@@ -188,6 +188,13 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	var resume_key: String = synthesizer.call("_numeric_resume_key", "region", "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, "FEASIBLE_REGION_CENTROID", Vector2(0.25, 0.5))
 	var collision_key: String = synthesizer.call("_numeric_resume_key", "region", "edge:c", "edge:d", Vector3i(60, 8, 25), 2, 1, "FEASIBLE_REGION_CENTROID", Vector2(0.25, 0.5))
 	_expect(resume_key != collision_key, "R6-Y numeric resume identity includes the boundary pair and disambiguates region ID collisions")
+	var numeric_region_key: String = synthesizer.call("_region_resume_key", "region", "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1)
+	_expect(numeric_region_key != resume_key, "R6-Y region attempt identity groups seeds while exact frontier identity retains method and projected seed")
+	var resumed_candidate: Dictionary = {"constraint_arrangement_region_id": "region", "method": "ACTIVE_CONSTRAINT_TRANSITION", "position": Vector2(0.25, 0.5)}
+	var fresh_candidate: Dictionary = {"constraint_arrangement_region_id": "region", "method": "FEASIBLE_REGION_CENTROID", "position": Vector2(0.25, 0.5)}
+	var resumed_candidate_key: String = synthesizer.call("_numeric_resume_key", "region", "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, "ACTIVE_CONSTRAINT_TRANSITION", Vector2(0.25, 0.5))
+	var candidate_frontiers: Dictionary = {resumed_candidate_key: {"tested_triples": 99}}
+	_expect(bool(synthesizer.call("_critical_candidate_resume_before", resumed_candidate, fresh_candidate, "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, candidate_frontiers)), "R6-Y resumes the most advanced exact candidate frontier before a fresh seed in the same region")
 	var one_up: float = realizer.call("_step_binary32", 1.0, 1)
 	var one_down: float = realizer.call("_step_binary32", 1.0, -1)
 	var negative_up: float = realizer.call("_step_binary32", -1.0, 1)
@@ -222,6 +229,8 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	_expect(bool(acceptance_gated_search.get("accepted", false)) and Vector3(acceptance_gated_search.get("position", excluded_first_witness)) != excluded_first_witness and int(acceptance_gated_search.get("acceptance_gate_rejection_count", 0)) > 0, "R6-Y binary32 enumeration continues after a field-valid candidate fails the complete support acceptance gate")
 	var partial_acceptance: Dictionary = realizer.call("_search_representable_zero_multicoordinate", Vector3(0.5, 0.0, 0.0), representability_tet, 1, Callable(func(_candidate: Vector3) -> bool: return false))
 	_expect(String(partial_acceptance.get("search_state", "")) == "PARTIAL_LIMIT" and not bool(partial_acceptance.get("accepted", true)) and not bool(partial_acceptance.get("finite_domain_complete", true)), "R6-Y numeric timeout never promotes its field-valid seed to a support witness")
+	var partial_frontier: Dictionary = partial_acceptance.get("search_frontier", {})
+	_expect(partial_frontier.has("seed_ordered_float32_keys") and partial_frontier.has("tetra_aabb_minimum_ordered_float32_keys") and partial_frontier.has("tetra_aabb_maximum_ordered_float32_keys") and partial_frontier.has("tetra_aabb_axis_candidate_counts") and partial_frontier.has("minimum_radius") and partial_frontier.has("maximum_radius") and not String(partial_frontier.get("remaining_domain_definition", "")).is_empty(), "R6-Y partial evidence records the exact finite representable AABB and unvisited cursor")
 	var far_seed: Vector3 = Vector3(10.0, 10.0, 10.0)
 	var far_origin_bytes: PackedByteArray = PackedFloat32Array([far_seed.x, far_seed.y, far_seed.z]).to_byte_array()
 	var far_minimum_radius: int = 0

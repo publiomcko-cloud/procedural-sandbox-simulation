@@ -262,6 +262,16 @@ func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dic
 	var tested: int = int(resume_frontier.get("tested_triples", 0))
 	var acceptance_rejection_count: int = 0
 	var frontier: Dictionary = resume_frontier.duplicate(true) if not resume_frontier.is_empty() else {"stage": "shell", "radius": minimum_radius, "dx": -minimum_radius, "dy": -minimum_radius, "dz": -minimum_radius, "tested_triples": 0}
+	var axis_candidate_counts: Array[int] = []
+	for axis in range(3): axis_candidate_counts.append(maximum_keys[axis] - minimum_keys[axis] + 1)
+	frontier["seed_world_position"] = [original.x, original.y, original.z]
+	frontier["seed_ordered_float32_keys"] = original_keys.duplicate()
+	frontier["tetra_aabb_minimum_ordered_float32_keys"] = minimum_keys.duplicate()
+	frontier["tetra_aabb_maximum_ordered_float32_keys"] = maximum_keys.duplicate()
+	frontier["tetra_aabb_axis_candidate_counts"] = axis_candidate_counts
+	frontier["minimum_radius"] = minimum_radius
+	frontier["maximum_radius"] = maximum_radius
+	frontier["remaining_domain_definition"] = "all ordered-binary32 xyz triples in the inclusive tetra coordinate AABB, at or after this deterministic Chebyshev-shell (radius,dx,dy,dz) cursor, each checked against same-tetra barycentric/residual gates and the unchanged complete support acceptance gate"
 	var resume_radius: int = int(frontier.get("radius", 0))
 	var resume_dx: int = int(frontier.get("dx", -resume_radius))
 	var resume_dy: int = int(frontier.get("dy", -resume_radius))
@@ -280,7 +290,7 @@ func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dic
 		if resume_active and radius == resume_radius and _binary32_frontier_before(radius, -radius, -radius, -radius, resume_radius, resume_dx, resume_dy, resume_dz):
 			frontier = resume_frontier.duplicate(true)
 		if Time.get_ticks_usec() - started_usec >= max_search_usec:
-			return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested, acceptance_rejection_count)
+			return _binary32_search_partial(original, tet_data, _binary32_frontier_with_domain(frontier, original, original_keys, minimum_keys, maximum_keys, minimum_radius, maximum_radius), maximum_radius, tested, acceptance_rejection_count)
 		var dx_start: int = maxi(-radius, minimum_keys[0] - original_keys[0])
 		var dx_end: int = mini(radius, maximum_keys[0] - original_keys[0])
 		for dx in range(dx_start, dx_end + 1):
@@ -291,13 +301,13 @@ func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dic
 			var dz_end: int = mini(radius, maximum_keys[2] - original_keys[2])
 			frontier = {"stage": "x_offset", "radius": radius, "dx": dx, "dy": dy_start, "dz": dz_start, "tested_triples": tested}
 			if Time.get_ticks_usec() - started_usec >= max_search_usec:
-				return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested, acceptance_rejection_count)
+				return _binary32_search_partial(original, tet_data, _binary32_frontier_with_domain(frontier, original, original_keys, minimum_keys, maximum_keys, minimum_radius, maximum_radius), maximum_radius, tested, acceptance_rejection_count)
 			var x_key: int = original_keys[0] + dx
 			for dy in range(dy_start, dy_end + 1):
 				if resume_active and radius == resume_radius and dx == resume_dx and dy < resume_dy: continue
 				frontier = {"stage": "y_offset", "radius": radius, "dx": dx, "dy": dy, "dz": dz_start, "tested_triples": tested}
 				if Time.get_ticks_usec() - started_usec >= max_search_usec:
-					return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested, acceptance_rejection_count)
+					return _binary32_search_partial(original, tet_data, _binary32_frontier_with_domain(frontier, original, original_keys, minimum_keys, maximum_keys, minimum_radius, maximum_radius), maximum_radius, tested, acceptance_rejection_count)
 				var y_key: int = original_keys[1] + dy
 				var z_offsets: Array[int] = []
 				if maxi(absi(dx), absi(dy)) == radius:
@@ -311,7 +321,7 @@ func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dic
 					frontier = {"radius": radius, "dx": dx, "dy": dy, "dz": dz, "tested_triples": tested}
 					resume_active = false
 					if Time.get_ticks_usec() - started_usec >= max_search_usec:
-						return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested, acceptance_rejection_count)
+						return _binary32_search_partial(original, tet_data, _binary32_frontier_with_domain(frontier, original, original_keys, minimum_keys, maximum_keys, minimum_radius, maximum_radius), maximum_radius, tested, acceptance_rejection_count)
 					var candidate: Vector3 = Vector3(_float_from_ordered_key(x_key), _float_from_ordered_key(y_key), _float_from_ordered_key(z_key))
 					var evaluation: Dictionary = _evaluate_zero_point(candidate, tet_data)
 					tested += 1
@@ -323,7 +333,7 @@ func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dic
 						evaluation["ulp_steps"] = [dx, dy, dz]
 						evaluation["search_state"] = "MULTICOORDINATE_BINARY32_WITNESS"
 						evaluation["finite_domain_complete"] = false
-						evaluation["search_frontier"] = frontier
+						evaluation["search_frontier"] = _binary32_frontier_with_domain(frontier, original, original_keys, minimum_keys, maximum_keys, minimum_radius, maximum_radius)
 						evaluation["tested_triples"] = tested
 						evaluation["acceptance_gate_rejection_count"] = acceptance_rejection_count
 						return evaluation
@@ -342,6 +352,20 @@ func _binary32_frontier_before(radius: int, dx: int, dy: int, dz: int, target_ra
 	if dx != target_dx: return dx < target_dx
 	if dy != target_dy: return dy < target_dy
 	return dz < target_dz
+
+func _binary32_frontier_with_domain(frontier: Dictionary, original: Vector3, original_keys: Array[int], minimum_keys: Array[int], maximum_keys: Array[int], minimum_radius: int, maximum_radius: int) -> Dictionary:
+	var axis_candidate_counts: Array[int] = []
+	for axis in range(3): axis_candidate_counts.append(maximum_keys[axis] - minimum_keys[axis] + 1)
+	var result: Dictionary = frontier.duplicate(true)
+	result["seed_world_position"] = [original.x, original.y, original.z]
+	result["seed_ordered_float32_keys"] = original_keys.duplicate()
+	result["tetra_aabb_minimum_ordered_float32_keys"] = minimum_keys.duplicate()
+	result["tetra_aabb_maximum_ordered_float32_keys"] = maximum_keys.duplicate()
+	result["tetra_aabb_axis_candidate_counts"] = axis_candidate_counts
+	result["minimum_radius"] = minimum_radius
+	result["maximum_radius"] = maximum_radius
+	result["remaining_domain_definition"] = "all ordered-binary32 xyz triples in the inclusive tetra coordinate AABB, at or after this deterministic Chebyshev-shell (radius,dx,dy,dz) cursor, each checked against same-tetra barycentric/residual gates and the unchanged complete support acceptance gate"
+	return result
 
 func _binary32_search_partial(original: Vector3, tet_data: Dictionary, frontier: Dictionary, maximum_radius: int, tested: int, acceptance_rejection_count: int) -> Dictionary:
 	var partial: Dictionary = _evaluate_zero_point(original, tet_data)
