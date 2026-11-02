@@ -259,25 +259,33 @@ func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dic
 	var tested: int = 0
 	var frontier: Dictionary = {"radius": 0, "dx": 0, "dy": 0, "dz": 0, "tested_triples": 0}
 	for radius in range(maximum_radius + 1):
+		frontier = {"stage": "shell", "radius": radius, "dx": -radius, "dy": -radius, "dz": -radius, "tested_triples": tested}
+		if Time.get_ticks_usec() - started_usec >= max_search_usec:
+			return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested)
 		for dx in range(-radius, radius + 1):
+			frontier = {"stage": "x_offset", "radius": radius, "dx": dx, "dy": -radius, "dz": -radius, "tested_triples": tested}
+			if Time.get_ticks_usec() - started_usec >= max_search_usec:
+				return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested)
+			var x_key: int = original_keys[0] + dx
+			if x_key < minimum_keys[0] or x_key > maximum_keys[0]: continue
 			for dy in range(-radius, radius + 1):
-				for dz in range(-radius, radius + 1):
-					if maxi(maxi(absi(dx), absi(dy)), absi(dz)) != radius:
-						continue
+				frontier = {"stage": "y_offset", "radius": radius, "dx": dx, "dy": dy, "dz": -radius, "tested_triples": tested}
+				if Time.get_ticks_usec() - started_usec >= max_search_usec:
+					return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested)
+				var y_key: int = original_keys[1] + dy
+				if y_key < minimum_keys[1] or y_key > maximum_keys[1]: continue
+				var z_offsets: Array[int] = []
+				if maxi(absi(dx), absi(dy)) == radius:
+					for dz_shell in range(-radius, radius + 1): z_offsets.append(dz_shell)
+				else:
+					z_offsets = [-radius, radius]
+				for dz in z_offsets:
+					var z_key: int = original_keys[2] + dz
+					if z_key < minimum_keys[2] or z_key > maximum_keys[2]: continue
 					frontier = {"radius": radius, "dx": dx, "dy": dy, "dz": dz, "tested_triples": tested}
 					if Time.get_ticks_usec() - started_usec >= max_search_usec:
-						var partial: Dictionary = _evaluate_zero_point(original, tet_data)
-						partial["position"] = original
-						partial["search_state"] = "PARTIAL_LIMIT"
-						partial["finite_domain_complete"] = false
-						partial["search_frontier"] = frontier
-						partial["maximum_radius"] = maximum_radius
-						partial["reason"] = "MULTICOORDINATE_FLOAT32_SEARCH_TIME_LIMIT"
-						return partial
-					var keys: Array[int] = [original_keys[0] + dx, original_keys[1] + dy, original_keys[2] + dz]
-					if keys[0] < minimum_keys[0] or keys[0] > maximum_keys[0] or keys[1] < minimum_keys[1] or keys[1] > maximum_keys[1] or keys[2] < minimum_keys[2] or keys[2] > maximum_keys[2]:
-						continue
-					var candidate: Vector3 = Vector3(_float_from_ordered_key(keys[0]), _float_from_ordered_key(keys[1]), _float_from_ordered_key(keys[2]))
+						return _binary32_search_partial(original, tet_data, frontier, maximum_radius, tested)
+					var candidate: Vector3 = Vector3(_float_from_ordered_key(x_key), _float_from_ordered_key(y_key), _float_from_ordered_key(z_key))
 					var evaluation: Dictionary = _evaluate_zero_point(candidate, tet_data)
 					tested += 1
 					if bool(evaluation.get("accepted", false)):
@@ -296,6 +304,17 @@ func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dic
 	exhausted["tested_triples"] = tested
 	exhausted["reason"] = "EXHAUSTIVE_MULTICOORDINATE_BINARY32_TETRA_DOMAIN"
 	return exhausted
+
+func _binary32_search_partial(original: Vector3, tet_data: Dictionary, frontier: Dictionary, maximum_radius: int, tested: int) -> Dictionary:
+	var partial: Dictionary = _evaluate_zero_point(original, tet_data)
+	partial["position"] = original
+	partial["search_state"] = "PARTIAL_LIMIT"
+	partial["finite_domain_complete"] = false
+	partial["search_frontier"] = frontier.duplicate(true)
+	partial["maximum_radius"] = maximum_radius
+	partial["tested_triples"] = tested
+	partial["reason"] = "MULTICOORDINATE_FLOAT32_SEARCH_TIME_LIMIT"
+	return partial
 
 func _axis_step_point(original: Vector3, axis: int, step: int) -> Vector3:
 	var point: Vector3 = original

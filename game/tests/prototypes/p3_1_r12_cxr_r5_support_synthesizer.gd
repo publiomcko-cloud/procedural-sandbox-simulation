@@ -43,6 +43,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 	var projected_region_polygons: Dictionary = {}
 	var stream_file: FileAccess = null
 	var stream_row_count: int = 0
+	var numeric_search_frontiers: Array[Dictionary] = []
 	if complete_support_domain:
 		if stream_evidence_path.is_empty() or FileAccess.file_exists(stream_evidence_path):
 			return {"valid": false, "reason": "R6_COMPLETE_SUPPORT_AUDIT_STREAM_PATH_MISSING_OR_EXISTS", "stream_path": stream_evidence_path}
@@ -246,12 +247,19 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 							var correction_state: String = String(witness_check.get("binary32_representability_correction", {}).get("search_state", ""))
 							if correction_state == "PARTIAL_LIMIT":
 								numeric_search_frontier = witness_check.get("binary32_representability_correction", {}).get("search_frontier", {})
-								cap_reason = "PARTIAL_LIMIT_BINARY32_REPRESENTABLE_SEARCH"
+								var numeric_frontier_record: Dictionary = numeric_search_frontier.duplicate(true)
+								numeric_frontier_record["boundary_pair"] = [id_a, id_b]
+								numeric_frontier_record["source_cell_global_lattice"] = tet_data.global_cell
+								numeric_frontier_record["source_tetrahedron"] = tet_index
+								numeric_frontier_record["source_facet"] = facet_index
+								numeric_frontier_record["arrangement_region_id"] = String(witness_record.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED"))
+								numeric_frontier_record["critical_candidate_method"] = String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED"))
+								numeric_search_frontiers.append(numeric_frontier_record)
 								x2_audit_row["terminal_gate"] = "PARTIAL_LIMIT_BINARY32_REPRESENTABLE_SEARCH"
 								x2_audit_row["numeric_search_frontier"] = numeric_search_frontier
 								_record_candidate_audit(stream_file, x2_witness_audit, x2_audit_row, complete_support_domain, stream_row_count + 1)
 								if complete_support_domain: stream_row_count += 1
-								break
+								continue
 							if witness_reason == "support_outside_support_distance": skipped_outside_support_distance += 1
 							elif witness_reason == "support_field_residual_invalid": skipped_field_residual += 1
 							elif witness_reason in ["support_on_cavity_boundary", "support_duplicates_topology_root"]: skipped_boundary_or_root += 1
@@ -375,6 +383,8 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 			_stream_write_record(stream_file, {"record_type": "continuous_zero_set_region_resolution", "record": bound}, stream_row_count + 1)
 			stream_row_count += 1
 	var total_usec: int = Time.get_ticks_usec() - started_usec
+	if complete_support_domain and cap_reason.is_empty() and not numeric_search_frontiers.is_empty():
+		cap_reason = "PARTIAL_LIMIT_BINARY32_REPRESENTABLE_SEARCH"
 	var stream_identity: Dictionary = {}
 	if complete_support_domain:
 		stream_file.flush()
@@ -413,6 +423,8 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		"execution_state": "COMPLETE" if cap_reason.is_empty() and not truncated else "PARTIAL_LIMIT" if complete_support_domain else "PARTIAL",
 		"enumeration_frontier": enumeration_frontier,
 		"numeric_search_frontier": numeric_search_frontier,
+		"numeric_search_frontier_count": numeric_search_frontiers.size(),
+		"numeric_search_frontiers": numeric_search_frontiers,
 		"enumeration_mode": "DETERMINISTIC_SOURCE_PAIR_REGION_STREAM" if complete_support_domain else "LEGACY_BOUNDED_R5",
 		"analytic_feasible_support_domain_exhausted": false,
 		"skipped_projection_degenerate": skipped_projection_degenerate,
