@@ -46,7 +46,7 @@ func _run() -> void:
 		_run_evidence_writer_check()
 		return
 	if mode.is_empty(): mode = "freeze"
-	if mode not in ["freeze", "boundary-audit", "cavity-audit", "x3-cavity-search", "x3-cavity-realize", "x4-joint-support", "synthesize", "resume-r6-06", "resume-x2-graph"]:
+	if mode not in ["freeze", "boundary-audit", "cavity-audit", "x3-cavity-search", "x3-cavity-realize", "x4-joint-support", "x4-targeted-evidence", "synthesize", "resume-r6-06", "resume-x2-graph"]:
 		_fail("r6_mode_invalid", {"mode": mode})
 		return
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
@@ -514,13 +514,15 @@ func _run() -> void:
 		print("R12CXR_R6_X3_ALTERNATIVE_REALIZED " + JSON.stringify({"attempt_id": attempt_id, "status": x3_result.get("status", ""), "terminal_reason": x3_result.get("terminal_reason", ""), "result_sha256": Core.sha256(x3_result_bytes), "target_attempt_consumed": true}))
 		quit(0)
 		return
-	if mode == "x4-joint-support":
+	if mode in ["x4-joint-support", "x4-targeted-evidence"]:
+		var x4_evidence_only: bool = mode == "x4-targeted-evidence"
 		var x4_source_sha: String = OS.get_environment("R12CXR_SOURCE_SHA")
 		var x4_attempt_id: String = OS.get_environment("R12CXR_R6_ATTEMPT_ID")
 		var x4_previous_path: String = OS.get_environment("R12CXR_R6_X4_PREVIOUS_INPUT")
 		var x4_previous_sha: String = OS.get_environment("R12CXR_R6_X4_PREVIOUS_SHA256")
 		var x4_previous_bytes: PackedByteArray = FileAccess.get_file_as_bytes(x4_previous_path) if FileAccess.file_exists(x4_previous_path) else PackedByteArray()
-		if x4_source_sha.length() != 40 or not x4_source_sha.is_valid_hex_number() or x4_attempt_id != "R6-X4-20261102-01" or x4_previous_sha != "f7fd6ba64df9fb2b515930c245b2c59c50a24e7fa77fcc835bd83d38ce8b2661" or Core.sha256(x4_previous_bytes) != x4_previous_sha:
+		var expected_x4_run_id: String = "R6-X4-EVIDENCE-20261102-01" if x4_evidence_only else "R6-X4-20261102-01"
+		if x4_source_sha.length() != 40 or not x4_source_sha.is_valid_hex_number() or x4_attempt_id != expected_x4_run_id or x4_previous_sha != "f7fd6ba64df9fb2b515930c245b2c59c50a24e7fa77fcc835bd83d38ce8b2661" or Core.sha256(x4_previous_bytes) != x4_previous_sha:
 			_fail("r6_x4_previous_x3_result_identity_invalid", {"source_sha": x4_source_sha, "attempt_id": x4_attempt_id, "previous_sha256": Core.sha256(x4_previous_bytes), "expected_previous_sha256": x4_previous_sha})
 			return
 		var x4_previous_value: Variant = JSON.parse_string(x4_previous_bytes.get_string_from_utf8())
@@ -589,6 +591,11 @@ func _run() -> void:
 			return
 		var x4_targeted: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), x4_obligations.get("target_pairs", []), true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS)
 		var x4_targeted_repeat: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), x4_obligations.get("target_pairs", []), true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS)
+		if x4_evidence_only:
+			var targeted_evidence: Dictionary = {"schema": "P3.1.R12CXR.R6.X4TargetedSupportEvidence.v1", "campaign_id": "P3.1.R12CXR.R6X.AUTONOMOUS_E2E", "status": "DIAGNOSTIC_COMPLETE" if bool(x4_targeted.get("valid", false)) and bool(x4_targeted_repeat.get("valid", false)) else "DIAGNOSTIC_FAILED", "target_attempt_consumed": false, "evidence_only": true, "evidence_run_id": x4_attempt_id, "scientific_attempt_id": "R6-X4-20261102-01", "source_sha": x4_source_sha, "parent_sha": OS.get_environment("R12CXR_PARENT_SHA"), "prior_x3_result_sha256": x4_previous_sha, "target_pairs": x4_obligations.get("target_pairs", []), "zero_boundary_edge_keys": x4_obligations.get("zero_edge_keys", []), "base_x3_support_set_sha256": x4_base_sha, "first_targeted_synthesis": x4_targeted, "repeat_targeted_synthesis": x4_targeted_repeat, "first_fingerprint_sha256": _support_synthesis_fingerprint(x4_targeted), "repeat_fingerprint_sha256": _support_synthesis_fingerprint(x4_targeted_repeat), "deterministic_repeat_pass": _support_synthesis_fingerprint(x4_targeted) == _support_synthesis_fingerprint(x4_targeted_repeat)}
+			var evidence_written: bool = _write_result(output_path, targeted_evidence, "R12CXR_R6_X4_TARGETED_SUPPORT_EVIDENCE")
+			quit(0 if evidence_written and String(targeted_evidence.get("status", "")) == "DIAGNOSTIC_COMPLETE" and bool(targeted_evidence.get("deterministic_repeat_pass", false)) else 3)
+			return
 		if not bool(x4_targeted.get("valid", false)) or not bool(x4_targeted_repeat.get("valid", false)):
 			var incomplete_result: Dictionary = {"schema": "P3.1.R12CXR.R6.X4Result.v1", "campaign_id": "P3.1.R12CXR.R6X.AUTONOMOUS_E2E", "status": "R6_X4_SUPPORT_GENERATION_PARTIAL", "source_sha": x4_source_sha, "parent_sha": OS.get_environment("R12CXR_PARENT_SHA"), "attempt_id": x4_attempt_id, "target_attempt_consumed": true, "target_attempt_phase": "R6-X4-JOINT-SUPPORT", "prior_x3_result_sha256": x4_previous_sha, "zero_boundary_obligations": x4_obligations, "targeted_synthesis": x4_targeted, "repeat_synthesis": x4_targeted_repeat, "attempt_accounting": {"baseline_r6_06_attempts_consumed": 1, "r6_x1_attempts_consumed": 1, "r6_x2_attempts_consumed": 1, "r6_x3_attempts_consumed": 1, "r6_x4_attempts_consumed": 1, "cumulative_valid_scientific_target_attempts": 5, "unconsumed_tooling_failures_preserved": 5, "attempt_id": x4_attempt_id}}
 			_write_result(output_path, incomplete_result, "R12CXR_R6_X4_SUPPORT_GENERATION_PARTIAL")
