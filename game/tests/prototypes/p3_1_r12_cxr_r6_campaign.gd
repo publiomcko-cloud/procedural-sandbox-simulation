@@ -915,7 +915,7 @@ func _r6_x1_boundary_support_completion(realizer: RefCounted, inventory_realizer
 	var diagnostics: RefCounted = Diagnostics.new()
 	var inventory: Dictionary = diagnostics.call("collect_zero_facet_inventory", inventory_realizer, values, roi)
 	if not bool(inventory.get("valid", false)): return {"valid": false, "reason": "R6_X1_ZERO_FACET_INVENTORY_INVALID", "inventory": inventory}
-	var projection: Dictionary = {"origin": context.get("projection_origin", Vector3.ZERO), "axis_u": context.get("projection_u", Vector3.ZERO), "axis_v": context.get("projection_v", Vector3.ZERO)}
+	var projection: Dictionary = {"origin": _vector3_array(Vector3(context.get("projection_origin", Vector3.ZERO))), "axis_u": _vector3_array(Vector3(context.get("projection_u", Vector3.ZERO))), "axis_v": _vector3_array(Vector3(context.get("projection_v", Vector3.ZERO)))}
 	var root_positions: Dictionary = context.get("vertex_positions", {})
 	var boundary_audit: Dictionary = diagnostics.call("analyze_patch_boundary", realizer, patch, context.get("boundary_cycle", []), root_positions, projection, inventory.get("facets", []))
 	if not bool(boundary_audit.get("valid", false)): return {"valid": false, "reason": "R6_X1_CONTINUOUS_BOUNDARY_AUDIT_INVALID", "boundary_audit": boundary_audit}
