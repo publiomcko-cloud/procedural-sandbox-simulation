@@ -873,7 +873,7 @@ func _triangle_first_critical_candidates(clipped: Array[Vector2], cavity: Array[
 					continuous_maximum = vertex_cross_squared
 					maximum_vertex = vertex
 			var numeric_bound_margin: float = maxf(absf(continuous_maximum) * 1.0e-12, 1.0e-30)
-			continuous_bounds.append({"region_id": region_id, "projected_polygon": region, "projected_extreme_count": mapped_vertex_count, "region_vertex_count": region.size(), "maximum_cross_squared_vertex": maximum_vertex, "observed_vertex_maximum_cross_squared": continuous_maximum, "numeric_outward_margin": numeric_bound_margin, "continuous_upper_bound_cross_squared": continuous_maximum + numeric_bound_margin, "proof_method": "CONVEX_CROSS_SQUARED_MAXIMUM_AT_CLOSED_ARRANGEMENT_POLYGON_EXTREMES_WITH_CONSERVATIVE_NUMERIC_MARGIN", "cutoff_squared": FROZEN_CROSS_SQUARED_CUTOFF, "strict_interior_witness_required": true, "region_cavity_intersection_algorithm": "DETERMINISTIC_TRIANGULATION_AND_HALFPLANE_CLIP", "region_cavity_intersection_complete": bool(feasible_intersection.get("valid", false)), "region_cavity_intersection_component_count": int(feasible_intersection.get("component_count", 0)), "region_cavity_intersection_area": float(feasible_intersection.get("total_area", 0.0))})
+			continuous_bounds.append({"region_id": region_id, "projected_polygon": region, "projected_extreme_count": mapped_vertex_count, "region_vertex_count": region.size(), "maximum_cross_squared_vertex": maximum_vertex, "observed_vertex_maximum_cross_squared": continuous_maximum, "numeric_outward_margin": numeric_bound_margin, "continuous_upper_bound_cross_squared": continuous_maximum + numeric_bound_margin, "proof_method": "CONVEX_CROSS_SQUARED_MAXIMUM_AT_CLOSED_ARRANGEMENT_POLYGON_EXTREMES_WITH_CONSERVATIVE_NUMERIC_MARGIN", "cutoff_squared": FROZEN_CROSS_SQUARED_CUTOFF, "strict_interior_witness_required": true, "region_cavity_intersection_algorithm": "DETERMINISTIC_TRIANGULATION_AND_HALFPLANE_CLIP", "region_cavity_intersection_complete": bool(feasible_intersection.get("valid", false)), "region_cavity_intersection_reason": String(feasible_intersection.get("reason", "")), "region_cavity_intersection_component_count": int(feasible_intersection.get("component_count", 0)), "region_cavity_intersection_uncertified_centroid_count": int(feasible_intersection.get("uncertified_centroid_count", 0)), "region_cavity_intersection_area": float(feasible_intersection.get("total_area", 0.0))})
 		var region_candidates: Array[Dictionary] = _critical_candidates_for_region(region, cavity, source_2d, source_world, root_a_world, root_b_world, arc_segments, region_id, enumerate_all_critical_vertices, feasible_intersection_seeds)
 		all_candidates.append_array(region_candidates)
 		if capture_continuous_bounds and memory_budget_bytes > 0 and Performance.get_monitor(Performance.MEMORY_STATIC) >= memory_budget_bytes:
@@ -964,6 +964,7 @@ func _strict_region_cavity_intersection(region: Array[Vector2], cavity: Array[Ve
 	var centroids: Array[Vector2] = []
 	var components: Array[Dictionary] = []
 	var total_area: float = 0.0
+	var uncertified_centroid_count: int = 0
 	for offset in range(0, triangle_indices.size(), 3):
 		var triangle: Array[Vector2] = [cavity[triangle_indices[offset]], cavity[triangle_indices[offset + 1]], cavity[triangle_indices[offset + 2]]]
 		var orientation: float = _signed_area(triangle)
@@ -978,12 +979,18 @@ func _strict_region_cavity_intersection(region: Array[Vector2], cavity: Array[Ve
 		var area: float = absf(_signed_area(clipped)) if clipped.size() >= 3 else 0.0
 		if not is_finite(area) or area <= 0.0: continue
 		var centroid: Vector2 = _polygon_centroid(clipped)
-		if not _point_strictly_inside(centroid, region) or not _point_strictly_inside(centroid, cavity):
-			return {"valid": false, "reason": "POSITIVE_AREA_INTERSECTION_HAS_NO_CERTIFIED_STRICT_CENTROID", "triangle_indices": triangle_indices, "component_count": -1, "centroids": centroids, "components": components, "total_area": total_area, "uncertified_intersection_polygon": clipped, "uncertified_intersection_area": area}
+		# Positive area in the analytically clipped polygon proves a continuous
+		# intersection. A float32 Vector2 centroid can round within the strict
+		# point predicate's 1e-8 boundary-distance guard even though the clipped
+		# component has positive area. Keep it as a deterministic search seed,
+		# but record that the point itself still needs the unchanged full witness
+		# gates; never promote this seed to a geometric witness.
+		var centroid_certified: bool = _point_strictly_inside(centroid, region) and _point_strictly_inside(centroid, cavity)
+		if not centroid_certified: uncertified_centroid_count += 1
 		centroids.append(centroid)
-		components.append({"triangle_indices": [triangle_indices[offset], triangle_indices[offset + 1], triangle_indices[offset + 2]], "polygon": clipped, "area": area, "strict_interior_centroid": centroid})
+		components.append({"triangle_indices": [triangle_indices[offset], triangle_indices[offset + 1], triangle_indices[offset + 2]], "polygon": clipped, "area": area, "centroid_seed": centroid, "strict_interior_centroid": centroid if centroid_certified else null, "strict_interior_centroid_certified": centroid_certified})
 		total_area += area
-	return {"valid": true, "reason": "", "triangle_indices": triangle_indices, "component_count": centroids.size(), "components": components, "centroids": centroids, "total_area": total_area, "strict_interior_empty": centroids.is_empty()}
+	return {"valid": true, "reason": "POSITIVE_AREA_INTERSECTION_SEED_NOT_STRICTLY_CERTIFIED" if uncertified_centroid_count > 0 else "", "triangle_indices": triangle_indices, "component_count": centroids.size(), "components": components, "centroids": centroids, "uncertified_centroid_count": uncertified_centroid_count, "total_area": total_area, "strict_interior_empty": centroids.is_empty()}
 
 func _clip_polygon_to_oriented_halfplane(subject: Array[Vector2], edge_a: Vector2, edge_b: Vector2, keep_left: bool) -> Array[Vector2]:
 	var output: Array[Vector2] = []

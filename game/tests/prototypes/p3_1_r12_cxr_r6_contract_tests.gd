@@ -231,9 +231,13 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	var support_synthesizer: RefCounted = R5Synthesizer.new()
 	var overlap_result: Dictionary = support_synthesizer.call("_strict_region_cavity_intersection", overlapping_region, cavity_triangle)
 	var disjoint_result: Dictionary = support_synthesizer.call("_strict_region_cavity_intersection", disjoint_region, cavity_triangle)
+	var narrow_positive_area_region: Array[Vector2] = [Vector2(0.0, 0.05), Vector2(1.0e-8, 0.05), Vector2(1.0e-8, 0.15), Vector2(0.0, 0.15)]
+	var narrow_overlap_result: Dictionary = support_synthesizer.call("_strict_region_cavity_intersection", narrow_positive_area_region, cavity_triangle)
 	var overlap_centroid: Vector2 = Vector2(overlap_result.get("centroids", [Vector2.ZERO])[0])
 	_expect(bool(overlap_result.get("valid", false)) and int(overlap_result.get("component_count", 0)) > 0 and bool(support_synthesizer.call("_point_strictly_inside", overlap_centroid, overlapping_region)) and bool(support_synthesizer.call("_point_strictly_inside", overlap_centroid, cavity_triangle)), "R6-Y clips arrangement regions against the cavity and emits strict interior support seeds")
 	_expect(bool(disjoint_result.get("valid", false)) and int(disjoint_result.get("component_count", -1)) == 0 and bool(disjoint_result.get("strict_interior_empty", false)), "R6-Y proves a strict region-cavity intersection empty by deterministic polygon clipping")
+	_expect(bool(narrow_overlap_result.get("valid", false)) and float(narrow_overlap_result.get("total_area", 0.0)) > 0.0 and int(narrow_overlap_result.get("component_count", 0)) > 0 and int(narrow_overlap_result.get("uncertified_centroid_count", 0)) > 0, "R6-Y keeps positive-area overlap complete when float32 centroid is inside the strict predicate boundary guard")
+	_expect(bool(narrow_overlap_result.get("centroids", []).size() > 0) and not bool(narrow_overlap_result.get("components", [])[0].get("strict_interior_centroid_certified", true)), "R6-Y exposes uncertified centroid only as a search seed, never as a witness")
 	var centroid_priority: int = int(support_synthesizer.call("_critical_candidate_search_priority", {"method": "CAVITY_ARRANGEMENT_INTERSECTION_CENTROID"}))
 	var edge_priority: int = int(support_synthesizer.call("_critical_candidate_search_priority", {"method": "FEASIBLE_REGION_EDGE_MIDPOINT"}))
 	_expect(centroid_priority < edge_priority, "R6-Y prioritizes strict interior region-cavity seeds before edge midpoints for the numerical witness search")
