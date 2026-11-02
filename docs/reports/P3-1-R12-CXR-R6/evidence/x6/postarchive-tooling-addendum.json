@@ -13,9 +13,14 @@
       "stage": "exact-command manifest",
       "kind": "evidence_manifest_builder_failure",
       "detail": "The initial manifest serialization referenced its executable path before assignment; a first replacement then emitted a non-escaped JSON path. Both defects were caught before publication and corrected; the final manifest parses and names the pinned Godot executable. No scientific process changed or repeated."
+    },
+    {
+      "kind": "stale_result_marker",
+      "stage": "X6 process evidence labeling",
+      "detail": "The campaign stdout markers still say R6_X4 for the X6 scientific and diagnostic invocations. Structured result schema, attempt ID, source SHA, output paths and result hashes correctly identify X6; this is a label-only instrumentation defect and does not change or invalidate the result."
     }
   ],
-  "cumulative_unconsumed_tooling_events": 13,
+  "cumulative_unconsumed_tooling_events": 14,
   "scientific_attempts_consumed_by_addendum": 0,
   "existing_archive_sha256": "97df9cde3f2361cb014947e688c4cf8163c27c617ce49f5f7391f9c51cc8eb25",
   "corrected_command_manifest_sha256": "80FBB2D200E0D84FD261A64382D087B85A7C4BD72D0A9142487E60D55C7BC459"
