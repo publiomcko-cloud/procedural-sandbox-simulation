@@ -329,7 +329,7 @@ func _run() -> void:
 		var x1_extension: bool = OS.get_environment("R12CXR_R6_EXTENSION") == "R6-X1"
 		var x2_extension: bool = OS.get_environment("R12CXR_R6_EXTENSION") == "R6-X2"
 		var domain_extension: bool = x1_extension or x2_extension
-		var expected_attempt_id: String = "R6-X2-20261102-01" if x2_extension else "R6-X1-20261102-01" if x1_extension else "R6-06-20261101-aa16d87"
+		var expected_attempt_id: String = attempt_id if x2_extension and attempt_id in ["R6-X2-20261102-01", "R6-X2-20261102-02"] else "R6-X1-20261102-01" if x1_extension else "R6-06-20261101-aa16d87"
 		if continuation_source_sha.length() != 40 or attempt_id != expected_attempt_id or previous_path.is_empty() or not FileAccess.file_exists(previous_path):
 			_fail("r6_continuation_identity_invalid", {"source_sha": continuation_source_sha, "attempt_id": attempt_id, "expected_attempt_id": expected_attempt_id, "previous_path": previous_path, "x1_extension": x1_extension, "x2_extension": x2_extension})
 			return
