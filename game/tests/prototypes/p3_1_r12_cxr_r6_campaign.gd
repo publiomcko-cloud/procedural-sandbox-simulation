@@ -287,13 +287,19 @@ func _run() -> void:
 				return
 			prior_supports.append(support_value)
 		var resumed_synthesis: Dictionary = prior_synthesis.duplicate(true)
-		var resumed_context_result: Dictionary = realizer.call("_r3_make_expanded_patch_context", analysis_patch, analysis_patch_ids, seed_triangles, prior_supports, analysis_boundary, triangles, search_residual_fixture, 2, false)
+		var resumed_realizer: RefCounted = R6Realizer.new()
+		resumed_realizer.set("_root_positions", root_positions)
+		resumed_realizer.set("_required_arc_keys", required_arc_keys)
+		resumed_realizer.set("_locked_triplets", realizer.get("_locked_triplets"))
+		resumed_realizer.set("_cxr_active_phase", "r6")
+		resumed_realizer.set("_cxr_active_snapshot", snapshot)
+		var resumed_context_result: Dictionary = resumed_realizer.call("_r3_make_expanded_patch_context", analysis_patch, analysis_patch_ids, seed_triangles, prior_supports, analysis_boundary, triangles, search_residual_fixture, 2, false)
 		if not bool(resumed_context_result.get("valid", false)) or resumed_context_result.get("context", {}).is_empty():
 			_fail("r6_x2_graph_resume_context_rebuild_failed", resumed_context_result)
 			return
 		var resumed_context: Dictionary = resumed_context_result.get("context", {})
 		var resume_metadata: Dictionary = {"is_continuation": true, "same_attempt_id": String(prior_result.get("attempt_id", "")), "original_target_source_sha": String(prior_result.get("source_sha", "")), "continuation_source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "original_target_result_sha256": prior_sha, "original_target_attempt_consumed": true, "additional_target_attempts_consumed": 0, "reason": "resume the same consumed R6-X2 geometry from its preserved complete support-domain and deterministic-repeat evidence; prior graph gate used a stale per-cavity clock after the baseline graph pass", "support_set_identical": true, "support_set_sha256": _support_synthesis_fingerprint(resumed_synthesis)}
-		var resumed_result: Dictionary = _run_constraint_synthesis(realizer, volume.get("values", PackedFloat32Array()), roi, resumed_context, analysis_patch, analysis_patch_ids, seed_triangles, analysis_boundary, triangles, search_residual_fixture, base, snapshot, support_fixture, residual_fixture.get("residuals", []), output_path, prior_result.get("cavity_search", {}), resumed_synthesis, resume_metadata)
+		var resumed_result: Dictionary = _run_constraint_synthesis(resumed_realizer, volume.get("values", PackedFloat32Array()), roi, resumed_context, analysis_patch, analysis_patch_ids, seed_triangles, analysis_boundary, triangles, search_residual_fixture, base, snapshot, support_fixture, residual_fixture.get("residuals", []), output_path, prior_result.get("cavity_search", {}), resumed_synthesis, resume_metadata)
 		if resumed_result.is_empty() or _terminal_failure_requested: return
 		resumed_result["r6_x2_support_completion"] = prior_completion.duplicate(true)
 		resumed_result["r6_x2_graph_resume"] = {"started": true, "same_attempt_continuation": true, "original_target_source_sha": prior_result.get("source_sha", ""), "original_target_result_sha256": prior_sha, "continuation_source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "reused_support_set_sha256": resume_metadata.support_set_sha256, "stale_timer_diagnosis": "the baseline candidate-graph enumeration left the original per-cavity clock expired; the X2 extension graph scan inherited that clock and stopped on its first triplet", "geometry_domain_changed": false}
