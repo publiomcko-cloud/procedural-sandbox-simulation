@@ -1,3 +1,11 @@
+# 2026-11-01 — R12-CXR R6-X6 finite-domain blocker; six target attempts consumed
+
+The authorized test-only Issue [#218](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/issues/218) continued on branch `exp/p3-1-r12-cxr-r6-realization-map-cavity`, exact source `896e78b9614f0a4bf4dad51dddaee31b2ced7d99` (parent `c89b78fd9650f9a8fb2b4aeb7b8a2c347a76068f`), published to draft functional PR [#219](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/219). Godot 4.7.2 cold import, check-only, R6 96/96, R5 348/348, CXR 216/216 and evidence-writer gates passed. Six valid target attempts are now consumed: baseline, X1, X2, X3, X4 and X6; X5 was not justified because all 870 topology-path reachability records were reachable.
+
+R6-D selected and audited a seven-face manifold alternative cavity. R6-E's complete finite X6 targeted witness set covered 1,370 candidates / 142 arrangement regions / three zero-option boundary pairs and repeated deterministically, but emitted zero supports. The complete selected graph had 3,029 legal triangles and solver result `UNSAT_COMPLETE`. Overall status is `R6_X6_REPRESENTABILITY_PARTIAL`: inherited X3 support synthesis hit `R5_MAX_CRITICAL_CANDIDATES_TOTAL` after 4,084 candidates, so the alternative-cavity support domain remains incomplete. No continuous or global infeasibility claim is made.
+
+No SAT mesh exists. Equal-LOD, controls, ROI rays, volume reconfirmation, mixed LOD, downstream deterministic repeat, full E2E and `scripts/validate.ps1` were not run because their R6-F gate did not pass. The R6-X6 raw result, complete targeted witness audits, preregistration, logs and hashes are archived in the [evidence package](../reports/P3-1-R12-CXR-R6/evidence/x6-2026-11-02/R6-X6-20261102-evidence.zip), SHA-256 `97df9cde3f2361cb014947e688c4cf8163c27c617ce49f5f7391f9c51cc8eb25`. This is implementation-agent evidence; independent review and owner GUI remain pending. No production adoption, merge, release or protected-state operation is authorized. All five F2-G1 holds remain unchanged. See the [immutable checkpoint](../checkpoints/2026-11-01-P3-1-R12-CXR-R6-X6-PARTIAL-CLOSEOUT.md).
+
 # Current implementation candidate — P3.0D (2026-10-25)
 
 ## Newer candidate — P3.0D Issue #123 (2026-10-25)

@@ -6,6 +6,7 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-11-01 | [P3.1 R12-CXR R6-X6 partial closeout](2026-11-01-P3-1-R12-CXR-R6-X6-PARTIAL-CLOSEOUT.md) | Six valid target attempts consumed; X6 finite witness set completed deterministically with zero supports and complete finite-graph UNSAT, while inherited X3 candidate cap leaves broader support feasibility PARTIAL | Pending new docs-only PR; not integrated, no merge or production adoption |
 | 2026-10-25 | [P3.0D precise entity placement](2026-10-25-P3-0D-ENTITY-PLACEMENT.md) | Reproduced center-aim selection mismatch; added visible-pointer SDF placement, shared target marker, consistent millimeter/region ownership, and 51 focused assertions; full Godot validation 18,204/0 | Draft PR #124; independent source review and owner GUI retest pending |
 | 2026-10-25 | [P3.0C persistent entity undo/redo](2026-10-25-P3-0C-IMPLEMENTATION.md) | Schema-3 bounded history, transactional undo/redo, exact DELETE/F7 restoration and F9 baseline semantics; complete Godot validation 18,153/0 | Feature candidate on `feat/p3-0c-transactional-undo-redo`; draft PR pending; independent source review and owner GUI pending |
 | 2026-10-25 | [Issue #118 optional-root API hardening](2026-10-25-ISSUE-118-OPTIONAL-ROOT-API-HARDENING.md) | Reproduced caller downgrade of an authorized required root; loader now allows optional handling only for canonical `user://mods`; full validation 18,047/0 | R1 source `f0164b14`; exact-HEAD static checks pass; independent review and owner GUI pending |
