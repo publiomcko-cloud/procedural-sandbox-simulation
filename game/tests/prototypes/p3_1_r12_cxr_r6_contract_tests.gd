@@ -210,6 +210,21 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	_expect(not bool(multicoordinate_before.get("accepted", false)) and not bool(x_only.get("accepted", false)) and not bool(y_only.get("accepted", false)), "R6-Y binary32 fixture requires coordinated movement on multiple axes")
 	_expect(bool(multicoordinate.get("accepted", false)) and absf(float(multicoordinate.get("field_residual", INF))) <= 1.0e-7 and bool(multicoordinate.get("barycentric_gate_pass", false)), "R6-Y multicoordinate float search finds a same-tetra point under unchanged field and barycentric gates")
 	_expect(multicoordinate_steps.size() == 3 and absi(int(multicoordinate_steps[0])) == 1 and absi(int(multicoordinate_steps[1])) == 1 and String(multicoordinate.get("search_state", "")) == "MULTICOORDINATE_BINARY32_WITNESS", "R6-Y records the deterministic multiaxis float frontier and displacement")
+	var excluded_first_witness: Vector3 = Vector3(multicoordinate.get("position", Vector3.ZERO))
+	var acceptance_gated_search: Dictionary = realizer.call("_search_representable_zero_multicoordinate", multicoordinate_origin, multicoordinate_tet, 1000000, Callable(func(candidate: Vector3) -> bool: return candidate != excluded_first_witness))
+	_expect(bool(acceptance_gated_search.get("accepted", false)) and Vector3(acceptance_gated_search.get("position", excluded_first_witness)) != excluded_first_witness and int(acceptance_gated_search.get("acceptance_gate_rejection_count", 0)) > 0, "R6-Y binary32 enumeration continues after a field-valid candidate fails the complete support acceptance gate")
+	var single_point_tet: Dictionary = {"positions": [Vector3.ONE, Vector3.ONE, Vector3.ONE, Vector3.ONE], "samples": [0.0, 0.0, 0.0, 0.0]}
+	var exhausted_representation: Dictionary = realizer.call("_search_representable_zero_multicoordinate", Vector3.ONE, single_point_tet, 1000000, Callable(func(_candidate: Vector3) -> bool: return false))
+	_expect(not bool(exhausted_representation.get("accepted", false)) and bool(exhausted_representation.get("finite_domain_complete", false)) and String(exhausted_representation.get("search_state", "")) == "EXHAUSTED_NO_VALID_BINARY32_POINT_IN_TETRA_AABB", "R6-Y binary32 enumeration distinguishes complete finite AABB exhaustion from a resource frontier")
+	var cavity_triangle: Array[Vector2] = [Vector2.ZERO, Vector2(1.0, 0.0), Vector2(0.0, 1.0)]
+	var overlapping_region: Array[Vector2] = [Vector2(0.1, 0.1), Vector2(0.7, 0.1), Vector2(0.1, 0.7)]
+	var disjoint_region: Array[Vector2] = [Vector2(2.0, 2.0), Vector2(3.0, 2.0), Vector2(2.0, 3.0)]
+	var support_synthesizer: RefCounted = R5Synthesizer.new()
+	var overlap_result: Dictionary = support_synthesizer.call("_strict_region_cavity_intersection", overlapping_region, cavity_triangle)
+	var disjoint_result: Dictionary = support_synthesizer.call("_strict_region_cavity_intersection", disjoint_region, cavity_triangle)
+	var overlap_centroid: Vector2 = Vector2(overlap_result.get("centroids", [Vector2.ZERO])[0])
+	_expect(bool(overlap_result.get("valid", false)) and int(overlap_result.get("component_count", 0)) > 0 and bool(support_synthesizer.call("_point_strictly_inside", overlap_centroid, overlapping_region)) and bool(support_synthesizer.call("_point_strictly_inside", overlap_centroid, cavity_triangle)), "R6-Y clips arrangement regions against the cavity and emits strict interior support seeds")
+	_expect(bool(disjoint_result.get("valid", false)) and int(disjoint_result.get("component_count", -1)) == 0 and bool(disjoint_result.get("strict_interior_empty", false)), "R6-Y proves a strict region-cavity intersection empty by deterministic polygon clipping")
 	var already_valid: Array[Dictionary] = realizer.call("corrected_tetra_zero_sources", {"positions": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP, Vector3.BACK], "samples": [-1.0, 1.0, 1.0, 1.0]})
 	_expect(already_valid.size() == 3 and already_valid.all(func(row: Dictionary) -> bool: return bool(row.get("accepted", false))), "R6 correction retains passing roots without searching")
 	_expect(already_valid.all(func(row: Dictionary) -> bool: return String(row.get("correction_search_state", "")) == "unchanged"), "R6 correction records unchanged passing-root provenance")

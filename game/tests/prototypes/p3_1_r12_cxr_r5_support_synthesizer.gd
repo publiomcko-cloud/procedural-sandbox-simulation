@@ -41,6 +41,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 	var continuous_region_bounds: Array[Dictionary] = []
 	var witnessed_region_ids: Dictionary = {}
 	var projected_region_polygons: Dictionary = {}
+	var exhausted_region_proofs: Array[Dictionary] = []
 	var stream_file: FileAccess = null
 	var stream_row_count: int = 0
 	var numeric_search_frontiers: Array[Dictionary] = []
@@ -235,8 +236,14 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 						enumeration_frontier["candidate"] = witness_index
 						enumeration_frontier["completed_critical_candidates"] = critical_candidate_count
 						var witness: Vector2 = Vector2(witness_record.get("position", Vector2.ZERO))
-						var witness_check: Dictionary = _validate_witness(realizer, witness, source_triangle_2d, world_triangle, tet_data, polygon, vertex_positions, source_origins, max_support_distance, residual_epsilon, barycentric_epsilon, enumerate_all_critical_vertices, context, directed_axis_bracket, complete_support_domain)
-						var x2_audit_row: Dictionary = {"boundary_pair": [id_a, id_b], "source_cell_global_lattice": tet_data.global_cell, "source_tetrahedron": tet_index, "source_facet": facet_index, "arrangement_region_id": String(witness_record.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED")), "critical_candidate_method": String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), "projected_position": witness, "pre_correction_world_position": witness_check.get("pre_correction_world_position", witness_check.get("world", Vector3.ZERO)), "world_position": witness_check.get("world", Vector3.ZERO), "field_residual": witness_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "barycentric_weights": witness_check.get("tetra_weights", []), "binary32_representability_correction": witness_check.get("binary32_representability_correction", {}), "witness_valid": bool(witness_check.get("valid", false)), "reason": witness_check.get("reason", "")}
+						var candidate_region_id: String = String(witness_record.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED"))
+						var candidate_region_polygon: Array[Vector2] = []
+						for projected_vertex in projected_region_polygons.get(candidate_region_id, []): candidate_region_polygon.append(Vector2(projected_vertex))
+						var complete_numeric_gate: Callable = Callable()
+						if complete_support_domain:
+							complete_numeric_gate = Callable(self, "_complete_binary32_candidate_gate").bind(realizer, context, id_a, id_b, candidate_region_polygon, cutoff, polygon, vertex_positions, source_origins, max_support_distance)
+						var witness_check: Dictionary = _validate_witness(realizer, witness, source_triangle_2d, world_triangle, tet_data, polygon, vertex_positions, source_origins, max_support_distance, residual_epsilon, barycentric_epsilon, enumerate_all_critical_vertices, context, directed_axis_bracket, complete_support_domain, complete_numeric_gate)
+						var x2_audit_row: Dictionary = {"boundary_pair": [id_a, id_b], "source_cell_global_lattice": tet_data.global_cell, "source_cell_local": cell, "source_tetrahedron": tet_index, "source_facet": facet_index, "arrangement_region_id": candidate_region_id, "critical_candidate_method": String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), "projected_position": witness, "pre_correction_world_position": witness_check.get("pre_correction_world_position", witness_check.get("world", Vector3.ZERO)), "world_position": witness_check.get("world", Vector3.ZERO), "field_residual": witness_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "barycentric_weights": witness_check.get("tetra_weights", []), "binary32_representability_correction": witness_check.get("binary32_representability_correction", {}), "witness_valid": bool(witness_check.get("valid", false)), "reason": witness_check.get("reason", "")}
 						if enumerate_all_critical_vertices and witness_check.has("binary32_representability_correction"):
 							var correction_record: Dictionary = witness_check.binary32_representability_correction
 							if bool(correction_record.get("attempted", false)):
@@ -244,19 +251,28 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 								else: x2_representability_correction_failure_count += 1
 						if not bool(witness_check.get("valid", false)):
 							var witness_reason: String = String(witness_check.get("reason", "UNKNOWN_NOT_CAPTURED"))
-							var correction_state: String = String(witness_check.get("binary32_representability_correction", {}).get("search_state", ""))
+							var correction: Dictionary = witness_check.get("binary32_representability_correction", {})
+							var correction_state: String = String(correction.get("search_state", ""))
 							if correction_state == "PARTIAL_LIMIT":
-								numeric_search_frontier = witness_check.get("binary32_representability_correction", {}).get("search_frontier", {})
+								numeric_search_frontier = correction.get("search_frontier", {})
 								var numeric_frontier_record: Dictionary = numeric_search_frontier.duplicate(true)
 								numeric_frontier_record["boundary_pair"] = [id_a, id_b]
 								numeric_frontier_record["source_cell_global_lattice"] = tet_data.global_cell
 								numeric_frontier_record["source_tetrahedron"] = tet_index
 								numeric_frontier_record["source_facet"] = facet_index
-								numeric_frontier_record["arrangement_region_id"] = String(witness_record.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED"))
+								numeric_frontier_record["arrangement_region_id"] = candidate_region_id
 								numeric_frontier_record["critical_candidate_method"] = String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED"))
 								numeric_search_frontiers.append(numeric_frontier_record)
 								x2_audit_row["terminal_gate"] = "PARTIAL_LIMIT_BINARY32_REPRESENTABLE_SEARCH"
 								x2_audit_row["numeric_search_frontier"] = numeric_search_frontier
+								_record_candidate_audit(stream_file, x2_witness_audit, x2_audit_row, complete_support_domain, stream_row_count + 1)
+								if complete_support_domain: stream_row_count += 1
+								continue
+							if correction_state == "EXHAUSTED_NO_VALID_BINARY32_POINT_IN_TETRA_AABB" and bool(correction.get("finite_domain_complete", false)):
+								var exhausted_proof: Dictionary = {"arrangement_region_id": candidate_region_id, "boundary_pair": [id_a, id_b], "source_cell_global_lattice": tet_data.global_cell, "source_cell_local": cell, "source_tetrahedron": tet_index, "source_facet": facet_index, "candidate_method": String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), "candidate_projected_position": witness, "numeric_domain": "ALL_BINARY32_TRIPLES_INSIDE_SOURCE_TETRA_COORDINATE_AABB_FILTERED_BY_BARYCENTRIC_EPSILON_1E-7_FIELD_RESIDUAL_1E-7_STRICT_REGION_AND_FULL_SINGLE_SUPPORT_PAIR_GATE", "tested_binary32_triples": int(correction.get("tested_triples", 0)), "acceptance_gate_rejections": int(correction.get("acceptance_gate_rejection_count", 0)), "finite_numeric_domain_complete": true, "maximum_ulp_radius": correction.get("maximum_radius", -1)}
+								exhausted_region_proofs.append(exhausted_proof)
+								x2_audit_row["terminal_gate"] = "EXHAUSTIVE_NO_VALID_BINARY32_SUPPORT_IN_TETRA_REGION_DOMAIN"
+								x2_audit_row["exhausted_region_proof"] = exhausted_proof
 								_record_candidate_audit(stream_file, x2_witness_audit, x2_audit_row, complete_support_domain, stream_row_count + 1)
 								if complete_support_domain: stream_row_count += 1
 								continue
@@ -271,18 +287,14 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 							continue
 						witness_check["critical_candidate_method"] = String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED"))
 						var point: Vector3 = Vector3(witness_check.get("world", Vector3.ZERO))
-						if complete_support_domain:
-							var candidate_region_id: String = String(witness_record.get("constraint_arrangement_region_id", ""))
-							var projected_polygon: Array[Vector2] = []
-							for projected_vertex in projected_region_polygons.get(candidate_region_id, []): projected_polygon.append(Vector2(projected_vertex))
-							if projected_polygon.size() < 3 or not _point_strictly_inside(_project(point, context), projected_polygon):
-								_add_rejection(candidate_triangle_rejections, "binary32_correction_left_source_arrangement_region")
-								if enumerate_all_critical_vertices:
-									x2_audit_row["terminal_gate"] = "SOURCE_ARRANGEMENT_REGION_MEMBERSHIP"
-									x2_audit_row["corrected_projected_position"] = _project(point, context)
-									_record_candidate_audit(stream_file, x2_witness_audit, x2_audit_row, complete_support_domain, stream_row_count + 1)
-									if complete_support_domain: stream_row_count += 1
-								continue
+						if complete_support_domain and (candidate_region_polygon.size() < 3 or not _point_strictly_inside(_project(point, context), candidate_region_polygon)):
+							_add_rejection(candidate_triangle_rejections, "binary32_correction_left_source_arrangement_region")
+							if enumerate_all_critical_vertices:
+								x2_audit_row["terminal_gate"] = "SOURCE_ARRANGEMENT_REGION_MEMBERSHIP"
+								x2_audit_row["corrected_projected_position"] = _project(point, context)
+								_record_candidate_audit(stream_file, x2_witness_audit, x2_audit_row, complete_support_domain, stream_row_count + 1)
+								if complete_support_domain: stream_row_count += 1
+							continue
 						var cross_squared: float = _support_pair_objective(a, b, point)
 						if not is_finite(cross_squared) or cross_squared <= cutoff:
 							_add_rejection(candidate_triangle_rejections, "candidate_cross_squared_at_or_below_frozen_cutoff")
@@ -374,10 +386,18 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		var region_id: String = String(bound.get("region_id", ""))
 		var maximum_cross_squared: float = float(bound.get("continuous_upper_bound_cross_squared", INF))
 		var all_extremes_mapped: bool = int(bound.get("projected_extreme_count", 0)) == int(bound.get("region_vertex_count", -1))
-		var outcome: String = "ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF" if all_extremes_mapped and maximum_cross_squared <= cutoff else "VALID_REPRESENTABLE_SUPPORT_WITNESS" if witnessed_region_ids.has(region_id) else "UNRESOLVED_REGION_REQUIRES_FURTHER_PROOF_OR_WITNESS"
+		var strict_cavity_intersection_empty: bool = bool(bound.get("region_cavity_intersection_complete", false)) and int(bound.get("region_cavity_intersection_component_count", -1)) == 0
+		var exhaustion_proof: Dictionary = {}
+		for proof_value in exhausted_region_proofs:
+			var proof: Dictionary = proof_value
+			if String(proof.get("arrangement_region_id", "")) == region_id:
+				exhaustion_proof = proof
+				break
+		var outcome: String = "ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF" if all_extremes_mapped and maximum_cross_squared <= cutoff else "ANALYTIC_NO_STRICT_REGION_CAVITY_INTERSECTION" if strict_cavity_intersection_empty else "VALID_REPRESENTABLE_SUPPORT_WITNESS" if witnessed_region_ids.has(region_id) else "EXHAUSTIVE_NO_VALID_REPRESENTABLE_SUPPORT_IN_TETRA_DOMAIN" if not exhaustion_proof.is_empty() else "UNRESOLVED_REGION_REQUIRES_FURTHER_PROOF_OR_WITNESS"
 		if outcome == "UNRESOLVED_REGION_REQUIRES_FURTHER_PROOF_OR_WITNESS": unresolved_continuous_region_count += 1
 		bound["resolution"] = outcome
 		bound["support_witness_found"] = witnessed_region_ids.has(region_id)
+		if not exhaustion_proof.is_empty(): bound["binary32_exhaustion_proof"] = exhaustion_proof
 		continuous_region_outcomes.append(bound)
 		if complete_support_domain:
 			_stream_write_record(stream_file, {"record_type": "continuous_zero_set_region_resolution", "record": bound}, stream_row_count + 1)
@@ -417,7 +437,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		"finite_candidate_enumeration_complete": cap_reason.is_empty() and not truncated,
 		"continuous_region_resolution_complete": cap_reason.is_empty() and unresolved_continuous_region_count == 0,
 		"unresolved_continuous_region_count": unresolved_continuous_region_count,
-		"continuous_region_resolution_histogram": {"ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF": continuous_region_outcomes.filter(func(row: Dictionary) -> bool: return String(row.get("resolution", "")) == "ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF").size(), "VALID_REPRESENTABLE_SUPPORT_WITNESS": continuous_region_outcomes.filter(func(row: Dictionary) -> bool: return String(row.get("resolution", "")) == "VALID_REPRESENTABLE_SUPPORT_WITNESS").size(), "UNRESOLVED_REGION_REQUIRES_FURTHER_PROOF_OR_WITNESS": unresolved_continuous_region_count},
+		"continuous_region_resolution_histogram": {"ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF": continuous_region_outcomes.filter(func(row: Dictionary) -> bool: return String(row.get("resolution", "")) == "ANALYTIC_UPPER_BOUND_AT_OR_BELOW_FROZEN_CUTOFF").size(), "ANALYTIC_NO_STRICT_REGION_CAVITY_INTERSECTION": continuous_region_outcomes.filter(func(row: Dictionary) -> bool: return String(row.get("resolution", "")) == "ANALYTIC_NO_STRICT_REGION_CAVITY_INTERSECTION").size(), "VALID_REPRESENTABLE_SUPPORT_WITNESS": continuous_region_outcomes.filter(func(row: Dictionary) -> bool: return String(row.get("resolution", "")) == "VALID_REPRESENTABLE_SUPPORT_WITNESS").size(), "EXHAUSTIVE_NO_VALID_REPRESENTABLE_SUPPORT_IN_TETRA_DOMAIN": continuous_region_outcomes.filter(func(row: Dictionary) -> bool: return String(row.get("resolution", "")) == "EXHAUSTIVE_NO_VALID_REPRESENTABLE_SUPPORT_IN_TETRA_DOMAIN").size(), "UNRESOLVED_REGION_REQUIRES_FURTHER_PROOF_OR_WITNESS": unresolved_continuous_region_count},
 		"continuous_region_bounds": [] if complete_support_domain else continuous_region_outcomes,
 		"continuous_region_stream": stream_identity,
 		"execution_state": "COMPLETE" if cap_reason.is_empty() and not truncated else "PARTIAL_LIMIT" if complete_support_domain else "PARTIAL",
@@ -798,6 +818,8 @@ func _triangle_first_critical_candidates(clipped: Array[Vector2], cavity: Array[
 			return {"valid": false, "reason": "PARTIAL_LIMIT_REGION_ENUMERATION_MEMORY", "region_count": region_index, "candidates": all_candidates, "continuous_region_bounds": continuous_bounds, "arrangement_frontier": {"stage": "region_candidates", "region_index": region_index, "unvisited_region_count": regions.size() - region_index}}
 		var region: Array[Vector2] = regions[region_index]
 		var region_id: String = "R5REG_" + Core.sha256((region_source_key + "|" + str(region_index) + "|" + _polygon_identity(region)).to_utf8_buffer()).substr(0, 24)
+		var feasible_intersection: Dictionary = _strict_region_cavity_intersection(region, cavity)
+		var feasible_intersection_seeds: Array[Vector2] = feasible_intersection.get("centroids", [])
 		if capture_continuous_bounds:
 			var continuous_maximum: float = -INF
 			var maximum_vertex: Vector2 = Vector2.ZERO
@@ -811,8 +833,8 @@ func _triangle_first_critical_candidates(clipped: Array[Vector2], cavity: Array[
 					continuous_maximum = vertex_cross_squared
 					maximum_vertex = vertex
 			var numeric_bound_margin: float = maxf(absf(continuous_maximum) * 1.0e-12, 1.0e-30)
-			continuous_bounds.append({"region_id": region_id, "projected_polygon": region, "projected_extreme_count": mapped_vertex_count, "region_vertex_count": region.size(), "maximum_cross_squared_vertex": maximum_vertex, "observed_vertex_maximum_cross_squared": continuous_maximum, "numeric_outward_margin": numeric_bound_margin, "continuous_upper_bound_cross_squared": continuous_maximum + numeric_bound_margin, "proof_method": "CONVEX_CROSS_SQUARED_MAXIMUM_AT_CLOSED_ARRANGEMENT_POLYGON_EXTREMES_WITH_CONSERVATIVE_NUMERIC_MARGIN", "cutoff_squared": FROZEN_CROSS_SQUARED_CUTOFF, "strict_interior_witness_required": true})
-		var region_candidates: Array[Dictionary] = _critical_candidates_for_region(region, cavity, source_2d, source_world, root_a_world, root_b_world, arc_segments, region_id, enumerate_all_critical_vertices)
+			continuous_bounds.append({"region_id": region_id, "projected_polygon": region, "projected_extreme_count": mapped_vertex_count, "region_vertex_count": region.size(), "maximum_cross_squared_vertex": maximum_vertex, "observed_vertex_maximum_cross_squared": continuous_maximum, "numeric_outward_margin": numeric_bound_margin, "continuous_upper_bound_cross_squared": continuous_maximum + numeric_bound_margin, "proof_method": "CONVEX_CROSS_SQUARED_MAXIMUM_AT_CLOSED_ARRANGEMENT_POLYGON_EXTREMES_WITH_CONSERVATIVE_NUMERIC_MARGIN", "cutoff_squared": FROZEN_CROSS_SQUARED_CUTOFF, "strict_interior_witness_required": true, "region_cavity_intersection_algorithm": "DETERMINISTIC_TRIANGULATION_AND_HALFPLANE_CLIP", "region_cavity_intersection_complete": bool(feasible_intersection.get("valid", false)), "region_cavity_intersection_component_count": int(feasible_intersection.get("component_count", 0)), "region_cavity_intersection_area": float(feasible_intersection.get("total_area", 0.0))})
+		var region_candidates: Array[Dictionary] = _critical_candidates_for_region(region, cavity, source_2d, source_world, root_a_world, root_b_world, arc_segments, region_id, enumerate_all_critical_vertices, feasible_intersection_seeds)
 		all_candidates.append_array(region_candidates)
 		if capture_continuous_bounds and memory_budget_bytes > 0 and Performance.get_monitor(Performance.MEMORY_STATIC) >= memory_budget_bytes:
 			return {"valid": false, "reason": "PARTIAL_LIMIT_REGION_CANDIDATE_MEMORY", "region_count": region_index + 1, "candidates": all_candidates, "continuous_region_bounds": continuous_bounds, "arrangement_frontier": {"stage": "region_candidate_page", "region_index": region_index + 1, "unvisited_region_count": regions.size() - region_index - 1}}
@@ -889,10 +911,65 @@ func _sanitize_polygon(points: Array[Vector2]) -> Array[Vector2]:
 	if result.size() > 1 and result[0] == result[result.size() - 1]: result.remove_at(result.size() - 1)
 	return result
 
-func _critical_candidates_for_region(region: Array[Vector2], cavity: Array[Vector2], source_2d: Array[Vector2], source_world: Array[Vector3], root_a_world: Vector3, root_b_world: Vector3, arc_segments: Array[Dictionary], region_id: String, enumerate_all_critical_vertices: bool = false) -> Array[Dictionary]:
+func _strict_region_cavity_intersection(region: Array[Vector2], cavity: Array[Vector2]) -> Dictionary:
+	if region.size() < 3 or cavity.size() < 3 or absf(_signed_area(region)) <= 0.0 or absf(_signed_area(cavity)) <= 0.0:
+		return {"valid": false, "reason": "DEGENERATE_REGION_OR_CAVITY_POLYGON", "component_count": 0, "centroids": [], "total_area": 0.0}
+	var triangle_indices: PackedInt32Array
+	if cavity.size() == 3:
+		triangle_indices = PackedInt32Array([0, 1, 2])
+	else:
+		triangle_indices = Geometry2D.triangulate_polygon(PackedVector2Array(cavity))
+	if triangle_indices.is_empty() or triangle_indices.size() % 3 != 0:
+		return {"valid": false, "reason": "CAVITY_POLYGON_TRIANGULATION_FAILED", "triangle_indices": triangle_indices, "component_count": 0, "centroids": [], "total_area": 0.0}
+	var centroids: Array[Vector2] = []
+	var components: Array[Dictionary] = []
+	var total_area: float = 0.0
+	for offset in range(0, triangle_indices.size(), 3):
+		var triangle: Array[Vector2] = [cavity[triangle_indices[offset]], cavity[triangle_indices[offset + 1]], cavity[triangle_indices[offset + 2]]]
+		var orientation: float = _signed_area(triangle)
+		if not is_finite(orientation) or absf(orientation) <= 0.0: continue
+		var clipped: Array[Vector2] = region.duplicate()
+		for edge_index in range(3):
+			var edge_a: Vector2 = triangle[edge_index]
+			var edge_b: Vector2 = triangle[(edge_index + 1) % 3]
+			clipped = _clip_polygon_to_oriented_halfplane(clipped, edge_a, edge_b, orientation > 0.0)
+			if clipped.size() < 3: break
+		clipped = _sanitize_polygon(clipped)
+		var area: float = absf(_signed_area(clipped)) if clipped.size() >= 3 else 0.0
+		if not is_finite(area) or area <= 0.0: continue
+		var centroid: Vector2 = _polygon_centroid(clipped)
+		if not _point_strictly_inside(centroid, region) or not _point_strictly_inside(centroid, cavity):
+			return {"valid": false, "reason": "POSITIVE_AREA_INTERSECTION_HAS_NO_CERTIFIED_STRICT_CENTROID", "triangle_indices": triangle_indices, "component_count": -1, "centroids": centroids, "components": components, "total_area": total_area, "uncertified_intersection_polygon": clipped, "uncertified_intersection_area": area}
+		centroids.append(centroid)
+		components.append({"triangle_indices": [triangle_indices[offset], triangle_indices[offset + 1], triangle_indices[offset + 2]], "polygon": clipped, "area": area, "strict_interior_centroid": centroid})
+		total_area += area
+	return {"valid": true, "reason": "", "triangle_indices": triangle_indices, "component_count": centroids.size(), "components": components, "centroids": centroids, "total_area": total_area, "strict_interior_empty": centroids.is_empty()}
+
+func _clip_polygon_to_oriented_halfplane(subject: Array[Vector2], edge_a: Vector2, edge_b: Vector2, keep_left: bool) -> Array[Vector2]:
+	var output: Array[Vector2] = []
+	if subject.is_empty(): return output
+	var previous: Vector2 = subject[subject.size() - 1]
+	var previous_distance: float = (edge_b - edge_a).cross(previous - edge_a) * (1.0 if keep_left else -1.0)
+	for current in subject:
+		var current_distance: float = (edge_b - edge_a).cross(current - edge_a) * (1.0 if keep_left else -1.0)
+		var previous_inside: bool = previous_distance >= 0.0
+		var current_inside: bool = current_distance >= 0.0
+		if previous_inside != current_inside:
+			var denominator: float = previous_distance - current_distance
+			if denominator != 0.0:
+				var t: float = previous_distance / denominator
+				output.append(previous.lerp(current, t))
+		if current_inside: output.append(current)
+		previous = current
+		previous_distance = current_distance
+	return _sanitize_polygon(output)
+
+func _critical_candidates_for_region(region: Array[Vector2], cavity: Array[Vector2], source_2d: Array[Vector2], source_world: Array[Vector3], root_a_world: Vector3, root_b_world: Vector3, arc_segments: Array[Dictionary], region_id: String, enumerate_all_critical_vertices: bool = false, feasible_intersection_seeds: Array[Vector2] = []) -> Array[Dictionary]:
 	var center: Vector2 = _polygon_centroid(region)
 	var points: Array[Dictionary] = []
 	var raw_points: Array[Dictionary] = [{"position": center, "method": "FEASIBLE_REGION_CENTROID"}]
+	for intersection_seed in feasible_intersection_seeds:
+		raw_points.append({"position": intersection_seed, "method": "CAVITY_ARRANGEMENT_INTERSECTION_CENTROID"})
 	for edge_index in range(region.size()):
 		var edge_a: Vector2 = region[edge_index]
 		var edge_b: Vector2 = region[(edge_index + 1) % region.size()]
@@ -1133,7 +1210,20 @@ func _map_projected_point(point: Vector2, source: Array[Vector2], world: Array[V
 	if not position.is_finite(): return {"valid": false, "reason": "mapped_world_point_nonfinite"}
 	return {"valid": true, "world": position, "weights": weights}
 
-func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Array[Vector2], source_world: Array[Vector3], tet_data: Dictionary, domain_polygon: Array[Vector2], topology_positions: Dictionary, source_origins: Array[Dictionary], max_distance: float, residual_epsilon: float, barycentric_epsilon: float, correct_binary32: bool = false, projection_context: Dictionary = {}, directed_axis_bracket: bool = false, multi_coordinate_search: bool = false) -> Dictionary:
+func _complete_binary32_candidate_gate(point: Vector3, realizer: RefCounted, projection_context: Dictionary, id_a: String, id_b: String, arrangement_region: Array[Vector2], cutoff: float, cavity_polygon: Array[Vector2], topology_positions: Dictionary, source_origins: Array[Dictionary], max_distance: float) -> bool:
+	var projected: Vector2 = _project(point, projection_context)
+	if arrangement_region.size() < 3 or not _point_strictly_inside(projected, arrangement_region): return false
+	if _point_on_polygon_boundary(projected, cavity_polygon): return false
+	for root_value in topology_positions.values():
+		if point.distance_squared_to(Vector3(root_value)) <= 1.0e-16: return false
+	var origin: Dictionary = _nearest_origin(point, source_origins)
+	if origin.is_empty(): return false
+	var distance: float = point.distance_to(Vector3(origin.get("center", Vector3.ZERO)))
+	if not is_finite(distance) or distance > max_distance: return false
+	var exact_gate: Dictionary = _single_support_pair_gate(realizer, projection_context, id_a, id_b, point, projected, cutoff)
+	return bool(exact_gate.get("valid", false))
+
+func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Array[Vector2], source_world: Array[Vector3], tet_data: Dictionary, domain_polygon: Array[Vector2], topology_positions: Dictionary, source_origins: Array[Dictionary], max_distance: float, residual_epsilon: float, barycentric_epsilon: float, correct_binary32: bool = false, projection_context: Dictionary = {}, directed_axis_bracket: bool = false, multi_coordinate_search: bool = false, acceptance_gate: Callable = Callable()) -> Dictionary:
 	if _point_on_polygon_boundary(projected, domain_polygon): return {"valid": false, "reason": "support_on_cavity_boundary"}
 	var mapped: Dictionary = _map_projected_point(projected, source_2d, source_world)
 	if not bool(mapped.get("valid", false)): return mapped
@@ -1141,23 +1231,25 @@ func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Arra
 	var pre_correction_point: Vector3 = point
 	var field_check: Dictionary = _validate_field_point(realizer, point, tet_data.get("positions", []), tet_data.get("samples", []), residual_epsilon, barycentric_epsilon)
 	var correction: Dictionary = {"attempted": false, "accepted": false}
-	if not bool(field_check.get("valid", false)) and correct_binary32:
+	if correct_binary32 and (not bool(field_check.get("valid", false)) or multi_coordinate_search):
 		var searched: Dictionary
 		var representation_method: String
 		if multi_coordinate_search:
 			var search_budget_raw: String = OS.get_environment("R12CXR_R6_BINARY32_SEARCH_BUDGET_MS")
 			var search_budget_ms: int = maxi(1, search_budget_raw.to_int()) if not search_budget_raw.is_empty() else 100
-			searched = realizer.call("_search_representable_zero_multicoordinate", point, tet_data, search_budget_ms * 1000)
-			representation_method = "COMPLETE_MULTICOORDINATE_BINARY32_TETRA_ENUMERATION_WITH_RESOURCE_FRONTIER"
+			searched = realizer.call("_search_representable_zero_multicoordinate", point, tet_data, search_budget_ms * 1000, acceptance_gate)
+			representation_method = "COMPLETE_MULTICOORDINATE_BINARY32_TETRA_ENUMERATION_WITH_FULL_SUPPORT_ACCEPTANCE_GATE_AND_RESOURCE_FRONTIER"
 		else:
 			searched = realizer.call("_search_representable_zero_axis_bracket" if directed_axis_bracket else "_search_representable_zero", point, tet_data)
 			representation_method = "FULL_SAME_TETRA_AXIS_BRACKET" if directed_axis_bracket else "BOUNDED_PLUS_MINUS_2_ULP_CUBE"
-		correction = {"attempted": true, "method": representation_method, "accepted": bool(searched.get("accepted", false)), "pre_correction_position": pre_correction_point, "pre_correction_field_residual": field_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "post_correction_position": searched.get("position", pre_correction_point), "post_correction_field_residual": searched.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "coordinate_ulp_steps": searched.get("ulp_steps", [0, 0, 0]), "search_state": searched.get("search_state", "UNKNOWN_NOT_CAPTURED"), "search_frontier": searched.get("search_frontier", {}), "finite_domain_complete": searched.get("finite_domain_complete", false), "tested_triples": searched.get("tested_triples", 0), "reason": searched.get("reason", "")}
+		correction = {"attempted": true, "method": representation_method, "accepted": bool(searched.get("accepted", false)), "pre_correction_position": pre_correction_point, "pre_correction_field_residual": field_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "post_correction_position": searched.get("position", pre_correction_point), "post_correction_field_residual": searched.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "coordinate_ulp_steps": searched.get("ulp_steps", [0, 0, 0]), "search_state": searched.get("search_state", "UNKNOWN_NOT_CAPTURED"), "search_frontier": searched.get("search_frontier", {}), "finite_domain_complete": searched.get("finite_domain_complete", false), "tested_triples": searched.get("tested_triples", 0), "acceptance_gate_rejection_count": searched.get("acceptance_gate_rejection_count", 0), "maximum_radius": searched.get("maximum_radius", -1), "reason": searched.get("reason", "")}
 		if bool(searched.get("accepted", false)):
 			point = Vector3(searched.get("position", pre_correction_point))
 			field_check = {"valid": true, "weights": searched.get("weights", []), "field_residual": searched.get("field_residual", NAN)}
 			projected = _project(point, projection_context)
 			if _point_on_polygon_boundary(projected, domain_polygon): return {"valid": false, "reason": "support_on_cavity_boundary", "pre_correction_world_position": pre_correction_point, "world": point, "field_residual": field_check.get("field_residual", NAN), "tetra_weights": field_check.get("weights", []), "binary32_representability_correction": correction}
+		else:
+			field_check = {"valid": false, "reason": "support_binary32_search_found_no_accepted_point", "search_state": searched.get("search_state", "UNKNOWN_NOT_CAPTURED")}
 	for root_value in topology_positions.values():
 		if point.distance_squared_to(Vector3(root_value)) <= 1.0e-16: return {"valid": false, "reason": "support_duplicates_topology_root", "pre_correction_world_position": pre_correction_point, "world": point, "binary32_representability_correction": correction}
 	var origin: Dictionary = _nearest_origin(point, source_origins)
