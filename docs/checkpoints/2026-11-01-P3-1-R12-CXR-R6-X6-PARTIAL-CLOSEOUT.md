@@ -44,10 +44,10 @@ No SAT mesh exists. Equal-LOD, controls, ROI rays, volume reconfirmation, mixed 
 ## Architecture and recovery
 
 - Current functional state is test-only; no product code adoption or architecture selection.
-- Reproduce with the pinned Godot executable and the R6, R5 and CXR contract commands recorded in `attempt-preflight.json`; full invocation environment and logs are in the evidence archive.
+- The exact R6, R5, CXR, writer, X6 and non-consuming evidence-capture commands and environments are in the [execution command manifest](../reports/P3-1-R12-CXR-R6/evidence/x6/execution-command-manifest.json), SHA-256 `80fbb2d200e0d84fd261a64382d087b85a7c4bd72d0a9142487e60d55c7bc459`; raw process logs and structured results are in the evidence archive.
 - Known limits: six valid target attempts consumed; the X3 inherited support domain hit its 4,096-candidate cap; X6 only explored axis-aligned binary32 intervals for the recorded critical witnesses. No additional attempt is authorized by the six-attempt procedure.
 - Next action: independent exact-SHA review of PR #219 and review of this bounded partial evidence. Any broader support-domain continuation requires explicit scope/attempt authorization if it exceeds the current procedure.
-- Docs updated on this new draft documentation branch: README, CURRENT_STATUS, AGENT_RECOVERY, checkpoint index and this checkpoint. DECISION_REGISTER and CHANGELOG are unchanged because no architecture decision or merge occurred.
+- Docs updated on this new draft documentation branch: README, CURRENT_STATUS, AGENT_RECOVERY, checkpoint index and this checkpoint. Separate supplemental records preserve the exact command environment and the final non-consuming tooling accounting. DECISION_REGISTER and CHANGELOG are unchanged because no architecture decision or merge occurred.
 
 ## Event significance and decision
 
