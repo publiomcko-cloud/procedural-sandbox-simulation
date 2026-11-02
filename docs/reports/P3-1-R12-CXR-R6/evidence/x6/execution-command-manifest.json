@@ -1,0 +1,105 @@
+{
+  "schema": "P3.1.R12CXR.R6X.ExecutionCommandManifest.v1",
+  "source_sha": "896e78b9614f0a4bf4dad51dddaee31b2ced7d99",
+  "parent_sha": "c89b78fd9650f9a8fb2b4aeb7b8a2c347a76068f",
+  "godot_executable": "C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "godot_sha256": "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643",
+  "preflight_commands": [
+    {
+      "exit_code": 0,
+      "command": "& 'C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe' --headless --editor --path 'C:\\Dev\\sandbox-sim-dev\\game' --quit",
+      "id": "cold_import",
+      "log": "cold-import.stdout.txt"
+    },
+    {
+      "environment": {
+        "R12CXR_R6_MODE": "check-only"
+      },
+      "exit_code": 0,
+      "command": "& 'C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe' --headless --path 'C:\\Dev\\sandbox-sim-dev\\game' --script 'res://tests/prototypes/p3_1_r12_cxr_r6_campaign.gd'",
+      "id": "campaign_check_only",
+      "log": "campaign-check-only.txt"
+    },
+    {
+      "environment": {
+        "R12CXR_R6_TEST_MODE": "check-only"
+      },
+      "exit_code": 0,
+      "command": "& 'C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe' --headless --path 'C:\\Dev\\sandbox-sim-dev\\game' --script 'res://tests/prototypes/p3_1_r12_cxr_r6_contract_tests.gd'",
+      "id": "contract_check_only",
+      "log": "contract-check-only.txt"
+    },
+    {
+      "exit_code": 0,
+      "command": "& 'C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe' --headless --path 'C:\\Dev\\sandbox-sim-dev\\game' --script 'res://tests/prototypes/p3_1_r12_cxr_r6_contract_tests.gd'",
+      "id": "r6_contract_suite",
+      "result": "96 assertions; 0 failures",
+      "log": "r6-contract-suite.txt"
+    },
+    {
+      "exit_code": 0,
+      "command": "& 'C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe' --headless --path 'C:\\Dev\\sandbox-sim-dev\\game' --script 'res://tests/prototypes/p3_1_r12_cxr_r5_contract_tests.gd'",
+      "id": "r5_contract_suite",
+      "result": "348 assertions; 0 failures",
+      "log": "r5-contract-suite.txt"
+    },
+    {
+      "exit_code": 0,
+      "command": "& 'C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe' --headless --path 'C:\\Dev\\sandbox-sim-dev\\game' --script 'res://tests/prototypes/p3_1_r12_cxr_contract_tests.gd'",
+      "id": "cxr_contract_suite",
+      "result": "216 assertions; 0 failures",
+      "log": "cxr-contract-suite.txt"
+    },
+    {
+      "environment": {
+        "R12CXR_R6_MODE": "writer-check"
+      },
+      "exit_code": 0,
+      "command": "& 'C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe' --headless --path 'C:\\Dev\\sandbox-sim-dev\\game' --script 'res://tests/prototypes/p3_1_r12_cxr_r6_campaign.gd'",
+      "id": "evidence_writer_check",
+      "log": "evidence-writer-check.txt"
+    }
+  ],
+  "scientific_attempt": {
+    "id": "R6-X6-REPRESENTABILITY-20261102-01",
+    "result_sha256": "dd2413009300d13bb84472096a1648016475d34daf9c948261d274d674d6eb55",
+    "target_attempt_consumed": true,
+    "result_file": "result.json",
+    "mode": "x6-representability",
+    "environment": {
+      "R12CXR_R6_MODE": "x6-representability",
+      "R12CXR_R6_X4_PREVIOUS_SHA256": "f7fd6ba64df9fb2b515930c245b2c59c50a24e7fa77fcc835bd83d38ce8b2661",
+      "R12CXR_SOURCE_SHA": "896e78b9614f0a4bf4dad51dddaee31b2ced7d99",
+      "R12CXR_PARENT_SHA": "c89b78fd9650f9a8fb2b4aeb7b8a2c347a76068f",
+      "R12CXR_R6_OUTPUT": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\R6-X6_20261102_896e78b\\result.json",
+      "R12CXR_R6_X4_PREVIOUS_INPUT": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\R6-X3_20261102_9f65ba3\\result.json",
+      "R12CXR_R6_ATTEMPT_ID": "R6-X6-REPRESENTABILITY-20261102-01"
+    },
+    "exit_code": 0,
+    "stdout_log": "x6-process.stdout.txt",
+    "command": "& 'C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe' --headless --path 'C:\\Dev\\sandbox-sim-dev\\game' --script 'res://tests/prototypes/p3_1_r12_cxr_r6_campaign.gd'"
+  },
+  "non_consuming_raw_evidence": {
+    "id": "R6-X6-REPRESENTABILITY-EVIDENCE-20261102-01",
+    "result_sha256": "9bb50583f12b536799cff44d65bec95c3ee9c063ed39cf81379a1629c0182490",
+    "target_attempt_consumed": false,
+    "result_file": "targeted-synthesis-raw.json",
+    "mode": "x6-representability-evidence",
+    "environment": {
+      "R12CXR_R6_MODE": "x6-representability-evidence",
+      "R12CXR_R6_X4_PREVIOUS_SHA256": "f7fd6ba64df9fb2b515930c245b2c59c50a24e7fa77fcc835bd83d38ce8b2661",
+      "R12CXR_SOURCE_SHA": "896e78b9614f0a4bf4dad51dddaee31b2ced7d99",
+      "R12CXR_PARENT_SHA": "c89b78fd9650f9a8fb2b4aeb7b8a2c347a76068f",
+      "R12CXR_R6_OUTPUT": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\R6-X6_20261102_896e78b\\targeted-synthesis-raw.json",
+      "R12CXR_R6_X4_PREVIOUS_INPUT": "C:\\Users\\PUBLI\\AppData\\Local\\Temp\\R6-X3_20261102_9f65ba3\\result.json",
+      "R12CXR_R6_ATTEMPT_ID": "R6-X6-REPRESENTABILITY-EVIDENCE-20261102-01"
+    },
+    "exit_code": 0,
+    "stdout_log": "x6-evidence-capture.stdout.txt",
+    "command": "& 'C:\\Tools\\Godot\\Godot_v4.7.2-stable_win64_console.exe' --headless --path 'C:\\Dev\\sandbox-sim-dev\\game' --script 'res://tests/prototypes/p3_1_r12_cxr_r6_campaign.gd'"
+  }
+}
+
+
+
