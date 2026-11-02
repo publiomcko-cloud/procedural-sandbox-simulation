@@ -4,6 +4,7 @@ const Core := preload("res://tests/prototypes/p3_1_r9_2_diagnostic_base.gd")
 const CandidateD := preload("res://tests/prototypes/p3_1_r9_2_candidate_impl.gd")
 const Realizer := preload("res://tests/prototypes/p3_1_r12_cxr_field_support_realizer.gd")
 const R6Realizer := preload("res://tests/prototypes/p3_1_r12_cxr_r6_realizer.gd")
+const R6FrozenSolver := preload("res://tests/prototypes/p3_1_r12_cxr_r6_frozen_solver.gd")
 const Synthesizer := preload("res://tests/prototypes/p3_1_r12_cxr_r5_support_synthesizer.gd")
 const Diagnostics := preload("res://tests/prototypes/p3_1_r12_cxr_r6_diagnostics.gd")
 const CXRDownstream := preload("res://tests/prototypes/p3_1_r12_cxr_campaign.gd")
@@ -23,6 +24,10 @@ const R4SourceSha := "f48990e25ffb1d377e02a9182240cabe35c815eb"
 const R4D1ResultSha := "927ec58f8f4e7821d9acb27a46068a4fa5fccf4f354f22b24be9cf88f90970c4"
 const R4CavitySignature := "90be2d27d3c08ccb2fe93ebf6b8a0da0d8955d3c4d533a4496809b4d07bd363b"
 const R5CavitySha := "a54a407ac84b3fd7d64108f41457d5ecc7ff335abaee6899819de579ebeae6a6"
+const FrozenSupportSetSha := "499292cff4e6f6904fed4bb5b44d0828f82b81fbf4c7846d4680bff412fd23ea"
+const FrozenCandidateGraphSha := "de2f1121c60052324717c8d326536fc63890aacd5cc39f9a192a5f4ec4382e87"
+const FrozenCandidateGraphAuditSha := "3fd0cd4db9c8ec088857c73c54475313c06ea549f2fef8ea83b0ccb7df294afd"
+const FrozenCandidateTriangleCount: int = 1058
 const FROZEN_CROSS_SQUARED_CUTOFF: float = 1.0e-12
 
 var _terminal_failure_requested: bool = false
@@ -36,6 +41,9 @@ func _run() -> void:
 	if mode == "check-only":
 		print("R6_CAMPAIGN_CHECK_ONLY=PASS")
 		quit(0)
+		return
+	if mode == "writer-check":
+		_run_evidence_writer_check()
 		return
 	if mode.is_empty(): mode = "freeze"
 	if mode not in ["freeze", "boundary-audit", "cavity-audit", "synthesize", "resume-r6-06"]:
@@ -365,7 +373,7 @@ func _run() -> void:
 		if not bool(continued_synthesis.get("valid", false)) or previous_synthesis_sha != continued_synthesis_sha:
 			_fail("r6_continuation_support_set_changed", {"previous_fingerprint_sha256": previous_synthesis_sha, "continued_fingerprint_sha256": continued_synthesis_sha, "continued_valid": continued_synthesis.get("valid", false), "previous_support_summary": _support_summary_for_diagnostic(previous_synthesis), "continued_support_summary": _support_summary_for_diagnostic(continued_synthesis), "support_differences": _support_row_differences(previous_synthesis.get("supports", []), continued_synthesis.get("supports", []), 12)})
 			return
-		var continuation_metadata: Dictionary = {"is_continuation": true, "same_attempt_id": attempt_id, "original_target_source_sha": previous.get("source_sha", ""), "continuation_source_sha": continuation_source_sha, "original_target_result_sha256": Core.sha256(previous_bytes), "original_target_attempt_consumed": true, "additional_target_attempts_consumed": 0, "reason": "corrected graph gate had incorrectly compared possible triplets to the legal candidate triangle cap; now probes at most the unchanged 2048 candidate limit and may run D3 on the observed partial graph for a positive witness", "support_set_identical": true, "support_set_sha256": continued_synthesis_sha}
+		var continuation_metadata: Dictionary = {"is_continuation": true, "same_attempt_id": attempt_id, "original_target_source_sha": previous.get("source_sha", ""), "continuation_source_sha": continuation_source_sha, "original_target_result_sha256": Core.sha256(previous_bytes), "original_target_attempt_consumed": true, "additional_target_attempts_consumed": 0, "reason": "continuation from the already-consumed R6-06 target; preserve the exact support identities and cavity, complete the finite 1058-triangle graph audit, and capture the required bounded legacy F0 telemetry before corrected F1", "support_set_identical": true, "support_set_sha256": continued_synthesis_sha}
 		var continuation_result: Dictionary = _run_constraint_synthesis(continuation_realizer, volume.get("values", PackedFloat32Array()), roi, selected_context, selected_patch, selected_ids, seed_triangles, selected_boundary, triangles, search_fixture, base, snapshot, support_fixture, residual_fixture.get("residuals", []), output_path, cavity_search, continued_synthesis, continuation_metadata)
 		if continuation_result.is_empty() or _terminal_failure_requested: return
 		quit(0)
@@ -486,8 +494,10 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 	var support_rows: Array[Dictionary] = synthesis.get("supports", [])
 	var result: Dictionary = {
 		"schema": "P3.1.R12CXR.R6.Result.v1",
+		"campaign_id": "P3.1.R12CXR.R6X.AUTONOMOUS_E2E",
 		"status": "R6_SUPPORT_SYNTHESIS_PARTIAL",
 		"source_sha": OS.get_environment("R12CXR_SOURCE_SHA"),
+		"parent_sha": OS.get_environment("R12CXR_PARENT_SHA") if not OS.get_environment("R12CXR_PARENT_SHA").is_empty() else "UNKNOWN_NOT_CAPTURED",
 		"attempt_id": OS.get_environment("R12CXR_R6_ATTEMPT_ID"),
 		"target_attempt_consumed": true,
 		"continuation": continuation_metadata,
@@ -499,6 +509,7 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		"frozen_cavity_sha256": R5CavitySha,
 		"candidate_d_sha256": CandidateSha,
 		"manifest_sha256": ManifestSha,
+		"frozen_hashes": {"cavity": R5CavitySha, "candidate_d": CandidateSha, "manifest": ManifestSha, "support_pool": SupportPoolSha, "topology": TopologySha, "topology_graph_roundtrip": GraphSha, "volume": VolumeSha, "payload": PayloadSha, "r4_d1_result": R4D1ResultSha},
 		"scenario_id": TargetId,
 		"cavity_id": cavity_id,
 		"r6a_constraint_analysis": r6a_analysis,
@@ -521,6 +532,9 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 			"full_validation": "NOT_RUN_PENDING_EQUAL_LOD_PASS"
 		},
 		"continuum_domain_exhausted": false,
+		"global_impossibility_claim": false,
+		"baseline_comparison": {"status": "NOT_RUN_EQUAL_LOD_NOT_REACHED"},
+		"validation": {"status": "NOT_RUN_EQUAL_LOD_NOT_REACHED"},
 		"timing_classification": "UNSCORED_EXPERIMENTAL_CPU_TIME_ONLY"
 	}
 	if support_rows.is_empty():
@@ -614,19 +628,61 @@ func _run_constraint_synthesis(realizer: RefCounted, values: PackedFloat32Array,
 		result["continuum_domain_exhausted"] = false
 		_write_result(output_path, result, "R12CXR_R6_SUPPORT_SYNTHESIS_RESULT")
 		return result
-	var d3: Dictionary = realizer.call("_r2_search_level", context)
-	d3["started"] = true
-	result["d3"] = d3
-	if not bool(d3.get("valid", false)):
-		var triangulation_complete: bool = bool(d3.get("search_complete", false)) and graph_complete
-		result["status"] = "R6_TRIANGULATION_PARTIAL" if not triangulation_complete else "R6_SUPPORT_SYNTHESIS_PARTIAL"
-		result["terminal_reason"] = "NO_SOLUTION_ON_FINITE_SYNTHESIZED_SUPPORT_GRAPH" if triangulation_complete else "FINITE_GRAPH_OR_TRIANGULATION_GATE_PARTIAL"
+	var observed_support_set_sha: String = _support_synthesis_fingerprint(synthesis)
+	var observed_candidate_graph_sha: String = String(graph_summary.get("candidate_graph_sha256", ""))
+	var observed_graph_audit_sha: String = String(result.graph_gate.get("audit_sha256", ""))
+	var frozen_identity_check: Dictionary = {"expected_support_count": 23, "observed_support_count": support_rows.size(), "expected_support_set_sha256": FrozenSupportSetSha, "observed_support_set_sha256": observed_support_set_sha, "expected_candidate_triangle_count": FrozenCandidateTriangleCount, "observed_candidate_triangle_count": candidate_triangles.size(), "expected_candidate_graph_sha256": FrozenCandidateGraphSha, "observed_candidate_graph_sha256": observed_candidate_graph_sha, "expected_candidate_graph_audit_sha256": FrozenCandidateGraphAuditSha, "observed_candidate_graph_audit_sha256": observed_graph_audit_sha}
+	var frozen_identity_matches: bool = support_rows.size() == 23 and observed_support_set_sha == FrozenSupportSetSha and candidate_triangles.size() == FrozenCandidateTriangleCount and observed_candidate_graph_sha == FrozenCandidateGraphSha and observed_graph_audit_sha == FrozenCandidateGraphAuditSha
+	result["frozen_graph_identity_check"] = frozen_identity_check
+	if not graph_complete or not frozen_identity_matches:
+		result["status"] = "R6_FROZEN_GRAPH_PARTIAL" if not graph_complete else "R6_FROZEN_GRAPH_IDENTITY_MISMATCH"
+		result["terminal_reason"] = "candidate graph scan incomplete before solver" if not graph_complete else "frozen support or candidate graph identity changed"
+		result["d3"] = {"started": false, "reason": "NOT_RUN_FROZEN_GRAPH_GATE_FAILED"}
 		_write_result(output_path, result, "R12CXR_R6_SUPPORT_SYNTHESIS_RESULT")
 		return result
-	var d3_repeat: Dictionary = realizer.call("_r2_search_level", context)
+	var frozen_solver: RefCounted = R6FrozenSolver.new()
+	var frozen_solver_limits: Dictionary = {"candidate_graph_sha256": observed_candidate_graph_sha, "support_set_sha256": observed_support_set_sha, "expected_candidate_triangles": FrozenCandidateTriangleCount, "max_search_states_per_cavity": 16384, "max_search_usec_per_cavity": 10000000, "max_patch_triangles": 64}
+	var solver_mode: String = OS.get_environment("R12CXR_R6_SOLVER_MODE")
+	var d3: Dictionary
+	if solver_mode == "legacy-f0":
+		d3 = realizer.call("_r2_search_level", context)
+		d3["solver_type"] = "R6_F0_LEGACY_FOUR_SUPPORT_CAPTURE"
+		d3["support_cardinality_bound"] = "0..4"
+	else:
+		d3 = frozen_solver.call("solve", context, candidate_triangles, realizer, frozen_solver_limits)
+		d3["solver_type"] = "R6_F_FROZEN_GRAPH_MRV_EDGE_COMPLETION_V1"
+	d3["solver_mode"] = "legacy-f0" if solver_mode == "legacy-f0" else "corrected-f1"
+	d3["started"] = true
+	result["d3"] = d3
+	var coverage_audit: Dictionary = d3.get("best_solution", {}).get("coverage_area_audit", {})
+	result["coverage_area_audit"] = coverage_audit
+	if not bool(d3.get("valid", false)):
+		var triangulation_complete: bool = bool(d3.get("search_complete", false)) and graph_complete
+		if solver_mode == "legacy-f0" and triangulation_complete:
+			result["status"] = "R6_F0_REPRODUCED_NO_SOLUTION"
+			result["terminal_reason"] = "legacy solver exhaustively searched support cardinalities 0..4 with no solution"
+		elif solver_mode == "legacy-f0":
+			result["status"] = "R6_F0_REPRODUCTION_PARTIAL"
+			result["terminal_reason"] = "legacy bounded solver did not complete its 0..4 support search"
+		else:
+			result["status"] = "R6_TRIANGULATION_PARTIAL" if not triangulation_complete else "R6_SUPPORT_SYNTHESIS_PARTIAL"
+			result["terminal_reason"] = "NO_SOLUTION_ON_FINITE_SYNTHESIZED_SUPPORT_GRAPH" if triangulation_complete else "FINITE_GRAPH_OR_TRIANGULATION_GATE_PARTIAL"
+		_write_result(output_path, result, "R12CXR_R6_SUPPORT_SYNTHESIS_RESULT")
+		return result
+	var d3_repeat: Dictionary = frozen_solver.call("solve", context, candidate_triangles, realizer, frozen_solver_limits)
 	var d3_first_fingerprint: String = _stable_evidence_sha({"valid": d3.get("valid", false), "best_solution": d3.get("best_solution", {}), "solution_count": d3.get("solution_count", -1), "search_complete": d3.get("search_complete", false)})
 	var d3_repeat_fingerprint: String = _stable_evidence_sha({"valid": d3_repeat.get("valid", false), "best_solution": d3_repeat.get("best_solution", {}), "solution_count": d3_repeat.get("solution_count", -1), "search_complete": d3_repeat.get("search_complete", false)})
 	result["r6_f_deterministic_repeat"] = {"started": true, "pass": d3_first_fingerprint == d3_repeat_fingerprint, "first_fingerprint_sha256": d3_first_fingerprint, "repeat_fingerprint_sha256": d3_repeat_fingerprint, "repeat_valid": d3_repeat.get("valid", false), "repeat_search_complete": d3_repeat.get("search_complete", false)}
+	if not bool(result.get("r6_f_deterministic_repeat", {}).get("pass", false)):
+		result["status"] = "R6_F_DETERMINISTIC_REPEAT_FAILED"
+		result["terminal_reason"] = "corrected frozen graph solver did not reproduce its first terminal result"
+		_write_result(output_path, result, "R12CXR_R6_SUPPORT_SYNTHESIS_RESULT")
+		return result
+	if not bool(coverage_audit.get("applicable", false)) or not bool(coverage_audit.get("within_tolerance", false)):
+		result["status"] = "R6_COVERAGE_AUDIT_BLOCKED"
+		result["terminal_reason"] = "topology-valid triangulation lacks a passing projected-area coverage audit; topology status remains unchanged"
+		_write_result(output_path, result, "R12CXR_R6_SUPPORT_SYNTHESIS_RESULT")
+		return result
 	var solution: Dictionary = d3.get("best_solution", {})
 	var replacement_value: Variant = solution.get("final_replacement_triangles", null)
 	if typeof(replacement_value) != TYPE_ARRAY:
@@ -779,6 +835,23 @@ func _support_row_differences(previous_rows: Array, continued_rows: Array, limit
 				if differences.size() >= limit: return differences
 	if previous_rows.size() != continued_rows.size(): differences.append({"previous_count": previous_rows.size(), "continued_count": continued_rows.size()})
 	return differences
+
+func _run_evidence_writer_check() -> void:
+	var output_path: String = OS.get_environment("TEMP").path_join("R6-evidence-writer-%d.json" % Time.get_ticks_usec())
+	var test_result: Dictionary = {"schema": "R6.EvidenceWriterCheck.v1", "status": "WRITER_TEST", "vector": Vector3(1.0, 2.0, 3.0)}
+	if not _write_result(output_path, test_result, "R6_EVIDENCE_WRITER_CHECK"):
+		quit(1)
+		return
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(output_path))
+	var passed: bool = typeof(parsed) == TYPE_DICTIONARY and parsed.get("schema", "") == "R6.EvidenceWriterCheck.v1" and parsed.get("vector", []) == [1.0, 2.0, 3.0]
+	var output_sha256: String = Core.sha256(FileAccess.get_file_as_bytes(output_path))
+	DirAccess.remove_absolute(output_path)
+	if not passed:
+		printerr("R6_EVIDENCE_WRITER_CHECK=FAIL " + JSON.stringify({"sha256": output_sha256}))
+		quit(1)
+		return
+	print("R6_EVIDENCE_WRITER_CHECK=PASS sha256=%s" % output_sha256)
+	quit(0)
 
 func _write_result(output_path: String, result: Dictionary, marker: String) -> bool:
 	if output_path.is_empty() or FileAccess.file_exists(output_path):

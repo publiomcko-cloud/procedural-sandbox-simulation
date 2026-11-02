@@ -5,6 +5,7 @@ const R6Realizer := preload("res://tests/prototypes/p3_1_r12_cxr_r6_realizer.gd"
 const CXRDownstream := preload("res://tests/prototypes/p3_1_r12_cxr_campaign.gd")
 const R6Campaign := preload("res://tests/prototypes/p3_1_r12_cxr_r6_campaign.gd")
 const R5Synthesizer := preload("res://tests/prototypes/p3_1_r12_cxr_r5_support_synthesizer.gd")
+const R6FrozenSolver := preload("res://tests/prototypes/p3_1_r12_cxr_r6_frozen_solver.gd")
 
 var assertions: int = 0
 var failures: Array[String] = []
@@ -31,6 +32,7 @@ func _run() -> void:
 	_test_patch_boundary_upper_bound(diagnostics)
 	_test_analytic_edge_witness_not_sampling_limited(diagnostics)
 	_test_mixed_lod_interface_oracle()
+	_test_r6_unbounded_frozen_graph_solver()
 	if failures.is_empty():
 		print("R12CXR_R6_CONTRACTS assertions=%d failures=0" % assertions)
 		quit(0)
@@ -218,6 +220,107 @@ func _test_mixed_lod_interface_oracle() -> void:
 	var mismatch: PackedVector3Array = PackedVector3Array([Vector3(16.0, 0.0, 0.0), Vector3(16.0, 2.0, 0.0), Vector3(15.0, 0.0, 0.0), Vector3(16.0, 0.0, 0.0), Vector3(16.0, 2.0, 0.0), Vector3(17.0, 0.0, 0.0)])
 	var rejected: Dictionary = CXRDownstream._compare_mixed_lod_interface({"positions": shared}, {"positions": mismatch}, 0, 16.0)
 	_expect(not bool(rejected.get("conforming", true)) and int(rejected.get("unmatched_segment_entries", 0)) == 2, "mixed-LOD interface oracle rejects unmatched segment sets")
+
+func _test_r6_unbounded_frozen_graph_solver() -> void:
+	var synthetic: Dictionary = _make_six_support_solver_fixture()
+	var context: Dictionary = synthetic.context
+	var graph: Array[Dictionary] = synthetic.candidate_triangles
+	var before_graph: Array[Dictionary] = graph.duplicate(true)
+	var validator: Callable = func(triangles: Array, support_ids: Array, _edge_state: Dictionary, _context: Dictionary) -> Dictionary:
+		return {"valid": true, "support_ids": support_ids.duplicate(), "selected_triangle_ids": triangles.map(func(row: Dictionary) -> String: return String(row.triangle_id))}
+	var solver: RefCounted = R6FrozenSolver.new()
+	var limits: Dictionary = {"candidate_graph_sha256": "fixture-graph-sha256", "support_set_sha256": "fixture-support-sha256", "expected_candidate_triangles": graph.size(), "max_search_states_per_cavity": 1000, "max_search_usec_per_cavity": 10000000, "max_patch_triangles": 64}
+	var sat: Dictionary = solver.call("solve", context, graph, null, limits, validator)
+	_expect(String(sat.get("status", "")) == "SAT" and bool(sat.get("search_complete", false)), "R6-F solver finds a complete valid graph triangulation")
+	_expect(String(sat.get("candidate_graph_sha256", "")) == "fixture-graph-sha256" and int(sat.get("candidate_triangle_count", -1)) == before_graph.size() and int(sat.get("indexed_triangle_count", -1)) == before_graph.size(), "R6-F preserves candidate graph identity and indexes every legal row")
+	_expect(int(sat.get("support_count", 0)) == 23 and context.support_by_id.size() == 23, "R6-F retains all 23 addressable frozen supports")
+	_expect(sat.get("best_solution", {}).get("support_ids", []).size() == 6 and String(sat.get("support_cardinality_bound", "")) == "NONE", "R6-F derives six selected supports from triangles without a four-support cap")
+	var selected_ids: Dictionary = {}
+	for triangle_id_value in sat.get("best_solution", {}).get("selected_triangle_ids", []): selected_ids[String(triangle_id_value)] = true
+	var derived_support_ids: Array[String] = []
+	for triangle in graph:
+		if not selected_ids.has(String(triangle.triangle_id)): continue
+		for root_id_value in triangle.root_ids:
+			var root_id: String = String(root_id_value)
+			if context.support_by_id.has(root_id) and not derived_support_ids.has(root_id): derived_support_ids.append(root_id)
+	derived_support_ids.sort()
+	var every_support_addressable: bool = true
+	for support_id_value in context.support_by_id.keys(): every_support_addressable = every_support_addressable and context.vertex_positions.has(String(support_id_value))
+	_expect(every_support_addressable and sat.get("best_solution", {}).get("support_ids", []) == derived_support_ids, "R6-F makes every retained support addressable and derives selected identities only from solution triangles")
+	_expect(graph == before_graph, "R6-F search leaves the frozen candidate graph unchanged")
+	var area_audit: Dictionary = solver.call("_coverage_area_audit", graph)
+	_expect(bool(area_audit.get("applicable", false)) and bool(area_audit.get("within_tolerance", false)) and String(area_audit.get("use", "")).contains("audit_only"), "R6-F projected-area agreement is captured as an audit-only coverage check")
+	var first_ids: Array = sat.get("best_solution", {}).get("selected_triangle_ids", []).duplicate()
+	var repeated: Dictionary = solver.call("solve", context, graph, null, limits, validator)
+	var repeated_ids: Array = repeated.get("best_solution", {}).get("selected_triangle_ids", []).duplicate()
+	_expect(String(repeated.get("status", "")) == "SAT" and first_ids == repeated_ids, "R6-F deterministic repeat selects the same ordered solution")
+	var incomplete: Array[Dictionary] = graph.duplicate(true)
+	for index in range(incomplete.size()):
+		if String(incomplete[index].triangle_id) == "syn-inner-2":
+			incomplete.remove_at(index)
+			break
+	var unsat_limits: Dictionary = limits.duplicate(true)
+	unsat_limits.expected_candidate_triangles = incomplete.size()
+	var unsat: Dictionary = solver.call("solve", context, incomplete, null, unsat_limits, validator)
+	_expect(String(unsat.get("status", "")) == "UNSAT_COMPLETE" and bool(unsat.get("search_exhaustive", false)), "R6-F distinguishes a fully explored synthetic finite-graph UNSAT")
+	var bounded_limits: Dictionary = limits.duplicate(true)
+	bounded_limits.max_search_states_per_cavity = 1
+	var partial: Dictionary = solver.call("solve", context, graph, null, bounded_limits, validator)
+	_expect(String(partial.get("status", "")) == "PARTIAL_LIMIT" and not bool(partial.get("search_complete", true)) and not bool(partial.get("search_exhaustive", true)), "R6-F reports bounded search as PARTIAL_LIMIT, never UNSAT")
+	var duplicate_graph: Array[Dictionary] = graph.duplicate(true)
+	duplicate_graph.append(graph[0].duplicate(true))
+	var duplicate_limits: Dictionary = limits.duplicate(true)
+	duplicate_limits.expected_candidate_triangles = duplicate_graph.size()
+	var duplicate_result: Dictionary = solver.call("solve", context, duplicate_graph, null, duplicate_limits, validator)
+	_expect(String(duplicate_result.get("status", "")) == "INVALID_GRAPH_INPUT" and String(duplicate_result.get("terminal_reason", "")) == "FROZEN_GRAPH_DUPLICATE_TRIANGLE_ID", "R6-F rejects duplicate graph rows rather than silently dropping them")
+
+func _make_six_support_solver_fixture() -> Dictionary:
+	var positions: Dictionary = {}
+	var support_by_id: Dictionary = {}
+	var vertex_ids: Array[String] = []
+	for index in range(5):
+		var outer_id: String = "B%d" % index
+		var outer_angle: float = TAU * float(index) / 5.0
+		positions[outer_id] = Vector3(2.0 * cos(outer_angle), 2.0 * sin(outer_angle), 0.0)
+		vertex_ids.append(outer_id)
+		var support_id: String = "S%d" % index
+		var inner_angle: float = TAU * (float(index) - 0.5) / 5.0
+		positions[support_id] = Vector3(cos(inner_angle), sin(inner_angle), 0.0)
+		vertex_ids.append(support_id)
+		support_by_id[support_id] = {"support_id": support_id}
+	var center_id: String = "C"
+	positions[center_id] = Vector3.ZERO
+	vertex_ids.append(center_id)
+	support_by_id[center_id] = {"support_id": center_id}
+	for index in range(17):
+		var unused_id: String = "X%02d" % index
+		positions[unused_id] = Vector3(10.0 + float(index), 10.0, 0.0)
+		vertex_ids.append(unused_id)
+		support_by_id[unused_id] = {"support_id": unused_id}
+	var boundary: Dictionary = {}
+	for index in range(5):
+		var a: String = "B%d" % index
+		var b: String = "B%d" % ((index + 1) % 5)
+		boundary[_fixture_edge_key(a, b)] = {"a": a, "b": b}
+	var candidates: Array[Dictionary] = []
+	for index in range(5):
+		var next: int = (index + 1) % 5
+		candidates.append(_fixture_triangle("syn-outer-%d" % index, ["B%d" % index, "B%d" % next, "S%d" % next], positions))
+		candidates.append(_fixture_triangle("syn-annulus-%d" % index, ["B%d" % index, "S%d" % next, "S%d" % index], positions))
+		candidates.append(_fixture_triangle("syn-inner-%d" % index, ["S%d" % index, "S%d" % next, center_id], positions))
+	var projected_positions: Dictionary = {}
+	for vertex_id in positions: projected_positions[vertex_id] = Vector2(positions[vertex_id].x, positions[vertex_id].y)
+	var boundary_cycle: Array[String] = ["B0", "B1", "B2", "B3", "B4"]
+	var context: Dictionary = {"vertex_ids": vertex_ids, "vertex_positions": positions, "projected_positions": projected_positions, "boundary_cycle": boundary_cycle, "support_by_id": support_by_id, "boundary_edge_map": boundary, "patch_ids": [], "all_triangles": []}
+	return {"context": context, "candidate_triangles": candidates}
+
+func _fixture_triangle(triangle_id: String, ids: Array, positions: Dictionary) -> Dictionary:
+	var points: Array[Vector3] = [positions[String(ids[0])], positions[String(ids[1])], positions[String(ids[2])]]
+	return {"triangle_id": triangle_id, "root_ids": ids, "points": points, "cross_squared": (points[1] - points[0]).cross(points[2] - points[0]).length_squared(), "polygon_id": "fixture-owner", "source_polygon_ids": ["fixture-owner"]}
+
+func _fixture_edge_key(a: String, b: String) -> String:
+	return a + "\u001f" + b if a < b else b + "\u001f" + a
+
 
 
 func _expect(condition: bool, name: String) -> void:
