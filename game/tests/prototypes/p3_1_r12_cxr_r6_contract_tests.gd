@@ -33,6 +33,7 @@ func _run() -> void:
 	_test_analytic_edge_witness_not_sampling_limited(diagnostics)
 	_test_mixed_lod_interface_oracle()
 	_test_r6_unbounded_frozen_graph_solver()
+	_test_x2_all_arrangement_vertices()
 	if failures.is_empty():
 		print("R12CXR_R6_CONTRACTS assertions=%d failures=0" % assertions)
 		quit(0)
@@ -69,6 +70,27 @@ func _test_candidate_graph_summary_numeric_formatting() -> void:
 	var summary: Dictionary = synthesizer.call("_candidate_graph_summary", triangles, edges, {"S": {"support_id": "S"}})
 	_expect(String(summary.get("candidate_graph_sha256", "")).length() == 64, "candidate graph summary hashes root and support edges without integer cast error")
 	_expect(int(summary.get("legal_root_root_edges", 0)) == 1 and int(summary.get("legal_root_support_edges", 0)) == 1, "candidate graph summary classifies root and support edges")
+
+func _test_x2_all_arrangement_vertices() -> void:
+	var synthesizer: RefCounted = R5Synthesizer.new()
+	var region: Array[Vector2] = []
+	for index in range(9):
+		var angle: float = TAU * float(index) / 9.0
+		region.append(Vector2(1.0 + 0.3 * cos(angle), 1.0 + 0.3 * sin(angle)))
+	var cavity: Array[Vector2] = [Vector2.ZERO, Vector2(3.0, 0.0), Vector2(0.0, 3.0)]
+	var source_2d: Array[Vector2] = [Vector2.ZERO, Vector2(3.0, 0.0), Vector2(0.0, 3.0)]
+	var source_world: Array[Vector3] = [Vector3.ZERO, Vector3(3.0, 0.0, 0.0), Vector3(0.0, 3.0, 0.0)]
+	var arc_segments: Array[Dictionary] = []
+	var bounded: Array[Dictionary] = synthesizer.call("_critical_candidates_for_region", region, cavity, source_2d, source_world, Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.0, -1.0), arc_segments, "R6X2_TEST", false)
+	var complete: Array[Dictionary] = synthesizer.call("_critical_candidates_for_region", region, cavity, source_2d, source_world, Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.0, -1.0), arc_segments, "R6X2_TEST", true)
+	_expect(bounded.size() <= 7, "legacy critical candidate cap remains unchanged")
+	_expect(complete.size() > 7, "R6-X2 exposes more than seven deterministic critical points in a region")
+	var vertices_seen: Dictionary = {}
+	for candidate in complete: vertices_seen[var_to_bytes(Vector2(candidate.get("position", Vector2.ZERO))).hex_encode()] = true
+	var all_vertices_preserved: bool = true
+	for vertex in region:
+		if not vertices_seen.has(var_to_bytes(vertex).hex_encode()): all_vertices_preserved = false
+	_expect(all_vertices_preserved, "R6-X2 retains every active arrangement vertex exactly")
 
 func _test_convex_region_clipping(diagnostics: RefCounted) -> void:
 	var source: Array[Vector3] = [Vector3(-1.0, 0.0, 0.0), Vector3(1.0, 0.0, 0.0), Vector3(0.0, 1.0, 0.0)]

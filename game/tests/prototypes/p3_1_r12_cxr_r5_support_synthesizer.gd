@@ -16,7 +16,7 @@ const MAX_CONSTRAINT_LINES_PER_PAIR_REGION: int = 256
 const FROZEN_CROSS_SQUARED_CUTOFF: float = 1.0e-12
 const SHA256_EMPTY_BYTES: String = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
-func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = []) -> Dictionary:
+func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = [], x2_target_pairs: Array = [], enumerate_all_critical_vertices: bool = false) -> Dictionary:
 	var started_usec: int = Time.get_ticks_usec()
 	var limits: Dictionary = realizer.call("_cxr_limits")
 	var cutoff: float = float(limits.get("cross_squared_cutoff", NAN))
@@ -146,13 +146,14 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 					for pair_j in range(pair_i + 1, boundary_ids.size()):
 						var id_a: String = boundary_ids[pair_i]
 						var id_b: String = boundary_ids[pair_j]
+						if enumerate_all_critical_vertices and not _x2_pair_is_target(id_a, id_b, x2_target_pairs): continue
 						if not vertex_positions.has(id_a) or not vertex_positions.has(id_b): continue
 						var a: Vector3 = vertex_positions[id_a]
 						var b: Vector3 = vertex_positions[id_b]
 						var root_a_2d: Vector2 = Vector2(projected_positions.get(id_a, Vector2.ZERO))
 						var root_b_2d: Vector2 = Vector2(projected_positions.get(id_b, Vector2.ZERO))
 						var region_key: String = "%s|%06d|%02d|%02d|%s|%s" % [str(tet_data.global_cell), tet_index, facet_index, domain_index, id_a, id_b]
-						var region_result: Dictionary = _triangle_first_critical_candidates(clipped, polygon, root_a_2d, root_b_2d, a, b, source_triangle_2d, world_triangle, arc_segments, feasible_region_count, region_key, critical_candidate_count)
+						var region_result: Dictionary = _triangle_first_critical_candidates(clipped, polygon, root_a_2d, root_b_2d, a, b, source_triangle_2d, world_triangle, arc_segments, feasible_region_count, region_key, critical_candidate_count, enumerate_all_critical_vertices)
 						if not bool(region_result.get("valid", false)):
 							cap_reason = String(region_result.get("reason", "R5_FEASIBLE_REGION_INVALID"))
 							break
@@ -273,12 +274,14 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		"eligible_boundary_source_pairs": possible_source_pairs,
 		"owner_origin_count": source_origins.size(),
 		"owner_origin_triangle_ids": source_origins.map(func(row: Dictionary) -> String: return String(row.get("id", ""))),
-		"candidate_model": "FINITE_CONSTRAINT_ARRANGEMENT_CRITICAL_POINTS",
-		"max_critical_candidates_per_pair_region": MAX_CRITICAL_CANDIDATES_PER_PAIR_REGION,
+		"candidate_model": "COMPLETE_CONSTRAINT_ARRANGEMENT_VERTICES_PLUS_INTERIOR_WITNESSES" if enumerate_all_critical_vertices else "FINITE_CONSTRAINT_ARRANGEMENT_CRITICAL_POINTS",
+		"x2_targeted_continuous_completion": enumerate_all_critical_vertices,
+		"x2_target_pairs": x2_target_pairs.duplicate(true) if enumerate_all_critical_vertices else [],
+		"max_critical_candidates_per_pair_region": "ALL_REGION_VERTICES_WITH_GLOBAL_TOTAL_CAP" if enumerate_all_critical_vertices else MAX_CRITICAL_CANDIDATES_PER_PAIR_REGION,
 		"max_critical_candidates_total": MAX_CRITICAL_CANDIDATES_TOTAL,
 		"max_constraint_lines_per_pair_region": MAX_CONSTRAINT_LINES_PER_PAIR_REGION,
 		"max_feasible_region_components": MAX_FEASIBLE_REGION_COMPONENTS,
-		"limits": {"max_tetrahedra": MAX_TETRAHEDRA, "max_zero_facets": MAX_ZERO_FACETS, "max_clip_fragments": MAX_CLIP_FRAGMENTS, "max_raw_supports": MAX_RAW_SUPPORTS, "max_supports": MAX_SUPPORTS, "max_synthesis_usec": MAX_SYNTHESIS_USEC, "max_source_pairs": MAX_BOUNDARY_SOURCE_PAIRS, "max_critical_candidates_per_pair_region": MAX_CRITICAL_CANDIDATES_PER_PAIR_REGION, "max_critical_candidates_total": MAX_CRITICAL_CANDIDATES_TOTAL, "max_constraint_lines_per_pair_region": MAX_CONSTRAINT_LINES_PER_PAIR_REGION, "max_feasible_region_components": MAX_FEASIBLE_REGION_COMPONENTS, "existing_cross_squared_cutoff": cutoff, "existing_max_support_distance": max_support_distance}
+		"limits": {"max_tetrahedra": MAX_TETRAHEDRA, "max_zero_facets": MAX_ZERO_FACETS, "max_clip_fragments": MAX_CLIP_FRAGMENTS, "max_raw_supports": MAX_RAW_SUPPORTS, "max_supports": MAX_SUPPORTS, "max_synthesis_usec": MAX_SYNTHESIS_USEC, "max_source_pairs": MAX_BOUNDARY_SOURCE_PAIRS, "max_critical_candidates_per_pair_region": "ALL_REGION_VERTICES_WITH_GLOBAL_TOTAL_CAP" if enumerate_all_critical_vertices else MAX_CRITICAL_CANDIDATES_PER_PAIR_REGION, "max_critical_candidates_total": MAX_CRITICAL_CANDIDATES_TOTAL, "max_constraint_lines_per_pair_region": MAX_CONSTRAINT_LINES_PER_PAIR_REGION, "max_feasible_region_components": MAX_FEASIBLE_REGION_COMPONENTS, "existing_cross_squared_cutoff": cutoff, "existing_max_support_distance": max_support_distance}
 	}
 
 func _clip_linear_interval(lower: float, upper: float, value_at_lower: float, value_at_upper: float) -> Dictionary:
@@ -581,7 +584,7 @@ func _project_required_arc_segments(required_arcs: Array, context: Dictionary) -
 	)
 	return {"valid": true, "segments": segments}
 
-func _triangle_first_critical_candidates(clipped: Array[Vector2], cavity: Array[Vector2], root_a: Vector2, root_b: Vector2, root_a_world: Vector3, root_b_world: Vector3, source_2d: Array[Vector2], source_world: Array[Vector3], arc_segments: Array[Dictionary], prior_region_count: int, region_source_key: String, prior_candidate_count: int = 0) -> Dictionary:
+func _triangle_first_critical_candidates(clipped: Array[Vector2], cavity: Array[Vector2], root_a: Vector2, root_b: Vector2, root_a_world: Vector3, root_b_world: Vector3, source_2d: Array[Vector2], source_world: Array[Vector3], arc_segments: Array[Dictionary], prior_region_count: int, region_source_key: String, prior_candidate_count: int = 0, enumerate_all_critical_vertices: bool = false) -> Dictionary:
 	var lines: Array[Dictionary] = []
 	_add_constraint_line(lines, root_a, root_b, "ROOT_PAIR")
 	for edge_index in range(cavity.size()):
@@ -623,7 +626,8 @@ func _triangle_first_critical_candidates(clipped: Array[Vector2], cavity: Array[
 	for region_index in range(regions.size()):
 		var region: Array[Vector2] = regions[region_index]
 		var region_id: String = "R5REG_" + Core.sha256((region_source_key + "|" + str(region_index) + "|" + _polygon_identity(region)).to_utf8_buffer()).substr(0, 24)
-		all_candidates.append_array(_critical_candidates_for_region(region, cavity, source_2d, source_world, root_a_world, root_b_world, arc_segments, region_id))
+		var region_candidates: Array[Dictionary] = _critical_candidates_for_region(region, cavity, source_2d, source_world, root_a_world, root_b_world, arc_segments, region_id, enumerate_all_critical_vertices)
+		all_candidates.append_array(region_candidates)
 		if prior_candidate_count + all_candidates.size() > MAX_CRITICAL_CANDIDATES_TOTAL:
 			return {"valid": false, "reason": "R5_MAX_CRITICAL_CANDIDATES_TOTAL"}
 	return {"valid": true, "region_count": regions.size(), "constraint_line_count": lines.size(), "candidates": all_candidates}
@@ -695,7 +699,7 @@ func _sanitize_polygon(points: Array[Vector2]) -> Array[Vector2]:
 	if result.size() > 1 and result[0] == result[result.size() - 1]: result.remove_at(result.size() - 1)
 	return result
 
-func _critical_candidates_for_region(region: Array[Vector2], cavity: Array[Vector2], source_2d: Array[Vector2], source_world: Array[Vector3], root_a_world: Vector3, root_b_world: Vector3, arc_segments: Array[Dictionary], region_id: String) -> Array[Dictionary]:
+func _critical_candidates_for_region(region: Array[Vector2], cavity: Array[Vector2], source_2d: Array[Vector2], source_world: Array[Vector3], root_a_world: Vector3, root_b_world: Vector3, arc_segments: Array[Dictionary], region_id: String, enumerate_all_critical_vertices: bool = false) -> Array[Dictionary]:
 	var center: Vector2 = _polygon_centroid(region)
 	var points: Array[Dictionary] = []
 	var raw_points: Array[Dictionary] = [{"position": center, "method": "FEASIBLE_REGION_CENTROID"}]
@@ -706,31 +710,42 @@ func _critical_candidates_for_region(region: Array[Vector2], cavity: Array[Vecto
 		raw_points.append({"position": edge_a.lerp(edge_b, 0.5), "method": "FEASIBLE_REGION_EDGE_MIDPOINT"})
 	var unique: Dictionary = {}
 	for row in raw_points:
-		var point: Vector2 = Vector2(row.position)
-		if not _point_strictly_inside(point, cavity):
-			var inset: Dictionary = _nearest_strict_interior_point(point, center, cavity)
-			if not bool(inset.get("valid", false)): continue
-			point = Vector2(inset.position)
-		if not _point_strictly_inside(point, cavity): continue
-		var identity: String = var_to_bytes(point).hex_encode()
-		if unique.has(identity):
-			var prior_roles: Array = unique[identity].get("critical_roles", [])
-			_append_critical_role(prior_roles, String(row.method))
-			unique[identity]["critical_roles"] = prior_roles
-			continue
-		var mapped: Dictionary = _map_projected_point(point, source_2d, source_world)
-		if not bool(mapped.get("valid", false)): continue
-		var clearance: float = _constraint_clearance(point, region, arc_segments)
-		var position: Vector3 = Vector3(mapped.world)
-		var cross_squared: float = _support_pair_objective(root_a_world, root_b_world, position)
-		if not is_finite(cross_squared): continue
-		unique[identity] = {"position": point, "world": position, "clearance": clearance, "method": String(row.method), "critical_roles": [String(row.method)], "cross_squared": cross_squared, "region_id": region_id}
+		var variants: Array[Dictionary] = [row.duplicate(true)]
+		if enumerate_all_critical_vertices and not _point_strictly_inside(Vector2(row.position), region):
+			var region_inset: Dictionary = _nearest_strict_interior_point(Vector2(row.position), center, region)
+			if bool(region_inset.get("valid", false)):
+				variants.append({"position": Vector2(region_inset.position), "method": String(row.method) + "_STRICT_REGION_INTERIOR"})
+		for variant in variants:
+			var point: Vector2 = Vector2(variant.position)
+			var strict_domain: Array[Vector2] = cavity
+			if not _point_strictly_inside(point, strict_domain):
+				var inset: Dictionary = _nearest_strict_interior_point(point, center, strict_domain)
+				if not bool(inset.get("valid", false)): continue
+				point = Vector2(inset.position)
+			if not _point_strictly_inside(point, strict_domain) or not _point_strictly_inside(point, cavity): continue
+			var identity: String = var_to_bytes(point).hex_encode()
+			if unique.has(identity):
+				var prior_roles: Array = unique[identity].get("critical_roles", [])
+				_append_critical_role(prior_roles, String(variant.method))
+				unique[identity]["critical_roles"] = prior_roles
+				continue
+			var mapped: Dictionary = _map_projected_point(point, source_2d, source_world)
+			if not bool(mapped.get("valid", false)): continue
+			var clearance: float = _constraint_clearance(point, region, arc_segments)
+			var position: Vector3 = Vector3(mapped.world)
+			var cross_squared: float = _support_pair_objective(root_a_world, root_b_world, position)
+			if not is_finite(cross_squared): continue
+			unique[identity] = {"position": point, "world": position, "clearance": clearance, "method": String(variant.method), "critical_roles": [String(variant.method)], "cross_squared": cross_squared, "region_id": region_id}
 	var unique_ids: Array = unique.keys()
 	unique_ids.sort()
 	for identity in unique_ids:
 		var row: Dictionary = unique[identity]
 		points.append(row)
 	if points.is_empty(): return []
+	if enumerate_all_critical_vertices:
+		for row in points:
+			row["constraint_arrangement_region_id"] = region_id
+		return points
 	var lex_order: Array[Dictionary] = points.duplicate(true)
 	lex_order.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var pa: Vector2 = Vector2(a.position)
@@ -772,6 +787,16 @@ func _critical_candidates_for_region(region: Array[Vector2], cavity: Array[Vecto
 	for row in selected:
 		row["constraint_arrangement_region_id"] = region_id
 	return selected
+
+func _x2_pair_is_target(id_a: String, id_b: String, target_pairs: Array) -> bool:
+	var wanted: Array[String] = [id_a, id_b]
+	wanted.sort()
+	for pair_value in target_pairs:
+		if not (pair_value is Array) or pair_value.size() != 2: continue
+		var observed: Array[String] = [String(pair_value[0]), String(pair_value[1])]
+		observed.sort()
+		if observed == wanted: return true
+	return false
 
 func _add_selected_critical(selected: Array[Dictionary], selected_ids: Dictionary, row: Dictionary, method: String) -> void:
 	var identity: String = var_to_bytes(Vector2(row.position)).hex_encode()
