@@ -818,8 +818,11 @@ func _triangle_first_critical_candidates(clipped: Array[Vector2], cavity: Array[
 			return {"valid": false, "reason": "PARTIAL_LIMIT_REGION_ENUMERATION_MEMORY", "region_count": region_index, "candidates": all_candidates, "continuous_region_bounds": continuous_bounds, "arrangement_frontier": {"stage": "region_candidates", "region_index": region_index, "unvisited_region_count": regions.size() - region_index}}
 		var region: Array[Vector2] = regions[region_index]
 		var region_id: String = "R5REG_" + Core.sha256((region_source_key + "|" + str(region_index) + "|" + _polygon_identity(region)).to_utf8_buffer()).substr(0, 24)
-		var feasible_intersection: Dictionary = _strict_region_cavity_intersection(region, cavity)
-		var feasible_intersection_seeds: Array[Vector2] = feasible_intersection.get("centroids", [])
+		var feasible_intersection: Dictionary = {}
+		var feasible_intersection_seeds: Array[Vector2] = []
+		if capture_continuous_bounds:
+			feasible_intersection = _strict_region_cavity_intersection(region, cavity)
+			feasible_intersection_seeds = feasible_intersection.get("centroids", [])
 		if capture_continuous_bounds:
 			var continuous_maximum: float = -INF
 			var maximum_vertex: Vector2 = Vector2.ZERO
