@@ -82,6 +82,9 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 	var critical_candidate_count: int = 0
 	var feasible_single_support_count: int = 0
 	var candidate_triangle_rejections: Dictionary = {}
+	var x2_witness_audit: Array[Dictionary] = []
+	var x2_representability_correction_count: int = 0
+	var x2_representability_correction_failure_count: int = 0
 	var cap_reason: String = ""
 	var tetrahedra_visited: int = 0
 	var execution_id: String = OS.get_environment("R12CXR_R5_EXECUTION_ID")
@@ -169,25 +172,48 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 								cap_reason = "R5_MAX_SYNTHESIS_USEC"
 								break
 							var witness: Vector2 = Vector2(witness_record.get("position", Vector2.ZERO))
-							var witness_check: Dictionary = _validate_witness(realizer, witness, source_triangle_2d, world_triangle, tet_data, polygon, vertex_positions, source_origins, max_support_distance, residual_epsilon, barycentric_epsilon)
+							var witness_check: Dictionary = _validate_witness(realizer, witness, source_triangle_2d, world_triangle, tet_data, polygon, vertex_positions, source_origins, max_support_distance, residual_epsilon, barycentric_epsilon, enumerate_all_critical_vertices, context)
+							var x2_audit_row: Dictionary = {"boundary_pair": [id_a, id_b], "source_cell_global_lattice": tet_data.global_cell, "source_tetrahedron": tet_index, "source_facet": facet_index, "arrangement_region_id": String(witness_record.get("constraint_arrangement_region_id", "UNKNOWN_NOT_CAPTURED")), "critical_candidate_method": String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED")), "projected_position": witness, "pre_correction_world_position": witness_check.get("pre_correction_world_position", witness_check.get("world", Vector3.ZERO)), "world_position": witness_check.get("world", Vector3.ZERO), "field_residual": witness_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "barycentric_weights": witness_check.get("tetra_weights", []), "binary32_representability_correction": witness_check.get("binary32_representability_correction", {}), "witness_valid": bool(witness_check.get("valid", false)), "reason": witness_check.get("reason", "")}
+							if enumerate_all_critical_vertices and witness_check.has("binary32_representability_correction"):
+								var correction_record: Dictionary = witness_check.binary32_representability_correction
+								if bool(correction_record.get("attempted", false)):
+									if bool(correction_record.get("accepted", false)): x2_representability_correction_count += 1
+									else: x2_representability_correction_failure_count += 1
 							if not bool(witness_check.get("valid", false)):
 								var witness_reason: String = String(witness_check.get("reason", "UNKNOWN_NOT_CAPTURED"))
 								if witness_reason == "support_outside_support_distance": skipped_outside_support_distance += 1
 								elif witness_reason == "support_field_residual_invalid": skipped_field_residual += 1
 								elif witness_reason in ["support_on_cavity_boundary", "support_duplicates_topology_root"]: skipped_boundary_or_root += 1
 								_add_rejection(candidate_triangle_rejections, witness_reason)
+								if enumerate_all_critical_vertices:
+									x2_audit_row["terminal_gate"] = "FIELD_BARYCENTRIC_DISTANCE_OR_BOUNDARY_WITNESS_GATE"
+									x2_witness_audit.append(x2_audit_row)
 								continue
 							witness_check["critical_candidate_method"] = String(witness_record.get("method", "UNKNOWN_NOT_CAPTURED"))
 							var point: Vector3 = Vector3(witness_check.get("world", Vector3.ZERO))
 							var cross_squared: float = _support_pair_objective(a, b, point)
 							if not is_finite(cross_squared) or cross_squared <= cutoff:
 								_add_rejection(candidate_triangle_rejections, "candidate_cross_squared_at_or_below_frozen_cutoff")
+								if enumerate_all_critical_vertices:
+									x2_audit_row["terminal_gate"] = "FROZEN_CROSS_SQUARED_CUTOFF"
+									x2_audit_row["cross_squared"] = cross_squared
+								x2_witness_audit.append(x2_audit_row)
 								continue
 							var exact_gate: Dictionary = _single_support_pair_gate(realizer, context, id_a, id_b, point, _project(point, context), cutoff)
 							if not bool(exact_gate.get("valid", false)):
 								_add_rejection(candidate_triangle_rejections, String(exact_gate.get("reason", "UNKNOWN_NOT_CAPTURED")))
+								if enumerate_all_critical_vertices:
+									x2_audit_row["terminal_gate"] = "EXACT_SINGLE_SUPPORT_PAIR_GATE"
+									x2_audit_row["cross_squared"] = cross_squared
+									x2_audit_row["exact_gate"] = exact_gate.duplicate(true)
+									x2_witness_audit.append(x2_audit_row)
 								continue
 							feasible_single_support_count += 1
+							if enumerate_all_critical_vertices:
+								x2_audit_row["terminal_gate"] = "SINGLE_SUPPORT_PAIR_PASS"
+								x2_audit_row["cross_squared"] = cross_squared
+								x2_audit_row["exact_gate"] = exact_gate.duplicate(true)
+								x2_witness_audit.append(x2_audit_row)
 							var origin: Dictionary = witness_check.origin
 							var distance: float = float(witness_check.distance)
 							var tetra_weights: Array = witness_check.tetra_weights
@@ -260,6 +286,9 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		"critical_support_candidate_count": critical_candidate_count,
 		"single_support_triangle_feasible_candidate_count": feasible_single_support_count,
 		"single_support_triangle_rejection_histogram": candidate_triangle_rejections,
+		"x2_representability_correction_count": x2_representability_correction_count,
+		"x2_representability_correction_failure_count": x2_representability_correction_failure_count,
+		"x2_candidate_witness_audit": x2_witness_audit,
 		"raw_unique_support_count": raw_by_identity.size(),
 		"retained_support_count": ranked.size(),
 		"support_cap_hit": truncated,
@@ -943,20 +972,33 @@ func _map_projected_point(point: Vector2, source: Array[Vector2], world: Array[V
 	if not position.is_finite(): return {"valid": false, "reason": "mapped_world_point_nonfinite"}
 	return {"valid": true, "world": position, "weights": weights}
 
-func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Array[Vector2], source_world: Array[Vector3], tet_data: Dictionary, domain_polygon: Array[Vector2], topology_positions: Dictionary, source_origins: Array[Dictionary], max_distance: float, residual_epsilon: float, barycentric_epsilon: float) -> Dictionary:
+func _validate_witness(realizer: RefCounted, projected: Vector2, source_2d: Array[Vector2], source_world: Array[Vector3], tet_data: Dictionary, domain_polygon: Array[Vector2], topology_positions: Dictionary, source_origins: Array[Dictionary], max_distance: float, residual_epsilon: float, barycentric_epsilon: float, correct_binary32: bool = false, projection_context: Dictionary = {}) -> Dictionary:
 	if _point_on_polygon_boundary(projected, domain_polygon): return {"valid": false, "reason": "support_on_cavity_boundary"}
 	var mapped: Dictionary = _map_projected_point(projected, source_2d, source_world)
 	if not bool(mapped.get("valid", false)): return mapped
 	var point: Vector3 = mapped.world
-	for root_value in topology_positions.values():
-		if point.distance_squared_to(Vector3(root_value)) <= 1.0e-16: return {"valid": false, "reason": "support_duplicates_topology_root"}
-	var origin: Dictionary = _nearest_origin(point, source_origins)
-	if origin.is_empty(): return {"valid": false, "reason": "residual_owner_centroid_missing"}
-	var distance: float = point.distance_to(Vector3(origin.get("center", Vector3.ZERO)))
-	if not is_finite(distance) or distance > max_distance: return {"valid": false, "reason": "support_outside_support_distance"}
+	var pre_correction_point: Vector3 = point
 	var field_check: Dictionary = _validate_field_point(realizer, point, tet_data.get("positions", []), tet_data.get("samples", []), residual_epsilon, barycentric_epsilon)
-	if not bool(field_check.get("valid", false)): return field_check
-	return {"valid": true, "projected": projected, "world": point, "origin": origin, "distance": distance, "tetra_weights": field_check.get("weights", []), "field_residual": field_check.get("field_residual", NAN)}
+	var correction: Dictionary = {"attempted": false, "accepted": false}
+	if not bool(field_check.get("valid", false)) and correct_binary32:
+		var searched: Dictionary = realizer.call("_search_representable_zero", point, tet_data)
+		correction = {"attempted": true, "accepted": bool(searched.get("accepted", false)), "pre_correction_position": pre_correction_point, "pre_correction_field_residual": field_check.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "post_correction_position": searched.get("position", pre_correction_point), "post_correction_field_residual": searched.get("field_residual", "UNKNOWN_NOT_CAPTURED"), "coordinate_ulp_steps": searched.get("ulp_steps", [0, 0, 0]), "search_state": searched.get("search_state", "UNKNOWN_NOT_CAPTURED"), "reason": searched.get("reason", "")}
+		if bool(searched.get("accepted", false)):
+			point = Vector3(searched.get("position", pre_correction_point))
+			field_check = {"valid": true, "weights": searched.get("weights", []), "field_residual": searched.get("field_residual", NAN)}
+			projected = _project(point, projection_context)
+			if _point_on_polygon_boundary(projected, domain_polygon): return {"valid": false, "reason": "support_on_cavity_boundary", "pre_correction_world_position": pre_correction_point, "world": point, "field_residual": field_check.get("field_residual", NAN), "tetra_weights": field_check.get("weights", []), "binary32_representability_correction": correction}
+	for root_value in topology_positions.values():
+		if point.distance_squared_to(Vector3(root_value)) <= 1.0e-16: return {"valid": false, "reason": "support_duplicates_topology_root", "pre_correction_world_position": pre_correction_point, "world": point, "binary32_representability_correction": correction}
+	var origin: Dictionary = _nearest_origin(point, source_origins)
+	if origin.is_empty(): return {"valid": false, "reason": "residual_owner_centroid_missing", "pre_correction_world_position": pre_correction_point, "world": point, "binary32_representability_correction": correction}
+	var distance: float = point.distance_to(Vector3(origin.get("center", Vector3.ZERO)))
+	if not is_finite(distance) or distance > max_distance: return {"valid": false, "reason": "support_outside_support_distance", "pre_correction_world_position": pre_correction_point, "world": point, "distance": distance, "binary32_representability_correction": correction}
+	if not bool(field_check.get("valid", false)):
+		field_check["pre_correction_world_position"] = pre_correction_point
+		field_check["binary32_representability_correction"] = correction
+		return field_check
+	return {"valid": true, "projected": projected, "world": point, "origin": origin, "distance": distance, "tetra_weights": field_check.get("weights", []), "field_residual": field_check.get("field_residual", NAN), "pre_correction_world_position": pre_correction_point, "binary32_representability_correction": correction}
 
 func _nearest_origin(point: Vector3, source_origins: Array[Dictionary]) -> Dictionary:
 	var best: Dictionary = {}

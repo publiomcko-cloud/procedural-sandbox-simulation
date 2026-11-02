@@ -146,6 +146,12 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	_expect(positive_zero_up > 0.0 and negative_zero_down < 0.0, "binary32 ULP stepping handles signed zero")
 	var exact_zero: Dictionary = realizer.call("_evaluate_zero_point", Vector3(0.5, 0.0, 0.0), {"positions": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP, Vector3.BACK], "samples": [-2.0e-7, 2.0e-7, 0.0, 0.0]})
 	_expect(bool(exact_zero.get("accepted", false)) and is_equal_approx(float(exact_zero.get("field_residual", NAN)), 0.0), "R6 correction rechecks unchanged field and barycentric gates")
+	var representability_tet: Dictionary = {"positions": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP, Vector3.BACK], "samples": [-4.0, 4.0, 0.0, 0.0]}
+	var uncorrected: Dictionary = realizer.call("_evaluate_zero_point", Vector3(0.49999994, 0.0, 0.0), representability_tet)
+	var corrected: Dictionary = realizer.call("_search_representable_zero", Vector3(0.49999994, 0.0, 0.0), representability_tet)
+	_expect(not bool(uncorrected.get("accepted", false)) and bool(corrected.get("accepted", false)), "R6 bounded same-tetra ULP correction recovers an otherwise rejected binary32 zero")
+	var correction_steps: Array = corrected.get("ulp_steps", [])
+	_expect(Vector3(corrected.get("position", Vector3.ZERO)) == Vector3(0.5, 0.0, 0.0) and correction_steps.size() == 3 and absi(int(correction_steps[0])) <= 2 and absi(int(correction_steps[1])) <= 2 and absi(int(correction_steps[2])) <= 2, "R6 representability correction records exact pre/post coordinate steps within the frozen plus/minus 2 ULP bound")
 	var already_valid: Array[Dictionary] = realizer.call("corrected_tetra_zero_sources", {"positions": [Vector3.ZERO, Vector3.RIGHT, Vector3.UP, Vector3.BACK], "samples": [-1.0, 1.0, 1.0, 1.0]})
 	_expect(already_valid.size() == 3 and already_valid.all(func(row: Dictionary) -> bool: return bool(row.get("accepted", false))), "R6 correction retains passing roots without searching")
 	_expect(already_valid.all(func(row: Dictionary) -> bool: return String(row.get("correction_search_state", "")) == "unchanged"), "R6 correction records unchanged passing-root provenance")
