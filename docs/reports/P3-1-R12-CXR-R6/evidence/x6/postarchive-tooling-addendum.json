@@ -1,0 +1,16 @@
+{
+  "schema": "P3.1.R12CXR.R6X.PostArchiveToolingAddendum.v1",
+  "attempt_id": "R6-X6-REPRESENTABILITY-20261102-01",
+  "scientific_attempt_consumed": false,
+  "prior_reconciled_unconsumed_tooling_events": 11,
+  "additional_events": [
+    {
+      "kind": "evidence_packaging_invocation_failure",
+      "stage": "archive preparation",
+      "detail": "The first Compress-Archive call used -LiteralPath with a wildcard and rejected the path before creating an archive. A corrected -Path invocation then created the preserved 564261-byte archive; no scientific process or evidence payload was altered."
+    }
+  ],
+  "cumulative_unconsumed_tooling_events": 12,
+  "scientific_attempts_consumed_by_addendum": 0,
+  "existing_archive_sha256": "97df9cde3f2361cb014947e688c4cf8163c27c617ce49f5f7391f9c51cc8eb25"
+}
