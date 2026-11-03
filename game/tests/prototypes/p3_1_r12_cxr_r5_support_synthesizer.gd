@@ -57,6 +57,12 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 	var stream_file: FileAccess = null
 	var stream_row_count: int = 0
 	var numeric_search_frontiers: Array[Dictionary] = []
+	var numeric_search_budget_raw: String = OS.get_environment("R12CXR_R6_BINARY32_SEARCH_BUDGET_MS")
+	var numeric_search_budget_ms: int = maxi(1, numeric_search_budget_raw.to_int()) if not numeric_search_budget_raw.is_empty() else 100
+	var numeric_schedule: Dictionary = _critical_candidate_numeric_schedule(resume_numeric_frontiers, synthesis_budget_usec, numeric_search_budget_ms * 1000, resumed_region_ids)
+	var scheduled_prior_numeric_regions: Dictionary = numeric_schedule.get("scheduled_prior_regions", {})
+	var fresh_numeric_region_quota: int = int(numeric_schedule.get("fresh_region_quota", 0))
+	var fresh_numeric_regions_scheduled: int = 0
 	if complete_support_domain:
 		if stream_evidence_path.is_empty() or FileAccess.file_exists(stream_evidence_path):
 			return {"valid": false, "reason": "R6_COMPLETE_SUPPORT_AUDIT_STREAM_PATH_MISSING_OR_EXISTS", "stream_path": stream_evidence_path}
@@ -262,6 +268,13 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 						# continuous region. Prefer its most advanced persisted seed so a
 						# region-wide guard never skips a saved frontier from another seed.
 						var resolve_region_numerically: bool = complete_support_domain and not region_numeric_search_attempted.has(numeric_region_key) and not witnessed_region_ids.has(numeric_region_key) and not resumed_region_ids.has(numeric_region_key)
+						if resolve_region_numerically:
+							var region_frontier_progress: int = _critical_candidate_region_tested(candidate_region_id, id_a, id_b, tet_data.global_cell, tet_index, facet_index, resume_numeric_frontiers)
+							if region_frontier_progress >= 0:
+								resolve_region_numerically = scheduled_prior_numeric_regions.has(numeric_region_key)
+							else:
+								resolve_region_numerically = fresh_numeric_regions_scheduled < fresh_numeric_region_quota
+								if resolve_region_numerically: fresh_numeric_regions_scheduled += 1
 						if resolve_region_numerically:
 							complete_numeric_gate = Callable(self, "_complete_binary32_candidate_gate").bind(realizer, context, id_a, id_b, candidate_region_polygon, cutoff, polygon, vertex_positions, source_origins, max_support_distance)
 						var resume_frontier: Dictionary = resume_numeric_frontiers.get(resume_key, {}) if resolve_region_numerically else {}
@@ -479,6 +492,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		"continuous_region_stream": stream_identity,
 		"resumed_region_resolution_count": resumed_region_ids.size(),
 		"resumed_region_resolution_histogram": resumed_region_resolution_histogram,
+		"numeric_search_schedule": {"region_capacity": int(numeric_schedule.get("region_capacity", 0)), "prior_frontier_region_count": int(numeric_schedule.get("prior_frontier_region_count", 0)), "prior_region_quota": int(numeric_schedule.get("prior_region_quota", 0)), "fresh_region_quota": fresh_numeric_region_quota, "scheduled_prior_region_keys": scheduled_prior_numeric_regions.keys(), "fresh_regions_scheduled": fresh_numeric_regions_scheduled},
 		"execution_state": "COMPLETE" if cap_reason.is_empty() and not truncated else "PARTIAL_LIMIT" if complete_support_domain else "PARTIAL",
 		"enumeration_frontier": enumeration_frontier,
 		"numeric_search_frontier": numeric_search_frontier,
@@ -1156,10 +1170,37 @@ func _critical_candidate_region_tested(region_id: String, id_a: String, id_b: St
 		var frontier: Dictionary = frontier_value
 		if String(frontier.get("arrangement_region_id", "")) != region_id: continue
 		if JSON.stringify(frontier.get("boundary_pair", [])) != JSON.stringify(pair): continue
-		if JSON.stringify(frontier.get("source_cell_global_lattice", [])) != JSON.stringify([global_cell.x, global_cell.y, global_cell.z]): continue
+		var frontier_cell: Array = frontier.get("source_cell_global_lattice", [])
+		if frontier_cell.size() != 3 or Vector3i(roundi(float(frontier_cell[0])), roundi(float(frontier_cell[1])), roundi(float(frontier_cell[2]))) != global_cell: continue
 		if int(frontier.get("source_tetrahedron", -1)) != tet_index or int(frontier.get("source_facet", -1)) != facet_index: continue
 		maximum_tested = maxi(maximum_tested, maxi(0, int(frontier.get("tested_triples", 0))))
 	return maximum_tested
+
+func _critical_candidate_numeric_schedule(resume_numeric_frontiers: Dictionary, synthesis_budget_usec: int, search_budget_usec: int, resolved_regions: Dictionary) -> Dictionary:
+	var tested_by_region: Dictionary = {}
+	for frontier_value in resume_numeric_frontiers.values():
+		if typeof(frontier_value) != TYPE_DICTIONARY: continue
+		var frontier: Dictionary = frontier_value
+		var region_id: String = String(frontier.get("arrangement_region_id", ""))
+		var pair: Array = frontier.get("boundary_pair", [])
+		var cell: Array = frontier.get("source_cell_global_lattice", [])
+		if region_id.is_empty() or pair.size() != 2 or cell.size() != 3: continue
+		var key: String = _region_resume_key(region_id, String(pair[0]), String(pair[1]), Vector3i(roundi(float(cell[0])), roundi(float(cell[1])), roundi(float(cell[2]))), int(frontier.get("source_tetrahedron", -1)), int(frontier.get("source_facet", -1)))
+		if resolved_regions.has(key): continue
+		tested_by_region[key] = maxi(int(tested_by_region.get(key, -1)), maxi(0, int(frontier.get("tested_triples", 0))))
+	var region_keys: Array = tested_by_region.keys()
+	region_keys.sort_custom(func(left: String, right: String) -> bool:
+		var left_tested: int = int(tested_by_region[left])
+		var right_tested: int = int(tested_by_region[right])
+		if left_tested != right_tested: return left_tested < right_tested
+		return left < right
+	)
+	var region_capacity: int = maxi(1, floori(float(synthesis_budget_usec) / float(maxi(1, search_budget_usec))))
+	var prior_region_quota: int = 0 if region_keys.is_empty() else maxi(1, region_capacity / 2)
+	var fresh_region_quota: int = region_capacity - prior_region_quota
+	var scheduled_prior_regions: Dictionary = {}
+	for index in range(mini(prior_region_quota, region_keys.size())): scheduled_prior_regions[String(region_keys[index])] = true
+	return {"region_capacity": region_capacity, "prior_frontier_region_count": region_keys.size(), "prior_region_quota": prior_region_quota, "fresh_region_quota": fresh_region_quota, "scheduled_prior_regions": scheduled_prior_regions}
 
 func _add_selected_critical(selected: Array[Dictionary], selected_ids: Dictionary, row: Dictionary, method: String) -> void:
 	var identity: String = var_to_bytes(Vector2(row.position)).hex_encode()

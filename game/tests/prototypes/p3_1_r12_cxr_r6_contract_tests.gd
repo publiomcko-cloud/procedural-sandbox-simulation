@@ -198,10 +198,16 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	var low_progress_candidate: Dictionary = {"constraint_arrangement_region_id": "region-low", "method": "FEASIBLE_REGION_CENTROID", "position": Vector2(0.25, 0.5)}
 	var high_progress_candidate: Dictionary = {"constraint_arrangement_region_id": "region-high", "method": "FEASIBLE_REGION_CENTROID", "position": Vector2(0.25, 0.5)}
 	var progress_frontiers: Dictionary = {
-		"low": {"arrangement_region_id": "region-low", "boundary_pair": ["edge:a", "edge:b"], "source_cell_global_lattice": [60, 8, 25], "source_tetrahedron": 2, "source_facet": 1, "tested_triples": 10},
-		"high": {"arrangement_region_id": "region-high", "boundary_pair": ["edge:a", "edge:b"], "source_cell_global_lattice": [60, 8, 25], "source_tetrahedron": 2, "source_facet": 1, "tested_triples": 20}
+		"low": {"arrangement_region_id": "region-low", "boundary_pair": ["edge:a", "edge:b"], "source_cell_global_lattice": [60.0, 8.0, 25.0], "source_tetrahedron": 2, "source_facet": 1, "tested_triples": 10},
+		"high": {"arrangement_region_id": "region-high", "boundary_pair": ["edge:a", "edge:b"], "source_cell_global_lattice": [60.0, 8.0, 25.0], "source_tetrahedron": 2, "source_facet": 1, "tested_triples": 20}
 	}
 	_expect(bool(synthesizer.call("_critical_candidate_resume_before", low_progress_candidate, high_progress_candidate, "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, progress_frontiers)), "R6-Y schedules the least-advanced continuous region first to prevent frontier starvation")
+	_expect(int(synthesizer.call("_critical_candidate_region_tested", "region-low", "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, progress_frontiers)) == 10, "R6-Y matches frontier region identity across JSON integer and float cell encodings")
+	var numeric_schedule: Dictionary = synthesizer.call("_critical_candidate_numeric_schedule", progress_frontiers, 20000000, 10000000, {})
+	var scheduled_prior_regions: Dictionary = numeric_schedule.get("scheduled_prior_regions", {})
+	var low_region_key: String = synthesizer.call("_region_resume_key", "region-low", "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1)
+	var high_region_key: String = synthesizer.call("_region_resume_key", "region-high", "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1)
+	_expect(scheduled_prior_regions.has(low_region_key) and not scheduled_prior_regions.has(high_region_key) and int(numeric_schedule.get("fresh_region_quota", -1)) == 1, "R6-Y allocates budget to the least-advanced saved region and reserves capacity for fresh regions")
 	var one_up: float = realizer.call("_step_binary32", 1.0, 1)
 	var one_down: float = realizer.call("_step_binary32", 1.0, -1)
 	var negative_up: float = realizer.call("_step_binary32", -1.0, 1)
