@@ -552,11 +552,23 @@ func _test_r6_unbounded_frozen_graph_solver() -> void:
 	_expect(String(unsat.get("status", "")) == "UNSAT_COMPLETE" and bool(unsat.get("search_exhaustive", false)), "R6-F distinguishes a fully explored synthetic finite-graph UNSAT")
 	var zero_obligation: Dictionary = unsat.get("first_zero_candidate_obligation", {})
 	var zero_edge_key: String = String(zero_obligation.get("edge_key", ""))
-	var zero_boundary_row: Dictionary = context.boundary_edge_map.get(zero_edge_key, {})
 	_expect(not zero_obligation.is_empty() and not zero_edge_key.is_empty() and String(zero_obligation.get("from_id", "")) != String(zero_obligation.get("to_id", "")), "R6-Y solver preserves the exact directed edge obligation that lost all compatible candidates")
-	_expect(not zero_boundary_row.is_empty() and String(zero_obligation.get("from_id", "")) == String(zero_boundary_row.get("a", "")) and String(zero_obligation.get("to_id", "")) == String(zero_boundary_row.get("b", "")), "R6-Y serializes boundary zero-option endpoints from the authoritative boundary edge map")
-	_expect(String(zero_obligation.get("directed_edge_key", "")) == _fixture_directed_key(String(zero_boundary_row.get("a", "")), String(zero_boundary_row.get("b", ""))), "R6-Y serialized zero-option directed key matches authoritative boundary orientation")
 	_expect(int(zero_obligation.get("compatible_candidate_option_count_after_state_filters", -1)) == 0 and unsat.get("zero_candidate_obligation_edge_histogram", {}).size() > 0, "R6-Y distinguishes complete-graph edge options from zero options after selected-state constraints")
+
+	var boundary_incomplete: Array[Dictionary] = graph.duplicate(true)
+	for index in range(boundary_incomplete.size()):
+		if String(boundary_incomplete[index].triangle_id) == "syn-outer-0":
+			boundary_incomplete.remove_at(index)
+			break
+	var boundary_unsat_limits: Dictionary = limits.duplicate(true)
+	boundary_unsat_limits.expected_candidate_triangles = boundary_incomplete.size()
+	var boundary_unsat: Dictionary = solver.call("solve", context, boundary_incomplete, null, boundary_unsat_limits, validator)
+	var boundary_zero: Dictionary = boundary_unsat.get("first_zero_candidate_obligation", {})
+	var boundary_zero_edge_key: String = String(boundary_zero.get("edge_key", ""))
+	var authoritative_boundary_row: Dictionary = context.boundary_edge_map.get(boundary_zero_edge_key, {})
+	_expect(String(boundary_unsat.get("status", "")) == "UNSAT_COMPLETE" and String(boundary_zero.get("kind", "")) == "boundary", "R6-Y dedicated fixture produces a boundary zero-option obligation")
+	_expect(not authoritative_boundary_row.is_empty() and String(boundary_zero.get("from_id", "")) == String(authoritative_boundary_row.get("a", "")) and String(boundary_zero.get("to_id", "")) == String(authoritative_boundary_row.get("b", "")), "R6-Y serializes boundary zero-option endpoints from the authoritative boundary edge map")
+	_expect(String(boundary_zero.get("directed_edge_key", "")) == _fixture_directed_key(String(authoritative_boundary_row.get("a", "")), String(authoritative_boundary_row.get("b", ""))), "R6-Y serialized zero-option directed key matches authoritative boundary orientation")
 	var disconnected_context: Dictionary = context.duplicate(true)
 	disconnected_context["global_arc_map"] = [{"arc_id": "unreachable", "root_ids": ["B0", "X16"]}]
 	var topology_unsat: Dictionary = solver.call("solve", disconnected_context, graph, null, limits, validator)
