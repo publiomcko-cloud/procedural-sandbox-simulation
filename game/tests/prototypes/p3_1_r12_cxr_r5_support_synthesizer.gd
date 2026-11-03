@@ -27,7 +27,7 @@ func _boundary_source_domain_gate(polygon: Array[Vector2], boundary_ids: Array[S
 		return {"valid": false, "reason": "cavity_polygon_or_boundary_invalid", "polygon_vertex_count": polygon.size(), "boundary_vertex_count": boundary_ids.size(), "possible_source_pairs": pair_count, "max_source_pairs": max_source_pairs}
 	return {"valid": true, "boundary_vertex_count": boundary_ids.size(), "possible_source_pairs": pair_count, "max_source_pairs": max_source_pairs}
 
-func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = [], x2_target_pairs: Array = [], enumerate_all_critical_vertices: bool = false, max_boundary_source_pairs: int = MAX_BOUNDARY_SOURCE_PAIRS, directed_axis_bracket: bool = false, complete_support_domain: bool = false, stream_evidence_path: String = "", resume_region_states: Dictionary = {}, resume_numeric_frontiers: Dictionary = {}) -> Dictionary:
+func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionary, context: Dictionary, residual_triangles: Array, cavity_id: String, required_arcs: Array = [], x2_target_pairs: Array = [], enumerate_all_critical_vertices: bool = false, max_boundary_source_pairs: int = MAX_BOUNDARY_SOURCE_PAIRS, directed_axis_bracket: bool = false, complete_support_domain: bool = false, stream_evidence_path: String = "", resume_region_states: Dictionary = {}, resume_numeric_frontiers: Dictionary = {}, priority_boundary_pairs: Array = []) -> Dictionary:
 	var started_usec: int = Time.get_ticks_usec()
 	var synthesis_budget_usec: int = MAX_SYNTHESIS_USEC
 	if complete_support_domain:
@@ -59,7 +59,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 	var numeric_search_frontiers: Array[Dictionary] = []
 	var numeric_search_budget_raw: String = OS.get_environment("R12CXR_R6_BINARY32_SEARCH_BUDGET_MS")
 	var numeric_search_budget_ms: int = maxi(1, numeric_search_budget_raw.to_int()) if not numeric_search_budget_raw.is_empty() else 100
-	var numeric_schedule: Dictionary = _critical_candidate_numeric_schedule(resume_numeric_frontiers, synthesis_budget_usec, numeric_search_budget_ms * 1000, resumed_region_ids)
+	var numeric_schedule: Dictionary = _critical_candidate_numeric_schedule(resume_numeric_frontiers, synthesis_budget_usec, numeric_search_budget_ms * 1000, resumed_region_ids, priority_boundary_pairs)
 	var scheduled_prior_numeric_regions: Dictionary = numeric_schedule.get("scheduled_prior_regions", {})
 	var fresh_numeric_region_quota: int = int(numeric_schedule.get("fresh_region_quota", 0))
 	var fresh_numeric_regions_scheduled: int = 0
@@ -201,7 +201,9 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 						var pair_a: String = boundary_ids[pair_i]
 						var pair_b: String = boundary_ids[pair_j]
 						if enumerate_all_critical_vertices and not _x2_pair_is_target(pair_a, pair_b, x2_target_pairs): continue
-						source_pairs.append({"a": pair_a, "b": pair_b, "priority": 0 if _x2_pair_is_target(pair_a, pair_b, x2_target_pairs) else 1, "key": pair_a + "|" + pair_b})
+						var required_obligation_priority: int = 0 if _x2_pair_is_target(pair_a, pair_b, priority_boundary_pairs) else 1
+						var target_pair_priority: int = 0 if _x2_pair_is_target(pair_a, pair_b, x2_target_pairs) else 1
+						source_pairs.append({"a": pair_a, "b": pair_b, "priority": required_obligation_priority * 2 + target_pair_priority, "key": pair_a + "|" + pair_b})
 				source_pairs.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
 					if int(left.priority) != int(right.priority): return int(left.priority) < int(right.priority)
 					return String(left.key) < String(right.key)
@@ -492,7 +494,7 @@ func synthesize(realizer: RefCounted, values: PackedFloat32Array, roi: Dictionar
 		"continuous_region_stream": stream_identity,
 		"resumed_region_resolution_count": resumed_region_ids.size(),
 		"resumed_region_resolution_histogram": resumed_region_resolution_histogram,
-		"numeric_search_schedule": {"region_capacity": int(numeric_schedule.get("region_capacity", 0)), "prior_frontier_region_count": int(numeric_schedule.get("prior_frontier_region_count", 0)), "prior_region_quota": int(numeric_schedule.get("prior_region_quota", 0)), "fresh_region_quota": fresh_numeric_region_quota, "scheduled_prior_region_keys": scheduled_prior_numeric_regions.keys(), "fresh_regions_scheduled": fresh_numeric_regions_scheduled},
+		"numeric_search_schedule": {"region_capacity": int(numeric_schedule.get("region_capacity", 0)), "prior_frontier_region_count": int(numeric_schedule.get("prior_frontier_region_count", 0)), "prior_region_quota": int(numeric_schedule.get("prior_region_quota", 0)), "fresh_region_quota": fresh_numeric_region_quota, "scheduled_prior_region_keys": scheduled_prior_numeric_regions.keys(), "fresh_regions_scheduled": fresh_numeric_regions_scheduled, "priority_boundary_pairs": priority_boundary_pairs},
 		"execution_state": "COMPLETE" if cap_reason.is_empty() and not truncated else "PARTIAL_LIMIT" if complete_support_domain else "PARTIAL",
 		"enumeration_frontier": enumeration_frontier,
 		"numeric_search_frontier": numeric_search_frontier,
@@ -1176,8 +1178,9 @@ func _critical_candidate_region_tested(region_id: String, id_a: String, id_b: St
 		maximum_tested = maxi(maximum_tested, maxi(0, int(frontier.get("tested_triples", 0))))
 	return maximum_tested
 
-func _critical_candidate_numeric_schedule(resume_numeric_frontiers: Dictionary, synthesis_budget_usec: int, search_budget_usec: int, resolved_regions: Dictionary) -> Dictionary:
+func _critical_candidate_numeric_schedule(resume_numeric_frontiers: Dictionary, synthesis_budget_usec: int, search_budget_usec: int, resolved_regions: Dictionary, priority_boundary_pairs: Array = []) -> Dictionary:
 	var tested_by_region: Dictionary = {}
+	var priority_by_region: Dictionary = {}
 	for frontier_value in resume_numeric_frontiers.values():
 		if typeof(frontier_value) != TYPE_DICTIONARY: continue
 		var frontier: Dictionary = frontier_value
@@ -1188,8 +1191,13 @@ func _critical_candidate_numeric_schedule(resume_numeric_frontiers: Dictionary, 
 		var key: String = _region_resume_key(region_id, String(pair[0]), String(pair[1]), Vector3i(roundi(float(cell[0])), roundi(float(cell[1])), roundi(float(cell[2]))), int(frontier.get("source_tetrahedron", -1)), int(frontier.get("source_facet", -1)))
 		if resolved_regions.has(key): continue
 		tested_by_region[key] = maxi(int(tested_by_region.get(key, -1)), maxi(0, int(frontier.get("tested_triples", 0))))
+		var is_priority_pair: bool = _x2_pair_is_target(String(pair[0]), String(pair[1]), priority_boundary_pairs)
+		priority_by_region[key] = bool(priority_by_region.get(key, false)) or is_priority_pair
 	var region_keys: Array = tested_by_region.keys()
 	region_keys.sort_custom(func(left: String, right: String) -> bool:
+		var left_priority: bool = bool(priority_by_region.get(left, false))
+		var right_priority: bool = bool(priority_by_region.get(right, false))
+		if left_priority != right_priority: return left_priority
 		var left_tested: int = int(tested_by_region[left])
 		var right_tested: int = int(tested_by_region[right])
 		if left_tested != right_tested: return left_tested < right_tested
@@ -1200,7 +1208,7 @@ func _critical_candidate_numeric_schedule(resume_numeric_frontiers: Dictionary, 
 	var fresh_region_quota: int = region_capacity - prior_region_quota
 	var scheduled_prior_regions: Dictionary = {}
 	for index in range(mini(prior_region_quota, region_keys.size())): scheduled_prior_regions[String(region_keys[index])] = true
-	return {"region_capacity": region_capacity, "prior_frontier_region_count": region_keys.size(), "prior_region_quota": prior_region_quota, "fresh_region_quota": fresh_region_quota, "scheduled_prior_regions": scheduled_prior_regions}
+	return {"region_capacity": region_capacity, "prior_frontier_region_count": region_keys.size(), "prior_region_quota": prior_region_quota, "fresh_region_quota": fresh_region_quota, "scheduled_prior_regions": scheduled_prior_regions, "priority_frontier_region_count": priority_by_region.values().filter(func(value: bool) -> bool: return value).size()}
 
 func _add_selected_critical(selected: Array[Dictionary], selected_ids: Dictionary, row: Dictionary, method: String) -> void:
 	var identity: String = var_to_bytes(Vector2(row.position)).hex_encode()

@@ -669,7 +669,7 @@ func _run() -> void:
 					_fail("r6_y1_resume_input_not_qualified", y_resume)
 					return
 			var y_stream_path: String = output_path + ".support-domain.jsonl"
-			var y_synthesis: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), y_pairs, true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, false, true, y_stream_path, y_resume.get("region_states", {}), y_resume.get("numeric_frontiers", {}))
+			var y_synthesis: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), y_pairs, true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, false, true, y_stream_path, y_resume.get("region_states", {}), y_resume.get("numeric_frontiers", {}), x4_obligations.get("target_pairs", []))
 			var y_prior_supports: Array = x4_previous_synthesis.get("supports", []).duplicate(true)
 			for resume_support in y_resume.get("supports", []): y_prior_supports.append(resume_support)
 			var y_support_merge: Dictionary = _merge_y1_support_domain_supports(y_synthesis, y_prior_supports, x4_realizer)
@@ -687,7 +687,7 @@ func _run() -> void:
 				quit(0)
 				return
 			var y_repeat_stream_path: String = output_path + ".support-domain.repeat.jsonl"
-			var y_synthesis_repeat: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), y_pairs, true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, false, true, y_repeat_stream_path, y_resume.get("region_states", {}))
+			var y_synthesis_repeat: Dictionary = Synthesizer.new().call("synthesize", x4_realizer, volume.get("values", PackedFloat32Array()), roi, x4_context, residual_fixture.get("residuals", []), String(support_fixture.get("cavity_id", "")), residual_fixture.get("arc_map", []), y_pairs, true, Synthesizer.MAX_R6X3_BOUNDARY_SOURCE_PAIRS, false, true, y_repeat_stream_path, y_resume.get("region_states", {}), {}, x4_obligations.get("target_pairs", []))
 			var y_repeat_support_merge: Dictionary = _merge_y1_support_domain_supports(y_synthesis_repeat, y_prior_supports, x4_realizer)
 			if not bool(y_repeat_support_merge.get("valid", false)):
 				_fail("r6_y1_repeat_support_union_invalid", y_repeat_support_merge)
