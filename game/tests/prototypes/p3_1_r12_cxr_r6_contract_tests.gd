@@ -188,6 +188,22 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	var resume_key: String = synthesizer.call("_numeric_resume_key", "region", "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1, "FEASIBLE_REGION_CENTROID", Vector2(0.25, 0.5))
 	var collision_key: String = synthesizer.call("_numeric_resume_key", "region", "edge:c", "edge:d", Vector3i(60, 8, 25), 2, 1, "FEASIBLE_REGION_CENTROID", Vector2(0.25, 0.5))
 	_expect(resume_key != collision_key, "R6-Y numeric resume identity includes the boundary pair and disambiguates region ID collisions")
+	var persisted_resume_key: String = R6Campaign.new().call("_y1_numeric_resume_key", "region", "edge:a", "edge:b", [60.0, 8.0, 25.0], 2, 1, "FEASIBLE_REGION_CENTROID", [0.25, 0.5])
+	_expect(persisted_resume_key == resume_key, "R6-Y persisted JSON cell coordinates canonicalize to the Vector3i resume identity")
+	var narrow_seed_key: String = synthesizer.call("_numeric_resume_key", "region", "edge:a", "edge:b", Vector3i(60, 8, 25), 0, 0, "FEASIBLE_REGION_CENTROID", Vector2(0.250171482563019, 0.0000129929949252983))
+	var persisted_narrow_seed_key: String = R6Campaign.new().call("_y1_numeric_resume_key", "region", "edge:a", "edge:b", [60.0, 8.0, 25.0], 0, 0, "FEASIBLE_REGION_CENTROID", [0.250171482563019, 0.00001299299492529])
+	_expect(persisted_narrow_seed_key == narrow_seed_key, "R6-Y persisted projected seed coordinates canonicalize through Vector2 binary32 identity")
+	var legacy_frontier: Dictionary = {"tested_triples": 2189977, "radius": 65, "dx": -14, "dy": -65, "dz": 62}
+	var affine_frontier: Dictionary = {"affine_algorithm_version": 1, "tested_triples": 5137, "radius": 1, "du": 0, "dv": -1}
+	var merged_frontier: Dictionary = R6Campaign.new().call("_merge_y1_numeric_resume_frontiers", legacy_frontier, affine_frontier)
+	_expect(int(merged_frontier.get("affine_algorithm_version", 0)) == 1 and int(merged_frontier.get("tested_triples", 0)) == 2195114 and int(merged_frontier.get("legacy_resume_frontier", {}).get("tested_triples", 0)) == 2189977, "R6-Y resume merge preserves affine progress, cumulative tests and the legacy cursor")
+	var newer_legacy: Dictionary = {"tested_triples": 2300000, "radius": 66, "dx": 0, "dy": 66, "dz": 0}
+	var reverse_merged: Dictionary = R6Campaign.new().call("_merge_y1_numeric_resume_frontiers", affine_frontier, newer_legacy)
+	_expect(int(reverse_merged.get("affine_algorithm_version", 0)) == 1 and int(reverse_merged.get("tested_triples", 0)) == 2305137 and int(reverse_merged.get("legacy_resume_frontier", {}).get("tested_triples", 0)) == 2300000, "R6-Y resume merge keeps affine cursor when a later legacy record has a larger incomparable triple count")
+	var nested_affine: Dictionary = merged_frontier.duplicate(true)
+	var latest_legacy: Dictionary = {"tested_triples": 2400000, "radius": 67, "dx": 0, "dy": 67, "dz": 0}
+	var advanced_merge: Dictionary = R6Campaign.new().call("_merge_y1_numeric_resume_frontiers", nested_affine, latest_legacy)
+	_expect(int(advanced_merge.get("tested_triples", 0)) == 2405137 and int(advanced_merge.get("legacy_resume_frontier", {}).get("tested_triples", 0)) == 2400000, "R6-Y replacing a nested legacy cursor adjusts cumulative tests without double counting affine progress")
 	var numeric_region_key: String = synthesizer.call("_region_resume_key", "region", "edge:a", "edge:b", Vector3i(60, 8, 25), 2, 1)
 	_expect(numeric_region_key != resume_key, "R6-Y region attempt identity groups seeds while exact frontier identity retains method and projected seed")
 	var resumed_candidate: Dictionary = {"constraint_arrangement_region_id": "region", "method": "ACTIVE_CONSTRAINT_TRANSITION", "position": Vector2(0.25, 0.5)}

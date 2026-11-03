@@ -1977,8 +1977,7 @@ func _load_y1_resume_state(result_path: String, expected_result_sha256: String, 
 		for frontier_key in current_state.get("numeric_frontiers", {}).keys():
 			var candidate_frontier: Dictionary = current_state.numeric_frontiers[frontier_key]
 			var existing_frontier: Dictionary = merged_numeric_frontiers.get(frontier_key, {})
-			if not merged_numeric_frontiers.has(frontier_key) or int(candidate_frontier.get("tested_triples", 0)) > int(existing_frontier.get("tested_triples", -1)):
-				merged_numeric_frontiers[frontier_key] = candidate_frontier
+			merged_numeric_frontiers[frontier_key] = _merge_y1_numeric_resume_frontiers(existing_frontier, candidate_frontier)
 		for support in current_state.get("supports", []):
 			var support_identity: String = String(support.get("binary32_position_identity", support.get("support_id", "")))
 			if not support_identity.is_empty() and not merged_supports.has(support_identity): merged_supports[support_identity] = support
@@ -2054,11 +2053,10 @@ func _load_y1_resume_state_single(result_path: String, expected_result_sha256: S
 					frontier["source_facet"] = record.get("source_facet", -1)
 					frontier["critical_candidate_method"] = record.get("critical_candidate_method", "UNKNOWN_NOT_CAPTURED")
 					frontier["seed_projected_position"] = record.get("projected_position", [])
-					var resume_key: String = JSON.stringify([region_id, String(pair[0]), String(pair[1]), cell, int(record.get("source_tetrahedron", -1)), int(record.get("source_facet", -1)), String(record.get("critical_candidate_method", "UNKNOWN_NOT_CAPTURED")), projected])
+					var resume_key: String = _y1_numeric_resume_key(region_id, String(pair[0]), String(pair[1]), cell, int(record.get("source_tetrahedron", -1)), int(record.get("source_facet", -1)), String(record.get("critical_candidate_method", "UNKNOWN_NOT_CAPTURED")), projected)
 					frontier["resume_key"] = resume_key
 					var prior_frontier: Dictionary = numeric_frontiers.get(resume_key, {})
-					if int(frontier.get("tested_triples", 0)) > int(prior_frontier.get("tested_triples", -1)):
-						numeric_frontiers[resume_key] = frontier
+					numeric_frontiers[resume_key] = _merge_y1_numeric_resume_frontiers(prior_frontier, frontier)
 			continue
 		if String(row.get("record_type", "")) != "continuous_zero_set_region_resolution": continue
 		var resolution: String = String(record.get("resolution", ""))
@@ -2081,6 +2079,37 @@ func _load_y1_resume_state_single(result_path: String, expected_result_sha256: S
 	for support_identity in resume_support_by_identity.keys(): resume_supports.append(resume_support_by_identity[support_identity])
 	var resume_metadata: Dictionary = result.get("resume_metadata", synthesis.get("resume_metadata", {}))
 	return {"valid": true, "region_states": region_states, "numeric_frontiers": numeric_frontiers, "supports": resume_supports, "metadata": {"source_result_path": result_path, "source_result_sha256": observed_result_sha256, "source_stream_path": stream_path, "source_stream_sha256": observed_stream_sha256, "prior_result_path": resume_metadata.get("source_result_path", ""), "prior_result_sha256": resume_metadata.get("source_result_sha256", ""), "prior_stream_sha256": resume_metadata.get("source_stream_sha256", ""), "resumed_region_count": region_states.size(), "resumed_resolution_histogram": resolution_counts, "resumed_numeric_frontier_count": numeric_frontiers.size(), "resumed_numeric_tested_triples": numeric_frontiers.values().reduce(func(total: int, frontier: Dictionary) -> int: return total + int(frontier.get("tested_triples", 0)), 0), "resumed_support_count": resume_supports.size(), "prior_attempt_id": result.get("attempt_id", ""), "same_scientific_attempt": true}}
+
+func _y1_numeric_resume_key(region_id: String, id_a: String, id_b: String, cell: Array, tet_index: int, facet_index: int, method: String, projected: Array) -> String:
+	# JSON numbers load as floats, but the synthesizer keys integer lattice coordinates
+	# from Vector3i. Canonicalize persisted coordinates to the same integer identity.
+	var canonical_cell: Array[int] = [int(cell[0]), int(cell[1]), int(cell[2])]
+	var projected_vector: Vector2 = Vector2(float(projected[0]), float(projected[1]))
+	var canonical_projected: Array[float] = [projected_vector.x, projected_vector.y]
+	return JSON.stringify([region_id, id_a, id_b, canonical_cell, tet_index, facet_index, method, canonical_projected])
+
+func _merge_y1_numeric_resume_frontiers(previous_value: Dictionary, incoming_value: Dictionary) -> Dictionary:
+	if previous_value.is_empty(): return incoming_value.duplicate(true)
+	var previous: Dictionary = previous_value.duplicate(true)
+	var incoming: Dictionary = incoming_value.duplicate(true)
+	var previous_is_affine: bool = int(previous.get("affine_algorithm_version", 0)) == 1
+	var incoming_is_affine: bool = int(incoming.get("affine_algorithm_version", 0)) == 1
+	if previous_is_affine or incoming_is_affine:
+		var choose_incoming: bool = incoming_is_affine and (not previous_is_affine or int(incoming.get("tested_triples", 0)) > int(previous.get("tested_triples", 0)))
+		var chosen: Dictionary = incoming if choose_incoming else previous
+		var other: Dictionary = previous if choose_incoming else incoming
+		var nested: Dictionary = chosen.get("legacy_resume_frontier", {})
+		if not other.is_empty():
+			var other_legacy: Dictionary = other.get("legacy_resume_frontier", {}) if int(other.get("affine_algorithm_version", 0)) == 1 else other
+			if not other_legacy.is_empty() and (nested.is_empty() or int(other_legacy.get("tested_triples", 0)) > int(nested.get("tested_triples", 0))):
+				nested = other_legacy
+		if not nested.is_empty():
+			var prior_nested: Dictionary = chosen.get("legacy_resume_frontier", {})
+			var affine_tested: int = int(chosen.get("tested_triples", 0)) - int(prior_nested.get("tested_triples", 0))
+			chosen["legacy_resume_frontier"] = nested
+			chosen["tested_triples"] = affine_tested + int(nested.get("tested_triples", 0))
+		return chosen
+	return incoming if int(incoming.get("tested_triples", 0)) > int(previous.get("tested_triples", 0)) else previous
 
 func _run_y1_resume_check() -> void:
 	var result_path: String = OS.get_environment("R12CXR_R6_Y1_RESUME_INPUT")
