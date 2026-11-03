@@ -342,9 +342,15 @@ func _search(selected: Array[Dictionary], selected_ids: Dictionary, edge_state: 
 			var selected_triangle_ids: Array[String] = []
 			for selected_triangle in selected: selected_triangle_ids.append(String(selected_triangle.get("triangle_id", "")))
 			selected_triangle_ids.sort()
-			var directed_key: String = _directed_key(String(chosen.get("from_id", "")), String(chosen.get("to_id", "")))
+			var serialized_from_id: String = String(chosen.get("from_id", ""))
+			var serialized_to_id: String = String(chosen.get("to_id", ""))
+			if String(chosen.get("kind", "")) == "boundary" and _boundary_edge_map.has(edge_key):
+				var authoritative_boundary_row: Dictionary = _boundary_edge_map[edge_key]
+				serialized_from_id = String(authoritative_boundary_row.get("a", ""))
+				serialized_to_id = String(authoritative_boundary_row.get("b", ""))
+			var directed_key: String = _directed_key(serialized_from_id, serialized_to_id)
 			var graph_options: Array = _edge_options.get(directed_key, [])
-			_stats.first_zero_candidate_obligation = {"kind": chosen.get("kind", "UNKNOWN_NOT_CAPTURED"), "edge_key": edge_key, "from_id": chosen.get("from_id", ""), "to_id": chosen.get("to_id", ""), "directed_edge_key": directed_key, "selected_triangle_ids": selected_triangle_ids, "edge_state_incidence": edge_state.get(edge_key, []).duplicate(true), "candidate_graph_option_count_before_state_filters": graph_options.size(), "candidate_graph_triangle_ids": graph_options.map(func(row: Dictionary) -> String: return String(row.get("triangle_id", ""))), "compatible_candidate_option_count_after_state_filters": 0}
+			_stats.first_zero_candidate_obligation = {"kind": chosen.get("kind", "UNKNOWN_NOT_CAPTURED"), "edge_key": edge_key, "from_id": serialized_from_id, "to_id": serialized_to_id, "directed_edge_key": directed_key, "selected_triangle_ids": selected_triangle_ids, "edge_state_incidence": edge_state.get(edge_key, []).duplicate(true), "candidate_graph_option_count_before_state_filters": graph_options.size(), "candidate_graph_triangle_ids": graph_options.map(func(row: Dictionary) -> String: return String(row.get("triangle_id", ""))), "compatible_candidate_option_count_after_state_filters": 0}
 		return false
 	for candidate in chosen_candidates:
 		if not _limit_hit.is_empty() or not _solution.is_empty(): return not _solution.is_empty()

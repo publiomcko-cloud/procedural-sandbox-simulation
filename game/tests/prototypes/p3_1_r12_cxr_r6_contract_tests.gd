@@ -551,7 +551,11 @@ func _test_r6_unbounded_frozen_graph_solver() -> void:
 	var unsat: Dictionary = solver.call("solve", context, incomplete, null, unsat_limits, validator)
 	_expect(String(unsat.get("status", "")) == "UNSAT_COMPLETE" and bool(unsat.get("search_exhaustive", false)), "R6-F distinguishes a fully explored synthetic finite-graph UNSAT")
 	var zero_obligation: Dictionary = unsat.get("first_zero_candidate_obligation", {})
-	_expect(not zero_obligation.is_empty() and not String(zero_obligation.get("edge_key", "")).is_empty() and String(zero_obligation.get("from_id", "")) != String(zero_obligation.get("to_id", "")), "R6-Y solver preserves the exact directed edge obligation that lost all compatible candidates")
+	var zero_edge_key: String = String(zero_obligation.get("edge_key", ""))
+	var zero_boundary_row: Dictionary = context.boundary_edge_map.get(zero_edge_key, {})
+	_expect(not zero_obligation.is_empty() and not zero_edge_key.is_empty() and String(zero_obligation.get("from_id", "")) != String(zero_obligation.get("to_id", "")), "R6-Y solver preserves the exact directed edge obligation that lost all compatible candidates")
+	_expect(not zero_boundary_row.is_empty() and String(zero_obligation.get("from_id", "")) == String(zero_boundary_row.get("a", "")) and String(zero_obligation.get("to_id", "")) == String(zero_boundary_row.get("b", "")), "R6-Y serializes boundary zero-option endpoints from the authoritative boundary edge map")
+	_expect(String(zero_obligation.get("directed_edge_key", "")) == _fixture_directed_key(String(zero_boundary_row.get("a", "")), String(zero_boundary_row.get("b", ""))), "R6-Y serialized zero-option directed key matches authoritative boundary orientation")
 	_expect(int(zero_obligation.get("compatible_candidate_option_count_after_state_filters", -1)) == 0 and unsat.get("zero_candidate_obligation_edge_histogram", {}).size() > 0, "R6-Y distinguishes complete-graph edge options from zero options after selected-state constraints")
 	var disconnected_context: Dictionary = context.duplicate(true)
 	disconnected_context["global_arc_map"] = [{"arc_id": "unreachable", "root_ids": ["B0", "X16"]}]
@@ -614,6 +618,9 @@ func _fixture_triangle(triangle_id: String, ids: Array, positions: Dictionary) -
 
 func _fixture_edge_key(a: String, b: String) -> String:
 	return a + "\u001f" + b if a < b else b + "\u001f" + a
+
+func _fixture_directed_key(a: String, b: String) -> String:
+	return a + "\u001e" + b
 
 
 
