@@ -1807,6 +1807,62 @@ func _r6_rehydrate_support_geometry(source_support: Dictionary) -> Dictionary:
 	return {"valid": true, "support": support}
 
 func _load_y1_resume_state(result_path: String, expected_result_sha256: String, expected_stream_sha256: String, attempt_id: String, expected_boundary_pairs: Array) -> Dictionary:
+	var merged_region_states: Dictionary = {}
+	var merged_numeric_frontiers: Dictionary = {}
+	var merged_supports: Dictionary = {}
+	var resolution_counts: Dictionary = {}
+	var seen_paths: Dictionary = {}
+	var current_path: String = result_path
+	var current_result_sha: String = expected_result_sha256
+	var current_stream_sha: String = expected_stream_sha256
+	var latest_metadata: Dictionary = {}
+	var first_ancestor_path: String = ""
+	while not current_path.is_empty():
+		if seen_paths.has(current_path):
+			return {"valid": false, "reason": "RESUME_CHAIN_CYCLE", "path": current_path}
+		seen_paths[current_path] = true
+		var current_state: Dictionary = _load_y1_resume_state_single(current_path, current_result_sha, current_stream_sha, attempt_id, expected_boundary_pairs)
+		if not bool(current_state.get("valid", false)):
+			return {"valid": false, "reason": "RESUME_CHAIN_SOURCE_INVALID", "prior_result_path": current_path, "prior_resume": current_state}
+		var current_metadata: Dictionary = current_state.get("metadata", {})
+		if latest_metadata.is_empty(): latest_metadata = current_metadata.duplicate(true)
+		for region_key in current_state.get("region_states", {}).keys():
+			if not merged_region_states.has(region_key): merged_region_states[region_key] = current_state.region_states[region_key]
+		for frontier_key in current_state.get("numeric_frontiers", {}).keys():
+			var candidate_frontier: Dictionary = current_state.numeric_frontiers[frontier_key]
+			var existing_frontier: Dictionary = merged_numeric_frontiers.get(frontier_key, {})
+			if not merged_numeric_frontiers.has(frontier_key) or int(candidate_frontier.get("tested_triples", 0)) > int(existing_frontier.get("tested_triples", -1)):
+				merged_numeric_frontiers[frontier_key] = candidate_frontier
+		for support in current_state.get("supports", []):
+			var support_identity: String = String(support.get("binary32_position_identity", support.get("support_id", "")))
+			if not support_identity.is_empty() and not merged_supports.has(support_identity): merged_supports[support_identity] = support
+		var node_bytes: PackedByteArray = FileAccess.get_file_as_bytes(current_path)
+		var node_value: Variant = JSON.parse_string(node_bytes.get_string_from_utf8().replace(String.chr(31), "\\u001f").replace(String.chr(30), "\\u001e"))
+		if typeof(node_value) != TYPE_DICTIONARY:
+			return {"valid": false, "reason": "RESUME_CHAIN_SOURCE_SCHEMA_INVALID", "path": current_path}
+		var node_result: Dictionary = node_value
+		var node_synthesis: Dictionary = node_result.get("support_synthesis", {})
+		var node_resume: Dictionary = node_result.get("resume_metadata", node_synthesis.get("resume_metadata", {}))
+		var prior_path: String = String(node_resume.get("source_result_path", ""))
+		if prior_path.is_empty() or prior_path == current_path or not FileAccess.file_exists(prior_path): break
+		if first_ancestor_path.is_empty(): first_ancestor_path = prior_path
+		current_path = prior_path
+		current_result_sha = String(node_resume.get("source_result_sha256", ""))
+		current_stream_sha = String(node_resume.get("source_stream_sha256", ""))
+	var merged_support_array: Array = []
+	for support in merged_supports.values(): merged_support_array.append(support)
+	for region in merged_region_states.values():
+		var resolution: String = String(region.get("resolution", ""))
+		resolution_counts[resolution] = int(resolution_counts.get(resolution, 0)) + 1
+	latest_metadata["merged_prior_source_result_path"] = first_ancestor_path
+	latest_metadata["resumed_region_count"] = merged_region_states.size()
+	latest_metadata["resumed_resolution_histogram"] = resolution_counts
+	latest_metadata["resumed_numeric_frontier_count"] = merged_numeric_frontiers.size()
+	latest_metadata["resumed_numeric_tested_triples"] = merged_numeric_frontiers.values().reduce(func(total: int, frontier: Dictionary) -> int: return total + int(frontier.get("tested_triples", 0)), 0)
+	latest_metadata["resumed_support_count"] = merged_support_array.size()
+	return {"valid": true, "region_states": merged_region_states, "numeric_frontiers": merged_numeric_frontiers, "supports": merged_support_array, "metadata": latest_metadata}
+
+func _load_y1_resume_state_single(result_path: String, expected_result_sha256: String, expected_stream_sha256: String, attempt_id: String, expected_boundary_pairs: Array) -> Dictionary:
 	var result_bytes: PackedByteArray = FileAccess.get_file_as_bytes(result_path) if FileAccess.file_exists(result_path) else PackedByteArray()
 	var observed_result_sha256: String = Core.sha256(result_bytes)
 	if expected_result_sha256.length() != 64 or observed_result_sha256 != expected_result_sha256:
@@ -1875,28 +1931,10 @@ func _load_y1_resume_state(result_path: String, expected_result_sha256: String, 
 		if bool(support.get("accepted", false)) and bool(support.get("supported", false)):
 			var support_identity: String = String(support.get("binary32_position_identity", support.get("support_id", "")))
 			if not support_identity.is_empty(): resume_support_by_identity[support_identity] = support
-	var merged_prior_source: String = ""
-	var resume_metadata: Dictionary = result.get("resume_metadata", synthesis.get("resume_metadata", {}))
-	var prior_result_path: String = String(resume_metadata.get("source_result_path", ""))
-	var prior_result_sha256: String = String(resume_metadata.get("source_result_sha256", ""))
-	var prior_stream_sha256: String = String(resume_metadata.get("source_stream_sha256", ""))
-	if not prior_result_path.is_empty() and prior_result_path != result_path and FileAccess.file_exists(prior_result_path):
-		var prior_resume: Dictionary = _load_y1_resume_state(prior_result_path, prior_result_sha256, prior_stream_sha256, attempt_id, expected_boundary_pairs)
-		if not bool(prior_resume.get("valid", false)):
-			return {"valid": false, "reason": "RESUME_CHAIN_SOURCE_INVALID", "prior_result_path": prior_result_path, "prior_resume": prior_resume}
-		merged_prior_source = prior_result_path
-		for prior_key in prior_resume.get("region_states", {}).keys():
-			if not region_states.has(prior_key): region_states[prior_key] = prior_resume.region_states[prior_key]
-		for prior_key in prior_resume.get("numeric_frontiers", {}).keys():
-			var prior_frontier: Dictionary = prior_resume.numeric_frontiers[prior_key]
-			var current_frontier: Dictionary = numeric_frontiers.get(prior_key, {})
-			if int(prior_frontier.get("tested_triples", 0)) > int(current_frontier.get("tested_triples", -1)): numeric_frontiers[prior_key] = prior_frontier
-		for prior_support in prior_resume.get("supports", []):
-			var prior_identity: String = String(prior_support.get("binary32_position_identity", prior_support.get("support_id", "")))
-			if not prior_identity.is_empty() and not resume_support_by_identity.has(prior_identity): resume_support_by_identity[prior_identity] = prior_support
 	var resume_supports: Array = []
 	for support_identity in resume_support_by_identity.keys(): resume_supports.append(resume_support_by_identity[support_identity])
-	return {"valid": true, "region_states": region_states, "numeric_frontiers": numeric_frontiers, "supports": resume_supports, "metadata": {"source_result_path": result_path, "source_result_sha256": observed_result_sha256, "source_stream_path": stream_path, "source_stream_sha256": observed_stream_sha256, "merged_prior_source_result_path": merged_prior_source, "resumed_region_count": region_states.size(), "resumed_resolution_histogram": resolution_counts, "resumed_numeric_frontier_count": numeric_frontiers.size(), "resumed_numeric_tested_triples": numeric_frontiers.values().reduce(func(total: int, frontier: Dictionary) -> int: return total + int(frontier.get("tested_triples", 0)), 0), "resumed_support_count": resume_supports.size(), "prior_attempt_id": result.get("attempt_id", ""), "same_scientific_attempt": true}}
+	var resume_metadata: Dictionary = result.get("resume_metadata", synthesis.get("resume_metadata", {}))
+	return {"valid": true, "region_states": region_states, "numeric_frontiers": numeric_frontiers, "supports": resume_supports, "metadata": {"source_result_path": result_path, "source_result_sha256": observed_result_sha256, "source_stream_path": stream_path, "source_stream_sha256": observed_stream_sha256, "prior_result_path": resume_metadata.get("source_result_path", ""), "prior_result_sha256": resume_metadata.get("source_result_sha256", ""), "prior_stream_sha256": resume_metadata.get("source_stream_sha256", ""), "resumed_region_count": region_states.size(), "resumed_resolution_histogram": resolution_counts, "resumed_numeric_frontier_count": numeric_frontiers.size(), "resumed_numeric_tested_triples": numeric_frontiers.values().reduce(func(total: int, frontier: Dictionary) -> int: return total + int(frontier.get("tested_triples", 0)), 0), "resumed_support_count": resume_supports.size(), "prior_attempt_id": result.get("attempt_id", ""), "same_scientific_attempt": true}}
 
 func _run_y1_resume_check() -> void:
 	var result_path: String = OS.get_environment("R12CXR_R6_Y1_RESUME_INPUT")
