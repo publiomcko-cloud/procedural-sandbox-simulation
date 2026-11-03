@@ -1722,7 +1722,14 @@ func _r6_y1a_boundary_identity_audit(realizer: RefCounted, boundary: Dictionary,
 		if typeof(support_value) != TYPE_DICTIONARY: continue
 		var support: Dictionary = support_value
 		var support_id: String = String(support.get("support_id", ""))
-		var support_position: Vector3 = Vector3(support.get("world_position", Vector3.ZERO))
+		var support_position_value: Variant = support.get("world_position", null)
+		var support_position: Vector3 = Vector3.ZERO
+		if support_position_value is Vector3:
+			support_position = support_position_value
+		elif typeof(support_position_value) == TYPE_ARRAY and support_position_value.size() == 3:
+			support_position = Vector3(float(support_position_value[0]), float(support_position_value[1]), float(support_position_value[2]))
+		else:
+			return {"valid": false, "reason": "R6_Y1A_SUPPORT_POSITION_SCHEMA_INVALID", "support_id": support_id, "world_position": support_position_value}
 		var support_bytes: String = PackedFloat32Array([support_position.x, support_position.y, support_position.z]).to_byte_array().hex_encode()
 		if String(support.get("binary32_position_identity", "")) != support_bytes:
 			return {"valid": false, "reason": "R6_Y1A_SUPPORT_POSITION_IDENTITY_BYTES_MISMATCH", "support_id": support_id, "declared_identity": support.get("binary32_position_identity", ""), "observed_identity": support_bytes}
