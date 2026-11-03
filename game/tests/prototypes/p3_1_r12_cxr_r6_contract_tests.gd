@@ -236,14 +236,14 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	var multicoordinate_steps: Array = multicoordinate.get("ulp_steps", [])
 	_expect(not bool(multicoordinate_before.get("accepted", false)) and not bool(x_only.get("accepted", false)) and not bool(y_only.get("accepted", false)), "R6-Y binary32 fixture requires coordinated movement on multiple axes")
 	_expect(bool(multicoordinate.get("accepted", false)) and absf(float(multicoordinate.get("field_residual", INF))) <= 1.0e-7 and bool(multicoordinate.get("barycentric_gate_pass", false)), "R6-Y multicoordinate float search finds a same-tetra point under unchanged field and barycentric gates")
-	_expect(multicoordinate_steps.size() == 3 and absi(int(multicoordinate_steps[0])) == 1 and absi(int(multicoordinate_steps[1])) == 1 and String(multicoordinate.get("search_state", "")) == "MULTICOORDINATE_BINARY32_WITNESS", "R6-Y records the deterministic multiaxis float frontier and displacement")
+	_expect(multicoordinate_steps.size() == 3 and String(multicoordinate.get("search_state", "")) == "AFFINE_BINARY32_WITNESS" and int(multicoordinate.get("dependent_axis", -1)) == 0, "R6-Y records the deterministic affine binary32 frontier and dependent axis")
 	var excluded_first_witness: Vector3 = Vector3(multicoordinate.get("position", Vector3.ZERO))
 	var acceptance_gated_search: Dictionary = realizer.call("_search_representable_zero_multicoordinate", multicoordinate_origin, multicoordinate_tet, 1000000, Callable(func(candidate: Vector3) -> bool: return candidate != excluded_first_witness))
 	_expect(bool(acceptance_gated_search.get("accepted", false)) and Vector3(acceptance_gated_search.get("position", excluded_first_witness)) != excluded_first_witness and int(acceptance_gated_search.get("acceptance_gate_rejection_count", 0)) > 0, "R6-Y binary32 enumeration continues after a field-valid candidate fails the complete support acceptance gate")
 	var partial_acceptance: Dictionary = realizer.call("_search_representable_zero_multicoordinate", Vector3(0.5, 0.0, 0.0), representability_tet, 1, Callable(func(_candidate: Vector3) -> bool: return false))
 	_expect(String(partial_acceptance.get("search_state", "")) == "PARTIAL_LIMIT" and not bool(partial_acceptance.get("accepted", true)) and not bool(partial_acceptance.get("finite_domain_complete", true)), "R6-Y numeric timeout never promotes its field-valid seed to a support witness")
 	var partial_frontier: Dictionary = partial_acceptance.get("search_frontier", {})
-	_expect(partial_frontier.has("seed_ordered_float32_keys") and partial_frontier.has("tetra_aabb_minimum_ordered_float32_keys") and partial_frontier.has("tetra_aabb_maximum_ordered_float32_keys") and partial_frontier.has("tetra_aabb_axis_candidate_counts") and partial_frontier.has("minimum_radius") and partial_frontier.has("maximum_radius") and not String(partial_frontier.get("remaining_domain_definition", "")).is_empty(), "R6-Y partial evidence records the exact finite representable AABB and unvisited cursor")
+	_expect(partial_frontier.has("seed_ordered_float32_keys") and partial_frontier.has("tetra_aabb_minimum_ordered_float32_keys") and partial_frontier.has("tetra_aabb_maximum_ordered_float32_keys") and partial_frontier.has("tetra_aabb_axis_candidate_counts") and partial_frontier.has("minimum_radius") and partial_frontier.has("maximum_radius") and partial_frontier.has("affine_algorithm_version") and not String(partial_frontier.get("remaining_domain_definition", "")).is_empty(), "R6-Y partial evidence records the exact finite representable AABB and affine cursor")
 	var far_seed: Vector3 = Vector3(10.0, 10.0, 10.0)
 	var far_origin_bytes: PackedByteArray = PackedFloat32Array([far_seed.x, far_seed.y, far_seed.z]).to_byte_array()
 	var far_minimum_radius: int = 0
@@ -263,7 +263,104 @@ func _test_binary32_ulp_correction(_diagnostics: RefCounted) -> void:
 	_expect(String(far_seed_partial.get("search_state", "")) == "PARTIAL_LIMIT" and int(far_seed_partial.get("search_frontier", {}).get("radius", -1)) == far_minimum_radius and far_minimum_radius > 0 and int(far_seed_partial.get("tested_triples", -1)) == 0, "R6-Y skips analytically empty float32 shells up to the nearest tetra-AABB representable coordinate")
 	var single_point_tet: Dictionary = {"positions": [Vector3.ONE, Vector3.ONE, Vector3.ONE, Vector3.ONE], "samples": [0.0, 0.0, 0.0, 0.0]}
 	var exhausted_representation: Dictionary = realizer.call("_search_representable_zero_multicoordinate", Vector3.ONE, single_point_tet, 1000000, Callable(func(_candidate: Vector3) -> bool: return false))
-	_expect(not bool(exhausted_representation.get("accepted", false)) and bool(exhausted_representation.get("finite_domain_complete", false)) and String(exhausted_representation.get("search_state", "")) == "EXHAUSTED_NO_VALID_BINARY32_POINT_IN_TETRA_AABB", "R6-Y binary32 enumeration distinguishes complete finite AABB exhaustion from a resource frontier")
+	_expect(not bool(exhausted_representation.get("accepted", false)) and not bool(exhausted_representation.get("finite_domain_complete", true)) and String(exhausted_representation.get("search_state", "")) == "AFFINE_TETRA_SINGULAR", "R6-Y refuses to classify a singular tetra as a completed affine search")
+	var small_x: float = 1.0; var small_y: float = 1.0; var small_z: float = 1.0
+	for _step in range(8):
+		small_x = float(realizer.call("_step_binary32", small_x, 1)); small_y = float(realizer.call("_step_binary32", small_y, 1)); small_z = float(realizer.call("_step_binary32", small_z, 1))
+	var small_tet: Dictionary = {"positions": [Vector3(1.0, 1.0, 1.0), Vector3(small_x, 1.0, 1.0), Vector3(1.0, small_y, 1.0), Vector3(1.0, 1.0, small_z)], "samples": [0.0, 1.0e-6, -0.75e-6, 0.0]}
+	var affine_fixture: Dictionary = realizer.call("_derive_tetra_affine_field", small_tet)
+	var affine_coefficients: Array = affine_fixture.get("coefficients", [])
+	var affine_points: Array[Vector3] = []
+	for point_value in small_tet.positions: affine_points.append(Vector3(point_value))
+	for edge in [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]:
+		affine_points.append(Vector3(small_tet.positions[edge[0]]).lerp(Vector3(small_tet.positions[edge[1]]), 0.5))
+	affine_points.append((Vector3(small_tet.positions[0]) + Vector3(small_tet.positions[1]) + Vector3(small_tet.positions[2]) + Vector3(small_tet.positions[3])) / 4.0)
+	var affine_agreement: bool = bool(affine_fixture.get("valid", false)) and affine_coefficients.size() == 4
+	for point in affine_points:
+		var bary_eval: Dictionary = realizer.call("_evaluate_zero_point", point, small_tet)
+		var affine_value: float = float(affine_coefficients[0]) * point.x + float(affine_coefficients[1]) * point.y + float(affine_coefficients[2]) * point.z + float(affine_coefficients[3]) if affine_coefficients.size() == 4 else INF
+		if absf(float(bary_eval.get("field_residual", INF)) - affine_value) > 2.0e-10: affine_agreement = false
+	_expect(affine_agreement, "R6-Y affine coefficients match barycentric field at vertices, edge midpoints, and interior within 2e-10")
+	var epsilon_tet: Dictionary = {"positions": small_tet.positions, "samples": [0.0, 3.2e-7, 0.0, 0.0]}
+	var epsilon_inside_x: float = 1.0; var epsilon_outside_x: float = 1.0
+	for _step in range(2): epsilon_inside_x = float(realizer.call("_step_binary32", epsilon_inside_x, 1))
+	for _step in range(3): epsilon_outside_x = float(realizer.call("_step_binary32", epsilon_outside_x, 1))
+	var epsilon_inside: Dictionary = realizer.call("_evaluate_zero_point", Vector3(epsilon_inside_x, 1.0, 1.0), epsilon_tet)
+	var epsilon_outside: Dictionary = realizer.call("_evaluate_zero_point", Vector3(epsilon_outside_x, 1.0, 1.0), epsilon_tet)
+	_expect(bool(epsilon_inside.get("barycentric_gate_pass", false)) and absf(float(epsilon_inside.get("field_residual", INF))) <= 1.0e-7 and bool(epsilon_outside.get("barycentric_gate_pass", false)) and absf(float(epsilon_outside.get("field_residual", 0.0))) > 1.0e-7, "R6-Y regression distinguishes representable points just inside and outside the frozen residual epsilon")
+	var old_fixture_ids: Array[String] = []
+	var new_fixture_ids: Array[String] = []
+	var old_collect: Callable = Callable(func(point: Vector3) -> bool: old_fixture_ids.append(String(realizer.call("_position_bytes_hex", point))); return false)
+	var new_collect: Callable = Callable(func(point: Vector3) -> bool: new_fixture_ids.append(String(realizer.call("_position_bytes_hex", point))); return false)
+	var old_fixture: Dictionary = realizer.call("_search_representable_zero_multicoordinate_legacy", Vector3(1.0, 1.0, 1.0), small_tet, 100000000, old_collect)
+	var new_fixture: Dictionary = realizer.call("_search_representable_zero_multicoordinate", Vector3(1.0, 1.0, 1.0), small_tet, 100000000, new_collect)
+	old_fixture_ids.sort(); new_fixture_ids.sort()
+	_expect(bool(old_fixture.get("finite_domain_complete", false)) and bool(new_fixture.get("finite_domain_complete", false)) and old_fixture_ids == new_fixture_ids, "R6-Y affine enumerator equals legacy exhaustive binary32 accepted identities on the complete small tetra domain")
+	_expect(new_fixture_ids.size() > 1 and int(new_fixture.get("dependent_axis", -1)) == 0, "R6-Y small-domain equivalence covers multiple dependent-axis values and deterministic X tie-break")
+	var affine_partial_ids: Array[String] = []; var affine_resume_ids: Array[String] = []
+	var affine_partial_gate: Callable = Callable(func(point: Vector3) -> bool: affine_partial_ids.append(String(realizer.call("_position_bytes_hex", point))); return false)
+	var affine_resume_gate: Callable = Callable(func(point: Vector3) -> bool: affine_resume_ids.append(String(realizer.call("_position_bytes_hex", point))); return false)
+	var affine_partial: Dictionary = realizer.call("_search_representable_zero_multicoordinate", Vector3(1.0, 1.0, 1.0), small_tet, 1, affine_partial_gate)
+	var affine_resumed: Dictionary = realizer.call("_search_representable_zero_multicoordinate", Vector3(1.0, 1.0, 1.0), small_tet, 100000000, affine_resume_gate, affine_partial.get("search_frontier", {}))
+	affine_partial_ids.append_array(affine_resume_ids); affine_partial_ids.sort()
+	_expect(String(affine_partial.get("search_state", "")) == "PARTIAL_LIMIT" and bool(affine_resumed.get("finite_domain_complete", false)) and affine_partial_ids == new_fixture_ids, "R6-Y affine cursor resume exactly covers the uninterrupted accepted binary32 identities")
+	var near_axis_tet: Dictionary = {"positions": small_tet.positions, "samples": [0.0, -1.0e-6, 1.0e-9, 0.0]}
+	var near_axis_affine: Dictionary = realizer.call("_derive_tetra_affine_field", near_axis_tet)
+	var near_axis_coefficients: Array = near_axis_affine.get("coefficients", [])
+	var negative_axis_ids: Array[String] = []; var negative_affine_ids: Array[String] = []
+	var negative_axis_gate: Callable = Callable(func(point: Vector3) -> bool: negative_axis_ids.append(String(realizer.call("_position_bytes_hex", point))); return false)
+	var negative_affine_gate: Callable = Callable(func(point: Vector3) -> bool: negative_affine_ids.append(String(realizer.call("_position_bytes_hex", point))); return false)
+	var negative_axis_old: Dictionary = realizer.call("_search_representable_zero_multicoordinate_legacy", Vector3(1.0, 1.0, 1.0), near_axis_tet, 100000000, negative_axis_gate)
+	var negative_axis_new: Dictionary = realizer.call("_search_representable_zero_multicoordinate", Vector3(1.0, 1.0, 1.0), near_axis_tet, 100000000, negative_affine_gate)
+	negative_axis_ids.sort(); negative_affine_ids.sort()
+	_expect(near_axis_coefficients.size() == 4 and float(near_axis_coefficients[0]) < 0.0 and absf(float(near_axis_coefficients[0])) > 100.0 * absf(float(near_axis_coefficients[1])) and is_zero_approx(float(near_axis_coefficients[2])), "R6-Y affine fixture covers negative near-axis-aligned coefficient and an exact zero axis")
+	_expect(bool(negative_axis_old.get("finite_domain_complete", false)) and bool(negative_axis_new.get("finite_domain_complete", false)) and negative_axis_ids == negative_affine_ids, "R6-Y affine/legacy identity sets agree for the negative near-axis-aligned plane")
+	var seed_bytes: PackedByteArray = PackedFloat32Array([1.0, 1.0, 1.0]).to_byte_array()
+	var seed_keys: Array[int] = []
+	for axis in range(3): seed_keys.append(int(realizer.call("_ordered_float32_key", int(seed_bytes.decode_u32(axis * 4)))) )
+	var legacy_cursor: Dictionary = {"stage": "z_offset", "radius": 1, "dx": 0, "dy": 1, "dz": -1, "seed_ordered_float32_keys": seed_keys, "tested_triples": 0}
+	var resumed_old_ids: Array[String] = []; var resumed_new_ids: Array[String] = []
+	var resumed_old_gate: Callable = Callable(func(point: Vector3) -> bool: resumed_old_ids.append(String(realizer.call("_position_bytes_hex", point))); return false)
+	var resumed_new_gate: Callable = Callable(func(point: Vector3) -> bool: resumed_new_ids.append(String(realizer.call("_position_bytes_hex", point))); return false)
+	var resumed_old: Dictionary = realizer.call("_search_representable_zero_multicoordinate_legacy", Vector3(1.0, 1.0, 1.0), small_tet, 100000000, resumed_old_gate, legacy_cursor)
+	var resumed_new: Dictionary = realizer.call("_search_representable_zero_multicoordinate", Vector3(1.0, 1.0, 1.0), small_tet, 100000000, resumed_new_gate, legacy_cursor)
+	resumed_old_ids.sort(); resumed_new_ids.sort()
+	_expect(bool(resumed_old.get("finite_domain_complete", false)) and bool(resumed_new.get("finite_domain_complete", false)) and resumed_old_ids == resumed_new_ids and int(resumed_new.get("legacy_points_skipped", 0)) > 0, "R6-Y legacy shell frontier translates without losing or repeating accepted binary32 identities")
+	# Pinned real Y1 field/tetra sample from segment 47 (result SHA fc94cec0...); the local binary32 window is only a deterministic regression slice.
+	var real_tet: Dictionary = {"positions": [Vector3(15.0, 2.0, 6.25), Vector3(15.0, 2.25, 6.5), Vector3(15.0, 2.0, 6.5), Vector3(15.25, 2.25, 6.5)], "samples": [-0.294565767049789, 0.00994052179157734, -0.218629404902458, 0.0001123118418036]}
+	var real_seed: Vector3 = Vector3(15.2499046, 2.2499046, 6.4999046)
+	var real_window: Dictionary = real_tet.duplicate(true)
+	var real_window_min: Array[int] = []; var real_window_max: Array[int] = []
+	for value in [real_seed.x, real_seed.y, real_seed.z]:
+		var center_key: int = int(realizer.call("_ordered_float32_key_at", float(value)))
+		real_window_min.append(center_key - 2); real_window_max.append(center_key + 2)
+	real_window["binary32_window_minimum_ordered_float32_keys"] = real_window_min
+	real_window["binary32_window_maximum_ordered_float32_keys"] = real_window_max
+	var real_old_ids: Array[String] = []; var real_new_ids: Array[String] = []
+	var real_old_gate: Callable = Callable(func(point: Vector3) -> bool: real_old_ids.append(String(realizer.call("_position_bytes_hex", point))); return false)
+	var real_new_gate: Callable = Callable(func(point: Vector3) -> bool: real_new_ids.append(String(realizer.call("_position_bytes_hex", point))); return false)
+	var real_old: Dictionary = realizer.call("_search_representable_zero_multicoordinate_legacy", real_seed, real_window, 100000000, real_old_gate)
+	var real_new: Dictionary = realizer.call("_search_representable_zero_multicoordinate", real_seed, real_window, 100000000, real_new_gate)
+	real_old_ids.sort(); real_new_ids.sort()
+	var oracle_counts: Dictionary = {"total": 0, "barycentric_reject": 0, "residual_reject": 0, "accepted_before_full_gate": 0}
+	var real_min_keys: Array[int] = []; var real_max_keys: Array[int] = []
+	var real_corner_min: Vector3 = real_tet.positions[0]; var real_corner_max: Vector3 = real_tet.positions[3]
+	for axis in range(3):
+		var mins: Array[float] = [real_corner_min.x, real_corner_min.y, real_corner_min.z]
+		var maxs: Array[float] = [real_corner_max.x, real_corner_max.y, real_corner_max.z]
+		real_min_keys.append(maxi(int(realizer.call("_ordered_float32_key_at", mins[axis])), real_window_min[axis]))
+		real_max_keys.append(mini(int(realizer.call("_ordered_float32_key_at", maxs[axis])), real_window_max[axis]))
+	for x_key in range(real_min_keys[0], real_max_keys[0] + 1):
+		for y_key in range(real_min_keys[1], real_max_keys[1] + 1):
+			for z_key in range(real_min_keys[2], real_max_keys[2] + 1):
+				var oracle_point: Vector3 = Vector3(realizer.call("_float_from_ordered_key", x_key), realizer.call("_float_from_ordered_key", y_key), realizer.call("_float_from_ordered_key", z_key))
+				var oracle_eval: Dictionary = realizer.call("_evaluate_zero_point", oracle_point, real_tet)
+				oracle_counts.total += 1
+				if not bool(oracle_eval.get("barycentric_gate_pass", false)): oracle_counts.barycentric_reject += 1
+				elif not bool(oracle_eval.get("residual_gate_pass", false)): oracle_counts.residual_reject += 1
+				else: oracle_counts.accepted_before_full_gate += 1
+	_expect(bool(real_old.get("finite_domain_complete", false)) and bool(real_new.get("finite_domain_complete", false)) and real_old_ids == real_new_ids and oracle_counts.total == 125 and oracle_counts.accepted_before_full_gate == real_new_ids.size(), "R6-Y real segment-47 tetra local-window identity set agrees with exhaustive oracle; barycentric and residual rejection counts recorded")
+	print("R6_Y1B_REAL_DOMAIN_SAMPLE " + JSON.stringify({"source_result_sha256": "fc94cec0848dc395cad83d066bc488b294cd86342459e4ae74f3324aa3176a31", "source_cell_global_lattice": [60, 8, 25], "source_cell_local": [0, 4, 1], "source_tetrahedron": 4, "window_triples": oracle_counts.total, "oracle_barycentric_rejections": oracle_counts.barycentric_reject, "oracle_residual_rejections": oracle_counts.residual_reject, "oracle_field_and_barycentric_passes": oracle_counts.accepted_before_full_gate, "legacy_accepted_identity_count": real_old_ids.size(), "affine_accepted_identity_count": real_new_ids.size(), "legacy_tested": real_old.get("tested_triples", -1), "affine_tested": real_new.get("tested_triples", -1), "affine_skipped": real_new.get("affine_skipped_candidates", -1), "identity_sets_equal": real_old_ids == real_new_ids, "finite_complete": bool(real_old.get("finite_domain_complete", false)) and bool(real_new.get("finite_domain_complete", false))}))
 	var cavity_triangle: Array[Vector2] = [Vector2.ZERO, Vector2(1.0, 0.0), Vector2(0.0, 1.0)]
 	var overlapping_region: Array[Vector2] = [Vector2(0.1, 0.1), Vector2(0.7, 0.1), Vector2(0.1, 0.7)]
 	var disjoint_region: Array[Vector2] = [Vector2(2.0, 2.0), Vector2(3.0, 2.0), Vector2(2.0, 3.0)]

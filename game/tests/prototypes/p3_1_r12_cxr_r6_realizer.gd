@@ -234,7 +234,245 @@ func _float_from_ordered_key(key: int) -> float:
 ## point. Every representable triple inside the tetrahedron's coordinate AABB
 ## is visited exactly once if this finite search reaches max_radius. Resource
 ## interruption returns PARTIAL_LIMIT with the next shell/offset preserved.
+func _derive_tetra_affine_field(tet_data: Dictionary) -> Dictionary:
+	var positions: Array = tet_data.get("positions", [])
+	var samples: Array = tet_data.get("samples", [])
+	if positions.size() != 4 or samples.size() != 4:
+		return {"valid": false, "reason": "AFFINE_TETRA_SCHEMA_INVALID"}
+	var p0: Vector3 = Vector3(positions[0])
+	var a: Vector3 = Vector3(positions[1]) - p0
+	var b: Vector3 = Vector3(positions[2]) - p0
+	var c: Vector3 = Vector3(positions[3]) - p0
+	var determinant: float = a.dot(b.cross(c))
+	if not is_finite(determinant) or absf(determinant) <= 1.0e-20:
+		return {"valid": false, "reason": "AFFINE_TETRA_SINGULAR"}
+	var g1: Vector3 = b.cross(c) / determinant
+	var g2: Vector3 = c.cross(a) / determinant
+	var g3: Vector3 = a.cross(b) / determinant
+	var s0: float = float(samples[0])
+	var gradient: Vector3 = g1 * (float(samples[1]) - s0) + g2 * (float(samples[2]) - s0) + g3 * (float(samples[3]) - s0)
+	var offset: float = s0 - gradient.dot(p0)
+	if not gradient.is_finite() or not is_finite(offset):
+		return {"valid": false, "reason": "AFFINE_TETRA_COEFFICIENT_NONFINITE"}
+	var matrix_norm: float = maxf(absf(a.x) + absf(b.x) + absf(c.x), maxf(absf(a.y) + absf(b.y) + absf(c.y), absf(a.z) + absf(b.z) + absf(c.z)))
+	var inverse_norm: float = maxf(absf(g1.x) + absf(g1.y) + absf(g1.z), maxf(absf(g2.x) + absf(g2.y) + absf(g2.z), absf(g3.x) + absf(g3.y) + absf(g3.z)))
+	var condition_estimate: float = maxf(1.0, matrix_norm * inverse_norm)
+	return {"valid": true, "coefficients": [gradient.x, gradient.y, gradient.z, offset], "gradient": gradient, "offset": offset, "determinant": determinant, "condition_estimate": condition_estimate}
+
+func _ordered_float32_key_at(value: float) -> int:
+	var bytes: PackedByteArray = PackedFloat32Array([value]).to_byte_array()
+	return _ordered_float32_key(int(bytes.decode_u32(0)))
+
+func _float32_key_ceil(value: float) -> int:
+	var key: int = _ordered_float32_key_at(value)
+	if _float_from_ordered_key(key) < value: key += 1
+	return key
+
+func _float32_key_floor(value: float) -> int:
+	var key: int = _ordered_float32_key_at(value)
+	if _float_from_ordered_key(key) > value: key -= 1
+	return key
+
+func _clip_binary32_search_window(tet_data: Dictionary, minimum_keys: Array[int], maximum_keys: Array[int]) -> Dictionary:
+	var window_min: Variant = tet_data.get("binary32_window_minimum_ordered_float32_keys", null)
+	var window_max: Variant = tet_data.get("binary32_window_maximum_ordered_float32_keys", null)
+	if window_min == null and window_max == null: return {"valid": true, "empty": false, "minimum": minimum_keys, "maximum": maximum_keys}
+	if not (window_min is Array) or not (window_max is Array) or window_min.size() != 3 or window_max.size() != 3:
+		return {"valid": false, "reason": "BINARY32_SEARCH_WINDOW_SCHEMA_INVALID"}
+	var clipped_min: Array[int] = minimum_keys.duplicate()
+	var clipped_max: Array[int] = maximum_keys.duplicate()
+	for axis in range(3):
+		clipped_min[axis] = maxi(clipped_min[axis], int(window_min[axis]))
+		clipped_max[axis] = mini(clipped_max[axis], int(window_max[axis]))
+		if clipped_min[axis] > clipped_max[axis]: return {"valid": true, "empty": true, "minimum": clipped_min, "maximum": clipped_max}
+	return {"valid": true, "empty": false, "minimum": clipped_min, "maximum": clipped_max}
+
+func _affine_barycentric_interval(point: Vector3, axis: int, lower: float, upper: float, positions: Array, condition_estimate: float = 1.0) -> Dictionary:
+	var p0: Vector3 = point
+	var p1: Vector3 = point
+	if axis == 0: p0.x = 0.0; p1.x = 1.0
+	elif axis == 1: p0.y = 0.0; p1.y = 1.0
+	else: p0.z = 0.0; p1.z = 1.0
+	var weights0: Array = _tetra_barycentric(p0, positions).get("weights", [])
+	var weights1: Array = _tetra_barycentric(p1, positions).get("weights", [])
+	if weights0.size() != 4 or weights1.size() != 4:
+		return {"valid": false, "lower": lower, "upper": upper, "reason": "BARYCENTRIC_INTERVAL_UNAVAILABLE"}
+	var lo: float = lower
+	var hi: float = upper
+	# This outward guard is prefilter-only; the unchanged exact gate is still
+	# evaluated for every enumerated binary32 point.
+	var guard: float = 512.0 * 5.960464477539063e-8 * maxf(1.0, condition_estimate)
+	for index in range(4):
+		var slope: float = float(weights1[index]) - float(weights0[index])
+		var intercept: float = float(weights0[index])
+		if absf(slope) <= 1.0e-30:
+			if intercept < -R6_BARYCENTRIC_EPSILON - guard or intercept > 1.0 + R6_BARYCENTRIC_EPSILON + guard:
+				return {"valid": true, "empty": true, "lower": 1.0, "upper": 0.0}
+			continue
+		var bound_a: float = (-R6_BARYCENTRIC_EPSILON - guard - intercept) / slope
+		var bound_b: float = (1.0 + R6_BARYCENTRIC_EPSILON + guard - intercept) / slope
+		lo = maxf(lo, minf(bound_a, bound_b))
+		hi = minf(hi, maxf(bound_a, bound_b))
+		if lo > hi: return {"valid": true, "empty": true, "lower": lo, "upper": hi}
+	return {"valid": true, "empty": false, "lower": lo, "upper": hi}
+
+func _legacy_binary32_point_precedes_frontier(keys: Array[int], frontier: Dictionary) -> bool:
+	if not frontier.has("radius") or not frontier.has("dx") or not frontier.has("dy") or not frontier.has("dz"):
+		return false
+	var seed: Array = frontier.get("seed_ordered_float32_keys", [])
+	if seed.size() != 3: return false
+	var dx: int = keys[0] - int(seed[0])
+	var dy: int = keys[1] - int(seed[1])
+	var dz: int = keys[2] - int(seed[2])
+	var radius: int = maxi(absi(dx), maxi(absi(dy), absi(dz)))
+	var target_radius: int = int(frontier.radius)
+	if radius != target_radius: return radius < target_radius
+	var target_dx: int = int(frontier.dx)
+	var target_dy: int = int(frontier.dy)
+	var target_dz: int = int(frontier.dz)
+	if dx != target_dx: return dx < target_dx
+	if dy != target_dy: return dy < target_dy
+	return dz < target_dz
+
 func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dictionary, max_search_usec: int = 25000, acceptance_gate: Callable = Callable(), resume_frontier: Dictionary = {}) -> Dictionary:
+	var positions: Array = tet_data.get("positions", [])
+	if positions.size() != 4 or not original.is_finite():
+		return {"position": original, "accepted": false, "search_state": "INVALID_TETRA_DOMAIN", "finite_domain_complete": false}
+	var affine: Dictionary = _derive_tetra_affine_field(tet_data)
+	if not bool(affine.get("valid", false)):
+		var invalid: Dictionary = _evaluate_zero_point(original, tet_data)
+		invalid["search_state"] = String(affine.get("reason", "AFFINE_TETRA_INVALID")); invalid["finite_domain_complete"] = false
+		return invalid
+	var coefficients: Array = affine.coefficients
+	var gradient: Vector3 = affine.gradient
+	var coeffs: Array[float] = [float(coefficients[0]), float(coefficients[1]), float(coefficients[2])]
+	var dependent_axis: int = 0
+	for axis in range(1, 3):
+		if absf(coeffs[axis]) > absf(coeffs[dependent_axis]): dependent_axis = axis
+	if absf(coeffs[dependent_axis]) <= 1.0e-30:
+		var constant_eval: Dictionary = _evaluate_zero_point(original, tet_data)
+		constant_eval["search_state"] = "CONSTANT_FIELD_REQUIRES_EXACT_SOURCE_CLASSIFICATION"
+		constant_eval["finite_domain_complete"] = false
+		constant_eval["affine_coefficients"] = coefficients
+		return constant_eval
+	var independent_axes: Array[int] = []
+	for axis in range(3):
+		if axis != dependent_axis: independent_axes.append(axis)
+	var original_bytes: PackedByteArray = PackedFloat32Array([original.x, original.y, original.z]).to_byte_array()
+	var original_keys: Array[int] = []
+	var minimum_keys: Array[int] = [0xffffffff, 0xffffffff, 0xffffffff]
+	var maximum_keys: Array[int] = [0, 0, 0]
+	for axis in range(3): original_keys.append(_ordered_float32_key(int(original_bytes.decode_u32(axis * 4))))
+	for position_value in positions:
+		var corner: Vector3 = Vector3(position_value)
+		var values: Array[float] = [corner.x, corner.y, corner.z]
+		for axis in range(3):
+			var key: int = _ordered_float32_key_at(values[axis])
+			minimum_keys[axis] = mini(minimum_keys[axis], key); maximum_keys[axis] = maxi(maximum_keys[axis], key)
+	var clipped_window: Dictionary = _clip_binary32_search_window(tet_data, minimum_keys, maximum_keys)
+	if not bool(clipped_window.get("valid", false)):
+		return {"position": original, "accepted": false, "search_state": "INVALID_BINARY32_SEARCH_WINDOW", "reason": clipped_window.get("reason", "UNKNOWN_NOT_CAPTURED"), "finite_domain_complete": false}
+	minimum_keys = clipped_window.minimum; maximum_keys = clipped_window.maximum
+	if bool(clipped_window.get("empty", false)):
+		var empty_result: Dictionary = _evaluate_zero_point(original, tet_data); empty_result["accepted"] = false; empty_result["search_state"] = "EXHAUSTIVE_EMPTY_BINARY32_TEST_WINDOW"; empty_result["finite_domain_complete"] = true; empty_result["tested_triples"] = 0
+		return empty_result
+	var started: int = Time.get_ticks_usec()
+	var tested: int = int(resume_frontier.get("tested_triples", 0))
+	var skipped: int = int(resume_frontier.get("affine_skipped_candidates", 0))
+	var gate_rejections: int = int(resume_frontier.get("acceptance_gate_rejection_count", 0))
+	var cursor: Dictionary = resume_frontier.duplicate(true)
+	var is_affine_resume: bool = int(cursor.get("affine_algorithm_version", 0)) == 1
+	var has_legacy_resume: bool = not cursor.is_empty() and not is_affine_resume
+	var next_radius: int = int(cursor.get("radius", 0)) if is_affine_resume else 0
+	var next_du: int = int(cursor.get("du", 0)) if is_affine_resume else 0
+	var next_dv: int = int(cursor.get("dv", 0)) if is_affine_resume else 0
+	var next_w: int = int(cursor.get("w_key", minimum_keys[dependent_axis])) if is_affine_resume else minimum_keys[dependent_axis]
+	var legacy_frontier: Dictionary = cursor if has_legacy_resume else cursor.get("legacy_resume_frontier", {})
+	var has_legacy_frontier: bool = not legacy_frontier.is_empty()
+	var skipped_legacy: int = int(cursor.get("legacy_points_skipped", 0))
+	var origin_u: int = original_keys[independent_axes[0]]
+	var origin_v: int = original_keys[independent_axes[1]]
+	var u_min: int = minimum_keys[independent_axes[0]]; var u_max: int = maximum_keys[independent_axes[0]]
+	var v_min: int = minimum_keys[independent_axes[1]]; var v_max: int = maximum_keys[independent_axes[1]]
+	var minimum_radius: int = maxi(maxi(0, u_min - origin_u), maxi(origin_u - u_max, maxi(maxi(0, v_min - origin_v), origin_v - v_max)))
+	var maximum_radius: int = maxi(maxi(absi(u_min - origin_u), absi(u_max - origin_u)), maxi(absi(v_min - origin_v), absi(v_max - origin_v)))
+	var axis_candidate_counts: Array[int] = []
+	for axis in range(3): axis_candidate_counts.append(maximum_keys[axis] - minimum_keys[axis] + 1)
+	for radius in range(minimum_radius, maximum_radius + 1):
+		var du_start: int = maxi(-radius, u_min - origin_u); var du_end: int = mini(radius, u_max - origin_u)
+		for du in range(du_start, du_end + 1):
+			var dv_start: int = maxi(-radius, v_min - origin_v); var dv_end: int = mini(radius, v_max - origin_v)
+			for dv in range(dv_start, dv_end + 1):
+				if maxi(absi(du), absi(dv)) != radius: continue
+				if is_affine_resume and (radius < next_radius or (radius == next_radius and (du < next_du or (du == next_du and dv < next_dv)))): continue
+				var u_key: int = origin_u + du; var v_key: int = origin_v + dv
+				var u_value: float = _float_from_ordered_key(u_key)
+				var v_value: float = _float_from_ordered_key(v_key)
+				cursor = {"affine_algorithm_version": 1, "dependent_axis": dependent_axis, "independent_axes": independent_axes.duplicate(), "radius": radius, "du": du, "dv": dv, "w_key": minimum_keys[dependent_axis], "tested_triples": tested, "affine_skipped_candidates": skipped, "legacy_points_skipped": skipped_legacy, "acceptance_gate_rejection_count": gate_rejections, "legacy_resume_frontier": legacy_frontier, "seed_ordered_float32_keys": original_keys, "tetra_aabb_minimum_ordered_float32_keys": minimum_keys, "tetra_aabb_maximum_ordered_float32_keys": maximum_keys, "tetra_aabb_axis_candidate_counts": axis_candidate_counts, "minimum_radius": minimum_radius, "maximum_radius": maximum_radius, "remaining_domain_definition": "ordered Chebyshev shells over the two independent binary32 coordinates; every dependent-axis binary32 value in the conservative residual and barycentric interval is checked by unchanged exact gates"}
+				if Time.get_ticks_usec() - started >= max_search_usec:
+					return _affine_binary32_partial(original, tet_data, cursor, tested, skipped, skipped_legacy, gate_rejections)
+				var base_point: Vector3 = original
+				if independent_axes[0] == 0: base_point.x = u_value
+				elif independent_axes[0] == 1: base_point.y = u_value
+				else: base_point.z = u_value
+				if independent_axes[1] == 0: base_point.x = v_value
+				elif independent_axes[1] == 1: base_point.y = v_value
+				else: base_point.z = v_value
+				if dependent_axis == 0: base_point.x = 0.0
+				elif dependent_axis == 1: base_point.y = 0.0
+				else: base_point.z = 0.0
+				var residual_base: float = float(coeffs[0]) * base_point.x + float(coeffs[1]) * base_point.y + float(coeffs[2]) * base_point.z + float(affine.offset)
+				var dep_coeff: float = coeffs[dependent_axis]
+				var sample_scale: float = absf(float(tet_data.samples[0])) + absf(float(tet_data.samples[1])) + absf(float(tet_data.samples[2])) + absf(float(tet_data.samples[3]))
+				var residual_guard: float = 512.0 * 5.960464477539063e-8 * maxf(1.0, float(affine.condition_estimate)) * maxf(1.0, sample_scale)
+				var residual_lo: float = (-R6_RESIDUAL_EPSILON - residual_guard - residual_base) / dep_coeff
+				var residual_hi: float = (R6_RESIDUAL_EPSILON + residual_guard - residual_base) / dep_coeff
+				var w_lo: float = maxf(minf(residual_lo, residual_hi), _float_from_ordered_key(minimum_keys[dependent_axis]))
+				var w_hi: float = minf(maxf(residual_lo, residual_hi), _float_from_ordered_key(maximum_keys[dependent_axis]))
+				var bary: Dictionary = _affine_barycentric_interval(base_point, dependent_axis, w_lo, w_hi, positions, float(affine.condition_estimate))
+				if not bool(bary.get("valid", false)):
+					var failed: Dictionary = _evaluate_zero_point(original, tet_data); failed["search_state"] = "PARTIAL_LIMIT"; failed["finite_domain_complete"] = false; failed["reason"] = "BARYCENTRIC_INTERVAL_UNAVAILABLE"; return failed
+				var full_w_start: int = minimum_keys[dependent_axis]
+				var full_w_end: int = maximum_keys[dependent_axis]
+				var interval_w_count: int = 0
+				if not bool(bary.get("empty", false)):
+					w_lo = float(bary.lower); w_hi = float(bary.upper)
+					var w_start: int = maxi(minimum_keys[dependent_axis], _float32_key_ceil(w_lo))
+					var w_end: int = mini(maximum_keys[dependent_axis], _float32_key_floor(w_hi))
+					interval_w_count = maxi(0, w_end - w_start + 1)
+					if is_affine_resume and radius == next_radius and du == next_du and dv == next_dv: w_start = maxi(w_start, next_w)
+					for w_key in range(w_start, w_end + 1):
+						var keys: Array[int] = [0, 0, 0]; keys[independent_axes[0]] = u_key; keys[independent_axes[1]] = v_key; keys[dependent_axis] = w_key
+						cursor = {"affine_algorithm_version": 1, "dependent_axis": dependent_axis, "independent_axes": independent_axes.duplicate(), "radius": radius, "du": du, "dv": dv, "w_key": w_key, "dependent_interval_size": interval_w_count, "tested_triples": tested, "affine_skipped_candidates": skipped, "legacy_points_skipped": skipped_legacy, "acceptance_gate_rejection_count": gate_rejections, "legacy_resume_frontier": legacy_frontier, "seed_ordered_float32_keys": original_keys, "tetra_aabb_minimum_ordered_float32_keys": minimum_keys, "tetra_aabb_maximum_ordered_float32_keys": maximum_keys, "tetra_aabb_axis_candidate_counts": axis_candidate_counts, "minimum_radius": minimum_radius, "maximum_radius": maximum_radius, "remaining_domain_definition": "ordered independent-axis binary32 shell and inclusive dependent-axis interval; unchanged exact gates per candidate"}
+						if Time.get_ticks_usec() - started >= max_search_usec:
+							return _affine_binary32_partial(original, tet_data, cursor, tested, skipped, skipped_legacy, gate_rejections)
+						if has_legacy_frontier and _legacy_binary32_point_precedes_frontier(keys, legacy_frontier):
+							skipped += 1; skipped_legacy += 1; continue
+						var candidate: Vector3 = Vector3(_float_from_ordered_key(keys[0]), _float_from_ordered_key(keys[1]), _float_from_ordered_key(keys[2]))
+						var evaluation: Dictionary = _evaluate_zero_point(candidate, tet_data); tested += 1
+						if not bool(evaluation.get("accepted", false)): continue
+						if acceptance_gate.is_valid() and not bool(acceptance_gate.call(candidate)):
+							gate_rejections += 1; continue
+						evaluation["position"] = candidate; evaluation["ulp_steps"] = [keys[0] - original_keys[0], keys[1] - original_keys[1], keys[2] - original_keys[2]]
+						evaluation["search_state"] = "AFFINE_BINARY32_WITNESS"; evaluation["finite_domain_complete"] = false
+						evaluation["search_frontier"] = cursor; evaluation["tested_triples"] = tested; evaluation["affine_skipped_candidates"] = skipped; evaluation["legacy_points_skipped"] = skipped_legacy; evaluation["acceptance_gate_rejection_count"] = gate_rejections; evaluation["affine_coefficients"] = coefficients; evaluation["dependent_axis"] = dependent_axis
+						evaluation["affine_algorithm_version"] = 1; evaluation["minimum_radius"] = minimum_radius; evaluation["maximum_radius"] = maximum_radius
+						return evaluation
+				skipped += maxi(0, full_w_end - full_w_start + 1 - interval_w_count)
+	var exhausted: Dictionary = _evaluate_zero_point(original, tet_data)
+	exhausted["position"] = original; exhausted["search_state"] = "EXHAUSTIVE_NO_VALID_REPRESENTABLE_SUPPORT_IN_TETRA_DOMAIN"; exhausted["finite_domain_complete"] = true
+	exhausted["tested_triples"] = tested; exhausted["affine_skipped_candidates"] = skipped; exhausted["legacy_points_skipped"] = skipped_legacy; exhausted["acceptance_gate_rejection_count"] = gate_rejections; exhausted["affine_coefficients"] = coefficients; exhausted["dependent_axis"] = dependent_axis
+	exhausted["affine_algorithm_version"] = 1; exhausted["minimum_radius"] = minimum_radius; exhausted["maximum_radius"] = maximum_radius
+	return exhausted
+
+func _affine_binary32_partial(original: Vector3, tet_data: Dictionary, frontier: Dictionary, tested: int, skipped: int, skipped_legacy: int, gate_rejections: int) -> Dictionary:
+	var partial: Dictionary = _evaluate_zero_point(original, tet_data); partial["position"] = original; partial["accepted"] = false
+	partial["search_state"] = "PARTIAL_LIMIT"; partial["finite_domain_complete"] = false; partial["search_frontier"] = frontier.duplicate(true)
+	partial["tested_triples"] = tested; partial["affine_skipped_candidates"] = skipped; partial["legacy_points_skipped"] = skipped_legacy; partial["acceptance_gate_rejection_count"] = gate_rejections; partial["reason"] = "AFFINE_BINARY32_SEARCH_TIME_LIMIT"
+	partial["affine_algorithm_version"] = int(frontier.get("affine_algorithm_version", 1)); partial["dependent_axis"] = frontier.get("dependent_axis", -1); partial["minimum_radius"] = frontier.get("minimum_radius", -1); partial["maximum_radius"] = frontier.get("maximum_radius", -1)
+	return partial
+
+func _search_representable_zero_multicoordinate_legacy(original: Vector3, tet_data: Dictionary, max_search_usec: int = 25000, acceptance_gate: Callable = Callable(), resume_frontier: Dictionary = {}) -> Dictionary:
 	var positions: Array = tet_data.get("positions", [])
 	if positions.size() != 4 or not original.is_finite():
 		return {"position": original, "accepted": false, "search_state": "INVALID_TETRA_DOMAIN", "finite_domain_complete": false}
@@ -252,6 +490,13 @@ func _search_representable_zero_multicoordinate(original: Vector3, tet_data: Dic
 			var key: int = _ordered_float32_key(int(corner_bytes.decode_u32(0)))
 			minimum_keys[axis] = mini(minimum_keys[axis], key)
 			maximum_keys[axis] = maxi(maximum_keys[axis], key)
+	var clipped_window: Dictionary = _clip_binary32_search_window(tet_data, minimum_keys, maximum_keys)
+	if not bool(clipped_window.get("valid", false)):
+		return {"position": original, "accepted": false, "search_state": "INVALID_BINARY32_SEARCH_WINDOW", "reason": clipped_window.get("reason", "UNKNOWN_NOT_CAPTURED"), "finite_domain_complete": false}
+	minimum_keys = clipped_window.minimum; maximum_keys = clipped_window.maximum
+	if bool(clipped_window.get("empty", false)):
+		var empty_result: Dictionary = _evaluate_zero_point(original, tet_data); empty_result["accepted"] = false; empty_result["search_state"] = "EXHAUSTIVE_EMPTY_BINARY32_TEST_WINDOW"; empty_result["finite_domain_complete"] = true; empty_result["tested_triples"] = 0
+		return empty_result
 	var maximum_radius: int = 0
 	var minimum_radius: int = 0
 	for axis in range(3):
