@@ -6,6 +6,7 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-11-03 | [P3.1 R12-CXR R6-Y1 segment 65](2026-11-03-P3-1-R12-CXR-R6-Y1-SEGMENT-65.md) | Segment 65 ended at the synthesis time limit with 126 supports and an incomplete support-domain frontier; explicitly not global UNSAT | Source on draft functional PR #219; SHA-pinned report and raw evidence on draft docs PR #222; unmerged |
 | 2026-11-01 | [P3.1 R12-CXR R6-X6 partial closeout](2026-11-01-P3-1-R12-CXR-R6-X6-PARTIAL-CLOSEOUT.md) | Six valid target attempts consumed; X6 finite witness set completed deterministically with zero supports and complete finite-graph UNSAT, while inherited X3 candidate cap leaves broader support feasibility PARTIAL | Draft docs PR #222 open/unmerged; not integrated, no merge or production adoption |
 | 2026-10-25 | [P3.0D precise entity placement](2026-10-25-P3-0D-ENTITY-PLACEMENT.md) | Reproduced center-aim selection mismatch; added visible-pointer SDF placement, shared target marker, consistent millimeter/region ownership, and 51 focused assertions; full Godot validation 18,204/0 | Draft PR #124; independent source review and owner GUI retest pending |
 | 2026-10-25 | [P3.0C persistent entity undo/redo](2026-10-25-P3-0C-IMPLEMENTATION.md) | Schema-3 bounded history, transactional undo/redo, exact DELETE/F7 restoration and F9 baseline semantics; complete Godot validation 18,153/0 | Feature candidate on `feat/p3-0c-transactional-undo-redo`; draft PR pending; independent source review and owner GUI pending |
