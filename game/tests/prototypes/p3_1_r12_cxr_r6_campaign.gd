@@ -49,7 +49,7 @@ func _run() -> void:
 		_run_y1_resume_check()
 		return
 	if mode.is_empty(): mode = "freeze"
-	if mode not in ["freeze", "boundary-audit", "cavity-audit", "x3-cavity-search", "x3-cavity-realize", "x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "y1-complete-support", "y1-graph-partial", "synthesize", "resume-r6-06", "resume-x2-graph"]:
+	if mode not in ["freeze", "boundary-audit", "cavity-audit", "x3-cavity-search", "x3-cavity-realize", "x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "y1a-boundary-audit", "y1-complete-support", "y1-graph-partial", "synthesize", "resume-r6-06", "resume-x2-graph"]:
 		_fail("r6_mode_invalid", {"mode": mode})
 		return
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
@@ -517,8 +517,9 @@ func _run() -> void:
 		print("R12CXR_R6_X3_ALTERNATIVE_REALIZED " + JSON.stringify({"attempt_id": attempt_id, "status": x3_result.get("status", ""), "terminal_reason": x3_result.get("terminal_reason", ""), "result_sha256": Core.sha256(x3_result_bytes), "target_attempt_consumed": true}))
 		quit(0)
 		return
-	if mode in ["x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "y1-complete-support", "y1-graph-partial"]:
+	if mode in ["x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "y1a-boundary-audit", "y1-complete-support", "y1-graph-partial"]:
 		var x6_representability: bool = mode in ["x6-representability", "x6-representability-evidence"]
+		var y1a_boundary_audit: bool = mode == "y1a-boundary-audit"
 		var y1_complete_support: bool = mode in ["y1-complete-support", "y1-graph-partial"]
 		var y1_graph_partial: bool = mode == "y1-graph-partial"
 		var x4_evidence_only: bool = mode in ["x4-targeted-evidence", "x6-representability-evidence"]
@@ -528,7 +529,7 @@ func _run() -> void:
 		var x4_previous_path: String = OS.get_environment("R12CXR_R6_X4_PREVIOUS_INPUT")
 		var x4_previous_sha: String = OS.get_environment("R12CXR_R6_X4_PREVIOUS_SHA256")
 		var x4_previous_bytes: PackedByteArray = FileAccess.get_file_as_bytes(x4_previous_path) if FileAccess.file_exists(x4_previous_path) else PackedByteArray()
-		var expected_x4_run_id: String = "R6-Y1-COMPLETE-SUPPORT-20261102-01" if y1_complete_support else "R6-X6-REPRESENTABILITY-EVIDENCE-20261102-01" if mode == "x6-representability-evidence" else "R6-X6-REPRESENTABILITY-20261102-01" if x6_representability else "R6-X4-EVIDENCE-20261102-01" if x4_evidence_only else "R6-X4-20261102-01"
+		var expected_x4_run_id: String = "R6-Y1A-BOUNDARY-AUDIT-20261103-01" if y1a_boundary_audit else "R6-Y1-COMPLETE-SUPPORT-20261102-01" if y1_complete_support else "R6-X6-REPRESENTABILITY-EVIDENCE-20261102-01" if mode == "x6-representability-evidence" else "R6-X6-REPRESENTABILITY-20261102-01" if x6_representability else "R6-X4-EVIDENCE-20261102-01" if x4_evidence_only else "R6-X4-20261102-01"
 		if x4_source_sha.length() != 40 or not x4_source_sha.is_valid_hex_number() or x4_attempt_id != expected_x4_run_id or x4_previous_sha != "f7fd6ba64df9fb2b515930c245b2c59c50a24e7fa77fcc835bd83d38ce8b2661" or Core.sha256(x4_previous_bytes) != x4_previous_sha:
 			_fail("r6_x4_previous_x3_result_identity_invalid", {"source_sha": x4_source_sha, "attempt_id": x4_attempt_id, "previous_sha256": Core.sha256(x4_previous_bytes), "expected_previous_sha256": x4_previous_sha})
 			return
@@ -564,6 +565,15 @@ func _run() -> void:
 		var x4_connectivity: Dictionary = x4_realizer.call("_r3_patch_connectivity", x4_patch)
 		if x4_patch.size() != x4_selected_ids.size() or not bool(x4_boundary.get("valid", false)) or not bool(x4_connectivity.get("valid", false)) or String(x4_boundary.get("signature", "")) != String(x4_cavity_meta.get("selected_cavity_boundary_signature", "")):
 			_fail("r6_x4_alternative_cavity_rebuild_invalid", {"patch_count": x4_patch.size(), "boundary": x4_boundary, "connectivity": x4_connectivity})
+			return
+		if y1a_boundary_audit:
+			var audit: Dictionary = _r6_y1a_boundary_identity_audit(x4_realizer, x4_boundary, root_positions)
+			if not bool(audit.get("valid", false)):
+				_fail("r6_y1a_boundary_identity_audit_failed", audit)
+				return
+			var audit_written: bool = _write_result(output_path, audit, "R12CXR_R6_Y1A_BOUNDARY_AUDIT")
+			print("R12CXR_R6_Y1A_BOUNDARY_AUDIT " + JSON.stringify({"decision": audit.get("decision", ""), "result_sha256": Core.sha256(FileAccess.get_file_as_bytes(output_path)) if audit_written else "WRITE_FAILED", "obligation_count": audit.get("zero_option_obligation_audits", []).size()}))
+			quit(0 if audit_written else 1)
 			return
 		var x4_support_pool: Dictionary = _r6_regenerate_support_rows(x4_realizer, seed_triangles, x4_patch, volume.get("values", PackedFloat32Array()), roi, support_fixture, seed_by_id)
 		var x4_support_pool_repeat: Dictionary = _r6_regenerate_support_rows(x4_realizer, seed_triangles, x4_patch, volume.get("values", PackedFloat32Array()), roi, support_fixture, seed_by_id)
@@ -1598,6 +1608,135 @@ func _r6_x2_critical_support_completion(realizer: RefCounted, zero_set_realizer:
 		if not already.has(String(support_id)): generated_new_count += 1
 	var support_domain_complete: bool = bool(generated.get("finite_candidate_enumeration_complete", false)) and not bool(generated.get("support_cap_hit", false)) and generated_new_count <= 38 and selected_new.size() == generated_new_count and int(base_supports.size()) + all_supports.size() <= 64
 	return {"valid": true, "zero_option_edges": zero_option_edges, "boundary_audit": x1_completion.get("boundary_audit", {}), "supports": all_supports, "support_count": all_supports.size(), "x1_supports_reconstructed": x1_completion.get("supports", []), "x1_support_fingerprint_sha256": x1_fingerprint, "x2_selected_supports": selected_new, "x2_continuous_domain": {"target_pairs": target_pairs, "candidate_model": "COMPLETE_CONSTRAINT_ARRANGEMENT_VERTICES_PLUS_DETERMINISTIC_INTERIOR_WITNESSES", "generated": generated, "repeat_fingerprint_sha256": repeat_generation_fingerprint, "deterministic_repeat_pass": first_generation_fingerprint == repeat_generation_fingerprint, "max_new_supports": 38, "generated_new_support_count": generated_new_count, "selected_new_support_count": selected_new.size()}, "support_domain_complete": support_domain_complete, "candidate_domain": "all active arrangement vertices plus deterministic strict-interior transition witnesses for each zero-option root pair, under unchanged direct topology-arc checks; convex cross-squared maximum is checked at every arrangement vertex; no dense sampling", "field_residual_epsilon": 1.0e-7, "cross_squared_cutoff": FROZEN_CROSS_SQUARED_CUTOFF}
+
+func _r6_y1a_boundary_identity_audit(realizer: RefCounted, boundary: Dictionary, root_positions: Dictionary) -> Dictionary:
+	var graph_path: String = OS.get_environment("R12CXR_R6_Y1A_GRAPH_INPUT")
+	var graph_expected_sha: String = OS.get_environment("R12CXR_R6_Y1A_GRAPH_SHA256")
+	var checkpoint_path: String = OS.get_environment("R12CXR_R6_Y1A_CHECKPOINT_INPUT")
+	var checkpoint_expected_sha: String = OS.get_environment("R12CXR_R6_Y1A_CHECKPOINT_SHA256")
+	var graph_bytes: PackedByteArray = FileAccess.get_file_as_bytes(graph_path) if FileAccess.file_exists(graph_path) else PackedByteArray()
+	var checkpoint_bytes: PackedByteArray = FileAccess.get_file_as_bytes(checkpoint_path) if FileAccess.file_exists(checkpoint_path) else PackedByteArray()
+	var graph_sha: String = Core.sha256(graph_bytes)
+	var checkpoint_sha: String = Core.sha256(checkpoint_bytes)
+	if graph_expected_sha != "b32998a15964361b24eb11e4dc4107ee3e646e04d8ab7285a8af542e2808f339" or graph_sha != graph_expected_sha:
+		return {"valid": false, "reason": "R6_Y1A_COMPLETE_GRAPH_IDENTITY_INVALID", "graph_path": graph_path, "expected_sha256": graph_expected_sha, "observed_sha256": graph_sha}
+	if checkpoint_expected_sha != "fc94cec0848dc395cad83d066bc488b294cd86342459e4ae74f3324aa3176a31" or checkpoint_sha != checkpoint_expected_sha:
+		return {"valid": false, "reason": "R6_Y1A_SEGMENT47_RESULT_IDENTITY_INVALID", "checkpoint_path": checkpoint_path, "expected_sha256": checkpoint_expected_sha, "observed_sha256": checkpoint_sha}
+	var graph_value: Variant = JSON.parse_string(graph_bytes.get_string_from_utf8())
+	var checkpoint_value: Variant = JSON.parse_string(checkpoint_bytes.get_string_from_utf8())
+	if typeof(graph_value) != TYPE_DICTIONARY or typeof(checkpoint_value) != TYPE_DICTIONARY:
+		return {"valid": false, "reason": "R6_Y1A_INPUT_SCHEMA_INVALID"}
+	var graph: Dictionary = graph_value
+	var checkpoint: Dictionary = checkpoint_value
+	var d3: Dictionary = graph.get("d3", {})
+	var checkpoint_synthesis: Dictionary = checkpoint.get("support_synthesis", {})
+	var checkpoint_stream: Dictionary = checkpoint_synthesis.get("continuous_region_stream", {})
+	var checkpoint_stream_path: String = String(checkpoint_stream.get("path", ""))
+	var checkpoint_stream_sha: String = Core.sha256(FileAccess.get_file_as_bytes(checkpoint_stream_path)) if FileAccess.file_exists(checkpoint_stream_path) else ""
+	var nested_graph_path: String = String(graph.get("nested_graph_result_path", ""))
+	var nested_graph_sha: String = Core.sha256(FileAccess.get_file_as_bytes(nested_graph_path)) if FileAccess.file_exists(nested_graph_path) else ""
+	if String(checkpoint.get("attempt_id", "")) != "R6-Y1-COMPLETE-SUPPORT-20261102-01" or String(checkpoint.get("status", "")) != "R6_Y1_SUPPORT_DOMAIN_PARTIAL_LIMIT" or bool(checkpoint.get("support_domain_complete", true)) or checkpoint_synthesis.get("supports", []).size() != 122 or checkpoint_stream_sha != String(checkpoint_stream.get("sha256", "")):
+		return {"valid": false, "reason": "R6_Y1A_SEGMENT47_CHECKPOINT_NOT_QUALIFIED", "attempt_id": checkpoint.get("attempt_id", ""), "status": checkpoint.get("status", ""), "support_count": checkpoint_synthesis.get("supports", []).size(), "stream_sha256": checkpoint_stream.get("sha256", ""), "observed_stream_sha256": checkpoint_stream_sha}
+	if String(graph.get("status", "")) != "R6_Y1_PARTIAL_SUPPORT_GRAPH_UNSAT" or int(graph.get("partial_support_count", -1)) != 122 or not bool(graph.get("complete_graph_gate", {}).get("complete", false)) or String(d3.get("status", "")) != "UNSAT_COMPLETE" or not bool(d3.get("complete", false)) or not bool(d3.get("search_exhaustive", false)) or nested_graph_sha != String(graph.get("nested_graph_result_sha256", "")):
+		return {"valid": false, "reason": "R6_Y1A_COMPLETE_FINITE_GRAPH_NOT_QUALIFIED", "graph_status": graph.get("status", ""), "support_count": graph.get("partial_support_count", -1), "graph_complete": graph.get("complete_graph_gate", {}).get("complete", false), "solver_status": d3.get("status", ""), "solver_complete": d3.get("complete", false), "solver_exhaustive": d3.get("search_exhaustive", false), "nested_graph_sha256": nested_graph_sha, "expected_nested_graph_sha256": graph.get("nested_graph_result_sha256", "")}
+	var cycle_result: Dictionary = realizer.call("_r4_boundary_cycle_set", boundary)
+	var cycles: Array = cycle_result.get("cycles", [])
+	if not bool(cycle_result.get("valid", false)) or cycles.size() != 1:
+		return {"valid": false, "reason": "R6_Y1A_BOUNDARY_CYCLE_INVALID", "cycle_result": cycle_result}
+	var cycle: Array = cycles[0].get("root_ids", [])
+	var cycle_index_by_id: Dictionary = {}
+	var cycle_index_by_edge_key: Dictionary = {}
+	var edge_key_to_row: Dictionary = {}
+	var duplicate_adjacent_id: bool = false
+	var duplicate_adjacent_position: bool = false
+	var cycle_records: Array[Dictionary] = []
+	for index in range(cycle.size()):
+		var root_id: String = String(cycle[index])
+		var next_id: String = String(cycle[(index + 1) % cycle.size()])
+		if root_id.is_empty() or next_id.is_empty() or cycle_index_by_id.has(root_id):
+			return {"valid": false, "reason": "R6_Y1A_CYCLE_ID_EMPTY_OR_DUPLICATE", "index": index, "root_id": root_id, "cycle": cycle}
+		cycle_index_by_id[root_id] = index
+		if root_id == next_id: duplicate_adjacent_id = true
+		if not root_positions.has(root_id) or not root_positions.has(next_id):
+			return {"valid": false, "reason": "R6_Y1A_CYCLE_ROOT_POSITION_MISSING", "index": index, "root_id": root_id, "next_id": next_id}
+		var position: Vector3 = Vector3(root_positions[root_id])
+		var next_position: Vector3 = Vector3(root_positions[next_id])
+		var position_bytes: String = PackedFloat32Array([position.x, position.y, position.z]).to_byte_array().hex_encode()
+		var next_position_bytes: String = PackedFloat32Array([next_position.x, next_position.y, next_position.z]).to_byte_array().hex_encode()
+		if position_bytes == next_position_bytes: duplicate_adjacent_position = true
+		var edge_key: String = String(realizer.call("_edge_key", root_id, next_id))
+		if cycle_index_by_edge_key.has(edge_key):
+			return {"valid": false, "reason": "R6_Y1A_CYCLE_EDGE_KEY_COLLISION", "edge_key": edge_key}
+		cycle_index_by_edge_key[edge_key] = index
+		cycle_records.append({"index": index, "from_id": root_id, "to_id": next_id, "from_id_utf8_hex": root_id.to_utf8_buffer().hex_encode(), "to_id_utf8_hex": next_id.to_utf8_buffer().hex_encode(), "from_id_length": root_id.length(), "to_id_length": next_id.length(), "ids_equal": root_id == next_id, "edge_key": edge_key, "from_world_position": _vector3_array(position), "to_world_position": _vector3_array(next_position), "from_binary32_position_bytes": position_bytes, "to_binary32_position_bytes": next_position_bytes, "position_bytes_equal": position_bytes == next_position_bytes})
+	var boundary_map_rows: Array[Dictionary] = []
+	var directed_edges: Array = boundary.get("directed_edges", [])
+	for edge_value in directed_edges:
+		var edge_text: String = String(edge_value)
+		var split: PackedStringArray = edge_text.split("->")
+		if split.size() != 2 or split[0].is_empty() or split[1].is_empty():
+			return {"valid": false, "reason": "R6_Y1A_DIRECTED_BOUNDARY_EDGE_ENCODING_INVALID", "edge": edge_text}
+		var a: String = String(split[0])
+		var b: String = String(split[1])
+		var map_key: String = String(realizer.call("_edge_key", a, b))
+		if a == b or not cycle_index_by_edge_key.has(map_key) or cycle_index_by_id.get(a, -1) != cycle_index_by_edge_key.get(map_key, -2) or String(cycle[(int(cycle_index_by_edge_key[map_key]) + 1) % cycle.size()]) != b or edge_key_to_row.has(map_key):
+			return {"valid": false, "reason": "R6_Y1A_BOUNDARY_MAP_CYCLE_MISMATCH", "edge": edge_text, "edge_key": map_key, "cycle": cycle}
+		var row: Dictionary = {"a": a, "b": b, "edge_key": map_key}
+		edge_key_to_row[map_key] = row
+		boundary_map_rows.append({"edge_key": map_key, "a": a, "b": b, "source_directed_edge": edge_text, "source": String(boundary.get("boundary_source", "")), "cycle_index_from": int(cycle_index_by_id[a]), "cycle_index_to": (int(cycle_index_by_id[a]) + 1) % cycle.size(), "row": row.duplicate(true)})
+	if boundary_map_rows.size() != cycle.size() or edge_key_to_row.size() != cycle_index_by_edge_key.size():
+		return {"valid": false, "reason": "R6_Y1A_BOUNDARY_MAP_NOT_ONE_TO_ONE_WITH_CYCLE", "cycle_edge_count": cycle.size(), "boundary_map_row_count": boundary_map_rows.size(), "map_key_count": edge_key_to_row.size()}
+	var option_counts: Dictionary = d3.get("boundary_edge_candidate_counts", {})
+	var zero_edge_keys: Array[String] = []
+	for edge_key_value in option_counts.keys():
+		var edge_key: String = String(edge_key_value)
+		if int(option_counts[edge_key_value]) == 0: zero_edge_keys.append(edge_key)
+	zero_edge_keys.sort()
+	var first_zero: Dictionary = d3.get("first_zero_candidate_obligation", {})
+	var zero_audits: Array[Dictionary] = []
+	var zero_identity_defect: bool = false
+	var zero_position_collapse: bool = false
+	for edge_key in zero_edge_keys:
+		if not edge_key_to_row.has(edge_key):
+			return {"valid": false, "reason": "R6_Y1A_ZERO_OBLIGATION_NOT_IN_BOUNDARY_MAP", "edge_key": edge_key}
+		var row: Dictionary = edge_key_to_row[edge_key]
+		var a: String = String(row.get("a", ""))
+		var b: String = String(row.get("b", ""))
+		var a_position: Vector3 = Vector3(root_positions[a])
+		var b_position: Vector3 = Vector3(root_positions[b])
+		var a_bytes: String = PackedFloat32Array([a_position.x, a_position.y, a_position.z]).to_byte_array().hex_encode()
+		var b_bytes: String = PackedFloat32Array([b_position.x, b_position.y, b_position.z]).to_byte_array().hex_encode()
+		var event_matches: bool = String(first_zero.get("edge_key", "")) == edge_key
+		var before_count: int = int(option_counts[edge_key])
+		var after_count: int = 0 if before_count == 0 else -1
+		if event_matches:
+			if String(first_zero.get("kind", "")) != "boundary" or String(first_zero.get("from_id", "")) != a or String(first_zero.get("to_id", "")) != b or String(first_zero.get("directed_edge_key", "")) != a + "\u001e" + b or int(first_zero.get("candidate_graph_option_count_before_state_filters", -1)) != before_count:
+				return {"valid": false, "reason": "R6_Y1A_SOLVER_OBLIGATION_ENDPOINT_OR_KEY_MISMATCH", "edge_key": edge_key, "boundary_map_row": row, "solver_event": first_zero}
+			after_count = int(first_zero.get("compatible_candidate_option_count_after_state_filters", -1))
+		if a == b: zero_identity_defect = true
+		if a_bytes == b_bytes: zero_position_collapse = true
+		zero_audits.append({"edge_key": edge_key, "kind": "boundary", "from_id": a, "to_id": b, "from_id_utf8_hex": a.to_utf8_buffer().hex_encode(), "to_id_utf8_hex": b.to_utf8_buffer().hex_encode(), "from_id_length": a.length(), "to_id_length": b.length(), "ids_equal": a == b, "boundary_cycle_index_from": int(cycle_index_by_id[a]), "boundary_cycle_index_to": (int(cycle_index_by_id[a]) + 1) % cycle.size(), "directed_boundary_edge_source": String(boundary.get("boundary_source", "")), "source_directed_edge": String(a + "->" + b), "boundary_edge_map_row": row.duplicate(true), "from_world_position": _vector3_array(a_position), "to_world_position": _vector3_array(b_position), "from_binary32_position_bytes": a_bytes, "to_binary32_position_bytes": b_bytes, "position_bytes_equal": a_bytes == b_bytes, "candidate_graph_option_count_before_state_filters": before_count, "compatible_candidate_option_count_after_state_filters": after_count, "solver_first_zero_event": event_matches})
+	var support_collisions: Array[Dictionary] = []
+	var checkpoint_supports: Array = checkpoint_synthesis.get("supports", [])
+	for support_value in checkpoint_supports:
+		if typeof(support_value) != TYPE_DICTIONARY: continue
+		var support: Dictionary = support_value
+		var support_id: String = String(support.get("support_id", ""))
+		var support_position: Vector3 = Vector3(support.get("world_position", Vector3.ZERO))
+		var support_bytes: String = PackedFloat32Array([support_position.x, support_position.y, support_position.z]).to_byte_array().hex_encode()
+		if String(support.get("binary32_position_identity", "")) != support_bytes:
+			return {"valid": false, "reason": "R6_Y1A_SUPPORT_POSITION_IDENTITY_BYTES_MISMATCH", "support_id": support_id, "declared_identity": support.get("binary32_position_identity", ""), "observed_identity": support_bytes}
+		for root_id_value in root_positions.keys():
+			var root_id: String = String(root_id_value)
+			var root_position: Vector3 = Vector3(root_positions[root_id_value])
+			var root_bytes: String = PackedFloat32Array([root_position.x, root_position.y, root_position.z]).to_byte_array().hex_encode()
+			if support_id == root_id or support_bytes == root_bytes:
+				support_collisions.append({"support_id": support_id, "root_id": root_id, "same_id": support_id == root_id, "same_binary32_position": support_bytes == root_bytes, "support_position_bytes": support_bytes, "root_position_bytes": root_bytes})
+	var graph_obligations: Dictionary = graph.get("zero_option_boundary_obligations", {})
+	var graph_target_pairs: Array = graph_obligations.get("target_pairs", [])
+	var valid: bool = zero_edge_keys.size() == 3 and zero_audits.size() == 3 and not duplicate_adjacent_id and not duplicate_adjacent_position and not zero_identity_defect and not zero_position_collapse and support_collisions.is_empty() and bool(graph_obligations.get("valid", false)) and graph_target_pairs.size() == zero_edge_keys.size()
+	var decision: String = "R6_Y1A_BOUNDARY_IDENTITY_VALID" if valid else "R6_Y1A_BOUNDARY_IDENTITY_DEFECT_CONFIRMED" if zero_identity_defect or zero_position_collapse else "R6_Y1A_AUDIT_INCONSISTENT"
+	return {"schema": "P3.1.R12CXR.R6.Y1A.BoundaryIdentityAudit.v1", "campaign_id": "P3.1.R12CXR.R6Y.COMPLETE_SUPPORT_DOMAIN", "status": "DIAGNOSTIC_COMPLETE" if valid else "DIAGNOSTIC_FAILED", "valid": valid, "decision": decision, "attempt_id": OS.get_environment("R12CXR_R6_ATTEMPT_ID"), "scientific_attempt_id": "R6-Y1-COMPLETE-SUPPORT-20261102-01", "source_sha": OS.get_environment("R12CXR_SOURCE_SHA"), "parent_sha": OS.get_environment("R12CXR_PARENT_SHA"), "graph_input": {"path": graph_path, "sha256": graph_sha, "nested_graph_path": nested_graph_path, "nested_graph_sha256": nested_graph_sha, "solver_status": d3.get("status", ""), "solver_complete": d3.get("complete", false), "solver_exhaustive": d3.get("search_exhaustive", false), "candidate_graph_sha256": d3.get("candidate_graph_sha256", ""), "candidate_triangle_count": d3.get("candidate_triangle_count", -1), "support_count": graph.get("partial_support_count", -1), "support_set_sha256": graph.get("partial_support_set_sha256", "")}, "checkpoint_input": {"path": checkpoint_path, "sha256": checkpoint_sha, "stream_path": checkpoint_stream_path, "stream_sha256": checkpoint_stream_sha, "attempt_id": checkpoint.get("attempt_id", ""), "support_count": checkpoint_synthesis.get("supports", []).size()}, "selected_cavity_face_ids": graph.get("selected_cavity_face_ids", []), "boundary_signature": boundary.get("signature", ""), "boundary_source": boundary.get("boundary_source", ""), "ordered_boundary_cycle": cycle_records, "directed_boundary_edges": boundary_map_rows, "zero_option_boundary_obligations": zero_audits, "solver_first_zero_obligation": first_zero, "graph_zero_option_boundary_obligations": graph_obligations, "zero_option_edge_count": zero_edge_keys.size(), "zero_identity_defect": zero_identity_defect, "adjacent_endpoint_position_collapse": duplicate_adjacent_position or zero_position_collapse, "support_root_position_collisions": support_collisions, "all_cycle_edges_adjacent_distinct_ids": not duplicate_adjacent_id, "all_cycle_edges_have_distinct_binary32_endpoint_positions": not duplicate_adjacent_position, "boundary_edge_map_one_to_one_with_cycle": boundary_map_rows.size() == cycle.size() and edge_key_to_row.size() == cycle_index_by_edge_key.size(), "solver_obligation_round_trip_valid": zero_audits.size() == zero_edge_keys.size(), "decision_basis": "Exact source-reconstructed boundary cycle and boundary-edge map rows are compared with the complete 122-support graph's zero-option obligations; IDs use full UTF-8 bytes and endpoint positions use binary32 bytes. No display abbreviations are used.", "target_attempt_consumed": false}
 
 static func _r6_x4_zero_boundary_targets(boundary_edge_candidate_counts: Dictionary) -> Dictionary:
 	var zero_edge_keys: Array[String] = []
