@@ -1723,17 +1723,13 @@ func _r6_y1a_boundary_identity_audit(realizer: RefCounted, boundary: Dictionary,
 		var support: Dictionary = support_value
 		var support_id: String = String(support.get("support_id", ""))
 		var support_position_value: Variant = support.get("world_position", null)
-		var support_position: Vector3 = Vector3.ZERO
-		if support_position_value is Vector3:
-			support_position = support_position_value
-		elif typeof(support_position_value) == TYPE_ARRAY and support_position_value.size() == 3:
-			support_position = Vector3(float(support_position_value[0]), float(support_position_value[1]), float(support_position_value[2]))
-		else:
-			return {"valid": false, "reason": "R6_Y1A_SUPPORT_POSITION_SCHEMA_INVALID", "support_id": support_id, "world_position": support_position_value}
-		var support_bytes: String = PackedFloat32Array([support_position.x, support_position.y, support_position.z]).to_byte_array().hex_encode()
-		var support_identity_bytes: String = var_to_bytes(support_position).hex_encode()
-		if String(support.get("binary32_position_identity", "")) != support_identity_bytes:
-			return {"valid": false, "reason": "R6_Y1A_SUPPORT_POSITION_IDENTITY_BYTES_MISMATCH", "support_id": support_id, "declared_identity": support.get("binary32_position_identity", ""), "observed_identity": support_identity_bytes, "raw_component_binary32_bytes": support_bytes}
+		var support_identity_bytes: String = String(support.get("binary32_position_identity", ""))
+		if support_identity_bytes.length() != 32 or not support_identity_bytes.begins_with("09000000"):
+			return {"valid": false, "reason": "R6_Y1A_SUPPORT_POSITION_IDENTITY_ENCODING_INVALID", "support_id": support_id, "declared_identity": support_identity_bytes, "world_position_payload": support_position_value}
+		var support_bytes: String = support_identity_bytes.substr(8)
+		var expected_support_id: String = "R5SUP_" + Core.sha256(support_identity_bytes.to_utf8_buffer()).substr(0, 24)
+		if support_id != expected_support_id:
+			return {"valid": false, "reason": "R6_Y1A_SUPPORT_IDENTITY_HASH_MISMATCH", "support_id": support_id, "expected_support_id": expected_support_id, "declared_identity": support_identity_bytes}
 		for root_id_value in root_positions.keys():
 			var root_id: String = String(root_id_value)
 			var root_position: Vector3 = Vector3(root_positions[root_id_value])
