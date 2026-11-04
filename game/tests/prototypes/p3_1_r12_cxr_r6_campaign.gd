@@ -8,6 +8,7 @@ const R6FrozenSolver := preload("res://tests/prototypes/p3_1_r12_cxr_r6_frozen_s
 const Synthesizer := preload("res://tests/prototypes/p3_1_r12_cxr_r5_support_synthesizer.gd")
 const Diagnostics := preload("res://tests/prototypes/p3_1_r12_cxr_r6_diagnostics.gd")
 const R6DCausalMap := preload("res://tests/prototypes/p3_1_r12_cxr_r6d_causal_map.gd")
+const R6D5Frontier := preload("res://tests/prototypes/p3_1_r12_cxr_r6d5_frontier.gd")
 const CXRDownstream := preload("res://tests/prototypes/p3_1_r12_cxr_campaign.gd")
 const ManifestSha := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
 const Stage0Sha := "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d"
@@ -51,7 +52,7 @@ func _run() -> void:
 		_run_y1_resume_check()
 		return
 	if mode.is_empty(): mode = "freeze"
-	if mode not in ["freeze", "boundary-audit", "cavity-audit", "x3-cavity-search", "x3-cavity-realize", "x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "y1a-boundary-audit", "y1-complete-support", "y1-graph-partial", "r6d-causal-localize", "r6d4-boundary-inventory", "synthesize", "resume-r6-06", "resume-x2-graph"]:
+	if mode not in ["freeze", "boundary-audit", "cavity-audit", "x3-cavity-search", "x3-cavity-realize", "x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "y1a-boundary-audit", "y1-complete-support", "y1-graph-partial", "r6d-causal-localize", "r6d4-boundary-inventory", "r6d5-boundary-frontier", "synthesize", "resume-r6-06", "resume-x2-graph"]:
 		_fail("r6_mode_invalid", {"mode": mode})
 		return
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
@@ -162,6 +163,9 @@ func _run() -> void:
 		return
 	if mode == "r6d4-boundary-inventory":
 		_run_r6d4_boundary_inventory(output_path, triangles, root_positions, realizer, base, volume.get("values", PackedFloat32Array()), roi, residual_fixture)
+		return
+	if mode == "r6d5-boundary-frontier":
+		_run_r6d5_boundary_frontier(output_path, triangles, root_positions, realizer, base, volume.get("values", PackedFloat32Array()), roi, residual_fixture)
 		return
 	var defect_groups: Array = realizer.call("_canonicalize_defect_groups", realizer.call("_overlapping_defect_groups", residual_fixture.get("residuals", []), adjacency))
 	var seed_ids: Array = support_fixture.get("seed_triangle_ids", [])
@@ -2442,6 +2446,193 @@ static func _r6d4_obligation_rows(value: Variant) -> Array:
 	# JSON.parse_string returns an untyped Array. Keep this boundary untyped so
 	# deserialized evidence can be updated without a runtime typed-array error.
 	return value if typeof(value) == TYPE_ARRAY else []
+
+func _run_r6d5_boundary_frontier(output_path: String, triangles: Array[Dictionary], root_positions: Dictionary, realizer: RefCounted, base: Dictionary, values: PackedFloat32Array, roi: Dictionary, residual_fixture: Dictionary) -> void:
+	const D4ResultSha: String = "6f70a61b7ed3fb7f602832ca29b7d1d922a98b8ea3cef98ec565880ffa2466cc"
+	const D4InventorySha: String = "e76cfefd280ab0583d0d737e4b19ae50a9e4ac61b12217bba243fa0dae84938a"
+	const DomainSha: String = "811a1de43ca389b3a2d0a6946654f6c55c0676ab8cddbc373ff5ee7d8456f319"
+	const CandidateSignature: String = "234ebf1520e00ee52ab93281d07b542ca4561f33e17f720f81baaed61ce0a1e6"
+	const GraphSha: String = "8a560270de725d11a88cff210b66ddd7f98df6ba1018d49eb5f26fa961baf249"
+	var d4_path: String = OS.get_environment("R12CXR_R6D4_INPUT_PATH")
+	var inventory_path: String = OS.get_environment("R12CXR_R6D4_INVENTORY_PATH")
+	var journal_path: String = OS.get_environment("R12CXR_R6D5_JOURNAL_PATH")
+	var d4_bytes: PackedByteArray = FileAccess.get_file_as_bytes(d4_path)
+	var inventory_bytes: PackedByteArray = FileAccess.get_file_as_bytes(inventory_path)
+	if Core.sha256(d4_bytes) != D4ResultSha or Core.sha256(inventory_bytes) != D4InventorySha or journal_path.is_empty():
+		_fail("r6d5_pinned_d4_input_identity_invalid", {"d4_sha256": Core.sha256(d4_bytes), "inventory_sha256": Core.sha256(inventory_bytes), "journal_path_present": not journal_path.is_empty()})
+		return
+	var d4_value: Variant = JSON.parse_string(d4_bytes.get_string_from_utf8())
+	var inventory_value: Variant = JSON.parse_string(inventory_bytes.get_string_from_utf8())
+	if typeof(d4_value) != TYPE_DICTIONARY or typeof(inventory_value) != TYPE_DICTIONARY:
+		_fail("r6d5_pinned_d4_json_parse_failed", {})
+		return
+	var d4_result: Dictionary = d4_value
+	var inventory_result: Dictionary = inventory_value
+	var selected: Dictionary = d4_result.get("selected_candidate", {})
+	var selected_signature: String = String(selected.get("candidate_signature", ""))
+	var frozen: Dictionary = d4_result.get("frozen_invariants", {})
+	if selected_signature != CandidateSignature or String(frozen.get("candidate_graph_sha256", "")) != GraphSha or String(frozen.get("topology_sha256", "")) != TopologySha or String(frozen.get("volume_sha256", "")) != VolumeSha or int(frozen.get("support_count", 0)) != 126 or float(frozen.get("cutoff_squared", 0.0)) != FROZEN_CROSS_SQUARED_CUTOFF or float(frozen.get("residual_epsilon", 0.0)) != 1.0e-7 or float(frozen.get("barycentric_epsilon", 0.0)) != 1.0e-7 or String(d4_result.get("authoritative_input_sha256", "")) != "226bdbbc9fa61692548d0d38eb5eb0a1f2a96802c4a97049d5f30206f15272f3":
+		_fail("r6d5_frozen_candidate_or_invariant_mismatch", {"candidate_signature": selected_signature, "frozen_invariants": frozen})
+		return
+	var domain_inventory: Dictionary = inventory_result.get("d4_continuous_domain_inventory", {})
+	var regions: Array = domain_inventory.get("regions", [])
+	if not bool(domain_inventory.get("complete", false)) or String(domain_inventory.get("candidate_signature", "")) != CandidateSignature or String(domain_inventory.get("continuous_domain_inventory_sha256", "")) != DomainSha or regions.size() != 117 or String(inventory_result.get("terminal_status", "")) != "R6_D4_CANDIDATE_PARTIAL_WITH_RESUMABLE_PROOF_FRONTIER":
+		_fail("r6d5_d4_domain_inventory_not_authoritative", {"region_count": regions.size(), "domain_sha256": domain_inventory.get("continuous_domain_inventory_sha256", ""), "complete": domain_inventory.get("complete", false)})
+		return
+	regions.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return String(a.get("region_id", "")) < String(b.get("region_id", "")))
+	var candidate_faces: Array[String] = _string_array(selected.get("face_ids", []))
+	var prequalification: Dictionary = R6DCausalMap.prequalify_topology(realizer, triangles, candidate_faces, root_positions)
+	if not bool(prequalification.get("valid", false)) or String(prequalification.get("boundary_signature", "")) != CandidateSignature:
+		_fail("r6d5_selected_d2_candidate_reconstruction_mismatch", {"valid": prequalification.get("valid", false), "signature": prequalification.get("boundary_signature", "")})
+		return
+	var projection: Dictionary = _projection_context(realizer, prequalification.patch, root_positions, prequalification.boundary_cycle)
+	var zero_inventory: Dictionary = Diagnostics.new().call("collect_zero_facet_inventory", realizer, values, roi)
+	if not bool(projection.get("valid", false)) or not bool(zero_inventory.get("valid", false)):
+		_fail("r6d5_frozen_domain_reconstruction_failed", {"projection": projection, "zero_inventory": zero_inventory})
+		return
+	var projection_rows: Dictionary = {"origin": _vector3_array(projection.origin), "axis_u": _vector3_array(projection.axis_u), "axis_v": _vector3_array(projection.axis_v)}
+	var boundary_audit: Dictionary = Diagnostics.new().call("analyze_patch_boundary", realizer, prequalification.patch, prequalification.boundary_cycle, root_positions, projection_rows, zero_inventory.get("facets", []), true)
+	var rebuilt_regions: Array = boundary_audit.get("continuous_domain_inventory", [])
+	var rebuilt_bytes: PackedByteArray = JSON.stringify(rebuilt_regions, "\t", false).to_utf8_buffer()
+	if not bool(boundary_audit.get("valid", false)) or not bool(boundary_audit.get("continuous_domain_inventory_complete", false)) or String(Core.sha256(rebuilt_bytes)) != DomainSha or rebuilt_regions.size() != regions.size():
+		_fail("r6d5_clipped_domain_reconstruction_hash_mismatch", {"valid": boundary_audit.get("valid", false), "region_count": rebuilt_regions.size(), "domain_sha256": Core.sha256(rebuilt_bytes)})
+		return
+	var option_screen: Dictionary = _r6d_required_arc_option_screen(realizer, boundary_audit, prequalification, prequalification.patch, triangles, root_positions, projection, base, residual_fixture)
+	var d4_obligations: Array = d4_result.get("obligation_records", [])
+	var expected_legal_indices: Array[int] = []
+	for row_value in d4_obligations:
+		var row: Dictionary = row_value
+		if String(row.get("candidate_signature", "")) == CandidateSignature and String(row.get("terminal_classification", "")) == "LEGAL_GRAPH_OPTION_FOUND":
+			var index: int = int(row.get("boundary_index", -1))
+			if not expected_legal_indices.has(index): expected_legal_indices.append(index)
+	expected_legal_indices.sort()
+	var regenerated_legal_indices: Array[int] = []
+	for edge_value in boundary_audit.get("boundary_edges", []):
+		var edge: Dictionary = edge_value
+		var edge_legal: bool = option_screen.get("rows", []).any(func(screen_row: Dictionary) -> bool: return String(screen_row.get("edge_id", "")) == String(edge.get("edge_id", "")) and bool(screen_row.get("legal_candidate_triangle_option", false)))
+		if edge_legal and regenerated_legal_indices.size() < expected_legal_indices.size():
+			var boundary_index: int = int(boundary_audit.get("boundary_edges", []).find(edge))
+			if expected_legal_indices.has(boundary_index): regenerated_legal_indices.append(boundary_index)
+	regenerated_legal_indices.sort()
+	if expected_legal_indices != [0, 1, 5, 6, 7, 8] or regenerated_legal_indices != expected_legal_indices:
+		_fail("r6d5_existing_six_legal_options_regeneration_mismatch", {"expected_boundary_indices": expected_legal_indices, "regenerated_boundary_indices": regenerated_legal_indices, "screen": option_screen})
+		return
+	var obligation_by_index: Dictionary = {}
+	for row_value in d4_obligations:
+		var row: Dictionary = row_value
+		if String(row.get("candidate_signature", "")) == CandidateSignature and String(row.get("terminal_classification", "")) == "PARTIAL_WITH_RESUMABLE_PROOF_FRONTIER": obligation_by_index[int(row.get("boundary_index", -1))] = row
+	if not obligation_by_index.has(2) or not obligation_by_index.has(3) or not obligation_by_index.has(4):
+		_fail("r6d5_open_obligation_set_mismatch", {"indices": obligation_by_index.keys()})
+		return
+	var facet_by_key: Dictionary = {}
+	for facet_value in zero_inventory.get("facets", []):
+		var facet: Dictionary = facet_value
+		facet_by_key[String(facet.get("tetrahedron_id", "")) + "|" + str(int(facet.get("facet_index", -1)))] = facet
+	var existing_records: Dictionary = {}
+	if FileAccess.file_exists(journal_path):
+		var old_journal: FileAccess = FileAccess.open(journal_path, FileAccess.READ)
+		if old_journal == null:
+			_fail("r6d5_resume_journal_open_failed", {"path": journal_path})
+			return
+		while not old_journal.eof_reached():
+			var old_line: String = old_journal.get_line()
+			if old_line.is_empty(): continue
+			var old_value: Variant = JSON.parse_string(old_line)
+			if typeof(old_value) == TYPE_DICTIONARY:
+				var old_row: Dictionary = old_value
+				existing_records[String(old_row.get("deterministic_region_key", ""))] = old_row
+		old_journal.close()
+	var journal: FileAccess = FileAccess.open(journal_path, FileAccess.READ_WRITE) if FileAccess.file_exists(journal_path) else FileAccess.open(journal_path, FileAccess.WRITE_READ)
+	if journal == null:
+		_fail("r6d5_region_journal_create_failed", {"path": journal_path, "error": FileAccess.get_open_error()})
+		return
+	journal.seek_end()
+	var open_indices: Array[int] = [2, 3, 4]
+	var obligation_summaries: Array[Dictionary] = []
+	var all_records: Array[Dictionary] = []
+	var facet_cache: Dictionary = {}
+	for obligation_index in open_indices:
+		var obligation: Dictionary = obligation_by_index[obligation_index]
+		var boundary_edges: Array = boundary_audit.get("boundary_edges", [])
+		if obligation_index >= boundary_edges.size():
+			journal.close(); _fail("r6d5_boundary_index_out_of_range", {"index": obligation_index, "count": boundary_edges.size()}); return
+		var boundary_edge: Dictionary = boundary_edges[obligation_index]
+		var roots: Array = boundary_edge.get("root_ids", [])
+		if roots.size() != 2:
+			journal.close(); _fail("r6d5_boundary_edge_roots_invalid", {"index": obligation_index, "edge": boundary_edge}); return
+		var projected_positions: Dictionary = {}
+		for root_id_value in root_positions.keys():
+			var root_id: String = String(root_id_value)
+			var delta: Vector3 = Vector3(root_positions[root_id]) - Vector3(projection.origin)
+			projected_positions[root_id] = Vector2(delta.dot(Vector3(projection.axis_u)), delta.dot(Vector3(projection.axis_v)))
+			projected_positions["__world__" + root_id] = Vector3(root_positions[root_id])
+		var summary_counts: Dictionary = {"LEGAL_OPTION_FOUND": 0, "REGION_PROVEN_EMPTY": 0, "REGION_PARTIAL": 0}
+		var rows_for_obligation: Array[Dictionary] = []
+		for region_value in regions:
+			var region: Dictionary = region_value
+			var region_id: String = String(region.get("region_id", ""))
+			var region_key: String = CandidateSignature + "|boundary:" + str(obligation_index) + "|" + region_id
+			var region_sha: String = R6D5Frontier.geometry_sha(region)
+			var previous: Dictionary = existing_records.get(region_key, {})
+			if String(previous.get("source_geometry_sha256", "")) != "" and String(previous.get("source_geometry_sha256", "")) != region_sha:
+				journal.close(); _fail("r6d5_resume_region_geometry_changed", {"region_key": region_key, "expected": region_sha, "observed": previous.get("source_geometry_sha256", "")}); return
+			if String(previous.get("terminal_classification", "")) in ["LEGAL_OPTION_FOUND", "REGION_PROVEN_EMPTY"]:
+				rows_for_obligation.append(previous); summary_counts[String(previous.terminal_classification)] += 1; all_records.append(previous); continue
+			var facet_key: String = String(region.get("tetrahedron_id", "")) + "|" + str(int(region.get("facet_index", -1)))
+			if not facet_by_key.has(facet_key):
+				journal.close(); _fail("r6d5_inventory_facet_not_reconstructed", {"region_id": region_id, "facet_key": facet_key}); return
+			var facet: Dictionary = facet_by_key[facet_key]
+			var patch_triangle: Dictionary = {}
+			for patch_value in prequalification.patch:
+				var patch_row: Dictionary = patch_value
+				if String(patch_row.get("triangle_id", "")) == String(region.get("patch_face_id", "")):
+					patch_triangle = patch_row; break
+			if patch_triangle.is_empty():
+				journal.close(); _fail("r6d5_inventory_patch_face_not_reconstructed", {"region_id": region_id}); return
+			var domain_triangle: Array[Vector2] = []
+			for point_value in patch_triangle.get("points", []):
+				var delta: Vector3 = Vector3(point_value) - Vector3(projection.origin)
+				domain_triangle.append(Vector2(delta.dot(Vector3(projection.axis_u)), delta.dot(Vector3(projection.axis_v))))
+			var arcs: Array = []
+			for arc_value in base.get("arc_map", []):
+				var arc: Dictionary = arc_value
+				var arc_ids: Array = arc.get("root_ids", [])
+				if arc_ids.size() == 2:
+					if not projected_positions.has(String(arc_ids[0])) or not projected_positions.has(String(arc_ids[1])):
+						journal.close(); _fail("r6d5_required_arc_projection_missing", {"arc_id": arc.get("arc_id", ""), "root_ids": arc_ids}); return
+					arcs.append(arc)
+			var queue: Array = previous.get("frontier_cells", [])
+			if queue.is_empty() and previous.is_empty(): queue = R6D5Frontier.initial_cells(region)
+			var proof_leaves: Array = previous.get("proof_leaf_certificates", [])
+			var processed_total: int = int(previous.get("processed_cells_total", 0))
+			var node_cap: int = 64
+			var advance: Dictionary = R6D5Frontier.advance_frontier(queue, proof_leaves, Vector2(projected_positions[String(roots[0])]), Vector2(projected_positions[String(roots[1])]), roots, arcs, projected_positions, node_cap)
+			queue = advance.get("frontier_cells", [])
+			proof_leaves = advance.get("proof_leaf_certificates", [])
+			var processed_this_run: int = int(advance.get("processed_cells", 0))
+			processed_total += processed_this_run
+			var terminal_classification: String = "REGION_PROVEN_EMPTY" if queue.is_empty() and not proof_leaves.is_empty() else "REGION_PARTIAL"
+			var gate_counts: Dictionary = {}
+			for leaf_value in proof_leaves:
+				var leaf: Dictionary = leaf_value
+				var gate: String = String(leaf.get("gate", "UNKNOWN"))
+				gate_counts[gate] = int(gate_counts.get(gate, 0)) + 1
+			var row: Dictionary = {"schema": "P3.1.R12CXR.R6D5.RegionProof.v1", "source_sha": OS.get_environment("R12CXR_R6D5_EXECUTION_SOURCE_SHA"), "candidate_signature": CandidateSignature, "boundary_obligation_index": obligation_index, "deterministic_region_key": region_key, "region_id": region_id, "source_geometry_sha256": region_sha, "continuous_domain_inventory_sha256": DomainSha, "analytic_domain_state": "COMPLETE_CLIPPED_ZERO_FACET_POLYGON", "initial_subdomain_count": R6D5Frontier.initial_cells(region).size(), "processed_cells_this_run": processed_this_run, "processed_cells_total": processed_total, "proof_leaf_certificates": proof_leaves, "certified_rejection_gate_counts": gate_counts, "frontier_cells": queue, "continuous_feasibility_state": "PROVEN_EMPTY_BY_REQUIRED_ARC_OR_CUTOFF" if terminal_classification == "REGION_PROVEN_EMPTY" else "UNRESOLVED_INTERVAL_SUBDOMAINS_REMAIN", "binary32_state": "EMPTY_AS_SUBSET_OF_PROVEN_EMPTY_CONTINUOUS_DOMAIN" if terminal_classification == "REGION_PROVEN_EMPTY" else "NOT_EXHAUSTED_CONTINUOUS_WITNESS_NOT_CERTIFIED", "required_arc_result": "ALL_SUBDOMAINS_REJECTED_BY_REQUIRED_ARC" if terminal_classification == "REGION_PROVEN_EMPTY" and gate_counts.has("REQUIRED_ARC") else "CUTOFF_SUFFICES_FOR_EMPTY_REGION" if terminal_classification == "REGION_PROVEN_EMPTY" else "PARTIAL_NOT_ALL_SUBDOMAINS_REJECTED", "field_gate_result": "CLIPPED_SOURCE_ZERO_FACET; POINTWISE_CANONICAL_RECHECK_NOT_NEEDED_FOR_REJECTED_DOMAIN", "barycentric_gate_result": "CLIPPED_PATCH_FACET_DOMAIN; POINTWISE_CANONICAL_RECHECK_NOT_NEEDED_FOR_REJECTED_DOMAIN", "cutoff_gate_result": "SUBDOMAIN_UPPER_BOUNDS_RECORDED" if gate_counts.has("FROZEN_CUTOFF") else "NOT_PROVEN_EMPTY_BY_CUTOFF", "legal_option_result": "NONE_FOUND_NO_CANDIDATE_WITNESS_SCREENED", "terminal_classification": terminal_classification, "terminal_reason": "Every continuous point in the region is excluded by conservative required-arc or frozen-cutoff certificates." if terminal_classification == "REGION_PROVEN_EMPTY" else "Deterministic interval predicates did not reject every subdomain within the per-region subdivision cap; the listed frontier is resumable and no emptiness inference is made.", "proof_sha256": "", "method": "CONSERVATIVE_ORIENTATION_INTERVALS_WITH_LONGEST_EDGE_BISECTION", "subdivision_cap_per_run": node_cap}
+			row["proof_sha256"] = Core.sha256(_json_evidence_bytes(row))
+			journal.store_line(JSON.stringify(row))
+			journal.flush()
+			existing_records[region_key] = row
+			rows_for_obligation.append(row)
+			summary_counts[terminal_classification] = int(summary_counts.get(terminal_classification, 0)) + 1
+			all_records.append(row)
+		var obligation_status: String = "OBLIGATION_SAT" if summary_counts["LEGAL_OPTION_FOUND"] > 0 else "OBLIGATION_PROVEN_EMPTY" if summary_counts["REGION_PROVEN_EMPTY"] == regions.size() else "OBLIGATION_PARTIAL"
+		obligation_summaries.append({"boundary_obligation_index": obligation_index, "boundary_edge_key": obligation.get("boundary_edge_key", ""), "deterministic_resume_key": obligation.get("frontier", {}).get("deterministic_resume_key", ""), "region_count": regions.size(), "region_terminal_counts": summary_counts, "status": obligation_status, "legal_options": summary_counts["LEGAL_OPTION_FOUND"], "resumable_region_keys": rows_for_obligation.filter(func(row: Dictionary) -> bool: return row.get("terminal_classification", "") == "REGION_PARTIAL").map(func(row: Dictionary) -> String: return String(row.get("deterministic_region_key", "")))})
+	journal.close()
+	var all_sat: bool = obligation_summaries.all(func(row: Dictionary) -> bool: return String(row.get("status", "")) == "OBLIGATION_SAT")
+	var all_empty: bool = obligation_summaries.all(func(row: Dictionary) -> bool: return String(row.get("status", "")) == "OBLIGATION_PROVEN_EMPTY")
+	var terminal: String = "R6_D5_BOUNDARY_OPTIONS_COMPLETE_CANDIDATE_PROMOTED" if all_sat else "R6_D5_BOUNDARY_OPTION_PROVEN_EMPTY_WITH_EVIDENCE" if all_empty else "R6_D5_PARTIAL_WITH_RESUMABLE_PROOF_FRONTIER"
+	var result: Dictionary = {"schema": "P3.1.R12CXR.R6D5.BoundaryFrontier.v1", "campaign_id": "R6-D5-BOUNDARY-PROOF-FRONTIER-20261104-01", "source_sha": OS.get_environment("R12CXR_R6D5_EXECUTION_SOURCE_SHA"), "d4_source_sha": String(d4_result.get("source_sha", "")), "d4_result_sha256": D4ResultSha, "d4_inventory_result_sha256": D4InventorySha, "candidate_signature": CandidateSignature, "frozen_graph_sha256": GraphSha, "frozen_support_count": 126, "frozen_invariants": frozen, "d4_region_inventory_sha256": DomainSha, "continuous_regions_per_obligation": regions.size(), "obligations": obligation_summaries, "region_record_count": all_records.size(), "region_terminal_counts": {"LEGAL_OPTION_FOUND": all_records.filter(func(row: Dictionary) -> bool: return row.get("terminal_classification", "") == "LEGAL_OPTION_FOUND").size(), "REGION_PROVEN_EMPTY": all_records.filter(func(row: Dictionary) -> bool: return row.get("terminal_classification", "") == "REGION_PROVEN_EMPTY").size(), "REGION_PARTIAL": all_records.filter(func(row: Dictionary) -> bool: return row.get("terminal_classification", "") == "REGION_PARTIAL").size()}, "six_existing_legal_options_regenerated": true, "regenerated_legal_boundary_indices": regenerated_legal_indices, "candidate_promoted": false, "graph_built": false, "frozen_solver": "NOT_RUN", "scientific_target_attempt_consumed": false, "journal_path": journal_path, "method": "PER_REGION_CONSERVATIVE_REQUIRED_ARC_OR_CUTOFF_INTERVAL_BRANCH_AND_BOUND", "resume_is_idempotent": true, "terminal_status": terminal, "terminal_reason": "D5 processes only boundary obligations 2/3/4 of the frozen D2 candidate. Every unresolved subdomain is retained in the append-only region journal; no cap is treated as infeasibility."}
+	_write_result(output_path, result, "R12CXR_R6D5_BOUNDARY_FRONTIER")
 
 func _run_r6d_causal_localization(output_path: String, triangles: Array[Dictionary], root_positions: Dictionary, realizer: RefCounted, base: Dictionary, values: PackedFloat32Array, roi: Dictionary, residual_fixture: Dictionary) -> void:
 	var input_path: String = "res://tests/prototypes/fixtures/r12_cxr_r6d/rejected-cavity-y1c.json"

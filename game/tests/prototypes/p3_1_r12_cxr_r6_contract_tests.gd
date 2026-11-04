@@ -7,6 +7,7 @@ const R6Campaign := preload("res://tests/prototypes/p3_1_r12_cxr_r6_campaign.gd"
 const R5Synthesizer := preload("res://tests/prototypes/p3_1_r12_cxr_r5_support_synthesizer.gd")
 const R6FrozenSolver := preload("res://tests/prototypes/p3_1_r12_cxr_r6_frozen_solver.gd")
 const R6DCausalMap := preload("res://tests/prototypes/p3_1_r12_cxr_r6d_causal_map.gd")
+const R6D5Frontier := preload("res://tests/prototypes/p3_1_r12_cxr_r6d5_frontier.gd")
 
 var assertions: int = 0
 var failures: Array[String] = []
@@ -33,6 +34,7 @@ func _run() -> void:
 	_test_atomic_alternative_cavity_search(diagnostics)
 	_test_patch_boundary_upper_bound(diagnostics)
 	_test_r6d4_json_obligation_array_adapter()
+	_test_r6d5_interval_frontier()
 	_test_analytic_edge_witness_not_sampling_limited(diagnostics)
 	_test_mixed_lod_interface_oracle()
 	_test_r6_unbounded_frozen_graph_solver()
@@ -553,6 +555,31 @@ func _test_r6d4_json_obligation_array_adapter() -> void:
 	_expect(typeof(raw_rows) == TYPE_ARRAY and rows.size() == 2, "R6-D4 accepts JSON.parse_string untyped obligation arrays")
 	_expect(int(rows[0].get("index", -1)) == 2 and int(rows[1].get("index", -1)) == 3, "R6-D4 preserves deserialized obligation dictionary rows")
 	_expect(R6Campaign._r6d4_obligation_rows({"not": "an array"}).is_empty(), "R6-D4 fails closed on non-array obligation input")
+
+func _test_r6d5_interval_frontier() -> void:
+	var arc_a: Vector2 = Vector2(1.0, -1.0)
+	var arc_b: Vector2 = Vector2(1.0, 1.0)
+	var fixed_cross: Dictionary = R6D5Frontier._proper_cross_fixed(Vector2.ZERO, Vector2(2.0, 0.0), arc_a, arc_b)
+	_expect(bool(fixed_cross.get("proved", false)), "R6-D5 conservatively certifies a required arc crossing the fixed obligation edge")
+	var endpoint_inside: Dictionary = R6D5Frontier._endpoint_inside_triangle_for_all(Vector2.ZERO, Vector2(2.0, 0.0), Vector2(1.0, 0.5), [[0.5, 2.0], [1.5, 2.0], [1.0, 3.0]])
+	_expect(bool(endpoint_inside.get("proved", false)), "R6-D5 certifies an arc endpoint inside every triangle over a convex subdomain")
+	var endpoint_mixed: Dictionary = R6D5Frontier._endpoint_inside_triangle_for_all(Vector2.ZERO, Vector2(2.0, 0.0), Vector2(1.0, 0.5), [[0.5, 0.25], [1.5, 2.0], [1.0, 3.0]])
+	_expect(not bool(endpoint_mixed.get("proved", false)), "R6-D5 leaves a mixed endpoint interval unresolved")
+	var moving_cross: Dictionary = R6D5Frontier._moving_edge_crosses_arc_for_all(Vector2.ZERO, arc_a, arc_b, [[2.0, 0.5], [3.0, 0.5], [2.5, 1.5]])
+	_expect(bool(moving_cross.get("proved", false)), "R6-D5 certifies required-arc crossing across a moving candidate edge")
+	var split: Array[Dictionary] = R6D5Frontier.subdivide({"projected": [[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], "world": [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [1.0, 2.0, 0.0]]})
+	_expect(split.size() == 2 and split[0].projected.size() == 3 and split[1].world.size() == 3, "R6-D5 longest-edge subdivision preserves paired projected/world triangles")
+	var region: Dictionary = {"region_id": "r", "patch_face_id": "f", "tetrahedron_id": "t", "facet_index": 0, "clipped_world_polygon": [[0, 0, 0], [1, 0, 0], [0, 1, 0]], "clipped_projected_polygon": [[0, 0], [1, 0], [0, 1]]}
+	_expect(R6D5Frontier.geometry_sha(region) == R6D5Frontier.geometry_sha(region), "R6-D5 region geometry identity hashes deterministically")
+	var resumable_region: Dictionary = {"region_id": "resume", "patch_face_id": "f", "tetrahedron_id": "t", "facet_index": 0, "clipped_world_polygon": [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [1.0, 2.0, 0.0]], "clipped_projected_polygon": [[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]]}
+	var queue0: Array[Dictionary] = R6D5Frontier.initial_cells(resumable_region)
+	var positions: Dictionary = {"A": Vector2.ZERO, "B": Vector2(2.0, 0.0), "__world__A": Vector3.ZERO, "__world__B": Vector3(2.0, 0.0, 0.0)}
+	var first_pass: Dictionary = R6D5Frontier.advance_frontier(queue0, [], Vector2.ZERO, Vector2(2.0, 0.0), ["A", "B"], [], positions, 2)
+	var persisted: Dictionary = JSON.parse_string(JSON.stringify(first_pass))
+	var resumed: Dictionary = R6D5Frontier.advance_frontier(persisted.frontier_cells, persisted.proof_leaf_certificates, Vector2.ZERO, Vector2(2.0, 0.0), ["A", "B"], [], positions, 3)
+	var direct: Dictionary = R6D5Frontier.advance_frontier(queue0, [], Vector2.ZERO, Vector2(2.0, 0.0), ["A", "B"], [], positions, 5)
+	_expect(int(first_pass.processed_cells) == 2 and int(resumed.processed_cells) == 3, "R6-D5 persists exact processed-cell counts across a controlled resume")
+	_expect(JSON.stringify(resumed.frontier_cells) == JSON.stringify(direct.frontier_cells) and JSON.stringify(resumed.proof_leaf_certificates) == JSON.stringify(direct.proof_leaf_certificates), "R6-D5 resumed subdivision reproduces a single deterministic run")
 
 func _test_analytic_edge_witness_not_sampling_limited(diagnostics: RefCounted) -> void:
 	var realizer: RefCounted = R6Realizer.new()
