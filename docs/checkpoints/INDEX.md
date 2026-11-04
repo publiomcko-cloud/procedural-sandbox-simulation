@@ -1,3 +1,7 @@
+## 2026-11-04 — P3.1 R12-CXR R6-D4 boundary completion
+
+- [R6-D4 boundary completion PARTIAL](2026-11-04-P3-1-R12-CXR-R6-D4-PARTIAL.md) — D2 candidate remains at 6/9; obligations 2/3/4 retain 117-region resumable frontiers; no emptiness proof, graph promotion, solver run, or scientific target attempt.
+
 ## 2026-11-01 — P3.1 R12-CXR R5-4 synthesis result
 
 - [R5-4 synthesis result](2026-11-01-P3-1-R12-CXR-R5-ATTEMPT-04-SYNTHESIS-RESULT.md) — one valid frozen target run returned PARTIAL with 2,416 finite critical candidates and zero retained supports; D3/downstream skipped; no continuum-exhaustion or structural-incompatibility claim.
