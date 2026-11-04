@@ -34,6 +34,8 @@ P2.0C source commit `057536f1680d5118e9c9990c137e1812f8cc8244` adds versioned da
 
 Godot 4.7.2 procedural 3D sandbox: versioned SDF terrain, caves, additive/subtractive brushes and localized chunk remeshing. **Functional finite prototypes exist; a production-ready endless world, persistent saves, multiplayer, LOD, collision, mods and simulation do not.**
 
+**Experimental R6 status (2026-11-04):** R6-D5 is `R6_D5_PARTIAL_WITH_RESUMABLE_PROOF_FRONTIER` for the frozen D2 candidate. Obligations 2/3/4 retain 289 resumable clipped regions after conservative interval rejection; no new option was found, no cavity/graph/solver promotion occurred, and no scientific target attempt was consumed. See the [D5 result](docs/reports/P3-1-R12-CXR-R6/R6-D5/RESULTS.md), [checkpoint](docs/checkpoints/2026-11-04-P3-1-R12-CXR-R6-D5-PARTIAL.md), and [raw evidence inventory](docs/reports/P3-1-R12-CXR-R6/evidence/r6-d5/). This is test-only research evidence; no merge, production adoption, release, or protected-state change is implied.
+
 ## Start here — authoritative continuity
 
 1. [Current status](docs/status/CURRENT_STATUS.md) — last recorded integrated SHA, active work, risks and next owner gate. **Compare with live GitHub refs**; this file is a snapshot, not real-time state.

@@ -1,0 +1,3 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+R12CXR_R6D5_BOUNDARY_FRONTIER {"d3_started":false,"legal_triangles":"NOT_RUN","output_path":"C:\\Users\\PUBLI\\AppData\\Local\\Temp\\R6D5-boundary-frontier-e6e33d8-20261104.json","result_sha256":"1528c15562bc39f830b1ca9234a80b927085325a91cee347dcc35bd9ef51b402","status":"UNKNOWN_NOT_CAPTURED","supports":"UNKNOWN_NOT_CAPTURED","terminal_reason":"D5 processes only boundary obligations 2/3/4 of the frozen D2 candidate. Every unresolved subdomain is retained in the append-only region journal; no cap is treated as infeasibility."}

@@ -83,6 +83,10 @@
 - [P3.1 R9.2 preregistration](2026-10-28-P3-1-R9.2-PREREGISTRATION.md) — Issue #175, contract P3.1.R9.2.contract.v1, 20 scenario rows, manifest SHA-256 1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972; candidate execution remains NOT_RUN.
 # Documentary checkpoint index — project recovery
 
+## 2026-11-04 — P3.1 R12-CXR R6-D5 boundary frontier PARTIAL
+
+- [R6-D5 partial frontier](2026-11-04-P3-1-R12-CXR-R6-D5-PARTIAL.md) — frozen D2 obligations 2/3/4 processed across 351 regions; 62 region-local empties, 289 resumable regions, zero new legal options; candidate/graph/solver not promoted/run; no scientific target attempt consumed.
+
 ## 2026-10-30 — P3.1 R12-C Stage 0 passed; C1 not applicable
 
 - [R12-C Stage 0 result and A6 provenance correction](2026-10-30-P3-1-R12-C-STAGE0-RESULT.md) — primary R10-A6 raw archive pins `de53e9fa...`; Stage 0 exact topology/volume/component fixture passes; C1 has zero eligible interior degree-2 roots and is unconsumed; C2 preregistered before execution.
