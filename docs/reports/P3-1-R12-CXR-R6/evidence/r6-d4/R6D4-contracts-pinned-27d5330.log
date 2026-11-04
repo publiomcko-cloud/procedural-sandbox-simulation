@@ -1,0 +1,13 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+R6_Y1B_REAL_DOMAIN_SAMPLE {"affine_accepted_identity_count":8,"affine_skipped":0,"affine_tested":125,"finite_complete":true,"identity_sets_equal":true,"legacy_accepted_identity_count":8,"legacy_tested":125,"oracle_barycentric_rejections":90,"oracle_field_and_barycentric_passes":8,"oracle_residual_rejections":27,"source_cell_global_lattice":[60,8,25],"source_cell_local":[0,4,1],"source_result_sha256":"fc94cec0848dc395cad83d066bc488b294cd86342459e4ae74f3324aa3176a31","source_tetrahedron":4,"window_triples":125}
+R12CXR_R6_CONTRACTS assertions=150 failures=0
+ERROR: 5 RID allocations of type 'N16RendererViewport8ViewportE' were leaked at exit.
+ERROR: 5 RID allocations of type 'PN13RendererDummy14TextureStorage12DummyTextureE' were leaked at exit.
+ERROR: 5 RID allocations of type 'N17RendererSceneCull8ScenarioE' were leaked at exit.
+WARNING: 5 RIDs of type "Canvas" were leaked.
+   at: _free_rids (servers/rendering/renderer_canvas_cull.cpp:2735)
+WARNING: 67 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 1 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)

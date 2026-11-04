@@ -1,9 +1,9 @@
 # R6-D4 — Boundary option completion: PARTIAL
 
-Date: 2026-11-04  
-Branch: `exp/p3-1-r12-cxr-r6-realization-map-cavity`  
-Tooling source: `27d5330bffe4873e3e585d708e998f9d40d502b3` (parent `451a43b1e86844471eb8c18c3f88ae297a088028`)  
-D4 campaign input source: `451a43b1e86844471eb8c18c3f88ae297a088028`  
+Date: 2026-11-04
+Branch: `exp/p3-1-r12-cxr-r6-realization-map-cavity`
+Tooling source: `27d5330bffe4873e3e585d708e998f9d40d502b3` (parent `451a43b1e86844471eb8c18c3f88ae297a088028`)
+D4 campaign input source: `451a43b1e86844471eb8c18c3f88ae297a088028`
 Godot: `4.7.2.stable.official.ed1daf0bf`, executable SHA-256 `c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643`
 
 ## Verified disposition
