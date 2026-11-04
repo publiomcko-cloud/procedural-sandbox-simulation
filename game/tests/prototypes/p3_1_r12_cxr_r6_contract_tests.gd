@@ -6,6 +6,7 @@ const CXRDownstream := preload("res://tests/prototypes/p3_1_r12_cxr_campaign.gd"
 const R6Campaign := preload("res://tests/prototypes/p3_1_r12_cxr_r6_campaign.gd")
 const R5Synthesizer := preload("res://tests/prototypes/p3_1_r12_cxr_r5_support_synthesizer.gd")
 const R6FrozenSolver := preload("res://tests/prototypes/p3_1_r12_cxr_r6_frozen_solver.gd")
+const R6DCausalMap := preload("res://tests/prototypes/p3_1_r12_cxr_r6d_causal_map.gd")
 
 var assertions: int = 0
 var failures: Array[String] = []
@@ -31,12 +32,14 @@ func _run() -> void:
 	_test_bounded_causal_cavity_search(diagnostics)
 	_test_atomic_alternative_cavity_search(diagnostics)
 	_test_patch_boundary_upper_bound(diagnostics)
+	_test_r6d4_json_obligation_array_adapter()
 	_test_analytic_edge_witness_not_sampling_limited(diagnostics)
 	_test_mixed_lod_interface_oracle()
 	_test_r6_unbounded_frozen_graph_solver()
 	_test_x2_all_arrangement_vertices()
 	_test_alternative_cavity_boundary_pair_domain()
 	_test_x4_zero_boundary_obligations()
+	_test_r6d_authoritative_seven_face_localization()
 	if failures.is_empty():
 		print("R12CXR_R6_CONTRACTS assertions=%d failures=0" % assertions)
 		quit(0)
@@ -92,6 +95,60 @@ func _test_alternative_cavity_boundary_pair_domain() -> void:
 	_expect(not bool(legacy_rejects_extension.get("valid", false)), "legacy synthesis does not silently expand beyond six vertices")
 	_expect(bool(x3_extension.get("valid", false)) and int(x3_extension.get("possible_source_pairs", 0)) == 21, "R6-X3 admits a seven-vertex cavity with all 21 source pairs")
 	_expect(not bool(over_cap.get("valid", false)) and int(over_cap.get("possible_source_pairs", 0)) == 36, "alternative cavity pair cap remains finite and fail-closed")
+
+func _test_r6d_authoritative_seven_face_localization() -> void:
+	var realizer: RefCounted = R6Realizer.new()
+	var root_positions: Dictionary = {}
+	var triangles: Array[Dictionary] = []
+	var face_ids: Array[String] = []
+	var center_id: String = "R6D_TEST_CENTER"
+	root_positions[center_id] = Vector3.ZERO
+	for index in range(7):
+		var angle: float = TAU * float(index) / 7.0
+		var outer_id: String = "R6D_TEST_OUTER_%d" % index
+		root_positions[outer_id] = Vector3(cos(angle), sin(angle), 0.0)
+	for index in range(7):
+		var outer_id: String = "R6D_TEST_OUTER_%d" % index
+		var next_id: String = "R6D_TEST_OUTER_%d" % ((index + 1) % 7)
+		var face_id: String = "R6D_TEST_FACE_%d" % index
+		face_ids.append(face_id)
+		triangles.append(_r6d_test_triangle(face_id, [center_id, outer_id, next_id], root_positions))
+	for index in range(7):
+		var angle: float = TAU * (float(index) + 0.5) / 7.0
+		var far_id: String = "R6D_TEST_FAR_%d" % index
+		root_positions[far_id] = Vector3(2.0 * cos(angle), 2.0 * sin(angle), 0.25)
+		var outer_id: String = "R6D_TEST_OUTER_%d" % index
+		var next_id: String = "R6D_TEST_OUTER_%d" % ((index + 1) % 7)
+		triangles.append(_r6d_test_triangle("R6D_TEST_OUTSIDE_%d" % index, [next_id, outer_id, far_id], root_positions))
+	realizer.set("_root_positions", root_positions)
+	var legacy_registry_ids: Array[String] = []
+	var resolved: Dictionary = R6DCausalMap.resolve_face_registry(triangles, face_ids)
+	var reconstructed: Dictionary = R6DCausalMap.reconstruct_cavity(realizer, triangles, face_ids)
+	var reversed: Array[String] = face_ids.duplicate()
+	reversed.reverse()
+	var reconstructed_reverse: Dictionary = R6DCausalMap.reconstruct_cavity(realizer, triangles, reversed)
+	_expect(legacy_registry_ids.is_empty() and bool(resolved.get("valid", false)) and int(resolved.get("resolved_count", 0)) == 7, "R6-D authoritative face registry resolves seven IDs absent from the legacy residual registry")
+	_expect(bool(reconstructed.get("valid", false)) and reconstructed.get("patch", []).size() == 7, "R6-D reconstructs the full authoritative seven-face patch")
+	_expect(bool(reconstructed.get("connectivity", {}).get("valid", false)) and bool(reconstructed.get("boundary", {}).get("valid", false)), "R6-D seven-face patch connectivity and boundary gates pass")
+	_expect(reconstructed.get("cycles", {}).get("component_count", 0) == 1 and reconstructed.get("boundary_signature", "") == reconstructed_reverse.get("boundary_signature", ""), "R6-D cavity signature is stable under reversed face order")
+	var missing_ids: Array[String] = face_ids.duplicate()
+	missing_ids[0] = "R6D_TEST_FACE_MISSING"
+	var duplicate_ids: Array[String] = face_ids.duplicate()
+	duplicate_ids[1] = duplicate_ids[0]
+	_expect(not bool(R6DCausalMap.resolve_face_registry(triangles, missing_ids).get("valid", false)), "R6-D authoritative registry fails closed for a missing face ID")
+	_expect(not bool(R6DCausalMap.resolve_face_registry(triangles, duplicate_ids).get("valid", false)), "R6-D authoritative registry fails closed for duplicate face IDs")
+	var p1_pair: Array[String] = ["R6D_TEST_OUTER_0", "R6D_TEST_OUTER_1"]
+	var first_map: Dictionary = R6DCausalMap.build_causal_topology_map(realizer, triangles, reconstructed, p1_pair, [], [], root_positions, [])
+	var second_map: Dictionary = R6DCausalMap.build_causal_topology_map(realizer, triangles, reconstructed_reverse, p1_pair, [], [], root_positions, [])
+	var first_candidates: Array[Dictionary] = R6DCausalMap.generate_d1_additions(first_map)
+	var second_candidates: Array[Dictionary] = R6DCausalMap.generate_d1_additions(second_map)
+	_expect(bool(first_map.get("valid", false)) and first_map.get("d1_face_universe_sha256", "") == second_map.get("d1_face_universe_sha256", ""), "R6-D causal adjacency universe is stable under face order")
+	_expect(JSON.stringify(first_candidates) == JSON.stringify(second_candidates), "R6-D D1 candidate ordering is deterministic")
+
+func _r6d_test_triangle(triangle_id: String, ids: Array, positions: Dictionary) -> Dictionary:
+	var points: Array[Vector3] = [Vector3(positions[String(ids[0])]), Vector3(positions[String(ids[1])]), Vector3(positions[String(ids[2])])]
+	var normal: Vector3 = (points[1] - points[0]).cross(points[2] - points[0]).normalized()
+	return {"triangle_id": triangle_id, "polygon_id": "R6D_TEST_OWNER", "source_polygon_ids": ["R6D_TEST_OWNER"], "root_ids": ids.duplicate(), "points": points, "normal": normal, "cross_squared": (points[1] - points[0]).cross(points[2] - points[0]).length_squared(), "rejected": false, "construction": "R6D_AUTHORITY_FIXTURE"}
 
 func _test_x4_zero_boundary_obligations() -> void:
 	var counts: Dictionary = {"edge|b|c\u001fedge|c|d": 0, "edge|a|b\u001fedge|b|c": 4, "edge|a|d\u001fedge|c|d": 0}
@@ -482,6 +539,20 @@ func _test_patch_boundary_upper_bound(diagnostics: RefCounted) -> void:
 	_expect(int(result.get("zero_facet_clip_evaluations", 0)) == 1 and int(repeated.get("zero_facet_clip_evaluations", -1)) == 0, "R6-D reuses facet clipping for repeated cavity faces")
 	_expect(int(result.get("face_edge_metric_evaluations", 0)) == 3 and int(repeated.get("face_edge_metric_cache_hits", 0)) == 3, "R6-D reuses edge metrics across repeated cavity states")
 	_expect(repeated.get("boundary_edges", []) == result.get("boundary_edges", []), "R6-D clipping cache preserves boundary audit results")
+	var inventory_result: Dictionary = diagnostics.call("analyze_patch_boundary", realizer, patch, ["A", "B", "C"], root_positions, projection, facets, true)
+	var domain_inventory: Array = inventory_result.get("continuous_domain_inventory", [])
+	_expect(bool(inventory_result.get("continuous_domain_inventory_complete", false)) and int(inventory_result.get("continuous_domain_inventory_count", 0)) == 1, "R6-D4 emits the complete clipped zero-facet region inventory on request")
+	_expect(domain_inventory.size() == 1 and String(domain_inventory[0].get("region_id", "")) == "patch|tet-1|facet:0" and domain_inventory[0].get("clipped_world_polygon", []).size() >= 3, "R6-D4 inventory retains a stable region identity and clipped polygon")
+	var repeated_inventory: Dictionary = diagnostics.call("analyze_patch_boundary", realizer, patch, ["A", "B", "C"], root_positions, projection, facets, true)
+	_expect(String(repeated_inventory.get("continuous_domain_inventory_sha256", "")) == String(inventory_result.get("continuous_domain_inventory_sha256", "")), "R6-D4 clipped region inventory hash is deterministic across cache reuse")
+
+func _test_r6d4_json_obligation_array_adapter() -> void:
+	var parsed: Variant = JSON.parse_string("{\"obligation_records\":[{\"index\":2},{\"index\":3}]}")
+	var raw_rows: Variant = parsed.get("obligation_records", [])
+	var rows: Array = R6Campaign._r6d4_obligation_rows(raw_rows)
+	_expect(typeof(raw_rows) == TYPE_ARRAY and rows.size() == 2, "R6-D4 accepts JSON.parse_string untyped obligation arrays")
+	_expect(int(rows[0].get("index", -1)) == 2 and int(rows[1].get("index", -1)) == 3, "R6-D4 preserves deserialized obligation dictionary rows")
+	_expect(R6Campaign._r6d4_obligation_rows({"not": "an array"}).is_empty(), "R6-D4 fails closed on non-array obligation input")
 
 func _test_analytic_edge_witness_not_sampling_limited(diagnostics: RefCounted) -> void:
 	var realizer: RefCounted = R6Realizer.new()

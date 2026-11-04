@@ -7,6 +7,7 @@ const R6Realizer := preload("res://tests/prototypes/p3_1_r12_cxr_r6_realizer.gd"
 const R6FrozenSolver := preload("res://tests/prototypes/p3_1_r12_cxr_r6_frozen_solver.gd")
 const Synthesizer := preload("res://tests/prototypes/p3_1_r12_cxr_r5_support_synthesizer.gd")
 const Diagnostics := preload("res://tests/prototypes/p3_1_r12_cxr_r6_diagnostics.gd")
+const R6DCausalMap := preload("res://tests/prototypes/p3_1_r12_cxr_r6d_causal_map.gd")
 const CXRDownstream := preload("res://tests/prototypes/p3_1_r12_cxr_campaign.gd")
 const ManifestSha := "1610c535f98a11e26ca1890c0d99addf4316fbcaa7ec9cdb7dfaa71cf5bb3972"
 const Stage0Sha := "33e04446d25ec8dc21f6794b9509296e7ebcd575c2a8713edefd152f58e1cd0d"
@@ -24,6 +25,7 @@ const R4SourceSha := "f48990e25ffb1d377e02a9182240cabe35c815eb"
 const R4D1ResultSha := "927ec58f8f4e7821d9acb27a46068a4fa5fccf4f354f22b24be9cf88f90970c4"
 const R4CavitySignature := "90be2d27d3c08ccb2fe93ebf6b8a0da0d8955d3c4d533a4496809b4d07bd363b"
 const R5CavitySha := "a54a407ac84b3fd7d64108f41457d5ecc7ff335abaee6899819de579ebeae6a6"
+const R6DRejectedCavityInputSha := "7a749b15b643cdd25b91fb1835219bf23e5050ff50d6e2b09685d3f51561430b"
 const FrozenSupportSetSha := "499292cff4e6f6904fed4bb5b44d0828f82b81fbf4c7846d4680bff412fd23ea"
 const FrozenCandidateGraphSha := "de2f1121c60052324717c8d326536fc63890aacd5cc39f9a192a5f4ec4382e87"
 const FrozenCandidateGraphAuditSha := "3fd0cd4db9c8ec088857c73c54475313c06ea549f2fef8ea83b0ccb7df294afd"
@@ -49,7 +51,7 @@ func _run() -> void:
 		_run_y1_resume_check()
 		return
 	if mode.is_empty(): mode = "freeze"
-	if mode not in ["freeze", "boundary-audit", "cavity-audit", "x3-cavity-search", "x3-cavity-realize", "x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "y1a-boundary-audit", "y1-complete-support", "y1-graph-partial", "synthesize", "resume-r6-06", "resume-x2-graph"]:
+	if mode not in ["freeze", "boundary-audit", "cavity-audit", "x3-cavity-search", "x3-cavity-realize", "x4-joint-support", "x4-targeted-evidence", "x6-representability", "x6-representability-evidence", "y1a-boundary-audit", "y1-complete-support", "y1-graph-partial", "r6d-causal-localize", "r6d4-boundary-inventory", "synthesize", "resume-r6-06", "resume-x2-graph"]:
 		_fail("r6_mode_invalid", {"mode": mode})
 		return
 	if output_path.is_empty() or FileAccess.file_exists(output_path):
@@ -155,6 +157,12 @@ func _run() -> void:
 	realizer.set("_locked_triplets", realizer.call("_derive_locked_triplets", base.get("applied_flips", []), root_positions))
 	var adjacency: Dictionary = realizer.call("_adjacency", triangles)
 	realizer.call("_orient_rejected_triangles", triangles, adjacency)
+	if mode == "r6d-causal-localize":
+		_run_r6d_causal_localization(output_path, triangles, root_positions, realizer, base, volume.get("values", PackedFloat32Array()), roi, residual_fixture)
+		return
+	if mode == "r6d4-boundary-inventory":
+		_run_r6d4_boundary_inventory(output_path, triangles, root_positions, realizer, base, volume.get("values", PackedFloat32Array()), roi, residual_fixture)
+		return
 	var defect_groups: Array = realizer.call("_canonicalize_defect_groups", realizer.call("_overlapping_defect_groups", residual_fixture.get("residuals", []), adjacency))
 	var seed_ids: Array = support_fixture.get("seed_triangle_ids", [])
 	seed_ids.sort()
@@ -2344,6 +2352,514 @@ func _projection_context(realizer: RefCounted, patch: Array[Dictionary], root_po
 		polygon.append(Vector2(delta.dot(axis_u), delta.dot(axis_v)))
 	return {"valid": true, "origin": origin, "axis_u": axis_u, "axis_v": axis_v, "polygon": polygon}
 
+func _run_r6d4_boundary_inventory(output_path: String, triangles: Array[Dictionary], root_positions: Dictionary, realizer: RefCounted, base: Dictionary, values: PackedFloat32Array, roi: Dictionary, residual_fixture: Dictionary) -> void:
+	var r6d_result_path: String = OS.get_environment("R12CXR_R6D_RESULT_PATH")
+	var r6d_result_bytes: PackedByteArray = FileAccess.get_file_as_bytes(r6d_result_path)
+	var r6d_result_sha: String = Core.sha256(r6d_result_bytes)
+	if r6d_result_sha != "226bdbbc9fa61692548d0d38eb5eb0a1f2a96802c4a97049d5f30206f15272f3":
+		_fail("r6d4_authoritative_result_hash_mismatch", {"observed": r6d_result_sha, "expected": "226bdbbc9fa61692548d0d38eb5eb0a1f2a96802c4a97049d5f30206f15272f3"})
+		return
+	var d4_input_path: String = OS.get_environment("R12CXR_R6D4_INPUT_PATH")
+	var d4_input_bytes: PackedByteArray = FileAccess.get_file_as_bytes(d4_input_path)
+	var d4_input_value: Variant = JSON.parse_string(d4_input_bytes.get_string_from_utf8())
+	if typeof(d4_input_value) != TYPE_DICTIONARY:
+		_fail("r6d4_completion_input_parse_failed", {"path": d4_input_path})
+		return
+	var d4_result: Dictionary = d4_input_value
+	if String(d4_result.get("schema", "")) != "P3.1.R12CXR.R6D4.BoundaryOptionCompletion.v1" or String(d4_result.get("authoritative_input_sha256", "")) != r6d_result_sha or String(d4_result.get("source_sha", "")) != OS.get_environment("R12CXR_SOURCE_SHA"):
+		_fail("r6d4_completion_input_identity_mismatch", {"schema": d4_result.get("schema", ""), "input_sha256": d4_result.get("authoritative_input_sha256", ""), "source_sha": d4_result.get("source_sha", "")})
+		return
+	var selected: Dictionary = d4_result.get("selected_candidate", {})
+	var candidate_faces: Array[String] = _string_array(selected.get("face_ids", []))
+	var candidate_signature: String = String(selected.get("candidate_signature", ""))
+	var prequalification: Dictionary = R6DCausalMap.prequalify_topology(realizer, triangles, candidate_faces, root_positions)
+	if not bool(prequalification.get("valid", false)) or String(prequalification.get("boundary_signature", "")) != candidate_signature:
+		_fail("r6d4_selected_candidate_reconstruction_mismatch", {"valid": prequalification.get("valid", false), "observed_signature": prequalification.get("boundary_signature", ""), "expected_signature": candidate_signature})
+		return
+	var projection: Dictionary = _projection_context(realizer, prequalification.get("patch", []), root_positions, prequalification.get("boundary_cycle", []))
+	if not bool(projection.get("valid", false)):
+		_fail("r6d4_candidate_projection_reconstruction_failed", projection)
+		return
+	var projection_rows: Dictionary = {"origin": _vector3_array(projection.origin), "axis_u": _vector3_array(projection.axis_u), "axis_v": _vector3_array(projection.axis_v)}
+	var zero_inventory: Dictionary = Diagnostics.new().call("collect_zero_facet_inventory", realizer, values, roi)
+	if not bool(zero_inventory.get("valid", false)):
+		_fail("r6d4_zero_facet_inventory_failed", zero_inventory)
+		return
+	var boundary_audit: Dictionary = Diagnostics.new().call("analyze_patch_boundary", realizer, prequalification.get("patch", []), prequalification.get("boundary_cycle", []), root_positions, projection_rows, zero_inventory.get("facets", []), true)
+	if not bool(boundary_audit.get("valid", false)) or not bool(boundary_audit.get("continuous_domain_inventory_complete", false)):
+		_fail("r6d4_clipped_domain_inventory_incomplete", boundary_audit)
+		return
+	var region_ids: Array[String] = []
+	for region_value in boundary_audit.get("continuous_domain_inventory", []):
+		var region: Dictionary = region_value
+		region_ids.append(String(region.get("region_id", "")))
+	var updated: Dictionary = d4_result.duplicate(true)
+	updated["d4_continuous_domain_inventory"] = {"complete": true, "candidate_signature": candidate_signature, "continuous_region_count": region_ids.size(), "continuous_domain_inventory_sha256": boundary_audit.get("continuous_domain_inventory_sha256", "UNKNOWN_NOT_CAPTURED"), "regions": boundary_audit.get("continuous_domain_inventory", []), "source_zero_facet_inventory_sha256": zero_inventory.get("inventory_sha256", zero_inventory.get("sha256", "UNKNOWN_NOT_CAPTURED")), "proof_subdivision_started": false}
+	var obligation_rows: Array = _r6d4_obligation_rows(updated.get("obligation_records", []))
+	for obligation_index in range(obligation_rows.size()):
+		var obligation: Dictionary = obligation_rows[obligation_index]
+		var matched_edge: Dictionary = {}
+		for edge_value in boundary_audit.get("boundary_edges", []):
+			var edge: Dictionary = edge_value
+			if String(edge.get("edge_id", "")) == String(obligation.get("boundary_edge_key", "")):
+				matched_edge = edge
+				break
+		if matched_edge.is_empty():
+			_fail("r6d4_boundary_obligation_reconstruction_mismatch", {"boundary_edge_key": obligation.get("boundary_edge_key", "")})
+			return
+		if int(matched_edge.get("clipped_zero_facet_piece_count", -1)) != region_ids.size():
+			_fail("r6d4_obligation_region_count_mismatch", {"boundary_edge_key": obligation.get("boundary_edge_key", ""), "observed_edge_piece_count": matched_edge.get("clipped_zero_facet_piece_count", -1), "inventory_count": region_ids.size()})
+			return
+		obligation["continuous_inventory_complete"] = true
+		obligation["continuous_inventory_status"] = "COMPLETE_CLIPPED_ZERO_FACET_POLYGONS_RECONSTRUCTED"
+		obligation["continuous_region_count"] = region_ids.size()
+		obligation["continuous_domain_inventory_sha256"] = boundary_audit.get("continuous_domain_inventory_sha256", "UNKNOWN_NOT_CAPTURED")
+		obligation["continuous_region_ids"] = region_ids.duplicate()
+		obligation["continuous_feasible_region_count"] = "NOT_YET_SUBDIVIDED_BY_REQUIRED_ARC_GATES"
+		var frontier: Dictionary = obligation.get("frontier", {})
+		frontier["remaining_clipped_zero_facet_regions"] = region_ids.size()
+		frontier["remaining_region_ids"] = region_ids.duplicate()
+		frontier["processed_regions"] = 0
+		frontier["next_region_index"] = 0
+		frontier["next_method"] = "DETERMINISTIC_REQUIRED_ARC_INTERVAL_BRANCH_AND_BOUND"
+		frontier["reason"] = "The complete continuous clipped-domain inventory is now persisted; the required-arc arrangement has not been subdivided, so the candidate remains PARTIAL rather than empty."
+		obligation["frontier"] = frontier
+		obligation_rows[obligation_index] = obligation
+	updated["obligation_records"] = obligation_rows
+	updated["terminal_reason"] = "The selected D2 candidate retains three obligations with no legal graph option. Their complete clipped zero-facet domains are reconstructed and hashed; every stored analytic witness is rejected by required-arc checks, but interval subdivision of the full domain union and binary32 exhaustion remain open."
+	updated["proof_frontier"] = {"selected_candidate_signature": candidate_signature, "all_three_missing_obligations_have_complete_clipped_domain_inventory": true, "required_arc_branch_and_bound_started": false, "binary32_domain_exhaustion": false, "deterministic_resume_keys": obligation_rows.filter(func(row: Dictionary) -> bool: return row.get("terminal_classification", "") == "PARTIAL_WITH_RESUMABLE_PROOF_FRONTIER").map(func(row: Dictionary) -> String: return String(row.get("frontier", {}).get("deterministic_resume_key", "")))}
+	var written: bool = _write_result(output_path, updated, "R12CXR_R6D4_BOUNDARY_INVENTORY")
+	if not written: return
+	var unresolved_boundary_indices: Array[int] = []
+	for obligation_value in obligation_rows:
+		var obligation: Dictionary = obligation_value
+		if String(obligation.get("candidate_signature", "")) == candidate_signature and String(obligation.get("terminal_classification", "")) == "PARTIAL_WITH_RESUMABLE_PROOF_FRONTIER":
+			unresolved_boundary_indices.append(int(obligation.get("boundary_index", -1)))
+	print("R6D4_BOUNDARY_INVENTORY " + JSON.stringify({"status": updated.get("terminal_status", "UNKNOWN_NOT_CAPTURED"), "candidate_signature": candidate_signature, "coverage": String(updated.get("selected_candidate", {}).get("coverage_after_D4", "UNKNOWN_NOT_CAPTURED")), "unresolved_obligation_count": unresolved_boundary_indices.size(), "unresolved_boundary_indices": unresolved_boundary_indices, "continuous_region_count": region_ids.size(), "continuous_domain_inventory_sha256": boundary_audit.get("continuous_domain_inventory_sha256", "UNKNOWN_NOT_CAPTURED")}))
+	quit(0)
+
+static func _r6d4_obligation_rows(value: Variant) -> Array:
+	# JSON.parse_string returns an untyped Array. Keep this boundary untyped so
+	# deserialized evidence can be updated without a runtime typed-array error.
+	return value if typeof(value) == TYPE_ARRAY else []
+
+func _run_r6d_causal_localization(output_path: String, triangles: Array[Dictionary], root_positions: Dictionary, realizer: RefCounted, base: Dictionary, values: PackedFloat32Array, roi: Dictionary, residual_fixture: Dictionary) -> void:
+	var input_path: String = "res://tests/prototypes/fixtures/r12_cxr_r6d/rejected-cavity-y1c.json"
+	var input_bytes: PackedByteArray = FileAccess.get_file_as_bytes(input_path)
+	if input_bytes.is_empty() or Core.sha256(input_bytes) != R6DRejectedCavityInputSha:
+		_fail("r6d_authoritative_cavity_input_hash_mismatch", {"observed": Core.sha256(input_bytes), "expected": R6DRejectedCavityInputSha})
+		return
+	var input_value: Variant = JSON.parse_string(input_bytes.get_string_from_utf8())
+	if typeof(input_value) != TYPE_DICTIONARY:
+		_fail("r6d_authoritative_cavity_input_parse_failed", {})
+		return
+	var input: Dictionary = input_value
+	if String(input.get("schema", "")) != "P3.1.R12CXR.R6D.AuthoritativeRejectedCavity.v1" or String(input.get("campaign_id", "")) != "R6-D-CAUSAL-ARC-CROSSING-20261103-01" or String(input.get("candidate_graph_sha256", "")) != "8a560270de725d11a88cff210b66ddd7f98df6ba1018d49eb5f26fa961baf249" or int(input.get("support_count", 0)) != 126 or not bool(input.get("identity_crosscheck", {}).get("all_sources_agree", false)):
+		_fail("r6d_authoritative_cavity_input_identity_invalid", {"schema": input.get("schema", ""), "campaign_id": input.get("campaign_id", ""), "candidate_graph_sha256": input.get("candidate_graph_sha256", ""), "support_count": input.get("support_count", 0)})
+		return
+	var selected_ids: Array = input.get("authoritative_face_ids", [])
+	if selected_ids.size() != 7:
+		_fail("r6d_authoritative_cavity_face_count_invalid", {"count": selected_ids.size()})
+		return
+	var cavity: Dictionary = R6DCausalMap.reconstruct_cavity(realizer, triangles, selected_ids, String(input.get("rejected_cavity_boundary_signature", "")))
+	if not bool(cavity.get("valid", false)):
+		_fail("r6d_authoritative_cavity_reconstruction_failed", cavity)
+		return
+	var topology_map: Dictionary = R6DCausalMap.build_causal_topology_map(realizer, triangles, cavity, input.get("p1_boundary_pair", []), input.get("blocking_required_arc_ids", []), input.get("p1_region_ids", []), root_positions, base.get("arc_map", []))
+	if not bool(topology_map.get("valid", false)):
+		_fail("r6d_causal_topology_map_reconstruction_failed", topology_map)
+		return
+	var first_candidates: Array[Dictionary] = R6DCausalMap.generate_d1_additions(topology_map)
+	var second_candidates: Array[Dictionary] = R6DCausalMap.generate_d1_additions(topology_map)
+	var first_manifest_bytes: PackedByteArray = JSON.stringify(first_candidates, "\t", false).to_utf8_buffer()
+	var second_manifest_bytes: PackedByteArray = JSON.stringify(second_candidates, "\t", false).to_utf8_buffer()
+	if first_manifest_bytes != second_manifest_bytes:
+		_fail("r6d_d1_candidate_manifest_repeat_mismatch", {})
+		return
+	var prequalification_rows: Array[Dictionary] = []
+	var topology_pass_count: int = 0
+	var causal_p1_removed_count: int = 0
+	var zero_inventory: Dictionary = Diagnostics.new().call("collect_zero_facet_inventory", realizer, values, roi)
+	if not bool(zero_inventory.get("valid", false)):
+		_fail("r6d_zero_facet_inventory_failed", zero_inventory)
+		return
+	for candidate_value in first_candidates:
+		var candidate: Dictionary = candidate_value
+		var prequalification: Dictionary = R6DCausalMap.prequalify_topology(realizer, triangles, candidate.get("face_ids", []), root_positions)
+		var p1_remains_boundary: bool = false
+		if bool(prequalification.get("valid", false)):
+			topology_pass_count += 1
+			for directed_value in prequalification.get("boundary", {}).get("directed_edges", []):
+				var endpoints: PackedStringArray = String(directed_value).split("->")
+				if endpoints.size() == 2 and String(realizer.call("_edge_key", String(endpoints[0]), String(endpoints[1]))) == String(topology_map.get("p1_edge_key", "")):
+					p1_remains_boundary = true
+					break
+			if not p1_remains_boundary: causal_p1_removed_count += 1
+		var continuous_audit: Dictionary = {"started": false, "reason": "TOPOLOGY_PREQUALIFICATION_FAILED"}
+		if bool(prequalification.get("valid", false)):
+			var projection: Dictionary = _projection_context(realizer, prequalification.patch, root_positions, prequalification.boundary_cycle)
+			if bool(projection.get("valid", false)):
+				var projection_rows: Dictionary = {"origin": _vector3_array(projection.origin), "axis_u": _vector3_array(projection.axis_u), "axis_v": _vector3_array(projection.axis_v)}
+				continuous_audit = Diagnostics.new().call("analyze_patch_boundary", R6Realizer.new(), prequalification.patch, prequalification.boundary_cycle, root_positions, projection_rows, zero_inventory.get("facets", []))
+				continuous_audit["started"] = true
+				continuous_audit["projection_valid"] = true
+				continuous_audit["required_arc_option_screen"] = _r6d_required_arc_option_screen(realizer, continuous_audit, prequalification, cavity.patch, triangles, root_positions, projection, base, residual_fixture)
+			else:
+				continuous_audit = {"started": true, "valid": false, "projection_valid": false, "projection_failure": projection}
+		prequalification_rows.append({"transformation": candidate.get("transformation", ""), "face_ids": candidate.get("face_ids", []), "added_face_ids": candidate.get("added_face_ids", []), "removed_face_ids": candidate.get("removed_face_ids", []), "symmetric_difference_count": candidate.get("symmetric_difference_count", -1), "topology_pass": prequalification.get("valid", false), "topology_reason": prequalification.get("reason", ""), "boundary_signature": prequalification.get("boundary_signature", ""), "boundary_cycle": prequalification.get("boundary_cycle", []), "p1_remains_boundary": p1_remains_boundary, "p1_causal_topology_gate": "OLD_P1_REMOVED" if bool(prequalification.get("valid", false)) and not p1_remains_boundary else "REQUIRES_CONTINUOUS_RECERTIFICATION" if bool(prequalification.get("valid", false)) else "NOT_REACHED", "continuous_boundary_audit": continuous_audit})
+	var graph_extension: Dictionary = _r6d_expand_graph_and_solve(prequalification_rows, first_candidates, cavity.patch, triangles, root_positions, realizer, base, residual_fixture)
+	var d2_result: Dictionary = _r6d_d2_two_ring(input, topology_map, cavity, triangles, root_positions, realizer, base, residual_fixture, zero_inventory.get("facets", []))
+	if not bool(graph_extension.get("started", false)) and bool(d2_result.get("candidate_graph_extension", {}).get("started", false)):
+		graph_extension = d2_result.candidate_graph_extension
+	var d3_result: Dictionary = _r6d_d3_local_replacements(topology_map, cavity, triangles, root_positions, realizer, base, residual_fixture, zero_inventory.get("facets", []))
+	if not bool(graph_extension.get("started", false)) and bool(d3_result.get("candidate_graph_extension", {}).get("started", false)):
+		graph_extension = d3_result.candidate_graph_extension
+	var terminal_status: String = "R6_D_CAUSAL_PREQUALIFICATION_PARTIAL_WITH_EVIDENCE"
+	var terminal_reason: String = "D1/D2/D3 causal candidates have continuous boundary witnesses but no candidate has canonical legal graph options covering every required boundary edge; continuous/discrete option-domain emptiness is not proved, so no cavity is rejected or promoted."
+	var cavity_promoted: bool = false
+	if bool(graph_extension.get("started", false)):
+		cavity_promoted = true
+		if String(graph_extension.get("frozen_solver", {}).get("status", "")) == "SAT":
+			terminal_status = "R6_D_CAUSAL_PROMOTED_CAVITY_PARTIAL_WITH_RESUMABLE_FRONTIER"
+			terminal_reason = "A cavity reached complete boundary-option coverage and the frozen solver returned SAT; downstream realization remains to run."
+		else:
+			terminal_reason = "A cavity reached boundary-option coverage and its complete captured finite graph was solved; support-domain completeness and the next blocker frontier remain to be established."
+	var result: Dictionary = {
+		"schema": "P3.1.R12CXR.R6D.CausalLocalization.v1",
+		"status": terminal_status,
+		"terminal_reason": terminal_reason,
+		"campaign_id": String(input.campaign_id),
+		"source_sha": OS.get_environment("R12CXR_SOURCE_SHA"),
+		"target_attempt_consumed": false,
+		"scientific_candidate_promoted": cavity_promoted,
+		"frozen_invariants": {"cutoff_squared": 1.0e-12, "residual_epsilon": 1.0e-7, "barycentric_epsilon": 1.0e-7, "candidate_graph_sha256": input.candidate_graph_sha256, "support_count": input.support_count, "topology_sha256": TopologySha, "volume_sha256": VolumeSha},
+		"authoritative_input_sha256": R6DRejectedCavityInputSha,
+		"authoritative_face_source": "Y1C selected_cavity_face_ids resolved against complete campaign triangles; residual-c6.json not used as face registry",
+		"localization": {"valid": true, "selected_face_count": cavity.face_ids.size(), "selected_face_ids": cavity.face_ids, "complete_triangles_count": triangles.size(), "triangle_registry_sha256": cavity.registry_identity_sha256, "boundary_signature": cavity.boundary_signature, "boundary_cycle": cavity.cycles.cycles[0].get("root_ids", []), "connectivity_valid": cavity.connectivity.valid, "boundary_valid": cavity.boundary.valid, "cycle_count": cavity.cycles.component_count},
+		"causal_topology_map": topology_map,
+		"d1": {"face_universe_count": topology_map.d1_face_universe.size(), "face_universe": topology_map.d1_face_universe, "face_universe_sha256": topology_map.d1_face_universe_sha256, "candidate_count": first_candidates.size(), "candidate_manifest_sha256": Core.sha256(first_manifest_bytes), "deterministic_repeat_pass": true, "topology_pass_count": topology_pass_count, "p1_removed_candidate_count": causal_p1_removed_count, "prequalification": prequalification_rows},
+		"next_gate": "RESUME_TARGETED_BINARY32_FRONTIER_OR_CAUSAL_D3_EXTENSION",
+		"proof_frontier": {"d1_d2_d3_topology_families_screened": true, "all_examined_candidates_have_continuous_boundary_witness_inventory": true, "all_boundary_obligations_have_legal_graph_options": false, "continuous_or_binary32_option_domain_exhaustion": false, "finite_analytic_witness_candidate_frontiers": {"d1": prequalification_rows.map(func(row: Dictionary) -> Variant: return row.get("continuous_boundary_audit", {}).get("required_arc_option_screen", {}).get("witness_frontier", [])), "d2": d2_result.get("topology_rows", []).map(func(row: Dictionary) -> Variant: return row.get("continuous_boundary_audit", {}).get("required_arc_option_screen", {}).get("witness_frontier", [])), "d3": d3_result.get("resumable_frontier", [])}},
+		"continuous_inventory": {"valid": true, "zero_facet_count": zero_inventory.get("facets", []).size(), "inventory_sha256": zero_inventory.get("inventory_sha256", zero_inventory.get("sha256", "UNKNOWN_NOT_CAPTURED")), "certification": "ANALYTIC_CLIPPED_ZERO_FACET_BOUNDARY_MAXIMA_AND_VALIDATED_WITNESS_CONSTRUCTION"},
+		"causal_graph_extension": graph_extension,
+		"d2_two_ring": d2_result,
+		"d3_local_replacements": d3_result
+	}
+	var written: bool = _write_result(output_path, result, "R12CXR_R6D_CAUSAL_LOCALIZATION")
+	if not written: return
+	print("R6D_CAUSAL_LOCALIZATION " + JSON.stringify({"status": result.status, "source_sha": result.source_sha, "selected_face_count": cavity.face_ids.size(), "triangles_count": triangles.size(), "d1_candidates": first_candidates.size(), "d1_topology_pass": topology_pass_count, "p1_removed": causal_p1_removed_count, "candidate_manifest_sha256": result.d1.candidate_manifest_sha256}))
+	quit(0)
+
+func _r6d_required_arc_option_screen(realizer: RefCounted, audit: Dictionary, prequalification: Dictionary, residual_patch: Array[Dictionary], all_triangles: Array[Dictionary], root_positions: Dictionary, projection: Dictionary, base: Dictionary, residual_fixture: Dictionary) -> Dictionary:
+	var rows: Array[Dictionary] = []
+	var pass_count: int = 0
+	var graph_option_count: int = 0
+	var crossing_count: int = 0
+	var candidate_cap_per_edge: int = 4096
+	var witness_candidates_examined: int = 0
+	var witness_frontier: Array[Dictionary] = []
+	for edge_value in audit.get("boundary_edges", []):
+		var edge: Dictionary = edge_value
+		var roots: Array = edge.get("root_ids", [])
+		var candidates: Array = edge.get("feasible_incident_triangle_witness_candidates", [])
+		if candidates.is_empty():
+			var primary_witness: Dictionary = edge.get("feasible_incident_triangle_witness", {})
+			if bool(primary_witness.get("valid", false)): candidates = [primary_witness]
+		if roots.size() != 2 or candidates.is_empty():
+			rows.append({"edge_id": edge.get("edge_id", ""), "state": "NO_CONTINUOUS_WITNESS", "canonical_required_arc_check": "NOT_REACHED"})
+			continue
+		var examined_for_edge: int = 0
+		for witness_value in candidates:
+			if examined_for_edge >= candidate_cap_per_edge:
+				witness_frontier.append({"edge_id": edge.get("edge_id", ""), "next_candidate_index": examined_for_edge, "remaining_witness_candidates": candidates.size() - examined_for_edge})
+				break
+			var screened: Dictionary = _r6d_screen_one_witness(realizer, witness_value, roots, prequalification, residual_patch, all_triangles, root_positions, projection, base, residual_fixture)
+			screened["edge_id"] = edge.get("edge_id", "")
+			screened["witness_index"] = examined_for_edge
+			rows.append(screened)
+			examined_for_edge += 1
+			witness_candidates_examined += 1
+			if String(screened.get("canonical_required_arc_check", "")) == "PASS": pass_count += 1
+			elif String(screened.get("arc_diagnostics", {}).get("reason", "")).contains("required_arc") or String(screened.get("arc_diagnostics", {}).get("reason", "")).contains("cross"): crossing_count += 1
+			if bool(screened.get("legal_candidate_triangle_option", false)): graph_option_count += 1
+			if bool(screened.get("legal_candidate_triangle_option", false)):
+				break
+	return {"started": true, "method": "CONTINUOUS_WITNESS_THEN_CANONICAL_R2_GRAPH_TRIANGLE_GATE", "boundary_edge_count": audit.get("boundary_edge_count", 0), "witness_candidate_cap_per_edge": candidate_cap_per_edge, "witness_candidates_examined": witness_candidates_examined, "witness_frontier": witness_frontier, "required_arc_pass_count": pass_count, "required_arc_rejection_count": crossing_count, "legal_candidate_graph_option_count": graph_option_count, "complete": witness_frontier.is_empty() and rows.filter(func(row: Dictionary) -> bool: return row.has("edge_id")).size() >= int(audit.get("boundary_edge_count", 0)), "rows": rows}
+
+func _r6d_screen_one_witness(realizer: RefCounted, witness: Dictionary, roots: Array, prequalification: Dictionary, residual_patch: Array[Dictionary], all_triangles: Array[Dictionary], root_positions: Dictionary, projection: Dictionary, base: Dictionary, residual_fixture: Dictionary) -> Dictionary:
+	var world: Array = witness.get("world_position", [])
+	if roots.size() != 2 or world.size() != 3: return {"state": "WITNESS_POSITION_INVALID", "legal_candidate_triangle_option": false}
+	var point: Vector3 = Vector3(float(world[0]), float(world[1]), float(world[2]))
+	var support_id: String = "R6D_WITNESS_" + Core.sha256(PackedFloat32Array([point.x, point.y, point.z]).to_byte_array()).substr(0, 20)
+	var projected_positions: Dictionary = {}
+	for root_id_value in root_positions.keys():
+		var root_id: String = String(root_id_value)
+		var delta: Vector3 = Vector3(root_positions[root_id]) - Vector3(projection.origin)
+		projected_positions[root_id] = Vector2(delta.dot(Vector3(projection.axis_u)), delta.dot(Vector3(projection.axis_v)))
+	var point_delta: Vector3 = point - Vector3(projection.origin)
+	projected_positions[support_id] = Vector2(point_delta.dot(Vector3(projection.axis_u)), point_delta.dot(Vector3(projection.axis_v)))
+	var triangle_ids: Array[String] = [String(roots[0]), String(roots[1]), support_id]
+	var arc_result: Dictionary = realizer.call("_r2_triangle_respects_required_arcs", triangle_ids, {"projected_positions": projected_positions, "residual_fixture": {"arc_map": base.get("arc_map", [])}})
+	var graph_triangle: Dictionary = {"started": false, "valid": false, "reason": "REQUIRED_ARC_REJECTED"}
+	if bool(arc_result.get("valid", false)):
+		var support_row: Dictionary = {"support_id": support_id, "world_position": point, "accepted": true, "supported": true, "frozen_field_interpolated_residual": float(witness.get("continuous_field_residual", NAN)), "binary32_position_identity": PackedFloat32Array([point.x, point.y, point.z]).to_byte_array().hex_encode()}
+		var graph_realizer: RefCounted = R6Realizer.new()
+		graph_realizer.set("_root_positions", root_positions); graph_realizer.set("_required_arc_keys", realizer.get("_required_arc_keys")); graph_realizer.set("_locked_triplets", realizer.get("_locked_triplets")); graph_realizer.set("_cxr_active_phase", "r4"); graph_realizer.set("_cxr_active_snapshot", realizer.get("_cxr_active_snapshot")); graph_realizer.set("_cxr_search_started_usec", Time.get_ticks_usec()); graph_realizer.set("_cxr_cavity_started_usec", Time.get_ticks_usec()); graph_realizer.set("_cxr_search_nodes_total", 0); graph_realizer.set("_cxr_search_nodes_cavity", 0); graph_realizer.set("_cxr_candidate_triangles_total", 0); graph_realizer.set("_cxr_candidate_triangles_cavity", 0)
+		var candidate_fixture: Dictionary = residual_fixture.duplicate(true); candidate_fixture["arc_map"] = base.get("arc_map", []).duplicate(true); candidate_fixture["applied_flips"] = base.get("applied_flips", []).duplicate(true)
+		var candidate_patch: Array[Dictionary] = prequalification.get("patch", []); var candidate_face_ids: Array = prequalification.get("face_ids", []); var residual_owner_patch: Array[Dictionary] = []
+		for source_triangle_value in residual_patch:
+			var source_triangle: Dictionary = source_triangle_value.duplicate(true)
+			if not String(source_triangle.get("polygon_id", "")).is_empty(): residual_owner_patch.append(source_triangle)
+		var candidate_support_rows: Array[Dictionary] = [support_row]; var candidate_boundary: Dictionary = prequalification.get("boundary", {}); var campaign_triangles: Array[Dictionary] = all_triangles
+		var context_result: Dictionary = graph_realizer.call("_r2_make_search_context", candidate_patch, candidate_face_ids, residual_owner_patch, candidate_support_rows, candidate_boundary, campaign_triangles, candidate_fixture, 2, false)
+		if bool(context_result.get("valid", false)):
+			graph_triangle = graph_realizer.call("_r2_get_candidate_triangle", triangle_ids, context_result.get("context", {})); graph_triangle["started"] = true
+		else:
+			graph_triangle = {"started": true, "valid": false, "reason": context_result.get("reason", "R2_SEARCH_CONTEXT_INVALID"), "context_failure": context_result}
+	return {"support_id": support_id, "world_position_f32_hex": PackedFloat32Array([point.x, point.y, point.z]).to_byte_array().hex_encode(), "witness": witness.duplicate(true), "continuous_witness_valid": true, "cutoff_gate": float(witness.get("cross_squared", -INF)) > FROZEN_CROSS_SQUARED_CUTOFF, "field_barycentric_gate": true, "canonical_required_arc_check": "PASS" if bool(arc_result.get("valid", false)) else "REJECT", "arc_diagnostics": arc_result, "r2_candidate_graph_gate": graph_triangle, "legal_candidate_triangle_option": bool(graph_triangle.get("valid", false))}
+
+func _r6d_d2_two_ring(input: Dictionary, original_map: Dictionary, original_cavity: Dictionary, triangles: Array[Dictionary], root_positions: Dictionary, realizer: RefCounted, base: Dictionary, residual_fixture: Dictionary, zero_facets: Array[Dictionary]) -> Dictionary:
+	var base_ids: Array[String] = _string_array(original_cavity.get("face_ids", []))
+	var universe: Array[String] = _string_array(original_map.get("d1_face_universe", []))
+	var candidate_sets: Dictionary = {}
+	for first_index in range(universe.size()):
+		for second_index in range(first_index + 1, universe.size()):
+			var first_face: String = universe[first_index]
+			var second_face: String = universe[second_index]
+			if base_ids.has(first_face) or base_ids.has(second_face): continue
+			var ids: Array[String] = base_ids.duplicate()
+			ids.append(first_face); ids.append(second_face); ids.sort()
+			candidate_sets["|".join(ids)] = {"transformation": "D2_TWO_FACE_CAUSAL_EXPANSION", "face_ids": ids, "added_face_ids": [first_face, second_face], "removed_face_ids": [], "symmetric_difference_count": 2}
+	var candidates: Array[Dictionary] = []
+	for value in candidate_sets.values(): candidates.append(value)
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return "|".join(a.face_ids) < "|".join(b.face_ids))
+	var generated_manifest: PackedByteArray = JSON.stringify(candidates, "\t", false).to_utf8_buffer()
+	var repeated_rows: Array[Dictionary] = []
+	for value in candidate_sets.values(): repeated_rows.append(value)
+	repeated_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return "|".join(a.face_ids) < "|".join(b.face_ids))
+	if generated_manifest != JSON.stringify(repeated_rows, "\t", false).to_utf8_buffer(): return {"status": "D2_DETERMINISM_FAILURE", "candidate_manifest_sha256": Core.sha256(generated_manifest)}
+	var topology_rows: Array[Dictionary] = []
+	for candidate_value in candidates:
+		var candidate: Dictionary = candidate_value
+		var prequalification: Dictionary = R6DCausalMap.prequalify_topology(realizer, triangles, candidate.face_ids, root_positions)
+		var row: Dictionary = {"transformation": candidate.transformation, "face_ids": candidate.face_ids, "added_face_ids": candidate.added_face_ids, "symmetric_difference_count": candidate.symmetric_difference_count, "topology_pass": prequalification.get("valid", false), "topology_reason": prequalification.get("reason", ""), "boundary_signature": prequalification.get("boundary_signature", ""), "boundary_cycle": prequalification.get("boundary_cycle", []), "prequalification": prequalification}
+		if bool(prequalification.get("valid", false)):
+			var projection: Dictionary = _projection_context(realizer, prequalification.patch, root_positions, prequalification.boundary_cycle)
+			if bool(projection.get("valid", false)):
+				var projection_rows: Dictionary = {"origin": _vector3_array(projection.origin), "axis_u": _vector3_array(projection.axis_u), "axis_v": _vector3_array(projection.axis_v)}
+				var audit: Dictionary = Diagnostics.new().call("analyze_patch_boundary", R6Realizer.new(), prequalification.patch, prequalification.boundary_cycle, root_positions, projection_rows, zero_facets)
+				audit["required_arc_option_screen"] = _r6d_required_arc_option_screen(realizer, audit, prequalification, original_cavity.patch, triangles, root_positions, projection, base, residual_fixture)
+				row["continuous_boundary_audit"] = audit
+			else:
+				row["continuous_boundary_audit"] = {"valid": false, "projection_failure": projection}
+		topology_rows.append(row)
+	var feasible_rows: Array[Dictionary] = []
+	var feasible_candidates: Array[Dictionary] = []
+	for row in topology_rows:
+		if not bool(row.get("topology_pass", false)): continue
+		var candidate: Dictionary = {"transformation": row.transformation, "face_ids": row.face_ids, "added_face_ids": row.added_face_ids, "removed_face_ids": [], "symmetric_difference_count": 2}
+		feasible_rows.append(row); feasible_candidates.append(candidate)
+	var extension: Dictionary = {"started": false, "status": "NO_D2_CANDIDATE_HAS_COMPLETE_BOUNDARY_OPTION_COVERAGE"}
+	if not feasible_rows.is_empty(): extension = _r6d_expand_graph_and_solve(feasible_rows, feasible_candidates, original_cavity.patch, triangles, root_positions, realizer, base, residual_fixture)
+	var pass_count: int = 0
+	for row in topology_rows:
+		if bool(row.get("topology_pass", false)): pass_count += 1
+	return {"status": "R6_D_CAUSAL_D2_TWO_RING_SCREENED" if pass_count > 0 else "R6_D_CAUSAL_D2_NO_TOPOLOGY_CANDIDATES", "candidate_count": candidates.size(), "candidate_manifest_sha256": Core.sha256(generated_manifest), "deterministic_repeat_pass": true, "topology_pass_count": pass_count, "topology_rows": topology_rows, "candidate_graph_extension": extension, "scope": "two-face additions from the authoritative D1 causal face universe; no remote topology, no invariant changed"}
+
+func _r6d_d3_local_replacements(original_map: Dictionary, original_cavity: Dictionary, triangles: Array[Dictionary], root_positions: Dictionary, realizer: RefCounted, base: Dictionary, residual_fixture: Dictionary, zero_facets: Array[Dictionary]) -> Dictionary:
+	var base_ids: Array[String] = _string_array(original_cavity.get("face_ids", []))
+	var universe: Array[String] = _string_array(original_map.get("d1_face_universe", []))
+	var removable: Array[String] = _string_array(original_map.get("p1_cavity_incident_face_ids", []))
+	var candidate_sets: Dictionary = {}
+	for removed_face in removable:
+		if not base_ids.has(removed_face): continue
+		for first_index in range(universe.size()):
+			for second_index in range(first_index + 1, universe.size()):
+				var first_face: String = universe[first_index]
+				var second_face: String = universe[second_index]
+				if base_ids.has(first_face) or base_ids.has(second_face): continue
+				var ids: Array[String] = base_ids.duplicate()
+				ids.erase(removed_face); ids.append(first_face); ids.append(second_face); ids.sort()
+				candidate_sets["|".join(ids)] = {"transformation": "D3_TWO_ADD_ONE_REMOVE_ARC_CROSSING_SHIFT", "face_ids": ids, "added_face_ids": [first_face, second_face], "removed_face_ids": [removed_face], "symmetric_difference_count": 3}
+	var candidates: Array[Dictionary] = []
+	for value in candidate_sets.values(): candidates.append(value)
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a.symmetric_difference_count) != int(b.symmetric_difference_count): return int(a.symmetric_difference_count) < int(b.symmetric_difference_count)
+		return "|".join(a.face_ids) < "|".join(b.face_ids)
+	)
+	var manifest: PackedByteArray = JSON.stringify(candidates, "\t", false).to_utf8_buffer()
+	var repeat: Array[Dictionary] = []
+	for value in candidate_sets.values(): repeat.append(value)
+	repeat.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return "|".join(a.face_ids) < "|".join(b.face_ids))
+	if Core.sha256(manifest) != Core.sha256(JSON.stringify(repeat, "\t", false).to_utf8_buffer()): return {"status": "D3_DETERMINISM_FAILURE", "candidate_manifest_sha256": Core.sha256(manifest)}
+	var rows: Array[Dictionary] = []
+	var option_rows: Array[Dictionary] = []
+	var promoted_candidates: Array[Dictionary] = []
+	var screened: int = 0
+	var frontier: Array[Dictionary] = []
+	for candidate_value in candidates:
+		var candidate: Dictionary = candidate_value
+		var prequalification: Dictionary = R6DCausalMap.prequalify_topology(realizer, triangles, candidate.face_ids, root_positions)
+		var row: Dictionary = {"transformation": candidate.transformation, "face_ids": candidate.face_ids, "added_face_ids": candidate.added_face_ids, "removed_face_ids": candidate.removed_face_ids, "symmetric_difference_count": candidate.symmetric_difference_count, "topology_pass": prequalification.get("valid", false), "topology_reason": prequalification.get("reason", ""), "boundary_signature": prequalification.get("boundary_signature", ""), "boundary_cycle": prequalification.get("boundary_cycle", []), "prequalification": prequalification}
+		if bool(prequalification.get("valid", false)) and screened < 16:
+			var projection: Dictionary = _projection_context(realizer, prequalification.patch, root_positions, prequalification.boundary_cycle)
+			if bool(projection.get("valid", false)):
+				var projection_rows: Dictionary = {"origin": _vector3_array(projection.origin), "axis_u": _vector3_array(projection.axis_u), "axis_v": _vector3_array(projection.axis_v)}
+				var audit: Dictionary = Diagnostics.new().call("analyze_patch_boundary", R6Realizer.new(), prequalification.patch, prequalification.boundary_cycle, root_positions, projection_rows, zero_facets)
+				audit["required_arc_option_screen"] = _r6d_required_arc_option_screen(realizer, audit, prequalification, original_cavity.patch, triangles, root_positions, projection, base, residual_fixture)
+				row["continuous_boundary_audit"] = audit
+				option_rows.append(row)
+				promoted_candidates.append(candidate)
+			else:
+				row["continuous_boundary_audit"] = {"valid": false, "projection_failure": projection}
+			screened += 1
+		rows.append(row)
+		if bool(prequalification.get("valid", false)) and screened >= 16:
+			frontier.append({"next_candidate_index": rows.size(), "remaining_candidates": candidates.size() - rows.size(), "resume_key": "D3_TWO_ADD_ONE_REMOVE_LEXICOGRAPHIC_FACE_SET"})
+			break
+	var extension: Dictionary = {"started": false, "status": "NO_D3_CANDIDATE_HAS_COMPLETE_BOUNDARY_OPTION_COVERAGE"}
+	if not promoted_candidates.is_empty(): extension = _r6d_expand_graph_and_solve(option_rows, promoted_candidates, original_cavity.patch, triangles, root_positions, realizer, base, residual_fixture)
+	var pass_count: int = 0
+	for row in rows:
+		if bool(row.get("topology_pass", false)): pass_count += 1
+	return {"status": "R6_D_CAUSAL_D3_LOCAL_REPLACEMENTS_SCREENED" if screened > 0 else "R6_D_CAUSAL_D3_NO_TOPOLOGY_CANDIDATES", "candidate_count": candidates.size(), "candidates_screened": screened, "candidate_manifest_sha256": Core.sha256(manifest), "deterministic_repeat_pass": true, "topology_pass_count_screened": pass_count, "resumable_frontier": frontier, "rows": rows, "candidate_graph_extension": extension, "scope": "two additions plus one P1-incident removal within D1 causal face universe"}
+
+func _r6d_expand_graph_and_solve(prequalification_rows: Array[Dictionary], candidates: Array[Dictionary], residual_patch: Array[Dictionary], all_triangles: Array[Dictionary], root_positions: Dictionary, realizer: RefCounted, base: Dictionary, residual_fixture: Dictionary) -> Dictionary:
+	var chosen_candidate_index: int = -1
+	var chosen_options_by_edge: Dictionary = {}
+	var candidate_coverage: Array[Dictionary] = []
+	for row_index in range(prequalification_rows.size()):
+		var row: Dictionary = prequalification_rows[row_index]
+		if not bool(row.get("topology_pass", false)): continue
+		var screen: Dictionary = row.get("continuous_boundary_audit", {}).get("required_arc_option_screen", {})
+		var legal_by_edge: Dictionary = {}
+		for option_value in screen.get("rows", []):
+			var option: Dictionary = option_value
+			if bool(option.get("legal_candidate_triangle_option", false)) and not legal_by_edge.has(String(option.get("edge_id", ""))): legal_by_edge[String(option.edge_id)] = option
+		var edge_count: int = int(row.get("continuous_boundary_audit", {}).get("boundary_edge_count", 0))
+		candidate_coverage.append({"candidate_index": row_index, "transformation": row.get("transformation", ""), "boundary_edge_count": edge_count, "legal_option_edge_count": legal_by_edge.size(), "uncovered_edge_ids": _sorted_keys_from_dict_diff(row.get("continuous_boundary_audit", {}).get("boundary_edges", []), legal_by_edge)})
+		if edge_count > 0 and legal_by_edge.size() == edge_count:
+			chosen_candidate_index = row_index
+			chosen_options_by_edge = legal_by_edge
+			break
+	if chosen_candidate_index < 0:
+		return {"started": false, "status": "R6_D_CAUSAL_PREQUALIFICATION_PARTIAL_WITH_EVIDENCE", "reason": "NO_D1_CANDIDATE_HAS_A_CANONICAL_LEGAL_OPTION_FOR_EVERY_BOUNDARY_EDGE", "candidate_boundary_option_coverage": candidate_coverage, "graph_and_solver_not_started": true, "binary32_witness_frontier_preserved": true}
+	var prior_graph_path: String = OS.get_environment("R12CXR_R6D_PRIOR_GRAPH_PATH")
+	var prior_graph_bytes: PackedByteArray = FileAccess.get_file_as_bytes(prior_graph_path) if not prior_graph_path.is_empty() else PackedByteArray()
+	var prior_graph_sha: String = Core.sha256(prior_graph_bytes)
+	if prior_graph_sha != "0d66d5a92d0a25d6f4110d9824d0279c198845f80851d11594310aaf59d8d436":
+		return {"started": false, "status": "BLOCKED_PRIOR_GRAPH_EVIDENCE_HASH_MISMATCH", "prior_graph_sha256": prior_graph_sha, "expected_sha256": "0d66d5a92d0a25d6f4110d9824d0279c198845f80851d11594310aaf59d8d436"}
+	var graph_value: Variant = JSON.parse_string(prior_graph_bytes.get_string_from_utf8())
+	if typeof(graph_value) != TYPE_DICTIONARY:
+		return {"started": false, "status": "BLOCKED_PRIOR_GRAPH_EVIDENCE_PARSE_FAILED"}
+	var prior_graph: Dictionary = graph_value
+	if String(prior_graph.get("graph_gate", {}).get("candidate_graph_summary", {}).get("candidate_graph_sha256", "")) != "8a560270de725d11a88cff210b66ddd7f98df6ba1018d49eb5f26fa961baf249":
+		return {"started": false, "status": "BLOCKED_PRIOR_GRAPH_IDENTITY_MISMATCH"}
+	var prior_synthesis: Dictionary = prior_graph.get("synthesis", {})
+	var prior_supports: Array = prior_synthesis.get("supports", [])
+	if prior_supports.size() != 126 or _support_synthesis_fingerprint(prior_synthesis) != "e1652f048994c809cd535c7a2acb86b467b5b0a6ae2e8a11136dfd93296a87f5":
+		return {"started": false, "status": "BLOCKED_PRIOR_SUPPORT_SET_RECONSTRUCTION_MISMATCH", "support_count": prior_supports.size(), "support_set_sha256": _support_synthesis_fingerprint(prior_synthesis)}
+	var chosen_candidate: Dictionary = candidates[chosen_candidate_index]
+	var selected_prequalification: Dictionary = R6DCausalMap.prequalify_topology(realizer, all_triangles, chosen_candidate.get("face_ids", []), root_positions)
+	if not bool(selected_prequalification.get("valid", false)):
+		return {"started": false, "status": "BLOCKED_SELECTED_D1_CANDIDATE_TOPOLOGY_CHANGED", "detail": selected_prequalification}
+	var new_support_rows: Array[Dictionary] = []
+	var chosen_options: Array[Dictionary] = []
+	var unique_new_support_ids: Dictionary = {}
+	for edge_id_value in _sorted_keys(chosen_options_by_edge):
+		var option: Dictionary = chosen_options_by_edge[String(edge_id_value)]
+		chosen_options.append(option)
+		var witness: Dictionary = option.get("witness", {})
+		var world: Array = witness.get("world_position", [])
+		if world.size() != 3: return {"started": false, "status": "BLOCKED_SELECTED_WITNESS_POSITION_INVALID", "edge_id": edge_id_value}
+		var point: Vector3 = Vector3(float(world[0]), float(world[1]), float(world[2]))
+		var support_id: String = String(option.get("support_id", ""))
+		if unique_new_support_ids.has(support_id): continue
+		unique_new_support_ids[support_id] = true
+		new_support_rows.append({"candidate_id": "R6D_CAUSAL_" + Core.sha256((String(selected_prequalification.boundary_signature) + "|" + support_id).to_utf8_buffer()).substr(0, 24), "support_id": support_id, "world_position": point, "accepted": true, "supported": true, "frozen_field_interpolated_residual": float(witness.get("continuous_field_residual", NAN)), "binary32_position_identity": String(option.get("world_position_f32_hex", "")), "residual_triangle_id": "R6D_ZERO_FACET_WITNESS", "method": "R6D_CAUSAL_BOUNDARY_CONTINUOUS_WITNESS", "level": 2, "barycentric_weights": witness.get("tetra_barycentric_weights", []), "source_cell_global_lattice": [60, 8, 26], "source_cell_local": [0, 0, 0], "source_tetrahedron": int(witness.get("facet_index", -1)), "tetrahedron_sample_values": [], "constraint_clearance": 0.0, "max_constraint_cross_squared": float(witness.get("cross_squared", 0.0))})
+	var support_rows: Array[Dictionary] = []
+	var seen_position: Dictionary = {}
+	var seen_support_id: Dictionary = {}
+	for prior_value in prior_supports:
+		var prior: Dictionary = prior_value.duplicate(true)
+		var prior_id: String = String(prior.get("support_id", ""))
+		var prior_position: Array = prior.get("world_position", [])
+		if prior_id.is_empty() or prior_position.size() != 3 or seen_support_id.has(prior_id):
+			return {"started": false, "status": "BLOCKED_PRIOR_SUPPORT_ROW_INVALID", "support_id": prior_id}
+		prior["world_position"] = Vector3(float(prior_position[0]), float(prior_position[1]), float(prior_position[2]))
+		var identity: String = String(prior.get("binary32_position_identity", ""))
+		if identity.is_empty() or seen_position.has(identity):
+			return {"started": false, "status": "BLOCKED_PRIOR_SUPPORT_POSITION_IDENTITY_INVALID", "support_id": prior_id}
+		seen_support_id[prior_id] = true
+		seen_position[identity] = true
+		support_rows.append(prior)
+	for support_row in new_support_rows:
+		var support_id: String = String(support_row.get("support_id", ""))
+		if seen_support_id.has(support_id) or seen_position.has(String(support_row.get("binary32_position_identity", ""))):
+			return {"started": false, "status": "BLOCKED_NEW_SUPPORT_DUPLICATES_CARRIED_DOMAIN", "support_id": support_id}
+		seen_support_id[support_id] = true
+		seen_position[String(support_row.get("binary32_position_identity", ""))] = true
+		support_rows.append(support_row)
+	var candidate_fixture: Dictionary = residual_fixture.duplicate(true)
+	candidate_fixture["arc_map"] = base.get("arc_map", []).duplicate(true)
+	candidate_fixture["applied_flips"] = base.get("applied_flips", []).duplicate(true)
+	var owner_rows: Array[Dictionary] = []
+	for source_triangle_value in residual_patch:
+		var source_triangle: Dictionary = source_triangle_value
+		if not String(source_triangle.get("polygon_id", "")).is_empty(): owner_rows.append(source_triangle)
+	var graph_realizer: RefCounted = R6Realizer.new()
+	graph_realizer.set("_root_positions", root_positions)
+	graph_realizer.set("_required_arc_keys", realizer.get("_required_arc_keys"))
+	graph_realizer.set("_locked_triplets", realizer.get("_locked_triplets"))
+	graph_realizer.set("_cxr_active_phase", "r4")
+	graph_realizer.set("_cxr_active_snapshot", realizer.get("_cxr_active_snapshot"))
+	graph_realizer.set("_cxr_search_started_usec", Time.get_ticks_usec())
+	graph_realizer.set("_cxr_cavity_started_usec", Time.get_ticks_usec())
+	graph_realizer.set("_cxr_search_nodes_total", 0)
+	graph_realizer.set("_cxr_search_nodes_cavity", 0)
+	graph_realizer.set("_cxr_candidate_triangles_total", 0)
+	graph_realizer.set("_cxr_candidate_triangles_cavity", 0)
+	graph_realizer.set("_cxr_full_finite_graph_mode", true)
+	var graph_context_result: Dictionary = graph_realizer.call("_r2_make_search_context", selected_prequalification.patch, selected_prequalification.face_ids, owner_rows, support_rows, selected_prequalification.boundary, all_triangles, candidate_fixture, 2, false)
+	if not bool(graph_context_result.get("valid", false)):
+		return {"started": false, "status": "BLOCKED_EXTENDED_R2_CONTEXT_INVALID", "detail": graph_context_result}
+	var context: Dictionary = graph_context_result.get("context", {})
+	var vertex_ids: Array = context.get("vertex_ids", []).duplicate()
+	vertex_ids.sort()
+	var possible: int = int(vertex_ids.size() * maxi(0, vertex_ids.size() - 1) * maxi(0, vertex_ids.size() - 2) / 6)
+	var candidate_triangles: Array[Dictionary] = []
+	var triplets: int = 0
+	var reject_histogram: Dictionary = {}
+	var started: int = Time.get_ticks_usec()
+	var budget_usec: int = 600000000
+	var graph_limited: bool = false
+	for i in range(vertex_ids.size()):
+		for j in range(i + 1, vertex_ids.size()):
+			for k in range(j + 1, vertex_ids.size()):
+				if Time.get_ticks_usec() - started >= budget_usec or Performance.get_monitor(Performance.MEMORY_STATIC) >= 2147483648:
+					graph_limited = true
+					break
+				var ids: Array[String] = [String(vertex_ids[i]), String(vertex_ids[j]), String(vertex_ids[k])]
+				var triangle_result: Dictionary = graph_realizer.call("_r2_get_candidate_triangle", ids, context)
+				triplets += 1
+				if bool(triangle_result.get("limit", false)):
+					graph_limited = true
+					break
+				if bool(triangle_result.get("valid", false)):
+					candidate_triangles.append(triangle_result.get("triangle", {}))
+				else:
+					var reason: String = String(triangle_result.get("reason", "UNKNOWN_NOT_CAPTURED"))
+					reject_histogram[reason] = int(reject_histogram.get(reason, 0)) + 1
+			if graph_limited: break
+		if graph_limited: break
+	var graph_complete: bool = not graph_limited and triplets == possible
+	var graph_identity: Dictionary = Synthesizer.new().call("_candidate_graph_summary", candidate_triangles, context.get("candidate_edges", {}), context.get("support_by_id", {}))
+	var solver_result: Dictionary = {"status": "NOT_RUN_INCOMPLETE_GRAPH", "complete": false}
+	if graph_complete:
+		var support_set_sha: String = _support_synthesis_fingerprint({"valid": true, "supports": support_rows, "retained_support_count": support_rows.size(), "raw_unique_support_count": support_rows.size(), "support_cap_hit": false, "finite_candidate_enumeration_complete": false})
+		solver_result = R6FrozenSolver.new().call("solve", context, candidate_triangles, graph_realizer, {"candidate_graph_sha256": graph_identity.get("candidate_graph_sha256", ""), "support_set_sha256": support_set_sha, "expected_candidate_triangles": candidate_triangles.size(), "max_search_states_per_cavity": 16384, "max_search_usec_per_cavity": 10000000, "max_patch_triangles": 64})
+	return {"started": true, "candidate_transformation": prequalification_rows[chosen_candidate_index].get("transformation", ""), "candidate_boundary_signature": selected_prequalification.boundary_signature, "candidate_p1_remains_boundary": prequalification_rows[chosen_candidate_index].get("p1_remains_boundary", true), "candidate_boundary_option_coverage": candidate_coverage, "chosen_edge_options": chosen_options, "prior_graph_evidence_sha256": prior_graph_sha, "prior_graph_sha256": prior_graph.graph_gate.candidate_graph_summary.candidate_graph_sha256, "prior_support_set_sha256": "e1652f048994c809cd535c7a2acb86b467b5b0a6ae2e8a11136dfd93296a87f5", "prior_support_count": prior_supports.size(), "new_support_ids": unique_new_support_ids.keys(), "new_support_count": new_support_rows.size(), "extended_support_count": support_rows.size(), "extended_support_set_sha256": _support_synthesis_fingerprint({"valid": true, "supports": support_rows, "retained_support_count": support_rows.size(), "raw_unique_support_count": support_rows.size(), "support_cap_hit": false, "finite_candidate_enumeration_complete": false}), "vertex_count": vertex_ids.size(), "possible_triplets": possible, "triplets_probed": triplets, "graph_complete": graph_complete, "graph_limited": graph_limited, "legal_candidate_triangle_count": candidate_triangles.size(), "rejection_histogram": reject_histogram, "candidate_graph_identity": graph_identity, "frozen_solver": solver_result}
+
 func _project_support_position(position_value: Variant, context: Dictionary, realizer: RefCounted) -> Dictionary:
 	if not bool(context.get("valid", false)) or not (position_value is Vector3) or not Vector3(position_value).is_finite():
 		return {"valid": false, "inside_domain": false, "reason": "position_or_projection_context_invalid"}
@@ -2364,6 +2880,15 @@ func _string_array(value: Variant) -> Array[String]:
 		for item in value: result.append(String(item))
 	result.sort()
 	return result
+
+func _sorted_keys_from_dict_diff(edge_rows: Array, legal_by_edge: Dictionary) -> Array[String]:
+	var missing: Array[String] = []
+	for edge_value in edge_rows:
+		var edge: Dictionary = edge_value
+		var edge_id: String = String(edge.get("edge_id", ""))
+		if not edge_id.is_empty() and not legal_by_edge.has(edge_id): missing.append(edge_id)
+	missing.sort()
+	return missing
 
 func _r6_regenerate_support_rows(realizer: RefCounted, seed_triangles: Array[Dictionary], patch: Array[Dictionary], values: PackedFloat32Array, roi: Dictionary, support_fixture: Dictionary, seed_by_id: Dictionary) -> Dictionary:
 	if seed_triangles.is_empty(): return {"valid": false, "reason": "r6_seed_triangles_missing"}
