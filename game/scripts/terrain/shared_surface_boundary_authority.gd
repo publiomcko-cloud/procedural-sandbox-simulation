@@ -537,6 +537,7 @@ static func build_z_shared_volume(
 	var total_cell_count := 0
 	var mixed_cell_count := 0
 	var uniform_cell_count := 0
+	var tet_call_count := 0
 	var root_cache: Dictionary = {}
 	var root_position_keys: Dictionary = {}
 	var triangles: Array[Dictionary] = []
@@ -545,14 +546,10 @@ static func build_z_shared_volume(
 		for z in range(cells.z):
 			for x in range(cells.x):
 				var cell := Vector3i(x, y, z)
-				var nodes: Array[Vector3i] = []
-				var points: Array[Vector3] = []
 				var density: Array[float] = []
 				for corner_value in CORNERS:
 					var corner: Vector3i = corner_value
 					var node := cell + corner
-					nodes.append(node)
-					points.append(roi_min + Vector3(node) * step)
 					density.append(values[_index(node.x, node.y, node.z, dims)])
 				var has_solid := false
 				var has_empty := false
@@ -562,11 +559,19 @@ static func build_z_shared_volume(
 					else:
 						has_empty = true
 				total_cell_count += 1
-				if has_solid and has_empty:
-					mixed_cell_count += 1
-				else:
+				if not (has_solid and has_empty):
 					uniform_cell_count += 1
+					continue
+				mixed_cell_count += 1
+				var nodes: Array[Vector3i] = []
+				var points: Array[Vector3] = []
+				for corner_value in CORNERS:
+					var corner: Vector3i = corner_value
+					var node := cell + corner
+					nodes.append(node)
+					points.append(roi_min + Vector3(node) * step)
 				for tet in TETS:
+					tet_call_count += 1
 					var emitted := _polygonize_tet_z(
 						tet, nodes, points, density, roi_min, step, seam_z,
 						root_cache, root_position_keys
@@ -625,7 +630,7 @@ static func build_z_shared_volume(
 			"cell_count": total_cell_count,
 			"mixed_cell_count": mixed_cell_count,
 			"uniform_cell_count": uniform_cell_count,
-			"tet_call_count": total_cell_count * TETS.size(),
+			"tet_call_count": tet_call_count,
 			"triangle_candidate_count": triangle_candidate_count,
 			"triangle_count": triangles.size(),
 			"unique_root_count": root_cache.size(),
@@ -670,6 +675,7 @@ static func build_xz_corner_volume(
 	var total_cell_count := 0
 	var mixed_cell_count := 0
 	var uniform_cell_count := 0
+	var tet_call_count := 0
 	var root_cache: Dictionary = {}
 	var root_position_keys: Dictionary = {}
 	var triangles: Array[Dictionary] = []
@@ -678,14 +684,10 @@ static func build_xz_corner_volume(
 		for z in range(cells.z):
 			for x in range(cells.x):
 				var cell := Vector3i(x, y, z)
-				var nodes: Array[Vector3i] = []
-				var points: Array[Vector3] = []
 				var density: Array[float] = []
 				for corner_value in CORNERS:
 					var corner: Vector3i = corner_value
 					var node := cell + corner
-					nodes.append(node)
-					points.append(roi_min + Vector3(node) * step)
 					density.append(values[_index(node.x, node.y, node.z, dims)])
 				var has_solid := false
 				var has_empty := false
@@ -695,11 +697,19 @@ static func build_xz_corner_volume(
 					else:
 						has_empty = true
 				total_cell_count += 1
-				if has_solid and has_empty:
-					mixed_cell_count += 1
-				else:
+				if not (has_solid and has_empty):
 					uniform_cell_count += 1
+					continue
+				mixed_cell_count += 1
+				var nodes: Array[Vector3i] = []
+				var points: Array[Vector3] = []
+				for corner_value in CORNERS:
+					var corner: Vector3i = corner_value
+					var node := cell + corner
+					nodes.append(node)
+					points.append(roi_min + Vector3(node) * step)
 				for tet in TETS:
+					tet_call_count += 1
 					var emitted := _polygonize_tet_corner(
 						tet, nodes, points, density, roi_min, step, seam_x, seam_z,
 						root_cache, root_position_keys
@@ -758,7 +768,7 @@ static func build_xz_corner_volume(
 			"cell_count": total_cell_count,
 			"mixed_cell_count": mixed_cell_count,
 			"uniform_cell_count": uniform_cell_count,
-			"tet_call_count": total_cell_count * TETS.size(),
+			"tet_call_count": tet_call_count,
 			"triangle_candidate_count": triangle_candidate_count,
 			"triangle_count": triangles.size(),
 			"unique_root_count": root_cache.size(),
@@ -801,6 +811,7 @@ static func build_x_shared_volume(
 	var total_cell_count := 0
 	var mixed_cell_count := 0
 	var uniform_cell_count := 0
+	var tet_call_count := 0
 	var root_cache: Dictionary = {}
 	var root_position_keys: Dictionary = {}
 	var triangles: Array[Dictionary] = []
@@ -809,14 +820,10 @@ static func build_x_shared_volume(
 		for z in range(cells.z):
 			for x in range(cells.x):
 				var cell := Vector3i(x, y, z)
-				var nodes: Array[Vector3i] = []
-				var points: Array[Vector3] = []
 				var density: Array[float] = []
 				for corner_value in CORNERS:
 					var corner: Vector3i = corner_value
 					var node := cell + corner
-					nodes.append(node)
-					points.append(roi_min + Vector3(node) * step)
 					density.append(values[_index(node.x, node.y, node.z, dims)])
 				var has_solid := false
 				var has_empty := false
@@ -826,11 +833,19 @@ static func build_x_shared_volume(
 					else:
 						has_empty = true
 				total_cell_count += 1
-				if has_solid and has_empty:
-					mixed_cell_count += 1
-				else:
+				if not (has_solid and has_empty):
 					uniform_cell_count += 1
+					continue
+				mixed_cell_count += 1
+				var nodes: Array[Vector3i] = []
+				var points: Array[Vector3] = []
+				for corner_value in CORNERS:
+					var corner: Vector3i = corner_value
+					var node := cell + corner
+					nodes.append(node)
+					points.append(roi_min + Vector3(node) * step)
 				for tet in TETS:
+					tet_call_count += 1
 					var emitted := _polygonize_tet(
 						tet, nodes, points, density, roi_min, step, seam_x,
 						root_cache, root_position_keys
@@ -896,7 +911,7 @@ static func build_x_shared_volume(
 			"cell_count": total_cell_count,
 			"mixed_cell_count": mixed_cell_count,
 			"uniform_cell_count": uniform_cell_count,
-			"tet_call_count": total_cell_count * TETS.size(),
+			"tet_call_count": tet_call_count,
 			"triangle_candidate_count": triangle_candidate_count,
 			"triangle_count": triangles.size(),
 			"unique_root_count": root_cache.size(),
