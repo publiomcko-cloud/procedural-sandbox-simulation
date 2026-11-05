@@ -204,9 +204,17 @@ func process_queued_publications() -> int:
 
 
 func _dispatch_region_generation_jobs() -> void:
-	while _region_generation_jobs.size() < MAX_REGION_GENERATION_JOBS_IN_FLIGHT and not _pending_publication_order.is_empty():
+	# Examine each currently queued region at most once. Requests for a region
+	# that already has a worker in flight stay queued instead of being orphaned.
+	var remaining_attempts := _pending_publication_order.size()
+	while _region_generation_jobs.size() < MAX_REGION_GENERATION_JOBS_IN_FLIGHT \
+		and not _pending_publication_order.is_empty() and remaining_attempts > 0:
+		remaining_attempts -= 1
 		var id: String = _pending_publication_order.pop_front()
-		if _region_generation_task_by_id.has(id) or not _pending_region_publications.has(id):
+		if _region_generation_task_by_id.has(id):
+			_pending_publication_order.append(id)
+			continue
+		if not _pending_region_publications.has(id):
 			continue
 		var request: Dictionary = _pending_region_publications[id]
 		_pending_region_publications.erase(id)
