@@ -15,6 +15,8 @@ const MaterializedSdfStore := preload("res://scripts/terrain/terrain_materialize
 const AsyncCheckpointJob := preload("res://scripts/terrain/terrain_async_checkpoint_job.gd")
 const SharedBoundaryAuthority := preload("res://scripts/terrain/shared_surface_boundary_authority.gd")
 const SharedBoundaryMeshJob := preload("res://scripts/terrain/shared_surface_boundary_mesh_job.gd")
+const SharedZBoundaryMeshJob := preload("res://scripts/terrain/shared_surface_z_boundary_mesh_job.gd")
+const SharedCornerMeshJob := preload("res://scripts/terrain/shared_surface_corner_mesh_job.gd")
 const EntityStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 
 const BRUSH_RADIUS := 1.25
@@ -91,6 +93,9 @@ var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
 var last_mesh_diagnostics: Dictionary = {}
 var _last_shared_boundary_diagnostics: Dictionary = {}
+var _last_shared_x_boundary_diagnostics: Dictionary = {}
+var _last_shared_z_boundary_diagnostics: Dictionary = {}
+var _last_shared_corner_diagnostics: Dictionary = {}
 var last_stream_error := ""
 
 var global_rebuild_pending := false
@@ -732,10 +737,48 @@ func _update_lod_selection() -> void:
 	_update_status()
 
 
+func _is_x_edge(coordinate: Vector2i) -> bool:
+	return coordinate.x == 0 or coordinate.x == ChunkGrid.CHUNK_COUNT_X - 1
+
+
+func _is_z_edge(coordinate: Vector2i) -> bool:
+	return coordinate.y == 0 or coordinate.y == ChunkGrid.CHUNK_COUNT_Z - 1
+
+
+func _uses_shared_corner(coordinate: Vector2i) -> bool:
+	return _shared_boundary_runtime_enabled \
+		and not cave_section_enabled \
+		and _is_x_edge(coordinate) and _is_z_edge(coordinate)
+
+
 func _uses_shared_x_boundary(coordinate: Vector2i) -> bool:
 	return _shared_boundary_runtime_enabled \
 		and not cave_section_enabled \
-		and (coordinate.x == 0 or coordinate.x == ChunkGrid.CHUNK_COUNT_X - 1)
+		and _is_x_edge(coordinate) and not _is_z_edge(coordinate)
+
+
+func _uses_shared_z_boundary(coordinate: Vector2i) -> bool:
+	return _shared_boundary_runtime_enabled \
+		and not cave_section_enabled \
+		and _is_z_edge(coordinate) and not _is_x_edge(coordinate)
+
+
+func _uses_any_shared_boundary(coordinate: Vector2i) -> bool:
+	return _uses_shared_corner(coordinate) \
+		or _uses_shared_x_boundary(coordinate) \
+		or _uses_shared_z_boundary(coordinate)
+
+
+func _corner_min_region(region_key: Vector2i, coordinate: Vector2i) -> Vector2i:
+	return region_key + Vector2i(
+		-1 if coordinate.x == 0 else 0,
+		-1 if coordinate.y == 0 else 0
+	)
+
+
+func _corner_owner_for_coordinate(coordinate: Vector2i) -> String:
+	return ("minx" if coordinate.x == ChunkGrid.CHUNK_COUNT_X - 1 else "maxx") + "_" \
+		+ ("minz" if coordinate.y == ChunkGrid.CHUNK_COUNT_Z - 1 else "maxz")
 
 
 func _desired_lod_for_chunk(region_key: Vector2i, coordinate: Vector2i, current_lod: int) -> int:
@@ -743,7 +786,7 @@ func _desired_lod_for_chunk(region_key: Vector2i, coordinate: Vector2i, current_
 	# Region-edge chunks are the shared-surface collar. LOD transitions begin one
 	# chunk inward so the independently selected interior LOD never owns the
 	# regional seam.
-	if _uses_shared_x_boundary(coordinate):
+	if _uses_any_shared_boundary(coordinate):
 		return 0
 	if not lod_enabled or _lod_fallback_chunks.has(chunk_id):
 		return 0
@@ -961,15 +1004,26 @@ func _process_completed_mesh_jobs() -> void:
 			_supersede_region_stage(id)
 			continue
 		var cpu_result: Dictionary
-		if String(record.get("job_kind", "chunk")) == "shared_boundary_x":
-			var pair_result: Dictionary = job.result
-			if not pair_result.get("valid", false):
-				_fail_region_stage(id, "Shared-boundary CPU mesh job failed; previous visible meshes retained")
+		var completed_kind := String(record.get("job_kind", "chunk"))
+		if completed_kind in ["shared_boundary_x", "shared_boundary_z", "shared_corner_xz"]:
+			var shared_result: Dictionary = job.result
+			if not shared_result.get("valid", false):
+				_fail_region_stage(id, "Shared-surface CPU mesh job failed; previous visible meshes retained")
 				continue
 			var shared_side := String(record.get("shared_side", ""))
-			cpu_result = pair_result.get(shared_side, {})
-			_last_shared_boundary_diagnostics = (pair_result.get("diagnostics", {}) as Dictionary).duplicate(true)
+			cpu_result = shared_result.get(shared_side, {})
+			var diag := (shared_result.get("diagnostics", {}) as Dictionary).duplicate(true)
+			_last_shared_boundary_diagnostics = diag
+			if completed_kind == "shared_boundary_x":
+				_last_shared_x_boundary_diagnostics = diag
+			elif completed_kind == "shared_boundary_z":
+				_last_shared_z_boundary_diagnostics = diag
+			else:
+				_last_shared_corner_diagnostics = diag
 			last_mesh_diagnostics["last_shared_boundary_diagnostics"] = _last_shared_boundary_diagnostics
+			last_mesh_diagnostics["last_shared_x_boundary_diagnostics"] = _last_shared_x_boundary_diagnostics
+			last_mesh_diagnostics["last_shared_z_boundary_diagnostics"] = _last_shared_z_boundary_diagnostics
+			last_mesh_diagnostics["last_shared_corner_diagnostics"] = _last_shared_corner_diagnostics
 		else:
 			cpu_result = job.result
 		if not cpu_result.get("valid", false) or not cpu_result.has("positions"):
@@ -1046,7 +1100,17 @@ func _dispatch_mesh_jobs() -> void:
 		var job: RefCounted
 		var job_kind := "chunk"
 		var shared_side := ""
-		if _uses_shared_x_boundary(coordinate):
+		if _uses_shared_corner(coordinate):
+			var min_region := _corner_min_region(stage["region_key"], coordinate)
+			var corner_snapshot: Dictionary = SharedBoundaryAuthority.make_xz_corner_snapshot(
+				state.brush_edits, min_region
+			)
+			job = SharedCornerMeshJob.new(
+				state.world_seed, min_region, corner_snapshot, submitted_usec
+			)
+			job_kind = "shared_corner_xz"
+			shared_side = _corner_owner_for_coordinate(coordinate)
+		elif _uses_shared_x_boundary(coordinate):
 			var left_region: Vector2i = stage["region_key"] if coordinate.x == ChunkGrid.CHUNK_COUNT_X - 1 \
 				else stage["region_key"] - Vector2i.RIGHT
 			var pair_snapshot: Dictionary = SharedBoundaryAuthority.make_x_pair_snapshot(
@@ -1057,6 +1121,17 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			job_kind = "shared_boundary_x"
 			shared_side = "left" if coordinate.x == ChunkGrid.CHUNK_COUNT_X - 1 else "right"
+		elif _uses_shared_z_boundary(coordinate):
+			var low_region: Vector2i = stage["region_key"] if coordinate.y == ChunkGrid.CHUNK_COUNT_Z - 1 \
+				else stage["region_key"] - Vector2i(0, 1)
+			var z_snapshot: Dictionary = SharedBoundaryAuthority.make_z_pair_snapshot(
+				state.brush_edits, low_region, coordinate.x
+			)
+			job = SharedZBoundaryMeshJob.new(
+				state.world_seed, low_region, coordinate.x, z_snapshot, submitted_usec
+			)
+			job_kind = "shared_boundary_z"
+			shared_side = "low" if coordinate.y == ChunkGrid.CHUNK_COUNT_Z - 1 else "high"
 		else:
 			job = TerrainMeshJob.new(
 				state.world_seed, stage["region_key"], coordinate,
@@ -1066,9 +1141,15 @@ func _dispatch_mesh_jobs() -> void:
 				int(stage.get("lod_by_coordinate", {}).get(coordinate, 0))
 			)
 		var high_priority: bool = String(stage["purpose"]) in ["edit_transaction", "partial"]
+		var task_label := "P1.0C terrain chunk"
+		if job_kind == "shared_boundary_x":
+			task_label = "shared boundary X"
+		elif job_kind == "shared_boundary_z":
+			task_label = "shared boundary Z"
+		elif job_kind == "shared_corner_xz":
+			task_label = "shared corner XZ"
 		var task_id := WorkerThreadPool.add_task(
-			Callable(job, "run"), high_priority,
-			"shared boundary X" if job_kind == "shared_boundary_x" else "P1.0C terrain chunk"
+			Callable(job, "run"), high_priority, task_label
 		)
 		if task_id < 0:
 			_fail_region_stage(id, "Worker pool rejected a mesh job; previous visible meshes retained")
@@ -1481,6 +1562,9 @@ func _record_completed_operation(stage: Dictionary) -> void:
 		"edit_stage_state": "idle" if _edit_transaction.is_empty() else _edit_transaction.get("stage_state", "staging"),
 		"last_edit_rejection": _last_edit_rejection,
 		"last_shared_boundary_diagnostics": _last_shared_boundary_diagnostics.duplicate(true),
+		"last_shared_x_boundary_diagnostics": _last_shared_x_boundary_diagnostics.duplicate(true),
+		"last_shared_z_boundary_diagnostics": _last_shared_z_boundary_diagnostics.duplicate(true),
+		"last_shared_corner_diagnostics": _last_shared_corner_diagnostics.duplicate(true),
 	}
 
 
