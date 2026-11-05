@@ -250,6 +250,9 @@ static func build_x_shared_volume(
 					dropped_degenerate_candidates += int(emitted.get("dropped_degenerate", 0))
 					triangles.append_array(emitted.get("triangles", []))
 
+	var deduplicated := _deduplicate_triangles(triangles)
+	var dropped_duplicate_candidates := triangles.size() - deduplicated.size()
+	triangles = deduplicated
 	var diagnostics := analyze_world_triangles(triangles, seam_x, roi_min, roi_max)
 	var signature_rows: Array[String] = []
 	for triangle_value in triangles:
@@ -267,6 +270,7 @@ static func build_x_shared_volume(
 			break
 	diagnostics["root_identity_consistent"] = root_identity_consistent
 	diagnostics["dropped_degenerate_candidate_count"] = dropped_degenerate_candidates
+	diagnostics["dropped_duplicate_candidate_count"] = dropped_duplicate_candidates
 	diagnostics["emitted_degenerate_triangle_count"] = 0
 
 	return {
@@ -282,6 +286,23 @@ static func build_x_shared_volume(
 		"step": step,
 		"seam_x": seam_x,
 	}
+
+
+static func _deduplicate_triangles(source: Array[Dictionary]) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var seen: Dictionary = {}
+	for triangle in source:
+		var ids: Array = triangle.get("root_ids", [])
+		if ids.size() != 3:
+			continue
+		var canonical := [String(ids[0]), String(ids[1]), String(ids[2])]
+		canonical.sort()
+		var key := "|".join(canonical)
+		if seen.has(key):
+			continue
+		seen[key] = true
+		result.append(triangle)
+	return result
 
 
 static func analyze_cpu_pair_plane(
