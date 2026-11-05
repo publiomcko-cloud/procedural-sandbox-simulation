@@ -94,12 +94,11 @@ static func sample_canonical(world_seed: int, world_position: Vector3, brush_sna
 static func _sample_canonical_validated(world_seed: int, world_position: Vector3, brush_snapshot: Dictionary) -> float:
 	if not world_position.is_finite():
 		return NAN
-	var mapped: Dictionary = SPATIAL.world_to_region_local(world_position)
-	if not mapped.get("valid", false):
-		return NAN
+	var region_key := SPATIAL.region_key_for_world_position(world_position)
+	var local_position := SPATIAL.region_local_for_world_position(world_position, region_key)
 	if not brush_snapshot.is_empty():
-		return BRUSH.sample_density_snapshot(world_seed, mapped["region_key"], mapped["local_position"], false, brush_snapshot)
-	return FIELD.sample_density(world_seed, mapped["region_key"], mapped["local_position"], false)
+		return BRUSH.sample_density_snapshot(world_seed, region_key, local_position, false, brush_snapshot)
+	return FIELD.sample_density(world_seed, region_key, local_position, false)
 
 
 ## selected_fine_faces contains one to three cell face ids in either direction,
