@@ -962,7 +962,11 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 	var coordinates: Array[Vector2i] = chunk_coordinates.duplicate()
 	var token := _next_stage_token
 	_next_stage_token += 1
-	object_stream.expect_region_publication(region_key, token)
+	# Only stages that can replace the region-level terrain publication may
+	# invalidate an in-flight object publication. LOD partial stages update
+	# existing chunk meshes in place and must not cancel entity visual rebuilds.
+	if purpose == "load" or purpose == "full" or not active_regions.has(id):
+		object_stream.expect_region_publication(region_key, token)
 	var queued_times: Array[int] = []
 	var queued_now := Time.get_ticks_usec()
 	for _coordinate in coordinates:
