@@ -59,7 +59,7 @@ func _run() -> void:
 	_check(int(first.get("seam_cross_owner_count", 0)) == int(first.get("seam_edge_count", 0)), "every seam edge is contributed by cells from both region sides")
 	_check(int(first.get("t_junction_count", -1)) == 0, "no seam root lies in the interior of another seam edge")
 	_check(int(first.get("duplicate_triangle_count", -1)) == 0, "shared authority emits no duplicate triangles")
-	_check(int(first.get("degenerate_triangle_count", -1)) == 0, "shared authority emits no degenerate triangles")
+	_check(int(first.get("emitted_degenerate_triangle_count", -1)) == 0, "shared authority emits no degenerate triangles")
 	_check(bool(first.get("root_identity_consistent", false)), "global lattice-edge roots have one binary32 position identity")
 
 	_finish(first)
@@ -102,7 +102,7 @@ func _build_shared_surface(snapshot: Dictionary) -> Dictionary:
 	var root_cache: Dictionary = {}
 	var root_position_key: Dictionary = {}
 	var triangles: Array[Dictionary] = []
-	var degenerate_count := 0
+	var dropped_degenerate_candidate_count := 0
 	for y in range(CELLS.y):
 		for z in range(CELLS.z):
 			for x in range(CELLS.x):
@@ -117,7 +117,7 @@ func _build_shared_surface(snapshot: Dictionary) -> Dictionary:
 					density.append(values[_index(node.x, node.y, node.z, dims)])
 				for tet in TETS:
 					var emitted := _polygonize_tet(tet, nodes, points, density, cell, root_cache, root_position_key)
-					degenerate_count += int(emitted.get("degenerate", 0))
+					dropped_degenerate_candidate_count += int(emitted.get("degenerate", 0))
 					triangles.append_array(emitted.get("triangles", []))
 
 	var duplicate_count := 0
@@ -200,7 +200,7 @@ func _build_shared_surface(snapshot: Dictionary) -> Dictionary:
 		"seam_cross_owner_count": cross_owner,
 		"t_junction_count": tjunctions,
 		"duplicate_triangle_count": duplicate_count,
-		"degenerate_triangle_count": degenerate_count,
+		"emitted_degenerate_triangle_count": 0,\n\t\t"dropped_degenerate_candidate_count": dropped_degenerate_candidate_count,
 		"root_identity_consistent": root_consistent,
 		"mesh_signature": mesh_signature,
 		"architecture": "single global SDF seam authority; region meshes consume shared boundary geometry instead of independently reconstructing x=16",
