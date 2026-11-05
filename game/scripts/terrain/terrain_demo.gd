@@ -2470,7 +2470,7 @@ func _update_status() -> void:
 	if not package_discovery_summary.is_empty():
 		status += package_discovery_summary + "\n"
 	if _scalable_runtime_enabled:
-		status += "Materialized SDF: archived %d | hot tail %d | generation %d | %s | shared X collar %s\n" % [
+		status += "Materialized SDF: archived %d | hot tail %d | generation %d | %s | shared X/Z/corner collar %s\n" % [
 			int(edit_ledger.get_archived_edit_count()),
 			int(edit_ledger.get_tail_edit_count()),
 			_checkpoint_generation,
