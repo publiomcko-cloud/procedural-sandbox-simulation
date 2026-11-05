@@ -38,6 +38,10 @@ func _init(directory_override: String = "") -> void:
 	_world_directory = directory_override if not directory_override.is_empty() 		else ProjectSettings.globalize_path("user://worlds-v3/" + WORLD_ID)
 
 
+func get_world_directory() -> String:
+	return _world_directory
+
+
 func load_world(world_id: String = WORLD_ID) -> Dictionary:
 	reset_hot_stats()
 	last_error = ""
@@ -70,7 +74,7 @@ func load_world(world_id: String = WORLD_ID) -> Dictionary:
 	}
 
 
-func checkpoint_state(world_id: String, state: RefCounted) -> Dictionary:
+func checkpoint_state(world_id: String, state: RefCounted, use_worker_pool: bool = true) -> Dictionary:
 	last_error = ""
 	if world_id != WORLD_ID or state == null:
 		return {"ok": false, "reason": "unsupported_world_identity"}
@@ -81,7 +85,7 @@ func checkpoint_state(world_id: String, state: RefCounted) -> Dictionary:
 		if existing.get("ok", false) and existing.get("found", false):
 			_head_metadata = (existing["metadata"] as Dictionary).duplicate(true)
 	var current_generation := int(_head_metadata.get("generation", 0))
-	var plan: Dictionary = state.build_checkpoint_plan()
+	var plan: Dictionary = state.build_checkpoint_plan(use_worker_pool)
 	if not plan.get("valid", false):
 		return {
 			"ok": false,
