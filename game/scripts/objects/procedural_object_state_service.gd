@@ -197,7 +197,7 @@ func upgrade_command_snapshot_schema() -> Dictionary:
 	if not checked.get("ok", false):
 		return _failure(String(checked.get("reason", "object_state_upgrade_invalid")))
 	var persist_started := Time.get_ticks_usec()
-	var saved: Dictionary = store.save_snapshot(checked.snapshot)
+	var saved: Dictionary = store.save_validated_snapshot(checked.snapshot)
 	last_persist_duration_usec = Time.get_ticks_usec() - persist_started
 	if not saved.get("ok", false):
 		initialized = false
@@ -267,7 +267,7 @@ func upgrade_history_snapshot_schema() -> Dictionary:
 	if not checked.get("ok", false):
 		return _failure("history_upgrade_candidate_invalid:%s" % checked.get("reason", "unknown"))
 	var persist_started := Time.get_ticks_usec()
-	var saved: Dictionary = store.save_snapshot(checked.snapshot)
+	var saved: Dictionary = store.save_validated_snapshot(checked.snapshot)
 	last_persist_duration_usec = Time.get_ticks_usec() - persist_started
 	if not saved.get("ok", false):
 		initialized = false
@@ -294,7 +294,7 @@ func commit_command_candidate(candidate: Dictionary, expected_world_revision: in
 	if not checked.get("ok", false):
 		return _failure(String(checked.get("reason", "command_candidate_invalid")))
 	var persist_started := Time.get_ticks_usec()
-	var saved: Dictionary = store.save_snapshot(checked.snapshot)
+	var saved: Dictionary = store.save_validated_snapshot(checked.snapshot)
 	last_persist_duration_usec = Time.get_ticks_usec() - persist_started
 	if not saved.get("ok", false):
 		# A rename may have committed before readback failed. Require reinitialization
@@ -330,7 +330,7 @@ func _commit_candidate(candidate: Dictionary, changed_instance_id: String = "") 
 	if not checked.get("ok", false):
 		return _failure(String(checked.get("reason", "object_state_candidate_invalid")))
 	var persist_started := Time.get_ticks_usec()
-	var saved: Dictionary = store.save_snapshot(checked.snapshot)
+	var saved: Dictionary = store.save_validated_snapshot(checked.snapshot)
 	last_persist_duration_usec = Time.get_ticks_usec() - persist_started
 	if not saved.get("ok", false):
 		return _failure(String(saved.get("reason", "object_state_save_failed")))
