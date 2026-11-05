@@ -579,7 +579,9 @@ static func sample_density_snapshot(
 		return NAN
 	var world_position := SPATIAL.region_local_to_world(region_key, local_position)
 	var materialized := _sample_materialized_tiles(
-		world_position, snapshot.get("materialized_tiles", [])
+		world_position,
+		snapshot.get("materialized_tiles", []),
+		snapshot.get("materialized_tile_index", {})
 	)
 	var density: float
 	if materialized.get("found", false):
@@ -602,70 +604,113 @@ static func sample_density_snapshot(
 	return density
 
 
-static func _sample_materialized_tiles(world_position: Vector3, tiles_value: Variant) -> Dictionary:
+static func build_materialized_tile_index(tiles_value: Variant) -> Dictionary:
+	var result: Dictionary = {}
 	if typeof(tiles_value) != TYPE_ARRAY:
-		return {"found": false}
-	var epsilon := 0.00001
+		return result
+	var chunk_width := float(GRID.CELLS_PER_CHUNK_X) * GRID.SAMPLE_STEP
+	var chunk_depth := float(GRID.CELLS_PER_CHUNK_Z) * GRID.SAMPLE_STEP
 	for tile_value in tiles_value:
 		if typeof(tile_value) != TYPE_DICTIONARY:
 			continue
 		var tile: Dictionary = tile_value
 		var origin: Vector3 = tile.get("origin_world", Vector3.INF)
-		var dims: Vector3i = tile.get("dims", Vector3i.ZERO)
-		var step := float(tile.get("step", 0.0))
-		var values_value: Variant = tile.get("values", PackedFloat64Array())
-		if typeof(values_value) != TYPE_PACKED_FLOAT64_ARRAY \
-			and typeof(values_value) != TYPE_PACKED_FLOAT32_ARRAY:
+		if not origin.is_finite():
 			continue
-		var values = values_value
-		if not origin.is_finite() or dims.x < 2 or dims.y < 2 or dims.z < 2 \
-			or not is_finite(step) or step <= 0.0 \
-			or values.size() != dims.x * dims.y * dims.z:
+		var gx := roundi(origin.x / chunk_width)
+		var gz := roundi(origin.z / chunk_depth)
+		result["%d,%d" % [gx, gz]] = tile
+	return result
+
+
+static func _sample_materialized_tiles(
+	world_position: Vector3,
+	tiles_value: Variant,
+	index_value: Variant = {}
+) -> Dictionary:
+	if typeof(tiles_value) != TYPE_ARRAY:
+		return {"found": false}
+	if typeof(index_value) == TYPE_DICTIONARY and not (index_value as Dictionary).is_empty():
+		var chunk_width := float(GRID.CELLS_PER_CHUNK_X) * GRID.SAMPLE_STEP
+		var chunk_depth := float(GRID.CELLS_PER_CHUNK_Z) * GRID.SAMPLE_STEP
+		var gx := floori(world_position.x / chunk_width)
+		var gz := floori(world_position.z / chunk_depth)
+		var key := "%d,%d" % [gx, gz]
+		var index: Dictionary = index_value
+		if index.has(key):
+			var direct := _sample_materialized_tile(world_position, index[key])
+			if direct.get("found", false):
+				return direct
+	# Compatibility/fidelity fallback for old snapshots and exact-boundary cases.
+	for tile_value in tiles_value:
+		if typeof(tile_value) != TYPE_DICTIONARY:
 			continue
-		var lattice := (world_position - origin) / step
-		if lattice.x < -epsilon or lattice.y < -epsilon or lattice.z < -epsilon \
-			or lattice.x > float(dims.x - 1) + epsilon \
-			or lattice.y > float(dims.y - 1) + epsilon \
-			or lattice.z > float(dims.z - 1) + epsilon:
-			continue
-		var rx := roundi(lattice.x)
-		var ry := roundi(lattice.y)
-		var rz := roundi(lattice.z)
-		if absf(lattice.x - float(rx)) <= epsilon \
-			and absf(lattice.y - float(ry)) <= epsilon \
-			and absf(lattice.z - float(rz)) <= epsilon:
-			rx = clampi(rx, 0, dims.x - 1)
-			ry = clampi(ry, 0, dims.y - 1)
-			rz = clampi(rz, 0, dims.z - 1)
-			return {
-				"found": true,
-				"density": float(values[(ry * dims.z + rz) * dims.x + rx]),
-			}
-		var x0 := clampi(floori(lattice.x), 0, dims.x - 1)
-		var y0 := clampi(floori(lattice.y), 0, dims.y - 1)
-		var z0 := clampi(floori(lattice.z), 0, dims.z - 1)
-		var x1 := mini(x0 + 1, dims.x - 1)
-		var y1 := mini(y0 + 1, dims.y - 1)
-		var z1 := mini(z0 + 1, dims.z - 1)
-		var tx := clampf(lattice.x - float(x0), 0.0, 1.0)
-		var ty := clampf(lattice.y - float(y0), 0.0, 1.0)
-		var tz := clampf(lattice.z - float(z0), 0.0, 1.0)
-		var c000 := float(values[(y0 * dims.z + z0) * dims.x + x0])
-		var c100 := float(values[(y0 * dims.z + z0) * dims.x + x1])
-		var c010 := float(values[(y1 * dims.z + z0) * dims.x + x0])
-		var c110 := float(values[(y1 * dims.z + z0) * dims.x + x1])
-		var c001 := float(values[(y0 * dims.z + z1) * dims.x + x0])
-		var c101 := float(values[(y0 * dims.z + z1) * dims.x + x1])
-		var c011 := float(values[(y1 * dims.z + z1) * dims.x + x0])
-		var c111 := float(values[(y1 * dims.z + z1) * dims.x + x1])
-		var c00 := lerpf(c000, c100, tx)
-		var c10 := lerpf(c010, c110, tx)
-		var c01 := lerpf(c001, c101, tx)
-		var c11 := lerpf(c011, c111, tx)
-		var c0 := lerpf(c00, c10, ty)
-		var c1 := lerpf(c01, c11, ty)
-		return {"found": true, "density": lerpf(c0, c1, tz)}
+		var sampled := _sample_materialized_tile(world_position, tile_value)
+		if sampled.get("found", false):
+			return sampled
 	return {"found": false}
+
+
+static func _sample_materialized_tile(world_position: Vector3, tile_value: Variant) -> Dictionary:
+	if typeof(tile_value) != TYPE_DICTIONARY:
+		return {"found": false}
+	var tile: Dictionary = tile_value
+	var origin: Vector3 = tile.get("origin_world", Vector3.INF)
+	var dims: Vector3i = tile.get("dims", Vector3i.ZERO)
+	var step := float(tile.get("step", 0.0))
+	var values_value: Variant = tile.get("values", PackedFloat64Array())
+	if typeof(values_value) != TYPE_PACKED_FLOAT64_ARRAY \
+		and typeof(values_value) != TYPE_PACKED_FLOAT32_ARRAY:
+		return {"found": false}
+	var values = values_value
+	if not origin.is_finite() or dims.x < 2 or dims.y < 2 or dims.z < 2 \
+		or not is_finite(step) or step <= 0.0 \
+		or values.size() != dims.x * dims.y * dims.z:
+		return {"found": false}
+	var epsilon := 0.00001
+	var lattice := (world_position - origin) / step
+	if lattice.x < -epsilon or lattice.y < -epsilon or lattice.z < -epsilon \
+		or lattice.x > float(dims.x - 1) + epsilon \
+		or lattice.y > float(dims.y - 1) + epsilon \
+		or lattice.z > float(dims.z - 1) + epsilon:
+		return {"found": false}
+	var rx := roundi(lattice.x)
+	var ry := roundi(lattice.y)
+	var rz := roundi(lattice.z)
+	if absf(lattice.x - float(rx)) <= epsilon \
+		and absf(lattice.y - float(ry)) <= epsilon \
+		and absf(lattice.z - float(rz)) <= epsilon:
+		rx = clampi(rx, 0, dims.x - 1)
+		ry = clampi(ry, 0, dims.y - 1)
+		rz = clampi(rz, 0, dims.z - 1)
+		return {
+			"found": true,
+			"density": float(values[(ry * dims.z + rz) * dims.x + rx]),
+		}
+	var x0 := clampi(floori(lattice.x), 0, dims.x - 1)
+	var y0 := clampi(floori(lattice.y), 0, dims.y - 1)
+	var z0 := clampi(floori(lattice.z), 0, dims.z - 1)
+	var x1 := mini(x0 + 1, dims.x - 1)
+	var y1 := mini(y0 + 1, dims.y - 1)
+	var z1 := mini(z0 + 1, dims.z - 1)
+	var tx := clampf(lattice.x - float(x0), 0.0, 1.0)
+	var ty := clampf(lattice.y - float(y0), 0.0, 1.0)
+	var tz := clampf(lattice.z - float(z0), 0.0, 1.0)
+	var c000 := float(values[(y0 * dims.z + z0) * dims.x + x0])
+	var c100 := float(values[(y0 * dims.z + z0) * dims.x + x1])
+	var c010 := float(values[(y1 * dims.z + z0) * dims.x + x0])
+	var c110 := float(values[(y1 * dims.z + z0) * dims.x + x1])
+	var c001 := float(values[(y0 * dims.z + z1) * dims.x + x0])
+	var c101 := float(values[(y0 * dims.z + z1) * dims.x + x1])
+	var c011 := float(values[(y1 * dims.z + z1) * dims.x + x0])
+	var c111 := float(values[(y1 * dims.z + z1) * dims.x + x1])
+	var c00 := lerpf(c000, c100, tx)
+	var c10 := lerpf(c010, c110, tx)
+	var c01 := lerpf(c001, c101, tx)
+	var c11 := lerpf(c011, c111, tx)
+	var c0 := lerpf(c00, c10, ty)
+	var c1 := lerpf(c01, c11, ty)
+	return {"found": true, "density": lerpf(c0, c1, tz)}
 
 
 func get_operations_for_region(region_key: Vector2i) -> Array[Dictionary]:
