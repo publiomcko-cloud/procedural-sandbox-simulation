@@ -451,7 +451,11 @@ static func _polygonize_tet(
 	var inside: Array[int] = []
 	var outside: Array[int] = []
 	for local_index in tet:
-		if density[local_index] >= 0.0:
+		# Exact-zero samples use one deterministic half-open convention. Treating
+		# zero as empty prevents several crossed lattice edges from collapsing onto
+		# the same zero node and creating non-manifold incidence under tetrahedral
+		# decomposition. Non-zero topology and interpolation are unchanged.
+		if density[local_index] > 0.0:
 			inside.append(local_index)
 		else:
 			outside.append(local_index)
