@@ -1261,7 +1261,7 @@ func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary
 		_procedural_object_status = "Procedural objects queued" if object_error.is_empty() else "Procedural object issue: %s" % object_error
 	if region_key == focus_region_key:
 		world_state = state
-	_refresh_placement_target_indicator()
+		_refresh_placement_target_indicator()
 
 
 func _create_chunk_node(region_key: Vector2i, coordinate: Vector2i, chunk_id: String) -> MeshInstance3D:
