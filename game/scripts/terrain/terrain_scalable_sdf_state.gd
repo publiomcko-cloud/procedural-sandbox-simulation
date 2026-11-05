@@ -90,6 +90,76 @@ func get_last_sequence() -> int:
 	return _next_sequence - 1
 
 
+func get_last_operation_snapshot() -> Dictionary:
+	if _tail_operations.is_empty():
+		return {}
+	return (_tail_operations[-1] as Dictionary).duplicate(true)
+
+
+func make_async_checkpoint_snapshot() -> Dictionary:
+	var tail_copy: Array[Dictionary] = []
+	for operation in _tail_operations:
+		tail_copy.append(operation.duplicate(true))
+	return {
+		"valid": true,
+		"world_seed": world_seed,
+		"generator_version": generator_version,
+		"token_revision": revision,
+		"token_next_sequence": _next_sequence,
+		"token_lifetime_operation_count": _lifetime_operation_count,
+		"token_archived_operation_count": _archived_operation_count,
+		"tail_operations": tail_copy,
+	}
+
+
+func commit_async_checkpoint(
+	snapshot: Dictionary,
+	tile_source: RefCounted,
+	source_metadata: Dictionary
+) -> bool:
+	last_storage_error = ""
+	if not bool(snapshot.get("valid", false)) or tile_source == null:
+		last_storage_error = "async_checkpoint_input_invalid"
+		return false
+	if int(snapshot.get("world_seed", -1)) != world_seed \
+		or int(snapshot.get("generator_version", -1)) != generator_version:
+		last_storage_error = "async_checkpoint_world_identity_mismatch"
+		return false
+	var prefix: Array = snapshot.get("tail_operations", [])
+	var checkpoint_next := int(snapshot.get("token_next_sequence", -1))
+	var checkpoint_count := int(snapshot.get("token_lifetime_operation_count", -1))
+	if checkpoint_next < 0 or checkpoint_count < 0 \
+		or int(source_metadata.get("next_sequence", -2)) != checkpoint_next \
+		or int(source_metadata.get("lifetime_operation_count", -2)) != checkpoint_count \
+		or int(source_metadata.get("archived_operation_count", -2)) != checkpoint_count:
+		last_storage_error = "async_checkpoint_metadata_mismatch"
+		return false
+	if prefix.size() > _tail_operations.size():
+		last_storage_error = "async_checkpoint_tail_prefix_missing"
+		return false
+	for index in range(prefix.size()):
+		var expected: Dictionary = prefix[index]
+		var current: Dictionary = _tail_operations[index]
+		if int(current.get("sequence", -1)) != int(expected.get("sequence", -2)) \
+			or int(current.get("mode", -1)) != int(expected.get("mode", -2)) \
+			or current.get("center_world", Vector3.INF) != expected.get("center_world", Vector3.NAN) \
+			or float(current.get("radius", -1.0)) != float(expected.get("radius", -2.0)):
+			last_storage_error = "async_checkpoint_tail_prefix_diverged"
+			return false
+	var remaining: Array[Dictionary] = []
+	for index in range(prefix.size(), _tail_operations.size()):
+		remaining.append((_tail_operations[index] as Dictionary).duplicate(true))
+	_tile_source = tile_source
+	_source_metadata = source_metadata.duplicate(true)
+	_archived_operation_count = checkpoint_count
+	_tail_operations = remaining
+	_dirty_chunks.clear()
+	_overlay_tiles.clear()
+	for operation in _tail_operations:
+		_mark_query_influence_dirty(operation)
+	return true
+
+
 func get_dirty_chunk_count() -> int:
 	return _dirty_chunks.size()
 
@@ -171,7 +241,60 @@ func get_meshing_snapshot_for_chunk(region_key: Vector2i, chunk_coordinate: Vect
 	}
 
 
-func build_checkpoint_plan() -> Dictionary:
+func get_ray_snapshot(ray_origin: Vector3, ray_direction: Vector3, max_distance: float) -> Dictionary:
+	last_storage_error = ""
+	if not ray_origin.is_finite() or not ray_direction.is_finite() \
+		or not is_finite(max_distance) or max_distance < 0.0 \
+		or ray_direction.length_squared() <= 0.000001:
+		return {"valid": false, "storage_error": "invalid_ray_query", "revision": revision}
+	var direction := ray_direction.normalized()
+	var ray_end := ray_origin + direction * max_distance
+	var materialized_tiles: Array[Dictionary] = []
+	var seen_tiles: Dictionary = {}
+	# Sample the segment at <=1 m intervals. The smallest horizontal materialized
+	# tile dimension is 3 m, so this conservatively visits every crossed tile
+	# without reading the archived journal.
+	var sample_count := maxi(1, ceili(max_distance / 1.0))
+	for sample_index in range(sample_count + 1):
+		var t := float(sample_index) / float(sample_count)
+		var world := ray_origin.lerp(ray_end, t)
+		var mapped := Spatial.world_to_region_local(world)
+		if not mapped.get("valid", false):
+			continue
+		var local: Vector3 = mapped["local_position"]
+		var coordinate := Vector2i(
+			clampi(floori(local.x / (float(Grid.CELLS_PER_CHUNK_X) * Grid.SAMPLE_STEP)), 0, Grid.CHUNK_COUNT_X - 1),
+			clampi(floori(local.z / (float(Grid.CELLS_PER_CHUNK_Z) * Grid.SAMPLE_STEP)), 0, Grid.CHUNK_COUNT_Z - 1)
+		)
+		var tile_id := Grid.stable_id(mapped["region_key"], coordinate)
+		if seen_tiles.has(tile_id):
+			continue
+		seen_tiles[tile_id] = true
+		var tile_result := _get_materialized_tile(mapped["region_key"], coordinate)
+		if not tile_result.get("ok", false):
+			last_storage_error = String(tile_result.get("reason", "materialized_tile_read_failed"))
+			return {"valid": false, "storage_error": last_storage_error, "revision": revision}
+		if tile_result.get("found", false):
+			materialized_tiles.append(tile_result["tile"])
+	var arrays := _operation_arrays(_tail_operations)
+	return {
+		"valid": true,
+		"revision": revision,
+		"world_seed": world_seed,
+		"generator_version": generator_version,
+		"centers": arrays["centers"],
+		"radii": arrays["radii"],
+		"modes": arrays["modes"],
+		"sequences": arrays["sequences"],
+		"materialized_tiles": materialized_tiles,
+		"candidate_operation_count": _tail_operations.size(),
+		"tail_operation_count": _tail_operations.size(),
+		"ledger_operation_count": _lifetime_operation_count,
+		"scalable_state": true,
+	}
+
+
+func build_checkpoint_plan(use_worker_pool: bool = true) -> Dictionary:
 	last_storage_error = ""
 	var tile_replacements: Dictionary = {}
 	var ordered_ids: Array[String] = []
@@ -230,12 +353,20 @@ func build_checkpoint_plan() -> Dictionary:
 		)
 		jobs.append(job)
 		job_tile_ids.append(tile_id)
-		task_ids.append(WorkerThreadPool.add_task(
-			Callable(job, "run"), false, "materialized SDF tile"
-		))
+		if use_worker_pool:
+			task_ids.append(WorkerThreadPool.add_task(
+				Callable(job, "run"), false, "materialized SDF tile"
+			))
+		else:
+			# Async checkpoint jobs already execute off the main thread. Running tile
+			# materialization inline here avoids nested worker-pool waits/deadlocks.
+			job.run()
 
-	for task_id in task_ids:
-		WorkerThreadPool.wait_for_task_completion(task_id)
+	if use_worker_pool:
+		for task_id in task_ids:
+			if task_id < 0:
+				return {"valid": false, "reason": "materialization_worker_rejected"}
+			WorkerThreadPool.wait_for_task_completion(task_id)
 
 	var max_worker_usec := 0
 	var worker_usec_total := 0
