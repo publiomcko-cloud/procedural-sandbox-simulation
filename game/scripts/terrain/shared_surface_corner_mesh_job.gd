@@ -2,6 +2,7 @@ class_name SharedSurfaceCornerMeshJob
 extends RefCounted
 
 const Authority := preload("res://scripts/terrain/shared_surface_boundary_authority.gd")
+const WorkCache := preload("res://scripts/terrain/shared_surface_work_cache.gd")
 
 var world_seed: int
 var min_region_key: Vector2i
@@ -35,7 +36,18 @@ func run() -> void:
 			"ledger_revision": int(brush_snapshot.get("revision", -1)),
 		}
 	else:
-		result = Authority.build_xz_corner_quad(
-			world_seed, min_region_key, brush_snapshot
-		)
+		var key := "corner:%d:%d:%d:%d:%d" % [
+			world_seed,
+			int(brush_snapshot.get("revision", -1)),
+			int(brush_snapshot.get("ledger_operation_count", -1)),
+			min_region_key.x,
+			min_region_key.y,
+		]
+		result = WorkCache.get_or_build(key, Callable(self, "_build_uncached"))
 	worker_finished_usec = Time.get_ticks_usec()
+
+
+func _build_uncached() -> Dictionary:
+	return Authority.build_xz_corner_quad(
+		world_seed, min_region_key, brush_snapshot
+	)
