@@ -26,6 +26,16 @@ const TETS := [
 ]
 
 
+# P1: bounded cross-revision state for append-only shared-volume rebuilds.
+# Cached state is immutable after publication. A new revision reuses it only
+# when the materialized base is unchanged and the candidate operation stream
+# is an exact prefix extension; every other transition falls back to a full build.
+const MAX_INCREMENTAL_STATES := 32
+static var _incremental_mutex := Mutex.new()
+static var _incremental_states: Dictionary = {}
+static var _incremental_order: Array[String] = []
+
+
 static func make_x_pair_snapshot(
 	ledger: RefCounted,
 	left_region_key: Vector2i,
@@ -513,131 +523,10 @@ static func build_z_shared_volume(
 	seam_z: float,
 	diagnostics_enabled: bool = true
 ) -> Dictionary:
-	var total_started_usec := Time.get_ticks_usec()
-	if cells.x <= 0 or cells.y <= 0 or cells.z <= 0 or not is_finite(step) or step <= 0.0:
-		return {"valid": false, "reason": "invalid_volume_shape"}
-	var roi_max := roi_min + Vector3(cells) * step
-	if seam_z <= roi_min.z + EPS or seam_z >= roi_max.z - EPS:
-		return {"valid": false, "reason": "seam_outside_volume"}
-	var dims := cells + Vector3i.ONE
-	var values := PackedFloat32Array()
-	values.resize(dims.x * dims.y * dims.z)
-	var sampling_started_usec := Time.get_ticks_usec()
-	for y in range(dims.y):
-		for z in range(dims.z):
-			for x in range(dims.x):
-				var p := roi_min + Vector3(x, y, z) * step
-				var d := _sample_density(world_seed, p, brush_snapshot)
-				if not is_finite(d):
-					return {"valid": false, "reason": "non_finite_sample", "sample": [x, y, z]}
-				values[_index(x, y, z, dims)] = d
-
-	var sampling_elapsed_usec := Time.get_ticks_usec() - sampling_started_usec
-	var polygonize_started_usec := Time.get_ticks_usec()
-	var total_cell_count := 0
-	var mixed_cell_count := 0
-	var uniform_cell_count := 0
-	var tet_call_count := 0
-	var root_cache: Dictionary = {}
-	var root_position_keys: Dictionary = {}
-	var triangles: Array[Dictionary] = []
-	var dropped_degenerate_candidates := 0
-	for y in range(cells.y):
-		for z in range(cells.z):
-			for x in range(cells.x):
-				var cell := Vector3i(x, y, z)
-				var density: Array[float] = []
-				for corner_value in CORNERS:
-					var corner: Vector3i = corner_value
-					var node := cell + corner
-					density.append(values[_index(node.x, node.y, node.z, dims)])
-				var has_solid := false
-				var has_empty := false
-				for density_value in density:
-					if density_value > 0.0:
-						has_solid = true
-					else:
-						has_empty = true
-				total_cell_count += 1
-				if not (has_solid and has_empty):
-					uniform_cell_count += 1
-					continue
-				mixed_cell_count += 1
-				var nodes: Array[Vector3i] = []
-				var points: Array[Vector3] = []
-				for corner_value in CORNERS:
-					var corner: Vector3i = corner_value
-					var node := cell + corner
-					nodes.append(node)
-					points.append(roi_min + Vector3(node) * step)
-				for tet in TETS:
-					tet_call_count += 1
-					var emitted := _polygonize_tet_z(
-						tet, nodes, points, density, roi_min, step, seam_z,
-						root_cache, root_position_keys
-					)
-					dropped_degenerate_candidates += int(emitted.get("dropped_degenerate", 0))
-					triangles.append_array(emitted.get("triangles", []))
-
-	var polygonize_elapsed_usec := Time.get_ticks_usec() - polygonize_started_usec
-	var triangle_candidate_count := triangles.size()
-	var deduplicate_started_usec := Time.get_ticks_usec()
-	var deduplicated := _deduplicate_triangles(triangles)
-	var dropped_duplicate_candidates := triangles.size() - deduplicated.size()
-	var deduplicate_elapsed_usec := Time.get_ticks_usec() - deduplicate_started_usec
-	triangles = deduplicated
-	var diagnostics_started_usec := Time.get_ticks_usec()
-	var diagnostics: Dictionary = {}
-	if diagnostics_enabled:
-		diagnostics = analyze_world_triangles_z(triangles, seam_z, roi_min, roi_max)
-	var diagnostics_elapsed_usec := Time.get_ticks_usec() - diagnostics_started_usec
-	var signature_started_usec := Time.get_ticks_usec()
-	var signature_rows: Array[String] = []
-	for triangle_value in triangles:
-		var ids: Array = triangle_value["root_ids"]
-		var sorted_ids := [String(ids[0]), String(ids[1]), String(ids[2])]
-		sorted_ids.sort()
-		signature_rows.append("%s:%s" % [String(triangle_value["side"]), "|".join(sorted_ids)])
-	signature_rows.sort()
-	var signature_elapsed_usec := Time.get_ticks_usec() - signature_started_usec
-	if diagnostics_enabled:
-		var root_identity_consistent := _root_identity_consistent(root_cache, root_position_keys)
-		diagnostics["root_identity_consistent"] = root_identity_consistent
-		diagnostics["dropped_degenerate_candidate_count"] = dropped_degenerate_candidates
-		diagnostics["dropped_duplicate_candidate_count"] = dropped_duplicate_candidates
-		diagnostics["emitted_degenerate_triangle_count"] = 0
-	return {
-		"valid": true,
-		"triangles": triangles,
-		"diagnostics": diagnostics,
-		"mesh_signature": _fnv1a_64("\n".join(signature_rows)),
-		"unique_root_count": root_cache.size(),
-		"triangle_count": triangles.size(),
-		"sample_count": values.size(),
-		"roi_min": roi_min,
-		"roi_max": roi_max,
-		"step": step,
-		"seam_z": seam_z,
-		"timings_usec": {
-			"shared_sampling": sampling_elapsed_usec,
-			"shared_polygonize": polygonize_elapsed_usec,
-			"shared_deduplicate": deduplicate_elapsed_usec,
-			"shared_diagnostics": diagnostics_elapsed_usec,
-			"shared_signature": signature_elapsed_usec,
-			"shared_volume_total": Time.get_ticks_usec() - total_started_usec,
-		},
-		"work_counters": {
-			"cell_count": total_cell_count,
-			"mixed_cell_count": mixed_cell_count,
-			"uniform_cell_count": uniform_cell_count,
-			"tet_call_count": tet_call_count,
-			"triangle_candidate_count": triangle_candidate_count,
-			"triangle_count": triangles.size(),
-			"unique_root_count": root_cache.size(),
-			"sample_count": values.size(),
-		},
-
-	}
+	return _build_shared_volume(
+		"z", world_seed, brush_snapshot, roi_min, cells, step,
+		0.0, seam_z, diagnostics_enabled
+	)
 
 
 static func build_xz_corner_volume(
@@ -650,132 +539,10 @@ static func build_xz_corner_volume(
 	seam_z: float,
 	diagnostics_enabled: bool = true
 ) -> Dictionary:
-	var total_started_usec := Time.get_ticks_usec()
-	if cells.x <= 0 or cells.y <= 0 or cells.z <= 0 or not is_finite(step) or step <= 0.0:
-		return {"valid": false, "reason": "invalid_volume_shape"}
-	var roi_max := roi_min + Vector3(cells) * step
-	if seam_x <= roi_min.x + EPS or seam_x >= roi_max.x - EPS \
-		or seam_z <= roi_min.z + EPS or seam_z >= roi_max.z - EPS:
-		return {"valid": false, "reason": "corner_seam_outside_volume"}
-	var dims := cells + Vector3i.ONE
-	var values := PackedFloat32Array()
-	values.resize(dims.x * dims.y * dims.z)
-	var sampling_started_usec := Time.get_ticks_usec()
-	for y in range(dims.y):
-		for z in range(dims.z):
-			for x in range(dims.x):
-				var p := roi_min + Vector3(x, y, z) * step
-				var d := _sample_density(world_seed, p, brush_snapshot)
-				if not is_finite(d):
-					return {"valid": false, "reason": "non_finite_sample", "sample": [x, y, z]}
-				values[_index(x, y, z, dims)] = d
-
-	var sampling_elapsed_usec := Time.get_ticks_usec() - sampling_started_usec
-	var polygonize_started_usec := Time.get_ticks_usec()
-	var total_cell_count := 0
-	var mixed_cell_count := 0
-	var uniform_cell_count := 0
-	var tet_call_count := 0
-	var root_cache: Dictionary = {}
-	var root_position_keys: Dictionary = {}
-	var triangles: Array[Dictionary] = []
-	var dropped_degenerate_candidates := 0
-	for y in range(cells.y):
-		for z in range(cells.z):
-			for x in range(cells.x):
-				var cell := Vector3i(x, y, z)
-				var density: Array[float] = []
-				for corner_value in CORNERS:
-					var corner: Vector3i = corner_value
-					var node := cell + corner
-					density.append(values[_index(node.x, node.y, node.z, dims)])
-				var has_solid := false
-				var has_empty := false
-				for density_value in density:
-					if density_value > 0.0:
-						has_solid = true
-					else:
-						has_empty = true
-				total_cell_count += 1
-				if not (has_solid and has_empty):
-					uniform_cell_count += 1
-					continue
-				mixed_cell_count += 1
-				var nodes: Array[Vector3i] = []
-				var points: Array[Vector3] = []
-				for corner_value in CORNERS:
-					var corner: Vector3i = corner_value
-					var node := cell + corner
-					nodes.append(node)
-					points.append(roi_min + Vector3(node) * step)
-				for tet in TETS:
-					tet_call_count += 1
-					var emitted := _polygonize_tet_corner(
-						tet, nodes, points, density, roi_min, step, seam_x, seam_z,
-						root_cache, root_position_keys
-					)
-					dropped_degenerate_candidates += int(emitted.get("dropped_degenerate", 0))
-					triangles.append_array(emitted.get("triangles", []))
-
-	var polygonize_elapsed_usec := Time.get_ticks_usec() - polygonize_started_usec
-	var triangle_candidate_count := triangles.size()
-	var deduplicate_started_usec := Time.get_ticks_usec()
-	var deduplicated := _deduplicate_triangles(triangles)
-	var dropped_duplicate_candidates := triangles.size() - deduplicated.size()
-	var deduplicate_elapsed_usec := Time.get_ticks_usec() - deduplicate_started_usec
-	triangles = deduplicated
-	var diagnostics_started_usec := Time.get_ticks_usec()
-	var diagnostics: Dictionary = {}
-	if diagnostics_enabled:
-		diagnostics = analyze_corner_world_triangles(triangles, seam_x, seam_z, roi_min, roi_max)
-	var diagnostics_elapsed_usec := Time.get_ticks_usec() - diagnostics_started_usec
-	var signature_started_usec := Time.get_ticks_usec()
-	var signature_rows: Array[String] = []
-	for triangle_value in triangles:
-		var ids: Array = triangle_value["root_ids"]
-		var sorted_ids := [String(ids[0]), String(ids[1]), String(ids[2])]
-		sorted_ids.sort()
-		signature_rows.append("%s:%s" % [String(triangle_value["owner"]), "|".join(sorted_ids)])
-	signature_rows.sort()
-	var signature_elapsed_usec := Time.get_ticks_usec() - signature_started_usec
-	if diagnostics_enabled:
-		diagnostics["root_identity_consistent"] = _root_identity_consistent(root_cache, root_position_keys)
-		diagnostics["dropped_degenerate_candidate_count"] = dropped_degenerate_candidates
-		diagnostics["dropped_duplicate_candidate_count"] = dropped_duplicate_candidates
-		diagnostics["emitted_degenerate_triangle_count"] = 0
-	return {
-		"valid": true,
-		"triangles": triangles,
-		"diagnostics": diagnostics,
-		"mesh_signature": _fnv1a_64("\n".join(signature_rows)),
-		"unique_root_count": root_cache.size(),
-		"triangle_count": triangles.size(),
-		"sample_count": values.size(),
-		"roi_min": roi_min,
-		"roi_max": roi_max,
-		"step": step,
-		"seam_x": seam_x,
-		"seam_z": seam_z,
-		"timings_usec": {
-			"shared_sampling": sampling_elapsed_usec,
-			"shared_polygonize": polygonize_elapsed_usec,
-			"shared_deduplicate": deduplicate_elapsed_usec,
-			"shared_diagnostics": diagnostics_elapsed_usec,
-			"shared_signature": signature_elapsed_usec,
-			"shared_volume_total": Time.get_ticks_usec() - total_started_usec,
-		},
-		"work_counters": {
-			"cell_count": total_cell_count,
-			"mixed_cell_count": mixed_cell_count,
-			"uniform_cell_count": uniform_cell_count,
-			"tet_call_count": tet_call_count,
-			"triangle_candidate_count": triangle_candidate_count,
-			"triangle_count": triangles.size(),
-			"unique_root_count": root_cache.size(),
-			"sample_count": values.size(),
-		},
-
-	}
+	return _build_shared_volume(
+		"corner", world_seed, brush_snapshot, roi_min, cells, step,
+		seam_x, seam_z, diagnostics_enabled
+	)
 
 
 static func build_x_shared_volume(
@@ -787,38 +554,117 @@ static func build_x_shared_volume(
 	seam_x: float,
 	diagnostics_enabled: bool = true
 ) -> Dictionary:
+	return _build_shared_volume(
+		"x", world_seed, brush_snapshot, roi_min, cells, step,
+		seam_x, 0.0, diagnostics_enabled
+	)
+
+
+static func clear_incremental_cache() -> void:
+	_incremental_mutex.lock()
+	_incremental_states.clear()
+	_incremental_order.clear()
+	_incremental_mutex.unlock()
+
+
+static func incremental_cache_count() -> int:
+	_incremental_mutex.lock()
+	var count := _incremental_states.size()
+	_incremental_mutex.unlock()
+	return count
+
+
+static func _build_shared_volume(
+	kind: String,
+	world_seed: int,
+	brush_snapshot: Dictionary,
+	roi_min: Vector3,
+	cells: Vector3i,
+	step: float,
+	seam_x: float,
+	seam_z: float,
+	diagnostics_enabled: bool
+) -> Dictionary:
 	var total_started_usec := Time.get_ticks_usec()
 	if cells.x <= 0 or cells.y <= 0 or cells.z <= 0 or not is_finite(step) or step <= 0.0:
 		return {"valid": false, "reason": "invalid_volume_shape"}
 	var roi_max := roi_min + Vector3(cells) * step
-	if seam_x <= roi_min.x + EPS or seam_x >= roi_max.x - EPS:
-		return {"valid": false, "reason": "seam_outside_volume"}
-	var dims := cells + Vector3i.ONE
-	var values := PackedFloat32Array()
-	values.resize(dims.x * dims.y * dims.z)
-	var sampling_started_usec := Time.get_ticks_usec()
-	for y in range(dims.y):
-		for z in range(dims.z):
-			for x in range(dims.x):
-				var p := roi_min + Vector3(x, y, z) * step
-				var d := _sample_density(world_seed, p, brush_snapshot)
-				if not is_finite(d):
-					return {"valid": false, "reason": "non_finite_sample", "sample": [x, y, z]}
-				values[_index(x, y, z, dims)] = d
+	if kind == "x":
+		if seam_x <= roi_min.x + EPS or seam_x >= roi_max.x - EPS:
+			return {"valid": false, "reason": "seam_outside_volume"}
+	elif kind == "z":
+		if seam_z <= roi_min.z + EPS or seam_z >= roi_max.z - EPS:
+			return {"valid": false, "reason": "seam_outside_volume"}
+	elif kind == "corner":
+		if seam_x <= roi_min.x + EPS or seam_x >= roi_max.x - EPS \
+			or seam_z <= roi_min.z + EPS or seam_z >= roi_max.z - EPS:
+			return {"valid": false, "reason": "corner_seam_outside_volume"}
+	else:
+		return {"valid": false, "reason": "invalid_shared_volume_kind"}
 
+	var dims := cells + Vector3i.ONE
+	var cache_key := _incremental_scope_key(
+		kind, world_seed, brush_snapshot, roi_min, cells, step, seam_x, seam_z
+	)
+	var sampling_started_usec := Time.get_ticks_usec()
+	var prepared := _prepare_incremental_volume(
+		cache_key, world_seed, brush_snapshot, roi_min, cells, dims, step
+	)
 	var sampling_elapsed_usec := Time.get_ticks_usec() - sampling_started_usec
+	if not prepared.get("valid", false):
+		return prepared
+
+	var values: PackedFloat32Array = prepared["values"]
+	var exact_values: PackedFloat64Array = prepared["exact_values"]
+	var dirty_flags: PackedByteArray = prepared["dirty_flags"]
+	var cell_mixed: PackedByteArray = prepared["cell_mixed"]
+	var cell_dropped: PackedInt32Array = prepared["cell_dropped"]
+	var cell_triangles: Dictionary = prepared["cell_triangles"]
+	var cache_hit := bool(prepared.get("cache_hit", false))
+	var dirty_cell_count := int(prepared.get("dirty_cell_count", cells.x * cells.y * cells.z))
+	var applied_operation_count := int(prepared.get("applied_operation_count", 0))
+	var mixed_cell_count := int(prepared.get("mixed_cell_count", 0))
+	var uniform_cell_count := int(prepared.get("uniform_cell_count", 0))
+	var total_cell_count := cells.x * cells.y * cells.z
+
+	# If appended operations do not change a single float32 lattice sample, the
+	# exact previous geometry remains authoritative. Preserve the new exact SDF
+	# state for future appends but avoid polygonization, dedup and signatures.
+	if cache_hit and dirty_cell_count == 0:
+		var previous_result: Dictionary = prepared.get("previous_result", {})
+		if not previous_result.is_empty():
+			var reused := previous_result.duplicate(false)
+			var reused_timings: Dictionary = (previous_result.get("timings_usec", {}) as Dictionary).duplicate(true)
+			reused_timings["shared_sampling"] = sampling_elapsed_usec
+			reused_timings["shared_polygonize"] = 0
+			reused_timings["shared_deduplicate"] = 0
+			reused_timings["shared_diagnostics"] = 0
+			reused_timings["shared_signature"] = 0
+			reused_timings["shared_volume_total"] = Time.get_ticks_usec() - total_started_usec
+			reused["timings_usec"] = reused_timings
+			var reused_counters: Dictionary = (previous_result.get("work_counters", {}) as Dictionary).duplicate(true)
+			reused_counters["tet_call_count"] = 0
+			reused_counters["dirty_cell_count"] = 0
+			reused_counters["reused_cell_count"] = total_cell_count
+			reused_counters["incremental_cache_hit"] = 1
+			reused_counters["incremental_applied_operation_count"] = applied_operation_count
+			reused["work_counters"] = reused_counters
+			_store_incremental_state(cache_key, _make_incremental_state(
+				brush_snapshot, prepared, exact_values, values, cell_mixed,
+				cell_dropped, cell_triangles, mixed_cell_count, uniform_cell_count, reused
+			))
+			return reused
+
 	var polygonize_started_usec := Time.get_ticks_usec()
-	var total_cell_count := 0
-	var mixed_cell_count := 0
-	var uniform_cell_count := 0
 	var tet_call_count := 0
-	var root_cache: Dictionary = {}
-	var root_position_keys: Dictionary = {}
-	var triangles: Array[Dictionary] = []
-	var dropped_degenerate_candidates := 0
+	var dirty_root_cache: Dictionary = {}
+	var dirty_root_position_keys: Dictionary = {}
 	for y in range(cells.y):
 		for z in range(cells.z):
 			for x in range(cells.x):
+				var cell_index := _cell_index(x, y, z, cells)
+				if dirty_flags[cell_index] == 0:
+					continue
 				var cell := Vector3i(x, y, z)
 				var density: Array[float] = []
 				for corner_value in CORNERS:
@@ -832,11 +678,26 @@ static func build_x_shared_volume(
 						has_solid = true
 					else:
 						has_empty = true
-				total_cell_count += 1
-				if not (has_solid and has_empty):
+				var is_mixed := has_solid and has_empty
+				if cache_hit:
+					var was_mixed := cell_mixed[cell_index] != 0
+					if was_mixed != is_mixed:
+						if is_mixed:
+							mixed_cell_count += 1
+							uniform_cell_count -= 1
+						else:
+							mixed_cell_count -= 1
+							uniform_cell_count += 1
+				elif is_mixed:
+					mixed_cell_count += 1
+				else:
 					uniform_cell_count += 1
+				cell_mixed[cell_index] = 1 if is_mixed else 0
+				if not is_mixed:
+					cell_triangles.erase(cell_index)
+					cell_dropped[cell_index] = 0
 					continue
-				mixed_cell_count += 1
+
 				var nodes: Array[Vector3i] = []
 				var points: Array[Vector3] = []
 				for corner_value in CORNERS:
@@ -844,50 +705,94 @@ static func build_x_shared_volume(
 					var node := cell + corner
 					nodes.append(node)
 					points.append(roi_min + Vector3(node) * step)
+				var emitted_for_cell: Array[Dictionary] = []
+				var dropped_for_cell := 0
 				for tet in TETS:
 					tet_call_count += 1
-					var emitted := _polygonize_tet(
-						tet, nodes, points, density, roi_min, step, seam_x,
-						root_cache, root_position_keys
-					)
-					dropped_degenerate_candidates += int(emitted.get("dropped_degenerate", 0))
-					triangles.append_array(emitted.get("triangles", []))
+					var emitted: Dictionary
+					if kind == "x":
+						emitted = _polygonize_tet(
+							tet, nodes, points, density, roi_min, step, seam_x,
+							dirty_root_cache, dirty_root_position_keys
+						)
+					elif kind == "z":
+						emitted = _polygonize_tet_z(
+							tet, nodes, points, density, roi_min, step, seam_z,
+							dirty_root_cache, dirty_root_position_keys
+						)
+					else:
+						emitted = _polygonize_tet_corner(
+							tet, nodes, points, density, roi_min, step, seam_x, seam_z,
+							dirty_root_cache, dirty_root_position_keys
+						)
+					dropped_for_cell += int(emitted.get("dropped_degenerate", 0))
+					emitted_for_cell.append_array(emitted.get("triangles", []))
+				cell_triangles[cell_index] = emitted_for_cell
+				cell_dropped[cell_index] = dropped_for_cell
 
 	var polygonize_elapsed_usec := Time.get_ticks_usec() - polygonize_started_usec
+	var triangles: Array[Dictionary] = []
+	var dropped_degenerate_candidates := 0
+	for cell_index in range(total_cell_count):
+		dropped_degenerate_candidates += int(cell_dropped[cell_index])
+		if cell_triangles.has(cell_index):
+			triangles.append_array(cell_triangles[cell_index])
 	var triangle_candidate_count := triangles.size()
+
 	var deduplicate_started_usec := Time.get_ticks_usec()
 	var deduplicated := _deduplicate_triangles(triangles)
 	var dropped_duplicate_candidates := triangles.size() - deduplicated.size()
 	var deduplicate_elapsed_usec := Time.get_ticks_usec() - deduplicate_started_usec
 	triangles = deduplicated
+
+	# Reconstruct global root identity from the merged reused+dirty triangle set.
+	var root_cache: Dictionary = {}
+	var root_position_keys: Dictionary = {}
+	for triangle_value in triangles:
+		var triangle: Dictionary = triangle_value
+		var ids: Array = triangle.get("root_ids", [])
+		var points: Array = triangle.get("points", [])
+		if ids.size() != 3 or points.size() != 3:
+			continue
+		for index in range(3):
+			var root_id := String(ids[index])
+			var point: Vector3 = points[index]
+			var point_key := _point_key(point)
+			if not root_cache.has(root_id):
+				root_cache[root_id] = point
+				root_position_keys[root_id] = point_key
+			elif String(root_position_keys.get(root_id, "")) != point_key:
+				root_position_keys[root_id] = "__root_identity_conflict__"
+
 	var diagnostics_started_usec := Time.get_ticks_usec()
 	var diagnostics: Dictionary = {}
 	if diagnostics_enabled:
-		diagnostics = analyze_world_triangles(triangles, seam_x, roi_min, roi_max)
+		if kind == "x":
+			diagnostics = analyze_world_triangles(triangles, seam_x, roi_min, roi_max)
+		elif kind == "z":
+			diagnostics = analyze_world_triangles_z(triangles, seam_z, roi_min, roi_max)
+		else:
+			diagnostics = analyze_corner_world_triangles(triangles, seam_x, seam_z, roi_min, roi_max)
 	var diagnostics_elapsed_usec := Time.get_ticks_usec() - diagnostics_started_usec
+
 	var signature_started_usec := Time.get_ticks_usec()
 	var signature_rows: Array[String] = []
+	var owner_key := "owner" if kind == "corner" else "side"
 	for triangle_value in triangles:
 		var ids: Array = triangle_value["root_ids"]
 		var sorted_ids := [String(ids[0]), String(ids[1]), String(ids[2])]
 		sorted_ids.sort()
-		signature_rows.append("%s:%s" % [String(triangle_value["side"]), "|".join(sorted_ids)])
+		signature_rows.append("%s:%s" % [String(triangle_value[owner_key]), "|".join(sorted_ids)])
 	signature_rows.sort()
 	var signature_elapsed_usec := Time.get_ticks_usec() - signature_started_usec
 
 	if diagnostics_enabled:
-		var root_identity_consistent := true
-		for root_id in root_cache.keys():
-			var point: Vector3 = root_cache[root_id]
-			if String(root_position_keys.get(root_id, "")) != _point_key(point):
-				root_identity_consistent = false
-				break
-		diagnostics["root_identity_consistent"] = root_identity_consistent
+		diagnostics["root_identity_consistent"] = _root_identity_consistent(root_cache, root_position_keys)
 		diagnostics["dropped_degenerate_candidate_count"] = dropped_degenerate_candidates
 		diagnostics["dropped_duplicate_candidate_count"] = dropped_duplicate_candidates
 		diagnostics["emitted_degenerate_triangle_count"] = 0
 
-	return {
+	var result := {
 		"valid": true,
 		"triangles": triangles,
 		"diagnostics": diagnostics,
@@ -898,7 +803,6 @@ static func build_x_shared_volume(
 		"roi_min": roi_min,
 		"roi_max": roi_max,
 		"step": step,
-		"seam_x": seam_x,
 		"timings_usec": {
 			"shared_sampling": sampling_elapsed_usec,
 			"shared_polygonize": polygonize_elapsed_usec,
@@ -916,9 +820,315 @@ static func build_x_shared_volume(
 			"triangle_count": triangles.size(),
 			"unique_root_count": root_cache.size(),
 			"sample_count": values.size(),
+			"dirty_cell_count": dirty_cell_count,
+			"reused_cell_count": total_cell_count - dirty_cell_count,
+			"incremental_cache_hit": 1 if cache_hit else 0,
+			"incremental_applied_operation_count": applied_operation_count,
 		},
-
 	}
+	if kind == "x" or kind == "corner":
+		result["seam_x"] = seam_x
+	if kind == "z" or kind == "corner":
+		result["seam_z"] = seam_z
+
+	_store_incremental_state(cache_key, _make_incremental_state(
+		brush_snapshot, prepared, exact_values, values, cell_mixed,
+		cell_dropped, cell_triangles, mixed_cell_count, uniform_cell_count, result
+	))
+	return result
+
+
+static func _prepare_incremental_volume(
+	cache_key: String,
+	world_seed: int,
+	snapshot: Dictionary,
+	roi_min: Vector3,
+	cells: Vector3i,
+	dims: Vector3i,
+	step: float
+) -> Dictionary:
+	var centers: PackedVector3Array = snapshot.get("centers", PackedVector3Array())
+	var radii: PackedFloat64Array = snapshot.get("radii", PackedFloat64Array())
+	var modes: PackedByteArray = snapshot.get("modes", PackedByteArray())
+	var sequences := _snapshot_sequences(snapshot)
+	if centers.size() != radii.size() or centers.size() != modes.size() \
+		or centers.size() != sequences.size():
+		return {"valid": false, "reason": "incremental_snapshot_attribute_mismatch"}
+
+	var base_signature := _materialized_base_signature(snapshot)
+	var previous := _get_incremental_state(cache_key)
+	var node_count := dims.x * dims.y * dims.z
+	var cell_count := cells.x * cells.y * cells.z
+	var can_increment := not previous.is_empty() \
+		and String(previous.get("base_signature", "")) == base_signature \
+		and _snapshot_extends_state(previous, centers, radii, modes, sequences) \
+		and (previous.get("exact_values", PackedFloat64Array()) as PackedFloat64Array).size() == node_count \
+		and (previous.get("values", PackedFloat32Array()) as PackedFloat32Array).size() == node_count
+
+	if can_increment:
+		var exact_values: PackedFloat64Array = (previous["exact_values"] as PackedFloat64Array).duplicate()
+		var values: PackedFloat32Array = (previous["values"] as PackedFloat32Array).duplicate()
+		var dirty_flags := PackedByteArray()
+		dirty_flags.resize(cell_count)
+		var cell_mixed: PackedByteArray = (previous.get("cell_mixed", PackedByteArray()) as PackedByteArray).duplicate()
+		var cell_dropped: PackedInt32Array = (previous.get("cell_dropped", PackedInt32Array()) as PackedInt32Array).duplicate()
+		if cell_mixed.size() != cell_count or cell_dropped.size() != cell_count:
+			can_increment = false
+		else:
+			var cell_triangles: Dictionary = {}
+			var previous_cells: Dictionary = previous.get("cell_triangles", {})
+			for key in previous_cells.keys():
+				cell_triangles[key] = previous_cells[key]
+			var dirty_cell_count := 0
+			var previous_operation_count := int(previous.get("operation_count", 0))
+			for operation_index in range(previous_operation_count, sequences.size()):
+				var center: Vector3 = centers[operation_index]
+				var radius := float(radii[operation_index])
+				var mode := int(modes[operation_index])
+				for y in range(dims.y):
+					for z in range(dims.z):
+						for x in range(dims.x):
+							var node_index := _index(x, y, z, dims)
+							var prior_exact := float(exact_values[node_index])
+							var world := roi_min + Vector3(x, y, z) * step
+							var distance_to_surface := world.distance_to(center) - radius
+							var next_exact := minf(prior_exact, distance_to_surface) \
+								if mode == Brush.Mode.CARVE \
+								else maxf(prior_exact, -distance_to_surface)
+							exact_values[node_index] = next_exact
+							var prior_value := float(values[node_index])
+							values[node_index] = next_exact
+							if float(values[node_index]) != prior_value:
+								dirty_cell_count += _mark_dirty_cells_for_node(
+									dirty_flags, cells, x, y, z
+								)
+			return {
+				"valid": true,
+				"cache_hit": true,
+				"applied_operation_count": sequences.size() - previous_operation_count,
+				"dirty_cell_count": dirty_cell_count,
+				"values": values,
+				"exact_values": exact_values,
+				"dirty_flags": dirty_flags,
+				"cell_mixed": cell_mixed,
+				"cell_dropped": cell_dropped,
+				"cell_triangles": cell_triangles,
+				"mixed_cell_count": int(previous.get("mixed_cell_count", 0)),
+				"uniform_cell_count": int(previous.get("uniform_cell_count", 0)),
+				"base_signature": base_signature,
+				"centers": centers,
+				"radii": radii,
+				"modes": modes,
+				"sequences": sequences,
+				"previous_result": previous.get("final_result", {}),
+			}
+
+	# Conservative full-build fallback for materialization changes, clears,
+	# candidate-pruning rewrites, cache eviction, or any state-shape mismatch.
+	var exact_values := PackedFloat64Array()
+	exact_values.resize(node_count)
+	var values := PackedFloat32Array()
+	values.resize(node_count)
+	for y in range(dims.y):
+		for z in range(dims.z):
+			for x in range(dims.x):
+				var world := roi_min + Vector3(x, y, z) * step
+				var density := _sample_density(world_seed, world, snapshot)
+				if not is_finite(density):
+					return {"valid": false, "reason": "non_finite_sample", "sample": [x, y, z]}
+				var node_index := _index(x, y, z, dims)
+				exact_values[node_index] = density
+				values[node_index] = density
+	var dirty_flags := PackedByteArray()
+	dirty_flags.resize(cell_count)
+	dirty_flags.fill(1)
+	var cell_mixed := PackedByteArray()
+	cell_mixed.resize(cell_count)
+	var cell_dropped := PackedInt32Array()
+	cell_dropped.resize(cell_count)
+	return {
+		"valid": true,
+		"cache_hit": false,
+		"applied_operation_count": sequences.size(),
+		"dirty_cell_count": cell_count,
+		"values": values,
+		"exact_values": exact_values,
+		"dirty_flags": dirty_flags,
+		"cell_mixed": cell_mixed,
+		"cell_dropped": cell_dropped,
+		"cell_triangles": {},
+		"mixed_cell_count": 0,
+		"uniform_cell_count": 0,
+		"base_signature": base_signature,
+		"centers": centers,
+		"radii": radii,
+		"modes": modes,
+		"sequences": sequences,
+	}
+
+
+static func _make_incremental_state(
+	snapshot: Dictionary,
+	prepared: Dictionary,
+	exact_values: PackedFloat64Array,
+	values: PackedFloat32Array,
+	cell_mixed: PackedByteArray,
+	cell_dropped: PackedInt32Array,
+	cell_triangles: Dictionary,
+	mixed_cell_count: int,
+	uniform_cell_count: int,
+	final_result: Dictionary
+) -> Dictionary:
+	return {
+		"revision": int(snapshot.get("revision", -1)),
+		"base_signature": String(prepared.get("base_signature", "")),
+		"operation_count": (prepared.get("sequences", PackedInt64Array()) as PackedInt64Array).size(),
+		"centers": (prepared.get("centers", PackedVector3Array()) as PackedVector3Array).duplicate(),
+		"radii": (prepared.get("radii", PackedFloat64Array()) as PackedFloat64Array).duplicate(),
+		"modes": (prepared.get("modes", PackedByteArray()) as PackedByteArray).duplicate(),
+		"sequences": (prepared.get("sequences", PackedInt64Array()) as PackedInt64Array).duplicate(),
+		"exact_values": exact_values.duplicate(),
+		"values": values.duplicate(),
+		"cell_mixed": cell_mixed.duplicate(),
+		"cell_dropped": cell_dropped.duplicate(),
+		"cell_triangles": cell_triangles,
+		"mixed_cell_count": mixed_cell_count,
+		"uniform_cell_count": uniform_cell_count,
+		"final_result": final_result,
+	}
+
+
+static func _snapshot_sequences(snapshot: Dictionary) -> PackedInt64Array:
+	var result := PackedInt64Array()
+	var value: Variant = snapshot.get("sequences", PackedInt64Array())
+	if typeof(value) != TYPE_PACKED_INT32_ARRAY and typeof(value) != TYPE_PACKED_INT64_ARRAY:
+		return result
+	for sequence_value in value:
+		result.append(int(sequence_value))
+	return result
+
+
+static func _snapshot_extends_state(
+	state: Dictionary,
+	centers: PackedVector3Array,
+	radii: PackedFloat64Array,
+	modes: PackedByteArray,
+	sequences: PackedInt64Array
+) -> bool:
+	var prior_centers: PackedVector3Array = state.get("centers", PackedVector3Array())
+	var prior_radii: PackedFloat64Array = state.get("radii", PackedFloat64Array())
+	var prior_modes: PackedByteArray = state.get("modes", PackedByteArray())
+	var prior_sequences: PackedInt64Array = state.get("sequences", PackedInt64Array())
+	var prior_count := prior_sequences.size()
+	if prior_centers.size() != prior_count or prior_radii.size() != prior_count \
+		or prior_modes.size() != prior_count or sequences.size() < prior_count:
+		return false
+	for index in range(prior_count):
+		if prior_sequences[index] != sequences[index] \
+			or prior_centers[index] != centers[index] \
+			or float(prior_radii[index]) != float(radii[index]) \
+			or int(prior_modes[index]) != int(modes[index]):
+			return false
+	return true
+
+
+static func _materialized_base_signature(snapshot: Dictionary) -> String:
+	var rows: Array[String] = []
+	var tiles_value: Variant = snapshot.get("materialized_tiles", [])
+	if typeof(tiles_value) != TYPE_ARRAY:
+		return ""
+	for tile_value in tiles_value:
+		if typeof(tile_value) != TYPE_DICTIONARY:
+			continue
+		var tile: Dictionary = tile_value
+		var origin: Vector3 = tile.get("origin_world", Vector3.INF)
+		var dims: Vector3i = tile.get("dims", Vector3i.ZERO)
+		var values_value: Variant = tile.get("values", PackedFloat64Array())
+		var value_count := values_value.size() if values_value is PackedFloat64Array or values_value is PackedFloat32Array else -1
+		rows.append("%s:%d:%d:%s:%d,%d,%d:%d:%d" % [
+			String(tile.get("tile_id", "")),
+			int(tile.get("base_revision", -1)),
+			int(tile.get("base_sequence", -1)),
+			_point_key(origin) if origin.is_finite() else "invalid",
+			dims.x, dims.y, dims.z,
+			roundi(float(tile.get("step", 0.0)) * ROOT_QUANT),
+			value_count,
+		])
+	rows.sort()
+	return "\n".join(rows)
+
+
+static func _incremental_scope_key(
+	kind: String,
+	world_seed: int,
+	snapshot: Dictionary,
+	roi_min: Vector3,
+	cells: Vector3i,
+	step: float,
+	seam_x: float,
+	seam_z: float
+) -> String:
+	return "%s:%d:%d:%s:%d,%d,%d:%d:%d:%d" % [
+		kind,
+		world_seed,
+		int(snapshot.get("cache_scope_id", -1)),
+		_point_key(roi_min),
+		cells.x, cells.y, cells.z,
+		roundi(step * ROOT_QUANT),
+		roundi(seam_x * ROOT_QUANT),
+		roundi(seam_z * ROOT_QUANT),
+	]
+
+
+static func _get_incremental_state(key: String) -> Dictionary:
+	_incremental_mutex.lock()
+	var result: Dictionary = _incremental_states.get(key, {})
+	_incremental_mutex.unlock()
+	return result
+
+
+static func _store_incremental_state(key: String, state: Dictionary) -> void:
+	if key.is_empty() or state.is_empty():
+		return
+	_incremental_mutex.lock()
+	var existing: Dictionary = _incremental_states.get(key, {})
+	if existing.is_empty() or int(state.get("revision", -1)) >= int(existing.get("revision", -1)):
+		if not _incremental_states.has(key):
+			_incremental_order.append(key)
+		_incremental_states[key] = state
+		while _incremental_order.size() > MAX_INCREMENTAL_STATES:
+			var oldest := String(_incremental_order.pop_front())
+			if oldest != key:
+				_incremental_states.erase(oldest)
+	_incremental_mutex.unlock()
+
+
+static func _mark_dirty_cells_for_node(
+	dirty_flags: PackedByteArray,
+	cells: Vector3i,
+	node_x: int,
+	node_y: int,
+	node_z: int
+) -> int:
+	var added := 0
+	for cy in [node_y - 1, node_y]:
+		if cy < 0 or cy >= cells.y:
+			continue
+		for cz in [node_z - 1, node_z]:
+			if cz < 0 or cz >= cells.z:
+				continue
+			for cx in [node_x - 1, node_x]:
+				if cx < 0 or cx >= cells.x:
+					continue
+				var cell_index := _cell_index(cx, cy, cz, cells)
+				if dirty_flags[cell_index] == 0:
+					dirty_flags[cell_index] = 1
+					added += 1
+	return added
+
+
+static func _cell_index(x: int, y: int, z: int, cells: Vector3i) -> int:
+	return (y * cells.z + z) * cells.x + x
 
 
 static func _deduplicate_triangles(source: Array[Dictionary]) -> Array[Dictionary]:
