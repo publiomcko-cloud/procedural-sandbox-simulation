@@ -39,9 +39,10 @@ func run() -> void:
 			"ledger_revision": int(brush_snapshot.get("revision", -1)),
 		}
 	else:
-		var key := "z:%d:%d:%d:%d:%d:%d" % [
+		var key := "z:%d:%d:%d:%d:%d:%d:%d" % [
 			world_seed,
 			int(brush_snapshot.get("revision", -1)),
+			int(brush_snapshot.get("cache_scope_id", -1)),
 			int(brush_snapshot.get("ledger_operation_count", -1)),
 			low_z_region_key.x,
 			low_z_region_key.y,
