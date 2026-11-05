@@ -43,6 +43,7 @@ var _pending_region_publications: Dictionary = {}
 var _pending_publication_order: Array[String] = []
 var _region_generation_jobs: Dictionary = {} # worker task id -> {job, id, request, cancelled}
 var _region_generation_task_by_id: Dictionary = {}
+var _next_region_publication_serial := 1
 var _geometry_mesh_cache: Dictionary = {}
 var _geometry_mesh_cache_order: Array[String] = []
 var _last_region_metrics: Dictionary = {}
@@ -71,6 +72,7 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_published_publication_tokens.clear()
 	_pending_region_publications.clear()
 	_pending_publication_order.clear()
+	_next_region_publication_serial = 1
 	_command_visual_pending.clear()
 	_command_migration_sync_regions.clear()
 	_last_command_visual_result.clear()
@@ -171,15 +173,38 @@ func enqueue_region_publication(region_key: Vector2i, state: RefCounted, publica
 		return _record_region_failure(id, "region_world_identity_mismatch")
 	if _expected_publication_tokens.has(id) and publication_token != int(_expected_publication_tokens[id]):
 		return _failure("stale_object_region_publication")
+	var request_serial := _next_region_publication_serial
+	_next_region_publication_serial += 1
+	var request := {
+		"region_key": region_key,
+		"world_state": state,
+		"publication_token": publication_token,
+		"force_rebuild": force_rebuild,
+		"request_serial": request_serial,
+	}
 	if _pending_region_publications.has(id):
-		_pending_region_publications[id] = {"region_key": region_key, "world_state": state, "publication_token": publication_token, "force_rebuild": force_rebuild}
-		return {"ok": true, "reason": "queued_replaced", "queue_depth": _pending_region_publications.size()}
+		# Latest state wins. Any older worker for this same region is now
+		# superseded; its immutable CPU result may finish but must not publish.
+		_mark_region_generation_cancelled(id)
+		_pending_region_publications[id] = request
+		return {
+			"ok": true,
+			"reason": "queued_replaced",
+			"queue_depth": _pending_region_publications.size(),
+			"request_serial": request_serial,
+		}
 	if _pending_region_publications.size() >= MAX_PENDING_REGION_PUBLICATIONS:
 		return _record_region_failure(id, "object_publication_queue_full")
-	_pending_region_publications[id] = {"region_key": region_key, "world_state": state, "publication_token": publication_token, "force_rebuild": force_rebuild}
+	_mark_region_generation_cancelled(id)
+	_pending_region_publications[id] = request
 	_pending_publication_order.append(id)
 	_region_errors.erase(id)
-	return {"ok": true, "reason": "queued", "queue_depth": _pending_region_publications.size()}
+	return {
+		"ok": true,
+		"reason": "queued",
+		"queue_depth": _pending_region_publications.size(),
+		"request_serial": request_serial,
+	}
 
 
 func process_queued_publications() -> int:
@@ -195,7 +220,7 @@ func process_queued_publications() -> int:
 			_pending_region_publications.erase(id)
 			var result := publish_region(request["region_key"], request["world_state"], bool(request.get("force_rebuild", false)), int(request["publication_token"]))
 			_publications_last_process_tick += 1
-			_finish_queued_publication(id, result)
+			_finish_queued_publication(id, result, int(request.get("request_serial", -1)))
 	else:
 		_process_completed_region_generation_jobs()
 		_dispatch_region_generation_jobs()
@@ -222,7 +247,11 @@ func _dispatch_region_generation_jobs() -> void:
 		var job := RegionGenerationJob.new(int(state.get("world_seed")), world_id, request["region_key"], registry)
 		var task_id := WorkerThreadPool.add_task(Callable(job, "run"), false, "procedural object region generation")
 		if task_id < 0:
-			_finish_queued_publication(id, _record_region_failure(id, "object_generation_worker_rejected"))
+			_finish_queued_publication(
+				id,
+				_record_region_failure(id, "object_generation_worker_rejected"),
+				int(request.get("request_serial", -1))
+			)
 			continue
 		_region_generation_jobs[task_id] = {
 			"job": job,
@@ -266,31 +295,34 @@ func _process_completed_region_generation_jobs() -> void:
 				bool(request.get("force_rebuild", false)), publication_token, generated
 			)
 		_publications_last_process_tick += 1
-		_finish_queued_publication(id, result)
+		_finish_queued_publication(id, result, int(request.get("request_serial", -1)))
 
 
-func _finish_queued_publication(id: String, result: Dictionary) -> void:
+func _finish_queued_publication(id: String, result: Dictionary, request_serial: int = -1) -> void:
 	if not result.get("ok", false) and result.get("reason", "") != "stale_object_region_publication":
 		_region_errors[id] = String(result.get("reason", "object_region_publication_failed"))
 	if _command_visual_pending.has(id):
 		var pending_visual: Dictionary = _command_visual_pending[id]
-		var visual_publication_usec := int(_last_region_metrics.get("publication_usec", 0))
-		var visual_queue_wait_usec := maxi(0, int(Time.get_ticks_usec() - int(pending_visual.get("queued_usec", Time.get_ticks_usec())) - visual_publication_usec))
-		var visual_elapsed_usec := Time.get_ticks_usec() - int(pending_visual.get("command_started_usec", Time.get_ticks_usec()))
-		var visual_timings: Dictionary = _last_entity_command_metrics.duplicate(true)
-		visual_timings["visual_queue_wait_usec"] = visual_queue_wait_usec
-		visual_timings["visual_publication_usec"] = visual_publication_usec
-		visual_timings["command_total_to_visual_publish_usec"] = visual_elapsed_usec
-		_last_entity_command_metrics = visual_timings
-		_last_command_visual_result = {
-			"entity_id": String(pending_visual.get("entity_id", "")),
-			"operation": String(pending_visual.get("operation", "")),
-			"world_revision": int(pending_visual.get("world_revision", -1)),
-			"ok": bool(result.get("ok", false)),
-			"reason": String(result.get("reason", "publication_failed")),
-			"timings_usec": visual_timings,
-		}
-		_command_visual_pending.erase(id)
+		# An older same-region worker can finish after a newer command has queued
+		# its own visual rebuild. Only the exact request may resolve that command.
+		if int(pending_visual.get("request_serial", -2)) == request_serial:
+			var visual_publication_usec := int(_last_region_metrics.get("publication_usec", 0))
+			var visual_queue_wait_usec := maxi(0, int(Time.get_ticks_usec() - int(pending_visual.get("queued_usec", Time.get_ticks_usec())) - visual_publication_usec))
+			var visual_elapsed_usec := Time.get_ticks_usec() - int(pending_visual.get("command_started_usec", Time.get_ticks_usec()))
+			var visual_timings: Dictionary = _last_entity_command_metrics.duplicate(true)
+			visual_timings["visual_queue_wait_usec"] = visual_queue_wait_usec
+			visual_timings["visual_publication_usec"] = visual_publication_usec
+			visual_timings["command_total_to_visual_publish_usec"] = visual_elapsed_usec
+			_last_entity_command_metrics = visual_timings
+			_last_command_visual_result = {
+				"entity_id": String(pending_visual.get("entity_id", "")),
+				"operation": String(pending_visual.get("operation", "")),
+				"world_revision": int(pending_visual.get("world_revision", -1)),
+				"ok": bool(result.get("ok", false)),
+				"reason": String(result.get("reason", "publication_failed")),
+				"timings_usec": visual_timings,
+			}
+			_command_visual_pending.erase(id)
 	if _command_migration_sync_regions.has(id) and result.get("ok", false):
 		_command_migration_sync_regions.erase(id)
 
@@ -634,7 +666,14 @@ func _queue_committed_visual_update(result: Dictionary, region_key: Vector2i, st
 		output["visual_status"] = "failed"
 		_last_command_visual_result = {"entity_id": String(output.get("entity_id", "")), "operation": String(output.get("operation", "")), "world_revision": int(output.get("world_revision", -1)), "ok": false, "reason": String(output["reason"])}
 		return output
-	_command_visual_pending[region_id] = {"entity_id": String(output.get("entity_id", "")), "operation": String(output.get("operation", "")), "world_revision": int(output.get("world_revision", -1)), "queued_usec": Time.get_ticks_usec(), "command_started_usec": started_usec}
+	_command_visual_pending[region_id] = {
+		"entity_id": String(output.get("entity_id", "")),
+		"operation": String(output.get("operation", "")),
+		"world_revision": int(output.get("world_revision", -1)),
+		"queued_usec": Time.get_ticks_usec(),
+		"command_started_usec": started_usec,
+		"request_serial": int(queued.get("request_serial", -1)),
+	}
 	output["visual_status"] = "queued"
 	return output
 
