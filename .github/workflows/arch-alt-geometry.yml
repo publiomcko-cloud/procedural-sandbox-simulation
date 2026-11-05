@@ -27,6 +27,11 @@ jobs:
           chmod +x /tmp/godot/Godot_v4.7.2-stable_linux.x86_64
           /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --version
 
+      - name: Import project script classes
+        shell: bash
+        run: |
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path game --quit
+
       - name: Run shared-surface probe
         shell: bash
         run: |
@@ -77,6 +82,12 @@ jobs:
           chmod +x "$VT_GODOT"
           echo "$VT_GODOT" > /tmp/vt-godot-path
           "$VT_GODOT" --version
+
+      - name: Import project script classes with Voxel Tools build
+        shell: bash
+        run: |
+          VT_GODOT="$(cat /tmp/vt-godot-path)"
+          "$VT_GODOT" --headless --editor --path game --quit
 
       - name: Run native Transvoxel probe
         shell: bash
