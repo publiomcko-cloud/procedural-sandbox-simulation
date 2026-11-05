@@ -778,6 +778,27 @@ static func analyze_cpu_pair_plane(
 	)
 
 
+static func analyze_cpu_pair_plane_z(
+	low_cpu: Dictionary,
+	low_world_origin: Vector3,
+	high_cpu: Dictionary,
+	high_world_origin: Vector3,
+	seam_z: float,
+	y_min: float,
+	y_max: float,
+	x_min: float,
+	x_max: float
+) -> Dictionary:
+	var triangles: Array[Dictionary] = []
+	_append_cpu_triangles(triangles, low_cpu, low_world_origin, "low")
+	_append_cpu_triangles(triangles, high_cpu, high_world_origin, "high")
+	return analyze_world_triangles_z(
+		triangles, seam_z,
+		Vector3(x_min, y_min, seam_z - 1.0),
+		Vector3(x_max, y_max, seam_z + 1.0)
+	)
+
+
 static func analyze_world_triangles(
 	triangles: Array,
 	seam_x: float,
