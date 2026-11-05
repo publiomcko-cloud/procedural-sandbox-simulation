@@ -1,0 +1,78 @@
+name: P2 same-runner P1 vs P2 benchmark
+
+on:
+  push:
+    branches:
+      - perf/p2-gdscript-allocation-reduction
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout P1 control
+        uses: actions/checkout@v4
+        with:
+          ref: cc9aed9078855b45ea5a841eb34141cff7c31730
+          path: p1
+
+      - name: Checkout P2 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 8564b14489079998d9e2ee2711c99a13cac4994f
+          path: p2
+
+      - name: Download Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          chmod +x /tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --version
+
+      - name: Import exact refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path p1/game --quit > /tmp/p1-import.log 2>&1
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path p2/game --quit > /tmp/p2-import.log 2>&1
+
+      - name: Alternate runtime and repeated benchmarks
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in 1 2 3; do
+            echo "=== P2_AB_ROUND=$i P1_RUNTIME ==="
+            timeout --signal=TERM 180s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path p1/game --script res://tests/experiments/runtime_performance_baseline.gd 2>&1 | tee "/tmp/p1-runtime-$i.log"
+            grep -q 'RUNTIME_PERFORMANCE_BASELINE_PASS' "/tmp/p1-runtime-$i.log"
+
+            echo "=== P2_AB_ROUND=$i P2_RUNTIME ==="
+            timeout --signal=TERM 180s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path p2/game --script res://tests/experiments/runtime_performance_baseline.gd 2>&1 | tee "/tmp/p2-runtime-$i.log"
+            grep -q 'RUNTIME_PERFORMANCE_BASELINE_PASS' "/tmp/p2-runtime-$i.log"
+
+            echo "=== P2_AB_ROUND=$i P1_REPEAT ==="
+            timeout --signal=TERM 180s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path p1/game --script res://tests/experiments/p1_shared_repeat_benchmark.gd 2>&1 | tee "/tmp/p1-repeat-$i.log"
+            grep -q 'P1_SHARED_REPEAT_BENCHMARK_PASS' "/tmp/p1-repeat-$i.log"
+
+            echo "=== P2_AB_ROUND=$i P2_REPEAT ==="
+            timeout --signal=TERM 180s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path p2/game --script res://tests/experiments/p1_shared_repeat_benchmark.gd 2>&1 | tee "/tmp/p2-repeat-$i.log"
+            grep -q 'P1_SHARED_REPEAT_BENCHMARK_PASS' "/tmp/p2-repeat-$i.log"
+          done
+
+      - name: Upload A/B evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p2-same-runner-p1-vs-p2
+          path: |
+            /tmp/p1-import.log
+            /tmp/p2-import.log
+            /tmp/p1-runtime-*.log
+            /tmp/p2-runtime-*.log
+            /tmp/p1-repeat-*.log
+            /tmp/p2-repeat-*.log
