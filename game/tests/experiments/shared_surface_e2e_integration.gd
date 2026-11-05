@@ -63,7 +63,7 @@ func _run() -> void:
 		evidence["scientific_roots"] = scientific.get("unique_root_count", 0)
 
 	# Production 0.5 boundary chunks through worker-compatible pair jobs.
-	var production_before := _build_all_boundary_pairs(snapshot)
+	var production_before := _build_all_boundary_pairs(ledger)
 	_check(production_before.get("valid", false), "all four production X+ boundary chunk pairs build")
 	if production_before.get("valid", false):
 		_check(int(production_before.get("total_seam_edges", 0)) > 0, "production region seam intersects generated surface")
@@ -87,7 +87,7 @@ func _run() -> void:
 	# Mixed LOD qualification: region edge chunks are forced LOD0; LOD1 begins
 	# one chunk inward, where the existing transition mesher has a fine-split face.
 	if production_before.get("valid", false):
-		var mixed := _qualify_mixed_lod_collars(snapshot, production_before["pairs"])
+		var mixed := _qualify_mixed_lod_collars(ledger, production_before["pairs"])
 		_check(mixed.get("valid", false), "LOD1 interior to shared LOD0 boundary collar builds on both regions")
 		if mixed.get("valid", false):
 			_check(int(mixed.get("total_seam_edges", 0)) > 0, "mixed-LOD collar has surface crossings")
@@ -117,8 +117,7 @@ func _run() -> void:
 		_finish()
 		return
 	var restored_ledger: RefCounted = reloaded1["ledger"]
-	var restored_snapshot: Dictionary = restored_ledger.get_meshing_snapshot()
-	var production_reloaded := _build_all_boundary_pairs(restored_snapshot)
+	var production_reloaded := _build_all_boundary_pairs(restored_ledger)
 	_check(production_reloaded.get("valid", false), "reloaded boundary pairs rebuild")
 	_check(String(production_reloaded.get("signature", "")) == before_signature, "save/unload/reload preserves complete boundary signature")
 	if production_reloaded.get("valid", false):
@@ -134,15 +133,14 @@ func _run() -> void:
 	_check(edit_ok, "cross-region FILL edit is accepted")
 	_check(int(restored_ledger.revision) == prior_revision + 1, "cross-region edit increments revision once")
 	_check(int(restored_ledger.get_edit_count()) == prior_count + 1, "cross-region edit appends one ordered command")
-	var edited_snapshot: Dictionary = restored_ledger.get_meshing_snapshot()
-	var production_edited := _build_all_boundary_pairs(edited_snapshot)
+	var production_edited := _build_all_boundary_pairs(restored_ledger)
 	_check(production_edited.get("valid", false), "boundary pairs rebuild after cross-region edit")
 	if production_edited.get("valid", false):
 		_check(String(production_edited.get("signature", "")) != before_signature, "cross-region edit changes boundary geometry signature")
 		_check(int(production_edited.get("bad_incidence", -1)) == 0, "edited regional seam has no bad edge incidence")
 		_check(int(production_edited.get("t_junctions", -1)) == 0, "edited regional seam has no T-junctions")
 		_check(int(production_edited.get("cross_owned", -1)) == int(production_edited.get("total_seam_edges", -2)), "edited seam remains shared by both regions")
-		var mixed_after := _qualify_mixed_lod_collars(edited_snapshot, production_edited["pairs"])
+		var mixed_after := _qualify_mixed_lod_collars(restored_ledger, production_edited["pairs"])
 		_check(mixed_after.get("valid", false), "mixed-LOD collars rebuild after cross-region edit")
 		if mixed_after.get("valid", false):
 			_check(int(mixed_after.get("bad_incidence", -1)) == 0, "edited mixed-LOD collar has no bad edge incidence")
@@ -164,9 +162,9 @@ func _run() -> void:
 	_check(reloaded2.get("valid", false), "fresh store reloads edited generation")
 	if reloaded2.get("valid", false):
 		var final_ledger: RefCounted = reloaded2["ledger"]
-		var final_snapshot: Dictionary = final_ledger.get_meshing_snapshot()
-		var final_pairs := _build_all_boundary_pairs(final_snapshot)
+		var final_pairs := _build_all_boundary_pairs(final_ledger)
 		_check(final_pairs.get("valid", false), "edited generation rebuilds after second unload/reload")
+		evidence["final_reloaded_signature"] = String(final_pairs.get("signature", ""))
 		_check(String(final_pairs.get("signature", "")) == edited_signature, "edited save/reload preserves complete boundary signature")
 		if final_pairs.get("valid", false):
 			_check(int(final_pairs.get("bad_incidence", -1)) == 0, "final reloaded seam remains closed")
@@ -197,11 +195,14 @@ func _make_frozen_ledger() -> Dictionary:
 	return {"valid": true, "ledger": ledger}
 
 
-func _build_all_boundary_pairs(snapshot: Dictionary) -> Dictionary:
+func _build_all_boundary_pairs(ledger: RefCounted) -> Dictionary:
 	var jobs: Array = []
 	var task_ids: Array[int] = []
 	for z_chunk in range(Grid.CHUNK_COUNT_Z):
-		var job := BoundaryJob.new(SEED, LEFT_REGION, z_chunk, snapshot, Time.get_ticks_usec())
+		var pair_snapshot: Dictionary = Authority.make_x_pair_snapshot(ledger, LEFT_REGION, z_chunk)
+		if not pair_snapshot.get("valid", false):
+			return {"valid": false, "reason": "pair_snapshot_failed", "z_chunk": z_chunk, "detail": pair_snapshot}
+		var job := BoundaryJob.new(SEED, LEFT_REGION, z_chunk, pair_snapshot, Time.get_ticks_usec())
 		jobs.append(job)
 		task_ids.append(WorkerThreadPool.add_task(
 			Callable(job, "run"), false, "shared-surface boundary pair"
@@ -239,21 +240,25 @@ func _build_all_boundary_pairs(snapshot: Dictionary) -> Dictionary:
 	}
 
 
-func _qualify_mixed_lod_collars(snapshot: Dictionary, pairs: Array) -> Dictionary:
+func _qualify_mixed_lod_collars(ledger: RefCounted, pairs: Array) -> Dictionary:
 	var total_edges := 0
 	var bad_incidence := 0
 	var t_junctions := 0
 	var cross_owned := 0
 	var valid_pair_count := 0
+	var seam_details: Array[Dictionary] = []
 	for z_chunk in range(Grid.CHUNK_COUNT_Z):
 		var pair: Dictionary = pairs[z_chunk]
 		var left_boundary: Dictionary = pair["left"]
 		var right_boundary: Dictionary = pair["right"]
 
 		var left_interior_coordinate := Vector2i(Grid.CHUNK_COUNT_X - 2, z_chunk)
+		var left_snapshot: Dictionary = ledger.get_meshing_snapshot_for_chunk(LEFT_REGION, left_interior_coordinate)
+		if not left_snapshot.get("valid", false):
+			return {"valid": false, "reason": "left_lod1_snapshot_failed", "z_chunk": z_chunk, "detail": left_snapshot}
 		var left_lod1 := TerrainMeshJob.new(
 			SEED, LEFT_REGION, left_interior_coordinate, false,
-			snapshot, Time.get_ticks_usec(), 1
+			left_snapshot, Time.get_ticks_usec(), 1
 		)
 		left_lod1.run()
 		if not left_lod1.result.get("valid", false) or int(left_lod1.result.get("lod_level", -1)) != 1:
@@ -270,9 +275,12 @@ func _qualify_mixed_lod_collars(snapshot: Dictionary, pairs: Array) -> Dictionar
 		)
 
 		var right_interior_coordinate := Vector2i(1, z_chunk)
+		var right_snapshot: Dictionary = ledger.get_meshing_snapshot_for_chunk(RIGHT_REGION, right_interior_coordinate)
+		if not right_snapshot.get("valid", false):
+			return {"valid": false, "reason": "right_lod1_snapshot_failed", "z_chunk": z_chunk, "detail": right_snapshot}
 		var right_lod1 := TerrainMeshJob.new(
 			SEED, RIGHT_REGION, right_interior_coordinate, false,
-			snapshot, Time.get_ticks_usec(), 1
+			right_snapshot, Time.get_ticks_usec(), 1
 		)
 		right_lod1.run()
 		if not right_lod1.result.get("valid", false) or int(right_lod1.result.get("lod_level", -1)) != 1:
@@ -299,6 +307,7 @@ func _qualify_mixed_lod_collars(snapshot: Dictionary, pairs: Array) -> Dictionar
 		"bad_incidence": bad_incidence,
 		"t_junctions": t_junctions,
 		"cross_owned": cross_owned,
+		"seam_details": seam_details,
 		"policy": "force region-edge chunks to LOD0; transition LOD1 one chunk inward",
 	}
 
