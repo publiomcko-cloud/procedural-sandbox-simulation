@@ -42,11 +42,11 @@ func _run() -> void:
 	var preedit_started := Time.get_ticks_usec()
 	demo._apply_preedit_fixture()
 	var preedit_ready := await _wait_until(func() -> bool:
-		if demo._checkpoint_task_id >= 0 and (
-			demo.global_rebuild_pending or not demo.loading_regions.is_empty()
-		):
-			concurrent_observed = true
-		return demo._checkpoint_task_id < 0 			and not demo.global_rebuild_pending 			and demo.loading_regions.is_empty() 			and demo.edit_ledger.get_archived_edit_count() == PREEDIT_COUNT 			and demo.edit_ledger.get_tail_edit_count() == 0
+		return demo._checkpoint_task_id < 0 \
+			and not demo.global_rebuild_pending \
+			and demo.loading_regions.is_empty() \
+			and demo.edit_ledger.get_archived_edit_count() == PREEDIT_COUNT \
+			and demo.edit_ledger.get_tail_edit_count() == 0
 	)
 	var preedit_elapsed_usec := Time.get_ticks_usec() - preedit_started
 	_check(preedit_ready, "pre-edits rebuild and async checkpoint settle")
