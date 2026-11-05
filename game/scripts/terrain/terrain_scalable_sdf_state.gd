@@ -176,6 +176,7 @@ func get_persistence_metadata() -> Dictionary:
 		"world_seed": world_seed,
 		"generator_version": generator_version,
 		"revision": revision,
+		"cache_scope_id": get_instance_id(),
 		"next_sequence": _next_sequence,
 		"lifetime_operation_count": _lifetime_operation_count,
 		"archived_operation_count": _archived_operation_count,
@@ -214,6 +215,7 @@ func get_meshing_snapshot() -> Dictionary:
 	return {
 		"valid": true,
 		"revision": revision,
+		"cache_scope_id": get_instance_id(),
 		"world_seed": world_seed,
 		"generator_version": generator_version,
 		"centers": arrays["centers"],
@@ -235,6 +237,7 @@ func get_meshing_snapshot_for_chunk(region_key: Vector2i, chunk_coordinate: Vect
 			"valid": false,
 			"storage_error": "invalid_chunk_coordinate",
 			"revision": revision,
+		"cache_scope_id": get_instance_id(),
 		}
 	var tiles_result := _materialized_tiles_for_chunk(region_key, chunk_coordinate)
 	if not tiles_result.get("valid", false):
@@ -243,6 +246,7 @@ func get_meshing_snapshot_for_chunk(region_key: Vector2i, chunk_coordinate: Vect
 			"valid": false,
 			"storage_error": last_storage_error,
 			"revision": revision,
+		"cache_scope_id": get_instance_id(),
 		}
 	var candidates: Array[Dictionary] = []
 	for operation in _tail_operations:
@@ -252,6 +256,7 @@ func get_meshing_snapshot_for_chunk(region_key: Vector2i, chunk_coordinate: Vect
 	return {
 		"valid": true,
 		"revision": revision,
+		"cache_scope_id": get_instance_id(),
 		"world_seed": world_seed,
 		"generator_version": generator_version,
 		"centers": arrays["centers"],
@@ -306,6 +311,7 @@ func get_ray_snapshot(ray_origin: Vector3, ray_direction: Vector3, max_distance:
 	return {
 		"valid": true,
 		"revision": revision,
+		"cache_scope_id": get_instance_id(),
 		"world_seed": world_seed,
 		"generator_version": generator_version,
 		"centers": arrays["centers"],
@@ -423,6 +429,7 @@ func build_checkpoint_plan(use_worker_pool: bool = true) -> Dictionary:
 		"world_seed": world_seed,
 		"generator_version": generator_version,
 		"revision": revision,
+		"cache_scope_id": get_instance_id(),
 		"next_sequence": _next_sequence,
 		"lifetime_operation_count": _lifetime_operation_count,
 		"archived_operation_count_before": _archived_operation_count,
