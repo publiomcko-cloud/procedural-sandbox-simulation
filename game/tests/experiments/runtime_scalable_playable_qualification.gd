@@ -58,7 +58,7 @@ func _run() -> void:
 		await _shutdown(demo)
 		return
 
-	var origin_id := demo._region_id(Vector2i.ZERO)
+	var origin_id: String = demo._region_id(Vector2i.ZERO)
 	_check(demo.active_regions.has(origin_id), "edited origin region is resident before excursion")
 	var before_stats: Dictionary = demo.world_save_store.get_hot_stats()
 
