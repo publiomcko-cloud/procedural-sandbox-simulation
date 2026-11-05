@@ -875,6 +875,185 @@ static func analyze_world_triangles(
 	}
 
 
+static func analyze_world_triangles_z(
+	triangles: Array,
+	seam_z: float,
+	roi_min: Vector3,
+	roi_max: Vector3
+) -> Dictionary:
+	var edge_incidence: Dictionary = {}
+	var edge_sides: Dictionary = {}
+	var edge_points: Dictionary = {}
+	var edge_geometry_sides: Dictionary = {}
+	var duplicate_triangles := 0
+	var triangle_keys: Dictionary = {}
+	for triangle_value in triangles:
+		var triangle: Dictionary = triangle_value
+		var points: Array = triangle["points"]
+		if points.size() != 3:
+			continue
+		var point_keys := [_point_key(points[0]), _point_key(points[1]), _point_key(points[2])]
+		var canonical_triangle := point_keys.duplicate()
+		canonical_triangle.sort()
+		var triangle_key := "|".join(canonical_triangle)
+		if triangle_keys.has(triangle_key):
+			duplicate_triangles += 1
+		triangle_keys[triangle_key] = true
+		var triangle_geometry_sides := {}
+		for point_value in points:
+			var point: Vector3 = point_value
+			if point.z < seam_z - EPS:
+				triangle_geometry_sides["low"] = true
+			elif point.z > seam_z + EPS:
+				triangle_geometry_sides["high"] = true
+		for pair in [[0, 1], [1, 2], [2, 0]]:
+			var a: Vector3 = points[pair[0]]
+			var b: Vector3 = points[pair[1]]
+			var key := _ordered_pair(_point_key(a), _point_key(b))
+			edge_incidence[key] = int(edge_incidence.get(key, 0)) + 1
+			if not edge_sides.has(key):
+				edge_sides[key] = {}
+			var sides: Dictionary = edge_sides[key]
+			sides[String(triangle.get("side", "unknown"))] = true
+			edge_sides[key] = sides
+			if not edge_geometry_sides.has(key):
+				edge_geometry_sides[key] = {}
+			var geometry_sides: Dictionary = edge_geometry_sides[key]
+			for geometry_side in triangle_geometry_sides.keys():
+				geometry_sides[geometry_side] = true
+			edge_geometry_sides[key] = geometry_sides
+			edge_points[key] = [a, b]
+
+	var seam_edges: Array[String] = []
+	var bad_incidence := 0
+	var cross_owner := 0
+	var crossing_edges := 0
+	var tangent_contact_edges := 0
+	var bad_edges: Array[Dictionary] = []
+	var non_cross_owned_edges: Array[Dictionary] = []
+	for edge_value in edge_incidence.keys():
+		var edge_key := String(edge_value)
+		var pts: Array = edge_points[edge_key]
+		var a: Vector3 = pts[0]
+		var b: Vector3 = pts[1]
+		if absf(a.z - seam_z) > EPS or absf(b.z - seam_z) > EPS:
+			continue
+		if _on_outer_xy(a, roi_min, roi_max) and _on_outer_xy(b, roi_min, roi_max):
+			continue
+		seam_edges.append(edge_key)
+		var incidence := int(edge_incidence[edge_key])
+		var sides: Dictionary = edge_sides[edge_key]
+		var geometry_sides: Dictionary = edge_geometry_sides.get(edge_key, {})
+		var geometrically_crossing := geometry_sides.has("low") and geometry_sides.has("high")
+		if geometrically_crossing:
+			crossing_edges += 1
+		else:
+			tangent_contact_edges += 1
+		if incidence != 2:
+			bad_incidence += 1
+			if bad_edges.size() < 32:
+				bad_edges.append({"edge": edge_key, "incidence": incidence, "sides": sides.keys(), "geometry_sides": geometry_sides.keys(), "points": [a, b]})
+		if geometrically_crossing:
+			if sides.has("low") and sides.has("high"):
+				cross_owner += 1
+			elif non_cross_owned_edges.size() < 32:
+				non_cross_owned_edges.append({"edge": edge_key, "incidence": incidence, "sides": sides.keys(), "geometry_sides": geometry_sides.keys(), "points": [a, b]})
+	return {
+		"seam_edge_count": seam_edges.size(),
+		"seam_bad_incidence_count": bad_incidence,
+		"seam_cross_owner_count": cross_owner,
+		"seam_crossing_edge_count": crossing_edges,
+		"seam_tangent_contact_edge_count": tangent_contact_edges,
+		"t_junction_count": _count_t_junctions(seam_edges, edge_points),
+		"duplicate_triangle_count": duplicate_triangles,
+		"bad_edges": bad_edges,
+		"non_cross_owned_edges": non_cross_owned_edges,
+	}
+
+
+static func analyze_corner_world_triangles(
+	triangles: Array,
+	seam_x: float,
+	seam_z: float,
+	roi_min: Vector3,
+	roi_max: Vector3
+) -> Dictionary:
+	var x_triangles: Array[Dictionary] = []
+	var z_triangles: Array[Dictionary] = []
+	var edge_incidence: Dictionary = {}
+	var edge_points: Dictionary = {}
+	var edge_owners: Dictionary = {}
+	for triangle_value in triangles:
+		var triangle: Dictionary = triangle_value
+		var owner := String(triangle.get("owner", ""))
+		var x_copy := triangle.duplicate(true)
+		x_copy["side"] = "left" if owner.begins_with("minx_") else "right"
+		x_triangles.append(x_copy)
+		var z_copy := triangle.duplicate(true)
+		z_copy["side"] = "low" if owner.ends_with("_minz") else "high"
+		z_triangles.append(z_copy)
+		var points: Array = triangle.get("points", [])
+		if points.size() != 3:
+			continue
+		for pair in [[0, 1], [1, 2], [2, 0]]:
+			var a: Vector3 = points[pair[0]]
+			var b: Vector3 = points[pair[1]]
+			var key := _ordered_pair(_point_key(a), _point_key(b))
+			edge_incidence[key] = int(edge_incidence.get(key, 0)) + 1
+			edge_points[key] = [a, b]
+			if not edge_owners.has(key):
+				edge_owners[key] = {}
+			var owners: Dictionary = edge_owners[key]
+			owners[owner] = true
+			edge_owners[key] = owners
+	var x_diag := analyze_world_triangles(x_triangles, seam_x, roi_min, roi_max)
+	var z_diag := analyze_world_triangles_z(z_triangles, seam_z, roi_min, roi_max)
+	var junction_edges: Array[String] = []
+	var junction_bad_incidence := 0
+	var junction_multi_owner := 0
+	var junction_bad_edges: Array[Dictionary] = []
+	for edge_value in edge_incidence.keys():
+		var edge_key := String(edge_value)
+		var pts: Array = edge_points[edge_key]
+		var a: Vector3 = pts[0]
+		var b: Vector3 = pts[1]
+		if absf(a.x - seam_x) > EPS or absf(b.x - seam_x) > EPS \
+			or absf(a.z - seam_z) > EPS or absf(b.z - seam_z) > EPS:
+			continue
+		if _on_outer_y(a, roi_min, roi_max) and _on_outer_y(b, roi_min, roi_max):
+			continue
+		junction_edges.append(edge_key)
+		var incidence := int(edge_incidence[edge_key])
+		var owners: Dictionary = edge_owners.get(edge_key, {})
+		if owners.size() >= 2:
+			junction_multi_owner += 1
+		if incidence != 2:
+			junction_bad_incidence += 1
+			if junction_bad_edges.size() < 32:
+				junction_bad_edges.append({
+					"edge": edge_key,
+					"incidence": incidence,
+					"owners": owners.keys(),
+					"points": [a, b],
+				})
+	return {
+		"x": x_diag,
+		"z": z_diag,
+		"x_seam_bad_incidence_count": int(x_diag.get("seam_bad_incidence_count", -1)),
+		"x_t_junction_count": int(x_diag.get("t_junction_count", -1)),
+		"x_non_cross_owned_count": (x_diag.get("non_cross_owned_edges", []) as Array).size(),
+		"z_seam_bad_incidence_count": int(z_diag.get("seam_bad_incidence_count", -1)),
+		"z_t_junction_count": int(z_diag.get("t_junction_count", -1)),
+		"z_non_cross_owned_count": (z_diag.get("non_cross_owned_edges", []) as Array).size(),
+		"junction_edge_count": junction_edges.size(),
+		"junction_bad_incidence_count": junction_bad_incidence,
+		"junction_t_junction_count": _count_t_junctions(junction_edges, edge_points),
+		"junction_multi_owner_count": junction_multi_owner,
+		"junction_bad_edges": junction_bad_edges,
+		"duplicate_triangle_count": int(x_diag.get("duplicate_triangle_count", -1)),
+	}
+
+
 static func _append_cpu_triangles(
 	target: Array[Dictionary],
 	cpu: Dictionary,
@@ -1277,6 +1456,29 @@ static func _count_t_junctions(seam_edges: Array[String], edge_points: Dictionar
 			if (a + ab * t).distance_squared_to(p) <= 1.0e-12:
 				count += 1
 	return count
+
+
+static func _root_identity_consistent(root_cache: Dictionary, root_position_keys: Dictionary) -> bool:
+	for root_id in root_cache.keys():
+		var point: Vector3 = root_cache[root_id]
+		if String(root_position_keys.get(root_id, "")) != _point_key(point):
+			return false
+	return true
+
+
+static func _on_outer_xy(p: Vector3, roi_min: Vector3, roi_max: Vector3) -> bool:
+	var px := roundi(p.x * ROOT_QUANT)
+	var py := roundi(p.y * ROOT_QUANT)
+	return px == roundi(roi_min.x * ROOT_QUANT) \
+		or px == roundi(roi_max.x * ROOT_QUANT) \
+		or py == roundi(roi_min.y * ROOT_QUANT) \
+		or py == roundi(roi_max.y * ROOT_QUANT)
+
+
+static func _on_outer_y(p: Vector3, roi_min: Vector3, roi_max: Vector3) -> bool:
+	var py := roundi(p.y * ROOT_QUANT)
+	return py == roundi(roi_min.y * ROOT_QUANT) \
+		or py == roundi(roi_max.y * ROOT_QUANT)
 
 
 static func _on_outer_yz(p: Vector3, roi_min: Vector3, roi_max: Vector3) -> bool:
