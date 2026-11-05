@@ -59,6 +59,7 @@ var _last_command_visual_result: Dictionary = {}
 var _last_entity_command_metrics: Dictionary = {}
 var _last_reconstruction_usec := 0
 var debug_fail_next_visual_publication := false
+var _debug_fail_visual_request_serial := -1
 
 
 func initialize(seed_value: int, world_identifier: String, package_roots: Array[String] = [], object_state_directory: String = "") -> Dictionary:
@@ -73,6 +74,7 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_pending_region_publications.clear()
 	_pending_publication_order.clear()
 	_next_region_publication_serial = 1
+	_debug_fail_visual_request_serial = -1
 	_command_visual_pending.clear()
 	_command_migration_sync_regions.clear()
 	_last_command_visual_result.clear()
@@ -218,7 +220,11 @@ func process_queued_publications() -> int:
 				continue
 			var request: Dictionary = _pending_region_publications[id]
 			_pending_region_publications.erase(id)
-			var result := publish_region(request["region_key"], request["world_state"], bool(request.get("force_rebuild", false)), int(request["publication_token"]))
+			var result := publish_region(
+				request["region_key"], request["world_state"],
+				bool(request.get("force_rebuild", false)), int(request["publication_token"]),
+				{}, int(request.get("request_serial", -1))
+			)
 			_publications_last_process_tick += 1
 			_finish_queued_publication(id, result, int(request.get("request_serial", -1)))
 	else:
@@ -292,7 +298,8 @@ func _process_completed_region_generation_jobs() -> void:
 		else:
 			result = publish_region(
 				request["region_key"], request["world_state"],
-				bool(request.get("force_rebuild", false)), publication_token, generated
+				bool(request.get("force_rebuild", false)), publication_token, generated,
+				int(request.get("request_serial", -1))
 			)
 		_publications_last_process_tick += 1
 		_finish_queued_publication(id, result, int(request.get("request_serial", -1)))
@@ -327,7 +334,14 @@ func _finish_queued_publication(id: String, result: Dictionary, request_serial: 
 		_command_migration_sync_regions.erase(id)
 
 
-func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool = false, publication_token: int = -1, generated_base: Dictionary = {}) -> Dictionary:
+func publish_region(
+	region_key: Vector2i,
+	state: RefCounted,
+	force_rebuild: bool = false,
+	publication_token: int = -1,
+	generated_base: Dictionary = {},
+	request_serial: int = -1
+) -> Dictionary:
 	var publication_started_usec := Time.get_ticks_usec()
 	var id := _region_id(region_key)
 	if _expected_publication_tokens.has(id) and publication_token != int(_expected_publication_tokens[id]):
@@ -461,8 +475,8 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 		region_root.add_child(batch_node)
 	for object_node in pending_nodes:
 		region_root.add_child(object_node)
-	if debug_fail_next_visual_publication:
-		debug_fail_next_visual_publication = false
+	if request_serial >= 0 and request_serial == _debug_fail_visual_request_serial:
+		_debug_fail_visual_request_serial = -1
 		region_root.free()
 		for pending_node in pending_nodes:
 			if is_instance_valid(pending_node) and pending_node.get_parent() == null:
@@ -666,14 +680,20 @@ func _queue_committed_visual_update(result: Dictionary, region_key: Vector2i, st
 		output["visual_status"] = "failed"
 		_last_command_visual_result = {"entity_id": String(output.get("entity_id", "")), "operation": String(output.get("operation", "")), "world_revision": int(output.get("world_revision", -1)), "ok": false, "reason": String(output["reason"])}
 		return output
+	var request_serial := int(queued.get("request_serial", -1))
 	_command_visual_pending[region_id] = {
 		"entity_id": String(output.get("entity_id", "")),
 		"operation": String(output.get("operation", "")),
 		"world_revision": int(output.get("world_revision", -1)),
 		"queued_usec": Time.get_ticks_usec(),
 		"command_started_usec": started_usec,
-		"request_serial": int(queued.get("request_serial", -1)),
+		"request_serial": request_serial,
 	}
+	# Failure injection is command-scoped, not globally consumed by whichever
+	# unrelated region worker happens to publish first.
+	if debug_fail_next_visual_publication:
+		debug_fail_next_visual_publication = false
+		_debug_fail_visual_request_serial = request_serial
 	output["visual_status"] = "queued"
 	return output
 
