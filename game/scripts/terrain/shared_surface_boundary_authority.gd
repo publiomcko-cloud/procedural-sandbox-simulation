@@ -659,6 +659,7 @@ static func _build_shared_volume(
 	var tet_call_count := 0
 	var dirty_root_cache: Dictionary = {}
 	var dirty_root_position_keys: Dictionary = {}
+	var polygonize_mode := 0 if kind == "x" else (1 if kind == "z" else 2)
 	for y in range(cells.y):
 		for z in range(cells.z):
 			for x in range(cells.x):
@@ -666,19 +667,30 @@ static func _build_shared_volume(
 				if dirty_flags[cell_index] == 0:
 					continue
 				var cell := Vector3i(x, y, z)
-				var density: Array[float] = []
-				for corner_value in CORNERS:
-					var corner: Vector3i = corner_value
-					var node := cell + corner
-					density.append(values[_index(node.x, node.y, node.z, dims)])
-				var has_solid := false
-				var has_empty := false
-				for density_value in density:
-					if density_value > 0.0:
-						has_solid = true
-					else:
-						has_empty = true
-				var is_mixed := has_solid and has_empty
+				# P2: two Vector4 values replace density/nodes/points Arrays for
+				# every dirty cell. Exact zero keeps the existing empty convention.
+				var density0 := Vector4(
+					values[_index(x, y, z, dims)],
+					values[_index(x + 1, y, z, dims)],
+					values[_index(x + 1, y + 1, z, dims)],
+					values[_index(x, y + 1, z, dims)]
+				)
+				var density1 := Vector4(
+					values[_index(x, y, z + 1, dims)],
+					values[_index(x + 1, y, z + 1, dims)],
+					values[_index(x + 1, y + 1, z + 1, dims)],
+					values[_index(x, y + 1, z + 1, dims)]
+				)
+				var solid_mask := 0
+				if density0.x > 0.0: solid_mask |= 1
+				if density0.y > 0.0: solid_mask |= 2
+				if density0.z > 0.0: solid_mask |= 4
+				if density0.w > 0.0: solid_mask |= 8
+				if density1.x > 0.0: solid_mask |= 16
+				if density1.y > 0.0: solid_mask |= 32
+				if density1.z > 0.0: solid_mask |= 64
+				if density1.w > 0.0: solid_mask |= 128
+				var is_mixed := solid_mask != 0 and solid_mask != 255
 				if cache_hit:
 					var was_mixed := cell_mixed[cell_index] != 0
 					if was_mixed != is_mixed:
@@ -698,35 +710,16 @@ static func _build_shared_volume(
 					cell_dropped[cell_index] = 0
 					continue
 
-				var nodes: Array[Vector3i] = []
-				var points: Array[Vector3] = []
-				for corner_value in CORNERS:
-					var corner: Vector3i = corner_value
-					var node := cell + corner
-					nodes.append(node)
-					points.append(roi_min + Vector3(node) * step)
 				var emitted_for_cell: Array[Dictionary] = []
 				var dropped_for_cell := 0
 				for tet in TETS:
 					tet_call_count += 1
-					var emitted: Dictionary
-					if kind == "x":
-						emitted = _polygonize_tet(
-							tet, nodes, points, density, roi_min, step, seam_x,
-							dirty_root_cache, dirty_root_position_keys
-						)
-					elif kind == "z":
-						emitted = _polygonize_tet_z(
-							tet, nodes, points, density, roi_min, step, seam_z,
-							dirty_root_cache, dirty_root_position_keys
-						)
-					else:
-						emitted = _polygonize_tet_corner(
-							tet, nodes, points, density, roi_min, step, seam_x, seam_z,
-							dirty_root_cache, dirty_root_position_keys
-						)
-					dropped_for_cell += int(emitted.get("dropped_degenerate", 0))
-					emitted_for_cell.append_array(emitted.get("triangles", []))
+					dropped_for_cell += _polygonize_tet_into(
+						tet, polygonize_mode, cell, density0, density1,
+						roi_min, step, seam_x, seam_z,
+						dirty_root_cache, dirty_root_position_keys,
+						diagnostics_enabled, emitted_for_cell
+					)
 				cell_triangles[cell_index] = emitted_for_cell
 				cell_dropped[cell_index] = dropped_for_cell
 
@@ -745,7 +738,8 @@ static func _build_shared_volume(
 	var deduplicate_elapsed_usec := Time.get_ticks_usec() - deduplicate_started_usec
 	triangles = deduplicated
 
-	# Reconstruct global root identity from the merged reused+dirty triangle set.
+	# Reconstruct unique roots for counters. Point-key identity strings are only
+	# needed by diagnostics; runtime jobs avoid allocating them entirely.
 	var root_cache: Dictionary = {}
 	var root_position_keys: Dictionary = {}
 	for triangle_value in triangles:
@@ -757,12 +751,14 @@ static func _build_shared_volume(
 		for index in range(3):
 			var root_id := String(ids[index])
 			var point: Vector3 = points[index]
-			var point_key := _point_key(point)
 			if not root_cache.has(root_id):
 				root_cache[root_id] = point
-				root_position_keys[root_id] = point_key
-			elif String(root_position_keys.get(root_id, "")) != point_key:
-				root_position_keys[root_id] = "__root_identity_conflict__"
+				if diagnostics_enabled:
+					root_position_keys[root_id] = _point_key(point)
+			elif diagnostics_enabled:
+				var point_key := _point_key(point)
+				if String(root_position_keys.get(root_id, "")) != point_key:
+					root_position_keys[root_id] = "__root_identity_conflict__"
 
 	var diagnostics_started_usec := Time.get_ticks_usec()
 	var diagnostics: Dictionary = {}
@@ -780,9 +776,10 @@ static func _build_shared_volume(
 	var owner_key := "owner" if kind == "corner" else "side"
 	for triangle_value in triangles:
 		var ids: Array = triangle_value["root_ids"]
-		var sorted_ids := [String(ids[0]), String(ids[1]), String(ids[2])]
-		sorted_ids.sort()
-		signature_rows.append("%s:%s" % [String(triangle_value[owner_key]), "|".join(sorted_ids)])
+		signature_rows.append("%s:%s" % [
+			String(triangle_value[owner_key]),
+			_sorted_triplet_key(String(ids[0]), String(ids[1]), String(ids[2])),
+		])
 	signature_rows.sort()
 	var signature_elapsed_usec := Time.get_ticks_usec() - signature_started_usec
 
@@ -1110,16 +1107,17 @@ static func _mark_dirty_cells_for_node(
 	node_y: int,
 	node_z: int
 ) -> int:
+	# P2: integer ranges avoid three short Array literals for every changed node.
 	var added := 0
-	for cy in [node_y - 1, node_y]:
-		if cy < 0 or cy >= cells.y:
-			continue
-		for cz in [node_z - 1, node_z]:
-			if cz < 0 or cz >= cells.z:
-				continue
-			for cx in [node_x - 1, node_x]:
-				if cx < 0 or cx >= cells.x:
-					continue
+	var cy_min := maxi(0, node_y - 1)
+	var cy_max := mini(cells.y - 1, node_y)
+	var cz_min := maxi(0, node_z - 1)
+	var cz_max := mini(cells.z - 1, node_z)
+	var cx_min := maxi(0, node_x - 1)
+	var cx_max := mini(cells.x - 1, node_x)
+	for cy in range(cy_min, cy_max + 1):
+		for cz in range(cz_min, cz_max + 1):
+			for cx in range(cx_min, cx_max + 1):
 				var cell_index := _cell_index(cx, cy, cz, cells)
 				if dirty_flags[cell_index] == 0:
 					dirty_flags[cell_index] = 1
@@ -1138,23 +1136,34 @@ static func _deduplicate_triangles(source: Array[Dictionary]) -> Array[Dictionar
 		var points: Array = triangle.get("points", [])
 		if points.size() != 3:
 			continue
-		# Exact-zero SDF nodes may be reached through several lattice edges. Those
-		# edges have different root IDs but collapse to the same geometric vertex,
-		# so root-ID deduplication can leave coincident triangles and incidence 4.
-		# Geometry identity is authoritative here: remove only triangles whose
-		# three canonical world-space points are exactly the same set.
-		var canonical := [
-			_point_key(points[0]),
-			_point_key(points[1]),
-			_point_key(points[2]),
-		]
-		canonical.sort()
-		var key := "|".join(canonical)
+		# P2: sort three scalar keys without allocating a temporary Array.
+		var key := _sorted_triplet_key(
+			_point_key(points[0]), _point_key(points[1]), _point_key(points[2])
+		)
 		if seen.has(key):
 			continue
 		seen[key] = true
 		result.append(triangle)
 	return result
+
+
+static func _sorted_triplet_key(a: String, b: String, c: String) -> String:
+	var first := a
+	var second := b
+	var third := c
+	if second < first:
+		var swap := first
+		first = second
+		second = swap
+	if third < second:
+		var swap := second
+		second = third
+		third = swap
+	if second < first:
+		var swap := first
+		first = second
+		second = swap
+	return first + "|" + second + "|" + third
 
 
 static func analyze_cpu_pair_plane(
@@ -1505,300 +1514,141 @@ static func _sample_density(world_seed: int, world: Vector3, snapshot: Dictionar
 	)
 
 
-static func _polygonize_tet(
+static func _polygonize_tet_into(
 	tet: Array,
-	nodes: Array[Vector3i],
-	points: Array[Vector3],
-	density: Array[float],
-	roi_min: Vector3,
-	step: float,
-	seam_x: float,
-	root_cache: Dictionary,
-	root_position_keys: Dictionary
-) -> Dictionary:
-	var inside: Array[int] = []
-	var outside: Array[int] = []
-	for local_index in tet:
-		# Exact-zero samples use one deterministic half-open convention. Treating
-		# zero as empty prevents several crossed lattice edges from collapsing onto
-		# the same zero node and creating non-manifold incidence under tetrahedral
-		# decomposition. Non-zero topology and interpolation are unchanged.
-		if density[local_index] > 0.0:
-			inside.append(local_index)
-		else:
-			outside.append(local_index)
-	if inside.is_empty() or outside.is_empty():
-		return {"triangles": [], "dropped_degenerate": 0}
-
-	var inside_center := Vector3.ZERO
-	var outside_center := Vector3.ZERO
-	for i in inside:
-		inside_center += points[i]
-	for i in outside:
-		outside_center += points[i]
-	inside_center /= float(inside.size())
-	outside_center /= float(outside.size())
-	var toward_empty := outside_center - inside_center
-
-	if inside.size() == 1 or inside.size() == 3:
-		var singleton: int
-		var others: Array[int]
-		if inside.size() == 1:
-			singleton = inside[0]
-			others = outside
-		else:
-			singleton = outside[0]
-			others = inside
-		var roots: Array[String] = []
-		for other in others:
-			roots.append(_root_id_and_cache(
-				singleton, other, nodes, points, density, roi_min, step,
-				root_cache, root_position_keys
-			))
-		return _emit_triangle(roots[0], roots[1], roots[2], toward_empty, seam_x, root_cache)
-
-	var r00 := _root_id_and_cache(inside[0], outside[0], nodes, points, density, roi_min, step, root_cache, root_position_keys)
-	var r01 := _root_id_and_cache(inside[0], outside[1], nodes, points, density, roi_min, step, root_cache, root_position_keys)
-	var r10 := _root_id_and_cache(inside[1], outside[0], nodes, points, density, roi_min, step, root_cache, root_position_keys)
-	var r11 := _root_id_and_cache(inside[1], outside[1], nodes, points, density, roi_min, step, root_cache, root_position_keys)
-	# Match MarchingTetrahedra and Lod01TransitionFixture exactly for 2/2
-	# tetrahedra: both use the a-d diagonal. Root interpolation remains globally
-	# canonical, but topology must share the production diagonal convention.
-	var result: Array[Dictionary] = []
-	var first := _emit_triangle(r00, r01, r11, toward_empty, seam_x, root_cache)
-	var second := _emit_triangle(r00, r11, r10, toward_empty, seam_x, root_cache)
-	result.append_array(first["triangles"])
-	result.append_array(second["triangles"])
-	var dropped := int(first["dropped_degenerate"]) + int(second["dropped_degenerate"])
-	return {"triangles": result, "dropped_degenerate": dropped}
-
-
-static func _polygonize_tet_z(
-	tet: Array,
-	nodes: Array[Vector3i],
-	points: Array[Vector3],
-	density: Array[float],
-	roi_min: Vector3,
-	step: float,
-	seam_z: float,
-	root_cache: Dictionary,
-	root_position_keys: Dictionary
-) -> Dictionary:
-	var inside: Array[int] = []
-	var outside: Array[int] = []
-	for local_index in tet:
-		if density[local_index] > 0.0:
-			inside.append(local_index)
-		else:
-			outside.append(local_index)
-	if inside.is_empty() or outside.is_empty():
-		return {"triangles": [], "dropped_degenerate": 0}
-	var inside_center := Vector3.ZERO
-	var outside_center := Vector3.ZERO
-	for i in inside:
-		inside_center += points[i]
-	for i in outside:
-		outside_center += points[i]
-	inside_center /= float(inside.size())
-	outside_center /= float(outside.size())
-	var toward_empty := outside_center - inside_center
-	if inside.size() == 1 or inside.size() == 3:
-		var singleton: int
-		var others: Array[int]
-		if inside.size() == 1:
-			singleton = inside[0]
-			others = outside
-		else:
-			singleton = outside[0]
-			others = inside
-		var roots: Array[String] = []
-		for other in others:
-			roots.append(_root_id_and_cache(
-				singleton, other, nodes, points, density, roi_min, step,
-				root_cache, root_position_keys
-			))
-		return _emit_triangle_z(roots[0], roots[1], roots[2], toward_empty, seam_z, root_cache)
-	var r00 := _root_id_and_cache(inside[0], outside[0], nodes, points, density, roi_min, step, root_cache, root_position_keys)
-	var r01 := _root_id_and_cache(inside[0], outside[1], nodes, points, density, roi_min, step, root_cache, root_position_keys)
-	var r10 := _root_id_and_cache(inside[1], outside[0], nodes, points, density, roi_min, step, root_cache, root_position_keys)
-	var r11 := _root_id_and_cache(inside[1], outside[1], nodes, points, density, roi_min, step, root_cache, root_position_keys)
-	var result: Array[Dictionary] = []
-	var first := _emit_triangle_z(r00, r01, r11, toward_empty, seam_z, root_cache)
-	var second := _emit_triangle_z(r00, r11, r10, toward_empty, seam_z, root_cache)
-	result.append_array(first["triangles"])
-	result.append_array(second["triangles"])
-	return {
-		"triangles": result,
-		"dropped_degenerate": int(first["dropped_degenerate"]) + int(second["dropped_degenerate"]),
-	}
-
-
-static func _polygonize_tet_corner(
-	tet: Array,
-	nodes: Array[Vector3i],
-	points: Array[Vector3],
-	density: Array[float],
+	mode: int,
+	cell: Vector3i,
+	density0: Vector4,
+	density1: Vector4,
 	roi_min: Vector3,
 	step: float,
 	seam_x: float,
 	seam_z: float,
 	root_cache: Dictionary,
-	root_position_keys: Dictionary
-) -> Dictionary:
-	var inside: Array[int] = []
-	var outside: Array[int] = []
+	root_position_keys: Dictionary,
+	track_identity: bool,
+	target: Array[Dictionary]
+) -> int:
+	# P2: fixed slots replace inside/outside Arrays and emit directly into the
+	# cell's final triangle Array instead of allocating Dictionary wrappers.
+	var inside_count := 0
+	var outside_count := 0
+	var inside0 := -1
+	var inside1 := -1
+	var inside2 := -1
+	var outside0 := -1
+	var outside1 := -1
+	var outside2 := -1
 	for local_index in tet:
-		if density[local_index] > 0.0:
-			inside.append(local_index)
+		if _shared_density_for_corner(local_index, density0, density1) > 0.0:
+			match inside_count:
+				0: inside0 = local_index
+				1: inside1 = local_index
+				2: inside2 = local_index
+			inside_count += 1
 		else:
-			outside.append(local_index)
-	if inside.is_empty() or outside.is_empty():
-		return {"triangles": [], "dropped_degenerate": 0}
+			match outside_count:
+				0: outside0 = local_index
+				1: outside1 = local_index
+				2: outside2 = local_index
+			outside_count += 1
+	if inside_count == 0 or outside_count == 0:
+		return 0
+
 	var inside_center := Vector3.ZERO
 	var outside_center := Vector3.ZERO
-	for i in inside:
-		inside_center += points[i]
-	for i in outside:
-		outside_center += points[i]
-	inside_center /= float(inside.size())
-	outside_center /= float(outside.size())
+	if inside_count > 0: inside_center += _shared_point_for_corner(cell, inside0, roi_min, step)
+	if inside_count > 1: inside_center += _shared_point_for_corner(cell, inside1, roi_min, step)
+	if inside_count > 2: inside_center += _shared_point_for_corner(cell, inside2, roi_min, step)
+	if outside_count > 0: outside_center += _shared_point_for_corner(cell, outside0, roi_min, step)
+	if outside_count > 1: outside_center += _shared_point_for_corner(cell, outside1, roi_min, step)
+	if outside_count > 2: outside_center += _shared_point_for_corner(cell, outside2, roi_min, step)
+	inside_center /= float(inside_count)
+	outside_center /= float(outside_count)
 	var toward_empty := outside_center - inside_center
-	if inside.size() == 1 or inside.size() == 3:
-		var singleton: int
-		var others: Array[int]
-		if inside.size() == 1:
-			singleton = inside[0]
-			others = outside
-		else:
-			singleton = outside[0]
-			others = inside
-		var roots: Array[String] = []
-		for other in others:
-			roots.append(_root_id_and_cache(
-				singleton, other, nodes, points, density, roi_min, step,
-				root_cache, root_position_keys
-			))
-		return _emit_triangle_corner(
-			roots[0], roots[1], roots[2], toward_empty, seam_x, seam_z, root_cache
+
+	if inside_count == 1 or inside_count == 3:
+		var singleton := inside0 if inside_count == 1 else outside0
+		var other0 := outside0 if inside_count == 1 else inside0
+		var other1 := outside1 if inside_count == 1 else inside1
+		var other2 := outside2 if inside_count == 1 else inside2
+		var r0 := _root_id_and_cache_cell(
+			singleton, other0, cell, density0, density1, roi_min, step,
+			root_cache, root_position_keys, track_identity
 		)
-	var r00 := _root_id_and_cache(inside[0], outside[0], nodes, points, density, roi_min, step, root_cache, root_position_keys)
-	var r01 := _root_id_and_cache(inside[0], outside[1], nodes, points, density, roi_min, step, root_cache, root_position_keys)
-	var r10 := _root_id_and_cache(inside[1], outside[0], nodes, points, density, roi_min, step, root_cache, root_position_keys)
-	var r11 := _root_id_and_cache(inside[1], outside[1], nodes, points, density, roi_min, step, root_cache, root_position_keys)
-	var result: Array[Dictionary] = []
-	var first := _emit_triangle_corner(r00, r01, r11, toward_empty, seam_x, seam_z, root_cache)
-	var second := _emit_triangle_corner(r00, r11, r10, toward_empty, seam_x, seam_z, root_cache)
-	result.append_array(first["triangles"])
-	result.append_array(second["triangles"])
-	return {
-		"triangles": result,
-		"dropped_degenerate": int(first["dropped_degenerate"]) + int(second["dropped_degenerate"]),
-	}
+		var r1 := _root_id_and_cache_cell(
+			singleton, other1, cell, density0, density1, roi_min, step,
+			root_cache, root_position_keys, track_identity
+		)
+		var r2 := _root_id_and_cache_cell(
+			singleton, other2, cell, density0, density1, roi_min, step,
+			root_cache, root_position_keys, track_identity
+		)
+		return _emit_triangle_into(
+			target, r0, r1, r2, toward_empty, mode, seam_x, seam_z, root_cache
+		)
+
+	var r00 := _root_id_and_cache_cell(
+		inside0, outside0, cell, density0, density1, roi_min, step,
+		root_cache, root_position_keys, track_identity
+	)
+	var r01 := _root_id_and_cache_cell(
+		inside0, outside1, cell, density0, density1, roi_min, step,
+		root_cache, root_position_keys, track_identity
+	)
+	var r10 := _root_id_and_cache_cell(
+		inside1, outside0, cell, density0, density1, roi_min, step,
+		root_cache, root_position_keys, track_identity
+	)
+	var r11 := _root_id_and_cache_cell(
+		inside1, outside1, cell, density0, density1, roi_min, step,
+		root_cache, root_position_keys, track_identity
+	)
+	var dropped := _emit_triangle_into(
+		target, r00, r01, r11, toward_empty, mode, seam_x, seam_z, root_cache
+	)
+	dropped += _emit_triangle_into(
+		target, r00, r11, r10, toward_empty, mode, seam_x, seam_z, root_cache
+	)
+	return dropped
 
 
-static func _emit_triangle_z(
-	a: String,
-	b: String,
-	c: String,
-	toward_empty: Vector3,
-	seam_z: float,
-	roots: Dictionary
-) -> Dictionary:
-	if a == b or b == c or c == a:
-		return {"triangles": [], "dropped_degenerate": 1}
-	var pa: Vector3 = roots[a]
-	var pb: Vector3 = roots[b]
-	var pc: Vector3 = roots[c]
-	var normal := (pb - pa).cross(pc - pa)
-	if normal.length_squared() <= 1.0e-14:
-		return {"triangles": [], "dropped_degenerate": 1}
-	if normal.dot(toward_empty) < 0.0:
-		var swap := pb
-		pb = pc
-		pc = swap
-		var swap_id := b
-		b = c
-		c = swap_id
-		normal = -normal
-	normal = normal.normalized()
-	var center_z := (pa.z + pb.z + pc.z) / 3.0
-	var side := "low" if center_z < seam_z else "high"
-	return {
-		"triangles": [{
-			"root_ids": [a, b, c],
-			"points": [pa, pb, pc],
-			"normal": normal,
-			"side": side,
-		}],
-		"dropped_degenerate": 0,
-	}
+static func _shared_density_for_corner(index: int, density0: Vector4, density1: Vector4) -> float:
+	return density0[index] if index < 4 else density1[index - 4]
 
 
-static func _emit_triangle_corner(
-	a: String,
-	b: String,
-	c: String,
-	toward_empty: Vector3,
-	seam_x: float,
-	seam_z: float,
-	roots: Dictionary
-) -> Dictionary:
-	if a == b or b == c or c == a:
-		return {"triangles": [], "dropped_degenerate": 1}
-	var pa: Vector3 = roots[a]
-	var pb: Vector3 = roots[b]
-	var pc: Vector3 = roots[c]
-	var normal := (pb - pa).cross(pc - pa)
-	if normal.length_squared() <= 1.0e-14:
-		return {"triangles": [], "dropped_degenerate": 1}
-	if normal.dot(toward_empty) < 0.0:
-		var swap := pb
-		pb = pc
-		pc = swap
-		var swap_id := b
-		b = c
-		c = swap_id
-		normal = -normal
-	normal = normal.normalized()
-	var center := (pa + pb + pc) / 3.0
-	var owner := ("minx" if center.x < seam_x else "maxx") + "_" \
-		+ ("minz" if center.z < seam_z else "maxz")
-	return {
-		"triangles": [{
-			"root_ids": [a, b, c],
-			"points": [pa, pb, pc],
-			"normal": normal,
-			"owner": owner,
-		}],
-		"dropped_degenerate": 0,
-	}
+static func _shared_point_for_corner(
+	cell: Vector3i,
+	index: int,
+	roi_min: Vector3,
+	step: float
+) -> Vector3:
+	var corner: Vector3i = CORNERS[index]
+	return roi_min + Vector3(cell + corner) * step
 
 
-static func _root_id_and_cache(
+static func _root_id_and_cache_cell(
 	a: int,
 	b: int,
-	nodes: Array[Vector3i],
-	points: Array[Vector3],
-	density: Array[float],
+	cell: Vector3i,
+	density0: Vector4,
+	density1: Vector4,
 	roi_min: Vector3,
 	step: float,
 	root_cache: Dictionary,
-	root_position_keys: Dictionary
+	root_position_keys: Dictionary,
+	track_identity: bool
 ) -> String:
-	var wa := roi_min + Vector3(nodes[a]) * step
-	var wb := roi_min + Vector3(nodes[b]) * step
-	var node_a := _lattice_key(wa, step)
-	var node_b := _lattice_key(wb, step)
+	var point_a := _shared_point_for_corner(cell, a, roi_min, step)
+	var point_b := _shared_point_for_corner(cell, b, roi_min, step)
+	var node_a := _lattice_key(point_a, step)
+	var node_b := _lattice_key(point_b, step)
 	var key := _ordered_pair(node_a, node_b)
 	if root_cache.has(key):
 		return key
-	var point_a: Vector3 = points[a]
-	var point_b: Vector3 = points[b]
-	var da := density[a]
-	var db := density[b]
-	# Match Lod01TransitionFixture bit-for-bit: shared crossed edges may be
-	# traversed in opposite directions by different mesh owners, so canonicalize
-	# endpoint order before the floating-point interpolation.
+	var da := _shared_density_for_corner(a, density0, density1)
+	var db := _shared_density_for_corner(b, density0, density1)
+	# Preserve the established canonical endpoint ordering bit-for-bit.
 	if _point_precedes(point_b, point_a):
 		var point_swap := point_a
 		point_a = point_b
@@ -1810,46 +1660,64 @@ static func _root_id_and_cache(
 	var t := 0.5 if is_zero_approx(denominator) else clampf(da / denominator, 0.0, 1.0)
 	var point := point_a.lerp(point_b, t)
 	root_cache[key] = point
-	root_position_keys[key] = _point_key(point)
+	if track_identity:
+		root_position_keys[key] = _point_key(point)
 	return key
 
 
-static func _emit_triangle(
+static func _emit_triangle_into(
+	target: Array[Dictionary],
 	a: String,
 	b: String,
 	c: String,
 	toward_empty: Vector3,
+	mode: int,
 	seam_x: float,
+	seam_z: float,
 	roots: Dictionary
-) -> Dictionary:
+) -> int:
 	if a == b or b == c or c == a:
-		return {"triangles": [], "dropped_degenerate": 1}
+		return 1
 	var pa: Vector3 = roots[a]
 	var pb: Vector3 = roots[b]
 	var pc: Vector3 = roots[c]
 	var normal := (pb - pa).cross(pc - pa)
 	if normal.length_squared() <= 1.0e-14:
-		return {"triangles": [], "dropped_degenerate": 1}
+		return 1
 	if normal.dot(toward_empty) < 0.0:
-		var swap := pb
+		var point_swap := pb
 		pb = pc
-		pc = swap
-		var swap_id := b
+		pc = point_swap
+		var id_swap := b
 		b = c
-		c = swap_id
+		c = id_swap
 		normal = -normal
 	normal = normal.normalized()
-	var center_x := (pa.x + pb.x + pc.x) / 3.0
-	var side := "left" if center_x < seam_x else "right"
-	return {
-		"triangles": [{
+	if mode == 0:
+		var center_x := (pa.x + pb.x + pc.x) / 3.0
+		target.append({
 			"root_ids": [a, b, c],
 			"points": [pa, pb, pc],
 			"normal": normal,
-			"side": side,
-		}],
-		"dropped_degenerate": 0,
-	}
+			"side": "left" if center_x < seam_x else "right",
+		})
+	elif mode == 1:
+		var center_z := (pa.z + pb.z + pc.z) / 3.0
+		target.append({
+			"root_ids": [a, b, c],
+			"points": [pa, pb, pc],
+			"normal": normal,
+			"side": "low" if center_z < seam_z else "high",
+		})
+	else:
+		var center := (pa + pb + pc) / 3.0
+		target.append({
+			"root_ids": [a, b, c],
+			"points": [pa, pb, pc],
+			"normal": normal,
+			"owner": ("minx" if center.x < seam_x else "maxx") + "_" 				+ ("minz" if center.z < seam_z else "maxz"),
+		})
+	return 0
 
 
 static func _count_t_junctions(seam_edges: Array[String], edge_points: Dictionary) -> int:
