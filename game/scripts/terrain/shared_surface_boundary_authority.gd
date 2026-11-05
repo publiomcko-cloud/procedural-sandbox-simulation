@@ -292,10 +292,19 @@ static func _deduplicate_triangles(source: Array[Dictionary]) -> Array[Dictionar
 	var result: Array[Dictionary] = []
 	var seen: Dictionary = {}
 	for triangle in source:
-		var ids: Array = triangle.get("root_ids", [])
-		if ids.size() != 3:
+		var points: Array = triangle.get("points", [])
+		if points.size() != 3:
 			continue
-		var canonical := [String(ids[0]), String(ids[1]), String(ids[2])]
+		# Exact-zero SDF nodes may be reached through several lattice edges. Those
+		# edges have different root IDs but collapse to the same geometric vertex,
+		# so root-ID deduplication can leave coincident triangles and incidence 4.
+		# Geometry identity is authoritative here: remove only triangles whose
+		# three canonical world-space points are exactly the same set.
+		var canonical := [
+			_point_key(points[0]),
+			_point_key(points[1]),
+			_point_key(points[2]),
+		]
 		canonical.sort()
 		var key := "|".join(canonical)
 		if seen.has(key):
