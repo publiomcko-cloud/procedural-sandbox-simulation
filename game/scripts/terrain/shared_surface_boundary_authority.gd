@@ -1504,13 +1504,14 @@ static func _append_cpu_triangles(
 
 
 static func _sample_density(world_seed: int, world: Vector3, snapshot: Dictionary) -> float:
-	var mapped: Dictionary = Spatial.world_to_region_local(world)
-	if not bool(mapped.get("valid", false)):
+	if not world.is_finite():
 		return NAN
+	var region_key := Spatial.region_key_for_world_position(world)
+	var local_position := Spatial.region_local_for_world_position(world, region_key)
 	if snapshot.is_empty():
-		return Field.sample_density(world_seed, mapped["region_key"], mapped["local_position"], false)
+		return Field.sample_density(world_seed, region_key, local_position, false)
 	return Brush.sample_density_snapshot(
-		world_seed, mapped["region_key"], mapped["local_position"], false, snapshot
+		world_seed, region_key, local_position, false, snapshot
 	)
 
 
