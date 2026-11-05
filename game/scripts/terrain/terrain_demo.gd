@@ -2198,13 +2198,19 @@ func _build_deterministic_preedit_specs(count: int) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var origin := SpatialGrid.region_origin_world(focus_region_key)
 	for index in range(count):
-		# Two-region X corridor: exercises shared boundary ownership while remaining
-		# easy to leave with WASD and later revisit after unload.
+		# Four-region fixture: general edits plus deliberate X, Z and X/Z-corner
+		# crossings. This is the default owner-facing stress pattern.
+		var lane := index % 4
 		var x := 1.0 + float((index * 37) % 120) * 0.25
-		var z := 1.0 + float((index * 19) % 40) * 0.25
+		var z := 1.0 + float((index * 19) % 88) * 0.25
 		var y := 0.75 + float((index * 11) % 17) * 0.20
-		if index % 9 == 0:
+		if lane == 1:
 			x = 15.25 + float(index % 7) * 0.25
+		elif lane == 2:
+			z = 11.25 + float(index % 7) * 0.25
+		elif lane == 3:
+			x = 15.25 + float(index % 7) * 0.25
+			z = 11.25 + float((index * 3) % 7) * 0.25
 		result.append({
 			"mode": BrushEditState.Mode.CARVE if index % 3 == 0 else BrushEditState.Mode.FILL,
 			"center": origin + Vector3(x, y, z),
