@@ -5,7 +5,7 @@ const Store := preload("res://scripts/terrain/terrain_materialized_sdf_store.gd"
 
 const PREEDIT_COUNT := 256
 const SETTLE_TIMEOUT_MSEC := 90000
-const STREAM_DELTA := Vector3(64.0, 0.0, 0.0)
+const STREAM_DELTA := Vector3(64.0, 0.0, 48.0)
 
 var assertions := 0
 var failures := 0
@@ -63,7 +63,9 @@ func _run() -> void:
 
 	demo._move_focus(STREAM_DELTA)
 	var unloaded := await _wait_until(func() -> bool:
-		return not demo.active_regions.has(origin_id) 			and demo.focus_region_key.x >= 4
+		return not demo.active_regions.has(origin_id) \
+			and demo.focus_region_key.x >= 4 \
+			and demo.focus_region_key.y >= 4
 	)
 	_check(unloaded, "edited origin region unloads after moving beyond retention radius")
 
@@ -98,19 +100,35 @@ func _run() -> void:
 		int(after_stats.get("journal_read_count", -1)) == int(before_stats.get("journal_read_count", -2)),
 		"stream unload/reload performs zero archived journal reads"
 	)
-	var shared_diag: Dictionary = demo.last_mesh_diagnostics.get(
-		"last_shared_boundary_diagnostics", {}
-	)
-	if not shared_diag.is_empty():
-		_check(int(shared_diag.get("seam_bad_incidence_count", -1)) == 0, "runtime shared seam has no bad incidence")
-		_check(int(shared_diag.get("t_junction_count", -1)) == 0, "runtime shared seam has no T-junctions")
+	var x_diag: Dictionary = demo._last_shared_x_boundary_diagnostics
+	var z_diag: Dictionary = demo._last_shared_z_boundary_diagnostics
+	var corner_diag: Dictionary = demo._last_shared_corner_diagnostics
+	_check(not x_diag.is_empty(), "runtime publishes X-boundary diagnostics")
+	_check(not z_diag.is_empty(), "runtime publishes Z-boundary diagnostics")
+	_check(not corner_diag.is_empty(), "runtime publishes four-region corner diagnostics")
+	if not x_diag.is_empty():
+		_check(int(x_diag.get("seam_bad_incidence_count", -1)) == 0, "runtime X seam has no bad incidence")
+		_check(int(x_diag.get("t_junction_count", -1)) == 0, "runtime X seam has no T-junctions")
 		_check(
-			int(shared_diag.get("seam_cross_owner_count", -1))
-				== int(shared_diag.get("seam_crossing_edge_count", -2)),
-			"runtime crossing seam edges remain cross-owned"
+			int(x_diag.get("seam_cross_owner_count", -1))
+				== int(x_diag.get("seam_crossing_edge_count", -2)),
+			"runtime X crossing seam edges remain cross-owned"
 		)
-	else:
-		_check(false, "runtime publishes shared-boundary diagnostics")
+	if not z_diag.is_empty():
+		_check(int(z_diag.get("seam_bad_incidence_count", -1)) == 0, "runtime Z seam has no bad incidence")
+		_check(int(z_diag.get("t_junction_count", -1)) == 0, "runtime Z seam has no T-junctions")
+		_check(
+			int(z_diag.get("seam_cross_owner_count", -1))
+				== int(z_diag.get("seam_crossing_edge_count", -2)),
+			"runtime Z crossing seam edges remain cross-owned"
+		)
+	if not corner_diag.is_empty():
+		_check(int(corner_diag.get("x_seam_bad_incidence_count", -1)) == 0, "runtime corner X plane has no bad incidence")
+		_check(int(corner_diag.get("z_seam_bad_incidence_count", -1)) == 0, "runtime corner Z plane has no bad incidence")
+		_check(int(corner_diag.get("junction_bad_incidence_count", -1)) == 0, "runtime four-region junction has no bad incidence")
+		_check(int(corner_diag.get("x_t_junction_count", -1)) == 0, "runtime corner X plane has no T-junctions")
+		_check(int(corner_diag.get("z_t_junction_count", -1)) == 0, "runtime corner Z plane has no T-junctions")
+		_check(int(corner_diag.get("junction_t_junction_count", -1)) == 0, "runtime four-region junction has no T-junctions")
 
 	demo._update_runtime_diagnostics()
 	evidence = {
@@ -129,7 +147,9 @@ func _run() -> void:
 		"streamed_region_loads": int(demo.last_mesh_diagnostics.get("streamed_region_loads", 0)),
 		"streamed_region_unloads": int(demo.last_mesh_diagnostics.get("streamed_region_unloads", 0)),
 		"store_stats": after_stats,
-		"shared_boundary": shared_diag,
+		"shared_x_boundary": x_diag,
+		"shared_z_boundary": z_diag,
+		"shared_corner": corner_diag,
 	}
 	# Hosted headless timing is evidence, not a product FPS threshold. This only
 	# catches a pathological reload stall; target-machine frame budgets are manual.
