@@ -16,7 +16,8 @@ extends RefCounted
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const Brush := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
-const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")\nconst TileJob := preload("res://scripts/terrain/terrain_sdf_tile_materialization_job.gd")
+const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
+const TileJob := preload("res://scripts/terrain/terrain_sdf_tile_materialization_job.gd")
 
 const FORMAT_ID := "procedural-sandbox-materialized-sdf-state"
 const FORMAT_VERSION := 1
