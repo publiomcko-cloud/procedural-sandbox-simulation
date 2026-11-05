@@ -44,16 +44,19 @@ static func make_x_pair_snapshot(
 		return {"valid": false, "reason": "right_snapshot_failed", "detail": right_snapshot}
 
 	var by_sequence: Dictionary = {}
+	var materialized_by_id: Dictionary = {}
 	for snapshot_value in [left_snapshot, right_snapshot]:
 		var snapshot: Dictionary = snapshot_value
 		var centers: PackedVector3Array = snapshot.get("centers", PackedVector3Array())
 		var radii: PackedFloat64Array = snapshot.get("radii", PackedFloat64Array())
 		var modes: PackedByteArray = snapshot.get("modes", PackedByteArray())
-		var sequences: PackedInt32Array = snapshot.get("sequences", PackedInt32Array())
-		if centers.size() != radii.size() or centers.size() != modes.size() or centers.size() != sequences.size():
+		var sequences_value: Variant = snapshot.get("sequences", PackedInt32Array())
+		if typeof(sequences_value) != TYPE_PACKED_INT32_ARRAY 			and typeof(sequences_value) != TYPE_PACKED_INT64_ARRAY:
+			return {"valid": false, "reason": "pair_snapshot_sequence_type_invalid"}
+		if centers.size() != radii.size() or centers.size() != modes.size() 			or centers.size() != sequences_value.size():
 			return {"valid": false, "reason": "pair_snapshot_attribute_mismatch"}
 		for index in range(centers.size()):
-			var sequence := int(sequences[index])
+			var sequence := int(sequences_value[index])
 			var row := {
 				"center": centers[index],
 				"radius": float(radii[index]),
@@ -61,10 +64,25 @@ static func make_x_pair_snapshot(
 			}
 			if by_sequence.has(sequence):
 				var existing: Dictionary = by_sequence[sequence]
-				if existing["center"] != row["center"] or float(existing["radius"]) != float(row["radius"]) or int(existing["mode"]) != int(row["mode"]):
-					return {"valid": false, "reason": "pair_snapshot_sequence_conflict", "sequence": sequence}
+				if existing["center"] != row["center"] 					or float(existing["radius"]) != float(row["radius"]) 					or int(existing["mode"]) != int(row["mode"]):
+					return {
+						"valid": false,
+						"reason": "pair_snapshot_sequence_conflict",
+						"sequence": sequence,
+					}
 			else:
 				by_sequence[sequence] = row
+		var tiles_value: Variant = snapshot.get("materialized_tiles", [])
+		if typeof(tiles_value) == TYPE_ARRAY:
+			for tile_value in tiles_value:
+				if typeof(tile_value) != TYPE_DICTIONARY:
+					continue
+				var tile: Dictionary = tile_value
+				var tile_id := String(tile.get("tile_id", ""))
+				if tile_id.is_empty():
+					continue
+				if not materialized_by_id.has(tile_id):
+					materialized_by_id[tile_id] = tile
 
 	var ordered_sequences: Array[int] = []
 	for sequence_value in by_sequence.keys():
@@ -73,13 +91,20 @@ static func make_x_pair_snapshot(
 	var centers := PackedVector3Array()
 	var radii := PackedFloat64Array()
 	var modes := PackedByteArray()
-	var sequences := PackedInt32Array()
+	var sequences := PackedInt64Array()
 	for sequence in ordered_sequences:
 		var row: Dictionary = by_sequence[sequence]
 		centers.append(row["center"])
 		radii.append(float(row["radius"]))
 		modes.append(int(row["mode"]))
 		sequences.append(sequence)
+	var tile_ids: Array[String] = []
+	for tile_id_value in materialized_by_id.keys():
+		tile_ids.append(String(tile_id_value))
+	tile_ids.sort()
+	var materialized_tiles: Array[Dictionary] = []
+	for tile_id in tile_ids:
+		materialized_tiles.append(materialized_by_id[tile_id])
 	return {
 		"valid": true,
 		"revision": int(ledger.revision),
@@ -89,6 +114,7 @@ static func make_x_pair_snapshot(
 		"radii": radii,
 		"modes": modes,
 		"sequences": sequences,
+		"materialized_tiles": materialized_tiles,
 		"candidate_operation_count": centers.size(),
 		"ledger_operation_count": int(ledger.get_edit_count()),
 	}
