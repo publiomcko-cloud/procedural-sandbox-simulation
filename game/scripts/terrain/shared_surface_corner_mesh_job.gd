@@ -9,6 +9,7 @@ var min_region_key: Vector2i
 var brush_snapshot: Dictionary
 var result: Dictionary = {}
 var queued_usec: int
+var diagnostics_enabled := true
 var worker_started_usec := 0
 var worker_finished_usec := 0
 var worker_thread_id := 0
@@ -18,12 +19,14 @@ func _init(
 	seed_value: int,
 	min_region_value: Vector2i,
 	brush_snapshot_value: Dictionary,
-	queued_value: int = 0
+	queued_value: int = 0,
+	diagnostics_enabled_value: bool = true
 ) -> void:
 	world_seed = seed_value
 	min_region_key = min_region_value
 	brush_snapshot = brush_snapshot_value
 	queued_usec = queued_value
+	diagnostics_enabled = diagnostics_enabled_value
 
 
 func run() -> void:
@@ -36,11 +39,12 @@ func run() -> void:
 			"ledger_revision": int(brush_snapshot.get("revision", -1)),
 		}
 	else:
-		var key := "corner:%d:%d:%d:%d:%d:%d" % [
+		var key := "corner:%d:%d:%d:%d:%d:%d:%d" % [
 			world_seed,
 			int(brush_snapshot.get("revision", -1)),
 			int(brush_snapshot.get("cache_scope_id", -1)),
 			int(brush_snapshot.get("ledger_operation_count", -1)),
+			1 if diagnostics_enabled else 0,
 			min_region_key.x,
 			min_region_key.y,
 		]
@@ -50,5 +54,5 @@ func run() -> void:
 
 func _build_uncached() -> Dictionary:
 	return Authority.build_xz_corner_quad(
-		world_seed, min_region_key, brush_snapshot
+		world_seed, min_region_key, brush_snapshot, diagnostics_enabled
 	)
