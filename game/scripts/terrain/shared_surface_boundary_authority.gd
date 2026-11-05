@@ -1044,7 +1044,7 @@ static func _materialized_base_signature(snapshot: Dictionary) -> String:
 		var origin: Vector3 = tile.get("origin_world", Vector3.INF)
 		var dims: Vector3i = tile.get("dims", Vector3i.ZERO)
 		var values_value: Variant = tile.get("values", PackedFloat64Array())
-		var value_count := values_value.size() if values_value is PackedFloat64Array or values_value is PackedFloat32Array else -1
+		var value_count: int = values_value.size() if values_value is PackedFloat64Array or values_value is PackedFloat32Array else -1
 		rows.append("%s:%d:%d:%s:%d,%d,%d:%d:%d" % [
 			String(tile.get("tile_id", "")),
 			int(tile.get("base_revision", -1)),
