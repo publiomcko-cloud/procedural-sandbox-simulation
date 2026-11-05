@@ -4,6 +4,7 @@ const DemoScene := preload("res://scenes/terrain_demo.tscn")
 const Store := preload("res://scripts/terrain/terrain_materialized_sdf_store.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
+const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const Brush := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const Picker := preload("res://scripts/terrain/terrain_brush_picker.gd")
 
@@ -75,6 +76,14 @@ func _run() -> void:
 		_check(result.get("ok", false), "%s direct edit becomes visible" % name)
 	evidence["edits"] = edit_results
 
+	var burst_result := await _measure_same_area_burst(demo, _surface_point(demo, Vector2(8.0, 5.0)))
+	evidence["same_area_burst"] = burst_result
+	_check(burst_result.get("ok", false), "rapid same-area edit burst coalesces without losing input")
+	_check(
+		int(burst_result.get("pruned_candidate_count", 0)) >= 10,
+		"same-mode dominated hot-tail operations are pruned before meshing"
+	)
+
 	var picker_result := _measure_picker(demo)
 	evidence["picker"] = picker_result
 	_check(picker_result.get("ok", false), "picker benchmark completes")
@@ -143,6 +152,49 @@ func _measure_direct_edit(demo: Node, label: String, point: Vector3) -> Dictiona
 		"stage_timings_ms": metrics.get("stage_timings_ms", {}),
 		"peak_workers": int(metrics.get("peak_mesh_jobs_in_flight", -1)),
 		"peak_uploads_per_frame": int(metrics.get("peak_mesh_uploads_per_frame", -1)),
+	}
+
+
+func _measure_same_area_burst(demo: Node, point: Vector3) -> Dictionary:
+	if not await _wait_idle(demo):
+		return {"ok": false, "reason": "burst_precondition_not_idle"}
+	var before_count := int(demo.edit_ledger.get_edit_count())
+	demo.selected_brush_mode = Brush.Mode.CARVE
+	var accepted := 0
+	var started := Time.get_ticks_usec()
+	for _index in range(12):
+		if demo._accept_brush_at_world(point):
+			accepted += 1
+	var settled := await _wait_until(func() -> bool:
+		return demo._edit_transaction.is_empty() \
+			and demo._buffered_brush_requests.is_empty() \
+			and int(demo.edit_ledger.get_edit_count()) == before_count + 12
+	)
+	var elapsed_usec := Time.get_ticks_usec() - started
+	var mapped: Dictionary = Spatial.world_to_region_local(point)
+	if not mapped.get("valid", false):
+		return {"ok": false, "reason": "burst_point_mapping_failed"}
+	var local: Vector3 = mapped["local_position"]
+	var chunk_width := float(Grid.CELLS_PER_CHUNK_X) * Grid.SAMPLE_STEP
+	var chunk_depth := float(Grid.CELLS_PER_CHUNK_Z) * Grid.SAMPLE_STEP
+	var coordinate := Vector2i(
+		clampi(floori(local.x / chunk_width), 0, Grid.CHUNK_COUNT_X - 1),
+		clampi(floori(local.z / chunk_depth), 0, Grid.CHUNK_COUNT_Z - 1)
+	)
+	var state: RefCounted = demo._state_for_region(mapped["region_key"])
+	var snapshot: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
+		mapped["region_key"], coordinate
+	)
+	var raw_candidates := int(snapshot.get("raw_candidate_operation_count", snapshot.get("candidate_operation_count", 0)))
+	var reduced_candidates := int(snapshot.get("candidate_operation_count", 0))
+	return {
+		"ok": settled and accepted == 12,
+		"accepted": accepted,
+		"elapsed_ms": float(elapsed_usec) / 1000.0,
+		"raw_candidate_count": raw_candidates,
+		"reduced_candidate_count": reduced_candidates,
+		"pruned_candidate_count": raw_candidates - reduced_candidates,
+		"final_edit_count": int(demo.edit_ledger.get_edit_count()),
 	}
 
 
