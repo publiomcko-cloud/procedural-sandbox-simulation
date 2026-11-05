@@ -555,18 +555,18 @@ static func build_z_shared_volume(
 					points.append(roi_min + Vector3(node) * step)
 					density.append(values[_index(node.x, node.y, node.z, dims)])
 				var has_solid := false
-			var has_empty := false
-			for density_value in density:
-				if density_value > 0.0:
-					has_solid = true
+				var has_empty := false
+				for density_value in density:
+					if density_value > 0.0:
+						has_solid = true
+					else:
+						has_empty = true
+				total_cell_count += 1
+				if has_solid and has_empty:
+					mixed_cell_count += 1
 				else:
-					has_empty = true
-			total_cell_count += 1
-			if has_solid and has_empty:
-				mixed_cell_count += 1
-			else:
-				uniform_cell_count += 1
-			for tet in TETS:
+					uniform_cell_count += 1
+				for tet in TETS:
 					var emitted := _polygonize_tet_z(
 						tet, nodes, points, density, roi_min, step, seam_z,
 						root_cache, root_position_keys
@@ -688,18 +688,18 @@ static func build_xz_corner_volume(
 					points.append(roi_min + Vector3(node) * step)
 					density.append(values[_index(node.x, node.y, node.z, dims)])
 				var has_solid := false
-			var has_empty := false
-			for density_value in density:
-				if density_value > 0.0:
-					has_solid = true
+				var has_empty := false
+				for density_value in density:
+					if density_value > 0.0:
+						has_solid = true
+					else:
+						has_empty = true
+				total_cell_count += 1
+				if has_solid and has_empty:
+					mixed_cell_count += 1
 				else:
-					has_empty = true
-			total_cell_count += 1
-			if has_solid and has_empty:
-				mixed_cell_count += 1
-			else:
-				uniform_cell_count += 1
-			for tet in TETS:
+					uniform_cell_count += 1
+				for tet in TETS:
 					var emitted := _polygonize_tet_corner(
 						tet, nodes, points, density, roi_min, step, seam_x, seam_z,
 						root_cache, root_position_keys
@@ -819,18 +819,18 @@ static func build_x_shared_volume(
 					points.append(roi_min + Vector3(node) * step)
 					density.append(values[_index(node.x, node.y, node.z, dims)])
 				var has_solid := false
-			var has_empty := false
-			for density_value in density:
-				if density_value > 0.0:
-					has_solid = true
+				var has_empty := false
+				for density_value in density:
+					if density_value > 0.0:
+						has_solid = true
+					else:
+						has_empty = true
+				total_cell_count += 1
+				if has_solid and has_empty:
+					mixed_cell_count += 1
 				else:
-					has_empty = true
-			total_cell_count += 1
-			if has_solid and has_empty:
-				mixed_cell_count += 1
-			else:
-				uniform_cell_count += 1
-			for tet in TETS:
+					uniform_cell_count += 1
+				for tet in TETS:
 					var emitted := _polygonize_tet(
 						tet, nodes, points, density, roi_min, step, seam_x,
 						root_cache, root_position_keys
