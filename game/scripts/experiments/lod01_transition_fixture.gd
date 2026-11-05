@@ -19,6 +19,9 @@ const FACE_Z_NEG := 4
 const FACE_Z_POS := 5
 const FACE_AXES := [0, 0, 1, 1, 2, 2]
 const FACE_SIGNS := [-1, 1, -1, 1, -1, 1]
+const FACE_UV_CORNERS := [
+	Vector2(0.0, 0.0), Vector2(1.0, 0.0), Vector2(1.0, 1.0), Vector2(0.0, 1.0),
+]
 const CUBE_CORNERS := [
 	Vector3i(0, 0, 0), Vector3i(1, 0, 0), Vector3i(1, 1, 0), Vector3i(0, 1, 0),
 	Vector3i(0, 0, 1), Vector3i(1, 0, 1), Vector3i(1, 1, 1), Vector3i(0, 1, 1),
@@ -71,15 +74,27 @@ static func is_lod1_aligned_origin(min_lod0_lattice: Vector3i) -> bool:
 
 
 static func transition_faces_for_chunk_cell(cell: Vector3i, extent: Vector3i) -> Array[int]:
-	var faces: Array[int] = []
+	return _faces_from_mask(_transition_face_mask_for_chunk_cell(cell, extent))
+
+
+static func _transition_face_mask_for_chunk_cell(cell: Vector3i, extent: Vector3i) -> int:
+	var mask := 0
 	if cell.x == 0:
-		faces.append(FACE_X_NEG)
+		mask |= 1 << FACE_X_NEG
 	if cell.x == extent.x - 1:
-		faces.append(FACE_X_POS)
+		mask |= 1 << FACE_X_POS
 	if cell.z == 0:
-		faces.append(FACE_Z_NEG)
+		mask |= 1 << FACE_Z_NEG
 	if cell.z == extent.z - 1:
-		faces.append(FACE_Z_POS)
+		mask |= 1 << FACE_Z_POS
+	return mask
+
+
+static func _faces_from_mask(mask: int) -> Array[int]:
+	var faces: Array[int] = []
+	for face in range(6):
+		if mask & (1 << face):
+			faces.append(face)
 	return faces
 
 
@@ -190,8 +205,8 @@ static func build_lod1_chunk(
 			for x in range(cell_extent.x):
 				var cell := Vector3i(x, y, z)
 				var cell_lattice := min_lod0_lattice + cell * LOD1_IN_LOD0_STEPS
-				var selected := transition_faces_for_chunk_cell(cell, cell_extent)
-				if selected.is_empty():
+				var selected_mask := _transition_face_mask_for_chunk_cell(cell, cell_extent)
+				if selected_mask == 0:
 					var origin := min_world + Vector3(cell) * LOD1_STEP
 					for corner_index in range(CUBE_CORNERS.size()):
 						var corner: Vector3i = CUBE_CORNERS[corner_index]
@@ -205,6 +220,7 @@ static func build_lod1_chunk(
 							return builder._failure_result()
 					continue
 				transition_count += 1
+				var selected := _faces_from_mask(selected_mask)
 				var geometry_started_usec := Time.get_ticks_usec()
 				var boundary_triangles := _boundary_triangles(cell_lattice, selected)
 				geometry_usec += Time.get_ticks_usec() - geometry_started_usec
@@ -382,13 +398,12 @@ static func _lateral_face_triangles(min_lattice: Vector3i, face: int, selected: 
 	var u_axis := (axis + 1) % 3
 	var v_axis := (axis + 2) % 3
 	var perimeter: Array[Vector3] = []
-	var corners := [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
 	for edge in range(4):
-		var a: Array = corners[edge]
-		var b: Array = corners[(edge + 1) % 4]
-		perimeter.append(_face_point(base, axis, fixed, u_axis, v_axis, a[0], a[1]))
+		var a: Vector2 = FACE_UV_CORNERS[edge]
+		var b: Vector2 = FACE_UV_CORNERS[(edge + 1) % 4]
+		perimeter.append(_face_point(base, axis, fixed, u_axis, v_axis, a.x, a.y))
 		if _edge_is_split(face, edge, selected):
-			perimeter.append(_face_point(base, axis, fixed, u_axis, v_axis, (a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5))
+			perimeter.append(_face_point(base, axis, fixed, u_axis, v_axis, (a.x + b.x) * 0.5, (a.y + b.y) * 0.5))
 	var face_center := _face_point(base, axis, fixed, u_axis, v_axis, 0.5, 0.5)
 	var triangles: Array[Array] = []
 	for index in range(perimeter.size()):
@@ -397,16 +412,13 @@ static func _lateral_face_triangles(min_lattice: Vector3i, face: int, selected: 
 
 
 static func _edge_is_split(face: int, edge: int, selected: Array[int]) -> bool:
-	var edge_faces: Array[int] = []
+	var adjacent_face := -1
 	match edge:
-		0: edge_faces = [face, _face_id((FACE_AXES[face] + 2) % 3, -1)]
-		1: edge_faces = [face, _face_id((FACE_AXES[face] + 1) % 3, 1)]
-		2: edge_faces = [face, _face_id((FACE_AXES[face] + 2) % 3, 1)]
-		3: edge_faces = [face, _face_id((FACE_AXES[face] + 1) % 3, -1)]
-	for selected_face in selected:
-		if edge_faces.has(selected_face):
-			return true
-	return false
+		0: adjacent_face = _face_id((FACE_AXES[face] + 2) % 3, -1)
+		1: adjacent_face = _face_id((FACE_AXES[face] + 1) % 3, 1)
+		2: adjacent_face = _face_id((FACE_AXES[face] + 2) % 3, 1)
+		3: adjacent_face = _face_id((FACE_AXES[face] + 1) % 3, -1)
+	return selected.has(face) or selected.has(adjacent_face)
 
 
 static func _face_id(axis: int, sign: int) -> int:
