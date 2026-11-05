@@ -199,22 +199,31 @@ static func _build_mesh_cells(
 static func mesh_from_cpu_data(cpu_data: Dictionary) -> Dictionary:
 	if not cpu_data.get("valid", false):
 		return cpu_data
+	# Treat CPU mesh data as immutable. Shared-surface work can be cached and
+	# consumed by more than one publication path at the same revision; mutating
+	# the source dictionary here would poison that cache after the first upload.
+	var result: Dictionary = cpu_data.duplicate(false)
 	var mesh := ArrayMesh.new()
-	var positions: PackedVector3Array = cpu_data["positions"]
+	var positions: PackedVector3Array = cpu_data.get("positions", PackedVector3Array())
 	if not positions.is_empty():
+		var normals: PackedVector3Array = cpu_data.get("normals", PackedVector3Array())
+		if normals.size() != positions.size():
+			return {"valid": false, "reason": "cpu_mesh_normal_count_mismatch"}
 		var arrays: Array = []
 		arrays.resize(Mesh.ARRAY_MAX)
 		arrays[Mesh.ARRAY_VERTEX] = positions
-		arrays[Mesh.ARRAY_NORMAL] = cpu_data["normals"]
+		arrays[Mesh.ARRAY_NORMAL] = normals
 		var upload_started_usec := Time.get_ticks_usec()
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-		var timings: Dictionary = cpu_data.get("timings_usec", {})
+		var timings: Dictionary = (cpu_data.get("timings_usec", {}) as Dictionary).duplicate(true)
 		timings["array_mesh_build"] = Time.get_ticks_usec() - upload_started_usec
-		cpu_data["timings_usec"] = timings
-	cpu_data["mesh"] = mesh
-	cpu_data.erase("positions")
-	cpu_data.erase("normals")
-	return cpu_data
+		result["timings_usec"] = timings
+	result["mesh"] = mesh
+	# Drop the heavy packed arrays only from the returned publication result.
+	# The caller-provided CPU data remains reusable and cache-safe.
+	result.erase("positions")
+	result.erase("normals")
+	return result
 
 
 static func contains_mesh_point(point: Vector3) -> bool:
