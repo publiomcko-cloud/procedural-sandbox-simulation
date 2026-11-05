@@ -1097,6 +1097,15 @@ func _process_completed_mesh_jobs() -> void:
 				"shared_signature_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_signature", 0)) / 1000.0,
 				"shared_partition_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_partition", 0)) / 1000.0,
 				"shared_authority_total_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_authority_total", 0)) / 1000.0,
+				"shared_volume_total_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_volume_total", 0)) / 1000.0,
+				"shared_cell_count": int((result.get("work_counters", {}) as Dictionary).get("cell_count", 0)),
+				"shared_mixed_cell_count": int((result.get("work_counters", {}) as Dictionary).get("mixed_cell_count", 0)),
+				"shared_uniform_cell_count": int((result.get("work_counters", {}) as Dictionary).get("uniform_cell_count", 0)),
+				"shared_tet_call_count": int((result.get("work_counters", {}) as Dictionary).get("tet_call_count", 0)),
+				"shared_triangle_candidate_count": int((result.get("work_counters", {}) as Dictionary).get("triangle_candidate_count", 0)),
+				"shared_triangle_count": int((result.get("work_counters", {}) as Dictionary).get("triangle_count", 0)),
+				"shared_unique_root_count": int((result.get("work_counters", {}) as Dictionary).get("unique_root_count", 0)),
+				"shared_sample_count": int((result.get("work_counters", {}) as Dictionary).get("sample_count", 0)),
 			})
 		if contributes_to_operation:
 			_mesh_upload_usec_samples.append(upload_elapsed_usec)
