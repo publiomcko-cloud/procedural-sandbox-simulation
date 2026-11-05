@@ -1,5 +1,7 @@
 # Procedural Sandbox Simulation
 
+**Authoritative runtime mainline candidate — 2026-11-05:** the owner has accepted `feat/free-exploration-mode` as the principal development line and explicitly authorized reconciliation and merge into `main`. Accepted runtime source HEAD: `314edceb618e537b6d7a249330a854aca3113010`; pre-merge `main`: `5997a76d345f45bf86edfe83f690336391e8be27`; comparison: 203 commits ahead, 0 behind. GitHub Actions run `42117264773` passed free-exploration (17/17), LOD runtime (55/55), scalable playable runtime (33/33) and canonical `scripts/validate.sh`; Starter checks `42117264811` also passed. Owner GUI testing confirmed free exploration, simultaneous terrain editing and no perceptible lag. The older P3.1 R12-CXR/R6 research chain is superseded as the active path; its evidence remains historical. See [current status](docs/status/CURRENT_STATUS.md) and [2026-11-05 reconciliation checkpoint](docs/checkpoints/2026-11-05-RUNTIME-MAINLINE-RECONCILIATION.md).
+
 **Latest Issue #118 R1 correction candidate — 2026-10-25:** source `f0164b140009bb797951aa4085bb36001889bc57` on the existing PR #119 now enforces that only the exact canonical `user://mods` root can be optional. Caller attempts to downgrade required first-party, example, descendant or prefix roots fail closed. Full Godot 4.7.2 validation passed 18,047 assertions/0 failures in isolated user data; both exact-HEAD Starter checks pass (static only). Independent R1 review and owner GUI retest remain pending. No merge is authorized. See [R1 checkpoint](docs/checkpoints/2026-10-25-ISSUE-118-OPTIONAL-ROOT-API-HARDENING.md), [spec](docs/specs/ISSUE-118-MOD-DISCOVERY.md), and [proposed ADR-0005](docs/decisions/ADR-0005-MOD-DISCOVERY-OPTIONAL-USER-ROOT.md). All five F2-G1 holds remain unchanged.
 
 **Previous P3.0B implementation candidate — 2026-10-25:** source commit `6ce65bbe2f1a54bd1436416b5cb6102c75a09769`, based on verified main `5b8cf36108ce48476095f14b35426e7e8ab4bfe8`, adds playable transactional entity placement, selection, component updates, deletion and restoration using the P2 state service. Full Godot 4.7.2 validation passed 18,022 assertions/0 failures; independent source review and owner GUI retest remain pending, and no merge is authorized. See [checkpoint](docs/checkpoints/2026-10-25-P3-0B-IMPLEMENTATION.md), [spec](docs/specs/P3-0B-PLAYABLE-WORLD-ENTITY-INTEGRATION.md), and [ADR-0004](docs/decisions/ADR-0004-P3-0B-PLAYABLE-ENTITY-INTEGRATION.md). PR #115 was not modified. All five F2-G1 holds remain.
@@ -34,12 +36,12 @@ Working development directory designated by owner: `C:\Dev\sandbox-sim-dev` (not
 ```powershell
 & 'C:\Tools\Godot\Godot_v4.7.2-stable_win64.exe' --path 'C:\Dev\sandbox-sim-dev\game'
 # In editor: open res://scenes/terrain_demo.tscn; F6 to run that scene.
-# Tests:
+# Canonical tests from Git Bash/WSL:
 $env:GODOT_BIN='C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
-& 'C:\Dev\sandbox-sim-dev\scripts\validate.ps1'
+bash .\scripts\validate.sh
 ```
 
-Check exact executable paths and engine version on the machine. The integrated prototype has versioned 16×12 logical regions, each divided into 16 chunks, camera-driven bounded streaming (PR #88) and the accepted P1.0B lighting correction (PR #90). Controls are left-click carve, Shift+left fill, right-drag orbit, wheel zoom, C section, R regenerate and X focused reset. P1.0C's bounded 256-command in-memory global edit ledger, cross-region remeshing and adaptive v1 picker are now **merged on `main`**, with owner GUI PASS and remaining performance caveats documented. [Owner GUI checkpoint](docs/checkpoints/2026-10-19-P1-0C-OWNER-GUI-ACCEPTANCE-AND-PREFLIGHT.md).
+Check exact executable paths and engine version on the machine. The integrated prototype has versioned 16×12 logical regions, each divided into 16 chunks, camera-driven bounded streaming (PR #88) and the accepted P1.0B lighting correction (PR #90). Controls are left-click carve, Shift+left fill, right-drag orbit, wheel zoom, C section, R regenerate and X focused reset. F10 toggles free exploration: mouse look, WASD/arrows flight, Space up, Shift down and Ctrl boost; the HUD/placement marker are hidden while active, and terrain editing remains available through center aim. P1.0C's bounded 256-command in-memory global edit ledger, cross-region remeshing and adaptive v1 picker are now **merged on `main`**, with owner GUI PASS and remaining performance caveats documented. [Owner GUI checkpoint](docs/checkpoints/2026-10-19-P1-0C-OWNER-GUI-ACCEPTANCE-AND-PREFLIGHT.md).
 
 ## Product goal vs current deliverable
 

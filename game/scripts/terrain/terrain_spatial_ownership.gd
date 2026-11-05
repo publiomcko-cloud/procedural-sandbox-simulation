@@ -12,16 +12,32 @@ const PREVIEW_RADIUS := 1
 static func world_to_region_local(world_position: Vector3) -> Dictionary:
 	if not world_position.is_finite():
 		return {"valid": false, "region_key": Vector2i.ZERO, "local_position": Vector3.ZERO}
-	var region_key := Vector2i(
+	var region_key := region_key_for_world_position(world_position)
+	return {
+		"valid": true,
+		"region_key": region_key,
+		"local_position": region_local_for_world_position(world_position, region_key),
+	}
+
+
+## Allocation-free mapping for hot sampling loops. The caller must reject
+## non-finite positions before using these helpers.
+static func region_key_for_world_position(world_position: Vector3) -> Vector2i:
+	return Vector2i(
 		floori(world_position.x / REGION_SIZE_X),
 		floori(world_position.z / REGION_SIZE_Z)
 	)
-	var local_position := Vector3(
+
+
+static func region_local_for_world_position(
+	world_position: Vector3,
+	region_key: Vector2i
+) -> Vector3:
+	return Vector3(
 		world_position.x - float(region_key.x) * REGION_SIZE_X,
 		world_position.y,
 		world_position.z - float(region_key.y) * REGION_SIZE_Z
 	)
-	return {"valid": true, "region_key": region_key, "local_position": local_position}
 
 
 static func region_local_to_world(region_key: Vector2i, local_position: Vector3) -> Vector3:

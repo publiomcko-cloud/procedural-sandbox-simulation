@@ -6,6 +6,7 @@ extends Node3D
 const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 const RegistryScript := preload("res://scripts/modding/content_definition_registry.gd")
 const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
+const RegionGenerationJob := preload("res://scripts/objects/procedural_object_region_generation_job.gd")
 const RockMeshAdapter := preload("res://scripts/objects/procedural_rock_mesh_adapter.gd")
 const StaticBatchBuilder := preload("res://scripts/objects/procedural_object_static_batch.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
@@ -17,6 +18,7 @@ const REQUIRED_MOD_IDS := ["firstparty.core_rocks", "official.example.procedural
 const MAX_RESIDENT_REGIONS := 25
 const MAX_PENDING_REGION_PUBLICATIONS := 25
 const MAX_REGION_PUBLICATIONS_PER_FRAME := 1
+const MAX_REGION_GENERATION_JOBS_IN_FLIGHT := 2
 const MAX_CACHED_GEOMETRY_VARIANTS := 32
 
 var registry: ContentDefinitionRegistry
@@ -39,6 +41,9 @@ var _published_publication_tokens: Dictionary = {}
 var _population_rule_ids: Array[String] = []
 var _pending_region_publications: Dictionary = {}
 var _pending_publication_order: Array[String] = []
+var _region_generation_jobs: Dictionary = {} # worker task id -> {job, id, request, cancelled}
+var _region_generation_task_by_id: Dictionary = {}
+var _next_region_publication_serial := 1
 var _geometry_mesh_cache: Dictionary = {}
 var _geometry_mesh_cache_order: Array[String] = []
 var _last_region_metrics: Dictionary = {}
@@ -54,6 +59,7 @@ var _last_command_visual_result: Dictionary = {}
 var _last_entity_command_metrics: Dictionary = {}
 var _last_reconstruction_usec := 0
 var debug_fail_next_visual_publication := false
+var _debug_fail_visual_request_serial := -1
 
 
 func initialize(seed_value: int, world_identifier: String, package_roots: Array[String] = [], object_state_directory: String = "") -> Dictionary:
@@ -67,6 +73,8 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_published_publication_tokens.clear()
 	_pending_region_publications.clear()
 	_pending_publication_order.clear()
+	_next_region_publication_serial = 1
+	_debug_fail_visual_request_serial = -1
 	_command_visual_pending.clear()
 	_command_migration_sync_regions.clear()
 	_last_command_visual_result.clear()
@@ -146,6 +154,14 @@ func expect_region_publication(region_key: Vector2i, publication_token: int) -> 
 	var id := _region_id(region_key)
 	if publication_token > int(_expected_publication_tokens.get(id, -1)):
 		_expected_publication_tokens[id] = publication_token
+		if _region_generation_task_by_id.has(id):
+			var task_id := int(_region_generation_task_by_id[id])
+			if _region_generation_jobs.has(task_id):
+				var record: Dictionary = _region_generation_jobs[task_id]
+				var request: Dictionary = record.get("request", {})
+				if int(request.get("publication_token", -1)) != publication_token:
+					record["cancelled"] = true
+					_region_generation_jobs[task_id] = record
 		if _pending_region_publications.has(id) and int(_pending_region_publications[id].get("publication_token", -1)) != publication_token:
 			_pending_region_publications.erase(id)
 			_pending_publication_order.erase(id)
@@ -159,31 +175,144 @@ func enqueue_region_publication(region_key: Vector2i, state: RefCounted, publica
 		return _record_region_failure(id, "region_world_identity_mismatch")
 	if _expected_publication_tokens.has(id) and publication_token != int(_expected_publication_tokens[id]):
 		return _failure("stale_object_region_publication")
+	var request_serial := _next_region_publication_serial
+	_next_region_publication_serial += 1
+	var request := {
+		"region_key": region_key,
+		"world_state": state,
+		"publication_token": publication_token,
+		"force_rebuild": force_rebuild,
+		"request_serial": request_serial,
+	}
 	if _pending_region_publications.has(id):
-		_pending_region_publications[id] = {"region_key": region_key, "world_state": state, "publication_token": publication_token, "force_rebuild": force_rebuild}
-		return {"ok": true, "reason": "queued_replaced", "queue_depth": _pending_region_publications.size()}
+		# Latest state wins. Any older worker for this same region is now
+		# superseded; its immutable CPU result may finish but must not publish.
+		_mark_region_generation_cancelled(id)
+		_pending_region_publications[id] = request
+		return {
+			"ok": true,
+			"reason": "queued_replaced",
+			"queue_depth": _pending_region_publications.size(),
+			"request_serial": request_serial,
+		}
 	if _pending_region_publications.size() >= MAX_PENDING_REGION_PUBLICATIONS:
 		return _record_region_failure(id, "object_publication_queue_full")
-	_pending_region_publications[id] = {"region_key": region_key, "world_state": state, "publication_token": publication_token, "force_rebuild": force_rebuild}
+	_mark_region_generation_cancelled(id)
+	_pending_region_publications[id] = request
 	_pending_publication_order.append(id)
 	_region_errors.erase(id)
-	return {"ok": true, "reason": "queued", "queue_depth": _pending_region_publications.size()}
+	return {
+		"ok": true,
+		"reason": "queued",
+		"queue_depth": _pending_region_publications.size(),
+		"request_serial": request_serial,
+	}
 
 
 func process_queued_publications() -> int:
 	_publications_last_process_tick = 0
-	while _publications_last_process_tick < MAX_REGION_PUBLICATIONS_PER_FRAME and not _pending_publication_order.is_empty():
+	# Unit-level callers that are not in a SceneTree retain the deterministic
+	# synchronous contract. Runtime publication uses worker generation.
+	if not is_inside_tree():
+		while _publications_last_process_tick < MAX_REGION_PUBLICATIONS_PER_FRAME and not _pending_publication_order.is_empty():
+			var id: String = _pending_publication_order.pop_front()
+			if not _pending_region_publications.has(id):
+				continue
+			var request: Dictionary = _pending_region_publications[id]
+			_pending_region_publications.erase(id)
+			var result := publish_region(
+				request["region_key"], request["world_state"],
+				bool(request.get("force_rebuild", false)), int(request["publication_token"]),
+				{}, int(request.get("request_serial", -1))
+			)
+			_publications_last_process_tick += 1
+			_finish_queued_publication(id, result, int(request.get("request_serial", -1)))
+	else:
+		_process_completed_region_generation_jobs()
+		_dispatch_region_generation_jobs()
+	_peak_publications_per_process_tick = maxi(_peak_publications_per_process_tick, _publications_last_process_tick)
+	return _publications_last_process_tick
+
+
+func _dispatch_region_generation_jobs() -> void:
+	# Examine each currently queued region at most once. Requests for a region
+	# that already has a worker in flight stay queued instead of being orphaned.
+	var remaining_attempts := _pending_publication_order.size()
+	while _region_generation_jobs.size() < MAX_REGION_GENERATION_JOBS_IN_FLIGHT \
+		and not _pending_publication_order.is_empty() and remaining_attempts > 0:
+		remaining_attempts -= 1
 		var id: String = _pending_publication_order.pop_front()
+		if _region_generation_task_by_id.has(id):
+			_pending_publication_order.append(id)
+			continue
 		if not _pending_region_publications.has(id):
 			continue
 		var request: Dictionary = _pending_region_publications[id]
 		_pending_region_publications.erase(id)
-		var result := publish_region(request["region_key"], request["world_state"], bool(request.get("force_rebuild", false)), int(request["publication_token"]))
+		var state: RefCounted = request["world_state"]
+		var job := RegionGenerationJob.new(int(state.get("world_seed")), world_id, request["region_key"], registry)
+		var task_id := WorkerThreadPool.add_task(Callable(job, "run"), false, "procedural object region generation")
+		if task_id < 0:
+			_finish_queued_publication(
+				id,
+				_record_region_failure(id, "object_generation_worker_rejected"),
+				int(request.get("request_serial", -1))
+			)
+			continue
+		_region_generation_jobs[task_id] = {
+			"job": job,
+			"id": id,
+			"request": request,
+			"cancelled": false,
+			"submitted_usec": Time.get_ticks_usec(),
+		}
+		_region_generation_task_by_id[id] = task_id
+
+
+func _process_completed_region_generation_jobs() -> void:
+	var completed: Array[int] = []
+	for task_id_value in _region_generation_jobs.keys():
+		var task_id := int(task_id_value)
+		if WorkerThreadPool.is_task_completed(task_id):
+			completed.append(task_id)
+	completed.sort()
+	for task_id in completed:
+		if _publications_last_process_tick >= MAX_REGION_PUBLICATIONS_PER_FRAME:
+			break
+		WorkerThreadPool.wait_for_task_completion(task_id)
+		var record: Dictionary = _region_generation_jobs[task_id]
+		_region_generation_jobs.erase(task_id)
+		var id := String(record["id"])
+		_region_generation_task_by_id.erase(id)
+		if bool(record.get("cancelled", false)):
+			continue
+		var request: Dictionary = record["request"]
+		var publication_token := int(request.get("publication_token", -1))
+		if _expected_publication_tokens.has(id) and publication_token != int(_expected_publication_tokens[id]):
+			continue
+		var job = record["job"]
+		var generated: Dictionary = job.result
+		var result: Dictionary
+		if not generated.get("ok", false):
+			result = _record_region_failure(id, String(generated.get("reason", "object_generation_failed")))
+		else:
+			result = publish_region(
+				request["region_key"], request["world_state"],
+				bool(request.get("force_rebuild", false)), publication_token, generated,
+				int(request.get("request_serial", -1))
+			)
 		_publications_last_process_tick += 1
-		if not result.get("ok", false) and result.get("reason", "") != "stale_object_region_publication":
-			_region_errors[id] = String(result.get("reason", "object_region_publication_failed"))
-		if _command_visual_pending.has(id):
-			var pending_visual: Dictionary = _command_visual_pending[id]
+		_finish_queued_publication(id, result, int(request.get("request_serial", -1)))
+
+
+func _finish_queued_publication(id: String, result: Dictionary, request_serial: int = -1) -> void:
+	if not result.get("ok", false) and result.get("reason", "") != "stale_object_region_publication":
+		_region_errors[id] = String(result.get("reason", "object_region_publication_failed"))
+	if _command_visual_pending.has(id):
+		var pending_visual: Dictionary = _command_visual_pending[id]
+		# An older same-region worker can finish after a newer command has queued
+		# its own visual rebuild. Only the exact request may resolve that command.
+		if int(pending_visual.get("request_serial", -2)) == request_serial:
 			var visual_publication_usec := int(_last_region_metrics.get("publication_usec", 0))
 			var visual_queue_wait_usec := maxi(0, int(Time.get_ticks_usec() - int(pending_visual.get("queued_usec", Time.get_ticks_usec())) - visual_publication_usec))
 			var visual_elapsed_usec := Time.get_ticks_usec() - int(pending_visual.get("command_started_usec", Time.get_ticks_usec()))
@@ -201,13 +330,18 @@ func process_queued_publications() -> int:
 				"timings_usec": visual_timings,
 			}
 			_command_visual_pending.erase(id)
-		if _command_migration_sync_regions.has(id) and result.get("ok", false):
-			_command_migration_sync_regions.erase(id)
-	_peak_publications_per_process_tick = maxi(_peak_publications_per_process_tick, _publications_last_process_tick)
-	return _publications_last_process_tick
+	if _command_migration_sync_regions.has(id) and result.get("ok", false):
+		_command_migration_sync_regions.erase(id)
 
 
-func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool = false, publication_token: int = -1) -> Dictionary:
+func publish_region(
+	region_key: Vector2i,
+	state: RefCounted,
+	force_rebuild: bool = false,
+	publication_token: int = -1,
+	generated_base: Dictionary = {},
+	request_serial: int = -1
+) -> Dictionary:
 	var publication_started_usec := Time.get_ticks_usec()
 	var id := _region_id(region_key)
 	if _expected_publication_tokens.has(id) and publication_token != int(_expected_publication_tokens[id]):
@@ -236,28 +370,40 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 		return {"ok": true, "reason": "already_published", "instance_count": _regions[id]["instances"].size()}
 	var base_instances: Array[Dictionary] = []
 	var generation_usec := 0
+	var generation_worker_usec := int(generated_base.get("worker_usec", 0))
+	var main_thread_reconstruction_usec := 0
 	var candidate_cell_count := 0
 	var surface_anchor_count := 0
 	if entity_command_service != null and bool(entity_command_service.get("initialized")):
-		var reconstruction: Dictionary = entity_command_service.reconstruct_region(region_key)
+		var reconstruction: Dictionary
+		if generated_base.is_empty():
+			reconstruction = entity_command_service.reconstruct_region(region_key)
+		else:
+			reconstruction = entity_command_service.reconstruct_region_from_generated(region_key, generated_base)
 		if not reconstruction.get("ok", false):
 			return _record_region_failure(id, String(reconstruction.get("reason", "entity_region_reconstruction_failed")))
 		base_instances = entity_command_service.get_region_base_instances(region_key)
 		_last_reconstruction_usec = int(reconstruction.get("reconstruction_usec", 0))
-		generation_usec = _last_reconstruction_usec
+		generation_usec = int(reconstruction.get("generation_usec", _last_reconstruction_usec))
+		main_thread_reconstruction_usec = int(reconstruction.get("main_thread_reconstruction_usec", 0))
 		candidate_cell_count = int(reconstruction.get("candidate_cell_count", 0))
 		surface_anchor_count = int(reconstruction.get("surface_anchor_count", 0))
 	else:
-		var generated: Dictionary = ObjectWorld.build_region_instances(region_world_seed, world_id, region_key, registry)
+		var generated: Dictionary = generated_base
+		if generated.is_empty():
+			generated = ObjectWorld.build_region_instances(region_world_seed, world_id, region_key, registry)
 		if not generated.get("ok", false):
 			return _record_region_failure(id, String(generated.get("reason", "object_generation_failed")))
 		base_instances = generated["instances"]
 		generation_usec = int(generated.get("timings_usec", {}).get("total", 0))
+		_last_reconstruction_usec = generation_usec
 		candidate_cell_count = int(generated.get("candidate_cell_count", 0))
 		surface_anchor_count = int(generated.get("surface_anchor_count", 0))
 	var pending_nodes: Array[Node3D] = []
 	var instances: Array[Dictionary] = []
 	var batch_items: Array[Dictionary] = []
+	var geometry_cpu_by_instance: Dictionary = generated_base.get("geometry_cpu_by_instance", {})
+	var geometry_cpu_worker_usec := int(generated_base.get("geometry_cpu_usec", 0))
 	var mesh_build_started_usec := Time.get_ticks_usec()
 	for base_instance in base_instances:
 		var resolved: Dictionary = state_service.resolve_instance(base_instance)
@@ -269,7 +415,8 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 			continue
 		var instance: Dictionary = resolved["instance"]
 		instances.append(instance)
-		var mesh_result: Dictionary = _get_or_build_geometry_mesh(instance)
+		var prepared_cpu: Dictionary = geometry_cpu_by_instance.get(String(instance.get("instance_id", "")), {})
+		var mesh_result: Dictionary = _get_or_build_geometry_mesh(instance, prepared_cpu)
 		if not mesh_result.get("ok", false):
 			for pending_node in pending_nodes:
 				pending_node.free()
@@ -328,8 +475,8 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 		region_root.add_child(batch_node)
 	for object_node in pending_nodes:
 		region_root.add_child(object_node)
-	if debug_fail_next_visual_publication:
-		debug_fail_next_visual_publication = false
+	if request_serial >= 0 and request_serial == _debug_fail_visual_request_serial:
+		_debug_fail_visual_request_serial = -1
 		region_root.free()
 		for pending_node in pending_nodes:
 			if is_instance_valid(pending_node) and pending_node.get_parent() == null:
@@ -353,6 +500,9 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 		"candidate_cell_count": candidate_cell_count,
 		"surface_anchor_count": surface_anchor_count,
 		"generation_usec": generation_usec,
+		"generation_worker_usec": generation_worker_usec,
+		"geometry_cpu_worker_usec": geometry_cpu_worker_usec,
+		"main_thread_reconstruction_usec": main_thread_reconstruction_usec,
 		"logical_reconstruction_usec": _last_reconstruction_usec,
 		"mesh_build_usec": mesh_build_elapsed_usec,
 		"batch_build_usec": batch_elapsed_usec,
@@ -530,7 +680,20 @@ func _queue_committed_visual_update(result: Dictionary, region_key: Vector2i, st
 		output["visual_status"] = "failed"
 		_last_command_visual_result = {"entity_id": String(output.get("entity_id", "")), "operation": String(output.get("operation", "")), "world_revision": int(output.get("world_revision", -1)), "ok": false, "reason": String(output["reason"])}
 		return output
-	_command_visual_pending[region_id] = {"entity_id": String(output.get("entity_id", "")), "operation": String(output.get("operation", "")), "world_revision": int(output.get("world_revision", -1)), "queued_usec": Time.get_ticks_usec(), "command_started_usec": started_usec}
+	var request_serial := int(queued.get("request_serial", -1))
+	_command_visual_pending[region_id] = {
+		"entity_id": String(output.get("entity_id", "")),
+		"operation": String(output.get("operation", "")),
+		"world_revision": int(output.get("world_revision", -1)),
+		"queued_usec": Time.get_ticks_usec(),
+		"command_started_usec": started_usec,
+		"request_serial": request_serial,
+	}
+	# Failure injection is command-scoped, not globally consumed by whichever
+	# unrelated region worker happens to publish first.
+	if debug_fail_next_visual_publication:
+		debug_fail_next_visual_publication = false
+		_debug_fail_visual_request_serial = request_serial
 	output["visual_status"] = "queued"
 	return output
 
@@ -745,6 +908,7 @@ func _apply_components_to_node(node: Node3D, instance: Dictionary) -> void:
 
 func unload_region(region_key: Vector2i) -> void:
 	var id := _region_id(region_key)
+	_mark_region_generation_cancelled(id)
 	_region_errors.erase(id)
 	_pending_region_publications.erase(id)
 	_pending_publication_order.erase(id)
@@ -820,7 +984,8 @@ func get_performance_snapshot() -> Dictionary:
 				resident_batched += 1
 	return {
 		"active_region_count": _regions.size(),
-		"pending_region_publication_count": _pending_region_publications.size(),
+		"pending_region_publication_count": _pending_region_publications.size() + _region_generation_jobs.size(),
+		"region_generation_jobs_in_flight": _region_generation_jobs.size(),
 		"active_instance_count": resident_instances,
 		"batched_instance_count": resident_batched,
 		"geometry_cache_variant_count": _geometry_mesh_cache.size(),
@@ -948,6 +1113,7 @@ func _record_region_failure(region_id: String, reason: String) -> Dictionary:
 
 
 func _clear_region_nodes() -> void:
+	_wait_for_region_generation_jobs()
 	_pending_region_publications.clear()
 	_pending_publication_order.clear()
 	for entry in _regions.values():
@@ -960,28 +1126,55 @@ func _clear_region_nodes() -> void:
 	_region_errors.clear()
 
 
+func _mark_region_generation_cancelled(id: String) -> void:
+	if not _region_generation_task_by_id.has(id):
+		return
+	var task_id := int(_region_generation_task_by_id[id])
+	if not _region_generation_jobs.has(task_id):
+		_region_generation_task_by_id.erase(id)
+		return
+	var record: Dictionary = _region_generation_jobs[task_id]
+	record["cancelled"] = true
+	_region_generation_jobs[task_id] = record
+
+
+func _wait_for_region_generation_jobs() -> void:
+	for task_id_value in _region_generation_jobs.keys():
+		WorkerThreadPool.wait_for_task_completion(int(task_id_value))
+	_region_generation_jobs.clear()
+	_region_generation_task_by_id.clear()
+
+
+func _exit_tree() -> void:
+	_wait_for_region_generation_jobs()
+
+
 func _region_id(region_key: Vector2i) -> String:
 	return "%d,%d" % [region_key.x, region_key.y]
 
 
-func _get_or_build_geometry_mesh(instance: Dictionary) -> Dictionary:
-	var cacheable := bool(instance.get("population_batched", false))
-	var cache_key := ""
-	if cacheable:
-		var key_data := {
-			"definition_id": instance.get("definition_id", ""),
-			"content_pin": instance.get("content_pin", {}),
-			"algorithm": instance.get("recipe_algorithm", ""),
-			"geometry": instance.get("geometry", {}),
-			"geometry_seeds": instance.get("geometry_seeds", {}),
-		}
-		cache_key = JSON.stringify(key_data, "", true, true).sha256_text()
-		if _geometry_mesh_cache.has(cache_key):
-			_geometry_mesh_cache_order.erase(cache_key)
-			_geometry_mesh_cache_order.append(cache_key)
-			return {"ok": true, "reason": "cache_hit", "mesh": _geometry_mesh_cache[cache_key]}
-	var result: Dictionary = RockMeshAdapter.build_mesh(instance["geometry"], instance["geometry_seeds"])
-	if result.get("ok", false) and cacheable:
+func _get_or_build_geometry_mesh(instance: Dictionary, prepared_cpu: Dictionary = {}) -> Dictionary:
+	# Procedural geometry is immutable for a fixed content pin + recipe + seed.
+	# Transform/appearance/logical components never mutate mesh topology, so all
+	# representatives (legacy, population and placed) can share this bounded cache.
+	var key_data := {
+		"definition_id": instance.get("definition_id", ""),
+		"content_pin": instance.get("content_pin", {}),
+		"algorithm": instance.get("recipe_algorithm", ""),
+		"geometry": instance.get("geometry", {}),
+		"geometry_seeds": instance.get("geometry_seeds", {}),
+	}
+	var cache_key := JSON.stringify(key_data, "", true, true).sha256_text()
+	if _geometry_mesh_cache.has(cache_key):
+		_geometry_mesh_cache_order.erase(cache_key)
+		_geometry_mesh_cache_order.append(cache_key)
+		return {"ok": true, "reason": "cache_hit", "mesh": _geometry_mesh_cache[cache_key]}
+	var result: Dictionary
+	if not prepared_cpu.is_empty():
+		result = RockMeshAdapter.mesh_from_cpu_data(prepared_cpu)
+	else:
+		result = RockMeshAdapter.build_mesh(instance["geometry"], instance["geometry_seeds"])
+	if result.get("ok", false):
 		_geometry_mesh_cache[cache_key] = result["mesh"]
 		_geometry_mesh_cache_order.append(cache_key)
 		while _geometry_mesh_cache_order.size() > MAX_CACHED_GEOMETRY_VARIANTS:

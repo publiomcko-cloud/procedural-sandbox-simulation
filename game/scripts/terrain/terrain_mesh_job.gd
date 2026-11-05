@@ -41,6 +41,16 @@ func _init(
 func run() -> void:
 	worker_started_usec = Time.get_ticks_usec()
 	worker_thread_id = OS.get_thread_caller_id()
+	if brush_snapshot is Dictionary and not bool(brush_snapshot.get("valid", true)):
+		result = {
+			"valid": false,
+			"reason": String(brush_snapshot.get("storage_error", "invalid_brush_snapshot")),
+			"region_key": region_key,
+			"coordinate": coordinate,
+			"ledger_revision": int(brush_snapshot.get("revision", -1)),
+		}
+		worker_finished_usec = Time.get_ticks_usec()
+		return
 	if lod_level == 1:
 		var snapshot: Dictionary = brush_snapshot if brush_snapshot is Dictionary else {}
 		result = LodMesher.build_chunk_cpu_data(
@@ -62,12 +72,13 @@ func run() -> void:
 
 
 func _sample_lod_density(world_position: Vector3) -> float:
-	var mapped: Dictionary = Spatial.world_to_region_local(world_position)
-	if not mapped.get("valid", false):
+	if not world_position.is_finite():
 		return NAN
+	var mapped_region := Spatial.region_key_for_world_position(world_position)
+	var mapped_local := Spatial.region_local_for_world_position(world_position, mapped_region)
 	var snapshot: Dictionary = brush_snapshot if brush_snapshot is Dictionary else {}
 	if snapshot.is_empty():
-		return Field.sample_density(seed, mapped["region_key"], mapped["local_position"], cave_section_enabled)
+		return Field.sample_density(seed, mapped_region, mapped_local, cave_section_enabled)
 	return BrushState.sample_density_snapshot(
-		seed, mapped["region_key"], mapped["local_position"], cave_section_enabled, snapshot
+		seed, mapped_region, mapped_local, cave_section_enabled, snapshot
 	)

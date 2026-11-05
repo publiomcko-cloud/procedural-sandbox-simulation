@@ -69,8 +69,7 @@ func _run() -> void:
 	_check(stream.state_service.snapshot.get("overrides", {}).has(individual_id), "schema migration preserves prior P2 sparse overrides")
 	var migration_pending_snapshot: Dictionary = stream.state_service.snapshot.duplicate(true)
 	_check(stream.dispatch_entity_command({}).get("reason") == "command_region_rebuild_pending" and stream.state_service.snapshot == migration_pending_snapshot, "commands fail closed while migration-triggered region publications are pending")
-	while int(stream.get_performance_snapshot().get("pending_region_publication_count", 0)) > 0:
-		stream.process_queued_publications()
+	await _drain_publications(stream)
 	_check(stream.get_active_region_count() == 3 and stream.is_entity_command_ready(), "migration republishes the three resident regions before enabling the command path")
 
 	var negative_world_position := Vector3i(-1, 125, -1)
@@ -89,7 +88,7 @@ func _run() -> void:
 	conflict.recipe_seed = int(conflict.recipe_seed) + 1
 	var conflicting_retry: Dictionary = stream.dispatch_entity_command(conflict)
 	_check(not conflicting_retry.get("ok", false) and conflicting_retry.get("reason") == "idempotency_key_payload_conflict", "reusing a command ID with a different payload is rejected")
-	stream.process_queued_publications()
+	await _drain_publications(stream)
 	var visual_result := stream.consume_last_command_visual_result()
 	_check(visual_result.get("ok", false) and String(visual_result.get("entity_id", "")) == placed_id, "successful committed placement receives a matching asynchronous visual-publication result")
 	var placed_pick := _ray_pick(negative, _record_for(negative, placed_id))
@@ -102,7 +101,7 @@ func _run() -> void:
 	var transformed: Dictionary = stream.dispatch_entity_command(transform_command)
 	_check(transformed.get("ok", false) and int(transformed.get("entity_revision", -1)) == 2, "ENTITY_SET_COMPONENT accepts a valid transform at the current world and entity revisions")
 	_record_command_timings(transformed)
-	stream.process_queued_publications()
+	await _drain_publications(stream)
 	_record_region_timings()
 	var transformed_node := _find_entity_node(placed_id)
 	_check(transformed_node != null and transformed_node.position.y > 0.3, "committed transform is applied to the rebuilt individual representation")
@@ -110,7 +109,7 @@ func _run() -> void:
 	var appearance_result: Dictionary = stream.dispatch_entity_command(appearance_command)
 	_check(appearance_result.get("ok", false) and stream.state_service.snapshot.overrides[placed_id].components.has(StateContract.COMPONENT_APPEARANCE), "appearance changes use the same persisted command contract")
 	_record_command_timings(appearance_result)
-	stream.process_queued_publications()
+	await _drain_publications(stream)
 	_record_region_timings()
 
 	var visual_ids_before_rejections := stream.get_instance_ids()
@@ -142,7 +141,7 @@ func _run() -> void:
 	var visual_failure_commit: Dictionary = stream.dispatch_entity_command(visual_failure_command)
 	_record_command_timings(visual_failure_commit)
 	var prior_root: Node = stream.get_node_or_null("Objects_-1_-1")
-	stream.process_queued_publications()
+	await _drain_publications(stream)
 	_record_region_timings()
 	var visual_failure_result := stream.consume_last_command_visual_result()
 	_check(visual_failure_commit.get("ok", false) and visual_failure_result.get("ok") == false and stream.state_service.snapshot.overrides[placed_id].components.has(StateContract.COMPONENT_LOGICAL), "post-commit visual failure reports persisted state and does not imply rollback")
@@ -151,7 +150,7 @@ func _run() -> void:
 	var delete_command := _operation_command("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "ENTITY_DELETE", placed_id)
 	var deleted: Dictionary = stream.dispatch_entity_command(delete_command)
 	_record_command_timings(deleted)
-	stream.process_queued_publications()
+	await _drain_publications(stream)
 	_record_region_timings()
 	_check(deleted.get("ok", false) and stream.state_service.snapshot.get("deleted", {}).has(placed_id) and not stream.get_instance_ids().has(placed_id), "ENTITY_DELETE persists a tombstone and removes the batched or individual representation")
 	stream.unload_region(negative)
@@ -205,6 +204,15 @@ func _run() -> void:
 	else:
 		push_error("PLAYABLE_ENTITY_COMMAND_FAIL: assertions=%d failures=%d" % [assertions, failures])
 	quit(0 if failures == 0 else 1)
+
+
+func _drain_publications(target: ProceduralObjectStream, max_frames: int = 600) -> void:
+	for _frame in range(max_frames):
+		target.process_queued_publications()
+		if int(target.get_performance_snapshot().get("pending_region_publication_count", 0)) == 0:
+			return
+		await process_frame
+	_check(false, "asynchronous object publication queue drains before timeout")
 
 
 func _publish(region_key: Vector2i) -> bool:

@@ -43,7 +43,18 @@ func _run() -> void:
 	scene.call("_start_global_rebuild", "cancel_obsolete_edit_stage_test")
 	_check(scene.get("_edit_transaction").is_empty(), "full rebuild invalidates the old edit transaction")
 	await _wait_for_global_rebuild(scene)
-	var expected: Dictionary = Mesher.build_chunk_mesh(WorldState.DEMO_SEED, Vector2i.ZERO, Vector2i(2, 2), false, scene.get("edit_ledger"))
+	# The scalable runtime materializes historical edits and exposes an immutable
+	# per-chunk meshing snapshot. The legacy build_chunk_mesh RefCounted path only
+	# understands SdfBrushEditState, so using the scalable state object directly
+	# silently falls back to the base field and produces a false reference mesh.
+	var expected_snapshot: Dictionary = scene.get("edit_ledger").get_meshing_snapshot_for_chunk(
+		Vector2i.ZERO, Vector2i(2, 2)
+	)
+	_check(expected_snapshot.get("valid", false), "latest scalable ledger snapshot is available after cancellation")
+	var expected_cpu: Dictionary = Mesher.build_chunk_cpu_data(
+		WorldState.DEMO_SEED, Vector2i.ZERO, Vector2i(2, 2), false, expected_snapshot
+	)
+	var expected: Dictionary = Mesher.mesh_from_cpu_data(expected_cpu)
 	var actual: ArrayMesh = scene.get("chunk_nodes")[Grid.stable_id(Vector2i.ZERO, Vector2i(2, 2))].mesh
 	_check(_meshes_equal(actual, expected["mesh"]), "latest ledger revision wins after cancellation and atomic full rebuild")
 	_check(actual != old_mesh, "accepted edit becomes visible only through the replacement mesh set")

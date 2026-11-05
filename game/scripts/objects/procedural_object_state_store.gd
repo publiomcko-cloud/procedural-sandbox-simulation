@@ -13,6 +13,7 @@ var _directory: String
 var _world_id := ""
 var _world_seed := -1
 var _generator_version := -1
+var _last_generation := 0
 
 
 func _init(directory_override: String = "") -> void:
@@ -33,6 +34,7 @@ func load_snapshot(world_id: String, world_seed: int, generator_version: int) ->
 		return _failure("object_state_directory_unreadable")
 	var candidates: Array[Dictionary] = []
 	var recognized := 0
+	var highest_generation_seen := 0
 	directory.list_dir_begin()
 	while true:
 		var filename := directory.get_next()
@@ -41,6 +43,7 @@ func load_snapshot(world_id: String, world_seed: int, generator_version: int) ->
 		if directory.current_is_dir() or not _is_generation_filename(filename):
 			continue
 		recognized += 1
+		highest_generation_seen = maxi(highest_generation_seen, _generation(filename))
 		var decoded := _decode_document(FileAccess.get_file_as_bytes(_directory.path_join(filename)))
 		if not decoded.get("ok", false) or int(decoded.get("generation", -1)) != _generation(filename):
 			if filename.ends_with(".tmp"):
@@ -49,6 +52,7 @@ func load_snapshot(world_id: String, world_seed: int, generator_version: int) ->
 			return _failure("object_state_corrupt_generation")
 		candidates.append({"generation": int(decoded.generation), "snapshot": decoded.snapshot, "temporary": filename.ends_with(".tmp")})
 	directory.list_dir_end()
+	_last_generation = highest_generation_seen
 	if candidates.is_empty():
 		if recognized > 0:
 			return {"ok": true, "found": false, "generation": 0, "snapshot": _empty_snapshot(), "ignored_incomplete_generations": recognized}
@@ -72,15 +76,32 @@ func save_snapshot(snapshot: Dictionary) -> Dictionary:
 	var checked := Contract.validate_snapshot(snapshot, _world_id, _world_seed, _generator_version)
 	if not checked.get("ok", false):
 		return _failure(String(checked.get("reason", "object_state_snapshot_invalid")))
+	return save_validated_snapshot(checked.snapshot)
+
+
+## Fast durable path for callers that already ran Contract.validate_snapshot.
+## It preserves write->flush->readback->atomic rename->final readback, but avoids
+## validating/canonicalizing the same snapshot repeatedly in one command commit.
+func save_validated_snapshot(snapshot: Dictionary) -> Dictionary:
+	if snapshot.get("world_id", "") != _world_id \
+		or int(snapshot.get("world_seed", -1)) != _world_seed \
+		or int(snapshot.get("generator_version", -1)) != _generator_version:
+		return _failure("object_state_validated_snapshot_identity_mismatch")
 	var mkdir_error := DirAccess.make_dir_recursive_absolute(_directory)
 	if mkdir_error != OK and mkdir_error != ERR_ALREADY_EXISTS:
 		return _failure("object_state_directory_unavailable")
 	var generation := _next_generation()
 	if generation < 1 or generation > 99999999:
 		return _failure("object_state_generation_limit_reached")
-	var payload_json := _canonical_json(checked.snapshot)
+	var payload_json := _canonical_json(snapshot)
 	var payload_bytes := payload_json.to_utf8_buffer()
-	var envelope := {"format": FORMAT_ID, "schema_version": SCHEMA_VERSION, "generation": generation, "payload_json": payload_json, "payload_sha256": _sha256(payload_bytes)}
+	var envelope := {
+		"format": FORMAT_ID,
+		"schema_version": SCHEMA_VERSION,
+		"generation": generation,
+		"payload_json": payload_json,
+		"payload_sha256": _sha256(payload_bytes),
+	}
 	var bytes := _canonical_json(envelope).to_utf8_buffer()
 	if bytes.size() > MAX_DOCUMENT_BYTES:
 		return _failure("object_state_document_too_large")
@@ -97,22 +118,21 @@ func save_snapshot(snapshot: Dictionary) -> Dictionary:
 	file.close()
 	if write_error != OK:
 		return _failure("object_state_temporary_write_failed")
+	# Byte equality proves the flushed temporary file is exactly the already
+	# validated canonical envelope; reparsing it here would duplicate all work.
 	var readback := FileAccess.get_file_as_bytes(temporary_path)
-	if readback != bytes or readback.size() > MAX_DOCUMENT_BYTES:
+	if readback != bytes:
 		return _failure("object_state_readback_mismatch")
-	var checked_temp := _decode_document(readback)
-	if not checked_temp.get("ok", false):
-		return _failure("object_state_temporary_validation_failed:%s" % checked_temp.get("reason", "unknown"))
-	if int(checked_temp.generation) != generation:
-		return _failure("object_state_temporary_generation_mismatch")
 	var rename_error := DirAccess.rename_absolute(temporary_path, final_path)
 	if rename_error != OK:
 		return _failure("object_state_commit_rename_failed")
-	var committed := _decode_document(FileAccess.get_file_as_bytes(final_path))
-	if not committed.get("ok", false) or int(committed.generation) != generation:
+	# Final-path byte equality catches rename/readback failures without a second
+	# JSON parse + full snapshot validation.
+	if FileAccess.get_file_as_bytes(final_path) != bytes:
 		return _failure("object_state_committed_verification_failed")
+	_last_generation = generation
 	_prune(generation)
-	return {"ok": true, "generation": generation, "revision": int(snapshot.revision)}
+	return {"ok": true, "generation": generation, "revision": int(snapshot.get("revision", 0))}
 
 
 func _decode_document(bytes: PackedByteArray) -> Dictionary:
@@ -154,6 +174,8 @@ func _empty_snapshot() -> Dictionary:
 
 
 func _next_generation() -> int:
+	if _last_generation > 0:
+		return _last_generation + 1
 	var maximum := 0
 	var directory := DirAccess.open(_directory)
 	if directory == null:
@@ -166,6 +188,7 @@ func _next_generation() -> int:
 		if _is_generation_filename(filename):
 			maximum = maxi(maximum, _generation(filename))
 	directory.list_dir_end()
+	_last_generation = maximum
 	return maximum + 1
 
 
@@ -199,9 +222,7 @@ func _prune(current: int) -> void:
 		if filename.is_empty():
 			break
 		if _is_generation_filename(filename) and filename.ends_with(".json"):
-			var decoded := _decode_document(FileAccess.get_file_as_bytes(_directory.path_join(filename)))
-			if decoded.get("ok", false):
-				generations.append(_generation(filename))
+			generations.append(_generation(filename))
 	directory.list_dir_end()
 	generations.sort()
 	generations.reverse()

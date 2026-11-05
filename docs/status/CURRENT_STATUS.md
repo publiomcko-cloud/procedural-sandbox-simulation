@@ -1,4 +1,37 @@
-# Current implementation candidate — P3.0D (2026-10-25)
+# Current project status — owner-accepted runtime mainline candidate (2026-11-05)
+
+## Authoritative 2026-11-05 override
+
+The active development path is now `feat/free-exploration-mode`, derived from the runtime/performance line and accepted by the owner for mainline integration. The accepted runtime source HEAD before documentary reconciliation is `314edceb618e537b6d7a249330a854aca3113010`. At pre-merge verification, live `main` is `5997a76d345f45bf86edfe83f690336391e8be27`; the candidate is **203 commits ahead, 0 behind**, and that `main` SHA is the exact merge base.
+
+The candidate incorporates the scalable/materialized SDF runtime, shared-surface playable integration, persistence, localized remeshing, runtime hardening, asynchronous procedural-object generation/geometry preparation, entity command/history fixes, event-driven LOD work and the F10 free-exploration mode. The owner performed the GUI test on 2026-11-05 and reported that free exploration works, editing can continue while exploring, and no perceptible lag was observed.
+
+Final automated evidence on source HEAD `314edceb618e537b6d7a249330a854aca3113010`:
+
+- GitHub Actions `42117264773`: SUCCESS.
+- `FREE_EXPLORATION_MODE_PASS: assertions=17 failures=0`.
+- `TERRAIN_LOD_RUNTIME_PASS: assertions=55 failures=0`.
+- `RUNTIME_SCALABLE_PLAYABLE_PASS: assertions=33 failures=0`.
+- `VALIDATION_PASS: L0-L2; GUI visual test remains an owner task`.
+- Starter checks `42117264811`: SUCCESS.
+
+The owner explicitly authorized documentary reconciliation and merge of this line into `main`. The older P3.1 R12-CXR/R6 scientific campaign is **superseded as the active project path**. Its evidence remains historical and must not be deleted or rewritten; its still-open R1–R6 draft PR chain is to be closed as superseded only after the runtime mainline merge is verified.
+
+For current validation use **Godot 4.7.2** and `scripts/validate.sh`. Any historical `scripts/validate.ps1` references below describe earlier snapshots only and are not current operating instructions.
+
+See [2026-11-05 runtime mainline reconciliation](../checkpoints/2026-11-05-RUNTIME-MAINLINE-RECONCILIATION.md). After integration, new functional work starts from live `main`; do not resume R6/R12 unless the owner explicitly reopens that research direction.
+
+---
+
+# Historical status snapshots below
+
+# Current implementation candidate — P3.1 Storage R2 (2026-10-25)
+
+## Newer candidate — P3.1 Storage R2 (2026-10-25)
+
+Verified `origin/main` remains the P3.1 baseline `5997a76d345f45bf86edfe83f690336391e8be27`; PR #129 starts from `db1c72fadd24e69f87f0eb2c5091cee1ac1b39da`. Source correction `ea18432c6f9cfc1912e1d4aeb5363bb8f5bc9731` on `feat/p3-1-scalable-terrain-storage` adds conservative spatial/min-max SDF candidate selection and append-only schema-v2 segment reuse without deleting historical generations or changing schema 1. Focused storage tests passed 3,516/0; isolated-profile `scripts/validate.ps1` passed 21 suites and 21,464 assertions with zero failures on Godot 4.7.2. Measurements are exploratory: 8,192 concentrated commands still yield 8,192 local candidates, ~49.1 ms point-query p99, ~63.2 ms ray-picker end-to-end p99 and ~6.45 s LOD1 reconstruction; saves rehash reused segment bytes. The reparse-junction fixture was unavailable on this host, and three camera colinearity warnings were non-fatal. PR #129 remains draft/unmerged; exact source review and owner GUI save/restart checks are pending. See [R2 checkpoint](../checkpoints/2026-10-25-P3-1-STORAGE-R2-CORRECTIONS.md). PRs #128/#130, P3.0D work, stash entries, and three pre-existing untracked `.gd.uid` files were preserved. All five F2-G1 holds remain unchanged.
+
+# Prior implementation candidate — P3.0D (2026-10-25)
 
 ## Newer candidate — P3.0D Issue #123 (2026-10-25)
 

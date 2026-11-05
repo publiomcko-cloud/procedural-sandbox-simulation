@@ -132,6 +132,12 @@ func _test_stage_staleness_and_lod0_fallback() -> void:
 	root.add_child(test_camera)
 	demo.set("camera", test_camera)
 	demo.set("lod_enabled", true)
+	demo.set("_lod_selection_dirty", false)
+	demo.call("_update_camera")
+	_check(bool(demo.get("_lod_selection_dirty")), "camera updates mark event-driven LOD selection dirty")
+	demo.set("_lod_selection_dirty", false)
+	demo.call("_update_lod_selection")
+	_check(not bool(demo.get("_lod_selection_dirty")), "idle LOD update returns without scanning when no selection event occurred")
 	var coordinate := Vector2i.ZERO
 	var chunk_id: String = ChunkGrid.stable_id(Vector2i.ZERO, coordinate)
 	var center: Vector3 = Spatial.region_origin_world(Vector2i.ZERO) + ChunkGrid.origin_for(coordinate) + ChunkGrid.size_for(coordinate) * 0.5

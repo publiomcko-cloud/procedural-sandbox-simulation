@@ -954,6 +954,9 @@ func _test_playable_scene_publication() -> void:
 			if stream.get_active_region_count() == demo.get("active_regions").size() and not stream.get_region_instance_records(Vector2i.ZERO).is_empty():
 				break
 		_check(stream.get_active_region_count() == demo.get("active_regions").size(), "object visibility follows actually published active regions (objects=%d terrain=%d init=%s status=%s)" % [stream.get_active_region_count(), demo.get("active_regions").size(), stream.initialized, demo.get("_procedural_object_status")])
+		var runtime_object_metrics: Dictionary = stream.get_performance_snapshot().get("last_region", {})
+		_check(int(runtime_object_metrics.get("generation_worker_usec", 0)) > 0, "playable region population generation executes through the worker path")
+		_check(int(runtime_object_metrics.get("geometry_cpu_worker_usec", 0)) > 0, "playable procedural geometry CPU construction executes through the worker path")
 		var center_records: Array[Dictionary] = stream.get_region_instance_records(Vector2i.ZERO)
 		_check(center_records.size() >= 2, "scene publication creates both compatibility objects and declarative population from registered packages (instances=%d init=%s error=%s)" % [center_records.size(), stream.initialized, stream.initialization_error])
 		if center_records.size() < 2:
@@ -1037,7 +1040,20 @@ func _test_playable_scene_publication() -> void:
 			if String(demo.get("_object_state_action_status")).contains("visual publication failed"):
 				visual_failure_reported = true
 				break
-		_check(stream.get_command_world_revision() == command_revision_before_visual_failure + 1 and stream.state_service.snapshot.get("deleted", {}).has(input_selected_id) and visual_failure_reported, "committed Redo remains authoritative when mesh publication fails, and the HUD reports the visual failure separately")
+		var visual_pending_debug: Dictionary = stream.get("_command_visual_pending")
+		var generation_jobs_debug: Dictionary = stream.get("_region_generation_jobs")
+		_check(
+			stream.get_command_world_revision() == command_revision_before_visual_failure + 1
+			and stream.state_service.snapshot.get("deleted", {}).has(input_selected_id)
+			and visual_failure_reported,
+			"committed Redo remains authoritative when mesh publication fails, and the HUD reports the visual failure separately (status=%s pending=%s jobs=%s debug_flag=%s perf=%s)" % [
+				String(demo.get("_object_state_action_status")),
+				str(visual_pending_debug),
+				str(generation_jobs_debug),
+				str(stream.debug_fail_next_visual_publication),
+				str(stream.get_performance_snapshot()),
+			]
+		)
 		var command_revision_before_visual_recovery := stream.get_command_world_revision()
 		_push_demo_key(demo, KEY_Z, true)
 		await _wait_for_entity_presence(stream, input_selected_id, true)
@@ -1050,6 +1066,17 @@ func _test_playable_scene_publication() -> void:
 				break
 		await _wait_for_entity_presence(stream, input_selected_id, true)
 		_check(stream.get_command_world_revision() == command_revision_before_restore + 1 and not stream.state_service.snapshot.get("deleted", {}).has(input_selected_id) and not stream.state_service.snapshot.get("overrides", {}).has(input_selected_id) and stream.get_instance_ids().count(input_selected_id) == 1 and String(demo.get("_object_state_action_status")).contains("ENTITY_RESTORE committed"), "F9 remains distinct from Undo Delete and restores the procedural baseline without overrides or duplication (status=%s)" % String(demo.get("_object_state_action_status")))
+		# Region generation is asynchronous in the playable stream. Presence alone
+		# is not a publication-completion fence when the entity already existed
+		# before the command, so wait for the queued visual rebuild to drain before
+		# taking the persisted visual-state snapshot used by the unload/reload check.
+		var restore_visual_quiescent := false
+		for _frame in range(240):
+			await process_frame
+			if int(stream.get_performance_snapshot().get("pending_region_publication_count", 0)) == 0:
+				restore_visual_quiescent = true
+				break
+		_check(restore_visual_quiescent, "F9 visual rebuild drains before the unload/reload reference snapshot")
 		stateful_records = stream.get_region_instance_records(Vector2i.ZERO)
 		var region_root_count := 0
 		for child in stream.get_children():
@@ -1075,7 +1102,16 @@ func _test_playable_scene_publication() -> void:
 				break
 		_check(center_reloaded, "camera-driven revisit republishes the original region")
 		if center_reloaded:
-			_check(stream.get_region_instance_records(Vector2i.ZERO) == stateful_records, "playable stream revisit rebuilds the persisted override independent of visit order")
+			var object_center_reloaded := false
+			for _frame in range(240):
+				await process_frame
+				if stream.has_published_region(Vector2i.ZERO) \
+					and int(stream.get_performance_snapshot().get("pending_region_publication_count", 0)) == 0:
+					object_center_reloaded = true
+					break
+			_check(object_center_reloaded, "object stream catches up after asynchronous terrain revisit")
+			if object_center_reloaded:
+				_check(stream.get_region_instance_records(Vector2i.ZERO) == stateful_records, "playable stream revisit rebuilds the persisted override independent of visit order")
 	demo.queue_free()
 	for _frame in range(2):
 		await process_frame

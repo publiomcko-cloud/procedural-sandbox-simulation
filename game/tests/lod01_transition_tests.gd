@@ -485,7 +485,8 @@ func _test_ordered_ledger_parity_and_revision_identity() -> void:
 		_check(Fixture.result_matches_request(built, SEED, Field.GENERATOR_VERSION, count, MIN_LATTICE, [Fixture.FACE_X_NEG]), "%d-op transition result carries its immutable request identity" % count)
 		_check(not Fixture.result_matches_request(built, SEED, Field.GENERATOR_VERSION, count + 1, MIN_LATTICE, [Fixture.FACE_X_NEG]), "%d-op result is rejected when ledger revision becomes obsolete" % count)
 	_check(ledger.get_edit_count() == 256 and ledger.get_last_sequence() == 255, "fixture leaves the canonical 256-command ordered ledger intact")
-	_check(not ledger.add_sphere(Brush.Mode.CARVE, base, 0.45), "fixture does not weaken canonical ledger capacity")
+	_check(ledger.add_sphere(Brush.Mode.CARVE, base, 0.45), "LOD fixture accepts the 257th operation under the v2 canonical quota")
+	_check(ledger.get_edit_count() == 257 and ledger.get_last_sequence() == 256, "LOD fixture preserves the newly admitted command and monotonic identity")
 	var final_snapshot: Dictionary = ledger.get_meshing_snapshot()
 	var edited_transition: Dictionary = Fixture.build_transition_cell(SEED, MIN_LATTICE, [Fixture.FACE_X_NEG], final_snapshot)
 	_check(_interface_normals_match_canonical(edited_transition, final_snapshot), "shared LOD seam normals use the same canonical SDF gradient and fixed physical epsilon")
@@ -608,14 +609,14 @@ func _test_snapshot_identity_and_capacity_guards() -> void:
 	var excessive_centers := PackedVector3Array()
 	var excessive_radii := PackedFloat64Array()
 	var excessive_modes := PackedByteArray()
-	for _index in range(Brush.MAX_EDITS + 1):
+	for _index in range(Brush.MAX_OPERATION_COUNT + 1):
 		excessive_centers.append(Vector3.ZERO)
 		excessive_radii.append(0.5)
 		excessive_modes.append(Brush.Mode.CARVE)
 	unbounded["centers"] = excessive_centers
 	unbounded["radii"] = excessive_radii
 	unbounded["modes"] = excessive_modes
-	_expect_snapshot_failure(unbounded, "invalid_snapshot_command_count", "fixture enforces canonical ledger capacity without expanding authority")
+	_expect_snapshot_failure(unbounded, "invalid_snapshot_command_count", "fixture rejects snapshots above the finite v2 canonical operation quota")
 
 
 func _expect_snapshot_failure(snapshot: Dictionary, expected_reason: String, label: String) -> void:

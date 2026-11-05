@@ -91,6 +91,25 @@ func _test_mesh_generation() -> void:
 	var cut_vertices: PackedVector3Array = cut_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 	_check(cut_vertices != first_vertices, "cross-section rebuild changes the generated surface")
 
+	# Regression: publishing CPU data must not consume the source Dictionary.
+	# Shared-surface cache entries can be read by multiple region owners.
+	var reusable_cpu: Dictionary = TerrainMesher.build_chunk_cpu_data(
+		424242, Vector2i.ZERO, Vector2i(1, 1), false, {}
+	)
+	var reusable_positions: PackedVector3Array = reusable_cpu.get("positions", PackedVector3Array()).duplicate()
+	var reusable_normals: PackedVector3Array = reusable_cpu.get("normals", PackedVector3Array()).duplicate()
+	var first_upload: Dictionary = TerrainMesher.mesh_from_cpu_data(reusable_cpu)
+	var second_upload: Dictionary = TerrainMesher.mesh_from_cpu_data(reusable_cpu)
+	_check(
+		reusable_cpu.get("positions", PackedVector3Array()) == reusable_positions
+		and reusable_cpu.get("normals", PackedVector3Array()) == reusable_normals,
+		"ArrayMesh publication preserves reusable cached CPU positions and normals"
+	)
+	_check(
+		first_upload.get("mesh", null) is ArrayMesh and second_upload.get("mesh", null) is ArrayMesh,
+		"the same cached CPU mesh data can be published more than once"
+	)
+
 
 func _test_scene_contract() -> void:
 	var packed := load("res://scenes/terrain_demo.tscn") as PackedScene

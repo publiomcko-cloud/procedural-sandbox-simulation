@@ -6,7 +6,7 @@ const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const Mesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const Scene := preload("res://scenes/terrain_demo.tscn")
-const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
+const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store_v2.gd")
 const SEED := 424242
 const REGION_KEYS := [
 	Vector2i(-2, -2), Vector2i(-1, -2), Vector2i(0, -2), Vector2i(1, -2),
@@ -29,6 +29,7 @@ func _run() -> void:
 	_test_capacity_and_exact_spatial_filter(ledger)
 	_test_ray_snapshot_equivalence(ledger, "distributed")
 	_test_concentrated_256_filter()
+	_test_idempotent_interval_pruning()
 	await _test_256_sequential_scene_edits()
 	await _test_revision_supersession_and_rapid_movement()
 	if failures == 0:
@@ -69,9 +70,8 @@ func _test_capacity_and_exact_spatial_filter(ledger: RefCounted) -> void:
 	var before_count: int = ledger.get_edit_count()
 	var before_revision: int = ledger.revision
 	var before_sequence: int = ledger.get_last_sequence()
-	_check(not ledger.add_sphere(BrushState.Mode.CARVE, Vector3(8.0, 3.0, 6.0), 1.25), "257th valid command is rejected at the documented finite cap")
-	_check(ledger.last_rejection_reason == "ledger_capacity_exceeded", "257th rejection identifies capacity rather than invalid brush data")
-	_check(ledger.get_edit_count() == before_count and ledger.revision == before_revision and ledger.get_last_sequence() == before_sequence, "capacity rejection cannot silently evict or consume sequence/revision")
+	_check(ledger.add_sphere(BrushState.Mode.CARVE, Vector3(8.0, 3.0, 6.0), 1.25), "257th valid command is accepted beyond the former prototype cap")
+	_check(ledger.get_edit_count() == before_count + 1 and ledger.revision == before_revision + 1 and ledger.get_last_sequence() == before_sequence + 1, "scalable history preserves the 257th command without eviction")
 	_check(not ledger.add_sphere(BrushState.Mode.CARVE, Vector3(NAN, 3.0, 6.0), 1.25), "invalid input remains rejected when ledger is full")
 	_check(ledger.last_rejection_reason == "non_finite_input", "invalid input reason takes precedence over full-capacity status")
 
@@ -142,13 +142,27 @@ func _test_concentrated_256_filter() -> void:
 		var key: Vector2i = case["region"]
 		var coordinate: Vector2i = case["chunk"]
 		var filtered: Dictionary = ledger.get_meshing_snapshot_for_chunk(key, coordinate)
-		_check(filtered["candidate_operation_count"] == 256, "concentrated corner history retains every potentially effective command at %s/%s" % [key, coordinate])
+		_check(int(filtered["candidate_operation_count"]) <= 256, "concentrated corner history remains bounded after interval proof at %s/%s" % [key, coordinate])
 		_check_expanded_query_domain(full_snapshot, filtered, key, coordinate, "concentrated")
 		var reference: Dictionary = Mesher.build_chunk_mesh(SEED, key, coordinate, false, ledger)
 		var cpu_data: Dictionary = Mesher.build_chunk_cpu_data(SEED, key, coordinate, false, filtered)
 		var candidate: Dictionary = Mesher.mesh_from_cpu_data(cpu_data)
 		_check(_meshes_equal(reference["mesh"], candidate["mesh"]), "concentrated 256-operation mesh and normals exactly match full ordered replay at %s/%s" % [key, coordinate])
 	_test_ray_snapshot_equivalence(ledger, "concentrated")
+
+
+func _test_idempotent_interval_pruning() -> void:
+	var ledger: RefCounted = BrushState.new(SEED, Field.GENERATOR_VERSION)
+	for index in range(64):
+		_check(ledger.add_sphere(BrushState.Mode.CARVE, Vector3(2.0, 3.0, 2.0), 0.58), "consecutive identical carve %d is accepted" % index)
+	var full_snapshot: Dictionary = ledger.get_meshing_snapshot()
+	var filtered: Dictionary = ledger.get_meshing_snapshot_for_chunk(Vector2i.ZERO, Vector2i.ZERO)
+	_check(int(filtered["candidate_operation_count"]) == 1, "consecutive identical min operators are reduced by exact idempotence")
+	var full_data: Dictionary = Mesher.build_chunk_cpu_data(SEED, Vector2i.ZERO, Vector2i.ZERO, false, full_snapshot)
+	var filtered_data: Dictionary = Mesher.build_chunk_cpu_data(SEED, Vector2i.ZERO, Vector2i.ZERO, false, filtered)
+	var full_mesh: Dictionary = Mesher.mesh_from_cpu_data(full_data)
+	var filtered_mesh: Dictionary = Mesher.mesh_from_cpu_data(filtered_data)
+	_check(_meshes_equal(full_mesh["mesh"], filtered_mesh["mesh"]), "idempotence reduction preserves complete chunk geometry and normals")
 
 
 func _test_ray_snapshot_equivalence(ledger: RefCounted, history_name: String) -> void:

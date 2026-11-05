@@ -133,24 +133,37 @@ static func _build_mesh_cells(
 	for y in range(ny - 1):
 		for z in range(nz - 1):
 			for x in range(nx - 1):
-				var cube_points: Array[Vector3] = []
-				var cube_values: Array[float] = []
-				var has_solid_sample := false
-				var has_empty_sample := false
-				for corner in CORNERS:
-					var cx: int = x + corner.x
-					var cy: int = y + corner.y
-					var cz: int = z + corner.z
-					var sample_value: float = values[_index(cx, cy, cz, nx, nz)]
-					cube_values.append(sample_value)
-					has_solid_sample = has_solid_sample or sample_value >= 0.0
-					has_empty_sample = has_empty_sample or sample_value < 0.0
-				if not has_solid_sample or not has_empty_sample:
+				# P2: keep the eight scalar samples in stack-like value types instead
+				# of allocating two Variant Arrays for every visited cell.
+				var density0 := Vector4(
+					values[_index(x, y, z, nx, nz)],
+					values[_index(x + 1, y, z, nx, nz)],
+					values[_index(x + 1, y + 1, z, nx, nz)],
+					values[_index(x, y + 1, z, nx, nz)]
+				)
+				var density1 := Vector4(
+					values[_index(x, y, z + 1, nx, nz)],
+					values[_index(x + 1, y, z + 1, nx, nz)],
+					values[_index(x + 1, y + 1, z + 1, nx, nz)],
+					values[_index(x, y + 1, z + 1, nx, nz)]
+				)
+				var solid_mask := 0
+				if density0.x >= 0.0: solid_mask |= 1
+				if density0.y >= 0.0: solid_mask |= 2
+				if density0.z >= 0.0: solid_mask |= 4
+				if density0.w >= 0.0: solid_mask |= 8
+				if density1.x >= 0.0: solid_mask |= 16
+				if density1.y >= 0.0: solid_mask |= 32
+				if density1.z >= 0.0: solid_mask |= 64
+				if density1.w >= 0.0: solid_mask |= 128
+				if solid_mask == 0 or solid_mask == 255:
 					continue
-				for corner in CORNERS:
-					cube_points.append(world_sample_origin + Vector3(x + corner.x, cell_start_y + y + corner.y, z + corner.z) * STEP)
+				var cell_lattice := Vector3i(x, cell_start_y + y, z)
 				for tetra in TETRAHEDRA:
-					_polygonize_tetra(tetra, cube_points, cube_values, positions, normals)
+					_polygonize_tetra(
+						tetra, world_sample_origin, cell_lattice, density0, density1,
+						positions, normals
+					)
 	var triangle_count := positions.size() / 3
 	timings_usec["triangulation_and_face_normals"] = Time.get_ticks_usec() - polygonize_started_usec
 	var has_chunk_coordinate := CHUNK_GRID.is_valid_coordinate(chunk_coordinate)
@@ -159,8 +172,10 @@ static func _build_mesh_cells(
 		var global_position: Vector3 = positions[vertex_index]
 		var region_local_position: Vector3 = global_position - world_region_origin
 		if has_chunk_coordinate and CHUNK_GRID.is_shared_boundary_vertex(region_local_position, chunk_coordinate):
-			var shared_normal: Vector3 = shared_normal_cache.get(global_position, Vector3.ZERO)
-			if not shared_normal_cache.has(global_position):
+			var shared_normal := Vector3.ZERO
+			if shared_normal_cache.has(global_position):
+				shared_normal = shared_normal_cache[global_position]
+			else:
 				var normal_started_usec := Time.get_ticks_usec()
 				shared_normal = _sample_outward_normal(seed, region_key, region_local_position, show_cave_section, brush_state, density_override)
 				timings_usec["shared_gradient_normals"] = int(timings_usec["shared_gradient_normals"]) + Time.get_ticks_usec() - normal_started_usec
@@ -184,22 +199,31 @@ static func _build_mesh_cells(
 static func mesh_from_cpu_data(cpu_data: Dictionary) -> Dictionary:
 	if not cpu_data.get("valid", false):
 		return cpu_data
+	# Treat CPU mesh data as immutable. Shared-surface work can be cached and
+	# consumed by more than one publication path at the same revision; mutating
+	# the source dictionary here would poison that cache after the first upload.
+	var result: Dictionary = cpu_data.duplicate(false)
 	var mesh := ArrayMesh.new()
-	var positions: PackedVector3Array = cpu_data["positions"]
+	var positions: PackedVector3Array = cpu_data.get("positions", PackedVector3Array())
 	if not positions.is_empty():
+		var normals: PackedVector3Array = cpu_data.get("normals", PackedVector3Array())
+		if normals.size() != positions.size():
+			return {"valid": false, "reason": "cpu_mesh_normal_count_mismatch"}
 		var arrays: Array = []
 		arrays.resize(Mesh.ARRAY_MAX)
 		arrays[Mesh.ARRAY_VERTEX] = positions
-		arrays[Mesh.ARRAY_NORMAL] = cpu_data["normals"]
+		arrays[Mesh.ARRAY_NORMAL] = normals
 		var upload_started_usec := Time.get_ticks_usec()
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-		var timings: Dictionary = cpu_data.get("timings_usec", {})
+		var timings: Dictionary = (cpu_data.get("timings_usec", {}) as Dictionary).duplicate(true)
 		timings["array_mesh_build"] = Time.get_ticks_usec() - upload_started_usec
-		cpu_data["timings_usec"] = timings
-	cpu_data["mesh"] = mesh
-	cpu_data.erase("positions")
-	cpu_data.erase("normals")
-	return cpu_data
+		result["timings_usec"] = timings
+	result["mesh"] = mesh
+	# Drop the heavy packed arrays only from the returned publication result.
+	# The caller-provided CPU data remains reusable and cache-safe.
+	result.erase("positions")
+	result.erase("normals")
+	return result
 
 
 static func contains_mesh_point(point: Vector3) -> bool:
@@ -253,11 +277,14 @@ static func _sample_outward_normal(
 
 static func _polygonize_tetra(
 	tetra: Array,
-	cube_points: Array[Vector3],
-	cube_values: Array[float],
+	world_sample_origin: Vector3,
+	cell_lattice: Vector3i,
+	density0: Vector4,
+	density1: Vector4,
 	positions: PackedVector3Array,
 	normals: PackedVector3Array
 ) -> int:
+	# P2: fixed scalar slots replace per-tetra inside/outside Arrays.
 	var inside_count := 0
 	var outside_count := 0
 	var inside0 := -1
@@ -267,7 +294,7 @@ static func _polygonize_tetra(
 	var outside1 := -1
 	var outside2 := -1
 	for corner_index in tetra:
-		if cube_values[corner_index] >= 0.0:
+		if _density_for_corner(corner_index, density0, density1) >= 0.0:
 			match inside_count:
 				0: inside0 = corner_index
 				1: inside1 = corner_index
@@ -283,47 +310,64 @@ static func _polygonize_tetra(
 		return 0
 	var inside_center := Vector3.ZERO
 	var outside_center := Vector3.ZERO
-	if inside_count > 0: inside_center += cube_points[inside0]
-	if inside_count > 1: inside_center += cube_points[inside1]
-	if inside_count > 2: inside_center += cube_points[inside2]
-	if outside_count > 0: outside_center += cube_points[outside0]
-	if outside_count > 1: outside_center += cube_points[outside1]
-	if outside_count > 2: outside_center += cube_points[outside2]
+	if inside_count > 0: inside_center += _point_for_corner(world_sample_origin, cell_lattice, inside0)
+	if inside_count > 1: inside_center += _point_for_corner(world_sample_origin, cell_lattice, inside1)
+	if inside_count > 2: inside_center += _point_for_corner(world_sample_origin, cell_lattice, inside2)
+	if outside_count > 0: outside_center += _point_for_corner(world_sample_origin, cell_lattice, outside0)
+	if outside_count > 1: outside_center += _point_for_corner(world_sample_origin, cell_lattice, outside1)
+	if outside_count > 2: outside_center += _point_for_corner(world_sample_origin, cell_lattice, outside2)
 	inside_center /= float(inside_count)
 	outside_center /= float(outside_count)
 	var toward_empty := outside_center - inside_center
 	if inside_count == 1:
-		var a := _interpolate(inside0, outside0, cube_points, cube_values)
-		var b := _interpolate(inside0, outside1, cube_points, cube_values)
-		var c := _interpolate(inside0, outside2, cube_points, cube_values)
+		var a := _interpolate(inside0, outside0, world_sample_origin, cell_lattice, density0, density1)
+		var b := _interpolate(inside0, outside1, world_sample_origin, cell_lattice, density0, density1)
+		var c := _interpolate(inside0, outside2, world_sample_origin, cell_lattice, density0, density1)
 		_add_triangle(a, b, c, toward_empty, positions, normals)
 		return 1
 	if inside_count == 3:
-		var a := _interpolate(outside0, inside0, cube_points, cube_values)
-		var b := _interpolate(outside0, inside1, cube_points, cube_values)
-		var c := _interpolate(outside0, inside2, cube_points, cube_values)
+		var a := _interpolate(outside0, inside0, world_sample_origin, cell_lattice, density0, density1)
+		var b := _interpolate(outside0, inside1, world_sample_origin, cell_lattice, density0, density1)
+		var c := _interpolate(outside0, inside2, world_sample_origin, cell_lattice, density0, density1)
 		_add_triangle(a, b, c, toward_empty, positions, normals)
 		return 1
-	var a := _interpolate(inside0, outside0, cube_points, cube_values)
-	var b := _interpolate(inside0, outside1, cube_points, cube_values)
-	var c := _interpolate(inside1, outside0, cube_points, cube_values)
-	var d := _interpolate(inside1, outside1, cube_points, cube_values)
+	var a := _interpolate(inside0, outside0, world_sample_origin, cell_lattice, density0, density1)
+	var b := _interpolate(inside0, outside1, world_sample_origin, cell_lattice, density0, density1)
+	var c := _interpolate(inside1, outside0, world_sample_origin, cell_lattice, density0, density1)
+	var d := _interpolate(inside1, outside1, world_sample_origin, cell_lattice, density0, density1)
 	_add_triangle(a, b, d, toward_empty, positions, normals)
 	_add_triangle(a, d, c, toward_empty, positions, normals)
 	return 2
 
 
+static func _density_for_corner(index: int, density0: Vector4, density1: Vector4) -> float:
+	return density0[index] if index < 4 else density1[index - 4]
+
+
+static func _point_for_corner(
+	world_sample_origin: Vector3,
+	cell_lattice: Vector3i,
+	index: int
+) -> Vector3:
+	var corner: Vector3i = CORNERS[index]
+	return world_sample_origin + Vector3(cell_lattice + corner) * STEP
+
+
 static func _interpolate(
 	a_index: int,
 	b_index: int,
-	cube_points: Array[Vector3],
-	cube_values: Array[float]
+	world_sample_origin: Vector3,
+	cell_lattice: Vector3i,
+	density0: Vector4,
+	density1: Vector4
 ) -> Vector3:
-	var a_value := cube_values[a_index]
-	var b_value := cube_values[b_index]
+	var a_value := _density_for_corner(a_index, density0, density1)
+	var b_value := _density_for_corner(b_index, density0, density1)
 	var denominator := a_value - b_value
 	var weight := 0.5 if is_zero_approx(denominator) else clampf(a_value / denominator, 0.0, 1.0)
-	return cube_points[a_index].lerp(cube_points[b_index], weight)
+	return _point_for_corner(world_sample_origin, cell_lattice, a_index).lerp(
+		_point_for_corner(world_sample_origin, cell_lattice, b_index), weight
+	)
 
 
 static func _add_triangle(

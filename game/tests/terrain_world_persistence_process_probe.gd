@@ -1,6 +1,6 @@
 extends SceneTree
 
-const Store := preload("res://scripts/terrain/terrain_world_save_store.gd")
+const Store := preload("res://scripts/terrain/terrain_world_save_store_v2.gd")
 const Brush := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 
@@ -49,7 +49,7 @@ func _run() -> void:
 			"generator_version": int(payload["generator_version"]),
 			"revision": int(payload["ledger_revision"]),
 			"next_sequence": int(payload["next_sequence"]),
-			"operations": payload["operations"],
+			"storage_reference": payload["storage_reference"],
 		}
 		if not ledger.restore_persistence_snapshot(snapshot):
 			push_error("PERSISTENCE_PROBE_READ_RESTORE_FAILED: %s" % ledger.last_restore_rejection_reason)

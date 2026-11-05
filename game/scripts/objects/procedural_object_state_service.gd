@@ -197,7 +197,7 @@ func upgrade_command_snapshot_schema() -> Dictionary:
 	if not checked.get("ok", false):
 		return _failure(String(checked.get("reason", "object_state_upgrade_invalid")))
 	var persist_started := Time.get_ticks_usec()
-	var saved: Dictionary = store.save_snapshot(checked.snapshot)
+	var saved: Dictionary = _save_checked_snapshot(checked.snapshot)
 	last_persist_duration_usec = Time.get_ticks_usec() - persist_started
 	if not saved.get("ok", false):
 		initialized = false
@@ -267,7 +267,7 @@ func upgrade_history_snapshot_schema() -> Dictionary:
 	if not checked.get("ok", false):
 		return _failure("history_upgrade_candidate_invalid:%s" % checked.get("reason", "unknown"))
 	var persist_started := Time.get_ticks_usec()
-	var saved: Dictionary = store.save_snapshot(checked.snapshot)
+	var saved: Dictionary = _save_checked_snapshot(checked.snapshot)
 	last_persist_duration_usec = Time.get_ticks_usec() - persist_started
 	if not saved.get("ok", false):
 		initialized = false
@@ -294,7 +294,7 @@ func commit_command_candidate(candidate: Dictionary, expected_world_revision: in
 	if not checked.get("ok", false):
 		return _failure(String(checked.get("reason", "command_candidate_invalid")))
 	var persist_started := Time.get_ticks_usec()
-	var saved: Dictionary = store.save_snapshot(checked.snapshot)
+	var saved: Dictionary = _save_checked_snapshot(checked.snapshot)
 	last_persist_duration_usec = Time.get_ticks_usec() - persist_started
 	if not saved.get("ok", false):
 		# A rename may have committed before readback failed. Require reinitialization
@@ -330,13 +330,25 @@ func _commit_candidate(candidate: Dictionary, changed_instance_id: String = "") 
 	if not checked.get("ok", false):
 		return _failure(String(checked.get("reason", "object_state_candidate_invalid")))
 	var persist_started := Time.get_ticks_usec()
-	var saved: Dictionary = store.save_snapshot(checked.snapshot)
+	var saved: Dictionary = _save_checked_snapshot(checked.snapshot)
 	last_persist_duration_usec = Time.get_ticks_usec() - persist_started
 	if not saved.get("ok", false):
 		return _failure(String(saved.get("reason", "object_state_save_failed")))
 	snapshot = checked.snapshot
 	storage_generation = int(saved.generation)
 	return {"ok": true, "revision": int(snapshot.revision), "generation": storage_generation, "entity_revision": get_entity_revision(changed_instance_id) if not changed_instance_id.is_empty() else 0}
+
+
+func _save_checked_snapshot(checked_snapshot: Dictionary) -> Dictionary:
+	# Production store exposes the optimized path because the caller already ran
+	# the strict snapshot contract. Fault-injection/test stores intentionally
+	# implement only the historical save_snapshot API; keep that seam valid so
+	# commit-uncertainty and prewrite-failure behavior remain testable.
+	if store != null and store.has_method("save_validated_snapshot"):
+		return store.save_validated_snapshot(checked_snapshot)
+	if store != null and store.has_method("save_snapshot"):
+		return store.save_snapshot(checked_snapshot)
+	return _failure("object_state_store_save_unavailable")
 
 
 func _failure(reason: String) -> Dictionary:

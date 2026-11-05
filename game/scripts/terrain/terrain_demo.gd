@@ -9,22 +9,39 @@ const BrushEditState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const BrushPicker := preload("res://scripts/terrain/terrain_brush_picker.gd")
 const TerrainMeshJob := preload("res://scripts/terrain/terrain_mesh_job.gd")
 const TerrainLodPolicy := preload("res://scripts/terrain/terrain_lod_policy.gd")
-const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
+const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store_v2.gd")
+const ScalableSdfState := preload("res://scripts/terrain/terrain_scalable_sdf_state.gd")
+const MaterializedSdfStore := preload("res://scripts/terrain/terrain_materialized_sdf_store.gd")
+const AsyncCheckpointJob := preload("res://scripts/terrain/terrain_async_checkpoint_job.gd")
+const SharedBoundaryAuthority := preload("res://scripts/terrain/shared_surface_boundary_authority.gd")
+const SharedBoundaryMeshJob := preload("res://scripts/terrain/shared_surface_boundary_mesh_job.gd")
+const SharedZBoundaryMeshJob := preload("res://scripts/terrain/shared_surface_z_boundary_mesh_job.gd")
+const SharedCornerMeshJob := preload("res://scripts/terrain/shared_surface_corner_mesh_job.gd")
 const EntityStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
 const UNLOAD_RADIUS := 2
 const MAX_ACTIVE_REGIONS := 25
-const MAX_MESH_JOBS_IN_FLIGHT := 4
-const MAX_MESH_UPLOADS_PER_FRAME := 2
+const MIN_MESH_JOBS_IN_FLIGHT := 4
+const MAX_MESH_JOBS_IN_FLIGHT_HARD := 12
+const MAX_MESH_UPLOADS_PER_FRAME := 4
+const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
+const MAX_BUFFERED_BRUSH_REQUESTS := 64
+const EDIT_TRACE_DEFAULT_ENABLED := false
 const DIAGNOSTICS_REFRESH_INTERVAL := 0.25
 const FOCUS_MOVE_STEP := 4.0
 const MAX_STAGE_RETRIES := 2
+const PREEDIT_DEFAULT_COUNT := 512
+const FREE_EXPLORE_SPEED := 18.0
+const FREE_EXPLORE_BOOST_MULTIPLIER := 3.0
+const FREE_EXPLORE_MOUSE_SENSITIVITY := 0.0025
+const FREE_EXPLORE_MAX_PITCH_RADIANS := 1.553343034
 
 @onready var terrain_chunks_root: Node3D = $TerrainChunks
 @onready var terrain_mesh_template: MeshInstance3D = $TerrainChunks/Terrain
 @onready var camera: Camera3D = $Camera3D
+@onready var ui_layer: CanvasLayer = $CanvasLayer
 @onready var status_label: Label = $CanvasLayer/Status
 @onready var object_stream: ProceduralObjectStream = $ProceduralObjects
 
@@ -32,6 +49,11 @@ var cave_section_enabled := false
 var orbit_target := Vector3(8.0, 3.1, 6.0)
 var orbit_offset := Vector3(34.0, 24.0, 40.0)
 var orbit_dragging := false
+var free_explore_enabled := false
+var _free_explore_yaw := 0.0
+var _free_explore_pitch := 0.0
+var _free_explore_previous_mouse_mode := Input.MOUSE_MODE_VISIBLE
+var _free_explore_ui_was_visible := true
 var focus_region_key := Vector2i.ZERO
 var _last_reconciled_focus := Vector2i(2147483647, 2147483647)
 
@@ -42,8 +64,20 @@ var world_states: Dictionary = {} # active and currently staged domain states
 var world_state: RefCounted # focused region compatibility alias for the demo/tests
 var edit_ledger: RefCounted
 var world_seed := WorldState.DEMO_SEED
-var world_id := WorldSaveStore.WORLD_ID
+var world_id := MaterializedSdfStore.WORLD_ID
 var world_save_store: RefCounted
+var _scalable_runtime_enabled := false
+var _shared_boundary_runtime_enabled := false
+var _checkpoint_task_id := -1
+var _checkpoint_job: RefCounted
+var _checkpoint_status := "checkpoint idle"
+var _checkpoint_generation := 0
+var _checkpoint_last_worker_ms := 0.0
+var _checkpoint_started_usec := 0
+var _checkpoint_overlap_observed := false
+var _preedit_path := ""
+var _preedit_count := PREEDIT_DEFAULT_COUNT
+var _preedit_status := "F5: inject deterministic pre-edits"
 var _pending_world_load: Dictionary = {}
 var _persistence_status := "No saved world; press P to save or O to load"
 var _persistence_blocked := false
@@ -68,21 +102,30 @@ var chunk_nodes: Dictionary = {} # stable chunk id -> active MeshInstance3D
 var _published_lod_by_chunk: Dictionary = {} # stable chunk id -> 0/1
 var _lod_fallback_chunks: Dictionary = {} # stable chunk id -> deterministic LOD0 fallback until retry/toggle
 var lod_enabled := false
+var _lod_selection_dirty := true
+var _edit_trace_enabled := EDIT_TRACE_DEFAULT_ENABLED
 
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
 var last_mesh_diagnostics: Dictionary = {}
+var _last_shared_boundary_diagnostics: Dictionary = {}
+var _last_shared_x_boundary_diagnostics: Dictionary = {}
+var _last_shared_z_boundary_diagnostics: Dictionary = {}
+var _last_shared_corner_diagnostics: Dictionary = {}
 var last_stream_error := ""
 
 var global_rebuild_pending := false
 var global_rebuild_reason := ""
 var _full_rebuild_target_ids: Array[String] = []
 var _edit_transaction: Dictionary = {}
+var _buffered_brush_requests: Array[Dictionary] = []
+var _edit_trace_serial := 0
 var _stage_retry_counts: Dictionary = {}
 var _stream_errors_by_region: Dictionary = {}
 var _superseded_stage_total := 0
 var _next_stage_token := 1
 var _mesh_jobs: Dictionary = {} # WorkerThreadPool task id -> immutable job/stage token
+var _mesh_job_limit := MIN_MESH_JOBS_IN_FLIGHT
 var _mesh_queue_wait_usec_samples: Array[int] = []
 var _pool_queue_wait_usec_samples: Array[int] = []
 var _mesh_upload_usec_samples: Array[int] = []
@@ -90,6 +133,7 @@ var _mesh_publish_usec_samples: Array[int] = []
 var _global_rebuild_retry_count := 0
 var debug_fail_next_mesh_stage := false
 var debug_fail_next_load_stage := false
+var debug_shared_runtime_diagnostics := false
 var _mesh_stage_retry_total := 0
 var _rendered_cave_section_enabled := false
 var _operation_name := "initial_load"
@@ -135,25 +179,64 @@ var _last_edit_rejection := ""
 
 func _ready() -> void:
 	_frame_time_samples.resize(512)
-	# Tests may inject an isolated store before adding this scene to the tree.
-	# Ordinary production instances still use the default user:// world slot.
+	_mesh_job_limit = clampi(
+		OS.get_processor_count() - 1,
+		MIN_MESH_JOBS_IN_FLIGHT,
+		MAX_MESH_JOBS_IN_FLIGHT_HARD
+	)
+	_configure_preedit_arguments()
+	_edit_trace_enabled = EDIT_TRACE_DEFAULT_ENABLED or OS.get_environment("SANDBOX_EDIT_TRACE") == "1"
+	for argument in OS.get_cmdline_user_args():
+		if argument == "--edit-trace":
+			_edit_trace_enabled = true
+		elif argument == "--no-edit-trace":
+			_edit_trace_enabled = false
+	# Existing tests may inject the legacy v2 store. Normal runtime defaults to
+	# the materialized store and scalable edit state.
 	if world_save_store == null:
-		world_save_store = WorldSaveStore.new()
-	edit_ledger = BrushEditState.new(world_seed, Field.GENERATOR_VERSION)
-	var saved_world: Dictionary = world_save_store.load_world(world_id)
-	if saved_world.get("found", false):
-		if saved_world.get("ok", false):
-			var loaded: Dictionary = _build_ledger_from_payload(saved_world.get("payload", {}))
-			if loaded.get("ok", false):
-				world_seed = int(loaded["world_seed"])
-				edit_ledger = loaded["ledger"]
-				_persistence_status = _loaded_world_message(saved_world)
+		world_save_store = MaterializedSdfStore.new()
+	_scalable_runtime_enabled = world_save_store.has_method("checkpoint_state") \
+		and world_save_store.has_method("get_world_directory")
+	_shared_boundary_runtime_enabled = _scalable_runtime_enabled
+
+	if _scalable_runtime_enabled:
+		var saved_world: Dictionary = world_save_store.load_world(world_id)
+		if saved_world.get("found", false):
+			if saved_world.get("ok", false):
+				edit_ledger = saved_world["state"]
+				world_seed = int(edit_ledger.world_seed)
+				_checkpoint_generation = int(saved_world.get("generation", 0))
+				_persistence_status = "Materialized generation %d loaded (%d archived edits, hot tail %d)" % [
+					_checkpoint_generation,
+					int(edit_ledger.get_archived_edit_count()),
+					int(edit_ledger.get_tail_edit_count()),
+				]
 			else:
 				_persistence_blocked = true
-				_persistence_status = "Saved world rejected (%s); edits remain untouched and saving is blocked" % loaded.get("reason", "invalid")
+				edit_ledger = ScalableSdfState.new(world_seed, Field.GENERATOR_VERSION)
+				_persistence_status = "Materialized world rejected (%s); new edits are blocked from persistence" % saved_world.get("reason", "invalid")
 		else:
-			_persistence_blocked = true
-			_persistence_status = "Saved world unavailable (%s); edits remain untouched and saving is blocked" % saved_world.get("reason", "invalid")
+			edit_ledger = ScalableSdfState.new(world_seed, Field.GENERATOR_VERSION)
+			_persistence_status = "New materialized world; async checkpoints every %d edits" % ScalableSdfState.CHECKPOINT_TAIL_TARGET
+	else:
+		edit_ledger = BrushEditState.new(world_seed, Field.GENERATOR_VERSION)
+		var saved_world: Dictionary = world_save_store.load_world(world_id)
+		if saved_world.get("found", false):
+			if saved_world.get("ok", false):
+				var loaded: Dictionary = _build_ledger_from_payload(saved_world.get("payload", {}))
+				if loaded.get("ok", false):
+					world_seed = int(loaded["world_seed"])
+					edit_ledger = loaded["ledger"]
+					_persistence_status = _loaded_world_message(saved_world)
+				else:
+					_persistence_blocked = true
+					_persistence_status = "Saved world rejected (%s); edits remain untouched and saving is blocked" % loaded.get("reason", "invalid")
+			else:
+				_persistence_blocked = true
+				_persistence_status = "Saved world unavailable (%s); edits remain untouched and saving is blocked" % saved_world.get("reason", "invalid")
+		elif saved_world.get("legacy_available", false):
+			_persistence_status = "Schema-1 terrain save detected and preserved; choose a new v2 world explicitly (no migration/import)"
+
 	var object_initialization: Dictionary = object_stream.initialize(world_seed, world_id, object_package_roots_override, object_state_directory_override)
 	if object_initialization.get("ok", false):
 		_procedural_object_status = "Procedural objects ready"
@@ -174,6 +257,10 @@ func _exit_tree() -> void:
 	for task_id_value in _mesh_jobs.keys().duplicate():
 		WorkerThreadPool.wait_for_task_completion(int(task_id_value))
 	_mesh_jobs.clear()
+	if _checkpoint_task_id >= 0:
+		WorkerThreadPool.wait_for_task_completion(_checkpoint_task_id)
+		_checkpoint_task_id = -1
+		_checkpoint_job = null
 
 
 func _process(delta: float) -> void:
@@ -185,9 +272,15 @@ func _process(delta: float) -> void:
 		_frame_sample_write_index = (_frame_sample_write_index + 1) % 512
 		_frame_sample_count = mini(_frame_sample_count + 1, 512)
 	_peak_frame_ms = maxf(_peak_frame_ms, _last_frame_ms)
+	if free_explore_enabled:
+		_process_free_exploration(delta)
 	_update_focus_key()
 	_reconcile_region_window()
 	_update_lod_selection()
+	if _checkpoint_task_id >= 0 and (global_rebuild_pending or not loading_regions.is_empty()):
+		_checkpoint_overlap_observed = true
+	_process_async_checkpoint()
+	_maybe_schedule_async_checkpoint()
 	_process_one_chunk_job()
 	object_stream.process_queued_publications()
 	var visual_result: Dictionary = object_stream.consume_last_command_visual_result()
@@ -218,24 +311,38 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion or event is InputEventMouseButton:
 		_last_pointer_viewport_position = event.position
 		_has_pointer_viewport_position = true
+
+	if event is InputEventKey and event.pressed and not event.echo and _event_matches_key(event, KEY_F10):
+		_set_free_explore_enabled(not free_explore_enabled)
+		return
+
+	if free_explore_enabled and event is InputEventMouseMotion:
+		_apply_free_explore_look(event.relative)
+		return
+
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
-			orbit_dragging = event.pressed
+			if not free_explore_enabled:
+				orbit_dragging = event.pressed
+			return
 		elif event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var screen_position: Vector2 = _free_explore_screen_center() if free_explore_enabled else event.position
 			if event.ctrl_pressed:
-				_select_entity_at(event.position)
+				_select_entity_at(screen_position)
 			else:
 				selected_brush_mode = BrushEditState.Mode.FILL if event.shift_pressed else BrushEditState.Mode.CARVE
-				_apply_brush_at(event.position)
-		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
+				_apply_brush_at(screen_position)
+		elif not free_explore_enabled and event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_set_orbit_distance(orbit_offset.length() * 0.9)
-		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		elif not free_explore_enabled and event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_set_orbit_distance(orbit_offset.length() * 1.1)
 	elif event is InputEventMouseMotion and orbit_dragging:
 		orbit_offset = orbit_offset.rotated(Vector3.UP, -event.relative.x * 0.006)
 		orbit_offset.y = clampf(orbit_offset.y - event.relative.y * 0.05, 2.0, 36.0)
 		_update_camera()
 	elif event is InputEventKey and event.pressed and not event.echo:
+		if free_explore_enabled and _is_free_explore_movement_key(event):
+			return
 		if event.ctrl_pressed and _event_matches_key(event, KEY_Z):
 			if event.shift_pressed:
 				_handle_entity_history_navigation("ENTITY_REDO")
@@ -250,16 +357,22 @@ func _unhandled_input(event: InputEvent) -> void:
 			_start_global_rebuild("regenerate")
 		elif _event_matches_key(event, KEY_X):
 			var cleared: Dictionary = edit_ledger.clear_for_region(focus_region_key)
-			last_brush_result = "Reset focused edits for %s: removed %d command(s); rebuilding %d dependent region(s)" % [
-				focus_region_key, cleared["removed_count"], cleared["rebuild_regions"].size(),
-			]
-			_start_global_rebuild("reset")
+			if int(cleared.get("removed_count", 0)) > 0:
+				last_brush_result = "Reset focused edits for %s: removed %d command(s); rebuilding %d dependent region(s)" % [
+					focus_region_key, cleared["removed_count"], (cleared.get("rebuild_regions", []) as Array).size(),
+				]
+				_start_global_rebuild("reset")
+			else:
+				last_brush_result = "Focused reset unavailable for materialized history (%s)" % cleared.get("error", "nothing_to_reset")
 		elif _event_matches_key(event, KEY_L):
 			lod_enabled = not lod_enabled
 			_lod_fallback_chunks.clear()
+			_lod_selection_dirty = true
 			last_brush_result = "Custom LOD 0/1: %s" % ("ON" if lod_enabled else "OFF; using LOD0 fallback")
 		elif _event_matches_key(event, KEY_V):
 			object_stream.set_object_visibility(not object_stream.objects_visible)
+		elif _event_matches_key(event, KEY_F5):
+			_apply_preedit_fixture()
 		elif _event_matches_key(event, KEY_P):
 			_save_world_to_storage()
 		elif _event_matches_key(event, KEY_O):
@@ -285,7 +398,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif _event_matches_key(event, KEY_S) or _event_matches_key(event, KEY_DOWN):
 			_move_focus(Vector3(0.0, 0.0, FOCUS_MOVE_STEP))
 		_update_status()
-	if event is InputEventMouseMotion or event is InputEventMouseButton:
+	if not free_explore_enabled and (event is InputEventMouseMotion or event is InputEventMouseButton):
 		_refresh_placement_target_indicator(event.position)
 
 
@@ -432,7 +545,17 @@ func _placement_target_at(screen_position: Vector2) -> Dictionary:
 		return {"valid": false, "published": false, "reason": "scene_not_ready"}
 	var ray_origin := camera.project_ray_origin(screen_position)
 	var ray_direction := camera.project_ray_normal(screen_position)
-	var picked: Dictionary = BrushPicker.pick_sdf_v1_surface(ray_origin, ray_direction, Callable(self, "_sample_world_density"))
+	var density_sampler := Callable(self, "_sample_world_density")
+	if _scalable_runtime_enabled and edit_ledger != null:
+		var ray_snapshot: Dictionary = edit_ledger.get_ray_snapshot(
+			ray_origin, ray_direction, BrushPicker.MAX_DISTANCE
+		)
+		if ray_snapshot.get("valid", false):
+			density_sampler = func(point: Vector3) -> float:
+				return _sample_world_density_from_snapshot(point, ray_snapshot)
+	var picked: Dictionary = BrushPicker.pick_sdf_v1_surface(
+		ray_origin, ray_direction, density_sampler
+	)
 	if not picked.get("hit", false):
 		return {"valid": false, "published": false, "reason": "no_surface"}
 	var world_position: Vector3 = picked["position"]
@@ -510,7 +633,7 @@ func _refresh_placement_target_indicator(screen_override: Variant = null) -> voi
 func _update_placement_marker_visual() -> void:
 	if not is_instance_valid(_placement_target_marker):
 		return
-	_placement_target_marker.visible = _placement_target_valid
+	_placement_target_marker.visible = _placement_target_valid and not free_explore_enabled
 	if not _placement_target_valid:
 		return
 	_placement_target_marker.global_position = _placement_target_world_position + _placement_target_normal * 0.045
@@ -616,6 +739,116 @@ func _event_matches_key(event: InputEventKey, keycode: int) -> bool:
 	return event.keycode == keycode or event.physical_keycode == keycode
 
 
+func _is_free_explore_movement_key(event: InputEventKey) -> bool:
+	return _event_matches_key(event, KEY_W) \
+		or _event_matches_key(event, KEY_A) \
+		or _event_matches_key(event, KEY_S) \
+		or _event_matches_key(event, KEY_D) \
+		or _event_matches_key(event, KEY_UP) \
+		or _event_matches_key(event, KEY_DOWN) \
+		or _event_matches_key(event, KEY_LEFT) \
+		or _event_matches_key(event, KEY_RIGHT) \
+		or _event_matches_key(event, KEY_SPACE) \
+		or _event_matches_key(event, KEY_SHIFT) \
+		or _event_matches_key(event, KEY_CTRL)
+
+
+func _set_free_explore_enabled(enabled: bool) -> void:
+	if free_explore_enabled == enabled or not is_instance_valid(camera):
+		return
+	free_explore_enabled = enabled
+	orbit_dragging = false
+	_lod_selection_dirty = true
+	if enabled:
+		_free_explore_previous_mouse_mode = Input.mouse_mode
+		_free_explore_ui_was_visible = ui_layer.visible if is_instance_valid(ui_layer) else true
+		_free_explore_yaw = camera.rotation.y
+		_free_explore_pitch = clampf(camera.rotation.x, -FREE_EXPLORE_MAX_PITCH_RADIANS, FREE_EXPLORE_MAX_PITCH_RADIANS)
+		orbit_target = camera.global_position
+		if DisplayServer.get_name() != "headless":
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if is_instance_valid(ui_layer):
+			ui_layer.visible = false
+	else:
+		if DisplayServer.get_name() != "headless":
+			Input.mouse_mode = _free_explore_previous_mouse_mode
+		if is_instance_valid(ui_layer):
+			ui_layer.visible = _free_explore_ui_was_visible
+		var forward := -camera.global_transform.basis.z.normalized()
+		var orbit_distance := clampf(orbit_offset.length(), 20.0, 96.0)
+		orbit_target = camera.global_position + forward * orbit_distance
+		orbit_offset = camera.global_position - orbit_target
+		_update_camera()
+	_update_placement_marker_visual()
+	if is_inside_tree():
+		_update_focus_key()
+		if is_instance_valid(object_stream):
+			_reconcile_region_window()
+			if not enabled and edit_ledger != null:
+				_update_status()
+
+
+func _process_free_exploration(delta: float) -> void:
+	if not free_explore_enabled or not is_instance_valid(camera):
+		return
+	var local_input := Vector3.ZERO
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		local_input.x -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		local_input.x += 1.0
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		local_input.z -= 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		local_input.z += 1.0
+	if Input.is_key_pressed(KEY_SPACE):
+		local_input.y += 1.0
+	if Input.is_key_pressed(KEY_SHIFT):
+		local_input.y -= 1.0
+	_apply_free_explore_motion(local_input, delta, Input.is_key_pressed(KEY_CTRL))
+
+
+func _apply_free_explore_motion(local_input: Vector3, delta: float, boosted: bool = false) -> void:
+	if not free_explore_enabled or not is_instance_valid(camera) or delta <= 0.0 or local_input.length_squared() <= 0.0:
+		return
+	var basis := camera.global_transform.basis
+	var forward := -basis.z
+	forward.y = 0.0
+	if forward.length_squared() <= 0.000001:
+		forward = Vector3(-sin(_free_explore_yaw), 0.0, -cos(_free_explore_yaw))
+	else:
+		forward = forward.normalized()
+	var right := basis.x
+	right.y = 0.0
+	right = right.normalized() if right.length_squared() > 0.000001 else Vector3.RIGHT
+	var world_direction := right * local_input.x + Vector3.UP * local_input.y + forward * -local_input.z
+	if world_direction.length_squared() <= 0.000001:
+		return
+	var speed := FREE_EXPLORE_SPEED * (FREE_EXPLORE_BOOST_MULTIPLIER if boosted else 1.0)
+	camera.global_position += world_direction.normalized() * speed * delta
+	orbit_target = camera.global_position
+	_lod_selection_dirty = true
+
+
+func _apply_free_explore_look(relative: Vector2) -> void:
+	if not free_explore_enabled or not is_instance_valid(camera):
+		return
+	_free_explore_yaw -= relative.x * FREE_EXPLORE_MOUSE_SENSITIVITY
+	_free_explore_pitch = clampf(
+		_free_explore_pitch - relative.y * FREE_EXPLORE_MOUSE_SENSITIVITY,
+		-FREE_EXPLORE_MAX_PITCH_RADIANS,
+		FREE_EXPLORE_MAX_PITCH_RADIANS
+	)
+	camera.rotation = Vector3(_free_explore_pitch, _free_explore_yaw, 0.0)
+	_lod_selection_dirty = true
+
+
+func _free_explore_screen_center() -> Vector2:
+	if not is_inside_tree():
+		return Vector2.ZERO
+	var rect := get_viewport().get_visible_rect()
+	return rect.position + rect.size * 0.5
+
+
 func _move_focus(delta: Vector3) -> void:
 	orbit_target += delta
 	_update_camera()
@@ -624,6 +857,8 @@ func _move_focus(delta: Vector3) -> void:
 
 
 func _update_lod_selection() -> void:
+	if not _lod_selection_dirty:
+		return
 	if global_rebuild_pending or not _edit_transaction.is_empty():
 		return
 	# Keep old and replacement meshes alive for at most one LOD region transaction.
@@ -633,6 +868,9 @@ func _update_lod_selection() -> void:
 		var pending_stage: Dictionary = stage_value
 		if String(pending_stage.get("purpose", "")) == "partial":
 			return
+	# LOD selection is event-driven. Camera movement, region publication and
+	# completed partial transitions mark it dirty; idle frames do no full scan.
+	_lod_selection_dirty = false
 	var changed_by_region: Dictionary = {}
 	for entry_value in active_regions.values():
 		var entry: Dictionary = entry_value
@@ -662,8 +900,57 @@ func _update_lod_selection() -> void:
 	_update_status()
 
 
+func _is_x_edge(coordinate: Vector2i) -> bool:
+	return coordinate.x == 0 or coordinate.x == ChunkGrid.CHUNK_COUNT_X - 1
+
+
+func _is_z_edge(coordinate: Vector2i) -> bool:
+	return coordinate.y == 0 or coordinate.y == ChunkGrid.CHUNK_COUNT_Z - 1
+
+
+func _uses_shared_corner(coordinate: Vector2i) -> bool:
+	return _shared_boundary_runtime_enabled \
+		and not cave_section_enabled \
+		and _is_x_edge(coordinate) and _is_z_edge(coordinate)
+
+
+func _uses_shared_x_boundary(coordinate: Vector2i) -> bool:
+	return _shared_boundary_runtime_enabled \
+		and not cave_section_enabled \
+		and _is_x_edge(coordinate) and not _is_z_edge(coordinate)
+
+
+func _uses_shared_z_boundary(coordinate: Vector2i) -> bool:
+	return _shared_boundary_runtime_enabled \
+		and not cave_section_enabled \
+		and _is_z_edge(coordinate) and not _is_x_edge(coordinate)
+
+
+func _uses_any_shared_boundary(coordinate: Vector2i) -> bool:
+	return _uses_shared_corner(coordinate) \
+		or _uses_shared_x_boundary(coordinate) \
+		or _uses_shared_z_boundary(coordinate)
+
+
+func _corner_min_region(region_key: Vector2i, coordinate: Vector2i) -> Vector2i:
+	return region_key + Vector2i(
+		-1 if coordinate.x == 0 else 0,
+		-1 if coordinate.y == 0 else 0
+	)
+
+
+func _corner_owner_for_coordinate(coordinate: Vector2i) -> String:
+	return ("minx" if coordinate.x == ChunkGrid.CHUNK_COUNT_X - 1 else "maxx") + "_" \
+		+ ("minz" if coordinate.y == ChunkGrid.CHUNK_COUNT_Z - 1 else "maxz")
+
+
 func _desired_lod_for_chunk(region_key: Vector2i, coordinate: Vector2i, current_lod: int) -> int:
 	var chunk_id: String = ChunkGrid.stable_id(region_key, coordinate)
+	# Region-edge chunks are the shared-surface collar. LOD transitions begin one
+	# chunk inward so the independently selected interior LOD never owns the
+	# regional seam.
+	if _uses_any_shared_boundary(coordinate):
+		return 0
 	if not lod_enabled or _lod_fallback_chunks.has(chunk_id):
 		return 0
 	var center_local: Vector3 = ChunkGrid.origin_for(coordinate) + ChunkGrid.size_for(coordinate) * 0.5
@@ -811,7 +1098,11 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 	var coordinates: Array[Vector2i] = chunk_coordinates.duplicate()
 	var token := _next_stage_token
 	_next_stage_token += 1
-	object_stream.expect_region_publication(region_key, token)
+	# Only stages that can replace the region-level terrain publication may
+	# invalidate an in-flight object publication. LOD partial stages update
+	# existing chunk meshes in place and must not cancel entity visual rebuilds.
+	if purpose == "load" or purpose == "full" or not active_regions.has(id):
+		object_stream.expect_region_publication(region_key, token)
 	var queued_times: Array[int] = []
 	var queued_now := Time.get_ticks_usec()
 	for _coordinate in coordinates:
@@ -858,9 +1149,28 @@ func _process_completed_mesh_jobs() -> void:
 		var task_id := int(task_id_value)
 		if WorkerThreadPool.is_task_completed(task_id):
 			completed_task_ids.append(task_id)
+	completed_task_ids.sort_custom(func(a: int, b: int) -> bool:
+		var record_a: Dictionary = _mesh_jobs[a]
+		var record_b: Dictionary = _mesh_jobs[b]
+		var stage_a: Dictionary = loading_regions.get(String(record_a.get("stage_id", "")), {})
+		var stage_b: Dictionary = loading_regions.get(String(record_b.get("stage_id", "")), {})
+		var pa := _stage_priority(String(stage_a.get("purpose", "load")))
+		var pb := _stage_priority(String(stage_b.get("purpose", "load")))
+		if pa != pb:
+			return pa < pb
+		var ka: Vector2i = stage_a.get("region_key", Vector2i.ZERO)
+		var kb: Vector2i = stage_b.get("region_key", Vector2i.ZERO)
+		var da := maxi(absi(ka.x - focus_region_key.x), absi(ka.y - focus_region_key.y))
+		var db := maxi(absi(kb.x - focus_region_key.x), absi(kb.y - focus_region_key.y))
+		return da < db
+	)
 	var uploads_this_frame := 0
+	var upload_frame_started_usec := Time.get_ticks_usec()
 	for task_id in completed_task_ids:
 		if uploads_this_frame >= MAX_MESH_UPLOADS_PER_FRAME:
+			break
+		if uploads_this_frame > 0 \
+			and Time.get_ticks_usec() - upload_frame_started_usec >= MESH_UPLOAD_FRAME_BUDGET_USEC:
 			break
 		WorkerThreadPool.wait_for_task_completion(task_id)
 		var record: Dictionary = _mesh_jobs[task_id]
@@ -879,13 +1189,78 @@ func _process_completed_mesh_jobs() -> void:
 		if state.brush_edits.revision != int(stage["edit_revision"]):
 			_supersede_region_stage(id)
 			continue
-		var cpu_result: Dictionary = job.result
+		var cpu_result: Dictionary
+		var completed_kind := String(record.get("job_kind", "chunk"))
+		if completed_kind in ["shared_boundary_x", "shared_boundary_z", "shared_corner_xz"]:
+			var shared_result: Dictionary = job.result
+			if not shared_result.get("valid", false):
+				_fail_region_stage(id, "Shared-surface CPU mesh job failed; previous visible meshes retained")
+				continue
+			var shared_side := String(record.get("shared_side", ""))
+			cpu_result = shared_result.get(shared_side, {})
+			var diag := (shared_result.get("diagnostics", {}) as Dictionary).duplicate(true)
+			_last_shared_boundary_diagnostics = diag
+			if completed_kind == "shared_boundary_x":
+				_last_shared_x_boundary_diagnostics = diag
+			elif completed_kind == "shared_boundary_z":
+				_last_shared_z_boundary_diagnostics = diag
+			else:
+				_last_shared_corner_diagnostics = diag
+			last_mesh_diagnostics["last_shared_boundary_diagnostics"] = _last_shared_boundary_diagnostics
+			last_mesh_diagnostics["last_shared_x_boundary_diagnostics"] = _last_shared_x_boundary_diagnostics
+			last_mesh_diagnostics["last_shared_z_boundary_diagnostics"] = _last_shared_z_boundary_diagnostics
+			last_mesh_diagnostics["last_shared_corner_diagnostics"] = _last_shared_corner_diagnostics
+		else:
+			cpu_result = job.result
 		if not cpu_result.get("valid", false) or not cpu_result.has("positions"):
 			_fail_region_stage(id, "Chunk CPU mesh job failed; previous visible meshes retained")
 			continue
 		var upload_started_usec := Time.get_ticks_usec()
 		var result: Dictionary = TerrainMesher.mesh_from_cpu_data(cpu_result)
 		var upload_elapsed_usec := Time.get_ticks_usec() - upload_started_usec
+		var worker_queue_usec := maxi(0, int(job.worker_started_usec) - int(record["submitted_usec"]))
+		var worker_run_usec := maxi(0, int(job.worker_finished_usec) - int(job.worker_started_usec))
+		if String(stage["purpose"]) == "edit_transaction" and not _edit_transaction.is_empty():
+			_edit_transaction["trace_worker_queue_usec_max"] = maxi(int(_edit_transaction.get("trace_worker_queue_usec_max", 0)), worker_queue_usec)
+			_edit_transaction["trace_worker_run_usec_max"] = maxi(int(_edit_transaction.get("trace_worker_run_usec_max", 0)), worker_run_usec)
+			_edit_transaction["trace_upload_usec_total"] = int(_edit_transaction.get("trace_upload_usec_total", 0)) + upload_elapsed_usec
+			_edit_transaction["trace_upload_usec_max"] = maxi(int(_edit_transaction.get("trace_upload_usec_max", 0)), upload_elapsed_usec)
+			_edit_trace("job_complete", {
+				"sequence_start": int(_edit_transaction.get("operation_sequence_start", -1)),
+				"sequence_end": int(_edit_transaction.get("operation_sequence", -1)),
+				"revision": int(stage["edit_revision"]),
+				"region": str(stage["region_key"]),
+				"chunk": str(record["coordinate"]),
+				"kind": completed_kind,
+				"side": String(record.get("shared_side", "")),
+				"snapshot_ms": float(record.get("snapshot_usec", 0)) / 1000.0,
+				"worker_queue_ms": float(worker_queue_usec) / 1000.0,
+				"worker_run_ms": float(worker_run_usec) / 1000.0,
+				"upload_ms": float(upload_elapsed_usec) / 1000.0,
+				"job_total_ms": float(Time.get_ticks_usec() - int(record["submitted_usec"])) / 1000.0,
+				"candidate_operations": int(record.get("snapshot_candidate_count", -1)),
+				"raw_candidate_operations": int(record.get("snapshot_raw_candidate_count", -1)),
+				"materialized_tiles": int(record.get("snapshot_tile_count", -1)),
+				"sdf_ms": float((result.get("timings_usec", {}) as Dictionary).get("sdf_and_ledger", 0)) / 1000.0,
+				"triangulation_ms": float((result.get("timings_usec", {}) as Dictionary).get("triangulation_and_face_normals", 0)) / 1000.0,
+				"normals_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_gradient_normals", 0)) / 1000.0,
+				"shared_sampling_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_sampling", 0)) / 1000.0,
+				"shared_polygonize_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_polygonize", 0)) / 1000.0,
+				"shared_deduplicate_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_deduplicate", 0)) / 1000.0,
+				"shared_diagnostics_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_diagnostics", 0)) / 1000.0,
+				"shared_signature_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_signature", 0)) / 1000.0,
+				"shared_partition_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_partition", 0)) / 1000.0,
+				"shared_authority_total_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_authority_total", 0)) / 1000.0,
+				"shared_volume_total_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_volume_total", 0)) / 1000.0,
+				"shared_cell_count": int((result.get("work_counters", {}) as Dictionary).get("cell_count", 0)),
+				"shared_mixed_cell_count": int((result.get("work_counters", {}) as Dictionary).get("mixed_cell_count", 0)),
+				"shared_uniform_cell_count": int((result.get("work_counters", {}) as Dictionary).get("uniform_cell_count", 0)),
+				"shared_tet_call_count": int((result.get("work_counters", {}) as Dictionary).get("tet_call_count", 0)),
+				"shared_triangle_candidate_count": int((result.get("work_counters", {}) as Dictionary).get("triangle_candidate_count", 0)),
+				"shared_triangle_count": int((result.get("work_counters", {}) as Dictionary).get("triangle_count", 0)),
+				"shared_unique_root_count": int((result.get("work_counters", {}) as Dictionary).get("unique_root_count", 0)),
+				"shared_sample_count": int((result.get("work_counters", {}) as Dictionary).get("sample_count", 0)),
+			})
 		if contributes_to_operation:
 			_mesh_upload_usec_samples.append(upload_elapsed_usec)
 		_last_mesh_upload_ms = float(upload_elapsed_usec) / 1000.0
@@ -928,7 +1303,7 @@ func _process_completed_mesh_jobs() -> void:
 
 
 func _dispatch_mesh_jobs() -> void:
-	while _mesh_jobs.size() < MAX_MESH_JOBS_IN_FLIGHT:
+	while _mesh_jobs.size() < _mesh_job_limit:
 		var request := _next_mesh_job_request()
 		if request.is_empty():
 			return
@@ -949,17 +1324,78 @@ func _dispatch_mesh_jobs() -> void:
 		var queue_index: int = int(stage["submit_index"])
 		var enqueued_usec := int(stage["chunk_queued_usec"][queue_index])
 		var submitted_usec := Time.get_ticks_usec()
+		var snapshot_started_usec := Time.get_ticks_usec()
+		var snapshot_meta: Dictionary = {}
 		if _stage_contributes_to_active_operation(stage):
 			_mesh_queue_wait_usec_samples.append(maxi(0, submitted_usec - enqueued_usec))
-		var job := TerrainMeshJob.new(
-			state.world_seed, stage["region_key"], coordinate,
-			stage["cave_section_enabled"],
-			state.brush_edits.get_meshing_snapshot_for_chunk(stage["region_key"], coordinate),
-			submitted_usec,
-			int(stage.get("lod_by_coordinate", {}).get(coordinate, 0))
-		)
+		var job: RefCounted
+		var job_kind := "chunk"
+		var shared_side := ""
+		if _uses_shared_corner(coordinate):
+			var min_region := _corner_min_region(stage["region_key"], coordinate)
+			var corner_snapshot: Dictionary = SharedBoundaryAuthority.make_xz_corner_snapshot(
+				state.brush_edits, min_region
+			)
+			snapshot_meta = corner_snapshot
+			job = SharedCornerMeshJob.new(
+				state.world_seed, min_region, corner_snapshot, submitted_usec,
+				debug_shared_runtime_diagnostics
+			)
+			job_kind = "shared_corner_xz"
+			shared_side = _corner_owner_for_coordinate(coordinate)
+		elif _uses_shared_x_boundary(coordinate):
+			var left_region: Vector2i = stage["region_key"] if coordinate.x == ChunkGrid.CHUNK_COUNT_X - 1 \
+				else stage["region_key"] - Vector2i.RIGHT
+			var pair_snapshot: Dictionary = SharedBoundaryAuthority.make_x_pair_snapshot(
+				state.brush_edits, left_region, coordinate.y
+			)
+			snapshot_meta = pair_snapshot
+			job = SharedBoundaryMeshJob.new(
+				state.world_seed, left_region, coordinate.y, pair_snapshot, submitted_usec,
+				debug_shared_runtime_diagnostics
+			)
+			job_kind = "shared_boundary_x"
+			shared_side = "left" if coordinate.x == ChunkGrid.CHUNK_COUNT_X - 1 else "right"
+		elif _uses_shared_z_boundary(coordinate):
+			var low_region: Vector2i = stage["region_key"] if coordinate.y == ChunkGrid.CHUNK_COUNT_Z - 1 \
+				else stage["region_key"] - Vector2i(0, 1)
+			var z_snapshot: Dictionary = SharedBoundaryAuthority.make_z_pair_snapshot(
+				state.brush_edits, low_region, coordinate.x
+			)
+			snapshot_meta = z_snapshot
+			job = SharedZBoundaryMeshJob.new(
+				state.world_seed, low_region, coordinate.x, z_snapshot, submitted_usec,
+				debug_shared_runtime_diagnostics
+			)
+			job_kind = "shared_boundary_z"
+			shared_side = "low" if coordinate.y == ChunkGrid.CHUNK_COUNT_Z - 1 else "high"
+		else:
+			var chunk_snapshot: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
+				stage["region_key"], coordinate
+			)
+			snapshot_meta = chunk_snapshot
+			job = TerrainMeshJob.new(
+				state.world_seed, stage["region_key"], coordinate,
+				stage["cave_section_enabled"],
+				chunk_snapshot,
+				submitted_usec,
+				int(stage.get("lod_by_coordinate", {}).get(coordinate, 0))
+			)
+		var snapshot_elapsed_usec := Time.get_ticks_usec() - snapshot_started_usec
+		if String(stage["purpose"]) == "edit_transaction" and not _edit_transaction.is_empty():
+			_edit_transaction["trace_snapshot_usec_total"] = int(_edit_transaction.get("trace_snapshot_usec_total", 0)) + snapshot_elapsed_usec
+			_edit_transaction["trace_snapshot_usec_max"] = maxi(int(_edit_transaction.get("trace_snapshot_usec_max", 0)), snapshot_elapsed_usec)
 		var high_priority: bool = String(stage["purpose"]) in ["edit_transaction", "partial"]
-		var task_id := WorkerThreadPool.add_task(Callable(job, "run"), high_priority, "P1.0C terrain chunk")
+		var task_label := "P1.0C terrain chunk"
+		if job_kind == "shared_boundary_x":
+			task_label = "shared boundary X"
+		elif job_kind == "shared_boundary_z":
+			task_label = "shared boundary Z"
+		elif job_kind == "shared_corner_xz":
+			task_label = "shared corner XZ"
+		var task_id := WorkerThreadPool.add_task(
+			Callable(job, "run"), high_priority, task_label
+		)
 		if task_id < 0:
 			_fail_region_stage(id, "Worker pool rejected a mesh job; previous visible meshes retained")
 			continue
@@ -972,8 +1408,29 @@ func _dispatch_mesh_jobs() -> void:
 			"stage_token": stage["stage_token"],
 			"coordinate": coordinate,
 			"submitted_usec": submitted_usec,
+			"job_kind": job_kind,
+			"shared_side": shared_side,
+			"snapshot_usec": snapshot_elapsed_usec,
+			"snapshot_candidate_count": int(snapshot_meta.get("candidate_operation_count", -1)),
+			"snapshot_raw_candidate_count": int(snapshot_meta.get("raw_candidate_operation_count", snapshot_meta.get("candidate_operation_count", -1))),
+			"snapshot_tile_count": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
 		}
 		_peak_mesh_jobs_in_flight = maxi(_peak_mesh_jobs_in_flight, _mesh_jobs.size())
+		if String(stage["purpose"]) == "edit_transaction":
+			_edit_trace("job_dispatch", {
+				"sequence_start": int(_edit_transaction.get("operation_sequence_start", -1)),
+				"sequence_end": int(_edit_transaction.get("operation_sequence", -1)),
+				"revision": int(stage["edit_revision"]),
+				"region": str(stage["region_key"]),
+				"chunk": str(coordinate),
+				"kind": job_kind,
+				"side": shared_side,
+				"snapshot_ms": float(snapshot_elapsed_usec) / 1000.0,
+				"stage_queue_ms": float(submitted_usec - enqueued_usec) / 1000.0,
+				"candidate_operations": int(snapshot_meta.get("candidate_operation_count", -1)),
+				"raw_candidate_operations": int(snapshot_meta.get("raw_candidate_operation_count", snapshot_meta.get("candidate_operation_count", -1))),
+				"materialized_tiles": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
+			})
 
 
 func _next_mesh_job_request() -> Dictionary:
@@ -1063,6 +1520,7 @@ func _publish_partial_stage(id: String, stage: Dictionary) -> bool:
 		_replace_node_mesh(node, stage["meshes"][coordinate])
 		_set_chunk_lod_state(chunk_id, node, int(stage.get("actual_lod_by_coordinate", {}).get(coordinate, 0)), bool(stage.get("fallback_by_coordinate", {}).get(coordinate, false)))
 	_record_completed_operation(stage)
+	_lod_selection_dirty = true
 	_update_runtime_diagnostics()
 	return true
 
@@ -1086,6 +1544,7 @@ func _try_commit_global_rebuild() -> void:
 		world_seed = int(_pending_world_load["world_seed"])
 		edit_ledger = _pending_world_load["ledger"]
 		_persistence_blocked = false
+		_checkpoint_generation = int(_pending_world_load["generation"]) if _scalable_runtime_enabled else _checkpoint_generation
 		_persistence_status = "Loaded generation %d (%d ordered edit(s))" % [
 			int(_pending_world_load["generation"]), edit_ledger.get_edit_count(),
 		]
@@ -1143,6 +1602,7 @@ func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary
 			_release_chunk_node(old_id, previous["chunk_nodes"][old_id])
 	active_regions[id] = {"region_key": region_key, "world_state": state, "chunk_nodes": region_nodes}
 	world_states[id] = state
+	_lod_selection_dirty = true
 	var object_publication: Dictionary = object_stream.enqueue_region_publication(region_key, state, publication_token)
 	if not object_publication.get("ok", false) and object_publication.get("reason") != "stale_object_region_publication":
 		_procedural_object_status = "Procedural object issue: %s" % object_stream.get_error_summary()
@@ -1151,7 +1611,7 @@ func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary
 		_procedural_object_status = "Procedural objects queued" if object_error.is_empty() else "Procedural object issue: %s" % object_error
 	if region_key == focus_region_key:
 		world_state = state
-	_refresh_placement_target_indicator()
+		_refresh_placement_target_indicator()
 
 
 func _create_chunk_node(region_key: Vector2i, coordinate: Vector2i, chunk_id: String) -> MeshInstance3D:
@@ -1367,6 +1827,10 @@ func _record_completed_operation(stage: Dictionary) -> void:
 		"last_dirty_mesh_job_count": _last_edit_mesh_jobs,
 		"edit_stage_state": "idle" if _edit_transaction.is_empty() else _edit_transaction.get("stage_state", "staging"),
 		"last_edit_rejection": _last_edit_rejection,
+		"last_shared_boundary_diagnostics": _last_shared_boundary_diagnostics.duplicate(true),
+		"last_shared_x_boundary_diagnostics": _last_shared_x_boundary_diagnostics.duplicate(true),
+		"last_shared_z_boundary_diagnostics": _last_shared_z_boundary_diagnostics.duplicate(true),
+		"last_shared_corner_diagnostics": _last_shared_corner_diagnostics.duplicate(true),
 	}
 
 
@@ -1407,47 +1871,131 @@ func _start_global_rebuild(operation_name: String) -> void:
 
 
 func _schedule_edit_transaction(operation: Dictionary) -> void:
+	var operations: Array[Dictionary] = [operation]
+	_schedule_edit_transaction_batch(operations)
+
+
+func _schedule_edit_transaction_batch(operations: Array[Dictionary]) -> void:
+	if operations.is_empty():
+		return
+	var schedule_started_usec := Time.get_ticks_usec()
 	_begin_operation("global_brush_edit")
-	var targets: Array[Dictionary] = []
-	_last_edit_support_region_count = operation["support_regions"].size()
-	_last_edit_rebuild_region_count = operation["rebuild_regions"].size()
-	_last_edit_rebuild_chunk_count = 0
+	var support_regions_by_id: Dictionary = {}
+	var rebuild_regions_by_id: Dictionary = {}
+	var target_builders: Dictionary = {}
 	_last_edit_rejection = ""
-	for region_key in operation["rebuild_regions"]:
-		var id := _region_id(region_key)
-		if not active_regions.has(id) and not loading_regions.has(id):
-			continue # Canonical ledger replays this command on the next load.
-		var local_center := Vector3(
-			operation["center_world"].x - float(region_key.x) * SpatialGrid.REGION_SIZE_X,
-			operation["center_world"].y,
-			operation["center_world"].z - float(region_key.y) * SpatialGrid.REGION_SIZE_Z
-		)
-		var chunks: Array[Vector2i] = ChunkGrid.affected_chunks_for_sphere(local_center, float(operation["radius"]))
-		var needs_full_stage := not active_regions.has(id)
-		if needs_full_stage:
-			chunks = ChunkGrid.all_coordinates()
+	for operation in operations:
+		for support_region_value in operation["support_regions"]:
+			var support_region: Vector2i = support_region_value
+			support_regions_by_id[_region_id(support_region)] = support_region
+		for rebuild_region_value in operation["rebuild_regions"]:
+			var region_key: Vector2i = rebuild_region_value
+			var id := _region_id(region_key)
+			rebuild_regions_by_id[id] = region_key
+			if not active_regions.has(id) and not loading_regions.has(id):
+				continue
+			var local_center := Vector3(
+				(operation["center_world"] as Vector3).x - float(region_key.x) * SpatialGrid.REGION_SIZE_X,
+				(operation["center_world"] as Vector3).y,
+				(operation["center_world"] as Vector3).z - float(region_key.y) * SpatialGrid.REGION_SIZE_Z
+			)
+			var needs_full_stage := not active_regions.has(id)
+			var chunks: Array[Vector2i] = ChunkGrid.all_coordinates() if needs_full_stage else ChunkGrid.affected_chunks_for_sphere(
+				local_center, float(operation["radius"])
+			)
+			if chunks.is_empty():
+				continue
+			if not target_builders.has(id):
+				target_builders[id] = {
+					"region_key": region_key,
+					"id": id,
+					"full": needs_full_stage,
+					"chunk_set": {},
+				}
+			var builder: Dictionary = target_builders[id]
+			if needs_full_stage:
+				builder["full"] = true
+				builder["chunk_set"] = {}
+				for coordinate in ChunkGrid.all_coordinates():
+					(builder["chunk_set"] as Dictionary)[coordinate] = true
+			elif not bool(builder["full"]):
+				for coordinate in chunks:
+					(builder["chunk_set"] as Dictionary)[coordinate] = true
+			target_builders[id] = builder
+
+	var target_ids_ordered: Array[String] = []
+	for id_value in target_builders.keys():
+		target_ids_ordered.append(String(id_value))
+	target_ids_ordered.sort()
+	var targets: Array[Dictionary] = []
+	_last_edit_rebuild_chunk_count = 0
+	for id in target_ids_ordered:
+		var builder: Dictionary = target_builders[id]
+		var chunks: Array[Vector2i] = []
+		for coordinate in ChunkGrid.all_coordinates():
+			if (builder["chunk_set"] as Dictionary).has(coordinate):
+				chunks.append(coordinate)
 		if chunks.is_empty():
 			continue
-		targets.append({"region_key": region_key, "id": id, "chunks": chunks, "full": needs_full_stage})
+		targets.append({
+			"region_key": builder["region_key"],
+			"id": id,
+			"chunks": chunks,
+			"full": bool(builder["full"]),
+		})
 		_last_edit_rebuild_chunk_count += chunks.size()
+
+	var rebuild_region_ids: Array[String] = []
+	for id_value in rebuild_regions_by_id.keys():
+		rebuild_region_ids.append(String(id_value))
+	rebuild_region_ids.sort()
+	var rebuild_regions: Array[Vector2i] = []
+	for id in rebuild_region_ids:
+		rebuild_regions.append(rebuild_regions_by_id[id])
+
+	_last_edit_support_region_count = support_regions_by_id.size()
+	_last_edit_rebuild_region_count = rebuild_regions.size()
 	if targets.is_empty():
 		_edit_transaction = {}
 		last_brush_result += "; no rebuild-dependent region is resident, future loads will replay it"
 		_record_completed_operation({"region_key": focus_region_key, "purpose": "global_brush_edit"})
+		_flush_buffered_brush_requests()
 		return
+
+	var first_sequence := int(operations[0]["sequence"])
+	var last_sequence := int(operations[-1]["sequence"])
 	_edit_transaction = {
 		"revision": edit_ledger.revision,
-		"operation_sequence": operation["sequence"],
-		"rebuild_regions": operation["rebuild_regions"],
+		"operation_sequence": last_sequence,
+		"operation_sequence_start": first_sequence,
+		"operation_count": operations.size(),
+		"rebuild_regions": rebuild_regions,
 		"target_ids": [],
 		"targets": targets,
 		"retries": 0,
 		"stage_state": "staging",
-		"support_region_count": operation["support_regions"].size(),
-		"rebuild_region_count": operation["rebuild_regions"].size(),
+		"support_region_count": support_regions_by_id.size(),
+		"rebuild_region_count": rebuild_regions.size(),
 		"rebuild_chunk_count": 0,
 		"mesh_job_count": 0,
+		"trace_started_usec": schedule_started_usec,
+		"trace_snapshot_usec_total": 0,
+		"trace_snapshot_usec_max": 0,
+		"trace_worker_queue_usec_max": 0,
+		"trace_worker_run_usec_max": 0,
+		"trace_upload_usec_total": 0,
+		"trace_upload_usec_max": 0,
 	}
+	_edit_trace("schedule", {
+		"sequence_start": first_sequence,
+		"sequence_end": last_sequence,
+		"revision": int(edit_ledger.revision),
+		"operation_count": operations.size(),
+		"target_regions": targets.size(),
+		"rebuild_regions": rebuild_regions.size(),
+		"rebuild_chunks": _last_edit_rebuild_chunk_count,
+		"schedule_ms": float(Time.get_ticks_usec() - schedule_started_usec) / 1000.0,
+	})
 	_start_edit_transaction_attempt()
 	_update_runtime_diagnostics()
 
@@ -1519,15 +2067,41 @@ func _try_commit_edit_transaction() -> void:
 		loading_regions.erase(id)
 	_mesh_publish_usec_samples.append(Time.get_ticks_usec() - publish_started_usec)
 	var committed_sequence: int = _edit_transaction["operation_sequence"]
+	var committed_sequence_start := int(_edit_transaction.get("operation_sequence_start", committed_sequence))
+	var committed_operation_count := int(_edit_transaction.get("operation_count", 1))
 	var committed_regions: int = target_ids.size()
 	for id in target_ids:
 		_clear_stream_error(id)
 	_last_edit_mesh_jobs = int(_edit_transaction.get("mesh_job_count", 0))
+	var trace_transaction_usec := Time.get_ticks_usec() - int(_edit_transaction.get("trace_started_usec", Time.get_ticks_usec()))
+	var trace_summary := {
+		"sequence_start": committed_sequence_start,
+		"sequence_end": committed_sequence,
+		"revision": int(_edit_transaction.get("revision", -1)),
+		"operation_count": committed_operation_count,
+		"resident_regions": committed_regions,
+		"mesh_jobs": _last_edit_mesh_jobs,
+		"transaction_ms": float(trace_transaction_usec) / 1000.0,
+		"snapshot_total_ms": float(_edit_transaction.get("trace_snapshot_usec_total", 0)) / 1000.0,
+		"snapshot_max_ms": float(_edit_transaction.get("trace_snapshot_usec_max", 0)) / 1000.0,
+		"worker_queue_max_ms": float(_edit_transaction.get("trace_worker_queue_usec_max", 0)) / 1000.0,
+		"worker_run_max_ms": float(_edit_transaction.get("trace_worker_run_usec_max", 0)) / 1000.0,
+		"upload_total_ms": float(_edit_transaction.get("trace_upload_usec_total", 0)) / 1000.0,
+		"upload_max_ms": float(_edit_transaction.get("trace_upload_usec_max", 0)) / 1000.0,
+		"publish_ms": float(Time.get_ticks_usec() - publish_started_usec) / 1000.0,
+	}
+	_edit_trace("commit", trace_summary)
 	_edit_transaction = {}
-	last_brush_result = "Global edit #%d mesh commit complete across %d resident region(s)" % [committed_sequence, committed_regions]
+	if committed_operation_count > 1:
+		last_brush_result = "Global edits #%d-#%d coalesced mesh commit complete across %d resident region(s)" % [
+			committed_sequence_start, committed_sequence, committed_regions,
+		]
+	else:
+		last_brush_result = "Global edit #%d mesh commit complete across %d resident region(s)" % [committed_sequence, committed_regions]
 	_record_completed_operation({"region_key": focus_region_key, "purpose": "global_brush_edit"})
 	_sync_world_state_index()
 	_update_runtime_diagnostics()
+	_flush_buffered_brush_requests()
 
 
 func _finish_edit_transaction(message: String) -> void:
@@ -1539,6 +2113,7 @@ func _finish_edit_transaction(message: String) -> void:
 	_record_completed_operation({"region_key": focus_region_key, "purpose": "global_brush_edit"})
 	_sync_world_state_index()
 	_update_runtime_diagnostics()
+	_flush_buffered_brush_requests()
 
 
 func _retry_edit_transaction(failure_message: String) -> void:
@@ -1552,15 +2127,16 @@ func _retry_edit_transaction(failure_message: String) -> void:
 			_stream_errors_by_region[id] = last_stream_error
 		_start_edit_transaction_attempt()
 		return
-	for id_value in (_edit_transaction["target_ids"] as Array).duplicate():
+	var exhausted_target_ids: Array = (_edit_transaction["target_ids"] as Array).duplicate()
+	for id_value in exhausted_target_ids:
 		var id: String = id_value
 		if loading_regions.has(id) and loading_regions[id]["purpose"] == "edit_transaction":
 			loading_regions.erase(id)
 	_edit_transaction["stage_state"] = "failed_pending_retry"
 	_edit_transaction["target_ids"] = []
 	last_stream_error = "%s; accepted edit retained, press R to retry mesh build" % failure_message
-	for id in _edit_transaction["target_ids"]:
-		_stream_errors_by_region[id] = last_stream_error
+	for id_value in exhausted_target_ids:
+		_stream_errors_by_region[String(id_value)] = last_stream_error
 	last_brush_result = "Accepted edit remains in the global ledger; visible meshes retained until retry succeeds"
 	_update_runtime_diagnostics()
 
@@ -1670,13 +2246,18 @@ func _sample_world_density_from_snapshot(world_position: Vector3, snapshot: Dict
 	)
 
 
+func _edit_trace(event: String, payload: Dictionary = {}) -> void:
+	if not _edit_trace_enabled:
+		return
+	var record := payload.duplicate(true)
+	record["event"] = event
+	record["t_usec"] = Time.get_ticks_usec()
+	print("EDIT_TRACE " + JSON.stringify(record))
+
+
 func _apply_brush_at(screen_position: Vector2) -> void:
 	if global_rebuild_pending or not active_regions.has(_region_id(focus_region_key)):
 		last_brush_result = "Focused region is not ready for edits; no edit added"
-		_update_status()
-		return
-	if not _edit_transaction.is_empty():
-		last_brush_result = "Previous accepted edit is waiting for a coherent mesh commit; no new edit added"
 		_update_status()
 		return
 	var pick_total_started_usec := Time.get_ticks_usec()
@@ -1700,6 +2281,15 @@ func _apply_brush_at(screen_position: Vector2) -> void:
 	_last_brush_pick_hit = bool(pick.get("hit", false))
 	_last_brush_pick_position = pick.get("position", Vector3.ZERO)
 	_brush_pick_serial += 1
+	_edit_trace("pick", {
+		"pick_serial": _brush_pick_serial,
+		"snapshot_ms": float(_last_brush_pick_snapshot_elapsed_usec) / 1000.0,
+		"march_ms": float(_last_brush_pick_elapsed_usec) / 1000.0,
+		"total_ms": float(_last_brush_pick_total_elapsed_usec) / 1000.0,
+		"candidate_operations": _last_brush_pick_candidate_count,
+		"samples": _last_brush_pick_sample_count,
+		"hit": _last_brush_pick_hit,
+	})
 	if not pick.get("hit", false):
 		last_brush_result = "No terrain surface hit; no edit added"
 		_update_status()
@@ -1714,27 +2304,119 @@ func _apply_brush_at(screen_position: Vector2) -> void:
 
 
 func _accept_brush_at_world(world_hit: Vector3) -> bool:
-	if global_rebuild_pending or not _edit_transaction.is_empty():
-		last_brush_result = "Mesh publication is busy; no edit added"
+	var accept_started_usec := Time.get_ticks_usec()
+	_edit_trace_serial += 1
+	var trace_serial := _edit_trace_serial
+	if global_rebuild_pending:
+		last_brush_result = "Global mesh publication is busy; no edit added"
 		_update_status()
 		return false
+	if not world_hit.is_finite():
+		last_brush_result = "Edit rejected (non-finite hit); terrain unchanged"
+		_update_status()
+		return false
+	if not _edit_transaction.is_empty():
+		if _buffered_brush_requests.size() >= MAX_BUFFERED_BRUSH_REQUESTS:
+			last_brush_result = "Edit input buffer is full; no edit added"
+			_update_status()
+			return false
+		_buffered_brush_requests.append({
+			"mode": selected_brush_mode,
+			"center_world": world_hit,
+			"radius": BRUSH_RADIUS,
+			"buffered_usec": Time.get_ticks_usec(),
+			"trace_serial": trace_serial,
+		})
+		_edit_trace("buffered_input", {
+			"trace_serial": trace_serial,
+			"active_revision": int(_edit_transaction.get("revision", edit_ledger.revision)),
+			"pending_count": _buffered_brush_requests.size(),
+			"accept_ms": float(Time.get_ticks_usec() - accept_started_usec) / 1000.0,
+		})
+		var buffered_mode := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
+		last_brush_result = "%s buffered while revision %d publishes; %d pending edit(s)" % [
+			buffered_mode,
+			int(_edit_transaction.get("revision", edit_ledger.revision)),
+			_buffered_brush_requests.size(),
+		]
+		_update_status()
+		return true
+	var ledger_started_usec := Time.get_ticks_usec()
 	if not edit_ledger.add_sphere(selected_brush_mode, world_hit, BRUSH_RADIUS):
 		_last_edit_rejection = edit_ledger.last_rejection_reason
 		last_brush_result = "Edit rejected (%s); terrain unchanged" % _last_edit_rejection
 		_update_status()
 		return false
+	var ledger_elapsed_usec := Time.get_ticks_usec() - ledger_started_usec
 	var operation: Dictionary = edit_ledger.get_last_operation_snapshot()
-	var support_regions: Array[Vector2i] = operation["support_regions"]
-	var dependency_regions: Array[Vector2i] = operation["dependency_regions"]
-	var rebuild_regions: Array[Vector2i] = operation["rebuild_regions"]
+	_edit_trace("ledger_accept", {
+		"trace_serial": trace_serial,
+		"sequence": int(operation["sequence"]),
+		"revision": int(edit_ledger.revision),
+		"ledger_ms": float(ledger_elapsed_usec) / 1000.0,
+		"accept_to_ledger_ms": float(Time.get_ticks_usec() - accept_started_usec) / 1000.0,
+		"tail_operations": int(edit_ledger.get_tail_edit_count()) if edit_ledger.has_method("get_tail_edit_count") else -1,
+		"support_regions": (operation["support_regions"] as Array).size(),
+		"dependency_regions": (operation["dependency_regions"] as Array).size(),
+		"rebuild_regions": (operation["rebuild_regions"] as Array).size(),
+	})
 	_last_edit_rejection = ""
 	var mode_name := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
 	last_brush_result = "%s #%d accepted globally at %s; %d support + %d dependent rebuild region(s)" % [
-		mode_name, operation["sequence"], world_hit, support_regions.size(), dependency_regions.size(),
+		mode_name,
+		operation["sequence"],
+		world_hit,
+		(operation["support_regions"] as Array).size(),
+		(operation["dependency_regions"] as Array).size(),
 	]
 	_schedule_edit_transaction(operation)
 	_update_status()
 	return true
+
+
+func _flush_buffered_brush_requests() -> void:
+	if _buffered_brush_requests.is_empty() or not _edit_transaction.is_empty() or global_rebuild_pending:
+		return
+	var requests: Array[Dictionary] = _buffered_brush_requests.duplicate(true)
+	_buffered_brush_requests.clear()
+	var operations: Array[Dictionary] = []
+	var rejected := 0
+	var batch_ledger_started_usec := Time.get_ticks_usec()
+	var oldest_buffered_usec := 0
+	for request in requests:
+		var buffered_usec := int(request.get("buffered_usec", 0))
+		if buffered_usec > 0 and (oldest_buffered_usec == 0 or buffered_usec < oldest_buffered_usec):
+			oldest_buffered_usec = buffered_usec
+		var mode := int(request["mode"])
+		var center: Vector3 = request["center_world"]
+		var radius := float(request["radius"])
+		if edit_ledger.add_sphere(mode, center, radius):
+			operations.append(edit_ledger.get_last_operation_snapshot())
+		else:
+			rejected += 1
+	var batch_ledger_usec := Time.get_ticks_usec() - batch_ledger_started_usec
+	if operations.is_empty():
+		last_brush_result = "Buffered edit batch rejected; %d request(s) unchanged" % rejected
+		_update_status()
+		return
+	var first_sequence := int(operations[0]["sequence"])
+	var last_sequence := int(operations[-1]["sequence"])
+	last_brush_result = "Coalesced %d buffered edit(s) into revisions #%d-#%d%s" % [
+		operations.size(),
+		first_sequence,
+		last_sequence,
+		"" if rejected == 0 else "; %d rejected" % rejected,
+	]
+	_edit_trace("buffer_flush", {
+		"operation_count": operations.size(),
+		"rejected": rejected,
+		"ledger_ms": float(batch_ledger_usec) / 1000.0,
+		"oldest_buffer_wait_ms": float(Time.get_ticks_usec() - oldest_buffered_usec) / 1000.0 if oldest_buffered_usec > 0 else 0.0,
+		"sequence_start": first_sequence,
+		"sequence_end": last_sequence,
+	})
+	_schedule_edit_transaction_batch(operations)
+	_update_status()
 
 
 func _region_id(region_key: Vector2i) -> String:
@@ -1749,6 +2431,7 @@ func _region_key_from_id(region_id: String) -> Vector2i:
 
 
 func _update_camera() -> void:
+	_lod_selection_dirty = true
 	camera.position = orbit_target + orbit_offset
 	camera.look_at(orbit_target, Vector3.UP)
 	if is_instance_valid(_placement_target_marker):
@@ -1832,6 +2515,8 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["global_rebuild_pending"] = global_rebuild_pending
 	last_mesh_diagnostics["max_active_region_count"] = MAX_ACTIVE_REGIONS
 	last_mesh_diagnostics["max_mesh_uploads_per_frame"] = MAX_MESH_UPLOADS_PER_FRAME
+	last_mesh_diagnostics["mesh_upload_frame_budget_usec"] = MESH_UPLOAD_FRAME_BUDGET_USEC
+	last_mesh_diagnostics["mesh_job_limit"] = _mesh_job_limit
 	last_mesh_diagnostics["peak_mesh_uploads_per_frame"] = _peak_mesh_uploads_per_frame
 	last_mesh_diagnostics["mesh_jobs_in_flight"] = _mesh_jobs.size()
 	last_mesh_diagnostics["peak_mesh_jobs_in_flight"] = _peak_mesh_jobs_in_flight
@@ -1844,7 +2529,7 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["last_brush_pick_candidate_count"] = _last_brush_pick_candidate_count
 	last_mesh_diagnostics["brush_pick_serial"] = _brush_pick_serial
 	last_mesh_diagnostics["global_edit_count"] = edit_ledger.get_edit_count()
-	last_mesh_diagnostics["global_edit_limit"] = BrushEditState.MAX_EDITS
+	last_mesh_diagnostics["global_edit_limit"] = BrushEditState.MAX_OPERATION_COUNT
 	last_mesh_diagnostics["global_edit_last_sequence"] = edit_ledger.get_last_sequence()
 	last_mesh_diagnostics["global_edit_revision"] = edit_ledger.revision
 	last_mesh_diagnostics["last_support_region_count"] = _last_edit_support_region_count
@@ -1863,6 +2548,197 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["frame_time_p99_ms"] = frame_percentiles.z
 
 
+func _configure_preedit_arguments() -> void:
+	var env_path := OS.get_environment("SANDBOX_PREEDIT_PATH")
+	if not env_path.is_empty():
+		_preedit_path = env_path
+	var env_count := OS.get_environment("SANDBOX_PREEDIT_COUNT")
+	if env_count.is_valid_int():
+		_preedit_count = clampi(int(env_count), 1, 20000)
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--preedit-path="):
+			_preedit_path = argument.trim_prefix("--preedit-path=")
+		elif argument.begins_with("--preedit-count="):
+			var raw := argument.trim_prefix("--preedit-count=")
+			if raw.is_valid_int():
+				_preedit_count = clampi(int(raw), 1, 20000)
+	if not _preedit_path.is_empty():
+		_preedit_status = "F5: inject edits from %s" % _preedit_path
+	else:
+		_preedit_status = "F5: inject %d deterministic edits around focus" % _preedit_count
+
+
+func _maybe_schedule_async_checkpoint() -> void:
+	if not _scalable_runtime_enabled or _checkpoint_task_id >= 0 \
+		or _persistence_blocked or not _pending_world_load.is_empty():
+		return
+	if edit_ledger != null and edit_ledger.needs_checkpoint(ScalableSdfState.CHECKPOINT_TAIL_TARGET):
+		_start_async_checkpoint(false)
+
+
+func _start_async_checkpoint(manual: bool) -> bool:
+	if not _scalable_runtime_enabled or _persistence_blocked:
+		_checkpoint_status = "checkpoint unavailable"
+		return false
+	if _checkpoint_task_id >= 0:
+		_checkpoint_status = "checkpoint already running"
+		return false
+	if edit_ledger == null or int(edit_ledger.get_tail_edit_count()) <= 0:
+		_checkpoint_status = "materialized state already current"
+		if manual:
+			_persistence_status = "No uncheckpointed edits; materialized generation %d is current" % _checkpoint_generation
+		return true
+	var snapshot: Dictionary = edit_ledger.make_async_checkpoint_snapshot()
+	if not snapshot.get("valid", false):
+		_checkpoint_status = "checkpoint snapshot failed"
+		return false
+	var now := Time.get_ticks_usec()
+	var job := AsyncCheckpointJob.new(
+		world_save_store.get_world_directory(), snapshot, now
+	)
+	var task_id := WorkerThreadPool.add_task(
+		Callable(job, "run"), false, "terrain async checkpoint"
+	)
+	if task_id < 0:
+		_checkpoint_status = "worker pool rejected checkpoint"
+		return false
+	_checkpoint_job = job
+	_checkpoint_task_id = task_id
+	_checkpoint_started_usec = now
+	_checkpoint_overlap_observed = false
+	_checkpoint_status = "checkpoint running: %d frozen tail edit(s)" % (snapshot.get("tail_operations", []) as Array).size()
+	if manual:
+		_persistence_status = "Async materialized checkpoint queued; gameplay remains active"
+	return true
+
+
+func _process_async_checkpoint() -> void:
+	if _checkpoint_task_id < 0 or not WorkerThreadPool.is_task_completed(_checkpoint_task_id):
+		return
+	WorkerThreadPool.wait_for_task_completion(_checkpoint_task_id)
+	var job := _checkpoint_job
+	var result: Dictionary = job.result if job != null else {}
+	_checkpoint_task_id = -1
+	_checkpoint_job = null
+	if not result.get("valid", false):
+		_checkpoint_status = "checkpoint failed: %s" % result.get("reason", "unknown")
+		_persistence_status = _checkpoint_status
+		return
+	var checkpoint_snapshot: Dictionary = result.get("checkpoint_snapshot", {})
+	var checkpoint_store: RefCounted = result.get("store")
+	var head: Dictionary = result.get("head", {})
+	if checkpoint_store == null or not edit_ledger.commit_async_checkpoint(
+		checkpoint_snapshot, checkpoint_store, head
+	):
+		_checkpoint_status = "checkpoint main-thread commit rejected: %s" % edit_ledger.last_storage_error
+		_persistence_status = _checkpoint_status
+		return
+	world_save_store = checkpoint_store
+	_checkpoint_generation = int(head.get("generation", _checkpoint_generation))
+	_checkpoint_last_worker_ms = float(result.get("worker_usec", 0)) / 1000.0
+	_checkpoint_status = "checkpoint gen %d committed in %.1f ms; archived %d, live tail %d" % [
+		_checkpoint_generation,
+		_checkpoint_last_worker_ms,
+		int(edit_ledger.get_archived_edit_count()),
+		int(edit_ledger.get_tail_edit_count()),
+	]
+	_persistence_status = _checkpoint_status
+
+
+func _apply_preedit_fixture() -> void:
+	if not _scalable_runtime_enabled:
+		last_brush_result = "Pre-edit fixture requires the scalable materialized runtime"
+		return
+	if global_rebuild_pending or not _edit_transaction.is_empty() or not loading_regions.is_empty():
+		last_brush_result = "Wait for current terrain staging to finish before injecting pre-edits"
+		return
+	var specs_result := _load_preedit_specs(_preedit_path) if not _preedit_path.is_empty() \
+		else {"ok": true, "operations": _build_deterministic_preedit_specs(_preedit_count)}
+	if not specs_result.get("ok", false):
+		last_brush_result = "Pre-edit input rejected: %s" % specs_result.get("reason", "invalid")
+		return
+	var operations: Array = specs_result.get("operations", [])
+	var accepted := 0
+	var started := Time.get_ticks_usec()
+	for spec_value in operations:
+		if typeof(spec_value) != TYPE_DICTIONARY:
+			continue
+		var spec: Dictionary = spec_value
+		if not edit_ledger.add_sphere(
+			int(spec.get("mode", BrushEditState.Mode.CARVE)),
+			spec.get("center", Vector3.INF),
+			float(spec.get("radius", BRUSH_RADIUS))
+		):
+			last_brush_result = "Pre-edit #%d rejected: %s" % [accepted, edit_ledger.last_rejection_reason]
+			break
+		accepted += 1
+	if accepted <= 0:
+		return
+	var elapsed_ms := float(Time.get_ticks_usec() - started) / 1000.0
+	_preedit_status = "Injected %d pre-edits in %.1f ms; checkpoint will compact in background" % [accepted, elapsed_ms]
+	last_brush_result = _preedit_status
+	_start_global_rebuild("preedit_fixture")
+	_start_async_checkpoint(false)
+
+
+func _build_deterministic_preedit_specs(count: int) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var origin := SpatialGrid.region_origin_world(focus_region_key)
+	for index in range(count):
+		# Four-region fixture: general edits plus deliberate X, Z and X/Z-corner
+		# crossings. This is the default owner-facing stress pattern.
+		var lane := index % 4
+		var x := 1.0 + float((index * 37) % 120) * 0.25
+		var z := 1.0 + float((index * 19) % 88) * 0.25
+		var y := 0.75 + float((index * 11) % 17) * 0.20
+		if lane == 1:
+			x = 15.25 + float(index % 7) * 0.25
+		elif lane == 2:
+			z = 11.25 + float(index % 7) * 0.25
+		elif lane == 3:
+			x = 15.25 + float(index % 7) * 0.25
+			z = 11.25 + float((index * 3) % 7) * 0.25
+		result.append({
+			"mode": BrushEditState.Mode.CARVE if index % 3 == 0 else BrushEditState.Mode.FILL,
+			"center": origin + Vector3(x, y, z),
+			"radius": 0.55 + float(index % 5) * 0.12,
+		})
+	return result
+
+
+func _load_preedit_specs(path: String) -> Dictionary:
+	if path.is_empty() or not FileAccess.file_exists(path):
+		return {"ok": false, "reason": "file_not_found"}
+	var text_value := FileAccess.get_file_as_string(path)
+	var parsed: Variant = JSON.parse_string(text_value)
+	var rows: Variant = parsed
+	if typeof(parsed) == TYPE_DICTIONARY:
+		rows = (parsed as Dictionary).get("operations", null)
+	if typeof(rows) != TYPE_ARRAY:
+		return {"ok": false, "reason": "expected_array_or_operations_array"}
+	var result: Array[Dictionary] = []
+	for row_value in rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			return {"ok": false, "reason": "operation_not_object"}
+		var row: Dictionary = row_value
+		var center_value: Variant = row.get("center", row.get("center_world", null))
+		if typeof(center_value) != TYPE_ARRAY or (center_value as Array).size() != 3:
+			return {"ok": false, "reason": "center_requires_xyz_array"}
+		var center_array: Array = center_value
+		var mode_value: Variant = row.get("mode", "CARVE")
+		var mode := BrushEditState.Mode.CARVE
+		if typeof(mode_value) == TYPE_STRING:
+			mode = BrushEditState.Mode.FILL if String(mode_value).to_upper() == "FILL" else BrushEditState.Mode.CARVE
+		elif typeof(mode_value) == TYPE_INT:
+			mode = int(mode_value)
+		result.append({
+			"mode": mode,
+			"center": Vector3(float(center_array[0]), float(center_array[1]), float(center_array[2])),
+			"radius": float(row.get("radius", BRUSH_RADIUS)),
+		})
+	return {"ok": true, "operations": result}
+
+
 func _build_ledger_from_payload(payload: Dictionary) -> Dictionary:
 	var seed_value: Variant = payload.get("world_seed", null)
 	var generator_value: Variant = payload.get("generator_version", null)
@@ -1875,8 +2751,11 @@ func _build_ledger_from_payload(payload: Dictionary) -> Dictionary:
 		"generator_version": int(generator_value),
 		"revision": int(payload.get("ledger_revision", -1)),
 		"next_sequence": int(payload.get("next_sequence", -1)),
-		"operations": payload.get("operations", null),
 	}
+	if payload.has("storage_reference"):
+		snapshot["storage_reference"] = payload["storage_reference"]
+	else:
+		snapshot["operations"] = payload.get("operations", null)
 	if not ledger.restore_persistence_snapshot(snapshot):
 		return {"ok": false, "reason": ledger.last_restore_rejection_reason}
 	return {"ok": true, "world_seed": int(seed_value), "ledger": ledger}
@@ -1889,7 +2768,7 @@ func _loaded_world_message(load_result: Dictionary) -> String:
 		return "Loaded valid generation %d; ignored %d invalid candidate(s)" % [
 			int(load_result.get("generation", 0)), int(load_result["ignored_invalid_candidates"]),
 		]
-	return "Loaded local world generation %d" % int(load_result.get("generation", 0))
+	return "Loaded terrain schema v2 generation %d (%d indexed segment(s))" % [int(load_result.get("generation", 0)), int(load_result.get("segment_count", 0))]
 
 
 func _save_world_to_storage() -> bool:
@@ -1897,6 +2776,10 @@ func _save_world_to_storage() -> bool:
 		_persistence_status = "Save blocked until the invalid/incompatible existing world is handled"
 		_update_status()
 		return false
+	if _scalable_runtime_enabled:
+		var queued := _start_async_checkpoint(true)
+		_update_status()
+		return queued
 	if global_rebuild_pending or not _edit_transaction.is_empty():
 		_persistence_status = "Save waits for coherent terrain publication to finish"
 		_update_status()
@@ -1918,6 +2801,31 @@ func _load_world_from_storage() -> bool:
 		_persistence_status = "Load waits for the current mesh transaction to finish"
 		_update_status()
 		return false
+	if _scalable_runtime_enabled:
+		if _checkpoint_task_id >= 0:
+			_persistence_status = "Load waits for the async checkpoint to finish"
+			_update_status()
+			return false
+		var loaded: Dictionary = world_save_store.load_world(world_id)
+		if not loaded.get("ok", false):
+			_persistence_status = "Load rejected (%s); current world is unchanged" % loaded.get("reason", "invalid")
+			_update_status()
+			return false
+		if not loaded.get("found", false):
+			_persistence_status = "No materialized world exists; current world is unchanged"
+			_update_status()
+			return false
+		var candidate: RefCounted = loaded["state"]
+		_pending_world_load = {
+			"world_seed": int(candidate.world_seed),
+			"ledger": candidate,
+			"generation": int(loaded["generation"]),
+		}
+		_checkpoint_generation = int(loaded["generation"])
+		_persistence_status = "Loading materialized generation %d; old meshes remain until coherent publication" % _checkpoint_generation
+		_start_global_rebuild("load_world")
+		_update_status()
+		return true
 	var loaded: Dictionary = world_save_store.load_world(world_id)
 	if not loaded.get("ok", false):
 		_persistence_status = "Load rejected (%s); current world is unchanged" % loaded.get("reason", "invalid")
@@ -1944,15 +2852,21 @@ func _load_world_from_storage() -> bool:
 
 
 func _update_status() -> void:
+	if free_explore_enabled:
+		if is_instance_valid(status_label):
+			status_label.text = ""
+		return
 	var state := _state_for_region(focus_region_key)
 	var seed: int = state.world_seed if state != null else world_seed
 	var generator_version: int = state.generator_version if state != null else Field.GENERATOR_VERSION
 	var selected_mode_name := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
 	var queue_depth := _queued_chunk_count()
 	var transaction_state := "idle" if _edit_transaction.is_empty() else String(_edit_transaction.get("stage_state", "staging"))
+	if not _buffered_brush_requests.is_empty():
+		transaction_state += " + %d buffered" % _buffered_brush_requests.size()
 	var aim_text := "visible pointer" if _last_placement_aim_mode == "pointer" else "center aim (cursor hidden/unavailable)"
 	var target_text := "none" if not _placement_target_valid else "%s at %s (%s)" % [aim_text, _placement_target_region_key, "published" if _placement_target_published else "waiting for publication"]
-	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: cave section    R: rebuild    X: focused reset    L: LOD    P/O: terrain save/load\nCtrl+left: select object    B: place at visible pointer; hidden cursor uses center aim    F6: cycle    F7: transform + appearance    F8: delete    F9: restore baseline\nPlacement target: %s\nUndo anchor: entity origin/base center coincides with the terrain hit; no slope conforming\nCtrl+Z: Undo entity command    Ctrl+Y / Ctrl+Shift+Z: Redo entity command\nM twice within 6 s: explicit schema-3 history migration (preflight then commit); no automatic migration\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
+	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill    F10: free explore\nC: cave section    R: rebuild    X: focused reset    L: LOD    F5: pre-edits    P/O: checkpoint/load\nCtrl+left: select object    B: place at visible pointer; hidden cursor uses center aim    F6: cycle    F7: transform + appearance    F8: delete    F9: restore baseline\nPlacement target: %s\nUndo anchor: entity origin/base center coincides with the terrain hit; no slope conforming\nCtrl+Z: Undo entity command    Ctrl+Y / Ctrl+Shift+Z: Redo entity command\nM twice within 6 s: explicit schema-3 history migration (preflight then commit); no automatic migration\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
 		seed,
 		generator_version,
 		focus_region_key,
@@ -1965,7 +2879,7 @@ func _update_status() -> void:
 		_persistence_status,
 		selected_mode_name,
 		edit_ledger.get_edit_count(),
-		BrushEditState.MAX_EDITS,
+		ScalableSdfState.MAX_SAFE_SEQUENCE if _scalable_runtime_enabled else BrushEditState.MAX_OPERATION_COUNT,
 		edit_ledger.get_last_sequence(),
 		edit_ledger.revision,
 		BRUSH_RADIUS,
@@ -1977,11 +2891,19 @@ func _update_status() -> void:
 		int(last_mesh_diagnostics.get("lod0_chunk_count", 0)),
 		int(last_mesh_diagnostics.get("lod1_chunk_count", 0)),
 		_mesh_jobs.size(),
-		MAX_MESH_JOBS_IN_FLIGHT,
+		_mesh_job_limit,
 		MAX_MESH_UPLOADS_PER_FRAME,
 		_last_mesh_upload_ms,
 		_peak_mesh_upload_ms,
 		_peak_frame_ms,
+	]
+	status += "Runtime timing: last op %s %.1f ms | frame p50/p95/p99 %.1f/%.1f/%.1f ms | process peak %.1f ms\n" % [
+		String(last_mesh_diagnostics.get("operation", _operation_name)),
+		float(last_mesh_diagnostics.get("elapsed_ms", 0.0)),
+		float(last_mesh_diagnostics.get("frame_time_p50_ms", 0.0)),
+		float(last_mesh_diagnostics.get("frame_time_p95_ms", 0.0)),
+		float(last_mesh_diagnostics.get("frame_time_p99_ms", 0.0)),
+		_peak_process_work_ms,
 	]
 	if global_rebuild_pending:
 		status += "Rebuilding visible set: %d regions staged\n" % loading_regions.size()
@@ -2040,6 +2962,15 @@ func _update_status() -> void:
 	var package_discovery_summary := object_stream.get_package_discovery_summary()
 	if not package_discovery_summary.is_empty():
 		status += package_discovery_summary + "\n"
+	if _scalable_runtime_enabled:
+		status += "Materialized SDF: archived %d | hot tail %d | generation %d | %s | shared X/Z/corner collar %s\n" % [
+			int(edit_ledger.get_archived_edit_count()),
+			int(edit_ledger.get_tail_edit_count()),
+			_checkpoint_generation,
+			_checkpoint_status,
+			"ON" if _shared_boundary_runtime_enabled and not cave_section_enabled else "fallback",
+		]
+		status += _preedit_status + "\n"
 	if last_stream_error != "":
 		status += "STREAM ERROR: " + last_stream_error + "\n"
 	status += last_brush_result

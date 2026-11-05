@@ -1,7 +1,7 @@
 extends SceneTree
 
 const BrushPicker := preload("res://scripts/terrain/terrain_brush_picker.gd")
-const SaveStore := preload("res://scripts/terrain/terrain_world_save_store.gd")
+const SaveStore := preload("res://scripts/terrain/terrain_world_save_store_v2.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const WorldState := preload("res://scripts/terrain/terrain_world_state.gd")
 const ObjectStream := preload("res://scripts/objects/procedural_object_stream.gd")
