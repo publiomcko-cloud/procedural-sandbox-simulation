@@ -111,7 +111,7 @@ func _build_shared_surface(snapshot: Dictionary) -> Dictionary:
 				var points: Array[Vector3] = []
 				var density: Array[float] = []
 				for corner in CORNERS:
-					var node := cell + corner
+					var node: Vector3i = cell + Vector3i(corner)
 					nodes.append(node)
 					points.append(ROI_MIN + Vector3(node) * STEP)
 					density.append(values[_index(node.x, node.y, node.z, dims)])
