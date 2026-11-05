@@ -33,7 +33,10 @@ func _run() -> void:
 	demo.call("_unhandled_input", toggle_event)
 	_check(bool(demo.get("free_explore_enabled")), "F10 input enters free exploration")
 	_check(not test_ui.visible, "free exploration hides the entire HUD canvas")
-	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "free exploration captures the mouse")
+	_check(
+		Input.mouse_mode == (previous_mouse_mode if DisplayServer.get_name() == "headless" else Input.MOUSE_MODE_CAPTURED),
+		"free exploration captures the mouse when a display backend is available"
+	)
 	demo.call("_update_placement_marker_visual")
 	_check(not test_marker.visible, "free exploration hides the placement marker for a clean view")
 
