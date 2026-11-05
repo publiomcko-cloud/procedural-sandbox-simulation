@@ -408,6 +408,7 @@ static func build_xz_corner_quad(
 	min_region_key: Vector2i,
 	brush_snapshot: Dictionary
 ) -> Dictionary:
+	var authority_started_usec := Time.get_ticks_usec()
 	var regions := {
 		"minx_minz": min_region_key,
 		"maxx_minz": min_region_key + Vector2i(1, 0),
@@ -438,6 +439,7 @@ static func build_xz_corner_quad(
 	if not built.get("valid", false):
 		return built
 
+	var partition_started_usec := Time.get_ticks_usec()
 	var positions_by_owner: Dictionary = {}
 	var normals_by_owner: Dictionary = {}
 	for owner in regions.keys():
@@ -454,6 +456,10 @@ static func build_xz_corner_quad(
 		positions_by_owner[owner] = positions
 		normals_by_owner[owner] = normals
 
+	var partition_elapsed_usec := Time.get_ticks_usec() - partition_started_usec
+	var shared_timings: Dictionary = (built.get("timings_usec", {}) as Dictionary).duplicate(true)
+	shared_timings["shared_partition"] = partition_elapsed_usec
+	shared_timings["shared_authority_total"] = Time.get_ticks_usec() - authority_started_usec
 	var result := {
 		"valid": true,
 		"diagnostics": built.get("diagnostics", {}),
@@ -479,6 +485,7 @@ static func build_xz_corner_quad(
 			"vertex_count": positions.size(),
 			"triangle_count": positions.size() / 3,
 			"sample_count": int(built.get("sample_count", 0)),
+			"timings_usec": shared_timings.duplicate(true),
 		}
 	return result
 
@@ -499,6 +506,7 @@ static func build_z_shared_volume(
 	var dims := cells + Vector3i.ONE
 	var values := PackedFloat32Array()
 	values.resize(dims.x * dims.y * dims.z)
+	var sampling_started_usec := Time.get_ticks_usec()
 	for y in range(dims.y):
 		for z in range(dims.z):
 			for x in range(dims.x):
@@ -508,6 +516,8 @@ static func build_z_shared_volume(
 					return {"valid": false, "reason": "non_finite_sample", "sample": [x, y, z]}
 				values[_index(x, y, z, dims)] = d
 
+	var sampling_elapsed_usec := Time.get_ticks_usec() - sampling_started_usec
+	var polygonize_started_usec := Time.get_ticks_usec()
 	var root_cache: Dictionary = {}
 	var root_position_keys: Dictionary = {}
 	var triangles: Array[Dictionary] = []
@@ -533,8 +543,11 @@ static func build_z_shared_volume(
 					dropped_degenerate_candidates += int(emitted.get("dropped_degenerate", 0))
 					triangles.append_array(emitted.get("triangles", []))
 
+	var polygonize_elapsed_usec := Time.get_ticks_usec() - polygonize_started_usec
+	var deduplicate_started_usec := Time.get_ticks_usec()
 	var deduplicated := _deduplicate_triangles(triangles)
 	var dropped_duplicate_candidates := triangles.size() - deduplicated.size()
+	var deduplicate_elapsed_usec := Time.get_ticks_usec() - deduplicate_started_usec
 	triangles = deduplicated
 	var diagnostics := analyze_world_triangles_z(triangles, seam_z, roi_min, roi_max)
 	var signature_rows: Array[String] = []
@@ -561,6 +574,14 @@ static func build_z_shared_volume(
 		"roi_max": roi_max,
 		"step": step,
 		"seam_z": seam_z,
+		"timings_usec": {
+			"shared_sampling": sampling_elapsed_usec,
+			"shared_polygonize": polygonize_elapsed_usec,
+			"shared_deduplicate": deduplicate_elapsed_usec,
+			"shared_diagnostics": diagnostics_elapsed_usec,
+			"shared_signature": signature_elapsed_usec,
+			"shared_volume_total": Time.get_ticks_usec() - total_started_usec,
+		},
 	}
 
 
@@ -573,6 +594,7 @@ static func build_xz_corner_volume(
 	seam_x: float,
 	seam_z: float
 ) -> Dictionary:
+	var total_started_usec := Time.get_ticks_usec()
 	if cells.x <= 0 or cells.y <= 0 or cells.z <= 0 or not is_finite(step) or step <= 0.0:
 		return {"valid": false, "reason": "invalid_volume_shape"}
 	var roi_max := roi_min + Vector3(cells) * step
@@ -619,7 +641,10 @@ static func build_xz_corner_volume(
 	var deduplicated := _deduplicate_triangles(triangles)
 	var dropped_duplicate_candidates := triangles.size() - deduplicated.size()
 	triangles = deduplicated
+	var diagnostics_started_usec := Time.get_ticks_usec()
 	var diagnostics := analyze_corner_world_triangles(triangles, seam_x, seam_z, roi_min, roi_max)
+	var diagnostics_elapsed_usec := Time.get_ticks_usec() - diagnostics_started_usec
+	var signature_started_usec := Time.get_ticks_usec()
 	var signature_rows: Array[String] = []
 	for triangle_value in triangles:
 		var ids: Array = triangle_value["root_ids"]
@@ -627,6 +652,7 @@ static func build_xz_corner_volume(
 		sorted_ids.sort()
 		signature_rows.append("%s:%s" % [String(triangle_value["owner"]), "|".join(sorted_ids)])
 	signature_rows.sort()
+	var signature_elapsed_usec := Time.get_ticks_usec() - signature_started_usec
 	diagnostics["root_identity_consistent"] = _root_identity_consistent(root_cache, root_position_keys)
 	diagnostics["dropped_degenerate_candidate_count"] = dropped_degenerate_candidates
 	diagnostics["dropped_duplicate_candidate_count"] = dropped_duplicate_candidates
