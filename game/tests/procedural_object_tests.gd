@@ -1040,7 +1040,20 @@ func _test_playable_scene_publication() -> void:
 			if String(demo.get("_object_state_action_status")).contains("visual publication failed"):
 				visual_failure_reported = true
 				break
-		_check(stream.get_command_world_revision() == command_revision_before_visual_failure + 1 and stream.state_service.snapshot.get("deleted", {}).has(input_selected_id) and visual_failure_reported, "committed Redo remains authoritative when mesh publication fails, and the HUD reports the visual failure separately")
+		var visual_pending_debug: Dictionary = stream.get("_command_visual_pending")
+		var generation_jobs_debug: Dictionary = stream.get("_region_generation_jobs")
+		_check(
+			stream.get_command_world_revision() == command_revision_before_visual_failure + 1
+			and stream.state_service.snapshot.get("deleted", {}).has(input_selected_id)
+			and visual_failure_reported,
+			"committed Redo remains authoritative when mesh publication fails, and the HUD reports the visual failure separately (status=%s pending=%s jobs=%s debug_flag=%s perf=%s)" % [
+				String(demo.get("_object_state_action_status")),
+				str(visual_pending_debug),
+				str(generation_jobs_debug),
+				str(stream.debug_fail_next_visual_publication),
+				str(stream.get_performance_snapshot()),
+			]
+		)
 		var command_revision_before_visual_recovery := stream.get_command_world_revision()
 		_push_demo_key(demo, KEY_Z, true)
 		await _wait_for_entity_presence(stream, input_selected_id, true)
