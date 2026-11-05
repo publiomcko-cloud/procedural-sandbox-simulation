@@ -421,12 +421,12 @@ func _validate_tile(
 	if tile.get("region_key", Vector2i(999999, 999999)) != region_key 		or tile.get("coordinate", Vector2i(-1, -1)) != coordinate:
 		return false
 	var dims: Vector3i = tile.get("dims", Vector3i.ZERO)
-	var values: PackedFloat32Array = tile.get("values", PackedFloat32Array())
+	var values_value: Variant = tile.get("values", PackedFloat64Array())\n\tif typeof(values_value) != TYPE_PACKED_FLOAT64_ARRAY:\n\t\treturn false
 	return dims == Vector3i(
 		Grid.CELLS_PER_CHUNK_X + 1,
 		Grid.CELL_COUNT_Y + 1,
 		Grid.CELLS_PER_CHUNK_Z + 1
-	) and is_equal_approx(float(tile.get("step", 0.0)), State.MATERIALIZED_STEP) 		and values.size() == dims.x * dims.y * dims.z
+	) and is_equal_approx(float(tile.get("step", 0.0)), State.MATERIALIZED_STEP) 		and values_value.size() == dims.x * dims.y * dims.z
 
 
 func _ensure_layout() -> int:
