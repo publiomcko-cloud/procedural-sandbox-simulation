@@ -577,11 +577,20 @@ static func sample_density_snapshot(
 ) -> float:
 	if snapshot.has("valid") and not bool(snapshot["valid"]):
 		return NAN
-	var density: float = FIELD.sample_density(seed, region_key, local_position)
 	var world_position := SPATIAL.region_local_to_world(region_key, local_position)
-	var centers: PackedVector3Array = snapshot["centers"]
-	var radii: PackedFloat64Array = snapshot["radii"]
-	var modes: PackedByteArray = snapshot["modes"]
+	var materialized := _sample_materialized_tiles(
+		world_position, snapshot.get("materialized_tiles", [])
+	)
+	var density: float
+	if materialized.get("found", false):
+		density = float(materialized["density"])
+	else:
+		density = FIELD.sample_density(seed, region_key, local_position)
+	var centers: PackedVector3Array = snapshot.get("centers", PackedVector3Array())
+	var radii: PackedFloat64Array = snapshot.get("radii", PackedFloat64Array())
+	var modes: PackedByteArray = snapshot.get("modes", PackedByteArray())
+	if centers.size() != radii.size() or centers.size() != modes.size():
+		return NAN
 	for index in range(centers.size()):
 		var distance_to_surface := world_position.distance_to(centers[index]) - radii[index]
 		if modes[index] == Mode.CARVE:
@@ -591,6 +600,61 @@ static func sample_density_snapshot(
 	if show_cave_section:
 		density = minf(density, 6.0 - world_position.z)
 	return density
+
+
+static func _sample_materialized_tiles(world_position: Vector3, tiles_value: Variant) -> Dictionary:
+	if typeof(tiles_value) != TYPE_ARRAY:
+		return {"found": false}
+	var epsilon := 0.00001
+	for tile_value in tiles_value:
+		if typeof(tile_value) != TYPE_DICTIONARY:
+			continue
+		var tile: Dictionary = tile_value
+		var origin: Vector3 = tile.get("origin_world", Vector3.INF)
+		var dims: Vector3i = tile.get("dims", Vector3i.ZERO)
+		var step := float(tile.get("step", 0.0))
+		var values: PackedFloat32Array = tile.get("values", PackedFloat32Array())
+		if not origin.is_finite() or dims.x < 2 or dims.y < 2 or dims.z < 2 			or not is_finite(step) or step <= 0.0 			or values.size() != dims.x * dims.y * dims.z:
+			continue
+		var lattice := (world_position - origin) / step
+		if lattice.x < -epsilon or lattice.y < -epsilon or lattice.z < -epsilon 			or lattice.x > float(dims.x - 1) + epsilon 			or lattice.y > float(dims.y - 1) + epsilon 			or lattice.z > float(dims.z - 1) + epsilon:
+			continue
+		var rx := roundi(lattice.x)
+		var ry := roundi(lattice.y)
+		var rz := roundi(lattice.z)
+		if absf(lattice.x - float(rx)) <= epsilon 			and absf(lattice.y - float(ry)) <= epsilon 			and absf(lattice.z - float(rz)) <= epsilon:
+			rx = clampi(rx, 0, dims.x - 1)
+			ry = clampi(ry, 0, dims.y - 1)
+			rz = clampi(rz, 0, dims.z - 1)
+			return {
+				"found": true,
+				"density": float(values[(ry * dims.z + rz) * dims.x + rx]),
+			}
+		var x0 := clampi(floori(lattice.x), 0, dims.x - 1)
+		var y0 := clampi(floori(lattice.y), 0, dims.y - 1)
+		var z0 := clampi(floori(lattice.z), 0, dims.z - 1)
+		var x1 := mini(x0 + 1, dims.x - 1)
+		var y1 := mini(y0 + 1, dims.y - 1)
+		var z1 := mini(z0 + 1, dims.z - 1)
+		var tx := clampf(lattice.x - float(x0), 0.0, 1.0)
+		var ty := clampf(lattice.y - float(y0), 0.0, 1.0)
+		var tz := clampf(lattice.z - float(z0), 0.0, 1.0)
+		var c000 := float(values[(y0 * dims.z + z0) * dims.x + x0])
+		var c100 := float(values[(y0 * dims.z + z0) * dims.x + x1])
+		var c010 := float(values[(y1 * dims.z + z0) * dims.x + x0])
+		var c110 := float(values[(y1 * dims.z + z0) * dims.x + x1])
+		var c001 := float(values[(y0 * dims.z + z1) * dims.x + x0])
+		var c101 := float(values[(y0 * dims.z + z1) * dims.x + x1])
+		var c011 := float(values[(y1 * dims.z + z1) * dims.x + x0])
+		var c111 := float(values[(y1 * dims.z + z1) * dims.x + x1])
+		var c00 := lerpf(c000, c100, tx)
+		var c10 := lerpf(c010, c110, tx)
+		var c01 := lerpf(c001, c101, tx)
+		var c11 := lerpf(c011, c111, tx)
+		var c0 := lerpf(c00, c10, ty)
+		var c1 := lerpf(c01, c11, ty)
+		return {"found": true, "density": lerpf(c0, c1, tz)}
+	return {"found": false}
 
 
 func get_operations_for_region(region_key: Vector2i) -> Array[Dictionary]:
