@@ -718,8 +718,19 @@ func _update_lod_selection() -> void:
 	_update_status()
 
 
+func _uses_shared_x_boundary(coordinate: Vector2i) -> bool:
+	return _shared_boundary_runtime_enabled \
+		and not cave_section_enabled \
+		and (coordinate.x == 0 or coordinate.x == ChunkGrid.CHUNK_COUNT_X - 1)
+
+
 func _desired_lod_for_chunk(region_key: Vector2i, coordinate: Vector2i, current_lod: int) -> int:
 	var chunk_id: String = ChunkGrid.stable_id(region_key, coordinate)
+	# Region-edge chunks are the shared-surface collar. LOD transitions begin one
+	# chunk inward so the independently selected interior LOD never owns the
+	# regional seam.
+	if _uses_shared_x_boundary(coordinate):
+		return 0
 	if not lod_enabled or _lod_fallback_chunks.has(chunk_id):
 		return 0
 	var center_local: Vector3 = ChunkGrid.origin_for(coordinate) + ChunkGrid.size_for(coordinate) * 0.5
@@ -935,7 +946,17 @@ func _process_completed_mesh_jobs() -> void:
 		if state.brush_edits.revision != int(stage["edit_revision"]):
 			_supersede_region_stage(id)
 			continue
-		var cpu_result: Dictionary = job.result
+		var cpu_result: Dictionary
+		if String(record.get("job_kind", "chunk")) == "shared_boundary_x":
+			var pair_result: Dictionary = job.result
+			if not pair_result.get("valid", false):
+				_fail_region_stage(id, "Shared-boundary CPU mesh job failed; previous visible meshes retained")
+				continue
+			var shared_side := String(record.get("shared_side", ""))
+			cpu_result = pair_result.get(shared_side, {})
+			last_mesh_diagnostics["last_shared_boundary_diagnostics"] = pair_result.get("diagnostics", {})
+		else:
+			cpu_result = job.result
 		if not cpu_result.get("valid", false) or not cpu_result.has("positions"):
 			_fail_region_stage(id, "Chunk CPU mesh job failed; previous visible meshes retained")
 			continue
@@ -1007,15 +1028,33 @@ func _dispatch_mesh_jobs() -> void:
 		var submitted_usec := Time.get_ticks_usec()
 		if _stage_contributes_to_active_operation(stage):
 			_mesh_queue_wait_usec_samples.append(maxi(0, submitted_usec - enqueued_usec))
-		var job := TerrainMeshJob.new(
-			state.world_seed, stage["region_key"], coordinate,
-			stage["cave_section_enabled"],
-			state.brush_edits.get_meshing_snapshot_for_chunk(stage["region_key"], coordinate),
-			submitted_usec,
-			int(stage.get("lod_by_coordinate", {}).get(coordinate, 0))
-		)
+		var job: RefCounted
+		var job_kind := "chunk"
+		var shared_side := ""
+		if _uses_shared_x_boundary(coordinate):
+			var left_region: Vector2i = stage["region_key"] if coordinate.x == ChunkGrid.CHUNK_COUNT_X - 1 \
+				else stage["region_key"] - Vector2i.RIGHT
+			var pair_snapshot: Dictionary = SharedBoundaryAuthority.make_x_pair_snapshot(
+				state.brush_edits, left_region, coordinate.y
+			)
+			job = SharedBoundaryMeshJob.new(
+				state.world_seed, left_region, coordinate.y, pair_snapshot, submitted_usec
+			)
+			job_kind = "shared_boundary_x"
+			shared_side = "left" if coordinate.x == ChunkGrid.CHUNK_COUNT_X - 1 else "right"
+		else:
+			job = TerrainMeshJob.new(
+				state.world_seed, stage["region_key"], coordinate,
+				stage["cave_section_enabled"],
+				state.brush_edits.get_meshing_snapshot_for_chunk(stage["region_key"], coordinate),
+				submitted_usec,
+				int(stage.get("lod_by_coordinate", {}).get(coordinate, 0))
+			)
 		var high_priority: bool = String(stage["purpose"]) in ["edit_transaction", "partial"]
-		var task_id := WorkerThreadPool.add_task(Callable(job, "run"), high_priority, "P1.0C terrain chunk")
+		var task_id := WorkerThreadPool.add_task(
+			Callable(job, "run"), high_priority,
+			"shared boundary X" if job_kind == "shared_boundary_x" else "P1.0C terrain chunk"
+		)
 		if task_id < 0:
 			_fail_region_stage(id, "Worker pool rejected a mesh job; previous visible meshes retained")
 			continue
@@ -1028,6 +1067,8 @@ func _dispatch_mesh_jobs() -> void:
 			"stage_token": stage["stage_token"],
 			"coordinate": coordinate,
 			"submitted_usec": submitted_usec,
+			"job_kind": job_kind,
+			"shared_side": shared_side,
 		}
 		_peak_mesh_jobs_in_flight = maxi(_peak_mesh_jobs_in_flight, _mesh_jobs.size())
 
