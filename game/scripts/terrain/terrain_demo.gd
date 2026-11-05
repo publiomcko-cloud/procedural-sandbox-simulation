@@ -28,7 +28,7 @@ const MAX_MESH_JOBS_IN_FLIGHT_HARD := 12
 const MAX_MESH_UPLOADS_PER_FRAME := 4
 const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
 const MAX_BUFFERED_BRUSH_REQUESTS := 64
-const EDIT_TRACE_ENABLED := true
+const EDIT_TRACE_DEFAULT_ENABLED := false
 const DIAGNOSTICS_REFRESH_INTERVAL := 0.25
 const FOCUS_MOVE_STEP := 4.0
 const MAX_STAGE_RETRIES := 2
@@ -92,6 +92,8 @@ var chunk_nodes: Dictionary = {} # stable chunk id -> active MeshInstance3D
 var _published_lod_by_chunk: Dictionary = {} # stable chunk id -> 0/1
 var _lod_fallback_chunks: Dictionary = {} # stable chunk id -> deterministic LOD0 fallback until retry/toggle
 var lod_enabled := false
+var _lod_selection_dirty := true
+var _edit_trace_enabled := EDIT_TRACE_DEFAULT_ENABLED
 
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
@@ -173,6 +175,12 @@ func _ready() -> void:
 		MAX_MESH_JOBS_IN_FLIGHT_HARD
 	)
 	_configure_preedit_arguments()
+	_edit_trace_enabled = EDIT_TRACE_DEFAULT_ENABLED or OS.get_environment("SANDBOX_EDIT_TRACE") == "1"
+	for argument in OS.get_cmdline_user_args():
+		if argument == "--edit-trace":
+			_edit_trace_enabled = true
+		elif argument == "--no-edit-trace":
+			_edit_trace_enabled = false
 	# Existing tests may inject the legacy v2 store. Normal runtime defaults to
 	# the materialized store and scalable edit state.
 	if world_save_store == null:
@@ -333,6 +341,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif _event_matches_key(event, KEY_L):
 			lod_enabled = not lod_enabled
 			_lod_fallback_chunks.clear()
+			_lod_selection_dirty = true
 			last_brush_result = "Custom LOD 0/1: %s" % ("ON" if lod_enabled else "OFF; using LOD0 fallback")
 		elif _event_matches_key(event, KEY_V):
 			object_stream.set_object_visibility(not object_stream.objects_visible)
@@ -712,6 +721,8 @@ func _move_focus(delta: Vector3) -> void:
 
 
 func _update_lod_selection() -> void:
+	if not _lod_selection_dirty:
+		return
 	if global_rebuild_pending or not _edit_transaction.is_empty():
 		return
 	# Keep old and replacement meshes alive for at most one LOD region transaction.
@@ -721,6 +732,9 @@ func _update_lod_selection() -> void:
 		var pending_stage: Dictionary = stage_value
 		if String(pending_stage.get("purpose", "")) == "partial":
 			return
+	# LOD selection is event-driven. Camera movement, region publication and
+	# completed partial transitions mark it dirty; idle frames do no full scan.
+	_lod_selection_dirty = false
 	var changed_by_region: Dictionary = {}
 	for entry_value in active_regions.values():
 		var entry: Dictionary = entry_value
@@ -1366,6 +1380,7 @@ func _publish_partial_stage(id: String, stage: Dictionary) -> bool:
 		_replace_node_mesh(node, stage["meshes"][coordinate])
 		_set_chunk_lod_state(chunk_id, node, int(stage.get("actual_lod_by_coordinate", {}).get(coordinate, 0)), bool(stage.get("fallback_by_coordinate", {}).get(coordinate, false)))
 	_record_completed_operation(stage)
+	_lod_selection_dirty = true
 	_update_runtime_diagnostics()
 	return true
 
@@ -1447,6 +1462,7 @@ func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary
 			_release_chunk_node(old_id, previous["chunk_nodes"][old_id])
 	active_regions[id] = {"region_key": region_key, "world_state": state, "chunk_nodes": region_nodes}
 	world_states[id] = state
+	_lod_selection_dirty = true
 	var object_publication: Dictionary = object_stream.enqueue_region_publication(region_key, state, publication_token)
 	if not object_publication.get("ok", false) and object_publication.get("reason") != "stale_object_region_publication":
 		_procedural_object_status = "Procedural object issue: %s" % object_stream.get_error_summary()
@@ -1971,15 +1987,16 @@ func _retry_edit_transaction(failure_message: String) -> void:
 			_stream_errors_by_region[id] = last_stream_error
 		_start_edit_transaction_attempt()
 		return
-	for id_value in (_edit_transaction["target_ids"] as Array).duplicate():
+	var exhausted_target_ids: Array = (_edit_transaction["target_ids"] as Array).duplicate()
+	for id_value in exhausted_target_ids:
 		var id: String = id_value
 		if loading_regions.has(id) and loading_regions[id]["purpose"] == "edit_transaction":
 			loading_regions.erase(id)
 	_edit_transaction["stage_state"] = "failed_pending_retry"
 	_edit_transaction["target_ids"] = []
 	last_stream_error = "%s; accepted edit retained, press R to retry mesh build" % failure_message
-	for id in _edit_transaction["target_ids"]:
-		_stream_errors_by_region[id] = last_stream_error
+	for id_value in exhausted_target_ids:
+		_stream_errors_by_region[String(id_value)] = last_stream_error
 	last_brush_result = "Accepted edit remains in the global ledger; visible meshes retained until retry succeeds"
 	_update_runtime_diagnostics()
 
@@ -2090,7 +2107,7 @@ func _sample_world_density_from_snapshot(world_position: Vector3, snapshot: Dict
 
 
 func _edit_trace(event: String, payload: Dictionary = {}) -> void:
-	if not EDIT_TRACE_ENABLED:
+	if not _edit_trace_enabled:
 		return
 	var record := payload.duplicate(true)
 	record["event"] = event
@@ -2274,6 +2291,7 @@ func _region_key_from_id(region_id: String) -> Vector2i:
 
 
 func _update_camera() -> void:
+	_lod_selection_dirty = true
 	camera.position = orbit_target + orbit_offset
 	camera.look_at(orbit_target, Vector3.UP)
 	if is_instance_valid(_placement_target_marker):
