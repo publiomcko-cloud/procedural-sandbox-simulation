@@ -779,7 +779,10 @@ func _set_free_explore_enabled(enabled: bool) -> void:
 		_update_camera()
 	_update_placement_marker_visual()
 	_update_focus_key()
-	_reconcile_region_window()
+	if is_inside_tree() and is_instance_valid(object_stream):
+		_reconcile_region_window()
+		if not enabled and edit_ledger != null:
+			_update_status()
 
 
 func _process_free_exploration(delta: float) -> void:
