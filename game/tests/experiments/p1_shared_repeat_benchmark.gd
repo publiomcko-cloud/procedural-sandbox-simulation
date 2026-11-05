@@ -133,7 +133,7 @@ func _summary(values: Array[float]) -> Dictionary:
 	var ordered := values.duplicate()
 	ordered.sort()
 	var count := ordered.size()
-	var median := ordered[count / 2] if count % 2 == 1 else (ordered[count / 2 - 1] + ordered[count / 2]) * 0.5
+	var median: float = float(ordered[count / 2]) if count % 2 == 1 else (float(ordered[count / 2 - 1]) + float(ordered[count / 2])) * 0.5
 	var total := 0.0
 	for value in ordered:
 		total += value
