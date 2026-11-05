@@ -1,0 +1,62 @@
+name: Scalable world load + fidelity qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      edits:
+        description: Deterministic edit count
+        required: false
+        default: "4096"
+  push:
+    branches:
+      - exp/p3-1-shared-surface-e2e-success
+    paths:
+      - "game/scripts/terrain/**"
+      - "game/tests/experiments/scalable_world_load_fidelity.gd"
+      - ".github/workflows/scalable-world-qualification.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: Materialized SDF scalability / Godot 4.7.2
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download stock Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          chmod +x /tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --version | tee /tmp/godot-version.log
+
+      - name: Import project script classes
+        shell: bash
+        run: |
+          set -o pipefail
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path game --quit 2>&1 | tee /tmp/import.log
+
+      - name: Run scalable world qualification
+        shell: bash
+        env:
+          EDITS: ${{ inputs.edits || '4096' }}
+        run: |
+          set -euo pipefail
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64             --headless --path game             --script res://tests/experiments/scalable_world_load_fidelity.gd             -- --edits="${EDITS}"             2>&1 | tee /tmp/scalable-world.log
+          grep -q 'SCALABLE_WORLD_QUALIFICATION_PASS' /tmp/scalable-world.log
+
+      - name: Upload qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scalable-world-qualification-evidence
+          path: |
+            /tmp/godot-version.log
+            /tmp/import.log
+            /tmp/scalable-world.log
