@@ -1089,7 +1089,16 @@ func _test_playable_scene_publication() -> void:
 				break
 		_check(center_reloaded, "camera-driven revisit republishes the original region")
 		if center_reloaded:
-			_check(stream.get_region_instance_records(Vector2i.ZERO) == stateful_records, "playable stream revisit rebuilds the persisted override independent of visit order")
+			var object_center_reloaded := false
+			for _frame in range(240):
+				await process_frame
+				if stream.has_published_region(Vector2i.ZERO) \
+					and int(stream.get_performance_snapshot().get("pending_region_publication_count", 0)) == 0:
+					object_center_reloaded = true
+					break
+			_check(object_center_reloaded, "object stream catches up after asynchronous terrain revisit")
+			if object_center_reloaded:
+				_check(stream.get_region_instance_records(Vector2i.ZERO) == stateful_records, "playable stream revisit rebuilds the persisted override independent of visit order")
 	demo.queue_free()
 	for _frame in range(2):
 		await process_frame
