@@ -356,6 +356,8 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 	var pending_nodes: Array[Node3D] = []
 	var instances: Array[Dictionary] = []
 	var batch_items: Array[Dictionary] = []
+	var geometry_cpu_by_instance: Dictionary = generated_base.get("geometry_cpu_by_instance", {})
+	var geometry_cpu_worker_usec := int(generated_base.get("geometry_cpu_usec", 0))
 	var mesh_build_started_usec := Time.get_ticks_usec()
 	for base_instance in base_instances:
 		var resolved: Dictionary = state_service.resolve_instance(base_instance)
@@ -367,7 +369,8 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 			continue
 		var instance: Dictionary = resolved["instance"]
 		instances.append(instance)
-		var mesh_result: Dictionary = _get_or_build_geometry_mesh(instance)
+		var prepared_cpu: Dictionary = geometry_cpu_by_instance.get(String(instance.get("instance_id", "")), {})
+		var mesh_result: Dictionary = _get_or_build_geometry_mesh(instance, prepared_cpu)
 		if not mesh_result.get("ok", false):
 			for pending_node in pending_nodes:
 				pending_node.free()
@@ -452,6 +455,7 @@ func publish_region(region_key: Vector2i, state: RefCounted, force_rebuild: bool
 		"surface_anchor_count": surface_anchor_count,
 		"generation_usec": generation_usec,
 		"generation_worker_usec": generation_worker_usec,
+		"geometry_cpu_worker_usec": geometry_cpu_worker_usec,
 		"main_thread_reconstruction_usec": main_thread_reconstruction_usec,
 		"logical_reconstruction_usec": _last_reconstruction_usec,
 		"mesh_build_usec": mesh_build_elapsed_usec,
@@ -1090,24 +1094,28 @@ func _region_id(region_key: Vector2i) -> String:
 	return "%d,%d" % [region_key.x, region_key.y]
 
 
-func _get_or_build_geometry_mesh(instance: Dictionary) -> Dictionary:
-	var cacheable := bool(instance.get("population_batched", false))
-	var cache_key := ""
-	if cacheable:
-		var key_data := {
-			"definition_id": instance.get("definition_id", ""),
-			"content_pin": instance.get("content_pin", {}),
-			"algorithm": instance.get("recipe_algorithm", ""),
-			"geometry": instance.get("geometry", {}),
-			"geometry_seeds": instance.get("geometry_seeds", {}),
-		}
-		cache_key = JSON.stringify(key_data, "", true, true).sha256_text()
-		if _geometry_mesh_cache.has(cache_key):
-			_geometry_mesh_cache_order.erase(cache_key)
-			_geometry_mesh_cache_order.append(cache_key)
-			return {"ok": true, "reason": "cache_hit", "mesh": _geometry_mesh_cache[cache_key]}
-	var result: Dictionary = RockMeshAdapter.build_mesh(instance["geometry"], instance["geometry_seeds"])
-	if result.get("ok", false) and cacheable:
+func _get_or_build_geometry_mesh(instance: Dictionary, prepared_cpu: Dictionary = {}) -> Dictionary:
+	# Procedural geometry is immutable for a fixed content pin + recipe + seed.
+	# Transform/appearance/logical components never mutate mesh topology, so all
+	# representatives (legacy, population and placed) can share this bounded cache.
+	var key_data := {
+		"definition_id": instance.get("definition_id", ""),
+		"content_pin": instance.get("content_pin", {}),
+		"algorithm": instance.get("recipe_algorithm", ""),
+		"geometry": instance.get("geometry", {}),
+		"geometry_seeds": instance.get("geometry_seeds", {}),
+	}
+	var cache_key := JSON.stringify(key_data, "", true, true).sha256_text()
+	if _geometry_mesh_cache.has(cache_key):
+		_geometry_mesh_cache_order.erase(cache_key)
+		_geometry_mesh_cache_order.append(cache_key)
+		return {"ok": true, "reason": "cache_hit", "mesh": _geometry_mesh_cache[cache_key]}
+	var result: Dictionary
+	if not prepared_cpu.is_empty():
+		result = RockMeshAdapter.mesh_from_cpu_data(prepared_cpu)
+	else:
+		result = RockMeshAdapter.build_mesh(instance["geometry"], instance["geometry_seeds"])
+	if result.get("ok", false):
 		_geometry_mesh_cache[cache_key] = result["mesh"]
 		_geometry_mesh_cache_order.append(cache_key)
 		while _geometry_mesh_cache_order.size() > MAX_CACHED_GEOMETRY_VARIANTS:
