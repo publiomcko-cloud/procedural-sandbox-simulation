@@ -2310,6 +2310,14 @@ func _update_status() -> void:
 		_peak_mesh_upload_ms,
 		_peak_frame_ms,
 	]
+	status += "Runtime timing: last op %s %.1f ms | frame p50/p95/p99 %.1f/%.1f/%.1f ms | process peak %.1f ms\n" % [
+		String(last_mesh_diagnostics.get("operation", _operation_name)),
+		float(last_mesh_diagnostics.get("elapsed_ms", 0.0)),
+		float(last_mesh_diagnostics.get("frame_time_p50_ms", 0.0)),
+		float(last_mesh_diagnostics.get("frame_time_p95_ms", 0.0)),
+		float(last_mesh_diagnostics.get("frame_time_p99_ms", 0.0)),
+		_peak_process_work_ms,
+	]
 	if global_rebuild_pending:
 		status += "Rebuilding visible set: %d regions staged\n" % loading_regions.size()
 	if cave_section_enabled:
