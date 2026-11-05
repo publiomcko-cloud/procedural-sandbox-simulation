@@ -582,14 +582,14 @@ static func sample_density_snapshot(
 	if snapshot.has("valid") and not bool(snapshot["valid"]):
 		return NAN
 	var world_position := SPATIAL.region_local_to_world(region_key, local_position)
-	var materialized := _sample_materialized_tiles(
+	var materialized_density := _sample_materialized_density(
 		world_position,
 		snapshot.get("materialized_tiles", []),
 		snapshot.get("materialized_tile_index", {})
 	)
 	var density: float
-	if materialized.get("found", false):
-		density = float(materialized["density"])
+	if materialized_density != INF:
+		density = materialized_density
 	else:
 		density = FIELD.sample_density(seed, region_key, local_position)
 	var centers: PackedVector3Array = snapshot.get("centers", PackedVector3Array())
@@ -627,13 +627,15 @@ static func build_materialized_tile_index(tiles_value: Variant) -> Dictionary:
 	return result
 
 
-static func _sample_materialized_tiles(
+static func _sample_materialized_density(
 	world_position: Vector3,
 	tiles_value: Variant,
 	index_value: Variant = {}
-) -> Dictionary:
+) -> float:
+	# Hot-path sampler: INF means "no materialized tile". Returning a scalar
+	# avoids allocating a Dictionary for every SDF lattice/normal sample.
 	if typeof(tiles_value) != TYPE_ARRAY:
-		return {"found": false}
+		return INF
 	if typeof(index_value) == TYPE_DICTIONARY and not (index_value as Dictionary).is_empty():
 		var chunk_width := float(GRID.CELLS_PER_CHUNK_X) * GRID.SAMPLE_STEP
 		var chunk_depth := float(GRID.CELLS_PER_CHUNK_Z) * GRID.SAMPLE_STEP
@@ -642,22 +644,22 @@ static func _sample_materialized_tiles(
 		var key := "%d,%d" % [gx, gz]
 		var index: Dictionary = index_value
 		if index.has(key):
-			var direct := _sample_materialized_tile(world_position, index[key])
-			if direct.get("found", false):
+			var direct := _sample_materialized_tile_density(world_position, index[key])
+			if direct != INF:
 				return direct
 	# Compatibility/fidelity fallback for old snapshots and exact-boundary cases.
 	for tile_value in tiles_value:
 		if typeof(tile_value) != TYPE_DICTIONARY:
 			continue
-		var sampled := _sample_materialized_tile(world_position, tile_value)
-		if sampled.get("found", false):
+		var sampled := _sample_materialized_tile_density(world_position, tile_value)
+		if sampled != INF:
 			return sampled
-	return {"found": false}
+	return INF
 
 
-static func _sample_materialized_tile(world_position: Vector3, tile_value: Variant) -> Dictionary:
+static func _sample_materialized_tile_density(world_position: Vector3, tile_value: Variant) -> float:
 	if typeof(tile_value) != TYPE_DICTIONARY:
-		return {"found": false}
+		return INF
 	var tile: Dictionary = tile_value
 	var origin: Vector3 = tile.get("origin_world", Vector3.INF)
 	var dims: Vector3i = tile.get("dims", Vector3i.ZERO)
@@ -665,19 +667,19 @@ static func _sample_materialized_tile(world_position: Vector3, tile_value: Varia
 	var values_value: Variant = tile.get("values", PackedFloat64Array())
 	if typeof(values_value) != TYPE_PACKED_FLOAT64_ARRAY \
 		and typeof(values_value) != TYPE_PACKED_FLOAT32_ARRAY:
-		return {"found": false}
+		return INF
 	var values = values_value
 	if not origin.is_finite() or dims.x < 2 or dims.y < 2 or dims.z < 2 \
 		or not is_finite(step) or step <= 0.0 \
 		or values.size() != dims.x * dims.y * dims.z:
-		return {"found": false}
+		return INF
 	var epsilon := 0.00001
 	var lattice := (world_position - origin) / step
 	if lattice.x < -epsilon or lattice.y < -epsilon or lattice.z < -epsilon \
 		or lattice.x > float(dims.x - 1) + epsilon \
 		or lattice.y > float(dims.y - 1) + epsilon \
 		or lattice.z > float(dims.z - 1) + epsilon:
-		return {"found": false}
+		return INF
 	var rx := roundi(lattice.x)
 	var ry := roundi(lattice.y)
 	var rz := roundi(lattice.z)
@@ -687,10 +689,7 @@ static func _sample_materialized_tile(world_position: Vector3, tile_value: Varia
 		rx = clampi(rx, 0, dims.x - 1)
 		ry = clampi(ry, 0, dims.y - 1)
 		rz = clampi(rz, 0, dims.z - 1)
-		return {
-			"found": true,
-			"density": float(values[(ry * dims.z + rz) * dims.x + rx]),
-		}
+		return float(values[(ry * dims.z + rz) * dims.x + rx])
 	var x0 := clampi(floori(lattice.x), 0, dims.x - 1)
 	var y0 := clampi(floori(lattice.y), 0, dims.y - 1)
 	var z0 := clampi(floori(lattice.z), 0, dims.z - 1)
@@ -714,7 +713,7 @@ static func _sample_materialized_tile(world_position: Vector3, tile_value: Varia
 	var c11 := lerpf(c011, c111, tx)
 	var c0 := lerpf(c00, c10, ty)
 	var c1 := lerpf(c01, c11, ty)
-	return {"found": true, "density": lerpf(c0, c1, tz)}
+	return lerpf(c0, c1, tz)
 
 
 func get_operations_for_region(region_key: Vector2i) -> Array[Dictionary]:
