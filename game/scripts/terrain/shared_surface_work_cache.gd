@@ -30,7 +30,7 @@ static func get_or_build(key: String, builder: Callable) -> Dictionary:
 			_mutex.unlock()
 			semaphore.wait()
 			continue
-		var semaphore := Semaphore.new()
+		var semaphore: Semaphore = Semaphore.new()
 		_inflight[key] = {"semaphore": semaphore, "waiters": 0}
 		_mutex.unlock()
 
@@ -43,7 +43,7 @@ static func get_or_build(key: String, builder: Callable) -> Dictionary:
 		_cache[key] = built
 		_order.append(key)
 		while _order.size() > MAX_RESULTS:
-			var oldest := _order.pop_front()
+			var oldest: String = String(_order.pop_front())
 			if oldest != key:
 				_cache.erase(oldest)
 		_inflight.erase(key)
@@ -51,6 +51,7 @@ static func get_or_build(key: String, builder: Callable) -> Dictionary:
 		for _index in range(waiter_count):
 			completed_semaphore.post()
 		return built
+	return {"valid": false, "reason": "shared_work_cache_unreachable"}
 
 
 static func clear() -> void:
@@ -63,6 +64,6 @@ static func clear() -> void:
 
 static func result_count() -> int:
 	_mutex.lock()
-	var count := _cache.size()
+	var count: int = _cache.size()
 	_mutex.unlock()
 	return count
