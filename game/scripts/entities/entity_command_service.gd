@@ -40,18 +40,33 @@ func initialize(authoritative_state_service: ProceduralObjectStateService, conte
 ## Reconstructs one canonical region without creating Godot nodes. Regions are
 ## explicit command preconditions: absent/unloaded content cannot be mutated.
 func reconstruct_region(region_key: Vector2i) -> Dictionary:
+	if not initialized:
+		return _failure("command_service_not_initialized")
+	if not _valid_region(region_key):
+		return _failure("command_region_invalid")
+	var generated: Dictionary = ObjectWorld.build_region_instances(
+		state_service.world_seed, state_service.world_id, region_key, registry
+	)
+	if not generated.get("ok", false):
+		return _failure(String(generated.get("reason", "command_region_generation_failed")))
+	return reconstruct_region_from_generated(region_key, generated)
+
+
+## Completes reconstruction from an immutable procedural-generation result.
+## This split lets the expensive terrain/surface scan run on a worker while
+## authoritative state registration remains serialized on the main thread.
+func reconstruct_region_from_generated(region_key: Vector2i, generated: Dictionary) -> Dictionary:
 	var reconstruction_started_usec := Time.get_ticks_usec()
 	if not initialized:
 		return _failure("command_service_not_initialized")
 	if not _valid_region(region_key):
 		return _failure("command_region_invalid")
+	if not generated.get("ok", false) or Vector2i(generated.get("region_key", region_key)) != region_key:
+		return _failure(String(generated.get("reason", "command_region_generation_invalid")))
 	for existing_id in _base_instances.keys().duplicate():
 		var existing: Dictionary = _base_instances[existing_id]
 		if Vector2i(existing.region_key) == region_key:
 			_base_instances.erase(existing_id)
-	var generated: Dictionary = ObjectWorld.build_region_instances(state_service.world_seed, state_service.world_id, region_key, registry)
-	if not generated.get("ok", false):
-		return _failure(String(generated.get("reason", "command_region_generation_failed")))
 	var count := 0
 	for base_instance in generated.get("instances", []):
 		var registered := _register_reconstructed_instance(base_instance)
@@ -71,8 +86,19 @@ func reconstruct_region(region_key: Vector2i) -> Dictionary:
 		if not registered.get("ok", false):
 			return registered
 		count += 1
-	last_reconstruction_usec = Time.get_ticks_usec() - reconstruction_started_usec
-	return {"ok": true, "region_key": region_key, "entity_count": count, "candidate_cell_count": int(generated.get("candidate_cell_count", 0)), "surface_anchor_count": int(generated.get("surface_anchor_count", 0)), "reconstruction_usec": last_reconstruction_usec}
+	var main_thread_usec := Time.get_ticks_usec() - reconstruction_started_usec
+	var generation_usec := int(generated.get("timings_usec", {}).get("total", 0))
+	last_reconstruction_usec = generation_usec + main_thread_usec
+	return {
+		"ok": true,
+		"region_key": region_key,
+		"entity_count": count,
+		"candidate_cell_count": int(generated.get("candidate_cell_count", 0)),
+		"surface_anchor_count": int(generated.get("surface_anchor_count", 0)),
+		"generation_usec": generation_usec,
+		"main_thread_reconstruction_usec": main_thread_usec,
+		"reconstruction_usec": last_reconstruction_usec,
+	}
 
 
 func release_region(region_key: Vector2i) -> void:
