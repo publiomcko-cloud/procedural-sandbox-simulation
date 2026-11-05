@@ -265,12 +265,30 @@ func clear() -> void:
 
 
 func _build_materialized_tile(region_key: Vector2i, coordinate: Vector2i) -> Dictionary:
-	var snapshot := get_meshing_snapshot_for_chunk(region_key, coordinate)
-	if not snapshot.get("valid", false):
+	var current_result := _get_materialized_tile(region_key, coordinate)
+	if not current_result.get("ok", false):
 		return {
 			"valid": false,
-			"reason": String(snapshot.get("storage_error", "snapshot_failed")),
+			"reason": String(current_result.get("reason", "tile_source_failure")),
 		}
+	var previous_values := PackedFloat64Array()
+	if current_result.get("found", false):
+		var current_tile: Dictionary = current_result["tile"]
+		var current_values: Variant = current_tile.get("values", PackedFloat64Array())
+		if typeof(current_values) == TYPE_PACKED_FLOAT64_ARRAY:
+			previous_values = current_values
+		elif typeof(current_values) == TYPE_PACKED_FLOAT32_ARRAY:
+			previous_values.resize(current_values.size())
+			for value_index in range(current_values.size()):
+				previous_values[value_index] = float(current_values[value_index])
+		else:
+			return {"valid": false, "reason": "materialized_tile_values_invalid"}
+
+	var candidates: Array[Dictionary] = []
+	for operation in _tail_operations:
+		if _operation_may_affect_chunk(operation, region_key, coordinate):
+			candidates.append(operation)
+
 	var region_origin := Spatial.region_origin_world(region_key)
 	var local_origin := Grid.origin_for(coordinate)
 	var world_origin := region_origin + Vector3(local_origin.x, Grid.MIN_BOUND.y, local_origin.z)
@@ -279,25 +297,43 @@ func _build_materialized_tile(region_key: Vector2i, coordinate: Vector2i) -> Dic
 		Grid.CELL_COUNT_Y + 1,
 		Grid.CELLS_PER_CHUNK_Z + 1
 	)
-	var values := PackedFloat32Array()
-	values.resize(dims.x * dims.y * dims.z)
+	var expected_count := dims.x * dims.y * dims.z
+	if not previous_values.is_empty() and previous_values.size() != expected_count:
+		return {"valid": false, "reason": "materialized_tile_shape_mismatch"}
+
+	# Preserve the selected CSG operand in float64 across checkpoints. Ordered
+	# min/max brush evaluation never combines the previous density arithmetically;
+	# it selects either the prior density or the current sphere threshold. Keeping
+	# that selected value in float64 prevents checkpoint-by-checkpoint rounding
+	# from changing later min/max decisions.
+	var values := PackedFloat64Array()
+	values.resize(expected_count)
 	for y in range(dims.y):
 		for z in range(dims.z):
 			for x in range(dims.x):
+				var value_index := _tile_index(x, y, z, dims)
 				var world_point := world_origin + Vector3(x, y, z) * MATERIALIZED_STEP
-				var mapped: Dictionary = Spatial.world_to_region_local(world_point)
-				if not mapped.get("valid", false):
-					return {"valid": false, "reason": "materialized_sample_mapping_failed"}
-				var density := Brush.sample_density_snapshot(
-					world_seed,
-					mapped["region_key"],
-					mapped["local_position"],
-					false,
-					snapshot
-				)
+				var density: float
+				if previous_values.is_empty():
+					var mapped: Dictionary = Spatial.world_to_region_local(world_point)
+					if not mapped.get("valid", false):
+						return {"valid": false, "reason": "materialized_sample_mapping_failed"}
+					density = Field.sample_density(
+						world_seed, mapped["region_key"], mapped["local_position"], false
+					)
+				else:
+					density = float(previous_values[value_index])
+				for operation in candidates:
+					var center: Vector3 = operation["center_world"]
+					var threshold := world_point.distance_to(center) - float(operation["radius"])
+					if int(operation["mode"]) == Brush.Mode.CARVE:
+						density = minf(density, threshold)
+					else:
+						density = maxf(density, -threshold)
 				if not is_finite(density):
 					return {"valid": false, "reason": "materialized_sample_non_finite"}
-				values[_tile_index(x, y, z, dims)] = density
+				values[value_index] = density
+
 	var tile_id := Grid.stable_id(region_key, coordinate)
 	return {
 		"valid": true,
