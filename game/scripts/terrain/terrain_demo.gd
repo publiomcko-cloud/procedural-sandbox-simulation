@@ -89,6 +89,7 @@ var lod_enabled := false
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
 var last_mesh_diagnostics: Dictionary = {}
+var _last_shared_boundary_diagnostics: Dictionary = {}
 var last_stream_error := ""
 
 var global_rebuild_pending := false
@@ -954,7 +955,8 @@ func _process_completed_mesh_jobs() -> void:
 				continue
 			var shared_side := String(record.get("shared_side", ""))
 			cpu_result = pair_result.get(shared_side, {})
-			last_mesh_diagnostics["last_shared_boundary_diagnostics"] = pair_result.get("diagnostics", {})
+			_last_shared_boundary_diagnostics = (pair_result.get("diagnostics", {}) as Dictionary).duplicate(true)
+			last_mesh_diagnostics["last_shared_boundary_diagnostics"] = _last_shared_boundary_diagnostics
 		else:
 			cpu_result = job.result
 		if not cpu_result.get("valid", false) or not cpu_result.has("positions"):
@@ -1465,6 +1467,7 @@ func _record_completed_operation(stage: Dictionary) -> void:
 		"last_dirty_mesh_job_count": _last_edit_mesh_jobs,
 		"edit_stage_state": "idle" if _edit_transaction.is_empty() else _edit_transaction.get("stage_state", "staging"),
 		"last_edit_rejection": _last_edit_rejection,
+		"last_shared_boundary_diagnostics": _last_shared_boundary_diagnostics.duplicate(true),
 	}
 
 
