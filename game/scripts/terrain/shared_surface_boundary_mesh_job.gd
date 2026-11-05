@@ -4,6 +4,7 @@ extends RefCounted
 ## Worker-compatible immutable job for one X-adjacent region-edge chunk pair.
 
 const Authority := preload("res://scripts/terrain/shared_surface_boundary_authority.gd")
+const WorkCache := preload("res://scripts/terrain/shared_surface_work_cache.gd")
 
 var world_seed: int
 var left_region_key: Vector2i
@@ -40,7 +41,19 @@ func run() -> void:
 			"ledger_revision": int(brush_snapshot.get("revision", -1)),
 		}
 	else:
-		result = Authority.build_x_region_boundary_pair(
-			world_seed, left_region_key, z_chunk, brush_snapshot
-		)
+		var key := "x:%d:%d:%d:%d:%d:%d" % [
+			world_seed,
+			int(brush_snapshot.get("revision", -1)),
+			int(brush_snapshot.get("ledger_operation_count", -1)),
+			left_region_key.x,
+			left_region_key.y,
+			z_chunk,
+		]
+		result = WorkCache.get_or_build(key, Callable(self, "_build_uncached"))
 	worker_finished_usec = Time.get_ticks_usec()
+
+
+func _build_uncached() -> Dictionary:
+	return Authority.build_x_region_boundary_pair(
+		world_seed, left_region_key, z_chunk, brush_snapshot
+	)
