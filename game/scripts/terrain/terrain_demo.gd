@@ -2427,7 +2427,7 @@ func _update_status() -> void:
 		int(last_mesh_diagnostics.get("lod0_chunk_count", 0)),
 		int(last_mesh_diagnostics.get("lod1_chunk_count", 0)),
 		_mesh_jobs.size(),
-		MAX_MESH_JOBS_IN_FLIGHT,
+		_mesh_job_limit,
 		MAX_MESH_UPLOADS_PER_FRAME,
 		_last_mesh_upload_ms,
 		_peak_mesh_upload_ms,
