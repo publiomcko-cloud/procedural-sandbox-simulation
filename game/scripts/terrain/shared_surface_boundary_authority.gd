@@ -26,6 +26,74 @@ const TETS := [
 ]
 
 
+static func make_x_pair_snapshot(
+	ledger: RefCounted,
+	left_region_key: Vector2i,
+	z_chunk: int
+) -> Dictionary:
+	if ledger == null or z_chunk < 0 or z_chunk >= Grid.CHUNK_COUNT_Z:
+		return {"valid": false, "reason": "invalid_pair_snapshot_request"}
+	var left_coordinate := Vector2i(Grid.CHUNK_COUNT_X - 1, z_chunk)
+	var right_region_key := left_region_key + Vector2i.RIGHT
+	var right_coordinate := Vector2i(0, z_chunk)
+	var left_snapshot: Dictionary = ledger.get_meshing_snapshot_for_chunk(left_region_key, left_coordinate)
+	var right_snapshot: Dictionary = ledger.get_meshing_snapshot_for_chunk(right_region_key, right_coordinate)
+	if not bool(left_snapshot.get("valid", false)):
+		return {"valid": false, "reason": "left_snapshot_failed", "detail": left_snapshot}
+	if not bool(right_snapshot.get("valid", false)):
+		return {"valid": false, "reason": "right_snapshot_failed", "detail": right_snapshot}
+
+	var by_sequence: Dictionary = {}
+	for snapshot_value in [left_snapshot, right_snapshot]:
+		var snapshot: Dictionary = snapshot_value
+		var centers: PackedVector3Array = snapshot.get("centers", PackedVector3Array())
+		var radii: PackedFloat64Array = snapshot.get("radii", PackedFloat64Array())
+		var modes: PackedByteArray = snapshot.get("modes", PackedByteArray())
+		var sequences: PackedInt32Array = snapshot.get("sequences", PackedInt32Array())
+		if centers.size() != radii.size() or centers.size() != modes.size() or centers.size() != sequences.size():
+			return {"valid": false, "reason": "pair_snapshot_attribute_mismatch"}
+		for index in range(centers.size()):
+			var sequence := int(sequences[index])
+			var row := {
+				"center": centers[index],
+				"radius": float(radii[index]),
+				"mode": int(modes[index]),
+			}
+			if by_sequence.has(sequence):
+				var existing: Dictionary = by_sequence[sequence]
+				if existing["center"] != row["center"] or float(existing["radius"]) != float(row["radius"]) or int(existing["mode"]) != int(row["mode"]):
+					return {"valid": false, "reason": "pair_snapshot_sequence_conflict", "sequence": sequence}
+			else:
+				by_sequence[sequence] = row
+
+	var ordered_sequences: Array[int] = []
+	for sequence_value in by_sequence.keys():
+		ordered_sequences.append(int(sequence_value))
+	ordered_sequences.sort()
+	var centers := PackedVector3Array()
+	var radii := PackedFloat64Array()
+	var modes := PackedByteArray()
+	var sequences := PackedInt32Array()
+	for sequence in ordered_sequences:
+		var row: Dictionary = by_sequence[sequence]
+		centers.append(row["center"])
+		radii.append(float(row["radius"]))
+		modes.append(int(row["mode"]))
+		sequences.append(sequence)
+	return {
+		"valid": true,
+		"revision": int(ledger.revision),
+		"world_seed": int(ledger.world_seed),
+		"generator_version": int(ledger.generator_version),
+		"centers": centers,
+		"radii": radii,
+		"modes": modes,
+		"sequences": sequences,
+		"candidate_operation_count": centers.size(),
+		"ledger_operation_count": int(ledger.get_edit_count()),
+	}
+
+
 static func build_x_region_boundary_pair(
 	world_seed: int,
 	left_region_key: Vector2i,
@@ -249,6 +317,8 @@ static func analyze_world_triangles(
 	var seam_edges: Array[String] = []
 	var bad_incidence := 0
 	var cross_owner := 0
+	var bad_edges: Array[Dictionary] = []
+	var non_cross_owned_edges: Array[Dictionary] = []
 	for edge_value in edge_incidence.keys():
 		var edge_key := String(edge_value)
 		var pts: Array = edge_points[edge_key]
@@ -259,11 +329,16 @@ static func analyze_world_triangles(
 		if _on_outer_yz(a, roi_min, roi_max) and _on_outer_yz(b, roi_min, roi_max):
 			continue
 		seam_edges.append(edge_key)
-		if int(edge_incidence[edge_key]) != 2:
-			bad_incidence += 1
+		var incidence := int(edge_incidence[edge_key])
 		var sides: Dictionary = edge_sides[edge_key]
+		if incidence != 2:
+			bad_incidence += 1
+			if bad_edges.size() < 32:
+				bad_edges.append({"edge": edge_key, "incidence": incidence, "sides": sides.keys(), "points": [a, b]})
 		if sides.has("left") and sides.has("right"):
 			cross_owner += 1
+		elif non_cross_owned_edges.size() < 32:
+			non_cross_owned_edges.append({"edge": edge_key, "incidence": incidence, "sides": sides.keys(), "points": [a, b]})
 
 	return {
 		"seam_edge_count": seam_edges.size(),
@@ -271,6 +346,8 @@ static func analyze_world_triangles(
 		"seam_cross_owner_count": cross_owner,
 		"t_junction_count": _count_t_junctions(seam_edges, edge_points),
 		"duplicate_triangle_count": duplicate_triangles,
+		"bad_edges": bad_edges,
+		"non_cross_owned_edges": non_cross_owned_edges,
 	}
 
 
@@ -356,22 +433,15 @@ static func _polygonize_tet(
 	var r01 := _root_id_and_cache(inside[0], outside[1], nodes, points, density, roi_min, step, root_cache, root_position_keys)
 	var r10 := _root_id_and_cache(inside[1], outside[0], nodes, points, density, roi_min, step, root_cache, root_position_keys)
 	var r11 := _root_id_and_cache(inside[1], outside[1], nodes, points, density, roi_min, step, root_cache, root_position_keys)
-	var option_a := _ordered_pair(r00, r11)
-	var option_b := _ordered_pair(r01, r10)
+	# Match MarchingTetrahedra and Lod01TransitionFixture exactly for 2/2
+	# tetrahedra: both use the a-d diagonal. Root interpolation remains globally
+	# canonical, but topology must share the production diagonal convention.
 	var result: Array[Dictionary] = []
-	var dropped := 0
-	if option_a <= option_b:
-		var a := _emit_triangle(r00, r01, r11, toward_empty, seam_x, root_cache)
-		var b := _emit_triangle(r00, r11, r10, toward_empty, seam_x, root_cache)
-		result.append_array(a["triangles"])
-		result.append_array(b["triangles"])
-		dropped += int(a["dropped_degenerate"]) + int(b["dropped_degenerate"])
-	else:
-		var a := _emit_triangle(r00, r01, r10, toward_empty, seam_x, root_cache)
-		var b := _emit_triangle(r01, r11, r10, toward_empty, seam_x, root_cache)
-		result.append_array(a["triangles"])
-		result.append_array(b["triangles"])
-		dropped += int(a["dropped_degenerate"]) + int(b["dropped_degenerate"])
+	var first := _emit_triangle(r00, r01, r11, toward_empty, seam_x, root_cache)
+	var second := _emit_triangle(r00, r11, r10, toward_empty, seam_x, root_cache)
+	result.append_array(first["triangles"])
+	result.append_array(second["triangles"])
+	var dropped := int(first["dropped_degenerate"]) + int(second["dropped_degenerate"])
 	return {"triangles": result, "dropped_degenerate": dropped}
 
 
