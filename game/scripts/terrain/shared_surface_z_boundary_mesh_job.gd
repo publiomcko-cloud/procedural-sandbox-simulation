@@ -58,5 +58,5 @@ func run() -> void:
 
 func _build_uncached() -> Dictionary:
 	return Authority.build_z_region_boundary_pair(
-		world_seed, low_z_region_key, x_chunk, brush_snapshot
+		world_seed, low_z_region_key, x_chunk, brush_snapshot, diagnostics_enabled
 	)
