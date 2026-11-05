@@ -294,15 +294,17 @@ func _qualify_mixed_lod_collars(ledger: RefCounted, pairs: Array) -> Dictionary:
 			right_plane_x, Grid.MIN_BOUND.y, Grid.MAX_BOUND.y, z_min, z_max
 		)
 
-		for diag in [left_diag, right_diag]:
-			total_edges += int(diag.get("seam_edge_count", 0))
-			bad_incidence += int(diag.get("seam_bad_incidence_count", 0))
-			t_junctions += int(diag.get("t_junction_count", 0))
-			cross_owned += int(diag.get("seam_cross_owner_count", 0))
-		valid_pair_count += 1
+		seam_details.append({"z_chunk": z_chunk, "side": "left", "diagnostics": left_diag})
+		seam_details.append({"z_chunk": z_chunk, "side": "right", "diagnostics": right_diag})
+		total_edges += int(left_diag.get("seam_edge_count", 0)) + int(right_diag.get("seam_edge_count", 0))
+		bad_incidence += int(left_diag.get("seam_bad_incidence_count", 0)) + int(right_diag.get("seam_bad_incidence_count", 0))
+		t_junctions += int(left_diag.get("t_junction_count", 0)) + int(right_diag.get("t_junction_count", 0))
+		cross_owned += int(left_diag.get("seam_cross_owner_count", 0)) + int(right_diag.get("seam_cross_owner_count", 0))
+		valid_pair_count += 2
 	return {
 		"valid": true,
 		"qualified_internal_seams": valid_pair_count,
+		"grid_chunk_count_z": Grid.CHUNK_COUNT_Z,
 		"total_seam_edges": total_edges,
 		"bad_incidence": bad_incidence,
 		"t_junctions": t_junctions,
