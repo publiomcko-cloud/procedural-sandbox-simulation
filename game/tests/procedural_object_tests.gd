@@ -954,6 +954,9 @@ func _test_playable_scene_publication() -> void:
 			if stream.get_active_region_count() == demo.get("active_regions").size() and not stream.get_region_instance_records(Vector2i.ZERO).is_empty():
 				break
 		_check(stream.get_active_region_count() == demo.get("active_regions").size(), "object visibility follows actually published active regions (objects=%d terrain=%d init=%s status=%s)" % [stream.get_active_region_count(), demo.get("active_regions").size(), stream.initialized, demo.get("_procedural_object_status")])
+		var runtime_object_metrics: Dictionary = stream.get_performance_snapshot().get("last_region", {})
+		_check(int(runtime_object_metrics.get("generation_worker_usec", 0)) > 0, "playable region population generation executes through the worker path")
+		_check(int(runtime_object_metrics.get("geometry_cpu_worker_usec", 0)) > 0, "playable procedural geometry CPU construction executes through the worker path")
 		var center_records: Array[Dictionary] = stream.get_region_instance_records(Vector2i.ZERO)
 		_check(center_records.size() >= 2, "scene publication creates both compatibility objects and declarative population from registered packages (instances=%d init=%s error=%s)" % [center_records.size(), stream.initialized, stream.initialization_error])
 		if center_records.size() < 2:
