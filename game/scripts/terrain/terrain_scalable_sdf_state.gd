@@ -252,6 +252,8 @@ func get_meshing_snapshot_for_chunk(region_key: Vector2i, chunk_coordinate: Vect
 	for operation in _tail_operations:
 		if _operation_may_affect_chunk(operation, region_key, chunk_coordinate):
 			candidates.append(operation)
+	var raw_candidate_count := candidates.size()
+	candidates = _reduce_consecutive_dominated_operations(candidates)
 	var arrays := _operation_arrays(candidates)
 	return {
 		"valid": true,
@@ -266,6 +268,7 @@ func get_meshing_snapshot_for_chunk(region_key: Vector2i, chunk_coordinate: Vect
 		"materialized_tiles": tiles_result.get("tiles", []),
 		"materialized_tile_index": Brush.build_materialized_tile_index(tiles_result.get("tiles", [])),
 		"candidate_operation_count": candidates.size(),
+		"raw_candidate_operation_count": raw_candidate_count,
 		"tail_operation_count": _tail_operations.size(),
 		"ledger_operation_count": _lifetime_operation_count,
 		"scalable_state": true,
@@ -747,6 +750,48 @@ func _operation_may_affect_chunk(
 		clampf(center.z, chunk_min.z, chunk_max.z)
 	)
 	return nearest.distance_squared_to(center) 		<= Brush.MESHING_NOOP_DISTANCE * Brush.MESHING_NOOP_DISTANCE
+
+
+func _reduce_consecutive_dominated_operations(
+	operations: Array[Dictionary]
+) -> Array[Dictionary]:
+	if operations.size() <= 1:
+		return operations.duplicate()
+	var result: Array[Dictionary] = []
+	var run: Array[Dictionary] = []
+	var run_mode := -1
+	for operation in operations:
+		var mode := int(operation["mode"])
+		if run_mode >= 0 and mode != run_mode:
+			result.append_array(run)
+			run.clear()
+		if run.is_empty():
+			run_mode = mode
+		var dominated := false
+		for existing in run:
+			if _sphere_operation_dominates(existing, operation):
+				dominated = true
+				break
+		if dominated:
+			continue
+		var filtered: Array[Dictionary] = []
+		for existing in run:
+			if not _sphere_operation_dominates(operation, existing):
+				filtered.append(existing)
+		filtered.append(operation)
+		run = filtered
+	result.append_array(run)
+	return result
+
+
+func _sphere_operation_dominates(a: Dictionary, b: Dictionary) -> bool:
+	if int(a["mode"]) != int(b["mode"]):
+		return false
+	var a_center: Vector3 = a["center_world"]
+	var b_center: Vector3 = b["center_world"]
+	var a_radius := float(a["radius"])
+	var b_radius := float(b["radius"])
+	return a_radius + 0.000001 >= b_radius + a_center.distance_to(b_center)
 
 
 func _operation_arrays(operations: Array[Dictionary]) -> Dictionary:
