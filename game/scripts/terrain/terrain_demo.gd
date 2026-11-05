@@ -23,8 +23,10 @@ const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
 const UNLOAD_RADIUS := 2
 const MAX_ACTIVE_REGIONS := 25
-const MAX_MESH_JOBS_IN_FLIGHT := 4
-const MAX_MESH_UPLOADS_PER_FRAME := 2
+const MIN_MESH_JOBS_IN_FLIGHT := 4
+const MAX_MESH_JOBS_IN_FLIGHT_HARD := 12
+const MAX_MESH_UPLOADS_PER_FRAME := 4
+const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
 const DIAGNOSTICS_REFRESH_INTERVAL := 0.25
 const FOCUS_MOVE_STEP := 4.0
 const MAX_STAGE_RETRIES := 2
@@ -107,6 +109,7 @@ var _stream_errors_by_region: Dictionary = {}
 var _superseded_stage_total := 0
 var _next_stage_token := 1
 var _mesh_jobs: Dictionary = {} # WorkerThreadPool task id -> immutable job/stage token
+var _mesh_job_limit := MIN_MESH_JOBS_IN_FLIGHT
 var _mesh_queue_wait_usec_samples: Array[int] = []
 var _pool_queue_wait_usec_samples: Array[int] = []
 var _mesh_upload_usec_samples: Array[int] = []
@@ -159,6 +162,11 @@ var _last_edit_rejection := ""
 
 func _ready() -> void:
 	_frame_time_samples.resize(512)
+	_mesh_job_limit = clampi(
+		OS.get_processor_count() - 1,
+		MIN_MESH_JOBS_IN_FLIGHT,
+		MAX_MESH_JOBS_IN_FLIGHT_HARD
+	)
 	_configure_preedit_arguments()
 	# Existing tests may inject the legacy v2 store. Normal runtime defaults to
 	# the materialized store and scalable edit state.
@@ -982,9 +990,28 @@ func _process_completed_mesh_jobs() -> void:
 		var task_id := int(task_id_value)
 		if WorkerThreadPool.is_task_completed(task_id):
 			completed_task_ids.append(task_id)
+	completed_task_ids.sort_custom(func(a: int, b: int) -> bool:
+		var record_a: Dictionary = _mesh_jobs[a]
+		var record_b: Dictionary = _mesh_jobs[b]
+		var stage_a: Dictionary = loading_regions.get(String(record_a.get("stage_id", "")), {})
+		var stage_b: Dictionary = loading_regions.get(String(record_b.get("stage_id", "")), {})
+		var pa := _stage_priority(String(stage_a.get("purpose", "load")))
+		var pb := _stage_priority(String(stage_b.get("purpose", "load")))
+		if pa != pb:
+			return pa < pb
+		var ka: Vector2i = stage_a.get("region_key", Vector2i.ZERO)
+		var kb: Vector2i = stage_b.get("region_key", Vector2i.ZERO)
+		var da := maxi(absi(ka.x - focus_region_key.x), absi(ka.y - focus_region_key.y))
+		var db := maxi(absi(kb.x - focus_region_key.x), absi(kb.y - focus_region_key.y))
+		return da < db
+	)
 	var uploads_this_frame := 0
+	var upload_frame_started_usec := Time.get_ticks_usec()
 	for task_id in completed_task_ids:
 		if uploads_this_frame >= MAX_MESH_UPLOADS_PER_FRAME:
+			break
+		if uploads_this_frame > 0 \
+			and Time.get_ticks_usec() - upload_frame_started_usec >= MESH_UPLOAD_FRAME_BUDGET_USEC:
 			break
 		WorkerThreadPool.wait_for_task_completion(task_id)
 		var record: Dictionary = _mesh_jobs[task_id]
@@ -1074,7 +1101,7 @@ func _process_completed_mesh_jobs() -> void:
 
 
 func _dispatch_mesh_jobs() -> void:
-	while _mesh_jobs.size() < MAX_MESH_JOBS_IN_FLIGHT:
+	while _mesh_jobs.size() < _mesh_job_limit:
 		var request := _next_mesh_job_request()
 		if request.is_empty():
 			return
@@ -2030,6 +2057,8 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["global_rebuild_pending"] = global_rebuild_pending
 	last_mesh_diagnostics["max_active_region_count"] = MAX_ACTIVE_REGIONS
 	last_mesh_diagnostics["max_mesh_uploads_per_frame"] = MAX_MESH_UPLOADS_PER_FRAME
+	last_mesh_diagnostics["mesh_upload_frame_budget_usec"] = MESH_UPLOAD_FRAME_BUDGET_USEC
+	last_mesh_diagnostics["mesh_job_limit"] = _mesh_job_limit
 	last_mesh_diagnostics["peak_mesh_uploads_per_frame"] = _peak_mesh_uploads_per_frame
 	last_mesh_diagnostics["mesh_jobs_in_flight"] = _mesh_jobs.size()
 	last_mesh_diagnostics["peak_mesh_jobs_in_flight"] = _peak_mesh_jobs_in_flight
