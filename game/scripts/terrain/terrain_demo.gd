@@ -58,6 +58,7 @@ var _checkpoint_status := "checkpoint idle"
 var _checkpoint_generation := 0
 var _checkpoint_last_worker_ms := 0.0
 var _checkpoint_started_usec := 0
+var _checkpoint_overlap_observed := false
 var _preedit_path := ""
 var _preedit_count := PREEDIT_DEFAULT_COUNT
 var _preedit_status := "F5: inject deterministic pre-edits"
@@ -238,6 +239,8 @@ func _process(delta: float) -> void:
 	_update_focus_key()
 	_reconcile_region_window()
 	_update_lod_selection()
+	if _checkpoint_task_id >= 0 and (global_rebuild_pending or not loading_regions.is_empty()):
+		_checkpoint_overlap_observed = true
 	_process_async_checkpoint()
 	_maybe_schedule_async_checkpoint()
 	_process_one_chunk_job()
@@ -2031,6 +2034,7 @@ func _start_async_checkpoint(manual: bool) -> bool:
 	_checkpoint_job = job
 	_checkpoint_task_id = task_id
 	_checkpoint_started_usec = now
+	_checkpoint_overlap_observed = false
 	_checkpoint_status = "checkpoint running: %d frozen tail edit(s)" % (snapshot.get("tail_operations", []) as Array).size()
 	if manual:
 		_persistence_status = "Async materialized checkpoint queued; gameplay remains active"
