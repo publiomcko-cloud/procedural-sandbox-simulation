@@ -120,6 +120,125 @@ static func make_x_pair_snapshot(
 	}
 
 
+static func make_z_pair_snapshot(
+	ledger: RefCounted,
+	low_z_region_key: Vector2i,
+	x_chunk: int
+) -> Dictionary:
+	if ledger == null or x_chunk < 0 or x_chunk >= Grid.CHUNK_COUNT_X:
+		return {"valid": false, "reason": "invalid_z_pair_snapshot_request"}
+	return _merge_snapshot_requests(ledger, [
+		{"region_key": low_z_region_key, "coordinate": Vector2i(x_chunk, Grid.CHUNK_COUNT_Z - 1)},
+		{"region_key": low_z_region_key + Vector2i(0, 1), "coordinate": Vector2i(x_chunk, 0)},
+	])
+
+
+static func make_xz_corner_snapshot(
+	ledger: RefCounted,
+	min_region_key: Vector2i
+) -> Dictionary:
+	if ledger == null:
+		return {"valid": false, "reason": "invalid_corner_snapshot_request"}
+	return _merge_snapshot_requests(ledger, [
+		{"region_key": min_region_key, "coordinate": Vector2i(Grid.CHUNK_COUNT_X - 1, Grid.CHUNK_COUNT_Z - 1)},
+		{"region_key": min_region_key + Vector2i(1, 0), "coordinate": Vector2i(0, Grid.CHUNK_COUNT_Z - 1)},
+		{"region_key": min_region_key + Vector2i(0, 1), "coordinate": Vector2i(Grid.CHUNK_COUNT_X - 1, 0)},
+		{"region_key": min_region_key + Vector2i(1, 1), "coordinate": Vector2i(0, 0)},
+	])
+
+
+static func _merge_snapshot_requests(ledger: RefCounted, requests: Array) -> Dictionary:
+	var by_sequence: Dictionary = {}
+	var materialized_by_id: Dictionary = {}
+	for request_value in requests:
+		if typeof(request_value) != TYPE_DICTIONARY:
+			return {"valid": false, "reason": "snapshot_request_invalid"}
+		var request: Dictionary = request_value
+		var snapshot: Dictionary = ledger.get_meshing_snapshot_for_chunk(
+			request["region_key"], request["coordinate"]
+		)
+		if not bool(snapshot.get("valid", false)):
+			return {
+				"valid": false,
+				"reason": "snapshot_source_failed",
+				"request": request,
+				"detail": snapshot,
+			}
+		var centers: PackedVector3Array = snapshot.get("centers", PackedVector3Array())
+		var radii: PackedFloat64Array = snapshot.get("radii", PackedFloat64Array())
+		var modes: PackedByteArray = snapshot.get("modes", PackedByteArray())
+		var sequences_value: Variant = snapshot.get("sequences", PackedInt32Array())
+		if typeof(sequences_value) != TYPE_PACKED_INT32_ARRAY \
+			and typeof(sequences_value) != TYPE_PACKED_INT64_ARRAY:
+			return {"valid": false, "reason": "snapshot_sequence_type_invalid"}
+		if centers.size() != radii.size() or centers.size() != modes.size() \
+			or centers.size() != sequences_value.size():
+			return {"valid": false, "reason": "snapshot_attribute_mismatch"}
+		for index in range(centers.size()):
+			var sequence := int(sequences_value[index])
+			var row := {
+				"center": centers[index],
+				"radius": float(radii[index]),
+				"mode": int(modes[index]),
+			}
+			if by_sequence.has(sequence):
+				var existing: Dictionary = by_sequence[sequence]
+				if existing["center"] != row["center"] \
+					or float(existing["radius"]) != float(row["radius"]) \
+					or int(existing["mode"]) != int(row["mode"]):
+					return {
+						"valid": false,
+						"reason": "snapshot_sequence_conflict",
+						"sequence": sequence,
+					}
+			else:
+				by_sequence[sequence] = row
+		var tiles_value: Variant = snapshot.get("materialized_tiles", [])
+		if typeof(tiles_value) == TYPE_ARRAY:
+			for tile_value in tiles_value:
+				if typeof(tile_value) != TYPE_DICTIONARY:
+					continue
+				var tile: Dictionary = tile_value
+				var tile_id := String(tile.get("tile_id", ""))
+				if not tile_id.is_empty() and not materialized_by_id.has(tile_id):
+					materialized_by_id[tile_id] = tile
+
+	var ordered_sequences: Array[int] = []
+	for sequence_value in by_sequence.keys():
+		ordered_sequences.append(int(sequence_value))
+	ordered_sequences.sort()
+	var centers := PackedVector3Array()
+	var radii := PackedFloat64Array()
+	var modes := PackedByteArray()
+	var sequences := PackedInt64Array()
+	for sequence in ordered_sequences:
+		var row: Dictionary = by_sequence[sequence]
+		centers.append(row["center"])
+		radii.append(float(row["radius"]))
+		modes.append(int(row["mode"]))
+		sequences.append(sequence)
+	var tile_ids: Array[String] = []
+	for tile_id_value in materialized_by_id.keys():
+		tile_ids.append(String(tile_id_value))
+	tile_ids.sort()
+	var materialized_tiles: Array[Dictionary] = []
+	for tile_id in tile_ids:
+		materialized_tiles.append(materialized_by_id[tile_id])
+	return {
+		"valid": true,
+		"revision": int(ledger.revision),
+		"world_seed": int(ledger.world_seed),
+		"generator_version": int(ledger.generator_version),
+		"centers": centers,
+		"radii": radii,
+		"modes": modes,
+		"sequences": sequences,
+		"materialized_tiles": materialized_tiles,
+		"candidate_operation_count": centers.size(),
+		"ledger_operation_count": int(ledger.get_edit_count()),
+	}
+
+
 static func build_x_region_boundary_pair(
 	world_seed: int,
 	left_region_key: Vector2i,
