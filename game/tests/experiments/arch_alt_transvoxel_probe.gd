@@ -11,7 +11,8 @@ const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 
 const SEED := 131102026
 const STEP := 0.25
-const INTERIOR_MIN := Vector3(14.0, 1.0, 6.0)
+const FACE_Y_MIN := 1.0
+const FACE_Z_MIN := 6.0
 const INTERIOR_CELLS := Vector3i(8, 8, 8)
 const TARGET_XPLUS := 16.0
 const CHANNEL_SDF := 1
@@ -105,7 +106,6 @@ func _build_case(snapshot: Dictionary) -> Dictionary:
 	for y in range(size.y):
 		for z in range(size.z):
 			for x in range(size.x):
-				var local_node := Vector3i(x, y, z) - Vector3i.ONE * min_padding
 				var transition_face_buffer_x := size.x - 1 - min_padding
 				var world := Vector3(
 					TARGET_XPLUS + float(x - transition_face_buffer_x) * STEP,
