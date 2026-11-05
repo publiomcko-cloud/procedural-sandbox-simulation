@@ -115,6 +115,7 @@ static func make_x_pair_snapshot(
 		"modes": modes,
 		"sequences": sequences,
 		"materialized_tiles": materialized_tiles,
+		"materialized_tile_index": Brush.build_materialized_tile_index(materialized_tiles),
 		"candidate_operation_count": centers.size(),
 		"ledger_operation_count": int(ledger.get_edit_count()),
 	}
@@ -234,6 +235,7 @@ static func _merge_snapshot_requests(ledger: RefCounted, requests: Array) -> Dic
 		"modes": modes,
 		"sequences": sequences,
 		"materialized_tiles": materialized_tiles,
+		"materialized_tile_index": Brush.build_materialized_tile_index(materialized_tiles),
 		"candidate_operation_count": centers.size(),
 		"ledger_operation_count": int(ledger.get_edit_count()),
 	}
