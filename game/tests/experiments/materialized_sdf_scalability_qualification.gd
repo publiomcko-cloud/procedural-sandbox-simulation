@@ -155,8 +155,9 @@ func _run() -> void:
 		_check(int(diag.get("seam_bad_incidence_count", -1)) == 0, "materialized seam has incidence 2")
 		_check(int(diag.get("t_junction_count", -1)) == 0, "materialized seam has no T-junctions")
 		_check(
-			int(diag.get("seam_cross_owner_count", -1)) 				== int(diag.get("seam_edge_count", -2)),
-			"materialized seam remains cross-owned"
+			int(diag.get("seam_cross_owner_count", -1))
+				== int(diag.get("seam_crossing_edge_count", -2)),
+			"every geometrically crossing seam edge remains cross-owned"
 		)
 
 	# Fresh-process style hot load. No journal or tile is allowed to be read just
