@@ -54,6 +54,13 @@ jobs:
             grep -q 'RUNTIME_PERFORMANCE_BASELINE_PASS' "/tmp/runtime-performance-$i.log"
           done
 
+      - name: Repeated shared-surface benchmark
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 180s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/experiments/p1_shared_repeat_benchmark.gd 2>&1 | tee /tmp/p1-shared-repeat.log
+          grep -q 'P1_SHARED_REPEAT_BENCHMARK_PASS' /tmp/p1-shared-repeat.log
+
       - name: Full validation
         shell: bash
         run: |
@@ -70,3 +77,4 @@ jobs:
             /tmp/shared-surface.log
             /tmp/runtime-performance-*.log
             /tmp/validate.log
+            /tmp/p1-shared-repeat.log
