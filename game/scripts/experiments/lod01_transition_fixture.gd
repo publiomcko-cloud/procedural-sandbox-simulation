@@ -31,8 +31,11 @@ const CUBE_TETRAHEDRA := [
 var _center := Vector3.ZERO
 var _positions := PackedVector3Array()
 var _normals := PackedVector3Array()
-var _samples: Dictionary = {}
-var _sample_list: Array[Dictionary] = []
+# P2: sample identity remains dictionary-indexed, but hot sample payloads live
+# in packed typed buffers instead of one Dictionary per sample.
+var _sample_ids: Dictionary = {}
+var _sample_points := PackedVector3Array()
+var _sample_densities := PackedFloat64Array()
 var _sampler := Callable()
 var _world_seed := 424242
 var _brush_snapshot: Dictionary = {}
@@ -149,7 +152,7 @@ static func build_transition_cell(
 		var c: int = builder._add_sample_point(triangle[2], world_seed, brush_snapshot)
 		if c < 0:
 			return builder._failure_result()
-		builder._polygonize_tetra([center_id, a, b, c])
+		builder._polygonize_tetra4(center_id, a, b, c)
 		if not builder._failure_reason.is_empty():
 			return builder._failure_result()
 	var polygonization_usec := Time.get_ticks_usec() - triangulation_started
@@ -179,6 +182,9 @@ static func build_lod1_chunk(
 	var min_world := Vector3(min_lod0_lattice) * LOD0_STEP
 	var geometry_usec := 0
 	var transition_count := 0
+	# Reuse one typed 8-ID buffer for all uniform cells in this chunk.
+	var ids := PackedInt32Array()
+	ids.resize(8)
 	var polygonization_started_usec := Time.get_ticks_usec()
 	for y in range(cell_extent.y):
 		for z in range(cell_extent.z):
@@ -187,15 +193,15 @@ static func build_lod1_chunk(
 				var cell_lattice := min_lod0_lattice + cell * LOD1_IN_LOD0_STEPS
 				var selected := transition_faces_for_chunk_cell(cell, cell_extent)
 				if selected.is_empty():
-					var ids: Array[int] = []
 					var origin := min_world + Vector3(cell) * LOD1_STEP
-					for corner in CUBE_CORNERS:
+					for corner_index in range(CUBE_CORNERS.size()):
+						var corner: Vector3i = CUBE_CORNERS[corner_index]
 						var sample_id: int = builder._add_sample_point(origin + Vector3(corner) * LOD1_STEP, world_seed, brush_snapshot)
 						if sample_id < 0:
 							return builder._failure_result()
-						ids.append(sample_id)
+						ids[corner_index] = sample_id
 					for tetra in CUBE_TETRAHEDRA:
-						builder._polygonize_tetra([ids[tetra[0]], ids[tetra[1]], ids[tetra[2]], ids[tetra[3]]])
+						builder._polygonize_tetra4(ids[tetra[0]], ids[tetra[1]], ids[tetra[2]], ids[tetra[3]])
 						if not builder._failure_reason.is_empty():
 							return builder._failure_result()
 					continue
@@ -217,7 +223,7 @@ static func build_lod1_chunk(
 					var c: int = builder._add_sample_point(triangle[2], world_seed, brush_snapshot)
 					if c < 0:
 						return builder._failure_result()
-					builder._polygonize_tetra([center_id, a, b, c])
+					builder._polygonize_tetra4(center_id, a, b, c)
 					if not builder._failure_reason.is_empty():
 						return builder._failure_result()
 	var polygonization_usec := Time.get_ticks_usec() - polygonization_started_usec
@@ -250,19 +256,21 @@ static func build_uniform_reference_cell(
 	var subcells := 2 if lod == 0 else 1
 	var origin := Vector3(min_lod0_lattice) * LOD0_STEP
 	var geometry_usec := 0
+	var ids := PackedInt32Array()
+	ids.resize(8)
 	var triangulation_started := Time.get_ticks_usec()
 	for y in range(subcells):
 		for z in range(subcells):
 			for x in range(subcells):
-				var ids: Array[int] = []
-				for corner in CUBE_CORNERS:
+				for corner_index in range(CUBE_CORNERS.size()):
+					var corner: Vector3i = CUBE_CORNERS[corner_index]
 					var point := origin + Vector3(x, y, z) * step + Vector3(corner) * step
 					var sample_id := builder._add_sample_point(point, world_seed, brush_snapshot)
 					if sample_id < 0:
 						return builder._failure_result()
-					ids.append(sample_id)
+					ids[corner_index] = sample_id
 				for tetra in CUBE_TETRAHEDRA:
-					builder._polygonize_tetra([ids[tetra[0]], ids[tetra[1]], ids[tetra[2]], ids[tetra[3]]])
+					builder._polygonize_tetra4(ids[tetra[0]], ids[tetra[1]], ids[tetra[2]], ids[tetra[3]])
 					if not builder._failure_reason.is_empty():
 						return builder._failure_result()
 	var polygonization_usec := Time.get_ticks_usec() - triangulation_started
@@ -291,7 +299,7 @@ func _make_result(
 		"vertices": _positions,
 		"normals": _normals,
 		"triangle_count": _positions.size() / 3,
-		"sample_count": _samples.size(),
+		"sample_count": _sample_points.size(),
 		"timings_usec": {
 			"transition_geometry": geometry_usec,
 			"sdf_ledger_sampling": _sampling_usec,
@@ -299,7 +307,7 @@ func _make_result(
 			"normal_computation": _normal_usec,
 			"array_mesh_publication": 0,
 		},
-		"cpu_array_bytes": _positions.size() * 24 + _samples.size() * 32,
+		"cpu_array_bytes": _positions.size() * 24 + _sample_points.size() * 32,
 		"world_seed": world_seed,
 		"generator_version": FIELD.GENERATOR_VERSION,
 		"ledger_revision": int(_brush_snapshot.get("revision", 0)),
@@ -416,8 +424,8 @@ static func _face_point(base: Vector3, axis: int, fixed: float, u_axis: int, v_a
 
 func _add_sample_point(point: Vector3, world_seed: int, brush_snapshot: Dictionary) -> int:
 	var key := "%d,%d,%d" % [roundi(point.x * 4000.0), roundi(point.y * 4000.0), roundi(point.z * 4000.0)]
-	if _samples.has(key):
-		return int(_samples[key]["id"])
+	if _sample_ids.has(key):
+		return int(_sample_ids[key])
 	var density := NAN
 	var sample_started := Time.get_ticks_usec()
 	if _sampler.is_valid():
@@ -428,54 +436,79 @@ func _add_sample_point(point: Vector3, world_seed: int, brush_snapshot: Dictiona
 	if not is_finite(density):
 		_failure_reason = "non_finite_sample_density"
 		return -1
-	var sample := {"id": _samples.size(), "point": point, "density": density}
-	_samples[key] = sample
-	_sample_list.append(sample)
-	return int(sample["id"])
+	var sample_id := _sample_points.size()
+	_sample_ids[key] = sample_id
+	_sample_points.append(point)
+	_sample_densities.append(density)
+	return sample_id
 
 
-func _polygonize_tetra(ids: Array[int]) -> void:
-	var inside: Array[int] = []
-	var outside: Array[int] = []
+func _polygonize_tetra4(id0: int, id1: int, id2: int, id3: int) -> void:
+	# Vector4i is a value type; unlike the previous Array[int], this creates no
+	# per-tetra Variant container.
+	var ids := Vector4i(id0, id1, id2, id3)
+	var inside_count := 0
+	var outside_count := 0
+	var inside0 := -1
+	var inside1 := -1
+	var inside2 := -1
+	var outside0 := -1
+	var outside1 := -1
+	var outside2 := -1
 	var inside_center := Vector3.ZERO
 	var outside_center := Vector3.ZERO
-	for id in ids:
-		var sample: Dictionary = _sample_by_id(id)
-		if float(sample["density"]) >= 0.0:
-			inside.append(id)
-			inside_center += sample["point"]
+	for slot in range(4):
+		var sample_id := ids[slot]
+		if sample_id < 0 or sample_id >= _sample_points.size():
+			_failure_reason = "invalid_sample_id"
+			return
+		if float(_sample_densities[sample_id]) >= 0.0:
+			match inside_count:
+				0: inside0 = sample_id
+				1: inside1 = sample_id
+				2: inside2 = sample_id
+			inside_count += 1
+			inside_center += _sample_points[sample_id]
 		else:
-			outside.append(id)
-			outside_center += sample["point"]
-	if inside.is_empty() or outside.is_empty():
+			match outside_count:
+				0: outside0 = sample_id
+				1: outside1 = sample_id
+				2: outside2 = sample_id
+			outside_count += 1
+			outside_center += _sample_points[sample_id]
+	if inside_count == 0 or outside_count == 0:
 		return
-	inside_center /= float(inside.size())
-	outside_center /= float(outside.size())
+	inside_center /= float(inside_count)
+	outside_center /= float(outside_count)
 	var toward_empty := outside_center - inside_center
-	if inside.size() == 1 or outside.size() == 1:
-		var pivot := inside[0] if inside.size() == 1 else outside[0]
-		var others := outside if inside.size() == 1 else inside
-		_emit_triangle(_edge_point(pivot, others[0]), _edge_point(pivot, others[1]), _edge_point(pivot, others[2]), toward_empty)
+	if inside_count == 1 or outside_count == 1:
+		var pivot := inside0 if inside_count == 1 else outside0
+		var other0 := outside0 if inside_count == 1 else inside0
+		var other1 := outside1 if inside_count == 1 else inside1
+		var other2 := outside2 if inside_count == 1 else inside2
+		_emit_triangle(
+			_edge_point(pivot, other0),
+			_edge_point(pivot, other1),
+			_edge_point(pivot, other2),
+			toward_empty
+		)
 	else:
-		var a := _edge_point(inside[0], outside[0])
-		var b := _edge_point(inside[0], outside[1])
-		var c := _edge_point(inside[1], outside[0])
-		var d := _edge_point(inside[1], outside[1])
+		var a := _edge_point(inside0, outside0)
+		var b := _edge_point(inside0, outside1)
+		var c := _edge_point(inside1, outside0)
+		var d := _edge_point(inside1, outside1)
 		_emit_triangle(a, b, d, toward_empty)
 		_emit_triangle(a, d, c, toward_empty)
 
 
-func _sample_by_id(id: int) -> Dictionary:
-	return _sample_list[id] if id >= 0 and id < _sample_list.size() else {}
-
-
 func _edge_point(a_id: int, b_id: int) -> Vector3:
-	var a: Dictionary = _sample_by_id(a_id)
-	var b: Dictionary = _sample_by_id(b_id)
-	var a_point: Vector3 = a["point"]
-	var b_point: Vector3 = b["point"]
-	var av := float(a["density"])
-	var bv := float(b["density"])
+	if a_id < 0 or b_id < 0 or a_id >= _sample_points.size() or b_id >= _sample_points.size():
+		_failure_reason = "invalid_sample_id"
+		return Vector3(NAN, NAN, NAN)
+	var a_point: Vector3 = _sample_points[a_id]
+	var b_point: Vector3 = _sample_points[b_id]
+	var av := float(_sample_densities[a_id])
+	var bv := float(_sample_densities[b_id])
 	# Adjacent tetrahedra can ask for the same crossed edge in opposite
 	# directions. Canonicalize its endpoints before interpolation so the
 	# resulting Vector3 bits do not depend on tetrahedron traversal order.
@@ -514,28 +547,38 @@ func _emit_triangle(a: Vector3, b: Vector3, c: Vector3, toward_empty: Vector3) -
 		b = c
 		c = swap
 		cross = -cross
-	var normal := Vector3.ZERO
-	var triangle_normals: Array[Vector3] = []
 	var normal_started := Time.get_ticks_usec()
-	for point in [a, b, c]:
-		var gradient := Vector3(
-			_sample_density(point + Vector3.RIGHT * NORMAL_EPSILON) - _sample_density(point - Vector3.RIGHT * NORMAL_EPSILON),
-			_sample_density(point + Vector3.UP * NORMAL_EPSILON) - _sample_density(point - Vector3.UP * NORMAL_EPSILON),
-			_sample_density(point + Vector3.BACK * NORMAL_EPSILON) - _sample_density(point - Vector3.BACK * NORMAL_EPSILON)
-		)
-		if not _failure_reason.is_empty():
-			return
-		normal = -gradient.normalized() if gradient.length_squared() > 1.0e-12 else cross.normalized()
-		if not gradient.is_finite() or not normal.is_finite():
-			_failure_reason = "non_finite_normal_output"
-			return
-		triangle_normals.append(normal)
-	_normal_usec += Time.get_ticks_usec() - normal_started
-	if triangle_normals.size() != 3:
-		_failure_reason = "invalid_normal_output"
+	var normal_a := _normal_for_point(a, cross)
+	if not _failure_reason.is_empty():
 		return
-	_positions.append_array([a, b, c])
-	_normals.append_array(triangle_normals)
+	var normal_b := _normal_for_point(b, cross)
+	if not _failure_reason.is_empty():
+		return
+	var normal_c := _normal_for_point(c, cross)
+	if not _failure_reason.is_empty():
+		return
+	_normal_usec += Time.get_ticks_usec() - normal_started
+	_positions.append(a)
+	_positions.append(b)
+	_positions.append(c)
+	_normals.append(normal_a)
+	_normals.append(normal_b)
+	_normals.append(normal_c)
+
+
+func _normal_for_point(point: Vector3, fallback_cross: Vector3) -> Vector3:
+	var gradient := Vector3(
+		_sample_density(point + Vector3.RIGHT * NORMAL_EPSILON) - _sample_density(point - Vector3.RIGHT * NORMAL_EPSILON),
+		_sample_density(point + Vector3.UP * NORMAL_EPSILON) - _sample_density(point - Vector3.UP * NORMAL_EPSILON),
+		_sample_density(point + Vector3.BACK * NORMAL_EPSILON) - _sample_density(point - Vector3.BACK * NORMAL_EPSILON)
+	)
+	if not _failure_reason.is_empty():
+		return Vector3.ZERO
+	var normal := -gradient.normalized() if gradient.length_squared() > 1.0e-12 else fallback_cross.normalized()
+	if not gradient.is_finite() or not normal.is_finite():
+		_failure_reason = "non_finite_normal_output"
+		return Vector3.ZERO
+	return normal
 
 
 func _sample_density(point: Vector3) -> float:
