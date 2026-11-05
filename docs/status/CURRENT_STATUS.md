@@ -1,3 +1,30 @@
+# Current project status — owner-accepted runtime mainline candidate (2026-11-05)
+
+## Authoritative 2026-11-05 override
+
+The active development path is now `feat/free-exploration-mode`, derived from the runtime/performance line and accepted by the owner for mainline integration. The accepted runtime source HEAD before documentary reconciliation is `314edceb618e537b6d7a249330a854aca3113010`. At pre-merge verification, live `main` is `5997a76d345f45bf86edfe83f690336391e8be27`; the candidate is **203 commits ahead, 0 behind**, and that `main` SHA is the exact merge base.
+
+The candidate incorporates the scalable/materialized SDF runtime, shared-surface playable integration, persistence, localized remeshing, runtime hardening, asynchronous procedural-object generation/geometry preparation, entity command/history fixes, event-driven LOD work and the F10 free-exploration mode. The owner performed the GUI test on 2026-11-05 and reported that free exploration works, editing can continue while exploring, and no perceptible lag was observed.
+
+Final automated evidence on source HEAD `314edceb618e537b6d7a249330a854aca3113010`:
+
+- GitHub Actions `42117264773`: SUCCESS.
+- `FREE_EXPLORATION_MODE_PASS: assertions=17 failures=0`.
+- `TERRAIN_LOD_RUNTIME_PASS: assertions=55 failures=0`.
+- `RUNTIME_SCALABLE_PLAYABLE_PASS: assertions=33 failures=0`.
+- `VALIDATION_PASS: L0-L2; GUI visual test remains an owner task`.
+- Starter checks `42117264811`: SUCCESS.
+
+The owner explicitly authorized documentary reconciliation and merge of this line into `main`. The older P3.1 R12-CXR/R6 scientific campaign is **superseded as the active project path**. Its evidence remains historical and must not be deleted or rewritten; its still-open R1–R6 draft PR chain is to be closed as superseded only after the runtime mainline merge is verified.
+
+For current validation use **Godot 4.7.2** and `scripts/validate.sh`. Any historical `scripts/validate.ps1` references below describe earlier snapshots only and are not current operating instructions.
+
+See [2026-11-05 runtime mainline reconciliation](../checkpoints/2026-11-05-RUNTIME-MAINLINE-RECONCILIATION.md). After integration, new functional work starts from live `main`; do not resume R6/R12 unless the owner explicitly reopens that research direction.
+
+---
+
+# Historical status snapshots below
+
 # Current implementation candidate — P3.1 Storage R2 (2026-10-25)
 
 ## Newer candidate — P3.1 Storage R2 (2026-10-25)
