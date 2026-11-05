@@ -1,0 +1,38 @@
+name: P3 concurrency A-B diagnostic
+
+on:
+  push:
+    branches:
+      - perf/p3-runtime-hardening
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 7e8690db3731c645adcdc925fdc7d9cb0b395565
+          path: base
+      - uses: actions/checkout@v4
+        with:
+          ref: perf/p3-runtime-hardening
+          path: candidate
+      - name: Download Godot
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          chmod +x /tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+      - name: Import base
+        run: /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path base/game --import
+      - name: Base concurrency
+        run: timeout --signal=TERM 240s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path base/game --script res://tests/terrain_concurrency_tests.gd
+      - name: Import candidate
+        run: /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path candidate/game --import
+      - name: Candidate concurrency
+        run: timeout --signal=TERM 240s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path candidate/game --script res://tests/terrain_concurrency_tests.gd
