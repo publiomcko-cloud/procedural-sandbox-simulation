@@ -344,6 +344,7 @@ static func analyze_world_triangles(
 	var edge_incidence: Dictionary = {}
 	var edge_sides: Dictionary = {}
 	var edge_points: Dictionary = {}
+	var edge_geometry_sides: Dictionary = {}
 	var duplicate_triangles := 0
 	var triangle_keys: Dictionary = {}
 	for triangle_value in triangles:
@@ -358,6 +359,13 @@ static func analyze_world_triangles(
 		if triangle_keys.has(triangle_key):
 			duplicate_triangles += 1
 		triangle_keys[triangle_key] = true
+		var triangle_geometry_sides := {}
+		for point_value in points:
+			var point: Vector3 = point_value
+			if point.x < seam_x - EPS:
+				triangle_geometry_sides["left"] = true
+			elif point.x > seam_x + EPS:
+				triangle_geometry_sides["right"] = true
 		for pair in [[0, 1], [1, 2], [2, 0]]:
 			var a: Vector3 = points[pair[0]]
 			var b: Vector3 = points[pair[1]]
@@ -368,11 +376,19 @@ static func analyze_world_triangles(
 			var sides: Dictionary = edge_sides[key]
 			sides[String(triangle.get("side", "unknown"))] = true
 			edge_sides[key] = sides
+			if not edge_geometry_sides.has(key):
+				edge_geometry_sides[key] = {}
+			var geometry_sides: Dictionary = edge_geometry_sides[key]
+			for geometry_side in triangle_geometry_sides.keys():
+				geometry_sides[geometry_side] = true
+			edge_geometry_sides[key] = geometry_sides
 			edge_points[key] = [a, b]
 
 	var seam_edges: Array[String] = []
 	var bad_incidence := 0
 	var cross_owner := 0
+	var crossing_edges := 0
+	var tangent_contact_edges := 0
 	var bad_edges: Array[Dictionary] = []
 	var non_cross_owned_edges: Array[Dictionary] = []
 	for edge_value in edge_incidence.keys():
@@ -387,19 +403,28 @@ static func analyze_world_triangles(
 		seam_edges.append(edge_key)
 		var incidence := int(edge_incidence[edge_key])
 		var sides: Dictionary = edge_sides[edge_key]
+		var geometry_sides: Dictionary = edge_geometry_sides.get(edge_key, {})
+		var geometrically_crossing := geometry_sides.has("left") and geometry_sides.has("right")
+		if geometrically_crossing:
+			crossing_edges += 1
+		else:
+			tangent_contact_edges += 1
 		if incidence != 2:
 			bad_incidence += 1
 			if bad_edges.size() < 32:
-				bad_edges.append({"edge": edge_key, "incidence": incidence, "sides": sides.keys(), "points": [a, b]})
-		if sides.has("left") and sides.has("right"):
-			cross_owner += 1
-		elif non_cross_owned_edges.size() < 32:
-			non_cross_owned_edges.append({"edge": edge_key, "incidence": incidence, "sides": sides.keys(), "points": [a, b]})
+				bad_edges.append({"edge": edge_key, "incidence": incidence, "sides": sides.keys(), "geometry_sides": geometry_sides.keys(), "points": [a, b]})
+		if geometrically_crossing:
+			if sides.has("left") and sides.has("right"):
+				cross_owner += 1
+			elif non_cross_owned_edges.size() < 32:
+				non_cross_owned_edges.append({"edge": edge_key, "incidence": incidence, "sides": sides.keys(), "geometry_sides": geometry_sides.keys(), "points": [a, b]})
 
 	return {
 		"seam_edge_count": seam_edges.size(),
 		"seam_bad_incidence_count": bad_incidence,
 		"seam_cross_owner_count": cross_owner,
+		"seam_crossing_edge_count": crossing_edges,
+		"seam_tangent_contact_edge_count": tangent_contact_edges,
 		"t_junction_count": _count_t_junctions(seam_edges, edge_points),
 		"duplicate_triangle_count": duplicate_triangles,
 		"bad_edges": bad_edges,
