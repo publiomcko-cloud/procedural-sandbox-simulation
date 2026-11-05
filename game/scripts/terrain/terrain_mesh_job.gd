@@ -72,12 +72,13 @@ func run() -> void:
 
 
 func _sample_lod_density(world_position: Vector3) -> float:
-	var mapped: Dictionary = Spatial.world_to_region_local(world_position)
-	if not mapped.get("valid", false):
+	if not world_position.is_finite():
 		return NAN
+	var mapped_region := Spatial.region_key_for_world_position(world_position)
+	var mapped_local := Spatial.region_local_for_world_position(world_position, mapped_region)
 	var snapshot: Dictionary = brush_snapshot if brush_snapshot is Dictionary else {}
 	if snapshot.is_empty():
-		return Field.sample_density(seed, mapped["region_key"], mapped["local_position"], cave_section_enabled)
+		return Field.sample_density(seed, mapped_region, mapped_local, cave_section_enabled)
 	return BrushState.sample_density_snapshot(
-		seed, mapped["region_key"], mapped["local_position"], cave_section_enabled, snapshot
+		seed, mapped_region, mapped_local, cave_section_enabled, snapshot
 	)
