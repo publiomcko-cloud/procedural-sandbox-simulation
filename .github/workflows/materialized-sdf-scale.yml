@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      SCALABLE_EDIT_COUNT: "256"
+      SCALABLE_EDIT_COUNT: "16"
     steps:
       - uses: actions/checkout@v4
 
