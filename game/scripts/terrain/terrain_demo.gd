@@ -27,6 +27,7 @@ const MIN_MESH_JOBS_IN_FLIGHT := 4
 const MAX_MESH_JOBS_IN_FLIGHT_HARD := 12
 const MAX_MESH_UPLOADS_PER_FRAME := 4
 const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
+const MAX_BUFFERED_BRUSH_REQUESTS := 64
 const DIAGNOSTICS_REFRESH_INTERVAL := 0.25
 const FOCUS_MOVE_STEP := 4.0
 const MAX_STAGE_RETRIES := 2
@@ -104,6 +105,7 @@ var global_rebuild_pending := false
 var global_rebuild_reason := ""
 var _full_rebuild_target_ids: Array[String] = []
 var _edit_transaction: Dictionary = {}
+var _buffered_brush_requests: Array[Dictionary] = []
 var _stage_retry_counts: Dictionary = {}
 var _stream_errors_by_region: Dictionary = {}
 var _superseded_stage_total := 0
@@ -1632,44 +1634,110 @@ func _start_global_rebuild(operation_name: String) -> void:
 
 
 func _schedule_edit_transaction(operation: Dictionary) -> void:
+	var operations: Array[Dictionary] = [operation]
+	_schedule_edit_transaction_batch(operations)
+
+
+func _schedule_edit_transaction_batch(operations: Array[Dictionary]) -> void:
+	if operations.is_empty():
+		return
 	_begin_operation("global_brush_edit")
-	var targets: Array[Dictionary] = []
-	_last_edit_support_region_count = operation["support_regions"].size()
-	_last_edit_rebuild_region_count = operation["rebuild_regions"].size()
-	_last_edit_rebuild_chunk_count = 0
+	var support_regions_by_id: Dictionary = {}
+	var rebuild_regions_by_id: Dictionary = {}
+	var target_builders: Dictionary = {}
 	_last_edit_rejection = ""
-	for region_key in operation["rebuild_regions"]:
-		var id := _region_id(region_key)
-		if not active_regions.has(id) and not loading_regions.has(id):
-			continue # Canonical ledger replays this command on the next load.
-		var local_center := Vector3(
-			operation["center_world"].x - float(region_key.x) * SpatialGrid.REGION_SIZE_X,
-			operation["center_world"].y,
-			operation["center_world"].z - float(region_key.y) * SpatialGrid.REGION_SIZE_Z
-		)
-		var chunks: Array[Vector2i] = ChunkGrid.affected_chunks_for_sphere(local_center, float(operation["radius"]))
-		var needs_full_stage := not active_regions.has(id)
-		if needs_full_stage:
-			chunks = ChunkGrid.all_coordinates()
+	for operation in operations:
+		for support_region_value in operation["support_regions"]:
+			var support_region: Vector2i = support_region_value
+			support_regions_by_id[_region_id(support_region)] = support_region
+		for rebuild_region_value in operation["rebuild_regions"]:
+			var region_key: Vector2i = rebuild_region_value
+			var id := _region_id(region_key)
+			rebuild_regions_by_id[id] = region_key
+			if not active_regions.has(id) and not loading_regions.has(id):
+				continue
+			var local_center := Vector3(
+				(operation["center_world"] as Vector3).x - float(region_key.x) * SpatialGrid.REGION_SIZE_X,
+				(operation["center_world"] as Vector3).y,
+				(operation["center_world"] as Vector3).z - float(region_key.y) * SpatialGrid.REGION_SIZE_Z
+			)
+			var needs_full_stage := not active_regions.has(id)
+			var chunks: Array[Vector2i] = ChunkGrid.all_coordinates() if needs_full_stage else ChunkGrid.affected_chunks_for_sphere(
+				local_center, float(operation["radius"])
+			)
+			if chunks.is_empty():
+				continue
+			if not target_builders.has(id):
+				target_builders[id] = {
+					"region_key": region_key,
+					"id": id,
+					"full": needs_full_stage,
+					"chunk_set": {},
+				}
+			var builder: Dictionary = target_builders[id]
+			if needs_full_stage:
+				builder["full"] = true
+				builder["chunk_set"] = {}
+				for coordinate in ChunkGrid.all_coordinates():
+					(builder["chunk_set"] as Dictionary)[coordinate] = true
+			elif not bool(builder["full"]):
+				for coordinate in chunks:
+					(builder["chunk_set"] as Dictionary)[coordinate] = true
+			target_builders[id] = builder
+
+	var target_ids_ordered: Array[String] = []
+	for id_value in target_builders.keys():
+		target_ids_ordered.append(String(id_value))
+	target_ids_ordered.sort()
+	var targets: Array[Dictionary] = []
+	_last_edit_rebuild_chunk_count = 0
+	for id in target_ids_ordered:
+		var builder: Dictionary = target_builders[id]
+		var chunks: Array[Vector2i] = []
+		for coordinate in ChunkGrid.all_coordinates():
+			if (builder["chunk_set"] as Dictionary).has(coordinate):
+				chunks.append(coordinate)
 		if chunks.is_empty():
 			continue
-		targets.append({"region_key": region_key, "id": id, "chunks": chunks, "full": needs_full_stage})
+		targets.append({
+			"region_key": builder["region_key"],
+			"id": id,
+			"chunks": chunks,
+			"full": bool(builder["full"]),
+		})
 		_last_edit_rebuild_chunk_count += chunks.size()
+
+	var rebuild_region_ids: Array[String] = []
+	for id_value in rebuild_regions_by_id.keys():
+		rebuild_region_ids.append(String(id_value))
+	rebuild_region_ids.sort()
+	var rebuild_regions: Array[Vector2i] = []
+	for id in rebuild_region_ids:
+		rebuild_regions.append(rebuild_regions_by_id[id])
+
+	_last_edit_support_region_count = support_regions_by_id.size()
+	_last_edit_rebuild_region_count = rebuild_regions.size()
 	if targets.is_empty():
 		_edit_transaction = {}
 		last_brush_result += "; no rebuild-dependent region is resident, future loads will replay it"
 		_record_completed_operation({"region_key": focus_region_key, "purpose": "global_brush_edit"})
+		_flush_buffered_brush_requests()
 		return
+
+	var first_sequence := int(operations[0]["sequence"])
+	var last_sequence := int(operations[-1]["sequence"])
 	_edit_transaction = {
 		"revision": edit_ledger.revision,
-		"operation_sequence": operation["sequence"],
-		"rebuild_regions": operation["rebuild_regions"],
+		"operation_sequence": last_sequence,
+		"operation_sequence_start": first_sequence,
+		"operation_count": operations.size(),
+		"rebuild_regions": rebuild_regions,
 		"target_ids": [],
 		"targets": targets,
 		"retries": 0,
 		"stage_state": "staging",
-		"support_region_count": operation["support_regions"].size(),
-		"rebuild_region_count": operation["rebuild_regions"].size(),
+		"support_region_count": support_regions_by_id.size(),
+		"rebuild_region_count": rebuild_regions.size(),
 		"rebuild_chunk_count": 0,
 		"mesh_job_count": 0,
 	}
@@ -1744,15 +1812,23 @@ func _try_commit_edit_transaction() -> void:
 		loading_regions.erase(id)
 	_mesh_publish_usec_samples.append(Time.get_ticks_usec() - publish_started_usec)
 	var committed_sequence: int = _edit_transaction["operation_sequence"]
+	var committed_sequence_start := int(_edit_transaction.get("operation_sequence_start", committed_sequence))
+	var committed_operation_count := int(_edit_transaction.get("operation_count", 1))
 	var committed_regions: int = target_ids.size()
 	for id in target_ids:
 		_clear_stream_error(id)
 	_last_edit_mesh_jobs = int(_edit_transaction.get("mesh_job_count", 0))
 	_edit_transaction = {}
-	last_brush_result = "Global edit #%d mesh commit complete across %d resident region(s)" % [committed_sequence, committed_regions]
+	if committed_operation_count > 1:
+		last_brush_result = "Global edits #%d-#%d coalesced mesh commit complete across %d resident region(s)" % [
+			committed_sequence_start, committed_sequence, committed_regions,
+		]
+	else:
+		last_brush_result = "Global edit #%d mesh commit complete across %d resident region(s)" % [committed_sequence, committed_regions]
 	_record_completed_operation({"region_key": focus_region_key, "purpose": "global_brush_edit"})
 	_sync_world_state_index()
 	_update_runtime_diagnostics()
+	_flush_buffered_brush_requests()
 
 
 func _finish_edit_transaction(message: String) -> void:
@@ -1764,6 +1840,7 @@ func _finish_edit_transaction(message: String) -> void:
 	_record_completed_operation({"region_key": focus_region_key, "purpose": "global_brush_edit"})
 	_sync_world_state_index()
 	_update_runtime_diagnostics()
+	_flush_buffered_brush_requests()
 
 
 func _retry_edit_transaction(failure_message: String) -> void:
@@ -1939,27 +2016,81 @@ func _apply_brush_at(screen_position: Vector2) -> void:
 
 
 func _accept_brush_at_world(world_hit: Vector3) -> bool:
-	if global_rebuild_pending or not _edit_transaction.is_empty():
-		last_brush_result = "Mesh publication is busy; no edit added"
+	if global_rebuild_pending:
+		last_brush_result = "Global mesh publication is busy; no edit added"
 		_update_status()
 		return false
+	if not world_hit.is_finite():
+		last_brush_result = "Edit rejected (non-finite hit); terrain unchanged"
+		_update_status()
+		return false
+	if not _edit_transaction.is_empty():
+		if _buffered_brush_requests.size() >= MAX_BUFFERED_BRUSH_REQUESTS:
+			last_brush_result = "Edit input buffer is full; no edit added"
+			_update_status()
+			return false
+		_buffered_brush_requests.append({
+			"mode": selected_brush_mode,
+			"center_world": world_hit,
+			"radius": BRUSH_RADIUS,
+		})
+		var buffered_mode := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
+		last_brush_result = "%s buffered while revision %d publishes; %d pending edit(s)" % [
+			buffered_mode,
+			int(_edit_transaction.get("revision", edit_ledger.revision)),
+			_buffered_brush_requests.size(),
+		]
+		_update_status()
+		return true
 	if not edit_ledger.add_sphere(selected_brush_mode, world_hit, BRUSH_RADIUS):
 		_last_edit_rejection = edit_ledger.last_rejection_reason
 		last_brush_result = "Edit rejected (%s); terrain unchanged" % _last_edit_rejection
 		_update_status()
 		return false
 	var operation: Dictionary = edit_ledger.get_last_operation_snapshot()
-	var support_regions: Array[Vector2i] = operation["support_regions"]
-	var dependency_regions: Array[Vector2i] = operation["dependency_regions"]
-	var rebuild_regions: Array[Vector2i] = operation["rebuild_regions"]
 	_last_edit_rejection = ""
 	var mode_name := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
 	last_brush_result = "%s #%d accepted globally at %s; %d support + %d dependent rebuild region(s)" % [
-		mode_name, operation["sequence"], world_hit, support_regions.size(), dependency_regions.size(),
+		mode_name,
+		operation["sequence"],
+		world_hit,
+		(operation["support_regions"] as Array).size(),
+		(operation["dependency_regions"] as Array).size(),
 	]
 	_schedule_edit_transaction(operation)
 	_update_status()
 	return true
+
+
+func _flush_buffered_brush_requests() -> void:
+	if _buffered_brush_requests.is_empty() or not _edit_transaction.is_empty() or global_rebuild_pending:
+		return
+	var requests: Array[Dictionary] = _buffered_brush_requests.duplicate(true)
+	_buffered_brush_requests.clear()
+	var operations: Array[Dictionary] = []
+	var rejected := 0
+	for request in requests:
+		var mode := int(request["mode"])
+		var center: Vector3 = request["center_world"]
+		var radius := float(request["radius"])
+		if edit_ledger.add_sphere(mode, center, radius):
+			operations.append(edit_ledger.get_last_operation_snapshot())
+		else:
+			rejected += 1
+	if operations.is_empty():
+		last_brush_result = "Buffered edit batch rejected; %d request(s) unchanged" % rejected
+		_update_status()
+		return
+	var first_sequence := int(operations[0]["sequence"])
+	var last_sequence := int(operations[-1]["sequence"])
+	last_brush_result = "Coalesced %d buffered edit(s) into revisions #%d-#%d%s" % [
+		operations.size(),
+		first_sequence,
+		last_sequence,
+		"" if rejected == 0 else "; %d rejected" % rejected,
+	]
+	_schedule_edit_transaction_batch(operations)
+	_update_status()
 
 
 func _region_id(region_key: Vector2i) -> String:
@@ -2400,6 +2531,8 @@ func _update_status() -> void:
 	var selected_mode_name := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
 	var queue_depth := _queued_chunk_count()
 	var transaction_state := "idle" if _edit_transaction.is_empty() else String(_edit_transaction.get("stage_state", "staging"))
+	if not _buffered_brush_requests.is_empty():
+		transaction_state += " + %d buffered" % _buffered_brush_requests.size()
 	var aim_text := "visible pointer" if _last_placement_aim_mode == "pointer" else "center aim (cursor hidden/unavailable)"
 	var target_text := "none" if not _placement_target_valid else "%s at %s (%s)" % [aim_text, _placement_target_region_key, "published" if _placement_target_published else "waiting for publication"]
 	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: cave section    R: rebuild    X: focused reset    L: LOD    F5: pre-edits    P/O: checkpoint/load\nCtrl+left: select object    B: place at visible pointer; hidden cursor uses center aim    F6: cycle    F7: transform + appearance    F8: delete    F9: restore baseline\nPlacement target: %s\nUndo anchor: entity origin/base center coincides with the terrain hit; no slope conforming\nCtrl+Z: Undo entity command    Ctrl+Y / Ctrl+Shift+Z: Redo entity command\nM twice within 6 s: explicit schema-3 history migration (preflight then commit); no automatic migration\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
