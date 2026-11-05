@@ -2,6 +2,7 @@ class_name SharedSurfaceZBoundaryMeshJob
 extends RefCounted
 
 const Authority := preload("res://scripts/terrain/shared_surface_boundary_authority.gd")
+const WorkCache := preload("res://scripts/terrain/shared_surface_work_cache.gd")
 
 var world_seed: int
 var low_z_region_key: Vector2i
@@ -38,7 +39,19 @@ func run() -> void:
 			"ledger_revision": int(brush_snapshot.get("revision", -1)),
 		}
 	else:
-		result = Authority.build_z_region_boundary_pair(
-			world_seed, low_z_region_key, x_chunk, brush_snapshot
-		)
+		var key := "z:%d:%d:%d:%d:%d:%d" % [
+			world_seed,
+			int(brush_snapshot.get("revision", -1)),
+			int(brush_snapshot.get("ledger_operation_count", -1)),
+			low_z_region_key.x,
+			low_z_region_key.y,
+			x_chunk,
+		]
+		result = WorkCache.get_or_build(key, Callable(self, "_build_uncached"))
 	worker_finished_usec = Time.get_ticks_usec()
+
+
+func _build_uncached() -> Dictionary:
+	return Authority.build_z_region_boundary_pair(
+		world_seed, low_z_region_key, x_chunk, brush_snapshot
+	)
