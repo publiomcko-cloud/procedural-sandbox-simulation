@@ -489,7 +489,17 @@ func _placement_target_at(screen_position: Vector2) -> Dictionary:
 		return {"valid": false, "published": false, "reason": "scene_not_ready"}
 	var ray_origin := camera.project_ray_origin(screen_position)
 	var ray_direction := camera.project_ray_normal(screen_position)
-	var picked: Dictionary = BrushPicker.pick_sdf_v1_surface(ray_origin, ray_direction, Callable(self, "_sample_world_density"))
+	var density_sampler := Callable(self, "_sample_world_density")
+	if _scalable_runtime_enabled and edit_ledger != null:
+		var ray_snapshot: Dictionary = edit_ledger.get_ray_snapshot(
+			ray_origin, ray_direction, BrushPicker.MAX_DISTANCE
+		)
+		if ray_snapshot.get("valid", false):
+			density_sampler = func(point: Vector3) -> float:
+				return _sample_world_density_from_snapshot(point, ray_snapshot)
+	var picked: Dictionary = BrushPicker.pick_sdf_v1_surface(
+		ray_origin, ray_direction, density_sampler
+	)
 	if not picked.get("hit", false):
 		return {"valid": false, "published": false, "reason": "no_surface"}
 	var world_position: Vector3 = picked["position"]
