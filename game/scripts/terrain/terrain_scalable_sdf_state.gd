@@ -142,7 +142,8 @@ func commit_async_checkpoint(
 		var current: Dictionary = _tail_operations[index]
 		if int(current.get("sequence", -1)) != int(expected.get("sequence", -2)) \
 			or int(current.get("mode", -1)) != int(expected.get("mode", -2)) \
-			or current.get("center_world", Vector3.INF) != expected.get("center_world", Vector3.NAN) \
+			or not current.has("center_world") or not expected.has("center_world") \
+			or current["center_world"] != expected["center_world"] \
 			or float(current.get("radius", -1.0)) != float(expected.get("radius", -2.0)):
 			last_storage_error = "async_checkpoint_tail_prefix_diverged"
 			return false
