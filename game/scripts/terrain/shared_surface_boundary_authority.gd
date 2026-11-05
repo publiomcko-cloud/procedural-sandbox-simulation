@@ -282,6 +282,8 @@ static func build_x_region_boundary_pair(
 				right_positions.append(point - right_origin)
 				right_normals.append(normal)
 
+	var shared_timings: Dictionary = (built.get("timings_usec", {}) as Dictionary).duplicate(true)
+	var shared_work_counters: Dictionary = (built.get("work_counters", {}) as Dictionary).duplicate(true)
 	var common := {
 		"ledger_revision": int(brush_snapshot.get("revision", 0)),
 		"world_seed": world_seed,
@@ -290,6 +292,8 @@ static func build_x_region_boundary_pair(
 		"boundary_authority": "shared_surface_x_pair_v1",
 		"seam_x": seam_x,
 		"shared_mesh_signature": String(built.get("mesh_signature", "")),
+		"timings_usec": shared_timings,
+		"work_counters": shared_work_counters,
 	}
 	var left_cpu := common.duplicate(true)
 	left_cpu.merge({
@@ -363,6 +367,8 @@ static func build_z_region_boundary_pair(
 				high_positions.append(point - high_origin)
 				high_normals.append(normal)
 
+	var shared_timings: Dictionary = (built.get("timings_usec", {}) as Dictionary).duplicate(true)
+	var shared_work_counters: Dictionary = (built.get("work_counters", {}) as Dictionary).duplicate(true)
 	var common := {
 		"ledger_revision": int(brush_snapshot.get("revision", 0)),
 		"world_seed": world_seed,
@@ -371,6 +377,8 @@ static func build_z_region_boundary_pair(
 		"boundary_authority": "shared_surface_z_pair_v1",
 		"seam_z": seam_z,
 		"shared_mesh_signature": String(built.get("mesh_signature", "")),
+		"timings_usec": shared_timings,
+		"work_counters": shared_work_counters,
 	}
 	var low_cpu := common.duplicate(true)
 	low_cpu.merge({
@@ -464,6 +472,7 @@ static func build_xz_corner_quad(
 	var shared_timings: Dictionary = (built.get("timings_usec", {}) as Dictionary).duplicate(true)
 	shared_timings["shared_partition"] = partition_elapsed_usec
 	shared_timings["shared_authority_total"] = Time.get_ticks_usec() - authority_started_usec
+	var shared_work_counters: Dictionary = (built.get("work_counters", {}) as Dictionary).duplicate(true)
 	var result := {
 		"valid": true,
 		"diagnostics": built.get("diagnostics", {}),
@@ -490,6 +499,7 @@ static func build_xz_corner_quad(
 			"triangle_count": positions.size() / 3,
 			"sample_count": int(built.get("sample_count", 0)),
 			"timings_usec": shared_timings.duplicate(true),
+			"work_counters": shared_work_counters.duplicate(true),
 		}
 	return result
 
@@ -503,6 +513,7 @@ static func build_z_shared_volume(
 	seam_z: float,
 	diagnostics_enabled: bool = true
 ) -> Dictionary:
+	var total_started_usec := Time.get_ticks_usec()
 	if cells.x <= 0 or cells.y <= 0 or cells.z <= 0 or not is_finite(step) or step <= 0.0:
 		return {"valid": false, "reason": "invalid_volume_shape"}
 	var roi_max := roi_min + Vector3(cells) * step
@@ -511,6 +522,7 @@ static func build_z_shared_volume(
 	var dims := cells + Vector3i.ONE
 	var values := PackedFloat32Array()
 	values.resize(dims.x * dims.y * dims.z)
+	var sampling_started_usec := Time.get_ticks_usec()
 	for y in range(dims.y):
 		for z in range(dims.z):
 			for x in range(dims.x):
@@ -520,6 +532,11 @@ static func build_z_shared_volume(
 					return {"valid": false, "reason": "non_finite_sample", "sample": [x, y, z]}
 				values[_index(x, y, z, dims)] = d
 
+	var sampling_elapsed_usec := Time.get_ticks_usec() - sampling_started_usec
+	var polygonize_started_usec := Time.get_ticks_usec()
+	var total_cell_count := 0
+	var mixed_cell_count := 0
+	var uniform_cell_count := 0
 	var root_cache: Dictionary = {}
 	var root_position_keys: Dictionary = {}
 	var triangles: Array[Dictionary] = []
@@ -537,7 +554,19 @@ static func build_z_shared_volume(
 					nodes.append(node)
 					points.append(roi_min + Vector3(node) * step)
 					density.append(values[_index(node.x, node.y, node.z, dims)])
-				for tet in TETS:
+				var has_solid := false
+			var has_empty := false
+			for density_value in density:
+				if density_value > 0.0:
+					has_solid = true
+				else:
+					has_empty = true
+			total_cell_count += 1
+			if has_solid and has_empty:
+				mixed_cell_count += 1
+			else:
+				uniform_cell_count += 1
+			for tet in TETS:
 					var emitted := _polygonize_tet_z(
 						tet, nodes, points, density, roi_min, step, seam_z,
 						root_cache, root_position_keys
@@ -545,12 +574,19 @@ static func build_z_shared_volume(
 					dropped_degenerate_candidates += int(emitted.get("dropped_degenerate", 0))
 					triangles.append_array(emitted.get("triangles", []))
 
+	var polygonize_elapsed_usec := Time.get_ticks_usec() - polygonize_started_usec
+	var triangle_candidate_count := triangles.size()
+	var deduplicate_started_usec := Time.get_ticks_usec()
 	var deduplicated := _deduplicate_triangles(triangles)
 	var dropped_duplicate_candidates := triangles.size() - deduplicated.size()
+	var deduplicate_elapsed_usec := Time.get_ticks_usec() - deduplicate_started_usec
 	triangles = deduplicated
+	var diagnostics_started_usec := Time.get_ticks_usec()
 	var diagnostics: Dictionary = {}
 	if diagnostics_enabled:
 		diagnostics = analyze_world_triangles_z(triangles, seam_z, roi_min, roi_max)
+	var diagnostics_elapsed_usec := Time.get_ticks_usec() - diagnostics_started_usec
+	var signature_started_usec := Time.get_ticks_usec()
 	var signature_rows: Array[String] = []
 	for triangle_value in triangles:
 		var ids: Array = triangle_value["root_ids"]
@@ -558,6 +594,7 @@ static func build_z_shared_volume(
 		sorted_ids.sort()
 		signature_rows.append("%s:%s" % [String(triangle_value["side"]), "|".join(sorted_ids)])
 	signature_rows.sort()
+	var signature_elapsed_usec := Time.get_ticks_usec() - signature_started_usec
 	if diagnostics_enabled:
 		var root_identity_consistent := _root_identity_consistent(root_cache, root_position_keys)
 		diagnostics["root_identity_consistent"] = root_identity_consistent
@@ -576,6 +613,25 @@ static func build_z_shared_volume(
 		"roi_max": roi_max,
 		"step": step,
 		"seam_z": seam_z,
+		"timings_usec": {
+			"shared_sampling": sampling_elapsed_usec,
+			"shared_polygonize": polygonize_elapsed_usec,
+			"shared_deduplicate": deduplicate_elapsed_usec,
+			"shared_diagnostics": diagnostics_elapsed_usec,
+			"shared_signature": signature_elapsed_usec,
+			"shared_volume_total": Time.get_ticks_usec() - total_started_usec,
+		},
+		"work_counters": {
+			"cell_count": total_cell_count,
+			"mixed_cell_count": mixed_cell_count,
+			"uniform_cell_count": uniform_cell_count,
+			"tet_call_count": total_cell_count * TETS.size(),
+			"triangle_candidate_count": triangle_candidate_count,
+			"triangle_count": triangles.size(),
+			"unique_root_count": root_cache.size(),
+			"sample_count": values.size(),
+		},
+
 	}
 
 
@@ -611,6 +667,9 @@ static func build_xz_corner_volume(
 
 	var sampling_elapsed_usec := Time.get_ticks_usec() - sampling_started_usec
 	var polygonize_started_usec := Time.get_ticks_usec()
+	var total_cell_count := 0
+	var mixed_cell_count := 0
+	var uniform_cell_count := 0
 	var root_cache: Dictionary = {}
 	var root_position_keys: Dictionary = {}
 	var triangles: Array[Dictionary] = []
@@ -628,7 +687,19 @@ static func build_xz_corner_volume(
 					nodes.append(node)
 					points.append(roi_min + Vector3(node) * step)
 					density.append(values[_index(node.x, node.y, node.z, dims)])
-				for tet in TETS:
+				var has_solid := false
+			var has_empty := false
+			for density_value in density:
+				if density_value > 0.0:
+					has_solid = true
+				else:
+					has_empty = true
+			total_cell_count += 1
+			if has_solid and has_empty:
+				mixed_cell_count += 1
+			else:
+				uniform_cell_count += 1
+			for tet in TETS:
 					var emitted := _polygonize_tet_corner(
 						tet, nodes, points, density, roi_min, step, seam_x, seam_z,
 						root_cache, root_position_keys
@@ -637,6 +708,7 @@ static func build_xz_corner_volume(
 					triangles.append_array(emitted.get("triangles", []))
 
 	var polygonize_elapsed_usec := Time.get_ticks_usec() - polygonize_started_usec
+	var triangle_candidate_count := triangles.size()
 	var deduplicate_started_usec := Time.get_ticks_usec()
 	var deduplicated := _deduplicate_triangles(triangles)
 	var dropped_duplicate_candidates := triangles.size() - deduplicated.size()
@@ -682,6 +754,17 @@ static func build_xz_corner_volume(
 			"shared_signature": signature_elapsed_usec,
 			"shared_volume_total": Time.get_ticks_usec() - total_started_usec,
 		},
+		"work_counters": {
+			"cell_count": total_cell_count,
+			"mixed_cell_count": mixed_cell_count,
+			"uniform_cell_count": uniform_cell_count,
+			"tet_call_count": total_cell_count * TETS.size(),
+			"triangle_candidate_count": triangle_candidate_count,
+			"triangle_count": triangles.size(),
+			"unique_root_count": root_cache.size(),
+			"sample_count": values.size(),
+		},
+
 	}
 
 
@@ -694,6 +777,7 @@ static func build_x_shared_volume(
 	seam_x: float,
 	diagnostics_enabled: bool = true
 ) -> Dictionary:
+	var total_started_usec := Time.get_ticks_usec()
 	if cells.x <= 0 or cells.y <= 0 or cells.z <= 0 or not is_finite(step) or step <= 0.0:
 		return {"valid": false, "reason": "invalid_volume_shape"}
 	var roi_max := roi_min + Vector3(cells) * step
@@ -702,6 +786,7 @@ static func build_x_shared_volume(
 	var dims := cells + Vector3i.ONE
 	var values := PackedFloat32Array()
 	values.resize(dims.x * dims.y * dims.z)
+	var sampling_started_usec := Time.get_ticks_usec()
 	for y in range(dims.y):
 		for z in range(dims.z):
 			for x in range(dims.x):
@@ -711,6 +796,11 @@ static func build_x_shared_volume(
 					return {"valid": false, "reason": "non_finite_sample", "sample": [x, y, z]}
 				values[_index(x, y, z, dims)] = d
 
+	var sampling_elapsed_usec := Time.get_ticks_usec() - sampling_started_usec
+	var polygonize_started_usec := Time.get_ticks_usec()
+	var total_cell_count := 0
+	var mixed_cell_count := 0
+	var uniform_cell_count := 0
 	var root_cache: Dictionary = {}
 	var root_position_keys: Dictionary = {}
 	var triangles: Array[Dictionary] = []
@@ -728,7 +818,19 @@ static func build_x_shared_volume(
 					nodes.append(node)
 					points.append(roi_min + Vector3(node) * step)
 					density.append(values[_index(node.x, node.y, node.z, dims)])
-				for tet in TETS:
+				var has_solid := false
+			var has_empty := false
+			for density_value in density:
+				if density_value > 0.0:
+					has_solid = true
+				else:
+					has_empty = true
+			total_cell_count += 1
+			if has_solid and has_empty:
+				mixed_cell_count += 1
+			else:
+				uniform_cell_count += 1
+			for tet in TETS:
 					var emitted := _polygonize_tet(
 						tet, nodes, points, density, roi_min, step, seam_x,
 						root_cache, root_position_keys
@@ -736,12 +838,19 @@ static func build_x_shared_volume(
 					dropped_degenerate_candidates += int(emitted.get("dropped_degenerate", 0))
 					triangles.append_array(emitted.get("triangles", []))
 
+	var polygonize_elapsed_usec := Time.get_ticks_usec() - polygonize_started_usec
+	var triangle_candidate_count := triangles.size()
+	var deduplicate_started_usec := Time.get_ticks_usec()
 	var deduplicated := _deduplicate_triangles(triangles)
 	var dropped_duplicate_candidates := triangles.size() - deduplicated.size()
+	var deduplicate_elapsed_usec := Time.get_ticks_usec() - deduplicate_started_usec
 	triangles = deduplicated
+	var diagnostics_started_usec := Time.get_ticks_usec()
 	var diagnostics: Dictionary = {}
 	if diagnostics_enabled:
 		diagnostics = analyze_world_triangles(triangles, seam_x, roi_min, roi_max)
+	var diagnostics_elapsed_usec := Time.get_ticks_usec() - diagnostics_started_usec
+	var signature_started_usec := Time.get_ticks_usec()
 	var signature_rows: Array[String] = []
 	for triangle_value in triangles:
 		var ids: Array = triangle_value["root_ids"]
@@ -749,6 +858,7 @@ static func build_x_shared_volume(
 		sorted_ids.sort()
 		signature_rows.append("%s:%s" % [String(triangle_value["side"]), "|".join(sorted_ids)])
 	signature_rows.sort()
+	var signature_elapsed_usec := Time.get_ticks_usec() - signature_started_usec
 
 	if diagnostics_enabled:
 		var root_identity_consistent := true
@@ -774,6 +884,25 @@ static func build_x_shared_volume(
 		"roi_max": roi_max,
 		"step": step,
 		"seam_x": seam_x,
+		"timings_usec": {
+			"shared_sampling": sampling_elapsed_usec,
+			"shared_polygonize": polygonize_elapsed_usec,
+			"shared_deduplicate": deduplicate_elapsed_usec,
+			"shared_diagnostics": diagnostics_elapsed_usec,
+			"shared_signature": signature_elapsed_usec,
+			"shared_volume_total": Time.get_ticks_usec() - total_started_usec,
+		},
+		"work_counters": {
+			"cell_count": total_cell_count,
+			"mixed_cell_count": mixed_cell_count,
+			"uniform_cell_count": uniform_cell_count,
+			"tet_call_count": total_cell_count * TETS.size(),
+			"triangle_candidate_count": triangle_candidate_count,
+			"triangle_count": triangles.size(),
+			"unique_root_count": root_cache.size(),
+			"sample_count": values.size(),
+		},
+
 	}
 
 
