@@ -10,6 +10,11 @@ const BrushPicker := preload("res://scripts/terrain/terrain_brush_picker.gd")
 const TerrainMeshJob := preload("res://scripts/terrain/terrain_mesh_job.gd")
 const TerrainLodPolicy := preload("res://scripts/terrain/terrain_lod_policy.gd")
 const WorldSaveStore := preload("res://scripts/terrain/terrain_world_save_store_v2.gd")
+const ScalableSdfState := preload("res://scripts/terrain/terrain_scalable_sdf_state.gd")
+const MaterializedSdfStore := preload("res://scripts/terrain/terrain_materialized_sdf_store.gd")
+const AsyncCheckpointJob := preload("res://scripts/terrain/terrain_async_checkpoint_job.gd")
+const SharedBoundaryAuthority := preload("res://scripts/terrain/shared_surface_boundary_authority.gd")
+const SharedBoundaryMeshJob := preload("res://scripts/terrain/shared_surface_boundary_mesh_job.gd")
 const EntityStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 
 const BRUSH_RADIUS := 1.25
@@ -21,6 +26,7 @@ const MAX_MESH_UPLOADS_PER_FRAME := 2
 const DIAGNOSTICS_REFRESH_INTERVAL := 0.25
 const FOCUS_MOVE_STEP := 4.0
 const MAX_STAGE_RETRIES := 2
+const PREEDIT_DEFAULT_COUNT := 512
 
 @onready var terrain_chunks_root: Node3D = $TerrainChunks
 @onready var terrain_mesh_template: MeshInstance3D = $TerrainChunks/Terrain
@@ -42,8 +48,19 @@ var world_states: Dictionary = {} # active and currently staged domain states
 var world_state: RefCounted # focused region compatibility alias for the demo/tests
 var edit_ledger: RefCounted
 var world_seed := WorldState.DEMO_SEED
-var world_id := WorldSaveStore.WORLD_ID
+var world_id := MaterializedSdfStore.WORLD_ID
 var world_save_store: RefCounted
+var _scalable_runtime_enabled := false
+var _shared_boundary_runtime_enabled := false
+var _checkpoint_task_id := -1
+var _checkpoint_job: RefCounted
+var _checkpoint_status := "checkpoint idle"
+var _checkpoint_generation := 0
+var _checkpoint_last_worker_ms := 0.0
+var _checkpoint_started_usec := 0
+var _preedit_path := ""
+var _preedit_count := PREEDIT_DEFAULT_COUNT
+var _preedit_status := "F5: inject deterministic pre-edits"
 var _pending_world_load: Dictionary = {}
 var _persistence_status := "No saved world; press P to save or O to load"
 var _persistence_blocked := false
@@ -135,27 +152,53 @@ var _last_edit_rejection := ""
 
 func _ready() -> void:
 	_frame_time_samples.resize(512)
-	# Tests may inject an isolated store before adding this scene to the tree.
-	# Ordinary production instances still use the default user:// world slot.
+	_configure_preedit_arguments()
+	# Existing tests may inject the legacy v2 store. Normal runtime defaults to
+	# the materialized store and scalable edit state.
 	if world_save_store == null:
-		world_save_store = WorldSaveStore.new()
-	edit_ledger = BrushEditState.new(world_seed, Field.GENERATOR_VERSION)
-	var saved_world: Dictionary = world_save_store.load_world(world_id)
-	if saved_world.get("found", false):
-		if saved_world.get("ok", false):
-			var loaded: Dictionary = _build_ledger_from_payload(saved_world.get("payload", {}))
-			if loaded.get("ok", false):
-				world_seed = int(loaded["world_seed"])
-				edit_ledger = loaded["ledger"]
-				_persistence_status = _loaded_world_message(saved_world)
+		world_save_store = MaterializedSdfStore.new()
+	_scalable_runtime_enabled = world_save_store.has_method("checkpoint_state") \
+		and world_save_store.has_method("get_world_directory")
+	_shared_boundary_runtime_enabled = _scalable_runtime_enabled
+
+	if _scalable_runtime_enabled:
+		var saved_world: Dictionary = world_save_store.load_world(world_id)
+		if saved_world.get("found", false):
+			if saved_world.get("ok", false):
+				edit_ledger = saved_world["state"]
+				world_seed = int(edit_ledger.world_seed)
+				_checkpoint_generation = int(saved_world.get("generation", 0))
+				_persistence_status = "Materialized generation %d loaded (%d archived edits, hot tail %d)" % [
+					_checkpoint_generation,
+					int(edit_ledger.get_archived_edit_count()),
+					int(edit_ledger.get_tail_edit_count()),
+				]
 			else:
 				_persistence_blocked = true
-				_persistence_status = "Saved world rejected (%s); edits remain untouched and saving is blocked" % loaded.get("reason", "invalid")
+				edit_ledger = ScalableSdfState.new(world_seed, Field.GENERATOR_VERSION)
+				_persistence_status = "Materialized world rejected (%s); new edits are blocked from persistence" % saved_world.get("reason", "invalid")
 		else:
-			_persistence_blocked = true
-			_persistence_status = "Saved world unavailable (%s); edits remain untouched and saving is blocked" % saved_world.get("reason", "invalid")
-	elif saved_world.get("legacy_available", false):
-		_persistence_status = "Schema-1 terrain save detected and preserved; choose a new v2 world explicitly (no migration/import)"
+			edit_ledger = ScalableSdfState.new(world_seed, Field.GENERATOR_VERSION)
+			_persistence_status = "New materialized world; async checkpoints every %d edits" % ScalableSdfState.CHECKPOINT_TAIL_TARGET
+	else:
+		edit_ledger = BrushEditState.new(world_seed, Field.GENERATOR_VERSION)
+		var saved_world: Dictionary = world_save_store.load_world(world_id)
+		if saved_world.get("found", false):
+			if saved_world.get("ok", false):
+				var loaded: Dictionary = _build_ledger_from_payload(saved_world.get("payload", {}))
+				if loaded.get("ok", false):
+					world_seed = int(loaded["world_seed"])
+					edit_ledger = loaded["ledger"]
+					_persistence_status = _loaded_world_message(saved_world)
+				else:
+					_persistence_blocked = true
+					_persistence_status = "Saved world rejected (%s); edits remain untouched and saving is blocked" % loaded.get("reason", "invalid")
+			else:
+				_persistence_blocked = true
+				_persistence_status = "Saved world unavailable (%s); edits remain untouched and saving is blocked" % saved_world.get("reason", "invalid")
+		elif saved_world.get("legacy_available", false):
+			_persistence_status = "Schema-1 terrain save detected and preserved; choose a new v2 world explicitly (no migration/import)"
+
 	var object_initialization: Dictionary = object_stream.initialize(world_seed, world_id, object_package_roots_override, object_state_directory_override)
 	if object_initialization.get("ok", false):
 		_procedural_object_status = "Procedural objects ready"
@@ -176,6 +219,10 @@ func _exit_tree() -> void:
 	for task_id_value in _mesh_jobs.keys().duplicate():
 		WorkerThreadPool.wait_for_task_completion(int(task_id_value))
 	_mesh_jobs.clear()
+	if _checkpoint_task_id >= 0:
+		WorkerThreadPool.wait_for_task_completion(_checkpoint_task_id)
+		_checkpoint_task_id = -1
+		_checkpoint_job = null
 
 
 func _process(delta: float) -> void:
@@ -190,6 +237,8 @@ func _process(delta: float) -> void:
 	_update_focus_key()
 	_reconcile_region_window()
 	_update_lod_selection()
+	_process_async_checkpoint()
+	_maybe_schedule_async_checkpoint()
 	_process_one_chunk_job()
 	object_stream.process_queued_publications()
 	var visual_result: Dictionary = object_stream.consume_last_command_visual_result()
@@ -252,16 +301,21 @@ func _unhandled_input(event: InputEvent) -> void:
 			_start_global_rebuild("regenerate")
 		elif _event_matches_key(event, KEY_X):
 			var cleared: Dictionary = edit_ledger.clear_for_region(focus_region_key)
-			last_brush_result = "Reset focused edits for %s: removed %d command(s); rebuilding %d dependent region(s)" % [
-				focus_region_key, cleared["removed_count"], cleared["rebuild_regions"].size(),
-			]
-			_start_global_rebuild("reset")
+			if int(cleared.get("removed_count", 0)) > 0:
+				last_brush_result = "Reset focused edits for %s: removed %d command(s); rebuilding %d dependent region(s)" % [
+					focus_region_key, cleared["removed_count"], (cleared.get("rebuild_regions", []) as Array).size(),
+				]
+				_start_global_rebuild("reset")
+			else:
+				last_brush_result = "Focused reset unavailable for materialized history (%s)" % cleared.get("error", "nothing_to_reset")
 		elif _event_matches_key(event, KEY_L):
 			lod_enabled = not lod_enabled
 			_lod_fallback_chunks.clear()
 			last_brush_result = "Custom LOD 0/1: %s" % ("ON" if lod_enabled else "OFF; using LOD0 fallback")
 		elif _event_matches_key(event, KEY_V):
 			object_stream.set_object_visibility(not object_stream.objects_visible)
+		elif _event_matches_key(event, KEY_F5):
+			_apply_preedit_fixture()
 		elif _event_matches_key(event, KEY_P):
 			_save_world_to_storage()
 		elif _event_matches_key(event, KEY_O):
