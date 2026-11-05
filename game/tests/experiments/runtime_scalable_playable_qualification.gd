@@ -41,7 +41,6 @@ func _run() -> void:
 
 	var preedit_started := Time.get_ticks_usec()
 	demo._apply_preedit_fixture()
-	var concurrent_observed := false
 	var preedit_ready := await _wait_until(func() -> bool:
 		if demo._checkpoint_task_id >= 0 and (
 			demo.global_rebuild_pending or not demo.loading_regions.is_empty()
@@ -51,7 +50,7 @@ func _run() -> void:
 	)
 	var preedit_elapsed_usec := Time.get_ticks_usec() - preedit_started
 	_check(preedit_ready, "pre-edits rebuild and async checkpoint settle")
-	_check(concurrent_observed, "checkpoint overlaps terrain rebuild instead of blocking the frame lifecycle")
+	_check(demo._checkpoint_overlap_observed, "checkpoint overlaps terrain rebuild instead of blocking the frame lifecycle")
 	_check(demo.edit_ledger.get_edit_count() == PREEDIT_COUNT, "all pre-edits remain in lifetime count")
 	_check(demo._checkpoint_generation >= 1, "pre-edits produce a committed materialized generation")
 	if not preedit_ready:
