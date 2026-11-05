@@ -121,6 +121,7 @@ var _mesh_publish_usec_samples: Array[int] = []
 var _global_rebuild_retry_count := 0
 var debug_fail_next_mesh_stage := false
 var debug_fail_next_load_stage := false
+var debug_shared_runtime_diagnostics := false
 var _mesh_stage_retry_total := 0
 var _rendered_cave_section_enabled := false
 var _operation_name := "initial_load"
@@ -1174,7 +1175,8 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			snapshot_meta = corner_snapshot
 			job = SharedCornerMeshJob.new(
-				state.world_seed, min_region, corner_snapshot, submitted_usec
+				state.world_seed, min_region, corner_snapshot, submitted_usec,
+				debug_shared_runtime_diagnostics
 			)
 			job_kind = "shared_corner_xz"
 			shared_side = _corner_owner_for_coordinate(coordinate)
@@ -1186,7 +1188,8 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			snapshot_meta = pair_snapshot
 			job = SharedBoundaryMeshJob.new(
-				state.world_seed, left_region, coordinate.y, pair_snapshot, submitted_usec
+				state.world_seed, left_region, coordinate.y, pair_snapshot, submitted_usec,
+				debug_shared_runtime_diagnostics
 			)
 			job_kind = "shared_boundary_x"
 			shared_side = "left" if coordinate.x == ChunkGrid.CHUNK_COUNT_X - 1 else "right"
@@ -1198,7 +1201,8 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			snapshot_meta = z_snapshot
 			job = SharedZBoundaryMeshJob.new(
-				state.world_seed, low_region, coordinate.x, z_snapshot, submitted_usec
+				state.world_seed, low_region, coordinate.x, z_snapshot, submitted_usec,
+				debug_shared_runtime_diagnostics
 			)
 			job_kind = "shared_boundary_z"
 			shared_side = "low" if coordinate.y == ChunkGrid.CHUNK_COUNT_Z - 1 else "high"
