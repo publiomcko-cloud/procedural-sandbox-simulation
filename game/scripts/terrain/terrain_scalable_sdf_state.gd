@@ -184,6 +184,29 @@ func get_persistence_metadata() -> Dictionary:
 	}
 
 
+func sample_density(
+	seed: int,
+	region_key: Vector2i,
+	local_position: Vector3,
+	show_cave_section: bool = false
+) -> float:
+	if seed != world_seed:
+		last_storage_error = "sample_seed_mismatch"
+		return NAN
+	var chunk_width := float(Grid.CELLS_PER_CHUNK_X) * Grid.SAMPLE_STEP
+	var chunk_depth := float(Grid.CELLS_PER_CHUNK_Z) * Grid.SAMPLE_STEP
+	var coordinate := Vector2i(
+		clampi(floori(local_position.x / chunk_width), 0, Grid.CHUNK_COUNT_X - 1),
+		clampi(floori(local_position.z / chunk_depth), 0, Grid.CHUNK_COUNT_Z - 1)
+	)
+	var snapshot := get_meshing_snapshot_for_chunk(region_key, coordinate)
+	if not snapshot.get("valid", false):
+		return NAN
+	return Brush.sample_density_snapshot(
+		seed, region_key, local_position, show_cave_section, snapshot
+	)
+
+
 func get_meshing_snapshot() -> Dictionary:
 	# Global snapshots intentionally contain only the bounded live tail. Historical
 	# state is spatially materialized and therefore must be queried by chunk.
