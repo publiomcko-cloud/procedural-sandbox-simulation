@@ -16,6 +16,10 @@ func _run() -> void:
 	var test_ui := CanvasLayer.new()
 	var test_status := Label.new()
 	var test_marker := MeshInstance3D.new()
+	root.add_child(test_camera)
+	root.add_child(test_ui)
+	test_ui.add_child(test_status)
+	root.add_child(test_marker)
 	test_camera.position = Vector3(10.0, 8.0, 12.0)
 	test_camera.rotation = Vector3(-0.2, 0.35, 0.0)
 	test_ui.visible = true
@@ -80,7 +84,6 @@ func _run() -> void:
 	demo.free()
 	test_camera.free()
 	test_ui.free()
-	test_status.free()
 	test_marker.free()
 
 	if failures == 0:
