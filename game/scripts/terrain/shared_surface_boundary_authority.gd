@@ -463,11 +463,23 @@ static func _root_id_and_cache(
 	var key := _ordered_pair(node_a, node_b)
 	if root_cache.has(key):
 		return key
+	var point_a: Vector3 = points[a]
+	var point_b: Vector3 = points[b]
 	var da := density[a]
 	var db := density[b]
+	# Match Lod01TransitionFixture bit-for-bit: shared crossed edges may be
+	# traversed in opposite directions by different mesh owners, so canonicalize
+	# endpoint order before the floating-point interpolation.
+	if _point_precedes(point_b, point_a):
+		var point_swap := point_a
+		point_a = point_b
+		point_b = point_swap
+		var density_swap := da
+		da = db
+		db = density_swap
 	var denominator := da - db
 	var t := 0.5 if is_zero_approx(denominator) else clampf(da / denominator, 0.0, 1.0)
-	var point := points[a].lerp(points[b], t)
+	var point := point_a.lerp(point_b, t)
 	root_cache[key] = point
 	root_position_keys[key] = _point_key(point)
 	return key
@@ -544,6 +556,14 @@ static func _on_outer_yz(p: Vector3, roi_min: Vector3, roi_max: Vector3) -> bool
 
 static func _index(x: int, y: int, z: int, dims: Vector3i) -> int:
 	return (y * dims.z + z) * dims.x + x
+
+
+static func _point_precedes(a: Vector3, b: Vector3) -> bool:
+	if a.x != b.x:
+		return a.x < b.x
+	if a.y != b.y:
+		return a.y < b.y
+	return a.z < b.z
 
 
 static func _lattice_key(p: Vector3, step: float) -> String:
