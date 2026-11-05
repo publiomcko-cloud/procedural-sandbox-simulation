@@ -421,7 +421,9 @@ func _validate_tile(
 	if tile.get("region_key", Vector2i(999999, 999999)) != region_key 		or tile.get("coordinate", Vector2i(-1, -1)) != coordinate:
 		return false
 	var dims: Vector3i = tile.get("dims", Vector3i.ZERO)
-	var values_value: Variant = tile.get("values", PackedFloat64Array())\n\tif typeof(values_value) != TYPE_PACKED_FLOAT64_ARRAY:\n\t\treturn false
+	var values_value: Variant = tile.get("values", PackedFloat64Array())
+	if typeof(values_value) != TYPE_PACKED_FLOAT64_ARRAY:
+		return false
 	return dims == Vector3i(
 		Grid.CELLS_PER_CHUNK_X + 1,
 		Grid.CELL_COUNT_Y + 1,
