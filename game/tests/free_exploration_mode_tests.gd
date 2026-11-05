@@ -27,8 +27,11 @@ func _run() -> void:
 	demo.set("_placement_target_valid", true)
 
 	var previous_mouse_mode := Input.mouse_mode
-	demo.call("_set_free_explore_enabled", true)
-	_check(bool(demo.get("free_explore_enabled")), "F10 mode state can enter free exploration")
+	var toggle_event := InputEventKey.new()
+	toggle_event.keycode = KEY_F10
+	toggle_event.pressed = true
+	demo.call("_unhandled_input", toggle_event)
+	_check(bool(demo.get("free_explore_enabled")), "F10 input enters free exploration")
 	_check(not test_ui.visible, "free exploration hides the entire HUD canvas")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "free exploration captures the mouse")
 	demo.call("_update_placement_marker_visual")
