@@ -200,6 +200,7 @@ func get_persistence_snapshot() -> Dictionary:
 		"world_seed": world_seed,
 		"generator_version": generator_version,
 		"revision": revision,
+		"cache_scope_id": get_instance_id(),
 		"next_sequence": _next_sequence,
 		"operations": operations,
 	}
@@ -354,6 +355,7 @@ func get_meshing_snapshot() -> Dictionary:
 		modes.append(int(operation["mode"]))
 	return {
 		"revision": revision,
+		"cache_scope_id": get_instance_id(),
 		"world_seed": world_seed,
 		"generator_version": generator_version,
 		"centers": centers,
@@ -446,6 +448,7 @@ func get_meshing_snapshot_for_chunk(region_key: Vector2i, chunk_coordinate: Vect
 	return {
 		"valid": true,
 		"revision": revision,
+		"cache_scope_id": get_instance_id(),
 		"world_seed": world_seed,
 		"generator_version": generator_version,
 		"centers": centers,
@@ -557,6 +560,7 @@ func get_ray_snapshot(ray_origin: Vector3, ray_direction: Vector3, max_distance:
 		"valid": last_storage_error.is_empty(),
 		"storage_error": last_storage_error,
 		"revision": revision,
+		"cache_scope_id": get_instance_id(),
 		"world_seed": world_seed,
 		"generator_version": generator_version,
 		"centers": centers,
@@ -916,6 +920,7 @@ func get_persistence_metadata() -> Dictionary:
 		"world_seed": world_seed,
 		"generator_version": generator_version,
 		"revision": revision,
+		"cache_scope_id": get_instance_id(),
 		"next_sequence": _next_sequence,
 		"operation_count": get_edit_count(),
 	}
