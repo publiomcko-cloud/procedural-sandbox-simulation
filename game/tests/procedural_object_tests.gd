@@ -1050,6 +1050,17 @@ func _test_playable_scene_publication() -> void:
 				break
 		await _wait_for_entity_presence(stream, input_selected_id, true)
 		_check(stream.get_command_world_revision() == command_revision_before_restore + 1 and not stream.state_service.snapshot.get("deleted", {}).has(input_selected_id) and not stream.state_service.snapshot.get("overrides", {}).has(input_selected_id) and stream.get_instance_ids().count(input_selected_id) == 1 and String(demo.get("_object_state_action_status")).contains("ENTITY_RESTORE committed"), "F9 remains distinct from Undo Delete and restores the procedural baseline without overrides or duplication (status=%s)" % String(demo.get("_object_state_action_status")))
+		# Region generation is asynchronous in the playable stream. Presence alone
+		# is not a publication-completion fence when the entity already existed
+		# before the command, so wait for the queued visual rebuild to drain before
+		# taking the persisted visual-state snapshot used by the unload/reload check.
+		var restore_visual_quiescent := false
+		for _frame in range(240):
+			await process_frame
+			if int(stream.get_performance_snapshot().get("pending_region_publication_count", 0)) == 0:
+				restore_visual_quiescent = true
+				break
+		_check(restore_visual_quiescent, "F9 visual rebuild drains before the unload/reload reference snapshot")
 		stateful_records = stream.get_region_instance_records(Vector2i.ZERO)
 		var region_root_count := 0
 		for child in stream.get_children():
