@@ -28,6 +28,7 @@ const MAX_MESH_JOBS_IN_FLIGHT_HARD := 12
 const MAX_MESH_UPLOADS_PER_FRAME := 4
 const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
 const MAX_BUFFERED_BRUSH_REQUESTS := 64
+const EDIT_TRACE_ENABLED := true
 const DIAGNOSTICS_REFRESH_INTERVAL := 0.25
 const FOCUS_MOVE_STEP := 4.0
 const MAX_STAGE_RETRIES := 2
@@ -106,6 +107,7 @@ var global_rebuild_reason := ""
 var _full_rebuild_target_ids: Array[String] = []
 var _edit_transaction: Dictionary = {}
 var _buffered_brush_requests: Array[Dictionary] = []
+var _edit_trace_serial := 0
 var _stage_retry_counts: Dictionary = {}
 var _stream_errors_by_region: Dictionary = {}
 var _superseded_stage_total := 0
@@ -1061,6 +1063,33 @@ func _process_completed_mesh_jobs() -> void:
 		var upload_started_usec := Time.get_ticks_usec()
 		var result: Dictionary = TerrainMesher.mesh_from_cpu_data(cpu_result)
 		var upload_elapsed_usec := Time.get_ticks_usec() - upload_started_usec
+		var worker_queue_usec := maxi(0, int(job.worker_started_usec) - int(record["submitted_usec"]))
+		var worker_run_usec := maxi(0, int(job.worker_finished_usec) - int(job.worker_started_usec))
+		if String(stage["purpose"]) == "edit_transaction" and not _edit_transaction.is_empty():
+			_edit_transaction["trace_worker_queue_usec_max"] = maxi(int(_edit_transaction.get("trace_worker_queue_usec_max", 0)), worker_queue_usec)
+			_edit_transaction["trace_worker_run_usec_max"] = maxi(int(_edit_transaction.get("trace_worker_run_usec_max", 0)), worker_run_usec)
+			_edit_transaction["trace_upload_usec_total"] = int(_edit_transaction.get("trace_upload_usec_total", 0)) + upload_elapsed_usec
+			_edit_transaction["trace_upload_usec_max"] = maxi(int(_edit_transaction.get("trace_upload_usec_max", 0)), upload_elapsed_usec)
+			_edit_trace("job_complete", {
+				"sequence_start": int(_edit_transaction.get("operation_sequence_start", -1)),
+				"sequence_end": int(_edit_transaction.get("operation_sequence", -1)),
+				"revision": int(stage["edit_revision"]),
+				"region": str(stage["region_key"]),
+				"chunk": str(record["coordinate"]),
+				"kind": completed_kind,
+				"side": String(record.get("shared_side", "")),
+				"snapshot_ms": float(record.get("snapshot_usec", 0)) / 1000.0,
+				"worker_queue_ms": float(worker_queue_usec) / 1000.0,
+				"worker_run_ms": float(worker_run_usec) / 1000.0,
+				"upload_ms": float(upload_elapsed_usec) / 1000.0,
+				"job_total_ms": float(Time.get_ticks_usec() - int(record["submitted_usec"])) / 1000.0,
+				"candidate_operations": int(record.get("snapshot_candidate_count", -1)),
+				"raw_candidate_operations": int(record.get("snapshot_raw_candidate_count", -1)),
+				"materialized_tiles": int(record.get("snapshot_tile_count", -1)),
+				"sdf_ms": float((result.get("timings_usec", {}) as Dictionary).get("sdf_and_ledger", 0)) / 1000.0,
+				"triangulation_ms": float((result.get("timings_usec", {}) as Dictionary).get("triangulation_and_face_normals", 0)) / 1000.0,
+				"normals_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_gradient_normals", 0)) / 1000.0,
+			})
 		if contributes_to_operation:
 			_mesh_upload_usec_samples.append(upload_elapsed_usec)
 		_last_mesh_upload_ms = float(upload_elapsed_usec) / 1000.0
@@ -1124,6 +1153,8 @@ func _dispatch_mesh_jobs() -> void:
 		var queue_index: int = int(stage["submit_index"])
 		var enqueued_usec := int(stage["chunk_queued_usec"][queue_index])
 		var submitted_usec := Time.get_ticks_usec()
+		var snapshot_started_usec := Time.get_ticks_usec()
+		var snapshot_meta: Dictionary = {}
 		if _stage_contributes_to_active_operation(stage):
 			_mesh_queue_wait_usec_samples.append(maxi(0, submitted_usec - enqueued_usec))
 		var job: RefCounted
@@ -1134,6 +1165,7 @@ func _dispatch_mesh_jobs() -> void:
 			var corner_snapshot: Dictionary = SharedBoundaryAuthority.make_xz_corner_snapshot(
 				state.brush_edits, min_region
 			)
+			snapshot_meta = corner_snapshot
 			job = SharedCornerMeshJob.new(
 				state.world_seed, min_region, corner_snapshot, submitted_usec
 			)
@@ -1145,6 +1177,7 @@ func _dispatch_mesh_jobs() -> void:
 			var pair_snapshot: Dictionary = SharedBoundaryAuthority.make_x_pair_snapshot(
 				state.brush_edits, left_region, coordinate.y
 			)
+			snapshot_meta = pair_snapshot
 			job = SharedBoundaryMeshJob.new(
 				state.world_seed, left_region, coordinate.y, pair_snapshot, submitted_usec
 			)
@@ -1156,19 +1189,28 @@ func _dispatch_mesh_jobs() -> void:
 			var z_snapshot: Dictionary = SharedBoundaryAuthority.make_z_pair_snapshot(
 				state.brush_edits, low_region, coordinate.x
 			)
+			snapshot_meta = z_snapshot
 			job = SharedZBoundaryMeshJob.new(
 				state.world_seed, low_region, coordinate.x, z_snapshot, submitted_usec
 			)
 			job_kind = "shared_boundary_z"
 			shared_side = "low" if coordinate.y == ChunkGrid.CHUNK_COUNT_Z - 1 else "high"
 		else:
+			var chunk_snapshot: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
+				stage["region_key"], coordinate
+			)
+			snapshot_meta = chunk_snapshot
 			job = TerrainMeshJob.new(
 				state.world_seed, stage["region_key"], coordinate,
 				stage["cave_section_enabled"],
-				state.brush_edits.get_meshing_snapshot_for_chunk(stage["region_key"], coordinate),
+				chunk_snapshot,
 				submitted_usec,
 				int(stage.get("lod_by_coordinate", {}).get(coordinate, 0))
 			)
+		var snapshot_elapsed_usec := Time.get_ticks_usec() - snapshot_started_usec
+		if String(stage["purpose"]) == "edit_transaction" and not _edit_transaction.is_empty():
+			_edit_transaction["trace_snapshot_usec_total"] = int(_edit_transaction.get("trace_snapshot_usec_total", 0)) + snapshot_elapsed_usec
+			_edit_transaction["trace_snapshot_usec_max"] = maxi(int(_edit_transaction.get("trace_snapshot_usec_max", 0)), snapshot_elapsed_usec)
 		var high_priority: bool = String(stage["purpose"]) in ["edit_transaction", "partial"]
 		var task_label := "P1.0C terrain chunk"
 		if job_kind == "shared_boundary_x":
@@ -1194,8 +1236,27 @@ func _dispatch_mesh_jobs() -> void:
 			"submitted_usec": submitted_usec,
 			"job_kind": job_kind,
 			"shared_side": shared_side,
+			"snapshot_usec": snapshot_elapsed_usec,
+			"snapshot_candidate_count": int(snapshot_meta.get("candidate_operation_count", -1)),
+			"snapshot_raw_candidate_count": int(snapshot_meta.get("raw_candidate_operation_count", snapshot_meta.get("candidate_operation_count", -1))),
+			"snapshot_tile_count": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
 		}
 		_peak_mesh_jobs_in_flight = maxi(_peak_mesh_jobs_in_flight, _mesh_jobs.size())
+		if String(stage["purpose"]) == "edit_transaction":
+			_edit_trace("job_dispatch", {
+				"sequence_start": int(_edit_transaction.get("operation_sequence_start", -1)),
+				"sequence_end": int(_edit_transaction.get("operation_sequence", -1)),
+				"revision": int(stage["edit_revision"]),
+				"region": str(stage["region_key"]),
+				"chunk": str(coordinate),
+				"kind": job_kind,
+				"side": shared_side,
+				"snapshot_ms": float(snapshot_elapsed_usec) / 1000.0,
+				"stage_queue_ms": float(submitted_usec - enqueued_usec) / 1000.0,
+				"candidate_operations": int(snapshot_meta.get("candidate_operation_count", -1)),
+				"raw_candidate_operations": int(snapshot_meta.get("raw_candidate_operation_count", snapshot_meta.get("candidate_operation_count", -1))),
+				"materialized_tiles": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
+			})
 
 
 func _next_mesh_job_request() -> Dictionary:
@@ -1641,6 +1702,7 @@ func _schedule_edit_transaction(operation: Dictionary) -> void:
 func _schedule_edit_transaction_batch(operations: Array[Dictionary]) -> void:
 	if operations.is_empty():
 		return
+	var schedule_started_usec := Time.get_ticks_usec()
 	_begin_operation("global_brush_edit")
 	var support_regions_by_id: Dictionary = {}
 	var rebuild_regions_by_id: Dictionary = {}
@@ -1740,7 +1802,24 @@ func _schedule_edit_transaction_batch(operations: Array[Dictionary]) -> void:
 		"rebuild_region_count": rebuild_regions.size(),
 		"rebuild_chunk_count": 0,
 		"mesh_job_count": 0,
+		"trace_started_usec": schedule_started_usec,
+		"trace_snapshot_usec_total": 0,
+		"trace_snapshot_usec_max": 0,
+		"trace_worker_queue_usec_max": 0,
+		"trace_worker_run_usec_max": 0,
+		"trace_upload_usec_total": 0,
+		"trace_upload_usec_max": 0,
 	}
+	_edit_trace("schedule", {
+		"sequence_start": first_sequence,
+		"sequence_end": last_sequence,
+		"revision": int(edit_ledger.revision),
+		"operation_count": operations.size(),
+		"target_regions": targets.size(),
+		"rebuild_regions": rebuild_regions.size(),
+		"rebuild_chunks": _last_edit_rebuild_chunk_count,
+		"schedule_ms": float(Time.get_ticks_usec() - schedule_started_usec) / 1000.0,
+	})
 	_start_edit_transaction_attempt()
 	_update_runtime_diagnostics()
 
@@ -1818,6 +1897,24 @@ func _try_commit_edit_transaction() -> void:
 	for id in target_ids:
 		_clear_stream_error(id)
 	_last_edit_mesh_jobs = int(_edit_transaction.get("mesh_job_count", 0))
+	var trace_transaction_usec := Time.get_ticks_usec() - int(_edit_transaction.get("trace_started_usec", Time.get_ticks_usec()))
+	var trace_summary := {
+		"sequence_start": committed_sequence_start,
+		"sequence_end": committed_sequence,
+		"revision": int(_edit_transaction.get("revision", -1)),
+		"operation_count": committed_operation_count,
+		"resident_regions": committed_regions,
+		"mesh_jobs": _last_edit_mesh_jobs,
+		"transaction_ms": float(trace_transaction_usec) / 1000.0,
+		"snapshot_total_ms": float(_edit_transaction.get("trace_snapshot_usec_total", 0)) / 1000.0,
+		"snapshot_max_ms": float(_edit_transaction.get("trace_snapshot_usec_max", 0)) / 1000.0,
+		"worker_queue_max_ms": float(_edit_transaction.get("trace_worker_queue_usec_max", 0)) / 1000.0,
+		"worker_run_max_ms": float(_edit_transaction.get("trace_worker_run_usec_max", 0)) / 1000.0,
+		"upload_total_ms": float(_edit_transaction.get("trace_upload_usec_total", 0)) / 1000.0,
+		"upload_max_ms": float(_edit_transaction.get("trace_upload_usec_max", 0)) / 1000.0,
+		"publish_ms": float(Time.get_ticks_usec() - publish_started_usec) / 1000.0,
+	}
+	_edit_trace("commit", trace_summary)
 	_edit_transaction = {}
 	if committed_operation_count > 1:
 		last_brush_result = "Global edits #%d-#%d coalesced mesh commit complete across %d resident region(s)" % [
@@ -1972,13 +2069,18 @@ func _sample_world_density_from_snapshot(world_position: Vector3, snapshot: Dict
 	)
 
 
+func _edit_trace(event: String, payload: Dictionary = {}) -> void:
+	if not EDIT_TRACE_ENABLED:
+		return
+	var record := payload.duplicate(true)
+	record["event"] = event
+	record["t_usec"] = Time.get_ticks_usec()
+	print("EDIT_TRACE " + JSON.stringify(record))
+
+
 func _apply_brush_at(screen_position: Vector2) -> void:
 	if global_rebuild_pending or not active_regions.has(_region_id(focus_region_key)):
 		last_brush_result = "Focused region is not ready for edits; no edit added"
-		_update_status()
-		return
-	if not _edit_transaction.is_empty():
-		last_brush_result = "Previous accepted edit is waiting for a coherent mesh commit; no new edit added"
 		_update_status()
 		return
 	var pick_total_started_usec := Time.get_ticks_usec()
@@ -2002,6 +2104,15 @@ func _apply_brush_at(screen_position: Vector2) -> void:
 	_last_brush_pick_hit = bool(pick.get("hit", false))
 	_last_brush_pick_position = pick.get("position", Vector3.ZERO)
 	_brush_pick_serial += 1
+	_edit_trace("pick", {
+		"pick_serial": _brush_pick_serial,
+		"snapshot_ms": float(_last_brush_pick_snapshot_elapsed_usec) / 1000.0,
+		"march_ms": float(_last_brush_pick_elapsed_usec) / 1000.0,
+		"total_ms": float(_last_brush_pick_total_elapsed_usec) / 1000.0,
+		"candidate_operations": _last_brush_pick_candidate_count,
+		"samples": _last_brush_pick_sample_count,
+		"hit": _last_brush_pick_hit,
+	})
 	if not pick.get("hit", false):
 		last_brush_result = "No terrain surface hit; no edit added"
 		_update_status()
@@ -2016,6 +2127,9 @@ func _apply_brush_at(screen_position: Vector2) -> void:
 
 
 func _accept_brush_at_world(world_hit: Vector3) -> bool:
+	var accept_started_usec := Time.get_ticks_usec()
+	_edit_trace_serial += 1
+	var trace_serial := _edit_trace_serial
 	if global_rebuild_pending:
 		last_brush_result = "Global mesh publication is busy; no edit added"
 		_update_status()
@@ -2033,6 +2147,14 @@ func _accept_brush_at_world(world_hit: Vector3) -> bool:
 			"mode": selected_brush_mode,
 			"center_world": world_hit,
 			"radius": BRUSH_RADIUS,
+			"buffered_usec": Time.get_ticks_usec(),
+			"trace_serial": trace_serial,
+		})
+		_edit_trace("buffered_input", {
+			"trace_serial": trace_serial,
+			"active_revision": int(_edit_transaction.get("revision", edit_ledger.revision)),
+			"pending_count": _buffered_brush_requests.size(),
+			"accept_ms": float(Time.get_ticks_usec() - accept_started_usec) / 1000.0,
 		})
 		var buffered_mode := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
 		last_brush_result = "%s buffered while revision %d publishes; %d pending edit(s)" % [
@@ -2042,12 +2164,25 @@ func _accept_brush_at_world(world_hit: Vector3) -> bool:
 		]
 		_update_status()
 		return true
+	var ledger_started_usec := Time.get_ticks_usec()
 	if not edit_ledger.add_sphere(selected_brush_mode, world_hit, BRUSH_RADIUS):
 		_last_edit_rejection = edit_ledger.last_rejection_reason
 		last_brush_result = "Edit rejected (%s); terrain unchanged" % _last_edit_rejection
 		_update_status()
 		return false
+	var ledger_elapsed_usec := Time.get_ticks_usec() - ledger_started_usec
 	var operation: Dictionary = edit_ledger.get_last_operation_snapshot()
+	_edit_trace("ledger_accept", {
+		"trace_serial": trace_serial,
+		"sequence": int(operation["sequence"]),
+		"revision": int(edit_ledger.revision),
+		"ledger_ms": float(ledger_elapsed_usec) / 1000.0,
+		"accept_to_ledger_ms": float(Time.get_ticks_usec() - accept_started_usec) / 1000.0,
+		"tail_operations": int(edit_ledger.get_tail_edit_count()) if edit_ledger.has_method("get_tail_edit_count") else -1,
+		"support_regions": (operation["support_regions"] as Array).size(),
+		"dependency_regions": (operation["dependency_regions"] as Array).size(),
+		"rebuild_regions": (operation["rebuild_regions"] as Array).size(),
+	})
 	_last_edit_rejection = ""
 	var mode_name := "FILL" if selected_brush_mode == BrushEditState.Mode.FILL else "CARVE"
 	last_brush_result = "%s #%d accepted globally at %s; %d support + %d dependent rebuild region(s)" % [
@@ -2069,7 +2204,12 @@ func _flush_buffered_brush_requests() -> void:
 	_buffered_brush_requests.clear()
 	var operations: Array[Dictionary] = []
 	var rejected := 0
+	var batch_ledger_started_usec := Time.get_ticks_usec()
+	var oldest_buffered_usec := 0
 	for request in requests:
+		var buffered_usec := int(request.get("buffered_usec", 0))
+		if buffered_usec > 0 and (oldest_buffered_usec == 0 or buffered_usec < oldest_buffered_usec):
+			oldest_buffered_usec = buffered_usec
 		var mode := int(request["mode"])
 		var center: Vector3 = request["center_world"]
 		var radius := float(request["radius"])
@@ -2077,6 +2217,7 @@ func _flush_buffered_brush_requests() -> void:
 			operations.append(edit_ledger.get_last_operation_snapshot())
 		else:
 			rejected += 1
+	var batch_ledger_usec := Time.get_ticks_usec() - batch_ledger_started_usec
 	if operations.is_empty():
 		last_brush_result = "Buffered edit batch rejected; %d request(s) unchanged" % rejected
 		_update_status()
@@ -2089,6 +2230,14 @@ func _flush_buffered_brush_requests() -> void:
 		last_sequence,
 		"" if rejected == 0 else "; %d rejected" % rejected,
 	]
+	_edit_trace("buffer_flush", {
+		"operation_count": operations.size(),
+		"rejected": rejected,
+		"ledger_ms": float(batch_ledger_usec) / 1000.0,
+		"oldest_buffer_wait_ms": float(Time.get_ticks_usec() - oldest_buffered_usec) / 1000.0 if oldest_buffered_usec > 0 else 0.0,
+		"sequence_start": first_sequence,
+		"sequence_end": last_sequence,
+	})
 	_schedule_edit_transaction_batch(operations)
 	_update_status()
 
