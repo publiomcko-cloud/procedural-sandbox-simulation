@@ -25,6 +25,7 @@ func _run() -> void:
 	demo.world_save_store = Store.new(_root.path_join("terrain"))
 	demo.object_state_directory_override = _root.path_join("objects")
 	demo._preedit_count = PREEDIT_COUNT
+	demo.debug_shared_runtime_diagnostics = true
 	get_root().add_child(demo)
 
 	var initial_ready := await _wait_until(func() -> bool:
