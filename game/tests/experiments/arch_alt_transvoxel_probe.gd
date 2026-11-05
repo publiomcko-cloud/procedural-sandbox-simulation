@@ -106,7 +106,12 @@ func _build_case(snapshot: Dictionary) -> Dictionary:
 		for z in range(size.z):
 			for x in range(size.x):
 				var local_node := Vector3i(x, y, z) - Vector3i.ONE * min_padding
-				var world := INTERIOR_MIN + Vector3(local_node) * STEP
+				var transition_face_buffer_x := size.x - 1 - min_padding
+				var world := Vector3(
+					TARGET_XPLUS + float(x - transition_face_buffer_x) * STEP,
+					FACE_Y_MIN + float(y - min_padding) * STEP,
+					FACE_Z_MIN + float(z - min_padding) * STEP
+				)
 				var project_density := _sample_project_density(world, snapshot)
 				if not is_finite(project_density):
 					return {"valid": false, "reason": "nonfinite_project_density", "voxel": [x, y, z]}
@@ -135,7 +140,12 @@ func _build_case(snapshot: Dictionary) -> Dictionary:
 		"minimum_padding": min_padding,
 		"maximum_padding": max_padding,
 		"buffer_size": [size.x, size.y, size.z],
-		"interior_min": [INTERIOR_MIN.x, INTERIOR_MIN.y, INTERIOR_MIN.z],
+		"regular_grid_min_world": [
+			TARGET_XPLUS - float((size.x - 1 - min_padding) - min_padding) * STEP,
+			FACE_Y_MIN,
+			FACE_Z_MIN
+		],
+		"transition_face_world_x": TARGET_XPLUS,
 		"interior_cells": [INTERIOR_CELLS.x, INTERIOR_CELLS.y, INTERIOR_CELLS.z],
 		"sample_step": STEP,
 		"transition_direction": DIR_X_POS,
@@ -205,7 +215,7 @@ func _count_xplus_face_sign_changes(snapshot: Dictionary) -> int:
 	for y in range(nodes):
 		var row: Array = []
 		for z in range(INTERIOR_CELLS.z + 1):
-			row.append(_sample_project_density(Vector3(x, INTERIOR_MIN.y + y * STEP, INTERIOR_MIN.z + z * STEP), snapshot))
+			row.append(_sample_project_density(Vector3(x, FACE_Y_MIN + y * STEP, FACE_Z_MIN + z * STEP), snapshot))
 		values.append(row)
 	for y in range(INTERIOR_CELLS.y + 1):
 		for z in range(INTERIOR_CELLS.z):
