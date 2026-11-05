@@ -7,14 +7,14 @@ Use this to reproduce the successful E2E without changing your normal R6 checkou
 ```powershell
 cd C:\Dev\procedural-sandbox-simulation
 git fetch origin
-git switch -c test/shared-surface-e2e --track origin/exp/p3-1-shared-surface-e2e-integration
+git switch -c test/shared-surface-e2e --track origin/exp/p3-1-shared-surface-e2e-success
 ```
 
 If that local branch already exists:
 
 ```powershell
 git switch test/shared-surface-e2e
-git reset --hard origin/exp/p3-1-shared-surface-e2e-integration
+git reset --hard origin/exp/p3-1-shared-surface-e2e-success
 ```
 
 ## Godot 4.7.2
