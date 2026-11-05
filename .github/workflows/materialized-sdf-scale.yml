@@ -49,6 +49,13 @@ jobs:
           timeout --signal=TERM 90s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64             --headless --path game             --script res://tests/experiments/materialized_sdf_scalability_qualification.gd             2>&1 | tee /tmp/materialized-sdf-scale.log
           grep -q 'MATERIALIZED_SDF_SCALE_PASS' /tmp/materialized-sdf-scale.log
 
+      - name: Run playable runtime unload/reload qualification
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 180s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64             --headless --path game             --script res://tests/experiments/runtime_scalable_playable_qualification.gd             2>&1 | tee /tmp/runtime-scalable-playable.log
+          grep -q 'RUNTIME_SCALABLE_PLAYABLE_PASS' /tmp/runtime-scalable-playable.log
+
       - name: Upload qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -58,3 +65,4 @@ jobs:
             /tmp/import.log
             /tmp/shared-surface-e2e.log
             /tmp/materialized-sdf-scale.log
+            /tmp/runtime-scalable-playable.log
