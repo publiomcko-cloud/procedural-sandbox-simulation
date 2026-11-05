@@ -765,11 +765,13 @@ func _set_free_explore_enabled(enabled: bool) -> void:
 		_free_explore_yaw = camera.rotation.y
 		_free_explore_pitch = clampf(camera.rotation.x, -FREE_EXPLORE_MAX_PITCH_RADIANS, FREE_EXPLORE_MAX_PITCH_RADIANS)
 		orbit_target = camera.global_position
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if DisplayServer.get_name() != "headless":
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		if is_instance_valid(ui_layer):
 			ui_layer.visible = false
 	else:
-		Input.mouse_mode = _free_explore_previous_mouse_mode
+		if DisplayServer.get_name() != "headless":
+			Input.mouse_mode = _free_explore_previous_mouse_mode
 		if is_instance_valid(ui_layer):
 			ui_layer.visible = _free_explore_ui_was_visible
 		var forward := -camera.global_transform.basis.z.normalized()
