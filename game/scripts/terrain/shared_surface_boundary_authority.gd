@@ -319,6 +319,330 @@ static func build_x_region_boundary_pair(
 	}
 
 
+static func build_z_region_boundary_pair(
+	world_seed: int,
+	low_z_region_key: Vector2i,
+	x_chunk: int,
+	brush_snapshot: Dictionary
+) -> Dictionary:
+	if x_chunk < 0 or x_chunk >= Grid.CHUNK_COUNT_X:
+		return {"valid": false, "reason": "invalid_x_chunk"}
+	var high_z_region_key := low_z_region_key + Vector2i(0, 1)
+	var low_coordinate := Vector2i(x_chunk, Grid.CHUNK_COUNT_Z - 1)
+	var high_coordinate := Vector2i(x_chunk, 0)
+	var low_origin := Spatial.region_origin_world(low_z_region_key) + Grid.origin_for(low_coordinate)
+	var high_origin := Spatial.region_origin_world(high_z_region_key) + Grid.origin_for(high_coordinate)
+	var seam_z := high_origin.z
+	var cells := Vector3i(Grid.CELLS_PER_CHUNK_X, Grid.CELL_COUNT_Y, Grid.CELLS_PER_CHUNK_Z * 2)
+	var roi_min := Vector3(low_origin.x, Grid.MIN_BOUND.y, low_origin.z)
+	var built := build_z_shared_volume(world_seed, brush_snapshot, roi_min, cells, Grid.SAMPLE_STEP, seam_z)
+	if not built.get("valid", false):
+		return built
+
+	var low_positions := PackedVector3Array()
+	var low_normals := PackedVector3Array()
+	var high_positions := PackedVector3Array()
+	var high_normals := PackedVector3Array()
+	for triangle_value in built.get("triangles", []):
+		var triangle: Dictionary = triangle_value
+		var points: Array = triangle["points"]
+		var normal: Vector3 = triangle["normal"]
+		var side := String(triangle["side"])
+		for point_value in points:
+			var point: Vector3 = point_value
+			if side == "low":
+				low_positions.append(point - low_origin)
+				low_normals.append(normal)
+			else:
+				high_positions.append(point - high_origin)
+				high_normals.append(normal)
+
+	var common := {
+		"ledger_revision": int(brush_snapshot.get("revision", 0)),
+		"world_seed": world_seed,
+		"generator_version": Field.GENERATOR_VERSION,
+		"lod_level": 0,
+		"boundary_authority": "shared_surface_z_pair_v1",
+		"seam_z": seam_z,
+		"shared_mesh_signature": String(built.get("mesh_signature", "")),
+	}
+	var low_cpu := common.duplicate(true)
+	low_cpu.merge({
+		"valid": true,
+		"region_key": low_z_region_key,
+		"coordinate": low_coordinate,
+		"positions": low_positions,
+		"normals": low_normals,
+		"vertex_count": low_positions.size(),
+		"triangle_count": low_positions.size() / 3,
+		"sample_count": int(built.get("sample_count", 0)),
+	}, true)
+	var high_cpu := common.duplicate(true)
+	high_cpu.merge({
+		"valid": true,
+		"region_key": high_z_region_key,
+		"coordinate": high_coordinate,
+		"positions": high_positions,
+		"normals": high_normals,
+		"vertex_count": high_positions.size(),
+		"triangle_count": high_positions.size() / 3,
+		"sample_count": int(built.get("sample_count", 0)),
+	}, true)
+	return {
+		"valid": true,
+		"low": low_cpu,
+		"high": high_cpu,
+		"diagnostics": built.get("diagnostics", {}),
+		"mesh_signature": built.get("mesh_signature", ""),
+		"seam_z": seam_z,
+		"x_chunk": x_chunk,
+	}
+
+
+static func build_xz_corner_quad(
+	world_seed: int,
+	min_region_key: Vector2i,
+	brush_snapshot: Dictionary
+) -> Dictionary:
+	var regions := {
+		"minx_minz": min_region_key,
+		"maxx_minz": min_region_key + Vector2i(1, 0),
+		"minx_maxz": min_region_key + Vector2i(0, 1),
+		"maxx_maxz": min_region_key + Vector2i(1, 1),
+	}
+	var coordinates := {
+		"minx_minz": Vector2i(Grid.CHUNK_COUNT_X - 1, Grid.CHUNK_COUNT_Z - 1),
+		"maxx_minz": Vector2i(0, Grid.CHUNK_COUNT_Z - 1),
+		"minx_maxz": Vector2i(Grid.CHUNK_COUNT_X - 1, 0),
+		"maxx_maxz": Vector2i(0, 0),
+	}
+	var origins: Dictionary = {}
+	for owner in regions.keys():
+		origins[owner] = Spatial.region_origin_world(regions[owner]) + Grid.origin_for(coordinates[owner])
+	var roi_min: Vector3 = origins["minx_minz"]
+	roi_min.y = Grid.MIN_BOUND.y
+	var seam_x: float = (origins["maxx_minz"] as Vector3).x
+	var seam_z: float = (origins["minx_maxz"] as Vector3).z
+	var cells := Vector3i(
+		Grid.CELLS_PER_CHUNK_X * 2,
+		Grid.CELL_COUNT_Y,
+		Grid.CELLS_PER_CHUNK_Z * 2
+	)
+	var built := build_xz_corner_volume(
+		world_seed, brush_snapshot, roi_min, cells, Grid.SAMPLE_STEP, seam_x, seam_z
+	)
+	if not built.get("valid", false):
+		return built
+
+	var positions_by_owner: Dictionary = {}
+	var normals_by_owner: Dictionary = {}
+	for owner in regions.keys():
+		positions_by_owner[owner] = PackedVector3Array()
+		normals_by_owner[owner] = PackedVector3Array()
+	for triangle_value in built.get("triangles", []):
+		var triangle: Dictionary = triangle_value
+		var owner := String(triangle["owner"])
+		var positions: PackedVector3Array = positions_by_owner[owner]
+		var normals: PackedVector3Array = normals_by_owner[owner]
+		for point_value in triangle["points"]:
+			positions.append((point_value as Vector3) - (origins[owner] as Vector3))
+			normals.append(triangle["normal"])
+		positions_by_owner[owner] = positions
+		normals_by_owner[owner] = normals
+
+	var result := {
+		"valid": true,
+		"diagnostics": built.get("diagnostics", {}),
+		"mesh_signature": built.get("mesh_signature", ""),
+		"seam_x": seam_x,
+		"seam_z": seam_z,
+		"min_region_key": min_region_key,
+	}
+	for owner in regions.keys():
+		var positions: PackedVector3Array = positions_by_owner[owner]
+		result[owner] = {
+			"valid": true,
+			"ledger_revision": int(brush_snapshot.get("revision", 0)),
+			"world_seed": world_seed,
+			"generator_version": Field.GENERATOR_VERSION,
+			"lod_level": 0,
+			"boundary_authority": "shared_surface_xz_corner_v1",
+			"shared_mesh_signature": String(built.get("mesh_signature", "")),
+			"region_key": regions[owner],
+			"coordinate": coordinates[owner],
+			"positions": positions,
+			"normals": normals_by_owner[owner],
+			"vertex_count": positions.size(),
+			"triangle_count": positions.size() / 3,
+			"sample_count": int(built.get("sample_count", 0)),
+		}
+	return result
+
+
+static func build_z_shared_volume(
+	world_seed: int,
+	brush_snapshot: Dictionary,
+	roi_min: Vector3,
+	cells: Vector3i,
+	step: float,
+	seam_z: float
+) -> Dictionary:
+	if cells.x <= 0 or cells.y <= 0 or cells.z <= 0 or not is_finite(step) or step <= 0.0:
+		return {"valid": false, "reason": "invalid_volume_shape"}
+	var roi_max := roi_min + Vector3(cells) * step
+	if seam_z <= roi_min.z + EPS or seam_z >= roi_max.z - EPS:
+		return {"valid": false, "reason": "seam_outside_volume"}
+	var dims := cells + Vector3i.ONE
+	var values := PackedFloat32Array()
+	values.resize(dims.x * dims.y * dims.z)
+	for y in range(dims.y):
+		for z in range(dims.z):
+			for x in range(dims.x):
+				var p := roi_min + Vector3(x, y, z) * step
+				var d := _sample_density(world_seed, p, brush_snapshot)
+				if not is_finite(d):
+					return {"valid": false, "reason": "non_finite_sample", "sample": [x, y, z]}
+				values[_index(x, y, z, dims)] = d
+
+	var root_cache: Dictionary = {}
+	var root_position_keys: Dictionary = {}
+	var triangles: Array[Dictionary] = []
+	var dropped_degenerate_candidates := 0
+	for y in range(cells.y):
+		for z in range(cells.z):
+			for x in range(cells.x):
+				var cell := Vector3i(x, y, z)
+				var nodes: Array[Vector3i] = []
+				var points: Array[Vector3] = []
+				var density: Array[float] = []
+				for corner_value in CORNERS:
+					var corner: Vector3i = corner_value
+					var node := cell + corner
+					nodes.append(node)
+					points.append(roi_min + Vector3(node) * step)
+					density.append(values[_index(node.x, node.y, node.z, dims)])
+				for tet in TETS:
+					var emitted := _polygonize_tet_z(
+						tet, nodes, points, density, roi_min, step, seam_z,
+						root_cache, root_position_keys
+					)
+					dropped_degenerate_candidates += int(emitted.get("dropped_degenerate", 0))
+					triangles.append_array(emitted.get("triangles", []))
+
+	var deduplicated := _deduplicate_triangles(triangles)
+	var dropped_duplicate_candidates := triangles.size() - deduplicated.size()
+	triangles = deduplicated
+	var diagnostics := analyze_world_triangles_z(triangles, seam_z, roi_min, roi_max)
+	var signature_rows: Array[String] = []
+	for triangle_value in triangles:
+		var ids: Array = triangle_value["root_ids"]
+		var sorted_ids := [String(ids[0]), String(ids[1]), String(ids[2])]
+		sorted_ids.sort()
+		signature_rows.append("%s:%s" % [String(triangle_value["side"]), "|".join(sorted_ids)])
+	signature_rows.sort()
+	var root_identity_consistent := _root_identity_consistent(root_cache, root_position_keys)
+	diagnostics["root_identity_consistent"] = root_identity_consistent
+	diagnostics["dropped_degenerate_candidate_count"] = dropped_degenerate_candidates
+	diagnostics["dropped_duplicate_candidate_count"] = dropped_duplicate_candidates
+	diagnostics["emitted_degenerate_triangle_count"] = 0
+	return {
+		"valid": true,
+		"triangles": triangles,
+		"diagnostics": diagnostics,
+		"mesh_signature": _fnv1a_64("\n".join(signature_rows)),
+		"unique_root_count": root_cache.size(),
+		"triangle_count": triangles.size(),
+		"sample_count": values.size(),
+		"roi_min": roi_min,
+		"roi_max": roi_max,
+		"step": step,
+		"seam_z": seam_z,
+	}
+
+
+static func build_xz_corner_volume(
+	world_seed: int,
+	brush_snapshot: Dictionary,
+	roi_min: Vector3,
+	cells: Vector3i,
+	step: float,
+	seam_x: float,
+	seam_z: float
+) -> Dictionary:
+	if cells.x <= 0 or cells.y <= 0 or cells.z <= 0 or not is_finite(step) or step <= 0.0:
+		return {"valid": false, "reason": "invalid_volume_shape"}
+	var roi_max := roi_min + Vector3(cells) * step
+	if seam_x <= roi_min.x + EPS or seam_x >= roi_max.x - EPS \
+		or seam_z <= roi_min.z + EPS or seam_z >= roi_max.z - EPS:
+		return {"valid": false, "reason": "corner_seam_outside_volume"}
+	var dims := cells + Vector3i.ONE
+	var values := PackedFloat32Array()
+	values.resize(dims.x * dims.y * dims.z)
+	for y in range(dims.y):
+		for z in range(dims.z):
+			for x in range(dims.x):
+				var p := roi_min + Vector3(x, y, z) * step
+				var d := _sample_density(world_seed, p, brush_snapshot)
+				if not is_finite(d):
+					return {"valid": false, "reason": "non_finite_sample", "sample": [x, y, z]}
+				values[_index(x, y, z, dims)] = d
+
+	var root_cache: Dictionary = {}
+	var root_position_keys: Dictionary = {}
+	var triangles: Array[Dictionary] = []
+	var dropped_degenerate_candidates := 0
+	for y in range(cells.y):
+		for z in range(cells.z):
+			for x in range(cells.x):
+				var cell := Vector3i(x, y, z)
+				var nodes: Array[Vector3i] = []
+				var points: Array[Vector3] = []
+				var density: Array[float] = []
+				for corner_value in CORNERS:
+					var corner: Vector3i = corner_value
+					var node := cell + corner
+					nodes.append(node)
+					points.append(roi_min + Vector3(node) * step)
+					density.append(values[_index(node.x, node.y, node.z, dims)])
+				for tet in TETS:
+					var emitted := _polygonize_tet_corner(
+						tet, nodes, points, density, roi_min, step, seam_x, seam_z,
+						root_cache, root_position_keys
+					)
+					dropped_degenerate_candidates += int(emitted.get("dropped_degenerate", 0))
+					triangles.append_array(emitted.get("triangles", []))
+
+	var deduplicated := _deduplicate_triangles(triangles)
+	var dropped_duplicate_candidates := triangles.size() - deduplicated.size()
+	triangles = deduplicated
+	var diagnostics := analyze_corner_world_triangles(triangles, seam_x, seam_z, roi_min, roi_max)
+	var signature_rows: Array[String] = []
+	for triangle_value in triangles:
+		var ids: Array = triangle_value["root_ids"]
+		var sorted_ids := [String(ids[0]), String(ids[1]), String(ids[2])]
+		sorted_ids.sort()
+		signature_rows.append("%s:%s" % [String(triangle_value["owner"]), "|".join(sorted_ids)])
+	signature_rows.sort()
+	diagnostics["root_identity_consistent"] = _root_identity_consistent(root_cache, root_position_keys)
+	diagnostics["dropped_degenerate_candidate_count"] = dropped_degenerate_candidates
+	diagnostics["dropped_duplicate_candidate_count"] = dropped_duplicate_candidates
+	diagnostics["emitted_degenerate_triangle_count"] = 0
+	return {
+		"valid": true,
+		"triangles": triangles,
+		"diagnostics": diagnostics,
+		"mesh_signature": _fnv1a_64("\n".join(signature_rows)),
+		"unique_root_count": root_cache.size(),
+		"triangle_count": triangles.size(),
+		"sample_count": values.size(),
+		"roi_min": roi_min,
+		"roi_max": roi_max,
+		"step": step,
+		"seam_x": seam_x,
+		"seam_z": seam_z,
+	}
+
+
 static func build_x_shared_volume(
 	world_seed: int,
 	brush_snapshot: Dictionary,
