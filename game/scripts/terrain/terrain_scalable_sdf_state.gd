@@ -188,7 +188,8 @@ func build_checkpoint_plan() -> Dictionary:
 				"reason": String(built.get("reason", "tile_materialization_failed")),
 				"tile_id": tile_id,
 			}
-		tile_replacements[tile_id] = built["tile"]
+		if built.get("changed", true):
+			tile_replacements[tile_id] = built["tile"]
 	var journal_records: Array[Dictionary] = []
 	for operation in _tail_operations:
 		journal_records.append(_journal_record(operation))
@@ -284,10 +285,11 @@ func _build_materialized_tile(region_key: Vector2i, coordinate: Vector2i) -> Dic
 		else:
 			return {"valid": false, "reason": "materialized_tile_values_invalid"}
 
-	var candidates: Array[Dictionary] = []
-	for operation in _tail_operations:
-		if _operation_may_affect_chunk(operation, region_key, coordinate):
-			candidates.append(operation)
+	var candidates: Array[Dictionary] = _materialization_candidates(
+		region_key, coordinate, current_result
+	)
+	if candidates.is_empty():
+		return {"valid": true, "changed": false}
 
 	var region_origin := Spatial.region_origin_world(region_key)
 	var local_origin := Grid.origin_for(coordinate)
@@ -351,6 +353,77 @@ func _build_materialized_tile(region_key: Vector2i, coordinate: Vector2i) -> Dic
 			"values": values,
 		},
 	}
+
+
+func _materialization_candidates(
+	region_key: Vector2i,
+	coordinate: Vector2i,
+	current_result: Dictionary
+) -> Array[Dictionary]:
+	var density_min: float
+	var density_max: float
+	if current_result.get("found", false):
+		var tile: Dictionary = current_result["tile"]
+		var values_value: Variant = tile.get("values", PackedFloat64Array())
+		if typeof(values_value) != TYPE_PACKED_FLOAT64_ARRAY 			and typeof(values_value) != TYPE_PACKED_FLOAT32_ARRAY:
+			return []
+		var values = values_value
+		if values.is_empty():
+			return []
+		density_min = float(values[0])
+		density_max = float(values[0])
+		for value_index in range(1, values.size()):
+			var value := float(values[value_index])
+			density_min = minf(density_min, value)
+			density_max = maxf(density_max, value)
+	else:
+		var base_interval: Dictionary = _validator._base_density_interval(
+			Grid.MIN_BOUND.y, Grid.MAX_BOUND.y
+		)
+		density_min = float(base_interval["minimum"])
+		density_max = float(base_interval["maximum"])
+
+	var region_origin := Spatial.region_origin_world(region_key)
+	var chunk_origin := region_origin + Grid.origin_for(coordinate)
+	var chunk_size := Grid.size_for(coordinate)
+	var chunk_min := Vector3(chunk_origin.x, Grid.MIN_BOUND.y, chunk_origin.z)
+	var chunk_max := Vector3(
+		chunk_origin.x + chunk_size.x,
+		Grid.MAX_BOUND.y,
+		chunk_origin.z + chunk_size.z
+	)
+	var result: Array[Dictionary] = []
+	for operation in _tail_operations:
+		var center: Vector3 = operation["center_world"]
+		var radius := float(operation["radius"])
+		var nearest := Vector3(
+			clampf(center.x, chunk_min.x, chunk_max.x),
+			clampf(center.y, chunk_min.y, chunk_max.y),
+			clampf(center.z, chunk_min.z, chunk_max.z)
+		)
+		var farthest_delta := Vector3(
+			maxf(absf(center.x - chunk_min.x), absf(center.x - chunk_max.x)),
+			maxf(absf(center.y - chunk_min.y), absf(center.y - chunk_max.y)),
+			maxf(absf(center.z - chunk_min.z), absf(center.z - chunk_max.z))
+		)
+		var minimum_distance := nearest.distance_to(center)
+		var maximum_distance := farthest_delta.length()
+		if int(operation["mode"]) == Brush.Mode.CARVE:
+			var threshold_min := minimum_distance - radius
+			var threshold_max := maximum_distance - radius
+			if threshold_min >= density_max:
+				continue
+			density_min = minf(density_min, threshold_min)
+			density_max = minf(density_max, threshold_max)
+		else:
+			var threshold_min := radius - maximum_distance
+			var threshold_max := radius - minimum_distance
+			if threshold_max <= density_min:
+				continue
+			density_min = maxf(density_min, threshold_min)
+			density_max = maxf(density_max, threshold_max)
+		result.append(operation)
+	return result
 
 
 func _materialized_tiles_for_chunk(region_key: Vector2i, coordinate: Vector2i) -> Dictionary:
