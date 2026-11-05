@@ -607,7 +607,15 @@ static func _count_t_junctions(seam_edges: Array[String], edge_points: Dictionar
 
 
 static func _on_outer_yz(p: Vector3, roi_min: Vector3, roi_max: Vector3) -> bool:
-	return absf(p.y - roi_min.y) <= EPS or absf(p.y - roi_max.y) <= EPS 		or absf(p.z - roi_min.z) <= EPS or absf(p.z - roi_max.z) <= EPS
+	# Use the same canonical world-point quantization as topology diagnostics.
+	# Exact-zero interpolation can leave a sub-micro-unit float residue even when
+	# the canonical point lies exactly on the finite ROI exterior.
+	var py := roundi(p.y * ROOT_QUANT)
+	var pz := roundi(p.z * ROOT_QUANT)
+	return py == roundi(roi_min.y * ROOT_QUANT) \
+		or py == roundi(roi_max.y * ROOT_QUANT) \
+		or pz == roundi(roi_min.z * ROOT_QUANT) \
+		or pz == roundi(roi_max.z * ROOT_QUANT)
 
 
 static func _index(x: int, y: int, z: int, dims: Vector3i) -> int:
