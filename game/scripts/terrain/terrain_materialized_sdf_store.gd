@@ -134,7 +134,7 @@ func checkpoint_state(world_id: String, state: RefCounted) -> Dictionary:
 	var reused_blobs := 0
 	for tile_id in ordered_tile_ids:
 		var tile: Dictionary = replacements[tile_id]
-		var tile_bytes := var_to_bytes(tile, false)
+		var tile_bytes := var_to_bytes(tile)
 		if tile_bytes.is_empty():
 			return {"ok": false, "reason": "tile_serialization_failed", "tile_id": tile_id}
 		var tile_sha := _sha256(tile_bytes)
@@ -256,7 +256,7 @@ func get_materialized_tile(region_key: Vector2i, coordinate: Vector2i) -> Dictio
 	tile_blob_read_bytes += bytes.size()
 	if bytes.is_empty() or _sha256(bytes) != String(entry.get("sha256", "")):
 		return {"ok": false, "found": false, "reason": "tile_blob_integrity_failure"}
-	var decoded: Variant = bytes_to_var(bytes, false)
+	var decoded: Variant = bytes_to_var(bytes)
 	if typeof(decoded) != TYPE_DICTIONARY:
 		return {"ok": false, "found": false, "reason": "tile_blob_decode_failure"}
 	var tile: Dictionary = decoded
