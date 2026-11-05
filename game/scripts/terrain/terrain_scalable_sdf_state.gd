@@ -16,7 +16,7 @@ extends RefCounted
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const Brush := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
-const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
+const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")\nconst TileJob := preload("res://scripts/terrain/terrain_sdf_tile_materialization_job.gd")
 
 const FORMAT_ID := "procedural-sandbox-materialized-sdf-state"
 const FORMAT_VERSION := 1
@@ -177,19 +177,82 @@ func build_checkpoint_plan() -> Dictionary:
 	for id_value in _dirty_chunks.keys():
 		ordered_ids.append(String(id_value))
 	ordered_ids.sort()
+
+	# Read current tile inputs on the caller, then rasterize dirty chunks in
+	# parallel from immutable copies. Store/cache mutation never occurs in workers.
+	var jobs: Array = []
+	var task_ids: Array[int] = []
+	var job_tile_ids: Array[String] = []
 	for tile_id in ordered_ids:
 		var descriptor: Dictionary = _dirty_chunks[tile_id]
-		var built := _build_materialized_tile(
-			descriptor["region_key"], descriptor["coordinate"]
+		var region_key: Vector2i = descriptor["region_key"]
+		var coordinate: Vector2i = descriptor["coordinate"]
+		var current_result := _get_materialized_tile(region_key, coordinate)
+		if not current_result.get("ok", false):
+			return {
+				"valid": false,
+				"reason": String(current_result.get("reason", "tile_source_failure")),
+				"tile_id": tile_id,
+			}
+		var candidates: Array[Dictionary] = _materialization_candidates(
+			region_key, coordinate, current_result
 		)
+		if candidates.is_empty():
+			continue
+		var previous_values := PackedFloat64Array()
+		if current_result.get("found", false):
+			var current_tile: Dictionary = current_result["tile"]
+			var current_values: Variant = current_tile.get("values", PackedFloat64Array())
+			if typeof(current_values) == TYPE_PACKED_FLOAT64_ARRAY:
+				previous_values = current_values
+			elif typeof(current_values) == TYPE_PACKED_FLOAT32_ARRAY:
+				previous_values.resize(current_values.size())
+				for value_index in range(current_values.size()):
+					previous_values[value_index] = float(current_values[value_index])
+			else:
+				return {
+					"valid": false,
+					"reason": "materialized_tile_values_invalid",
+					"tile_id": tile_id,
+				}
+		var immutable_operations: Array[Dictionary] = []
+		for operation in candidates:
+			immutable_operations.append(operation.duplicate(true))
+		var job := TileJob.new(
+			world_seed,
+			region_key,
+			coordinate,
+			previous_values,
+			immutable_operations,
+			revision,
+			_next_sequence
+		)
+		jobs.append(job)
+		job_tile_ids.append(tile_id)
+		task_ids.append(WorkerThreadPool.add_task(
+			Callable(job, "run"), false, "materialized SDF tile"
+		))
+
+	for task_id in task_ids:
+		WorkerThreadPool.wait_for_task_completion(task_id)
+
+	var max_worker_usec := 0
+	var worker_usec_total := 0
+	for index in range(jobs.size()):
+		var job = jobs[index]
+		var built: Dictionary = job.result
+		var tile_id := job_tile_ids[index]
 		if not built.get("valid", false):
 			return {
 				"valid": false,
 				"reason": String(built.get("reason", "tile_materialization_failed")),
 				"tile_id": tile_id,
 			}
-		if built.get("changed", true):
-			tile_replacements[tile_id] = built["tile"]
+		tile_replacements[tile_id] = built["tile"]
+		var worker_usec := int(built.get("worker_usec", 0))
+		worker_usec_total += worker_usec
+		max_worker_usec = maxi(max_worker_usec, worker_usec)
+
 	var journal_records: Array[Dictionary] = []
 	for operation in _tail_operations:
 		journal_records.append(_journal_record(operation))
@@ -207,6 +270,9 @@ func build_checkpoint_plan() -> Dictionary:
 		"journal_records": journal_records,
 		"tile_replacements": tile_replacements,
 		"dirty_chunk_count": tile_replacements.size(),
+		"materialization_job_count": jobs.size(),
+		"materialization_worker_usec_total": worker_usec_total,
+		"materialization_max_worker_usec": max_worker_usec,
 	}
 
 
