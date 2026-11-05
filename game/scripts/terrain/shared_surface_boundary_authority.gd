@@ -108,6 +108,7 @@ static func make_x_pair_snapshot(
 	return {
 		"valid": true,
 		"revision": int(ledger.revision),
+		"cache_scope_id": int(ledger.get_instance_id()),
 		"world_seed": int(ledger.world_seed),
 		"generator_version": int(ledger.generator_version),
 		"centers": centers,
@@ -228,6 +229,7 @@ static func _merge_snapshot_requests(ledger: RefCounted, requests: Array) -> Dic
 	return {
 		"valid": true,
 		"revision": int(ledger.revision),
+		"cache_scope_id": int(ledger.get_instance_id()),
 		"world_seed": int(ledger.world_seed),
 		"generator_version": int(ledger.generator_version),
 		"centers": centers,
