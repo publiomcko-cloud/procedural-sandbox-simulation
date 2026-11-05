@@ -44,6 +44,13 @@ jobs:
           timeout --signal=TERM 180s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/experiments/global_shared_surface_qualification.gd 2>&1 | tee /tmp/shared-surface.log
           grep -q 'GLOBAL_SHARED_SURFACE_PASS' /tmp/shared-surface.log
 
+      - name: P1 incremental equivalence qualification
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 180s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/experiments/p1_incremental_shared_surface_qualification.gd 2>&1 | tee /tmp/p1-incremental.log
+          grep -q 'P1_INCREMENTAL_SHARED_PASS' /tmp/p1-incremental.log
+
       - name: Runtime performance samples
         shell: bash
         run: |
@@ -68,5 +75,6 @@ jobs:
           path: |
             /tmp/import.log
             /tmp/shared-surface.log
+            /tmp/p1-incremental.log
             /tmp/runtime-performance-*.log
             /tmp/validate.log
