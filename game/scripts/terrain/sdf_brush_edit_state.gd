@@ -613,16 +613,27 @@ static func _sample_materialized_tiles(world_position: Vector3, tiles_value: Var
 		var origin: Vector3 = tile.get("origin_world", Vector3.INF)
 		var dims: Vector3i = tile.get("dims", Vector3i.ZERO)
 		var step := float(tile.get("step", 0.0))
-		var values: PackedFloat32Array = tile.get("values", PackedFloat32Array())
-		if not origin.is_finite() or dims.x < 2 or dims.y < 2 or dims.z < 2 			or not is_finite(step) or step <= 0.0 			or values.size() != dims.x * dims.y * dims.z:
+		var values_value: Variant = tile.get("values", PackedFloat64Array())
+		if typeof(values_value) != TYPE_PACKED_FLOAT64_ARRAY \
+			and typeof(values_value) != TYPE_PACKED_FLOAT32_ARRAY:
+			continue
+		var values = values_value
+		if not origin.is_finite() or dims.x < 2 or dims.y < 2 or dims.z < 2 \
+			or not is_finite(step) or step <= 0.0 \
+			or values.size() != dims.x * dims.y * dims.z:
 			continue
 		var lattice := (world_position - origin) / step
-		if lattice.x < -epsilon or lattice.y < -epsilon or lattice.z < -epsilon 			or lattice.x > float(dims.x - 1) + epsilon 			or lattice.y > float(dims.y - 1) + epsilon 			or lattice.z > float(dims.z - 1) + epsilon:
+		if lattice.x < -epsilon or lattice.y < -epsilon or lattice.z < -epsilon \
+			or lattice.x > float(dims.x - 1) + epsilon \
+			or lattice.y > float(dims.y - 1) + epsilon \
+			or lattice.z > float(dims.z - 1) + epsilon:
 			continue
 		var rx := roundi(lattice.x)
 		var ry := roundi(lattice.y)
 		var rz := roundi(lattice.z)
-		if absf(lattice.x - float(rx)) <= epsilon 			and absf(lattice.y - float(ry)) <= epsilon 			and absf(lattice.z - float(rz)) <= epsilon:
+		if absf(lattice.x - float(rx)) <= epsilon \
+			and absf(lattice.y - float(ry)) <= epsilon \
+			and absf(lattice.z - float(rz)) <= epsilon:
 			rx = clampi(rx, 0, dims.x - 1)
 			ry = clampi(ry, 0, dims.y - 1)
 			rz = clampi(rz, 0, dims.z - 1)
