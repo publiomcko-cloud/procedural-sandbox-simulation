@@ -33,10 +33,15 @@ const DIAGNOSTICS_REFRESH_INTERVAL := 0.25
 const FOCUS_MOVE_STEP := 4.0
 const MAX_STAGE_RETRIES := 2
 const PREEDIT_DEFAULT_COUNT := 512
+const FREE_EXPLORE_SPEED := 18.0
+const FREE_EXPLORE_BOOST_MULTIPLIER := 3.0
+const FREE_EXPLORE_MOUSE_SENSITIVITY := 0.0025
+const FREE_EXPLORE_MAX_PITCH_RADIANS := 1.553343034
 
 @onready var terrain_chunks_root: Node3D = $TerrainChunks
 @onready var terrain_mesh_template: MeshInstance3D = $TerrainChunks/Terrain
 @onready var camera: Camera3D = $Camera3D
+@onready var ui_layer: CanvasLayer = $CanvasLayer
 @onready var status_label: Label = $CanvasLayer/Status
 @onready var object_stream: ProceduralObjectStream = $ProceduralObjects
 
@@ -44,6 +49,11 @@ var cave_section_enabled := false
 var orbit_target := Vector3(8.0, 3.1, 6.0)
 var orbit_offset := Vector3(34.0, 24.0, 40.0)
 var orbit_dragging := false
+var free_explore_enabled := false
+var _free_explore_yaw := 0.0
+var _free_explore_pitch := 0.0
+var _free_explore_previous_mouse_mode := Input.MOUSE_MODE_VISIBLE
+var _free_explore_ui_was_visible := true
 var focus_region_key := Vector2i.ZERO
 var _last_reconciled_focus := Vector2i(2147483647, 2147483647)
 
@@ -262,6 +272,8 @@ func _process(delta: float) -> void:
 		_frame_sample_write_index = (_frame_sample_write_index + 1) % 512
 		_frame_sample_count = mini(_frame_sample_count + 1, 512)
 	_peak_frame_ms = maxf(_peak_frame_ms, _last_frame_ms)
+	if free_explore_enabled:
+		_process_free_exploration(delta)
 	_update_focus_key()
 	_reconcile_region_window()
 	_update_lod_selection()
@@ -299,24 +311,38 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion or event is InputEventMouseButton:
 		_last_pointer_viewport_position = event.position
 		_has_pointer_viewport_position = true
+
+	if event is InputEventKey and event.pressed and not event.echo and _event_matches_key(event, KEY_F10):
+		_set_free_explore_enabled(not free_explore_enabled)
+		return
+
+	if free_explore_enabled and event is InputEventMouseMotion:
+		_apply_free_explore_look(event.relative)
+		return
+
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
-			orbit_dragging = event.pressed
+			if not free_explore_enabled:
+				orbit_dragging = event.pressed
+			return
 		elif event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var screen_position := _free_explore_screen_center() if free_explore_enabled else event.position
 			if event.ctrl_pressed:
-				_select_entity_at(event.position)
+				_select_entity_at(screen_position)
 			else:
 				selected_brush_mode = BrushEditState.Mode.FILL if event.shift_pressed else BrushEditState.Mode.CARVE
-				_apply_brush_at(event.position)
-		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
+				_apply_brush_at(screen_position)
+		elif not free_explore_enabled and event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_set_orbit_distance(orbit_offset.length() * 0.9)
-		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		elif not free_explore_enabled and event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_set_orbit_distance(orbit_offset.length() * 1.1)
 	elif event is InputEventMouseMotion and orbit_dragging:
 		orbit_offset = orbit_offset.rotated(Vector3.UP, -event.relative.x * 0.006)
 		orbit_offset.y = clampf(orbit_offset.y - event.relative.y * 0.05, 2.0, 36.0)
 		_update_camera()
 	elif event is InputEventKey and event.pressed and not event.echo:
+		if free_explore_enabled and _is_free_explore_movement_key(event):
+			return
 		if event.ctrl_pressed and _event_matches_key(event, KEY_Z):
 			if event.shift_pressed:
 				_handle_entity_history_navigation("ENTITY_REDO")
@@ -372,7 +398,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif _event_matches_key(event, KEY_S) or _event_matches_key(event, KEY_DOWN):
 			_move_focus(Vector3(0.0, 0.0, FOCUS_MOVE_STEP))
 		_update_status()
-	if event is InputEventMouseMotion or event is InputEventMouseButton:
+	if not free_explore_enabled and (event is InputEventMouseMotion or event is InputEventMouseButton):
 		_refresh_placement_target_indicator(event.position)
 
 
@@ -607,7 +633,7 @@ func _refresh_placement_target_indicator(screen_override: Variant = null) -> voi
 func _update_placement_marker_visual() -> void:
 	if not is_instance_valid(_placement_target_marker):
 		return
-	_placement_target_marker.visible = _placement_target_valid
+	_placement_target_marker.visible = _placement_target_valid and not free_explore_enabled
 	if not _placement_target_valid:
 		return
 	_placement_target_marker.global_position = _placement_target_world_position + _placement_target_normal * 0.045
@@ -711,6 +737,110 @@ func _new_entity_command_id() -> String:
 
 func _event_matches_key(event: InputEventKey, keycode: int) -> bool:
 	return event.keycode == keycode or event.physical_keycode == keycode
+
+
+func _is_free_explore_movement_key(event: InputEventKey) -> bool:
+	return _event_matches_key(event, KEY_W) \
+		or _event_matches_key(event, KEY_A) \
+		or _event_matches_key(event, KEY_S) \
+		or _event_matches_key(event, KEY_D) \
+		or _event_matches_key(event, KEY_UP) \
+		or _event_matches_key(event, KEY_DOWN) \
+		or _event_matches_key(event, KEY_LEFT) \
+		or _event_matches_key(event, KEY_RIGHT) \
+		or _event_matches_key(event, KEY_SPACE) \
+		or _event_matches_key(event, KEY_SHIFT) \
+		or _event_matches_key(event, KEY_CTRL)
+
+
+func _set_free_explore_enabled(enabled: bool) -> void:
+	if free_explore_enabled == enabled or not is_instance_valid(camera):
+		return
+	free_explore_enabled = enabled
+	orbit_dragging = false
+	_lod_selection_dirty = true
+	if enabled:
+		_free_explore_previous_mouse_mode = Input.mouse_mode
+		_free_explore_ui_was_visible = ui_layer.visible if is_instance_valid(ui_layer) else true
+		_free_explore_yaw = camera.rotation.y
+		_free_explore_pitch = clampf(camera.rotation.x, -FREE_EXPLORE_MAX_PITCH_RADIANS, FREE_EXPLORE_MAX_PITCH_RADIANS)
+		orbit_target = camera.global_position
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if is_instance_valid(ui_layer):
+			ui_layer.visible = false
+	else:
+		Input.mouse_mode = _free_explore_previous_mouse_mode
+		if is_instance_valid(ui_layer):
+			ui_layer.visible = _free_explore_ui_was_visible
+		var forward := -camera.global_transform.basis.z.normalized()
+		var orbit_distance := clampf(orbit_offset.length(), 20.0, 96.0)
+		orbit_target = camera.global_position + forward * orbit_distance
+		orbit_offset = camera.global_position - orbit_target
+		_update_camera()
+	_update_placement_marker_visual()
+	_update_focus_key()
+	_reconcile_region_window()
+
+
+func _process_free_exploration(delta: float) -> void:
+	if not free_explore_enabled or not is_instance_valid(camera):
+		return
+	var local_input := Vector3.ZERO
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		local_input.x -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		local_input.x += 1.0
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		local_input.z -= 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		local_input.z += 1.0
+	if Input.is_key_pressed(KEY_SPACE):
+		local_input.y += 1.0
+	if Input.is_key_pressed(KEY_SHIFT):
+		local_input.y -= 1.0
+	_apply_free_explore_motion(local_input, delta, Input.is_key_pressed(KEY_CTRL))
+
+
+func _apply_free_explore_motion(local_input: Vector3, delta: float, boosted: bool = false) -> void:
+	if not free_explore_enabled or not is_instance_valid(camera) or delta <= 0.0 or local_input.length_squared() <= 0.0:
+		return
+	var basis := camera.global_transform.basis
+	var forward := -basis.z
+	forward.y = 0.0
+	if forward.length_squared() <= 0.000001:
+		forward = Vector3(-sin(_free_explore_yaw), 0.0, -cos(_free_explore_yaw))
+	else:
+		forward = forward.normalized()
+	var right := basis.x
+	right.y = 0.0
+	right = right.normalized() if right.length_squared() > 0.000001 else Vector3.RIGHT
+	var world_direction := right * local_input.x + Vector3.UP * local_input.y + forward * -local_input.z
+	if world_direction.length_squared() <= 0.000001:
+		return
+	var speed := FREE_EXPLORE_SPEED * (FREE_EXPLORE_BOOST_MULTIPLIER if boosted else 1.0)
+	camera.global_position += world_direction.normalized() * speed * delta
+	orbit_target = camera.global_position
+	_lod_selection_dirty = true
+
+
+func _apply_free_explore_look(relative: Vector2) -> void:
+	if not free_explore_enabled or not is_instance_valid(camera):
+		return
+	_free_explore_yaw -= relative.x * FREE_EXPLORE_MOUSE_SENSITIVITY
+	_free_explore_pitch = clampf(
+		_free_explore_pitch - relative.y * FREE_EXPLORE_MOUSE_SENSITIVITY,
+		-FREE_EXPLORE_MAX_PITCH_RADIANS,
+		FREE_EXPLORE_MAX_PITCH_RADIANS
+	)
+	camera.rotation = Vector3(_free_explore_pitch, _free_explore_yaw, 0.0)
+	_lod_selection_dirty = true
+
+
+func _free_explore_screen_center() -> Vector2:
+	if not is_inside_tree():
+		return Vector2.ZERO
+	var rect := get_viewport().get_visible_rect()
+	return rect.position + rect.size * 0.5
 
 
 func _move_focus(delta: Vector3) -> void:
@@ -2716,6 +2846,10 @@ func _load_world_from_storage() -> bool:
 
 
 func _update_status() -> void:
+	if free_explore_enabled:
+		if is_instance_valid(status_label):
+			status_label.text = ""
+		return
 	var state := _state_for_region(focus_region_key)
 	var seed: int = state.world_seed if state != null else world_seed
 	var generator_version: int = state.generator_version if state != null else Field.GENERATOR_VERSION
@@ -2726,7 +2860,7 @@ func _update_status() -> void:
 		transaction_state += " + %d buffered" % _buffered_brush_requests.size()
 	var aim_text := "visible pointer" if _last_placement_aim_mode == "pointer" else "center aim (cursor hidden/unavailable)"
 	var target_text := "none" if not _placement_target_valid else "%s at %s (%s)" % [aim_text, _placement_target_region_key, "published" if _placement_target_published else "waiting for publication"]
-	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: cave section    R: rebuild    X: focused reset    L: LOD    F5: pre-edits    P/O: checkpoint/load\nCtrl+left: select object    B: place at visible pointer; hidden cursor uses center aim    F6: cycle    F7: transform + appearance    F8: delete    F9: restore baseline\nPlacement target: %s\nUndo anchor: entity origin/base center coincides with the terrain hit; no slope conforming\nCtrl+Z: Undo entity command    Ctrl+Y / Ctrl+Shift+Z: Redo entity command\nM twice within 6 s: explicit schema-3 history migration (preflight then commit); no automatic migration\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
+	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill    F10: free explore\nC: cave section    R: rebuild    X: focused reset    L: LOD    F5: pre-edits    P/O: checkpoint/load\nCtrl+left: select object    B: place at visible pointer; hidden cursor uses center aim    F6: cycle    F7: transform + appearance    F8: delete    F9: restore baseline\nPlacement target: %s\nUndo anchor: entity origin/base center coincides with the terrain hit; no slope conforming\nCtrl+Z: Undo entity command    Ctrl+Y / Ctrl+Shift+Z: Redo entity command\nM twice within 6 s: explicit schema-3 history migration (preflight then commit); no automatic migration\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
 		seed,
 		generator_version,
 		focus_region_key,
