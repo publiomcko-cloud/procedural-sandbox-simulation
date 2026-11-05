@@ -1183,6 +1183,7 @@ func _try_commit_global_rebuild() -> void:
 		world_seed = int(_pending_world_load["world_seed"])
 		edit_ledger = _pending_world_load["ledger"]
 		_persistence_blocked = false
+		_checkpoint_generation = int(_pending_world_load["generation"]) if _scalable_runtime_enabled else _checkpoint_generation
 		_persistence_status = "Loaded generation %d (%d ordered edit(s))" % [
 			int(_pending_world_load["generation"]), edit_ledger.get_edit_count(),
 		]
@@ -1960,6 +1961,190 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["frame_time_p99_ms"] = frame_percentiles.z
 
 
+func _configure_preedit_arguments() -> void:
+	var env_path := OS.get_environment("SANDBOX_PREEDIT_PATH")
+	if not env_path.is_empty():
+		_preedit_path = env_path
+	var env_count := OS.get_environment("SANDBOX_PREEDIT_COUNT")
+	if env_count.is_valid_int():
+		_preedit_count = clampi(int(env_count), 1, 20000)
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--preedit-path="):
+			_preedit_path = argument.trim_prefix("--preedit-path=")
+		elif argument.begins_with("--preedit-count="):
+			var raw := argument.trim_prefix("--preedit-count=")
+			if raw.is_valid_int():
+				_preedit_count = clampi(int(raw), 1, 20000)
+	if not _preedit_path.is_empty():
+		_preedit_status = "F5: inject edits from %s" % _preedit_path
+	else:
+		_preedit_status = "F5: inject %d deterministic edits around focus" % _preedit_count
+
+
+func _maybe_schedule_async_checkpoint() -> void:
+	if not _scalable_runtime_enabled or _checkpoint_task_id >= 0 \
+		or _persistence_blocked or not _pending_world_load.is_empty():
+		return
+	if edit_ledger != null and edit_ledger.needs_checkpoint(ScalableSdfState.CHECKPOINT_TAIL_TARGET):
+		_start_async_checkpoint(false)
+
+
+func _start_async_checkpoint(manual: bool) -> bool:
+	if not _scalable_runtime_enabled or _persistence_blocked:
+		_checkpoint_status = "checkpoint unavailable"
+		return false
+	if _checkpoint_task_id >= 0:
+		_checkpoint_status = "checkpoint already running"
+		return false
+	if edit_ledger == null or int(edit_ledger.get_tail_edit_count()) <= 0:
+		_checkpoint_status = "materialized state already current"
+		if manual:
+			_persistence_status = "No uncheckpointed edits; materialized generation %d is current" % _checkpoint_generation
+		return true
+	var snapshot: Dictionary = edit_ledger.make_async_checkpoint_snapshot()
+	if not snapshot.get("valid", false):
+		_checkpoint_status = "checkpoint snapshot failed"
+		return false
+	var now := Time.get_ticks_usec()
+	var job := AsyncCheckpointJob.new(
+		world_save_store.get_world_directory(), snapshot, now
+	)
+	var task_id := WorkerThreadPool.add_task(
+		Callable(job, "run"), false, "terrain async checkpoint"
+	)
+	if task_id < 0:
+		_checkpoint_status = "worker pool rejected checkpoint"
+		return false
+	_checkpoint_job = job
+	_checkpoint_task_id = task_id
+	_checkpoint_started_usec = now
+	_checkpoint_status = "checkpoint running: %d frozen tail edit(s)" % (snapshot.get("tail_operations", []) as Array).size()
+	if manual:
+		_persistence_status = "Async materialized checkpoint queued; gameplay remains active"
+	return true
+
+
+func _process_async_checkpoint() -> void:
+	if _checkpoint_task_id < 0 or not WorkerThreadPool.is_task_completed(_checkpoint_task_id):
+		return
+	WorkerThreadPool.wait_for_task_completion(_checkpoint_task_id)
+	var job := _checkpoint_job
+	var result: Dictionary = job.result if job != null else {}
+	_checkpoint_task_id = -1
+	_checkpoint_job = null
+	if not result.get("valid", false):
+		_checkpoint_status = "checkpoint failed: %s" % result.get("reason", "unknown")
+		_persistence_status = _checkpoint_status
+		return
+	var checkpoint_snapshot: Dictionary = result.get("checkpoint_snapshot", {})
+	var checkpoint_store: RefCounted = result.get("store")
+	var head: Dictionary = result.get("head", {})
+	if checkpoint_store == null or not edit_ledger.commit_async_checkpoint(
+		checkpoint_snapshot, checkpoint_store, head
+	):
+		_checkpoint_status = "checkpoint main-thread commit rejected: %s" % edit_ledger.last_storage_error
+		_persistence_status = _checkpoint_status
+		return
+	world_save_store = checkpoint_store
+	_checkpoint_generation = int(head.get("generation", _checkpoint_generation))
+	_checkpoint_last_worker_ms = float(result.get("worker_usec", 0)) / 1000.0
+	_checkpoint_status = "checkpoint gen %d committed in %.1f ms; archived %d, live tail %d" % [
+		_checkpoint_generation,
+		_checkpoint_last_worker_ms,
+		int(edit_ledger.get_archived_edit_count()),
+		int(edit_ledger.get_tail_edit_count()),
+	]
+	_persistence_status = _checkpoint_status
+
+
+func _apply_preedit_fixture() -> void:
+	if not _scalable_runtime_enabled:
+		last_brush_result = "Pre-edit fixture requires the scalable materialized runtime"
+		return
+	if global_rebuild_pending or not _edit_transaction.is_empty() or not loading_regions.is_empty():
+		last_brush_result = "Wait for current terrain staging to finish before injecting pre-edits"
+		return
+	var specs_result := _load_preedit_specs(_preedit_path) if not _preedit_path.is_empty() \
+		else {"ok": true, "operations": _build_deterministic_preedit_specs(_preedit_count)}
+	if not specs_result.get("ok", false):
+		last_brush_result = "Pre-edit input rejected: %s" % specs_result.get("reason", "invalid")
+		return
+	var operations: Array = specs_result.get("operations", [])
+	var accepted := 0
+	var started := Time.get_ticks_usec()
+	for spec_value in operations:
+		if typeof(spec_value) != TYPE_DICTIONARY:
+			continue
+		var spec: Dictionary = spec_value
+		if not edit_ledger.add_sphere(
+			int(spec.get("mode", BrushEditState.Mode.CARVE)),
+			spec.get("center", Vector3.INF),
+			float(spec.get("radius", BRUSH_RADIUS))
+		):
+			last_brush_result = "Pre-edit #%d rejected: %s" % [accepted, edit_ledger.last_rejection_reason]
+			break
+		accepted += 1
+	if accepted <= 0:
+		return
+	var elapsed_ms := float(Time.get_ticks_usec() - started) / 1000.0
+	_preedit_status = "Injected %d pre-edits in %.1f ms; checkpoint will compact in background" % [accepted, elapsed_ms]
+	last_brush_result = _preedit_status
+	_start_global_rebuild("preedit_fixture")
+	_start_async_checkpoint(false)
+
+
+func _build_deterministic_preedit_specs(count: int) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var origin := SpatialGrid.region_origin_world(focus_region_key)
+	for index in range(count):
+		# Two-region X corridor: exercises shared boundary ownership while remaining
+		# easy to leave with WASD and later revisit after unload.
+		var x := 1.0 + float((index * 37) % 120) * 0.25
+		var z := 1.0 + float((index * 19) % 40) * 0.25
+		var y := 0.75 + float((index * 11) % 17) * 0.20
+		if index % 9 == 0:
+			x = 15.25 + float(index % 7) * 0.25
+		result.append({
+			"mode": BrushEditState.Mode.CARVE if index % 3 == 0 else BrushEditState.Mode.FILL,
+			"center": origin + Vector3(x, y, z),
+			"radius": 0.55 + float(index % 5) * 0.12,
+		})
+	return result
+
+
+func _load_preedit_specs(path: String) -> Dictionary:
+	if path.is_empty() or not FileAccess.file_exists(path):
+		return {"ok": false, "reason": "file_not_found"}
+	var text_value := FileAccess.get_file_as_string(path)
+	var parsed: Variant = JSON.parse_string(text_value)
+	var rows: Variant = parsed
+	if typeof(parsed) == TYPE_DICTIONARY:
+		rows = (parsed as Dictionary).get("operations", null)
+	if typeof(rows) != TYPE_ARRAY:
+		return {"ok": false, "reason": "expected_array_or_operations_array"}
+	var result: Array[Dictionary] = []
+	for row_value in rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			return {"ok": false, "reason": "operation_not_object"}
+		var row: Dictionary = row_value
+		var center_value: Variant = row.get("center", row.get("center_world", null))
+		if typeof(center_value) != TYPE_ARRAY or (center_value as Array).size() != 3:
+			return {"ok": false, "reason": "center_requires_xyz_array"}
+		var center_array: Array = center_value
+		var mode_value: Variant = row.get("mode", "CARVE")
+		var mode := BrushEditState.Mode.CARVE
+		if typeof(mode_value) == TYPE_STRING:
+			mode = BrushEditState.Mode.FILL if String(mode_value).to_upper() == "FILL" else BrushEditState.Mode.CARVE
+		elif typeof(mode_value) == TYPE_INT:
+			mode = int(mode_value)
+		result.append({
+			"mode": mode,
+			"center": Vector3(float(center_array[0]), float(center_array[1]), float(center_array[2])),
+			"radius": float(row.get("radius", BRUSH_RADIUS)),
+		})
+	return {"ok": true, "operations": result}
+
+
 func _build_ledger_from_payload(payload: Dictionary) -> Dictionary:
 	var seed_value: Variant = payload.get("world_seed", null)
 	var generator_value: Variant = payload.get("generator_version", null)
@@ -1997,6 +2182,10 @@ func _save_world_to_storage() -> bool:
 		_persistence_status = "Save blocked until the invalid/incompatible existing world is handled"
 		_update_status()
 		return false
+	if _scalable_runtime_enabled:
+		var queued := _start_async_checkpoint(true)
+		_update_status()
+		return queued
 	if global_rebuild_pending or not _edit_transaction.is_empty():
 		_persistence_status = "Save waits for coherent terrain publication to finish"
 		_update_status()
@@ -2018,6 +2207,31 @@ func _load_world_from_storage() -> bool:
 		_persistence_status = "Load waits for the current mesh transaction to finish"
 		_update_status()
 		return false
+	if _scalable_runtime_enabled:
+		if _checkpoint_task_id >= 0:
+			_persistence_status = "Load waits for the async checkpoint to finish"
+			_update_status()
+			return false
+		var loaded: Dictionary = world_save_store.load_world(world_id)
+		if not loaded.get("ok", false):
+			_persistence_status = "Load rejected (%s); current world is unchanged" % loaded.get("reason", "invalid")
+			_update_status()
+			return false
+		if not loaded.get("found", false):
+			_persistence_status = "No materialized world exists; current world is unchanged"
+			_update_status()
+			return false
+		var candidate: RefCounted = loaded["state"]
+		_pending_world_load = {
+			"world_seed": int(candidate.world_seed),
+			"ledger": candidate,
+			"generation": int(loaded["generation"]),
+		}
+		_checkpoint_generation = int(loaded["generation"])
+		_persistence_status = "Loading materialized generation %d; old meshes remain until coherent publication" % _checkpoint_generation
+		_start_global_rebuild("load_world")
+		_update_status()
+		return true
 	var loaded: Dictionary = world_save_store.load_world(world_id)
 	if not loaded.get("ok", false):
 		_persistence_status = "Load rejected (%s); current world is unchanged" % loaded.get("reason", "invalid")
@@ -2052,7 +2266,7 @@ func _update_status() -> void:
 	var transaction_state := "idle" if _edit_transaction.is_empty() else String(_edit_transaction.get("stage_state", "staging"))
 	var aim_text := "visible pointer" if _last_placement_aim_mode == "pointer" else "center aim (cursor hidden/unavailable)"
 	var target_text := "none" if not _placement_target_valid else "%s at %s (%s)" % [aim_text, _placement_target_region_key, "published" if _placement_target_published else "waiting for publication"]
-	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: cave section    R: rebuild    X: focused reset    L: LOD    P/O: terrain save/load\nCtrl+left: select object    B: place at visible pointer; hidden cursor uses center aim    F6: cycle    F7: transform + appearance    F8: delete    F9: restore baseline\nPlacement target: %s\nUndo anchor: entity origin/base center coincides with the terrain hit; no slope conforming\nCtrl+Z: Undo entity command    Ctrl+Y / Ctrl+Shift+Z: Redo entity command\nM twice within 6 s: explicit schema-3 history migration (preflight then commit); no automatic migration\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
+	var status := "P1.1C custom LOD 0/1 + P1.0C global SDF edits  |  seed %d  |  generator v%d\nFocus region: %s  |  resident/active: %d/%d  |  queued regions: %d  |  queued chunks/jobs: %d/%d\nWASD/arrows: move focus    Right-drag: orbit    Wheel: zoom    Left: carve    Shift+left: fill\nC: cave section    R: rebuild    X: focused reset    L: LOD    F5: pre-edits    P/O: checkpoint/load\nCtrl+left: select object    B: place at visible pointer; hidden cursor uses center aim    F6: cycle    F7: transform + appearance    F8: delete    F9: restore baseline\nPlacement target: %s\nUndo anchor: entity origin/base center coincides with the terrain hit; no slope conforming\nCtrl+Z: Undo entity command    Ctrl+Y / Ctrl+Shift+Z: Redo entity command\nM twice within 6 s: explicit schema-3 history migration (preflight then commit); no automatic migration\nLocal world: %s\nSelected: %s    Global edits: %d/%d  |  seq/rev: %d/%d  |  Radius: %.2f\nLast edit: %d support / %d rebuild regions, %d chunks, %d uploads  |  commit: %s\nLOD chunks 0/1: %d/%d    Worker jobs: %d/%d  |  max uploads/frame: %d  |  last/peak upload: %.1f/%.1f ms  |  peak frame: %.1f ms\n" % [
 		seed,
 		generator_version,
 		focus_region_key,
@@ -2065,7 +2279,7 @@ func _update_status() -> void:
 		_persistence_status,
 		selected_mode_name,
 		edit_ledger.get_edit_count(),
-		BrushEditState.MAX_OPERATION_COUNT,
+		ScalableSdfState.MAX_SAFE_SEQUENCE if _scalable_runtime_enabled else BrushEditState.MAX_OPERATION_COUNT,
 		edit_ledger.get_last_sequence(),
 		edit_ledger.revision,
 		BRUSH_RADIUS,
@@ -2140,6 +2354,15 @@ func _update_status() -> void:
 	var package_discovery_summary := object_stream.get_package_discovery_summary()
 	if not package_discovery_summary.is_empty():
 		status += package_discovery_summary + "\n"
+	if _scalable_runtime_enabled:
+		status += "Materialized SDF: archived %d | hot tail %d | generation %d | %s | shared X collar %s\n" % [
+			int(edit_ledger.get_archived_edit_count()),
+			int(edit_ledger.get_tail_edit_count()),
+			_checkpoint_generation,
+			_checkpoint_status,
+			"ON" if _shared_boundary_runtime_enabled and not cave_section_enabled else "fallback",
+		]
+		status += _preedit_status + "\n"
 	if last_stream_error != "":
 		status += "STREAM ERROR: " + last_stream_error + "\n"
 	status += last_brush_result
