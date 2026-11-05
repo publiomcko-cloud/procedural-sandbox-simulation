@@ -145,6 +145,8 @@ func _run() -> void:
 	if oracle_pair.get("valid", false) and scalable_pair.get("valid", false):
 		evidence["oracle_boundary_signature"] = oracle_pair.get("mesh_signature", "")
 		evidence["materialized_boundary_signature"] = scalable_pair.get("mesh_signature", "")
+		evidence["oracle_boundary_diagnostics"] = oracle_pair.get("diagnostics", {})
+		evidence["materialized_boundary_diagnostics"] = scalable_pair.get("diagnostics", {})
 		_check(
 			String(oracle_pair.get("mesh_signature", "")) 				== String(scalable_pair.get("mesh_signature", "")),
 			"materialization preserves shared-boundary geometry signature"
