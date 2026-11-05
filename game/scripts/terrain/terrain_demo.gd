@@ -1089,6 +1089,13 @@ func _process_completed_mesh_jobs() -> void:
 				"sdf_ms": float((result.get("timings_usec", {}) as Dictionary).get("sdf_and_ledger", 0)) / 1000.0,
 				"triangulation_ms": float((result.get("timings_usec", {}) as Dictionary).get("triangulation_and_face_normals", 0)) / 1000.0,
 				"normals_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_gradient_normals", 0)) / 1000.0,
+				"shared_sampling_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_sampling", 0)) / 1000.0,
+				"shared_polygonize_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_polygonize", 0)) / 1000.0,
+				"shared_deduplicate_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_deduplicate", 0)) / 1000.0,
+				"shared_diagnostics_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_diagnostics", 0)) / 1000.0,
+				"shared_signature_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_signature", 0)) / 1000.0,
+				"shared_partition_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_partition", 0)) / 1000.0,
+				"shared_authority_total_ms": float((result.get("timings_usec", {}) as Dictionary).get("shared_authority_total", 0)) / 1000.0,
 			})
 		if contributes_to_operation:
 			_mesh_upload_usec_samples.append(upload_elapsed_usec)
