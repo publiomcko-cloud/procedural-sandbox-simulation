@@ -326,7 +326,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				orbit_dragging = event.pressed
 			return
 		elif event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			var screen_position := _free_explore_screen_center() if free_explore_enabled else event.position
+			var screen_position: Vector2 = _free_explore_screen_center() if free_explore_enabled else event.position
 			if event.ctrl_pressed:
 				_select_entity_at(screen_position)
 			else:
