@@ -75,11 +75,22 @@ func _run() -> void:
 
 	var reload_started := Time.get_ticks_usec()
 	demo._move_focus(-STREAM_DELTA)
-	var reloaded := await _wait_until(func() -> bool:
-		return demo.focus_region_key == Vector2i.ZERO 			and demo.active_regions.has(origin_id) 			and demo.loading_regions.is_empty() 			and not demo.global_rebuild_pending
+	var focus_reloaded := await _wait_until(func() -> bool:
+		return demo.focus_region_key == Vector2i.ZERO and demo.active_regions.has(origin_id)
 	)
-	var reload_usec := Time.get_ticks_usec() - reload_started
-	_check(reloaded, "edited origin region reloads after returning")
+	var focus_reload_usec := Time.get_ticks_usec() - reload_started
+	_check(focus_reloaded, "edited focus region becomes visible again after returning")
+
+	var settle_started := Time.get_ticks_usec()
+	var reloaded := await _wait_until(func() -> bool:
+		return demo.focus_region_key == Vector2i.ZERO \
+			and demo.active_regions.has(origin_id) \
+			and demo.loading_regions.is_empty() \
+			and not demo.global_rebuild_pending
+	)
+	var full_settle_usec := Time.get_ticks_usec() - reload_started
+	var post_focus_settle_usec := Time.get_ticks_usec() - settle_started
+	_check(reloaded, "complete 3x3 streaming window settles after returning")
 	_check(demo.edit_ledger.get_edit_count() == PREEDIT_COUNT, "reload preserves lifetime edit count")
 	_check(demo.edit_ledger.get_tail_edit_count() == 0, "reload uses materialized state with empty hot tail")
 
@@ -108,7 +119,9 @@ func _run() -> void:
 		"preedit_elapsed_ms": float(preedit_elapsed_usec) / 1000.0,
 		"checkpoint_generation": demo._checkpoint_generation,
 		"checkpoint_worker_ms": demo._checkpoint_last_worker_ms,
-		"reload_elapsed_ms": float(reload_usec) / 1000.0,
+		"focus_reload_elapsed_ms": float(focus_reload_usec) / 1000.0,
+		"full_window_settle_elapsed_ms": float(full_settle_usec) / 1000.0,
+		"post_focus_window_settle_ms": float(post_focus_settle_usec) / 1000.0,
 		"frame_p50_ms": float(demo.last_mesh_diagnostics.get("frame_time_p50_ms", 0.0)),
 		"frame_p95_ms": float(demo.last_mesh_diagnostics.get("frame_time_p95_ms", 0.0)),
 		"frame_p99_ms": float(demo.last_mesh_diagnostics.get("frame_time_p99_ms", 0.0)),
@@ -121,7 +134,7 @@ func _run() -> void:
 	}
 	# Hosted headless timing is evidence, not a product FPS threshold. This only
 	# catches a pathological reload stall; target-machine frame budgets are manual.
-	_check(reload_usec < 10000000, "headless edited-region reload completes within 10 seconds")
+	_check(focus_reload_usec < 5000000, "headless edited focus region becomes visible within 5 seconds")
 
 	await _shutdown(demo)
 
