@@ -108,7 +108,11 @@ func _wait_for_publish_profile(scene: Node, expected_region: Vector2i) -> Dictio
 	for _frame in range(5000):
 		var profile: Dictionary = scene.get("_last_region_publish_profile")
 		var region: Array = profile.get("region", [])
-		if region.size() == 2 			and int(region[0]) == expected_region.x 			and int(region[1]) == expected_region.y:
+		if (
+			region.size() == 2
+			and int(region[0]) == expected_region.x
+			and int(region[1]) == expected_region.y
+		):
 			return profile.duplicate(true)
 		await process_frame
 	return {}
@@ -118,7 +122,10 @@ func _wait_for_nonfocused_publish_profile(scene: Node) -> Dictionary:
 	for _frame in range(5000):
 		var profile: Dictionary = scene.get("_last_region_publish_profile")
 		var region: Array = profile.get("region", [])
-		if region.size() == 2 			and not (int(region[0]) == 0 and int(region[1]) == 0):
+		if (
+			region.size() == 2
+			and not (int(region[0]) == 0 and int(region[1]) == 0)
+		):
 			return profile.duplicate(true)
 		await process_frame
 	return {}
