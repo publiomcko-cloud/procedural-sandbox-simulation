@@ -25,15 +25,18 @@ const FRAME_KEYS := [
 static func build_from_instance(
 	instance: Dictionary,
 	effect: Dictionary,
-	source_revision: int
+	source_revision: int,
+	shape_descriptor: Dictionary = {}
 ) -> Dictionary:
 	if not instance.get("region_key") is Vector2i 		or not instance.get("position_mm") is Vector3i:
 		return _failure("terrain_effect_frame_source_transform_invalid")
 	if String(effect.get("source_instance_id", "")) != String(instance.get("instance_id", "")) 		or int(effect.get("source_revision", -1)) != source_revision:
 		return _failure("terrain_effect_frame_source_identity_mismatch")
-	var descriptor := ShapeDescriptor.build(
-		instance.get("geometry", {}), instance.get("geometry_seeds", {})
-	)
+	var descriptor: Dictionary = shape_descriptor
+	if descriptor.is_empty():
+		descriptor = ShapeDescriptor.build(
+			instance.get("geometry", {}), instance.get("geometry_seeds", {})
+		)
 	if not descriptor.get("ok", false):
 		return _failure(
 			"terrain_effect_frame_descriptor_failed:%s" 				% descriptor.get("reason", "unknown")
