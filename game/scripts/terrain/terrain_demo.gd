@@ -256,6 +256,15 @@ func _ready() -> void:
 		)
 		if effect_initialization.get("ok", false):
 			_terrain_object_effect_status = "Terrain object effects ready"
+			var effect_change_callback := Callable(
+				self, "_on_authoritative_object_state_changed"
+			)
+			if not object_stream.is_connected(
+				"authoritative_state_changed", effect_change_callback
+			):
+				object_stream.connect(
+					"authoritative_state_changed", effect_change_callback
+				)
 		else:
 			_terrain_object_effect_status = "Terrain object effects unavailable (%s)" % effect_initialization.get("reason", "unknown")
 			terrain_object_effect_runtime = null
@@ -545,7 +554,6 @@ func _place_entity_under_crosshair() -> void:
 	_placement_target_normal = target["normal"]
 	_update_placement_marker_visual()
 	_selected_object_id = String(result.get("entity_id", ""))
-	_on_entity_effect_source_changed(region_key, result)
 	_object_state_action_status = "ENTITY_PLACE committed %s at %s target %s (anchor mm %s; world/entity revisions %d/%d; visual %s)" % [_selected_object_id, _aim_description(_last_placement_aim_mode), region_key, position_mm, int(result.get("world_revision", -1)), int(result.get("entity_revision", -1)), result.get("visual_status", "unknown")]
 
 
@@ -712,39 +720,28 @@ func _handle_entity_history_navigation(operation: String) -> void:
 		_object_state_action_status = "%s rejected: no %s operation is available (history %d/%d)" % [operation, "applied" if operation == "ENTITY_UNDO" else "undone", int(summary.get("cursor", 0)), int(summary.get("depth", 0))]
 		return
 	var entity_id := String(target.get("entity_id", ""))
-	var source_region := _entity_region_for_effect(entity_id)
 	var command := _entity_command_base(operation, _new_entity_command_id(), entity_id)
 	command["history_entry_id"] = String(target.get("history_entry_id", ""))
 	var result: Dictionary = object_stream.dispatch_entity_command(command)
 	if not result.get("ok", false):
 		_object_state_action_status = "%s rejected: %s" % [operation, result.get("reason", "unknown")]
 		return
-	if source_region.get("ok", false):
-		_on_entity_effect_source_changed(source_region["region_key"], result)
 	_selected_object_id = entity_id
 	_object_state_action_status = "%s committed for %s at world/entity revisions %d/%d; history %d/%d; visual %s" % [operation, entity_id, int(result.get("world_revision", -1)), int(result.get("entity_revision", -1)), int(result.get("history_cursor", 0)), int(result.get("history_depth", 0)), result.get("visual_status", "unknown")]
 
 
 func _dispatch_entity_component(entity_id: String, component_id: String, component: Dictionary) -> Dictionary:
-	var source_region := _entity_region_for_effect(entity_id)
 	var command_id := _new_entity_command_id()
 	var command := _entity_command_base("ENTITY_SET_COMPONENT", command_id, entity_id)
 	command["component_id"] = component_id
 	command["component"] = component
-	var result: Dictionary = object_stream.dispatch_entity_command(command)
-	if result.get("ok", false) and source_region.get("ok", false):
-		_on_entity_effect_source_changed(source_region["region_key"], result)
-	return result
+	return object_stream.dispatch_entity_command(command)
 
 
 func _dispatch_entity_operation(operation: String, entity_id: String) -> Dictionary:
-	var source_region := _entity_region_for_effect(entity_id)
-	var result: Dictionary = object_stream.dispatch_entity_command(
+	return object_stream.dispatch_entity_command(
 		_entity_command_base(operation, _new_entity_command_id(), entity_id)
 	)
-	if result.get("ok", false) and source_region.get("ok", false):
-		_on_entity_effect_source_changed(source_region["region_key"], result)
-	return result
 
 
 func _attach_terrain_object_effect_snapshot(
@@ -780,37 +777,13 @@ func _compose_resident_terrain_object_effects(
 	return density
 
 
-func _entity_region_for_effect(entity_id: String) -> Dictionary:
-	if entity_id.is_empty() or not is_instance_valid(object_stream):
-		return {"ok": false}
-	var command_service: RefCounted = object_stream.get_entity_command_service()
-	if command_service != null and bool(command_service.get("initialized")):
-		var located: Dictionary = command_service.get_entity_region(entity_id)
-		if located.get("ok", false):
-			return located
-	var state: Object = object_stream.state_service
-	if state == null:
-		return {"ok": false}
-	var identity: Dictionary = state.get_deleted_identity(entity_id)
-	if identity.is_empty():
-		var placed: Dictionary = state.snapshot.get("placed_entities", {}).get(
-			entity_id, {}
-		)
-		identity = placed.get("identity", {})
-	if typeof(identity.get("region_key", null)) == TYPE_ARRAY 		and identity["region_key"].size() == 2:
-		var values: Array = identity["region_key"]
-		return {
-			"ok": true,
-			"region_key": Vector2i(int(values[0]), int(values[1])),
-		}
-	return {"ok": false}
-
-
-func _on_entity_effect_source_changed(
+func _on_authoritative_object_state_changed(
 	source_region: Vector2i,
-	command_result: Dictionary
+	world_revision: int,
+	_entity_id: String,
+	_operation: String
 ) -> void:
-	if terrain_object_effect_runtime == null 		or not bool(terrain_object_effect_runtime.get("initialized")) 		or not command_result.get("ok", false):
+	if terrain_object_effect_runtime == null 		or not bool(terrain_object_effect_runtime.get("initialized")):
 		return
 	var reconciled: Dictionary = terrain_object_effect_runtime.reconcile_source_region(
 		source_region
@@ -818,8 +791,14 @@ func _on_entity_effect_source_changed(
 	if not reconciled.get("ok", false):
 		_terrain_object_effect_status = "Terrain object effect reconcile failed (%s)" % reconciled.get("reason", "unknown")
 		return
+	if int(reconciled.get("source_world_revision", -1)) != world_revision:
+		_terrain_object_effect_status = "Terrain object effect revision mismatch (%d != %d)" % [
+			int(reconciled.get("source_world_revision", -1)),
+			world_revision,
+		]
+		return
 	_terrain_object_effect_status = "Terrain object effects revision %d; %d affected chunk(s)" % [
-		int(reconciled.get("source_world_revision", -1)),
+		world_revision,
 		int(reconciled.get("affected_chunk_count", 0)),
 	]
 	_schedule_terrain_object_effect_remesh(
