@@ -266,7 +266,7 @@ func _required_source_regions(
 
 
 func _normalize_targets(value: Array) -> Dictionary:
-	if value.is_empty() or value.size() > 4:
+	if value.is_empty() or value.size() > 64:
 		return _failure("terrain_effect_runtime_targets_invalid")
 	var by_id: Dictionary = {}
 	for target_value in value:
