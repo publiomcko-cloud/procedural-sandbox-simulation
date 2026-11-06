@@ -14,6 +14,7 @@ const FIELD := preload("res://scripts/terrain/sdf_world.gd")
 const StateServiceScript := preload("res://scripts/objects/procedural_object_state_service.gd")
 const StateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 const EntityCommandServiceScript := preload("res://scripts/entities/entity_command_service.gd")
+const TerrainEffectProjectionService := preload("res://scripts/terrain/terrain_object_effect_projection_service.gd")
 const MAX_RESIDENT_REGIONS := 25
 const MAX_PENDING_REGION_PUBLICATIONS := 25
 const MAX_REGION_PUBLICATIONS_PER_FRAME := 1
@@ -33,6 +34,8 @@ var _mod_count := 0
 var _rock_material: StandardMaterial3D
 var state_service: RefCounted
 var entity_command_service: RefCounted
+var terrain_effect_projection_service: RefCounted
+var _terrain_effect_dirty_chunk_ids: Array[String] = []
 var state_directory_override := ""
 var _package_discovery_report: Dictionary = {}
 var _expected_publication_tokens: Dictionary = {}
@@ -66,6 +69,8 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_clear_region_nodes()
 	initialized = false
 	registry = null
+	terrain_effect_projection_service = null
+	_terrain_effect_dirty_chunk_ids.clear()
 	_definition_ids.clear()
 	world_seed = seed_value
 	world_id = world_identifier
@@ -83,6 +88,8 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_population_rule_ids.clear()
 	_terrain_interaction_rule_ids.clear()
 	_package_discovery_report.clear()
+	_terrain_effect_dirty_chunk_ids.clear()
+	terrain_effect_projection_service = null
 	var roots: Array[String] = []
 	for package_root in package_roots:
 		roots.append(package_root)
@@ -109,6 +116,20 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 		return _fail_initialize("object_state_unavailable:%s" % state_load.get("reason", "invalid"))
 	registry = candidate
 	_initialize_entity_command_service()
+	var effect_projection_directory := ProjectSettings.globalize_path(
+		"user://worlds/%s/terrain-object-effects/seed-%d-generator-%d" % [
+			world_id, world_seed, FIELD.GENERATOR_VERSION
+		]
+	)
+	var projection_candidate: RefCounted = TerrainEffectProjectionService.new()
+	var projection_initialized: Dictionary = projection_candidate.initialize(
+		world_id, world_seed, FIELD.GENERATOR_VERSION, effect_projection_directory
+	)
+	if not projection_initialized.get("ok", false):
+		return _fail_initialize(
+			"terrain_effect_projection_unavailable:%s" % projection_initialized.get("reason", "invalid")
+		)
+	terrain_effect_projection_service = projection_candidate
 	_mod_count = int(registration.get("mod_count", 0))
 	_definition_ids = candidate.get_definition_ids()
 	_population_rule_ids = candidate.get_population_rule_ids()
@@ -343,6 +364,21 @@ func publish_region(
 			return _record_region_failure(id, "object_state_unavailable:%s" % state_load.get("reason", "invalid"))
 		world_seed = region_world_seed
 		_initialize_entity_command_service()
+		var effect_projection_directory := ProjectSettings.globalize_path(
+			"user://worlds/%s/terrain-object-effects/seed-%d-generator-%d" % [
+				world_id, world_seed, FIELD.GENERATOR_VERSION
+			]
+		)
+		var projection_candidate: RefCounted = TerrainEffectProjectionService.new()
+		var projection_initialized: Dictionary = projection_candidate.initialize(
+			world_id, world_seed, FIELD.GENERATOR_VERSION, effect_projection_directory
+		)
+		if not projection_initialized.get("ok", false):
+			return _record_region_failure(
+				id,
+				"terrain_effect_projection_unavailable:%s" % projection_initialized.get("reason", "invalid")
+			)
+		terrain_effect_projection_service = projection_candidate
 	if not _regions.has(id) and _regions.size() >= MAX_RESIDENT_REGIONS:
 		return _record_region_failure(id, "object_resident_region_budget_exceeded")
 	if not force_rebuild and _regions.has(id) and int(_regions[id]["world_seed"]) == region_world_seed and _regions[id].get("world_state") == state:
@@ -364,6 +400,20 @@ func publish_region(
 		if not reconstruction.get("ok", false):
 			return _record_region_failure(id, String(reconstruction.get("reason", "entity_region_reconstruction_failed")))
 		base_instances = entity_command_service.get_region_base_instances(region_key)
+		if terrain_effect_projection_service != null:
+			var effect_reconcile: Dictionary = terrain_effect_projection_service.reconcile_command_region(
+				region_key, entity_command_service
+			)
+			if not effect_reconcile.get("ok", false):
+				return _record_region_failure(
+					id,
+					"terrain_effect_reconcile_failed:%s" % effect_reconcile.get("reason", "unknown")
+				)
+			for chunk_id_value in effect_reconcile.get("affected_chunk_ids", []):
+				var dirty_chunk_id := String(chunk_id_value)
+				if not _terrain_effect_dirty_chunk_ids.has(dirty_chunk_id):
+					_terrain_effect_dirty_chunk_ids.append(dirty_chunk_id)
+			_terrain_effect_dirty_chunk_ids.sort()
 		_last_reconstruction_usec = int(reconstruction.get("reconstruction_usec", 0))
 		generation_usec = int(reconstruction.get("generation_usec", _last_reconstruction_usec))
 		main_thread_reconstruction_usec = int(reconstruction.get("main_thread_reconstruction_usec", 0))
@@ -897,6 +947,8 @@ func unload_region(region_key: Vector2i) -> void:
 	_command_migration_sync_regions.erase(id)
 	if entity_command_service != null and bool(entity_command_service.get("initialized")):
 		entity_command_service.release_region(region_key)
+	if terrain_effect_projection_service != null:
+		terrain_effect_projection_service.release_scope(region_key)
 	if not _regions.has(id):
 		return
 	var region_root: Node3D = _regions[id]["root"]
@@ -904,6 +956,23 @@ func unload_region(region_key: Vector2i) -> void:
 	if is_instance_valid(region_root):
 		remove_child(region_root)
 		region_root.free()
+
+
+func get_terrain_effect_snapshot_for_chunks(requests: Array) -> Dictionary:
+	if terrain_effect_projection_service == null:
+		return {
+			"ok": true,
+			"terrain_object_local_frames": [],
+			"terrain_object_effect_count": 0,
+			"terrain_object_effect_snapshot_sha256": "none",
+		}
+	return terrain_effect_projection_service.local_snapshot_for_chunks(requests)
+
+
+func consume_terrain_effect_dirty_chunk_ids() -> Array[String]:
+	var result := _terrain_effect_dirty_chunk_ids.duplicate()
+	_terrain_effect_dirty_chunk_ids.clear()
+	return result
 
 
 func set_object_visibility(enabled: bool) -> void:
