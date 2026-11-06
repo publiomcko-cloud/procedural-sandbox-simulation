@@ -226,7 +226,7 @@ func is_snapshot_current(snapshot: Dictionary) -> bool:
 func reconcile_source_region(region_key: Vector2i) -> Dictionary:
 	if not initialized:
 		return _failure("terrain_effect_runtime_not_initialized")
-	var loaded := projection.load_scope(region_key)
+	var loaded: Dictionary = projection.load_scope(region_key)
 	if not loaded.get("ok", false):
 		return loaded
 	var before: Dictionary = projection.get_scope_snapshot(region_key)
@@ -376,7 +376,7 @@ func _ensure_source_scope(region_key: Vector2i) -> Dictionary:
 	var authoritative_revision := int(
 		authoritative_state_service.call("get_revision")
 	)
-	var loaded := projection.load_scope(region_key)
+	var loaded: Dictionary = projection.load_scope(region_key)
 	if not loaded.get("ok", false):
 		return loaded
 	var status: Dictionary = projection.get_scope_status(
