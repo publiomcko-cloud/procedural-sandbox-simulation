@@ -7,6 +7,7 @@ extends RefCounted
 ## streaming reconstruction state.
 const ProjectionService := preload("res://scripts/terrain/terrain_object_effect_projection_service.gd")
 const CommandService := preload("res://scripts/entities/entity_command_service.gd")
+const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const EffectIndex := preload("res://scripts/terrain/terrain_object_effect_index.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const ProjectionContract := preload("res://scripts/terrain/terrain_object_effect_projection_contract.gd")
@@ -37,14 +38,21 @@ func initialize(
 		return _fail_initialize("terrain_effect_runtime_dependencies_missing")
 	authoritative_state_service = state_service
 	registry = content_registry
-	command_service = CommandService.new()
-	var command_init: Dictionary = command_service.initialize(
+	command_service = null
+	var command_candidate := CommandService.new()
+	var command_init: Dictionary = command_candidate.initialize(
 		authoritative_state_service, registry
 	)
-	if not command_init.get("ok", false):
+	if command_init.get("ok", false):
+		command_service = command_candidate
+	elif command_init.get("reason") != "command_snapshot_migration_required":
 		return _fail_initialize(
 			"terrain_effect_runtime_command_service_failed:%s" 				% command_init.get("reason", "unknown")
 		)
+	# Schema-1 worlds still have procedural/override authority. Until the
+	# explicit command-schema migration occurs, projection reconstruction uses
+	# ObjectWorld + state_service.resolve_instance and contains no placed
+	# entities. The command service is retried lazily after migration.
 	projection = ProjectionService.new()
 	var projection_init: Dictionary = projection.initialize(
 		world_id, world_seed, generator_version, directory_override
@@ -223,15 +231,7 @@ func reconcile_source_region(region_key: Vector2i) -> Dictionary:
 		return loaded
 	var before: Dictionary = projection.get_scope_snapshot(region_key)
 	var before_chunks := _indexed_chunks_for_scope(before)
-	var reconstructed: Dictionary = command_service.reconstruct_region(region_key)
-	if not reconstructed.get("ok", false):
-		return _failure(
-			"terrain_effect_runtime_reconstruct_failed:%s" 				% reconstructed.get("reason", "unknown")
-		)
-	var reconciled: Dictionary = projection.reconcile_command_region(
-		region_key, command_service
-	)
-	command_service.release_region(region_key)
+	var reconciled: Dictionary = _reconcile_region_from_authority(region_key)
 	if not reconciled.get("ok", false):
 		return reconciled
 	var after: Dictionary = projection.get_scope_snapshot(region_key)
@@ -279,6 +279,75 @@ func get_effect_count() -> int:
 	return int(projection.get_effect_count()) if initialized else 0
 
 
+func _reconcile_region_from_authority(region_key: Vector2i) -> Dictionary:
+	if _ensure_command_service():
+		var reconstructed: Dictionary = command_service.reconstruct_region(region_key)
+		if not reconstructed.get("ok", false):
+			return _failure(
+				"terrain_effect_runtime_reconstruct_failed:%s" 					% reconstructed.get("reason", "unknown")
+			)
+		var reconciled: Dictionary = projection.reconcile_command_region(
+			region_key, command_service
+		)
+		command_service.release_region(region_key)
+		return reconciled
+
+	var generated: Dictionary = ObjectWorld.build_region_instances(
+		int(authoritative_state_service.get("world_seed")),
+		String(authoritative_state_service.get("world_id")),
+		region_key,
+		registry
+	)
+	if not generated.get("ok", false):
+		return _failure(
+			"terrain_effect_runtime_generation_failed:%s" 				% generated.get("reason", "unknown")
+		)
+	var active_instances: Array[Dictionary] = []
+	var source_revisions: Dictionary = {}
+	for base_value in generated.get("instances", []):
+		if typeof(base_value) != TYPE_DICTIONARY:
+			return _failure("terrain_effect_runtime_generated_instance_invalid")
+		var base: Dictionary = base_value
+		var resolved: Dictionary = authoritative_state_service.call(
+			"resolve_instance", base
+		)
+		if not resolved.get("ok", false):
+			return _failure(
+				"terrain_effect_runtime_resolution_failed:%s" 					% resolved.get("reason", "unknown")
+			)
+		if bool(resolved.get("deleted", false)):
+			continue
+		var instance: Dictionary = resolved.get("instance", {})
+		var instance_id := String(instance.get("instance_id", ""))
+		if instance_id.is_empty():
+			return _failure("terrain_effect_runtime_instance_identity_invalid")
+		active_instances.append(instance.duplicate(true))
+		source_revisions[instance_id] = int(
+			authoritative_state_service.call(
+				"get_entity_revision", instance_id
+			)
+		)
+	return projection.reconcile_scope(
+		region_key,
+		int(authoritative_state_service.call("get_revision")),
+		active_instances,
+		source_revisions
+	)
+
+
+func _ensure_command_service() -> bool:
+	if command_service != null and bool(command_service.get("initialized")):
+		return true
+	var candidate := CommandService.new()
+	var initialized_result: Dictionary = candidate.initialize(
+		authoritative_state_service, registry
+	)
+	if not initialized_result.get("ok", false):
+		return false
+	command_service = candidate
+	return true
+
+
 func _ensure_source_scope(region_key: Vector2i) -> Dictionary:
 	var authoritative_revision := int(
 		authoritative_state_service.call("get_revision")
@@ -293,16 +362,7 @@ func _ensure_source_scope(region_key: Vector2i) -> Dictionary:
 		return {"ok": true, "changed": false, "status": "current"}
 	if status.get("status") == "ahead":
 		return _failure("terrain_effect_projection_ahead_of_authority")
-	var reconstructed: Dictionary = command_service.reconstruct_region(region_key)
-	if not reconstructed.get("ok", false):
-		return _failure(
-			"terrain_effect_runtime_reconstruct_failed:%s" 				% reconstructed.get("reason", "unknown")
-		)
-	var reconciled: Dictionary = projection.reconcile_command_region(
-		region_key, command_service
-	)
-	command_service.release_region(region_key)
-	return reconciled
+	return _reconcile_region_from_authority(region_key)
 
 
 func _trim_resident_scopes(target_regions: Array) -> void:
