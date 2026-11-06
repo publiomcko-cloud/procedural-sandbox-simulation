@@ -1147,6 +1147,7 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 		"fallback_by_coordinate": {},
 		"cave_section_enabled": cave_section_enabled,
 		"edit_revision": state.brush_edits.revision,
+		"terrain_effect_authority_revision": object_stream.get_command_world_revision(),
 		"chunk_enqueued_usec": Time.get_ticks_usec(),
 		"retry_count": 0,
 	}
@@ -1205,7 +1206,9 @@ func _process_completed_mesh_jobs() -> void:
 		if contributes_to_operation:
 			_pool_queue_wait_usec_samples.append(maxi(0, int(job.worker_started_usec) - int(record["submitted_usec"])))
 		var state: RefCounted = stage["world_state"]
-		if state.brush_edits.revision != int(stage["edit_revision"]):
+		if state.brush_edits.revision != int(stage["edit_revision"]) \
+			or object_stream.get_command_world_revision() \
+				!= int(stage.get("terrain_effect_authority_revision", -1)):
 			_supersede_region_stage(id)
 			continue
 		var cpu_result: Dictionary
@@ -1329,7 +1332,9 @@ func _dispatch_mesh_jobs() -> void:
 		var id: String = request["id"]
 		var stage: Dictionary = loading_regions[id]
 		var state: RefCounted = stage["world_state"]
-		if state.brush_edits.revision != int(stage["edit_revision"]):
+		if state.brush_edits.revision != int(stage["edit_revision"]) \
+			or object_stream.get_command_world_revision() \
+				!= int(stage.get("terrain_effect_authority_revision", -1)):
 			_supersede_region_stage(id)
 			continue
 		var inject_edit_failure: bool = debug_fail_next_mesh_stage and String(stage["purpose"]) == "edit_transaction"
