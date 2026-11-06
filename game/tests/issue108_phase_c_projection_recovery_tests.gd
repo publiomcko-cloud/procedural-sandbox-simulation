@@ -147,8 +147,10 @@ func _run() -> void:
 	var recovered_effect := _effect_for_source(recovered.get_scope_snapshot(Vector2i.ZERO), entity_id)
 	_check(
 		not recovered_effect.is_empty()
-			and recovered_effect["terrain_interaction_pin"] == initial_effect["terrain_interaction_pin"],
-		"crash recovery preserves exact effect and interaction pin"
+			and recovered_effect == initial_effect
+			and recovered_effect["terrain_interaction_pin"]
+				== initial_effect["terrain_interaction_pin"],
+		"crash recovery canonicalizes and preserves the exact normalized effect"
 	)
 
 	# Source commit precedes projection commit. Revision comparison makes the gap
