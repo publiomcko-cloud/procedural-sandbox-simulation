@@ -1,6 +1,13 @@
 # Accepted project integration ledger
 This ledger reports verified merge actions; consult GitHub refs for current HEAD. Detailed SHA-bound evaluations remain in docs/reviews/.
 
+## 2026-11-05 — Runtime mainline integrated
+- PR #228 merged the owner-accepted runtime line as `f646a3b1b5d22ee443adb12d7b77634ef4528f17`.
+- Accepted source: `314edceb618e537b6d7a249330a854aca3113010`; reconciled PR head: `843f7603d88c1492c2a4bb96e4567c5b98be1831`.
+- Final runtime, benchmark, Starter and `scripts/validate.sh` gates passed; owner GUI accepted exploration plus simultaneous editing.
+- R12-CXR R1–R6 was retired as active work with historical evidence preserved.
+- Receipt: [2026-11-05 runtime mainline merge](../checkpoints/2026-11-05-RUNTIME-MAINLINE-MERGE.md).
+
 ## 2026-10-08 — P0.0 integrated
 - PR #1 charter and continuity: f71d4e4596eb3b00ce5729ad5781043a70f2302e
 - PR #3 initial independent technical review: 9f927d146adc04d9cbb654257080e3ab905e1164
