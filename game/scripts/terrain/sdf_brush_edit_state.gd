@@ -5,6 +5,7 @@ extends RefCounted
 const FIELD := preload("res://scripts/terrain/sdf_world.gd")
 const SPATIAL := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const GRID := preload("res://scripts/terrain/terrain_chunk_grid.gd")
+const TerrainObjectEffect := preload("res://scripts/terrain/terrain_object_effect.gd")
 # Explicit finite world quota. This replaces the old 256-command prototype cap.
 # The v2 store enforces the same limit before committing a generation.
 const MAX_EDITS := 256 # Historical fixture-size constant; no longer an admission cap.
@@ -603,6 +604,21 @@ static func sample_density_snapshot(
 			density = minf(density, distance_to_surface)
 		else:
 			density = maxf(density, -distance_to_surface)
+
+	# Contract order is explicit: base/materialized terrain, then the ordered
+	# player CARVE/FILL ledger, then anchored terrain-object imprints.
+	var effects_value: Variant = snapshot.get("terrain_object_effects", [])
+	if typeof(effects_value) != TYPE_ARRAY:
+		return NAN
+	for effect_value in effects_value:
+		if typeof(effect_value) != TYPE_DICTIONARY:
+			return NAN
+		density = TerrainObjectEffect.compose_density_prevalidated(
+			density,
+			effect_value,
+			region_key,
+			local_position
+		)
 	if show_cave_section:
 		density = minf(density, 6.0 - world_position.z)
 	return density
