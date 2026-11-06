@@ -358,6 +358,161 @@ func reconcile_scope(
 	}
 
 
+func reconcile_prebuilt_scope(
+	region_key: Vector2i,
+	prebuilt: Dictionary,
+	allow_authoritative_rewind: bool = false,
+	persist_projection: bool = true
+) -> Dictionary:
+	var started_usec := Time.get_ticks_usec()
+	if not initialized:
+		return _failure("effect_projection_service_not_initialized")
+	if not prebuilt.get("ok", false) 		or prebuilt.get("region_key", Vector2i(2147483647, 2147483647)) 			!= region_key:
+		return _failure("effect_projection_prebuilt_invalid")
+	var source_world_revision := int(
+		prebuilt.get("source_world_revision", -1)
+	)
+	if source_world_revision < 0 		or source_world_revision > Contract.MAX_REVISION:
+		return _failure("effect_projection_source_world_revision_invalid")
+	if typeof(prebuilt.get("effects")) != TYPE_DICTIONARY 		or typeof(prebuilt.get("local_frames")) != TYPE_DICTIONARY 		or typeof(prebuilt.get("source_instance_ids")) != TYPE_ARRAY 		or typeof(prebuilt.get("source_digest_sha256")) != TYPE_STRING:
+		return _failure("effect_projection_prebuilt_fields_invalid")
+
+	var loaded := load_scope(region_key)
+	if not loaded.get("ok", false):
+		return loaded
+	var scope_id := Contract.scope_id_for_region(region_key)
+	var prior: Dictionary = _scopes[scope_id]
+	var prior_source_world_revision := int(prior["source_world_revision"])
+	if source_world_revision < prior_source_world_revision:
+		if not allow_authoritative_rewind:
+			return _failure("effect_projection_stale_scope_revision")
+		var prior_projection_revision := int(prior["projection_revision"])
+		prior = Contract.empty_snapshot(
+			world_id, world_seed, generator_version, region_key
+		)
+		prior["projection_revision"] = prior_projection_revision
+
+	var incoming_effects: Dictionary = (
+		prebuilt["effects"] as Dictionary
+	).duplicate(true)
+	var incoming_frames: Dictionary = (
+		prebuilt["local_frames"] as Dictionary
+	).duplicate(true)
+	var source_instance_ids: Array = (
+		prebuilt["source_instance_ids"] as Array
+	).duplicate()
+	var source_digest := String(prebuilt["source_digest_sha256"])
+
+	for effect_id_value in incoming_effects:
+		var effect_id := String(effect_id_value)
+		if not incoming_frames.has(effect_id):
+			return _failure("effect_projection_prebuilt_frame_missing")
+		var effect: Dictionary = incoming_effects[effect_id]
+		var existing: Dictionary = (
+			prior["effects"] as Dictionary
+		).get(effect_id, {})
+		if existing.is_empty():
+			continue
+		var source_revision := int(effect.get("source_revision", -1))
+		var existing_revision := int(existing["source_revision"])
+		if source_revision < existing_revision:
+			return _failure("effect_projection_stale_source_revision")
+		if source_revision == existing_revision 			and String(effect.get("source_fingerprint_sha256", "")) 				!= String(existing["source_fingerprint_sha256"]):
+			return _failure(
+				"effect_projection_same_revision_fingerprint_conflict"
+			)
+
+	if int(prior["source_world_revision"]) == source_world_revision 		and String(prior["source_digest_sha256"]) == source_digest 		and prior["source_instance_ids"] == source_instance_ids:
+		last_reconcile_metrics = {
+			"scope_id": scope_id,
+			"changed": false,
+			"prebuilt": true,
+			"source_count": source_instance_ids.size(),
+			"effect_count": incoming_effects.size(),
+			"removed_effect_count": 0,
+			"duration_usec": Time.get_ticks_usec() - started_usec,
+		}
+		return {
+			"ok": true,
+			"changed": false,
+			"reason": "already_current",
+			"scope_id": scope_id,
+			"generation": int(_storage_generations.get(scope_id, 0)),
+			"projection_revision": int(prior["projection_revision"]),
+			"source_world_revision": source_world_revision,
+			"effect_count": incoming_effects.size(),
+			"removed_effect_count": 0,
+		}
+
+	var removed_effect_count := 0
+	for prior_effect_id in (prior["effects"] as Dictionary):
+		if not incoming_effects.has(String(prior_effect_id)):
+			removed_effect_count += 1
+	var candidate := {
+		"schema_version": Contract.SCHEMA_VERSION,
+		"world_id": world_id,
+		"world_seed": world_seed,
+		"generator_version": generator_version,
+		"scope_id": scope_id,
+		"region_key": [region_key.x, region_key.y],
+		"projection_revision": int(prior["projection_revision"]) + 1,
+		"source_world_revision": source_world_revision,
+		"source_digest_sha256": source_digest,
+		"source_instance_ids": source_instance_ids,
+		"effects": incoming_effects,
+		"local_frames": incoming_frames,
+	}
+	var checked := Contract.validate_snapshot(
+		candidate, world_id, world_seed, generator_version, region_key
+	)
+	if not checked.get("ok", false):
+		return checked
+	var index_result := _build_scope_index(checked["snapshot"])
+	if not index_result.get("ok", false):
+		return index_result
+
+	var generation := int(_storage_generations.get(scope_id, 0))
+	if persist_projection:
+		var persisted: Dictionary = store.save_validated_snapshot(
+			checked["snapshot"]
+		)
+		if not persisted.get("ok", false):
+			initialized = false
+			initialization_error = String(
+				persisted.get("reason", "effect_projection_persist_failed")
+			)
+			return _failure(
+				"effect_projection_commit_uncertain:%s" 					% initialization_error
+			)
+		generation = int(persisted["generation"])
+
+	_scopes[scope_id] = checked["snapshot"]
+	_install_scope_index(scope_id, index_result["index"])
+	_storage_generations[scope_id] = generation
+	last_reconcile_metrics = {
+		"scope_id": scope_id,
+		"changed": true,
+		"prebuilt": true,
+		"persisted": persist_projection,
+		"source_count": source_instance_ids.size(),
+		"effect_count": incoming_effects.size(),
+		"removed_effect_count": removed_effect_count,
+		"duration_usec": Time.get_ticks_usec() - started_usec,
+	}
+	return {
+		"ok": true,
+		"changed": true,
+		"persisted": persist_projection,
+		"reason": "committed" if persist_projection else "transient_current",
+		"scope_id": scope_id,
+		"generation": generation,
+		"projection_revision": int(checked["snapshot"]["projection_revision"]),
+		"source_world_revision": source_world_revision,
+		"effect_count": incoming_effects.size(),
+		"removed_effect_count": removed_effect_count,
+	}
+
+
 ## Read-only adapter over authoritative entity/object state.
 func reconcile_command_region(
 	region_key: Vector2i,
