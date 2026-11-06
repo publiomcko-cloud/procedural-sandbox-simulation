@@ -253,6 +253,7 @@ func _ready() -> void:
 			terrain_effect_directory_override
 		)
 		if effect_initialization.get("ok", false):
+			terrain_effect_runtime.set_incremental_prefetch_enabled(true)
 			_terrain_effect_status = "Terrain-object effects ready"
 		else:
 			terrain_effect_runtime = null
@@ -300,6 +301,11 @@ func _process(delta: float) -> void:
 		_checkpoint_overlap_observed = true
 	_process_async_checkpoint()
 	_maybe_schedule_async_checkpoint()
+	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
+		var prefetch_result: Dictionary = terrain_effect_runtime.process_prefetch_step(1)
+		if not prefetch_result.get("ok", false):
+			_terrain_effect_status = "Terrain-object effects unavailable (%s)" % prefetch_result.get("reason", "unknown")
+			_record_stream_error("_terrain_effect_prefetch", _terrain_effect_status)
 	_process_one_chunk_job()
 	object_stream.process_queued_publications()
 	var visual_result: Dictionary = object_stream.consume_last_command_visual_result()
@@ -1502,6 +1508,8 @@ func _dispatch_mesh_jobs() -> void:
 				]
 			)
 			if not prepared_corner.get("ok", false):
+				if _terrain_effect_snapshot_pending(prepared_corner):
+					return
 				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_corner.get("reason", "unknown"))
 				continue
 			corner_snapshot = prepared_corner["snapshot"]
@@ -1526,6 +1534,8 @@ func _dispatch_mesh_jobs() -> void:
 				]
 			)
 			if not prepared_pair.get("ok", false):
+				if _terrain_effect_snapshot_pending(prepared_pair):
+					return
 				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_pair.get("reason", "unknown"))
 				continue
 			pair_snapshot = prepared_pair["snapshot"]
@@ -1550,6 +1560,8 @@ func _dispatch_mesh_jobs() -> void:
 				]
 			)
 			if not prepared_z.get("ok", false):
+				if _terrain_effect_snapshot_pending(prepared_z):
+					return
 				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_z.get("reason", "unknown"))
 				continue
 			z_snapshot = prepared_z["snapshot"]
@@ -1569,6 +1581,8 @@ func _dispatch_mesh_jobs() -> void:
 				[{"region_key": stage["region_key"], "chunk_coordinate": coordinate}]
 			)
 			if not prepared_chunk.get("ok", false):
+				if _terrain_effect_snapshot_pending(prepared_chunk):
+					return
 				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_chunk.get("reason", "unknown"))
 				continue
 			chunk_snapshot = prepared_chunk["snapshot"]
@@ -1646,9 +1660,17 @@ func _prepare_terrain_effect_snapshot(
 			int(prepared.get("effect_count", 0)),
 			int(terrain_effect_runtime.get_loaded_scope_count()),
 		]
+	elif prepared.get("pending", false):
+		_terrain_effect_status = "Terrain-object effects prefetching (%d scope(s) pending)" % int(
+			prepared.get("prefetch_pending_count", prepared.get("missing_scope_count", 0))
+		)
 	else:
 		_terrain_effect_status = "Terrain-object effects unavailable (%s)" % prepared.get("reason", "unknown")
 	return prepared
+
+
+func _terrain_effect_snapshot_pending(result: Dictionary) -> bool:
+	return not result.get("ok", false) and bool(result.get("pending", false))
 
 
 func _next_mesh_job_request() -> Dictionary:
@@ -3203,9 +3225,11 @@ func _update_status() -> void:
 	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
 		var effect_perf: Dictionary = terrain_effect_runtime.get_performance_snapshot()
 		var projection_perf: Dictionary = effect_perf.get("projection", {})
-		status += "Effect runtime: prep avg/peak %.2f/%.2f ms | resident/protected %d/%d | reconcile/evict %d/%d | lookup scopes/frames %d/%d\n" % [
+		status += "Effect runtime: prep avg/peak %.2f/%.2f ms | prefetch pending/peak %.0f/%.2f ms | resident/protected %d/%d | reconcile/evict %d/%d | lookup scopes/frames %d/%d\n" % [
 			float(effect_perf.get("prepare_average_usec", 0.0)) / 1000.0,
 			float(effect_perf.get("prepare_peak_usec", 0)) / 1000.0,
+			float(effect_perf.get("prefetch_pending_count", 0)),
+			float(effect_perf.get("prefetch_peak_usec", 0)) / 1000.0,
 			int(effect_perf.get("resident_scope_count", 0)),
 			int(effect_perf.get("protected_scope_count", 0)),
 			int(effect_perf.get("scope_reconcile_count", 0)),
