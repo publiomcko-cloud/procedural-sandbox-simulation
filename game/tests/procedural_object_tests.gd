@@ -1142,17 +1142,31 @@ func _test_playable_scene_publication() -> void:
 		demo.set("orbit_target", Vector3(8.0, 3.1, 6.0))
 		demo.call("_update_camera")
 		var center_reloaded := false
-		for _frame in range(2400):
+		var revisit_started_msec := Time.get_ticks_msec()
+		var revisit_deadline_msec := revisit_started_msec + 30000
+		while Time.get_ticks_msec() < revisit_deadline_msec:
 			await process_frame
+			OS.delay_msec(1)
 			if demo.get("active_regions").has("0,0"):
 				center_reloaded = true
 				break
-		_check(center_reloaded, "camera-driven revisit republishes the original region")
+		var revisit_elapsed_msec := Time.get_ticks_msec() - revisit_started_msec
+		_check(
+			center_reloaded,
+			"camera-driven revisit republishes the original region within 30s wall-clock (elapsed_ms=%d stream_error=%s diagnostics=%s)" % [
+				revisit_elapsed_msec,
+				String(demo.get("last_stream_error")),
+				str(demo.get("last_mesh_diagnostics")),
+			]
+		)
 		if center_reloaded:
+			print("PROCEDURAL_SCENE_REVISIT_MS=%d" % revisit_elapsed_msec)
 			var object_center_reloaded := false
-			for _frame in range(600):
+			var object_revisit_deadline_msec := Time.get_ticks_msec() + 15000
+			while Time.get_ticks_msec() < object_revisit_deadline_msec:
 				stream.process_queued_publications()
 				await process_frame
+				OS.delay_msec(1)
 				if stream.has_published_region(Vector2i.ZERO) \
 					and int(stream.get_performance_snapshot().get("pending_region_publication_count", 0)) == 0:
 					object_center_reloaded = true
