@@ -35,6 +35,15 @@ static func build_from_instance(instance: Dictionary, source_revision: int = 0) 
 	var input_check := _validate_instance_input(instance, source_revision)
 	if not input_check.get("ok", false):
 		return input_check
+	var content_pin: Dictionary = instance["content_pin"]
+	if not _exact_keys(content_pin, [
+		"content_id", "mod_id", "mod_version", "definition_schema_version"
+	]) \
+		or String(content_pin.get("content_id", "")) != String(instance["definition_id"]) \
+		or String(content_pin.get("mod_id", "")).is_empty() \
+		or String(content_pin.get("mod_version", "")).is_empty() \
+		or not _is_integer(content_pin.get("definition_schema_version")):
+		return _failure("terrain_effect_content_pin_invalid")
 	var interaction: Dictionary = instance["terrain_interaction"]
 	var interaction_pin: Dictionary = instance["terrain_interaction_pin"]
 	var descriptor := ShapeDescriptor.build(instance["geometry"], instance["geometry_seeds"])
@@ -186,8 +195,40 @@ static func validate_effect(value: Variant) -> Dictionary:
 		return _failure("terrain_effect_shape_version_invalid")
 	if not _is_integer(effect["embed_depth_mm"]) or int(effect["embed_depth_mm"]) < 0 		or int(effect["embed_depth_mm"]) > 3000 		or not _is_integer(effect["blend_radius_mm"]) or int(effect["blend_radius_mm"]) < 0 		or int(effect["blend_radius_mm"]) > 2000:
 		return _failure("terrain_effect_interaction_range_invalid")
-	if typeof(effect["content_pin"]) != TYPE_DICTIONARY 		or typeof(effect["terrain_interaction_pin"]) != TYPE_DICTIONARY:
+	if typeof(effect["content_pin"]) != TYPE_DICTIONARY \
+		or typeof(effect["terrain_interaction_pin"]) != TYPE_DICTIONARY:
 		return _failure("terrain_effect_pin_invalid")
+	var content_pin: Dictionary = effect["content_pin"]
+	if not _exact_keys(content_pin, [
+		"content_id", "mod_id", "mod_version", "definition_schema_version"
+	]):
+		return _failure("terrain_effect_content_pin_invalid")
+	if String(content_pin["content_id"]) != String(effect["definition_id"]) \
+		or typeof(content_pin["mod_id"]) != TYPE_STRING \
+		or String(content_pin["mod_id"]).is_empty() \
+		or typeof(content_pin["mod_version"]) != TYPE_STRING \
+		or String(content_pin["mod_version"]).is_empty() \
+		or not _is_integer(content_pin["definition_schema_version"]):
+		return _failure("terrain_effect_content_pin_invalid")
+	var interaction_pin: Dictionary = effect["terrain_interaction_pin"]
+	if not _exact_keys(interaction_pin, [
+		"rule_id", "definition_id", "mod_id", "mod_version", "rule_schema_version",
+		"algorithm", "rule_sha256"
+	]):
+		return _failure("terrain_effect_interaction_pin_invalid")
+	if String(interaction_pin["definition_id"]) != String(effect["definition_id"]) \
+		or String(interaction_pin["algorithm"]) != EFFECT_ALGORITHM \
+		or typeof(interaction_pin["rule_id"]) != TYPE_STRING \
+		or String(interaction_pin["rule_id"]).is_empty() \
+		or typeof(interaction_pin["mod_id"]) != TYPE_STRING \
+		or String(interaction_pin["mod_id"]).is_empty() \
+		or typeof(interaction_pin["mod_version"]) != TYPE_STRING \
+		or String(interaction_pin["mod_version"]).is_empty() \
+		or not _is_integer(interaction_pin["rule_schema_version"]) \
+		or typeof(interaction_pin["rule_sha256"]) != TYPE_STRING \
+		or String(interaction_pin["rule_sha256"]).length() != 64 \
+		or not _is_hex(String(interaction_pin["rule_sha256"])):
+		return _failure("terrain_effect_interaction_pin_invalid")
 	var anchor := _read_int3(effect["anchor_world_mm"])
 	var translation := _read_int3(effect["translation_mm"])
 	var rotation := _read_int3(effect["rotation_mdeg"])
@@ -206,6 +247,11 @@ static func validate_effect(value: Variant) -> Dictionary:
 	var max_v: Vector3 = maximum["value"]
 	if min_v.x > max_v.x or min_v.y > max_v.y or min_v.z > max_v.z:
 		return _failure("terrain_effect_bounds_invalid")
+	var interior_v: Vector3 = interior["value"]
+	if interior_v.x < min_v.x - 0.000001 or interior_v.x > max_v.x + 0.000001 \
+		or interior_v.y < min_v.y - 0.000001 or interior_v.y > max_v.y + 0.000001 \
+		or interior_v.z < min_v.z - 0.000001 or interior_v.z > max_v.z + 0.000001:
+		return _failure("terrain_effect_interior_outside_bounds")
 	if typeof(effect["world_planes"]) != TYPE_ARRAY 		or effect["world_planes"].is_empty() or effect["world_planes"].size() > MAX_PLANES:
 		return _failure("terrain_effect_planes_invalid")
 	for plane_value in effect["world_planes"]:
@@ -215,7 +261,9 @@ static func validate_effect(value: Variant) -> Dictionary:
 		if not _exact_keys(plane, ["normal", "distance_m"]):
 			return _failure("terrain_effect_plane_invalid")
 		var normal_result := _read_float3(plane["normal"])
-		if not normal_result.get("ok", false) or not is_finite(float(plane["distance_m"])):
+		if not normal_result.get("ok", false) \
+			or not _is_number(plane["distance_m"]) \
+			or not is_finite(float(plane["distance_m"])):
 			return _failure("terrain_effect_plane_invalid")
 		var normal: Vector3 = normal_result["value"]
 		if absf(normal.length() - 1.0) > 0.00001:
@@ -228,6 +276,17 @@ static func sample_cutter(effect: Dictionary, world_point: Vector3) -> float:
 		return INF
 	var checked := validate_effect(effect)
 	if not checked.get("ok", false):
+		return INF
+	return sample_cutter_prevalidated(effect, world_point)
+
+
+## Hot-path evaluator for effects already validated by a snapshot/index boundary.
+## Phase D must never feed unvalidated external dictionaries into this method.
+static func sample_cutter_prevalidated(
+	effect: Dictionary,
+	world_point: Vector3
+) -> float:
+	if not world_point.is_finite():
 		return INF
 	var maximum_plane_delta := -INF
 	for plane_value in effect["world_planes"]:
@@ -247,11 +306,24 @@ static func compose_density(
 ) -> float:
 	if not is_finite(terrain_density):
 		return terrain_density
-	var cutter := sample_cutter(effect, world_point)
+	var checked := validate_effect(effect)
+	if not checked.get("ok", false):
+		return terrain_density
+	return compose_density_prevalidated(terrain_density, effect, world_point)
+
+
+static func compose_density_prevalidated(
+	terrain_density: float,
+	effect: Dictionary,
+	world_point: Vector3
+) -> float:
+	if not is_finite(terrain_density):
+		return terrain_density
+	var cutter := sample_cutter_prevalidated(effect, world_point)
 	if not is_finite(cutter) or cutter >= 0.0:
 		return terrain_density
 	var hard := minf(terrain_density, cutter)
-	var radius := float(effect.get("blend_radius_mm", 0)) / 1000.0
+	var radius := float(effect["blend_radius_mm"]) / 1000.0
 	if radius <= 0.0 or -cutter >= radius:
 		return hard
 	var u := clampf((-cutter) / radius, 0.0, 1.0)
@@ -266,13 +338,29 @@ static func compose_effects(
 ) -> float:
 	if not is_finite(terrain_density):
 		return terrain_density
-	var ordered := effects.duplicate(true)
+	for effect in effects:
+		if not validate_effect(effect).get("ok", false):
+			return terrain_density
+	return compose_effects_prevalidated(terrain_density, effects, world_point)
+
+
+## Multiple imprints are ordered by stable effect_id. This makes overlap replay
+## independent of discovery/visit order while avoiding validation inside every
+## lattice sample after the snapshot boundary has qualified its records.
+static func compose_effects_prevalidated(
+	terrain_density: float,
+	effects: Array[Dictionary],
+	world_point: Vector3
+) -> float:
+	if not is_finite(terrain_density):
+		return terrain_density
+	var ordered := effects.duplicate(false)
 	ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return String(a.get("effect_id", "")) < String(b.get("effect_id", ""))
+		return String(a["effect_id"]) < String(b["effect_id"])
 	)
 	var density := terrain_density
 	for effect in ordered:
-		density = compose_density(density, effect, world_point)
+		density = compose_density_prevalidated(density, effect, world_point)
 	return density
 
 
@@ -425,6 +513,10 @@ static func _exact_keys(value: Dictionary, expected: Array) -> bool:
 		if not value.has(key):
 			return false
 	return true
+
+
+static func _is_number(value: Variant) -> bool:
+	return typeof(value) == TYPE_INT or typeof(value) == TYPE_FLOAT
 
 
 static func _is_integer(value: Variant) -> bool:
