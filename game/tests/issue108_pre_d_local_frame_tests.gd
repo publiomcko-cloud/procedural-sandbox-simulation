@@ -5,7 +5,7 @@ const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const Effect := preload("res://scripts/terrain/terrain_object_effect.gd")
 const Frame := preload("res://scripts/terrain/terrain_object_effect_local_frame.gd")
 const FrameIndex := preload("res://scripts/terrain/terrain_object_effect_local_frame_index.gd")
-const Projection := preload("res://scripts/terrain/terrain_object_effect_projection_service.gd")
+const ProjectionService := preload("res://scripts/terrain/terrain_object_effect_projection_service.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
@@ -151,7 +151,7 @@ func _run() -> void:
 		"local-frame index preserves cross-region influence at extreme coordinates"
 	)
 
-	var projection := Projection.new()
+	var projection: RefCounted = ProjectionService.new()
 	_check(
 		projection.initialize(
 			WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, ROOT + "/projection"
