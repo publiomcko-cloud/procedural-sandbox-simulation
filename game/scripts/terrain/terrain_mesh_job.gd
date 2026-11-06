@@ -51,8 +51,12 @@ func run() -> void:
 		}
 		worker_finished_usec = Time.get_ticks_usec()
 		return
-	if lod_level == 1:
-		var snapshot: Dictionary = brush_snapshot if brush_snapshot is Dictionary else {}
+	var immutable_snapshot: Dictionary = brush_snapshot if brush_snapshot is Dictionary else {}
+	var has_terrain_effects := not (
+		immutable_snapshot.get("terrain_object_effect_frames", []) as Array
+	).is_empty()
+	if lod_level == 1 and not has_terrain_effects:
+		var snapshot: Dictionary = immutable_snapshot
 		result = LodMesher.build_chunk_cpu_data(
 			seed, region_key, coordinate, snapshot, Callable(self, "_sample_lod_density")
 		)
@@ -68,6 +72,10 @@ func run() -> void:
 		result = Mesher.build_chunk_cpu_data(
 			seed, region_key, coordinate, cave_section_enabled, brush_snapshot
 		)
+		if lod_level == 1 and has_terrain_effects:
+			result["lod_level"] = 0
+			result["lod_fallback"] = true
+			result["lod_fallback_reason"] = "terrain_effect_precision_frame_requires_lod0"
 	worker_finished_usec = Time.get_ticks_usec()
 
 
