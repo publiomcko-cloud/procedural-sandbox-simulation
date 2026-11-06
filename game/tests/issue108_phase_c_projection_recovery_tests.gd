@@ -145,16 +145,14 @@ func _run() -> void:
 	)
 	_check(FileAccess.file_exists(crash_final) and not FileAccess.file_exists(crash_tmp), "temporary recovery promotes regional generation back to final path")
 	var recovered_effect := _effect_for_source(recovered.get_scope_snapshot(Vector2i.ZERO), entity_id)
-	if recovered_effect != initial_effect:
-		print("ISSUE108_PHASE_C_RECOVERY_DIFF=" + JSON.stringify(
-			_first_difference(initial_effect, recovered_effect, "effect")
-		))
 	_check(
 		not recovered_effect.is_empty()
-			and recovered_effect == initial_effect
+			and ProjectionContract.canonical_sha256(recovered_effect)
+				== ProjectionContract.canonical_sha256(initial_effect)
+			and recovered_effect["content_pin"] == initial_effect["content_pin"]
 			and recovered_effect["terrain_interaction_pin"]
 				== initial_effect["terrain_interaction_pin"],
-		"crash recovery canonicalizes and preserves the exact normalized effect"
+		"crash recovery preserves exact canonical effect bytes and pins"
 	)
 
 	# Source commit precedes projection commit. Revision comparison makes the gap
@@ -344,68 +342,6 @@ func _effect_for_source(scope_snapshot: Dictionary, entity_id: String) -> Dictio
 		var effect: Dictionary = effect_value
 		if String(effect.get("source_instance_id", "")) == entity_id:
 			return effect.duplicate(true)
-	return {}
-
-
-func _first_difference(first: Variant, second: Variant, path: String) -> Dictionary:
-	if typeof(first) != typeof(second):
-		return {
-			"path": path,
-			"kind": "type",
-			"first_type": typeof(first),
-			"second_type": typeof(second),
-			"first": first,
-			"second": second,
-		}
-	if first is Dictionary:
-		var first_dict: Dictionary = first
-		var second_dict: Dictionary = second
-		if first_dict.size() != second_dict.size():
-			return {
-				"path": path,
-				"kind": "dictionary_size",
-				"first": first_dict.size(),
-				"second": second_dict.size(),
-			}
-		var keys: Array[String] = []
-		for key in first_dict:
-			keys.append(String(key))
-		keys.sort()
-		for key in keys:
-			if not second_dict.has(key):
-				return {"path": path + "." + key, "kind": "missing_second"}
-			var nested := _first_difference(
-				first_dict[key], second_dict[key], path + "." + key
-			)
-			if not nested.is_empty():
-				return nested
-		return {}
-	if first is Array:
-		var first_array: Array = first
-		var second_array: Array = second
-		if first_array.size() != second_array.size():
-			return {
-				"path": path,
-				"kind": "array_size",
-				"first": first_array.size(),
-				"second": second_array.size(),
-			}
-		for index in range(first_array.size()):
-			var nested := _first_difference(
-				first_array[index],
-				second_array[index],
-				"%s[%d]" % [path, index]
-			)
-			if not nested.is_empty():
-				return nested
-		return {}
-	if first != second:
-		return {
-			"path": path,
-			"kind": "value",
-			"first": first,
-			"second": second,
-		}
 	return {}
 
 
