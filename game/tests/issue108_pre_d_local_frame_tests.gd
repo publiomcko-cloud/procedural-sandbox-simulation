@@ -287,7 +287,8 @@ func _fixture(
 	instance_id: String
 ) -> Dictionary:
 	var definition_id := "firstparty.core_rocks:granite"
-	var pin_result: Dictionary = registry.pin_definitions([definition_id])
+	var definition_ids: Array[String] = [definition_id]
+	var pin_result: Dictionary = registry.pin_definitions(definition_ids)
 	var recipe: Dictionary = registry.evaluate_rock_recipe(definition_id, 31337)
 	var interaction: Dictionary = registry.resolve_terrain_interaction(definition_id)
 	if not pin_result.get("ok", false) 		or (pin_result.get("pins", []) as Array).is_empty() 		or not recipe.get("ok", false) 		or not interaction.get("ok", false):
