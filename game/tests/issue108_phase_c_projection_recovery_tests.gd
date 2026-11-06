@@ -110,7 +110,7 @@ func _run() -> void:
 		"negative region has independent signed shard path"
 	)
 	_check(projection.get_loaded_scope_count() == 2, "two reconciled regions are independently resident")
-	var resident_effects_before_release := projection.get_effect_count()
+	var resident_effects_before_release: int = projection.get_effect_count()
 	projection.release_scope(Vector2i(-1, -1))
 	_check(
 		projection.get_loaded_scope_count() == 1
@@ -128,7 +128,7 @@ func _run() -> void:
 
 	# Simulate crash after the regional generation bytes exist but before final
 	# visibility to the next process.
-	var crash_generation := projection.storage_generation_for_scope(Vector2i.ZERO)
+	var crash_generation: int = projection.storage_generation_for_scope(Vector2i.ZERO)
 	var region_zero_dir := projection_abs.path_join("regions/r_0_0")
 	var crash_final := region_zero_dir.path_join("projection-%08d.json" % crash_generation)
 	var crash_tmp := region_zero_dir.path_join("projection-%08d.tmp" % crash_generation)
