@@ -1507,7 +1507,7 @@ func _dispatch_mesh_jobs() -> void:
 				]
 			)
 			if not corner_snapshot.get("valid", false):
-				_fail_region_stage(id, "Terrain object effect snapshot failed for shared corner")
+				_fail_region_stage(id, "Terrain object effect snapshot failed for shared corner: %s" % corner_snapshot.get("storage_error", "unknown"))
 				continue
 			snapshot_meta = corner_snapshot
 			job = SharedCornerMeshJob.new(
@@ -1530,7 +1530,7 @@ func _dispatch_mesh_jobs() -> void:
 				]
 			)
 			if not pair_snapshot.get("valid", false):
-				_fail_region_stage(id, "Terrain object effect snapshot failed for shared X boundary")
+				_fail_region_stage(id, "Terrain object effect snapshot failed for shared X boundary: %s" % pair_snapshot.get("storage_error", "unknown"))
 				continue
 			snapshot_meta = pair_snapshot
 			job = SharedBoundaryMeshJob.new(
@@ -1553,7 +1553,7 @@ func _dispatch_mesh_jobs() -> void:
 				]
 			)
 			if not z_snapshot.get("valid", false):
-				_fail_region_stage(id, "Terrain object effect snapshot failed for shared Z boundary")
+				_fail_region_stage(id, "Terrain object effect snapshot failed for shared Z boundary: %s" % z_snapshot.get("storage_error", "unknown"))
 				continue
 			snapshot_meta = z_snapshot
 			job = SharedZBoundaryMeshJob.new(
@@ -1571,7 +1571,7 @@ func _dispatch_mesh_jobs() -> void:
 				[{"region_key": stage["region_key"], "coordinate": coordinate}]
 			)
 			if not chunk_snapshot.get("valid", false):
-				_fail_region_stage(id, "Terrain object effect snapshot failed for chunk")
+				_fail_region_stage(id, "Terrain object effect snapshot failed for chunk: %s" % chunk_snapshot.get("storage_error", "unknown"))
 				continue
 			snapshot_meta = chunk_snapshot
 			job = TerrainMeshJob.new(
