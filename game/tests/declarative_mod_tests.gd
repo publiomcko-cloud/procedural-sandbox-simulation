@@ -181,6 +181,28 @@ func _test_generic_profile_and_terrain_interaction_contract() -> void:
 	cross_package["definition_id"] = "firstparty.core_rocks:granite"
 	var rejected := Registry.new().register_discovered({"ok": true, "packages": [{"manifest": manifest, "definitions": [definition], "population_rules": [population], "terrain_interactions": [cross_package]}]})
 	_check(not rejected.get("ok", false) and rejected.get("reason", "") == "terrain_interaction_definition_invalid", "a mod cannot override another package's terrain interaction contract")
+	var independent_root := _new_root("modfirst_independent_runtime")
+	var package_path := independent_root.path_join("package")
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(package_path.path_join("objects")))
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(package_path.path_join("populations")))
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(package_path.path_join("interactions")))
+	_write_text(package_path.path_join("manifest.json"), JSON.stringify(manifest))
+	_write_text(package_path.path_join("objects/weathered.json"), JSON.stringify(definition))
+	_write_text(package_path.path_join("populations/weathered.json"), JSON.stringify(population))
+	_write_text(package_path.path_join("interactions/weathered.json"), JSON.stringify(interaction))
+	var disk_discovery := Loader.discover_and_validate([independent_root])
+	_check(disk_discovery.get("ok", false) and int(disk_discovery.get("accepted_package_count", 0)) == 1, "independent external package passes the real filesystem loader without first-party dependencies")
+	var disk_registry := Registry.new()
+	var disk_registration := disk_registry.discover_and_register([independent_root])
+	_check(disk_registration.get("ok", false) and disk_registry.get_definition_ids() == ["sample.modfirst:weathered_block"], "independent external package reaches the same registry with only its own namespaced definition")
+	var external_stream: ProceduralObjectStream = ObjectStream.new()
+	var external_state := independent_root.path_join("runtime-state")
+	var stream_result := external_stream.initialize(31337, "modfirst-independent-runtime", [independent_root], external_state)
+	_check(stream_result.get("ok", false) and external_stream.get_placeable_definition_ids() == ["sample.modfirst:weathered_block"], "independent external package initializes the runtime without any engine or first-party content dependency")
+	if stream_result.get("ok", false):
+		var generated := external_stream.registry.get_population_rule_ids()
+		_check(generated == ["sample.modfirst:weathered_population"] and external_stream.registry.get_terrain_interaction_rule_ids() == ["sample.modfirst:weathered_ground"], "external runtime exposes its population and terrain capability through the same generic registry APIs")
+	external_stream.free()
 
 
 func _test_reparse_package_root() -> void:
