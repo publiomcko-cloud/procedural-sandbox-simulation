@@ -45,6 +45,32 @@ func replace_frame(frame_value: Dictionary) -> Dictionary:
 	}
 
 
+func replace_frame_prevalidated(frame: Dictionary) -> Dictionary:
+	var effect_id := String(frame.get("effect_id", ""))
+	if effect_id.is_empty():
+		return _failure("terrain_effect_frame_index_identity_invalid")
+	if not _frames.has(effect_id) and _frames.size() >= MAX_FRAMES:
+		return _failure("terrain_effect_frame_index_capacity_exceeded")
+	var keys_result := _chunk_keys_for_frame_prevalidated(frame)
+	if not keys_result.get("ok", false):
+		return keys_result
+	_remove_membership(effect_id)
+	_frames[effect_id] = frame.duplicate(true)
+	_chunks_by_frame[effect_id] = keys_result["keys"].duplicate()
+	for key_value in keys_result["keys"]:
+		var key := String(key_value)
+		var ids: Array = _frame_ids_by_chunk.get(key, [])
+		if not ids.has(effect_id):
+			ids.append(effect_id)
+			ids.sort()
+		_frame_ids_by_chunk[key] = ids
+	return {
+		"ok": true,
+		"effect_id": effect_id,
+		"indexed_chunk_count": keys_result["keys"].size(),
+	}
+
+
 func get_frames_for_chunk(
 	region_key: Vector2i,
 	chunk_coordinate: Vector2i
@@ -102,9 +128,27 @@ func _chunk_keys_for_frame(frame: Dictionary) -> Dictionary:
 	var bounds := Frame.bounds_local(frame)
 	if not bounds.get("ok", false):
 		return bounds
-	var source_region: Vector2i = bounds["source_region_key"]
-	var minimum: Vector3 = bounds["min"]
-	var maximum: Vector3 = bounds["max"]
+	return _chunk_keys_for_bounds(
+		bounds["source_region_key"], bounds["min"], bounds["max"]
+	)
+
+
+func _chunk_keys_for_frame_prevalidated(frame: Dictionary) -> Dictionary:
+	var source_values: Array = frame["source_region_key"]
+	return _chunk_keys_for_bounds(
+		Vector2i(int(source_values[0]), int(source_values[1])),
+		_array_to_vector3(frame["bounds_min_local"]),
+		_array_to_vector3(frame["bounds_max_local"])
+	)
+
+
+func _chunk_keys_for_bounds(
+	source_region: Vector2i,
+	minimum: Vector3,
+	maximum: Vector3
+) -> Dictionary:
+	if not minimum.is_finite() or not maximum.is_finite() 		or minimum.x > maximum.x 		or minimum.y > maximum.y 		or minimum.z > maximum.z:
+		return _failure("terrain_effect_frame_bounds_invalid")
 	if maximum.y < Grid.MIN_BOUND.y - INDEX_HALO 		or minimum.y > Grid.MAX_BOUND.y + INDEX_HALO:
 		return {"ok": true, "keys": []}
 
@@ -135,6 +179,10 @@ func _chunk_keys_for_frame(frame: Dictionary) -> Dictionary:
 			))
 	keys.sort()
 	return {"ok": true, "keys": keys}
+
+
+func _array_to_vector3(value: Array) -> Vector3:
+	return Vector3(float(value[0]), float(value[1]), float(value[2]))
 
 
 func _remove_membership(effect_id: String) -> void:
