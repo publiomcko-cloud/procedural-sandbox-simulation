@@ -452,7 +452,6 @@ func snapshot_for_chunk(
 			"chunk_coordinate": [chunk_coordinate.x, chunk_coordinate.y],
 			"effect_ids": effect_ids,
 			"fingerprints": fingerprints,
-			"resident_scope_ids": get_loaded_scope_ids(),
 		}),
 	}
 
