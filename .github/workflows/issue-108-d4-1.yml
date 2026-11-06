@@ -56,6 +56,24 @@ jobs:
           ! grep -q 'SCRIPT ERROR:' /tmp/d4.log
           ! grep -q 'ERROR: FAIL:' /tmp/d4.log
 
+      - name: Pre-D persisted local-frame reload regression
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 240s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_pre_d_local_frame_tests.gd 2>&1 | tee /tmp/pre-d.log
+          grep -q 'ISSUE108_PRE_D_PASS' /tmp/pre-d.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/pre-d.log
+          ! grep -q 'ERROR: FAIL:' /tmp/pre-d.log
+
+      - name: Phase C projection recovery regression
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 240s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_phase_c_projection_recovery_tests.gd 2>&1 | tee /tmp/phase-c.log
+          grep -q 'ISSUE108_PHASE_C_PASS' /tmp/phase-c.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/phase-c.log
+          ! grep -q 'ERROR: FAIL:' /tmp/phase-c.log
+
       - name: Phase D live integration regression
         shell: bash
         run: |
@@ -90,6 +108,8 @@ jobs:
             /tmp/import.log
             /tmp/d4-1.log
             /tmp/d4.log
+            /tmp/pre-d.log
+            /tmp/phase-c.log
             /tmp/phase-d.log
             /tmp/d3.log
             /tmp/validate.log
