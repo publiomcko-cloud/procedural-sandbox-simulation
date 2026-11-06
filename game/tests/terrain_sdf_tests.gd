@@ -216,6 +216,15 @@ func _wait_for_region(scene: Node, region_key: Vector2i) -> void:
 			return
 		await process_frame
 		OS.delay_msec(ASYNC_WORKER_YIELD_MSEC)
+	if not scene.get("active_regions").has(region_id):
+		var stream: Node = scene.get_node_or_null("ProceduralObjects")
+		print("TERRAIN_SDF_REGION_TIMEOUT: loading=%s queued=%s effect_status=%s object_error=%s object_perf=%s" % [
+			str(scene.get("loading_regions")),
+			str(scene.call("_queued_chunk_count")),
+			str(scene.get("_terrain_effect_status")),
+			String(stream.get_error_summary()) if stream != null and stream.has_method("get_error_summary") else "unavailable",
+			str(stream.get_performance_snapshot()) if stream != null and stream.has_method("get_performance_snapshot") else "unavailable",
+		])
 	_check(scene.get("active_regions").has(region_id), "focused region completes its incremental load")
 
 
