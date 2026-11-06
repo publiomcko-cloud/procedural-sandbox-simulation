@@ -12,8 +12,16 @@ const StoreScript := preload("res://scripts/terrain/terrain_object_effect_projec
 const Effect := preload("res://scripts/terrain/terrain_object_effect.gd")
 const LocalFrame := preload("res://scripts/terrain/terrain_object_effect_local_frame.gd")
 const LocalFrameIndex := preload("res://scripts/terrain/terrain_object_effect_local_frame_index.gd")
+const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 
-const MAX_RESIDENT_SCOPES := 64
+# The demo retains terrain within radius 2 and a terrain-object effect can reach
+# source regions within radius 2. The normal bounded working set is therefore
+# radius 4: (2 * 4 + 1)^2 = 81 source scopes. This is a derived contract, not
+# an arbitrary cache size.
+const TERRAIN_RESIDENCY_RADIUS := 2
+const EFFECT_SOURCE_RADIUS := 2
+const NORMAL_WORKING_SET_RADIUS := TERRAIN_RESIDENCY_RADIUS + EFFECT_SOURCE_RADIUS
+const MAX_RESIDENT_SCOPES := (NORMAL_WORKING_SET_RADIUS * 2 + 1) * (NORMAL_WORKING_SET_RADIUS * 2 + 1)
 
 var world_id := ""
 var world_seed := -1
@@ -26,6 +34,19 @@ var last_reconcile_metrics: Dictionary = {}
 var _scopes: Dictionary = {}
 var _scope_indexes: Dictionary = {}
 var _storage_generations: Dictionary = {}
+# Reverse routing: stable target chunk id -> sorted source scope ids whose
+# indexed effect footprints can touch that chunk. This removes the former
+# O(resident scopes) scan from every chunk snapshot.
+var _scope_ids_by_chunk: Dictionary = {}
+var _performance := {
+	"scope_load_count": 0,
+	"scope_release_count": 0,
+	"scope_route_install_count": 0,
+	"snapshot_call_count": 0,
+	"lookup_scope_index_examined_count": 0,
+	"lookup_frame_count": 0,
+	"peak_resident_scope_count": 0,
+}
 
 
 func initialize(
@@ -42,6 +63,8 @@ func initialize(
 	_scopes.clear()
 	_scope_indexes.clear()
 	_storage_generations.clear()
+	_scope_ids_by_chunk.clear()
+	_reset_performance_metrics()
 	store = StoreScript.new(directory_override)
 	store.configure(world_id, world_seed, generator_version)
 	initialized = true
@@ -86,8 +109,12 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 	if not index_result.get("ok", false):
 		return index_result
 	_scopes[scope_id] = checked["snapshot"]
-	_scope_indexes[scope_id] = index_result["index"]
+	_install_scope_index(scope_id, index_result["index"])
 	_storage_generations[scope_id] = int(loaded.get("generation", 0))
+	_performance["scope_load_count"] = int(_performance["scope_load_count"]) + 1
+	_performance["peak_resident_scope_count"] = maxi(
+		int(_performance["peak_resident_scope_count"]), _scopes.size()
+	)
 	return {
 		"ok": true,
 		"found": bool(loaded.get("found", false)),
@@ -108,9 +135,13 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 
 func release_scope(region_key: Vector2i) -> void:
 	var scope_id := Contract.scope_id_for_region(region_key)
+	if not _scopes.has(scope_id):
+		return
+	_remove_scope_routes(scope_id)
 	_scopes.erase(scope_id)
 	_scope_indexes.erase(scope_id)
 	_storage_generations.erase(scope_id)
+	_performance["scope_release_count"] = int(_performance["scope_release_count"]) + 1
 
 
 func reconcile_scope(
@@ -291,7 +322,7 @@ func reconcile_scope(
 		)
 
 	_scopes[scope_id] = checked["snapshot"]
-	_scope_indexes[scope_id] = index_result["index"]
+	_install_scope_index(scope_id, index_result["index"])
 	_storage_generations[scope_id] = int(persisted["generation"])
 	last_reconcile_metrics = {
 		"scope_id": scope_id,
@@ -445,10 +476,20 @@ func get_frames_for_chunk(
 	region_key: Vector2i,
 	chunk_coordinate: Vector2i
 ) -> Array[Dictionary]:
-	if not initialized:
+	if not initialized or not Grid.is_valid_coordinate(chunk_coordinate):
 		return []
+	var chunk_id := Grid.stable_id(region_key, chunk_coordinate)
+	var scope_ids: Array = _scope_ids_by_chunk.get(chunk_id, [])
+	_performance["snapshot_call_count"] = int(_performance["snapshot_call_count"]) + 1
+	_performance["lookup_scope_index_examined_count"] = int(
+		_performance["lookup_scope_index_examined_count"]
+	) + scope_ids.size()
 	var by_id: Dictionary = {}
-	for scope_index in _scope_indexes.values():
+	for scope_id_value in scope_ids:
+		var scope_id := String(scope_id_value)
+		if not _scope_indexes.has(scope_id):
+			continue
+		var scope_index: RefCounted = _scope_indexes[scope_id]
 		for frame in scope_index.get_frames_for_chunk(
 			region_key, chunk_coordinate
 		):
@@ -460,6 +501,7 @@ func get_frames_for_chunk(
 	var result: Array[Dictionary] = []
 	for effect_id in ids:
 		result.append((by_id[effect_id] as Dictionary).duplicate(true))
+	_performance["lookup_frame_count"] = int(_performance["lookup_frame_count"]) + result.size()
 	return result
 
 
@@ -481,15 +523,75 @@ func snapshot_for_chunk(
 		"chunk_coordinate": chunk_coordinate,
 		"local_frames": frames,
 		"effect_count": frames.size(),
-		"resident_scope_ids": get_loaded_scope_ids(),
+		"routed_scope_count": (
+			_scope_ids_by_chunk.get(
+				Grid.stable_id(region_key, chunk_coordinate), []
+			) as Array
+		).size(),
 		"snapshot_sha256": Contract.canonical_sha256({
 			"region_key": [region_key.x, region_key.y],
 			"chunk_coordinate": [chunk_coordinate.x, chunk_coordinate.y],
 			"effect_ids": effect_ids,
 			"frame_hashes": frame_hashes,
-			"resident_scope_ids": get_loaded_scope_ids(),
 		}),
 	}
+
+
+func has_scope(region_key: Vector2i) -> bool:
+	return _scopes.has(Contract.scope_id_for_region(region_key))
+
+
+func get_performance_snapshot() -> Dictionary:
+	var result := _performance.duplicate(true)
+	result["resident_scope_count"] = _scopes.size()
+	result["reverse_route_chunk_count"] = _scope_ids_by_chunk.size()
+	result["max_resident_scope_count"] = MAX_RESIDENT_SCOPES
+	return result
+
+
+func reset_performance_metrics() -> void:
+	_reset_performance_metrics()
+
+
+func _reset_performance_metrics() -> void:
+	_performance = {
+		"scope_load_count": 0,
+		"scope_release_count": 0,
+		"scope_route_install_count": 0,
+		"snapshot_call_count": 0,
+		"lookup_scope_index_examined_count": 0,
+		"lookup_frame_count": 0,
+		"peak_resident_scope_count": _scopes.size(),
+	}
+
+
+func _install_scope_index(scope_id: String, index: RefCounted) -> void:
+	_remove_scope_routes(scope_id)
+	_scope_indexes[scope_id] = index
+	for chunk_id_value in index.get_all_indexed_chunk_ids():
+		var chunk_id := String(chunk_id_value)
+		var ids: Array = _scope_ids_by_chunk.get(chunk_id, [])
+		if not ids.has(scope_id):
+			ids.append(scope_id)
+			ids.sort()
+			_scope_ids_by_chunk[chunk_id] = ids
+	_performance["scope_route_install_count"] = int(
+		_performance["scope_route_install_count"]
+	) + 1
+
+
+func _remove_scope_routes(scope_id: String) -> void:
+	if not _scope_indexes.has(scope_id):
+		return
+	var index: RefCounted = _scope_indexes[scope_id]
+	for chunk_id_value in index.get_all_indexed_chunk_ids():
+		var chunk_id := String(chunk_id_value)
+		var ids: Array = _scope_ids_by_chunk.get(chunk_id, [])
+		ids.erase(scope_id)
+		if ids.is_empty():
+			_scope_ids_by_chunk.erase(chunk_id)
+		else:
+			_scope_ids_by_chunk[chunk_id] = ids
 
 
 func _source_revision(
