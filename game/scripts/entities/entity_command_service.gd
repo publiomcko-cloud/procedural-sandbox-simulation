@@ -107,6 +107,69 @@ func release_region(region_key: Vector2i) -> void:
 			_base_instances.erase(entity_id)
 
 
+## Builds the authoritative base list for a derived projection without
+## registering the region as command-resident. Procedural generation may be
+## completed on a worker before this method is called; placed records are
+## reconstructed here against the current registry/pins.
+func build_projection_region_base_instances(
+	region_key: Vector2i,
+	generated: Dictionary
+) -> Dictionary:
+	if not initialized:
+		return _failure("command_service_not_initialized")
+	if not _valid_region(region_key):
+		return _failure("command_region_invalid")
+	if not generated.get("ok", false) 		or Vector2i(generated.get("region_key", region_key)) != region_key:
+		return _failure(String(
+			generated.get("reason", "command_region_generation_invalid")
+		))
+	var by_id: Dictionary = {}
+	for base_value in generated.get("instances", []):
+		if typeof(base_value) != TYPE_DICTIONARY:
+			return _failure("command_region_generated_instance_invalid")
+		var base: Dictionary = base_value
+		var instance_id := String(base.get("instance_id", ""))
+		if instance_id.is_empty() or by_id.has(instance_id):
+			return _failure("command_region_generated_identity_invalid")
+		by_id[instance_id] = base.duplicate(true)
+
+	var placed: Dictionary = state_service.snapshot.get("placed_entities", {})
+	for entity_id_value in placed:
+		var entity_id := String(entity_id_value)
+		var record: Dictionary = placed[entity_id]
+		var identity: Dictionary = record.get("identity", {})
+		var stored_region: Array = identity.get("region_key", [])
+		if stored_region.size() != 2:
+			return _failure("placed_entity_identity_invalid")
+		if Vector2i(int(stored_region[0]), int(stored_region[1])) != region_key:
+			continue
+		var built := _build_placed_instance(entity_id, record)
+		if not built.get("ok", false):
+			return built
+		if by_id.has(entity_id):
+			return _failure("placed_entity_id_collision")
+		by_id[entity_id] = (built["instance"] as Dictionary).duplicate(true)
+
+	var ids: Array[String] = []
+	for entity_id in by_id:
+		ids.append(String(entity_id))
+	ids.sort()
+	var result: Array[Dictionary] = []
+	for entity_id in ids:
+		result.append((by_id[entity_id] as Dictionary).duplicate(true))
+	return {
+		"ok": true,
+		"region_key": region_key,
+		"instances": result,
+		"entity_count": result.size(),
+		"generation_usec": int(
+			generated.get("timings_usec", {}).get(
+				"total", generated.get("worker_usec", 0)
+			)
+		),
+	}
+
+
 func get_region_base_instances(region_key: Vector2i) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var ids: Array[String] = []
