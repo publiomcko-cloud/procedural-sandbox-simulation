@@ -170,16 +170,16 @@ func _test_effect_normalization_and_transform(registry: RefCounted) -> void:
 			"source fingerprint changes with transform/revision"
 		)
 		_check(
-			changed["effect"]["bounds_min"] != effect["bounds_min"]
-				or changed["effect"]["bounds_max"] != effect["bounds_max"],
-			"world bounds respond to transform"
+			changed["effect"]["bounds_min_local"] != effect["bounds_min_local"]
+				or changed["effect"]["bounds_max_local"] != effect["bounds_max_local"],
+			"region-local bounds respond to transform"
 		)
 		var changed_repeat := Effect.build_from_instance(transformed, 8)
 		_check(
 			changed_repeat.get("ok", false)
 				and changed_repeat["effect"]["source_fingerprint_sha256"]
 					== changed["effect"]["source_fingerprint_sha256"]
-				and changed_repeat["effect"]["world_planes"] == changed["effect"]["world_planes"],
+				and changed_repeat["effect"]["region_planes"] == changed["effect"]["region_planes"],
 			"effect transform and fingerprint are deterministic"
 		)
 
@@ -224,46 +224,71 @@ func _test_evaluator(registry: RefCounted) -> void:
 		return
 	var first: Dictionary = first_result["effect"]
 	var second: Dictionary = second_result["effect"]
-	var interior := _vector3(first["interior_point_world"])
-	var cutter := Effect.sample_cutter(first, interior)
+	var sample_region := _effect_region(first)
+	var interior := _vector3(first["interior_point_local"])
+	var cutter := Effect.sample_cutter(first, sample_region, interior)
 	_check(cutter < 0.0, "effect interior evaluates to negative cutter density")
 	var terrain_density := 0.25
-	var composed := Effect.compose_density(terrain_density, first, interior)
+	var composed := Effect.compose_density(
+		terrain_density, first, sample_region, interior
+	)
 	_check(composed <= terrain_density and composed < 0.0, "interior imprint subtracts solid terrain")
-	var outside := _vector3(first["bounds_max"]) + Vector3(1.0, 1.0, 1.0)
-	var outside_cutter := Effect.sample_cutter(first, outside)
+	var outside := _vector3(first["bounds_max_local"]) + Vector3(1.0, 1.0, 1.0)
+	var outside_cutter := Effect.sample_cutter(first, sample_region, outside)
 	_check(outside_cutter > 0.0, "outside point evaluates positive cutter density")
 	_check(
-		Effect.compose_density(terrain_density, first, outside) == terrain_density,
+		Effect.compose_density(
+			terrain_density, first, sample_region, outside
+		) == terrain_density,
 		"outside cutter has exactly zero terrain influence"
 	)
-	var forward := Effect.compose_effects(terrain_density, [first, second], interior)
-	var reverse := Effect.compose_effects(terrain_density, [second, first], interior)
+	var forward := Effect.compose_effects(
+		terrain_density, [first, second], sample_region, interior
+	)
+	var reverse := Effect.compose_effects(
+		terrain_density, [second, first], sample_region, interior
+	)
 	_check(is_equal_approx(forward, reverse), "effect composition is deterministic independent of input visitation order")
 
 	var hard := first.duplicate(true)
 	hard["blend_radius_mm"] = 0
 	_check(Effect.validate_effect(hard).get("ok", false), "zero-radius hard subtract variant remains schema-valid")
-	var hard_density := Effect.compose_density(terrain_density, hard, interior)
+	var hard_density := Effect.compose_density(
+		terrain_density, hard, sample_region, interior
+	)
 	_check(
-		is_equal_approx(hard_density, minf(terrain_density, Effect.sample_cutter(hard, interior))),
+		is_equal_approx(
+			hard_density,
+			minf(
+				terrain_density,
+				Effect.sample_cutter(hard, sample_region, interior)
+			)
+		),
 		"zero blend radius is exact hard subtraction"
 	)
 	_check(
 		is_equal_approx(
-			Effect.sample_cutter(first, interior),
-			Effect.sample_cutter_prevalidated(first, interior)
+			Effect.sample_cutter(first, sample_region, interior),
+			Effect.sample_cutter_prevalidated(first, sample_region, interior)
 		) and is_equal_approx(
-			Effect.compose_density(terrain_density, first, interior),
-			Effect.compose_density_prevalidated(terrain_density, first, interior)
+			Effect.compose_density(
+				terrain_density, first, sample_region, interior
+			),
+			Effect.compose_density_prevalidated(
+				terrain_density, first, sample_region, interior
+			)
 		) and is_equal_approx(
-			Effect.compose_effects(terrain_density, [first, second], interior),
-			Effect.compose_effects_prevalidated(terrain_density, [first, second], interior)
+			Effect.compose_effects(
+				terrain_density, [first, second], sample_region, interior
+			),
+			Effect.compose_effects_prevalidated(
+				terrain_density, [first, second], sample_region, interior
+			)
 		),
-		"prevalidated hot-path evaluator is semantically identical to safe evaluator"
+		"prevalidated region-local hot path is semantically identical to safe evaluator"
 	)
 	var malformed_plane := first.duplicate(true)
-	malformed_plane["world_planes"][0]["distance_m"] = "invalid"
+	malformed_plane["region_planes"][0]["distance_m"] = "invalid"
 	_check(
 		not Effect.validate_effect(malformed_plane).get("ok", false),
 		"malformed plane distance fails validation without entering evaluator"
@@ -460,6 +485,11 @@ func _find_common_chunk(
 
 func _vector3(value: Array) -> Vector3:
 	return Vector3(float(value[0]), float(value[1]), float(value[2]))
+
+
+func _effect_region(effect: Dictionary) -> Vector2i:
+	var value: Array = effect["source_region_key"]
+	return Vector2i(int(value[0]), int(value[1]))
 
 
 func _synthetic_discovery() -> Dictionary:
