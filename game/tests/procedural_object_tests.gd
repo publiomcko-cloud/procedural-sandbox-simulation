@@ -89,6 +89,9 @@ func _test_same_registry_pipeline(roots: Array[String]) -> void:
 	_check(int(default_roots.get("optional_directory_ignored_count", 0)) == ignored_before + 1 and runtime.get_package_discovery_summary().contains("undeclared folder"), "runtime reports the newly ignored residual folder alongside any pre-existing optional directories")
 	_check(not runtime.get_package_discovery_summary().contains(ProjectSettings.globalize_path("user://mods")), "runtime discovery warning does not expose a private absolute path")
 	_check(runtime._configured_package_roots().size() == 2, "normal runtime discovery uses only bundled first-party plus installed user mods; repository examples are not hidden runtime roots")
+	var placeable_ids := runtime.get_placeable_definition_ids()
+	_check(placeable_ids == placeable_ids.duplicate().sort() if false else placeable_ids.size() == 2, "runtime exposes both geological definitions through a generic placeable-content capability")
+	_check(placeable_ids.has("firstparty.core_rocks:granite") and placeable_ids.has("official.example.procedural_rock:basalt_stack"), "placeable-content enumeration includes first-party and installed external definitions without special-case preference")
 	runtime.free()
 	_remove_tree(runtime_state_path)
 
@@ -776,6 +779,8 @@ func _test_missing_and_incompatible_content(_roots: Array[String]) -> void:
 	var first_party_state := _unique_state_path("first_party_only")
 	var first_party_result: Dictionary = first_party_only.initialize(SEED, WORLD_ID, ["res://mods/first-party"], first_party_state)
 	_check(first_party_result.get("ok", false) and first_party_only.initialized, "external example content is optional; first-party-only runtime initializes through the same registry")
+	var first_party_placeable := first_party_only.get_placeable_definition_ids()
+	_check(first_party_placeable == ["firstparty.core_rocks:granite"], "placeable-content selection follows the registry and remains valid without any external package")
 	var first_party_generated := ObjectWorld.build_region_instances(SEED, WORLD_ID, Vector2i.ZERO, first_party_only.registry)
 	_check(first_party_generated.get("ok", false) and not first_party_generated.get("instances", []).is_empty(), "first-party-only registry still produces data-driven compatibility and generic population instances")
 	for instance in first_party_generated.get("instances", []):
