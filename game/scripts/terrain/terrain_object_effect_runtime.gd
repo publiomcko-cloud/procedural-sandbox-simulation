@@ -25,6 +25,19 @@ var initialization_error := ""
 var last_prepare_metrics: Dictionary = {}
 var _invalidated_scope_ids: Dictionary = {}
 var _pre_invalidation_frames: Dictionary = {}
+var _protected_scope_ids: Dictionary = {}
+var _required_regions_cache: Dictionary = {}
+var _performance := {
+	"prepare_call_count": 0,
+	"prepare_total_usec": 0,
+	"prepare_peak_usec": 0,
+	"required_scope_check_count": 0,
+	"scope_reconcile_count": 0,
+	"scope_eviction_count": 0,
+	"window_update_count": 0,
+	"window_target_region_count": 0,
+	"protected_scope_count": 0,
+}
 
 
 func initialize(
@@ -45,6 +58,9 @@ func initialize(
 	object_stream = object_stream_value
 	_invalidated_scope_ids.clear()
 	_pre_invalidation_frames.clear()
+	_protected_scope_ids.clear()
+	_required_regions_cache.clear()
+	_reset_performance_metrics()
 	projection = ProjectionService.new()
 	var init: Dictionary = projection.initialize(
 		world_id, world_seed, generator_version, directory_override
@@ -91,16 +107,12 @@ func prepare_targets_snapshot(
 		return capacity
 	var authority_revision := int(object_stream.call("get_command_world_revision"))
 	var reconciled_count := 0
-	var loaded_count := 0
 	for source_region in required_source_regions:
+		_performance["required_scope_check_count"] = int(
+			_performance["required_scope_check_count"]
+		) + 1
 		var scope_id := Contract.scope_id_for_region(source_region)
-		var status: Dictionary = projection.get_scope_status(
-			source_region, authority_revision
-		)
-		var status_name := String(status.get("status", "unloaded"))
-		var must_reconcile := status_name in ["unloaded", "missing", "ahead"] 			or _invalidated_scope_ids.has(scope_id)
-		# A global entity world revision does not make unrelated source regions
-		# stale. Region-local invalidation is driven by the command/lifecycle path.
+		var must_reconcile := not projection.has_scope(source_region) 			or _invalidated_scope_ids.has(scope_id)
 		if not must_reconcile:
 			continue
 		var source: Dictionary = object_stream.call(
@@ -110,10 +122,9 @@ func prepare_targets_snapshot(
 			return _failure(
 				"terrain_effect_runtime_source_failed:%s" 					% source.get("reason", "unknown")
 			)
-		var source_revision := int(source.get("world_revision", -1))
 		var reconciled: Dictionary = projection.reconcile_scope(
 			source_region,
-			source_revision,
+			int(source.get("world_revision", -1)),
 			source.get("instances", []),
 			source.get("source_revisions", {}),
 			true
@@ -123,13 +134,15 @@ func prepare_targets_snapshot(
 				"terrain_effect_runtime_reconcile_failed:%s" 					% reconciled.get("reason", "unknown")
 			)
 		reconciled_count += 1
+		_performance["scope_reconcile_count"] = int(
+			_performance["scope_reconcile_count"]
+		) + 1
 		_invalidated_scope_ids.erase(scope_id)
 		_pre_invalidation_frames.erase(scope_id)
-		if bool(reconciled.get("changed", false)):
-			loaded_count += 1
 
 	var by_effect_id: Dictionary = {}
 	var target_rows: Array[Dictionary] = []
+	var routed_scope_count := 0
 	for target in targets:
 		var effect_snapshot: Dictionary = projection.snapshot_for_chunk(
 			target["region_key"], target["chunk_coordinate"]
@@ -138,6 +151,7 @@ func prepare_targets_snapshot(
 			return _failure(
 				"terrain_effect_runtime_chunk_snapshot_failed:%s" 					% effect_snapshot.get("reason", "unknown")
 			)
+		routed_scope_count += int(effect_snapshot.get("routed_scope_count", 0))
 		var effect_ids: Array[String] = []
 		for frame_value in effect_snapshot.get("local_frames", []):
 			if typeof(frame_value) != TYPE_DICTIONARY:
@@ -179,25 +193,32 @@ func prepare_targets_snapshot(
 
 	var prepared := base_snapshot.duplicate(true)
 	prepared["terrain_object_effect_frames"] = frames
+	# Snapshot identity is content-local. Unrelated entity revisions or unrelated
+	# resident scope churn must not invalidate terrain/shared-surface caches.
 	prepared["terrain_effect_snapshot_sha256"] = Contract.canonical_sha256({
-		"schema_version": 1,
+		"schema_version": 2,
 		"world_id": world_id,
 		"world_seed": world_seed,
 		"generator_version": generator_version,
-		"authority_revision": authority_revision,
 		"targets": target_rows,
 		"effect_ids": effect_ids,
 		"frame_hashes": frame_hashes,
 	})
 	prepared["terrain_effect_authority_revision"] = authority_revision
 	prepared["terrain_effect_frame_count"] = frames.size()
+	var duration_usec := Time.get_ticks_usec() - started_usec
+	_performance["prepare_call_count"] = int(_performance["prepare_call_count"]) + 1
+	_performance["prepare_total_usec"] = int(_performance["prepare_total_usec"]) + duration_usec
+	_performance["prepare_peak_usec"] = maxi(
+		int(_performance["prepare_peak_usec"]), duration_usec
+	)
 	last_prepare_metrics = {
 		"target_count": targets.size(),
 		"required_source_scope_count": required_source_regions.size(),
 		"reconciled_scope_count": reconciled_count,
-		"changed_scope_count": loaded_count,
+		"routed_scope_count": routed_scope_count,
 		"frame_count": frames.size(),
-		"duration_usec": Time.get_ticks_usec() - started_usec,
+		"duration_usec": duration_usec,
 	}
 	return {
 		"ok": true,
@@ -326,6 +347,88 @@ func _target_from_chunk_id(chunk_id: String) -> Dictionary:
 	}
 
 
+func update_resident_target_regions(
+	target_regions_value: Array
+) -> Dictionary:
+	if not initialized:
+		return _failure("terrain_effect_runtime_not_initialized")
+	var target_regions: Array[Vector2i] = []
+	var seen: Dictionary = {}
+	for value in target_regions_value:
+		if not value is Vector2i:
+			return _failure("terrain_effect_runtime_window_region_invalid")
+		var region: Vector2i = value
+		var id := Contract.scope_id_for_region(region)
+		if not seen.has(id):
+			seen[id] = true
+			target_regions.append(region)
+	target_regions.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return a.y < b.y or (a.y == b.y and a.x < b.x)
+	)
+	var required := _required_source_regions_for_regions(target_regions)
+	if required.size() > ProjectionService.MAX_RESIDENT_SCOPES:
+		return _failure("terrain_effect_runtime_window_scope_budget_exceeded")
+	var next_protected: Dictionary = {}
+	for region in required:
+		next_protected[Contract.scope_id_for_region(region)] = true
+	_protected_scope_ids = next_protected
+	_performance["window_update_count"] = int(_performance["window_update_count"]) + 1
+	_performance["window_target_region_count"] = target_regions.size()
+	_performance["protected_scope_count"] = required.size()
+
+	# Release scopes that cannot contribute to the current requested terrain
+	# window. No source generation/reconciliation is performed here.
+	for scope_id in projection.get_loaded_scope_ids():
+		if _protected_scope_ids.has(scope_id):
+			continue
+		if _invalidated_scope_ids.has(scope_id):
+			continue
+		var parsed := _region_from_scope_id(scope_id)
+		if parsed.get("ok", false):
+			projection.release_scope(parsed["region_key"])
+			_performance["scope_eviction_count"] = int(
+				_performance["scope_eviction_count"]
+			) + 1
+	return {
+		"ok": true,
+		"target_region_count": target_regions.size(),
+		"protected_scope_count": required.size(),
+		"resident_scope_count": projection.get_loaded_scope_count(),
+	}
+
+
+func get_performance_snapshot() -> Dictionary:
+	var result := _performance.duplicate(true)
+	var calls := int(result["prepare_call_count"])
+	result["prepare_average_usec"] = (
+		float(result["prepare_total_usec"]) / float(calls)
+		if calls > 0 else 0.0
+	)
+	result["resident_scope_count"] = projection.get_loaded_scope_count() 		if projection != null else 0
+	result["projection"] = projection.get_performance_snapshot() 		if projection != null else {}
+	return result
+
+
+func reset_performance_metrics() -> void:
+	_reset_performance_metrics()
+	if projection != null:
+		projection.reset_performance_metrics()
+
+
+func _reset_performance_metrics() -> void:
+	_performance = {
+		"prepare_call_count": 0,
+		"prepare_total_usec": 0,
+		"prepare_peak_usec": 0,
+		"required_scope_check_count": 0,
+		"scope_reconcile_count": 0,
+		"scope_eviction_count": 0,
+		"window_update_count": 0,
+		"window_target_region_count": 0,
+		"protected_scope_count": 0,
+	}
+
+
 func release_all_scopes() -> void:
 	if projection == null:
 		return
@@ -348,20 +451,26 @@ func _make_projection_capacity(
 	var loaded_ids: Array[String] = projection.get_loaded_scope_ids()
 	var missing_count := 0
 	for region in required_regions:
-		if not loaded_ids.has(Contract.scope_id_for_region(region)):
+		if not projection.has_scope(region):
 			missing_count += 1
 	var needed := loaded_ids.size() + missing_count 		- ProjectionService.MAX_RESIDENT_SCOPES
 	if needed <= 0:
 		return {"ok": true, "released": 0}
 	var released := 0
+	# Never evict the stable window working set or scopes needed by this job.
 	for scope_id in loaded_ids:
-		if required_ids.has(scope_id):
+		if required_ids.has(scope_id) or _protected_scope_ids.has(scope_id):
+			continue
+		if _invalidated_scope_ids.has(scope_id):
 			continue
 		var parsed := _region_from_scope_id(scope_id)
 		if not parsed.get("ok", false):
 			continue
 		projection.release_scope(parsed["region_key"])
 		released += 1
+		_performance["scope_eviction_count"] = int(
+			_performance["scope_eviction_count"]
+		) + 1
 		if released >= needed:
 			break
 	if projection.get_loaded_scope_count() + missing_count 		> ProjectionService.MAX_RESIDENT_SCOPES:
@@ -372,9 +481,30 @@ func _make_projection_capacity(
 func _required_source_regions(
 	targets: Array[Dictionary]
 ) -> Array[Vector2i]:
-	var by_id: Dictionary = {}
+	var target_regions: Array[Vector2i] = []
+	var seen: Dictionary = {}
 	for target in targets:
-		var center: Vector2i = target["region_key"]
+		var region: Vector2i = target["region_key"]
+		var id := Contract.scope_id_for_region(region)
+		if not seen.has(id):
+			seen[id] = true
+			target_regions.append(region)
+	return _required_source_regions_for_regions(target_regions)
+
+
+func _required_source_regions_for_regions(
+	target_regions: Array[Vector2i]
+) -> Array[Vector2i]:
+	var by_id: Dictionary = {}
+	for center in target_regions:
+		var center_id := Contract.scope_id_for_region(center)
+		var cached: Variant = _required_regions_cache.get(center_id)
+		if cached is Array:
+			for region_value in cached:
+				var region: Vector2i = region_value
+				by_id[Contract.scope_id_for_region(region)] = region
+			continue
+		var local: Array[Vector2i] = []
 		for z in range(
 			center.y - SOURCE_REGION_RADIUS,
 			center.y + SOURCE_REGION_RADIUS + 1
@@ -384,7 +514,9 @@ func _required_source_regions(
 				center.x + SOURCE_REGION_RADIUS + 1
 			):
 				var region := Vector2i(x, z)
+				local.append(region)
 				by_id[Contract.scope_id_for_region(region)] = region
+		_required_regions_cache[center_id] = local
 	var result: Array[Vector2i] = []
 	var ids: Array[String] = []
 	for scope_id in by_id:
