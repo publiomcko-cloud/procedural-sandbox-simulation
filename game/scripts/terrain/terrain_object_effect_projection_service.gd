@@ -212,7 +212,10 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 	}
 
 
-func release_scope(region_key: Vector2i) -> void:
+func release_scope(
+	region_key: Vector2i,
+	retain_dormant: bool = false
+) -> void:
 	var scope_id := Contract.scope_id_for_region(region_key)
 	if not _scopes.has(scope_id):
 		return
@@ -223,7 +226,11 @@ func release_scope(region_key: Vector2i) -> void:
 	_scopes.erase(scope_id)
 	_scope_indexes.erase(scope_id)
 	_storage_generations.erase(scope_id)
-	_remember_dormant_scope(scope_id, snapshot, index, generation)
+	if retain_dormant:
+		_remember_dormant_scope(scope_id, snapshot, index, generation)
+	else:
+		_dormant_scopes.erase(scope_id)
+		_dormant_scope_order.erase(scope_id)
 	_performance["scope_release_count"] = int(_performance["scope_release_count"]) + 1
 
 
