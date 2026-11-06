@@ -1194,6 +1194,15 @@ func _process_completed_mesh_jobs() -> void:
 		if state.brush_edits.revision != int(stage["edit_revision"]):
 			_supersede_region_stage(id)
 			continue
+		var current_effect_snapshot: Dictionary = object_stream.get_terrain_effect_snapshot_for_chunks(
+			record.get("terrain_effect_requests", [])
+		)
+		if not current_effect_snapshot.get("ok", false) \
+			or String(current_effect_snapshot.get(
+				"terrain_object_effect_snapshot_sha256", "none"
+			)) != String(record.get("terrain_effect_snapshot_sha256", "none")):
+			_supersede_region_stage(id)
+			continue
 		var cpu_result: Dictionary
 		var completed_kind := String(record.get("job_kind", "chunk"))
 		if completed_kind in ["shared_boundary_x", "shared_boundary_z", "shared_corner_xz"]:
@@ -1336,17 +1345,19 @@ func _dispatch_mesh_jobs() -> void:
 		var job: RefCounted
 		var job_kind := "chunk"
 		var shared_side := ""
+		var effect_requests: Array = []
 		if _uses_shared_corner(coordinate):
 			var min_region := _corner_min_region(stage["region_key"], coordinate)
 			var corner_snapshot: Dictionary = SharedBoundaryAuthority.make_xz_corner_snapshot(
 				state.brush_edits, min_region
 			)
-			_attach_terrain_effect_snapshot(corner_snapshot, [
+			effect_requests = [
 				{"region_key": min_region, "coordinate": Vector2i(ChunkGrid.CHUNK_COUNT_X - 1, ChunkGrid.CHUNK_COUNT_Z - 1)},
 				{"region_key": min_region + Vector2i(1, 0), "coordinate": Vector2i(0, ChunkGrid.CHUNK_COUNT_Z - 1)},
 				{"region_key": min_region + Vector2i(0, 1), "coordinate": Vector2i(ChunkGrid.CHUNK_COUNT_X - 1, 0)},
 				{"region_key": min_region + Vector2i(1, 1), "coordinate": Vector2i(0, 0)},
-			])
+			]
+			_attach_terrain_effect_snapshot(corner_snapshot, effect_requests)
 			snapshot_meta = corner_snapshot
 			job = SharedCornerMeshJob.new(
 				state.world_seed, min_region, corner_snapshot, submitted_usec,
@@ -1360,10 +1371,11 @@ func _dispatch_mesh_jobs() -> void:
 			var pair_snapshot: Dictionary = SharedBoundaryAuthority.make_x_pair_snapshot(
 				state.brush_edits, left_region, coordinate.y
 			)
-			_attach_terrain_effect_snapshot(pair_snapshot, [
+			effect_requests = [
 				{"region_key": left_region, "coordinate": Vector2i(ChunkGrid.CHUNK_COUNT_X - 1, coordinate.y)},
 				{"region_key": left_region + Vector2i.RIGHT, "coordinate": Vector2i(0, coordinate.y)},
-			])
+			]
+			_attach_terrain_effect_snapshot(pair_snapshot, effect_requests)
 			snapshot_meta = pair_snapshot
 			job = SharedBoundaryMeshJob.new(
 				state.world_seed, left_region, coordinate.y, pair_snapshot, submitted_usec,
@@ -1377,10 +1389,11 @@ func _dispatch_mesh_jobs() -> void:
 			var z_snapshot: Dictionary = SharedBoundaryAuthority.make_z_pair_snapshot(
 				state.brush_edits, low_region, coordinate.x
 			)
-			_attach_terrain_effect_snapshot(z_snapshot, [
+			effect_requests = [
 				{"region_key": low_region, "coordinate": Vector2i(coordinate.x, ChunkGrid.CHUNK_COUNT_Z - 1)},
 				{"region_key": low_region + Vector2i(0, 1), "coordinate": Vector2i(coordinate.x, 0)},
-			])
+			]
+			_attach_terrain_effect_snapshot(z_snapshot, effect_requests)
 			snapshot_meta = z_snapshot
 			job = SharedZBoundaryMeshJob.new(
 				state.world_seed, low_region, coordinate.x, z_snapshot, submitted_usec,
@@ -1392,10 +1405,11 @@ func _dispatch_mesh_jobs() -> void:
 			var chunk_snapshot: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
 				stage["region_key"], coordinate
 			)
-			_attach_terrain_effect_snapshot(chunk_snapshot, [{
+			effect_requests = [{
 				"region_key": stage["region_key"],
 				"coordinate": coordinate,
-			}])
+			}]
+			_attach_terrain_effect_snapshot(chunk_snapshot, effect_requests)
 			snapshot_meta = chunk_snapshot
 			job = TerrainMeshJob.new(
 				state.world_seed, stage["region_key"], coordinate,
@@ -1437,6 +1451,10 @@ func _dispatch_mesh_jobs() -> void:
 			"snapshot_candidate_count": int(snapshot_meta.get("candidate_operation_count", -1)),
 			"snapshot_raw_candidate_count": int(snapshot_meta.get("raw_candidate_operation_count", snapshot_meta.get("candidate_operation_count", -1))),
 			"snapshot_tile_count": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
+			"terrain_effect_requests": effect_requests.duplicate(true),
+			"terrain_effect_snapshot_sha256": String(
+				snapshot_meta.get("terrain_object_effect_snapshot_sha256", "none")
+			),
 		}
 		_peak_mesh_jobs_in_flight = maxi(_peak_mesh_jobs_in_flight, _mesh_jobs.size())
 		if String(stage["purpose"]) == "edit_transaction":
