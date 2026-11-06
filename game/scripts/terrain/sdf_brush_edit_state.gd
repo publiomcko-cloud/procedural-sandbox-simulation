@@ -4,6 +4,7 @@ extends RefCounted
 ## One bounded, globally ordered in-memory command ledger shared by every region.
 const FIELD := preload("res://scripts/terrain/sdf_world.gd")
 const SPATIAL := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
+const TerrainEffectFrame := preload("res://scripts/terrain/terrain_object_effect_local_frame.gd")
 const GRID := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 # Explicit finite world quota. This replaces the old 256-command prototype cap.
 # The v2 store enforces the same limit before committing a generation.
@@ -603,6 +604,18 @@ static func sample_density_snapshot(
 			density = minf(density, distance_to_surface)
 		else:
 			density = maxf(density, -distance_to_surface)
+
+	# Issue #108 ordering contract: authoritative player terrain edits are
+	# evaluated first, then active anchored-object imprints are composed. Effects
+	# are immutable validated local frames captured in the meshing/query snapshot.
+	var effect_frames_value: Variant = snapshot.get(
+		"terrain_object_effect_frames", []
+	)
+	if typeof(effect_frames_value) == TYPE_ARRAY:
+		density = TerrainEffectFrame.compose_frames_prevalidated(
+			density, effect_frames_value, region_key, local_position
+		)
+
 	if show_cave_section:
 		density = minf(density, 6.0 - world_position.z)
 	return density

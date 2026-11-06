@@ -51,8 +51,8 @@ func _run() -> void:
 	var expected_left_mm := _to_mm(left_hit.position)
 	var expected_right_mm := _to_mm(right_hit.position)
 	_check(expected_left_mm != expected_right_mm, "distinct screen points produce distinct quantized world-space hits")
-	var left_surface_density: float = scene.call("_sample_world_density", left_hit.position)
-	var right_surface_density: float = scene.call("_sample_world_density", right_hit.position)
+	var left_surface_density: float = _sample_live_density(scene, left_hit.position)
+	var right_surface_density: float = _sample_live_density(scene, right_hit.position)
 	_check(absf(left_surface_density) < 0.02 and absf(right_surface_density) < 0.02, "ray targets lie on sampled non-flat SDF terrain rather than a placement constant")
 	var left_region: Vector2i = Spatial.world_to_region_local(Vector3(expected_left_mm) / 1000.0).region_key
 	var right_region: Vector2i = Spatial.world_to_region_local(Vector3(expected_right_mm) / 1000.0).region_key
@@ -67,15 +67,32 @@ func _run() -> void:
 	var right_record := _placed_record(stream, right_id)
 	_check(not right_id.is_empty() and right_id != left_id, "a second B creates a distinct identity")
 	_check(_record_position(right_record) == expected_right_mm, "right-pointer command persists its own SDF hit")
+	_check(await _wait_terrain_idle(scene), "terrain imprint from prior placements publishes before repeated aim")
+	var repeated_left_hit := _pick(scene, camera, left_screen)
 	var repeated_left_id := await _place_from_pointer(scene, left_screen)
 	var repeated_left_record := _placed_record(stream, repeated_left_id)
-	_check(repeated_left_id != left_id and _record_position(repeated_left_record) == _record_position(left_record), "repeated aim is stable and allows intentional overlap without jitter")
+	_check(
+		repeated_left_hit.get("hit", false)
+			and repeated_left_id != left_id
+			and _record_position(repeated_left_record) == _to_mm(repeated_left_hit.position),
+		"repeated aim deterministically persists the current post-imprint SDF hit"
+	)
 	var left_visible := await _wait_instance_count(stream, left_id, 1)
 	var right_visible := await _wait_instance_count(stream, right_id, 1)
 	var repeated_visible := await _wait_instance_count(stream, repeated_left_id, 1)
 	_check(left_visible and right_visible and repeated_visible, "each accepted placement publishes exactly one visual for its stable identity (counts=%d/%d/%d errors=%s)" % [stream.get_instance_ids().count(left_id), stream.get_instance_ids().count(right_id), stream.get_instance_ids().count(repeated_left_id), stream.get_error_summary()])
+	_check(await _wait_terrain_idle(scene), "repeated placement terrain imprint publishes before marker validation")
+	var current_left_hit := _pick(scene, camera, left_screen)
+	scene.call("_refresh_placement_target_indicator", left_screen)
+	await process_frame
 	var marker: Node3D = scene.get_node_or_null("PlacementTargetMarker")
-	_check(marker != null and marker.visible and marker.global_position.distance_to(Vector3(left_hit.position)) < 0.1, "visual target indicator marks the same surface hit used by B")
+	_check(
+		current_left_hit.get("hit", false)
+			and marker != null
+			and marker.visible
+			and marker.global_position.distance_to(Vector3(current_left_hit.position)) < 0.1,
+		"visual target indicator tracks the current post-imprint SDF surface"
+	)
 	_assert_global_local_transform(stream, left_id, left_record)
 
 	# A logical viewport resize checks that the picker consumes viewport coordinates,
@@ -190,6 +207,7 @@ func _create_isolated_scene() -> Node3D:
 	var scene: Node3D = load("res://scenes/terrain_demo.tscn").instantiate()
 	scene.set("world_save_store", SaveStore.new(fixture_root.path_join("terrain")))
 	scene.set("object_state_directory_override", ProjectSettings.globalize_path(fixture_root.path_join("entities")))
+	scene.set("terrain_effect_directory_override", ProjectSettings.globalize_path(fixture_root.path_join("terrain-object-effects")))
 	var package_roots: Array[String] = ["res://mods/first-party"]
 	scene.set("object_package_roots_override", package_roots)
 	root.add_child(scene)
@@ -378,7 +396,73 @@ func _wait_region_unpublished(scene: Node, region_key: Vector2i) -> bool:
 func _pick(scene: Node, camera: Camera3D, screen_position: Vector2) -> Dictionary:
 	var origin := camera.project_ray_origin(screen_position)
 	var direction := camera.project_ray_normal(screen_position)
-	return BrushPicker.pick_sdf_v1_surface(origin, direction, Callable(scene, "_sample_world_density"))
+	var ledger: RefCounted = scene.get("edit_ledger")
+	if ledger != null and ledger.has_method("get_ray_snapshot"):
+		var snapshot: Dictionary = ledger.get_ray_snapshot(
+			origin, direction, BrushPicker.MAX_DISTANCE
+		)
+		var prepared: Dictionary = scene.call(
+			"_prepare_terrain_effect_ray_snapshot",
+			snapshot,
+			origin,
+			direction,
+			BrushPicker.MAX_DISTANCE
+		)
+		if prepared.get("ok", false):
+			var live_snapshot: Dictionary = prepared["snapshot"]
+			var sampler := func(point: Vector3) -> float:
+				return scene.call(
+					"_sample_world_density_from_snapshot",
+					point,
+					live_snapshot
+				)
+			return BrushPicker.pick_sdf_v1_surface(origin, direction, sampler)
+	return BrushPicker.pick_sdf_v1_surface(
+		origin, direction, Callable(scene, "_sample_world_density")
+	)
+
+
+func _sample_live_density(scene: Node, world_position: Vector3) -> float:
+	var mapped: Dictionary = Spatial.world_to_region_local(world_position)
+	if not mapped.get("valid", false):
+		return -INF
+	var local: Vector3 = mapped["local_position"]
+	var chunk_width := 4.0
+	var chunk_depth := 3.0
+	var coordinate := Vector2i(
+		clampi(floori(local.x / chunk_width), 0, 3),
+		clampi(floori(local.z / chunk_depth), 0, 3)
+	)
+	var ledger: RefCounted = scene.get("edit_ledger")
+	var base_snapshot: Dictionary = ledger.get_meshing_snapshot_for_chunk(
+		mapped["region_key"], coordinate
+	)
+	var prepared: Dictionary = scene.call(
+		"_prepare_terrain_effect_snapshot",
+		base_snapshot,
+		[{
+			"region_key": mapped["region_key"],
+			"chunk_coordinate": coordinate,
+		}]
+	)
+	if not prepared.get("ok", false):
+		return scene.call("_sample_world_density", world_position)
+	return scene.call(
+		"_sample_world_density_from_snapshot",
+		world_position,
+		prepared["snapshot"]
+	)
+
+
+func _wait_terrain_idle(scene: Node) -> bool:
+	var deadline := Time.get_ticks_msec() + ASYNC_WAIT_TIMEOUT_MSEC
+	while Time.get_ticks_msec() < deadline:
+		await process_frame
+		OS.delay_msec(ASYNC_WORKER_YIELD_MSEC)
+		var loading: Dictionary = scene.get("loading_regions")
+		if loading.is_empty() and not bool(scene.get("global_rebuild_pending")):
+			return true
+	return false
 
 
 func _placed_record(stream: Node, entity_id: String) -> Dictionary:

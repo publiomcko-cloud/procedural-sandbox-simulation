@@ -6,6 +6,9 @@ const TerrainMesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 var assertion_count := 0
 var failure_count := 0
 
+const ASYNC_WAIT_TIMEOUT_MSEC := 30000
+const ASYNC_WORKER_YIELD_MSEC := 1
+
 
 func _initialize() -> void:
 	call_deferred("_run_tests")
@@ -207,18 +210,31 @@ func _test_demo_controls() -> void:
 
 func _wait_for_region(scene: Node, region_key: Vector2i) -> void:
 	var region_id := "%d,%d" % [region_key.x, region_key.y]
-	for _frame in range(600):
+	var deadline := Time.get_ticks_msec() + ASYNC_WAIT_TIMEOUT_MSEC
+	while Time.get_ticks_msec() < deadline:
 		if scene.get("active_regions").has(region_id):
 			return
 		await process_frame
+		OS.delay_msec(ASYNC_WORKER_YIELD_MSEC)
+	if not scene.get("active_regions").has(region_id):
+		var stream: Node = scene.get_node_or_null("ProceduralObjects")
+		print("TERRAIN_SDF_REGION_TIMEOUT: loading=%s queued=%s effect_status=%s object_error=%s object_perf=%s" % [
+			str(scene.get("loading_regions")),
+			str(scene.call("_queued_chunk_count")),
+			str(scene.get("_terrain_effect_status")),
+			String(stream.get_error_summary()) if stream != null and stream.has_method("get_error_summary") else "unavailable",
+			str(stream.get_performance_snapshot()) if stream != null and stream.has_method("get_performance_snapshot") else "unavailable",
+		])
 	_check(scene.get("active_regions").has(region_id), "focused region completes its incremental load")
 
 
 func _wait_for_global_rebuild(scene: Node) -> void:
-	for _frame in range(2000):
+	var deadline := Time.get_ticks_msec() + ASYNC_WAIT_TIMEOUT_MSEC
+	while Time.get_ticks_msec() < deadline:
 		if not scene.get("global_rebuild_pending"):
 			return
 		await process_frame
+		OS.delay_msec(ASYNC_WORKER_YIELD_MSEC)
 	if scene.get("global_rebuild_pending"):
 		print("GLOBAL_REBUILD_TIMEOUT: stages=%d queued=%d targets=%s" % [scene.get("loading_regions").size(), scene.call("_queued_chunk_count"), scene.get("_full_rebuild_target_ids")])
 	_check(not scene.get("global_rebuild_pending"), "global rebuild completes through incremental chunk jobs")

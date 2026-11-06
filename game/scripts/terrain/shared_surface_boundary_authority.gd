@@ -1051,6 +1051,11 @@ static func _materialized_base_signature(snapshot: Dictionary) -> String:
 			roundi(float(tile.get("step", 0.0)) * ROOT_QUANT),
 			value_count,
 		])
+	rows.append(
+		"terrain_effect_snapshot:%s" % String(
+			snapshot.get("terrain_effect_snapshot_sha256", "none")
+		)
+	)
 	rows.sort()
 	return "\n".join(rows)
 
@@ -1065,10 +1070,11 @@ static func _incremental_scope_key(
 	seam_x: float,
 	seam_z: float
 ) -> String:
-	return "%s:%d:%d:%s:%d,%d,%d:%d:%d:%d" % [
+	return "%s:%d:%d:%s:%s:%d,%d,%d:%d:%d:%d" % [
 		kind,
 		world_seed,
 		int(snapshot.get("cache_scope_id", -1)),
+		String(snapshot.get("terrain_effect_snapshot_sha256", "none")),
 		_point_key(roi_min),
 		cells.x, cells.y, cells.z,
 		roundi(step * ROOT_QUANT),

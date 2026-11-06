@@ -1,0 +1,175 @@
+name: Issue 108 D1 effect runtime performance
+
+on:
+  push:
+    branches:
+      - perf/issue-108-d1-effect-runtime
+  pull_request:
+    paths:
+      - 'game/scripts/terrain/terrain_object_effect*.gd'
+      - 'game/scripts/terrain/terrain_demo.gd'
+      - 'game/scripts/objects/procedural_object_stream.gd'
+      - 'game/scripts/entities/entity_command_service.gd'
+      - 'game/scripts/diagnostics/performance_trace.gd'
+      - 'game/tests/issue108_d1_runtime_performance_tests.gd'
+      - 'game/tests/issue108_d1_scene_streaming_performance_tests.gd'
+      - 'game/tests/issue108_phase_d_live_integration_tests.gd'
+      - 'game/tests/p3_0d_entity_placement_tests.gd'
+      - '.github/workflows/issue-108-d1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          chmod +x /tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --version
+
+      - name: Import
+        shell: bash
+        run: |
+          set -o pipefail
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path game --import 2>&1 | tee /tmp/import.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/import.log
+
+      - name: D1 runtime traversal benchmark
+        shell: bash
+        run: |
+          set -o pipefail
+          SANDBOX_PERF_TRACE=1 SANDBOX_PERF_TRACE_MIN_MS=999999 timeout --signal=TERM 180s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_d1_runtime_performance_tests.gd 2>&1 | tee /tmp/d1.log
+          grep -q 'ISSUE108_D1_PERFORMANCE_PASS' /tmp/d1.log
+          grep -q 'PERF_TRACE ' /tmp/d1.log
+          grep -q '"event":"effect_window_update"' /tmp/d1.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/d1.log
+          ! grep -q 'ERROR: FAIL:' /tmp/d1.log
+
+      - name: D1 current real-scene streaming benchmark
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 300s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_d1_scene_streaming_performance_tests.gd 2>&1 | tee /tmp/d1-scene-current.log
+          grep -q 'ISSUE108_D1_SCENE_PASS' /tmp/d1-scene-current.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/d1-scene-current.log
+          ! grep -q 'ERROR: FAIL:' /tmp/d1-scene-current.log
+
+      - name: D1 base real-scene streaming benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin feat/issue-108-pre-d-local-frame-phase-d
+          test "$(git rev-parse FETCH_HEAD)" = "6017dc95988455bf5f39af8f77523d95e8c156c1"
+          git worktree add --detach /tmp/issue108-d1-base FETCH_HEAD
+          cp game/tests/issue108_d1_scene_streaming_performance_tests.gd /tmp/issue108-d1-base/game/tests/
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path /tmp/issue108-d1-base/game --import 2>&1 | tee /tmp/d1-base-import.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/d1-base-import.log
+          timeout --signal=TERM 300s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path /tmp/issue108-d1-base/game --script res://tests/issue108_d1_scene_streaming_performance_tests.gd 2>&1 | tee /tmp/d1-scene-base.log
+          grep -q 'ISSUE108_D1_SCENE_PASS' /tmp/d1-scene-base.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/d1-scene-base.log
+          ! grep -q 'ERROR: FAIL:' /tmp/d1-scene-base.log
+
+      - name: D1 A/B scene metrics
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, re
+          def read(path):
+              data=open(path,encoding='utf-8').read()
+              m=re.search(r'ISSUE108_D1_SCENE_EVIDENCE=(\{.*\})',data)
+              if not m:
+                  raise SystemExit(f'missing evidence in {path}')
+              return json.loads(m.group(1))
+          base=read('/tmp/d1-scene-base.log')
+          current=read('/tmp/d1-scene-current.log')
+          result={
+              'base_initial_usec':base['initial_usec'],
+              'current_initial_usec':current['initial_usec'],
+              'base_step_p50_usec':base['step_p50_usec'],
+              'current_step_p50_usec':current['step_p50_usec'],
+              'base_step_p95_usec':base['step_p95_usec'],
+              'current_step_p95_usec':current['step_p95_usec'],
+              'base_step_max_usec':base['step_max_usec'],
+              'current_step_max_usec':current['step_max_usec'],
+              'base_peak_process_work_ms':base.get('peak_process_work_ms',0),
+              'current_peak_process_work_ms':current.get('peak_process_work_ms',0),
+              'base_peak_frame_ms':base.get('peak_frame_ms',0),
+              'current_peak_frame_ms':current.get('peak_frame_ms',0),
+              'current_lod_fallback_chunk_count':current['lod_fallback_chunk_count'],
+          }
+          print('ISSUE108_D1_AB_EVIDENCE='+json.dumps(result,separators=(',',':')))
+          PY
+
+      - name: Phase D live regression
+        shell: bash
+        run: |
+          set -o pipefail
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_phase_d_live_integration_tests.gd 2>&1 | tee /tmp/phase-d.log
+          grep -q 'ISSUE108_PHASE_D_PASS' /tmp/phase-d.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/phase-d.log
+          ! grep -q 'ERROR: FAIL:' /tmp/phase-d.log
+
+      - name: Placement and shared-surface regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 180s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/p3_0d_entity_placement_tests.gd 2>&1 | tee /tmp/placement.log
+          grep -q 'P3_0D_PLACEMENT_PASS' /tmp/placement.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/placement.log
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/experiments/global_shared_surface_qualification.gd 2>&1 | tee /tmp/shared-global.log
+          grep -q 'GLOBAL_SHARED_SURFACE_PASS' /tmp/shared-global.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/shared-global.log
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/experiments/p1_incremental_shared_surface_qualification.gd 2>&1 | tee /tmp/shared-incremental.log
+          grep -q 'P1_INCREMENTAL_SHARED_PASS' /tmp/shared-incremental.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/shared-incremental.log
+
+      - name: Pre-D C B regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_pre_d_local_frame_tests.gd 2>&1 | tee /tmp/pre-d.log
+          grep -q 'ISSUE108_PRE_D_PASS' /tmp/pre-d.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/pre-d.log
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_phase_c_projection_recovery_tests.gd 2>&1 | tee /tmp/phase-c.log
+          grep -q 'ISSUE108_PHASE_C_PASS' /tmp/phase-c.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/phase-c.log
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_phase_b_pure_effect_tests.gd 2>&1 | tee /tmp/phase-b.log
+          grep -q 'ISSUE108_PHASE_B_PASS' /tmp/phase-b.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/phase-b.log
+
+      - name: Canonical validation
+        shell: bash
+        run: |
+          set -o pipefail
+          GODOT_BIN=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64 bash scripts/validate.sh 2>&1 | tee /tmp/validate.log
+          grep -q 'VALIDATION_PASS' /tmp/validate.log
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue108-d1-evidence
+          path: |
+            /tmp/import.log
+            /tmp/d1.log
+            /tmp/d1-scene-current.log
+            /tmp/d1-scene-base.log
+            /tmp/d1-base-import.log
+            /tmp/phase-d.log
+            /tmp/placement.log
+            /tmp/shared-global.log
+            /tmp/shared-incremental.log
+            /tmp/pre-d.log
+            /tmp/phase-c.log
+            /tmp/phase-b.log
+            /tmp/validate.log

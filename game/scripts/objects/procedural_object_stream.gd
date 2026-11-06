@@ -7,6 +7,7 @@ const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 const RegistryScript := preload("res://scripts/modding/content_definition_registry.gd")
 const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const RegionGenerationJob := preload("res://scripts/objects/procedural_object_region_generation_job.gd")
+const ProjectionSourceGenerationJob := preload("res://scripts/objects/procedural_object_projection_source_generation_job.gd")
 const RockMeshAdapter := preload("res://scripts/objects/procedural_rock_mesh_adapter.gd")
 const StaticBatchBuilder := preload("res://scripts/objects/procedural_object_static_batch.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
@@ -14,6 +15,7 @@ const FIELD := preload("res://scripts/terrain/sdf_world.gd")
 const StateServiceScript := preload("res://scripts/objects/procedural_object_state_service.gd")
 const StateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 const EntityCommandServiceScript := preload("res://scripts/entities/entity_command_service.gd")
+const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 const MAX_RESIDENT_REGIONS := 25
 const MAX_PENDING_REGION_PUBLICATIONS := 25
 const MAX_REGION_PUBLICATIONS_PER_FRAME := 1
@@ -60,11 +62,13 @@ var _last_entity_command_metrics: Dictionary = {}
 var _last_reconstruction_usec := 0
 var debug_fail_next_visual_publication := false
 var _debug_fail_visual_request_serial := -1
+var _perf_trace_enabled := false
 
 
 func initialize(seed_value: int, world_identifier: String, package_roots: Array[String] = [], object_state_directory: String = "") -> Dictionary:
 	_clear_region_nodes()
 	initialized = false
+	_perf_trace_enabled = PerformanceTrace.is_enabled()
 	registry = null
 	_definition_ids.clear()
 	world_seed = seed_value
@@ -490,6 +494,11 @@ func publish_region(
 		"publication_usec": Time.get_ticks_usec() - publication_started_usec,
 		"batch_vertex_count": int(batch_result.get("vertex_count", 0)),
 	}
+	if _perf_trace_enabled and int(_last_region_metrics["publication_usec"]) >= PerformanceTrace.min_usec():
+		var trace_metrics := _last_region_metrics.duplicate(true)
+		trace_metrics.erase("region_key")
+		trace_metrics["region"] = [region_key.x, region_key.y]
+		PerformanceTrace.emit("object_region_publish", trace_metrics)
 	_peak_region_generation_usec = maxi(_peak_region_generation_usec, int(_last_region_metrics["generation_usec"]))
 	_peak_mesh_build_usec = maxi(_peak_mesh_build_usec, mesh_build_elapsed_usec)
 	_peak_batch_build_usec = maxi(_peak_batch_build_usec, batch_elapsed_usec)
@@ -923,6 +932,128 @@ func get_visible_instance_count() -> int:
 
 func get_active_region_count() -> int:
 	return _regions.size()
+
+
+func create_projection_source_generation_job(
+	region_key: Vector2i
+) -> RefCounted:
+	if not initialized or registry == null:
+		return null
+	return ProjectionSourceGenerationJob.new(
+		world_seed, world_id, region_key, registry
+	)
+
+
+func finalize_authoritative_region_projection_source(
+	region_key: Vector2i,
+	generated: Dictionary
+) -> Dictionary:
+	var finalize_started_usec := Time.get_ticks_usec()
+	var base_build_usec := 0
+	var state_resolution_usec := 0
+	if not initialized or state_service == null 		or not bool(state_service.get("initialized")):
+		return {"ok": false, "reason": "object_projection_source_unavailable"}
+	if not generated.get("ok", false) 		or Vector2i(generated.get("region_key", region_key)) != region_key:
+		return {
+			"ok": false,
+			"reason": "object_projection_region_generation_failed:%s" 				% generated.get("reason", "invalid"),
+		}
+
+	var base_instances: Array[Dictionary] = []
+	var base_started_usec := Time.get_ticks_usec()
+	if entity_command_service != null 		and bool(entity_command_service.get("initialized")):
+		if not entity_command_service.has_method(
+			"build_projection_region_base_instances"
+		):
+			return {
+				"ok": false,
+				"reason": "object_projection_readonly_adapter_unavailable",
+			}
+		var built: Dictionary = entity_command_service.call(
+			"build_projection_region_base_instances", region_key, generated
+		)
+		if not built.get("ok", false):
+			return {
+				"ok": false,
+				"reason": "object_projection_region_reconstruction_failed:%s" 					% built.get("reason", "unknown"),
+			}
+		for value in built.get("instances", []):
+			if typeof(value) == TYPE_DICTIONARY:
+				base_instances.append((value as Dictionary).duplicate(true))
+	else:
+		for value in generated.get("instances", []):
+			if typeof(value) == TYPE_DICTIONARY:
+				base_instances.append((value as Dictionary).duplicate(true))
+		# Explicit placed entities require command-schema reconstruction. A
+		# legacy pre-command save can project deterministic procedural content.
+		var placed: Dictionary = state_service.snapshot.get(
+			"placed_entities", {}
+		)
+		if not placed.is_empty():
+			return {
+				"ok": false,
+				"reason": "object_projection_command_migration_required",
+			}
+
+	base_build_usec = Time.get_ticks_usec() - base_started_usec
+	var active: Array[Dictionary] = []
+	var resolve_started_usec := Time.get_ticks_usec()
+	var revisions: Dictionary = {}
+	for base in base_instances:
+		var resolved: Dictionary = state_service.resolve_instance(base)
+		if not resolved.get("ok", false):
+			return {
+				"ok": false,
+				"reason": "object_projection_resolution_failed:%s" 					% resolved.get("reason", "unknown"),
+			}
+		if resolved.get("deleted", false):
+			continue
+		var instance: Dictionary = resolved["instance"]
+		active.append(instance.duplicate(true))
+		var instance_id := String(instance.get("instance_id", ""))
+		revisions[instance_id] = int(
+			state_service.get_entity_revision(instance_id)
+		)
+	active.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return String(a.get("instance_id", "")) 			< String(b.get("instance_id", ""))
+	)
+	state_resolution_usec = Time.get_ticks_usec() - resolve_started_usec
+	var total_usec := Time.get_ticks_usec() - finalize_started_usec
+	var timings := {
+		"base_build_usec": base_build_usec,
+		"state_resolution_usec": state_resolution_usec,
+		"total_usec": total_usec,
+	}
+	if _perf_trace_enabled and total_usec >= PerformanceTrace.min_usec():
+		PerformanceTrace.emit("effect_source_finalize_detail", {
+			"region": [region_key.x, region_key.y],
+			"base_instance_count": base_instances.size(),
+			"active_instance_count": active.size(),
+			"base_build_usec": base_build_usec,
+			"state_resolution_usec": state_resolution_usec,
+			"total_usec": total_usec,
+		})
+	return {
+		"ok": true,
+		"region_key": region_key,
+		"world_revision": int(state_service.get_revision()),
+		"instances": active,
+		"source_revisions": revisions,
+		"generation_worker_usec": int(generated.get("worker_usec", 0)),
+		"timings_usec": timings,
+	}
+
+
+func get_authoritative_region_projection_source(
+	region_key: Vector2i
+) -> Dictionary:
+	var job := create_projection_source_generation_job(region_key)
+	if job == null:
+		return {"ok": false, "reason": "object_projection_source_unavailable"}
+	job.run()
+	return finalize_authoritative_region_projection_source(
+		region_key, job.result
+	)
 
 
 func get_region_instance_records(region_key: Vector2i) -> Array[Dictionary]:
