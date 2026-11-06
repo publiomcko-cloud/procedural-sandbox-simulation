@@ -207,6 +207,7 @@ func _create_isolated_scene() -> Node3D:
 	var scene: Node3D = load("res://scenes/terrain_demo.tscn").instantiate()
 	scene.set("world_save_store", SaveStore.new(fixture_root.path_join("terrain")))
 	scene.set("object_state_directory_override", ProjectSettings.globalize_path(fixture_root.path_join("entities")))
+	scene.set("terrain_effect_directory_override", ProjectSettings.globalize_path(fixture_root.path_join("terrain-object-effects")))
 	var package_roots: Array[String] = ["res://mods/first-party"]
 	scene.set("object_package_roots_override", package_roots)
 	root.add_child(scene)
