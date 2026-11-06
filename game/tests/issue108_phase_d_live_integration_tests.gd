@@ -5,6 +5,8 @@ const StateService := preload("res://scripts/objects/procedural_object_state_ser
 const CommandService := preload("res://scripts/entities/entity_command_service.gd")
 const StateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 const EffectRuntime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
+const ProjectionStore := preload("res://scripts/terrain/terrain_object_effect_projection_store.gd")
+const ProjectionContract := preload("res://scripts/terrain/terrain_object_effect_projection_contract.gd")
 const Effect := preload("res://scripts/terrain/terrain_object_effect.gd")
 const Brush := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
@@ -359,6 +361,65 @@ func _run() -> void:
 			and String(restored_effect["effect_id"])
 				== String(source_effect["effect_id"]),
 		"restore reintroduces the same stable live imprint identity"
+	)
+
+	# Phase-C projection files are derived caches. A known older schema is
+	# preserved and ignored, then the next current-schema save advances the
+	# generation rather than treating the old cache as corruption.
+	var obsolete_root := ProjectSettings.globalize_path(
+		ROOT + "/obsolete-projection"
+	)
+	var obsolete_scope := obsolete_root.path_join("regions/r_0_0")
+	DirAccess.make_dir_recursive_absolute(obsolete_scope)
+	var obsolete_payload := "{}"
+	var obsolete_envelope := {
+		"format": ProjectionStore.FORMAT_ID,
+		"schema_version": 1,
+		"generation": 1,
+		"payload_json": obsolete_payload,
+		"payload_sha256": obsolete_payload.sha256_text(),
+	}
+	var obsolete_path := obsolete_scope.path_join(
+		"projection-00000001.json"
+	)
+	var obsolete_file := FileAccess.open(obsolete_path, FileAccess.WRITE)
+	if obsolete_file != null:
+		obsolete_file.store_string(
+			JSON.stringify(obsolete_envelope, "", true, true)
+		)
+		obsolete_file.flush()
+		obsolete_file.close()
+	var projection_store := ProjectionStore.new(obsolete_root)
+	projection_store.configure(
+		WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION
+	)
+	var obsolete_load: Dictionary = projection_store.load_scope(
+		Vector2i.ZERO
+	)
+	_check(
+		obsolete_load.get("ok", false)
+			and not obsolete_load.get("found", true)
+			and int(
+				obsolete_load.get(
+					"ignored_incomplete_generations", 0
+				)
+			) == 1
+			and FileAccess.file_exists(obsolete_path),
+		"obsolete derived projection schema is preserved and scheduled for rebuild"
+	)
+	var rebuilt_empty := ProjectionContract.empty_snapshot(
+		WORLD_ID,
+		WORLD_SEED,
+		Field.GENERATOR_VERSION,
+		Vector2i.ZERO
+	)
+	var rebuilt_save: Dictionary = projection_store.save_snapshot(
+		rebuilt_empty
+	)
+	_check(
+		rebuilt_save.get("ok", false)
+			and int(rebuilt_save.get("generation", -1)) == 2,
+		"current projection rebuild advances past preserved obsolete generation"
 	)
 
 	evidence = {
