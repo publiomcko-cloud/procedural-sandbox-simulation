@@ -413,6 +413,13 @@ func storage_generation_for_scope(region_key: Vector2i) -> int:
 	))
 
 
+func get_scope_indexed_chunk_ids(region_key: Vector2i) -> Array[String]:
+	var scope_id := Contract.scope_id_for_region(region_key)
+	if not _scope_indexes.has(scope_id):
+		return []
+	return _scope_indexes[scope_id].get_all_indexed_chunk_ids()
+
+
 func get_loaded_scope_ids() -> Array[String]:
 	var ids: Array[String] = []
 	for scope_id in _scopes:
