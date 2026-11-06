@@ -190,7 +190,7 @@ func _create_isolated_scene() -> Node3D:
 	var scene: Node3D = load("res://scenes/terrain_demo.tscn").instantiate()
 	scene.set("world_save_store", SaveStore.new(fixture_root.path_join("terrain")))
 	scene.set("object_state_directory_override", ProjectSettings.globalize_path(fixture_root.path_join("entities")))
-	var package_roots: Array[String] = []
+	var package_roots: Array[String] = ["res://mods/first-party"]
 	scene.set("object_package_roots_override", package_roots)
 	root.add_child(scene)
 	if not await _wait_for_scene_publication(scene):
@@ -212,7 +212,7 @@ func _create_isolated_scene() -> Node3D:
 func _verify_stream_restart(entity_id: String, expected_position_mm: Vector3i) -> void:
 	var restarted_stream: Node = ObjectStream.new()
 	root.add_child(restarted_stream)
-	var package_roots: Array[String] = []
+	var package_roots: Array[String] = ["res://mods/first-party"]
 	var initialized: Dictionary = restarted_stream.initialize(424242, "sandbox-default", package_roots, ProjectSettings.globalize_path(fixture_root.path_join("entities")))
 	_check(initialized.get("ok", false), "fresh object-stream service reopens the isolated persisted entity store")
 	if not initialized.get("ok", false):
