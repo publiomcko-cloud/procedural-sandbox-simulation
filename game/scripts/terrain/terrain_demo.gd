@@ -246,13 +246,18 @@ func _ready() -> void:
 	if object_initialization.get("ok", false):
 		_procedural_object_status = "Procedural objects ready"
 		terrain_object_effect_runtime = TerrainObjectEffectRuntimeScript.new()
+		var effective_effect_directory := terrain_object_effect_directory_override
+		if effective_effect_directory.is_empty() 			and not object_state_directory_override.is_empty():
+			effective_effect_directory = object_state_directory_override.path_join(
+				"terrain-object-effects"
+			)
 		var effect_initialization: Dictionary = terrain_object_effect_runtime.initialize(
 			world_id,
 			world_seed,
 			Field.GENERATOR_VERSION,
 			object_stream.state_service,
 			object_stream.registry,
-			terrain_object_effect_directory_override
+			effective_effect_directory
 		)
 		if effect_initialization.get("ok", false):
 			_terrain_object_effect_status = "Terrain object effects ready"
