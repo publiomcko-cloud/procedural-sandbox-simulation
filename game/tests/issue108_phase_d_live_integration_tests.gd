@@ -244,6 +244,7 @@ func _run() -> void:
 	)
 
 	var first_hash := String(prepared_left.get("snapshot_sha256", ""))
+	runtime.invalidate_source_region(Vector2i.ZERO)
 	fake.transform_translation(Vector3i(-350, 100, 0))
 	var transformed: Dictionary = runtime.prepare_chunk_snapshot(
 		ledger.get_meshing_snapshot_for_chunk(Vector2i.ZERO, left_coordinate),
@@ -256,6 +257,7 @@ func _run() -> void:
 		"source transform revision invalidates and rebuilds live effect snapshot"
 	)
 
+	runtime.invalidate_source_region(Vector2i.ZERO)
 	fake.set_active(false)
 	var deleted: Dictionary = runtime.prepare_chunk_snapshot(
 		ledger.get_meshing_snapshot_for_chunk(Vector2i.ZERO, left_coordinate),
@@ -267,6 +269,7 @@ func _run() -> void:
 			and int(deleted.get("effect_count", -1)) == 0,
 		"source delete removes live terrain effect from the next snapshot"
 	)
+	runtime.invalidate_source_region(Vector2i.ZERO)
 	fake.set_active(true)
 	var restored: Dictionary = runtime.prepare_chunk_snapshot(
 		ledger.get_meshing_snapshot_for_chunk(Vector2i.ZERO, left_coordinate),
