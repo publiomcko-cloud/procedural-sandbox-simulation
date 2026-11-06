@@ -100,6 +100,9 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 		"ignored_incomplete_generations": int(
 			loaded.get("ignored_incomplete_generations", 0)
 		),
+		"legacy_rebuild_required": bool(
+			loaded.get("legacy_rebuild_required", false)
+		),
 	}
 
 
