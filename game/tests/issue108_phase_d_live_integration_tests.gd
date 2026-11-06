@@ -12,6 +12,7 @@ const Brush := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const Mesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
+const Lod01Mesher := preload("res://scripts/terrain/lod01_chunk_mesher.gd")
 const Shared := preload("res://scripts/terrain/shared_surface_boundary_authority.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 
@@ -184,6 +185,29 @@ func _run() -> void:
 	_check(
 		mesh_changed,
 		"terrain-object effect changes the authoritative terrain mesh output"
+	)
+
+	var lod1_base: Dictionary = Lod01Mesher.build_chunk_cpu_data(
+		WORLD_SEED,
+		source_region,
+		coordinate,
+		base_snapshot
+	)
+	var lod1_live: Dictionary = Lod01Mesher.build_chunk_cpu_data(
+		WORLD_SEED,
+		source_region,
+		coordinate,
+		live_snapshot
+	)
+	_check(
+		lod1_base.get("valid", false)
+			and lod1_live.get("valid", false),
+		"LOD1 mesher accepts the same immutable effect snapshot as LOD0"
+	)
+	var lod1_changed := int(lod1_base.get("triangle_count", -1)) 		!= int(lod1_live.get("triangle_count", -1)) 		or _points_sha(lod1_base.get("positions", PackedVector3Array())) 			!= _points_sha(lod1_live.get("positions", PackedVector3Array()))
+	_check(
+		lod1_changed,
+		"terrain-object effect changes LOD1 geometry through the shared sampler"
 	)
 
 	# Shared X seam: build one deterministic edge imprint and require the shared
@@ -435,6 +459,8 @@ func _run() -> void:
 		"fill_then_imprint_density": fill_then_imprint_density,
 		"base_triangles": int(base_mesh.get("triangle_count", 0)),
 		"live_triangles": int(live_mesh.get("triangle_count", 0)),
+		"lod1_base_triangles": int(lod1_base.get("triangle_count", 0)),
+		"lod1_live_triangles": int(lod1_live.get("triangle_count", 0)),
 		"transform_affected_chunks": int(
 			transformed_reconcile.get("affected_chunk_count", 0)
 		),
