@@ -9,6 +9,7 @@ on:
       - 'game/scripts/terrain/terrain_object_effect*.gd'
       - 'game/scripts/terrain/terrain_demo.gd'
       - 'game/tests/issue108_d1_runtime_performance_tests.gd'
+      - 'game/tests/issue108_d1_scene_streaming_performance_tests.gd'
       - 'game/tests/issue108_phase_d_live_integration_tests.gd'
       - 'game/tests/p3_0d_entity_placement_tests.gd'
       - '.github/workflows/issue-108-d1.yml'
@@ -48,6 +49,55 @@ jobs:
           grep -q 'ISSUE108_D1_PERFORMANCE_PASS' /tmp/d1.log
           ! grep -q 'SCRIPT ERROR:' /tmp/d1.log
           ! grep -q 'ERROR: FAIL:' /tmp/d1.log
+
+      - name: D1 current real-scene streaming benchmark
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 300s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_d1_scene_streaming_performance_tests.gd 2>&1 | tee /tmp/d1-scene-current.log
+          grep -q 'ISSUE108_D1_SCENE_PASS' /tmp/d1-scene-current.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/d1-scene-current.log
+          ! grep -q 'ERROR: FAIL:' /tmp/d1-scene-current.log
+
+      - name: D1 base real-scene streaming benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach /tmp/issue108-d1-base 6017dc95988455bf5f39af8f77523d95e8c156c1
+          cp game/tests/issue108_d1_scene_streaming_performance_tests.gd /tmp/issue108-d1-base/game/tests/
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path /tmp/issue108-d1-base/game --import 2>&1 | tee /tmp/d1-base-import.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/d1-base-import.log
+          timeout --signal=TERM 300s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path /tmp/issue108-d1-base/game --script res://tests/issue108_d1_scene_streaming_performance_tests.gd 2>&1 | tee /tmp/d1-scene-base.log
+          grep -q 'ISSUE108_D1_SCENE_PASS' /tmp/d1-scene-base.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/d1-scene-base.log
+          ! grep -q 'ERROR: FAIL:' /tmp/d1-scene-base.log
+
+      - name: D1 A/B scene metrics
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, re
+          def read(path):
+              data=open(path,encoding='utf-8').read()
+              m=re.search(r'ISSUE108_D1_SCENE_EVIDENCE=(\{.*\})',data)
+              if not m:
+                  raise SystemExit(f'missing evidence in {path}')
+              return json.loads(m.group(1))
+          base=read('/tmp/d1-scene-base.log')
+          current=read('/tmp/d1-scene-current.log')
+          result={
+              'base_initial_usec':base['initial_usec'],
+              'current_initial_usec':current['initial_usec'],
+              'base_step_p50_usec':base['step_p50_usec'],
+              'current_step_p50_usec':current['step_p50_usec'],
+              'base_step_p95_usec':base['step_p95_usec'],
+              'current_step_p95_usec':current['step_p95_usec'],
+              'base_step_max_usec':base['step_max_usec'],
+              'current_step_max_usec':current['step_max_usec'],
+              'current_lod_fallback_chunk_count':current['lod_fallback_chunk_count'],
+          }
+          print('ISSUE108_D1_AB_EVIDENCE='+json.dumps(result,separators=(',',':')))
+          PY
 
       - name: Phase D live regression
         shell: bash
@@ -101,6 +151,9 @@ jobs:
           path: |
             /tmp/import.log
             /tmp/d1.log
+            /tmp/d1-scene-current.log
+            /tmp/d1-scene-base.log
+            /tmp/d1-base-import.log
             /tmp/phase-d.log
             /tmp/placement.log
             /tmp/shared-global.log
