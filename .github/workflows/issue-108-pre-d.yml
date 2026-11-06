@@ -57,6 +57,20 @@ jobs:
           ! grep -q 'SCRIPT ERROR:' /tmp/phase-d.log
           ! grep -q 'ERROR: FAIL:' /tmp/phase-d.log
 
+      - name: Placement and shared-surface regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 180s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/p3_0d_entity_placement_tests.gd 2>&1 | tee /tmp/placement.log
+          grep -q 'P3_0D_PLACEMENT_PASS' /tmp/placement.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/placement.log
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/experiments/global_shared_surface_qualification.gd 2>&1 | tee /tmp/shared-global.log
+          grep -q 'GLOBAL_SHARED_SURFACE_PASS' /tmp/shared-global.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/shared-global.log
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/experiments/p1_incremental_shared_surface_qualification.gd 2>&1 | tee /tmp/shared-incremental.log
+          grep -q 'P1_INCREMENTAL_SHARED_PASS' /tmp/shared-incremental.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/shared-incremental.log
+
       - name: Phase C recovery regression
         shell: bash
         run: |
@@ -88,6 +102,9 @@ jobs:
             /tmp/import.log
             /tmp/pre-d.log
             /tmp/phase-d.log
+            /tmp/placement.log
+            /tmp/shared-global.log
+            /tmp/shared-incremental.log
             /tmp/phase-c.log
             /tmp/phase-b.log
             /tmp/validate.log
