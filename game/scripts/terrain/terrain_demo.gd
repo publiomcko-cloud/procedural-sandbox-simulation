@@ -1114,16 +1114,17 @@ func _reconcile_region_window(force: bool = false) -> void:
 		return
 	_last_reconciled_focus = focus_region_key
 	var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
+	var retained := _region_keys_within_radius(focus_region_key, UNLOAD_RADIUS)
 	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
 		var effect_window: Dictionary = terrain_effect_runtime.update_resident_target_regions(
-			desired
+			retained
 		)
 		if not effect_window.get("ok", false):
 			_terrain_effect_status = "Terrain-object effects unavailable (%s)" % effect_window.get("reason", "unknown")
 			last_stream_error = _terrain_effect_status
 			return
 	var retained_ids: Dictionary = {}
-	for key in _region_keys_within_radius(focus_region_key, UNLOAD_RADIUS):
+	for key in retained:
 		retained_ids[_region_id(key)] = true
 	for id_value in active_regions.keys().duplicate():
 		var id: String = id_value
