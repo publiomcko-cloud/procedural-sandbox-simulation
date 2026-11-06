@@ -249,8 +249,12 @@ static func _apply_coherent_roughness_with_guard(
 	var output := points.duplicate()
 	var maximum_guard := 0.0
 	for index in range(points.size()):
-		if not is_finite(shortest_edges[index]):
-			return _failure("shape_shortest_edge_invalid")
+		var normal: Vector3 = (normals[index] as Vector3).normalized()
+		# _triangulate_polygons preserves the source point buffer, including
+		# vertices clipped out of every published face. Those dead points are not
+		# part of the rendered topology and must not widen the terrain guard.
+		if normal.length_squared() <= 0.5 or not is_finite(shortest_edges[index]):
+			continue
 		var coordinate: Vector3 = points[index]
 		coordinate[anisotropy_axis] *= scale
 		var broad := _value_noise(coordinate * 1.6, seed)
@@ -262,9 +266,7 @@ static func _apply_coherent_roughness_with_guard(
 		var maximum_safe_amplitude := minf(configured_amplitude, shortest_edges[index] * 0.07)
 		maximum_guard = maxf(maximum_guard, maximum_safe_amplitude)
 		displacement = clampf(displacement, -maximum_safe_amplitude, maximum_safe_amplitude)
-		var normal: Vector3 = (normals[index] as Vector3).normalized()
-		if normal.length_squared() > 0.5:
-			output[index] = points[index] + normal * displacement
+		output[index] = points[index] + normal * displacement
 	return {
 		"ok": true,
 		"points": output,
