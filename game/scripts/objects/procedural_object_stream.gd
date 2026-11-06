@@ -58,6 +58,7 @@ var _geometry_cache_hit_count := 0
 var _geometry_cache_miss_count := 0
 var _geometry_cache_eviction_count := 0
 var _visual_mesh_commits_last_tick := 0
+var _peak_visual_mesh_commits_per_tick := 0
 var _visual_mesh_commit_count := 0
 var _visual_mesh_commit_total_usec := 0
 var _visual_mesh_commit_peak_usec := 0
@@ -104,6 +105,7 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_geometry_cache_miss_count = 0
 	_geometry_cache_eviction_count = 0
 	_visual_mesh_commits_last_tick = 0
+	_peak_visual_mesh_commits_per_tick = 0
 	_visual_mesh_commit_count = 0
 	_visual_mesh_commit_total_usec = 0
 	_visual_mesh_commit_peak_usec = 0
@@ -253,6 +255,9 @@ func process_queued_publications() -> int:
 		_process_completed_region_generation_jobs()
 		_dispatch_region_generation_jobs()
 	_peak_publications_per_process_tick = maxi(_peak_publications_per_process_tick, _publications_last_process_tick)
+	_peak_visual_mesh_commits_per_tick = maxi(
+		_peak_visual_mesh_commits_per_tick, _visual_mesh_commits_last_tick
+	)
 	return _publications_last_process_tick
 
 
@@ -1341,7 +1346,9 @@ func get_performance_snapshot() -> Dictionary:
 			+ _region_visual_preparations.size(),
 		"region_generation_jobs_in_flight": _region_generation_jobs.size(),
 		"visual_preparation_count": _region_visual_preparations.size(),
+		"visual_mesh_commit_budget_per_frame": MAX_GEOMETRY_MESH_COMMITS_PER_FRAME,
 		"visual_mesh_commits_last_tick": _visual_mesh_commits_last_tick,
+		"peak_visual_mesh_commits_per_tick": _peak_visual_mesh_commits_per_tick,
 		"visual_mesh_commit_count": _visual_mesh_commit_count,
 		"visual_mesh_commit_total_usec": _visual_mesh_commit_total_usec,
 		"visual_mesh_commit_peak_usec": _visual_mesh_commit_peak_usec,
