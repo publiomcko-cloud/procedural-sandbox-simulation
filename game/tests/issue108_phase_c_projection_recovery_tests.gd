@@ -145,12 +145,17 @@ func _run() -> void:
 	)
 	_check(FileAccess.file_exists(crash_final) and not FileAccess.file_exists(crash_tmp), "temporary recovery promotes regional generation back to final path")
 	var recovered_effect := _effect_for_source(recovered.get_scope_snapshot(Vector2i.ZERO), entity_id)
-	var initial_effect_sha := ProjectionContract.canonical_sha256(initial_effect)
-	var recovered_effect_sha := ProjectionContract.canonical_sha256(recovered_effect)
+	var initial_effect_json := JSON.stringify(initial_effect, "", true, true)
+	var recovered_effect_json := JSON.stringify(recovered_effect, "", true, true)
+	var initial_effect_sha := initial_effect_json.sha256_text()
+	var recovered_effect_sha := recovered_effect_json.sha256_text()
 	if initial_effect_sha != recovered_effect_sha 		or recovered_effect.get("content_pin", {}) != initial_effect.get("content_pin", {}) 		or recovered_effect.get("terrain_interaction_pin", {}) != initial_effect.get("terrain_interaction_pin", {}):
 		print("ISSUE108_PHASE_C_RECOVERY_CANONICAL_DIAGNOSTIC=" + JSON.stringify({
 			"initial_sha": initial_effect_sha,
 			"recovered_sha": recovered_effect_sha,
+			"canonical_json_difference": _first_string_difference(
+				initial_effect_json, recovered_effect_json
+			),
 			"content_pin_equal": recovered_effect.get("content_pin", {}) == initial_effect.get("content_pin", {}),
 			"interaction_pin_equal": recovered_effect.get("terrain_interaction_pin", {}) == initial_effect.get("terrain_interaction_pin", {}),
 			"initial_content_pin": initial_effect.get("content_pin", {}),
@@ -355,6 +360,25 @@ func _effect_for_source(scope_snapshot: Dictionary, entity_id: String) -> Dictio
 		if String(effect.get("source_instance_id", "")) == entity_id:
 			return effect.duplicate(true)
 	return {}
+
+
+func _first_string_difference(first: String, second: String) -> Dictionary:
+	var shared := mini(first.length(), second.length())
+	var offset := -1
+	for index in range(shared):
+		if first.unicode_at(index) != second.unicode_at(index):
+			offset = index
+			break
+	if offset < 0:
+		offset = shared
+	var start := maxi(0, offset - 80)
+	return {
+		"offset": offset,
+		"first_length": first.length(),
+		"second_length": second.length(),
+		"first_slice": first.substr(start, mini(180, first.length() - start)),
+		"second_slice": second.substr(start, mini(180, second.length() - start)),
+	}
 
 
 func _set_component(command_id: String, entity_id: String, world_revision: int, entity_revision: int, component_id: String, component: Dictionary) -> Dictionary:
