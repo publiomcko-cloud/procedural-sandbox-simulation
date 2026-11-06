@@ -18,6 +18,8 @@ const SharedBoundaryMeshJob := preload("res://scripts/terrain/shared_surface_bou
 const SharedZBoundaryMeshJob := preload("res://scripts/terrain/shared_surface_z_boundary_mesh_job.gd")
 const SharedCornerMeshJob := preload("res://scripts/terrain/shared_surface_corner_mesh_job.gd")
 const EntityStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
+const TerrainObjectEffectRuntimeScript := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
+const TerrainObjectEffect := preload("res://scripts/terrain/terrain_object_effect.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -84,6 +86,9 @@ var _persistence_blocked := false
 var _procedural_object_status := "Procedural objects unavailable"
 var object_state_directory_override := ""
 var object_package_roots_override: Array[String] = []
+var terrain_object_effect_directory_override := ""
+var terrain_object_effect_runtime: RefCounted
+var _terrain_object_effect_status := "Terrain object effects unavailable"
 var _selected_object_index := 0
 var _selected_object_id := ""
 var _object_state_action_status := "Entities: Ctrl+click select; M twice migrates entity save; B place; F6 cycle; F7 edit; F8 delete; F9 restore"
@@ -240,8 +245,24 @@ func _ready() -> void:
 	var object_initialization: Dictionary = object_stream.initialize(world_seed, world_id, object_package_roots_override, object_state_directory_override)
 	if object_initialization.get("ok", false):
 		_procedural_object_status = "Procedural objects ready"
+		terrain_object_effect_runtime = TerrainObjectEffectRuntimeScript.new()
+		var effect_initialization: Dictionary = terrain_object_effect_runtime.initialize(
+			world_id,
+			world_seed,
+			Field.GENERATOR_VERSION,
+			object_stream.state_service,
+			object_stream.registry,
+			terrain_object_effect_directory_override
+		)
+		if effect_initialization.get("ok", false):
+			_terrain_object_effect_status = "Terrain object effects ready"
+		else:
+			_terrain_object_effect_status = "Terrain object effects unavailable (%s)" % effect_initialization.get("reason", "unknown")
+			terrain_object_effect_runtime = null
 	else:
 		_procedural_object_status = "Procedural objects unavailable (%s)" % object_initialization.get("reason", "unknown")
+		_terrain_object_effect_status = "Terrain object effects unavailable (object runtime unavailable)"
+		terrain_object_effect_runtime = null
 	_create_placement_target_marker()
 	terrain_mesh_template.mesh = null
 	terrain_mesh_template.visible = false
@@ -524,6 +545,7 @@ func _place_entity_under_crosshair() -> void:
 	_placement_target_normal = target["normal"]
 	_update_placement_marker_visual()
 	_selected_object_id = String(result.get("entity_id", ""))
+	_on_entity_effect_source_changed(region_key, result)
 	_object_state_action_status = "ENTITY_PLACE committed %s at %s target %s (anchor mm %s; world/entity revisions %d/%d; visual %s)" % [_selected_object_id, _aim_description(_last_placement_aim_mode), region_key, position_mm, int(result.get("world_revision", -1)), int(result.get("entity_revision", -1)), result.get("visual_status", "unknown")]
 
 
@@ -690,26 +712,169 @@ func _handle_entity_history_navigation(operation: String) -> void:
 		_object_state_action_status = "%s rejected: no %s operation is available (history %d/%d)" % [operation, "applied" if operation == "ENTITY_UNDO" else "undone", int(summary.get("cursor", 0)), int(summary.get("depth", 0))]
 		return
 	var entity_id := String(target.get("entity_id", ""))
+	var source_region := _entity_region_for_effect(entity_id)
 	var command := _entity_command_base(operation, _new_entity_command_id(), entity_id)
 	command["history_entry_id"] = String(target.get("history_entry_id", ""))
 	var result: Dictionary = object_stream.dispatch_entity_command(command)
 	if not result.get("ok", false):
 		_object_state_action_status = "%s rejected: %s" % [operation, result.get("reason", "unknown")]
 		return
+	if source_region.get("ok", false):
+		_on_entity_effect_source_changed(source_region["region_key"], result)
 	_selected_object_id = entity_id
 	_object_state_action_status = "%s committed for %s at world/entity revisions %d/%d; history %d/%d; visual %s" % [operation, entity_id, int(result.get("world_revision", -1)), int(result.get("entity_revision", -1)), int(result.get("history_cursor", 0)), int(result.get("history_depth", 0)), result.get("visual_status", "unknown")]
 
 
 func _dispatch_entity_component(entity_id: String, component_id: String, component: Dictionary) -> Dictionary:
+	var source_region := _entity_region_for_effect(entity_id)
 	var command_id := _new_entity_command_id()
 	var command := _entity_command_base("ENTITY_SET_COMPONENT", command_id, entity_id)
 	command["component_id"] = component_id
 	command["component"] = component
-	return object_stream.dispatch_entity_command(command)
+	var result: Dictionary = object_stream.dispatch_entity_command(command)
+	if result.get("ok", false) and source_region.get("ok", false):
+		_on_entity_effect_source_changed(source_region["region_key"], result)
+	return result
 
 
 func _dispatch_entity_operation(operation: String, entity_id: String) -> Dictionary:
-	return object_stream.dispatch_entity_command(_entity_command_base(operation, _new_entity_command_id(), entity_id))
+	var source_region := _entity_region_for_effect(entity_id)
+	var result: Dictionary = object_stream.dispatch_entity_command(
+		_entity_command_base(operation, _new_entity_command_id(), entity_id)
+	)
+	if result.get("ok", false) and source_region.get("ok", false):
+		_on_entity_effect_source_changed(source_region["region_key"], result)
+	return result
+
+
+func _attach_terrain_object_effect_snapshot(
+	terrain_snapshot: Dictionary,
+	requests: Array
+) -> Dictionary:
+	if terrain_object_effect_runtime == null 		or not bool(terrain_object_effect_runtime.get("initialized")):
+		var unchanged := terrain_snapshot.duplicate(true)
+		unchanged["terrain_object_effects"] = []
+		unchanged["terrain_object_effect_snapshot_sha256"] = ""
+		unchanged["terrain_object_effect_source_world_revision"] = -1
+		unchanged["terrain_object_effect_count"] = 0
+		return unchanged
+	return terrain_object_effect_runtime.attach_to_terrain_snapshot(
+		terrain_snapshot, requests
+	)
+
+
+func _compose_resident_terrain_object_effects(
+	density: float,
+	region_key: Vector2i,
+	local_position: Vector3
+) -> float:
+	if not is_finite(density) 		or terrain_object_effect_runtime == null 		or not bool(terrain_object_effect_runtime.get("initialized")):
+		return density
+	var effects: Array[Dictionary] = terrain_object_effect_runtime.get_resident_effects_for_point(
+		region_key, local_position
+	)
+	for effect in effects:
+		density = TerrainObjectEffect.compose_density_prevalidated(
+			density, effect, region_key, local_position
+		)
+	return density
+
+
+func _entity_region_for_effect(entity_id: String) -> Dictionary:
+	if entity_id.is_empty() or not is_instance_valid(object_stream):
+		return {"ok": false}
+	var command_service: RefCounted = object_stream.get_entity_command_service()
+	if command_service != null and bool(command_service.get("initialized")):
+		var located: Dictionary = command_service.get_entity_region(entity_id)
+		if located.get("ok", false):
+			return located
+	var state: Object = object_stream.state_service
+	if state == null:
+		return {"ok": false}
+	var identity: Dictionary = state.get_deleted_identity(entity_id)
+	if identity.is_empty():
+		var placed: Dictionary = state.snapshot.get("placed_entities", {}).get(
+			entity_id, {}
+		)
+		identity = placed.get("identity", {})
+	if typeof(identity.get("region_key", null)) == TYPE_ARRAY 		and identity["region_key"].size() == 2:
+		var values: Array = identity["region_key"]
+		return {
+			"ok": true,
+			"region_key": Vector2i(int(values[0]), int(values[1])),
+		}
+	return {"ok": false}
+
+
+func _on_entity_effect_source_changed(
+	source_region: Vector2i,
+	command_result: Dictionary
+) -> void:
+	if terrain_object_effect_runtime == null 		or not bool(terrain_object_effect_runtime.get("initialized")) 		or not command_result.get("ok", false):
+		return
+	var reconciled: Dictionary = terrain_object_effect_runtime.reconcile_source_region(
+		source_region
+	)
+	if not reconciled.get("ok", false):
+		_terrain_object_effect_status = "Terrain object effect reconcile failed (%s)" % reconciled.get("reason", "unknown")
+		return
+	_terrain_object_effect_status = "Terrain object effects revision %d; %d affected chunk(s)" % [
+		int(reconciled.get("source_world_revision", -1)),
+		int(reconciled.get("affected_chunk_count", 0)),
+	]
+	_schedule_terrain_object_effect_remesh(
+		reconciled.get("affected_chunks", [])
+	)
+
+
+func _schedule_terrain_object_effect_remesh(affected_chunks: Array) -> void:
+	if affected_chunks.is_empty():
+		return
+	# Existing edit/global transactions are revision-pinned. Their next dispatch
+	# or completion will supersede/restart when it observes the entity revision.
+	if global_rebuild_pending or not _edit_transaction.is_empty():
+		return
+	var by_region: Dictionary = {}
+	for descriptor_value in affected_chunks:
+		if typeof(descriptor_value) != TYPE_DICTIONARY:
+			continue
+		var descriptor: Dictionary = descriptor_value
+		var region_key: Vector2i = descriptor.get(
+			"region_key", Vector2i(2147483647, 2147483647)
+		)
+		var coordinate: Vector2i = descriptor.get(
+			"coordinate", Vector2i(-1, -1)
+		)
+		var id := _region_id(region_key)
+		if not active_regions.has(id) or not ChunkGrid.is_valid_coordinate(coordinate):
+			continue
+		if not by_region.has(id):
+			by_region[id] = {
+				"region_key": region_key,
+				"coordinates": [],
+			}
+		var coordinates: Array = by_region[id]["coordinates"]
+		if not coordinates.has(coordinate):
+			coordinates.append(coordinate)
+	for id_value in by_region:
+		var id := String(id_value)
+		var entry: Dictionary = by_region[id]
+		var coordinates: Array[Vector2i] = []
+		for coordinate_value in entry["coordinates"]:
+			coordinates.append(coordinate_value)
+		coordinates.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+			return a.y < b.y if a.y != b.y else a.x < b.x
+		)
+		if coordinates.is_empty():
+			continue
+		# Replace any older stage for this region. Its in-flight worker result is
+		# rejected by stage token, while the visible prior mesh remains until the
+		# new partial stage publishes.
+		if loading_regions.has(id):
+			loading_regions.erase(id)
+		_begin_operation("terrain_object_effect")
+		_begin_region_stage(entry["region_key"], "partial", coordinates)
+	_sync_world_state_index()
 
 
 func _entity_command_base(operation: String, command_id: String, entity_id: String) -> Dictionary:
@@ -971,6 +1136,8 @@ func _reconcile_region_window(force: bool = false) -> void:
 	if not force and focus_region_key == _last_reconciled_focus:
 		return
 	_last_reconciled_focus = focus_region_key
+	if terrain_object_effect_runtime != null 		and bool(terrain_object_effect_runtime.get("initialized")):
+		terrain_object_effect_runtime.release_far_scopes(focus_region_key)
 	var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
 	var retained_ids: Dictionary = {}
 	for key in _region_keys_within_radius(focus_region_key, UNLOAD_RADIUS):
@@ -1128,6 +1295,10 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 		"fallback_by_coordinate": {},
 		"cave_section_enabled": cave_section_enabled,
 		"edit_revision": state.brush_edits.revision,
+		"effect_source_world_revision": object_stream.get_command_world_revision()
+			if terrain_object_effect_runtime != null
+				and bool(terrain_object_effect_runtime.get("initialized"))
+			else -1,
 		"chunk_enqueued_usec": Time.get_ticks_usec(),
 		"retry_count": 0,
 	}
@@ -1187,6 +1358,9 @@ func _process_completed_mesh_jobs() -> void:
 			_pool_queue_wait_usec_samples.append(maxi(0, int(job.worker_started_usec) - int(record["submitted_usec"])))
 		var state: RefCounted = stage["world_state"]
 		if state.brush_edits.revision != int(stage["edit_revision"]):
+			_supersede_region_stage(id)
+			continue
+		if terrain_object_effect_runtime != null 			and bool(terrain_object_effect_runtime.get("initialized")) 			and int(record.get("effect_source_world_revision", -1)) 				!= object_stream.get_command_world_revision():
 			_supersede_region_stage(id)
 			continue
 		var cpu_result: Dictionary
@@ -1313,6 +1487,9 @@ func _dispatch_mesh_jobs() -> void:
 		if state.brush_edits.revision != int(stage["edit_revision"]):
 			_supersede_region_stage(id)
 			continue
+		if terrain_object_effect_runtime != null 			and bool(terrain_object_effect_runtime.get("initialized")) 			and int(stage.get("effect_source_world_revision", -1)) 				!= object_stream.get_command_world_revision():
+			_supersede_region_stage(id)
+			continue
 		var inject_edit_failure: bool = debug_fail_next_mesh_stage and String(stage["purpose"]) == "edit_transaction"
 		var inject_load_failure: bool = debug_fail_next_load_stage and String(stage["purpose"]) == "load"
 		if inject_edit_failure or inject_load_failure:
@@ -1336,6 +1513,18 @@ func _dispatch_mesh_jobs() -> void:
 			var corner_snapshot: Dictionary = SharedBoundaryAuthority.make_xz_corner_snapshot(
 				state.brush_edits, min_region
 			)
+			corner_snapshot = _attach_terrain_object_effect_snapshot(
+				corner_snapshot,
+				[
+					{"region_key": min_region, "coordinate": Vector2i(ChunkGrid.CHUNK_COUNT_X - 1, ChunkGrid.CHUNK_COUNT_Z - 1)},
+					{"region_key": min_region + Vector2i(1, 0), "coordinate": Vector2i(0, ChunkGrid.CHUNK_COUNT_Z - 1)},
+					{"region_key": min_region + Vector2i(0, 1), "coordinate": Vector2i(ChunkGrid.CHUNK_COUNT_X - 1, 0)},
+					{"region_key": min_region + Vector2i(1, 1), "coordinate": Vector2i(0, 0)},
+				]
+			)
+			if not corner_snapshot.get("valid", false):
+				_fail_region_stage(id, "Terrain object effect snapshot failed for shared corner")
+				continue
 			snapshot_meta = corner_snapshot
 			job = SharedCornerMeshJob.new(
 				state.world_seed, min_region, corner_snapshot, submitted_usec,
@@ -1349,6 +1538,16 @@ func _dispatch_mesh_jobs() -> void:
 			var pair_snapshot: Dictionary = SharedBoundaryAuthority.make_x_pair_snapshot(
 				state.brush_edits, left_region, coordinate.y
 			)
+			pair_snapshot = _attach_terrain_object_effect_snapshot(
+				pair_snapshot,
+				[
+					{"region_key": left_region, "coordinate": Vector2i(ChunkGrid.CHUNK_COUNT_X - 1, coordinate.y)},
+					{"region_key": left_region + Vector2i.RIGHT, "coordinate": Vector2i(0, coordinate.y)},
+				]
+			)
+			if not pair_snapshot.get("valid", false):
+				_fail_region_stage(id, "Terrain object effect snapshot failed for shared X boundary")
+				continue
 			snapshot_meta = pair_snapshot
 			job = SharedBoundaryMeshJob.new(
 				state.world_seed, left_region, coordinate.y, pair_snapshot, submitted_usec,
@@ -1362,6 +1561,16 @@ func _dispatch_mesh_jobs() -> void:
 			var z_snapshot: Dictionary = SharedBoundaryAuthority.make_z_pair_snapshot(
 				state.brush_edits, low_region, coordinate.x
 			)
+			z_snapshot = _attach_terrain_object_effect_snapshot(
+				z_snapshot,
+				[
+					{"region_key": low_region, "coordinate": Vector2i(coordinate.x, ChunkGrid.CHUNK_COUNT_Z - 1)},
+					{"region_key": low_region + Vector2i(0, 1), "coordinate": Vector2i(coordinate.x, 0)},
+				]
+			)
+			if not z_snapshot.get("valid", false):
+				_fail_region_stage(id, "Terrain object effect snapshot failed for shared Z boundary")
+				continue
 			snapshot_meta = z_snapshot
 			job = SharedZBoundaryMeshJob.new(
 				state.world_seed, low_region, coordinate.x, z_snapshot, submitted_usec,
@@ -1373,6 +1582,13 @@ func _dispatch_mesh_jobs() -> void:
 			var chunk_snapshot: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
 				stage["region_key"], coordinate
 			)
+			chunk_snapshot = _attach_terrain_object_effect_snapshot(
+				chunk_snapshot,
+				[{"region_key": stage["region_key"], "coordinate": coordinate}]
+			)
+			if not chunk_snapshot.get("valid", false):
+				_fail_region_stage(id, "Terrain object effect snapshot failed for chunk")
+				continue
 			snapshot_meta = chunk_snapshot
 			job = TerrainMeshJob.new(
 				state.world_seed, stage["region_key"], coordinate,
@@ -1414,6 +1630,9 @@ func _dispatch_mesh_jobs() -> void:
 			"snapshot_candidate_count": int(snapshot_meta.get("candidate_operation_count", -1)),
 			"snapshot_raw_candidate_count": int(snapshot_meta.get("raw_candidate_operation_count", snapshot_meta.get("candidate_operation_count", -1))),
 			"snapshot_tile_count": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
+			"effect_source_world_revision": int(snapshot_meta.get("terrain_object_effect_source_world_revision", -1)),
+			"effect_snapshot_sha256": String(snapshot_meta.get("terrain_object_effect_snapshot_sha256", "")),
+			"effect_count": int(snapshot_meta.get("terrain_object_effect_count", 0)),
 		}
 		_peak_mesh_jobs_in_flight = maxi(_peak_mesh_jobs_in_flight, _mesh_jobs.size())
 		if String(stage["purpose"]) == "edit_transaction":
@@ -2234,15 +2453,26 @@ func _sample_world_density(world_position: Vector3) -> float:
 		return -INF
 	var key: Vector2i = mapped["region_key"]
 	var state := _state_for_region(key)
-	return state.sample_density(mapped["local_position"], cave_section_enabled)
+	var local_position: Vector3 = mapped["local_position"]
+	var density: float = state.sample_density(local_position, cave_section_enabled)
+	return _compose_resident_terrain_object_effects(
+		density, key, local_position
+	)
 
 
 func _sample_world_density_from_snapshot(world_position: Vector3, snapshot: Dictionary) -> float:
 	var mapped: Dictionary = SpatialGrid.world_to_region_local(world_position)
 	if not mapped.get("valid", false):
 		return -INF
-	return BrushEditState.sample_density_snapshot(
-		world_seed, mapped["region_key"], mapped["local_position"], cave_section_enabled, snapshot
+	var key: Vector2i = mapped["region_key"]
+	var local_position: Vector3 = mapped["local_position"]
+	var density := BrushEditState.sample_density_snapshot(
+		world_seed, key, local_position, cave_section_enabled, snapshot
+	)
+	if snapshot.has("terrain_object_effects"):
+		return density
+	return _compose_resident_terrain_object_effects(
+		density, key, local_position
 	)
 
 
