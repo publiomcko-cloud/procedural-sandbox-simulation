@@ -110,19 +110,9 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	registry = candidate
 	_initialize_entity_command_service()
 	_mod_count = int(registration.get("mod_count", 0))
-	_definition_ids.clear()
-	_population_rule_ids.clear()
-	_terrain_interaction_rule_ids.clear()
-	for package in discovery.get("packages", []):
-		for definition in package.get("definitions", []):
-			_definition_ids.append(String(definition.get("id", "")))
-		for rule in package.get("population_rules", []):
-			_population_rule_ids.append(String(rule.get("id", "")))
-		for interaction in package.get("terrain_interactions", []):
-			_terrain_interaction_rule_ids.append(String(interaction.get("id", "")))
-	_definition_ids.sort()
-	_population_rule_ids.sort()
-	_terrain_interaction_rule_ids.sort()
+	_definition_ids = candidate.get_definition_ids()
+	_population_rule_ids = candidate.get_population_rule_ids()
+	_terrain_interaction_rule_ids = candidate.get_terrain_interaction_rule_ids()
 	_rock_material = StandardMaterial3D.new()
 	_rock_material.albedo_color = Color(0.38, 0.39, 0.37, 1.0)
 	_rock_material.roughness = 0.94
