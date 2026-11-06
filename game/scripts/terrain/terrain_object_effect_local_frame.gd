@@ -302,6 +302,115 @@ static func validate_frame(value: Variant) -> Dictionary:
 	return {"ok": true, "frame": normalized}
 
 
+static func compile_for_sampling(frame: Dictionary) -> Dictionary:
+	var checked := validate_frame(frame)
+	if not checked.get("ok", false):
+		return checked
+	return compile_prevalidated(checked["frame"])
+
+
+static func compile_prevalidated(frame: Dictionary) -> Dictionary:
+	var normals := PackedVector3Array()
+	var distances := PackedFloat64Array()
+	for plane_value in frame["local_planes"]:
+		var plane: Dictionary = plane_value
+		normals.append(_array_to_vector3(plane["normal"]))
+		distances.append(float(plane["distance_m"]))
+	return {
+		"ok": true,
+		"sampling_frame": {
+			"effect_id": String(frame["effect_id"]),
+			"source_instance_id": String(frame["source_instance_id"]),
+			"source_revision": int(frame["source_revision"]),
+			"source_fingerprint_sha256": String(frame["source_fingerprint_sha256"]),
+			"frame_region_key": Vector2i(
+				int(frame["frame_region_key"][0]),
+				int(frame["frame_region_key"][1])
+			),
+			"blend_radius_m": float(frame["blend_radius_mm"]) / 1000.0,
+			"plane_normals": normals,
+			"plane_distances": distances,
+		},
+	}
+
+
+static func sample_cutter_compiled(
+	sampling_frame: Dictionary,
+	query_region_key: Vector2i,
+	query_local_position: Vector3
+) -> float:
+	if not query_local_position.is_finite():
+		return INF
+	var frame_region: Vector2i = sampling_frame.get(
+		"frame_region_key", Vector2i(2147483647, 2147483647)
+	)
+	var delta := query_region_key - frame_region
+	if absi(delta.x) > MAX_QUERY_REGION_DELTA \
+		or absi(delta.y) > MAX_QUERY_REGION_DELTA:
+		return INF
+	var point_in_frame := Vector3(
+		float(delta.x) * REGION_SIZE_X_M + query_local_position.x,
+		query_local_position.y,
+		float(delta.y) * REGION_SIZE_Z_M + query_local_position.z
+	)
+	var normals: PackedVector3Array = sampling_frame.get(
+		"plane_normals", PackedVector3Array()
+	)
+	var distances: PackedFloat64Array = sampling_frame.get(
+		"plane_distances", PackedFloat64Array()
+	)
+	if normals.is_empty() or normals.size() != distances.size():
+		return INF
+	var maximum_plane_delta := -INF
+	for index in range(normals.size()):
+		maximum_plane_delta = maxf(
+			maximum_plane_delta,
+			normals[index].dot(point_in_frame) - distances[index]
+		)
+	return maximum_plane_delta
+
+
+static func compose_compiled_density(
+	terrain_density: float,
+	sampling_frame: Dictionary,
+	query_region_key: Vector2i,
+	query_local_position: Vector3
+) -> float:
+	if not is_finite(terrain_density):
+		return terrain_density
+	var cutter := sample_cutter_compiled(
+		sampling_frame, query_region_key, query_local_position
+	)
+	if not is_finite(cutter) or cutter >= 0.0:
+		return terrain_density
+	var hard := minf(terrain_density, cutter)
+	var radius := float(sampling_frame.get("blend_radius_m", 0.0))
+	if radius <= 0.0 or -cutter >= radius:
+		return hard
+	var u := clampf((-cutter) / radius, 0.0, 1.0)
+	var weight := u * u * (3.0 - 2.0 * u)
+	return lerpf(terrain_density, hard, weight)
+
+
+static func compose_compiled_frames(
+	terrain_density: float,
+	sampling_frames: Array,
+	query_region_key: Vector2i,
+	query_local_position: Vector3
+) -> float:
+	var density := terrain_density
+	for sampling_frame_value in sampling_frames:
+		if typeof(sampling_frame_value) != TYPE_DICTIONARY:
+			continue
+		density = compose_compiled_density(
+			density,
+			sampling_frame_value,
+			query_region_key,
+			query_local_position
+		)
+	return density
+
+
 static func sample_cutter(
 	frame: Dictionary,
 	query_region_key: Vector2i,
