@@ -151,6 +151,7 @@ func _build() -> Dictionary:
 		"source_world_revision": source_world_revision,
 		"source_instance_ids": source_instance_ids,
 		"source_digest_sha256": source_digest_sha256,
+		"source_digest_entries": source_digest_entries.duplicate(true),
 		"effects": incoming_effects,
 		"local_frames": incoming_frames,
 		"timings_usec": {
