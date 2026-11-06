@@ -242,6 +242,7 @@ func reconcile_scope(
 			"source_world_revision": source_world_revision,
 			"effect_count": incoming_effects.size(),
 			"removed_effect_count": 0,
+			"affected_chunk_ids": [],
 		}
 
 	var removed_effect_count := 0
@@ -282,6 +283,9 @@ func reconcile_scope(
 			"effect_projection_commit_uncertain:%s" % initialization_error
 		)
 
+	var prior_local_index: Variant = _local_indexes_by_scope.get(scope_id)
+	var prior_local_frames: Dictionary = _local_frames_by_scope.get(scope_id, {})
+	var prior_chunk_ids := _indexed_chunk_ids(prior_local_index, prior_local_frames)
 	var local_index_result := _build_local_index(incoming_local_frames)
 	if not local_index_result.get("ok", false):
 		initialized = false
@@ -292,6 +296,10 @@ func reconcile_scope(
 	_storage_generations[scope_id] = int(persisted["generation"])
 	_local_frames_by_scope[scope_id] = incoming_local_frames.duplicate(true)
 	_local_indexes_by_scope[scope_id] = local_index_result["index"]
+	var next_chunk_ids := _indexed_chunk_ids(
+		local_index_result["index"], incoming_local_frames
+	)
+	var affected_chunk_ids := _union_sorted_strings(prior_chunk_ids, next_chunk_ids)
 	last_reconcile_metrics = {
 		"scope_id": scope_id,
 		"changed": true,
@@ -310,6 +318,7 @@ func reconcile_scope(
 		"source_world_revision": source_world_revision,
 		"effect_count": incoming_effects.size(),
 		"removed_effect_count": removed_effect_count,
+		"affected_chunk_ids": affected_chunk_ids,
 	}
 
 
@@ -530,6 +539,77 @@ func local_snapshot_for_chunk(
 			"fingerprints": fingerprints,
 		}),
 	}
+
+
+func local_snapshot_for_chunks(requests: Array) -> Dictionary:
+	if not initialized:
+		return _failure("effect_projection_service_not_initialized")
+	var by_id: Dictionary = {}
+	var chunk_ids: Array[String] = []
+	for request_value in requests:
+		if typeof(request_value) != TYPE_DICTIONARY:
+			return _failure("effect_projection_chunk_request_invalid")
+		var request: Dictionary = request_value
+		var region_key: Vector2i = request.get(
+			"region_key", Vector2i(2147483647, 2147483647)
+		)
+		var coordinate: Vector2i = request.get(
+			"coordinate", Vector2i(-1, -1)
+		)
+		var chunk_id := "region:%d,%d/chunk:%d,%d" % [
+			region_key.x, region_key.y, coordinate.x, coordinate.y
+		]
+		if not chunk_ids.has(chunk_id):
+			chunk_ids.append(chunk_id)
+		for frame in get_local_frames_for_chunk(region_key, coordinate):
+			by_id[String(frame["effect_id"])] = frame
+	chunk_ids.sort()
+	var ids: Array[String] = []
+	for effect_id in by_id:
+		ids.append(String(effect_id))
+	ids.sort()
+	var frames: Array[Dictionary] = []
+	var fingerprints: Array[String] = []
+	for effect_id in ids:
+		var frame: Dictionary = by_id[effect_id]
+		frames.append(frame.duplicate(true))
+		fingerprints.append(String(frame["source_fingerprint_sha256"]))
+	return {
+		"ok": true,
+		"terrain_object_local_frames": frames,
+		"terrain_object_effect_count": frames.size(),
+		"terrain_object_effect_snapshot_sha256": Contract.canonical_sha256({
+			"chunk_ids": chunk_ids,
+			"effect_ids": ids,
+			"fingerprints": fingerprints,
+		}),
+	}
+
+
+func _indexed_chunk_ids(index_value: Variant, frames: Dictionary) -> Array[String]:
+	var result: Array[String] = []
+	if index_value == null:
+		return result
+	for effect_id_value in frames:
+		var effect_id := String(effect_id_value)
+		for chunk_id in index_value.get_indexed_chunk_ids(effect_id):
+			if not result.has(chunk_id):
+				result.append(chunk_id)
+	result.sort()
+	return result
+
+
+func _union_sorted_strings(first: Array[String], second: Array[String]) -> Array[String]:
+	var seen: Dictionary = {}
+	for value in first:
+		seen[value] = true
+	for value in second:
+		seen[value] = true
+	var result: Array[String] = []
+	for value in seen:
+		result.append(String(value))
+	result.sort()
+	return result
 
 
 func _build_local_index(frames: Dictionary) -> Dictionary:
