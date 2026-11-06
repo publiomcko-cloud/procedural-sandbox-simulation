@@ -18,6 +18,7 @@ Issue #108 may consume this contract but must not bypass it.
 6. **Missing optional content is not substituted.** Removing an external package removes its derived content. The runtime must not silently replace it with first-party content or load a repository example.
 7. **Persistent references remain pinned.** Entity placement and procedural instances resolve namespaced definitions through the registry and carry content/rule pins. Invalid or unavailable referenced content fails explicitly.
 8. **No package code execution.** This contract remains data-only. Trusted scripted mods are a separate future contract.
+9. **Gameplay selection is capability-driven.** Player/editor placement enumerates registered definitions compatible with the supported geometry algorithm and selects deterministically from that registry result. Gameplay code must not prefer a first-party package or definition ID.
 
 ## Terrain-interaction capability
 
@@ -80,6 +81,7 @@ Terrain-object SDF integration must:
 - preserve content pin validation and deterministic order;
 - make no branch on package ID, definition ID, display name, tag or profile name;
 - keep the rule's effect separate from renderer mesh authority;
+- persist the exact terrain-interaction pin in the terrain-side imprint/effect operation when the effect becomes authoritative, rather than migrating entity identity solely to remember the rule;
 - define replay/recovery/ordering against player CARVE/FILL before enabling `terrain_interaction_applied`.
 
 ## Verification
