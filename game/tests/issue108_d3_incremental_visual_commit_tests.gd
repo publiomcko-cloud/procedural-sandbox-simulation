@@ -120,7 +120,7 @@ func _wait_stream_idle(scene: Node) -> bool:
 		var loading: Dictionary = scene.get("loading_regions")
 		var mesh_jobs: Dictionary = scene.get("_mesh_jobs")
 		var perf: Dictionary = stream.get_performance_snapshot()
-		var stable := active.has("0,0") 			and stream.has_published_region(Vector2i.ZERO) 			and loading.is_empty() 			and mesh_jobs.is_empty() 			and int(perf.get("pending_region_publication_count", 0)) == 0 			and not bool(scene.get("global_rebuild_pending"))
+		var stable: bool = active.has("0,0") 			and stream.has_published_region(Vector2i.ZERO) 			and loading.is_empty() 			and mesh_jobs.is_empty() 			and int(perf.get("pending_region_publication_count", 0)) == 0 			and not bool(scene.get("global_rebuild_pending"))
 		if stable:
 			stable_frames += 1
 			if stable_frames >= 3:
