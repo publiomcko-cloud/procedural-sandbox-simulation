@@ -26,7 +26,9 @@ const REQUEST_RADIUS := 1
 const UNLOAD_RADIUS := 2
 const MAX_ACTIVE_REGIONS := 25
 const MIN_MESH_JOBS_IN_FLIGHT := 4
-const MAX_MESH_JOBS_IN_FLIGHT_HARD := 12
+const MAX_MESH_JOBS_IN_FLIGHT_HARD := 8
+const MAX_MESH_JOB_DISPATCHES_PER_FRAME := 1
+const MESH_SNAPSHOT_FRAME_BUDGET_USEC := 3500
 const MAX_MESH_UPLOADS_PER_FRAME := 4
 const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
 const MAX_BUFFERED_BRUSH_REQUESTS := 64
@@ -155,7 +157,9 @@ var _peak_process_work_ms := 0.0
 var _last_frame_ms := 0.0
 var _peak_frame_ms := 0.0
 var _mesh_uploads_this_frame := 0
+var _mesh_dispatches_this_frame := 0
 var _peak_mesh_uploads_per_frame := 0
+var _peak_mesh_dispatches_per_frame := 0
 var _peak_mesh_jobs_in_flight := 0
 var _brush_pick_serial := 0
 var _last_brush_pick_snapshot_elapsed_usec := 0
@@ -300,6 +304,7 @@ func _exit_tree() -> void:
 func _process(delta: float) -> void:
 	var process_started_usec := Time.get_ticks_usec()
 	_mesh_uploads_this_frame = 0
+	_mesh_dispatches_this_frame = 0
 	_last_frame_ms = maxf(delta * 1000.0, 0.0)
 	if _frame_time_samples.size() == 512:
 		_frame_time_samples[_frame_sample_write_index] = _last_frame_ms
@@ -334,6 +339,9 @@ func _process(delta: float) -> void:
 			_placement_target_published = target_is_published
 			_update_placement_marker_visual()
 	_peak_mesh_uploads_per_frame = maxi(_peak_mesh_uploads_per_frame, _mesh_uploads_this_frame)
+	_peak_mesh_dispatches_per_frame = maxi(
+		_peak_mesh_dispatches_per_frame, _mesh_dispatches_this_frame
+	)
 	_last_process_work_ms = float(Time.get_ticks_usec() - process_started_usec) / 1000.0
 	_peak_process_work_ms = maxf(_peak_process_work_ms, _last_process_work_ms)
 	if _perf_trace_enabled and _last_process_work_ms >= 16.0:
@@ -1327,6 +1335,8 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 		"pending_count": 0,
 		"chunk_queued_usec": queued_times,
 		"meshes": {},
+		"vertex_count_by_coordinate": {},
+		"triangle_count_by_coordinate": {},
 		"lod_by_coordinate": lod_by_coordinate,
 		"actual_lod_by_coordinate": {},
 		"fallback_by_coordinate": {},
@@ -1512,6 +1522,8 @@ func _process_completed_mesh_jobs() -> void:
 			continue
 		var coordinate: Vector2i = record["coordinate"]
 		stage["meshes"][coordinate] = result["mesh"]
+		stage["vertex_count_by_coordinate"][coordinate] = int(result.get("vertex_count", 0))
+		stage["triangle_count_by_coordinate"][coordinate] = int(result.get("triangle_count", 0))
 		stage["actual_lod_by_coordinate"][coordinate] = int(result.get("lod_level", 0))
 		stage["fallback_by_coordinate"][coordinate] = bool(result.get("lod_fallback", false))
 		stage["next_index"] = int(stage["next_index"]) + 1
@@ -1537,7 +1549,12 @@ func _process_completed_mesh_jobs() -> void:
 
 
 func _dispatch_mesh_jobs() -> void:
+	var dispatch_started_usec := Time.get_ticks_usec()
 	while _mesh_jobs.size() < _mesh_job_limit:
+		if _mesh_dispatches_this_frame >= MAX_MESH_JOB_DISPATCHES_PER_FRAME:
+			return
+		if _mesh_dispatches_this_frame > 0 			and Time.get_ticks_usec() - dispatch_started_usec >= MESH_SNAPSHOT_FRAME_BUDGET_USEC:
+			return
 		var request := _next_mesh_job_request()
 		if request.is_empty():
 			return
@@ -1681,6 +1698,8 @@ func _dispatch_mesh_jobs() -> void:
 				"candidate_operations": int(snapshot_meta.get("candidate_operation_count", -1)),
 				"materialized_tiles": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
 				"mesh_jobs_in_flight": _mesh_jobs.size(),
+				"dispatches_this_frame": _mesh_dispatches_this_frame + 1,
+				"dispatch_budget": MAX_MESH_JOB_DISPATCHES_PER_FRAME,
 			})
 		if String(stage["purpose"]) == "edit_transaction" and not _edit_transaction.is_empty():
 			_edit_transaction["trace_snapshot_usec_total"] = int(_edit_transaction.get("trace_snapshot_usec_total", 0)) + snapshot_elapsed_usec
@@ -1702,6 +1721,7 @@ func _dispatch_mesh_jobs() -> void:
 		stage["submit_index"] = int(stage["submit_index"]) + 1
 		stage["pending_count"] = int(stage["pending_count"]) + 1
 		loading_regions[id] = stage
+		_mesh_dispatches_this_frame += 1
 		_mesh_jobs[task_id] = {
 			"job": job,
 			"stage_id": id,
@@ -1818,7 +1838,16 @@ func _complete_region_stage(id: String) -> void:
 		if _publish_partial_stage(id, stage):
 			_clear_stream_error(id)
 	else:
-		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"], stage.get("actual_lod_by_coordinate", {}), stage.get("fallback_by_coordinate", {}), int(stage["stage_token"]))
+		_publish_region(
+			stage["region_key"],
+			stage["world_state"],
+			stage["meshes"],
+			stage.get("actual_lod_by_coordinate", {}),
+			stage.get("fallback_by_coordinate", {}),
+			int(stage["stage_token"]),
+			stage.get("vertex_count_by_coordinate", {}),
+			stage.get("triangle_count_by_coordinate", {})
+		)
 		_streamed_region_loads += 1
 		_stage_retry_counts.erase(id)
 		_clear_stream_error(id)
@@ -1844,7 +1873,12 @@ func _publish_partial_stage(id: String, stage: Dictionary) -> bool:
 	for coordinate in stage["chunk_coordinates"]:
 		var chunk_id: String = ChunkGrid.stable_id(stage["region_key"], coordinate)
 		var node: MeshInstance3D = region_nodes[chunk_id]
-		_replace_node_mesh(node, stage["meshes"][coordinate])
+		_replace_node_mesh(
+			node,
+			stage["meshes"][coordinate],
+			int(stage.get("vertex_count_by_coordinate", {}).get(coordinate, -1)),
+			int(stage.get("triangle_count_by_coordinate", {}).get(coordinate, -1))
+		)
 		_set_chunk_lod_state(chunk_id, node, int(stage.get("actual_lod_by_coordinate", {}).get(coordinate, 0)), bool(stage.get("fallback_by_coordinate", {}).get(coordinate, false)))
 	_record_completed_operation(stage)
 	_lod_selection_dirty = true
@@ -1888,7 +1922,16 @@ func _try_commit_global_rebuild() -> void:
 	_edit_transaction = {}
 	var publish_started_usec := Time.get_ticks_usec()
 	for stage in all_stages:
-		_publish_region(stage["region_key"], stage["world_state"], stage["meshes"], stage.get("actual_lod_by_coordinate", {}), stage.get("fallback_by_coordinate", {}), int(stage["stage_token"]))
+		_publish_region(
+			stage["region_key"],
+			stage["world_state"],
+			stage["meshes"],
+			stage.get("actual_lod_by_coordinate", {}),
+			stage.get("fallback_by_coordinate", {}),
+			int(stage["stage_token"]),
+			stage.get("vertex_count_by_coordinate", {}),
+			stage.get("triangle_count_by_coordinate", {})
+		)
 	_mesh_publish_usec_samples.append(Time.get_ticks_usec() - publish_started_usec)
 	_rendered_cave_section_enabled = cave_section_enabled
 	_streamed_region_loads += all_stages.size()
@@ -1903,7 +1946,16 @@ func _try_commit_global_rebuild() -> void:
 	_update_runtime_diagnostics()
 
 
-func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary, actual_lods: Dictionary = {}, fallback_lods: Dictionary = {}, publication_token: int = -1) -> void:
+func _publish_region(
+	region_key: Vector2i,
+	state: RefCounted,
+	meshes: Dictionary,
+	actual_lods: Dictionary = {},
+	fallback_lods: Dictionary = {},
+	publication_token: int = -1,
+	vertex_counts: Dictionary = {},
+	triangle_counts: Dictionary = {}
+) -> void:
 	var publish_started_usec := Time.get_ticks_usec()
 	var id := _region_id(region_key)
 	var region_nodes: Dictionary = {}
@@ -1918,7 +1970,12 @@ func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary
 		else:
 			node = _create_chunk_node(region_key, coordinate, chunk_id)
 		node.position = region_origin + ChunkGrid.origin_for(coordinate)
-		_replace_node_mesh(node, meshes[coordinate])
+		_replace_node_mesh(
+			node,
+			meshes[coordinate],
+			int(vertex_counts.get(coordinate, -1)),
+			int(triangle_counts.get(coordinate, -1))
+		)
 		node.visible = true
 		node.set_meta("stable_chunk_id", chunk_id)
 		node.set_meta("region_key", region_key)
@@ -1977,13 +2034,32 @@ func _release_chunk_node(chunk_id: String, node: MeshInstance3D) -> void:
 	node.free()
 
 
-func _replace_node_mesh(node: MeshInstance3D, replacement: Mesh) -> void:
+func _replace_node_mesh(
+	node: MeshInstance3D,
+	replacement: Mesh,
+	replacement_vertex_count: int = -1,
+	replacement_triangle_count: int = -1
+) -> void:
 	var previous := node.mesh
-	_active_triangle_count -= _mesh_triangle_count(previous)
-	_active_vertex_count -= _mesh_vertex_count(previous)
+	var previous_triangle_count := int(node.get_meta("mesh_triangle_count", -1))
+	var previous_vertex_count := int(node.get_meta("mesh_vertex_count", -1))
+	if previous_triangle_count < 0:
+		previous_triangle_count = _mesh_triangle_count(previous)
+	if previous_vertex_count < 0:
+		previous_vertex_count = _mesh_vertex_count(previous)
+	var next_triangle_count := replacement_triangle_count
+	var next_vertex_count := replacement_vertex_count
+	if next_triangle_count < 0:
+		next_triangle_count = _mesh_triangle_count(replacement)
+	if next_vertex_count < 0:
+		next_vertex_count = _mesh_vertex_count(replacement)
+	_active_triangle_count -= previous_triangle_count
+	_active_vertex_count -= previous_vertex_count
 	node.mesh = replacement
-	_active_triangle_count += _mesh_triangle_count(replacement)
-	_active_vertex_count += _mesh_vertex_count(replacement)
+	_active_triangle_count += next_triangle_count
+	_active_vertex_count += next_vertex_count
+	node.set_meta("mesh_triangle_count", next_triangle_count)
+	node.set_meta("mesh_vertex_count", next_vertex_count)
 
 
 func _set_chunk_lod_state(chunk_id: String, node: MeshInstance3D, lod_level: int, did_fallback: bool) -> void:
@@ -2400,10 +2476,24 @@ func _try_commit_edit_transaction() -> void:
 			var nodes: Dictionary = active_regions[id]["chunk_nodes"]
 			for coordinate in stage["chunk_coordinates"]:
 				var chunk_id: String = ChunkGrid.stable_id(stage["region_key"], coordinate)
-				_replace_node_mesh(nodes[chunk_id], stage["meshes"][coordinate])
+				_replace_node_mesh(
+					nodes[chunk_id],
+					stage["meshes"][coordinate],
+					int(stage.get("vertex_count_by_coordinate", {}).get(coordinate, -1)),
+					int(stage.get("triangle_count_by_coordinate", {}).get(coordinate, -1))
+				)
 				_set_chunk_lod_state(chunk_id, nodes[chunk_id], int(stage.get("actual_lod_by_coordinate", {}).get(coordinate, 0)), bool(stage.get("fallback_by_coordinate", {}).get(coordinate, false)))
 		else:
-			_publish_region(stage["region_key"], stage["world_state"], stage["meshes"], stage.get("actual_lod_by_coordinate", {}), stage.get("fallback_by_coordinate", {}), int(stage["stage_token"]))
+			_publish_region(
+				stage["region_key"],
+				stage["world_state"],
+				stage["meshes"],
+				stage.get("actual_lod_by_coordinate", {}),
+				stage.get("fallback_by_coordinate", {}),
+				int(stage["stage_token"]),
+				stage.get("vertex_count_by_coordinate", {}),
+				stage.get("triangle_count_by_coordinate", {})
+			)
 		loading_regions.erase(id)
 	_mesh_publish_usec_samples.append(Time.get_ticks_usec() - publish_started_usec)
 	var committed_sequence: int = _edit_transaction["operation_sequence"]
@@ -2914,8 +3004,11 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["max_active_region_count"] = MAX_ACTIVE_REGIONS
 	last_mesh_diagnostics["max_mesh_uploads_per_frame"] = MAX_MESH_UPLOADS_PER_FRAME
 	last_mesh_diagnostics["mesh_upload_frame_budget_usec"] = MESH_UPLOAD_FRAME_BUDGET_USEC
+	last_mesh_diagnostics["max_mesh_job_dispatches_per_frame"] = MAX_MESH_JOB_DISPATCHES_PER_FRAME
+	last_mesh_diagnostics["mesh_snapshot_frame_budget_usec"] = MESH_SNAPSHOT_FRAME_BUDGET_USEC
 	last_mesh_diagnostics["mesh_job_limit"] = _mesh_job_limit
 	last_mesh_diagnostics["peak_mesh_uploads_per_frame"] = _peak_mesh_uploads_per_frame
+	last_mesh_diagnostics["peak_mesh_dispatches_per_frame"] = _peak_mesh_dispatches_per_frame
 	last_mesh_diagnostics["mesh_jobs_in_flight"] = _mesh_jobs.size()
 	last_mesh_diagnostics["peak_mesh_jobs_in_flight"] = _peak_mesh_jobs_in_flight
 	last_mesh_diagnostics["last_brush_pick_elapsed_ms"] = float(_last_brush_pick_elapsed_usec) / 1000.0
