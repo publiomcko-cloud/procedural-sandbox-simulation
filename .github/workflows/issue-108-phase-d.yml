@@ -84,6 +84,13 @@ jobs:
           /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/p3_0d_entity_placement_tests.gd 2>&1 | tee /tmp/placement.log
           grep -q 'P3_0D_PLACEMENT_PASS' /tmp/placement.log
 
+      - name: Runtime performance baseline
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 300s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/experiments/runtime_performance_baseline.gd 2>&1 | tee /tmp/runtime-performance.log
+          grep -q 'RUNTIME_PERFORMANCE_BASELINE_PASS' /tmp/runtime-performance.log
+
       - name: Canonical validation
         shell: bash
         run: |
@@ -104,4 +111,5 @@ jobs:
             /tmp/entity-command.log
             /tmp/procedural.log
             /tmp/placement.log
+            /tmp/runtime-performance.log
             /tmp/validate.log
