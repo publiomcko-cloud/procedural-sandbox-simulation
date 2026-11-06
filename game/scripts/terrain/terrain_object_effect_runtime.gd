@@ -114,7 +114,7 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 		if projection.has_scope(region) and not _invalidated_scope_ids.has(scope_id):
 			continue
 		var scope_started_usec := Time.get_ticks_usec()
-		var reconciled := _reconcile_source_region(region)
+		var reconciled := _reconcile_source_region(region, false)
 		var scope_usec := Time.get_ticks_usec() - scope_started_usec
 		if not reconciled.get("ok", false):
 			_prefetch_error = String(reconciled.get(
@@ -143,7 +143,10 @@ func get_prefetch_pending_count() -> int:
 	return _prefetch_queue.size()
 
 
-func _reconcile_source_region(source_region: Vector2i) -> Dictionary:
+func _reconcile_source_region(
+	source_region: Vector2i,
+	persist_projection: bool = true
+) -> Dictionary:
 	var scope_id := Contract.scope_id_for_region(source_region)
 	var source: Dictionary = object_stream.call(
 		"get_authoritative_region_projection_source", source_region
@@ -157,7 +160,8 @@ func _reconcile_source_region(source_region: Vector2i) -> Dictionary:
 		int(source.get("world_revision", -1)),
 		source.get("instances", []),
 		source.get("source_revisions", {}),
-		true
+		true,
+		persist_projection
 	)
 	if not reconciled.get("ok", false):
 		return _failure(
