@@ -2047,11 +2047,18 @@ func _publish_region(
 	var object_enqueue_usec := Time.get_ticks_usec() - object_enqueue_started_usec
 
 	var object_status_started_usec := Time.get_ticks_usec()
-	if not object_publication.get("ok", false) 		and object_publication.get("reason") != "stale_object_region_publication":
+	if (
+		not object_publication.get("ok", false)
+		and object_publication.get("reason") != "stale_object_region_publication"
+	):
 		_procedural_object_status = "Procedural object issue: %s" % object_stream.get_error_summary()
 	else:
 		var object_error: String = object_stream.get_error_summary()
-		_procedural_object_status = "Procedural objects queued" 			if object_error.is_empty() 			else "Procedural object issue: %s" % object_error
+		_procedural_object_status = (
+			"Procedural objects queued"
+			if object_error.is_empty()
+			else "Procedural object issue: %s" % object_error
+		)
 	var object_status_usec := Time.get_ticks_usec() - object_status_started_usec
 
 	var focus_refresh_usec := 0
@@ -2063,8 +2070,22 @@ func _publish_region(
 		focus_refresh_usec = Time.get_ticks_usec() - focus_refresh_started_usec
 
 	var publish_duration_usec := Time.get_ticks_usec() - publish_started_usec
-	var measured_top_level_usec := chunk_commit_usec 		+ stale_release_usec 		+ registry_commit_usec 		+ object_enqueue_usec 		+ object_status_usec 		+ focus_refresh_usec
-	var chunk_measured_usec := node_resolve_usec 		+ transform_usec 		+ mesh_replace_usec 		+ metadata_usec 		+ lod_state_usec 		+ index_commit_usec
+	var measured_top_level_usec := (
+		chunk_commit_usec
+		+ stale_release_usec
+		+ registry_commit_usec
+		+ object_enqueue_usec
+		+ object_status_usec
+		+ focus_refresh_usec
+	)
+	var chunk_measured_usec := (
+		node_resolve_usec
+		+ transform_usec
+		+ mesh_replace_usec
+		+ metadata_usec
+		+ lod_state_usec
+		+ index_commit_usec
+	)
 	_last_region_publish_profile = {
 		"region": [region_key.x, region_key.y],
 		"focused_region": focused_region,
