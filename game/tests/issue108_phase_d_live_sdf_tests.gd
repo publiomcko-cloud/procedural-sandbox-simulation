@@ -310,10 +310,10 @@ func _first_effect_chunk(projection: RefCounted) -> Dictionary:
 
 func _first_cross_region_effect_chunk(projection: RefCounted) -> Dictionary:
 	for z in range(Grid.CHUNK_COUNT_Z):
-		var left := projection.local_snapshot_for_chunk(
+		var left: Dictionary = projection.local_snapshot_for_chunk(
 			Vector2i.ZERO, Vector2i(Grid.CHUNK_COUNT_X - 1, z)
 		)
-		var right := projection.local_snapshot_for_chunk(
+		var right: Dictionary = projection.local_snapshot_for_chunk(
 			Vector2i.RIGHT, Vector2i(0, z)
 		)
 		if int(left.get("terrain_object_effect_count", 0)) > 0 			and int(right.get("terrain_object_effect_count", 0)) > 0:
