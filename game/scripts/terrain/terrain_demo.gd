@@ -2295,6 +2295,7 @@ func _attach_terrain_effect_snapshot(
 ) -> void:
 	if requests.is_empty() or object_stream == null:
 		target_snapshot["terrain_object_local_frames"] = []
+		target_snapshot["terrain_object_sampling_frames"] = []
 		target_snapshot["terrain_object_effect_count"] = 0
 		target_snapshot["terrain_object_effect_snapshot_sha256"] = "none"
 		return
@@ -2307,6 +2308,9 @@ func _attach_terrain_effect_snapshot(
 		return
 	target_snapshot["terrain_object_local_frames"] = effect_snapshot.get(
 		"terrain_object_local_frames", []
+	)
+	target_snapshot["terrain_object_sampling_frames"] = effect_snapshot.get(
+		"terrain_object_sampling_frames", []
 	)
 	target_snapshot["terrain_object_effect_count"] = int(
 		effect_snapshot.get("terrain_object_effect_count", 0)
