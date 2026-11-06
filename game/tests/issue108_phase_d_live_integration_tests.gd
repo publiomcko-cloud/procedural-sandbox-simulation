@@ -279,6 +279,35 @@ func _run() -> void:
 		"source restore replays terrain effect into the next snapshot"
 	)
 
+	# A derived projection may be ahead after loading/rolling back an older
+	# authoritative save. The live coordinator must rebuild from that authority,
+	# while direct stale reconcile calls remain fail-closed.
+	var rewind_before_revision := int(fake.world_revision)
+	var rewind_before_entity_revision := int(fake.entity_revision)
+	fake.world_revision = 1
+	fake.entity_revision = 1
+	var rewound: Dictionary = runtime.prepare_chunk_snapshot(
+		ledger.get_meshing_snapshot_for_chunk(Vector2i.ZERO, left_coordinate),
+		Vector2i.ZERO,
+		left_coordinate
+	)
+	_check(
+		rewound.get("ok", false)
+			and int(rewound.get("authority_revision", -1)) == 1,
+		"ahead derived projection rebuilds from explicitly current older authority"
+	)
+	fake.world_revision = rewind_before_revision + 1
+	fake.entity_revision = rewind_before_entity_revision + 1
+	var forward_again: Dictionary = runtime.prepare_chunk_snapshot(
+		ledger.get_meshing_snapshot_for_chunk(Vector2i.ZERO, left_coordinate),
+		Vector2i.ZERO,
+		left_coordinate
+	)
+	_check(
+		forward_again.get("ok", false),
+		"projection advances normally after authoritative rewind rebuild"
+	)
+
 	# Old Phase-C projection shards are derived data and must upgrade by rebuild,
 	# not be treated as authoritative corruption.
 	var legacy_upgrade := _exercise_legacy_projection_rebuild(
