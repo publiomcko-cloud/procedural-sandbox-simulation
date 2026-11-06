@@ -216,7 +216,11 @@ func _decode_document(bytes: PackedByteArray, region_key: Vector2i) -> Dictionar
 		return _failure("effect_projection_format_invalid")
 	var version := _read_integer(document.get("schema_version"))
 	var generation := _read_integer(document.get("generation"))
-	if not version.get("ok", false) or int(version["value"]) != SCHEMA_VERSION 		or not generation.get("ok", false) or int(generation["value"]) < 1:
+	if not version.get("ok", false) 		or not generation.get("ok", false) 		or int(generation["value"]) < 1:
+		return _failure("effect_projection_version_invalid")
+	if int(version["value"]) < SCHEMA_VERSION:
+		return _failure("effect_projection_legacy_schema_rebuild_required")
+	if int(version["value"]) != SCHEMA_VERSION:
 		return _failure("effect_projection_version_invalid")
 	if typeof(document.get("payload_json")) != TYPE_STRING 		or typeof(document.get("payload_sha256")) != TYPE_STRING:
 		return _failure("effect_projection_envelope_invalid")
