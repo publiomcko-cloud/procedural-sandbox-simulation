@@ -2361,7 +2361,10 @@ func _process_terrain_effect_dirty_chunks() -> void:
 		if not active_regions.has(id):
 			_terrain_effect_dirty_chunks_by_region.erase(id)
 			continue
-		var coordinates: Array = _terrain_effect_dirty_chunks_by_region[id]
+		var coordinates: Array[Vector2i] = []
+		for coordinate_value in _terrain_effect_dirty_chunks_by_region[id]:
+			if coordinate_value is Vector2i:
+				coordinates.append(coordinate_value)
 		_terrain_effect_dirty_chunks_by_region.erase(id)
 		if coordinates.is_empty():
 			continue
