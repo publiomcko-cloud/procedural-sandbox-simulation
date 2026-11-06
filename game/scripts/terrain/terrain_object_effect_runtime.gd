@@ -114,7 +114,7 @@ func prepare_targets_snapshot(
 			_performance["required_scope_check_count"]
 		) + 1
 		var scope_id := Contract.scope_id_for_region(source_region)
-		var must_reconcile := not projection.has_scope(source_region) 			or _invalidated_scope_ids.has(scope_id)
+		var must_reconcile: bool = not projection.has_scope(source_region) 			or _invalidated_scope_ids.has(scope_id)
 		if not must_reconcile:
 			continue
 		var source: Dictionary = object_stream.call(
