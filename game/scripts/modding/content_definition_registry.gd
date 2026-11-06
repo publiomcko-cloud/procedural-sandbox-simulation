@@ -128,6 +128,14 @@ func has_mod(mod_id: String) -> bool:
 	return _mods.has(mod_id)
 
 
+func get_definition_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for id_value in _definitions.keys():
+		ids.append(String(id_value))
+	ids.sort()
+	return ids
+
+
 func get_population_rule(namespaced_id: String) -> Dictionary:
 	if not _population_rules.has(namespaced_id):
 		return {}
