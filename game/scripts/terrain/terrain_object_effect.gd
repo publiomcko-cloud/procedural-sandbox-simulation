@@ -24,7 +24,8 @@ const REGION_SIZE_X := 16.0
 const REGION_SIZE_Z := 12.0
 const REGION_SIZE_X_MM := 16000
 const REGION_SIZE_Z_MM := 12000
-const MAX_SAMPLE_REGION_DELTA := 64
+const MAX_SAMPLE_REGION_DELTA := 1
+const MAX_RUNTIME_REGION_REACH := 1
 const EFFECT_KEYS := [
 	"schema_version", "type", "frame", "effect_id", "source_instance_id",
 	"source_revision", "source_fingerprint_sha256", "world_id", "world_seed",
@@ -252,6 +253,11 @@ static func validate_effect(value: Variant) -> Dictionary:
 	var max_v: Vector3 = maximum["value"]
 	if min_v.x > max_v.x or min_v.y > max_v.y or min_v.z > max_v.z:
 		return _failure("terrain_effect_bounds_invalid")
+	# Live lookup is manifest-free: any target chunk needs only the target
+	# region and its immediate source-region neighbors. Reject effects whose
+	# conservative local bounds would require a wider source search.
+	if min_v.x < -REGION_SIZE_X or max_v.x > REGION_SIZE_X * 2.0 		or min_v.z < -REGION_SIZE_Z or max_v.z > REGION_SIZE_Z * 2.0:
+		return _failure("terrain_effect_runtime_region_reach_exceeded")
 	var interior_v: Vector3 = interior["value"]
 	if interior_v.x < min_v.x - 0.000001 		or interior_v.x > max_v.x + 0.000001 		or interior_v.y < min_v.y - 0.000001 		or interior_v.y > max_v.y + 0.000001 		or interior_v.z < min_v.z - 0.000001 		or interior_v.z > max_v.z + 0.000001:
 		return _failure("terrain_effect_interior_outside_bounds")
