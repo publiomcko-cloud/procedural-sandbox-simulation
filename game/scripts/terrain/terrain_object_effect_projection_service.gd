@@ -23,6 +23,9 @@ const TERRAIN_RESIDENCY_RADIUS := 2
 const EFFECT_SOURCE_RADIUS := 2
 const NORMAL_WORKING_SET_RADIUS := TERRAIN_RESIDENCY_RADIUS + EFFECT_SOURCE_RADIUS
 const MAX_RESIDENT_SCOPES := (NORMAL_WORKING_SET_RADIUS * 2 + 1) * (NORMAL_WORKING_SET_RADIUS * 2 + 1)
+# D.4.1 keeps recently evicted validated scopes/indexes in process memory only.
+# This cache is derived, non-authoritative and independently bounded.
+const MAX_DORMANT_SCOPES := 256
 
 var world_id := ""
 var world_seed := -1
@@ -36,6 +39,8 @@ var _perf_trace_enabled := false
 var _scopes: Dictionary = {}
 var _scope_indexes: Dictionary = {}
 var _storage_generations: Dictionary = {}
+var _dormant_scopes: Dictionary = {}
+var _dormant_scope_order: Array[String] = []
 # Reverse routing: stable target chunk id -> sorted source scope ids whose
 # indexed effect footprints can touch that chunk. This removes the former
 # O(resident scopes) scan from every chunk snapshot.
@@ -48,6 +53,14 @@ var _performance := {
 	"lookup_scope_index_examined_count": 0,
 	"lookup_frame_count": 0,
 	"peak_resident_scope_count": 0,
+	"dormant_scope_store_count": 0,
+	"dormant_scope_hit_count": 0,
+	"dormant_scope_miss_count": 0,
+	"dormant_scope_eviction_count": 0,
+	"dormant_scope_purge_count": 0,
+	"dormant_scope_activate_total_usec": 0,
+	"dormant_scope_activate_peak_usec": 0,
+	"peak_dormant_scope_count": 0,
 }
 
 
@@ -66,6 +79,8 @@ func initialize(
 	_scopes.clear()
 	_scope_indexes.clear()
 	_storage_generations.clear()
+	_dormant_scopes.clear()
+	_dormant_scope_order.clear()
 	_scope_ids_by_chunk.clear()
 	_reset_performance_metrics()
 	store = StoreScript.new(directory_override)
@@ -89,6 +104,7 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 			"ok": true,
 			"found": int(_storage_generations.get(scope_id, 0)) > 0,
 			"already_loaded": true,
+			"dormant_cache_hit": false,
 			"generation": int(_storage_generations.get(scope_id, 0)),
 			"projection_revision": int(existing["projection_revision"]),
 			"source_world_revision": int(existing["source_world_revision"]),
@@ -97,6 +113,53 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 		}
 	if _scopes.size() >= MAX_RESIDENT_SCOPES:
 		return _failure("effect_projection_resident_scope_capacity_exceeded")
+	var dormant_started_usec := Time.get_ticks_usec()
+	var dormant := _take_dormant_scope(scope_id)
+	if not dormant.is_empty():
+		var snapshot: Dictionary = dormant["snapshot"]
+		var index: RefCounted = dormant["index"]
+		var generation := int(dormant.get("generation", 0))
+		_scopes[scope_id] = snapshot
+		_install_scope_index(scope_id, index)
+		_storage_generations[scope_id] = generation
+		_performance["dormant_scope_hit_count"] = int(
+			_performance["dormant_scope_hit_count"]
+		) + 1
+		_performance["peak_resident_scope_count"] = maxi(
+			int(_performance["peak_resident_scope_count"]), _scopes.size()
+		)
+		var activate_usec := Time.get_ticks_usec() - dormant_started_usec
+		_performance["dormant_scope_activate_total_usec"] = int(
+			_performance["dormant_scope_activate_total_usec"]
+		) + activate_usec
+		_performance["dormant_scope_activate_peak_usec"] = maxi(
+			int(_performance["dormant_scope_activate_peak_usec"]),
+			activate_usec
+		)
+		if _perf_trace_enabled:
+			PerformanceTrace.emit("effect_scope_dormant_hit", {
+				"duration_usec": activate_usec,
+				"scope_id": scope_id,
+				"region": [region_key.x, region_key.y],
+				"generation": generation,
+				"effect_count": (snapshot["effects"] as Dictionary).size(),
+				"resident_scope_count": _scopes.size(),
+				"dormant_scope_count": _dormant_scopes.size(),
+			})
+		return {
+			"ok": true,
+			"found": generation > 0,
+			"already_loaded": false,
+			"dormant_cache_hit": true,
+			"generation": generation,
+			"projection_revision": int(snapshot["projection_revision"]),
+			"source_world_revision": int(snapshot["source_world_revision"]),
+			"effect_count": (snapshot["effects"] as Dictionary).size(),
+			"recovered_temporary": false,
+		}
+	_performance["dormant_scope_miss_count"] = int(
+		_performance["dormant_scope_miss_count"]
+	) + 1
 	var loaded: Dictionary = store.load_scope(region_key)
 	if not loaded.get("ok", false):
 		return loaded
@@ -134,6 +197,7 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 		"ok": true,
 		"found": bool(loaded.get("found", false)),
 		"already_loaded": false,
+		"dormant_cache_hit": false,
 		"generation": int(loaded.get("generation", 0)),
 		"projection_revision": int(checked["snapshot"]["projection_revision"]),
 		"source_world_revision": int(checked["snapshot"]["source_world_revision"]),
@@ -153,10 +217,27 @@ func release_scope(region_key: Vector2i) -> void:
 	if not _scopes.has(scope_id):
 		return
 	_remove_scope_routes(scope_id)
+	var snapshot: Dictionary = _scopes[scope_id]
+	var index: RefCounted = _scope_indexes[scope_id]
+	var generation := int(_storage_generations.get(scope_id, 0))
 	_scopes.erase(scope_id)
 	_scope_indexes.erase(scope_id)
 	_storage_generations.erase(scope_id)
+	_remember_dormant_scope(scope_id, snapshot, index, generation)
 	_performance["scope_release_count"] = int(_performance["scope_release_count"]) + 1
+
+
+func purge_dormant_scopes() -> void:
+	var purged := _dormant_scopes.size()
+	_dormant_scopes.clear()
+	_dormant_scope_order.clear()
+	_performance["dormant_scope_purge_count"] = int(
+		_performance["dormant_scope_purge_count"]
+	) + purged
+	if _perf_trace_enabled and purged > 0:
+		PerformanceTrace.emit("effect_scope_dormant_purge", {
+			"purged": purged,
+		})
 
 
 func reconcile_scope(
@@ -771,6 +852,8 @@ func get_performance_snapshot() -> Dictionary:
 	result["resident_scope_count"] = _scopes.size()
 	result["reverse_route_chunk_count"] = _scope_ids_by_chunk.size()
 	result["max_resident_scope_count"] = MAX_RESIDENT_SCOPES
+	result["dormant_scope_count"] = _dormant_scopes.size()
+	result["max_dormant_scope_count"] = MAX_DORMANT_SCOPES
 	return result
 
 
@@ -787,7 +870,62 @@ func _reset_performance_metrics() -> void:
 		"lookup_scope_index_examined_count": 0,
 		"lookup_frame_count": 0,
 		"peak_resident_scope_count": _scopes.size(),
+		"dormant_scope_store_count": 0,
+		"dormant_scope_hit_count": 0,
+		"dormant_scope_miss_count": 0,
+		"dormant_scope_eviction_count": 0,
+		"dormant_scope_purge_count": 0,
+		"dormant_scope_activate_total_usec": 0,
+		"dormant_scope_activate_peak_usec": 0,
+		"peak_dormant_scope_count": _dormant_scopes.size(),
 	}
+
+
+func _take_dormant_scope(scope_id: String) -> Dictionary:
+	if not _dormant_scopes.has(scope_id):
+		return {}
+	var record: Dictionary = _dormant_scopes[scope_id]
+	_dormant_scopes.erase(scope_id)
+	_dormant_scope_order.erase(scope_id)
+	return record
+
+
+func _remember_dormant_scope(
+	scope_id: String,
+	snapshot: Dictionary,
+	index: RefCounted,
+	generation: int
+) -> void:
+	if scope_id.is_empty() or snapshot.is_empty() or index == null:
+		return
+	_dormant_scopes[scope_id] = {
+		"snapshot": snapshot,
+		"index": index,
+		"generation": generation,
+	}
+	_dormant_scope_order.erase(scope_id)
+	_dormant_scope_order.append(scope_id)
+	_performance["dormant_scope_store_count"] = int(
+		_performance["dormant_scope_store_count"]
+	) + 1
+	while _dormant_scope_order.size() > MAX_DORMANT_SCOPES:
+		var evicted_scope_id: String = _dormant_scope_order.pop_front()
+		if _dormant_scopes.has(evicted_scope_id):
+			_dormant_scopes.erase(evicted_scope_id)
+			_performance["dormant_scope_eviction_count"] = int(
+				_performance["dormant_scope_eviction_count"]
+			) + 1
+	_performance["peak_dormant_scope_count"] = maxi(
+		int(_performance["peak_dormant_scope_count"]),
+		_dormant_scopes.size()
+	)
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("effect_scope_dormant_store", {
+			"scope_id": scope_id,
+			"generation": generation,
+			"effect_count": (snapshot["effects"] as Dictionary).size(),
+			"dormant_scope_count": _dormant_scopes.size(),
+		})
 
 
 func _install_scope_index(scope_id: String, index: RefCounted) -> void:
