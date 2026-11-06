@@ -54,6 +54,7 @@ func run() -> void:
 			left_region_key.y,
 			z_chunk,
 		]
+		key += ":%s" % String(brush_snapshot.get("terrain_object_effect_snapshot_sha256", "none"))
 		result = WorkCache.get_or_build(key, Callable(self, "_build_uncached"))
 	worker_finished_usec = Time.get_ticks_usec()
 
