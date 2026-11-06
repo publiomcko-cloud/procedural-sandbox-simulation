@@ -96,6 +96,10 @@ jobs:
               'current_step_p95_usec':current['step_p95_usec'],
               'base_step_max_usec':base['step_max_usec'],
               'current_step_max_usec':current['step_max_usec'],
+              'base_peak_process_work_ms':base.get('peak_process_work_ms',0),
+              'current_peak_process_work_ms':current.get('peak_process_work_ms',0),
+              'base_peak_frame_ms':base.get('peak_frame_ms',0),
+              'current_peak_frame_ms':current.get('peak_frame_ms',0),
               'current_lod_fallback_chunk_count':current['lod_fallback_chunk_count'],
           }
           print('ISSUE108_D1_AB_EVIDENCE='+json.dumps(result,separators=(',',':')))
