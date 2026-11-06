@@ -219,8 +219,15 @@ func _registry() -> ContentDefinitionRegistry:
 		_check(false, "external mod package is copied into a unique disposable user:// root")
 		return null
 	DirAccess.make_dir_recursive_absolute(package_absolute.path_join("populations"))
+	DirAccess.make_dir_recursive_absolute(package_absolute.path_join("interactions"))
 	var source_root := ProjectSettings.globalize_path("res://").trim_suffix("/").get_base_dir().path_join("mods/examples/procedural-rock")
-	for relative_path in ["manifest.json", "objects/procedural_rock.json", "populations/basalt_legacy.json", "populations/basalt_population.json"]:
+	for relative_path in [
+		"manifest.json",
+		"objects/procedural_rock.json",
+		"populations/basalt_legacy.json",
+		"populations/basalt_population.json",
+		"interactions/basalt_ground_imprint.json",
+	]:
 		var bytes: PackedByteArray = FileAccess.get_file_as_bytes(source_root.path_join(relative_path))
 		if bytes.is_empty() or not _write_bytes(package_absolute.path_join(relative_path), bytes):
 			_check(false, "external declarative package fixture copied from repository data")
