@@ -8,6 +8,7 @@ extends RefCounted
 const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const RockMeshAdapter := preload("res://scripts/objects/procedural_rock_mesh_adapter.gd")
 const MaterializationStore := preload("res://scripts/objects/procedural_object_materialization_store.gd")
+const Field := preload("res://scripts/terrain/sdf_world.gd")
 
 var world_seed := 0
 var world_id := ""
@@ -52,7 +53,7 @@ func run() -> void:
 			materialization_directory,
 			world_id,
 			world_seed,
-			ObjectWorld.FIELD.GENERATOR_VERSION,
+			Field.GENERATOR_VERSION,
 			content_signature
 		)
 		var loaded: Dictionary = store.load_region(region_key)
