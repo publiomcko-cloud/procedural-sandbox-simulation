@@ -7,6 +7,7 @@ const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 const RegistryScript := preload("res://scripts/modding/content_definition_registry.gd")
 const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const RegionGenerationJob := preload("res://scripts/objects/procedural_object_region_generation_job.gd")
+const MaterializationStore := preload("res://scripts/objects/procedural_object_materialization_store.gd")
 const ProjectionSourceGenerationJob := preload("res://scripts/objects/procedural_object_projection_source_generation_job.gd")
 const RockMeshAdapter := preload("res://scripts/objects/procedural_rock_mesh_adapter.gd")
 const StaticBatchBuilder := preload("res://scripts/objects/procedural_object_static_batch.gd")
@@ -20,7 +21,7 @@ const MAX_RESIDENT_REGIONS := 25
 const MAX_PENDING_REGION_PUBLICATIONS := 25
 const MAX_REGION_PUBLICATIONS_PER_FRAME := 1
 const MAX_REGION_GENERATION_JOBS_IN_FLIGHT := 2
-const MAX_CACHED_GEOMETRY_VARIANTS := 32
+const MAX_CACHED_GEOMETRY_VARIANTS := 512
 
 var registry: ContentDefinitionRegistry
 var world_seed := 0
@@ -48,6 +49,11 @@ var _region_generation_task_by_id: Dictionary = {}
 var _next_region_publication_serial := 1
 var _geometry_mesh_cache: Dictionary = {}
 var _geometry_mesh_cache_order: Array[String] = []
+var _geometry_cache_hit_count := 0
+var _geometry_cache_miss_count := 0
+var _geometry_cache_eviction_count := 0
+var _materialization_content_signature := ""
+var _materialization_directory := ""
 var _last_region_metrics: Dictionary = {}
 var _peak_region_generation_usec := 0
 var _peak_mesh_build_usec := 0
@@ -84,6 +90,11 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_last_command_visual_result.clear()
 	_geometry_mesh_cache.clear()
 	_geometry_mesh_cache_order.clear()
+	_geometry_cache_hit_count = 0
+	_geometry_cache_miss_count = 0
+	_geometry_cache_eviction_count = 0
+	_materialization_content_signature = ""
+	_materialization_directory = ""
 	_population_rule_ids.clear()
 	_terrain_interaction_rule_ids.clear()
 	_package_discovery_report.clear()
@@ -112,6 +123,8 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	if not state_load.get("ok", false):
 		return _fail_initialize("object_state_unavailable:%s" % state_load.get("reason", "invalid"))
 	registry = candidate
+	_materialization_content_signature = MaterializationStore.build_content_signature(registry)
+	_materialization_directory = _object_materialization_directory(world_seed)
 	_initialize_entity_command_service()
 	_mod_count = int(registration.get("mod_count", 0))
 	_definition_ids = candidate.get_definition_ids()
@@ -235,7 +248,14 @@ func _dispatch_region_generation_jobs() -> void:
 		var request: Dictionary = _pending_region_publications[id]
 		_pending_region_publications.erase(id)
 		var state: RefCounted = request["world_state"]
-		var job := RegionGenerationJob.new(int(state.get("world_seed")), world_id, request["region_key"], registry)
+		var job := RegionGenerationJob.new(
+			int(state.get("world_seed")),
+			world_id,
+			request["region_key"],
+			registry,
+			_materialization_content_signature,
+			_materialization_directory
+		)
 		var task_id := WorkerThreadPool.add_task(Callable(job, "run"), false, "procedural object region generation")
 		if task_id < 0:
 			_finish_queued_publication(
@@ -277,6 +297,17 @@ func _process_completed_region_generation_jobs() -> void:
 			continue
 		var job = record["job"]
 		var generated: Dictionary = job.result
+		if _perf_trace_enabled:
+			PerformanceTrace.emit("object_region_generation_ready", {
+				"region": [int(request["region_key"].x), int(request["region_key"].y)],
+				"worker_usec": int(generated.get("worker_usec", 0)),
+				"geometry_cpu_usec": int(generated.get("geometry_cpu_usec", 0)),
+				"materialization_hit": bool(generated.get("materialization_hit", false)),
+				"materialization_load_usec": int(generated.get("materialization_load_usec", 0)),
+				"materialization_save_usec": int(generated.get("materialization_save_usec", 0)),
+				"materialization_reason": String(generated.get("materialization_reason", "")),
+				"instance_count": (generated.get("instances", []) as Array).size(),
+			})
 		var result: Dictionary
 		if not generated.get("ok", false):
 			result = _record_region_failure(id, String(generated.get("reason", "object_generation_failed")))
@@ -328,6 +359,9 @@ func publish_region(
 	request_serial: int = -1
 ) -> Dictionary:
 	var publication_started_usec := Time.get_ticks_usec()
+	var geometry_cache_hits_before := _geometry_cache_hit_count
+	var geometry_cache_misses_before := _geometry_cache_miss_count
+	var geometry_cache_evictions_before := _geometry_cache_eviction_count
 	var id := _region_id(region_key)
 	if _expected_publication_tokens.has(id) and publication_token != int(_expected_publication_tokens[id]):
 		return _failure("stale_object_region_publication")
@@ -487,6 +521,13 @@ func publish_region(
 		"generation_usec": generation_usec,
 		"generation_worker_usec": generation_worker_usec,
 		"geometry_cpu_worker_usec": geometry_cpu_worker_usec,
+		"materialization_hit": bool(generated_base.get("materialization_hit", false)),
+		"materialization_load_usec": int(generated_base.get("materialization_load_usec", 0)),
+		"materialization_save_usec": int(generated_base.get("materialization_save_usec", 0)),
+		"geometry_cache_hits": _geometry_cache_hit_count - geometry_cache_hits_before,
+		"geometry_cache_misses": _geometry_cache_miss_count - geometry_cache_misses_before,
+		"geometry_cache_evictions": _geometry_cache_eviction_count - geometry_cache_evictions_before,
+		"geometry_cache_variant_count": _geometry_mesh_cache.size(),
 		"main_thread_reconstruction_usec": main_thread_reconstruction_usec,
 		"logical_reconstruction_usec": _last_reconstruction_usec,
 		"mesh_build_usec": mesh_build_elapsed_usec,
@@ -1113,6 +1154,11 @@ func get_performance_snapshot() -> Dictionary:
 		"active_instance_count": resident_instances,
 		"batched_instance_count": resident_batched,
 		"geometry_cache_variant_count": _geometry_mesh_cache.size(),
+		"geometry_cache_capacity": MAX_CACHED_GEOMETRY_VARIANTS,
+		"geometry_cache_hit_count": _geometry_cache_hit_count,
+		"geometry_cache_miss_count": _geometry_cache_miss_count,
+		"geometry_cache_eviction_count": _geometry_cache_eviction_count,
+		"materialization_enabled": not _materialization_content_signature.is_empty(),
 		"last_region": _last_region_metrics.duplicate(true),
 		"peak_generation_usec": _peak_region_generation_usec,
 		"peak_geometry_build_usec": _peak_mesh_build_usec,
@@ -1182,6 +1228,20 @@ func _discover_configured_packages(base_roots: Array[String]) -> Dictionary:
 
 func _configured_optional_roots(roots: Array[String]) -> Array[String]:
 	return Loader.optional_user_roots(roots)
+
+
+func _object_materialization_directory(seed_value: int) -> String:
+	var root: String
+	if state_directory_override.is_empty():
+		root = ProjectSettings.globalize_path(
+			"user://worlds/%s/object-materialized" % world_id
+		)
+	else:
+		var state_root := ProjectSettings.globalize_path(state_directory_override) 			if state_directory_override.begins_with("user://") 				or state_directory_override.begins_with("res://") 			else state_directory_override
+		root = state_root.get_base_dir().path_join("object-materialized")
+	return root.path_join(
+		"seed-%d-generator-%d" % [seed_value, FIELD.GENERATOR_VERSION]
+	)
 
 
 func _initialize_state_service(seed_value: int) -> Dictionary:
@@ -1282,9 +1342,11 @@ func _get_or_build_geometry_mesh(instance: Dictionary, prepared_cpu: Dictionary 
 	}
 	var cache_key := JSON.stringify(key_data, "", true, true).sha256_text()
 	if _geometry_mesh_cache.has(cache_key):
+		_geometry_cache_hit_count += 1
 		_geometry_mesh_cache_order.erase(cache_key)
 		_geometry_mesh_cache_order.append(cache_key)
 		return {"ok": true, "reason": "cache_hit", "mesh": _geometry_mesh_cache[cache_key]}
+	_geometry_cache_miss_count += 1
 	var result: Dictionary
 	if not prepared_cpu.is_empty():
 		result = RockMeshAdapter.mesh_from_cpu_data(prepared_cpu)
@@ -1296,6 +1358,7 @@ func _get_or_build_geometry_mesh(instance: Dictionary, prepared_cpu: Dictionary 
 		while _geometry_mesh_cache_order.size() > MAX_CACHED_GEOMETRY_VARIANTS:
 			var evicted: String = _geometry_mesh_cache_order.pop_front()
 			_geometry_mesh_cache.erase(evicted)
+			_geometry_cache_eviction_count += 1
 	return result
 
 
