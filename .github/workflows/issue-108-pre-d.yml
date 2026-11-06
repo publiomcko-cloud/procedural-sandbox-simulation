@@ -46,6 +46,7 @@ jobs:
           set -o pipefail
           /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_pre_d_local_frame_tests.gd 2>&1 | tee /tmp/pre-d.log
           grep -q 'ISSUE108_PRE_D_PASS' /tmp/pre-d.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/pre-d.log
 
       - name: Phase D live SDF integration
         shell: bash
@@ -53,6 +54,8 @@ jobs:
           set -o pipefail
           /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_phase_d_live_integration_tests.gd 2>&1 | tee /tmp/phase-d.log
           grep -q 'ISSUE108_PHASE_D_PASS' /tmp/phase-d.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/phase-d.log
+          ! grep -q 'ERROR: FAIL:' /tmp/phase-d.log
 
       - name: Phase C recovery regression
         shell: bash
@@ -60,6 +63,7 @@ jobs:
           set -o pipefail
           /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_phase_c_projection_recovery_tests.gd 2>&1 | tee /tmp/phase-c.log
           grep -q 'ISSUE108_PHASE_C_PASS' /tmp/phase-c.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/phase-c.log
 
       - name: Frozen Phase B domain regression
         shell: bash
@@ -67,6 +71,7 @@ jobs:
           set -o pipefail
           /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_phase_b_pure_effect_tests.gd 2>&1 | tee /tmp/phase-b.log
           grep -q 'ISSUE108_PHASE_B_PASS' /tmp/phase-b.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/phase-b.log
 
       - name: Canonical validation
         shell: bash
