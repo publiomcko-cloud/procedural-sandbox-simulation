@@ -496,6 +496,7 @@ func publish_region(
 	}
 	if _perf_trace_enabled and int(_last_region_metrics["publication_usec"]) >= PerformanceTrace.min_usec():
 		var trace_metrics := _last_region_metrics.duplicate(true)
+		trace_metrics.erase("region_key")
 		trace_metrics["region"] = [region_key.x, region_key.y]
 		PerformanceTrace.emit("object_region_publish", trace_metrics)
 	_peak_region_generation_usec = maxi(_peak_region_generation_usec, int(_last_region_metrics["generation_usec"]))
