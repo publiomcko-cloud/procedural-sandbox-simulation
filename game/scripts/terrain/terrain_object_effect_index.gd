@@ -9,7 +9,7 @@ const Effect := preload("res://scripts/terrain/terrain_object_effect.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 
-const INDEX_VERSION := 1
+const INDEX_VERSION := 2
 const MAX_EFFECTS := 20064
 const MAX_CHUNKS_PER_EFFECT := 256
 const CHUNK_WIDTH := float(Grid.CELLS_PER_CHUNK_X) * Grid.SAMPLE_STEP
@@ -149,28 +149,46 @@ func _chunk_keys_for_effect(effect: Dictionary) -> Dictionary:
 	var bounds_result := Effect.bounds(effect)
 	if not bounds_result.get("ok", false):
 		return bounds_result
-	var minimum: Vector3 = bounds_result["min"]
-	var maximum: Vector3 = bounds_result["max"]
+	var source_region: Vector2i = bounds_result["source_region_key"]
+	var minimum: Vector3 = bounds_result["min_local"]
+	var maximum: Vector3 = bounds_result["max_local"]
 	if maximum.y < Grid.MIN_BOUND.y - INDEX_HALO 		or minimum.y > Grid.MAX_BOUND.y + INDEX_HALO:
 		return {"ok": true, "keys": []}
-	var min_x := floori((minimum.x - INDEX_HALO) / CHUNK_WIDTH)
-	var max_x := floori((maximum.x + INDEX_HALO) / CHUNK_WIDTH)
-	var min_z := floori((minimum.z - INDEX_HALO) / CHUNK_DEPTH)
-	var max_z := floori((maximum.z + INDEX_HALO) / CHUNK_DEPTH)
-	var estimated := (max_x - min_x + 1) * (max_z - min_z + 1)
+
+	# Bounds remain in the source-region frame. Convert only local chunk offsets
+	# to integer world-chunk coordinates; no large world-space float is formed.
+	var min_local_chunk_x := floori((minimum.x - INDEX_HALO) / CHUNK_WIDTH)
+	var max_local_chunk_x := floori((maximum.x + INDEX_HALO) / CHUNK_WIDTH)
+	var min_local_chunk_z := floori((minimum.z - INDEX_HALO) / CHUNK_DEPTH)
+	var max_local_chunk_z := floori((maximum.z + INDEX_HALO) / CHUNK_DEPTH)
+	var estimated := (
+		(max_local_chunk_x - min_local_chunk_x + 1)
+		* (max_local_chunk_z - min_local_chunk_z + 1)
+	)
 	if estimated < 0 or estimated > MAX_CHUNKS_PER_EFFECT:
 		return _failure("terrain_effect_spatial_budget_exceeded")
+
+	var source_world_chunk_x: int = int(source_region.x) * Grid.CHUNK_COUNT_X
+	var source_world_chunk_z: int = int(source_region.y) * Grid.CHUNK_COUNT_Z
 	var keys: Array[String] = []
-	for world_chunk_z in range(min_z, max_z + 1):
+	for local_chunk_z in range(min_local_chunk_z, max_local_chunk_z + 1):
+		var world_chunk_z: int = source_world_chunk_z + local_chunk_z
 		var region_z := _floor_divide(world_chunk_z, Grid.CHUNK_COUNT_Z)
+		if region_z < -2147483648 or region_z > 2147483647:
+			return _failure("terrain_effect_region_range_exceeded")
 		var local_z := world_chunk_z - region_z * Grid.CHUNK_COUNT_Z
-		for world_chunk_x in range(min_x, max_x + 1):
+		for local_chunk_x in range(min_local_chunk_x, max_local_chunk_x + 1):
+			var world_chunk_x: int = source_world_chunk_x + local_chunk_x
 			var region_x := _floor_divide(world_chunk_x, Grid.CHUNK_COUNT_X)
+			if region_x < -2147483648 or region_x > 2147483647:
+				return _failure("terrain_effect_region_range_exceeded")
 			var local_x := world_chunk_x - region_x * Grid.CHUNK_COUNT_X
 			var coordinate := Vector2i(local_x, local_z)
 			if not Grid.is_valid_coordinate(coordinate):
 				return _failure("terrain_effect_chunk_mapping_invalid")
-			keys.append(Grid.stable_id(Vector2i(region_x, region_z), coordinate))
+			keys.append(
+				Grid.stable_id(Vector2i(region_x, region_z), coordinate)
+			)
 	keys.sort()
 	return {"ok": true, "keys": keys}
 
