@@ -272,6 +272,10 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	# Effect projection source workers hold the immutable content registry. Join
+	# them before the object stream/registry can be released with the scene.
+	if terrain_effect_runtime != null 		and terrain_effect_runtime.has_method("wait_for_prefetch_jobs"):
+		terrain_effect_runtime.wait_for_prefetch_jobs()
 	# Worker callbacks own only immutable input and CPU packed arrays, but complete
 	# them before the scene and their result holders are released.
 	for task_id_value in _mesh_jobs.keys().duplicate():
