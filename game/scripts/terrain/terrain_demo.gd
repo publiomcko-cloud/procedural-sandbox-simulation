@@ -175,6 +175,7 @@ var _last_edit_rebuild_region_count := 0
 var _last_edit_rebuild_chunk_count := 0
 var _last_edit_mesh_jobs := 0
 var _last_edit_rejection := ""
+var _terrain_effect_dirty_chunks_by_region: Dictionary = {}
 
 
 func _ready() -> void:
@@ -283,6 +284,10 @@ func _process(delta: float) -> void:
 	_maybe_schedule_async_checkpoint()
 	_process_one_chunk_job()
 	object_stream.process_queued_publications()
+	_queue_terrain_effect_dirty_chunks(
+		object_stream.consume_terrain_effect_dirty_chunk_ids()
+	)
+	_process_terrain_effect_dirty_chunks()
 	var visual_result: Dictionary = object_stream.consume_last_command_visual_result()
 	if not visual_result.is_empty():
 		if visual_result.get("ok", false):
@@ -1336,6 +1341,12 @@ func _dispatch_mesh_jobs() -> void:
 			var corner_snapshot: Dictionary = SharedBoundaryAuthority.make_xz_corner_snapshot(
 				state.brush_edits, min_region
 			)
+			_attach_terrain_effect_snapshot(corner_snapshot, [
+				{"region_key": min_region, "coordinate": Vector2i(ChunkGrid.CHUNK_COUNT_X - 1, ChunkGrid.CHUNK_COUNT_Z - 1)},
+				{"region_key": min_region + Vector2i(1, 0), "coordinate": Vector2i(0, ChunkGrid.CHUNK_COUNT_Z - 1)},
+				{"region_key": min_region + Vector2i(0, 1), "coordinate": Vector2i(ChunkGrid.CHUNK_COUNT_X - 1, 0)},
+				{"region_key": min_region + Vector2i(1, 1), "coordinate": Vector2i(0, 0)},
+			])
 			snapshot_meta = corner_snapshot
 			job = SharedCornerMeshJob.new(
 				state.world_seed, min_region, corner_snapshot, submitted_usec,
@@ -1349,6 +1360,10 @@ func _dispatch_mesh_jobs() -> void:
 			var pair_snapshot: Dictionary = SharedBoundaryAuthority.make_x_pair_snapshot(
 				state.brush_edits, left_region, coordinate.y
 			)
+			_attach_terrain_effect_snapshot(pair_snapshot, [
+				{"region_key": left_region, "coordinate": Vector2i(ChunkGrid.CHUNK_COUNT_X - 1, coordinate.y)},
+				{"region_key": left_region + Vector2i.RIGHT, "coordinate": Vector2i(0, coordinate.y)},
+			])
 			snapshot_meta = pair_snapshot
 			job = SharedBoundaryMeshJob.new(
 				state.world_seed, left_region, coordinate.y, pair_snapshot, submitted_usec,
@@ -1362,6 +1377,10 @@ func _dispatch_mesh_jobs() -> void:
 			var z_snapshot: Dictionary = SharedBoundaryAuthority.make_z_pair_snapshot(
 				state.brush_edits, low_region, coordinate.x
 			)
+			_attach_terrain_effect_snapshot(z_snapshot, [
+				{"region_key": low_region, "coordinate": Vector2i(coordinate.x, ChunkGrid.CHUNK_COUNT_Z - 1)},
+				{"region_key": low_region + Vector2i(0, 1), "coordinate": Vector2i(coordinate.x, 0)},
+			])
 			snapshot_meta = z_snapshot
 			job = SharedZBoundaryMeshJob.new(
 				state.world_seed, low_region, coordinate.x, z_snapshot, submitted_usec,
@@ -1373,6 +1392,10 @@ func _dispatch_mesh_jobs() -> void:
 			var chunk_snapshot: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
 				stage["region_key"], coordinate
 			)
+			_attach_terrain_effect_snapshot(chunk_snapshot, [{
+				"region_key": stage["region_key"],
+				"coordinate": coordinate,
+			}])
 			snapshot_meta = chunk_snapshot
 			job = TerrainMeshJob.new(
 				state.world_seed, stage["region_key"], coordinate,
@@ -2246,6 +2269,112 @@ func _sample_world_density_from_snapshot(world_position: Vector3, snapshot: Dict
 	)
 
 
+func _attach_terrain_effect_snapshot(
+	target_snapshot: Dictionary,
+	requests: Array
+) -> void:
+	if requests.is_empty() or object_stream == null:
+		target_snapshot["terrain_object_local_frames"] = []
+		target_snapshot["terrain_object_effect_count"] = 0
+		target_snapshot["terrain_object_effect_snapshot_sha256"] = "none"
+		return
+	var effect_snapshot: Dictionary = object_stream.get_terrain_effect_snapshot_for_chunks(
+		requests
+	)
+	if not effect_snapshot.get("ok", false):
+		target_snapshot["valid"] = false
+		target_snapshot["storage_error"] = "terrain_effect_snapshot_failed:%s" % effect_snapshot.get("reason", "unknown")
+		return
+	target_snapshot["terrain_object_local_frames"] = effect_snapshot.get(
+		"terrain_object_local_frames", []
+	)
+	target_snapshot["terrain_object_effect_count"] = int(
+		effect_snapshot.get("terrain_object_effect_count", 0)
+	)
+	target_snapshot["terrain_object_effect_snapshot_sha256"] = String(
+		effect_snapshot.get("terrain_object_effect_snapshot_sha256", "none")
+	)
+
+
+func _terrain_effect_chunk_requests_for_ray(
+	ray_origin: Vector3,
+	ray_direction: Vector3,
+	max_distance: float
+) -> Array:
+	var requests: Array = []
+	if not ray_origin.is_finite() or not ray_direction.is_finite() 		or ray_direction.length_squared() < 0.000001:
+		return requests
+	var seen: Dictionary = {}
+	var direction := ray_direction.normalized()
+	var step := 2.0
+	var distance := 0.0
+	while distance <= max_distance + step:
+		var point := ray_origin + direction * minf(distance, max_distance)
+		var mapped: Dictionary = SpatialGrid.world_to_region_local(point)
+		if mapped.get("valid", false):
+			var region_key: Vector2i = mapped["region_key"]
+			var local: Vector3 = mapped["local_position"]
+			var coordinate := Vector2i(
+				clampi(floori(local.x / 4.0), 0, ChunkGrid.CHUNK_COUNT_X - 1),
+				clampi(floori(local.z / 3.0), 0, ChunkGrid.CHUNK_COUNT_Z - 1)
+			)
+			var id := ChunkGrid.stable_id(region_key, coordinate)
+			if not seen.has(id):
+				seen[id] = true
+				requests.append({
+					"region_key": region_key,
+					"coordinate": coordinate,
+				})
+		if distance >= max_distance:
+			break
+		distance += step
+	return requests
+
+
+func _queue_terrain_effect_dirty_chunks(chunk_ids: Array[String]) -> void:
+	var regex := RegEx.new()
+	regex.compile("^region:(-?[0-9]+),(-?[0-9]+)/chunk:([0-9]+),([0-9]+)$")
+	for chunk_id in chunk_ids:
+		var match := regex.search(chunk_id)
+		if match == null:
+			continue
+		var region_key := Vector2i(
+			int(match.get_string(1)), int(match.get_string(2))
+		)
+		var coordinate := Vector2i(
+			int(match.get_string(3)), int(match.get_string(4))
+		)
+		if not ChunkGrid.is_valid_coordinate(coordinate):
+			continue
+		var id := _region_id(region_key)
+		var coordinates: Array = _terrain_effect_dirty_chunks_by_region.get(id, [])
+		if not coordinates.has(coordinate):
+			coordinates.append(coordinate)
+		_terrain_effect_dirty_chunks_by_region[id] = coordinates
+
+
+func _process_terrain_effect_dirty_chunks() -> void:
+	for id_value in _terrain_effect_dirty_chunks_by_region.keys().duplicate():
+		var id := String(id_value)
+		if loading_regions.has(id):
+			continue
+		if not active_regions.has(id):
+			_terrain_effect_dirty_chunks_by_region.erase(id)
+			continue
+		var coordinates: Array = _terrain_effect_dirty_chunks_by_region[id]
+		_terrain_effect_dirty_chunks_by_region.erase(id)
+		if coordinates.is_empty():
+			continue
+		coordinates.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+			return a.y < b.y or (a.y == b.y and a.x < b.x)
+		)
+		_begin_region_stage(
+			active_regions[id]["region_key"],
+			"partial",
+			coordinates
+		)
+
+
 func _edit_trace(event: String, payload: Dictionary = {}) -> void:
 	if not _edit_trace_enabled:
 		return
@@ -2267,6 +2396,12 @@ func _apply_brush_at(screen_position: Vector2) -> void:
 	var snapshot_started_usec := Time.get_ticks_usec()
 	var pick_snapshot: Dictionary = focused_state.brush_edits.get_ray_snapshot(
 		ray_origin, ray_direction, BrushPicker.MAX_DISTANCE
+	)
+	_attach_terrain_effect_snapshot(
+		pick_snapshot,
+		_terrain_effect_chunk_requests_for_ray(
+			ray_origin, ray_direction, BrushPicker.MAX_DISTANCE
+		)
 	)
 	_last_brush_pick_snapshot_elapsed_usec = Time.get_ticks_usec() - snapshot_started_usec
 	_last_brush_pick_candidate_count = int(pick_snapshot.get("candidate_operation_count", 0))
