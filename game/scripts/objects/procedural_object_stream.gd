@@ -925,6 +925,63 @@ func get_active_region_count() -> int:
 	return _regions.size()
 
 
+func get_authoritative_region_projection_source(region_key: Vector2i) -> Dictionary:
+	if not initialized or state_service == null or not bool(state_service.get("initialized")):
+		return {"ok": false, "reason": "object_projection_source_unavailable"}
+	var base_instances: Array[Dictionary] = []
+	if entity_command_service != null and bool(entity_command_service.get("initialized")):
+		var reconstructed: Dictionary = entity_command_service.reconstruct_region(region_key)
+		if not reconstructed.get("ok", false):
+			return {
+				"ok": false,
+				"reason": "object_projection_region_reconstruction_failed:%s" 					% reconstructed.get("reason", "unknown"),
+			}
+		base_instances = entity_command_service.get_region_base_instances(region_key)
+	else:
+		var generated: Dictionary = ObjectWorld.build_region_instances(
+			world_seed, world_id, region_key, registry
+		)
+		if not generated.get("ok", false):
+			return {
+				"ok": false,
+				"reason": "object_projection_region_generation_failed:%s" 					% generated.get("reason", "unknown"),
+			}
+		for value in generated.get("instances", []):
+			if typeof(value) == TYPE_DICTIONARY:
+				base_instances.append((value as Dictionary).duplicate(true))
+		# Explicit placed entities require command-schema reconstruction. A legacy
+		# pre-command save can still project deterministic procedural content.
+		var placed: Dictionary = state_service.snapshot.get("placed_entities", {})
+		if not placed.is_empty():
+			return {
+				"ok": false,
+				"reason": "object_projection_command_migration_required",
+			}
+
+	var active: Array[Dictionary] = []
+	var revisions: Dictionary = {}
+	for base in base_instances:
+		var resolved: Dictionary = state_service.resolve_instance(base)
+		if not resolved.get("ok", false):
+			return {
+				"ok": false,
+				"reason": "object_projection_resolution_failed:%s" 					% resolved.get("reason", "unknown"),
+			}
+		if resolved.get("deleted", false):
+			continue
+		var instance: Dictionary = resolved["instance"]
+		active.append(instance.duplicate(true))
+		var instance_id := String(instance.get("instance_id", ""))
+		revisions[instance_id] = int(state_service.get_entity_revision(instance_id))
+	return {
+		"ok": true,
+		"region_key": region_key,
+		"world_revision": int(state_service.get_revision()),
+		"instances": active,
+		"source_revisions": revisions,
+	}
+
+
 func get_region_instance_records(region_key: Vector2i) -> Array[Dictionary]:
 	var entry: Dictionary = _regions.get(_region_id(region_key), {})
 	var result: Array[Dictionary] = []
