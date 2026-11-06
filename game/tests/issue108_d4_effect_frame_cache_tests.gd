@@ -145,7 +145,7 @@ func _run() -> void:
 		Vector2i.ZERO
 	])
 	_check(window.get("ok", false), "cold source window queues")
-	var cold_drained := await _drain(runtime)
+	var cold_drained: bool = await _drain(runtime)
 	_check(cold_drained, "cold source window drains")
 	var cold_perf: Dictionary = runtime.get_performance_snapshot()
 	var cold_misses := int(cold_perf.get(
@@ -182,7 +182,7 @@ func _run() -> void:
 		Vector2i.ZERO
 	])
 	_check(warm_window.get("ok", false), "warm revisit window queues")
-	var warm_drained := await _drain(runtime)
+	var warm_drained: bool = await _drain(runtime)
 	_check(warm_drained, "warm revisit window drains from cache")
 	var warm_perf: Dictionary = runtime.get_performance_snapshot()
 	var warm_hits := int(warm_perf.get(
@@ -218,7 +218,7 @@ func _run() -> void:
 		Vector2i.ZERO
 	])
 	_check(mutated_window.get("ok", false), "mutated source window queues")
-	var mutated_drained := await _drain(runtime)
+	var mutated_drained: bool = await _drain(runtime)
 	_check(mutated_drained, "mutated source window drains")
 	var mutated_perf: Dictionary = runtime.get_performance_snapshot()
 	_check(
