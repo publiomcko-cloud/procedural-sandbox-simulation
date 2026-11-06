@@ -282,12 +282,14 @@ func _process(delta: float) -> void:
 		_checkpoint_overlap_observed = true
 	_process_async_checkpoint()
 	_maybe_schedule_async_checkpoint()
-	_process_one_chunk_job()
+	# Publish/reconcile object authority before accepting completed terrain jobs
+	# so a same-frame effect change invalidates the old immutable mesh snapshot.
 	object_stream.process_queued_publications()
 	_queue_terrain_effect_dirty_chunks(
 		object_stream.consume_terrain_effect_dirty_chunk_ids()
 	)
 	_process_terrain_effect_dirty_chunks()
+	_process_one_chunk_job()
 	var visual_result: Dictionary = object_stream.consume_last_command_visual_result()
 	if not visual_result.is_empty():
 		if visual_result.get("ok", false):
@@ -2324,7 +2326,7 @@ func _terrain_effect_chunk_requests_for_ray(
 		return requests
 	var seen: Dictionary = {}
 	var direction := ray_direction.normalized()
-	var step := 2.0
+	var step := ChunkGrid.SAMPLE_STEP
 	var distance := 0.0
 	while distance <= max_distance + step:
 		var point := ray_origin + direction * minf(distance, max_distance)
