@@ -604,8 +604,9 @@ func _remember_projection_build(
 	_projection_build_cache_order.erase(cache_key)
 	_projection_build_cache_order.append(cache_key)
 	while _projection_build_cache_order.size() > MAX_PROJECTION_BUILD_CACHE_ENTRIES:
-		var evicted_key := _projection_build_cache_order.pop_front()
-		if _projection_build_cache.erase(evicted_key):
+		var evicted_key: String = _projection_build_cache_order.pop_front()
+		if _projection_build_cache.has(evicted_key):
+			_projection_build_cache.erase(evicted_key)
 			_performance["projection_build_cache_eviction_count"] = int(
 				_performance["projection_build_cache_eviction_count"]
 			) + 1
