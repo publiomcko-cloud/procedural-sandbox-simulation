@@ -234,7 +234,10 @@ func reconcile_scope(
 				)
 		incoming_effects[effect_id] = effect
 		var built_frame := LocalFrame.build_from_instance(
-			instance, effect, source_revision
+			instance,
+			effect,
+			source_revision,
+			built.get("shape_descriptor", {})
 		)
 		if not built_frame.get("ok", false):
 			return _failure(
