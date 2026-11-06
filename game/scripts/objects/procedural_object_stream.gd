@@ -7,6 +7,7 @@ const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 const RegistryScript := preload("res://scripts/modding/content_definition_registry.gd")
 const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const RegionGenerationJob := preload("res://scripts/objects/procedural_object_region_generation_job.gd")
+const ProjectionSourceGenerationJob := preload("res://scripts/objects/procedural_object_projection_source_generation_job.gd")
 const RockMeshAdapter := preload("res://scripts/objects/procedural_rock_mesh_adapter.gd")
 const StaticBatchBuilder := preload("res://scripts/objects/procedural_object_static_batch.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
@@ -925,33 +926,57 @@ func get_active_region_count() -> int:
 	return _regions.size()
 
 
-func get_authoritative_region_projection_source(region_key: Vector2i) -> Dictionary:
-	if not initialized or state_service == null or not bool(state_service.get("initialized")):
+func create_projection_source_generation_job(
+	region_key: Vector2i
+) -> RefCounted:
+	if not initialized or registry == null:
+		return null
+	return ProjectionSourceGenerationJob.new(
+		world_seed, world_id, region_key, registry
+	)
+
+
+func finalize_authoritative_region_projection_source(
+	region_key: Vector2i,
+	generated: Dictionary
+) -> Dictionary:
+	if not initialized or state_service == null 		or not bool(state_service.get("initialized")):
 		return {"ok": false, "reason": "object_projection_source_unavailable"}
+	if not generated.get("ok", false) 		or Vector2i(generated.get("region_key", region_key)) != region_key:
+		return {
+			"ok": false,
+			"reason": "object_projection_region_generation_failed:%s" 				% generated.get("reason", "invalid"),
+		}
+
 	var base_instances: Array[Dictionary] = []
-	if entity_command_service != null and bool(entity_command_service.get("initialized")):
-		var reconstructed: Dictionary = entity_command_service.reconstruct_region(region_key)
-		if not reconstructed.get("ok", false):
+	if entity_command_service != null 		and bool(entity_command_service.get("initialized")):
+		if not entity_command_service.has_method(
+			"build_projection_region_base_instances"
+		):
 			return {
 				"ok": false,
-				"reason": "object_projection_region_reconstruction_failed:%s" 					% reconstructed.get("reason", "unknown"),
+				"reason": "object_projection_readonly_adapter_unavailable",
 			}
-		base_instances = entity_command_service.get_region_base_instances(region_key)
-	else:
-		var generated: Dictionary = ObjectWorld.build_region_instances(
-			world_seed, world_id, region_key, registry
+		var built: Dictionary = entity_command_service.call(
+			"build_projection_region_base_instances", region_key, generated
 		)
-		if not generated.get("ok", false):
+		if not built.get("ok", false):
 			return {
 				"ok": false,
-				"reason": "object_projection_region_generation_failed:%s" 					% generated.get("reason", "unknown"),
+				"reason": "object_projection_region_reconstruction_failed:%s" 					% built.get("reason", "unknown"),
 			}
+		for value in built.get("instances", []):
+			if typeof(value) == TYPE_DICTIONARY:
+				base_instances.append((value as Dictionary).duplicate(true))
+	else:
 		for value in generated.get("instances", []):
 			if typeof(value) == TYPE_DICTIONARY:
 				base_instances.append((value as Dictionary).duplicate(true))
-		# Explicit placed entities require command-schema reconstruction. A legacy
-		# pre-command save can still project deterministic procedural content.
-		var placed: Dictionary = state_service.snapshot.get("placed_entities", {})
+		# Explicit placed entities require command-schema reconstruction. A
+		# legacy pre-command save can project deterministic procedural content.
+		var placed: Dictionary = state_service.snapshot.get(
+			"placed_entities", {}
+		)
 		if not placed.is_empty():
 			return {
 				"ok": false,
@@ -972,14 +997,32 @@ func get_authoritative_region_projection_source(region_key: Vector2i) -> Diction
 		var instance: Dictionary = resolved["instance"]
 		active.append(instance.duplicate(true))
 		var instance_id := String(instance.get("instance_id", ""))
-		revisions[instance_id] = int(state_service.get_entity_revision(instance_id))
+		revisions[instance_id] = int(
+			state_service.get_entity_revision(instance_id)
+		)
+	active.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return String(a.get("instance_id", "")) 			< String(b.get("instance_id", ""))
+	)
 	return {
 		"ok": true,
 		"region_key": region_key,
 		"world_revision": int(state_service.get_revision()),
 		"instances": active,
 		"source_revisions": revisions,
+		"generation_worker_usec": int(generated.get("worker_usec", 0)),
 	}
+
+
+func get_authoritative_region_projection_source(
+	region_key: Vector2i
+) -> Dictionary:
+	var job := create_projection_source_generation_job(region_key)
+	if job == null:
+		return {"ok": false, "reason": "object_projection_source_unavailable"}
+	job.run()
+	return finalize_authoritative_region_projection_source(
+		region_key, job.result
+	)
 
 
 func get_region_instance_records(region_key: Vector2i) -> Array[Dictionary]:
