@@ -19,6 +19,7 @@ const SharedZBoundaryMeshJob := preload("res://scripts/terrain/shared_surface_z_
 const SharedCornerMeshJob := preload("res://scripts/terrain/shared_surface_corner_mesh_job.gd")
 const EntityStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 const TerrainEffectRuntime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
+const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -108,6 +109,7 @@ var _lod_fallback_chunks: Dictionary = {} # stable chunk id -> deterministic LOD
 var lod_enabled := false
 var _lod_selection_dirty := true
 var _edit_trace_enabled := EDIT_TRACE_DEFAULT_ENABLED
+var _perf_trace_enabled := false
 
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
@@ -182,6 +184,14 @@ var _last_edit_rejection := ""
 
 
 func _ready() -> void:
+	_perf_trace_enabled = PerformanceTrace.is_enabled()
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("terrain_trace_session", {
+			"world_id": world_id,
+			"world_seed": world_seed,
+			"processor_count": OS.get_processor_count(),
+			"trace_min_usec": PerformanceTrace.min_usec(),
+		})
 	_frame_time_samples.resize(512)
 	_mesh_job_limit = clampi(
 		OS.get_processor_count() - 1,
@@ -326,6 +336,24 @@ func _process(delta: float) -> void:
 	_peak_mesh_uploads_per_frame = maxi(_peak_mesh_uploads_per_frame, _mesh_uploads_this_frame)
 	_last_process_work_ms = float(Time.get_ticks_usec() - process_started_usec) / 1000.0
 	_peak_process_work_ms = maxf(_peak_process_work_ms, _last_process_work_ms)
+	if _perf_trace_enabled and _last_process_work_ms >= 16.0:
+		var effect_pending := 0
+		if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
+			effect_pending = int(terrain_effect_runtime.get_prefetch_pending_count())
+		var object_perf: Dictionary = object_stream.get_performance_snapshot()
+		PerformanceTrace.emit("terrain_process_spike", {
+			"work_ms": _last_process_work_ms,
+			"frame_ms": _last_frame_ms,
+			"focus": [focus_region_key.x, focus_region_key.y],
+			"active_regions": active_regions.size(),
+			"loading_regions": loading_regions.size(),
+			"mesh_jobs_in_flight": _mesh_jobs.size(),
+			"mesh_uploads_this_frame": _mesh_uploads_this_frame,
+			"effect_prefetch_pending": effect_pending,
+			"object_publications_pending": int(object_perf.get("pending_region_publication_count", 0)),
+			"global_rebuild_pending": global_rebuild_pending,
+			"edit_stage": String(_edit_transaction.get("stage_state", "idle")) if not _edit_transaction.is_empty() else "idle",
+		})
 	_diagnostics_refresh_elapsed += delta
 	if int(Input.mouse_mode) != _last_placement_mouse_mode:
 		_last_placement_mouse_mode = int(Input.mouse_mode)
@@ -1119,6 +1147,9 @@ func _update_focus_key() -> void:
 
 
 func _reconcile_region_window(force: bool = false) -> void:
+	var reconcile_started_usec := Time.get_ticks_usec()
+	var active_before := active_regions.size()
+	var loading_before := loading_regions.size()
 	_update_focus_key()
 	if not force and focus_region_key == _last_reconciled_focus:
 		return
@@ -1171,6 +1202,18 @@ func _reconcile_region_window(force: bool = false) -> void:
 				_add_edit_transaction_region(key)
 	_sync_world_state_index()
 	_update_runtime_diagnostics()
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("terrain_window_reconcile", {
+			"duration_usec": Time.get_ticks_usec() - reconcile_started_usec,
+			"force": force,
+			"focus": [focus_region_key.x, focus_region_key.y],
+			"active_before": active_before,
+			"active_after": active_regions.size(),
+			"loading_before": loading_before,
+			"loading_after": loading_regions.size(),
+			"mesh_jobs_in_flight": _mesh_jobs.size(),
+			"effect_prefetch_pending": int(terrain_effect_runtime.get_prefetch_pending_count()) if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")) else 0,
+		})
 
 
 func _edit_transaction_affects_region(region_key: Vector2i) -> bool:
@@ -1296,6 +1339,15 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 	world_states[id] = state
 	if region_key == focus_region_key:
 		world_state = state
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("terrain_stage_begin", {
+			"region": [region_key.x, region_key.y],
+			"purpose": purpose,
+			"chunk_count": coordinates.size(),
+			"stage_token": token,
+			"loading_regions": loading_regions.size(),
+			"mesh_jobs_in_flight": _mesh_jobs.size(),
+		})
 
 
 func _process_one_chunk_job() -> void:
@@ -1384,6 +1436,24 @@ func _process_completed_mesh_jobs() -> void:
 		var upload_elapsed_usec := Time.get_ticks_usec() - upload_started_usec
 		var worker_queue_usec := maxi(0, int(job.worker_started_usec) - int(record["submitted_usec"]))
 		var worker_run_usec := maxi(0, int(job.worker_finished_usec) - int(job.worker_started_usec))
+		if _perf_trace_enabled and (
+			worker_run_usec >= PerformanceTrace.min_usec()
+			or upload_elapsed_usec >= PerformanceTrace.min_usec()
+			or worker_queue_usec >= PerformanceTrace.min_usec()
+		):
+			PerformanceTrace.emit("terrain_mesh_job_complete", {
+				"region": [(stage["region_key"] as Vector2i).x, (stage["region_key"] as Vector2i).y],
+				"chunk": [(record["coordinate"] as Vector2i).x, (record["coordinate"] as Vector2i).y],
+				"purpose": String(stage["purpose"]),
+				"job_kind": completed_kind,
+				"snapshot_usec": int(record.get("snapshot_usec", 0)),
+				"worker_queue_usec": worker_queue_usec,
+				"worker_run_usec": worker_run_usec,
+				"upload_usec": upload_elapsed_usec,
+				"job_total_usec": Time.get_ticks_usec() - int(record["submitted_usec"]),
+				"mesh_jobs_remaining": _mesh_jobs.size(),
+				"completed_ready_count": completed_task_ids.size(),
+			})
 		if String(stage["purpose"]) == "edit_transaction" and not _edit_transaction.is_empty():
 			_edit_transaction["trace_worker_queue_usec_max"] = maxi(int(_edit_transaction.get("trace_worker_queue_usec_max", 0)), worker_queue_usec)
 			_edit_transaction["trace_worker_run_usec_max"] = maxi(int(_edit_transaction.get("trace_worker_run_usec_max", 0)), worker_run_usec)
@@ -1599,6 +1669,19 @@ func _dispatch_mesh_jobs() -> void:
 				int(stage.get("lod_by_coordinate", {}).get(coordinate, 0))
 			)
 		var snapshot_elapsed_usec := Time.get_ticks_usec() - snapshot_started_usec
+		if _perf_trace_enabled and snapshot_elapsed_usec >= PerformanceTrace.min_usec():
+			PerformanceTrace.emit("terrain_mesh_snapshot", {
+				"duration_usec": snapshot_elapsed_usec,
+				"region": [(stage["region_key"] as Vector2i).x, (stage["region_key"] as Vector2i).y],
+				"chunk": [coordinate.x, coordinate.y],
+				"purpose": String(stage["purpose"]),
+				"job_kind": job_kind,
+				"queue_wait_usec": maxi(0, submitted_usec - enqueued_usec),
+				"effect_frame_count": int(snapshot_meta.get("terrain_effect_frame_count", 0)),
+				"candidate_operations": int(snapshot_meta.get("candidate_operation_count", -1)),
+				"materialized_tiles": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
+				"mesh_jobs_in_flight": _mesh_jobs.size(),
+			})
 		if String(stage["purpose"]) == "edit_transaction" and not _edit_transaction.is_empty():
 			_edit_transaction["trace_snapshot_usec_total"] = int(_edit_transaction.get("trace_snapshot_usec_total", 0)) + snapshot_elapsed_usec
 			_edit_transaction["trace_snapshot_usec_max"] = maxi(int(_edit_transaction.get("trace_snapshot_usec_max", 0)), snapshot_elapsed_usec)
@@ -1821,6 +1904,7 @@ func _try_commit_global_rebuild() -> void:
 
 
 func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary, actual_lods: Dictionary = {}, fallback_lods: Dictionary = {}, publication_token: int = -1) -> void:
+	var publish_started_usec := Time.get_ticks_usec()
 	var id := _region_id(region_key)
 	var region_nodes: Dictionary = {}
 	var region_origin: Vector3 = SpatialGrid.region_origin_world(region_key)
@@ -1858,6 +1942,16 @@ func _publish_region(region_key: Vector2i, state: RefCounted, meshes: Dictionary
 	if region_key == focus_region_key:
 		world_state = state
 		_refresh_placement_target_indicator()
+	var publish_duration_usec := Time.get_ticks_usec() - publish_started_usec
+	if _perf_trace_enabled and publish_duration_usec >= PerformanceTrace.min_usec():
+		PerformanceTrace.emit("terrain_region_publish", {
+			"duration_usec": publish_duration_usec,
+			"region": [region_key.x, region_key.y],
+			"mesh_count": meshes.size(),
+			"active_region_count": active_regions.size(),
+			"active_chunk_count": chunk_nodes.size(),
+			"object_publication_pending": int(object_stream.get_performance_snapshot().get("pending_region_publication_count", 0)),
+		})
 
 
 func _create_chunk_node(region_key: Vector2i, coordinate: Vector2i, chunk_id: String) -> MeshInstance3D:
