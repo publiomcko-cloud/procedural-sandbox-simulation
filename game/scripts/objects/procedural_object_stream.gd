@@ -961,6 +961,18 @@ func get_definition_ids() -> Array[String]:
 	return _definition_ids.duplicate()
 
 
+func get_placeable_definition_ids() -> Array[String]:
+	var ids: Array[String] = []
+	if registry == null:
+		return ids
+	for definition_id in _definition_ids:
+		var recipe: Dictionary = registry.evaluate_rock_recipe(definition_id, 1)
+		if recipe.get("ok", false) and String(recipe.get("algorithm", "")) == RockMeshAdapter.ALGORITHM:
+			ids.append(definition_id)
+	ids.sort()
+	return ids
+
+
 func get_population_rule_ids() -> Array[String]:
 	return _population_rule_ids.duplicate()
 
