@@ -157,6 +157,9 @@ func _test_chunk_mesh(projection: RefCounted) -> void:
 			effect_job_snapshot["terrain_object_local_frames"] = effect_snapshot[
 				"terrain_object_local_frames"
 			].duplicate(true)
+			effect_job_snapshot["terrain_object_sampling_frames"] = effect_snapshot.get(
+				"terrain_object_sampling_frames", []
+			).duplicate(true)
 			effect_job_snapshot["terrain_object_effect_count"] = int(
 				effect_snapshot["terrain_object_effect_count"]
 			)
@@ -408,6 +411,13 @@ func _fixture_instance(
 
 
 func _snapshot(frames: Array) -> Dictionary:
+	var sampling_frames: Array[Dictionary] = []
+	for frame_value in frames:
+		if typeof(frame_value) != TYPE_DICTIONARY:
+			continue
+		var compiled: Dictionary = Frame.compile_prevalidated(frame_value)
+		if compiled.get("ok", false):
+			sampling_frames.append(compiled["sampling_frame"])
 	return {
 		"valid": true,
 		"revision": 0,
@@ -423,6 +433,7 @@ func _snapshot(frames: Array) -> Dictionary:
 		"candidate_operation_count": 0,
 		"ledger_operation_count": 0,
 		"terrain_object_local_frames": frames.duplicate(true),
+		"terrain_object_sampling_frames": sampling_frames,
 		"terrain_object_effect_count": frames.size(),
 		"terrain_object_effect_snapshot_sha256": "test",
 	}
