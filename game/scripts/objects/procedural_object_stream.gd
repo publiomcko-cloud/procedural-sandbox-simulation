@@ -14,7 +14,6 @@ const FIELD := preload("res://scripts/terrain/sdf_world.gd")
 const StateServiceScript := preload("res://scripts/objects/procedural_object_state_service.gd")
 const StateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 const EntityCommandServiceScript := preload("res://scripts/entities/entity_command_service.gd")
-const REQUIRED_MOD_IDS := ["firstparty.core_rocks", "official.example.procedural_rock"]
 const MAX_RESIDENT_REGIONS := 25
 const MAX_PENDING_REGION_PUBLICATIONS := 25
 const MAX_REGION_PUBLICATIONS_PER_FRAME := 1
@@ -39,6 +38,7 @@ var _package_discovery_report: Dictionary = {}
 var _expected_publication_tokens: Dictionary = {}
 var _published_publication_tokens: Dictionary = {}
 var _population_rule_ids: Array[String] = []
+var _terrain_interaction_rule_ids: Array[String] = []
 var _pending_region_publications: Dictionary = {}
 var _pending_publication_order: Array[String] = []
 var _region_generation_jobs: Dictionary = {} # worker task id -> {job, id, request, cancelled}
@@ -81,6 +81,7 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_geometry_mesh_cache.clear()
 	_geometry_mesh_cache_order.clear()
 	_population_rule_ids.clear()
+	_terrain_interaction_rule_ids.clear()
 	_package_discovery_report.clear()
 	var roots: Array[String] = []
 	for package_root in package_roots:
@@ -102,21 +103,6 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	var registration: Dictionary = candidate.register_discovered(discovery)
 	if not registration.get("ok", false):
 		return _fail_initialize("package_registration_failed:%s" % registration.get("reason", "unknown"))
-	for mod_id in REQUIRED_MOD_IDS:
-		if not candidate.has_mod(mod_id):
-			return _fail_initialize("required_mod_missing:%s" % mod_id)
-	for definition_id in ObjectWorld.SLOT_DEFINITIONS:
-		var definition: Dictionary = candidate.get_definition(definition_id)
-		if definition.is_empty():
-			return _fail_initialize("required_definition_missing:%s" % definition_id)
-		if int(definition.get("schema_version", -1)) != 2 or definition.get("recipe", {}).get("algorithm", "") != RockMeshAdapter.ALGORITHM:
-			return _fail_initialize("required_definition_geometry_version_unsupported:%s" % definition_id)
-	var compatibility_rules: Array[Dictionary] = candidate.get_compatibility_population_rules()
-	if compatibility_rules.size() != ObjectWorld.SLOT_DEFINITIONS.size():
-		return _fail_initialize("legacy_population_rules_incompatible")
-	for slot in range(compatibility_rules.size()):
-		if int(compatibility_rules[slot].get("legacy_slot", -1)) != slot or String(compatibility_rules[slot].get("definition_id", "")) != String(ObjectWorld.SLOT_DEFINITIONS[slot]):
-			return _fail_initialize("legacy_population_rules_incompatible")
 	state_directory_override = object_state_directory
 	var state_load := _initialize_state_service(world_seed)
 	if not state_load.get("ok", false):
@@ -126,13 +112,17 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_mod_count = int(registration.get("mod_count", 0))
 	_definition_ids.clear()
 	_population_rule_ids.clear()
+	_terrain_interaction_rule_ids.clear()
 	for package in discovery.get("packages", []):
 		for definition in package.get("definitions", []):
 			_definition_ids.append(String(definition.get("id", "")))
 		for rule in package.get("population_rules", []):
 			_population_rule_ids.append(String(rule.get("id", "")))
+		for interaction in package.get("terrain_interactions", []):
+			_terrain_interaction_rule_ids.append(String(interaction.get("id", "")))
 	_definition_ids.sort()
 	_population_rule_ids.sort()
+	_terrain_interaction_rule_ids.sort()
 	_rock_material = StandardMaterial3D.new()
 	_rock_material.albedo_color = Color(0.38, 0.39, 0.37, 1.0)
 	_rock_material.roughness = 0.94
@@ -144,6 +134,7 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 		"mod_count": _mod_count,
 		"definition_ids": _definition_ids.duplicate(),
 		"population_rule_ids": _population_rule_ids.duplicate(),
+		"terrain_interaction_rule_ids": _terrain_interaction_rule_ids.duplicate(),
 		"accepted_package_count": int(discovery.get("accepted_package_count", _mod_count)),
 		"optional_directory_ignored_count": int(discovery.get("optional_directory_ignored_count", 0)),
 		"discovery_diagnostics": discovery.get("diagnostics", []).duplicate(true),
@@ -1051,17 +1042,9 @@ func _configured_package_roots() -> Array[String]:
 
 
 func _discover_configured_packages(base_roots: Array[String]) -> Dictionary:
-	var optional_roots: Array[String] = ["user://mods"]
-	var installed_discovery: Dictionary = Loader.discover_and_validate(base_roots, optional_roots)
-	if not installed_discovery.get("ok", false):
-		return installed_discovery
-	for package in installed_discovery.get("packages", []):
-		if String(package.get("manifest", {}).get("id", "")) == "official.example.procedural_rock":
-			return installed_discovery
-	var project_root := ProjectSettings.globalize_path("res://").trim_suffix("/")
-	var repository_example_root := project_root.get_base_dir().path_join("mods/examples")
-	var fallback_roots: Array[String] = ["res://mods/first-party", repository_example_root, "user://mods"]
-	return Loader.discover_and_validate(fallback_roots, optional_roots)
+	# Repository examples are documentation/test fixtures, not runtime dependencies.
+	# Bundled first-party and installed user packages share this one discovery path.
+	return Loader.discover_and_validate(base_roots, ["user://mods"])
 
 
 func _configured_optional_roots(roots: Array[String]) -> Array[String]:
