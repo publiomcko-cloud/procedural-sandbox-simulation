@@ -20,6 +20,13 @@ const MAX_REGION_PUBLICATIONS_PER_FRAME := 1
 const MAX_REGION_GENERATION_JOBS_IN_FLIGHT := 2
 const MAX_CACHED_GEOMETRY_VARIANTS := 32
 
+signal authoritative_state_changed(
+	region_key: Vector2i,
+	world_revision: int,
+	entity_id: String,
+	operation: String
+)
+
 var registry: ContentDefinitionRegistry
 var world_seed := 0
 var world_id := ""
@@ -516,6 +523,21 @@ func get_entity_command_service() -> RefCounted:
 	return entity_command_service
 
 
+func _emit_authoritative_state_changed(
+	region_key: Vector2i,
+	entity_id: String,
+	operation: String
+) -> void:
+	if state_service == null or not bool(state_service.get("initialized")):
+		return
+	authoritative_state_changed.emit(
+		region_key,
+		int(state_service.get_revision()),
+		entity_id,
+		operation
+	)
+
+
 func get_command_world_revision() -> int:
 	return int(state_service.get_revision()) if state_service != null and state_service.initialized else 0
 
@@ -616,9 +638,18 @@ func dispatch_entity_command(command: Dictionary) -> Dictionary:
 			return placed_result
 		entity_id = String(placed_result.get("entity_id", ""))
 		var placed_location: Dictionary = entity_command_service.get_entity_region(entity_id)
+		if placed_location.get("ok", false):
+			affected_region = Vector2i(placed_location.region_key)
+		else:
+			var fallback_values: Array = command.get("region_key", [])
+			affected_region = Vector2i(
+				int(fallback_values[0]), int(fallback_values[1])
+			)
+		_emit_authoritative_state_changed(
+			affected_region, entity_id, operation
+		)
 		if not placed_location.get("ok", false):
 			return {"ok": true, "committed": true, "reason": "committed_but_identity_cache_missing", "entity_id": entity_id, "world_revision": int(placed_result.get("world_revision", -1)), "entity_revision": int(placed_result.get("entity_revision", -1))}
-		affected_region = Vector2i(placed_location.region_key)
 		return _queue_committed_visual_update(placed_result, affected_region, started_usec, region_reconstruction_usec)
 	var old_location: Dictionary = entity_command_service.get_entity_region(entity_id)
 	if old_location.get("ok", false):
@@ -633,6 +664,9 @@ func dispatch_entity_command(command: Dictionary) -> Dictionary:
 		affected_region = Vector2i(new_location.region_key)
 	if temporary_reconstruction and not _regions.has(_region_id(temporary_region)):
 		entity_command_service.release_region(temporary_region)
+	_emit_authoritative_state_changed(
+		affected_region, entity_id, operation
+	)
 	return _queue_committed_visual_update(result, affected_region, started_usec, region_reconstruction_usec)
 
 
@@ -787,6 +821,9 @@ func set_instance_component(instance_id: String, component_id: String, value: Di
 	var result: Dictionary = state_service.set_component(located.instance, component_id, value)
 	if not result.get("ok", false):
 		return result
+	_emit_authoritative_state_changed(
+		located.region_key, instance_id, "LEGACY_SET_COMPONENT"
+	)
 	var rebuilt := _republish_after_state_mutation(located.region_key, located.world_state)
 	if not rebuilt.get("ok", false):
 		return _failure("state_committed_region_rebuild_failed")
@@ -800,6 +837,9 @@ func delete_instance(instance_id: String) -> Dictionary:
 	var result: Dictionary = state_service.delete_instance(located.instance)
 	if not result.get("ok", false):
 		return result
+	_emit_authoritative_state_changed(
+		located.region_key, instance_id, "LEGACY_DELETE"
+	)
 	var rebuilt := _republish_after_state_mutation(located.region_key, located.world_state)
 	if not rebuilt.get("ok", false):
 		return _failure("state_committed_region_rebuild_failed")
@@ -830,10 +870,17 @@ func restore_instance(instance_id: String) -> Dictionary:
 		if not resolved.get("ok", false) or not resolved.get("deleted", false):
 			return _failure(String(resolved.get("reason", "deleted_instance_content_pin_mismatch")))
 		var restored_unloaded: Dictionary = state_service.restore_instance(baseline)
+		if restored_unloaded.get("ok", false):
+			_emit_authoritative_state_changed(
+				region_key, instance_id, "LEGACY_RESTORE"
+			)
 		return restored_unloaded
 	var result: Dictionary = state_service.restore_instance(located.instance)
 	if not result.get("ok", false):
 		return result
+	_emit_authoritative_state_changed(
+		located.region_key, instance_id, "LEGACY_RESTORE"
+	)
 	var rebuilt := _republish_after_state_mutation(located.region_key, located.world_state)
 	if not rebuilt.get("ok", false):
 		return _failure("state_committed_region_rebuild_failed")
