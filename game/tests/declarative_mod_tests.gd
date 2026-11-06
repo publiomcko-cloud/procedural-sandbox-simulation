@@ -6,6 +6,7 @@ const Store := preload("res://scripts/terrain/terrain_world_save_store.gd")
 const Brush := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const ObjectStream := preload("res://scripts/objects/procedural_object_stream.gd")
+const RockMeshAdapter := preload("res://scripts/objects/procedural_rock_mesh_adapter.gd")
 
 var assertions := 0
 var failures := 0
@@ -21,7 +22,8 @@ func _initialize() -> void:
 	_test_dependency_failures()
 	_test_content_validation_and_atomicity()
 	_test_deterministic_recipe()
-	_test_missing_required_package()
+	_test_external_package_optional()
+	_test_generic_profile_and_terrain_interaction_contract()
 	_test_failed_package_preserves_save()
 	_remove_tree(ProjectSettings.globalize_path(_test_root))
 	if failures == 0:
@@ -125,12 +127,60 @@ func _test_optional_user_mod_directories() -> void:
 	_remove_tree(ProjectSettings.globalize_path(nested_path))
 
 
-func _test_missing_required_package() -> void:
+func _test_external_package_optional() -> void:
 	var stream: ProceduralObjectStream = ObjectStream.new()
-	var no_example: Array[String] = ["res://mods/first-party"]
-	var result: Dictionary = stream.initialize(118, "issue118-required-package", no_example, _test_root.path_join("missing-required-state"))
-	_check(not result.get("ok", false) and String(result.get("reason", "")).begins_with("required_mod_missing:official.example.procedural_rock"), "missing required external package remains a distinct initialization failure")
+	var first_party_only: Array[String] = ["res://mods/first-party"]
+	var result: Dictionary = stream.initialize(118, "modfirst-first-party-only", first_party_only, _test_root.path_join("first-party-only-state"))
+	_check(result.get("ok", false) and stream.initialized, "runtime initializes with first-party packages only; repository example content is not a hidden dependency")
+	_check(int(result.get("mod_count", 0)) == 1 and result.get("definition_ids", []).has("firstparty.core_rocks:granite"), "first-party-only runtime exposes only discovered content through the shared registry")
+	_check(not result.get("definition_ids", []).has("official.example.procedural_rock:basalt_stack"), "external example absence does not trigger fallback or implicit substitution")
 	stream.free()
+
+
+func _test_generic_profile_and_terrain_interaction_contract() -> void:
+	var definition := {
+		"schema_version": 2,
+		"type": "procedural_rock",
+		"id": "sample.modfirst:weathered_block",
+		"display_name": "Weathered Block",
+		"tags": ["rock", "test"],
+		"recipe": {
+			"algorithm": "geological_halfspace_v1", "profile": "weathered_block_v1",
+			"half_extent_x_mm": 650, "half_extent_y_mm": 700, "half_extent_z_mm": 620,
+			"primary_plane_count": 7, "fracture_plane_count": 3, "anisotropy_axis": "x",
+			"anisotropy_milli": 1200, "bevel_count": 3, "weathering_milli": 500,
+			"macro_roughness_mm": 35, "meso_roughness_mm": 18, "fine_roughness_mm": 7
+		}
+	}
+	var population := {
+		"schema_version": 1, "type": "static_population_rule", "id": "sample.modfirst:weathered_population",
+		"definition_id": "sample.modfirst:weathered_block", "algorithm": "region_grid_density_v1",
+		"density_milli_per_region": 1000, "legacy_slot": -1,
+		"distribution": {"grid_spacing_mm": 3000, "jitter_milli": 100, "minimum_separation_mm": 2400, "edge_margin_mm": 2000, "geometry_variant_count": 4},
+		"transform": {"scale_min_milli": [900, 900, 900], "scale_max_milli": [1100, 1100, 1100], "orientation": "yaw_uniform_v1", "yaw_min_mdeg": 0, "yaw_max_mdeg": 360000},
+		"surface": {"mode": "top_surface_v1", "minimum_height_mm": -1000, "maximum_height_mm": 12000, "maximum_slope_mdeg": 50000}
+	}
+	var interaction := {
+		"schema_version": 1, "type": "terrain_interaction_rule", "id": "sample.modfirst:weathered_ground",
+		"definition_id": "sample.modfirst:weathered_block", "algorithm": "sdf_ground_imprint_v1",
+		"shape_source": "recipe_envelope_v1", "operation": "subtract_solid_v1",
+		"embed_depth_mm": 240, "blend_radius_mm": 160, "edit_order": "terrain_edits_then_imprint_v1"
+	}
+	var manifest := {"id": "sample.modfirst", "version": "1.0.0", "schema_version": 1, "requires_engine": "4.7.2", "dependencies": [], "content_roots": ["objects/", "populations/", "interactions/"], "script_policy": "data_only"}
+	var discovery := {"ok": true, "packages": [{"manifest": manifest, "definitions": [definition], "population_rules": [population], "terrain_interactions": [interaction]}]}
+	var registry := Registry.new()
+	var registered: Dictionary = registry.register_discovered(discovery)
+	_check(registered.get("ok", false), "a new external geological profile registers without adding profile-specific engine code")
+	var recipe: Dictionary = registry.evaluate_rock_recipe("sample.modfirst:weathered_block", 31337)
+	var mesh: Dictionary = RockMeshAdapter.build_mesh(recipe.get("geometry", {}), recipe.get("geometry_seeds", {}))
+	_check(recipe.get("ok", false) and recipe.get("profile", "") == "weathered_block_v1" and mesh.get("ok", false), "generic profile uses the existing geological adapter and deterministic seed contract")
+	var resolved: Dictionary = registry.resolve_terrain_interaction("sample.modfirst:weathered_block")
+	_check(resolved.get("ok", false) and resolved.get("rule", {}).get("algorithm", "") == "sdf_ground_imprint_v1", "terrain interaction is resolved generically by definition ID")
+	_check(String(resolved.get("pin", {}).get("rule_sha256", "")).length() == 64, "terrain interaction capability carries a deterministic content pin")
+	var cross_package := interaction.duplicate(true)
+	cross_package["definition_id"] = "firstparty.core_rocks:granite"
+	var rejected := Registry.new().register_discovered({"ok": true, "packages": [{"manifest": manifest, "definitions": [definition], "population_rules": [population], "terrain_interactions": [cross_package]}]})
+	_check(not rejected.get("ok", false) and rejected.get("reason", "") == "terrain_interaction_definition_invalid", "a mod cannot override another package's terrain interaction contract")
 
 
 func _test_reparse_package_root() -> void:
@@ -181,11 +231,13 @@ func _test_real_packages_and_stable_order() -> void:
 	var registration: Dictionary = registry.discover_and_register(roots_a)
 	_check(registration.get("ok", false) and registration.get("mod_count", 0) == 2, "shared registry accepts both package sources")
 	_check(registration.get("definition_count", 0) == 2, "both first-party and external definitions register")
+	_check(registration.get("terrain_interaction_count", 0) == 2, "both packages register terrain-interaction capabilities through the same registry")
 	var example_id := "official.example.procedural_rock:basalt_stack"
 	var builtin_id := "firstparty.core_rocks:granite"
 	_check(registry.get_definition(example_id).get("display_name", "") == "Example Basalt Stack", "external definition lookup uses stable namespaced ID")
 	_check(registry.get_definition(builtin_id).get("display_name", "") == "Granite Formation", "first-party definition uses the same lookup API")
 	_check(registry.get_definition("missing.mod:rock").is_empty(), "unknown definition lookup returns an empty result")
+	_check(registry.resolve_terrain_interaction(example_id).get("rule", {}).get("definition_id", "") == example_id and registry.resolve_terrain_interaction(builtin_id).get("rule", {}).get("definition_id", "") == builtin_id, "first-party and external terrain capabilities resolve through the same definition-indexed API")
 	var pins: Dictionary = registry.pin_definitions([example_id, builtin_id])
 	_check(pins.get("ok", false) and pins["pins"].size() == 2, "content use can be represented by stable ID, mod version and schema pins")
 	_check(registry.validate_content_pins(pins.get("pins", [])).get("ok", false), "matching saved content pins validate without reinterpretation")
