@@ -149,20 +149,6 @@ func _run() -> void:
 	var recovered_effect_json := JSON.stringify(recovered_effect, "", true, true)
 	var initial_effect_sha := initial_effect_json.sha256_text()
 	var recovered_effect_sha := recovered_effect_json.sha256_text()
-	if initial_effect_sha != recovered_effect_sha 		or recovered_effect.get("content_pin", {}) != initial_effect.get("content_pin", {}) 		or recovered_effect.get("terrain_interaction_pin", {}) != initial_effect.get("terrain_interaction_pin", {}):
-		print("ISSUE108_PHASE_C_RECOVERY_CANONICAL_DIAGNOSTIC=" + JSON.stringify({
-			"initial_sha": initial_effect_sha,
-			"recovered_sha": recovered_effect_sha,
-			"canonical_json_difference": _first_string_difference(
-				initial_effect_json, recovered_effect_json
-			),
-			"content_pin_equal": recovered_effect.get("content_pin", {}) == initial_effect.get("content_pin", {}),
-			"interaction_pin_equal": recovered_effect.get("terrain_interaction_pin", {}) == initial_effect.get("terrain_interaction_pin", {}),
-			"initial_content_pin": initial_effect.get("content_pin", {}),
-			"recovered_content_pin": recovered_effect.get("content_pin", {}),
-			"initial_interaction_pin": initial_effect.get("terrain_interaction_pin", {}),
-			"recovered_interaction_pin": recovered_effect.get("terrain_interaction_pin", {}),
-		}))
 	_check(
 		not recovered_effect.is_empty()
 			and recovered_effect_sha == initial_effect_sha
@@ -312,6 +298,48 @@ func _run() -> void:
 		"corrupt finalized regional generation fails closed on scoped load"
 	)
 
+	# Resident projection memory is bounded independently from world extent.
+	var capacity_service: RefCounted = ProjectionService.new()
+	_check(
+		capacity_service.initialize(
+			WORLD_ID,
+			WORLD_SEED,
+			Field.GENERATOR_VERSION,
+			ROOT + "/capacity-projection"
+		).get("ok", false),
+		"resident-scope capacity fixture initializes"
+	)
+	var capacity_ok := true
+	for index in range(ProjectionService.MAX_RESIDENT_SCOPES):
+		var loaded_capacity_scope: Dictionary = capacity_service.load_scope(
+			Vector2i(index, 1000)
+		)
+		if not loaded_capacity_scope.get("ok", false):
+			capacity_ok = false
+			break
+	_check(
+		capacity_ok
+			and capacity_service.get_loaded_scope_count()
+				== ProjectionService.MAX_RESIDENT_SCOPES,
+		"resident projection admits exactly the configured bounded scope count"
+	)
+	var overflow_scope: Dictionary = capacity_service.load_scope(
+		Vector2i(ProjectionService.MAX_RESIDENT_SCOPES, 1000)
+	)
+	_check(
+		not overflow_scope.get("ok", false)
+			and overflow_scope.get("reason")
+				== "effect_projection_resident_scope_capacity_exceeded",
+		"resident projection fails closed beyond its configured scope capacity"
+	)
+	capacity_service.release_scope(Vector2i(0, 1000))
+	_check(
+		capacity_service.load_scope(
+			Vector2i(ProjectionService.MAX_RESIDENT_SCOPES, 1000)
+		).get("ok", false),
+		"releasing a scope makes bounded resident capacity reusable"
+	)
+
 	evidence = {
 		"initial_scope_effect_count": (initial_scope["effects"] as Dictionary).size(),
 		"crash_recovered_generation": crash_generation,
@@ -360,25 +388,6 @@ func _effect_for_source(scope_snapshot: Dictionary, entity_id: String) -> Dictio
 		if String(effect.get("source_instance_id", "")) == entity_id:
 			return effect.duplicate(true)
 	return {}
-
-
-func _first_string_difference(first: String, second: String) -> Dictionary:
-	var shared := mini(first.length(), second.length())
-	var offset := -1
-	for index in range(shared):
-		if first.unicode_at(index) != second.unicode_at(index):
-			offset = index
-			break
-	if offset < 0:
-		offset = shared
-	var start := maxi(0, offset - 80)
-	return {
-		"offset": offset,
-		"first_length": first.length(),
-		"second_length": second.length(),
-		"first_slice": first.substr(start, mini(180, first.length() - start)),
-		"second_slice": second.substr(start, mini(180, second.length() - start)),
-	}
 
 
 func _set_component(command_id: String, entity_id: String, world_revision: int, entity_revision: int, component_id: String, component: Dictionary) -> Dictionary:
