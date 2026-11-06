@@ -526,11 +526,20 @@ func local_snapshot_for_chunk(
 	for frame in frames:
 		ids.append(String(frame["effect_id"]))
 		fingerprints.append(String(frame["source_fingerprint_sha256"]))
+	var sampling_frames: Array[Dictionary] = []
+	for frame in frames:
+		var compiled: Dictionary = LocalFrame.compile_prevalidated(frame)
+		if not compiled.get("ok", false):
+			return _failure(
+				"effect_projection_sampling_compile_failed:%s" % compiled.get("reason", "unknown")
+			)
+		sampling_frames.append(compiled["sampling_frame"])
 	return {
 		"ok": true,
 		"region_key": region_key,
 		"chunk_coordinate": chunk_coordinate,
 		"terrain_object_local_frames": frames,
+		"terrain_object_sampling_frames": sampling_frames,
 		"terrain_object_effect_count": frames.size(),
 		"terrain_object_effect_snapshot_sha256": Contract.canonical_sha256({
 			"region_key": [region_key.x, region_key.y],
@@ -569,14 +578,22 @@ func local_snapshot_for_chunks(requests: Array) -> Dictionary:
 		ids.append(String(effect_id))
 	ids.sort()
 	var frames: Array[Dictionary] = []
+	var sampling_frames: Array[Dictionary] = []
 	var fingerprints: Array[String] = []
 	for effect_id in ids:
 		var frame: Dictionary = by_id[effect_id]
 		frames.append(frame.duplicate(true))
+		var compiled: Dictionary = LocalFrame.compile_prevalidated(frame)
+		if not compiled.get("ok", false):
+			return _failure(
+				"effect_projection_sampling_compile_failed:%s" % compiled.get("reason", "unknown")
+			)
+		sampling_frames.append(compiled["sampling_frame"])
 		fingerprints.append(String(frame["source_fingerprint_sha256"]))
 	return {
 		"ok": true,
 		"terrain_object_local_frames": frames,
+		"terrain_object_sampling_frames": sampling_frames,
 		"terrain_object_effect_count": frames.size(),
 		"terrain_object_effect_snapshot_sha256": Contract.canonical_sha256({
 			"chunk_ids": chunk_ids,
