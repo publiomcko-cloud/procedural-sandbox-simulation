@@ -1150,7 +1150,7 @@ func _terrain_effect_projection_directory(seed_value: int) -> String:
 	else:
 		var object_root := state_directory_override
 		object_root = ProjectSettings.globalize_path(object_root) 			if object_root.begins_with("user://") or object_root.begins_with("res://") 			else object_root
-		root = object_root.get_base_dir().path_join("terrain-object-effects")
+		root = object_root + "-terrain-object-effects"
 	return root.path_join(
 		"seed-%d-generator-%d" % [seed_value, FIELD.GENERATOR_VERSION]
 	)
