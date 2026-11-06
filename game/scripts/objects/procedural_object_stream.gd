@@ -358,7 +358,18 @@ func _queue_region_visual_preparation(
 	var variants: Array[Dictionary] = []
 	var seen_keys: Dictionary = {}
 	var cpu_by_instance: Dictionary = generated.get("geometry_cpu_by_instance", {})
-	for value in generated.get("instances", []):
+	var prewarm_instances: Array = generated.get("instances", [])
+	if entity_command_service != null 		and bool(entity_command_service.get("initialized")) 		and entity_command_service.has_method(
+			"build_projection_region_base_instances"
+		):
+		var built: Dictionary = entity_command_service.call(
+			"build_projection_region_base_instances",
+			request["region_key"],
+			generated
+		)
+		if built.get("ok", false):
+			prewarm_instances = built.get("instances", prewarm_instances)
+	for value in prewarm_instances:
 		if typeof(value) != TYPE_DICTIONARY:
 			continue
 		var instance: Dictionary = value
