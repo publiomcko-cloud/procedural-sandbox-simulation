@@ -303,7 +303,7 @@ static func validate_effect(value: Variant) -> Dictionary:
 		var normal: Vector3 = normal_result["value"]
 		normalized_planes.append({
 			"normal": _vector3_array(normal),
-			"distance_m": float(plane["distance_m"]),
+			"distance_m": _canonical_float(float(plane["distance_m"])),
 		})
 	normalized["world_planes"] = normalized_planes
 	return {"ok": true, "effect": normalized}
@@ -537,7 +537,19 @@ static func _vector3i_array(value: Vector3i) -> Array[int]:
 
 
 static func _vector3_array(value: Vector3) -> Array[float]:
-	return [value.x, value.y, value.z]
+	return [
+		_canonical_float(value.x),
+		_canonical_float(value.y),
+		_canonical_float(value.z),
+	]
+
+
+static func _canonical_float(value: float) -> float:
+	# Godot's JSON parser/stringifier may shift the final binary digit of a
+	# double across a round-trip. Twelve decimal places are far below terrain
+	# sampling resolution while making validate->serialize->parse->validate
+	# idempotent.
+	return String.num(value, 12).to_float()
 
 
 static func _array_to_vector3(value: Array) -> Vector3:
