@@ -557,6 +557,11 @@ func _build_placed_instance(entity_id: String, record: Dictionary) -> Dictionary
 	var recipe: Dictionary = registry.evaluate_rock_recipe(String(identity.definition_id), int(identity.recipe_seed))
 	if not recipe.get("ok", false) or String(recipe.get("algorithm", "")) != RockMeshAdapter.ALGORITHM:
 		return _failure("placed_entity_recipe_unavailable")
+	var terrain_interaction_result: Dictionary = registry.resolve_terrain_interaction(String(identity.definition_id))
+	if not terrain_interaction_result.get("ok", false):
+		return _failure("placed_entity_terrain_interaction_unavailable")
+	var terrain_interaction: Dictionary = terrain_interaction_result.get("rule", {})
+	var terrain_interaction_pin: Dictionary = terrain_interaction_result.get("pin", {})
 	var region_key := Vector2i(int(identity.region_key[0]), int(identity.region_key[1]))
 	var world_position_mm := Vector3i(int(record.position_mm[0]), int(record.position_mm[1]), int(record.position_mm[2]))
 	var region_origin_mm := Vector3i(roundi(Spatial.region_origin_world(region_key).x * 1000.0), 0, roundi(Spatial.region_origin_world(region_key).z * 1000.0))
@@ -574,6 +579,9 @@ func _build_placed_instance(entity_id: String, record: Dictionary) -> Dictionary
 		"default_scale_milli": Vector3i(1000, 1000, 1000), "default_yaw_mdeg": 0, "population_rule_id": "",
 		"population_rule_pin": {}, "population_rule_schema_version": 0, "population_candidate_index": -1,
 		"population_algorithm": "explicit_place_v1", "population_batched": false,
+		"terrain_interaction": terrain_interaction.duplicate(true),
+		"terrain_interaction_pin": terrain_interaction_pin.duplicate(true),
+		"terrain_interaction_applied": false,
 		"base_components": record.components.duplicate(true),
 	}}
 
