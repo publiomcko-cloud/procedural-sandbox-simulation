@@ -120,7 +120,7 @@ func reconcile_scope(
 		return _failure("effect_projection_service_not_initialized")
 	if source_world_revision < 0 or source_world_revision > Contract.MAX_REVISION:
 		return _failure("effect_projection_source_world_revision_invalid")
-	var loaded := load_scope(region_key)
+	var loaded: Dictionary = load_scope(region_key)
 	if not loaded.get("ok", false):
 		return loaded
 	var scope_id := Contract.scope_id_for_region(region_key)
