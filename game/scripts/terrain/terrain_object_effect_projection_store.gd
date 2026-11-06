@@ -62,6 +62,7 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 		return _failure("effect_projection_scope_directory_unreadable")
 	var candidates: Array[Dictionary] = []
 	var ignored := 0
+	var legacy_rebuild_count := 0
 	var highest_generation_seen := 0
 	directory.list_dir_begin()
 	while true:
@@ -77,6 +78,9 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 			region_key
 		)
 		if not decoded.get("ok", false) or int(decoded.get("generation", -1)) != generation:
+			if String(decoded.get("reason", "")) 				== "effect_projection_legacy_schema_rebuild_required":
+				legacy_rebuild_count += 1
+				continue
 			if filename.ends_with(".tmp"):
 				ignored += 1
 				continue
@@ -99,6 +103,7 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 			),
 			"recovered_temporary": false,
 			"ignored_incomplete_generations": ignored,
+			"legacy_rebuild_required": legacy_rebuild_count > 0,
 		}
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if int(a["generation"]) != int(b["generation"]):
@@ -125,6 +130,7 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 		"snapshot": selected["snapshot"],
 		"recovered_temporary": recovered_temporary,
 		"ignored_incomplete_generations": ignored,
+		"legacy_rebuild_required": legacy_rebuild_count > 0,
 	}
 
 
@@ -221,6 +227,8 @@ func _decode_document(bytes: PackedByteArray, region_key: Vector2i) -> Dictionar
 	var payload_parse := _parse_json(payload_json)
 	if not payload_parse.get("ok", false):
 		return _failure("effect_projection_payload_invalid")
+	if typeof(payload_parse.get("value")) == TYPE_DICTIONARY 		and int((payload_parse["value"] as Dictionary).get("schema_version", -1)) 			< Contract.SCHEMA_VERSION:
+		return _failure("effect_projection_legacy_schema_rebuild_required")
 	var normalized := Contract.validate_snapshot(
 		payload_parse.get("value"),
 		_world_id,
