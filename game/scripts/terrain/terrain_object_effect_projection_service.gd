@@ -117,7 +117,8 @@ func reconcile_scope(
 	region_key: Vector2i,
 	source_world_revision: int,
 	authoritative_instances: Array,
-	source_revisions: Dictionary
+	source_revisions: Dictionary,
+	allow_authoritative_rewind: bool = false
 ) -> Dictionary:
 	var started_usec := Time.get_ticks_usec()
 	if not initialized:
@@ -129,8 +130,20 @@ func reconcile_scope(
 		return loaded
 	var scope_id := Contract.scope_id_for_region(region_key)
 	var prior: Dictionary = _scopes[scope_id]
-	if source_world_revision < int(prior["source_world_revision"]):
-		return _failure("effect_projection_stale_scope_revision")
+	var prior_source_world_revision := int(prior["source_world_revision"])
+	if source_world_revision < prior_source_world_revision:
+		if not allow_authoritative_rewind:
+			return _failure("effect_projection_stale_scope_revision")
+		# The projection is derived. When the caller explicitly identifies its
+		# source snapshot as the current authority (e.g. loading/rolling back an
+		# older authoritative save), discard the ahead derived contents and
+		# commit a new projection generation from that authority. Keep the
+		# projection revision monotonic for diagnostics.
+		var prior_projection_revision := int(prior["projection_revision"])
+		prior = Contract.empty_snapshot(
+			world_id, world_seed, generator_version, region_key
+		)
+		prior["projection_revision"] = prior_projection_revision
 
 	var ordered_instances := authoritative_instances.duplicate(true)
 	ordered_instances.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
