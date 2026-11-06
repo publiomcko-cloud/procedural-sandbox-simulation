@@ -375,12 +375,11 @@ static func compose_frames_prevalidated(
 ) -> float:
 	if not is_finite(terrain_density):
 		return terrain_density
-	var ordered := frames.duplicate(false)
-	ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return String(a["effect_id"]) < String(b["effect_id"])
-	)
+	# Projection/local-index snapshots already emit frames in stable effect_id
+	# order. Re-sorting here would execute once per SDF sample and dominate mesh
+	# generation cost.
 	var density := terrain_density
-	for frame_value in ordered:
+	for frame_value in frames:
 		if typeof(frame_value) != TYPE_DICTIONARY:
 			continue
 		density = compose_density_prevalidated(
