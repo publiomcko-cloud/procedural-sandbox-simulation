@@ -286,7 +286,7 @@ func _run() -> void:
 	)
 	_check(
 		legacy_upgrade.get("ok", false),
-		"legacy Phase-C projection schema is rebuildable without entity-state migration"
+		"legacy Phase-C projection schema is rebuildable without entity-state migration (%s)" 			% legacy_upgrade.get("reason", "ok")
 	)
 
 	evidence = {
