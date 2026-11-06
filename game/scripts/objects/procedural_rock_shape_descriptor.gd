@@ -14,6 +14,8 @@ const ALGORITHM := "geological_halfspace_v1"
 const MAX_SEED := 2147483646
 const RAND_MOD := 2147483647
 const MIN_AREA_SQUARED := 1.0e-12
+const MIN_TRIANGLES := 100
+const MAX_TRIANGLES := 500
 const RECIPE_KEYS := [
 	"algorithm", "profile", "half_extent_x_mm", "half_extent_y_mm", "half_extent_z_mm",
 	"primary_plane_count", "fracture_plane_count", "anisotropy_axis", "anisotropy_milli",
@@ -23,6 +25,16 @@ const SEED_KEYS := ["structure", "fracture", "wear", "detail"]
 
 
 static func build(recipe: Dictionary, seeds: Dictionary) -> Dictionary:
+	var geometry := build_geometry_data(recipe, seeds)
+	if not geometry.get("ok", false):
+		return geometry
+	return geometry["descriptor"].duplicate(true)
+
+
+## Shared pure geometry core consumed by both the renderer adapter and terrain
+## effect descriptor. Keeping the deterministic construction here prevents
+## visual/authoritative shape drift.
+static func build_geometry_data(recipe: Dictionary, seeds: Dictionary) -> Dictionary:
 	var checked := _validate_input(recipe, seeds)
 	if not checked.get("ok", false):
 		return checked
@@ -39,12 +51,21 @@ static func build(recipe: Dictionary, seeds: Dictionary) -> Dictionary:
 	if not roughened.get("ok", false):
 		return roughened
 	var roughened_points: Array[Vector3] = roughened["points"]
+	var triangles: Array[Vector3i] = prepared["triangles"]
+	if triangles.size() < MIN_TRIANGLES or triangles.size() > MAX_TRIANGLES:
+		return _failure("triangle_budget_exceeded")
 	var lowest_y := INF
 	for point in roughened_points:
 		lowest_y = minf(lowest_y, point.y)
 	if not is_finite(lowest_y):
 		return _failure("shape_grounding_invalid")
 	var ground_shift := -lowest_y
+	var grounded_points: Array[Vector3] = roughened_points.duplicate()
+	for index in range(grounded_points.size()):
+		grounded_points[index].y += ground_shift
+	var orientation_center: Vector3 = prepared["center"]
+	orientation_center.y += ground_shift
+
 	var grounded_planes: Array[Dictionary] = []
 	for plane_value in prepared["planes"]:
 		var plane: Dictionary = plane_value
@@ -60,10 +81,10 @@ static func build(recipe: Dictionary, seeds: Dictionary) -> Dictionary:
 	if guarded_vertices.size() < 4:
 		return _failure("shape_guarded_polyhedron_invalid")
 	var bounds := _measure_bounds(guarded_vertices)
-	var center := Vector3.ZERO
+	var descriptor_center := Vector3.ZERO
 	for vertex in guarded_vertices:
-		center += vertex
-	center /= float(guarded_vertices.size())
+		descriptor_center += vertex
+	descriptor_center /= float(guarded_vertices.size())
 	var source_pin := {
 		"descriptor_version": DESCRIPTOR_VERSION,
 		"geometry_version": GEOMETRY_VERSION,
@@ -72,7 +93,7 @@ static func build(recipe: Dictionary, seeds: Dictionary) -> Dictionary:
 		"geometry_seeds": seeds,
 	}
 	var descriptor_sha := JSON.stringify(source_pin, "", true, true).sha256_text()
-	return {
+	var descriptor := {
 		"ok": true,
 		"schema_version": DESCRIPTOR_VERSION,
 		"algorithm": ALGORITHM,
@@ -84,10 +105,17 @@ static func build(recipe: Dictionary, seeds: Dictionary) -> Dictionary:
 		"ground_shift_m": ground_shift,
 		"bounds_min": bounds["min"],
 		"bounds_max": bounds["max"],
-		"interior_point": center,
+		"interior_point": descriptor_center,
 		"guarded_vertices": guarded_vertices,
 		"plane_count": grounded_planes.size(),
 		"guarded_vertex_count": guarded_vertices.size(),
+	}
+	return {
+		"ok": true,
+		"points": grounded_points,
+		"triangles": triangles,
+		"orientation_center": orientation_center,
+		"descriptor": descriptor,
 	}
 
 
@@ -208,6 +236,7 @@ static func _prepare_pre_roughness(recipe: Dictionary, seeds: Dictionary) -> Dic
 		"triangles": triangles,
 		"planes": planes,
 		"preferred_axis": preferred_axis,
+		"center": center,
 	}
 
 
