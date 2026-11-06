@@ -80,6 +80,14 @@ func get_indexed_chunk_ids(effect_id: String) -> Array[String]:
 	return result
 
 
+func get_all_indexed_chunk_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for chunk_id in _frame_ids_by_chunk:
+		ids.append(String(chunk_id))
+	ids.sort()
+	return ids
+
+
 func get_frame_count() -> int:
 	return _frames.size()
 
