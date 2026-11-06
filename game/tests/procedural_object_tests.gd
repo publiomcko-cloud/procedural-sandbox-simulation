@@ -984,10 +984,12 @@ func _test_playable_scene_publication() -> void:
 	var stream: ProceduralObjectStream = demo.get_node("ProceduralObjects")
 	_check(
 		center_ready,
-		"playable terrain scene publishes its focused region within 30s wall-clock (elapsed_ms=%d loading=%s effect_status=%s)" % [
+		"playable terrain scene publishes its focused region within 30s wall-clock (elapsed_ms=%d loading=%s effect_status=%s stream_error=%s diagnostics=%s)" % [
 			center_elapsed_msec,
 			str(demo.get("loading_regions")),
 			String(demo.get("_terrain_object_effect_status")),
+			String(demo.get("last_stream_error")),
+			str(demo.get("last_mesh_diagnostics")),
 		]
 	)
 	if center_ready:
