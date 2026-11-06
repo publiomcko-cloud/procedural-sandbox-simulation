@@ -18,6 +18,7 @@ const SharedBoundaryMeshJob := preload("res://scripts/terrain/shared_surface_bou
 const SharedZBoundaryMeshJob := preload("res://scripts/terrain/shared_surface_z_boundary_mesh_job.gd")
 const SharedCornerMeshJob := preload("res://scripts/terrain/shared_surface_corner_mesh_job.gd")
 const EntityStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
+const TerrainEffectRuntime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -84,6 +85,9 @@ var _persistence_blocked := false
 var _procedural_object_status := "Procedural objects unavailable"
 var object_state_directory_override := ""
 var object_package_roots_override: Array[String] = []
+var terrain_effect_directory_override := ""
+var terrain_effect_runtime: RefCounted
+var _terrain_effect_status := "Terrain-object effects unavailable"
 var _selected_object_index := 0
 var _selected_object_id := ""
 var _object_state_action_status := "Entities: Ctrl+click select; M twice migrates entity save; B place; F6 cycle; F7 edit; F8 delete; F9 restore"
@@ -240,8 +244,23 @@ func _ready() -> void:
 	var object_initialization: Dictionary = object_stream.initialize(world_seed, world_id, object_package_roots_override, object_state_directory_override)
 	if object_initialization.get("ok", false):
 		_procedural_object_status = "Procedural objects ready"
+		terrain_effect_runtime = TerrainEffectRuntime.new()
+		var effect_initialization: Dictionary = terrain_effect_runtime.initialize(
+			world_id,
+			world_seed,
+			Field.GENERATOR_VERSION,
+			object_stream,
+			terrain_effect_directory_override
+		)
+		if effect_initialization.get("ok", false):
+			_terrain_effect_status = "Terrain-object effects ready"
+		else:
+			terrain_effect_runtime = null
+			_terrain_effect_status = "Terrain-object effects unavailable (%s)" % effect_initialization.get("reason", "unknown")
 	else:
 		_procedural_object_status = "Procedural objects unavailable (%s)" % object_initialization.get("reason", "unknown")
+		terrain_effect_runtime = null
+		_terrain_effect_status = "Terrain-object effects unavailable (object stream unavailable)"
 	_create_placement_target_marker()
 	terrain_mesh_template.mesh = null
 	terrain_mesh_template.visible = false
