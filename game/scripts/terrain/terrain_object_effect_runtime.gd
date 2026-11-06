@@ -7,6 +7,7 @@ extends RefCounted
 const ProjectionService := preload("res://scripts/terrain/terrain_object_effect_projection_service.gd")
 const Contract := preload("res://scripts/terrain/terrain_object_effect_projection_contract.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
+const LocalFrameIndex := preload("res://scripts/terrain/terrain_object_effect_local_frame_index.gd")
 
 # Public v1 contracts bound horizontal reach:
 # translation <= 8 m, half extent <= 1.8 m, scale <= 5x, roughness <= 0.1 m.
@@ -22,6 +23,8 @@ var projection: RefCounted
 var initialized := false
 var initialization_error := ""
 var last_prepare_metrics: Dictionary = {}
+var _invalidated_scope_ids: Dictionary = {}
+var _pre_invalidation_frames: Dictionary = {}
 
 
 func initialize(
@@ -40,6 +43,8 @@ func initialize(
 	world_seed = seed_value
 	generator_version = generator
 	object_stream = object_stream_value
+	_invalidated_scope_ids.clear()
+	_pre_invalidation_frames.clear()
 	projection = ProjectionService.new()
 	var init: Dictionary = projection.initialize(
 		world_id, world_seed, generator_version, directory_override
@@ -88,10 +93,15 @@ func prepare_targets_snapshot(
 	var reconciled_count := 0
 	var loaded_count := 0
 	for source_region in required_source_regions:
+		var scope_id := Contract.scope_id_for_region(source_region)
 		var status: Dictionary = projection.get_scope_status(
 			source_region, authority_revision
 		)
-		if status.get("status") == "current":
+		var status_name := String(status.get("status", "unloaded"))
+		var must_reconcile := status_name in ["unloaded", "missing", "ahead"] 			or _invalidated_scope_ids.has(scope_id)
+		# A global entity world revision does not make unrelated source regions
+		# stale. Region-local invalidation is driven by the command/lifecycle path.
+		if not must_reconcile:
 			continue
 		var source: Dictionary = object_stream.call(
 			"get_authoritative_region_projection_source", source_region
@@ -106,13 +116,15 @@ func prepare_targets_snapshot(
 			source_revision,
 			source.get("instances", []),
 			source.get("source_revisions", {}),
-			status.get("status") == "ahead"
+			true
 		)
 		if not reconciled.get("ok", false):
 			return _failure(
 				"terrain_effect_runtime_reconcile_failed:%s" 					% reconciled.get("reason", "unknown")
 			)
 		reconciled_count += 1
+		_invalidated_scope_ids.erase(scope_id)
+		_pre_invalidation_frames.erase(scope_id)
 		if bool(reconciled.get("changed", false)):
 			loaded_count += 1
 
@@ -194,6 +206,123 @@ func prepare_targets_snapshot(
 		"snapshot_sha256": prepared["terrain_effect_snapshot_sha256"],
 		"authority_revision": authority_revision,
 		"metrics": last_prepare_metrics.duplicate(true),
+	}
+
+
+func invalidate_source_region(source_region: Vector2i) -> void:
+	if not initialized or projection == null:
+		return
+	var scope_id := Contract.scope_id_for_region(source_region)
+	if not _pre_invalidation_frames.has(scope_id):
+		var scope: Dictionary = projection.get_scope_snapshot(source_region)
+		_pre_invalidation_frames[scope_id] = (
+			scope.get("local_frames", {}) as Dictionary
+		).duplicate(true) if not scope.is_empty() else {}
+	_invalidated_scope_ids[scope_id] = true
+
+
+func refresh_invalidated_source_region(
+	source_region: Vector2i
+) -> Dictionary:
+	if not initialized:
+		return _failure("terrain_effect_runtime_not_initialized")
+	var scope_id := Contract.scope_id_for_region(source_region)
+	var old_frames: Dictionary = (
+		_pre_invalidation_frames.get(scope_id, {}) as Dictionary
+	).duplicate(true)
+	var source: Dictionary = object_stream.call(
+		"get_authoritative_region_projection_source", source_region
+	)
+	if not source.get("ok", false):
+		return _failure(
+			"terrain_effect_runtime_source_failed:%s" 				% source.get("reason", "unknown")
+		)
+	var reconciled: Dictionary = projection.reconcile_scope(
+		source_region,
+		int(source.get("world_revision", -1)),
+		source.get("instances", []),
+		source.get("source_revisions", {}),
+		true
+	)
+	if not reconciled.get("ok", false):
+		return _failure(
+			"terrain_effect_runtime_reconcile_failed:%s" 				% reconciled.get("reason", "unknown")
+		)
+	var new_scope: Dictionary = projection.get_scope_snapshot(source_region)
+	var new_frames: Dictionary = (
+		new_scope.get("local_frames", {}) as Dictionary
+	).duplicate(true)
+	var targets := _changed_frame_targets(old_frames, new_frames)
+	_invalidated_scope_ids.erase(scope_id)
+	_pre_invalidation_frames.erase(scope_id)
+	return {
+		"ok": true,
+		"targets": targets,
+		"changed_target_count": targets.size(),
+		"projection_changed": bool(reconciled.get("changed", false)),
+	}
+
+
+func _changed_frame_targets(
+	old_frames: Dictionary,
+	new_frames: Dictionary
+) -> Array[Dictionary]:
+	var changed_ids: Dictionary = {}
+	for effect_id_value in old_frames:
+		var effect_id := String(effect_id_value)
+		if not new_frames.has(effect_id) 			or String((old_frames[effect_id] as Dictionary).get("frame_sha256", "")) 				!= String((new_frames[effect_id] as Dictionary).get("frame_sha256", "")):
+			changed_ids[effect_id] = true
+	for effect_id_value in new_frames:
+		var effect_id := String(effect_id_value)
+		if not old_frames.has(effect_id) 			or String((old_frames[effect_id] as Dictionary).get("frame_sha256", "")) 				!= String((new_frames[effect_id] as Dictionary).get("frame_sha256", "")):
+			changed_ids[effect_id] = true
+
+	var chunk_ids: Dictionary = {}
+	for frames in [old_frames, new_frames]:
+		var index := LocalFrameIndex.new()
+		for effect_id in changed_ids:
+			if not frames.has(effect_id):
+				continue
+			var indexed: Dictionary = index.replace_frame(frames[effect_id])
+			if not indexed.get("ok", false):
+				continue
+		for chunk_id in index.get_all_indexed_chunk_ids():
+			chunk_ids[String(chunk_id)] = true
+
+	var ids: Array[String] = []
+	for chunk_id in chunk_ids:
+		ids.append(String(chunk_id))
+	ids.sort()
+	var targets: Array[Dictionary] = []
+	for chunk_id in ids:
+		var parsed := _target_from_chunk_id(chunk_id)
+		if parsed.get("ok", false):
+			targets.append({
+				"region_key": parsed["region_key"],
+				"chunk_coordinate": parsed["chunk_coordinate"],
+			})
+	return targets
+
+
+func _target_from_chunk_id(chunk_id: String) -> Dictionary:
+	if not chunk_id.begins_with("region:") or not chunk_id.contains("/chunk:"):
+		return {"ok": false}
+	var sides := chunk_id.split("/chunk:")
+	if sides.size() != 2:
+		return {"ok": false}
+	var region_parts := sides[0].trim_prefix("region:").split(",")
+	var chunk_parts := sides[1].split(",")
+	if region_parts.size() != 2 or chunk_parts.size() != 2 		or not region_parts[0].is_valid_int() 		or not region_parts[1].is_valid_int() 		or not chunk_parts[0].is_valid_int() 		or not chunk_parts[1].is_valid_int():
+		return {"ok": false}
+	var coordinate := Vector2i(int(chunk_parts[0]), int(chunk_parts[1]))
+	if not Grid.is_valid_coordinate(coordinate):
+		return {"ok": false}
+	return {
+		"ok": true,
+		"region_key": Vector2i(
+			int(region_parts[0]), int(region_parts[1])
+		),
+		"chunk_coordinate": coordinate,
 	}
 
 
