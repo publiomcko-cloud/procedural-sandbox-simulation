@@ -63,7 +63,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git worktree add --detach /tmp/issue108-d1-base 6017dc95988455bf5f39af8f77523d95e8c156c1
+          git fetch --no-tags --depth=1 origin feat/issue-108-pre-d-local-frame-phase-d
+          test "$(git rev-parse FETCH_HEAD)" = "6017dc95988455bf5f39af8f77523d95e8c156c1"
+          git worktree add --detach /tmp/issue108-d1-base FETCH_HEAD
           cp game/tests/issue108_d1_scene_streaming_performance_tests.gd /tmp/issue108-d1-base/game/tests/
           /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path /tmp/issue108-d1-base/game --import 2>&1 | tee /tmp/d1-base-import.log
           ! grep -q 'SCRIPT ERROR:' /tmp/d1-base-import.log
