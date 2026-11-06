@@ -4,6 +4,7 @@ const Registry := preload("res://scripts/modding/content_definition_registry.gd"
 const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const Runtime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
+const ProjectionService := preload("res://scripts/terrain/terrain_object_effect_projection_service.gd")
 const Frame := preload("res://scripts/terrain/terrain_object_effect_local_frame.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
@@ -281,7 +282,7 @@ func _run() -> void:
 	# Old Phase-C projection shards are derived data and must upgrade by rebuild,
 	# not be treated as authoritative corruption.
 	var legacy_upgrade := _exercise_legacy_projection_rebuild(
-		runtime, fake, ledger, left_coordinate
+		runtime, fake
 	)
 	_check(
 		legacy_upgrade.get("ok", false),
@@ -310,15 +311,81 @@ func _run() -> void:
 
 
 func _exercise_legacy_projection_rebuild(
-	_runtime: RefCounted,
-	_fake: Node,
-	_ledger: RefCounted,
-	_coordinate: Vector2i
+	runtime: RefCounted,
+	fake: Node
 ) -> Dictionary:
-	# The projection-store regression is covered by the dedicated Phase-C/pre-D
-	# suites. This marker keeps the Phase-D gate explicit without manufacturing
-	# a schema-1 envelope by hand.
-	return {"ok": true}
+	var current_scope: Dictionary = runtime.projection.get_scope_snapshot(
+		Vector2i.ZERO
+	)
+	if current_scope.is_empty():
+		return {"ok": false, "reason": "current_scope_missing"}
+	var legacy_scope := current_scope.duplicate(true)
+	legacy_scope["schema_version"] = 1
+	legacy_scope.erase("local_frames")
+	var payload_json := JSON.stringify(legacy_scope, "", true, true)
+	var payload_bytes := payload_json.to_utf8_buffer()
+	var hashing := HashingContext.new()
+	if hashing.start(HashingContext.HASH_SHA256) != OK 		or hashing.update(payload_bytes) != OK:
+		return {"ok": false, "reason": "hash_context_failed"}
+	var payload_sha := hashing.finish().hex_encode()
+	var envelope := {
+		"format": "procedural-sandbox-terrain-object-effect-projection",
+		"schema_version": 1,
+		"generation": 1,
+		"payload_json": payload_json,
+		"payload_sha256": payload_sha,
+	}
+	var root := ProjectSettings.globalize_path(ROOT + "/legacy-projection")
+	var scope_dir := root.path_join("regions/r_0_0")
+	if DirAccess.make_dir_recursive_absolute(scope_dir) != OK:
+		return {"ok": false, "reason": "legacy_scope_directory_failed"}
+	var file := FileAccess.open(
+		scope_dir.path_join("projection-00000001.json"), FileAccess.WRITE
+	)
+	if file == null:
+		return {"ok": false, "reason": "legacy_projection_open_failed"}
+	file.store_string(JSON.stringify(envelope, "", true, true))
+	file.flush()
+	var write_error := file.get_error()
+	file.close()
+	if write_error != OK:
+		return {"ok": false, "reason": "legacy_projection_write_failed"}
+
+	var upgraded := ProjectionService.new()
+	var initialized: Dictionary = upgraded.initialize(
+		WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, root
+	)
+	if not initialized.get("ok", false):
+		return initialized
+	var loaded: Dictionary = upgraded.load_scope(Vector2i.ZERO)
+	if not loaded.get("ok", false) 		or loaded.get("found", true) 		or not loaded.get("legacy_rebuild_required", false):
+		return {
+			"ok": false,
+			"reason": "legacy_projection_not_classified_for_rebuild",
+			"loaded": loaded,
+		}
+	var source_id := String(fake.instance.get("instance_id", ""))
+	var reconciled: Dictionary = upgraded.reconcile_scope(
+		Vector2i.ZERO,
+		int(fake.world_revision),
+		[fake.instance.duplicate(true)] if bool(fake.active) else [],
+		{source_id: int(fake.entity_revision)} if bool(fake.active) else {}
+	)
+	if not reconciled.get("ok", false):
+		return reconciled
+	if int(reconciled.get("generation", -1)) != 2 		or not FileAccess.file_exists(
+			scope_dir.path_join("projection-00000002.json")
+		):
+		return {
+			"ok": false,
+			"reason": "legacy_projection_rebuild_generation_invalid",
+			"reconciled": reconciled,
+		}
+	return {
+		"ok": true,
+		"generation": int(reconciled["generation"]),
+		"effect_count": int(reconciled.get("effect_count", 0)),
+	}
 
 
 func _relocate_to_edge(source: Dictionary) -> Dictionary:
