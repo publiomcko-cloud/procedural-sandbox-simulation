@@ -1663,6 +1663,8 @@ func _publish_partial_stage(id: String, stage: Dictionary) -> bool:
 		_set_chunk_lod_state(chunk_id, node, int(stage.get("actual_lod_by_coordinate", {}).get(coordinate, 0)), bool(stage.get("fallback_by_coordinate", {}).get(coordinate, false)))
 	_record_completed_operation(stage)
 	_lod_selection_dirty = true
+	if stage["region_key"] == focus_region_key:
+		_refresh_placement_target_indicator()
 	_update_runtime_diagnostics()
 	return true
 
