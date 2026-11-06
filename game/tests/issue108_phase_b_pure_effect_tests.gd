@@ -56,7 +56,7 @@ func _test_shape_descriptor(registry: RefCounted) -> void:
 		var max_guard_mm := 0.0
 		var max_violation := 0.0
 		for seed in TEST_SEEDS:
-			var recipe := registry.evaluate_rock_recipe(definition_id, seed)
+			var recipe: Dictionary = registry.evaluate_rock_recipe(definition_id, seed)
 			_check(recipe.get("ok", false), "%s seed %d recipe evaluates" % [definition_id, seed])
 			if not recipe.get("ok", false):
 				continue
@@ -320,8 +320,8 @@ func _test_spatial_index(registry: RefCounted) -> void:
 			"replacement removes stale old-footprint membership"
 		)
 
-	var first := seam_result["effect"]
-	var second := negative_result["effect"] if negative_result.get("ok", false) else moved_result["effect"]
+	var first: Dictionary = seam_result["effect"]
+	var second: Dictionary = negative_result["effect"] if negative_result.get("ok", false) else moved_result["effect"]
 	var index_a := EffectIndex.new()
 	var index_b := EffectIndex.new()
 	index_a.replace_effect(first)
@@ -385,9 +385,9 @@ func _fixture_instance(
 	yaw_mdeg: int,
 	instance_id: String
 ) -> Dictionary:
-	var pin_result := registry.pin_definitions([definition_id])
-	var recipe := registry.evaluate_rock_recipe(definition_id, recipe_seed)
-	var interaction := registry.resolve_terrain_interaction(definition_id)
+	var pin_result: Dictionary = registry.pin_definitions([definition_id])
+	var recipe: Dictionary = registry.evaluate_rock_recipe(definition_id, recipe_seed)
+	var interaction: Dictionary = registry.resolve_terrain_interaction(definition_id)
 	if not pin_result.get("ok", false) or pin_result.get("pins", []).is_empty() 		or not recipe.get("ok", false) or not interaction.get("ok", false):
 		return {}
 	return {
