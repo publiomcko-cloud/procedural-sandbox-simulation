@@ -986,6 +986,7 @@ func get_terrain_effect_snapshot_for_chunks(requests: Array) -> Dictionary:
 		return {
 			"ok": true,
 			"terrain_object_local_frames": [],
+			"terrain_object_sampling_frames": [],
 			"terrain_object_effect_count": 0,
 			"terrain_object_effect_snapshot_sha256": "none",
 		}
