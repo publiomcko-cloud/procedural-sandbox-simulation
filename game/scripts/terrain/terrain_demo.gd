@@ -1114,6 +1114,14 @@ func _reconcile_region_window(force: bool = false) -> void:
 		return
 	_last_reconciled_focus = focus_region_key
 	var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
+	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
+		var effect_window: Dictionary = terrain_effect_runtime.update_resident_target_regions(
+			desired
+		)
+		if not effect_window.get("ok", false):
+			_terrain_effect_status = "Terrain-object effects unavailable (%s)" % effect_window.get("reason", "unknown")
+			last_stream_error = _terrain_effect_status
+			return
 	var retained_ids: Dictionary = {}
 	for key in _region_keys_within_radius(focus_region_key, UNLOAD_RADIUS):
 		retained_ids[_region_id(key)] = true
@@ -3191,6 +3199,19 @@ func _update_status() -> void:
 		int(population_metrics.get("pending_region_publication_count", 0)),
 		float(population_metrics.get("peak_generation_usec", 0)) / 1000.0,
 	]
+	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
+		var effect_perf: Dictionary = terrain_effect_runtime.get_performance_snapshot()
+		var projection_perf: Dictionary = effect_perf.get("projection", {})
+		status += "Effect runtime: prep avg/peak %.2f/%.2f ms | resident/protected %d/%d | reconcile/evict %d/%d | lookup scopes/frames %d/%d\n" % [
+			float(effect_perf.get("prepare_average_usec", 0.0)) / 1000.0,
+			float(effect_perf.get("prepare_peak_usec", 0)) / 1000.0,
+			int(effect_perf.get("resident_scope_count", 0)),
+			int(effect_perf.get("protected_scope_count", 0)),
+			int(effect_perf.get("scope_reconcile_count", 0)),
+			int(effect_perf.get("scope_eviction_count", 0)),
+			int(projection_perf.get("lookup_scope_index_examined_count", 0)),
+			int(projection_perf.get("lookup_frame_count", 0)),
+		]
 	var state_schema := int(object_stream.state_service.snapshot.get("schema_version", 0)) if object_stream.state_service != null else 0
 	var command_readiness := "READY" if object_stream.is_entity_command_ready() else ("REBUILDING resident regions" if state_schema >= EntityStateContract.HISTORY_SNAPSHOT_SCHEMA_VERSION else "LOCKED until explicit history migration")
 	status += "Entity state schema %d | world revision %d | command dispatcher %s\n" % [state_schema, object_stream.get_instance_state_revision(), command_readiness]
