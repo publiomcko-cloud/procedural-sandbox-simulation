@@ -543,6 +543,7 @@ func _place_entity_under_crosshair() -> void:
 	_placement_target_normal = target["normal"]
 	_update_placement_marker_visual()
 	_selected_object_id = String(result.get("entity_id", ""))
+	_schedule_terrain_effect_rebuild(region_key)
 	_object_state_action_status = "ENTITY_PLACE committed %s at %s target %s (anchor mm %s; world/entity revisions %d/%d; visual %s)" % [_selected_object_id, _aim_description(_last_placement_aim_mode), region_key, position_mm, int(result.get("world_revision", -1)), int(result.get("entity_revision", -1)), result.get("visual_status", "unknown")]
 
 
@@ -709,6 +710,7 @@ func _handle_entity_history_navigation(operation: String) -> void:
 		_object_state_action_status = "%s rejected: no %s operation is available (history %d/%d)" % [operation, "applied" if operation == "ENTITY_UNDO" else "undone", int(summary.get("cursor", 0)), int(summary.get("depth", 0))]
 		return
 	var entity_id := String(target.get("entity_id", ""))
+	var terrain_region := _entity_region_for_terrain_effect(entity_id)
 	var command := _entity_command_base(operation, _new_entity_command_id(), entity_id)
 	command["history_entry_id"] = String(target.get("history_entry_id", ""))
 	var result: Dictionary = object_stream.dispatch_entity_command(command)
@@ -716,19 +718,53 @@ func _handle_entity_history_navigation(operation: String) -> void:
 		_object_state_action_status = "%s rejected: %s" % [operation, result.get("reason", "unknown")]
 		return
 	_selected_object_id = entity_id
+	if terrain_region.get("ok", false):
+		_schedule_terrain_effect_rebuild(terrain_region["region_key"])
 	_object_state_action_status = "%s committed for %s at world/entity revisions %d/%d; history %d/%d; visual %s" % [operation, entity_id, int(result.get("world_revision", -1)), int(result.get("entity_revision", -1)), int(result.get("history_cursor", 0)), int(result.get("history_depth", 0)), result.get("visual_status", "unknown")]
 
 
 func _dispatch_entity_component(entity_id: String, component_id: String, component: Dictionary) -> Dictionary:
+	var terrain_region := _entity_region_for_terrain_effect(entity_id)
 	var command_id := _new_entity_command_id()
 	var command := _entity_command_base("ENTITY_SET_COMPONENT", command_id, entity_id)
 	command["component_id"] = component_id
 	command["component"] = component
-	return object_stream.dispatch_entity_command(command)
+	var result: Dictionary = object_stream.dispatch_entity_command(command)
+	if result.get("ok", false) 		and component_id == EntityStateContract.COMPONENT_TRANSFORM 		and terrain_region.get("ok", false):
+		_schedule_terrain_effect_rebuild(terrain_region["region_key"])
+	return result
 
 
 func _dispatch_entity_operation(operation: String, entity_id: String) -> Dictionary:
-	return object_stream.dispatch_entity_command(_entity_command_base(operation, _new_entity_command_id(), entity_id))
+	var terrain_region := _entity_region_for_terrain_effect(entity_id)
+	var result: Dictionary = object_stream.dispatch_entity_command(
+		_entity_command_base(operation, _new_entity_command_id(), entity_id)
+	)
+	if result.get("ok", false) 		and terrain_region.get("ok", false) 		and operation in ["ENTITY_DELETE", "ENTITY_RESTORE"]:
+		_schedule_terrain_effect_rebuild(terrain_region["region_key"])
+	return result
+
+
+func _entity_region_for_terrain_effect(entity_id: String) -> Dictionary:
+	var command_service: RefCounted = object_stream.get_entity_command_service()
+	if command_service == null 		or not bool(command_service.get("initialized")) 		or not command_service.has_method("get_entity_region"):
+		return {"ok": false, "reason": "entity_region_unavailable"}
+	return command_service.get_entity_region(entity_id)
+
+
+func _schedule_terrain_effect_rebuild(source_region: Vector2i) -> void:
+	# If an edit/global transaction is already staging, its revision gate will
+	# supersede stale jobs and restart coherently on the new entity revision.
+	if global_rebuild_pending or not _edit_transaction.is_empty():
+		return
+	_begin_operation("terrain_object_effect")
+	for entry in active_regions.values():
+		var target: Vector2i = entry["region_key"]
+		if maxi(absi(target.x - source_region.x), absi(target.y - source_region.y)) 			> TerrainEffectRuntime.SOURCE_REGION_RADIUS:
+			continue
+		_begin_region_stage(target, "partial", ChunkGrid.all_coordinates())
+
+
 
 
 func _entity_command_base(operation: String, command_id: String, entity_id: String) -> Dictionary:
