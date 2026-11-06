@@ -172,9 +172,7 @@ func reconcile_scope(
 		return _failure("effect_projection_service_not_initialized")
 	if source_world_revision < 0 or source_world_revision > Contract.MAX_REVISION:
 		return _failure("effect_projection_source_world_revision_invalid")
-	var load_started_usec := Time.get_ticks_usec()
 	var loaded := load_scope(region_key)
-	load_usec = Time.get_ticks_usec() - load_started_usec
 	if not loaded.get("ok", false):
 		return loaded
 	var scope_id := Contract.scope_id_for_region(region_key)
@@ -417,7 +415,9 @@ func reconcile_prebuilt_scope(
 	if typeof(prebuilt.get("effects")) != TYPE_DICTIONARY 		or typeof(prebuilt.get("local_frames")) != TYPE_DICTIONARY 		or typeof(prebuilt.get("source_instance_ids")) != TYPE_ARRAY 		or typeof(prebuilt.get("source_digest_sha256")) != TYPE_STRING:
 		return _failure("effect_projection_prebuilt_fields_invalid")
 
+	var load_started_usec := Time.get_ticks_usec()
 	var loaded := load_scope(region_key)
+	load_usec = Time.get_ticks_usec() - load_started_usec
 	if not loaded.get("ok", false):
 		return loaded
 	var scope_id := Contract.scope_id_for_region(region_key)
