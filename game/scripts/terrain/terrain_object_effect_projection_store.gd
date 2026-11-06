@@ -7,7 +7,7 @@ extends RefCounted
 const Contract := preload("res://scripts/terrain/terrain_object_effect_projection_contract.gd")
 
 const FORMAT_ID := "procedural-sandbox-terrain-object-effect-projection"
-const SCHEMA_VERSION := 1
+const SCHEMA_VERSION := 2
 const MAX_DOCUMENT_BYTES := 128 * 1024 * 1024
 const GENERATIONS_TO_KEEP := 2
 
@@ -76,6 +76,9 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 			FileAccess.get_file_as_bytes(directory_path.path_join(filename)),
 			region_key
 		)
+		if bool(decoded.get("obsolete", false)):
+			ignored += 1
+			continue
 		if not decoded.get("ok", false) or int(decoded.get("generation", -1)) != generation:
 			if filename.ends_with(".tmp"):
 				ignored += 1
@@ -210,7 +213,16 @@ func _decode_document(bytes: PackedByteArray, region_key: Vector2i) -> Dictionar
 		return _failure("effect_projection_format_invalid")
 	var version := _read_integer(document.get("schema_version"))
 	var generation := _read_integer(document.get("generation"))
-	if not version.get("ok", false) or int(version["value"]) != SCHEMA_VERSION 		or not generation.get("ok", false) or int(generation["value"]) < 1:
+	if not version.get("ok", false) 		or not generation.get("ok", false) or int(generation["value"]) < 1:
+		return _failure("effect_projection_version_invalid")
+	if int(version["value"]) < SCHEMA_VERSION:
+		return {
+			"ok": false,
+			"obsolete": true,
+			"generation": int(generation["value"]),
+			"reason": "effect_projection_schema_obsolete",
+		}
+	if int(version["value"]) != SCHEMA_VERSION:
 		return _failure("effect_projection_version_invalid")
 	if typeof(document.get("payload_json")) != TYPE_STRING 		or typeof(document.get("payload_sha256")) != TYPE_STRING:
 		return _failure("effect_projection_envelope_invalid")
