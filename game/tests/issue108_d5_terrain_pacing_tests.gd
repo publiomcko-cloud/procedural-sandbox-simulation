@@ -22,6 +22,9 @@ func _run() -> void:
 		"issue108-d5-%d-%d" % [OS.get_process_id(), Time.get_ticks_usec()]
 	)
 	scene.set("world_save_store", WorldSaveStore.new(store_path))
+	scene.set("object_state_directory_override", store_path.path_join("objects"))
+	scene.set("terrain_effect_directory_override", store_path.path_join("effects"))
+	scene.set("object_package_roots_override", ["res://mods/first-party"])
 	root.add_child(scene)
 
 	var ready := await _wait_for_window(scene)
