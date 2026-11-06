@@ -88,6 +88,7 @@ func _run() -> void:
 		_finish()
 		return
 
+	var source_id := String(source_effect["source_instance_id"])
 	var source_region := _effect_region(source_effect)
 	_check(
 		source_region == Vector2i.ZERO,
@@ -351,7 +352,6 @@ func _run() -> void:
 			and commands.reconstruct_region(source_region).get("ok", false),
 		"authoritative command service reconstructs effect source region"
 	)
-	var source_id := String(source_effect["source_instance_id"])
 	var transformed: Dictionary = commands.dispatch(
 		_set_component_command(
 			"00000000-0000-4000-8000-00000000d001",
