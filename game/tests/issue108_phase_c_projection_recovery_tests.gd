@@ -5,7 +5,6 @@ const StateService := preload("res://scripts/objects/procedural_object_state_ser
 const CommandService := preload("res://scripts/entities/entity_command_service.gd")
 const StateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 const ProjectionContract := preload("res://scripts/terrain/terrain_object_effect_projection_contract.gd")
-const ProjectionStore := preload("res://scripts/terrain/terrain_object_effect_projection_store.gd")
 const ProjectionService := preload("res://scripts/terrain/terrain_object_effect_projection_service.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 
@@ -50,8 +49,7 @@ func _run() -> void:
 
 	var commands: RefCounted = CommandService.new()
 	_check(commands.initialize(state, registry).get("ok", false), "entity command service binds authoritative state")
-	var reconstructed: Dictionary = commands.reconstruct_region(Vector2i.ZERO)
-	_check(reconstructed.get("ok", false), "canonical region reconstructs for projection source")
+	_check(commands.reconstruct_region(Vector2i.ZERO).get("ok", false), "canonical region reconstructs for projection source")
 
 	var projection_abs := ProjectSettings.globalize_path(PROJECTION_DIR)
 	_check(not DirAccess.dir_exists_absolute(projection_abs), "old world begins without projection directory")
@@ -59,21 +57,26 @@ func _run() -> void:
 	var projection_init: Dictionary = projection.initialize(
 		WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, PROJECTION_DIR
 	)
-	_check(
-		projection_init.get("ok", false)
-			and not projection_init.get("found", true)
-			and int(projection_init.get("generation", -1)) == 0,
-		"missing projection store loads as compatible empty projection"
-	)
+	_check(projection_init.get("ok", false), "projection service initializes without loading global state")
 	_check(
 		not DirAccess.dir_exists_absolute(projection_abs),
-		"read-only initialization of an old world does not create or rewrite files"
+		"old-world projection initialization performs no write or migration"
 	)
+	_check(projection.get_loaded_scope_count() == 0, "projection starts with zero resident scopes")
 
 	var initial_reconcile: Dictionary = projection.reconcile_command_region(Vector2i.ZERO, commands)
 	_check(initial_reconcile.get("ok", false) and initial_reconcile.get("changed", false), "authoritative region projects durably")
-	_check(projection.get_effect_count() > 0, "region projection contains terrain effects")
-	_check(DirAccess.dir_exists_absolute(projection_abs), "first reconciliation creates the separate projection store")
+	var initial_scope: Dictionary = projection.get_scope_snapshot(Vector2i.ZERO)
+	_check(not initial_scope.is_empty() and (initial_scope["effects"] as Dictionary).size() > 0, "regional projection contains terrain effects")
+	_check(
+		FileAccess.file_exists(projection_abs.path_join("regions/r_0_0/projection-00000001.json")),
+		"region scope persists at spatially computable path"
+	)
+	_check(
+		not FileAccess.file_exists(projection_abs.path_join("head.json"))
+			and not FileAccess.file_exists(projection_abs.path_join("projection-00000001.json")),
+		"projection store has no world-global growing manifest or snapshot"
+	)
 
 	var target := _first_active_effect_source(commands, Vector2i.ZERO)
 	_check(target.get("ok", false), "projection fixture finds active interacting entity")
@@ -81,20 +84,11 @@ func _run() -> void:
 		_finish()
 		return
 	var entity_id := String(target["instance"]["instance_id"])
-	var initial_effect := _effect_for_source(projection.get_snapshot(), entity_id)
+	var initial_effect := _effect_for_source(initial_scope, entity_id)
 	_check(not initial_effect.is_empty(), "projected effect maps one-to-one to source entity")
-	_check(
-		initial_effect["terrain_interaction_pin"] == target["instance"]["terrain_interaction_pin"],
-		"projection persists exact terrain-interaction pin"
-	)
-	_check(
-		initial_effect["content_pin"] == target["instance"]["content_pin"],
-		"projection persists exact source content pin"
-	)
-	_check(
-		not bool(target["instance"].get("terrain_interaction_applied", true)),
-		"projection does not mutate terrain_interaction_applied"
-	)
+	_check(initial_effect["terrain_interaction_pin"] == target["instance"]["terrain_interaction_pin"], "projection persists exact terrain-interaction pin")
+	_check(initial_effect["content_pin"] == target["instance"]["content_pin"], "projection persists exact source content pin")
+	_check(not bool(target["instance"].get("terrain_interaction_applied", true)), "projection does not mutate terrain_interaction_applied")
 	var initial_effect_id := String(initial_effect["effect_id"])
 	var initial_fingerprint := String(initial_effect["source_fingerprint_sha256"])
 
@@ -103,89 +97,86 @@ func _run() -> void:
 		no_change.get("ok", false)
 			and not no_change.get("changed", true)
 			and no_change.get("reason") == "already_current",
-		"repeat reconciliation is an idempotent no-op"
+		"repeat regional reconciliation is an idempotent no-op"
 	)
 
-	var negative_reconstruct: Dictionary = commands.reconstruct_region(Vector2i(-1, -1))
-	_check(negative_reconstruct.get("ok", false), "negative region reconstructs")
+	# A second signed region is persisted independently and can be released from
+	# memory without losing its durable projection.
+	_check(commands.reconstruct_region(Vector2i(-1, -1)).get("ok", false), "negative region reconstructs")
 	var negative_reconcile: Dictionary = projection.reconcile_command_region(Vector2i(-1, -1), commands)
 	_check(negative_reconcile.get("ok", false), "negative region projection persists")
 	_check(
-		projection.get_snapshot()["scopes"].has(ProjectionContract.scope_id_for_region(Vector2i(-1, -1))),
-		"negative region uses signed deterministic scope identity"
+		FileAccess.file_exists(projection_abs.path_join("regions/r_-1_-1/projection-00000001.json")),
+		"negative region has independent signed shard path"
 	)
+	_check(projection.get_loaded_scope_count() == 2, "two reconciled regions are independently resident")
+	var resident_effects_before_release := projection.get_effect_count()
+	projection.release_scope(Vector2i(-1, -1))
+	_check(
+		projection.get_loaded_scope_count() == 1
+			and projection.get_effect_count() < resident_effects_before_release,
+		"release_scope removes a region from resident projection/index memory"
+	)
+	var negative_reload: Dictionary = projection.load_scope(Vector2i(-1, -1))
+	_check(
+		negative_reload.get("ok", false)
+			and negative_reload.get("found", false)
+			and int(negative_reload.get("generation", 0)) == 1,
+		"released signed scope reloads independently from disk"
+	)
+	projection.release_scope(Vector2i(-1, -1))
 
-	# Simulate a crash after the generation file has been flushed but before the
-	# final rename is observed by the next process.
-	var crash_generation := int(projection.storage_generation)
-	var crash_final := projection_abs.path_join("projection-%08d.json" % crash_generation)
-	var crash_tmp := projection_abs.path_join("projection-%08d.tmp" % crash_generation)
-	_check(FileAccess.file_exists(crash_final), "latest projection generation exists before crash simulation")
-	var crash_rename := DirAccess.rename_absolute(crash_final, crash_tmp)
-	_check(crash_rename == OK, "latest committed generation is converted into recoverable temporary fixture")
-
+	# Simulate crash after the regional generation bytes exist but before final
+	# visibility to the next process.
+	var crash_generation := projection.storage_generation_for_scope(Vector2i.ZERO)
+	var region_zero_dir := projection_abs.path_join("regions/r_0_0")
+	var crash_final := region_zero_dir.path_join("projection-%08d.json" % crash_generation)
+	var crash_tmp := region_zero_dir.path_join("projection-%08d.tmp" % crash_generation)
+	_check(DirAccess.rename_absolute(crash_final, crash_tmp) == OK, "latest regional generation becomes recoverable temporary fixture")
 	var recovered: RefCounted = ProjectionService.new()
-	var recovered_init: Dictionary = recovered.initialize(
-		WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, PROJECTION_DIR
-	)
+	_check(recovered.initialize(WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, PROJECTION_DIR).get("ok", false), "fresh service initializes before scoped recovery")
+	var recovered_load: Dictionary = recovered.load_scope(Vector2i.ZERO)
 	_check(
-		recovered_init.get("ok", false)
-			and recovered_init.get("found", false)
-			and recovered_init.get("recovered_temporary", false)
-			and int(recovered_init.get("generation", -1)) == crash_generation,
-		"startup recovers highest valid temporary generation"
+		recovered_load.get("ok", false)
+			and recovered_load.get("found", false)
+			and recovered_load.get("recovered_temporary", false)
+			and int(recovered_load.get("generation", -1)) == crash_generation,
+		"scope load recovers highest valid temporary generation"
 	)
-	_check(
-		FileAccess.file_exists(crash_final) and not FileAccess.file_exists(crash_tmp),
-		"temporary recovery promotes generation back to final path"
-	)
-	var recovered_effect := _effect_for_source(recovered.get_snapshot(), entity_id)
+	_check(FileAccess.file_exists(crash_final) and not FileAccess.file_exists(crash_tmp), "temporary recovery promotes regional generation back to final path")
+	var recovered_effect := _effect_for_source(recovered.get_scope_snapshot(Vector2i.ZERO), entity_id)
 	_check(
 		not recovered_effect.is_empty()
 			and recovered_effect["terrain_interaction_pin"] == initial_effect["terrain_interaction_pin"],
 		"crash recovery preserves exact effect and interaction pin"
 	)
 
-	# Mutate the authoritative entity after the projection commit. The projection
-	# must become stale and remain so until explicitly reconciled.
-	var set_transform := _set_component(
+	# Source commit precedes projection commit. Revision comparison makes the gap
+	# explicit and recoverable rather than requiring distributed atomicity.
+	var transformed: Dictionary = commands.dispatch(_set_component(
 		"00000000-0000-4000-8000-00000000c001",
 		entity_id,
 		state.get_revision(),
 		state.get_entity_revision(entity_id),
 		StateContract.COMPONENT_TRANSFORM,
 		_transform([120, 0, -80], [11000, 27000, -7000], [900, 1200, 1100])
-	)
-	var transformed: Dictionary = commands.dispatch(set_transform)
-	_check(
-		transformed.get("ok", false)
-			and int(transformed.get("world_revision", -1)) == 1
-			and int(transformed.get("entity_revision", -1)) == 1,
-		"authoritative transform commits independently before projection reconciliation"
-	)
-	var stale_status: Dictionary = recovered.get_scope_status(Vector2i.ZERO, state.get_revision())
-	_check(stale_status.get("status") == "stale", "projection exposes stale scope after source-only commit")
+	))
+	_check(transformed.get("ok", false) and int(transformed.get("world_revision", -1)) == 1, "authoritative transform commits before projection")
+	_check(recovered.get_scope_status(Vector2i.ZERO, state.get_revision()).get("status") == "stale", "source-only commit makes regional projection observably stale")
 	var transformed_reconcile: Dictionary = recovered.reconcile_command_region(Vector2i.ZERO, commands)
 	_check(transformed_reconcile.get("ok", false) and transformed_reconcile.get("changed", false), "stale scope reconciles from authoritative state")
-	var transformed_effect := _effect_for_source(recovered.get_snapshot(), entity_id)
-	_check(
-		String(transformed_effect.get("effect_id", "")) == initial_effect_id,
-		"effect identity remains stable across source transform revision"
-	)
+	var transformed_effect := _effect_for_source(recovered.get_scope_snapshot(Vector2i.ZERO), entity_id)
+	_check(String(transformed_effect.get("effect_id", "")) == initial_effect_id, "effect identity remains stable across source transform revision")
 	_check(
 		String(transformed_effect.get("source_fingerprint_sha256", "")) != initial_fingerprint
 			and int(transformed_effect.get("source_revision", -1)) == 1,
 		"projection advances source revision and fingerprint after transform"
 	)
-	_check(
-		recovered.get_scope_status(Vector2i.ZERO, state.get_revision()).get("status") == "current",
-		"reconciled scope is current with authoritative world revision"
-	)
 
-	# Same source revision with a different effective effect is an explicit
-	# divergence, not a silent rewrite.
+	# Same revision plus a different fingerprint is a conflict, not an implicit
+	# content migration.
 	var conflict_sources := _resolved_region_sources(commands, state, Vector2i.ZERO)
-	_check(conflict_sources.get("ok", false), "effective region sources can be reconstructed for conflict probe")
+	_check(conflict_sources.get("ok", false), "effective sources reconstruct for divergence probe")
 	if conflict_sources.get("ok", false):
 		var conflict_instances: Array[Dictionary] = conflict_sources["instances"]
 		for instance in conflict_instances:
@@ -202,144 +193,121 @@ func _run() -> void:
 				and conflict.get("reason") == "effect_projection_same_revision_fingerprint_conflict",
 			"same-revision divergent fingerprint fails closed"
 		)
-	var stale_reconcile: Dictionary = recovered.reconcile_scope(
-		Vector2i.ZERO, 0, [], {}
-	)
-	_check(
-		not stale_reconcile.get("ok", false)
-			and stale_reconcile.get("reason") == "effect_projection_stale_source_world_revision",
-		"older authoritative snapshot cannot overwrite newer projection"
-	)
+	var stale_sources := _resolved_region_sources(commands, state, Vector2i.ZERO)
+	if stale_sources.get("ok", false):
+		var stale: Dictionary = recovered.reconcile_scope(
+			Vector2i.ZERO,
+			0,
+			stale_sources["instances"],
+			stale_sources["source_revisions"]
+		)
+		_check(
+			not stale.get("ok", false)
+				and stale.get("reason") == "effect_projection_stale_scope_revision",
+			"older authoritative scope cannot overwrite newer regional projection"
+		)
 
-	# Delete is authoritative first; reconciliation then garbage-collects the
-	# orphaned effect from this regional scope.
-	var delete_command := _simple_command(
+	# Delete removes the source from the authoritative active set; reconciliation
+	# garbage-collects only this scope's orphaned effect.
+	var deleted: Dictionary = commands.dispatch(_simple_command(
 		"00000000-0000-4000-8000-00000000c002",
 		"ENTITY_DELETE",
 		entity_id,
 		state.get_revision(),
 		state.get_entity_revision(entity_id)
-	)
-	var deleted: Dictionary = commands.dispatch(delete_command)
+	))
 	_check(deleted.get("ok", false) and int(deleted.get("world_revision", -1)) == 2, "authoritative delete commits")
-	_check(
-		recovered.get_scope_status(Vector2i.ZERO, state.get_revision()).get("status") == "stale",
-		"delete leaves projection detectably stale until reconciliation"
-	)
 	var delete_reconcile: Dictionary = recovered.reconcile_command_region(Vector2i.ZERO, commands)
 	_check(
 		delete_reconcile.get("ok", false)
 			and int(delete_reconcile.get("removed_effect_count", 0)) >= 1,
-		"reconciliation removes orphaned effect after authoritative delete"
+		"regional reconciliation garbage-collects orphan after delete"
 	)
-	_check(
-		_effect_for_source(recovered.get_snapshot(), entity_id).is_empty(),
-		"deleted source no longer has persistent projected effect"
-	)
+	_check(_effect_for_source(recovered.get_scope_snapshot(Vector2i.ZERO), entity_id).is_empty(), "deleted source no longer has projected effect")
 
-	# Restore returns the same source identity and therefore the same stable effect
-	# ID at a newer source revision.
-	var restore_command := _simple_command(
+	var restored: Dictionary = commands.dispatch(_simple_command(
 		"00000000-0000-4000-8000-00000000c003",
 		"ENTITY_RESTORE",
 		entity_id,
 		state.get_revision(),
 		state.get_entity_revision(entity_id)
-	)
-	var restored: Dictionary = commands.dispatch(restore_command)
+	))
 	_check(restored.get("ok", false) and int(restored.get("world_revision", -1)) == 3, "authoritative restore commits")
-	var restore_reconcile: Dictionary = recovered.reconcile_command_region(Vector2i.ZERO, commands)
-	_check(restore_reconcile.get("ok", false), "restored entity reprojects")
-	var restored_effect := _effect_for_source(recovered.get_snapshot(), entity_id)
+	_check(recovered.reconcile_command_region(Vector2i.ZERO, commands).get("ok", false), "restored source reprojects")
+	var restored_effect := _effect_for_source(recovered.get_scope_snapshot(Vector2i.ZERO), entity_id)
 	_check(
 		String(restored_effect.get("effect_id", "")) == initial_effect_id
 			and int(restored_effect.get("source_revision", -1)) == 3,
-		"restored source recreates stable effect identity at monotonic revision"
-	)
-	_check(
-		String(restored_effect.get("source_fingerprint_sha256", "")) != initial_fingerprint,
-		"source revision participates in recovery fingerprint"
+		"restore recreates stable effect identity at monotonic source revision"
 	)
 
-	# Lost projection data is rebuildable from the authoritative command/state
-	# services without touching entity persistence.
+	# Lost scope data is rebuilt from authority without touching neighboring
+	# shards or the object-state store.
 	var authoritative_snapshot_before_rebuild: Dictionary = state.snapshot.duplicate(true)
 	var expected_restored_effect := restored_effect.duplicate(true)
-	_remove_tree(projection_abs)
+	_remove_tree(region_zero_dir)
 	var rebuilt: RefCounted = ProjectionService.new()
-	var rebuilt_init: Dictionary = rebuilt.initialize(
-		WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, PROJECTION_DIR
-	)
-	_check(rebuilt_init.get("ok", false) and not rebuilt_init.get("found", true), "lost projection reopens as empty derived state")
-	var rebuilt_region: Dictionary = rebuilt.reconcile_command_region(Vector2i.ZERO, commands)
-	_check(rebuilt_region.get("ok", false), "empty projection rebuilds from authoritative region")
-	var rebuilt_effect := _effect_for_source(rebuilt.get_snapshot(), entity_id)
-	_check(
-		rebuilt_effect == expected_restored_effect,
-		"projection rebuild reproduces exact normalized effect from authoritative source"
-	)
-	_check(
-		state.snapshot == authoritative_snapshot_before_rebuild,
-		"projection rebuild never rewrites authoritative entity/object snapshot"
-	)
+	_check(rebuilt.initialize(WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, PROJECTION_DIR).get("ok", false), "rebuild service initializes")
+	var missing_scope_load: Dictionary = rebuilt.load_scope(Vector2i.ZERO)
+	_check(missing_scope_load.get("ok", false) and not missing_scope_load.get("found", true), "missing regional shard loads as empty derived scope")
+	_check(rebuilt.reconcile_command_region(Vector2i.ZERO, commands).get("ok", false), "missing regional shard rebuilds from authority")
+	var rebuilt_effect := _effect_for_source(rebuilt.get_scope_snapshot(Vector2i.ZERO), entity_id)
+	_check(rebuilt_effect == expected_restored_effect, "rebuild reproduces exact normalized effect")
+	_check(state.snapshot == authoritative_snapshot_before_rebuild, "projection rebuild never rewrites authoritative object state")
+	var neighbor_survives: Dictionary = rebuilt.load_scope(Vector2i(-1, -1))
+	_check(neighbor_survives.get("ok", false) and neighbor_survives.get("found", false), "rebuilding one shard leaves neighboring signed shard intact")
 
-	# An uncertain projection-store write must invalidate the service before any
-	# retry can publish or overwrite a potentially committed generation.
+	# Commit uncertainty invalidates the service before candidate publication.
 	var faulted: RefCounted = ProjectionService.new()
-	var fault_init: Dictionary = faulted.initialize(
-		WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, ROOT + "/fault-projection"
-	)
-	_check(fault_init.get("ok", false), "fault-injection projection service initializes")
-	var fault_snapshot_before: Dictionary = faulted.get_snapshot()
+	_check(faulted.initialize(WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, ROOT + "/fault-projection").get("ok", false), "fault-injection service initializes")
+	_check(faulted.load_scope(Vector2i.ZERO).get("ok", false), "fault-injection scope loads empty before store replacement")
+	var fault_scope_before: Dictionary = faulted.get_scope_snapshot(Vector2i.ZERO)
 	faulted.store = FailingProjectionStore.new()
 	var fault_result: Dictionary = faulted.reconcile_command_region(Vector2i.ZERO, commands)
 	_check(
 		not fault_result.get("ok", false)
 			and String(fault_result.get("reason", "")).begins_with("effect_projection_commit_uncertain:")
 			and not bool(faulted.initialized),
-		"uncertain persistence outcome invalidates projection service until reinitialize"
+		"uncertain persistence invalidates projection service until recovery"
 	)
-	_check(
-		faulted.snapshot == fault_snapshot_before,
-		"failed projection commit never publishes candidate snapshot in memory"
-	)
+	_check(faulted.get_scope_snapshot(Vector2i.ZERO) == fault_scope_before, "failed commit never publishes candidate scope")
 
-	# A corrupt finalized generation fails closed instead of being silently
-	# replaced. This preserves evidentiary recovery semantics.
-	var corrupt_dir := ProjectSettings.globalize_path(ROOT + "/corrupt-projection")
-	DirAccess.make_dir_recursive_absolute(corrupt_dir)
-	var corrupt_file := FileAccess.open(
-		corrupt_dir.path_join("projection-00000001.json"), FileAccess.WRITE
-	)
+	# A corrupt finalized generation fails closed only when that spatial scope is
+	# requested; initialization remains lazy and unrelated scopes need no scan.
+	var corrupt_root := ProjectSettings.globalize_path(ROOT + "/corrupt-projection")
+	var corrupt_scope := corrupt_root.path_join("regions/r_0_0")
+	DirAccess.make_dir_recursive_absolute(corrupt_scope)
+	var corrupt_file := FileAccess.open(corrupt_scope.path_join("projection-00000001.json"), FileAccess.WRITE)
 	if corrupt_file != null:
 		corrupt_file.store_string("{corrupt")
 		corrupt_file.flush()
 		corrupt_file.close()
 	var corrupt_service: RefCounted = ProjectionService.new()
-	var corrupt_init: Dictionary = corrupt_service.initialize(
-		WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, corrupt_dir
-	)
+	_check(corrupt_service.initialize(WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, corrupt_root).get("ok", false), "corrupt store does not force global scan at initialize")
+	var corrupt_load: Dictionary = corrupt_service.load_scope(Vector2i.ZERO)
 	_check(
-		not corrupt_init.get("ok", false)
-			and corrupt_init.get("reason") == "effect_projection_corrupt_generation",
-		"corrupt finalized generation fails closed"
+		not corrupt_load.get("ok", false)
+			and corrupt_load.get("reason") == "effect_projection_corrupt_generation",
+		"corrupt finalized regional generation fails closed on scoped load"
 	)
 
 	evidence = {
-		"initial_effect_count": int(initial_reconcile.get("effect_count", 0)),
-		"negative_scope_effect_count": int(negative_reconcile.get("effect_count", 0)),
+		"initial_scope_effect_count": (initial_scope["effects"] as Dictionary).size(),
 		"crash_recovered_generation": crash_generation,
 		"final_authoritative_world_revision": state.get_revision(),
 		"final_target_source_revision": int(rebuilt_effect.get("source_revision", -1)),
-		"rebuild_effect_count": rebuilt.get_effect_count(),
+		"resident_scope_limit": ProjectionService.MAX_RESIDENT_SCOPES,
+		"per_scope_source_limit": ProjectionContract.MAX_SOURCES_PER_SCOPE,
 	}
 	_finish()
 
 
 func _first_active_effect_source(commands: RefCounted, region_key: Vector2i) -> Dictionary:
-	for base in commands.get_region_base_instances(region_key):
+	var bases: Array = commands.call("get_region_base_instances", region_key)
+	for base_value in bases:
+		var base: Dictionary = base_value
 		var entity_id := String(base.get("instance_id", ""))
-		var resolved: Dictionary = commands.resolve_entity(entity_id)
+		var resolved: Dictionary = commands.call("resolve_entity", entity_id)
 		if not resolved.get("ok", false) or resolved.get("deleted", false):
 			continue
 		var instance: Dictionary = resolved["instance"]
@@ -348,87 +316,52 @@ func _first_active_effect_source(commands: RefCounted, region_key: Vector2i) -> 
 	return {"ok": false}
 
 
-func _resolved_region_sources(
-	commands: RefCounted,
-	state: RefCounted,
-	region_key: Vector2i
-) -> Dictionary:
+func _resolved_region_sources(commands: RefCounted, state: RefCounted, region_key: Vector2i) -> Dictionary:
 	var instances: Array[Dictionary] = []
 	var revisions: Dictionary = {}
-	for base in commands.get_region_base_instances(region_key):
+	var bases: Array = commands.call("get_region_base_instances", region_key)
+	for base_value in bases:
+		var base: Dictionary = base_value
 		var entity_id := String(base.get("instance_id", ""))
-		var resolved: Dictionary = commands.resolve_entity(entity_id)
+		var resolved: Dictionary = commands.call("resolve_entity", entity_id)
 		if not resolved.get("ok", false):
 			return {"ok": false, "reason": resolved.get("reason", "resolve_failed")}
 		if resolved.get("deleted", false):
 			continue
 		instances.append((resolved["instance"] as Dictionary).duplicate(true))
-		revisions[entity_id] = state.get_entity_revision(entity_id)
+		revisions[entity_id] = int(state.call("get_entity_revision", entity_id))
 	return {"ok": true, "instances": instances, "source_revisions": revisions}
 
 
-func _effect_for_source(projection_snapshot: Dictionary, entity_id: String) -> Dictionary:
-	for effect_value in (projection_snapshot.get("effects", {}) as Dictionary).values():
+func _effect_for_source(scope_snapshot: Dictionary, entity_id: String) -> Dictionary:
+	for effect_value in (scope_snapshot.get("effects", {}) as Dictionary).values():
 		var effect: Dictionary = effect_value
 		if String(effect.get("source_instance_id", "")) == entity_id:
 			return effect.duplicate(true)
 	return {}
 
 
-func _set_component(
-	command_id: String,
-	entity_id: String,
-	world_revision: int,
-	entity_revision: int,
-	component_id: String,
-	component: Dictionary
-) -> Dictionary:
+func _set_component(command_id: String, entity_id: String, world_revision: int, entity_revision: int, component_id: String, component: Dictionary) -> Dictionary:
 	return {
-		"schema_version": 1,
-		"command_id": command_id,
-		"operation": "ENTITY_SET_COMPONENT",
-		"origin": {"type": "player", "id": "phase-c-test"},
-		"world_id": WORLD_ID,
-		"world_seed": WORLD_SEED,
-		"generator_version": Field.GENERATOR_VERSION,
-		"expected_world_revision": world_revision,
-		"expected_entity_revision": entity_revision,
-		"entity_id": entity_id,
-		"component_id": component_id,
+		"schema_version": 1, "command_id": command_id, "operation": "ENTITY_SET_COMPONENT",
+		"origin": {"type": "player", "id": "phase-c-test"}, "world_id": WORLD_ID, "world_seed": WORLD_SEED,
+		"generator_version": Field.GENERATOR_VERSION, "expected_world_revision": world_revision,
+		"expected_entity_revision": entity_revision, "entity_id": entity_id, "component_id": component_id,
 		"component": component,
 	}
 
 
-func _simple_command(
-	command_id: String,
-	operation: String,
-	entity_id: String,
-	world_revision: int,
-	entity_revision: int
-) -> Dictionary:
+func _simple_command(command_id: String, operation: String, entity_id: String, world_revision: int, entity_revision: int) -> Dictionary:
 	return {
-		"schema_version": 1,
-		"command_id": command_id,
-		"operation": operation,
-		"origin": {"type": "player", "id": "phase-c-test"},
-		"world_id": WORLD_ID,
-		"world_seed": WORLD_SEED,
-		"generator_version": Field.GENERATOR_VERSION,
-		"expected_world_revision": world_revision,
-		"expected_entity_revision": entity_revision,
-		"entity_id": entity_id,
+		"schema_version": 1, "command_id": command_id, "operation": operation,
+		"origin": {"type": "player", "id": "phase-c-test"}, "world_id": WORLD_ID, "world_seed": WORLD_SEED,
+		"generator_version": Field.GENERATOR_VERSION, "expected_world_revision": world_revision,
+		"expected_entity_revision": entity_revision, "entity_id": entity_id,
 	}
 
 
 func _transform(translation: Array, rotation: Array, scale: Array) -> Dictionary:
-	return {
-		"schema_version": 1,
-		"properties": {
-			"translation_mm": translation,
-			"rotation_mdeg": rotation,
-			"scale_milli": scale,
-		},
-	}
+	return {"schema_version": 1, "properties": {"translation_mm": translation, "rotation_mdeg": rotation, "scale_milli": scale}}
 
 
 func _remove_tree(path: String) -> void:
