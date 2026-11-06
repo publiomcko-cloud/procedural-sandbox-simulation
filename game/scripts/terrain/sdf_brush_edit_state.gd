@@ -607,11 +607,23 @@ static func sample_density_snapshot(
 	# Declarative object imprints compose after all canonical terrain edits.
 	# Frames are immutable, prevalidated snapshot data prepared on the main
 	# thread; workers never read entity/object state.
-	var local_frames_value: Variant = snapshot.get("terrain_object_local_frames", [])
-	if typeof(local_frames_value) == TYPE_ARRAY and not local_frames_value.is_empty():
-		density = LocalEffectFrame.compose_frames_prevalidated(
-			density, local_frames_value, region_key, local_position
+	var sampling_frames_value: Variant = snapshot.get(
+		"terrain_object_sampling_frames", []
+	)
+	if typeof(sampling_frames_value) == TYPE_ARRAY \
+		and not sampling_frames_value.is_empty():
+		density = LocalEffectFrame.compose_compiled_frames(
+			density, sampling_frames_value, region_key, local_position
 		)
+	else:
+		var local_frames_value: Variant = snapshot.get(
+			"terrain_object_local_frames", []
+		)
+		if typeof(local_frames_value) == TYPE_ARRAY \
+			and not local_frames_value.is_empty():
+			density = LocalEffectFrame.compose_frames_prevalidated(
+				density, local_frames_value, region_key, local_position
+			)
 	if show_cave_section:
 		density = minf(density, 6.0 - world_position.z)
 	return density
