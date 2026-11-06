@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "type": "terrain_interaction_rule",
+  "id": "firstparty.core_rocks:granite_ground_imprint",
+  "definition_id": "firstparty.core_rocks:granite",
+  "algorithm": "sdf_ground_imprint_v1",
+  "shape_source": "recipe_envelope_v1",
+  "operation": "subtract_solid_v1",
+  "embed_depth_mm": 220,
+  "blend_radius_mm": 180,
+  "edit_order": "terrain_edits_then_imprint_v1"
+}
