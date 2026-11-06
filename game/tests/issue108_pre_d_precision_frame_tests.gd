@@ -223,7 +223,8 @@ func _fixture(
 	position_mm: Vector3i,
 	instance_id: String
 ) -> Dictionary:
-	var pins: Dictionary = registry.pin_definitions([DEFINITION_ID])
+	var definition_ids: Array[String] = [DEFINITION_ID]
+	var pins: Dictionary = registry.pin_definitions(definition_ids)
 	var recipe: Dictionary = registry.evaluate_rock_recipe(
 		DEFINITION_ID, 31337
 	)
