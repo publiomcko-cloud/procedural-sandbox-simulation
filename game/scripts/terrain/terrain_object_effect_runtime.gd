@@ -105,7 +105,8 @@ func prepare_targets_snapshot(
 			source_region,
 			source_revision,
 			source.get("instances", []),
-			source.get("source_revisions", {})
+			source.get("source_revisions", {}),
+			status.get("status") == "ahead"
 		)
 		if not reconciled.get("ok", false):
 			return _failure(
