@@ -116,11 +116,7 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 		return _fail_initialize("object_state_unavailable:%s" % state_load.get("reason", "invalid"))
 	registry = candidate
 	_initialize_entity_command_service()
-	var effect_projection_directory := ProjectSettings.globalize_path(
-		"user://worlds/%s/terrain-object-effects/seed-%d-generator-%d" % [
-			world_id, world_seed, FIELD.GENERATOR_VERSION
-		]
-	)
+	var effect_projection_directory := _terrain_effect_projection_directory(world_seed)
 	var projection_candidate: RefCounted = TerrainEffectProjectionService.new()
 	var projection_initialized: Dictionary = projection_candidate.initialize(
 		world_id, world_seed, FIELD.GENERATOR_VERSION, effect_projection_directory
@@ -364,11 +360,7 @@ func publish_region(
 			return _record_region_failure(id, "object_state_unavailable:%s" % state_load.get("reason", "invalid"))
 		world_seed = region_world_seed
 		_initialize_entity_command_service()
-		var effect_projection_directory := ProjectSettings.globalize_path(
-			"user://worlds/%s/terrain-object-effects/seed-%d-generator-%d" % [
-				world_id, world_seed, FIELD.GENERATOR_VERSION
-			]
-		)
+		var effect_projection_directory := _terrain_effect_projection_directory(world_seed)
 		var projection_candidate: RefCounted = TerrainEffectProjectionService.new()
 		var projection_initialized: Dictionary = projection_candidate.initialize(
 			world_id, world_seed, FIELD.GENERATOR_VERSION, effect_projection_directory
@@ -1120,6 +1112,21 @@ func _discover_configured_packages(base_roots: Array[String]) -> Dictionary:
 
 func _configured_optional_roots(roots: Array[String]) -> Array[String]:
 	return Loader.optional_user_roots(roots)
+
+
+func _terrain_effect_projection_directory(seed_value: int) -> String:
+	var root: String
+	if state_directory_override.is_empty():
+		root = ProjectSettings.globalize_path(
+			"user://worlds/%s/terrain-object-effects" % world_id
+		)
+	else:
+		var object_root := state_directory_override
+		object_root = ProjectSettings.globalize_path(object_root) 			if object_root.begins_with("user://") or object_root.begins_with("res://") 			else object_root
+		root = object_root.get_base_dir().path_join("terrain-object-effects")
+	return root.path_join(
+		"seed-%d-generator-%d" % [seed_value, FIELD.GENERATOR_VERSION]
+	)
 
 
 func _initialize_state_service(seed_value: int) -> Dictionary:
