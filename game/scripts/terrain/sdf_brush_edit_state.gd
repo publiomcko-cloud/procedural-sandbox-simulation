@@ -2,6 +2,7 @@ class_name SdfBrushEditState
 extends RefCounted
 
 ## One bounded, globally ordered in-memory command ledger shared by every region.
+const LocalEffectFrame := preload("res://scripts/terrain/terrain_object_effect_local_frame.gd")
 const FIELD := preload("res://scripts/terrain/sdf_world.gd")
 const SPATIAL := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const GRID := preload("res://scripts/terrain/terrain_chunk_grid.gd")
@@ -603,6 +604,14 @@ static func sample_density_snapshot(
 			density = minf(density, distance_to_surface)
 		else:
 			density = maxf(density, -distance_to_surface)
+	# Declarative object imprints compose after all canonical terrain edits.
+	# Frames are immutable, prevalidated snapshot data prepared on the main
+	# thread; workers never read entity/object state.
+	var local_frames_value: Variant = snapshot.get("terrain_object_local_frames", [])
+	if typeof(local_frames_value) == TYPE_ARRAY and not local_frames_value.is_empty():
+		density = LocalEffectFrame.compose_frames_prevalidated(
+			density, local_frames_value, region_key, local_position
+		)
 	if show_cave_section:
 		density = minf(density, 6.0 - world_position.z)
 	return density
