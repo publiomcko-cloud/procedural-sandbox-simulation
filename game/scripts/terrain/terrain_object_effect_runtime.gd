@@ -14,6 +14,7 @@ const LocalFrameIndex := preload("res://scripts/terrain/terrain_object_effect_lo
 # With 16x12 m regions, +/-2 source regions conservatively covers any effect
 # that can touch a target chunk, including the chunk-normal halo.
 const SOURCE_REGION_RADIUS := 2
+const MAX_PREFETCH_GENERATION_JOBS_IN_FLIGHT := 2
 
 var world_id := ""
 var world_seed := -1
@@ -30,6 +31,8 @@ var _required_regions_cache: Dictionary = {}
 var incremental_prefetch_enabled := false
 var _prefetch_queue: Array[Vector2i] = []
 var _prefetch_scope_ids: Dictionary = {}
+var _prefetch_generation_jobs: Dictionary = {}
+var _prefetch_task_by_scope: Dictionary = {}
 var _prefetch_error := ""
 var _performance := {
 	"prepare_call_count": 0,
@@ -47,6 +50,12 @@ var _performance := {
 	"prefetch_total_usec": 0,
 	"prefetch_peak_usec": 0,
 	"prefetch_pending_peak": 0,
+	"prefetch_worker_dispatch_count": 0,
+	"prefetch_worker_complete_count": 0,
+	"prefetch_worker_total_usec": 0,
+	"prefetch_worker_peak_usec": 0,
+	"prefetch_finalize_total_usec": 0,
+	"prefetch_finalize_peak_usec": 0,
 }
 
 
@@ -72,6 +81,8 @@ func initialize(
 	_required_regions_cache.clear()
 	_prefetch_queue.clear()
 	_prefetch_scope_ids.clear()
+	_prefetch_generation_jobs.clear()
+	_prefetch_task_by_scope.clear()
 	_prefetch_error = ""
 	incremental_prefetch_enabled = false
 	_reset_performance_metrics()
@@ -89,10 +100,14 @@ func initialize(
 
 
 func set_incremental_prefetch_enabled(enabled: bool) -> void:
+	if incremental_prefetch_enabled and not enabled:
+		wait_for_prefetch_jobs()
 	incremental_prefetch_enabled = enabled
 	if not enabled:
 		_prefetch_queue.clear()
 		_prefetch_scope_ids.clear()
+		_prefetch_generation_jobs.clear()
+		_prefetch_task_by_scope.clear()
 		_prefetch_error = ""
 
 
@@ -103,19 +118,66 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 		return {"ok": true, "processed": 0, "pending": 0}
 	if not _prefetch_error.is_empty():
 		return _failure(_prefetch_error)
+
 	var processed := 0
 	var started_usec := Time.get_ticks_usec()
-	while processed < maxi(max_scopes, 0) and not _prefetch_queue.is_empty():
-		var region: Vector2i = _prefetch_queue.pop_front()
-		var scope_id := Contract.scope_id_for_region(region)
+	var completed: Array[int] = []
+	for task_id_value in _prefetch_generation_jobs:
+		var task_id := int(task_id_value)
+		if WorkerThreadPool.is_task_completed(task_id):
+			completed.append(task_id)
+	completed.sort()
+	for task_id in completed:
+		if processed >= maxi(max_scopes, 0):
+			break
+		WorkerThreadPool.wait_for_task_completion(task_id)
+		var record: Dictionary = _prefetch_generation_jobs[task_id]
+		_prefetch_generation_jobs.erase(task_id)
+		var region: Vector2i = record["region"]
+		var scope_id := String(record["scope_id"])
+		_prefetch_task_by_scope.erase(scope_id)
 		_prefetch_scope_ids.erase(scope_id)
-		if not _protected_scope_ids.is_empty() 			and not _protected_scope_ids.has(scope_id):
+		if bool(record.get("cancelled", false)) 			or (
+				not _protected_scope_ids.is_empty()
+				and not _protected_scope_ids.has(scope_id)
+			):
 			continue
-		if projection.has_scope(region) and not _invalidated_scope_ids.has(scope_id):
-			continue
-		var scope_started_usec := Time.get_ticks_usec()
-		var reconciled := _reconcile_source_region(region, false)
-		var scope_usec := Time.get_ticks_usec() - scope_started_usec
+		var job: RefCounted = record["job"]
+		var generated: Dictionary = job.get("result")
+		var worker_usec := int(generated.get(
+			"worker_usec",
+			int(job.get("worker_finished_usec")) - int(job.get("worker_started_usec"))
+		))
+		_performance["prefetch_worker_complete_count"] = int(
+			_performance["prefetch_worker_complete_count"]
+		) + 1
+		_performance["prefetch_worker_total_usec"] = int(
+			_performance["prefetch_worker_total_usec"]
+		) + worker_usec
+		_performance["prefetch_worker_peak_usec"] = maxi(
+			int(_performance["prefetch_worker_peak_usec"]), worker_usec
+		)
+		if not generated.get("ok", false):
+			_prefetch_error = "terrain_effect_runtime_prefetch_generation_failed:%s" 				% generated.get("reason", "unknown")
+			return _failure(_prefetch_error)
+
+		var finalize_started_usec := Time.get_ticks_usec()
+		var source_value: Variant = object_stream.call(
+			"finalize_authoritative_region_projection_source",
+			region,
+			generated
+		)
+		if typeof(source_value) != TYPE_DICTIONARY:
+			_prefetch_error = "terrain_effect_runtime_prefetch_finalize_invalid"
+			return _failure(_prefetch_error)
+		var source: Dictionary = source_value
+		if not source.get("ok", false):
+			_prefetch_error = "terrain_effect_runtime_source_failed:%s" 				% source.get("reason", "unknown")
+			return _failure(_prefetch_error)
+		var reconciled := _reconcile_prebuilt_source_region(
+			region, source, false
+		)
+		var finalize_usec := Time.get_ticks_usec() - finalize_started_usec
 		if not reconciled.get("ok", false):
 			_prefetch_error = String(reconciled.get(
 				"reason", "terrain_effect_runtime_prefetch_failed"
@@ -126,21 +188,113 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 		) + 1
 		_performance["prefetch_total_usec"] = int(
 			_performance["prefetch_total_usec"]
-		) + scope_usec
+		) + finalize_usec
 		_performance["prefetch_peak_usec"] = maxi(
-			int(_performance["prefetch_peak_usec"]), scope_usec
+			int(_performance["prefetch_peak_usec"]), finalize_usec
+		)
+		_performance["prefetch_finalize_total_usec"] = int(
+			_performance["prefetch_finalize_total_usec"]
+		) + finalize_usec
+		_performance["prefetch_finalize_peak_usec"] = maxi(
+			int(_performance["prefetch_finalize_peak_usec"]), finalize_usec
 		)
 		processed += 1
+
+	while _prefetch_generation_jobs.size() 		< MAX_PREFETCH_GENERATION_JOBS_IN_FLIGHT 		and not _prefetch_queue.is_empty():
+		var region: Vector2i = _prefetch_queue.pop_front()
+		var scope_id := Contract.scope_id_for_region(region)
+		if not _protected_scope_ids.is_empty() 			and not _protected_scope_ids.has(scope_id):
+			_prefetch_scope_ids.erase(scope_id)
+			continue
+		if projection.has_scope(region) 			and not _invalidated_scope_ids.has(scope_id):
+			_prefetch_scope_ids.erase(scope_id)
+			continue
+		if _prefetch_task_by_scope.has(scope_id):
+			continue
+		if not object_stream.has_method(
+			"create_projection_source_generation_job"
+		) or not object_stream.has_method(
+			"finalize_authoritative_region_projection_source"
+		):
+			# Generic/fake object streams keep the synchronous fallback.
+			var scope_started_usec := Time.get_ticks_usec()
+			var reconciled := _reconcile_source_region(region, false)
+			var scope_usec := Time.get_ticks_usec() - scope_started_usec
+			_prefetch_scope_ids.erase(scope_id)
+			if not reconciled.get("ok", false):
+				_prefetch_error = String(reconciled.get(
+					"reason", "terrain_effect_runtime_prefetch_failed"
+				))
+				return _failure(_prefetch_error)
+			_performance["prefetch_scope_count"] = int(
+				_performance["prefetch_scope_count"]
+			) + 1
+			_performance["prefetch_total_usec"] = int(
+				_performance["prefetch_total_usec"]
+			) + scope_usec
+			_performance["prefetch_peak_usec"] = maxi(
+				int(_performance["prefetch_peak_usec"]), scope_usec
+			)
+			processed += 1
+			if processed >= maxi(max_scopes, 0):
+				break
+			continue
+		var job_value: Variant = object_stream.call(
+			"create_projection_source_generation_job", region
+		)
+		if job_value == null or not job_value is RefCounted:
+			_prefetch_error = "terrain_effect_runtime_prefetch_job_unavailable"
+			return _failure(_prefetch_error)
+		var job: RefCounted = job_value
+		var task_id := WorkerThreadPool.add_task(
+			Callable(job, "run"),
+			false,
+			"terrain-object projection source generation"
+		)
+		if task_id < 0:
+			_prefetch_error = "terrain_effect_runtime_prefetch_worker_rejected"
+			return _failure(_prefetch_error)
+		_prefetch_generation_jobs[task_id] = {
+			"job": job,
+			"region": region,
+			"scope_id": scope_id,
+			"cancelled": false,
+			"submitted_usec": Time.get_ticks_usec(),
+		}
+		_prefetch_task_by_scope[scope_id] = task_id
+		_performance["prefetch_worker_dispatch_count"] = int(
+			_performance["prefetch_worker_dispatch_count"]
+		) + 1
+
+	_performance["prefetch_pending_peak"] = maxi(
+		int(_performance["prefetch_pending_peak"]),
+		_prefetch_queue.size() + _prefetch_generation_jobs.size()
+	)
 	return {
 		"ok": true,
 		"processed": processed,
-		"pending": _prefetch_queue.size(),
+		"pending": _prefetch_queue.size() + _prefetch_generation_jobs.size(),
+		"queued": _prefetch_queue.size(),
+		"in_flight": _prefetch_generation_jobs.size(),
 		"duration_usec": Time.get_ticks_usec() - started_usec,
 	}
 
 
 func get_prefetch_pending_count() -> int:
-	return _prefetch_queue.size()
+	return _prefetch_queue.size() + _prefetch_generation_jobs.size()
+
+
+func wait_for_prefetch_jobs() -> void:
+	var task_ids: Array[int] = []
+	for task_id_value in _prefetch_generation_jobs:
+		task_ids.append(int(task_id_value))
+	task_ids.sort()
+	for task_id in task_ids:
+		WorkerThreadPool.wait_for_task_completion(task_id)
+	_prefetch_generation_jobs.clear()
+	_prefetch_task_by_scope.clear()
+	_prefetch_queue.clear()
+	_prefetch_scope_ids.clear()
 
 
 func _reconcile_source_region(
@@ -155,6 +309,17 @@ func _reconcile_source_region(
 		return _failure(
 			"terrain_effect_runtime_source_failed:%s" 				% source.get("reason", "unknown")
 		)
+	return _reconcile_prebuilt_source_region(
+		source_region, source, persist_projection
+	)
+
+
+func _reconcile_prebuilt_source_region(
+	source_region: Vector2i,
+	source: Dictionary,
+	persist_projection: bool = true
+) -> Dictionary:
+	var scope_id := Contract.scope_id_for_region(source_region)
 	var reconciled: Dictionary = projection.reconcile_scope(
 		source_region,
 		int(source.get("world_revision", -1)),
@@ -183,6 +348,8 @@ func _enqueue_prefetch_regions(
 	for region in regions:
 		var scope_id := Contract.scope_id_for_region(region)
 		if projection.has_scope(region) and not _invalidated_scope_ids.has(scope_id):
+			continue
+		if _prefetch_task_by_scope.has(scope_id):
 			continue
 		if _prefetch_scope_ids.has(scope_id):
 			if high_priority:
@@ -217,6 +384,15 @@ func _filter_prefetch_to_protected() -> void:
 			kept.append(region)
 			kept_ids[scope_id] = true
 	_prefetch_queue = kept
+	for task_id_value in _prefetch_generation_jobs:
+		var task_id := int(task_id_value)
+		var record: Dictionary = _prefetch_generation_jobs[task_id]
+		var scope_id := String(record["scope_id"])
+		if not _protected_scope_ids.has(scope_id):
+			record["cancelled"] = true
+			_prefetch_generation_jobs[task_id] = record
+		else:
+			kept_ids[scope_id] = true
 	_prefetch_scope_ids = kept_ids
 
 
@@ -549,7 +725,8 @@ func get_performance_snapshot() -> Dictionary:
 		if calls > 0 else 0.0
 	)
 	result["resident_scope_count"] = projection.get_loaded_scope_count() 		if projection != null else 0
-	result["prefetch_pending_count"] = _prefetch_queue.size()
+	result["prefetch_pending_count"] = _prefetch_queue.size() + _prefetch_generation_jobs.size()
+	result["prefetch_in_flight_count"] = _prefetch_generation_jobs.size()
 	result["prefetch_error"] = _prefetch_error
 	result["projection"] = projection.get_performance_snapshot() 		if projection != null else {}
 	return result
@@ -578,10 +755,17 @@ func _reset_performance_metrics() -> void:
 		"prefetch_total_usec": 0,
 		"prefetch_peak_usec": 0,
 		"prefetch_pending_peak": 0,
+		"prefetch_worker_dispatch_count": 0,
+		"prefetch_worker_complete_count": 0,
+		"prefetch_worker_total_usec": 0,
+		"prefetch_worker_peak_usec": 0,
+		"prefetch_finalize_total_usec": 0,
+		"prefetch_finalize_peak_usec": 0,
 	}
 
 
 func release_all_scopes() -> void:
+	wait_for_prefetch_jobs()
 	_prefetch_queue.clear()
 	_prefetch_scope_ids.clear()
 	_prefetch_error = ""
