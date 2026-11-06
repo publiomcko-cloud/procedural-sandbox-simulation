@@ -189,6 +189,12 @@ func _test_effect_normalization_and_transform(registry: RefCounted) -> void:
 		not Effect.build_from_instance(bad_pin, 7).get("ok", false),
 		"interaction pin mismatch is rejected explicitly"
 	)
+	var bad_content_pin := base.duplicate(true)
+	bad_content_pin["content_pin"]["content_id"] = "other.package:other"
+	_check(
+		not Effect.build_from_instance(bad_content_pin, 7).get("ok", false),
+		"content pin mismatch is rejected explicitly"
+	)
 	var bad_world_anchor := base.duplicate(true)
 	bad_world_anchor["world_position_mm"] = Vector3i(1, 2, 3)
 	_check(
@@ -242,6 +248,25 @@ func _test_evaluator(registry: RefCounted) -> void:
 	_check(
 		is_equal_approx(hard_density, minf(terrain_density, Effect.sample_cutter(hard, interior))),
 		"zero blend radius is exact hard subtraction"
+	)
+	_check(
+		is_equal_approx(
+			Effect.sample_cutter(first, interior),
+			Effect.sample_cutter_prevalidated(first, interior)
+		) and is_equal_approx(
+			Effect.compose_density(terrain_density, first, interior),
+			Effect.compose_density_prevalidated(terrain_density, first, interior)
+		) and is_equal_approx(
+			Effect.compose_effects(terrain_density, [first, second], interior),
+			Effect.compose_effects_prevalidated(terrain_density, [first, second], interior)
+		),
+		"prevalidated hot-path evaluator is semantically identical to safe evaluator"
+	)
+	var malformed_plane := first.duplicate(true)
+	malformed_plane["world_planes"][0]["distance_m"] = "invalid"
+	_check(
+		not Effect.validate_effect(malformed_plane).get("ok", false),
+		"malformed plane distance fails validation without entering evaluator"
 	)
 
 
