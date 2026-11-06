@@ -477,7 +477,22 @@ func _select_entity_at(screen_position: Vector2) -> void:
 	if not picked.get("ok", false):
 		_object_state_action_status = "Selection missed: %s" % picked.get("reason", "no entity")
 		return
-	var terrain_hit: Dictionary = BrushPicker.pick_sdf_v1_surface(ray_origin, ray_direction, Callable(self, "_sample_world_density"))
+	var terrain_sampler := Callable(self, "_sample_world_density")
+	if edit_ledger != null and edit_ledger.has_method("get_ray_snapshot"):
+		var selection_snapshot: Dictionary = edit_ledger.get_ray_snapshot(
+			ray_origin, ray_direction, BrushPicker.MAX_DISTANCE
+		)
+		if selection_snapshot.get("valid", false):
+			var prepared_selection := _prepare_terrain_effect_ray_snapshot(
+				selection_snapshot, ray_origin, ray_direction, BrushPicker.MAX_DISTANCE
+			)
+			if prepared_selection.get("ok", false):
+				selection_snapshot = prepared_selection["snapshot"]
+				terrain_sampler = func(point: Vector3) -> float:
+					return _sample_world_density_from_snapshot(point, selection_snapshot)
+	var terrain_hit: Dictionary = BrushPicker.pick_sdf_v1_surface(
+		ray_origin, ray_direction, terrain_sampler
+	)
 	if terrain_hit.get("hit", false):
 		var terrain_distance := ray_origin.distance_to(Vector3(terrain_hit.position))
 		if float(picked.get("distance", INF)) > terrain_distance + 0.15:
@@ -566,13 +581,18 @@ func _placement_target_at(screen_position: Vector2) -> Dictionary:
 	var ray_origin := camera.project_ray_origin(screen_position)
 	var ray_direction := camera.project_ray_normal(screen_position)
 	var density_sampler := Callable(self, "_sample_world_density")
-	if _scalable_runtime_enabled and edit_ledger != null:
+	if edit_ledger != null and edit_ledger.has_method("get_ray_snapshot"):
 		var ray_snapshot: Dictionary = edit_ledger.get_ray_snapshot(
 			ray_origin, ray_direction, BrushPicker.MAX_DISTANCE
 		)
 		if ray_snapshot.get("valid", false):
-			density_sampler = func(point: Vector3) -> float:
-				return _sample_world_density_from_snapshot(point, ray_snapshot)
+			var prepared_ray := _prepare_terrain_effect_ray_snapshot(
+				ray_snapshot, ray_origin, ray_direction, BrushPicker.MAX_DISTANCE
+			)
+			if prepared_ray.get("ok", false):
+				ray_snapshot = prepared_ray["snapshot"]
+				density_sampler = func(point: Vector3) -> float:
+					return _sample_world_density_from_snapshot(point, ray_snapshot)
 	var picked: Dictionary = BrushPicker.pick_sdf_v1_surface(
 		ray_origin, ray_direction, density_sampler
 	)
@@ -2350,6 +2370,56 @@ func _state_for_region(region_key: Vector2i) -> RefCounted:
 	return WorldState.new(world_seed, region_key, edit_ledger)
 
 
+func _prepare_terrain_effect_ray_snapshot(
+	base_snapshot: Dictionary,
+	ray_origin: Vector3,
+	ray_direction: Vector3,
+	max_distance: float
+) -> Dictionary:
+	if terrain_effect_runtime == null or not bool(terrain_effect_runtime.get("initialized")):
+		return {"ok": false, "reason": "terrain_effect_runtime_unavailable"}
+	if not ray_origin.is_finite() or not ray_direction.is_finite() 		or ray_direction.length_squared() <= 0.000001 		or not is_finite(max_distance) or max_distance <= 0.0:
+		return {"ok": false, "reason": "terrain_effect_ray_invalid"}
+	var direction := ray_direction.normalized()
+	var targets_by_id: Dictionary = {}
+	var step := 1.5
+	var distance := 0.0
+	while distance <= max_distance and targets_by_id.size() < 64:
+		var point := ray_origin + direction * distance
+		var mapped: Dictionary = SpatialGrid.world_to_region_local(point)
+		if mapped.get("valid", false):
+			var region_key: Vector2i = mapped["region_key"]
+			if active_regions.has(_region_id(region_key)) 				or loading_regions.has(_region_id(region_key)):
+				var coordinate := _chunk_coordinate_for_local(
+					mapped["local_position"]
+				)
+				var target_id := ChunkGrid.stable_id(region_key, coordinate)
+				targets_by_id[target_id] = {
+					"region_key": region_key,
+					"chunk_coordinate": coordinate,
+				}
+		distance += step
+	if targets_by_id.is_empty():
+		return {"ok": false, "reason": "terrain_effect_ray_has_no_resident_targets"}
+	var ids: Array[String] = []
+	for target_id in targets_by_id:
+		ids.append(String(target_id))
+	ids.sort()
+	var targets: Array[Dictionary] = []
+	for target_id in ids:
+		targets.append(targets_by_id[target_id])
+	return _prepare_terrain_effect_snapshot(base_snapshot, targets)
+
+
+func _chunk_coordinate_for_local(local_position: Vector3) -> Vector2i:
+	var chunk_width := float(ChunkGrid.CELLS_PER_CHUNK_X) * ChunkGrid.SAMPLE_STEP
+	var chunk_depth := float(ChunkGrid.CELLS_PER_CHUNK_Z) * ChunkGrid.SAMPLE_STEP
+	return Vector2i(
+		clampi(floori(local_position.x / chunk_width), 0, ChunkGrid.CHUNK_COUNT_X - 1),
+		clampi(floori(local_position.z / chunk_depth), 0, ChunkGrid.CHUNK_COUNT_Z - 1)
+	)
+
+
 func _sample_world_density(world_position: Vector3) -> float:
 	var mapped: Dictionary = SpatialGrid.world_to_region_local(world_position)
 	if not mapped.get("valid", false):
@@ -2390,6 +2460,14 @@ func _apply_brush_at(screen_position: Vector2) -> void:
 	var pick_snapshot: Dictionary = focused_state.brush_edits.get_ray_snapshot(
 		ray_origin, ray_direction, BrushPicker.MAX_DISTANCE
 	)
+	var prepared_pick := _prepare_terrain_effect_ray_snapshot(
+		pick_snapshot, ray_origin, ray_direction, BrushPicker.MAX_DISTANCE
+	)
+	if not prepared_pick.get("ok", false):
+		last_brush_result = "Terrain-object effect pick snapshot unavailable (%s); no edit added" % prepared_pick.get("reason", "unknown")
+		_update_status()
+		return
+	pick_snapshot = prepared_pick["snapshot"]
 	_last_brush_pick_snapshot_elapsed_usec = Time.get_ticks_usec() - snapshot_started_usec
 	_last_brush_pick_candidate_count = int(pick_snapshot.get("candidate_operation_count", 0))
 	_last_brush_pick_sample_count = 0
