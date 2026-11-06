@@ -34,6 +34,8 @@ var _performance := {
 	"required_scope_check_count": 0,
 	"scope_reconcile_count": 0,
 	"scope_eviction_count": 0,
+	"hot_path_eviction_count": 0,
+	"window_eviction_count": 0,
 	"window_update_count": 0,
 	"window_target_region_count": 0,
 	"protected_scope_count": 0,
@@ -389,6 +391,9 @@ func update_resident_target_regions(
 			_performance["scope_eviction_count"] = int(
 				_performance["scope_eviction_count"]
 			) + 1
+			_performance["window_eviction_count"] = int(
+				_performance["window_eviction_count"]
+			) + 1
 	return {
 		"ok": true,
 		"target_region_count": target_regions.size(),
@@ -423,6 +428,8 @@ func _reset_performance_metrics() -> void:
 		"required_scope_check_count": 0,
 		"scope_reconcile_count": 0,
 		"scope_eviction_count": 0,
+		"hot_path_eviction_count": 0,
+		"window_eviction_count": 0,
 		"window_update_count": 0,
 		"window_target_region_count": 0,
 		"protected_scope_count": 0,
@@ -470,6 +477,9 @@ func _make_projection_capacity(
 		released += 1
 		_performance["scope_eviction_count"] = int(
 			_performance["scope_eviction_count"]
+		) + 1
+		_performance["hot_path_eviction_count"] = int(
+			_performance["hot_path_eviction_count"]
 		) + 1
 		if released >= needed:
 			break
