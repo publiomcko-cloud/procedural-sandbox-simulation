@@ -10,7 +10,8 @@ extends RefCounted
 const Contract := preload("res://scripts/terrain/terrain_object_effect_projection_contract.gd")
 const StoreScript := preload("res://scripts/terrain/terrain_object_effect_projection_store.gd")
 const Effect := preload("res://scripts/terrain/terrain_object_effect.gd")
-const EffectIndex := preload("res://scripts/terrain/terrain_object_effect_index.gd")
+const LocalFrame := preload("res://scripts/terrain/terrain_object_effect_local_frame.gd")
+const LocalFrameIndex := preload("res://scripts/terrain/terrain_object_effect_local_frame_index.gd")
 
 const MAX_RESIDENT_SCOPES := 64
 
@@ -99,6 +100,9 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 		"ignored_incomplete_generations": int(
 			loaded.get("ignored_incomplete_generations", 0)
 		),
+		"legacy_rebuild_required": bool(
+			loaded.get("legacy_rebuild_required", false)
+		),
 	}
 
 
@@ -113,7 +117,8 @@ func reconcile_scope(
 	region_key: Vector2i,
 	source_world_revision: int,
 	authoritative_instances: Array,
-	source_revisions: Dictionary
+	source_revisions: Dictionary,
+	allow_authoritative_rewind: bool = false
 ) -> Dictionary:
 	var started_usec := Time.get_ticks_usec()
 	if not initialized:
@@ -125,14 +130,27 @@ func reconcile_scope(
 		return loaded
 	var scope_id := Contract.scope_id_for_region(region_key)
 	var prior: Dictionary = _scopes[scope_id]
-	if source_world_revision < int(prior["source_world_revision"]):
-		return _failure("effect_projection_stale_scope_revision")
+	var prior_source_world_revision := int(prior["source_world_revision"])
+	if source_world_revision < prior_source_world_revision:
+		if not allow_authoritative_rewind:
+			return _failure("effect_projection_stale_scope_revision")
+		# The projection is derived. When the caller explicitly identifies its
+		# source snapshot as the current authority (e.g. loading/rolling back an
+		# older authoritative save), discard the ahead derived contents and
+		# commit a new projection generation from that authority. Keep the
+		# projection revision monotonic for diagnostics.
+		var prior_projection_revision := int(prior["projection_revision"])
+		prior = Contract.empty_snapshot(
+			world_id, world_seed, generator_version, region_key
+		)
+		prior["projection_revision"] = prior_projection_revision
 
 	var ordered_instances := authoritative_instances.duplicate(true)
 	ordered_instances.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return String(a.get("instance_id", "")) < String(b.get("instance_id", ""))
 	)
 	var incoming_effects: Dictionary = {}
+	var incoming_frames: Dictionary = {}
 	var source_instance_ids: Array[String] = []
 	var source_digest_entries: Array[Dictionary] = []
 	var seen_sources: Dictionary = {}
@@ -183,6 +201,15 @@ func reconcile_scope(
 					"effect_projection_same_revision_fingerprint_conflict"
 				)
 		incoming_effects[effect_id] = effect
+		var built_frame := LocalFrame.build_from_instance(
+			instance, effect, source_revision
+		)
+		if not built_frame.get("ok", false):
+			return _failure(
+				"effect_projection_frame_build_failed:%s" 					% built_frame.get("reason", "unknown")
+			)
+		var frame: Dictionary = built_frame["frame"]
+		incoming_frames[effect_id] = frame
 		source_digest_entries.append({
 			"instance_id": instance_id,
 			"source_revision": source_revision,
@@ -190,6 +217,7 @@ func reconcile_scope(
 			"source_fingerprint_sha256": String(
 				effect["source_fingerprint_sha256"]
 			),
+			"sampling_frame_sha256": String(frame["frame_sha256"]),
 		})
 
 	source_instance_ids.sort()
@@ -239,6 +267,7 @@ func reconcile_scope(
 		"source_digest_sha256": source_digest,
 		"source_instance_ids": source_instance_ids,
 		"effects": incoming_effects,
+		"local_frames": incoming_frames,
 	}
 	var checked := Contract.validate_snapshot(
 		candidate, world_id, world_seed, generator_version, region_key
@@ -384,6 +413,13 @@ func storage_generation_for_scope(region_key: Vector2i) -> int:
 	))
 
 
+func get_scope_indexed_chunk_ids(region_key: Vector2i) -> Array[String]:
+	var scope_id := Contract.scope_id_for_region(region_key)
+	if not _scope_indexes.has(scope_id):
+		return []
+	return _scope_indexes[scope_id].get_all_indexed_chunk_ids()
+
+
 func get_loaded_scope_ids() -> Array[String]:
 	var ids: Array[String] = []
 	for scope_id in _scopes:
@@ -403,10 +439,9 @@ func get_effect_count() -> int:
 	return count
 
 
-## Returns effects from every currently resident source scope whose conservative
-## bounds touch the requested chunk. Phase D must ensure all neighboring source
-## scopes that can influence a chunk are resident before sampling.
-func get_effects_for_chunk(
+## Returns precision-safe local sampling frames from every resident source scope
+## whose conservative local bounds touch the requested chunk.
+func get_frames_for_chunk(
 	region_key: Vector2i,
 	chunk_coordinate: Vector2i
 ) -> Array[Dictionary]:
@@ -414,10 +449,10 @@ func get_effects_for_chunk(
 		return []
 	var by_id: Dictionary = {}
 	for scope_index in _scope_indexes.values():
-		for effect in scope_index.get_effects_for_chunk(
+		for frame in scope_index.get_frames_for_chunk(
 			region_key, chunk_coordinate
 		):
-			by_id[String(effect["effect_id"])] = effect
+			by_id[String(frame["effect_id"])] = frame
 	var ids: Array[String] = []
 	for effect_id in by_id:
 		ids.append(String(effect_id))
@@ -434,24 +469,24 @@ func snapshot_for_chunk(
 ) -> Dictionary:
 	if not initialized:
 		return _failure("effect_projection_service_not_initialized")
-	var effects := get_effects_for_chunk(region_key, chunk_coordinate)
+	var frames := get_frames_for_chunk(region_key, chunk_coordinate)
 	var effect_ids: Array[String] = []
-	var fingerprints: Array[String] = []
-	for effect in effects:
-		effect_ids.append(String(effect["effect_id"]))
-		fingerprints.append(String(effect["source_fingerprint_sha256"]))
+	var frame_hashes: Array[String] = []
+	for frame in frames:
+		effect_ids.append(String(frame["effect_id"]))
+		frame_hashes.append(String(frame["frame_sha256"]))
 	return {
 		"ok": true,
 		"region_key": region_key,
 		"chunk_coordinate": chunk_coordinate,
-		"effects": effects,
-		"effect_count": effects.size(),
+		"local_frames": frames,
+		"effect_count": frames.size(),
 		"resident_scope_ids": get_loaded_scope_ids(),
 		"snapshot_sha256": Contract.canonical_sha256({
 			"region_key": [region_key.x, region_key.y],
 			"chunk_coordinate": [chunk_coordinate.x, chunk_coordinate.y],
 			"effect_ids": effect_ids,
-			"fingerprints": fingerprints,
+			"frame_hashes": frame_hashes,
 			"resident_scope_ids": get_loaded_scope_ids(),
 		}),
 	}
@@ -470,14 +505,14 @@ func _source_revision(
 
 
 func _build_scope_index(scope_snapshot: Dictionary) -> Dictionary:
-	var candidate_index := EffectIndex.new()
+	var candidate_index := LocalFrameIndex.new()
 	var effect_ids: Array[String] = []
-	for effect_id_value in (scope_snapshot["effects"] as Dictionary):
+	for effect_id_value in (scope_snapshot["local_frames"] as Dictionary):
 		effect_ids.append(String(effect_id_value))
 	effect_ids.sort()
 	for effect_id in effect_ids:
-		var indexed: Dictionary = candidate_index.replace_effect(
-			scope_snapshot["effects"][effect_id]
+		var indexed: Dictionary = candidate_index.replace_frame(
+			scope_snapshot["local_frames"][effect_id]
 		)
 		if not indexed.get("ok", false):
 			return _failure(

@@ -5,8 +5,9 @@ extends RefCounted
 ## projection. Entity/object state remains authoritative; each regional snapshot
 ## is independently rebuildable and independently recoverable.
 const Effect := preload("res://scripts/terrain/terrain_object_effect.gd")
+const LocalFrame := preload("res://scripts/terrain/terrain_object_effect_local_frame.gd")
 
-const SCHEMA_VERSION := 1
+const SCHEMA_VERSION := 2
 const MAX_EFFECTS_PER_SCOPE := 20064
 const MAX_SOURCES_PER_SCOPE := 20064
 const MAX_REVISION := 9007199254740991
@@ -14,7 +15,7 @@ const MAX_REVISION := 9007199254740991
 const SNAPSHOT_KEYS := [
 	"schema_version", "world_id", "world_seed", "generator_version",
 	"scope_id", "region_key", "projection_revision", "source_world_revision",
-	"source_digest_sha256", "source_instance_ids", "effects"
+	"source_digest_sha256", "source_instance_ids", "effects", "local_frames"
 ]
 
 
@@ -37,6 +38,7 @@ static func empty_snapshot(
 		"source_digest_sha256": source_digest(scope_id, region_key, 0, []),
 		"source_instance_ids": [],
 		"effects": {},
+		"local_frames": {},
 	}
 
 
@@ -109,6 +111,29 @@ static func validate_snapshot(
 		seen_effect_sources[source_id] = effect_id
 		normalized_effects[effect_id] = effect
 
+	if typeof(snapshot["local_frames"]) != TYPE_DICTIONARY:
+		return _failure("effect_projection_frame_map_invalid")
+	var frames: Dictionary = snapshot["local_frames"]
+	if frames.size() != normalized_effects.size():
+		return _failure("effect_projection_frame_count_mismatch")
+	var normalized_frames: Dictionary = {}
+	for effect_id in normalized_effects:
+		if not frames.has(effect_id) or typeof(frames[effect_id]) != TYPE_DICTIONARY:
+			return _failure("effect_projection_frame_missing")
+		var checked_frame := LocalFrame.validate_frame(frames[effect_id])
+		if not checked_frame.get("ok", false):
+			return _failure(
+				"effect_projection_frame_invalid:%s" 					% checked_frame.get("reason", "unknown")
+			)
+		var frame: Dictionary = checked_frame["frame"]
+		var effect: Dictionary = normalized_effects[effect_id]
+		if String(frame["effect_id"]) != effect_id 			or String(frame["source_instance_id"]) != String(effect["source_instance_id"]) 			or int(frame["source_revision"]) != int(effect["source_revision"]) 			or String(frame["source_fingerprint_sha256"]) 				!= String(effect["source_fingerprint_sha256"]):
+			return _failure("effect_projection_frame_effect_mismatch")
+		var frame_region: Array = frame["source_region_key"]
+		if int(frame_region[0]) != region_key.x or int(frame_region[1]) != region_key.y:
+			return _failure("effect_projection_frame_scope_mismatch")
+		normalized_frames[effect_id] = frame
+
 	var normalized := {
 		"schema_version": SCHEMA_VERSION,
 		"world_id": world_id,
@@ -121,6 +146,7 @@ static func validate_snapshot(
 		"source_digest_sha256": digest,
 		"source_instance_ids": source_ids["values"],
 		"effects": normalized_effects,
+		"local_frames": normalized_frames,
 	}
 	return {"ok": true, "snapshot": normalized}
 

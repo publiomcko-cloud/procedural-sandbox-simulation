@@ -39,11 +39,12 @@ func run() -> void:
 			"ledger_revision": int(brush_snapshot.get("revision", -1)),
 		}
 	else:
-		var key := "corner:%d:%d:%d:%d:%d:%d:%d" % [
+		var key := "corner:%d:%d:%d:%d:%s:%d:%d:%d" % [
 			world_seed,
 			int(brush_snapshot.get("revision", -1)),
 			int(brush_snapshot.get("cache_scope_id", -1)),
 			int(brush_snapshot.get("ledger_operation_count", -1)),
+			String(brush_snapshot.get("terrain_effect_snapshot_sha256", "none")),
 			1 if diagnostics_enabled else 0,
 			min_region_key.x,
 			min_region_key.y,
