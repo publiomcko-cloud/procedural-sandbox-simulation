@@ -165,7 +165,7 @@ static func build_from_instance(instance: Dictionary, source_revision: int = 0) 
 	var checked := validate_effect(effect)
 	if not checked.get("ok", false):
 		return checked
-	return {"ok": true, "effect": effect, "shape_descriptor": descriptor}
+	return {"ok": true, "effect": checked["effect"], "shape_descriptor": descriptor}
 
 
 static func validate_effect(value: Variant) -> Dictionary:
@@ -268,7 +268,45 @@ static func validate_effect(value: Variant) -> Dictionary:
 		var normal: Vector3 = normal_result["value"]
 		if absf(normal.length() - 1.0) > 0.00001:
 			return _failure("terrain_effect_plane_normal_invalid")
-	return {"ok": true, "effect": effect.duplicate(true)}
+	var normalized: Dictionary = effect.duplicate(true)
+	normalized["schema_version"] = SCHEMA_VERSION
+	normalized["source_revision"] = int(effect["source_revision"])
+	normalized["world_seed"] = int(effect["world_seed"])
+	normalized["generator_version"] = int(effect["generator_version"])
+	normalized["shape_descriptor_version"] = int(effect["shape_descriptor_version"])
+	normalized["embed_depth_mm"] = int(effect["embed_depth_mm"])
+	normalized["blend_radius_mm"] = int(effect["blend_radius_mm"])
+	normalized["anchor_world_mm"] = anchor["value"].duplicate()
+	normalized["translation_mm"] = translation["value"].duplicate()
+	normalized["rotation_mdeg"] = rotation["value"].duplicate()
+	normalized["scale_milli"] = scale["value"].duplicate()
+
+	var normalized_content_pin: Dictionary = content_pin.duplicate(true)
+	normalized_content_pin["definition_schema_version"] = int(
+		content_pin["definition_schema_version"]
+	)
+	normalized["content_pin"] = normalized_content_pin
+
+	var normalized_interaction_pin: Dictionary = interaction_pin.duplicate(true)
+	normalized_interaction_pin["rule_schema_version"] = int(
+		interaction_pin["rule_schema_version"]
+	)
+	normalized["terrain_interaction_pin"] = normalized_interaction_pin
+
+	normalized["bounds_min"] = _vector3_array(min_v)
+	normalized["bounds_max"] = _vector3_array(max_v)
+	normalized["interior_point_world"] = _vector3_array(interior_v)
+	var normalized_planes: Array[Dictionary] = []
+	for plane_value in effect["world_planes"]:
+		var plane: Dictionary = plane_value
+		var normal_result := _read_float3(plane["normal"])
+		var normal: Vector3 = normal_result["value"]
+		normalized_planes.append({
+			"normal": _vector3_array(normal),
+			"distance_m": float(plane["distance_m"]),
+		})
+	normalized["world_planes"] = normalized_planes
+	return {"ok": true, "effect": normalized}
 
 
 static func sample_cutter(effect: Dictionary, world_point: Vector3) -> float:
