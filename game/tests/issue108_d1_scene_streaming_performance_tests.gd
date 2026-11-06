@@ -94,6 +94,8 @@ func _run() -> void:
 		"object_active_region_count": stream.get_active_region_count(),
 		"object_peak_generation_usec": int(stream_perf.get("peak_generation_usec", 0)),
 		"last_stream_error": String(scene.get("last_stream_error")),
+		"peak_process_work_ms": float(scene.get("_peak_process_work_ms")),
+		"peak_frame_ms": float(scene.get("_peak_frame_ms")),
 	}
 	if not effect_perf.is_empty():
 		evidence["effect_runtime"] = effect_perf
