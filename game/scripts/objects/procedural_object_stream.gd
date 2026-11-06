@@ -429,9 +429,14 @@ func publish_region(
 			var resolved_instance: Dictionary = resolved_for_effect["instance"]
 			active_effect_instances.append(resolved_instance.duplicate(true))
 			var resolved_id := String(resolved_instance.get("instance_id", ""))
-			source_revisions[resolved_id] = int(
-				state_service.get_entity_revision(resolved_id)
-			)
+			# Schema 1 predates per-entity revisions. Its global revision is still
+			# monotonic and therefore provides a safe source-version fallback until
+			# the owner explicitly upgrades the save. Schema 2/3 keep the narrower
+			# per-entity revision semantics.
+			var source_schema := int(state_service.snapshot.get("schema_version", 1))
+			source_revisions[resolved_id] = int(state_service.get_revision()) \
+				if source_schema == 1 \
+				else int(state_service.get_entity_revision(resolved_id))
 		var effect_reconcile: Dictionary = terrain_effect_projection_service.reconcile_scope(
 			region_key,
 			int(state_service.get_revision()),
