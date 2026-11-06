@@ -11,6 +11,14 @@ const SURFACE_KEYS := ["mode", "minimum_height_mm", "maximum_height_mm", "maximu
 const POPULATION_ALGORITHM := "region_grid_density_v1"
 const LEGACY_POPULATION_ALGORITHM := "p2a_compatibility_slot_v1"
 const MAX_POPULATION_RULES := 128
+const MAX_LEGACY_COMPATIBILITY_SLOTS := 32
+const TERRAIN_INTERACTION_RULE_TYPE := "terrain_interaction_rule"
+const TERRAIN_INTERACTION_KEYS := ["schema_version", "type", "id", "definition_id", "algorithm", "shape_source", "operation", "embed_depth_mm", "blend_radius_mm", "edit_order"]
+const TERRAIN_INTERACTION_ALGORITHM := "sdf_ground_imprint_v1"
+const TERRAIN_INTERACTION_SHAPE_SOURCE := "recipe_envelope_v1"
+const TERRAIN_INTERACTION_OPERATION := "subtract_solid_v1"
+const TERRAIN_INTERACTION_EDIT_ORDER := "terrain_edits_then_imprint_v1"
+const MAX_TERRAIN_INTERACTION_RULES := 128
 const LEGACY_RECIPE_KEYS := ["algorithm", "lobe_count", "radius_min_mm", "radius_max_mm", "vertical_step_mm", "spread_mm", "jitter_mm"]
 const GEOLOGICAL_RECIPE_KEYS := [
 	"algorithm", "profile", "half_extent_x_mm", "half_extent_y_mm", "half_extent_z_mm",
@@ -18,12 +26,12 @@ const GEOLOGICAL_RECIPE_KEYS := [
 	"bevel_count", "weathering_milli", "macro_roughness_mm", "meso_roughness_mm", "fine_roughness_mm"
 ]
 const GEOLOGICAL_ALGORITHM := "geological_halfspace_v1"
-const GRANITE_PROFILE := "granite_massive_weathered_v1"
-const BASALT_PROFILE := "basalt_fractured_anisotropic_v1"
 const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 
 var _definitions: Dictionary = {}
 var _population_rules: Dictionary = {}
+var _terrain_interactions: Dictionary = {}
+var _terrain_interaction_by_definition: Dictionary = {}
 var _mods: Dictionary = {}
 
 
@@ -42,6 +50,8 @@ func register_discovered(discovery: Dictionary) -> Dictionary:
 		return _failure("invalid_discovery_result")
 	var candidate_definitions := _definitions.duplicate(true)
 	var candidate_population_rules := _population_rules.duplicate(true)
+	var candidate_terrain_interactions := _terrain_interactions.duplicate(true)
+	var candidate_terrain_interaction_by_definition := _terrain_interaction_by_definition.duplicate(true)
 	var candidate_mods := _mods.duplicate(true)
 	for package_value in discovery["packages"]:
 		if not package_value is Dictionary:
@@ -83,10 +93,29 @@ func register_discovered(discovery: Dictionary) -> Dictionary:
 			candidate_population_rules[rule_id] = rule.duplicate(true)
 			if candidate_population_rules.size() > MAX_POPULATION_RULES:
 				return _failure("population_rule_limit_exceeded")
+		for interaction_value in package.get("terrain_interactions", []):
+			if not interaction_value is Dictionary:
+				return _failure("invalid_terrain_interaction_rule")
+			var interaction: Dictionary = interaction_value
+			var interaction_validation := _validate_terrain_interaction(interaction, mod_id, candidate_definitions)
+			if not interaction_validation.get("ok", false):
+				return interaction_validation
+			var interaction_id := String(interaction["id"])
+			var definition_id := String(interaction["definition_id"])
+			if candidate_terrain_interactions.has(interaction_id):
+				return _failure("duplicate_terrain_interaction_rule")
+			if candidate_terrain_interaction_by_definition.has(definition_id):
+				return _failure("duplicate_terrain_interaction_for_definition")
+			candidate_terrain_interactions[interaction_id] = interaction.duplicate(true)
+			candidate_terrain_interaction_by_definition[definition_id] = interaction_id
+			if candidate_terrain_interactions.size() > MAX_TERRAIN_INTERACTION_RULES:
+				return _failure("terrain_interaction_rule_limit_exceeded")
 	_definitions = candidate_definitions
 	_population_rules = candidate_population_rules
+	_terrain_interactions = candidate_terrain_interactions
+	_terrain_interaction_by_definition = candidate_terrain_interaction_by_definition
 	_mods = candidate_mods
-	return {"ok": true, "reason": "ok", "mod_count": _mods.size(), "definition_count": _definitions.size(), "population_rule_count": _population_rules.size()}
+	return {"ok": true, "reason": "ok", "mod_count": _mods.size(), "definition_count": _definitions.size(), "population_rule_count": _population_rules.size(), "terrain_interaction_count": _terrain_interactions.size()}
 
 
 func get_definition(namespaced_id: String) -> Dictionary:
@@ -97,6 +126,14 @@ func get_definition(namespaced_id: String) -> Dictionary:
 
 func has_mod(mod_id: String) -> bool:
 	return _mods.has(mod_id)
+
+
+func get_definition_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for id_value in _definitions.keys():
+		ids.append(String(id_value))
+	ids.sort()
+	return ids
 
 
 func get_population_rule(namespaced_id: String) -> Dictionary:
@@ -121,6 +158,52 @@ func get_compatibility_population_rules() -> Array[Dictionary]:
 			result.append(rule.duplicate(true))
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.get("legacy_slot", -1)) < int(b.get("legacy_slot", -1)))
 	return result
+
+
+
+func get_terrain_interaction_rule(namespaced_id: String) -> Dictionary:
+	if not _terrain_interactions.has(namespaced_id):
+		return {}
+	return _terrain_interactions[namespaced_id].duplicate(true)
+
+
+func get_terrain_interaction_for_definition(definition_id: String) -> Dictionary:
+	var interaction_id := String(_terrain_interaction_by_definition.get(definition_id, ""))
+	return get_terrain_interaction_rule(interaction_id) if not interaction_id.is_empty() else {}
+
+
+func get_terrain_interaction_rule_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for id_value in _terrain_interactions.keys():
+		ids.append(String(id_value))
+	ids.sort()
+	return ids
+
+
+func resolve_terrain_interaction(definition_id: String) -> Dictionary:
+	var rule := get_terrain_interaction_for_definition(definition_id)
+	if rule.is_empty():
+		return {"ok": true, "rule": {}, "pin": {}}
+	var interaction_id := String(rule["id"])
+	var separator := interaction_id.find(":")
+	if separator <= 0:
+		return _failure("terrain_interaction_id_invalid")
+	var mod_id := interaction_id.substr(0, separator)
+	if not _mods.has(mod_id):
+		return _failure("terrain_interaction_package_missing")
+	var canonical := JSON.stringify(rule, "", true, true)
+	var context := HashingContext.new()
+	if context.start(HashingContext.HASH_SHA256) != OK or context.update(canonical.to_utf8_buffer()) != OK:
+		return _failure("terrain_interaction_pin_failed")
+	return {"ok": true, "rule": rule, "pin": {
+		"rule_id": interaction_id,
+		"definition_id": definition_id,
+		"mod_id": mod_id,
+		"mod_version": String(_mods[mod_id]["version"]),
+		"rule_schema_version": int(rule["schema_version"]),
+		"algorithm": String(rule["algorithm"]),
+		"rule_sha256": context.finish().hex_encode(),
+	}}
 
 
 func pin_population_rule(namespaced_id: String) -> Dictionary:
@@ -295,7 +378,7 @@ func _validate_population_rule(rule: Dictionary, mod_id: String, definitions: Di
 		return _failure("population_rule_algorithm_unsupported")
 	if not _is_integer(rule["density_milli_per_region"]) or int(rule["density_milli_per_region"]) < 0 or int(rule["density_milli_per_region"]) > 15000:
 		return _failure("population_rule_density_out_of_range")
-	if not _is_integer(rule["legacy_slot"]) or int(rule["legacy_slot"]) < -1 or int(rule["legacy_slot"]) > 1:
+	if not _is_integer(rule["legacy_slot"]) or int(rule["legacy_slot"]) < -1 or int(rule["legacy_slot"]) >= MAX_LEGACY_COMPATIBILITY_SLOTS:
 		return _failure("population_rule_legacy_slot_invalid")
 	var distribution: Dictionary = rule["distribution"]
 	for key in DISTRIBUTION_KEYS:
@@ -347,6 +430,26 @@ func _validate_population_rule(rule: Dictionary, mod_id: String, definitions: Di
 	return {"ok": true, "reason": "ok"}
 
 
+
+func _validate_terrain_interaction(rule: Dictionary, mod_id: String, definitions: Dictionary) -> Dictionary:
+	if not _has_exact_keys(rule, TERRAIN_INTERACTION_KEYS):
+		return _failure("terrain_interaction_schema_fields")
+	if not _valid_local_id(rule["id"], mod_id) or not _is_integer(rule["schema_version"]) or int(rule["schema_version"]) != 1 or rule["type"] != TERRAIN_INTERACTION_RULE_TYPE:
+		return _failure("terrain_interaction_identity_invalid")
+	if not rule["definition_id"] is String or not _valid_local_id(rule["definition_id"], mod_id) or not definitions.has(rule["definition_id"]):
+		return _failure("terrain_interaction_definition_invalid")
+	var definition: Dictionary = definitions[rule["definition_id"]]
+	if definition.get("type") != ROCK_TYPE or int(definition.get("schema_version", -1)) != 2:
+		return _failure("terrain_interaction_definition_unsupported")
+	if rule["algorithm"] != TERRAIN_INTERACTION_ALGORITHM or rule["shape_source"] != TERRAIN_INTERACTION_SHAPE_SOURCE or rule["operation"] != TERRAIN_INTERACTION_OPERATION or rule["edit_order"] != TERRAIN_INTERACTION_EDIT_ORDER:
+		return _failure("terrain_interaction_algorithm_unsupported")
+	if not _is_integer(rule["embed_depth_mm"]) or int(rule["embed_depth_mm"]) < 0 or int(rule["embed_depth_mm"]) > 3000:
+		return _failure("terrain_interaction_embed_depth_invalid")
+	if not _is_integer(rule["blend_radius_mm"]) or int(rule["blend_radius_mm"]) < 0 or int(rule["blend_radius_mm"]) > 2000:
+		return _failure("terrain_interaction_blend_radius_invalid")
+	return {"ok": true, "reason": "ok"}
+
+
 func _population_candidate_count(distribution: Dictionary) -> int:
 	const REGION_X_MM := 16000
 	const REGION_Z_MM := 12000
@@ -379,7 +482,7 @@ func _validate_geological_recipe(recipe: Dictionary) -> Dictionary:
 		return _failure("invalid_rock_recipe")
 	if recipe["algorithm"] != GEOLOGICAL_ALGORITHM:
 		return _failure("unsupported_rock_algorithm")
-	if recipe["profile"] != GRANITE_PROFILE and recipe["profile"] != BASALT_PROFILE:
+	if not _valid_profile_id(recipe["profile"]):
 		return _failure("unsupported_rock_profile")
 	for key in GEOLOGICAL_RECIPE_KEYS.slice(2):
 		if key == "anisotropy_axis":
@@ -402,12 +505,6 @@ func _validate_geological_recipe(recipe: Dictionary) -> Dictionary:
 		return _failure("invalid_rock_recipe")
 	if int(recipe["macro_roughness_mm"]) < 0 or int(recipe["macro_roughness_mm"]) > 100 or int(recipe["meso_roughness_mm"]) < 0 or int(recipe["meso_roughness_mm"]) > 60 or int(recipe["fine_roughness_mm"]) < 0 or int(recipe["fine_roughness_mm"]) > 30:
 		return _failure("invalid_rock_recipe")
-	if recipe["profile"] == GRANITE_PROFILE:
-		if int(recipe["fracture_plane_count"]) > 3 or int(recipe["weathering_milli"]) < 600 or int(recipe["anisotropy_milli"]) > 1300:
-			return _failure("profile_parameter_mismatch")
-	else:
-		if int(recipe["fracture_plane_count"]) < 4 or int(recipe["weathering_milli"]) > 450 or int(recipe["anisotropy_milli"]) < 1300:
-			return _failure("profile_parameter_mismatch")
 	return {"ok": true, "reason": "ok"}
 
 
@@ -434,6 +531,14 @@ func _valid_local_id(value: Variant, mod_id: String) -> bool:
 	var regex := RegEx.new()
 	regex.compile("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$")
 	return regex.search(local_id) != null
+
+
+func _valid_profile_id(value: Variant) -> bool:
+	if not value is String or String(value).length() < 3 or String(value).length() > 64:
+		return false
+	var regex := RegEx.new()
+	regex.compile("^[a-z][a-z0-9_]*_v[1-9][0-9]*$")
+	return regex.search(String(value)) != null
 
 
 func _next_random(state: int) -> int:

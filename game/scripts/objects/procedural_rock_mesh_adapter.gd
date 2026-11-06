@@ -191,7 +191,7 @@ static func _validate_input(recipe: Dictionary, seeds: Dictionary) -> Dictionary
 	for key in SEED_KEYS:
 		if not seeds.has(key) or typeof(seeds[key]) != TYPE_INT or int(seeds[key]) < 1 or int(seeds[key]) > MAX_SEED:
 			return _failure("invalid_geometry_seeds")
-	if recipe["algorithm"] != ALGORITHM or not ["granite_massive_weathered_v1", "basalt_fractured_anisotropic_v1"].has(recipe["profile"]):
+	if recipe["algorithm"] != ALGORITHM or not _valid_profile_id(recipe["profile"]):
 		return _failure("unsupported_geometry_version_or_profile:%s:%s" % [recipe["algorithm"], recipe["profile"]])
 	for key in RECIPE_KEYS.slice(2):
 		if key == "anisotropy_axis":
@@ -208,11 +208,15 @@ static func _validate_input(recipe: Dictionary, seeds: Dictionary) -> Dictionary
 		return _failure("geometry_profile_parameter_out_of_range")
 	if int(recipe["macro_roughness_mm"]) < 0 or int(recipe["macro_roughness_mm"]) > 100 or int(recipe["meso_roughness_mm"]) < 0 or int(recipe["meso_roughness_mm"]) > 60 or int(recipe["fine_roughness_mm"]) < 0 or int(recipe["fine_roughness_mm"]) > 30:
 		return _failure("geometry_roughness_out_of_range")
-	if recipe["profile"] == "granite_massive_weathered_v1" and (int(recipe["fracture_plane_count"]) > 3 or int(recipe["weathering_milli"]) < 600 or int(recipe["anisotropy_milli"]) > 1300):
-		return _failure("granite_profile_parameters_invalid")
-	if recipe["profile"] == "basalt_fractured_anisotropic_v1" and (int(recipe["fracture_plane_count"]) < 4 or int(recipe["weathering_milli"]) > 450 or int(recipe["anisotropy_milli"]) < 1300):
-		return _failure("basalt_profile_parameters_invalid")
 	return {"ok": true}
+
+
+static func _valid_profile_id(value: Variant) -> bool:
+	if not value is String or String(value).length() < 3 or String(value).length() > 64:
+		return false
+	var regex := RegEx.new()
+	regex.compile("^[a-z][a-z0-9_]*_v[1-9][0-9]*$")
+	return regex.search(String(value)) != null
 
 
 static func _is_integer(value: Variant) -> bool:

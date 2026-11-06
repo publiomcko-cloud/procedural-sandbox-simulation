@@ -5,5 +5,9 @@
   "requires_engine": "4.7.2",
   "dependencies": [],
   "script_policy": "data_only",
-  "content_roots": ["objects/", "populations/"]
+  "content_roots": [
+    "objects/",
+    "populations/",
+    "interactions/"
+  ]
 }

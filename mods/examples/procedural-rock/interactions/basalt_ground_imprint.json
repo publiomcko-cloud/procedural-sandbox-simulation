@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "type": "terrain_interaction_rule",
+  "id": "official.example.procedural_rock:basalt_ground_imprint",
+  "definition_id": "official.example.procedural_rock:basalt_stack",
+  "algorithm": "sdf_ground_imprint_v1",
+  "shape_source": "recipe_envelope_v1",
+  "operation": "subtract_solid_v1",
+  "embed_depth_mm": 260,
+  "blend_radius_mm": 140,
+  "edit_order": "terrain_edits_then_imprint_v1"
+}

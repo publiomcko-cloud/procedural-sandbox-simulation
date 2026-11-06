@@ -11,7 +11,6 @@ const RockMeshAdapter := preload("res://scripts/objects/procedural_rock_mesh_ada
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const WORLD_ID := "p3-command-demo"
 const WORLD_SEED := 734921
-const DEFINITION_ID := "firstparty.core_rocks:granite"
 
 var state_service: ProceduralObjectStateService
 var command_service: EntityCommandService
@@ -23,6 +22,7 @@ var _storage_root := ""
 var _sequence := 0
 var _operation_label: Label
 var _object_nodes: Dictionary = {}
+var _definition_id := ""
 
 
 func _ready() -> void:
@@ -38,6 +38,10 @@ func _ready() -> void:
 	var registered: Dictionary = registry.register_discovered(discovered)
 	if not registered.get("ok", false):
 		_set_status("Package registration failed: %s" % registered.get("reason", "unknown"))
+		return
+	_definition_id = _first_placeable_definition_id()
+	if _definition_id.is_empty():
+		_set_status("Package registration failed: no placeable definition")
 		return
 	state_service = StateServiceScript.new()
 	var initialized: Dictionary = state_service.initialize(WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, _storage_root)
@@ -131,6 +135,16 @@ func _build_hud() -> void:
 	column.add_child(controls)
 
 
+func _first_placeable_definition_id() -> String:
+	if registry == null:
+		return ""
+	for definition_id in registry.get_definition_ids():
+		var recipe: Dictionary = registry.evaluate_rock_recipe(definition_id, 1)
+		if recipe.get("ok", false) and String(recipe.get("algorithm", "")) == RockMeshAdapter.ALGORITHM:
+			return definition_id
+	return ""
+
+
 func _place_new_entity() -> void:
 	if command_service == null:
 		return
@@ -142,11 +156,11 @@ func _place_new_entity() -> void:
 		"origin": {"type": "player", "id": "demo-player"}, "world_id": WORLD_ID,
 		"world_seed": WORLD_SEED, "generator_version": Field.GENERATOR_VERSION,
 		"expected_world_revision": state_service.get_revision(), "expected_entity_revision": 0,
-		"definition_id": DEFINITION_ID, "position_mm": position, "region_key": region,
+		"definition_id": _definition_id, "position_mm": position, "region_key": region,
 		"recipe_seed": 4000 + _sequence,
 		"components": {
 			StateContract.COMPONENT_TRANSFORM: _transform([0, 0, 0], [0, 0, 0], [1000, 1000, 1000]),
-			StateContract.COMPONENT_APPEARANCE: _appearance("placed granite"),
+			StateContract.COMPONENT_APPEARANCE: _appearance("placed content"),
 			StateContract.COMPONENT_LOGICAL: _logical({"placed": true}),
 		},
 	}

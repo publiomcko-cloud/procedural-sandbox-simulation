@@ -496,8 +496,8 @@ func _place_entity_under_crosshair() -> void:
 		_update_placement_marker_visual()
 		_object_state_action_status = "ENTITY_PLACE rejected: target region %s is not fully published" % region_key
 		return
-	var definitions: Array[String] = object_stream.get_definition_ids()
-	var definition_id := "firstparty.core_rocks:granite" if definitions.has("firstparty.core_rocks:granite") else (String(definitions[0]) if not definitions.is_empty() else "")
+	var definitions: Array[String] = object_stream.get_placeable_definition_ids()
+	var definition_id := String(definitions[0]) if not definitions.is_empty() else ""
 	if definition_id.is_empty():
 		_object_state_action_status = "ENTITY_PLACE rejected: no registered definition is available"
 		return

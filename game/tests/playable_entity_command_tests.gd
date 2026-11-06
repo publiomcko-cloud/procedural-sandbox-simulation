@@ -91,7 +91,9 @@ func _run() -> void:
 	await _drain_publications(stream)
 	var visual_result := stream.consume_last_command_visual_result()
 	_check(visual_result.get("ok", false) and String(visual_result.get("entity_id", "")) == placed_id, "successful committed placement receives a matching asynchronous visual-publication result")
-	var placed_pick := _ray_pick(negative, _record_for(negative, placed_id))
+	var placed_record := _record_for(negative, placed_id)
+	_check(not placed_record.get("terrain_interaction", {}).is_empty() and String(placed_record.get("terrain_interaction_pin", {}).get("rule_sha256", "")).length() == 64 and not bool(placed_record.get("terrain_interaction_applied", true)), "explicit placement carries the same pinned inert terrain capability as procedural content")
+	var placed_pick := _ray_pick(negative, placed_record)
 	_check(placed_pick.get("ok", false) and String(placed_pick.get("entity_id", "")) == placed_id and not bool(placed_pick.get("batched", true)), "explicitly placed entity remains selectable by its stable identity")
 	var placed_node := _find_entity_node(placed_id)
 	_check(placed_node != null and placed_node.global_position.is_equal_approx(Vector3(negative_world_position) / 1000.0), "negative-region visual uses the persisted world anchor exactly once, not region origin twice")
@@ -272,7 +274,7 @@ func _place_command(command_id: String, position_mm: Vector3i, region_key: Vecto
 		"generator_version": TerrainState.FIELD.GENERATOR_VERSION,
 		"expected_world_revision": stream.get_command_world_revision(),
 		"expected_entity_revision": 0,
-		"definition_id": "firstparty.core_rocks:granite",
+		"definition_id": String(stream.get_placeable_definition_ids()[0]) if not stream.get_placeable_definition_ids().is_empty() else "",
 		"position_mm": [position_mm.x, position_mm.y, position_mm.z],
 		"region_key": [region_key.x, region_key.y],
 		"recipe_seed": 44123,

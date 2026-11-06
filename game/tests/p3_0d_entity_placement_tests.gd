@@ -6,6 +6,9 @@ const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const WorldState := preload("res://scripts/terrain/terrain_world_state.gd")
 const ObjectStream := preload("res://scripts/objects/procedural_object_stream.gd")
 
+const ASYNC_WAIT_TIMEOUT_MSEC := 30000
+const ASYNC_WORKER_YIELD_MSEC := 1
+
 var assertions := 0
 var failures := 0
 var fixture_root := ""
@@ -187,7 +190,7 @@ func _create_isolated_scene() -> Node3D:
 	var scene: Node3D = load("res://scenes/terrain_demo.tscn").instantiate()
 	scene.set("world_save_store", SaveStore.new(fixture_root.path_join("terrain")))
 	scene.set("object_state_directory_override", ProjectSettings.globalize_path(fixture_root.path_join("entities")))
-	var package_roots: Array[String] = []
+	var package_roots: Array[String] = ["res://mods/first-party"]
 	scene.set("object_package_roots_override", package_roots)
 	root.add_child(scene)
 	if not await _wait_for_scene_publication(scene):
@@ -209,7 +212,7 @@ func _create_isolated_scene() -> Node3D:
 func _verify_stream_restart(entity_id: String, expected_position_mm: Vector3i) -> void:
 	var restarted_stream: Node = ObjectStream.new()
 	root.add_child(restarted_stream)
-	var package_roots: Array[String] = []
+	var package_roots: Array[String] = ["res://mods/first-party"]
 	var initialized: Dictionary = restarted_stream.initialize(424242, "sandbox-default", package_roots, ProjectSettings.globalize_path(fixture_root.path_join("entities")))
 	_check(initialized.get("ok", false), "fresh object-stream service reopens the isolated persisted entity store")
 	if not initialized.get("ok", false):
@@ -229,21 +232,36 @@ func _verify_stream_restart(entity_id: String, expected_position_mm: Vector3i) -
 
 
 func _wait_for_scene_publication(scene: Node) -> bool:
-	for _frame in range(4000):
+	var deadline := Time.get_ticks_msec() + ASYNC_WAIT_TIMEOUT_MSEC
+	var stream: Node = scene.get_node("ProceduralObjects")
+	while Time.get_ticks_msec() < deadline:
 		await process_frame
+		OS.delay_msec(ASYNC_WORKER_YIELD_MSEC)
 		var active: Dictionary = scene.get("active_regions")
-		var stream: Node = scene.get_node("ProceduralObjects")
 		if active.has("0,0") and stream.has_published_region(Vector2i.ZERO):
 			return true
+	print("PLACEMENT_WAIT_TIMEOUT: stage=initial_scene active=%s loading=%s stream_perf=%s stream_error=%s" % [
+		str(scene.get("active_regions")),
+		str(scene.get("loading_regions")),
+		str(stream.get_performance_snapshot()),
+		String(stream.get_error_summary()),
+	])
 	return false
 
 
 func _wait_command_ready(scene: Node) -> bool:
 	var stream: Node = scene.get_node("ProceduralObjects")
-	for _frame in range(1600):
+	var deadline := Time.get_ticks_msec() + ASYNC_WAIT_TIMEOUT_MSEC
+	while Time.get_ticks_msec() < deadline:
 		await process_frame
+		OS.delay_msec(ASYNC_WORKER_YIELD_MSEC)
 		if stream.is_entity_command_ready():
 			return true
+	print("PLACEMENT_WAIT_TIMEOUT: stage=command_ready state_schema=%s stream_perf=%s stream_error=%s" % [
+		str(stream.state_service.snapshot.get("schema_version", -1) if stream.state_service != null else -1),
+		str(stream.get_performance_snapshot()),
+		String(stream.get_error_summary()),
+	])
 	return false
 
 
@@ -301,30 +319,59 @@ func _press_b_at(scene: Node, screen_position: Vector2) -> void:
 
 
 func _wait_instance_count(stream: Node, entity_id: String, expected_count: int) -> bool:
-	for _frame in range(500):
+	var deadline := Time.get_ticks_msec() + ASYNC_WAIT_TIMEOUT_MSEC
+	while Time.get_ticks_msec() < deadline:
 		await process_frame
+		OS.delay_msec(ASYNC_WORKER_YIELD_MSEC)
 		if stream.get_instance_ids().count(entity_id) == expected_count:
 			return true
+	print("PLACEMENT_WAIT_TIMEOUT: stage=instance_count entity=%s expected=%d actual=%d stream_perf=%s stream_error=%s" % [
+		entity_id,
+		expected_count,
+		stream.get_instance_ids().count(entity_id),
+		str(stream.get_performance_snapshot()),
+		String(stream.get_error_summary()),
+	])
 	return false
 
 
 func _wait_region_published(scene: Node, region_key: Vector2i) -> bool:
-	for _frame in range(4000):
+	var deadline := Time.get_ticks_msec() + ASYNC_WAIT_TIMEOUT_MSEC
+	var stream: Node = scene.get_node("ProceduralObjects")
+	var region_id := "%d,%d" % [region_key.x, region_key.y]
+	while Time.get_ticks_msec() < deadline:
 		await process_frame
+		OS.delay_msec(ASYNC_WORKER_YIELD_MSEC)
 		var active: Dictionary = scene.get("active_regions")
-		var stream: Node = scene.get_node("ProceduralObjects")
-		if active.has("%d,%d" % [region_key.x, region_key.y]) and stream.has_published_region(region_key):
+		if active.has(region_id) and stream.has_published_region(region_key):
 			return true
+	print("PLACEMENT_WAIT_TIMEOUT: stage=region_published region=%s active=%s loading=%s stream_perf=%s stream_error=%s" % [
+		region_id,
+		str(scene.get("active_regions")),
+		str(scene.get("loading_regions")),
+		str(stream.get_performance_snapshot()),
+		String(stream.get_error_summary()),
+	])
 	return false
 
 
 func _wait_region_unpublished(scene: Node, region_key: Vector2i) -> bool:
-	for _frame in range(4000):
+	var deadline := Time.get_ticks_msec() + ASYNC_WAIT_TIMEOUT_MSEC
+	var stream: Node = scene.get_node("ProceduralObjects")
+	var region_id := "%d,%d" % [region_key.x, region_key.y]
+	while Time.get_ticks_msec() < deadline:
 		await process_frame
+		OS.delay_msec(ASYNC_WORKER_YIELD_MSEC)
 		var active: Dictionary = scene.get("active_regions")
-		var stream: Node = scene.get_node("ProceduralObjects")
-		if not active.has("%d,%d" % [region_key.x, region_key.y]) and not stream.has_published_region(region_key):
+		if not active.has(region_id) and not stream.has_published_region(region_key):
 			return true
+	print("PLACEMENT_WAIT_TIMEOUT: stage=region_unpublished region=%s active=%s loading=%s stream_perf=%s stream_error=%s" % [
+		region_id,
+		str(scene.get("active_regions")),
+		str(scene.get("loading_regions")),
+		str(stream.get_performance_snapshot()),
+		String(stream.get_error_summary()),
+	])
 	return false
 
 

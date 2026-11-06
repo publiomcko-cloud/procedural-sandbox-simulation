@@ -6,11 +6,6 @@ const FIELD := preload("res://scripts/terrain/sdf_world.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 const LEGACY_ALGORITHM := "p2a_compatibility_slot_v1"
 const REGION_GRID_ALGORITHM := "region_grid_density_v1"
-const LEGACY_SLOT_DEFINITIONS := [
-	"firstparty.core_rocks:granite",
-	"official.example.procedural_rock:basalt_stack",
-]
-const SLOT_DEFINITIONS := LEGACY_SLOT_DEFINITIONS # P2.0A compatibility API; new population uses registry rules.
 const MAX_SURFACE_ATTEMPTS := 12
 const MAX_SURFACE_ANCHORS_PER_REGION := 64
 const MAX_RULES_PER_REGION := 16
@@ -41,7 +36,8 @@ static func build_region_instances(
 	if all_rule_ids.size() > MAX_RULES_PER_REGION:
 		return _failure("population_rule_region_budget_exceeded")
 	var rules: Array[Dictionary] = []
-	var legacy_by_slot: Dictionary = {}
+	var legacy_rules: Array[Dictionary] = []
+	var legacy_slots: Dictionary = {}
 	var used_definition_ids: Array[String] = []
 	var candidate_cells_total := 0
 	for rule_id in all_rule_ids:
@@ -50,17 +46,17 @@ static func build_region_instances(
 			return _failure("population_rule_disappeared")
 		if rule.get("algorithm", "") == LEGACY_ALGORITHM:
 			var slot := int(rule.get("legacy_slot", -1))
-			if slot < 0 or slot >= LEGACY_SLOT_DEFINITIONS.size() or legacy_by_slot.has(slot) or String(rule.get("definition_id", "")) != String(LEGACY_SLOT_DEFINITIONS[slot]):
+			if slot < 0 or legacy_slots.has(slot):
 				return _failure("legacy_population_contract_mismatch")
-			legacy_by_slot[slot] = rule
+			legacy_slots[slot] = true
+			legacy_rules.append(rule)
 		else:
 			candidate_cells_total += _candidate_cell_count(rule.get("distribution", {}))
 			rules.append(rule)
 		var definition_id := String(rule.get("definition_id", ""))
 		if not used_definition_ids.has(definition_id):
 			used_definition_ids.append(definition_id)
-	if legacy_by_slot.size() != LEGACY_SLOT_DEFINITIONS.size():
-		return _failure("legacy_population_rules_missing")
+	legacy_rules.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.get("legacy_slot", -1)) < int(b.get("legacy_slot", -1)))
 	if candidate_cells_total > MAX_CANDIDATE_CELLS_PER_REGION:
 		return _failure("population_candidate_region_budget_exceeded")
 	var pins_result: Dictionary = registry.pin_definitions(used_definition_ids)
@@ -69,6 +65,14 @@ static func build_region_instances(
 	var pins_by_id: Dictionary = {}
 	for pin in pins_result["pins"]:
 		pins_by_id[String(pin["content_id"])] = pin
+	var terrain_interactions_by_definition: Dictionary = {}
+	var terrain_interaction_pins_by_definition: Dictionary = {}
+	for definition_id in used_definition_ids:
+		var interaction_result: Dictionary = registry.resolve_terrain_interaction(definition_id)
+		if not interaction_result.get("ok", false):
+			return _failure("terrain_interaction_resolution_failed")
+		terrain_interactions_by_definition[definition_id] = interaction_result.get("rule", {}).duplicate(true)
+		terrain_interaction_pins_by_definition[definition_id] = interaction_result.get("pin", {}).duplicate(true)
 	var rules_by_id: Dictionary = {}
 	for rule in rules:
 		var rule_id := String(rule["id"])
@@ -81,10 +85,10 @@ static func build_region_instances(
 	var instances: Array[Dictionary] = []
 	var seen_ids: Dictionary = {}
 	var surface_anchor_count := 0
-	# These two compatibility records preserve every P2.0A/P2.0B identity and
-	# placement seed exactly. Their rules now live in the same data registry.
-	for slot in range(LEGACY_SLOT_DEFINITIONS.size()):
-		var rule: Dictionary = legacy_by_slot[slot]
+	# Compatibility records are data-driven. Existing rule IDs/definition IDs/slots
+	# retain their exact historical identity formula when those packages are present.
+	for rule in legacy_rules:
+		var slot := int(rule["legacy_slot"])
 		var definition_id := String(rule["definition_id"])
 		var placement_seed := _mix_seed(world_seed, region_key, slot)
 		var position_result := _find_placement(world_seed, region_key, placement_seed, slot)
@@ -92,7 +96,7 @@ static func build_region_instances(
 		if not position_result.get("ok", false):
 			return _failure("legacy_surface_anchor_unavailable")
 		var recipe_seed := _mix_seed(placement_seed, region_key, 97 + slot)
-		var instance_result := _build_instance(world_seed, world_id, region_key, registry, rule, pins_by_id[definition_id], {}, slot, -1, placement_seed, recipe_seed, position_result["position_mm"], Vector3i(1000, 1000, 1000), 0)
+		var instance_result := _build_instance(world_seed, world_id, region_key, registry, rule, pins_by_id[definition_id], {}, terrain_interactions_by_definition[definition_id], terrain_interaction_pins_by_definition[definition_id], slot, -1, placement_seed, recipe_seed, position_result["position_mm"], Vector3i(1000, 1000, 1000), 0)
 		if not instance_result.get("ok", false):
 			return instance_result
 		var legacy_instance: Dictionary = instance_result["instance"]
@@ -109,8 +113,9 @@ static func build_region_instances(
 		var definition: Dictionary = registry.get_definition(definition_id)
 		var generated: Dictionary = _build_rule_instances(
 			world_seed, world_id, region_key, registry, rule, definition,
-			pins_by_id[definition_id], rules_by_id[rule_id], instances, seen_ids,
-			surface_anchor_count
+			pins_by_id[definition_id], rules_by_id[rule_id],
+			terrain_interactions_by_definition[definition_id], terrain_interaction_pins_by_definition[definition_id],
+			instances, seen_ids, surface_anchor_count
 		)
 		if not generated.get("ok", false):
 			return generated
@@ -140,6 +145,8 @@ static func _build_rule_instances(
 	definition: Dictionary,
 	content_pin: Dictionary,
 	rule_pin: Dictionary,
+	terrain_interaction: Dictionary,
+	terrain_interaction_pin: Dictionary,
 	prior_instances: Array[Dictionary],
 	prior_ids: Dictionary,
 	prior_surface_anchor_count: int
@@ -208,7 +215,7 @@ static func _build_rule_instances(
 		var candidate_id := _population_instance_id(world_id, world_seed, String(rule["definition_id"]), region_key, String(rule["id"]), candidate_index)
 		if prior_ids.has(candidate_id):
 			return _failure("population_instance_identity_collision")
-		var built := _build_instance(world_seed, world_id, region_key, registry, rule, content_pin, rule_pin, -1, candidate_index, placement_seed, recipe_seed, position_mm, Vector3i(scale_values[0], scale_values[1], scale_values[2]), yaw)
+		var built := _build_instance(world_seed, world_id, region_key, registry, rule, content_pin, rule_pin, terrain_interaction, terrain_interaction_pin, -1, candidate_index, placement_seed, recipe_seed, position_mm, Vector3i(scale_values[0], scale_values[1], scale_values[2]), yaw)
 		if not built.get("ok", false):
 			return built
 		var instance: Dictionary = built["instance"]
@@ -232,6 +239,8 @@ static func _build_instance(
 	rule: Dictionary,
 	content_pin: Dictionary,
 	rule_pin: Dictionary,
+	terrain_interaction: Dictionary,
+	terrain_interaction_pin: Dictionary,
 	slot: int,
 	candidate_index: int,
 	placement_seed: int,
@@ -273,6 +282,9 @@ static func _build_instance(
 		"population_candidate_index": candidate_index,
 		"population_algorithm": String(rule["algorithm"]),
 		"population_batched": not is_legacy,
+		"terrain_interaction": terrain_interaction.duplicate(true),
+		"terrain_interaction_pin": terrain_interaction_pin.duplicate(true),
+		"terrain_interaction_applied": false,
 	}
 	var recipe: Dictionary = instance["geometry"]
 	var base_radius := sqrt(pow(float(recipe["half_extent_x_mm"]), 2.0) + pow(float(recipe["half_extent_z_mm"]), 2.0))

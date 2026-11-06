@@ -62,7 +62,7 @@ func _test_same_registry_pipeline(roots: Array[String]) -> void:
 	var registry := Registry.new()
 	var result: Dictionary = registry.discover_and_register(roots)
 	_check(result.get("ok", false), "first-party and user:// external packages register through the P0.3 entrypoint")
-	_check(registry.has_mod("firstparty.core_rocks") and registry.has_mod("official.example.procedural_rock"), "both required packages are registered")
+	_check(registry.has_mod("firstparty.core_rocks") and registry.has_mod("official.example.procedural_rock"), "first-party and installed external packages are registered through the same runtime registry")
 	var builtin: Dictionary = registry.get_definition("firstparty.core_rocks:granite")
 	var external: Dictionary = registry.get_definition("official.example.procedural_rock:basalt_stack")
 	_check(not builtin.is_empty() and not external.is_empty(), "both namespaces resolve through the shared definition API")
@@ -74,6 +74,10 @@ func _test_same_registry_pipeline(roots: Array[String]) -> void:
 	_check(builtin_recipe.get("geometry", {}).get("fracture_plane_count", 0) < external_recipe.get("geometry", {}).get("fracture_plane_count", 0), "the basalt profile declares a denser fracture system")
 	_check(builtin_recipe.get("geometry_seeds", {}).size() == 4 and external_recipe.get("geometry_seeds", {}).size() == 4, "the registry derives independent structure, fracture, wear and detail seeds")
 	_check(registry.pin_definitions([builtin["id"], external["id"]]).get("ok", false), "runtime object definitions carry P0.3 content version pins")
+	var builtin_interaction := registry.resolve_terrain_interaction(String(builtin["id"]))
+	var external_interaction := registry.resolve_terrain_interaction(String(external["id"]))
+	_check(builtin_interaction.get("ok", false) and external_interaction.get("ok", false) and not builtin_interaction.get("rule", {}).is_empty() and not external_interaction.get("rule", {}).is_empty(), "first-party and external objects resolve terrain interaction capabilities through the same registry API")
+	_check(String(builtin_interaction.get("pin", {}).get("rule_sha256", "")).length() == 64 and String(external_interaction.get("pin", {}).get("rule_sha256", "")).length() == 64, "terrain interaction capabilities are independently content-pinned")
 	var runtime: ProceduralObjectStream = ObjectStream.new()
 	var runtime_state_path := _unique_state_path("registry")
 	var ignored_before_result: Dictionary = Loader.discover_and_validate(roots, ["user://mods"])
@@ -84,7 +88,12 @@ func _test_same_registry_pipeline(roots: Array[String]) -> void:
 	_check(default_roots.get("ok", false), "runtime discovers valid first-party and installed external packages despite an unmanifested user mod directory")
 	_check(int(default_roots.get("optional_directory_ignored_count", 0)) == ignored_before + 1 and runtime.get_package_discovery_summary().contains("undeclared folder"), "runtime reports the newly ignored residual folder alongside any pre-existing optional directories")
 	_check(not runtime.get_package_discovery_summary().contains(ProjectSettings.globalize_path("user://mods")), "runtime discovery warning does not expose a private absolute path")
-	_check(runtime._configured_package_roots().size() == 2, "installed example takes precedence over its repository copy to avoid duplicate package IDs")
+	_check(runtime._configured_package_roots().size() == 2, "normal runtime discovery uses only bundled first-party plus installed user mods; repository examples are not hidden runtime roots")
+	var placeable_ids := runtime.get_placeable_definition_ids()
+	var sorted_placeable_ids := placeable_ids.duplicate()
+	sorted_placeable_ids.sort()
+	_check(placeable_ids == sorted_placeable_ids and placeable_ids.size() == 2, "runtime exposes both geological definitions through a deterministic generic placeable-content capability")
+	_check(placeable_ids.has("firstparty.core_rocks:granite") and placeable_ids.has("official.example.procedural_rock:basalt_stack"), "placeable-content enumeration includes first-party and installed external definitions without special-case preference")
 	runtime.free()
 	_remove_tree(runtime_state_path)
 
@@ -119,11 +128,13 @@ func _test_versioned_recipe_compatibility() -> void:
 	geological["id"] = "test.legacy_rocks:granite"
 	var rejected_new := Registry.new().register_discovered({"ok": true, "packages": [{"manifest": manifest, "definitions": [geological]}]})
 	_check(not rejected_new.get("ok", false), "schema-2 geological parameters cannot be loaded under schema-1")
-	var unknown_profile := JSON.parse_string(geological_bytes.get_string_from_utf8()) as Dictionary
-	unknown_profile["id"] = "test.legacy_rocks:granite"
-	unknown_profile["recipe"]["profile"] = "granite_magic_v1"
-	var rejected_profile := Registry.new().register_discovered({"ok": true, "packages": [{"manifest": manifest, "definitions": [unknown_profile]}]})
-	_check(not rejected_profile.get("ok", false), "unregistered geological profiles fail schema validation")
+	var generic_profile := JSON.parse_string(geological_bytes.get_string_from_utf8()) as Dictionary
+	generic_profile["id"] = "test.legacy_rocks:granite"
+	generic_profile["recipe"]["profile"] = "granite_magic_v1"
+	var generic_registry := Registry.new()
+	var generic_profile_result := generic_registry.register_discovered({"ok": true, "packages": [{"manifest": manifest, "definitions": [generic_profile], "population_rules": [], "terrain_interactions": []}]})
+	var generic_recipe := generic_registry.evaluate_rock_recipe("test.legacy_rocks:granite", 101)
+	_check(generic_profile_result.get("ok", false) and generic_recipe.get("ok", false) and RockMeshAdapter.build_mesh(generic_recipe.get("geometry", {}), generic_recipe.get("geometry_seeds", {})).get("ok", false), "new versioned geological profiles use the generic parameter contract without engine profile allowlists")
 
 
 func _test_mesh_conversion() -> void:
@@ -132,7 +143,7 @@ func _test_mesh_conversion() -> void:
 	_check(registration.get("ok", false), "mesh conversion fixture can load both package definitions")
 	if not registration.get("ok", false):
 		return
-	for definition_id in ObjectWorld.SLOT_DEFINITIONS:
+	for definition_id in _registered_geological_definition_ids(registry):
 		var recipe: Dictionary = registry.evaluate_rock_recipe(definition_id, 91234)
 		var geometry: Dictionary = recipe.get("geometry", {})
 		var seeds: Dictionary = recipe.get("geometry_seeds", {})
@@ -248,7 +259,7 @@ func _test_seed_family_variation() -> void:
 	_check(setup.get("ok", false), "seed gallery can register bundled granite and example basalt profiles")
 	if not setup.get("ok", false):
 		return
-	for definition_id in ObjectWorld.SLOT_DEFINITIONS:
+	for definition_id in _registered_geological_definition_ids(registry):
 		var signatures: Dictionary = {}
 		var triangle_total := 0
 		for sample_index in range(12):
@@ -266,6 +277,20 @@ func _test_seed_family_variation() -> void:
 			triangle_total += int(built["triangle_count"])
 		_check(signatures.size() == 12, "%s produces all twelve requested independent gallery silhouettes" % definition_id)
 		print("ROCK_GALLERY_TEST_METRICS: family=%s count=%d mean_triangles=%.2f" % [definition_id, signatures.size(), float(triangle_total) / 12.0])
+
+
+func _registered_geological_definition_ids(registry: ContentDefinitionRegistry) -> Array[String]:
+	var ids: Array[String] = []
+	for rule_id in registry.get_population_rule_ids():
+		var rule: Dictionary = registry.get_population_rule(rule_id)
+		var definition_id := String(rule.get("definition_id", ""))
+		if definition_id.is_empty() or ids.has(definition_id):
+			continue
+		var recipe := registry.evaluate_rock_recipe(definition_id, 1)
+		if recipe.get("ok", false) and recipe.get("algorithm", "") == Registry.GEOLOGICAL_ALGORITHM:
+			ids.append(definition_id)
+	ids.sort()
+	return ids
 
 
 func _mesh_arrays(result: Dictionary) -> Array:
@@ -310,6 +335,7 @@ func _test_order_independent_records(roots: Array[String]) -> void:
 			_check(instance["position_mm"] is Vector3i and instance["region_key"] == key, "placement uses integer local millimeters and its canonical signed region")
 			_check(instance["content_pin"].get("mod_version", "").is_empty() == false and instance["recipe_algorithm"] == "geological_halfspace_v1" and instance["geometry_profile"] != "" and instance["geometry_seeds"].size() == 4, "instance pins its definition, recipe version, profile and independent stage seeds")
 			_check(instance.get("instance_state", null) is Dictionary and instance["instance_state"].is_empty(), "unmodified procedural instance starts with no mutable override; persisted deltas stay in the separate sparse state snapshot")
+			_check(instance.get("terrain_interaction", {}) is Dictionary and not instance.get("terrain_interaction", {}).is_empty() and String(instance.get("terrain_interaction_pin", {}).get("rule_sha256", "")).length() == 64 and not bool(instance.get("terrain_interaction_applied", true)), "instance carries a pinned declarative terrain capability without applying terrain effects before Issue #108")
 			var local_position := Vector3(instance["position_mm"]) / 1000.0
 			var below: float = Field.sample_density(SEED, key, local_position + Vector3.DOWN * 0.05)
 			var above: float = Field.sample_density(SEED, key, local_position + Vector3.UP * 0.05)
@@ -751,12 +777,18 @@ func _test_seed_partition_isolation(roots: Array[String]) -> void:
 
 
 func _test_missing_and_incompatible_content(_roots: Array[String]) -> void:
-	var missing: ProceduralObjectStream = ObjectStream.new()
-	var missing_result: Dictionary = missing.initialize(SEED, WORLD_ID, ["res://mods/first-party"])
-	_check(not missing_result.get("ok", false) and missing_result.get("reason") == "required_mod_missing:official.example.procedural_rock", "missing required external package fails with a meaningful identity")
-	_check(missing.get_error_summary() == "required_mod_missing:official.example.procedural_rock", "required package failure remains visible to the HUD status adapter")
-	_check(not missing.initialized, "missing required content cannot produce a partially initialized object stream")
-	missing.free()
+	var first_party_only: ProceduralObjectStream = ObjectStream.new()
+	var first_party_state := _unique_state_path("first_party_only")
+	var first_party_result: Dictionary = first_party_only.initialize(SEED, WORLD_ID, ["res://mods/first-party"], first_party_state)
+	_check(first_party_result.get("ok", false) and first_party_only.initialized, "external example content is optional; first-party-only runtime initializes through the same registry")
+	var first_party_placeable := first_party_only.get_placeable_definition_ids()
+	_check(first_party_placeable == ["firstparty.core_rocks:granite"], "placeable-content selection follows the registry and remains valid without any external package")
+	var first_party_generated := ObjectWorld.build_region_instances(SEED, WORLD_ID, Vector2i.ZERO, first_party_only.registry)
+	_check(first_party_generated.get("ok", false) and not first_party_generated.get("instances", []).is_empty(), "first-party-only registry still produces data-driven compatibility and generic population instances")
+	for instance in first_party_generated.get("instances", []):
+		_check(String(instance.get("definition_id", "")).begins_with("firstparty.core_rocks:"), "first-party-only generation does not silently substitute external content")
+	first_party_only.free()
+	_remove_tree(first_party_state)
 	var definition_path := _mod_root.path_join("objects/procedural_rock.json")
 	var current_definition_bytes: PackedByteArray = FileAccess.get_file_as_bytes(definition_path)
 	var legacy_definition := {
@@ -1103,13 +1135,14 @@ func _test_playable_scene_publication() -> void:
 		_check(center_reloaded, "camera-driven revisit republishes the original region")
 		if center_reloaded:
 			var object_center_reloaded := false
-			for _frame in range(240):
+			for _frame in range(600):
+				stream.process_queued_publications()
 				await process_frame
 				if stream.has_published_region(Vector2i.ZERO) \
 					and int(stream.get_performance_snapshot().get("pending_region_publication_count", 0)) == 0:
 					object_center_reloaded = true
 					break
-			_check(object_center_reloaded, "object stream catches up after asynchronous terrain revisit")
+			_check(object_center_reloaded, "object stream catches up after asynchronous terrain revisit (perf=%s)" % str(stream.get_performance_snapshot()))
 			if object_center_reloaded:
 				_check(stream.get_region_instance_records(Vector2i.ZERO) == stateful_records, "playable stream revisit rebuilds the persisted override independent of visit order")
 	demo.queue_free()
@@ -1193,8 +1226,9 @@ func _create_external_package(package_path: String) -> String:
 	var global_path: String = ProjectSettings.globalize_path(package_path)
 	DirAccess.make_dir_recursive_absolute(global_path.path_join("objects"))
 	DirAccess.make_dir_recursive_absolute(global_path.path_join("populations"))
+	DirAccess.make_dir_recursive_absolute(global_path.path_join("interactions"))
 	var source_root := ProjectSettings.globalize_path("res://").trim_suffix("/").get_base_dir().path_join("mods/examples/procedural-rock")
-	for relative_path in ["manifest.json", "objects/procedural_rock.json", "populations/basalt_legacy.json", "populations/basalt_population.json"]:
+	for relative_path in ["manifest.json", "objects/procedural_rock.json", "populations/basalt_legacy.json", "populations/basalt_population.json", "interactions/basalt_ground_imprint.json"]:
 		var source_path: String = source_root.path_join(relative_path)
 		var bytes: PackedByteArray = FileAccess.get_file_as_bytes(source_path)
 		if bytes.is_empty() or not _write_bytes(package_path.path_join(relative_path), bytes):

@@ -79,7 +79,7 @@ static func discover_and_validate(roots: Array[String], optional_roots: Array[St
 		if packages_by_id.has(mod_id):
 			diagnostics.append(_discovery_diagnostic(root_path, _relative_package_path(root_path, package_path), "duplicate_package_id", "duplicate_mod_id", "REJECTED"))
 			return _discovery_failure("duplicate_mod_id", diagnostics, packages_by_id.size(), ignored_optional_directory_count)
-		total_content_record_count += package["definitions"].size() + package["population_rules"].size()
+		total_content_record_count += package["definitions"].size() + package["population_rules"].size() + package.get("terrain_interactions", []).size()
 		if total_content_record_count > MAX_DEFINITIONS:
 			diagnostics.append(_discovery_diagnostic(root_path, _relative_package_path(root_path, package_path), "content_limit", "content_record_limit_exceeded", "REJECTED"))
 			return _discovery_failure("content_record_limit_exceeded", diagnostics, packages_by_id.size(), ignored_optional_directory_count)
@@ -225,6 +225,7 @@ static func _read_package(package_path: String) -> Dictionary:
 		return manifest_result
 	var definitions: Array[Dictionary] = []
 	var population_rules: Array[Dictionary] = []
+	var terrain_interactions: Array[Dictionary] = []
 	for content_root in manifest["content_roots"]:
 		if not _is_safe_relative_root(content_root):
 			return _failure("unsafe_content_root")
@@ -260,17 +261,20 @@ static func _read_package(package_path: String) -> Dictionary:
 							definitions.append(content_record)
 						"static_population_rule":
 							population_rules.append(content_record)
+						"terrain_interaction_rule":
+							terrain_interactions.append(content_record)
 						_:
 							content_directory.list_dir_end()
 							return _failure("unsupported_content_record_type")
-					if definitions.size() + population_rules.size() > MAX_DEFINITIONS:
+					if definitions.size() + population_rules.size() + terrain_interactions.size() > MAX_DEFINITIONS:
 						content_directory.list_dir_end()
 						return _failure("content_record_limit_exceeded")
 			entry = content_directory.get_next()
 		content_directory.list_dir_end()
 	definitions.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.get("id", "")) < str(b.get("id", "")))
 	population_rules.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.get("id", "")) < str(b.get("id", "")))
-	return {"ok": true, "package": {"path": package_path, "manifest": manifest, "definitions": definitions, "population_rules": population_rules}}
+	terrain_interactions.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.get("id", "")) < str(b.get("id", "")))
+	return {"ok": true, "package": {"path": package_path, "manifest": manifest, "definitions": definitions, "population_rules": population_rules, "terrain_interactions": terrain_interactions}}
 
 
 static func validate_manifest(manifest: Dictionary) -> Dictionary:
