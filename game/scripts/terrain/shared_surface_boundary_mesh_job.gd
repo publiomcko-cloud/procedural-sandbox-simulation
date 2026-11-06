@@ -44,7 +44,7 @@ func run() -> void:
 			"ledger_revision": int(brush_snapshot.get("revision", -1)),
 		}
 	else:
-		var key := "x:%d:%d:%d:%d:%d:%d:%d:%d" % [
+		var key := "x:%d:%d:%d:%d:%d:%d:%d:%d:%s" % [
 			world_seed,
 			int(brush_snapshot.get("revision", -1)),
 			int(brush_snapshot.get("cache_scope_id", -1)),
@@ -53,6 +53,7 @@ func run() -> void:
 			left_region_key.x,
 			left_region_key.y,
 			z_chunk,
+			String(brush_snapshot.get("terrain_object_effect_snapshot_sha256", "")),
 		]
 		result = WorkCache.get_or_build(key, Callable(self, "_build_uncached"))
 	worker_finished_usec = Time.get_ticks_usec()
