@@ -249,8 +249,8 @@ func pin_definitions(namespaced_ids: Array[String]) -> Dictionary:
 		pins.append({
 			"content_id": definition_id,
 			"mod_id": mod_id,
-			"mod_version": _mods[mod_id]["version"],
-			"definition_schema_version": definition["schema_version"]
+			"mod_version": String(_mods[mod_id]["version"]),
+			"definition_schema_version": int(definition["schema_version"])
 		})
 	pins.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a["content_id"]) < str(b["content_id"]))
 	return {"ok": true, "pins": pins}
