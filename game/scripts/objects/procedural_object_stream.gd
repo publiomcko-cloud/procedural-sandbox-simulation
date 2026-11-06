@@ -392,20 +392,6 @@ func publish_region(
 		if not reconstruction.get("ok", false):
 			return _record_region_failure(id, String(reconstruction.get("reason", "entity_region_reconstruction_failed")))
 		base_instances = entity_command_service.get_region_base_instances(region_key)
-		if terrain_effect_projection_service != null:
-			var effect_reconcile: Dictionary = terrain_effect_projection_service.reconcile_command_region(
-				region_key, entity_command_service
-			)
-			if not effect_reconcile.get("ok", false):
-				return _record_region_failure(
-					id,
-					"terrain_effect_reconcile_failed:%s" % effect_reconcile.get("reason", "unknown")
-				)
-			for chunk_id_value in effect_reconcile.get("affected_chunk_ids", []):
-				var dirty_chunk_id := String(chunk_id_value)
-				if not _terrain_effect_dirty_chunk_ids.has(dirty_chunk_id):
-					_terrain_effect_dirty_chunk_ids.append(dirty_chunk_id)
-			_terrain_effect_dirty_chunk_ids.sort()
 		_last_reconstruction_usec = int(reconstruction.get("reconstruction_usec", 0))
 		generation_usec = int(reconstruction.get("generation_usec", _last_reconstruction_usec))
 		main_thread_reconstruction_usec = int(reconstruction.get("main_thread_reconstruction_usec", 0))
@@ -422,6 +408,47 @@ func publish_region(
 		_last_reconstruction_usec = generation_usec
 		candidate_cell_count = int(generated.get("candidate_cell_count", 0))
 		surface_anchor_count = int(generated.get("surface_anchor_count", 0))
+	# Terrain interaction is independent from the optional command/history
+	# migration. Resolve the same authoritative object state in both the legacy
+	# and command-enabled paths, then project it once.
+	if terrain_effect_projection_service != null and state_service != null:
+		var active_effect_instances: Array[Dictionary] = []
+		var source_revisions: Dictionary = {}
+		for base_instance_value in base_instances:
+			var base_instance_for_effect: Dictionary = base_instance_value
+			var resolved_for_effect: Dictionary = state_service.resolve_instance(
+				base_instance_for_effect
+			)
+			if not resolved_for_effect.get("ok", false):
+				return _record_region_failure(
+					id,
+					"terrain_effect_state_resolution_failed:%s" % resolved_for_effect.get("reason", "unknown")
+				)
+			if bool(resolved_for_effect.get("deleted", false)):
+				continue
+			var resolved_instance: Dictionary = resolved_for_effect["instance"]
+			active_effect_instances.append(resolved_instance.duplicate(true))
+			var resolved_id := String(resolved_instance.get("instance_id", ""))
+			source_revisions[resolved_id] = int(
+				state_service.get_entity_revision(resolved_id)
+			)
+		var effect_reconcile: Dictionary = terrain_effect_projection_service.reconcile_scope(
+			region_key,
+			int(state_service.get_revision()),
+			active_effect_instances,
+			source_revisions
+		)
+		if not effect_reconcile.get("ok", false):
+			return _record_region_failure(
+				id,
+				"terrain_effect_reconcile_failed:%s" % effect_reconcile.get("reason", "unknown")
+			)
+		for chunk_id_value in effect_reconcile.get("affected_chunk_ids", []):
+			var dirty_chunk_id := String(chunk_id_value)
+			if not _terrain_effect_dirty_chunk_ids.has(dirty_chunk_id):
+				_terrain_effect_dirty_chunk_ids.append(dirty_chunk_id)
+		_terrain_effect_dirty_chunk_ids.sort()
+
 	var pending_nodes: Array[Node3D] = []
 	var instances: Array[Dictionary] = []
 	var batch_items: Array[Dictionary] = []
