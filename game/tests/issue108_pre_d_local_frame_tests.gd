@@ -136,12 +136,12 @@ func _run() -> void:
 	var has_source_region := false
 	var has_right_region := false
 	for chunk_id in indexed_ids:
-		if chunk_id.begins_with("%d,%d/" % [
+		if chunk_id.begins_with("region:%d,%d/" % [
 			(edge_instance["region_key"] as Vector2i).x,
 			(edge_instance["region_key"] as Vector2i).y,
 		]):
 			has_source_region = true
-		if chunk_id.begins_with("%d,%d/" % [
+		if chunk_id.begins_with("region:%d,%d/" % [
 			(edge_instance["region_key"] as Vector2i).x + 1,
 			(edge_instance["region_key"] as Vector2i).y,
 		]):
