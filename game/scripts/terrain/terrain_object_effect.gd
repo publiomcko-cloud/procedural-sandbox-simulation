@@ -3,13 +3,14 @@ extends RefCounted
 
 ## Pure terrain-object effect normalization and SDF evaluation.
 ##
-## This Phase-B domain type is intentionally disconnected from terrain runtime,
-## persistence and entity lifecycle. It accepts already-resolved object records
-## and produces deterministic world-space convex cutter planes.
+## Schema v2 stores all continuous geometry in the source region's local frame.
+## No world-space floating-point coordinate is persisted or required by the hot
+## evaluator. Cross-region sampling uses only the bounded integer region delta.
 const ShapeDescriptor := preload("res://scripts/objects/procedural_rock_shape_descriptor.gd")
-const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 
-const SCHEMA_VERSION := 1
+const SCHEMA_VERSION := 2
+const EFFECT_ID_VERSION := 1
+const FRAME := "source_region_local_v1"
 const EFFECT_TYPE := "terrain_object_effect"
 const EFFECT_ALGORITHM := "sdf_ground_imprint_v1"
 const SHAPE_SOURCE := "recipe_envelope_v1"
@@ -19,15 +20,20 @@ const BLEND_MODE := "interior_eased_subtract_v1"
 const MAX_WORLD_SEED := 2147483646
 const MAX_SOURCE_REVISION := 9007199254740991
 const MAX_PLANES := 64
+const REGION_SIZE_X := 16.0
+const REGION_SIZE_Z := 12.0
+const REGION_SIZE_X_MM := 16000
+const REGION_SIZE_Z_MM := 12000
+const MAX_SAMPLE_REGION_DELTA := 64
 const EFFECT_KEYS := [
-	"schema_version", "type", "effect_id", "source_instance_id", "source_revision",
-	"source_fingerprint_sha256", "world_id", "world_seed", "generator_version",
-	"definition_id", "content_pin", "terrain_interaction_pin",
+	"schema_version", "type", "frame", "effect_id", "source_instance_id",
+	"source_revision", "source_fingerprint_sha256", "world_id", "world_seed",
+	"generator_version", "definition_id", "content_pin", "terrain_interaction_pin",
 	"shape_descriptor_version", "shape_descriptor_sha256", "algorithm",
-	"shape_source", "operation", "edit_order", "blend_mode",
-	"embed_depth_mm", "blend_radius_mm", "anchor_world_mm", "translation_mm",
-	"rotation_mdeg", "scale_milli", "world_planes", "bounds_min", "bounds_max",
-	"interior_point_world"
+	"shape_source", "operation", "edit_order", "blend_mode", "embed_depth_mm",
+	"blend_radius_mm", "source_region_key", "anchor_local_mm", "translation_mm",
+	"rotation_mdeg", "scale_milli", "region_planes", "bounds_min_local",
+	"bounds_max_local", "interior_point_local"
 ]
 
 
@@ -38,28 +44,27 @@ static func build_from_instance(instance: Dictionary, source_revision: int = 0) 
 	var content_pin: Dictionary = instance["content_pin"]
 	if not _exact_keys(content_pin, [
 		"content_id", "mod_id", "mod_version", "definition_schema_version"
-	]) \
-		or String(content_pin.get("content_id", "")) != String(instance["definition_id"]) \
-		or String(content_pin.get("mod_id", "")).is_empty() \
-		or String(content_pin.get("mod_version", "")).is_empty() \
-		or not _is_integer(content_pin.get("definition_schema_version")):
+	]) 		or String(content_pin.get("content_id", "")) != String(instance["definition_id"]) 		or String(content_pin.get("mod_id", "")).is_empty() 		or String(content_pin.get("mod_version", "")).is_empty() 		or not _is_integer(content_pin.get("definition_schema_version")):
 		return _failure("terrain_effect_content_pin_invalid")
 	var interaction: Dictionary = instance["terrain_interaction"]
 	var interaction_pin: Dictionary = instance["terrain_interaction_pin"]
 	var descriptor := ShapeDescriptor.build(instance["geometry"], instance["geometry_seeds"])
 	if not descriptor.get("ok", false):
-		return _failure("terrain_effect_shape_descriptor_failed:%s" % descriptor.get("reason", "unknown"))
+		return _failure(
+			"terrain_effect_shape_descriptor_failed:%s" % descriptor.get("reason", "unknown")
+		)
 
 	var transform_result := _resolve_transform(instance)
 	if not transform_result.get("ok", false):
 		return transform_result
-	var anchor_world_mm: Vector3i = transform_result["anchor_world_mm"]
+	var source_region_key: Vector2i = transform_result["source_region_key"]
+	var anchor_local_mm: Vector3i = transform_result["anchor_local_mm"]
 	var translation_mm: Vector3i = transform_result["translation_mm"]
 	var rotation_mdeg: Vector3i = transform_result["rotation_mdeg"]
 	var scale_milli: Vector3i = transform_result["scale_milli"]
 	var embed_depth_mm := int(interaction["embed_depth_mm"])
-	var effect_origin := (
-		Vector3(anchor_world_mm + translation_mm) / 1000.0
+	var effect_origin_local := (
+		Vector3(anchor_local_mm + translation_mm) / 1000.0
 		+ Vector3(0.0, -float(embed_depth_mm) / 1000.0, 0.0)
 	)
 	var rotation_radians := Vector3(rotation_mdeg) * (PI / 180000.0)
@@ -69,7 +74,7 @@ static func build_from_instance(instance: Dictionary, source_revision: int = 0) 
 		return _failure("terrain_effect_scale_invalid")
 
 	var local_guard := float(descriptor["roughness_guard_m"])
-	var world_planes: Array[Dictionary] = []
+	var region_planes: Array[Dictionary] = []
 	for plane_value in descriptor["planes"]:
 		var plane: Dictionary = plane_value
 		var local_normal: Vector3 = plane["normal"]
@@ -78,18 +83,21 @@ static func build_from_instance(instance: Dictionary, source_revision: int = 0) 
 			local_normal.y / scale.y,
 			local_normal.z / scale.z
 		)
-		var world_unnormalized: Vector3 = basis * scaled_normal
-		var normal_length := world_unnormalized.length()
+		var region_unnormalized: Vector3 = basis * scaled_normal
+		var normal_length := region_unnormalized.length()
 		if not is_finite(normal_length) or normal_length <= 0.000000001:
 			return _failure("terrain_effect_plane_transform_invalid")
-		var world_normal := world_unnormalized / normal_length
+		var region_normal := region_unnormalized / normal_length
 		var local_distance := float(plane["distance"]) + local_guard
-		var world_distance := local_distance / normal_length + world_normal.dot(effect_origin)
-		world_planes.append({
-			"normal": [world_normal.x, world_normal.y, world_normal.z],
-			"distance_m": world_distance,
+		var region_distance := (
+			local_distance / normal_length
+			+ region_normal.dot(effect_origin_local)
+		)
+		region_planes.append({
+			"normal": _vector3_array(region_normal),
+			"distance_m": _canonical_float(region_distance),
 		})
-	if world_planes.is_empty() or world_planes.size() > MAX_PLANES:
+	if region_planes.is_empty() or region_planes.size() > MAX_PLANES:
 		return _failure("terrain_effect_plane_budget_invalid")
 
 	var minimum := Vector3(INF, INF, INF)
@@ -97,18 +105,20 @@ static func build_from_instance(instance: Dictionary, source_revision: int = 0) 
 	var interior := Vector3.ZERO
 	var guarded_vertices: Array[Vector3] = descriptor["guarded_vertices"]
 	for local_vertex in guarded_vertices:
-		var world_vertex := effect_origin + basis * (local_vertex * scale)
-		minimum = minimum.min(world_vertex)
-		maximum = maximum.max(world_vertex)
-		interior += world_vertex
+		var region_vertex := effect_origin_local + basis * (local_vertex * scale)
+		minimum = minimum.min(region_vertex)
+		maximum = maximum.max(region_vertex)
+		interior += region_vertex
 	if guarded_vertices.is_empty() or not minimum.is_finite() or not maximum.is_finite():
 		return _failure("terrain_effect_bounds_invalid")
 	interior /= float(guarded_vertices.size())
 
 	var world_id := String(instance["world_id"])
 	var source_id := String(instance["instance_id"])
+	# Preserve the stable Phase-B effect identity even though the normalized
+	# record schema/frame has advanced.
 	var effect_identity_source := JSON.stringify({
-		"schema_version": SCHEMA_VERSION,
+		"schema_version": EFFECT_ID_VERSION,
 		"world_id": world_id,
 		"source_instance_id": source_id,
 	}, "", true, true)
@@ -118,12 +128,14 @@ static func build_from_instance(instance: Dictionary, source_revision: int = 0) 
 	]
 	var source_fingerprint := JSON.stringify({
 		"schema_version": SCHEMA_VERSION,
+		"frame": FRAME,
 		"source_instance_id": source_id,
 		"source_revision": source_revision,
 		"content_pin": instance["content_pin"],
 		"terrain_interaction_pin": interaction_pin,
 		"shape_descriptor_sha256": descriptor["descriptor_sha256"],
-		"anchor_world_mm": _vector3i_array(anchor_world_mm),
+		"source_region_key": [source_region_key.x, source_region_key.y],
+		"anchor_local_mm": _vector3i_array(anchor_local_mm),
 		"translation_mm": _vector3i_array(translation_mm),
 		"rotation_mdeg": _vector3i_array(rotation_mdeg),
 		"scale_milli": _vector3i_array(scale_milli),
@@ -134,6 +146,7 @@ static func build_from_instance(instance: Dictionary, source_revision: int = 0) 
 	var effect := {
 		"schema_version": SCHEMA_VERSION,
 		"type": EFFECT_TYPE,
+		"frame": FRAME,
 		"effect_id": effect_id,
 		"source_instance_id": source_id,
 		"source_revision": source_revision,
@@ -153,19 +166,24 @@ static func build_from_instance(instance: Dictionary, source_revision: int = 0) 
 		"blend_mode": BLEND_MODE,
 		"embed_depth_mm": embed_depth_mm,
 		"blend_radius_mm": int(interaction["blend_radius_mm"]),
-		"anchor_world_mm": _vector3i_array(anchor_world_mm),
+		"source_region_key": [source_region_key.x, source_region_key.y],
+		"anchor_local_mm": _vector3i_array(anchor_local_mm),
 		"translation_mm": _vector3i_array(translation_mm),
 		"rotation_mdeg": _vector3i_array(rotation_mdeg),
 		"scale_milli": _vector3i_array(scale_milli),
-		"world_planes": world_planes,
-		"bounds_min": _vector3_array(minimum),
-		"bounds_max": _vector3_array(maximum),
-		"interior_point_world": _vector3_array(interior),
+		"region_planes": region_planes,
+		"bounds_min_local": _vector3_array(minimum),
+		"bounds_max_local": _vector3_array(maximum),
+		"interior_point_local": _vector3_array(interior),
 	}
 	var checked := validate_effect(effect)
 	if not checked.get("ok", false):
 		return checked
-	return {"ok": true, "effect": checked["effect"], "shape_descriptor": descriptor}
+	return {
+		"ok": true,
+		"effect": checked["effect"],
+		"shape_descriptor": descriptor,
+	}
 
 
 static func validate_effect(value: Variant) -> Dictionary:
@@ -174,7 +192,7 @@ static func validate_effect(value: Variant) -> Dictionary:
 	var effect: Dictionary = value
 	if not _exact_keys(effect, EFFECT_KEYS):
 		return _failure("terrain_effect_fields_invalid")
-	if not _is_integer(effect["schema_version"]) or int(effect["schema_version"]) != SCHEMA_VERSION 		or effect["type"] != EFFECT_TYPE:
+	if not _is_integer(effect["schema_version"]) 		or int(effect["schema_version"]) != SCHEMA_VERSION 		or effect["type"] != EFFECT_TYPE 		or effect["frame"] != FRAME:
 		return _failure("terrain_effect_schema_invalid")
 	for key in [
 		"effect_id", "source_instance_id", "source_fingerprint_sha256", "world_id",
@@ -185,30 +203,25 @@ static func validate_effect(value: Variant) -> Dictionary:
 			return _failure("terrain_effect_string_field_invalid")
 	if String(effect["source_fingerprint_sha256"]).length() != 64 		or String(effect["shape_descriptor_sha256"]).length() != 64 		or not _is_hex(String(effect["source_fingerprint_sha256"])) 		or not _is_hex(String(effect["shape_descriptor_sha256"])):
 		return _failure("terrain_effect_hash_invalid")
-	if effect["algorithm"] != EFFECT_ALGORITHM or effect["shape_source"] != SHAPE_SOURCE 		or effect["operation"] != OPERATION or effect["edit_order"] != EDIT_ORDER 		or effect["blend_mode"] != BLEND_MODE:
+	if effect["algorithm"] != EFFECT_ALGORITHM 		or effect["shape_source"] != SHAPE_SOURCE 		or effect["operation"] != OPERATION 		or effect["edit_order"] != EDIT_ORDER 		or effect["blend_mode"] != BLEND_MODE:
 		return _failure("terrain_effect_contract_invalid")
-	if not _is_integer(effect["source_revision"]) or int(effect["source_revision"]) < 0 		or int(effect["source_revision"]) > MAX_SOURCE_REVISION:
+	if not _is_integer(effect["source_revision"]) 		or int(effect["source_revision"]) < 0 		or int(effect["source_revision"]) > MAX_SOURCE_REVISION:
 		return _failure("terrain_effect_source_revision_invalid")
-	if not _is_integer(effect["world_seed"]) or int(effect["world_seed"]) < 0 		or int(effect["world_seed"]) > MAX_WORLD_SEED 		or not _is_integer(effect["generator_version"]) or int(effect["generator_version"]) < 1:
+	if not _is_integer(effect["world_seed"]) 		or int(effect["world_seed"]) < 0 		or int(effect["world_seed"]) > MAX_WORLD_SEED 		or not _is_integer(effect["generator_version"]) 		or int(effect["generator_version"]) < 1:
 		return _failure("terrain_effect_world_identity_invalid")
 	if not _is_integer(effect["shape_descriptor_version"]) 		or int(effect["shape_descriptor_version"]) != ShapeDescriptor.DESCRIPTOR_VERSION:
 		return _failure("terrain_effect_shape_version_invalid")
-	if not _is_integer(effect["embed_depth_mm"]) or int(effect["embed_depth_mm"]) < 0 		or int(effect["embed_depth_mm"]) > 3000 		or not _is_integer(effect["blend_radius_mm"]) or int(effect["blend_radius_mm"]) < 0 		or int(effect["blend_radius_mm"]) > 2000:
+	if not _is_integer(effect["embed_depth_mm"]) 		or int(effect["embed_depth_mm"]) < 0 		or int(effect["embed_depth_mm"]) > 3000 		or not _is_integer(effect["blend_radius_mm"]) 		or int(effect["blend_radius_mm"]) < 0 		or int(effect["blend_radius_mm"]) > 2000:
 		return _failure("terrain_effect_interaction_range_invalid")
-	if typeof(effect["content_pin"]) != TYPE_DICTIONARY \
-		or typeof(effect["terrain_interaction_pin"]) != TYPE_DICTIONARY:
+
+	if typeof(effect["content_pin"]) != TYPE_DICTIONARY 		or typeof(effect["terrain_interaction_pin"]) != TYPE_DICTIONARY:
 		return _failure("terrain_effect_pin_invalid")
 	var content_pin: Dictionary = effect["content_pin"]
 	if not _exact_keys(content_pin, [
 		"content_id", "mod_id", "mod_version", "definition_schema_version"
 	]):
 		return _failure("terrain_effect_content_pin_invalid")
-	if String(content_pin["content_id"]) != String(effect["definition_id"]) \
-		or typeof(content_pin["mod_id"]) != TYPE_STRING \
-		or String(content_pin["mod_id"]).is_empty() \
-		or typeof(content_pin["mod_version"]) != TYPE_STRING \
-		or String(content_pin["mod_version"]).is_empty() \
-		or not _is_integer(content_pin["definition_schema_version"]):
+	if String(content_pin["content_id"]) != String(effect["definition_id"]) 		or typeof(content_pin["mod_id"]) != TYPE_STRING 		or String(content_pin["mod_id"]).is_empty() 		or typeof(content_pin["mod_version"]) != TYPE_STRING 		or String(content_pin["mod_version"]).is_empty() 		or not _is_integer(content_pin["definition_schema_version"]):
 		return _failure("terrain_effect_content_pin_invalid")
 	var interaction_pin: Dictionary = effect["terrain_interaction_pin"]
 	if not _exact_keys(interaction_pin, [
@@ -216,58 +229,47 @@ static func validate_effect(value: Variant) -> Dictionary:
 		"algorithm", "rule_sha256"
 	]):
 		return _failure("terrain_effect_interaction_pin_invalid")
-	if String(interaction_pin["definition_id"]) != String(effect["definition_id"]) \
-		or String(interaction_pin["algorithm"]) != EFFECT_ALGORITHM \
-		or typeof(interaction_pin["rule_id"]) != TYPE_STRING \
-		or String(interaction_pin["rule_id"]).is_empty() \
-		or typeof(interaction_pin["mod_id"]) != TYPE_STRING \
-		or String(interaction_pin["mod_id"]).is_empty() \
-		or typeof(interaction_pin["mod_version"]) != TYPE_STRING \
-		or String(interaction_pin["mod_version"]).is_empty() \
-		or not _is_integer(interaction_pin["rule_schema_version"]) \
-		or typeof(interaction_pin["rule_sha256"]) != TYPE_STRING \
-		or String(interaction_pin["rule_sha256"]).length() != 64 \
-		or not _is_hex(String(interaction_pin["rule_sha256"])):
+	if String(interaction_pin["definition_id"]) != String(effect["definition_id"]) 		or String(interaction_pin["algorithm"]) != EFFECT_ALGORITHM 		or typeof(interaction_pin["rule_id"]) != TYPE_STRING 		or String(interaction_pin["rule_id"]).is_empty() 		or typeof(interaction_pin["mod_id"]) != TYPE_STRING 		or String(interaction_pin["mod_id"]).is_empty() 		or typeof(interaction_pin["mod_version"]) != TYPE_STRING 		or String(interaction_pin["mod_version"]).is_empty() 		or not _is_integer(interaction_pin["rule_schema_version"]) 		or typeof(interaction_pin["rule_sha256"]) != TYPE_STRING 		or String(interaction_pin["rule_sha256"]).length() != 64 		or not _is_hex(String(interaction_pin["rule_sha256"])):
 		return _failure("terrain_effect_interaction_pin_invalid")
-	var anchor := _read_int3(effect["anchor_world_mm"])
+
+	var source_region := _read_int2(effect["source_region_key"])
+	var anchor := _read_int3(effect["anchor_local_mm"])
 	var translation := _read_int3(effect["translation_mm"])
 	var rotation := _read_int3(effect["rotation_mdeg"])
 	var scale := _read_int3(effect["scale_milli"])
-	if not anchor.get("ok", false) or not translation.get("ok", false) 		or not rotation.get("ok", false) or not scale.get("ok", false):
+	if not source_region.get("ok", false) 		or not anchor.get("ok", false) 		or not translation.get("ok", false) 		or not rotation.get("ok", false) 		or not scale.get("ok", false):
 		return _failure("terrain_effect_transform_invalid")
 	for component in scale["value"]:
 		if int(component) <= 0 or int(component) > 5000:
 			return _failure("terrain_effect_scale_invalid")
-	var minimum := _read_float3(effect["bounds_min"])
-	var maximum := _read_float3(effect["bounds_max"])
-	var interior := _read_float3(effect["interior_point_world"])
-	if not minimum.get("ok", false) or not maximum.get("ok", false) or not interior.get("ok", false):
+
+	var minimum := _read_float3(effect["bounds_min_local"])
+	var maximum := _read_float3(effect["bounds_max_local"])
+	var interior := _read_float3(effect["interior_point_local"])
+	if not minimum.get("ok", false) 		or not maximum.get("ok", false) 		or not interior.get("ok", false):
 		return _failure("terrain_effect_bounds_invalid")
 	var min_v: Vector3 = minimum["value"]
 	var max_v: Vector3 = maximum["value"]
 	if min_v.x > max_v.x or min_v.y > max_v.y or min_v.z > max_v.z:
 		return _failure("terrain_effect_bounds_invalid")
 	var interior_v: Vector3 = interior["value"]
-	if interior_v.x < min_v.x - 0.000001 or interior_v.x > max_v.x + 0.000001 \
-		or interior_v.y < min_v.y - 0.000001 or interior_v.y > max_v.y + 0.000001 \
-		or interior_v.z < min_v.z - 0.000001 or interior_v.z > max_v.z + 0.000001:
+	if interior_v.x < min_v.x - 0.000001 		or interior_v.x > max_v.x + 0.000001 		or interior_v.y < min_v.y - 0.000001 		or interior_v.y > max_v.y + 0.000001 		or interior_v.z < min_v.z - 0.000001 		or interior_v.z > max_v.z + 0.000001:
 		return _failure("terrain_effect_interior_outside_bounds")
-	if typeof(effect["world_planes"]) != TYPE_ARRAY 		or effect["world_planes"].is_empty() or effect["world_planes"].size() > MAX_PLANES:
+	if typeof(effect["region_planes"]) != TYPE_ARRAY 		or effect["region_planes"].is_empty() 		or effect["region_planes"].size() > MAX_PLANES:
 		return _failure("terrain_effect_planes_invalid")
-	for plane_value in effect["world_planes"]:
+	for plane_value in effect["region_planes"]:
 		if typeof(plane_value) != TYPE_DICTIONARY:
 			return _failure("terrain_effect_plane_invalid")
 		var plane: Dictionary = plane_value
 		if not _exact_keys(plane, ["normal", "distance_m"]):
 			return _failure("terrain_effect_plane_invalid")
 		var normal_result := _read_float3(plane["normal"])
-		if not normal_result.get("ok", false) \
-			or not _is_number(plane["distance_m"]) \
-			or not is_finite(float(plane["distance_m"])):
+		if not normal_result.get("ok", false) 			or not _is_number(plane["distance_m"]) 			or not is_finite(float(plane["distance_m"])):
 			return _failure("terrain_effect_plane_invalid")
 		var normal: Vector3 = normal_result["value"]
 		if absf(normal.length() - 1.0) > 0.00001:
 			return _failure("terrain_effect_plane_normal_invalid")
+
 	var normalized: Dictionary = effect.duplicate(true)
 	normalized["schema_version"] = SCHEMA_VERSION
 	normalized["source_revision"] = int(effect["source_revision"])
@@ -276,63 +278,77 @@ static func validate_effect(value: Variant) -> Dictionary:
 	normalized["shape_descriptor_version"] = int(effect["shape_descriptor_version"])
 	normalized["embed_depth_mm"] = int(effect["embed_depth_mm"])
 	normalized["blend_radius_mm"] = int(effect["blend_radius_mm"])
-	normalized["anchor_world_mm"] = anchor["value"].duplicate()
+	normalized["source_region_key"] = source_region["value"].duplicate()
+	normalized["anchor_local_mm"] = anchor["value"].duplicate()
 	normalized["translation_mm"] = translation["value"].duplicate()
 	normalized["rotation_mdeg"] = rotation["value"].duplicate()
 	normalized["scale_milli"] = scale["value"].duplicate()
-
 	var normalized_content_pin: Dictionary = content_pin.duplicate(true)
 	normalized_content_pin["definition_schema_version"] = int(
 		content_pin["definition_schema_version"]
 	)
 	normalized["content_pin"] = normalized_content_pin
-
 	var normalized_interaction_pin: Dictionary = interaction_pin.duplicate(true)
 	normalized_interaction_pin["rule_schema_version"] = int(
 		interaction_pin["rule_schema_version"]
 	)
 	normalized["terrain_interaction_pin"] = normalized_interaction_pin
-
-	normalized["bounds_min"] = _vector3_array(min_v)
-	normalized["bounds_max"] = _vector3_array(max_v)
-	normalized["interior_point_world"] = _vector3_array(interior_v)
+	normalized["bounds_min_local"] = _vector3_array(min_v)
+	normalized["bounds_max_local"] = _vector3_array(max_v)
+	normalized["interior_point_local"] = _vector3_array(interior_v)
 	var normalized_planes: Array[Dictionary] = []
-	for plane_value in effect["world_planes"]:
+	for plane_value in effect["region_planes"]:
 		var plane: Dictionary = plane_value
 		var normal_result := _read_float3(plane["normal"])
-		var normal: Vector3 = normal_result["value"]
 		normalized_planes.append({
-			"normal": _vector3_array(normal),
+			"normal": _vector3_array(normal_result["value"]),
 			"distance_m": _canonical_float(float(plane["distance_m"])),
 		})
-	normalized["world_planes"] = normalized_planes
+	normalized["region_planes"] = normalized_planes
 	return {"ok": true, "effect": normalized}
 
 
-static func sample_cutter(effect: Dictionary, world_point: Vector3) -> float:
-	if not world_point.is_finite():
+static func sample_cutter(
+	effect: Dictionary,
+	sample_region_key: Vector2i,
+	region_local_point: Vector3
+) -> float:
+	if not region_local_point.is_finite():
 		return INF
 	var checked := validate_effect(effect)
 	if not checked.get("ok", false):
 		return INF
-	return sample_cutter_prevalidated(effect, world_point)
+	return sample_cutter_prevalidated(
+		checked["effect"], sample_region_key, region_local_point
+	)
 
 
-## Hot-path evaluator for effects already validated by a snapshot/index boundary.
-## Phase D must never feed unvalidated external dictionaries into this method.
+## Hot path. The effect must already be validated by the projection/index
+## boundary. The only float translation is a bounded region delta.
 static func sample_cutter_prevalidated(
 	effect: Dictionary,
-	world_point: Vector3
+	sample_region_key: Vector2i,
+	region_local_point: Vector3
 ) -> float:
-	if not world_point.is_finite():
+	if not region_local_point.is_finite():
 		return INF
+	var source_values: Array = effect["source_region_key"]
+	var source_region := Vector2i(int(source_values[0]), int(source_values[1]))
+	var delta := sample_region_key - source_region
+	if absi(delta.x) > MAX_SAMPLE_REGION_DELTA 		or absi(delta.y) > MAX_SAMPLE_REGION_DELTA:
+		return INF
+	var point_in_source_frame := Vector3(
+		float(delta.x) * REGION_SIZE_X + region_local_point.x,
+		region_local_point.y,
+		float(delta.y) * REGION_SIZE_Z + region_local_point.z
+	)
 	var maximum_plane_delta := -INF
-	for plane_value in effect["world_planes"]:
+	for plane_value in effect["region_planes"]:
 		var plane: Dictionary = plane_value
 		var n := _array_to_vector3(plane["normal"])
 		maximum_plane_delta = maxf(
 			maximum_plane_delta,
-			n.dot(world_point) - float(plane["distance_m"])
+			n.dot(point_in_source_frame) - float(plane["distance_m"])
 		)
 	return maximum_plane_delta
 
@@ -340,24 +356,30 @@ static func sample_cutter_prevalidated(
 static func compose_density(
 	terrain_density: float,
 	effect: Dictionary,
-	world_point: Vector3
+	sample_region_key: Vector2i,
+	region_local_point: Vector3
 ) -> float:
 	if not is_finite(terrain_density):
 		return terrain_density
 	var checked := validate_effect(effect)
 	if not checked.get("ok", false):
 		return terrain_density
-	return compose_density_prevalidated(terrain_density, effect, world_point)
+	return compose_density_prevalidated(
+		terrain_density, checked["effect"], sample_region_key, region_local_point
+	)
 
 
 static func compose_density_prevalidated(
 	terrain_density: float,
 	effect: Dictionary,
-	world_point: Vector3
+	sample_region_key: Vector2i,
+	region_local_point: Vector3
 ) -> float:
 	if not is_finite(terrain_density):
 		return terrain_density
-	var cutter := sample_cutter_prevalidated(effect, world_point)
+	var cutter := sample_cutter_prevalidated(
+		effect, sample_region_key, region_local_point
+	)
 	if not is_finite(cutter) or cutter >= 0.0:
 		return terrain_density
 	var hard := minf(terrain_density, cutter)
@@ -372,23 +394,27 @@ static func compose_density_prevalidated(
 static func compose_effects(
 	terrain_density: float,
 	effects: Array[Dictionary],
-	world_point: Vector3
+	sample_region_key: Vector2i,
+	region_local_point: Vector3
 ) -> float:
 	if not is_finite(terrain_density):
 		return terrain_density
+	var normalized: Array[Dictionary] = []
 	for effect in effects:
-		if not validate_effect(effect).get("ok", false):
+		var checked := validate_effect(effect)
+		if not checked.get("ok", false):
 			return terrain_density
-	return compose_effects_prevalidated(terrain_density, effects, world_point)
+		normalized.append(checked["effect"])
+	return compose_effects_prevalidated(
+		terrain_density, normalized, sample_region_key, region_local_point
+	)
 
 
-## Multiple imprints are ordered by stable effect_id. This makes overlap replay
-## independent of discovery/visit order while avoiding validation inside every
-## lattice sample after the snapshot boundary has qualified its records.
 static func compose_effects_prevalidated(
 	terrain_density: float,
 	effects: Array[Dictionary],
-	world_point: Vector3
+	sample_region_key: Vector2i,
+	region_local_point: Vector3
 ) -> float:
 	if not is_finite(terrain_density):
 		return terrain_density
@@ -398,7 +424,9 @@ static func compose_effects_prevalidated(
 	)
 	var density := terrain_density
 	for effect in ordered:
-		density = compose_density_prevalidated(density, effect, world_point)
+		density = compose_density_prevalidated(
+			density, effect, sample_region_key, region_local_point
+		)
 	return density
 
 
@@ -406,14 +434,22 @@ static func bounds(effect: Dictionary) -> Dictionary:
 	var checked := validate_effect(effect)
 	if not checked.get("ok", false):
 		return checked
+	var normalized: Dictionary = checked["effect"]
+	var region_values: Array = normalized["source_region_key"]
 	return {
 		"ok": true,
-		"min": _array_to_vector3(effect["bounds_min"]),
-		"max": _array_to_vector3(effect["bounds_max"]),
+		"source_region_key": Vector2i(
+			int(region_values[0]), int(region_values[1])
+		),
+		"min_local": _array_to_vector3(normalized["bounds_min_local"]),
+		"max_local": _array_to_vector3(normalized["bounds_max_local"]),
 	}
 
 
-static func _validate_instance_input(instance: Dictionary, source_revision: int) -> Dictionary:
+static func _validate_instance_input(
+	instance: Dictionary,
+	source_revision: int
+) -> Dictionary:
 	for key in [
 		"instance_id", "definition_id", "content_pin", "world_id", "world_seed",
 		"generator_version", "region_key", "position_mm", "default_scale_milli",
@@ -422,13 +458,13 @@ static func _validate_instance_input(instance: Dictionary, source_revision: int)
 	]:
 		if not instance.has(key):
 			return _failure("terrain_effect_instance_field_missing:%s" % key)
-	if String(instance["instance_id"]).is_empty() or String(instance["definition_id"]).is_empty() 		or String(instance["world_id"]).is_empty():
+	if String(instance["instance_id"]).is_empty() 		or String(instance["definition_id"]).is_empty() 		or String(instance["world_id"]).is_empty():
 		return _failure("terrain_effect_instance_identity_invalid")
-	if not _is_integer(source_revision) or source_revision < 0 or source_revision > MAX_SOURCE_REVISION:
+	if not _is_integer(source_revision) 		or source_revision < 0 		or source_revision > MAX_SOURCE_REVISION:
 		return _failure("terrain_effect_source_revision_invalid")
-	if not _is_integer(instance["world_seed"]) or int(instance["world_seed"]) < 0 		or int(instance["world_seed"]) > MAX_WORLD_SEED 		or not _is_integer(instance["generator_version"]) or int(instance["generator_version"]) < 1:
+	if not _is_integer(instance["world_seed"]) 		or int(instance["world_seed"]) < 0 		or int(instance["world_seed"]) > MAX_WORLD_SEED 		or not _is_integer(instance["generator_version"]) 		or int(instance["generator_version"]) < 1:
 		return _failure("terrain_effect_instance_world_invalid")
-	if not instance["region_key"] is Vector2i or not instance["position_mm"] is Vector3i 		or not instance["default_scale_milli"] is Vector3i 		or not _is_integer(instance["default_yaw_mdeg"]):
+	if not instance["region_key"] is Vector2i 		or not instance["position_mm"] is Vector3i 		or not instance["default_scale_milli"] is Vector3i 		or not _is_integer(instance["default_yaw_mdeg"]):
 		return _failure("terrain_effect_instance_transform_invalid")
 	if typeof(instance["geometry"]) != TYPE_DICTIONARY 		or typeof(instance["geometry_seeds"]) != TYPE_DICTIONARY 		or typeof(instance["content_pin"]) != TYPE_DICTIONARY 		or typeof(instance["terrain_interaction"]) != TYPE_DICTIONARY 		or typeof(instance["terrain_interaction_pin"]) != TYPE_DICTIONARY:
 		return _failure("terrain_effect_instance_payload_invalid")
@@ -458,16 +494,18 @@ static func _validate_instance_input(instance: Dictionary, source_revision: int)
 
 static func _resolve_transform(instance: Dictionary) -> Dictionary:
 	var region_key: Vector2i = instance["region_key"]
-	var local_position_mm: Vector3i = instance["position_mm"]
-	var region_origin := Spatial.region_origin_world(region_key)
-	var anchor_world := region_origin + Vector3(local_position_mm) / 1000.0
-	var anchor_world_mm := Vector3i(
-		roundi(anchor_world.x * 1000.0),
-		roundi(anchor_world.y * 1000.0),
-		roundi(anchor_world.z * 1000.0)
-	)
+	var anchor_local_mm: Vector3i = instance["position_mm"]
 	if instance.has("world_position_mm"):
-		if not instance["world_position_mm"] is Vector3i 			or Vector3i(instance["world_position_mm"]) != anchor_world_mm:
+		if not instance["world_position_mm"] is Vector3i:
+			return _failure("terrain_effect_world_anchor_invalid")
+		var expected_x: int = int(region_key.x) * REGION_SIZE_X_MM + anchor_local_mm.x
+		var expected_z: int = int(region_key.y) * REGION_SIZE_Z_MM + anchor_local_mm.z
+		if expected_x < -2147483648 or expected_x > 2147483647 			or expected_z < -2147483648 or expected_z > 2147483647:
+			return _failure("terrain_effect_world_anchor_unrepresentable")
+		var expected_world := Vector3i(
+			expected_x, anchor_local_mm.y, expected_z
+		)
+		if Vector3i(instance["world_position_mm"]) != expected_world:
 			return _failure("terrain_effect_world_anchor_mismatch")
 	var translation_mm := Vector3i.ZERO
 	var rotation_mdeg := Vector3i(0, int(instance["default_yaw_mdeg"]), 0)
@@ -489,10 +527,33 @@ static func _resolve_transform(instance: Dictionary) -> Dictionary:
 			return _failure("terrain_effect_scale_invalid")
 	return {
 		"ok": true,
-		"anchor_world_mm": anchor_world_mm,
+		"source_region_key": region_key,
+		"anchor_local_mm": anchor_local_mm,
 		"translation_mm": translation_mm,
 		"rotation_mdeg": rotation_mdeg,
 		"scale_milli": scale_milli,
+	}
+
+
+static func _read_int2(value: Variant) -> Dictionary:
+	if value is Vector2i:
+		var vector: Vector2i = value
+		return {
+			"ok": true,
+			"value": [vector.x, vector.y],
+			"vector2i": vector,
+		}
+	if typeof(value) != TYPE_ARRAY or value.size() != 2:
+		return {"ok": false}
+	var parsed: Array[int] = []
+	for component in value:
+		if not _is_integer(component) or abs(float(component)) > 2147483647.0:
+			return {"ok": false}
+		parsed.append(int(component))
+	return {
+		"ok": true,
+		"value": parsed,
+		"vector2i": Vector2i(parsed[0], parsed[1]),
 	}
 
 
@@ -523,7 +584,7 @@ static func _read_float3(value: Variant) -> Dictionary:
 		return {"ok": false}
 	var parsed: Array[float] = []
 	for component in value:
-		if not (typeof(component) == TYPE_FLOAT or typeof(component) == TYPE_INT) 			or not is_finite(float(component)):
+		if not _is_number(component) or not is_finite(float(component)):
 			return {"ok": false}
 		parsed.append(float(component))
 	return {
@@ -545,10 +606,6 @@ static func _vector3_array(value: Vector3) -> Array[float]:
 
 
 static func _canonical_float(value: float) -> float:
-	# Godot's JSON parser/stringifier may shift the final binary digit of a
-	# double across a round-trip. Twelve decimal places are far below terrain
-	# sampling resolution while making validate->serialize->parse->validate
-	# idempotent.
 	return String.num(value, 12).to_float()
 
 
