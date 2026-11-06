@@ -1065,7 +1065,7 @@ static func _incremental_scope_key(
 	seam_x: float,
 	seam_z: float
 ) -> String:
-	return "%s:%d:%d:%s:%d,%d,%d:%d:%d:%d" % [
+	return "%s:%d:%d:%s:%d,%d,%d:%d:%d:%d:%s" % [
 		kind,
 		world_seed,
 		int(snapshot.get("cache_scope_id", -1)),
@@ -1074,6 +1074,7 @@ static func _incremental_scope_key(
 		roundi(step * ROOT_QUANT),
 		roundi(seam_x * ROOT_QUANT),
 		roundi(seam_z * ROOT_QUANT),
+		String(snapshot.get("terrain_object_effect_snapshot_sha256", "")),
 	]
 
 
