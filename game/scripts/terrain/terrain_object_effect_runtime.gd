@@ -271,6 +271,30 @@ func release_far_scopes(focus_region: Vector2i) -> void:
 	_trim_resident_scopes(retained_targets)
 
 
+func get_resident_effects_for_chunk(
+	region_key: Vector2i,
+	chunk_coordinate: Vector2i
+) -> Array[Dictionary]:
+	if not initialized or not Grid.is_valid_coordinate(chunk_coordinate):
+		return []
+	return projection.get_effects_for_chunk(region_key, chunk_coordinate)
+
+
+func get_resident_effects_for_point(
+	region_key: Vector2i,
+	local_position: Vector3
+) -> Array[Dictionary]:
+	if not initialized or not local_position.is_finite():
+		return []
+	var chunk_width := float(Grid.CELLS_PER_CHUNK_X) * Grid.SAMPLE_STEP
+	var chunk_depth := float(Grid.CELLS_PER_CHUNK_Z) * Grid.SAMPLE_STEP
+	var coordinate := Vector2i(
+		clampi(floori(local_position.x / chunk_width), 0, Grid.CHUNK_COUNT_X - 1),
+		clampi(floori(local_position.z / chunk_depth), 0, Grid.CHUNK_COUNT_Z - 1)
+	)
+	return projection.get_effects_for_chunk(region_key, coordinate)
+
+
 func get_loaded_scope_count() -> int:
 	return int(projection.get_loaded_scope_count()) if initialized else 0
 
