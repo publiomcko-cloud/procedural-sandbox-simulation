@@ -10,7 +10,7 @@ const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 
 const INDEX_VERSION := 1
-const MAX_EFFECTS := 20000
+const MAX_EFFECTS := 20064
 const MAX_CHUNKS_PER_EFFECT := 256
 const CHUNK_WIDTH := float(Grid.CELLS_PER_CHUNK_X) * Grid.SAMPLE_STEP
 const CHUNK_DEPTH := float(Grid.CELLS_PER_CHUNK_Z) * Grid.SAMPLE_STEP
