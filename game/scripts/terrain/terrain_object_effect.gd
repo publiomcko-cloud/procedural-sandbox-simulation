@@ -459,13 +459,14 @@ static func _validate_instance_input(instance: Dictionary, source_revision: int)
 static func _resolve_transform(instance: Dictionary) -> Dictionary:
 	var region_key: Vector2i = instance["region_key"]
 	var local_position_mm: Vector3i = instance["position_mm"]
-	var region_origin := Spatial.region_origin_world(region_key)
-	var anchor_world := region_origin + Vector3(local_position_mm) / 1000.0
+	var region_size_x_mm := roundi(Spatial.REGION_SIZE_X * 1000.0)
+	var region_size_z_mm := roundi(Spatial.REGION_SIZE_Z * 1000.0)
 	var anchor_world_mm := Vector3i(
-		roundi(anchor_world.x * 1000.0),
-		roundi(anchor_world.y * 1000.0),
-		roundi(anchor_world.z * 1000.0)
+		region_key.x * region_size_x_mm + local_position_mm.x,
+		local_position_mm.y,
+		region_key.y * region_size_z_mm + local_position_mm.z
 	)
+	var anchor_world := Vector3(anchor_world_mm) / 1000.0
 	if instance.has("world_position_mm"):
 		if not instance["world_position_mm"] is Vector3i 			or Vector3i(instance["world_position_mm"]) != anchor_world_mm:
 			return _failure("terrain_effect_world_anchor_mismatch")
