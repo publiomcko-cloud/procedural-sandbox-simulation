@@ -382,7 +382,10 @@ func _ensure_source_scope(region_key: Vector2i) -> Dictionary:
 	var status: Dictionary = projection.get_scope_status(
 		region_key, authoritative_revision
 	)
-	if status.get("status") == "current":
+	# A missing shard is an empty derived cache, not proof that the region has
+	# no authoritative interacting sources. Revision zero is therefore not
+	# sufficient to classify it as current.
+	if bool(loaded.get("found", false)) 		and status.get("status") == "current":
 		return {"ok": true, "changed": false, "status": "current"}
 	if status.get("status") == "ahead":
 		return _failure("terrain_effect_projection_ahead_of_authority")
