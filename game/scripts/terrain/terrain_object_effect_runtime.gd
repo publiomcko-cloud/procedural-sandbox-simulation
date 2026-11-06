@@ -9,6 +9,7 @@ const Contract := preload("res://scripts/terrain/terrain_object_effect_projectio
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const LocalFrameIndex := preload("res://scripts/terrain/terrain_object_effect_local_frame_index.gd")
 const ProjectionBuildJob := preload("res://scripts/terrain/terrain_object_effect_projection_build_job.gd")
+const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
 # Public v1 contracts bound horizontal reach:
 # translation <= 8 m, half extent <= 1.8 m, scale <= 5x, roughness <= 0.1 m.
@@ -38,6 +39,7 @@ var _prefetch_task_by_scope: Dictionary = {}
 var _prefetch_projection_jobs: Dictionary = {}
 var _prefetch_projection_task_by_scope: Dictionary = {}
 var _prefetch_error := ""
+var _perf_trace_enabled := false
 var _performance := {
 	"prepare_call_count": 0,
 	"prepare_total_usec": 0,
@@ -80,6 +82,7 @@ func initialize(
 ) -> Dictionary:
 	initialized = false
 	initialization_error = ""
+	_perf_trace_enabled = PerformanceTrace.is_enabled()
 	if object_stream_value == null 		or not object_stream_value.has_method("get_authoritative_region_projection_source") 		or not object_stream_value.has_method("get_command_world_revision"):
 		initialization_error = "terrain_effect_runtime_object_stream_invalid"
 		return _failure(initialization_error)
@@ -110,6 +113,13 @@ func initialize(
 		)
 		return _failure(initialization_error)
 	initialized = true
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("effect_runtime_initialize", {
+			"world_id": world_id,
+			"generator_version": generator_version,
+			"max_resident_scopes": ProjectionService.MAX_RESIDENT_SCOPES,
+			"incremental_prefetch": incremental_prefetch_enabled,
+		})
 	return {"ok": true, "reason": "ok"}
 
 
@@ -216,6 +226,19 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 			int(_performance["prefetch_projection_publish_peak_usec"]),
 			publish_usec
 		)
+		if _perf_trace_enabled:
+			PerformanceTrace.emit("effect_scope_published", {
+				"scope_id": scope_id,
+				"region": [region.x, region.y],
+				"projection_worker_usec": worker_usec,
+				"publish_usec": publish_usec,
+				"effect_count": int(reconciled.get("effect_count", 0)),
+				"source_count": int(prebuilt.get("source_instance_ids", []).size()),
+				"resident_scopes": projection.get_loaded_scope_count(),
+				"queued": _prefetch_queue.size(),
+				"generation_in_flight": _prefetch_generation_jobs.size(),
+				"projection_in_flight": _prefetch_projection_jobs.size(),
+			})
 		processed += 1
 
 	# Stage 2: finalize one completed procedural source on main, then dispatch
@@ -307,6 +330,17 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 				_performance["prefetch_projection_worker_dispatch_count"] = int(
 					_performance["prefetch_projection_worker_dispatch_count"]
 				) + 1
+				if _perf_trace_enabled:
+					PerformanceTrace.emit("effect_source_ready", {
+						"scope_id": scope_id,
+						"region": [region.x, region.y],
+						"source_generation_worker_usec": worker_usec,
+						"source_finalize_usec": source_usec,
+						"instance_count": int((source.get("instances", []) as Array).size()),
+						"queued": _prefetch_queue.size(),
+						"generation_in_flight": _prefetch_generation_jobs.size(),
+						"projection_in_flight": _prefetch_projection_jobs.size(),
+					})
 
 	# Stage 1: keep two deterministic source-generation jobs in flight.
 	while _prefetch_generation_jobs.size() 		< MAX_PREFETCH_GENERATION_JOBS_IN_FLIGHT 		and not _prefetch_queue.is_empty():
@@ -373,11 +407,31 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 		_performance["prefetch_worker_dispatch_count"] = int(
 			_performance["prefetch_worker_dispatch_count"]
 		) + 1
+		if _perf_trace_enabled:
+			PerformanceTrace.emit("effect_source_dispatched", {
+				"scope_id": scope_id,
+				"region": [region.x, region.y],
+				"queued_after_dispatch": _prefetch_queue.size(),
+				"generation_in_flight": _prefetch_generation_jobs.size(),
+				"projection_in_flight": _prefetch_projection_jobs.size(),
+			})
 
 	var pending := _prefetch_queue.size() 		+ _prefetch_generation_jobs.size() 		+ _prefetch_projection_jobs.size()
 	_performance["prefetch_pending_peak"] = maxi(
 		int(_performance["prefetch_pending_peak"]), pending
 	)
+	var step_duration_usec := Time.get_ticks_usec() - started_usec
+	if _perf_trace_enabled and (
+		processed > 0 or step_duration_usec >= PerformanceTrace.min_usec()
+	):
+		PerformanceTrace.emit("effect_prefetch_tick", {
+			"duration_usec": step_duration_usec,
+			"processed": processed,
+			"pending": pending,
+			"queued": _prefetch_queue.size(),
+			"generation_in_flight": _prefetch_generation_jobs.size(),
+			"projection_in_flight": _prefetch_projection_jobs.size(),
+		})
 	return {
 		"ok": true,
 		"processed": processed,
@@ -385,7 +439,7 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 		"queued": _prefetch_queue.size(),
 		"generation_in_flight": _prefetch_generation_jobs.size(),
 		"projection_in_flight": _prefetch_projection_jobs.size(),
-		"duration_usec": Time.get_ticks_usec() - started_usec,
+		"duration_usec": step_duration_usec,
 	}
 
 
@@ -394,6 +448,7 @@ func get_prefetch_pending_count() -> int:
 
 
 func wait_for_prefetch_jobs() -> void:
+	var wait_started_usec := Time.get_ticks_usec()
 	var task_ids: Array[int] = []
 	for task_id_value in _prefetch_generation_jobs:
 		task_ids.append(int(task_id_value))
@@ -408,6 +463,11 @@ func wait_for_prefetch_jobs() -> void:
 	_prefetch_projection_task_by_scope.clear()
 	_prefetch_queue.clear()
 	_prefetch_scope_ids.clear()
+	if _perf_trace_enabled and not task_ids.is_empty():
+		PerformanceTrace.emit("effect_prefetch_join", {
+			"duration_usec": Time.get_ticks_usec() - wait_started_usec,
+			"task_count": task_ids.size(),
+		})
 
 
 func _reconcile_source_region(
@@ -647,6 +707,8 @@ func prepare_targets_snapshot(
 		"frame_count": frames.size(),
 		"duration_usec": duration_usec,
 	}
+	if _perf_trace_enabled and duration_usec >= PerformanceTrace.min_usec():
+		PerformanceTrace.emit("effect_snapshot_prepare", last_prepare_metrics)
 	return {
 		"ok": true,
 		"snapshot": prepared,
@@ -777,6 +839,7 @@ func _target_from_chunk_id(chunk_id: String) -> Dictionary:
 func update_resident_target_regions(
 	target_regions_value: Array
 ) -> Dictionary:
+	var window_started_usec := Time.get_ticks_usec()
 	if not initialized:
 		return _failure("terrain_effect_runtime_not_initialized")
 	var target_regions: Array[Vector2i] = []
@@ -807,6 +870,7 @@ func update_resident_target_regions(
 
 	# Release scopes that cannot contribute to the current requested terrain
 	# window. No source generation/reconciliation is performed here.
+	var evicted_now := 0
 	for scope_id in projection.get_loaded_scope_ids():
 		if _protected_scope_ids.has(scope_id):
 			continue
@@ -821,8 +885,19 @@ func update_resident_target_regions(
 			_performance["window_eviction_count"] = int(
 				_performance["window_eviction_count"]
 			) + 1
+			evicted_now += 1
 	if incremental_prefetch_enabled:
 		_enqueue_prefetch_regions(required, false)
+	var window_duration_usec := Time.get_ticks_usec() - window_started_usec
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("effect_window_update", {
+			"duration_usec": window_duration_usec,
+			"target_region_count": target_regions.size(),
+			"protected_scope_count": required.size(),
+			"resident_scope_count": projection.get_loaded_scope_count(),
+			"evicted_scope_count": evicted_now,
+			"prefetch_pending": get_prefetch_pending_count(),
+		})
 	return {
 		"ok": true,
 		"target_region_count": target_regions.size(),
@@ -941,6 +1016,12 @@ func _make_projection_capacity(
 			break
 	if projection.get_loaded_scope_count() + missing_count 		> ProjectionService.MAX_RESIDENT_SCOPES:
 		return _failure("terrain_effect_runtime_scope_eviction_failed")
+	if _perf_trace_enabled and released > 0:
+		PerformanceTrace.emit("effect_hot_path_eviction", {
+			"released": released,
+			"missing_scope_count": missing_count,
+			"resident_scope_count": projection.get_loaded_scope_count(),
+		})
 	return {"ok": true, "released": released}
 
 
