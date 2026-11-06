@@ -1231,14 +1231,15 @@ func _configured_optional_roots(roots: Array[String]) -> Array[String]:
 
 
 func _object_materialization_directory(seed_value: int) -> String:
-	var root: String
-	if state_directory_override.is_empty():
-		root = ProjectSettings.globalize_path(
-			"user://worlds/%s/object-materialized" % world_id
-		)
-	else:
-		var state_root := ProjectSettings.globalize_path(state_directory_override) 			if state_directory_override.begins_with("user://") 				or state_directory_override.begins_with("res://") 			else state_directory_override
-		root = state_root.get_base_dir().path_join("object-materialized")
+	# A custom authoritative object-state directory is an isolation boundary
+	# (tests, tools, migrations). Do not silently persist a sibling derived cache
+	# outside that boundary. Runtime worlds using the canonical state location
+	# receive persistent materialization by default.
+	if not state_directory_override.is_empty():
+		return ""
+	var root := ProjectSettings.globalize_path(
+		"user://worlds/%s/object-materialized" % world_id
+	)
 	return root.path_join(
 		"seed-%d-generator-%d" % [seed_value, FIELD.GENERATOR_VERSION]
 	)
