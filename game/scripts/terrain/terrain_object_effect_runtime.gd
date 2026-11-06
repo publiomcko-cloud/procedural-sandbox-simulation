@@ -1105,7 +1105,7 @@ func update_resident_target_regions(
 			continue
 		var parsed := _region_from_scope_id(scope_id)
 		if parsed.get("ok", false):
-			projection.release_scope(parsed["region_key"])
+			projection.release_scope(parsed["region_key"], true)
 			_performance["scope_eviction_count"] = int(
 				_performance["scope_eviction_count"]
 			) + 1
@@ -1214,6 +1214,8 @@ func release_all_scopes() -> void:
 		var parsed := _region_from_scope_id(scope_id)
 		if parsed.get("ok", false):
 			projection.release_scope(parsed["region_key"])
+	if projection.has_method("purge_dormant_scopes"):
+		projection.purge_dormant_scopes()
 
 
 func get_loaded_scope_count() -> int:
@@ -1244,7 +1246,7 @@ func _make_projection_capacity(
 		var parsed := _region_from_scope_id(scope_id)
 		if not parsed.get("ok", false):
 			continue
-		projection.release_scope(parsed["region_key"])
+		projection.release_scope(parsed["region_key"], true)
 		released += 1
 		_performance["scope_eviction_count"] = int(
 			_performance["scope_eviction_count"]
