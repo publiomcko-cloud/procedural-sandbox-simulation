@@ -27,6 +27,10 @@ var _invalidated_scope_ids: Dictionary = {}
 var _pre_invalidation_frames: Dictionary = {}
 var _protected_scope_ids: Dictionary = {}
 var _required_regions_cache: Dictionary = {}
+var incremental_prefetch_enabled := false
+var _prefetch_queue: Array[Vector2i] = []
+var _prefetch_scope_ids: Dictionary = {}
+var _prefetch_error := ""
 var _performance := {
 	"prepare_call_count": 0,
 	"prepare_total_usec": 0,
@@ -39,6 +43,10 @@ var _performance := {
 	"window_update_count": 0,
 	"window_target_region_count": 0,
 	"protected_scope_count": 0,
+	"prefetch_scope_count": 0,
+	"prefetch_total_usec": 0,
+	"prefetch_peak_usec": 0,
+	"prefetch_pending_peak": 0,
 }
 
 
@@ -62,6 +70,10 @@ func initialize(
 	_pre_invalidation_frames.clear()
 	_protected_scope_ids.clear()
 	_required_regions_cache.clear()
+	_prefetch_queue.clear()
+	_prefetch_scope_ids.clear()
+	_prefetch_error = ""
+	incremental_prefetch_enabled = false
 	_reset_performance_metrics()
 	projection = ProjectionService.new()
 	var init: Dictionary = projection.initialize(
@@ -74,6 +86,134 @@ func initialize(
 		return _failure(initialization_error)
 	initialized = true
 	return {"ok": true, "reason": "ok"}
+
+
+func set_incremental_prefetch_enabled(enabled: bool) -> void:
+	incremental_prefetch_enabled = enabled
+	if not enabled:
+		_prefetch_queue.clear()
+		_prefetch_scope_ids.clear()
+		_prefetch_error = ""
+
+
+func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
+	if not initialized:
+		return _failure("terrain_effect_runtime_not_initialized")
+	if not incremental_prefetch_enabled:
+		return {"ok": true, "processed": 0, "pending": 0}
+	if not _prefetch_error.is_empty():
+		return _failure(_prefetch_error)
+	var processed := 0
+	var started_usec := Time.get_ticks_usec()
+	while processed < maxi(max_scopes, 0) and not _prefetch_queue.is_empty():
+		var region: Vector2i = _prefetch_queue.pop_front()
+		var scope_id := Contract.scope_id_for_region(region)
+		_prefetch_scope_ids.erase(scope_id)
+		if not _protected_scope_ids.is_empty() 			and not _protected_scope_ids.has(scope_id):
+			continue
+		if projection.has_scope(region) and not _invalidated_scope_ids.has(scope_id):
+			continue
+		var scope_started_usec := Time.get_ticks_usec()
+		var reconciled := _reconcile_source_region(region)
+		var scope_usec := Time.get_ticks_usec() - scope_started_usec
+		if not reconciled.get("ok", false):
+			_prefetch_error = String(reconciled.get(
+				"reason", "terrain_effect_runtime_prefetch_failed"
+			))
+			return _failure(_prefetch_error)
+		_performance["prefetch_scope_count"] = int(
+			_performance["prefetch_scope_count"]
+		) + 1
+		_performance["prefetch_total_usec"] = int(
+			_performance["prefetch_total_usec"]
+		) + scope_usec
+		_performance["prefetch_peak_usec"] = maxi(
+			int(_performance["prefetch_peak_usec"]), scope_usec
+		)
+		processed += 1
+	return {
+		"ok": true,
+		"processed": processed,
+		"pending": _prefetch_queue.size(),
+		"duration_usec": Time.get_ticks_usec() - started_usec,
+	}
+
+
+func get_prefetch_pending_count() -> int:
+	return _prefetch_queue.size()
+
+
+func _reconcile_source_region(source_region: Vector2i) -> Dictionary:
+	var scope_id := Contract.scope_id_for_region(source_region)
+	var source: Dictionary = object_stream.call(
+		"get_authoritative_region_projection_source", source_region
+	)
+	if not source.get("ok", false):
+		return _failure(
+			"terrain_effect_runtime_source_failed:%s" 				% source.get("reason", "unknown")
+		)
+	var reconciled: Dictionary = projection.reconcile_scope(
+		source_region,
+		int(source.get("world_revision", -1)),
+		source.get("instances", []),
+		source.get("source_revisions", {}),
+		true
+	)
+	if not reconciled.get("ok", false):
+		return _failure(
+			"terrain_effect_runtime_reconcile_failed:%s" 				% reconciled.get("reason", "unknown")
+		)
+	_performance["scope_reconcile_count"] = int(
+		_performance["scope_reconcile_count"]
+	) + 1
+	_invalidated_scope_ids.erase(scope_id)
+	_pre_invalidation_frames.erase(scope_id)
+	return reconciled
+
+
+func _enqueue_prefetch_regions(
+	regions: Array[Vector2i],
+	high_priority: bool
+) -> void:
+	var to_add: Array[Vector2i] = []
+	for region in regions:
+		var scope_id := Contract.scope_id_for_region(region)
+		if projection.has_scope(region) and not _invalidated_scope_ids.has(scope_id):
+			continue
+		if _prefetch_scope_ids.has(scope_id):
+			if high_priority:
+				# Move an existing background request to the front deterministically.
+				for index in range(_prefetch_queue.size()):
+					if _prefetch_queue[index] == region:
+						_prefetch_queue.remove_at(index)
+						to_add.append(region)
+						break
+			continue
+		_prefetch_scope_ids[scope_id] = true
+		to_add.append(region)
+	if high_priority:
+		for index in range(to_add.size() - 1, -1, -1):
+			_prefetch_queue.push_front(to_add[index])
+	else:
+		for region in to_add:
+			_prefetch_queue.append(region)
+	_performance["prefetch_pending_peak"] = maxi(
+		int(_performance["prefetch_pending_peak"]), _prefetch_queue.size()
+	)
+
+
+func _filter_prefetch_to_protected() -> void:
+	if _protected_scope_ids.is_empty():
+		return
+	var kept: Array[Vector2i] = []
+	var kept_ids: Dictionary = {}
+	for region in _prefetch_queue:
+		var scope_id := Contract.scope_id_for_region(region)
+		if _protected_scope_ids.has(scope_id):
+			kept.append(region)
+			kept_ids[scope_id] = true
+	_prefetch_queue = kept
+	_prefetch_scope_ids = kept_ids
 
 
 func prepare_chunk_snapshot(
@@ -109,38 +249,29 @@ func prepare_targets_snapshot(
 		return capacity
 	var authority_revision := int(object_stream.call("get_command_world_revision"))
 	var reconciled_count := 0
+	var missing_regions: Array[Vector2i] = []
 	for source_region in required_source_regions:
 		_performance["required_scope_check_count"] = int(
 			_performance["required_scope_check_count"]
 		) + 1
 		var scope_id := Contract.scope_id_for_region(source_region)
 		var must_reconcile: bool = not projection.has_scope(source_region) 			or _invalidated_scope_ids.has(scope_id)
-		if not must_reconcile:
-			continue
-		var source: Dictionary = object_stream.call(
-			"get_authoritative_region_projection_source", source_region
-		)
-		if not source.get("ok", false):
-			return _failure(
-				"terrain_effect_runtime_source_failed:%s" 					% source.get("reason", "unknown")
-			)
-		var reconciled: Dictionary = projection.reconcile_scope(
-			source_region,
-			int(source.get("world_revision", -1)),
-			source.get("instances", []),
-			source.get("source_revisions", {}),
-			true
-		)
+		if must_reconcile:
+			missing_regions.append(source_region)
+	if incremental_prefetch_enabled and not missing_regions.is_empty():
+		_enqueue_prefetch_regions(missing_regions, true)
+		return {
+			"ok": false,
+			"pending": true,
+			"reason": "terrain_effect_runtime_prefetch_pending",
+			"missing_scope_count": missing_regions.size(),
+			"prefetch_pending_count": _prefetch_queue.size(),
+		}
+	for source_region in missing_regions:
+		var reconciled := _reconcile_source_region(source_region)
 		if not reconciled.get("ok", false):
-			return _failure(
-				"terrain_effect_runtime_reconcile_failed:%s" 					% reconciled.get("reason", "unknown")
-			)
+			return reconciled
 		reconciled_count += 1
-		_performance["scope_reconcile_count"] = int(
-			_performance["scope_reconcile_count"]
-		) + 1
-		_invalidated_scope_ids.erase(scope_id)
-		_pre_invalidation_frames.erase(scope_id)
 
 	var by_effect_id: Dictionary = {}
 	var target_rows: Array[Dictionary] = []
@@ -374,6 +505,8 @@ func update_resident_target_regions(
 	for region in required:
 		next_protected[Contract.scope_id_for_region(region)] = true
 	_protected_scope_ids = next_protected
+	_filter_prefetch_to_protected()
+	_prefetch_error = ""
 	_performance["window_update_count"] = int(_performance["window_update_count"]) + 1
 	_performance["window_target_region_count"] = target_regions.size()
 	_performance["protected_scope_count"] = required.size()
@@ -394,6 +527,8 @@ func update_resident_target_regions(
 			_performance["window_eviction_count"] = int(
 				_performance["window_eviction_count"]
 			) + 1
+	if incremental_prefetch_enabled:
+		_enqueue_prefetch_regions(required, false)
 	return {
 		"ok": true,
 		"target_region_count": target_regions.size(),
@@ -410,6 +545,8 @@ func get_performance_snapshot() -> Dictionary:
 		if calls > 0 else 0.0
 	)
 	result["resident_scope_count"] = projection.get_loaded_scope_count() 		if projection != null else 0
+	result["prefetch_pending_count"] = _prefetch_queue.size()
+	result["prefetch_error"] = _prefetch_error
 	result["projection"] = projection.get_performance_snapshot() 		if projection != null else {}
 	return result
 
@@ -433,10 +570,17 @@ func _reset_performance_metrics() -> void:
 		"window_update_count": 0,
 		"window_target_region_count": 0,
 		"protected_scope_count": 0,
+		"prefetch_scope_count": 0,
+		"prefetch_total_usec": 0,
+		"prefetch_peak_usec": 0,
+		"prefetch_pending_peak": 0,
 	}
 
 
 func release_all_scopes() -> void:
+	_prefetch_queue.clear()
+	_prefetch_scope_ids.clear()
+	_prefetch_error = ""
 	if projection == null:
 		return
 	for scope_id in projection.get_loaded_scope_ids():
