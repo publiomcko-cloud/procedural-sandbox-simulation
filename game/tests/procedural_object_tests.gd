@@ -972,13 +972,26 @@ func _test_playable_scene_publication() -> void:
 	demo.set("object_package_roots_override", package_roots_override)
 	root.add_child(demo)
 	var center_ready := false
-	for _frame in range(4000):
+	var center_started_msec := Time.get_ticks_msec()
+	var center_deadline_msec := center_started_msec + 30000
+	while Time.get_ticks_msec() < center_deadline_msec:
 		await process_frame
+		OS.delay_msec(1)
 		if demo.get("active_regions").has("0,0"):
 			center_ready = true
 			break
+	var center_elapsed_msec := Time.get_ticks_msec() - center_started_msec
 	var stream: ProceduralObjectStream = demo.get_node("ProceduralObjects")
-	_check(center_ready, "playable terrain scene publishes its focused region during streaming")
+	_check(
+		center_ready,
+		"playable terrain scene publishes its focused region within 30s wall-clock (elapsed_ms=%d loading=%s effect_status=%s)" % [
+			center_elapsed_msec,
+			str(demo.get("loading_regions")),
+			String(demo.get("_terrain_object_effect_status")),
+		]
+	)
+	if center_ready:
+		print("PROCEDURAL_SCENE_PUBLICATION_MS=%d" % center_elapsed_msec)
 	_check(stream.initialized and int(stream.get_package_discovery_diagnostics().size()) >= 1 and stream.get_package_discovery_summary().contains("undeclared folder"), "main scene initializes packages and displays the nonfatal optional-folder diagnostic")
 	if center_ready:
 		for _frame in range(1200):
