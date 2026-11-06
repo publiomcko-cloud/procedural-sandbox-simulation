@@ -13,6 +13,7 @@ const Effect := preload("res://scripts/terrain/terrain_object_effect.gd")
 const LocalFrame := preload("res://scripts/terrain/terrain_object_effect_local_frame.gd")
 const LocalFrameIndex := preload("res://scripts/terrain/terrain_object_effect_local_frame_index.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
+const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
 # The demo retains terrain within radius 2 and a terrain-object effect can reach
 # source regions within radius 2. The normal bounded working set is therefore
@@ -30,6 +31,7 @@ var store: RefCounted
 var initialized := false
 var initialization_error := ""
 var last_reconcile_metrics: Dictionary = {}
+var _perf_trace_enabled := false
 
 var _scopes: Dictionary = {}
 var _scope_indexes: Dictionary = {}
@@ -57,6 +59,7 @@ func initialize(
 ) -> Dictionary:
 	initialized = false
 	initialization_error = ""
+	_perf_trace_enabled = PerformanceTrace.is_enabled()
 	world_id = world_identifier
 	world_seed = seed_value
 	generator_version = generator
@@ -76,6 +79,7 @@ func initialize(
 
 
 func load_scope(region_key: Vector2i) -> Dictionary:
+	var load_started_usec := Time.get_ticks_usec()
 	if not initialized:
 		return _failure("effect_projection_service_not_initialized")
 	var scope_id := Contract.scope_id_for_region(region_key)
@@ -115,6 +119,17 @@ func load_scope(region_key: Vector2i) -> Dictionary:
 	_performance["peak_resident_scope_count"] = maxi(
 		int(_performance["peak_resident_scope_count"]), _scopes.size()
 	)
+	var load_duration_usec := Time.get_ticks_usec() - load_started_usec
+	if _perf_trace_enabled and load_duration_usec >= PerformanceTrace.min_usec():
+		PerformanceTrace.emit("effect_scope_load", {
+			"duration_usec": load_duration_usec,
+			"scope_id": scope_id,
+			"region": [region_key.x, region_key.y],
+			"found": bool(loaded.get("found", false)),
+			"generation": int(loaded.get("generation", 0)),
+			"effect_count": (checked["snapshot"]["effects"] as Dictionary).size(),
+			"resident_scope_count": _scopes.size(),
+		})
 	return {
 		"ok": true,
 		"found": bool(loaded.get("found", false)),
@@ -157,7 +172,9 @@ func reconcile_scope(
 		return _failure("effect_projection_service_not_initialized")
 	if source_world_revision < 0 or source_world_revision > Contract.MAX_REVISION:
 		return _failure("effect_projection_source_world_revision_invalid")
+	var load_started_usec := Time.get_ticks_usec()
 	var loaded := load_scope(region_key)
+	load_usec = Time.get_ticks_usec() - load_started_usec
 	if not loaded.get("ok", false):
 		return loaded
 	var scope_id := Contract.scope_id_for_region(region_key)
@@ -265,6 +282,7 @@ func reconcile_scope(
 		source_world_revision,
 		source_digest_entries
 	)
+	copy_conflict_usec = Time.get_ticks_usec() - copy_conflict_started_usec
 	if int(prior["source_world_revision"]) == source_world_revision 		and String(prior["source_digest_sha256"]) == source_digest 		and prior["source_instance_ids"] == source_instance_ids:
 		last_reconcile_metrics = {
 			"scope_id": scope_id,
@@ -332,9 +350,11 @@ func reconcile_scope(
 	# authoritative entity/object state remains durable; after a crash or release
 	# this scope can be rebuilt exactly. Lifecycle mutations still use the
 	# crash-consistent persisted path.
+	var publish_routes_started_usec := Time.get_ticks_usec()
 	_scopes[scope_id] = checked["snapshot"]
 	_install_scope_index(scope_id, index_result["index"])
 	_storage_generations[scope_id] = generation
+	publish_routes_usec = Time.get_ticks_usec() - publish_routes_started_usec
 	last_reconcile_metrics = {
 		"scope_id": scope_id,
 		"changed": true,
@@ -343,7 +363,21 @@ func reconcile_scope(
 		"effect_count": incoming_effects.size(),
 		"removed_effect_count": removed_effect_count,
 		"duration_usec": Time.get_ticks_usec() - started_usec,
+		"load_usec": load_usec,
+		"copy_conflict_usec": copy_conflict_usec,
+		"validate_usec": validate_usec,
+		"index_usec": index_usec,
+		"persist_usec": persist_usec,
+		"publish_routes_usec": publish_routes_usec,
 	}
+	if _perf_trace_enabled and (
+		int(last_reconcile_metrics["duration_usec"]) >= PerformanceTrace.min_usec()
+		or persist_projection
+	):
+		var trace_payload := last_reconcile_metrics.duplicate(true)
+		trace_payload["region"] = [region_key.x, region_key.y]
+		trace_payload["resident_scope_count"] = _scopes.size()
+		PerformanceTrace.emit("effect_projection_reconcile", trace_payload)
 	return {
 		"ok": true,
 		"changed": true,
@@ -365,6 +399,12 @@ func reconcile_prebuilt_scope(
 	persist_projection: bool = true
 ) -> Dictionary:
 	var started_usec := Time.get_ticks_usec()
+	var load_usec := 0
+	var copy_conflict_usec := 0
+	var validate_usec := 0
+	var index_usec := 0
+	var persist_usec := 0
+	var publish_routes_usec := 0
 	if not initialized:
 		return _failure("effect_projection_service_not_initialized")
 	if not prebuilt.get("ok", false) 		or prebuilt.get("region_key", Vector2i(2147483647, 2147483647)) 			!= region_key:
@@ -392,6 +432,7 @@ func reconcile_prebuilt_scope(
 		)
 		prior["projection_revision"] = prior_projection_revision
 
+	var copy_conflict_started_usec := Time.get_ticks_usec()
 	var incoming_effects: Dictionary = (
 		prebuilt["effects"] as Dictionary
 	).duplicate(true)
@@ -462,20 +503,26 @@ func reconcile_prebuilt_scope(
 		"effects": incoming_effects,
 		"local_frames": incoming_frames,
 	}
+	var validate_started_usec := Time.get_ticks_usec()
 	var checked := Contract.validate_snapshot(
 		candidate, world_id, world_seed, generator_version, region_key
 	)
+	validate_usec = Time.get_ticks_usec() - validate_started_usec
 	if not checked.get("ok", false):
 		return checked
+	var index_started_usec := Time.get_ticks_usec()
 	var index_result := _build_scope_index(checked["snapshot"])
+	index_usec = Time.get_ticks_usec() - index_started_usec
 	if not index_result.get("ok", false):
 		return index_result
 
 	var generation := int(_storage_generations.get(scope_id, 0))
 	if persist_projection:
+		var persist_started_usec := Time.get_ticks_usec()
 		var persisted: Dictionary = store.save_validated_snapshot(
 			checked["snapshot"]
 		)
+		persist_usec = Time.get_ticks_usec() - persist_started_usec
 		if not persisted.get("ok", false):
 			initialized = false
 			initialization_error = String(
