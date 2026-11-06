@@ -610,7 +610,9 @@ func _placement_target_at(screen_position: Vector2) -> Dictionary:
 		"world_position": world_position,
 		"position_mm": position_mm,
 		"region_key": region_key,
-		"normal": _estimate_surface_normal(world_position),
+		"normal": _estimate_surface_normal_with_sampler(
+			world_position, density_sampler
+		),
 	}
 
 
@@ -623,12 +625,33 @@ func _world_position_to_mm(world_position: Vector3) -> Vector3i:
 
 
 func _estimate_surface_normal(world_position: Vector3) -> Vector3:
+	return _estimate_surface_normal_with_sampler(
+		world_position, Callable(self, "_sample_world_density")
+	)
+
+
+func _estimate_surface_normal_with_sampler(
+	world_position: Vector3,
+	density_sampler: Callable
+) -> Vector3:
 	const SAMPLE_RADIUS := 0.025
-	var x_gradient := _sample_world_density(world_position + Vector3.RIGHT * SAMPLE_RADIUS) - _sample_world_density(world_position - Vector3.RIGHT * SAMPLE_RADIUS)
-	var y_gradient := _sample_world_density(world_position + Vector3.UP * SAMPLE_RADIUS) - _sample_world_density(world_position - Vector3.UP * SAMPLE_RADIUS)
-	var z_gradient := _sample_world_density(world_position + Vector3.BACK * SAMPLE_RADIUS) - _sample_world_density(world_position - Vector3.BACK * SAMPLE_RADIUS)
+	var x_gradient := float(density_sampler.call(
+		world_position + Vector3.RIGHT * SAMPLE_RADIUS
+	)) - float(density_sampler.call(
+		world_position - Vector3.RIGHT * SAMPLE_RADIUS
+	))
+	var y_gradient := float(density_sampler.call(
+		world_position + Vector3.UP * SAMPLE_RADIUS
+	)) - float(density_sampler.call(
+		world_position - Vector3.UP * SAMPLE_RADIUS
+	))
+	var z_gradient := float(density_sampler.call(
+		world_position + Vector3.BACK * SAMPLE_RADIUS
+	)) - float(density_sampler.call(
+		world_position - Vector3.BACK * SAMPLE_RADIUS
+	))
 	var gradient := Vector3(x_gradient, y_gradient, z_gradient)
-	return gradient.normalized() if gradient.is_finite() and gradient.length_squared() > 0.000001 else Vector3.UP
+	return gradient.normalized() 		if gradient.is_finite() and gradient.length_squared() > 0.000001 		else Vector3.UP
 
 
 func _create_placement_target_marker() -> void:
