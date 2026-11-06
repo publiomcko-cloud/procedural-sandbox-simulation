@@ -280,7 +280,6 @@ func reconcile_scope(
 		source_world_revision,
 		source_digest_entries
 	)
-	copy_conflict_usec = Time.get_ticks_usec() - copy_conflict_started_usec
 	if int(prior["source_world_revision"]) == source_world_revision 		and String(prior["source_digest_sha256"]) == source_digest 		and prior["source_instance_ids"] == source_instance_ids:
 		last_reconcile_metrics = {
 			"scope_id": scope_id,
@@ -348,11 +347,9 @@ func reconcile_scope(
 	# authoritative entity/object state remains durable; after a crash or release
 	# this scope can be rebuilt exactly. Lifecycle mutations still use the
 	# crash-consistent persisted path.
-	var publish_routes_started_usec := Time.get_ticks_usec()
 	_scopes[scope_id] = checked["snapshot"]
 	_install_scope_index(scope_id, index_result["index"])
 	_storage_generations[scope_id] = generation
-	publish_routes_usec = Time.get_ticks_usec() - publish_routes_started_usec
 	last_reconcile_metrics = {
 		"scope_id": scope_id,
 		"changed": true,
@@ -361,12 +358,6 @@ func reconcile_scope(
 		"effect_count": incoming_effects.size(),
 		"removed_effect_count": removed_effect_count,
 		"duration_usec": Time.get_ticks_usec() - started_usec,
-		"load_usec": load_usec,
-		"copy_conflict_usec": copy_conflict_usec,
-		"validate_usec": validate_usec,
-		"index_usec": index_usec,
-		"persist_usec": persist_usec,
-		"publish_routes_usec": publish_routes_usec,
 	}
 	if _perf_trace_enabled and (
 		int(last_reconcile_metrics["duration_usec"]) >= PerformanceTrace.min_usec()
@@ -375,6 +366,7 @@ func reconcile_scope(
 		var trace_payload := last_reconcile_metrics.duplicate(true)
 		trace_payload["region"] = [region_key.x, region_key.y]
 		trace_payload["resident_scope_count"] = _scopes.size()
+		trace_payload["path"] = "authoritative"
 		PerformanceTrace.emit("effect_projection_reconcile", trace_payload)
 	return {
 		"ok": true,
@@ -463,6 +455,7 @@ func reconcile_prebuilt_scope(
 				"effect_projection_same_revision_fingerprint_conflict"
 			)
 
+	copy_conflict_usec = Time.get_ticks_usec() - copy_conflict_started_usec
 	if int(prior["source_world_revision"]) == source_world_revision 		and String(prior["source_digest_sha256"]) == source_digest 		and prior["source_instance_ids"] == source_instance_ids:
 		last_reconcile_metrics = {
 			"scope_id": scope_id,
@@ -533,9 +526,11 @@ func reconcile_prebuilt_scope(
 			)
 		generation = int(persisted["generation"])
 
+	var publish_routes_started_usec := Time.get_ticks_usec()
 	_scopes[scope_id] = checked["snapshot"]
 	_install_scope_index(scope_id, index_result["index"])
 	_storage_generations[scope_id] = generation
+	publish_routes_usec = Time.get_ticks_usec() - publish_routes_started_usec
 	last_reconcile_metrics = {
 		"scope_id": scope_id,
 		"changed": true,
@@ -545,7 +540,22 @@ func reconcile_prebuilt_scope(
 		"effect_count": incoming_effects.size(),
 		"removed_effect_count": removed_effect_count,
 		"duration_usec": Time.get_ticks_usec() - started_usec,
+		"load_usec": load_usec,
+		"copy_conflict_usec": copy_conflict_usec,
+		"validate_usec": validate_usec,
+		"index_usec": index_usec,
+		"persist_usec": persist_usec,
+		"publish_routes_usec": publish_routes_usec,
 	}
+	if _perf_trace_enabled and (
+		int(last_reconcile_metrics["duration_usec"]) >= PerformanceTrace.min_usec()
+		or persist_projection
+	):
+		var trace_payload := last_reconcile_metrics.duplicate(true)
+		trace_payload["region"] = [region_key.x, region_key.y]
+		trace_payload["resident_scope_count"] = _scopes.size()
+		trace_payload["path"] = "prebuilt"
+		PerformanceTrace.emit("effect_projection_reconcile", trace_payload)
 	return {
 		"ok": true,
 		"changed": true,
