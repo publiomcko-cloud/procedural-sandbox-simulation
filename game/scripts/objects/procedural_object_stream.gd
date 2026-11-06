@@ -1158,7 +1158,8 @@ func get_performance_snapshot() -> Dictionary:
 		"geometry_cache_hit_count": _geometry_cache_hit_count,
 		"geometry_cache_miss_count": _geometry_cache_miss_count,
 		"geometry_cache_eviction_count": _geometry_cache_eviction_count,
-		"materialization_enabled": not _materialization_content_signature.is_empty(),
+		"materialization_enabled": not _materialization_content_signature.is_empty()
+			and not _materialization_directory.is_empty(),
 		"last_region": _last_region_metrics.duplicate(true),
 		"peak_generation_usec": _peak_region_generation_usec,
 		"peak_geometry_build_usec": _peak_mesh_build_usec,
