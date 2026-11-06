@@ -20,6 +20,13 @@ var failures := 0
 var evidence: Dictionary = {}
 
 
+class FailingProjectionStore:
+	extends RefCounted
+
+	func save_validated_snapshot(_snapshot: Dictionary) -> Dictionary:
+		return {"ok": false, "reason": "injected_projection_store_failure"}
+
+
 func _initialize() -> void:
 	call_deferred("_run")
 
@@ -274,6 +281,27 @@ func _run() -> void:
 	_check(
 		state.snapshot == authoritative_snapshot_before_rebuild,
 		"projection rebuild never rewrites authoritative entity/object snapshot"
+	)
+
+	# An uncertain projection-store write must invalidate the service before any
+	# retry can publish or overwrite a potentially committed generation.
+	var faulted: RefCounted = ProjectionService.new()
+	var fault_init: Dictionary = faulted.initialize(
+		WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, ROOT + "/fault-projection"
+	)
+	_check(fault_init.get("ok", false), "fault-injection projection service initializes")
+	var fault_snapshot_before: Dictionary = faulted.get_snapshot()
+	faulted.store = FailingProjectionStore.new()
+	var fault_result: Dictionary = faulted.reconcile_command_region(Vector2i.ZERO, commands)
+	_check(
+		not fault_result.get("ok", false)
+			and String(fault_result.get("reason", "")).begins_with("effect_projection_commit_uncertain:")
+			and not bool(faulted.initialized),
+		"uncertain persistence outcome invalidates projection service until reinitialize"
+	)
+	_check(
+		faulted.snapshot == fault_snapshot_before,
+		"failed projection commit never publishes candidate snapshot in memory"
 	)
 
 	# A corrupt finalized generation fails closed instead of being silently
