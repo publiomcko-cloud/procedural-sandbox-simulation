@@ -21,6 +21,7 @@ const MAX_RESIDENT_REGIONS := 25
 const MAX_PENDING_REGION_PUBLICATIONS := 25
 const MAX_REGION_PUBLICATIONS_PER_FRAME := 1
 const MAX_REGION_GENERATION_JOBS_IN_FLIGHT := 2
+const MAX_GEOMETRY_MESH_COMMITS_PER_FRAME := 1
 const MAX_CACHED_GEOMETRY_VARIANTS := 512
 
 var registry: ContentDefinitionRegistry
@@ -46,12 +47,21 @@ var _pending_region_publications: Dictionary = {}
 var _pending_publication_order: Array[String] = []
 var _region_generation_jobs: Dictionary = {} # worker task id -> {job, id, request, cancelled}
 var _region_generation_task_by_id: Dictionary = {}
+# D.3: completed CPU generation waits here while expensive ArrayMesh resource
+# commits are amortized across frames. Scene publication remains atomic.
+var _region_visual_preparations: Dictionary = {}
+var _region_visual_preparation_order: Array[String] = []
 var _next_region_publication_serial := 1
 var _geometry_mesh_cache: Dictionary = {}
 var _geometry_mesh_cache_order: Array[String] = []
 var _geometry_cache_hit_count := 0
 var _geometry_cache_miss_count := 0
 var _geometry_cache_eviction_count := 0
+var _visual_mesh_commits_last_tick := 0
+var _visual_mesh_commit_count := 0
+var _visual_mesh_commit_total_usec := 0
+var _visual_mesh_commit_peak_usec := 0
+var _visual_prewarm_completed_count := 0
 var _materialization_content_signature := ""
 var _materialization_directory := ""
 var _last_region_metrics: Dictionary = {}
@@ -93,6 +103,13 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_geometry_cache_hit_count = 0
 	_geometry_cache_miss_count = 0
 	_geometry_cache_eviction_count = 0
+	_visual_mesh_commits_last_tick = 0
+	_visual_mesh_commit_count = 0
+	_visual_mesh_commit_total_usec = 0
+	_visual_mesh_commit_peak_usec = 0
+	_visual_prewarm_completed_count = 0
+	_region_visual_preparations.clear()
+	_region_visual_preparation_order.clear()
 	_materialization_content_signature = ""
 	_materialization_directory = ""
 	_population_rule_ids.clear()
@@ -163,6 +180,8 @@ func expect_region_publication(region_key: Vector2i, publication_token: int) -> 
 		if _pending_region_publications.has(id) and int(_pending_region_publications[id].get("publication_token", -1)) != publication_token:
 			_pending_region_publications.erase(id)
 			_pending_publication_order.erase(id)
+		if _region_visual_preparations.has(id) and int((_region_visual_preparations[id] as Dictionary).get("publication_token", -1)) != publication_token:
+			_cancel_region_visual_preparation(id)
 
 
 func enqueue_region_publication(region_key: Vector2i, state: RefCounted, publication_token: int = -1, force_rebuild: bool = false) -> Dictionary:
@@ -196,6 +215,7 @@ func enqueue_region_publication(region_key: Vector2i, state: RefCounted, publica
 	if _pending_region_publications.size() >= MAX_PENDING_REGION_PUBLICATIONS:
 		return _record_region_failure(id, "object_publication_queue_full")
 	_mark_region_generation_cancelled(id)
+	_cancel_region_visual_preparation(id)
 	_pending_region_publications[id] = request
 	_pending_publication_order.append(id)
 	_region_errors.erase(id)
@@ -209,6 +229,7 @@ func enqueue_region_publication(region_key: Vector2i, state: RefCounted, publica
 
 func process_queued_publications() -> int:
 	_publications_last_process_tick = 0
+	_visual_mesh_commits_last_tick = 0
 	# Unit-level callers that are not in a SceneTree retain the deterministic
 	# synchronous contract. Runtime publication uses worker generation.
 	if not is_inside_tree():
@@ -226,6 +247,9 @@ func process_queued_publications() -> int:
 			_publications_last_process_tick += 1
 			_finish_queued_publication(id, result, int(request.get("request_serial", -1)))
 	else:
+		# Finalize any region whose mesh variants were warmed on earlier frames,
+		# or commit at most one new ArrayMesh variant this frame.
+		_process_region_visual_preparations()
 		_process_completed_region_generation_jobs()
 		_dispatch_region_generation_jobs()
 	_peak_publications_per_process_tick = maxi(_peak_publications_per_process_tick, _publications_last_process_tick)
@@ -308,17 +332,179 @@ func _process_completed_region_generation_jobs() -> void:
 				"materialization_reason": String(generated.get("materialization_reason", "")),
 				"instance_count": (generated.get("instances", []) as Array).size(),
 			})
-		var result: Dictionary
 		if not generated.get("ok", false):
-			result = _record_region_failure(id, String(generated.get("reason", "object_generation_failed")))
-		else:
-			result = publish_region(
-				request["region_key"], request["world_state"],
-				bool(request.get("force_rebuild", false)), publication_token, generated,
-				int(request.get("request_serial", -1))
+			var result := _record_region_failure(
+				id, String(generated.get("reason", "object_generation_failed"))
 			)
-		_publications_last_process_tick += 1
-		_finish_queued_publication(id, result, int(request.get("request_serial", -1)))
+			_publications_last_process_tick += 1
+			_finish_queued_publication(
+				id, result, int(request.get("request_serial", -1))
+			)
+		else:
+			_queue_region_visual_preparation(id, request, generated)
+
+
+func _queue_region_visual_preparation(
+	id: String,
+	request: Dictionary,
+	generated: Dictionary
+) -> void:
+	_cancel_region_visual_preparation(id)
+	var variants: Array[Dictionary] = []
+	var seen_keys: Dictionary = {}
+	var cpu_by_instance: Dictionary = generated.get("geometry_cpu_by_instance", {})
+	for value in generated.get("instances", []):
+		if typeof(value) != TYPE_DICTIONARY:
+			continue
+		var instance: Dictionary = value
+		var cache_key := _geometry_cache_key(instance)
+		if cache_key.is_empty() or seen_keys.has(cache_key):
+			continue
+		seen_keys[cache_key] = true
+		var instance_id := String(instance.get("instance_id", ""))
+		variants.append({
+			"cache_key": cache_key,
+			"instance": instance.duplicate(true),
+			"prepared_cpu": (
+				(cpu_by_instance.get(instance_id, {}) as Dictionary).duplicate(true)
+			),
+		})
+	var record := {
+		"request": request,
+		"generated": generated,
+		"publication_token": int(request.get("publication_token", -1)),
+		"request_serial": int(request.get("request_serial", -1)),
+		"variants": variants,
+		"next_variant": 0,
+		"started_usec": Time.get_ticks_usec(),
+		"ready_to_publish": false,
+		"cache_hits": 0,
+		"mesh_commits": 0,
+	}
+	_region_visual_preparations[id] = record
+	_region_visual_preparation_order.append(id)
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("object_visual_prewarm_queued", {
+			"region": [
+				int((request["region_key"] as Vector2i).x),
+				int((request["region_key"] as Vector2i).y),
+			],
+			"variant_count": variants.size(),
+			"materialization_hit": bool(generated.get("materialization_hit", false)),
+			"pending_visual_preparations": _region_visual_preparations.size(),
+		})
+
+
+func _process_region_visual_preparations() -> void:
+	if _publications_last_process_tick >= MAX_REGION_PUBLICATIONS_PER_FRAME:
+		return
+	while not _region_visual_preparation_order.is_empty():
+		var id := String(_region_visual_preparation_order[0])
+		if not _region_visual_preparations.has(id):
+			_region_visual_preparation_order.pop_front()
+			continue
+		var record: Dictionary = _region_visual_preparations[id]
+		var request: Dictionary = record["request"]
+		var publication_token := int(record.get("publication_token", -1))
+		if _expected_publication_tokens.has(id) 			and publication_token != int(_expected_publication_tokens[id]):
+			_cancel_region_visual_preparation(id)
+			continue
+
+		if bool(record.get("ready_to_publish", false)):
+			_region_visual_preparation_order.pop_front()
+			_region_visual_preparations.erase(id)
+			var result := publish_region(
+				request["region_key"],
+				request["world_state"],
+				bool(request.get("force_rebuild", false)),
+				publication_token,
+				record["generated"],
+				int(record.get("request_serial", -1))
+			)
+			_publications_last_process_tick += 1
+			_finish_queued_publication(
+				id, result, int(record.get("request_serial", -1))
+			)
+			return
+
+		var variants: Array = record.get("variants", [])
+		var next_variant := int(record.get("next_variant", 0))
+		while next_variant < variants.size():
+			var variant: Dictionary = variants[next_variant]
+			var cache_key := String(variant.get("cache_key", ""))
+			var was_cached := _geometry_mesh_cache.has(cache_key)
+			var commit_started_usec := Time.get_ticks_usec()
+			var mesh_result := _get_or_build_geometry_mesh(
+				variant.get("instance", {}),
+				variant.get("prepared_cpu", {})
+			)
+			var commit_usec := Time.get_ticks_usec() - commit_started_usec
+			if not mesh_result.get("ok", false):
+				_region_visual_preparation_order.pop_front()
+				_region_visual_preparations.erase(id)
+				var failed := _record_region_failure(
+					id,
+					"object_mesh_prewarm_failed:%s"
+						% mesh_result.get("reason", "unknown")
+				)
+				_publications_last_process_tick += 1
+				_finish_queued_publication(
+					id, failed, int(record.get("request_serial", -1))
+				)
+				return
+			next_variant += 1
+			record["next_variant"] = next_variant
+			if was_cached:
+				record["cache_hits"] = int(record.get("cache_hits", 0)) + 1
+				continue
+
+			record["mesh_commits"] = int(record.get("mesh_commits", 0)) + 1
+			_visual_mesh_commits_last_tick += 1
+			_visual_mesh_commit_count += 1
+			_visual_mesh_commit_total_usec += commit_usec
+			_visual_mesh_commit_peak_usec = maxi(
+				_visual_mesh_commit_peak_usec, commit_usec
+			)
+			_region_visual_preparations[id] = record
+			if _perf_trace_enabled:
+				PerformanceTrace.emit("object_mesh_commit_step", {
+					"region": [
+						int((request["region_key"] as Vector2i).x),
+						int((request["region_key"] as Vector2i).y),
+					],
+					"duration_usec": commit_usec,
+					"variant_index": next_variant - 1,
+					"variant_count": variants.size(),
+					"remaining_variant_count": variants.size() - next_variant,
+					"geometry_cache_variant_count": _geometry_mesh_cache.size(),
+				})
+			if _visual_mesh_commits_last_tick 				>= MAX_GEOMETRY_MESH_COMMITS_PER_FRAME:
+				return
+
+		record["ready_to_publish"] = true
+		_region_visual_preparations[id] = record
+		_visual_prewarm_completed_count += 1
+		if _perf_trace_enabled:
+			PerformanceTrace.emit("object_visual_prewarm_complete", {
+				"region": [
+					int((request["region_key"] as Vector2i).x),
+					int((request["region_key"] as Vector2i).y),
+				],
+				"duration_usec": Time.get_ticks_usec()
+					- int(record.get("started_usec", Time.get_ticks_usec())),
+				"variant_count": variants.size(),
+				"mesh_commits": int(record.get("mesh_commits", 0)),
+				"cache_hits": int(record.get("cache_hits", 0)),
+				"geometry_cache_variant_count": _geometry_mesh_cache.size(),
+			})
+		# Publication is intentionally deferred to a later frame so the last
+		# expensive resource commit and scene-tree publication never stack.
+		return
+
+
+func _cancel_region_visual_preparation(id: String) -> void:
+	_region_visual_preparations.erase(id)
+	_region_visual_preparation_order.erase(id)
 
 
 func _finish_queued_publication(id: String, result: Dictionary, request_serial: int = -1) -> void:
@@ -940,6 +1126,7 @@ func _apply_components_to_node(node: Node3D, instance: Dictionary) -> void:
 func unload_region(region_key: Vector2i) -> void:
 	var id := _region_id(region_key)
 	_mark_region_generation_cancelled(id)
+	_cancel_region_visual_preparation(id)
 	_region_errors.erase(id)
 	_pending_region_publications.erase(id)
 	_pending_publication_order.erase(id)
@@ -1149,8 +1336,16 @@ func get_performance_snapshot() -> Dictionary:
 				resident_batched += 1
 	return {
 		"active_region_count": _regions.size(),
-		"pending_region_publication_count": _pending_region_publications.size() + _region_generation_jobs.size(),
+		"pending_region_publication_count": _pending_region_publications.size()
+			+ _region_generation_jobs.size()
+			+ _region_visual_preparations.size(),
 		"region_generation_jobs_in_flight": _region_generation_jobs.size(),
+		"visual_preparation_count": _region_visual_preparations.size(),
+		"visual_mesh_commits_last_tick": _visual_mesh_commits_last_tick,
+		"visual_mesh_commit_count": _visual_mesh_commit_count,
+		"visual_mesh_commit_total_usec": _visual_mesh_commit_total_usec,
+		"visual_mesh_commit_peak_usec": _visual_mesh_commit_peak_usec,
+		"visual_prewarm_completed_count": _visual_prewarm_completed_count,
 		"active_instance_count": resident_instances,
 		"batched_instance_count": resident_batched,
 		"geometry_cache_variant_count": _geometry_mesh_cache.size(),
@@ -1294,6 +1489,8 @@ func _clear_region_nodes() -> void:
 	_wait_for_region_generation_jobs()
 	_pending_region_publications.clear()
 	_pending_publication_order.clear()
+	_region_visual_preparations.clear()
+	_region_visual_preparation_order.clear()
 	for entry in _regions.values():
 		var region_root: Node3D = entry.get("root")
 		if is_instance_valid(region_root):
@@ -1331,10 +1528,7 @@ func _region_id(region_key: Vector2i) -> String:
 	return "%d,%d" % [region_key.x, region_key.y]
 
 
-func _get_or_build_geometry_mesh(instance: Dictionary, prepared_cpu: Dictionary = {}) -> Dictionary:
-	# Procedural geometry is immutable for a fixed content pin + recipe + seed.
-	# Transform/appearance/logical components never mutate mesh topology, so all
-	# representatives (legacy, population and placed) can share this bounded cache.
+func _geometry_cache_key(instance: Dictionary) -> String:
 	var key_data := {
 		"definition_id": instance.get("definition_id", ""),
 		"content_pin": instance.get("content_pin", {}),
@@ -1342,7 +1536,14 @@ func _get_or_build_geometry_mesh(instance: Dictionary, prepared_cpu: Dictionary 
 		"geometry": instance.get("geometry", {}),
 		"geometry_seeds": instance.get("geometry_seeds", {}),
 	}
-	var cache_key := JSON.stringify(key_data, "", true, true).sha256_text()
+	return JSON.stringify(key_data, "", true, true).sha256_text()
+
+
+func _get_or_build_geometry_mesh(instance: Dictionary, prepared_cpu: Dictionary = {}) -> Dictionary:
+	# Procedural geometry is immutable for a fixed content pin + recipe + seed.
+	# Transform/appearance/logical components never mutate mesh topology, so all
+	# representatives (legacy, population and placed) can share this bounded cache.
+	var cache_key := _geometry_cache_key(instance)
 	if _geometry_mesh_cache.has(cache_key):
 		_geometry_cache_hit_count += 1
 		_geometry_mesh_cache_order.erase(cache_key)
