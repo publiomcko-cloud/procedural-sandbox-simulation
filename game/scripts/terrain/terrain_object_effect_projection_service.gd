@@ -11,6 +11,8 @@ const Contract := preload("res://scripts/terrain/terrain_object_effect_projectio
 const StoreScript := preload("res://scripts/terrain/terrain_object_effect_projection_store.gd")
 const Effect := preload("res://scripts/terrain/terrain_object_effect.gd")
 const EffectIndex := preload("res://scripts/terrain/terrain_object_effect_index.gd")
+const LocalFrame := preload("res://scripts/terrain/terrain_object_effect_local_frame.gd")
+const LocalIndex := preload("res://scripts/terrain/terrain_object_effect_local_index.gd")
 
 const MAX_RESIDENT_SCOPES := 64
 
@@ -25,6 +27,8 @@ var last_reconcile_metrics: Dictionary = {}
 var _scopes: Dictionary = {}
 var _scope_indexes: Dictionary = {}
 var _storage_generations: Dictionary = {}
+var _local_frames_by_scope: Dictionary = {}
+var _local_indexes_by_scope: Dictionary = {}
 
 
 func initialize(
@@ -41,6 +45,8 @@ func initialize(
 	_scopes.clear()
 	_scope_indexes.clear()
 	_storage_generations.clear()
+	_local_frames_by_scope.clear()
+	_local_indexes_by_scope.clear()
 	store = StoreScript.new(directory_override)
 	store.configure(world_id, world_seed, generator_version)
 	initialized = true
@@ -107,6 +113,8 @@ func release_scope(region_key: Vector2i) -> void:
 	_scopes.erase(scope_id)
 	_scope_indexes.erase(scope_id)
 	_storage_generations.erase(scope_id)
+	_local_frames_by_scope.erase(scope_id)
+	_local_indexes_by_scope.erase(scope_id)
 
 
 func reconcile_scope(
@@ -133,6 +141,7 @@ func reconcile_scope(
 		return String(a.get("instance_id", "")) < String(b.get("instance_id", ""))
 	)
 	var incoming_effects: Dictionary = {}
+	var incoming_local_frames: Dictionary = {}
 	var source_instance_ids: Array[String] = []
 	var source_digest_entries: Array[Dictionary] = []
 	var seen_sources: Dictionary = {}
@@ -164,10 +173,16 @@ func reconcile_scope(
 				"terrain_interaction": "none",
 			})
 			continue
+		var local_built := LocalFrame.build_from_instance(instance, source_revision)
+		if not local_built.get("ok", false):
+			return _failure(
+				"effect_projection_local_frame_build_failed:%s" % local_built.get("reason", "unknown")
+			)
+		var local_frame: Dictionary = local_built["frame"]
 		var built := Effect.build_from_instance(instance, source_revision)
 		if not built.get("ok", false):
 			return _failure(
-				"effect_projection_effect_build_failed:%s" 					% built.get("reason", "unknown")
+				"effect_projection_effect_build_failed:%s" % built.get("reason", "unknown")
 			)
 		var effect: Dictionary = built["effect"]
 		var effect_id := String(effect["effect_id"])
@@ -183,6 +198,7 @@ func reconcile_scope(
 					"effect_projection_same_revision_fingerprint_conflict"
 				)
 		incoming_effects[effect_id] = effect
+		incoming_local_frames[effect_id] = local_frame
 		source_digest_entries.append({
 			"instance_id": instance_id,
 			"source_revision": source_revision,
@@ -203,6 +219,11 @@ func reconcile_scope(
 		source_digest_entries
 	)
 	if int(prior["source_world_revision"]) == source_world_revision 		and String(prior["source_digest_sha256"]) == source_digest 		and prior["source_instance_ids"] == source_instance_ids:
+		var local_index_result := _build_local_index(incoming_local_frames)
+		if not local_index_result.get("ok", false):
+			return local_index_result
+		_local_frames_by_scope[scope_id] = incoming_local_frames.duplicate(true)
+		_local_indexes_by_scope[scope_id] = local_index_result["index"]
 		last_reconcile_metrics = {
 			"scope_id": scope_id,
 			"changed": false,
@@ -261,9 +282,16 @@ func reconcile_scope(
 			"effect_projection_commit_uncertain:%s" % initialization_error
 		)
 
+	var local_index_result := _build_local_index(incoming_local_frames)
+	if not local_index_result.get("ok", false):
+		initialized = false
+		initialization_error = String(local_index_result.get("reason", "effect_projection_local_index_failed"))
+		return _failure(initialization_error)
 	_scopes[scope_id] = checked["snapshot"]
 	_scope_indexes[scope_id] = index_result["index"]
 	_storage_generations[scope_id] = int(persisted["generation"])
+	_local_frames_by_scope[scope_id] = incoming_local_frames.duplicate(true)
+	_local_indexes_by_scope[scope_id] = local_index_result["index"]
 	last_reconcile_metrics = {
 		"scope_id": scope_id,
 		"changed": true,
@@ -455,6 +483,68 @@ func snapshot_for_chunk(
 			"resident_scope_ids": get_loaded_scope_ids(),
 		}),
 	}
+
+
+func get_local_frames_for_chunk(
+	region_key: Vector2i,
+	chunk_coordinate: Vector2i
+) -> Array[Dictionary]:
+	if not initialized:
+		return []
+	var by_id: Dictionary = {}
+	for scope_index in _local_indexes_by_scope.values():
+		for frame in scope_index.get_frames_for_chunk(region_key, chunk_coordinate):
+			by_id[String(frame["effect_id"])] = frame
+	var ids: Array[String] = []
+	for effect_id in by_id:
+		ids.append(String(effect_id))
+	ids.sort()
+	var result: Array[Dictionary] = []
+	for effect_id in ids:
+		result.append((by_id[effect_id] as Dictionary).duplicate(true))
+	return result
+
+
+func local_snapshot_for_chunk(
+	region_key: Vector2i,
+	chunk_coordinate: Vector2i
+) -> Dictionary:
+	if not initialized:
+		return _failure("effect_projection_service_not_initialized")
+	var frames := get_local_frames_for_chunk(region_key, chunk_coordinate)
+	var ids: Array[String] = []
+	var fingerprints: Array[String] = []
+	for frame in frames:
+		ids.append(String(frame["effect_id"]))
+		fingerprints.append(String(frame["source_fingerprint_sha256"]))
+	return {
+		"ok": true,
+		"region_key": region_key,
+		"chunk_coordinate": chunk_coordinate,
+		"terrain_object_local_frames": frames,
+		"terrain_object_effect_count": frames.size(),
+		"terrain_object_effect_snapshot_sha256": Contract.canonical_sha256({
+			"region_key": [region_key.x, region_key.y],
+			"chunk_coordinate": [chunk_coordinate.x, chunk_coordinate.y],
+			"effect_ids": ids,
+			"fingerprints": fingerprints,
+		}),
+	}
+
+
+func _build_local_index(frames: Dictionary) -> Dictionary:
+	var candidate := LocalIndex.new()
+	var ids: Array[String] = []
+	for id_value in frames:
+		ids.append(String(id_value))
+	ids.sort()
+	for effect_id in ids:
+		var indexed: Dictionary = candidate.replace_frame(frames[effect_id])
+		if not indexed.get("ok", false):
+			return _failure(
+				"effect_projection_local_index_failed:%s" % indexed.get("reason", "unknown")
+			)
+	return {"ok": true, "index": candidate}
 
 
 func _source_revision(
