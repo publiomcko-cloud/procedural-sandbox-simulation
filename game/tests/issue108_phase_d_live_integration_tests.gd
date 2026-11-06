@@ -4,6 +4,7 @@ const Registry := preload("res://scripts/modding/content_definition_registry.gd"
 const StateService := preload("res://scripts/objects/procedural_object_state_service.gd")
 const CommandService := preload("res://scripts/entities/entity_command_service.gd")
 const StateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
+const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const EffectRuntime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
 const ProjectionStore := preload("res://scripts/terrain/terrain_object_effect_projection_store.gd")
 const ProjectionContract := preload("res://scripts/terrain/terrain_object_effect_projection_contract.gd")
@@ -275,6 +276,66 @@ func _run() -> void:
 				)
 			),
 			"both seam publications carry the identical shared effect signature"
+		)
+
+	# Legacy schema-1 mutations do not increment entity_revision. The live
+	# projection therefore uses monotonic world revision as its source revision
+	# and must accept transform/restore before explicit command migration.
+	var legacy_world: Dictionary = ObjectWorld.build_region_instances(
+		WORLD_SEED, WORLD_ID, source_region, registry
+	)
+	var legacy_base: Dictionary = {}
+	if legacy_world.get("ok", false):
+		for candidate_value in legacy_world.get("instances", []):
+			var candidate: Dictionary = candidate_value
+			if String(candidate.get("instance_id", "")) == source_id:
+				legacy_base = candidate
+				break
+	_check(
+		not legacy_base.is_empty(),
+		"legacy lifecycle fixture resolves the projected procedural source"
+	)
+	if not legacy_base.is_empty():
+		var legacy_mutation: Dictionary = state.set_component(
+			legacy_base,
+			StateContract.COMPONENT_TRANSFORM,
+			{"schema_version": 1, "properties": {
+				"translation_mm": [0, 120, 0],
+				"rotation_mdeg": [0, 4000, 0],
+				"scale_milli": [1000, 1000, 1000],
+			}}
+		)
+		_check(
+			legacy_mutation.get("ok", false)
+				and int(legacy_mutation.get("entity_revision", -1)) == 0,
+			"legacy transform advances world revision while entity revision remains zero"
+		)
+		var legacy_reconcile: Dictionary = runtime.reconcile_source_region(
+			source_region
+		)
+		var legacy_effect := _effect_for_source(
+			runtime.projection.get_scope_snapshot(source_region),
+			source_id
+		)
+		_check(
+			legacy_reconcile.get("ok", false)
+				and not legacy_effect.is_empty()
+				and int(legacy_effect.get("source_revision", -1))
+					== state.get_revision()
+				and String(
+					legacy_effect.get("source_fingerprint_sha256", "")
+				) != String(
+					source_effect.get("source_fingerprint_sha256", "")
+				),
+			"live projection accepts legitimate schema-1 fingerprint change via world revision"
+		)
+		var legacy_restore: Dictionary = state.restore_instance(legacy_base)
+		_check(
+			legacy_restore.get("ok", false)
+				and runtime.reconcile_source_region(
+					source_region
+				).get("ok", false),
+			"legacy restore reconciles before command-schema migration"
 		)
 
 	# Upgrade entity command schema and mutate the projected source. Runtime
