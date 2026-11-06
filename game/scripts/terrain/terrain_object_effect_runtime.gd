@@ -1214,6 +1214,8 @@ func release_all_scopes() -> void:
 		var parsed := _region_from_scope_id(scope_id)
 		if parsed.get("ok", false):
 			projection.release_scope(parsed["region_key"])
+	if projection.has_method("purge_dormant_scopes"):
+		projection.purge_dormant_scopes()
 
 
 func get_loaded_scope_count() -> int:
