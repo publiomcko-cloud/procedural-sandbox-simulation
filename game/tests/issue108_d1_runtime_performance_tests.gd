@@ -222,7 +222,7 @@ func _exercise_focus(
 	focus: Vector2i,
 	include_retained_probe: bool
 ) -> Dictionary:
-	var window := runtime.update_resident_target_regions(
+	var window: Dictionary = runtime.update_resident_target_regions(
 		_regions_within_radius(focus, RETAINED_RADIUS)
 	)
 	if not window.get("ok", false):
