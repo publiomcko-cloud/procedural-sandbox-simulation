@@ -112,7 +112,7 @@ func release_scope(region_key: Vector2i) -> void:
 func reconcile_scope(
 	region_key: Vector2i,
 	source_world_revision: int,
-	authoritative_instances: Array[Dictionary],
+	authoritative_instances: Array,
 	source_revisions: Dictionary
 ) -> Dictionary:
 	var started_usec := Time.get_ticks_usec()
@@ -136,7 +136,10 @@ func reconcile_scope(
 	var source_instance_ids: Array[String] = []
 	var source_digest_entries: Array[Dictionary] = []
 	var seen_sources: Dictionary = {}
-	for instance in ordered_instances:
+	for instance_value in ordered_instances:
+		if typeof(instance_value) != TYPE_DICTIONARY:
+			return _failure("effect_projection_source_not_dictionary")
+		var instance: Dictionary = instance_value
 		var instance_id := String(instance.get("instance_id", ""))
 		if instance_id.is_empty() or seen_sources.has(instance_id):
 			return _failure("effect_projection_source_identity_invalid")
