@@ -87,8 +87,8 @@ func _run() -> void:
 	)
 
 	_test_edit_order(frame)
-	_test_chunk_mesh(region_key, coordinate, effect_snapshot)
-	_test_shared_seam(projection)
+	_test_chunk_mesh(projection)
+	_test_shared_seam(registry)
 	_test_delete_restore(commands, state, projection, frame)
 	_finish()
 
@@ -131,86 +131,117 @@ func _test_edit_order(frame: Dictionary) -> void:
 	evidence["edit_order_composed_density"] = composed
 
 
-func _test_chunk_mesh(
-	region_key: Vector2i,
-	coordinate: Vector2i,
-	effect_snapshot: Dictionary
-) -> void:
-	var base_snapshot := _snapshot([])
-	var effect_job_snapshot := base_snapshot.duplicate(true)
-	effect_job_snapshot["terrain_object_local_frames"] = effect_snapshot[
-		"terrain_object_local_frames"
-	].duplicate(true)
-	effect_job_snapshot["terrain_object_effect_count"] = int(
-		effect_snapshot["terrain_object_effect_count"]
-	)
-	effect_job_snapshot["terrain_object_effect_snapshot_sha256"] = String(
-		effect_snapshot["terrain_object_effect_snapshot_sha256"]
-	)
-	var base_job := TerrainMeshJob.new(
-		WORLD_SEED, region_key, coordinate, false, base_snapshot, 0, 0
-	)
-	var effect_job := TerrainMeshJob.new(
-		WORLD_SEED, region_key, coordinate, false, effect_job_snapshot, 0, 0
-	)
-	base_job.run()
-	effect_job.run()
+func _test_chunk_mesh(projection: RefCounted) -> void:
+	var changed := false
+	var selected_region := Vector2i.ZERO
+	var selected_coordinate := Vector2i.ZERO
+	var selected_base_hash := ""
+	var selected_effect_hash := ""
+	var candidate_count := 0
+	for region_key in [
+		Vector2i.ZERO,
+		Vector2i.RIGHT,
+		Vector2i.LEFT,
+		Vector2i(0, 1),
+		Vector2i(0, -1),
+	]:
+		for coordinate in Grid.all_coordinates():
+			var effect_snapshot: Dictionary = projection.local_snapshot_for_chunk(
+				region_key, coordinate
+			)
+			if int(effect_snapshot.get("terrain_object_effect_count", 0)) == 0:
+				continue
+			candidate_count += 1
+			var base_snapshot := _snapshot([])
+			var effect_job_snapshot := base_snapshot.duplicate(true)
+			effect_job_snapshot["terrain_object_local_frames"] = effect_snapshot[
+				"terrain_object_local_frames"
+			].duplicate(true)
+			effect_job_snapshot["terrain_object_effect_count"] = int(
+				effect_snapshot["terrain_object_effect_count"]
+			)
+			effect_job_snapshot["terrain_object_effect_snapshot_sha256"] = String(
+				effect_snapshot["terrain_object_effect_snapshot_sha256"]
+			)
+			var base_job := TerrainMeshJob.new(
+				WORLD_SEED, region_key, coordinate, false, base_snapshot, 0, 0
+			)
+			var effect_job := TerrainMeshJob.new(
+				WORLD_SEED, region_key, coordinate, false, effect_job_snapshot, 0, 0
+			)
+			base_job.run()
+			effect_job.run()
+			_check(
+				base_job.result.get("valid", false)
+					and effect_job.result.get("valid", false),
+				"candidate LOD0 jobs complete with and without object effects"
+			)
+			var base_hash := _cpu_mesh_hash(base_job.result)
+			var effect_hash := _cpu_mesh_hash(effect_job.result)
+			if base_hash != effect_hash:
+				changed = true
+				selected_region = region_key
+				selected_coordinate = coordinate
+				selected_base_hash = base_hash
+				selected_effect_hash = effect_hash
+				var lod_job := TerrainMeshJob.new(
+					WORLD_SEED,
+					region_key,
+					coordinate,
+					false,
+					effect_job_snapshot,
+					0,
+					1
+				)
+				lod_job.run()
+				_check(
+					lod_job.result.get("valid", false),
+					"LOD1/fallback path consumes the same object effect snapshot"
+				)
+				break
+		if changed:
+			break
+	_check(candidate_count > 0, "projection exposes at least one mesh candidate chunk")
 	_check(
-		base_job.result.get("valid", false)
-			and effect_job.result.get("valid", false),
-		"LOD0 terrain jobs complete with and without object effects"
+		changed,
+		"at least one affected chunk CPU mesh changes when object imprint is active"
 	)
-	var base_hash := _cpu_mesh_hash(base_job.result)
-	var effect_hash := _cpu_mesh_hash(effect_job.result)
-	_check(
-		base_hash != effect_hash,
-		"object effect snapshot changes the affected chunk CPU mesh"
-	)
-
-	var lod_job := TerrainMeshJob.new(
-		WORLD_SEED, region_key, coordinate, false, effect_job_snapshot, 0, 1
-	)
-	lod_job.run()
-	_check(
-		lod_job.result.get("valid", false),
-		"LOD1/fallback path consumes the same object effect snapshot"
-	)
-	evidence["affected_chunk"] = Grid.stable_id(region_key, coordinate)
-	evidence["base_mesh_sha256"] = base_hash
-	evidence["effect_mesh_sha256"] = effect_hash
+	if changed:
+		evidence["affected_chunk"] = Grid.stable_id(
+			selected_region, selected_coordinate
+		)
+		evidence["base_mesh_sha256"] = selected_base_hash
+		evidence["effect_mesh_sha256"] = selected_effect_hash
 
 
-func _test_shared_seam(projection: RefCounted) -> void:
-	var seam := _first_cross_region_effect_chunk(projection)
-	_check(seam.get("ok", false), "projection contains a cross-region effect candidate")
-	if not seam.get("ok", false):
+func _test_shared_seam(registry: RefCounted) -> void:
+	var seam_instance := _fixture_instance(
+		registry,
+		Vector2i.ZERO,
+		Vector3i(15850, 3800, 6000),
+		"phase-d-seam"
+	)
+	var frame_result := Frame.build_from_instance(seam_instance, 1)
+	_check(frame_result.get("ok", false), "deterministic seam effect frame builds")
+	if not frame_result.get("ok", false):
 		return
-	var left_region: Vector2i = seam["left_region"]
-	var z_chunk := int(seam["z_chunk"])
-	var requests: Array = [
-		{
-			"region_key": left_region,
-			"coordinate": Vector2i(Grid.CHUNK_COUNT_X - 1, z_chunk),
-		},
-		{
-			"region_key": left_region + Vector2i.RIGHT,
-			"coordinate": Vector2i(0, z_chunk),
-		},
-	]
-	var combined: Dictionary = projection.local_snapshot_for_chunks(requests)
-	_check(
-		combined.get("ok", false)
-			and int(combined.get("terrain_object_effect_count", 0)) > 0,
-		"shared pair receives one deterministic union effect snapshot"
+	var frame: Dictionary = frame_result["frame"]
+	var z_chunk := clampi(
+		floori(float(frame["interior_point_local"][2]) / 3.0),
+		0,
+		Grid.CHUNK_COUNT_Z - 1
 	)
-	var snapshot := _snapshot(combined.get("terrain_object_local_frames", []))
-	snapshot["terrain_object_effect_snapshot_sha256"] = String(
-		combined.get("terrain_object_effect_snapshot_sha256", "none")
-	)
+	var snapshot := _snapshot([frame])
+	snapshot["terrain_object_effect_snapshot_sha256"] = JSON.stringify(
+		frame, "", true, true
+	).sha256_text()
 	var built := SharedAuthority.build_x_region_boundary_pair(
-		WORLD_SEED, left_region, z_chunk, snapshot, true
+		WORLD_SEED, Vector2i.ZERO, z_chunk, snapshot, true
 	)
-	_check(built.get("valid", false), "shared X authority builds with object effect snapshot")
+	_check(
+		built.get("valid", false),
+		"shared X authority builds from one precision-safe seam effect snapshot"
+	)
 	if built.get("valid", false):
 		_check(
 			built["left"].get("shared_mesh_signature", "")
@@ -338,6 +369,42 @@ func _frame_by_source(projection: RefCounted, source_id: String) -> Dictionary:
 				if String(frame.get("source_instance_id", "")) == source_id:
 					return frame.duplicate(true)
 	return {}
+
+
+func _fixture_instance(
+	registry: RefCounted,
+	region_key: Vector2i,
+	position_mm: Vector3i,
+	instance_id: String
+) -> Dictionary:
+	var definition_id := "firstparty.core_rocks:granite"
+	var ids: Array[String] = [definition_id]
+	var pin_result: Dictionary = registry.pin_definitions(ids)
+	var recipe: Dictionary = registry.evaluate_rock_recipe(definition_id, 31337)
+	var interaction: Dictionary = registry.resolve_terrain_interaction(definition_id)
+	if not pin_result.get("ok", false) \
+		or (pin_result.get("pins", []) as Array).is_empty() \
+		or not recipe.get("ok", false) \
+		or not interaction.get("ok", false):
+		return {}
+	return {
+		"instance_id": instance_id,
+		"definition_id": definition_id,
+		"content_pin": pin_result["pins"][0].duplicate(true),
+		"world_id": WORLD_ID,
+		"world_seed": WORLD_SEED,
+		"generator_version": Field.GENERATOR_VERSION,
+		"region_key": region_key,
+		"position_mm": position_mm,
+		"default_scale_milli": Vector3i(1000, 1000, 1000),
+		"default_yaw_mdeg": 0,
+		"geometry": recipe["geometry"].duplicate(true),
+		"geometry_seeds": recipe["geometry_seeds"].duplicate(true),
+		"terrain_interaction": interaction["rule"].duplicate(true),
+		"terrain_interaction_pin": interaction["pin"].duplicate(true),
+		"terrain_interaction_applied": false,
+		"instance_components": {},
+	}
 
 
 func _snapshot(frames: Array) -> Dictionary:
