@@ -149,7 +149,8 @@ func reconcile_scope(
 	source_world_revision: int,
 	authoritative_instances: Array,
 	source_revisions: Dictionary,
-	allow_authoritative_rewind: bool = false
+	allow_authoritative_rewind: bool = false,
+	persist_projection: bool = true
 ) -> Dictionary:
 	var started_usec := Time.get_ticks_usec()
 	if not initialized:
@@ -308,25 +309,33 @@ func reconcile_scope(
 	var index_result := _build_scope_index(checked["snapshot"])
 	if not index_result.get("ok", false):
 		return index_result
-	var persisted: Dictionary = store.save_validated_snapshot(checked["snapshot"])
-	if not persisted.get("ok", false):
-		# The write may have become durable before failure was observable. Force
-		# a full service reinitialize so no second mutation can build on an
-		# uncertain generation.
-		initialized = false
-		initialization_error = String(
-			persisted.get("reason", "effect_projection_persist_failed")
-		)
-		return _failure(
-			"effect_projection_commit_uncertain:%s" % initialization_error
-		)
+	var generation := int(_storage_generations.get(scope_id, 0))
+	if persist_projection:
+		var persisted: Dictionary = store.save_validated_snapshot(checked["snapshot"])
+		if not persisted.get("ok", false):
+			# The write may have become durable before failure was observable. Force
+			# a full service reinitialize so no second mutation can build on an
+			# uncertain generation.
+			initialized = false
+			initialization_error = String(
+				persisted.get("reason", "effect_projection_persist_failed")
+			)
+			return _failure(
+				"effect_projection_commit_uncertain:%s" % initialization_error
+			)
+		generation = int(persisted["generation"])
 
+	# A transient publication is safe because projection state is derived. The
+	# authoritative entity/object state remains durable; after a crash or release
+	# this scope can be rebuilt exactly. Lifecycle mutations still use the
+	# crash-consistent persisted path.
 	_scopes[scope_id] = checked["snapshot"]
 	_install_scope_index(scope_id, index_result["index"])
-	_storage_generations[scope_id] = int(persisted["generation"])
+	_storage_generations[scope_id] = generation
 	last_reconcile_metrics = {
 		"scope_id": scope_id,
 		"changed": true,
+		"persisted": persist_projection,
 		"source_count": source_instance_ids.size(),
 		"effect_count": incoming_effects.size(),
 		"removed_effect_count": removed_effect_count,
@@ -335,9 +344,10 @@ func reconcile_scope(
 	return {
 		"ok": true,
 		"changed": true,
-		"reason": "committed",
+		"persisted": persist_projection,
+		"reason": "committed" if persist_projection else "transient_current",
 		"scope_id": scope_id,
-		"generation": int(persisted["generation"]),
+		"generation": generation,
 		"projection_revision": int(checked["snapshot"]["projection_revision"]),
 		"source_world_revision": source_world_revision,
 		"effect_count": incoming_effects.size(),
