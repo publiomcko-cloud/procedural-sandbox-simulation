@@ -591,7 +591,9 @@ func _projection_build_cache_lookup(cache_key: String) -> Dictionary:
 		return {}
 	_projection_build_cache_order.erase(cache_key)
 	_projection_build_cache_order.append(cache_key)
-	return (_projection_build_cache[cache_key] as Dictionary).duplicate(true)
+	# Cache entries are immutable. Rebase performs the single deep copy needed
+	# before changing the current global revision/digest.
+	return _projection_build_cache[cache_key] as Dictionary
 
 
 func _remember_projection_build(
