@@ -2374,6 +2374,13 @@ func _queue_terrain_effect_dirty_chunks(chunk_ids: Array[String]) -> void:
 
 
 func _process_terrain_effect_dirty_chunks() -> void:
+	# Command/region visual reconciliation has priority over derived terrain
+	# remeshing. Dirty effect footprints remain queued until object publication
+	# is quiescent; completed terrain jobs are independently hash-validated.
+	if object_stream != null:
+		var object_perf: Dictionary = object_stream.get_performance_snapshot()
+		if int(object_perf.get("pending_region_publication_count", 0)) > 0:
+			return
 	for id_value in _terrain_effect_dirty_chunks_by_region.keys().duplicate():
 		var id := String(id_value)
 		if loading_regions.has(id):
