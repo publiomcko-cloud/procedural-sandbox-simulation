@@ -67,15 +67,42 @@ func _run() -> void:
 	var right_record := _placed_record(stream, right_id)
 	_check(not right_id.is_empty() and right_id != left_id, "a second B creates a distinct identity")
 	_check(_record_position(right_record) == expected_right_mm, "right-pointer command persists its own SDF hit")
+	# Once terrain-object effects are live, the first placement can change the
+	# surface seen by the same ray. Stability is defined at one effect revision,
+	# not against the pre-placement terrain.
+	var repeated_left_hit_a := _pick(scene, camera, left_screen)
+	var repeated_left_hit_b := _pick(scene, camera, left_screen)
+	var repeated_left_expected_mm := _to_mm(
+		repeated_left_hit_a.get("position", Vector3.ZERO)
+	)
+	_check(
+		repeated_left_hit_a.get("hit", false)
+			and repeated_left_hit_b.get("hit", false)
+			and repeated_left_expected_mm
+				== _to_mm(repeated_left_hit_b.get("position", Vector3.ZERO)),
+		"repeated aim is deterministic within the same terrain-effect revision"
+	)
 	var repeated_left_id := await _place_from_pointer(scene, left_screen)
 	var repeated_left_record := _placed_record(stream, repeated_left_id)
-	_check(repeated_left_id != left_id and _record_position(repeated_left_record) == _record_position(left_record), "repeated aim is stable and allows intentional overlap without jitter")
+	_check(
+		repeated_left_id != left_id
+			and _record_position(repeated_left_record)
+				== repeated_left_expected_mm,
+		"repeated placement persists the current effect-aware SDF hit without jitter"
+	)
 	var left_visible := await _wait_instance_count(stream, left_id, 1)
 	var right_visible := await _wait_instance_count(stream, right_id, 1)
 	var repeated_visible := await _wait_instance_count(stream, repeated_left_id, 1)
 	_check(left_visible and right_visible and repeated_visible, "each accepted placement publishes exactly one visual for its stable identity (counts=%d/%d/%d errors=%s)" % [stream.get_instance_ids().count(left_id), stream.get_instance_ids().count(right_id), stream.get_instance_ids().count(repeated_left_id), stream.get_error_summary()])
 	var marker: Node3D = scene.get_node_or_null("PlacementTargetMarker")
-	_check(marker != null and marker.visible and marker.global_position.distance_to(Vector3(left_hit.position)) < 0.1, "visual target indicator marks the same surface hit used by B")
+	_check(
+		marker != null
+			and marker.visible
+			and marker.global_position.distance_to(
+				Vector3(repeated_left_hit_a.position)
+			) < 0.1,
+		"visual target indicator marks the same effect-aware surface hit used by B"
+	)
 	_assert_global_local_transform(stream, left_id, left_record)
 
 	# A logical viewport resize checks that the picker consumes viewport coordinates,
