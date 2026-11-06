@@ -6,7 +6,7 @@ extends RefCounted
 ## is independently rebuildable and independently recoverable.
 const Effect := preload("res://scripts/terrain/terrain_object_effect.gd")
 
-const SCHEMA_VERSION := 1
+const SCHEMA_VERSION := 2
 const MAX_EFFECTS_PER_SCOPE := 20064
 const MAX_SOURCES_PER_SCOPE := 20064
 const MAX_REVISION := 9007199254740991
