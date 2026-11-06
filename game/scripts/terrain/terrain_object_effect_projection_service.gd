@@ -218,7 +218,16 @@ func reconcile_scope(
 		return index_result
 	var persisted: Dictionary = store.save_validated_snapshot(checked["snapshot"])
 	if not persisted.get("ok", false):
-		return _failure(String(persisted.get("reason", "effect_projection_persist_failed")))
+		# A store failure may occur after bytes were flushed or a rename became
+		# durable. Do not permit another mutation until load/recovery establishes
+		# the actual committed generation.
+		initialized = false
+		initialization_error = String(
+			persisted.get("reason", "effect_projection_persist_failed")
+		)
+		return _failure(
+			"effect_projection_commit_uncertain:%s" % initialization_error
+		)
 
 	snapshot = checked["snapshot"]
 	index = index_result["index"]
