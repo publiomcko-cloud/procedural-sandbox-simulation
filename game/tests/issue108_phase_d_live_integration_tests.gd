@@ -50,9 +50,21 @@ class FakeObjectStream:
 	func transform_translation(value: Vector3i) -> void:
 		if instance.is_empty():
 			return
-		instance["instance_components"]["core.transform"]["properties"]["translation_mm"] = [
-			value.x, value.y, value.z
-		]
+		var components: Dictionary = instance.get("instance_components", {}).duplicate(true)
+		var default_scale: Vector3i = instance.get(
+			"default_scale_milli", Vector3i(1000, 1000, 1000)
+		)
+		components["core.transform"] = {
+			"schema_version": 1,
+			"properties": {
+				"translation_mm": [value.x, value.y, value.z],
+				"rotation_mdeg": [0, int(instance.get("default_yaw_mdeg", 0)), 0],
+				"scale_milli": [
+					default_scale.x, default_scale.y, default_scale.z
+				],
+			},
+		}
+		instance["instance_components"] = components
 		entity_revision += 1
 		world_revision += 1
 
