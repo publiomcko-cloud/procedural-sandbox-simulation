@@ -85,7 +85,7 @@ func load_region(region_key: Vector2i) -> Dictionary:
 			"reason": "materialization_size_invalid",
 			"load_usec": Time.get_ticks_usec() - started_usec,
 		}
-	var envelope_value := bytes_to_var(bytes, false)
+	var envelope_value: Variant = bytes_to_var(bytes)
 	if typeof(envelope_value) != TYPE_DICTIONARY:
 		_discard(path)
 		return {
@@ -102,7 +102,7 @@ func load_region(region_key: Vector2i) -> Dictionary:
 			"reason": "materialization_identity_mismatch",
 			"load_usec": Time.get_ticks_usec() - started_usec,
 		}
-	var stored_region := envelope.get("region_key", [])
+	var stored_region: Array = envelope.get("region_key", [])
 	if typeof(stored_region) != TYPE_ARRAY or stored_region.size() != 2 		or Vector2i(int(stored_region[0]), int(stored_region[1])) != region_key:
 		_discard(path)
 		return {
@@ -111,7 +111,7 @@ func load_region(region_key: Vector2i) -> Dictionary:
 			"reason": "materialization_region_mismatch",
 			"load_usec": Time.get_ticks_usec() - started_usec,
 		}
-	var payload_value := envelope.get("payload", PackedByteArray())
+	var payload_value: Variant = envelope.get("payload", PackedByteArray())
 	if typeof(payload_value) != TYPE_PACKED_BYTE_ARRAY:
 		_discard(path)
 		return {
@@ -129,7 +129,7 @@ func load_region(region_key: Vector2i) -> Dictionary:
 			"reason": "materialization_hash_mismatch",
 			"load_usec": Time.get_ticks_usec() - started_usec,
 		}
-	var generated_value := bytes_to_var(payload_bytes, false)
+	var generated_value: Variant = bytes_to_var(payload_bytes)
 	if typeof(generated_value) != TYPE_DICTIONARY:
 		_discard(path)
 		return {
@@ -181,7 +181,7 @@ func save_region(region_key: Vector2i, generated: Dictionary) -> Dictionary:
 		"materialization_reason",
 	]:
 		payload.erase(transient_key)
-	var payload_bytes := var_to_bytes(payload, false)
+	var payload_bytes: PackedByteArray = var_to_bytes(payload)
 	if payload_bytes.is_empty() or payload_bytes.size() > MAX_REGION_BYTES:
 		return {
 			"ok": false,
@@ -199,7 +199,7 @@ func save_region(region_key: Vector2i, generated: Dictionary) -> Dictionary:
 		"payload_sha256": _sha256(payload_bytes),
 		"payload": payload_bytes,
 	}
-	var bytes := var_to_bytes(envelope, false)
+	var bytes: PackedByteArray = var_to_bytes(envelope)
 	if bytes.is_empty() or bytes.size() > MAX_REGION_BYTES:
 		return {
 			"ok": false,
