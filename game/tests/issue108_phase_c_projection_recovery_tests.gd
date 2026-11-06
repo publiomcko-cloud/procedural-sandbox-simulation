@@ -145,10 +145,22 @@ func _run() -> void:
 	)
 	_check(FileAccess.file_exists(crash_final) and not FileAccess.file_exists(crash_tmp), "temporary recovery promotes regional generation back to final path")
 	var recovered_effect := _effect_for_source(recovered.get_scope_snapshot(Vector2i.ZERO), entity_id)
+	var initial_effect_sha := ProjectionContract.canonical_sha256(initial_effect)
+	var recovered_effect_sha := ProjectionContract.canonical_sha256(recovered_effect)
+	if initial_effect_sha != recovered_effect_sha 		or recovered_effect.get("content_pin", {}) != initial_effect.get("content_pin", {}) 		or recovered_effect.get("terrain_interaction_pin", {}) != initial_effect.get("terrain_interaction_pin", {}):
+		print("ISSUE108_PHASE_C_RECOVERY_CANONICAL_DIAGNOSTIC=" + JSON.stringify({
+			"initial_sha": initial_effect_sha,
+			"recovered_sha": recovered_effect_sha,
+			"content_pin_equal": recovered_effect.get("content_pin", {}) == initial_effect.get("content_pin", {}),
+			"interaction_pin_equal": recovered_effect.get("terrain_interaction_pin", {}) == initial_effect.get("terrain_interaction_pin", {}),
+			"initial_content_pin": initial_effect.get("content_pin", {}),
+			"recovered_content_pin": recovered_effect.get("content_pin", {}),
+			"initial_interaction_pin": initial_effect.get("terrain_interaction_pin", {}),
+			"recovered_interaction_pin": recovered_effect.get("terrain_interaction_pin", {}),
+		}))
 	_check(
 		not recovered_effect.is_empty()
-			and ProjectionContract.canonical_sha256(recovered_effect)
-				== ProjectionContract.canonical_sha256(initial_effect)
+			and recovered_effect_sha == initial_effect_sha
 			and recovered_effect["content_pin"] == initial_effect["content_pin"]
 			and recovered_effect["terrain_interaction_pin"]
 				== initial_effect["terrain_interaction_pin"],
