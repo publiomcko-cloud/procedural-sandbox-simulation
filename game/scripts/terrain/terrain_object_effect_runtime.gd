@@ -304,14 +304,50 @@ func get_effect_count() -> int:
 
 
 func _reconcile_region_from_authority(region_key: Vector2i) -> Dictionary:
+	var authoritative_revision := int(
+		authoritative_state_service.call("get_revision")
+	)
 	if _ensure_command_service():
 		var reconstructed: Dictionary = command_service.reconstruct_region(region_key)
 		if not reconstructed.get("ok", false):
 			return _failure(
 				"terrain_effect_runtime_reconstruct_failed:%s" 					% reconstructed.get("reason", "unknown")
 			)
-		var reconciled: Dictionary = projection.reconcile_command_region(
-			region_key, command_service
+		var active_instances: Array[Dictionary] = []
+		var source_revisions: Dictionary = {}
+		var base_instances: Array = command_service.get_region_base_instances(
+			region_key
+		)
+		for base_value in base_instances:
+			if typeof(base_value) != TYPE_DICTIONARY:
+				command_service.release_region(region_key)
+				return _failure(
+					"terrain_effect_runtime_region_source_invalid"
+				)
+			var base: Dictionary = base_value
+			var source_id := String(base.get("instance_id", ""))
+			var resolved: Dictionary = command_service.resolve_entity(
+				source_id
+			)
+			if not resolved.get("ok", false):
+				command_service.release_region(region_key)
+				return _failure(
+					"terrain_effect_runtime_resolution_failed:%s" 						% resolved.get("reason", "unknown")
+				)
+			if bool(resolved.get("deleted", false)):
+				continue
+			active_instances.append(
+				(resolved["instance"] as Dictionary).duplicate(true)
+			)
+			# The live projection must survive the schema-1 -> schema-3
+			# transition. Legacy entity revisions remain zero, whereas the
+			# authoritative world revision is monotonic across both schemas.
+			source_revisions[source_id] = authoritative_revision
+		var reconciled: Dictionary = projection.reconcile_scope(
+			region_key,
+			authoritative_revision,
+			active_instances,
+			source_revisions
 		)
 		command_service.release_region(region_key)
 		return reconciled
@@ -346,14 +382,10 @@ func _reconcile_region_from_authority(region_key: Vector2i) -> Dictionary:
 		if instance_id.is_empty():
 			return _failure("terrain_effect_runtime_instance_identity_invalid")
 		active_instances.append(instance.duplicate(true))
-		source_revisions[instance_id] = int(
-			authoritative_state_service.call(
-				"get_entity_revision", instance_id
-			)
-		)
+		source_revisions[instance_id] = authoritative_revision
 	return projection.reconcile_scope(
 		region_key,
-		int(authoritative_state_service.call("get_revision")),
+		authoritative_revision,
 		active_instances,
 		source_revisions
 	)
