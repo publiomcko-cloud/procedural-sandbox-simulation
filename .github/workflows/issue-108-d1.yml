@@ -8,6 +8,9 @@ on:
     paths:
       - 'game/scripts/terrain/terrain_object_effect*.gd'
       - 'game/scripts/terrain/terrain_demo.gd'
+      - 'game/scripts/objects/procedural_object_stream.gd'
+      - 'game/scripts/entities/entity_command_service.gd'
+      - 'game/scripts/diagnostics/performance_trace.gd'
       - 'game/tests/issue108_d1_runtime_performance_tests.gd'
       - 'game/tests/issue108_d1_scene_streaming_performance_tests.gd'
       - 'game/tests/issue108_phase_d_live_integration_tests.gd'
@@ -45,8 +48,10 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          timeout --signal=TERM 180s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_d1_runtime_performance_tests.gd 2>&1 | tee /tmp/d1.log
+          SANDBOX_PERF_TRACE=1 SANDBOX_PERF_TRACE_MIN_MS=999999 timeout --signal=TERM 180s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_d1_runtime_performance_tests.gd 2>&1 | tee /tmp/d1.log
           grep -q 'ISSUE108_D1_PERFORMANCE_PASS' /tmp/d1.log
+          grep -q 'PERF_TRACE ' /tmp/d1.log
+          grep -q '"event":"effect_window_update"' /tmp/d1.log
           ! grep -q 'SCRIPT ERROR:' /tmp/d1.log
           ! grep -q 'ERROR: FAIL:' /tmp/d1.log
 
