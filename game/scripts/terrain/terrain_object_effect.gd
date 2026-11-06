@@ -53,13 +53,17 @@ static func build_from_instance(instance: Dictionary, source_revision: int = 0) 
 	var transform_result := _resolve_transform(instance)
 	if not transform_result.get("ok", false):
 		return transform_result
-	var anchor_world_mm: Vector3i = transform_result["anchor_world_mm"]
+	var anchor_world_mm: Array = transform_result["anchor_world_mm"]
 	var translation_mm: Vector3i = transform_result["translation_mm"]
 	var rotation_mdeg: Vector3i = transform_result["rotation_mdeg"]
 	var scale_milli: Vector3i = transform_result["scale_milli"]
 	var embed_depth_mm := int(interaction["embed_depth_mm"])
 	var effect_origin := (
-		Vector3(anchor_world_mm + translation_mm) / 1000.0
+		Vector3(
+			float(anchor_world_mm[0] + translation_mm.x),
+			float(anchor_world_mm[1] + translation_mm.y),
+			float(anchor_world_mm[2] + translation_mm.z)
+		) / 1000.0
 		+ Vector3(0.0, -float(embed_depth_mm) / 1000.0, 0.0)
 	)
 	var rotation_radians := Vector3(rotation_mdeg) * (PI / 180000.0)
@@ -123,7 +127,7 @@ static func build_from_instance(instance: Dictionary, source_revision: int = 0) 
 		"content_pin": instance["content_pin"],
 		"terrain_interaction_pin": interaction_pin,
 		"shape_descriptor_sha256": descriptor["descriptor_sha256"],
-		"anchor_world_mm": _vector3i_array(anchor_world_mm),
+		"anchor_world_mm": anchor_world_mm.duplicate(),
 		"translation_mm": _vector3i_array(translation_mm),
 		"rotation_mdeg": _vector3i_array(rotation_mdeg),
 		"scale_milli": _vector3i_array(scale_milli),
@@ -153,7 +157,7 @@ static func build_from_instance(instance: Dictionary, source_revision: int = 0) 
 		"blend_mode": BLEND_MODE,
 		"embed_depth_mm": embed_depth_mm,
 		"blend_radius_mm": int(interaction["blend_radius_mm"]),
-		"anchor_world_mm": _vector3i_array(anchor_world_mm),
+		"anchor_world_mm": anchor_world_mm.duplicate(),
 		"translation_mm": _vector3i_array(translation_mm),
 		"rotation_mdeg": _vector3i_array(rotation_mdeg),
 		"scale_milli": _vector3i_array(scale_milli),
@@ -229,7 +233,7 @@ static func validate_effect(value: Variant) -> Dictionary:
 		or String(interaction_pin["rule_sha256"]).length() != 64 \
 		or not _is_hex(String(interaction_pin["rule_sha256"])):
 		return _failure("terrain_effect_interaction_pin_invalid")
-	var anchor := _read_int3(effect["anchor_world_mm"])
+	var anchor := _read_wide_int3(effect["anchor_world_mm"])
 	var translation := _read_int3(effect["translation_mm"])
 	var rotation := _read_int3(effect["rotation_mdeg"])
 	var scale := _read_int3(effect["scale_milli"])
@@ -459,15 +463,18 @@ static func _validate_instance_input(instance: Dictionary, source_revision: int)
 static func _resolve_transform(instance: Dictionary) -> Dictionary:
 	var region_key: Vector2i = instance["region_key"]
 	var local_position_mm: Vector3i = instance["position_mm"]
-	var region_origin := Spatial.region_origin_world(region_key)
-	var anchor_world := region_origin + Vector3(local_position_mm) / 1000.0
-	var anchor_world_mm := Vector3i(
-		roundi(anchor_world.x * 1000.0),
-		roundi(anchor_world.y * 1000.0),
-		roundi(anchor_world.z * 1000.0)
-	)
+	# Compatibility/archive record only. Use integer region arithmetic so the
+	# Phase-C projection cannot overflow Vector3i before Phase-D local-frame
+	# sampling takes over.
+	var anchor_world_mm: Array[int] = [
+		int(region_key.x) * 16000 + int(local_position_mm.x),
+		int(local_position_mm.y),
+		int(region_key.y) * 12000 + int(local_position_mm.z),
+	]
 	if instance.has("world_position_mm"):
-		if not instance["world_position_mm"] is Vector3i 			or Vector3i(instance["world_position_mm"]) != anchor_world_mm:
+		var explicit_anchor := _read_wide_int3(instance["world_position_mm"])
+		if not explicit_anchor.get("ok", false) \
+			or explicit_anchor["value"] != anchor_world_mm:
 			return _failure("terrain_effect_world_anchor_mismatch")
 	var translation_mm := Vector3i.ZERO
 	var rotation_mdeg := Vector3i(0, int(instance["default_yaw_mdeg"]), 0)
@@ -494,6 +501,19 @@ static func _resolve_transform(instance: Dictionary) -> Dictionary:
 		"rotation_mdeg": rotation_mdeg,
 		"scale_milli": scale_milli,
 	}
+
+
+static func _read_wide_int3(value: Variant) -> Dictionary:
+	if value is Vector3i:
+		return {"ok": true, "value": [int(value.x), int(value.y), int(value.z)]}
+	if typeof(value) != TYPE_ARRAY or value.size() != 3:
+		return {"ok": false}
+	var parsed: Array[int] = []
+	for component in value:
+		if not _is_integer(component) or abs(float(component)) > 9007199254740991.0:
+			return {"ok": false}
+		parsed.append(int(component))
+	return {"ok": true, "value": parsed}
 
 
 static func _read_int3(value: Variant) -> Dictionary:
