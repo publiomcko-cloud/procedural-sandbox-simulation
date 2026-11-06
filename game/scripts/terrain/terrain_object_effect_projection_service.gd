@@ -626,7 +626,7 @@ func _build_scope_index(scope_snapshot: Dictionary) -> Dictionary:
 		effect_ids.append(String(effect_id_value))
 	effect_ids.sort()
 	for effect_id in effect_ids:
-		var indexed: Dictionary = candidate_index.replace_frame(
+		var indexed: Dictionary = candidate_index.replace_frame_prevalidated(
 			scope_snapshot["local_frames"][effect_id]
 		)
 		if not indexed.get("ok", false):
