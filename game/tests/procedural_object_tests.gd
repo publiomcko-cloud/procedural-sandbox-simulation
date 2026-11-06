@@ -1,5 +1,7 @@
 extends SceneTree
 
+# D.2 diagnostic branch: runtime code is exact D.1 base; comment-only test touch.
+
 const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 const Registry := preload("res://scripts/modding/content_definition_registry.gd")
 const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
