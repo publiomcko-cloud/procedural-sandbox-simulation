@@ -1355,6 +1355,19 @@ func _dispatch_mesh_jobs() -> void:
 			var corner_snapshot: Dictionary = SharedBoundaryAuthority.make_xz_corner_snapshot(
 				state.brush_edits, min_region
 			)
+			var prepared_corner := _prepare_terrain_effect_snapshot(
+				corner_snapshot,
+				[
+					{"region_key": min_region, "chunk_coordinate": Vector2i(ChunkGrid.CHUNK_COUNT_X - 1, ChunkGrid.CHUNK_COUNT_Z - 1)},
+					{"region_key": min_region + Vector2i.RIGHT, "chunk_coordinate": Vector2i(0, ChunkGrid.CHUNK_COUNT_Z - 1)},
+					{"region_key": min_region + Vector2i(0, 1), "chunk_coordinate": Vector2i(ChunkGrid.CHUNK_COUNT_X - 1, 0)},
+					{"region_key": min_region + Vector2i(1, 1), "chunk_coordinate": Vector2i.ZERO},
+				]
+			)
+			if not prepared_corner.get("ok", false):
+				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_corner.get("reason", "unknown"))
+				continue
+			corner_snapshot = prepared_corner["snapshot"]
 			snapshot_meta = corner_snapshot
 			job = SharedCornerMeshJob.new(
 				state.world_seed, min_region, corner_snapshot, submitted_usec,
@@ -1368,6 +1381,17 @@ func _dispatch_mesh_jobs() -> void:
 			var pair_snapshot: Dictionary = SharedBoundaryAuthority.make_x_pair_snapshot(
 				state.brush_edits, left_region, coordinate.y
 			)
+			var prepared_pair := _prepare_terrain_effect_snapshot(
+				pair_snapshot,
+				[
+					{"region_key": left_region, "chunk_coordinate": Vector2i(ChunkGrid.CHUNK_COUNT_X - 1, coordinate.y)},
+					{"region_key": left_region + Vector2i.RIGHT, "chunk_coordinate": Vector2i(0, coordinate.y)},
+				]
+			)
+			if not prepared_pair.get("ok", false):
+				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_pair.get("reason", "unknown"))
+				continue
+			pair_snapshot = prepared_pair["snapshot"]
 			snapshot_meta = pair_snapshot
 			job = SharedBoundaryMeshJob.new(
 				state.world_seed, left_region, coordinate.y, pair_snapshot, submitted_usec,
@@ -1381,6 +1405,17 @@ func _dispatch_mesh_jobs() -> void:
 			var z_snapshot: Dictionary = SharedBoundaryAuthority.make_z_pair_snapshot(
 				state.brush_edits, low_region, coordinate.x
 			)
+			var prepared_z := _prepare_terrain_effect_snapshot(
+				z_snapshot,
+				[
+					{"region_key": low_region, "chunk_coordinate": Vector2i(coordinate.x, ChunkGrid.CHUNK_COUNT_Z - 1)},
+					{"region_key": low_region + Vector2i(0, 1), "chunk_coordinate": Vector2i(coordinate.x, 0)},
+				]
+			)
+			if not prepared_z.get("ok", false):
+				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_z.get("reason", "unknown"))
+				continue
+			z_snapshot = prepared_z["snapshot"]
 			snapshot_meta = z_snapshot
 			job = SharedZBoundaryMeshJob.new(
 				state.world_seed, low_region, coordinate.x, z_snapshot, submitted_usec,
@@ -1392,6 +1427,14 @@ func _dispatch_mesh_jobs() -> void:
 			var chunk_snapshot: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
 				stage["region_key"], coordinate
 			)
+			var prepared_chunk := _prepare_terrain_effect_snapshot(
+				chunk_snapshot,
+				[{"region_key": stage["region_key"], "chunk_coordinate": coordinate}]
+			)
+			if not prepared_chunk.get("ok", false):
+				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_chunk.get("reason", "unknown"))
+				continue
+			chunk_snapshot = prepared_chunk["snapshot"]
 			snapshot_meta = chunk_snapshot
 			job = TerrainMeshJob.new(
 				state.world_seed, stage["region_key"], coordinate,
@@ -1450,6 +1493,25 @@ func _dispatch_mesh_jobs() -> void:
 				"raw_candidate_operations": int(snapshot_meta.get("raw_candidate_operation_count", snapshot_meta.get("candidate_operation_count", -1))),
 				"materialized_tiles": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
 			})
+
+
+func _prepare_terrain_effect_snapshot(
+	base_snapshot: Dictionary,
+	targets: Array
+) -> Dictionary:
+	if terrain_effect_runtime == null or not bool(terrain_effect_runtime.get("initialized")):
+		return {"ok": false, "reason": "terrain_effect_runtime_unavailable"}
+	var prepared: Dictionary = terrain_effect_runtime.prepare_targets_snapshot(
+		base_snapshot, targets
+	)
+	if prepared.get("ok", false):
+		_terrain_effect_status = "Terrain-object effects active (%d frame(s), %d resident scope(s))" % [
+			int(prepared.get("effect_count", 0)),
+			int(terrain_effect_runtime.get_loaded_scope_count()),
+		]
+	else:
+		_terrain_effect_status = "Terrain-object effects unavailable (%s)" % prepared.get("reason", "unknown")
+	return prepared
 
 
 func _next_mesh_job_request() -> Dictionary:
