@@ -1,5 +1,14 @@
 # Decision register — scope, evidence, authority (2026-10-17)
 
+## 2026-11-07 — current accepted architecture decisions
+
+| Decision / expectation | Classification | Source / evidence | Open limitation |
+| --- | --- | --- | --- |
+| Issue #108 terrain–procedural object grounding/SDF integration | **COMPLETE / CLOSED / owner accepted** | Issue #108; D.8 PR #254; merge `5a69a2ec9e96411fd256abc97ae9a6c32d4658a9`; [closure/M4.0 checkpoint](../checkpoints/2026-11-07-ISSUE108-CLOSURE-M4-0-HANDOFF.md) | Future terrain/object features require a new issue; historical procedural revisit test baseline remains separately documented |
+| Generalize the mod-first content core before P4 | **ACCEPTED / M4.0 authorized as next slice** | [ADR-0007](ADR-0007-MOD-FIRST-CONTENT-CORE-BEFORE-P4.md), [closure/M4.0 checkpoint](../checkpoints/2026-11-07-ISSUE108-CLOSURE-M4-0-HANDOFF.md) | P4 does not start until M4.0 preserves current behavior and qualifies generalized handlers/fingerprints |
+| Main-thread budget, derived-work isolation, revision-gated caches and stage-level performance telemetry | **ACCEPTED runtime architecture rule** | [ADR-0008](ADR-0008-MAIN-THREAD-BUDGET-AND-PERFORMANCE-OBSERVABILITY.md), [Issue #108 performance retrospective](../reports/2026-11-07-ISSUE108-PERFORMANCE-RETROSPECTIVE.md) | Numeric phase budgets remain scenario-specific and must be established with evidence |
+
+
 This register maps *recorded owner decisions* to proof and status; it does **not** supersede accepted [ADR-0001](ADR-0001-BASELINE.md) or enact proposed [ADR-0002](ADR-0002-TERRAIN-BACKEND-PROPOSED.md). For later changes, add a new decision/ADR and checkpoint instead of rewriting the history. All live statuses require verification.
 
 | Decision / expectation | Classification as of checkpoint | Source / evidence | Open limitation |
