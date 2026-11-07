@@ -1297,6 +1297,118 @@ func _republish_after_state_mutation(region_key: Vector2i, world_state: RefCount
 	return publish_region(region_key, world_state, true, token)
 
 
+func _batch_render_state(instance: Dictionary) -> Dictionary:
+	var position := Vector3(instance.get("position_mm", Vector3i.ZERO)) / 1000.0
+	var default_scale: Vector3i = instance.get(
+		"default_scale_milli", Vector3i(1000, 1000, 1000)
+	)
+	var default_yaw := float(instance.get("default_yaw_mdeg", 0)) * (
+		PI / 180000.0
+	)
+	var basis := Basis(Vector3.UP, default_yaw).scaled(
+		Vector3(default_scale) / 1000.0
+	)
+	var components: Dictionary = instance.get("instance_components", {})
+	var transform_component: Dictionary = components.get(
+		StateContract.COMPONENT_TRANSFORM, {}
+	)
+	if not transform_component.is_empty():
+		var values: Dictionary = transform_component.get("properties", {})
+		var translation: Array = values.get("translation_mm", [0, 0, 0])
+		var rotation_mdeg: Array = values.get(
+			"rotation_mdeg", [0, 0, 0]
+		)
+		var scale_milli: Array = values.get(
+			"scale_milli", [1000, 1000, 1000]
+		)
+		position += Vector3(
+			float(translation[0]),
+			float(translation[1]),
+			float(translation[2])
+		) / 1000.0
+		var rotation := Vector3(
+			float(rotation_mdeg[0]),
+			float(rotation_mdeg[1]),
+			float(rotation_mdeg[2])
+		) * (PI / 180000.0)
+		basis = Basis.from_euler(rotation).scaled(Vector3(
+			float(scale_milli[0]),
+			float(scale_milli[1]),
+			float(scale_milli[2])
+		) / 1000.0)
+	var tint: Array = [1000, 1000, 1000]
+	var appearance: Dictionary = components.get(
+		StateContract.COMPONENT_APPEARANCE, {}
+	)
+	if not appearance.is_empty():
+		var appearance_properties: Dictionary = appearance.get(
+			"properties", {}
+		)
+		tint = appearance_properties.get("tint_milli", tint)
+	return {
+		"position": position,
+		"basis": basis,
+		"tint_milli": [
+			int(tint[0]),
+			int(tint[1]),
+			int(tint[2]),
+		],
+	}
+
+
+func _appearance_batch_key(render_state: Dictionary) -> String:
+	var tint: Array = render_state.get("tint_milli", [1000, 1000, 1000])
+	return "%d,%d,%d" % [int(tint[0]), int(tint[1]), int(tint[2])]
+
+
+func _material_for_tint(tint_value: Variant) -> StandardMaterial3D:
+	var tint: Array = (
+		tint_value as Array
+		if typeof(tint_value) == TYPE_ARRAY
+		else [1000, 1000, 1000]
+	)
+	if (
+		int(tint[0]) == 1000
+		and int(tint[1]) == 1000
+		and int(tint[2]) == 1000
+	):
+		return _rock_material
+	var material := _rock_material.duplicate() as StandardMaterial3D
+	material.albedo_color = _rock_material.albedo_color * Color(
+		float(tint[0]) / 1000.0,
+		float(tint[1]) / 1000.0,
+		float(tint[2]) / 1000.0,
+		1.0
+	)
+	return material
+
+
+func _new_identity_node(instance: Dictionary) -> Node3D:
+	var object_node := Node3D.new()
+	object_node.name = "Object_%s" % String(
+		instance["instance_id"]
+	).sha256_text().substr(0, 12)
+	object_node.position = Vector3(instance["position_mm"]) / 1000.0
+	object_node.set_meta("stable_instance_id", instance["instance_id"])
+	object_node.set_meta("definition_id", instance["definition_id"])
+	object_node.set_meta("content_pin", instance["content_pin"])
+	object_node.set_meta("recipe_algorithm", instance["recipe_algorithm"])
+	object_node.set_meta("geometry_profile", instance["geometry_profile"])
+	object_node.set_meta(
+		"geometry_seeds",
+		(instance["geometry_seeds"] as Dictionary).duplicate(true)
+	)
+	object_node.set_meta(
+		"geometry_adapter_version", RockMeshAdapter.GEOMETRY_VERSION
+	)
+	object_node.set_meta(
+		"instance_components",
+		(instance.get("instance_components", {}) as Dictionary).duplicate(true)
+	)
+	_apply_components_to_node(object_node, instance)
+	return object_node
+
+
 func _apply_components_to_node(node: Node3D, instance: Dictionary) -> void:
 	var default_scale: Vector3i = instance.get("default_scale_milli", Vector3i(1000, 1000, 1000))
 	var default_yaw := int(instance.get("default_yaw_mdeg", 0))
