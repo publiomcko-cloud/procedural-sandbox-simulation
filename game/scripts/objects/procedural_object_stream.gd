@@ -886,6 +886,9 @@ func _process_region_visual_preparations() -> void:
 				generated["_visual_batch_worker_usec"] = int(
 					prepared_batch.get("worker_usec", 0)
 				)
+				generated["_visual_batch_worker_thread_id"] = int(
+					prepared_batch.get("worker_thread_id", 0)
+				)
 				record["generated"] = generated
 				record["batch_preparation_worker_usec"] = int(
 					prepared_batch.get("worker_usec", 0)
@@ -1356,6 +1359,9 @@ func publish_region(
 	var batch_prepare_worker_usec := int(
 		generated_base.get("_visual_batch_worker_usec", 0)
 	)
+	var batch_prepare_worker_thread_id := int(
+		generated_base.get("_visual_batch_worker_thread_id", 0)
+	)
 	var batch_commit_usec := 0
 	var batch_result: Dictionary
 	if can_reuse_prepared_batches:
@@ -1514,6 +1520,7 @@ func publish_region(
 		"geometry_cpu_worker_usec": geometry_cpu_worker_usec,
 		"visual_geometry_worker_usec": visual_geometry_worker_usec,
 		"batch_prepare_worker_usec": batch_prepare_worker_usec,
+		"batch_prepare_worker_thread_id": batch_prepare_worker_thread_id,
 		"batch_prepare_reused": can_reuse_prepared_batches,
 		"batch_commit_usec": batch_commit_usec,
 		"prepared_base_adopted": prepared_base_adopted,
