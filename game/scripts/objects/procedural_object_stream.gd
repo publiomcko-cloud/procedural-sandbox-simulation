@@ -1026,15 +1026,23 @@ func publish_region(
 		"region_key": region_key,
 		"instance_count": instances.size(),
 		"batched_instance_count": batch_items.size(),
+		"mutable_batched_instance_count": mutable_batched_instance_count,
+		"total_render_batched_instance_count": (
+			batch_items.size() + mutable_batched_instance_count
+		),
+		"mutable_batch_group_count": mutable_batch_results.size(),
 		"individual_node_count": pending_nodes.size(),
+		"individual_mesh_node_count": individual_mesh_node_count,
 		"batch_cpu_source_count": int(batch_result.get("cpu_source_count", 0)),
 		"batch_mesh_source_count": int(batch_result.get("mesh_source_count", 0)),
+		"mutable_batch_cpu_source_count": mutable_batch_cpu_source_count,
 		"resolved_reuse_count": resolved_reuse_count,
 		"candidate_cell_count": candidate_cell_count,
 		"surface_anchor_count": surface_anchor_count,
 		"generation_usec": generation_usec,
 		"generation_worker_usec": generation_worker_usec,
 		"geometry_cpu_worker_usec": geometry_cpu_worker_usec,
+		"visual_geometry_worker_usec": visual_geometry_worker_usec,
 		"materialization_hit": bool(generated_base.get("materialization_hit", false)),
 		"materialization_load_usec": int(generated_base.get("materialization_load_usec", 0)),
 		"materialization_save_usec": int(generated_base.get("materialization_save_usec", 0)),
@@ -1042,12 +1050,16 @@ func publish_region(
 		"geometry_cache_misses": _geometry_cache_miss_count - geometry_cache_misses_before,
 		"geometry_cache_evictions": _geometry_cache_eviction_count - geometry_cache_evictions_before,
 		"geometry_cache_variant_count": _geometry_mesh_cache.size(),
+		"geometry_cpu_cache_variant_count": _geometry_cpu_cache.size(),
 		"main_thread_reconstruction_usec": main_thread_reconstruction_usec,
 		"logical_reconstruction_usec": _last_reconstruction_usec,
 		"mesh_build_usec": mesh_build_elapsed_usec,
 		"batch_build_usec": batch_elapsed_usec,
 		"publication_usec": Time.get_ticks_usec() - publication_started_usec,
-		"batch_vertex_count": int(batch_result.get("vertex_count", 0)),
+		"static_batch_vertex_count": int(batch_result.get("vertex_count", 0)),
+		"mutable_batch_vertex_count": mutable_batch_vertex_count,
+		"batch_vertex_count": int(batch_result.get("vertex_count", 0))
+			+ mutable_batch_vertex_count,
 	}
 	if _perf_trace_enabled and int(_last_region_metrics["publication_usec"]) >= PerformanceTrace.min_usec():
 		var trace_metrics := _last_region_metrics.duplicate(true)
