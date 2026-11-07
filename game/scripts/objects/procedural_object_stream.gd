@@ -780,8 +780,21 @@ func publish_region(
 	var pending_nodes: Array[Node3D] = []
 	var instances: Array[Dictionary] = []
 	var batch_items: Array[Dictionary] = []
-	var geometry_cpu_by_instance: Dictionary = generated_base.get("geometry_cpu_by_instance", {})
-	var geometry_cpu_worker_usec := int(generated_base.get("geometry_cpu_usec", 0))
+	var mutable_batch_groups: Dictionary = {}
+	var mutable_batch_tints: Dictionary = {}
+	var individual_mesh_node_count := 0
+	var geometry_cpu_by_instance: Dictionary = generated_base.get(
+		"geometry_cpu_by_instance", {}
+	)
+	var visual_cpu_by_cache_key: Dictionary = generated_base.get(
+		"_visual_cpu_by_cache_key", {}
+	)
+	var geometry_cpu_worker_usec := int(
+		generated_base.get("geometry_cpu_usec", 0)
+	)
+	var visual_geometry_worker_usec := int(
+		generated_base.get("_visual_geometry_worker_usec", 0)
+	)
 	var mesh_build_started_usec := Time.get_ticks_usec()
 	var prepared_resolved_by_id: Dictionary = generated_base.get(
 		"_visual_resolved_by_id", {}
@@ -805,77 +818,142 @@ func publish_region(
 		if not resolved.get("ok", false):
 			for pending_node in pending_nodes:
 				pending_node.free()
-			return _record_region_failure(id, String(resolved.get("reason", "object_state_resolution_failed")))
+			return _record_region_failure(
+				id,
+				String(resolved.get("reason", "object_state_resolution_failed"))
+			)
 		if resolved.get("deleted", false):
 			continue
+
 		var instance: Dictionary = resolved["instance"]
 		instances.append(instance)
+		var instance_id := String(instance.get("instance_id", ""))
+		var cache_key := _geometry_cache_key(instance)
 		var prepared_cpu: Dictionary = geometry_cpu_by_instance.get(
-			String(instance.get("instance_id", "")), {}
+			instance_id, {}
 		)
+		if not prepared_cpu.get("ok", false):
+			prepared_cpu = visual_cpu_by_cache_key.get(cache_key, {})
+
 		if _is_static_batch_candidate(instance):
-			var batch_item: Dictionary = {
-				"instance_id": String(instance["instance_id"]),
+			var static_cpu := _get_or_build_geometry_cpu(
+				instance, prepared_cpu
+			)
+			if not static_cpu.get("ok", false):
+				for pending_node in pending_nodes:
+					pending_node.free()
+				return _record_region_failure(
+					id,
+					"object_geometry_cpu_build_failed:%s"
+						% static_cpu.get("reason", "unknown")
+				)
+			batch_items.append({
+				"instance_id": instance_id,
 				"position": Vector3(instance["position_mm"]) / 1000.0,
 				"scale_milli": instance.get(
 					"default_scale_milli", Vector3i(1000, 1000, 1000)
 				),
 				"yaw_mdeg": int(instance.get("default_yaw_mdeg", 0)),
+				"cpu_data": static_cpu,
 				"selection_record": _build_selection_record(instance),
-			}
-			if prepared_cpu.get("ok", false):
-				batch_item["cpu_data"] = prepared_cpu
-			else:
-				var batch_mesh_result: Dictionary = _get_or_build_geometry_mesh(
-					instance, prepared_cpu
-				)
-				if not batch_mesh_result.get("ok", false):
-					for pending_node in pending_nodes:
-						pending_node.free()
-					return _record_region_failure(
-						id,
-						"object_mesh_build_failed:%s"
-							% batch_mesh_result.get("reason", "unknown")
-					)
-				batch_item["mesh"] = batch_mesh_result["mesh"]
-			batch_items.append(batch_item)
+			})
 			continue
 
+		var object_node := _new_identity_node(instance)
+		pending_nodes.append(object_node)
+		if String(instance.get("recipe_algorithm", "")) == RockMeshAdapter.ALGORITHM:
+			var mutable_cpu := _get_or_build_geometry_cpu(
+				instance, prepared_cpu
+			)
+			if mutable_cpu.get("ok", false):
+				var render_state := _batch_render_state(instance)
+				var appearance_key := _appearance_batch_key(render_state)
+				if not mutable_batch_groups.has(appearance_key):
+					mutable_batch_groups[appearance_key] = []
+					mutable_batch_tints[appearance_key] = (
+						render_state["tint_milli"] as Array
+					).duplicate()
+				var mutable_items: Array = mutable_batch_groups[appearance_key]
+				mutable_items.append({
+					"instance_id": instance_id,
+					"position": render_state["position"],
+					"basis": render_state["basis"],
+					"cpu_data": mutable_cpu,
+					"selection_record": _build_selection_record(instance),
+				})
+				mutable_batch_groups[appearance_key] = mutable_items
+				continue
+
+		# Compatibility fallback for an unsupported visual adapter. This path is
+		# not used by current rock content and remains explicit in diagnostics.
 		var mesh_result: Dictionary = _get_or_build_geometry_mesh(
 			instance, prepared_cpu
 		)
 		if not mesh_result.get("ok", false):
 			for pending_node in pending_nodes:
 				pending_node.free()
-			return _record_region_failure(id, "object_mesh_build_failed:%s" % mesh_result.get("reason", "unknown"))
-		var object_node := Node3D.new()
-		object_node.name = "Object_%s" % String(instance["instance_id"]).sha256_text().substr(0, 12)
-		object_node.position = Vector3(instance["position_mm"]) / 1000.0
-		object_node.set_meta("stable_instance_id", instance["instance_id"])
-		object_node.set_meta("definition_id", instance["definition_id"])
-		object_node.set_meta("content_pin", instance["content_pin"])
-		object_node.set_meta("recipe_algorithm", instance["recipe_algorithm"])
-		object_node.set_meta("geometry_profile", instance["geometry_profile"])
-		object_node.set_meta("geometry_seeds", instance["geometry_seeds"].duplicate(true))
-		object_node.set_meta("geometry_adapter_version", RockMeshAdapter.GEOMETRY_VERSION)
-		object_node.set_meta("instance_components", instance.get("instance_components", {}).duplicate(true))
+			return _record_region_failure(
+				id,
+				"object_mesh_build_failed:%s"
+					% mesh_result.get("reason", "unknown")
+			)
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = mesh_result["mesh"]
 		mesh_instance.material_override = _rock_material
 		object_node.add_child(mesh_instance)
 		_apply_components_to_node(object_node, instance)
-		pending_nodes.append(object_node)
+		individual_mesh_node_count += 1
+
 	var mesh_build_elapsed_usec := Time.get_ticks_usec() - mesh_build_started_usec
 	var batch_started_usec := Time.get_ticks_usec()
 	var batch_result := StaticBatchBuilder.build(batch_items)
 	if not batch_result.get("ok", false):
 		for pending_node in pending_nodes:
 			pending_node.free()
-		return _record_region_failure(id, String(batch_result.get("reason", "static_batch_failed")))
+		return _record_region_failure(
+			id, String(batch_result.get("reason", "static_batch_failed"))
+		)
+
+	var mutable_batch_results: Array[Dictionary] = []
+	var mutable_batch_keys: Array[String] = []
+	for group_key_value in mutable_batch_groups.keys():
+		mutable_batch_keys.append(String(group_key_value))
+	mutable_batch_keys.sort()
+	var mutable_batched_instance_count := 0
+	var mutable_batch_vertex_count := 0
+	var mutable_batch_cpu_source_count := 0
+	for group_key in mutable_batch_keys:
+		var mutable_items: Array[Dictionary] = []
+		for item_value in (mutable_batch_groups[group_key] as Array):
+			mutable_items.append(item_value as Dictionary)
+		var mutable_result := StaticBatchBuilder.build(mutable_items)
+		if not mutable_result.get("ok", false):
+			for pending_node in pending_nodes:
+				pending_node.free()
+			return _record_region_failure(
+				id,
+				"mutable_render_batch_failed:%s"
+					% mutable_result.get("reason", "unknown")
+			)
+		mutable_batched_instance_count += mutable_items.size()
+		mutable_batch_vertex_count += int(
+			mutable_result.get("vertex_count", 0)
+		)
+		mutable_batch_cpu_source_count += int(
+			mutable_result.get("cpu_source_count", 0)
+		)
+		mutable_batch_results.append({
+			"group_key": group_key,
+			"tint_milli": mutable_batch_tints[group_key],
+			"items": mutable_items,
+			"result": mutable_result,
+		})
+
 	var region_root := Node3D.new()
 	region_root.name = "Objects_%d_%d" % [region_key.x, region_key.y]
 	region_root.position = Spatial.region_origin_world(region_key)
 	region_root.visible = objects_visible
+
 	if batch_result.get("mesh", null) is ArrayMesh:
 		var batch_node := Node3D.new()
 		batch_node.name = "StaticPopulationBatch"
@@ -891,6 +969,40 @@ func publish_region(
 		batch_mesh_instance.material_override = _rock_material
 		batch_node.add_child(batch_mesh_instance)
 		region_root.add_child(batch_node)
+
+	for mutable_entry in mutable_batch_results:
+		var mutable_result: Dictionary = mutable_entry["result"]
+		if not mutable_result.get("mesh", null) is ArrayMesh:
+			continue
+		var mutable_node := Node3D.new()
+		var group_key := String(mutable_entry["group_key"])
+		mutable_node.name = "MutableRenderBatch_%s" % (
+			group_key.sha256_text().substr(0, 10)
+		)
+		mutable_node.set_meta(
+			"stable_instance_ids", mutable_result["instance_ids"]
+		)
+		mutable_node.set_meta("mutable_render_batch_version", 1)
+		mutable_node.set_meta(
+			"tint_milli",
+			(mutable_entry["tint_milli"] as Array).duplicate()
+		)
+		var mutable_selection_records: Array[Dictionary] = []
+		for mutable_item in (mutable_entry["items"] as Array):
+			mutable_selection_records.append(
+				(mutable_item as Dictionary)["selection_record"]
+			)
+		mutable_node.set_meta(
+			"selection_records", mutable_selection_records
+		)
+		var mutable_mesh_instance := MeshInstance3D.new()
+		mutable_mesh_instance.mesh = mutable_result["mesh"]
+		mutable_mesh_instance.material_override = _material_for_tint(
+			mutable_entry["tint_milli"]
+		)
+		mutable_node.add_child(mutable_mesh_instance)
+		region_root.add_child(mutable_node)
+
 	for object_node in pending_nodes:
 		region_root.add_child(object_node)
 	if request_serial >= 0 and request_serial == _debug_fail_visual_request_serial:
