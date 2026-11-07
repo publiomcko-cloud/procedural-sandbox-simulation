@@ -100,9 +100,9 @@ jobs:
             test "$test_status" -eq 0
           else
             test "$test_status" -ne 0
-            grep -Eq 'PROCEDURAL_OBJECT_FAIL: assertions=[0-9]+ failures=1' /tmp/procedural.log
+            grep -q 'PROCEDURAL_OBJECT_FAIL: assertions=671 failures=1' /tmp/procedural.log
             grep -q 'ERROR: FAIL: camera-driven revisit republishes the original region' /tmp/procedural.log
-            grep -q 'effect_projection_same_revision_fingerprint_conflict' /tmp/procedural.log
+            test "$(grep -c 'effect_projection_same_revision_fingerprint_conflict' /tmp/procedural.log)" -eq 9
             test "$(grep -c 'ERROR: FAIL:' /tmp/procedural.log)" -eq 1
           fi
 
