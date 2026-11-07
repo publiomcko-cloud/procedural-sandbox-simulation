@@ -6,6 +6,7 @@ const Effect := preload("res://scripts/terrain/terrain_object_effect.gd")
 const Frame := preload("res://scripts/terrain/terrain_object_effect_local_frame.gd")
 const Brush := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const TerrainMeshJob := preload("res://scripts/terrain/terrain_mesh_job.gd")
+const LodMesher := preload("res://scripts/terrain/lod01_chunk_mesher.gd")
 const Transition := preload("res://scripts/experiments/lod01_transition_fixture.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
@@ -158,6 +159,30 @@ func _run() -> void:
 		_check(
 			_positions_are_chunk_local(result.get("positions", PackedVector3Array())),
 			"D8 LOD1 output remains bounded in chunk-local coordinates at region %s" % region_key
+		)
+
+		var reference_sampler := func(region_local_point: Vector3) -> float:
+			return Brush.sample_density_snapshot(
+				WORLD_SEED,
+				region_key,
+				region_local_point,
+				false,
+				snapshot
+			)
+		var reference: Dictionary = LodMesher.build_chunk_cpu_data_per_cell_reference(
+			WORLD_SEED,
+			region_key,
+			CHUNK,
+			snapshot,
+			reference_sampler
+		)
+		_check(
+			reference.get("valid", false)
+				and reference.get("positions", PackedVector3Array())
+					== result.get("positions", PackedVector3Array())
+				and reference.get("normals", PackedVector3Array())
+					== result.get("normals", PackedVector3Array()),
+			"D8 optimized LOD1 builder matches the per-cell oracle with effects at region %s" % region_key
 		)
 
 		var chunk_origin := Grid.origin_for(CHUNK)
