@@ -139,6 +139,12 @@ func _run() -> void:
 	var final_metrics: Dictionary = stream.get_performance_snapshot().get(
 		"last_region", {}
 	)
+	var mutated_record: Dictionary = {}
+	for record in stream.get_region_instance_records(region):
+		if String(record.get("instance_id", "")) == target_id:
+			mutated_record = record
+			break
+	_check(not mutated_record.is_empty(), "mutated authoritative record remains available")
 	_check(
 		int(final_metrics.get("batched_instance_count", -1))
 			== records.size() - 1,
@@ -179,6 +185,15 @@ func _run() -> void:
 			identity_node.get_child_count() == 0,
 			"identity Node3D carries no individual mesh child"
 		)
+		if not mutated_record.is_empty():
+			var render_state: Dictionary = stream.call(
+				"_batch_render_state", mutated_record
+			)
+			var expected_basis: Basis = render_state["basis"]
+			_check(
+				identity_node.transform.basis.is_equal_approx(expected_basis),
+				"identity Node3D and mutable batch share the same effective Basis"
+			)
 		_check(
 			String(identity_node.get_meta("instance_label", ""))
 				== "d7-1-batched",
@@ -207,6 +222,25 @@ func _run() -> void:
 					and mesh_instance.mesh.get_surface_count() == 1,
 				"mutable render batch publishes one valid surface"
 			)
+			if mesh_instance.mesh != null and not mutated_record.is_empty():
+				var arrays: Array = mesh_instance.mesh.surface_get_arrays(0)
+				var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+				var source_positions: PackedVector3Array = (
+					target_cpu.get("positions", PackedVector3Array())
+				)
+				var render_state: Dictionary = stream.call(
+					"_batch_render_state", mutated_record
+				)
+				var expected_first_vertex: Vector3 = (
+					(render_state["basis"] as Basis) * source_positions[0]
+					+ (render_state["position"] as Vector3)
+				)
+				_check(
+					not vertices.is_empty()
+						and vertices[0].distance_to(expected_first_vertex)
+							< 0.0001,
+					"mutable batch bakes the authoritative transform into geometry"
+				)
 			var material := (
 				mesh_instance.material_override as StandardMaterial3D
 			)
