@@ -11,6 +11,8 @@ const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const SEED := 424242
 const WORLD_ID := "issue108-d7-static-procedural-batch"
 const STATE_ROOT := "user://issue108-d7-static-batch-state"
+const POSITION_EQUIVALENCE_EPSILON := 1.0e-5
+const NORMAL_EQUIVALENCE_EPSILON := 1.0e-4
 
 var assertions := 0
 var failures := 0
@@ -154,11 +156,19 @@ func _run() -> void:
 	if cpu_batch.get("ok", false) and mesh_batch.get("ok", false):
 		var cpu_arrays: Array = cpu_batch["mesh"].surface_get_arrays(0)
 		var mesh_arrays: Array = mesh_batch["mesh"].surface_get_arrays(0)
+		var cpu_vertices: PackedVector3Array = cpu_arrays[Mesh.ARRAY_VERTEX]
+		var mesh_vertices: PackedVector3Array = mesh_arrays[Mesh.ARRAY_VERTEX]
+		var cpu_normals: PackedVector3Array = cpu_arrays[Mesh.ARRAY_NORMAL]
+		var mesh_normals: PackedVector3Array = mesh_arrays[Mesh.ARRAY_NORMAL]
+		var position_delta := _maximum_vector_delta(cpu_vertices, mesh_vertices)
+		var normal_delta := _maximum_vector_delta(cpu_normals, mesh_normals)
+		evidence["cpu_mesh_position_max_delta"] = position_delta
+		evidence["cpu_mesh_normal_max_delta"] = normal_delta
 		_check(
-			cpu_arrays[Mesh.ARRAY_VERTEX] == mesh_arrays[Mesh.ARRAY_VERTEX]
-				and cpu_arrays[Mesh.ARRAY_NORMAL]
-					== mesh_arrays[Mesh.ARRAY_NORMAL],
-			"CPU-direct batching preserves exact rendered positions and normals"
+			position_delta <= POSITION_EQUIVALENCE_EPSILON
+				and normal_delta <= NORMAL_EQUIVALENCE_EPSILON,
+			"CPU-direct batching remains numerically equivalent after the legacy ArrayMesh round-trip (position_delta=%g normal_delta=%g)"
+				% [position_delta, normal_delta]
 		)
 		_check(
 			int(cpu_batch.get("cpu_source_count", 0))
@@ -289,6 +299,21 @@ func _run() -> void:
 
 	stream.free()
 	_finish()
+
+
+func _maximum_vector_delta(
+	first: PackedVector3Array,
+	second: PackedVector3Array
+) -> float:
+	if first.size() != second.size():
+		return INF
+	var maximum_delta := 0.0
+	for index in range(first.size()):
+		maximum_delta = maxf(
+			maximum_delta,
+			first[index].distance_to(second[index])
+		)
+	return maximum_delta
 
 
 func _remove_tree(path: String) -> void:
