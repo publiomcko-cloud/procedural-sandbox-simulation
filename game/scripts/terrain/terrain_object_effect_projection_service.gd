@@ -463,7 +463,6 @@ func reconcile_scope(
 		"ok": true,
 		"changed": true,
 		"persisted": persist_projection,
-		"storage_load_bypassed": memory_only_miss,
 		"reason": "committed" if persist_projection else "transient_current",
 		"scope_id": scope_id,
 		"generation": generation,
@@ -588,6 +587,7 @@ func reconcile_prebuilt_scope(
 		return {
 			"ok": true,
 			"changed": false,
+			"storage_load_bypassed": memory_only_miss,
 			"reason": "already_current",
 			"scope_id": scope_id,
 			"generation": int(_storage_generations.get(scope_id, 0)),
@@ -685,6 +685,7 @@ func reconcile_prebuilt_scope(
 		"ok": true,
 		"changed": true,
 		"persisted": persist_projection,
+		"storage_load_bypassed": memory_only_miss,
 		"reason": "committed" if persist_projection else "transient_current",
 		"scope_id": scope_id,
 		"generation": generation,
