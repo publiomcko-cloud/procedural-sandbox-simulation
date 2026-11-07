@@ -285,26 +285,33 @@ func register_discovered(discovery: Dictionary) -> Dictionary:
 			var content_type := String(record.get("type", ""))
 			if not _content_handlers.has(content_type):
 				return _failure("unsupported_content_record_type")
-			var common_validation := _validate_common_content_identity(record, mod_id, content_type)
+			var handler: RefCounted = _content_handlers[content_type]
+			var handler_context := {
+				"records_by_type": candidate_records.duplicate(true),
+				"terrain_interaction_by_definition":
+					candidate_terrain_interaction_by_definition.duplicate(true),
+			}
+			var prepared: Dictionary = handler.call(
+				"prepare", record, mod_id, handler_context
+			)
+			if not prepared.get("ok", false):
+				return prepared
+			var normalized: Dictionary = prepared.get("record", {})
+			var common_validation := _validate_common_content_identity(
+				normalized, mod_id, content_type
+			)
 			if not common_validation.get("ok", false):
 				return common_validation
-			var handler: RefCounted = _content_handlers[content_type]
-			var validation: Dictionary = handler.call("validate", record, mod_id, {
-				"records_by_type": candidate_records,
-				"terrain_interaction_by_definition": candidate_terrain_interaction_by_definition,
-			})
-			if not validation.get("ok", false):
-				return validation
 			var records_for_type: Dictionary = candidate_records.get(content_type, {}).duplicate(true)
-			var record_id := String(record["id"])
+			var record_id := String(normalized["id"])
 			if records_for_type.has(record_id):
 				return _failure(String(handler.get("duplicate_reason")))
 			if content_type == TERRAIN_INTERACTION_RULE_TYPE:
-				var definition_id := String(record["definition_id"])
+				var definition_id := String(normalized["definition_id"])
 				if candidate_terrain_interaction_by_definition.has(definition_id):
 					return _failure("duplicate_terrain_interaction_for_definition")
 				candidate_terrain_interaction_by_definition[definition_id] = record_id
-			records_for_type[record_id] = record.duplicate(true)
+			records_for_type[record_id] = normalized.duplicate(true)
 			var max_records := int(handler.get("max_records"))
 			if max_records > 0 and records_for_type.size() > max_records:
 				if content_type == POPULATION_RULE_TYPE:
