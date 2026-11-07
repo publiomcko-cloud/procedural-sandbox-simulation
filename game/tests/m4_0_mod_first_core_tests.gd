@@ -4,6 +4,7 @@ const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 const Registry := preload("res://scripts/modding/content_definition_registry.gd")
 const Handler := preload("res://scripts/modding/content_type_handler.gd")
 const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
+const ObjectStream := preload("res://scripts/objects/procedural_object_stream.gd")
 
 const SYNTHETIC_TYPE := "synthetic_simulation_profile"
 
@@ -239,6 +240,29 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 			and registry.validate_content_fingerprint(first_fp.get("fingerprint", {})).get("ok", false),
 		"synthetic type receives the same canonical fingerprint contract"
 	)
+
+	var runtime_handler := Handler.new(
+		SYNTHETIC_TYPE, 40, Callable(self, "_validate_synthetic"),
+		"duplicate_synthetic_profile", 16,
+		Callable(self, "_normalize_synthetic")
+	)
+	var stream: ProceduralObjectStream = ObjectStream.new()
+	var stream_result: Dictionary = stream.initialize(
+		424242,
+		"m4-synthetic-runtime",
+		[package_root],
+		test_root.path_join("synthetic-runtime-state"),
+		[runtime_handler]
+	)
+	_check(
+		stream_result.get("ok", false)
+			and stream.registry != null
+			and stream.registry.get_content_record(
+				SYNTHETIC_TYPE, "sample.m4:temperate"
+			).get("label", "") == "Temperate",
+		"shared runtime registry accepts an engine-owned future content handler before package commit"
+	)
+	stream.free()
 
 	record["value_milli"] = 421
 	_write_text(profile_path.path_join("temperate.json"), JSON.stringify(record))
