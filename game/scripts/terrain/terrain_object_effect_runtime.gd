@@ -434,7 +434,11 @@ func _publish_prebuilt_projection_record(
 		)
 	var publish_started_usec := Time.get_ticks_usec()
 	var reconciled: Dictionary = projection.reconcile_prebuilt_scope(
-		region, prebuilt, true, false
+		region,
+		prebuilt,
+		true,
+		false,
+		false
 	)
 	var publish_usec := Time.get_ticks_usec() - publish_started_usec
 	if not reconciled.get("ok", false):
@@ -480,6 +484,12 @@ func _publish_prebuilt_projection_record(
 			),
 			"projection_worker_counts": prebuilt.get("work_counts", {}),
 			"publish_usec": publish_usec,
+			"storage_load_bypassed": bool(
+				reconciled.get("storage_load_bypassed", false)
+			),
+			"reconcile_timings_usec": projection.last_reconcile_metrics.duplicate(
+				true
+			),
 			"effect_count": int(reconciled.get("effect_count", 0)),
 			"source_count": int(prebuilt.get("source_instance_ids", []).size()),
 			"resident_scopes": projection.get_loaded_scope_count(),

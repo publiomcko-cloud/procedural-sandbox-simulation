@@ -61,6 +61,9 @@ var _performance := {
 	"dormant_scope_activate_total_usec": 0,
 	"dormant_scope_activate_peak_usec": 0,
 	"peak_dormant_scope_count": 0,
+	"transient_memory_miss_count": 0,
+	"transient_storage_load_bypass_count": 0,
+	"transient_direct_install_count": 0,
 }
 
 
@@ -474,7 +477,8 @@ func reconcile_prebuilt_scope(
 	region_key: Vector2i,
 	prebuilt: Dictionary,
 	allow_authoritative_rewind: bool = false,
-	persist_projection: bool = true
+	persist_projection: bool = true,
+	load_persisted_on_memory_miss: bool = true
 ) -> Dictionary:
 	var started_usec := Time.get_ticks_usec()
 	var load_usec := 0
@@ -495,13 +499,37 @@ func reconcile_prebuilt_scope(
 	if typeof(prebuilt.get("effects")) != TYPE_DICTIONARY 		or typeof(prebuilt.get("local_frames")) != TYPE_DICTIONARY 		or typeof(prebuilt.get("source_instance_ids")) != TYPE_ARRAY 		or typeof(prebuilt.get("source_digest_sha256")) != TYPE_STRING:
 		return _failure("effect_projection_prebuilt_fields_invalid")
 
-	var load_started_usec := Time.get_ticks_usec()
-	var loaded := load_scope(region_key)
-	load_usec = Time.get_ticks_usec() - load_started_usec
-	if not loaded.get("ok", false):
-		return loaded
 	var scope_id := Contract.scope_id_for_region(region_key)
-	var prior: Dictionary = _scopes[scope_id]
+	var memory_only_miss := false
+	var loaded: Dictionary = {}
+	if (
+		not persist_projection
+		and not load_persisted_on_memory_miss
+		and not _scopes.has(scope_id)
+		and not _dormant_scopes.has(scope_id)
+	):
+		if _scopes.size() >= MAX_RESIDENT_SCOPES:
+			return _failure("effect_projection_resident_scope_capacity_exceeded")
+		memory_only_miss = true
+		_performance["transient_memory_miss_count"] = int(
+			_performance["transient_memory_miss_count"]
+		) + 1
+		_performance["transient_storage_load_bypass_count"] = int(
+			_performance["transient_storage_load_bypass_count"]
+		) + 1
+	else:
+		var load_started_usec := Time.get_ticks_usec()
+		loaded = load_scope(region_key)
+		load_usec = Time.get_ticks_usec() - load_started_usec
+		if not loaded.get("ok", false):
+			return loaded
+	var prior: Dictionary = (
+		Contract.empty_snapshot(
+			world_id, world_seed, generator_version, region_key
+		)
+		if memory_only_miss
+		else _scopes[scope_id]
+	)
 	var prior_source_world_revision := int(prior["source_world_revision"])
 	if source_world_revision < prior_source_world_revision:
 		if not allow_authoritative_rewind:
@@ -545,10 +573,27 @@ func reconcile_prebuilt_scope(
 
 	copy_conflict_usec = Time.get_ticks_usec() - copy_conflict_started_usec
 	if int(prior["source_world_revision"]) == source_world_revision 		and String(prior["source_digest_sha256"]) == source_digest 		and prior["source_instance_ids"] == source_instance_ids:
+		if memory_only_miss:
+			var current_index_result := _build_scope_index(prior)
+			if not current_index_result.get("ok", false):
+				return current_index_result
+			_scopes[scope_id] = prior
+			_install_scope_index(scope_id, current_index_result["index"])
+			_storage_generations[scope_id] = 0
+			_performance["transient_direct_install_count"] = int(
+				_performance["transient_direct_install_count"]
+			) + 1
+			_performance["peak_resident_scope_count"] = maxi(
+				int(_performance["peak_resident_scope_count"]),
+				_scopes.size()
+			)
 		last_reconcile_metrics = {
 			"scope_id": scope_id,
 			"changed": false,
 			"prebuilt": true,
+			"memory_only_miss": memory_only_miss,
+			"storage_load_bypassed": memory_only_miss,
+			"direct_installed": memory_only_miss,
 			"source_count": source_instance_ids.size(),
 			"effect_count": incoming_effects.size(),
 			"removed_effect_count": 0,
@@ -557,6 +602,8 @@ func reconcile_prebuilt_scope(
 		return {
 			"ok": true,
 			"changed": false,
+			"storage_load_bypassed": memory_only_miss,
+			"direct_installed": memory_only_miss,
 			"reason": "already_current",
 			"scope_id": scope_id,
 			"generation": int(_storage_generations.get(scope_id, 0)),
@@ -618,12 +665,18 @@ func reconcile_prebuilt_scope(
 	_scopes[scope_id] = checked["snapshot"]
 	_install_scope_index(scope_id, index_result["index"])
 	_storage_generations[scope_id] = generation
+	if memory_only_miss:
+		_performance["transient_direct_install_count"] = int(
+			_performance["transient_direct_install_count"]
+		) + 1
 	publish_routes_usec = Time.get_ticks_usec() - publish_routes_started_usec
 	last_reconcile_metrics = {
 		"scope_id": scope_id,
 		"changed": true,
 		"prebuilt": true,
 		"persisted": persist_projection,
+		"memory_only_miss": memory_only_miss,
+		"storage_load_bypassed": memory_only_miss,
 		"source_count": source_instance_ids.size(),
 		"effect_count": incoming_effects.size(),
 		"removed_effect_count": removed_effect_count,
@@ -648,6 +701,7 @@ func reconcile_prebuilt_scope(
 		"ok": true,
 		"changed": true,
 		"persisted": persist_projection,
+		"storage_load_bypassed": memory_only_miss,
 		"reason": "committed" if persist_projection else "transient_current",
 		"scope_id": scope_id,
 		"generation": generation,
@@ -885,6 +939,9 @@ func _reset_performance_metrics() -> void:
 		"dormant_scope_activate_total_usec": 0,
 		"dormant_scope_activate_peak_usec": 0,
 		"peak_dormant_scope_count": _dormant_scopes.size(),
+		"transient_memory_miss_count": 0,
+		"transient_storage_load_bypass_count": 0,
+		"transient_direct_install_count": 0,
 	}
 
 
