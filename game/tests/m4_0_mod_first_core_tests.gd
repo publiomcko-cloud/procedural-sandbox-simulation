@@ -35,10 +35,11 @@ func _test_builtin_compatibility_and_fingerprints() -> void:
 	if not packages.is_empty():
 		var package: Dictionary = packages[0]
 		var content_records: Array = package.get("content_records", [])
+		var definitions: Array = package.get("definitions", [])
+		var population_rules: Array = package.get("population_rules", [])
+		var terrain_interactions: Array = package.get("terrain_interactions", [])
 		var compatibility_count := (
-			(package.get("definitions", []) as Array).size()
-			+ (package.get("population_rules", []) as Array).size()
-			+ (package.get("terrain_interactions", []) as Array).size()
+			definitions.size() + population_rules.size() + terrain_interactions.size()
 		)
 		_check(
 			content_records.size() == compatibility_count and not content_records.is_empty(),
@@ -67,9 +68,9 @@ func _test_builtin_compatibility_and_fingerprints() -> void:
 	var legacy_pins: Dictionary = registry.pin_definitions([definition_id])
 	_check(
 		legacy_pins.get("ok", false)
-			and (legacy_pins.get("pins", []) as Array).size() == 1
-			and ((legacy_pins["pins"] as Array)[0] as Dictionary).size() == 4
-			and not ((legacy_pins["pins"] as Array)[0] as Dictionary).has("content_sha256"),
+			and legacy_pins.get("pins", []).size() == 1
+			and legacy_pins["pins"][0].size() == 4
+			and not legacy_pins["pins"][0].has("content_sha256"),
 		"legacy persisted definition pin shape remains unchanged"
 	)
 
@@ -105,7 +106,7 @@ func _test_builtin_compatibility_and_fingerprints() -> void:
 	)
 
 	var tampered: Dictionary = rock_fp.get("fingerprint", {}).duplicate(true)
-	tampered["content_sha256"] = "0".repeat(64)
+	tampered["content_sha256"] = "0000000000000000000000000000000000000000000000000000000000000000"
 	_check(
 		registry.validate_content_fingerprint(tampered).get("reason", "")
 			== "content_fingerprint_mismatch",
@@ -160,7 +161,7 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 	var discovered := Loader.discover_and_validate([package_root])
 	_check(
 		discovered.get("ok", false)
-			and ((discovered.get("packages", []) as Array)[0] as Dictionary)
+			and discovered.get("packages", [])[0]
 				.get("content_records", []).size() == 1,
 		"loader discovers a new declarative type without type-specific discovery code"
 	)
