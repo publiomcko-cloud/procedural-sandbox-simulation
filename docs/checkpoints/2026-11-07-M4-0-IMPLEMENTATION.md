@@ -68,6 +68,17 @@ Built-in handlers preserve the existing semantics for:
 
 Existing P2/P3 APIs remain compatibility views and are not removed.
 
+
+### Shared runtime handler bootstrap
+
+`ProceduralObjectStream.initialize()` now accepts an optional engine-owned handler list as its final argument. Handlers are installed on the same registry **before** discovered first-party/user content is committed.
+
+Existing callers pass no handlers and retain identical behavior.
+
+This closes the pre-P4 bootstrap gap: a future P4/P5 content family can join the existing world registry and the existing `res://mods/first-party` + `user://mods` discovery path without introducing a second mod/content system.
+
+The M4.0 focused suite creates a synthetic package and proves that this actual runtime initialization path can load it only when the engine provides the matching handler.
+
 ### Canonical content fingerprint
 
 New content fingerprint fields:
@@ -129,7 +140,10 @@ The focused suite verifies:
 13. unknown type fails closed without an engine handler;
 14. synthetic handler registration enables the package;
 15. handler normalization is applied;
-16. same-version content mutation changes SHA-256.
+16. same-version content mutation changes SHA-256;
+17. normalized records are revalidated before commit;
+18. normalization cannot bypass record semantics;
+19. the shared runtime registry accepts an engine-owned future content handler before package commit.
 
 ## Regression envelope
 
@@ -149,6 +163,15 @@ The procedural regression is allowed only the already-recorded exact historical 
 - one camera-driven revisit failure;
 - zero `SCRIPT ERROR`;
 - no additional assertion failures.
+
+
+## Hosted CI status at implementation handoff
+
+GitHub Actions repeatedly returned workflow/job `failure` before any step was allocated or executed. For the observed M4.0 runs, the selected jobs report `steps=[]`; attempting to fetch job logs returned no job-log blob.
+
+This matches the runner-allocation/infrastructure failure mode already observed during D.7/D.8. It is **not** treated as either a code PASS or code FAIL.
+
+Owner-local Godot 4.7.2 qualification remains the authoritative implementation gate.
 
 ## Non-goals
 
