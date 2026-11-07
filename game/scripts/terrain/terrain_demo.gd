@@ -104,6 +104,8 @@ var _last_pointer_viewport_position := Vector2.ZERO
 var _has_pointer_viewport_position := false
 var _last_placement_aim_mode := "center"
 var _last_placement_mouse_mode := -1
+var _placement_target_dirty := false
+var _placement_target_invalidation_count := 0
 var _entity_migration_confirmation_deadline_msec := 0
 var chunk_nodes: Dictionary = {} # stable chunk id -> active MeshInstance3D
 var _published_lod_by_chunk: Dictionary = {} # stable chunk id -> 0/1
@@ -558,6 +560,7 @@ func _place_entity_under_crosshair() -> void:
 	var screen_position: Vector2 = aim["screen_position"]
 	_last_placement_aim_mode = String(aim["mode"])
 	var target := _placement_target_at(screen_position)
+	_placement_target_dirty = false
 	if not target.get("valid", false):
 		_placement_target_valid = false
 		if is_instance_valid(_placement_target_marker):
@@ -735,11 +738,21 @@ func _refresh_placement_target_indicator(screen_override: Variant = null) -> voi
 	var target := _placement_target_at(aim["screen_position"])
 	_placement_target_valid = bool(target.get("valid", false))
 	_placement_target_published = bool(target.get("published", false))
+	_placement_target_dirty = false
 	if _placement_target_valid:
 		_placement_target_world_position = target["world_position"]
 		_placement_target_region_key = target["region_key"]
 		_placement_target_normal = target["normal"]
 	_update_placement_marker_visual()
+
+
+func _invalidate_placement_target_after_terrain_change() -> void:
+	_placement_target_dirty = true
+	_placement_target_invalidation_count += 1
+	_placement_target_valid = false
+	_placement_target_published = false
+	if is_instance_valid(_placement_target_marker):
+		_placement_target_marker.visible = false
 
 
 func _update_placement_marker_visual() -> void:
@@ -1884,7 +1897,7 @@ func _publish_partial_stage(id: String, stage: Dictionary) -> bool:
 	_record_completed_operation(stage)
 	_lod_selection_dirty = true
 	if stage["region_key"] == focus_region_key:
-		_refresh_placement_target_indicator()
+		_invalidate_placement_target_after_terrain_change()
 	_update_runtime_diagnostics()
 	return true
 
@@ -2062,12 +2075,13 @@ func _publish_region(
 	var object_status_usec := Time.get_ticks_usec() - object_status_started_usec
 
 	var focus_refresh_usec := 0
+	var placement_invalidate_usec := 0
 	var focused_region := region_key == focus_region_key
 	if focused_region:
 		world_state = state
-		var focus_refresh_started_usec := Time.get_ticks_usec()
-		_refresh_placement_target_indicator()
-		focus_refresh_usec = Time.get_ticks_usec() - focus_refresh_started_usec
+		var placement_invalidate_started_usec := Time.get_ticks_usec()
+		_invalidate_placement_target_after_terrain_change()
+		placement_invalidate_usec = Time.get_ticks_usec() - placement_invalidate_started_usec
 
 	var publish_duration_usec := Time.get_ticks_usec() - publish_started_usec
 	var measured_top_level_usec := (
@@ -2076,7 +2090,7 @@ func _publish_region(
 		+ registry_commit_usec
 		+ object_enqueue_usec
 		+ object_status_usec
-		+ focus_refresh_usec
+		+ placement_invalidate_usec
 	)
 	var chunk_measured_usec := (
 		node_resolve_usec
@@ -2094,6 +2108,8 @@ func _publish_region(
 		"created_node_count": created_node_count,
 		"reused_node_count": reused_node_count,
 		"released_node_count": released_node_count,
+		"placement_target_dirty_after_publish": _placement_target_dirty,
+		"placement_target_invalidation_count": _placement_target_invalidation_count,
 		"timings_usec": {
 			"chunk_commit": chunk_commit_usec,
 			"stale_release": stale_release_usec,
@@ -2101,6 +2117,7 @@ func _publish_region(
 			"object_enqueue": object_enqueue_usec,
 			"object_status": object_status_usec,
 			"focus_refresh": focus_refresh_usec,
+			"placement_invalidate": placement_invalidate_usec,
 			"top_level_unaccounted": maxi(0, publish_duration_usec - measured_top_level_usec),
 		},
 		"chunk_timings_usec": {
