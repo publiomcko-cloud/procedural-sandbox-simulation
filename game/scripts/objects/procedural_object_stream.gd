@@ -8,6 +8,7 @@ const RegistryScript := preload("res://scripts/modding/content_definition_regist
 const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const RegionGenerationJob := preload("res://scripts/objects/procedural_object_region_generation_job.gd")
 const VisualGeometryJob := preload("res://scripts/objects/procedural_object_visual_geometry_job.gd")
+const BatchPreparationJob := preload("res://scripts/objects/procedural_object_batch_preparation_job.gd")
 const MaterializationStore := preload("res://scripts/objects/procedural_object_materialization_store.gd")
 const ProjectionSourceGenerationJob := preload("res://scripts/objects/procedural_object_projection_source_generation_job.gd")
 const RockMeshAdapter := preload("res://scripts/objects/procedural_rock_mesh_adapter.gd")
@@ -54,6 +55,8 @@ var _region_visual_preparations: Dictionary = {}
 var _region_visual_preparation_order: Array[String] = []
 var _visual_geometry_jobs: Dictionary = {} # worker task id -> {job, id, cancelled}
 var _visual_geometry_task_by_region: Dictionary = {}
+var _batch_preparation_jobs: Dictionary = {} # worker task id -> {job, id, cancelled}
+var _batch_preparation_task_by_region: Dictionary = {}
 var _next_region_publication_serial := 1
 var _geometry_mesh_cache: Dictionary = {}
 var _geometry_mesh_cache_order: Array[String] = []
@@ -120,10 +123,13 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_visual_prewarm_completed_count = 0
 	_visual_batch_cpu_bypass_count = 0
 	_wait_for_visual_geometry_jobs()
+	_wait_for_batch_preparation_jobs()
 	_region_visual_preparations.clear()
 	_region_visual_preparation_order.clear()
 	_visual_geometry_jobs.clear()
 	_visual_geometry_task_by_region.clear()
+	_batch_preparation_jobs.clear()
+	_batch_preparation_task_by_region.clear()
 	_materialization_content_signature = ""
 	_materialization_directory = ""
 	_population_rule_ids.clear()
@@ -693,6 +699,14 @@ func _wait_for_visual_geometry_jobs() -> void:
 		WorkerThreadPool.wait_for_task_completion(int(task_id_value))
 	_visual_geometry_jobs.clear()
 	_visual_geometry_task_by_region.clear()
+
+
+func _wait_for_batch_preparation_jobs() -> void:
+	for task_id_value in _batch_preparation_jobs.keys():
+		WorkerThreadPool.wait_for_task_completion(int(task_id_value))
+	_batch_preparation_jobs.clear()
+	_batch_preparation_task_by_region.clear()
+
 
 func _finish_queued_publication(id: String, result: Dictionary, request_serial: int = -1) -> void:
 	if not result.get("ok", false) and result.get("reason", "") != "stale_object_region_publication":
@@ -2004,6 +2018,7 @@ func _wait_for_region_generation_jobs() -> void:
 func _exit_tree() -> void:
 	_wait_for_region_generation_jobs()
 	_wait_for_visual_geometry_jobs()
+	_wait_for_batch_preparation_jobs()
 
 
 func _region_id(region_key: Vector2i) -> String:
