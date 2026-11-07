@@ -88,8 +88,8 @@ func _package_content_records(package: Dictionary) -> Dictionary:
 		for value in package["content_records"]:
 			if not value is Dictionary:
 				return _failure("invalid_content_record")
-			var record: Dictionary = value
-			direct.append(record.duplicate(true))
+			var direct_record: Dictionary = value
+			direct.append(direct_record.duplicate(true))
 		return {"ok": true, "records": direct}
 	var legacy: Array[Dictionary] = []
 	for key in ["definitions", "population_rules", "terrain_interactions"]:
@@ -99,8 +99,8 @@ func _package_content_records(package: Dictionary) -> Dictionary:
 		for value in values:
 			if not value is Dictionary:
 				return _failure("invalid_content_record")
-			var record: Dictionary = value
-			legacy.append(record.duplicate(true))
+			var legacy_record: Dictionary = value
+			legacy.append(legacy_record.duplicate(true))
 	return {"ok": true, "records": legacy}
 
 
