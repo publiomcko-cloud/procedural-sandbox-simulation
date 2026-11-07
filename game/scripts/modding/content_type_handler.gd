@@ -114,6 +114,14 @@ func prepare(record: Dictionary, mod_id: String, context: Dictionary) -> Diction
 				"ok": false,
 				"reason": "content_type_handler_normalization_changed_identity",
 			}
+		var normalized_validation_value: Variant = validator_target.call(
+			_validator_method, normalized.duplicate(true), mod_id, context
+		)
+		if typeof(normalized_validation_value) != TYPE_DICTIONARY:
+			return {"ok": false, "reason": "content_type_handler_invalid_result"}
+		var normalized_validation: Dictionary = normalized_validation_value
+		if not normalized_validation.get("ok", false):
+			return normalized_validation
 	return {"ok": true, "reason": "ok", "record": normalized}
 
 
