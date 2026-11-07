@@ -396,7 +396,7 @@ func _queue_region_visual_preparation(
 			resolved_cache_complete = false
 			continue
 		var base_instance: Dictionary = value
-		var instance := base_instance
+		var instance: Dictionary = base_instance
 		if resolved_cache_complete:
 			var resolved: Dictionary = state_service.resolve_instance(base_instance)
 			if not resolved.get("ok", false):
@@ -426,11 +426,11 @@ func _queue_region_visual_preparation(
 			"prepared_cpu": prepared_cpu.duplicate(true),
 		})
 
-	var prepared_generated := generated.duplicate(false)
+	var prepared_generated: Dictionary = generated.duplicate(false)
 	if resolved_cache_complete:
 		prepared_generated["_visual_resolved_by_id"] = resolved_by_id
 		prepared_generated["_visual_resolved_state_revision"] = resolved_state_revision
-	var record := {
+	var record: Dictionary = {
 		"request": request,
 		"generated": prepared_generated,
 		"publication_token": int(request.get("publication_token", -1)),
@@ -709,7 +709,7 @@ func publish_region(
 			String(instance.get("instance_id", "")), {}
 		)
 		if _is_static_batch_candidate(instance):
-			var batch_item := {
+			var batch_item: Dictionary = {
 				"instance_id": String(instance["instance_id"]),
 				"position": Vector3(instance["position_mm"]) / 1000.0,
 				"scale_milli": instance.get(
