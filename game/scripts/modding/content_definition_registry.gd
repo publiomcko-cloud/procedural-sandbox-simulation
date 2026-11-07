@@ -26,6 +26,7 @@ const GEOLOGICAL_RECIPE_KEYS := [
 	"bevel_count", "weathering_milli", "macro_roughness_mm", "meso_roughness_mm", "fine_roughness_mm"
 ]
 const GEOLOGICAL_ALGORITHM := "geological_halfspace_v1"
+const MAX_CONTENT_TYPE_HANDLERS := 64
 const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 const ContentTypeHandlerScript := preload("res://scripts/modding/content_type_handler.gd")
 
@@ -61,6 +62,8 @@ func _register_handler_internal(handler: RefCounted) -> Dictionary:
 		return _failure("content_type_handler_invalid")
 	if _content_handlers.has(content_type):
 		return _failure("duplicate_content_type_handler")
+	if _content_handlers.size() >= MAX_CONTENT_TYPE_HANDLERS:
+		return _failure("content_type_handler_limit_exceeded")
 	_content_handlers[content_type] = handler
 	return {"ok": true, "reason": "ok"}
 
@@ -122,6 +125,16 @@ func _package_content_records(package: Dictionary) -> Dictionary:
 	):
 		return _failure("invalid_content_record_collection")
 	return {"ok": true, "records": records}
+
+
+func _count_content_records(records_by_type: Dictionary) -> int:
+	var count := 0
+	for typed_records_value in records_by_type.values():
+		if not typed_records_value is Dictionary:
+			continue
+		var typed_records: Dictionary = typed_records_value
+		count += typed_records.size()
+	return count
 
 
 func _validate_common_content_identity(
@@ -265,6 +278,7 @@ func register_discovered(discovery: Dictionary) -> Dictionary:
 	if not discovery.get("ok", false) or not discovery.get("packages") is Array:
 		return _failure("invalid_discovery_result")
 	var candidate_records: Dictionary = _content_records_by_type.duplicate(true)
+	var candidate_content_record_count := _count_content_records(candidate_records)
 	var candidate_terrain_interaction_by_definition := _terrain_interaction_by_definition.duplicate(true)
 	var candidate_mods := _mods.duplicate(true)
 	for package_value in discovery["packages"]:
@@ -331,7 +345,10 @@ func register_discovered(discovery: Dictionary) -> Dictionary:
 				if candidate_terrain_interaction_by_definition.has(definition_id):
 					return _failure("duplicate_terrain_interaction_for_definition")
 				candidate_terrain_interaction_by_definition[definition_id] = record_id
+			if candidate_content_record_count + 1 > Loader.MAX_DEFINITIONS:
+				return _failure("content_record_limit_exceeded")
 			records_for_type[record_id] = normalized.duplicate(true)
+			candidate_content_record_count += 1
 			var max_records := int(handler.get("max_records"))
 			if max_records > 0 and records_for_type.size() > max_records:
 				if content_type == POPULATION_RULE_TYPE:
@@ -346,10 +363,6 @@ func register_discovered(discovery: Dictionary) -> Dictionary:
 	_terrain_interactions = candidate_records.get(TERRAIN_INTERACTION_RULE_TYPE, {}).duplicate(true)
 	_terrain_interaction_by_definition = candidate_terrain_interaction_by_definition
 	_mods = candidate_mods
-	var content_record_count := 0
-	for typed_records_value in _content_records_by_type.values():
-		var typed_records: Dictionary = typed_records_value
-		content_record_count += typed_records.size()
 	return {
 		"ok": true,
 		"reason": "ok",
@@ -358,7 +371,7 @@ func register_discovered(discovery: Dictionary) -> Dictionary:
 		"population_rule_count": _population_rules.size(),
 		"terrain_interaction_count": _terrain_interactions.size(),
 		"content_type_count": _content_records_by_type.size(),
-		"content_record_count": content_record_count,
+		"content_record_count": candidate_content_record_count,
 	}
 
 
