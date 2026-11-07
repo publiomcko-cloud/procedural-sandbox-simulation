@@ -62,6 +62,16 @@ func prepare(record: Dictionary, mod_id: String, context: Dictionary) -> Diction
 			return {"ok": false, "reason": "content_type_handler_invalid_normalization"}
 		var normalized_record: Dictionary = normalization["record"]
 		normalized = normalized_record.duplicate(true)
+		if (
+			String(normalized.get("type", "")) != String(record.get("type", ""))
+			or String(normalized.get("id", "")) != String(record.get("id", ""))
+			or int(normalized.get("schema_version", -1))
+				!= int(record.get("schema_version", -2))
+		):
+			return {
+				"ok": false,
+				"reason": "content_type_handler_normalization_changed_identity",
+			}
 	return {"ok": true, "reason": "ok", "record": normalized}
 
 
