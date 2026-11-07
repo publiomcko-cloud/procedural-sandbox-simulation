@@ -2279,6 +2279,7 @@ func get_performance_snapshot() -> Dictionary:
 			+ _region_visual_preparations.size(),
 		"region_generation_jobs_in_flight": _region_generation_jobs.size(),
 		"visual_geometry_jobs_in_flight": _visual_geometry_jobs.size(),
+		"batch_preparation_jobs_in_flight": _batch_preparation_jobs.size(),
 		"visual_preparation_count": _region_visual_preparations.size(),
 		"visual_mesh_commit_budget_per_frame": MAX_GEOMETRY_MESH_COMMITS_PER_FRAME,
 		"visual_mesh_commits_last_tick": _visual_mesh_commits_last_tick,
