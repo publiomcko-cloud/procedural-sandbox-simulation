@@ -56,7 +56,9 @@ func run() -> void:
 		mutable_keys.append(String(key_value))
 	mutable_keys.sort()
 	for group_key in mutable_keys:
-		var items: Array[Dictionary] = mutable_groups[group_key]
+		var items: Array[Dictionary] = []
+		for item_value in (mutable_groups[group_key] as Array):
+			items.append(item_value as Dictionary)
 		if not _all_cpu_backed(items):
 			result = {
 				"ok": false,
