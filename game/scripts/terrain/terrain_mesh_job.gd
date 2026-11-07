@@ -52,13 +52,9 @@ func run() -> void:
 		worker_finished_usec = Time.get_ticks_usec()
 		return
 	var immutable_snapshot: Dictionary = brush_snapshot if brush_snapshot is Dictionary else {}
-	var has_terrain_effects := not (
-		immutable_snapshot.get("terrain_object_effect_frames", []) as Array
-	).is_empty()
-	if lod_level == 1 and not has_terrain_effects:
-		var snapshot: Dictionary = immutable_snapshot
+	if lod_level == 1:
 		result = LodMesher.build_chunk_cpu_data(
-			seed, region_key, coordinate, snapshot, Callable(self, "_sample_lod_density")
+			seed, region_key, coordinate, immutable_snapshot, Callable(self, "_sample_lod_density")
 		)
 		if not result.get("valid", false):
 			var fallback_reason := String(result.get("reason", "lod1_build_failed"))
@@ -72,21 +68,17 @@ func run() -> void:
 		result = Mesher.build_chunk_cpu_data(
 			seed, region_key, coordinate, cave_section_enabled, brush_snapshot
 		)
-		if lod_level == 1 and has_terrain_effects:
-			result["lod_level"] = 0
-			result["lod_fallback"] = true
-			result["lod_fallback_reason"] = "terrain_effect_precision_frame_requires_lod0"
 	worker_finished_usec = Time.get_ticks_usec()
 
 
-func _sample_lod_density(world_position: Vector3) -> float:
-	if not world_position.is_finite():
+func _sample_lod_density(region_local_position: Vector3) -> float:
+	if not region_local_position.is_finite():
 		return NAN
-	var mapped_region := Spatial.region_key_for_world_position(world_position)
-	var mapped_local := Spatial.region_local_for_world_position(world_position, mapped_region)
 	var snapshot: Dictionary = brush_snapshot if brush_snapshot is Dictionary else {}
 	if snapshot.is_empty():
-		return Field.sample_density(seed, mapped_region, mapped_local, cave_section_enabled)
+		return Field.sample_density(
+			seed, region_key, region_local_position, cave_section_enabled
+		)
 	return BrushState.sample_density_snapshot(
-		seed, mapped_region, mapped_local, cave_section_enabled, snapshot
+		seed, region_key, region_local_position, cave_section_enabled, snapshot
 	)
