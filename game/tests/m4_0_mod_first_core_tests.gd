@@ -154,6 +154,7 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 		"type": SYNTHETIC_TYPE,
 		"id": "sample.m4:temperate",
 		"value_milli": 420,
+		"label": " Temperate ",
 	}
 	_write_text(package_path.path_join("manifest.json"), JSON.stringify(manifest))
 	_write_text(profile_path.path_join("temperate.json"), JSON.stringify(record))
@@ -178,7 +179,8 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 	var registry := Registry.new()
 	var handler := Handler.new(
 		SYNTHETIC_TYPE, 40, Callable(self, "_validate_synthetic"),
-		"duplicate_synthetic_profile", 16
+		"duplicate_synthetic_profile", 16,
+		Callable(self, "_normalize_synthetic")
 	)
 	_check(
 		registry.register_engine_content_type_handler(handler).get("ok", false),
@@ -192,8 +194,9 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 	_check(registered.get("ok", false), "synthetic content registers without loader modification")
 	var loaded := registry.get_content_record(SYNTHETIC_TYPE, "sample.m4:temperate")
 	_check(
-		int(loaded.get("value_milli", -1)) == 420,
-		"generic registry exposes synthetic content through typed lookup"
+		int(loaded.get("value_milli", -1)) == 420
+			and String(loaded.get("label", "")) == "Temperate",
+		"generic registry exposes handler-normalized synthetic content"
 	)
 	var first_fp := registry.pin_content_record(SYNTHETIC_TYPE, "sample.m4:temperate")
 	_check(
@@ -208,7 +211,8 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 	var drift_registry := Registry.new()
 	drift_registry.register_engine_content_type_handler(Handler.new(
 		SYNTHETIC_TYPE, 40, Callable(self, "_validate_synthetic"),
-		"duplicate_synthetic_profile", 16
+		"duplicate_synthetic_profile", 16,
+		Callable(self, "_normalize_synthetic")
 	))
 	var drift_registered := drift_registry.register_discovered(drift_discovery)
 	var second_fp := drift_registry.pin_content_record(SYNTHETIC_TYPE, "sample.m4:temperate")
@@ -225,7 +229,7 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 func _validate_synthetic(
 	record: Dictionary, _mod_id: String, _context: Dictionary
 ) -> Dictionary:
-	var expected := ["schema_version", "type", "id", "value_milli"]
+	var expected := ["schema_version", "type", "id", "value_milli", "label"]
 	if record.size() != expected.size():
 		return {"ok": false, "reason": "synthetic_schema_fields"}
 	for key in expected:
@@ -238,7 +242,17 @@ func _validate_synthetic(
 	var value: Variant = record.get("value_milli")
 	if typeof(value) != TYPE_INT or int(value) < 0 or int(value) > 1000:
 		return {"ok": false, "reason": "synthetic_value_invalid"}
+	if not record.get("label") is String or String(record.get("label", "")).strip_edges().is_empty():
+		return {"ok": false, "reason": "synthetic_label_invalid"}
 	return {"ok": true, "reason": "ok"}
+
+
+func _normalize_synthetic(
+	record: Dictionary, _mod_id: String, _context: Dictionary
+) -> Dictionary:
+	var normalized := record.duplicate(true)
+	normalized["label"] = String(normalized.get("label", "")).strip_edges()
+	return {"ok": true, "reason": "ok", "record": normalized}
 
 
 func _write_text(path: String, value: String) -> void:
