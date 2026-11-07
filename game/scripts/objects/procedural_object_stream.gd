@@ -676,8 +676,25 @@ func publish_region(
 	var geometry_cpu_by_instance: Dictionary = generated_base.get("geometry_cpu_by_instance", {})
 	var geometry_cpu_worker_usec := int(generated_base.get("geometry_cpu_usec", 0))
 	var mesh_build_started_usec := Time.get_ticks_usec()
+	var prepared_resolved_by_id: Dictionary = generated_base.get(
+		"_visual_resolved_by_id", {}
+	)
+	var prepared_resolved_revision := int(
+		generated_base.get("_visual_resolved_state_revision", -1)
+	)
+	var can_reuse_resolved := (
+		prepared_resolved_revision >= 0
+		and prepared_resolved_revision == int(state_service.get_revision())
+	)
+	var resolved_reuse_count := 0
 	for base_instance in base_instances:
-		var resolved: Dictionary = state_service.resolve_instance(base_instance)
+		var base_instance_id := String(base_instance.get("instance_id", ""))
+		var resolved: Dictionary
+		if can_reuse_resolved and prepared_resolved_by_id.has(base_instance_id):
+			resolved = prepared_resolved_by_id[base_instance_id]
+			resolved_reuse_count += 1
+		else:
+			resolved = state_service.resolve_instance(base_instance)
 		if not resolved.get("ok", false):
 			for pending_node in pending_nodes:
 				pending_node.free()
@@ -686,22 +703,44 @@ func publish_region(
 			continue
 		var instance: Dictionary = resolved["instance"]
 		instances.append(instance)
-		var prepared_cpu: Dictionary = geometry_cpu_by_instance.get(String(instance.get("instance_id", "")), {})
-		var mesh_result: Dictionary = _get_or_build_geometry_mesh(instance, prepared_cpu)
+		var prepared_cpu: Dictionary = geometry_cpu_by_instance.get(
+			String(instance.get("instance_id", "")), {}
+		)
+		if _is_static_batch_candidate(instance):
+			var batch_item := {
+				"instance_id": String(instance["instance_id"]),
+				"position": Vector3(instance["position_mm"]) / 1000.0,
+				"scale_milli": instance.get(
+					"default_scale_milli", Vector3i(1000, 1000, 1000)
+				),
+				"yaw_mdeg": int(instance.get("default_yaw_mdeg", 0)),
+				"selection_record": _build_selection_record(instance),
+			}
+			if prepared_cpu.get("ok", false):
+				batch_item["cpu_data"] = prepared_cpu
+			else:
+				var batch_mesh_result: Dictionary = _get_or_build_geometry_mesh(
+					instance, prepared_cpu
+				)
+				if not batch_mesh_result.get("ok", false):
+					for pending_node in pending_nodes:
+						pending_node.free()
+					return _record_region_failure(
+						id,
+						"object_mesh_build_failed:%s"
+							% batch_mesh_result.get("reason", "unknown")
+					)
+				batch_item["mesh"] = batch_mesh_result["mesh"]
+			batch_items.append(batch_item)
+			continue
+
+		var mesh_result: Dictionary = _get_or_build_geometry_mesh(
+			instance, prepared_cpu
+		)
 		if not mesh_result.get("ok", false):
 			for pending_node in pending_nodes:
 				pending_node.free()
 			return _record_region_failure(id, "object_mesh_build_failed:%s" % mesh_result.get("reason", "unknown"))
-		if bool(instance.get("population_batched", false)) and instance.get("instance_components", {}).is_empty():
-			batch_items.append({
-				"instance_id": String(instance["instance_id"]),
-				"mesh": mesh_result["mesh"],
-				"position": Vector3(instance["position_mm"]) / 1000.0,
-				"scale_milli": instance.get("default_scale_milli", Vector3i(1000, 1000, 1000)),
-				"yaw_mdeg": int(instance.get("default_yaw_mdeg", 0)),
-				"selection_record": _build_selection_record(instance),
-			})
-			continue
 		var object_node := Node3D.new()
 		object_node.name = "Object_%s" % String(instance["instance_id"]).sha256_text().substr(0, 12)
 		object_node.position = Vector3(instance["position_mm"]) / 1000.0
@@ -768,6 +807,9 @@ func publish_region(
 		"instance_count": instances.size(),
 		"batched_instance_count": batch_items.size(),
 		"individual_node_count": pending_nodes.size(),
+		"batch_cpu_source_count": int(batch_result.get("cpu_source_count", 0)),
+		"batch_mesh_source_count": int(batch_result.get("mesh_source_count", 0)),
+		"resolved_reuse_count": resolved_reuse_count,
 		"candidate_cell_count": candidate_cell_count,
 		"surface_anchor_count": surface_anchor_count,
 		"generation_usec": generation_usec,
