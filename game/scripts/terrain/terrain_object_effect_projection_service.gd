@@ -656,6 +656,8 @@ func reconcile_prebuilt_scope(
 			"changed": false,
 			"storage_load_bypassed": memory_only_miss,
 			"direct_installed": memory_only_miss,
+			"worker_prevalidated": worker_prevalidated,
+			"main_validation_skipped": worker_prevalidated,
 			"reason": "already_current",
 			"scope_id": scope_id,
 			"generation": int(_storage_generations.get(scope_id, 0)),
