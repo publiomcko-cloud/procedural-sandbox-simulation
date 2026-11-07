@@ -63,6 +63,7 @@ var _visual_mesh_commit_count := 0
 var _visual_mesh_commit_total_usec := 0
 var _visual_mesh_commit_peak_usec := 0
 var _visual_prewarm_completed_count := 0
+var _visual_batch_cpu_bypass_count := 0
 var _materialization_content_signature := ""
 var _materialization_directory := ""
 var _last_region_metrics: Dictionary = {}
@@ -110,6 +111,7 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_visual_mesh_commit_total_usec = 0
 	_visual_mesh_commit_peak_usec = 0
 	_visual_prewarm_completed_count = 0
+	_visual_batch_cpu_bypass_count = 0
 	_region_visual_preparations.clear()
 	_region_visual_preparation_order.clear()
 	_materialization_content_signature = ""
@@ -349,6 +351,17 @@ func _process_completed_region_generation_jobs() -> void:
 			_queue_region_visual_preparation(id, request, generated)
 
 
+func _is_static_batch_candidate(instance: Dictionary) -> bool:
+	if not (instance.get("instance_components", {}) as Dictionary).is_empty():
+		return false
+	var population_algorithm := String(
+		instance.get("population_algorithm", "")
+	)
+	if population_algorithm.is_empty() or population_algorithm == "explicit_place_v1":
+		return false
+	return String(instance.get("recipe_algorithm", "")) == RockMeshAdapter.ALGORITHM
+
+
 func _queue_region_visual_preparation(
 	id: String,
 	request: Dictionary,
@@ -359,9 +372,9 @@ func _queue_region_visual_preparation(
 	var seen_keys: Dictionary = {}
 	var cpu_by_instance: Dictionary = generated.get("geometry_cpu_by_instance", {})
 	var prewarm_instances: Array = generated.get("instances", [])
-	if entity_command_service != null 		and bool(entity_command_service.get("initialized")) 		and entity_command_service.has_method(
-			"build_projection_region_base_instances"
-		):
+	if entity_command_service != null 			and bool(entity_command_service.get("initialized")) 			and entity_command_service.has_method(
+				"build_projection_region_base_instances"
+			):
 		var built: Dictionary = entity_command_service.call(
 			"build_projection_region_base_instances",
 			request["region_key"],
@@ -369,25 +382,55 @@ func _queue_region_visual_preparation(
 		)
 		if built.get("ok", false):
 			prewarm_instances = built.get("instances", prewarm_instances)
+
+	var resolved_by_id: Dictionary = {}
+	var resolved_state_revision := (
+		int(state_service.get_revision())
+		if state_service != null and bool(state_service.get("initialized"))
+		else -1
+	)
+	var resolved_cache_complete := resolved_state_revision >= 0
+	var batch_cpu_bypass_variant_count := 0
 	for value in prewarm_instances:
 		if typeof(value) != TYPE_DICTIONARY:
+			resolved_cache_complete = false
 			continue
-		var instance: Dictionary = value
+		var base_instance: Dictionary = value
+		var instance := base_instance
+		if resolved_cache_complete:
+			var resolved: Dictionary = state_service.resolve_instance(base_instance)
+			if not resolved.get("ok", false):
+				resolved_cache_complete = false
+				resolved_by_id.clear()
+			else:
+				var instance_id := String(base_instance.get("instance_id", ""))
+				resolved_by_id[instance_id] = resolved.duplicate(true)
+				if resolved.get("deleted", false):
+					continue
+				instance = resolved["instance"]
+
 		var cache_key := _geometry_cache_key(instance)
 		if cache_key.is_empty() or seen_keys.has(cache_key):
 			continue
 		seen_keys[cache_key] = true
 		var instance_id := String(instance.get("instance_id", ""))
+		var prepared_cpu: Dictionary = cpu_by_instance.get(instance_id, {})
+		if _is_static_batch_candidate(instance) and prepared_cpu.get("ok", false):
+			batch_cpu_bypass_variant_count += 1
+			continue
 		variants.append({
 			"cache_key": cache_key,
 			"instance": instance.duplicate(true),
-			"prepared_cpu": (
-				(cpu_by_instance.get(instance_id, {}) as Dictionary).duplicate(true)
-			),
+			"prepared_cpu": prepared_cpu.duplicate(true),
 		})
+
+	var prepared_generated := generated.duplicate(false)
+	if resolved_cache_complete:
+		prepared_generated["_visual_resolved_by_id"] = resolved_by_id
+		prepared_generated["_visual_resolved_state_revision"] = resolved_state_revision
 	var record := {
 		"request": request,
-		"generated": generated,
+		"generated": prepared_generated,
 		"publication_token": int(request.get("publication_token", -1)),
 		"request_serial": int(request.get("request_serial", -1)),
 		"variants": variants,
@@ -396,7 +439,9 @@ func _queue_region_visual_preparation(
 		"ready_to_publish": false,
 		"cache_hits": 0,
 		"mesh_commits": 0,
+		"batch_cpu_bypass_variant_count": batch_cpu_bypass_variant_count,
 	}
+	_visual_batch_cpu_bypass_count += batch_cpu_bypass_variant_count
 	_region_visual_preparations[id] = record
 	_region_visual_preparation_order.append(id)
 	if _perf_trace_enabled:
@@ -406,10 +451,12 @@ func _queue_region_visual_preparation(
 				int((request["region_key"] as Vector2i).y),
 			],
 			"variant_count": variants.size(),
+			"batch_cpu_bypass_variant_count": batch_cpu_bypass_variant_count,
+			"resolved_state_revision": resolved_state_revision
+				if resolved_cache_complete else -1,
 			"materialization_hit": bool(generated.get("materialization_hit", false)),
 			"pending_visual_preparations": _region_visual_preparations.size(),
 		})
-
 
 func _process_region_visual_preparations() -> void:
 	if _publications_last_process_tick >= MAX_REGION_PUBLICATIONS_PER_FRAME:
@@ -511,6 +558,9 @@ func _process_region_visual_preparations() -> void:
 				"variant_count": variants.size(),
 				"mesh_commits": int(record.get("mesh_commits", 0)),
 				"cache_hits": int(record.get("cache_hits", 0)),
+				"batch_cpu_bypass_variant_count": int(
+					record.get("batch_cpu_bypass_variant_count", 0)
+				),
 				"geometry_cache_variant_count": _geometry_mesh_cache.size(),
 			})
 		# Publication is intentionally deferred to a later frame so the last
@@ -1028,7 +1078,7 @@ func find_instance_along_ray(ray_origin: Vector3, ray_direction: Vector3, max_di
 			var hit_distance := maxf(0.0, along - sqrt(maxf(0.0, radius * radius - perpendicular_squared)))
 			if hit_distance < best_distance:
 				best_distance = hit_distance
-				best = {"ok": true, "entity_id": String(instance.get("instance_id", "")), "distance": hit_distance, "region_key": region_key, "batched": bool(instance.get("population_batched", false)) and components.is_empty()}
+				best = {"ok": true, "entity_id": String(instance.get("instance_id", "")), "distance": hit_distance, "region_key": region_key, "batched": _is_static_batch_candidate(instance)}
 	return best if not best.is_empty() else _failure("selection_no_entity_hit")
 
 
@@ -1348,7 +1398,7 @@ func get_performance_snapshot() -> Dictionary:
 	for entry in _regions.values():
 		resident_instances += (entry.get("instances", []) as Array).size()
 		for instance in entry.get("instances", []):
-			if bool(instance.get("population_batched", false)) and instance.get("instance_components", {}).is_empty():
+			if _is_static_batch_candidate(instance):
 				resident_batched += 1
 	return {
 		"active_region_count": _regions.size(),
@@ -1364,6 +1414,7 @@ func get_performance_snapshot() -> Dictionary:
 		"visual_mesh_commit_total_usec": _visual_mesh_commit_total_usec,
 		"visual_mesh_commit_peak_usec": _visual_mesh_commit_peak_usec,
 		"visual_prewarm_completed_count": _visual_prewarm_completed_count,
+		"visual_batch_cpu_bypass_count": _visual_batch_cpu_bypass_count,
 		"active_instance_count": resident_instances,
 		"batched_instance_count": resident_batched,
 		"geometry_cache_variant_count": _geometry_mesh_cache.size(),
