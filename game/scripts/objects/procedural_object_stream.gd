@@ -478,7 +478,7 @@ func _queue_region_visual_preparation(
 		"request_serial": int(request.get("request_serial", -1)),
 		"variants": variants,
 		"started_usec": Time.get_ticks_usec(),
-		"ready_to_publish": variants.is_empty(),
+		"ready_to_publish": false,
 		"visual_geometry_task_id": visual_geometry_task_id,
 		"visual_geometry_worker_usec": 0,
 		"mesh_commits": 0,
@@ -521,7 +521,31 @@ func _process_region_visual_preparations() -> void:
 
 		if not bool(record.get("ready_to_publish", false)):
 			var task_id := int(record.get("visual_geometry_task_id", -1))
-			if task_id < 0 or not _visual_geometry_jobs.has(task_id):
+			if task_id < 0:
+				record["ready_to_publish"] = true
+				_region_visual_preparations[id] = record
+				_visual_prewarm_completed_count += 1
+				if _perf_trace_enabled:
+					PerformanceTrace.emit("object_visual_prewarm_complete", {
+						"region": [
+							int((request["region_key"] as Vector2i).x),
+							int((request["region_key"] as Vector2i).y),
+						],
+						"duration_usec": Time.get_ticks_usec()
+							- int(record.get("started_usec", Time.get_ticks_usec())),
+						"variant_count": 0,
+						"mesh_commits": 0,
+						"batch_cpu_bypass_variant_count": int(
+							record.get("batch_cpu_bypass_variant_count", 0)
+						),
+						"state_resolve_usec": int(
+							record.get("state_resolve_usec", 0)
+						),
+						"visual_geometry_worker_usec": 0,
+						"geometry_cache_variant_count": _geometry_mesh_cache.size(),
+					})
+				return
+			if not _visual_geometry_jobs.has(task_id):
 				_cancel_region_visual_preparation(id)
 				var missing := _record_region_failure(
 					id, "object_visual_geometry_worker_missing"
