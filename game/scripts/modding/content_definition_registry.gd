@@ -88,7 +88,8 @@ func _package_content_records(package: Dictionary) -> Dictionary:
 		for value in package["content_records"]:
 			if not value is Dictionary:
 				return _failure("invalid_content_record")
-			direct.append((value as Dictionary).duplicate(true))
+			var record: Dictionary = value
+			direct.append(record.duplicate(true))
 		return {"ok": true, "records": direct}
 	var legacy: Array[Dictionary] = []
 	for key in ["definitions", "population_rules", "terrain_interactions"]:
@@ -98,7 +99,8 @@ func _package_content_records(package: Dictionary) -> Dictionary:
 		for value in values:
 			if not value is Dictionary:
 				return _failure("invalid_content_record")
-			legacy.append((value as Dictionary).duplicate(true))
+			var record: Dictionary = value
+			legacy.append(record.duplicate(true))
 	return {"ok": true, "records": legacy}
 
 
@@ -196,7 +198,8 @@ func get_content_record(content_type: String, namespaced_id: String) -> Dictiona
 	var typed: Dictionary = _content_records_by_type.get(content_type, {})
 	if not typed.has(namespaced_id):
 		return {}
-	return (typed[namespaced_id] as Dictionary).duplicate(true)
+	var record: Dictionary = typed[namespaced_id]
+	return record.duplicate(true)
 
 
 func get_content_record_ids(content_type: String) -> Array[String]:
