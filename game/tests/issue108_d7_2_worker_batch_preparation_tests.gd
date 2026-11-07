@@ -11,6 +11,7 @@ const StateContract := preload("res://scripts/objects/procedural_object_state_co
 const SEED := 424242
 const WORLD_ID := "issue108-d7-2-worker-batch-preparation"
 const STATE_ROOT := "user://issue108-d7-2-worker-batch-state"
+const COMMAND_STATE_ROOT := "user://issue108-d7-2-command-batch-state"
 
 var assertions := 0
 var failures := 0
@@ -23,6 +24,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_remove_tree(ProjectSettings.globalize_path(STATE_ROOT))
+	_remove_tree(ProjectSettings.globalize_path(COMMAND_STATE_ROOT))
 
 	var registry := Registry.new()
 	var registered: Dictionary = registry.discover_and_register([
@@ -155,10 +157,7 @@ func _run() -> void:
 		final_metrics = stream.get_performance_snapshot().get(
 			"last_region", {}
 		)
-		if (
-			bool(final_metrics.get("batch_prepare_reused", false))
-			and bool(final_metrics.get("prepared_base_adopted", false))
-		):
+		if bool(final_metrics.get("batch_prepare_reused", false)):
 			break
 		await process_frame
 
@@ -191,8 +190,9 @@ func _run() -> void:
 		"publication commits the worker-prepared batch arrays"
 	)
 	_check(
-		bool(final_metrics.get("prepared_base_adopted", false)),
-		"publication adopts the revision-gated prepared base list"
+		stream.get("entity_command_service") == null
+			and not bool(final_metrics.get("prepared_base_adopted", false)),
+		"legacy schema fixture intentionally bypasses command-service base adoption"
 	)
 	_check(
 		int(final_metrics.get("batch_prepare_worker_thread_id", 0)) > 0
@@ -220,6 +220,29 @@ func _run() -> void:
 	_check(
 		int(final_metrics.get("geometry_cache_misses", -1)) == 0,
 		"prepared publication performs zero individual ArrayMesh cache misses"
+	)
+
+	var command_evidence: Dictionary = await _run_command_service_adoption(
+		generated,
+		state,
+		records.size()
+	)
+	_check(
+		command_evidence.get("ok", false),
+		"schema-3 command-service fixture publishes through D7.2"
+	)
+	_check(
+		bool(command_evidence.get("prepared_base_adopted", false)),
+		"schema-3 publication adopts the revision-gated prepared base list"
+	)
+	_check(
+		bool(command_evidence.get("batch_prepare_reused", false)),
+		"schema-3 publication also commits worker-prepared batch arrays"
+	)
+	_check(
+		int(command_evidence.get("resolved_reuse_count", 0))
+			== records.size(),
+		"schema-3 publication reuses every prepared state resolution"
 	)
 
 	evidence = {
@@ -252,14 +275,126 @@ func _run() -> void:
 		"batch_prepare_reused": bool(
 			final_metrics.get("batch_prepare_reused", false)
 		),
-		"prepared_base_adopted": bool(
+		"legacy_prepared_base_adopted": bool(
 			final_metrics.get("prepared_base_adopted", false)
 		),
+		"command_service": command_evidence,
 	}
 
 	stream.queue_free()
 	await process_frame
 	_finish()
+
+
+func _run_command_service_adoption(
+	generated: Dictionary,
+	state: RefCounted,
+	expected_instance_count: int
+) -> Dictionary:
+	var region := Vector2i.ZERO
+	var command_stream := ObjectStream.new()
+	var initialized: Dictionary = command_stream.initialize(
+		SEED,
+		WORLD_ID,
+		["res://mods/first-party"],
+		COMMAND_STATE_ROOT
+	)
+	if not initialized.get("ok", false):
+		command_stream.free()
+		return {"ok": false, "reason": "command_stream_init_failed"}
+
+	var migrated: Dictionary = command_stream.migrate_command_snapshot_explicitly()
+	if (
+		not migrated.get("ok", false)
+		or not command_stream.is_entity_command_ready()
+	):
+		command_stream.free()
+		return {
+			"ok": false,
+			"reason": "command_schema_migration_failed:%s"
+				% migrated.get("reason", "unknown"),
+		}
+
+	root.add_child(command_stream)
+	var baseline: Dictionary = command_stream.publish_region(
+		region,
+		state,
+		false,
+		-1,
+		generated
+	)
+	if not baseline.get("ok", false):
+		command_stream.queue_free()
+		await process_frame
+		return {
+			"ok": false,
+			"reason": "command_baseline_publish_failed:%s"
+				% baseline.get("reason", "unknown"),
+		}
+
+	var request := {
+		"region_key": region,
+		"world_state": state,
+		"publication_token": -1,
+		"force_rebuild": true,
+		"request_serial": 7203,
+	}
+	command_stream.call(
+		"_queue_region_visual_preparation",
+		"0,0",
+		request,
+		generated
+	)
+
+	var metrics: Dictionary = {}
+	for _frame in range(600):
+		command_stream.process_queued_publications()
+		metrics = command_stream.get_performance_snapshot().get(
+			"last_region", {}
+		)
+		if (
+			bool(metrics.get("prepared_base_adopted", false))
+			and bool(metrics.get("batch_prepare_reused", false))
+		):
+			break
+		await process_frame
+
+	var output := {
+		"ok": (
+			bool(metrics.get("prepared_base_adopted", false))
+			and bool(metrics.get("batch_prepare_reused", false))
+			and int(metrics.get("instance_count", -1))
+				== expected_instance_count
+		),
+		"prepared_base_adopted": bool(
+			metrics.get("prepared_base_adopted", false)
+		),
+		"prepared_base_adoption_usec": int(
+			metrics.get("prepared_base_adoption_usec", -1)
+		),
+		"main_thread_reconstruction_usec": int(
+			metrics.get("main_thread_reconstruction_usec", -1)
+		),
+		"batch_prepare_reused": bool(
+			metrics.get("batch_prepare_reused", false)
+		),
+		"batch_prepare_worker_usec": int(
+			metrics.get("batch_prepare_worker_usec", -1)
+		),
+		"batch_commit_usec": int(
+			metrics.get("batch_commit_usec", -1)
+		),
+		"publication_usec": int(
+			metrics.get("publication_usec", -1)
+		),
+		"resolved_reuse_count": int(
+			metrics.get("resolved_reuse_count", -1)
+		),
+		"instance_count": int(metrics.get("instance_count", -1)),
+	}
+	command_stream.queue_free()
+	await process_frame
+	return output
 
 
 func _remove_tree(path: String) -> void:
@@ -299,4 +434,5 @@ func _finish() -> void:
 		failures,
 	])
 	_remove_tree(ProjectSettings.globalize_path(STATE_ROOT))
+	_remove_tree(ProjectSettings.globalize_path(COMMAND_STATE_ROOT))
 	quit(0 if failures == 0 else 1)
