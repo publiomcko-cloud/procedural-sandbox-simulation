@@ -144,20 +144,52 @@ func _build() -> Dictionary:
 		source_digest_entries
 	)
 	var digest_usec := Time.get_ticks_usec() - digest_started_usec
+	var validate_started_usec := Time.get_ticks_usec()
+	var candidate := {
+		"schema_version": Contract.SCHEMA_VERSION,
+		"world_id": world_id,
+		"world_seed": world_seed,
+		"generator_version": generator_version,
+		"scope_id": scope_id,
+		"region_key": [region_key.x, region_key.y],
+		"projection_revision": 0,
+		"source_world_revision": source_world_revision,
+		"source_digest_sha256": source_digest_sha256,
+		"source_instance_ids": source_instance_ids,
+		"effects": incoming_effects,
+		"local_frames": incoming_frames,
+	}
+	var checked := Contract.validate_snapshot(
+		candidate,
+		world_id,
+		world_seed,
+		generator_version,
+		region_key
+	)
+	var validate_usec := Time.get_ticks_usec() - validate_started_usec
+	if not checked.get("ok", false):
+		return _failure(
+			"effect_projection_worker_validation_failed:%s"
+				% checked.get("reason", "unknown")
+		)
+	var normalized_snapshot: Dictionary = checked["snapshot"]
 	var total_usec := Time.get_ticks_usec() - build_started_usec
 	return {
 		"ok": true,
 		"region_key": region_key,
 		"source_world_revision": source_world_revision,
-		"source_instance_ids": source_instance_ids,
+		"source_instance_ids": normalized_snapshot["source_instance_ids"],
 		"source_digest_sha256": source_digest_sha256,
-		"source_digest_entries": source_digest_entries.duplicate(true),
-		"effects": incoming_effects,
-		"local_frames": incoming_frames,
+		"source_digest_entries": source_digest_entries,
+		"effects": normalized_snapshot["effects"],
+		"local_frames": normalized_snapshot["local_frames"],
+		"worker_prevalidated": true,
+		"prevalidated_snapshot": normalized_snapshot,
 		"timings_usec": {
 			"prepare_sort": prepare_usec,
 			"effect_frame_build": effect_frame_usec,
 			"digest": digest_usec,
+			"validate_snapshot": validate_usec,
 			"total": total_usec,
 		},
 		"work_counts": {
