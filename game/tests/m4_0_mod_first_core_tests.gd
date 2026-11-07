@@ -212,6 +212,22 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 		"unknown content type remains fail-closed when the engine has no handler"
 	)
 
+	var invalid_normalizer_registry := Registry.new()
+	var invalid_normalizer_handler := Handler.new(
+		SYNTHETIC_TYPE, 40, Callable(self, "_validate_synthetic"),
+		"duplicate_synthetic_profile", 16,
+		Callable(self, "_normalize_synthetic_invalid")
+	)
+	invalid_normalizer_registry.register_engine_content_type_handler(
+		invalid_normalizer_handler
+	)
+	_check(
+		invalid_normalizer_registry.register_discovered(discovered).get(
+			"reason", ""
+		) == "synthetic_value_invalid",
+		"normalized content is revalidated before it can enter the registry"
+	)
+
 	var registry := Registry.new()
 	var handler := Handler.new(
 		SYNTHETIC_TYPE, 40, Callable(self, "_validate_synthetic"),
@@ -304,6 +320,14 @@ func _validate_synthetic(
 	if not record.get("label") is String or String(record.get("label", "")).strip_edges().is_empty():
 		return {"ok": false, "reason": "synthetic_label_invalid"}
 	return {"ok": true, "reason": "ok"}
+
+
+func _normalize_synthetic_invalid(
+	record: Dictionary, _mod_id: String, _context: Dictionary
+) -> Dictionary:
+	var normalized := record.duplicate(true)
+	normalized["value_milli"] = 2001
+	return {"ok": true, "reason": "ok", "record": normalized}
 
 
 func _normalize_synthetic(
