@@ -19,6 +19,7 @@ const SOURCE_REGION_RADIUS := 2
 const MAX_PREFETCH_GENERATION_JOBS_IN_FLIGHT := 2
 const MAX_PREFETCH_PROJECTION_JOBS_IN_FLIGHT := 2
 const MAX_PROJECTION_BUILD_CACHE_ENTRIES := 256
+const MAX_PROJECTION_SOURCE_CACHE_ENTRIES := 256
 
 var world_id := ""
 var world_seed := -1
@@ -42,6 +43,12 @@ var _prefetch_projection_task_by_scope: Dictionary = {}
 var _prefetch_projection_ready: Array[Dictionary] = []
 var _projection_build_cache: Dictionary = {}
 var _projection_build_cache_order: Array[String] = []
+# D.7.3: immutable authoritative projection sources are reusable while the
+# command-world revision remains exactly unchanged. This sits ahead of the
+# projection-build cache so revisits can skip source generation, base
+# reconstruction/state resolution, and the canonical projection cache-key hash.
+var _projection_source_cache: Dictionary = {}
+var _projection_source_cache_order: Array[String] = []
 var _prefetch_error := ""
 var _perf_trace_enabled := false
 var _performance := {
@@ -80,6 +87,14 @@ var _performance := {
 	"projection_build_cache_lookup_total_usec": 0,
 	"projection_build_cache_lookup_peak_usec": 0,
 	"projection_build_cache_reused_effect_count": 0,
+	"projection_source_cache_hit_count": 0,
+	"projection_source_cache_miss_count": 0,
+	"projection_source_cache_eviction_count": 0,
+	"projection_source_cache_lookup_total_usec": 0,
+	"projection_source_cache_lookup_peak_usec": 0,
+	"projection_source_cache_reused_instance_count": 0,
+	"source_finalize_skipped_count": 0,
+	"projection_build_cache_key_reuse_count": 0,
 }
 
 
@@ -113,6 +128,8 @@ func initialize(
 	_prefetch_projection_ready.clear()
 	_projection_build_cache.clear()
 	_projection_build_cache_order.clear()
+	_projection_source_cache.clear()
+	_projection_source_cache_order.clear()
 	_prefetch_error = ""
 	incremental_prefetch_enabled = false
 	_reset_performance_metrics()
@@ -290,6 +307,11 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 						"reason", "terrain_effect_runtime_projection_worker_rejected"
 					))
 					return _failure(_prefetch_error)
+				_remember_projection_source(
+					region,
+					source,
+					String(projection_queue.get("cache_key", ""))
+				)
 
 				if _perf_trace_enabled:
 					PerformanceTrace.emit("effect_source_ready", {
@@ -318,6 +340,68 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 			continue
 		if _prefetch_task_by_scope.has(scope_id) 			or _prefetch_projection_task_by_scope.has(scope_id):
 			continue
+
+		# D.7.3 fast revisit path. The global command revision is deliberately
+		# conservative: any accepted entity mutation invalidates reuse until a
+		# source is rebuilt at the new revision. Explicit source invalidation
+		# also removes the affected entry immediately.
+		var authority_revision := int(
+			object_stream.call("get_command_world_revision")
+		)
+		var cached_source_record := _projection_source_cache_lookup(
+			region, authority_revision
+		)
+		if not cached_source_record.is_empty():
+			# Do not let source-cache hits drain the entire prefetch queue in a
+			# single frame. Reuse the same bounded projection-stage capacity.
+			if (
+				_prefetch_projection_jobs.size()
+					+ _prefetch_projection_ready.size()
+				>= MAX_PREFETCH_PROJECTION_JOBS_IN_FLIGHT
+			):
+				_prefetch_queue.push_front(region)
+				break
+			var cached_source: Dictionary = cached_source_record.get(
+				"source", {}
+			)
+			var cached_projection_key := String(
+				cached_source_record.get("projection_cache_key", "")
+			)
+			var source_cache_queue := _queue_projection_build(
+				region,
+				scope_id,
+				cached_source,
+				cached_projection_key
+			)
+			if not source_cache_queue.get("ok", false):
+				_prefetch_error = String(source_cache_queue.get(
+					"reason",
+					"terrain_effect_runtime_projection_worker_rejected"
+				))
+				return _failure(_prefetch_error)
+			_performance["source_finalize_skipped_count"] = int(
+				_performance["source_finalize_skipped_count"]
+			) + 1
+			if _perf_trace_enabled:
+				PerformanceTrace.emit("effect_projection_source_cache_hit", {
+					"scope_id": scope_id,
+					"region": [region.x, region.y],
+					"world_revision": authority_revision,
+					"instance_count": int(
+						(cached_source.get("instances", []) as Array).size()
+					),
+					"projection_cache_key_reused":
+						not cached_projection_key.is_empty(),
+					"projection_cache_hit": bool(
+						source_cache_queue.get("cache_hit", false)
+					),
+					"queued": _prefetch_queue.size(),
+					"generation_in_flight": _prefetch_generation_jobs.size(),
+					"projection_in_flight": _prefetch_projection_jobs.size(),
+					"projection_ready": _prefetch_projection_ready.size(),
+				})
+			continue
+
 		if not object_stream.has_method(
 			"create_projection_source_generation_job"
 		) or not object_stream.has_method(
@@ -511,10 +595,18 @@ func _publish_prebuilt_projection_record(
 func _queue_projection_build(
 	region: Vector2i,
 	scope_id: String,
-	source: Dictionary
+	source: Dictionary,
+	known_cache_key: String = ""
 ) -> Dictionary:
 	var cache_key_started_usec := Time.get_ticks_usec()
-	var cache_key := _projection_build_cache_key(region, source)
+	var cache_key := known_cache_key
+	var cache_key_reused := not cache_key.is_empty()
+	if cache_key_reused:
+		_performance["projection_build_cache_key_reuse_count"] = int(
+			_performance["projection_build_cache_key_reuse_count"]
+		) + 1
+	else:
+		cache_key = _projection_build_cache_key(region, source)
 	var cache_key_usec := Time.get_ticks_usec() - cache_key_started_usec
 	var lookup_started_usec := Time.get_ticks_usec()
 	var cached := _projection_build_cache_lookup(cache_key)
@@ -550,6 +642,7 @@ func _queue_projection_build(
 					"scope_id": scope_id,
 					"region": [region.x, region.y],
 					"cache_key_usec": cache_key_usec,
+					"cache_key_reused": cache_key_reused,
 					"lookup_usec": lookup_usec,
 					"rebase_usec": rebase_usec,
 					"effect_count": int((rebased.get("effects", {}) as Dictionary).size()),
@@ -559,7 +652,12 @@ func _queue_projection_build(
 					).get("effect_frame_build", 0)),
 					"cache_entry_count": _projection_build_cache.size(),
 				})
-			return {"ok": true, "cache_hit": true}
+			return {
+				"ok": true,
+				"cache_hit": true,
+				"cache_key": cache_key,
+				"cache_key_reused": cache_key_reused,
+			}
 		_projection_build_cache.erase(cache_key)
 		_projection_build_cache_order.erase(cache_key)
 	_performance["projection_build_cache_miss_count"] = int(
@@ -591,7 +689,92 @@ func _queue_projection_build(
 	_performance["prefetch_projection_worker_dispatch_count"] = int(
 		_performance["prefetch_projection_worker_dispatch_count"]
 	) + 1
-	return {"ok": true, "cache_hit": false}
+	return {
+		"ok": true,
+		"cache_hit": false,
+		"cache_key": cache_key,
+		"cache_key_reused": cache_key_reused,
+	}
+
+
+func _projection_source_cache_lookup(
+	region: Vector2i,
+	world_revision: int
+) -> Dictionary:
+	var started_usec := Time.get_ticks_usec()
+	var scope_id := Contract.scope_id_for_region(region)
+	var record: Dictionary = _projection_source_cache.get(scope_id, {})
+	var hit := (
+		not record.is_empty()
+		and int(record.get("world_revision", -1)) == world_revision
+	)
+	if not hit and not record.is_empty():
+		_projection_source_cache.erase(scope_id)
+		_projection_source_cache_order.erase(scope_id)
+	if hit:
+		_projection_source_cache_order.erase(scope_id)
+		_projection_source_cache_order.append(scope_id)
+		_performance["projection_source_cache_hit_count"] = int(
+			_performance["projection_source_cache_hit_count"]
+		) + 1
+		var source: Dictionary = record.get("source", {})
+		_performance["projection_source_cache_reused_instance_count"] = int(
+			_performance["projection_source_cache_reused_instance_count"]
+		) + int((source.get("instances", []) as Array).size())
+	else:
+		_performance["projection_source_cache_miss_count"] = int(
+			_performance["projection_source_cache_miss_count"]
+		) + 1
+	var lookup_usec := Time.get_ticks_usec() - started_usec
+	_performance["projection_source_cache_lookup_total_usec"] = int(
+		_performance["projection_source_cache_lookup_total_usec"]
+	) + lookup_usec
+	_performance["projection_source_cache_lookup_peak_usec"] = maxi(
+		int(_performance["projection_source_cache_lookup_peak_usec"]),
+		lookup_usec
+	)
+	return record if hit else {}
+
+
+func _remember_projection_source(
+	region: Vector2i,
+	source: Dictionary,
+	projection_cache_key: String
+) -> void:
+	if not source.get("ok", false):
+		return
+	var source_region: Vector2i = source.get("region_key", region)
+	if source_region != region:
+		return
+	var world_revision := int(source.get("world_revision", -1))
+	if world_revision < 0 or world_revision > Contract.MAX_REVISION:
+		return
+	var scope_id := Contract.scope_id_for_region(region)
+	# The finalized source is immutable after construction. Keep the original
+	# reference rather than deep-copying 10-20 entity dictionaries on the cold
+	# path; consumers only read it and ProjectionBuildJob copies its own input.
+	_projection_source_cache[scope_id] = {
+		"world_revision": world_revision,
+		"source": source,
+		"projection_cache_key": projection_cache_key,
+	}
+	_projection_source_cache_order.erase(scope_id)
+	_projection_source_cache_order.append(scope_id)
+	while (
+		_projection_source_cache_order.size()
+			> MAX_PROJECTION_SOURCE_CACHE_ENTRIES
+	):
+		var evicted_scope_id: String = _projection_source_cache_order.pop_front()
+		if _projection_source_cache.has(evicted_scope_id):
+			_projection_source_cache.erase(evicted_scope_id)
+			_performance["projection_source_cache_eviction_count"] = int(
+				_performance["projection_source_cache_eviction_count"]
+			) + 1
+
+
+func _forget_projection_source(scope_id: String) -> void:
+	_projection_source_cache.erase(scope_id)
+	_projection_source_cache_order.erase(scope_id)
 
 
 func _projection_build_cache_key(
@@ -729,14 +912,26 @@ func _reconcile_source_region(
 	source_region: Vector2i,
 	persist_projection: bool = true
 ) -> Dictionary:
-	var scope_id := Contract.scope_id_for_region(source_region)
-	var source: Dictionary = object_stream.call(
-		"get_authoritative_region_projection_source", source_region
+	var authority_revision := int(
+		object_stream.call("get_command_world_revision")
 	)
-	if not source.get("ok", false):
-		return _failure(
-			"terrain_effect_runtime_source_failed:%s" 				% source.get("reason", "unknown")
+	var cached_record := _projection_source_cache_lookup(
+		source_region, authority_revision
+	)
+	var source: Dictionary = cached_record.get("source", {})
+	if source.is_empty():
+		source = object_stream.call(
+			"get_authoritative_region_projection_source", source_region
 		)
+		if not source.get("ok", false):
+			return _failure(
+				"terrain_effect_runtime_source_failed:%s" 					% source.get("reason", "unknown")
+			)
+		_remember_projection_source(source_region, source, "")
+	else:
+		_performance["source_finalize_skipped_count"] = int(
+			_performance["source_finalize_skipped_count"]
+		) + 1
 	return _reconcile_prebuilt_source_region(
 		source_region, source, persist_projection
 	)
@@ -985,6 +1180,7 @@ func invalidate_source_region(source_region: Vector2i) -> void:
 	if not initialized or projection == null:
 		return
 	var scope_id := Contract.scope_id_for_region(source_region)
+	_forget_projection_source(scope_id)
 	if not _pre_invalidation_frames.has(scope_id):
 		var scope: Dictionary = projection.get_scope_snapshot(source_region)
 		_pre_invalidation_frames[scope_id] = (
@@ -1020,6 +1216,7 @@ func refresh_invalidated_source_region(
 		return _failure(
 			"terrain_effect_runtime_reconcile_failed:%s" 				% reconciled.get("reason", "unknown")
 		)
+	_remember_projection_source(source_region, source, "")
 	var new_scope: Dictionary = projection.get_scope_snapshot(source_region)
 	var new_frames: Dictionary = (
 		new_scope.get("local_frames", {}) as Dictionary
@@ -1187,6 +1384,8 @@ func get_performance_snapshot() -> Dictionary:
 	result["prefetch_projection_ready_count"] = _prefetch_projection_ready.size()
 	result["projection_build_cache_entry_count"] = _projection_build_cache.size()
 	result["projection_build_cache_capacity"] = MAX_PROJECTION_BUILD_CACHE_ENTRIES
+	result["projection_source_cache_entry_count"] = _projection_source_cache.size()
+	result["projection_source_cache_capacity"] = MAX_PROJECTION_SOURCE_CACHE_ENTRIES
 	result["prefetch_error"] = _prefetch_error
 	result["projection"] = projection.get_performance_snapshot() 		if projection != null else {}
 	return result
@@ -1235,6 +1434,14 @@ func _reset_performance_metrics() -> void:
 		"projection_build_cache_lookup_total_usec": 0,
 		"projection_build_cache_lookup_peak_usec": 0,
 		"projection_build_cache_reused_effect_count": 0,
+		"projection_source_cache_hit_count": 0,
+		"projection_source_cache_miss_count": 0,
+		"projection_source_cache_eviction_count": 0,
+		"projection_source_cache_lookup_total_usec": 0,
+		"projection_source_cache_lookup_peak_usec": 0,
+		"projection_source_cache_reused_instance_count": 0,
+		"source_finalize_skipped_count": 0,
+		"projection_build_cache_key_reuse_count": 0,
 	}
 
 
