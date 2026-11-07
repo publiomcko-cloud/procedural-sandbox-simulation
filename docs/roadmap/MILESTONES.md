@@ -1,5 +1,29 @@
 # Roadmap with implementation gates
 
+## 2026-11-07 — M4.0 mandatory pre-P4 mod-first architecture gate
+
+Issue #108 is complete and closed after D.8 / PR #254 / merge `5a69a2ec9e96411fd256abc97ae9a6c32d4658a9`.
+
+Before P4 begins, the owner accepted [ADR-0007](../decisions/ADR-0007-MOD-FIRST-CONTENT-CORE-BEFORE-P4.md): M4.0 generalizes the existing P0.3/P2 mod-first content core without changing gameplay behavior.
+
+M4.0 must:
+
+- preserve the single first-party + `user://mods` declarative discovery path;
+- replace domain-specific central registration with engine-owned extensible content-type handlers;
+- preserve current procedural rock, population and terrain-interaction semantics/identities;
+- expose uniform canonical content fingerprints/pins;
+- prove a synthetic new data-only type can be added without changing loader discovery;
+- retain strict schema/dependency/path/budget validation;
+- keep executable scripted mods out of scope.
+
+P4 scheduler mechanics remain engine-owned. Future simulation/material/environment definitions should enter through the generalized content architecture rather than through new first-party-only data paths.
+
+Runtime implementation from M4.0 onward is also governed by [ADR-0008](../decisions/ADR-0008-MAIN-THREAD-BUDGET-AND-PERFORMANCE-OBSERVABILITY.md) and the [Issue #108 performance retrospective](../reports/2026-11-07-ISSUE108-PERFORMANCE-RETROSPECTIVE.md): bounded work, direct indexes, pure worker preparation where applicable, revision-gated reuse, bounded main-thread publication and stage-level `PERF_TRACE` evidence.
+
+**Next authorized development slice:** M4.0.  
+**Blocked until M4.0 qualification:** P4.0A fixed-tick scheduler implementation.
+
+
 ## 2026-10-25 — P3.0C persistent transactional entity history candidate
 
 The P3.0C candidate on `feat/p3-0c-transactional-undo-redo`, draft PR [#121](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/121), adds explicit schema-3 persistent history and revision-checked `ENTITY_UNDO`/`ENTITY_REDO` through the existing P2.0B state store. It preserves exact pre-delete overrides (including F7), keeps F9 as baseline restore with reversible prior state, and requires explicit schema migration. Full Godot 4.7.2 validation passed 18,153 assertions/0 failures; developer headless evidence only. See [spec](../specs/P3-0C-TRANSACTIONAL-PERSISTENT-UNDO-REDO.md), [ADR-0006](../decisions/ADR-0006-PERSISTENT-ENTITY-UNDO-REDO.md), and [checkpoint](../checkpoints/2026-10-25-P3-0C-IMPLEMENTATION.md). Independent source review and owner GUI retest remain gates; do not merge. All five F2-G1 holds remain.
