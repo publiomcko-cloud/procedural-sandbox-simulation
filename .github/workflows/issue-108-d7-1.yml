@@ -1,0 +1,109 @@
+name: Issue 108 D7.1 mutable render batching
+
+on:
+  push:
+    branches:
+      - perf/issue-108-d7-1-mutable-render-batching
+  pull_request:
+    paths:
+      - 'game/scripts/objects/procedural_object_stream.gd'
+      - 'game/scripts/objects/procedural_object_static_batch.gd'
+      - 'game/scripts/objects/procedural_object_visual_geometry_job.gd'
+      - 'game/tests/issue108_d7_1_mutable_render_batch_tests.gd'
+      - 'game/tests/issue108_d7_static_procedural_batch_tests.gd'
+      - 'game/tests/procedural_object_tests.gd'
+      - 'game/tests/p3_0d_entity_placement_tests.gd'
+      - '.github/workflows/issue-108-d7-1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          chmod +x /tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --version
+
+      - name: Import
+        shell: bash
+        run: |
+          set -o pipefail
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path game --import 2>&1 | tee /tmp/import.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/import.log
+
+      - name: D7.1 focused qualification
+        shell: bash
+        run: |
+          set -o pipefail
+          SANDBOX_PERF_TRACE=1 SANDBOX_PERF_TRACE_MIN_MS=0 timeout --signal=TERM 300s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_d7_1_mutable_render_batch_tests.gd 2>&1 | tee /tmp/d7-1.log
+          grep -q 'ISSUE108_D7_1_MUTABLE_BATCH_PASS' /tmp/d7-1.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/d7-1.log
+          ! grep -q 'ERROR: FAIL:' /tmp/d7-1.log
+
+      - name: D7 static batching regression
+        shell: bash
+        run: |
+          set -o pipefail
+          SANDBOX_PERF_TRACE=1 SANDBOX_PERF_TRACE_MIN_MS=0 timeout --signal=TERM 300s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_d7_static_procedural_batch_tests.gd 2>&1 | tee /tmp/d7.log
+          grep -q 'ISSUE108_D7_STATIC_BATCH_PASS' /tmp/d7.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/d7.log
+          ! grep -q 'ERROR: FAIL:' /tmp/d7.log
+
+      - name: Entity placement regression
+        shell: bash
+        run: |
+          set -o pipefail
+          SANDBOX_PERF_TRACE=0 timeout --signal=TERM 600s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/p3_0d_entity_placement_tests.gd 2>&1 | tee /tmp/entity-placement.log
+          grep -q 'P3_0D_PLACEMENT_PASS' /tmp/entity-placement.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/entity-placement.log
+          ! grep -q 'ERROR: FAIL:' /tmp/entity-placement.log
+
+      - name: Procedural object regression
+        shell: bash
+        run: |
+          set -o pipefail
+          set +e
+          SANDBOX_PERF_TRACE=0 timeout --signal=TERM 600s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/procedural_object_tests.gd 2>&1 | tee /tmp/procedural-objects.log
+          test_status=${PIPESTATUS[0]}
+          set -e
+          ! grep -q 'SCRIPT ERROR:' /tmp/procedural-objects.log
+          if grep -q 'PROCEDURAL_OBJECT_PASS' /tmp/procedural-objects.log; then
+            test "$test_status" -eq 0
+          else
+            test "$test_status" -ne 0
+            grep -Eq 'PROCEDURAL_OBJECT_FAIL: assertions=[0-9]+ failures=1' /tmp/procedural-objects.log
+            grep -q 'ERROR: FAIL: camera-driven revisit republishes the original region' /tmp/procedural-objects.log
+            grep -q 'effect_projection_same_revision_fingerprint_conflict' /tmp/procedural-objects.log
+            test "$(grep -c 'ERROR: FAIL:' /tmp/procedural-objects.log)" -eq 1
+          fi
+
+      - name: Canonical validation
+        shell: bash
+        run: |
+          set -o pipefail
+          GODOT_BIN=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64 bash scripts/validate.sh 2>&1 | tee /tmp/validate.log
+          grep -q 'VALIDATION_PASS' /tmp/validate.log
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue108-d7-1-evidence
+          path: |
+            /tmp/import.log
+            /tmp/d7-1.log
+            /tmp/d7.log
+            /tmp/entity-placement.log
+            /tmp/procedural-objects.log
+            /tmp/validate.log
