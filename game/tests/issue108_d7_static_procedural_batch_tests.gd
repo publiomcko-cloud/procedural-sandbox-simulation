@@ -104,13 +104,13 @@ func _run() -> void:
 			and bool(stream.call("_is_static_batch_candidate", legacy_candidate)),
 		"unmodified legacy procedural objects are batch candidates"
 	)
-	var placed_like := legacy_candidate.duplicate(true)
+	var placed_like: Dictionary = legacy_candidate.duplicate(true)
 	placed_like["population_algorithm"] = "explicit_place_v1"
 	_check(
 		not bool(stream.call("_is_static_batch_candidate", placed_like)),
 		"explicitly placed entities remain outside the static procedural batch"
 	)
-	var stateful_like := legacy_candidate.duplicate(true)
+	var stateful_like: Dictionary = legacy_candidate.duplicate(true)
 	stateful_like["instance_components"] = {
 		"core.appearance": {
 			"schema_version": 1,
@@ -130,7 +130,7 @@ func _run() -> void:
 		var cpu: Dictionary = cpu_by_instance[instance_id]
 		var mesh_result: Dictionary = RockMeshAdapter.mesh_from_cpu_data(cpu)
 		_check(mesh_result.get("ok", false), "reference individual mesh commits")
-		var common := {
+		var common: Dictionary = {
 			"instance_id": instance_id,
 			"position": Vector3(instance["position_mm"]) / 1000.0,
 			"scale_milli": instance.get(
@@ -138,10 +138,10 @@ func _run() -> void:
 			),
 			"yaw_mdeg": int(instance.get("default_yaw_mdeg", 0)),
 		}
-		var cpu_item := common.duplicate(true)
+		var cpu_item: Dictionary = common.duplicate(true)
 		cpu_item["cpu_data"] = cpu
 		reference_items_cpu.append(cpu_item)
-		var mesh_item := common.duplicate(true)
+		var mesh_item: Dictionary = common.duplicate(true)
 		mesh_item["mesh"] = mesh_result["mesh"]
 		reference_items_mesh.append(mesh_item)
 
@@ -203,7 +203,7 @@ func _run() -> void:
 		"regional static batch remains inside the explicit vertex budget"
 	)
 
-	var batch_node := stream.get_node_or_null(
+	var batch_node: Node = stream.get_node_or_null(
 		"Objects_0_0/StaticPopulationBatch"
 	)
 	_check(batch_node != null, "regional static batch node is published")
