@@ -1,8 +1,8 @@
 extends RefCounted
 class_name ProceduralObjectStaticBatch
 
-## Combines immutable, unmodified static instances into one surface per region.
-## Stateful/deleted representatives remain individual and are never authoritative here.
+## Combines immutable, unmodified procedural instances into one surface per region.
+## Stateful/deleted/explicitly placed representatives remain individual and are never authoritative here.
 const MAX_BATCH_VERTICES := 96000 # 64 objects x 500 triangles x 3 flat vertices.
 
 
