@@ -1,3 +1,30 @@
+# Current project status — Issue #108 complete; M4.0 next (2026-11-07)
+
+## Authoritative 2026-11-07 update
+
+Live functional main is integrated through Issue #108 D.8 / PR #254 at merge commit `5a69a2ec9e96411fd256abc97ae9a6c32d4658a9`.
+
+Owner status:
+
+- Issue #108 is **COMPLETE / CLOSED**;
+- terrain/object grounding, derived SDF imprint, persistence/replay, cross-region handling, streaming, D.7.x performance work and precision-safe effect-bearing LOD1 are accepted;
+- the owner considers the final GUI acceptance gate satisfied;
+- the next authorized development slice is **M4.0 — mod-first content-core generalization**;
+- **P4 implementation is downstream of M4.0 qualification**.
+
+Accepted architecture decisions:
+
+- [ADR-0007 — Generalize the mod-first content core before P4](../decisions/ADR-0007-MOD-FIRST-CONTENT-CORE-BEFORE-P4.md);
+- [ADR-0008 — Main-thread budget, derived-work isolation and performance observability](../decisions/ADR-0008-MAIN-THREAD-BUDGET-AND-PERFORMANCE-OBSERVABILITY.md).
+
+Performance engineering handoff:
+
+- [Issue #108 performance retrospective](../reports/2026-11-07-ISSUE108-PERFORMANCE-RETROSPECTIVE.md).
+
+M4.0 is behavior-preserving: it generalizes content registration/pinning and must not silently change current procedural objects, population, terrain interactions, entity persistence or gameplay. Scripted mods remain out of scope.
+
+---
+
 # Current project status — runtime mainline integrated (2026-11-05)
 
 ## Authoritative 2026-11-05 status
