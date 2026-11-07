@@ -195,8 +195,8 @@ func _run() -> void:
 		"terrain_edits_then_imprint_v1 re-applies anchored imprint after FILL"
 	)
 
-	# LOD1 is deliberately rejected for effect-bearing chunks until its callback
-	# can consume the same region-local frame without world-float conversion.
+	# D8: LOD1 consumes the same precision-safe source-region-local frame as
+	# LOD0. No global float lattice or effect-specific forced fallback remains.
 	var lod_job := TerrainMeshJob.new(
 		WORLD_SEED,
 		Vector2i.ZERO,
@@ -209,10 +209,9 @@ func _run() -> void:
 	lod_job.run()
 	_check(
 		lod_job.result.get("valid", false)
-			and int(lod_job.result.get("lod_level", -1)) == 0
-			and lod_job.result.get("lod_fallback_reason")
-				== "terrain_effect_precision_frame_requires_lod0",
-		"effect-bearing LOD1 request fails over deterministically to precision-safe LOD0"
+			and int(lod_job.result.get("lod_level", -1)) == 1
+			and not bool(lod_job.result.get("lod_fallback", false)),
+		"effect-bearing LOD1 request meshes through the precision-safe region-local frame"
 	)
 
 	# Shared X seam receives one merged immutable effect snapshot for both sides.
