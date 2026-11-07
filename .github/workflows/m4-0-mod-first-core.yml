@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - 'game/scripts/modding/**'
+      - 'game/scripts/objects/procedural_object_stream.gd'
       - 'game/tests/m4_0_mod_first_core_tests.gd'
       - 'game/tests/declarative_mod_tests.gd'
       - 'game/tests/entity_command_tests.gd'
