@@ -1216,7 +1216,13 @@ func _mesh_snapshots(manager: ProceduralObjectStream, region_key: Vector2i) -> A
 	var region_id := "%d,%d" % [region_key.x, region_key.y]
 	var region_root := manager.get_node("Objects_%d_%d" % [region_key.x, region_key.y])
 	for object_node in region_root.get_children():
+		if object_node.get_child_count() == 0:
+			continue
+		if not object_node.get_child(0) is MeshInstance3D:
+			continue
 		var mesh_instance: MeshInstance3D = object_node.get_child(0)
+		if mesh_instance.mesh == null:
+			continue
 		var arrays: Array = mesh_instance.mesh.surface_get_arrays(0)
 		var representation_ids: Array = []
 		var geometry_version := -1
@@ -1225,7 +1231,12 @@ func _mesh_snapshots(manager: ProceduralObjectStream, region_key: Vector2i) -> A
 			geometry_version = int(object_node.get_meta("geometry_adapter_version", -1))
 		elif object_node.has_meta("stable_instance_ids"):
 			representation_ids = object_node.get_meta("stable_instance_ids")
-			geometry_version = int(object_node.get_meta("population_batch_version", -1))
+			geometry_version = int(
+				object_node.get_meta(
+					"population_batch_version",
+					object_node.get_meta("mutable_render_batch_version", -1)
+				)
+			)
 		result.append({"ids": representation_ids, "geometry_version": geometry_version, "vertices": arrays[Mesh.ARRAY_VERTEX], "normals": arrays[Mesh.ARRAY_NORMAL]})
 	return result
 
