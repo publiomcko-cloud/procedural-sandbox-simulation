@@ -170,6 +170,38 @@ func _run() -> void:
 	var state: RefCounted = WorldState.new(
 		SEED, region, BrushState.new(SEED)
 	)
+	var prewarm_request: Dictionary = {
+		"region_key": region,
+		"world_state": state,
+		"publication_token": -1,
+		"force_rebuild": false,
+		"request_serial": 1,
+	}
+	stream.call(
+		"_queue_region_visual_preparation",
+		"0,0",
+		prewarm_request,
+		generated
+	)
+	var preparations: Dictionary = stream.get(
+		"_region_visual_preparations"
+	)
+	var prewarm_record: Dictionary = preparations.get("0,0", {})
+	_check(
+		not prewarm_record.is_empty(),
+		"D7 runtime visual preparation record is created"
+	)
+	_check(
+		(prewarm_record.get("variants", []) as Array).is_empty(),
+		"all static CPU-backed procedural variants bypass individual ArrayMesh prewarm"
+	)
+	_check(
+		int(prewarm_record.get("batch_cpu_bypass_variant_count", 0)) > 0
+			and int(prewarm_record.get("state_resolve_usec", -1)) >= 0,
+		"runtime preparation reports unique mesh bypasses and authoritative state-resolution timing"
+	)
+	stream.call("_cancel_region_visual_preparation", "0,0")
+
 	var published: Dictionary = stream.publish_region(
 		region,
 		state,
@@ -223,6 +255,15 @@ func _run() -> void:
 	evidence = {
 		"instance_count": instances.size(),
 		"legacy_procedural_count": legacy_count,
+		"prewarm_variant_count": (
+			prewarm_record.get("variants", []) as Array
+		).size(),
+		"prewarm_bypassed_unique_variant_count": int(
+			prewarm_record.get("batch_cpu_bypass_variant_count", -1)
+		),
+		"prewarm_state_resolve_usec": int(
+			prewarm_record.get("state_resolve_usec", -1)
+		),
 		"batched_instance_count": int(metrics.get(
 			"batched_instance_count", -1
 		)),
