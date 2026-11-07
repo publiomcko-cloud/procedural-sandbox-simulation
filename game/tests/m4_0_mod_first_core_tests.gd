@@ -15,7 +15,9 @@ var test_root := ""
 func _initialize() -> void:
 	test_root = "user://mods/m4_0_test_%d" % Time.get_ticks_usec()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(test_root))
+	_test_handler_lifetime_is_acyclic()
 	_test_builtin_compatibility_and_fingerprints()
+	_test_legacy_discovery_view_compatibility()
 	_test_loader_is_type_agnostic_and_registry_is_fail_closed()
 	_remove_tree(ProjectSettings.globalize_path(test_root))
 	if failures == 0:
@@ -23,6 +25,16 @@ func _initialize() -> void:
 	else:
 		push_error("M4_0_MOD_FIRST_CORE_FAIL: assertions=%d failures=%d" % [assertions, failures])
 	quit(0 if failures == 0 else 1)
+
+
+func _test_handler_lifetime_is_acyclic() -> void:
+	var registry := Registry.new()
+	var registry_weak := weakref(registry)
+	registry = null
+	_check(
+		registry_weak.get_ref() == null,
+		"built-in handler callbacks do not create a RefCounted registry cycle"
+	)
 
 
 func _test_builtin_compatibility_and_fingerprints() -> void:
@@ -132,6 +144,29 @@ func _test_builtin_compatibility_and_fingerprints() -> void:
 		first_generation.get("ok", false)
 			and first_generation.get("instances", []) == second_generation.get("instances", []),
 		"existing procedural world generation remains deterministic through compatibility APIs"
+	)
+
+
+func _test_legacy_discovery_view_compatibility() -> void:
+	var discovered := Loader.discover_and_validate(["res://mods/first-party"])
+	_check(discovered.get("ok", false), "legacy-view compatibility fixture discovers first-party content")
+	if not discovered.get("ok", false):
+		return
+	var packages: Array = discovered["packages"]
+	var package: Dictionary = packages[0]
+	var rules: Array = package.get("population_rules", [])
+	for rule_value in rules:
+		var rule: Dictionary = rule_value
+		if String(rule.get("algorithm", "")) == Registry.POPULATION_ALGORITHM:
+			rule["density_milli_per_region"] = 15001
+	package["population_rules"] = rules
+	packages[0] = package
+	discovered["packages"] = packages
+	var rejected := Registry.new().register_discovered(discovered)
+	_check(
+		not rejected.get("ok", false)
+			and String(rejected.get("reason", "")) == "population_rule_density_out_of_range",
+		"legacy typed discovery view remains authoritative for pre-M4.0 fixture mutation"
 	)
 
 
