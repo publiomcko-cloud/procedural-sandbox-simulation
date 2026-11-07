@@ -51,7 +51,7 @@ static func build(items: Array[Dictionary]) -> Dictionary:
 			var rotation_y := deg_to_rad(
 				float(item.get("yaw_mdeg", 0)) / 1000.0
 			)
-			basis = Basis(Vector3.UP, rotation_y).scaled(
+			basis = Basis(Vector3.UP, rotation_y).scaled_local(
 				Vector3(scale_values) / 1000.0
 			)
 		if not position.is_finite() or not basis.is_finite():
