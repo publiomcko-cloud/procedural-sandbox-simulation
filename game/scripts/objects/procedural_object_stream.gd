@@ -57,6 +57,8 @@ var _visual_geometry_task_by_region: Dictionary = {}
 var _next_region_publication_serial := 1
 var _geometry_mesh_cache: Dictionary = {}
 var _geometry_mesh_cache_order: Array[String] = []
+var _geometry_cpu_cache: Dictionary = {}
+var _geometry_cpu_cache_order: Array[String] = []
 var _geometry_cache_hit_count := 0
 var _geometry_cache_miss_count := 0
 var _geometry_cache_eviction_count := 0
@@ -105,6 +107,8 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_last_command_visual_result.clear()
 	_geometry_mesh_cache.clear()
 	_geometry_mesh_cache_order.clear()
+	_geometry_cpu_cache.clear()
+	_geometry_cpu_cache_order.clear()
 	_geometry_cache_hit_count = 0
 	_geometry_cache_miss_count = 0
 	_geometry_cache_eviction_count = 0
@@ -1670,6 +1674,7 @@ func get_performance_snapshot() -> Dictionary:
 		"active_instance_count": resident_instances,
 		"batched_instance_count": resident_batched,
 		"geometry_cache_variant_count": _geometry_mesh_cache.size(),
+		"geometry_cpu_cache_variant_count": _geometry_cpu_cache.size(),
 		"geometry_cache_capacity": MAX_CACHED_GEOMETRY_VARIANTS,
 		"geometry_cache_hit_count": _geometry_cache_hit_count,
 		"geometry_cache_miss_count": _geometry_cache_miss_count,
@@ -1859,6 +1864,38 @@ func _geometry_cache_key(instance: Dictionary) -> String:
 		"geometry_seeds": instance.get("geometry_seeds", {}),
 	}
 	return JSON.stringify(key_data, "", true, true).sha256_text()
+
+
+func _remember_geometry_cpu(cache_key: String, cpu_data: Dictionary) -> void:
+	if cache_key.is_empty() or not cpu_data.get("ok", false):
+		return
+	_geometry_cpu_cache[cache_key] = cpu_data
+	_geometry_cpu_cache_order.erase(cache_key)
+	_geometry_cpu_cache_order.append(cache_key)
+	while _geometry_cpu_cache_order.size() > MAX_CACHED_GEOMETRY_VARIANTS:
+		var evicted: String = _geometry_cpu_cache_order.pop_front()
+		_geometry_cpu_cache.erase(evicted)
+
+
+func _get_or_build_geometry_cpu(
+	instance: Dictionary,
+	prepared_cpu: Dictionary = {}
+) -> Dictionary:
+	var cache_key := _geometry_cache_key(instance)
+	if prepared_cpu.get("ok", false):
+		_remember_geometry_cpu(cache_key, prepared_cpu)
+		return prepared_cpu
+	if _geometry_cpu_cache.has(cache_key):
+		_geometry_cpu_cache_order.erase(cache_key)
+		_geometry_cpu_cache_order.append(cache_key)
+		return _geometry_cpu_cache[cache_key]
+	var built: Dictionary = RockMeshAdapter.build_cpu_data(
+		instance.get("geometry", {}),
+		instance.get("geometry_seeds", {})
+	)
+	if built.get("ok", false):
+		_remember_geometry_cpu(cache_key, built)
+	return built
 
 
 func _get_or_build_geometry_mesh(instance: Dictionary, prepared_cpu: Dictionary = {}) -> Dictionary:
