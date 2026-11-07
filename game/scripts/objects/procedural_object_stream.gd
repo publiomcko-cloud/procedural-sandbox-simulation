@@ -513,7 +513,12 @@ func _queue_region_visual_preparation(
 func _process_region_visual_preparations() -> void:
 	if _publications_last_process_tick >= MAX_REGION_PUBLICATIONS_PER_FRAME:
 		return
-	while not _region_visual_preparation_order.is_empty():
+	var remaining_attempts := _region_visual_preparation_order.size()
+	while (
+		not _region_visual_preparation_order.is_empty()
+		and remaining_attempts > 0
+	):
+		remaining_attempts -= 1
 		var id := String(_region_visual_preparation_order[0])
 		if not _region_visual_preparations.has(id):
 			_region_visual_preparation_order.pop_front()
@@ -562,7 +567,9 @@ func _process_region_visual_preparations() -> void:
 				)
 				return
 			if not WorkerThreadPool.is_task_completed(task_id):
-				return
+				_region_visual_preparation_order.pop_front()
+				_region_visual_preparation_order.append(id)
+				continue
 			WorkerThreadPool.wait_for_task_completion(task_id)
 			var job_record: Dictionary = _visual_geometry_jobs[task_id]
 			_visual_geometry_jobs.erase(task_id)
