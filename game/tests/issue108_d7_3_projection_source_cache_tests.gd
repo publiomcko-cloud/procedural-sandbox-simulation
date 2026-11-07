@@ -233,8 +233,9 @@ func _run() -> void:
 	evidence = {
 		"cold_generation_jobs": generation_before_revisit,
 		"cold_finalizations": finalize_before_revisit,
-		"same_revision_generation_jobs": stream.generation_job_count
-			- 2,
+		"same_revision_generation_skipped": (
+			generation_before_revisit == finalize_before_revisit
+		),
 		"projection_source_cache_hit_count": int(
 			invalidated_perf.get("projection_source_cache_hit_count", -1)
 		),
@@ -265,7 +266,7 @@ func _run() -> void:
 
 
 func _prefetch_region(
-	runtime: RefCounted,
+	runtime,
 	region: Vector2i
 ) -> Dictionary:
 	var regions: Array[Vector2i] = [region]
