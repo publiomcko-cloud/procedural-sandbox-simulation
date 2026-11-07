@@ -112,6 +112,7 @@ var lod_enabled := false
 var _lod_selection_dirty := true
 var _edit_trace_enabled := EDIT_TRACE_DEFAULT_ENABLED
 var _perf_trace_enabled := false
+var _last_region_publish_profile: Dictionary = {}
 
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
@@ -1960,56 +1961,174 @@ func _publish_region(
 	var id := _region_id(region_key)
 	var region_nodes: Dictionary = {}
 	var region_origin: Vector3 = SpatialGrid.region_origin_world(region_key)
+	var created_node_count := 0
+	var reused_node_count := 0
+	var released_node_count := 0
+	var chunk_commit_started_usec := Time.get_ticks_usec()
+	var node_resolve_usec := 0
+	var transform_usec := 0
+	var mesh_replace_usec := 0
+	var metadata_usec := 0
+	var lod_state_usec := 0
+	var index_commit_usec := 0
+	var slowest_mesh_replace_usec := 0
+	var slowest_node_resolve_usec := 0
 	for coordinate in ChunkGrid.all_coordinates():
 		if not meshes.has(coordinate):
 			continue
 		var chunk_id: String = state.chunk_id(coordinate)
+		var node_resolve_started_usec := Time.get_ticks_usec()
 		var node: MeshInstance3D
 		if active_regions.has(id) and active_regions[id]["chunk_nodes"].has(chunk_id):
 			node = active_regions[id]["chunk_nodes"][chunk_id]
+			reused_node_count += 1
 		else:
 			node = _create_chunk_node(region_key, coordinate, chunk_id)
+			created_node_count += 1
+		var node_resolve_elapsed_usec := Time.get_ticks_usec() - node_resolve_started_usec
+		node_resolve_usec += node_resolve_elapsed_usec
+		slowest_node_resolve_usec = maxi(slowest_node_resolve_usec, node_resolve_elapsed_usec)
+
+		var transform_started_usec := Time.get_ticks_usec()
 		node.position = region_origin + ChunkGrid.origin_for(coordinate)
+		transform_usec += Time.get_ticks_usec() - transform_started_usec
+
+		var mesh_replace_started_usec := Time.get_ticks_usec()
 		_replace_node_mesh(
 			node,
 			meshes[coordinate],
 			int(vertex_counts.get(coordinate, -1)),
 			int(triangle_counts.get(coordinate, -1))
 		)
+		var mesh_replace_elapsed_usec := Time.get_ticks_usec() - mesh_replace_started_usec
+		mesh_replace_usec += mesh_replace_elapsed_usec
+		slowest_mesh_replace_usec = maxi(slowest_mesh_replace_usec, mesh_replace_elapsed_usec)
+
+		var metadata_started_usec := Time.get_ticks_usec()
 		node.visible = true
 		node.set_meta("stable_chunk_id", chunk_id)
 		node.set_meta("region_key", region_key)
 		node.set_meta("chunk_coordinate", coordinate)
-		_set_chunk_lod_state(chunk_id, node, int(actual_lods.get(coordinate, 0)), bool(fallback_lods.get(coordinate, false)))
+		metadata_usec += Time.get_ticks_usec() - metadata_started_usec
+
+		var lod_started_usec := Time.get_ticks_usec()
+		_set_chunk_lod_state(
+			chunk_id,
+			node,
+			int(actual_lods.get(coordinate, 0)),
+			bool(fallback_lods.get(coordinate, false))
+		)
+		lod_state_usec += Time.get_ticks_usec() - lod_started_usec
+
+		var index_started_usec := Time.get_ticks_usec()
 		region_nodes[chunk_id] = node
 		chunk_nodes[chunk_id] = node
+		index_commit_usec += Time.get_ticks_usec() - index_started_usec
+	var chunk_commit_usec := Time.get_ticks_usec() - chunk_commit_started_usec
+
+	var stale_release_started_usec := Time.get_ticks_usec()
 	var previous: Dictionary = active_regions.get(id, {})
 	for old_id in previous.get("chunk_nodes", {}):
 		if not region_nodes.has(old_id):
+			released_node_count += 1
 			_release_chunk_node(old_id, previous["chunk_nodes"][old_id])
+	var stale_release_usec := Time.get_ticks_usec() - stale_release_started_usec
+
+	var registry_started_usec := Time.get_ticks_usec()
 	active_regions[id] = {"region_key": region_key, "world_state": state, "chunk_nodes": region_nodes}
 	world_states[id] = state
 	_lod_selection_dirty = true
-	var object_publication: Dictionary = object_stream.enqueue_region_publication(region_key, state, publication_token)
-	if not object_publication.get("ok", false) and object_publication.get("reason") != "stale_object_region_publication":
+	var registry_commit_usec := Time.get_ticks_usec() - registry_started_usec
+
+	var object_enqueue_started_usec := Time.get_ticks_usec()
+	var object_publication: Dictionary = object_stream.enqueue_region_publication(
+		region_key, state, publication_token
+	)
+	var object_enqueue_usec := Time.get_ticks_usec() - object_enqueue_started_usec
+
+	var object_status_started_usec := Time.get_ticks_usec()
+	if (
+		not object_publication.get("ok", false)
+		and object_publication.get("reason") != "stale_object_region_publication"
+	):
 		_procedural_object_status = "Procedural object issue: %s" % object_stream.get_error_summary()
 	else:
 		var object_error: String = object_stream.get_error_summary()
-		_procedural_object_status = "Procedural objects queued" if object_error.is_empty() else "Procedural object issue: %s" % object_error
-	if region_key == focus_region_key:
+		_procedural_object_status = (
+			"Procedural objects queued"
+			if object_error.is_empty()
+			else "Procedural object issue: %s" % object_error
+		)
+	var object_status_usec := Time.get_ticks_usec() - object_status_started_usec
+
+	var focus_refresh_usec := 0
+	var focused_region := region_key == focus_region_key
+	if focused_region:
 		world_state = state
+		var focus_refresh_started_usec := Time.get_ticks_usec()
 		_refresh_placement_target_indicator()
+		focus_refresh_usec = Time.get_ticks_usec() - focus_refresh_started_usec
+
 	var publish_duration_usec := Time.get_ticks_usec() - publish_started_usec
+	var measured_top_level_usec := (
+		chunk_commit_usec
+		+ stale_release_usec
+		+ registry_commit_usec
+		+ object_enqueue_usec
+		+ object_status_usec
+		+ focus_refresh_usec
+	)
+	var chunk_measured_usec := (
+		node_resolve_usec
+		+ transform_usec
+		+ mesh_replace_usec
+		+ metadata_usec
+		+ lod_state_usec
+		+ index_commit_usec
+	)
+	_last_region_publish_profile = {
+		"region": [region_key.x, region_key.y],
+		"focused_region": focused_region,
+		"duration_usec": publish_duration_usec,
+		"mesh_count": meshes.size(),
+		"created_node_count": created_node_count,
+		"reused_node_count": reused_node_count,
+		"released_node_count": released_node_count,
+		"timings_usec": {
+			"chunk_commit": chunk_commit_usec,
+			"stale_release": stale_release_usec,
+			"registry_commit": registry_commit_usec,
+			"object_enqueue": object_enqueue_usec,
+			"object_status": object_status_usec,
+			"focus_refresh": focus_refresh_usec,
+			"top_level_unaccounted": maxi(0, publish_duration_usec - measured_top_level_usec),
+		},
+		"chunk_timings_usec": {
+			"node_resolve": node_resolve_usec,
+			"transform": transform_usec,
+			"mesh_replace": mesh_replace_usec,
+			"metadata": metadata_usec,
+			"lod_state": lod_state_usec,
+			"index_commit": index_commit_usec,
+			"chunk_unaccounted": maxi(0, chunk_commit_usec - chunk_measured_usec),
+			"slowest_mesh_replace": slowest_mesh_replace_usec,
+			"slowest_node_resolve": slowest_node_resolve_usec,
+		},
+	}
 	if _perf_trace_enabled and publish_duration_usec >= PerformanceTrace.min_usec():
+		PerformanceTrace.emit("terrain_region_publish_detail", _last_region_publish_profile)
 		PerformanceTrace.emit("terrain_region_publish", {
 			"duration_usec": publish_duration_usec,
 			"region": [region_key.x, region_key.y],
 			"mesh_count": meshes.size(),
 			"active_region_count": active_regions.size(),
 			"active_chunk_count": chunk_nodes.size(),
-			"object_publication_pending": int(object_stream.get_performance_snapshot().get("pending_region_publication_count", 0)),
+			"object_publication_pending": int(
+				object_stream.get_performance_snapshot().get(
+					"pending_region_publication_count", 0
+				)
+			),
 		})
-
 
 func _create_chunk_node(region_key: Vector2i, coordinate: Vector2i, chunk_id: String) -> MeshInstance3D:
 	if region_key == Vector2i.ZERO and coordinate == Vector2i.ZERO:
