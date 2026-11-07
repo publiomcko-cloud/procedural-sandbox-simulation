@@ -448,6 +448,7 @@ func _queue_region_visual_preparation(
 	var state_resolve_usec := Time.get_ticks_usec() - resolve_started_usec
 	var prepared_generated: Dictionary = generated.duplicate(false)
 	prepared_generated["_visual_cpu_by_cache_key"] = cpu_by_cache_key
+	prepared_generated["_visual_geometry_worker_usec"] = 0
 	if resolved_cache_complete:
 		prepared_generated["_visual_resolved_by_id"] = resolved_by_id
 		prepared_generated["_visual_resolved_state_revision"] = resolved_state_revision
@@ -594,6 +595,9 @@ func _process_region_visual_preparations() -> void:
 				cpu_by_cache_key[cache_key] = cpu_data
 				_remember_geometry_cpu(String(cache_key), cpu_data)
 			generated["_visual_cpu_by_cache_key"] = cpu_by_cache_key
+			generated["_visual_geometry_worker_usec"] = int(
+				prepared.get("worker_usec", 0)
+			)
 			record["generated"] = generated
 			record["visual_geometry_worker_usec"] = int(
 				prepared.get("worker_usec", 0)
