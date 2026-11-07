@@ -210,10 +210,14 @@ func _run() -> void:
 			var material := (
 				mesh_instance.material_override as StandardMaterial3D
 			)
+			var base_material: StandardMaterial3D = stream.get(
+				"_rock_material"
+			)
 			_check(
 				material != null
+					and base_material != null
 					and material.albedo_color.r
-						< stream.get("_rock_material").albedo_color.r,
+						< base_material.albedo_color.r,
 				"appearance tint is represented by the mutable batch material"
 			)
 
