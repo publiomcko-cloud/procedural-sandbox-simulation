@@ -170,6 +170,69 @@ func build_projection_region_base_instances(
 	}
 
 
+## Adopts a base list that was produced earlier by
+## build_projection_region_base_instances() on this same service. The state
+## revision gate makes the prepared view invalid as soon as any authoritative
+## entity command commits. Registry/content authority is unchanged; this only
+## avoids revalidating and re-resolving the same immutable bases during visual
+## publication.
+func adopt_prepared_projection_region_base_instances(
+	region_key: Vector2i,
+	prepared_instances: Array,
+	prepared_state_revision: int
+) -> Dictionary:
+	var started_usec := Time.get_ticks_usec()
+	if not initialized:
+		return _failure("command_service_not_initialized")
+	if not _valid_region(region_key):
+		return _failure("command_region_invalid")
+	if prepared_state_revision < 0 or prepared_state_revision != int(
+		state_service.get_revision()
+	):
+		return _failure("prepared_projection_state_revision_stale")
+
+	var candidates: Array[Dictionary] = []
+	var seen_ids: Dictionary = {}
+	for value in prepared_instances:
+		if typeof(value) != TYPE_DICTIONARY:
+			return _failure("prepared_projection_instance_invalid")
+		var base: Dictionary = value
+		if Vector2i(
+			base.get(
+				"region_key",
+				Vector2i(2147483647, 2147483647)
+			)
+		) != region_key:
+			return _failure("prepared_projection_region_mismatch")
+		var instance_id := String(base.get("instance_id", ""))
+		if instance_id.is_empty() or seen_ids.has(instance_id):
+			return _failure("prepared_projection_identity_invalid")
+		seen_ids[instance_id] = true
+		candidates.append(base)
+
+	for existing_id in _base_instances.keys().duplicate():
+		var existing: Dictionary = _base_instances[existing_id]
+		if Vector2i(existing.get("region_key", Vector2i.ZERO)) == region_key:
+			_base_instances.erase(existing_id)
+	for base in candidates:
+		# The prepared dictionaries are immutable reconstruction products. A
+		# shallow dictionary copy isolates top-level map mutation without
+		# duplicating large immutable geometry/pin payloads.
+		_base_instances[String(base["instance_id"])] = base.duplicate(false)
+
+	var main_thread_usec := Time.get_ticks_usec() - started_usec
+	last_reconstruction_usec = main_thread_usec
+	return {
+		"ok": true,
+		"region_key": region_key,
+		"entity_count": candidates.size(),
+		"generation_usec": 0,
+		"main_thread_reconstruction_usec": main_thread_usec,
+		"reconstruction_usec": main_thread_usec,
+		"prepared_adoption": true,
+	}
+
+
 func get_region_base_instances(region_key: Vector2i) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var ids: Array[String] = []
