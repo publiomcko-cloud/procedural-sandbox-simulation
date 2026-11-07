@@ -142,7 +142,7 @@ func _run() -> void:
 			and int(transient_metrics.get("publish_routes_usec", -1)) >= 0,
 		"main thread retains index and route publication responsibilities"
 	)
-	var installed_snapshot := runtime.projection.get_scope_snapshot(Vector2i.ZERO)
+	var installed_snapshot: Dictionary = runtime.projection.get_scope_snapshot(Vector2i.ZERO)
 	var installed_checked := Contract.validate_snapshot(
 		installed_snapshot,
 		WORLD_ID,
