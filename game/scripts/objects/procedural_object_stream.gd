@@ -430,6 +430,7 @@ func _queue_region_visual_preparation(
 		var prepared_cpu: Dictionary = cpu_by_instance.get(instance_id, {})
 		if prepared_cpu.get("ok", false):
 			cpu_by_cache_key[cache_key] = prepared_cpu
+			_remember_geometry_cpu(cache_key, prepared_cpu)
 			if _is_static_batch_candidate(instance):
 				if not batch_cpu_bypass_keys.has(cache_key):
 					batch_cpu_bypass_keys[cache_key] = true
@@ -587,9 +588,11 @@ func _process_region_visual_preparations() -> void:
 			for cache_key in (
 				prepared.get("cpu_by_cache_key", {}) as Dictionary
 			):
-				cpu_by_cache_key[cache_key] = (
+				var cpu_data: Dictionary = (
 					prepared["cpu_by_cache_key"] as Dictionary
 				)[cache_key]
+				cpu_by_cache_key[cache_key] = cpu_data
+				_remember_geometry_cpu(String(cache_key), cpu_data)
 			generated["_visual_cpu_by_cache_key"] = cpu_by_cache_key
 			record["generated"] = generated
 			record["visual_geometry_worker_usec"] = int(
