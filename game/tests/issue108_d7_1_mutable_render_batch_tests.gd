@@ -139,6 +139,7 @@ func _run() -> void:
 	var final_metrics: Dictionary = stream.get_performance_snapshot().get(
 		"last_region", {}
 	)
+	var target_cpu: Dictionary = cpu_by_instance[target_id]
 	var mutated_record: Dictionary = {}
 	for record in stream.get_region_instance_records(region):
 		if String(record.get("instance_id", "")) == target_id:
@@ -255,7 +256,6 @@ func _run() -> void:
 				"appearance tint is represented by the mutable batch material"
 			)
 
-	var target_cpu: Dictionary = cpu_by_instance[target_id]
 	var cache_key := String(stream.call("_geometry_cache_key", target))
 	var worker_variant: Array[Dictionary] = [{
 		"cache_key": cache_key,
