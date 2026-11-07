@@ -573,12 +573,27 @@ func reconcile_prebuilt_scope(
 
 	copy_conflict_usec = Time.get_ticks_usec() - copy_conflict_started_usec
 	if int(prior["source_world_revision"]) == source_world_revision 		and String(prior["source_digest_sha256"]) == source_digest 		and prior["source_instance_ids"] == source_instance_ids:
+		if memory_only_miss:
+			var current_index_result := _build_scope_index(prior)
+			if not current_index_result.get("ok", false):
+				return current_index_result
+			_scopes[scope_id] = prior
+			_install_scope_index(scope_id, current_index_result["index"])
+			_storage_generations[scope_id] = 0
+			_performance["transient_direct_install_count"] = int(
+				_performance["transient_direct_install_count"]
+			) + 1
+			_performance["peak_resident_scope_count"] = maxi(
+				int(_performance["peak_resident_scope_count"]),
+				_scopes.size()
+			)
 		last_reconcile_metrics = {
 			"scope_id": scope_id,
 			"changed": false,
 			"prebuilt": true,
 			"memory_only_miss": memory_only_miss,
 			"storage_load_bypassed": memory_only_miss,
+			"direct_installed": memory_only_miss,
 			"source_count": source_instance_ids.size(),
 			"effect_count": incoming_effects.size(),
 			"removed_effect_count": 0,
@@ -588,6 +603,7 @@ func reconcile_prebuilt_scope(
 			"ok": true,
 			"changed": false,
 			"storage_load_bypassed": memory_only_miss,
+			"direct_installed": memory_only_miss,
 			"reason": "already_current",
 			"scope_id": scope_id,
 			"generation": int(_storage_generations.get(scope_id, 0)),
