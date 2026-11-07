@@ -1746,15 +1746,24 @@ func get_region_instance_records(region_key: Vector2i) -> Array[Dictionary]:
 
 func _build_selection_record(instance: Dictionary) -> Dictionary:
 	var geometry: Dictionary = instance.get("geometry", {})
-	var extents := Vector3(float(geometry.get("half_extent_x_mm", 600)), float(geometry.get("half_extent_y_mm", 600)), float(geometry.get("half_extent_z_mm", 600))) / 1000.0
-	var scale_milli: Vector3i = instance.get("default_scale_milli", Vector3i(1000, 1000, 1000))
-	var position: Vector3 = Vector3(instance.get("position_mm", Vector3i.ZERO)) / 1000.0
+	var extents := Vector3(
+		float(geometry.get("half_extent_x_mm", 600)),
+		float(geometry.get("half_extent_y_mm", 600)),
+		float(geometry.get("half_extent_z_mm", 600))
+	) / 1000.0
+	var render_state := _batch_render_state(instance)
+	var position: Vector3 = render_state["position"]
+	var basis: Basis = render_state["basis"]
 	return {
 		"entity_id": String(instance.get("instance_id", "")),
 		"definition_id": String(instance.get("definition_id", "")),
-		"identity_kind": String(instance.get("entity_identity", {}).get("identity_kind", "procedural")),
-		"center_local": position + Vector3(0.0, extents.y * float(scale_milli.y) / 1000.0, 0.0),
-		"radius": (extents * Vector3(scale_milli) / 1000.0).length(),
+		"identity_kind": String(
+			instance.get("entity_identity", {}).get(
+				"identity_kind", "procedural"
+			)
+		),
+		"center_local": position + basis * Vector3(0.0, extents.y, 0.0),
+		"radius": (basis * extents).length(),
 	}
 
 
