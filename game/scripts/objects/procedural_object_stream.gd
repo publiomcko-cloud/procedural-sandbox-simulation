@@ -1944,6 +1944,7 @@ func _record_region_failure(region_id: String, reason: String) -> Dictionary:
 
 func _clear_region_nodes() -> void:
 	_wait_for_region_generation_jobs()
+	_wait_for_visual_geometry_jobs()
 	_pending_region_publications.clear()
 	_pending_publication_order.clear()
 	_region_visual_preparations.clear()
