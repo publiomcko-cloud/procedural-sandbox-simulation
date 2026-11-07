@@ -1021,6 +1021,54 @@ func _finish_queued_publication(id: String, result: Dictionary, request_serial: 
 		_command_migration_sync_regions.erase(id)
 
 
+func _prepared_batch_matches_items(
+	prepared: Dictionary,
+	items: Array[Dictionary]
+) -> bool:
+	if not prepared.get("ok", false):
+		return false
+	var expected_ids: Array[String] = []
+	for item in items:
+		expected_ids.append(String(item.get("instance_id", "")))
+	expected_ids.sort()
+	var prepared_ids: Array = prepared.get("instance_ids", [])
+	if prepared_ids.size() != expected_ids.size():
+		return false
+	for index in range(expected_ids.size()):
+		if String(prepared_ids[index]) != expected_ids[index]:
+			return false
+	return true
+
+
+func _prepared_batches_match(
+	prepared_batches: Dictionary,
+	static_items: Array[Dictionary],
+	mutable_groups: Dictionary
+) -> bool:
+	if not prepared_batches.get("ok", false):
+		return false
+	var static_prepared: Dictionary = prepared_batches.get("static", {})
+	if not _prepared_batch_matches_items(static_prepared, static_items):
+		return false
+	var mutable_prepared: Dictionary = prepared_batches.get(
+		"mutable", {}
+	)
+	if mutable_prepared.size() != mutable_groups.size():
+		return false
+	for group_key_value in mutable_groups:
+		var group_key := String(group_key_value)
+		if not mutable_prepared.has(group_key):
+			return false
+		var items: Array[Dictionary] = []
+		for item_value in (mutable_groups[group_key_value] as Array):
+			items.append(item_value as Dictionary)
+		if not _prepared_batch_matches_items(
+			mutable_prepared[group_key], items
+		):
+			return false
+	return true
+
+
 func publish_region(
 	region_key: Vector2i,
 	state: RefCounted,
@@ -1064,20 +1112,98 @@ func publish_region(
 	var main_thread_reconstruction_usec := 0
 	var candidate_cell_count := 0
 	var surface_anchor_count := 0
+	var prepared_base_adopted := false
 	if entity_command_service != null and bool(entity_command_service.get("initialized")):
-		var reconstruction: Dictionary
-		if generated_base.is_empty():
-			reconstruction = entity_command_service.reconstruct_region(region_key)
-		else:
-			reconstruction = entity_command_service.reconstruct_region_from_generated(region_key, generated_base)
-		if not reconstruction.get("ok", false):
-			return _record_region_failure(id, String(reconstruction.get("reason", "entity_region_reconstruction_failed")))
-		base_instances = entity_command_service.get_region_base_instances(region_key)
-		_last_reconstruction_usec = int(reconstruction.get("reconstruction_usec", 0))
-		generation_usec = int(reconstruction.get("generation_usec", _last_reconstruction_usec))
-		main_thread_reconstruction_usec = int(reconstruction.get("main_thread_reconstruction_usec", 0))
-		candidate_cell_count = int(reconstruction.get("candidate_cell_count", 0))
-		surface_anchor_count = int(reconstruction.get("surface_anchor_count", 0))
+		var reconstruction: Dictionary = {}
+		var prepared_revision := int(
+			generated_base.get("_visual_resolved_state_revision", -1)
+		)
+		var can_adopt_prepared_base := (
+			not generated_base.is_empty()
+			and bool(generated_base.get("_visual_prepared_base_complete", false))
+			and prepared_revision >= 0
+			and prepared_revision == int(state_service.get_revision())
+			and entity_command_service.has_method(
+				"adopt_prepared_projection_region_base_instances"
+			)
+		)
+		if can_adopt_prepared_base:
+			var prepared_bases: Array = generated_base.get(
+				"_visual_base_instances", []
+			)
+			reconstruction = entity_command_service.call(
+				"adopt_prepared_projection_region_base_instances",
+				region_key,
+				prepared_bases,
+				prepared_revision
+			)
+			if reconstruction.get("ok", false):
+				for value in prepared_bases:
+					if typeof(value) == TYPE_DICTIONARY:
+						base_instances.append(value as Dictionary)
+				prepared_base_adopted = true
+				generation_usec = int(
+					generated_base.get("timings_usec", {}).get(
+						"total", generated_base.get("worker_usec", 0)
+					)
+				)
+				main_thread_reconstruction_usec = int(
+					reconstruction.get(
+						"main_thread_reconstruction_usec", 0
+					)
+				)
+				_last_reconstruction_usec = (
+					generation_usec + main_thread_reconstruction_usec
+				)
+				candidate_cell_count = int(
+					generated_base.get("candidate_cell_count", 0)
+				)
+				surface_anchor_count = int(
+					generated_base.get("surface_anchor_count", 0)
+				)
+		if not prepared_base_adopted:
+			if generated_base.is_empty():
+				reconstruction = entity_command_service.reconstruct_region(
+					region_key
+				)
+			else:
+				reconstruction = (
+					entity_command_service.reconstruct_region_from_generated(
+						region_key, generated_base
+					)
+				)
+			if not reconstruction.get("ok", false):
+				return _record_region_failure(
+					id,
+					String(
+						reconstruction.get(
+							"reason",
+							"entity_region_reconstruction_failed"
+						)
+					)
+				)
+			base_instances = entity_command_service.get_region_base_instances(
+				region_key
+			)
+			_last_reconstruction_usec = int(
+				reconstruction.get("reconstruction_usec", 0)
+			)
+			generation_usec = int(
+				reconstruction.get(
+					"generation_usec", _last_reconstruction_usec
+				)
+			)
+			main_thread_reconstruction_usec = int(
+				reconstruction.get(
+					"main_thread_reconstruction_usec", 0
+				)
+			)
+			candidate_cell_count = int(
+				reconstruction.get("candidate_cell_count", 0)
+			)
+			surface_anchor_count = int(
+				reconstruction.get("surface_anchor_count", 0)
+			)
 	else:
 		var generated: Dictionary = generated_base
 		if generated.is_empty():
@@ -1218,13 +1344,33 @@ func publish_region(
 
 	var mesh_build_elapsed_usec := Time.get_ticks_usec() - mesh_build_started_usec
 	var batch_started_usec := Time.get_ticks_usec()
-	var batch_result := StaticBatchBuilder.build(batch_items)
+	var prepared_batches: Dictionary = generated_base.get(
+		"_visual_batch_prepared", {}
+	)
+	var can_reuse_prepared_batches := (
+		can_reuse_resolved
+		and _prepared_batches_match(
+			prepared_batches, batch_items, mutable_batch_groups
+		)
+	)
+	var batch_prepare_worker_usec := int(
+		generated_base.get("_visual_batch_worker_usec", 0)
+	)
+	var batch_commit_usec := 0
+	var batch_result: Dictionary
+	if can_reuse_prepared_batches:
+		batch_result = StaticBatchBuilder.commit(
+			prepared_batches.get("static", {})
+		)
+	else:
+		batch_result = StaticBatchBuilder.build(batch_items)
 	if not batch_result.get("ok", false):
 		for pending_node in pending_nodes:
 			pending_node.free()
 		return _record_region_failure(
 			id, String(batch_result.get("reason", "static_batch_failed"))
 		)
+	batch_commit_usec += int(batch_result.get("commit_usec", 0))
 
 	var mutable_batch_results: Array[Dictionary] = []
 	var mutable_batch_keys: Array[String] = []
@@ -1238,7 +1384,16 @@ func publish_region(
 		var mutable_items: Array[Dictionary] = []
 		for item_value in (mutable_batch_groups[group_key] as Array):
 			mutable_items.append(item_value as Dictionary)
-		var mutable_result := StaticBatchBuilder.build(mutable_items)
+		var mutable_result: Dictionary
+		if can_reuse_prepared_batches:
+			var mutable_prepared: Dictionary = prepared_batches.get(
+				"mutable", {}
+			)
+			mutable_result = StaticBatchBuilder.commit(
+				mutable_prepared.get(group_key, {})
+			)
+		else:
+			mutable_result = StaticBatchBuilder.build(mutable_items)
 		if not mutable_result.get("ok", false):
 			for pending_node in pending_nodes:
 				pending_node.free()
@@ -1247,6 +1402,9 @@ func publish_region(
 				"mutable_render_batch_failed:%s"
 					% mutable_result.get("reason", "unknown")
 			)
+		batch_commit_usec += int(
+			mutable_result.get("commit_usec", 0)
+		)
 		mutable_batched_instance_count += mutable_items.size()
 		mutable_batch_vertex_count += int(
 			mutable_result.get("vertex_count", 0)
@@ -1355,6 +1513,10 @@ func publish_region(
 		"generation_worker_usec": generation_worker_usec,
 		"geometry_cpu_worker_usec": geometry_cpu_worker_usec,
 		"visual_geometry_worker_usec": visual_geometry_worker_usec,
+		"batch_prepare_worker_usec": batch_prepare_worker_usec,
+		"batch_prepare_reused": can_reuse_prepared_batches,
+		"batch_commit_usec": batch_commit_usec,
+		"prepared_base_adopted": prepared_base_adopted,
 		"materialization_hit": bool(generated_base.get("materialization_hit", false)),
 		"materialization_load_usec": int(generated_base.get("materialization_load_usec", 0)),
 		"materialization_save_usec": int(generated_base.get("materialization_save_usec", 0)),
@@ -1365,6 +1527,9 @@ func publish_region(
 		"geometry_cpu_cache_variant_count": _geometry_cpu_cache.size(),
 		"main_thread_reconstruction_usec": main_thread_reconstruction_usec,
 		"logical_reconstruction_usec": _last_reconstruction_usec,
+		"prepared_base_adoption_usec": (
+			main_thread_reconstruction_usec if prepared_base_adopted else 0
+		),
 		"mesh_build_usec": mesh_build_elapsed_usec,
 		"batch_build_usec": batch_elapsed_usec,
 		"publication_usec": Time.get_ticks_usec() - publication_started_usec,
