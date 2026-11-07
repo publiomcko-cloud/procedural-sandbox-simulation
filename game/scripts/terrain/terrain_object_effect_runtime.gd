@@ -438,7 +438,8 @@ func _publish_prebuilt_projection_record(
 		prebuilt,
 		true,
 		false,
-		false
+		false,
+		true
 	)
 	var publish_usec := Time.get_ticks_usec() - publish_started_usec
 	if not reconciled.get("ok", false):
@@ -486,6 +487,12 @@ func _publish_prebuilt_projection_record(
 			"publish_usec": publish_usec,
 			"storage_load_bypassed": bool(
 				reconciled.get("storage_load_bypassed", false)
+			),
+			"worker_prevalidated": bool(
+				reconciled.get("worker_prevalidated", false)
+			),
+			"main_validation_skipped": bool(
+				reconciled.get("main_validation_skipped", false)
 			),
 			"reconcile_timings_usec": projection.last_reconcile_metrics.duplicate(
 				true
