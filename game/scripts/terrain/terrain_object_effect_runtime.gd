@@ -357,19 +357,29 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 		)
 		var cached_source_record: Dictionary = {}
 		if has_async_source_pipeline:
+			var raw_cached_source: Dictionary = _projection_source_cache.get(
+				scope_id, {}
+			)
+			var exact_source_candidate := (
+				not raw_cached_source.is_empty()
+				and int(raw_cached_source.get("world_revision", -1))
+					== authority_revision
+			)
+			# Do not count a cache hit until the bounded projection stage can
+			# actually consume it. Cold misses may still dispatch generation in
+			# parallel, preserving the established pipeline overlap.
+			if (
+				exact_source_candidate
+				and _prefetch_projection_jobs.size()
+					+ _prefetch_projection_ready.size()
+					>= MAX_PREFETCH_PROJECTION_JOBS_IN_FLIGHT
+			):
+				_prefetch_queue.push_front(region)
+				break
 			cached_source_record = _projection_source_cache_lookup(
 				region, authority_revision
 			)
 		if not cached_source_record.is_empty():
-			# Do not let source-cache hits drain the entire prefetch queue in a
-			# single frame. Reuse the same bounded projection-stage capacity.
-			if (
-				_prefetch_projection_jobs.size()
-					+ _prefetch_projection_ready.size()
-				>= MAX_PREFETCH_PROJECTION_JOBS_IN_FLIGHT
-			):
-				_prefetch_queue.push_front(region)
-				break
 			var cached_source: Dictionary = cached_source_record.get(
 				"source", {}
 			)
