@@ -1454,7 +1454,7 @@ func _batch_render_state(instance: Dictionary) -> Dictionary:
 	var default_yaw := float(instance.get("default_yaw_mdeg", 0)) * (
 		PI / 180000.0
 	)
-	var basis := Basis(Vector3.UP, default_yaw).scaled(
+	var basis := Basis(Vector3.UP, default_yaw).scaled_local(
 		Vector3(default_scale) / 1000.0
 	)
 	var components: Dictionary = instance.get("instance_components", {})
@@ -1480,7 +1480,7 @@ func _batch_render_state(instance: Dictionary) -> Dictionary:
 			float(rotation_mdeg[1]),
 			float(rotation_mdeg[2])
 		) * (PI / 180000.0)
-		basis = Basis.from_euler(rotation).scaled(Vector3(
+		basis = Basis.from_euler(rotation).scaled_local(Vector3(
 			float(scale_milli[0]),
 			float(scale_milli[1]),
 			float(scale_milli[2])
