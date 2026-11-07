@@ -776,6 +776,7 @@ func publish_region(
 		batch_node.name = "StaticPopulationBatch"
 		batch_node.set_meta("stable_instance_ids", batch_result["instance_ids"])
 		batch_node.set_meta("population_batch_version", 1)
+		batch_node.set_meta("static_procedural_batch_version", 1)
 		var selection_records: Array[Dictionary] = []
 		for batch_item in batch_items:
 			selection_records.append(batch_item["selection_record"])
