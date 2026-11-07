@@ -317,8 +317,9 @@ func register_discovered(discovery: Dictionary) -> Dictionary:
 	_terrain_interaction_by_definition = candidate_terrain_interaction_by_definition
 	_mods = candidate_mods
 	var content_record_count := 0
-	for typed_records in _content_records_by_type.values():
-		content_record_count += (typed_records as Dictionary).size()
+	for typed_records_value in _content_records_by_type.values():
+		var typed_records: Dictionary = typed_records_value
+		content_record_count += typed_records.size()
 	return {
 		"ok": true,
 		"reason": "ok",
@@ -404,10 +405,10 @@ func resolve_terrain_interaction(definition_id: String) -> Dictionary:
 	var mod_id := interaction_id.substr(0, separator)
 	if not _mods.has(mod_id):
 		return _failure("terrain_interaction_package_missing")
-	var canonical := JSON.stringify(rule, "", true, true)
-	var context := HashingContext.new()
-	if context.start(HashingContext.HASH_SHA256) != OK or context.update(canonical.to_utf8_buffer()) != OK:
+	var uniform := pin_content_record(TERRAIN_INTERACTION_RULE_TYPE, interaction_id)
+	if not uniform.get("ok", false):
 		return _failure("terrain_interaction_pin_failed")
+	var fingerprint: Dictionary = uniform["fingerprint"]
 	return {"ok": true, "rule": rule, "pin": {
 		"rule_id": interaction_id,
 		"definition_id": definition_id,
@@ -415,7 +416,7 @@ func resolve_terrain_interaction(definition_id: String) -> Dictionary:
 		"mod_version": String(_mods[mod_id]["version"]),
 		"rule_schema_version": int(rule["schema_version"]),
 		"algorithm": String(rule["algorithm"]),
-		"rule_sha256": context.finish().hex_encode(),
+		"rule_sha256": String(fingerprint["content_sha256"]),
 	}}
 
 
@@ -429,17 +430,17 @@ func pin_population_rule(namespaced_id: String) -> Dictionary:
 	var mod_id := namespaced_id.substr(0, separator)
 	if not _mods.has(mod_id):
 		return _failure("population_rule_package_missing")
-	var canonical := JSON.stringify(rule, "", true, true)
-	var context := HashingContext.new()
-	if context.start(HashingContext.HASH_SHA256) != OK or context.update(canonical.to_utf8_buffer()) != OK:
+	var uniform := pin_content_record(POPULATION_RULE_TYPE, namespaced_id)
+	if not uniform.get("ok", false):
 		return _failure("population_rule_pin_failed")
+	var fingerprint: Dictionary = uniform["fingerprint"]
 	return {"ok": true, "pin": {
 		"rule_id": namespaced_id,
 		"mod_id": mod_id,
 		"mod_version": String(_mods[mod_id]["version"]),
 		"rule_schema_version": int(rule["schema_version"]),
 		"algorithm": String(rule["algorithm"]),
-		"rule_sha256": context.finish().hex_encode(),
+		"rule_sha256": String(fingerprint["content_sha256"]),
 	}}
 
 
