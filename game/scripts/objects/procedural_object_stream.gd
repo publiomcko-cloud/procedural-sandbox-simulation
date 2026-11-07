@@ -7,6 +7,7 @@ const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 const RegistryScript := preload("res://scripts/modding/content_definition_registry.gd")
 const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const RegionGenerationJob := preload("res://scripts/objects/procedural_object_region_generation_job.gd")
+const VisualGeometryJob := preload("res://scripts/objects/procedural_object_visual_geometry_job.gd")
 const MaterializationStore := preload("res://scripts/objects/procedural_object_materialization_store.gd")
 const ProjectionSourceGenerationJob := preload("res://scripts/objects/procedural_object_projection_source_generation_job.gd")
 const RockMeshAdapter := preload("res://scripts/objects/procedural_rock_mesh_adapter.gd")
@@ -51,9 +52,13 @@ var _region_generation_task_by_id: Dictionary = {}
 # commits are amortized across frames. Scene publication remains atomic.
 var _region_visual_preparations: Dictionary = {}
 var _region_visual_preparation_order: Array[String] = []
+var _visual_geometry_jobs: Dictionary = {} # worker task id -> {job, id, cancelled}
+var _visual_geometry_task_by_region: Dictionary = {}
 var _next_region_publication_serial := 1
 var _geometry_mesh_cache: Dictionary = {}
 var _geometry_mesh_cache_order: Array[String] = []
+var _geometry_cpu_cache: Dictionary = {}
+var _geometry_cpu_cache_order: Array[String] = []
 var _geometry_cache_hit_count := 0
 var _geometry_cache_miss_count := 0
 var _geometry_cache_eviction_count := 0
@@ -102,6 +107,8 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_last_command_visual_result.clear()
 	_geometry_mesh_cache.clear()
 	_geometry_mesh_cache_order.clear()
+	_geometry_cpu_cache.clear()
+	_geometry_cpu_cache_order.clear()
 	_geometry_cache_hit_count = 0
 	_geometry_cache_miss_count = 0
 	_geometry_cache_eviction_count = 0
@@ -112,8 +119,11 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_visual_mesh_commit_peak_usec = 0
 	_visual_prewarm_completed_count = 0
 	_visual_batch_cpu_bypass_count = 0
+	_wait_for_visual_geometry_jobs()
 	_region_visual_preparations.clear()
 	_region_visual_preparation_order.clear()
+	_visual_geometry_jobs.clear()
+	_visual_geometry_task_by_region.clear()
 	_materialization_content_signature = ""
 	_materialization_directory = ""
 	_population_rule_ids.clear()
@@ -251,8 +261,9 @@ func process_queued_publications() -> int:
 			_publications_last_process_tick += 1
 			_finish_queued_publication(id, result, int(request.get("request_serial", -1)))
 	else:
-		# Finalize any region whose mesh variants were warmed on earlier frames,
-		# or commit at most one new ArrayMesh variant this frame.
+		_cleanup_completed_visual_geometry_jobs()
+		# D.7.1 visual preparation waits only for CPU geometry workers. Rendering
+		# resource commits happen as bounded regional batches during publication.
 		_process_region_visual_preparations()
 		_process_completed_region_generation_jobs()
 		_dispatch_region_generation_jobs()
@@ -371,6 +382,7 @@ func _queue_region_visual_preparation(
 	var variants: Array[Dictionary] = []
 	var seen_keys: Dictionary = {}
 	var cpu_by_instance: Dictionary = generated.get("geometry_cpu_by_instance", {})
+	var cpu_by_cache_key: Dictionary = {}
 	var prewarm_instances: Array = generated.get("instances", [])
 	if entity_command_service != null 			and bool(entity_command_service.get("initialized")) 			and entity_command_service.has_method(
 				"build_projection_region_base_instances"
@@ -416,35 +428,72 @@ func _queue_region_visual_preparation(
 			continue
 		var instance_id := String(instance.get("instance_id", ""))
 		var prepared_cpu: Dictionary = cpu_by_instance.get(instance_id, {})
-		if _is_static_batch_candidate(instance) and prepared_cpu.get("ok", false):
-			if not batch_cpu_bypass_keys.has(cache_key):
-				batch_cpu_bypass_keys[cache_key] = true
-				batch_cpu_bypass_variant_count += 1
+		if (
+			not prepared_cpu.get("ok", false)
+			and _geometry_cpu_cache.has(cache_key)
+		):
+			prepared_cpu = _geometry_cpu_cache[cache_key]
+			_geometry_cpu_cache_order.erase(cache_key)
+			_geometry_cpu_cache_order.append(cache_key)
+		if prepared_cpu.get("ok", false):
+			cpu_by_cache_key[cache_key] = prepared_cpu
+			_remember_geometry_cpu(cache_key, prepared_cpu)
+			if _is_static_batch_candidate(instance):
+				if not batch_cpu_bypass_keys.has(cache_key):
+					batch_cpu_bypass_keys[cache_key] = true
+					batch_cpu_bypass_variant_count += 1
 			continue
 		if seen_keys.has(cache_key):
 			continue
 		seen_keys[cache_key] = true
 		variants.append({
 			"cache_key": cache_key,
-			"instance": instance.duplicate(true),
-			"prepared_cpu": prepared_cpu.duplicate(true),
+			"geometry": (instance.get("geometry", {}) as Dictionary).duplicate(true),
+			"geometry_seeds": (instance.get("geometry_seeds", {}) as Dictionary).duplicate(true),
 		})
 
 	var state_resolve_usec := Time.get_ticks_usec() - resolve_started_usec
 	var prepared_generated: Dictionary = generated.duplicate(false)
+	prepared_generated["_visual_cpu_by_cache_key"] = cpu_by_cache_key
+	prepared_generated["_visual_geometry_worker_usec"] = 0
 	if resolved_cache_complete:
 		prepared_generated["_visual_resolved_by_id"] = resolved_by_id
 		prepared_generated["_visual_resolved_state_revision"] = resolved_state_revision
+
+	var visual_geometry_task_id := -1
+	if not variants.is_empty():
+		var job := VisualGeometryJob.new(variants)
+		visual_geometry_task_id = WorkerThreadPool.add_task(
+			Callable(job, "run"),
+			false,
+			"procedural object mutable visual geometry"
+		)
+		if visual_geometry_task_id < 0:
+			var failed := _record_region_failure(
+				id, "object_visual_geometry_worker_rejected"
+			)
+			_publications_last_process_tick += 1
+			_finish_queued_publication(
+				id, failed, int(request.get("request_serial", -1))
+			)
+			return
+		_visual_geometry_jobs[visual_geometry_task_id] = {
+			"job": job,
+			"id": id,
+			"cancelled": false,
+		}
+		_visual_geometry_task_by_region[id] = visual_geometry_task_id
+
 	var record: Dictionary = {
 		"request": request,
 		"generated": prepared_generated,
 		"publication_token": int(request.get("publication_token", -1)),
 		"request_serial": int(request.get("request_serial", -1)),
 		"variants": variants,
-		"next_variant": 0,
 		"started_usec": Time.get_ticks_usec(),
 		"ready_to_publish": false,
-		"cache_hits": 0,
+		"visual_geometry_task_id": visual_geometry_task_id,
+		"visual_geometry_worker_usec": 0,
 		"mesh_commits": 0,
 		"batch_cpu_bypass_variant_count": batch_cpu_bypass_variant_count,
 		"state_resolve_usec": state_resolve_usec,
@@ -464,13 +513,19 @@ func _queue_region_visual_preparation(
 			"resolved_state_revision": resolved_state_revision
 				if resolved_cache_complete else -1,
 			"materialization_hit": bool(generated.get("materialization_hit", false)),
+			"visual_geometry_worker_dispatched": visual_geometry_task_id >= 0,
 			"pending_visual_preparations": _region_visual_preparations.size(),
 		})
 
 func _process_region_visual_preparations() -> void:
 	if _publications_last_process_tick >= MAX_REGION_PUBLICATIONS_PER_FRAME:
 		return
-	while not _region_visual_preparation_order.is_empty():
+	var remaining_attempts := _region_visual_preparation_order.size()
+	while (
+		not _region_visual_preparation_order.is_empty()
+		and remaining_attempts > 0
+	):
+		remaining_attempts -= 1
 		var id := String(_region_visual_preparation_order[0])
 		if not _region_visual_preparations.has(id):
 			_region_visual_preparation_order.pop_front()
@@ -478,110 +533,166 @@ func _process_region_visual_preparations() -> void:
 		var record: Dictionary = _region_visual_preparations[id]
 		var request: Dictionary = record["request"]
 		var publication_token := int(record.get("publication_token", -1))
-		if _expected_publication_tokens.has(id) 			and publication_token != int(_expected_publication_tokens[id]):
+		if _expected_publication_tokens.has(id) 				and publication_token != int(_expected_publication_tokens[id]):
 			_cancel_region_visual_preparation(id)
 			continue
 
-		if bool(record.get("ready_to_publish", false)):
-			_region_visual_preparation_order.pop_front()
-			_region_visual_preparations.erase(id)
-			var result := publish_region(
-				request["region_key"],
-				request["world_state"],
-				bool(request.get("force_rebuild", false)),
-				publication_token,
-				record["generated"],
-				int(record.get("request_serial", -1))
-			)
-			_publications_last_process_tick += 1
-			_finish_queued_publication(
-				id, result, int(record.get("request_serial", -1))
-			)
-			return
-
-		var variants: Array = record.get("variants", [])
-		var next_variant := int(record.get("next_variant", 0))
-		while next_variant < variants.size():
-			var variant: Dictionary = variants[next_variant]
-			var cache_key := String(variant.get("cache_key", ""))
-			var was_cached := _geometry_mesh_cache.has(cache_key)
-			var commit_started_usec := Time.get_ticks_usec()
-			var mesh_result := _get_or_build_geometry_mesh(
-				variant.get("instance", {}),
-				variant.get("prepared_cpu", {})
-			)
-			var commit_usec := Time.get_ticks_usec() - commit_started_usec
-			if not mesh_result.get("ok", false):
+		if not bool(record.get("ready_to_publish", false)):
+			var task_id := int(record.get("visual_geometry_task_id", -1))
+			if task_id < 0:
+				record["ready_to_publish"] = true
+				_region_visual_preparations[id] = record
+				_visual_prewarm_completed_count += 1
+				if _perf_trace_enabled:
+					PerformanceTrace.emit("object_visual_prewarm_complete", {
+						"region": [
+							int((request["region_key"] as Vector2i).x),
+							int((request["region_key"] as Vector2i).y),
+						],
+						"duration_usec": Time.get_ticks_usec()
+							- int(record.get("started_usec", Time.get_ticks_usec())),
+						"variant_count": 0,
+						"mesh_commits": 0,
+						"batch_cpu_bypass_variant_count": int(
+							record.get("batch_cpu_bypass_variant_count", 0)
+						),
+						"state_resolve_usec": int(
+							record.get("state_resolve_usec", 0)
+						),
+						"visual_geometry_worker_usec": 0,
+						"geometry_cache_variant_count": _geometry_mesh_cache.size(),
+					})
+				return
+			if not _visual_geometry_jobs.has(task_id):
+				_cancel_region_visual_preparation(id)
+				var missing := _record_region_failure(
+					id, "object_visual_geometry_worker_missing"
+				)
+				_publications_last_process_tick += 1
+				_finish_queued_publication(
+					id, missing, int(record.get("request_serial", -1))
+				)
+				return
+			if not WorkerThreadPool.is_task_completed(task_id):
+				_region_visual_preparation_order.pop_front()
+				_region_visual_preparation_order.append(id)
+				continue
+			WorkerThreadPool.wait_for_task_completion(task_id)
+			var job_record: Dictionary = _visual_geometry_jobs[task_id]
+			_visual_geometry_jobs.erase(task_id)
+			_visual_geometry_task_by_region.erase(id)
+			var job = job_record["job"]
+			var prepared: Dictionary = job.result
+			if not prepared.get("ok", false):
 				_region_visual_preparation_order.pop_front()
 				_region_visual_preparations.erase(id)
 				var failed := _record_region_failure(
 					id,
-					"object_mesh_prewarm_failed:%s"
-						% mesh_result.get("reason", "unknown")
+					"object_visual_geometry_prepare_failed:%s"
+						% prepared.get("reason", "unknown")
 				)
 				_publications_last_process_tick += 1
 				_finish_queued_publication(
 					id, failed, int(record.get("request_serial", -1))
 				)
 				return
-			next_variant += 1
-			record["next_variant"] = next_variant
-			if was_cached:
-				record["cache_hits"] = int(record.get("cache_hits", 0)) + 1
-				continue
-
-			record["mesh_commits"] = int(record.get("mesh_commits", 0)) + 1
-			_visual_mesh_commits_last_tick += 1
-			_visual_mesh_commit_count += 1
-			_visual_mesh_commit_total_usec += commit_usec
-			_visual_mesh_commit_peak_usec = maxi(
-				_visual_mesh_commit_peak_usec, commit_usec
+			var generated: Dictionary = record["generated"]
+			var cpu_by_cache_key: Dictionary = generated.get(
+				"_visual_cpu_by_cache_key", {}
 			)
+			for cache_key in (
+				prepared.get("cpu_by_cache_key", {}) as Dictionary
+			):
+				var cpu_data: Dictionary = (
+					prepared["cpu_by_cache_key"] as Dictionary
+				)[cache_key]
+				cpu_by_cache_key[cache_key] = cpu_data
+				_remember_geometry_cpu(String(cache_key), cpu_data)
+			generated["_visual_cpu_by_cache_key"] = cpu_by_cache_key
+			generated["_visual_geometry_worker_usec"] = int(
+				prepared.get("worker_usec", 0)
+			)
+			record["generated"] = generated
+			record["visual_geometry_worker_usec"] = int(
+				prepared.get("worker_usec", 0)
+			)
+			record["ready_to_publish"] = true
 			_region_visual_preparations[id] = record
+			_visual_prewarm_completed_count += 1
 			if _perf_trace_enabled:
-				PerformanceTrace.emit("object_mesh_commit_step", {
+				PerformanceTrace.emit("object_visual_prewarm_complete", {
 					"region": [
 						int((request["region_key"] as Vector2i).x),
 						int((request["region_key"] as Vector2i).y),
 					],
-					"duration_usec": commit_usec,
-					"variant_index": next_variant - 1,
-					"variant_count": variants.size(),
-					"remaining_variant_count": variants.size() - next_variant,
+					"duration_usec": Time.get_ticks_usec()
+						- int(record.get("started_usec", Time.get_ticks_usec())),
+					"variant_count": (
+						record.get("variants", []) as Array
+					).size(),
+					"mesh_commits": 0,
+					"batch_cpu_bypass_variant_count": int(
+						record.get("batch_cpu_bypass_variant_count", 0)
+					),
+					"state_resolve_usec": int(
+						record.get("state_resolve_usec", 0)
+					),
+					"visual_geometry_worker_usec": int(
+						record.get("visual_geometry_worker_usec", 0)
+					),
 					"geometry_cache_variant_count": _geometry_mesh_cache.size(),
 				})
-			if _visual_mesh_commits_last_tick 				>= MAX_GEOMETRY_MESH_COMMITS_PER_FRAME:
-				return
+			# Keep publication on a later frame than worker finalization.
+			return
 
-		record["ready_to_publish"] = true
-		_region_visual_preparations[id] = record
-		_visual_prewarm_completed_count += 1
-		if _perf_trace_enabled:
-			PerformanceTrace.emit("object_visual_prewarm_complete", {
-				"region": [
-					int((request["region_key"] as Vector2i).x),
-					int((request["region_key"] as Vector2i).y),
-				],
-				"duration_usec": Time.get_ticks_usec()
-					- int(record.get("started_usec", Time.get_ticks_usec())),
-				"variant_count": variants.size(),
-				"mesh_commits": int(record.get("mesh_commits", 0)),
-				"cache_hits": int(record.get("cache_hits", 0)),
-				"batch_cpu_bypass_variant_count": int(
-					record.get("batch_cpu_bypass_variant_count", 0)
-				),
-				"state_resolve_usec": int(record.get("state_resolve_usec", 0)),
-				"geometry_cache_variant_count": _geometry_mesh_cache.size(),
-			})
-		# Publication is intentionally deferred to a later frame so the last
-		# expensive resource commit and scene-tree publication never stack.
+		_region_visual_preparation_order.pop_front()
+		_region_visual_preparations.erase(id)
+		var result := publish_region(
+			request["region_key"],
+			request["world_state"],
+			bool(request.get("force_rebuild", false)),
+			publication_token,
+			record["generated"],
+			int(record.get("request_serial", -1))
+		)
+		_publications_last_process_tick += 1
+		_finish_queued_publication(
+			id, result, int(record.get("request_serial", -1))
+		)
 		return
 
-
 func _cancel_region_visual_preparation(id: String) -> void:
+	if _region_visual_preparations.has(id):
+		var record: Dictionary = _region_visual_preparations[id]
+		var task_id := int(record.get("visual_geometry_task_id", -1))
+		if task_id >= 0 and _visual_geometry_jobs.has(task_id):
+			var job_record: Dictionary = _visual_geometry_jobs[task_id]
+			job_record["cancelled"] = true
+			_visual_geometry_jobs[task_id] = job_record
+	_visual_geometry_task_by_region.erase(id)
 	_region_visual_preparations.erase(id)
 	_region_visual_preparation_order.erase(id)
 
+
+func _cleanup_completed_visual_geometry_jobs() -> void:
+	var completed: Array[int] = []
+	for task_id_value in _visual_geometry_jobs.keys():
+		var task_id := int(task_id_value)
+		if WorkerThreadPool.is_task_completed(task_id):
+			completed.append(task_id)
+	for task_id in completed:
+		var record: Dictionary = _visual_geometry_jobs[task_id]
+		if not bool(record.get("cancelled", false)):
+			continue
+		WorkerThreadPool.wait_for_task_completion(task_id)
+		_visual_geometry_jobs.erase(task_id)
+
+
+func _wait_for_visual_geometry_jobs() -> void:
+	for task_id_value in _visual_geometry_jobs.keys():
+		WorkerThreadPool.wait_for_task_completion(int(task_id_value))
+	_visual_geometry_jobs.clear()
+	_visual_geometry_task_by_region.clear()
 
 func _finish_queued_publication(id: String, result: Dictionary, request_serial: int = -1) -> void:
 	if not result.get("ok", false) and result.get("reason", "") != "stale_object_region_publication":
@@ -683,8 +794,21 @@ func publish_region(
 	var pending_nodes: Array[Node3D] = []
 	var instances: Array[Dictionary] = []
 	var batch_items: Array[Dictionary] = []
-	var geometry_cpu_by_instance: Dictionary = generated_base.get("geometry_cpu_by_instance", {})
-	var geometry_cpu_worker_usec := int(generated_base.get("geometry_cpu_usec", 0))
+	var mutable_batch_groups: Dictionary = {}
+	var mutable_batch_tints: Dictionary = {}
+	var individual_mesh_node_count := 0
+	var geometry_cpu_by_instance: Dictionary = generated_base.get(
+		"geometry_cpu_by_instance", {}
+	)
+	var visual_cpu_by_cache_key: Dictionary = generated_base.get(
+		"_visual_cpu_by_cache_key", {}
+	)
+	var geometry_cpu_worker_usec := int(
+		generated_base.get("geometry_cpu_usec", 0)
+	)
+	var visual_geometry_worker_usec := int(
+		generated_base.get("_visual_geometry_worker_usec", 0)
+	)
 	var mesh_build_started_usec := Time.get_ticks_usec()
 	var prepared_resolved_by_id: Dictionary = generated_base.get(
 		"_visual_resolved_by_id", {}
@@ -708,77 +832,142 @@ func publish_region(
 		if not resolved.get("ok", false):
 			for pending_node in pending_nodes:
 				pending_node.free()
-			return _record_region_failure(id, String(resolved.get("reason", "object_state_resolution_failed")))
+			return _record_region_failure(
+				id,
+				String(resolved.get("reason", "object_state_resolution_failed"))
+			)
 		if resolved.get("deleted", false):
 			continue
+
 		var instance: Dictionary = resolved["instance"]
 		instances.append(instance)
+		var instance_id := String(instance.get("instance_id", ""))
+		var cache_key := _geometry_cache_key(instance)
 		var prepared_cpu: Dictionary = geometry_cpu_by_instance.get(
-			String(instance.get("instance_id", "")), {}
+			instance_id, {}
 		)
+		if not prepared_cpu.get("ok", false):
+			prepared_cpu = visual_cpu_by_cache_key.get(cache_key, {})
+
 		if _is_static_batch_candidate(instance):
-			var batch_item: Dictionary = {
-				"instance_id": String(instance["instance_id"]),
+			var static_cpu := _get_or_build_geometry_cpu(
+				instance, prepared_cpu
+			)
+			if not static_cpu.get("ok", false):
+				for pending_node in pending_nodes:
+					pending_node.free()
+				return _record_region_failure(
+					id,
+					"object_geometry_cpu_build_failed:%s"
+						% static_cpu.get("reason", "unknown")
+				)
+			batch_items.append({
+				"instance_id": instance_id,
 				"position": Vector3(instance["position_mm"]) / 1000.0,
 				"scale_milli": instance.get(
 					"default_scale_milli", Vector3i(1000, 1000, 1000)
 				),
 				"yaw_mdeg": int(instance.get("default_yaw_mdeg", 0)),
+				"cpu_data": static_cpu,
 				"selection_record": _build_selection_record(instance),
-			}
-			if prepared_cpu.get("ok", false):
-				batch_item["cpu_data"] = prepared_cpu
-			else:
-				var batch_mesh_result: Dictionary = _get_or_build_geometry_mesh(
-					instance, prepared_cpu
-				)
-				if not batch_mesh_result.get("ok", false):
-					for pending_node in pending_nodes:
-						pending_node.free()
-					return _record_region_failure(
-						id,
-						"object_mesh_build_failed:%s"
-							% batch_mesh_result.get("reason", "unknown")
-					)
-				batch_item["mesh"] = batch_mesh_result["mesh"]
-			batch_items.append(batch_item)
+			})
 			continue
 
+		var object_node := _new_identity_node(instance)
+		pending_nodes.append(object_node)
+		if String(instance.get("recipe_algorithm", "")) == RockMeshAdapter.ALGORITHM:
+			var mutable_cpu := _get_or_build_geometry_cpu(
+				instance, prepared_cpu
+			)
+			if mutable_cpu.get("ok", false):
+				var render_state := _batch_render_state(instance)
+				var appearance_key := _appearance_batch_key(render_state)
+				if not mutable_batch_groups.has(appearance_key):
+					mutable_batch_groups[appearance_key] = []
+					mutable_batch_tints[appearance_key] = (
+						render_state["tint_milli"] as Array
+					).duplicate()
+				var mutable_items: Array = mutable_batch_groups[appearance_key]
+				mutable_items.append({
+					"instance_id": instance_id,
+					"position": render_state["position"],
+					"basis": render_state["basis"],
+					"cpu_data": mutable_cpu,
+					"selection_record": _build_selection_record(instance),
+				})
+				mutable_batch_groups[appearance_key] = mutable_items
+				continue
+
+		# Compatibility fallback for an unsupported visual adapter. This path is
+		# not used by current rock content and remains explicit in diagnostics.
 		var mesh_result: Dictionary = _get_or_build_geometry_mesh(
 			instance, prepared_cpu
 		)
 		if not mesh_result.get("ok", false):
 			for pending_node in pending_nodes:
 				pending_node.free()
-			return _record_region_failure(id, "object_mesh_build_failed:%s" % mesh_result.get("reason", "unknown"))
-		var object_node := Node3D.new()
-		object_node.name = "Object_%s" % String(instance["instance_id"]).sha256_text().substr(0, 12)
-		object_node.position = Vector3(instance["position_mm"]) / 1000.0
-		object_node.set_meta("stable_instance_id", instance["instance_id"])
-		object_node.set_meta("definition_id", instance["definition_id"])
-		object_node.set_meta("content_pin", instance["content_pin"])
-		object_node.set_meta("recipe_algorithm", instance["recipe_algorithm"])
-		object_node.set_meta("geometry_profile", instance["geometry_profile"])
-		object_node.set_meta("geometry_seeds", instance["geometry_seeds"].duplicate(true))
-		object_node.set_meta("geometry_adapter_version", RockMeshAdapter.GEOMETRY_VERSION)
-		object_node.set_meta("instance_components", instance.get("instance_components", {}).duplicate(true))
+			return _record_region_failure(
+				id,
+				"object_mesh_build_failed:%s"
+					% mesh_result.get("reason", "unknown")
+			)
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = mesh_result["mesh"]
 		mesh_instance.material_override = _rock_material
 		object_node.add_child(mesh_instance)
 		_apply_components_to_node(object_node, instance)
-		pending_nodes.append(object_node)
+		individual_mesh_node_count += 1
+
 	var mesh_build_elapsed_usec := Time.get_ticks_usec() - mesh_build_started_usec
 	var batch_started_usec := Time.get_ticks_usec()
 	var batch_result := StaticBatchBuilder.build(batch_items)
 	if not batch_result.get("ok", false):
 		for pending_node in pending_nodes:
 			pending_node.free()
-		return _record_region_failure(id, String(batch_result.get("reason", "static_batch_failed")))
+		return _record_region_failure(
+			id, String(batch_result.get("reason", "static_batch_failed"))
+		)
+
+	var mutable_batch_results: Array[Dictionary] = []
+	var mutable_batch_keys: Array[String] = []
+	for group_key_value in mutable_batch_groups.keys():
+		mutable_batch_keys.append(String(group_key_value))
+	mutable_batch_keys.sort()
+	var mutable_batched_instance_count := 0
+	var mutable_batch_vertex_count := 0
+	var mutable_batch_cpu_source_count := 0
+	for group_key in mutable_batch_keys:
+		var mutable_items: Array[Dictionary] = []
+		for item_value in (mutable_batch_groups[group_key] as Array):
+			mutable_items.append(item_value as Dictionary)
+		var mutable_result := StaticBatchBuilder.build(mutable_items)
+		if not mutable_result.get("ok", false):
+			for pending_node in pending_nodes:
+				pending_node.free()
+			return _record_region_failure(
+				id,
+				"mutable_render_batch_failed:%s"
+					% mutable_result.get("reason", "unknown")
+			)
+		mutable_batched_instance_count += mutable_items.size()
+		mutable_batch_vertex_count += int(
+			mutable_result.get("vertex_count", 0)
+		)
+		mutable_batch_cpu_source_count += int(
+			mutable_result.get("cpu_source_count", 0)
+		)
+		mutable_batch_results.append({
+			"group_key": group_key,
+			"tint_milli": mutable_batch_tints[group_key],
+			"items": mutable_items,
+			"result": mutable_result,
+		})
+
 	var region_root := Node3D.new()
 	region_root.name = "Objects_%d_%d" % [region_key.x, region_key.y]
 	region_root.position = Spatial.region_origin_world(region_key)
 	region_root.visible = objects_visible
+
 	if batch_result.get("mesh", null) is ArrayMesh:
 		var batch_node := Node3D.new()
 		batch_node.name = "StaticPopulationBatch"
@@ -794,6 +983,40 @@ func publish_region(
 		batch_mesh_instance.material_override = _rock_material
 		batch_node.add_child(batch_mesh_instance)
 		region_root.add_child(batch_node)
+
+	for mutable_entry in mutable_batch_results:
+		var mutable_result: Dictionary = mutable_entry["result"]
+		if not mutable_result.get("mesh", null) is ArrayMesh:
+			continue
+		var mutable_node := Node3D.new()
+		var group_key := String(mutable_entry["group_key"])
+		mutable_node.name = "MutableRenderBatch_%s" % (
+			group_key.sha256_text().substr(0, 10)
+		)
+		mutable_node.set_meta(
+			"stable_instance_ids", mutable_result["instance_ids"]
+		)
+		mutable_node.set_meta("mutable_render_batch_version", 1)
+		mutable_node.set_meta(
+			"tint_milli",
+			(mutable_entry["tint_milli"] as Array).duplicate()
+		)
+		var mutable_selection_records: Array[Dictionary] = []
+		for mutable_item in (mutable_entry["items"] as Array):
+			mutable_selection_records.append(
+				(mutable_item as Dictionary)["selection_record"]
+			)
+		mutable_node.set_meta(
+			"selection_records", mutable_selection_records
+		)
+		var mutable_mesh_instance := MeshInstance3D.new()
+		mutable_mesh_instance.mesh = mutable_result["mesh"]
+		mutable_mesh_instance.material_override = _material_for_tint(
+			mutable_entry["tint_milli"]
+		)
+		mutable_node.add_child(mutable_mesh_instance)
+		region_root.add_child(mutable_node)
+
 	for object_node in pending_nodes:
 		region_root.add_child(object_node)
 	if request_serial >= 0 and request_serial == _debug_fail_visual_request_serial:
@@ -817,15 +1040,23 @@ func publish_region(
 		"region_key": region_key,
 		"instance_count": instances.size(),
 		"batched_instance_count": batch_items.size(),
+		"mutable_batched_instance_count": mutable_batched_instance_count,
+		"total_render_batched_instance_count": (
+			batch_items.size() + mutable_batched_instance_count
+		),
+		"mutable_batch_group_count": mutable_batch_results.size(),
 		"individual_node_count": pending_nodes.size(),
+		"individual_mesh_node_count": individual_mesh_node_count,
 		"batch_cpu_source_count": int(batch_result.get("cpu_source_count", 0)),
 		"batch_mesh_source_count": int(batch_result.get("mesh_source_count", 0)),
+		"mutable_batch_cpu_source_count": mutable_batch_cpu_source_count,
 		"resolved_reuse_count": resolved_reuse_count,
 		"candidate_cell_count": candidate_cell_count,
 		"surface_anchor_count": surface_anchor_count,
 		"generation_usec": generation_usec,
 		"generation_worker_usec": generation_worker_usec,
 		"geometry_cpu_worker_usec": geometry_cpu_worker_usec,
+		"visual_geometry_worker_usec": visual_geometry_worker_usec,
 		"materialization_hit": bool(generated_base.get("materialization_hit", false)),
 		"materialization_load_usec": int(generated_base.get("materialization_load_usec", 0)),
 		"materialization_save_usec": int(generated_base.get("materialization_save_usec", 0)),
@@ -833,12 +1064,16 @@ func publish_region(
 		"geometry_cache_misses": _geometry_cache_miss_count - geometry_cache_misses_before,
 		"geometry_cache_evictions": _geometry_cache_eviction_count - geometry_cache_evictions_before,
 		"geometry_cache_variant_count": _geometry_mesh_cache.size(),
+		"geometry_cpu_cache_variant_count": _geometry_cpu_cache.size(),
 		"main_thread_reconstruction_usec": main_thread_reconstruction_usec,
 		"logical_reconstruction_usec": _last_reconstruction_usec,
 		"mesh_build_usec": mesh_build_elapsed_usec,
 		"batch_build_usec": batch_elapsed_usec,
 		"publication_usec": Time.get_ticks_usec() - publication_started_usec,
-		"batch_vertex_count": int(batch_result.get("vertex_count", 0)),
+		"static_batch_vertex_count": int(batch_result.get("vertex_count", 0)),
+		"mutable_batch_vertex_count": mutable_batch_vertex_count,
+		"batch_vertex_count": int(batch_result.get("vertex_count", 0))
+			+ mutable_batch_vertex_count,
 	}
 	if _perf_trace_enabled and int(_last_region_metrics["publication_usec"]) >= PerformanceTrace.min_usec():
 		var trace_metrics := _last_region_metrics.duplicate(true)
@@ -1211,6 +1446,118 @@ func _republish_after_state_mutation(region_key: Vector2i, world_state: RefCount
 	return publish_region(region_key, world_state, true, token)
 
 
+func _batch_render_state(instance: Dictionary) -> Dictionary:
+	var position := Vector3(instance.get("position_mm", Vector3i.ZERO)) / 1000.0
+	var default_scale: Vector3i = instance.get(
+		"default_scale_milli", Vector3i(1000, 1000, 1000)
+	)
+	var default_yaw := float(instance.get("default_yaw_mdeg", 0)) * (
+		PI / 180000.0
+	)
+	var basis := Basis(Vector3.UP, default_yaw).scaled_local(
+		Vector3(default_scale) / 1000.0
+	)
+	var components: Dictionary = instance.get("instance_components", {})
+	var transform_component: Dictionary = components.get(
+		StateContract.COMPONENT_TRANSFORM, {}
+	)
+	if not transform_component.is_empty():
+		var values: Dictionary = transform_component.get("properties", {})
+		var translation: Array = values.get("translation_mm", [0, 0, 0])
+		var rotation_mdeg: Array = values.get(
+			"rotation_mdeg", [0, 0, 0]
+		)
+		var scale_milli: Array = values.get(
+			"scale_milli", [1000, 1000, 1000]
+		)
+		position += Vector3(
+			float(translation[0]),
+			float(translation[1]),
+			float(translation[2])
+		) / 1000.0
+		var rotation := Vector3(
+			float(rotation_mdeg[0]),
+			float(rotation_mdeg[1]),
+			float(rotation_mdeg[2])
+		) * (PI / 180000.0)
+		basis = Basis.from_euler(rotation).scaled_local(Vector3(
+			float(scale_milli[0]),
+			float(scale_milli[1]),
+			float(scale_milli[2])
+		) / 1000.0)
+	var tint: Array = [1000, 1000, 1000]
+	var appearance: Dictionary = components.get(
+		StateContract.COMPONENT_APPEARANCE, {}
+	)
+	if not appearance.is_empty():
+		var appearance_properties: Dictionary = appearance.get(
+			"properties", {}
+		)
+		tint = appearance_properties.get("tint_milli", tint)
+	return {
+		"position": position,
+		"basis": basis,
+		"tint_milli": [
+			int(tint[0]),
+			int(tint[1]),
+			int(tint[2]),
+		],
+	}
+
+
+func _appearance_batch_key(render_state: Dictionary) -> String:
+	var tint: Array = render_state.get("tint_milli", [1000, 1000, 1000])
+	return "%d,%d,%d" % [int(tint[0]), int(tint[1]), int(tint[2])]
+
+
+func _material_for_tint(tint_value: Variant) -> StandardMaterial3D:
+	var tint: Array = (
+		tint_value as Array
+		if typeof(tint_value) == TYPE_ARRAY
+		else [1000, 1000, 1000]
+	)
+	if (
+		int(tint[0]) == 1000
+		and int(tint[1]) == 1000
+		and int(tint[2]) == 1000
+	):
+		return _rock_material
+	var material := _rock_material.duplicate() as StandardMaterial3D
+	material.albedo_color = _rock_material.albedo_color * Color(
+		float(tint[0]) / 1000.0,
+		float(tint[1]) / 1000.0,
+		float(tint[2]) / 1000.0,
+		1.0
+	)
+	return material
+
+
+func _new_identity_node(instance: Dictionary) -> Node3D:
+	var object_node := Node3D.new()
+	object_node.name = "Object_%s" % String(
+		instance["instance_id"]
+	).sha256_text().substr(0, 12)
+	object_node.position = Vector3(instance["position_mm"]) / 1000.0
+	object_node.set_meta("stable_instance_id", instance["instance_id"])
+	object_node.set_meta("definition_id", instance["definition_id"])
+	object_node.set_meta("content_pin", instance["content_pin"])
+	object_node.set_meta("recipe_algorithm", instance["recipe_algorithm"])
+	object_node.set_meta("geometry_profile", instance["geometry_profile"])
+	object_node.set_meta(
+		"geometry_seeds",
+		(instance["geometry_seeds"] as Dictionary).duplicate(true)
+	)
+	object_node.set_meta(
+		"geometry_adapter_version", RockMeshAdapter.GEOMETRY_VERSION
+	)
+	object_node.set_meta(
+		"instance_components",
+		(instance.get("instance_components", {}) as Dictionary).duplicate(true)
+	)
+	_apply_components_to_node(object_node, instance)
+	return object_node
+
+
 func _apply_components_to_node(node: Node3D, instance: Dictionary) -> void:
 	var default_scale: Vector3i = instance.get("default_scale_milli", Vector3i(1000, 1000, 1000))
 	var default_yaw := int(instance.get("default_yaw_mdeg", 0))
@@ -1413,15 +1760,24 @@ func get_region_instance_records(region_key: Vector2i) -> Array[Dictionary]:
 
 func _build_selection_record(instance: Dictionary) -> Dictionary:
 	var geometry: Dictionary = instance.get("geometry", {})
-	var extents := Vector3(float(geometry.get("half_extent_x_mm", 600)), float(geometry.get("half_extent_y_mm", 600)), float(geometry.get("half_extent_z_mm", 600))) / 1000.0
-	var scale_milli: Vector3i = instance.get("default_scale_milli", Vector3i(1000, 1000, 1000))
-	var position: Vector3 = Vector3(instance.get("position_mm", Vector3i.ZERO)) / 1000.0
+	var extents := Vector3(
+		float(geometry.get("half_extent_x_mm", 600)),
+		float(geometry.get("half_extent_y_mm", 600)),
+		float(geometry.get("half_extent_z_mm", 600))
+	) / 1000.0
+	var render_state := _batch_render_state(instance)
+	var position: Vector3 = render_state["position"]
+	var basis: Basis = render_state["basis"]
 	return {
 		"entity_id": String(instance.get("instance_id", "")),
 		"definition_id": String(instance.get("definition_id", "")),
-		"identity_kind": String(instance.get("entity_identity", {}).get("identity_kind", "procedural")),
-		"center_local": position + Vector3(0.0, extents.y * float(scale_milli.y) / 1000.0, 0.0),
-		"radius": (extents * Vector3(scale_milli) / 1000.0).length(),
+		"identity_kind": String(
+			instance.get("entity_identity", {}).get(
+				"identity_kind", "procedural"
+			)
+		),
+		"center_local": position + basis * Vector3(0.0, extents.y, 0.0),
+		"radius": (basis * extents).length(),
 	}
 
 
@@ -1459,6 +1815,7 @@ func get_performance_snapshot() -> Dictionary:
 			+ _region_generation_jobs.size()
 			+ _region_visual_preparations.size(),
 		"region_generation_jobs_in_flight": _region_generation_jobs.size(),
+		"visual_geometry_jobs_in_flight": _visual_geometry_jobs.size(),
 		"visual_preparation_count": _region_visual_preparations.size(),
 		"visual_mesh_commit_budget_per_frame": MAX_GEOMETRY_MESH_COMMITS_PER_FRAME,
 		"visual_mesh_commits_last_tick": _visual_mesh_commits_last_tick,
@@ -1471,6 +1828,7 @@ func get_performance_snapshot() -> Dictionary:
 		"active_instance_count": resident_instances,
 		"batched_instance_count": resident_batched,
 		"geometry_cache_variant_count": _geometry_mesh_cache.size(),
+		"geometry_cpu_cache_variant_count": _geometry_cpu_cache.size(),
 		"geometry_cache_capacity": MAX_CACHED_GEOMETRY_VARIANTS,
 		"geometry_cache_hit_count": _geometry_cache_hit_count,
 		"geometry_cache_miss_count": _geometry_cache_miss_count,
@@ -1609,6 +1967,7 @@ func _record_region_failure(region_id: String, reason: String) -> Dictionary:
 
 func _clear_region_nodes() -> void:
 	_wait_for_region_generation_jobs()
+	_wait_for_visual_geometry_jobs()
 	_pending_region_publications.clear()
 	_pending_publication_order.clear()
 	_region_visual_preparations.clear()
@@ -1644,6 +2003,7 @@ func _wait_for_region_generation_jobs() -> void:
 
 func _exit_tree() -> void:
 	_wait_for_region_generation_jobs()
+	_wait_for_visual_geometry_jobs()
 
 
 func _region_id(region_key: Vector2i) -> String:
@@ -1659,6 +2019,38 @@ func _geometry_cache_key(instance: Dictionary) -> String:
 		"geometry_seeds": instance.get("geometry_seeds", {}),
 	}
 	return JSON.stringify(key_data, "", true, true).sha256_text()
+
+
+func _remember_geometry_cpu(cache_key: String, cpu_data: Dictionary) -> void:
+	if cache_key.is_empty() or not cpu_data.get("ok", false):
+		return
+	_geometry_cpu_cache[cache_key] = cpu_data
+	_geometry_cpu_cache_order.erase(cache_key)
+	_geometry_cpu_cache_order.append(cache_key)
+	while _geometry_cpu_cache_order.size() > MAX_CACHED_GEOMETRY_VARIANTS:
+		var evicted: String = _geometry_cpu_cache_order.pop_front()
+		_geometry_cpu_cache.erase(evicted)
+
+
+func _get_or_build_geometry_cpu(
+	instance: Dictionary,
+	prepared_cpu: Dictionary = {}
+) -> Dictionary:
+	var cache_key := _geometry_cache_key(instance)
+	if prepared_cpu.get("ok", false):
+		_remember_geometry_cpu(cache_key, prepared_cpu)
+		return prepared_cpu
+	if _geometry_cpu_cache.has(cache_key):
+		_geometry_cpu_cache_order.erase(cache_key)
+		_geometry_cpu_cache_order.append(cache_key)
+		return _geometry_cpu_cache[cache_key]
+	var built: Dictionary = RockMeshAdapter.build_cpu_data(
+		instance.get("geometry", {}),
+		instance.get("geometry_seeds", {})
+	)
+	if built.get("ok", false):
+		_remember_geometry_cpu(cache_key, built)
+	return built
 
 
 func _get_or_build_geometry_mesh(instance: Dictionary, prepared_cpu: Dictionary = {}) -> Dictionary:
