@@ -40,10 +40,22 @@ static func build(items: Array[Dictionary]) -> Dictionary:
 			return _failure("static_batch_geometry_invalid")
 		if vertices.size() + source_vertices.size() > MAX_BATCH_VERTICES:
 			return _failure("static_batch_vertex_budget_exceeded")
-		var scale_values: Vector3i = item.get("scale_milli", Vector3i(1000, 1000, 1000))
-		var rotation_y := deg_to_rad(float(item.get("yaw_mdeg", 0)) / 1000.0)
 		var position: Vector3 = item.get("position", Vector3.ZERO)
-		var basis := Basis(Vector3.UP, rotation_y).scaled(Vector3(scale_values) / 1000.0)
+		var basis: Basis
+		if item.get("basis", null) is Basis:
+			basis = item["basis"]
+		else:
+			var scale_values: Vector3i = item.get(
+				"scale_milli", Vector3i(1000, 1000, 1000)
+			)
+			var rotation_y := deg_to_rad(
+				float(item.get("yaw_mdeg", 0)) / 1000.0
+			)
+			basis = Basis(Vector3.UP, rotation_y).scaled(
+				Vector3(scale_values) / 1000.0
+			)
+		if not position.is_finite() or not basis.is_finite():
+			return _failure("static_batch_transform_invalid")
 		var normal_basis := basis.inverse().transposed()
 		for index in range(source_vertices.size()):
 			var transformed: Vector3 = basis * source_vertices[index] + position
