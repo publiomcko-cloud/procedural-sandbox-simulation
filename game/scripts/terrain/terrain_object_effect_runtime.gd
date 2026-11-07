@@ -341,16 +341,25 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 		if _prefetch_task_by_scope.has(scope_id) 			or _prefetch_projection_task_by_scope.has(scope_id):
 			continue
 
+		var has_async_source_pipeline := (
+			object_stream.has_method("create_projection_source_generation_job")
+			and object_stream.has_method(
+				"finalize_authoritative_region_projection_source"
+			)
+		)
 		# D.7.3 fast revisit path. The global command revision is deliberately
 		# conservative: any accepted entity mutation invalidates reuse until a
 		# source is rebuilt at the new revision. Explicit source invalidation
-		# also removes the affected entry immediately.
+		# also removes the affected entry immediately. Keep legacy streams on
+		# their existing synchronous path.
 		var authority_revision := int(
 			object_stream.call("get_command_world_revision")
 		)
-		var cached_source_record := _projection_source_cache_lookup(
-			region, authority_revision
-		)
+		var cached_source_record: Dictionary = {}
+		if has_async_source_pipeline:
+			cached_source_record = _projection_source_cache_lookup(
+				region, authority_revision
+			)
 		if not cached_source_record.is_empty():
 			# Do not let source-cache hits drain the entire prefetch queue in a
 			# single frame. Reuse the same bounded projection-stage capacity.
@@ -402,11 +411,7 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 				})
 			continue
 
-		if not object_stream.has_method(
-			"create_projection_source_generation_job"
-		) or not object_stream.has_method(
-			"finalize_authoritative_region_projection_source"
-		):
+		if not has_async_source_pipeline:
 			var scope_started_usec := Time.get_ticks_usec()
 			var reconciled := _reconcile_source_region(region, false)
 			var scope_usec := Time.get_ticks_usec() - scope_started_usec
@@ -1449,6 +1454,8 @@ func release_all_scopes() -> void:
 	wait_for_prefetch_jobs()
 	_prefetch_queue.clear()
 	_prefetch_scope_ids.clear()
+	_projection_source_cache.clear()
+	_projection_source_cache_order.clear()
 	_prefetch_error = ""
 	if projection == null:
 		return
