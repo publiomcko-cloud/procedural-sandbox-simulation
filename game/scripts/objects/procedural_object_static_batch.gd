@@ -42,7 +42,7 @@ static func build(items: Array[Dictionary]) -> Dictionary:
 			return _failure("static_batch_vertex_budget_exceeded")
 		var position: Vector3 = item.get("position", Vector3.ZERO)
 		var basis: Basis
-		if item.get("basis", null) is Basis:
+		if typeof(item.get("basis", null)) == TYPE_BASIS:
 			basis = item["basis"]
 		else:
 			var scale_values: Vector3i = item.get(
