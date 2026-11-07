@@ -7,6 +7,7 @@ const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 const RegistryScript := preload("res://scripts/modding/content_definition_registry.gd")
 const ObjectWorld := preload("res://scripts/objects/procedural_object_world.gd")
 const RegionGenerationJob := preload("res://scripts/objects/procedural_object_region_generation_job.gd")
+const VisualGeometryJob := preload("res://scripts/objects/procedural_object_visual_geometry_job.gd")
 const MaterializationStore := preload("res://scripts/objects/procedural_object_materialization_store.gd")
 const ProjectionSourceGenerationJob := preload("res://scripts/objects/procedural_object_projection_source_generation_job.gd")
 const RockMeshAdapter := preload("res://scripts/objects/procedural_rock_mesh_adapter.gd")
@@ -51,6 +52,8 @@ var _region_generation_task_by_id: Dictionary = {}
 # commits are amortized across frames. Scene publication remains atomic.
 var _region_visual_preparations: Dictionary = {}
 var _region_visual_preparation_order: Array[String] = []
+var _visual_geometry_jobs: Dictionary = {} # worker task id -> {job, id, cancelled}
+var _visual_geometry_task_by_region: Dictionary = {}
 var _next_region_publication_serial := 1
 var _geometry_mesh_cache: Dictionary = {}
 var _geometry_mesh_cache_order: Array[String] = []
@@ -112,8 +115,11 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	_visual_mesh_commit_peak_usec = 0
 	_visual_prewarm_completed_count = 0
 	_visual_batch_cpu_bypass_count = 0
+	_wait_for_visual_geometry_jobs()
 	_region_visual_preparations.clear()
 	_region_visual_preparation_order.clear()
+	_visual_geometry_jobs.clear()
+	_visual_geometry_task_by_region.clear()
 	_materialization_content_signature = ""
 	_materialization_directory = ""
 	_population_rule_ids.clear()
@@ -251,8 +257,9 @@ func process_queued_publications() -> int:
 			_publications_last_process_tick += 1
 			_finish_queued_publication(id, result, int(request.get("request_serial", -1)))
 	else:
-		# Finalize any region whose mesh variants were warmed on earlier frames,
-		# or commit at most one new ArrayMesh variant this frame.
+		_cleanup_completed_visual_geometry_jobs()
+		# D.7.1 visual preparation waits only for CPU geometry workers. Rendering
+		# resource commits happen as bounded regional batches during publication.
 		_process_region_visual_preparations()
 		_process_completed_region_generation_jobs()
 		_dispatch_region_generation_jobs()
@@ -1459,6 +1466,7 @@ func get_performance_snapshot() -> Dictionary:
 			+ _region_generation_jobs.size()
 			+ _region_visual_preparations.size(),
 		"region_generation_jobs_in_flight": _region_generation_jobs.size(),
+		"visual_geometry_jobs_in_flight": _visual_geometry_jobs.size(),
 		"visual_preparation_count": _region_visual_preparations.size(),
 		"visual_mesh_commit_budget_per_frame": MAX_GEOMETRY_MESH_COMMITS_PER_FRAME,
 		"visual_mesh_commits_last_tick": _visual_mesh_commits_last_tick,
@@ -1644,6 +1652,7 @@ func _wait_for_region_generation_jobs() -> void:
 
 func _exit_tree() -> void:
 	_wait_for_region_generation_jobs()
+	_wait_for_visual_geometry_jobs()
 
 
 func _region_id(region_key: Vector2i) -> String:
