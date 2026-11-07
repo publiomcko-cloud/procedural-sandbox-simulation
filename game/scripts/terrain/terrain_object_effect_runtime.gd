@@ -506,19 +506,23 @@ func _queue_projection_build(
 	scope_id: String,
 	source: Dictionary
 ) -> Dictionary:
-	var lookup_started_usec := Time.get_ticks_usec()
+	var cache_key_started_usec := Time.get_ticks_usec()
 	var cache_key := _projection_build_cache_key(region, source)
+	var cache_key_usec := Time.get_ticks_usec() - cache_key_started_usec
+	var lookup_started_usec := Time.get_ticks_usec()
 	var cached := _projection_build_cache_lookup(cache_key)
 	var lookup_usec := Time.get_ticks_usec() - lookup_started_usec
 	_performance["projection_build_cache_lookup_total_usec"] = int(
 		_performance["projection_build_cache_lookup_total_usec"]
-	) + lookup_usec
+	) + cache_key_usec + lookup_usec
 	_performance["projection_build_cache_lookup_peak_usec"] = maxi(
 		int(_performance["projection_build_cache_lookup_peak_usec"]),
-		lookup_usec
+		cache_key_usec + lookup_usec
 	)
 	if not cached.is_empty():
+		var rebase_started_usec := Time.get_ticks_usec()
 		var rebased := _rebase_cached_projection(region, source, cached)
+		var rebase_usec := Time.get_ticks_usec() - rebase_started_usec
 		if rebased.get("ok", false):
 			_performance["projection_build_cache_hit_count"] = int(
 				_performance["projection_build_cache_hit_count"]
@@ -538,7 +542,9 @@ func _queue_projection_build(
 				PerformanceTrace.emit("effect_projection_cache_hit", {
 					"scope_id": scope_id,
 					"region": [region.x, region.y],
+					"cache_key_usec": cache_key_usec,
 					"lookup_usec": lookup_usec,
+					"rebase_usec": rebase_usec,
 					"effect_count": int((rebased.get("effects", {}) as Dictionary).size()),
 					"source_count": int((rebased.get("source_instance_ids", []) as Array).size()),
 					"cached_effect_frame_build_usec": int((
@@ -612,7 +618,7 @@ func _remember_projection_build(
 ) -> void:
 	if cache_key.is_empty() or not prebuilt.get("ok", false):
 		return
-	_projection_build_cache[cache_key] = prebuilt.duplicate(true)
+	_projection_build_cache[cache_key] = prebuilt
 	_projection_build_cache_order.erase(cache_key)
 	_projection_build_cache_order.append(cache_key)
 	while _projection_build_cache_order.size() > MAX_PROJECTION_BUILD_CACHE_ENTRIES:
@@ -643,19 +649,30 @@ func _rebase_cached_projection(
 	var entries_value: Variant = cached.get("source_digest_entries", [])
 	if typeof(entries_value) != TYPE_ARRAY:
 		return _failure("effect_projection_cache_digest_entries_invalid")
-	var rebased := cached.duplicate(true)
+	var rebased := cached.duplicate(false)
 	var source_timings: Dictionary = (
-		rebased.get("timings_usec", {}) as Dictionary
-	).duplicate(true)
+		cached.get("timings_usec", {}) as Dictionary
+	).duplicate(false)
 	var digest_started_usec := Time.get_ticks_usec()
-	rebased["source_world_revision"] = source_world_revision
-	rebased["source_digest_sha256"] = Contract.source_digest(
+	var rebased_digest := Contract.source_digest(
 		Contract.scope_id_for_region(region),
 		region,
 		source_world_revision,
-		(entries_value as Array).duplicate(true)
+		entries_value as Array
 	)
 	var digest_usec := Time.get_ticks_usec() - digest_started_usec
+	rebased["source_world_revision"] = source_world_revision
+	rebased["source_digest_sha256"] = rebased_digest
+	if (
+		bool(cached.get("worker_prevalidated", false))
+		and typeof(cached.get("prevalidated_snapshot")) == TYPE_DICTIONARY
+	):
+		var prevalidated: Dictionary = (
+			cached["prevalidated_snapshot"] as Dictionary
+		).duplicate(false)
+		prevalidated["source_world_revision"] = source_world_revision
+		prevalidated["source_digest_sha256"] = rebased_digest
+		rebased["prevalidated_snapshot"] = prevalidated
 	rebased["cache_hit"] = true
 	rebased["cache_source_timings_usec"] = source_timings
 	rebased["worker_usec"] = 0
@@ -664,6 +681,7 @@ func _rebase_cached_projection(
 		"prepare_sort": 0,
 		"effect_frame_build": 0,
 		"digest": digest_usec,
+		"validate_snapshot": 0,
 		"total": Time.get_ticks_usec() - started_usec,
 	}
 	return rebased
