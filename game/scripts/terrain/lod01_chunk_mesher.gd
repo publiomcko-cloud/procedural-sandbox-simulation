@@ -7,6 +7,7 @@ extends RefCounted
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const Transition := preload("res://scripts/experiments/lod01_transition_fixture.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
+const Brush := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 
 
 static func transition_faces_for_cell(cell: Vector3i, extent: Vector3i) -> Array[int]:
@@ -38,8 +39,22 @@ static func build_chunk_cpu_data(
 	if Vector3(min_lattice).distance_squared_to(scaled_origin) > 0.000001:
 		return {"valid": false, "reason": "region_local_origin_off_lod_lattice"}
 	var coarse_extent := Vector3i(Grid.CELLS_PER_CHUNK_X / 2, Grid.CELL_COUNT_Y / 2, Grid.CELLS_PER_CHUNK_Z / 2)
+	var sampler := density_override
+	if not sampler.is_valid():
+		sampler = func(region_local_position: Vector3) -> float:
+			if brush_snapshot.is_empty():
+				return Field.sample_density(
+					world_seed, region_key, region_local_position, false
+				)
+			return Brush.sample_density_snapshot(
+				world_seed,
+				region_key,
+				region_local_position,
+				false,
+				brush_snapshot
+			)
 	var cell_result: Dictionary = Transition.build_lod1_chunk(
-		world_seed, min_lattice, coarse_extent, brush_snapshot, density_override
+		world_seed, min_lattice, coarse_extent, brush_snapshot, sampler
 	)
 	if not cell_result.get("valid", false):
 		return cell_result
@@ -93,6 +108,20 @@ static func build_chunk_cpu_data_per_cell_reference(
 	var polygonization_usec := 0
 	var normal_usec := 0
 	var total_started_usec := Time.get_ticks_usec()
+	var sampler := density_override
+	if not sampler.is_valid():
+		sampler = func(region_local_position: Vector3) -> float:
+			if brush_snapshot.is_empty():
+				return Field.sample_density(
+					world_seed, region_key, region_local_position, false
+				)
+			return Brush.sample_density_snapshot(
+				world_seed,
+				region_key,
+				region_local_position,
+				false,
+				brush_snapshot
+			)
 	var coarse_x_count: int = Grid.CELLS_PER_CHUNK_X / 2
 	var coarse_z_count: int = Grid.CELLS_PER_CHUNK_Z / 2
 	var coarse_y_count: int = Grid.CELL_COUNT_Y / 2
@@ -112,12 +141,12 @@ static func build_chunk_cpu_data_per_cell_reference(
 				var cell_result: Dictionary
 				if fine_faces.is_empty():
 					cell_result = Transition.build_uniform_reference_cell(
-						world_seed, lattice_origin, 1, brush_snapshot, density_override
+						world_seed, lattice_origin, 1, brush_snapshot, sampler
 					)
 				else:
 					transition_cell_count += 1
 					cell_result = Transition.build_transition_cell(
-						world_seed, lattice_origin, fine_faces, brush_snapshot, density_override
+						world_seed, lattice_origin, fine_faces, brush_snapshot, sampler
 					)
 				if not cell_result.get("valid", false):
 					return {
