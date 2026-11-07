@@ -390,7 +390,9 @@ func _queue_region_visual_preparation(
 		else -1
 	)
 	var resolved_cache_complete := resolved_state_revision >= 0
+	var resolve_started_usec := Time.get_ticks_usec()
 	var batch_cpu_bypass_variant_count := 0
+	var batch_cpu_bypass_keys: Dictionary = {}
 	for value in prewarm_instances:
 		if typeof(value) != TYPE_DICTIONARY:
 			resolved_cache_complete = false
@@ -415,7 +417,9 @@ func _queue_region_visual_preparation(
 		var instance_id := String(instance.get("instance_id", ""))
 		var prepared_cpu: Dictionary = cpu_by_instance.get(instance_id, {})
 		if _is_static_batch_candidate(instance) and prepared_cpu.get("ok", false):
-			batch_cpu_bypass_variant_count += 1
+			if not batch_cpu_bypass_keys.has(cache_key):
+				batch_cpu_bypass_keys[cache_key] = true
+				batch_cpu_bypass_variant_count += 1
 			continue
 		if seen_keys.has(cache_key):
 			continue
@@ -426,6 +430,7 @@ func _queue_region_visual_preparation(
 			"prepared_cpu": prepared_cpu.duplicate(true),
 		})
 
+	var state_resolve_usec := Time.get_ticks_usec() - resolve_started_usec
 	var prepared_generated: Dictionary = generated.duplicate(false)
 	if resolved_cache_complete:
 		prepared_generated["_visual_resolved_by_id"] = resolved_by_id
@@ -442,6 +447,7 @@ func _queue_region_visual_preparation(
 		"cache_hits": 0,
 		"mesh_commits": 0,
 		"batch_cpu_bypass_variant_count": batch_cpu_bypass_variant_count,
+		"state_resolve_usec": state_resolve_usec,
 	}
 	_visual_batch_cpu_bypass_count += batch_cpu_bypass_variant_count
 	_region_visual_preparations[id] = record
@@ -454,6 +460,7 @@ func _queue_region_visual_preparation(
 			],
 			"variant_count": variants.size(),
 			"batch_cpu_bypass_variant_count": batch_cpu_bypass_variant_count,
+			"state_resolve_usec": state_resolve_usec,
 			"resolved_state_revision": resolved_state_revision
 				if resolved_cache_complete else -1,
 			"materialization_hit": bool(generated.get("materialization_hit", false)),
@@ -563,6 +570,7 @@ func _process_region_visual_preparations() -> void:
 				"batch_cpu_bypass_variant_count": int(
 					record.get("batch_cpu_bypass_variant_count", 0)
 				),
+				"state_resolve_usec": int(record.get("state_resolve_usec", 0)),
 				"geometry_cache_variant_count": _geometry_mesh_cache.size(),
 			})
 		# Publication is intentionally deferred to a later frame so the last
