@@ -232,9 +232,10 @@ func _run() -> void:
 				var render_state: Dictionary = stream.call(
 					"_batch_render_state", mutated_record
 				)
+				var render_basis: Basis = render_state["basis"]
+				var render_position: Vector3 = render_state["position"]
 				var expected_first_vertex: Vector3 = (
-					(render_state["basis"] as Basis) * source_positions[0]
-					+ (render_state["position"] as Vector3)
+					render_basis * source_positions[0] + render_position
 				)
 				_check(
 					not vertices.is_empty()
@@ -338,7 +339,7 @@ func _find_identity_node(stream: Node, instance_id: String) -> Node3D:
 func _find_batch_for_id(stream: Node, instance_id: String) -> Node3D:
 	for region_root in stream.get_children():
 		for child in region_root.get_children():
-			if not child is Node3D:
+			if not (child is Node3D):
 				continue
 			var ids: Array = child.get_meta("stable_instance_ids", [])
 			if ids.has(instance_id):
