@@ -478,7 +478,8 @@ func reconcile_prebuilt_scope(
 	prebuilt: Dictionary,
 	allow_authoritative_rewind: bool = false,
 	persist_projection: bool = true,
-	load_persisted_on_memory_miss: bool = true
+	load_persisted_on_memory_miss: bool = true,
+	accept_worker_prevalidated: bool = false
 ) -> Dictionary:
 	var started_usec := Time.get_ticks_usec()
 	var load_usec := 0
@@ -541,16 +542,65 @@ func reconcile_prebuilt_scope(
 		prior["projection_revision"] = prior_projection_revision
 
 	var copy_conflict_started_usec := Time.get_ticks_usec()
+	var worker_prevalidated := false
+	var prevalidated_snapshot: Dictionary = {}
+	if (
+		accept_worker_prevalidated
+		and not persist_projection
+		and bool(prebuilt.get("worker_prevalidated", false))
+		and typeof(prebuilt.get("prevalidated_snapshot")) == TYPE_DICTIONARY
+	):
+		prevalidated_snapshot = prebuilt["prevalidated_snapshot"] as Dictionary
+		var prevalidated_region: Array = prevalidated_snapshot.get(
+			"region_key", []
+		)
+		if (
+			int(prevalidated_snapshot.get("schema_version", -1))
+				!= Contract.SCHEMA_VERSION
+			or String(prevalidated_snapshot.get("world_id", "")) != world_id
+			or int(prevalidated_snapshot.get("world_seed", -1)) != world_seed
+			or int(prevalidated_snapshot.get("generator_version", -1))
+				!= generator_version
+			or String(prevalidated_snapshot.get("scope_id", "")) != scope_id
+			or prevalidated_region.size() != 2
+			or int(prevalidated_region[0]) != region_key.x
+			or int(prevalidated_region[1]) != region_key.y
+			or int(prevalidated_snapshot.get("source_world_revision", -1))
+				!= source_world_revision
+			or String(prevalidated_snapshot.get("source_digest_sha256", ""))
+				!= String(prebuilt["source_digest_sha256"])
+			or typeof(prevalidated_snapshot.get("source_instance_ids"))
+				!= TYPE_ARRAY
+			or typeof(prevalidated_snapshot.get("effects"))
+				!= TYPE_DICTIONARY
+			or typeof(prevalidated_snapshot.get("local_frames"))
+				!= TYPE_DICTIONARY
+		):
+			return _failure(
+				"effect_projection_worker_prevalidation_envelope_mismatch"
+			)
+		worker_prevalidated = true
+
 	var incoming_effects: Dictionary = (
-		prebuilt["effects"] as Dictionary
-	).duplicate(true)
+		prevalidated_snapshot["effects"] as Dictionary
+		if worker_prevalidated
+		else (prebuilt["effects"] as Dictionary).duplicate(true)
+	)
 	var incoming_frames: Dictionary = (
-		prebuilt["local_frames"] as Dictionary
-	).duplicate(true)
+		prevalidated_snapshot["local_frames"] as Dictionary
+		if worker_prevalidated
+		else (prebuilt["local_frames"] as Dictionary).duplicate(true)
+	)
 	var source_instance_ids: Array = (
-		prebuilt["source_instance_ids"] as Array
-	).duplicate()
-	var source_digest := String(prebuilt["source_digest_sha256"])
+		prevalidated_snapshot["source_instance_ids"] as Array
+		if worker_prevalidated
+		else (prebuilt["source_instance_ids"] as Array).duplicate()
+	)
+	var source_digest := String(
+		prevalidated_snapshot["source_digest_sha256"]
+		if worker_prevalidated
+		else prebuilt["source_digest_sha256"]
+	)
 
 	for effect_id_value in incoming_effects:
 		var effect_id := String(effect_id_value)
@@ -594,6 +644,8 @@ func reconcile_prebuilt_scope(
 			"memory_only_miss": memory_only_miss,
 			"storage_load_bypassed": memory_only_miss,
 			"direct_installed": memory_only_miss,
+			"worker_prevalidated": worker_prevalidated,
+			"main_validation_skipped": worker_prevalidated,
 			"source_count": source_instance_ids.size(),
 			"effect_count": incoming_effects.size(),
 			"removed_effect_count": 0,
@@ -617,27 +669,37 @@ func reconcile_prebuilt_scope(
 	for prior_effect_id in (prior["effects"] as Dictionary):
 		if not incoming_effects.has(String(prior_effect_id)):
 			removed_effect_count += 1
-	var candidate := {
-		"schema_version": Contract.SCHEMA_VERSION,
-		"world_id": world_id,
-		"world_seed": world_seed,
-		"generator_version": generator_version,
-		"scope_id": scope_id,
-		"region_key": [region_key.x, region_key.y],
-		"projection_revision": int(prior["projection_revision"]) + 1,
-		"source_world_revision": source_world_revision,
-		"source_digest_sha256": source_digest,
-		"source_instance_ids": source_instance_ids,
-		"effects": incoming_effects,
-		"local_frames": incoming_frames,
-	}
-	var validate_started_usec := Time.get_ticks_usec()
-	var checked := Contract.validate_snapshot(
-		candidate, world_id, world_seed, generator_version, region_key
-	)
-	validate_usec = Time.get_ticks_usec() - validate_started_usec
-	if not checked.get("ok", false):
-		return checked
+	var next_projection_revision := int(prior["projection_revision"]) + 1
+	if next_projection_revision > Contract.MAX_REVISION:
+		return _failure("effect_projection_revision_limit_reached")
+	var candidate: Dictionary
+	var checked: Dictionary
+	if worker_prevalidated:
+		candidate = prevalidated_snapshot.duplicate(false)
+		candidate["projection_revision"] = next_projection_revision
+		checked = {"ok": true, "snapshot": candidate}
+	else:
+		candidate = {
+			"schema_version": Contract.SCHEMA_VERSION,
+			"world_id": world_id,
+			"world_seed": world_seed,
+			"generator_version": generator_version,
+			"scope_id": scope_id,
+			"region_key": [region_key.x, region_key.y],
+			"projection_revision": next_projection_revision,
+			"source_world_revision": source_world_revision,
+			"source_digest_sha256": source_digest,
+			"source_instance_ids": source_instance_ids,
+			"effects": incoming_effects,
+			"local_frames": incoming_frames,
+		}
+		var validate_started_usec := Time.get_ticks_usec()
+		checked = Contract.validate_snapshot(
+			candidate, world_id, world_seed, generator_version, region_key
+		)
+		validate_usec = Time.get_ticks_usec() - validate_started_usec
+		if not checked.get("ok", false):
+			return checked
 	var index_started_usec := Time.get_ticks_usec()
 	var index_result := _build_scope_index(checked["snapshot"])
 	index_usec = Time.get_ticks_usec() - index_started_usec
@@ -677,6 +739,8 @@ func reconcile_prebuilt_scope(
 		"persisted": persist_projection,
 		"memory_only_miss": memory_only_miss,
 		"storage_load_bypassed": memory_only_miss,
+		"worker_prevalidated": worker_prevalidated,
+		"main_validation_skipped": worker_prevalidated,
 		"source_count": source_instance_ids.size(),
 		"effect_count": incoming_effects.size(),
 		"removed_effect_count": removed_effect_count,
@@ -702,6 +766,8 @@ func reconcile_prebuilt_scope(
 		"changed": true,
 		"persisted": persist_projection,
 		"storage_load_bypassed": memory_only_miss,
+		"worker_prevalidated": worker_prevalidated,
+		"main_validation_skipped": worker_prevalidated,
 		"reason": "committed" if persist_projection else "transient_current",
 		"scope_id": scope_id,
 		"generation": generation,
