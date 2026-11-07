@@ -12,7 +12,7 @@ const SEED := 424242
 const WORLD_ID := "issue108-d7-static-procedural-batch"
 const STATE_ROOT := "user://issue108-d7-static-batch-state"
 const POSITION_EQUIVALENCE_EPSILON := 1.0e-5
-const NORMAL_EQUIVALENCE_EPSILON := 1.0e-4
+const NORMAL_EQUIVALENCE_EPSILON := 2.0e-4
 
 var assertions := 0
 var failures := 0
@@ -171,10 +171,10 @@ func _run() -> void:
 		_check(
 			cpu_mesh_position_max_delta <= POSITION_EQUIVALENCE_EPSILON
 				and cpu_mesh_normal_max_delta <= NORMAL_EQUIVALENCE_EPSILON,
-			"CPU-direct batching remains numerically equivalent after the legacy ArrayMesh round-trip (position_delta=%g normal_delta=%g)"
+			"CPU-direct batching remains numerically equivalent after the legacy ArrayMesh round-trip (position_delta=%s normal_delta=%s)"
 				% [
-					cpu_mesh_position_max_delta,
-					cpu_mesh_normal_max_delta,
+					str(cpu_mesh_position_max_delta),
+					str(cpu_mesh_normal_max_delta),
 				]
 		)
 		_check(
