@@ -406,7 +406,7 @@ func _queue_region_visual_preparation(
 				resolved_by_id.clear()
 			else:
 				var instance_id := String(base_instance.get("instance_id", ""))
-				resolved_by_id[instance_id] = resolved.duplicate(true)
+				resolved_by_id[instance_id] = resolved
 				if resolved.get("deleted", false):
 					continue
 				instance = resolved["instance"]
