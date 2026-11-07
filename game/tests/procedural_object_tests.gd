@@ -562,7 +562,14 @@ func _test_population_publication_queue(roots: Array[String]) -> void:
 	_check(manager.enqueue_region_publication(key, state_b, 11).get("ok", false), "current publication token is admitted after cancellation")
 	_check(manager.process_queued_publications() == 1 and manager.get_active_region_count() == 1 and manager.get_performance_snapshot().get("publications_last_process_tick", 0) == 1, "one explicit queue tick publishes at most one complete region batch")
 	var metrics: Dictionary = manager.get_performance_snapshot().get("last_region", {})
-	_check(metrics.get("batched_instance_count", 0) > 0 and metrics.get("individual_node_count", 0) == 2 and metrics.get("batch_vertex_count", 0) <= StaticBatch.MAX_BATCH_VERTICES, "unmodified population is batched while P2.0B compatibility objects remain individual and bounded")
+	_check(
+		int(metrics.get("batched_instance_count", 0))
+			== int(metrics.get("instance_count", 0))
+			and int(metrics.get("individual_node_count", 0)) == 0
+			and int(metrics.get("batch_vertex_count", 0))
+				<= StaticBatch.MAX_BATCH_VERTICES,
+		"all unmodified procedural compatibility and population objects share the bounded static batch"
+	)
 	var records := manager.get_region_instance_records(key)
 	var generic_id := ""
 	for instance in records:
@@ -719,8 +726,18 @@ func _test_runtime_streaming_and_unload_reload(roots: Array[String]) -> void:
 			generic_id = String(record["instance_id"])
 			break
 	if not generic_id.is_empty():
+		var batched_before_generic := int(
+			manager.get_performance_snapshot().get("batched_instance_count", 0)
+		)
 		var generic_override := manager.set_instance_component(generic_id, ObjectStateContract.COMPONENT_APPEARANCE, {"schema_version": 1, "properties": {"tint_milli": [800, 850, 900], "label": "reloaded-population"}})
-		_check(generic_override.get("ok", false) and int(manager.get_performance_snapshot().get("batched_instance_count", 0)) < baseline_instance_count - 2, "mutating one population instance promotes it out of the immutable static batch")
+		var batched_after_generic := int(
+			manager.get_performance_snapshot().get("batched_instance_count", 0)
+		)
+		_check(
+			generic_override.get("ok", false)
+				and batched_after_generic == batched_before_generic - 1,
+			"mutating one procedural population instance promotes exactly that representative out of the immutable static batch"
+		)
 	stateful_records = manager.get_region_instance_records(key)
 	var duplicate: Dictionary = manager.publish_region(key, state)
 	_check(duplicate.get("ok", false) and duplicate.get("reason") == "already_published" and manager.get_child_count() == 1, "repeated publication does not create duplicate region or object nodes")
