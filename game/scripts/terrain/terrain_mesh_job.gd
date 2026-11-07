@@ -5,7 +5,6 @@ const Mesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const LodMesher := preload("res://scripts/terrain/lod01_chunk_mesher.gd")
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
-const Spatial := preload("res://scripts/terrain/terrain_spatial_ownership.gd")
 
 var seed: int
 var region_key: Vector2i
