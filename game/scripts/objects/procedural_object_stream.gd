@@ -428,6 +428,13 @@ func _queue_region_visual_preparation(
 			continue
 		var instance_id := String(instance.get("instance_id", ""))
 		var prepared_cpu: Dictionary = cpu_by_instance.get(instance_id, {})
+		if (
+			not prepared_cpu.get("ok", false)
+			and _geometry_cpu_cache.has(cache_key)
+		):
+			prepared_cpu = _geometry_cpu_cache[cache_key]
+			_geometry_cpu_cache_order.erase(cache_key)
+			_geometry_cpu_cache_order.append(cache_key)
 		if prepared_cpu.get("ok", false):
 			cpu_by_cache_key[cache_key] = prepared_cpu
 			_remember_geometry_cpu(cache_key, prepared_cpu)
