@@ -81,27 +81,47 @@ func _valid_content_type_id(value: String) -> bool:
 
 
 func _package_content_records(package: Dictionary) -> Dictionary:
+	var records: Array[Dictionary] = []
+	var has_legacy_definition_view := package.has("definitions")
+	var has_legacy_population_view := package.has("population_rules")
+	var has_legacy_interaction_view := package.has("terrain_interactions")
 	if package.has("content_records"):
 		if not package["content_records"] is Array:
 			return _failure("invalid_content_record_collection")
-		var direct: Array[Dictionary] = []
 		for value in package["content_records"]:
 			if not value is Dictionary:
 				return _failure("invalid_content_record")
 			var direct_record: Dictionary = value
-			direct.append(direct_record.duplicate(true))
-		return {"ok": true, "records": direct}
-	var legacy: Array[Dictionary] = []
+			var content_type := String(direct_record.get("type", ""))
+			# Loader-produced packages expose compatibility views for the three
+			# pre-M4.0 families. Prefer those views when present so callers that
+			# intentionally amend a discovery fixture before registration retain
+			# their historical behavior. New/future types flow only here.
+			if content_type == ROCK_TYPE and has_legacy_definition_view:
+				continue
+			if content_type == POPULATION_RULE_TYPE and has_legacy_population_view:
+				continue
+			if content_type == TERRAIN_INTERACTION_RULE_TYPE and has_legacy_interaction_view:
+				continue
+			records.append(direct_record.duplicate(true))
 	for key in ["definitions", "population_rules", "terrain_interactions"]:
-		var values: Variant = package.get(key, [])
+		if not package.has(key):
+			continue
+		var values: Variant = package[key]
 		if not values is Array:
 			return _failure("invalid_content_record_collection")
 		for value in values:
 			if not value is Dictionary:
 				return _failure("invalid_content_record")
 			var legacy_record: Dictionary = value
-			legacy.append(legacy_record.duplicate(true))
-	return {"ok": true, "records": legacy}
+			records.append(legacy_record.duplicate(true))
+	if not package.has("content_records") and not (
+		has_legacy_definition_view
+		or has_legacy_population_view
+		or has_legacy_interaction_view
+	):
+		return _failure("invalid_content_record_collection")
+	return {"ok": true, "records": records}
 
 
 func _validate_common_content_identity(
