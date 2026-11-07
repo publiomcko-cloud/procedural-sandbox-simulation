@@ -149,6 +149,8 @@ func _run() -> void:
 
 	var cpu_batch: Dictionary = StaticBatch.build(reference_items_cpu)
 	var mesh_batch: Dictionary = StaticBatch.build(reference_items_mesh)
+	var cpu_mesh_position_max_delta := INF
+	var cpu_mesh_normal_max_delta := INF
 	_check(
 		cpu_batch.get("ok", false) and mesh_batch.get("ok", false),
 		"CPU-direct and legacy mesh-source static batches both build"
@@ -160,15 +162,20 @@ func _run() -> void:
 		var mesh_vertices: PackedVector3Array = mesh_arrays[Mesh.ARRAY_VERTEX]
 		var cpu_normals: PackedVector3Array = cpu_arrays[Mesh.ARRAY_NORMAL]
 		var mesh_normals: PackedVector3Array = mesh_arrays[Mesh.ARRAY_NORMAL]
-		var position_delta := _maximum_vector_delta(cpu_vertices, mesh_vertices)
-		var normal_delta := _maximum_vector_delta(cpu_normals, mesh_normals)
-		evidence["cpu_mesh_position_max_delta"] = position_delta
-		evidence["cpu_mesh_normal_max_delta"] = normal_delta
+		cpu_mesh_position_max_delta = _maximum_vector_delta(
+			cpu_vertices, mesh_vertices
+		)
+		cpu_mesh_normal_max_delta = _maximum_vector_delta(
+			cpu_normals, mesh_normals
+		)
 		_check(
-			position_delta <= POSITION_EQUIVALENCE_EPSILON
-				and normal_delta <= NORMAL_EQUIVALENCE_EPSILON,
+			cpu_mesh_position_max_delta <= POSITION_EQUIVALENCE_EPSILON
+				and cpu_mesh_normal_max_delta <= NORMAL_EQUIVALENCE_EPSILON,
 			"CPU-direct batching remains numerically equivalent after the legacy ArrayMesh round-trip (position_delta=%g normal_delta=%g)"
-				% [position_delta, normal_delta]
+				% [
+					cpu_mesh_position_max_delta,
+					cpu_mesh_normal_max_delta,
+				]
 		)
 		_check(
 			int(cpu_batch.get("cpu_source_count", 0))
@@ -263,6 +270,8 @@ func _run() -> void:
 		)
 
 	evidence = {
+		"cpu_mesh_position_max_delta": cpu_mesh_position_max_delta,
+		"cpu_mesh_normal_max_delta": cpu_mesh_normal_max_delta,
 		"instance_count": instances.size(),
 		"legacy_procedural_count": legacy_count,
 		"prewarm_variant_count": (
