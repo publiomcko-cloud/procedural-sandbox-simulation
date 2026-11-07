@@ -79,7 +79,7 @@ static func discover_and_validate(roots: Array[String], optional_roots: Array[St
 		if packages_by_id.has(mod_id):
 			diagnostics.append(_discovery_diagnostic(root_path, _relative_package_path(root_path, package_path), "duplicate_package_id", "duplicate_mod_id", "REJECTED"))
 			return _discovery_failure("duplicate_mod_id", diagnostics, packages_by_id.size(), ignored_optional_directory_count)
-		total_content_record_count += package["definitions"].size() + package["population_rules"].size() + package.get("terrain_interactions", []).size()
+		total_content_record_count += package.get("content_records", []).size()
 		if total_content_record_count > MAX_DEFINITIONS:
 			diagnostics.append(_discovery_diagnostic(root_path, _relative_package_path(root_path, package_path), "content_limit", "content_record_limit_exceeded", "REJECTED"))
 			return _discovery_failure("content_record_limit_exceeded", diagnostics, packages_by_id.size(), ignored_optional_directory_count)
@@ -223,6 +223,9 @@ static func _read_package(package_path: String) -> Dictionary:
 	var manifest_result := validate_manifest(manifest)
 	if not manifest_result.get("ok", false):
 		return manifest_result
+	var content_records: Array[Dictionary] = []
+	# Compatibility views are retained for existing callers/tests. The generic
+	# content_records collection is authoritative for registration in M4.0.
 	var definitions: Array[Dictionary] = []
 	var population_rules: Array[Dictionary] = []
 	var terrain_interactions: Array[Dictionary] = []
@@ -256,6 +259,10 @@ static func _read_package(package_path: String) -> Dictionary:
 						content_directory.list_dir_end()
 						return definition
 					var content_record: Dictionary = definition["value"]
+					content_records.append(content_record)
+					# Legacy typed views remain available, but discovery no longer
+					# decides which content types the engine supports. That authority
+					# belongs to registered ContentTypeHandlers in the registry.
 					match String(content_record.get("type", "")):
 						"procedural_rock":
 							definitions.append(content_record)
@@ -263,18 +270,27 @@ static func _read_package(package_path: String) -> Dictionary:
 							population_rules.append(content_record)
 						"terrain_interaction_rule":
 							terrain_interactions.append(content_record)
-						_:
-							content_directory.list_dir_end()
-							return _failure("unsupported_content_record_type")
-					if definitions.size() + population_rules.size() + terrain_interactions.size() > MAX_DEFINITIONS:
+					if content_records.size() > MAX_DEFINITIONS:
 						content_directory.list_dir_end()
 						return _failure("content_record_limit_exceeded")
 			entry = content_directory.get_next()
 		content_directory.list_dir_end()
+	content_records.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_key := "%s|%s" % [String(a.get("type", "")), String(a.get("id", ""))]
+		var b_key := "%s|%s" % [String(b.get("type", "")), String(b.get("id", ""))]
+		return a_key < b_key
+	)
 	definitions.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.get("id", "")) < str(b.get("id", "")))
 	population_rules.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.get("id", "")) < str(b.get("id", "")))
 	terrain_interactions.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.get("id", "")) < str(b.get("id", "")))
-	return {"ok": true, "package": {"path": package_path, "manifest": manifest, "definitions": definitions, "population_rules": population_rules, "terrain_interactions": terrain_interactions}}
+	return {"ok": true, "package": {
+		"path": package_path,
+		"manifest": manifest,
+		"content_records": content_records,
+		"definitions": definitions,
+		"population_rules": population_rules,
+		"terrain_interactions": terrain_interactions,
+	}}
 
 
 static func validate_manifest(manifest: Dictionary) -> Dictionary:
