@@ -410,14 +410,16 @@ func _queue_region_visual_preparation(
 				instance = resolved["instance"]
 
 		var cache_key := _geometry_cache_key(instance)
-		if cache_key.is_empty() or seen_keys.has(cache_key):
+		if cache_key.is_empty():
 			continue
-		seen_keys[cache_key] = true
 		var instance_id := String(instance.get("instance_id", ""))
 		var prepared_cpu: Dictionary = cpu_by_instance.get(instance_id, {})
 		if _is_static_batch_candidate(instance) and prepared_cpu.get("ok", false):
 			batch_cpu_bypass_variant_count += 1
 			continue
+		if seen_keys.has(cache_key):
+			continue
+		seen_keys[cache_key] = true
 		variants.append({
 			"cache_key": cache_key,
 			"instance": instance.duplicate(true),
@@ -691,7 +693,7 @@ func publish_region(
 		var base_instance_id := String(base_instance.get("instance_id", ""))
 		var resolved: Dictionary
 		if can_reuse_resolved and prepared_resolved_by_id.has(base_instance_id):
-			resolved = prepared_resolved_by_id[base_instance_id]
+			resolved = prepared_resolved_by_id[base_instance_id] as Dictionary
 			resolved_reuse_count += 1
 		else:
 			resolved = state_service.resolve_instance(base_instance)
