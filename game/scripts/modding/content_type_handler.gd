@@ -40,23 +40,28 @@ func is_valid() -> bool:
 func prepare(record: Dictionary, mod_id: String, context: Dictionary) -> Dictionary:
 	if not is_valid():
 		return {"ok": false, "reason": "content_type_handler_invalid"}
-	var validation: Variant = validator.call(record.duplicate(true), mod_id, context)
-	if typeof(validation) != TYPE_DICTIONARY:
+	var validation_value: Variant = validator.call(
+		record.duplicate(true), mod_id, context
+	)
+	if typeof(validation_value) != TYPE_DICTIONARY:
 		return {"ok": false, "reason": "content_type_handler_invalid_result"}
+	var validation: Dictionary = validation_value
 	if not validation.get("ok", false):
 		return validation
 	var normalized := record.duplicate(true)
 	if normalizer.is_valid():
-		var normalization: Variant = normalizer.call(
+		var normalization_value: Variant = normalizer.call(
 			record.duplicate(true), mod_id, context
 		)
-		if typeof(normalization) != TYPE_DICTIONARY:
+		if typeof(normalization_value) != TYPE_DICTIONARY:
 			return {"ok": false, "reason": "content_type_handler_invalid_normalization"}
+		var normalization: Dictionary = normalization_value
 		if not normalization.get("ok", false):
 			return normalization
 		if not normalization.get("record") is Dictionary:
 			return {"ok": false, "reason": "content_type_handler_invalid_normalization"}
-		normalized = (normalization["record"] as Dictionary).duplicate(true)
+		var normalized_record: Dictionary = normalization["record"]
+		normalized = normalized_record.duplicate(true)
 	return {"ok": true, "reason": "ok", "record": normalized}
 
 
