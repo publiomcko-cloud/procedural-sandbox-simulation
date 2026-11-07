@@ -891,9 +891,10 @@ func _schedule_terrain_effect_rebuild(source_region: Vector2i) -> void:
 		var region_id := _region_id(region)
 		if not active_regions.has(region_id):
 			continue
-		var coordinates: Array[Vector2i] = coordinates_by_region.get(
-			region_id, []
-		)
+		var coordinates: Array[Vector2i] = []
+		var stored_coordinates: Array = coordinates_by_region.get(region_id, [])
+		for stored_coordinate in stored_coordinates:
+			coordinates.append(Vector2i(stored_coordinate))
 		if not coordinates.has(coordinate):
 			coordinates.append(coordinate)
 		coordinates_by_region[region_id] = coordinates
@@ -906,7 +907,10 @@ func _schedule_terrain_effect_rebuild(source_region: Vector2i) -> void:
 	region_ids.sort()
 	for region_id in region_ids:
 		var entry: Dictionary = active_regions[region_id]
-		var coordinates: Array[Vector2i] = coordinates_by_region[region_id]
+		var coordinates: Array[Vector2i] = []
+		var stored_coordinates: Array = coordinates_by_region[region_id]
+		for stored_coordinate in stored_coordinates:
+			coordinates.append(Vector2i(stored_coordinate))
 		coordinates.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
 			return a.y < b.y or (a.y == b.y and a.x < b.x)
 		)
