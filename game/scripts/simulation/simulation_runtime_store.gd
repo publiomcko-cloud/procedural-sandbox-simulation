@@ -59,7 +59,7 @@ func save_snapshot(
 
 	# Godot Variant serialization preserves integer/float/vector distinctions that
 	# JSON cannot preserve. The authoritative snapshot is already canonicalized.
-	var payload_bytes: PackedByteArray = var_to_bytes(runtime_snapshot, false)
+	var payload_bytes: PackedByteArray = var_to_bytes(runtime_snapshot)
 	if payload_bytes.is_empty() or payload_bytes.size() > MAX_PAYLOAD_BYTES:
 		return _failure("simulation_store_payload_size_invalid")
 	var payload_sha := _sha256(payload_bytes)
@@ -269,7 +269,7 @@ func _decode_document(bytes: PackedByteArray) -> Dictionary:
 	var payload_sha := _sha256(payload_bytes)
 	if payload_sha != String(document["payload_sha256"]):
 		return _failure("simulation_store_hash_mismatch")
-	var value: Variant = bytes_to_var(payload_bytes, false)
+	var value: Variant = bytes_to_var(payload_bytes)
 	if typeof(value) != TYPE_DICTIONARY:
 		return _failure("simulation_store_payload_variant_invalid")
 	var snapshot: Dictionary = value
