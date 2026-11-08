@@ -129,13 +129,17 @@ func notify_region_published(
 	elif not already_resident:
 		_revisits_total += 1
 
-	var next_tick := int(runtime.get_scheduler_snapshot().get("current_tick", 0)) + 1
-	var resident_record := {
-		"scope_id": scope_id,
-		"region_key": region_key,
-		"next_tick": next_tick,
-	}
-	_resident[scope_id] = resident_record
+	if not already_resident:
+		var next_tick := int(runtime.get_scheduler_snapshot().get("current_tick", 0)) + 1
+		_resident[scope_id] = {
+			"scope_id": scope_id,
+			"region_key": region_key,
+			"next_tick": next_tick,
+		}
+	else:
+		var resident_record: Dictionary = _resident[scope_id]
+		resident_record["region_key"] = region_key
+		_resident[scope_id] = resident_record
 	_peak_resident_scopes = maxi(_peak_resident_scopes, _resident.size())
 
 	var observation := _submit_observation(runtime, scope_id, region_key)
