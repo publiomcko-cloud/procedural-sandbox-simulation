@@ -4,22 +4,7 @@ on:
   push:
     branches:
       - feat/issue-108-phase-c-effect-projection-recovery
-  pull_request:
-    branches:
-      - feat/issue-108-phase-b-pure-effect
-      - exp/issue-108-phase-a-grounding-characterization
-      - main
-    paths:
-      - 'game/scripts/terrain/terrain_object_effect_projection_contract.gd'
-      - 'game/scripts/terrain/terrain_object_effect_projection_store.gd'
-      - 'game/scripts/terrain/terrain_object_effect_projection_service.gd'
-      - 'game/tests/issue108_phase_c_projection_recovery_tests.gd'
-      - 'game/scripts/terrain/terrain_object_effect*.gd'
-      - 'game/scripts/objects/procedural_rock_shape_descriptor.gd'
-      - 'game/scripts/objects/procedural_rock_mesh_adapter.gd'
-      - 'docs/experiments/ISSUE-108-PHASE-C/**'
-      - '.github/workflows/issue-108-phase-c.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 
