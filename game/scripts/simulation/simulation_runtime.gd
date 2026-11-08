@@ -9,8 +9,8 @@ class_name SimulationRuntime
 const SchedulerScript := preload("res://scripts/simulation/fixed_tick_scheduler.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
-const DEFAULT_TICK_USEC := FixedTickScheduler.DEFAULT_TICK_USEC
-const DEFAULT_MAX_TICKS_PER_FRAME := FixedTickScheduler.DEFAULT_MAX_TICKS_PER_FRAME
+const DEFAULT_TICK_USEC := SchedulerScript.DEFAULT_TICK_USEC
+const DEFAULT_MAX_TICKS_PER_FRAME := SchedulerScript.DEFAULT_MAX_TICKS_PER_FRAME
 
 var scheduler: FixedTickScheduler
 var initialized := false
@@ -77,8 +77,11 @@ func process_delta_seconds(delta: float) -> Dictionary:
 
 	var total_usec: float = delta * 1_000_000.0 + _fractional_usec
 	var elapsed_usec: int = floori(total_usec)
-	_fractional_usec = total_usec - float(elapsed_usec)
-	return process_elapsed_usec(elapsed_usec)
+	var next_fractional_usec: float = total_usec - float(elapsed_usec)
+	var result: Dictionary = process_elapsed_usec(elapsed_usec)
+	if result.get("ok", false):
+		_fractional_usec = next_fractional_usec
+	return result
 
 
 func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
