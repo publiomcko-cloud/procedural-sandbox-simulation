@@ -129,9 +129,6 @@ func initialize_runtime(
 	scheduler = next_scheduler
 	tier_state = next_tier_state
 	tier_router = next_tier_router
-	if material_bridge != null:
-		material_bridge.reset_after_restore()
-	material_bridge = null
 	_fractional_usec = 0.0
 	_last_result = {}
 	initialization_error = ""
@@ -477,6 +474,9 @@ func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
 			)
 			return router_result
 
+	if material_bridge != null:
+		material_bridge.reset_after_restore()
+	material_bridge = null
 	scheduler = next_scheduler
 	tier_state = next_tier_state
 	tier_router = next_tier_router
@@ -649,6 +649,9 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 			"reason": "simulation_runtime_snapshot_router_invalid",
 		}
 
+	if material_bridge != null:
+		material_bridge.reset_after_restore()
+	material_bridge = null
 	scheduler = next_scheduler
 	tier_state = next_tier_state
 	tier_router = next_tier_router
