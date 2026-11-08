@@ -1,3 +1,13 @@
+# Current project status — P4.0C integrated (2026-11-08)
+
+## Authoritative post-merge update
+
+P4.0C is **INTEGRATED** into `main` through [PR #267](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/267). Merge commit: `e5370cb78d7685ea6439c78e6d753c2c975fb4cb`. The qualification evidence remains the final PR-head successful self-hosted workflow `42500732123` (P4.0C 110/110) and Starter checks `42500732074`. The accepted procedural-object historical failure envelope remains unchanged. Issue #266 is complete. See [integration receipt](../checkpoints/2026-11-08-P4-0C-INTEGRATION.md).
+
+M4.0 and P4.0A/P4.0B/P4.0C infrastructure are integrated. The next development slice is the first mod-first material/environment state domain; visual/interactive testing is required when observable gameplay first changes. No separate P4.0C visual gate is required. The sections below retain historical pre-merge qualification context.
+
+---
+
 # Current project status — P4.0C qualified; integration pending (2026-11-08)
 
 ## Authoritative 2026-11-08 update
