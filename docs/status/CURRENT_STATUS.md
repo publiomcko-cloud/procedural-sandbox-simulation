@@ -1,21 +1,24 @@
-# Current project status — M4.0 qualified; integration pending (2026-11-08)
+# Current project status — P4.0A qualified; integration pending (2026-11-08)
 
 ## Authoritative 2026-11-08 update
 
-M4.0 — mod-first content-core generalization — is **QUALIFIED / READY_FOR_INTEGRATION** on PR #256.
+M4.0 is integrated into `main` through PR #256 at merge commit `ca13d91a4917e8061528736e5b6d808dc9b85576`.
+
+P4.0A — fixed-tick scheduler foundation — is **QUALIFIED / READY_FOR_INTEGRATION** on PR #258.
 
 Qualified runtime source:
 
-- branch: `feat/m4-0-mod-first-content-core`;
-- source HEAD: `a7faa6f10421ec2e0acffb9bfcc4efe201901b6d`;
-- base main/docs state: `bda2968d914ff899f2dbb5407808b0cbeeb7ed14`;
+- branch: `feat/p4-0a-fixed-tick-scheduler`;
+- source HEAD: `f9318644da1458a8b7633f3bd3a0fd81c51288f5`;
+- issue: #257;
 - Godot: `4.7.2.stable.official.ed1daf0bf`.
 
-M4.0 now provides type-agnostic declarative discovery, engine-owned extensible content handlers, generic typed content storage, uniform canonical SHA-256 fingerprints, compatibility views for existing P2/P3 APIs and an engine-handler bootstrap on the same first-party + `user://mods` runtime registry.
+P4.0A provides an engine-owned deterministic scheduler core and playable runtime adapter with integer-microsecond fixed cadence, bounded per-frame admission, scalar deferred catch-up backlog, hard backlog bound, pause/resume, bounded manual step, exact snapshot/restore and opt-in scheduler `PERF_TRACE` telemetry.
 
 Owner-local qualification passed:
 
-- focused M4.0: 31/31;
+- P4.0A focused: 74/74;
+- M4.0 focused: 31/31;
 - declarative mods: 79/79;
 - entity commands: 67/67;
 - Issue #108 D8: 34/34;
@@ -24,24 +27,22 @@ Owner-local qualification passed:
 - terrain SDF: 46/46;
 - LOD0/1 transition: 6474/6474;
 - bootstrap structure: 18/18;
-- main-scene startup exit: 0;
-- canonical translated validation: PASS.
+- main-scene startup exit: 0.
 
 The procedural-object suite preserved the exact accepted historical baseline: 671 assertions / 1 known camera-revisit failure / 9 same-revision fingerprint conflicts / 0 `SCRIPT ERROR`.
 
-Hosted GitHub Actions remain non-authoritative for this branch because observed jobs failed before step allocation/execution.
+Hosted GitHub Actions remain non-authoritative because observed jobs failed before step allocation/execution.
 
-Issue #108 remains **COMPLETE / CLOSED**. M4.0 changes no gameplay semantics, save schema, terrain/object effect semantics, streaming/LOD authority or script policy.
-
-Accepted architecture:
+Architecture remains governed by:
 
 - [ADR-0007 — Generalize the mod-first content core before P4](../decisions/ADR-0007-MOD-FIRST-CONTENT-CORE-BEFORE-P4.md);
 - [ADR-0008 — Main-thread budget, derived-work isolation and performance observability](../decisions/ADR-0008-MAIN-THREAD-BUDGET-AND-PERFORMANCE-OBSERVABILITY.md);
-- [M4.0 final qualification checkpoint](../checkpoints/2026-11-08-M4-0-QUALIFICATION.md).
+- [P4.0A fixed-tick specification](../specs/P4-0A-FIXED-TICK-SCHEDULER.md);
+- [P4.0A final qualification checkpoint](../checkpoints/2026-11-08-P4-0A-QUALIFICATION.md).
 
-**Integration state:** PR #256 is ready; merge still requires explicit owner authorization.
+**Integration state:** PR #258 is ready; merge still requires explicit owner authorization.
 
-**Next development slice after integration:** P4.0A fixed-tick scheduler foundation. P4 has not started.
+**Next development slice after integration:** bounded P4 simulation tier/state framework. Active/aggregate/dormant tier semantics remain not started.
 
 
 ---

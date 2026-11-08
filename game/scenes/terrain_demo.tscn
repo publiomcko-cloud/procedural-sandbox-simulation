@@ -1,7 +1,8 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/terrain/terrain_demo.gd" id="1_demo"]
 [ext_resource type="Script" path="res://scripts/objects/procedural_object_stream.gd" id="2_objects"]
+[ext_resource type="Script" path="res://scripts/simulation/simulation_runtime.gd" id="3_simulation"]
 
 [sub_resource type="StandardMaterial3D" id="TerrainMaterial"]
 albedo_color = Color(0.28, 0.42, 0.22, 1)
@@ -23,6 +24,9 @@ script = ExtResource("1_demo")
 
 [node name="ProceduralObjects" type="Node3D" parent="."]
 script = ExtResource("2_objects")
+
+[node name="SimulationRuntime" type="Node" parent="."]
+script = ExtResource("3_simulation")
 
 [node name="Terrain" type="MeshInstance3D" parent="TerrainChunks"]
 material_override = SubResource("TerrainMaterial")

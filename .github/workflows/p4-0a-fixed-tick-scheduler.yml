@@ -1,0 +1,150 @@
+name: P4.0A fixed tick scheduler
+
+on:
+  push:
+    branches:
+      - feat/p4-0a-fixed-tick-scheduler
+  pull_request:
+    paths:
+      - 'game/scripts/simulation/**'
+      - 'game/scenes/terrain_demo.tscn'
+      - 'game/tests/p4_0a_fixed_tick_scheduler_tests.gd'
+      - 'game/tests/m4_0_mod_first_core_tests.gd'
+      - 'game/tests/declarative_mod_tests.gd'
+      - 'game/tests/entity_command_tests.gd'
+      - 'game/tests/issue108_d8_lod1_terrain_effect_tests.gd'
+      - 'game/tests/p3_0d_entity_placement_tests.gd'
+      - 'game/tests/procedural_object_tests.gd'
+      - 'docs/specs/P4-0A-FIXED-TICK-SCHEDULER.md'
+      - '.github/workflows/p4-0a-fixed-tick-scheduler.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          chmod +x /tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --version
+
+      - name: Import and parser gate
+        shell: bash
+        run: |
+          set -o pipefail
+          /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path game --import 2>&1 | tee /tmp/import.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/import.log
+
+      - name: P4.0A focused qualification
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 300s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/p4_0a_fixed_tick_scheduler_tests.gd 2>&1 | tee /tmp/p4-0a.log
+          grep -q 'P4_0A_FIXED_TICK_PASS' /tmp/p4-0a.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/p4-0a.log
+          ! grep -q 'ERROR: FAIL:' /tmp/p4-0a.log
+
+      - name: M4.0 focused regression
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 300s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/m4_0_mod_first_core_tests.gd 2>&1 | tee /tmp/m4.log
+          grep -q 'M4_0_MOD_FIRST_CORE_PASS' /tmp/m4.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/m4.log
+          ! grep -q 'ERROR: FAIL:' /tmp/m4.log
+
+      - name: Declarative mod regression
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 300s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/declarative_mod_tests.gd 2>&1 | tee /tmp/declarative.log
+          grep -q 'DECLARATIVE_MOD_PASS' /tmp/declarative.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/declarative.log
+          ! grep -q 'ERROR: FAIL:' /tmp/declarative.log
+
+      - name: Entity command regression
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 300s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/entity_command_tests.gd 2>&1 | tee /tmp/entity.log
+          grep -q 'ENTITY_COMMAND_PASS' /tmp/entity.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/entity.log
+          ! grep -q 'ERROR: FAIL:' /tmp/entity.log
+
+      - name: D8 terrain-object regression
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 300s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/issue108_d8_lod1_terrain_effect_tests.gd 2>&1 | tee /tmp/d8.log
+          grep -q 'ISSUE108_D8_LOD1_EFFECT_PASS' /tmp/d8.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/d8.log
+          ! grep -q 'ERROR: FAIL:' /tmp/d8.log
+
+      - name: Placement regression
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 600s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/p3_0d_entity_placement_tests.gd 2>&1 | tee /tmp/placement.log
+          grep -q 'P3_0D_PLACEMENT_PASS' /tmp/placement.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/placement.log
+          ! grep -q 'ERROR: FAIL:' /tmp/placement.log
+
+      - name: Procedural object exact known baseline
+        shell: bash
+        run: |
+          set -o pipefail
+          set +e
+          timeout --signal=TERM 600s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --script res://tests/procedural_object_tests.gd 2>&1 | tee /tmp/procedural.log
+          test_status=${PIPESTATUS[0]}
+          set -e
+          ! grep -q 'SCRIPT ERROR:' /tmp/procedural.log
+          if grep -q 'PROCEDURAL_OBJECT_PASS' /tmp/procedural.log; then
+            test "$test_status" -eq 0
+          else
+            test "$test_status" -ne 0
+            grep -q 'PROCEDURAL_OBJECT_FAIL: assertions=671 failures=1' /tmp/procedural.log
+            grep -q 'ERROR: FAIL: camera-driven revisit republishes the original region' /tmp/procedural.log
+            test "$(grep -c 'effect_projection_same_revision_fingerprint_conflict' /tmp/procedural.log)" -eq 9
+            test "$(grep -c 'ERROR: FAIL:' /tmp/procedural.log)" -eq 1
+          fi
+
+      - name: Canonical validation
+        shell: bash
+        run: |
+          set -o pipefail
+          GODOT_BIN=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64 bash scripts/validate.sh 2>&1 | tee /tmp/validate.log
+          grep -q 'VALIDATION_PASS' /tmp/validate.log
+
+      - name: Main scene startup
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout --signal=TERM 60s /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path game --quit-after 2 2>&1 | tee /tmp/startup.log
+          ! grep -q 'SCRIPT ERROR:' /tmp/startup.log
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p4-0a-fixed-tick-evidence
+          path: |
+            /tmp/import.log
+            /tmp/p4-0a.log
+            /tmp/m4.log
+            /tmp/declarative.log
+            /tmp/entity.log
+            /tmp/d8.log
+            /tmp/placement.log
+            /tmp/procedural.log
+            /tmp/validate.log
+            /tmp/startup.log

@@ -6,6 +6,8 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-11-08 | [P4.0A final qualification](2026-11-08-P4-0A-QUALIFICATION.md) | Deterministic fixed-tick scheduler, bounded catch-up, pause/step, snapshot/restore and playable runtime qualified; exact historical regression envelope preserved | PR #258 ready for integration; explicit owner merge authorization pending; tier/state framework next after merge |
+| 2026-11-08 | [P4.0A fixed-tick scheduler implementation](2026-11-08-P4-0A-FIXED-TICK-IMPLEMENTATION.md) | Engine-owned deterministic tick clock, bounded catch-up, pause/step, scheduler snapshot and playable SimulationRuntime implemented | Issue #257 on `feat/p4-0a-fixed-tick-scheduler`; qualification pending; later P4 tiers not started |
 | 2026-11-08 | [M4.0 final qualification](2026-11-08-M4-0-QUALIFICATION.md) | M4.0 type-agnostic discovery, engine-owned handlers, canonical fingerprints and shared runtime bootstrap qualified; exact legacy regression envelope preserved | PR #256 ready for integration; explicit owner merge authorization pending; P4.0A next after merge |
 | 2026-11-07 | [M4.0 mod-first content-core implementation](2026-11-07-M4-0-IMPLEMENTATION.md) | Type-agnostic discovery, engine-owned handlers, generic content storage/fingerprints and compatibility layer implemented; qualification pending | Draft PR #256 on `feat/m4-0-mod-first-content-core`; P4 not started |
 | 2026-11-07 | [Issue #108 closure and M4.0 architecture handoff](2026-11-07-ISSUE108-CLOSURE-M4-0-HANDOFF.md) | Owner closes #108 after D.8; accepts ADR-0007 mod-first pre-P4 gate and ADR-0008 performance architecture; M4.0 is next authorized slice | Main functional baseline `5a69a2e`; documentation decision branch |
