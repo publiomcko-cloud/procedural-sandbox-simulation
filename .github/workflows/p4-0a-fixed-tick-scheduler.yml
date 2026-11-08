@@ -1,22 +1,6 @@
 name: P4.0A fixed tick scheduler
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'game/scripts/simulation/**'
-      - 'game/scenes/terrain_demo.tscn'
-      - 'game/tests/p4_0a_fixed_tick_scheduler_tests.gd'
-      - 'game/tests/m4_0_mod_first_core_tests.gd'
-      - 'game/tests/declarative_mod_tests.gd'
-      - 'game/tests/entity_command_tests.gd'
-      - 'game/tests/issue108_d8_lod1_terrain_effect_tests.gd'
-      - 'game/tests/p3_0d_entity_placement_tests.gd'
-      - 'game/tests/procedural_object_tests.gd'
-      - 'scripts/ci/run-p4-0a-qualification.ps1'
-      - 'docs/specs/P4-0A-FIXED-TICK-SCHEDULER.md'
-      - '.github/workflows/p4-0a-fixed-tick-scheduler.yml'
   workflow_dispatch:
 
 concurrency:
