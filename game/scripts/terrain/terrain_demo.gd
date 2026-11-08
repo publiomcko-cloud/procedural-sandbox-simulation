@@ -102,6 +102,7 @@ var _simulation_persistence_status := "Simulation state not loaded"
 var _simulation_persistence_blocked := false
 var _simulation_store: SimulationRuntimeStore
 var _simulation_storage_generation := 0
+var _pending_simulation_save_terrain_generation := -1
 var _selected_object_index := 0
 var _selected_object_id := ""
 var _object_state_action_status := "Entities: Ctrl+click select; M twice migrates entity save; B place; F6 cycle; F7 edit; F8 delete; F9 restore"
