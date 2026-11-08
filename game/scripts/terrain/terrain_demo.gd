@@ -421,6 +421,10 @@ func _save_simulation_state(terrain_generation: int) -> bool:
 	if not is_instance_valid(simulation_runtime) or not simulation_runtime.initialized:
 		_simulation_persistence_status = "Simulation save unavailable"
 		return false
+	var preflight: Dictionary = simulation_runtime.get_persistence_preflight()
+	if not preflight.get("ok", false):
+		_simulation_persistence_status = "Simulation snapshot deferred (%s)" % preflight.get("reason", "work_pending")
+		return false
 	var content_validation: Dictionary = simulation_runtime.validate_material_state_content(
 		object_stream.registry
 	)
@@ -446,6 +450,24 @@ func _save_simulation_state(terrain_generation: int) -> bool:
 		% [_simulation_storage_generation, terrain_generation]
 	)
 	return true
+
+
+func _queue_simulation_save(terrain_generation: int) -> void:
+	_pending_simulation_save_terrain_generation = maxi(0, terrain_generation)
+	_simulation_persistence_status = (
+		"Simulation snapshot pending for terrain generation %d"
+		% _pending_simulation_save_terrain_generation
+	)
+
+
+func _process_pending_simulation_save() -> void:
+	if _pending_simulation_save_terrain_generation < 0:
+		return
+	if _simulation_persistence_blocked:
+		return
+	var terrain_generation := _pending_simulation_save_terrain_generation
+	if _save_simulation_state(terrain_generation):
+		_pending_simulation_save_terrain_generation = -1
 
 
 func _apply_pending_simulation_candidate(pending: Dictionary) -> bool:
@@ -564,6 +586,7 @@ func _exit_tree() -> void:
 
 func _process(delta: float) -> void:
 	var process_started_usec := Time.get_ticks_usec()
+	_process_pending_simulation_save()
 	_mesh_uploads_this_frame = 0
 	_mesh_dispatches_this_frame = 0
 	_last_frame_ms = maxf(delta * 1000.0, 0.0)
