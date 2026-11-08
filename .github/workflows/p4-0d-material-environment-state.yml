@@ -11,10 +11,10 @@ on:
       - 'game/scripts/simulation/simulation_runtime.gd'
       - 'game/tests/p4_0c_simulation_tier_router_tests.gd'
       - 'game/tests/p4_0b_simulation_tier_tests.gd'
-      - 'scripts/ci/run-p4-0d-qualification.ps1'
+      - 'scripts/ci/run-p4-0c-qualification.ps1'
       - 'scripts/ci/run-p4-0b-qualification.ps1'
       - 'docs/specs/P4-0D-MATERIAL-ENVIRONMENT-STATE.md'
-      - '.github/workflows/p4-0d-tier-routing-policy.yml'
+      - '.github/workflows/p4-0d-material-environment-state.yml'
   workflow_dispatch:
 
 concurrency:
