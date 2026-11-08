@@ -106,7 +106,7 @@ func _test_mod_first_discovery_and_pin() -> void:
 	_check(registry.register_engine_content_type_handler(domain.create_content_handler()).get("ok", false), "material handler registers before package commit")
 	if discovered.get("ok", false):
 		var registered: Dictionary = registry.register_discovered(discovered)
-		_check(registered.get("ok", false), "data-only material record registers with generic registry")
+		_check(registered.get("ok", false), "data-only material record registers with generic registry: %s" % String(registered.get("reason", "missing_reason")))
 		if registered.get("ok", false):
 			var record: Dictionary = registry.get_content_record(Domain.PROFILE_TYPE, profile["id"])
 			var pin_result: Dictionary = registry.pin_content_record(Domain.PROFILE_TYPE, profile["id"])
