@@ -25,7 +25,7 @@ const STATE_FIELDS := [
 ]
 
 
-func create_content_handler() -> ContentTypeHandler:
+func create_content_handler() -> RefCounted:
 	return HandlerScript.new(
 		PROFILE_TYPE, 40, Callable(self, "validate_profile"),
 		"duplicate_material_environment_profile", MAX_PROFILES,
@@ -64,7 +64,7 @@ func normalize_profile(record: Dictionary, mod_id: String, context: Dictionary) 
 	return {"ok": true, "reason": "ok", "record": normalized}
 
 
-func bind_registry_profile(registry: ContentDefinitionRegistry, profile_id: String) -> Dictionary:
+func bind_registry_profile(registry: RefCounted, profile_id: String) -> Dictionary:
 	# Cold-path only: revalidate M4.0 identity/fingerprint once per profile.
 	if registry == null:
 		return {"ok": false, "reason": "material_registry_unavailable"}
@@ -140,7 +140,7 @@ func validate_persisted_state_payload(material: Dictionary) -> Dictionary:
 
 
 func validate_persisted_state_binding(
-	registry: ContentDefinitionRegistry, material: Dictionary
+	registry: RefCounted, material: Dictionary
 ) -> Dictionary:
 	if registry == null:
 		return {"ok": false, "reason": "material_registry_unavailable"}
@@ -177,7 +177,7 @@ func validate_persisted_state_binding(
 
 
 func initialize_bound_scope_state(
-	tier_state: SimulationTierState, scope_id: String,
+	tier_state: RefCounted, scope_id: String,
 	profile_id: String, initial_temperature_milli_c: int
 ) -> Dictionary:
 	if not _bound_profiles.has(profile_id):
@@ -190,7 +190,7 @@ func initialize_bound_scope_state(
 
 
 func process_bound_due_scope(
-	tier_state: SimulationTierState, scope_id: String,
+	tier_state: RefCounted, scope_id: String,
 	profile_id: String, logical_tick: int
 ) -> Dictionary:
 	if not _bound_profiles.has(profile_id):
@@ -213,7 +213,7 @@ func _integer_like(value: Variant) -> bool:
 
 
 func initialize_scope_state(
-	tier_state: SimulationTierState,
+	tier_state: RefCounted,
 	scope_id: String,
 	profile: Dictionary,
 	profile_fingerprint: Dictionary,
@@ -228,7 +228,7 @@ func initialize_scope_state(
 
 
 func _initialize_verified_scope_state(
-	tier_state: SimulationTierState, scope_id: String,
+	tier_state: RefCounted, scope_id: String,
 	profile: Dictionary, profile_fingerprint: Dictionary,
 	initial_temperature_milli_c: int
 ) -> Dictionary:
@@ -252,7 +252,7 @@ func _initialize_verified_scope_state(
 
 
 func process_due_scope(
-	tier_state: SimulationTierState,
+	tier_state: RefCounted,
 	scope_id: String,
 	profile: Dictionary,
 	profile_fingerprint: Dictionary,
@@ -267,7 +267,7 @@ func process_due_scope(
 
 
 func _process_verified_due_scope(
-	tier_state: SimulationTierState, scope_id: String,
+	tier_state: RefCounted, scope_id: String,
 	profile: Dictionary, profile_fingerprint: Dictionary,
 	logical_tick: int
 ) -> Dictionary:
