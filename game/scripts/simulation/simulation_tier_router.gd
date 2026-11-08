@@ -240,7 +240,7 @@ func process_pending(
 		selected_scope_ids.append(selected_scope_id)
 
 	for scope_id in selected_scope_ids:
-		var popped_scope_id := _pending_scope_ids.pop_front()
+		var popped_scope_id: String = _pending_scope_ids.pop_front()
 		if popped_scope_id != scope_id:
 			return {
 				"ok": false,
