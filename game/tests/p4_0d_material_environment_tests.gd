@@ -3,6 +3,7 @@ extends SceneTree
 const Domain := preload("res://scripts/simulation/material_environment_domain.gd")
 const TierState := preload("res://scripts/simulation/simulation_tier_state.gd")
 const Registry := preload("res://scripts/modding/content_definition_registry.gd")
+const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 
 var assertions := 0
 var failures := 0
@@ -10,6 +11,7 @@ var failures := 0
 
 func _initialize() -> void:
 	_test_profile_and_state()
+	_test_mod_first_discovery_and_pin()
 	if failures == 0:
 		print("P4_0D_MATERIAL_PASS: assertions=%d failures=0" % assertions)
 	else:
@@ -70,6 +72,68 @@ func _test_profile_and_state() -> void:
 	_check(not domain.process_due_scope(restored, "cell.a", profile, tampered, 3).get("ok", false), "malformed pin rejected")
 	_check(int(restored.get_scope("cell.a")["state_revision"]) == 3, "failed bind cannot mutate authoritative state")
 
+
+
+func _test_mod_first_discovery_and_pin() -> void:
+	var root := "user://mods/p4_0d_test_%d" % Time.get_ticks_usec()
+	var package_path := root.path_join("material_package")
+	var profile_path := package_path.path_join("profiles")
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(profile_path))
+	var manifest := {
+		"id": "sample.p4",
+		"version": "1.0.0",
+		"schema_version": 1,
+		"requires_engine": "4.7.2",
+		"dependencies": [],
+		"content_roots": ["profiles/"],
+		"script_policy": "data_only",
+	}
+	var profile := {
+		"schema_version": 1,
+		"type": Domain.PROFILE_TYPE,
+		"id": "sample.p4:granite",
+		"ambient_temperature_milli_c": 15000,
+		"relaxation_milli_per_due_step": 250,
+	}
+	var manifest_path := package_path.path_join("manifest.json")
+	var record_path := profile_path.path_join("granite.json")
+	_write_json(manifest_path, manifest)
+	_write_json(record_path, profile)
+	var discovered: Dictionary = Loader.discover_and_validate([root])
+	_check(discovered.get("ok", false), "material profile loads through unmodified M4.0 discovery")
+	var domain: MaterialEnvironmentDomain = Domain.new()
+	var registry: ContentDefinitionRegistry = Registry.new()
+	_check(registry.register_engine_content_type_handler(domain.create_content_handler()).get("ok", false), "material handler registers before package commit")
+	if discovered.get("ok", false):
+		var registered: Dictionary = registry.register_discovered(discovered)
+		_check(registered.get("ok", false), "data-only material record registers with generic registry")
+		if registered.get("ok", false):
+			var record: Dictionary = registry.get_content_record(Domain.PROFILE_TYPE, profile["id"])
+			var pin_result: Dictionary = registry.pin_content_record(Domain.PROFILE_TYPE, profile["id"])
+			_check(record == profile, "registered material record roundtrips exactly")
+			_check(pin_result.get("ok", false), "M4.0 provides material profile fingerprint")
+			if pin_result.get("ok", false):
+				var pin: Dictionary = pin_result["fingerprint"]
+				_check(registry.validate_content_fingerprint(pin).get("ok", false), "profile pin validates in M4.0")
+				var tiers: SimulationTierState = TierState.new()
+				tiers.initialize()
+				tiers.register_scope("material.area", "active")
+				_check(domain.initialize_scope_state(tiers, "material.area", record, pin, 0).get("ok", false), "M4.0-pin-backed material scope initializes")
+				var drift: Dictionary = record.duplicate(true)
+				drift["ambient_temperature_milli_c"] = 16000
+				_check(domain.process_due_scope(tiers, "material.area", drift, pin, 1).get("reason", "") == "material_profile_pin_conflict", "same-version content drift is rejected before state mutation")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(record_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(manifest_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(profile_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(package_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(root))
+
+
+func _write_json(path: String, data: Dictionary) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file != null:
+		file.store_string(JSON.stringify(data))
+		file.close()
 
 func _pin(profile: Dictionary) -> Dictionary:
 	var context := HashingContext.new()
