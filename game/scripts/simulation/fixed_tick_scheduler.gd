@@ -214,9 +214,19 @@ func restore_snapshot(snapshot: Dictionary) -> Dictionary:
 func validate_snapshot(snapshot: Dictionary) -> Dictionary:
 	if not _has_exact_keys(snapshot, SNAPSHOT_KEYS):
 		return _failure("scheduler_snapshot_fields_invalid")
-	if not _is_int(snapshot.get("schema_version")) 		or int(snapshot["schema_version"]) != SNAPSHOT_SCHEMA_VERSION:
+	if (
+		not _is_int(snapshot.get("schema_version"))
+		or int(snapshot["schema_version"]) != SNAPSHOT_SCHEMA_VERSION
+	):
 		return _failure("scheduler_snapshot_schema_unsupported")
-	if not _is_int(snapshot.get("tick_usec")) 		or not _is_int(snapshot.get("max_ticks_per_frame")) 		or not _is_int(snapshot.get("current_tick")) 		or not _is_int(snapshot.get("accumulator_usec")) 		or not _is_int(snapshot.get("backlog_ticks")) 		or not _is_int(snapshot.get("manual_step_ticks")):
+	if (
+		not _is_int(snapshot.get("tick_usec"))
+		or not _is_int(snapshot.get("max_ticks_per_frame"))
+		or not _is_int(snapshot.get("current_tick"))
+		or not _is_int(snapshot.get("accumulator_usec"))
+		or not _is_int(snapshot.get("backlog_ticks"))
+		or not _is_int(snapshot.get("manual_step_ticks"))
+	):
 		return _failure("scheduler_snapshot_integer_invalid")
 	if typeof(snapshot.get("paused")) != TYPE_BOOL:
 		return _failure("scheduler_snapshot_pause_invalid")
