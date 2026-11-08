@@ -127,6 +127,16 @@ func _test_exact_fixed_tick_cadence() -> void:
 		"single-call elapsed input is explicitly bounded and atomic on rejection"
 	)
 
+	var backlog_guard: FixedTickScheduler = _new_scheduler(1, 1)
+	var backlog_guard_prior: Dictionary = backlog_guard.get_authoritative_snapshot()
+	_check(
+		backlog_guard.process_elapsed_usec(
+			FixedTickScheduler.MAX_BACKLOG_TICKS_HARD + 1
+		).get("reason", "") == "backlog_limit_exceeded"
+			and backlog_guard.get_authoritative_snapshot() == backlog_guard_prior,
+		"deferred backlog has a hard scalar bound and overflow rejection is atomic"
+	)
+
 
 func _test_bounded_catchup_and_frame_slicing_equivalence() -> void:
 	var sliced: FixedTickScheduler = _new_scheduler(1000, 4)
