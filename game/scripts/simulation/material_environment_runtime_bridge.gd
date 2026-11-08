@@ -6,28 +6,29 @@ class_name MaterialEnvironmentRuntimeBridge
 ## Shared FIFO budget covers registration, material initialization and due updates.
 const DomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const QueueScript := preload("res://scripts/simulation/material_environment_work_queue.gd")
+const TierStateScript := preload("res://scripts/simulation/simulation_tier_state.gd")
 
-var _domain: MaterialEnvironmentDomain
-var _queue: MaterialEnvironmentWorkQueue
+var _domain: RefCounted
+var _queue: RefCounted
 var _enabled := false
 var _last_frame_index := -1
 
 
 func configure(
-	registry: ContentDefinitionRegistry,
+	registry: RefCounted,
 	profile_id: String,
-	budget_per_frame: int = MaterialEnvironmentWorkQueue.DEFAULT_BUDGET,
-	queue_capacity: int = MaterialEnvironmentWorkQueue.DEFAULT_CAPACITY
+	budget_per_frame: int = QueueScript.DEFAULT_BUDGET,
+	queue_capacity: int = QueueScript.DEFAULT_CAPACITY
 ) -> Dictionary:
 	if _enabled:
 		return {"ok": false, "reason": "material_bridge_already_configured"}
 	if registry == null:
 		return {"ok": false, "reason": "material_registry_unavailable"}
-	var next_domain: MaterialEnvironmentDomain = DomainScript.new()
+	var next_domain: RefCounted = DomainScript.new()
 	var bind: Dictionary = next_domain.bind_registry_profile(registry, profile_id)
 	if not bind.get("ok", false):
 		return bind
-	var next_queue: MaterialEnvironmentWorkQueue = QueueScript.new()
+	var next_queue: RefCounted = QueueScript.new()
 	var setup: Dictionary = next_queue.initialize(next_domain, budget_per_frame, queue_capacity)
 	if not setup.get("ok", false):
 		return setup
@@ -43,8 +44,8 @@ func is_enabled() -> bool:
 
 
 func register_scope(
-	tier_state: SimulationTierState, scope_id: String,
-	initial_tier: String = SimulationTierState.TIER_DORMANT
+	tier_state: RefCounted, scope_id: String,
+	initial_tier: String = TierStateScript.TIER_DORMANT
 ) -> Dictionary:
 	if not _enabled:
 		return {"ok": false, "reason": "material_bridge_not_configured"}
@@ -52,7 +53,7 @@ func register_scope(
 
 
 func initialize_scope(
-	tier_state: SimulationTierState, scope_id: String,
+	tier_state: RefCounted, scope_id: String,
 	profile_id: String, temperature_milli_c: int
 ) -> Dictionary:
 	if not _enabled:
@@ -63,7 +64,7 @@ func initialize_scope(
 
 
 func submit_due(
-	tier_state: SimulationTierState, scope_id: String,
+	tier_state: RefCounted, scope_id: String,
 	profile_id: String, logical_tick: int
 ) -> Dictionary:
 	if not _enabled:
@@ -72,7 +73,7 @@ func submit_due(
 
 
 func process_frame(
-	tier_state: SimulationTierState, frame_index: int
+	tier_state: RefCounted, frame_index: int
 ) -> Dictionary:
 	if not _enabled:
 		return {"ok": false, "reason": "material_bridge_not_configured"}

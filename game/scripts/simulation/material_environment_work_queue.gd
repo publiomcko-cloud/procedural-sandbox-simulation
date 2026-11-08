@@ -5,13 +5,14 @@ class_name MaterialEnvironmentWorkQueue
 ## FIFO ring buffer avoids O(backlog) Array.pop_front() during gameplay.
 const DomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
+const TierStateScript := preload("res://scripts/simulation/simulation_tier_state.gd")
 
 const DEFAULT_BUDGET := 32
 const HARD_MAX_BUDGET := 4096
 const DEFAULT_CAPACITY := 8192
 const HARD_MAX_CAPACITY := 65536
 
-var _domain: MaterialEnvironmentDomain
+var _domain: RefCounted
 var _slots: Array = []
 var _index: Dictionary = {}
 var _read := 0
@@ -31,7 +32,7 @@ var _admitted_in_frame := 0
 
 
 func initialize(
-	domain: MaterialEnvironmentDomain,
+	domain: RefCounted,
 	max_per_call: int = DEFAULT_BUDGET,
 	max_pending: int = DEFAULT_CAPACITY
 ) -> Dictionary:
@@ -52,7 +53,7 @@ func initialize(
 
 
 func enqueue(
-	tier_state: SimulationTierState, scope_id: String,
+	tier_state: RefCounted, scope_id: String,
 	profile_id: String, logical_tick: int
 ) -> Dictionary:
 	if _domain == null:
@@ -81,8 +82,8 @@ func enqueue(
 
 
 func enqueue_scope_registration(
-	tier_state: SimulationTierState, scope_id: String,
-	initial_tier: String = SimulationTierState.TIER_DORMANT
+	tier_state: RefCounted, scope_id: String,
+	initial_tier: String = TierStateScript.TIER_DORMANT
 ) -> Dictionary:
 	# Explicit scope feed, not a world scan. Registration shares the frame budget.
 	if _domain == null:
@@ -90,9 +91,9 @@ func enqueue_scope_registration(
 	_submissions += 1
 	if tier_state == null or not tier_state.is_initialized():
 		return {"ok": false, "reason": "material_tier_state_unavailable"}
-	if scope_id.is_empty() or scope_id.length() > SimulationTierState.MAX_SCOPE_ID_LENGTH:
+	if scope_id.is_empty() or scope_id.length() > TierStateScript.MAX_SCOPE_ID_LENGTH:
 		return {"ok": false, "reason": "simulation_scope_id_invalid"}
-	if not SimulationTierState.VALID_TIERS.has(initial_tier):
+	if not TierStateScript.VALID_TIERS.has(initial_tier):
 		return {"ok": false, "reason": "simulation_tier_invalid"}
 	if tier_state.has_scope(scope_id):
 		return {"ok": false, "reason": "simulation_scope_already_registered"}
@@ -113,7 +114,7 @@ func enqueue_scope_registration(
 
 
 func enqueue_initialization(
-	tier_state: SimulationTierState, scope_id: String,
+	tier_state: RefCounted, scope_id: String,
 	profile_id: String, initial_temperature_milli_c: int
 ) -> Dictionary:
 	if _domain == null:
@@ -123,7 +124,7 @@ func enqueue_initialization(
 		return {"ok": false, "reason": "simulation_scope_not_found"}
 	if not _domain.has_bound_profile(profile_id):
 		return {"ok": false, "reason": "material_profile_not_bound"}
-	if absi(initial_temperature_milli_c) > MaterialEnvironmentDomain.MAX_ABS_TEMPERATURE_MC:
+	if absi(initial_temperature_milli_c) > DomainScript.MAX_ABS_TEMPERATURE_MC:
 		return {"ok": false, "reason": "material_initial_temperature_invalid"}
 	var key := "initialize|%d|%s|%s" % [scope_id.length(), scope_id, profile_id]
 	if _index.has(key):
@@ -143,7 +144,7 @@ func enqueue_initialization(
 
 
 func process_pending(
-	tier_state: SimulationTierState, frame_index: int, requested_budget: int = -1
+	tier_state: RefCounted, frame_index: int, requested_budget: int = -1
 ) -> Dictionary:
 	if _domain == null:
 		return {"ok": false, "reason": "material_queue_not_initialized"}

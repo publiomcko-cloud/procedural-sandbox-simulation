@@ -21,6 +21,7 @@ const EntityStateContract := preload("res://scripts/objects/procedural_object_st
 const TerrainEffectRuntime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
 const MaterialEnvironmentDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const SimulationRuntimeStoreScript := preload("res://scripts/simulation/simulation_runtime_store.gd")
+const SimulationRuntimeScript := preload("res://scripts/simulation/simulation_runtime.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
 const BRUSH_RADIUS := 1.25
@@ -50,7 +51,7 @@ const FREE_EXPLORE_MAX_PITCH_RADIANS := 1.553343034
 @onready var ui_layer: CanvasLayer = $CanvasLayer
 @onready var status_label: Label = $CanvasLayer/Status
 @onready var object_stream: ProceduralObjectStream = $ProceduralObjects
-@onready var simulation_runtime: SimulationRuntime = $SimulationRuntime
+@onready var simulation_runtime: Node = $SimulationRuntime
 
 var cave_section_enabled := false
 var orbit_target := Vector3(8.0, 3.1, 6.0)
@@ -95,12 +96,12 @@ var terrain_effect_directory_override := ""
 var simulation_state_directory_override := ""
 var terrain_effect_runtime: RefCounted
 var _terrain_effect_status := "Terrain-object effects unavailable"
-var _material_content_domain: MaterialEnvironmentDomain
+var _material_content_domain: RefCounted
 var _simulation_material_profile_id := ""
 var _simulation_streaming_status := "Simulation streaming unavailable"
 var _simulation_persistence_status := "Simulation state not loaded"
 var _simulation_persistence_blocked := false
-var _simulation_store: SimulationRuntimeStore
+var _simulation_store: RefCounted
 var _simulation_storage_generation := 0
 var _pending_simulation_save_terrain_generation := -1
 var _selected_object_index := 0
@@ -352,7 +353,7 @@ func _read_simulation_candidate(
 			"terrain_generation": terrain_generation,
 		}
 
-	var validator: SimulationRuntime = SimulationRuntime.new()
+	var validator: Node = SimulationRuntimeScript.new()
 	var restored: Dictionary = validator.restore_runtime_snapshot(loaded["snapshot"])
 	if not restored.get("ok", false):
 		validator.free()

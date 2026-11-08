@@ -12,6 +12,7 @@ const SchedulerScript := preload("res://scripts/simulation/fixed_tick_scheduler.
 const TierStateScript := preload("res://scripts/simulation/simulation_tier_state.gd")
 const TierRouterScript := preload("res://scripts/simulation/simulation_tier_router.gd")
 const MaterialBridgeScript := preload("res://scripts/simulation/material_environment_runtime_bridge.gd")
+const MaterialQueueScript := preload("res://scripts/simulation/material_environment_work_queue.gd")
 const MaterialDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const WorldScopeLifecycleScript := preload("res://scripts/simulation/simulation_world_scope_lifecycle.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
@@ -44,11 +45,11 @@ const RUNTIME_SNAPSHOT_FIELDS_V2 := [
 	"tier_router",
 ]
 
-var scheduler: FixedTickScheduler
-var tier_state: SimulationTierState
-var tier_router: SimulationTierRouter
-var material_bridge: MaterialEnvironmentRuntimeBridge
-var world_scope_lifecycle: SimulationWorldScopeLifecycle
+var scheduler: RefCounted
+var tier_state: RefCounted
+var tier_router: RefCounted
+var material_bridge: RefCounted
+var world_scope_lifecycle: RefCounted
 var initialized := false
 var initialization_error := ""
 
@@ -91,7 +92,7 @@ func initialize_runtime(
 	if initialized:
 		return {"ok": false, "reason": "simulation_runtime_already_initialized"}
 
-	var next_scheduler: FixedTickScheduler = SchedulerScript.new()
+	var next_scheduler: RefCounted = SchedulerScript.new()
 	var scheduler_result: Dictionary = next_scheduler.initialize(
 		tick_usec, max_ticks_per_frame, start_tick, start_paused
 	)
@@ -101,7 +102,7 @@ func initialize_runtime(
 		)
 		return scheduler_result
 
-	var next_tier_state: SimulationTierState = TierStateScript.new()
+	var next_tier_state: RefCounted = TierStateScript.new()
 	var tier_result: Dictionary = next_tier_state.initialize(
 		aggregate_interval_ticks, max_simulation_scopes
 	)
@@ -111,7 +112,7 @@ func initialize_runtime(
 		)
 		return tier_result
 
-	var next_tier_router: SimulationTierRouter = TierRouterScript.new()
+	var next_tier_router: RefCounted = TierRouterScript.new()
 	var router_result: Dictionary = next_tier_router.initialize(
 		router_active_enter_mm,
 		router_active_exit_mm,
@@ -270,7 +271,7 @@ func transition_simulation_scope(
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
 
 	var started_usec: int = Time.get_ticks_usec() if _perf_trace_enabled else 0
-	var logical_tick := scheduler.get_current_tick()
+	var logical_tick: int = int(scheduler.get_current_tick())
 	var result: Dictionary = tier_state.transition_scope(
 		scope_id, target_tier, logical_tick, expected_tier_revision
 	)
@@ -309,15 +310,15 @@ func replace_simulation_scope_state(
 
 
 func configure_material_environment(
-	registry: ContentDefinitionRegistry, profile_id: String,
-	budget_per_frame: int = MaterialEnvironmentWorkQueue.DEFAULT_BUDGET,
-	queue_capacity: int = MaterialEnvironmentWorkQueue.DEFAULT_CAPACITY
+	registry: RefCounted, profile_id: String,
+	budget_per_frame: int = MaterialQueueScript.DEFAULT_BUDGET,
+	queue_capacity: int = MaterialQueueScript.DEFAULT_CAPACITY
 ) -> Dictionary:
 	if not initialized or tier_state == null or scheduler == null:
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
 	if material_bridge != null and material_bridge.is_enabled():
 		return {"ok": false, "reason": "material_bridge_already_configured"}
-	var candidate: MaterialEnvironmentRuntimeBridge = MaterialBridgeScript.new()
+	var candidate: RefCounted = MaterialBridgeScript.new()
 	var outcome: Dictionary = candidate.configure(
 		registry, profile_id, budget_per_frame, queue_capacity
 	)
@@ -350,7 +351,7 @@ func enqueue_material_due_step(
 ) -> Dictionary:
 	if material_bridge == null or scheduler == null:
 		return {"ok": false, "reason": "material_bridge_not_configured"}
-	var due_tick := scheduler.get_current_tick() if logical_tick == -1 else logical_tick
+	var due_tick: int = int(scheduler.get_current_tick()) if logical_tick == -1 else logical_tick
 	if due_tick < 0 or due_tick > scheduler.get_current_tick():
 		return {"ok": false, "reason": "material_due_tick_not_admitted"}
 	return material_bridge.submit_due(tier_state, scope_id, profile_id, due_tick)
@@ -362,10 +363,10 @@ func get_material_environment_metrics() -> Dictionary:
 
 func configure_world_scope_lifecycle(
 	profile_id: String = "",
-	max_resident_scopes: int = SimulationWorldScopeLifecycle.DEFAULT_MAX_RESIDENT_SCOPES,
-	region_size_x_mm: int = SimulationWorldScopeLifecycle.DEFAULT_REGION_SIZE_X_MM,
-	region_size_z_mm: int = SimulationWorldScopeLifecycle.DEFAULT_REGION_SIZE_Z_MM,
-	due_decision_budget: int = SimulationWorldScopeLifecycle.DEFAULT_DUE_DECISION_BUDGET
+	max_resident_scopes: int = WorldScopeLifecycleScript.DEFAULT_MAX_RESIDENT_SCOPES,
+	region_size_x_mm: int = WorldScopeLifecycleScript.DEFAULT_REGION_SIZE_X_MM,
+	region_size_z_mm: int = WorldScopeLifecycleScript.DEFAULT_REGION_SIZE_Z_MM,
+	due_decision_budget: int = WorldScopeLifecycleScript.DEFAULT_DUE_DECISION_BUDGET
 ) -> Dictionary:
 	if not initialized or scheduler == null or tier_state == null or tier_router == null:
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
@@ -374,7 +375,7 @@ func configure_world_scope_lifecycle(
 	if not profile_id.is_empty():
 		if material_bridge == null or not material_bridge.is_enabled():
 			return {"ok": false, "reason": "material_bridge_not_configured"}
-	var candidate: SimulationWorldScopeLifecycle = WorldScopeLifecycleScript.new()
+	var candidate: RefCounted = WorldScopeLifecycleScript.new()
 	var result: Dictionary = candidate.initialize(
 		profile_id,
 		max_resident_scopes,
@@ -544,7 +545,7 @@ func get_runtime_snapshot() -> Dictionary:
 func get_persistence_preflight() -> Dictionary:
 	if not initialized or scheduler == null or tier_state == null or tier_router == null:
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
-	var router_pending := tier_router.get_pending_count()
+	var router_pending: int = int(tier_router.get_pending_count())
 	if router_pending > 0:
 		return {
 			"ok": false,
@@ -589,25 +590,25 @@ func get_runtime_snapshot_fingerprint() -> String:
 	return hashing.finish().hex_encode()
 
 
-func validate_material_state_content(registry: ContentDefinitionRegistry) -> Dictionary:
+func validate_material_state_content(registry: RefCounted) -> Dictionary:
 	if not initialized or tier_state == null:
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
-	var domain: MaterialEnvironmentDomain = MaterialDomainScript.new()
+	var domain: RefCounted = MaterialDomainScript.new()
 	var checked_bindings: Dictionary = {}
 	var material_scope_count := 0
 	var scopes: Array = tier_state.get_authoritative_snapshot().get("scopes", [])
 	for record_value in scopes:
 		var record: Dictionary = record_value
 		var state: Dictionary = record.get("state", {})
-		if not state.has(MaterialEnvironmentDomain.STATE_KEY):
+		if not state.has(MaterialDomainScript.STATE_KEY):
 			continue
-		if typeof(state[MaterialEnvironmentDomain.STATE_KEY]) != TYPE_DICTIONARY:
+		if typeof(state[MaterialDomainScript.STATE_KEY]) != TYPE_DICTIONARY:
 			return {
 				"ok": false,
 				"reason": "material_state_invalid",
 				"scope_id": String(record.get("scope_id", "")),
 			}
-		var material: Dictionary = state[MaterialEnvironmentDomain.STATE_KEY]
+		var material: Dictionary = state[MaterialDomainScript.STATE_KEY]
 		var payload: Dictionary = domain.validate_persisted_state_payload(material)
 		if not payload.get("ok", false):
 			return {
@@ -652,13 +653,13 @@ func consume_last_scheduler_result() -> Dictionary:
 
 
 func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
-	var next_scheduler: FixedTickScheduler = SchedulerScript.new()
+	var next_scheduler: RefCounted = SchedulerScript.new()
 	var result: Dictionary = next_scheduler.restore_snapshot(snapshot)
 	if not result.get("ok", false):
 		initialization_error = String(result.get("reason", "scheduler_restore_failed"))
 		return result
 
-	var next_tier_state: SimulationTierState = tier_state
+	var next_tier_state: RefCounted = tier_state
 	if next_tier_state == null or not next_tier_state.is_initialized():
 		next_tier_state = TierStateScript.new()
 		var tier_result: Dictionary = next_tier_state.initialize()
@@ -668,7 +669,7 @@ func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
 			)
 			return tier_result
 
-	var next_tier_router: SimulationTierRouter = tier_router
+	var next_tier_router: RefCounted = tier_router
 	if next_tier_router == null or not next_tier_router.is_initialized():
 		next_tier_router = TierRouterScript.new()
 		var router_result: Dictionary = next_tier_router.initialize()
@@ -702,13 +703,13 @@ func restore_simulation_tier_snapshot(snapshot: Dictionary) -> Dictionary:
 	if not initialized or scheduler == null:
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
 
-	var next_tier_state: SimulationTierState = TierStateScript.new()
+	var next_tier_state: RefCounted = TierStateScript.new()
 	var result: Dictionary = next_tier_state.restore_snapshot(snapshot)
 	if not result.get("ok", false):
 		return result
 
 	if tier_router != null and tier_router.is_initialized():
-		var router_snapshot := tier_router.get_authoritative_snapshot()
+		var router_snapshot: Dictionary = tier_router.get_authoritative_snapshot()
 		var compatibility := _validate_router_scope_compatibility(
 			router_snapshot,
 			next_tier_state
@@ -734,7 +735,7 @@ func restore_simulation_router_snapshot(snapshot: Dictionary) -> Dictionary:
 	if not initialized or scheduler == null or tier_state == null:
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
 
-	var next_router: SimulationTierRouter = TierRouterScript.new()
+	var next_router: RefCounted = TierRouterScript.new()
 	var result: Dictionary = next_router.restore_snapshot(snapshot)
 	if not result.get("ok", false):
 		return result
@@ -779,7 +780,7 @@ func validate_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 	if typeof(snapshot.get("tier_state")) != TYPE_DICTIONARY:
 		return {"ok": false, "reason": "simulation_runtime_snapshot_tier_state_invalid"}
 
-	var scheduler_candidate: FixedTickScheduler = SchedulerScript.new()
+	var scheduler_candidate: RefCounted = SchedulerScript.new()
 	var scheduler_result: Dictionary = scheduler_candidate.restore_snapshot(
 		snapshot["scheduler"]
 	)
@@ -790,7 +791,7 @@ func validate_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 			"detail": String(scheduler_result.get("reason", "")),
 		}
 
-	var tier_candidate: SimulationTierState = TierStateScript.new()
+	var tier_candidate: RefCounted = TierStateScript.new()
 	var tier_result: Dictionary = tier_candidate.restore_snapshot(
 		snapshot["tier_state"]
 	)
@@ -804,7 +805,7 @@ func validate_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 	if schema_version == RUNTIME_SNAPSHOT_SCHEMA_VERSION:
 		if typeof(snapshot.get("tier_router")) != TYPE_DICTIONARY:
 			return {"ok": false, "reason": "simulation_runtime_snapshot_router_invalid"}
-		var router_candidate: SimulationTierRouter = TierRouterScript.new()
+		var router_candidate: RefCounted = TierRouterScript.new()
 		var router_result: Dictionary = router_candidate.restore_snapshot(
 			snapshot["tier_router"]
 		)
@@ -829,7 +830,7 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 	if not validation.get("ok", false):
 		return validation
 
-	var next_scheduler: FixedTickScheduler = SchedulerScript.new()
+	var next_scheduler: RefCounted = SchedulerScript.new()
 	var scheduler_result: Dictionary = next_scheduler.restore_snapshot(
 		snapshot["scheduler"]
 	)
@@ -839,7 +840,7 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 			"reason": "simulation_runtime_snapshot_scheduler_invalid",
 		}
 
-	var next_tier_state: SimulationTierState = TierStateScript.new()
+	var next_tier_state: RefCounted = TierStateScript.new()
 	var tier_result: Dictionary = next_tier_state.restore_snapshot(
 		snapshot["tier_state"]
 	)
@@ -849,7 +850,7 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 			"reason": "simulation_runtime_snapshot_tier_state_invalid",
 		}
 
-	var next_tier_router: SimulationTierRouter = TierRouterScript.new()
+	var next_tier_router: RefCounted = TierRouterScript.new()
 	var schema_version := int(snapshot["schema_version"])
 	var router_result: Dictionary
 	if schema_version == RUNTIME_SNAPSHOT_SCHEMA_V1:
@@ -889,7 +890,7 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 
 func _validate_router_scope_compatibility(
 	router_snapshot: Dictionary,
-	candidate_tier_state: SimulationTierState
+	candidate_tier_state: RefCounted
 ) -> Dictionary:
 	var observations: Array = router_snapshot.get("observations", [])
 	for observation_value in observations:

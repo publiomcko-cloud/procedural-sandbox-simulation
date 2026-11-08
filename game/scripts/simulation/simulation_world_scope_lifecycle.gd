@@ -7,6 +7,10 @@ class_name SimulationWorldScopeLifecycle
 ## SceneTree, terrain registry, world history or unloaded simulation scopes.
 ## Its only iterable working set is the explicitly bounded resident region set.
 
+const DomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
+const TierStateScript := preload("res://scripts/simulation/simulation_tier_state.gd")
+const TierRouterScript := preload("res://scripts/simulation/simulation_tier_router.gd")
+
 const DEFAULT_MAX_RESIDENT_SCOPES := 25
 const MAX_RESIDENT_SCOPES_HARD := 4096
 const DEFAULT_REGION_SIZE_X_MM := 16_000
@@ -119,7 +123,7 @@ func notify_region_published(
 	var registered_now := false
 	if record.is_empty():
 		var registration: Dictionary = runtime.register_simulation_scope(
-			scope_id, SimulationTierState.TIER_DORMANT
+			scope_id, TierStateScript.TIER_DORMANT
 		)
 		if not registration.get("ok", false):
 			return {
@@ -159,7 +163,7 @@ func notify_region_published(
 	if not _profile_id.is_empty():
 		record = runtime.get_simulation_scope(scope_id)
 		var state: Dictionary = record.get("state", {})
-		if not state.has(MaterialEnvironmentDomain.STATE_KEY):
+		if not state.has(DomainScript.STATE_KEY):
 			var material_init: Dictionary = runtime.enqueue_material_scope_initialization(
 				scope_id, _profile_id, initial_temperature_milli_c
 			)
@@ -201,7 +205,7 @@ func notify_region_unloaded(runtime: Object, region_key: Vector2i) -> Dictionary
 			"resident_count": _resident.size(),
 		}
 	var observation: Dictionary = runtime.submit_simulation_scope_observation(
-		scope_id, SimulationTierRouter.MAX_DISTANCE_MM
+		scope_id, TierRouterScript.MAX_DISTANCE_MM
 	)
 	if not observation.get("ok", false):
 		return {
@@ -389,7 +393,7 @@ func _schedule_due_work(runtime: Object, current_tick: int) -> Dictionary:
 				continue
 			var scope: Dictionary = runtime.get_simulation_scope(scope_id)
 			var state: Dictionary = scope.get("state", {})
-			if not state.has(MaterialEnvironmentDomain.STATE_KEY):
+			if not state.has(DomainScript.STATE_KEY):
 				deferred += 1
 				continue
 			var due: Dictionary = runtime.get_simulation_due_decision(
