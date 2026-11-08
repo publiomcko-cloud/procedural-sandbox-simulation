@@ -1,4 +1,5 @@
 name: Starter checks
+
 on:
   push:
     branches:
@@ -10,14 +11,34 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   static:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Validate expected files
+        shell: pwsh
         run: |
-          test -f game/project.godot
-          test -f game/scenes/main.tscn
-          test -f game/tests/smoke.gd
-          echo 'Static project structure PASS. Godot runtime validation is NOT performed by this job.'
+          $required = @(
+            'game/project.godot',
+            'game/scenes/main.tscn',
+            'game/tests/smoke.gd'
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              Write-Error "Missing expected file: $path"
+              exit 1
+            }
+          }
+          Write-Output 'STATIC_PROJECT_STRUCTURE_PASS'
