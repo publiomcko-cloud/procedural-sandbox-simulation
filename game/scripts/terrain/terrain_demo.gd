@@ -319,7 +319,7 @@ func _configure_simulation_streaming() -> void:
 		var profile_ids: Array[String] = object_stream.registry.get_content_record_ids(
 			MaterialEnvironmentDomainScript.PROFILE_TYPE
 		)
-		if not profile_ids.is_empty():
+		if profile_ids.size() == 1:
 			var profile_id := String(profile_ids[0])
 			var material_config: Dictionary = simulation_runtime.configure_material_environment(
 				object_stream.registry, profile_id
@@ -328,6 +328,9 @@ func _configure_simulation_streaming() -> void:
 				_simulation_material_profile_id = profile_id
 			else:
 				_simulation_streaming_status = "Material simulation unavailable (%s)" % material_config.get("reason", "unknown")
+		elif profile_ids.size() > 1:
+			# Selection policy belongs to world/content configuration, not discovery.
+			_simulation_streaming_status = "Material simulation awaiting explicit profile selection (%d profiles)" % profile_ids.size()
 
 	var lifecycle: Dictionary = simulation_runtime.configure_world_scope_lifecycle(
 		_simulation_material_profile_id,
@@ -3626,6 +3629,19 @@ func _update_status() -> void:
 		float(last_mesh_diagnostics.get("frame_time_p99_ms", 0.0)),
 		_peak_process_work_ms,
 	]
+	if is_instance_valid(simulation_runtime):
+		var simulation_metrics: Dictionary = simulation_runtime.get_world_scope_lifecycle_metrics()
+		if bool(simulation_metrics.get("initialized", false)):
+			status += "P4 simulation: resident/peak %d/%d | registrations/revisits %d/%d | route obs %d | due queued/deferred %d/%d | %s\n" % [
+				int(simulation_metrics.get("resident_count", 0)),
+				int(simulation_metrics.get("peak_resident_scopes", 0)),
+				int(simulation_metrics.get("registrations_total", 0)),
+				int(simulation_metrics.get("revisits_total", 0)),
+				int(simulation_metrics.get("route_observations_total", 0)),
+				int(simulation_metrics.get("due_updates_queued_total", 0)),
+				int(simulation_metrics.get("due_updates_deferred_total", 0)),
+				_simulation_streaming_status,
+			]
 	if global_rebuild_pending:
 		status += "Rebuilding visible set: %d regions staged\n" % loading_regions.size()
 	if cave_section_enabled:
