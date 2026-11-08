@@ -130,7 +130,7 @@ func _test_exact_fixed_tick_cadence() -> void:
 
 func _test_bounded_catchup_and_frame_slicing_equivalence() -> void:
 	var sliced: FixedTickScheduler = _new_scheduler(1000, 4)
-	for _index: int in range(10):
+	for _index in range(10):
 		var result: Dictionary = sliced.process_elapsed_usec(1000)
 		_check(
 			int(result.get("admitted_ticks", -1)) == 1,
