@@ -4,17 +4,7 @@ on:
   push:
     branches:
       - perf/issue-108-d7-3-projection-source-cache
-  pull_request:
-    paths:
-      - 'game/scripts/terrain/terrain_object_effect_runtime.gd'
-      - 'game/tests/issue108_d7_3_projection_source_cache_tests.gd'
-      - 'game/tests/issue108_d7_2_worker_batch_preparation_tests.gd'
-      - 'game/tests/issue108_d7_1_mutable_render_batch_tests.gd'
-      - 'game/tests/issue108_d7_static_procedural_batch_tests.gd'
-      - 'game/tests/procedural_object_tests.gd'
-      - 'game/tests/p3_0d_entity_placement_tests.gd'
-      - '.github/workflows/issue-108-d7-3.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 
