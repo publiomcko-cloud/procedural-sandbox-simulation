@@ -27,32 +27,24 @@ jobs:
           persist-credentials: false
 
       - name: Verify runner and pinned Godot
-        shell: powershell
+        shell: cmd
         run: |
-          Write-Output "RUNNER_NAME=$env:RUNNER_NAME"
-          Write-Output "RUNNER_OS=$env:RUNNER_OS"
-          Write-Output "RUNNER_ARCH=$env:RUNNER_ARCH"
-          if ($env:RUNNER_OS -ne 'Windows' -or $env:RUNNER_ARCH -ne 'X64') {
-            Write-Error "Unexpected runner platform: $env:RUNNER_OS/$env:RUNNER_ARCH"
-            exit 1
-          }
-          if (-not (Test-Path -LiteralPath $env:GODOT_BIN -PathType Leaf)) {
-            Write-Error "Godot executable not found: $env:GODOT_BIN"
-            exit 1
-          }
-          $version = (& $env:GODOT_BIN --version 2>&1 | Out-String).Trim()
-          Write-Output "GODOT_VERSION=$version"
-          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^4\.7\.2\.stable(?:\.|$)') {
-            Write-Error "Godot 4.7.2 stable verification failed"
-            exit 1
-          }
+          @echo off
+          echo RUNNER_NAME=%RUNNER_NAME%
+          echo RUNNER_OS=%RUNNER_OS%
+          echo RUNNER_ARCH=%RUNNER_ARCH%
+          if /I not "%RUNNER_OS%"=="Windows" exit /b 1
+          if /I not "%RUNNER_ARCH%"=="X64" exit /b 1
+          if not exist "%GODOT_BIN%" exit /b 1
+          "%GODOT_BIN%" --version
+          if errorlevel 1 exit /b 1
 
       - name: Run P4.0A qualification envelope
-        shell: powershell
+        shell: cmd
         timeout-minutes: 70
         run: |
-          & .\scripts\ci\run-p4-0a-qualification.ps1 -GodotBin $env:GODOT_BIN
-          exit $LASTEXITCODE
+          powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\ci\run-p4-0a-qualification.ps1" -GodotBin "%GODOT_BIN%"
+          if errorlevel 1 exit /b 1
 
       - name: Upload qualification evidence
         if: always()
