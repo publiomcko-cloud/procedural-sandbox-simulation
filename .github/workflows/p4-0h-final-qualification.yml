@@ -8,6 +8,7 @@ on:
     paths:
       - 'game/scripts/simulation/**'
       - 'game/scripts/terrain/terrain_demo.gd'
+      - 'game/tests/p4_0h_cold_boot_probe.gd'
       - 'game/tests/p4_0h_final_qualification_tests.gd'
       - 'scripts/ci/run-p4-0h-qualification.ps1'
       - 'scripts/ci/validate-p4-0h-perf-trace.ps1'
