@@ -35,7 +35,8 @@ function Invoke-Qualification([string]$Label, [string[]]$CommandArgs, [string]$E
 }
 
 Invoke-Qualification 'import' @('--headless', '--editor', '--path', $ProjectPath, '--import') '' | Out-Null
-$focusedLog = Invoke-Qualification 'focused' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p4_0h_final_qualification_tests.gd') 'P4_0H_FINAL_PASS:'
+Invoke-Qualification 'focused' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p4_0h_final_qualification_tests.gd') 'P4_0H_FINAL_PASS:' | Out-Host
+$focusedLog = Join-Path $EvidenceDir 'focused.log'
 & (Join-Path $PSScriptRoot 'validate-p4-0h-perf-trace.ps1') -LogPath $focusedLog
 if ($LASTEXITCODE -ne 0) { throw "P4.0H performance trace gates failed: $LASTEXITCODE" }
 
