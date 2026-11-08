@@ -557,8 +557,6 @@ func get_runtime_snapshot_fingerprint() -> String:
 func validate_material_state_content(registry: ContentDefinitionRegistry) -> Dictionary:
 	if not initialized or tier_state == null:
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
-	if registry == null:
-		return {"ok": false, "reason": "material_registry_unavailable"}
 	var domain: MaterialEnvironmentDomain = MaterialDomainScript.new()
 	var checked_bindings: Dictionary = {}
 	var material_scope_count := 0
@@ -583,6 +581,12 @@ func validate_material_state_content(registry: ContentDefinitionRegistry) -> Dic
 				"scope_id": String(record.get("scope_id", "")),
 			}
 		material_scope_count += 1
+		if registry == null:
+			return {
+				"ok": false,
+				"reason": "material_registry_unavailable",
+				"scope_id": String(record.get("scope_id", "")),
+			}
 		var binding_key := "%s|%s" % [
 			String(payload["profile_id"]), String(payload["profile_sha256"])
 		]
