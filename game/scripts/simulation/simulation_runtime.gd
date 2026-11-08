@@ -580,7 +580,7 @@ func get_runtime_snapshot_fingerprint() -> String:
 	var snapshot := get_runtime_snapshot()
 	if snapshot.is_empty():
 		return ""
-	var bytes: PackedByteArray = var_to_bytes(snapshot, false)
+	var bytes: PackedByteArray = var_to_bytes(snapshot)
 	var hashing := HashingContext.new()
 	if hashing.start(HashingContext.HASH_SHA256) != OK:
 		return ""
