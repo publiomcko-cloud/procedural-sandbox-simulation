@@ -541,6 +541,41 @@ func get_runtime_snapshot() -> Dictionary:
 	}
 
 
+func get_persistence_preflight() -> Dictionary:
+	if not initialized or scheduler == null or tier_state == null or tier_router == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	var router_pending := tier_router.get_pending_count()
+	if router_pending > 0:
+		return {
+			"ok": false,
+			"reason": "simulation_router_work_pending",
+			"router_pending_count": router_pending,
+		}
+	if material_bridge != null and material_bridge.is_enabled():
+		var material_metrics: Dictionary = material_bridge.get_metrics()
+		var queue_metrics: Dictionary = material_metrics.get("queue", {})
+		var material_pending := int(queue_metrics.get("pending_count", 0))
+		if material_pending > 0:
+			return {
+				"ok": false,
+				"reason": "material_queue_work_pending",
+				"material_pending_count": material_pending,
+			}
+	if world_scope_lifecycle != null and world_scope_lifecycle.is_initialized():
+		var lifecycle: Dictionary = world_scope_lifecycle.get_persistence_preflight(
+			scheduler.get_current_tick()
+		)
+		if not lifecycle.get("ok", false):
+			return lifecycle
+	return {
+		"ok": true,
+		"reason": "ok",
+		"current_tick": scheduler.get_current_tick(),
+		"router_pending_count": router_pending,
+		"material_pending_count": 0,
+	}
+
+
 func get_runtime_snapshot_fingerprint() -> String:
 	var snapshot := get_runtime_snapshot()
 	if snapshot.is_empty():
