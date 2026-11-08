@@ -22,29 +22,49 @@ const STATE_FIELDS := [
 func create_content_handler() -> ContentTypeHandler:
 	return HandlerScript.new(
 		PROFILE_TYPE, 40, Callable(self, "validate_profile"),
-		"duplicate_material_environment_profile", MAX_PROFILES
+		"duplicate_material_environment_profile", MAX_PROFILES,
+		Callable(self, "normalize_profile")
 	)
 
 
 func validate_profile(record: Dictionary, mod_id: String, _context: Dictionary = {}) -> Dictionary:
 	if not _has_exact_fields(record, FIELDS):
 		return {"ok": false, "reason": "material_profile_fields_invalid"}
-	if typeof(record["schema_version"]) != TYPE_INT or int(record["schema_version"]) != 1:
+	if not _integer_like(record["schema_version"]) or int(record["schema_version"]) != 1:
 		return {"ok": false, "reason": "material_profile_schema_invalid"}
 	if typeof(record["type"]) != TYPE_STRING or record["type"] != PROFILE_TYPE:
 		return {"ok": false, "reason": "material_profile_type_invalid"}
 	if typeof(record["id"]) != TYPE_STRING or not _valid_namespaced_id(String(record["id"]), mod_id):
 		return {"ok": false, "reason": "material_profile_id_invalid"}
-	if typeof(record["ambient_temperature_milli_c"]) != TYPE_INT:
+	if not _integer_like(record["ambient_temperature_milli_c"]):
 		return {"ok": false, "reason": "material_profile_temperature_invalid"}
 	if absi(int(record["ambient_temperature_milli_c"])) > MAX_ABS_TEMPERATURE_MC:
 		return {"ok": false, "reason": "material_profile_temperature_invalid"}
-	if typeof(record["relaxation_milli_per_due_step"]) != TYPE_INT:
+	if not _integer_like(record["relaxation_milli_per_due_step"]):
 		return {"ok": false, "reason": "material_profile_relaxation_invalid"}
 	var relaxation := int(record["relaxation_milli_per_due_step"])
 	if relaxation < 0 or relaxation > 1000:
 		return {"ok": false, "reason": "material_profile_relaxation_invalid"}
 	return {"ok": true, "reason": "ok"}
+
+
+func normalize_profile(record: Dictionary, mod_id: String, context: Dictionary) -> Dictionary:
+	var validation := validate_profile(record, mod_id, context)
+	if not validation.get("ok", false):
+		return validation
+	var normalized := record.duplicate(true)
+	for field in ["schema_version", "ambient_temperature_milli_c", "relaxation_milli_per_due_step"]:
+		normalized[field] = int(normalized[field])
+	return {"ok": true, "reason": "ok", "record": normalized}
+
+
+func _integer_like(value: Variant) -> bool:
+	if typeof(value) == TYPE_INT:
+		return true
+	if typeof(value) != TYPE_FLOAT:
+		return false
+	var numeric := float(value)
+	return is_finite(numeric) and floor(numeric) == numeric
 
 
 func initialize_scope_state(
