@@ -65,7 +65,7 @@ Missed logical time is converted into a scalar deferred backlog.
 
 Each frame can admit at most `max_ticks_per_frame`.
 
-A large backlog therefore changes an integer counter, not the amount of same-frame loop work.
+A large backlog therefore changes an integer counter, not the amount of same-frame loop work. The scalar backlog itself has a hard defensive bound; overflow is rejected atomically rather than dropping ticks.
 
 Zero-elapsed later frames may drain the backlog incrementally.
 
@@ -116,6 +116,7 @@ Engine hard bounds include:
 - maximum tick duration: 60 seconds;
 - maximum ticks admitted per frame: 64;
 - maximum queued manual steps: 1024;
+- maximum deferred backlog: 10,000,000 ticks;
 - maximum elapsed interval accepted by one scheduler call: 24 hours.
 
 These are defensive work/input bounds, not gameplay design values.
