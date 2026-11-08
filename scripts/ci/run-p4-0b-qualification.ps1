@@ -28,6 +28,25 @@ $isolatedAppData = Join-Path $isolatedRoot ("sandbox-sim-p4-0b-appdata-" + $PID)
 New-Item -ItemType Directory -Force -Path $isolatedAppData | Out-Null
 $env:APPDATA = $isolatedAppData
 
+$importLog = Join-Path $EvidenceDir 'p4-0b-import.log'
+$importOutput = @(
+    & $GodotBin --headless --editor --path $ProjectPath --import 2>&1
+)
+$importExit = $LASTEXITCODE
+$importText = ($importOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+[System.IO.File]::WriteAllText(
+    $importLog,
+    $importText + [Environment]::NewLine,
+    [System.Text.UTF8Encoding]::new($false)
+)
+foreach ($line in $importOutput) {
+    Write-Output $line
+}
+if ($importExit -ne 0 -or $importText.Contains('SCRIPT ERROR:')) {
+    Write-Error "P4.0B import/parser gate failed (exit=$importExit)"
+    exit 1
+}
+
 $focusedLog = Join-Path $EvidenceDir 'p4-0b-focused.log'
 $focusedOutput = @(
     & $GodotBin --headless --path $ProjectPath --script 'res://tests/p4_0b_simulation_tier_tests.gd' 2>&1
