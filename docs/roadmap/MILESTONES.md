@@ -1,8 +1,8 @@
 # Roadmap with implementation gates
 
-## 2026-11-08 — P4.0B qualified; domain simulation still not started
+## 2026-11-08 — P4.0B integrated; domain simulation still not started
 
-M4.0 and P4.0A are integrated. P4.0B issue #263 / PR #264 is **qualified** on runtime/source `d741d1fa0711034a46ac4d57450310a365114f8b`.
+M4.0, P4.0A and P4.0B are integrated. P4.0B issue #263 / PR #264 merged at `25a2dd8687cf513aa414a0469dc1f5de659863e3`; qualified runtime/source remains `d741d1fa0711034a46ac4d57450310a365114f8b`.
 
 Qualified P4 foundation now includes:
 
@@ -22,7 +22,7 @@ Self-hosted Windows Godot 4.7.2 qualification passed P4.0B 67/67 plus the comple
 
 P4.0B preserves ADR-0007's mod-first/data-only boundary and ADR-0008's bounded-work requirements.
 
-**Current integration gate:** PR #264 ready; explicit owner merge authorization still required.
+**Current integration gate:** complete. PR #264 is merged.
 
 **Not yet selected:** the next P4 slice. The two valid frontiers are a bounded automatic tier-assignment/routing policy or the first mod-first material/environment state domain. Materials, climate, water and organism simulation are not part of P4.0B.
 

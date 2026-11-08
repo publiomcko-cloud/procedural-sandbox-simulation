@@ -1,4 +1,4 @@
-# Current project status — P4.0B qualified; integration pending (2026-11-08)
+# Current project status — P4.0B integrated (2026-11-08)
 
 ## Authoritative 2026-11-08 update
 
@@ -10,7 +10,7 @@ Integration identities:
 - P4.0A merge: `7b18f9fd02b3b2d993127670b4c4d1dde19796cb`;
 - self-hosted CI migration/main base: `8fbffbde03f61050f32cac41767925566be0f98a`.
 
-P4.0B — bounded active/aggregate/dormant simulation tier framework — is **QUALIFIED / READY_FOR_INTEGRATION** on PR #264 / Issue #263.
+P4.0B — bounded active/aggregate/dormant simulation tier framework — is **INTEGRATED** through PR #264 at merge commit `25a2dd8687cf513aa414a0469dc1f5de659863e3`.
 
 Qualified runtime/source HEAD:
 
@@ -56,9 +56,10 @@ Architecture remains governed by:
 - [ADR-0008 — Main-thread budget, derived-work isolation and performance observability](../decisions/ADR-0008-MAIN-THREAD-BUDGET-AND-PERFORMANCE-OBSERVABILITY.md);
 - [P4.0A fixed-tick specification](../specs/P4-0A-FIXED-TICK-SCHEDULER.md);
 - [P4.0B tier/state specification](../specs/P4-0B-SIMULATION-TIER-FRAMEWORK.md);
-- [P4.0B final qualification checkpoint](../checkpoints/2026-11-08-P4-0B-QUALIFICATION.md).
+- [P4.0B final qualification checkpoint](../checkpoints/2026-11-08-P4-0B-QUALIFICATION.md);
+- [P4.0B integration receipt](../checkpoints/2026-11-08-P4-0B-INTEGRATION.md).
 
-**Integration state:** PR #264 is ready; merge still requires explicit owner authorization.
+**Integration state:** complete. PR #264 is merged. Issue #263 is complete.
 
 **Not started:** automatic tier assignment, materials/environment, climate/water, organism simulation and domain-specific aggregation.
 
