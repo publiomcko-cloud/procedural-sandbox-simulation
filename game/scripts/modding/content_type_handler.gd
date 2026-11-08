@@ -47,7 +47,7 @@ func _capture_validator(callback: Callable) -> void:
 func _capture_normalizer(callback: Callable) -> void:
 	if not callback.is_valid():
 		return
-	var target := callback.get_object()
+	var target: Object = callback.get_object()
 	if target == null:
 		return
 	_normalizer_target = weakref(target)
