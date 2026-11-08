@@ -1,5 +1,11 @@
 # Roadmap with implementation gates
 
+## 2026-11-08 — P4.0C integrated; first material/environment state domain next
+
+P4.0C [PR #267](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/267) merged to `main` at `e5370cb78d7685ea6439c78e6d753c2c975fb4cb`, completing the bounded deterministic tier-routing infrastructure after M4.0/P4.0A/P4.0B. Final P4.0C qualification 110/110 and self-hosted workflow PASS; historical procedural-object regression envelope unchanged. Issue #266 completed. [Integration receipt](../checkpoints/2026-11-08-P4-0C-INTEGRATION.md).
+
+**Next:** implement the first mod-first material/environment state domain using existing scheduler/tier/router contracts, with a visual/interactive gate at the first observable behavioral change. Climate/water and organisms remain later slices. The prior roadmap entry below is a historical qualification snapshot.
+
 ## 2026-11-08 — P4.0C qualified; material/environment domain next after integration
 
 M4.0, P4.0A and P4.0B are integrated. P4.0C Issue #266 is **qualified** on runtime/source `e43893505924cdf0557222193d03eb7ec0dfd933`.
