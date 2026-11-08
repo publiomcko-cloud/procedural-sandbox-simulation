@@ -34,9 +34,10 @@ function Invoke-Qualification([string]$Label, [string[]]$CommandArgs, [string]$E
     return $log
 }
 
-$godotCache = Join-Path $ProjectPath '.godot'
-if (Test-Path -LiteralPath $godotCache) {
-    Remove-Item -LiteralPath $godotCache -Recurse -Force
+Invoke-Qualification 'import-prereq' @('--headless', '--editor', '--path', $ProjectPath, '--import') '' | Out-Null
+$scriptClassCache = Join-Path $ProjectPath '.godot\global_script_class_cache.cfg'
+if (Test-Path -LiteralPath $scriptClassCache) {
+    Remove-Item -LiteralPath $scriptClassCache -Force
 }
 Invoke-Qualification 'cold-boot' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p4_0h_cold_boot_probe.gd') 'P4_0H_COLD_BOOT_PARSE_PASS' | Out-Host
 Invoke-Qualification 'import' @('--headless', '--editor', '--path', $ProjectPath, '--import') '' | Out-Null
