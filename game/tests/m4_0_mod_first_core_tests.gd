@@ -51,7 +51,7 @@ func _test_builtin_compatibility_and_fingerprints() -> void:
 		var definitions: Array = package.get("definitions", [])
 		var population_rules: Array = package.get("population_rules", [])
 		var terrain_interactions: Array = package.get("terrain_interactions", [])
-		var compatibility_count := (
+		var compatibility_count: int = (
 			definitions.size() + population_rules.size() + terrain_interactions.size()
 		)
 		_check(
@@ -75,9 +75,9 @@ func _test_builtin_compatibility_and_fingerprints() -> void:
 		"generic registry reports typed content totals"
 	)
 
-	var definition_id := "firstparty.core_rocks:granite"
-	var population_id := "firstparty.core_rocks:granite_population"
-	var interaction_id := "firstparty.core_rocks:granite_ground_imprint"
+	var definition_id: String = "firstparty.core_rocks:granite"
+	var population_id: String = "firstparty.core_rocks:granite_population"
+	var interaction_id: String = "firstparty.core_rocks:granite_ground_imprint"
 	var legacy_pins: Dictionary = registry.pin_definitions([definition_id])
 	_check(
 		legacy_pins.get("ok", false)
