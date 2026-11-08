@@ -97,6 +97,10 @@ func bind_registry_profile(registry: ContentDefinitionRegistry, profile_id: Stri
 	return {"ok": true, "reason": "ok", "noop": false}
 
 
+func has_bound_profile(profile_id: String) -> bool:
+	return _bound_profiles.has(profile_id)
+
+
 func clear_profile_bindings() -> void:
 	_bound_profiles.clear()
 
