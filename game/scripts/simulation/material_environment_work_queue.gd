@@ -119,8 +119,8 @@ func process_pending(
 		_slots[_read] = null
 		_read = (_read + 1) % _capacity
 		_count -= 1
-	_admitted_in_frame += receipts.size()
-	_processed_total += receipts.size()
+		_admitted_in_frame += 1
+		_processed_total += 1
 	_deferred_total += _count
 	if _trace and (receipts.size() > 0 or _count > 0):
 		PerformanceTrace.emit_duration(
