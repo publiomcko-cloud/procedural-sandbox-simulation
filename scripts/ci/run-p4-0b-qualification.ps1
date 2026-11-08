@@ -29,10 +29,13 @@ New-Item -ItemType Directory -Force -Path $isolatedAppData | Out-Null
 $env:APPDATA = $isolatedAppData
 
 $importLog = Join-Path $EvidenceDir 'p4-0b-import.log'
+$previousErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
 $importOutput = @(
     & $GodotBin --headless --editor --path $ProjectPath --import 2>&1
 )
 $importExit = $LASTEXITCODE
+$ErrorActionPreference = $previousErrorActionPreference
 $importText = ($importOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
 [System.IO.File]::WriteAllText(
     $importLog,
@@ -48,10 +51,13 @@ if ($importExit -ne 0 -or $importText.Contains('SCRIPT ERROR:')) {
 }
 
 $focusedLog = Join-Path $EvidenceDir 'p4-0b-focused.log'
+$previousErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
 $focusedOutput = @(
     & $GodotBin --headless --path $ProjectPath --script 'res://tests/p4_0b_simulation_tier_tests.gd' 2>&1
 )
 $focusedExit = $LASTEXITCODE
+$ErrorActionPreference = $previousErrorActionPreference
 $focusedText = ($focusedOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
 [System.IO.File]::WriteAllText(
     $focusedLog,
