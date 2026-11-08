@@ -3748,12 +3748,23 @@ func _load_world_from_storage() -> bool:
 			_update_status()
 			return false
 		var candidate: RefCounted = loaded["state"]
+		var terrain_generation := int(loaded["generation"])
+		var simulation_candidate := _read_simulation_candidate(
+			int(candidate.world_seed), terrain_generation
+		)
+		if not simulation_candidate.get("ok", false):
+			_persistence_status = "Load rejected: simulation sidecar %s; current world is unchanged" % simulation_candidate.get("reason", "invalid")
+			_update_status()
+			return false
 		_pending_world_load = {
 			"world_seed": int(candidate.world_seed),
 			"ledger": candidate,
-			"generation": int(loaded["generation"]),
+			"generation": terrain_generation,
+			"simulation_found": bool(simulation_candidate.get("found", false)),
+			"simulation_generation": int(simulation_candidate.get("generation", 0)),
+			"simulation_snapshot": simulation_candidate.get("snapshot", {}),
 		}
-		_checkpoint_generation = int(loaded["generation"])
+		_checkpoint_generation = terrain_generation
 		_persistence_status = "Loading materialized generation %d; old meshes remain until coherent publication" % _checkpoint_generation
 		_start_global_rebuild("load_world")
 		_update_status()
@@ -3772,12 +3783,23 @@ func _load_world_from_storage() -> bool:
 		_persistence_status = "Load rejected (%s); current world is unchanged" % candidate.get("reason", "invalid")
 		_update_status()
 		return false
+	var terrain_generation := int(loaded["generation"])
+	var simulation_candidate := _read_simulation_candidate(
+		int(candidate["world_seed"]), terrain_generation
+	)
+	if not simulation_candidate.get("ok", false):
+		_persistence_status = "Load rejected: simulation sidecar %s; current world is unchanged" % simulation_candidate.get("reason", "invalid")
+		_update_status()
+		return false
 	_pending_world_load = {
 		"world_seed": int(candidate["world_seed"]),
 		"ledger": candidate["ledger"],
-		"generation": int(loaded["generation"]),
+		"generation": terrain_generation,
+		"simulation_found": bool(simulation_candidate.get("found", false)),
+		"simulation_generation": int(simulation_candidate.get("generation", 0)),
+		"simulation_snapshot": simulation_candidate.get("snapshot", {}),
 	}
-	_persistence_status = "Loading generation %d; old meshes remain until the complete set is ready" % int(loaded["generation"])
+	_persistence_status = "Loading generation %d; old meshes remain until the complete set is ready" % terrain_generation
 	_start_global_rebuild("load_world")
 	_update_status()
 	return true
