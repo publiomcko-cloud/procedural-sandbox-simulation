@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
 
       - name: Verify runner and pinned Godot
-        shell: pwsh
+        shell: powershell
         run: |
           Write-Output "RUNNER_NAME=$env:RUNNER_NAME"
           Write-Output "RUNNER_OS=$env:RUNNER_OS"
@@ -48,7 +48,7 @@ jobs:
           }
 
       - name: Run P4.0A qualification envelope
-        shell: pwsh
+        shell: powershell
         timeout-minutes: 70
         run: |
           & .\scripts\ci\run-p4-0a-qualification.ps1 -GodotBin $env:GODOT_BIN
