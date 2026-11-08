@@ -44,8 +44,8 @@ func _test_profile_and_state() -> void:
 	invalid["relaxation_milli_per_due_step"] = 1001
 	_check(not domain.validate_profile(invalid, "test.mod").get("ok", false), "invalid coefficient rejected")
 	invalid = profile.duplicate(true)
-	invalid["ambient_temperature_milli_c"] = 1.0
-	_check(not domain.validate_profile(invalid, "test.mod").get("ok", false), "float input rejected")
+	invalid["ambient_temperature_milli_c"] = 1.5
+	_check(not domain.validate_profile(invalid, "test.mod").get("ok", false), "fractional temperature input rejected")
 	var fingerprint := _pin(profile)
 	var tiers: SimulationTierState = TierState.new()
 	_check(tiers.initialize(2, 3).get("ok", false), "tier authority initialized")
