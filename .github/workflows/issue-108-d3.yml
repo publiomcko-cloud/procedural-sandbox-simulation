@@ -4,12 +4,7 @@ on:
   push:
     branches:
       - perf/issue-108-d3-incremental-visual-commit
-  pull_request:
-    paths:
-      - 'game/scripts/objects/procedural_object_stream.gd'
-      - 'game/tests/issue108_d3_incremental_visual_commit_tests.gd'
-      - '.github/workflows/issue-108-d3.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 

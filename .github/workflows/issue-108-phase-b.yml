@@ -4,19 +4,7 @@ on:
   push:
     branches:
       - feat/issue-108-phase-b-pure-effect
-  pull_request:
-    branches:
-      - exp/issue-108-phase-a-grounding-characterization
-      - main
-    paths:
-      - 'game/scripts/objects/procedural_rock_shape_descriptor.gd'
-      - 'game/scripts/terrain/terrain_object_effect.gd'
-      - 'game/scripts/terrain/terrain_object_effect_index.gd'
-      - 'game/tests/issue108_phase_b_pure_effect_tests.gd'
-      - 'game/tests/experiments/issue108_*'
-      - 'docs/experiments/ISSUE-108-PHASE-B/**'
-      - '.github/workflows/issue-108-phase-b.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 

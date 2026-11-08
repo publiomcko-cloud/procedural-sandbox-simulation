@@ -4,13 +4,7 @@ on:
   push:
     branches:
       - perf/issue-108-d6-cold-effect-transient-publish
-  pull_request:
-    paths:
-      - 'game/scripts/terrain/terrain_object_effect_projection_service.gd'
-      - 'game/scripts/terrain/terrain_object_effect_runtime.gd'
-      - 'game/tests/issue108_d6_cold_effect_transient_publish_tests.gd'
-      - '.github/workflows/issue-108-d6.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 

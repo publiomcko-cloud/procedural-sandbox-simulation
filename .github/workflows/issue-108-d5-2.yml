@@ -4,12 +4,7 @@ on:
   push:
     branches:
       - perf/issue-108-d5-2-decouple-placement-refresh
-  pull_request:
-    paths:
-      - 'game/scripts/terrain/terrain_demo.gd'
-      - 'game/tests/issue108_d5_2_placement_refresh_decoupling_tests.gd'
-      - '.github/workflows/issue-108-d5-2.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 

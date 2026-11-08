@@ -4,13 +4,7 @@ on:
   push:
     branches:
       - perf/issue-108-d4-effect-frame-cache
-  pull_request:
-    paths:
-      - 'game/scripts/terrain/terrain_object_effect_runtime.gd'
-      - 'game/scripts/terrain/terrain_object_effect_projection_build_job.gd'
-      - 'game/tests/issue108_d4_effect_frame_cache_tests.gd'
-      - '.github/workflows/issue-108-d4.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 

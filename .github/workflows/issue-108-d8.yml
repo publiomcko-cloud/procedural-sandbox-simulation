@@ -4,18 +4,7 @@ on:
   push:
     branches:
       - feat/issue-108-d8-lod1-terrain-effects
-  pull_request:
-    paths:
-      - 'game/scripts/terrain/lod01_chunk_mesher.gd'
-      - 'game/scripts/terrain/terrain_mesh_job.gd'
-      - 'game/tests/issue108_d8_lod1_terrain_effect_tests.gd'
-      - 'game/tests/issue108_phase_d_live_integration_tests.gd'
-      - 'game/tests/issue108_pre_d_local_frame_tests.gd'
-      - 'game/tests/lod01_transition_tests.gd'
-      - 'game/tests/p3_0d_entity_placement_tests.gd'
-      - 'game/tests/procedural_object_tests.gd'
-      - '.github/workflows/issue-108-d8.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 

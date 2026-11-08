@@ -4,14 +4,7 @@ on:
   push:
     branches:
       - perf/issue-108-d6-1-worker-prevalidated-effects
-  pull_request:
-    paths:
-      - 'game/scripts/terrain/terrain_object_effect_projection_build_job.gd'
-      - 'game/scripts/terrain/terrain_object_effect_projection_service.gd'
-      - 'game/scripts/terrain/terrain_object_effect_runtime.gd'
-      - 'game/tests/issue108_d6_1_worker_prevalidated_effect_tests.gd'
-      - '.github/workflows/issue-108-d6-1.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 

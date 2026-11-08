@@ -4,16 +4,7 @@ on:
   push:
     branches:
       - feat/issue-108-pre-d-local-frame-phase-d
-  pull_request:
-    paths:
-      - 'game/scripts/terrain/terrain_object_effect*.gd'
-      - 'game/tests/issue108_pre_d_local_frame_tests.gd'
-      - 'game/tests/issue108_phase_d_live_integration_tests.gd'
-      - 'game/scripts/terrain/terrain_demo.gd'
-      - 'game/scripts/terrain/sdf_brush_edit_state.gd'
-      - 'game/scripts/objects/procedural_object_stream.gd'
-      - '.github/workflows/issue-108-pre-d.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 

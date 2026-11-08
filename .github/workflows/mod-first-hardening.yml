@@ -4,19 +4,7 @@ on:
   push:
     branches:
       - arch/mod-first-hardening-pre-108
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'game/scripts/modding/**'
-      - 'game/scripts/objects/**'
-      - 'game/scripts/entities/**'
-      - 'game/mods/**'
-      - 'mods/examples/**'
-      - 'game/tests/**'
-      - 'docs/specs/MOD-FIRST-RUNTIME-CONTRACT.md'
-      - '.github/workflows/mod-first-hardening.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 

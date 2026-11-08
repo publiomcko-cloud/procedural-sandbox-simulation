@@ -4,12 +4,7 @@ on:
   push:
     branches:
       - diag/issue-108-d5-1-region-publish-decomposition
-  pull_request:
-    paths:
-      - 'game/scripts/terrain/terrain_demo.gd'
-      - 'game/tests/issue108_d5_1_region_publish_profile_tests.gd'
-      - '.github/workflows/issue-108-d5-1.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 
