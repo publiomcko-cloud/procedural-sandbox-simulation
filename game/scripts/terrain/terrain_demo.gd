@@ -20,6 +20,7 @@ const SharedCornerMeshJob := preload("res://scripts/terrain/shared_surface_corne
 const EntityStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 const TerrainEffectRuntime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
 const MaterialEnvironmentDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
+const SimulationRuntimeStoreScript := preload("res://scripts/simulation/simulation_runtime_store.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
 const BRUSH_RADIUS := 1.25
@@ -91,11 +92,16 @@ var _procedural_object_status := "Procedural objects unavailable"
 var object_state_directory_override := ""
 var object_package_roots_override: Array[String] = []
 var terrain_effect_directory_override := ""
+var simulation_state_directory_override := ""
 var terrain_effect_runtime: RefCounted
 var _terrain_effect_status := "Terrain-object effects unavailable"
 var _material_content_domain: MaterialEnvironmentDomain
 var _simulation_material_profile_id := ""
 var _simulation_streaming_status := "Simulation streaming unavailable"
+var _simulation_persistence_status := "Simulation state not loaded"
+var _simulation_persistence_blocked := false
+var _simulation_store: SimulationRuntimeStore
+var _simulation_storage_generation := 0
 var _selected_object_index := 0
 var _selected_object_id := ""
 var _object_state_action_status := "Entities: Ctrl+click select; M twice migrates entity save; B place; F6 cycle; F7 edit; F8 delete; F9 restore"
