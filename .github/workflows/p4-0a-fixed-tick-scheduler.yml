@@ -36,7 +36,7 @@ jobs:
       GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           clean: true
           fetch-depth: 1
@@ -72,7 +72,7 @@ jobs:
 
       - name: Upload qualification evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: p4-0a-self-hosted-windows-evidence
           path: ${{ runner.temp }}\p4-0a-evidence\*.log
