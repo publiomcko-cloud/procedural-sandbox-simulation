@@ -37,6 +37,7 @@ foreach ($relative in $relativeFiles) {
     Get-Content -LiteralPath $path | ForEach-Object {
         $lineNumber += 1
         $line = $_
+        if ($line -match '^\s*#') { return }
         if ($line -match '^\s*class_name\s+') { return }
         foreach ($name in $classNames) {
             $escaped = [regex]::Escape($name)
