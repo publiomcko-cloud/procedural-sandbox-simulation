@@ -319,6 +319,61 @@ func _ensure_simulation_store() -> void:
 		)
 
 
+func _read_simulation_candidate(
+	seed_value: int,
+	terrain_generation: int
+) -> Dictionary:
+	_ensure_simulation_store()
+	var loaded: Dictionary = _simulation_store.load_snapshot(
+		world_id,
+		seed_value,
+		Field.GENERATOR_VERSION,
+		maxi(0, terrain_generation)
+	)
+	if not loaded.get("ok", false):
+		return loaded
+	if (
+		not loaded.get("found", false)
+		and loaded.get("reason") == "simulation_generation_not_found"
+		and int(loaded.get("recognized_generation_count", 0)) > 0
+	):
+		return {
+			"ok": false,
+			"reason": "simulation_sidecar_generation_mismatch",
+			"terrain_generation": terrain_generation,
+		}
+	if not loaded.get("found", false):
+		return {
+			"ok": true,
+			"reason": "no_saved_simulation",
+			"found": false,
+			"generation": 0,
+			"terrain_generation": terrain_generation,
+		}
+
+	var validator: SimulationRuntime = SimulationRuntime.new()
+	var restored: Dictionary = validator.restore_runtime_snapshot(loaded["snapshot"])
+	if not restored.get("ok", false):
+		validator.free()
+		return {
+			"ok": false,
+			"reason": "simulation_candidate_restore_invalid",
+			"detail": String(restored.get("reason", "")),
+		}
+	var content_validation: Dictionary = validator.validate_material_state_content(
+		object_stream.registry
+	)
+	validator.free()
+	if not content_validation.get("ok", false):
+		return {
+			"ok": false,
+			"reason": String(
+				content_validation.get("reason", "simulation_candidate_content_invalid")
+			),
+		}
+	return loaded
+
+
 func _restore_simulation_for_terrain_generation(
 	terrain_generation: int,
 	explicit_load: bool = false
@@ -327,25 +382,12 @@ func _restore_simulation_for_terrain_generation(
 		_simulation_persistence_status = "Simulation persistence unavailable (runtime node missing)"
 		_simulation_persistence_blocked = true
 		return false
-	_ensure_simulation_store()
-	var loaded: Dictionary = _simulation_store.load_snapshot(
-		world_id,
-		world_seed,
-		Field.GENERATOR_VERSION,
-		maxi(0, terrain_generation)
-	)
+	var loaded := _read_simulation_candidate(world_seed, terrain_generation)
 	if not loaded.get("ok", false):
 		_simulation_persistence_status = "Simulation load blocked (%s)" % loaded.get("reason", "invalid")
 		_simulation_persistence_blocked = true
 		return false
 	if not loaded.get("found", false):
-		if (
-			loaded.get("reason") == "simulation_generation_not_found"
-			and int(loaded.get("recognized_generation_count", 0)) > 0
-		):
-			_simulation_persistence_status = "Simulation load blocked: no sidecar matches terrain generation %d" % terrain_generation
-			_simulation_persistence_blocked = true
-			return false
 		_simulation_persistence_status = (
 			"No persisted simulation for terrain generation %d"
 			% terrain_generation
@@ -359,13 +401,6 @@ func _restore_simulation_for_terrain_generation(
 	)
 	if not restored.get("ok", false):
 		_simulation_persistence_status = "Simulation restore blocked (%s)" % restored.get("reason", "invalid")
-		_simulation_persistence_blocked = true
-		return false
-	var content_validation: Dictionary = simulation_runtime.validate_material_state_content(
-		object_stream.registry
-	)
-	if not content_validation.get("ok", false):
-		_simulation_persistence_status = "Simulation content pin blocked (%s)" % content_validation.get("reason", "invalid")
 		_simulation_persistence_blocked = true
 		return false
 	_simulation_storage_generation = int(loaded["generation"])
