@@ -36,7 +36,7 @@ func _test_configuration_contract() -> void:
 	var oversized_tick: FixedTickScheduler = SchedulerScript.new()
 	_check(
 		oversized_tick.initialize(
-			FixedTickScheduler.MAX_TICK_USEC + 1, 4
+			SchedulerScript.MAX_TICK_USEC + 1, 4
 		).get("reason", "") == "tick_usec_invalid",
 		"tick duration has an explicit upper bound"
 	)
@@ -51,7 +51,7 @@ func _test_configuration_contract() -> void:
 	var oversized_budget: FixedTickScheduler = SchedulerScript.new()
 	_check(
 		oversized_budget.initialize(
-			1000, FixedTickScheduler.MAX_TICKS_PER_FRAME_HARD + 1
+			1000, SchedulerScript.MAX_TICKS_PER_FRAME_HARD + 1
 		).get("reason", "") == "max_ticks_per_frame_invalid",
 		"per-frame admission budget has a hard engine bound"
 	)
@@ -121,7 +121,7 @@ func _test_exact_fixed_tick_cadence() -> void:
 	)
 	_check(
 		scheduler.process_elapsed_usec(
-			FixedTickScheduler.MAX_ELAPSED_USEC_PER_CALL + 1
+			SchedulerScript.MAX_ELAPSED_USEC_PER_CALL + 1
 		).get("reason", "") == "elapsed_usec_exceeds_bound"
 			and scheduler.get_authoritative_snapshot() == prior,
 		"single-call elapsed input is explicitly bounded and atomic on rejection"
@@ -131,7 +131,7 @@ func _test_exact_fixed_tick_cadence() -> void:
 	var backlog_guard_prior: Dictionary = backlog_guard.get_authoritative_snapshot()
 	_check(
 		backlog_guard.process_elapsed_usec(
-			FixedTickScheduler.MAX_BACKLOG_TICKS_HARD + 1
+			SchedulerScript.MAX_BACKLOG_TICKS_HARD + 1
 		).get("reason", "") == "backlog_limit_exceeded"
 			and backlog_guard.get_authoritative_snapshot() == backlog_guard_prior,
 		"deferred backlog has a hard scalar bound and overflow rejection is atomic"
@@ -263,7 +263,7 @@ func _test_pause_and_manual_step_semantics() -> void:
 	)
 	_check(
 		scheduler.request_steps(
-			FixedTickScheduler.MAX_MANUAL_STEP_QUEUE
+			SchedulerScript.MAX_MANUAL_STEP_QUEUE
 		).get("ok", false),
 		"manual-step queue accepts its exact bounded capacity"
 	)
