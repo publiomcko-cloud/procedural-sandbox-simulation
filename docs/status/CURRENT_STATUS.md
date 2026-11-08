@@ -1,28 +1,48 @@
-# Current project status — M4.0 integrated; P4.0A candidate (2026-11-08)
+# Current project status — P4.0A qualified; integration pending (2026-11-08)
 
 ## Authoritative 2026-11-08 update
 
 M4.0 is integrated into `main` through PR #256 at merge commit `ca13d91a4917e8061528736e5b6d808dc9b85576`.
 
-P4.0A — fixed-tick scheduler foundation — is now implemented as a qualification candidate:
+P4.0A — fixed-tick scheduler foundation — is **QUALIFIED / READY_FOR_INTEGRATION** on PR #258.
 
-- issue: #257;
+Qualified runtime source:
+
 - branch: `feat/p4-0a-fixed-tick-scheduler`;
-- status: **IMPLEMENTED / QUALIFICATION_PENDING**;
-- P4 simulation tiers/material/environment state: **NOT STARTED**.
+- source HEAD: `f9318644da1458a8b7633f3bd3a0fd81c51288f5`;
+- issue: #257;
+- Godot: `4.7.2.stable.official.ed1daf0bf`.
 
-P4.0A adds an engine-owned deterministic scheduler core and playable runtime adapter with integer-microsecond fixed cadence, bounded per-frame admission, scalar deferred catch-up backlog, pause/resume, bounded manual step, snapshot/restore and opt-in scheduler `PERF_TRACE` telemetry.
+P4.0A provides an engine-owned deterministic scheduler core and playable runtime adapter with integer-microsecond fixed cadence, bounded per-frame admission, scalar deferred catch-up backlog, hard backlog bound, pause/resume, bounded manual step, exact snapshot/restore and opt-in scheduler `PERF_TRACE` telemetry.
 
-The playable scene mounts the scheduler runtime, but no gameplay simulation system consumes ticks yet. This is intentional: P4.0A establishes scheduling authority without prematurely defining tier or material semantics.
+Owner-local qualification passed:
+
+- P4.0A focused: 74/74;
+- M4.0 focused: 31/31;
+- declarative mods: 79/79;
+- entity commands: 67/67;
+- Issue #108 D8: 34/34;
+- P3.0D placement: 53/53;
+- smoke: 52/52;
+- terrain SDF: 46/46;
+- LOD0/1 transition: 6474/6474;
+- bootstrap structure: 18/18;
+- main-scene startup exit: 0.
+
+The procedural-object suite preserved the exact accepted historical baseline: 671 assertions / 1 known camera-revisit failure / 9 same-revision fingerprint conflicts / 0 `SCRIPT ERROR`.
+
+Hosted GitHub Actions remain non-authoritative because observed jobs failed before step allocation/execution.
 
 Architecture remains governed by:
 
 - [ADR-0007 — Generalize the mod-first content core before P4](../decisions/ADR-0007-MOD-FIRST-CONTENT-CORE-BEFORE-P4.md);
 - [ADR-0008 — Main-thread budget, derived-work isolation and performance observability](../decisions/ADR-0008-MAIN-THREAD-BUDGET-AND-PERFORMANCE-OBSERVABILITY.md);
 - [P4.0A fixed-tick specification](../specs/P4-0A-FIXED-TICK-SCHEDULER.md);
-- [P4.0A implementation checkpoint](../checkpoints/2026-11-08-P4-0A-FIXED-TICK-IMPLEMENTATION.md).
+- [P4.0A final qualification checkpoint](../checkpoints/2026-11-08-P4-0A-QUALIFICATION.md).
 
-Next gate: exact Godot 4.7.2 owner-local focused and regression qualification. P4.0B remains downstream of P4.0A qualification/integration.
+**Integration state:** PR #258 is ready; merge still requires explicit owner authorization.
+
+**Next development slice after integration:** bounded P4 simulation tier/state framework. Active/aggregate/dormant tier semantics remain not started.
 
 
 ---
