@@ -32,6 +32,7 @@ function Invoke-Qualification([string]$Label, [string[]]$CommandArgs, [string]$E
 
 Invoke-Qualification 'import' @('--headless', '--editor', '--path', $ProjectPath, '--import') ''
 Invoke-Qualification 'focused' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p4_0d_material_environment_tests.gd') 'P4_0D_MATERIAL_PASS:'
+Invoke-Qualification 'performance' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p4_0d_performance_benchmark.gd') 'P4_0D_BENCH_PASS'
 & (Join-Path $PSScriptRoot 'run-p4-0c-qualification.ps1') -GodotBin $GodotBin -ProjectPath $ProjectPath
 if ($LASTEXITCODE -ne 0) { throw "P4.0C cumulative regression failed: $LASTEXITCODE" }
 Write-Output 'SELF_HOSTED_P4_0D_QUALIFICATION_PASS'
