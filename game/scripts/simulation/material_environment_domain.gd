@@ -14,6 +14,12 @@ const FIELDS := [
 	"relaxation_milli_per_due_step",
 ]
 const STATE_KEY := "material_environment"
+# Derived immutable-in-practice validated bindings: disposable after restore.
+# No cache entry is ever authoritative; the scope's pinned SHA remains authority.
+var _bound_profiles: Dictionary = {}
+var _profile_binds_total := 0
+var _bound_update_calls_total := 0
+var _legacy_hash_validations_total := 0
 const STATE_FIELDS := [
 	"profile_id", "profile_sha256", "temperature_milli_c", "last_due_tick",
 ]
@@ -58,6 +64,79 @@ func normalize_profile(record: Dictionary, mod_id: String, context: Dictionary) 
 	return {"ok": true, "reason": "ok", "record": normalized}
 
 
+func bind_registry_profile(registry: ContentDefinitionRegistry, profile_id: String) -> Dictionary:
+	# Cold-path only: revalidate M4.0 identity/fingerprint once per profile.
+	if registry == null:
+		return {"ok": false, "reason": "material_registry_unavailable"}
+	if _bound_profiles.has(profile_id):
+		var current_pin: Dictionary = registry.pin_content_record(PROFILE_TYPE, profile_id)
+		if not current_pin.get("ok", false):
+			return current_pin
+		if current_pin["fingerprint"] == _bound_profiles[profile_id]["fingerprint"]:
+			return {"ok": true, "reason": "ok", "noop": true}
+		return {"ok": false, "reason": "material_profile_pin_conflict"}
+	if _bound_profiles.size() >= MAX_PROFILES:
+		return {"ok": false, "reason": "material_profile_binding_limit"}
+	var profile: Dictionary = registry.get_content_record(PROFILE_TYPE, profile_id)
+	if profile.is_empty():
+		return {"ok": false, "reason": "material_profile_missing"}
+	var pin: Dictionary = registry.pin_content_record(PROFILE_TYPE, profile_id)
+	if not pin.get("ok", false):
+		return pin
+	var verified: Dictionary = registry.validate_content_fingerprint(pin["fingerprint"])
+	if not verified.get("ok", false):
+		return verified
+	var checked := _validate_binding(profile, pin["fingerprint"])
+	if not checked.get("ok", false):
+		return checked
+	_bound_profiles[profile_id] = {
+		"profile": profile.duplicate(true),
+		"fingerprint": pin["fingerprint"].duplicate(true),
+	}
+	_profile_binds_total += 1
+	return {"ok": true, "reason": "ok", "noop": false}
+
+
+func clear_profile_bindings() -> void:
+	_bound_profiles.clear()
+
+
+func get_binding_metrics() -> Dictionary:
+	return {
+		"bound_profiles": _bound_profiles.size(),
+		"profile_binds_total": _profile_binds_total,
+		"bound_update_calls_total": _bound_update_calls_total,
+		"legacy_hash_validations_total": _legacy_hash_validations_total,
+	}
+
+
+func initialize_bound_scope_state(
+	tier_state: SimulationTierState, scope_id: String,
+	profile_id: String, initial_temperature_milli_c: int
+) -> Dictionary:
+	if not _bound_profiles.has(profile_id):
+		return {"ok": false, "reason": "material_profile_not_bound"}
+	var binding: Dictionary = _bound_profiles[profile_id]
+	return _initialize_verified_scope_state(
+		tier_state, scope_id, binding["profile"],
+		binding["fingerprint"], initial_temperature_milli_c
+	)
+
+
+func process_bound_due_scope(
+	tier_state: SimulationTierState, scope_id: String,
+	profile_id: String, logical_tick: int
+) -> Dictionary:
+	if not _bound_profiles.has(profile_id):
+		return {"ok": false, "reason": "material_profile_not_bound"}
+	_bound_update_calls_total += 1
+	var binding: Dictionary = _bound_profiles[profile_id]
+	return _process_verified_due_scope(
+		tier_state, scope_id, binding["profile"],
+		binding["fingerprint"], logical_tick
+	)
+
+
 func _integer_like(value: Variant) -> bool:
 	if typeof(value) == TYPE_INT:
 		return true
@@ -77,6 +156,16 @@ func initialize_scope_state(
 	var validation := _validate_binding(profile, profile_fingerprint)
 	if not validation.get("ok", false):
 		return validation
+	return _initialize_verified_scope_state(
+		tier_state, scope_id, profile, profile_fingerprint, initial_temperature_milli_c
+	)
+
+
+func _initialize_verified_scope_state(
+	tier_state: SimulationTierState, scope_id: String,
+	profile: Dictionary, profile_fingerprint: Dictionary,
+	initial_temperature_milli_c: int
+) -> Dictionary:
 	if absi(initial_temperature_milli_c) > MAX_ABS_TEMPERATURE_MC:
 		return {"ok": false, "reason": "material_initial_temperature_invalid"}
 	if tier_state == null or not tier_state.is_initialized():
@@ -106,6 +195,16 @@ func process_due_scope(
 	var validation := _validate_binding(profile, profile_fingerprint)
 	if not validation.get("ok", false):
 		return validation
+	return _process_verified_due_scope(
+		tier_state, scope_id, profile, profile_fingerprint, logical_tick
+	)
+
+
+func _process_verified_due_scope(
+	tier_state: SimulationTierState, scope_id: String,
+	profile: Dictionary, profile_fingerprint: Dictionary,
+	logical_tick: int
+) -> Dictionary:
 	if tier_state == null or not tier_state.is_initialized():
 		return {"ok": false, "reason": "material_tier_state_unavailable"}
 	var record: Dictionary = tier_state.get_scope(scope_id)
@@ -180,6 +279,7 @@ func _validate_binding(profile: Dictionary, fingerprint: Dictionary) -> Dictiona
 		or String(fingerprint["content_sha256"]).length() != 64
 	):
 		return {"ok": false, "reason": "material_profile_fingerprint_invalid"}
+	_legacy_hash_validations_total += 1
 	# Verify canonical content bytes in addition to identity: never trust the caller's
 	# supplied hash without recomputing it. Package/version pin verification remains
 	# the responsibility of M4.0's registry at the ingestion boundary.
