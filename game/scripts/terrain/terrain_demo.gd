@@ -3563,6 +3563,8 @@ func _process_async_checkpoint() -> void:
 		int(edit_ledger.get_tail_edit_count()),
 	]
 	_persistence_status = _checkpoint_status
+	if not _save_simulation_state(_checkpoint_generation):
+		_persistence_status += "; " + _simulation_persistence_status
 
 
 func _apply_preedit_fixture() -> void:
@@ -3698,6 +3700,11 @@ func _save_world_to_storage() -> bool:
 		return false
 	if _scalable_runtime_enabled:
 		var queued := _start_async_checkpoint(true)
+		if queued and _checkpoint_task_id < 0:
+			if not _save_simulation_state(_checkpoint_generation):
+				_persistence_status += "; " + _simulation_persistence_status
+				_update_status()
+				return false
 		_update_status()
 		return queued
 	if global_rebuild_pending or not _edit_transaction.is_empty():
@@ -3709,9 +3716,14 @@ func _save_world_to_storage() -> bool:
 		_persistence_status = "Save failed (%s); previous generations retained" % saved.get("reason", "unknown")
 		_update_status()
 		return false
+	var terrain_generation := int(saved["generation"])
 	_persistence_status = "Saved generation %d (%d ordered edit(s), revision %d)" % [
-		int(saved["generation"]), int(saved["operation_count"]), int(saved["revision"]),
+		terrain_generation, int(saved["operation_count"]), int(saved["revision"]),
 	]
+	if not _save_simulation_state(terrain_generation):
+		_persistence_status += "; " + _simulation_persistence_status
+		_update_status()
+		return false
 	_update_status()
 	return true
 
