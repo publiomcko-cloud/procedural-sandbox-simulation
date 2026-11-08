@@ -20,6 +20,7 @@ const SharedCornerMeshJob := preload("res://scripts/terrain/shared_surface_corne
 const EntityStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 const TerrainEffectRuntime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
 const MaterialEnvironmentDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
+const SimulationRuntimeStoreScript := preload("res://scripts/simulation/simulation_runtime_store.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
 const BRUSH_RADIUS := 1.25
@@ -91,11 +92,17 @@ var _procedural_object_status := "Procedural objects unavailable"
 var object_state_directory_override := ""
 var object_package_roots_override: Array[String] = []
 var terrain_effect_directory_override := ""
+var simulation_state_directory_override := ""
 var terrain_effect_runtime: RefCounted
 var _terrain_effect_status := "Terrain-object effects unavailable"
 var _material_content_domain: MaterialEnvironmentDomain
 var _simulation_material_profile_id := ""
 var _simulation_streaming_status := "Simulation streaming unavailable"
+var _simulation_persistence_status := "Simulation state not loaded"
+var _simulation_persistence_blocked := false
+var _simulation_store: SimulationRuntimeStore
+var _simulation_storage_generation := 0
+var _pending_simulation_save_terrain_generation := -1
 var _selected_object_index := 0
 var _selected_object_id := ""
 var _object_state_action_status := "Entities: Ctrl+click select; M twice migrates entity save; B place; F6 cycle; F7 edit; F8 delete; F9 restore"
@@ -294,7 +301,9 @@ func _ready() -> void:
 		_procedural_object_status = "Procedural objects unavailable (%s)" % object_initialization.get("reason", "unknown")
 		terrain_effect_runtime = null
 		_terrain_effect_status = "Terrain-object effects unavailable (object stream unavailable)"
-	_configure_simulation_streaming()
+	_restore_simulation_for_terrain_generation(_checkpoint_generation)
+	if not _simulation_persistence_blocked:
+		_configure_simulation_streaming()
 	_create_placement_target_marker()
 	terrain_mesh_template.mesh = null
 	terrain_mesh_template.visible = false
@@ -302,6 +311,212 @@ func _ready() -> void:
 	_update_camera()
 	_reconcile_region_window(true)
 	_update_status()
+
+
+func _ensure_simulation_store() -> void:
+	if _simulation_store == null:
+		_simulation_store = SimulationRuntimeStoreScript.new(
+			simulation_state_directory_override
+		)
+
+
+func _read_simulation_candidate(
+	seed_value: int,
+	terrain_generation: int
+) -> Dictionary:
+	_ensure_simulation_store()
+	var loaded: Dictionary = _simulation_store.load_snapshot(
+		world_id,
+		seed_value,
+		Field.GENERATOR_VERSION,
+		maxi(0, terrain_generation)
+	)
+	if not loaded.get("ok", false):
+		return loaded
+	if (
+		not loaded.get("found", false)
+		and loaded.get("reason") == "simulation_generation_not_found"
+		and int(loaded.get("recognized_generation_count", 0)) > 0
+	):
+		return {
+			"ok": false,
+			"reason": "simulation_sidecar_generation_mismatch",
+			"terrain_generation": terrain_generation,
+		}
+	if not loaded.get("found", false):
+		return {
+			"ok": true,
+			"reason": "no_saved_simulation",
+			"found": false,
+			"generation": 0,
+			"terrain_generation": terrain_generation,
+		}
+
+	var validator: SimulationRuntime = SimulationRuntime.new()
+	var restored: Dictionary = validator.restore_runtime_snapshot(loaded["snapshot"])
+	if not restored.get("ok", false):
+		validator.free()
+		return {
+			"ok": false,
+			"reason": "simulation_candidate_restore_invalid",
+			"detail": String(restored.get("reason", "")),
+		}
+	var content_validation: Dictionary = validator.validate_material_state_content(
+		object_stream.registry
+	)
+	validator.free()
+	if not content_validation.get("ok", false):
+		return {
+			"ok": false,
+			"reason": String(
+				content_validation.get("reason", "simulation_candidate_content_invalid")
+			),
+		}
+	return loaded
+
+
+func _restore_simulation_for_terrain_generation(
+	terrain_generation: int,
+	explicit_load: bool = false
+) -> bool:
+	if not is_instance_valid(simulation_runtime):
+		_simulation_persistence_status = "Simulation persistence unavailable (runtime node missing)"
+		_simulation_persistence_blocked = true
+		return false
+	var loaded := _read_simulation_candidate(world_seed, terrain_generation)
+	if not loaded.get("ok", false):
+		_simulation_persistence_status = "Simulation load blocked (%s)" % loaded.get("reason", "invalid")
+		_simulation_persistence_blocked = true
+		return false
+	if not loaded.get("found", false):
+		_simulation_persistence_status = (
+			"No persisted simulation for terrain generation %d"
+			% terrain_generation
+		)
+		_simulation_storage_generation = 0
+		_simulation_persistence_blocked = false
+		return true
+
+	var restored: Dictionary = simulation_runtime.restore_runtime_snapshot(
+		loaded["snapshot"]
+	)
+	if not restored.get("ok", false):
+		_simulation_persistence_status = "Simulation restore blocked (%s)" % restored.get("reason", "invalid")
+		_simulation_persistence_blocked = true
+		return false
+	_simulation_storage_generation = int(loaded["generation"])
+	_simulation_persistence_status = (
+		"Loaded simulation generation %d for terrain generation %d"
+		% [_simulation_storage_generation, terrain_generation]
+	)
+	if bool(loaded.get("recovered_temporary", false)):
+		_simulation_persistence_status += " (recovered interrupted commit)"
+	_simulation_persistence_blocked = false
+	return true
+
+
+func _save_simulation_state(terrain_generation: int) -> bool:
+	if _simulation_persistence_blocked:
+		return false
+	if not is_instance_valid(simulation_runtime) or not simulation_runtime.initialized:
+		_simulation_persistence_status = "Simulation save unavailable"
+		return false
+	var preflight: Dictionary = simulation_runtime.get_persistence_preflight()
+	if not preflight.get("ok", false):
+		_simulation_persistence_status = "Simulation snapshot deferred (%s)" % preflight.get("reason", "work_pending")
+		return false
+	var content_validation: Dictionary = simulation_runtime.validate_material_state_content(
+		object_stream.registry
+	)
+	if not content_validation.get("ok", false):
+		_simulation_persistence_status = "Simulation save blocked (%s)" % content_validation.get("reason", "invalid")
+		_simulation_persistence_blocked = true
+		return false
+	_ensure_simulation_store()
+	var snapshot: Dictionary = simulation_runtime.get_runtime_snapshot()
+	var saved: Dictionary = _simulation_store.save_snapshot(
+		world_id,
+		world_seed,
+		Field.GENERATOR_VERSION,
+		maxi(0, terrain_generation),
+		snapshot
+	)
+	if not saved.get("ok", false):
+		_simulation_persistence_status = "Simulation save failed (%s)" % saved.get("reason", "unknown")
+		return false
+	_simulation_storage_generation = int(saved["generation"])
+	_simulation_persistence_status = (
+		"Saved simulation generation %d with terrain generation %d"
+		% [_simulation_storage_generation, terrain_generation]
+	)
+	return true
+
+
+func _queue_simulation_save(terrain_generation: int) -> void:
+	_pending_simulation_save_terrain_generation = maxi(0, terrain_generation)
+	_simulation_persistence_status = (
+		"Simulation snapshot pending for terrain generation %d"
+		% _pending_simulation_save_terrain_generation
+	)
+
+
+func _process_pending_simulation_save() -> void:
+	if _pending_simulation_save_terrain_generation < 0:
+		return
+	if _simulation_persistence_blocked:
+		return
+	var terrain_generation := _pending_simulation_save_terrain_generation
+	if _save_simulation_state(terrain_generation):
+		_pending_simulation_save_terrain_generation = -1
+
+
+func _apply_pending_simulation_candidate(pending: Dictionary) -> bool:
+	if not is_instance_valid(simulation_runtime):
+		_simulation_persistence_status = "Simulation apply failed (runtime node missing)"
+		_simulation_persistence_blocked = true
+		return false
+	var result: Dictionary
+	if bool(pending.get("simulation_found", false)):
+		result = simulation_runtime.restore_runtime_snapshot(
+			pending.get("simulation_snapshot", {})
+		)
+		if result.get("ok", false):
+			_simulation_storage_generation = int(
+				pending.get("simulation_generation", 0)
+			)
+	else:
+		result = simulation_runtime.initialize_runtime()
+		if result.get("ok", false):
+			_simulation_storage_generation = 0
+	if not result.get("ok", false):
+		_simulation_persistence_status = "Simulation apply failed (%s)" % result.get("reason", "invalid")
+		_simulation_persistence_blocked = true
+		return false
+
+	_simulation_persistence_blocked = false
+	_configure_simulation_streaming()
+	if not bool(
+		simulation_runtime.get_world_scope_lifecycle_metrics().get(
+			"initialized", false
+		)
+	):
+		_simulation_persistence_status = "Simulation lifecycle reconfiguration failed"
+		_simulation_persistence_blocked = true
+		return false
+	if bool(pending.get("simulation_found", false)):
+		_simulation_persistence_status = (
+			"Loaded simulation generation %d with terrain generation %d"
+			% [
+				_simulation_storage_generation,
+				int(pending.get("generation", 0)),
+			]
+		)
+	else:
+		_simulation_persistence_status = (
+			"No saved simulation for terrain generation %d; initialized deterministic baseline"
+			% int(pending.get("generation", 0))
+		)
+	return true
 
 
 func _configure_simulation_streaming() -> void:
@@ -371,6 +586,7 @@ func _exit_tree() -> void:
 
 func _process(delta: float) -> void:
 	var process_started_usec := Time.get_ticks_usec()
+	_process_pending_simulation_save()
 	_mesh_uploads_this_frame = 0
 	_mesh_dispatches_this_frame = 0
 	_last_frame_ms = maxf(delta * 1000.0, 0.0)
@@ -1996,13 +2212,17 @@ func _try_commit_global_rebuild() -> void:
 	for id in _full_rebuild_target_ids:
 		all_stages.append(loading_regions[id])
 	if not _pending_world_load.is_empty():
-		world_seed = int(_pending_world_load["world_seed"])
-		edit_ledger = _pending_world_load["ledger"]
+		var pending_load: Dictionary = _pending_world_load.duplicate(true)
+		world_seed = int(pending_load["world_seed"])
+		edit_ledger = pending_load["ledger"]
 		_persistence_blocked = false
-		_checkpoint_generation = int(_pending_world_load["generation"]) if _scalable_runtime_enabled else _checkpoint_generation
+		_checkpoint_generation = int(pending_load["generation"]) if _scalable_runtime_enabled else _checkpoint_generation
 		_persistence_status = "Loaded generation %d (%d ordered edit(s))" % [
-			int(_pending_world_load["generation"]), edit_ledger.get_edit_count(),
+			int(pending_load["generation"]), edit_ledger.get_edit_count(),
 		]
+		if not _apply_pending_simulation_candidate(pending_load):
+			_persistence_blocked = true
+			_persistence_status += "; simulation restore blocked"
 		_pending_world_load = {}
 	global_rebuild_pending = false
 	global_rebuild_reason = ""
@@ -3367,6 +3587,10 @@ func _process_async_checkpoint() -> void:
 		int(edit_ledger.get_tail_edit_count()),
 	]
 	_persistence_status = _checkpoint_status
+	_queue_simulation_save(_checkpoint_generation)
+	_process_pending_simulation_save()
+	if _pending_simulation_save_terrain_generation >= 0:
+		_persistence_status += "; " + _simulation_persistence_status
 
 
 func _apply_preedit_fixture() -> void:
@@ -3502,6 +3726,11 @@ func _save_world_to_storage() -> bool:
 		return false
 	if _scalable_runtime_enabled:
 		var queued := _start_async_checkpoint(true)
+		if queued and _checkpoint_task_id < 0:
+			_queue_simulation_save(_checkpoint_generation)
+			_process_pending_simulation_save()
+			if _pending_simulation_save_terrain_generation >= 0:
+				_persistence_status += "; " + _simulation_persistence_status
 		_update_status()
 		return queued
 	if global_rebuild_pending or not _edit_transaction.is_empty():
@@ -3513,14 +3742,23 @@ func _save_world_to_storage() -> bool:
 		_persistence_status = "Save failed (%s); previous generations retained" % saved.get("reason", "unknown")
 		_update_status()
 		return false
+	var terrain_generation := int(saved["generation"])
 	_persistence_status = "Saved generation %d (%d ordered edit(s), revision %d)" % [
-		int(saved["generation"]), int(saved["operation_count"]), int(saved["revision"]),
+		terrain_generation, int(saved["operation_count"]), int(saved["revision"]),
 	]
+	_queue_simulation_save(terrain_generation)
+	_process_pending_simulation_save()
+	if _pending_simulation_save_terrain_generation >= 0:
+		_persistence_status += "; " + _simulation_persistence_status
 	_update_status()
 	return true
 
 
 func _load_world_from_storage() -> bool:
+	if _pending_simulation_save_terrain_generation >= 0:
+		_persistence_status = "Load waits for the pending simulation snapshot to commit"
+		_update_status()
+		return false
 	if global_rebuild_pending or not _edit_transaction.is_empty():
 		_persistence_status = "Load waits for the current mesh transaction to finish"
 		_update_status()
@@ -3540,12 +3778,23 @@ func _load_world_from_storage() -> bool:
 			_update_status()
 			return false
 		var candidate: RefCounted = loaded["state"]
+		var terrain_generation := int(loaded["generation"])
+		var simulation_candidate := _read_simulation_candidate(
+			int(candidate.world_seed), terrain_generation
+		)
+		if not simulation_candidate.get("ok", false):
+			_persistence_status = "Load rejected: simulation sidecar %s; current world is unchanged" % simulation_candidate.get("reason", "invalid")
+			_update_status()
+			return false
 		_pending_world_load = {
 			"world_seed": int(candidate.world_seed),
 			"ledger": candidate,
-			"generation": int(loaded["generation"]),
+			"generation": terrain_generation,
+			"simulation_found": bool(simulation_candidate.get("found", false)),
+			"simulation_generation": int(simulation_candidate.get("generation", 0)),
+			"simulation_snapshot": simulation_candidate.get("snapshot", {}),
 		}
-		_checkpoint_generation = int(loaded["generation"])
+		_checkpoint_generation = terrain_generation
 		_persistence_status = "Loading materialized generation %d; old meshes remain until coherent publication" % _checkpoint_generation
 		_start_global_rebuild("load_world")
 		_update_status()
@@ -3564,12 +3813,23 @@ func _load_world_from_storage() -> bool:
 		_persistence_status = "Load rejected (%s); current world is unchanged" % candidate.get("reason", "invalid")
 		_update_status()
 		return false
+	var terrain_generation := int(loaded["generation"])
+	var simulation_candidate := _read_simulation_candidate(
+		int(candidate["world_seed"]), terrain_generation
+	)
+	if not simulation_candidate.get("ok", false):
+		_persistence_status = "Load rejected: simulation sidecar %s; current world is unchanged" % simulation_candidate.get("reason", "invalid")
+		_update_status()
+		return false
 	_pending_world_load = {
 		"world_seed": int(candidate["world_seed"]),
 		"ledger": candidate["ledger"],
-		"generation": int(loaded["generation"]),
+		"generation": terrain_generation,
+		"simulation_found": bool(simulation_candidate.get("found", false)),
+		"simulation_generation": int(simulation_candidate.get("generation", 0)),
+		"simulation_snapshot": simulation_candidate.get("snapshot", {}),
 	}
-	_persistence_status = "Loading generation %d; old meshes remain until the complete set is ready" % int(loaded["generation"])
+	_persistence_status = "Loading generation %d; old meshes remain until the complete set is ready" % terrain_generation
 	_start_global_rebuild("load_world")
 	_update_status()
 	return true
@@ -3641,6 +3901,12 @@ func _update_status() -> void:
 				int(simulation_metrics.get("due_updates_queued_total", 0)),
 				int(simulation_metrics.get("due_updates_deferred_total", 0)),
 				_simulation_streaming_status,
+			]
+			status += "P4 persistence: generation %d | terrain generation %d | pending %d | %s\n" % [
+				_simulation_storage_generation,
+				_checkpoint_generation,
+				_pending_simulation_save_terrain_generation,
+				_simulation_persistence_status,
 			]
 	if global_rebuild_pending:
 		status += "Rebuilding visible set: %d regions staged\n" % loading_regions.size()

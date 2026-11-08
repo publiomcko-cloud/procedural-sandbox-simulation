@@ -308,6 +308,32 @@ func process_scheduler_frame(
 	}
 
 
+func get_persistence_preflight(current_tick: int) -> Dictionary:
+	if not _initialized:
+		return {"ok": true, "reason": "ok", "resident_count": 0}
+	if current_tick < 0:
+		return {"ok": false, "reason": "world_scope_persistence_tick_invalid"}
+	var pending_due_scope_count := 0
+	for scope_id_value in _resident.keys():
+		var scope_id := String(scope_id_value)
+		var record: Dictionary = _resident[scope_id]
+		if int(record.get("next_tick", current_tick + 1)) <= current_tick:
+			pending_due_scope_count += 1
+	if pending_due_scope_count > 0:
+		return {
+			"ok": false,
+			"reason": "world_scope_due_cursors_pending",
+			"resident_count": _resident.size(),
+			"pending_due_scope_count": pending_due_scope_count,
+		}
+	return {
+		"ok": true,
+		"reason": "ok",
+		"resident_count": _resident.size(),
+		"pending_due_scope_count": 0,
+	}
+
+
 func reset_transient() -> void:
 	_resident.clear()
 	_has_focus = false

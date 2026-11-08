@@ -12,6 +12,7 @@ const SchedulerScript := preload("res://scripts/simulation/fixed_tick_scheduler.
 const TierStateScript := preload("res://scripts/simulation/simulation_tier_state.gd")
 const TierRouterScript := preload("res://scripts/simulation/simulation_tier_router.gd")
 const MaterialBridgeScript := preload("res://scripts/simulation/material_environment_runtime_bridge.gd")
+const MaterialDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const WorldScopeLifecycleScript := preload("res://scripts/simulation/simulation_world_scope_lifecycle.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
@@ -537,6 +538,110 @@ func get_runtime_snapshot() -> Dictionary:
 		"scheduler": scheduler.get_authoritative_snapshot(),
 		"tier_state": tier_state.get_authoritative_snapshot(),
 		"tier_router": tier_router.get_authoritative_snapshot(),
+	}
+
+
+func get_persistence_preflight() -> Dictionary:
+	if not initialized or scheduler == null or tier_state == null or tier_router == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	var router_pending := tier_router.get_pending_count()
+	if router_pending > 0:
+		return {
+			"ok": false,
+			"reason": "simulation_router_work_pending",
+			"router_pending_count": router_pending,
+		}
+	if material_bridge != null and material_bridge.is_enabled():
+		var material_metrics: Dictionary = material_bridge.get_metrics()
+		var queue_metrics: Dictionary = material_metrics.get("queue", {})
+		var material_pending := int(queue_metrics.get("pending_count", 0))
+		if material_pending > 0:
+			return {
+				"ok": false,
+				"reason": "material_queue_work_pending",
+				"material_pending_count": material_pending,
+			}
+	if world_scope_lifecycle != null and world_scope_lifecycle.is_initialized():
+		var lifecycle: Dictionary = world_scope_lifecycle.get_persistence_preflight(
+			scheduler.get_current_tick()
+		)
+		if not lifecycle.get("ok", false):
+			return lifecycle
+	return {
+		"ok": true,
+		"reason": "ok",
+		"current_tick": scheduler.get_current_tick(),
+		"router_pending_count": router_pending,
+		"material_pending_count": 0,
+	}
+
+
+func get_runtime_snapshot_fingerprint() -> String:
+	var snapshot := get_runtime_snapshot()
+	if snapshot.is_empty():
+		return ""
+	var bytes: PackedByteArray = var_to_bytes(snapshot)
+	var hashing := HashingContext.new()
+	if hashing.start(HashingContext.HASH_SHA256) != OK:
+		return ""
+	if hashing.update(bytes) != OK:
+		return ""
+	return hashing.finish().hex_encode()
+
+
+func validate_material_state_content(registry: ContentDefinitionRegistry) -> Dictionary:
+	if not initialized or tier_state == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	var domain: MaterialEnvironmentDomain = MaterialDomainScript.new()
+	var checked_bindings: Dictionary = {}
+	var material_scope_count := 0
+	var scopes: Array = tier_state.get_authoritative_snapshot().get("scopes", [])
+	for record_value in scopes:
+		var record: Dictionary = record_value
+		var state: Dictionary = record.get("state", {})
+		if not state.has(MaterialEnvironmentDomain.STATE_KEY):
+			continue
+		if typeof(state[MaterialEnvironmentDomain.STATE_KEY]) != TYPE_DICTIONARY:
+			return {
+				"ok": false,
+				"reason": "material_state_invalid",
+				"scope_id": String(record.get("scope_id", "")),
+			}
+		var material: Dictionary = state[MaterialEnvironmentDomain.STATE_KEY]
+		var payload: Dictionary = domain.validate_persisted_state_payload(material)
+		if not payload.get("ok", false):
+			return {
+				"ok": false,
+				"reason": String(payload.get("reason", "material_state_invalid")),
+				"scope_id": String(record.get("scope_id", "")),
+			}
+		material_scope_count += 1
+		if registry == null:
+			return {
+				"ok": false,
+				"reason": "material_registry_unavailable",
+				"scope_id": String(record.get("scope_id", "")),
+			}
+		var binding_key := "%s|%s" % [
+			String(payload["profile_id"]), String(payload["profile_sha256"])
+		]
+		if checked_bindings.has(binding_key):
+			continue
+		var binding: Dictionary = domain.validate_persisted_state_binding(
+			registry, material
+		)
+		if not binding.get("ok", false):
+			return {
+				"ok": false,
+				"reason": String(binding.get("reason", "material_persisted_profile_invalid")),
+				"profile_id": String(payload["profile_id"]),
+			}
+		checked_bindings[binding_key] = true
+	return {
+		"ok": true,
+		"reason": "ok",
+		"material_scope_count": material_scope_count,
+		"validated_binding_count": checked_bindings.size(),
 	}
 
 
