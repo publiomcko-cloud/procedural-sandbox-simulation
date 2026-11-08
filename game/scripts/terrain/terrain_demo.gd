@@ -300,7 +300,9 @@ func _ready() -> void:
 		_procedural_object_status = "Procedural objects unavailable (%s)" % object_initialization.get("reason", "unknown")
 		terrain_effect_runtime = null
 		_terrain_effect_status = "Terrain-object effects unavailable (object stream unavailable)"
-	_configure_simulation_streaming()
+	_restore_simulation_for_terrain_generation(_checkpoint_generation)
+	if not _simulation_persistence_blocked:
+		_configure_simulation_streaming()
 	_create_placement_target_marker()
 	terrain_mesh_template.mesh = null
 	terrain_mesh_template.visible = false
@@ -308,6 +310,106 @@ func _ready() -> void:
 	_update_camera()
 	_reconcile_region_window(true)
 	_update_status()
+
+
+func _ensure_simulation_store() -> void:
+	if _simulation_store == null:
+		_simulation_store = SimulationRuntimeStoreScript.new(
+			simulation_state_directory_override
+		)
+
+
+func _restore_simulation_for_terrain_generation(
+	terrain_generation: int,
+	explicit_load: bool = false
+) -> bool:
+	if not is_instance_valid(simulation_runtime):
+		_simulation_persistence_status = "Simulation persistence unavailable (runtime node missing)"
+		_simulation_persistence_blocked = true
+		return false
+	_ensure_simulation_store()
+	var loaded: Dictionary = _simulation_store.load_snapshot(
+		world_id,
+		world_seed,
+		Field.GENERATOR_VERSION,
+		maxi(0, terrain_generation)
+	)
+	if not loaded.get("ok", false):
+		_simulation_persistence_status = "Simulation load blocked (%s)" % loaded.get("reason", "invalid")
+		_simulation_persistence_blocked = true
+		return false
+	if not loaded.get("found", false):
+		if (
+			loaded.get("reason") == "simulation_generation_not_found"
+			and int(loaded.get("recognized_generation_count", 0)) > 0
+		):
+			_simulation_persistence_status = "Simulation load blocked: no sidecar matches terrain generation %d" % terrain_generation
+			_simulation_persistence_blocked = true
+			return false
+		_simulation_persistence_status = (
+			"No persisted simulation for terrain generation %d"
+			% terrain_generation
+		)
+		_simulation_storage_generation = 0
+		_simulation_persistence_blocked = false
+		return true
+
+	var restored: Dictionary = simulation_runtime.restore_runtime_snapshot(
+		loaded["snapshot"]
+	)
+	if not restored.get("ok", false):
+		_simulation_persistence_status = "Simulation restore blocked (%s)" % restored.get("reason", "invalid")
+		_simulation_persistence_blocked = true
+		return false
+	var content_validation: Dictionary = simulation_runtime.validate_material_state_content(
+		object_stream.registry
+	)
+	if not content_validation.get("ok", false):
+		_simulation_persistence_status = "Simulation content pin blocked (%s)" % content_validation.get("reason", "invalid")
+		_simulation_persistence_blocked = true
+		return false
+	_simulation_storage_generation = int(loaded["generation"])
+	_simulation_persistence_status = (
+		"Loaded simulation generation %d for terrain generation %d"
+		% [_simulation_storage_generation, terrain_generation]
+	)
+	if bool(loaded.get("recovered_temporary", false)):
+		_simulation_persistence_status += " (recovered interrupted commit)"
+	_simulation_persistence_blocked = false
+	return true
+
+
+func _save_simulation_state(terrain_generation: int) -> bool:
+	if _simulation_persistence_blocked:
+		return false
+	if not is_instance_valid(simulation_runtime) or not simulation_runtime.initialized:
+		_simulation_persistence_status = "Simulation save unavailable"
+		return false
+	var content_validation: Dictionary = simulation_runtime.validate_material_state_content(
+		object_stream.registry
+	)
+	if not content_validation.get("ok", false):
+		_simulation_persistence_status = "Simulation save blocked (%s)" % content_validation.get("reason", "invalid")
+		_simulation_persistence_blocked = true
+		return false
+	_ensure_simulation_store()
+	var snapshot: Dictionary = simulation_runtime.get_runtime_snapshot()
+	var saved: Dictionary = _simulation_store.save_snapshot(
+		world_id,
+		world_seed,
+		Field.GENERATOR_VERSION,
+		maxi(0, terrain_generation),
+		snapshot
+	)
+	if not saved.get("ok", false):
+		_simulation_persistence_status = "Simulation save failed (%s)" % saved.get("reason", "unknown")
+		return false
+	_simulation_storage_generation = int(saved["generation"])
+	_simulation_persistence_status = (
+		"Saved simulation generation %d with terrain generation %d"
+		% [_simulation_storage_generation, terrain_generation]
+	)
+	return true
 
 
 func _configure_simulation_streaming() -> void:
