@@ -447,6 +447,55 @@ func _save_simulation_state(terrain_generation: int) -> bool:
 	return true
 
 
+func _apply_pending_simulation_candidate(pending: Dictionary) -> bool:
+	if not is_instance_valid(simulation_runtime):
+		_simulation_persistence_status = "Simulation apply failed (runtime node missing)"
+		_simulation_persistence_blocked = true
+		return false
+	var result: Dictionary
+	if bool(pending.get("simulation_found", false)):
+		result = simulation_runtime.restore_runtime_snapshot(
+			pending.get("simulation_snapshot", {})
+		)
+		if result.get("ok", false):
+			_simulation_storage_generation = int(
+				pending.get("simulation_generation", 0)
+			)
+	else:
+		result = simulation_runtime.initialize_runtime()
+		if result.get("ok", false):
+			_simulation_storage_generation = 0
+	if not result.get("ok", false):
+		_simulation_persistence_status = "Simulation apply failed (%s)" % result.get("reason", "invalid")
+		_simulation_persistence_blocked = true
+		return false
+
+	_simulation_persistence_blocked = false
+	_configure_simulation_streaming()
+	if not bool(
+		simulation_runtime.get_world_scope_lifecycle_metrics().get(
+			"initialized", false
+		)
+	):
+		_simulation_persistence_status = "Simulation lifecycle reconfiguration failed"
+		_simulation_persistence_blocked = true
+		return false
+	if bool(pending.get("simulation_found", false)):
+		_simulation_persistence_status = (
+			"Loaded simulation generation %d with terrain generation %d"
+			% [
+				_simulation_storage_generation,
+				int(pending.get("generation", 0)),
+			]
+		)
+	else:
+		_simulation_persistence_status = (
+			"No saved simulation for terrain generation %d; initialized deterministic baseline"
+			% int(pending.get("generation", 0))
+		)
+	return true
+
+
 func _configure_simulation_streaming() -> void:
 	if not is_instance_valid(simulation_runtime):
 		_simulation_streaming_status = "Simulation streaming unavailable (runtime node missing)"
