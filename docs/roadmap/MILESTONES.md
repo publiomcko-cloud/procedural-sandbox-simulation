@@ -1,27 +1,30 @@
 # Roadmap with implementation gates
 
-## 2026-11-07 — M4.0 mandatory pre-P4 mod-first architecture gate
+## 2026-11-08 — M4.0 qualified; P4.0A next after integration
 
-Issue #108 is complete and closed after D.8 / PR #254 / merge `5a69a2ec9e96411fd256abc97ae9a6c32d4658a9`.
+Issue #108 is complete/closed. The mandatory pre-P4 M4.0 gate from [ADR-0007](../decisions/ADR-0007-MOD-FIRST-CONTENT-CORE-BEFORE-P4.md) is now **qualified** on PR #256 source `a7faa6f10421ec2e0acffb9bfcc4efe201901b6d`.
 
-Before P4 begins, the owner accepted [ADR-0007](../decisions/ADR-0007-MOD-FIRST-CONTENT-CORE-BEFORE-P4.md): M4.0 generalizes the existing P0.3/P2 mod-first content core without changing gameplay behavior.
+M4.0 qualification proves:
 
-M4.0 must:
+- one first-party + `user://mods` declarative discovery path remains authoritative;
+- loader discovery is content-type agnostic;
+- engine-owned handlers provide strict validation/normalization for registered content families;
+- current procedural-rock, population and terrain-interaction semantics remain compatible;
+- uniform canonical SHA-256 fingerprints detect same-version content drift;
+- existing persisted definition pins remain compatible without an implicit migration;
+- a synthetic new data-only content type joins the same runtime registry without loader changes;
+- unknown types remain fail-closed;
+- executable scripted mods remain out of scope.
 
-- preserve the single first-party + `user://mods` declarative discovery path;
-- replace domain-specific central registration with engine-owned extensible content-type handlers;
-- preserve current procedural rock, population and terrain-interaction semantics/identities;
-- expose uniform canonical content fingerprints/pins;
-- prove a synthetic new data-only type can be added without changing loader discovery;
-- retain strict schema/dependency/path/budget validation;
-- keep executable scripted mods out of scope.
+Owner-local Godot 4.7.2 qualification passed the M4.0 focused, declarative, entity-command, D8, placement and canonical L0-L2 gates. The procedural-object suite retained its exact pre-existing 671/1 baseline with no new failure.
 
-P4 scheduler mechanics remain engine-owned. Future simulation/material/environment definitions should enter through the generalized content architecture rather than through new first-party-only data paths.
+Runtime implementation remains governed by [ADR-0008](../decisions/ADR-0008-MAIN-THREAD-BUDGET-AND-PERFORMANCE-OBSERVABILITY.md): bounded work, direct indexes, pure worker preparation where applicable, revision-gated reuse, bounded main-thread publication and stage-level `PERF_TRACE` evidence.
 
-Runtime implementation from M4.0 onward is also governed by [ADR-0008](../decisions/ADR-0008-MAIN-THREAD-BUDGET-AND-PERFORMANCE-OBSERVABILITY.md) and the [Issue #108 performance retrospective](../reports/2026-11-07-ISSUE108-PERFORMANCE-RETROSPECTIVE.md): bounded work, direct indexes, pure worker preparation where applicable, revision-gated reuse, bounded main-thread publication and stage-level `PERF_TRACE` evidence.
+**Current integration gate:** PR #256 ready; explicit owner merge authorization still required.
 
-**Next authorized development slice:** M4.0.  
-**Blocked until M4.0 qualification:** P4.0A fixed-tick scheduler implementation.
+**Next development slice after integration:** **P4.0A — fixed-tick scheduler foundation**.
+
+P4 scheduler mechanics remain engine-owned. Any new simulation/material/environment definitions introduced by P4/P5 should enter through the generalized M4.0 content-handler architecture rather than a new first-party-only data path.
 
 
 ## 2026-10-25 — P3.0C persistent transactional entity history candidate

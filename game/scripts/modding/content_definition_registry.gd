@@ -26,13 +26,181 @@ const GEOLOGICAL_RECIPE_KEYS := [
 	"bevel_count", "weathering_milli", "macro_roughness_mm", "meso_roughness_mm", "fine_roughness_mm"
 ]
 const GEOLOGICAL_ALGORITHM := "geological_halfspace_v1"
+const MAX_CONTENT_TYPE_HANDLERS := 64
 const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
+const ContentTypeHandlerScript := preload("res://scripts/modding/content_type_handler.gd")
 
 var _definitions: Dictionary = {}
 var _population_rules: Dictionary = {}
 var _terrain_interactions: Dictionary = {}
 var _terrain_interaction_by_definition: Dictionary = {}
 var _mods: Dictionary = {}
+var _content_handlers: Dictionary = {}
+var _content_records_by_type: Dictionary = {}
+
+
+func _init() -> void:
+	_register_handler_internal(ContentTypeHandlerScript.new(
+		ROCK_TYPE, 10, Callable(self, "_validate_rock_handler"),
+		"duplicate_content_definition", 0
+	))
+	_register_handler_internal(ContentTypeHandlerScript.new(
+		POPULATION_RULE_TYPE, 20, Callable(self, "_validate_population_handler"),
+		"duplicate_population_rule", MAX_POPULATION_RULES
+	))
+	_register_handler_internal(ContentTypeHandlerScript.new(
+		TERRAIN_INTERACTION_RULE_TYPE, 30, Callable(self, "_validate_terrain_interaction_handler"),
+		"duplicate_terrain_interaction_rule", MAX_TERRAIN_INTERACTION_RULES
+	))
+
+
+func _register_handler_internal(handler: RefCounted) -> Dictionary:
+	if handler == null or not handler.has_method("is_valid") or not bool(handler.call("is_valid")):
+		return _failure("content_type_handler_invalid")
+	var content_type := String(handler.get("type_id"))
+	if not _valid_content_type_id(content_type):
+		return _failure("content_type_handler_invalid")
+	if _content_handlers.has(content_type):
+		return _failure("duplicate_content_type_handler")
+	if _content_handlers.size() >= MAX_CONTENT_TYPE_HANDLERS:
+		return _failure("content_type_handler_limit_exceeded")
+	_content_handlers[content_type] = handler
+	return {"ok": true, "reason": "ok"}
+
+
+func _valid_content_type_id(value: String) -> bool:
+	if value.is_empty() or value.length() > 64:
+		return false
+	for index in range(value.length()):
+		var code := value.unicode_at(index)
+		var valid := (
+			(code >= 97 and code <= 122)
+			or (code >= 48 and code <= 57 and index > 0)
+			or (code == 95 and index > 0)
+		)
+		if not valid:
+			return false
+	return true
+
+
+func _package_content_records(package: Dictionary) -> Dictionary:
+	var records: Array[Dictionary] = []
+	var has_legacy_definition_view := package.has("definitions")
+	var has_legacy_population_view := package.has("population_rules")
+	var has_legacy_interaction_view := package.has("terrain_interactions")
+	if package.has("content_records"):
+		if not package["content_records"] is Array:
+			return _failure("invalid_content_record_collection")
+		for value in package["content_records"]:
+			if not value is Dictionary:
+				return _failure("invalid_content_record")
+			var direct_record: Dictionary = value
+			var content_type := String(direct_record.get("type", ""))
+			# Loader-produced packages expose compatibility views for the three
+			# pre-M4.0 families. Prefer those views when present so callers that
+			# intentionally amend a discovery fixture before registration retain
+			# their historical behavior. New/future types flow only here.
+			if content_type == ROCK_TYPE and has_legacy_definition_view:
+				continue
+			if content_type == POPULATION_RULE_TYPE and has_legacy_population_view:
+				continue
+			if content_type == TERRAIN_INTERACTION_RULE_TYPE and has_legacy_interaction_view:
+				continue
+			records.append(direct_record.duplicate(true))
+	for key in ["definitions", "population_rules", "terrain_interactions"]:
+		if not package.has(key):
+			continue
+		var values: Variant = package[key]
+		if not values is Array:
+			return _failure("invalid_content_record_collection")
+		for value in values:
+			if not value is Dictionary:
+				return _failure("invalid_content_record")
+			var legacy_record: Dictionary = value
+			records.append(legacy_record.duplicate(true))
+	if not package.has("content_records") and not (
+		has_legacy_definition_view
+		or has_legacy_population_view
+		or has_legacy_interaction_view
+	):
+		return _failure("invalid_content_record_collection")
+	return {"ok": true, "records": records}
+
+
+func _count_content_records(records_by_type: Dictionary) -> int:
+	var count := 0
+	for typed_records_value in records_by_type.values():
+		if not typed_records_value is Dictionary:
+			continue
+		var typed_records: Dictionary = typed_records_value
+		count += typed_records.size()
+	return count
+
+
+func _validate_common_content_identity(
+	record: Dictionary, mod_id: String, expected_type: String
+) -> Dictionary:
+	if not record.has("schema_version") or not record.has("type") or not record.has("id"):
+		return _failure("content_record_identity_fields")
+	if String(record.get("type", "")) != expected_type:
+		return _failure("content_record_type_mismatch")
+	if not _is_integer(record["schema_version"]) or int(record["schema_version"]) <= 0:
+		return _failure("content_record_schema_invalid")
+	if not record["id"] is String or not _valid_local_id(record["id"], mod_id):
+		return _failure("content_record_namespace_mismatch")
+	return {"ok": true, "reason": "ok"}
+
+
+func _validate_rock_handler(
+	record: Dictionary, mod_id: String, _context: Dictionary
+) -> Dictionary:
+	return _validate_definition(record, mod_id)
+
+
+func _validate_population_handler(
+	record: Dictionary, mod_id: String, context: Dictionary
+) -> Dictionary:
+	var records_by_type: Dictionary = context.get("records_by_type", {})
+	var definitions: Dictionary = records_by_type.get(ROCK_TYPE, {})
+	return _validate_population_rule(record, mod_id, definitions)
+
+
+func _validate_terrain_interaction_handler(
+	record: Dictionary, mod_id: String, context: Dictionary
+) -> Dictionary:
+	var records_by_type: Dictionary = context.get("records_by_type", {})
+	var definitions: Dictionary = records_by_type.get(ROCK_TYPE, {})
+	return _validate_terrain_interaction(record, mod_id, definitions)
+
+
+func _build_content_fingerprint(
+	content_type: String,
+	namespaced_id: String,
+	record: Dictionary,
+	mods: Dictionary
+) -> Dictionary:
+	var separator := namespaced_id.find(":")
+	if separator <= 0:
+		return _failure("invalid_content_record_id")
+	var mod_id := namespaced_id.substr(0, separator)
+	if not mods.has(mod_id):
+		return _failure("content_record_package_missing")
+	var canonical := JSON.stringify(record, "", true, true)
+	var context := HashingContext.new()
+	if context.start(HashingContext.HASH_SHA256) != OK:
+		return _failure("content_fingerprint_failed")
+	if context.update(canonical.to_utf8_buffer()) != OK:
+		return _failure("content_fingerprint_failed")
+	return {"ok": true, "fingerprint": {
+		"content_id": namespaced_id,
+		"content_type": content_type,
+		"mod_id": mod_id,
+		"mod_version": String(mods[mod_id]["version"]),
+		"schema_version": int(record["schema_version"]),
+		"content_sha256": context.finish().hex_encode(),
+	}}
+
+
 
 
 func discover_and_register(roots: Array[String], optional_roots: Array[String] = []) -> Dictionary:
@@ -45,12 +213,72 @@ func discover_and_register(roots: Array[String], optional_roots: Array[String] =
 	return register_discovered(discovered)
 
 
+func register_engine_content_type_handler(handler: RefCounted) -> Dictionary:
+	if not _mods.is_empty() or not _content_records_by_type.is_empty():
+		return _failure("content_type_handler_registration_closed")
+	return _register_handler_internal(handler)
+
+
+func get_registered_content_type_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for type_value in _content_handlers.keys():
+		ids.append(String(type_value))
+	ids.sort()
+	return ids
+
+
+func get_content_record(content_type: String, namespaced_id: String) -> Dictionary:
+	var typed: Dictionary = _content_records_by_type.get(content_type, {})
+	if not typed.has(namespaced_id):
+		return {}
+	var record: Dictionary = typed[namespaced_id]
+	return record.duplicate(true)
+
+
+func get_content_record_ids(content_type: String) -> Array[String]:
+	var result: Array[String] = []
+	var typed: Dictionary = _content_records_by_type.get(content_type, {})
+	for id_value in typed.keys():
+		result.append(String(id_value))
+	result.sort()
+	return result
+
+
+func pin_content_record(content_type: String, namespaced_id: String) -> Dictionary:
+	var record := get_content_record(content_type, namespaced_id)
+	if record.is_empty():
+		return _failure("content_record_missing")
+	var fingerprint := _build_content_fingerprint(content_type, namespaced_id, record, _mods)
+	if not fingerprint.get("ok", false):
+		return fingerprint
+	return {"ok": true, "fingerprint": fingerprint["fingerprint"]}
+
+
+func validate_content_fingerprint(fingerprint: Dictionary) -> Dictionary:
+	var required := [
+		"content_id", "content_type", "mod_id", "mod_version",
+		"schema_version", "content_sha256"
+	]
+	if not _has_exact_keys(fingerprint, required):
+		return _failure("invalid_content_fingerprint")
+	var content_type := String(fingerprint.get("content_type", ""))
+	var content_id := String(fingerprint.get("content_id", ""))
+	var record := get_content_record(content_type, content_id)
+	if record.is_empty():
+		return _failure("content_record_missing")
+	var current := _build_content_fingerprint(content_type, content_id, record, _mods)
+	if not current.get("ok", false):
+		return current
+	if current["fingerprint"] != fingerprint:
+		return _failure("content_fingerprint_mismatch")
+	return {"ok": true, "reason": "ok"}
+
+
 func register_discovered(discovery: Dictionary) -> Dictionary:
 	if not discovery.get("ok", false) or not discovery.get("packages") is Array:
 		return _failure("invalid_discovery_result")
-	var candidate_definitions := _definitions.duplicate(true)
-	var candidate_population_rules := _population_rules.duplicate(true)
-	var candidate_terrain_interactions := _terrain_interactions.duplicate(true)
+	var candidate_records: Dictionary = _content_records_by_type.duplicate(true)
+	var candidate_content_record_count := _count_content_records(candidate_records)
 	var candidate_terrain_interaction_by_definition := _terrain_interaction_by_definition.duplicate(true)
 	var candidate_mods := _mods.duplicate(true)
 	for package_value in discovery["packages"]:
@@ -68,54 +296,83 @@ func register_discovered(discovery: Dictionary) -> Dictionary:
 			var dependency_id: String = dependency["id"]
 			if not candidate_mods.has(dependency_id) or str(candidate_mods[dependency_id]["version"]) != str(dependency["version"]):
 				return _failure("dependency_order_or_version_invalid")
-		candidate_mods[mod_id] = {"version": manifest.get("version", ""), "schema_version": manifest.get("schema_version", -1)}
-		for definition_value in package.get("definitions", []):
-			if not definition_value is Dictionary:
-				return _failure("invalid_definition")
-			var definition: Dictionary = definition_value
-			var validation := _validate_definition(definition, mod_id)
-			if not validation.get("ok", false):
-				return validation
-			var definition_id: String = definition["id"]
-			if candidate_definitions.has(definition_id):
-				return _failure("duplicate_content_definition")
-			candidate_definitions[definition_id] = definition.duplicate(true)
-		for rule_value in package.get("population_rules", []):
-			if not rule_value is Dictionary:
-				return _failure("invalid_population_rule")
-			var rule: Dictionary = rule_value
-			var rule_validation := _validate_population_rule(rule, mod_id, candidate_definitions)
-			if not rule_validation.get("ok", false):
-				return rule_validation
-			var rule_id := String(rule["id"])
-			if candidate_population_rules.has(rule_id):
-				return _failure("duplicate_population_rule")
-			candidate_population_rules[rule_id] = rule.duplicate(true)
-			if candidate_population_rules.size() > MAX_POPULATION_RULES:
-				return _failure("population_rule_limit_exceeded")
-		for interaction_value in package.get("terrain_interactions", []):
-			if not interaction_value is Dictionary:
-				return _failure("invalid_terrain_interaction_rule")
-			var interaction: Dictionary = interaction_value
-			var interaction_validation := _validate_terrain_interaction(interaction, mod_id, candidate_definitions)
-			if not interaction_validation.get("ok", false):
-				return interaction_validation
-			var interaction_id := String(interaction["id"])
-			var definition_id := String(interaction["definition_id"])
-			if candidate_terrain_interactions.has(interaction_id):
-				return _failure("duplicate_terrain_interaction_rule")
-			if candidate_terrain_interaction_by_definition.has(definition_id):
-				return _failure("duplicate_terrain_interaction_for_definition")
-			candidate_terrain_interactions[interaction_id] = interaction.duplicate(true)
-			candidate_terrain_interaction_by_definition[definition_id] = interaction_id
-			if candidate_terrain_interactions.size() > MAX_TERRAIN_INTERACTION_RULES:
-				return _failure("terrain_interaction_rule_limit_exceeded")
-	_definitions = candidate_definitions
-	_population_rules = candidate_population_rules
-	_terrain_interactions = candidate_terrain_interactions
+		candidate_mods[mod_id] = {
+			"version": manifest.get("version", ""),
+			"schema_version": manifest.get("schema_version", -1)
+		}
+		var records_result := _package_content_records(package)
+		if not records_result.get("ok", false):
+			return records_result
+		var records: Array[Dictionary] = records_result["records"]
+		records.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			var a_type := String(a.get("type", ""))
+			var b_type := String(b.get("type", ""))
+			var a_handler: RefCounted = _content_handlers.get(a_type)
+			var b_handler: RefCounted = _content_handlers.get(b_type)
+			var a_priority := int(a_handler.get("registration_priority")) if a_handler != null else 2147483647
+			var b_priority := int(b_handler.get("registration_priority")) if b_handler != null else 2147483647
+			if a_priority != b_priority:
+				return a_priority < b_priority
+			return "%s|%s" % [a_type, String(a.get("id", ""))] < "%s|%s" % [b_type, String(b.get("id", ""))]
+		)
+		for record in records:
+			var content_type := String(record.get("type", ""))
+			if not _content_handlers.has(content_type):
+				return _failure("unsupported_content_record_type")
+			var handler: RefCounted = _content_handlers[content_type]
+			var handler_context := {
+				"records_by_type": candidate_records.duplicate(true),
+				"terrain_interaction_by_definition":
+					candidate_terrain_interaction_by_definition.duplicate(true),
+			}
+			var prepared: Dictionary = handler.call(
+				"prepare", record, mod_id, handler_context
+			)
+			if not prepared.get("ok", false):
+				return prepared
+			var normalized: Dictionary = prepared.get("record", {})
+			var common_validation := _validate_common_content_identity(
+				normalized, mod_id, content_type
+			)
+			if not common_validation.get("ok", false):
+				return common_validation
+			var records_for_type: Dictionary = candidate_records.get(content_type, {}).duplicate(true)
+			var record_id := String(normalized["id"])
+			if records_for_type.has(record_id):
+				return _failure(String(handler.get("duplicate_reason")))
+			if content_type == TERRAIN_INTERACTION_RULE_TYPE:
+				var definition_id := String(normalized["definition_id"])
+				if candidate_terrain_interaction_by_definition.has(definition_id):
+					return _failure("duplicate_terrain_interaction_for_definition")
+				candidate_terrain_interaction_by_definition[definition_id] = record_id
+			if candidate_content_record_count + 1 > Loader.MAX_DEFINITIONS:
+				return _failure("content_record_limit_exceeded")
+			records_for_type[record_id] = normalized.duplicate(true)
+			candidate_content_record_count += 1
+			var max_records := int(handler.get("max_records"))
+			if max_records > 0 and records_for_type.size() > max_records:
+				if content_type == POPULATION_RULE_TYPE:
+					return _failure("population_rule_limit_exceeded")
+				if content_type == TERRAIN_INTERACTION_RULE_TYPE:
+					return _failure("terrain_interaction_rule_limit_exceeded")
+				return _failure("content_type_record_limit_exceeded")
+			candidate_records[content_type] = records_for_type
+	_content_records_by_type = candidate_records
+	_definitions = candidate_records.get(ROCK_TYPE, {}).duplicate(true)
+	_population_rules = candidate_records.get(POPULATION_RULE_TYPE, {}).duplicate(true)
+	_terrain_interactions = candidate_records.get(TERRAIN_INTERACTION_RULE_TYPE, {}).duplicate(true)
 	_terrain_interaction_by_definition = candidate_terrain_interaction_by_definition
 	_mods = candidate_mods
-	return {"ok": true, "reason": "ok", "mod_count": _mods.size(), "definition_count": _definitions.size(), "population_rule_count": _population_rules.size(), "terrain_interaction_count": _terrain_interactions.size()}
+	return {
+		"ok": true,
+		"reason": "ok",
+		"mod_count": _mods.size(),
+		"definition_count": _definitions.size(),
+		"population_rule_count": _population_rules.size(),
+		"terrain_interaction_count": _terrain_interactions.size(),
+		"content_type_count": _content_records_by_type.size(),
+		"content_record_count": candidate_content_record_count,
+	}
 
 
 func get_definition(namespaced_id: String) -> Dictionary:
@@ -191,10 +448,10 @@ func resolve_terrain_interaction(definition_id: String) -> Dictionary:
 	var mod_id := interaction_id.substr(0, separator)
 	if not _mods.has(mod_id):
 		return _failure("terrain_interaction_package_missing")
-	var canonical := JSON.stringify(rule, "", true, true)
-	var context := HashingContext.new()
-	if context.start(HashingContext.HASH_SHA256) != OK or context.update(canonical.to_utf8_buffer()) != OK:
+	var uniform := pin_content_record(TERRAIN_INTERACTION_RULE_TYPE, interaction_id)
+	if not uniform.get("ok", false):
 		return _failure("terrain_interaction_pin_failed")
+	var fingerprint: Dictionary = uniform["fingerprint"]
 	return {"ok": true, "rule": rule, "pin": {
 		"rule_id": interaction_id,
 		"definition_id": definition_id,
@@ -202,7 +459,7 @@ func resolve_terrain_interaction(definition_id: String) -> Dictionary:
 		"mod_version": String(_mods[mod_id]["version"]),
 		"rule_schema_version": int(rule["schema_version"]),
 		"algorithm": String(rule["algorithm"]),
-		"rule_sha256": context.finish().hex_encode(),
+		"rule_sha256": String(fingerprint["content_sha256"]),
 	}}
 
 
@@ -216,17 +473,17 @@ func pin_population_rule(namespaced_id: String) -> Dictionary:
 	var mod_id := namespaced_id.substr(0, separator)
 	if not _mods.has(mod_id):
 		return _failure("population_rule_package_missing")
-	var canonical := JSON.stringify(rule, "", true, true)
-	var context := HashingContext.new()
-	if context.start(HashingContext.HASH_SHA256) != OK or context.update(canonical.to_utf8_buffer()) != OK:
+	var uniform := pin_content_record(POPULATION_RULE_TYPE, namespaced_id)
+	if not uniform.get("ok", false):
 		return _failure("population_rule_pin_failed")
+	var fingerprint: Dictionary = uniform["fingerprint"]
 	return {"ok": true, "pin": {
 		"rule_id": namespaced_id,
 		"mod_id": mod_id,
 		"mod_version": String(_mods[mod_id]["version"]),
 		"rule_schema_version": int(rule["schema_version"]),
 		"algorithm": String(rule["algorithm"]),
-		"rule_sha256": context.finish().hex_encode(),
+		"rule_sha256": String(fingerprint["content_sha256"]),
 	}}
 
 

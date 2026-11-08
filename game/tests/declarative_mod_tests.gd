@@ -35,6 +35,7 @@ func _initialize() -> void:
 
 func _test_optional_user_mod_directories() -> void:
 	var user_root := "user://mods"
+	_remove_known_test_fixture_residue(user_root)
 	var first_party_root := "res://mods/first-party"
 	var example_root := _repo_mod_path("examples")
 	_check(Loader.optional_user_roots([user_root]) == [user_root], "only the exact canonical user mods root is inferred as optional")
@@ -446,6 +447,31 @@ func _write_text(path: String, text: String) -> void:
 		return
 	file.store_string(text)
 	file.close()
+
+
+func _remove_known_test_fixture_residue(user_root: String) -> void:
+	var absolute_root: String = ProjectSettings.globalize_path(user_root)
+	var current_fixture_name: String = _test_root.get_file()
+	var directory: DirAccess = DirAccess.open(absolute_root)
+	if directory == null:
+		return
+	var prefixes: Array[String] = [
+		"p3_0a_command_test_",
+		"p0_3_test_",
+		"m4_0_test_",
+	]
+	directory.list_dir_begin()
+	while true:
+		var entry: String = directory.get_next()
+		if entry.is_empty():
+			break
+		if entry == current_fixture_name or not directory.current_is_dir():
+			continue
+		for prefix: String in prefixes:
+			if entry.begins_with(prefix):
+				_remove_tree(absolute_root.path_join(entry))
+				break
+	directory.list_dir_end()
 
 
 func _remove_tree(path: String) -> void:

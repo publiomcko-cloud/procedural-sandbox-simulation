@@ -91,7 +91,13 @@ var _debug_fail_visual_request_serial := -1
 var _perf_trace_enabled := false
 
 
-func initialize(seed_value: int, world_identifier: String, package_roots: Array[String] = [], object_state_directory: String = "") -> Dictionary:
+func initialize(
+	seed_value: int,
+	world_identifier: String,
+	package_roots: Array[String] = [],
+	object_state_directory: String = "",
+	engine_content_type_handlers: Array[RefCounted] = []
+) -> Dictionary:
 	_clear_region_nodes()
 	initialized = false
 	_perf_trace_enabled = PerformanceTrace.is_enabled()
@@ -151,7 +157,21 @@ func initialize(seed_value: int, world_identifier: String, package_roots: Array[
 	var candidate: ContentDefinitionRegistry = RegistryScript.new()
 	_package_discovery_report = discovery.duplicate(true)
 	if not discovery.get("ok", false):
-		return _fail_initialize("package_discovery_failed:%s" % discovery.get("reason", "unknown"))
+		return _fail_initialize(
+			"package_discovery_failed:%s" % discovery.get("reason", "unknown")
+		)
+	# M4.0: the runtime still owns one shared first-party/user content registry,
+	# but future engine subsystems may install data-only type handlers before
+	# discovered package content is committed. Existing callers pass none.
+	for handler in engine_content_type_handlers:
+		var handler_registration: Dictionary = (
+			candidate.register_engine_content_type_handler(handler)
+		)
+		if not handler_registration.get("ok", false):
+			return _fail_initialize(
+				"content_type_handler_registration_failed:%s"
+				% handler_registration.get("reason", "unknown")
+			)
 	var registration: Dictionary = candidate.register_discovered(discovery)
 	if not registration.get("ok", false):
 		return _fail_initialize("package_registration_failed:%s" % registration.get("reason", "unknown"))
