@@ -220,26 +220,37 @@ func process_pending(
 	_process_calls_total += 1
 	var processed: Array = []
 	var processed_count := mini(budget, _pending_scope_ids.size())
-	for _index in range(processed_count):
-		var scope_id := _pending_scope_ids.pop_front()
-		_pending_set.erase(scope_id)
-
-		if not _observations.has(scope_id):
+	var selected_scope_ids: Array[String] = []
+	for index in range(processed_count):
+		var selected_scope_id := _pending_scope_ids[index]
+		if not _observations.has(selected_scope_id):
 			return {
 				"ok": false,
 				"reason": "simulation_router_pending_observation_missing",
 				"processed": processed,
+				"pending_count": _pending_scope_ids.size(),
 			}
-
-		var observation: Dictionary = _observations[scope_id]
-		var scope_record: Dictionary = tier_state.get_scope(scope_id)
-		if scope_record.is_empty():
+		if tier_state.get_scope(selected_scope_id).is_empty():
 			return {
 				"ok": false,
 				"reason": "simulation_scope_not_found",
 				"processed": processed,
+				"pending_count": _pending_scope_ids.size(),
 			}
+		selected_scope_ids.append(selected_scope_id)
 
+	for scope_id in selected_scope_ids:
+		var popped_scope_id := _pending_scope_ids.pop_front()
+		if popped_scope_id != scope_id:
+			return {
+				"ok": false,
+				"reason": "simulation_router_pending_order_corrupt",
+				"processed": processed,
+			}
+		_pending_set.erase(scope_id)
+
+		var observation: Dictionary = _observations[scope_id]
+		var scope_record: Dictionary = tier_state.get_scope(scope_id)
 		var source_tier := String(scope_record["tier"])
 		var target_tier := _target_tier(
 			source_tier,
