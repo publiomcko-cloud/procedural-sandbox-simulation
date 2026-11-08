@@ -6,6 +6,7 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-11-08 | [P4.0C final qualification](2026-11-08-P4-0C-QUALIFICATION.md) | Deterministic hysteretic tier routing over explicit integer-distance observations, bounded FIFO dirty work and runtime snapshot schema-2 migration qualified on self-hosted Windows CI | Issue #266 / feature branch ready for integration review; no visual gate required; material/environment domain next after merge |
 | 2026-11-08 | [P4.0B integration receipt](2026-11-08-P4-0B-INTEGRATION.md) | PR #264 merged qualified active/aggregate/dormant tier framework into main; no visual gate required for this non-visible infrastructure slice | Merge commit `25a2dd8687cf513aa414a0469dc1f5de659863e3`; domain simulation not started |
 | 2026-11-08 | [P4.0B final qualification](2026-11-08-P4-0B-QUALIFICATION.md) | Bounded active/aggregate/dormant scope authority, revision-gated state, deterministic cadence and atomic scheduler+tier snapshots qualified on self-hosted Windows CI | PR #264 ready for integration; explicit owner merge authorization pending; domain simulation not started |
 | 2026-11-08 | [P4.0A final qualification](2026-11-08-P4-0A-QUALIFICATION.md) | Deterministic fixed-tick scheduler, bounded catch-up, pause/step, snapshot/restore and playable runtime qualified; exact historical regression envelope preserved | PR #258 ready for integration; explicit owner merge authorization pending; tier/state framework next after merge |

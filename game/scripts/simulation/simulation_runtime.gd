@@ -3,30 +3,47 @@ class_name SimulationRuntime
 
 ## SceneTree adapter for P4 simulation authority.
 ##
-## P4.0A owns deterministic fixed logical time. P4.0B adds engine-owned
-## active/aggregate/dormant scope authority and due decisions. Domain-specific
-## simulation systems remain outside this node.
+## P4.0A owns deterministic fixed logical time. P4.0B owns explicit
+## active/aggregate/dormant scope authority. P4.0C adds bounded automatic tier
+## routing for explicit scope-distance observations. Domain simulation systems
+## remain outside this node.
 
 const SchedulerScript := preload("res://scripts/simulation/fixed_tick_scheduler.gd")
 const TierStateScript := preload("res://scripts/simulation/simulation_tier_state.gd")
+const TierRouterScript := preload("res://scripts/simulation/simulation_tier_router.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
-const RUNTIME_SNAPSHOT_SCHEMA_VERSION := 1
+const RUNTIME_SNAPSHOT_SCHEMA_VERSION := 2
+const RUNTIME_SNAPSHOT_SCHEMA_V1 := 1
 
 const DEFAULT_TICK_USEC := SchedulerScript.DEFAULT_TICK_USEC
 const DEFAULT_MAX_TICKS_PER_FRAME := SchedulerScript.DEFAULT_MAX_TICKS_PER_FRAME
 const DEFAULT_AGGREGATE_INTERVAL_TICKS := TierStateScript.DEFAULT_AGGREGATE_INTERVAL_TICKS
 const DEFAULT_MAX_SIMULATION_SCOPES := TierStateScript.DEFAULT_MAX_SCOPES
+const DEFAULT_ROUTER_ACTIVE_ENTER_MM := TierRouterScript.DEFAULT_ACTIVE_ENTER_MM
+const DEFAULT_ROUTER_ACTIVE_EXIT_MM := TierRouterScript.DEFAULT_ACTIVE_EXIT_MM
+const DEFAULT_ROUTER_AGGREGATE_ENTER_MM := TierRouterScript.DEFAULT_AGGREGATE_ENTER_MM
+const DEFAULT_ROUTER_AGGREGATE_EXIT_MM := TierRouterScript.DEFAULT_AGGREGATE_EXIT_MM
+const DEFAULT_ROUTER_MAX_DECISIONS_PER_CALL := TierRouterScript.DEFAULT_MAX_DECISIONS_PER_CALL
+const DEFAULT_ROUTER_MAX_TRACKED_OBSERVATIONS := TierRouterScript.DEFAULT_MAX_TRACKED_OBSERVATIONS
 
-const RUNTIME_SNAPSHOT_FIELDS := [
+const RUNTIME_SNAPSHOT_FIELDS_V1 := [
 	"schema_version",
 	"fractional_usec",
 	"scheduler",
 	"tier_state",
 ]
+const RUNTIME_SNAPSHOT_FIELDS_V2 := [
+	"schema_version",
+	"fractional_usec",
+	"scheduler",
+	"tier_state",
+	"tier_router",
+]
 
 var scheduler: FixedTickScheduler
 var tier_state: SimulationTierState
+var tier_router: SimulationTierRouter
 var initialized := false
 var initialization_error := ""
 
@@ -58,7 +75,13 @@ func initialize_runtime(
 	start_tick: int = 0,
 	start_paused: bool = false,
 	aggregate_interval_ticks: int = DEFAULT_AGGREGATE_INTERVAL_TICKS,
-	max_simulation_scopes: int = DEFAULT_MAX_SIMULATION_SCOPES
+	max_simulation_scopes: int = DEFAULT_MAX_SIMULATION_SCOPES,
+	router_active_enter_mm: int = DEFAULT_ROUTER_ACTIVE_ENTER_MM,
+	router_active_exit_mm: int = DEFAULT_ROUTER_ACTIVE_EXIT_MM,
+	router_aggregate_enter_mm: int = DEFAULT_ROUTER_AGGREGATE_ENTER_MM,
+	router_aggregate_exit_mm: int = DEFAULT_ROUTER_AGGREGATE_EXIT_MM,
+	router_max_decisions_per_call: int = DEFAULT_ROUTER_MAX_DECISIONS_PER_CALL,
+	router_max_tracked_observations: int = DEFAULT_ROUTER_MAX_TRACKED_OBSERVATIONS
 ) -> Dictionary:
 	if initialized:
 		return {"ok": false, "reason": "simulation_runtime_already_initialized"}
@@ -83,8 +106,24 @@ func initialize_runtime(
 		)
 		return tier_result
 
+	var next_tier_router: SimulationTierRouter = TierRouterScript.new()
+	var router_result: Dictionary = next_tier_router.initialize(
+		router_active_enter_mm,
+		router_active_exit_mm,
+		router_aggregate_enter_mm,
+		router_aggregate_exit_mm,
+		router_max_decisions_per_call,
+		router_max_tracked_observations
+	)
+	if not router_result.get("ok", false):
+		initialization_error = String(
+			router_result.get("reason", "simulation_tier_router_initialization_failed")
+		)
+		return router_result
+
 	scheduler = next_scheduler
 	tier_state = next_tier_state
+	tier_router = next_tier_router
 	_fractional_usec = 0.0
 	_last_result = {}
 	initialization_error = ""
@@ -234,6 +273,54 @@ func get_simulation_due_decision(
 	return tier_state.get_due_decision(scope_id, query_tick)
 
 
+func submit_simulation_scope_observation(
+	scope_id: String,
+	distance_mm: int
+) -> Dictionary:
+	if not initialized or tier_state == null or tier_router == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	return tier_router.submit_observation(scope_id, distance_mm, tier_state)
+
+
+func process_simulation_tier_routes(requested_budget: int = -1) -> Dictionary:
+	if (
+		not initialized
+		or scheduler == null
+		or tier_state == null
+		or tier_router == null
+	):
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+
+	var started_usec: int = Time.get_ticks_usec() if _perf_trace_enabled else 0
+	var result: Dictionary = tier_router.process_pending(
+		tier_state,
+		scheduler.get_current_tick(),
+		requested_budget
+	)
+	if _perf_trace_enabled and result.get("ok", false):
+		var processed_count := int(result.get("processed_count", 0))
+		var pending_count := int(result.get("pending_count", 0))
+		if processed_count > 0 or pending_count > 0:
+			PerformanceTrace.emit_duration(
+				"simulation_tier_routing_batch",
+				started_usec,
+				{
+					"logical_tick": scheduler.get_current_tick(),
+					"processed_count": processed_count,
+					"pending_count": pending_count,
+					"budget": int(result.get("budget", 0)),
+				},
+				true
+			)
+	return result
+
+
+func get_simulation_scope_observation(scope_id: String) -> Dictionary:
+	if not initialized or tier_router == null:
+		return {}
+	return tier_router.get_observation(scope_id)
+
+
 func get_scheduler_snapshot() -> Dictionary:
 	if not initialized or scheduler == null:
 		return {}
@@ -258,14 +345,32 @@ func get_simulation_tier_metrics() -> Dictionary:
 	return tier_state.get_metrics()
 
 
+func get_simulation_router_snapshot() -> Dictionary:
+	if not initialized or tier_router == null:
+		return {}
+	return tier_router.get_authoritative_snapshot()
+
+
+func get_simulation_router_metrics() -> Dictionary:
+	if not initialized or tier_router == null:
+		return {}
+	return tier_router.get_metrics()
+
+
 func get_runtime_snapshot() -> Dictionary:
-	if not initialized or scheduler == null or tier_state == null:
+	if (
+		not initialized
+		or scheduler == null
+		or tier_state == null
+		or tier_router == null
+	):
 		return {}
 	return {
 		"schema_version": RUNTIME_SNAPSHOT_SCHEMA_VERSION,
 		"fractional_usec": _fractional_usec,
 		"scheduler": scheduler.get_authoritative_snapshot(),
 		"tier_state": tier_state.get_authoritative_snapshot(),
+		"tier_router": tier_router.get_authoritative_snapshot(),
 	}
 
 
@@ -292,8 +397,19 @@ func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
 			)
 			return tier_result
 
+	var next_tier_router: SimulationTierRouter = tier_router
+	if next_tier_router == null or not next_tier_router.is_initialized():
+		next_tier_router = TierRouterScript.new()
+		var router_result: Dictionary = next_tier_router.initialize()
+		if not router_result.get("ok", false):
+			initialization_error = String(
+				router_result.get("reason", "simulation_tier_router_initialization_failed")
+			)
+			return router_result
+
 	scheduler = next_scheduler
 	tier_state = next_tier_state
+	tier_router = next_tier_router
 	_fractional_usec = 0.0
 	_last_result = {}
 	initialization_error = ""
@@ -313,6 +429,16 @@ func restore_simulation_tier_snapshot(snapshot: Dictionary) -> Dictionary:
 	var result: Dictionary = next_tier_state.restore_snapshot(snapshot)
 	if not result.get("ok", false):
 		return result
+
+	if tier_router != null and tier_router.is_initialized():
+		var router_snapshot := tier_router.get_authoritative_snapshot()
+		var compatibility := _validate_router_scope_compatibility(
+			router_snapshot,
+			next_tier_state
+		)
+		if not compatibility.get("ok", false):
+			return compatibility
+
 	tier_state = next_tier_state
 	return {
 		"ok": true,
@@ -321,13 +447,39 @@ func restore_simulation_tier_snapshot(snapshot: Dictionary) -> Dictionary:
 	}
 
 
+func restore_simulation_router_snapshot(snapshot: Dictionary) -> Dictionary:
+	if not initialized or scheduler == null or tier_state == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+
+	var next_router: SimulationTierRouter = TierRouterScript.new()
+	var result: Dictionary = next_router.restore_snapshot(snapshot)
+	if not result.get("ok", false):
+		return result
+	var compatibility := _validate_router_scope_compatibility(snapshot, tier_state)
+	if not compatibility.get("ok", false):
+		return compatibility
+
+	tier_router = next_router
+	return {
+		"ok": true,
+		"reason": "ok",
+		"snapshot": tier_router.get_authoritative_snapshot(),
+	}
+
+
 func validate_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
-	if not _has_exact_fields(snapshot, RUNTIME_SNAPSHOT_FIELDS):
-		return {"ok": false, "reason": "simulation_runtime_snapshot_fields_invalid"}
 	if typeof(snapshot.get("schema_version")) != TYPE_INT:
 		return {"ok": false, "reason": "simulation_runtime_snapshot_schema_invalid"}
-	if int(snapshot["schema_version"]) != RUNTIME_SNAPSHOT_SCHEMA_VERSION:
+	var schema_version := int(snapshot["schema_version"])
+	if schema_version == RUNTIME_SNAPSHOT_SCHEMA_V1:
+		if not _has_exact_fields(snapshot, RUNTIME_SNAPSHOT_FIELDS_V1):
+			return {"ok": false, "reason": "simulation_runtime_snapshot_fields_invalid"}
+	elif schema_version == RUNTIME_SNAPSHOT_SCHEMA_VERSION:
+		if not _has_exact_fields(snapshot, RUNTIME_SNAPSHOT_FIELDS_V2):
+			return {"ok": false, "reason": "simulation_runtime_snapshot_fields_invalid"}
+	else:
 		return {"ok": false, "reason": "simulation_runtime_snapshot_schema_invalid"}
+
 	if typeof(snapshot.get("fractional_usec")) != TYPE_FLOAT:
 		return {"ok": false, "reason": "simulation_runtime_snapshot_fractional_usec_invalid"}
 	var fractional_usec := float(snapshot["fractional_usec"])
@@ -360,6 +512,26 @@ func validate_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 			"detail": String(tier_result.get("reason", "")),
 		}
 
+	if schema_version == RUNTIME_SNAPSHOT_SCHEMA_VERSION:
+		if typeof(snapshot.get("tier_router")) != TYPE_DICTIONARY:
+			return {"ok": false, "reason": "simulation_runtime_snapshot_router_invalid"}
+		var router_candidate: SimulationTierRouter = TierRouterScript.new()
+		var router_result: Dictionary = router_candidate.restore_snapshot(
+			snapshot["tier_router"]
+		)
+		if not router_result.get("ok", false):
+			return {
+				"ok": false,
+				"reason": "simulation_runtime_snapshot_router_invalid",
+				"detail": String(router_result.get("reason", "")),
+			}
+		var compatibility := _validate_router_scope_compatibility(
+			snapshot["tier_router"],
+			tier_candidate
+		)
+		if not compatibility.get("ok", false):
+			return compatibility
+
 	return {"ok": true, "reason": "ok"}
 
 
@@ -388,8 +560,22 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 			"reason": "simulation_runtime_snapshot_tier_state_invalid",
 		}
 
+	var next_tier_router: SimulationTierRouter = TierRouterScript.new()
+	var schema_version := int(snapshot["schema_version"])
+	var router_result: Dictionary
+	if schema_version == RUNTIME_SNAPSHOT_SCHEMA_V1:
+		router_result = next_tier_router.initialize()
+	else:
+		router_result = next_tier_router.restore_snapshot(snapshot["tier_router"])
+	if not router_result.get("ok", false):
+		return {
+			"ok": false,
+			"reason": "simulation_runtime_snapshot_router_invalid",
+		}
+
 	scheduler = next_scheduler
 	tier_state = next_tier_state
+	tier_router = next_tier_router
 	_fractional_usec = float(snapshot["fractional_usec"])
 	_last_result = {}
 	initialization_error = ""
@@ -398,7 +584,29 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 		"ok": true,
 		"reason": "ok",
 		"snapshot": get_runtime_snapshot(),
+		"migrated_from_schema": (
+			RUNTIME_SNAPSHOT_SCHEMA_V1
+			if schema_version == RUNTIME_SNAPSHOT_SCHEMA_V1
+			else 0
+		),
 	}
+
+
+func _validate_router_scope_compatibility(
+	router_snapshot: Dictionary,
+	candidate_tier_state: SimulationTierState
+) -> Dictionary:
+	var observations: Array = router_snapshot.get("observations", [])
+	for observation_value in observations:
+		var observation: Dictionary = observation_value
+		var scope_id := String(observation.get("scope_id", ""))
+		if candidate_tier_state.get_scope(scope_id).is_empty():
+			return {
+				"ok": false,
+				"reason": "simulation_runtime_snapshot_router_scope_missing",
+				"scope_id": scope_id,
+			}
+	return {"ok": true, "reason": "ok"}
 
 
 func _has_exact_fields(value: Dictionary, fields: Array) -> bool:

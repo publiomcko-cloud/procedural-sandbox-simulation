@@ -1,38 +1,43 @@
-# Current project status — P4.0B integrated (2026-11-08)
+# Current project status — P4.0C qualified; integration pending (2026-11-08)
 
 ## Authoritative 2026-11-08 update
 
-M4.0 and P4.0A are integrated into `main`.
+M4.0, P4.0A and P4.0B are integrated into `main`.
 
-Integration identities:
+Integrated foundation:
 
 - M4.0 merge: `ca13d91a4917e8061528736e5b6d808dc9b85576`;
 - P4.0A merge: `7b18f9fd02b3b2d993127670b4c4d1dde19796cb`;
-- self-hosted CI migration/main base: `8fbffbde03f61050f32cac41767925566be0f98a`.
+- P4.0B merge: `25a2dd8687cf513aa414a0469dc1f5de659863e3`;
+- current P4.0C base: `5810a5f8b3cad19d90b3e11789b9f4186f92b7d7`.
 
-P4.0B — bounded active/aggregate/dormant simulation tier framework — is **INTEGRATED** through PR #264 at merge commit `25a2dd8687cf513aa414a0469dc1f5de659863e3`.
+P4.0C — bounded automatic simulation tier routing policy — is **QUALIFIED / READY_FOR_INTEGRATION** on Issue #266.
 
-Qualified runtime/source HEAD:
+Qualified runtime/source:
 
-- `d741d1fa0711034a46ac4d57450310a365114f8b`;
-- branch: `feat/p4-0b-simulation-tier-framework`;
+- `e43893505924cdf0557222193d03eb7ec0dfd933`;
+- branch: `feat/p4-0c-tier-routing-policy`;
 - Godot: `4.7.2.stable.official.ed1daf0bf`;
 - self-hosted runner: `sandbox`, Windows/X64.
 
-P4.0B adds engine-owned stable simulation scopes with:
+P4.0C adds an engine-owned bounded router for explicit `scope_id + distance_mm` observations:
 
-- `active`, `aggregate`, and `dormant` tiers;
-- independent tier/state revisions;
-- revision-gated transitions and state replacement;
-- bounded data-only generic state;
-- deterministic aggregate cadence;
-- direct scope-ID routing without world scans;
-- deterministic tier snapshot/restore;
-- combined scheduler+tier runtime snapshot/restore;
-- `simulation_tier_transition` PERF_TRACE telemetry.
+- deterministic integer-distance input;
+- active/aggregate/dormant hysteresis bands;
+- deduplicated FIFO dirty queue;
+- hard per-call decision budget;
+- hard tracked-observation capacity;
+- preflight before queue consumption;
+- revision-gated P4.0B tier commits;
+- router snapshot/restore;
+- runtime snapshot schema 2 with backward restore from schema 1;
+- `simulation_tier_routing_batch` PERF_TRACE telemetry.
+
+The router does **not** scan cameras, players, chunks, terrain, entities or world history. Distance derivation remains outside the policy layer.
 
 Final self-hosted qualification passed:
 
+- P4.0C focused: 110/110;
 - P4.0B focused: 67/67;
 - P4.0A focused: 74/74;
 - M4.0 focused: 31/31;
@@ -48,20 +53,20 @@ Final self-hosted qualification passed:
 
 The procedural-object suite preserved the exact accepted historical envelope: 671 assertions / 1 known camera-revisit failure / 9 same-revision fingerprint conflicts / 0 `SCRIPT ERROR`.
 
-The active CI path now runs on the repository self-hosted Windows service runner. Inline workflow steps avoid user-profile dependencies; versioned PowerShell qualification scripts are invoked explicitly with execution-policy bypass.
-
 Architecture remains governed by:
 
 - [ADR-0007 — Generalize the mod-first content core before P4](../decisions/ADR-0007-MOD-FIRST-CONTENT-CORE-BEFORE-P4.md);
 - [ADR-0008 — Main-thread budget, derived-work isolation and performance observability](../decisions/ADR-0008-MAIN-THREAD-BUDGET-AND-PERFORMANCE-OBSERVABILITY.md);
 - [P4.0A fixed-tick specification](../specs/P4-0A-FIXED-TICK-SCHEDULER.md);
 - [P4.0B tier/state specification](../specs/P4-0B-SIMULATION-TIER-FRAMEWORK.md);
-- [P4.0B final qualification checkpoint](../checkpoints/2026-11-08-P4-0B-QUALIFICATION.md);
-- [P4.0B integration receipt](../checkpoints/2026-11-08-P4-0B-INTEGRATION.md).
+- [P4.0C routing specification](../specs/P4-0C-TIER-ROUTING-POLICY.md);
+- [P4.0C final qualification checkpoint](../checkpoints/2026-11-08-P4-0C-QUALIFICATION.md).
 
-**Integration state:** complete. PR #264 is merged. Issue #263 is complete.
+**Integration state:** P4.0C is qualified; merge requires explicit owner authorization.
 
-**Not started:** automatic tier assignment, materials/environment, climate/water, organism simulation and domain-specific aggregation.
+**Visual gate:** not required for P4.0C because no rendered/input behavior changes.
+
+**Next after integration:** first mod-first material/environment state domain. Climate/water and organism systems remain later work.
 
 
 ---
