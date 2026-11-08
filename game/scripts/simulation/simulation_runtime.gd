@@ -12,6 +12,7 @@ const SchedulerScript := preload("res://scripts/simulation/fixed_tick_scheduler.
 const TierStateScript := preload("res://scripts/simulation/simulation_tier_state.gd")
 const TierRouterScript := preload("res://scripts/simulation/simulation_tier_router.gd")
 const MaterialBridgeScript := preload("res://scripts/simulation/material_environment_runtime_bridge.gd")
+const MaterialQueueScript := preload("res://scripts/simulation/material_environment_work_queue.gd")
 const MaterialDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const WorldScopeLifecycleScript := preload("res://scripts/simulation/simulation_world_scope_lifecycle.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
@@ -310,8 +311,8 @@ func replace_simulation_scope_state(
 
 func configure_material_environment(
 	registry: RefCounted, profile_id: String,
-	budget_per_frame: int = MaterialEnvironmentWorkQueue.DEFAULT_BUDGET,
-	queue_capacity: int = MaterialEnvironmentWorkQueue.DEFAULT_CAPACITY
+	budget_per_frame: int = MaterialQueueScript.DEFAULT_BUDGET,
+	queue_capacity: int = MaterialQueueScript.DEFAULT_CAPACITY
 ) -> Dictionary:
 	if not initialized or tier_state == null or scheduler == null:
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
