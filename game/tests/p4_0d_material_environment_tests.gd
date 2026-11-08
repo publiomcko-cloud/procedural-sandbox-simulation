@@ -4,6 +4,7 @@ const Domain := preload("res://scripts/simulation/material_environment_domain.gd
 const TierState := preload("res://scripts/simulation/simulation_tier_state.gd")
 const Registry := preload("res://scripts/modding/content_definition_registry.gd")
 const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
+const WorkQueue := preload("res://scripts/simulation/material_environment_work_queue.gd")
 
 var assertions := 0
 var failures := 0
@@ -119,6 +120,7 @@ func _test_mod_first_discovery_and_pin() -> void:
 				tiers.initialize()
 				tiers.register_scope("material.area", "active")
 				_check(domain.initialize_scope_state(tiers, "material.area", record, pin, 0).get("ok", false), "M4.0-pin-backed material scope initializes")
+				_test_bound_queue(domain, registry, record, pin)
 				var drift: Dictionary = record.duplicate(true)
 				drift["ambient_temperature_milli_c"] = 16000
 				_check(domain.process_due_scope(tiers, "material.area", drift, pin, 1).get("reason", "") == "material_profile_pin_conflict", "same-version content drift is rejected before state mutation")
@@ -127,6 +129,51 @@ func _test_mod_first_discovery_and_pin() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(profile_path))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(package_path))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(root))
+
+
+func _test_bound_queue(
+	domain: MaterialEnvironmentDomain, registry: ContentDefinitionRegistry,
+	profile: Dictionary, pin: Dictionary
+) -> void:
+	var profile_id := String(profile["id"])
+	_check(domain.bind_registry_profile(registry, profile_id).get("ok", false), "cold profile bind validates M4.0")
+	_check(domain.bind_registry_profile(registry, profile_id).get("noop", false), "warm bind is idempotent")
+	var hash_count := int(domain.get_binding_metrics()["legacy_hash_validations_total"])
+	_check(hash_count == 1, "cold binding performs one SHA-256 validation")
+	var tiers: SimulationTierState = TierState.new()
+	tiers.initialize(2, 64)
+	for i in range(20):
+		var id := "dense.%02d" % i
+		tiers.register_scope(id, "active")
+		_check(domain.initialize_bound_scope_state(tiers, id, profile_id, 0).get("ok", false), "bound state init " + id)
+	var queue: MaterialEnvironmentWorkQueue = WorkQueue.new()
+	_check(queue.initialize(domain, 4, 20).get("ok", false), "bounded ring initialized")
+	_check(queue.process_pending(tiers, 5).get("reason", "") == "material_queue_budget_invalid", "cannot exceed per-call budget")
+	for i in range(20):
+		_check(queue.enqueue(tiers, "dense.%02d" % i, profile_id, 1).get("ok", false), "enqueue ordered dense scope")
+	_check(queue.enqueue(tiers, "dense.00", profile_id, 1).get("noop", false), "same scope/tick deduplicated")
+	_check(queue.enqueue(tiers, "dense.00", profile_id, 2).get("reason", "") == "material_queue_capacity_reached", "hard capacity rejects without evicting")
+	var first: Dictionary = queue.process_pending(tiers)
+	_check(first.get("ok", false) and int(first["processed_count"]) == 4 and int(first["pending_count"]) == 16, "first frame admits exactly four")
+	_check(String(first["processed"][0]["scope_id"]) == "dense.00", "FIFO receipts preserve admission order")
+	for _batch in range(4):
+		_check(queue.process_pending(tiers).get("ok", false), "remaining batch succeeds")
+	_check(int(queue.get_metrics()["pending_count"]) == 0, "backlog drains without global scans")
+	_check(int(queue.get_metrics()["processed_total"]) == 20, "exact bounded decision count")
+	for i in range(20):
+		var data: Dictionary = tiers.get_scope("dense.%02d" % i)["state"]["material_environment"]
+		_check(int(data["temperature_milli_c"]) == 3750 and int(data["last_due_tick"]) == 1, "each scope advanced exactly once")
+	_check(int(domain.get_binding_metrics()["legacy_hash_validations_total"]) == hash_count, "hot-path batches never hash profiles")
+	_check(int(domain.get_binding_metrics()["bound_update_calls_total"]) == 20, "bound update metrics count admitted work")
+	var snapshot: Dictionary = tiers.get_authoritative_snapshot()
+	var restored: SimulationTierState = TierState.new()
+	_check(restored.restore_snapshot(snapshot).get("ok", false), "dense state restore succeeds")
+	var next: MaterialEnvironmentWorkQueue = WorkQueue.new()
+	next.initialize(domain, 4, 8)
+	_check(next.enqueue(restored, "dense.00", profile_id, 2).get("ok", false), "restored scope accepts next tick")
+	_check(next.process_pending(restored).get("ok", false), "restored scope resumes safely")
+	_check(int(restored.get_scope("dense.00")["state"]["material_environment"]["temperature_milli_c"]) == 6562, "warm deterministic integer progression after restore")
+	_check(int(domain.get_binding_metrics()["legacy_hash_validations_total"]) == hash_count, "restore path still avoids per-tick hashing")
 
 
 func _write_json(path: String, data: Dictionary) -> void:
