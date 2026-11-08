@@ -45,7 +45,7 @@ foreach ($relative in $relativeFiles) {
                 $line -match ('->\s*' + $escaped + '\b') -or
                 $line -match ('\b' + $escaped + '\s*\.')
             ) {
-                $violations += "$relative:$lineNumber: $line"
+                $violations += "${relative}:${lineNumber}: $line"
             }
         }
     }
