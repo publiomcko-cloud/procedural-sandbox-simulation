@@ -7,6 +7,8 @@ class_name SimulationTierRouter
 ## not inspect SceneTree, terrain, chunks, entities or world history. Dirty
 ## observations are deduplicated and processed under a hard per-call budget.
 
+const TierStateScript := preload("res://scripts/simulation/simulation_tier_state.gd")
+
 const SNAPSHOT_SCHEMA_VERSION := 1
 
 const DEFAULT_ACTIVE_ENTER_MM := 32_000
@@ -123,7 +125,7 @@ func get_config() -> Dictionary:
 func submit_observation(
 	scope_id: String,
 	distance_mm: int,
-	tier_state: SimulationTierState
+	tier_state: RefCounted
 ) -> Dictionary:
 	if not _initialized:
 		return {"ok": false, "reason": "simulation_tier_router_not_initialized"}
@@ -198,7 +200,7 @@ func get_pending_count() -> int:
 
 
 func process_pending(
-	tier_state: SimulationTierState,
+	tier_state: RefCounted,
 	logical_tick: int,
 	requested_budget: int = -1
 ) -> Dictionary:
@@ -477,24 +479,24 @@ func get_metrics() -> Dictionary:
 
 func _target_tier(current_tier: String, distance_mm: int) -> String:
 	match current_tier:
-		SimulationTierState.TIER_ACTIVE:
+		TierStateScript.TIER_ACTIVE:
 			if distance_mm <= _active_exit_mm:
-				return SimulationTierState.TIER_ACTIVE
+				return TierStateScript.TIER_ACTIVE
 			if distance_mm <= _aggregate_exit_mm:
-				return SimulationTierState.TIER_AGGREGATE
-			return SimulationTierState.TIER_DORMANT
-		SimulationTierState.TIER_AGGREGATE:
+				return TierStateScript.TIER_AGGREGATE
+			return TierStateScript.TIER_DORMANT
+		TierStateScript.TIER_AGGREGATE:
 			if distance_mm <= _active_enter_mm:
-				return SimulationTierState.TIER_ACTIVE
+				return TierStateScript.TIER_ACTIVE
 			if distance_mm <= _aggregate_exit_mm:
-				return SimulationTierState.TIER_AGGREGATE
-			return SimulationTierState.TIER_DORMANT
-		SimulationTierState.TIER_DORMANT:
+				return TierStateScript.TIER_AGGREGATE
+			return TierStateScript.TIER_DORMANT
+		TierStateScript.TIER_DORMANT:
 			if distance_mm <= _active_enter_mm:
-				return SimulationTierState.TIER_ACTIVE
+				return TierStateScript.TIER_ACTIVE
 			if distance_mm <= _aggregate_enter_mm:
-				return SimulationTierState.TIER_AGGREGATE
-			return SimulationTierState.TIER_DORMANT
+				return TierStateScript.TIER_AGGREGATE
+			return TierStateScript.TIER_DORMANT
 		_:
 			return current_tier
 
