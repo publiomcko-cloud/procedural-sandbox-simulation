@@ -1,0 +1,29 @@
+name: Actions runner allocation diagnostic
+
+on:
+  push:
+    branches:
+      - diagnostic/actions-runner-allocation-2026-11-08
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo
+        run: echo "ACTIONS_DIAGNOSTIC_UBUNTU_OK"
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Echo
+        shell: pwsh
+        run: Write-Output "ACTIONS_DIAGNOSTIC_WINDOWS_OK"
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - name: Echo
+        run: echo "ACTIONS_DIAGNOSTIC_MACOS_OK"
