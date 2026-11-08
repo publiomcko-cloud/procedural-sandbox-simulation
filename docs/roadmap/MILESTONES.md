@@ -1,5 +1,16 @@
 # Roadmap with implementation gates
 
+## 2026-11-08 — P4 CLOSED; P5 V1 environment next
+
+P4 is **CLOSED**. P4.0D–H PRs #269–#273 are integrated through main merge `99e83c0bd6fcc28e55e0977dad41a378a00ea2ee`. Final automated P4.0H qualification run `42519921001` passed cache-independent cold boot, 81/81 real-scene assertions, structured performance gates and all cumulative P4.0G→A suites. The owner GUI run on the corrected source was visually smooth and accepted.
+
+The P4 roadmap acceptance gate is now satisfied: deterministic constrained replay, pause/step/catch-up and active/aggregate/dormant roundtrip invariants all qualified, with durable material/environment state and real save/restart/load integration.
+
+[Closure checkpoint](../checkpoints/2026-11-08-P4-CLOSURE.md).
+
+**Next milestone: P5 — V1 environment.** Add climate, rain, moisture and water accumulation/flow using the P4 scheduler, tiers, streaming lifecycle and persistence boundaries. Organism systems remain P7.
+
+
 ## 2026-11-08 — P4.0C integrated; first material/environment state domain next
 
 P4.0C [PR #267](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/pull/267) merged to `main` at `e5370cb78d7685ea6439c78e6d753c2c975fb4cb`, completing the bounded deterministic tier-routing infrastructure after M4.0/P4.0A/P4.0B. Final P4.0C qualification 110/110 and self-hosted workflow PASS; historical procedural-object regression envelope unchanged. Issue #266 completed. [Integration receipt](../checkpoints/2026-11-08-P4-0C-INTEGRATION.md).
