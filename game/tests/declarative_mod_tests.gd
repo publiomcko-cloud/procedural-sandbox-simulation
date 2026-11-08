@@ -450,11 +450,12 @@ func _write_text(path: String, text: String) -> void:
 
 
 func _remove_known_test_fixture_residue(user_root: String) -> void:
-	var absolute_root := ProjectSettings.globalize_path(user_root)
-	var directory := DirAccess.open(absolute_root)
+	var absolute_root: String = ProjectSettings.globalize_path(user_root)
+	var current_fixture_name: String = _test_root.get_file()
+	var directory: DirAccess = DirAccess.open(absolute_root)
 	if directory == null:
 		return
-	var prefixes := [
+	var prefixes: Array[String] = [
 		"p3_0a_command_test_",
 		"p0_3_test_",
 		"m4_0_test_",
@@ -464,9 +465,9 @@ func _remove_known_test_fixture_residue(user_root: String) -> void:
 		var entry: String = directory.get_next()
 		if entry.is_empty():
 			break
-		if not directory.current_is_dir():
+		if entry == current_fixture_name or not directory.current_is_dir():
 			continue
-		for prefix in prefixes:
+		for prefix: String in prefixes:
 			if entry.begins_with(prefix):
 				_remove_tree(absolute_root.path_join(entry))
 				break
