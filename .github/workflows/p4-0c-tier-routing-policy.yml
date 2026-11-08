@@ -1,9 +1,6 @@
 name: P4.0C tier routing policy
 
 on:
-  push:
-    branches:
-      - feat/p4-0c-tier-routing-policy
   pull_request:
     branches:
       - main
