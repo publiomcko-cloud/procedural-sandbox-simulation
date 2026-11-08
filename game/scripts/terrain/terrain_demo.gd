@@ -3587,7 +3587,9 @@ func _process_async_checkpoint() -> void:
 		int(edit_ledger.get_tail_edit_count()),
 	]
 	_persistence_status = _checkpoint_status
-	if not _save_simulation_state(_checkpoint_generation):
+	_queue_simulation_save(_checkpoint_generation)
+	_process_pending_simulation_save()
+	if _pending_simulation_save_terrain_generation >= 0:
 		_persistence_status += "; " + _simulation_persistence_status
 
 
@@ -3725,10 +3727,10 @@ func _save_world_to_storage() -> bool:
 	if _scalable_runtime_enabled:
 		var queued := _start_async_checkpoint(true)
 		if queued and _checkpoint_task_id < 0:
-			if not _save_simulation_state(_checkpoint_generation):
+			_queue_simulation_save(_checkpoint_generation)
+			_process_pending_simulation_save()
+			if _pending_simulation_save_terrain_generation >= 0:
 				_persistence_status += "; " + _simulation_persistence_status
-				_update_status()
-				return false
 		_update_status()
 		return queued
 	if global_rebuild_pending or not _edit_transaction.is_empty():
@@ -3744,15 +3746,19 @@ func _save_world_to_storage() -> bool:
 	_persistence_status = "Saved generation %d (%d ordered edit(s), revision %d)" % [
 		terrain_generation, int(saved["operation_count"]), int(saved["revision"]),
 	]
-	if not _save_simulation_state(terrain_generation):
+	_queue_simulation_save(terrain_generation)
+	_process_pending_simulation_save()
+	if _pending_simulation_save_terrain_generation >= 0:
 		_persistence_status += "; " + _simulation_persistence_status
-		_update_status()
-		return false
 	_update_status()
 	return true
 
 
 func _load_world_from_storage() -> bool:
+	if _pending_simulation_save_terrain_generation >= 0:
+		_persistence_status = "Load waits for the pending simulation snapshot to commit"
+		_update_status()
+		return false
 	if global_rebuild_pending or not _edit_transaction.is_empty():
 		_persistence_status = "Load waits for the current mesh transaction to finish"
 		_update_status()
