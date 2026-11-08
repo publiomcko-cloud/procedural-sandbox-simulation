@@ -30,7 +30,7 @@ func _initialize() -> void:
 
 func _test_handler_lifetime_is_acyclic() -> void:
 	var registry := Registry.new()
-	var registry_weak := weakref(registry)
+	var registry_weak: WeakRef = weakref(registry)
 	registry = null
 	_check(
 		registry_weak.get_ref() == null,
