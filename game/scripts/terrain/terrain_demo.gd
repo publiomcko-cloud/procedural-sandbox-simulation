@@ -19,6 +19,7 @@ const SharedZBoundaryMeshJob := preload("res://scripts/terrain/shared_surface_z_
 const SharedCornerMeshJob := preload("res://scripts/terrain/shared_surface_corner_mesh_job.gd")
 const EntityStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 const TerrainEffectRuntime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
+const MaterialEnvironmentDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
 const BRUSH_RADIUS := 1.25
@@ -48,6 +49,7 @@ const FREE_EXPLORE_MAX_PITCH_RADIANS := 1.553343034
 @onready var ui_layer: CanvasLayer = $CanvasLayer
 @onready var status_label: Label = $CanvasLayer/Status
 @onready var object_stream: ProceduralObjectStream = $ProceduralObjects
+@onready var simulation_runtime: SimulationRuntime = $SimulationRuntime
 
 var cave_section_enabled := false
 var orbit_target := Vector3(8.0, 3.1, 6.0)
@@ -91,6 +93,9 @@ var object_package_roots_override: Array[String] = []
 var terrain_effect_directory_override := ""
 var terrain_effect_runtime: RefCounted
 var _terrain_effect_status := "Terrain-object effects unavailable"
+var _material_content_domain: MaterialEnvironmentDomain
+var _simulation_material_profile_id := ""
+var _simulation_streaming_status := "Simulation streaming unavailable"
 var _selected_object_index := 0
 var _selected_object_id := ""
 var _object_state_action_status := "Entities: Ctrl+click select; M twice migrates entity save; B place; F6 cycle; F7 edit; F8 delete; F9 restore"
@@ -258,7 +263,17 @@ func _ready() -> void:
 		elif saved_world.get("legacy_available", false):
 			_persistence_status = "Schema-1 terrain save detected and preserved; choose a new v2 world explicitly (no migration/import)"
 
-	var object_initialization: Dictionary = object_stream.initialize(world_seed, world_id, object_package_roots_override, object_state_directory_override)
+	_material_content_domain = MaterialEnvironmentDomainScript.new()
+	var material_handlers: Array[RefCounted] = [
+		_material_content_domain.create_content_handler()
+	]
+	var object_initialization: Dictionary = object_stream.initialize(
+		world_seed,
+		world_id,
+		object_package_roots_override,
+		object_state_directory_override,
+		material_handlers
+	)
 	if object_initialization.get("ok", false):
 		_procedural_object_status = "Procedural objects ready"
 		terrain_effect_runtime = TerrainEffectRuntime.new()
@@ -279,6 +294,7 @@ func _ready() -> void:
 		_procedural_object_status = "Procedural objects unavailable (%s)" % object_initialization.get("reason", "unknown")
 		terrain_effect_runtime = null
 		_terrain_effect_status = "Terrain-object effects unavailable (object stream unavailable)"
+	_configure_simulation_streaming()
 	_create_placement_target_marker()
 	terrain_mesh_template.mesh = null
 	terrain_mesh_template.visible = false
@@ -286,6 +302,55 @@ func _ready() -> void:
 	_update_camera()
 	_reconcile_region_window(true)
 	_update_status()
+
+
+func _configure_simulation_streaming() -> void:
+	if not is_instance_valid(simulation_runtime):
+		_simulation_streaming_status = "Simulation streaming unavailable (runtime node missing)"
+		return
+	if not simulation_runtime.initialized:
+		var runtime_initialization: Dictionary = simulation_runtime.initialize_runtime()
+		if not runtime_initialization.get("ok", false):
+			_simulation_streaming_status = "Simulation runtime unavailable (%s)" % runtime_initialization.get("reason", "unknown")
+			return
+
+	_simulation_material_profile_id = ""
+	if object_stream.registry != null:
+		var profile_ids: Array[String] = object_stream.registry.get_content_record_ids(
+			MaterialEnvironmentDomainScript.PROFILE_TYPE
+		)
+		if profile_ids.size() == 1:
+			var profile_id := String(profile_ids[0])
+			var material_config: Dictionary = simulation_runtime.configure_material_environment(
+				object_stream.registry, profile_id
+			)
+			if material_config.get("ok", false):
+				_simulation_material_profile_id = profile_id
+			else:
+				_simulation_streaming_status = "Material simulation unavailable (%s)" % material_config.get("reason", "unknown")
+		elif profile_ids.size() > 1:
+			# Selection policy belongs to world/content configuration, not discovery.
+			_simulation_streaming_status = "Material simulation awaiting explicit profile selection (%d profiles)" % profile_ids.size()
+
+	var lifecycle: Dictionary = simulation_runtime.configure_world_scope_lifecycle(
+		_simulation_material_profile_id,
+		MAX_ACTIVE_REGIONS,
+		roundi(SpatialGrid.REGION_SIZE_X * 1000.0),
+		roundi(SpatialGrid.REGION_SIZE_Z * 1000.0)
+	)
+	if lifecycle.get("ok", false):
+		_simulation_streaming_status = (
+			"Simulation streaming ready (%s)"
+			% (
+				_simulation_material_profile_id
+				if not _simulation_material_profile_id.is_empty()
+				else "tier lifecycle only"
+			)
+		)
+	else:
+		_simulation_streaming_status = "Simulation streaming unavailable (%s)" % lifecycle.get("reason", "unknown")
+
+
 
 
 func _exit_tree() -> void:
@@ -1170,6 +1235,15 @@ func _update_focus_key() -> void:
 	if mapped.get("valid", false):
 		focus_region_key = mapped["region_key"]
 		world_state = _state_for_region(focus_region_key)
+		if (
+			is_instance_valid(simulation_runtime)
+			and bool(simulation_runtime.get_world_scope_lifecycle_metrics().get("initialized", false))
+		):
+			var focus_result: Dictionary = simulation_runtime.update_world_scope_focus(
+				focus_region_key
+			)
+			if not focus_result.get("ok", false):
+				_simulation_streaming_status = "Simulation focus routing issue: %s" % focus_result.get("reason", "unknown")
 
 
 func _reconcile_region_window(force: bool = false) -> void:
@@ -2057,6 +2131,16 @@ func _publish_region(
 	_lod_selection_dirty = true
 	var registry_commit_usec := Time.get_ticks_usec() - registry_started_usec
 
+	if (
+		is_instance_valid(simulation_runtime)
+		and bool(simulation_runtime.get_world_scope_lifecycle_metrics().get("initialized", false))
+	):
+		var simulation_publication: Dictionary = simulation_runtime.publish_world_region_scope(
+			region_key, 0
+		)
+		if not simulation_publication.get("ok", false):
+			_simulation_streaming_status = "Simulation publication issue: %s" % simulation_publication.get("reason", "unknown")
+
 	var object_enqueue_started_usec := Time.get_ticks_usec()
 	var object_publication: Dictionary = object_stream.enqueue_region_publication(
 		region_key, state, publication_token
@@ -2240,6 +2324,15 @@ func _unload_region(id: String) -> void:
 	if not active_regions.has(id):
 		return
 	var entry: Dictionary = active_regions[id]
+	if (
+		is_instance_valid(simulation_runtime)
+		and bool(simulation_runtime.get_world_scope_lifecycle_metrics().get("initialized", false))
+	):
+		var simulation_unload: Dictionary = simulation_runtime.unload_world_region_scope(
+			entry["region_key"]
+		)
+		if not simulation_unload.get("ok", false):
+			_simulation_streaming_status = "Simulation unload issue: %s" % simulation_unload.get("reason", "unknown")
 	object_stream.unload_region(entry["region_key"])
 	if _edit_transaction.has("target_ids") and (_edit_transaction["target_ids"] as Array).has(id):
 		_edit_transaction["target_ids"].erase(id)
@@ -3536,6 +3629,19 @@ func _update_status() -> void:
 		float(last_mesh_diagnostics.get("frame_time_p99_ms", 0.0)),
 		_peak_process_work_ms,
 	]
+	if is_instance_valid(simulation_runtime):
+		var simulation_metrics: Dictionary = simulation_runtime.get_world_scope_lifecycle_metrics()
+		if bool(simulation_metrics.get("initialized", false)):
+			status += "P4 simulation: resident/peak %d/%d | registrations/revisits %d/%d | route obs %d | due queued/deferred %d/%d | %s\n" % [
+				int(simulation_metrics.get("resident_count", 0)),
+				int(simulation_metrics.get("peak_resident_scopes", 0)),
+				int(simulation_metrics.get("registrations_total", 0)),
+				int(simulation_metrics.get("revisits_total", 0)),
+				int(simulation_metrics.get("route_observations_total", 0)),
+				int(simulation_metrics.get("due_updates_queued_total", 0)),
+				int(simulation_metrics.get("due_updates_deferred_total", 0)),
+				_simulation_streaming_status,
+			]
 	if global_rebuild_pending:
 		status += "Rebuilding visible set: %d regions staged\n" % loading_regions.size()
 	if cave_section_enabled:
