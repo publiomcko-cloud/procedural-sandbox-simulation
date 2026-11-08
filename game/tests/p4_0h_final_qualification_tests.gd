@@ -283,7 +283,7 @@ func _wait_stream_idle(scene: Node, expected_focus: Vector2i) -> bool:
 			)
 		)
 		var router_pending := int(runtime.get_simulation_router_metrics().get("pending_count", 0))
-		var stable := (
+		var stable: bool = (
 			active.has(expected_id)
 			and stream.has_published_region(expected_focus)
 			and loading.is_empty()
