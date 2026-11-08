@@ -1,0 +1,444 @@
+extends RefCounted
+class_name SimulationWorldScopeLifecycle
+
+## P4.0F explicit streamed-region -> simulation-scope lifecycle.
+##
+## The caller emits publication/unload/focus events. This class never scans the
+## SceneTree, terrain registry, world history or unloaded simulation scopes.
+## Its only iterable working set is the explicitly bounded resident region set.
+
+const DEFAULT_MAX_RESIDENT_SCOPES := 25
+const MAX_RESIDENT_SCOPES_HARD := 4096
+const DEFAULT_REGION_SIZE_X_MM := 16_000
+const DEFAULT_REGION_SIZE_Z_MM := 12_000
+const MAX_REGION_SIZE_MM := 1_000_000_000
+const DEFAULT_DUE_DECISION_BUDGET := 128
+const MAX_DUE_DECISION_BUDGET_HARD := 4096
+const SCOPE_PREFIX := "region:"
+
+var _initialized := false
+var _profile_id := ""
+var _max_resident_scopes := DEFAULT_MAX_RESIDENT_SCOPES
+var _region_size_x_mm := DEFAULT_REGION_SIZE_X_MM
+var _region_size_z_mm := DEFAULT_REGION_SIZE_Z_MM
+var _due_decision_budget := DEFAULT_DUE_DECISION_BUDGET
+var _focus_region := Vector2i.ZERO
+var _has_focus := false
+var _resident: Dictionary = {}
+
+var _publication_events_total := 0
+var _unload_events_total := 0
+var _focus_events_total := 0
+var _registrations_total := 0
+var _revisits_total := 0
+var _material_initializations_queued_total := 0
+var _route_observations_total := 0
+var _route_batches_total := 0
+var _due_decisions_total := 0
+var _due_updates_queued_total := 0
+var _due_updates_deferred_total := 0
+var _peak_resident_scopes := 0
+var _last_frame_index := -1
+
+
+func initialize(
+	profile_id: String = "",
+	max_resident_scopes: int = DEFAULT_MAX_RESIDENT_SCOPES,
+	region_size_x_mm: int = DEFAULT_REGION_SIZE_X_MM,
+	region_size_z_mm: int = DEFAULT_REGION_SIZE_Z_MM,
+	due_decision_budget: int = DEFAULT_DUE_DECISION_BUDGET
+) -> Dictionary:
+	if _initialized:
+		return {"ok": false, "reason": "world_scope_lifecycle_already_initialized"}
+	if max_resident_scopes < 1 or max_resident_scopes > MAX_RESIDENT_SCOPES_HARD:
+		return {"ok": false, "reason": "world_scope_resident_limit_invalid"}
+	if region_size_x_mm < 1 or region_size_x_mm > MAX_REGION_SIZE_MM:
+		return {"ok": false, "reason": "world_scope_region_size_invalid"}
+	if region_size_z_mm < 1 or region_size_z_mm > MAX_REGION_SIZE_MM:
+		return {"ok": false, "reason": "world_scope_region_size_invalid"}
+	if due_decision_budget < 1 or due_decision_budget > MAX_DUE_DECISION_BUDGET_HARD:
+		return {"ok": false, "reason": "world_scope_due_budget_invalid"}
+	_profile_id = profile_id
+	_max_resident_scopes = max_resident_scopes
+	_region_size_x_mm = region_size_x_mm
+	_region_size_z_mm = region_size_z_mm
+	_due_decision_budget = due_decision_budget
+	_resident.clear()
+	_reset_metrics()
+	_initialized = true
+	return {"ok": true, "reason": "ok", "config": get_config()}
+
+
+func is_initialized() -> bool:
+	return _initialized
+
+
+func has_material_profile() -> bool:
+	return not _profile_id.is_empty()
+
+
+func get_config() -> Dictionary:
+	return {
+		"profile_id": _profile_id,
+		"max_resident_scopes": _max_resident_scopes,
+		"region_size_x_mm": _region_size_x_mm,
+		"region_size_z_mm": _region_size_z_mm,
+		"due_decision_budget": _due_decision_budget,
+	}
+
+
+func scope_id_for_region(region_key: Vector2i) -> String:
+	return "%s%d,%d" % [SCOPE_PREFIX, region_key.x, region_key.y]
+
+
+func notify_region_published(
+	runtime: Object,
+	region_key: Vector2i,
+	initial_temperature_milli_c: int = 0
+) -> Dictionary:
+	if not _initialized:
+		return {"ok": false, "reason": "world_scope_lifecycle_not_initialized"}
+	if runtime == null:
+		return {"ok": false, "reason": "simulation_runtime_unavailable"}
+	_publication_events_total += 1
+	var scope_id := scope_id_for_region(region_key)
+	var already_resident := _resident.has(scope_id)
+	if not already_resident and _resident.size() >= _max_resident_scopes:
+		return {
+			"ok": false,
+			"reason": "world_scope_resident_limit_reached",
+			"scope_id": scope_id,
+		}
+
+	var record: Dictionary = runtime.get_simulation_scope(scope_id)
+	var registered_now := false
+	if record.is_empty():
+		var registration: Dictionary = runtime.register_simulation_scope(
+			scope_id, SimulationTierState.TIER_DORMANT
+		)
+		if not registration.get("ok", false):
+			return {
+				"ok": false,
+				"reason": "world_scope_registration_failed",
+				"detail": String(registration.get("reason", "")),
+				"scope_id": scope_id,
+			}
+		_registrations_total += 1
+		registered_now = true
+		record = registration.get("record", {})
+	elif not already_resident:
+		_revisits_total += 1
+
+	var next_tick := int(runtime.get_scheduler_snapshot().get("current_tick", 0)) + 1
+	var resident_record := {
+		"scope_id": scope_id,
+		"region_key": region_key,
+		"next_tick": next_tick,
+	}
+	_resident[scope_id] = resident_record
+	_peak_resident_scopes = maxi(_peak_resident_scopes, _resident.size())
+
+	var observation := _submit_observation(runtime, scope_id, region_key)
+	if not observation.get("ok", false):
+		if registered_now:
+			# Registration is authoritative and intentionally not rolled back.
+			# The caller can retry the explicit publication observation.
+			pass
+		return observation
+
+	var material_queued := false
+	if not _profile_id.is_empty():
+		record = runtime.get_simulation_scope(scope_id)
+		var state: Dictionary = record.get("state", {})
+		if not state.has(MaterialEnvironmentDomain.STATE_KEY):
+			var material_init: Dictionary = runtime.enqueue_material_scope_initialization(
+				scope_id, _profile_id, initial_temperature_milli_c
+			)
+			if not material_init.get("ok", false):
+				return {
+					"ok": false,
+					"reason": "world_scope_material_initialization_failed",
+					"detail": String(material_init.get("reason", "")),
+					"scope_id": scope_id,
+				}
+			_material_initializations_queued_total += 1
+			material_queued = true
+
+	return {
+		"ok": true,
+		"reason": "ok",
+		"scope_id": scope_id,
+		"registered": registered_now,
+		"revisit": not registered_now and not already_resident,
+		"material_initialization_queued": material_queued,
+		"resident_count": _resident.size(),
+	}
+
+
+func notify_region_unloaded(runtime: Object, region_key: Vector2i) -> Dictionary:
+	if not _initialized:
+		return {"ok": false, "reason": "world_scope_lifecycle_not_initialized"}
+	if runtime == null:
+		return {"ok": false, "reason": "simulation_runtime_unavailable"}
+	_unload_events_total += 1
+	var scope_id := scope_id_for_region(region_key)
+	if not _resident.has(scope_id):
+		return {
+			"ok": true,
+			"reason": "ok",
+			"noop": true,
+			"scope_id": scope_id,
+			"resident_count": _resident.size(),
+		}
+	var observation: Dictionary = runtime.submit_simulation_scope_observation(
+		scope_id, SimulationTierRouter.MAX_DISTANCE_MM
+	)
+	if not observation.get("ok", false):
+		return {
+			"ok": false,
+			"reason": "world_scope_unload_observation_failed",
+			"detail": String(observation.get("reason", "")),
+			"scope_id": scope_id,
+		}
+	_route_observations_total += 1
+	_resident.erase(scope_id)
+	return {
+		"ok": true,
+		"reason": "ok",
+		"noop": false,
+		"scope_id": scope_id,
+		"resident_count": _resident.size(),
+	}
+
+
+func update_focus(runtime: Object, focus_region: Vector2i) -> Dictionary:
+	if not _initialized:
+		return {"ok": false, "reason": "world_scope_lifecycle_not_initialized"}
+	if runtime == null:
+		return {"ok": false, "reason": "simulation_runtime_unavailable"}
+	if _has_focus and focus_region == _focus_region:
+		return {
+			"ok": true,
+			"reason": "ok",
+			"noop": true,
+			"observation_count": 0,
+		}
+	_focus_region = focus_region
+	_has_focus = true
+	_focus_events_total += 1
+	var ids := _sorted_resident_ids()
+	var submitted := 0
+	for scope_id_value in ids:
+		var scope_id := String(scope_id_value)
+		var record: Dictionary = _resident[scope_id]
+		var observation := _submit_observation(
+			runtime, scope_id, record["region_key"]
+		)
+		if not observation.get("ok", false):
+			return observation
+		submitted += 1
+	return {
+		"ok": true,
+		"reason": "ok",
+		"noop": false,
+		"observation_count": submitted,
+	}
+
+
+func process_scheduler_frame(
+	runtime: Object,
+	scheduler_result: Dictionary
+) -> Dictionary:
+	if not _initialized:
+		return {"ok": false, "reason": "world_scope_lifecycle_not_initialized"}
+	if runtime == null:
+		return {"ok": false, "reason": "simulation_runtime_unavailable"}
+	if not scheduler_result.get("ok", false):
+		return {"ok": false, "reason": "world_scope_scheduler_result_invalid"}
+	var frame_index := int(scheduler_result.get("frame_index", -1))
+	if frame_index < 0 or frame_index < _last_frame_index:
+		return {"ok": false, "reason": "world_scope_frame_invalid"}
+	_last_frame_index = frame_index
+
+	var routing: Dictionary = runtime.process_simulation_tier_routes()
+	if not routing.get("ok", false):
+		return {
+			"ok": false,
+			"reason": "world_scope_routing_failed",
+			"detail": String(routing.get("reason", "")),
+		}
+	_route_batches_total += 1
+
+	var due_result := {
+		"decisions": 0,
+		"queued": 0,
+		"deferred": 0,
+	}
+	if not _profile_id.is_empty():
+		due_result = _schedule_due_work(
+			runtime, int(scheduler_result.get("current_tick", 0))
+		)
+
+	return {
+		"ok": true,
+		"reason": "ok",
+		"frame_index": frame_index,
+		"resident_count": _resident.size(),
+		"routing_processed_count": int(routing.get("processed_count", 0)),
+		"routing_pending_count": int(routing.get("pending_count", 0)),
+		"due_decisions": int(due_result["decisions"]),
+		"due_updates_queued": int(due_result["queued"]),
+		"due_updates_deferred": int(due_result["deferred"]),
+	}
+
+
+func reset_transient() -> void:
+	_resident.clear()
+	_has_focus = false
+	_focus_region = Vector2i.ZERO
+	_last_frame_index = -1
+
+
+func get_resident_scope_ids() -> Array[String]:
+	return _sorted_resident_ids()
+
+
+func get_metrics() -> Dictionary:
+	return {
+		"initialized": _initialized,
+		"resident_count": _resident.size(),
+		"peak_resident_scopes": _peak_resident_scopes,
+		"profile_id": _profile_id,
+		"publication_events_total": _publication_events_total,
+		"unload_events_total": _unload_events_total,
+		"focus_events_total": _focus_events_total,
+		"registrations_total": _registrations_total,
+		"revisits_total": _revisits_total,
+		"material_initializations_queued_total": _material_initializations_queued_total,
+		"route_observations_total": _route_observations_total,
+		"route_batches_total": _route_batches_total,
+		"due_decisions_total": _due_decisions_total,
+		"due_updates_queued_total": _due_updates_queued_total,
+		"due_updates_deferred_total": _due_updates_deferred_total,
+		"last_frame_index": _last_frame_index,
+	}
+
+
+func _schedule_due_work(runtime: Object, current_tick: int) -> Dictionary:
+	var ids := _sorted_resident_ids()
+	var decisions := 0
+	var queued := 0
+	var deferred := 0
+	if ids.is_empty():
+		return {"decisions": 0, "queued": 0, "deferred": 0}
+
+	# Fair bounded sweeps. At most one next logical tick per resident per pass.
+	while decisions < _due_decision_budget:
+		var made_progress := false
+		for scope_id_value in ids:
+			if decisions >= _due_decision_budget:
+				break
+			var scope_id := String(scope_id_value)
+			if not _resident.has(scope_id):
+				continue
+			var resident_record: Dictionary = _resident[scope_id]
+			var next_tick := int(resident_record.get("next_tick", current_tick + 1))
+			if next_tick > current_tick:
+				continue
+			var scope: Dictionary = runtime.get_simulation_scope(scope_id)
+			var state: Dictionary = scope.get("state", {})
+			if not state.has(MaterialEnvironmentDomain.STATE_KEY):
+				deferred += 1
+				continue
+			var due: Dictionary = runtime.get_simulation_due_decision(
+				scope_id, next_tick
+			)
+			if not due.get("ok", false):
+				return {
+					"decisions": decisions,
+					"queued": queued,
+					"deferred": deferred,
+					"error": String(due.get("reason", "")),
+				}
+			decisions += 1
+			_due_decisions_total += 1
+			if bool(due.get("due", false)):
+				var admitted: Dictionary = runtime.enqueue_material_due_step(
+					scope_id, _profile_id, next_tick
+				)
+				if not admitted.get("ok", false):
+					if admitted.get("reason") == "material_queue_capacity_reached":
+						deferred += 1
+						_due_updates_deferred_total += 1
+						continue
+					return {
+						"decisions": decisions,
+						"queued": queued,
+						"deferred": deferred,
+						"error": String(admitted.get("reason", "")),
+					}
+				queued += 1
+				_due_updates_queued_total += 1
+			resident_record["next_tick"] = next_tick + 1
+			_resident[scope_id] = resident_record
+			made_progress = true
+		if not made_progress:
+			break
+	return {"decisions": decisions, "queued": queued, "deferred": deferred}
+
+
+func _submit_observation(
+	runtime: Object,
+	scope_id: String,
+	region_key: Vector2i
+) -> Dictionary:
+	var distance_mm := _distance_from_focus_mm(region_key)
+	var observation: Dictionary = runtime.submit_simulation_scope_observation(
+		scope_id, distance_mm
+	)
+	if not observation.get("ok", false):
+		return {
+			"ok": false,
+			"reason": "world_scope_observation_failed",
+			"detail": String(observation.get("reason", "")),
+			"scope_id": scope_id,
+		}
+	_route_observations_total += 1
+	return {
+		"ok": true,
+		"reason": "ok",
+		"scope_id": scope_id,
+		"distance_mm": distance_mm,
+	}
+
+
+func _distance_from_focus_mm(region_key: Vector2i) -> int:
+	if not _has_focus:
+		return 0
+	var dx := absi(region_key.x - _focus_region.x) * _region_size_x_mm
+	var dz := absi(region_key.y - _focus_region.y) * _region_size_z_mm
+	return maxi(dx, dz)
+
+
+func _sorted_resident_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for value in _resident.keys():
+		ids.append(String(value))
+	ids.sort()
+	return ids
+
+
+func _reset_metrics() -> void:
+	_publication_events_total = 0
+	_unload_events_total = 0
+	_focus_events_total = 0
+	_registrations_total = 0
+	_revisits_total = 0
+	_material_initializations_queued_total = 0
+	_route_observations_total = 0
+	_route_batches_total = 0
+	_due_decisions_total = 0
+	_due_updates_queued_total = 0
+	_due_updates_deferred_total = 0
+	_peak_resident_scopes = 0
+	_last_frame_index = -1
