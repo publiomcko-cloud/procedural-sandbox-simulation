@@ -1,4 +1,5 @@
 name: Self-hosted runner verification
+# trigger synchronization after workflow creation
 
 on:
   pull_request:
