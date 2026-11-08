@@ -4,11 +4,7 @@ on:
   push:
     branches:
       - perf/p2-gdscript-allocation-reduction
-  pull_request:
-    branches:
-      - main
-    types: [opened, synchronize, reopened]
-
+  workflow_dispatch:
 permissions:
   contents: read
 
