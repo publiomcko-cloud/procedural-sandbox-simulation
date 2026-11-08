@@ -14,6 +14,7 @@ const DEFAULT_MAX_TICKS_PER_FRAME := 4
 const MAX_TICK_USEC := 60_000_000
 const MAX_TICKS_PER_FRAME_HARD := 64
 const MAX_MANUAL_STEP_QUEUE := 1024
+const MAX_BACKLOG_TICKS_HARD := 10_000_000
 const MAX_ELAPSED_USEC_PER_CALL := 86_400_000_000
 
 const SNAPSHOT_KEYS := [
@@ -100,7 +101,10 @@ func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
 		source = "elapsed"
 		var total_usec: int = _accumulator_usec + elapsed_usec
 		newly_due_ticks = int(total_usec / _tick_usec)
-		_accumulator_usec = total_usec % _tick_usec
+		var next_accumulator_usec: int = total_usec % _tick_usec
+		if newly_due_ticks > MAX_BACKLOG_TICKS_HARD - _backlog_ticks:
+			return _failure("backlog_limit_exceeded")
+		_accumulator_usec = next_accumulator_usec
 		_backlog_ticks += newly_due_ticks
 		_peak_backlog_ticks = maxi(_peak_backlog_ticks, _backlog_ticks)
 		admitted_ticks = mini(_backlog_ticks, _max_ticks_per_frame)
@@ -233,7 +237,7 @@ func validate_snapshot(snapshot: Dictionary) -> Dictionary:
 
 	if accumulator_usec < 0 or accumulator_usec >= tick_usec:
 		return _failure("scheduler_snapshot_accumulator_invalid")
-	if backlog_ticks < 0:
+	if backlog_ticks < 0 or backlog_ticks > MAX_BACKLOG_TICKS_HARD:
 		return _failure("scheduler_snapshot_backlog_invalid")
 	if manual_step_ticks < 0 or manual_step_ticks > MAX_MANUAL_STEP_QUEUE:
 		return _failure("scheduler_snapshot_manual_steps_invalid")
