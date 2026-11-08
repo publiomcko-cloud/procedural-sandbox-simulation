@@ -362,7 +362,6 @@ func _test_snapshot_restore() -> void:
 			== "simulation_tier_snapshot_state_invalid",
 		"snapshot rejects non-data state payload"
 	)
-	unsafe["scopes"][0]["state"] = {}
 
 	var failed_restore: SimulationTierState = TierStateScript.new()
 	_check(
@@ -370,6 +369,7 @@ func _test_snapshot_restore() -> void:
 			and not failed_restore.is_initialized(),
 		"invalid snapshot fails without partially initializing authority"
 	)
+	unsafe["scopes"][0]["state"] = {}
 
 
 func _test_runtime_integration_and_atomic_restore() -> void:
