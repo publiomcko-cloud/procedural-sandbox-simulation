@@ -69,7 +69,7 @@ func is_valid() -> bool:
 func prepare(record: Dictionary, mod_id: String, context: Dictionary) -> Dictionary:
 	if not is_valid():
 		return {"ok": false, "reason": "content_type_handler_invalid"}
-	var validator_target := _validator_target.get_ref()
+	var validator_target: Object = _validator_target.get_ref()
 	if validator_target == null:
 		return {"ok": false, "reason": "content_type_handler_target_released"}
 	var validation_value: Variant = validator_target.call(
@@ -83,7 +83,7 @@ func prepare(record: Dictionary, mod_id: String, context: Dictionary) -> Diction
 
 	var normalized := record.duplicate(true)
 	if _normalizer_target != null and not _normalizer_method.is_empty():
-		var normalizer_target := _normalizer_target.get_ref()
+		var normalizer_target: Object = _normalizer_target.get_ref()
 		if normalizer_target == null:
 			return {"ok": false, "reason": "content_type_handler_target_released"}
 		var normalization_value: Variant = normalizer_target.call(
