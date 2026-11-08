@@ -320,7 +320,7 @@ func _validate_synthetic(
 	if String(record.get("type", "")) != SYNTHETIC_TYPE:
 		return {"ok": false, "reason": "synthetic_type_mismatch"}
 	var value: Variant = record.get("value_milli")
-	var integer_like := (
+	var integer_like: bool = (
 		typeof(value) == TYPE_INT
 		or (
 			typeof(value) == TYPE_FLOAT
