@@ -16,7 +16,7 @@ const MAX_TICKS_PER_FRAME_HARD := 64
 const MAX_MANUAL_STEP_QUEUE := 1024
 const MAX_ELAPSED_USEC_PER_CALL := 86_400_000_000
 
-const SNAPSHOT_KEYS: Array[String] = [
+const SNAPSHOT_KEYS := [
 	"schema_version",
 	"tick_usec",
 	"max_ticks_per_frame",
@@ -304,10 +304,10 @@ func _reset_telemetry() -> void:
 	_last_newly_due_ticks = 0
 
 
-func _has_exact_keys(value: Dictionary, expected: Array[String]) -> bool:
+func _has_exact_keys(value: Dictionary, expected: Array) -> bool:
 	if value.size() != expected.size():
 		return false
-	for key: String in expected:
+	for key in expected:
 		if not value.has(key):
 			return false
 	return true
