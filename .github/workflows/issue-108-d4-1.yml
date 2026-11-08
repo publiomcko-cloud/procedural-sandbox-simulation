@@ -4,13 +4,7 @@ on:
   push:
     branches:
       - perf/issue-108-d4-1-dormant-projection-scope-cache
-  pull_request:
-    paths:
-      - 'game/scripts/terrain/terrain_object_effect_projection_service.gd'
-      - 'game/scripts/terrain/terrain_object_effect_runtime.gd'
-      - 'game/tests/issue108_d4_1_dormant_projection_scope_cache_tests.gd'
-      - '.github/workflows/issue-108-d4-1.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 
