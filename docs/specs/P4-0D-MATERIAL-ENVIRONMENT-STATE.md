@@ -23,6 +23,23 @@ The environment domain checks the canonical SHA-256 against the passed data-only
 
 `process_due_scope` asks the tier authority for the specified scope and logical tick. Active scopes are due each tick, aggregate scopes only on configured cadence, dormant scopes never advance. On due steps, the integer temperature moves by `floor(abs(ambient-current)*relaxation_milli/1000)` toward the ambient value, never overshooting. Only one step is applied per due decision; aggregate behavior is deliberately per-due-step rather than per-elapsed-time integration. The last applied tick prevents duplicate advances. Callers schedule a bounded set of scope IDs themselves; **this domain does not enumerate all scopes, derive distances or mutate ticks**.
 
+## P4.0D bounded performance correction
+
+The original `process_due_scope` API remains a checked one-off/legacy route and still recomputes the fingerprint to protect callers passing mutable profile dictionaries. It is not intended for per-frame use.
+
+The preferred hot path is explicit:
+
+1. Register the engine-owned profile handler before M4.0 package discovery.
+2. Cold-bind each profile through `bind_registry_profile(registry, profile_id)`. The registry validates the six-field content fingerprint, then the domain recomputes canonical SHA-256 only once per binding. This derived binding is **not authority** and can be discarded with `clear_profile_bindings` on package reload.
+3. Initialize scope state with `initialize_bound_scope_state`, preserving the authoritative profile SHA in the scope.
+4. Enqueue explicit `scope_id + profile_id + logical_tick` work through `MaterialEnvironmentWorkQueue.enqueue`.
+5. Invoke `process_pending` with an explicit per-call budget. The ring buffer admits at most 32 by default, at most 4,096 configured hard ceiling, and tracks at most 8,192 pending items by default (65,536 hard maximum). Pending work remains deferred, never silently drained. Duplicate scope/profile/tick observations are idempotent.
+6. Every commit still compares the scope's pinned SHA and performs state revision-gated replacement; profile drift fails closed. Queue results preserve FIFO order. Failure leaves the failing work item pending; recovery requires an explicit corrective action. The queue is transient and not persisted as world authority.
+
+Queue metrics expose accepted/deduplicated/processed/deferred counts; opt-in `material_environment_batch` PERF_TRACE reports processed count, pending count and the configured budget. No implicit `_process` loop, world scan, worker join, hash or profile JSON normalization is introduced into the bound due-update path. State copies and tier authority calls remain bounded per scope and require dense-scene performance measurements before gameplay integration.
+
+Cold/warm binding behavior, a 20-scope dense batch, backlog saturation, FIFO delivery and snapshot-driven state recovery are exercised in the focused suite. These are functional/structural checks, **not** measured frame-time certification. Bindings must be rebuilt against a validated registry after content reload or world restore.
+
 ## Qualification gates
 - Godot 4.7.2 import/parser must pass.
 - Focused `game/tests/p4_0d_material_environment_tests.gd` must pass with `P4_0D_MATERIAL_PASS`.
