@@ -1,9 +1,6 @@
 name: P4.0B simulation tier framework
 
 on:
-  push:
-    branches:
-      - feat/p4-0b-simulation-tier-framework
   pull_request:
     branches:
       - main
