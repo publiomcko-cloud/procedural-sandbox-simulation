@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'game/scripts/simulation/material_environment_domain.gd'
+      - 'game/scripts/simulation/simulation_tier_state.gd'
       - 'game/scripts/simulation/material_environment_work_queue.gd'
       - 'game/tests/p4_0d_material_environment_tests.gd'
       - 'scripts/ci/run-p4-0d-qualification.ps1'
