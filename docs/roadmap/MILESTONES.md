@@ -1,30 +1,30 @@
 # Roadmap with implementation gates
 
-## 2026-11-08 — M4.0 qualified; P4.0A next after integration
+## 2026-11-08 — M4.0 integrated; P4.0A fixed-tick candidate
 
-Issue #108 is complete/closed. The mandatory pre-P4 M4.0 gate from [ADR-0007](../decisions/ADR-0007-MOD-FIRST-CONTENT-CORE-BEFORE-P4.md) is now **qualified** on PR #256 source `a7faa6f10421ec2e0acffb9bfcc4efe201901b6d`.
+M4.0 PR #256 is integrated at `ca13d91a4917e8061528736e5b6d808dc9b85576`.
 
-M4.0 qualification proves:
+P4.0A issue #257 is implemented on `feat/p4-0a-fixed-tick-scheduler` as a qualification candidate.
 
-- one first-party + `user://mods` declarative discovery path remains authoritative;
-- loader discovery is content-type agnostic;
-- engine-owned handlers provide strict validation/normalization for registered content families;
-- current procedural-rock, population and terrain-interaction semantics remain compatible;
-- uniform canonical SHA-256 fingerprints detect same-version content drift;
-- existing persisted definition pins remain compatible without an implicit migration;
-- a synthetic new data-only content type joins the same runtime registry without loader changes;
-- unknown types remain fail-closed;
-- executable scripted mods remain out of scope.
+P4.0A scope is deliberately limited to the engine-owned scheduler foundation:
 
-Owner-local Godot 4.7.2 qualification passed the M4.0 focused, declarative, entity-command, D8, placement and canonical L0-L2 gates. The procedural-object suite retained its exact pre-existing 671/1 baseline with no new failure.
+- deterministic logical tick identity;
+- integer-microsecond cadence;
+- bounded ticks admitted per frame;
+- scalar deferred catch-up backlog;
+- pause/resume;
+- bounded manual step;
+- authoritative scheduler snapshot/restore;
+- playable `SimulationRuntime` scene mount;
+- opt-in `simulation_scheduler_frame` PERF_TRACE evidence.
 
-Runtime implementation remains governed by [ADR-0008](../decisions/ADR-0008-MAIN-THREAD-BUDGET-AND-PERFORMANCE-OBSERVABILITY.md): bounded work, direct indexes, pure worker preparation where applicable, revision-gated reuse, bounded main-thread publication and stage-level `PERF_TRACE` evidence.
+No material/environment state, active/aggregate/dormant tiers or gameplay simulation systems are introduced in this slice.
 
-**Current integration gate:** PR #256 ready; explicit owner merge authorization still required.
+The scheduler preserves ADR-0007's engine/content boundary and ADR-0008's bounded-work rule. Future simulation data must use M4.0 content handlers when such data is introduced.
 
-**Next development slice after integration:** **P4.0A — fixed-tick scheduler foundation**.
+**Current gate:** P4.0A owner-local Godot 4.7.2 qualification.
 
-P4 scheduler mechanics remain engine-owned. Any new simulation/material/environment definitions introduced by P4/P5 should enter through the generalized M4.0 content-handler architecture rather than a new first-party-only data path.
+**Blocked until P4.0A qualification/integration:** later P4 tier/state slices.
 
 
 ## 2026-10-25 — P3.0C persistent transactional entity history candidate
