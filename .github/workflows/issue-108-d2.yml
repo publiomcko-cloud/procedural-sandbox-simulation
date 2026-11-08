@@ -4,14 +4,7 @@ on:
   push:
     branches:
       - perf/issue-108-d2-object-materialization
-  pull_request:
-    paths:
-      - 'game/scripts/objects/procedural_object_materialization_store.gd'
-      - 'game/scripts/objects/procedural_object_region_generation_job.gd'
-      - 'game/scripts/objects/procedural_object_stream.gd'
-      - 'game/tests/issue108_d2_object_materialization_tests.gd'
-      - '.github/workflows/issue-108-d2.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 
