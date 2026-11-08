@@ -56,7 +56,12 @@ func initialize(
 		return {"ok": false, "reason": "world_scope_region_size_invalid"}
 	if region_size_z_mm < 1 or region_size_z_mm > MAX_REGION_SIZE_MM:
 		return {"ok": false, "reason": "world_scope_region_size_invalid"}
-	if due_decision_budget < 1 or due_decision_budget > MAX_DUE_DECISION_BUDGET_HARD:
+	if (
+		due_decision_budget < max_resident_scopes
+		or due_decision_budget > MAX_DUE_DECISION_BUDGET_HARD
+	):
+		# One sweep can always examine every bounded resident scope; smaller
+		# budgets would deterministically starve later stable IDs.
 		return {"ok": false, "reason": "world_scope_due_budget_invalid"}
 	_profile_id = profile_id
 	_max_resident_scopes = max_resident_scopes
@@ -165,8 +170,9 @@ func notify_region_published(
 					"detail": String(material_init.get("reason", "")),
 					"scope_id": scope_id,
 				}
-			_material_initializations_queued_total += 1
-			material_queued = true
+			if not material_init.get("noop", false):
+				_material_initializations_queued_total += 1
+				material_queued = true
 
 	return {
 		"ok": true,
