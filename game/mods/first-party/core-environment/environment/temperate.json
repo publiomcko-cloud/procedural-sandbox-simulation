@@ -1,7 +1,0 @@
-{
-  "schema_version": 1,
-  "type": "material_environment_profile",
-  "id": "firstparty.core_environment:temperate",
-  "ambient_temperature_milli_c": 18000,
-  "relaxation_milli_per_due_step": 125
-}
