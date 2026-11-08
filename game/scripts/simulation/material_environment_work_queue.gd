@@ -80,6 +80,36 @@ func enqueue(
 	return {"ok": true, "reason": "ok", "noop": false, "pending_count": _count}
 
 
+func enqueue_initialization(
+	tier_state: SimulationTierState, scope_id: String,
+	profile_id: String, initial_temperature_milli_c: int
+) -> Dictionary:
+	if _domain == null:
+		return {"ok": false, "reason": "material_queue_not_initialized"}
+	_submissions += 1
+	if tier_state == null or not tier_state.has_scope(scope_id):
+		return {"ok": false, "reason": "simulation_scope_not_found"}
+	if not _domain.has_bound_profile(profile_id):
+		return {"ok": false, "reason": "material_profile_not_bound"}
+	if absi(initial_temperature_milli_c) > MaterialEnvironmentDomain.MAX_ABS_TEMPERATURE_MC:
+		return {"ok": false, "reason": "material_initial_temperature_invalid"}
+	var key := "initialize|%d|%s|%s" % [scope_id.length(), scope_id, profile_id]
+	if _index.has(key):
+		_deduplicated += 1
+		return {"ok": true, "reason": "ok", "noop": true, "pending_count": _count}
+	if _count >= _capacity:
+		return {"ok": false, "reason": "material_queue_capacity_reached", "pending_count": _count}
+	_slots[_write] = {
+		"key": key, "kind": "initialize", "scope_id": scope_id,
+		"profile_id": profile_id, "initial_temperature_milli_c": initial_temperature_milli_c,
+	}
+	_index[key] = true
+	_write = (_write + 1) % _capacity
+	_count += 1
+	_accepted += 1
+	return {"ok": true, "reason": "ok", "noop": false, "pending_count": _count}
+
+
 func process_pending(
 	tier_state: SimulationTierState, frame_index: int, requested_budget: int = -1
 ) -> Dictionary:
@@ -100,9 +130,18 @@ func process_pending(
 	var receipts: Array = []
 	for _i in range(mini(limit, _count)):
 		var item: Dictionary = _slots[_read]
-		var result: Dictionary = _domain.process_bound_due_scope(
-			tier_state, String(item["scope_id"]), String(item["profile_id"]), int(item["logical_tick"])
-		)
+		var is_initialization: bool = String(item.get("kind", "due")) == "initialize"
+		var result: Dictionary
+		if is_initialization:
+			result = _domain.initialize_bound_scope_state(
+				tier_state, String(item["scope_id"]), String(item["profile_id"]),
+				int(item["initial_temperature_milli_c"])
+			)
+		else:
+			result = _domain.process_bound_due_scope(
+				tier_state, String(item["scope_id"]), String(item["profile_id"]),
+				int(item["logical_tick"])
+			)
 		if not result.get("ok", false):
 			_failed_batches += 1
 			return {
@@ -111,7 +150,9 @@ func process_pending(
 				"processed": receipts, "pending_count": _count,
 			}
 		receipts.append({
-			"scope_id": item["scope_id"], "logical_tick": item["logical_tick"],
+			"scope_id": item["scope_id"],
+			"logical_tick": int(item.get("logical_tick", -1)),
+			"initialized": is_initialization,
 			"due": bool(result.get("due", false)),
 			"noop": bool(result.get("noop", false)),
 		})
