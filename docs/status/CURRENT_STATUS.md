@@ -1,27 +1,48 @@
-# Current project status — Issue #108 complete; M4.0 next (2026-11-07)
+# Current project status — M4.0 qualified; integration pending (2026-11-08)
 
-## Authoritative 2026-11-07 update
+## Authoritative 2026-11-08 update
 
-Live functional main is integrated through Issue #108 D.8 / PR #254 at merge commit `5a69a2ec9e96411fd256abc97ae9a6c32d4658a9`.
+M4.0 — mod-first content-core generalization — is **QUALIFIED / READY_FOR_INTEGRATION** on PR #256.
 
-Owner status:
+Qualified runtime source:
 
-- Issue #108 is **COMPLETE / CLOSED**;
-- terrain/object grounding, derived SDF imprint, persistence/replay, cross-region handling, streaming, D.7.x performance work and precision-safe effect-bearing LOD1 are accepted;
-- the owner considers the final GUI acceptance gate satisfied;
-- the next authorized development slice is **M4.0 — mod-first content-core generalization**;
-- **P4 implementation is downstream of M4.0 qualification**.
+- branch: `feat/m4-0-mod-first-content-core`;
+- source HEAD: `a7faa6f10421ec2e0acffb9bfcc4efe201901b6d`;
+- base main/docs state: `bda2968d914ff899f2dbb5407808b0cbeeb7ed14`;
+- Godot: `4.7.2.stable.official.ed1daf0bf`.
 
-Accepted architecture decisions:
+M4.0 now provides type-agnostic declarative discovery, engine-owned extensible content handlers, generic typed content storage, uniform canonical SHA-256 fingerprints, compatibility views for existing P2/P3 APIs and an engine-handler bootstrap on the same first-party + `user://mods` runtime registry.
+
+Owner-local qualification passed:
+
+- focused M4.0: 31/31;
+- declarative mods: 79/79;
+- entity commands: 67/67;
+- Issue #108 D8: 34/34;
+- P3.0D placement: 53/53;
+- smoke: 52/52;
+- terrain SDF: 46/46;
+- LOD0/1 transition: 6474/6474;
+- bootstrap structure: 18/18;
+- main-scene startup exit: 0;
+- canonical translated validation: PASS.
+
+The procedural-object suite preserved the exact accepted historical baseline: 671 assertions / 1 known camera-revisit failure / 9 same-revision fingerprint conflicts / 0 `SCRIPT ERROR`.
+
+Hosted GitHub Actions remain non-authoritative for this branch because observed jobs failed before step allocation/execution.
+
+Issue #108 remains **COMPLETE / CLOSED**. M4.0 changes no gameplay semantics, save schema, terrain/object effect semantics, streaming/LOD authority or script policy.
+
+Accepted architecture:
 
 - [ADR-0007 — Generalize the mod-first content core before P4](../decisions/ADR-0007-MOD-FIRST-CONTENT-CORE-BEFORE-P4.md);
-- [ADR-0008 — Main-thread budget, derived-work isolation and performance observability](../decisions/ADR-0008-MAIN-THREAD-BUDGET-AND-PERFORMANCE-OBSERVABILITY.md).
+- [ADR-0008 — Main-thread budget, derived-work isolation and performance observability](../decisions/ADR-0008-MAIN-THREAD-BUDGET-AND-PERFORMANCE-OBSERVABILITY.md);
+- [M4.0 final qualification checkpoint](../checkpoints/2026-11-08-M4-0-QUALIFICATION.md).
 
-Performance engineering handoff:
+**Integration state:** PR #256 is ready; merge still requires explicit owner authorization.
 
-- [Issue #108 performance retrospective](../reports/2026-11-07-ISSUE108-PERFORMANCE-RETROSPECTIVE.md).
+**Next development slice after integration:** P4.0A fixed-tick scheduler foundation. P4 has not started.
 
-M4.0 is behavior-preserving: it generalizes content registration/pinning and must not silently change current procedural objects, population, terrain interactions, entity persistence or gameplay. Scripted mods remain out of scope.
 
 ---
 
