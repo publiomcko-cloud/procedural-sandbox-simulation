@@ -155,3 +155,22 @@ A normal P4 PR should ordinarily launch:
 Historical Issue #108/M4/P2 benchmark workflows should not launch automatically.
 
 This reduces hosted-runner fan-out from as many as 7–11 jobs on one PR to approximately 1–2 current jobs.
+
+
+## Mitigation verification
+
+PR #260 exercised the hardened trigger policy before integration.
+
+Observed pull-request workflow fan-out:
+
+- `Starter checks`;
+- `P4.0A fixed tick scheduler`.
+
+No historical Issue #108, M4/mod-first or P2 benchmark workflow was triggered.
+
+Both current jobs still completed with `conclusion=failure`, `steps=null`, and no logs. This confirms:
+
+1. repository trigger amplification is mitigated;
+2. the remaining failure is account/hosted-runner allocation state, not a historical workflow trigger or test command.
+
+The repository-side mitigation is therefore independently useful but cannot replace the required account-side billing/usage action.
