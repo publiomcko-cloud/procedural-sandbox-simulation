@@ -160,7 +160,16 @@ func _validate_binding(profile: Dictionary, fingerprint: Dictionary) -> Dictiona
 		or String(fingerprint["content_sha256"]).length() != 64
 	):
 		return {"ok": false, "reason": "material_profile_fingerprint_invalid"}
-	# The caller must obtain this fingerprint from the verified M4.0 registry.
+	# Verify canonical content bytes in addition to identity: never trust the caller's
+	# supplied hash without recomputing it. Package/version pin verification remains
+	# the responsibility of M4.0's registry at the ingestion boundary.
+	var context := HashingContext.new()
+	if context.start(HashingContext.HASH_SHA256) != OK:
+		return {"ok": false, "reason": "material_profile_fingerprint_invalid"}
+	if context.update(JSON.stringify(profile, "", true, true).to_utf8_buffer()) != OK:
+		return {"ok": false, "reason": "material_profile_fingerprint_invalid"}
+	if context.finish().hex_encode() != String(fingerprint["content_sha256"]):
+		return {"ok": false, "reason": "material_profile_pin_conflict"}
 	return {"ok": true, "reason": "ok"}
 
 
