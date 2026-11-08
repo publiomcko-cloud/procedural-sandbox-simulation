@@ -35,10 +35,8 @@ function Invoke-Qualification([string]$Label, [string[]]$CommandArgs, [string]$E
 }
 
 Invoke-Qualification 'import-prereq' @('--headless', '--editor', '--path', $ProjectPath, '--import') '' | Out-Null
-$scriptClassCache = Join-Path $ProjectPath '.godot\global_script_class_cache.cfg'
-if (Test-Path -LiteralPath $scriptClassCache) {
-    Remove-Item -LiteralPath $scriptClassCache -Force
-}
+& (Join-Path $PSScriptRoot 'assert-p4-class-cache-independence.ps1') -ProjectPath $ProjectPath
+if ($LASTEXITCODE -ne 0) { throw "P4 class-cache independence gate failed: $LASTEXITCODE" }
 Invoke-Qualification 'cold-boot' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p4_0h_cold_boot_probe.gd') 'P4_0H_COLD_BOOT_PARSE_PASS' | Out-Host
 Invoke-Qualification 'import' @('--headless', '--editor', '--path', $ProjectPath, '--import') '' | Out-Null
 Invoke-Qualification 'focused' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p4_0h_final_qualification_tests.gd') 'P4_0H_FINAL_PASS:' | Out-Host
