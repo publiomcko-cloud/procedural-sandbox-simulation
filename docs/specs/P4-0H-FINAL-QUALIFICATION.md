@@ -1,6 +1,6 @@
 # P4.0H — final P4 qualification
 
-Status: **IMPLEMENTED / SELF_HOSTED_QUALIFICATION_PENDING / NOT MERGED**.
+Status: **INTEGRATED / AUTOMATED QUALIFIED / OWNER GUI ACCEPTED / P4 CLOSED**.
 
 Dependency chain: P4.0D PR #269 -> P4.0E #270 -> P4.0F #271 -> P4.0G #272 -> P4.0H stacked branch.
 
@@ -62,27 +62,18 @@ Restart must restore:
 
 The P4.0G store-level exact-snapshot/SHA replay tests remain cumulative and provide byte-exact durability proof independently of the scene's derived lifecycle reconstruction.
 
-## Remaining manual owner gate
+## Owner GUI gate — ACCEPTED
 
-Headless CI cannot establish perceived smoothness. After automated qualification passes, the owner must run the exact qualified HEAD in the GUI and exercise:
-
-1. cold launch;
-2. continuous movement;
-3. rapid multi-region movement;
-4. revisit;
-5. save;
-6. close/relaunch;
-7. load/continued movement.
-
-Capture `SANDBOX_PERF_TRACE=1` during that run. Any visible hitch or functional inconsistency triggers one corrective pass before P4 is integrated.
+The owner completed the corrected GUI run under `SANDBOX_PERF_TRACE=1` on Godot 4.7.2 with NVIDIA GTX 1050 Ti after the cold-start class-cache correction. The run contained no script/runtime errors, warnings or failed markers; measured scheduler/lifecycle/terrain/effect trace values remained within the P4.0H regression ceilings. The owner explicitly reported the game as visually good and smooth and authorized P4 closure.
 
 ## Closing rule
 
-P4 may be marked CLOSED only when:
+P4 closing conditions were satisfied:
 
-1. P4.0H automated qualification is green on the exact HEAD;
-2. owner GUI/visual acceptance is green on that same HEAD or on a strictly corrective descendant requalified by P4.0H;
-3. stacked PRs P4.0D→H are integrated in order and the final integrated main is requalified;
-4. project status/checkpoint documentation is updated to the integrated main commit.
+1. P4.0H automated qualification is green on corrected HEAD `3682491cd50f4a2f9a223a47ae94ebbe952043a1` via run `42519921001`;
+2. owner GUI/visual acceptance is green on that source;
+3. stacked PRs P4.0D→H were integrated in order, ending at main merge `99e83c0bd6fcc28e55e0977dad41a378a00ea2ee`;
+4. the integrated runtime tree exactly matches the final qualified P4.0H tree;
+5. project status/checkpoint documentation records P4 closure.
 
 P5 climate/water and later ecology work are explicitly outside this gate.
