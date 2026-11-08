@@ -2188,13 +2188,17 @@ func _try_commit_global_rebuild() -> void:
 	for id in _full_rebuild_target_ids:
 		all_stages.append(loading_regions[id])
 	if not _pending_world_load.is_empty():
-		world_seed = int(_pending_world_load["world_seed"])
-		edit_ledger = _pending_world_load["ledger"]
+		var pending_load: Dictionary = _pending_world_load.duplicate(true)
+		world_seed = int(pending_load["world_seed"])
+		edit_ledger = pending_load["ledger"]
 		_persistence_blocked = false
-		_checkpoint_generation = int(_pending_world_load["generation"]) if _scalable_runtime_enabled else _checkpoint_generation
+		_checkpoint_generation = int(pending_load["generation"]) if _scalable_runtime_enabled else _checkpoint_generation
 		_persistence_status = "Loaded generation %d (%d ordered edit(s))" % [
-			int(_pending_world_load["generation"]), edit_ledger.get_edit_count(),
+			int(pending_load["generation"]), edit_ledger.get_edit_count(),
 		]
+		if not _apply_pending_simulation_candidate(pending_load):
+			_persistence_blocked = true
+			_persistence_status += "; simulation restore blocked"
 		_pending_world_load = {}
 	global_rebuild_pending = false
 	global_rebuild_reason = ""
