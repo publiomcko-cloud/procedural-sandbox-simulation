@@ -27,11 +27,11 @@ function Percentile([Int64[]]$values, [double]$fraction) {
 }
 
 $requirements = @(
-    @{ Name='simulation_scheduler_frame'; Min=10; MaxUsec=2000 },
-    @{ Name='simulation_world_scope_frame'; Min=5; MaxUsec=15000 },
-    @{ Name='material_environment_batch'; Min=1; MaxUsec=15000 },
-    @{ Name='terrain_window_reconcile'; Min=3; MaxUsec=30000 },
-    @{ Name='effect_snapshot_prepare'; Min=1; MaxUsec=25000 }
+    @{ Name='simulation_scheduler_frame'; Min=10; P99Usec=5000 },
+    @{ Name='simulation_world_scope_frame'; Min=5; P99Usec=5000 },
+    @{ Name='material_environment_batch'; Min=1; P99Usec=5000 },
+    @{ Name='terrain_window_reconcile'; Min=3; P99Usec=25000 },
+    @{ Name='effect_snapshot_prepare'; Min=1; P99Usec=15000 }
 )
 
 $summary = [ordered]@{}
@@ -47,14 +47,14 @@ foreach ($gate in $requirements) {
         p95_usec = (Percentile $nonzero 0.95)
         p99_usec = (Percentile $nonzero 0.99)
         max_usec = $(if ($nonzero.Count -gt 0) { [int64](($nonzero | Measure-Object -Maximum).Maximum) } else { 0 })
-        max_gate_usec = [int64]$gate.MaxUsec
+        p99_gate_usec = [int64]$gate.P99Usec
     }
     $summary[$name] = $entry
     if ($values.Count -lt [int]$gate.Min) {
         $failures += "$name count $($values.Count) < $($gate.Min)"
     }
-    if ($entry.max_usec -gt [int64]$gate.MaxUsec) {
-        $failures += "$name max $($entry.max_usec) > $($gate.MaxUsec)"
+    if ($entry.p99_usec -gt [int64]$gate.P99Usec) {
+        $failures += "$name p99 $($entry.p99_usec) > $($gate.P99Usec)"
     }
 }
 
