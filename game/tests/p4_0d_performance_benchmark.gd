@@ -69,9 +69,33 @@ func _run_case(count: int) -> Dictionary:
 		var tier := "active" if index % 10 < 6 else ("aggregate" if index % 10 < 9 else "dormant")
 		if not _require(tiers.register_scope(scope_id, tier).get("ok", false), "scope registered"):
 			return {"scopes": count, "ok": false}
-		if not _require(domain.initialize_bound_scope_state(tiers, scope_id, profile_id, 0).get("ok", false), "scope state initialized"):
-			return {"scopes": count, "ok": false}
 	var setup_usec := Time.get_ticks_usec() - t0
+	# Round B: cold initialization uses the same cumulative frame budget as updates.
+	var init_queue: MaterialEnvironmentWorkQueue = QueueScript.new()
+	if not _require(init_queue.initialize(domain, BUDGET, CAPACITY).get("ok", false), "init queue configured"):
+		return {"scopes": count, "ok": false}
+	var init_cursor := 0
+	var init_frame := 1
+	var init_samples: Array[int] = []
+	var init_completed := 0
+	var init_peak_pending := 0
+	while init_completed < count and init_frame < count + 100:
+		while init_cursor < count and int(init_queue.get_metrics()["pending_count"]) < CAPACITY:
+			var id := "bench.%05d" % init_cursor
+			if not _require(init_queue.enqueue_initialization(tiers, id, profile_id, 0).get("ok", false), "cold init admission"):
+				return {"scopes": count, "ok": false}
+			init_cursor += 1
+		init_peak_pending = maxi(init_peak_pending, int(init_queue.get_metrics()["pending_count"]))
+		var begin := Time.get_ticks_usec()
+		var initialized: Dictionary = init_queue.process_pending(tiers, init_frame)
+		init_samples.append(Time.get_ticks_usec() - begin)
+		if not _require(initialized.get("ok", false), "cold init batch " + str(initialized.get("detail", ""))):
+			return {"scopes": count, "ok": false}
+		if not _require(int(initialized["processed_count"]) <= BUDGET, "cold init frame budget"):
+			return {"scopes": count, "ok": false}
+		init_completed += int(initialized["processed_count"])
+		init_frame += 1
+	_require(init_completed == count and int(init_queue.get_metrics()["pending_count"]) == 0, "cold initialization fully drained")
 	var queue: MaterialEnvironmentWorkQueue = QueueScript.new()
 	if not _require(queue.initialize(domain, BUDGET, CAPACITY).get("ok", false), "queue initialized"):
 		return {"scopes": count, "ok": false}
