@@ -11,6 +11,7 @@ on:
       - 'game/tests/p4_0h_cold_boot_probe.gd'
       - 'game/tests/p4_0h_final_qualification_tests.gd'
       - 'scripts/ci/run-p4-0h-qualification.ps1'
+      - 'scripts/ci/assert-p4-class-cache-independence.ps1'
       - 'scripts/ci/validate-p4-0h-perf-trace.ps1'
       - 'scripts/validate.sh'
       - 'docs/specs/P4-0H-FINAL-QUALIFICATION.md'
