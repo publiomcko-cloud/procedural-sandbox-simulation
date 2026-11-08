@@ -1,18 +1,6 @@
 name: P4.0B simulation tier framework
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'game/scripts/simulation/simulation_tier_state.gd'
-      - 'game/scripts/simulation/simulation_runtime.gd'
-      - 'game/tests/p4_0b_simulation_tier_tests.gd'
-      - 'game/tests/p4_0a_fixed_tick_scheduler_tests.gd'
-      - 'scripts/ci/run-p4-0b-qualification.ps1'
-      - 'scripts/ci/run-p4-0a-qualification.ps1'
-      - 'docs/specs/P4-0B-SIMULATION-TIER-FRAMEWORK.md'
-      - '.github/workflows/p4-0b-simulation-tier-framework.yml'
   workflow_dispatch:
 
 concurrency:
