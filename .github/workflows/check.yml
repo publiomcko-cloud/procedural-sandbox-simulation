@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
 
       - name: Validate expected files
-        shell: pwsh
+        shell: powershell
         run: |
           $required = @(
             'game/project.godot',
