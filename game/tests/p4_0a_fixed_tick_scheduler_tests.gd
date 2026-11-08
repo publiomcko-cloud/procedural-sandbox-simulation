@@ -288,10 +288,15 @@ func _test_snapshot_restore_and_validation() -> void:
 	var original_step: Dictionary = original.process_elapsed_usec(0)
 	var restored_step: Dictionary = restored.process_elapsed_usec(0)
 	_check(
-		original_step == restored_step
+		int(original_step.get("admitted_ticks", -1))
+				== int(restored_step.get("admitted_ticks", -1))
+			and int(original_step.get("first_tick", -1))
+				== int(restored_step.get("first_tick", -1))
+			and int(original_step.get("last_tick", -1))
+				== int(restored_step.get("last_tick", -1))
 			and original.get_authoritative_snapshot()
 				== restored.get_authoritative_snapshot(),
-		"restored scheduler replays the same next admitted tick batch"
+		"restored scheduler replays the same next admitted tick batch independent of telemetry counters"
 	)
 	_check(
 		original.set_paused(false).get("ok", false)
@@ -302,10 +307,13 @@ func _test_snapshot_restore_and_validation() -> void:
 	var original_resume: Dictionary = original.process_elapsed_usec(50)
 	var restored_resume: Dictionary = restored.process_elapsed_usec(50)
 	_check(
-		original_resume == restored_resume
+		int(original_resume.get("admitted_ticks", -1))
+				== int(restored_resume.get("admitted_ticks", -1))
+			and int(original_resume.get("current_tick", -1))
+				== int(restored_resume.get("current_tick", -1))
 			and original.get_authoritative_snapshot()
 				== restored.get_authoritative_snapshot(),
-		"restored scheduler preserves deterministic post-resume evolution"
+		"restored scheduler preserves deterministic post-resume evolution independent of telemetry counters"
 	)
 
 	var unknown_field: Dictionary = snapshot.duplicate(true)
