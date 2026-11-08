@@ -26,6 +26,8 @@ var _processed_total := 0
 var _deferred_total := 0
 var _failed_batches := 0
 var _trace := false
+var _last_frame_index := -1
+var _admitted_in_frame := 0
 
 
 func initialize(
@@ -78,14 +80,22 @@ func enqueue(
 	return {"ok": true, "reason": "ok", "noop": false, "pending_count": _count}
 
 
-func process_pending(tier_state: SimulationTierState, requested_budget: int = -1) -> Dictionary:
+func process_pending(
+	tier_state: SimulationTierState, frame_index: int, requested_budget: int = -1
+) -> Dictionary:
 	if _domain == null:
 		return {"ok": false, "reason": "material_queue_not_initialized"}
 	if tier_state == null or not tier_state.is_initialized():
 		return {"ok": false, "reason": "material_tier_state_unavailable"}
 	if requested_budget == 0 or requested_budget < -1 or requested_budget > _budget:
 		return {"ok": false, "reason": "material_queue_budget_invalid"}
-	var limit := _budget if requested_budget == -1 else requested_budget
+	if frame_index < 0 or frame_index < _last_frame_index:
+		return {"ok": false, "reason": "material_queue_frame_invalid"}
+	if frame_index > _last_frame_index:
+		_last_frame_index = frame_index
+		_admitted_in_frame = 0
+	var remaining := _budget - _admitted_in_frame
+	var limit := mini(remaining, _budget if requested_budget == -1 else requested_budget)
 	var started_usec := Time.get_ticks_usec() if _trace else 0
 	var receipts: Array = []
 	for _i in range(mini(limit, _count)):
@@ -109,25 +119,31 @@ func process_pending(tier_state: SimulationTierState, requested_budget: int = -1
 		_slots[_read] = null
 		_read = (_read + 1) % _capacity
 		_count -= 1
+	_admitted_in_frame += receipts.size()
 	_processed_total += receipts.size()
 	_deferred_total += _count
 	if _trace and (receipts.size() > 0 or _count > 0):
 		PerformanceTrace.emit_duration(
 			"material_environment_batch", started_usec,
 			{"processed_count": receipts.size(), "pending_count": _count,
-			 "budget": limit, "bound_updates_total": _domain.get_binding_metrics()["bound_update_calls_total"]},
+			 "budget": _budget, "frame_index": frame_index,
+			 "admitted_in_frame": _admitted_in_frame,
+			 "bound_updates_total": _domain.get_binding_metrics()["bound_update_calls_total"]},
 			true
 		)
 	return {
 		"ok": true, "reason": "ok", "processed": receipts,
 		"processed_count": receipts.size(), "pending_count": _count,
-		"budget": limit,
+		"budget": _budget, "frame_index": frame_index,
+		"admitted_in_frame": _admitted_in_frame,
 	}
 
 
 func get_metrics() -> Dictionary:
 	return {
 		"pending_count": _count, "capacity": _capacity, "budget": _budget,
+		"last_frame_index": _last_frame_index,
+		"admitted_in_frame": _admitted_in_frame,
 		"submissions_total": _submissions, "accepted_total": _accepted,
 		"deduplicated_total": _deduplicated, "processed_total": _processed_total,
 		"deferred_total": _deferred_total, "failed_batches": _failed_batches,
