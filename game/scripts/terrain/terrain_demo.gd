@@ -3902,6 +3902,12 @@ func _update_status() -> void:
 				int(simulation_metrics.get("due_updates_deferred_total", 0)),
 				_simulation_streaming_status,
 			]
+			status += "P4 persistence: generation %d | terrain generation %d | pending %d | %s\n" % [
+				_simulation_storage_generation,
+				_checkpoint_generation,
+				_pending_simulation_save_terrain_generation,
+				_simulation_persistence_status,
+			]
 	if global_rebuild_pending:
 		status += "Rebuilding visible set: %d regions staged\n" % loading_regions.size()
 	if cave_section_enabled:
