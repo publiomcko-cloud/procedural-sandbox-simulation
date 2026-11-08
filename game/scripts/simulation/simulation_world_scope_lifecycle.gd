@@ -278,6 +278,12 @@ func process_scheduler_frame(
 		due_result = _schedule_due_work(
 			runtime, int(scheduler_result.get("current_tick", 0))
 		)
+		if due_result.has("error"):
+			return {
+				"ok": false,
+				"reason": "world_scope_due_scheduling_failed",
+				"detail": String(due_result.get("error", "")),
+			}
 
 	return {
 		"ok": true,
