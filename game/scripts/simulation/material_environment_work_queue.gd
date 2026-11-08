@@ -58,7 +58,7 @@ func enqueue(
 	_submissions += 1
 	if logical_tick < 0:
 		return {"ok": false, "reason": "material_queue_tick_invalid"}
-	if tier_state == null or tier_state.get_scope(scope_id).is_empty():
+	if tier_state == null or not tier_state.has_scope(scope_id):
 		return {"ok": false, "reason": "simulation_scope_not_found"}
 	if not _domain.has_bound_profile(profile_id):
 		return {"ok": false, "reason": "material_profile_not_bound"}
