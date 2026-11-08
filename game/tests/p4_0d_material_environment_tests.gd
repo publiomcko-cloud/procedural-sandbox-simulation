@@ -149,16 +149,19 @@ func _test_bound_queue(
 		_check(domain.initialize_bound_scope_state(tiers, id, profile_id, 0).get("ok", false), "bound state init " + id)
 	var queue: MaterialEnvironmentWorkQueue = WorkQueue.new()
 	_check(queue.initialize(domain, 4, 20).get("ok", false), "bounded ring initialized")
-	_check(queue.process_pending(tiers, 5).get("reason", "") == "material_queue_budget_invalid", "cannot exceed per-call budget")
+	_check(queue.process_pending(tiers, 1, 5).get("reason", "") == "material_queue_budget_invalid", "cannot exceed per-call budget")
 	for i in range(20):
 		_check(queue.enqueue(tiers, "dense.%02d" % i, profile_id, 1).get("ok", false), "enqueue ordered dense scope")
 	_check(queue.enqueue(tiers, "dense.00", profile_id, 1).get("noop", false), "same scope/tick deduplicated")
 	_check(queue.enqueue(tiers, "dense.00", profile_id, 2).get("reason", "") == "material_queue_capacity_reached", "hard capacity rejects without evicting")
-	var first: Dictionary = queue.process_pending(tiers)
+	var first: Dictionary = queue.process_pending(tiers, 1)
 	_check(first.get("ok", false) and int(first["processed_count"]) == 4 and int(first["pending_count"]) == 16, "first frame admits exactly four")
 	_check(String(first["processed"][0]["scope_id"]) == "dense.00", "FIFO receipts preserve admission order")
-	for _batch in range(4):
-		_check(queue.process_pending(tiers).get("ok", false), "remaining batch succeeds")
+	var same_frame: Dictionary = queue.process_pending(tiers, 1)
+	_check(same_frame.get("ok", false) and int(same_frame.get("processed_count", -1)) == 0 and int(same_frame.get("pending_count", -1)) == 16, "second invocation cannot bypass frame budget")
+	_check(queue.process_pending(tiers, 0).get("reason", "") == "material_queue_frame_invalid", "out-of-order frame rejected")
+	for frame_index in range(2, 6):
+		_check(queue.process_pending(tiers, frame_index).get("ok", false), "next frame admits a bounded batch")
 	_check(int(queue.get_metrics()["pending_count"]) == 0, "backlog drains without global scans")
 	_check(int(queue.get_metrics()["processed_total"]) == 20, "exact bounded decision count")
 	for i in range(20):
@@ -172,7 +175,7 @@ func _test_bound_queue(
 	var next: MaterialEnvironmentWorkQueue = WorkQueue.new()
 	next.initialize(domain, 4, 8)
 	_check(next.enqueue(restored, "dense.00", profile_id, 2).get("ok", false), "restored scope accepts next tick")
-	_check(next.process_pending(restored).get("ok", false), "restored scope resumes safely")
+	_check(next.process_pending(restored, 6).get("ok", false), "restored scope resumes safely")
 	_check(int(restored.get_scope("dense.00")["state"]["material_environment"]["temperature_milli_c"]) == 6562, "warm deterministic integer progression after restore")
 	_check(int(domain.get_binding_metrics()["legacy_hash_validations_total"]) == hash_count, "restore path still avoids per-tick hashing")
 
