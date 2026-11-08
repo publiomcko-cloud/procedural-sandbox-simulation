@@ -12,6 +12,7 @@ const SchedulerScript := preload("res://scripts/simulation/fixed_tick_scheduler.
 const TierStateScript := preload("res://scripts/simulation/simulation_tier_state.gd")
 const TierRouterScript := preload("res://scripts/simulation/simulation_tier_router.gd")
 const MaterialBridgeScript := preload("res://scripts/simulation/material_environment_runtime_bridge.gd")
+const WorldScopeLifecycleScript := preload("res://scripts/simulation/simulation_world_scope_lifecycle.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
 const RUNTIME_SNAPSHOT_SCHEMA_VERSION := 2
@@ -46,6 +47,7 @@ var scheduler: FixedTickScheduler
 var tier_state: SimulationTierState
 var tier_router: SimulationTierRouter
 var material_bridge: MaterialEnvironmentRuntimeBridge
+var world_scope_lifecycle: SimulationWorldScopeLifecycle
 var initialized := false
 var initialization_error := ""
 
@@ -126,6 +128,10 @@ func initialize_runtime(
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
 	material_bridge = null
+	if world_scope_lifecycle != null:
+		world_scope_lifecycle.reset_transient()
+	world_scope_lifecycle = null
+	world_scope_lifecycle = null
 	scheduler = next_scheduler
 	tier_state = next_tier_state
 	tier_router = next_tier_router
@@ -164,6 +170,37 @@ func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
 
 	var started_usec: int = Time.get_ticks_usec() if _perf_trace_enabled else 0
 	var result: Dictionary = scheduler.process_elapsed_usec(elapsed_usec)
+	if (
+		result.get("ok", false)
+		and world_scope_lifecycle != null
+		and world_scope_lifecycle.is_initialized()
+	):
+		var lifecycle_started_usec := Time.get_ticks_usec() if _perf_trace_enabled else 0
+		var lifecycle_result: Dictionary = world_scope_lifecycle.process_scheduler_frame(
+			self, result
+		)
+		if not lifecycle_result.get("ok", false):
+			return {
+				"ok": false,
+				"reason": "world_scope_lifecycle_frame_failed",
+				"detail": String(
+					lifecycle_result.get("detail", lifecycle_result.get("reason", ""))
+				),
+			}
+		result["world_scope_lifecycle"] = lifecycle_result
+		if _perf_trace_enabled:
+			var lifecycle_work := (
+				int(lifecycle_result.get("routing_processed_count", 0))
+				+ int(lifecycle_result.get("due_decisions", 0))
+				+ int(lifecycle_result.get("due_updates_queued", 0))
+			)
+			if lifecycle_work > 0 or int(lifecycle_result.get("resident_count", 0)) > 0:
+				PerformanceTrace.emit_duration(
+					"simulation_world_scope_frame",
+					lifecycle_started_usec,
+					lifecycle_result,
+					true
+				)
 	if result.get("ok", false) and material_bridge != null and material_bridge.is_enabled():
 		var material_batch: Dictionary = material_bridge.process_frame(
 			tier_state, int(result.get("frame_index", -1))
@@ -322,6 +359,68 @@ func get_material_environment_metrics() -> Dictionary:
 	return material_bridge.get_metrics() if material_bridge != null else {"enabled": false}
 
 
+func configure_world_scope_lifecycle(
+	profile_id: String = "",
+	max_resident_scopes: int = SimulationWorldScopeLifecycle.DEFAULT_MAX_RESIDENT_SCOPES,
+	region_size_x_mm: int = SimulationWorldScopeLifecycle.DEFAULT_REGION_SIZE_X_MM,
+	region_size_z_mm: int = SimulationWorldScopeLifecycle.DEFAULT_REGION_SIZE_Z_MM,
+	due_decision_budget: int = SimulationWorldScopeLifecycle.DEFAULT_DUE_DECISION_BUDGET
+) -> Dictionary:
+	if not initialized or scheduler == null or tier_state == null or tier_router == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	if world_scope_lifecycle != null and world_scope_lifecycle.is_initialized():
+		return {"ok": false, "reason": "world_scope_lifecycle_already_initialized"}
+	if not profile_id.is_empty():
+		if material_bridge == null or not material_bridge.is_enabled():
+			return {"ok": false, "reason": "material_bridge_not_configured"}
+	var candidate: SimulationWorldScopeLifecycle = WorldScopeLifecycleScript.new()
+	var result: Dictionary = candidate.initialize(
+		profile_id,
+		max_resident_scopes,
+		region_size_x_mm,
+		region_size_z_mm,
+		due_decision_budget
+	)
+	if result.get("ok", false):
+		world_scope_lifecycle = candidate
+	return result
+
+
+func publish_world_region_scope(
+	region_key: Vector2i,
+	initial_temperature_milli_c: int = 0
+) -> Dictionary:
+	if world_scope_lifecycle == null:
+		return {"ok": false, "reason": "world_scope_lifecycle_not_initialized"}
+	return world_scope_lifecycle.notify_region_published(
+		self, region_key, initial_temperature_milli_c
+	)
+
+
+func unload_world_region_scope(region_key: Vector2i) -> Dictionary:
+	if world_scope_lifecycle == null:
+		return {"ok": false, "reason": "world_scope_lifecycle_not_initialized"}
+	return world_scope_lifecycle.notify_region_unloaded(self, region_key)
+
+
+func update_world_scope_focus(region_key: Vector2i) -> Dictionary:
+	if world_scope_lifecycle == null:
+		return {"ok": false, "reason": "world_scope_lifecycle_not_initialized"}
+	return world_scope_lifecycle.update_focus(self, region_key)
+
+
+func get_world_scope_lifecycle_metrics() -> Dictionary:
+	if world_scope_lifecycle == null:
+		return {"initialized": false}
+	return world_scope_lifecycle.get_metrics()
+
+
+func get_world_scope_resident_ids() -> Array[String]:
+	if world_scope_lifecycle == null:
+		return []
+	return world_scope_lifecycle.get_resident_scope_ids()
+
+
 func get_simulation_scope(scope_id: String) -> Dictionary:
 	if not initialized or tier_state == null:
 		return {}
@@ -477,6 +576,9 @@ func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
 	material_bridge = null
+	if world_scope_lifecycle != null:
+		world_scope_lifecycle.reset_transient()
+	world_scope_lifecycle = null
 	scheduler = next_scheduler
 	tier_state = next_tier_state
 	tier_router = next_tier_router
@@ -512,6 +614,9 @@ func restore_simulation_tier_snapshot(snapshot: Dictionary) -> Dictionary:
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
 	material_bridge = null
+	if world_scope_lifecycle != null:
+		world_scope_lifecycle.reset_transient()
+	world_scope_lifecycle = null
 	tier_state = next_tier_state
 	return {
 		"ok": true,
@@ -535,6 +640,9 @@ func restore_simulation_router_snapshot(snapshot: Dictionary) -> Dictionary:
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
 	material_bridge = null
+	if world_scope_lifecycle != null:
+		world_scope_lifecycle.reset_transient()
+	world_scope_lifecycle = null
 	tier_router = next_router
 	return {
 		"ok": true,
@@ -652,6 +760,9 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
 	material_bridge = null
+	if world_scope_lifecycle != null:
+		world_scope_lifecycle.reset_transient()
+	world_scope_lifecycle = null
 	scheduler = next_scheduler
 	tier_state = next_tier_state
 	tier_router = next_tier_router
