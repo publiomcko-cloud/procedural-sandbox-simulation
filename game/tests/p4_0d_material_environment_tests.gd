@@ -169,6 +169,24 @@ func _test_bound_queue(
 		_check(int(data["temperature_milli_c"]) == 3750 and int(data["last_due_tick"]) == 1, "each scope advanced exactly once")
 	_check(int(domain.get_binding_metrics()["legacy_hash_validations_total"]) == hash_count, "hot-path batches never hash profiles")
 	_check(int(domain.get_binding_metrics()["bound_update_calls_total"]) == 20, "bound update metrics count admitted work")
+	# Separate bounded cold initialization must obey exactly the same per-frame cap.
+	var cold: SimulationTierState = TierState.new()
+	cold.initialize(2, 8)
+	var cold_queue: MaterialEnvironmentWorkQueue = WorkQueue.new()
+	_check(cold_queue.initialize(domain, 2, 8).get("ok", false), "bounded initialization queue created")
+	for i in range(8):
+		var cold_id := "cold.%02d" % i
+		cold.register_scope(cold_id, "active")
+		_check(cold_queue.enqueue_initialization(cold, cold_id, profile_id, 1000).get("ok", false), "cold scope queued")
+	var cold_first := cold_queue.process_pending(cold, 1)
+	_check(cold_first.get("ok", false) and int(cold_first["processed_count"]) == 2, "cold init admits two states")
+	_check(cold_queue.process_pending(cold, 1).get("processed_count", -1) == 0, "cold init cannot bypass same-frame budget")
+	for frame_index in range(2, 5):
+		_check(cold_queue.process_pending(cold, frame_index).get("ok", false), "remaining cold batch succeeds")
+	_check(int(cold_queue.get_metrics()["pending_count"]) == 0, "cold initialization backlog drained")
+	for i in range(8):
+		var cold_state: Dictionary = cold.get_scope("cold.%02d" % i)["state"]
+		_check(int(cold_state["material_environment"]["temperature_milli_c"]) == 1000, "cold state committed without tick advance")
 	var snapshot: Dictionary = tiers.get_authoritative_snapshot()
 	var restored: SimulationTierState = TierState.new()
 	_check(restored.restore_snapshot(snapshot).get("ok", false), "dense state restore succeeds")
