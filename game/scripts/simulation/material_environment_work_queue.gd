@@ -80,6 +80,38 @@ func enqueue(
 	return {"ok": true, "reason": "ok", "noop": false, "pending_count": _count}
 
 
+func enqueue_scope_registration(
+	tier_state: SimulationTierState, scope_id: String,
+	initial_tier: String = SimulationTierState.TIER_DORMANT
+) -> Dictionary:
+	# Explicit scope feed, not a world scan. Registration shares the frame budget.
+	if _domain == null:
+		return {"ok": false, "reason": "material_queue_not_initialized"}
+	_submissions += 1
+	if tier_state == null or not tier_state.is_initialized():
+		return {"ok": false, "reason": "material_tier_state_unavailable"}
+	if scope_id.is_empty() or scope_id.length() > SimulationTierState.MAX_SCOPE_ID_LENGTH:
+		return {"ok": false, "reason": "simulation_scope_id_invalid"}
+	if not SimulationTierState.VALID_TIERS.has(initial_tier):
+		return {"ok": false, "reason": "simulation_tier_invalid"}
+	if tier_state.has_scope(scope_id):
+		return {"ok": false, "reason": "simulation_scope_already_registered"}
+	var key := "register|%s" % scope_id
+	if _index.has(key):
+		return {"ok": false, "reason": "material_scope_registration_pending"}
+	if _count >= _capacity:
+		return {"ok": false, "reason": "material_queue_capacity_reached", "pending_count": _count}
+	_slots[_write] = {
+		"key": key, "kind": "register", "scope_id": scope_id,
+		"initial_tier": initial_tier,
+	}
+	_index[key] = true
+	_write = (_write + 1) % _capacity
+	_count += 1
+	_accepted += 1
+	return {"ok": true, "reason": "ok", "pending_count": _count}
+
+
 func enqueue_initialization(
 	tier_state: SimulationTierState, scope_id: String,
 	profile_id: String, initial_temperature_milli_c: int
@@ -132,7 +164,12 @@ func process_pending(
 		var item: Dictionary = _slots[_read]
 		var is_initialization: bool = String(item.get("kind", "due")) == "initialize"
 		var result: Dictionary
-		if is_initialization:
+		var is_registration: bool = String(item.get("kind", "due")) == "register"
+		if is_registration:
+			result = tier_state.register_scope(
+				String(item["scope_id"]), String(item["initial_tier"])
+			)
+		elif is_initialization:
 			result = _domain.initialize_bound_scope_state(
 				tier_state, String(item["scope_id"]), String(item["profile_id"]),
 				int(item["initial_temperature_milli_c"])
@@ -153,6 +190,7 @@ func process_pending(
 			"scope_id": item["scope_id"],
 			"logical_tick": int(item.get("logical_tick", -1)),
 			"initialized": is_initialization,
+			"registered": is_registration,
 			"due": bool(result.get("due", false)),
 			"noop": bool(result.get("noop", false)),
 		})
