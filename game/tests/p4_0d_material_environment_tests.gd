@@ -136,10 +136,11 @@ func _test_bound_queue(
 	profile: Dictionary, pin: Dictionary
 ) -> void:
 	var profile_id := String(profile["id"])
+	var before_bind := int(domain.get_binding_metrics()["legacy_hash_validations_total"])
 	_check(domain.bind_registry_profile(registry, profile_id).get("ok", false), "cold profile bind validates M4.0")
 	_check(domain.bind_registry_profile(registry, profile_id).get("noop", false), "warm bind is idempotent")
 	var hash_count := int(domain.get_binding_metrics()["legacy_hash_validations_total"])
-	_check(hash_count == 1, "cold binding performs one SHA-256 validation")
+	_check(hash_count == before_bind + 1, "cold binding performs exactly one SHA-256 validation")
 	var tiers: SimulationTierState = TierState.new()
 	tiers.initialize(2, 64)
 	for i in range(20):
