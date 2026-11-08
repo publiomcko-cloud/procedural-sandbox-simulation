@@ -195,7 +195,7 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 	_write_text(package_path.path_join("manifest.json"), JSON.stringify(manifest))
 	_write_text(profile_path.path_join("temperate.json"), JSON.stringify(record))
 
-	var discovered := Loader.discover_and_validate([package_root])
+	var discovered: Dictionary = Loader.discover_and_validate([package_root])
 	_check(
 		discovered.get("ok", false)
 			and discovered.get("packages", [])[0]
