@@ -32,6 +32,7 @@ The scheduler is engine-owned and stores only logical scheduler authority:
 - sub-tick integer-microsecond accumulator;
 - scalar deferred backlog;
 - bounded per-frame admission;
+- hard-bounded scalar deferred backlog with atomic overflow rejection;
 - paused state;
 - bounded manual-step queue;
 - schema-1 scheduler snapshot;
@@ -75,7 +76,7 @@ Missed ticks become scalar backlog. One frame never loops over the entire missed
 
 Backlog drains incrementally on later frames, including zero-elapsed drain calls.
 
-No due tick is silently dropped by the scheduler core.
+No due tick is silently dropped by the scheduler core. Deferred backlog is hard-bounded to 10,000,000 ticks; a call that would overflow that scalar bound is rejected before authoritative scheduler mutation.
 
 ### Pause and manual step
 
@@ -175,6 +176,8 @@ P4.0A does not implement:
 - scripted mods.
 
 ## Next gate
+
+Hosted GitHub Actions for PR #258 currently fail before step allocation (`steps=null`), matching the repository's existing runner-infrastructure failure mode. This is not a code verdict.
 
 Run exact Godot 4.7.2 owner-local qualification on the final PR source.
 
