@@ -5,7 +5,7 @@ PROJECT="$ROOT/game"
 GODOT="${GODOT_BIN:-godot}"
 failures=0
 
-for file in project.godot scenes/main.tscn scenes/terrain_demo.tscn scripts/bootstrap.gd scripts/region_generator.gd scripts/terrain/sdf_world.gd scripts/terrain/marching_tetrahedra.gd scripts/terrain/terrain_demo.gd scripts/simulation/fixed_tick_scheduler.gd scripts/simulation/simulation_tier_state.gd scripts/simulation/simulation_tier_router.gd scripts/simulation/simulation_runtime.gd scripts/experiments/lod01_transition_fixture.gd tests/smoke.gd tests/terrain_sdf_tests.gd tests/p4_0a_fixed_tick_scheduler_tests.gd tests/p4_0b_simulation_tier_tests.gd tests/p4_0c_simulation_tier_router_tests.gd tests/lod01_transition_tests.gd tests/bootstrap_visual_regression.gd; do
+for file in project.godot scenes/main.tscn scenes/terrain_demo.tscn scripts/bootstrap.gd scripts/region_generator.gd scripts/terrain/sdf_world.gd scripts/terrain/marching_tetrahedra.gd scripts/terrain/terrain_demo.gd scripts/simulation/fixed_tick_scheduler.gd scripts/simulation/simulation_tier_state.gd scripts/simulation/simulation_tier_router.gd scripts/simulation/material_environment_domain.gd scripts/simulation/material_environment_work_queue.gd scripts/simulation/simulation_runtime.gd scripts/experiments/lod01_transition_fixture.gd tests/smoke.gd tests/terrain_sdf_tests.gd tests/p4_0a_fixed_tick_scheduler_tests.gd tests/p4_0b_simulation_tier_tests.gd tests/p4_0c_simulation_tier_router_tests.gd tests/p4_0d_material_environment_tests.gd tests/lod01_transition_tests.gd tests/bootstrap_visual_regression.gd; do
   if [[ -f "$PROJECT/$file" ]]; then
     :
   else
@@ -41,6 +41,8 @@ echo "COMMAND: $GODOT --headless --path $PROJECT --script res://tests/p4_0b_simu
 if "$GODOT" --headless --path "$PROJECT" --script res://tests/p4_0b_simulation_tier_tests.gd; then echo 'L2 PASS: bounded active/aggregate/dormant simulation tier framework'; else code=$?; printf 'L2 FAIL: P4.0B simulation tier tests exit code %s\n' "$code" >&2; failures=$((failures + 1)); fi
 echo "COMMAND: $GODOT --headless --path $PROJECT --script res://tests/p4_0c_simulation_tier_router_tests.gd"
 if "$GODOT" --headless --path "$PROJECT" --script res://tests/p4_0c_simulation_tier_router_tests.gd; then echo 'L2 PASS: bounded deterministic automatic simulation tier routing'; else code=$?; printf 'L2 FAIL: P4.0C tier router tests exit code %s\n' "$code" >&2; failures=$((failures + 1)); fi
+echo "COMMAND: $GODOT --headless --path $PROJECT --script res://tests/p4_0d_material_environment_tests.gd"
+if "$GODOT" --headless --path "$PROJECT" --script res://tests/p4_0d_material_environment_tests.gd; then echo 'L2 PASS: mod-first material/environment state domain'; else code=$?; printf 'L2 FAIL: P4.0D material/environment tests exit code %s\n' "$code" >&2; failures=$((failures + 1)); fi
 echo "COMMAND: $GODOT --headless --path $PROJECT --script res://tests/lod01_transition_tests.gd"
 if "$GODOT" --headless --path "$PROJECT" --script res://tests/lod01_transition_tests.gd; then echo 'L2 PASS: experimental deterministic LOD 0/1 transition fixture'; else code=$?; printf 'L2 FAIL: LOD 0/1 transition fixture exit code %s\n' "$code" >&2; failures=$((failures + 1)); fi
 echo "COMMAND: $GODOT --headless --path $PROJECT --script res://tests/bootstrap_visual_regression.gd"

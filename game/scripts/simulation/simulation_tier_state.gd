@@ -230,6 +230,10 @@ func replace_scope_state(
 	}
 
 
+func has_scope(scope_id: String) -> bool:
+	return _initialized and _scopes.has(scope_id)
+
+
 func get_scope(scope_id: String) -> Dictionary:
 	if not _initialized or not _scopes.has(scope_id):
 		return {}
