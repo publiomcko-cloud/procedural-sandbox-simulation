@@ -1,10 +1,9 @@
 name: P4.0A fixed tick scheduler
 
 on:
-  push:
-    branches:
-      - feat/p4-0a-fixed-tick-scheduler
   pull_request:
+    branches:
+      - main
     paths:
       - 'game/scripts/simulation/**'
       - 'game/scenes/terrain_demo.tscn'
@@ -17,6 +16,11 @@ on:
       - 'game/tests/procedural_object_tests.gd'
       - 'docs/specs/P4-0A-FIXED-TICK-SCHEDULER.md'
       - '.github/workflows/p4-0a-fixed-tick-scheduler.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
