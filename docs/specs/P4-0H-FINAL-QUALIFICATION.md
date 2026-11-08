@@ -34,15 +34,15 @@ SANDBOX_PERF_TRACE_MIN_MS=0
 
 The CI parser requires evidence for the following stages and applies deliberately conservative ceilings on the pinned self-hosted Windows runner:
 
-| Stage | Minimum samples | Max duration |
+| Stage | Minimum samples | P99 ceiling |
 |---|---:|---:|
-| simulation_scheduler_frame | 10 | 2 ms |
-| simulation_world_scope_frame | 5 | 15 ms |
-| material_environment_batch | 1 | 15 ms |
-| terrain_window_reconcile | 3 | 30 ms |
-| effect_snapshot_prepare | 1 | 25 ms |
+| simulation_scheduler_frame | 10 | 5 ms |
+| simulation_world_scope_frame | 5 | 5 ms |
+| material_environment_batch | 1 | 5 ms |
+| terrain_window_reconcile | 3 | 25 ms |
+| effect_snapshot_prepare | 1 | 15 ms |
 
-The real-scene harness also requires process-work peak and frame-time p99 to remain <= 50 ms. These thresholds are regression ceilings, not target frame budgets. Worker-side asynchronous wall latency such as object prewarm/projection generation is not misclassified as a main-thread stall.
+The trace gates use P99 so isolated tracing/runtime outliers remain visible in `max_usec` without being misclassified as systematic regression. The real-scene harness also requires process-work peak and frame-time p99 to remain <= 50 ms. These thresholds are regression ceilings, not target frame budgets. Worker-side asynchronous wall latency such as object prewarm/projection generation is not misclassified as a main-thread stall.
 
 The trace parser emits `P4_0H_TRACE_SUMMARY=<json>` and `P4_0H_TRACE_PASS`.
 
