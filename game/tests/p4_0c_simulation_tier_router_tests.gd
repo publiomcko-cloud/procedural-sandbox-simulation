@@ -342,12 +342,13 @@ func _test_snapshot_restore_and_preflight() -> void:
 		"router snapshot restores exact observations and queue order"
 	)
 
-	var original_future := router.process_pending(tiers, 3, 2)
+	var tier_snapshot_before_future := tiers.get_authoritative_snapshot()
 	var restored_tiers: SimulationTierState = TierStateScript.new()
 	_check(
-		restored_tiers.restore_snapshot(tiers.get_authoritative_snapshot()).get("ok", false),
+		restored_tiers.restore_snapshot(tier_snapshot_before_future).get("ok", false),
 		"router future-decision fixture clones tier authority"
 	)
+	var original_future := router.process_pending(tiers, 3, 2)
 	var restored_future := restored.process_pending(restored_tiers, 3, 2)
 	_check(
 		original_future["processed"] == restored_future["processed"],
@@ -355,7 +356,7 @@ func _test_snapshot_restore_and_preflight() -> void:
 	)
 
 	var bad := snapshot.duplicate(true)
-	bad["pending_scope_ids"].append("a")
+	bad["pending_scope_ids"][2] = "a"
 	var validator: SimulationTierRouter = TierRouterScript.new()
 	_check(
 		validator.validate_snapshot(bad).get("reason", "")
