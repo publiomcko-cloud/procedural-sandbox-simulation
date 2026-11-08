@@ -10,7 +10,7 @@ P4.0H is the closing qualification/correction slice for P4. It adds no new simul
 
 Automated gates:
 
-- cache-independent direct loading of `simulation_runtime.gd` and `terrain_demo.gd` before any editor/import pass, preventing hidden reliance on `.godot/global_script_class_cache.cfg`;
+- a static cache-independence guard forbidding P4 production scripts from resolving P4 `class_name` symbols through type annotations, static member access or constructors; followed by direct loading of `simulation_runtime.gd` and `terrain_demo.gd`; this targets the P4 cache-staleness failure without requiring unrelated legacy subsystems to abandon their established global classes;
 
 - real cold scene startup with a data-only environment mod discovered through the shared M4.0 registry;
 - bounded 25-scope saturation and 26th-scope fail-closed behavior;
