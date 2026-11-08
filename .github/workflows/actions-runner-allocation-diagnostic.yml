@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - diagnostic/actions-runner-allocation-2026-11-08
+  pull_request:
+    paths:
+      - '.github/workflows/actions-runner-allocation-diagnostic.yml'
 
 permissions:
   contents: read
