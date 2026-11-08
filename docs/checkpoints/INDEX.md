@@ -6,12 +6,14 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-11-08 | [P4 closure](2026-11-08-P4-CLOSURE.md) | P4.0D–H integrated in order; final automated campaign, cold-boot correction and owner GUI/perceived-smoothness acceptance complete | P4 CLOSED; integrated main runtime tree matches final qualified P4.0H tree; P5 V1 environment next |
 | 2026-11-08 | [P4.0C integration receipt](2026-11-08-P4-0C-INTEGRATION.md) | PR #267 merged bounded hysteretic tier routing, deterministic bounded observation processing and runtime schema-2 snapshots | Merge `e5370cb78d7685ea6439c78e6d753c2c975fb4cb`; Issue #266 completed; material/environment domain next |
 
 ## Latest feature event
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-11-08 | [P4 closure](2026-11-08-P4-CLOSURE.md) | Final P4.0H automated qualification plus owner GUI acceptance closes deterministic scheduler/tier/material/persistence foundation | Integrated; P4 CLOSED; P5 next |
 | 2026-11-08 | [P4.0C final qualification](2026-11-08-P4-0C-QUALIFICATION.md) | Deterministic hysteretic tier routing over explicit integer-distance observations, bounded FIFO dirty work and runtime snapshot schema-2 migration qualified on self-hosted Windows CI | Issue #266 / feature branch ready for integration review; no visual gate required; material/environment domain next after merge |
 | 2026-11-08 | [P4.0B integration receipt](2026-11-08-P4-0B-INTEGRATION.md) | PR #264 merged qualified active/aggregate/dormant tier framework into main; no visual gate required for this non-visible infrastructure slice | Merge commit `25a2dd8687cf513aa414a0469dc1f5de659863e3`; domain simulation not started |
 | 2026-11-08 | [P4.0B final qualification](2026-11-08-P4-0B-QUALIFICATION.md) | Bounded active/aggregate/dormant scope authority, revision-gated state, deterministic cadence and atomic scheduler+tier snapshots qualified on self-hosted Windows CI | PR #264 ready for integration; explicit owner merge authorization pending; domain simulation not started |
