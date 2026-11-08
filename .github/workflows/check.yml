@@ -28,17 +28,10 @@ jobs:
           persist-credentials: false
 
       - name: Validate expected files
-        shell: pwsh
+        shell: cmd
         run: |
-          $required = @(
-            'game/project.godot',
-            'game/scenes/main.tscn',
-            'game/tests/smoke.gd'
-          )
-          foreach ($path in $required) {
-            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-              Write-Error "Missing expected file: $path"
-              exit 1
-            }
-          }
-          Write-Output 'STATIC_PROJECT_STRUCTURE_PASS'
+          @echo off
+          if not exist "game\project.godot" exit /b 1
+          if not exist "game\scenes\main.tscn" exit /b 1
+          if not exist "game\tests\smoke.gd" exit /b 1
+          echo STATIC_PROJECT_STRUCTURE_PASS

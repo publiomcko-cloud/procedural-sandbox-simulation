@@ -6,6 +6,7 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-11-08 | [P4.0B final qualification](2026-11-08-P4-0B-QUALIFICATION.md) | Bounded active/aggregate/dormant scope authority, revision-gated state, deterministic cadence and atomic scheduler+tier snapshots qualified on self-hosted Windows CI | PR #264 ready for integration; explicit owner merge authorization pending; domain simulation not started |
 | 2026-11-08 | [P4.0A final qualification](2026-11-08-P4-0A-QUALIFICATION.md) | Deterministic fixed-tick scheduler, bounded catch-up, pause/step, snapshot/restore and playable runtime qualified; exact historical regression envelope preserved | PR #258 ready for integration; explicit owner merge authorization pending; tier/state framework next after merge |
 | 2026-11-08 | [P4.0A fixed-tick scheduler implementation](2026-11-08-P4-0A-FIXED-TICK-IMPLEMENTATION.md) | Engine-owned deterministic tick clock, bounded catch-up, pause/step, scheduler snapshot and playable SimulationRuntime implemented | Issue #257 on `feat/p4-0a-fixed-tick-scheduler`; qualification pending; later P4 tiers not started |
 | 2026-11-08 | [M4.0 final qualification](2026-11-08-M4-0-QUALIFICATION.md) | M4.0 type-agnostic discovery, engine-owned handlers, canonical fingerprints and shared runtime bootstrap qualified; exact legacy regression envelope preserved | PR #256 ready for integration; explicit owner merge authorization pending; P4.0A next after merge |

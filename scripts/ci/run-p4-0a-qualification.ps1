@@ -32,8 +32,11 @@ function Invoke-GodotCase {
     $logPath = Join-Path $EvidenceDir "$Name.log"
     Write-Host ("COMMAND: {0} {1}" -f $GodotBin, ($Arguments -join ' '))
 
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     $output = @(& $GodotBin @Arguments 2>&1)
     $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorActionPreference
     $text = ($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
 
     [System.IO.File]::WriteAllText(

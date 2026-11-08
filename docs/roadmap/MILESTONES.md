@@ -1,32 +1,30 @@
 # Roadmap with implementation gates
 
-## 2026-11-08 — P4.0A qualified; tier/state framework next after integration
+## 2026-11-08 — P4.0B qualified; domain simulation still not started
 
-M4.0 PR #256 is integrated at `ca13d91a4917e8061528736e5b6d808dc9b85576`.
+M4.0 and P4.0A are integrated. P4.0B issue #263 / PR #264 is **qualified** on runtime/source `d741d1fa0711034a46ac4d57450310a365114f8b`.
 
-P4.0A issue #257 / PR #258 is **qualified** on source `f9318644da1458a8b7633f3bd3a0fd81c51288f5`.
+Qualified P4 foundation now includes:
 
-Qualified P4.0A scope:
+- deterministic bounded fixed-tick logical time;
+- pause/manual-step and scalar catch-up backlog;
+- stable simulation scope IDs;
+- explicit `active / aggregate / dormant` fidelity tiers;
+- independent tier/state revisions;
+- bounded data-only scope state;
+- deterministic aggregate cadence independent of registration order;
+- direct scope-ID due decisions with no world scan;
+- deterministic tier snapshot/restore;
+- atomic combined scheduler+tier runtime restore;
+- scheduler and tier transition performance telemetry.
 
-- deterministic logical tick identity;
-- integer-microsecond cadence;
-- bounded ticks admitted per frame;
-- scalar deferred catch-up backlog with hard bound;
-- pause/resume;
-- bounded manual step;
-- authoritative scheduler snapshot/restore;
-- playable `SimulationRuntime` scene mount;
-- opt-in `simulation_scheduler_frame` PERF_TRACE evidence.
+Self-hosted Windows Godot 4.7.2 qualification passed P4.0B 67/67 plus the complete accepted P4.0A/M4/P3/D8/canonical regression envelope. The procedural-object suite retained its exact historical 671/1 + 9-conflict baseline with zero `SCRIPT ERROR`.
 
-Owner-local Godot 4.7.2 qualification passed the focused scheduler suite and the M4/P3/Issue #108/canonical regression envelope. The procedural-object suite retained its exact pre-existing 671/1 baseline with no new failure.
+P4.0B preserves ADR-0007's mod-first/data-only boundary and ADR-0008's bounded-work requirements.
 
-No material/environment state, active/aggregate/dormant tiers or gameplay simulation systems are introduced in P4.0A.
+**Current integration gate:** PR #264 ready; explicit owner merge authorization still required.
 
-The scheduler preserves ADR-0007's engine/content boundary and ADR-0008's bounded-work rule. Future simulation data must use M4.0 content handlers when such data is introduced.
-
-**Current integration gate:** PR #258 ready; explicit owner merge authorization still required.
-
-**Next development slice after integration:** bounded P4 simulation tier/state framework, including explicit active/aggregate/dormant transition contracts without weakening the fixed-tick scheduler guarantees.
+**Not yet selected:** the next P4 slice. The two valid frontiers are a bounded automatic tier-assignment/routing policy or the first mod-first material/environment state domain. Materials, climate, water and organism simulation are not part of P4.0B.
 
 
 ## 2026-10-25 — P3.0C persistent transactional entity history candidate
