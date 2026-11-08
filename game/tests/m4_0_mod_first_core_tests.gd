@@ -29,7 +29,7 @@ func _initialize() -> void:
 
 
 func _test_handler_lifetime_is_acyclic() -> void:
-	var registry := Registry.new()
+	var registry: ContentDefinitionRegistry = Registry.new()
 	var registry_weak: WeakRef = weakref(registry)
 	registry = null
 	_check(
@@ -39,7 +39,7 @@ func _test_handler_lifetime_is_acyclic() -> void:
 
 
 func _test_builtin_compatibility_and_fingerprints() -> void:
-	var discovered := Loader.discover_and_validate(["res://mods/first-party"])
+	var discovered: Dictionary = Loader.discover_and_validate(["res://mods/first-party"])
 	_check(discovered.get("ok", false), "M4.0 first-party package discovery succeeds")
 	if not discovered.get("ok", false):
 		return
@@ -59,7 +59,7 @@ func _test_builtin_compatibility_and_fingerprints() -> void:
 			"generic loader records are authoritative while legacy typed views remain equivalent"
 		)
 
-	var registry := Registry.new()
+	var registry: ContentDefinitionRegistry = Registry.new()
 	_check(
 		registry.get_registered_content_type_ids()
 			== ["procedural_rock", "static_population_rule", "terrain_interaction_rule"],
@@ -87,9 +87,9 @@ func _test_builtin_compatibility_and_fingerprints() -> void:
 		"legacy persisted definition pin shape remains unchanged"
 	)
 
-	var rock_fp := registry.pin_content_record(Registry.ROCK_TYPE, definition_id)
-	var population_fp := registry.pin_content_record(Registry.POPULATION_RULE_TYPE, population_id)
-	var interaction_fp := registry.pin_content_record(Registry.TERRAIN_INTERACTION_RULE_TYPE, interaction_id)
+	var rock_fp: Dictionary = registry.pin_content_record(Registry.ROCK_TYPE, definition_id)
+	var population_fp: Dictionary = registry.pin_content_record(Registry.POPULATION_RULE_TYPE, population_id)
+	var interaction_fp: Dictionary = registry.pin_content_record(Registry.TERRAIN_INTERACTION_RULE_TYPE, interaction_id)
 	for result in [rock_fp, population_fp, interaction_fp]:
 		var fingerprint: Dictionary = result.get("fingerprint", {})
 		_check(
@@ -103,8 +103,8 @@ func _test_builtin_compatibility_and_fingerprints() -> void:
 			"current uniform content fingerprint validates exactly"
 		)
 
-	var old_population := registry.pin_population_rule(population_id)
-	var old_interaction := registry.resolve_terrain_interaction(definition_id)
+	var old_population: Dictionary = registry.pin_population_rule(population_id)
+	var old_interaction: Dictionary = registry.resolve_terrain_interaction(definition_id)
 	_check(
 		old_population.get("ok", false)
 			and String(old_population.get("pin", {}).get("rule_sha256", ""))
@@ -125,7 +125,7 @@ func _test_builtin_compatibility_and_fingerprints() -> void:
 			== "content_fingerprint_mismatch",
 		"silent content fingerprint drift fails closed"
 	)
-	var late_handler := Handler.new(
+	var late_handler: ContentTypeHandler = Handler.new(
 		SYNTHETIC_TYPE, 40, Callable(self, "_validate_synthetic"),
 		"duplicate_synthetic_profile", 16
 	)
@@ -135,10 +135,10 @@ func _test_builtin_compatibility_and_fingerprints() -> void:
 		"handler set is immutable after content registration begins"
 	)
 
-	var first_generation := ObjectWorld.build_region_instances(
+	var first_generation: Dictionary = ObjectWorld.build_region_instances(
 		424242, "m4-compat", Vector2i.ZERO, registry
 	)
-	var second_generation := ObjectWorld.build_region_instances(
+	var second_generation: Dictionary = ObjectWorld.build_region_instances(
 		424242, "m4-compat", Vector2i.ZERO, registry
 	)
 	_check(
@@ -149,7 +149,7 @@ func _test_builtin_compatibility_and_fingerprints() -> void:
 
 
 func _test_legacy_discovery_view_compatibility() -> void:
-	var discovered := Loader.discover_and_validate(["res://mods/first-party"])
+	var discovered: Dictionary = Loader.discover_and_validate(["res://mods/first-party"])
 	_check(discovered.get("ok", false), "legacy-view compatibility fixture discovers first-party content")
 	if not discovered.get("ok", false):
 		return
@@ -163,7 +163,7 @@ func _test_legacy_discovery_view_compatibility() -> void:
 	package["population_rules"] = rules
 	packages[0] = package
 	discovered["packages"] = packages
-	var rejected := Registry.new().register_discovered(discovered)
+	var rejected: Dictionary = Registry.new().register_discovered(discovered)
 	_check(
 		not rejected.get("ok", false)
 			and String(rejected.get("reason", "")) == "population_rule_density_out_of_range",
@@ -172,11 +172,11 @@ func _test_legacy_discovery_view_compatibility() -> void:
 
 
 func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
-	var package_root := test_root.path_join("synthetic")
-	var package_path := package_root.path_join("package")
-	var profile_path := package_path.path_join("profiles")
+	var package_root: String = test_root.path_join("synthetic")
+	var package_path: String = package_root.path_join("package")
+	var profile_path: String = package_path.path_join("profiles")
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(profile_path))
-	var manifest := {
+	var manifest: Dictionary = {
 		"id": "sample.m4",
 		"version": "1.0.0",
 		"schema_version": 1,
@@ -185,7 +185,7 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 		"content_roots": ["profiles/"],
 		"script_policy": "data_only",
 	}
-	var record := {
+	var record: Dictionary = {
 		"schema_version": 1,
 		"type": SYNTHETIC_TYPE,
 		"id": "sample.m4:temperate",
@@ -205,15 +205,15 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 	if not discovered.get("ok", false):
 		return
 
-	var unsupported := Registry.new()
+	var unsupported: ContentDefinitionRegistry = Registry.new()
 	_check(
 		unsupported.register_discovered(discovered).get("reason", "")
 			== "unsupported_content_record_type",
 		"unknown content type remains fail-closed when the engine has no handler"
 	)
 
-	var invalid_normalizer_registry := Registry.new()
-	var invalid_normalizer_handler := Handler.new(
+	var invalid_normalizer_registry: ContentDefinitionRegistry = Registry.new()
+	var invalid_normalizer_handler: ContentTypeHandler = Handler.new(
 		SYNTHETIC_TYPE, 40, Callable(self, "_validate_synthetic"),
 		"duplicate_synthetic_profile", 16,
 		Callable(self, "_normalize_synthetic_invalid")
@@ -228,8 +228,8 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 		"normalized content is revalidated before it can enter the registry"
 	)
 
-	var registry := Registry.new()
-	var handler := Handler.new(
+	var registry: ContentDefinitionRegistry = Registry.new()
+	var handler: ContentTypeHandler = Handler.new(
 		SYNTHETIC_TYPE, 40, Callable(self, "_validate_synthetic"),
 		"duplicate_synthetic_profile", 16,
 		Callable(self, "_normalize_synthetic")
@@ -244,20 +244,20 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 	)
 	var registered: Dictionary = registry.register_discovered(discovered)
 	_check(registered.get("ok", false), "synthetic content registers without loader modification")
-	var loaded := registry.get_content_record(SYNTHETIC_TYPE, "sample.m4:temperate")
+	var loaded: Dictionary = registry.get_content_record(SYNTHETIC_TYPE, "sample.m4:temperate")
 	_check(
 		int(loaded.get("value_milli", -1)) == 420
 			and String(loaded.get("label", "")) == "Temperate",
 		"generic registry exposes handler-normalized synthetic content"
 	)
-	var first_fp := registry.pin_content_record(SYNTHETIC_TYPE, "sample.m4:temperate")
+	var first_fp: Dictionary = registry.pin_content_record(SYNTHETIC_TYPE, "sample.m4:temperate")
 	_check(
 		first_fp.get("ok", false)
 			and registry.validate_content_fingerprint(first_fp.get("fingerprint", {})).get("ok", false),
 		"synthetic type receives the same canonical fingerprint contract"
 	)
 
-	var runtime_handler := Handler.new(
+	var runtime_handler: ContentTypeHandler = Handler.new(
 		SYNTHETIC_TYPE, 40, Callable(self, "_validate_synthetic"),
 		"duplicate_synthetic_profile", 16,
 		Callable(self, "_normalize_synthetic")
@@ -282,15 +282,15 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 
 	record["value_milli"] = 421
 	_write_text(profile_path.path_join("temperate.json"), JSON.stringify(record))
-	var drift_discovery := Loader.discover_and_validate([package_root])
-	var drift_registry := Registry.new()
+	var drift_discovery: Dictionary = Loader.discover_and_validate([package_root])
+	var drift_registry: ContentDefinitionRegistry = Registry.new()
 	drift_registry.register_engine_content_type_handler(Handler.new(
 		SYNTHETIC_TYPE, 40, Callable(self, "_validate_synthetic"),
 		"duplicate_synthetic_profile", 16,
 		Callable(self, "_normalize_synthetic")
 	))
-	var drift_registered := drift_registry.register_discovered(drift_discovery)
-	var second_fp := drift_registry.pin_content_record(SYNTHETIC_TYPE, "sample.m4:temperate")
+	var drift_registered: Dictionary = drift_registry.register_discovered(drift_discovery)
+	var second_fp: Dictionary = drift_registry.pin_content_record(SYNTHETIC_TYPE, "sample.m4:temperate")
 	_check(
 		drift_registered.get("ok", false)
 			and String(first_fp.get("fingerprint", {}).get("mod_version", ""))
@@ -304,7 +304,7 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 func _validate_synthetic(
 	record: Dictionary, _mod_id: String, _context: Dictionary
 ) -> Dictionary:
-	var expected := ["schema_version", "type", "id", "value_milli", "label"]
+	var expected: Array[String] = ["schema_version", "type", "id", "value_milli", "label"]
 	if record.size() != expected.size():
 		return {"ok": false, "reason": "synthetic_schema_fields"}
 	for key in expected:
@@ -325,7 +325,7 @@ func _validate_synthetic(
 func _normalize_synthetic_invalid(
 	record: Dictionary, _mod_id: String, _context: Dictionary
 ) -> Dictionary:
-	var normalized := record.duplicate(true)
+	var normalized: Dictionary = record.duplicate(true)
 	normalized["value_milli"] = 2001
 	return {"ok": true, "reason": "ok", "record": normalized}
 
@@ -333,13 +333,13 @@ func _normalize_synthetic_invalid(
 func _normalize_synthetic(
 	record: Dictionary, _mod_id: String, _context: Dictionary
 ) -> Dictionary:
-	var normalized := record.duplicate(true)
+	var normalized: Dictionary = record.duplicate(true)
 	normalized["label"] = String(normalized.get("label", "")).strip_edges()
 	return {"ok": true, "reason": "ok", "record": normalized}
 
 
 func _write_text(path: String, value: String) -> void:
-	var file := FileAccess.open(path, FileAccess.WRITE)
+	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		_check(false, "fixture file opens for write: %s" % path)
 		return
@@ -350,17 +350,17 @@ func _write_text(path: String, value: String) -> void:
 func _remove_tree(path: String) -> void:
 	if not DirAccess.dir_exists_absolute(path):
 		return
-	var directory := DirAccess.open(path)
+	var directory: DirAccess = DirAccess.open(path)
 	if directory == null:
 		return
 	directory.list_dir_begin()
 	while true:
-		var entry := directory.get_next()
+		var entry: String = directory.get_next()
 		if entry.is_empty():
 			break
 		if entry == "." or entry == "..":
 			continue
-		var child := path.path_join(entry)
+		var child: String = path.path_join(entry)
 		if directory.current_is_dir():
 			_remove_tree(child)
 		else:
