@@ -15,9 +15,9 @@ $isolatedAppData = Join-Path $EvidenceDir 'isolated-appdata'
 New-Item -ItemType Directory -Force -Path $isolatedAppData | Out-Null
 $env:APPDATA = $isolatedAppData
 
-function Invoke-Qualification([string]$Label, [string[]]$Args, [string]$ExpectedMarker) {
+function Invoke-Qualification([string]$Label, [string[]]$CommandArgs, [string]$ExpectedMarker) {
     $ErrorActionPreference = 'Continue'
-    $output = @(& $GodotBin @Args 2>&1)
+    $output = @(& $GodotBin @CommandArgs 2>&1)
     $code = $LASTEXITCODE
     $text = ($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
     [System.IO.File]::WriteAllText((Join-Path $EvidenceDir "$Label.log"), $text + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
