@@ -9,6 +9,7 @@ on:
       - 'game/scripts/simulation/simulation_tier_state.gd'
       - 'game/scripts/simulation/material_environment_work_queue.gd'
       - 'game/tests/p4_0d_material_environment_tests.gd'
+      - 'game/tests/p4_0d_performance_benchmark.gd'
       - 'scripts/ci/run-p4-0d-qualification.ps1'
       - 'game/scripts/simulation/simulation_runtime.gd'
       - 'game/tests/p4_0c_simulation_tier_router_tests.gd'
