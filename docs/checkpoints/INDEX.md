@@ -2,6 +2,12 @@
 
 **Check live GitHub refs before action**; each checkpoint is a dated immutable evidence snapshot, never a real-time claim. A draft document is not merged or approved.
 
+## Latest integration event
+
+| Date | Checkpoint | Event | Publication state at creation |
+| --- | --- | --- | --- |
+| 2026-11-08 | [P4.0C integration receipt](2026-11-08-P4-0C-INTEGRATION.md) | PR #267 merged bounded hysteretic tier routing, deterministic bounded observation processing and runtime schema-2 snapshots | Merge `e5370cb78d7685ea6439c78e6d753c2c975fb4cb`; Issue #266 completed; material/environment domain next |
+
 ## Latest feature event
 
 | Date | Checkpoint | Event | Publication state at creation |
