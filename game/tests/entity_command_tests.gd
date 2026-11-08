@@ -38,6 +38,8 @@ func _run() -> void:
 	var registry := _registry()
 	_check(registry != null, "first-party declarative package registers without executable mod code")
 	if registry == null:
+		_remove_tree(ProjectSettings.globalize_path(_mod_root))
+		_remove_tree(_root)
 		return
 	var state: ProceduralObjectStateService = StateService.new()
 	var initialized: Dictionary = state.initialize(WORLD_ID, WORLD_SEED, Field.GENERATOR_VERSION, state_path)
@@ -212,7 +214,10 @@ func _test_contract_rejections() -> void:
 
 
 func _registry() -> ContentDefinitionRegistry:
-	var package_path := _mod_root
+	# Use a unique required container root instead of scanning the shared
+	# user://mods directory. This prevents stale/unrelated user packages from
+	# changing the entity-command fixture's package set.
+	var package_path := _mod_root.path_join("package")
 	var package_absolute := ProjectSettings.globalize_path(package_path)
 	var mkdir_result := DirAccess.make_dir_recursive_absolute(package_absolute.path_join("objects"))
 	if mkdir_result != OK and mkdir_result != ERR_ALREADY_EXISTS:
@@ -232,7 +237,7 @@ func _registry() -> ContentDefinitionRegistry:
 		if bytes.is_empty() or not _write_bytes(package_absolute.path_join(relative_path), bytes):
 			_check(false, "external declarative package fixture copied from repository data")
 			return null
-	var roots: Array[String] = ["res://mods/first-party", "user://mods"]
+	var roots: Array[String] = ["res://mods/first-party", _mod_root]
 	var discovered: Dictionary = Loader.discover_and_validate(roots)
 	if not discovered.get("ok", false):
 		_check(false, "first-party package discovery succeeds (%s)" % discovered.get("reason", "unknown"))
