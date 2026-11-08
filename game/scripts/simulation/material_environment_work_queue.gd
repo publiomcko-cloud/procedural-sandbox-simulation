@@ -62,7 +62,7 @@ func enqueue(
 		return {"ok": false, "reason": "simulation_scope_not_found"}
 	if not _domain.has_bound_profile(profile_id):
 		return {"ok": false, "reason": "material_profile_not_bound"}
-	var key := "%d:%s:%s" % [logical_tick, scope_id, profile_id]
+	var key := "%d|%d|%s|%s" % [logical_tick, scope_id.length(), scope_id, profile_id]
 	if _index.has(key):
 		_deduplicated += 1
 		return {"ok": true, "reason": "ok", "noop": true, "pending_count": _count}
