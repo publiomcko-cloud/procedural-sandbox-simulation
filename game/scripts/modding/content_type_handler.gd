@@ -37,7 +37,7 @@ func _init(
 func _capture_validator(callback: Callable) -> void:
 	if not callback.is_valid():
 		return
-	var target := callback.get_object()
+	var target: Object = callback.get_object()
 	if target == null:
 		return
 	_validator_target = weakref(target)
@@ -81,7 +81,7 @@ func prepare(record: Dictionary, mod_id: String, context: Dictionary) -> Diction
 	if not validation.get("ok", false):
 		return validation
 
-	var normalized := record.duplicate(true)
+	var normalized: Dictionary = record.duplicate(true)
 	if _normalizer_target != null and not _normalizer_method.is_empty():
 		var normalizer_target: Object = _normalizer_target.get_ref()
 		if normalizer_target == null:
@@ -126,7 +126,7 @@ func prepare(record: Dictionary, mod_id: String, context: Dictionary) -> Diction
 
 
 func validate(record: Dictionary, mod_id: String, context: Dictionary) -> Dictionary:
-	var prepared := prepare(record, mod_id, context)
+	var prepared: Dictionary = prepare(record, mod_id, context)
 	if not prepared.get("ok", false):
 		return prepared
 	return {"ok": true, "reason": "ok"}
