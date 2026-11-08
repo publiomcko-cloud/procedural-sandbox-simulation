@@ -114,6 +114,68 @@ func get_binding_metrics() -> Dictionary:
 	}
 
 
+func validate_persisted_state_payload(material: Dictionary) -> Dictionary:
+	if not _has_exact_fields(material, STATE_FIELDS):
+		return {"ok": false, "reason": "material_state_invalid"}
+	if (
+		typeof(material["profile_id"]) != TYPE_STRING
+		or String(material["profile_id"]).is_empty()
+		or typeof(material["profile_sha256"]) != TYPE_STRING
+		or String(material["profile_sha256"]).length() != 64
+		or typeof(material["temperature_milli_c"]) != TYPE_INT
+		or typeof(material["last_due_tick"]) != TYPE_INT
+	):
+		return {"ok": false, "reason": "material_state_invalid"}
+	if (
+		absi(int(material["temperature_milli_c"])) > MAX_ABS_TEMPERATURE_MC
+		or int(material["last_due_tick"]) < -1
+	):
+		return {"ok": false, "reason": "material_state_invalid"}
+	return {
+		"ok": true,
+		"reason": "ok",
+		"profile_id": String(material["profile_id"]),
+		"profile_sha256": String(material["profile_sha256"]),
+	}
+
+
+func validate_persisted_state_binding(
+	registry: ContentDefinitionRegistry, material: Dictionary
+) -> Dictionary:
+	if registry == null:
+		return {"ok": false, "reason": "material_registry_unavailable"}
+	var payload := validate_persisted_state_payload(material)
+	if not payload.get("ok", false):
+		return payload
+	var profile_id := String(payload["profile_id"])
+	var pin: Dictionary = registry.pin_content_record(PROFILE_TYPE, profile_id)
+	if not pin.get("ok", false):
+		return {
+			"ok": false,
+			"reason": "material_persisted_profile_missing",
+			"profile_id": profile_id,
+		}
+	var verified: Dictionary = registry.validate_content_fingerprint(pin["fingerprint"])
+	if not verified.get("ok", false):
+		return {
+			"ok": false,
+			"reason": "material_persisted_profile_invalid",
+			"profile_id": profile_id,
+		}
+	if String(pin["fingerprint"]["content_sha256"]) != String(payload["profile_sha256"]):
+		return {
+			"ok": false,
+			"reason": "material_persisted_profile_pin_conflict",
+			"profile_id": profile_id,
+		}
+	return {
+		"ok": true,
+		"reason": "ok",
+		"profile_id": profile_id,
+		"profile_sha256": String(payload["profile_sha256"]),
+	}
+
+
 func initialize_bound_scope_state(
 	tier_state: SimulationTierState, scope_id: String,
 	profile_id: String, initial_temperature_milli_c: int
