@@ -1,3 +1,19 @@
+# Current project status — P4 CLOSED (2026-11-08)
+
+## Authoritative post-P4 update
+
+P4 is **CLOSED / INTEGRATED / OWNER ACCEPTED**. P4.0D–P4.0H PRs #269–#273 were integrated into `main` in order, ending at merge `99e83c0bd6fcc28e55e0977dad41a378a00ea2ee`. The integrated runtime tree is identical to final qualified P4.0H source HEAD `3682491cd50f4a2f9a223a47ae94ebbe952043a1`.
+
+Final automated P4.0H qualification run `42519921001` passed the class-cache independence gate, cold-boot parser probe, 81/81 real-scene assertions, PERF_TRACE gates, and the cumulative P4.0G→A suites. The owner then completed the corrected GUI run on Godot 4.7.2/GTX 1050 Ti, reported the game visually good and smooth, and authorized closure. The GUI trace contained no script/runtime errors or warnings and remained within the P4.0H performance ceilings.
+
+P4 now supplies deterministic fixed ticks, pause/step/bounded catch-up, active/aggregate/dormant state, bounded tier routing, mod-first material/environment state, event-driven streaming lifecycle integration, deterministic replay, paired terrain/simulation persistence, content-pin validation and closing performance telemetry.
+
+See [P4 closure checkpoint](../checkpoints/2026-11-08-P4-CLOSURE.md).
+
+**Next:** P5 — V1 environment: climate, rain, moisture and water accumulation/flow. P5 must build on the P4 bounded scheduler/tier/persistence contracts rather than bypass them.
+
+---
+
 # Current project status — P4.0C integrated (2026-11-08)
 
 ## Authoritative post-merge update
