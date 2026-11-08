@@ -13,14 +13,18 @@ const TERRAIN_GENERATION := 17
 var assertions := 0
 var failures := 0
 var _root := ""
+var _package_path := ""
 
 
 func _initialize() -> void:
 	_root = "user://p4_0g_%d" % Time.get_ticks_usec()
+	_package_path = "user://mods/p4_0g_environment_%d" % Time.get_ticks_usec()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_root))
-	_test_first_party_material_discovery()
+	_write_material_package_fixture()
+	_test_mod_material_discovery()
 	_test_deterministic_replay_and_tier_invariants()
 	_test_durable_runtime_roundtrip_and_content_drift()
+	_remove_tree(ProjectSettings.globalize_path(_package_path))
 	_remove_tree(ProjectSettings.globalize_path(_root))
 	if failures == 0:
 		print("P4_0G_REPLAY_PASS: assertions=%d failures=0" % assertions)
@@ -29,23 +33,23 @@ func _initialize() -> void:
 	quit(0 if failures == 0 else 1)
 
 
-func _test_first_party_material_discovery() -> void:
+func _test_mod_material_discovery() -> void:
 	var domain: MaterialEnvironmentDomain = DomainScript.new()
 	var registry: ContentDefinitionRegistry = RegistryScript.new()
 	_check(
 		registry.register_engine_content_type_handler(
 			domain.create_content_handler()
 		).get("ok", false),
-		"first-party registry accepts material handler before package discovery"
+		"runtime registry accepts material handler before package discovery"
 	)
-	var registered := registry.discover_and_register(["res://mods/first-party"])
-	_check(registered.get("ok", false), "first-party packages register with generic material handler")
+	var registered := registry.discover_and_register(["user://mods"])
+	_check(registered.get("ok", false), "user data-only environment package registers through M4.0 discovery")
 	var ids: Array[String] = registry.get_content_record_ids(
 		DomainScript.PROFILE_TYPE
 	)
 	_check(
-		ids == ["firstparty.core_environment:temperate"],
-		"default runtime discovers exactly one first-party material/environment profile"
+		ids == ["p4g.environment:temperate"],
+		"fixture discovery exposes exactly one mod-first material/environment profile"
 	)
 	var profile: Dictionary = registry.get_content_record(
 		DomainScript.PROFILE_TYPE, ids[0]
@@ -53,12 +57,12 @@ func _test_first_party_material_discovery() -> void:
 	_check(
 		int(profile.get("ambient_temperature_milli_c", -1)) == 18000
 		and int(profile.get("relaxation_milli_per_due_step", -1)) == 125,
-		"first-party profile preserves explicit fixed-point environment parameters"
+		"discovered profile preserves explicit fixed-point environment parameters"
 	)
 
 
 func _test_deterministic_replay_and_tier_invariants() -> void:
-	var fixture := _first_party_registry()
+	var fixture := _fixture_registry()
 	var registry: ContentDefinitionRegistry = fixture["registry"]
 	var profile_id := String(fixture["profile_id"])
 
@@ -77,7 +81,7 @@ func _test_deterministic_replay_and_tier_invariants() -> void:
 
 
 func _test_durable_runtime_roundtrip_and_content_drift() -> void:
-	var fixture := _first_party_registry()
+	var fixture := _fixture_registry()
 	var registry: ContentDefinitionRegistry = fixture["registry"]
 	var profile_id := String(fixture["profile_id"])
 	var run := _run_scripted_replay(registry, profile_id)
@@ -140,7 +144,7 @@ func _test_durable_runtime_roundtrip_and_content_drift() -> void:
 	drifted.free()
 
 	var same_id_drift := _synthetic_registry(
-		19000, "firstparty.core_environment", "firstparty.core_environment:temperate"
+		19000, "p4g.environment", "p4g.environment:temperate"
 	)
 	var pin_drift_runtime: SimulationRuntime = RuntimeScript.new()
 	_check(pin_drift_runtime.restore_runtime_snapshot(snapshot).get("ok", false), "pin-drift fixture restores structurally")
@@ -323,7 +327,7 @@ func _drain_transient(runtime: SimulationRuntime, limit: int) -> bool:
 	return false
 
 
-func _first_party_registry() -> Dictionary:
+func _fixture_registry() -> Dictionary:
 	var domain: MaterialEnvironmentDomain = DomainScript.new()
 	var registry: ContentDefinitionRegistry = RegistryScript.new()
 	var handler := registry.register_engine_content_type_handler(
@@ -331,7 +335,7 @@ func _first_party_registry() -> Dictionary:
 	)
 	if not handler.get("ok", false):
 		return {"registry": registry, "profile_id": "", "domain": domain}
-	var registered := registry.discover_and_register(["res://mods/first-party"])
+	var registered := registry.discover_and_register(["user://mods"])
 	if not registered.get("ok", false):
 		return {"registry": registry, "profile_id": "", "domain": domain}
 	var ids := registry.get_content_record_ids(DomainScript.PROFILE_TYPE)
@@ -340,6 +344,48 @@ func _first_party_registry() -> Dictionary:
 		"profile_id": String(ids[0]) if ids.size() == 1 else "",
 		"domain": domain,
 	}
+
+
+func _write_material_package_fixture() -> void:
+	DirAccess.make_dir_recursive_absolute(
+		ProjectSettings.globalize_path(_package_path.path_join("environment"))
+	)
+	var manifest := {
+		"id": "p4g.environment",
+		"version": "1.0.0",
+		"schema_version": 1,
+		"requires_engine": "4.7.2",
+		"dependencies": [],
+		"content_roots": ["environment/"],
+		"script_policy": "data_only",
+	}
+	var profile := {
+		"schema_version": 1,
+		"type": DomainScript.PROFILE_TYPE,
+		"id": "p4g.environment:temperate",
+		"ambient_temperature_milli_c": 18000,
+		"relaxation_milli_per_due_step": 125,
+	}
+	_write_text(
+		_package_path.path_join("manifest.json"),
+		JSON.stringify(manifest, "  ", true, true)
+	)
+	_write_text(
+		_package_path.path_join("environment/temperate.json"),
+		JSON.stringify(profile, "  ", true, true)
+	)
+
+
+func _write_text(path: String, value: String) -> void:
+	var absolute := ProjectSettings.globalize_path(path)
+	DirAccess.make_dir_recursive_absolute(absolute.get_base_dir())
+	var file := FileAccess.open(absolute, FileAccess.WRITE)
+	if file == null:
+		_check(false, "fixture file opens: " + path)
+		return
+	file.store_string(value)
+	file.flush()
+	file.close()
 
 
 func _synthetic_registry(
