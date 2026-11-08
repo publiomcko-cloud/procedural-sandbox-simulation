@@ -243,7 +243,11 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 		"duplicate engine content handler is rejected"
 	)
 	var registered: Dictionary = registry.register_discovered(discovered)
-	_check(registered.get("ok", false), "synthetic content registers without loader modification")
+	_check(
+		registered.get("ok", false),
+		"synthetic content registers without loader modification (%s)"
+			% registered.get("reason", "ok")
+	)
 	var loaded: Dictionary = registry.get_content_record(SYNTHETIC_TYPE, "sample.m4:temperate")
 	_check(
 		int(loaded.get("value_milli", -1)) == 420
@@ -276,7 +280,8 @@ func _test_loader_is_type_agnostic_and_registry_is_fail_closed() -> void:
 			and stream.registry.get_content_record(
 				SYNTHETIC_TYPE, "sample.m4:temperate"
 			).get("label", "") == "Temperate",
-		"shared runtime registry accepts an engine-owned future content handler before package commit"
+		"shared runtime registry accepts an engine-owned future content handler before package commit (%s)"
+			% stream_result.get("reason", "ok")
 	)
 	stream.free()
 
@@ -315,7 +320,15 @@ func _validate_synthetic(
 	if String(record.get("type", "")) != SYNTHETIC_TYPE:
 		return {"ok": false, "reason": "synthetic_type_mismatch"}
 	var value: Variant = record.get("value_milli")
-	if typeof(value) != TYPE_INT or int(value) < 0 or int(value) > 1000:
+	var integer_like := (
+		typeof(value) == TYPE_INT
+		or (
+			typeof(value) == TYPE_FLOAT
+			and is_finite(float(value))
+			and floor(float(value)) == float(value)
+		)
+	)
+	if not integer_like or int(value) < 0 or int(value) > 1000:
 		return {"ok": false, "reason": "synthetic_value_invalid"}
 	if not record.get("label") is String or String(record.get("label", "")).strip_edges().is_empty():
 		return {"ok": false, "reason": "synthetic_label_invalid"}
@@ -334,6 +347,7 @@ func _normalize_synthetic(
 	record: Dictionary, _mod_id: String, _context: Dictionary
 ) -> Dictionary:
 	var normalized: Dictionary = record.duplicate(true)
+	normalized["value_milli"] = int(normalized.get("value_milli", 0))
 	normalized["label"] = String(normalized.get("label", "")).strip_edges()
 	return {"ok": true, "reason": "ok", "record": normalized}
 
