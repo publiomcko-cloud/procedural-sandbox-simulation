@@ -271,7 +271,7 @@ func transition_simulation_scope(
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
 
 	var started_usec: int = Time.get_ticks_usec() if _perf_trace_enabled else 0
-	var logical_tick := scheduler.get_current_tick()
+	var logical_tick: int = int(scheduler.get_current_tick())
 	var result: Dictionary = tier_state.transition_scope(
 		scope_id, target_tier, logical_tick, expected_tier_revision
 	)
@@ -351,7 +351,7 @@ func enqueue_material_due_step(
 ) -> Dictionary:
 	if material_bridge == null or scheduler == null:
 		return {"ok": false, "reason": "material_bridge_not_configured"}
-	var due_tick := scheduler.get_current_tick() if logical_tick == -1 else logical_tick
+	var due_tick: int = int(scheduler.get_current_tick()) if logical_tick == -1 else logical_tick
 	if due_tick < 0 or due_tick > scheduler.get_current_tick():
 		return {"ok": false, "reason": "material_due_tick_not_admitted"}
 	return material_bridge.submit_due(tier_state, scope_id, profile_id, due_tick)
@@ -545,7 +545,7 @@ func get_runtime_snapshot() -> Dictionary:
 func get_persistence_preflight() -> Dictionary:
 	if not initialized or scheduler == null or tier_state == null or tier_router == null:
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
-	var router_pending := tier_router.get_pending_count()
+	var router_pending: int = int(tier_router.get_pending_count())
 	if router_pending > 0:
 		return {
 			"ok": false,
@@ -709,7 +709,7 @@ func restore_simulation_tier_snapshot(snapshot: Dictionary) -> Dictionary:
 		return result
 
 	if tier_router != null and tier_router.is_initialized():
-		var router_snapshot := tier_router.get_authoritative_snapshot()
+		var router_snapshot: Dictionary = tier_router.get_authoritative_snapshot()
 		var compatibility := _validate_router_scope_compatibility(
 			router_snapshot,
 			next_tier_state
