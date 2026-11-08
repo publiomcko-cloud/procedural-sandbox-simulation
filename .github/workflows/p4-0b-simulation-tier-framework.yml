@@ -1,0 +1,81 @@
+name: P4.0B simulation tier framework
+
+on:
+  push:
+    branches:
+      - feat/p4-0b-simulation-tier-framework
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'game/scripts/simulation/simulation_tier_state.gd'
+      - 'game/scripts/simulation/simulation_runtime.gd'
+      - 'game/tests/p4_0b_simulation_tier_tests.gd'
+      - 'game/tests/p4_0a_fixed_tick_scheduler_tests.gd'
+      - 'scripts/ci/run-p4-0b-qualification.ps1'
+      - 'scripts/ci/run-p4-0a-qualification.ps1'
+      - 'docs/specs/P4-0B-SIMULATION-TIER-FRAMEWORK.md'
+      - '.github/workflows/p4-0b-simulation-tier-framework.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 80
+
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify runner and pinned Godot
+        shell: pwsh
+        run: |
+          Write-Output "RUNNER_NAME=$env:RUNNER_NAME"
+          Write-Output "RUNNER_OS=$env:RUNNER_OS"
+          Write-Output "RUNNER_ARCH=$env:RUNNER_ARCH"
+          if ($env:RUNNER_OS -ne 'Windows' -or $env:RUNNER_ARCH -ne 'X64') {
+            Write-Error "Unexpected runner platform: $env:RUNNER_OS/$env:RUNNER_ARCH"
+            exit 1
+          }
+          if (-not (Test-Path -LiteralPath $env:GODOT_BIN -PathType Leaf)) {
+            Write-Error "Godot executable not found: $env:GODOT_BIN"
+            exit 1
+          }
+          $version = (& $env:GODOT_BIN --version 2>&1 | Out-String).Trim()
+          Write-Output "GODOT_VERSION=$version"
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^4\.7\.2\.stable(?:\.|$)') {
+            Write-Error "Godot 4.7.2 stable verification failed"
+            exit 1
+          }
+
+      - name: Run P4.0B qualification envelope
+        shell: pwsh
+        timeout-minutes: 75
+        run: |
+          & .\scripts\ci\run-p4-0b-qualification.ps1 -GodotBin $env:GODOT_BIN
+          exit $LASTEXITCODE
+
+      - name: Upload P4.0B evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p4-0b-self-hosted-windows-evidence
+          path: |
+            ${{ runner.temp }}\p4-0b-evidence\*.log
+            ${{ runner.temp }}\p4-0a-evidence\*.log
+          if-no-files-found: warn
+          retention-days: 7
