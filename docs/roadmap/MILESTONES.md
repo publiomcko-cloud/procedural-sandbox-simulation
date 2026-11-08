@@ -1,30 +1,35 @@
 # Roadmap with implementation gates
 
-## 2026-11-08 — P4.0B integrated; domain simulation still not started
+## 2026-11-08 — P4.0C qualified; material/environment domain next after integration
 
-M4.0, P4.0A and P4.0B are integrated. P4.0B issue #263 / PR #264 merged at `25a2dd8687cf513aa414a0469dc1f5de659863e3`; qualified runtime/source remains `d741d1fa0711034a46ac4d57450310a365114f8b`.
+M4.0, P4.0A and P4.0B are integrated. P4.0C Issue #266 is **qualified** on runtime/source `e43893505924cdf0557222193d03eb7ec0dfd933`.
 
 Qualified P4 foundation now includes:
 
 - deterministic bounded fixed-tick logical time;
 - pause/manual-step and scalar catch-up backlog;
 - stable simulation scope IDs;
-- explicit `active / aggregate / dormant` fidelity tiers;
+- explicit active/aggregate/dormant fidelity tiers;
 - independent tier/state revisions;
 - bounded data-only scope state;
-- deterministic aggregate cadence independent of registration order;
-- direct scope-ID due decisions with no world scan;
-- deterministic tier snapshot/restore;
-- atomic combined scheduler+tier runtime restore;
-- scheduler and tier transition performance telemetry.
+- deterministic aggregate cadence;
+- deterministic integer-distance automatic routing policy;
+- active/aggregate hysteresis bands;
+- deduplicated FIFO dirty observation queue;
+- hard bounded routing decisions per call;
+- router snapshot/restore;
+- combined runtime snapshot schema 2 with schema-1 migration;
+- scheduler/tier/router performance telemetry.
 
-Self-hosted Windows Godot 4.7.2 qualification passed P4.0B 67/67 plus the complete accepted P4.0A/M4/P3/D8/canonical regression envelope. The procedural-object suite retained its exact historical 671/1 + 9-conflict baseline with zero `SCRIPT ERROR`.
+Self-hosted Windows Godot 4.7.2 qualification passed P4.0C 110/110 plus the complete accepted P4.0B/P4.0A/M4/P3/D8/canonical regression envelope. The procedural-object suite retains its exact historical 671/1 + 9-conflict baseline with zero `SCRIPT ERROR`.
 
-P4.0B preserves ADR-0007's mod-first/data-only boundary and ADR-0008's bounded-work requirements.
+P4.0C preserves ADR-0007's engine/data boundary and ADR-0008's bounded-work requirements. The router never scans world state; callers provide already-routed scope distance observations.
 
-**Current integration gate:** complete. PR #264 is merged.
+**Current integration gate:** P4.0C qualified; explicit owner merge authorization required.
 
-**Not yet selected:** the next P4 slice. The two valid frontiers are a bounded automatic tier-assignment/routing policy or the first mod-first material/environment state domain. Materials, climate, water and organism simulation are not part of P4.0B.
+**Next slice after integration:** first mod-first material/environment state domain. This is the first P4 frontier expected to produce user-observable simulation behavior, so it should define an explicit visual/interactive acceptance gate.
+
+Climate/rain/moisture/water and organisms remain outside P4.0C.
 
 
 ## 2026-10-25 — P3.0C persistent transactional entity history candidate
