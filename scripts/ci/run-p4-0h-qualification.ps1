@@ -34,6 +34,11 @@ function Invoke-Qualification([string]$Label, [string[]]$CommandArgs, [string]$E
     return $log
 }
 
+$godotCache = Join-Path $ProjectPath '.godot'
+if (Test-Path -LiteralPath $godotCache) {
+    Remove-Item -LiteralPath $godotCache -Recurse -Force
+}
+Invoke-Qualification 'cold-boot' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p4_0h_cold_boot_probe.gd') 'P4_0H_COLD_BOOT_PARSE_PASS' | Out-Host
 Invoke-Qualification 'import' @('--headless', '--editor', '--path', $ProjectPath, '--import') '' | Out-Null
 Invoke-Qualification 'focused' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p4_0h_final_qualification_tests.gd') 'P4_0H_FINAL_PASS:' | Out-Host
 $focusedLog = Join-Path $EvidenceDir 'focused.log'
