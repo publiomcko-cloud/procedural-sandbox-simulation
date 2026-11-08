@@ -4,19 +4,7 @@ on:
   push:
     branches:
       - perf/issue-108-d1-effect-runtime
-  pull_request:
-    paths:
-      - 'game/scripts/terrain/terrain_object_effect*.gd'
-      - 'game/scripts/terrain/terrain_demo.gd'
-      - 'game/scripts/objects/procedural_object_stream.gd'
-      - 'game/scripts/entities/entity_command_service.gd'
-      - 'game/scripts/diagnostics/performance_trace.gd'
-      - 'game/tests/issue108_d1_runtime_performance_tests.gd'
-      - 'game/tests/issue108_d1_scene_streaming_performance_tests.gd'
-      - 'game/tests/issue108_phase_d_live_integration_tests.gd'
-      - 'game/tests/p3_0d_entity_placement_tests.gd'
-      - '.github/workflows/issue-108-d1.yml'
-
+  workflow_dispatch:
 permissions:
   contents: read
 
