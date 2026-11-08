@@ -11,6 +11,7 @@ class_name SimulationRuntime
 const SchedulerScript := preload("res://scripts/simulation/fixed_tick_scheduler.gd")
 const TierStateScript := preload("res://scripts/simulation/simulation_tier_state.gd")
 const TierRouterScript := preload("res://scripts/simulation/simulation_tier_router.gd")
+const MaterialBridgeScript := preload("res://scripts/simulation/material_environment_runtime_bridge.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
 const RUNTIME_SNAPSHOT_SCHEMA_VERSION := 2
@@ -44,6 +45,7 @@ const RUNTIME_SNAPSHOT_FIELDS_V2 := [
 var scheduler: FixedTickScheduler
 var tier_state: SimulationTierState
 var tier_router: SimulationTierRouter
+var material_bridge: MaterialEnvironmentRuntimeBridge
 var initialized := false
 var initialization_error := ""
 
@@ -121,9 +123,15 @@ func initialize_runtime(
 		)
 		return router_result
 
+	if material_bridge != null:
+		material_bridge.reset_after_restore()
+	material_bridge = null
 	scheduler = next_scheduler
 	tier_state = next_tier_state
 	tier_router = next_tier_router
+	if material_bridge != null:
+		material_bridge.reset_after_restore()
+	material_bridge = null
 	_fractional_usec = 0.0
 	_last_result = {}
 	initialization_error = ""
@@ -159,6 +167,16 @@ func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
 
 	var started_usec: int = Time.get_ticks_usec() if _perf_trace_enabled else 0
 	var result: Dictionary = scheduler.process_elapsed_usec(elapsed_usec)
+	if result.get("ok", false) and material_bridge != null and material_bridge.is_enabled():
+		var material_batch: Dictionary = material_bridge.process_frame(
+			tier_state, int(result.get("frame_index", -1))
+		)
+		if not material_batch.get("ok", false):
+			return {
+				"ok": false, "reason": "material_runtime_frame_failed",
+				"detail": String(material_batch.get("detail", material_batch.get("reason", ""))),
+			}
+		result["material_batch"] = material_batch
 	_last_result = result.duplicate(true)
 
 	if _perf_trace_enabled and result.get("ok", false):
@@ -253,6 +271,58 @@ func replace_simulation_scope_state(
 	return tier_state.replace_scope_state(
 		scope_id, state, expected_state_revision
 	)
+
+
+func configure_material_environment(
+	registry: ContentDefinitionRegistry, profile_id: String,
+	budget_per_frame: int = MaterialEnvironmentWorkQueue.DEFAULT_BUDGET,
+	queue_capacity: int = MaterialEnvironmentWorkQueue.DEFAULT_CAPACITY
+) -> Dictionary:
+	if not initialized or tier_state == null or scheduler == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	if material_bridge != null and material_bridge.is_enabled():
+		return {"ok": false, "reason": "material_bridge_already_configured"}
+	var candidate: MaterialEnvironmentRuntimeBridge = MaterialBridgeScript.new()
+	var outcome: Dictionary = candidate.configure(
+		registry, profile_id, budget_per_frame, queue_capacity
+	)
+	if outcome.get("ok", false):
+		material_bridge = candidate
+	return outcome
+
+
+func enqueue_material_scope_registration(
+	scope_id: String,
+	initial_tier: String = TierStateScript.TIER_DORMANT
+) -> Dictionary:
+	if material_bridge == null:
+		return {"ok": false, "reason": "material_bridge_not_configured"}
+	return material_bridge.register_scope(tier_state, scope_id, initial_tier)
+
+
+func enqueue_material_scope_initialization(
+	scope_id: String, profile_id: String, initial_temperature_milli_c: int
+) -> Dictionary:
+	if material_bridge == null:
+		return {"ok": false, "reason": "material_bridge_not_configured"}
+	return material_bridge.initialize_scope(
+		tier_state, scope_id, profile_id, initial_temperature_milli_c
+	)
+
+
+func enqueue_material_due_step(
+	scope_id: String, profile_id: String, logical_tick: int = -1
+) -> Dictionary:
+	if material_bridge == null or scheduler == null:
+		return {"ok": false, "reason": "material_bridge_not_configured"}
+	var due_tick := scheduler.get_current_tick() if logical_tick == -1 else logical_tick
+	if due_tick < 0 or due_tick > scheduler.get_current_tick():
+		return {"ok": false, "reason": "material_due_tick_not_admitted"}
+	return material_bridge.submit_due(tier_state, scope_id, profile_id, due_tick)
+
+
+func get_material_environment_metrics() -> Dictionary:
+	return material_bridge.get_metrics() if material_bridge != null else {"enabled": false}
 
 
 func get_simulation_scope(scope_id: String) -> Dictionary:
@@ -439,6 +509,9 @@ func restore_simulation_tier_snapshot(snapshot: Dictionary) -> Dictionary:
 		if not compatibility.get("ok", false):
 			return compatibility
 
+	if material_bridge != null:
+		material_bridge.reset_after_restore()
+	material_bridge = null
 	tier_state = next_tier_state
 	return {
 		"ok": true,
@@ -459,6 +532,9 @@ func restore_simulation_router_snapshot(snapshot: Dictionary) -> Dictionary:
 	if not compatibility.get("ok", false):
 		return compatibility
 
+	if material_bridge != null:
+		material_bridge.reset_after_restore()
+	material_bridge = null
 	tier_router = next_router
 	return {
 		"ok": true,
