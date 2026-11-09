@@ -254,6 +254,16 @@ func commit_batch(updates: Array) -> Dictionary:
 		var next_soil: PackedInt64Array = update["soil_water_ul"]
 		var next_kinds: PackedByteArray = update["reservoir_kind"]
 		var next_levels: PackedInt64Array = update["reservoir_level_mm"]
+		var mutates_step_state := (
+			next_surface != current["surface_water_ul"]
+			or next_soil != current["soil_water_ul"]
+			or next_kinds != current["reservoir_kind"]
+			or next_levels != current["reservoir_level_mm"]
+			or inflow_delta > 0
+			or outflow_delta > 0
+		)
+		if next_tick == int(current["last_environment_tick"]) and mutates_step_state:
+			return _reject_commit("environment_tick_not_advanced")
 		next_record["surface_water_ul"] = next_surface.duplicate()
 		next_record["soil_water_ul"] = next_soil.duplicate()
 		next_record["reservoir_kind"] = next_kinds.duplicate()
