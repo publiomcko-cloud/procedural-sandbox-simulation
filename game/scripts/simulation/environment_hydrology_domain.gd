@@ -100,6 +100,9 @@ func process_due_batch(
 	var solved := solve_batch_snapshot(snapshot)
 	if not solved.get("ok", false):
 		return solved
+	var conservation := _validate_batch_conservation(solved)
+	if not conservation.get("ok", false):
+		return conservation
 	var committed := commit_batch_result(
 		environment_store, surface_cache, solved
 	)
@@ -127,9 +130,13 @@ func process_due_batch(
 		solved.get("boundary_transfer_count", 0)
 	)
 	var binding_total := 0
+	var river_bindings := 0
+	var ocean_bindings := 0
 	for row_value in solved.get("scope_results", []):
 		var row: Dictionary = row_value
 		binding_total += int(row.get("binding_reservoir_inflow_ul", 0))
+		river_bindings += int(row.get("river_bindings", 0))
+		ocean_bindings += int(row.get("ocean_bindings", 0))
 	_binding_inflow_ul_total += binding_total
 	return {
 		"ok": true,
@@ -273,6 +280,8 @@ func build_batch_snapshot(
 			"binding_reservoir_inflow_ul": int(
 				binding.get("reservoir_inflow_ul", 0)
 			),
+			"river_bindings": int(binding.get("river_bindings", 0)),
+			"ocean_bindings": int(binding.get("ocean_bindings", 0)),
 		})
 
 	return {
@@ -488,6 +497,42 @@ func _surface_token(record: Dictionary) -> Dictionary:
 		"terrain_revision": int(record.get("terrain_revision", -1)),
 		"terrain_cache_scope_id": int(record.get("terrain_cache_scope_id", 0)),
 		"terrain_effect_revision": int(record.get("terrain_effect_revision", -1)),
+	}
+
+
+func _validate_batch_conservation(solved: Dictionary) -> Dictionary:
+	var finite_initial := 0
+	var finite_final := 0
+	var precipitation := 0
+	var evaporation := 0
+	var binding_inflow := 0
+	for row_value in solved.get("scope_results", []):
+		var row: Dictionary = row_value
+		finite_initial += int(row.get("pre_binding_finite_initial_ul", 0))
+		finite_final += int(row.get("finite_final_ul", 0))
+		precipitation += int(row.get("precipitation_ul", 0))
+		evaporation += int(row.get("evaporation_ul", 0))
+		binding_inflow += int(row.get("binding_reservoir_inflow_ul", 0))
+	var reservoir_inflow := int(solved.get("reservoir_inflow_ul", 0)) + binding_inflow
+	var reservoir_outflow := int(solved.get("reservoir_outflow_ul", 0))
+	var expected_final := (
+		finite_initial
+		+ precipitation
+		+ reservoir_outflow
+		- reservoir_inflow
+		- evaporation
+	)
+	if finite_final != expected_final:
+		return _failure("environment_hydrology_conservation_violation")
+	return {
+		"ok": true,
+		"reason": "ok",
+		"finite_initial_ul": finite_initial,
+		"finite_final_ul": finite_final,
+		"precipitation_ul": precipitation,
+		"evaporation_ul": evaporation,
+		"reservoir_inflow_ul": reservoir_inflow,
+		"reservoir_outflow_ul": reservoir_outflow,
 	}
 
 
