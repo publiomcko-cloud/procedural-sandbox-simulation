@@ -35,6 +35,8 @@ The selected profile is pinned through the existing `ContentDefinitionRegistry` 
 
 A runtime restore preserves the authoritative profile pin but deliberately discards the transient registry binding. The caller must rebind the same content before climate execution resumes. A conflicting profile pin is rejected.
 
+When P5.0B first binds climate to an older unpinned P5.0A scope, the climate baseline is advanced to the current scheduler tick. Historical ticks that predate the climate system are therefore not replayed as retroactive precipitation.
+
 ## Deterministic forcing
 
 `EnvironmentClimateDomain` processes one explicit scope and logical tick.
@@ -124,6 +126,8 @@ Runtime snapshots continue using runtime schema 3 because P5.0B does not add a n
 
 Transient climate registry bindings are intentionally not persisted.
 
+Both save and candidate-load paths validate every persisted climate profile ID/SHA against the current content registry before accepting the snapshot. Same-ID content changed behind the persisted SHA is rejected.
+
 ## Bounds
 
 P5.0B remains bounded by:
@@ -155,6 +159,9 @@ Focused P5.0B tests must prove:
 - fixed reservoir level preservation;
 - world-lifecycle climate execution;
 - snapshot restore plus safe registry rebind;
+- no retroactive forcing when binding legacy unpinned P5.0A scopes;
+- save/load content-pin validation;
+- same-ID changed climate content rejection;
 - conflicting restored profile pin rejection.
 
 P5.0A focused qualification and cumulative P4.0H qualification remain inherited gates.
