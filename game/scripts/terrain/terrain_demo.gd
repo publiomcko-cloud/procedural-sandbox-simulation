@@ -2141,7 +2141,10 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 		chunk_snapshots,
 		queued_usec
 	)
-	job.build_visual_shoreline = is_instance_valid(_environment_visual)
+	job.build_visual_shoreline = (
+		is_instance_valid(_environment_visual)
+		and simulation_runtime.has_environment_hydrology()
+	)
 	var task_id := WorkerThreadPool.add_task(
 		Callable(job, "run"), false, "environment SDF surface cache"
 	)
