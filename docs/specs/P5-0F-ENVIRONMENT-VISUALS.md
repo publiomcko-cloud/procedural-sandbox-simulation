@@ -6,17 +6,17 @@ Status: IMPLEMENTED / SELF-HOSTED QUALIFICATION PENDING / OWNER GUI ACCEPTANCE P
 
 P5.0F presents the existing P5.0A–E hydrology authority and SDF-derived terrain cache. No simulation authority, water persistence or runtime schema is changed. The presentation is an intentionally stylized V1, not volumetric CFD or physically accurate water-surface reconstruction.
 
-- A new EnvironmentVisualPresentation Node3D belongs to the playable terrain scene. One MultiMeshInstance3D per resident region renders at most 48 surface quads from the existing 8x6 environmental grid, without per-cell nodes.
+- A new EnvironmentVisualPresentation Node3D belongs to the playable terrain scene. One MeshInstance3D per resident region renders an SDF-clipped ArrayMesh sourced from the existing 8x6 environmental authority grid; it has no per-cell nodes. The presentation uses a bounded 17x13 SDF height grid (1 m spacing, up to 2,304 vertices per region). Rain retains its independent bounded MultiMesh.
 - Finite water quad height derives only from surface_water_ul divided by cell area and the current SDF surface height. A cosmetic 25 mm minimum visible depth and 12 mm offset avoid z-fighting. Neither is fed back to water authority.
 - Rivers and oceans use their persisted fixed reservoir_level_mm. Visual height does not change with unlimited incoming/outgoing reservoir exchange. Colors distinguish finite/river/ocean.
-- Missing or stale surface cache hides water instead of displaying a stale terrain-relative plane. Refresh checks exact environment revision, logical tick, world seed/generator, terrain revision, cache identity and terrain effect revision.
+- Missing or stale surface cache, or a mismatched derived shoreline grid, hides water instead of displaying an uncut or terrain-stale surface. SDF topography is sampled from immutable region/chunk snapshots in the existing P5.0C worker and is not added to any authoritative/persisted record. Refresh checks environment revision, logical tick, world seed/generator, terrain revision, cache identity and terrain effect revision.
 - A single camera-local rain MultiMesh (at most 64 streaks) derives visibility from the pinned climate profile's positive precipitation rate. The environment scope's profile ID and SHA must match. The V1 rate is static; rain animation is cosmetic, with no simulation writes.
 
 ## Performance and lifecycle
 
-- Poll at most 3 resident region records per frame, and rebuild at most one water MultiMesh per frame. Unchanged revision tokens are reused.
+- Poll at most 3 resident region records per frame, and upload at most one clipped water ArrayMesh per frame. Unchanged revision tokens are reused. Derived SDF shoreline samples are built asynchronously in the existing capped cache worker (2 in-flight, 1 dispatch per frame), only when climate hydrology is actually configured.
 - Update bounded rain streak transforms at most every 100 ms.
-- Publishing a region registers one hidden visual node. Streaming unload removes only the derived node and token; loading recreates it from persistent environment authority and regenerated SDF surface data.
+- Publishing a region registers one hidden visual node. Streaming unload removes only its derived node, terrain samples and token. Terrain edits invalidate and hide the old mesh immediately; revisits regenerate from persistent environment authority and fresh SDF surface-cache products.
 - SANDBOX_PERF_TRACE=1 emits p5_environment_visual_rebuild duration and instance count. get_visual_metrics() exposes poll, rebuild, stale-hide, and peak-duration counters.
 
 ## Qualification and acceptance gates
@@ -27,7 +27,7 @@ Owner GUI acceptance is required before P5.0F can be called complete. Inspect ri
 
 ## Explicit limitations
 
-Flat environment-grid quads do not conform to exact bank outlines, rain is a camera-local cosmetic effect rather than weather particles with collision, and water has no collision surface. Integrated conservation/performance/replay and final owner signoff are reserved for P5.0G.
+Water is now clipped to a 1 m SDF-derived shoreline lattice with deterministic marching-triangle interpolation, instead of flat 2 m-wide cell quads covering partially dry land. Shorelines are still an approximation of the higher-resolution canonical terrain, rain is a camera-local cosmetic effect rather than weather particles with collision, and water has no collision surface. Integrated conservation/performance/replay and final owner signoff are reserved for P5.0G.
 
 ## Files
 
@@ -57,7 +57,7 @@ The original playable build provided only the first-party core-rocks package. Th
 
 Correction (R1): bundle `firstparty.core_climate:temperate` as declarative, data-only content at `game/mods/environment-presets/core-climate`. The playable scene opts into this second bundled package root in addition to the original first-party and user roots; generic object-stream consumers and P4 fixtures continue to discover only the original `res://mods/first-party` root unless they explicitly opt in. The strict unknown-content-type rejection contract is preserved; no fallback or silent filtering. The playable single-profile selection pins the canonical SHA and configures hydrology without a parallel simulation. Multiple climate profiles still require explicit selection.
 
-A focused integration test now discovers the real first-party mod, binds it into the real climate/runoff/hydrology runtime, commits generated ocean reservoir cells, and checks that the live authoritative state creates water quads. Starting with `-- --start-water=ocean` prints `P5_WATER_DIAG` every two seconds while water remains absent (up to thirty samples), then `P5_WATER_READY` when the focused region has authoritative ocean cells and visible water quads. This diagnoses profile discovery, hydrology activation, surface cache, binding, and rendering separately. Visual/GUI acceptance remains required.
+A focused integration test now discovers the real first-party mod, binds it into the real climate/runoff/hydrology runtime, commits generated ocean reservoir cells, and checks that the live authoritative state creates water surfaces. Starting with `-- --start-water=ocean` prints `P5_WATER_DIAG` every two seconds while water remains absent (up to thirty samples), then `P5_WATER_READY` when the focused region has authoritative ocean cells and visible shoreline mesh triangles. This diagnoses profile discovery, hydrology activation, surface cache, binding, and rendering separately. Visual/GUI acceptance remains required.
 
 ## R1 — Mod compatibility and P4 performance gate
 
@@ -66,3 +66,11 @@ Root cause: adding a climate content record under the original `res://mods/first
 R1 isolates the default climate profile under `res://mods/environment-presets` and opts in only the playable scene's no-override bootstrap. Explicit package root overrides remain unchanged, ensuring existing P4 test isolation. No P4 performance threshold is raised, no unknown content is silently accepted, and the authority schema is unchanged. Focused P5.0F tests assert that legacy registry discovery works without a climate handler, and that the real playable registry with both roots binds climate, runoff and ocean hydrology.
 
 The cost of hydrology-enabled gameplay must be measured by dedicated P5 performance traces during P5.0G; restoring the P4-only baseline is not proof that mixed P5 performance already satisfies the budgets.
+
+## P5.0F-R2 — SDF shoreline refinement
+
+**Implementation:** the 8x6 grid and all P5.0A–E hydro/persistence contracts remain unchanged. The P5.0C worker accepts an optional R2 `build_visual_shoreline` flag and produces a **transient** 17x13 height/validity lattice from the exact same brush-edit and terrain-object-effect chunk snapshots. This output is never passed into the EnvironmentStateStore or persistence schema. The flag is enabled only in a playable scene with configured hydrology; P4-only fixtures are not forced to pay for it.
+
+The presenter receives the 1 m terrain lattice only after the environment surface-cache record passes its existing revision gate. The water plane from the authoritative water/reservoir state is clipped against interpolated fine topography using marching triangles. Invalid/missing/stale samples fail closed (no whole-cell fallback). A region has one `MeshInstance3D` with capped vertex count, no per-water-cell nodes, and one main-thread mesh upload per frame. Stream unload drops derived samples; terrain invalidation hides the previous mesh until an updated worker product arrives.
+
+**Acceptance gates:** focused tests cover clipped wet area, fully dry terrain suppressing otherwise wet hydro cells, sample provenance rejection, bounded mesh lifecycle, and actual SDF edit-to-coast causality. Keep owner GUI inspection of underwater appearance, shoreline quality and hitches as explicit prerequisites. The higher-resolution sampling increases worker cost; measure it with P5.0G representative workloads before treating P5 as qualified.
