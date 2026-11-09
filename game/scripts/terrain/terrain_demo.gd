@@ -300,10 +300,22 @@ func _ready() -> void:
 		_material_content_domain.create_content_handler(),
 		_climate_content_domain.create_content_handler(),
 	]
+	# The playable scene opts into the bundled climate preset. Generic P4
+	# consumers keep their historical first-party-only discovery contract.
+	var playable_roots: Array[String] = object_package_roots_override.duplicate()
+	if playable_roots.is_empty():
+		var mod_root := ProjectSettings.globalize_path("user://mods")
+		var root_created := DirAccess.make_dir_recursive_absolute(mod_root)
+		if root_created == OK or root_created == ERR_ALREADY_EXISTS:
+			playable_roots = [
+				"res://mods/first-party",
+				"res://mods/environment-presets",
+				"user://mods",
+			]
 	var object_initialization: Dictionary = object_stream.initialize(
 		world_seed,
 		world_id,
-		object_package_roots_override,
+		playable_roots,
 		object_state_directory_override,
 		material_handlers
 	)
