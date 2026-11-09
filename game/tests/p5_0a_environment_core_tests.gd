@@ -97,6 +97,29 @@ func _test_environment_store_contract() -> void:
 	)
 	_check(store.get_scope("region:0,0") == after, "rejected reservoir mutation leaves authority unchanged")
 
+	var same_tick_surface: PackedInt64Array = after["surface_water_ul"].duplicate()
+	same_tick_surface[2] += 1
+	var same_tick_mutation: Dictionary = store.commit_batch([
+		_update(
+			after,
+			int(after["last_environment_tick"]),
+			same_tick_surface,
+			after["soil_water_ul"].duplicate(),
+			after["reservoir_kind"].duplicate(),
+			after["reservoir_level_mm"].duplicate(),
+			0,
+			0
+		)
+	])
+	_check(
+		same_tick_mutation.get("reason", "") == "environment_tick_not_advanced",
+		"environment authority rejects a second mutation in the same logical tick"
+	)
+	_check(
+		store.get_scope("region:0,0") == after,
+		"same-tick mutation rejection is atomic"
+	)
+
 	var saturation: Dictionary = store.commit_batch([
 		_update(
 			after,
