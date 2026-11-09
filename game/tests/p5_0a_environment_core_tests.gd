@@ -266,6 +266,18 @@ func _test_runtime_schema_migration() -> void:
 	_check(int(migrated.get_runtime_snapshot()["schema_version"]) == 3, "migrated runtime publishes schema 3")
 	_check(migrated.get_environment_state_snapshot().get("scopes", []).is_empty(), "legacy P4 world receives empty deterministic environment authority")
 
+	var v1: Dictionary = v3.duplicate(true)
+	v1["schema_version"] = 1
+	v1.erase("tier_router")
+	v1.erase("environment_state")
+	_check(runtime.validate_runtime_snapshot(v1).get("ok", false), "P4 schema 1 snapshot remains accepted")
+	var migrated_v1: Node = RuntimeScript.new()
+	var restore_v1: Dictionary = migrated_v1.restore_runtime_snapshot(v1)
+	_check(restore_v1.get("ok", false) and int(restore_v1["migrated_from_schema"]) == 1, "schema 1 migrates explicitly to P5 schema 3")
+	_check(int(migrated_v1.get_runtime_snapshot()["schema_version"]) == 3, "schema 1 migration publishes schema 3")
+	_check(migrated_v1.get_environment_state_snapshot().get("scopes", []).is_empty(), "schema 1 migration initializes empty deterministic environment authority")
+	_check(migrated_v1.get_simulation_router_snapshot().get("observations", []).is_empty(), "schema 1 migration initializes empty deterministic tier router authority")
+
 	var incompatible_tier_runtime: Node = RuntimeScript.new()
 	incompatible_tier_runtime.initialize_runtime()
 	var empty_tier: Dictionary = incompatible_tier_runtime.get_simulation_tier_snapshot()
@@ -284,6 +296,7 @@ func _test_runtime_schema_migration() -> void:
 
 	runtime.free()
 	migrated.free()
+	migrated_v1.free()
 	incompatible_tier_runtime.free()
 
 
