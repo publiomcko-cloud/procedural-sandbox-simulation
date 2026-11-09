@@ -74,7 +74,7 @@ On branch `feat/p3-0b-playable-world-entity-commands`, source commit `6ce65bbe2f
 | P2 | Procedural geometry recipe registry, entities, capabilities | Third-party content defines a deterministic object; stable persistent ID; batched static population |
 | P3 | Terrain/entity editing, placements, transformations, destruction | Across-boundary dig/save/restore; same commands via player/editor/mod; revisions reject stale edits; undo/redo |
 | P4 | Tick scheduler, tier transitions, materials, environmental state | Deterministic constrained replay; pause/step/catch-up; tier roundtrip conserves required invariants |
-| P5 | **V1 environment**: climate, temperature, rain, moisture, water accumulation/flow | Rain changes moisture and flow, digging influences runoff, state survives reload, bounded conservation drift |
+| P5 | **V1 environment**: climate, temperature, rain, moisture, water accumulation/flow ([approved execution plan](P5-ENVIRONMENT-HYDROLOGY-PLAN.md)) | Rain changes moisture and flow, digging influences runoff, state survives reload, bounded conservation drift |
 | P6 | **V1 release**: both modes, UX, diagnostics, packaging, regression/perf | End-to-end exploratory scenario and external mod smoke; no critical regressions; human signoff |
 | P7 | Organism components, geometry, metabolism, sensing and reproduction | Resource- and temperature-sensitive survival; repeatable growth/death; persistence after tier transitions |
 | P8 | **V2 ecosystem**: populations, trophic relationships, feedback | Measurable downstream impacts from removing species/resource; no unbounded growth; modded species coexist |
