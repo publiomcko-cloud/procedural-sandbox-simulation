@@ -317,6 +317,10 @@ finite_final
 
 Internal cell-to-cell and region-to-region transfers cancel from the global finite-water balance.
 
+## Future fluid systems (not part of P5)
+
+Lava, oil and other fluids are intentionally deferred. Reusable core infrastructure and the proposed mod-first fluid-content contract are documented in [Future Generic Fluids](FUTURE-GENERIC-FLUIDS.md). This is backlog context only: do not widen current P5 acceptance, change the water save schema, or introduce new fluid solvers while P5.0F-R2 and P5.0G are open.
+
 ## Non-goals for P5
 
 P5 does not attempt:
