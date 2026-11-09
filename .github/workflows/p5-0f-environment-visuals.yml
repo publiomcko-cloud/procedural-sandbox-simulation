@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'game/mods/first-party/core-climate/**'
+      - 'game/mods/environment-presets/core-climate/**'
       - 'game/scripts/simulation/environment_visual_presentation.gd'
       - 'game/scripts/simulation/simulation_runtime.gd'
       - 'game/scripts/simulation/simulation_world_scope_lifecycle.gd'
