@@ -289,6 +289,20 @@ func _test_snapshot_rebind() -> void:
 	var runtime: Node = fixture["runtime"]
 	var registry: RefCounted = fixture["registry"]
 	runtime.process_environment_climate_scope("region:0,0", 1)
+	_check(
+		runtime.validate_environment_climate_content(registry).get("ok", false),
+		"save preflight validates persisted climate profile fingerprint"
+	)
+	var changed_same_id: Dictionary = profile.duplicate(true)
+	changed_same_id["precipitation_ul_per_cell_per_tick"] = int(profile["precipitation_ul_per_cell_per_tick"]) + 1
+	var changed_registry: RefCounted = FakeClimateRegistry.new(changed_same_id)
+	var changed_validation: Dictionary = runtime.validate_environment_climate_content(
+		changed_registry
+	)
+	_check(
+		changed_validation.get("reason", "") == "environment_climate_persisted_profile_pin_conflict",
+		"save preflight rejects same-id climate content changed behind persisted sha"
+	)
 	var snapshot: Dictionary = runtime.get_runtime_snapshot()
 
 	var restored: Node = RuntimeScript.new()
