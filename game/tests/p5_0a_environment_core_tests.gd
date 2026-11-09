@@ -185,8 +185,26 @@ func _test_runtime_schema_migration() -> void:
 	_check(restore.get("ok", false) and int(restore["migrated_from_schema"]) == 2, "schema 2 migrates explicitly to P5 schema 3")
 	_check(int(migrated.get_runtime_snapshot()["schema_version"]) == 3, "migrated runtime publishes schema 3")
 	_check(migrated.get_environment_state_snapshot().get("scopes", []).is_empty(), "legacy P4 world receives empty deterministic environment authority")
+
+	var incompatible_tier_runtime: Node = RuntimeScript.new()
+	incompatible_tier_runtime.initialize_runtime()
+	var empty_tier: Dictionary = incompatible_tier_runtime.get_simulation_tier_snapshot()
+	var rejected_tier: Dictionary = runtime.restore_simulation_tier_snapshot(empty_tier)
+	_check(
+		rejected_tier.get("reason", "") == "simulation_runtime_snapshot_environment_scope_missing",
+		"partial tier restore cannot orphan authoritative environment scopes"
+	)
+	_check(not runtime.get_environment_scope("region:2,3").is_empty(), "rejected partial restore preserves environment authority")
+
+	runtime.set_environment_tick_admission_limit(0)
+	var scheduler_snapshot: Dictionary = runtime.get_scheduler_snapshot()
+	_check(runtime.restore_scheduler_snapshot(scheduler_snapshot).get("ok", false), "scheduler-only restore preserves environment authority")
+	_check(runtime.get_environment_tick_admission_limit() == -1, "scheduler restore clears transient environment admission limit")
+	_check(not runtime.get_environment_scope("region:2,3").is_empty(), "scheduler restore retains environment state")
+
 	runtime.free()
 	migrated.free()
+	incompatible_tier_runtime.free()
 
 
 func _test_streaming_lifecycle_binding() -> void:
