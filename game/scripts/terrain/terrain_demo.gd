@@ -411,16 +411,16 @@ func _probe_start_ocean_visual(delta: float) -> void:
 	for kind in kinds:
 		if int(kind) == 2:
 			ocean_cells += 1
-	var visible_quads := 0
+	var visible_triangles := 0
 	if is_instance_valid(_environment_visual):
 		var water_node := _environment_visual.get_node_or_null(
 			"Water_%d_%d" % [focus_region_key.x, focus_region_key.y]
-		) as MultiMeshInstance3D
-		if water_node != null and water_node.visible:
-			visible_quads = water_node.multimesh.visible_instance_count
-	var ready := ocean_cells > 0 and visible_quads > 0
+		) as MeshInstance3D
+		if water_node != null and water_node.visible and water_node.mesh != null:
+			visible_triangles = water_node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() / 3
+	var ready := ocean_cells > 0 and visible_triangles > 0
 	var status_label_text := "P5_WATER_READY" if ready else "P5_WATER_DIAG"
-	print("%s: region=%s candidate=%s profiles=%d climate=%s hydrology=%s scope=%s cache=%s ocean_cells=%d visible_quads=%d state_revision=%d status=%s" % [
+	print("%s: region=%s candidate=%s profiles=%d climate=%s hydrology=%s scope=%s cache=%s ocean_cells=%d visible_triangles=%d state_revision=%d status=%s" % [
 		status_label_text,
 		str(focus_region_key),
 		str(_startup_location_status),
@@ -430,7 +430,7 @@ func _probe_start_ocean_visual(delta: float) -> void:
 		str(not environmental_state.is_empty()),
 		str(not surface_cache.is_empty()),
 		ocean_cells,
-		visible_quads,
+		visible_triangles,
 		int(environmental_state.get("state_revision", -1)),
 		_simulation_streaming_status,
 	])
@@ -1977,6 +1977,10 @@ func _process_surface_cache_jobs() -> void:
 				_surface_cache_pending.erase(id)
 			continue
 		_surface_cache_publications_total += 1
+		if is_instance_valid(_environment_visual):
+			_environment_visual.install_region_shoreline_samples(
+				job.region_key, built["record"], built.get("visual_shoreline", {})
+			)
 		var pending_token: Dictionary = _surface_cache_pending.get(id, {})
 		if (
 			int(pending_token.get("terrain_revision", -1)) == int(job.terrain_revision)
@@ -2137,6 +2141,7 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 		chunk_snapshots,
 		queued_usec
 	)
+	job.build_visual_shoreline = is_instance_valid(_environment_visual)
 	var task_id := WorkerThreadPool.add_task(
 		Callable(job, "run"), false, "environment SDF surface cache"
 	)
