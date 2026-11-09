@@ -42,6 +42,8 @@ var _route_batches_total := 0
 var _due_decisions_total := 0
 var _due_updates_queued_total := 0
 var _due_updates_deferred_total := 0
+var _climate_steps_total := 0
+var _climate_noops_total := 0
 var _peak_resident_scopes := 0
 var _last_frame_index := -1
 
@@ -300,7 +302,7 @@ func process_scheduler_frame(
 		"queued": 0,
 		"deferred": 0,
 	}
-	if not _profile_id.is_empty():
+	if not _profile_id.is_empty() or runtime.has_environment_climate():
 		due_result = _schedule_due_work(
 			runtime, int(scheduler_result.get("current_tick", 0))
 		)
@@ -321,6 +323,8 @@ func process_scheduler_frame(
 		"due_decisions": int(due_result["decisions"]),
 		"due_updates_queued": int(due_result["queued"]),
 		"due_updates_deferred": int(due_result["deferred"]),
+		"climate_steps": int(due_result.get("climate_steps", 0)),
+		"climate_noops": int(due_result.get("climate_noops", 0)),
 	}
 
 
@@ -379,6 +383,8 @@ func get_metrics() -> Dictionary:
 		"due_decisions_total": _due_decisions_total,
 		"due_updates_queued_total": _due_updates_queued_total,
 		"due_updates_deferred_total": _due_updates_deferred_total,
+		"climate_steps_total": _climate_steps_total,
+		"climate_noops_total": _climate_noops_total,
 		"last_frame_index": _last_frame_index,
 	}
 
@@ -388,8 +394,19 @@ func _schedule_due_work(runtime: Object, current_tick: int) -> Dictionary:
 	var decisions := 0
 	var queued := 0
 	var deferred := 0
+	var climate_steps := 0
+	var climate_noops := 0
 	if ids.is_empty():
-		return {"decisions": 0, "queued": 0, "deferred": 0}
+		return {
+			"decisions": 0,
+			"queued": 0,
+			"deferred": 0,
+			"climate_steps": 0,
+			"climate_noops": 0,
+		}
+
+	var climate_enabled := bool(runtime.has_environment_climate())
+	var material_enabled := not _profile_id.is_empty()
 
 	# Fair bounded sweeps. At most one next logical tick per resident per pass.
 	while decisions < _due_decision_budget:
@@ -404,11 +421,13 @@ func _schedule_due_work(runtime: Object, current_tick: int) -> Dictionary:
 			var next_tick := int(resident_record.get("next_tick", current_tick + 1))
 			if next_tick > current_tick:
 				continue
+
 			var scope: Dictionary = runtime.get_simulation_scope(scope_id)
 			var state: Dictionary = scope.get("state", {})
-			if not state.has(DomainScript.STATE_KEY):
+			if material_enabled and not state.has(DomainScript.STATE_KEY):
 				deferred += 1
 				continue
+
 			var due: Dictionary = runtime.get_simulation_due_decision(
 				scope_id, next_tick
 			)
@@ -417,33 +436,66 @@ func _schedule_due_work(runtime: Object, current_tick: int) -> Dictionary:
 					"decisions": decisions,
 					"queued": queued,
 					"deferred": deferred,
+					"climate_steps": climate_steps,
+					"climate_noops": climate_noops,
 					"error": String(due.get("reason", "")),
 				}
 			decisions += 1
 			_due_decisions_total += 1
+
 			if bool(due.get("due", false)):
-				var admitted: Dictionary = runtime.enqueue_material_due_step(
-					scope_id, _profile_id, next_tick
-				)
-				if not admitted.get("ok", false):
-					if admitted.get("reason") == "material_queue_capacity_reached":
-						deferred += 1
-						_due_updates_deferred_total += 1
-						continue
-					return {
-						"decisions": decisions,
-						"queued": queued,
-						"deferred": deferred,
-						"error": String(admitted.get("reason", "")),
-					}
-				queued += 1
-				_due_updates_queued_total += 1
+				if climate_enabled:
+					var climate: Dictionary = runtime.process_environment_climate_scope(
+						scope_id, next_tick
+					)
+					if not climate.get("ok", false):
+						return {
+							"decisions": decisions,
+							"queued": queued,
+							"deferred": deferred,
+							"climate_steps": climate_steps,
+							"climate_noops": climate_noops,
+							"error": String(climate.get("reason", "")),
+						}
+					if climate.get("noop", false):
+						climate_noops += 1
+						_climate_noops_total += 1
+					else:
+						climate_steps += 1
+						_climate_steps_total += 1
+
+				if material_enabled:
+					var admitted: Dictionary = runtime.enqueue_material_due_step(
+						scope_id, _profile_id, next_tick
+					)
+					if not admitted.get("ok", false):
+						if admitted.get("reason") == "material_queue_capacity_reached":
+							deferred += 1
+							_due_updates_deferred_total += 1
+							continue
+						return {
+							"decisions": decisions,
+							"queued": queued,
+							"deferred": deferred,
+							"climate_steps": climate_steps,
+							"climate_noops": climate_noops,
+							"error": String(admitted.get("reason", "")),
+						}
+					queued += 1
+					_due_updates_queued_total += 1
+
 			resident_record["next_tick"] = next_tick + 1
 			_resident[scope_id] = resident_record
 			made_progress = true
 		if not made_progress:
 			break
-	return {"decisions": decisions, "queued": queued, "deferred": deferred}
+	return {
+		"decisions": decisions,
+		"queued": queued,
+		"deferred": deferred,
+		"climate_steps": climate_steps,
+		"climate_noops": climate_noops,
+	}
 
 
 func _submit_observation(
@@ -500,5 +552,7 @@ func _reset_metrics() -> void:
 	_due_decisions_total = 0
 	_due_updates_queued_total = 0
 	_due_updates_deferred_total = 0
+	_climate_steps_total = 0
+	_climate_noops_total = 0
 	_peak_resident_scopes = 0
 	_last_frame_index = -1
