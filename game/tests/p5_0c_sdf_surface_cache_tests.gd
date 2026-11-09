@@ -304,6 +304,25 @@ func _test_runtime_transience_and_unload() -> void:
 		not runtime.get_environment_scope("region:0,0").is_empty(),
 		"stream unload preserves authoritative environment state"
 	)
+	_check(
+		runtime.publish_world_region_scope(Vector2i.ZERO).get("ok", false),
+		"unchanged region can publish again after unload"
+	)
+	_check(
+		runtime.expect_environment_surface_cache(
+			"region:0,0", Vector2i.ZERO, 424242, Field.GENERATOR_VERSION,
+			0, int(brush.get_instance_id()), 0
+		).get("ok", false),
+		"reload registers the same unchanged terrain token"
+	)
+	_check(
+		runtime.publish_environment_surface_cache(job.result["record"]).get("ok", false),
+		"reload republishes cache derived from unchanged terrain"
+	)
+	_check(
+		runtime.get_environment_surface_cache("region:0,0") == job.result["record"],
+		"unload/reload reconstructs identical derived surface data"
+	)
 	runtime.free()
 	restored.free()
 
