@@ -45,6 +45,11 @@ func _test_environment_store_contract() -> void:
 	var initial: Dictionary = store.get_scope("region:0,0")
 	_check(int(initial["state_revision"]) == 0, "new environment scope starts at revision zero")
 	_check(_sum_i64(initial["surface_water_ul"]) == 0, "new scope starts with zero finite surface water")
+	var compact_initial: Dictionary = store.get_authoritative_snapshot()["scopes"][0]
+	var compact_surface: PackedInt64Array = compact_initial["surface_water_ul"]
+	var expanded_surface: PackedInt64Array = initial["surface_water_ul"]
+	_check(compact_surface.is_empty(), "dry scope snapshot uses implicit zero-cell compaction")
+	_check(expanded_surface.size() == 48, "public scope view expands compact dry state to engine grid")
 
 	var surface: PackedInt64Array = initial["surface_water_ul"].duplicate()
 	var soil: PackedInt64Array = initial["soil_water_ul"].duplicate()
