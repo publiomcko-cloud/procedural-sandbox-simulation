@@ -439,10 +439,10 @@ func _test_runtime_integration_and_schema_migration() -> void:
 	)
 	var snapshot: Dictionary = runtime.get_runtime_snapshot()
 	_check(
-		int(snapshot["schema_version"]) == 2
+		int(snapshot["schema_version"]) == 3
 			and snapshot.has("tier_router")
 			and snapshot["tier_router"]["pending_scope_ids"] == ["runtime-a"],
-		"runtime schema 2 captures router observations and pending order"
+		"runtime schema 3 preserves router observations and pending order"
 	)
 
 	var restored: SimulationRuntime = RuntimeScript.new()
@@ -472,15 +472,16 @@ func _test_runtime_integration_and_schema_migration() -> void:
 
 	var legacy := snapshot.duplicate(true)
 	legacy.erase("tier_router")
+	legacy.erase("environment_state")
 	legacy["schema_version"] = 1
 	var migrated: SimulationRuntime = RuntimeScript.new()
 	var migration_result: Dictionary = migrated.restore_runtime_snapshot(legacy)
 	_check(
 		migration_result.get("ok", false)
 			and int(migration_result.get("migrated_from_schema", 0)) == 1
-			and int(migrated.get_runtime_snapshot()["schema_version"]) == 2
+			and int(migrated.get_runtime_snapshot()["schema_version"]) == 3
 			and int(migrated.get_simulation_router_metrics()["tracked_observation_count"]) == 0,
-		"runtime restores P4.0B schema-1 snapshot into empty default router"
+		"runtime restores P4.0B schema-1 snapshot into default router plus empty P5 environment authority"
 	)
 
 	var metrics: Dictionary = runtime.get_simulation_router_metrics()

@@ -5,8 +5,8 @@ class_name SimulationRuntime
 ##
 ## P4.0A owns deterministic fixed logical time. P4.0B owns explicit
 ## active/aggregate/dormant scope authority. P4.0C adds bounded automatic tier
-## routing for explicit scope-distance observations. Domain simulation systems
-## remain outside this node.
+## routing for explicit scope-distance observations. P5.0A adds authoritative
+## environmental scope state plus transient scheduler admission backpressure.
 
 const SchedulerScript := preload("res://scripts/simulation/fixed_tick_scheduler.gd")
 const TierStateScript := preload("res://scripts/simulation/simulation_tier_state.gd")
@@ -15,10 +15,12 @@ const MaterialBridgeScript := preload("res://scripts/simulation/material_environ
 const MaterialQueueScript := preload("res://scripts/simulation/material_environment_work_queue.gd")
 const MaterialDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const WorldScopeLifecycleScript := preload("res://scripts/simulation/simulation_world_scope_lifecycle.gd")
+const EnvironmentStateStoreScript := preload("res://scripts/simulation/environment_state_store.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
-const RUNTIME_SNAPSHOT_SCHEMA_VERSION := 2
+const RUNTIME_SNAPSHOT_SCHEMA_VERSION := 3
 const RUNTIME_SNAPSHOT_SCHEMA_V1 := 1
+const RUNTIME_SNAPSHOT_SCHEMA_V2 := 2
 
 const DEFAULT_TICK_USEC := SchedulerScript.DEFAULT_TICK_USEC
 const DEFAULT_MAX_TICKS_PER_FRAME := SchedulerScript.DEFAULT_MAX_TICKS_PER_FRAME
@@ -44,18 +46,28 @@ const RUNTIME_SNAPSHOT_FIELDS_V2 := [
 	"tier_state",
 	"tier_router",
 ]
+const RUNTIME_SNAPSHOT_FIELDS_V3 := [
+	"schema_version",
+	"fractional_usec",
+	"scheduler",
+	"tier_state",
+	"tier_router",
+	"environment_state",
+]
 
 var scheduler: RefCounted
 var tier_state: RefCounted
 var tier_router: RefCounted
 var material_bridge: RefCounted
 var world_scope_lifecycle: RefCounted
+var environment_state_store: RefCounted
 var initialized := false
 var initialization_error := ""
 
 var _fractional_usec := 0.0
 var _last_result: Dictionary = {}
 var _perf_trace_enabled := false
+var _environment_tick_admission_limit := -1
 
 
 func _ready() -> void:
@@ -127,6 +139,18 @@ func initialize_runtime(
 		)
 		return router_result
 
+	var next_environment_store: RefCounted = EnvironmentStateStoreScript.new()
+	var environment_result: Dictionary = next_environment_store.initialize(
+		EnvironmentStateStoreScript.DEFAULT_GRID_WIDTH,
+		EnvironmentStateStoreScript.DEFAULT_GRID_HEIGHT,
+		max_simulation_scopes
+	)
+	if not environment_result.get("ok", false):
+		initialization_error = String(
+			environment_result.get("reason", "environment_store_initialization_failed")
+		)
+		return environment_result
+
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
 	material_bridge = null
@@ -137,6 +161,8 @@ func initialize_runtime(
 	scheduler = next_scheduler
 	tier_state = next_tier_state
 	tier_router = next_tier_router
+	environment_state_store = next_environment_store
+	_environment_tick_admission_limit = -1
 	_fractional_usec = 0.0
 	_last_result = {}
 	initialization_error = ""
@@ -171,7 +197,9 @@ func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
 
 	var started_usec: int = Time.get_ticks_usec() if _perf_trace_enabled else 0
-	var result: Dictionary = scheduler.process_elapsed_usec(elapsed_usec)
+	var result: Dictionary = scheduler.process_elapsed_usec(
+		elapsed_usec, _environment_tick_admission_limit
+	)
 	if (
 		result.get("ok", false)
 		and world_scope_lifecycle != null
@@ -234,6 +262,11 @@ func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
 					"backlog_ticks": backlog_ticks,
 					"manual_step_ticks": manual_step_ticks,
 					"paused": bool(result.get("paused", false)),
+					"environment_tick_admission_limit": _environment_tick_admission_limit,
+					"backpressure_limited": bool(result.get("backpressure_limited", false)),
+					"ticks_deferred_by_backpressure": int(
+						result.get("ticks_deferred_by_backpressure", 0)
+					),
 				},
 				true
 			)
@@ -525,6 +558,71 @@ func get_simulation_router_metrics() -> Dictionary:
 	return tier_router.get_metrics()
 
 
+func register_environment_scope(
+	scope_id: String,
+	profile_id: String = "",
+	profile_sha256: String = "",
+	last_environment_tick: int = -1
+) -> Dictionary:
+	if not initialized or tier_state == null or environment_state_store == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	if tier_state.get_scope(scope_id).is_empty():
+		return {"ok": false, "reason": "environment_simulation_scope_missing"}
+	if last_environment_tick < -1:
+		return {"ok": false, "reason": "environment_tick_invalid"}
+	var resolved_tick: int = (
+		int(scheduler.get_current_tick())
+		if last_environment_tick == -1
+		else last_environment_tick
+	)
+	return environment_state_store.register_scope(
+		scope_id, profile_id, profile_sha256, resolved_tick
+	)
+
+
+func get_environment_scope(scope_id: String) -> Dictionary:
+	if not initialized or environment_state_store == null:
+		return {}
+	return environment_state_store.get_scope(scope_id)
+
+
+func commit_environment_batch(updates: Array) -> Dictionary:
+	if not initialized or environment_state_store == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	return environment_state_store.commit_batch(updates)
+
+
+func get_environment_state_snapshot() -> Dictionary:
+	if not initialized or environment_state_store == null:
+		return {}
+	return environment_state_store.get_authoritative_snapshot()
+
+
+func get_environment_metrics() -> Dictionary:
+	if not initialized or environment_state_store == null:
+		return {}
+	var metrics: Dictionary = environment_state_store.get_metrics()
+	metrics["tick_admission_limit"] = _environment_tick_admission_limit
+	return metrics
+
+
+func set_environment_tick_admission_limit(limit: int = -1) -> Dictionary:
+	if not initialized or scheduler == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	if limit < -1 or limit > SchedulerScript.MAX_TICKS_PER_FRAME_HARD:
+		return {"ok": false, "reason": "environment_tick_admission_limit_invalid"}
+	_environment_tick_admission_limit = limit
+	return {
+		"ok": true,
+		"reason": "ok",
+		"tick_admission_limit": _environment_tick_admission_limit,
+	}
+
+
+func get_environment_tick_admission_limit() -> int:
+	return _environment_tick_admission_limit
+
+
 func get_runtime_snapshot() -> Dictionary:
 	if (
 		not initialized
@@ -539,6 +637,11 @@ func get_runtime_snapshot() -> Dictionary:
 		"scheduler": scheduler.get_authoritative_snapshot(),
 		"tier_state": tier_state.get_authoritative_snapshot(),
 		"tier_router": tier_router.get_authoritative_snapshot(),
+		"environment_state": (
+			environment_state_store.get_authoritative_snapshot()
+			if environment_state_store != null
+			else {}
+		),
 	}
 
 
@@ -574,6 +677,11 @@ func get_persistence_preflight() -> Dictionary:
 		"current_tick": scheduler.get_current_tick(),
 		"router_pending_count": router_pending,
 		"material_pending_count": 0,
+		"environment_scope_count": (
+			environment_state_store.get_scope_count()
+			if environment_state_store != null
+			else 0
+		),
 	}
 
 
@@ -679,6 +787,19 @@ func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
 			)
 			return router_result
 
+	var next_environment_store: RefCounted = environment_state_store
+	if next_environment_store == null or not next_environment_store.is_initialized():
+		next_environment_store = EnvironmentStateStoreScript.new()
+		var environment_result: Dictionary = next_environment_store.initialize(
+			EnvironmentStateStoreScript.DEFAULT_GRID_WIDTH,
+			EnvironmentStateStoreScript.DEFAULT_GRID_HEIGHT,
+			int(next_tier_state.get_authoritative_snapshot().get(
+				"max_scopes", DEFAULT_MAX_SIMULATION_SCOPES
+			))
+		)
+		if not environment_result.get("ok", false):
+			return environment_result
+
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
 	material_bridge = null
@@ -688,6 +809,8 @@ func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
 	scheduler = next_scheduler
 	tier_state = next_tier_state
 	tier_router = next_tier_router
+	environment_state_store = next_environment_store
+	_environment_tick_admission_limit = -1
 	_fractional_usec = 0.0
 	_last_result = {}
 	initialization_error = ""
@@ -716,6 +839,13 @@ func restore_simulation_tier_snapshot(snapshot: Dictionary) -> Dictionary:
 		)
 		if not compatibility.get("ok", false):
 			return compatibility
+	if environment_state_store != null and environment_state_store.is_initialized():
+		var environment_compatibility := _validate_environment_scope_compatibility(
+			environment_state_store.get_authoritative_snapshot(),
+			next_tier_state
+		)
+		if not environment_compatibility.get("ok", false):
+			return environment_compatibility
 
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
@@ -750,6 +880,7 @@ func restore_simulation_router_snapshot(snapshot: Dictionary) -> Dictionary:
 		world_scope_lifecycle.reset_transient()
 	world_scope_lifecycle = null
 	tier_router = next_router
+	_environment_tick_admission_limit = -1
 	return {
 		"ok": true,
 		"reason": "ok",
@@ -764,8 +895,11 @@ func validate_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 	if schema_version == RUNTIME_SNAPSHOT_SCHEMA_V1:
 		if not _has_exact_fields(snapshot, RUNTIME_SNAPSHOT_FIELDS_V1):
 			return {"ok": false, "reason": "simulation_runtime_snapshot_fields_invalid"}
-	elif schema_version == RUNTIME_SNAPSHOT_SCHEMA_VERSION:
+	elif schema_version == RUNTIME_SNAPSHOT_SCHEMA_V2:
 		if not _has_exact_fields(snapshot, RUNTIME_SNAPSHOT_FIELDS_V2):
+			return {"ok": false, "reason": "simulation_runtime_snapshot_fields_invalid"}
+	elif schema_version == RUNTIME_SNAPSHOT_SCHEMA_VERSION:
+		if not _has_exact_fields(snapshot, RUNTIME_SNAPSHOT_FIELDS_V3):
 			return {"ok": false, "reason": "simulation_runtime_snapshot_fields_invalid"}
 	else:
 		return {"ok": false, "reason": "simulation_runtime_snapshot_schema_invalid"}
@@ -802,7 +936,7 @@ func validate_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 			"detail": String(tier_result.get("reason", "")),
 		}
 
-	if schema_version == RUNTIME_SNAPSHOT_SCHEMA_VERSION:
+	if schema_version >= RUNTIME_SNAPSHOT_SCHEMA_V2:
 		if typeof(snapshot.get("tier_router")) != TYPE_DICTIONARY:
 			return {"ok": false, "reason": "simulation_runtime_snapshot_router_invalid"}
 		var router_candidate: RefCounted = TierRouterScript.new()
@@ -821,6 +955,25 @@ func validate_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 		)
 		if not compatibility.get("ok", false):
 			return compatibility
+
+	if schema_version == RUNTIME_SNAPSHOT_SCHEMA_VERSION:
+		if typeof(snapshot.get("environment_state")) != TYPE_DICTIONARY:
+			return {"ok": false, "reason": "simulation_runtime_snapshot_environment_invalid"}
+		var environment_candidate: RefCounted = EnvironmentStateStoreScript.new()
+		var environment_result: Dictionary = environment_candidate.restore_snapshot(
+			snapshot["environment_state"]
+		)
+		if not environment_result.get("ok", false):
+			return {
+				"ok": false,
+				"reason": "simulation_runtime_snapshot_environment_invalid",
+				"detail": String(environment_result.get("reason", "")),
+			}
+		var environment_compatibility := _validate_environment_scope_compatibility(
+			snapshot["environment_state"], tier_candidate
+		)
+		if not environment_compatibility.get("ok", false):
+			return environment_compatibility
 
 	return {"ok": true, "reason": "ok"}
 
@@ -863,6 +1016,25 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 			"reason": "simulation_runtime_snapshot_router_invalid",
 		}
 
+	var next_environment_store: RefCounted = EnvironmentStateStoreScript.new()
+	var environment_result: Dictionary
+	if schema_version < RUNTIME_SNAPSHOT_SCHEMA_VERSION:
+		environment_result = next_environment_store.initialize(
+			EnvironmentStateStoreScript.DEFAULT_GRID_WIDTH,
+			EnvironmentStateStoreScript.DEFAULT_GRID_HEIGHT,
+			int(snapshot["tier_state"].get("max_scopes", DEFAULT_MAX_SIMULATION_SCOPES))
+		)
+	else:
+		environment_result = next_environment_store.restore_snapshot(
+			snapshot["environment_state"]
+		)
+	if not environment_result.get("ok", false):
+		return {
+			"ok": false,
+			"reason": "simulation_runtime_snapshot_environment_invalid",
+			"detail": String(environment_result.get("reason", "")),
+		}
+
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
 	material_bridge = null
@@ -872,6 +1044,8 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 	scheduler = next_scheduler
 	tier_state = next_tier_state
 	tier_router = next_tier_router
+	environment_state_store = next_environment_store
+	_environment_tick_admission_limit = -1
 	_fractional_usec = float(snapshot["fractional_usec"])
 	_last_result = {}
 	initialization_error = ""
@@ -881,11 +1055,28 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 		"reason": "ok",
 		"snapshot": get_runtime_snapshot(),
 		"migrated_from_schema": (
-			RUNTIME_SNAPSHOT_SCHEMA_V1
-			if schema_version == RUNTIME_SNAPSHOT_SCHEMA_V1
+			schema_version
+			if schema_version < RUNTIME_SNAPSHOT_SCHEMA_VERSION
 			else 0
 		),
 	}
+
+
+func _validate_environment_scope_compatibility(
+	environment_snapshot: Dictionary,
+	candidate_tier_state: RefCounted
+) -> Dictionary:
+	var scopes: Array = environment_snapshot.get("scopes", [])
+	for record_value in scopes:
+		var record: Dictionary = record_value
+		var scope_id := String(record.get("scope_id", ""))
+		if candidate_tier_state.get_scope(scope_id).is_empty():
+			return {
+				"ok": false,
+				"reason": "simulation_runtime_snapshot_environment_scope_missing",
+				"scope_id": scope_id,
+			}
+	return {"ok": true, "reason": "ok"}
 
 
 func _validate_router_scope_compatibility(
