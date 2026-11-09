@@ -58,6 +58,7 @@ func _run() -> void:
 	_test_tier_policy()
 	_test_infinite_reservoir_exclusion()
 	_test_lifecycle_integration()
+	_test_legacy_binding_baseline()
 	_test_snapshot_rebind()
 
 	if failures == 0:
@@ -280,6 +281,31 @@ func _test_lifecycle_integration() -> void:
 	_check(int(lifecycle.get("climate_steps", 0)) >= 1, "world lifecycle executes climate due work")
 	var state: Dictionary = runtime.get_environment_scope("region:0,0")
 	_check(_sum_i64(state["surface_water_ul"]) > 0 or _sum_i64(state["soil_water_ul"]) > 0, "lifecycle rain reaches authoritative environment state")
+	runtime.free()
+
+
+func _test_legacy_binding_baseline() -> void:
+	var profile := _profile("test.climate:legacy", 1_000, 0, 100_000, 0)
+	var runtime: Node = RuntimeScript.new()
+	runtime.initialize_runtime(100_000, 4, 100)
+	runtime.register_simulation_scope("region:0,0", TierStateScript.TIER_ACTIVE)
+	var legacy_registration: Dictionary = runtime.environment_state_store.register_scope(
+		"region:0,0", "", "", 0
+	)
+	_check(legacy_registration.get("ok", false), "legacy unpinned environment scope fixture registers")
+	var registry: RefCounted = FakeClimateRegistry.new(profile)
+	_check(
+		runtime.configure_environment_climate(registry, String(profile["id"])).get("ok", false),
+		"legacy environment scope accepts first climate binding"
+	)
+	var rebound: Dictionary = runtime.get_environment_scope("region:0,0")
+	_check(
+		int(rebound["last_environment_tick"]) == 100,
+		"legacy climate binding baselines at current scheduler tick"
+	)
+	var step: Dictionary = runtime.process_environment_climate_scope("region:0,0", 101)
+	_check(step.get("ok", false), "legacy-bound climate resumes on next logical tick")
+	_check(int(step.get("elapsed_ticks", 0)) == 1, "legacy binding does not replay historical climate ticks")
 	runtime.free()
 
 
