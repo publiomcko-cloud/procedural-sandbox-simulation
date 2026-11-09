@@ -626,7 +626,7 @@ func configure_environment_climate(
 		var record: Dictionary = environment_state_store.get_scope(scope_id)
 		if String(record.get("profile_id", "")).is_empty():
 			var profile_bind: Dictionary = environment_state_store.bind_scope_profile(
-				scope_id, profile_id, sha
+				scope_id, profile_id, sha, int(scheduler.get_current_tick())
 			)
 			if not profile_bind.get("ok", false):
 				return profile_bind
