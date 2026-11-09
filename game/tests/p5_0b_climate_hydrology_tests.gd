@@ -58,6 +58,7 @@ func _run() -> void:
 	_test_tier_policy()
 	_test_infinite_reservoir_exclusion()
 	_test_lifecycle_integration()
+	_test_climate_capacity_backpressure()
 	_test_legacy_binding_baseline()
 	_test_snapshot_rebind()
 
@@ -281,6 +282,39 @@ func _test_lifecycle_integration() -> void:
 	_check(int(lifecycle.get("climate_steps", 0)) >= 1, "world lifecycle executes climate due work")
 	var state: Dictionary = runtime.get_environment_scope("region:0,0")
 	_check(_sum_i64(state["surface_water_ul"]) > 0 or _sum_i64(state["soil_water_ul"]) > 0, "lifecycle rain reaches authoritative environment state")
+	runtime.free()
+
+
+func _test_climate_capacity_backpressure() -> void:
+	var profile := _profile("test.climate:capacity", 10, 0, 100_000, 0)
+	var runtime: Node = RuntimeScript.new()
+	runtime.initialize_runtime(100_000, 4)
+	var registry: RefCounted = FakeClimateRegistry.new(profile)
+	runtime.configure_environment_climate(registry, String(profile["id"]))
+	_check(
+		runtime.configure_world_scope_lifecycle(
+			"", 25, 16_000, 12_000, 25
+		).get("ok", false),
+		"capacity fixture configures one resident decision per admitted tick"
+	)
+	runtime.update_world_scope_focus(Vector2i.ZERO)
+	for x in range(5):
+		for z in range(5):
+			_check(
+				runtime.publish_world_region_scope(Vector2i(x, z)).get("ok", false),
+				"capacity fixture publishes bounded resident scope"
+			)
+	var frame: Dictionary = runtime.process_elapsed_usec(400_000)
+	_check(frame.get("ok", false), "capacity-limited scheduler frame succeeds")
+	_check(
+		int(frame.get("environment_capacity_admission_limit", -1)) == 1,
+		"resident climate budget reduces scheduler admission to one tick"
+	)
+	_check(
+		int(frame.get("admitted_ticks", -1)) == 1
+			and int(frame.get("backlog_ticks", -1)) == 3,
+		"climate backpressure defers excess logical ticks without loss"
+	)
 	runtime.free()
 
 
