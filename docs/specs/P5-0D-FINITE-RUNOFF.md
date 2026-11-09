@@ -1,6 +1,6 @@
 # P5.0D — Finite Runoff and Local Water Redistribution
 
-Status: **IMPLEMENTED / QUALIFICATION PENDING / STACKED ON P5.0C**
+Status: **IMPLEMENTED / QUALIFIED / STACKED ON P5.0C**
 
 ## Scope
 
