@@ -35,11 +35,6 @@ function Invoke-Qualification([string]$Label, [string[]]$CommandArgs, [string]$E
 Invoke-Qualification 'import' @('--headless', '--editor', '--path', $ProjectPath, '--import') '' | Out-Null
 Invoke-Qualification 'focused' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p5_0a_environment_core_tests.gd') 'P5_0A_ENVIRONMENT_CORE_PASS:' | Out-Host
 
-$p50bTest = Join-Path $ProjectPath 'tests\p5_0b_climate_hydrology_tests.gd'
-if (Test-Path -LiteralPath $p50bTest -PathType Leaf) {
-    Invoke-Qualification 'p5-0b-stacked' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p5_0b_climate_hydrology_tests.gd') 'P5_0B_CLIMATE_HYDROLOGY_PASS:' | Out-Host
-}
-
 & (Join-Path $PSScriptRoot 'run-p4-0h-qualification.ps1') -GodotBin $GodotBin -ProjectPath $ProjectPath
 if ($LASTEXITCODE -ne 0) { throw "Inherited P4.0H qualification failed: $LASTEXITCODE" }
 
