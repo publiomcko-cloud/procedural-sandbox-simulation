@@ -114,6 +114,8 @@ Precipitation overflow is an explicit unretained boundary term. P5.0D may later 
 
 already used by P4 material-environment scheduling.
 
+When climate is enabled, the lifecycle also derives a conservative scheduler admission limit from `due_decision_budget / resident_scope_count`. This limit is combined with any explicit P5.0A admission limit, so logical ticks cannot outrun the bounded climate decision capacity. Excess due time remains deterministic scheduler backlog.
+
 No second world scan or independent climate loop is introduced.
 
 ## Streaming and persistence
@@ -158,6 +160,7 @@ Focused P5.0B tests must prove:
 - infinite river/ocean exclusion from finite climate stores;
 - fixed reservoir level preservation;
 - world-lifecycle climate execution;
+- resident-budget scheduler backpressure without lost ticks;
 - snapshot restore plus safe registry rebind;
 - no retroactive forcing when binding legacy unpinned P5.0A scopes;
 - save/load content-pin validation;
