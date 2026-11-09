@@ -45,7 +45,8 @@ River and ocean cells are infinite fixed-level boundary reservoirs:
 - they may receive unlimited modeled water without level/volume increase;
 - they may provide unlimited modeled water without level/volume decrease;
 - they may not contain finite surface or soil water in the environment arrays;
-- exchange is explicitly accounted through cumulative integer counters.
+- exchange is explicitly accounted through cumulative integer diagnostic counters;
+- those lifetime counters saturate at a large deterministic ceiling and **never reject or limit reservoir exchange**.
 
 Therefore later conservation checks use:
 
@@ -59,7 +60,7 @@ finite_final
 - modeled_external_drainage
 ```
 
-Reservoir exchange is not hidden creation/destruction; it is an explicit boundary term.
+Reservoir exchange is not hidden creation/destruction; it is an explicit boundary term. Conservation tests use the exact per-step exchange deltas; saturated lifetime diagnostics are not used as a physical capacity.
 
 ## Atomic multi-scope commits
 
