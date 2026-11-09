@@ -16,6 +16,7 @@ const MaterialQueueScript := preload("res://scripts/simulation/material_environm
 const MaterialDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const WorldScopeLifecycleScript := preload("res://scripts/simulation/simulation_world_scope_lifecycle.gd")
 const EnvironmentStateStoreScript := preload("res://scripts/simulation/environment_state_store.gd")
+const EnvironmentSurfaceCacheScript := preload("res://scripts/simulation/environment_surface_cache.gd")
 const EnvironmentClimateDomainScript := preload("res://scripts/simulation/environment_climate_domain.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
@@ -62,6 +63,7 @@ var tier_router: RefCounted
 var material_bridge: RefCounted
 var world_scope_lifecycle: RefCounted
 var environment_state_store: RefCounted
+var environment_surface_cache: RefCounted
 var environment_climate_domain: RefCounted
 var initialized := false
 var initialization_error := ""
@@ -155,6 +157,16 @@ func initialize_runtime(
 		)
 		return environment_result
 
+	var next_surface_cache: RefCounted = EnvironmentSurfaceCacheScript.new()
+	var surface_cache_result: Dictionary = next_surface_cache.initialize(
+		max_simulation_scopes
+	)
+	if not surface_cache_result.get("ok", false):
+		initialization_error = String(
+			surface_cache_result.get("reason", "surface_cache_initialization_failed")
+		)
+		return surface_cache_result
+
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
 	material_bridge = null
@@ -166,6 +178,7 @@ func initialize_runtime(
 	tier_state = next_tier_state
 	tier_router = next_tier_router
 	environment_state_store = next_environment_store
+	environment_surface_cache = next_surface_cache
 	environment_climate_domain = null
 	_environment_climate_profile_id = ""
 	_environment_climate_profile_sha256 = ""
@@ -461,7 +474,12 @@ func publish_world_region_scope(
 func unload_world_region_scope(region_key: Vector2i) -> Dictionary:
 	if world_scope_lifecycle == null:
 		return {"ok": false, "reason": "world_scope_lifecycle_not_initialized"}
-	return world_scope_lifecycle.notify_region_unloaded(self, region_key)
+	var result: Dictionary = world_scope_lifecycle.notify_region_unloaded(self, region_key)
+	if result.get("ok", false) and environment_surface_cache != null:
+		environment_surface_cache.discard_scope(
+			world_scope_lifecycle.scope_id_for_region(region_key)
+		)
+	return result
 
 
 func update_world_scope_focus(region_key: Vector2i) -> Dictionary:
@@ -700,6 +718,62 @@ func get_environment_climate_metrics() -> Dictionary:
 		"profile_sha256": _environment_climate_profile_sha256,
 		"metrics": environment_climate_domain.get_metrics(),
 	}
+
+
+func expect_environment_surface_cache(
+	scope_id: String,
+	region_key: Vector2i,
+	world_seed: int,
+	generator_version: int,
+	terrain_revision: int,
+	terrain_cache_scope_id: int,
+	terrain_effect_revision: int
+) -> Dictionary:
+	if (
+		not initialized
+		or environment_surface_cache == null
+		or tier_state == null
+		or environment_state_store == null
+	):
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	if tier_state.get_scope(scope_id).is_empty() 		or environment_state_store.get_scope(scope_id).is_empty():
+		return {"ok": false, "reason": "surface_cache_environment_scope_missing"}
+	return environment_surface_cache.expect_scope(
+		scope_id,
+		region_key,
+		world_seed,
+		generator_version,
+		terrain_revision,
+		terrain_cache_scope_id,
+		terrain_effect_revision
+	)
+
+
+func publish_environment_surface_cache(record: Dictionary) -> Dictionary:
+	if not initialized or environment_surface_cache == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	var scope_id := String(record.get("scope_id", ""))
+	if tier_state.get_scope(scope_id).is_empty() 		or environment_state_store.get_scope(scope_id).is_empty():
+		return {"ok": false, "reason": "surface_cache_environment_scope_missing"}
+	return environment_surface_cache.publish(record)
+
+
+func discard_environment_surface_cache(scope_id: String) -> Dictionary:
+	if not initialized or environment_surface_cache == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	return environment_surface_cache.discard_scope(scope_id)
+
+
+func get_environment_surface_cache(scope_id: String) -> Dictionary:
+	if not initialized or environment_surface_cache == null:
+		return {}
+	return environment_surface_cache.get_scope(scope_id)
+
+
+func get_environment_surface_cache_metrics() -> Dictionary:
+	if not initialized or environment_surface_cache == null:
+		return {"initialized": false}
+	return environment_surface_cache.get_metrics()
 
 
 func get_environment_scope(scope_id: String) -> Dictionary:
@@ -977,6 +1051,15 @@ func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
 		if not environment_result.get("ok", false):
 			return environment_result
 
+	var next_surface_cache: RefCounted = EnvironmentSurfaceCacheScript.new()
+	var surface_cache_result: Dictionary = next_surface_cache.initialize(
+		int(next_tier_state.get_authoritative_snapshot().get(
+			"max_scopes", DEFAULT_MAX_SIMULATION_SCOPES
+		))
+	)
+	if not surface_cache_result.get("ok", false):
+		return surface_cache_result
+
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
 	material_bridge = null
@@ -987,6 +1070,7 @@ func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
 	tier_state = next_tier_state
 	tier_router = next_tier_router
 	environment_state_store = next_environment_store
+	environment_surface_cache = next_surface_cache
 	environment_climate_domain = null
 	_environment_climate_profile_id = ""
 	_environment_climate_profile_sha256 = ""
@@ -1034,6 +1118,8 @@ func restore_simulation_tier_snapshot(snapshot: Dictionary) -> Dictionary:
 		world_scope_lifecycle.reset_transient()
 	world_scope_lifecycle = null
 	tier_state = next_tier_state
+	if environment_surface_cache != null:
+		environment_surface_cache.clear_transient()
 	return {
 		"ok": true,
 		"reason": "ok",
@@ -1197,6 +1283,16 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 		}
 
 	var next_environment_store: RefCounted = EnvironmentStateStoreScript.new()
+	var next_surface_cache: RefCounted = EnvironmentSurfaceCacheScript.new()
+	var surface_cache_result: Dictionary = next_surface_cache.initialize(
+		int(snapshot["tier_state"].get("max_scopes", DEFAULT_MAX_SIMULATION_SCOPES))
+	)
+	if not surface_cache_result.get("ok", false):
+		return {
+			"ok": false,
+			"reason": "simulation_runtime_surface_cache_restore_failed",
+			"detail": String(surface_cache_result.get("reason", "")),
+		}
 	var environment_result: Dictionary
 	if schema_version < RUNTIME_SNAPSHOT_SCHEMA_VERSION:
 		environment_result = next_environment_store.initialize(
@@ -1225,6 +1321,7 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 	tier_state = next_tier_state
 	tier_router = next_tier_router
 	environment_state_store = next_environment_store
+	environment_surface_cache = next_surface_cache
 	environment_climate_domain = null
 	_environment_climate_profile_id = ""
 	_environment_climate_profile_sha256 = ""

@@ -1,0 +1,300 @@
+extends RefCounted
+class_name EnvironmentSurfaceCacheJob
+
+## P5.0C worker-only immutable SDF surface derivation.
+## No SceneTree, runtime or terrain authority is mutated from this object.
+
+const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
+const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
+const SurfaceCache := preload("res://scripts/simulation/environment_surface_cache.gd")
+
+const PROBE_STEP := 0.5
+const BINARY_STEPS := 10
+const NEIGHBOR_NORTH := 0
+const NEIGHBOR_EAST := 1
+const NEIGHBOR_SOUTH := 2
+const NEIGHBOR_WEST := 3
+
+var scope_id: String
+var seed: int
+var generator_version: int
+var region_key: Vector2i
+var terrain_revision: int
+var terrain_cache_scope_id: int
+var terrain_effect_revision: int
+var chunk_snapshots: Dictionary
+var queued_usec: int
+
+var worker_started_usec := 0
+var worker_finished_usec := 0
+var worker_thread_id := 0
+var result: Dictionary = {}
+
+
+func _init(
+	scope_id_value: String,
+	seed_value: int,
+	generator_version_value: int,
+	region_key_value: Vector2i,
+	terrain_revision_value: int,
+	terrain_cache_scope_id_value: int,
+	terrain_effect_revision_value: int,
+	chunk_snapshots_value: Dictionary,
+	queued_usec_value: int
+) -> void:
+	scope_id = scope_id_value
+	seed = seed_value
+	generator_version = generator_version_value
+	region_key = region_key_value
+	terrain_revision = terrain_revision_value
+	terrain_cache_scope_id = terrain_cache_scope_id_value
+	terrain_effect_revision = terrain_effect_revision_value
+	chunk_snapshots = chunk_snapshots_value.duplicate(true)
+	queued_usec = queued_usec_value
+
+
+func run() -> void:
+	worker_started_usec = Time.get_ticks_usec()
+	worker_thread_id = OS.get_thread_caller_id()
+	result = _build()
+	worker_finished_usec = Time.get_ticks_usec()
+
+
+func _build() -> Dictionary:
+	var width := SurfaceCache.DEFAULT_GRID_WIDTH
+	var height := SurfaceCache.DEFAULT_GRID_HEIGHT
+	var cell_count := width * height
+	var surface_valid := PackedByteArray()
+	var surface_height_mm := PackedInt64Array()
+	var slope_milli := PackedInt32Array()
+	var neighbor_mask := PackedByteArray()
+	var neighbor_delta_mm := PackedInt64Array()
+	var downhill_neighbor := PackedInt32Array()
+	var downhill_drop_mm := PackedInt64Array()
+
+	surface_valid.resize(cell_count)
+	surface_height_mm.resize(cell_count)
+	slope_milli.resize(cell_count)
+	neighbor_mask.resize(cell_count)
+	neighbor_delta_mm.resize(cell_count * SurfaceCache.NEIGHBOR_COUNT)
+	downhill_neighbor.resize(cell_count)
+	downhill_drop_mm.resize(cell_count)
+	for index in range(cell_count):
+		downhill_neighbor[index] = -1
+
+	var clamped_top_count := 0
+	var missing_surface_count := 0
+	for z in range(height):
+		for x in range(width):
+			var index := z * width + x
+			var local_x := (
+				(float(x) + 0.5)
+				* float(SurfaceCache.DEFAULT_CELL_SIZE_X_MM)
+				/ 1000.0
+			)
+			var local_z := (
+				(float(z) + 0.5)
+				* float(SurfaceCache.DEFAULT_CELL_SIZE_Z_MM)
+				/ 1000.0
+			)
+			var chunk_coordinate := _chunk_for_local(local_x, local_z)
+			if not chunk_snapshots.has(chunk_coordinate):
+				return _failure("surface_cache_chunk_snapshot_missing")
+			var snapshot_value: Variant = chunk_snapshots[chunk_coordinate]
+			if typeof(snapshot_value) != TYPE_DICTIONARY:
+				return _failure("surface_cache_chunk_snapshot_invalid")
+			var snapshot: Dictionary = snapshot_value
+			if snapshot.has("valid") and not bool(snapshot.get("valid", true)):
+				return _failure("surface_cache_chunk_snapshot_invalid")
+			if int(snapshot.get("revision", -1)) != terrain_revision 				or int(snapshot.get("cache_scope_id", -1)) != terrain_cache_scope_id:
+				return _failure("surface_cache_chunk_snapshot_revision_mismatch")
+			var sampled := _sample_top_surface(local_x, local_z, snapshot)
+			if not sampled.get("ok", false):
+				return sampled
+			if bool(sampled.get("valid", false)):
+				surface_valid[index] = 1
+				surface_height_mm[index] = int(sampled["height_mm"])
+				if bool(sampled.get("clamped_top", false)):
+					clamped_top_count += 1
+			else:
+				surface_valid[index] = 0
+				surface_height_mm[index] = roundi(Grid.MIN_BOUND.y * 1000.0)
+				missing_surface_count += 1
+
+	_build_neighbors(
+		surface_valid,
+		surface_height_mm,
+		slope_milli,
+		neighbor_mask,
+		neighbor_delta_mm,
+		downhill_neighbor,
+		downhill_drop_mm,
+		width,
+		height
+	)
+
+	return {
+		"valid": true,
+		"reason": "ok",
+		"record": {
+			"scope_id": scope_id,
+			"region_key": region_key,
+			"world_seed": seed,
+			"generator_version": generator_version,
+			"terrain_revision": terrain_revision,
+			"terrain_cache_scope_id": terrain_cache_scope_id,
+			"terrain_effect_revision": terrain_effect_revision,
+			"grid_width": width,
+			"grid_height": height,
+			"cell_size_x_mm": SurfaceCache.DEFAULT_CELL_SIZE_X_MM,
+			"cell_size_z_mm": SurfaceCache.DEFAULT_CELL_SIZE_Z_MM,
+			"surface_valid": surface_valid,
+			"surface_height_mm": surface_height_mm,
+			"slope_milli": slope_milli,
+			"neighbor_mask": neighbor_mask,
+			"neighbor_delta_mm": neighbor_delta_mm,
+			"downhill_neighbor": downhill_neighbor,
+			"downhill_drop_mm": downhill_drop_mm,
+		},
+		"diagnostics": {
+			"cell_count": cell_count,
+			"clamped_top_count": clamped_top_count,
+			"missing_surface_count": missing_surface_count,
+			"chunk_snapshot_count": chunk_snapshots.size(),
+		},
+	}
+
+
+func _sample_top_surface(
+	local_x: float,
+	local_z: float,
+	snapshot: Dictionary
+) -> Dictionary:
+	var top_y := Grid.MAX_BOUND.y + BrushState.MESHING_QUERY_MARGIN
+	var bottom_y := Grid.MIN_BOUND.y - BrushState.MESHING_QUERY_MARGIN
+	var previous_y := top_y
+	var previous_density := BrushState.sample_density_snapshot(
+		seed,
+		region_key,
+		Vector3(local_x, previous_y, local_z),
+		false,
+		snapshot
+	)
+	if not is_finite(previous_density):
+		return _failure("surface_cache_density_non_finite")
+	if previous_density >= 0.0:
+		return {
+			"ok": true,
+			"valid": true,
+			"height_mm": roundi(top_y * 1000.0),
+			"clamped_top": true,
+		}
+
+	var y := top_y - PROBE_STEP
+	while y >= bottom_y - 0.000001:
+		var density := BrushState.sample_density_snapshot(
+			seed,
+			region_key,
+			Vector3(local_x, y, local_z),
+			false,
+			snapshot
+		)
+		if not is_finite(density):
+			return _failure("surface_cache_density_non_finite")
+		if previous_density <= 0.0 and density >= 0.0:
+			var low_y := y
+			var high_y := previous_y
+			for _step in range(BINARY_STEPS):
+				var mid_y := (low_y + high_y) * 0.5
+				var mid_density := BrushState.sample_density_snapshot(
+					seed,
+					region_key,
+					Vector3(local_x, mid_y, local_z),
+					false,
+					snapshot
+				)
+				if not is_finite(mid_density):
+					return _failure("surface_cache_density_non_finite")
+				if mid_density >= 0.0:
+					low_y = mid_y
+				else:
+					high_y = mid_y
+			return {
+				"ok": true,
+				"valid": true,
+				"height_mm": roundi((low_y + high_y) * 500.0),
+				"clamped_top": false,
+			}
+		previous_y = y
+		previous_density = density
+		y -= PROBE_STEP
+	return {
+		"ok": true,
+		"valid": false,
+		"height_mm": roundi(Grid.MIN_BOUND.y * 1000.0),
+		"clamped_top": false,
+	}
+
+
+func _build_neighbors(
+	surface_valid: PackedByteArray,
+	surface_height_mm: PackedInt64Array,
+	slope_milli: PackedInt32Array,
+	neighbor_mask: PackedByteArray,
+	neighbor_delta_mm: PackedInt64Array,
+	downhill_neighbor: PackedInt32Array,
+	downhill_drop_mm: PackedInt64Array,
+	width: int,
+	height: int
+) -> void:
+	var directions := [
+		Vector2i(0, -1),
+		Vector2i(1, 0),
+		Vector2i(0, 1),
+		Vector2i(-1, 0),
+	]
+	var run_mm := mini(
+		SurfaceCache.DEFAULT_CELL_SIZE_X_MM,
+		SurfaceCache.DEFAULT_CELL_SIZE_Z_MM
+	)
+	for z in range(height):
+		for x in range(width):
+			var index := z * width + x
+			if int(surface_valid[index]) == 0:
+				continue
+			var current_height := int(surface_height_mm[index])
+			var mask := 0
+			var max_abs_delta := 0
+			var best_drop := 0
+			var best_neighbor := -1
+			for direction_index in range(SurfaceCache.NEIGHBOR_COUNT):
+				var neighbor_coordinate: Vector2i = Vector2i(x, z) + directions[direction_index]
+				if neighbor_coordinate.x < 0 or neighbor_coordinate.x >= width 					or neighbor_coordinate.y < 0 or neighbor_coordinate.y >= height:
+					continue
+				var neighbor_index: int = neighbor_coordinate.y * width + neighbor_coordinate.x
+				if int(surface_valid[neighbor_index]) == 0:
+					continue
+				mask |= 1 << direction_index
+				var delta := current_height - int(surface_height_mm[neighbor_index])
+				neighbor_delta_mm[index * SurfaceCache.NEIGHBOR_COUNT + direction_index] = delta
+				max_abs_delta = maxi(max_abs_delta, absi(delta))
+				if delta > best_drop:
+					best_drop = delta
+					best_neighbor = neighbor_index
+			neighbor_mask[index] = mask
+			slope_milli[index] = int(max_abs_delta * 1000 / maxi(1, run_mm))
+			downhill_neighbor[index] = best_neighbor
+			downhill_drop_mm[index] = best_drop
+
+
+func _chunk_for_local(local_x: float, local_z: float) -> Vector2i:
+	var chunk_width := float(Grid.CELLS_PER_CHUNK_X) * Grid.SAMPLE_STEP
+	var chunk_depth := float(Grid.CELLS_PER_CHUNK_Z) * Grid.SAMPLE_STEP
+	return Vector2i(
+		clampi(floori(local_x / chunk_width), 0, Grid.CHUNK_COUNT_X - 1),
+		clampi(floori(local_z / chunk_depth), 0, Grid.CHUNK_COUNT_Z - 1)
+	)
+
+
+func _failure(reason: String) -> Dictionary:
+	return {"valid": false, "ok": false, "reason": reason}

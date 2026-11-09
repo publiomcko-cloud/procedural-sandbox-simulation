@@ -1,6 +1,6 @@
 # P5 — Environment and Hydrology Plan
 
-Status: **OWNER-DEFINED EXECUTION PLAN / P5.0A IMPLEMENTED / LATER SLICES NOT YET IMPLEMENTED**
+Status: **OWNER-DEFINED EXECUTION PLAN / P5.0A IMPLEMENTED / P5.0B IMPLEMENTED-PENDING-QUALIFICATION / P5.0C IMPLEMENTED-PENDING-QUALIFICATION / P5.0D-G NOT YET IMPLEMENTED**
 
 This document freezes the P5 scope previously defined during architecture planning. It is the roadmap-level source of truth for P5 sequencing. Slice specifications may refine implementation details, but must not silently widen or reorder this scope.
 
