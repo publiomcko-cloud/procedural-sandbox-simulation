@@ -370,6 +370,10 @@ func _read_simulation_candidate(
 	var content_validation: Dictionary = validator.validate_material_state_content(
 		object_stream.registry
 	)
+	if content_validation.get("ok", false):
+		content_validation = validator.validate_environment_climate_content(
+			object_stream.registry
+		)
 	validator.free()
 	if not content_validation.get("ok", false):
 		return {
@@ -434,6 +438,10 @@ func _save_simulation_state(terrain_generation: int) -> bool:
 	var content_validation: Dictionary = simulation_runtime.validate_material_state_content(
 		object_stream.registry
 	)
+	if content_validation.get("ok", false):
+		content_validation = simulation_runtime.validate_environment_climate_content(
+			object_stream.registry
+		)
 	if not content_validation.get("ok", false):
 		_simulation_persistence_status = "Simulation save blocked (%s)" % content_validation.get("reason", "invalid")
 		_simulation_persistence_blocked = true
