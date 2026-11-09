@@ -103,7 +103,7 @@ var terrain_effect_runtime: RefCounted
 var _terrain_effect_status := "Terrain-object effects unavailable"
 var _material_content_domain: RefCounted
 var _climate_content_domain: RefCounted
-var _environment_visual: EnvironmentVisualPresentation
+var _environment_visual
 var _simulation_material_profile_id := ""
 var _simulation_climate_profile_id := ""
 var _surface_cache_pending: Dictionary = {}
