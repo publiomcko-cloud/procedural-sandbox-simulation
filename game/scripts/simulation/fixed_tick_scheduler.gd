@@ -45,6 +45,9 @@ var _peak_backlog_ticks := 0
 var _peak_ticks_admitted_per_frame := 0
 var _last_admitted_ticks := 0
 var _last_newly_due_ticks := 0
+var _last_admission_limit := -1
+var _frames_backpressured := 0
+var _ticks_deferred_by_backpressure := 0
 
 
 func initialize(
@@ -77,13 +80,20 @@ func initialize(
 	}
 
 
-func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
+func process_elapsed_usec(elapsed_usec: int, admission_limit: int = -1) -> Dictionary:
 	if not initialized:
 		return _failure("scheduler_not_initialized")
 	if elapsed_usec < 0:
 		return _failure("elapsed_usec_negative")
 	if elapsed_usec > MAX_ELAPSED_USEC_PER_CALL:
 		return _failure("elapsed_usec_exceeds_bound")
+	if admission_limit < -1 or admission_limit > MAX_TICKS_PER_FRAME_HARD:
+		return _failure("scheduler_admission_limit_invalid")
+	var effective_limit := (
+		_max_ticks_per_frame
+		if admission_limit < 0
+		else mini(_max_ticks_per_frame, admission_limit)
+	)
 
 	_frames_processed += 1
 	var newly_due_ticks: int = 0
@@ -93,7 +103,7 @@ func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
 	if _paused:
 		if _manual_step_ticks > 0:
 			source = "manual_step"
-			admitted_ticks = mini(_manual_step_ticks, _max_ticks_per_frame)
+			admitted_ticks = mini(_manual_step_ticks, effective_limit)
 			var consumed_backlog_ticks: int = mini(admitted_ticks, _backlog_ticks)
 			_backlog_ticks -= consumed_backlog_ticks
 			_manual_step_ticks -= admitted_ticks
@@ -107,7 +117,7 @@ func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
 		_accumulator_usec = next_accumulator_usec
 		_backlog_ticks += newly_due_ticks
 		_peak_backlog_ticks = maxi(_peak_backlog_ticks, _backlog_ticks)
-		admitted_ticks = mini(_backlog_ticks, _max_ticks_per_frame)
+		admitted_ticks = mini(_backlog_ticks, effective_limit)
 		_backlog_ticks -= admitted_ticks
 
 	var first_tick: int = -1
@@ -123,8 +133,21 @@ func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
 	if _backlog_ticks > 0:
 		_frames_with_backlog += 1
 
+	var normal_capacity := _max_ticks_per_frame
+	var demand := (
+		_manual_step_ticks + admitted_ticks
+		if _paused
+		else _backlog_ticks + admitted_ticks
+	)
+	var normal_admission := mini(demand, normal_capacity)
+	var deferred_by_backpressure := maxi(0, normal_admission - admitted_ticks)
+	if deferred_by_backpressure > 0:
+		_frames_backpressured += 1
+		_ticks_deferred_by_backpressure += deferred_by_backpressure
+
 	_last_admitted_ticks = admitted_ticks
 	_last_newly_due_ticks = newly_due_ticks
+	_last_admission_limit = admission_limit
 	return {
 		"ok": true,
 		"reason": "ok",
@@ -140,6 +163,10 @@ func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
 		"backlog_ticks": _backlog_ticks,
 		"manual_step_ticks": _manual_step_ticks,
 		"paused": _paused,
+		"admission_limit": admission_limit,
+		"effective_admission_limit": effective_limit,
+		"backpressure_limited": deferred_by_backpressure > 0,
+		"ticks_deferred_by_backpressure": deferred_by_backpressure,
 	}
 
 
@@ -275,6 +302,9 @@ func get_metrics() -> Dictionary:
 		"peak_ticks_admitted_per_frame": _peak_ticks_admitted_per_frame,
 		"last_admitted_ticks": _last_admitted_ticks,
 		"last_newly_due_ticks": _last_newly_due_ticks,
+		"last_admission_limit": _last_admission_limit,
+		"frames_backpressured": _frames_backpressured,
+		"ticks_deferred_by_backpressure": _ticks_deferred_by_backpressure,
 	}
 
 
@@ -316,6 +346,9 @@ func _reset_telemetry() -> void:
 	_peak_ticks_admitted_per_frame = 0
 	_last_admitted_ticks = 0
 	_last_newly_due_ticks = 0
+	_last_admission_limit = -1
+	_frames_backpressured = 0
+	_ticks_deferred_by_backpressure = 0
 
 
 func _has_exact_keys(value: Dictionary, expected: Array) -> bool:
