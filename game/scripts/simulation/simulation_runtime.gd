@@ -857,6 +857,61 @@ func validate_material_state_content(registry: RefCounted) -> Dictionary:
 	}
 
 
+func validate_environment_climate_content(registry: RefCounted) -> Dictionary:
+	if not initialized or environment_state_store == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	if registry == null:
+		return {"ok": false, "reason": "environment_climate_registry_unavailable"}
+	var checked: Dictionary = {}
+	var scoped := 0
+	for scope_id in environment_state_store.get_scope_ids():
+		var record: Dictionary = environment_state_store.get_scope(scope_id)
+		var profile_id := String(record.get("profile_id", ""))
+		var profile_sha := String(record.get("profile_sha256", ""))
+		if profile_id.is_empty() and profile_sha.is_empty():
+			continue
+		if profile_id.is_empty() or profile_sha.length() != 64:
+			return {
+				"ok": false,
+				"reason": "environment_profile_pin_invalid",
+				"scope_id": scope_id,
+			}
+		scoped += 1
+		var key := "%s|%s" % [profile_id, profile_sha]
+		if checked.has(key):
+			continue
+		var pin: Dictionary = registry.pin_content_record(
+			EnvironmentClimateDomainScript.PROFILE_TYPE, profile_id
+		)
+		if not pin.get("ok", false):
+			return {
+				"ok": false,
+				"reason": "environment_climate_persisted_profile_missing",
+				"profile_id": profile_id,
+			}
+		var fingerprint: Dictionary = pin.get("fingerprint", {})
+		var verified: Dictionary = registry.validate_content_fingerprint(fingerprint)
+		if not verified.get("ok", false):
+			return {
+				"ok": false,
+				"reason": "environment_climate_persisted_profile_invalid",
+				"profile_id": profile_id,
+			}
+		if String(fingerprint.get("content_sha256", "")) != profile_sha:
+			return {
+				"ok": false,
+				"reason": "environment_climate_persisted_profile_pin_conflict",
+				"profile_id": profile_id,
+			}
+		checked[key] = true
+	return {
+		"ok": true,
+		"reason": "ok",
+		"environment_climate_scope_count": scoped,
+		"validated_binding_count": checked.size(),
+	}
+
+
 func consume_last_scheduler_result() -> Dictionary:
 	var result: Dictionary = _last_result.duplicate(true)
 	_last_result.clear()
