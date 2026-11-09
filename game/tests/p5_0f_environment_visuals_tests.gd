@@ -228,7 +228,7 @@ func _test_bounded_scene_presentation() -> void:
 	var original := runtime.environment.duplicate(true)
 	presenter.call("process_visual_frame", 0.2, Vector3(4, 10, 4), Vector2i.ZERO)
 	var node := presenter.get_node("Water_0_0") as MeshInstance3D
-	_check(node.visible and node.mesh != null and node.mesh.surface_get_count() == 1, "one regional shoreline MeshInstance renders the three water cells")
+	_check(node.visible and node.mesh != null and node.mesh.get_surface_count() == 1, "one regional shoreline MeshInstance renders the three water cells")
 	_check(node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() == 72, "R2 one 3-cell water mesh carries 24 triangles")
 	_check(presenter.get_node("DerivedRain").visible, "pinned nonzero precipitation produces rain")
 	_check(runtime.environment == original, "rendering does not commit or mutate environment authority")
