@@ -780,6 +780,19 @@ func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
 			)
 			return router_result
 
+	var next_environment_store: RefCounted = environment_state_store
+	if next_environment_store == null or not next_environment_store.is_initialized():
+		next_environment_store = EnvironmentStateStoreScript.new()
+		var environment_result: Dictionary = next_environment_store.initialize(
+			EnvironmentStateStoreScript.DEFAULT_GRID_WIDTH,
+			EnvironmentStateStoreScript.DEFAULT_GRID_HEIGHT,
+			int(next_tier_state.get_authoritative_snapshot().get(
+				"max_scopes", DEFAULT_MAX_SIMULATION_SCOPES
+			))
+		)
+		if not environment_result.get("ok", false):
+			return environment_result
+
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
 	material_bridge = null
@@ -789,6 +802,8 @@ func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
 	scheduler = next_scheduler
 	tier_state = next_tier_state
 	tier_router = next_tier_router
+	environment_state_store = next_environment_store
+	_environment_tick_admission_limit = -1
 	_fractional_usec = 0.0
 	_last_result = {}
 	initialization_error = ""
@@ -817,6 +832,13 @@ func restore_simulation_tier_snapshot(snapshot: Dictionary) -> Dictionary:
 		)
 		if not compatibility.get("ok", false):
 			return compatibility
+	if environment_state_store != null and environment_state_store.is_initialized():
+		var environment_compatibility := _validate_environment_scope_compatibility(
+			environment_state_store.get_authoritative_snapshot(),
+			next_tier_state
+		)
+		if not environment_compatibility.get("ok", false):
+			return environment_compatibility
 
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
@@ -851,6 +873,7 @@ func restore_simulation_router_snapshot(snapshot: Dictionary) -> Dictionary:
 		world_scope_lifecycle.reset_transient()
 	world_scope_lifecycle = null
 	tier_router = next_router
+	_environment_tick_admission_limit = -1
 	return {
 		"ok": true,
 		"reason": "ok",
