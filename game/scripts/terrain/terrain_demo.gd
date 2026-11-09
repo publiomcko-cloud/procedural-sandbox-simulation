@@ -1889,9 +1889,16 @@ func _queue_surface_cache_region(region_key: Vector2i) -> void:
 		and int(cached.get("terrain_revision", -1)) == terrain_revision
 		and int(cached.get("terrain_cache_scope_id", -1)) == terrain_cache_scope_id
 		and int(cached.get("terrain_effect_revision", -1)) == terrain_effect_revision
+		and (
+			not simulation_runtime.has_environment_hydrology()
+			or not is_instance_valid(_environment_visual)
+			or _environment_visual.has_region_shoreline_samples(region_key, cached)
+		)
 	):
 		_surface_cache_pending.erase(id)
 		return
+	if is_instance_valid(_environment_visual):
+		_environment_visual.invalidate_region_shoreline_samples(region_key)
 	_surface_cache_pending[id] = {
 		"region_key": region_key,
 		"scope_id": scope_id,
