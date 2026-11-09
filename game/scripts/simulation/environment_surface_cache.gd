@@ -80,7 +80,7 @@ func expect_scope(
 		return _failure("surface_cache_not_initialized")
 	if not _valid_scope_id(scope_id):
 		return _failure("surface_cache_scope_id_invalid")
-	if generator_version < 0 or terrain_revision < 0 or terrain_cache_scope_id <= 0 		or terrain_effect_revision < 0:
+	if generator_version < 0 or terrain_revision < 0 or terrain_cache_scope_id == 0 		or terrain_effect_revision < 0:
 		return _failure("surface_cache_provenance_invalid")
 	if not _expected.has(scope_id) and _expected.size() >= _max_scopes:
 		return _failure("surface_cache_scope_limit_reached")
@@ -220,7 +220,7 @@ func _validate_record(record: Dictionary) -> Dictionary:
 	]:
 		if typeof(record[field]) != TYPE_INT:
 			return _failure("surface_cache_record_integer_invalid")
-	if int(record["generator_version"]) < 0 or int(record["terrain_revision"]) < 0 		or int(record["terrain_cache_scope_id"]) <= 0 or int(record["terrain_effect_revision"]) < 0:
+	if int(record["generator_version"]) < 0 or int(record["terrain_revision"]) < 0 		or int(record["terrain_cache_scope_id"]) == 0 or int(record["terrain_effect_revision"]) < 0:
 		return _failure("surface_cache_provenance_invalid")
 	if int(record["grid_width"]) != DEFAULT_GRID_WIDTH 		or int(record["grid_height"]) != DEFAULT_GRID_HEIGHT 		or int(record["cell_size_x_mm"]) != DEFAULT_CELL_SIZE_X_MM 		or int(record["cell_size_z_mm"]) != DEFAULT_CELL_SIZE_Z_MM:
 		return _failure("surface_cache_grid_invalid")
