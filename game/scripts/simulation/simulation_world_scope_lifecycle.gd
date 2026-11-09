@@ -328,6 +328,18 @@ func process_scheduler_frame(
 	}
 
 
+func get_environment_tick_admission_limit(
+	max_ticks_per_frame: int
+) -> int:
+	if not _initialized or _resident.is_empty():
+		return -1
+	if max_ticks_per_frame <= 0:
+		return 0
+	var capacity_per_tick := maxi(1, _resident.size())
+	var bounded_ticks := int(_due_decision_budget / capacity_per_tick)
+	return mini(max_ticks_per_frame, maxi(0, bounded_ticks))
+
+
 func get_persistence_preflight(current_tick: int) -> Dictionary:
 	if not _initialized:
 		return {"ok": true, "reason": "ok", "resident_count": 0}
