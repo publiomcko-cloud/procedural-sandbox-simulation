@@ -92,6 +92,41 @@ func _test_environment_store_contract() -> void:
 	)
 	_check(store.get_scope("region:0,0") == after, "rejected reservoir mutation leaves authority unchanged")
 
+	var saturation: Dictionary = store.commit_batch([
+		_update(
+			after,
+			2,
+			after["surface_water_ul"].duplicate(),
+			after["soil_water_ul"].duplicate(),
+			after["reservoir_kind"].duplicate(),
+			after["reservoir_level_mm"].duplicate(),
+			EnvironmentStoreScript.MAX_EXCHANGE_TOTAL_UL,
+			EnvironmentStoreScript.MAX_EXCHANGE_TOTAL_UL
+		)
+	])
+	_check(saturation.get("ok", false), "large reservoir exchange never reduces infinite source/sink capacity")
+	after = store.get_scope("region:0,0")
+	var beyond_counter: Dictionary = store.commit_batch([
+		_update(
+			after,
+			3,
+			after["surface_water_ul"].duplicate(),
+			after["soil_water_ul"].duplicate(),
+			after["reservoir_kind"].duplicate(),
+			after["reservoir_level_mm"].duplicate(),
+			1,
+			1
+		)
+	])
+	_check(beyond_counter.get("ok", false), "saturated diagnostic counters never block further reservoir exchange")
+	after = store.get_scope("region:0,0")
+	_check(
+		int(after["reservoir_inflow_ul_total"]) == EnvironmentStoreScript.MAX_EXCHANGE_TOTAL_UL
+			and int(after["reservoir_outflow_ul_total"]) == EnvironmentStoreScript.MAX_EXCHANGE_TOTAL_UL,
+		"reservoir lifetime exchange counters saturate deterministically"
+	)
+	_check(int(after["reservoir_level_mm"][0]) == 12_000, "unbounded river exchange does not alter fixed level")
+
 	var snapshot: Dictionary = store.get_authoritative_snapshot()
 	var restored: RefCounted = EnvironmentStoreScript.new()
 	_check(restored.restore_snapshot(snapshot).get("ok", false), "environment snapshot restores")
