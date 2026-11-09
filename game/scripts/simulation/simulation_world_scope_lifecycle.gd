@@ -36,6 +36,7 @@ var _focus_events_total := 0
 var _registrations_total := 0
 var _revisits_total := 0
 var _material_initializations_queued_total := 0
+var _environment_registrations_total := 0
 var _route_observations_total := 0
 var _route_batches_total := 0
 var _due_decisions_total := 0
@@ -150,6 +151,17 @@ func notify_region_published(
 		resident_record["region_key"] = region_key
 		_resident[scope_id] = resident_record
 	_peak_resident_scopes = maxi(_peak_resident_scopes, _resident.size())
+
+	var environment_registration: Dictionary = runtime.register_environment_scope(scope_id)
+	if not environment_registration.get("ok", false):
+		return {
+			"ok": false,
+			"reason": "world_scope_environment_registration_failed",
+			"detail": String(environment_registration.get("reason", "")),
+			"scope_id": scope_id,
+		}
+	if not environment_registration.get("noop", false):
+		_environment_registrations_total += 1
 
 	var observation := _submit_observation(runtime, scope_id, region_key)
 	if not observation.get("ok", false):
@@ -361,6 +373,7 @@ func get_metrics() -> Dictionary:
 		"registrations_total": _registrations_total,
 		"revisits_total": _revisits_total,
 		"material_initializations_queued_total": _material_initializations_queued_total,
+		"environment_registrations_total": _environment_registrations_total,
 		"route_observations_total": _route_observations_total,
 		"route_batches_total": _route_batches_total,
 		"due_decisions_total": _due_decisions_total,
@@ -481,6 +494,7 @@ func _reset_metrics() -> void:
 	_registrations_total = 0
 	_revisits_total = 0
 	_material_initializations_queued_total = 0
+	_environment_registrations_total = 0
 	_route_observations_total = 0
 	_route_batches_total = 0
 	_due_decisions_total = 0
