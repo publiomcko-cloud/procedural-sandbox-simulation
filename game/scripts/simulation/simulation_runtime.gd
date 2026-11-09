@@ -19,6 +19,7 @@ const EnvironmentStateStoreScript := preload("res://scripts/simulation/environme
 const EnvironmentSurfaceCacheScript := preload("res://scripts/simulation/environment_surface_cache.gd")
 const EnvironmentClimateDomainScript := preload("res://scripts/simulation/environment_climate_domain.gd")
 const EnvironmentRunoffDomainScript := preload("res://scripts/simulation/environment_runoff_domain.gd")
+const EnvironmentHydrologyDomainScript := preload("res://scripts/simulation/environment_hydrology_domain.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
 const RUNTIME_SNAPSHOT_SCHEMA_VERSION := 3
@@ -67,6 +68,7 @@ var environment_state_store: RefCounted
 var environment_surface_cache: RefCounted
 var environment_climate_domain: RefCounted
 var environment_runoff_domain: RefCounted
+var environment_hydrology_domain: RefCounted
 var initialized := false
 var initialization_error := ""
 
@@ -183,6 +185,7 @@ func initialize_runtime(
 	environment_surface_cache = next_surface_cache
 	environment_climate_domain = null
 	environment_runoff_domain = null
+	environment_hydrology_domain = null
 	_environment_climate_profile_id = ""
 	_environment_climate_profile_sha256 = ""
 	_environment_tick_admission_limit = -1
@@ -222,7 +225,7 @@ func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
 	var started_usec: int = Time.get_ticks_usec() if _perf_trace_enabled else 0
 	var effective_environment_limit := _environment_tick_admission_limit
 	if (
-		(has_environment_climate() or has_environment_runoff())
+		(has_environment_climate() or has_environment_runoff() or has_environment_hydrology())
 		and world_scope_lifecycle != null
 		and world_scope_lifecycle.is_initialized()
 	):
@@ -673,6 +676,7 @@ func configure_environment_climate(
 
 	environment_climate_domain = next_domain
 	environment_runoff_domain = null
+	environment_hydrology_domain = null
 	_environment_climate_profile_id = profile_id
 	_environment_climate_profile_sha256 = sha
 	return {
@@ -717,6 +721,7 @@ func configure_environment_runoff(
 	):
 		return {"ok": false, "reason": "environment_runoff_profile_pin_conflict"}
 	environment_runoff_domain = next_domain
+	environment_hydrology_domain = null
 	return {
 		"ok": true,
 		"reason": "ok",
@@ -730,6 +735,66 @@ func has_environment_runoff() -> bool:
 		environment_runoff_domain != null
 		and has_environment_climate()
 	)
+
+
+func configure_environment_hydrology(
+	world_seed: int,
+	generator_version: int
+) -> Dictionary:
+	if not initialized or environment_state_store == null or environment_surface_cache == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	if not has_environment_runoff():
+		return {"ok": false, "reason": "environment_hydrology_runoff_not_configured"}
+	var next_domain: RefCounted = EnvironmentHydrologyDomainScript.new()
+	var configured: Dictionary = next_domain.initialize(
+		environment_runoff_domain,
+		_environment_climate_profile_id,
+		world_seed,
+		generator_version
+	)
+	if not configured.get("ok", false):
+		return configured
+	environment_hydrology_domain = next_domain
+	return configured
+
+
+func has_environment_hydrology() -> bool:
+	return (
+		environment_hydrology_domain != null
+		and environment_hydrology_domain.is_initialized()
+		and has_environment_runoff()
+	)
+
+
+func process_environment_hydrology_batch(
+	scope_ids: Array,
+	logical_tick: int,
+	max_scope_count: int
+) -> Dictionary:
+	if (
+		not initialized
+		or environment_state_store == null
+		or environment_surface_cache == null
+	):
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	if not has_environment_hydrology():
+		return {"ok": false, "reason": "environment_hydrology_not_configured"}
+	return environment_hydrology_domain.process_due_batch(
+		environment_state_store,
+		environment_surface_cache,
+		scope_ids,
+		logical_tick,
+		max_scope_count
+	)
+
+
+func get_environment_hydrology_metrics() -> Dictionary:
+	if not has_environment_hydrology():
+		return {"enabled": false, "metrics": {}}
+	return {
+		"enabled": true,
+		"metrics": environment_hydrology_domain.get_metrics(),
+	}
 
 
 func process_environment_runoff_scope(
@@ -1157,6 +1222,7 @@ func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
 	environment_surface_cache = next_surface_cache
 	environment_climate_domain = null
 	environment_runoff_domain = null
+	environment_hydrology_domain = null
 	_environment_climate_profile_id = ""
 	_environment_climate_profile_sha256 = ""
 	_environment_tick_admission_limit = -1
@@ -1409,6 +1475,7 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 	environment_surface_cache = next_surface_cache
 	environment_climate_domain = null
 	environment_runoff_domain = null
+	environment_hydrology_domain = null
 	_environment_climate_profile_id = ""
 	_environment_climate_profile_sha256 = ""
 	_environment_tick_admission_limit = -1

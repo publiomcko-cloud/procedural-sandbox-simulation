@@ -587,7 +587,13 @@ func _configure_simulation_streaming() -> void:
 				var runoff_config: Dictionary = simulation_runtime.configure_environment_runoff(
 					object_stream.registry, climate_profile_id
 				)
-				if not runoff_config.get("ok", false):
+				if runoff_config.get("ok", false):
+					var hydrology_config: Dictionary = simulation_runtime.configure_environment_hydrology(
+						world_seed, Field.GENERATOR_VERSION
+					)
+					if not hydrology_config.get("ok", false):
+						_simulation_streaming_status = "World hydrology unavailable (%s)" % hydrology_config.get("reason", "unknown")
+				else:
 					_simulation_streaming_status = "Runoff simulation unavailable (%s)" % runoff_config.get("reason", "unknown")
 			else:
 				_simulation_streaming_status = "Climate simulation unavailable (%s)" % climate_config.get("reason", "unknown")

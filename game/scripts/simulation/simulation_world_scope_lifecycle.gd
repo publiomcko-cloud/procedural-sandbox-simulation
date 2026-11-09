@@ -411,6 +411,8 @@ func get_metrics() -> Dictionary:
 
 
 func _schedule_due_work(runtime: Object, current_tick: int) -> Dictionary:
+	if runtime.has_environment_hydrology():
+		return _schedule_due_work_hydrology(runtime, current_tick)
 	var ids := _sorted_resident_ids()
 	var decisions := 0
 	var queued := 0
@@ -556,6 +558,157 @@ func _schedule_due_work(runtime: Object, current_tick: int) -> Dictionary:
 		"deferred": deferred,
 		"climate_steps": climate_steps,
 		"climate_noops": climate_noops,
+		"runoff_steps": runoff_steps,
+		"runoff_noops": runoff_noops,
+		"runoff_deferred": runoff_deferred,
+	}
+
+
+func _schedule_due_work_hydrology(runtime: Object, current_tick: int) -> Dictionary:
+	var ids := _sorted_resident_ids()
+	var decisions := 0
+	var queued := 0
+	var deferred := 0
+	var runoff_steps := 0
+	var runoff_noops := 0
+	var runoff_deferred := 0
+	var blocked_scope_ids: Dictionary = {}
+	var material_enabled := not _profile_id.is_empty()
+
+	while decisions < _due_decision_budget:
+		var batch_tick := -1
+		for scope_id in ids:
+			if blocked_scope_ids.has(scope_id) or not _resident.has(scope_id):
+				continue
+			var next_tick := int((_resident[scope_id] as Dictionary).get(
+				"next_tick", current_tick + 1
+			))
+			if next_tick <= current_tick and (batch_tick < 0 or next_tick < batch_tick):
+				batch_tick = next_tick
+		if batch_tick < 0:
+			break
+
+		var due_scope_ids: Array[String] = []
+		var non_due_scope_ids: Array[String] = []
+		var remaining_budget := _due_decision_budget - decisions
+		for scope_id in ids:
+			if remaining_budget <= 0:
+				break
+			if blocked_scope_ids.has(scope_id) or not _resident.has(scope_id):
+				continue
+			var resident_record: Dictionary = _resident[scope_id]
+			if int(resident_record.get("next_tick", current_tick + 1)) != batch_tick:
+				continue
+			var scope: Dictionary = runtime.get_simulation_scope(scope_id)
+			var state: Dictionary = scope.get("state", {})
+			if material_enabled and not state.has(DomainScript.STATE_KEY):
+				deferred += 1
+				_due_updates_deferred_total += 1
+				blocked_scope_ids[scope_id] = true
+				continue
+			var due: Dictionary = runtime.get_simulation_due_decision(
+				scope_id, batch_tick
+			)
+			if not due.get("ok", false):
+				return {
+					"decisions": decisions,
+					"queued": queued,
+					"deferred": deferred,
+					"climate_steps": 0,
+					"climate_noops": 0,
+					"runoff_steps": runoff_steps,
+					"runoff_noops": runoff_noops,
+					"runoff_deferred": runoff_deferred,
+					"error": String(due.get("reason", "")),
+				}
+			decisions += 1
+			_due_decisions_total += 1
+			remaining_budget -= 1
+			if bool(due.get("due", false)):
+				due_scope_ids.append(scope_id)
+			else:
+				non_due_scope_ids.append(scope_id)
+
+		for scope_id in non_due_scope_ids:
+			var resident_record: Dictionary = _resident[scope_id]
+			resident_record["next_tick"] = batch_tick + 1
+			_resident[scope_id] = resident_record
+
+		if due_scope_ids.is_empty():
+			continue
+
+		var hydrology: Dictionary = runtime.process_environment_hydrology_batch(
+			due_scope_ids,
+			batch_tick,
+			due_scope_ids.size()
+		)
+		if not hydrology.get("ok", false):
+			return {
+				"decisions": decisions,
+				"queued": queued,
+				"deferred": deferred,
+				"climate_steps": 0,
+				"climate_noops": 0,
+				"runoff_steps": runoff_steps,
+				"runoff_noops": runoff_noops,
+				"runoff_deferred": runoff_deferred,
+				"error": String(hydrology.get("reason", "")),
+			}
+
+		var deferred_ids: Array = hydrology.get("deferred_scope_ids", [])
+		for value in deferred_ids:
+			var scope_id := String(value)
+			deferred += 1
+			runoff_deferred += 1
+			_due_updates_deferred_total += 1
+			_runoff_deferred_total += 1
+			blocked_scope_ids[scope_id] = true
+
+		var processed_ids: Array = hydrology.get("processed_scope_ids", [])
+		var committed_count := int(hydrology.get("committed_scope_count", 0))
+		runoff_steps += committed_count
+		_runoff_steps_total += committed_count
+		var noops_in_batch := maxi(0, processed_ids.size() - committed_count)
+		runoff_noops += noops_in_batch
+		_runoff_noops_total += noops_in_batch
+
+		for value in processed_ids:
+			var scope_id := String(value)
+			if not _resident.has(scope_id):
+				continue
+			if material_enabled:
+				var admitted: Dictionary = runtime.enqueue_material_due_step(
+					scope_id, _profile_id, batch_tick
+				)
+				if not admitted.get("ok", false):
+					if admitted.get("reason") == "material_queue_capacity_reached":
+						deferred += 1
+						_due_updates_deferred_total += 1
+						blocked_scope_ids[scope_id] = true
+						continue
+					return {
+						"decisions": decisions,
+						"queued": queued,
+						"deferred": deferred,
+						"climate_steps": 0,
+						"climate_noops": 0,
+						"runoff_steps": runoff_steps,
+						"runoff_noops": runoff_noops,
+						"runoff_deferred": runoff_deferred,
+						"error": String(admitted.get("reason", "")),
+					}
+				queued += 1
+				_due_updates_queued_total += 1
+			var resident_record: Dictionary = _resident[scope_id]
+			resident_record["next_tick"] = batch_tick + 1
+			_resident[scope_id] = resident_record
+
+	return {
+		"decisions": decisions,
+		"queued": queued,
+		"deferred": deferred,
+		"climate_steps": 0,
+		"climate_noops": 0,
 		"runoff_steps": runoff_steps,
 		"runoff_noops": runoff_noops,
 		"runoff_deferred": runoff_deferred,
