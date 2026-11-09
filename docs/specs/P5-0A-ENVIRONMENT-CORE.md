@@ -4,7 +4,7 @@ Status: **IMPLEMENTED / QUALIFICATION PENDING / NOT MERGED**.
 
 ## Purpose
 
-P5.0A introduces the authoritative environmental state foundation used by later P5 climate and hydrology slices. It deliberately does **not** implement rain, infiltration, runoff, terrain-surface sampling or rendering.
+P5.0A introduces the authoritative environmental state foundation used by later P5 climate and hydrology slices. The phase-level sequence and invariants are frozen in [P5 Environment and Hydrology Plan](../roadmap/P5-ENVIRONMENT-HYDROLOGY-PLAN.md). It deliberately does **not** implement rain, infiltration, runoff, terrain-surface sampling or rendering.
 
 P5.0A reuses the integrated P4 contracts:
 
@@ -154,7 +154,7 @@ Focused P5.0A tests must prove:
 - whole-batch rejection on stale cross-scope revision;
 - successful atomic multi-scope commit;
 - scheduler backpressure without lost ticks;
-- schema 2 -> schema 3 migration;
+- schema 1 -> schema 3 and schema 2 -> schema 3 migration;
 - streamed-region environment registration and unload persistence;
 - exact runtime sidecar save/load with packed environmental state.
 
