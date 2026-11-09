@@ -1712,6 +1712,283 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 		})
 
 
+func _surface_cache_scope_id(region_key: Vector2i) -> String:
+	return "region:%d,%d" % [region_key.x, region_key.y]
+
+
+func _queue_surface_cache_region(region_key: Vector2i) -> void:
+	if not is_instance_valid(simulation_runtime) or not simulation_runtime.initialized:
+		return
+	var id := _region_id(region_key)
+	if not active_regions.has(id):
+		return
+	var state: RefCounted = active_regions[id]["world_state"]
+	if state == null or state.brush_edits == null:
+		return
+	var terrain_revision := int(state.brush_edits.revision)
+	var terrain_cache_scope_id := int(state.brush_edits.get_instance_id())
+	var terrain_effect_revision := int(object_stream.get_command_world_revision())
+	var scope_id := _surface_cache_scope_id(region_key)
+	var expectation: Dictionary = simulation_runtime.expect_environment_surface_cache(
+		scope_id,
+		region_key,
+		int(state.world_seed),
+		int(state.generator_version),
+		terrain_revision,
+		terrain_cache_scope_id,
+		terrain_effect_revision
+	)
+	if not expectation.get("ok", false):
+		return
+	var cached: Dictionary = simulation_runtime.get_environment_surface_cache(scope_id)
+	if (
+		not cached.is_empty()
+		and int(cached.get("terrain_revision", -1)) == terrain_revision
+		and int(cached.get("terrain_cache_scope_id", -1)) == terrain_cache_scope_id
+		and int(cached.get("terrain_effect_revision", -1)) == terrain_effect_revision
+	):
+		_surface_cache_pending.erase(id)
+		return
+	_surface_cache_pending[id] = {
+		"region_key": region_key,
+		"scope_id": scope_id,
+		"world_seed": int(state.world_seed),
+		"generator_version": int(state.generator_version),
+		"terrain_revision": terrain_revision,
+		"terrain_cache_scope_id": terrain_cache_scope_id,
+		"terrain_effect_revision": terrain_effect_revision,
+	}
+
+
+func _invalidate_surface_cache_regions(regions: Array) -> void:
+	for region_value in regions:
+		if typeof(region_value) != TYPE_VECTOR2I:
+			continue
+		_queue_surface_cache_region(region_value)
+
+
+func _sync_surface_cache_effect_revision() -> void:
+	var current_revision := int(object_stream.get_command_world_revision())
+	if _surface_cache_last_effect_revision < 0:
+		_surface_cache_last_effect_revision = current_revision
+		return
+	if current_revision == _surface_cache_last_effect_revision:
+		return
+	_surface_cache_last_effect_revision = current_revision
+	var ids: Array[String] = []
+	for id_value in active_regions.keys():
+		ids.append(String(id_value))
+	ids.sort()
+	for id in ids:
+		var entry: Dictionary = active_regions[id]
+		_queue_surface_cache_region(entry["region_key"])
+
+
+func _process_surface_cache_jobs() -> void:
+	if not is_instance_valid(simulation_runtime) or not simulation_runtime.initialized:
+		return
+	_sync_surface_cache_effect_revision()
+
+	var completed: Array[int] = []
+	for task_id_value in _surface_cache_jobs.keys():
+		var task_id := int(task_id_value)
+		if WorkerThreadPool.is_task_completed(task_id):
+			completed.append(task_id)
+	completed.sort()
+	for task_id in completed:
+		WorkerThreadPool.wait_for_task_completion(task_id)
+		if not _surface_cache_jobs.has(task_id):
+			continue
+		var job_record: Dictionary = _surface_cache_jobs[task_id]
+		_surface_cache_jobs.erase(task_id)
+		var id := String(job_record["region_id"])
+		if int(_surface_cache_job_by_region.get(id, -1)) == task_id:
+			_surface_cache_job_by_region.erase(id)
+		var job = job_record["job"]
+		if not active_regions.has(id):
+			_surface_cache_stale_discards_total += 1
+			continue
+		var state: RefCounted = active_regions[id]["world_state"]
+		if (
+			int(state.brush_edits.revision) != int(job.terrain_revision)
+			or int(state.brush_edits.get_instance_id()) != int(job.terrain_cache_scope_id)
+			or int(object_stream.get_command_world_revision()) != int(job.terrain_effect_revision)
+		):
+			_surface_cache_stale_discards_total += 1
+			_queue_surface_cache_region(job.region_key)
+			continue
+		var built: Dictionary = job.result
+		if not built.get("valid", false) or typeof(built.get("record")) != TYPE_DICTIONARY:
+			_surface_cache_worker_failures_total += 1
+			_surface_cache_pending.erase(id)
+			continue
+		var publication: Dictionary = simulation_runtime.publish_environment_surface_cache(
+			built["record"]
+		)
+		if not publication.get("ok", false):
+			if String(publication.get("reason", "")).contains("stale"):
+				_surface_cache_stale_discards_total += 1
+				_queue_surface_cache_region(job.region_key)
+			else:
+				_surface_cache_worker_failures_total += 1
+				_surface_cache_pending.erase(id)
+			continue
+		_surface_cache_publications_total += 1
+		var pending_token: Dictionary = _surface_cache_pending.get(id, {})
+		if (
+			int(pending_token.get("terrain_revision", -1)) == int(job.terrain_revision)
+			and int(pending_token.get("terrain_cache_scope_id", -1))
+				== int(job.terrain_cache_scope_id)
+			and int(pending_token.get("terrain_effect_revision", -1))
+				== int(job.terrain_effect_revision)
+		):
+			_surface_cache_pending.erase(id)
+		if _perf_trace_enabled:
+			PerformanceTrace.emit_duration(
+				"environment_surface_cache_job",
+				int(job.worker_started_usec),
+				{
+					"region": [job.region_key.x, job.region_key.y],
+					"terrain_revision": int(job.terrain_revision),
+					"terrain_effect_revision": int(job.terrain_effect_revision),
+					"worker_usec": maxi(
+						0, int(job.worker_finished_usec) - int(job.worker_started_usec)
+					),
+					"queue_usec": maxi(
+						0, int(job.worker_started_usec) - int(job.queued_usec)
+					),
+					"diagnostics": built.get("diagnostics", {}),
+				},
+				true
+			)
+
+	while (
+		_surface_cache_jobs.size() < MAX_SURFACE_CACHE_JOBS_IN_FLIGHT
+		and _surface_cache_dispatches_this_frame < MAX_SURFACE_CACHE_DISPATCHES_PER_FRAME
+	):
+		var candidates: Array[String] = []
+		for id_value in _surface_cache_pending.keys():
+			var id := String(id_value)
+			if active_regions.has(id) and not _surface_cache_job_by_region.has(id):
+				candidates.append(id)
+		if candidates.is_empty():
+			break
+		candidates.sort_custom(func(a: String, b: String) -> bool:
+			var a_key: Vector2i = active_regions[a]["region_key"]
+			var b_key: Vector2i = active_regions[b]["region_key"]
+			var a_distance := maxi(
+				absi(a_key.x - focus_region_key.x),
+				absi(a_key.y - focus_region_key.y)
+			)
+			var b_distance := maxi(
+				absi(b_key.x - focus_region_key.x),
+				absi(b_key.y - focus_region_key.y)
+			)
+			if a_distance != b_distance:
+				return a_distance < b_distance
+			return a_key.y < b_key.y if a_key.y != b_key.y else a_key.x < b_key.x
+		)
+		var dispatched := _dispatch_surface_cache_job(candidates[0])
+		if dispatched.get("ok", false):
+			_surface_cache_dispatches_this_frame += 1
+			continue
+		if dispatched.get("pending", false):
+			break
+		_surface_cache_pending.erase(candidates[0])
+		_surface_cache_snapshot_failures_total += 1
+
+
+func _dispatch_surface_cache_job(id: String) -> Dictionary:
+	if not active_regions.has(id) or not _surface_cache_pending.has(id):
+		return {"ok": false, "reason": "surface_cache_region_not_pending"}
+	var token: Dictionary = _surface_cache_pending[id]
+	var region_key: Vector2i = token["region_key"]
+	var state: RefCounted = active_regions[id]["world_state"]
+	if (
+		int(state.brush_edits.revision) != int(token["terrain_revision"])
+		or int(state.brush_edits.get_instance_id()) != int(token["terrain_cache_scope_id"])
+		or int(object_stream.get_command_world_revision())
+			!= int(token["terrain_effect_revision"])
+	):
+		_queue_surface_cache_region(region_key)
+		return {"ok": false, "pending": true, "reason": "surface_cache_token_changed"}
+
+	var snapshot_started_usec := Time.get_ticks_usec()
+	var chunk_snapshots: Dictionary = {}
+	for coordinate in ChunkGrid.all_coordinates():
+		var base_snapshot: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
+			region_key, coordinate
+		)
+		if not base_snapshot.get("valid", false):
+			return {
+				"ok": false,
+				"reason": String(base_snapshot.get("storage_error", "surface_cache_snapshot_invalid")),
+			}
+		var prepared := _prepare_terrain_effect_snapshot(
+			base_snapshot,
+			[{"region_key": region_key, "chunk_coordinate": coordinate}]
+		)
+		if not prepared.get("ok", false):
+			if _terrain_effect_snapshot_pending(prepared):
+				return {"ok": false, "pending": true, "reason": "surface_cache_effect_snapshot_pending"}
+			return {
+				"ok": false,
+				"reason": String(prepared.get("reason", "surface_cache_effect_snapshot_invalid")),
+			}
+		var snapshot: Dictionary = prepared["snapshot"]
+		if (
+			int(snapshot.get("revision", -1)) != int(token["terrain_revision"])
+			or int(snapshot.get("cache_scope_id", -1))
+				!= int(token["terrain_cache_scope_id"])
+		):
+			return {"ok": false, "pending": true, "reason": "surface_cache_snapshot_stale"}
+		chunk_snapshots[coordinate] = snapshot
+
+	if (
+		int(state.brush_edits.revision) != int(token["terrain_revision"])
+		or int(object_stream.get_command_world_revision())
+			!= int(token["terrain_effect_revision"])
+	):
+		_queue_surface_cache_region(region_key)
+		return {"ok": false, "pending": true, "reason": "surface_cache_snapshot_superseded"}
+
+	var queued_usec := Time.get_ticks_usec()
+	var job := EnvironmentSurfaceCacheJobScript.new(
+		String(token["scope_id"]),
+		int(token["world_seed"]),
+		int(token["generator_version"]),
+		region_key,
+		int(token["terrain_revision"]),
+		int(token["terrain_cache_scope_id"]),
+		int(token["terrain_effect_revision"]),
+		chunk_snapshots,
+		queued_usec
+	)
+	var task_id := WorkerThreadPool.add_task(
+		Callable(job, "run"), false, "environment SDF surface cache"
+	)
+	if task_id < 0:
+		return {"ok": false, "reason": "surface_cache_worker_rejected"}
+	_surface_cache_jobs[task_id] = {
+		"job": job,
+		"region_id": id,
+		"snapshot_usec": Time.get_ticks_usec() - snapshot_started_usec,
+	}
+	_surface_cache_job_by_region[id] = task_id
+	if _perf_trace_enabled:
+		var snapshot_usec := Time.get_ticks_usec() - snapshot_started_usec
+		if snapshot_usec >= PerformanceTrace.min_usec():
+			PerformanceTrace.emit("environment_surface_cache_snapshot", {
+				"duration_usec": snapshot_usec,
+				"region": [region_key.x, region_key.y],
+				"terrain_revision": int(token["terrain_revision"]),
+				"terrain_effect_revision": int(token["terrain_effect_revision"]),
+				"chunk_snapshot_count": chunk_snapshots.size(),
+				"jobs_in_flight": _surface_cache_jobs.size(),
+			})
+	return {"ok": true, "reason": "ok", "task_id": task_id}
+
+
 func _process_one_chunk_job() -> void:
 	_process_completed_mesh_jobs()
 	_dispatch_mesh_jobs()
