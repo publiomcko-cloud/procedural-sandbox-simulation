@@ -50,3 +50,11 @@ Example Windows PowerShell: `& "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console
 No option preserves the original starting focus. Multiple location options, malformed coordinate pairs, unknown presets or out-of-range values are rejected with a startup console warning without modifying simulation state. The console reports `P5_START_LOCATION` with selected region and estimated candidate base-SDF ocean cells.
 
 **Important:** Potential water eligibility from base SDF does not prove live reservoir binding or successful rendering; saved terrain edits, profile initialization, scene cache and render qualification may change the live observation. No test fixture injects water into gameplay authority.
+
+## Diagnosed ocean-visibility bootstrap defect (P5.0F)
+
+The original playable build provided only the first-party core-rocks package. The environment runtime requires exactly one selected `environment_climate_profile` before configuring climate → runoff → hydrology, so an ocean-start camera position could be correct while no authoritative ocean cells were ever generated. The earlier P5.0F tests used an injected fake registry and therefore did not catch missing default mod content.
+
+Correction: bundle `firstparty.core_climate:temperate` as declarative, data-only content at `game/mods/first-party/core-climate`. The existing single-profile selection path registers it, pins the canonical SHA, and configures hydrology without a parallel simulation or hardcoded climate fallback. If installed user mods introduce multiple climate profiles, the existing explicit-selection requirement remains; no conflicting profile is silently chosen.
+
+A focused integration test now discovers the real first-party mod, binds it into the real climate/runoff/hydrology runtime, commits generated ocean reservoir cells, and checks that the live authoritative state creates water quads. Starting with `-- --start-water=ocean` prints `P5_WATER_DIAG` every two seconds while water remains absent (up to thirty samples), then `P5_WATER_READY` when the focused region has authoritative ocean cells and visible water quads. This diagnoses profile discovery, hydrology activation, surface cache, binding, and rendering separately. Visual/GUI acceptance remains required.
