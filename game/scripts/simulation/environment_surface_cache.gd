@@ -10,6 +10,7 @@ const DEFAULT_GRID_HEIGHT := 6
 const DEFAULT_CELL_SIZE_X_MM := 2000
 const DEFAULT_CELL_SIZE_Z_MM := 2000
 const MAX_SCOPES_HARD := 1_000_000
+const MAX_SCOPE_ID_LENGTH := 256
 const MAX_ABS_HEIGHT_MM := 1_000_000_000
 const MAX_SLOPE_MILLI := 10_000_000
 const NEIGHBOR_COUNT := 4
@@ -295,12 +296,11 @@ func _copy_record(record: Dictionary) -> Dictionary:
 
 
 func _valid_scope_id(scope_id: String) -> bool:
-	if not scope_id.begins_with("region:"):
-		return false
-	var coordinates := scope_id.trim_prefix("region:").split(",")
-	if coordinates.size() != 2:
-		return false
-	return coordinates[0].is_valid_int() and coordinates[1].is_valid_int()
+	return (
+		not scope_id.is_empty()
+		and scope_id == scope_id.strip_edges()
+		and scope_id.length() <= MAX_SCOPE_ID_LENGTH
+	)
 
 
 func _has_exact_fields(value: Dictionary, fields: Array) -> bool:
