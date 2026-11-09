@@ -8,6 +8,7 @@
   "content_roots": [
     "objects/",
     "populations/",
-    "interactions/"
+    "interactions/",
+    "climates/"
   ]
 }
