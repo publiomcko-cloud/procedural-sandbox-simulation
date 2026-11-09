@@ -1,6 +1,6 @@
 # P5 — Environment and Hydrology Plan
 
-Status: **OWNER-DEFINED EXECUTION PLAN / P5.0A QUALIFIED / P5.0B QUALIFIED / P5.0C QUALIFIED / P5.0D QUALIFIED / P5.0E-G NOT YET IMPLEMENTED**
+Status: **OWNER-DEFINED EXECUTION PLAN / P5.0A QUALIFIED / P5.0B QUALIFIED / P5.0C QUALIFIED / P5.0D QUALIFIED / P5.0E IMPLEMENTED-PENDING-QUALIFICATION / P5.0F-G NOT YET IMPLEMENTED**
 
 This document freezes the P5 scope previously defined during architecture planning. It is the roadmap-level source of truth for P5 sequencing. Slice specifications may refine implementation details, but must not silently widen or reorder this scope.
 
@@ -201,6 +201,8 @@ Acceptance gate:
 - cross-region finite transfer cannot partially apply;
 - region unload/reload does not duplicate or lose committed water;
 - deterministic replay across region boundaries is exact.
+
+Implementation note: P5.0E is implemented on `feat/p5-0e-cross-region-hydrology`; see `docs/specs/P5-0E-CROSS-REGION-HYDROLOGY.md`. Qualification remains pending until the exact final branch HEAD passes the cumulative self-hosted runner.
 
 ---
 
