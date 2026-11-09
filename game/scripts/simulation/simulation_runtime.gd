@@ -766,7 +766,7 @@ func has_environment_hydrology() -> bool:
 
 
 func process_environment_hydrology_batch(
-	scope_ids: Array[String],
+	scope_ids: Array,
 	logical_tick: int,
 	max_scope_count: int
 ) -> Dictionary:
