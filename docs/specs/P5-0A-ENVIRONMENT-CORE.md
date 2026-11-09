@@ -76,7 +76,7 @@ Every update carries:
 - complete fixed-size state arrays;
 - reservoir exchange deltas.
 
-Duplicate scopes, stale revisions, malformed arrays, invalid reservoir state or counter overflow reject the entire batch. A state-changing commit must advance `last_environment_tick` strictly; an exact same-tick no-op remains idempotent. This prevents a future rain/runoff step from being applied twice at one logical tick. This is the future cross-region flow transaction boundary.
+Duplicate scopes, stale revisions, malformed arrays, invalid reservoir state or negative exchange deltas reject the entire batch. Lifetime reservoir counters saturate deterministically and never reject otherwise valid exchange. A state-changing commit must advance `last_environment_tick` strictly; an exact same-tick no-op remains idempotent. This prevents a future rain/runoff step from being applied twice at one logical tick. This is the future cross-region flow transaction boundary.
 
 No partial cross-region water transfer is permitted.
 
