@@ -4,6 +4,7 @@ const RuntimeScript := preload("res://scripts/simulation/simulation_runtime.gd")
 const ClimateDomainScript := preload("res://scripts/simulation/environment_climate_domain.gd")
 const EnvironmentStoreScript := preload("res://scripts/simulation/environment_state_store.gd")
 const TierStateScript := preload("res://scripts/simulation/simulation_tier_state.gd")
+const RegistryScript := preload("res://scripts/modding/content_definition_registry.gd")
 
 class FakeClimateRegistry:
 	extends RefCounted
@@ -52,6 +53,7 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	_test_real_registry_ingestion()
 	_test_profile_contract_and_water_accounting()
 	_test_tier_policy()
 	_test_infinite_reservoir_exclusion()
@@ -67,6 +69,49 @@ func _run() -> void:
 			% [assertions, failures]
 		)
 		quit(1)
+
+
+func _test_real_registry_ingestion() -> void:
+	var profile := _profile("test.climate:registry", 123, 45, 10_000, 6)
+	var domain: RefCounted = ClimateDomainScript.new()
+	var registry: RefCounted = RegistryScript.new()
+	_check(
+		registry.register_engine_content_type_handler(
+			domain.create_content_handler()
+		).get("ok", false),
+		"real content registry accepts engine-owned climate handler"
+	)
+	var discovery := {
+		"ok": true,
+		"packages": [{
+			"manifest": {
+				"id": "test.climate",
+				"version": "1.0.0",
+				"schema_version": 1,
+				"requires_engine": "4.7.2",
+				"dependencies": [],
+				"content_roots": ["climate/"],
+				"script_policy": "data_only",
+			},
+			"content_records": [profile],
+		}],
+	}
+	var registered: Dictionary = registry.register_discovered(discovery)
+	_check(registered.get("ok", false), "real registry ingests climate profile as data-only mod content")
+	_check(
+		registry.get_content_record(
+			ClimateDomainScript.PROFILE_TYPE, String(profile["id"])
+		) == profile,
+		"real registry exposes normalized climate profile"
+	)
+	var pin: Dictionary = registry.pin_content_record(
+		ClimateDomainScript.PROFILE_TYPE, String(profile["id"])
+	)
+	_check(
+		pin.get("ok", false)
+			and String(pin["fingerprint"]["content_sha256"]).length() == 64,
+		"real registry produces canonical climate content fingerprint"
+	)
 
 
 func _profile(
