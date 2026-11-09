@@ -2,6 +2,7 @@ extends SceneTree
 
 const VisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
 const EnvironmentStore := preload("res://scripts/simulation/environment_state_store.gd")
+const StartupLocation := preload("res://scripts/simulation/environment_startup_location.gd")
 
 class FakeRuntime:
 	extends Node
@@ -27,6 +28,7 @@ func _run() -> void:
 	_test_pure_water_plan()
 	_test_invalid_inputs()
 	_test_bounded_scene_presentation()
+	_test_startup_locations()
 	if failures == 0:
 		print("P5_0F_ENVIRONMENT_VISUALS_PASS: assertions=%d failures=0" % assertions)
 		quit(0)
@@ -179,6 +181,55 @@ func _test_bounded_scene_presentation() -> void:
 	_check(int(presenter.call("get_visual_metrics")["region_rebuilds_total"]) == 4, "revisit reconstructs derived visuals from authority")
 	presenter.queue_free()
 	runtime.queue_free()
+
+
+func _test_startup_locations() -> void:
+	var normal: Dictionary = StartupLocation.select_from_args(PackedStringArray(), 424242)
+	_check(normal.get("ok", false) and normal.get("mode") == "default", "default startup behavior unchanged")
+	_check(normal.get("target") == Vector3(8.0, 3.1, 6.0), "normal initial camera focus unchanged")
+
+	var manual: Dictionary = StartupLocation.select_from_args(
+		PackedStringArray(["--start-region=-2,13"]), 424242
+	)
+	_check(manual.get("ok", false), "manual negative region coordinates accepted")
+	_check(manual.get("region") == Vector2i(-2, 13), "manual region identity preserved")
+	_check(manual.get("target") == Vector3(-24.0, 3.1, 162.0), "manual region centers camera exactly")
+
+	var position: Dictionary = StartupLocation.select_from_args(
+		PackedStringArray(["--start-position=-27.5,161.25"]), 424242
+	)
+	_check(position.get("ok", false), "manual floating-point world coordinates accepted")
+	_check(position.get("target") == Vector3(-27.5, 3.1, 161.25), "world-space target preserved")
+	_check(position.get("region") == Vector2i(-2, 13), "negative fractional world position maps to proper region")
+
+	var water: Dictionary = StartupLocation.select_from_args(
+		PackedStringArray(["--start-water=ocean"]), 424242
+	)
+	_check(water.get("ok", false), "generated ocean start resolves a candidate")
+	if water.get("ok", false):
+		_check(int(water.get("candidate_water_cells", 0)) >= 1, "ocean start chooses region with base-SDF wet cell")
+		var region: Vector2i = water["region"]
+		_check(region.y >= 10, "ocean starts at or beyond global cell Z threshold")
+		_check(float(water["target"].z) >= 120.0, "ocean start is at or beyond world Z 120 meters")
+		_check(region == StartupLocation.select_from_args(
+			PackedStringArray(["--start-water=ocean"]), 424242
+		).get("region"), "ocean preset is deterministic for identical world seed")
+
+	_check(not StartupLocation.select_from_args(
+		PackedStringArray(["--start-water=lake"]), 424242
+	).get("ok", false), "unknown water preset rejected")
+	_check(not StartupLocation.select_from_args(
+		PackedStringArray(["--start-region=2.1,10"]), 424242
+	).get("ok", false), "fractional region coordinates rejected")
+	_check(not StartupLocation.select_from_args(
+		PackedStringArray(["--start-position=nan,120"]), 424242
+	).get("ok", false), "nonfinite world coordinates rejected")
+	_check(not StartupLocation.select_from_args(
+		PackedStringArray(["--start-region=100000,10"]), 424242
+	).get("ok", false), "out-of-bounds startup coordinates rejected")
+	_check(not StartupLocation.select_from_args(
+		PackedStringArray(["--start-water=ocean", "--start-region=0,10"]), 424242
+	).get("ok", false), "conflicting startup modes rejected")
 
 
 func _check(condition: bool, label: String) -> void:
