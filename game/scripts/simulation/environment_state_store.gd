@@ -80,6 +80,9 @@ var _commit_batches_total := 0
 var _committed_scopes_total := 0
 var _commit_rejections_total := 0
 var _snapshot_restores_total := 0
+var _reservoir_cells := 0
+var _river_cells := 0
+var _ocean_cells := 0
 
 
 func initialize(
@@ -273,8 +276,14 @@ func commit_batch(updates: Array) -> Dictionary:
 	ids.sort()
 	for scope_id_value in ids:
 		var scope_id := String(scope_id_value)
-		var before_revision := int(_scopes[scope_id]["state_revision"])
+		var current_record: Dictionary = _scopes[scope_id]
+		var before_revision := int(current_record["state_revision"])
 		var next_record: Dictionary = staged[scope_id]
+		var before_counts := _reservoir_counts(current_record["reservoir_kind"])
+		var after_counts := _reservoir_counts(next_record["reservoir_kind"])
+		_reservoir_cells += int(after_counts["reservoir"]) - int(before_counts["reservoir"])
+		_river_cells += int(after_counts["river"]) - int(before_counts["river"])
+		_ocean_cells += int(after_counts["ocean"]) - int(before_counts["ocean"])
 		_scopes[scope_id] = next_record
 		committed += 1
 		if int(next_record["state_revision"]) != before_revision:
@@ -356,11 +365,16 @@ func restore_snapshot(snapshot: Dictionary) -> Dictionary:
 	_cell_count = _grid_width * _grid_height
 	_max_scopes = int(snapshot["max_scopes"])
 	_scopes.clear()
+	_reset_metrics()
 	for record_value in snapshot["scopes"]:
 		var record: Dictionary = record_value
-		_scopes[String(record["scope_id"])] = _copy_record(record)
+		var copied := _copy_record(record)
+		_scopes[String(record["scope_id"])] = copied
+		var counts := _reservoir_counts(copied["reservoir_kind"])
+		_reservoir_cells += int(counts["reservoir"])
+		_river_cells += int(counts["river"])
+		_ocean_cells += int(counts["ocean"])
 	_initialized = true
-	_reset_metrics()
 	_snapshot_restores_total = 1
 	return {
 		"ok": true,
@@ -372,51 +386,21 @@ func restore_snapshot(snapshot: Dictionary) -> Dictionary:
 func get_metrics() -> Dictionary:
 	if not _initialized:
 		return {}
-	var reservoir_cells := 0
-	var river_cells := 0
-	var ocean_cells := 0
-	var finite_surface_water_ul := 0
-	var finite_soil_water_ul := 0
-	var reservoir_inflow_ul_total := 0
-	var reservoir_outflow_ul_total := 0
-	for record_value in _scopes.values():
-		var record: Dictionary = record_value
-		var kinds: PackedByteArray = record["reservoir_kind"]
-		var surface: PackedInt64Array = record["surface_water_ul"]
-		var soil: PackedInt64Array = record["soil_water_ul"]
-		for index in range(_cell_count):
-			var kind := int(kinds[index])
-			if kind == RESERVOIR_RIVER:
-				reservoir_cells += 1
-				river_cells += 1
-			elif kind == RESERVOIR_OCEAN:
-				reservoir_cells += 1
-				ocean_cells += 1
-			else:
-				finite_surface_water_ul += int(surface[index])
-				finite_soil_water_ul += int(soil[index])
-		reservoir_inflow_ul_total += int(record["reservoir_inflow_ul_total"])
-		reservoir_outflow_ul_total += int(record["reservoir_outflow_ul_total"])
 	return {
 		"grid_width": _grid_width,
 		"grid_height": _grid_height,
 		"cell_count": _cell_count,
 		"max_scopes": _max_scopes,
 		"scope_count": _scopes.size(),
-		"reservoir_cells": reservoir_cells,
-		"river_cells": river_cells,
-		"ocean_cells": ocean_cells,
-		"finite_surface_water_ul": finite_surface_water_ul,
-		"finite_soil_water_ul": finite_soil_water_ul,
-		"reservoir_inflow_ul_total": reservoir_inflow_ul_total,
-		"reservoir_outflow_ul_total": reservoir_outflow_ul_total,
+		"reservoir_cells": _reservoir_cells,
+		"river_cells": _river_cells,
+		"ocean_cells": _ocean_cells,
 		"registrations_total": _registrations_total,
 		"commit_batches_total": _commit_batches_total,
 		"committed_scopes_total": _committed_scopes_total,
 		"commit_rejections_total": _commit_rejections_total,
 		"snapshot_restores_total": _snapshot_restores_total,
 	}
-
 
 func _validate_config(grid_width: int, grid_height: int, max_scopes: int) -> Dictionary:
 	if (
@@ -576,12 +560,32 @@ func _zero_u8() -> PackedByteArray:
 	return result
 
 
+func _reservoir_counts(kinds_value: Variant) -> Dictionary:
+	var kinds: PackedByteArray = kinds_value
+	var river := 0
+	var ocean := 0
+	for kind_value in kinds:
+		var kind := int(kind_value)
+		if kind == RESERVOIR_RIVER:
+			river += 1
+		elif kind == RESERVOIR_OCEAN:
+			ocean += 1
+	return {
+		"reservoir": river + ocean,
+		"river": river,
+		"ocean": ocean,
+	}
+
+
 func _reset_metrics() -> void:
 	_registrations_total = 0
 	_commit_batches_total = 0
 	_committed_scopes_total = 0
 	_commit_rejections_total = 0
 	_snapshot_restores_total = 0
+	_reservoir_cells = 0
+	_river_cells = 0
+	_ocean_cells = 0
 
 
 func _reject_commit(reason: String) -> Dictionary:
