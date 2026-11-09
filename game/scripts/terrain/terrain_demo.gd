@@ -23,6 +23,7 @@ const MaterialEnvironmentDomainScript := preload("res://scripts/simulation/mater
 const EnvironmentClimateDomainScript := preload("res://scripts/simulation/environment_climate_domain.gd")
 const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/environment_surface_cache_job.gd")
 const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
+const EnvironmentStartupLocation := preload("res://scripts/simulation/environment_startup_location.gd")
 const SimulationRuntimeStoreScript := preload("res://scripts/simulation/simulation_runtime_store.gd")
 const SimulationRuntimeScript := preload("res://scripts/simulation/simulation_runtime.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
@@ -104,6 +105,7 @@ var _terrain_effect_status := "Terrain-object effects unavailable"
 var _material_content_domain: RefCounted
 var _climate_content_domain: RefCounted
 var _environment_visual
+var _startup_location_status := ""
 var _simulation_material_profile_id := ""
 var _simulation_climate_profile_id := ""
 var _surface_cache_pending: Dictionary = {}
@@ -288,6 +290,7 @@ func _ready() -> void:
 		elif saved_world.get("legacy_available", false):
 			_persistence_status = "Schema-1 terrain save detected and preserved; choose a new v2 world explicitly (no migration/import)"
 
+	_apply_startup_location()
 	_material_content_domain = MaterialEnvironmentDomainScript.new()
 	_climate_content_domain = EnvironmentClimateDomainScript.new()
 	var material_handlers: Array[RefCounted] = [
@@ -335,6 +338,32 @@ func _ready() -> void:
 	_update_camera()
 	_reconcile_region_window(true)
 	_update_status()
+
+
+func _apply_startup_location() -> void:
+	var selection: Dictionary = EnvironmentStartupLocation.select_from_args(
+		OS.get_cmdline_user_args(), world_seed
+	)
+	if not selection.get("ok", false):
+		_startup_location_status = "START_LOCATION_INVALID: %s (default focus retained)" % selection.get("reason", "unknown")
+		push_warning(_startup_location_status)
+		print(_startup_location_status)
+		return
+	if String(selection.get("mode", "default")) == "default":
+		return
+	orbit_target = selection["target"]
+	var start_region: Vector2i = selection["region"]
+	_startup_location_status = (
+		"P5_START_LOCATION: mode=%s region=(%d,%d) world_target=(%.2f,%.2f,%.2f) "
+		+ "base_sdf_ocean_cells=%d seed=%d"
+	) % [
+		String(selection["mode"]), start_region.x, start_region.y,
+		orbit_target.x, orbit_target.y, orbit_target.z,
+		int(selection.get("candidate_water_cells", -1)), world_seed
+	]
+	print(_startup_location_status)
+	if String(selection["mode"]) == "ocean":
+		print("P5_START_WATER_NOTE: base SDF eligibility only; live water requires hydrology binding and current terrain cache")
 
 
 func _ensure_simulation_store() -> void:
