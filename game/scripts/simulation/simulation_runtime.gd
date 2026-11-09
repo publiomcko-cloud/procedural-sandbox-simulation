@@ -16,6 +16,7 @@ const MaterialQueueScript := preload("res://scripts/simulation/material_environm
 const MaterialDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const WorldScopeLifecycleScript := preload("res://scripts/simulation/simulation_world_scope_lifecycle.gd")
 const EnvironmentStateStoreScript := preload("res://scripts/simulation/environment_state_store.gd")
+const EnvironmentClimateDomainScript := preload("res://scripts/simulation/environment_climate_domain.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 
 const RUNTIME_SNAPSHOT_SCHEMA_VERSION := 3
@@ -61,6 +62,7 @@ var tier_router: RefCounted
 var material_bridge: RefCounted
 var world_scope_lifecycle: RefCounted
 var environment_state_store: RefCounted
+var environment_climate_domain: RefCounted
 var initialized := false
 var initialization_error := ""
 
@@ -68,6 +70,8 @@ var _fractional_usec := 0.0
 var _last_result: Dictionary = {}
 var _perf_trace_enabled := false
 var _environment_tick_admission_limit := -1
+var _environment_climate_profile_id := ""
+var _environment_climate_profile_sha256 := ""
 
 
 func _ready() -> void:
@@ -162,6 +166,9 @@ func initialize_runtime(
 	tier_state = next_tier_state
 	tier_router = next_tier_router
 	environment_state_store = next_environment_store
+	environment_climate_domain = null
+	_environment_climate_profile_id = ""
+	_environment_climate_profile_sha256 = ""
 	_environment_tick_admission_limit = -1
 	_fractional_usec = 0.0
 	_last_result = {}
@@ -575,9 +582,105 @@ func register_environment_scope(
 		if last_environment_tick == -1
 		else last_environment_tick
 	)
+	var resolved_profile_id := profile_id
+	var resolved_profile_sha256 := profile_sha256
+	if resolved_profile_id.is_empty() and resolved_profile_sha256.is_empty() and has_environment_climate():
+		resolved_profile_id = _environment_climate_profile_id
+		resolved_profile_sha256 = _environment_climate_profile_sha256
 	return environment_state_store.register_scope(
-		scope_id, profile_id, profile_sha256, resolved_tick
+		scope_id, resolved_profile_id, resolved_profile_sha256, resolved_tick
 	)
+
+
+func configure_environment_climate(
+	registry: RefCounted,
+	profile_id: String
+) -> Dictionary:
+	if not initialized or environment_state_store == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	if registry == null:
+		return {"ok": false, "reason": "environment_climate_registry_unavailable"}
+	var next_domain: RefCounted = EnvironmentClimateDomainScript.new()
+	var bind: Dictionary = next_domain.bind_registry_profile(registry, profile_id)
+	if not bind.get("ok", false):
+		return bind
+	var pin: Dictionary = next_domain.get_bound_profile_pin(profile_id)
+	if pin.is_empty():
+		return {"ok": false, "reason": "environment_climate_profile_not_bound"}
+	var sha := String(pin["profile_sha256"])
+
+	for scope_id in environment_state_store.get_scope_ids():
+		var record: Dictionary = environment_state_store.get_scope(scope_id)
+		var existing_id := String(record.get("profile_id", ""))
+		var existing_sha := String(record.get("profile_sha256", ""))
+		if (
+			(not existing_id.is_empty() or not existing_sha.is_empty())
+			and (existing_id != profile_id or existing_sha != sha)
+		):
+			return {
+				"ok": false,
+				"reason": "environment_climate_profile_pin_conflict",
+				"scope_id": scope_id,
+			}
+	for scope_id in environment_state_store.get_scope_ids():
+		var record: Dictionary = environment_state_store.get_scope(scope_id)
+		if String(record.get("profile_id", "")).is_empty():
+			var profile_bind: Dictionary = environment_state_store.bind_scope_profile(
+				scope_id, profile_id, sha
+			)
+			if not profile_bind.get("ok", false):
+				return profile_bind
+
+	environment_climate_domain = next_domain
+	_environment_climate_profile_id = profile_id
+	_environment_climate_profile_sha256 = sha
+	return {
+		"ok": true,
+		"reason": "ok",
+		"profile_id": profile_id,
+		"profile_sha256": sha,
+	}
+
+
+func has_environment_climate() -> bool:
+	return (
+		environment_climate_domain != null
+		and not _environment_climate_profile_id.is_empty()
+		and not _environment_climate_profile_sha256.is_empty()
+	)
+
+
+func process_environment_climate_scope(
+	scope_id: String,
+	logical_tick: int
+) -> Dictionary:
+	if not initialized or environment_state_store == null or tier_state == null:
+		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
+	if not has_environment_climate():
+		return {"ok": false, "reason": "environment_climate_not_configured"}
+	return environment_climate_domain.process_bound_due_scope(
+		environment_state_store,
+		tier_state,
+		scope_id,
+		_environment_climate_profile_id,
+		logical_tick
+	)
+
+
+func get_environment_climate_metrics() -> Dictionary:
+	if not has_environment_climate():
+		return {
+			"enabled": false,
+			"profile_id": "",
+		"profile_sha256": "",
+		"metrics": {},
+		}
+	return {
+		"enabled": true,
+		"profile_id": _environment_climate_profile_id,
+		"profile_sha256": _environment_climate_profile_sha256,
+		"metrics": environment_climate_domain.get_metrics(),
+	}
 
 
 func get_environment_scope(scope_id: String) -> Dictionary:
@@ -810,6 +913,9 @@ func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
 	tier_state = next_tier_state
 	tier_router = next_tier_router
 	environment_state_store = next_environment_store
+	environment_climate_domain = null
+	_environment_climate_profile_id = ""
+	_environment_climate_profile_sha256 = ""
 	_environment_tick_admission_limit = -1
 	_fractional_usec = 0.0
 	_last_result = {}
@@ -1045,6 +1151,9 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 	tier_state = next_tier_state
 	tier_router = next_tier_router
 	environment_state_store = next_environment_store
+	environment_climate_domain = null
+	_environment_climate_profile_id = ""
+	_environment_climate_profile_sha256 = ""
 	_environment_tick_admission_limit = -1
 	_fractional_usec = float(snapshot["fractional_usec"])
 	_last_result = {}
