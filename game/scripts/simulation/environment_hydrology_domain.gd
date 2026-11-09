@@ -71,7 +71,7 @@ func is_initialized() -> bool:
 func process_due_batch(
 	environment_store: RefCounted,
 	surface_cache: RefCounted,
-	scope_ids: Array[String],
+	scope_ids: Array,
 	logical_tick: int,
 	max_scope_count: int
 ) -> Dictionary:
@@ -154,7 +154,7 @@ func process_due_batch(
 func build_batch_snapshot(
 	environment_store: RefCounted,
 	surface_cache: RefCounted,
-	scope_ids: Array[String],
+	scope_ids: Array,
 	logical_tick: int,
 	max_scope_count: int
 ) -> Dictionary:
