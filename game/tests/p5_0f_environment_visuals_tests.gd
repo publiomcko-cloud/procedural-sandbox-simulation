@@ -32,6 +32,7 @@ func _run() -> void:
 	_test_pure_water_plan()
 	_test_invalid_inputs()
 	_test_bounded_scene_presentation()
+	_test_shoreline_clipping()
 	_test_startup_locations()
 	_test_bundled_ocean_end_to_end()
 	if failures == 0:
@@ -140,6 +141,75 @@ func _test_invalid_inputs() -> void:
 	_check(not VisualScript.derive_water_cells(region, _environment(), bad_arrays).get("ok", false), "invalid array lengths rejected")
 
 
+
+func _shoreline(region: Vector2i = Vector2i.ZERO, terrain: Dictionary = {}) -> Dictionary:
+	var heights := PackedInt32Array()
+	var valid := PackedByteArray()
+	heights.resize(17 * 13)
+	valid.resize(heights.size())
+	heights.fill(3000)
+	valid.fill(1)
+	if terrain.is_empty():
+		terrain = _surface(region)
+	return {
+		"ok": true, "width": 17, "height": 13,
+		"height_mm": heights, "valid": valid,
+		"region_key": region,
+		"world_seed": int(terrain.get("world_seed", 42)),
+		"generator_version": int(terrain.get("generator_version", 1)),
+		"terrain_revision": int(terrain.get("terrain_revision", 0)),
+		"terrain_cache_scope_id": int(terrain.get("terrain_cache_scope_id", 1000)),
+		"terrain_effect_revision": int(terrain.get("terrain_effect_revision", 0)),
+	}
+
+
+func _projected_area(vertices: PackedVector3Array) -> float:
+	var area := 0.0
+	for i in range(0, vertices.size(), 3):
+		var a := Vector2(vertices[i].x, vertices[i].z)
+		var b := Vector2(vertices[i + 1].x, vertices[i + 1].z)
+		var c := Vector2(vertices[i + 2].x, vertices[i + 2].z)
+		area += absf((b - a).cross(c - a)) * 0.5
+	return area
+
+
+func _test_shoreline_clipping() -> void:
+	var region := Vector2i(-2, 13)
+	var terrain := _surface(region)
+	var environment := _environment(region)
+	var samples := _shoreline(region, terrain)
+	var original_environment := environment.duplicate(true)
+	var original_terrain := terrain.duplicate(true)
+	var complete: Dictionary = VisualScript.derive_shoreline_geometry(region, environment, terrain, samples)
+	_check(complete.get("ok", false), "R2 same-source shoreline grid generates mesh")
+	if not complete.get("ok", false):
+		return
+	_check(complete["vertices"].size() == 72, "three fully wet hydro cells generate 24 clipped-grid triangles")
+	var full_area := _projected_area(complete["vertices"])
+	_check(is_equal_approx(full_area, 12.0), "three completely wet 2m cells cover 12 square meters")
+	var dry_corner: PackedInt32Array = samples["height_mm"]
+	dry_corner[0] = 6000
+	samples["height_mm"] = dry_corner
+	var clipped: Dictionary = VisualScript.derive_shoreline_geometry(region, environment, terrain, samples)
+	_check(clipped.get("ok", false), "R2 submerged polygon clipping remains valid with dry land")
+	_check(_projected_area(clipped["vertices"]) < full_area, "R2 clipped shoreline has less wet area than uncut quad")
+	_check(_projected_area(clipped["vertices"]) > 0, "R2 partial wet cell retains its submerged area")
+	_check(environment == original_environment and terrain == original_terrain, "R2 mesh derivation cannot mutate authority or SDF cache")
+	dry_corner.fill(6000)
+	samples["height_mm"] = dry_corner
+	var fully_dry: Dictionary = VisualScript.derive_shoreline_geometry(region, environment, terrain, samples)
+	_check(fully_dry.get("ok", false) and fully_dry["vertices"].is_empty(), "R2 all-dry SDF does not draw ocean above land")
+	_check((fully_dry.get("water_cells", -1)) == 0, "R2 no hydrology cells visually drawn when terrain is higher")
+	var invalid_samples := _shoreline(region, terrain)
+	invalid_samples["terrain_revision"] = 42
+	_check(not VisualScript.derive_shoreline_geometry(region, environment, terrain, invalid_samples).get("ok", false), "R2 stale SDF revision fails closed")
+	var wrong_region := _shoreline(Vector2i(1, 1))
+	_check(not VisualScript.derive_shoreline_geometry(region, environment, terrain, wrong_region).get("ok", false), "R2 foreign region samples rejected")
+	var no_samples := _shoreline(region, terrain)
+	no_samples["height_mm"] = PackedInt32Array()
+	_check(not VisualScript.derive_shoreline_geometry(region, environment, terrain, no_samples).get("ok", false), "R2 partial sample array rejected")
+
+
 func _test_bounded_scene_presentation() -> void:
 	var runtime := FakeRuntime.new()
 	get_root().add_child(runtime)
@@ -153,11 +223,13 @@ func _test_bounded_scene_presentation() -> void:
 	}, "sha-fixture")
 	presenter.call("register_region", Vector2i.ZERO)
 	presenter.call("register_region", Vector2i.ZERO)
+	_check(presenter.call("install_region_shoreline_samples", Vector2i.ZERO, runtime.surface, _shoreline()), "R2 scene receives SDF-derived shoreline samples")
 	_check(int(presenter.call("get_visual_metrics")["resident_region_nodes"]) == 1, "repeated publication is idempotent")
 	var original := runtime.environment.duplicate(true)
 	presenter.call("process_visual_frame", 0.2, Vector3(4, 10, 4), Vector2i.ZERO)
-	var node := presenter.get_node("Water_0_0") as MultiMeshInstance3D
-	_check(node.visible and node.multimesh.visible_instance_count == 3, "one region MultiMesh shows three water cells")
+	var node := presenter.get_node("Water_0_0") as MeshInstance3D
+	_check(node.visible and node.mesh != null and node.mesh.surface_get_count() == 1, "one regional shoreline MeshInstance renders the three water cells")
+	_check(node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() == 72, "R2 one 3-cell water mesh carries 24 triangles")
 	_check(presenter.get_node("DerivedRain").visible, "pinned nonzero precipitation produces rain")
 	_check(runtime.environment == original, "rendering does not commit or mutate environment authority")
 	presenter.call("process_visual_frame", 0.2, Vector3(5, 10, 4), Vector2i.ZERO)
@@ -174,7 +246,7 @@ func _test_bounded_scene_presentation() -> void:
 	runtime.environment["surface_water_ul"] = dry
 	runtime.environment["state_revision"] = 3
 	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
-	_check(node.multimesh.visible_instance_count == 2, "new authority revision refreshes finite water visuals")
+	_check(node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() == 48, "new authority revision refreshes finite water shoreline mesh")
 	runtime.environment["profile_sha256"] = "different"
 	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
 	_check(not presenter.get_node("DerivedRain").visible, "rain refuses mismatched climate pin")
@@ -183,7 +255,10 @@ func _test_bounded_scene_presentation() -> void:
 	_check(runtime.environment["state_revision"] == 3, "unload does not delete persistent authority")
 	presenter.call("register_region", Vector2i.ZERO)
 	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
-	_check(int(presenter.call("get_visual_metrics")["region_rebuilds_total"]) == 4, "revisit reconstructs derived visuals from authority")
+	_check(int(presenter.call("get_visual_metrics")["region_rebuilds_total"]) == 3, "R2 revisit defers until a matching SDF shoreline is available")
+	_check(presenter.call("install_region_shoreline_samples", Vector2i.ZERO, runtime.surface, _shoreline()), "R2 regenerated cache attaches to revisited region")
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
+	_check(int(presenter.call("get_visual_metrics")["region_rebuilds_total"]) == 4, "revisit reconstructs the derived water mesh from refreshed SDF")
 	presenter.queue_free()
 	runtime.queue_free()
 
