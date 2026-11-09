@@ -251,10 +251,14 @@ func commit_batch(updates: Array) -> Dictionary:
 
 		var next_record: Dictionary = current.duplicate(true)
 		next_record["last_environment_tick"] = next_tick
-		next_record["surface_water_ul"] = (update["surface_water_ul"] as PackedInt64Array).duplicate()
-		next_record["soil_water_ul"] = (update["soil_water_ul"] as PackedInt64Array).duplicate()
-		next_record["reservoir_kind"] = (update["reservoir_kind"] as PackedByteArray).duplicate()
-		next_record["reservoir_level_mm"] = (update["reservoir_level_mm"] as PackedInt64Array).duplicate()
+		var next_surface: PackedInt64Array = update["surface_water_ul"]
+		var next_soil: PackedInt64Array = update["soil_water_ul"]
+		var next_kinds: PackedByteArray = update["reservoir_kind"]
+		var next_levels: PackedInt64Array = update["reservoir_level_mm"]
+		next_record["surface_water_ul"] = next_surface.duplicate()
+		next_record["soil_water_ul"] = next_soil.duplicate()
+		next_record["reservoir_kind"] = next_kinds.duplicate()
+		next_record["reservoir_level_mm"] = next_levels.duplicate()
 		next_record["reservoir_inflow_ul_total"] = current_inflow + inflow_delta
 		next_record["reservoir_outflow_ul_total"] = current_outflow + outflow_delta
 		if _same_mutable_state(current, next_record):
@@ -529,16 +533,20 @@ func _public_record(record: Dictionary) -> Dictionary:
 
 
 func _copy_record(record: Dictionary) -> Dictionary:
+	var surface: PackedInt64Array = record["surface_water_ul"]
+	var soil: PackedInt64Array = record["soil_water_ul"]
+	var kinds: PackedByteArray = record["reservoir_kind"]
+	var levels: PackedInt64Array = record["reservoir_level_mm"]
 	return {
 		"scope_id": String(record["scope_id"]),
 		"state_revision": int(record["state_revision"]),
 		"profile_id": String(record["profile_id"]),
 		"profile_sha256": String(record["profile_sha256"]),
 		"last_environment_tick": int(record["last_environment_tick"]),
-		"surface_water_ul": (record["surface_water_ul"] as PackedInt64Array).duplicate(),
-		"soil_water_ul": (record["soil_water_ul"] as PackedInt64Array).duplicate(),
-		"reservoir_kind": (record["reservoir_kind"] as PackedByteArray).duplicate(),
-		"reservoir_level_mm": (record["reservoir_level_mm"] as PackedInt64Array).duplicate(),
+		"surface_water_ul": surface.duplicate(),
+		"soil_water_ul": soil.duplicate(),
+		"reservoir_kind": kinds.duplicate(),
+		"reservoir_level_mm": levels.duplicate(),
 		"reservoir_inflow_ul_total": int(record["reservoir_inflow_ul_total"]),
 		"reservoir_outflow_ul_total": int(record["reservoir_outflow_ul_total"]),
 	}
