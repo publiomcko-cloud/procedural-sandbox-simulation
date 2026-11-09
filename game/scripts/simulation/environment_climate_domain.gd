@@ -345,7 +345,7 @@ func _saturating_product(value: int, multiplier: int) -> int:
 	if value <= 0 or multiplier <= 0:
 		return 0
 	var maximum := EnvironmentStoreScript.MAX_WATER_UL_PER_CELL
-	if multiplier >= int(maximum / value) if value > 0 else true:
+	if multiplier >= int(maximum / value):
 		return maximum
 	return mini(maximum, value * multiplier)
 
