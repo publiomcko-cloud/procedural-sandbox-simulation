@@ -584,6 +584,11 @@ func _configure_simulation_streaming() -> void:
 			)
 			if climate_config.get("ok", false):
 				_simulation_climate_profile_id = climate_profile_id
+				var runoff_config: Dictionary = simulation_runtime.configure_environment_runoff(
+					object_stream.registry, climate_profile_id
+				)
+				if not runoff_config.get("ok", false):
+					_simulation_streaming_status = "Runoff simulation unavailable (%s)" % runoff_config.get("reason", "unknown")
 			else:
 				_simulation_streaming_status = "Climate simulation unavailable (%s)" % climate_config.get("reason", "unknown")
 		elif climate_profile_ids.size() > 1:
