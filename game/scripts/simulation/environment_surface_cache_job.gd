@@ -142,9 +142,14 @@ func _build() -> Dictionary:
 
 	var shoreline: Dictionary = {}
 	if build_visual_shoreline:
+		# Visualization is optional. Never fail a valid P5.0C hydrology cache
+		# publication because higher-resolution presentation sampling failed.
 		shoreline = _derive_shoreline_top_samples()
 		if not shoreline.get("ok", false):
-			return _failure(String(shoreline.get("reason", "visual_shoreline_sample_failed")))
+			shoreline = {
+				"ok": false,
+				"reason": String(shoreline.get("reason", "visual_shoreline_sample_failed")),
+			}
 
 	return {
 		"valid": true,
@@ -175,6 +180,8 @@ func _build() -> Dictionary:
 			"clamped_top_count": clamped_top_count,
 			"missing_surface_count": missing_surface_count,
 			"chunk_snapshot_count": chunk_snapshots.size(),
+			"visual_shoreline_ok": (not build_visual_shoreline or bool(shoreline.get("ok", false))),
+			"visual_shoreline_reason": String(shoreline.get("reason", "")),
 			"visual_shoreline_sample_count": (
 				int((shoreline.get("height_mm", PackedInt32Array()) as PackedInt32Array).size())
 				if build_visual_shoreline else 0
