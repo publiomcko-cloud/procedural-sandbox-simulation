@@ -268,10 +268,10 @@ func _build_neighbors(
 			var best_drop := 0
 			var best_neighbor := -1
 			for direction_index in range(SurfaceCache.NEIGHBOR_COUNT):
-				var neighbor_coordinate := Vector2i(x, z) + directions[direction_index]
+				var neighbor_coordinate: Vector2i = Vector2i(x, z) + directions[direction_index]
 				if neighbor_coordinate.x < 0 or neighbor_coordinate.x >= width 					or neighbor_coordinate.y < 0 or neighbor_coordinate.y >= height:
 					continue
-				var neighbor_index := neighbor_coordinate.y * width + neighbor_coordinate.x
+				var neighbor_index: int = neighbor_coordinate.y * width + neighbor_coordinate.x
 				if int(surface_valid[neighbor_index]) == 0:
 					continue
 				mask |= 1 << direction_index
