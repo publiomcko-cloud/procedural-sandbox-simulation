@@ -15,6 +15,12 @@ const NEIGHBOR_EAST := 1
 const NEIGHBOR_SOUTH := 2
 const NEIGHBOR_WEST := 3
 
+# P5.0F-R2 optional, transient high-resolution shoreline samples.
+# No change to the authoritative P5.0C surface-cache record schema.
+const VISUAL_SUBDIVISIONS_PER_HYDRO_CELL := 2
+const VISUAL_SAMPLES_X := SurfaceCache.DEFAULT_GRID_WIDTH * VISUAL_SUBDIVISIONS_PER_HYDRO_CELL + 1
+const VISUAL_SAMPLES_Z := SurfaceCache.DEFAULT_GRID_HEIGHT * VISUAL_SUBDIVISIONS_PER_HYDRO_CELL + 1
+
 var scope_id: String
 var seed: int
 var generator_version: int
@@ -29,6 +35,7 @@ var worker_started_usec := 0
 var worker_finished_usec := 0
 var worker_thread_id := 0
 var result: Dictionary = {}
+var build_visual_shoreline := false
 
 
 func _init(
@@ -133,9 +140,16 @@ func _build() -> Dictionary:
 		height
 	)
 
+	var shoreline: Dictionary = {}
+	if build_visual_shoreline:
+		shoreline = _derive_shoreline_top_samples()
+		if not shoreline.get("ok", false):
+			return _failure(String(shoreline.get("reason", "visual_shoreline_sample_failed")))
+
 	return {
 		"valid": true,
 		"reason": "ok",
+		"visual_shoreline": shoreline,
 		"record": {
 			"scope_id": scope_id,
 			"region_key": region_key,
@@ -162,6 +176,50 @@ func _build() -> Dictionary:
 			"missing_surface_count": missing_surface_count,
 			"chunk_snapshot_count": chunk_snapshots.size(),
 		},
+	}
+
+
+
+## Derived-only terrain heights at a 1m grid (17x13), using exactly the
+## immutable chunk snapshots already used by the P5.0C cache worker.
+## Samples include saved brush edits and terrain-object effect frames.
+func _derive_shoreline_top_samples() -> Dictionary:
+	var samples := PackedInt32Array()
+	var valid := PackedByteArray()
+	samples.resize(VISUAL_SAMPLES_X * VISUAL_SAMPLES_Z)
+	valid.resize(samples.size())
+	var step_x := float(SurfaceCache.DEFAULT_CELL_SIZE_X_MM) / (
+		1000.0 * float(VISUAL_SUBDIVISIONS_PER_HYDRO_CELL)
+	)
+	var step_z := float(SurfaceCache.DEFAULT_CELL_SIZE_Z_MM) / (
+		1000.0 * float(VISUAL_SUBDIVISIONS_PER_HYDRO_CELL)
+	)
+	for z in range(VISUAL_SAMPLES_Z):
+		for x in range(VISUAL_SAMPLES_X):
+			var sample_x := float(x) * step_x
+			var sample_z := float(z) * step_z
+			var chunk := _chunk_for_local(sample_x, sample_z)
+			if not chunk_snapshots.has(chunk):
+				return {"ok": false, "reason": "visual_shoreline_snapshot_missing"}
+			var source: Dictionary = chunk_snapshots[chunk]
+			var sampled: Dictionary = _sample_top_surface(sample_x, sample_z, source)
+			if not sampled.get("ok", false):
+				return {"ok": false, "reason": String(sampled.get("reason", "visual_shoreline_sample_invalid"))}
+			var index := z * VISUAL_SAMPLES_X + x
+			samples[index] = int(sampled.get("height_mm", 0))
+			valid[index] = 1 if bool(sampled.get("valid", false)) else 0
+	return {
+		"ok": true,
+		"width": VISUAL_SAMPLES_X,
+		"height": VISUAL_SAMPLES_Z,
+		"height_mm": samples,
+		"valid": valid,
+		"world_seed": seed,
+		"generator_version": generator_version,
+		"terrain_revision": terrain_revision,
+		"terrain_cache_scope_id": terrain_cache_scope_id,
+		"terrain_effect_revision": terrain_effect_revision,
+		"region_key": region_key,
 	}
 
 
