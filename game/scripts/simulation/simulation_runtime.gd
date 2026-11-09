@@ -5,8 +5,8 @@ class_name SimulationRuntime
 ##
 ## P4.0A owns deterministic fixed logical time. P4.0B owns explicit
 ## active/aggregate/dormant scope authority. P4.0C adds bounded automatic tier
-## routing for explicit scope-distance observations. Domain simulation systems
-## remain outside this node.
+## routing for explicit scope-distance observations. P5.0A adds authoritative
+## environmental scope state plus transient scheduler admission backpressure.
 
 const SchedulerScript := preload("res://scripts/simulation/fixed_tick_scheduler.gd")
 const TierStateScript := preload("res://scripts/simulation/simulation_tier_state.gd")
@@ -262,6 +262,11 @@ func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
 					"backlog_ticks": backlog_ticks,
 					"manual_step_ticks": manual_step_ticks,
 					"paused": bool(result.get("paused", false)),
+					"environment_tick_admission_limit": _environment_tick_admission_limit,
+					"backpressure_limited": bool(result.get("backpressure_limited", false)),
+					"ticks_deferred_by_backpressure": int(
+						result.get("ticks_deferred_by_backpressure", 0)
+					),
 				},
 				true
 			)
@@ -565,7 +570,7 @@ func register_environment_scope(
 		return {"ok": false, "reason": "environment_simulation_scope_missing"}
 	var resolved_tick: int = (
 		int(scheduler.get_current_tick())
-		if last_environment_tick < 0
+		if last_environment_tick == -1
 		else last_environment_tick
 	)
 	return environment_state_store.register_scope(
