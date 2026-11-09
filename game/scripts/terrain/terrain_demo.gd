@@ -106,6 +106,9 @@ var _material_content_domain: RefCounted
 var _climate_content_domain: RefCounted
 var _environment_visual
 var _startup_location_status := ""
+var _start_ocean_probe_enabled := false
+var _start_ocean_probe_elapsed := 0.0
+var _start_ocean_probe_samples := 0
 var _simulation_material_profile_id := ""
 var _simulation_climate_profile_id := ""
 var _surface_cache_pending: Dictionary = {}
@@ -363,7 +366,64 @@ func _apply_startup_location() -> void:
 	]
 	print(_startup_location_status)
 	if String(selection["mode"]) == "ocean":
+		_start_ocean_probe_enabled = true
 		print("P5_START_WATER_NOTE: base SDF eligibility only; live water requires hydrology binding and current terrain cache")
+
+
+func _probe_start_ocean_visual(delta: float) -> void:
+	if _start_ocean_probe_samples >= 30:
+		_start_ocean_probe_enabled = false
+		return
+	_start_ocean_probe_elapsed += maxf(0.0, delta)
+	if _start_ocean_probe_elapsed < 2.0:
+		return
+	_start_ocean_probe_elapsed = 0.0
+	_start_ocean_probe_samples += 1
+	var profile_count := -1
+	if is_instance_valid(object_stream) and object_stream.registry != null:
+		profile_count = object_stream.registry.get_content_record_ids(
+			EnvironmentClimateDomainScript.PROFILE_TYPE
+		).size()
+	var climate_enabled := false
+	var hydrology_enabled := false
+	var environmental_state: Dictionary = {}
+	var surface_cache: Dictionary = {}
+	var scope_id := _surface_cache_scope_id(focus_region_key)
+	if is_instance_valid(simulation_runtime) and simulation_runtime.initialized:
+		climate_enabled = simulation_runtime.has_environment_climate()
+		hydrology_enabled = simulation_runtime.has_environment_hydrology()
+		environmental_state = simulation_runtime.get_environment_scope(scope_id)
+		surface_cache = simulation_runtime.get_environment_surface_cache(scope_id)
+	var ocean_cells := 0
+	var kinds: PackedByteArray = environmental_state.get("reservoir_kind", PackedByteArray())
+	for kind in kinds:
+		if int(kind) == 2:
+			ocean_cells += 1
+	var visible_quads := 0
+	if is_instance_valid(_environment_visual):
+		var water_node := _environment_visual.get_node_or_null(
+			"Water_%d_%d" % [focus_region_key.x, focus_region_key.y]
+		) as MultiMeshInstance3D
+		if water_node != null and water_node.visible:
+			visible_quads = water_node.multimesh.visible_instance_count
+	var ready := ocean_cells > 0 and visible_quads > 0
+	var status_label_text := "P5_WATER_READY" if ready else "P5_WATER_DIAG"
+	print("%s: region=%s candidate=%s profiles=%d climate=%s hydrology=%s scope=%s cache=%s ocean_cells=%d visible_quads=%d state_revision=%d status=%s" % [
+		status_label_text,
+		str(focus_region_key),
+		str(_startup_location_status),
+		profile_count,
+		str(climate_enabled),
+		str(hydrology_enabled),
+		str(not environmental_state.is_empty()),
+		str(not surface_cache.is_empty()),
+		ocean_cells,
+		visible_quads,
+		int(environmental_state.get("state_revision", -1)),
+		_simulation_streaming_status,
+	])
+	if ready:
+		_start_ocean_probe_enabled = false
 
 
 func _ensure_simulation_store() -> void:
@@ -723,6 +783,8 @@ func _process(delta: float) -> void:
 	_process_surface_cache_jobs()
 	if is_instance_valid(_environment_visual):
 		_environment_visual.process_visual_frame(delta, camera.global_position, focus_region_key)
+	if _start_ocean_probe_enabled:
+		_probe_start_ocean_visual(delta)
 	var visual_result: Dictionary = object_stream.consume_last_command_visual_result()
 	if not visual_result.is_empty():
 		if visual_result.get("ok", false):
