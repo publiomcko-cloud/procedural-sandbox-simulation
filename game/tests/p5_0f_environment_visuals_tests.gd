@@ -2,6 +2,10 @@ extends SceneTree
 
 const VisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
 const EnvironmentStore := preload("res://scripts/simulation/environment_state_store.gd")
+const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
+const RegistryScript := preload("res://scripts/modding/content_definition_registry.gd")
+const ClimateScript := preload("res://scripts/simulation/environment_climate_domain.gd")
+const RuntimeScript := preload("res://scripts/simulation/simulation_runtime.gd")
 const StartupLocation := preload("res://scripts/simulation/environment_startup_location.gd")
 
 class FakeRuntime:
@@ -29,6 +33,7 @@ func _run() -> void:
 	_test_invalid_inputs()
 	_test_bounded_scene_presentation()
 	_test_startup_locations()
+	_test_bundled_ocean_end_to_end()
 	if failures == 0:
 		print("P5_0F_ENVIRONMENT_VISUALS_PASS: assertions=%d failures=0" % assertions)
 		quit(0)
@@ -230,6 +235,92 @@ func _test_startup_locations() -> void:
 	_check(not StartupLocation.select_from_args(
 		PackedStringArray(["--start-water=ocean", "--start-region=0,10"]), 424242
 	).get("ok", false), "conflicting startup modes rejected")
+
+
+func _test_bundled_ocean_end_to_end() -> void:
+	# Unlike the pure rendering tests, use actual first-party package discovery,
+	# canonical climate fingerprint, runtime hydrology, and persisted state.
+	var roots: Array[String] = ["res://mods/first-party"]
+	var discovery: Dictionary = Loader.discover_and_validate(roots)
+	_check(discovery.get("ok", false), "bundled mod-first package discovery succeeds")
+	if not discovery.get("ok", false):
+		return
+	var registry: RefCounted = RegistryScript.new()
+	var climate_domain: RefCounted = ClimateScript.new()
+	_check(registry.register_engine_content_type_handler(
+		climate_domain.create_content_handler()
+	).get("ok", false), "climate handler registers alongside first-party packages")
+	var registered: Dictionary = registry.register_discovered(discovery)
+	_check(registered.get("ok", false), "bundled first-party climate JSON validates and registers")
+	if not registered.get("ok", false):
+		return
+	var profile_ids: Array[String] = registry.get_content_record_ids(ClimateScript.PROFILE_TYPE)
+	_check(profile_ids.size() == 1, "default playable bundles exactly one climate profile")
+	if profile_ids.size() != 1:
+		return
+	_check(profile_ids[0] == "firstparty.core_climate:temperate", "default first-party climate has stable namespaced ID")
+	var runtime: Node = RuntimeScript.new()
+	_check(runtime.initialize_runtime(100_000, 4, 0, false).get("ok", false), "ocean runtime initializes")
+	var configured: Dictionary = runtime.configure_environment_climate(registry, profile_ids[0])
+	_check(configured.get("ok", false), "real climate profile binds with canonical content fingerprint")
+	if not configured.get("ok", false):
+		runtime.free()
+		return
+	var runoff: Dictionary = runtime.configure_environment_runoff(registry, profile_ids[0])
+	_check(runoff.get("ok", false), "runoff binds actual bundled climate profile")
+	var hydrology: Dictionary = runtime.configure_environment_hydrology(424242, 1)
+	_check(hydrology.get("ok", false), "ocean hydrology activates with bundled default profile")
+	if not hydrology.get("ok", false):
+		runtime.free()
+		return
+	var region := Vector2i(-4, 13)
+	var scope_id := "region:-4,13"
+	_check(runtime.register_simulation_scope(scope_id, "active").get("ok", false), "ocean simulation scope registers")
+	_check(runtime.register_environment_scope(scope_id).get("ok", false), "ocean environment scope registers")
+	var baseline: Dictionary = runtime.get_environment_scope(scope_id)
+	_check(baseline.get("profile_id") == profile_ids[0], "registered ocean scope inherits the canonical climate pin")
+	_check(runtime.expect_environment_surface_cache(
+		scope_id, region, 424242, 1, 0, 9876, 0
+	).get("ok", false), "ocean surface provenance token is expected")
+	var surface: Dictionary = _surface(region)
+	surface["world_seed"] = 424242
+	surface["terrain_cache_scope_id"] = 9876
+	var heights: PackedInt64Array = surface["surface_height_mm"]
+	heights.fill(3000)
+	surface["surface_height_mm"] = heights
+	var slopes := PackedInt32Array()
+	slopes.resize(48)
+	var masks := PackedByteArray()
+	masks.resize(48)
+	var deltas := PackedInt64Array()
+	deltas.resize(48 * 4)
+	var downhill := PackedInt32Array()
+	downhill.resize(48)
+	downhill.fill(-1)
+	var drops := PackedInt64Array()
+	drops.resize(48)
+	surface["slope_milli"] = slopes
+	surface["neighbor_mask"] = masks
+	surface["neighbor_delta_mm"] = deltas
+	surface["downhill_neighbor"] = downhill
+	surface["downhill_drop_mm"] = drops
+	_check(runtime.publish_environment_surface_cache(surface).get("ok", false), "real runtime accepts derived ocean SDF cache")
+	var batch: Dictionary = runtime.process_environment_hydrology_batch([scope_id], 1, 1)
+	_check(batch.get("ok", false), "real climate+runoff+ocean hydrology batch commits")
+	var authoritative: Dictionary = runtime.get_environment_scope(scope_id)
+	var kinds: PackedByteArray = authoritative.get("reservoir_kind", PackedByteArray())
+	var ocean_cells := 0
+	for kind in kinds:
+		if int(kind) == EnvironmentStore.RESERVOIR_OCEAN:
+			ocean_cells += 1
+	_check(ocean_cells == 48, "real hydrology binds all 48 ocean cells at fixed 4m plane")
+	var plan: Dictionary = VisualScript.derive_water_cells(
+		region, authoritative, runtime.get_environment_surface_cache(scope_id)
+	)
+	_check(plan.get("ok", false), "live runtime ocean authority produces derived visible-water plan")
+	_check((plan.get("cells", []) as Array).size() == ocean_cells, "live ocean cell count matches visual quads")
+	_check(int(authoritative.get("state_revision", 0)) > 0, "ocean binding changes authoritative state revision")
+	runtime.free()
 
 
 func _check(condition: bool, label: String) -> void:
