@@ -246,11 +246,6 @@ func commit_batch(updates: Array) -> Dictionary:
 			return _reject_commit("environment_reservoir_exchange_invalid")
 		var current_inflow := int(current["reservoir_inflow_ul_total"])
 		var current_outflow := int(current["reservoir_outflow_ul_total"])
-		if (
-			inflow_delta > MAX_EXCHANGE_TOTAL_UL - current_inflow
-			or outflow_delta > MAX_EXCHANGE_TOTAL_UL - current_outflow
-		):
-			return _reject_commit("environment_reservoir_exchange_overflow")
 
 		var next_record: Dictionary = current.duplicate(true)
 		next_record["last_environment_tick"] = next_tick
@@ -262,8 +257,12 @@ func commit_batch(updates: Array) -> Dictionary:
 		next_record["soil_water_ul"] = next_soil.duplicate()
 		next_record["reservoir_kind"] = next_kinds.duplicate()
 		next_record["reservoir_level_mm"] = next_levels.duplicate()
-		next_record["reservoir_inflow_ul_total"] = current_inflow + inflow_delta
-		next_record["reservoir_outflow_ul_total"] = current_outflow + outflow_delta
+		next_record["reservoir_inflow_ul_total"] = _saturating_exchange_total(
+			current_inflow, inflow_delta
+		)
+		next_record["reservoir_outflow_ul_total"] = _saturating_exchange_total(
+			current_outflow, outflow_delta
+		)
 		if _same_mutable_state(current, next_record):
 			next_record["state_revision"] = int(current["state_revision"])
 		else:
@@ -437,7 +436,14 @@ func _validate_record(record: Dictionary, expected_cells: int) -> Dictionary:
 		or int(record["reservoir_outflow_ul_total"]) > MAX_EXCHANGE_TOTAL_UL
 	):
 		return _failure("environment_reservoir_exchange_invalid")
-	if not _valid_profile_pin(String(record.get("profile_id", "")), String(record.get("profile_sha256", ""))):
+	if (
+		typeof(record.get("profile_id")) != TYPE_STRING
+		or typeof(record.get("profile_sha256")) != TYPE_STRING
+	):
+		return _failure("environment_profile_pin_invalid")
+	if not _valid_profile_pin(
+		String(record["profile_id"]), String(record["profile_sha256"])
+	):
 		return _failure("environment_profile_pin_invalid")
 	return _validate_state_arrays(
 		record.get("surface_water_ul"),
@@ -499,9 +505,14 @@ func _validate_state_arrays(
 func _valid_profile_pin(profile_id: String, profile_sha256: String) -> bool:
 	if profile_id.is_empty() and profile_sha256.is_empty():
 		return true
-	if profile_id.is_empty() or profile_sha256.length() != 64:
+	if profile_id.is_empty() or profile_id != profile_id.strip_edges():
 		return false
-	return profile_id == profile_id.strip_edges()
+	if profile_sha256.length() != 64:
+		return false
+	for character in profile_sha256:
+		if not "0123456789abcdef".contains(character):
+			return false
+	return true
 
 
 func _valid_scope_id(scope_id: String) -> bool:
@@ -558,6 +569,14 @@ func _zero_u8() -> PackedByteArray:
 	var result := PackedByteArray()
 	result.resize(_cell_count)
 	return result
+
+
+func _saturating_exchange_total(current: int, delta: int) -> int:
+	if delta <= 0:
+		return current
+	if delta >= MAX_EXCHANGE_TOTAL_UL - current:
+		return MAX_EXCHANGE_TOTAL_UL
+	return current + delta
 
 
 func _reservoir_counts(kinds_value: Variant) -> Dictionary:
