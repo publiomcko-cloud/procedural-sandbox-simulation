@@ -1,6 +1,6 @@
 # P5.0E — Rivers, Oceans and Cross-Region Hydrology
 
-Status: **IMPLEMENTED / QUALIFICATION PENDING / STACKED ON P5.0D**
+Status: **IMPLEMENTED / QUALIFIED / STACKED ON P5.0D**
 
 ## Scope
 
