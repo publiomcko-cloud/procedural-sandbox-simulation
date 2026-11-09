@@ -110,6 +110,8 @@ func unregister_region(region_key: Vector2i) -> void:
 	var node: MultiMeshInstance3D = _regions[id]["node"]
 	_regions.erase(id)
 	_region_ids.erase(id)
+	if node.get_parent() == self:
+		remove_child(node)
 	node.queue_free()
 	_cursor = 0 if _region_ids.is_empty() else _cursor % _region_ids.size()
 
