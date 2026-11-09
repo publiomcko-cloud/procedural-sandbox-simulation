@@ -36,3 +36,17 @@ Flat environment-grid quads do not conform to exact bank outlines, rain is a cam
 - game/tests/p5_0f_environment_visuals_tests.gd
 - scripts/ci/run-p5-0f-qualification.ps1
 - .github/workflows/p5-0f-environment-visuals.yml
+
+## Startup location controls (P5.0F owner visual testing)
+
+Pass one of the following Godot user arguments **after** the standalone `--` separator:
+
+- `--start-water=ocean`: searches a bounded base-SDF ocean band (region Z 10..16, region X -6..6) for the most submersible 8x6 environment grid and starts at that region's center. Uses the current loaded world seed, including a saved world's seed.
+- `--start-region=-2,13`: starts focused on the specified integer world region, with its center at world (-24, 162) meters.
+- `--start-position=-27.5,161.25`: starts focused on precise X/Z world coordinates in meters.
+
+Example Windows PowerShell: `& "C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe" --path .\game -- --start-water=ocean`.
+
+No option preserves the original starting focus. Multiple location options, malformed coordinate pairs, unknown presets or out-of-range values are rejected with a startup console warning without modifying simulation state. The console reports `P5_START_LOCATION` with selected region and estimated candidate base-SDF ocean cells.
+
+**Important:** Potential water eligibility from base SDF does not prove live reservoir binding or successful rendering; saved terrain edits, profile initialization, scene cache and render qualification may change the live observation. No test fixture injects water into gameplay authority.
