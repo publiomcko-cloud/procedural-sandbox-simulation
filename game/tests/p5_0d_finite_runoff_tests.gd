@@ -467,6 +467,7 @@ func _test_lifecycle_backpressure() -> void:
 	_check(runtime.configure_environment_runoff(registry, String(profile["id"])).get("ok", false), "lifecycle runoff config succeeds")
 	_check(runtime.configure_world_scope_lifecycle("", 2, 16_000, 12_000, 2).get("ok", false), "lifecycle config accepts bounded due budget")
 	_check(runtime.publish_world_region_scope(Vector2i.ZERO).get("ok", false), "lifecycle publishes environment scope")
+	_check(runtime.update_world_scope_focus(Vector2i.ZERO).get("ok", false), "lifecycle focus routes published scope toward active simulation")
 
 	var deferred_frame: Dictionary = runtime.process_elapsed_usec(100_000)
 	_check(deferred_frame.get("ok", false), "scheduler frame remains valid while runoff awaits surface cache")
