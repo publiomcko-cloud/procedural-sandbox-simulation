@@ -20,6 +20,7 @@ const SharedCornerMeshJob := preload("res://scripts/terrain/shared_surface_corne
 const EntityStateContract := preload("res://scripts/objects/procedural_object_state_contract.gd")
 const TerrainEffectRuntime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
 const MaterialEnvironmentDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
+const EnvironmentClimateDomainScript := preload("res://scripts/simulation/environment_climate_domain.gd")
 const SimulationRuntimeStoreScript := preload("res://scripts/simulation/simulation_runtime_store.gd")
 const SimulationRuntimeScript := preload("res://scripts/simulation/simulation_runtime.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
@@ -97,7 +98,9 @@ var simulation_state_directory_override := ""
 var terrain_effect_runtime: RefCounted
 var _terrain_effect_status := "Terrain-object effects unavailable"
 var _material_content_domain: RefCounted
+var _climate_content_domain: RefCounted
 var _simulation_material_profile_id := ""
+var _simulation_climate_profile_id := ""
 var _simulation_streaming_status := "Simulation streaming unavailable"
 var _simulation_persistence_status := "Simulation state not loaded"
 var _simulation_persistence_blocked := false
@@ -272,8 +275,10 @@ func _ready() -> void:
 			_persistence_status = "Schema-1 terrain save detected and preserved; choose a new v2 world explicitly (no migration/import)"
 
 	_material_content_domain = MaterialEnvironmentDomainScript.new()
+	_climate_content_domain = EnvironmentClimateDomainScript.new()
 	var material_handlers: Array[RefCounted] = [
-		_material_content_domain.create_content_handler()
+		_material_content_domain.create_content_handler(),
+		_climate_content_domain.create_content_handler(),
 	]
 	var object_initialization: Dictionary = object_stream.initialize(
 		world_seed,
@@ -365,6 +370,10 @@ func _read_simulation_candidate(
 	var content_validation: Dictionary = validator.validate_material_state_content(
 		object_stream.registry
 	)
+	if content_validation.get("ok", false):
+		content_validation = validator.validate_environment_climate_content(
+			object_stream.registry
+		)
 	validator.free()
 	if not content_validation.get("ok", false):
 		return {
@@ -429,6 +438,10 @@ func _save_simulation_state(terrain_generation: int) -> bool:
 	var content_validation: Dictionary = simulation_runtime.validate_material_state_content(
 		object_stream.registry
 	)
+	if content_validation.get("ok", false):
+		content_validation = simulation_runtime.validate_environment_climate_content(
+			object_stream.registry
+		)
 	if not content_validation.get("ok", false):
 		_simulation_persistence_status = "Simulation save blocked (%s)" % content_validation.get("reason", "invalid")
 		_simulation_persistence_blocked = true
@@ -531,6 +544,7 @@ func _configure_simulation_streaming() -> void:
 			return
 
 	_simulation_material_profile_id = ""
+	_simulation_climate_profile_id = ""
 	if object_stream.registry != null:
 		var profile_ids: Array[String] = object_stream.registry.get_content_record_ids(
 			MaterialEnvironmentDomainScript.PROFILE_TYPE
@@ -547,6 +561,21 @@ func _configure_simulation_streaming() -> void:
 		elif profile_ids.size() > 1:
 			# Selection policy belongs to world/content configuration, not discovery.
 			_simulation_streaming_status = "Material simulation awaiting explicit profile selection (%d profiles)" % profile_ids.size()
+
+		var climate_profile_ids: Array[String] = object_stream.registry.get_content_record_ids(
+			EnvironmentClimateDomainScript.PROFILE_TYPE
+		)
+		if climate_profile_ids.size() == 1:
+			var climate_profile_id := String(climate_profile_ids[0])
+			var climate_config: Dictionary = simulation_runtime.configure_environment_climate(
+				object_stream.registry, climate_profile_id
+			)
+			if climate_config.get("ok", false):
+				_simulation_climate_profile_id = climate_profile_id
+			else:
+				_simulation_streaming_status = "Climate simulation unavailable (%s)" % climate_config.get("reason", "unknown")
+		elif climate_profile_ids.size() > 1:
+			_simulation_streaming_status = "Climate simulation awaiting explicit profile selection (%d profiles)" % climate_profile_ids.size()
 
 	var lifecycle: Dictionary = simulation_runtime.configure_world_scope_lifecycle(
 		_simulation_material_profile_id,
