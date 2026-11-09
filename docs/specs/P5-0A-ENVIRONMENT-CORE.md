@@ -31,6 +31,8 @@ Each scope stores:
 
 Packed integer arrays are used so the environment store is not constrained by the generic Dictionary node-count limit in P4 tier state.
 
+Dry finite scopes use an implicit-zero representation internally and in snapshots: all four per-cell arrays are empty until water or a reservoir cell exists. Public scope reads expand that representation back to the fixed engine grid. This keeps historical dry-region state compact without changing solver-facing semantics.
+
 ## Infinite river/ocean contract
 
 Each cell is exactly one of:
