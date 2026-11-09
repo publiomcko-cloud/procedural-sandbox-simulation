@@ -44,6 +44,9 @@ var _due_updates_queued_total := 0
 var _due_updates_deferred_total := 0
 var _climate_steps_total := 0
 var _climate_noops_total := 0
+var _runoff_steps_total := 0
+var _runoff_noops_total := 0
+var _runoff_deferred_total := 0
 var _peak_resident_scopes := 0
 var _last_frame_index := -1
 
@@ -302,7 +305,7 @@ func process_scheduler_frame(
 		"queued": 0,
 		"deferred": 0,
 	}
-	if not _profile_id.is_empty() or runtime.has_environment_climate():
+	if not _profile_id.is_empty() or runtime.has_environment_climate() or runtime.has_environment_runoff():
 		due_result = _schedule_due_work(
 			runtime, int(scheduler_result.get("current_tick", 0))
 		)
@@ -325,6 +328,9 @@ func process_scheduler_frame(
 		"due_updates_deferred": int(due_result["deferred"]),
 		"climate_steps": int(due_result.get("climate_steps", 0)),
 		"climate_noops": int(due_result.get("climate_noops", 0)),
+		"runoff_steps": int(due_result.get("runoff_steps", 0)),
+		"runoff_noops": int(due_result.get("runoff_noops", 0)),
+		"runoff_deferred": int(due_result.get("runoff_deferred", 0)),
 	}
 
 
@@ -397,6 +403,9 @@ func get_metrics() -> Dictionary:
 		"due_updates_deferred_total": _due_updates_deferred_total,
 		"climate_steps_total": _climate_steps_total,
 		"climate_noops_total": _climate_noops_total,
+		"runoff_steps_total": _runoff_steps_total,
+		"runoff_noops_total": _runoff_noops_total,
+		"runoff_deferred_total": _runoff_deferred_total,
 		"last_frame_index": _last_frame_index,
 	}
 
@@ -408,6 +417,10 @@ func _schedule_due_work(runtime: Object, current_tick: int) -> Dictionary:
 	var deferred := 0
 	var climate_steps := 0
 	var climate_noops := 0
+	var runoff_steps := 0
+	var runoff_noops := 0
+	var runoff_deferred := 0
+	var blocked_scope_ids: Dictionary = {}
 	if ids.is_empty():
 		return {
 			"decisions": 0,
@@ -415,9 +428,13 @@ func _schedule_due_work(runtime: Object, current_tick: int) -> Dictionary:
 			"deferred": 0,
 			"climate_steps": 0,
 			"climate_noops": 0,
+			"runoff_steps": 0,
+			"runoff_noops": 0,
+			"runoff_deferred": 0,
 		}
 
 	var climate_enabled := bool(runtime.has_environment_climate())
+	var runoff_enabled := bool(runtime.has_environment_runoff())
 	var material_enabled := not _profile_id.is_empty()
 
 	# Fair bounded sweeps. At most one next logical tick per resident per pass.
@@ -427,7 +444,7 @@ func _schedule_due_work(runtime: Object, current_tick: int) -> Dictionary:
 			if decisions >= _due_decision_budget:
 				break
 			var scope_id := String(scope_id_value)
-			if not _resident.has(scope_id):
+			if not _resident.has(scope_id) or blocked_scope_ids.has(scope_id):
 				continue
 			var resident_record: Dictionary = _resident[scope_id]
 			var next_tick := int(resident_record.get("next_tick", current_tick + 1))
@@ -456,7 +473,36 @@ func _schedule_due_work(runtime: Object, current_tick: int) -> Dictionary:
 			_due_decisions_total += 1
 
 			if bool(due.get("due", false)):
-				if climate_enabled:
+				if runoff_enabled:
+					var runoff: Dictionary = runtime.process_environment_runoff_scope(
+						scope_id, next_tick
+					)
+					if not runoff.get("ok", false):
+						return {
+							"decisions": decisions,
+							"queued": queued,
+							"deferred": deferred,
+							"climate_steps": climate_steps,
+							"climate_noops": climate_noops,
+							"runoff_steps": runoff_steps,
+							"runoff_noops": runoff_noops,
+							"runoff_deferred": runoff_deferred,
+							"error": String(runoff.get("reason", "")),
+						}
+					if runoff.get("deferred", false):
+						deferred += 1
+						runoff_deferred += 1
+						_due_updates_deferred_total += 1
+						_runoff_deferred_total += 1
+						blocked_scope_ids[scope_id] = true
+						continue
+					if runoff.get("noop", false):
+						runoff_noops += 1
+						_runoff_noops_total += 1
+					else:
+						runoff_steps += 1
+						_runoff_steps_total += 1
+				elif climate_enabled:
 					var climate: Dictionary = runtime.process_environment_climate_scope(
 						scope_id, next_tick
 					)
@@ -467,6 +513,9 @@ func _schedule_due_work(runtime: Object, current_tick: int) -> Dictionary:
 							"deferred": deferred,
 							"climate_steps": climate_steps,
 							"climate_noops": climate_noops,
+							"runoff_steps": runoff_steps,
+							"runoff_noops": runoff_noops,
+							"runoff_deferred": runoff_deferred,
 							"error": String(climate.get("reason", "")),
 						}
 					if climate.get("noop", false):
@@ -507,6 +556,9 @@ func _schedule_due_work(runtime: Object, current_tick: int) -> Dictionary:
 		"deferred": deferred,
 		"climate_steps": climate_steps,
 		"climate_noops": climate_noops,
+		"runoff_steps": runoff_steps,
+		"runoff_noops": runoff_noops,
+		"runoff_deferred": runoff_deferred,
 	}
 
 
@@ -566,5 +618,8 @@ func _reset_metrics() -> void:
 	_due_updates_deferred_total = 0
 	_climate_steps_total = 0
 	_climate_noops_total = 0
+	_runoff_steps_total = 0
+	_runoff_noops_total = 0
+	_runoff_deferred_total = 0
 	_peak_resident_scopes = 0
 	_last_frame_index = -1
