@@ -233,6 +233,24 @@ func install_region_shoreline_samples(
 	return true
 
 
+
+## Invalidate immediately when the terrain edit changes expected provenance.
+## Prevents the prior coast mesh from lingering while its SDF worker runs.
+func invalidate_region_shoreline_samples(region_key: Vector2i) -> void:
+	var id := _scope_id(region_key)
+	if not _regions.has(id):
+		return
+	var row: Dictionary = _regions[id]
+	row["token"] = ""
+	row["shoreline_token"] = ""
+	row["shoreline"] = {}
+	row["last_vertex_count"] = 0
+	var node: MeshInstance3D = row["node"]
+	node.visible = false
+	node.mesh = null
+	_regions[id] = row
+
+
 func has_region_shoreline_samples(region_key: Vector2i, surface_record: Dictionary) -> bool:
 	var id := _scope_id(region_key)
 	return _regions.has(id) and String(_regions[id].get("shoreline_token", "")) == _surface_identity(surface_record)
