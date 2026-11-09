@@ -224,6 +224,7 @@ func _solve(snapshot: Dictionary) -> Dictionary:
 				entry["surface_cache_token"] as Dictionary
 			).duplicate(true),
 			"finite_initial_ul": int(entry.get("finite_initial_ul", 0)),
+			"pre_binding_finite_initial_ul": int(entry.get("pre_binding_finite_initial_ul", entry.get("finite_initial_ul", 0))),
 			"finite_final_ul": _finite_total(entry),
 			"precipitation_ul": int(entry.get("precipitation_ul", 0)),
 			"evaporation_ul": int(entry.get("evaporation_ul", 0)),
