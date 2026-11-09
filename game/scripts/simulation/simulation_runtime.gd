@@ -676,6 +676,7 @@ func configure_environment_climate(
 
 	environment_climate_domain = next_domain
 	environment_runoff_domain = null
+	environment_hydrology_domain = null
 	_environment_climate_profile_id = profile_id
 	_environment_climate_profile_sha256 = sha
 	return {
