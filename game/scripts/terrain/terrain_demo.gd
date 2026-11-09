@@ -21,6 +21,7 @@ const EntityStateContract := preload("res://scripts/objects/procedural_object_st
 const TerrainEffectRuntime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
 const MaterialEnvironmentDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const EnvironmentClimateDomainScript := preload("res://scripts/simulation/environment_climate_domain.gd")
+const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/environment_surface_cache_job.gd")
 const SimulationRuntimeStoreScript := preload("res://scripts/simulation/simulation_runtime_store.gd")
 const SimulationRuntimeScript := preload("res://scripts/simulation/simulation_runtime.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
@@ -35,6 +36,8 @@ const MAX_MESH_JOB_DISPATCHES_PER_FRAME := 1
 const MESH_SNAPSHOT_FRAME_BUDGET_USEC := 3500
 const MAX_MESH_UPLOADS_PER_FRAME := 4
 const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
+const MAX_SURFACE_CACHE_JOBS_IN_FLIGHT := 2
+const MAX_SURFACE_CACHE_DISPATCHES_PER_FRAME := 1
 const MAX_BUFFERED_BRUSH_REQUESTS := 64
 const EDIT_TRACE_DEFAULT_ENABLED := false
 const DIAGNOSTICS_REFRESH_INTERVAL := 0.25
@@ -101,6 +104,15 @@ var _material_content_domain: RefCounted
 var _climate_content_domain: RefCounted
 var _simulation_material_profile_id := ""
 var _simulation_climate_profile_id := ""
+var _surface_cache_pending: Dictionary = {}
+var _surface_cache_jobs: Dictionary = {}
+var _surface_cache_job_by_region: Dictionary = {}
+var _surface_cache_last_effect_revision := -1
+var _surface_cache_dispatches_this_frame := 0
+var _surface_cache_publications_total := 0
+var _surface_cache_stale_discards_total := 0
+var _surface_cache_snapshot_failures_total := 0
+var _surface_cache_worker_failures_total := 0
 var _simulation_streaming_status := "Simulation streaming unavailable"
 var _simulation_persistence_status := "Simulation state not loaded"
 var _simulation_persistence_blocked := false
@@ -619,6 +631,7 @@ func _process(delta: float) -> void:
 	_process_pending_simulation_save()
 	_mesh_uploads_this_frame = 0
 	_mesh_dispatches_this_frame = 0
+	_surface_cache_dispatches_this_frame = 0
 	_last_frame_ms = maxf(delta * 1000.0, 0.0)
 	if _frame_time_samples.size() == 512:
 		_frame_time_samples[_frame_sample_write_index] = _last_frame_ms
@@ -641,6 +654,7 @@ func _process(delta: float) -> void:
 			_record_stream_error("_terrain_effect_prefetch", _terrain_effect_status)
 	_process_one_chunk_job()
 	object_stream.process_queued_publications()
+	_process_surface_cache_jobs()
 	var visual_result: Dictionary = object_stream.consume_last_command_visual_result()
 	if not visual_result.is_empty():
 		if visual_result.get("ok", false):
