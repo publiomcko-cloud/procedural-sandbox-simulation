@@ -238,11 +238,17 @@ func _test_startup_locations() -> void:
 
 
 func _test_bundled_ocean_end_to_end() -> void:
-	# Unlike the pure rendering tests, use actual first-party package discovery,
-	# canonical climate fingerprint, runtime hydrology, and persisted state.
-	var roots: Array[String] = ["res://mods/first-party"]
+	# Preserve the strict legacy first-party registry contract when the climate
+	# type handler is absent; the playable scene separately opts into profiles.
+	var legacy_roots: Array[String] = ["res://mods/first-party"]
+	var legacy_discovery: Dictionary = Loader.discover_and_validate(legacy_roots)
+	_check(legacy_discovery.get("ok", false), "legacy first-party discovery remains valid")
+	var legacy_registry: RefCounted = RegistryScript.new()
+	_check(legacy_registry.register_discovered(legacy_discovery).get("ok", false), "legacy registry without climate handler remains valid")
+	_check(legacy_registry.get_content_record_ids(ClimateScript.PROFILE_TYPE).is_empty(), "legacy registry does not acquire climate content")
+	var roots: Array[String] = ["res://mods/first-party", "res://mods/environment-presets"]
 	var discovery: Dictionary = Loader.discover_and_validate(roots)
-	_check(discovery.get("ok", false), "bundled mod-first package discovery succeeds")
+	_check(discovery.get("ok", false), "playable mod-first discovery joins base and isolated environment root")
 	if not discovery.get("ok", false):
 		return
 	var registry: RefCounted = RegistryScript.new()
@@ -251,7 +257,7 @@ func _test_bundled_ocean_end_to_end() -> void:
 		climate_domain.create_content_handler()
 	).get("ok", false), "climate handler registers alongside first-party packages")
 	var registered: Dictionary = registry.register_discovered(discovery)
-	_check(registered.get("ok", false), "bundled first-party climate JSON validates and registers")
+	_check(registered.get("ok", false), "playable climate JSON validates and registers")
 	if not registered.get("ok", false):
 		return
 	var profile_ids: Array[String] = registry.get_content_record_ids(ClimateScript.PROFILE_TYPE)
