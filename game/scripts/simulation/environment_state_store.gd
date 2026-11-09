@@ -155,10 +155,10 @@ func register_scope(
 		"profile_id": profile_id,
 		"profile_sha256": profile_sha256,
 		"last_environment_tick": last_environment_tick,
-		"surface_water_ul": _zero_i64(),
-		"soil_water_ul": _zero_i64(),
-		"reservoir_kind": _zero_u8(),
-		"reservoir_level_mm": _zero_i64(),
+		"surface_water_ul": PackedInt64Array(),
+		"soil_water_ul": PackedInt64Array(),
+		"reservoir_kind": PackedByteArray(),
+		"reservoir_level_mm": PackedInt64Array(),
 		"reservoir_inflow_ul_total": 0,
 		"reservoir_outflow_ul_total": 0,
 	}
@@ -224,7 +224,8 @@ func commit_batch(updates: Array) -> Dictionary:
 		if typeof(update.get("reservoir_outflow_ul_delta")) != TYPE_INT:
 			return _reject_commit("environment_reservoir_exchange_invalid")
 
-		var current: Dictionary = _scopes[scope_id]
+		var current_storage: Dictionary = _scopes[scope_id]
+		var current: Dictionary = _public_record(current_storage)
 		if int(update["expected_state_revision"]) != int(current["state_revision"]):
 			return _reject_commit("environment_state_revision_conflict")
 		var next_tick := int(update["last_environment_tick"])
@@ -267,7 +268,7 @@ func commit_batch(updates: Array) -> Dictionary:
 			next_record["state_revision"] = int(current["state_revision"])
 		else:
 			next_record["state_revision"] = int(current["state_revision"]) + 1
-		staged[scope_id] = next_record
+		staged[scope_id] = _compact_record(next_record)
 
 	var committed := 0
 	var changed := 0
@@ -305,7 +306,7 @@ func get_authoritative_snapshot() -> Dictionary:
 	ids.sort()
 	var scopes: Array = []
 	for scope_id_value in ids:
-		scopes.append(_public_record(_scopes[String(scope_id_value)]))
+		scopes.append(_copy_storage_record(_scopes[String(scope_id_value)]))
 	return {
 		"schema_version": SNAPSHOT_SCHEMA_VERSION,
 		"grid_width": _grid_width,
@@ -367,7 +368,7 @@ func restore_snapshot(snapshot: Dictionary) -> Dictionary:
 	_reset_metrics()
 	for record_value in snapshot["scopes"]:
 		var record: Dictionary = record_value
-		var copied := _copy_record(record)
+		var copied := _copy_storage_record(record)
 		_scopes[String(record["scope_id"])] = copied
 		var counts := _reservoir_counts(copied["reservoir_kind"])
 		_reservoir_cells += int(counts["reservoir"])
@@ -473,6 +474,14 @@ func _validate_state_arrays(
 	var soil: PackedInt64Array = soil_value
 	var kinds: PackedByteArray = kind_value
 	var levels: PackedInt64Array = level_value
+	var all_implicit := (
+		surface.is_empty()
+		and soil.is_empty()
+		and kinds.is_empty()
+		and levels.is_empty()
+	)
+	if all_implicit:
+		return {"ok": true, "reason": "ok"}
 	if (
 		surface.size() != count
 		or soil.size() != count
@@ -524,10 +533,17 @@ func _valid_scope_id(scope_id: String) -> bool:
 
 
 func _public_record(record: Dictionary) -> Dictionary:
-	return _copy_record(record)
+	var result := _copy_storage_record(record)
+	var surface: PackedInt64Array = result["surface_water_ul"]
+	if surface.is_empty():
+		result["surface_water_ul"] = _zero_i64()
+		result["soil_water_ul"] = _zero_i64()
+		result["reservoir_kind"] = _zero_u8()
+		result["reservoir_level_mm"] = _zero_i64()
+	return result
 
 
-func _copy_record(record: Dictionary) -> Dictionary:
+func _copy_storage_record(record: Dictionary) -> Dictionary:
 	var surface: PackedInt64Array = record["surface_water_ul"]
 	var soil: PackedInt64Array = record["soil_water_ul"]
 	var kinds: PackedByteArray = record["reservoir_kind"]
@@ -546,6 +562,35 @@ func _copy_record(record: Dictionary) -> Dictionary:
 		"reservoir_outflow_ul_total": int(record["reservoir_outflow_ul_total"]),
 	}
 
+
+func _compact_record(record: Dictionary) -> Dictionary:
+	var result := _copy_storage_record(record)
+	var surface: PackedInt64Array = result["surface_water_ul"]
+	var soil: PackedInt64Array = result["soil_water_ul"]
+	var kinds: PackedByteArray = result["reservoir_kind"]
+	var levels: PackedInt64Array = result["reservoir_level_mm"]
+	var can_compact := (
+		surface.size() == _cell_count
+		and soil.size() == _cell_count
+		and kinds.size() == _cell_count
+		and levels.size() == _cell_count
+	)
+	if can_compact:
+		for index in range(_cell_count):
+			if (
+				int(surface[index]) != 0
+				or int(soil[index]) != 0
+				or int(kinds[index]) != RESERVOIR_FINITE
+				or int(levels[index]) != 0
+			):
+				can_compact = false
+				break
+	if can_compact:
+		result["surface_water_ul"] = PackedInt64Array()
+		result["soil_water_ul"] = PackedInt64Array()
+		result["reservoir_kind"] = PackedByteArray()
+		result["reservoir_level_mm"] = PackedInt64Array()
+	return result
 
 func _same_mutable_state(a: Dictionary, b: Dictionary) -> bool:
 	return (
