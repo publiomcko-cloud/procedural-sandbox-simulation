@@ -754,6 +754,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				last_brush_result = "Reset focused edits for %s: removed %d command(s); rebuilding %d dependent region(s)" % [
 					focus_region_key, cleared["removed_count"], (cleared.get("rebuild_regions", []) as Array).size(),
 				]
+				_invalidate_surface_cache_regions(cleared.get("rebuild_regions", []))
 				_start_global_rebuild("reset")
 			else:
 				last_brush_result = "Focused reset unavailable for materialized history (%s)" % cleared.get("error", "nothing_to_reset")
@@ -2681,6 +2682,8 @@ func _publish_region(
 		)
 		if not simulation_publication.get("ok", false):
 			_simulation_streaming_status = "Simulation publication issue: %s" % simulation_publication.get("reason", "unknown")
+		else:
+			_queue_surface_cache_region(region_key)
 
 	var object_enqueue_started_usec := Time.get_ticks_usec()
 	var object_publication: Dictionary = object_stream.enqueue_region_publication(
@@ -2865,6 +2868,7 @@ func _unload_region(id: String) -> void:
 	if not active_regions.has(id):
 		return
 	var entry: Dictionary = active_regions[id]
+	_surface_cache_pending.erase(id)
 	if (
 		is_instance_valid(simulation_runtime)
 		and bool(simulation_runtime.get_world_scope_lifecycle_metrics().get("initialized", false))
@@ -3082,6 +3086,7 @@ func _schedule_edit_transaction_batch(operations: Array[Dictionary]) -> void:
 			var region_key: Vector2i = rebuild_region_value
 			var id := _region_id(region_key)
 			rebuild_regions_by_id[id] = region_key
+			_queue_surface_cache_region(region_key)
 			if not active_regions.has(id) and not loading_regions.has(id):
 				continue
 			var local_center := Vector3(
