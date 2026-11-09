@@ -1051,6 +1051,15 @@ func restore_scheduler_snapshot(snapshot: Dictionary) -> Dictionary:
 		if not environment_result.get("ok", false):
 			return environment_result
 
+	var next_surface_cache: RefCounted = EnvironmentSurfaceCacheScript.new()
+	var surface_cache_result: Dictionary = next_surface_cache.initialize(
+		int(next_tier_state.get_authoritative_snapshot().get(
+			"max_scopes", DEFAULT_MAX_SIMULATION_SCOPES
+		))
+	)
+	if not surface_cache_result.get("ok", false):
+		return surface_cache_result
+
 	if material_bridge != null:
 		material_bridge.reset_after_restore()
 	material_bridge = null
@@ -1312,8 +1321,7 @@ func restore_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 	tier_state = next_tier_state
 	tier_router = next_tier_router
 	environment_state_store = next_environment_store
-	if environment_surface_cache != null:
-		environment_surface_cache.clear_transient()
+	environment_surface_cache = next_surface_cache
 	environment_climate_domain = null
 	_environment_climate_profile_id = ""
 	_environment_climate_profile_sha256 = ""
