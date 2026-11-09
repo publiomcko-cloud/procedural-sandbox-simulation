@@ -184,7 +184,7 @@ func _test_revision_gated_cache_publication() -> void:
 		"new terrain token invalidates previous derived cache"
 	)
 	_check(not cache.has_scope("region:0,0"), "invalidation removes old derived record")
-	var stale := cache.publish(job0.result["record"])
+	var stale: Dictionary = cache.publish(job0.result["record"])
 	_check(
 		stale.get("reason", "") == "surface_cache_result_stale",
 		"stale worker result cannot publish after terrain revision changes"
@@ -214,7 +214,7 @@ func _test_revision_gated_cache_publication() -> void:
 		).get("ok", false),
 		"terrain-effect authority revision also invalidates surface cache"
 	)
-	var stale_effect := cache.publish(job1.result["record"])
+	var stale_effect: Dictionary = cache.publish(job1.result["record"])
 	_check(
 		stale_effect.get("reason", "") == "surface_cache_result_stale",
 		"old terrain-effect revision cannot publish"
