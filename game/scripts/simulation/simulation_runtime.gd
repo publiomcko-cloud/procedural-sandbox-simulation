@@ -568,6 +568,8 @@ func register_environment_scope(
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
 	if tier_state.get_scope(scope_id).is_empty():
 		return {"ok": false, "reason": "environment_simulation_scope_missing"}
+	if last_environment_tick < -1:
+		return {"ok": false, "reason": "environment_tick_invalid"}
 	var resolved_tick: int = (
 		int(scheduler.get_current_tick())
 		if last_environment_tick == -1
