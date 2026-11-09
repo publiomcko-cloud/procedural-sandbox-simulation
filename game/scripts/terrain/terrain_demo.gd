@@ -1915,7 +1915,9 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 		return {"ok": false, "pending": true, "reason": "surface_cache_token_changed"}
 
 	var snapshot_started_usec := Time.get_ticks_usec()
-	var chunk_snapshots: Dictionary = {}
+	var base_snapshots: Dictionary = {}
+	var effect_targets: Array[Dictionary] = []
+	var anchor_snapshot: Dictionary = {}
 	for coordinate in ChunkGrid.all_coordinates():
 		var base_snapshot: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
 			region_key, coordinate
@@ -1925,24 +1927,52 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 				"ok": false,
 				"reason": String(base_snapshot.get("storage_error", "surface_cache_snapshot_invalid")),
 			}
-		var prepared := _prepare_terrain_effect_snapshot(
-			base_snapshot,
-			[{"region_key": region_key, "chunk_coordinate": coordinate}]
-		)
-		if not prepared.get("ok", false):
-			if _terrain_effect_snapshot_pending(prepared):
-				return {"ok": false, "pending": true, "reason": "surface_cache_effect_snapshot_pending"}
-			return {
-				"ok": false,
-				"reason": String(prepared.get("reason", "surface_cache_effect_snapshot_invalid")),
-			}
-		var snapshot: Dictionary = prepared["snapshot"]
 		if (
-			int(snapshot.get("revision", -1)) != int(token["terrain_revision"])
-			or int(snapshot.get("cache_scope_id", -1))
+			int(base_snapshot.get("revision", -1)) != int(token["terrain_revision"])
+			or int(base_snapshot.get("cache_scope_id", -1))
 				!= int(token["terrain_cache_scope_id"])
 		):
 			return {"ok": false, "pending": true, "reason": "surface_cache_snapshot_stale"}
+		base_snapshots[coordinate] = base_snapshot
+		effect_targets.append({
+			"region_key": region_key,
+			"chunk_coordinate": coordinate,
+		})
+		if anchor_snapshot.is_empty():
+			anchor_snapshot = base_snapshot
+
+	var prepared_region := _prepare_terrain_effect_snapshot(
+		anchor_snapshot, effect_targets
+	)
+	if not prepared_region.get("ok", false):
+		if _terrain_effect_snapshot_pending(prepared_region):
+			return {
+				"ok": false,
+				"pending": true,
+				"reason": "surface_cache_effect_snapshot_pending",
+			}
+		return {
+			"ok": false,
+			"reason": String(
+				prepared_region.get("reason", "surface_cache_effect_snapshot_invalid")
+			),
+		}
+	var prepared_snapshot: Dictionary = prepared_region["snapshot"]
+	var chunk_snapshots: Dictionary = {}
+	for coordinate in ChunkGrid.all_coordinates():
+		var snapshot: Dictionary = (base_snapshots[coordinate] as Dictionary).duplicate(true)
+		snapshot["terrain_object_effect_frames"] = (
+			prepared_snapshot.get("terrain_object_effect_frames", []) as Array
+		).duplicate(true)
+		snapshot["terrain_effect_snapshot_sha256"] = String(
+			prepared_snapshot.get("terrain_effect_snapshot_sha256", "")
+		)
+		snapshot["terrain_effect_authority_revision"] = int(
+			prepared_snapshot.get("terrain_effect_authority_revision", -1)
+		)
+		snapshot["terrain_effect_frame_count"] = int(
+			prepared_snapshot.get("terrain_effect_frame_count", 0)
+		)
 		chunk_snapshots[coordinate] = snapshot
 
 	if (
