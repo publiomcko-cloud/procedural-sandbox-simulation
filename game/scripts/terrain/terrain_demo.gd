@@ -22,6 +22,7 @@ const TerrainEffectRuntime := preload("res://scripts/terrain/terrain_object_effe
 const MaterialEnvironmentDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const EnvironmentClimateDomainScript := preload("res://scripts/simulation/environment_climate_domain.gd")
 const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/environment_surface_cache_job.gd")
+const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
 const SimulationRuntimeStoreScript := preload("res://scripts/simulation/simulation_runtime_store.gd")
 const SimulationRuntimeScript := preload("res://scripts/simulation/simulation_runtime.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
@@ -102,6 +103,7 @@ var terrain_effect_runtime: RefCounted
 var _terrain_effect_status := "Terrain-object effects unavailable"
 var _material_content_domain: RefCounted
 var _climate_content_domain: RefCounted
+var _environment_visual: EnvironmentVisualPresentation
 var _simulation_material_profile_id := ""
 var _simulation_climate_profile_id := ""
 var _surface_cache_pending: Dictionary = {}
@@ -320,8 +322,12 @@ func _ready() -> void:
 		terrain_effect_runtime = null
 		_terrain_effect_status = "Terrain-object effects unavailable (object stream unavailable)"
 	_restore_simulation_for_terrain_generation(_checkpoint_generation)
+	_environment_visual = EnvironmentVisualScript.new()
+	_environment_visual.name = "EnvironmentVisuals"
+	add_child(_environment_visual)
 	if not _simulation_persistence_blocked:
 		_configure_simulation_streaming()
+	_configure_environment_visual()
 	_create_placement_target_marker()
 	terrain_mesh_template.mesh = null
 	terrain_mesh_template.visible = false
@@ -617,8 +623,28 @@ func _configure_simulation_streaming() -> void:
 		)
 	else:
 		_simulation_streaming_status = "Simulation streaming unavailable (%s)" % lifecycle.get("reason", "unknown")
+	_configure_environment_visual()
 
 
+func _configure_environment_visual() -> void:
+	if not is_instance_valid(_environment_visual):
+		return
+	var profile: Dictionary = {}
+	var sha := ""
+	if (
+		is_instance_valid(simulation_runtime)
+		and simulation_runtime.has_environment_climate()
+		and object_stream.registry != null
+		and not _simulation_climate_profile_id.is_empty()
+	):
+		profile = object_stream.registry.get_content_record(
+			EnvironmentClimateDomainScript.PROFILE_TYPE, _simulation_climate_profile_id
+		)
+		var pin: Dictionary = simulation_runtime.environment_climate_domain.get_bound_profile_pin(
+			_simulation_climate_profile_id
+		)
+		sha = String(pin.get("profile_sha256", ""))
+	_environment_visual.configure_environment(simulation_runtime, profile, sha)
 
 
 func _exit_tree() -> void:
@@ -666,6 +692,8 @@ func _process(delta: float) -> void:
 	_process_one_chunk_job()
 	object_stream.process_queued_publications()
 	_process_surface_cache_jobs()
+	if is_instance_valid(_environment_visual):
+		_environment_visual.process_visual_frame(delta, camera.global_position, focus_region_key)
 	var visual_result: Dictionary = object_stream.consume_last_command_visual_result()
 	if not visual_result.is_empty():
 		if visual_result.get("ok", false):
@@ -2710,6 +2738,8 @@ func _publish_region(
 
 	var registry_started_usec := Time.get_ticks_usec()
 	active_regions[id] = {"region_key": region_key, "world_state": state, "chunk_nodes": region_nodes}
+	if is_instance_valid(_environment_visual):
+		_environment_visual.register_region(region_key)
 	world_states[id] = state
 	_lod_selection_dirty = true
 	var registry_commit_usec := Time.get_ticks_usec() - registry_started_usec
@@ -2909,6 +2939,8 @@ func _unload_region(id: String) -> void:
 	if not active_regions.has(id):
 		return
 	var entry: Dictionary = active_regions[id]
+	if is_instance_valid(_environment_visual):
+		_environment_visual.unregister_region(entry["region_key"])
 	_surface_cache_pending.erase(id)
 	if (
 		is_instance_valid(simulation_runtime)
