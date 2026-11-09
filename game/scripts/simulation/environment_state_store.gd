@@ -175,7 +175,8 @@ func register_scope(
 func bind_scope_profile(
 	scope_id: String,
 	profile_id: String,
-	profile_sha256: String
+	profile_sha256: String,
+	baseline_environment_tick: int = -1
 ) -> Dictionary:
 	if not _initialized:
 		return _failure("environment_store_not_initialized")
@@ -183,6 +184,8 @@ func bind_scope_profile(
 		return _failure("environment_scope_not_found")
 	if not _valid_profile_pin(profile_id, profile_sha256) or profile_id.is_empty():
 		return _failure("environment_profile_pin_invalid")
+	if baseline_environment_tick < -1:
+		return _failure("environment_tick_invalid")
 	var current: Dictionary = _scopes[scope_id]
 	var current_id := String(current["profile_id"])
 	var current_sha := String(current["profile_sha256"])
@@ -193,6 +196,10 @@ func bind_scope_profile(
 	var next_record := _copy_storage_record(current)
 	next_record["profile_id"] = profile_id
 	next_record["profile_sha256"] = profile_sha256
+	if baseline_environment_tick >= 0:
+		next_record["last_environment_tick"] = maxi(
+			int(current["last_environment_tick"]), baseline_environment_tick
+		)
 	next_record["state_revision"] = int(current["state_revision"]) + 1
 	_scopes[scope_id] = _compact_record(next_record)
 	return {
