@@ -270,14 +270,14 @@ func _test_bounded_scene_presentation() -> void:
 func _test_sdf_worker_shoreline_and_edits() -> void:
 	var region := Vector2i(5, 13)
 	var brush: RefCounted = BrushStateScript.new(424242, 1)
-	var original_job: RefCounted = _shoreline_worker(region, brush)
-	_check(original_job.result.get("valid", false), "R2 full SDF worker derives shoreline with real canonical snapshots")
-	if not original_job.result.get("valid", false):
+	var original_job: Dictionary = _shoreline_worker(region, brush)
+	_check(original_job.get("valid", false), "R2 full SDF worker derives shoreline with real canonical snapshots")
+	if not original_job.get("valid", false):
 		return
-	var before: Dictionary = original_job.result.get("visual_shoreline", {})
+	var before: Dictionary = original_job.get("visual_shoreline", {})
 	_check(before.get("ok", false), "R2 optional SDF shoreline product is available")
 	_check((before.get("height_mm", PackedInt32Array()) as PackedInt32Array).size() == 221, "R2 fine grid has 17x13 samples")
-	_check((original_job.result.get("record", {}) as Dictionary).get("surface_height_mm", PackedInt64Array()).size() == 48, "R2 SDF worker preserves unchanged P5.0C record grid")
+	_check((original_job.get("record", {}) as Dictionary).get("surface_height_mm", PackedInt64Array()).size() == 48, "R2 SDF worker preserves unchanged P5.0C record grid")
 	var environment := _environment(region)
 	var kinds: PackedByteArray = environment["reservoir_kind"]
 	var levels: PackedInt64Array = environment["reservoir_level_mm"]
@@ -286,7 +286,7 @@ func _test_sdf_worker_shoreline_and_edits() -> void:
 	environment["reservoir_kind"] = kinds
 	environment["reservoir_level_mm"] = levels
 	var result_before: Dictionary = VisualScript.derive_shoreline_geometry(
-		region, environment, original_job.result["record"], before
+		region, environment, original_job["record"], before
 	)
 	_check(result_before.get("ok", false), "R2 canonical SDF samples yield clipped ocean geometry")
 	var old_area := _projected_area(result_before.get("vertices", PackedVector3Array()))
@@ -297,29 +297,29 @@ func _test_sdf_worker_shoreline_and_edits() -> void:
 	_check(fill_applied, "R2 terrain fill fixture admits a shoreline-affecting edit")
 	if not fill_applied:
 		return
-	var edited_job: RefCounted = _shoreline_worker(region, brush)
-	_check(edited_job.result.get("valid", false), "R2 edited-SDF shoreline worker succeeds")
-	if not edited_job.result.get("valid", false):
+	var edited_job: Dictionary = _shoreline_worker(region, brush)
+	_check(edited_job.get("valid", false), "R2 edited-SDF shoreline worker succeeds")
+	if not edited_job.get("valid", false):
 		return
-	var after: Dictionary = edited_job.result.get("visual_shoreline", {})
+	var after: Dictionary = edited_job.get("visual_shoreline", {})
 	_check(after.get("terrain_revision") != before.get("terrain_revision"), "R2 shoreline provenance tracks terrain edit revision")
 	_check(after.get("height_mm") != before.get("height_mm"), "R2 real terrain edit changes shoreline topography")
 	var result_after: Dictionary = VisualScript.derive_shoreline_geometry(
-		region, environment, edited_job.result["record"], after
+		region, environment, edited_job["record"], after
 	)
 	_check(result_after.get("ok", false), "R2 edited canonical SDF builds a new ocean mesh")
 	_check(_projected_area(result_after.get("vertices", PackedVector3Array())) < old_area, "R2 filling the coast reduces visible ocean area")
 	_check(not VisualScript.derive_shoreline_geometry(
-		region, environment, edited_job.result["record"], before
+		region, environment, edited_job["record"], before
 	).get("ok", false), "R2 stale unedited shoreline is rejected against edited SDF cache")
 
 
-func _shoreline_worker(region: Vector2i, brush: RefCounted) -> RefCounted:
+func _shoreline_worker(region: Vector2i, brush: RefCounted) -> Dictionary:
 	var snapshots: Dictionary = {}
 	for coordinate in ChunkGrid.all_coordinates():
 		var snap: Dictionary = brush.get_meshing_snapshot_for_chunk(region, coordinate)
 		if not snap.get("valid", false):
-			return RefCounted.new()
+			return {"valid": false, "reason": "snapshot_invalid"}
 		snapshots[coordinate] = snap
 	var job := SurfaceJobScript.new(
 		"region:%d,%d" % [region.x, region.y],
@@ -329,7 +329,7 @@ func _shoreline_worker(region: Vector2i, brush: RefCounted) -> RefCounted:
 	)
 	job.build_visual_shoreline = true
 	job.run()
-	return job
+	return job.result
 
 
 func _test_startup_locations() -> void:
