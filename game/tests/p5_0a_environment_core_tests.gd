@@ -173,7 +173,8 @@ func _test_runtime_schema_migration() -> void:
 	_check(runtime.register_environment_scope("region:2,3").get("ok", false), "runtime environment scope binds to P4 scope")
 	var v3: Dictionary = runtime.get_runtime_snapshot()
 	_check(int(v3["schema_version"]) == 3, "runtime snapshot advances to schema 3")
-	_check((v3["environment_state"] as Dictionary).get("scopes", []).size() == 1, "schema 3 persists environment authority")
+	var v3_environment: Dictionary = v3["environment_state"]
+	_check(v3_environment.get("scopes", []).size() == 1, "schema 3 persists environment authority")
 
 	var v2: Dictionary = v3.duplicate(true)
 	v2["schema_version"] = 2
