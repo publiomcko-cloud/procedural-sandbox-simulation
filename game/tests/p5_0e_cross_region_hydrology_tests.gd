@@ -227,20 +227,20 @@ func _cell_surface(runtime: Node, scope_id: String, cell: int) -> int:
 func _test_generated_reservoir_binding() -> void:
 	var runtime := _runtime("test.hydrology:binding")
 	var domain: RefCounted = runtime.environment_hydrology_domain
-	var ocean := domain.generated_binding_for_cell(Vector2i(0, 10), 0, 3_500)
+	var ocean: Dictionary = domain.generated_binding_for_cell(Vector2i(0, 10), 0, 3_500)
 	_check(
 		int(ocean.get("kind", -1)) == EnvironmentStoreScript.RESERVOIR_OCEAN
 			and int(ocean.get("level_mm", -1)) == 4_000,
 		"generated ocean binding uses fixed authoritative sea level"
 	)
-	var ocean_repeat := domain.generated_binding_for_cell(Vector2i(0, 10), 0, 3_500)
+	var ocean_repeat: Dictionary = domain.generated_binding_for_cell(Vector2i(0, 10), 0, 3_500)
 	_check(ocean == ocean_repeat, "generated ocean placement is deterministic")
 
 	var river_found := false
 	for rx in range(-3, 4):
 		for rz in range(-2, 3):
 			for cell in range(48):
-				var river := domain.generated_binding_for_cell(Vector2i(rx, rz), cell, 3_000)
+				var river: Dictionary = domain.generated_binding_for_cell(Vector2i(rx, rz), cell, 3_000)
 				if int(river.get("kind", -1)) == EnvironmentStoreScript.RESERVOIR_RIVER:
 					river_found = true
 					_check(
@@ -304,7 +304,7 @@ func _test_reservoir_inflow_fixed_level() -> void:
 	var current: Dictionary = runtime.get_environment_scope(scope)
 	var surface: PackedInt64Array = current["surface_water_ul"].duplicate()
 	surface[1] = 400
-	var seeded := runtime.commit_environment_batch([{
+	var seeded: Dictionary = runtime.commit_environment_batch([{
 		"scope_id": scope,
 		"expected_state_revision": int(current["state_revision"]),
 		"last_environment_tick": 2,
