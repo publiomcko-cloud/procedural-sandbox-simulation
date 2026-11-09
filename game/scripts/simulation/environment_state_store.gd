@@ -172,6 +172,47 @@ func register_scope(
 	}
 
 
+func bind_scope_profile(
+	scope_id: String,
+	profile_id: String,
+	profile_sha256: String
+) -> Dictionary:
+	if not _initialized:
+		return _failure("environment_store_not_initialized")
+	if not _scopes.has(scope_id):
+		return _failure("environment_scope_not_found")
+	if not _valid_profile_pin(profile_id, profile_sha256) or profile_id.is_empty():
+		return _failure("environment_profile_pin_invalid")
+	var current: Dictionary = _scopes[scope_id]
+	var current_id := String(current["profile_id"])
+	var current_sha := String(current["profile_sha256"])
+	if current_id == profile_id and current_sha == profile_sha256:
+		return {"ok": true, "reason": "ok", "noop": true, "record": _public_record(current)}
+	if not current_id.is_empty() or not current_sha.is_empty():
+		return _failure("environment_profile_pin_conflict")
+	var next_record := _copy_storage_record(current)
+	next_record["profile_id"] = profile_id
+	next_record["profile_sha256"] = profile_sha256
+	next_record["state_revision"] = int(current["state_revision"]) + 1
+	_scopes[scope_id] = _compact_record(next_record)
+	return {
+		"ok": true,
+		"reason": "ok",
+		"noop": false,
+		"record": _public_record(_scopes[scope_id]),
+	}
+
+
+func get_scope_ids() -> Array[String]:
+	if not _initialized:
+		return []
+	var ids: Array[String] = []
+	for scope_id_value in _scopes.keys():
+		ids.append(String(scope_id_value))
+	ids.sort()
+	return ids
+
+
 func has_scope(scope_id: String) -> bool:
 	return _scopes.has(scope_id)
 
