@@ -175,6 +175,10 @@ func _build() -> Dictionary:
 			"clamped_top_count": clamped_top_count,
 			"missing_surface_count": missing_surface_count,
 			"chunk_snapshot_count": chunk_snapshots.size(),
+			"visual_shoreline_sample_count": (
+				int((shoreline.get("height_mm", PackedInt32Array()) as PackedInt32Array).size())
+				if build_visual_shoreline else 0
+			),
 		},
 	}
 
