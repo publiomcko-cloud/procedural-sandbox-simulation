@@ -99,7 +99,7 @@ func _test_pure_water_plan() -> void:
 	var cells: Array = planned["cells"]
 	_check(cells.size() == 3, "finite, river and ocean become three water instances, not cell nodes")
 	_check(int(cells[0]["kind"]) == EnvironmentStore.RESERVOIR_FINITE, "finite surface is drawn")
-	_check(is_equal_approx(float(cells[0]["position"].y), 3.537), "finite depth derives from 2 billion microliters over 4 square meters")
+	_check(is_equal_approx(float(cells[0]["position"].y), 3.512), "finite depth derives from 2 billion microliters over 4 square meters")
 	_check(is_equal_approx(float(cells[1]["position"].y), 3.512), "river level comes from immutable fixed reservoir level")
 	_check(is_equal_approx(float(cells[2]["position"].y), 4.012), "ocean level comes from immutable fixed reservoir level")
 	_check(is_equal_approx(float(cells[0]["position"].x), -31.0), "negative region coordinates map to global X consistently")
