@@ -232,6 +232,8 @@ func _solve(snapshot: Dictionary) -> Dictionary:
 			"binding_reservoir_inflow_ul": int(
 				entry.get("binding_reservoir_inflow_ul", 0)
 			),
+			"river_bindings": int(entry.get("river_bindings", 0)),
+			"ocean_bindings": int(entry.get("ocean_bindings", 0)),
 		})
 
 	return {
