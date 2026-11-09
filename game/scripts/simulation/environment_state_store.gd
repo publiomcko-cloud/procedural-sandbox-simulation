@@ -254,7 +254,7 @@ func commit_batch(updates: Array) -> Dictionary:
 		var next_soil: PackedInt64Array = update["soil_water_ul"]
 		var next_kinds: PackedByteArray = update["reservoir_kind"]
 		var next_levels: PackedInt64Array = update["reservoir_level_mm"]
-		var mutates_step_state := (
+		var mutates_step_state: bool = (
 			next_surface != current["surface_water_ul"]
 			or next_soil != current["soil_water_ul"]
 			or next_kinds != current["reservoir_kind"]
