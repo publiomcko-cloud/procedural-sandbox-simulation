@@ -204,9 +204,27 @@ func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
 		return {"ok": false, "reason": "simulation_runtime_not_initialized"}
 
 	var started_usec: int = Time.get_ticks_usec() if _perf_trace_enabled else 0
+	var effective_environment_limit := _environment_tick_admission_limit
+	if (
+		has_environment_climate()
+		and world_scope_lifecycle != null
+		and world_scope_lifecycle.is_initialized()
+	):
+		var lifecycle_environment_limit := int(
+			world_scope_lifecycle.get_environment_tick_admission_limit(
+				scheduler.get_max_ticks_per_frame()
+			)
+		)
+		if lifecycle_environment_limit >= 0:
+			effective_environment_limit = (
+				lifecycle_environment_limit
+				if effective_environment_limit < 0
+				else mini(effective_environment_limit, lifecycle_environment_limit)
+			)
 	var result: Dictionary = scheduler.process_elapsed_usec(
-		elapsed_usec, _environment_tick_admission_limit
+		elapsed_usec, effective_environment_limit
 	)
+	result["environment_capacity_admission_limit"] = effective_environment_limit
 	if (
 		result.get("ok", false)
 		and world_scope_lifecycle != null
@@ -270,6 +288,7 @@ func process_elapsed_usec(elapsed_usec: int) -> Dictionary:
 					"manual_step_ticks": manual_step_ticks,
 					"paused": bool(result.get("paused", false)),
 					"environment_tick_admission_limit": _environment_tick_admission_limit,
+					"environment_capacity_admission_limit": effective_environment_limit,
 					"backpressure_limited": bool(result.get("backpressure_limited", false)),
 					"ticks_deferred_by_backpressure": int(
 						result.get("ticks_deferred_by_backpressure", 0)
