@@ -333,6 +333,11 @@ func _test_r4_continuous_ocean() -> void:
 	_check(int(integrated.get("coastal_halo_cells", -1)) == 0, "R4 ocean band uses no synthetic one-cell coastal halo")
 	_check(int(integrated.get("ocean_sdf_tiles", -1)) == 192, "R4 integrated presenter tracks continuous sea tiles")
 	_check(is_equal_approx(_projected_area(integrated["vertices"]), 192.0), "R4 presenter does not overlap old ocean rectangles")
+	var disabled: Dictionary = VisualScript.derive_shoreline_geometry(
+		region, all_ocean, terrain, samples, "normal", false
+	)
+	_check(disabled.get("ok", false) and (disabled["vertices"] as PackedVector3Array).is_empty(),
+		"R4 hydrology-disabled presentation never invents an ocean plane")
 
 	var coast := _shoreline(region, terrain)
 	var topography: PackedInt32Array = coast["height_mm"]
