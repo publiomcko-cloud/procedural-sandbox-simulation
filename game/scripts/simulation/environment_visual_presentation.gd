@@ -384,7 +384,7 @@ static func derive_shoreline_geometry(
 	# Retain the legacy R3 path ONLY for synthetic ocean fixtures outside
 	# the real ocean band; river and finite puddles still use hydro cells.
 	# The actual ocean band never invokes the one-cell halo compensator.
-	var real_ocean_band := region_key.y >= int(OceanVisual.Hydrology.OCEAN_START_GLOBAL_CELL_Z / 6)
+	var real_ocean_band := region_key.y >= OceanVisual.OCEAN_START_REGION_Z
 	var render_plan: Dictionary = {"cells": base["cells"], "halo_cells": 0}
 	if not real_ocean_band:
 		render_plan = _coastal_render_cells(
@@ -403,7 +403,7 @@ static func derive_shoreline_geometry(
 		# Below the global sea plane, finite water is already under the
 		# R4 ocean surface; avoid two coplanar transparent surfaces.
 		if real_ocean_band and kind == EnvironmentStore.RESERVOIR_FINITE and ocean_tiles > 0:
-			if float((cell["position"] as Vector3).y) <= float(OceanVisual.Hydrology.OCEAN_LEVEL_MM) / 1000.0 + WATER_EPSILON_M:
+			if float((cell["position"] as Vector3).y) <= float(OceanVisual.OCEAN_LEVEL_MM) / 1000.0 + WATER_EPSILON_M:
 				continue
 		var color: Color = cell["color"]
 		if water_debug_mode == "sources":
