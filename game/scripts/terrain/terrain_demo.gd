@@ -41,6 +41,8 @@ const MAX_MESH_UPLOADS_PER_FRAME := 4
 const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
 const MAX_SURFACE_CACHE_JOBS_IN_FLIGHT := 2
 const MAX_SURFACE_CACHE_DISPATCHES_PER_FRAME := 1
+const SURFACE_CACHE_RETRY_BASE_USEC := 250_000
+const SURFACE_CACHE_RETRY_MAX_USEC := 8_000_000
 const MAX_BUFFERED_BRUSH_REQUESTS := 64
 const EDIT_TRACE_DEFAULT_ENABLED := false
 const DIAGNOSTICS_REFRESH_INTERVAL := 0.25
@@ -115,6 +117,10 @@ var _simulation_climate_profile_id := ""
 var _surface_cache_pending: Dictionary = {}
 var _surface_cache_jobs: Dictionary = {}
 var _surface_cache_job_by_region: Dictionary = {}
+var _surface_cache_retry_after_usec: Dictionary = {}
+var _surface_cache_retry_counts: Dictionary = {}
+var _surface_cache_repair_cursor := 0
+var _surface_cache_visual_install_failures_total := 0
 var _surface_cache_last_effect_revision := -1
 var _surface_cache_dispatches_this_frame := 0
 var _surface_cache_publications_total := 0
@@ -1910,7 +1916,17 @@ func _queue_surface_cache_region(region_key: Vector2i) -> void:
 		)
 	):
 		_surface_cache_pending.erase(id)
+		_surface_cache_retry_after_usec.erase(id)
+		_surface_cache_retry_counts.erase(id)
 		return
+	var previous_pending: Dictionary = _surface_cache_pending.get(id, {})
+	if not previous_pending.is_empty() and (
+		int(previous_pending.get("terrain_revision", -1)) != terrain_revision
+		or int(previous_pending.get("terrain_cache_scope_id", -1)) != terrain_cache_scope_id
+		or int(previous_pending.get("terrain_effect_revision", -1)) != terrain_effect_revision
+	):
+		_surface_cache_retry_after_usec.erase(id)
+		_surface_cache_retry_counts.erase(id)
 	if is_instance_valid(_environment_visual):
 		_environment_visual.invalidate_region_shoreline_samples(region_key)
 	_surface_cache_pending[id] = {
@@ -1948,10 +1964,60 @@ func _sync_surface_cache_effect_revision() -> void:
 		_queue_surface_cache_region(entry["region_key"])
 
 
+## Retry transient failures without dropping publication obligations or
+## dispatching infinitely in one frame. New terrain revisions reset cooldown.
+func _schedule_surface_cache_retry(region_key: Vector2i, reason: String) -> void:
+	var id := _region_id(region_key)
+	if not active_regions.has(id):
+		return
+	_queue_surface_cache_region(region_key)
+	if not _surface_cache_pending.has(id):
+		return
+	var attempt := int(_surface_cache_retry_counts.get(id, 0)) + 1
+	_surface_cache_retry_counts[id] = attempt
+	var shift := mini(attempt - 1, 5)
+	var delay := mini(SURFACE_CACHE_RETRY_MAX_USEC, SURFACE_CACHE_RETRY_BASE_USEC * (1 << shift))
+	_surface_cache_retry_after_usec[id] = Time.get_ticks_usec() + delay
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("p5_surface_cache_retry_scheduled", {
+			"region": [region_key.x, region_key.y],
+			"reason": reason, "attempt": attempt,
+			"delay_usec": delay,
+		})
+
+
+## Lightweight self-heal for lost/failed visualization delivery after revisit.
+## Checks one active region/frame and never changes the canonical SDF authority.
+func _repair_missing_surface_cache_visual() -> void:
+	if not is_instance_valid(_environment_visual) or not simulation_runtime.has_environment_hydrology():
+		return
+	var ids: Array = active_regions.keys()
+	if ids.is_empty():
+		_surface_cache_repair_cursor = 0
+		return
+	ids.sort()
+	var id := String(ids[_surface_cache_repair_cursor % ids.size()])
+	_surface_cache_repair_cursor = (_surface_cache_repair_cursor + 1) % ids.size()
+	if _surface_cache_pending.has(id) or _surface_cache_job_by_region.has(id):
+		return
+	var region_key: Vector2i = active_regions[id]["region_key"]
+	var surface: Dictionary = simulation_runtime.get_environment_surface_cache(
+		_surface_cache_scope_id(region_key)
+	)
+	if not surface.is_empty() and not _environment_visual.has_region_shoreline_samples(region_key, surface):
+		_queue_surface_cache_region(region_key)
+		if _perf_trace_enabled and _surface_cache_pending.has(id):
+			PerformanceTrace.emit("p5_surface_cache_repair_queued", {
+				"region": [region_key.x, region_key.y],
+				"terrain_revision": int(surface.get("terrain_revision", -1)),
+			})
+
+
 func _process_surface_cache_jobs() -> void:
 	if not is_instance_valid(simulation_runtime) or not simulation_runtime.initialized:
 		return
 	_sync_surface_cache_effect_revision()
+	_repair_missing_surface_cache_visual()
 
 	var completed: Array[int] = []
 	for task_id_value in _surface_cache_jobs.keys():
@@ -1984,7 +2050,7 @@ func _process_surface_cache_jobs() -> void:
 		var built: Dictionary = job.result
 		if not built.get("valid", false) or typeof(built.get("record")) != TYPE_DICTIONARY:
 			_surface_cache_worker_failures_total += 1
-			_surface_cache_pending.erase(id)
+			_schedule_surface_cache_retry(job.region_key, "worker:" + String(built.get("reason", "invalid_record")))
 			continue
 		var publication: Dictionary = simulation_runtime.publish_environment_surface_cache(
 			built["record"]
@@ -1995,13 +2061,22 @@ func _process_surface_cache_jobs() -> void:
 				_queue_surface_cache_region(job.region_key)
 			else:
 				_surface_cache_worker_failures_total += 1
-				_surface_cache_pending.erase(id)
+				_schedule_surface_cache_retry(job.region_key, "publication:" + String(publication.get("reason", "rejected")))
 			continue
 		_surface_cache_publications_total += 1
-		if is_instance_valid(_environment_visual):
-			_environment_visual.install_region_shoreline_samples(
+		var install_ok := true
+		if is_instance_valid(_environment_visual) and simulation_runtime.has_environment_hydrology():
+			install_ok = bool(_environment_visual.install_region_shoreline_samples(
 				job.region_key, built["record"], built.get("visual_shoreline", {})
-			)
+			))
+		if not install_ok:
+			_surface_cache_visual_install_failures_total += 1
+			var visual_result: Dictionary = built.get("visual_shoreline", {})
+			_schedule_surface_cache_retry(job.region_key,
+				"shoreline_install:" + String(visual_result.get("reason", "rejected")))
+			continue
+		_surface_cache_retry_after_usec.erase(id)
+		_surface_cache_retry_counts.erase(id)
 		var pending_token: Dictionary = _surface_cache_pending.get(id, {})
 		if (
 			int(pending_token.get("terrain_revision", -1)) == int(job.terrain_revision)
@@ -2037,7 +2112,11 @@ func _process_surface_cache_jobs() -> void:
 		var candidates: Array[String] = []
 		for id_value in _surface_cache_pending.keys():
 			var id := String(id_value)
-			if active_regions.has(id) and not _surface_cache_job_by_region.has(id):
+			if (
+				active_regions.has(id)
+				and not _surface_cache_job_by_region.has(id)
+				and Time.get_ticks_usec() >= int(_surface_cache_retry_after_usec.get(id, 0))
+			):
 				candidates.append(id)
 		if candidates.is_empty():
 			break
@@ -2062,8 +2141,11 @@ func _process_surface_cache_jobs() -> void:
 			continue
 		if dispatched.get("pending", false):
 			break
-		_surface_cache_pending.erase(candidates[0])
 		_surface_cache_snapshot_failures_total += 1
+		var rejected_id := candidates[0]
+		var rejected_region: Vector2i = active_regions[rejected_id]["region_key"]
+		_schedule_surface_cache_retry(rejected_region,
+			"snapshot:" + String(dispatched.get("reason", "rejected")))
 
 
 func _dispatch_surface_cache_job(id: String) -> Dictionary:
@@ -3090,6 +3172,8 @@ func _unload_region(id: String) -> void:
 	if is_instance_valid(_environment_visual):
 		_environment_visual.unregister_region(entry["region_key"])
 	_surface_cache_pending.erase(id)
+	_surface_cache_retry_after_usec.erase(id)
+	_surface_cache_retry_counts.erase(id)
 	if (
 		is_instance_valid(simulation_runtime)
 		and bool(simulation_runtime.get_world_scope_lifecycle_metrics().get("initialized", false))
