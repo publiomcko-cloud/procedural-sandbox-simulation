@@ -344,6 +344,13 @@ func _ready() -> void:
 	_environment_visual = EnvironmentVisualScript.new()
 	_environment_visual.name = "EnvironmentVisuals"
 	add_child(_environment_visual)
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--p5-water-debug="):
+			var diagnostic_mode := argument.trim_prefix("--p5-water-debug=")
+			if _environment_visual.set_water_debug_mode(diagnostic_mode):
+				print("P5_WATER_DEBUG_MODE: %s" % diagnostic_mode)
+			else:
+				push_warning("P5_WATER_DEBUG_INVALID: %s (normal mode retained)" % diagnostic_mode)
 	if not _simulation_persistence_blocked:
 		_configure_simulation_streaming()
 	_configure_environment_visual()
