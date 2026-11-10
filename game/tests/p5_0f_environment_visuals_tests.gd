@@ -119,6 +119,21 @@ func _test_pure_water_plan() -> void:
 	_check(environment["surface_water_ul"] == original_water and environment["reservoir_level_mm"] == original_levels, "derivation never changes water authority")
 	var again: Dictionary = VisualScript.derive_water_cells(region, environment, terrain)
 	_check(again == planned, "identical authority and SDF produce identical geometry plan")
+	var small_rainfall: PackedInt64Array = environment["surface_water_ul"]
+	small_rainfall[0] = 1_000
+	environment["surface_water_ul"] = small_rainfall
+	_check(
+		(VisualScript.derive_water_cells(region, environment, terrain)["cells"] as Array).size() == 2,
+		"microscopic rainfall volume is still authoritative but does not paint a false visible puddle"
+	)
+	small_rainfall[0] = 40_000_000
+	environment["surface_water_ul"] = small_rainfall
+	var minimum_visible: Dictionary = VisualScript.derive_water_cells(region, environment, terrain)
+	_check((minimum_visible["cells"] as Array).size() == 3, "real one-centimeter puddle is rendered")
+	_check(
+		is_equal_approx(float(minimum_visible["cells"][0]["position"].y), 3.022),
+		"finite puddle height reflects 40 L over 4 square meters without inflated depth"
+	)
 	var dry: PackedInt64Array = environment["surface_water_ul"]
 	dry[0] = 0
 	environment["surface_water_ul"] = dry
