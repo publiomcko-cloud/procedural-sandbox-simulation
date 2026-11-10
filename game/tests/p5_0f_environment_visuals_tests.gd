@@ -40,6 +40,8 @@ func _run() -> void:
 	_test_r3_adaptive_coast()
 	_test_r4_continuous_ocean()
 	_test_r4_connected_basin_and_seams()
+	_test_r5_isolated_ocean_binding()
+	_test_r5_visual_signature_and_revisit()
 	_test_sdf_worker_shoreline_and_edits()
 	_test_startup_locations()
 	_test_bundled_ocean_end_to_end()
@@ -410,6 +412,104 @@ func _test_r4_connected_basin_and_seams() -> void:
 	_check((OceanVisual.build(west, no_source, isolated)["vertices"] as PackedVector3Array).is_empty(), "R4 isolated inland depression without ocean connection draws no sea")
 
 
+
+
+## R5: ocean-cell classification alone cannot flood an isolated excavation
+## whose submerged surface has no wet edge to any region boundary.
+func _test_r5_isolated_ocean_binding() -> void:
+	var region := Vector2i(5, 13)
+	var environment := _environment(region)
+	var kinds: PackedByteArray = environment["reservoir_kind"]
+	var levels: PackedInt64Array = environment["reservoir_level_mm"]
+	kinds[2] = EnvironmentStore.RESERVOIR_FINITE
+	levels[2] = 0
+	kinds[19] = EnvironmentStore.RESERVOIR_OCEAN
+	levels[19] = 4000
+	environment["reservoir_kind"] = kinds
+	environment["reservoir_level_mm"] = levels
+	var before := environment.duplicate(true)
+	var samples := _shoreline(region)
+	var heights: PackedInt32Array = samples["height_mm"]
+	heights.fill(5000)
+	for z in range(4, 7):
+		for x in range(6, 9):
+			heights[z * 17 + x] = 3000
+	samples["height_mm"] = heights
+	var landlocked: Dictionary = OceanVisual.build(region, environment, samples)
+	_check(landlocked.get("ok", false), "R5 isolated ocean-cell source remains a valid input")
+	_check((landlocked.get("vertices", PackedVector3Array()) as PackedVector3Array).is_empty(),
+		"R5 isolated newly dug basin with ocean binding cannot paint a disconnected sea")
+	_check(int(landlocked.get("isolated_components_skipped", 0)) == 1,
+		"R5 isolated ocean component is explicitly counted")
+	for x in range(17):
+		heights[11 * 17 + x] = 3000
+		heights[12 * 17 + x] = 3000
+	samples["height_mm"] = heights
+	var two_components: Dictionary = OceanVisual.build(region, environment, samples)
+	_check(two_components.get("ok", false), "R5 regional sea and disconnected pit can coexist")
+	_check(int(two_components.get("isolated_components_skipped", 0)) == 1,
+		"R5 connected seaward sea never legitimizes a second isolated pit")
+	_check(_projected_area(two_components.get("vertices", PackedVector3Array())) <= 32.0,
+		"R5 isolated inland area stays out of seaward mesh")
+	_check(environment == before, "R5 topology does not change persisted ocean bindings")
+
+
+## R5: revisions and ticks without visible water changes do not cause
+## expensive remeshing. A stale shoreline hides; valid samples restore it.
+func _test_r5_visual_signature_and_revisit() -> void:
+	var runtime := FakeRuntime.new()
+	get_root().add_child(runtime)
+	runtime.environment = _environment()
+	runtime.surface = _surface()
+	var presenter: Node3D = VisualScript.new()
+	get_root().add_child(presenter)
+	presenter.call("configure_environment", runtime)
+	presenter.call("register_region", Vector2i.ZERO)
+	_check(presenter.call("install_region_shoreline_samples",
+		Vector2i.ZERO, runtime.surface, _shoreline()), "R5 initial samples install")
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
+	var node := presenter.get_node("Water_0_0") as MeshInstance3D
+	_check(node.visible, "R5 initial water is visible")
+	var start_rebuilds := int(presenter.call("get_visual_metrics")["region_rebuilds_total"])
+	runtime.environment["state_revision"] = 100
+	runtime.environment["last_environment_tick"] = 200
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
+	_check(int(presenter.call("get_visual_metrics")["region_rebuilds_total"]) == start_rebuilds,
+		"R5 tick and revision changes without geometry do not rebuild the sea")
+	var water: PackedInt64Array = runtime.environment["surface_water_ul"]
+	water[0] += 1_000_000
+	runtime.environment["surface_water_ul"] = water
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
+	_check(int(presenter.call("get_visual_metrics")["region_rebuilds_total"]) == start_rebuilds,
+		"R5 sub-2mm finite-water changes reuse the last visual mesh")
+	water[0] += 8_000_000
+	runtime.environment["surface_water_ul"] = water
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
+	_check(int(presenter.call("get_visual_metrics")["region_rebuilds_total"]) == start_rebuilds + 1,
+		"R5 visible finite-depth changes still rebuild the water mesh")
+	_check(int(presenter.call("get_visual_metrics")["unchanged_visual_skips_total"]) >= 2,
+		"R5 bypassed rebuilds are measurable")
+	presenter.call("invalidate_region_shoreline_samples", Vector2i.ZERO)
+	_check(not node.visible, "R5 edited terrain hides stale water immediately")
+	var wrong := _shoreline()
+	wrong["terrain_revision"] = 999
+	_check(not presenter.call("install_region_shoreline_samples", Vector2i.ZERO, runtime.surface, wrong),
+		"R5 rejected shoreline cannot silently mark the region current")
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
+	_check(not node.visible, "R5 mismatched samples never expose stale geometry")
+	_check(presenter.call("install_region_shoreline_samples", Vector2i.ZERO, runtime.surface, _shoreline()),
+		"R5 valid retry installs fresh shoreline")
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
+	_check(node.visible, "R5 region becomes visible again after valid retry")
+	presenter.call("unregister_region", Vector2i.ZERO)
+	presenter.call("register_region", Vector2i.ZERO)
+	_check(presenter.call("install_region_shoreline_samples", Vector2i.ZERO, runtime.surface, _shoreline()),
+		"R5 revisit attaches current source samples")
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
+	_check((presenter.get_node("Water_0_0") as MeshInstance3D).visible,
+		"R5 revisit rebuilds water rather than staying hidden")
+	presenter.queue_free()
+	runtime.queue_free()
 
 
 func _test_bounded_scene_presentation() -> void:
