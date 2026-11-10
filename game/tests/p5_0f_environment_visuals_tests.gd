@@ -291,7 +291,7 @@ func _test_sdf_worker_shoreline_and_edits() -> void:
 	_check(result_before.get("ok", false), "R2 canonical SDF samples yield clipped ocean geometry")
 	var old_area := _projected_area(result_before.get("vertices", PackedVector3Array()))
 	_check(old_area > 0.0 and old_area <= 192.0, "R2 canonical SDF ocean footprint stays inside one region")
-	var fill_applied := brush.add_sphere(
+	var fill_applied: bool = brush.add_sphere(
 		BrushStateScript.Mode.FILL, Vector3(88.0, 4.0, 162.0), 1.8
 	)
 	_check(fill_applied, "R2 terrain fill fixture admits a shoreline-affecting edit")
