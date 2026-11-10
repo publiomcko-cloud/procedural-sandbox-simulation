@@ -21,6 +21,7 @@ const EntityStateContract := preload("res://scripts/objects/procedural_object_st
 const TerrainEffectRuntime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
 const MaterialEnvironmentDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const EnvironmentClimateDomainScript := preload("res://scripts/simulation/environment_climate_domain.gd")
+const EnvironmentHydrologyDomainScript := preload("res://scripts/simulation/environment_hydrology_domain.gd")
 const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/environment_surface_cache_job.gd")
 const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
 const EnvironmentStartupLocation := preload("res://scripts/simulation/environment_startup_location.gd")
@@ -2152,6 +2153,22 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 		is_instance_valid(_environment_visual)
 		and simulation_runtime.has_environment_hydrology()
 	)
+	if job.build_visual_shoreline:
+		var refine_levels := PackedInt64Array()
+		# Ocean can become bound only AFTER this surface-cache job has
+		# published. Include its deterministic level before the first tick.
+		if (region_key.y + 1) * 6 > EnvironmentHydrologyDomainScript.OCEAN_START_GLOBAL_CELL_Z:
+			refine_levels.append(EnvironmentHydrologyDomainScript.OCEAN_LEVEL_MM)
+		var live_environment: Dictionary = simulation_runtime.get_environment_scope(String(token["scope_id"]))
+		var kinds: PackedByteArray = live_environment.get("reservoir_kind", PackedByteArray())
+		var levels: PackedInt64Array = live_environment.get("reservoir_level_mm", PackedInt64Array())
+		if kinds.size() == levels.size():
+			for i in range(kinds.size()):
+				if int(kinds[i]) == 1 and not refine_levels.has(int(levels[i])):
+					refine_levels.append(int(levels[i]))
+				if refine_levels.size() >= 12:
+					break
+		job.visual_refine_levels_mm = refine_levels
 	var task_id := WorkerThreadPool.add_task(
 		Callable(job, "run"), false, "environment SDF surface cache"
 	)
