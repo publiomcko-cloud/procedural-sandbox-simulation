@@ -45,6 +45,7 @@ var _rebuilds_total := 0
 var _stale_hides_total := 0
 var _peak_rebuild_usec := 0
 var _trace_enabled := false
+var _water_debug_mode := "normal"
 
 
 func _ready() -> void:
@@ -93,6 +94,28 @@ func configure_environment(runtime: Node, climate_profile: Dictionary = {}, prof
 		_regions[id] = row
 
 
+
+
+## Visual-only diagnostic; no environment, terrain, or runtime mutation.
+## "off" isolates terrain, "ocean-only" removes rendered finite/river water,
+## "sources" assigns distinct colors to real ocean, coast halo and puddles.
+func set_water_debug_mode(mode: String) -> bool:
+	if mode not in ["normal", "off", "ocean-only", "sources"]:
+		return false
+	_water_debug_mode = mode
+	for id in _region_ids:
+		var row: Dictionary = _regions[id]
+		row["token"] = ""
+		var node: MeshInstance3D = row["node"]
+		node.visible = false
+		node.mesh = null
+		_regions[id] = row
+	return true
+
+
+func get_water_debug_mode() -> String:
+	return _water_debug_mode
+
 func register_region(region_key: Vector2i) -> void:
 	var id := _scope_id(region_key)
 	if _regions.has(id):
@@ -109,6 +132,8 @@ func register_region(region_key: Vector2i) -> void:
 		"shoreline_token": "",
 		"shoreline": {},
 		"last_vertex_count": 0,
+		"last_halo_cells": 0,
+		"last_refined_coast_quads": 0,
 	}
 	_region_ids.append(id)
 	_region_ids.sort()
@@ -130,7 +155,8 @@ func unregister_region(region_key: Vector2i) -> void:
 func process_visual_frame(delta: float, camera_position: Vector3, focus_region: Vector2i) -> void:
 	if _runtime == null or not is_instance_valid(_runtime):
 		return
-	_poll_resident_regions()
+	if _water_debug_mode != "off":
+		_poll_resident_regions()
 	_update_rain(delta, camera_position, focus_region)
 
 
@@ -143,6 +169,9 @@ func get_visual_metrics() -> Dictionary:
 		"peak_rebuild_usec": _peak_rebuild_usec,
 		"rain_visible": _rain_node != null and _rain_node.visible,
 		"visible_shoreline_vertices": _count_visible_shoreline_vertices(),
+		"water_debug_mode": _water_debug_mode,
+		"visible_coastal_halo_cells": _sum_visible_region_metric("last_halo_cells"),
+		"visible_refined_coast_quads": _sum_visible_region_metric("last_refined_coast_quads"),
 	}
 
 
@@ -258,6 +287,8 @@ func invalidate_region_shoreline_samples(region_key: Vector2i) -> void:
 	row["shoreline_token"] = ""
 	row["shoreline"] = {}
 	row["last_vertex_count"] = 0
+	row["last_halo_cells"] = 0
+	row["last_refined_coast_quads"] = 0
 	var node: MeshInstance3D = row["node"]
 	node.visible = false
 	node.mesh = null
@@ -267,6 +298,15 @@ func invalidate_region_shoreline_samples(region_key: Vector2i) -> void:
 func has_region_shoreline_samples(region_key: Vector2i, surface_record: Dictionary) -> bool:
 	var id := _scope_id(region_key)
 	return _regions.has(id) and String(_regions[id].get("shoreline_token", "")) == _surface_identity(surface_record)
+
+
+func _sum_visible_region_metric(key: String) -> int:
+	var total := 0
+	for id in _region_ids:
+		var row: Dictionary = _regions[id]
+		if (row["node"] as MeshInstance3D).visible:
+			total += int(row.get(key, 0))
+	return total
 
 
 func _count_visible_shoreline_vertices() -> int:
@@ -285,7 +325,8 @@ static func derive_shoreline_geometry(
 	region_key: Vector2i,
 	environment: Dictionary,
 	surface_cache: Dictionary,
-	shoreline: Dictionary
+	shoreline: Dictionary,
+	water_debug_mode: String = "normal"
 ) -> Dictionary:
 	var base := derive_water_cells(region_key, environment, surface_cache)
 	if not base.get("ok", false):
@@ -323,6 +364,18 @@ static func derive_shoreline_geometry(
 	var cells: Array = render_plan["cells"]
 	for cell_value in cells:
 		var cell: Dictionary = cell_value
+		if water_debug_mode == "ocean-only" and int(cell["kind"]) != EnvironmentStore.RESERVOIR_OCEAN:
+			continue
+		var color: Color = cell["color"]
+		if water_debug_mode == "sources":
+			if bool(cell.get("is_halo", false)):
+				color = Color(1.0, 0.08, 0.78, 0.97)
+			elif int(cell["kind"]) == EnvironmentStore.RESERVOIR_OCEAN:
+				color = Color(0.04, 0.31, 0.76, 0.88)
+			elif int(cell["kind"]) == EnvironmentStore.RESERVOIR_RIVER:
+				color = Color(0.2, 0.88, 0.3, 0.9)
+			else:
+				color = Color(0.2, 0.94, 0.96, 0.9)
 		var index := int(cell["cell_index"])
 		var col := index % 8
 		var row := int(index / 8)
@@ -387,7 +440,7 @@ static func derive_shoreline_geometry(
 								]:
 									var point: Vector2 = corner["p"]
 									vertices.append(Vector3(point.x, y, point.y))
-									colors.append(cell["color"])
+									colors.append(color)
 								emitted = true
 		if emitted:
 			water_cells += 1
@@ -474,6 +527,7 @@ static func _coastal_render_cells(
 				float(region_key.y) * 12.0 + (float(cz) + 0.5) * 2.0
 			),
 			"color": adjacent_ocean["color"],
+			"is_halo": true,
 		})
 		halo += 1
 	return {"cells": render_cells, "halo_cells": halo}
@@ -589,7 +643,7 @@ func _poll_resident_regions() -> void:
 			continue
 		var started := Time.get_ticks_usec()
 		var plan := derive_shoreline_geometry(
-			row["region_key"], environment, surface, row.get("shoreline", {})
+			row["region_key"], environment, surface, row.get("shoreline", {}), _water_debug_mode
 		)
 		if not plan.get("ok", false):
 			node.visible = false
@@ -613,6 +667,8 @@ func _poll_resident_regions() -> void:
 			node.visible = true
 		row["token"] = token
 		row["last_vertex_count"] = vertices.size()
+		row["last_halo_cells"] = int(plan.get("coastal_halo_cells", 0))
+		row["last_refined_coast_quads"] = int(plan.get("refined_coast_quads", 0))
 		_regions[id] = row
 		rebuilt += 1
 		_rebuilds_total += 1
