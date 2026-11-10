@@ -427,8 +427,9 @@ func _probe_start_ocean_visual(delta: float) -> void:
 		if water_node != null and water_node.visible and water_node.mesh != null:
 			visible_triangles = water_node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() / 3
 	var ready := ocean_cells > 0 and visible_triangles > 0
+	var metrics: Dictionary = _environment_visual.get_visual_metrics() if is_instance_valid(_environment_visual) else {}
 	var status_label_text := "P5_WATER_READY" if ready else "P5_WATER_DIAG"
-	print("%s: region=%s candidate=%s profiles=%d climate=%s hydrology=%s scope=%s cache=%s ocean_cells=%d visible_triangles=%d state_revision=%d status=%s" % [
+	print("%s: region=%s candidate=%s profiles=%d climate=%s hydrology=%s scope=%s cache=%s ocean_cells=%d visible_triangles=%d debug=%s halo_cells=%d refined_quads=%d state_revision=%d status=%s" % [
 		status_label_text,
 		str(focus_region_key),
 		str(_startup_location_status),
@@ -439,6 +440,9 @@ func _probe_start_ocean_visual(delta: float) -> void:
 		str(not surface_cache.is_empty()),
 		ocean_cells,
 		visible_triangles,
+		String(metrics.get("water_debug_mode", "normal")),
+		int(metrics.get("visible_coastal_halo_cells", 0)),
+		int(metrics.get("visible_refined_coast_quads", 0)),
 		int(environmental_state.get("state_revision", -1)),
 		_simulation_streaming_status,
 	])
