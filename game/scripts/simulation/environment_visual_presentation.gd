@@ -665,7 +665,7 @@ static func _surface_identity(record: Dictionary) -> String:
 ## Read the 48-cell visual state without using the changing logical tick as
 ## a mesh revision. Sub-2mm water depth changes are presentation-only.
 static func _water_visual_signature(
-	region_key: Vector2i, environment: Dictionary, surface: Dictionary,
+	_region_key: Vector2i, environment: Dictionary, surface: Dictionary,
 	mode: String, hydrology_enabled: bool
 ) -> PackedInt64Array:
 	var signature := PackedInt64Array()
