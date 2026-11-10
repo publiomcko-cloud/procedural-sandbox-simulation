@@ -29,6 +29,9 @@ const WATER_EPSILON_M := 0.012
 # as a misleading full-cell puddle after microscopic precipitation.
 const MIN_RENDERABLE_FINITE_DEPTH_M := 0.010
 const MAX_VISIBLE_DEPTH_M := 4.0
+# Presentation-only depth quantization, no change to finite water authority.
+const FINITE_VISUAL_DEPTH_STEP_MM := 2
+const WATER_WAIT_REPORT_INTERVAL_USEC := 2_000_000
 
 var _runtime: Node
 var _regions: Dictionary = {}
@@ -44,6 +47,7 @@ var _rain_step := 0
 var _polls_total := 0
 var _rebuilds_total := 0
 var _stale_hides_total := 0
+var _unchanged_visual_skips_total := 0
 var _peak_rebuild_usec := 0
 var _trace_enabled := false
 var _water_debug_mode := "normal"
@@ -130,6 +134,9 @@ func register_region(region_key: Vector2i) -> void:
 		"region_key": region_key,
 		"node": node,
 		"token": "",
+		"water_signature": PackedInt64Array(),
+		"wait_started_usec": Time.get_ticks_usec(),
+		"last_wait_report_usec": 0,
 		"shoreline_token": "",
 		"shoreline": {},
 		"last_vertex_count": 0,
@@ -169,6 +176,7 @@ func get_visual_metrics() -> Dictionary:
 		"region_polls_total": _polls_total,
 		"region_rebuilds_total": _rebuilds_total,
 		"stale_hides_total": _stale_hides_total,
+		"unchanged_visual_skips_total": _unchanged_visual_skips_total,
 		"peak_rebuild_usec": _peak_rebuild_usec,
 		"rain_visible": _rain_node != null and _rain_node.visible,
 		"visible_shoreline_vertices": _count_visible_shoreline_vertices(),
@@ -297,6 +305,12 @@ func invalidate_region_shoreline_samples(region_key: Vector2i) -> void:
 	row["last_ocean_sdf_tiles"] = 0
 	row["last_ocean_seam_edges"] = 0
 	var node: MeshInstance3D = row["node"]
+	if int(row.get("wait_started_usec", 0)) == 0:
+		row["wait_started_usec"] = Time.get_ticks_usec()
+		if _trace_enabled:
+			PerformanceTrace.emit("p5_water_hidden", {
+				"scope": id, "reason": "terrain_revision_invalidated",
+			})
 	node.visible = false
 	node.mesh = null
 	_regions[id] = row
@@ -648,6 +662,63 @@ static func _surface_identity(record: Dictionary) -> String:
 	]
 
 
+## Read the 48-cell visual state without using the changing logical tick as
+## a mesh revision. Sub-2mm water depth changes are presentation-only.
+static func _water_visual_signature(
+	region_key: Vector2i, environment: Dictionary, surface: Dictionary,
+	mode: String, hydrology_enabled: bool
+) -> PackedInt64Array:
+	var signature := PackedInt64Array()
+	var kinds: PackedByteArray = environment.get("reservoir_kind", PackedByteArray())
+	var levels: PackedInt64Array = environment.get("reservoir_level_mm", PackedInt64Array())
+	var water: PackedInt64Array = environment.get("surface_water_ul", PackedInt64Array())
+	if kinds.size() != MAX_CELLS_PER_REGION or levels.size() != kinds.size() or water.size() != kinds.size():
+		return signature
+	var cell_area_mm2 := maxi(1, int(surface.get("cell_size_x_mm", 0)) * int(surface.get("cell_size_z_mm", 0)))
+	signature.append(1 if hydrology_enabled else 0)
+	for index in range(MAX_CELLS_PER_REGION):
+		var kind := int(kinds[index])
+		if mode == "ocean-only" and kind != EnvironmentStore.RESERVOIR_OCEAN:
+			signature.append(0)
+			signature.append(0)
+			continue
+		if kind == EnvironmentStore.RESERVOIR_FINITE:
+			# 1 microliter = 1 mm3. Cell area is in square millimeters.
+			var depth_mm := int(water[index] / cell_area_mm2)
+			if depth_mm < 10:
+				signature.append(0)
+				signature.append(0)
+				continue
+			signature.append(1)
+			signature.append(1 + int((mini(depth_mm, 4000) - 10) / FINITE_VISUAL_DEPTH_STEP_MM))
+		elif kind == EnvironmentStore.RESERVOIR_RIVER:
+			signature.append(2)
+			signature.append(int(levels[index]))
+		elif kind == EnvironmentStore.RESERVOIR_OCEAN:
+			signature.append(3)
+			signature.append(int(levels[index]))
+		else:
+			signature.append(-1)
+			signature.append(kind)
+	return signature
+
+
+func _water_wait(id: String, row: Dictionary, reason: String) -> void:
+	var now := Time.get_ticks_usec()
+	if int(row.get("wait_started_usec", 0)) == 0:
+		row["wait_started_usec"] = now
+		if _trace_enabled:
+			PerformanceTrace.emit("p5_water_hidden", {"scope": id, "reason": reason})
+	if _trace_enabled and now - int(row.get("last_wait_report_usec", 0)) >= WATER_WAIT_REPORT_INTERVAL_USEC:
+		row["last_wait_report_usec"] = now
+		PerformanceTrace.emit("p5_water_wait", {
+			"scope": id, "reason": reason,
+			"wait_usec": now - int(row["wait_started_usec"]),
+			"shoreline_token": String(row.get("shoreline_token", "")),
+		})
+	_regions[id] = row
+
+
 func _poll_resident_regions() -> void:
 	if _region_ids.is_empty():
 		return
@@ -665,18 +736,17 @@ func _poll_resident_regions() -> void:
 				_stale_hides_total += 1
 			node.visible = false
 			row["token"] = ""
-			_regions[id] = row
+			_water_wait(id, row, "missing_surface_or_environment")
 			continue
-		var token := "%d:%d:%d:%d:%d:%d:%d" % [
-			int(environment.get("state_revision", -1)),
-			int(environment.get("last_environment_tick", -1)),
-			int(surface.get("world_seed", -1)),
-			int(surface.get("generator_version", -1)),
-			int(surface.get("terrain_revision", -1)),
-			int(surface.get("terrain_cache_scope_id", -1)),
-			int(surface.get("terrain_effect_revision", -1)),
-		]
-		if String(row["token"]) == token:
+		var token := _surface_identity(surface)
+		var hydrology_enabled := true
+		if _runtime.has_method("has_environment_hydrology"):
+			hydrology_enabled = bool(_runtime.call("has_environment_hydrology"))
+		var signature := _water_visual_signature(
+			row["region_key"], environment, surface, _water_debug_mode, hydrology_enabled
+		)
+		if String(row["token"]) == token and row.get("water_signature", PackedInt64Array()) == signature:
+			_unchanged_visual_skips_total += 1
 			continue
 		# Defer rather than bursting rebuilds on a loaded/revisited region window.
 		if rebuilt >= MAX_REBUILDS_PER_FRAME:
@@ -688,21 +758,18 @@ func _poll_resident_regions() -> void:
 			node.visible = false
 			node.mesh = null
 			row["token"] = ""
-			_regions[id] = row
+			_water_wait(id, row, "missing_or_stale_shoreline_samples")
 			continue
 		var started := Time.get_ticks_usec()
-		var ocean_domain_enabled: bool = true
-		if _runtime.has_method("has_environment_hydrology"):
-			ocean_domain_enabled = bool(_runtime.call("has_environment_hydrology"))
 		var plan := derive_shoreline_geometry(
 			row["region_key"], environment, surface, row.get("shoreline", {}),
-			_water_debug_mode, ocean_domain_enabled
+			_water_debug_mode, hydrology_enabled
 		)
 		if not plan.get("ok", false):
 			node.visible = false
 			node.mesh = null
 			row["token"] = ""
-			_regions[id] = row
+			_water_wait(id, row, "mesh_plan:" + String(plan.get("reason", "unknown")))
 			continue
 		var vertices: PackedVector3Array = plan["vertices"]
 		if vertices.is_empty():
@@ -718,7 +785,15 @@ func _poll_resident_regions() -> void:
 			mesh.surface_set_material(0, _water_material)
 			node.mesh = mesh
 			node.visible = true
+		if node.visible and _trace_enabled and int(row.get("wait_started_usec", 0)) > 0:
+			PerformanceTrace.emit("p5_water_visible", {
+				"scope": id, "wait_usec": Time.get_ticks_usec() - int(row["wait_started_usec"]),
+				"triangles": int(vertices.size() / 3),
+			})
+		row["wait_started_usec"] = 0
+		row["last_wait_report_usec"] = 0
 		row["token"] = token
+		row["water_signature"] = signature
 		row["last_vertex_count"] = vertices.size()
 		row["last_halo_cells"] = int(plan.get("coastal_halo_cells", 0))
 		row["last_refined_coast_quads"] = int(plan.get("refined_coast_quads", 0))
