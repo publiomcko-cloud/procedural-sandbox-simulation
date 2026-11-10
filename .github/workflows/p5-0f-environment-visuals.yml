@@ -8,6 +8,7 @@ on:
       - 'game/mods/environment-presets/core-climate/**'
       - 'game/scripts/simulation/environment_surface_cache_job.gd'
       - 'game/scripts/simulation/environment_visual_presentation.gd'
+      - 'game/scripts/simulation/environment_ocean_visual_domain.gd'
       - 'game/scripts/simulation/simulation_runtime.gd'
       - 'game/scripts/simulation/simulation_world_scope_lifecycle.gd'
       - 'game/scripts/terrain/terrain_demo.gd'
