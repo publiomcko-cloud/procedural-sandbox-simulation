@@ -1,6 +1,7 @@
 extends SceneTree
 
 const VisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
+const OceanVisual := preload("res://scripts/simulation/environment_ocean_visual_domain.gd")
 const EnvironmentStore := preload("res://scripts/simulation/environment_state_store.gd")
 const Loader := preload("res://scripts/modding/declarative_mod_loader.gd")
 const RegistryScript := preload("res://scripts/modding/content_definition_registry.gd")
@@ -37,6 +38,8 @@ func _run() -> void:
 	_test_bounded_scene_presentation()
 	_test_shoreline_clipping()
 	_test_r3_adaptive_coast()
+	_test_r4_continuous_ocean()
+	_test_r4_connected_basin_and_seams()
 	_test_sdf_worker_shoreline_and_edits()
 	_test_startup_locations()
 	_test_bundled_ocean_end_to_end()
@@ -290,6 +293,118 @@ func _test_r3_adaptive_coast() -> void:
 		region, without_ocean, halo_terrain, halo_samples
 	)
 	_check(int(no_ocean.get("coastal_halo_cells", -1)) == 0, "R3 no coast halo can appear without a true authoritative ocean neighbor")
+
+
+func _test_r4_continuous_ocean() -> void:
+	var region := Vector2i(5, 13)
+	var terrain := _surface(region)
+	var samples := _shoreline(region, terrain)
+	var authority := _environment(region)
+	var original := authority.duplicate(true)
+	var ocean: Dictionary = OceanVisual.build(region, authority, samples)
+	_check(ocean.get("ok", false), "R4 valid 1m SDF and ocean authority create a continuous ocean plane")
+	if not ocean.get("ok", false):
+		return
+	_check(int(ocean.get("water_tiles", 0)) == 192, "R4 connected sea covers entire submerged 16x12 region, not just bound 2m cells")
+	_check(is_equal_approx(_projected_area(ocean["vertices"]), 192.0), "R4 full 192m2 sea is independent of coarse water-source rectangle")
+	_check(int(ocean.get("source_ocean_cells", -1)) == 1, "R4 recognizes exactly one authoritative ocean seed")
+	var plane_y_ok := true
+	for vertex in ocean["vertices"]:
+		if not is_equal_approx(vertex.y, 4.012):
+			plane_y_ok = false
+			break
+	_check(plane_y_ok, "R4 all connected ocean vertices share authoritative fixed 4m level and 12mm draw offset")
+
+	var all_ocean := authority.duplicate(true)
+	var kinds: PackedByteArray = all_ocean["reservoir_kind"]
+	var levels: PackedInt64Array = all_ocean["reservoir_level_mm"]
+	kinds.fill(EnvironmentStore.RESERVOIR_OCEAN)
+	levels.fill(4000)
+	all_ocean["reservoir_kind"] = kinds
+	all_ocean["reservoir_level_mm"] = levels
+	var complete: Dictionary = OceanVisual.build(region, all_ocean, samples)
+	_check(complete.get("ok", false), "R4 all-ocean region generates clipped plane")
+	_check(complete.get("vertices") == ocean.get("vertices"), "R4 shoreline geometry does not depend on how many 2m cells are classified ocean")
+
+	var integrated: Dictionary = VisualScript.derive_shoreline_geometry(
+		region, all_ocean, terrain, samples, "sources"
+	)
+	_check(integrated.get("ok", false), "R4 presenter integrates continuous sea with R3 river/finite pathway")
+	_check(int(integrated.get("coastal_halo_cells", -1)) == 0, "R4 ocean band uses no synthetic one-cell coastal halo")
+	_check(int(integrated.get("ocean_sdf_tiles", -1)) == 192, "R4 integrated presenter tracks continuous sea tiles")
+	_check(is_equal_approx(_projected_area(integrated["vertices"]), 192.0), "R4 presenter does not overlap old ocean rectangles")
+
+	var coast := _shoreline(region, terrain)
+	var topography: PackedInt32Array = coast["height_mm"]
+	for z in range(13):
+		for x in range(17):
+			if x <= 5:
+				topography[z * 17 + x] = 5000
+	coast["height_mm"] = topography
+	var cut: Dictionary = OceanVisual.build(region, all_ocean, coast)
+	_check(cut.get("ok", false), "R4 SDF-clipped peninsula remains a valid sea mesh")
+	_check(_projected_area(cut.get("vertices", PackedVector3Array())) < 192.0, "R4 coastline removes dry SDF terrain without coarse ocean masks")
+	_check(_projected_area(cut.get("vertices", PackedVector3Array())) > 0.0, "R4 wet area beyond peninsula remains visible")
+	var repeated: Dictionary = OceanVisual.build(region, all_ocean, coast)
+	_check(repeated.get("vertices") == cut.get("vertices"), "R4 topology and triangulation are deterministic")
+	_check(authority == original, "R4 topology never writes the original hydrology arrays")
+
+	var wrong_level := all_ocean.duplicate(true)
+	var wrong_levels: PackedInt64Array = wrong_level["reservoir_level_mm"]
+	wrong_levels[0] = 4500
+	wrong_level["reservoir_level_mm"] = wrong_levels
+	_check(not OceanVisual.build(region, wrong_level, samples).get("ok", false), "R4 rejects ocean authority with mismatched fixed level")
+	_check((OceanVisual.build(Vector2i(5, 9), all_ocean, _shoreline(Vector2i(5, 9)))["vertices"] as PackedVector3Array).is_empty(), "R4 ocean plane cannot appear before core ocean world band")
+
+
+func _test_r4_connected_basin_and_seams() -> void:
+	var west := Vector2i(5, 13)
+	var east := Vector2i(6, 13)
+	var source := _environment(west)
+	var pure_west: Dictionary = OceanVisual.build(west, source, _shoreline(west))
+	var east_source := _environment(east)
+	var pure_east: Dictionary = OceanVisual.build(east, east_source, _shoreline(east))
+	_check(pure_west.get("ok", false) and pure_east.get("ok", false), "R4 adjoining regions both derive connected ocean")
+	var shared_x := float((west.x + 1) * 16)
+	var west_border := 0
+	var east_border := 0
+	for vertex in pure_west.get("vertices", PackedVector3Array()):
+		if is_equal_approx(vertex.x, shared_x):
+			west_border += 1
+	for vertex in pure_east.get("vertices", PackedVector3Array()):
+		if is_equal_approx(vertex.x, shared_x):
+			east_border += 1
+	_check(west_border > 0 and east_border > 0, "R4 ocean touches same global X seam in both neighboring regions")
+
+	var coastal := _shoreline(west)
+	var terrain: PackedInt32Array = coastal["height_mm"]
+	terrain.fill(5000)
+	for x in range(17):
+		terrain[11 * 17 + x] = 3000
+		terrain[12 * 17 + x] = 3000
+	for z in range(3, 6):
+		for x in range(3, 6):
+			terrain[z * 17 + x] = 3000
+	coastal["height_mm"] = terrain
+	var no_source := _environment(west)
+	var kinds: PackedByteArray = no_source["reservoir_kind"]
+	kinds[2] = EnvironmentStore.RESERVOIR_FINITE
+	no_source["reservoir_kind"] = kinds
+	var connected: Dictionary = OceanVisual.build(west, no_source, coastal)
+	_check(connected.get("ok", false), "R4 open-sea border can seed visual surface before coarse hydrology binds")
+	var area := _projected_area(connected.get("vertices", PackedVector3Array()))
+	_check(area > 0.0 and area <= 20.0, "R4 landlocked 3x3 depression is not filled merely because it is below sea level")
+	_check(int(connected.get("source_ocean_cells", -1)) == 0, "R4 no artificial source is written to authority")
+	var isolated := _shoreline(west)
+	var isolated_heights: PackedInt32Array = isolated["height_mm"]
+	isolated_heights.fill(5000)
+	for z in range(3, 6):
+		for x in range(3, 6):
+			isolated_heights[z * 17 + x] = 3000
+	isolated["height_mm"] = isolated_heights
+	_check((OceanVisual.build(west, no_source, isolated)["vertices"] as PackedVector3Array).is_empty(), "R4 isolated inland depression without ocean connection draws no sea")
+
+
 
 
 func _test_bounded_scene_presentation() -> void:
