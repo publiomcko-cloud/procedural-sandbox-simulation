@@ -18,6 +18,8 @@ const OCEAN_THRESHOLD_OFFSET_M := 0.018
 const DRAW_OFFSET_M := 0.012
 const MAX_COAST_REFINEMENT_QUADS := 96
 const MAX_MESH_VERTICES := 5760
+const OCEAN_START_REGION_Z := int(Hydrology.OCEAN_START_GLOBAL_CELL_Z / 6)
+const OCEAN_LEVEL_MM := Hydrology.OCEAN_LEVEL_MM
 
 
 ## The caller first verifies SDF cache provenance and the immutable 8x6
@@ -34,8 +36,7 @@ static func build(
 		"refined_coast_quads": 0, "ocean_components": 0,
 		"ocean_seam_edges": 0, "source_ocean_cells": 0,
 	}
-	var start_region_z := int(Hydrology.OCEAN_START_GLOBAL_CELL_Z / 6)
-	if region_key.y < start_region_z:
+	if region_key.y < OCEAN_START_REGION_Z:
 		return output
 	var kinds: PackedByteArray = environment.get("reservoir_kind", PackedByteArray())
 	var levels: PackedInt64Array = environment.get("reservoir_level_mm", PackedInt64Array())
@@ -64,8 +65,6 @@ static func build(
 	var threshold := level_m - OCEAN_THRESHOLD_OFFSET_M
 	var wet := PackedByteArray()
 	wet.resize(TILE_COUNT)
-	var source := PackedByteArray()
-	source.resize(TILE_COUNT)
 	var seeds: Array[int] = []
 	for z in range(TILES_Z):
 		for x in range(TILES_X):
@@ -90,7 +89,6 @@ static func build(
 				or heights[(z + 1) * WIDTH + x + 1] < roundi(threshold * 1000.0)
 			)
 			if from_authority or seaward:
-				source[id] = 1
 				seeds.append(id)
 	# Never draw a disconnected interior depression. This region gets its
 	# ocean only through actual bound ocean or an open-sea edge.
