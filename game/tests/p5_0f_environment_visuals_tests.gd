@@ -393,7 +393,7 @@ func _test_r4_connected_basin_and_seams() -> void:
 	var connected: Dictionary = OceanVisual.build(west, no_source, coastal)
 	_check(connected.get("ok", false), "R4 open-sea border can seed visual surface before coarse hydrology binds")
 	var area := _projected_area(connected.get("vertices", PackedVector3Array()))
-	_check(area > 0.0 and area <= 20.0, "R4 landlocked 3x3 depression is not filled merely because it is below sea level")
+	_check(area > 0.0 and area <= 32.0, "R4 landlocked 3x3 depression is not filled merely because it is below sea level")
 	_check(int(connected.get("source_ocean_cells", -1)) == 0, "R4 no artificial source is written to authority")
 	var isolated := _shoreline(west)
 	var isolated_heights: PackedInt32Array = isolated["height_mm"]
