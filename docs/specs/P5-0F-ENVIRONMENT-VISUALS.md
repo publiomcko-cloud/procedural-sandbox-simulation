@@ -96,3 +96,17 @@ Implementation:
 Acceptance: focused tests cover real sparse worker samples, immutable water authority, reduction of mesh area for a truly dry 0.5 m sample, dry-centered ocean fringe, no false inland expansion, exact repeatability, 5,760-vertex budget, and the previously required streaming/unload/revisit invariants. Cumulative P4/P5 tests and GUI validation are still mandatory. **Known limitation:** across a region border, a coast where the only authoritative ocean cell is in the neighboring unloaded region is not yet guaranteed to have a matching one-cell visual fringe. Evaluate this as an explicit P5.0G visual-boundary gate, not an assumed solved case.
 
 Lava and oil remain exclusively on the future post-P5 generic fluids roadmap; R3 touches no fluid-generalization code.
+
+## R3 visual diagnosis (owner report: little perceived improvement)
+
+The absence of thin-water artifacts confirms the R2 minimum 10 mm finite display threshold. The original full-cell water quads have been removed since R2. However, the 8x6 center-based hydrology mask and the one-neighbor coastal halo remain presentation inputs. The visible green shoreline may also inherit 0.5m terrain mesh tessellation. Thus further increasing water-only sample density without A/B evidence is not approved.
+
+Three mutually exclusive, **render-only** diagnostic user arguments are available (default mode is unchanged):
+
+- `--p5-water-debug=off`: hide derived water MeshInstance3D surfaces, leaving the terrain and all authoritative hydrology running unchanged.
+- `--p5-water-debug=ocean-only`: render only authoritative ocean and its clipped one-cell coastal fringe; hide finite surface water and rivers.
+- `--p5-water-debug=sources`: show ocean in blue, finite water in bright cyan, rivers in green, and synthetic *visual-only* coastal halo in magenta. This reveals whether a coarse hydro mask/halo or the triangulated terrain is responsible for the visible coastline steps.
+
+Example: `& $godot --path .\\game -- --start-water=ocean --p5-water-debug=sources`. The modes never edit water volumes, reservoir kinds, source snapshots, or save schema. The presenter exposes `visible_coastal_halo_cells`, `visible_refined_coast_quads`, and `water_debug_mode` through `get_visual_metrics()` for reproducible evidence. Diagnostic mode toggles rebuild only derived mesh products; no increase in scheduler or density-sampling frequency is introduced.
+
+Acceptance: compare screenshots at identical seed, camera, and world coordinates in normal, ocean-only, and sources modes before choosing a physically justified change. Leave final GUI approval pending.
