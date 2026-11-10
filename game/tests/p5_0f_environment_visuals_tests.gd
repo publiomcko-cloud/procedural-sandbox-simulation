@@ -36,6 +36,7 @@ func _run() -> void:
 	_test_invalid_inputs()
 	_test_bounded_scene_presentation()
 	_test_shoreline_clipping()
+	_test_r3_adaptive_coast()
 	_test_sdf_worker_shoreline_and_edits()
 	_test_startup_locations()
 	_test_bundled_ocean_end_to_end()
@@ -229,6 +230,66 @@ func _test_shoreline_clipping() -> void:
 	_check(not VisualScript.derive_shoreline_geometry(region, environment, terrain, no_samples).get("ok", false), "R2 partial sample array rejected")
 
 
+
+func _test_r3_adaptive_coast() -> void:
+	var region := Vector2i.ZERO
+	var environment := _environment(region)
+	var terrain := _surface(region)
+	var samples := _shoreline(region, terrain)
+	var original_environment := environment.duplicate(true)
+
+	var wet_plan: Dictionary = VisualScript.derive_shoreline_geometry(region, environment, terrain, samples)
+	_check(wet_plan.get("ok", false), "R3 fully wet environment builds successfully")
+	_check(int(wet_plan.get("refined_coast_quads", -1)) == 0, "R3 fully wet interiors retain coarse R2 triangles")
+	_check(int(wet_plan.get("coastal_halo_cells", -1)) == 0, "R3 no synthetic ocean halo on physically submerged centers")
+
+	var heights: PackedInt32Array = samples["height_mm"]
+	# Hydrologic ocean cell index=2 spans X=[4,6], Z=[0,2].
+	# Introduce a dry island crest within that otherwise wet cell.
+	heights[1 * 17 + 5] = 5000
+	samples["height_mm"] = heights
+	var coarse: Dictionary = VisualScript.derive_shoreline_geometry(region, environment, terrain, samples)
+	_check(coarse.get("ok", false), "R3 coastline mixed tiles build successfully")
+	_check(int(coarse.get("refined_coast_quads", 0)) > 0, "R3 refines only 1m tiles with both wet and dry corners")
+	_check(coarse.get("vertices", PackedVector3Array()).size() <= VisualScript.MAX_SHORELINE_VERTICES, "R3 regional mesh stays within hard vertex budget")
+	_check(_projected_area(coarse["vertices"]) < _projected_area(wet_plan["vertices"]), "R3 shoreline clipping removes known dry area")
+
+	var fine_heights: Dictionary = {1 * 33 + 9: 6000}
+	var fine_valid: Dictionary = {1 * 33 + 9: 1}
+	samples["fine_height_mm"] = fine_heights
+	samples["fine_valid"] = fine_valid
+	var precise: Dictionary = VisualScript.derive_shoreline_geometry(region, environment, terrain, samples)
+	_check(precise.get("ok", false), "R3 0.5m true-SDF sparse site is accepted")
+	_check(_projected_area(precise["vertices"]) < _projected_area(coarse["vertices"]), "R3 true-SDF sample corrects bilinear boundary interpolation")
+	var repeated: Dictionary = VisualScript.derive_shoreline_geometry(region, environment, terrain, samples)
+	_check(repeated.get("vertices") == precise.get("vertices"), "R3 stable sparse topography gives bitwise-repeatable mesh")
+
+	var halo_terrain := _surface(region)
+	var halo_center: PackedInt64Array = halo_terrain["surface_height_mm"]
+	halo_center[3] = 4500
+	halo_terrain["surface_height_mm"] = halo_center
+	var halo_samples := _shoreline(region, halo_terrain)
+	var halo_heights: PackedInt32Array = halo_samples["height_mm"]
+	for z in range(3):
+		halo_heights[z * 17 + 8] = 5000
+	halo_samples["height_mm"] = halo_heights
+	var halo: Dictionary = VisualScript.derive_shoreline_geometry(
+		region, environment, halo_terrain, halo_samples
+	)
+	_check(halo.get("ok", false), "R3 coastal dry-centered halo derives bounded water plane")
+	_check(int(halo.get("coastal_halo_cells", -1)) == 1, "R3 only authoritative-ocean-adjacent dry center gets visual halo")
+	_check(int(halo.get("refined_coast_quads", 0)) > 0, "R3 partial coast halo is clipped at refined resolution")
+	_check(environment == original_environment, "R3 coastal closure never changes reservoir kinds or finite water authority")
+	var without_ocean := environment.duplicate(true)
+	var kinds: PackedByteArray = without_ocean["reservoir_kind"]
+	kinds[2] = EnvironmentStore.RESERVOIR_FINITE
+	without_ocean["reservoir_kind"] = kinds
+	var no_ocean: Dictionary = VisualScript.derive_shoreline_geometry(
+		region, without_ocean, halo_terrain, halo_samples
+	)
+	_check(int(no_ocean.get("coastal_halo_cells", -1)) == 0, "R3 no coast halo can appear without a true authoritative ocean neighbor")
+
+
 func _test_bounded_scene_presentation() -> void:
 	var runtime := FakeRuntime.new()
 	get_root().add_child(runtime)
@@ -292,6 +353,9 @@ func _test_sdf_worker_shoreline_and_edits() -> void:
 	var before: Dictionary = original_job.get("visual_shoreline", {})
 	_check(before.get("ok", false), "R2 optional SDF shoreline product is available")
 	_check((before.get("height_mm", PackedInt32Array()) as PackedInt32Array).size() == 221, "R2 fine grid has 17x13 samples")
+	_check(int(before.get("refined_tile_count", 0)) > 0, "R3 actual ocean coast triggers selective true-SDF refinement")
+	_check(int(before.get("refined_sample_count", -1)) <= 512, "R3 sampled coastline remains under bounded SDF probe cap")
+	_check(int(before.get("refined_tile_count", -1)) <= 96, "R3 sampled coastline remains under bounded coastal tile cap")
 	_check((original_job.get("record", {}) as Dictionary).get("surface_height_mm", PackedInt64Array()).size() == 48, "R2 SDF worker preserves unchanged P5.0C record grid")
 	var environment := _environment(region)
 	var kinds: PackedByteArray = environment["reservoir_kind"]
@@ -343,6 +407,7 @@ func _shoreline_worker(region: Vector2i, brush: RefCounted) -> Dictionary:
 		snapshots, Time.get_ticks_usec()
 	)
 	job.build_visual_shoreline = true
+	job.visual_refine_levels_mm = PackedInt64Array([4000])
 	job.run()
 	return job.result
 
