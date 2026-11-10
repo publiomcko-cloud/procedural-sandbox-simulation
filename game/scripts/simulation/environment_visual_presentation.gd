@@ -691,10 +691,9 @@ func _poll_resident_regions() -> void:
 			_regions[id] = row
 			continue
 		var started := Time.get_ticks_usec()
-		var ocean_domain_enabled := (
-			_runtime.has_environment_hydrology()
-			if _runtime.has_method("has_environment_hydrology") else true
-		)
+		var ocean_domain_enabled: bool = true
+		if _runtime.has_method("has_environment_hydrology"):
+			ocean_domain_enabled = bool(_runtime.call("has_environment_hydrology"))
 		var plan := derive_shoreline_geometry(
 			row["region_key"], environment, surface, row.get("shoreline", {}),
 			_water_debug_mode, ocean_domain_enabled
