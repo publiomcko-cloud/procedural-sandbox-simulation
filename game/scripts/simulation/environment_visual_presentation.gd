@@ -13,7 +13,12 @@ const SHORELINE_SUBDIVISIONS := 2
 const SHORELINE_WIDTH := 8 * SHORELINE_SUBDIVISIONS + 1
 const SHORELINE_HEIGHT := 6 * SHORELINE_SUBDIVISIONS + 1
 const SHORELINE_CLEARANCE_M := 0.018
-const MAX_SHORELINE_VERTICES := MAX_CELLS_PER_REGION * SHORELINE_SUBDIVISIONS * SHORELINE_SUBDIVISIONS * 2 * 2 * 3
+const SHORELINE_FINE_WIDTH := (SHORELINE_WIDTH - 1) * 2 + 1
+const MAX_REFINED_COAST_QUADS := 96
+# At most 96 adaptive 1m tiles and 96 regular tiles, with two triangles
+# each and worst-case two output triangles per input triangle.
+const MAX_SHORELINE_VERTICES := 5760
+const MAX_SPARSE_FINE_SAMPLES := 512
 const MAX_POLLS_PER_FRAME := 3
 const MAX_REBUILDS_PER_FRAME := 1
 const MAX_RAIN_STREAKS := 64
@@ -229,6 +234,10 @@ func install_region_shoreline_samples(
 	var valid: PackedByteArray = shoreline.get("valid", PackedByteArray())
 	if heights.size() != SHORELINE_WIDTH * SHORELINE_HEIGHT or valid.size() != heights.size():
 		return false
+	var detail_heights: Dictionary = shoreline.get("fine_height_mm", {})
+	var detail_valid: Dictionary = shoreline.get("fine_valid", {})
+	if detail_heights.size() > MAX_SPARSE_FINE_SAMPLES or detail_heights.size() != detail_valid.size():
+		return false
 	var row: Dictionary = _regions[id]
 	row["shoreline"] = shoreline.duplicate(true)
 	row["shoreline_token"] = _surface_identity(surface_record)
@@ -298,13 +307,25 @@ static func derive_shoreline_geometry(
 	var vertices := PackedVector3Array()
 	var colors := PackedColorArray()
 	var water_cells := 0
-	var region_origin_x := float(region_key.x) * 16.0
-	var region_origin_z := float(region_key.y) * 12.0
-	for cell_value in base["cells"]:
+	var refined_quads := 0
+	var origin_x := float(region_key.x) * 16.0
+	var origin_z := float(region_key.y) * 12.0
+	var fine_heights: Dictionary = shoreline.get("fine_height_mm", {})
+	var fine_valid: Dictionary = shoreline.get("fine_valid", {})
+	if fine_heights.size() > MAX_SPARSE_FINE_SAMPLES or fine_heights.size() != fine_valid.size():
+		return {"ok": false, "reason": "shoreline_sparse_samples_invalid"}
+	# The 2m hydro grid classifies the cell center. Adjacent cells with a
+	# dry center can still have shoreline below the adjacent ocean level.
+	# Expand ONLY one coastal cell; never change finite-water authority.
+	var render_plan: Dictionary = _coastal_render_cells(
+		region_key, environment, surface_cache, heights, valid, base["cells"]
+	)
+	var cells: Array = render_plan["cells"]
+	for cell_value in cells:
 		var cell: Dictionary = cell_value
-		var cell_index := int(cell["cell_index"])
-		var col := cell_index % 8
-		var row := int(cell_index / 8)
+		var index := int(cell["cell_index"])
+		var col := index % 8
+		var row := int(index / 8)
 		var y := float((cell["position"] as Vector3).y)
 		var threshold := y - SHORELINE_CLEARANCE_M
 		var emitted := false
@@ -313,23 +334,61 @@ static func derive_shoreline_geometry(
 				var x := col * SHORELINE_SUBDIVISIONS + sub_x
 				var z := row * SHORELINE_SUBDIVISIONS + sub_z
 				var a := z * SHORELINE_WIDTH + x
-				var b := (z + 1) * SHORELINE_WIDTH + x
-				var c := (z + 1) * SHORELINE_WIDTH + x + 1
-				var d := z * SHORELINE_WIDTH + x + 1
+				var b := a + SHORELINE_WIDTH
+				var c := b + 1
+				var d := a + 1
 				if valid[a] == 0 or valid[b] == 0 or valid[c] == 0 or valid[d] == 0:
 					continue
-				var v0 := {"p": Vector2(region_origin_x + float(x), region_origin_z + float(z)), "h": float(heights[a]) / 1000.0}
-				var v1 := {"p": Vector2(region_origin_x + float(x), region_origin_z + float(z + 1)), "h": float(heights[b]) / 1000.0}
-				var v2 := {"p": Vector2(region_origin_x + float(x + 1), region_origin_z + float(z + 1)), "h": float(heights[c]) / 1000.0}
-				var v3 := {"p": Vector2(region_origin_x + float(x + 1), region_origin_z + float(z)), "h": float(heights[d]) / 1000.0}
-				for triangle in [[v0, v1, v2], [v0, v2, v3]]:
-					var clipped := _clip_under_surface(triangle, threshold)
-					for vertex_index in range(1, clipped.size() - 1):
-						for corner in [clipped[0], clipped[vertex_index], clipped[vertex_index + 1]]:
-							var point: Vector2 = corner["p"]
-							vertices.append(Vector3(point.x, y, point.y))
-							colors.append(cell["color"])
-						emitted = true
+				var wet := 0
+				for sample_index in [a, b, c, d]:
+					if float(heights[sample_index]) / 1000.0 <= threshold:
+						wet += 1
+				if wet == 0:
+					continue
+				# Subdivide only the mixed 1m coastal tiles to 0.5m.
+				# Fully submerged interior remains a pair of 1m triangles.
+				var subdivisions := 1
+				if wet < 4 and refined_quads < MAX_REFINED_COAST_QUADS:
+					subdivisions = 2
+					refined_quads += 1
+				var stride := 2 if subdivisions == 1 else 1
+				for tz in range(subdivisions):
+					for tx in range(subdivisions):
+						var fx := x * 2 + tx * stride
+						var fz := z * 2 + tz * stride
+						var fine_coords: Array[Vector2i] = [
+							Vector2i(fx, fz), Vector2i(fx, fz + stride),
+							Vector2i(fx + stride, fz + stride), Vector2i(fx + stride, fz),
+						]
+						var polygon: Array[Dictionary] = []
+						for point in fine_coords:
+							var sampled: Dictionary = _shoreline_height_at(
+								point.x, point.y, heights, valid,
+								fine_heights, fine_valid
+							)
+							if not sampled.get("ok", false):
+								polygon.clear()
+								break
+							polygon.append({
+								"p": Vector2(origin_x + float(point.x) * 0.5,
+									origin_z + float(point.y) * 0.5),
+								"h": float(sampled["height_mm"]) / 1000.0,
+							})
+						if polygon.size() != 4:
+							continue
+						for triangle in [
+							[polygon[0], polygon[1], polygon[2]],
+							[polygon[0], polygon[2], polygon[3]],
+						]:
+							var clipped := _clip_under_surface(triangle, threshold)
+							for vertex_index in range(1, clipped.size() - 1):
+								for corner in [
+									clipped[0], clipped[vertex_index], clipped[vertex_index + 1]
+								]:
+									var point: Vector2 = corner["p"]
+									vertices.append(Vector3(point.x, y, point.y))
+									colors.append(cell["color"])
+								emitted = true
 		if emitted:
 			water_cells += 1
 	if vertices.size() > MAX_SHORELINE_VERTICES:
@@ -338,8 +397,121 @@ static func derive_shoreline_geometry(
 		"ok": true, "reason": "ok",
 		"vertices": vertices, "colors": colors,
 		"water_cells": water_cells, "triangles": int(vertices.size() / 3),
+		"refined_coast_quads": refined_quads,
+		"coastal_halo_cells": int(render_plan["halo_cells"]),
 	}
 
+
+## Coastal visual closure: if the hydro cell center is dry but an adjacent
+## authoritative ocean cell wets its subcell SDF edge, extend the *drawing*
+## plane one cell. No reservoir binding, volume or simulation state changes.
+static func _coastal_render_cells(
+	region_key: Vector2i,
+	environment: Dictionary,
+	surface_cache: Dictionary,
+	heights: PackedInt32Array,
+	valid: PackedByteArray,
+	base_cells: Array
+) -> Dictionary:
+	var render_cells: Array = base_cells.duplicate(true)
+	var used: Dictionary = {}
+	var ocean: Dictionary = {}
+	for cell_value in base_cells:
+		var cell: Dictionary = cell_value
+		var id := int(cell["cell_index"])
+		used[id] = true
+		if int(cell["kind"]) == EnvironmentStore.RESERVOIR_OCEAN:
+			ocean[id] = cell
+	if ocean.is_empty():
+		return {"cells": render_cells, "halo_cells": 0}
+	var center_heights: PackedInt64Array = surface_cache["surface_height_mm"]
+	var center_valid: PackedByteArray = surface_cache["surface_valid"]
+	var kinds: PackedByteArray = environment["reservoir_kind"]
+	var halo := 0
+	for index in range(48):
+		if used.has(index) or int(kinds[index]) != EnvironmentStore.RESERVOIR_FINITE:
+			continue
+		if center_valid[index] == 0:
+			continue
+		var cx := index % 8
+		var cz := int(index / 8)
+		var adjacent_ocean: Dictionary = {}
+		for direction in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+			var nx := cx + direction.x
+			var nz := cz + direction.y
+			if nx < 0 or nx >= 8 or nz < 0 or nz >= 6:
+				continue
+			var nid := nz * 8 + nx
+			if ocean.has(nid):
+				adjacent_ocean = ocean[nid]
+				break
+		if adjacent_ocean.is_empty():
+			continue
+		var plane_y := float((adjacent_ocean["position"] as Vector3).y)
+		var plane_mm := roundi((plane_y - WATER_EPSILON_M) * 1000.0)
+		if int(center_heights[index]) <= plane_mm:
+			# This is not a partial dry-centered coastal fringe; the
+			# existing hydro binding will own this cell.
+			continue
+		var partly_submerged := false
+		for sz in range(3):
+			for sx in range(3):
+				var sample_id := (cz * 2 + sz) * SHORELINE_WIDTH + cx * 2 + sx
+				if valid[sample_id] != 0 and float(heights[sample_id]) / 1000.0 < plane_y - SHORELINE_CLEARANCE_M:
+					partly_submerged = true
+					break
+			if partly_submerged:
+				break
+		if not partly_submerged:
+			continue
+		render_cells.append({
+			"cell_index": index,
+			"kind": EnvironmentStore.RESERVOIR_OCEAN,
+			"position": Vector3(
+				float(region_key.x) * 16.0 + (float(cx) + 0.5) * 2.0,
+				plane_y,
+				float(region_key.y) * 12.0 + (float(cz) + 0.5) * 2.0
+			),
+			"color": adjacent_ocean["color"],
+		})
+		halo += 1
+	return {"cells": render_cells, "halo_cells": halo}
+
+
+## Sparse 0.5m true-SDF heights take priority on the coast. If a live
+## waterline does not match the worker's pinned refinement levels, use
+## bounded bilinear interpolation from the authoritative R2 SDF grid.
+static func _shoreline_height_at(
+	fx: int, fz: int,
+	heights: PackedInt32Array, valid: PackedByteArray,
+	fine_heights: Dictionary, fine_valid: Dictionary
+) -> Dictionary:
+	if fx < 0 or fz < 0 or fx >= SHORELINE_FINE_WIDTH or fz >= (SHORELINE_HEIGHT - 1) * 2 + 1:
+		return {"ok": false}
+	if fx % 2 == 0 and fz % 2 == 0:
+		var index := int(fz / 2) * SHORELINE_WIDTH + int(fx / 2)
+		return {"ok": valid[index] != 0, "height_mm": int(heights[index])}
+	var site := fz * SHORELINE_FINE_WIDTH + fx
+	if fine_heights.has(site):
+		return {
+			"ok": int(fine_valid.get(site, 0)) != 0,
+			"height_mm": int(fine_heights[site])
+		}
+	var x := mini(int(fx / 2), SHORELINE_WIDTH - 2)
+	var z := mini(int(fz / 2), SHORELINE_HEIGHT - 2)
+	var a := z * SHORELINE_WIDTH + x
+	var b := a + 1
+	var c := a + SHORELINE_WIDTH
+	var d := c + 1
+	if valid[a] == 0 or valid[b] == 0 or valid[c] == 0 or valid[d] == 0:
+		return {"ok": false}
+	var tx := float(fx) * 0.5 - float(x)
+	var tz := float(fz) * 0.5 - float(z)
+	var height_mm := lerpf(
+		lerpf(float(heights[a]), float(heights[b]), tx),
+		lerpf(float(heights[c]), float(heights[d]), tx), tz
+	)
+	return {"ok": true, "height_mm": roundi(height_mm)}
 
 static func _clip_under_surface(triangle: Array, water_threshold: float) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
@@ -452,6 +624,8 @@ func _poll_resident_regions() -> void:
 				"vertices": vertices.size(),
 				"triangles": int(vertices.size() / 3),
 				"water_cells": int(plan.get("water_cells", 0)),
+				"refined_coast_quads": int(plan.get("refined_coast_quads", 0)),
+				"coastal_halo_cells": int(plan.get("coastal_halo_cells", 0)),
 				"state_revision": int(environment["state_revision"]),
 				"terrain_revision": int(surface["terrain_revision"]),
 			})
