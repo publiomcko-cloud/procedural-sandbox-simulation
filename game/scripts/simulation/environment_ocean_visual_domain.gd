@@ -105,15 +105,16 @@ static func build(
 		head += 1
 		var x := id % TILES_X
 		var z := int(id / TILES_X)
-		for dir in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
-			var nx: int = x + dir.x
-			var nz: int = z + dir.y
+		for direction_value in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+			var direction: Vector2i = direction_value
+			var nx: int = x + direction.x
+			var nz: int = z + direction.y
 			if nx < 0 or nx >= TILES_X or nz < 0 or nz >= TILES_Z:
 				continue
 			var nid: int = nz * TILES_X + nx
 			if wet[nid] == 0 or visited[nid] != 0:
 				continue
-			if not _shared_wet_edge(x, z, dir, heights, valid, threshold):
+			if not _shared_wet_edge(x, z, direction, heights, valid, threshold):
 				continue
 			visited[nid] = 1
 			queue.append(nid)
