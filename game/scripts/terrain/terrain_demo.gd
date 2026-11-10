@@ -1987,7 +1987,8 @@ func _schedule_surface_cache_retry(region_key: Vector2i, reason: String) -> void
 
 
 ## Lightweight self-heal for lost/failed visualization delivery after revisit.
-## Checks one active region/frame and never changes the canonical SDF authority.
+## Checks one active region/frame, even if the canonical cache is missing,
+## and never changes the canonical SDF authority.
 func _repair_missing_surface_cache_visual() -> void:
 	if not is_instance_valid(_environment_visual) or not simulation_runtime.has_environment_hydrology():
 		return
@@ -2004,7 +2005,7 @@ func _repair_missing_surface_cache_visual() -> void:
 	var surface: Dictionary = simulation_runtime.get_environment_surface_cache(
 		_surface_cache_scope_id(region_key)
 	)
-	if not surface.is_empty() and not _environment_visual.has_region_shoreline_samples(region_key, surface):
+	if surface.is_empty() or not _environment_visual.has_region_shoreline_samples(region_key, surface):
 		_queue_surface_cache_region(region_key)
 		if _perf_trace_enabled and _surface_cache_pending.has(id):
 			PerformanceTrace.emit("p5_surface_cache_repair_queued", {
