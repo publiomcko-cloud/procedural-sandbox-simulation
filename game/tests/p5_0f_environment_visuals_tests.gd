@@ -199,7 +199,9 @@ func _projected_area(vertices: PackedVector3Array) -> float:
 
 
 func _test_shoreline_clipping() -> void:
-	var region := Vector2i(-2, 13)
+	# Legacy R2 test explicitly exercises the non-ocean-band R3-compatible
+	# cell geometry. Real ocean-band regions use the continuous R4 SDF plane.
+	var region := Vector2i(-2, 3)
 	var terrain := _surface(region)
 	var environment := _environment(region)
 	var samples := _shoreline(region, terrain)
