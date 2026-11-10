@@ -254,8 +254,10 @@ func _test_r3_adaptive_coast() -> void:
 	_check(coarse.get("vertices", PackedVector3Array()).size() <= VisualScript.MAX_SHORELINE_VERTICES, "R3 regional mesh stays within hard vertex budget")
 	_check(_projected_area(coarse["vertices"]) < _projected_area(wet_plan["vertices"]), "R3 shoreline clipping removes known dry area")
 
-	var fine_heights: Dictionary = {1 * 33 + 9: 6000}
-	var fine_valid: Dictionary = {1 * 33 + 9: 1}
+	var fine_heights: Dictionary = {}
+	var fine_valid: Dictionary = {}
+	fine_heights[1 * 33 + 9] = 6000
+	fine_valid[1 * 33 + 9] = 1
 	samples["fine_height_mm"] = fine_heights
 	samples["fine_valid"] = fine_valid
 	var precise: Dictionary = VisualScript.derive_shoreline_geometry(region, environment, terrain, samples)
