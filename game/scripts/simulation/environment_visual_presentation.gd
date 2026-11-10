@@ -7,6 +7,7 @@ class_name EnvironmentVisualPresentation
 
 const EnvironmentStore := preload("res://scripts/simulation/environment_state_store.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
+const OceanVisual := preload("res://scripts/simulation/environment_ocean_visual_domain.gd")
 
 const MAX_CELLS_PER_REGION := 48
 const SHORELINE_SUBDIVISIONS := 2
@@ -134,6 +135,8 @@ func register_region(region_key: Vector2i) -> void:
 		"last_vertex_count": 0,
 		"last_halo_cells": 0,
 		"last_refined_coast_quads": 0,
+		"last_ocean_sdf_tiles": 0,
+		"last_ocean_seam_edges": 0,
 	}
 	_region_ids.append(id)
 	_region_ids.sort()
@@ -172,6 +175,8 @@ func get_visual_metrics() -> Dictionary:
 		"water_debug_mode": _water_debug_mode,
 		"visible_coastal_halo_cells": _sum_visible_region_metric("last_halo_cells"),
 		"visible_refined_coast_quads": _sum_visible_region_metric("last_refined_coast_quads"),
+		"visible_ocean_sdf_tiles": _sum_visible_region_metric("last_ocean_sdf_tiles"),
+		"visible_ocean_seam_edges": _sum_visible_region_metric("last_ocean_seam_edges"),
 	}
 
 
@@ -289,6 +294,8 @@ func invalidate_region_shoreline_samples(region_key: Vector2i) -> void:
 	row["last_vertex_count"] = 0
 	row["last_halo_cells"] = 0
 	row["last_refined_coast_quads"] = 0
+	row["last_ocean_sdf_tiles"] = 0
+	row["last_ocean_seam_edges"] = 0
 	var node: MeshInstance3D = row["node"]
 	node.visible = false
 	node.mesh = null
@@ -347,6 +354,25 @@ static func derive_shoreline_geometry(
 		return {"ok": false, "reason": "shoreline_samples_invalid"}
 	var vertices := PackedVector3Array()
 	var colors := PackedColorArray()
+	var ocean_tiles := 0
+	var ocean_edges := 0
+	var ocean_refined := 0
+	var ocean_sources := 0
+	# In ocean-band regions, the ocean is a single clipped SDF plane,
+	# not a union of coarse 2m hydro-cell rectangles or coastal halos.
+	var continuous_ocean := OceanVisual.build(
+		region_key, environment, shoreline, water_debug_mode
+	)
+	if not continuous_ocean.get("ok", false):
+		return continuous_ocean
+	var ocean_vertices: PackedVector3Array = continuous_ocean["vertices"]
+	var ocean_colors: PackedColorArray = continuous_ocean["colors"]
+	vertices.append_array(ocean_vertices)
+	colors.append_array(ocean_colors)
+	ocean_tiles = int(continuous_ocean.get("water_tiles", 0))
+	ocean_edges = int(continuous_ocean.get("ocean_seam_edges", 0))
+	ocean_refined = int(continuous_ocean.get("refined_coast_quads", 0))
+	ocean_sources = int(continuous_ocean.get("source_ocean_cells", 0))
 	var water_cells := 0
 	var refined_quads := 0
 	var origin_x := float(region_key.x) * 16.0
@@ -355,17 +381,30 @@ static func derive_shoreline_geometry(
 	var fine_valid: Dictionary = shoreline.get("fine_valid", {})
 	if fine_heights.size() > MAX_SPARSE_FINE_SAMPLES or fine_heights.size() != fine_valid.size():
 		return {"ok": false, "reason": "shoreline_sparse_samples_invalid"}
-	# The 2m hydro grid classifies the cell center. Adjacent cells with a
-	# dry center can still have shoreline below the adjacent ocean level.
-	# Expand ONLY one coastal cell; never change finite-water authority.
-	var render_plan: Dictionary = _coastal_render_cells(
-		region_key, environment, surface_cache, heights, valid, base["cells"]
-	)
+	# Retain the legacy R3 path ONLY for synthetic ocean fixtures outside
+	# the real ocean band; river and finite puddles still use hydro cells.
+	# The actual ocean band never invokes the one-cell halo compensator.
+	var real_ocean_band := region_key.y >= int(OceanVisual.Hydrology.OCEAN_START_GLOBAL_CELL_Z / 6)
+	var render_plan: Dictionary = {"cells": base["cells"], "halo_cells": 0}
+	if not real_ocean_band:
+		render_plan = _coastal_render_cells(
+			region_key, environment, surface_cache, heights, valid, base["cells"]
+		)
 	var cells: Array = render_plan["cells"]
 	for cell_value in cells:
 		var cell: Dictionary = cell_value
-		if water_debug_mode == "ocean-only" and int(cell["kind"]) != EnvironmentStore.RESERVOIR_OCEAN:
+		var kind := int(cell["kind"])
+		# R4: ocean-band hydro cells must never reintroduce rectangular
+		# ocean quads, even when they are classified as an ocean source.
+		if real_ocean_band and kind == EnvironmentStore.RESERVOIR_OCEAN:
 			continue
+		if water_debug_mode == "ocean-only" and kind != EnvironmentStore.RESERVOIR_OCEAN:
+			continue
+		# Below the global sea plane, finite water is already under the
+		# R4 ocean surface; avoid two coplanar transparent surfaces.
+		if real_ocean_band and kind == EnvironmentStore.RESERVOIR_FINITE and ocean_tiles > 0:
+			if float((cell["position"] as Vector3).y) <= float(OceanVisual.Hydrology.OCEAN_LEVEL_MM) / 1000.0 + WATER_EPSILON_M:
+				continue
 		var color: Color = cell["color"]
 		if water_debug_mode == "sources":
 			if bool(cell.get("is_halo", false)):
@@ -450,8 +489,11 @@ static func derive_shoreline_geometry(
 		"ok": true, "reason": "ok",
 		"vertices": vertices, "colors": colors,
 		"water_cells": water_cells, "triangles": int(vertices.size() / 3),
-		"refined_coast_quads": refined_quads,
+		"refined_coast_quads": refined_quads + ocean_refined,
 		"coastal_halo_cells": int(render_plan["halo_cells"]),
+		"ocean_sdf_tiles": ocean_tiles,
+		"ocean_seam_edges": ocean_edges,
+		"ocean_source_cells": ocean_sources,
 	}
 
 
@@ -669,6 +711,8 @@ func _poll_resident_regions() -> void:
 		row["last_vertex_count"] = vertices.size()
 		row["last_halo_cells"] = int(plan.get("coastal_halo_cells", 0))
 		row["last_refined_coast_quads"] = int(plan.get("refined_coast_quads", 0))
+		row["last_ocean_sdf_tiles"] = int(plan.get("ocean_sdf_tiles", 0))
+		row["last_ocean_seam_edges"] = int(plan.get("ocean_seam_edges", 0))
 		_regions[id] = row
 		rebuilt += 1
 		_rebuilds_total += 1
@@ -683,6 +727,8 @@ func _poll_resident_regions() -> void:
 				"water_cells": int(plan.get("water_cells", 0)),
 				"refined_coast_quads": int(plan.get("refined_coast_quads", 0)),
 				"coastal_halo_cells": int(plan.get("coastal_halo_cells", 0)),
+				"ocean_sdf_tiles": int(plan.get("ocean_sdf_tiles", 0)),
+				"ocean_seam_edges": int(plan.get("ocean_seam_edges", 0)),
 				"state_revision": int(environment["state_revision"]),
 				"terrain_revision": int(surface["terrain_revision"]),
 			})
