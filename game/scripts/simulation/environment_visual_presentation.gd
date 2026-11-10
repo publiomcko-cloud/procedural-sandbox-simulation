@@ -333,7 +333,8 @@ static func derive_shoreline_geometry(
 	environment: Dictionary,
 	surface_cache: Dictionary,
 	shoreline: Dictionary,
-	water_debug_mode: String = "normal"
+	water_debug_mode: String = "normal",
+	ocean_domain_enabled: bool = true
 ) -> Dictionary:
 	var base := derive_water_cells(region_key, environment, surface_cache)
 	if not base.get("ok", false):
@@ -360,9 +361,15 @@ static func derive_shoreline_geometry(
 	var ocean_sources := 0
 	# In ocean-band regions, the ocean is a single clipped SDF plane,
 	# not a union of coarse 2m hydro-cell rectangles or coastal halos.
-	var continuous_ocean := OceanVisual.build(
-		region_key, environment, shoreline, water_debug_mode
-	)
+	var continuous_ocean := {
+		"ok": true, "vertices": PackedVector3Array(),
+		"colors": PackedColorArray(), "water_tiles": 0,
+		"ocean_seam_edges": 0, "refined_coast_quads": 0, "source_ocean_cells": 0
+	}
+	if ocean_domain_enabled:
+		continuous_ocean = OceanVisual.build(
+			region_key, environment, shoreline, water_debug_mode
+		)
 	if not continuous_ocean.get("ok", false):
 		return continuous_ocean
 	var ocean_vertices: PackedVector3Array = continuous_ocean["vertices"]
@@ -684,8 +691,13 @@ func _poll_resident_regions() -> void:
 			_regions[id] = row
 			continue
 		var started := Time.get_ticks_usec()
+		var ocean_domain_enabled := (
+			_runtime.has_environment_hydrology()
+			if _runtime.has_method("has_environment_hydrology") else true
+		)
 		var plan := derive_shoreline_geometry(
-			row["region_key"], environment, surface, row.get("shoreline", {}), _water_debug_mode
+			row["region_key"], environment, surface, row.get("shoreline", {}),
+			_water_debug_mode, ocean_domain_enabled
 		)
 		if not plan.get("ok", false):
 			node.visible = false
