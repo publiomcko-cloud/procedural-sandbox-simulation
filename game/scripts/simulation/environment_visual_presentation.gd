@@ -436,12 +436,13 @@ static func _coastal_render_cells(
 		var cx := index % 8
 		var cz := int(index / 8)
 		var adjacent_ocean: Dictionary = {}
-		for direction in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
-			var nx := cx + direction.x
-			var nz := cz + direction.y
+		for direction_value in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+			var direction: Vector2i = direction_value
+			var nx: int = cx + direction.x
+			var nz: int = cz + direction.y
 			if nx < 0 or nx >= 8 or nz < 0 or nz >= 6:
 				continue
-			var nid := nz * 8 + nx
+			var nid: int = nz * 8 + nx
 			if ocean.has(nid):
 				adjacent_ocean = ocean[nid]
 				break
