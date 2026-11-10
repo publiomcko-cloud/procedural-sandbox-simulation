@@ -19,7 +19,9 @@ const MAX_REBUILDS_PER_FRAME := 1
 const MAX_RAIN_STREAKS := 64
 const RAIN_UPDATE_SECONDS := 0.10
 const WATER_EPSILON_M := 0.012
-const MIN_VISIBLE_DEPTH_M := 0.025
+# Below one centimeter the water remains authoritative but is not rendered
+# as a misleading full-cell puddle after microscopic precipitation.
+const MIN_RENDERABLE_FINITE_DEPTH_M := 0.010
 const MAX_VISIBLE_DEPTH_M := 4.0
 
 var _runtime: Node
@@ -174,8 +176,10 @@ static func derive_water_cells(region_key: Vector2i, environment: Dictionary, su
 		if kind == EnvironmentStore.RESERVOIR_FINITE:
 			if water[index] <= 0:
 				continue
-			var depth_m := clampf(float(water[index]) / (1_000_000_000.0 * cell_area), MIN_VISIBLE_DEPTH_M, MAX_VISIBLE_DEPTH_M)
-			y = float(heights[index]) / 1000.0 + depth_m + WATER_EPSILON_M
+			var physical_depth_m := float(water[index]) / (1_000_000_000.0 * cell_area)
+			if physical_depth_m < MIN_RENDERABLE_FINITE_DEPTH_M:
+				continue
+			y = float(heights[index]) / 1000.0 + minf(physical_depth_m, MAX_VISIBLE_DEPTH_M) + WATER_EPSILON_M
 		elif kind == EnvironmentStore.RESERVOIR_RIVER:
 			y = float(levels[index]) / 1000.0 + WATER_EPSILON_M
 			tint = Color(0.08, 0.41, 0.73, 0.78)
