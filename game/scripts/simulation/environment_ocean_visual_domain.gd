@@ -34,6 +34,7 @@ static func build(
 		"ok": true, "vertices": PackedVector3Array(),
 		"colors": PackedColorArray(), "water_tiles": 0,
 		"refined_coast_quads": 0, "ocean_components": 0,
+		"isolated_components_skipped": 0,
 		"ocean_seam_edges": 0, "source_ocean_cells": 0,
 	}
 	if region_key.y < OCEAN_START_REGION_Z:
@@ -90,35 +91,59 @@ static func build(
 			)
 			if from_authority or seaward:
 				seeds.append(id)
-	# Never draw a disconnected interior depression. This region gets its
-	# ocean only through actual bound ocean or an open-sea edge.
-	var visited := PackedByteArray()
-	visited.resize(TILE_COUNT)
-	var queue: Array[int] = []
-	for seed in seeds:
-		if visited[seed] == 0:
-			visited[seed] = 1
-			queue.append(seed)
-	var head := 0
-	while head < queue.size():
-		var id := queue[head]
-		head += 1
-		var x := id % TILES_X
-		var z := int(id / TILES_X)
-		for direction_value in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
-			var direction: Vector2i = direction_value
-			var nx: int = x + direction.x
-			var nz: int = z + direction.y
-			if nx < 0 or nx >= TILES_X or nz < 0 or nz >= TILES_Z:
-				continue
-			var nid: int = nz * TILES_X + nx
-			if wet[nid] == 0 or visited[nid] != 0:
-				continue
-			if not _shared_wet_edge(x, z, direction, heights, valid, threshold):
-				continue
-			visited[nid] = 1
-			queue.append(nid)
-
+	# R5: an authoritative 2m ocean binding is only a candidate seed.
+	# A newly excavated landlocked depression may have become bound by
+	# height alone. Render a candidate component only when it has a real
+	# submerged opening to a region boundary. Global cross-region ocean
+	# connectivity remains a separate qualification obligation.
+	var is_seed := PackedByteArray()
+	is_seed.resize(TILE_COUNT)
+	for id in seeds:
+		is_seed[id] = 1
+	var processed := PackedByteArray()
+	var admitted := PackedByteArray()
+	processed.resize(TILE_COUNT)
+	admitted.resize(TILE_COUNT)
+	var admitted_components := 0
+	var isolated_components := 0
+	for start in range(TILE_COUNT):
+		if wet[start] == 0 or processed[start] != 0:
+			continue
+		var queue: Array[int] = [start]
+		var component_tiles: Array[int] = []
+		processed[start] = 1
+		var seed_found := false
+		var boundary_open := false
+		var head := 0
+		while head < queue.size():
+			var id := queue[head]
+			head += 1
+			component_tiles.append(id)
+			if is_seed[id] != 0:
+				seed_found = true
+			var x := id % TILES_X
+			var z := int(id / TILES_X)
+			if _open_boundary_wet_edge(x, z, heights, valid, threshold):
+				boundary_open = true
+			for direction_value in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+				var direction: Vector2i = direction_value
+				var nx: int = x + direction.x
+				var nz: int = z + direction.y
+				if nx < 0 or nx >= TILES_X or nz < 0 or nz >= TILES_Z:
+					continue
+				var nid: int = nz * TILES_X + nx
+				if wet[nid] == 0 or processed[nid] != 0:
+					continue
+				if not _shared_wet_edge(x, z, direction, heights, valid, threshold):
+					continue
+				processed[nid] = 1
+				queue.append(nid)
+		if seed_found and boundary_open:
+			admitted_components += 1
+			for tile_id in component_tiles:
+				admitted[tile_id] = 1
+		elif seed_found:
+			isolated_components += 1
 	var vertices := PackedVector3Array()
 	var colors := PackedColorArray()
 	var origin_x := float(region_key.x) * float(TILES_X)
@@ -132,7 +157,7 @@ static func build(
 	for z in range(TILES_Z):
 		for x in range(TILES_X):
 			var tile_id := z * TILES_X + x
-			if visited[tile_id] == 0:
+			if admitted[tile_id] == 0:
 				continue
 			var a := z * WIDTH + x
 			var b := a + 1
@@ -183,10 +208,35 @@ static func build(
 	output["vertices"] = vertices
 	output["colors"] = colors
 	output["water_tiles"] = water_tiles
-	output["ocean_components"] = 1 if water_tiles > 0 else 0
+	output["ocean_components"] = admitted_components
+	output["isolated_components_skipped"] = isolated_components
 	output["ocean_seam_edges"] = sea_edges
 	output["refined_coast_quads"] = refines
 	return output
+
+
+## A component must have a wet segment on at least one of its four
+## region boundaries. This is necessary, but not sufficient, for global
+## ocean connectivity: neighboring unloaded regions still need qualification.
+static func _open_boundary_wet_edge(
+	x: int, z: int,
+	heights: PackedInt32Array, valid: PackedByteArray, threshold: float
+) -> bool:
+	var edge_pairs: Array[Vector2i] = []
+	if x == 0:
+		edge_pairs.append(Vector2i(z * WIDTH, (z + 1) * WIDTH))
+	if x == TILES_X - 1:
+		edge_pairs.append(Vector2i(z * WIDTH + TILES_X, (z + 1) * WIDTH + TILES_X))
+	if z == 0:
+		edge_pairs.append(Vector2i(x, x + 1))
+	if z == TILES_Z - 1:
+		edge_pairs.append(Vector2i(TILES_Z * WIDTH + x, TILES_Z * WIDTH + x + 1))
+	for edge in edge_pairs:
+		if valid[edge.x] != 0 and valid[edge.y] != 0 and (
+			float(mini(heights[edge.x], heights[edge.y])) / 1000.0 < threshold
+		):
+			return true
+	return false
 
 
 ## Two neighboring wet tiles connect only if their actual shared SDF edge
