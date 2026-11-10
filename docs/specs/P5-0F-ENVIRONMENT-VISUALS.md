@@ -78,3 +78,21 @@ The presenter receives the 1 m terrain lattice only after the environment surfac
 ## R2 local visual feedback — rainfall shallows
 
 On the owner's ocean-start screenshot, the shoreline was generated (392 visible triangles), while turquoise patchwork remained over nearby terrain. The original finite-cell presenter treated any positive rainfall (as little as 1,000 µL in a 4 m² cell) as a 25 mm visually deep sheet. R2 now suppresses visible finite puddles below a true 10 mm depth and renders larger accumulations at their derived physical depth. This is **presentation-only**, and never discards, rounds, or modifies stored water. Fixed-level ocean and river visuals are unchanged. Focused tests cover the one-milliliter case and a 40-liter/4 m² one-centimeter puddle.
+
+
+## P5.0F-R3 — Adaptive SDF shoreline (implemented; qualification pending)
+
+Problem: R2 eliminated spurious thin-rainfall sheets and coarse 2 m full-cell water quads, but the shoreline still followed 1 m terrain samples and an 8×6 hydrology center-classification, creating a jagged coastal silhouette.
+
+Implementation:
+
+- The existing P5.0C worker still emits the same 17×13, 1 m transient top-surface grid. It additionally derives **true 0.5 m SDF samples only near active water levels**, using the same immutable brush-edit/effect snapshots and provenance. At most 96 coast tiles and 512 sparse sample sites per region are admitted. Every interior tile stays at the original 1 m sampling cost.
+- Before ocean bindings are committed, the worker uses the already-defined core ocean level (4,000 mm) in the ocean band. If river bindings are available, their pinned reservoir levels are added to the bounded selection. No content schema, water volume, sea level or solver rule changes.
+- A coastal 1 m tile is refined to 0.5 m triangles **only if both submerged and dry top-SDF corners exist**. Fully submerged interior quads remain unchanged. The renderer uses sparse true-SDF sites when present; for a newly changed water level, it uses bounded bilinear interpolation of the already-derived SDF heights rather than requesting synchronous SDF work on the main thread.
+- **Dry-centered coastal fringe**: where an authoritative ocean cell is directly adjacent to a finite cell whose 2 m center is above the ocean plane but whose shoreline SDF samples show submerged area, the water plane extends one cell only and is clipped to the SDF. This closes an appearance gap caused by the coarse center-based hydrology binding; it never converts the finite cell into a reservoir, generates/injects simulation water, or extends beyond the immediately neighboring cell. This remains a presentation-only ocean shoreline approximation, not a change in simulation coverage.
+- One derived `MeshInstance3D` per region; at most 96 coastal tiles refined and 5,760 region vertices. No per-cell SceneTree nodes, no extra water authority, and no per-frame synchronous terrain-density sampling. The one-region rebuild/frame and existing two-worker / one-dispatch constraints remain.
+- An optional refinement sampling failure suppresses the derived shoreline and is **not** allowed to block publication of the canonical P5.0C surface cache. Mesh, sample and edit-revision gates continue to fail closed. `p5_environment_visual_rebuild` includes `refined_coast_quads` and `coastal_halo_cells`; SDF worker diagnostics include counts of refined sites and tiles.
+
+Acceptance: focused tests cover real sparse worker samples, immutable water authority, reduction of mesh area for a truly dry 0.5 m sample, dry-centered ocean fringe, no false inland expansion, exact repeatability, 5,760-vertex budget, and the previously required streaming/unload/revisit invariants. Cumulative P4/P5 tests and GUI validation are still mandatory. **Known limitation:** across a region border, a coast where the only authoritative ocean cell is in the neighboring unloaded region is not yet guaranteed to have a matching one-cell visual fringe. Evaluate this as an explicit P5.0G visual-boundary gate, not an assumed solved case.
+
+Lava and oil remain exclusively on the future post-P5 generic fluids roadmap; R3 touches no fluid-generalization code.
