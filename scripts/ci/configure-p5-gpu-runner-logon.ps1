@@ -6,7 +6,7 @@ param(
     [switch]$Start
 )
 $ErrorActionPreference = 'Stop'
-if (@($Install, $Remove, $Start | Where-Object { $_ }).Count -ne 1) {
+if (([int][bool]$Install + [int][bool]$Remove + [int][bool]$Start) -ne 1) {
     throw 'Choose exactly one action: -Install, -Start or -Remove.'
 }
 if ((Get-Process -Id $PID).SessionId -le 0 -or -not [Environment]::UserInteractive) {
