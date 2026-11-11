@@ -52,7 +52,7 @@ static func can_skip_pending(
 	has_frame_headroom: bool
 ) -> bool:
 	return (
-		profile == "adaptive-skip"
+		profile in ["adaptive-skip", "adaptive-skip-lookahead"]
 		and has_frame_headroom
 		and purpose == "load"
 		and skip_count < MAX_SKIPPED_LOAD_REGIONS_PER_FRAME
