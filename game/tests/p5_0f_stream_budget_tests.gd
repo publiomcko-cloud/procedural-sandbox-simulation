@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Policy := preload("res://scripts/terrain/terrain_stream_budget_policy.gd")
+const Selector := preload("res://scripts/terrain/terrain_stream_dispatch_selector.gd")
 
 var assertions := 0
 var failures := 0
@@ -41,9 +42,96 @@ func _run() -> void:
 	adaptive = Policy.next(adaptive, 8.0, 3.0, false)
 	_check(int(adaptive["dispatch_limit"]) == 1 and int(adaptive["cooldown_frames"]) == 0,
 		"switching back to baseline resets all experimental state")
+	_test_stage_skip_selection()
 	if failures == 0:
 		print("P5_0F_STREAM_BUDGET_PASS: assertions=%d failures=0" % assertions)
 		quit(0)
 	else:
 		push_error("P5_0F_STREAM_BUDGET_FAIL: assertions=%d failures=%d" % [assertions, failures])
 		quit(1)
+
+
+## Exact, deterministic stage priority is preserved. A blocked LOAD stage is
+## excluded from this call only; a ready neighbor may be processed next.
+## Returning to the next frame starts with the original blocked stage again.
+func _test_stage_skip_selection() -> void:
+	var origin := Vector2i(5, 13)
+	var stages := {
+		"home": {
+			"region_key": origin,
+			"purpose": "load",
+			"chunk_coordinates": [Vector2i(0, 0), Vector2i(1, 0)],
+			"submit_index": 0,
+		},
+		"near": {
+			"region_key": Vector2i(6, 13),
+			"purpose": "load",
+			"chunk_coordinates": [Vector2i(0, 0), Vector2i(1, 0)],
+			"submit_index": 0,
+		},
+		"far": {
+			"region_key": Vector2i(7, 13),
+			"purpose": "load",
+			"chunk_coordinates": [Vector2i(0, 0)],
+			"submit_index": 0,
+		},
+	}
+	var initial := Selector.next(stages, {}, origin)
+	_check(initial.get("id", "") == "home",
+		"skip policy starts with focused region, preserving original region priority")
+	var excluded := {"home": true}
+	var next_ready := Selector.next(stages, excluded, origin)
+	_check(next_ready.get("id", "") == "near",
+		"skip policy passes an effect-pending focused region to next-ready neighbor")
+	_check(int(stages["home"]["submit_index"]) == 0,
+		"skipping a region never consumes or changes its next chunk")
+	_check(next_ready.get("coordinate") == Vector2i(0, 0),
+		"new region begins at its own first queued chunk")
+	var near: Dictionary = stages["near"]
+	near["submit_index"] = 1
+	stages["near"] = near
+	_check(Selector.next(stages, excluded, origin).get("coordinate") == Vector2i(1, 0),
+		"next chunk within the selected region follows strict original order")
+	_check(Selector.next(stages, {"home": true, "near": true}, origin).get("id") == "far",
+		"multiple blocked regions are excluded for this invocation only")
+	_check(Selector.next(stages, {"home": true, "near": true, "far": true}, origin).is_empty(),
+		"no candidate terminates immediately, preventing endless spinning")
+	_check(Selector.next(stages, {}, origin).get("id") == "home",
+		"blocked region becomes eligible again on next frame")
+	var edit := {
+		"region_key": Vector2i(7, 13),
+		"purpose": "edit_transaction",
+		"chunk_coordinates": [Vector2i(2, 1)],
+		"submit_index": 0,
+	}
+	stages["edit"] = edit
+	_check(Selector.next(stages, {}, origin).get("id") == "edit",
+		"edit transaction priority remains higher than regular load stages")
+	_check(Selector.next(stages, {"edit": true}, origin).get("id") == "home",
+		"explicit exclusion does not mutate edit transaction queue")
+	var policy_cases := [
+		["adaptive-skip", "load", 0, 1500, 3500, true, true],
+		["adaptive-skip", "load", 2, 3499, 3500, true, true],
+		["adaptive-skip", "load", 3, 500, 3500, true, false],
+		["adaptive-skip", "load", 0, 3500, 3500, true, false],
+		["adaptive-skip", "load", 0, 500, 3500, false, false],
+		["baseline", "load", 0, 500, 3500, true, false],
+		["adaptive", "load", 0, 500, 3500, true, false],
+		["adaptive-skip", "edit_transaction", 0, 500, 3500, true, false],
+		["adaptive-skip", "partial", 0, 500, 3500, true, false],
+		["adaptive-skip", "full", 0, 500, 3500, true, false],
+	]
+	for entry in policy_cases:
+		var accepted: bool = Selector.can_skip_pending(
+			String(entry[0]), String(entry[1]), int(entry[2]),
+			int(entry[3]), int(entry[4]), bool(entry[5])
+		)
+		_check(accepted == bool(entry[6]),
+			"skip eligibility enforces profile, load-only, 3-stage cap, 3.5ms cap, headroom")
+	var near_full := stages.duplicate(true)
+	near_full.erase("edit")
+	var complete: Dictionary = near_full["near"]
+	complete["submit_index"] = 2
+	near_full["near"] = complete
+	_check(Selector.next(near_full, {"home": true}, origin).get("id") == "far",
+		"completed region is ignored rather than restarting its chunk index")
