@@ -459,7 +459,7 @@ func _test_r5_isolated_ocean_binding() -> void:
 
 
 ## R5: revisions and ticks without visible water changes do not cause
-## expensive remeshing. A stale shoreline hides; valid samples restore it.
+## expensive remeshing. Old published visuals stay visible until validated swap.
 func _test_r5_visual_signature_and_revisit() -> void:
 	var runtime := FakeRuntime.new()
 	get_root().add_child(runtime)
@@ -493,21 +493,53 @@ func _test_r5_visual_signature_and_revisit() -> void:
 		"R5 visible finite-depth changes still rebuild the water mesh")
 	_check(int(presenter.call("get_visual_metrics")["unchanged_visual_skips_total"]) >= 2,
 		"R5 bypassed rebuilds are measurable")
+	var previous_water_mesh := node.mesh
 	presenter.call("invalidate_region_shoreline_samples", Vector2i.ZERO)
-	_check(not node.visible, "R5 edited terrain hides stale water immediately")
+	_check(node.visible and node.mesh == previous_water_mesh,
+		"R5.2 edit invalidation retains the last committed water mesh")
+	_check(int(presenter.call("get_visual_metrics")["pending_visual_refreshes"]) == 1,
+		"R5.2 pending old-to-new visual replacement is tracked")
+	var temporarily_missing := runtime.surface
+	runtime.surface = {}
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
+	_check(node.visible and node.mesh == previous_water_mesh,
+		"R5.2 temporary missing canonical cache does not produce a blank water frame")
+	runtime.surface = temporarily_missing
 	var wrong := _shoreline()
 	wrong["terrain_revision"] = 999
 	_check(not presenter.call("install_region_shoreline_samples", Vector2i.ZERO, runtime.surface, wrong),
 		"R5 rejected shoreline cannot silently mark the region current")
 	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
-	_check(not node.visible, "R5 mismatched samples never expose stale geometry")
+	_check(node.visible and node.mesh == previous_water_mesh,
+		"R5.2 invalid sample retry does not erase last committed mesh")
 	_check(presenter.call("install_region_shoreline_samples", Vector2i.ZERO, runtime.surface, _shoreline()),
 		"R5 valid retry installs fresh shoreline")
 	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
-	_check(node.visible, "R5 region becomes visible again after valid retry")
+	_check(node.visible and node.mesh != previous_water_mesh,
+		"R5.2 valid retry swaps the old water mesh for a complete new mesh")
+	_check(int(presenter.call("get_visual_metrics")["pending_visual_refreshes"]) == 0,
+		"R5.2 swap clears pending visual replacement state")
+	_check(int(presenter.call("get_visual_metrics")["completed_visual_swaps_total"]) >= 1,
+		"R5.2 old-to-new mesh swap produces telemetry")
+	var committed_mesh := node.mesh
+	var replacement_surface: Dictionary = runtime.surface.duplicate(true)
+	replacement_surface["terrain_revision"] = int(replacement_surface["terrain_revision"]) + 1
+	presenter.call("invalidate_region_shoreline_samples", Vector2i.ZERO)
+	runtime.surface = replacement_surface
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
+	_check(node.visible and node.mesh == committed_mesh,
+		"R5.2 new terrain revision keeps old sea until fresh SDF samples arrive")
+	var new_shoreline := _shoreline()
+	new_shoreline["terrain_revision"] = replacement_surface["terrain_revision"]
+	_check(presenter.call("install_region_shoreline_samples",
+		Vector2i.ZERO, runtime.surface, new_shoreline),
+		"R5.2 new revision-matched samples install successfully")
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
+	_check(node.visible and node.mesh != committed_mesh,
+		"R5.2 new SDF revision commits a replacement without any hidden frame")
 	presenter.call("unregister_region", Vector2i.ZERO)
 	presenter.call("register_region", Vector2i.ZERO)
-	_check(presenter.call("install_region_shoreline_samples", Vector2i.ZERO, runtime.surface, _shoreline()),
+	_check(presenter.call("install_region_shoreline_samples", Vector2i.ZERO, runtime.surface, new_shoreline),
 		"R5 revisit attaches current source samples")
 	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
 	_check((presenter.get_node("Water_0_0") as MeshInstance3D).visible,
