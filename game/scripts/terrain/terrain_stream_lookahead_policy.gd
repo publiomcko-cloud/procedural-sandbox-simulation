@@ -17,6 +17,26 @@ static func clamp_lead(focus: Vector2i, proposed: Vector2i) -> Vector2i:
 	)
 
 
+## At most six LOAD stages in the forward row/column at radius 2, always
+## within terrain's 5x5 retained window (MAX_ACTIVE_REGIONS=25). The 3x3
+## current window remains higher priority in the normal stage selector.
+static func forward_stage_targets(focus: Vector2i, ahead: Vector2i) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	var lead := clamp_lead(focus, ahead) - focus
+	if lead.x != 0:
+		var x := focus.x + (2 if lead.x > 0 else -2)
+		for z in range(focus.y - 1, focus.y + 2):
+			result.append(Vector2i(x, z))
+	if lead.y != 0:
+		var z := focus.y + (2 if lead.y > 0 else -2)
+		for x in range(focus.x - 1, focus.x + 2):
+			result.append(Vector2i(x, z))
+	result.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return a.y < b.y if a.y != b.y else a.x < b.x
+	)
+	return result
+
+
 static func _distance(a: Vector2i, b: Vector2i) -> int:
 	return maxi(absi(a.x - b.x), absi(a.y - b.y))
 
