@@ -2,6 +2,12 @@
 
 **Check live GitHub refs before action**; each checkpoint is a dated immutable evidence snapshot, never a real-time claim. A draft document is not merged or approved.
 
+## Latest experimental streaming event
+
+| Date | Checkpoint | Event | Publication state at creation |
+| --- | --- | --- | --- |
+| 2026-11-11 | [P5 streaming E1.1](2026-11-11-P5-STREAM-E1-1-EXPERIMENT.md) | Owner-authorized E1.1 event-invalidated readiness cache and scheduler optimization on PR #282; code published, qualification not established at checkpoint | Draft docs branch only; implementation not merged, GUI A/B pending |
+
 ## Latest integration event
 
 | Date | Checkpoint | Event | Publication state at creation |
