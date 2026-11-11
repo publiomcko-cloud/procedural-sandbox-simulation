@@ -184,3 +184,7 @@ For both sessions, F10 + WASD and then Ctrl+W for matching 60–90s path/time, s
 If R3 does not keep up at 54m/s, next step is **separate RFC for coarse-first/proxy terrain mesh publication** then revision-matched detail replacement under original SDF/mesh/LOD seams, NOT another unbounded increase of thread/upload budgets. Existing R5.2 water retain/swap and R5.3 coastline rules must be preserved.
 
 **Current documented verdict:** R2 `adaptive-skip` best observed candidate, R3 opt-in code only / exact-head CI and owner F10 A/B pending / no merge into PR #280 or main.
+
+### R3.1 clarification — avoid redundant source-window work
+
+After the initial R3 implementation, the experimental branch also gained a **same-focus lookahead-only fast path**: when the predicted forward strips change, terrain desired-stage selection is refreshed, but the 9×9 effect-source residency/protection reconciliation is skipped unless the actual focus changed or `force=true`. Thus no artificial re-fetch of 81 effect sources every predicted crossing. The main-thread `terrain_stream_budget_window.stage_work_usec` now has `focus_window_lookahead` and `lod_selection` components, enabling frame-spike root-cause attribution. This is not evidence of improved F10 visual speed; it is an additional optimizable bottleneck under test. Read the R3 experiment spec and inspect exact Git HEAD before any new changes.
