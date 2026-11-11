@@ -142,3 +142,45 @@ For EXACT tested SHA `0661e1b9...`, GitHub reports successful P5.0F, P5.0A/B/C/E
 6. If actual skip gains disappear, preserve baseline and target effect-preparation readiness, not arbitrary worker count increases.
 
 **Current R2 verdict: FUNCTIONAL_PASS, THROUGHPUT_PROMISING, CI_PARTIAL, NO_MERGE.**
+
+## 10. NEW R3 F10 velocity-matched streaming experiment — 2026-11-11
+
+Owner's instruction: **keep the best R2 profile `adaptive-skip`** but find further load bottlenecks, ideally with terrain displaying as quickly as F10 free camera moves. `adaptive-skip` remains preserved and available, NOT yet promoted into P5.0F production. New opt-in **`adaptive-skip-lookahead`** extends it **only during actual F10 motion**. This is a measured engineering hypothesis, NOT verified speed parity.
+
+### Verified design facts and limits
+
+- `FREE_EXPLORE_SPEED=18.0`m/s, Ctrl boosted ×3 = **54m/s**, region size **16×12m**, 16 chunks per region. Camera boosted passes a 12m region in **0.22s**, whereas R2's best measured region load p50 was ~1.5s. Fine-grained 16-chunk publication and effect-source/corner dependencies remain architectural throughput limits. **Do not claim F10 boost match can be guaranteed** by scheduling or extra workers alone.
+- Terrain requested 3×3, retained 5×5 / max 25 regions. Terrain-object source radius is **2** regions, so the protected prefetch halo is 9×9 / 81 scopes. Existing background effect source queue often has 81 entries, with two source-generation and two projection jobs in flight. Keep all hard caps and authoritative source/mesh/hydrology semantics unchanged.
+- The new profile predicts actual horizontal F10 camera motion **0.75s ahead**, caps lead to ±2 regions, and reorders *existing* queued effect sources: urgent pending-effect entries preserve FIFO precedence, current visible 3×3 sources receive priority, then predicted sources, then background. No new prefetch scope is created, no cache or source revisions changed.
+- It also starts **at most six terrain load stages** in forward strips at distance 2 (one x and one z strip for diagonal), inside retained5×5 and protected source9×9. Current visible 3×3 stages still dispatch first, per existing distance and edit priority. Speculative stages may be dropped by normal retention when user turns. F10-only, optional; baseline/adaptive/adaptive-skip unaffected.
+- New passive metrics from `terrain_stream_budget_window`: `f10_movement_frames` (only actually moving frames), `f10_focus_missing_frames`, `f10_missing_regions_in_window_total`, `f10_peak_speed_mps`, `f10_distance_m`, `f10_predictive_stages_started`. JSON runner normalizes to `f10_focus_missing_pct`, `f10_missing_regions_per_frame`, predicts count, reorders, plus existing FPS and region publication p50/p95. Direct objective: fewer frames moving through missing focus terrain, not merely more worker jobs.
+
+### Code additions / qualification gates
+
+Read `docs/reports/P5-0F-STREAM-ADAPTIVE/AB-R3-F10-LOOKAHEAD-EXPERIMENT.md` first; it is the detailed reproducible plan.
+- `game/scripts/terrain/terrain_stream_lookahead_policy.gd` + `game/tests/p5_0f_stream_lookahead_tests.gd` — horizon/forward strip, source priority and 5×5 confinement pure tests.
+- `game/scripts/terrain/terrain_object_effect_runtime.gd` — urgent queue marker and method `prioritize_prefetch_for_motion`.
+- `game/scripts/terrain/terrain_demo.gd` — profile-gated actual camera displacement, ahead projection and speculative source/region work, metrics.
+- `game/scripts/terrain/terrain_stream_budget_policy.gd`, `terrain_stream_dispatch_selector.gd`, `game/tests/p5_0f_stream_budget_tests.gd` — fourth profile while preserving R2 skip caps.
+- `scripts/ci/run-p5-0f-qualification.ps1` — new lookahead PASS gate, then inherited P5.0E→P4 chain.
+- `scripts/perf/run-p5-stream-profile.ps1` — four allowed profiles, two headless regressions, full PERF_TRACE log + .events.txt + .metrics.json; hard-fail if requested != effective runtime profile (R2 first-run lesson).
+
+**CI was queued at the moment of documentation.** New experiments must not be called qualified until the **exact current HEAD** passes Windows Godot 4.7.2 functional and cumulative CI. Earlier `0661e1b9` failed nested P5.0D P4.0H perf gate (p99 30.524ms > 25ms) even though independent P4.0H passed; this remains a pre-existing unresolved gate, NOT permission to loosen it. New documentation commits trigger workflows and may cancel older same-branch runs, so check current PR #281 HEAD.
+
+### Owner repeatable two-profile F10 benchmark
+
+```powershell
+cd C:\Dev\sandbox-sim-dev
+git fetch origin exp/p5-0f-adaptive-stream-budget
+git switch exp/p5-0f-adaptive-stream-budget
+git pull --ff-only origin exp/p5-0f-adaptive-stream-budget
+git rev-parse HEAD
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\perf\run-p5-stream-profile.ps1 -Profile adaptive-skip
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\perf\run-p5-stream-profile.ps1 -Profile adaptive-skip-lookahead
+```
+
+For both sessions, F10 + WASD and then Ctrl+W for matching 60–90s path/time, seed/world/camera conditions. Save full logs, `.events.txt`, `.metrics.json` from `C:\Dev\p5-0f-evidence`. Repeat in reverse order if possible. No manual metrics or naked Godot commands without trace+saved log. If `f10_movement_frames=0`, the run does NOT test F10. Reject if visual hitches, terrain/sea gaps worsen, >20ms frame rate increases ≥1 percentage point, new P4/P5 failures or revision/mesh seam rules are violated.
+
+If R3 does not keep up at 54m/s, next step is **separate RFC for coarse-first/proxy terrain mesh publication** then revision-matched detail replacement under original SDF/mesh/LOD seams, NOT another unbounded increase of thread/upload budgets. Existing R5.2 water retain/swap and R5.3 coastline rules must be preserved.
+
+**Current documented verdict:** R2 `adaptive-skip` best observed candidate, R3 opt-in code only / exact-head CI and owner F10 A/B pending / no merge into PR #280 or main.
