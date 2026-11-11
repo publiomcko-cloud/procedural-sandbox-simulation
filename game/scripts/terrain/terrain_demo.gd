@@ -2695,7 +2695,7 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_corner.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_corner):
-					_stream_dispatch_blocked("effect_snapshot_pending")
+					_stream_dispatch_blocked("effect_pending_corner")
 					if StreamDispatchSelector.can_skip_pending(
 						_stream_profile, String(stage["purpose"]),
 						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
@@ -2734,7 +2734,7 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_pair.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_pair):
-					_stream_dispatch_blocked("effect_snapshot_pending")
+					_stream_dispatch_blocked("effect_pending_x_boundary")
 					if StreamDispatchSelector.can_skip_pending(
 						_stream_profile, String(stage["purpose"]),
 						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
@@ -2773,7 +2773,7 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_z.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_z):
-					_stream_dispatch_blocked("effect_snapshot_pending")
+					_stream_dispatch_blocked("effect_pending_z_boundary")
 					if StreamDispatchSelector.can_skip_pending(
 						_stream_profile, String(stage["purpose"]),
 						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
@@ -2807,7 +2807,7 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_chunk.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_chunk):
-					_stream_dispatch_blocked("effect_snapshot_pending")
+					_stream_dispatch_blocked("effect_pending_chunk")
 					if StreamDispatchSelector.can_skip_pending(
 						_stream_profile, String(stage["purpose"]),
 						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
@@ -2901,6 +2901,8 @@ func _dispatch_mesh_jobs() -> void:
 				"raw_candidate_operations": int(snapshot_meta.get("raw_candidate_operation_count", snapshot_meta.get("candidate_operation_count", -1))),
 				"materialized_tiles": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
 			})
+	if _mesh_jobs.size() >= _mesh_job_limit:
+		_stream_dispatch_blocked("worker_capacity")
 
 
 func _prepare_terrain_effect_snapshot(
