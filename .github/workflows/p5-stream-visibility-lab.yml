@@ -30,14 +30,15 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Verify exact checked-out source and pinned Godot
-        shell: powershell
+        shell: cmd
         run: |
-          $ErrorActionPreference = 'Stop'
-          $sha = (& git rev-parse HEAD).Trim()
-          Write-Host "E0E1_SHA=$sha"
-          if (-not (Test-Path $env:GODOT_BIN)) { throw "Pinned Godot missing" }
-          & $env:GODOT_BIN --version
-          if ($LASTEXITCODE -ne 0) { throw "Godot version command failed" }
+          @echo off
+          git rev-parse HEAD
+          if errorlevel 1 exit /b 1
+          if /I not "%RUNNER_OS%"=="Windows" exit /b 1
+          if not exist "%GODOT_BIN%" exit /b 1
+          "%GODOT_BIN%" --version
+          if errorlevel 1 exit /b 1
       - name: Run complete inherited P5.0F + P4 qualification, including E0 and E1 tests
         shell: cmd
         timeout-minutes: 205
