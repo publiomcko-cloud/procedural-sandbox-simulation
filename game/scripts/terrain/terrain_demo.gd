@@ -2912,6 +2912,15 @@ func _complete_region_stage(id: String) -> void:
 			stage.get("vertex_count_by_coordinate", {}),
 			stage.get("triangle_count_by_coordinate", {})
 		)
+		if _perf_trace_enabled:
+			PerformanceTrace.emit("terrain_region_load_complete", {
+				"region": [(stage["region_key"] as Vector2i).x, (stage["region_key"] as Vector2i).y],
+				"purpose": String(stage["purpose"]),
+				"stage_token": int(stage["stage_token"]),
+				"elapsed_usec": maxi(0, Time.get_ticks_usec() - int(stage.get("chunk_enqueued_usec", 0))),
+				"chunk_count": (stage["chunk_coordinates"] as Array).size(),
+				"profile": _stream_profile,
+			})
 		_streamed_region_loads += 1
 		_stage_retry_counts.erase(id)
 		_clear_stream_error(id)
