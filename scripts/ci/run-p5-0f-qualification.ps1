@@ -34,6 +34,7 @@ function Invoke-Qualification([string]$Label, [string[]]$CommandArgs, [string]$E
 
 Invoke-Qualification 'import' @('--headless', '--editor', '--path', $ProjectPath, '--import') '' | Out-Null
 Invoke-Qualification 'focused' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p5_0f_environment_visuals_tests.gd') 'P5_0F_ENVIRONMENT_VISUALS_PASS:' | Out-Host
+Invoke-Qualification 'stream-budget' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p5_0f_stream_budget_tests.gd') 'P5_0F_STREAM_BUDGET_PASS:' | Out-Host
 
 & (Join-Path $PSScriptRoot 'run-p5-0e-qualification.ps1') -GodotBin $GodotBin -ProjectPath $ProjectPath
 if ($LASTEXITCODE -ne 0) { throw "Inherited P5.0E qualification failed: $LASTEXITCODE" }
