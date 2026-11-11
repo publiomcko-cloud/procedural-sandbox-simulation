@@ -112,3 +112,33 @@ Decisive evidence: the third report **requests** `adaptive-skip` and its metrics
 **Corrective code published after these logs:** `TerrainStreamBudgetPolicy.resolve_profile` handles three modes and CLI override, real `_ready()` invokes it, the trace declares requested/effective/mismatch, 10 new pure resolver regressions, and the PowerShell reporter now FAILS if observed effective mode mismatches. The first-run source-backed postmortem is `docs/reports/P5-0F-STREAM-ADAPTIVE/AB-R2-FIRST-RUN-RESULTS.md`; read it before changing code.
 
 **Current next step:** check latest exact-head CI; if green (or manual headless PASS), run three identical-path experiments again from the new head with the pinned Windows Godot and the built-in PERF_TRACE runner; verify effective `adaptive-skip` is actually active **before** interpreting FPS/throughput. Update this checkpoint's current HEAD/gates based on live GitHub, not its stale checkpoint time. Keep PR #281 draft, leave R5.3 PR #280 untouched and never direct-merge experiment to main.
+
+## 9. NEW VERIFIED RETEST — owner's second R2 A/B/C on 2026-11-11 13:20–13:22 (-03:00)
+
+**This section supersedes §8's "R2 not measured" verdict.** The user repeated all three profiles on the *fixed* exact commit `0661e1b9fc32286cce429ecafdd2ffc7e83cfc84`, with the pinned Windows Godot and the tool-generated PERF_TRACE logs. All three reported **183 assertions/0 failures**, exited 0, and showed `requested_profile == profile` with `profile_mismatch:false`.
+
+Artifacts (user uploads in the 2026-11-11 13:22 session):
+- `P5-stream-baseline-20261111-132035.log` / `.events.txt` / `.metrics.json`
+- `P5-stream-adaptive-20261111-132101.log` / `.events.txt` / `.metrics.json`
+- `P5-stream-adaptive-skip-20261111-132130.log` / `.events.txt` / `.metrics.json`
+
+**R2 bypass is FUNCTIONALLY CONFIRMED, but not ready to promote.** Adaptive-skip actually executed **135** skip events; **33** successful dispatch-after-skip events; **18** skip-time-budget exits. 27 regions loaded vs baseline 27 and adaptive 24. Unpaired load p50 baseline 1,754ms, adaptive 1,577ms, skip 1,495ms; p95 baseline 5,176ms, adaptive 5,551ms, skip 5,076ms. Slow frames >20ms baseline 6.09%, adaptive 3.21%, skip 2.01% (frames >33ms: 1.08%, 0.40%, 0.32%). Mean frame ~17.37 / 17.11 / 17.21ms.
+
+Matched **21 regions**: mean load baseline **2,724.94ms**, adaptive **2,680.09ms**, skip **2,589.51ms**. Skip ~5.0% mean improvement vs baseline, faster in 14/21; on initial shared 3×3, means 4,376.73 / 4,576.18 / 4,269.07ms. The origin region (5,13) alone was slower in skip (3,342ms vs 2,494ms baseline), so no universal speedup. These are 19–22s non-randomized sequential tests, **not a controlled or statistically conclusive acceleration guarantee**. Longer same-route reverse-order tests are recommended.
+
+Complete machine-readable numbers, parsed event counts, matched cohort methodology, constraints and verdict: `docs/reports/P5-0F-STREAM-ADAPTIVE/AB-R2-VALID-RESULTS.md`. The earlier invalid first-run report remains evidence of the profile selection bug, not of R2 throughput.
+
+### CI caution
+
+For EXACT tested SHA `0661e1b9...`, GitHub reports successful P5.0F, P5.0A/B/C/E, P4.0F/G/H and Starter checks, **but P5.0D cumulative workflow FAILED** on nested P4.0H perf gate: `terrain_window_reconcile` p99 **30,524µs > 25,000µs**. The underlying `P5_0D_FINITE_RUNOFF_PASS: 130/0` and `P4_0H_FINAL_PASS: 81/0` were successful; the sampled perf bound was not. The independent P4.0H workflow succeeded on the same SHA. Do not call cumulative CI green or loosen the 25ms threshold. Compare repeat traces, understand runner interference/variance vs actual code regression, and keep the hard gate until qualified. Later documentation-only commits may produce new CI runs; always verify **current HEAD and exact-head status** before promotion.
+
+### Mandatory next agent actions
+
+1. Read `AB-R2-VALID-RESULTS.md`, this checkpoint, PR #281, source and CI. Verify current experimental branch HEAD, not just the tested `0661...` ancestor.
+2. Preserve baseline and all P4/P5 authority, R5.2 water retention, R5.3 coastline. PR #281 remains a DRAFT **DO NOT MERGE**.
+3. Investigate nested P4.0H p99 gate failure and rerun controlled CI with no gate relaxation. Source snapshot/workload/order variance is a **hypothesis**, not an excuse.
+4. If CI clear, repeat 60–90s same-route baseline/adaptive/adaptive-skip, ideally reverse-order (skip/adaptive/baseline). The built-in PowerShell script instruments and writes logs+metrics automatically, with profile fail-closed check.
+5. Compare per-region matched latency, first 3×3 loaded, frame >20/33ms, successful skip conversions, remaining effect-corner pending and worker-capacity stalls, plus subjective visual hitches. Require reproducibility before selective promotion into P5.0F.
+6. If actual skip gains disappear, preserve baseline and target effect-preparation readiness, not arbitrary worker count increases.
+
+**Current R2 verdict: FUNCTIONAL_PASS, THROUGHPUT_PROMISING, CI_PARTIAL, NO_MERGE.**
