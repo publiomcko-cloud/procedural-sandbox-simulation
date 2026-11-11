@@ -130,6 +130,7 @@ try {
             $workMean += [double]$w.process_mean_ms * [double]$w.frame_count
             $framePeak = [Math]::Max($framePeak, [double]$w.frame_peak_ms)
         }
+        $predictiveStages = 0
         $f10Frames = 0
         $f10FocusMissing = 0
         $f10RegionGaps = 0
@@ -145,6 +146,7 @@ try {
         $skipBudgetExhausted = 0
         $dispatchBlockers = @{}
         foreach ($w in $windowRows) {
+            $predictiveStages += [int]$w.f10_predictive_stages_started
             $f10Frames += [int]$w.f10_movement_frames
             $f10FocusMissing += [int]$w.f10_focus_missing_frames
             $f10RegionGaps += [int]$w.f10_missing_regions_in_window_total
@@ -175,6 +177,7 @@ try {
             f10_distance_m = [Math]::Round($f10Distance, 1)
             f10_peak_speed_mps = [Math]::Round($f10PeakSpeed, 2)
             effect_motion_prefetch_reorders = [int]$lookaheadReorders
+            f10_predictive_stages_started = [int]$predictiveStages
             effect_pending_load_skips = $headSkips
             successful_dispatch_after_skip = $skipRecovered
             skip_time_budget_exhausted = $skipBudgetExhausted
