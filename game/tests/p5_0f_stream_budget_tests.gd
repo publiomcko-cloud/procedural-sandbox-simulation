@@ -42,6 +42,7 @@ func _run() -> void:
 	adaptive = Policy.next(adaptive, 8.0, 3.0, false)
 	_check(int(adaptive["dispatch_limit"]) == 1 and int(adaptive["cooldown_frames"]) == 0,
 		"switching back to baseline resets all experimental state")
+	_test_runtime_profile_resolution()
 	_test_stage_skip_selection()
 	if failures == 0:
 		print("P5_0F_STREAM_BUDGET_PASS: assertions=%d failures=0" % assertions)
@@ -135,3 +136,34 @@ func _test_stage_skip_selection() -> void:
 	near_full["near"] = complete
 	_check(Selector.next(near_full, {"home": true}, origin).get("id") == "far",
 		"completed region is ignored rather than restarting its chunk index")
+
+
+## R2 retest blocker: the actual Godot runtime previously coerced any
+## environment mode other than "adaptive" to baseline, so the A/B script
+## reported adaptive-skip even as PERF_TRACE said baseline.
+func _test_runtime_profile_resolution() -> void:
+	var empty := PackedStringArray()
+	_check(Policy.resolve_profile("", empty) == "baseline",
+		"unset environment retains default baseline")
+	_check(Policy.resolve_profile("baseline", empty) == "baseline",
+		"explicit baseline is supported")
+	_check(Policy.resolve_profile("adaptive", empty) == "adaptive",
+		"adaptive environment is preserved")
+	_check(Policy.resolve_profile("adaptive-skip", empty) == "adaptive-skip",
+		"adaptive-skip environment reaches actual runtime without being reset")
+	_check(Policy.resolve_profile(" ADAPTIVE-SKIP ", empty) == "adaptive-skip",
+		"case and whitespace do not disable adaptive-skip")
+	_check(Policy.resolve_profile("unknown", empty) == "baseline",
+		"invalid environment fails closed to baseline")
+	_check(Policy.resolve_profile("adaptive-skip",
+		PackedStringArray(["--stream-profile=baseline"])) == "baseline",
+		"explicit CLI baseline overrides environment")
+	_check(Policy.resolve_profile("baseline",
+		PackedStringArray(["--stream-profile=adaptive-skip"])) == "adaptive-skip",
+		"CLI can opt in to adaptive-skip without environment")
+	_check(Policy.resolve_profile("adaptive",
+		PackedStringArray(["--unused", "--stream-profile=adaptive-skip"])) == "adaptive-skip",
+		"CLI args scan selects requested adaptive-skip profile")
+	_check(Policy.resolve_profile("adaptive-skip",
+		PackedStringArray(["--stream-profile=unknown"])) == "baseline",
+		"invalid CLI override fails closed")
