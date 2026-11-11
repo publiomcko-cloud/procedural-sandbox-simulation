@@ -41,6 +41,17 @@ var _prefetch_scope_ids: Dictionary = {}
 var _prefetch_urgent_scope_ids: Dictionary = {}
 var _lookahead_last_motion_pair := ""
 var _lookahead_reorders := 0
+# E1.1 bounded derived cache: source scope mutations bump the epoch. Never
+# use its state as authority for canonical snapshot construction.
+var _dependency_source_epoch := 0
+var _dependency_cached_source_epoch := -1
+var _dependency_cached_target_ids: Array[String] = []
+var _dependency_cached_focus := Vector2i.ZERO
+var _dependency_cached_missing: Dictionary = {}
+var _dependency_cached_target_count := 0
+var _dependency_cached_ready_count := 0
+var _dependency_cache_valid := false
+
 var _prefetch_generation_jobs: Dictionary = {}
 var _prefetch_task_by_scope: Dictionary = {}
 var _prefetch_projection_jobs: Dictionary = {}
@@ -129,6 +140,7 @@ func initialize(
 	_prefetch_urgent_scope_ids.clear()
 	_lookahead_last_motion_pair = ""
 	_lookahead_reorders = 0
+	_reset_dependency_cache()
 	_prefetch_generation_jobs.clear()
 	_prefetch_task_by_scope.clear()
 	_prefetch_projection_jobs.clear()
@@ -176,6 +188,7 @@ func set_incremental_prefetch_enabled(enabled: bool) -> void:
 		_prefetch_projection_task_by_scope.clear()
 		_prefetch_projection_ready.clear()
 		_prefetch_error = ""
+		_reset_dependency_cache()
 
 
 func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
@@ -561,6 +574,7 @@ func _publish_prebuilt_projection_record(
 	) + 1
 	_invalidated_scope_ids.erase(scope_id)
 	_pre_invalidation_frames.erase(scope_id)
+	_note_dependency_source_change()
 	_performance["prefetch_scope_count"] = int(
 		_performance["prefetch_scope_count"]
 	) + 1
@@ -986,6 +1000,7 @@ func _reconcile_prebuilt_source_region(
 	) + 1
 	_invalidated_scope_ids.erase(scope_id)
 	_pre_invalidation_frames.erase(scope_id)
+	_note_dependency_source_change()
 	return reconciled
 
 
@@ -1097,30 +1112,76 @@ func prioritize_prefetch_for_motion(
 	return {"ok": true, "changed": changed, "queued": _prefetch_queue.size()}
 
 
-## E1: opt-in presentation scheduling only. Report exact resident source
-## readiness for staged terrain regions and reorder *already queued* sources.
-## High-priority effect requests retain FIFO. No source is added or dropped.
+## E1.1: a monotonic notification for changes to projection scope readiness.
+## This does not invalidate canonical snapshots: the snapshot API already does.
+func get_dependency_source_epoch() -> int:
+	return _dependency_source_epoch
+
+
+func _note_dependency_source_change() -> void:
+	_dependency_source_epoch += 1
+
+
+func _reset_dependency_cache() -> void:
+	_dependency_source_epoch += 1
+	_dependency_cached_source_epoch = -1
+	_dependency_cached_target_ids.clear()
+	_dependency_cached_missing.clear()
+	_dependency_cached_target_count = 0
+	_dependency_cached_ready_count = 0
+	_dependency_cache_valid = false
+
+
+## Opt-in E1.1 scheduler. Recompute cached halo readiness after a source
+## publication/invalidation/eviction or a change in staged terrain targets.
+## Sort pending prefetch only when target priority changes, not every frame.
 func prioritize_prefetch_for_dependency(targets: Array[Vector2i], focus: Vector2i) -> Dictionary:
 	if not initialized or not incremental_prefetch_enabled:
 		return {"ok": true, "changed": false, "missing_source_counts": {}}
+	var started_usec := Time.get_ticks_usec()
+	var target_ids: Array[String] = []
+	for target in targets:
+		target_ids.append("%d,%d" % [target.x, target.y])
+	var demand_changed := not _dependency_cache_valid \
+		or focus != _dependency_cached_focus \
+		or target_ids != _dependency_cached_target_ids
+	var source_changed := _dependency_cached_source_epoch != _dependency_source_epoch
+	if not demand_changed and not source_changed:
+		return {
+			"ok": true,
+			"changed": false,
+			"cache_hit": true,
+			"target_count": _dependency_cached_target_count,
+			"ready_targets": _dependency_cached_ready_count,
+			"missing_source_counts": _dependency_cached_missing.duplicate(false),
+			"elapsed_usec": Time.get_ticks_usec() - started_usec,
+		}
 	var missing_by_region: Dictionary = {}
 	var ready_count := 0
 	for target in targets:
 		var missing := 0
 		var single_target: Array[Vector2i] = [target]
-		var required := _required_source_regions_for_regions(single_target)
-		for source_region in required:
+		for source_region in _required_source_regions_for_regions(single_target):
 			var scope_id := Contract.scope_id_for_region(source_region)
 			if not projection.has_scope(source_region) or _invalidated_scope_ids.has(scope_id):
 				missing += 1
 		missing_by_region["%d,%d" % [target.x, target.y]] = missing
 		if missing == 0:
 			ready_count += 1
-	var original := _prefetch_queue.duplicate()
-	_prefetch_queue = DependencyPolicy.order_prefetch(
-		_prefetch_queue, targets, focus, _prefetch_urgent_scope_ids
-	)
-	var changed := _prefetch_queue != original
+	var changed := false
+	if demand_changed and _prefetch_queue.size() > 1 and not targets.is_empty():
+		var original := _prefetch_queue.duplicate()
+		_prefetch_queue = DependencyPolicy.order_prefetch(
+			_prefetch_queue, targets, focus, _prefetch_urgent_scope_ids
+		)
+		changed = _prefetch_queue != original
+	_dependency_cached_target_ids = target_ids
+	_dependency_cached_focus = focus
+	_dependency_cached_source_epoch = _dependency_source_epoch
+	_dependency_cached_missing = missing_by_region
+	_dependency_cached_target_count = targets.size()
+	_dependency_cached_ready_count = ready_count
+	_dependency_cache_valid = true
 	if changed and _perf_trace_enabled:
 		PerformanceTrace.emit("effect_dependency_prefetch_priority", {
 			"focus": [focus.x, focus.y],
@@ -1128,13 +1189,18 @@ func prioritize_prefetch_for_dependency(targets: Array[Vector2i], focus: Vector2
 			"ready_targets": ready_count,
 			"queue_size": _prefetch_queue.size(),
 			"urgent_scope_count": _prefetch_urgent_scope_ids.size(),
+			"reason": "demand_changed",
 		})
 	return {
 		"ok": true,
 		"changed": changed,
+		"cache_hit": false,
+		"demand_changed": demand_changed,
+		"source_changed": source_changed,
 		"target_count": targets.size(),
 		"ready_targets": ready_count,
-		"missing_source_counts": missing_by_region,
+		"missing_source_counts": missing_by_region.duplicate(false),
+		"elapsed_usec": Time.get_ticks_usec() - started_usec,
 	}
 
 
@@ -1298,6 +1364,7 @@ func invalidate_source_region(source_region: Vector2i) -> void:
 			scope.get("local_frames", {}) as Dictionary
 		).duplicate(true) if not scope.is_empty() else {}
 	_invalidated_scope_ids[scope_id] = true
+	_note_dependency_source_change()
 
 
 func refresh_invalidated_source_region(
@@ -1335,6 +1402,7 @@ func refresh_invalidated_source_region(
 	var targets := _changed_frame_targets(old_frames, new_frames)
 	_invalidated_scope_ids.erase(scope_id)
 	_pre_invalidation_frames.erase(scope_id)
+	_note_dependency_source_change()
 	return {
 		"ok": true,
 		"targets": targets,
@@ -1475,6 +1543,7 @@ func update_resident_target_regions(
 		var parsed := _region_from_scope_id(scope_id)
 		if parsed.get("ok", false):
 			projection.release_scope(parsed["region_key"], true)
+			_note_dependency_source_change()
 			_performance["scope_eviction_count"] = int(
 				_performance["scope_eviction_count"]
 			) + 1
@@ -1595,6 +1664,8 @@ func release_all_scopes() -> void:
 		var parsed := _region_from_scope_id(scope_id)
 		if parsed.get("ok", false):
 			projection.release_scope(parsed["region_key"])
+			_note_dependency_source_change()
+	_reset_dependency_cache()
 	if projection.has_method("purge_dormant_scopes"):
 		projection.purge_dormant_scopes()
 
@@ -1628,6 +1699,7 @@ func _make_projection_capacity(
 		if not parsed.get("ok", false):
 			continue
 		projection.release_scope(parsed["region_key"], true)
+		_note_dependency_source_change()
 		released += 1
 		_performance["scope_eviction_count"] = int(
 			_performance["scope_eviction_count"]
