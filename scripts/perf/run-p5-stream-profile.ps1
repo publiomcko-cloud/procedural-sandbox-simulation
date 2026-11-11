@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('baseline', 'adaptive', 'adaptive-skip', 'adaptive-skip-lookahead')]
+    [ValidateSet('baseline', 'adaptive', 'adaptive-skip', 'adaptive-skip-lookahead', 'adaptive-skip-coarse')]
     [Alias('Profile')]
     [string]$ProfileName = 'baseline',
     [string]$GodotBin = 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe',
@@ -31,6 +31,23 @@ try {
         "Godot: $(& $GodotBin --version)"
         '========== CONSOLE =========='
     ) | Set-Content -LiteralPath $log -Encoding UTF8
+
+    # The focused SceneTree tests do not necessarily parse the main game.
+    $ErrorActionPreference = 'Continue'
+    $sceneCheck = @(& $GodotBin --headless --path .\game --check-only --script res://scripts/terrain/terrain_demo.gd 2>&1)
+    $sceneCheckExit = $LASTEXITCODE
+    $sceneCheck | Tee-Object -FilePath $log -Append | Out-Host
+    $ErrorActionPreference = 'Stop'
+    if ($sceneCheckExit -ne 0 -or (($sceneCheck -join [Environment]::NewLine) -match '(?i)SCRIPT ERROR:|Parse Error:|ERROR: Failed to load script')) {
+        throw "Terrain main scene failed check-only; A/B not started. See $log"
+    }
+
+    $ErrorActionPreference = 'Continue'
+    & $GodotBin --headless --path .\game --script res://tests/p5_stream_coarse_preview_tests.gd 2>&1 |
+        Tee-Object -FilePath $log -Append
+    $coarseTestExit = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($coarseTestExit -ne 0) { throw "Coarse preview tests failed. See $log" }
 
     $ErrorActionPreference = 'Continue'
     & $GodotBin --headless --path .\game --script res://tests/p5_0f_stream_budget_tests.gd 2>&1 |
@@ -84,7 +101,7 @@ try {
     }
     $events = "$log.events.txt"
     $cleanLines |
-        Select-String -Pattern 'terrain_stream_(budget_window|budget_transition|profile)|terrain_mesh_snapshot|terrain_process_spike|terrain_region_publish|terrain_region_load_complete|effect_motion_prefetch_priority|environment_surface_cache_job|effect_prefetch_tick|p5_environment_visual_rebuild' |
+        Select-String -Pattern 'terrain_stream_(budget_window|budget_transition|profile)|terrain_mesh_snapshot|terrain_process_spike|terrain_region_publish|terrain_region_load_complete|terrain_region_coarse_visible|terrain_region_coarse_replaced|terrain_region_coarse_discarded|effect_motion_prefetch_priority|environment_surface_cache_job|effect_prefetch_tick|p5_environment_visual_rebuild' |
         Set-Content -LiteralPath $events
 
     $windowRows = @(
@@ -115,6 +132,18 @@ try {
                 }
             } | Sort-Object
     )
+    $coarseReadyTimes = @(
+        $cleanLines |
+            Select-String -SimpleMatch '"event":"terrain_region_coarse_visible"' |
+            ForEach-Object {
+                $raw = $_.Line
+                $start = $raw.IndexOf('PERF_TRACE ')
+                if ($start -ge 0) {
+                    try { [double](($raw.Substring($start + 11) | ConvertFrom-Json).queue_to_coarse_usec) / 1000.0 }
+                    catch {}
+                }
+            } | Sort-Object
+    )
     if ($windowRows.Count -gt 0) {
         $totalFrames = [double](($windowRows | Measure-Object -Property frame_count -Sum).Sum)
         $totalDispatches = [double](($windowRows | Measure-Object -Property mesh_dispatches -Sum).Sum)
@@ -134,6 +163,13 @@ try {
         $f10Frames = 0
         $f10FocusMissing = 0
         $f10RegionGaps = 0
+        $f10PerceivedRegionGaps = 0
+        $f10CoarseCovered = 0
+        $f10PerceivedFocusMissing = 0
+        $coarsePublished = 0
+        $coarseReplaced = 0
+        $coarseDiscarded = 0
+        $coarsePublishUsec = 0
         $f10Distance = 0.0
         $f10PeakSpeed = 0.0
         $lookaheadReorders = @(
@@ -150,6 +186,13 @@ try {
             $f10Frames += [int]$w.f10_movement_frames
             $f10FocusMissing += [int]$w.f10_focus_missing_frames
             $f10RegionGaps += [int]$w.f10_missing_regions_in_window_total
+            $f10PerceivedRegionGaps += [int]$w.f10_perceived_missing_regions_total
+            $f10CoarseCovered += [int]$w.f10_coarse_covered_region_samples
+            $f10PerceivedFocusMissing += [int]$w.f10_perceived_focus_missing_frames
+            $coarsePublished += [int]$w.coarse_preview_published
+            $coarseReplaced += [int]$w.coarse_preview_replaced
+            $coarseDiscarded += [int]$w.coarse_preview_discarded
+            $coarsePublishUsec += [double]$w.coarse_preview_publish_usec
             $f10Distance += [double]$w.f10_distance_m
             $f10PeakSpeed = [Math]::Max($f10PeakSpeed, [double]$w.f10_peak_speed_mps)
             $headSkips += [int]$w.effect_pending_load_skips
@@ -174,6 +217,13 @@ try {
             f10_missing_regions_per_frame = $(if ($f10Frames -gt 0) {
                 [Math]::Round([double]$f10RegionGaps / [Math]::Max(1, $f10Frames), 2)
             } else { $null })
+            f10_perceived_missing_regions_per_frame = $(if ($f10Frames -gt 0) {
+                [Math]::Round([double]$f10PerceivedRegionGaps / [Math]::Max(1, $f10Frames), 2)
+            } else { $null })
+            f10_perceived_focus_missing_pct = $(if ($f10Frames -gt 0) {
+                [Math]::Round(100.0 * $f10PerceivedFocusMissing / [Math]::Max(1, $f10Frames), 2)
+            } else { $null })
+            f10_coarse_covered_region_samples = [int]$f10CoarseCovered
             f10_distance_m = [Math]::Round($f10Distance, 1)
             f10_peak_speed_mps = [Math]::Round($f10PeakSpeed, 2)
             effect_motion_prefetch_reorders = [int]$lookaheadReorders
@@ -182,6 +232,17 @@ try {
             successful_dispatch_after_skip = $skipRecovered
             skip_time_budget_exhausted = $skipBudgetExhausted
             mesh_dispatch_blockers = $dispatchBlockers
+            coarse_preview_published = [int]$coarsePublished
+            coarse_preview_replaced = [int]$coarseReplaced
+            coarse_preview_discarded = [int]$coarseDiscarded
+            coarse_preview_publish_avg_main_ms_per_frame = [Math]::Round($coarsePublishUsec / [Math]::Max(1, $totalFrames) / 1000.0, 4)
+            coarse_visual_ready_samples = $coarseReadyTimes.Count
+            coarse_first_visual_p50_ms = $(if ($coarseReadyTimes.Count -gt 0) {
+                [Math]::Round($coarseReadyTimes[[int][Math]::Floor(($coarseReadyTimes.Count - 1) * 0.50)], 2)
+            } else { $null })
+            coarse_first_visual_p95_ms = $(if ($coarseReadyTimes.Count -gt 0) {
+                [Math]::Round($coarseReadyTimes[[int][Math]::Floor(($coarseReadyTimes.Count - 1) * 0.95)], 2)
+            } else { $null })
             mesh_dispatches = [int]$totalDispatches
             mesh_uploads = [int]$totalUploads
             dispatches_per_100_frames = [Math]::Round(100.0 * $totalDispatches / [Math]::Max(1.0, $totalFrames), 2)

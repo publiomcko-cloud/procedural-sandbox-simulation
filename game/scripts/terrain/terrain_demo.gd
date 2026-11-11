@@ -31,6 +31,8 @@ const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.g
 const StreamBudgetPolicy := preload("res://scripts/terrain/terrain_stream_budget_policy.gd")
 const StreamDispatchSelector := preload("res://scripts/terrain/terrain_stream_dispatch_selector.gd")
 const StreamLookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
+const CoarsePreviewJob := preload("res://scripts/terrain/terrain_coarse_preview_job.gd")
+const CoarsePreviewPolicy := preload("res://scripts/terrain/terrain_coarse_preview_policy.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -41,6 +43,7 @@ const MAX_MESH_JOBS_IN_FLIGHT_HARD := 8
 const MAX_MESH_JOB_DISPATCHES_PER_FRAME := 1
 const MESH_SNAPSHOT_FRAME_BUDGET_USEC := 3500
 const MAX_MESH_UPLOADS_PER_FRAME := 4
+const MAX_COARSE_PREVIEW_JOBS := 1
 const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
 const STREAM_BUDGET_TRACE_INTERVAL_USEC := 1_000_000
 const MAX_SURFACE_CACHE_JOBS_IN_FLIGHT := 2
@@ -192,6 +195,17 @@ var _stream_window_f10_focus_missing_frames := 0
 var _stream_window_f10_region_gaps := 0
 var _stream_window_f10_speed_peak_mps := 0.0
 var _stream_window_f10_distance_m := 0.0
+var _stream_window_f10_perceived_region_gaps := 0
+var _stream_window_f10_coarse_covered_regions := 0
+var _stream_window_f10_perceived_focus_missing_frames := 0
+var _coarse_preview_jobs: Dictionary = {}
+var _coarse_preview_nodes: Dictionary = {}
+var _coarse_preview_attempts: Dictionary = {}
+var _stream_window_coarse_published := 0
+var _stream_window_coarse_replaced := 0
+var _stream_window_coarse_discarded := 0
+var _stream_window_coarse_worker_usec := 0
+var _stream_window_coarse_publish_usec := 0
 
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
@@ -291,7 +305,7 @@ func _ready() -> void:
 	for argument in stream_profile_args:
 		if argument.begins_with("--stream-profile="):
 			stream_profile_requested = argument.trim_prefix("--stream-profile=").strip_edges().to_lower()
-	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip"]:
+	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse"]:
 		push_warning("Unknown stream profile; using baseline")
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("terrain_stream_profile", {
@@ -837,6 +851,9 @@ func _exit_tree() -> void:
 	for task_id_value in _mesh_jobs.keys().duplicate():
 		WorkerThreadPool.wait_for_task_completion(int(task_id_value))
 	_mesh_jobs.clear()
+	for task_id_value in _coarse_preview_jobs.keys().duplicate():
+		WorkerThreadPool.wait_for_task_completion(int(task_id_value))
+	_coarse_preview_jobs.clear()
 	if _checkpoint_task_id >= 0:
 		WorkerThreadPool.wait_for_task_completion(_checkpoint_task_id)
 		_checkpoint_task_id = -1
@@ -885,9 +902,15 @@ func _stream_finish_frame() -> void:
 		_stream_window_f10_distance_m += _last_f10_speed_mps * maxf(0.0, _last_frame_ms) / 1000.0
 		if not active_regions.has(_region_id(focus_region_key)):
 			_stream_window_f10_focus_missing_frames += 1
+			if not _coarse_preview_nodes.has(_region_id(focus_region_key)):
+				_stream_window_f10_perceived_focus_missing_frames += 1
 		for region in _region_keys_within_radius(focus_region_key, REQUEST_RADIUS):
 			if not active_regions.has(_region_id(region)):
 				_stream_window_f10_region_gaps += 1
+				if _coarse_preview_nodes.has(_region_id(region)):
+					_stream_window_f10_coarse_covered_regions += 1
+				else:
+					_stream_window_f10_perceived_region_gaps += 1
 	if int(_stream_budget_state.get("dispatch_limit", 1)) > 1:
 		_stream_window_boost_frames += 1
 	if now - _stream_window_started_usec < STREAM_BUDGET_TRACE_INTERVAL_USEC:
@@ -922,9 +945,19 @@ func _stream_finish_frame() -> void:
 		"f10_movement_frames": _stream_window_f10_frames,
 		"f10_focus_missing_frames": _stream_window_f10_focus_missing_frames,
 		"f10_missing_regions_in_window_total": _stream_window_f10_region_gaps,
+		"f10_perceived_missing_regions_total": _stream_window_f10_perceived_region_gaps,
+		"f10_coarse_covered_region_samples": _stream_window_f10_coarse_covered_regions,
+		"f10_perceived_focus_missing_frames": _stream_window_f10_perceived_focus_missing_frames,
 		"f10_peak_speed_mps": _stream_window_f10_speed_peak_mps,
 		"f10_distance_m": _stream_window_f10_distance_m,
 		"f10_predictive_stages_started": _stream_window_lookahead_stages,
+		"coarse_preview_published": _stream_window_coarse_published,
+		"coarse_preview_replaced": _stream_window_coarse_replaced,
+		"coarse_preview_discarded": _stream_window_coarse_discarded,
+		"coarse_preview_visible": _coarse_preview_nodes.size(),
+		"coarse_preview_jobs_in_flight": _coarse_preview_jobs.size(),
+		"coarse_preview_worker_usec": _stream_window_coarse_worker_usec,
+		"coarse_preview_publish_usec": _stream_window_coarse_publish_usec,
 	})
 	_stream_window_started_usec = now
 	_stream_window_frames = 0
@@ -946,9 +979,17 @@ func _stream_finish_frame() -> void:
 	_stream_window_f10_frames = 0
 	_stream_window_f10_focus_missing_frames = 0
 	_stream_window_f10_region_gaps = 0
+	_stream_window_f10_perceived_region_gaps = 0
+	_stream_window_f10_coarse_covered_regions = 0
+	_stream_window_f10_perceived_focus_missing_frames = 0
 	_stream_window_f10_speed_peak_mps = 0.0
 	_stream_window_f10_distance_m = 0.0
 	_stream_window_lookahead_stages = 0
+	_stream_window_coarse_published = 0
+	_stream_window_coarse_replaced = 0
+	_stream_window_coarse_discarded = 0
+	_stream_window_coarse_worker_usec = 0
+	_stream_window_coarse_publish_usec = 0
 
 
 func _process(delta: float) -> void:
@@ -961,7 +1002,7 @@ func _process(delta: float) -> void:
 	var previous_dispatch_limit := int(_stream_budget_state.get("dispatch_limit", 1))
 	_stream_budget_state = StreamBudgetPolicy.next(
 		_stream_budget_state, _last_frame_ms, _last_process_work_ms,
-		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead"]
+		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse"]
 	)
 	if _perf_trace_enabled and int(_stream_budget_state["dispatch_limit"]) != previous_dispatch_limit:
 		PerformanceTrace.emit("terrain_stream_budget_transition", {
@@ -1034,6 +1075,10 @@ func _process(delta: float) -> void:
 	stream_stage_started_usec = Time.get_ticks_usec()
 	_process_one_chunk_job()
 	_stream_stage_measure("mesh_dispatch_and_upload", stream_stage_started_usec)
+	stream_stage_started_usec = Time.get_ticks_usec()
+	if _stream_profile == "adaptive-skip-coarse":
+		_process_coarse_previews()
+	_stream_stage_measure("coarse_preview", stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
 	object_stream.process_queued_publications()
 	_stream_stage_measure("object_publication", stream_stage_started_usec)
@@ -2071,6 +2116,7 @@ func _ensure_full_rebuild_targets(desired: Array[Vector2i], retained_ids: Dictio
 
 func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinates: Array[Vector2i]) -> void:
 	var id := _region_id(region_key)
+	_clear_coarse_preview(id)
 	var state: RefCounted
 	if purpose == "full" and not _pending_world_load.is_empty():
 		state = WorldState.new(int(_pending_world_load["world_seed"]), region_key, _pending_world_load["ledger"])
@@ -2544,6 +2590,165 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 				"jobs_in_flight": _surface_cache_jobs.size(),
 			})
 	return {"ok": true, "reason": "ok", "task_id": task_id}
+
+
+## E2 derived coarse-first preview: always separate from terrain authority.
+func _coarse_preview_record_current(id: String, record: Dictionary) -> bool:
+	if _stream_profile != "adaptive-skip-coarse" or not loading_regions.has(id):
+		return false
+	var stage: Dictionary = loading_regions[id]
+	var state: RefCounted = stage["world_state"]
+	return CoarsePreviewPolicy.revision_matches(
+		stage, record, world_seed, int(state.generator_version),
+		int(state.brush_edits.revision),
+		int(object_stream.get_command_world_revision()),
+		focus_region_key, active_regions.has(id), global_rebuild_pending,
+		not _edit_transaction.is_empty(), int(state.brush_edits.get_edit_count()) > 0,
+		cave_section_enabled
+	)
+
+
+func _clear_coarse_preview(id: String, reason: String = "stale") -> bool:
+	if not _coarse_preview_nodes.has(id):
+		return false
+	var entry: Dictionary = _coarse_preview_nodes[id]
+	_coarse_preview_nodes.erase(id)
+	var node: MeshInstance3D = entry["node"]
+	if is_instance_valid(node):
+		node.queue_free()
+	if reason != "definitive":
+		_stream_window_coarse_discarded += 1
+		if _perf_trace_enabled:
+			var key: Vector2i = entry.get("region_key", Vector2i.ZERO)
+			PerformanceTrace.emit("terrain_region_coarse_discarded", {
+				"region": [key.x, key.y],
+				"stage_token": int(entry.get("stage_token", -1)),
+				"reason": reason,
+			})
+	return true
+
+
+func _process_coarse_previews() -> void:
+	# Revocation must also work while definitive effects are still pending.
+	for id_value in _coarse_preview_attempts.keys().duplicate():
+		var id: String = id_value
+		if not loading_regions.has(id) or int(loading_regions[id]["stage_token"]) != int(_coarse_preview_attempts[id]):
+			_coarse_preview_attempts.erase(id)
+	for id_value in _coarse_preview_nodes.keys().duplicate():
+		var id: String = id_value
+		var entry: Dictionary = _coarse_preview_nodes[id]
+		if not _coarse_preview_record_current(id, entry):
+			_clear_coarse_preview(id, "revision_or_residency_changed")
+	var completed: Array[int] = []
+	for task_id_value in _coarse_preview_jobs.keys():
+		var task_id := int(task_id_value)
+		if WorkerThreadPool.is_task_completed(task_id):
+			completed.append(task_id)
+	completed.sort()
+	# Bounded to one main-thread upload per frame, with a spike veto.
+	if not completed.is_empty() and _last_frame_ms < 20.0:
+		var task_id := completed[0]
+		WorkerThreadPool.wait_for_task_completion(task_id)
+		var record: Dictionary = _coarse_preview_jobs[task_id]
+		_coarse_preview_jobs.erase(task_id)
+		var id: String = record["stage_id"]
+		var job: RefCounted = record["job"]
+		var cpu: Dictionary = job.get("result")
+		_stream_window_coarse_worker_usec += int(cpu.get("worker_usec", 0))
+		if cpu.get("valid", false) and _coarse_preview_record_current(id, record):
+			var started_usec := Time.get_ticks_usec()
+			var mesh: ArrayMesh = CoarsePreviewJob.mesh_from_cpu_data(cpu)
+			if mesh.get_surface_count() > 0:
+				var node := MeshInstance3D.new()
+				node.name = "E2Coarse_%s" % id.replace(":", "_").replace(",", "_")
+				node.mesh = mesh
+				node.material_override = terrain_mesh_template.material_override
+				node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				node.position = SpatialGrid.region_origin_world(record["region_key"])
+				terrain_chunks_root.add_child(node)
+				_coarse_preview_nodes[id] = {
+					"node": node,
+					"region_key": record["region_key"],
+					"stage_token": int(record["stage_token"]),
+					"seed": int(record["seed"]),
+					"generator_version": int(record["generator_version"]),
+					"edit_revision": int(record["edit_revision"]),
+					"effect_revision": int(record["effect_revision"]),
+				}
+				var publish_usec := Time.get_ticks_usec() - started_usec
+				_stream_window_coarse_publish_usec += publish_usec
+				_stream_window_coarse_published += 1
+				if _perf_trace_enabled:
+					var stage: Dictionary = loading_regions[id]
+					var key: Vector2i = record["region_key"]
+					PerformanceTrace.emit("terrain_region_coarse_visible", {
+						"region": [key.x, key.y],
+						"stage_token": int(record["stage_token"]),
+						"edit_revision": int(record["edit_revision"]),
+						"effect_revision": int(record["effect_revision"]),
+						"queue_to_coarse_usec": Time.get_ticks_usec() - int(stage["chunk_enqueued_usec"]),
+						"worker_usec": int(cpu.get("worker_usec", 0)),
+						"publish_usec": publish_usec,
+						"triangle_count": int(cpu.get("triangle_count", 0)),
+						"source": "derived_preview_not_authority",
+					})
+	if _coarse_preview_jobs.size() >= MAX_COARSE_PREVIEW_JOBS or _last_frame_ms >= 20.0 	or _last_process_work_ms >= 10.5:
+		return
+	_submit_coarse_preview_job()
+
+
+func _submit_coarse_preview_job() -> void:
+	var candidates: Array[String] = []
+	for id_value in loading_regions.keys():
+		var id: String = id_value
+		if _coarse_preview_attempts.has(id) or _coarse_preview_nodes.has(id):
+			continue
+		var stage: Dictionary = loading_regions[id]
+		var state: RefCounted = stage["world_state"]
+		if not CoarsePreviewPolicy.eligible_stage(
+			_stream_profile, stage, active_regions.has(id), global_rebuild_pending,
+			not _edit_transaction.is_empty(), int(state.brush_edits.get_edit_count()) > 0,
+			cave_section_enabled
+		):
+			continue
+		var key: Vector2i = stage["region_key"]
+		if maxi(absi(key.x - focus_region_key.x), absi(key.y - focus_region_key.y)) <= 1:
+			candidates.append(id)
+	candidates.sort_custom(func(a: String, b: String) -> bool:
+		var ka: Vector2i = loading_regions[a]["region_key"]
+		var kb: Vector2i = loading_regions[b]["region_key"]
+		var da := maxi(absi(ka.x - focus_region_key.x), absi(ka.y - focus_region_key.y))
+		var db := maxi(absi(kb.x - focus_region_key.x), absi(kb.y - focus_region_key.y))
+		if da != db:
+			return da < db
+		return ka.y < kb.y if ka.y != kb.y else ka.x < kb.x
+	)
+	if candidates.is_empty():
+		return
+	var id := candidates[0]
+	var stage: Dictionary = loading_regions[id]
+	var state: RefCounted = stage["world_state"]
+	var job := CoarsePreviewJob.new(
+		int(state.world_seed), stage["region_key"], int(stage["stage_token"]),
+		int(stage["edit_revision"]), int(stage["terrain_effect_authority_revision"]),
+		int(state.generator_version)
+	)
+	var task_id := WorkerThreadPool.add_task(
+		Callable(job, "run"), false, "E2 derived coarse preview"
+	)
+	if task_id < 0:
+		return
+	_coarse_preview_attempts[id] = int(stage["stage_token"])
+	_coarse_preview_jobs[task_id] = {
+		"stage_id": id,
+		"region_key": stage["region_key"],
+		"stage_token": int(stage["stage_token"]),
+		"seed": int(state.world_seed),
+		"generator_version": int(state.generator_version),
+		"edit_revision": int(stage["edit_revision"]),
+		"effect_revision": int(stage["terrain_effect_authority_revision"]),
+		"job": job,
+	}
 
 
 func _process_one_chunk_job() -> void:
@@ -3268,6 +3473,15 @@ func _publish_region(
 		chunk_nodes[chunk_id] = node
 		index_commit_usec += Time.get_ticks_usec() - index_started_usec
 	var chunk_commit_usec := Time.get_ticks_usec() - chunk_commit_started_usec
+	# Only the definitive 16-chunk commit replaces the derived overlay.
+	if _clear_coarse_preview(id, "definitive"):
+		_stream_window_coarse_replaced += 1
+		if _perf_trace_enabled:
+			PerformanceTrace.emit("terrain_region_coarse_replaced", {
+				"region": [region_key.x, region_key.y],
+				"stage_token": publication_token,
+				"definitive_chunk_count": meshes.size(),
+			})
 
 	var stale_release_started_usec := Time.get_ticks_usec()
 	var previous: Dictionary = active_regions.get(id, {})
@@ -3506,6 +3720,7 @@ func _unload_region(id: String) -> void:
 
 
 func _supersede_region_stage(id: String) -> void:
+	_clear_coarse_preview(id, "superseded")
 	if not loading_regions.has(id):
 		return
 	var stale_stage: Dictionary = loading_regions[id]
@@ -3556,6 +3771,7 @@ func _clear_stream_error(id: String) -> void:
 
 
 func _fail_region_stage(id: String, message: String) -> void:
+	_clear_coarse_preview(id, "stage_failed")
 	_record_stream_error(id, message)
 	var failed_stage: Dictionary = loading_regions.get(id, {})
 	loading_regions.erase(id)
