@@ -3,8 +3,9 @@ class_name TerrainStreamLookaheadPolicy
 
 ## Bounded ordering policy for already-enqueued terrain-object source regions.
 ## No source authority, cache, protected scope, worker count or queue membership
-## changes. The closest critical sources for the current 3x3 render window
-## remain ahead of predictive sources.
+## changes. Projection SOURCE_REGION_RADIUS=2, so a 3x3 visible window
+## needs a 7x7 source footprint. Keep current-focus sources ahead of
+## predictive sources and prioritize urgent pending-effect dependencies.
 const LOOKAHEAD_SECONDS := 0.75
 const MAX_LEAD_REGIONS := 2
 
@@ -23,13 +24,13 @@ static func _distance(a: Vector2i, b: Vector2i) -> int:
 static func _rank(region: Vector2i, focus: Vector2i, ahead: Vector2i) -> int:
 	var d_focus := _distance(region, focus)
 	var d_ahead := _distance(region, ahead)
-	if d_focus <= 1:
-		return 0
-	if d_ahead <= 1:
-		return 1
 	if d_focus <= 2:
-		return 2
+		return 0
 	if d_ahead <= 2:
+		return 1
+	if d_focus <= 3:
+		return 2
+	if d_ahead <= 3:
 		return 3
 	return 4
 
