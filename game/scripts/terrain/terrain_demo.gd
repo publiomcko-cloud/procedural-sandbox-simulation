@@ -270,18 +270,22 @@ func _ready() -> void:
 		MIN_MESH_JOBS_IN_FLIGHT,
 		MAX_MESH_JOBS_IN_FLIGHT_HARD
 	)
-	_stream_profile = OS.get_environment("SANDBOX_STREAM_PROFILE").strip_edges().to_lower()
-	if _stream_profile != "adaptive":
-		_stream_profile = "baseline"
-	for argument in OS.get_cmdline_user_args():
+	var stream_profile_env := OS.get_environment("SANDBOX_STREAM_PROFILE")
+	var stream_profile_args := OS.get_cmdline_user_args()
+	_stream_profile = StreamBudgetPolicy.resolve_profile(
+		stream_profile_env, stream_profile_args
+	)
+	var stream_profile_requested := stream_profile_env.strip_edges().to_lower()
+	for argument in stream_profile_args:
 		if argument.begins_with("--stream-profile="):
-			_stream_profile = argument.trim_prefix("--stream-profile=").to_lower()
-	if _stream_profile not in ["baseline", "adaptive", "adaptive-skip"]:
+			stream_profile_requested = argument.trim_prefix("--stream-profile=").strip_edges().to_lower()
+	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip"]:
 		push_warning("Unknown stream profile; using baseline")
-		_stream_profile = "baseline"
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("terrain_stream_profile", {
 			"profile": _stream_profile,
+			"requested_profile": stream_profile_requested,
+			"profile_mismatch": stream_profile_requested != "" and stream_profile_requested != _stream_profile,
 			"mesh_dispatch_baseline": MAX_MESH_JOB_DISPATCHES_PER_FRAME,
 			"mesh_dispatch_adaptive_max": StreamBudgetPolicy.ADAPTIVE_DISPATCHES,
 			"mesh_jobs_in_flight_limit": _mesh_job_limit,
