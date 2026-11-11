@@ -112,6 +112,9 @@ func _test_stage_skip_selection() -> void:
 		"explicit exclusion does not mutate edit transaction queue")
 	var policy_cases := [
 		["adaptive-skip", "load", 0, 1500, 3500, true, true],
+		["adaptive-skip-lookahead", "load", 0, 1500, 3500, true, true],
+		["adaptive-skip-lookahead", "load", 3, 1500, 3500, true, false],
+		["adaptive-skip-lookahead", "edit_transaction", 0, 1500, 3500, true, false],
 		["adaptive-skip", "load", 2, 3499, 3500, true, true],
 		["adaptive-skip", "load", 3, 500, 3500, true, false],
 		["adaptive-skip", "load", 0, 3500, 3500, true, false],
@@ -151,6 +154,11 @@ func _test_runtime_profile_resolution() -> void:
 		"adaptive environment is preserved")
 	_check(Policy.resolve_profile("adaptive-skip", empty) == "adaptive-skip",
 		"adaptive-skip environment reaches actual runtime without being reset")
+	_check(Policy.resolve_profile("adaptive-skip-lookahead", empty) == "adaptive-skip-lookahead",
+		"lookahead profile uses same runtime resolver without coercion")
+	_check(Policy.resolve_profile("adaptive-skip",
+		PackedStringArray(["--stream-profile=adaptive-skip-lookahead"])) == "adaptive-skip-lookahead",
+		"CLI opt-in to lookahead overrides ordinary adaptive-skip")
 	_check(Policy.resolve_profile(" ADAPTIVE-SKIP ", empty) == "adaptive-skip",
 		"case and whitespace do not disable adaptive-skip")
 	_check(Policy.resolve_profile("unknown", empty) == "baseline",
