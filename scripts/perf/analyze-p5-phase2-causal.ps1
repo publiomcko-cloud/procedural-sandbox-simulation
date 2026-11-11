@@ -196,11 +196,14 @@ if ($groups.Count -ne 8) { throw "PHASE2_INCOMPLETE_ROUTE_PROFILE_GROUPS: actual
 foreach ($entry in $groups.GetEnumerator()) {
     if ([int]$entry.Value -ne 2) { throw "PHASE2_UNBALANCED_ABBA: group=$($entry.Key) actual=$($entry.Value)" }
 }
-$summaryPath = Join-Path $EvidenceDir 'summary.json'
-if (-not (Test-Path -LiteralPath $summaryPath -PathType Leaf)) { throw 'PHASE2_SOURCE_SUMMARY_MISSING' }
-$originalTrials = @(Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json)
-if ($originalTrials.Count -ne $ExpectedTrials) { throw "PHASE2_SOURCE_SUMMARY_INCOMPLETE: $($originalTrials.Count)" }
-$sourceShas = @($originalTrials | Select-Object -ExpandProperty commit -Unique)
+# Do not rely on PowerShell 5.1 ConvertFrom-Json array-enumeration semantics:
+# audit one sidecar receipt per trajectory instead.
+$metricFiles = @(Get-ChildItem -LiteralPath $EvidenceDir -Filter '*.metrics.json' -File)
+if ($metricFiles.Count -ne $ExpectedTrials) { throw "PHASE2_SOURCE_RECEIPTS_INCOMPLETE: actual=$($metricFiles.Count) expected=$ExpectedTrials" }
+$sourceShas = @($metricFiles | ForEach-Object {
+    $receipt = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
+    [string]$receipt.commit
+} | Sort-Object -Unique)
 if ($sourceShas.Count -ne 1) { throw 'PHASE2_MIXED_SOURCE_COMMITS' }
 $sourceSha = [string]$sourceShas[0]
 if ($ExpectedSourceCommit -and $ExpectedSourceCommit -ne $sourceSha) { throw "PHASE2_EXPECTED_SHA_MISMATCH: actual=$sourceSha expected=$ExpectedSourceCommit" }
@@ -228,7 +231,7 @@ foreach ($row in $matrix) {
     $effectBlocked = @($row.blocked_dispatch | Where-Object { $_.reason -eq 'effect_pending_corner' })
     $blockedCount = if ($effectBlocked.Count -gt 0) { [int]$effectBlocked[0].count } else { 0 }
     $workerP50 = if ($null -eq $row.mesh_worker.p50_ms) { '-' } else { [string]$row.mesh_worker.p50_ms }
-    $report += "| $($row.route) | $($row.profile) | $($row.focus_missing_pct) | $($row.perceived_focus_missing_pct) | $($row.final_regions_published) | $($row.coarse_regions_visible) | $($row.effect_pending_p50) | $blockedCount | $workerP50 |"
+    $report += "| $($row['route']) | $($row['profile']) | $($row['focus_missing_pct']) | $($row['perceived_focus_missing_pct']) | $($row['final_regions_published']) | $($row['coarse_regions_visible']) | $($row['effect_pending_p50']) | $blockedCount | $workerP50 |"
 }
 $report += ''
 $report += 'Interpret blocked-dispatch count as failed admission attempts, **not time spent waiting**. Work-stage milliseconds overlap other processes; no exclusive CPU attribution.'
