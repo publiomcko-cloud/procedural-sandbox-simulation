@@ -1,0 +1,65 @@
+name: P5 deterministic streaming benchmark (EXPERIMENT ONLY)
+
+on:
+  push:
+    branches:
+      - exp/p5-stream-deterministic-benchmark
+  workflow_dispatch:
+
+concurrency:
+  group: p5-stream-deterministic-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 40
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - name: Checkout exact experiment SHA
+        uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Validate runtime and import on this Windows runner
+        shell: cmd
+        run: |
+          @echo off
+          git rev-parse HEAD
+          if /I not "%RUNNER_OS%"=="Windows" exit /b 1
+          if /I not "%RUNNER_ARCH%"=="X64" exit /b 1
+          if not exist "%GODOT_BIN%" exit /b 1
+          "%GODOT_BIN%" --version
+          if errorlevel 1 exit /b 1
+          "%GODOT_BIN%" --headless --editor --path .\game --import
+          if errorlevel 1 exit /b 1
+          "%GODOT_BIN%" --headless --path .\game --check-only --script res://scripts/terrain/terrain_demo.gd
+          if errorlevel 1 exit /b 1
+      - name: Verify unchanged E2 coarse-worker contracts
+        shell: cmd
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --path .\game --script res://tests/p5_stream_coarse_preview_tests.gd
+          if errorlevel 1 exit /b 1
+      - name: Run ABBA deterministic F10 routes on the real host CPU
+        shell: cmd
+        timeout-minutes: 30
+        run: |
+          @echo off
+          powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\perf\run-p5-deterministic-stream-benchmark.ps1" -GodotBin "%GODOT_BIN%" -Frames 720
+          if errorlevel 1 exit /b 1
+      - name: Save raw stdout, stderr and JSON evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p5-deterministic-ABBA-headless-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}\p5-deterministic-evidence\*.log
+            ${{ runner.temp }}\p5-deterministic-evidence\*.json
+          retention-days: 14
+          if-no-files-found: warn
