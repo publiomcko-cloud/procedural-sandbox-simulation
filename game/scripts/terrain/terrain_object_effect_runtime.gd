@@ -10,6 +10,7 @@ const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const LocalFrameIndex := preload("res://scripts/terrain/terrain_object_effect_local_frame_index.gd")
 const ProjectionBuildJob := preload("res://scripts/terrain/terrain_object_effect_projection_build_job.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
+const LookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
 
 # Public v1 contracts bound horizontal reach:
 # translation <= 8 m, half extent <= 1.8 m, scale <= 5x, roughness <= 0.1 m.
@@ -36,6 +37,9 @@ var _required_regions_cache: Dictionary = {}
 var incremental_prefetch_enabled := false
 var _prefetch_queue: Array[Vector2i] = []
 var _prefetch_scope_ids: Dictionary = {}
+var _prefetch_urgent_scope_ids: Dictionary = {}
+var _lookahead_last_motion_pair := ""
+var _lookahead_reorders := 0
 var _prefetch_generation_jobs: Dictionary = {}
 var _prefetch_task_by_scope: Dictionary = {}
 var _prefetch_projection_jobs: Dictionary = {}
@@ -121,6 +125,9 @@ func initialize(
 	_required_regions_cache.clear()
 	_prefetch_queue.clear()
 	_prefetch_scope_ids.clear()
+	_prefetch_urgent_scope_ids.clear()
+	_lookahead_last_motion_pair = ""
+	_lookahead_reorders = 0
 	_prefetch_generation_jobs.clear()
 	_prefetch_task_by_scope.clear()
 	_prefetch_projection_jobs.clear()
@@ -160,6 +167,8 @@ func set_incremental_prefetch_enabled(enabled: bool) -> void:
 	if not enabled:
 		_prefetch_queue.clear()
 		_prefetch_scope_ids.clear()
+		_prefetch_urgent_scope_ids.clear()
+		_lookahead_last_motion_pair = ""
 		_prefetch_generation_jobs.clear()
 		_prefetch_task_by_scope.clear()
 		_prefetch_projection_jobs.clear()
@@ -332,6 +341,7 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 	while _prefetch_generation_jobs.size() 		< MAX_PREFETCH_GENERATION_JOBS_IN_FLIGHT 		and not _prefetch_queue.is_empty():
 		var region: Vector2i = _prefetch_queue.pop_front()
 		var scope_id := Contract.scope_id_for_region(region)
+		_prefetch_urgent_scope_ids.erase(scope_id)
 		if not _protected_scope_ids.is_empty() 			and not _protected_scope_ids.has(scope_id):
 			_prefetch_scope_ids.erase(scope_id)
 			continue
@@ -1003,6 +1013,8 @@ func _enqueue_prefetch_regions(
 	if high_priority:
 		for index in range(to_add.size() - 1, -1, -1):
 			_prefetch_queue.push_front(to_add[index])
+		for region in to_add:
+			_prefetch_urgent_scope_ids[Contract.scope_id_for_region(region)] = true
 	else:
 		for region in to_add:
 			_prefetch_queue.append(region)
@@ -1040,6 +1052,48 @@ func _filter_prefetch_to_protected() -> void:
 			kept_ids[ready_scope_id] = true
 	_prefetch_projection_ready = kept_ready
 	_prefetch_scope_ids = kept_ids
+	var kept_urgent: Dictionary = {}
+	for region in _prefetch_queue:
+		var scope_id := Contract.scope_id_for_region(region)
+		if _prefetch_urgent_scope_ids.has(scope_id):
+			kept_urgent[scope_id] = true
+	_prefetch_urgent_scope_ids = kept_urgent
+
+
+## Reprioritize only already-required effect source regions. Caller controls
+## when this is used (F10 + experimental lookahead profile only). No change
+## to the protected 9x9 source set, cache validity, in-flight jobs, or
+## explicit high-priority requests from blocked mesh stages.
+func prioritize_prefetch_for_motion(
+	focus: Vector2i, proposed_ahead: Vector2i
+) -> Dictionary:
+	if not initialized or not incremental_prefetch_enabled:
+		return {"ok": true, "changed": false, "reason": "prefetch_disabled"}
+	var ahead := LookaheadPolicy.clamp_lead(focus, proposed_ahead)
+	if ahead == focus or _prefetch_queue.size() <= 1:
+		return {"ok": true, "changed": false, "reason": "no_motion_or_queue"}
+	var pair := "%d,%d:%d,%d" % [focus.x, focus.y, ahead.x, ahead.y]
+	# Reorder when the motion target changes, not every rendered frame.
+	if pair == _lookahead_last_motion_pair:
+		return {"ok": true, "changed": false, "reason": "same_target"}
+	_lookahead_last_motion_pair = pair
+	var original := _prefetch_queue.duplicate()
+	_prefetch_queue = LookaheadPolicy.ordered_queue(
+		_prefetch_queue, focus, ahead, _prefetch_urgent_scope_ids
+	)
+	var changed := _prefetch_queue != original
+	if changed:
+		_lookahead_reorders += 1
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("effect_motion_prefetch_priority", {
+			"focus": [focus.x, focus.y],
+			"ahead": [ahead.x, ahead.y],
+			"changed": changed,
+			"queued": _prefetch_queue.size(),
+			"urgent_queued": _prefetch_urgent_scope_ids.size(),
+			"reorders_total": _lookahead_reorders,
+		})
+	return {"ok": true, "changed": changed, "queued": _prefetch_queue.size()}
 
 
 func prepare_chunk_snapshot(
