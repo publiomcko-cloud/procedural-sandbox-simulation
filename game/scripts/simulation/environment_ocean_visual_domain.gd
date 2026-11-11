@@ -28,7 +28,8 @@ static func build(
 	region_key: Vector2i,
 	environment: Dictionary,
 	shoreline: Dictionary,
-	debug_mode: String = "normal"
+	debug_mode: String = "normal",
+	external_anchor_edges: Dictionary = {}
 ) -> Dictionary:
 	var output := {
 		"ok": true, "vertices": PackedVector3Array(),
@@ -37,6 +38,8 @@ static func build(
 		"isolated_components_skipped": 0,
 		"baseline_rejected_seeds": 0,
 		"ocean_seam_edges": 0, "source_ocean_cells": 0,
+		"ocean_neighbor_anchor_tiles": 0,
+		"ocean_boundary_edges": {},
 	}
 	if region_key.y < OCEAN_START_REGION_Z:
 		return output
@@ -62,6 +65,13 @@ static func build(
 	if base_sea_wet.size() != 0 and base_sea_wet.size() != WIDTH * HEIGHT:
 		return {"ok": false, "reason": "ocean_baseline_provenance_invalid"}
 	var has_baseline := base_sea_wet.size() == WIDTH * HEIGHT
+	# Only evidence from a currently published, source-validated adjacent
+	# region may authorize a connection across the 16x12m visual boundary.
+	for side in ["west", "east", "north", "south"]:
+		var mask: PackedByteArray = external_anchor_edges.get(side, PackedByteArray())
+		var expected := TILES_Z if side == "west" or side == "east" else TILES_X
+		if mask.size() != 0 and mask.size() != expected:
+			return {"ok": false, "reason": "ocean_neighbor_edge_shape_invalid"}
 	var sparse_heights: Dictionary = shoreline.get("fine_height_mm", {})
 	var sparse_valid: Dictionary = shoreline.get("fine_valid", {})
 	if sparse_heights.size() > 512 or sparse_heights.size() != sparse_valid.size():
@@ -94,6 +104,21 @@ static func build(
 				heights[(z + 1) * WIDTH + x] < roundi(threshold * 1000.0)
 				or heights[(z + 1) * WIDTH + x + 1] < roundi(threshold * 1000.0)
 			)
+			# An admitted sea component in a READY neighbor can extend through
+			# the matching wet SDF edge even where this region has no native
+			# sea source. This is visual connectivity, not new water authority.
+			var external_source := false
+			if x == 0 and _neighbor_edge_anchor(external_anchor_edges, "west", z, x, z, heights, valid, threshold):
+				external_source = true
+			if x == TILES_X - 1 and _neighbor_edge_anchor(external_anchor_edges, "east", z, x, z, heights, valid, threshold):
+				external_source = true
+			if z == 0 and _neighbor_edge_anchor(external_anchor_edges, "north", x, x, z, heights, valid, threshold):
+				external_source = true
+			if z == TILES_Z - 1 and _neighbor_edge_anchor(external_anchor_edges, "south", x, x, z, heights, valid, threshold):
+				external_source = true
+			if external_source:
+				seeds.append(id)
+				output["ocean_neighbor_anchor_tiles"] = int(output["ocean_neighbor_anchor_tiles"]) + 1
 			if from_authority or seaward:
 				# The P5.0E V1 binding classifies any newly excavated low cell
 				# in the ocean band as an infinite reservoir. That classification
@@ -164,6 +189,36 @@ static func build(
 				admitted[tile_id] = 1
 		elif seed_found:
 			isolated_components += 1
+	# Report shared-edge coverage of admitted sea. A neighbor can use these
+	# only while this source region's SDF and environmental tokens remain
+	# current, never while an old visual mesh is retained during an edit.
+	var boundary_edges := {
+		"west": _empty_edge_mask(TILES_Z),
+		"east": _empty_edge_mask(TILES_Z),
+		"north": _empty_edge_mask(TILES_X),
+		"south": _empty_edge_mask(TILES_X),
+	}
+	for z in range(TILES_Z):
+		for x in range(TILES_X):
+			if admitted[z * TILES_X + x] == 0:
+				continue
+			if x == 0 and _shared_wet_edge(x, z, Vector2i(-1, 0), heights, valid, threshold):
+				var left: PackedByteArray = boundary_edges["west"]
+				left[z] = 1
+				boundary_edges["west"] = left
+			if x == TILES_X - 1 and _shared_wet_edge(x, z, Vector2i(1, 0), heights, valid, threshold):
+				var right: PackedByteArray = boundary_edges["east"]
+				right[z] = 1
+				boundary_edges["east"] = right
+			if z == 0 and _shared_wet_edge(x, z, Vector2i(0, -1), heights, valid, threshold):
+				var up: PackedByteArray = boundary_edges["north"]
+				up[x] = 1
+				boundary_edges["north"] = up
+			if z == TILES_Z - 1 and _shared_wet_edge(x, z, Vector2i(0, 1), heights, valid, threshold):
+				var down: PackedByteArray = boundary_edges["south"]
+				down[x] = 1
+				boundary_edges["south"] = down
+	output["ocean_boundary_edges"] = boundary_edges
 	var vertices := PackedVector3Array()
 	var colors := PackedColorArray()
 	var origin_x := float(region_key.x) * float(TILES_X)
@@ -233,6 +288,28 @@ static func build(
 	output["ocean_seam_edges"] = sea_edges
 	output["refined_coast_quads"] = refines
 	return output
+
+
+static func _empty_edge_mask(length: int) -> PackedByteArray:
+	var mask := PackedByteArray()
+	mask.resize(length)
+	return mask
+
+
+static func _neighbor_edge_anchor(
+	anchors: Dictionary, side: String, index: int, x: int, z: int,
+	heights: PackedInt32Array, valid: PackedByteArray, threshold: float
+) -> bool:
+	var mask: PackedByteArray = anchors.get(side, PackedByteArray())
+	if index < 0 or index >= mask.size() or mask[index] == 0:
+		return false
+	var direction := Vector2i.ZERO
+	match side:
+		"west": direction = Vector2i(-1, 0)
+		"east": direction = Vector2i(1, 0)
+		"north": direction = Vector2i(0, -1)
+		"south": direction = Vector2i(0, 1)
+	return _shared_wet_edge(x, z, direction, heights, valid, threshold)
 
 
 ## A component must have a wet segment on at least one of its four
