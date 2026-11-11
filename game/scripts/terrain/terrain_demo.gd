@@ -1807,6 +1807,10 @@ func _process_free_exploration(delta: float) -> void:
 		if _stream_bench_frames_done >= _stream_bench_frames_goal:
 			if not _stream_bench_reported:
 				_stream_bench_reported = true
+				# Include the final, otherwise lost sub-second telemetry window.
+				# _stream_finish_frame() executes later in this same _process call.
+				if _perf_trace_enabled:
+					_stream_window_started_usec = Time.get_ticks_usec() - STREAM_BUDGET_TRACE_INTERVAL_USEC
 				print("P5_STREAM_BENCH_COMPLETE: " + JSON.stringify({
 					"route": _stream_bench_route,
 					"profile": _stream_profile,
