@@ -43,6 +43,7 @@ func _run() -> void:
 	_test_r5_isolated_ocean_binding()
 	_test_r5_visual_signature_and_revisit()
 	_test_r5_1_submerged_ocean_finite_noop()
+	_test_r5_1_ocean_baseline_gate()
 	_test_sdf_worker_shoreline_and_edits()
 	_test_startup_locations()
 	_test_bundled_ocean_end_to_end()
@@ -549,6 +550,49 @@ func _test_r5_1_submerged_ocean_finite_noop() -> void:
 		"R5.1 finite water above ocean plane still triggers visual rebuild")
 	presenter.queue_free()
 	runtime.queue_free()
+
+
+## R5.1: even if the hydrology V1 height rule binds a low excavation,
+## it cannot become a visible infinite sea unless an unchanged base-world
+## ocean source is genuinely present in the SDF component.
+func _test_r5_1_ocean_baseline_gate() -> void:
+	var region := Vector2i(5, 13)
+	var environment := _environment(region)
+	var kinds: PackedByteArray = environment["reservoir_kind"]
+	var levels: PackedInt64Array = environment["reservoir_level_mm"]
+	kinds[2] = EnvironmentStore.RESERVOIR_FINITE
+	levels[2] = 0
+	kinds[23] = EnvironmentStore.RESERVOIR_OCEAN
+	levels[23] = 4000
+	environment["reservoir_kind"] = kinds
+	environment["reservoir_level_mm"] = levels
+	var original := environment.duplicate(true)
+	var shoreline := _shoreline(region)
+	var heights: PackedInt32Array = shoreline["height_mm"]
+	heights.fill(5000)
+	for z in range(4, 7):
+		for x in range(14, 17):
+			heights[z * 17 + x] = 3000
+	shoreline["height_mm"] = heights
+	var baseline := PackedByteArray()
+	baseline.resize(17 * 13)
+	shoreline["base_sea_wet"] = baseline
+	var isolated := OceanVisual.build(region, environment, shoreline)
+	_check(isolated.get("ok", false), "R5.1 newly excavated boundary pit accepts valid derived input")
+	_check(int(isolated.get("baseline_rejected_seeds", 0)) > 0,
+		"R5.1 edited-only ocean bindings are rejected as sea seeds")
+	_check((isolated.get("vertices", PackedVector3Array()) as PackedVector3Array).is_empty(),
+		"R5.1 excavated coastal-border pit cannot flood without baseline sea source")
+	baseline[5 * 17 + 16] = 1
+	shoreline["base_sea_wet"] = baseline
+	var anchored := OceanVisual.build(region, environment, shoreline)
+	_check(anchored.get("ok", false)
+		and not (anchored.get("vertices", PackedVector3Array()) as PackedVector3Array).is_empty(),
+		"R5.1 true baseline sea source can still render its connected wet component")
+	_check(environment == original, "R5.1 sea provenance never mutates hydrology authority")
+	shoreline["base_sea_wet"] = PackedByteArray([1])
+	_check(not OceanVisual.build(region, environment, shoreline).get("ok", false),
+		"R5.1 malformed optional baseline mask fails closed")
 
 
 func _test_bounded_scene_presentation() -> void:
