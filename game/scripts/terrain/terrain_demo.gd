@@ -195,6 +195,9 @@ var _stream_window_f10_focus_missing_frames := 0
 var _stream_window_f10_region_gaps := 0
 var _stream_window_f10_speed_peak_mps := 0.0
 var _stream_window_f10_distance_m := 0.0
+var _stream_window_f10_perceived_region_gaps := 0
+var _stream_window_f10_coarse_covered_regions := 0
+var _stream_window_f10_perceived_focus_missing_frames := 0
 var _coarse_preview_jobs: Dictionary = {}
 var _coarse_preview_nodes: Dictionary = {}
 var _coarse_preview_attempts: Dictionary = {}
@@ -899,9 +902,15 @@ func _stream_finish_frame() -> void:
 		_stream_window_f10_distance_m += _last_f10_speed_mps * maxf(0.0, _last_frame_ms) / 1000.0
 		if not active_regions.has(_region_id(focus_region_key)):
 			_stream_window_f10_focus_missing_frames += 1
+			if not _coarse_preview_nodes.has(_region_id(focus_region_key)):
+				_stream_window_f10_perceived_focus_missing_frames += 1
 		for region in _region_keys_within_radius(focus_region_key, REQUEST_RADIUS):
 			if not active_regions.has(_region_id(region)):
 				_stream_window_f10_region_gaps += 1
+				if _coarse_preview_nodes.has(_region_id(region)):
+					_stream_window_f10_coarse_covered_regions += 1
+				else:
+					_stream_window_f10_perceived_region_gaps += 1
 	if int(_stream_budget_state.get("dispatch_limit", 1)) > 1:
 		_stream_window_boost_frames += 1
 	if now - _stream_window_started_usec < STREAM_BUDGET_TRACE_INTERVAL_USEC:
@@ -936,6 +945,9 @@ func _stream_finish_frame() -> void:
 		"f10_movement_frames": _stream_window_f10_frames,
 		"f10_focus_missing_frames": _stream_window_f10_focus_missing_frames,
 		"f10_missing_regions_in_window_total": _stream_window_f10_region_gaps,
+		"f10_perceived_missing_regions_total": _stream_window_f10_perceived_region_gaps,
+		"f10_coarse_covered_region_samples": _stream_window_f10_coarse_covered_regions,
+		"f10_perceived_focus_missing_frames": _stream_window_f10_perceived_focus_missing_frames,
 		"f10_peak_speed_mps": _stream_window_f10_speed_peak_mps,
 		"f10_distance_m": _stream_window_f10_distance_m,
 		"f10_predictive_stages_started": _stream_window_lookahead_stages,
@@ -967,6 +979,9 @@ func _stream_finish_frame() -> void:
 	_stream_window_f10_frames = 0
 	_stream_window_f10_focus_missing_frames = 0
 	_stream_window_f10_region_gaps = 0
+	_stream_window_f10_perceived_region_gaps = 0
+	_stream_window_f10_coarse_covered_regions = 0
+	_stream_window_f10_perceived_focus_missing_frames = 0
 	_stream_window_f10_speed_peak_mps = 0.0
 	_stream_window_f10_distance_m = 0.0
 	_stream_window_lookahead_stages = 0
@@ -2638,7 +2653,7 @@ func _process_coarse_previews() -> void:
 		_coarse_preview_jobs.erase(task_id)
 		var id: String = record["stage_id"]
 		var job: RefCounted = record["job"]
-		var cpu: Dictionary = job.result
+		var cpu: Dictionary = job.get("result")
 		_stream_window_coarse_worker_usec += int(cpu.get("worker_usec", 0))
 		if cpu.get("valid", false) and _coarse_preview_record_current(id, record):
 			var started_usec := Time.get_ticks_usec()
