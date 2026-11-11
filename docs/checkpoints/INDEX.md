@@ -6,6 +6,7 @@
 
 | Date | Checkpoint | Event | Publication state at creation |
 | --- | --- | --- | --- |
+| 2026-11-11 | [E1.1 parse failure and recovery](2026-11-11-P5-STREAM-E1-1-PARSE-RECOVERY.md) | Owner GUI discovered terrain main script syntax failure; explicit integer typing and fail-closed scene parse preflights published | Candidate updated, Windows CI and owner GUI **pending** |
 | 2026-11-11 | [P5 streaming E1.1](2026-11-11-P5-STREAM-E1-1-EXPERIMENT.md) | Owner-authorized E1.1 event-invalidated readiness cache and scheduler optimization on PR #282; code published, qualification not established at checkpoint | Draft docs branch only; implementation not merged, GUI A/B pending |
 
 ## Latest integration event
