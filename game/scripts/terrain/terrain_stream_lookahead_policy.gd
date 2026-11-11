@@ -55,14 +55,22 @@ static func ordered_queue(
 		var rank_b := _rank(b, focus, ahead)
 		if rank_a != rank_b:
 			return rank_a < rank_b
-		var dpa := _distance(a, ahead)
-		var dpb := _distance(b, ahead)
-		if dpa != dpb:
-			return dpa < dpb
 		var dca := _distance(a, focus)
 		var dcb := _distance(b, focus)
-		if dca != dcb:
-			return dca < dcb
+		var dpa := _distance(a, ahead)
+		var dpb := _distance(b, ahead)
+		# Within an active-front rank, service the actual camera first; within
+		# an ahead-only rank, service the anticipated camera first.
+		if rank_a == 0 or rank_a == 2:
+			if dca != dcb:
+				return dca < dcb
+			if dpa != dpb:
+				return dpa < dpb
+		else:
+			if dpa != dpb:
+				return dpa < dpb
+			if dca != dcb:
+				return dca < dcb
 		return a.y < b.y if a.y != b.y else a.x < b.x
 	)
 	urgent.append_array(normal)
