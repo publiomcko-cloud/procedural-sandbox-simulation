@@ -186,6 +186,7 @@ var _lookahead_stage_targets: Array[Vector2i] = []
 var _lookahead_stage_signature := ""
 var _last_reconciled_lookahead_signature := ""
 var _lookahead_stage_begin_total := 0
+var _stream_window_lookahead_stages := 0
 var _stream_window_f10_frames := 0
 var _stream_window_f10_focus_missing_frames := 0
 var _stream_window_f10_region_gaps := 0
@@ -923,6 +924,7 @@ func _stream_finish_frame() -> void:
 		"f10_missing_regions_in_window_total": _stream_window_f10_region_gaps,
 		"f10_peak_speed_mps": _stream_window_f10_speed_peak_mps,
 		"f10_distance_m": _stream_window_f10_distance_m,
+		"f10_predictive_stages_started": _stream_window_lookahead_stages,
 	})
 	_stream_window_started_usec = now
 	_stream_window_frames = 0
@@ -946,6 +948,7 @@ func _stream_finish_frame() -> void:
 	_stream_window_f10_region_gaps = 0
 	_stream_window_f10_speed_peak_mps = 0.0
 	_stream_window_f10_distance_m = 0.0
+	_stream_window_lookahead_stages = 0
 
 
 func _process(delta: float) -> void:
@@ -1956,6 +1959,7 @@ func _reconcile_region_window(force: bool = false) -> void:
 						_region_keys_within_radius(focus_region_key, REQUEST_RADIUS), key
 					):
 						_lookahead_stage_begin_total += 1
+						_stream_window_lookahead_stages += 1
 		for id_value in loading_regions.keys().duplicate():
 			var id: String = id_value
 			var stage: Dictionary = loading_regions[id]
