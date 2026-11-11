@@ -1069,7 +1069,7 @@ func _process(delta: float) -> void:
 	var stream_stage_started_usec := Time.get_ticks_usec()
 	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
 		if _stream_profile == "adaptive-skip-dependency":
-			var source_epoch := terrain_effect_runtime.get_dependency_source_epoch()
+			var source_epoch: int = int(terrain_effect_runtime.get_dependency_source_epoch())
 			if _dependency_stage_dirty or source_epoch != _dependency_last_source_epoch:
 				var scheduler_started_usec := Time.get_ticks_usec()
 				if _dependency_stage_dirty:

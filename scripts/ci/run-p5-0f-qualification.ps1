@@ -33,6 +33,12 @@ function Invoke-Qualification([string]$Label, [string[]]$CommandArgs, [string]$E
 }
 
 Invoke-Qualification 'import' @('--headless', '--editor', '--path', $ProjectPath, '--import') '' | Out-Null
+# Every profile shares this main terrain script. Isolated policy tests do not
+# parse it; reject syntax errors before a green headless qualification.
+Invoke-Qualification 'terrain-main-script-check' @(
+    '--headless', '--path', $ProjectPath, '--check-only', '--script',
+    'res://scripts/terrain/terrain_demo.gd'
+) '' | Out-Host
 Invoke-Qualification 'focused' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p5_0f_environment_visuals_tests.gd') 'P5_0F_ENVIRONMENT_VISUALS_PASS:' | Out-Host
 Invoke-Qualification 'stream-budget' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p5_0f_stream_budget_tests.gd') 'P5_0F_STREAM_BUDGET_PASS:' | Out-Host
 Invoke-Qualification 'stream-lookahead' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p5_0f_stream_lookahead_tests.gd') 'P5_0F_STREAM_LOOKAHEAD_PASS:' | Out-Host

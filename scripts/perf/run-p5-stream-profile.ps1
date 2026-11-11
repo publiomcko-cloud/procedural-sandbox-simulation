@@ -32,6 +32,17 @@ try {
         '========== CONSOLE =========='
     ) | Set-Content -LiteralPath $log -Encoding UTF8
 
+    # E1.1 recovery: fail before launching the GUI if terrain_demo.gd does
+    # not parse. Focused SceneTree tests cannot detect this failure mode.
+    $ErrorActionPreference = 'Continue'
+    $sceneCheck = @(& $GodotBin --headless --path .\game --check-only --script res://scripts/terrain/terrain_demo.gd 2>&1)
+    $sceneCheckExit = $LASTEXITCODE
+    $sceneCheck | Tee-Object -FilePath $log -Append | Out-Host
+    $ErrorActionPreference = 'Stop'
+    if ($sceneCheckExit -ne 0 -or (($sceneCheck -join [Environment]::NewLine) -match '(?i)SCRIPT ERROR:|Parse Error:|ERROR: Failed to load script')) {
+        throw "Terrain main script failed Godot --check-only; A/B not started. See $log"
+    }
+
     $ErrorActionPreference = 'Continue'
     & $GodotBin --headless --path .\game --script res://tests/p5_0f_stream_budget_tests.gd 2>&1 |
         Tee-Object -FilePath $log -Append
