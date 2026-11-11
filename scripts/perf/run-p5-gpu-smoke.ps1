@@ -28,11 +28,27 @@ foreach ($route in @('straight-18','straight-54')) {
     $env:SANDBOX_PERF_TRACE = '1'
     $env:SANDBOX_PERF_TRACE_MIN_MS = '2.0'
     $env:SANDBOX_STREAM_BENCH_SCREENSHOT = $png
+    # This is a separate Windows runner workspace. The service runner's
+    # editor import/class_name cache is not shared here. Without import the
+    # GUI can keep running with an empty scene after GDScript parse errors.
+    $importLog = Join-Path $EvidenceDir "$runName.import.log"
+    $importErr = Join-Path $EvidenceDir "$runName.import.stderr.log"
+    $importProc = Start-Process -FilePath $GodotBin -ArgumentList ('--headless --editor --path "' + $project + '" --import') -PassThru -NoNewWindow -RedirectStandardOutput $importLog -RedirectStandardError $importErr
+    if (-not $importProc.WaitForExit(90000)) {
+        $importProc.Kill()
+        $importProc.WaitForExit()
+        throw "P5_GPU_IMPORT_TIMEOUT: $runName"
+    }
+    $importProc.Refresh()
+    $importErrors = (Get-Content -LiteralPath $importErr -Raw -ErrorAction SilentlyContinue)
+    if (($null -ne $importProc.ExitCode -and [int]$importProc.ExitCode -ne 0) -or $importErrors -match '(?m)(SCRIPT ERROR:|Parse Error:|ERROR: Failed to load script)') {
+        throw "P5_GPU_IMPORT_FAILED: $runName; inspect import stdout/stderr"
+    }
     $arguments = '--verbose --windowed --resolution 960x540 --rendering-method gl_compatibility --path "' + $project +
         '" -- --stream-benchmark-route=' + $route + ' --stream-benchmark-frames=' + $Frames + ' --start-water=ocean'
     Write-Host "P5_GPU_SMOKE_START: $route sha=$commit"
     $process = Start-Process -FilePath $GodotBin -ArgumentList $arguments -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-    if (-not $process.WaitForExit(180000)) {
+    if (-not $process.WaitForExit(90000)) {
         $process.Kill()
         $process.WaitForExit()
         throw "P5_GPU_SMOKE_TIMEOUT: $runName"
