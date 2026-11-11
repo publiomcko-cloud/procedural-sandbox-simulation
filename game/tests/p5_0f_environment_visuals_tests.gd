@@ -671,6 +671,10 @@ func _test_sdf_worker_shoreline_and_edits() -> void:
 	var before: Dictionary = original_job.get("visual_shoreline", {})
 	_check(before.get("ok", false), "R2 optional SDF shoreline product is available")
 	_check((before.get("height_mm", PackedInt32Array()) as PackedInt32Array).size() == 221, "R2 fine grid has 17x13 samples")
+	_check((before.get("base_sea_wet", PackedByteArray()) as PackedByteArray).size() == 221,
+		"R5.1 shoreline worker publishes immutable 17x13 baseline ocean source eligibility")
+	_check(int((original_job.get("diagnostics", {}) as Dictionary).get("top_surface_sample_cache_hits", 0)) >= 48,
+		"R5.1 worker reuses at least 48 overlapping hydro/visual SDF samples")
 	_check(int(before.get("refined_tile_count", 0)) > 0, "R3 actual ocean coast triggers selective true-SDF refinement")
 	_check(int(before.get("refined_sample_count", -1)) <= 512, "R3 sampled coastline remains under bounded SDF probe cap")
 	_check(int(before.get("refined_tile_count", -1)) <= 96, "R3 sampled coastline remains under bounded coastal tile cap")
@@ -701,6 +705,8 @@ func _test_sdf_worker_shoreline_and_edits() -> void:
 	var after: Dictionary = edited_job.get("visual_shoreline", {})
 	_check(after.get("terrain_revision") != before.get("terrain_revision"), "R2 shoreline provenance tracks terrain edit revision")
 	_check(after.get("height_mm") != before.get("height_mm"), "R2 real terrain edit changes shoreline topography")
+	_check(after.get("base_sea_wet") == before.get("base_sea_wet"),
+		"R5.1 terrain edits cannot rewrite immutable baseline ocean source eligibility")
 	var result_after: Dictionary = VisualScript.derive_shoreline_geometry(
 		region, environment, edited_job["record"], after
 	)
