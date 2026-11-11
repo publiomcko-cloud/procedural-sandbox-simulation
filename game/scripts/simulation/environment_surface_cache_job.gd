@@ -44,6 +44,11 @@ var worker_thread_id := 0
 var result: Dictionary = {}
 var build_visual_shoreline := false
 var visual_refine_levels_mm := PackedInt64Array()
+# Worker-local immutable-snapshot memoization. Hydro-cell centers coincide
+# with sites on the denser 1m visual grid, so reusing samples removes
+# redundant vertical SDF marches with no changes to published authority.
+var _top_surface_samples: Dictionary = {}
+var _top_surface_sample_hits := 0
 
 
 func _init(
@@ -185,6 +190,8 @@ func _build() -> Dictionary:
 		},
 		"diagnostics": {
 			"cell_count": cell_count,
+			"top_surface_sample_cache_hits": _top_surface_sample_hits,
+			"top_surface_unique_samples": _top_surface_samples.size(),
 			"clamped_top_count": clamped_top_count,
 			"missing_surface_count": missing_surface_count,
 			"chunk_snapshot_count": chunk_snapshots.size(),
@@ -335,6 +342,20 @@ func _derive_adaptive_coast_samples(
 
 
 func _sample_top_surface(
+	local_x: float,
+	local_z: float,
+	snapshot: Dictionary
+) -> Dictionary:
+	var key := Vector2i(roundi(local_x * 1000.0), roundi(local_z * 1000.0))
+	if _top_surface_samples.has(key):
+		_top_surface_sample_hits += 1
+		return (_top_surface_samples[key] as Dictionary).duplicate(true)
+	var sample := _sample_top_surface_uncached(local_x, local_z, snapshot)
+	_top_surface_samples[key] = sample.duplicate(true)
+	return sample
+
+
+func _sample_top_surface_uncached(
 	local_x: float,
 	local_z: float,
 	snapshot: Dictionary
