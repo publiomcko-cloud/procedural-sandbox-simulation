@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('baseline', 'adaptive')]
+    [ValidateSet('baseline', 'adaptive', 'adaptive-skip')]
     [Alias('Profile')]
     [string]$ProfileName = 'baseline',
     [string]$GodotBin = 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe',
@@ -105,12 +105,31 @@ try {
             $workMean += [double]$w.process_mean_ms * [double]$w.frame_count
             $framePeak = [Math]::Max($framePeak, [double]$w.frame_peak_ms)
         }
+        $effectWaits = 0
+        $headSkips = 0
+        $skipRecovered = 0
+        $skipBudgetExhausted = 0
+        $dispatchBlockers = @{}
+        foreach ($w in $windowRows) {
+            $headSkips += [int]$w.effect_pending_load_skips
+            $skipRecovered += [int]$w.successful_dispatch_after_skip
+            $skipBudgetExhausted += [int]$w.skip_time_budget_exhausted
+            if ($null -ne $w.mesh_dispatch_blockers) {
+                foreach ($property in $w.mesh_dispatch_blockers.PSObject.Properties) {
+                    $dispatchBlockers[$property.Name] = [int]$dispatchBlockers[$property.Name] + [int]$property.Value
+                }
+            }
+        }
         $metrics = [ordered]@{
             profile = $ProfileName
             commit = $head
             windows = $windowRows.Count
             frames = [int]$totalFrames
             boosted_frames = [int]$boosted
+            effect_pending_load_skips = $headSkips
+            successful_dispatch_after_skip = $skipRecovered
+            skip_time_budget_exhausted = $skipBudgetExhausted
+            mesh_dispatch_blockers = $dispatchBlockers
             mesh_dispatches = [int]$totalDispatches
             mesh_uploads = [int]$totalUploads
             dispatches_per_100_frames = [Math]::Round(100.0 * $totalDispatches / [Math]::Max(1.0, $totalFrames), 2)
