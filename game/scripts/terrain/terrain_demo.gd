@@ -29,6 +29,7 @@ const SimulationRuntimeStoreScript := preload("res://scripts/simulation/simulati
 const SimulationRuntimeScript := preload("res://scripts/simulation/simulation_runtime.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 const StreamBudgetPolicy := preload("res://scripts/terrain/terrain_stream_budget_policy.gd")
+const StreamDispatchSelector := preload("res://scripts/terrain/terrain_stream_dispatch_selector.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -175,6 +176,10 @@ var _stream_window_work_ms_peak := 0.0
 var _stream_window_dispatches := 0
 var _stream_window_uploads := 0
 var _stream_window_stage_usec: Dictionary = {}
+var _stream_window_dispatch_blockers: Dictionary = {}
+var _stream_window_skipped_load_stages := 0
+var _stream_window_skipped_then_dispatched := 0
+var _stream_window_skip_budget_exhausted := 0
 
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
@@ -271,7 +276,7 @@ func _ready() -> void:
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--stream-profile="):
 			_stream_profile = argument.trim_prefix("--stream-profile=").to_lower()
-	if _stream_profile not in ["baseline", "adaptive"]:
+	if _stream_profile not in ["baseline", "adaptive", "adaptive-skip"]:
 		push_warning("Unknown stream profile; using baseline")
 		_stream_profile = "baseline"
 	if _perf_trace_enabled:
@@ -823,6 +828,12 @@ func _exit_tree() -> void:
 
 ## Once/second aggregation avoids introducing a per-frame logging bottleneck.
 ## Stage timing is passive in baseline and adaptive runs.
+func _stream_dispatch_blocked(reason: String) -> void:
+	if not _perf_trace_enabled:
+		return
+	_stream_window_dispatch_blockers[reason] = int(_stream_window_dispatch_blockers.get(reason, 0)) + 1
+
+
 func _stream_stage_measure(stage: String, started_usec: int) -> void:
 	if not _perf_trace_enabled:
 		return
@@ -876,6 +887,10 @@ func _stream_finish_frame() -> void:
 		"mesh_limit": int(_stream_budget_state.get("dispatch_limit", 1)),
 		"reason": String(_stream_budget_state.get("reason", "baseline")),
 		"stage_work_usec": _stream_window_stage_usec.duplicate(true),
+		"mesh_dispatch_blockers": _stream_window_dispatch_blockers.duplicate(true),
+		"effect_pending_load_skips": _stream_window_skipped_load_stages,
+		"successful_dispatch_after_skip": _stream_window_skipped_then_dispatched,
+		"skip_time_budget_exhausted": _stream_window_skip_budget_exhausted,
 	})
 	_stream_window_started_usec = now
 	_stream_window_frames = 0
@@ -890,6 +905,10 @@ func _stream_finish_frame() -> void:
 	_stream_window_dispatches = 0
 	_stream_window_uploads = 0
 	_stream_window_stage_usec.clear()
+	_stream_window_dispatch_blockers.clear()
+	_stream_window_skipped_load_stages = 0
+	_stream_window_skipped_then_dispatched = 0
+	_stream_window_skip_budget_exhausted = 0
 
 
 func _process(delta: float) -> void:
@@ -902,7 +921,7 @@ func _process(delta: float) -> void:
 	var previous_dispatch_limit := int(_stream_budget_state.get("dispatch_limit", 1))
 	_stream_budget_state = StreamBudgetPolicy.next(
 		_stream_budget_state, _last_frame_ms, _last_process_work_ms,
-		_stream_profile == "adaptive"
+		_stream_profile in ["adaptive", "adaptive-skip"]
 	)
 	if _perf_trace_enabled and int(_stream_budget_state["dispatch_limit"]) != previous_dispatch_limit:
 		PerformanceTrace.emit("terrain_stream_budget_transition", {
@@ -2614,13 +2633,25 @@ func _process_completed_mesh_jobs() -> void:
 
 func _dispatch_mesh_jobs() -> void:
 	var dispatch_started_usec := Time.get_ticks_usec()
+	# A blocked LOAD stage may be skipped for this invocation only. The
+	# selector never advances its chunk index, so exact order within each
+	# region and all revision/transaction checks remain unchanged.
+	var skipped_ids: Dictionary = {}
+	var successful_after_skip := false
 	while _mesh_jobs.size() < _mesh_job_limit:
 		if _mesh_dispatches_this_frame >= int(_stream_budget_state.get("dispatch_limit", 1)):
+			_stream_dispatch_blocked("dispatch_cap")
 			return
-		if _mesh_dispatches_this_frame > 0 			and Time.get_ticks_usec() - dispatch_started_usec >= MESH_SNAPSHOT_FRAME_BUDGET_USEC:
+		var elapsed_usec := Time.get_ticks_usec() - dispatch_started_usec
+		if (_mesh_dispatches_this_frame > 0 or not skipped_ids.is_empty()) \
+		and elapsed_usec >= MESH_SNAPSHOT_FRAME_BUDGET_USEC:
+			_stream_dispatch_blocked("snapshot_time_budget")
+			if not skipped_ids.is_empty():
+				_stream_window_skip_budget_exhausted += 1
 			return
-		var request := _next_mesh_job_request()
+		var request := _next_mesh_job_request(skipped_ids)
 		if request.is_empty():
+			_stream_dispatch_blocked("no_eligible_stage_after_skips" if not skipped_ids.is_empty() else "no_eligible_stage")
 			return
 		var id: String = request["id"]
 		var stage: Dictionary = loading_regions[id]
@@ -2664,6 +2695,16 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_corner.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_corner):
+					_stream_dispatch_blocked("effect_snapshot_pending")
+					if StreamDispatchSelector.can_skip_pending(
+						_stream_profile, String(stage["purpose"]),
+						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
+						MESH_SNAPSHOT_FRAME_BUDGET_USEC
+					):
+						skipped_ids[id] = true
+						_stream_window_skipped_load_stages += 1
+						continue
+					_stream_dispatch_blocked("effect_skip_not_allowed_or_budget")
 					return
 				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_corner.get("reason", "unknown"))
 				continue
@@ -2690,6 +2731,16 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_pair.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_pair):
+					_stream_dispatch_blocked("effect_snapshot_pending")
+					if StreamDispatchSelector.can_skip_pending(
+						_stream_profile, String(stage["purpose"]),
+						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
+						MESH_SNAPSHOT_FRAME_BUDGET_USEC
+					):
+						skipped_ids[id] = true
+						_stream_window_skipped_load_stages += 1
+						continue
+					_stream_dispatch_blocked("effect_skip_not_allowed_or_budget")
 					return
 				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_pair.get("reason", "unknown"))
 				continue
@@ -2716,6 +2767,16 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_z.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_z):
+					_stream_dispatch_blocked("effect_snapshot_pending")
+					if StreamDispatchSelector.can_skip_pending(
+						_stream_profile, String(stage["purpose"]),
+						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
+						MESH_SNAPSHOT_FRAME_BUDGET_USEC
+					):
+						skipped_ids[id] = true
+						_stream_window_skipped_load_stages += 1
+						continue
+					_stream_dispatch_blocked("effect_skip_not_allowed_or_budget")
 					return
 				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_z.get("reason", "unknown"))
 				continue
@@ -2737,6 +2798,16 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_chunk.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_chunk):
+					_stream_dispatch_blocked("effect_snapshot_pending")
+					if StreamDispatchSelector.can_skip_pending(
+						_stream_profile, String(stage["purpose"]),
+						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
+						MESH_SNAPSHOT_FRAME_BUDGET_USEC
+					):
+						skipped_ids[id] = true
+						_stream_window_skipped_load_stages += 1
+						continue
+					_stream_dispatch_blocked("effect_skip_not_allowed_or_budget")
 					return
 				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_chunk.get("reason", "unknown"))
 				continue
@@ -2786,6 +2857,9 @@ func _dispatch_mesh_jobs() -> void:
 		stage["pending_count"] = int(stage["pending_count"]) + 1
 		loading_regions[id] = stage
 		_mesh_dispatches_this_frame += 1
+		if not skipped_ids.is_empty() and not successful_after_skip:
+			successful_after_skip = true
+			_stream_window_skipped_then_dispatched += 1
 		_mesh_jobs[task_id] = {
 			"job": job,
 			"stage_id": id,
@@ -2844,32 +2918,8 @@ func _terrain_effect_snapshot_pending(result: Dictionary) -> bool:
 	return not result.get("ok", false) and bool(result.get("pending", false))
 
 
-func _next_mesh_job_request() -> Dictionary:
-	var candidates: Array[String] = []
-	for key_value in loading_regions.keys():
-		candidates.append(String(key_value))
-	candidates.sort_custom(func(a: String, b: String) -> bool:
-		var stage_a: Dictionary = loading_regions[a]
-		var stage_b: Dictionary = loading_regions[b]
-		var pa := _stage_priority(String(stage_a["purpose"]))
-		var pb := _stage_priority(String(stage_b["purpose"]))
-		if pa != pb:
-			return pa < pb
-		var ka: Vector2i = stage_a["region_key"]
-		var kb: Vector2i = stage_b["region_key"]
-		var da := maxi(absi(ka.x - focus_region_key.x), absi(ka.y - focus_region_key.y))
-		var db := maxi(absi(kb.x - focus_region_key.x), absi(kb.y - focus_region_key.y))
-		if da == db:
-			return ka.y < kb.y if ka.y != kb.y else ka.x < kb.x
-		return da < db
-	)
-	for id in candidates:
-		var stage: Dictionary = loading_regions[id]
-		var submit_index: int = int(stage.get("submit_index", 0))
-		var coordinates: Array[Vector2i] = stage["chunk_coordinates"]
-		if submit_index < coordinates.size():
-			return {"id": id, "coordinate": coordinates[submit_index], "index": submit_index}
-	return {}
+func _next_mesh_job_request(excluded: Dictionary = {}) -> Dictionary:
+	return StreamDispatchSelector.next(loading_regions, excluded, focus_region_key)
 
 
 func _stage_priority(purpose: String) -> int:
