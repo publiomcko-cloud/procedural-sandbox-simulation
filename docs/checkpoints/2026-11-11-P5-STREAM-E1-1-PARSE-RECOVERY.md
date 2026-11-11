@@ -1,0 +1,11 @@
+# 2026-11-11 — E1.1 terrain main script parse failure and recovery
+
+**Event:** Owner's GUI A/B on `1264d711449ef15626775b0f77787acb233fd00c` produced no terrain. Owner-provided PowerShell transcript from both profiles showed `SCRIPT ERROR: Parse Error: Cannot infer the type of "source_epoch" variable` at `terrain_demo.gd:1072`. The A/B runner subsequently rejected trials because no `terrain_stream_profile` event was emitted. In both trials the isolated headless E1.1 tests passed 26/0; this was a **test-coverage gap**, not a valid playable build.
+
+**Correction:** `71b01848b3fbb1fbcd9a53cbf232bedd8b96290b` on `exp/p5-stream-visibility-lab`, PR #282 draft. Introduced an explicit GDScript `int` annotation with conversion for the dynamically invoked source epoch. Added scene-script `--headless --path game --check-only --script res://scripts/terrain/terrain_demo.gd` to the inherited Windows CI suite and the GUI A/B runner. Runner now rejects a script-parse failure **before** showing the game, instead of leaving a blank window and misleading test PASS markers.
+
+**Authoritative checked main:** `2dca19d125309f3b70c858df1acdf22324c31c17`. No merge, no production rollout, no owner GUI PASS. The prior E1.1 checkpoint is immutable and retains its earlier SHA; this document records the new failure and correction without rewriting history.
+
+**Evidence:** owner transcript on candidate HEAD, repository source verification and GitHub push of correction. New exact-HEAD Windows Godot CI runs [43098308261](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43098308261) and [43098312506](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43098312506) were queued at checkpoint creation; verdict **BLOCKED_WITH_EVIDENCE** until those tests and subsequent owner visual run pass. The previous Godot main-script failure is confirmed, while the corrected scene remains unverified on the owner machine.
+
+**Next action:** Recheck exact-HEAD Windows check-only and complete P5/P4 qualifications; user fetches corrected E1.1 branch and repeats isolated GUI A/B at the same seed and route. If script compiles and terrain renders, compare with control `adaptive-skip` for latency, FPS and scheduler CPU before any merge.
