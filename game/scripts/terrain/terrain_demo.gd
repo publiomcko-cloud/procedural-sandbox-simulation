@@ -167,6 +167,9 @@ var _stream_window_frames := 0
 var _stream_window_boost_frames := 0
 var _stream_window_frame_ms_sum := 0.0
 var _stream_window_frame_ms_peak := 0.0
+var _stream_window_frames_over_20_ms := 0
+var _stream_window_frames_over_33_ms := 0
+var _stream_window_work_over_16_ms := 0
 var _stream_window_work_ms_sum := 0.0
 var _stream_window_work_ms_peak := 0.0
 var _stream_window_dispatches := 0
@@ -838,6 +841,12 @@ func _stream_finish_frame() -> void:
 	_stream_window_work_ms_sum += _last_process_work_ms
 	_stream_window_frame_ms_peak = maxf(_stream_window_frame_ms_peak, _last_frame_ms)
 	_stream_window_work_ms_peak = maxf(_stream_window_work_ms_peak, _last_process_work_ms)
+	if _last_frame_ms > 20.0:
+		_stream_window_frames_over_20_ms += 1
+	if _last_frame_ms > 33.0:
+		_stream_window_frames_over_33_ms += 1
+	if _last_process_work_ms > 16.0:
+		_stream_window_work_over_16_ms += 1
 	_stream_window_dispatches += _mesh_dispatches_this_frame
 	_stream_window_uploads += _mesh_uploads_this_frame
 	if int(_stream_budget_state.get("dispatch_limit", 1)) > 1:
@@ -853,6 +862,9 @@ func _stream_finish_frame() -> void:
 		"boosted_frames": _stream_window_boost_frames,
 		"frame_mean_ms": _stream_window_frame_ms_sum / maxf(1.0, float(_stream_window_frames)),
 		"frame_peak_ms": _stream_window_frame_ms_peak,
+		"frames_over_20_ms": _stream_window_frames_over_20_ms,
+		"frames_over_33_ms": _stream_window_frames_over_33_ms,
+		"process_frames_over_16_ms": _stream_window_work_over_16_ms,
 		"process_mean_ms": _stream_window_work_ms_sum / maxf(1.0, float(_stream_window_frames)),
 		"process_peak_ms": _stream_window_work_ms_peak,
 		"mesh_dispatches": _stream_window_dispatches,
@@ -870,6 +882,9 @@ func _stream_finish_frame() -> void:
 	_stream_window_boost_frames = 0
 	_stream_window_frame_ms_sum = 0.0
 	_stream_window_frame_ms_peak = 0.0
+	_stream_window_frames_over_20_ms = 0
+	_stream_window_frames_over_33_ms = 0
+	_stream_window_work_over_16_ms = 0
 	_stream_window_work_ms_sum = 0.0
 	_stream_window_work_ms_peak = 0.0
 	_stream_window_dispatches = 0
