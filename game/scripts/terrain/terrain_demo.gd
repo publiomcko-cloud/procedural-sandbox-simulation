@@ -2682,6 +2682,60 @@ func _process_coarse_previews() -> void:
 	_submit_coarse_preview_job()
 
 
+func _submit_coarse_preview_job() -> void:
+	var candidates: Array[String] = []
+	for id_value in loading_regions.keys():
+		var id: String = id_value
+		if _coarse_preview_attempts.has(id) or _coarse_preview_nodes.has(id):
+			continue
+		var stage: Dictionary = loading_regions[id]
+		var state: RefCounted = stage["world_state"]
+		if not CoarsePreviewPolicy.eligible_stage(
+			_stream_profile, stage, active_regions.has(id), global_rebuild_pending,
+			not _edit_transaction.is_empty(), int(state.brush_edits.get_edit_count()) > 0,
+			cave_section_enabled
+		):
+			continue
+		var key: Vector2i = stage["region_key"]
+		if maxi(absi(key.x - focus_region_key.x), absi(key.y - focus_region_key.y)) <= 1:
+			candidates.append(id)
+	candidates.sort_custom(func(a: String, b: String) -> bool:
+		var ka: Vector2i = loading_regions[a]["region_key"]
+		var kb: Vector2i = loading_regions[b]["region_key"]
+		var da := maxi(absi(ka.x - focus_region_key.x), absi(ka.y - focus_region_key.y))
+		var db := maxi(absi(kb.x - focus_region_key.x), absi(kb.y - focus_region_key.y))
+		if da != db:
+			return da < db
+		return ka.y < kb.y if ka.y != kb.y else ka.x < kb.x
+	)
+	if candidates.is_empty():
+		return
+	var id := candidates[0]
+	var stage: Dictionary = loading_regions[id]
+	var state: RefCounted = stage["world_state"]
+	var job := CoarsePreviewJob.new(
+		int(state.world_seed), stage["region_key"], int(stage["stage_token"]),
+		int(stage["edit_revision"]), int(stage["terrain_effect_authority_revision"]),
+		int(state.generator_version)
+	)
+	var task_id := WorkerThreadPool.add_task(
+		Callable(job, "run"), false, "E2 derived coarse preview"
+	)
+	if task_id < 0:
+		return
+	_coarse_preview_attempts[id] = int(stage["stage_token"])
+	_coarse_preview_jobs[task_id] = {
+		"stage_id": id,
+		"region_key": stage["region_key"],
+		"stage_token": int(stage["stage_token"]),
+		"seed": int(state.world_seed),
+		"generator_version": int(state.generator_version),
+		"edit_revision": int(stage["edit_revision"]),
+		"effect_revision": int(stage["terrain_effect_authority_revision"]),
+		"job": job,
+	}
+
+
 func _process_one_chunk_job() -> void:
 	_process_completed_mesh_jobs()
 	_dispatch_mesh_jobs()
