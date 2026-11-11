@@ -946,7 +946,14 @@ func _poll_resident_regions() -> void:
 		row["wait_started_usec"] = 0
 		row["last_wait_report_usec"] = 0
 		row["token"] = token
-		row["water_signature"] = signature
+		# The signature must describe the water mesh just published. On the
+		# first ocean frame, row.last_ocean_sdf_tiles is still zero, so the
+		# pre-build signature incorrectly includes finite water hidden under
+		# the new sea plane, forcing an unnecessary follow-up rebuild.
+		row["water_signature"] = _water_visual_signature(
+			row["region_key"], environment, surface, _water_debug_mode,
+			hydrology_enabled, int(plan.get("ocean_sdf_tiles", 0))
+		)
 		row["ocean_neighbor_signature"] = neighbor_signature
 		row["ocean_boundary_edges"] = plan.get("ocean_boundary_edges", {})
 		row["last_ocean_neighbor_anchor_tiles"] = int(plan.get("ocean_neighbor_anchor_tiles", 0))
