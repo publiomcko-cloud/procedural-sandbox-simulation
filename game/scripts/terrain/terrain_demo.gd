@@ -31,6 +31,7 @@ const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.g
 const StreamBudgetPolicy := preload("res://scripts/terrain/terrain_stream_budget_policy.gd")
 const StreamDispatchSelector := preload("res://scripts/terrain/terrain_stream_dispatch_selector.gd")
 const StreamLookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
+const StreamReadiness := preload("res://scripts/terrain/terrain_stream_readiness_metrics.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -192,6 +193,8 @@ var _stream_window_f10_focus_missing_frames := 0
 var _stream_window_f10_region_gaps := 0
 var _stream_window_f10_speed_peak_mps := 0.0
 var _stream_window_f10_distance_m := 0.0
+var _stream_window_region_samples := 0
+var _stream_window_unpublished_region_samples := 0
 
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
@@ -877,17 +880,19 @@ func _stream_finish_frame() -> void:
 		_stream_window_work_over_16_ms += 1
 	_stream_window_dispatches += _mesh_dispatches_this_frame
 	_stream_window_uploads += _mesh_uploads_this_frame
+	# E0: published-region readiness, not a GPU pixel-coverage or ocean test.
+	var readiness := StreamReadiness.sample_window(focus_region_key, active_regions, REQUEST_RADIUS)
+	_stream_window_region_samples += int(readiness["requested"])
+	_stream_window_unpublished_region_samples += int(readiness["unpublished"])
 	if free_explore_enabled and _last_f10_speed_mps > 0.01:
 		_stream_window_f10_frames += 1
 		_stream_window_f10_speed_peak_mps = maxf(
 			_stream_window_f10_speed_peak_mps, _last_f10_speed_mps
 		)
 		_stream_window_f10_distance_m += _last_f10_speed_mps * maxf(0.0, _last_frame_ms) / 1000.0
-		if not active_regions.has(_region_id(focus_region_key)):
+		if bool(readiness["focus_unpublished"]):
 			_stream_window_f10_focus_missing_frames += 1
-		for region in _region_keys_within_radius(focus_region_key, REQUEST_RADIUS):
-			if not active_regions.has(_region_id(region)):
-				_stream_window_f10_region_gaps += 1
+		_stream_window_f10_region_gaps += int(readiness["unpublished"])
 	if int(_stream_budget_state.get("dispatch_limit", 1)) > 1:
 		_stream_window_boost_frames += 1
 	if now - _stream_window_started_usec < STREAM_BUDGET_TRACE_INTERVAL_USEC:
@@ -925,6 +930,9 @@ func _stream_finish_frame() -> void:
 		"f10_peak_speed_mps": _stream_window_f10_speed_peak_mps,
 		"f10_distance_m": _stream_window_f10_distance_m,
 		"f10_predictive_stages_started": _stream_window_lookahead_stages,
+		"terrain_requested_region_samples": _stream_window_region_samples,
+		"terrain_unpublished_region_samples": _stream_window_unpublished_region_samples,
+		"terrain_published_region_samples": _stream_window_region_samples - _stream_window_unpublished_region_samples,
 	})
 	_stream_window_started_usec = now
 	_stream_window_frames = 0
@@ -949,6 +957,8 @@ func _stream_finish_frame() -> void:
 	_stream_window_f10_speed_peak_mps = 0.0
 	_stream_window_f10_distance_m = 0.0
 	_stream_window_lookahead_stages = 0
+	_stream_window_region_samples = 0
+	_stream_window_unpublished_region_samples = 0
 
 
 func _process(delta: float) -> void:
@@ -2115,6 +2125,8 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 		"edit_revision": state.brush_edits.revision,
 		"terrain_effect_authority_revision": object_stream.get_command_world_revision(),
 		"chunk_enqueued_usec": Time.get_ticks_usec(),
+		"first_dispatch_usec": 0,
+		"first_mesh_ready_usec": 0,
 		"retry_count": 0,
 	}
 	world_states[id] = state
@@ -2708,6 +2720,8 @@ func _process_completed_mesh_jobs() -> void:
 			continue
 		var coordinate: Vector2i = record["coordinate"]
 		stage["meshes"][coordinate] = result["mesh"]
+		if int(stage.get("first_mesh_ready_usec", 0)) == 0:
+			stage["first_mesh_ready_usec"] = Time.get_ticks_usec()
 		stage["vertex_count_by_coordinate"][coordinate] = int(result.get("vertex_count", 0))
 		stage["triangle_count_by_coordinate"][coordinate] = int(result.get("triangle_count", 0))
 		stage["actual_lod_by_coordinate"][coordinate] = int(result.get("lod_level", 0))
@@ -2968,6 +2982,8 @@ func _dispatch_mesh_jobs() -> void:
 		if task_id < 0:
 			_fail_region_stage(id, "Worker pool rejected a mesh job; previous visible meshes retained")
 			continue
+		if int(stage.get("first_dispatch_usec", 0)) == 0:
+			stage["first_dispatch_usec"] = Time.get_ticks_usec()
 		stage["submit_index"] = int(stage["submit_index"]) + 1
 		stage["pending_count"] = int(stage["pending_count"]) + 1
 		loading_regions[id] = stage
@@ -3079,6 +3095,22 @@ func _complete_region_stage(id: String) -> void:
 			stage.get("vertex_count_by_coordinate", {}),
 			stage.get("triangle_count_by_coordinate", {})
 		)
+		if _perf_trace_enabled and String(stage["purpose"]) == "load":
+			var latency := StreamReadiness.load_latency(
+				int(stage.get("chunk_enqueued_usec", 0)),
+				int(stage.get("first_dispatch_usec", 0)),
+				int(stage.get("first_mesh_ready_usec", 0)),
+				Time.get_ticks_usec()
+			)
+			PerformanceTrace.emit("terrain_region_visual_ready", {
+				"region": [(stage["region_key"] as Vector2i).x, (stage["region_key"] as Vector2i).y],
+				"stage_token": int(stage["stage_token"]),
+				"source": "definitive_scene_commit",
+				"committed_chunks": (stage["meshes"] as Dictionary).size(),
+				"queue_to_first_dispatch_usec": int(latency["queue_to_first_dispatch_usec"]),
+				"queue_to_first_mesh_usec": int(latency["queue_to_first_mesh_usec"]),
+				"queue_to_visual_usec": int(latency["queue_to_visual_usec"]),
+			})
 		if _perf_trace_enabled:
 			PerformanceTrace.emit("terrain_region_load_complete", {
 				"region": [(stage["region_key"] as Vector2i).x, (stage["region_key"] as Vector2i).y],

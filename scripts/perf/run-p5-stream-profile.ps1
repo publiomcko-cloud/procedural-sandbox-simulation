@@ -115,6 +115,18 @@ try {
                 }
             } | Sort-Object
     )
+    $visualReadyTimes = @(
+        $cleanLines |
+            Select-String -SimpleMatch '"event":"terrain_region_visual_ready"' |
+            ForEach-Object {
+                $raw = $_.Line
+                $start = $raw.IndexOf('PERF_TRACE ')
+                if ($start -ge 0) {
+                    try { [double](($raw.Substring($start + 11) | ConvertFrom-Json).queue_to_visual_usec) / 1000.0 }
+                    catch {}
+                }
+            } | Sort-Object
+    )
     if ($windowRows.Count -gt 0) {
         $totalFrames = [double](($windowRows | Measure-Object -Property frame_count -Sum).Sum)
         $totalDispatches = [double](($windowRows | Measure-Object -Property mesh_dispatches -Sum).Sum)
@@ -145,6 +157,8 @@ try {
         $skipRecovered = 0
         $skipBudgetExhausted = 0
         $dispatchBlockers = @{}
+        $requestedSamples = 0
+        $unpublishedSamples = 0
         foreach ($w in $windowRows) {
             $predictiveStages += [int]$w.f10_predictive_stages_started
             $f10Frames += [int]$w.f10_movement_frames
@@ -152,6 +166,8 @@ try {
             $f10RegionGaps += [int]$w.f10_missing_regions_in_window_total
             $f10Distance += [double]$w.f10_distance_m
             $f10PeakSpeed = [Math]::Max($f10PeakSpeed, [double]$w.f10_peak_speed_mps)
+            $requestedSamples += [int]$w.terrain_requested_region_samples
+            $unpublishedSamples += [int]$w.terrain_unpublished_region_samples
             $headSkips += [int]$w.effect_pending_load_skips
             $skipRecovered += [int]$w.successful_dispatch_after_skip
             $skipBudgetExhausted += [int]$w.skip_time_budget_exhausted
@@ -178,6 +194,17 @@ try {
             f10_peak_speed_mps = [Math]::Round($f10PeakSpeed, 2)
             effect_motion_prefetch_reorders = [int]$lookaheadReorders
             f10_predictive_stages_started = [int]$predictiveStages
+            terrain_unpublished_region_pct = $(if ($requestedSamples -gt 0) {
+                [Math]::Round(100.0 * $unpublishedSamples / $requestedSamples, 2)
+            } else { $null })
+            terrain_region_samples = [int]$requestedSamples
+            region_visual_ready_samples = $visualReadyTimes.Count
+            region_first_visual_p50_ms = $(if ($visualReadyTimes.Count -gt 0) {
+                [Math]::Round($visualReadyTimes[[int][Math]::Floor(($visualReadyTimes.Count - 1) * 0.50)], 2)
+            } else { $null })
+            region_first_visual_p95_ms = $(if ($visualReadyTimes.Count -gt 0) {
+                [Math]::Round($visualReadyTimes[[int][Math]::Floor(($visualReadyTimes.Count - 1) * 0.95)], 2)
+            } else { $null })
             effect_pending_load_skips = $headSkips
             successful_dispatch_after_skip = $skipRecovered
             skip_time_budget_exhausted = $skipBudgetExhausted
