@@ -44,6 +44,7 @@ func _run() -> void:
 	_test_r5_visual_signature_and_revisit()
 	_test_r5_1_submerged_ocean_finite_noop()
 	_test_r5_1_ocean_baseline_gate()
+	_test_r5_3_neighbor_ocean_seam_admission()
 	_test_sdf_worker_shoreline_and_edits()
 	_test_startup_locations()
 	_test_bundled_ocean_end_to_end()
@@ -625,6 +626,93 @@ func _test_r5_1_ocean_baseline_gate() -> void:
 	shoreline["base_sea_wet"] = PackedByteArray([1])
 	_check(not OceanVisual.build(region, environment, shoreline).get("ok", false),
 		"R5.1 malformed optional baseline mask fails closed")
+
+
+## R5.3: local-only sea admission can clip a genuine continuous ocean at
+## a region seam when a neighboring region has the native sea source.
+func _test_r5_3_neighbor_ocean_seam_admission() -> void:
+	var west := Vector2i(5, 13)
+	var east := Vector2i(6, 13)
+	var west_env := _environment(west)
+	var west_kinds: PackedByteArray = west_env["reservoir_kind"]
+	var west_levels: PackedInt64Array = west_env["reservoir_level_mm"]
+	west_kinds.fill(EnvironmentStore.RESERVOIR_OCEAN)
+	west_levels.fill(4000)
+	west_env["reservoir_kind"] = west_kinds
+	west_env["reservoir_level_mm"] = west_levels
+	var west_samples := _shoreline(west)
+	var west_heights: PackedInt32Array = west_samples["height_mm"]
+	west_heights.fill(3000)
+	west_samples["height_mm"] = west_heights
+	var west_baseline := PackedByteArray()
+	west_baseline.resize(17 * 13)
+	west_baseline.fill(1)
+	west_samples["base_sea_wet"] = west_baseline
+	var proven := OceanVisual.build(west, west_env, west_samples)
+	_check(proven.get("ok", false) and is_equal_approx(
+		_projected_area(proven.get("vertices", PackedVector3Array())), 192.0
+	), "R5.3 native west sea covers its entire canonical SDF footprint")
+	var edges: Dictionary = proven.get("ocean_boundary_edges", {})
+	var east_edge: PackedByteArray = edges.get("east", PackedByteArray())
+	_check(east_edge.size() == 12 and east_edge[5] == 1,
+		"R5.3 native connected sea exports verified 1m seam samples")
+	var east_env := _environment(east)
+	var east_kinds: PackedByteArray = east_env["reservoir_kind"]
+	var east_levels: PackedInt64Array = east_env["reservoir_level_mm"]
+	east_kinds.fill(EnvironmentStore.RESERVOIR_FINITE)
+	east_levels.fill(0)
+	east_env["reservoir_kind"] = east_kinds
+	east_env["reservoir_level_mm"] = east_levels
+	var east_before := east_env.duplicate(true)
+	var east_samples := _shoreline(east)
+	var east_heights: PackedInt32Array = east_samples["height_mm"]
+	east_heights.fill(3000)
+	east_samples["height_mm"] = east_heights
+	var zero_baseline := PackedByteArray()
+	zero_baseline.resize(17 * 13)
+	east_samples["base_sea_wet"] = zero_baseline
+	var unproven := OceanVisual.build(east, east_env, east_samples)
+	_check((unproven.get("vertices", PackedVector3Array()) as PackedVector3Array).is_empty(),
+		"R5.3 unverified neighbor cannot fabricate an infinite ocean source")
+	var connected := OceanVisual.build(east, east_env, east_samples, "normal", {"west": east_edge})
+	_check(connected.get("ok", false) and is_equal_approx(
+		_projected_area(connected.get("vertices", PackedVector3Array())), 192.0
+	), "R5.3 verified west seam admits the actual continuous east-side sea")
+	_check(int(connected.get("ocean_neighbor_anchor_tiles", 0)) == 12,
+		"R5.3 visual plan counts external valid SDF seam anchors")
+	var untrusted_edges: Dictionary = connected.get("ocean_boundary_edges", {})
+	var further: PackedByteArray = untrusted_edges.get("east", PackedByteArray())
+	_check(further.size() == 12 and further.count(1) == 0,
+		"R5.3 externally seeded region cannot recursively authorize fabricated seas")
+	_check(east_env == east_before,
+		"R5.3 cross-region sea admission leaves finite water authority untouched")
+	var invalid := OceanVisual.build(
+		east, east_env, east_samples, "normal",
+		{"west": PackedByteArray([1])}
+	)
+	_check(not invalid.get("ok", true),
+		"R5.3 malformed cross-region edge proof is rejected")
+
+	# An external valid seam must not wet a distinct inland excavation.
+	east_heights.fill(5000)
+	for z in range(3, 6):
+		for x in range(0, 3):
+			east_heights[z * 17 + x] = 3000
+	for z in range(5, 8):
+		for x in range(12, 15):
+			east_heights[z * 17 + x] = 3000
+	east_samples["height_mm"] = east_heights
+	var narrow := PackedByteArray()
+	narrow.resize(12)
+	for z in range(3, 5):
+		narrow[z] = 1
+	var selective := OceanVisual.build(
+		east, east_env, east_samples, "normal", {"west": narrow}
+	)
+	_check(selective.get("ok", false)
+		and _projected_area(selective.get("vertices", PackedVector3Array())) > 0.0
+		and _projected_area(selective.get("vertices", PackedVector3Array())) < 12.0,
+		"R5.3 only region-seam-connected water renders; isolated excavation stays dry")
 
 
 func _test_bounded_scene_presentation() -> void:
