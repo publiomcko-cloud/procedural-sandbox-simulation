@@ -5,6 +5,7 @@ class_name EnvironmentSurfaceCacheJob
 ## No SceneTree, runtime or terrain authority is mutated from this object.
 
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
+const BaseTerrain := preload("res://scripts/terrain/sdf_world.gd")
 const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const SurfaceCache := preload("res://scripts/simulation/environment_surface_cache.gd")
 
@@ -228,6 +229,19 @@ func _derive_shoreline_top_samples() -> Dictionary:
 			var index := z * VISUAL_SAMPLES_X + x
 			samples[index] = int(sampled.get("height_mm", 0))
 			valid[index] = 1 if bool(sampled.get("valid", false)) else 0
+	# Immutable generator baseline: new brush excavations cannot create an
+	# infinite-ocean visual source where base terrain was originally dry.
+	# Read at the SAME sea-plane threshold as the R4 ocean clipping, without
+	# mutating the current canonical terrain or hydrology authority.
+	var base_sea_wet := PackedByteArray()
+	if region_key.y >= 10 and generator_version == BaseTerrain.GENERATOR_VERSION:
+		base_sea_wet.resize(samples.size())
+		for z in range(VISUAL_SAMPLES_Z):
+			for x in range(VISUAL_SAMPLES_X):
+				var density := BaseTerrain.sample_density(
+					seed, region_key, Vector3(float(x), 3.982, float(z))
+				)
+				base_sea_wet[z * VISUAL_SAMPLES_X + x] = 1 if density < 0.0 else 0
 	var detail: Dictionary = _derive_adaptive_coast_samples(samples, valid)
 	if not detail.get("ok", false):
 		return detail
@@ -237,6 +251,7 @@ func _derive_shoreline_top_samples() -> Dictionary:
 		"height": VISUAL_SAMPLES_Z,
 		"height_mm": samples,
 		"valid": valid,
+		"base_sea_wet": base_sea_wet,
 		"fine_height_mm": detail["fine_height_mm"],
 		"fine_valid": detail["fine_valid"],
 		"refined_tile_count": detail["refined_tile_count"],
