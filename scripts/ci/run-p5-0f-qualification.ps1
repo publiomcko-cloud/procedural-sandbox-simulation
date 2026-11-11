@@ -37,6 +37,7 @@ Invoke-Qualification 'focused' @('--headless', '--path', $ProjectPath, '--script
 Invoke-Qualification 'stream-budget' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p5_0f_stream_budget_tests.gd') 'P5_0F_STREAM_BUDGET_PASS:' | Out-Host
 Invoke-Qualification 'stream-lookahead' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p5_0f_stream_lookahead_tests.gd') 'P5_0F_STREAM_LOOKAHEAD_PASS:' | Out-Host
 Invoke-Qualification 'stream-readiness' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p5_stream_readiness_tests.gd') 'P5_STREAM_READINESS_PASS:' | Out-Host
+Invoke-Qualification 'stream-dependency' @('--headless', '--path', $ProjectPath, '--script', 'res://tests/p5_stream_dependency_tests.gd') 'P5_STREAM_DEPENDENCY_PASS:' | Out-Host
 
 & (Join-Path $PSScriptRoot 'run-p5-0e-qualification.ps1') -GodotBin $GodotBin -ProjectPath $ProjectPath
 if ($LASTEXITCODE -ne 0) { throw "Inherited P5.0E qualification failed: $LASTEXITCODE" }

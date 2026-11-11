@@ -23,3 +23,13 @@ Only promote after same-route forward/reverse-order controls, exact-HEAD Windows
 2. E1 reduces p50/p95 or missing requested regions without >=1 percentage point higher >20ms frame proportion, stutter, visual gaps, or persistence/authority regression.
 3. All existing P4/P5 CI workflows plus focused new headless tests pass at exact SHA.
 4. No CI PASS alone is evidence of GUI improvement or an authorization to merge.
+
+## E1 implementation checkpoint (source-only pending CI)
+
+- `adaptive-skip-dependency` adds readiness ranking **only within the visible 3x3 LOAD stages**. Edit, partial and full priorities remain unchanged. A ready source set only changes stage ordering; the canonical snapshot check still gates work.
+- Source prefetch reorders nonurgent **already enqueued** scopes by earliest waiting stage that needs them (2-region-radius dependency), preserving urgent FIFO, exact 9x9 protection and 2+2 effect worker caps.
+- E1 does not change F10 predictive targets, protected scope membership, source generation, mesh worker cap (8), snapshot/upload budgets, surface/river/ocean code, persistence or transaction publishing.
+- `dependency_prefetch_reorders`, `dependency_ready_mesh_dispatches`, `dependency_ready_target_pct` and region availability/visual latency are exposed in the existing PowerShell A/B runner.
+- E1 readiness is per-region source-halo completeness; a shared boundary may need additional adjacent targets, so original fail-closed snapshot validation remains the **only authoritative** admission gate.
+
+Test `p5_stream_dependency_tests.gd` exercises selector prioritization, edit precedence, queue membership, urgent FIFO, exact 25-source halo, ready vs cold and invalidated-scope rejection. All new behavior is opt-in and **UNQUALIFIED** until exact-HEAD CI, followed by reproducible GUI A/B with seed 424242 and 18/54m/s traversals.

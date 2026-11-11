@@ -21,7 +21,7 @@ static func resolve_profile(env_value: String, cli_args: PackedStringArray) -> S
 	for arg in cli_args:
 		if arg.begins_with("--stream-profile="):
 			selected = arg.trim_prefix("--stream-profile=").strip_edges().to_lower()
-	if selected not in ["baseline", "adaptive", "adaptive-skip", "adaptive-skip-lookahead"]:
+	if selected not in ["baseline", "adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-dependency"]:
 		return "baseline"
 	return selected
 

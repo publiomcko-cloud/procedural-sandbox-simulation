@@ -17,7 +17,10 @@ static func stage_priority(purpose: String) -> int:
 	return 3
 
 
-static func next(stages: Dictionary, excluded: Dictionary, focus: Vector2i) -> Dictionary:
+static func next(
+	stages: Dictionary, excluded: Dictionary, focus: Vector2i,
+	missing_source_counts: Dictionary = {}
+) -> Dictionary:
 	var candidates: Array[String] = []
 	for value in stages.keys():
 		var id := String(value)
@@ -34,7 +37,25 @@ static func next(stages: Dictionary, excluded: Dictionary, focus: Vector2i) -> D
 		var kb: Vector2i = stage_b["region_key"]
 		var da := maxi(absi(ka.x - focus.x), absi(ka.y - focus.y))
 		var db := maxi(absi(kb.x - focus.x), absi(kb.y - focus.y))
+		# E1 only: within the currently visible 3x3, work on a source-ready
+		# LOAD first. Never overtake edit/partial/full or dispatch outside 3x3
+		# while a visible LOAD is queued. Actual snapshot checks remain final.
+		if pa == 3 and not missing_source_counts.is_empty():
+			var a_visible := da <= 1
+			var b_visible := db <= 1
+			if a_visible != b_visible:
+				return a_visible
+			if a_visible and b_visible:
+				var a_ready := int(missing_source_counts.get(a, -1)) == 0
+				var b_ready := int(missing_source_counts.get(b, -1)) == 0
+				if a_ready != b_ready:
+					return a_ready
 		if da == db:
+			if pa == 3 and not missing_source_counts.is_empty():
+				var ma := int(missing_source_counts.get(a, 2147483647))
+				var mb := int(missing_source_counts.get(b, 2147483647))
+				if ma != mb:
+					return ma < mb
 			return ka.y < kb.y if ka.y != kb.y else ka.x < kb.x
 		return da < db
 	)
@@ -52,7 +73,7 @@ static func can_skip_pending(
 	has_frame_headroom: bool
 ) -> bool:
 	return (
-		profile in ["adaptive-skip", "adaptive-skip-lookahead"]
+		profile in ["adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-dependency"]
 		and has_frame_headroom
 		and purpose == "load"
 		and skip_count < MAX_SKIPPED_LOAD_REGIONS_PER_FRAME

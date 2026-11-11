@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('baseline', 'adaptive', 'adaptive-skip', 'adaptive-skip-lookahead')]
+    [ValidateSet('baseline', 'adaptive', 'adaptive-skip', 'adaptive-skip-lookahead', 'adaptive-skip-dependency')]
     [Alias('Profile')]
     [string]$ProfileName = 'baseline',
     [string]$GodotBin = 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe',
@@ -44,6 +44,13 @@ try {
     $lookaheadTestExit = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'
     if ($lookaheadTestExit -ne 0) { throw "Stream lookahead test failed. See $log" }
+
+    $ErrorActionPreference = 'Continue'
+    & $GodotBin --headless --path .\game --script res://tests/p5_stream_dependency_tests.gd 2>&1 |
+        Tee-Object -FilePath $log -Append
+    $dependencyTestExit = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($dependencyTestExit -ne 0) { throw "Stream dependency test failed. See $log" }
 
     Write-Host "Running $ProfileName. Travel the same route for each A/B run, then close Godot."
     $ErrorActionPreference = 'Continue'
@@ -159,6 +166,10 @@ try {
         $dispatchBlockers = @{}
         $requestedSamples = 0
         $unpublishedSamples = 0
+        $dependencyReorders = 0
+        $dependencyReadyDispatches = 0
+        $dependencyTargetSamples = 0
+        $dependencyReadySamples = 0
         foreach ($w in $windowRows) {
             $predictiveStages += [int]$w.f10_predictive_stages_started
             $f10Frames += [int]$w.f10_movement_frames
@@ -166,6 +177,10 @@ try {
             $f10RegionGaps += [int]$w.f10_missing_regions_in_window_total
             $f10Distance += [double]$w.f10_distance_m
             $f10PeakSpeed = [Math]::Max($f10PeakSpeed, [double]$w.f10_peak_speed_mps)
+            $dependencyReorders += [int]$w.dependency_prefetch_reorders
+            $dependencyReadyDispatches += [int]$w.dependency_ready_mesh_dispatches
+            $dependencyTargetSamples += [int]$w.dependency_target_samples
+            $dependencyReadySamples += [int]$w.dependency_ready_target_samples
             $requestedSamples += [int]$w.terrain_requested_region_samples
             $unpublishedSamples += [int]$w.terrain_unpublished_region_samples
             $headSkips += [int]$w.effect_pending_load_skips
@@ -198,6 +213,11 @@ try {
                 [Math]::Round(100.0 * $unpublishedSamples / $requestedSamples, 2)
             } else { $null })
             terrain_region_samples = [int]$requestedSamples
+            dependency_prefetch_reorders = [int]$dependencyReorders
+            dependency_ready_mesh_dispatches = [int]$dependencyReadyDispatches
+            dependency_ready_target_pct = $(if ($dependencyTargetSamples -gt 0) {
+                [Math]::Round(100.0 * $dependencyReadySamples / $dependencyTargetSamples, 2)
+            } else { $null })
             region_visual_ready_samples = $visualReadyTimes.Count
             region_first_visual_p50_ms = $(if ($visualReadyTimes.Count -gt 0) {
                 [Math]::Round($visualReadyTimes[[int][Math]::Floor(($visualReadyTimes.Count - 1) * 0.50)], 2)

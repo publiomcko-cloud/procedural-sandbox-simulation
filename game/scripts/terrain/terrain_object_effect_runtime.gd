@@ -11,6 +11,7 @@ const LocalFrameIndex := preload("res://scripts/terrain/terrain_object_effect_lo
 const ProjectionBuildJob := preload("res://scripts/terrain/terrain_object_effect_projection_build_job.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 const LookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
+const DependencyPolicy := preload("res://scripts/terrain/terrain_stream_dependency_policy.gd")
 
 # Public v1 contracts bound horizontal reach:
 # translation <= 8 m, half extent <= 1.8 m, scale <= 5x, roughness <= 0.1 m.
@@ -1094,6 +1095,46 @@ func prioritize_prefetch_for_motion(
 			"reorders_total": _lookahead_reorders,
 		})
 	return {"ok": true, "changed": changed, "queued": _prefetch_queue.size()}
+
+
+## E1: opt-in presentation scheduling only. Report exact resident source
+## readiness for staged terrain regions and reorder *already queued* sources.
+## High-priority effect requests retain FIFO. No source is added or dropped.
+func prioritize_prefetch_for_dependency(targets: Array[Vector2i], focus: Vector2i) -> Dictionary:
+	if not initialized or not incremental_prefetch_enabled:
+		return {"ok": true, "changed": false, "missing_source_counts": {}}
+	var missing_by_region: Dictionary = {}
+	var ready_count := 0
+	for target in targets:
+		var missing := 0
+		var required := _required_source_regions_for_regions([target])
+		for source_region in required:
+			var scope_id := Contract.scope_id_for_region(source_region)
+			if not projection.has_scope(source_region) or _invalidated_scope_ids.has(scope_id):
+				missing += 1
+		missing_by_region["%d,%d" % [target.x, target.y]] = missing
+		if missing == 0:
+			ready_count += 1
+	var original := _prefetch_queue.duplicate()
+	_prefetch_queue = DependencyPolicy.order_prefetch(
+		_prefetch_queue, targets, focus, _prefetch_urgent_scope_ids
+	)
+	var changed := _prefetch_queue != original
+	if changed and _perf_trace_enabled:
+		PerformanceTrace.emit("effect_dependency_prefetch_priority", {
+			"focus": [focus.x, focus.y],
+			"target_count": targets.size(),
+			"ready_targets": ready_count,
+			"queue_size": _prefetch_queue.size(),
+			"urgent_scope_count": _prefetch_urgent_scope_ids.size(),
+		})
+	return {
+		"ok": true,
+		"changed": changed,
+		"target_count": targets.size(),
+		"ready_targets": ready_count,
+		"missing_source_counts": missing_by_region,
+	}
 
 
 func prepare_chunk_snapshot(

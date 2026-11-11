@@ -32,6 +32,7 @@ const StreamBudgetPolicy := preload("res://scripts/terrain/terrain_stream_budget
 const StreamDispatchSelector := preload("res://scripts/terrain/terrain_stream_dispatch_selector.gd")
 const StreamLookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
 const StreamReadiness := preload("res://scripts/terrain/terrain_stream_readiness_metrics.gd")
+const StreamDependencyPolicy := preload("res://scripts/terrain/terrain_stream_dependency_policy.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -195,6 +196,11 @@ var _stream_window_f10_speed_peak_mps := 0.0
 var _stream_window_f10_distance_m := 0.0
 var _stream_window_region_samples := 0
 var _stream_window_unpublished_region_samples := 0
+var _dependency_missing_source_counts: Dictionary = {}
+var _stream_window_dependency_reorders := 0
+var _stream_window_dependency_ready_dispatches := 0
+var _stream_window_dependency_target_samples := 0
+var _stream_window_dependency_ready_samples := 0
 
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
@@ -294,7 +300,7 @@ func _ready() -> void:
 	for argument in stream_profile_args:
 		if argument.begins_with("--stream-profile="):
 			stream_profile_requested = argument.trim_prefix("--stream-profile=").strip_edges().to_lower()
-	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip"]:
+	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-dependency"]:
 		push_warning("Unknown stream profile; using baseline")
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("terrain_stream_profile", {
@@ -933,6 +939,10 @@ func _stream_finish_frame() -> void:
 		"terrain_requested_region_samples": _stream_window_region_samples,
 		"terrain_unpublished_region_samples": _stream_window_unpublished_region_samples,
 		"terrain_published_region_samples": _stream_window_region_samples - _stream_window_unpublished_region_samples,
+		"dependency_prefetch_reorders": _stream_window_dependency_reorders,
+		"dependency_ready_mesh_dispatches": _stream_window_dependency_ready_dispatches,
+		"dependency_target_samples": _stream_window_dependency_target_samples,
+		"dependency_ready_target_samples": _stream_window_dependency_ready_samples,
 	})
 	_stream_window_started_usec = now
 	_stream_window_frames = 0
@@ -959,6 +969,10 @@ func _stream_finish_frame() -> void:
 	_stream_window_lookahead_stages = 0
 	_stream_window_region_samples = 0
 	_stream_window_unpublished_region_samples = 0
+	_stream_window_dependency_reorders = 0
+	_stream_window_dependency_ready_dispatches = 0
+	_stream_window_dependency_target_samples = 0
+	_stream_window_dependency_ready_samples = 0
 
 
 func _process(delta: float) -> void:
@@ -971,7 +985,7 @@ func _process(delta: float) -> void:
 	var previous_dispatch_limit := int(_stream_budget_state.get("dispatch_limit", 1))
 	_stream_budget_state = StreamBudgetPolicy.next(
 		_stream_budget_state, _last_frame_ms, _last_process_work_ms,
-		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead"]
+		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-dependency"]
 	)
 	if _perf_trace_enabled and int(_stream_budget_state["dispatch_limit"]) != previous_dispatch_limit:
 		PerformanceTrace.emit("terrain_stream_budget_transition", {
@@ -1036,6 +1050,20 @@ func _process(delta: float) -> void:
 	_maybe_schedule_async_checkpoint()
 	var stream_stage_started_usec := Time.get_ticks_usec()
 	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
+		if _stream_profile == "adaptive-skip-dependency":
+			# E1 sorts only already-required prefetch sources. The authoritative
+			# source set, worker limits and stage tokens remain unchanged.
+			var targets := StreamDependencyPolicy.stage_targets(loading_regions, focus_region_key)
+			var prioritization: Dictionary = terrain_effect_runtime.prioritize_prefetch_for_dependency(
+				targets, focus_region_key
+			)
+			_dependency_missing_source_counts = prioritization.get("missing_source_counts", {})
+			if prioritization.get("changed", false):
+				_stream_window_dependency_reorders += 1
+			_stream_window_dependency_target_samples += int(prioritization.get("target_count", 0))
+			_stream_window_dependency_ready_samples += int(prioritization.get("ready_targets", 0))
+		else:
+			_dependency_missing_source_counts.clear()
 		var prefetch_result: Dictionary = terrain_effect_runtime.process_prefetch_step(1)
 		if not prefetch_result.get("ok", false):
 			_terrain_effect_status = "Terrain-object effects unavailable (%s)" % prefetch_result.get("reason", "unknown")
@@ -2988,6 +3016,9 @@ func _dispatch_mesh_jobs() -> void:
 		stage["pending_count"] = int(stage["pending_count"]) + 1
 		loading_regions[id] = stage
 		_mesh_dispatches_this_frame += 1
+		if _stream_profile == "adaptive-skip-dependency" and String(stage["purpose"]) == "load" \
+		and int(_dependency_missing_source_counts.get(id, -1)) == 0:
+			_stream_window_dependency_ready_dispatches += 1
 		if not skipped_ids.is_empty() and not successful_after_skip:
 			successful_after_skip = true
 			_stream_window_skipped_then_dispatched += 1
@@ -3052,7 +3083,8 @@ func _terrain_effect_snapshot_pending(result: Dictionary) -> bool:
 
 
 func _next_mesh_job_request(excluded: Dictionary = {}) -> Dictionary:
-	return StreamDispatchSelector.next(loading_regions, excluded, focus_region_key)
+	return StreamDispatchSelector.next(loading_regions, excluded, focus_region_key,
+		_dependency_missing_source_counts if _stream_profile == "adaptive-skip-dependency" else {})
 
 
 func _stage_priority(purpose: String) -> int:
