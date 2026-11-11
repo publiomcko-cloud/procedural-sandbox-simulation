@@ -10,13 +10,13 @@ static func sample_window(focus: Vector2i, published: Dictionary, radius: int = 
 	for z in range(focus.y - radius_safe, focus.y + radius_safe + 1):
 		for x in range(focus.x - radius_safe, focus.x + radius_safe + 1):
 			requested += 1
-			if not published.has("region:%d,%d" % [x, z]):
+			if not published.has("%d,%d" % [x, z]):
 				unpublished += 1
 	return {
 		"requested": requested,
 		"published": requested - unpublished,
 		"unpublished": unpublished,
-		"focus_unpublished": not published.has("region:%d,%d" % [focus.x, focus.y]),
+		"focus_unpublished": not published.has("%d,%d" % [focus.x, focus.y]),
 	}
 
 

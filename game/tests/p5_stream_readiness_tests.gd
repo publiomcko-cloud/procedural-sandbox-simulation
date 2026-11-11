@@ -18,7 +18,7 @@ func _run() -> void:
 	var none := Readiness.sample_window(focus, {})
 	_check(none["requested"] == 9 and none["unpublished"] == 9, "cold 3x3 is entirely unpublished")
 	_check(none["focus_unpublished"], "focus publication is absent")
-	var published := {"region:-5,13": true, "region:-4,14": true}
+	var published := {"-5,13": true, "-4,14": true}
 	var sample := Readiness.sample_window(focus, published)
 	_check(sample["published"] == 2 and sample["unpublished"] == 7, "partial window counts stable IDs")
 	_check(not sample["focus_unpublished"], "central publication is distinguished from surrounding gaps")
