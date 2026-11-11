@@ -142,10 +142,10 @@ foreach ($route in $Routes) {
         }
         # Fail closed if the stream monitor dropped any final movement frames.
         if ($route -ne 'idle' -and [int]$numMoving -ne $Frames) {
-            throw "Incomplete F10 trace $runId: movement=$numMoving expected=$Frames"
+            throw "Incomplete F10 trace ${runId}: movement=$numMoving expected=$Frames"
         }
         if ([int]$numFrames -ne ($Frames + 1)) {
-            throw "Incomplete frame trace $runId: sampled=$numFrames expected=$($Frames + 1)"
+            throw "Incomplete frame trace ${runId}: sampled=$numFrames expected=$($Frames + 1)"
         }
         $workerSummary = [ordered]@{}
         foreach ($kind in @($workerByKind.Keys | Sort-Object)) {
