@@ -30,6 +30,7 @@ const SimulationRuntimeScript := preload("res://scripts/simulation/simulation_ru
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 const StreamBudgetPolicy := preload("res://scripts/terrain/terrain_stream_budget_policy.gd")
 const StreamDispatchSelector := preload("res://scripts/terrain/terrain_stream_dispatch_selector.gd")
+const StreamLookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -180,6 +181,12 @@ var _stream_window_dispatch_blockers: Dictionary = {}
 var _stream_window_skipped_load_stages := 0
 var _stream_window_skipped_then_dispatched := 0
 var _stream_window_skip_budget_exhausted := 0
+var _last_f10_speed_mps := 0.0
+var _stream_window_f10_frames := 0
+var _stream_window_f10_focus_missing_frames := 0
+var _stream_window_f10_region_gaps := 0
+var _stream_window_f10_speed_peak_mps := 0.0
+var _stream_window_f10_distance_m := 0.0
 
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
@@ -288,6 +295,7 @@ func _ready() -> void:
 			"profile_mismatch": stream_profile_requested != "" and stream_profile_requested != _stream_profile,
 			"mesh_dispatch_baseline": MAX_MESH_JOB_DISPATCHES_PER_FRAME,
 			"mesh_dispatch_adaptive_max": StreamBudgetPolicy.ADAPTIVE_DISPATCHES,
+			"f10_lookahead_seconds": StreamLookaheadPolicy.LOOKAHEAD_SECONDS if _stream_profile == "adaptive-skip-lookahead" else 0.0,
 			"mesh_jobs_in_flight_limit": _mesh_job_limit,
 			"mesh_upload_limit": MAX_MESH_UPLOADS_PER_FRAME,
 			"snapshot_budget_usec": MESH_SNAPSHOT_FRAME_BUDGET_USEC,
@@ -864,6 +872,17 @@ func _stream_finish_frame() -> void:
 		_stream_window_work_over_16_ms += 1
 	_stream_window_dispatches += _mesh_dispatches_this_frame
 	_stream_window_uploads += _mesh_uploads_this_frame
+	if free_explore_enabled:
+		_stream_window_f10_frames += 1
+		_stream_window_f10_speed_peak_mps = maxf(
+			_stream_window_f10_speed_peak_mps, _last_f10_speed_mps
+		)
+		_stream_window_f10_distance_m += _last_f10_speed_mps * maxf(0.0, _last_frame_ms) / 1000.0
+		if not active_regions.has(_region_id(focus_region_key)):
+			_stream_window_f10_focus_missing_frames += 1
+		for region in _region_keys_within_radius(focus_region_key, REQUEST_RADIUS):
+			if not active_regions.has(_region_id(region)):
+				_stream_window_f10_region_gaps += 1
 	if int(_stream_budget_state.get("dispatch_limit", 1)) > 1:
 		_stream_window_boost_frames += 1
 	if now - _stream_window_started_usec < STREAM_BUDGET_TRACE_INTERVAL_USEC:
@@ -895,6 +914,11 @@ func _stream_finish_frame() -> void:
 		"effect_pending_load_skips": _stream_window_skipped_load_stages,
 		"successful_dispatch_after_skip": _stream_window_skipped_then_dispatched,
 		"skip_time_budget_exhausted": _stream_window_skip_budget_exhausted,
+		"f10_movement_frames": _stream_window_f10_frames,
+		"f10_focus_missing_frames": _stream_window_f10_focus_missing_frames,
+		"f10_missing_regions_in_window_total": _stream_window_f10_region_gaps,
+		"f10_peak_speed_mps": _stream_window_f10_speed_peak_mps,
+		"f10_distance_m": _stream_window_f10_distance_m,
 	})
 	_stream_window_started_usec = now
 	_stream_window_frames = 0
@@ -913,6 +937,11 @@ func _stream_finish_frame() -> void:
 	_stream_window_skipped_load_stages = 0
 	_stream_window_skipped_then_dispatched = 0
 	_stream_window_skip_budget_exhausted = 0
+	_stream_window_f10_frames = 0
+	_stream_window_f10_focus_missing_frames = 0
+	_stream_window_f10_region_gaps = 0
+	_stream_window_f10_speed_peak_mps = 0.0
+	_stream_window_f10_distance_m = 0.0
 
 
 func _process(delta: float) -> void:
@@ -925,7 +954,7 @@ func _process(delta: float) -> void:
 	var previous_dispatch_limit := int(_stream_budget_state.get("dispatch_limit", 1))
 	_stream_budget_state = StreamBudgetPolicy.next(
 		_stream_budget_state, _last_frame_ms, _last_process_work_ms,
-		_stream_profile in ["adaptive", "adaptive-skip"]
+		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead"]
 	)
 	if _perf_trace_enabled and int(_stream_budget_state["dispatch_limit"]) != previous_dispatch_limit:
 		PerformanceTrace.emit("terrain_stream_budget_transition", {
@@ -942,10 +971,31 @@ func _process(delta: float) -> void:
 		_frame_sample_write_index = (_frame_sample_write_index + 1) % 512
 		_frame_sample_count = mini(_frame_sample_count + 1, 512)
 	_peak_frame_ms = maxf(_peak_frame_ms, _last_frame_ms)
+	var camera_before_motion := camera.global_position
 	if free_explore_enabled:
 		_process_free_exploration(delta)
+	var f10_motion := camera.global_position - camera_before_motion
+	f10_motion.y = 0.0
+	_last_f10_speed_mps = (
+		f10_motion.length() / maxf(delta, 0.000001)
+		if free_explore_enabled else 0.0
+	)
 	_update_focus_key()
 	_reconcile_region_window()
+	# R3: reprioritize only the existing effect-source queue; do not expand
+	# residency or dispatch additional jobs. Cap lead to two regions.
+	if _stream_profile == "adaptive-skip-lookahead" \
+	and free_explore_enabled and _last_f10_speed_mps > 0.01 \
+	and terrain_effect_runtime != null \
+	and bool(terrain_effect_runtime.get("initialized")):
+		var ahead_position := camera.global_position + (
+			f10_motion / maxf(delta, 0.000001)
+		) * StreamLookaheadPolicy.LOOKAHEAD_SECONDS
+		var mapped_ahead: Dictionary = SpatialGrid.world_to_region_local(ahead_position)
+		if mapped_ahead.get("valid", false):
+			terrain_effect_runtime.prioritize_prefetch_for_motion(
+				focus_region_key, mapped_ahead["region_key"]
+			)
 	_update_lod_selection()
 	if _checkpoint_task_id >= 0 and (global_rebuild_pending or not loading_regions.is_empty()):
 		_checkpoint_overlap_observed = true
