@@ -162,7 +162,7 @@ foreach ($file in $logs) {
         frames_over_33_pct = [Math]::Round(100.0 * $bad33 / $frames, 3)
         mesh_dispatches = [int]$meshDispatches
         mesh_uploads = [int]$meshUploads
-        final_regions_published = [int]$finalPublished
+        final_regions_published = [int]$definitiveReadyMs.Count
         coarse_regions_visible = [int]$coarsePublished
         coarse_regions_discarded = [int]$coarseDiscarded
         effect_sources_ready = [int]$effectSourcesReady
@@ -184,7 +184,7 @@ foreach ($file in $logs) {
         blocked_dispatch = $blockerRank
         stage_work = $stageRank
     }
-    Write-Host "PHASE2_CAUSAL_TRIAL_PASS: $($file.Name) stages=$($stageRank.Count) blockers=$($blockerRank.Count) final=$finalPublished"
+    Write-Host "PHASE2_CAUSAL_TRIAL_PASS: $($file.Name) stages=$($stageRank.Count) blockers=$($blockerRank.Count) final=$($definitiveReadyMs.Count)"
 }
 $groups = @{}
 foreach ($row in $matrix) {
