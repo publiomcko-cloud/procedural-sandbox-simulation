@@ -35,6 +35,7 @@ static func build(
 		"colors": PackedColorArray(), "water_tiles": 0,
 		"refined_coast_quads": 0, "ocean_components": 0,
 		"isolated_components_skipped": 0,
+		"baseline_rejected_seeds": 0,
 		"ocean_seam_edges": 0, "source_ocean_cells": 0,
 	}
 	if region_key.y < OCEAN_START_REGION_Z:
@@ -57,6 +58,10 @@ static func build(
 	var valid: PackedByteArray = shoreline.get("valid", PackedByteArray())
 	if heights.size() != WIDTH * HEIGHT or valid.size() != heights.size():
 		return {"ok": false, "reason": "ocean_sdf_lattice_invalid"}
+	var base_sea_wet: PackedByteArray = shoreline.get("base_sea_wet", PackedByteArray())
+	if base_sea_wet.size() != 0 and base_sea_wet.size() != WIDTH * HEIGHT:
+		return {"ok": false, "reason": "ocean_baseline_provenance_invalid"}
+	var has_baseline := base_sea_wet.size() == WIDTH * HEIGHT
 	var sparse_heights: Dictionary = shoreline.get("fine_height_mm", {})
 	var sparse_valid: Dictionary = shoreline.get("fine_valid", {})
 	if sparse_heights.size() > 512 or sparse_heights.size() != sparse_valid.size():
@@ -90,7 +95,22 @@ static func build(
 				or heights[(z + 1) * WIDTH + x + 1] < roundi(threshold * 1000.0)
 			)
 			if from_authority or seaward:
-				seeds.append(id)
+				# The P5.0E V1 binding classifies any newly excavated low cell
+				# in the ocean band as an infinite reservoir. That classification
+				# is not proof of sea connectivity. Restrict the *visual* source
+				# to sites wet in the unedited canonical terrain. Excavated
+				# tiles may still flood when connected through current wet SDF
+				# tiles to a proven baseline sea component.
+				var baseline_source := not has_baseline or (
+					base_sea_wet[a] != 0 or base_sea_wet[b] != 0
+					or base_sea_wet[c] != 0 or base_sea_wet[d] != 0
+				)
+				if baseline_source:
+					seeds.append(id)
+				else:
+					output["baseline_rejected_seeds"] = int(
+						output["baseline_rejected_seeds"]
+					) + 1
 	# R5: an authoritative 2m ocean binding is only a candidate seed.
 	# A newly excavated landlocked depression may have become bound by
 	# height alone. Render a candidate component only when it has a real
