@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('baseline', 'adaptive', 'adaptive-skip', 'adaptive-skip-lookahead')]
+    [ValidateSet('baseline', 'adaptive', 'adaptive-skip', 'adaptive-skip-lookahead', 'adaptive-skip-dependency')]
     [Alias('Profile')]
     [string]$ProfileName = 'baseline',
     [string]$GodotBin = 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe',
@@ -32,6 +32,17 @@ try {
         '========== CONSOLE =========='
     ) | Set-Content -LiteralPath $log -Encoding UTF8
 
+    # E1.1 recovery: fail before launching the GUI if terrain_demo.gd does
+    # not parse. Focused SceneTree tests cannot detect this failure mode.
+    $ErrorActionPreference = 'Continue'
+    $sceneCheck = @(& $GodotBin --headless --path .\game --check-only --script res://scripts/terrain/terrain_demo.gd 2>&1)
+    $sceneCheckExit = $LASTEXITCODE
+    $sceneCheck | Tee-Object -FilePath $log -Append | Out-Host
+    $ErrorActionPreference = 'Stop'
+    if ($sceneCheckExit -ne 0 -or (($sceneCheck -join [Environment]::NewLine) -match '(?i)SCRIPT ERROR:|Parse Error:|ERROR: Failed to load script')) {
+        throw "Terrain main script failed Godot --check-only; A/B not started. See $log"
+    }
+
     $ErrorActionPreference = 'Continue'
     & $GodotBin --headless --path .\game --script res://tests/p5_0f_stream_budget_tests.gd 2>&1 |
         Tee-Object -FilePath $log -Append
@@ -44,6 +55,13 @@ try {
     $lookaheadTestExit = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'
     if ($lookaheadTestExit -ne 0) { throw "Stream lookahead test failed. See $log" }
+
+    $ErrorActionPreference = 'Continue'
+    & $GodotBin --headless --path .\game --script res://tests/p5_stream_dependency_tests.gd 2>&1 |
+        Tee-Object -FilePath $log -Append
+    $dependencyTestExit = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($dependencyTestExit -ne 0) { throw "Stream dependency test failed. See $log" }
 
     Write-Host "Running $ProfileName. Travel the same route for each A/B run, then close Godot."
     $ErrorActionPreference = 'Continue'
@@ -115,6 +133,18 @@ try {
                 }
             } | Sort-Object
     )
+    $visualReadyTimes = @(
+        $cleanLines |
+            Select-String -SimpleMatch '"event":"terrain_region_visual_ready"' |
+            ForEach-Object {
+                $raw = $_.Line
+                $start = $raw.IndexOf('PERF_TRACE ')
+                if ($start -ge 0) {
+                    try { [double](($raw.Substring($start + 11) | ConvertFrom-Json).queue_to_visual_usec) / 1000.0 }
+                    catch {}
+                }
+            } | Sort-Object
+    )
     if ($windowRows.Count -gt 0) {
         $totalFrames = [double](($windowRows | Measure-Object -Property frame_count -Sum).Sum)
         $totalDispatches = [double](($windowRows | Measure-Object -Property mesh_dispatches -Sum).Sum)
@@ -145,6 +175,16 @@ try {
         $skipRecovered = 0
         $skipBudgetExhausted = 0
         $dispatchBlockers = @{}
+        $requestedSamples = 0
+        $unpublishedSamples = 0
+        $dependencyReorders = 0
+        $dependencyReadyDispatches = 0
+        $dependencyTargetSamples = 0
+        $dependencyReadySamples = 0
+        $dependencySchedulerUsec = 0
+        $dependencySchedulerRefreshes = 0
+        $dependencySchedulerCacheHits = 0
+        $dependencyStageRebuilds = 0
         foreach ($w in $windowRows) {
             $predictiveStages += [int]$w.f10_predictive_stages_started
             $f10Frames += [int]$w.f10_movement_frames
@@ -152,6 +192,16 @@ try {
             $f10RegionGaps += [int]$w.f10_missing_regions_in_window_total
             $f10Distance += [double]$w.f10_distance_m
             $f10PeakSpeed = [Math]::Max($f10PeakSpeed, [double]$w.f10_peak_speed_mps)
+            $dependencySchedulerUsec += [double]$w.dependency_scheduler_usec
+            $dependencySchedulerRefreshes += [int]$w.dependency_scheduler_refreshes
+            $dependencySchedulerCacheHits += [int]$w.dependency_scheduler_cache_hit_frames
+            $dependencyStageRebuilds += [int]$w.dependency_scheduler_stage_rebuilds
+            $dependencyReorders += [int]$w.dependency_prefetch_reorders
+            $dependencyReadyDispatches += [int]$w.dependency_ready_mesh_dispatches
+            $dependencyTargetSamples += [int]$w.dependency_target_samples
+            $dependencyReadySamples += [int]$w.dependency_ready_target_samples
+            $requestedSamples += [int]$w.terrain_requested_region_samples
+            $unpublishedSamples += [int]$w.terrain_unpublished_region_samples
             $headSkips += [int]$w.effect_pending_load_skips
             $skipRecovered += [int]$w.successful_dispatch_after_skip
             $skipBudgetExhausted += [int]$w.skip_time_budget_exhausted
@@ -178,6 +228,26 @@ try {
             f10_peak_speed_mps = [Math]::Round($f10PeakSpeed, 2)
             effect_motion_prefetch_reorders = [int]$lookaheadReorders
             f10_predictive_stages_started = [int]$predictiveStages
+            terrain_unpublished_region_pct = $(if ($requestedSamples -gt 0) {
+                [Math]::Round(100.0 * $unpublishedSamples / $requestedSamples, 2)
+            } else { $null })
+            terrain_region_samples = [int]$requestedSamples
+            dependency_scheduler_avg_cpu_ms = [Math]::Round($dependencySchedulerUsec / [Math]::Max(1.0, $totalFrames) / 1000.0, 4)
+            dependency_scheduler_refreshes = [int]$dependencySchedulerRefreshes
+            dependency_scheduler_stage_rebuilds = [int]$dependencyStageRebuilds
+            dependency_scheduler_cached_frame_pct = [Math]::Round(100.0 * $dependencySchedulerCacheHits / [Math]::Max(1.0, $totalFrames), 2)
+            dependency_prefetch_reorders = [int]$dependencyReorders
+            dependency_ready_mesh_dispatches = [int]$dependencyReadyDispatches
+            dependency_ready_target_pct = $(if ($dependencyTargetSamples -gt 0) {
+                [Math]::Round(100.0 * $dependencyReadySamples / $dependencyTargetSamples, 2)
+            } else { $null })
+            region_visual_ready_samples = $visualReadyTimes.Count
+            region_first_visual_p50_ms = $(if ($visualReadyTimes.Count -gt 0) {
+                [Math]::Round($visualReadyTimes[[int][Math]::Floor(($visualReadyTimes.Count - 1) * 0.50)], 2)
+            } else { $null })
+            region_first_visual_p95_ms = $(if ($visualReadyTimes.Count -gt 0) {
+                [Math]::Round($visualReadyTimes[[int][Math]::Floor(($visualReadyTimes.Count - 1) * 0.95)], 2)
+            } else { $null })
             effect_pending_load_skips = $headSkips
             successful_dispatch_after_skip = $skipRecovered
             skip_time_budget_exhausted = $skipBudgetExhausted
