@@ -61,6 +61,11 @@ const FREE_EXPLORE_BOOST_MULTIPLIER := 3.0
 const FREE_EXPLORE_MOUSE_SENSITIVITY := 0.0025
 const FREE_EXPLORE_MAX_PITCH_RADIANS := 1.553343034
 
+# Opt-in CI-only deterministic route: no keyboard events, no world mutations.
+const STREAM_BENCH_START := Vector3(88.0, 8.0, 162.0)
+const STREAM_BENCH_STEP_SEC := 1.0 / 60.0
+const STREAM_BENCH_DEFAULT_FRAMES := 1200
+
 @onready var terrain_chunks_root: Node3D = $TerrainChunks
 @onready var terrain_mesh_template: MeshInstance3D = $TerrainChunks/Terrain
 @onready var camera: Camera3D = $Camera3D
@@ -185,6 +190,12 @@ var _stream_window_skipped_load_stages := 0
 var _stream_window_skipped_then_dispatched := 0
 var _stream_window_skip_budget_exhausted := 0
 var _last_f10_speed_mps := 0.0
+var _stream_bench_route := ""
+var _stream_bench_frames_goal := STREAM_BENCH_DEFAULT_FRAMES
+var _stream_bench_frames_done := 0
+var _stream_bench_started_usec := 0
+var _stream_bench_distance_m := 0.0
+var _stream_bench_reported := false
 var _lookahead_stage_targets: Array[Vector2i] = []
 var _lookahead_stage_signature := ""
 var _last_reconciled_lookahead_signature := ""
@@ -320,7 +331,19 @@ func _ready() -> void:
 			"snapshot_budget_usec": MESH_SNAPSHOT_FRAME_BUDGET_USEC,
 			"upload_budget_usec": MESH_UPLOAD_FRAME_BUDGET_USEC,
 		})
-	_configure_preedit_arguments()
+	# Deterministic benchmark mode is inert without the dedicated CI opt-in.
+	if OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1":
+		for argument in stream_profile_args:
+			if argument.begins_with("--stream-benchmark-route="):
+				_stream_bench_route = argument.trim_prefix("--stream-benchmark-route=").strip_edges().to_lower()
+			elif argument.begins_with("--stream-benchmark-frames="):
+				_stream_bench_frames_goal = int(argument.trim_prefix("--stream-benchmark-frames="))
+		if not _stream_bench_route.is_empty():
+			if _stream_bench_route not in ["idle", "straight-18", "straight-54", "outback-18", "outback-54"] \
+			or _stream_bench_frames_goal < 120 or _stream_bench_frames_goal > 5400:
+				push_error("P5_STREAM_BENCH_INVALID_ROUTE_OR_FRAMES")
+				get_tree().quit(2)
+				return
 	_edit_trace_enabled = EDIT_TRACE_DEFAULT_ENABLED or OS.get_environment("SANDBOX_EDIT_TRACE") == "1"
 	for argument in OS.get_cmdline_user_args():
 		if argument == "--edit-trace":
@@ -438,6 +461,23 @@ func _ready() -> void:
 	terrain_mesh_template.visible = false
 	_begin_operation("initial_load")
 	_update_camera()
+	if not _stream_bench_route.is_empty():
+		# Pinned world-space camera start, direction and seed. No input capture.
+		Engine.max_fps = 60
+		camera.global_position = STREAM_BENCH_START
+		camera.rotation = Vector3(-0.2, 0.0, 0.0)
+		orbit_target = camera.global_position
+		free_explore_enabled = true
+		_free_explore_yaw = 0.0
+		_free_explore_pitch = -0.2
+		_stream_bench_started_usec = Time.get_ticks_usec()
+		print("P5_STREAM_BENCH_START: " + JSON.stringify({
+			"route": _stream_bench_route,
+			"frames": _stream_bench_frames_goal,
+			"profile": _stream_profile,
+			"seed": world_seed,
+			"start": [STREAM_BENCH_START.x, STREAM_BENCH_START.y, STREAM_BENCH_START.z],
+		}))
 	_reconcile_region_window(true)
 	_update_status()
 
@@ -1762,6 +1802,31 @@ func _set_free_explore_enabled(enabled: bool) -> void:
 
 func _process_free_exploration(delta: float) -> void:
 	if not free_explore_enabled or not is_instance_valid(camera):
+		return
+	if not _stream_bench_route.is_empty():
+		if _stream_bench_frames_done >= _stream_bench_frames_goal:
+			if not _stream_bench_reported:
+				_stream_bench_reported = true
+				print("P5_STREAM_BENCH_COMPLETE: " + JSON.stringify({
+					"route": _stream_bench_route,
+					"profile": _stream_profile,
+					"seed": world_seed,
+					"frames": _stream_bench_frames_done,
+					"distance_m": snappedf(_stream_bench_distance_m, 0.001),
+					"final_x_mm": roundi(camera.global_position.x * 1000.0),
+					"final_z_mm": roundi(camera.global_position.z * 1000.0),
+					"elapsed_wall_ms": (Time.get_ticks_usec() - _stream_bench_started_usec) / 1000.0,
+					"active_regions": active_regions.size(),
+				}))
+				get_tree().quit(0)
+			return
+		var local_input := Vector3.ZERO
+		if _stream_bench_route != "idle":
+			local_input.x = -1.0 if _stream_bench_route.begins_with("outback") \
+				and _stream_bench_frames_done >= _stream_bench_frames_goal / 2 else 1.0
+			_stream_bench_distance_m += (54.0 if _stream_bench_route.ends_with("54") else 18.0) * STREAM_BENCH_STEP_SEC
+		_apply_free_explore_motion(local_input, STREAM_BENCH_STEP_SEC, _stream_bench_route.ends_with("54"))
+		_stream_bench_frames_done += 1
 		return
 	var local_input := Vector3.ZERO
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
