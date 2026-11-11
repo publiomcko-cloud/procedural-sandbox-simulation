@@ -1824,7 +1824,7 @@ func _process_free_exploration(delta: float) -> void:
 				}))
 				var capture_path := OS.get_environment("SANDBOX_STREAM_BENCH_SCREENSHOT")
 				if not capture_path.is_empty():
-					if display_name != "windows" or drawn_frames < 20:
+					if display_name.to_lower() != "windows" or drawn_frames < 20:
 						push_error("P5_STREAM_BENCH_GUI_NOT_INTERACTIVE")
 						get_tree().quit(3)
 						return
