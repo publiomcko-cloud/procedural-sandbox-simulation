@@ -16,11 +16,17 @@ class FakeRuntime:
 	extends Node
 	var environment: Dictionary = {}
 	var surface: Dictionary = {}
+	var region_environments: Dictionary = {}
+	var region_surfaces: Dictionary = {}
 
-	func get_environment_scope(_scope_id: String) -> Dictionary:
+	func get_environment_scope(scope_id: String) -> Dictionary:
+		if region_environments.has(scope_id):
+			return (region_environments[scope_id] as Dictionary).duplicate(true)
 		return environment.duplicate(true)
 
-	func get_environment_surface_cache(_scope_id: String) -> Dictionary:
+	func get_environment_surface_cache(scope_id: String) -> Dictionary:
+		if region_surfaces.has(scope_id):
+			return (region_surfaces[scope_id] as Dictionary).duplicate(true)
 		return surface.duplicate(true)
 
 
@@ -45,6 +51,7 @@ func _run() -> void:
 	_test_r5_1_submerged_ocean_finite_noop()
 	_test_r5_1_ocean_baseline_gate()
 	_test_r5_3_neighbor_ocean_seam_admission()
+	_test_r5_3_late_neighbor_publication_and_revisit()
 	_test_sdf_worker_shoreline_and_edits()
 	_test_startup_locations()
 	_test_bundled_ocean_end_to_end()
@@ -713,6 +720,80 @@ func _test_r5_3_neighbor_ocean_seam_admission() -> void:
 		and _projected_area(selective.get("vertices", PackedVector3Array())) > 0.0
 		and _projected_area(selective.get("vertices", PackedVector3Array())) < 12.0,
 		"R5.3 only region-seam-connected water renders; isolated excavation stays dry")
+
+
+## A region initially has no local sea source, then its seeded neighbor
+## publishes later. The normal bounded frame poll must repair the seam even
+## though neither water nor local SDF revision changed, including on revisit.
+func _test_r5_3_late_neighbor_publication_and_revisit() -> void:
+	var west := Vector2i(5, 13)
+	var east := Vector2i(6, 13)
+	var runtime := FakeRuntime.new()
+	get_root().add_child(runtime)
+	for region in [west, east]:
+		var env := _environment(region)
+		var kinds: PackedByteArray = env["reservoir_kind"]
+		var levels: PackedInt64Array = env["reservoir_level_mm"]
+		var water: PackedInt64Array = env["surface_water_ul"]
+		water.fill(0)
+		kinds.fill(EnvironmentStore.RESERVOIR_FINITE)
+		levels.fill(0)
+		if region == west:
+			kinds.fill(EnvironmentStore.RESERVOIR_OCEAN)
+			levels.fill(4000)
+		env["reservoir_kind"] = kinds
+		env["reservoir_level_mm"] = levels
+		env["surface_water_ul"] = water
+		var surface := _surface(region)
+		runtime.region_environments[env["scope_id"]] = env
+		runtime.region_surfaces[env["scope_id"]] = surface
+	var presenter: Node3D = VisualScript.new()
+	get_root().add_child(presenter)
+	presenter.call("configure_environment", runtime)
+	var east_shore := _shoreline(east)
+	var east_heights: PackedInt32Array = east_shore["height_mm"]
+	east_heights.fill(3000)
+	east_shore["height_mm"] = east_heights
+	var zero_baseline := PackedByteArray()
+	zero_baseline.resize(221)
+	east_shore["base_sea_wet"] = zero_baseline
+	presenter.call("register_region", east)
+	_check(presenter.call("install_region_shoreline_samples", east,
+		runtime.region_surfaces["region:6,13"], east_shore),
+		"R5.3 seedless neighbor surface attaches its own current cache")
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, east)
+	var east_node := presenter.get_node("Water_6_13") as MeshInstance3D
+	_check(not east_node.visible,
+		"R5.3 east region conservatively stays dry before west sea proof arrives")
+	var west_shore := _shoreline(west)
+	var west_heights: PackedInt32Array = west_shore["height_mm"]
+	west_heights.fill(3000)
+	west_shore["height_mm"] = west_heights
+	var west_base := PackedByteArray()
+	west_base.resize(221)
+	west_base.fill(1)
+	west_shore["base_sea_wet"] = west_base
+	presenter.call("register_region", west)
+	_check(presenter.call("install_region_shoreline_samples", west,
+		runtime.region_surfaces["region:5,13"], west_shore),
+		"R5.3 authoritative west sea sample installs")
+	for _frame in range(5):
+		presenter.call("process_visual_frame", 0.2, Vector3.ZERO, east)
+	_check(east_node.visible and east_node.mesh != null,
+		"R5.3 after late neighbor publication, seedless region fills verified ocean seam")
+	_check(int(presenter.call("get_visual_metrics")["visible_ocean_neighbor_anchor_tiles"]) >= 1,
+		"R5.3 cross-region admission is reported by visual metrics")
+	presenter.call("unregister_region", east)
+	presenter.call("register_region", east)
+	_check(presenter.call("install_region_shoreline_samples", east,
+		runtime.region_surfaces["region:6,13"], east_shore),
+		"R5.3 revisited region regenerates source sample")
+	for _frame in range(5):
+		presenter.call("process_visual_frame", 0.2, Vector3.ZERO, east)
+	_check((presenter.get_node("Water_6_13") as MeshInstance3D).visible,
+		"R5.3 revisiting after unloading does not permanently clip connected sea")
+	presenter.queue_free()
+	runtime.queue_free()
 
 
 func _test_bounded_scene_presentation() -> void:
