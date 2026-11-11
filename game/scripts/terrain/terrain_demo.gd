@@ -28,6 +28,7 @@ const EnvironmentStartupLocation := preload("res://scripts/simulation/environmen
 const SimulationRuntimeStoreScript := preload("res://scripts/simulation/simulation_runtime_store.gd")
 const SimulationRuntimeScript := preload("res://scripts/simulation/simulation_runtime.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
+const StreamBudgetPolicy := preload("res://scripts/terrain/terrain_stream_budget_policy.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -39,6 +40,7 @@ const MAX_MESH_JOB_DISPATCHES_PER_FRAME := 1
 const MESH_SNAPSHOT_FRAME_BUDGET_USEC := 3500
 const MAX_MESH_UPLOADS_PER_FRAME := 4
 const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
+const STREAM_BUDGET_TRACE_INTERVAL_USEC := 1_000_000
 const MAX_SURFACE_CACHE_JOBS_IN_FLIGHT := 2
 const MAX_SURFACE_CACHE_DISPATCHES_PER_FRAME := 1
 const SURFACE_CACHE_RETRY_BASE_USEC := 250_000
@@ -157,6 +159,19 @@ var _lod_selection_dirty := true
 var _edit_trace_enabled := EDIT_TRACE_DEFAULT_ENABLED
 var _perf_trace_enabled := false
 var _last_region_publish_profile: Dictionary = {}
+# The default streaming path remains unchanged; adaptive is opt-in for A/B.
+var _stream_profile := "baseline"
+var _stream_budget_state: Dictionary = {"dispatch_limit": 1}
+var _stream_window_started_usec := 0
+var _stream_window_frames := 0
+var _stream_window_boost_frames := 0
+var _stream_window_frame_ms_sum := 0.0
+var _stream_window_frame_ms_peak := 0.0
+var _stream_window_work_ms_sum := 0.0
+var _stream_window_work_ms_peak := 0.0
+var _stream_window_dispatches := 0
+var _stream_window_uploads := 0
+var _stream_window_stage_usec: Dictionary = {}
 
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
@@ -247,6 +262,25 @@ func _ready() -> void:
 		MIN_MESH_JOBS_IN_FLIGHT,
 		MAX_MESH_JOBS_IN_FLIGHT_HARD
 	)
+	_stream_profile = OS.get_environment("SANDBOX_STREAM_PROFILE").strip_edges().to_lower()
+	if _stream_profile != "adaptive":
+		_stream_profile = "baseline"
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--stream-profile="):
+			_stream_profile = argument.trim_prefix("--stream-profile=").to_lower()
+	if _stream_profile not in ["baseline", "adaptive"]:
+		push_warning("Unknown stream profile; using baseline")
+		_stream_profile = "baseline"
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("terrain_stream_profile", {
+			"profile": _stream_profile,
+			"mesh_dispatch_baseline": MAX_MESH_JOB_DISPATCHES_PER_FRAME,
+			"mesh_dispatch_adaptive_max": StreamBudgetPolicy.ADAPTIVE_DISPATCHES,
+			"mesh_jobs_in_flight_limit": _mesh_job_limit,
+			"mesh_upload_limit": MAX_MESH_UPLOADS_PER_FRAME,
+			"snapshot_budget_usec": MESH_SNAPSHOT_FRAME_BUDGET_USEC,
+			"upload_budget_usec": MESH_UPLOAD_FRAME_BUDGET_USEC,
+		})
 	_configure_preedit_arguments()
 	_edit_trace_enabled = EDIT_TRACE_DEFAULT_ENABLED or OS.get_environment("SANDBOX_EDIT_TRACE") == "1"
 	for argument in OS.get_cmdline_user_args():
@@ -784,6 +818,65 @@ func _exit_tree() -> void:
 		_checkpoint_job = null
 
 
+## Once/second aggregation avoids introducing a per-frame logging bottleneck.
+## Stage timing is passive in baseline and adaptive runs.
+func _stream_stage_measure(stage: String, started_usec: int) -> void:
+	if not _perf_trace_enabled:
+		return
+	var elapsed := maxi(0, Time.get_ticks_usec() - started_usec)
+	_stream_window_stage_usec[stage] = int(_stream_window_stage_usec.get(stage, 0)) + elapsed
+
+
+func _stream_finish_frame() -> void:
+	if not _perf_trace_enabled:
+		return
+	var now := Time.get_ticks_usec()
+	if _stream_window_started_usec == 0:
+		_stream_window_started_usec = now
+	_stream_window_frames += 1
+	_stream_window_frame_ms_sum += _last_frame_ms
+	_stream_window_work_ms_sum += _last_process_work_ms
+	_stream_window_frame_ms_peak = maxf(_stream_window_frame_ms_peak, _last_frame_ms)
+	_stream_window_work_ms_peak = maxf(_stream_window_work_ms_peak, _last_process_work_ms)
+	_stream_window_dispatches += _mesh_dispatches_this_frame
+	_stream_window_uploads += _mesh_uploads_this_frame
+	if int(_stream_budget_state.get("dispatch_limit", 1)) > 1:
+		_stream_window_boost_frames += 1
+	if now - _stream_window_started_usec < STREAM_BUDGET_TRACE_INTERVAL_USEC:
+		return
+	var effect_pending := 0
+	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
+		effect_pending = int(terrain_effect_runtime.get_prefetch_pending_count())
+	PerformanceTrace.emit("terrain_stream_budget_window", {
+		"profile": _stream_profile,
+		"frame_count": _stream_window_frames,
+		"boosted_frames": _stream_window_boost_frames,
+		"frame_mean_ms": _stream_window_frame_ms_sum / maxf(1.0, float(_stream_window_frames)),
+		"frame_peak_ms": _stream_window_frame_ms_peak,
+		"process_mean_ms": _stream_window_work_ms_sum / maxf(1.0, float(_stream_window_frames)),
+		"process_peak_ms": _stream_window_work_ms_peak,
+		"mesh_dispatches": _stream_window_dispatches,
+		"mesh_uploads": _stream_window_uploads,
+		"mesh_jobs_in_flight": _mesh_jobs.size(),
+		"loading_regions": loading_regions.size(),
+		"effect_prefetch_pending": effect_pending,
+		"surface_jobs_in_flight": _surface_cache_jobs.size(),
+		"mesh_limit": int(_stream_budget_state.get("dispatch_limit", 1)),
+		"reason": String(_stream_budget_state.get("reason", "baseline")),
+		"stage_work_usec": _stream_window_stage_usec.duplicate(true),
+	})
+	_stream_window_started_usec = now
+	_stream_window_frames = 0
+	_stream_window_boost_frames = 0
+	_stream_window_frame_ms_sum = 0.0
+	_stream_window_frame_ms_peak = 0.0
+	_stream_window_work_ms_sum = 0.0
+	_stream_window_work_ms_peak = 0.0
+	_stream_window_dispatches = 0
+	_stream_window_uploads = 0
+	_stream_window_stage_usec.clear()
+
+
 func _process(delta: float) -> void:
 	var process_started_usec := Time.get_ticks_usec()
 	_process_pending_simulation_save()
@@ -791,6 +884,21 @@ func _process(delta: float) -> void:
 	_mesh_dispatches_this_frame = 0
 	_surface_cache_dispatches_this_frame = 0
 	_last_frame_ms = maxf(delta * 1000.0, 0.0)
+	var previous_dispatch_limit := int(_stream_budget_state.get("dispatch_limit", 1))
+	_stream_budget_state = StreamBudgetPolicy.next(
+		_stream_budget_state, _last_frame_ms, _last_process_work_ms,
+		_stream_profile == "adaptive"
+	)
+	if _perf_trace_enabled and int(_stream_budget_state["dispatch_limit"]) != previous_dispatch_limit:
+		PerformanceTrace.emit("terrain_stream_budget_transition", {
+			"profile": _stream_profile,
+			"previous_limit": previous_dispatch_limit,
+			"new_limit": int(_stream_budget_state["dispatch_limit"]),
+			"reason": String(_stream_budget_state["reason"]),
+			"frame_ms": _last_frame_ms,
+			"previous_process_ms": _last_process_work_ms,
+			"cooldown_frames": int(_stream_budget_state["cooldown_frames"]),
+		})
 	if _frame_time_samples.size() == 512:
 		_frame_time_samples[_frame_sample_write_index] = _last_frame_ms
 		_frame_sample_write_index = (_frame_sample_write_index + 1) % 512
@@ -805,16 +913,26 @@ func _process(delta: float) -> void:
 		_checkpoint_overlap_observed = true
 	_process_async_checkpoint()
 	_maybe_schedule_async_checkpoint()
+	var stream_stage_started_usec := Time.get_ticks_usec()
 	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
 		var prefetch_result: Dictionary = terrain_effect_runtime.process_prefetch_step(1)
 		if not prefetch_result.get("ok", false):
 			_terrain_effect_status = "Terrain-object effects unavailable (%s)" % prefetch_result.get("reason", "unknown")
 			_record_stream_error("_terrain_effect_prefetch", _terrain_effect_status)
+	_stream_stage_measure("effect_prefetch", stream_stage_started_usec)
+	stream_stage_started_usec = Time.get_ticks_usec()
 	_process_one_chunk_job()
+	_stream_stage_measure("mesh_dispatch_and_upload", stream_stage_started_usec)
+	stream_stage_started_usec = Time.get_ticks_usec()
 	object_stream.process_queued_publications()
+	_stream_stage_measure("object_publication", stream_stage_started_usec)
+	stream_stage_started_usec = Time.get_ticks_usec()
 	_process_surface_cache_jobs()
+	_stream_stage_measure("sdf_cache", stream_stage_started_usec)
+	stream_stage_started_usec = Time.get_ticks_usec()
 	if is_instance_valid(_environment_visual):
 		_environment_visual.process_visual_frame(delta, camera.global_position, focus_region_key)
+	_stream_stage_measure("water_visual", stream_stage_started_usec)
 	if _start_ocean_probe_enabled:
 		_probe_start_ocean_visual(delta)
 	var visual_result: Dictionary = object_stream.consume_last_command_visual_result()
@@ -834,6 +952,7 @@ func _process(delta: float) -> void:
 	)
 	_last_process_work_ms = float(Time.get_ticks_usec() - process_started_usec) / 1000.0
 	_peak_process_work_ms = maxf(_peak_process_work_ms, _last_process_work_ms)
+	_stream_finish_frame()
 	if _perf_trace_enabled and _last_process_work_ms >= 16.0:
 		var effect_pending := 0
 		if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
@@ -2481,7 +2600,7 @@ func _process_completed_mesh_jobs() -> void:
 func _dispatch_mesh_jobs() -> void:
 	var dispatch_started_usec := Time.get_ticks_usec()
 	while _mesh_jobs.size() < _mesh_job_limit:
-		if _mesh_dispatches_this_frame >= MAX_MESH_JOB_DISPATCHES_PER_FRAME:
+		if _mesh_dispatches_this_frame >= int(_stream_budget_state.get("dispatch_limit", 1)):
 			return
 		if _mesh_dispatches_this_frame > 0 			and Time.get_ticks_usec() - dispatch_started_usec >= MESH_SNAPSHOT_FRAME_BUDGET_USEC:
 			return
@@ -2629,7 +2748,7 @@ func _dispatch_mesh_jobs() -> void:
 				"materialized_tiles": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
 				"mesh_jobs_in_flight": _mesh_jobs.size(),
 				"dispatches_this_frame": _mesh_dispatches_this_frame + 1,
-				"dispatch_budget": MAX_MESH_JOB_DISPATCHES_PER_FRAME,
+				"dispatch_budget": int(_stream_budget_state.get("dispatch_limit", 1)),
 			})
 		if String(stage["purpose"]) == "edit_transaction" and not _edit_transaction.is_empty():
 			_edit_transaction["trace_snapshot_usec_total"] = int(_edit_transaction.get("trace_snapshot_usec_total", 0)) + snapshot_elapsed_usec
@@ -4090,6 +4209,8 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["max_mesh_uploads_per_frame"] = MAX_MESH_UPLOADS_PER_FRAME
 	last_mesh_diagnostics["mesh_upload_frame_budget_usec"] = MESH_UPLOAD_FRAME_BUDGET_USEC
 	last_mesh_diagnostics["max_mesh_job_dispatches_per_frame"] = MAX_MESH_JOB_DISPATCHES_PER_FRAME
+	last_mesh_diagnostics["stream_profile"] = _stream_profile
+	last_mesh_diagnostics["stream_dispatch_budget"] = int(_stream_budget_state.get("dispatch_limit", 1))
 	last_mesh_diagnostics["mesh_snapshot_frame_budget_usec"] = MESH_SNAPSHOT_FRAME_BUDGET_USEC
 	last_mesh_diagnostics["mesh_job_limit"] = _mesh_job_limit
 	last_mesh_diagnostics["peak_mesh_uploads_per_frame"] = _peak_mesh_uploads_per_frame
