@@ -1,0 +1,87 @@
+name: P5 GPU interactive runner qualification (EXPERIMENT)
+
+on:
+  push:
+    branches:
+      - exp/p5-gpu-interactive-runner
+
+concurrency:
+  group: p5-gpu-interactive-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  service-preflight:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Record existing service-runner session and adapter context
+        shell: cmd
+        run: |
+          @echo off
+          git rev-parse HEAD
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\ci\p5-gpu-session-preflight.ps1" -Role Service
+          if errorlevel 1 exit /b 1
+      - name: Parse all PowerShell scripts, import project, check Godot and E2
+        shell: cmd
+        run: |
+          @echo off
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\ci\run-p5-gpu-static-qualification.ps1" -GodotBin "%GODOT_BIN%"
+          if errorlevel 1 exit /b 1
+      - name: Save non-GUI diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p5-gpu-service-preflight
+          path: |
+            ${{ runner.temp }}\p5-gpu-session\*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  interactive-gpu-smoke:
+    needs: service-preflight
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 25
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Refuse Session 0 or non-interactive execution
+        shell: cmd
+        run: |
+          @echo off
+          git rev-parse HEAD
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\ci\p5-gpu-session-preflight.ps1" -Role Interactive
+          if errorlevel 1 exit /b 1
+      - name: Render actual Godot OpenGL Windows frames and capture screenshots
+        shell: cmd
+        timeout-minutes: 20
+        run: |
+          @echo off
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\perf\run-p5-gpu-smoke.ps1" -GodotBin "%GODOT_BIN%"
+          if errorlevel 1 exit /b 1
+      - name: Upload GPU stdout, stderr, captures and exact-run receipts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p5-gpu-interactive-smoke-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}\p5-gpu-session\*.json
+            ${{ runner.temp }}\p5-gpu-smoke\*.log
+            ${{ runner.temp }}\p5-gpu-smoke\*.png
+            ${{ runner.temp }}\p5-gpu-smoke\*.json
+          if-no-files-found: warn
+          retention-days: 14
