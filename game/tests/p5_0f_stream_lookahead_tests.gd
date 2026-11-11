@@ -26,6 +26,21 @@ func _run() -> void:
 		"prediction clamps backward Z lead to the bounded source halo")
 	_check(Lookahead.clamp_lead(center, center) == center,
 		"stationary motion causes no predictive displacement")
+	_check(Lookahead.forward_stage_targets(center, center).is_empty(),
+		"stationary camera creates no speculative terrain stage")
+	var forward := Lookahead.forward_stage_targets(center, Vector2i(99, 13))
+	_check(forward.size() == 3, "forward straight path adds exactly three terrain stages")
+	for region in forward:
+		_check(region.x == 7 and absi(region.y - center.y) <= 1,
+			"forward stages remain inside the existing 5x5 retained window")
+	var diagonal := Lookahead.forward_stage_targets(center, Vector2i(99, -999))
+	_check(diagonal.size() == 6, "diagonal movement adds at most six terrain stages")
+	var distinct := {}
+	for region in diagonal:
+		distinct[str(region)] = true
+		_check(maxi(absi(region.x - center.x), absi(region.y - center.y)) <= 2,
+			"diagonal forward stage stays within the hard region retention radius")
+	_check(distinct.size() == diagonal.size(), "predictive stages contain no duplicates")
 	var queued: Array[Vector2i] = [
 		Vector2i(10, 13),  # distant background
 		Vector2i(7, 13),   # ahead priority
