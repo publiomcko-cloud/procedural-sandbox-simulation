@@ -52,7 +52,17 @@ foreach ($route in $Routes) {
             $process.WaitForExit()
             throw "Benchmark timeout: $runId ($stdout)"
         }
-        if ($process.ExitCode -ne 0) { throw "Godot exit $($process.ExitCode): $runId ($stdout / $stderr)" }
+        # PowerShell 5.1 on the service runner can expose an empty ExitCode
+        # even when WaitForExit returned success. A positive terminal marker,
+        # exact route/seed/profile receipt, and error-free console are required.
+        $process.Refresh()
+        if ($null -ne $process.ExitCode -and [int]$process.ExitCode -ne 0) {
+            throw "Godot exit $($process.ExitCode): $runId ($stdout / $stderr)"
+        }
+        $stderrContents = (Get-Content -LiteralPath $stderr -Raw -ErrorAction SilentlyContinue)
+        if ($stderrContents -match '(?m)(SCRIPT ERROR:|Parse Error:|ERROR: FAIL:|ERROR: Failed to load script)') {
+            throw "Godot engine stderr contained an error: $runId ($stderr)"
+        }
 
         $lines = @(Get-Content -LiteralPath $stdout | ForEach-Object { $_ -replace '\x00', '' })
         $completeLine = @($lines | Where-Object { $_.Contains('P5_STREAM_BENCH_COMPLETE: ') })
