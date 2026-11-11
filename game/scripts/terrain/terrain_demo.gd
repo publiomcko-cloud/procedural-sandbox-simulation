@@ -1811,6 +1811,38 @@ func _process_free_exploration(delta: float) -> void:
 				# _stream_finish_frame() executes later in this same _process call.
 				if _perf_trace_enabled:
 					_stream_window_started_usec = Time.get_ticks_usec() - STREAM_BUDGET_TRACE_INTERVAL_USEC
+				# Dedicated GPU lane requires proof of a real Windows display and
+				# at least one rendered frame, not simply a successful CPU scene.
+				var display_name := DisplayServer.get_name()
+				var drawn_frames := Engine.get_frames_drawn()
+				var adapter_name := RenderingServer.get_video_adapter_name()
+				print("P5_STREAM_BENCH_DISPLAY: " + JSON.stringify({
+					"display": display_name,
+					"drawn_frames": drawn_frames,
+					"adapter": adapter_name,
+					"screens": DisplayServer.get_screen_count(),
+				}))
+				var capture_path := OS.get_environment("SANDBOX_STREAM_BENCH_SCREENSHOT")
+				if not capture_path.is_empty():
+					if display_name != "windows" or drawn_frames < 20:
+						push_error("P5_STREAM_BENCH_GUI_NOT_INTERACTIVE")
+						get_tree().quit(3)
+						return
+					var image: Image = get_viewport().get_texture().get_image()
+					if image == null or image.is_empty():
+						push_error("P5_STREAM_BENCH_CAPTURE_EMPTY")
+						get_tree().quit(3)
+						return
+					var png_error := image.save_png(capture_path)
+					if png_error != OK:
+						push_error("P5_STREAM_BENCH_CAPTURE_FAILED: %d" % png_error)
+						get_tree().quit(3)
+						return
+					print("P5_STREAM_BENCH_SCREENSHOT: " + JSON.stringify({
+						"width": image.get_width(),
+						"height": image.get_height(),
+						"path": capture_path,
+					}))
 				print("P5_STREAM_BENCH_COMPLETE: " + JSON.stringify({
 					"route": _stream_bench_route,
 					"profile": _stream_profile,
