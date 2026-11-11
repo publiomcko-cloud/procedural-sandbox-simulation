@@ -42,6 +42,7 @@ func _run() -> void:
 	_test_r4_connected_basin_and_seams()
 	_test_r5_isolated_ocean_binding()
 	_test_r5_visual_signature_and_revisit()
+	_test_r5_1_submerged_ocean_finite_noop()
 	_test_sdf_worker_shoreline_and_edits()
 	_test_startup_locations()
 	_test_bundled_ocean_end_to_end()
@@ -510,6 +511,42 @@ func _test_r5_visual_signature_and_revisit() -> void:
 	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, Vector2i.ZERO)
 	_check((presenter.get_node("Water_0_0") as MeshInstance3D).visible,
 		"R5 revisit rebuilds water rather than staying hidden")
+	presenter.queue_free()
+	runtime.queue_free()
+
+
+## R5.1: finite water levels below a rendered real sea plane may
+## change every tick, but must not remesh the same continuous ocean.
+func _test_r5_1_submerged_ocean_finite_noop() -> void:
+	var region := Vector2i(5, 13)
+	var runtime := FakeRuntime.new()
+	get_root().add_child(runtime)
+	runtime.environment = _environment(region)
+	runtime.surface = _surface(region)
+	var presenter: Node3D = VisualScript.new()
+	get_root().add_child(presenter)
+	presenter.call("configure_environment", runtime)
+	presenter.call("register_region", region)
+	_check(presenter.call("install_region_shoreline_samples",
+		region, runtime.surface, _shoreline(region)), "R5.1 ocean SDF samples install")
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, region)
+	var node := presenter.get_node("Water_5_13") as MeshInstance3D
+	_check(node.visible, "R5.1 ocean renders before finite-water changes")
+	var baseline := int(presenter.call("get_visual_metrics")["region_rebuilds_total"])
+	var water: PackedInt64Array = runtime.environment["surface_water_ul"]
+	water[0] += 1_000_000_000
+	runtime.environment["surface_water_ul"] = water
+	runtime.environment["state_revision"] = 2
+	runtime.environment["last_environment_tick"] = 9
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, region)
+	_check(int(presenter.call("get_visual_metrics")["region_rebuilds_total"]) == baseline,
+		"R5.1 finite water fully below ocean plane does not rebuild SDF sea")
+	water[0] += 3_000_000_000
+	runtime.environment["surface_water_ul"] = water
+	runtime.environment["state_revision"] = 3
+	presenter.call("process_visual_frame", 0.2, Vector3.ZERO, region)
+	_check(int(presenter.call("get_visual_metrics")["region_rebuilds_total"]) == baseline + 1,
+		"R5.1 finite water above ocean plane still triggers visual rebuild")
 	presenter.queue_free()
 	runtime.queue_free()
 
