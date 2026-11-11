@@ -21,7 +21,10 @@ const EntityStateContract := preload("res://scripts/objects/procedural_object_st
 const TerrainEffectRuntime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
 const MaterialEnvironmentDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const EnvironmentClimateDomainScript := preload("res://scripts/simulation/environment_climate_domain.gd")
+const EnvironmentHydrologyDomainScript := preload("res://scripts/simulation/environment_hydrology_domain.gd")
 const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/environment_surface_cache_job.gd")
+const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
+const EnvironmentStartupLocation := preload("res://scripts/simulation/environment_startup_location.gd")
 const SimulationRuntimeStoreScript := preload("res://scripts/simulation/simulation_runtime_store.gd")
 const SimulationRuntimeScript := preload("res://scripts/simulation/simulation_runtime.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
@@ -38,6 +41,8 @@ const MAX_MESH_UPLOADS_PER_FRAME := 4
 const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
 const MAX_SURFACE_CACHE_JOBS_IN_FLIGHT := 2
 const MAX_SURFACE_CACHE_DISPATCHES_PER_FRAME := 1
+const SURFACE_CACHE_RETRY_BASE_USEC := 250_000
+const SURFACE_CACHE_RETRY_MAX_USEC := 8_000_000
 const MAX_BUFFERED_BRUSH_REQUESTS := 64
 const EDIT_TRACE_DEFAULT_ENABLED := false
 const DIAGNOSTICS_REFRESH_INTERVAL := 0.25
@@ -102,11 +107,20 @@ var terrain_effect_runtime: RefCounted
 var _terrain_effect_status := "Terrain-object effects unavailable"
 var _material_content_domain: RefCounted
 var _climate_content_domain: RefCounted
+var _environment_visual
+var _startup_location_status := ""
+var _start_ocean_probe_enabled := false
+var _start_ocean_probe_elapsed := 0.0
+var _start_ocean_probe_samples := 0
 var _simulation_material_profile_id := ""
 var _simulation_climate_profile_id := ""
 var _surface_cache_pending: Dictionary = {}
 var _surface_cache_jobs: Dictionary = {}
 var _surface_cache_job_by_region: Dictionary = {}
+var _surface_cache_retry_after_usec: Dictionary = {}
+var _surface_cache_retry_counts: Dictionary = {}
+var _surface_cache_repair_cursor := 0
+var _surface_cache_visual_install_failures_total := 0
 var _surface_cache_last_effect_revision := -1
 var _surface_cache_dispatches_this_frame := 0
 var _surface_cache_publications_total := 0
@@ -286,16 +300,29 @@ func _ready() -> void:
 		elif saved_world.get("legacy_available", false):
 			_persistence_status = "Schema-1 terrain save detected and preserved; choose a new v2 world explicitly (no migration/import)"
 
+	_apply_startup_location()
 	_material_content_domain = MaterialEnvironmentDomainScript.new()
 	_climate_content_domain = EnvironmentClimateDomainScript.new()
 	var material_handlers: Array[RefCounted] = [
 		_material_content_domain.create_content_handler(),
 		_climate_content_domain.create_content_handler(),
 	]
+	# The playable scene opts into the bundled climate preset. Generic P4
+	# consumers keep their historical first-party-only discovery contract.
+	var playable_roots: Array[String] = object_package_roots_override.duplicate()
+	if playable_roots.is_empty():
+		var mod_root := ProjectSettings.globalize_path("user://mods")
+		var root_created := DirAccess.make_dir_recursive_absolute(mod_root)
+		if root_created == OK or root_created == ERR_ALREADY_EXISTS:
+			playable_roots = [
+				"res://mods/first-party",
+				"res://mods/environment-presets",
+				"user://mods",
+			]
 	var object_initialization: Dictionary = object_stream.initialize(
 		world_seed,
 		world_id,
-		object_package_roots_override,
+		playable_roots,
 		object_state_directory_override,
 		material_handlers
 	)
@@ -320,8 +347,19 @@ func _ready() -> void:
 		terrain_effect_runtime = null
 		_terrain_effect_status = "Terrain-object effects unavailable (object stream unavailable)"
 	_restore_simulation_for_terrain_generation(_checkpoint_generation)
+	_environment_visual = EnvironmentVisualScript.new()
+	_environment_visual.name = "EnvironmentVisuals"
+	add_child(_environment_visual)
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--p5-water-debug="):
+			var diagnostic_mode := argument.trim_prefix("--p5-water-debug=")
+			if _environment_visual.set_water_debug_mode(diagnostic_mode):
+				print("P5_WATER_DEBUG_MODE: %s" % diagnostic_mode)
+			else:
+				push_warning("P5_WATER_DEBUG_INVALID: %s (normal mode retained)" % diagnostic_mode)
 	if not _simulation_persistence_blocked:
 		_configure_simulation_streaming()
+	_configure_environment_visual()
 	_create_placement_target_marker()
 	terrain_mesh_template.mesh = null
 	terrain_mesh_template.visible = false
@@ -329,6 +367,95 @@ func _ready() -> void:
 	_update_camera()
 	_reconcile_region_window(true)
 	_update_status()
+
+
+func _apply_startup_location() -> void:
+	var selection: Dictionary = EnvironmentStartupLocation.select_from_args(
+		OS.get_cmdline_user_args(), world_seed
+	)
+	if not selection.get("ok", false):
+		_startup_location_status = "START_LOCATION_INVALID: %s (default focus retained)" % selection.get("reason", "unknown")
+		push_warning(_startup_location_status)
+		print(_startup_location_status)
+		return
+	if String(selection.get("mode", "default")) == "default":
+		return
+	orbit_target = selection["target"]
+	var start_region: Vector2i = selection["region"]
+	_startup_location_status = (
+		"P5_START_LOCATION: mode=%s region=(%d,%d) world_target=(%.2f,%.2f,%.2f) "
+		+ "base_sdf_ocean_cells=%d seed=%d"
+	) % [
+		String(selection["mode"]), start_region.x, start_region.y,
+		orbit_target.x, orbit_target.y, orbit_target.z,
+		int(selection.get("candidate_water_cells", -1)), world_seed
+	]
+	print(_startup_location_status)
+	if String(selection["mode"]) == "ocean":
+		_start_ocean_probe_enabled = true
+		print("P5_START_WATER_NOTE: base SDF eligibility only; live water requires hydrology binding and current terrain cache")
+
+
+func _probe_start_ocean_visual(delta: float) -> void:
+	if _start_ocean_probe_samples >= 30:
+		_start_ocean_probe_enabled = false
+		return
+	_start_ocean_probe_elapsed += maxf(0.0, delta)
+	if _start_ocean_probe_elapsed < 2.0:
+		return
+	_start_ocean_probe_elapsed = 0.0
+	_start_ocean_probe_samples += 1
+	var profile_count := -1
+	if is_instance_valid(object_stream) and object_stream.registry != null:
+		profile_count = object_stream.registry.get_content_record_ids(
+			EnvironmentClimateDomainScript.PROFILE_TYPE
+		).size()
+	var climate_enabled := false
+	var hydrology_enabled := false
+	var environmental_state: Dictionary = {}
+	var surface_cache: Dictionary = {}
+	var scope_id := _surface_cache_scope_id(focus_region_key)
+	if is_instance_valid(simulation_runtime) and simulation_runtime.initialized:
+		climate_enabled = simulation_runtime.has_environment_climate()
+		hydrology_enabled = simulation_runtime.has_environment_hydrology()
+		environmental_state = simulation_runtime.get_environment_scope(scope_id)
+		surface_cache = simulation_runtime.get_environment_surface_cache(scope_id)
+	var ocean_cells := 0
+	var kinds: PackedByteArray = environmental_state.get("reservoir_kind", PackedByteArray())
+	for kind in kinds:
+		if int(kind) == 2:
+			ocean_cells += 1
+	var visible_triangles := 0
+	if is_instance_valid(_environment_visual):
+		var water_node := _environment_visual.get_node_or_null(
+			"Water_%d_%d" % [focus_region_key.x, focus_region_key.y]
+		) as MeshInstance3D
+		if water_node != null and water_node.visible and water_node.mesh != null:
+			visible_triangles = water_node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() / 3
+	var ready := ocean_cells > 0 and visible_triangles > 0
+	var metrics: Dictionary = _environment_visual.get_visual_metrics() if is_instance_valid(_environment_visual) else {}
+	var status_label_text := "P5_WATER_READY" if ready else "P5_WATER_DIAG"
+	print("%s: region=%s candidate=%s profiles=%d climate=%s hydrology=%s scope=%s cache=%s ocean_cells=%d visible_triangles=%d debug=%s halo_cells=%d ocean_sdf_tiles=%d ocean_seam_edges=%d refined_quads=%d state_revision=%d status=%s" % [
+		status_label_text,
+		str(focus_region_key),
+		str(_startup_location_status),
+		profile_count,
+		str(climate_enabled),
+		str(hydrology_enabled),
+		str(not environmental_state.is_empty()),
+		str(not surface_cache.is_empty()),
+		ocean_cells,
+		visible_triangles,
+		String(metrics.get("water_debug_mode", "normal")),
+		int(metrics.get("visible_coastal_halo_cells", 0)),
+		int(metrics.get("visible_ocean_sdf_tiles", 0)),
+		int(metrics.get("visible_ocean_seam_edges", 0)),
+		int(metrics.get("visible_refined_coast_quads", 0)),
+		int(environmental_state.get("state_revision", -1)),
+		_simulation_streaming_status,
+	])
+	if ready:
+		_start_ocean_probe_enabled = false
 
 
 func _ensure_simulation_store() -> void:
@@ -617,8 +744,28 @@ func _configure_simulation_streaming() -> void:
 		)
 	else:
 		_simulation_streaming_status = "Simulation streaming unavailable (%s)" % lifecycle.get("reason", "unknown")
+	_configure_environment_visual()
 
 
+func _configure_environment_visual() -> void:
+	if not is_instance_valid(_environment_visual):
+		return
+	var profile: Dictionary = {}
+	var sha := ""
+	if (
+		is_instance_valid(simulation_runtime)
+		and simulation_runtime.has_environment_climate()
+		and object_stream.registry != null
+		and not _simulation_climate_profile_id.is_empty()
+	):
+		profile = object_stream.registry.get_content_record(
+			EnvironmentClimateDomainScript.PROFILE_TYPE, _simulation_climate_profile_id
+		)
+		var pin: Dictionary = simulation_runtime.environment_climate_domain.get_bound_profile_pin(
+			_simulation_climate_profile_id
+		)
+		sha = String(pin.get("profile_sha256", ""))
+	_environment_visual.configure_environment(simulation_runtime, profile, sha)
 
 
 func _exit_tree() -> void:
@@ -666,6 +813,10 @@ func _process(delta: float) -> void:
 	_process_one_chunk_job()
 	object_stream.process_queued_publications()
 	_process_surface_cache_jobs()
+	if is_instance_valid(_environment_visual):
+		_environment_visual.process_visual_frame(delta, camera.global_position, focus_region_key)
+	if _start_ocean_probe_enabled:
+		_probe_start_ocean_visual(delta)
 	var visual_result: Dictionary = object_stream.consume_last_command_visual_result()
 	if not visual_result.is_empty():
 		if visual_result.get("ok", false):
@@ -1758,9 +1909,26 @@ func _queue_surface_cache_region(region_key: Vector2i) -> void:
 		and int(cached.get("terrain_revision", -1)) == terrain_revision
 		and int(cached.get("terrain_cache_scope_id", -1)) == terrain_cache_scope_id
 		and int(cached.get("terrain_effect_revision", -1)) == terrain_effect_revision
+		and (
+			not simulation_runtime.has_environment_hydrology()
+			or not is_instance_valid(_environment_visual)
+			or _environment_visual.has_region_shoreline_samples(region_key, cached)
+		)
 	):
 		_surface_cache_pending.erase(id)
+		_surface_cache_retry_after_usec.erase(id)
+		_surface_cache_retry_counts.erase(id)
 		return
+	var previous_pending: Dictionary = _surface_cache_pending.get(id, {})
+	if not previous_pending.is_empty() and (
+		int(previous_pending.get("terrain_revision", -1)) != terrain_revision
+		or int(previous_pending.get("terrain_cache_scope_id", -1)) != terrain_cache_scope_id
+		or int(previous_pending.get("terrain_effect_revision", -1)) != terrain_effect_revision
+	):
+		_surface_cache_retry_after_usec.erase(id)
+		_surface_cache_retry_counts.erase(id)
+	if is_instance_valid(_environment_visual):
+		_environment_visual.invalidate_region_shoreline_samples(region_key)
 	_surface_cache_pending[id] = {
 		"region_key": region_key,
 		"scope_id": scope_id,
@@ -1796,10 +1964,61 @@ func _sync_surface_cache_effect_revision() -> void:
 		_queue_surface_cache_region(entry["region_key"])
 
 
+## Retry transient failures without dropping publication obligations or
+## dispatching infinitely in one frame. New terrain revisions reset cooldown.
+func _schedule_surface_cache_retry(region_key: Vector2i, reason: String) -> void:
+	var id := _region_id(region_key)
+	if not active_regions.has(id):
+		return
+	_queue_surface_cache_region(region_key)
+	if not _surface_cache_pending.has(id):
+		return
+	var attempt := int(_surface_cache_retry_counts.get(id, 0)) + 1
+	_surface_cache_retry_counts[id] = attempt
+	var shift := mini(attempt - 1, 5)
+	var delay := mini(SURFACE_CACHE_RETRY_MAX_USEC, SURFACE_CACHE_RETRY_BASE_USEC * (1 << shift))
+	_surface_cache_retry_after_usec[id] = Time.get_ticks_usec() + delay
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("p5_surface_cache_retry_scheduled", {
+			"region": [region_key.x, region_key.y],
+			"reason": reason, "attempt": attempt,
+			"delay_usec": delay,
+		})
+
+
+## Lightweight self-heal for lost/failed visualization delivery after revisit.
+## Checks one active region/frame, even if the canonical cache is missing,
+## and never changes the canonical SDF authority.
+func _repair_missing_surface_cache_visual() -> void:
+	if not is_instance_valid(_environment_visual) or not simulation_runtime.has_environment_hydrology():
+		return
+	var ids: Array = active_regions.keys()
+	if ids.is_empty():
+		_surface_cache_repair_cursor = 0
+		return
+	ids.sort()
+	var id := String(ids[_surface_cache_repair_cursor % ids.size()])
+	_surface_cache_repair_cursor = (_surface_cache_repair_cursor + 1) % ids.size()
+	if _surface_cache_pending.has(id) or _surface_cache_job_by_region.has(id):
+		return
+	var region_key: Vector2i = active_regions[id]["region_key"]
+	var surface: Dictionary = simulation_runtime.get_environment_surface_cache(
+		_surface_cache_scope_id(region_key)
+	)
+	if surface.is_empty() or not _environment_visual.has_region_shoreline_samples(region_key, surface):
+		_queue_surface_cache_region(region_key)
+		if _perf_trace_enabled and _surface_cache_pending.has(id):
+			PerformanceTrace.emit("p5_surface_cache_repair_queued", {
+				"region": [region_key.x, region_key.y],
+				"terrain_revision": int(surface.get("terrain_revision", -1)),
+			})
+
+
 func _process_surface_cache_jobs() -> void:
 	if not is_instance_valid(simulation_runtime) or not simulation_runtime.initialized:
 		return
 	_sync_surface_cache_effect_revision()
+	_repair_missing_surface_cache_visual()
 
 	var completed: Array[int] = []
 	for task_id_value in _surface_cache_jobs.keys():
@@ -1832,7 +2051,7 @@ func _process_surface_cache_jobs() -> void:
 		var built: Dictionary = job.result
 		if not built.get("valid", false) or typeof(built.get("record")) != TYPE_DICTIONARY:
 			_surface_cache_worker_failures_total += 1
-			_surface_cache_pending.erase(id)
+			_schedule_surface_cache_retry(job.region_key, "worker:" + String(built.get("reason", "invalid_record")))
 			continue
 		var publication: Dictionary = simulation_runtime.publish_environment_surface_cache(
 			built["record"]
@@ -1843,9 +2062,22 @@ func _process_surface_cache_jobs() -> void:
 				_queue_surface_cache_region(job.region_key)
 			else:
 				_surface_cache_worker_failures_total += 1
-				_surface_cache_pending.erase(id)
+				_schedule_surface_cache_retry(job.region_key, "publication:" + String(publication.get("reason", "rejected")))
 			continue
 		_surface_cache_publications_total += 1
+		var install_ok := true
+		if is_instance_valid(_environment_visual) and simulation_runtime.has_environment_hydrology():
+			install_ok = bool(_environment_visual.install_region_shoreline_samples(
+				job.region_key, built["record"], built.get("visual_shoreline", {})
+			))
+		if not install_ok:
+			_surface_cache_visual_install_failures_total += 1
+			var visual_result: Dictionary = built.get("visual_shoreline", {})
+			_schedule_surface_cache_retry(job.region_key,
+				"shoreline_install:" + String(visual_result.get("reason", "rejected")))
+			continue
+		_surface_cache_retry_after_usec.erase(id)
+		_surface_cache_retry_counts.erase(id)
 		var pending_token: Dictionary = _surface_cache_pending.get(id, {})
 		if (
 			int(pending_token.get("terrain_revision", -1)) == int(job.terrain_revision)
@@ -1881,7 +2113,11 @@ func _process_surface_cache_jobs() -> void:
 		var candidates: Array[String] = []
 		for id_value in _surface_cache_pending.keys():
 			var id := String(id_value)
-			if active_regions.has(id) and not _surface_cache_job_by_region.has(id):
+			if (
+				active_regions.has(id)
+				and not _surface_cache_job_by_region.has(id)
+				and Time.get_ticks_usec() >= int(_surface_cache_retry_after_usec.get(id, 0))
+			):
 				candidates.append(id)
 		if candidates.is_empty():
 			break
@@ -1906,8 +2142,11 @@ func _process_surface_cache_jobs() -> void:
 			continue
 		if dispatched.get("pending", false):
 			break
-		_surface_cache_pending.erase(candidates[0])
 		_surface_cache_snapshot_failures_total += 1
+		var rejected_id := candidates[0]
+		var rejected_region: Vector2i = active_regions[rejected_id]["region_key"]
+		_schedule_surface_cache_retry(rejected_region,
+			"snapshot:" + String(dispatched.get("reason", "rejected")))
 
 
 func _dispatch_surface_cache_job(id: String) -> Dictionary:
@@ -2006,6 +2245,26 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 		chunk_snapshots,
 		queued_usec
 	)
+	job.build_visual_shoreline = (
+		is_instance_valid(_environment_visual)
+		and simulation_runtime.has_environment_hydrology()
+	)
+	if job.build_visual_shoreline:
+		var refine_levels := PackedInt64Array()
+		# Ocean can become bound only AFTER this surface-cache job has
+		# published. Include its deterministic level before the first tick.
+		if (region_key.y + 1) * 6 > EnvironmentHydrologyDomainScript.OCEAN_START_GLOBAL_CELL_Z:
+			refine_levels.append(EnvironmentHydrologyDomainScript.OCEAN_LEVEL_MM)
+		var live_environment: Dictionary = simulation_runtime.get_environment_scope(String(token["scope_id"]))
+		var kinds: PackedByteArray = live_environment.get("reservoir_kind", PackedByteArray())
+		var levels: PackedInt64Array = live_environment.get("reservoir_level_mm", PackedInt64Array())
+		if kinds.size() == levels.size():
+			for i in range(kinds.size()):
+				if int(kinds[i]) == 1 and not refine_levels.has(int(levels[i])):
+					refine_levels.append(int(levels[i]))
+				if refine_levels.size() >= 12:
+					break
+		job.visual_refine_levels_mm = refine_levels
 	var task_id := WorkerThreadPool.add_task(
 		Callable(job, "run"), false, "environment SDF surface cache"
 	)
@@ -2710,6 +2969,8 @@ func _publish_region(
 
 	var registry_started_usec := Time.get_ticks_usec()
 	active_regions[id] = {"region_key": region_key, "world_state": state, "chunk_nodes": region_nodes}
+	if is_instance_valid(_environment_visual):
+		_environment_visual.register_region(region_key)
 	world_states[id] = state
 	_lod_selection_dirty = true
 	var registry_commit_usec := Time.get_ticks_usec() - registry_started_usec
@@ -2909,7 +3170,11 @@ func _unload_region(id: String) -> void:
 	if not active_regions.has(id):
 		return
 	var entry: Dictionary = active_regions[id]
+	if is_instance_valid(_environment_visual):
+		_environment_visual.unregister_region(entry["region_key"])
 	_surface_cache_pending.erase(id)
+	_surface_cache_retry_after_usec.erase(id)
+	_surface_cache_retry_counts.erase(id)
 	if (
 		is_instance_valid(simulation_runtime)
 		and bool(simulation_runtime.get_world_scope_lifecycle_metrics().get("initialized", false))

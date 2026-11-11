@@ -1330,6 +1330,32 @@ func update_resident_target_regions(
 		return a.y < b.y or (a.y == b.y and a.x < b.x)
 	)
 	var required := _required_source_regions_for_regions(target_regions)
+	# Loading the nearest effect sources first avoids blocking the 3x3
+	# rendered terrain window behind distant sources in the 9x9 halo.
+	# Same required set and hard caps; only prefetch dispatch order changes.
+	if not target_regions.is_empty():
+		var minimum := target_regions[0]
+		var maximum := target_regions[0]
+		for region in target_regions:
+			minimum.x = mini(minimum.x, region.x)
+			minimum.y = mini(minimum.y, region.y)
+			maximum.x = maxi(maximum.x, region.x)
+			maximum.y = maxi(maximum.y, region.y)
+		var center := Vector2i(
+			int((minimum.x + maximum.x) / 2.0),
+			int((minimum.y + maximum.y) / 2.0)
+		)
+		required.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+			var da := maxi(absi(a.x - center.x), absi(a.y - center.y))
+			var db := maxi(absi(b.x - center.x), absi(b.y - center.y))
+			if da != db:
+				return da < db
+			var ma := absi(a.x - center.x) + absi(a.y - center.y)
+			var mb := absi(b.x - center.x) + absi(b.y - center.y)
+			if ma != mb:
+				return ma < mb
+			return a.y < b.y or (a.y == b.y and a.x < b.x)
+		)
 	if required.size() > ProjectionService.MAX_RESIDENT_SCOPES:
 		return _failure("terrain_effect_runtime_window_scope_budget_exceeded")
 	var next_protected: Dictionary = {}
