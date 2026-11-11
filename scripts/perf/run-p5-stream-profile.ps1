@@ -1,6 +1,7 @@
 param(
     [ValidateSet('baseline', 'adaptive')]
-    [string]$Profile = 'baseline',
+    [Alias('Profile')]
+    [string]$ProfileName = 'baseline',
     [string]$GodotBin = 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe',
     [string]$EvidenceDir = 'C:\Dev\p5-0f-evidence'
 )
@@ -16,14 +17,14 @@ try {
     $head = (& git rev-parse HEAD).Trim()
     $branch = (& git branch --show-current).Trim()
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $log = Join-Path $EvidenceDir "P5-stream-$Profile-$stamp.log"
+    $log = Join-Path $EvidenceDir "P5-stream-$ProfileName-$stamp.log"
     $env:SANDBOX_PERF_TRACE = '1'
     $env:SANDBOX_PERF_TRACE_MIN_MS = '2.0'
-    $env:SANDBOX_STREAM_PROFILE = $Profile
+    $env:SANDBOX_STREAM_PROFILE = $ProfileName
 
     @(
         'P5.0F STREAMING A/B EXPERIMENT'
-        "Profile: $Profile"
+        "Profile: $ProfileName"
         "Commit: $head"
         "Branch: $branch"
         "Date: $(Get-Date -Format o)"
@@ -31,14 +32,19 @@ try {
         '========== CONSOLE =========='
     ) | Set-Content -LiteralPath $log -Encoding UTF8
 
+    $ErrorActionPreference = 'Continue'
     & $GodotBin --headless --path .\game --script res://tests/p5_0f_stream_budget_tests.gd 2>&1 |
         Tee-Object -FilePath $log -Append
-    if ($LASTEXITCODE -ne 0) { throw "Stream policy unit test failed. See $log" }
+    $testExit = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($testExit -ne 0) { throw "Stream policy unit test failed. See $log" }
 
-    Write-Host "Running $Profile. Travel the same route for each A/B run, then close Godot."
+    Write-Host "Running $ProfileName. Travel the same route for each A/B run, then close Godot."
+    $ErrorActionPreference = 'Continue'
     & $GodotBin --path .\game -- --start-water=ocean --p5-water-debug=sources 2>&1 |
         Tee-Object -FilePath $log -Append
     $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
     Add-Content -LiteralPath $log -Value @(
         '========== END =========='
         "Exit code: $exitCode"
@@ -78,7 +84,7 @@ try {
             $framePeak = [Math]::Max($framePeak, [double]$w.frame_peak_ms)
         }
         $metrics = [ordered]@{
-            profile = $Profile
+            profile = $ProfileName
             commit = $head
             windows = $windowRows.Count
             frames = [int]$totalFrames
