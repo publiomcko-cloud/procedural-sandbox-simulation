@@ -665,8 +665,8 @@ static func _surface_identity(record: Dictionary) -> String:
 ## Read the 48-cell visual state without using the changing logical tick as
 ## a mesh revision. Sub-2mm water depth changes are presentation-only.
 static func _water_visual_signature(
-	_region_key: Vector2i, environment: Dictionary, surface: Dictionary,
-	mode: String, hydrology_enabled: bool
+	region_key: Vector2i, environment: Dictionary, surface: Dictionary,
+	mode: String, hydrology_enabled: bool, ocean_tiles: int = 0
 ) -> PackedInt64Array:
 	var signature := PackedInt64Array()
 	var kinds: PackedByteArray = environment.get("reservoir_kind", PackedByteArray())
@@ -675,6 +675,13 @@ static func _water_visual_signature(
 	if kinds.size() != MAX_CELLS_PER_REGION or levels.size() != kinds.size() or water.size() != kinds.size():
 		return signature
 	var cell_area_mm2 := maxi(1, int(surface.get("cell_size_x_mm", 0)) * int(surface.get("cell_size_z_mm", 0)))
+	var heights: PackedInt64Array = surface.get("surface_height_mm", PackedInt64Array())
+	var valid: PackedByteArray = surface.get("surface_valid", PackedByteArray())
+	var sea_visible := (
+		region_key.y >= OceanVisual.OCEAN_START_REGION_Z
+		and ocean_tiles > 0 and hydrology_enabled and mode != "off"
+		and heights.size() == MAX_CELLS_PER_REGION and valid.size() == MAX_CELLS_PER_REGION
+	)
 	signature.append(1 if hydrology_enabled else 0)
 	for index in range(MAX_CELLS_PER_REGION):
 		var kind := int(kinds[index])
@@ -685,7 +692,12 @@ static func _water_visual_signature(
 		if kind == EnvironmentStore.RESERVOIR_FINITE:
 			# 1 microliter = 1 mm3. Cell area is in square millimeters.
 			var depth_mm := int(water[index] / cell_area_mm2)
-			if depth_mm < 10:
+			if depth_mm < 10 or (
+				sea_visible and valid[index] != 0
+				and int(heights[index]) + mini(depth_mm, 4000) <= OceanVisual.OCEAN_LEVEL_MM
+			):
+				# Finite water below the rendered sea is not drawn. It must
+				# not rebuild the ocean mesh every runoff tick either.
 				signature.append(0)
 				signature.append(0)
 				continue
@@ -743,7 +755,8 @@ func _poll_resident_regions() -> void:
 		if _runtime.has_method("has_environment_hydrology"):
 			hydrology_enabled = bool(_runtime.call("has_environment_hydrology"))
 		var signature := _water_visual_signature(
-			row["region_key"], environment, surface, _water_debug_mode, hydrology_enabled
+			row["region_key"], environment, surface, _water_debug_mode,
+			hydrology_enabled, int(row.get("last_ocean_sdf_tiles", 0))
 		)
 		if String(row["token"]) == token and row.get("water_signature", PackedInt64Array()) == signature:
 			_unchanged_visual_skips_total += 1
