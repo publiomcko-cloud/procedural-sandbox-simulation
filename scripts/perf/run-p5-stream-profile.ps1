@@ -57,6 +57,25 @@ try {
         Get-Content -LiteralPath $log |
             ForEach-Object { $_ -replace '\x00', '' }
     )
+    # Fail closed: header/requested profile is not proof of the Godot
+    # runtime's actual selected profile. This caught the R2 false A/B.
+    $profileEvent = @(
+        $cleanLines |
+            Select-String -SimpleMatch '"event":"terrain_stream_profile"' |
+            Select-Object -First 1
+    )
+    if ($profileEvent.Count -ne 1) {
+        throw "No terrain_stream_profile event found; invalid A/B trial. See $log"
+    }
+    $rawProfile = $profileEvent[0].Line
+    $index = $rawProfile.IndexOf('PERF_TRACE ')
+    if ($index -lt 0) {
+        throw "Malformed profile event; invalid A/B trial. See $log"
+    }
+    $effectiveProfile = ($rawProfile.Substring($index + 11) | ConvertFrom-Json).profile
+    if ($effectiveProfile -ne $ProfileName) {
+        throw "Profile mismatch requested=$ProfileName effective=$effectiveProfile; invalid A/B trial. See $log"
+    }
     $events = "$log.events.txt"
     $cleanLines |
         Select-String -Pattern 'terrain_stream_(budget_window|budget_transition|profile)|terrain_mesh_snapshot|terrain_process_spike|terrain_region_publish|terrain_region_load_complete|environment_surface_cache_job|effect_prefetch_tick|p5_environment_visual_rebuild' |
