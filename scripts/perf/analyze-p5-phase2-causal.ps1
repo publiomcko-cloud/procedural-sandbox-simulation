@@ -1,7 +1,8 @@
 param(
     [string]$EvidenceDir = $(if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP 'p5-phase2-causal' } else { Join-Path $env:TEMP 'p5-phase2-causal' }),
     [int]$ExpectedFrames = 720,
-    [int]$ExpectedTrials = 16
+    [int]$ExpectedTrials = 16,
+    [string]$ExpectedSourceCommit = ''
 )
 $ErrorActionPreference = 'Stop'
 function Percentile([double[]]$Values, [double]$P) {
@@ -185,17 +186,29 @@ foreach ($file in $logs) {
     }
     Write-Host "PHASE2_CAUSAL_TRIAL_PASS: $($file.Name) stages=$($stageRank.Count) blockers=$($blockerRank.Count) final=$finalPublished"
 }
-$groups = @($matrix | Group-Object route,profile)
-if ($groups.Count -ne 8) {
-    throw "PHASE2_INCOMPLETE_ROUTE_PROFILE_GROUPS: actual=$($groups.Count) expected=8"
+$groups = @{}
+foreach ($row in $matrix) {
+    $key = ([string]$row['route']) + '|' + ([string]$row['profile'])
+    if (-not $groups.ContainsKey($key)) { $groups[$key] = 0 }
+    $groups[$key] += 1
 }
-foreach ($group in $groups) {
-    if ($group.Count -ne 2) { throw "PHASE2_UNBALANCED_ABBA: group=$($group.Name) actual=$($group.Count)" }
+if ($groups.Count -ne 8) { throw "PHASE2_INCOMPLETE_ROUTE_PROFILE_GROUPS: actual=$($groups.Count) expected=8" }
+foreach ($entry in $groups.GetEnumerator()) {
+    if ([int]$entry.Value -ne 2) { throw "PHASE2_UNBALANCED_ABBA: group=$($entry.Key) actual=$($entry.Value)" }
 }
-$sha = (& git rev-parse HEAD).Trim()
+$summaryPath = Join-Path $EvidenceDir 'summary.json'
+if (-not (Test-Path -LiteralPath $summaryPath -PathType Leaf)) { throw 'PHASE2_SOURCE_SUMMARY_MISSING' }
+$originalTrials = @(Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json)
+if ($originalTrials.Count -ne $ExpectedTrials) { throw "PHASE2_SOURCE_SUMMARY_INCOMPLETE: $($originalTrials.Count)" }
+$sourceShas = @($originalTrials | Select-Object -ExpandProperty commit -Unique)
+if ($sourceShas.Count -ne 1) { throw 'PHASE2_MIXED_SOURCE_COMMITS' }
+$sourceSha = [string]$sourceShas[0]
+if ($ExpectedSourceCommit -and $ExpectedSourceCommit -ne $sourceSha) { throw "PHASE2_EXPECTED_SHA_MISMATCH: actual=$sourceSha expected=$ExpectedSourceCommit" }
+$analysisSha = (& git rev-parse HEAD).Trim()
 $record = [ordered]@{
     verdict = 'PHASE2_CAUSAL_DIAGNOSTIC_CAPTURED'
-    commit = $sha
+    source_commit = $sourceSha
+    analysis_commit = $analysisSha
     expected_trials = $ExpectedTrials
     full_frame_coverage = $true
     trials = $matrix
@@ -204,7 +217,8 @@ $record | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $Eviden
 $report = @(
     '# P5 Phase 2 — deterministic causal diagnostic'
     ''
-    "Commit: $sha"
+    "Benchmark source commit: $sourceSha"
+    "Analysis tool commit: $analysisSha"
     'Status: PHASE2_CAUSAL_DIAGNOSTIC_CAPTURED (observation, not optimization).'
     ''
     '| Route | Profile | Focus missing % | Preview-covered focus missing % | Final regions | Coarse previews | Effect-pending p50 | Effect blocked | Worker p50 ms |'
@@ -219,4 +233,4 @@ foreach ($row in $matrix) {
 $report += ''
 $report += 'Interpret blocked-dispatch count as failed admission attempts, **not time spent waiting**. Work-stage milliseconds overlap other processes; no exclusive CPU attribution.'
 $report | Set-Content -LiteralPath (Join-Path $EvidenceDir 'causal-report.md') -Encoding UTF8
-Write-Host "P5_PHASE2_CAUSAL_ANALYSIS_PASS: trials=$($matrix.Count) sha=$sha"
+Write-Host "P5_PHASE2_CAUSAL_ANALYSIS_PASS: trials=$($matrix.Count) source=$sourceSha analyzer=$analysisSha"

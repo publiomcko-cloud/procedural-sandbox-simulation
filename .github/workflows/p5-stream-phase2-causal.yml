@@ -1,9 +1,7 @@
 name: P5 Phase 2 causal streaming diagnostic (DO NOT MERGE)
 
 on:
-  push:
-    branches:
-      - exp/p5-stream-phase2-causal
+  workflow_dispatch:
 
 concurrency:
   group: p5-phase2-causal-${{ github.ref }}

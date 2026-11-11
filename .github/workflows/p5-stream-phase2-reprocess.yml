@@ -1,0 +1,44 @@
+name: P5 Phase 2 reprocess preserved causal evidence
+
+on:
+  push:
+    branches:
+      - exp/p5-stream-phase2-causal
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  analyze-preserved-evidence:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Download the original sixteen validated trial traces without rerunning Godot
+        uses: actions/download-artifact@v4
+        with:
+          name: p5-phase2-causal-evidence-1
+          run-id: 43121465427
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}\p5-phase2-causal
+      - name: Re-aggregate with source commit provenance and ABBA group validation
+        shell: cmd
+        run: |
+          @echo off
+          powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\perf\analyze-p5-phase2-causal.ps1" -EvidenceDir "%RUNNER_TEMP%\p5-phase2-causal" -ExpectedFrames 720 -ExpectedTrials 16 -ExpectedSourceCommit "f43c0758cd7528710e458ab186f64358b1d8e4fe"
+          if errorlevel 1 exit /b 1
+      - name: Upload validated phase 2 causal report without overwriting original trace evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p5-phase2-reprocessed-causal
+          path: |
+            ${{ runner.temp }}\p5-phase2-causal\causal-analysis.json
+            ${{ runner.temp }}\p5-phase2-causal\causal-report.md
+          if-no-files-found: warn
+          retention-days: 14
