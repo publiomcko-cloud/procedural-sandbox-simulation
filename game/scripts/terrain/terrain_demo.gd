@@ -2577,6 +2577,111 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 	return {"ok": true, "reason": "ok", "task_id": task_id}
 
 
+## E2 derived coarse-first preview: always separate from terrain authority.
+func _coarse_preview_record_current(id: String, record: Dictionary) -> bool:
+	if _stream_profile != "adaptive-skip-coarse" or not loading_regions.has(id):
+		return false
+	var stage: Dictionary = loading_regions[id]
+	var state: RefCounted = stage["world_state"]
+	return CoarsePreviewPolicy.revision_matches(
+		stage, record, world_seed, int(state.generator_version),
+		int(state.brush_edits.revision),
+		int(object_stream.get_command_world_revision()),
+		focus_region_key, active_regions.has(id), global_rebuild_pending,
+		not _edit_transaction.is_empty(), int(state.brush_edits.get_edit_count()) > 0,
+		cave_section_enabled
+	)
+
+
+func _clear_coarse_preview(id: String, reason: String = "stale") -> bool:
+	if not _coarse_preview_nodes.has(id):
+		return false
+	var entry: Dictionary = _coarse_preview_nodes[id]
+	_coarse_preview_nodes.erase(id)
+	var node: MeshInstance3D = entry["node"]
+	if is_instance_valid(node):
+		node.queue_free()
+	if reason != "definitive":
+		_stream_window_coarse_discarded += 1
+		if _perf_trace_enabled:
+			var key: Vector2i = entry.get("region_key", Vector2i.ZERO)
+			PerformanceTrace.emit("terrain_region_coarse_discarded", {
+				"region": [key.x, key.y],
+				"stage_token": int(entry.get("stage_token", -1)),
+				"reason": reason,
+			})
+	return true
+
+
+func _process_coarse_previews() -> void:
+	# Revocation must also work while definitive effects are still pending.
+	for id_value in _coarse_preview_attempts.keys().duplicate():
+		var id: String = id_value
+		if not loading_regions.has(id) or int(loading_regions[id]["stage_token"]) != int(_coarse_preview_attempts[id]):
+			_coarse_preview_attempts.erase(id)
+	for id_value in _coarse_preview_nodes.keys().duplicate():
+		var id: String = id_value
+		var entry: Dictionary = _coarse_preview_nodes[id]
+		if not _coarse_preview_record_current(id, entry):
+			_clear_coarse_preview(id, "revision_or_residency_changed")
+	var completed: Array[int] = []
+	for task_id_value in _coarse_preview_jobs.keys():
+		var task_id := int(task_id_value)
+		if WorkerThreadPool.is_task_completed(task_id):
+			completed.append(task_id)
+	completed.sort()
+	# Bounded to one main-thread upload per frame, with a spike veto.
+	if not completed.is_empty() and _last_frame_ms < 20.0:
+		var task_id := completed[0]
+		WorkerThreadPool.wait_for_task_completion(task_id)
+		var record: Dictionary = _coarse_preview_jobs[task_id]
+		_coarse_preview_jobs.erase(task_id)
+		var id: String = record["stage_id"]
+		var job: RefCounted = record["job"]
+		var cpu: Dictionary = job.result
+		_stream_window_coarse_worker_usec += int(cpu.get("worker_usec", 0))
+		if cpu.get("valid", false) and _coarse_preview_record_current(id, record):
+			var started_usec := Time.get_ticks_usec()
+			var mesh: ArrayMesh = CoarsePreviewJob.mesh_from_cpu_data(cpu)
+			if mesh.get_surface_count() > 0:
+				var node := MeshInstance3D.new()
+				node.name = "E2Coarse_%s" % id.replace(":", "_").replace(",", "_")
+				node.mesh = mesh
+				node.material_override = terrain_mesh_template.material_override
+				node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				node.position = SpatialGrid.region_origin_world(record["region_key"])
+				terrain_chunks_root.add_child(node)
+				_coarse_preview_nodes[id] = {
+					"node": node,
+					"region_key": record["region_key"],
+					"stage_token": int(record["stage_token"]),
+					"seed": int(record["seed"]),
+					"generator_version": int(record["generator_version"]),
+					"edit_revision": int(record["edit_revision"]),
+					"effect_revision": int(record["effect_revision"]),
+				}
+				var publish_usec := Time.get_ticks_usec() - started_usec
+				_stream_window_coarse_publish_usec += publish_usec
+				_stream_window_coarse_published += 1
+				if _perf_trace_enabled:
+					var stage: Dictionary = loading_regions[id]
+					var key: Vector2i = record["region_key"]
+					PerformanceTrace.emit("terrain_region_coarse_visible", {
+						"region": [key.x, key.y],
+						"stage_token": int(record["stage_token"]),
+						"edit_revision": int(record["edit_revision"]),
+						"effect_revision": int(record["effect_revision"]),
+						"queue_to_coarse_usec": Time.get_ticks_usec() - int(stage["chunk_enqueued_usec"]),
+						"worker_usec": int(cpu.get("worker_usec", 0)),
+						"publish_usec": publish_usec,
+						"triangle_count": int(cpu.get("triangle_count", 0)),
+						"source": "derived_preview_not_authority",
+					})
+	if _coarse_preview_jobs.size() >= MAX_COARSE_PREVIEW_JOBS or _last_frame_ms >= 20.0 	or _last_process_work_ms >= 10.5:
+		return
+	_submit_coarse_preview_job()
+
+
 func _process_one_chunk_job() -> void:
 	_process_completed_mesh_jobs()
 	_dispatch_mesh_jobs()
