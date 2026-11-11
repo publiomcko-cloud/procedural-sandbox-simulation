@@ -877,7 +877,7 @@ func _stream_finish_frame() -> void:
 		_stream_window_work_over_16_ms += 1
 	_stream_window_dispatches += _mesh_dispatches_this_frame
 	_stream_window_uploads += _mesh_uploads_this_frame
-	if free_explore_enabled:
+	if free_explore_enabled and _last_f10_speed_mps > 0.01:
 		_stream_window_f10_frames += 1
 		_stream_window_f10_speed_peak_mps = maxf(
 			_stream_window_f10_speed_peak_mps, _last_f10_speed_mps
