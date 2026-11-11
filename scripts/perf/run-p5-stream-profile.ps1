@@ -51,13 +51,19 @@ try {
         "Finished: $(Get-Date -Format o)"
     )
 
+    # PowerShell 5.1 may write native output as UTF-16LE characters in
+    # a UTF-8 Tee-Object file. Strip interleaved NULs before JSON extraction.
+    $cleanLines = @(
+        Get-Content -LiteralPath $log |
+            ForEach-Object { $_ -replace '\x00', '' }
+    )
     $events = "$log.events.txt"
-    Get-Content -LiteralPath $log |
+    $cleanLines |
         Select-String -Pattern 'terrain_stream_(budget_window|budget_transition|profile)|terrain_mesh_snapshot|terrain_process_spike|terrain_region_publish|terrain_region_load_complete|environment_surface_cache_job|effect_prefetch_tick|p5_environment_visual_rebuild' |
         Set-Content -LiteralPath $events
 
     $windowRows = @(
-        Get-Content -LiteralPath $log |
+        $cleanLines |
             Select-String -SimpleMatch '"event":"terrain_stream_budget_window"' |
             ForEach-Object {
                 $raw = $_.Line
@@ -69,7 +75,7 @@ try {
             } | Where-Object { $null -ne $_ }
     )
     $regionLoadTimes = @(
-        Get-Content -LiteralPath $log |
+        $cleanLines |
             Select-String -SimpleMatch '"event":"terrain_region_load_complete"' |
             ForEach-Object {
                 $raw = $_.Line
