@@ -82,6 +82,8 @@ static func build(
 	var wet := PackedByteArray()
 	wet.resize(TILE_COUNT)
 	var seeds: Array[int] = []
+	var native_seed := PackedByteArray()
+	native_seed.resize(TILE_COUNT)
 	for z in range(TILES_Z):
 		for x in range(TILES_X):
 			var id := z * TILES_X + x
@@ -132,6 +134,7 @@ static func build(
 				)
 				if baseline_source:
 					seeds.append(id)
+					native_seed[id] = 1
 				else:
 					output["baseline_rejected_seeds"] = int(
 						output["baseline_rejected_seeds"]
@@ -147,8 +150,10 @@ static func build(
 		is_seed[id] = 1
 	var processed := PackedByteArray()
 	var admitted := PackedByteArray()
+	var trusted_export := PackedByteArray()
 	processed.resize(TILE_COUNT)
 	admitted.resize(TILE_COUNT)
+	trusted_export.resize(TILE_COUNT)
 	var admitted_components := 0
 	var isolated_components := 0
 	for start in range(TILE_COUNT):
@@ -158,6 +163,7 @@ static func build(
 		var component_tiles: Array[int] = []
 		processed[start] = 1
 		var seed_found := false
+		var native_found := false
 		var boundary_open := false
 		var head := 0
 		while head < queue.size():
@@ -166,6 +172,8 @@ static func build(
 			component_tiles.append(id)
 			if is_seed[id] != 0:
 				seed_found = true
+			if native_seed[id] != 0:
+				native_found = true
 			var x := id % TILES_X
 			var z := int(id / TILES_X)
 			if _open_boundary_wet_edge(x, z, heights, valid, threshold):
@@ -187,6 +195,10 @@ static func build(
 			admitted_components += 1
 			for tile_id in component_tiles:
 				admitted[tile_id] = 1
+				# Export only native-source-rooted edges: no circular
+				# mutual anchoring between two formerly valid neighbors.
+				if native_found:
+					trusted_export[tile_id] = 1
 		elif seed_found:
 			isolated_components += 1
 	# Report shared-edge coverage of admitted sea. A neighbor can use these
@@ -200,7 +212,7 @@ static func build(
 	}
 	for z in range(TILES_Z):
 		for x in range(TILES_X):
-			if admitted[z * TILES_X + x] == 0:
+			if trusted_export[z * TILES_X + x] == 0:
 				continue
 			if x == 0 and _shared_wet_edge(x, z, Vector2i(-1, 0), heights, valid, threshold):
 				var left: PackedByteArray = boundary_edges["west"]
