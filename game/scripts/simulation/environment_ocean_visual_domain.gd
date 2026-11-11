@@ -39,6 +39,10 @@ static func build(
 		"baseline_rejected_seeds": 0,
 		"ocean_seam_edges": 0, "source_ocean_cells": 0,
 		"ocean_neighbor_anchor_tiles": 0,
+		"unadmitted_wet_tiles": 0,
+		"unadmitted_boundary_wet_tiles": 0,
+		"components_missing_source": 0,
+		"components_missing_boundary": 0,
 		"ocean_boundary_edges": {},
 	}
 	if region_key.y < OCEAN_START_REGION_Z:
@@ -201,6 +205,9 @@ static func build(
 					trusted_export[tile_id] = 1
 		elif seed_found:
 			isolated_components += 1
+			output["components_missing_boundary"] = int(output["components_missing_boundary"]) + 1
+		else:
+			output["components_missing_source"] = int(output["components_missing_source"]) + 1
 	# Report shared-edge coverage of admitted sea. A neighbor can use these
 	# only while this source region's SDF and environmental tokens remain
 	# current, never while an old visual mesh is retained during an edit.
@@ -231,6 +238,14 @@ static func build(
 				down[x] = 1
 				boundary_edges["south"] = down
 	output["ocean_boundary_edges"] = boundary_edges
+	for z in range(TILES_Z):
+		for x in range(TILES_X):
+			var tile_id := z * TILES_X + x
+			if wet[tile_id] == 0 or admitted[tile_id] != 0:
+				continue
+			output["unadmitted_wet_tiles"] = int(output["unadmitted_wet_tiles"]) + 1
+			if (x == 0 or x == TILES_X - 1 or z == 0 or z == TILES_Z - 1) and _open_boundary_wet_edge(x, z, heights, valid, threshold):
+				output["unadmitted_boundary_wet_tiles"] = int(output["unadmitted_boundary_wet_tiles"]) + 1
 	var vertices := PackedVector3Array()
 	var colors := PackedColorArray()
 	var origin_x := float(region_key.x) * float(TILES_X)
