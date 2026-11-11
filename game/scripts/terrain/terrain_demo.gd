@@ -1903,7 +1903,8 @@ func _reconcile_region_window(force: bool = false) -> void:
 	var active_before := active_regions.size()
 	var loading_before := loading_regions.size()
 	_update_focus_key()
-	if not force and focus_region_key == _last_reconciled_focus \
+	var source_window_changed := force or focus_region_key != _last_reconciled_focus
+	if not source_window_changed \
 	and _last_reconciled_lookahead_signature == _lookahead_stage_signature:
 		return
 	_last_reconciled_focus = focus_region_key
@@ -1915,7 +1916,13 @@ func _reconcile_region_window(force: bool = false) -> void:
 			if _contains_region(retained, ahead_region) \
 			and not _contains_region(desired, ahead_region):
 				desired.append(ahead_region)
-	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
+	# A changed predictive strip does not change the retained 5x5 or
+	# protected 9x9 source footprint. Reordering stages must not reissue
+	# an expensive full object-source window reconciliation each time F10
+	# crosses its lookahead horizon.
+	if source_window_changed \
+	and terrain_effect_runtime != null \
+	and bool(terrain_effect_runtime.get("initialized")):
 		var effect_window: Dictionary = terrain_effect_runtime.update_resident_target_regions(
 			retained
 		)
