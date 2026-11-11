@@ -170,6 +170,10 @@ try {
         $dependencyReadyDispatches = 0
         $dependencyTargetSamples = 0
         $dependencyReadySamples = 0
+        $dependencySchedulerUsec = 0
+        $dependencySchedulerRefreshes = 0
+        $dependencySchedulerCacheHits = 0
+        $dependencyStageRebuilds = 0
         foreach ($w in $windowRows) {
             $predictiveStages += [int]$w.f10_predictive_stages_started
             $f10Frames += [int]$w.f10_movement_frames
@@ -177,6 +181,10 @@ try {
             $f10RegionGaps += [int]$w.f10_missing_regions_in_window_total
             $f10Distance += [double]$w.f10_distance_m
             $f10PeakSpeed = [Math]::Max($f10PeakSpeed, [double]$w.f10_peak_speed_mps)
+            $dependencySchedulerUsec += [double]$w.dependency_scheduler_usec
+            $dependencySchedulerRefreshes += [int]$w.dependency_scheduler_refreshes
+            $dependencySchedulerCacheHits += [int]$w.dependency_scheduler_cache_hit_frames
+            $dependencyStageRebuilds += [int]$w.dependency_scheduler_stage_rebuilds
             $dependencyReorders += [int]$w.dependency_prefetch_reorders
             $dependencyReadyDispatches += [int]$w.dependency_ready_mesh_dispatches
             $dependencyTargetSamples += [int]$w.dependency_target_samples
@@ -213,6 +221,10 @@ try {
                 [Math]::Round(100.0 * $unpublishedSamples / $requestedSamples, 2)
             } else { $null })
             terrain_region_samples = [int]$requestedSamples
+            dependency_scheduler_avg_cpu_ms = [Math]::Round($dependencySchedulerUsec / [Math]::Max(1.0, $totalFrames) / 1000.0, 4)
+            dependency_scheduler_refreshes = [int]$dependencySchedulerRefreshes
+            dependency_scheduler_stage_rebuilds = [int]$dependencyStageRebuilds
+            dependency_scheduler_cached_frame_pct = [Math]::Round(100.0 * $dependencySchedulerCacheHits / [Math]::Max(1.0, $totalFrames), 2)
             dependency_prefetch_reorders = [int]$dependencyReorders
             dependency_ready_mesh_dispatches = [int]$dependencyReadyDispatches
             dependency_ready_target_pct = $(if ($dependencyTargetSamples -gt 0) {
