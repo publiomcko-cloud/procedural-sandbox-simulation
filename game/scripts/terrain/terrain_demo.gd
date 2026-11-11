@@ -182,6 +182,10 @@ var _stream_window_skipped_load_stages := 0
 var _stream_window_skipped_then_dispatched := 0
 var _stream_window_skip_budget_exhausted := 0
 var _last_f10_speed_mps := 0.0
+var _lookahead_stage_targets: Array[Vector2i] = []
+var _lookahead_stage_signature := ""
+var _last_reconciled_lookahead_signature := ""
+var _lookahead_stage_begin_total := 0
 var _stream_window_f10_frames := 0
 var _stream_window_f10_focus_missing_frames := 0
 var _stream_window_f10_region_gaps := 0
@@ -981,21 +985,33 @@ func _process(delta: float) -> void:
 		if free_explore_enabled else 0.0
 	)
 	_update_focus_key()
-	_reconcile_region_window()
-	# R3: reprioritize only the existing effect-source queue; do not expand
-	# residency or dispatch additional jobs. Cap lead to two regions.
+	# R3's speculative stage strip is derived entirely from the F10 camera.
+	# It is never authoritative, never extends beyond the existing retained 5x5
+	# terrain window, and remains lower-priority than the visible 3x3.
+	var mapped_ahead: Dictionary = {}
 	if _stream_profile == "adaptive-skip-lookahead" \
-	and free_explore_enabled and _last_f10_speed_mps > 0.01 \
-	and terrain_effect_runtime != null \
-	and bool(terrain_effect_runtime.get("initialized")):
+	and free_explore_enabled and _last_f10_speed_mps > 0.01:
 		var ahead_position := camera.global_position + (
 			f10_motion / maxf(delta, 0.000001)
 		) * StreamLookaheadPolicy.LOOKAHEAD_SECONDS
-		var mapped_ahead: Dictionary = SpatialGrid.world_to_region_local(ahead_position)
+		mapped_ahead = SpatialGrid.world_to_region_local(ahead_position)
 		if mapped_ahead.get("valid", false):
-			terrain_effect_runtime.prioritize_prefetch_for_motion(
+			_lookahead_stage_targets = StreamLookaheadPolicy.forward_stage_targets(
 				focus_region_key, mapped_ahead["region_key"]
 			)
+			_lookahead_stage_signature = str(_lookahead_stage_targets)
+	elif not free_explore_enabled or _stream_profile != "adaptive-skip-lookahead":
+		_lookahead_stage_targets.clear()
+		_lookahead_stage_signature = ""
+	_reconcile_region_window()
+	# Effect projection prefetch reuses the same protected 9x9 source halo and
+	# respects urgent prerequisites queued by visible mesh work.
+	if not mapped_ahead.is_empty() and mapped_ahead.get("valid", false) \
+	and terrain_effect_runtime != null \
+	and bool(terrain_effect_runtime.get("initialized")):
+		terrain_effect_runtime.prioritize_prefetch_for_motion(
+			focus_region_key, mapped_ahead["region_key"]
+		)
 	_update_lod_selection()
 	if _checkpoint_task_id >= 0 and (global_rebuild_pending or not loading_regions.is_empty()):
 		_checkpoint_overlap_observed = true
@@ -1658,6 +1674,9 @@ func _set_free_explore_enabled(enabled: bool) -> void:
 	if free_explore_enabled == enabled or not is_instance_valid(camera):
 		return
 	free_explore_enabled = enabled
+	if not enabled:
+		_lookahead_stage_targets.clear()
+		_lookahead_stage_signature = ""
 	orbit_dragging = false
 	_lod_selection_dirty = true
 	if enabled:
@@ -1881,11 +1900,18 @@ func _reconcile_region_window(force: bool = false) -> void:
 	var active_before := active_regions.size()
 	var loading_before := loading_regions.size()
 	_update_focus_key()
-	if not force and focus_region_key == _last_reconciled_focus:
+	if not force and focus_region_key == _last_reconciled_focus \
+	and _last_reconciled_lookahead_signature == _lookahead_stage_signature:
 		return
 	_last_reconciled_focus = focus_region_key
+	_last_reconciled_lookahead_signature = _lookahead_stage_signature
 	var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
 	var retained := _region_keys_within_radius(focus_region_key, UNLOAD_RADIUS)
+	if _stream_profile == "adaptive-skip-lookahead" and free_explore_enabled:
+		for ahead_region in _lookahead_stage_targets:
+			if _contains_region(retained, ahead_region) \
+			and not _contains_region(desired, ahead_region):
+				desired.append(ahead_region)
 	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
 		var effect_window: Dictionary = terrain_effect_runtime.update_resident_target_regions(
 			retained
@@ -1924,6 +1950,12 @@ func _reconcile_region_window(force: bool = false) -> void:
 					_add_edit_transaction_region(key)
 				else:
 					_begin_region_stage(key, "load", ChunkGrid.all_coordinates())
+					if _stream_profile == "adaptive-skip-lookahead" \
+					and _contains_region(_lookahead_stage_targets, key) \
+					and not _contains_region(
+						_region_keys_within_radius(focus_region_key, REQUEST_RADIUS), key
+					):
+						_lookahead_stage_begin_total += 1
 		for id_value in loading_regions.keys().duplicate():
 			var id: String = id_value
 			var stage: Dictionary = loading_regions[id]
@@ -1943,6 +1975,8 @@ func _reconcile_region_window(force: bool = false) -> void:
 			"loading_after": loading_regions.size(),
 			"mesh_jobs_in_flight": _mesh_jobs.size(),
 			"effect_prefetch_pending": int(terrain_effect_runtime.get_prefetch_pending_count()) if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")) else 0,
+			"f10_predictive_stage_targets": _lookahead_stage_targets.size() if _stream_profile == "adaptive-skip-lookahead" else 0,
+			"f10_predictive_stage_begins_total": _lookahead_stage_begin_total,
 		})
 
 
