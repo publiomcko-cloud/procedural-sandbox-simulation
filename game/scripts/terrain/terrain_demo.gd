@@ -197,6 +197,16 @@ var _stream_window_f10_distance_m := 0.0
 var _stream_window_region_samples := 0
 var _stream_window_unpublished_region_samples := 0
 var _dependency_missing_source_counts: Dictionary = {}
+# E1.1 scheduling work is invalidated only by staged-demand/focus changes or
+# the effect runtime's monotonic projection-readiness epoch.
+var _dependency_stage_dirty := true
+var _dependency_last_source_epoch := -1
+var _dependency_stage_targets: Array[Vector2i] = []
+var _dependency_cached_readiness: Dictionary = {}
+var _stream_window_dependency_scheduler_usec := 0
+var _stream_window_dependency_scheduler_refreshes := 0
+var _stream_window_dependency_scheduler_cache_hit_frames := 0
+var _stream_window_dependency_stage_rebuilds := 0
 var _stream_window_dependency_reorders := 0
 var _stream_window_dependency_ready_dispatches := 0
 var _stream_window_dependency_target_samples := 0
@@ -943,6 +953,10 @@ func _stream_finish_frame() -> void:
 		"dependency_ready_mesh_dispatches": _stream_window_dependency_ready_dispatches,
 		"dependency_target_samples": _stream_window_dependency_target_samples,
 		"dependency_ready_target_samples": _stream_window_dependency_ready_samples,
+		"dependency_scheduler_usec": _stream_window_dependency_scheduler_usec,
+		"dependency_scheduler_refreshes": _stream_window_dependency_scheduler_refreshes,
+		"dependency_scheduler_cache_hit_frames": _stream_window_dependency_scheduler_cache_hit_frames,
+		"dependency_scheduler_stage_rebuilds": _stream_window_dependency_stage_rebuilds,
 	})
 	_stream_window_started_usec = now
 	_stream_window_frames = 0
@@ -973,6 +987,10 @@ func _stream_finish_frame() -> void:
 	_stream_window_dependency_ready_dispatches = 0
 	_stream_window_dependency_target_samples = 0
 	_stream_window_dependency_ready_samples = 0
+	_stream_window_dependency_scheduler_usec = 0
+	_stream_window_dependency_scheduler_refreshes = 0
+	_stream_window_dependency_scheduler_cache_hit_frames = 0
+	_stream_window_dependency_stage_rebuilds = 0
 
 
 func _process(delta: float) -> void:
@@ -1051,18 +1069,36 @@ func _process(delta: float) -> void:
 	var stream_stage_started_usec := Time.get_ticks_usec()
 	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
 		if _stream_profile == "adaptive-skip-dependency":
-			# E1 sorts only already-required prefetch sources. The authoritative
-			# source set, worker limits and stage tokens remain unchanged.
-			var targets := StreamDependencyPolicy.stage_targets(loading_regions, focus_region_key)
-			var prioritization: Dictionary = terrain_effect_runtime.prioritize_prefetch_for_dependency(
-				targets, focus_region_key
-			)
-			_dependency_missing_source_counts = prioritization.get("missing_source_counts", {})
+			var source_epoch := terrain_effect_runtime.get_dependency_source_epoch()
+			if _dependency_stage_dirty or source_epoch != _dependency_last_source_epoch:
+				var scheduler_started_usec := Time.get_ticks_usec()
+				if _dependency_stage_dirty:
+					_dependency_stage_targets = StreamDependencyPolicy.stage_targets(
+						loading_regions, focus_region_key
+					)
+					_stream_window_dependency_stage_rebuilds += 1
+				_dependency_stage_dirty = false
+				var prioritization: Dictionary = terrain_effect_runtime.prioritize_prefetch_for_dependency(
+					_dependency_stage_targets, focus_region_key
+				)
+				_dependency_cached_readiness = prioritization
+				_dependency_missing_source_counts = prioritization.get("missing_source_counts", {})
+				_dependency_last_source_epoch = terrain_effect_runtime.get_dependency_source_epoch()
+				if _perf_trace_enabled:
+					if prioritization.get("changed", false):
+						_stream_window_dependency_reorders += 1
+					_stream_window_dependency_scheduler_refreshes += 1
+					_stream_window_dependency_scheduler_usec += Time.get_ticks_usec() - scheduler_started_usec
+			elif _perf_trace_enabled:
+				_stream_window_dependency_scheduler_cache_hit_frames += 1
 			if _perf_trace_enabled:
-				if prioritization.get("changed", false):
-					_stream_window_dependency_reorders += 1
-				_stream_window_dependency_target_samples += int(prioritization.get("target_count", 0))
-				_stream_window_dependency_ready_samples += int(prioritization.get("ready_targets", 0))
+				# Keep previous per-frame denominator for comparable A/B telemetry.
+				_stream_window_dependency_target_samples += int(
+					_dependency_cached_readiness.get("target_count", 0)
+				)
+				_stream_window_dependency_ready_samples += int(
+					_dependency_cached_readiness.get("ready_targets", 0)
+				)
 		else:
 			_dependency_missing_source_counts.clear()
 		var prefetch_result: Dictionary = terrain_effect_runtime.process_prefetch_step(1)
@@ -1952,6 +1988,7 @@ func _reconcile_region_window(force: bool = false) -> void:
 		return
 	_last_reconciled_focus = focus_region_key
 	_last_reconciled_lookahead_signature = _lookahead_stage_signature
+	_dependency_stage_dirty = true
 	var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
 	var retained := _region_keys_within_radius(focus_region_key, UNLOAD_RADIUS)
 	if _stream_profile == "adaptive-skip-lookahead" and free_explore_enabled:
@@ -1989,6 +2026,7 @@ func _reconcile_region_window(force: bool = false) -> void:
 			var stage: Dictionary = loading_regions[id]
 			var key: Vector2i = stage["region_key"]
 			if not retained_ids.has(id) or (stage["purpose"] == "load" and not _contains_region(desired, key)):
+				_dependency_stage_dirty = true
 				loading_regions.erase(id)
 				if not _edit_transaction.is_empty() and (_edit_transaction["target_ids"] as Array).has(id):
 					_edit_transaction["target_ids"].erase(id)
@@ -2061,6 +2099,7 @@ func _add_edit_transaction_region(region_key: Vector2i) -> void:
 		_start_edit_transaction_attempt()
 		return
 	if not (_edit_transaction["target_ids"] as Array).has(id):
+		_dependency_stage_dirty = true
 		loading_regions.erase(id)
 		_begin_region_stage(region_key, "edit_transaction", ChunkGrid.all_coordinates())
 		_edit_transaction["target_ids"].append(id)
@@ -2103,6 +2142,7 @@ func _ensure_full_rebuild_targets(desired: Array[Vector2i], retained_ids: Dictio
 	if target_ids == _full_rebuild_target_ids:
 		return
 	_full_rebuild_target_ids = target_ids
+	_dependency_stage_dirty = true
 	loading_regions.clear()
 	for key in target_keys:
 		_begin_region_stage(key, "full", ChunkGrid.all_coordinates())
@@ -2134,6 +2174,7 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 		var chunk_id: String = ChunkGrid.stable_id(region_key, coordinate)
 		var current_lod := int(_published_lod_by_chunk.get(chunk_id, 0))
 		lod_by_coordinate[coordinate] = _desired_lod_for_chunk(region_key, coordinate, current_lod)
+	_dependency_stage_dirty = true
 	loading_regions[id] = {
 		"region_key": region_key,
 		"world_state": state,
@@ -3014,6 +3055,8 @@ func _dispatch_mesh_jobs() -> void:
 		if int(stage.get("first_dispatch_usec", 0)) == 0:
 			stage["first_dispatch_usec"] = Time.get_ticks_usec()
 		stage["submit_index"] = int(stage["submit_index"]) + 1
+		if int(stage["submit_index"]) >= (stage["chunk_coordinates"] as Array).size():
+			_dependency_stage_dirty = true
 		stage["pending_count"] = int(stage["pending_count"]) + 1
 		loading_regions[id] = stage
 		_mesh_dispatches_this_frame += 1
@@ -3114,6 +3157,7 @@ func _complete_region_stage(id: String) -> void:
 	if stage["purpose"] == "edit_transaction":
 		_try_commit_edit_transaction()
 		return
+	_dependency_stage_dirty = true
 	loading_regions.erase(id)
 	if stage["purpose"] == "partial":
 		if _publish_partial_stage(id, stage):
@@ -3228,6 +3272,7 @@ func _try_commit_global_rebuild() -> void:
 	for id in _full_rebuild_target_ids:
 		_clear_stream_error(id)
 	_full_rebuild_target_ids.clear()
+	_dependency_stage_dirty = true
 	loading_regions.clear()
 	_edit_transaction = {}
 	var publish_started_usec := Time.get_ticks_usec()
@@ -3563,6 +3608,7 @@ func _unload_region(id: String) -> void:
 	object_stream.unload_region(entry["region_key"])
 	if _edit_transaction.has("target_ids") and (_edit_transaction["target_ids"] as Array).has(id):
 		_edit_transaction["target_ids"].erase(id)
+		_dependency_stage_dirty = true
 		loading_regions.erase(id)
 	for chunk_id in entry["chunk_nodes"]:
 		_release_chunk_node(chunk_id, entry["chunk_nodes"][chunk_id])
@@ -3575,6 +3621,7 @@ func _supersede_region_stage(id: String) -> void:
 	if not loading_regions.has(id):
 		return
 	var stale_stage: Dictionary = loading_regions[id]
+	_dependency_stage_dirty = true
 	loading_regions.erase(id)
 	_superseded_stage_total += 1
 	var region_key: Vector2i = stale_stage["region_key"]
@@ -3586,6 +3633,7 @@ func _supersede_region_stage(id: String) -> void:
 	elif global_rebuild_pending:
 		# Every full-rebuild snapshot is revision-pinned. Replace the complete staged
 		# set together so no mixture of revisions can be published.
+		_dependency_stage_dirty = true
 		loading_regions.clear()
 		_full_rebuild_target_ids.clear()
 		var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
@@ -3624,6 +3672,7 @@ func _clear_stream_error(id: String) -> void:
 func _fail_region_stage(id: String, message: String) -> void:
 	_record_stream_error(id, message)
 	var failed_stage: Dictionary = loading_regions.get(id, {})
+	_dependency_stage_dirty = true
 	loading_regions.erase(id)
 	if not _edit_transaction.is_empty() and (_edit_transaction["target_ids"] as Array).has(id):
 		_retry_edit_transaction(message)
@@ -3636,10 +3685,12 @@ func _fail_region_stage(id: String, message: String) -> void:
 		if _global_rebuild_retry_count <= MAX_STAGE_RETRIES:
 			last_stream_error = "%s; full rebuild retry %d/%d" % [message, _global_rebuild_retry_count, MAX_STAGE_RETRIES]
 			_stream_errors_by_region[id if id != "" else "_global"] = last_stream_error
+			_dependency_stage_dirty = true
 			loading_regions.clear()
 			for target_id in _full_rebuild_target_ids:
 				_begin_region_stage(_region_key_from_id(target_id), "full", ChunkGrid.all_coordinates())
 		else:
+			_dependency_stage_dirty = true
 			loading_regions.clear()
 			global_rebuild_pending = false
 			global_rebuild_reason = ""
@@ -3718,6 +3769,7 @@ func _start_global_rebuild(operation_name: String) -> void:
 	_edit_transaction = {}
 	global_rebuild_pending = true
 	global_rebuild_reason = operation_name
+	_dependency_stage_dirty = true
 	loading_regions.clear()
 	_full_rebuild_target_ids.clear()
 	var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
@@ -3889,6 +3941,7 @@ func _start_edit_transaction_attempt() -> void:
 		var chunks: Array[Vector2i] = target["chunks"]
 		if not active_regions.has(id):
 			chunks = ChunkGrid.all_coordinates()
+		_dependency_stage_dirty = true
 		loading_regions.erase(id)
 		_begin_region_stage(region_key, "edit_transaction", chunks)
 		target_ids.append(id)
@@ -3955,6 +4008,7 @@ func _try_commit_edit_transaction() -> void:
 				stage.get("vertex_count_by_coordinate", {}),
 				stage.get("triangle_count_by_coordinate", {})
 			)
+		_dependency_stage_dirty = true
 		loading_regions.erase(id)
 	_mesh_publish_usec_samples.append(Time.get_ticks_usec() - publish_started_usec)
 	var committed_sequence: int = _edit_transaction["operation_sequence"]
@@ -4022,6 +4076,7 @@ func _retry_edit_transaction(failure_message: String) -> void:
 	for id_value in exhausted_target_ids:
 		var id: String = id_value
 		if loading_regions.has(id) and loading_regions[id]["purpose"] == "edit_transaction":
+			_dependency_stage_dirty = true
 			loading_regions.erase(id)
 	_edit_transaction["stage_state"] = "failed_pending_retry"
 	_edit_transaction["target_ids"] = []
