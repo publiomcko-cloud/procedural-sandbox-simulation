@@ -21,10 +21,16 @@ const EntityStateContract := preload("res://scripts/objects/procedural_object_st
 const TerrainEffectRuntime := preload("res://scripts/terrain/terrain_object_effect_runtime.gd")
 const MaterialEnvironmentDomainScript := preload("res://scripts/simulation/material_environment_domain.gd")
 const EnvironmentClimateDomainScript := preload("res://scripts/simulation/environment_climate_domain.gd")
+const EnvironmentHydrologyDomainScript := preload("res://scripts/simulation/environment_hydrology_domain.gd")
 const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/environment_surface_cache_job.gd")
+const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
+const EnvironmentStartupLocation := preload("res://scripts/simulation/environment_startup_location.gd")
 const SimulationRuntimeStoreScript := preload("res://scripts/simulation/simulation_runtime_store.gd")
 const SimulationRuntimeScript := preload("res://scripts/simulation/simulation_runtime.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
+const StreamBudgetPolicy := preload("res://scripts/terrain/terrain_stream_budget_policy.gd")
+const StreamDispatchSelector := preload("res://scripts/terrain/terrain_stream_dispatch_selector.gd")
+const StreamLookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -36,8 +42,11 @@ const MAX_MESH_JOB_DISPATCHES_PER_FRAME := 1
 const MESH_SNAPSHOT_FRAME_BUDGET_USEC := 3500
 const MAX_MESH_UPLOADS_PER_FRAME := 4
 const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
+const STREAM_BUDGET_TRACE_INTERVAL_USEC := 1_000_000
 const MAX_SURFACE_CACHE_JOBS_IN_FLIGHT := 2
 const MAX_SURFACE_CACHE_DISPATCHES_PER_FRAME := 1
+const SURFACE_CACHE_RETRY_BASE_USEC := 250_000
+const SURFACE_CACHE_RETRY_MAX_USEC := 8_000_000
 const MAX_BUFFERED_BRUSH_REQUESTS := 64
 const EDIT_TRACE_DEFAULT_ENABLED := false
 const DIAGNOSTICS_REFRESH_INTERVAL := 0.25
@@ -102,11 +111,20 @@ var terrain_effect_runtime: RefCounted
 var _terrain_effect_status := "Terrain-object effects unavailable"
 var _material_content_domain: RefCounted
 var _climate_content_domain: RefCounted
+var _environment_visual
+var _startup_location_status := ""
+var _start_ocean_probe_enabled := false
+var _start_ocean_probe_elapsed := 0.0
+var _start_ocean_probe_samples := 0
 var _simulation_material_profile_id := ""
 var _simulation_climate_profile_id := ""
 var _surface_cache_pending: Dictionary = {}
 var _surface_cache_jobs: Dictionary = {}
 var _surface_cache_job_by_region: Dictionary = {}
+var _surface_cache_retry_after_usec: Dictionary = {}
+var _surface_cache_retry_counts: Dictionary = {}
+var _surface_cache_repair_cursor := 0
+var _surface_cache_visual_install_failures_total := 0
 var _surface_cache_last_effect_revision := -1
 var _surface_cache_dispatches_this_frame := 0
 var _surface_cache_publications_total := 0
@@ -143,6 +161,37 @@ var _lod_selection_dirty := true
 var _edit_trace_enabled := EDIT_TRACE_DEFAULT_ENABLED
 var _perf_trace_enabled := false
 var _last_region_publish_profile: Dictionary = {}
+# The default streaming path remains unchanged; adaptive is opt-in for A/B.
+var _stream_profile := "baseline"
+var _stream_budget_state: Dictionary = {"dispatch_limit": 1}
+var _stream_window_started_usec := 0
+var _stream_window_frames := 0
+var _stream_window_boost_frames := 0
+var _stream_window_frame_ms_sum := 0.0
+var _stream_window_frame_ms_peak := 0.0
+var _stream_window_frames_over_20_ms := 0
+var _stream_window_frames_over_33_ms := 0
+var _stream_window_work_over_16_ms := 0
+var _stream_window_work_ms_sum := 0.0
+var _stream_window_work_ms_peak := 0.0
+var _stream_window_dispatches := 0
+var _stream_window_uploads := 0
+var _stream_window_stage_usec: Dictionary = {}
+var _stream_window_dispatch_blockers: Dictionary = {}
+var _stream_window_skipped_load_stages := 0
+var _stream_window_skipped_then_dispatched := 0
+var _stream_window_skip_budget_exhausted := 0
+var _last_f10_speed_mps := 0.0
+var _lookahead_stage_targets: Array[Vector2i] = []
+var _lookahead_stage_signature := ""
+var _last_reconciled_lookahead_signature := ""
+var _lookahead_stage_begin_total := 0
+var _stream_window_lookahead_stages := 0
+var _stream_window_f10_frames := 0
+var _stream_window_f10_focus_missing_frames := 0
+var _stream_window_f10_region_gaps := 0
+var _stream_window_f10_speed_peak_mps := 0.0
+var _stream_window_f10_distance_m := 0.0
 
 var selected_brush_mode: int = BrushEditState.Mode.CARVE
 var last_brush_result := "Ready"
@@ -233,6 +282,30 @@ func _ready() -> void:
 		MIN_MESH_JOBS_IN_FLIGHT,
 		MAX_MESH_JOBS_IN_FLIGHT_HARD
 	)
+	var stream_profile_env := OS.get_environment("SANDBOX_STREAM_PROFILE")
+	var stream_profile_args := OS.get_cmdline_user_args()
+	_stream_profile = StreamBudgetPolicy.resolve_profile(
+		stream_profile_env, stream_profile_args
+	)
+	var stream_profile_requested := stream_profile_env.strip_edges().to_lower()
+	for argument in stream_profile_args:
+		if argument.begins_with("--stream-profile="):
+			stream_profile_requested = argument.trim_prefix("--stream-profile=").strip_edges().to_lower()
+	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip"]:
+		push_warning("Unknown stream profile; using baseline")
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("terrain_stream_profile", {
+			"profile": _stream_profile,
+			"requested_profile": stream_profile_requested,
+			"profile_mismatch": stream_profile_requested != "" and stream_profile_requested != _stream_profile,
+			"mesh_dispatch_baseline": MAX_MESH_JOB_DISPATCHES_PER_FRAME,
+			"mesh_dispatch_adaptive_max": StreamBudgetPolicy.ADAPTIVE_DISPATCHES,
+			"f10_lookahead_seconds": StreamLookaheadPolicy.LOOKAHEAD_SECONDS if _stream_profile == "adaptive-skip-lookahead" else 0.0,
+			"mesh_jobs_in_flight_limit": _mesh_job_limit,
+			"mesh_upload_limit": MAX_MESH_UPLOADS_PER_FRAME,
+			"snapshot_budget_usec": MESH_SNAPSHOT_FRAME_BUDGET_USEC,
+			"upload_budget_usec": MESH_UPLOAD_FRAME_BUDGET_USEC,
+		})
 	_configure_preedit_arguments()
 	_edit_trace_enabled = EDIT_TRACE_DEFAULT_ENABLED or OS.get_environment("SANDBOX_EDIT_TRACE") == "1"
 	for argument in OS.get_cmdline_user_args():
@@ -286,16 +359,29 @@ func _ready() -> void:
 		elif saved_world.get("legacy_available", false):
 			_persistence_status = "Schema-1 terrain save detected and preserved; choose a new v2 world explicitly (no migration/import)"
 
+	_apply_startup_location()
 	_material_content_domain = MaterialEnvironmentDomainScript.new()
 	_climate_content_domain = EnvironmentClimateDomainScript.new()
 	var material_handlers: Array[RefCounted] = [
 		_material_content_domain.create_content_handler(),
 		_climate_content_domain.create_content_handler(),
 	]
+	# The playable scene opts into the bundled climate preset. Generic P4
+	# consumers keep their historical first-party-only discovery contract.
+	var playable_roots: Array[String] = object_package_roots_override.duplicate()
+	if playable_roots.is_empty():
+		var mod_root := ProjectSettings.globalize_path("user://mods")
+		var root_created := DirAccess.make_dir_recursive_absolute(mod_root)
+		if root_created == OK or root_created == ERR_ALREADY_EXISTS:
+			playable_roots = [
+				"res://mods/first-party",
+				"res://mods/environment-presets",
+				"user://mods",
+			]
 	var object_initialization: Dictionary = object_stream.initialize(
 		world_seed,
 		world_id,
-		object_package_roots_override,
+		playable_roots,
 		object_state_directory_override,
 		material_handlers
 	)
@@ -320,8 +406,19 @@ func _ready() -> void:
 		terrain_effect_runtime = null
 		_terrain_effect_status = "Terrain-object effects unavailable (object stream unavailable)"
 	_restore_simulation_for_terrain_generation(_checkpoint_generation)
+	_environment_visual = EnvironmentVisualScript.new()
+	_environment_visual.name = "EnvironmentVisuals"
+	add_child(_environment_visual)
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--p5-water-debug="):
+			var diagnostic_mode := argument.trim_prefix("--p5-water-debug=")
+			if _environment_visual.set_water_debug_mode(diagnostic_mode):
+				print("P5_WATER_DEBUG_MODE: %s" % diagnostic_mode)
+			else:
+				push_warning("P5_WATER_DEBUG_INVALID: %s (normal mode retained)" % diagnostic_mode)
 	if not _simulation_persistence_blocked:
 		_configure_simulation_streaming()
+	_configure_environment_visual()
 	_create_placement_target_marker()
 	terrain_mesh_template.mesh = null
 	terrain_mesh_template.visible = false
@@ -329,6 +426,95 @@ func _ready() -> void:
 	_update_camera()
 	_reconcile_region_window(true)
 	_update_status()
+
+
+func _apply_startup_location() -> void:
+	var selection: Dictionary = EnvironmentStartupLocation.select_from_args(
+		OS.get_cmdline_user_args(), world_seed
+	)
+	if not selection.get("ok", false):
+		_startup_location_status = "START_LOCATION_INVALID: %s (default focus retained)" % selection.get("reason", "unknown")
+		push_warning(_startup_location_status)
+		print(_startup_location_status)
+		return
+	if String(selection.get("mode", "default")) == "default":
+		return
+	orbit_target = selection["target"]
+	var start_region: Vector2i = selection["region"]
+	_startup_location_status = (
+		"P5_START_LOCATION: mode=%s region=(%d,%d) world_target=(%.2f,%.2f,%.2f) "
+		+ "base_sdf_ocean_cells=%d seed=%d"
+	) % [
+		String(selection["mode"]), start_region.x, start_region.y,
+		orbit_target.x, orbit_target.y, orbit_target.z,
+		int(selection.get("candidate_water_cells", -1)), world_seed
+	]
+	print(_startup_location_status)
+	if String(selection["mode"]) == "ocean":
+		_start_ocean_probe_enabled = true
+		print("P5_START_WATER_NOTE: base SDF eligibility only; live water requires hydrology binding and current terrain cache")
+
+
+func _probe_start_ocean_visual(delta: float) -> void:
+	if _start_ocean_probe_samples >= 30:
+		_start_ocean_probe_enabled = false
+		return
+	_start_ocean_probe_elapsed += maxf(0.0, delta)
+	if _start_ocean_probe_elapsed < 2.0:
+		return
+	_start_ocean_probe_elapsed = 0.0
+	_start_ocean_probe_samples += 1
+	var profile_count := -1
+	if is_instance_valid(object_stream) and object_stream.registry != null:
+		profile_count = object_stream.registry.get_content_record_ids(
+			EnvironmentClimateDomainScript.PROFILE_TYPE
+		).size()
+	var climate_enabled := false
+	var hydrology_enabled := false
+	var environmental_state: Dictionary = {}
+	var surface_cache: Dictionary = {}
+	var scope_id := _surface_cache_scope_id(focus_region_key)
+	if is_instance_valid(simulation_runtime) and simulation_runtime.initialized:
+		climate_enabled = simulation_runtime.has_environment_climate()
+		hydrology_enabled = simulation_runtime.has_environment_hydrology()
+		environmental_state = simulation_runtime.get_environment_scope(scope_id)
+		surface_cache = simulation_runtime.get_environment_surface_cache(scope_id)
+	var ocean_cells := 0
+	var kinds: PackedByteArray = environmental_state.get("reservoir_kind", PackedByteArray())
+	for kind in kinds:
+		if int(kind) == 2:
+			ocean_cells += 1
+	var visible_triangles := 0
+	if is_instance_valid(_environment_visual):
+		var water_node := _environment_visual.get_node_or_null(
+			"Water_%d_%d" % [focus_region_key.x, focus_region_key.y]
+		) as MeshInstance3D
+		if water_node != null and water_node.visible and water_node.mesh != null:
+			visible_triangles = water_node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() / 3
+	var ready := ocean_cells > 0 and visible_triangles > 0
+	var metrics: Dictionary = _environment_visual.get_visual_metrics() if is_instance_valid(_environment_visual) else {}
+	var status_label_text := "P5_WATER_READY" if ready else "P5_WATER_DIAG"
+	print("%s: region=%s candidate=%s profiles=%d climate=%s hydrology=%s scope=%s cache=%s ocean_cells=%d visible_triangles=%d debug=%s halo_cells=%d ocean_sdf_tiles=%d ocean_seam_edges=%d refined_quads=%d state_revision=%d status=%s" % [
+		status_label_text,
+		str(focus_region_key),
+		str(_startup_location_status),
+		profile_count,
+		str(climate_enabled),
+		str(hydrology_enabled),
+		str(not environmental_state.is_empty()),
+		str(not surface_cache.is_empty()),
+		ocean_cells,
+		visible_triangles,
+		String(metrics.get("water_debug_mode", "normal")),
+		int(metrics.get("visible_coastal_halo_cells", 0)),
+		int(metrics.get("visible_ocean_sdf_tiles", 0)),
+		int(metrics.get("visible_ocean_seam_edges", 0)),
+		int(metrics.get("visible_refined_coast_quads", 0)),
+		int(environmental_state.get("state_revision", -1)),
+		_simulation_streaming_status,
+	])
+	if ready:
+		_start_ocean_probe_enabled = false
 
 
 func _ensure_simulation_store() -> void:
@@ -617,8 +803,28 @@ func _configure_simulation_streaming() -> void:
 		)
 	else:
 		_simulation_streaming_status = "Simulation streaming unavailable (%s)" % lifecycle.get("reason", "unknown")
+	_configure_environment_visual()
 
 
+func _configure_environment_visual() -> void:
+	if not is_instance_valid(_environment_visual):
+		return
+	var profile: Dictionary = {}
+	var sha := ""
+	if (
+		is_instance_valid(simulation_runtime)
+		and simulation_runtime.has_environment_climate()
+		and object_stream.registry != null
+		and not _simulation_climate_profile_id.is_empty()
+	):
+		profile = object_stream.registry.get_content_record(
+			EnvironmentClimateDomainScript.PROFILE_TYPE, _simulation_climate_profile_id
+		)
+		var pin: Dictionary = simulation_runtime.environment_climate_domain.get_bound_profile_pin(
+			_simulation_climate_profile_id
+		)
+		sha = String(pin.get("profile_sha256", ""))
+	_environment_visual.configure_environment(simulation_runtime, profile, sha)
 
 
 func _exit_tree() -> void:
@@ -637,6 +843,114 @@ func _exit_tree() -> void:
 		_checkpoint_job = null
 
 
+## Once/second aggregation avoids introducing a per-frame logging bottleneck.
+## Stage timing is passive in baseline and adaptive runs.
+func _stream_dispatch_blocked(reason: String) -> void:
+	if not _perf_trace_enabled:
+		return
+	_stream_window_dispatch_blockers[reason] = int(_stream_window_dispatch_blockers.get(reason, 0)) + 1
+
+
+func _stream_stage_measure(stage: String, started_usec: int) -> void:
+	if not _perf_trace_enabled:
+		return
+	var elapsed := maxi(0, Time.get_ticks_usec() - started_usec)
+	_stream_window_stage_usec[stage] = int(_stream_window_stage_usec.get(stage, 0)) + elapsed
+
+
+func _stream_finish_frame() -> void:
+	if not _perf_trace_enabled:
+		return
+	var now := Time.get_ticks_usec()
+	if _stream_window_started_usec == 0:
+		_stream_window_started_usec = now
+	_stream_window_frames += 1
+	_stream_window_frame_ms_sum += _last_frame_ms
+	_stream_window_work_ms_sum += _last_process_work_ms
+	_stream_window_frame_ms_peak = maxf(_stream_window_frame_ms_peak, _last_frame_ms)
+	_stream_window_work_ms_peak = maxf(_stream_window_work_ms_peak, _last_process_work_ms)
+	if _last_frame_ms > 20.0:
+		_stream_window_frames_over_20_ms += 1
+	if _last_frame_ms > 33.0:
+		_stream_window_frames_over_33_ms += 1
+	if _last_process_work_ms > 16.0:
+		_stream_window_work_over_16_ms += 1
+	_stream_window_dispatches += _mesh_dispatches_this_frame
+	_stream_window_uploads += _mesh_uploads_this_frame
+	if free_explore_enabled and _last_f10_speed_mps > 0.01:
+		_stream_window_f10_frames += 1
+		_stream_window_f10_speed_peak_mps = maxf(
+			_stream_window_f10_speed_peak_mps, _last_f10_speed_mps
+		)
+		_stream_window_f10_distance_m += _last_f10_speed_mps * maxf(0.0, _last_frame_ms) / 1000.0
+		if not active_regions.has(_region_id(focus_region_key)):
+			_stream_window_f10_focus_missing_frames += 1
+		for region in _region_keys_within_radius(focus_region_key, REQUEST_RADIUS):
+			if not active_regions.has(_region_id(region)):
+				_stream_window_f10_region_gaps += 1
+	if int(_stream_budget_state.get("dispatch_limit", 1)) > 1:
+		_stream_window_boost_frames += 1
+	if now - _stream_window_started_usec < STREAM_BUDGET_TRACE_INTERVAL_USEC:
+		return
+	var effect_pending := 0
+	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
+		effect_pending = int(terrain_effect_runtime.get_prefetch_pending_count())
+	PerformanceTrace.emit("terrain_stream_budget_window", {
+		"profile": _stream_profile,
+		"frame_count": _stream_window_frames,
+		"boosted_frames": _stream_window_boost_frames,
+		"frame_mean_ms": _stream_window_frame_ms_sum / maxf(1.0, float(_stream_window_frames)),
+		"frame_peak_ms": _stream_window_frame_ms_peak,
+		"frames_over_20_ms": _stream_window_frames_over_20_ms,
+		"frames_over_33_ms": _stream_window_frames_over_33_ms,
+		"process_frames_over_16_ms": _stream_window_work_over_16_ms,
+		"process_mean_ms": _stream_window_work_ms_sum / maxf(1.0, float(_stream_window_frames)),
+		"process_peak_ms": _stream_window_work_ms_peak,
+		"mesh_dispatches": _stream_window_dispatches,
+		"mesh_uploads": _stream_window_uploads,
+		"mesh_jobs_in_flight": _mesh_jobs.size(),
+		"loading_regions": loading_regions.size(),
+		"effect_prefetch_pending": effect_pending,
+		"surface_jobs_in_flight": _surface_cache_jobs.size(),
+		"mesh_limit": int(_stream_budget_state.get("dispatch_limit", 1)),
+		"reason": String(_stream_budget_state.get("reason", "baseline")),
+		"stage_work_usec": _stream_window_stage_usec.duplicate(true),
+		"mesh_dispatch_blockers": _stream_window_dispatch_blockers.duplicate(true),
+		"effect_pending_load_skips": _stream_window_skipped_load_stages,
+		"successful_dispatch_after_skip": _stream_window_skipped_then_dispatched,
+		"skip_time_budget_exhausted": _stream_window_skip_budget_exhausted,
+		"f10_movement_frames": _stream_window_f10_frames,
+		"f10_focus_missing_frames": _stream_window_f10_focus_missing_frames,
+		"f10_missing_regions_in_window_total": _stream_window_f10_region_gaps,
+		"f10_peak_speed_mps": _stream_window_f10_speed_peak_mps,
+		"f10_distance_m": _stream_window_f10_distance_m,
+		"f10_predictive_stages_started": _stream_window_lookahead_stages,
+	})
+	_stream_window_started_usec = now
+	_stream_window_frames = 0
+	_stream_window_boost_frames = 0
+	_stream_window_frame_ms_sum = 0.0
+	_stream_window_frame_ms_peak = 0.0
+	_stream_window_frames_over_20_ms = 0
+	_stream_window_frames_over_33_ms = 0
+	_stream_window_work_over_16_ms = 0
+	_stream_window_work_ms_sum = 0.0
+	_stream_window_work_ms_peak = 0.0
+	_stream_window_dispatches = 0
+	_stream_window_uploads = 0
+	_stream_window_stage_usec.clear()
+	_stream_window_dispatch_blockers.clear()
+	_stream_window_skipped_load_stages = 0
+	_stream_window_skipped_then_dispatched = 0
+	_stream_window_skip_budget_exhausted = 0
+	_stream_window_f10_frames = 0
+	_stream_window_f10_focus_missing_frames = 0
+	_stream_window_f10_region_gaps = 0
+	_stream_window_f10_speed_peak_mps = 0.0
+	_stream_window_f10_distance_m = 0.0
+	_stream_window_lookahead_stages = 0
+
+
 func _process(delta: float) -> void:
 	var process_started_usec := Time.get_ticks_usec()
 	_process_pending_simulation_save()
@@ -644,28 +958,94 @@ func _process(delta: float) -> void:
 	_mesh_dispatches_this_frame = 0
 	_surface_cache_dispatches_this_frame = 0
 	_last_frame_ms = maxf(delta * 1000.0, 0.0)
+	var previous_dispatch_limit := int(_stream_budget_state.get("dispatch_limit", 1))
+	_stream_budget_state = StreamBudgetPolicy.next(
+		_stream_budget_state, _last_frame_ms, _last_process_work_ms,
+		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead"]
+	)
+	if _perf_trace_enabled and int(_stream_budget_state["dispatch_limit"]) != previous_dispatch_limit:
+		PerformanceTrace.emit("terrain_stream_budget_transition", {
+			"profile": _stream_profile,
+			"previous_limit": previous_dispatch_limit,
+			"new_limit": int(_stream_budget_state["dispatch_limit"]),
+			"reason": String(_stream_budget_state["reason"]),
+			"frame_ms": _last_frame_ms,
+			"previous_process_ms": _last_process_work_ms,
+			"cooldown_frames": int(_stream_budget_state["cooldown_frames"]),
+		})
 	if _frame_time_samples.size() == 512:
 		_frame_time_samples[_frame_sample_write_index] = _last_frame_ms
 		_frame_sample_write_index = (_frame_sample_write_index + 1) % 512
 		_frame_sample_count = mini(_frame_sample_count + 1, 512)
 	_peak_frame_ms = maxf(_peak_frame_ms, _last_frame_ms)
+	var camera_before_motion := camera.global_position
 	if free_explore_enabled:
 		_process_free_exploration(delta)
+	var f10_motion := camera.global_position - camera_before_motion
+	f10_motion.y = 0.0
+	_last_f10_speed_mps = (
+		f10_motion.length() / maxf(delta, 0.000001)
+		if free_explore_enabled else 0.0
+	)
+	var stream_preflight_started_usec := Time.get_ticks_usec()
 	_update_focus_key()
+	# R3's speculative stage strip is derived entirely from the F10 camera.
+	# It is never authoritative, never extends beyond the existing retained 5x5
+	# terrain window, and remains lower-priority than the visible 3x3.
+	var mapped_ahead: Dictionary = {}
+	if _stream_profile == "adaptive-skip-lookahead" \
+	and free_explore_enabled and _last_f10_speed_mps > 0.01:
+		var ahead_position := camera.global_position + (
+			f10_motion / maxf(delta, 0.000001)
+		) * StreamLookaheadPolicy.LOOKAHEAD_SECONDS
+		mapped_ahead = SpatialGrid.world_to_region_local(ahead_position)
+		if mapped_ahead.get("valid", false):
+			_lookahead_stage_targets = StreamLookaheadPolicy.forward_stage_targets(
+				focus_region_key, mapped_ahead["region_key"]
+			)
+			_lookahead_stage_signature = str(_lookahead_stage_targets)
+	elif not free_explore_enabled or _stream_profile != "adaptive-skip-lookahead":
+		_lookahead_stage_targets.clear()
+		_lookahead_stage_signature = ""
 	_reconcile_region_window()
+	# Effect projection prefetch reuses the same protected 9x9 source halo and
+	# respects urgent prerequisites queued by visible mesh work.
+	if not mapped_ahead.is_empty() and mapped_ahead.get("valid", false) \
+	and terrain_effect_runtime != null \
+	and bool(terrain_effect_runtime.get("initialized")):
+		terrain_effect_runtime.prioritize_prefetch_for_motion(
+			focus_region_key, mapped_ahead["region_key"]
+		)
+	_stream_stage_measure("focus_window_lookahead", stream_preflight_started_usec)
+	stream_preflight_started_usec = Time.get_ticks_usec()
 	_update_lod_selection()
+	_stream_stage_measure("lod_selection", stream_preflight_started_usec)
 	if _checkpoint_task_id >= 0 and (global_rebuild_pending or not loading_regions.is_empty()):
 		_checkpoint_overlap_observed = true
 	_process_async_checkpoint()
 	_maybe_schedule_async_checkpoint()
+	var stream_stage_started_usec := Time.get_ticks_usec()
 	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
 		var prefetch_result: Dictionary = terrain_effect_runtime.process_prefetch_step(1)
 		if not prefetch_result.get("ok", false):
 			_terrain_effect_status = "Terrain-object effects unavailable (%s)" % prefetch_result.get("reason", "unknown")
 			_record_stream_error("_terrain_effect_prefetch", _terrain_effect_status)
+	_stream_stage_measure("effect_prefetch", stream_stage_started_usec)
+	stream_stage_started_usec = Time.get_ticks_usec()
 	_process_one_chunk_job()
+	_stream_stage_measure("mesh_dispatch_and_upload", stream_stage_started_usec)
+	stream_stage_started_usec = Time.get_ticks_usec()
 	object_stream.process_queued_publications()
+	_stream_stage_measure("object_publication", stream_stage_started_usec)
+	stream_stage_started_usec = Time.get_ticks_usec()
 	_process_surface_cache_jobs()
+	_stream_stage_measure("sdf_cache", stream_stage_started_usec)
+	stream_stage_started_usec = Time.get_ticks_usec()
+	if is_instance_valid(_environment_visual):
+		_environment_visual.process_visual_frame(delta, camera.global_position, focus_region_key)
+	_stream_stage_measure("water_visual", stream_stage_started_usec)
+	if _start_ocean_probe_enabled:
+		_probe_start_ocean_visual(delta)
 	var visual_result: Dictionary = object_stream.consume_last_command_visual_result()
 	if not visual_result.is_empty():
 		if visual_result.get("ok", false):
@@ -683,6 +1063,7 @@ func _process(delta: float) -> void:
 	)
 	_last_process_work_ms = float(Time.get_ticks_usec() - process_started_usec) / 1000.0
 	_peak_process_work_ms = maxf(_peak_process_work_ms, _last_process_work_ms)
+	_stream_finish_frame()
 	if _perf_trace_enabled and _last_process_work_ms >= 16.0:
 		var effect_pending := 0
 		if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
@@ -1300,6 +1681,9 @@ func _set_free_explore_enabled(enabled: bool) -> void:
 	if free_explore_enabled == enabled or not is_instance_valid(camera):
 		return
 	free_explore_enabled = enabled
+	if not enabled:
+		_lookahead_stage_targets.clear()
+		_lookahead_stage_signature = ""
 	orbit_dragging = false
 	_lod_selection_dirty = true
 	if enabled:
@@ -1523,12 +1907,26 @@ func _reconcile_region_window(force: bool = false) -> void:
 	var active_before := active_regions.size()
 	var loading_before := loading_regions.size()
 	_update_focus_key()
-	if not force and focus_region_key == _last_reconciled_focus:
+	var source_window_changed := force or focus_region_key != _last_reconciled_focus
+	if not source_window_changed \
+	and _last_reconciled_lookahead_signature == _lookahead_stage_signature:
 		return
 	_last_reconciled_focus = focus_region_key
+	_last_reconciled_lookahead_signature = _lookahead_stage_signature
 	var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
 	var retained := _region_keys_within_radius(focus_region_key, UNLOAD_RADIUS)
-	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
+	if _stream_profile == "adaptive-skip-lookahead" and free_explore_enabled:
+		for ahead_region in _lookahead_stage_targets:
+			if _contains_region(retained, ahead_region) \
+			and not _contains_region(desired, ahead_region):
+				desired.append(ahead_region)
+	# A changed predictive strip does not change the retained 5x5 or
+	# protected 9x9 source footprint. Reordering stages must not reissue
+	# an expensive full object-source window reconciliation each time F10
+	# crosses its lookahead horizon.
+	if source_window_changed \
+	and terrain_effect_runtime != null \
+	and bool(terrain_effect_runtime.get("initialized")):
 		var effect_window: Dictionary = terrain_effect_runtime.update_resident_target_regions(
 			retained
 		)
@@ -1566,6 +1964,13 @@ func _reconcile_region_window(force: bool = false) -> void:
 					_add_edit_transaction_region(key)
 				else:
 					_begin_region_stage(key, "load", ChunkGrid.all_coordinates())
+					if _stream_profile == "adaptive-skip-lookahead" \
+					and _contains_region(_lookahead_stage_targets, key) \
+					and not _contains_region(
+						_region_keys_within_radius(focus_region_key, REQUEST_RADIUS), key
+					):
+						_lookahead_stage_begin_total += 1
+						_stream_window_lookahead_stages += 1
 		for id_value in loading_regions.keys().duplicate():
 			var id: String = id_value
 			var stage: Dictionary = loading_regions[id]
@@ -1585,6 +1990,8 @@ func _reconcile_region_window(force: bool = false) -> void:
 			"loading_after": loading_regions.size(),
 			"mesh_jobs_in_flight": _mesh_jobs.size(),
 			"effect_prefetch_pending": int(terrain_effect_runtime.get_prefetch_pending_count()) if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")) else 0,
+			"f10_predictive_stage_targets": _lookahead_stage_targets.size() if _stream_profile == "adaptive-skip-lookahead" else 0,
+			"f10_predictive_stage_begins_total": _lookahead_stage_begin_total,
 		})
 
 
@@ -1758,9 +2165,26 @@ func _queue_surface_cache_region(region_key: Vector2i) -> void:
 		and int(cached.get("terrain_revision", -1)) == terrain_revision
 		and int(cached.get("terrain_cache_scope_id", -1)) == terrain_cache_scope_id
 		and int(cached.get("terrain_effect_revision", -1)) == terrain_effect_revision
+		and (
+			not simulation_runtime.has_environment_hydrology()
+			or not is_instance_valid(_environment_visual)
+			or _environment_visual.has_region_shoreline_samples(region_key, cached)
+		)
 	):
 		_surface_cache_pending.erase(id)
+		_surface_cache_retry_after_usec.erase(id)
+		_surface_cache_retry_counts.erase(id)
 		return
+	var previous_pending: Dictionary = _surface_cache_pending.get(id, {})
+	if not previous_pending.is_empty() and (
+		int(previous_pending.get("terrain_revision", -1)) != terrain_revision
+		or int(previous_pending.get("terrain_cache_scope_id", -1)) != terrain_cache_scope_id
+		or int(previous_pending.get("terrain_effect_revision", -1)) != terrain_effect_revision
+	):
+		_surface_cache_retry_after_usec.erase(id)
+		_surface_cache_retry_counts.erase(id)
+	if is_instance_valid(_environment_visual):
+		_environment_visual.invalidate_region_shoreline_samples(region_key)
 	_surface_cache_pending[id] = {
 		"region_key": region_key,
 		"scope_id": scope_id,
@@ -1796,10 +2220,61 @@ func _sync_surface_cache_effect_revision() -> void:
 		_queue_surface_cache_region(entry["region_key"])
 
 
+## Retry transient failures without dropping publication obligations or
+## dispatching infinitely in one frame. New terrain revisions reset cooldown.
+func _schedule_surface_cache_retry(region_key: Vector2i, reason: String) -> void:
+	var id := _region_id(region_key)
+	if not active_regions.has(id):
+		return
+	_queue_surface_cache_region(region_key)
+	if not _surface_cache_pending.has(id):
+		return
+	var attempt := int(_surface_cache_retry_counts.get(id, 0)) + 1
+	_surface_cache_retry_counts[id] = attempt
+	var shift := mini(attempt - 1, 5)
+	var delay := mini(SURFACE_CACHE_RETRY_MAX_USEC, SURFACE_CACHE_RETRY_BASE_USEC * (1 << shift))
+	_surface_cache_retry_after_usec[id] = Time.get_ticks_usec() + delay
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("p5_surface_cache_retry_scheduled", {
+			"region": [region_key.x, region_key.y],
+			"reason": reason, "attempt": attempt,
+			"delay_usec": delay,
+		})
+
+
+## Lightweight self-heal for lost/failed visualization delivery after revisit.
+## Checks one active region/frame, even if the canonical cache is missing,
+## and never changes the canonical SDF authority.
+func _repair_missing_surface_cache_visual() -> void:
+	if not is_instance_valid(_environment_visual) or not simulation_runtime.has_environment_hydrology():
+		return
+	var ids: Array = active_regions.keys()
+	if ids.is_empty():
+		_surface_cache_repair_cursor = 0
+		return
+	ids.sort()
+	var id := String(ids[_surface_cache_repair_cursor % ids.size()])
+	_surface_cache_repair_cursor = (_surface_cache_repair_cursor + 1) % ids.size()
+	if _surface_cache_pending.has(id) or _surface_cache_job_by_region.has(id):
+		return
+	var region_key: Vector2i = active_regions[id]["region_key"]
+	var surface: Dictionary = simulation_runtime.get_environment_surface_cache(
+		_surface_cache_scope_id(region_key)
+	)
+	if surface.is_empty() or not _environment_visual.has_region_shoreline_samples(region_key, surface):
+		_queue_surface_cache_region(region_key)
+		if _perf_trace_enabled and _surface_cache_pending.has(id):
+			PerformanceTrace.emit("p5_surface_cache_repair_queued", {
+				"region": [region_key.x, region_key.y],
+				"terrain_revision": int(surface.get("terrain_revision", -1)),
+			})
+
+
 func _process_surface_cache_jobs() -> void:
 	if not is_instance_valid(simulation_runtime) or not simulation_runtime.initialized:
 		return
 	_sync_surface_cache_effect_revision()
+	_repair_missing_surface_cache_visual()
 
 	var completed: Array[int] = []
 	for task_id_value in _surface_cache_jobs.keys():
@@ -1832,7 +2307,7 @@ func _process_surface_cache_jobs() -> void:
 		var built: Dictionary = job.result
 		if not built.get("valid", false) or typeof(built.get("record")) != TYPE_DICTIONARY:
 			_surface_cache_worker_failures_total += 1
-			_surface_cache_pending.erase(id)
+			_schedule_surface_cache_retry(job.region_key, "worker:" + String(built.get("reason", "invalid_record")))
 			continue
 		var publication: Dictionary = simulation_runtime.publish_environment_surface_cache(
 			built["record"]
@@ -1843,9 +2318,22 @@ func _process_surface_cache_jobs() -> void:
 				_queue_surface_cache_region(job.region_key)
 			else:
 				_surface_cache_worker_failures_total += 1
-				_surface_cache_pending.erase(id)
+				_schedule_surface_cache_retry(job.region_key, "publication:" + String(publication.get("reason", "rejected")))
 			continue
 		_surface_cache_publications_total += 1
+		var install_ok := true
+		if is_instance_valid(_environment_visual) and simulation_runtime.has_environment_hydrology():
+			install_ok = bool(_environment_visual.install_region_shoreline_samples(
+				job.region_key, built["record"], built.get("visual_shoreline", {})
+			))
+		if not install_ok:
+			_surface_cache_visual_install_failures_total += 1
+			var visual_result: Dictionary = built.get("visual_shoreline", {})
+			_schedule_surface_cache_retry(job.region_key,
+				"shoreline_install:" + String(visual_result.get("reason", "rejected")))
+			continue
+		_surface_cache_retry_after_usec.erase(id)
+		_surface_cache_retry_counts.erase(id)
 		var pending_token: Dictionary = _surface_cache_pending.get(id, {})
 		if (
 			int(pending_token.get("terrain_revision", -1)) == int(job.terrain_revision)
@@ -1881,7 +2369,11 @@ func _process_surface_cache_jobs() -> void:
 		var candidates: Array[String] = []
 		for id_value in _surface_cache_pending.keys():
 			var id := String(id_value)
-			if active_regions.has(id) and not _surface_cache_job_by_region.has(id):
+			if (
+				active_regions.has(id)
+				and not _surface_cache_job_by_region.has(id)
+				and Time.get_ticks_usec() >= int(_surface_cache_retry_after_usec.get(id, 0))
+			):
 				candidates.append(id)
 		if candidates.is_empty():
 			break
@@ -1906,8 +2398,11 @@ func _process_surface_cache_jobs() -> void:
 			continue
 		if dispatched.get("pending", false):
 			break
-		_surface_cache_pending.erase(candidates[0])
 		_surface_cache_snapshot_failures_total += 1
+		var rejected_id := candidates[0]
+		var rejected_region: Vector2i = active_regions[rejected_id]["region_key"]
+		_schedule_surface_cache_retry(rejected_region,
+			"snapshot:" + String(dispatched.get("reason", "rejected")))
 
 
 func _dispatch_surface_cache_job(id: String) -> Dictionary:
@@ -2006,6 +2501,26 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 		chunk_snapshots,
 		queued_usec
 	)
+	job.build_visual_shoreline = (
+		is_instance_valid(_environment_visual)
+		and simulation_runtime.has_environment_hydrology()
+	)
+	if job.build_visual_shoreline:
+		var refine_levels := PackedInt64Array()
+		# Ocean can become bound only AFTER this surface-cache job has
+		# published. Include its deterministic level before the first tick.
+		if (region_key.y + 1) * 6 > EnvironmentHydrologyDomainScript.OCEAN_START_GLOBAL_CELL_Z:
+			refine_levels.append(EnvironmentHydrologyDomainScript.OCEAN_LEVEL_MM)
+		var live_environment: Dictionary = simulation_runtime.get_environment_scope(String(token["scope_id"]))
+		var kinds: PackedByteArray = live_environment.get("reservoir_kind", PackedByteArray())
+		var levels: PackedInt64Array = live_environment.get("reservoir_level_mm", PackedInt64Array())
+		if kinds.size() == levels.size():
+			for i in range(kinds.size()):
+				if int(kinds[i]) == 1 and not refine_levels.has(int(levels[i])):
+					refine_levels.append(int(levels[i]))
+				if refine_levels.size() >= 12:
+					break
+		job.visual_refine_levels_mm = refine_levels
 	var task_id := WorkerThreadPool.add_task(
 		Callable(job, "run"), false, "environment SDF surface cache"
 	)
@@ -2221,13 +2736,25 @@ func _process_completed_mesh_jobs() -> void:
 
 func _dispatch_mesh_jobs() -> void:
 	var dispatch_started_usec := Time.get_ticks_usec()
+	# A blocked LOAD stage may be skipped for this invocation only. The
+	# selector never advances its chunk index, so exact order within each
+	# region and all revision/transaction checks remain unchanged.
+	var skipped_ids: Dictionary = {}
+	var successful_after_skip := false
 	while _mesh_jobs.size() < _mesh_job_limit:
-		if _mesh_dispatches_this_frame >= MAX_MESH_JOB_DISPATCHES_PER_FRAME:
+		if _mesh_dispatches_this_frame >= int(_stream_budget_state.get("dispatch_limit", 1)):
+			_stream_dispatch_blocked("dispatch_cap")
 			return
-		if _mesh_dispatches_this_frame > 0 			and Time.get_ticks_usec() - dispatch_started_usec >= MESH_SNAPSHOT_FRAME_BUDGET_USEC:
+		var elapsed_usec := Time.get_ticks_usec() - dispatch_started_usec
+		if (_mesh_dispatches_this_frame > 0 or not skipped_ids.is_empty()) \
+		and elapsed_usec >= MESH_SNAPSHOT_FRAME_BUDGET_USEC:
+			_stream_dispatch_blocked("snapshot_time_budget")
+			if not skipped_ids.is_empty():
+				_stream_window_skip_budget_exhausted += 1
 			return
-		var request := _next_mesh_job_request()
+		var request := _next_mesh_job_request(skipped_ids)
 		if request.is_empty():
+			_stream_dispatch_blocked("no_eligible_stage_after_skips" if not skipped_ids.is_empty() else "no_eligible_stage")
 			return
 		var id: String = request["id"]
 		var stage: Dictionary = loading_regions[id]
@@ -2271,6 +2798,19 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_corner.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_corner):
+					_stream_dispatch_blocked("effect_pending_corner")
+					if StreamDispatchSelector.can_skip_pending(
+						_stream_profile, String(stage["purpose"]),
+						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
+						MESH_SNAPSHOT_FRAME_BUDGET_USEC,
+						_last_frame_ms < StreamBudgetPolicy.SPIKE_FRAME_MS
+						and _last_process_work_ms < StreamBudgetPolicy.SPIKE_PROCESS_MS
+						and String(_stream_budget_state.get("reason", "baseline")) not in ["frame_spike", "cooldown"]
+					):
+						skipped_ids[id] = true
+						_stream_window_skipped_load_stages += 1
+						continue
+					_stream_dispatch_blocked("effect_skip_not_allowed_or_budget")
 					return
 				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_corner.get("reason", "unknown"))
 				continue
@@ -2297,6 +2837,19 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_pair.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_pair):
+					_stream_dispatch_blocked("effect_pending_x_boundary")
+					if StreamDispatchSelector.can_skip_pending(
+						_stream_profile, String(stage["purpose"]),
+						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
+						MESH_SNAPSHOT_FRAME_BUDGET_USEC,
+						_last_frame_ms < StreamBudgetPolicy.SPIKE_FRAME_MS
+						and _last_process_work_ms < StreamBudgetPolicy.SPIKE_PROCESS_MS
+						and String(_stream_budget_state.get("reason", "baseline")) not in ["frame_spike", "cooldown"]
+					):
+						skipped_ids[id] = true
+						_stream_window_skipped_load_stages += 1
+						continue
+					_stream_dispatch_blocked("effect_skip_not_allowed_or_budget")
 					return
 				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_pair.get("reason", "unknown"))
 				continue
@@ -2323,6 +2876,19 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_z.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_z):
+					_stream_dispatch_blocked("effect_pending_z_boundary")
+					if StreamDispatchSelector.can_skip_pending(
+						_stream_profile, String(stage["purpose"]),
+						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
+						MESH_SNAPSHOT_FRAME_BUDGET_USEC,
+						_last_frame_ms < StreamBudgetPolicy.SPIKE_FRAME_MS
+						and _last_process_work_ms < StreamBudgetPolicy.SPIKE_PROCESS_MS
+						and String(_stream_budget_state.get("reason", "baseline")) not in ["frame_spike", "cooldown"]
+					):
+						skipped_ids[id] = true
+						_stream_window_skipped_load_stages += 1
+						continue
+					_stream_dispatch_blocked("effect_skip_not_allowed_or_budget")
 					return
 				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_z.get("reason", "unknown"))
 				continue
@@ -2344,6 +2910,19 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_chunk.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_chunk):
+					_stream_dispatch_blocked("effect_pending_chunk")
+					if StreamDispatchSelector.can_skip_pending(
+						_stream_profile, String(stage["purpose"]),
+						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
+						MESH_SNAPSHOT_FRAME_BUDGET_USEC,
+						_last_frame_ms < StreamBudgetPolicy.SPIKE_FRAME_MS
+						and _last_process_work_ms < StreamBudgetPolicy.SPIKE_PROCESS_MS
+						and String(_stream_budget_state.get("reason", "baseline")) not in ["frame_spike", "cooldown"]
+					):
+						skipped_ids[id] = true
+						_stream_window_skipped_load_stages += 1
+						continue
+					_stream_dispatch_blocked("effect_skip_not_allowed_or_budget")
 					return
 				_fail_region_stage(id, "Terrain-object effect snapshot failed: %s" % prepared_chunk.get("reason", "unknown"))
 				continue
@@ -2370,7 +2949,7 @@ func _dispatch_mesh_jobs() -> void:
 				"materialized_tiles": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
 				"mesh_jobs_in_flight": _mesh_jobs.size(),
 				"dispatches_this_frame": _mesh_dispatches_this_frame + 1,
-				"dispatch_budget": MAX_MESH_JOB_DISPATCHES_PER_FRAME,
+				"dispatch_budget": int(_stream_budget_state.get("dispatch_limit", 1)),
 			})
 		if String(stage["purpose"]) == "edit_transaction" and not _edit_transaction.is_empty():
 			_edit_transaction["trace_snapshot_usec_total"] = int(_edit_transaction.get("trace_snapshot_usec_total", 0)) + snapshot_elapsed_usec
@@ -2393,6 +2972,9 @@ func _dispatch_mesh_jobs() -> void:
 		stage["pending_count"] = int(stage["pending_count"]) + 1
 		loading_regions[id] = stage
 		_mesh_dispatches_this_frame += 1
+		if not skipped_ids.is_empty() and not successful_after_skip:
+			successful_after_skip = true
+			_stream_window_skipped_then_dispatched += 1
 		_mesh_jobs[task_id] = {
 			"job": job,
 			"stage_id": id,
@@ -2422,6 +3004,8 @@ func _dispatch_mesh_jobs() -> void:
 				"raw_candidate_operations": int(snapshot_meta.get("raw_candidate_operation_count", snapshot_meta.get("candidate_operation_count", -1))),
 				"materialized_tiles": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
 			})
+	if _mesh_jobs.size() >= _mesh_job_limit:
+		_stream_dispatch_blocked("worker_capacity")
 
 
 func _prepare_terrain_effect_snapshot(
@@ -2451,32 +3035,8 @@ func _terrain_effect_snapshot_pending(result: Dictionary) -> bool:
 	return not result.get("ok", false) and bool(result.get("pending", false))
 
 
-func _next_mesh_job_request() -> Dictionary:
-	var candidates: Array[String] = []
-	for key_value in loading_regions.keys():
-		candidates.append(String(key_value))
-	candidates.sort_custom(func(a: String, b: String) -> bool:
-		var stage_a: Dictionary = loading_regions[a]
-		var stage_b: Dictionary = loading_regions[b]
-		var pa := _stage_priority(String(stage_a["purpose"]))
-		var pb := _stage_priority(String(stage_b["purpose"]))
-		if pa != pb:
-			return pa < pb
-		var ka: Vector2i = stage_a["region_key"]
-		var kb: Vector2i = stage_b["region_key"]
-		var da := maxi(absi(ka.x - focus_region_key.x), absi(ka.y - focus_region_key.y))
-		var db := maxi(absi(kb.x - focus_region_key.x), absi(kb.y - focus_region_key.y))
-		if da == db:
-			return ka.y < kb.y if ka.y != kb.y else ka.x < kb.x
-		return da < db
-	)
-	for id in candidates:
-		var stage: Dictionary = loading_regions[id]
-		var submit_index: int = int(stage.get("submit_index", 0))
-		var coordinates: Array[Vector2i] = stage["chunk_coordinates"]
-		if submit_index < coordinates.size():
-			return {"id": id, "coordinate": coordinates[submit_index], "index": submit_index}
-	return {}
+func _next_mesh_job_request(excluded: Dictionary = {}) -> Dictionary:
+	return StreamDispatchSelector.next(loading_regions, excluded, focus_region_key)
 
 
 func _stage_priority(purpose: String) -> int:
@@ -2519,6 +3079,15 @@ func _complete_region_stage(id: String) -> void:
 			stage.get("vertex_count_by_coordinate", {}),
 			stage.get("triangle_count_by_coordinate", {})
 		)
+		if _perf_trace_enabled:
+			PerformanceTrace.emit("terrain_region_load_complete", {
+				"region": [(stage["region_key"] as Vector2i).x, (stage["region_key"] as Vector2i).y],
+				"purpose": String(stage["purpose"]),
+				"stage_token": int(stage["stage_token"]),
+				"elapsed_usec": maxi(0, Time.get_ticks_usec() - int(stage.get("chunk_enqueued_usec", 0))),
+				"chunk_count": (stage["chunk_coordinates"] as Array).size(),
+				"profile": _stream_profile,
+			})
 		_streamed_region_loads += 1
 		_stage_retry_counts.erase(id)
 		_clear_stream_error(id)
@@ -2710,6 +3279,8 @@ func _publish_region(
 
 	var registry_started_usec := Time.get_ticks_usec()
 	active_regions[id] = {"region_key": region_key, "world_state": state, "chunk_nodes": region_nodes}
+	if is_instance_valid(_environment_visual):
+		_environment_visual.register_region(region_key)
 	world_states[id] = state
 	_lod_selection_dirty = true
 	var registry_commit_usec := Time.get_ticks_usec() - registry_started_usec
@@ -2909,7 +3480,11 @@ func _unload_region(id: String) -> void:
 	if not active_regions.has(id):
 		return
 	var entry: Dictionary = active_regions[id]
+	if is_instance_valid(_environment_visual):
+		_environment_visual.unregister_region(entry["region_key"])
 	_surface_cache_pending.erase(id)
+	_surface_cache_retry_after_usec.erase(id)
+	_surface_cache_retry_counts.erase(id)
 	if (
 		is_instance_valid(simulation_runtime)
 		and bool(simulation_runtime.get_world_scope_lifecycle_metrics().get("initialized", false))
@@ -3825,6 +4400,8 @@ func _update_runtime_diagnostics() -> void:
 	last_mesh_diagnostics["max_mesh_uploads_per_frame"] = MAX_MESH_UPLOADS_PER_FRAME
 	last_mesh_diagnostics["mesh_upload_frame_budget_usec"] = MESH_UPLOAD_FRAME_BUDGET_USEC
 	last_mesh_diagnostics["max_mesh_job_dispatches_per_frame"] = MAX_MESH_JOB_DISPATCHES_PER_FRAME
+	last_mesh_diagnostics["stream_profile"] = _stream_profile
+	last_mesh_diagnostics["stream_dispatch_budget"] = int(_stream_budget_state.get("dispatch_limit", 1))
 	last_mesh_diagnostics["mesh_snapshot_frame_budget_usec"] = MESH_SNAPSHOT_FRAME_BUDGET_USEC
 	last_mesh_diagnostics["mesh_job_limit"] = _mesh_job_limit
 	last_mesh_diagnostics["peak_mesh_uploads_per_frame"] = _peak_mesh_uploads_per_frame

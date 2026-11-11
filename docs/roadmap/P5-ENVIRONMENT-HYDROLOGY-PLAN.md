@@ -1,6 +1,6 @@
 # P5 — Environment and Hydrology Plan
 
-Status: **OWNER-DEFINED EXECUTION PLAN / P5.0A QUALIFIED / P5.0B QUALIFIED / P5.0C QUALIFIED / P5.0D QUALIFIED / P5.0E QUALIFIED / P5.0F-G NOT YET IMPLEMENTED**
+Status: **OWNER-DEFINED EXECUTION PLAN / P5.0A QUALIFIED / P5.0B QUALIFIED / P5.0C QUALIFIED / P5.0D QUALIFIED / P5.0E QUALIFIED / P5.0F IMPLEMENTED-PENDING-QUALIFICATION-AND-GUI / P5.0G NOT YET IMPLEMENTED**
 
 This document freezes the P5 scope previously defined during architecture planning. It is the roadmap-level source of truth for P5 sequencing. Slice specifications may refine implementation details, but must not silently widen or reorder this scope.
 
@@ -229,6 +229,8 @@ Acceptance gate:
 - visual state cannot mutate water authority;
 - owner GUI acceptance is required for visual stability and smoothness.
 
+Implementation note: P5.0F is implemented on `feat/p5-0f-environment-visuals`; see `docs/specs/P5-0F-ENVIRONMENT-VISUALS.md`. Qualification and owner GUI acceptance are pending; water, river/ocean and rain presentation are derived only.
+
 ---
 
 ## P5.0G — Final P5 qualification, conservation, replay and performance
@@ -314,6 +316,10 @@ finite_final
 ```
 
 Internal cell-to-cell and region-to-region transfers cancel from the global finite-water balance.
+
+## Future fluid systems (not part of P5)
+
+Lava, oil and other fluids are intentionally deferred. Reusable core infrastructure and the proposed mod-first fluid-content contract are documented in [Future Generic Fluids](FUTURE-GENERIC-FLUIDS.md). This is backlog context only: do not widen current P5 acceptance, change the water save schema, or introduce new fluid solvers while P5.0F-R2 and P5.0G are open.
 
 ## Non-goals for P5
 

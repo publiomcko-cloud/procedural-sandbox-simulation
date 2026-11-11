@@ -5,6 +5,7 @@ class_name EnvironmentSurfaceCacheJob
 ## No SceneTree, runtime or terrain authority is mutated from this object.
 
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
+const BaseTerrain := preload("res://scripts/terrain/sdf_world.gd")
 const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const SurfaceCache := preload("res://scripts/simulation/environment_surface_cache.gd")
 
@@ -14,6 +15,18 @@ const NEIGHBOR_NORTH := 0
 const NEIGHBOR_EAST := 1
 const NEIGHBOR_SOUTH := 2
 const NEIGHBOR_WEST := 3
+
+# P5.0F-R2 optional, transient high-resolution shoreline samples.
+# No change to the authoritative P5.0C surface-cache record schema.
+const VISUAL_SUBDIVISIONS_PER_HYDRO_CELL := 2
+const VISUAL_SAMPLES_X := SurfaceCache.DEFAULT_GRID_WIDTH * VISUAL_SUBDIVISIONS_PER_HYDRO_CELL + 1
+const VISUAL_SAMPLES_Z := SurfaceCache.DEFAULT_GRID_HEIGHT * VISUAL_SUBDIVISIONS_PER_HYDRO_CELL + 1
+# R3: sparse 0.5m true-SDF samples only in 1m coastal quadrants.
+# Interior tiles reuse the R2 1m samples and do not incur extra SDF probes.
+const VISUAL_FINE_GRID_WIDTH := (VISUAL_SAMPLES_X - 1) * 2 + 1
+const MAX_REFINED_COAST_TILES := 96
+const MAX_REFINED_SAMPLE_SITES := 512
+const REFINEMENT_LEVEL_MARGIN_MM := 120
 
 var scope_id: String
 var seed: int
@@ -29,6 +42,13 @@ var worker_started_usec := 0
 var worker_finished_usec := 0
 var worker_thread_id := 0
 var result: Dictionary = {}
+var build_visual_shoreline := false
+var visual_refine_levels_mm := PackedInt64Array()
+# Worker-local immutable-snapshot memoization. Hydro-cell centers coincide
+# with sites on the denser 1m visual grid, so reusing samples removes
+# redundant vertical SDF marches with no changes to published authority.
+var _top_surface_samples: Dictionary = {}
+var _top_surface_sample_hits := 0
 
 
 func _init(
@@ -133,9 +153,21 @@ func _build() -> Dictionary:
 		height
 	)
 
+	var shoreline: Dictionary = {}
+	if build_visual_shoreline:
+		# Visualization is optional. Never fail a valid P5.0C hydrology cache
+		# publication because higher-resolution presentation sampling failed.
+		shoreline = _derive_shoreline_top_samples()
+		if not shoreline.get("ok", false):
+			shoreline = {
+				"ok": false,
+				"reason": String(shoreline.get("reason", "visual_shoreline_sample_failed")),
+			}
+
 	return {
 		"valid": true,
 		"reason": "ok",
+		"visual_shoreline": shoreline,
 		"record": {
 			"scope_id": scope_id,
 			"region_key": region_key,
@@ -158,14 +190,172 @@ func _build() -> Dictionary:
 		},
 		"diagnostics": {
 			"cell_count": cell_count,
+			"top_surface_sample_cache_hits": _top_surface_sample_hits,
+			"top_surface_unique_samples": _top_surface_samples.size(),
 			"clamped_top_count": clamped_top_count,
 			"missing_surface_count": missing_surface_count,
 			"chunk_snapshot_count": chunk_snapshots.size(),
+			"visual_shoreline_ok": (not build_visual_shoreline or bool(shoreline.get("ok", false))),
+			"visual_shoreline_reason": String(shoreline.get("reason", "")),
+			"visual_shoreline_sample_count": (
+				int((shoreline.get("height_mm", PackedInt32Array()) as PackedInt32Array).size())
+				if build_visual_shoreline else 0
+			),
+			"visual_shoreline_refined_sites": int(shoreline.get("refined_sample_count", 0)),
+			"visual_shoreline_refined_tiles": int(shoreline.get("refined_tile_count", 0)),
 		},
 	}
 
 
+
+## Derived-only terrain heights at a 1m grid (17x13), using exactly the
+## immutable chunk snapshots already used by the P5.0C cache worker.
+## Samples include saved brush edits and terrain-object effect frames.
+func _derive_shoreline_top_samples() -> Dictionary:
+	var samples := PackedInt32Array()
+	var valid := PackedByteArray()
+	samples.resize(VISUAL_SAMPLES_X * VISUAL_SAMPLES_Z)
+	valid.resize(samples.size())
+	var step_x := float(SurfaceCache.DEFAULT_CELL_SIZE_X_MM) / (
+		1000.0 * float(VISUAL_SUBDIVISIONS_PER_HYDRO_CELL)
+	)
+	var step_z := float(SurfaceCache.DEFAULT_CELL_SIZE_Z_MM) / (
+		1000.0 * float(VISUAL_SUBDIVISIONS_PER_HYDRO_CELL)
+	)
+	for z in range(VISUAL_SAMPLES_Z):
+		for x in range(VISUAL_SAMPLES_X):
+			var sample_x := float(x) * step_x
+			var sample_z := float(z) * step_z
+			var chunk := _chunk_for_local(sample_x, sample_z)
+			if not chunk_snapshots.has(chunk):
+				return {"ok": false, "reason": "visual_shoreline_snapshot_missing"}
+			var source: Dictionary = chunk_snapshots[chunk]
+			var sampled: Dictionary = _sample_top_surface(sample_x, sample_z, source)
+			if not sampled.get("ok", false):
+				return {"ok": false, "reason": String(sampled.get("reason", "visual_shoreline_sample_invalid"))}
+			var index := z * VISUAL_SAMPLES_X + x
+			samples[index] = int(sampled.get("height_mm", 0))
+			valid[index] = 1 if bool(sampled.get("valid", false)) else 0
+	# Immutable generator baseline: new brush excavations cannot create an
+	# infinite-ocean visual source where base terrain was originally dry.
+	# Read at the SAME sea-plane threshold as the R4 ocean clipping, without
+	# mutating the current canonical terrain or hydrology authority.
+	var base_sea_wet := PackedByteArray()
+	if region_key.y >= 10 and generator_version == BaseTerrain.GENERATOR_VERSION:
+		base_sea_wet.resize(samples.size())
+		for z in range(VISUAL_SAMPLES_Z):
+			for x in range(VISUAL_SAMPLES_X):
+				var density := BaseTerrain.sample_density(
+					seed, region_key, Vector3(float(x), 3.982, float(z))
+				)
+				base_sea_wet[z * VISUAL_SAMPLES_X + x] = 1 if density < 0.0 else 0
+	var detail: Dictionary = _derive_adaptive_coast_samples(samples, valid)
+	if not detail.get("ok", false):
+		return detail
+	return {
+		"ok": true,
+		"width": VISUAL_SAMPLES_X,
+		"height": VISUAL_SAMPLES_Z,
+		"height_mm": samples,
+		"valid": valid,
+		"base_sea_wet": base_sea_wet,
+		"fine_height_mm": detail["fine_height_mm"],
+		"fine_valid": detail["fine_valid"],
+		"refined_tile_count": detail["refined_tile_count"],
+		"refined_sample_count": detail["refined_sample_count"],
+		"world_seed": seed,
+		"generator_version": generator_version,
+		"terrain_revision": terrain_revision,
+		"terrain_cache_scope_id": terrain_cache_scope_id,
+		"terrain_effect_revision": terrain_effect_revision,
+		"region_key": region_key,
+	}
+
+
+
+## Work is bounded, deterministic and restricted to real waterline-adjacent
+## 1m tiles. Site keys are stable packed 0.5m lattice indices (33x25).
+## The optional failure never blocks authoritative SDF cache publication.
+func _derive_adaptive_coast_samples(
+	heights: PackedInt32Array, valid: PackedByteArray
+) -> Dictionary:
+	var refined_heights: Dictionary = {}
+	var refined_valid: Dictionary = {}
+	var refined_tiles := 0
+	if visual_refine_levels_mm.is_empty():
+		return {
+			"ok": true, "fine_height_mm": refined_heights,
+			"fine_valid": refined_valid,
+			"refined_tile_count": 0, "refined_sample_count": 0,
+		}
+	for z in range(VISUAL_SAMPLES_Z - 1):
+		for x in range(VISUAL_SAMPLES_X - 1):
+			if refined_tiles >= MAX_REFINED_COAST_TILES:
+				break
+			var a := z * VISUAL_SAMPLES_X + x
+			var b := a + 1
+			var c := a + VISUAL_SAMPLES_X
+			var d := c + 1
+			if valid[a] == 0 or valid[b] == 0 or valid[c] == 0 or valid[d] == 0:
+				continue
+			var min_height: int = mini(mini(heights[a], heights[b]), mini(heights[c], heights[d]))
+			var max_height: int = maxi(maxi(heights[a], heights[b]), maxi(heights[c], heights[d]))
+			var near_waterline := false
+			for level_mm in visual_refine_levels_mm:
+				if min_height <= int(level_mm) + REFINEMENT_LEVEL_MARGIN_MM and max_height >= int(level_mm) - REFINEMENT_LEVEL_MARGIN_MM:
+					near_waterline = true
+					break
+			if not near_waterline:
+				continue
+			refined_tiles += 1
+			for fine_z in range(3):
+				for fine_x in range(3):
+					if fine_x % 2 == 0 and fine_z % 2 == 0:
+						continue # Coarse grid already has this exact site.
+					var gx := x * 2 + fine_x
+					var gz := z * 2 + fine_z
+					var id := gz * VISUAL_FINE_GRID_WIDTH + gx
+					if refined_heights.has(id):
+						continue
+					if refined_heights.size() >= MAX_REFINED_SAMPLE_SITES:
+						return {
+							"ok": false, "reason": "shoreline_refinement_sample_budget_exceeded",
+						}
+					var local_x := float(gx) * 0.5
+					var local_z := float(gz) * 0.5
+					var chunk: Vector2i = _chunk_for_local(local_x, local_z)
+					if not chunk_snapshots.has(chunk):
+						return {"ok": false, "reason": "shoreline_refinement_snapshot_missing"}
+					var source: Dictionary = chunk_snapshots[chunk]
+					var sampled: Dictionary = _sample_top_surface(local_x, local_z, source)
+					if not sampled.get("ok", false):
+						return {"ok": false, "reason": "shoreline_refinement_sample_invalid"}
+					refined_heights[id] = int(sampled.get("height_mm", 0))
+					refined_valid[id] = 1 if bool(sampled.get("valid", false)) else 0
+	return {
+		"ok": true,
+		"fine_height_mm": refined_heights,
+		"fine_valid": refined_valid,
+		"refined_tile_count": refined_tiles,
+		"refined_sample_count": refined_heights.size(),
+	}
+
+
 func _sample_top_surface(
+	local_x: float,
+	local_z: float,
+	snapshot: Dictionary
+) -> Dictionary:
+	var key := Vector2i(roundi(local_x * 1000.0), roundi(local_z * 1000.0))
+	if _top_surface_samples.has(key):
+		_top_surface_sample_hits += 1
+		return (_top_surface_samples[key] as Dictionary).duplicate(true)
+	var sample := _sample_top_surface_uncached(local_x, local_z, snapshot)
+	_top_surface_samples[key] = sample.duplicate(true)
+	return sample
+
+
+func _sample_top_surface_uncached(
 	local_x: float,
 	local_z: float,
 	snapshot: Dictionary
