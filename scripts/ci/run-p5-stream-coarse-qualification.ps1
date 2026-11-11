@@ -21,8 +21,7 @@ function Invoke-Godot([string]$Label, [string[]]$Arguments, [string]$Marker) {
     $output = ($lines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
     [IO.File]::WriteAllText((Join-Path $EvidenceDir "$Label.log"), $output, [Text.UTF8Encoding]::new($false))
     $ErrorActionPreference = 'Stop'
-    if ($exit -ne 0 -or $output.Contains('SCRIPT ERROR:') -or $output.Contains('ERROR: FAIL:')
-        -or $output.Contains('Parse Error:') -or $output.Contains('ERROR: Failed to load script')) {
+    if ($exit -ne 0 -or $output.Contains('SCRIPT ERROR:') -or $output.Contains('ERROR: FAIL:') -or $output.Contains('Parse Error:') -or $output.Contains('ERROR: Failed to load script')) {
         throw "E2 $Label failed (exit=$exit). See $EvidenceDir"
     }
     if ($Marker -and -not $output.Contains($Marker)) {
