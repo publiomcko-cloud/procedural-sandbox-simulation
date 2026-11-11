@@ -53,7 +53,7 @@ try {
 
     $events = "$log.events.txt"
     Get-Content -LiteralPath $log |
-        Select-String -Pattern 'terrain_stream_(budget_window|budget_transition|profile)|terrain_mesh_snapshot|terrain_process_spike|terrain_region_publish|environment_surface_cache_job|effect_prefetch_tick|p5_environment_visual_rebuild' |
+        Select-String -Pattern 'terrain_stream_(budget_window|budget_transition|profile)|terrain_mesh_snapshot|terrain_process_spike|terrain_region_publish|terrain_region_load_complete|environment_surface_cache_job|effect_prefetch_tick|p5_environment_visual_rebuild' |
         Set-Content -LiteralPath $events
 
     $windowRows = @(
@@ -67,6 +67,22 @@ try {
                     catch { $null }
                 }
             } | Where-Object { $null -ne $_ }
+    )
+    $regionLoadTimes = @(
+        Get-Content -LiteralPath $log |
+            Select-String -SimpleMatch '"event":"terrain_region_load_complete"' |
+            ForEach-Object {
+                $raw = $_.Line
+                $start = $raw.IndexOf('PERF_TRACE ')
+                if ($start -ge 0) {
+                    try {
+                        $record = $raw.Substring($start + 11) | ConvertFrom-Json
+                        if ($record.purpose -eq 'load') {
+                            [double]$record.elapsed_usec / 1000.0
+                        }
+                    } catch {}
+                }
+            } | Sort-Object
     )
     if ($windowRows.Count -gt 0) {
         $totalFrames = [double](($windowRows | Measure-Object -Property frame_count -Sum).Sum)
@@ -97,6 +113,13 @@ try {
             avg_process_ms = [Math]::Round($workMean / [Math]::Max(1.0, $totalFrames), 2)
             frames_over_20_ms_pct = [Math]::Round(100.0 * $badFrames / [Math]::Max(1.0, $totalFrames), 2)
             frames_over_33_ms_pct = [Math]::Round(100.0 * $criticalFrames / [Math]::Max(1.0, $totalFrames), 2)
+            region_load_samples = $regionLoadTimes.Count
+            region_load_p50_ms = $(if ($regionLoadTimes.Count -gt 0) {
+                [Math]::Round($regionLoadTimes[[int][Math]::Floor(($regionLoadTimes.Count - 1) * 0.50)], 2)
+            } else { $null })
+            region_load_p95_ms = $(if ($regionLoadTimes.Count -gt 0) {
+                [Math]::Round($regionLoadTimes[[int][Math]::Floor(($regionLoadTimes.Count - 1) * 0.95)], 2)
+            } else { $null })
         }
         $metricsPath = "$log.metrics.json"
         $metrics | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $metricsPath -Encoding UTF8
