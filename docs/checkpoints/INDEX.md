@@ -2,6 +2,12 @@
 
 **Check live GitHub refs before action**; each checkpoint is a dated immutable evidence snapshot, never a real-time claim. A draft document is not merged or approved.
 
+## Current experimental streaming event
+
+| Date | Checkpoint | Event | Publication state at creation |
+| --- | --- | --- | --- |
+| 2026-11-11 | [P5 streaming E2 coarse-first](2026-11-11-P5-STREAM-E2-COARSE-FIRST.md) | Owner-authorized isolated 96-triangle preview with stage/revision gating and separate perceived-vs-definitive visibility metrics | Draft feature PR #284 and draft documentation only; CI/owner GUI pending; DO NOT MERGE |
+
 ## Latest integration event
 
 | Date | Checkpoint | Event | Publication state at creation |
