@@ -987,6 +987,7 @@ func _process(delta: float) -> void:
 		f10_motion.length() / maxf(delta, 0.000001)
 		if free_explore_enabled else 0.0
 	)
+	var stream_preflight_started_usec := Time.get_ticks_usec()
 	_update_focus_key()
 	# R3's speculative stage strip is derived entirely from the F10 camera.
 	# It is never authoritative, never extends beyond the existing retained 5x5
@@ -1015,7 +1016,10 @@ func _process(delta: float) -> void:
 		terrain_effect_runtime.prioritize_prefetch_for_motion(
 			focus_region_key, mapped_ahead["region_key"]
 		)
+	_stream_stage_measure("focus_window_lookahead", stream_preflight_started_usec)
+	stream_preflight_started_usec = Time.get_ticks_usec()
 	_update_lod_selection()
+	_stream_stage_measure("lod_selection", stream_preflight_started_usec)
 	if _checkpoint_task_id >= 0 and (global_rebuild_pending or not loading_regions.is_empty()):
 		_checkpoint_overlap_observed = true
 	_process_async_checkpoint()
