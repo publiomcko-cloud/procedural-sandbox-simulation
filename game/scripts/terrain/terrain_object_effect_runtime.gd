@@ -1107,7 +1107,8 @@ func prioritize_prefetch_for_dependency(targets: Array[Vector2i], focus: Vector2
 	var ready_count := 0
 	for target in targets:
 		var missing := 0
-		var required := _required_source_regions_for_regions([target])
+		var single_target: Array[Vector2i] = [target]
+		var required := _required_source_regions_for_regions(single_target)
 		for source_region in required:
 			var scope_id := Contract.scope_id_for_region(source_region)
 			if not projection.has_scope(source_region) or _invalidated_scope_ids.has(scope_id):

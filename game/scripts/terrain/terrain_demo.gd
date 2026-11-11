@@ -1058,10 +1058,11 @@ func _process(delta: float) -> void:
 				targets, focus_region_key
 			)
 			_dependency_missing_source_counts = prioritization.get("missing_source_counts", {})
-			if prioritization.get("changed", false):
-				_stream_window_dependency_reorders += 1
-			_stream_window_dependency_target_samples += int(prioritization.get("target_count", 0))
-			_stream_window_dependency_ready_samples += int(prioritization.get("ready_targets", 0))
+			if _perf_trace_enabled:
+				if prioritization.get("changed", false):
+					_stream_window_dependency_reorders += 1
+				_stream_window_dependency_target_samples += int(prioritization.get("target_count", 0))
+				_stream_window_dependency_ready_samples += int(prioritization.get("ready_targets", 0))
 		else:
 			_dependency_missing_source_counts.clear()
 		var prefetch_result: Dictionary = terrain_effect_runtime.process_prefetch_step(1)
@@ -3016,7 +3017,8 @@ func _dispatch_mesh_jobs() -> void:
 		stage["pending_count"] = int(stage["pending_count"]) + 1
 		loading_regions[id] = stage
 		_mesh_dispatches_this_frame += 1
-		if _stream_profile == "adaptive-skip-dependency" and String(stage["purpose"]) == "load" \
+		if _perf_trace_enabled and _stream_profile == "adaptive-skip-dependency" \
+		and String(stage["purpose"]) == "load" \
 		and int(_dependency_missing_source_counts.get(id, -1)) == 0:
 			_stream_window_dependency_ready_dispatches += 1
 		if not skipped_ids.is_empty() and not successful_after_skip:
