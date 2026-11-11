@@ -14,6 +14,18 @@ const SPIKE_FRAME_MS := 20.0
 const SPIKE_PROCESS_MS := 14.0
 
 
+## Resolve actual runtime mode once, from env with an explicit CLI override.
+## Keeping this pure allows a regression test for the profile the GUI uses.
+static func resolve_profile(env_value: String, cli_args: PackedStringArray) -> String:
+	var selected := env_value.strip_edges().to_lower()
+	for arg in cli_args:
+		if arg.begins_with("--stream-profile="):
+			selected = arg.trim_prefix("--stream-profile=").strip_edges().to_lower()
+	if selected not in ["baseline", "adaptive", "adaptive-skip"]:
+		return "baseline"
+	return selected
+
+
 static func next(previous: Dictionary, frame_ms: float, previous_process_ms: float, adaptive: bool) -> Dictionary:
 	var state := {
 		"dispatch_limit": BASE_DISPATCHES,
