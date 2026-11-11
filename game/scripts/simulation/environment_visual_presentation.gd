@@ -150,6 +150,9 @@ func register_region(region_key: Vector2i) -> void:
 		"last_refined_coast_quads": 0,
 		"last_ocean_sdf_tiles": 0,
 		"last_ocean_seam_edges": 0,
+		"ocean_boundary_edges": {},
+		"ocean_neighbor_signature": PackedByteArray(),
+		"last_ocean_neighbor_anchor_tiles": 0,
 	}
 	_region_ids.append(id)
 	_region_ids.sort()
@@ -195,6 +198,7 @@ func get_visual_metrics() -> Dictionary:
 		"visible_refined_coast_quads": _sum_visible_region_metric("last_refined_coast_quads"),
 		"visible_ocean_sdf_tiles": _sum_visible_region_metric("last_ocean_sdf_tiles"),
 		"visible_ocean_seam_edges": _sum_visible_region_metric("last_ocean_seam_edges"),
+		"visible_ocean_neighbor_anchor_tiles": _sum_visible_region_metric("last_ocean_neighbor_anchor_tiles"),
 	}
 
 
@@ -376,7 +380,8 @@ static func derive_shoreline_geometry(
 	surface_cache: Dictionary,
 	shoreline: Dictionary,
 	water_debug_mode: String = "normal",
-	ocean_domain_enabled: bool = true
+	ocean_domain_enabled: bool = true,
+	ocean_external_anchors: Dictionary = {}
 ) -> Dictionary:
 	var base := derive_water_cells(region_key, environment, surface_cache)
 	if not base.get("ok", false):
@@ -402,6 +407,8 @@ static func derive_shoreline_geometry(
 	var ocean_refined := 0
 	var ocean_sources := 0
 	var baseline_rejected_seeds := 0
+	var ocean_neighbor_anchors := 0
+	var ocean_boundary_edges: Dictionary = {}
 	# In ocean-band regions, the ocean is a single clipped SDF plane,
 	# not a union of coarse 2m hydro-cell rectangles or coastal halos.
 	var continuous_ocean := {
@@ -411,7 +418,8 @@ static func derive_shoreline_geometry(
 	}
 	if ocean_domain_enabled:
 		continuous_ocean = OceanVisual.build(
-			region_key, environment, shoreline, water_debug_mode
+			region_key, environment, shoreline, water_debug_mode,
+			ocean_external_anchors
 		)
 	if not continuous_ocean.get("ok", false):
 		return continuous_ocean
@@ -424,6 +432,8 @@ static func derive_shoreline_geometry(
 	ocean_refined = int(continuous_ocean.get("refined_coast_quads", 0))
 	ocean_sources = int(continuous_ocean.get("source_ocean_cells", 0))
 	baseline_rejected_seeds = int(continuous_ocean.get("baseline_rejected_seeds", 0))
+	ocean_neighbor_anchors = int(continuous_ocean.get("ocean_neighbor_anchor_tiles", 0))
+	ocean_boundary_edges = continuous_ocean.get("ocean_boundary_edges", {})
 	var water_cells := 0
 	var refined_quads := 0
 	var origin_x := float(region_key.x) * 16.0
@@ -546,6 +556,8 @@ static func derive_shoreline_geometry(
 		"ocean_seam_edges": ocean_edges,
 		"ocean_source_cells": ocean_sources,
 		"ocean_baseline_rejected_seeds": baseline_rejected_seeds,
+		"ocean_neighbor_anchor_tiles": ocean_neighbor_anchors,
+		"ocean_boundary_edges": ocean_boundary_edges,
 	}
 
 
@@ -763,6 +775,69 @@ func _water_wait(id: String, row: Dictionary, reason: String) -> void:
 	_regions[id] = row
 
 
+## A seam is usable only when the adjacent region has a completed current
+## SDF-based visual plan. Retained old meshes during edits are NOT evidence.
+func _neighbor_ocean_anchors(region_key: Vector2i) -> Dictionary:
+	var result := {}
+	for side in ["west", "east", "north", "south"]:
+		var offset := Vector2i.ZERO
+		var opposite := ""
+		match side:
+			"west":
+				offset = Vector2i(-1, 0)
+				opposite = "east"
+			"east":
+				offset = Vector2i(1, 0)
+				opposite = "west"
+			"north":
+				offset = Vector2i(0, -1)
+				opposite = "south"
+			"south":
+				offset = Vector2i(0, 1)
+				opposite = "north"
+		var id := _scope_id(region_key + offset)
+		if not _regions.has(id):
+			continue
+		var neighbor: Dictionary = _regions[id]
+		if bool(neighbor.get("refresh_pending", false)):
+			continue
+		var surface: Dictionary = _runtime.get_environment_surface_cache(id)
+		if surface.is_empty() or String(neighbor.get("token", "")) != _surface_identity(surface):
+			continue
+		if String(neighbor.get("shoreline_token", "")) != _surface_identity(surface):
+			continue
+		var env: Dictionary = _runtime.get_environment_scope(id)
+		if env.is_empty():
+			continue
+		var enabled := true
+		if _runtime.has_method("has_environment_hydrology"):
+			enabled = bool(_runtime.call("has_environment_hydrology"))
+		var signature := _water_visual_signature(
+			region_key + offset, env, surface, _water_debug_mode,
+			enabled, int(neighbor.get("last_ocean_sdf_tiles", 0))
+		)
+		if neighbor.get("water_signature", PackedInt64Array()) != signature:
+			continue
+		var edges: Dictionary = neighbor.get("ocean_boundary_edges", {})
+		var mask: PackedByteArray = edges.get(opposite, PackedByteArray())
+		if mask.size() > 0:
+			result[side] = mask
+	return result
+
+
+static func _neighbor_ocean_signature(anchors: Dictionary) -> PackedByteArray:
+	var signature := PackedByteArray()
+	for side in ["west", "east", "north", "south"]:
+		var mask: PackedByteArray = anchors.get(side, PackedByteArray())
+		signature.append_array(mask)
+		# A completely absent edge and an explicit all-zero edge must
+		# remain equivalent: both are no verified ocean connection.
+		if mask.is_empty():
+			for _i in range(12 if side == "west" or side == "east" else 16):
+				signature.append(0)
+	return signature
+
+
 func _poll_resident_regions() -> void:
 	if _region_ids.is_empty():
 		return
@@ -793,7 +868,11 @@ func _poll_resident_regions() -> void:
 			row["region_key"], environment, surface, _water_debug_mode,
 			hydrology_enabled, int(row.get("last_ocean_sdf_tiles", 0))
 		)
-		if String(row["token"]) == token and row.get("water_signature", PackedInt64Array()) == signature:
+		var neighbor_anchors := _neighbor_ocean_anchors(row["region_key"])
+		var neighbor_signature := _neighbor_ocean_signature(neighbor_anchors)
+		if String(row["token"]) == token \
+		and row.get("water_signature", PackedInt64Array()) == signature \
+		and row.get("ocean_neighbor_signature", PackedByteArray()) == neighbor_signature:
 			_unchanged_visual_skips_total += 1
 			continue
 		# Defer rather than bursting rebuilds on a loaded/revisited region window.
@@ -809,7 +888,7 @@ func _poll_resident_regions() -> void:
 		var started := Time.get_ticks_usec()
 		var plan := derive_shoreline_geometry(
 			row["region_key"], environment, surface, row.get("shoreline", {}),
-			_water_debug_mode, hydrology_enabled
+			_water_debug_mode, hydrology_enabled, neighbor_anchors
 		)
 		if not plan.get("ok", false):
 			_begin_pending_visual_refresh(id, row, "mesh_plan_invalid")
@@ -860,6 +939,9 @@ func _poll_resident_regions() -> void:
 		row["last_wait_report_usec"] = 0
 		row["token"] = token
 		row["water_signature"] = signature
+		row["ocean_neighbor_signature"] = neighbor_signature
+		row["ocean_boundary_edges"] = plan.get("ocean_boundary_edges", {})
+		row["last_ocean_neighbor_anchor_tiles"] = int(plan.get("ocean_neighbor_anchor_tiles", 0))
 		row["last_vertex_count"] = vertices.size()
 		row["last_halo_cells"] = int(plan.get("coastal_halo_cells", 0))
 		row["last_refined_coast_quads"] = int(plan.get("refined_coast_quads", 0))
@@ -882,6 +964,7 @@ func _poll_resident_regions() -> void:
 				"ocean_sdf_tiles": int(plan.get("ocean_sdf_tiles", 0)),
 				"ocean_seam_edges": int(plan.get("ocean_seam_edges", 0)),
 				"ocean_baseline_rejected_seeds": int(plan.get("ocean_baseline_rejected_seeds", 0)),
+				"ocean_neighbor_anchor_tiles": int(plan.get("ocean_neighbor_anchor_tiles", 0)),
 				"state_revision": int(environment["state_revision"]),
 				"terrain_revision": int(surface["terrain_revision"]),
 			})
