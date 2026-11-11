@@ -102,3 +102,13 @@ The same local branch/HEAD must be used for all 3 tests, no resets/edits/saves b
 - P5 hydrology / authority: `docs/roadmap/P5-ENVIRONMENT-HYDROLOGY-PLAN.md`
 
 If new conversation lacks logs, never pretend a local benchmark was performed; use only the proven R1 evidence until R2 logs arrive. Whenever publishing a new commit, record SHA and CI/GUI results in this checkpoint or successor report. 
+
+## 8. NEW RESULT — owner's first R2 A/B/C on 2026-11-11 12:22–12:24 (-03:00)
+
+**IMPORTANT: the first R2 performance trial is INVALID due to actual runtime profile remapping. This section supersedes prior "no owner A/B" status.** Uploaded `P5-stream-baseline-20261111-122250.log`, `P5-stream-adaptive-20261111-122327.log`, `P5-stream-adaptive-skip-20261111-122409.log` with matching events/metrics, all on `b56131e66bc83398e5183693b8d736646a7f528d`; 173 policy assertions PASS per GUI runner.
+
+Decisive evidence: the third report **requests** `adaptive-skip` and its metrics JSON is labeled that way, but in-game `PERF_TRACE terrain_stream_profile` says `profile:"baseline"`. The old `terrain_demo.gd::_ready` guard `if _stream_profile != "adaptive": _stream_profile = "baseline"` silently downgraded the third new mode before CLI parsing. Therefore **0 actual skips, 0 recoveries, 0 boosted frames** and no R2 speedup/slowdown was measured. Baseline and adaptive remain valid R1 modes, but trajectories/sample lengths differ so their relative data cannot prove causality. Distinct runs: baseline 27 load regions, 5.91% frames >20ms; adaptive 27, 4.59%; misconfigured skip run 24, 3.50%. Three-session p50 unpaired 1,780 / 1,802 / 1,657ms, not proof of improvement. All are original as-run measurements, not fixed-code data.
+
+**Corrective code published after these logs:** `TerrainStreamBudgetPolicy.resolve_profile` handles three modes and CLI override, real `_ready()` invokes it, the trace declares requested/effective/mismatch, 10 new pure resolver regressions, and the PowerShell reporter now FAILS if observed effective mode mismatches. The first-run source-backed postmortem is `docs/reports/P5-0F-STREAM-ADAPTIVE/AB-R2-FIRST-RUN-RESULTS.md`; read it before changing code.
+
+**Current next step:** check latest exact-head CI; if green (or manual headless PASS), run three identical-path experiments again from the new head with the pinned Windows Godot and the built-in PERF_TRACE runner; verify effective `adaptive-skip` is actually active **before** interpreting FPS/throughput. Update this checkpoint's current HEAD/gates based on live GitHub, not its stale checkpoint time. Keep PR #281 draft, leave R5.3 PR #280 untouched and never direct-merge experiment to main.
