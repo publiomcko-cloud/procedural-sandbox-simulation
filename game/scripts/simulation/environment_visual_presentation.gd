@@ -47,6 +47,9 @@ var _rain_step := 0
 var _polls_total := 0
 var _rebuilds_total := 0
 var _stale_hides_total := 0
+var _retained_refreshes_total := 0
+var _completed_visual_swaps_total := 0
+var _peak_retained_usec := 0
 var _unchanged_visual_skips_total := 0
 var _peak_rebuild_usec := 0
 var _trace_enabled := false
@@ -135,6 +138,9 @@ func register_region(region_key: Vector2i) -> void:
 		"node": node,
 		"token": "",
 		"water_signature": PackedInt64Array(),
+		"refresh_pending": false,
+		"retained_source_token": "",
+		"retained_visible": false,
 		"wait_started_usec": Time.get_ticks_usec(),
 		"last_wait_report_usec": 0,
 		"shoreline_token": "",
@@ -176,6 +182,10 @@ func get_visual_metrics() -> Dictionary:
 		"region_polls_total": _polls_total,
 		"region_rebuilds_total": _rebuilds_total,
 		"stale_hides_total": _stale_hides_total,
+		"retained_refreshes_total": _retained_refreshes_total,
+		"completed_visual_swaps_total": _completed_visual_swaps_total,
+		"peak_retained_usec": _peak_retained_usec,
+		"pending_visual_refreshes": _count_pending_visual_refreshes(),
 		"unchanged_visual_skips_total": _unchanged_visual_skips_total,
 		"peak_rebuild_usec": _peak_rebuild_usec,
 		"rain_visible": _rain_node != null and _rain_node.visible,
@@ -289,36 +299,54 @@ func install_region_shoreline_samples(
 
 
 
-## Invalidate immediately when the terrain edit changes expected provenance.
-## Prevents the prior coast mesh from lingering while its SDF worker runs.
+## Invalidate the sample provenance, but NOT the already committed GPU mesh.
+## The old presentation is kept until a revision-matched new mesh is ready.
+## This changes no SDF, hydrology, collision or persisted authority.
 func invalidate_region_shoreline_samples(region_key: Vector2i) -> void:
 	var id := _scope_id(region_key)
 	if not _regions.has(id):
 		return
 	var row: Dictionary = _regions[id]
+	_begin_pending_visual_refresh(id, row, "terrain_revision_invalidated")
 	row["token"] = ""
 	row["shoreline_token"] = ""
 	row["shoreline"] = {}
-	row["last_vertex_count"] = 0
-	row["last_halo_cells"] = 0
-	row["last_refined_coast_quads"] = 0
-	row["last_ocean_sdf_tiles"] = 0
-	row["last_ocean_seam_edges"] = 0
-	var node: MeshInstance3D = row["node"]
-	if int(row.get("wait_started_usec", 0)) == 0:
-		row["wait_started_usec"] = Time.get_ticks_usec()
-		if _trace_enabled:
-			PerformanceTrace.emit("p5_water_hidden", {
-				"scope": id, "reason": "terrain_revision_invalidated",
-			})
-	node.visible = false
-	node.mesh = null
+	# Old mesh + last metrics intentionally remain committed and visible.
 	_regions[id] = row
 
 
 func has_region_shoreline_samples(region_key: Vector2i, surface_record: Dictionary) -> bool:
 	var id := _scope_id(region_key)
 	return _regions.has(id) and String(_regions[id].get("shoreline_token", "")) == _surface_identity(surface_record)
+
+
+func _count_pending_visual_refreshes() -> int:
+	var pending := 0
+	for id in _region_ids:
+		if bool(_regions[id].get("refresh_pending", false)):
+			pending += 1
+	return pending
+
+
+## Only a source-verified next mesh can replace an already visible mesh.
+## Record a pending refresh once, even if multiple terrain edits supersede it.
+func _begin_pending_visual_refresh(id: String, row: Dictionary, reason: String) -> void:
+	if bool(row.get("refresh_pending", false)):
+		return
+	var node: MeshInstance3D = row["node"]
+	row["refresh_pending"] = true
+	row["retained_visible"] = node.visible and node.mesh != null
+	row["retained_source_token"] = String(row.get("token", ""))
+	row["wait_started_usec"] = Time.get_ticks_usec()
+	row["last_wait_report_usec"] = 0
+	if bool(row["retained_visible"]):
+		_retained_refreshes_total += 1
+		if _trace_enabled:
+			PerformanceTrace.emit("p5_water_visual_retained", {
+				"scope": id, "reason": reason,
+				"old_token": String(row["retained_source_token"]),
+				"vertices": int(row.get("last_vertex_count", 0)),
+			})
 
 
 func _sum_visible_region_metric(key: String) -> int:
@@ -730,6 +758,7 @@ func _water_wait(id: String, row: Dictionary, reason: String) -> void:
 			"scope": id, "reason": reason,
 			"wait_usec": now - int(row["wait_started_usec"]),
 			"shoreline_token": String(row.get("shoreline_token", "")),
+			"retained_visible": bool(row.get("retained_visible", false)),
 		})
 	_regions[id] = row
 
@@ -747,10 +776,13 @@ func _poll_resident_regions() -> void:
 		var surface: Dictionary = _runtime.get_environment_surface_cache(id)
 		var environment: Dictionary = _runtime.get_environment_scope(id)
 		if surface.is_empty() or environment.is_empty():
-			if node.visible:
-				_stale_hides_total += 1
-			node.visible = false
-			row["token"] = ""
+			if not bool(row.get("refresh_pending", false)):
+				if node.visible:
+					_stale_hides_total += 1
+				node.visible = false
+				row["token"] = ""
+			# A cached, committed mesh is not authority; keep it visible
+			# only during a known editing refresh, never after unload.
 			_water_wait(id, row, "missing_surface_or_environment")
 			continue
 		var token := _surface_identity(surface)
@@ -768,11 +800,9 @@ func _poll_resident_regions() -> void:
 		if rebuilt >= MAX_REBUILDS_PER_FRAME:
 			continue
 		if row.get("shoreline_token", "") != _surface_identity(surface):
-			# Never fall back to a square quad over dry land. Wait for SDF worker.
-			if node.visible:
-				_stale_hides_total += 1
-			node.visible = false
-			node.mesh = null
+			# Never fall back to square quads or stale computation; retain
+			# only the last complete rendered mesh while waiting for SDF.
+			_begin_pending_visual_refresh(id, row, "missing_or_stale_shoreline_samples")
 			row["token"] = ""
 			_water_wait(id, row, "missing_or_stale_shoreline_samples")
 			continue
@@ -782,30 +812,50 @@ func _poll_resident_regions() -> void:
 			_water_debug_mode, hydrology_enabled
 		)
 		if not plan.get("ok", false):
-			node.visible = false
-			node.mesh = null
+			_begin_pending_visual_refresh(id, row, "mesh_plan_invalid")
 			row["token"] = ""
 			_water_wait(id, row, "mesh_plan:" + String(plan.get("reason", "unknown")))
 			continue
 		var vertices: PackedVector3Array = plan["vertices"]
-		if vertices.is_empty():
-			node.mesh = null
-			node.visible = false
-		else:
+		# Fully prepare the replacement before touching the visible mesh.
+		# The one main-thread pointer assignment has no blank frame.
+		var replacement: ArrayMesh
+		if not vertices.is_empty():
 			var arrays: Array = []
 			arrays.resize(Mesh.ARRAY_MAX)
 			arrays[Mesh.ARRAY_VERTEX] = vertices
 			arrays[Mesh.ARRAY_COLOR] = plan["colors"]
-			var mesh := ArrayMesh.new()
-			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-			mesh.surface_set_material(0, _water_material)
-			node.mesh = mesh
-			node.visible = true
-		if node.visible and _trace_enabled and int(row.get("wait_started_usec", 0)) > 0:
+			replacement = ArrayMesh.new()
+			replacement.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+			replacement.surface_set_material(0, _water_material)
+		var old_retained := bool(row.get("retained_visible", false))
+		var old_vertices := int(row.get("last_vertex_count", 0))
+		var wait_usec := 0
+		if int(row.get("wait_started_usec", 0)) > 0:
+			wait_usec = Time.get_ticks_usec() - int(row["wait_started_usec"])
+		node.mesh = replacement
+		node.visible = replacement != null
+		if bool(row.get("refresh_pending", false)):
+			_completed_visual_swaps_total += 1
+			if old_retained:
+				_peak_retained_usec = maxi(_peak_retained_usec, wait_usec)
+			if _trace_enabled:
+				PerformanceTrace.emit("p5_water_visual_swapped", {
+					"scope": id, "wait_usec": wait_usec,
+					"old_retained": old_retained,
+					"old_vertices": old_vertices,
+					"new_vertices": vertices.size(),
+					"old_token": String(row.get("retained_source_token", "")),
+					"new_token": token,
+				})
+		if node.visible and _trace_enabled and wait_usec > 0:
 			PerformanceTrace.emit("p5_water_visible", {
-				"scope": id, "wait_usec": Time.get_ticks_usec() - int(row["wait_started_usec"]),
+				"scope": id, "wait_usec": wait_usec,
 				"triangles": int(vertices.size() / 3),
 			})
+		row["refresh_pending"] = false
+		row["retained_visible"] = false
+		row["retained_source_token"] = ""
 		row["wait_started_usec"] = 0
 		row["last_wait_report_usec"] = 0
 		row["token"] = token
