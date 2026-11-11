@@ -373,6 +373,7 @@ static func derive_shoreline_geometry(
 	var ocean_edges := 0
 	var ocean_refined := 0
 	var ocean_sources := 0
+	var baseline_rejected_seeds := 0
 	# In ocean-band regions, the ocean is a single clipped SDF plane,
 	# not a union of coarse 2m hydro-cell rectangles or coastal halos.
 	var continuous_ocean := {
@@ -394,6 +395,7 @@ static func derive_shoreline_geometry(
 	ocean_edges = int(continuous_ocean.get("ocean_seam_edges", 0))
 	ocean_refined = int(continuous_ocean.get("refined_coast_quads", 0))
 	ocean_sources = int(continuous_ocean.get("source_ocean_cells", 0))
+	baseline_rejected_seeds = int(continuous_ocean.get("baseline_rejected_seeds", 0))
 	var water_cells := 0
 	var refined_quads := 0
 	var origin_x := float(region_key.x) * 16.0
@@ -515,6 +517,7 @@ static func derive_shoreline_geometry(
 		"ocean_sdf_tiles": ocean_tiles,
 		"ocean_seam_edges": ocean_edges,
 		"ocean_source_cells": ocean_sources,
+		"ocean_baseline_rejected_seeds": baseline_rejected_seeds,
 	}
 
 
@@ -828,6 +831,7 @@ func _poll_resident_regions() -> void:
 				"coastal_halo_cells": int(plan.get("coastal_halo_cells", 0)),
 				"ocean_sdf_tiles": int(plan.get("ocean_sdf_tiles", 0)),
 				"ocean_seam_edges": int(plan.get("ocean_seam_edges", 0)),
+				"ocean_baseline_rejected_seeds": int(plan.get("ocean_baseline_rejected_seeds", 0)),
 				"state_revision": int(environment["state_revision"]),
 				"terrain_revision": int(surface["terrain_revision"]),
 			})
