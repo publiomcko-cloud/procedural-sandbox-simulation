@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('baseline', 'adaptive', 'adaptive-skip')]
+    [ValidateSet('baseline', 'adaptive', 'adaptive-skip', 'adaptive-skip-lookahead')]
     [Alias('Profile')]
     [string]$ProfileName = 'baseline',
     [string]$GodotBin = 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe',
@@ -38,6 +38,12 @@ try {
     $testExit = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'
     if ($testExit -ne 0) { throw "Stream policy unit test failed. See $log" }
+    $ErrorActionPreference = 'Continue'
+    & $GodotBin --headless --path .\game --script res://tests/p5_0f_stream_lookahead_tests.gd 2>&1 |
+        Tee-Object -FilePath $log -Append
+    $lookaheadTestExit = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($lookaheadTestExit -ne 0) { throw "Stream lookahead test failed. See $log" }
 
     Write-Host "Running $ProfileName. Travel the same route for each A/B run, then close Godot."
     $ErrorActionPreference = 'Continue'
@@ -78,7 +84,7 @@ try {
     }
     $events = "$log.events.txt"
     $cleanLines |
-        Select-String -Pattern 'terrain_stream_(budget_window|budget_transition|profile)|terrain_mesh_snapshot|terrain_process_spike|terrain_region_publish|terrain_region_load_complete|environment_surface_cache_job|effect_prefetch_tick|p5_environment_visual_rebuild' |
+        Select-String -Pattern 'terrain_stream_(budget_window|budget_transition|profile)|terrain_mesh_snapshot|terrain_process_spike|terrain_region_publish|terrain_region_load_complete|effect_motion_prefetch_priority|environment_surface_cache_job|effect_prefetch_tick|p5_environment_visual_rebuild' |
         Set-Content -LiteralPath $events
 
     $windowRows = @(
@@ -124,12 +130,26 @@ try {
             $workMean += [double]$w.process_mean_ms * [double]$w.frame_count
             $framePeak = [Math]::Max($framePeak, [double]$w.frame_peak_ms)
         }
-        $effectWaits = 0
+        $f10Frames = 0
+        $f10FocusMissing = 0
+        $f10RegionGaps = 0
+        $f10Distance = 0.0
+        $f10PeakSpeed = 0.0
+        $lookaheadReorders = @(
+            $cleanLines |
+                Select-String -SimpleMatch '"event":"effect_motion_prefetch_priority"' |
+                Where-Object { $_.Line -match '"changed":true' }
+        ).Count
         $headSkips = 0
         $skipRecovered = 0
         $skipBudgetExhausted = 0
         $dispatchBlockers = @{}
         foreach ($w in $windowRows) {
+            $f10Frames += [int]$w.f10_movement_frames
+            $f10FocusMissing += [int]$w.f10_focus_missing_frames
+            $f10RegionGaps += [int]$w.f10_missing_regions_in_window_total
+            $f10Distance += [double]$w.f10_distance_m
+            $f10PeakSpeed = [Math]::Max($f10PeakSpeed, [double]$w.f10_peak_speed_mps)
             $headSkips += [int]$w.effect_pending_load_skips
             $skipRecovered += [int]$w.successful_dispatch_after_skip
             $skipBudgetExhausted += [int]$w.skip_time_budget_exhausted
@@ -145,6 +165,16 @@ try {
             windows = $windowRows.Count
             frames = [int]$totalFrames
             boosted_frames = [int]$boosted
+            f10_movement_frames = [int]$f10Frames
+            f10_focus_missing_pct = $(if ($f10Frames -gt 0) {
+                [Math]::Round(100.0 * $f10FocusMissing / [Math]::Max(1, $f10Frames), 2)
+            } else { $null })
+            f10_missing_regions_per_frame = $(if ($f10Frames -gt 0) {
+                [Math]::Round([double]$f10RegionGaps / [Math]::Max(1, $f10Frames), 2)
+            } else { $null })
+            f10_distance_m = [Math]::Round($f10Distance, 1)
+            f10_peak_speed_mps = [Math]::Round($f10PeakSpeed, 2)
+            effect_motion_prefetch_reorders = [int]$lookaheadReorders
             effect_pending_load_skips = $headSkips
             successful_dispatch_after_skip = $skipRecovered
             skip_time_budget_exhausted = $skipBudgetExhausted
@@ -168,6 +198,9 @@ try {
         $metricsPath = "$log.metrics.json"
         $metrics | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $metricsPath -Encoding UTF8
         Write-Host "Metrics: $metricsPath"
+        if ($f10Frames -eq 0) {
+            Write-Warning 'No F10 free-explore movement was recorded. This is NOT a valid F10 comparison.'
+        }
         $metrics | Format-Table -AutoSize | Out-Host
     } else {
         Write-Warning 'No terrain_stream_budget_window events found; check profile/trace initialization.'
