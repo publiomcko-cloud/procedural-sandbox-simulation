@@ -153,6 +153,8 @@ func register_region(region_key: Vector2i) -> void:
 		"ocean_boundary_edges": {},
 		"ocean_neighbor_signature": PackedByteArray(),
 		"last_ocean_neighbor_anchor_tiles": 0,
+		"last_ocean_unadmitted_wet_tiles": 0,
+		"last_ocean_unadmitted_boundary_tiles": 0,
 	}
 	_region_ids.append(id)
 	_region_ids.sort()
@@ -199,6 +201,8 @@ func get_visual_metrics() -> Dictionary:
 		"visible_ocean_sdf_tiles": _sum_visible_region_metric("last_ocean_sdf_tiles"),
 		"visible_ocean_seam_edges": _sum_visible_region_metric("last_ocean_seam_edges"),
 		"visible_ocean_neighbor_anchor_tiles": _sum_visible_region_metric("last_ocean_neighbor_anchor_tiles"),
+		"visible_ocean_unadmitted_wet_tiles": _sum_visible_region_metric("last_ocean_unadmitted_wet_tiles"),
+		"visible_ocean_unadmitted_boundary_tiles": _sum_visible_region_metric("last_ocean_unadmitted_boundary_tiles"),
 	}
 
 
@@ -557,6 +561,10 @@ static func derive_shoreline_geometry(
 		"ocean_source_cells": ocean_sources,
 		"ocean_baseline_rejected_seeds": baseline_rejected_seeds,
 		"ocean_neighbor_anchor_tiles": ocean_neighbor_anchors,
+		"ocean_unadmitted_wet_tiles": int(continuous_ocean.get("unadmitted_wet_tiles", 0)),
+		"ocean_unadmitted_boundary_tiles": int(continuous_ocean.get("unadmitted_boundary_wet_tiles", 0)),
+		"ocean_components_missing_source": int(continuous_ocean.get("components_missing_source", 0)),
+		"ocean_components_missing_boundary": int(continuous_ocean.get("components_missing_boundary", 0)),
 		"ocean_boundary_edges": ocean_boundary_edges,
 	}
 
@@ -942,6 +950,8 @@ func _poll_resident_regions() -> void:
 		row["ocean_neighbor_signature"] = neighbor_signature
 		row["ocean_boundary_edges"] = plan.get("ocean_boundary_edges", {})
 		row["last_ocean_neighbor_anchor_tiles"] = int(plan.get("ocean_neighbor_anchor_tiles", 0))
+		row["last_ocean_unadmitted_wet_tiles"] = int(plan.get("ocean_unadmitted_wet_tiles", 0))
+		row["last_ocean_unadmitted_boundary_tiles"] = int(plan.get("ocean_unadmitted_boundary_tiles", 0))
 		row["last_vertex_count"] = vertices.size()
 		row["last_halo_cells"] = int(plan.get("coastal_halo_cells", 0))
 		row["last_refined_coast_quads"] = int(plan.get("refined_coast_quads", 0))
@@ -965,6 +975,10 @@ func _poll_resident_regions() -> void:
 				"ocean_seam_edges": int(plan.get("ocean_seam_edges", 0)),
 				"ocean_baseline_rejected_seeds": int(plan.get("ocean_baseline_rejected_seeds", 0)),
 				"ocean_neighbor_anchor_tiles": int(plan.get("ocean_neighbor_anchor_tiles", 0)),
+				"ocean_unadmitted_wet_tiles": int(plan.get("ocean_unadmitted_wet_tiles", 0)),
+				"ocean_unadmitted_boundary_tiles": int(plan.get("ocean_unadmitted_boundary_tiles", 0)),
+				"ocean_components_missing_source": int(plan.get("ocean_components_missing_source", 0)),
+				"ocean_components_missing_boundary": int(plan.get("ocean_components_missing_boundary", 0)),
 				"state_revision": int(environment["state_revision"]),
 				"terrain_revision": int(surface["terrain_revision"]),
 			})
