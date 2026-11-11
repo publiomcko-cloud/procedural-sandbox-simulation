@@ -48,10 +48,12 @@ static func next(stages: Dictionary, excluded: Dictionary, focus: Vector2i) -> D
 
 
 static func can_skip_pending(
-	profile: String, purpose: String, skip_count: int, elapsed_usec: int, budget_usec: int
+	profile: String, purpose: String, skip_count: int, elapsed_usec: int, budget_usec: int,
+	has_frame_headroom: bool
 ) -> bool:
 	return (
 		profile == "adaptive-skip"
+		and has_frame_headroom
 		and purpose == "load"
 		and skip_count < MAX_SKIPPED_LOAD_REGIONS_PER_FRAME
 		and elapsed_usec < budget_usec
