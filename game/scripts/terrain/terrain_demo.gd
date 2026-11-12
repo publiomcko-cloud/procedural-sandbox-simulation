@@ -34,6 +34,7 @@ const StreamLookaheadPolicy := preload("res://scripts/terrain/terrain_stream_loo
 const CoarsePreviewJob := preload("res://scripts/terrain/terrain_coarse_preview_job.gd")
 const CoarsePreviewPolicy := preload("res://scripts/terrain/terrain_coarse_preview_policy.gd")
 const ProgressiveLoadPolicy := preload("res://scripts/terrain/terrain_stream_progressive_load_policy.gd")
+const B4RadiusPolicy := preload("res://scripts/experiments/b4_radius_stream_policy.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -176,6 +177,11 @@ var _last_region_publish_profile: Dictionary = {}
 var _stream_profile := "baseline"
 # DM2 visual-only experimental mesher. The authoritative field and saves stay SDF.
 var _experimental_mesh_backend := "sdf"
+var _b4_last_reconciled_chunk := Vector2i(2147483647, 2147483647)
+var _b4_last_heading_bucket := 2147483647
+var _b4_visual_cache: Dictionary = {} # stable chunk id -> visual-only node + last-near time
+var _b4_visual_cache_last_prune_usec := 0
+var _b4_cache_evicted_total := 0
 var _stream_budget_state: Dictionary = {"dispatch_limit": 1}
 var _stream_window_started_usec := 0
 var _stream_window_frames := 0
@@ -1116,6 +1122,8 @@ func _process(delta: float) -> void:
 		_lookahead_stage_targets.clear()
 		_lookahead_stage_signature = ""
 	_reconcile_region_window()
+	if _b4_radius_mode():
+		_b4_prune_cached_visuals()
 	# Effect projection prefetch reuses the same protected 9x9 source halo and
 	# respects urgent prerequisites queued by visible mesh work.
 	if not mapped_ahead.is_empty() and mapped_ahead.get("valid", false) \
@@ -1984,6 +1992,10 @@ func _update_lod_selection() -> void:
 			var current_lod := int(_published_lod_by_chunk.get(chunk_id, 0))
 			var desired_lod := _desired_lod_for_chunk(region_key, coordinate, current_lod)
 			if desired_lod != current_lod:
+				# Never chase the camera by downgrading already-fine meshes;
+				# only promote a previously coarse chunk once it enters radius 4.
+				if _b4_radius_mode() and desired_lod == 1:
+					continue
 				changed.append(coordinate)
 		if not changed.is_empty():
 			changed_by_region[id] = {"region_key": region_key, "coordinates": changed}
@@ -2048,7 +2060,12 @@ func _corner_owner_for_coordinate(coordinate: Vector2i) -> String:
 
 
 func _desired_lod_for_chunk(region_key: Vector2i, coordinate: Vector2i, current_lod: int) -> int:
-	# The experimental mesher has no stitched multi-LOD support.
+	# DM3: 5th chunk ring stays low (1m), promotes at radius <= 4.
+	# All other B4 profiles retain the conservative DM2 LOD0 behavior.
+	if _b4_radius_mode():
+		return B4RadiusPolicy.mesh_lod(
+			B4RadiusPolicy.from_world(orbit_target), region_key, coordinate
+		)
 	if _experimental_mesh_backend == "b4":
 		return 0
 	var chunk_id: String = ChunkGrid.stable_id(region_key, coordinate)
@@ -2063,6 +2080,48 @@ func _desired_lod_for_chunk(region_key: Vector2i, coordinate: Vector2i, current_
 	var center_world: Vector3 = SpatialGrid.region_local_to_world(region_key, center_local)
 	var distance := camera.global_position.distance_to(center_world)
 	return TerrainLodPolicy.select_lod(distance, current_lod, true)
+
+
+
+## DM3 is strictly opt-in on top of the existing B4 experiment.
+func _b4_radius_mode() -> bool:
+	return _experimental_mesh_backend == "b4" \
+		and _stream_profile == "adaptive-skip-progressive"
+
+
+func _b4_camera_forward() -> Vector3:
+	var forward: Vector3 = -camera.global_transform.basis.z
+	forward.y = 0.0
+	return forward.normalized() if forward.length_squared() > 0.00001 else Vector3.FORWARD
+
+
+func _b4_sort_pending_loads() -> void:
+	var focus_chunk := B4RadiusPolicy.from_world(orbit_target)
+	var forward := _b4_camera_forward()
+	for id_value in loading_regions.keys():
+		var id: String = id_value
+		var stage: Dictionary = loading_regions[id]
+		if String(stage.get("purpose", "")) != "load":
+			continue
+		var index := int(stage.get("submit_index", 0))
+		var coords: Array[Vector2i] = stage["chunk_coordinates"]
+		if index >= coords.size():
+			continue
+		var pending: Array[Vector2i] = []
+		for i in range(index, coords.size()):
+			pending.append(coords[i])
+		var region: Vector2i = stage["region_key"]
+		pending.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+			var score_a := B4RadiusPolicy.rank(focus_chunk, region, a, forward)
+			var score_b := B4RadiusPolicy.rank(focus_chunk, region, b, forward)
+			return score_a < score_b if score_a != score_b else (
+				a.y < b.y if a.y != b.y else a.x < b.x
+			)
+		)
+		for i in range(pending.size()):
+			coords[index + i] = pending[i]
+		stage["chunk_coordinates"] = coords
+		loading_regions[id] = stage
 
 
 func _update_focus_key() -> void:
@@ -2087,12 +2146,26 @@ func _reconcile_region_window(force: bool = false) -> void:
 	var loading_before := loading_regions.size()
 	_update_focus_key()
 	var source_window_changed := force or focus_region_key != _last_reconciled_focus
-	if not source_window_changed \
+	var b4_radius := _b4_radius_mode()
+	var focus_chunk := B4RadiusPolicy.from_world(orbit_target) if b4_radius else Vector2i.ZERO
+	var forward := _b4_camera_forward() if b4_radius else Vector3.FORWARD
+	var heading_bucket := roundi(atan2(forward.x, forward.z) * 4.0 / PI)
+	var chunk_window_changed := b4_radius and focus_chunk != _b4_last_reconciled_chunk
+	var heading_changed := b4_radius and heading_bucket != _b4_last_heading_bucket
+	if not source_window_changed and not chunk_window_changed and not heading_changed \
 	and _last_reconciled_lookahead_signature == _lookahead_stage_signature:
 		return
 	_last_reconciled_focus = focus_region_key
 	_last_reconciled_lookahead_signature = _lookahead_stage_signature
-	var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
+	_b4_last_reconciled_chunk = focus_chunk
+	_b4_last_heading_bucket = heading_bucket
+	if b4_radius and (chunk_window_changed or heading_changed):
+		_b4_sort_pending_loads()
+	var desired := B4RadiusPolicy.regions_for_radius(
+		focus_chunk, B4RadiusPolicy.LOAD_RADIUS
+	) if b4_radius else _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
+	# Keep authoritative source protection limited to the original 5x5
+	# region window. The 10-chunk/20s history is visual-only, never scopes.
 	var retained := _region_keys_within_radius(focus_region_key, UNLOAD_RADIUS)
 	if _stream_profile == "adaptive-skip-lookahead" and free_explore_enabled:
 		for ahead_region in _lookahead_stage_targets:
@@ -2128,7 +2201,10 @@ func _reconcile_region_window(force: bool = false) -> void:
 			var id: String = id_value
 			var stage: Dictionary = loading_regions[id]
 			var key: Vector2i = stage["region_key"]
-			if not retained_ids.has(id) or (stage["purpose"] == "load" and not _contains_region(desired, key)):
+			if not retained_ids.has(id) or (
+				not b4_radius and stage["purpose"] == "load"
+				and not _contains_region(desired, key)
+			):
 				_discard_progressive_chunks(id, "left_window")
 				loading_regions.erase(id)
 				if not _edit_transaction.is_empty() and (_edit_transaction["target_ids"] as Array).has(id):
@@ -2263,7 +2339,15 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 	if state == null:
 		state = WorldState.new(world_seed, region_key, edit_ledger)
 	var coordinates: Array[Vector2i] = chunk_coordinates.duplicate()
-	if purpose == "load" and _stream_profile == "adaptive-skip-progressive":
+	if purpose == "load" and _b4_radius_mode():
+		var focus_chunk := B4RadiusPolicy.from_world(orbit_target)
+		var forward := _b4_camera_forward()
+		coordinates.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+			var sa := B4RadiusPolicy.rank(focus_chunk, region_key, a, forward)
+			var sb := B4RadiusPolicy.rank(focus_chunk, region_key, b, forward)
+			return sa < sb if sa != sb else (a.y < b.y if a.y != b.y else a.x < b.x)
+		)
+	elif purpose == "load" and _stream_profile == "adaptive-skip-progressive":
 		coordinates = ProgressiveLoadPolicy.interior_first(
 			coordinates, ChunkGrid.CHUNK_COUNT_X, ChunkGrid.CHUNK_COUNT_Z
 		)
@@ -3580,7 +3664,39 @@ func _terrain_effect_snapshot_pending(result: Dictionary) -> bool:
 
 
 func _next_mesh_job_request(excluded: Dictionary = {}) -> Dictionary:
-	return StreamDispatchSelector.next(loading_regions, excluded, focus_region_key)
+	var default_request := StreamDispatchSelector.next(
+		loading_regions, excluded, focus_region_key
+	)
+	if not _b4_radius_mode() or default_request.is_empty():
+		return default_request
+	var default_stage: Dictionary = loading_regions[default_request["id"]]
+	if String(default_stage.get("purpose", "")) != "load":
+		return default_request
+	var focus_chunk := B4RadiusPolicy.from_world(orbit_target)
+	var forward := _b4_camera_forward()
+	var best := default_request
+	var best_score := 2147483647
+	for id_value in loading_regions.keys():
+		var id: String = id_value
+		if excluded.has(id):
+			continue
+		var stage: Dictionary = loading_regions[id]
+		if String(stage.get("purpose", "")) != "load":
+			continue
+		var index := int(stage.get("submit_index", 0))
+		var coords: Array = stage["chunk_coordinates"]
+		if index < 0 or index >= coords.size():
+			continue
+		var chunk: Vector2i = coords[index]
+		var score := B4RadiusPolicy.rank(
+			focus_chunk, stage["region_key"], chunk, forward
+		)
+		if score < best_score or (
+			score == best_score and id < String(best.get("id", "~"))
+		):
+			best_score = score
+			best = {"id": id, "coordinate": chunk, "index": index}
+	return best
 
 
 func _stage_priority(purpose: String) -> int:
@@ -4017,6 +4133,10 @@ func _set_chunk_lod_state(chunk_id: String, node: MeshInstance3D, lod_level: int
 
 
 func _stage_lod_selection_is_current(stage: Dictionary) -> bool:
+	# A moving F10 camera crosses a chunk every ~0.17 s: do not discard a
+	# full 16-chunk stage just because radial presentation LOD moved.
+	if _b4_radius_mode():
+		return true
 	var lods: Dictionary = stage.get("lod_by_coordinate", {})
 	for coordinate in stage.get("chunk_coordinates", []):
 		var chunk_id: String = ChunkGrid.stable_id(stage["region_key"], coordinate)
@@ -4089,13 +4209,17 @@ func _supersede_region_stage(id: String) -> void:
 		# set together so no mixture of revisions can be published.
 		loading_regions.clear()
 		_full_rebuild_target_ids.clear()
-		var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
+		var desired := B4RadiusPolicy.regions_for_radius(
+			B4RadiusPolicy.from_world(orbit_target), B4RadiusPolicy.LOAD_RADIUS
+		) if _b4_radius_mode() else _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
 		var retained: Dictionary = {}
 		for key in _region_keys_within_radius(focus_region_key, UNLOAD_RADIUS):
 			retained[_region_id(key)] = true
 		_ensure_full_rebuild_targets(desired, retained)
 	elif purpose == "load":
-		var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
+		var desired := B4RadiusPolicy.regions_for_radius(
+			B4RadiusPolicy.from_world(orbit_target), B4RadiusPolicy.LOAD_RADIUS
+		) if _b4_radius_mode() else _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
 		if not active_regions.has(id) and _contains_region(desired, region_key):
 			_begin_region_stage(region_key, "load", ChunkGrid.all_coordinates())
 	elif purpose == "partial":
