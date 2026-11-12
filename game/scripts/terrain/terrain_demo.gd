@@ -34,6 +34,8 @@ const StreamLookaheadPolicy := preload("res://scripts/terrain/terrain_stream_loo
 const CoarsePreviewJob := preload("res://scripts/terrain/terrain_coarse_preview_job.gd")
 const CoarsePreviewPolicy := preload("res://scripts/terrain/terrain_coarse_preview_policy.gd")
 const ProgressiveLoadPolicy := preload("res://scripts/terrain/terrain_stream_progressive_load_policy.gd")
+const DM3Policy := preload("res://scripts/experiments/b4_region_stream_policy.gd")
+const DM3VisualJob := preload("res://scripts/experiments/b4_region_visual_job.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -176,6 +178,16 @@ var _last_region_publish_profile: Dictionary = {}
 var _stream_profile := "baseline"
 # DM2 visual-only experimental mesher. The authoritative field and saves stay SDF.
 var _experimental_mesh_backend := "sdf"
+# DM3-only derived 11x11 region visual shell; never added to active_regions.
+var _dm3_shell_nodes: Dictionary = {}
+var _dm3_shell_jobs: Dictionary = {}
+var _dm3_shell_pending: Dictionary = {}
+var _dm3_retired_region_nodes: Dictionary = {}
+var _dm3_last_scan_usec := 0
+var _dm3_shell_seed := -1
+var _dm3_shell_built := 0
+var _dm3_shell_evicted := 0
+var _dm3_shell_lod_promoted := 0
 var _stream_budget_state: Dictionary = {"dispatch_limit": 1}
 var _stream_window_started_usec := 0
 var _stream_window_frames := 0
@@ -336,6 +348,17 @@ func _ready() -> void:
 	_stream_profile = StreamBudgetPolicy.resolve_profile(
 		stream_profile_env, stream_profile_args
 	)
+	if _dm3_enabled():
+		print("DM3_REGION_STREAM: radius=5 high_through=4 low_from=5 retention_radius=10 retention_seconds=20 visual_only_outside_authority=1")
+		if _perf_trace_enabled:
+			PerformanceTrace.emit("dm3_region_stream_mode", {
+				"radius_regions": 5,
+				"high_through_regions": 4,
+				"low_from_regions": 5,
+				"retention_radius_regions": 10,
+				"retention_seconds": 20,
+				"authority_window_unchanged": true,
+			})
 	var stream_profile_requested := stream_profile_env.strip_edges().to_lower()
 	for argument in stream_profile_args:
 		if argument.begins_with("--stream-profile="):
@@ -1146,6 +1169,10 @@ func _process(delta: float) -> void:
 	if _stream_profile in ["adaptive-skip-coarse", "adaptive-skip-progressive"]:
 		_process_coarse_previews()
 	_stream_stage_measure("coarse_preview", stream_stage_started_usec)
+	stream_stage_started_usec = Time.get_ticks_usec()
+	if _dm3_enabled():
+		_dm3_process_shells()
+	_stream_stage_measure("dm3_visual_shell", stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
 	object_stream.process_queued_publications()
 	_stream_stage_measure("object_publication", stream_stage_started_usec)
@@ -3042,6 +3069,9 @@ func _process_progressive_chunk_publications() -> void:
 			if existing.has(chunk_id):
 				continue
 			var mesh: Mesh = stage["meshes"][coordinate]
+			if _dm3_enabled():
+				_dm3_drop_shell(id)
+				_dm3_drop_retired(id)
 			var node := _create_chunk_node(region_key, coordinate, chunk_id)
 			node.position = SpatialGrid.region_origin_world(region_key) + ChunkGrid.origin_for(coordinate)
 			_replace_node_mesh(
@@ -3580,7 +3610,33 @@ func _terrain_effect_snapshot_pending(result: Dictionary) -> bool:
 
 
 func _next_mesh_job_request(excluded: Dictionary = {}) -> Dictionary:
-	return StreamDispatchSelector.next(loading_regions, excluded, focus_region_key)
+	var selected := StreamDispatchSelector.next(loading_regions, excluded, focus_region_key)
+	if not _dm3_enabled() or selected.is_empty():
+		return selected
+	var selected_stage: Dictionary = loading_regions[selected["id"]]
+	if String(selected_stage.get("purpose", "")) != "load":
+		return selected
+	var best := selected
+	var best_rank := 2147483647
+	var forward := _dm3_forward()
+	for id_value in loading_regions.keys():
+		var id: String = id_value
+		if excluded.has(id):
+			continue
+		var stage: Dictionary = loading_regions[id]
+		if String(stage.get("purpose", "")) != "load":
+			continue
+		var index := int(stage.get("submit_index", 0))
+		if index >= (stage["chunk_coordinates"] as Array).size():
+			continue
+		var priority := DM3Policy.rank(stage["region_key"], focus_region_key, forward)
+		if priority < best_rank or (priority == best_rank and id < String(best.get("id", "~"))):
+			best_rank = priority
+			best = {
+				"id": id, "coordinate": stage["chunk_coordinates"][index],
+				"index": index,
+			}
+	return best
 
 
 func _stage_priority(purpose: String) -> int:
@@ -3746,6 +3802,9 @@ func _publish_region(
 ) -> void:
 	var publish_started_usec := Time.get_ticks_usec()
 	var id := _region_id(region_key)
+	if _dm3_enabled():
+		_dm3_drop_shell(id)
+		_dm3_drop_retired(id)
 	var region_nodes: Dictionary = {}
 	var early_record: Dictionary = _progressive_chunk_nodes.get(id, {})
 	var early_nodes: Dictionary = early_record.get("nodes", {}) if int(early_record.get("stage_token", -1)) == publication_token else {}
@@ -4063,8 +4122,11 @@ func _unload_region(id: String) -> void:
 	if _edit_transaction.has("target_ids") and (_edit_transaction["target_ids"] as Array).has(id):
 		_edit_transaction["target_ids"].erase(id)
 		loading_regions.erase(id)
-	for chunk_id in entry["chunk_nodes"]:
-		_release_chunk_node(chunk_id, entry["chunk_nodes"][chunk_id])
+	if _dm3_enabled() and not global_rebuild_pending:
+		_dm3_retire_region_nodes(id, entry)
+	else:
+		for chunk_id in entry["chunk_nodes"]:
+			_release_chunk_node(chunk_id, entry["chunk_nodes"][chunk_id])
 	active_regions.erase(id)
 	world_states.erase(id)
 	_streamed_region_unloads += 1
@@ -5398,6 +5460,10 @@ func _update_status() -> void:
 		_peak_frame_ms,
 	]
 	status += "DM2 terrain mesher: %s | experimental B4: visual-only, SDF simulation/save unchanged\n" % _experimental_mesh_backend
+	if _dm3_enabled():
+		status += "DM3: 5-region shell / HIGH <=4 / LOW 5 / retain 10 or 20s | visible %d + retired %d\n" % [
+			_dm3_shell_nodes.size(), _dm3_retired_region_nodes.size()
+		]
 	status += "Runtime timing: last op %s %.1f ms | frame p50/p95/p99 %.1f/%.1f/%.1f ms | process peak %.1f ms\n" % [
 		String(last_mesh_diagnostics.get("operation", _operation_name)),
 		float(last_mesh_diagnostics.get("elapsed_ms", 0.0)),
