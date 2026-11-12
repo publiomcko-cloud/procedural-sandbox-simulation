@@ -1,9 +1,7 @@
 name: P5 E7.2 budgeted event-driven progressive chunks (DO NOT MERGE)
 
 on:
-  push:
-    branches:
-      - exp/p5-stream-progressive-chunks-e7-2
+  workflow_dispatch:
 
 concurrency:
   group: p5-progressive-e7-2-${{ github.ref }}
