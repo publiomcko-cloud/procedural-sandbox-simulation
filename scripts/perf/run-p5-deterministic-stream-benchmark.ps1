@@ -132,13 +132,20 @@ foreach ($route in $Routes) {
         $workerRunMs = @()
         $uploadMs = @()
         $snapshotMs = @()
-        $dm9PrefetchStarts = 0
+        $dm9VisualWorkerMs = @()
+        $dm9VisualQueueMs = @()
+        $dm9VisualPublishMs = @()
         foreach ($line in $lines) {
             $start = $line.IndexOf('PERF_TRACE ')
             if ($start -lt 0) { continue }
             try { $event = $line.Substring($start + 11) | ConvertFrom-Json } catch { continue }
             switch ($event.event) {
                 'terrain_stream_budget_window' { $windows += $event }
+                'dm9_visual_shell_complete' {
+                    $dm9VisualWorkerMs += ([double]$event.worker_run_usec / 1000.0)
+                    $dm9VisualQueueMs += ([double]$event.worker_queue_usec / 1000.0)
+                    $dm9VisualPublishMs += ([double]$event.main_thread_publish_usec / 1000.0)
+                }
                 'dm9_prefetch_stage' {
                     $action = [string]$event.action
                     if (-not $dm9ByAction.ContainsKey($action)) { $dm9ByAction[$action] = 0 }
@@ -241,6 +248,12 @@ foreach ($route in $Routes) {
             mesh_uploads = $uploads
             dm9_enabled = ($env:SANDBOX_DM9_PREFETCH -eq '1')
             dm9_lifecycle = $dm9ByAction
+            dm9_visual_worker_limit = $(if ($env:SANDBOX_DM9_VISUAL_WORKERS) { [int]$env:SANDBOX_DM9_VISUAL_WORKERS } else { 1 })
+            dm9_visual_shell_complete_count = $dm9VisualWorkerMs.Count
+            dm9_visual_shell_worker_p50_ms = Get-Percentile $dm9VisualWorkerMs 0.50
+            dm9_visual_shell_worker_p95_ms = Get-Percentile $dm9VisualWorkerMs 0.95
+            dm9_visual_shell_queue_p95_ms = Get-Percentile $dm9VisualQueueMs 0.95
+            dm9_visual_shell_publish_p95_ms = Get-Percentile $dm9VisualPublishMs 0.95
             dm9_prefetch_ready_hits = [int]$(if ($dm9ByAction.ContainsKey('promote')) { $dm9ByAction['promote'] } else { 0 })
             snapshot_p50_ms = Get-Percentile $snapshotMs 0.50
             snapshot_p95_ms = Get-Percentile $snapshotMs 0.95
