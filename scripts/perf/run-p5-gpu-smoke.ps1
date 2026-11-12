@@ -1,5 +1,9 @@
 param(
     [ValidateRange(120, 1800)] [int]$Frames = 360,
+    [ValidateSet('idle','straight-18','straight-54','outback-18','outback-54')]
+    [string[]]$Routes = @('straight-18','straight-54'),
+    [ValidateSet('baseline','adaptive','adaptive-skip','adaptive-skip-lookahead','adaptive-skip-coarse','adaptive-skip-progressive')]
+    [string]$StreamProfile = 'adaptive-skip-coarse',
     [string]$GodotBin = 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe',
     [string]$EvidenceDir = $(if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP 'p5-gpu-smoke' } else { Join-Path $env:TEMP 'p5-gpu-smoke' })
 )
@@ -15,7 +19,7 @@ if ($version -notmatch '^4\.7\.2\.stable(?:\.|$)') { throw "Unexpected Godot ver
 New-Item -ItemType Directory -Force -Path $EvidenceDir | Out-Null
 $commit = (& git -C $repoRoot rev-parse HEAD).Trim()
 $receipts = @()
-foreach ($route in @('straight-18','straight-54')) {
+foreach ($route in $Routes) {
     $runName = "gpu-$route"
     $stdout = Join-Path $EvidenceDir "$runName.stdout.log"
     $stderr = Join-Path $EvidenceDir "$runName.stderr.log"
@@ -24,7 +28,7 @@ foreach ($route in @('straight-18','straight-54')) {
     New-Item -ItemType Directory -Path $userHome -Force | Out-Null
     $env:APPDATA = $userHome
     $env:SANDBOX_STREAM_BENCHMARK = '1'
-    $env:SANDBOX_STREAM_PROFILE = 'adaptive-skip-coarse'
+    $env:SANDBOX_STREAM_PROFILE = $StreamProfile
     $env:SANDBOX_PERF_TRACE = '1'
     $env:SANDBOX_PERF_TRACE_MIN_MS = '2.0'
     $env:SANDBOX_STREAM_BENCH_SCREENSHOT = $png
@@ -74,8 +78,8 @@ foreach ($route in @('straight-18','straight-54')) {
     $display = $displayLines[0].Substring($displayLines[0].IndexOf('P5_STREAM_BENCH_DISPLAY: ') + 'P5_STREAM_BENCH_DISPLAY: '.Length) | ConvertFrom-Json
     $capture = $captureLines[0].Substring($captureLines[0].IndexOf('P5_STREAM_BENCH_SCREENSHOT: ') + 'P5_STREAM_BENCH_SCREENSHOT: '.Length) | ConvertFrom-Json
     $complete = $completeLines[0].Substring($completeLines[0].IndexOf('P5_STREAM_BENCH_COMPLETE: ') + 'P5_STREAM_BENCH_COMPLETE: '.Length) | ConvertFrom-Json
-    if ($profile.profile -ne 'adaptive-skip-coarse' -or $profile.profile_mismatch -or
-        $complete.route -ne $route -or $complete.profile -ne 'adaptive-skip-coarse' -or
+    if ($profile.profile -ne $StreamProfile -or $profile.profile_mismatch -or
+        $complete.route -ne $route -or $complete.profile -ne $StreamProfile -or
         [int]$complete.seed -ne 424242 -or [int]$complete.frames -ne $Frames) {
         throw "P5_GPU_SMOKE_NONDETERMINISTIC_RECEIPT: $runName"
     }
@@ -85,7 +89,7 @@ foreach ($route in @('straight-18','straight-54')) {
     if ([string]::IsNullOrWhiteSpace([string]$display.adapter) -or $display.adapter -match '(?i)llvmpipe|basic render|software rasterizer') {
         throw "P5_GPU_SMOKE_NO_HARDWARE_ADAPTER: $runName adapter=$($display.adapter)"
     }
-    $speed = if ($route -eq 'straight-54') { 54.0 } else { 18.0 }
+    $speed = if ($route -eq 'idle') { 0.0 } elseif ($route.EndsWith('54')) { 54.0 } else { 18.0 }
     $expectedMeters = $speed * $Frames / 60.0
     if ([Math]::Abs([double]$complete.distance_m - $expectedMeters) -gt 0.005) {
         throw "P5_GPU_SMOKE_ROUTE_MISMATCH: $runName"
@@ -118,7 +122,7 @@ foreach ($route in @('straight-18','straight-54')) {
         route = $route
         sha = $commit
         godot = $version
-        profile = 'adaptive-skip-coarse'
+        profile = $StreamProfile
         seed = [int]$complete.seed
         frames = [int]$complete.frames
         distance_m = [double]$complete.distance_m
