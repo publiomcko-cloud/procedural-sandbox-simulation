@@ -26,12 +26,12 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Import Godot project
-        shell: powershell
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
           & $env:GODOT_BIN --headless --editor --path .\game --import
           if ($LASTEXITCODE -ne 0) { throw 'DM9 import failed' }
       - name: Parse and assert DM8/DM9 contracts
-        shell: powershell
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
           $scripts = @(
             'res://scripts/terrain/terrain_demo.gd',
@@ -69,7 +69,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Exact import
-        shell: powershell
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
           & $env:GODOT_BIN --headless --editor --path .\game --import
           if ($LASTEXITCODE -ne 0) { throw 'DM9 import failed' }
@@ -184,11 +184,11 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Windows GPU interactive preflight
-        shell: powershell
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
           & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive
       - name: Smoke test normal 18 m/s with four visual workers
-        shell: powershell
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
         timeout-minutes: 20
         run: |
           $dir = Join-Path $env:RUNNER_TEMP 'dm9-gpu'
