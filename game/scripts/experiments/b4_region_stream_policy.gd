@@ -1,15 +1,15 @@
 class_name ExperimentalB4RegionStreamPolicy
 extends RefCounted
 
-## DM3: derived rendering only. The canonical 3x3 load / 5x5 retention
+## DM4: uniform full-resolution B4 visual halo. Derived rendering only. The canonical 3x3 load / 5x5 retention
 ## and the 9x9 object-effect source footprint are not changed.
 const ACTIVE_RADIUS := 5
-const FINE_RADIUS := 4
+const FINE_RADIUS := 5
 const RETAIN_RADIUS := 10
 const RETAIN_USEC := 20_000_000
 const MAX_SHELL_REGIONS := 512
 const MAX_DETAILED_VISUAL_REGIONS := 48
-const MAX_JOBS_IN_FLIGHT := 2
+const MAX_JOBS_IN_FLIGHT := 1
 const RESCAN_USEC := 200_000
 
 static func distance(a: Vector2i, b: Vector2i) -> int:
@@ -17,7 +17,7 @@ static func distance(a: Vector2i, b: Vector2i) -> int:
 
 
 static func lod_for_distance(distance_regions: int) -> int:
-	return 0 if distance_regions <= FINE_RADIUS else 1
+	return 0 # Uniform B4 HIGH in every region; no mismatched LOW band.
 
 
 static func keep(last_near_usec: int, now_usec: int, distance_regions: int) -> bool:
@@ -28,18 +28,16 @@ static func keep(last_near_usec: int, now_usec: int, distance_regions: int) -> b
 static func rank(region: Vector2i, focus: Vector2i, forward: Vector3) -> int:
 	var diff := region - focus
 	var dist := distance(region, focus)
-	var ahead: float = -1.0
 	var direction := Vector2(float(diff.x) * 16.0, float(diff.y) * 12.0)
 	var facing := Vector2(forward.x, forward.z)
+	var alignment := -1.0
 	if direction.length_squared() > 0.00001 \
-	and facing.length_squared() > 0.00001:
-		ahead = direction.normalized().dot(facing.normalized())
-	# Canonical focus always wins; forward sector then gets a distance
-	# advantage without starving the close flanks indefinitely.
-	var sector := 0 if ahead >= 0.75 else (1 if ahead >= 0.25 else 2)
-	if dist <= 1:
-		return dist * 10
-	return sector * 100_000 + dist * 100 + (100 - roundi(ahead * 20.0))
+			and facing.length_squared() > 0.00001:
+		alignment = direction.normalized().dot(facing.normalized())
+	# Strict near-first dispatch: never spend CPU on a farther ring while
+	# a closer one is waiting. Inside each ring, camera forward wins first.
+	# Stable tie-breaking is handled by desired_regions().
+	return dist * 10000 + roundi((1.0 - alignment) * 1000.0)
 
 
 static func desired_regions(focus: Vector2i, forward: Vector3) -> Array[Vector2i]:
