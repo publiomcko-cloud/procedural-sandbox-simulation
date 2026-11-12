@@ -4192,10 +4192,10 @@ func _dm3_prune_shells(now: int) -> void:
 		var id: String = id_value
 		var record: Dictionary = _dm3_retired_region_nodes[id]
 		var dist := DM3Policy.distance(focus, record["region_key"])
-		# Radius 5 must be LOW. A retired high-resolution region is replaced
-		# with an inexpensive shell, while canonical authority stays unloaded.
-		if dist >= DM3Policy.ACTIVE_RADIUS or active_regions.has(id) \
-				or int(record["seed"]) != world_seed \
+		# At radius 5 request LOW but keep the previous detailed visual
+		# until the coarse replacement is ready. Fast F10 movement must
+		# never create a hole by eagerly discarding already-loaded terrain.
+		if active_regions.has(id) or int(record["seed"]) != world_seed \
 				or not DM3Policy.keep(int(record["last_near_usec"]), now, dist):
 			_dm3_drop_retired(id)
 			continue
