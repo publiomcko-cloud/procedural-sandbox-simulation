@@ -7,6 +7,7 @@ param(
     [int]$Frames = 720,
     [ValidateRange(0, 12000)]
     [int]$WarmupFrames = 0,
+    [switch]$CaptureProcessCpu,
     [string]$GodotBin = 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe',
     [string]$EvidenceDir = $(if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP 'p5-deterministic-evidence' } else { Join-Path $env:TEMP 'p5-deterministic-evidence' })
 )
@@ -52,10 +53,43 @@ foreach ($route in $Routes) {
         Write-Host "P5 deterministic trial $runId HEAD=$commit Godot=$version warmup_frames=$WarmupFrames"
         $process = Start-Process -FilePath $GodotBin -ArgumentList $arguments -NoNewWindow -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
         $timeoutMs = [int]([Math]::Max(120000, ($Frames + $WarmupFrames) / 60.0 * 9000))
-        if (-not $process.WaitForExit($timeoutMs)) {
+        $cpuSamples = @()
+        $cpuLastWall = [DateTime]::UtcNow
+        $cpuLastSeconds = 0.0
+        $cpuWatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $logicalCpus = [Environment]::ProcessorCount
+        $timedOut = $false
+        # Keep the original blocking semantics when CPU sampling is disabled.
+        if (-not $CaptureProcessCpu) {
+            $timedOut = -not $process.WaitForExit($timeoutMs)
+        } else {
+            while (-not $process.WaitForExit(500)) {
+                if ($cpuWatch.ElapsedMilliseconds -gt $timeoutMs) { $timedOut = $true; break }
+                $procInfo = Get-Process -Id $process.Id -ErrorAction SilentlyContinue
+                if ($null -eq $procInfo) { continue }
+                $wall = [DateTime]::UtcNow
+                $cpuSeconds = [double]$procInfo.CPU
+                $elapsedSeconds = ($wall - $cpuLastWall).TotalSeconds
+                if ($elapsedSeconds -gt 0.1) {
+                    $cpuSamples += [ordered]@{
+                        relative_wall_ms = [Math]::Round($cpuWatch.Elapsed.TotalMilliseconds, 1)
+                        cpu_pct_total_capacity = [Math]::Round(100.0 * [Math]::Max(0.0, $cpuSeconds - $cpuLastSeconds) / ($elapsedSeconds * $logicalCpus), 2)
+                        working_set_mb = [Math]::Round([double]$procInfo.WorkingSet64 / 1048576.0, 2)
+                        private_memory_mb = [Math]::Round([double]$procInfo.PrivateMemorySize64 / 1048576.0, 2)
+                        thread_count = $procInfo.Threads.Count
+                    }
+                    $cpuLastWall = $wall
+                    $cpuLastSeconds = $cpuSeconds
+                }
+            }
+        }
+        if ($timedOut) {
             $process.Kill()
             $process.WaitForExit()
             throw "Benchmark timeout: $runId ($stdout)"
+        }
+        if ($CaptureProcessCpu) {
+            $cpuSamples | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $EvidenceDir "$runId.cpu.json") -Encoding UTF8
         }
         # PowerShell 5.1 on the service runner can expose an empty ExitCode
         # even when WaitForExit returned success. A positive terminal marker,
@@ -93,12 +127,31 @@ foreach ($route in $Routes) {
         $coarseCount = 0
         $coarseReadyMs = @()
         $effectBlockers = 0
+        $dm9ByAction = @{}
+        $workerQueueMs = @()
+        $workerRunMs = @()
+        $uploadMs = @()
+        $snapshotMs = @()
+        $dm9PrefetchStarts = 0
         foreach ($line in $lines) {
             $start = $line.IndexOf('PERF_TRACE ')
             if ($start -lt 0) { continue }
             try { $event = $line.Substring($start + 11) | ConvertFrom-Json } catch { continue }
             switch ($event.event) {
                 'terrain_stream_budget_window' { $windows += $event }
+                'dm9_prefetch_stage' {
+                    $action = [string]$event.action
+                    if (-not $dm9ByAction.ContainsKey($action)) { $dm9ByAction[$action] = 0 }
+                    $dm9ByAction[$action]++
+                }
+                'terrain_mesh_job_complete' {
+                    $workerQueueMs += ([double]$event.worker_queue_usec / 1000.0)
+                    $workerRunMs += ([double]$event.worker_run_usec / 1000.0)
+                    $uploadMs += ([double]$event.upload_usec / 1000.0)
+                }
+                'terrain_mesh_snapshot' {
+                    $snapshotMs += ([double]$event.duration_usec / 1000.0)
+                }
                 'terrain_region_load_complete' {
                     if ($event.purpose -eq 'load') { $regionLoadMs += ([double]$event.elapsed_usec / 1000.0) }
                 }
@@ -186,6 +239,21 @@ foreach ($route in $Routes) {
             f10_missing_regions_per_frame = $(if ($numMoving -gt 0) { [Math]::Round($missingRegions / $numMoving, 3) } else { $null })
             mesh_dispatches = $dispatches
             mesh_uploads = $uploads
+            dm9_enabled = ($env:SANDBOX_DM9_PREFETCH -eq '1')
+            dm9_lifecycle = $dm9ByAction
+            dm9_prefetch_ready_hits = [int]$(if ($dm9ByAction.ContainsKey('promote')) { $dm9ByAction['promote'] } else { 0 })
+            snapshot_p50_ms = Get-Percentile $snapshotMs 0.50
+            snapshot_p95_ms = Get-Percentile $snapshotMs 0.95
+            worker_queue_p50_ms = Get-Percentile $workerQueueMs 0.50
+            worker_queue_p95_ms = Get-Percentile $workerQueueMs 0.95
+            worker_run_p50_ms = Get-Percentile $workerRunMs 0.50
+            worker_run_p95_ms = Get-Percentile $workerRunMs 0.95
+            upload_p50_ms = Get-Percentile $uploadMs 0.50
+            upload_p95_ms = Get-Percentile $uploadMs 0.95
+            process_cpu_samples = $cpuSamples.Count
+            process_cpu_mean_pct_total_capacity = $(if ($cpuSamples.Count -gt 0) { [Math]::Round(($cpuSamples | Measure-Object -Property cpu_pct_total_capacity -Average).Average, 2) } else { $null })
+            process_cpu_peak_pct_total_capacity = $(if ($cpuSamples.Count -gt 0) { [Math]::Round(($cpuSamples | Measure-Object -Property cpu_pct_total_capacity -Maximum).Maximum, 2) } else { $null })
+            process_rss_peak_mb = $(if ($cpuSamples.Count -gt 0) { [Math]::Round(($cpuSamples | Measure-Object -Property working_set_mb -Maximum).Maximum, 2) } else { $null })
             coarse_visible_events = $coarseCount
             coarse_reported_windows = $coarseReported
             coarse_ready_p50_ms = Get-Percentile $coarseReadyMs 0.50
