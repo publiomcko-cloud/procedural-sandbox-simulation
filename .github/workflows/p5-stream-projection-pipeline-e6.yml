@@ -1,9 +1,7 @@
 name: P5 E6 bounded source projection pipeline (DO NOT MERGE)
 
 on:
-  push:
-    branches:
-      - exp/p5-stream-projection-pipeline-e6
+  workflow_dispatch:
 
 concurrency:
   group: p5-projection-e6-${{ github.ref }}
