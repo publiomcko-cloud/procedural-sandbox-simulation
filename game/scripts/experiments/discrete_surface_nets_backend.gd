@@ -32,6 +32,7 @@ var _chunk_mode := false
 var _chunk_coordinate := Vector2i.ZERO
 var _chunk_offset := Vector3i.ZERO
 var last_generation_sample_count := 0
+var fast_skipped_inactive_cells := 0
 
 
 func generate(seed_value: int, region_value: Vector2i, step_value: float) -> bool:
@@ -43,6 +44,7 @@ func generate(seed_value: int, region_value: Vector2i, step_value: float) -> boo
 	_chunk_mode = false
 	_chunk_offset = Vector3i.ZERO
 	last_generation_sample_count = 0
+	fast_skipped_inactive_cells = 0
 	dims = Vector3i(
 		roundi((Grid.MAX_BOUND.x - Grid.MIN_BOUND.x) / step),
 		roundi((Grid.MAX_BOUND.y - Grid.MIN_BOUND.y) / step),
@@ -99,6 +101,7 @@ func generate_chunk(
 	cell_active.resize(cell_dims.x * cell_dims.y * cell_dims.z)
 	cell_vertices.resize(cell_active.size())
 	last_generation_sample_count = 0
+	fast_skipped_inactive_cells = 0
 	for y in range(-1, dims.y + 2):
 		for z in range(-1, dims.z + 2):
 			for x in range(-1, dims.x + 2):
@@ -241,6 +244,24 @@ func build_chunk(chunk: Vector2i) -> Dictionary:
 
 func _rebuild_cell(x: int, y: int, z: int) -> void:
 	var at := _cell_index(x, y, z)
+	# Most of the 0.5 m lattice is fully inside solid/air. These cells
+	# cannot own Surface Nets vertices. Reject them WITHOUT allocating
+	# eight floats and iterating 8 corners + 12 edges. Active cells run
+	# the unchanged original mesher, preserving exact B4 topology.
+	var n := _node_index(x, y, z)
+	var sz := node_dims.x
+	var sy := node_dims.x * node_dims.z
+	var solid := nodes[n] >= 0
+	if (nodes[n + 1] >= 0) == solid \
+			and (nodes[n + sy + 1] >= 0) == solid \
+			and (nodes[n + sy] >= 0) == solid \
+			and (nodes[n + sz] >= 0) == solid \
+			and (nodes[n + sz + 1] >= 0) == solid \
+			and (nodes[n + sz + sy + 1] >= 0) == solid \
+			and (nodes[n + sz + sy] >= 0) == solid:
+		cell_active[at] = 0
+		fast_skipped_inactive_cells += 1
+		return
 	var density := PackedFloat32Array()
 	density.resize(8)
 	var mask := 0
