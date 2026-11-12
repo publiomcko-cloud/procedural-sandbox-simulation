@@ -1,0 +1,42 @@
+name: P5 E3 reprocess preserved ABBA evidence (no rerun)
+
+on:
+  push:
+    branches:
+      - exp/p5-stream-ready-cache-e3
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  reprocess:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Fetch immutable E3 16-trial evidence from original benchmark run
+        uses: actions/download-artifact@v4
+        with:
+          name: p5-e3-ready-cache-abba-1
+          run-id: 43127869390
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}\p5-ready-cache-abba
+      - name: Recompute verdict without replaying Godot
+        shell: cmd
+        run: |
+          @echo off
+          powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\perf\analyze-p5-ready-cache-abba.ps1" -EvidenceDir "%RUNNER_TEMP%\p5-ready-cache-abba" -Frames 720 -ExpectedSourceCommit "ae5d0e37dc5d035d5a5d225d7b0a7dba44008dfa"
+          if errorlevel 1 exit /b 1
+      - name: Preserve E3 analytical verdict
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p5-e3-abba-postprocess-verdict
+          path: ${{ runner.temp }}\p5-ready-cache-abba\ready-cache-abba-verdict.json
+          if-no-files-found: warn
+          retention-days: 14
