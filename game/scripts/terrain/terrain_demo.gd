@@ -36,6 +36,7 @@ const CoarsePreviewPolicy := preload("res://scripts/terrain/terrain_coarse_previ
 const ProgressiveLoadPolicy := preload("res://scripts/terrain/terrain_stream_progressive_load_policy.gd")
 const DM3Policy := preload("res://scripts/experiments/b4_region_stream_policy.gd")
 const DM3VisualJob := preload("res://scripts/experiments/b4_region_visual_job.gd")
+const DM5DecorJob := preload("res://scripts/experiments/b4_low_detail_decor_job.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -192,6 +193,18 @@ var _dm3_shell_evicted := 0
 var _dm3_shell_lod_promoted := 0
 var _dm4_high_complete_focus := Vector2i(2147483647, 2147483647)
 var _dm4_high_complete_receipts := 0
+# DM5 derived LOW decorators are independent of authoritative object/hydro scope.
+var _dm5_decor_jobs: Dictionary = {}
+var _dm5_decor_pending: Dictionary = {}
+var _dm5_decor_nodes: Dictionary = {}
+var _dm5_decor_retry_after_usec: Dictionary = {}
+var _dm5_rock_mesh: SphereMesh
+var _dm5_rock_material: StandardMaterial3D
+var _dm5_water_material: StandardMaterial3D
+var _dm5_cache_hits := 0
+var _dm5_decor_published := 0
+var _dm5_decor_evictions := 0
+var _dm5_shell_regenerations := 0
 var _stream_budget_state: Dictionary = {"dispatch_limit": 1}
 var _stream_window_started_usec := 0
 var _stream_window_frames := 0
@@ -2770,6 +2783,8 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 
 ## E2 derived coarse-first preview: always separate from terrain authority.
 func _coarse_preview_record_current(id: String, record: Dictionary) -> bool:
+	if _dm3_enabled() and _dm5_has_cached_high(id):
+		return false
 	if _stream_profile not in ["adaptive-skip-coarse", "adaptive-skip-progressive"] or not loading_regions.has(id):
 		return false
 	var stage: Dictionary = loading_regions[id]
@@ -2909,6 +2924,10 @@ func _submit_coarse_preview_job() -> void:
 			continue
 		var stage: Dictionary = loading_regions[id]
 		var state: RefCounted = stage["world_state"]
+		if _dm3_enabled() and _dm5_has_cached_high(id):
+			# Revisit cache is already B4 HIGH; never schedule an E7 LOW
+			# approximation that would replace or overlap it.
+			continue
 		if not CoarsePreviewPolicy.eligible_stage(
 			_stream_profile, stage, active_regions.has(id), global_rebuild_pending,
 			not _edit_transaction.is_empty(), int(state.brush_edits.get_edit_count()) > 0,
@@ -3076,7 +3095,8 @@ func _process_progressive_chunk_publications() -> void:
 			if existing.has(chunk_id):
 				continue
 			var mesh: Mesh = stage["meshes"][coordinate]
-			if _dm3_enabled():
+			var dm5_keep_high := _dm3_enabled() and _dm5_has_cached_high(id)
+			if _dm3_enabled() and not dm5_keep_high:
 				_dm3_drop_shell(id)
 				_dm3_drop_retired(id)
 			var node := _create_chunk_node(region_key, coordinate, chunk_id)
@@ -3086,7 +3106,10 @@ func _process_progressive_chunk_publications() -> void:
 				int(stage.get("vertex_count_by_coordinate", {}).get(coordinate, -1)),
 				int(stage.get("triangle_count_by_coordinate", {}).get(coordinate, -1))
 			)
-			node.visible = true
+			# Preserve already-loaded HIGH geometry while the new
+			# authoritative chunks stage. Provisional B4 meshes are invisible
+			# until the atomic 16-chunk commit, never replaced by E7 LOW.
+			node.visible = not dm5_keep_high
 			node.set_meta("stable_chunk_id", chunk_id)
 			node.set_meta("region_key", region_key)
 			node.set_meta("chunk_coordinate", coordinate)
@@ -3812,6 +3835,7 @@ func _publish_region(
 	if _dm3_enabled():
 		_dm3_drop_shell(id)
 		_dm3_drop_retired(id)
+		_dm5_drop_decor(id, "authoritative_commit")
 	var region_nodes: Dictionary = {}
 	var early_record: Dictionary = _progressive_chunk_nodes.get(id, {})
 	var early_nodes: Dictionary = early_record.get("nodes", {}) if int(early_record.get("stage_token", -1)) == publication_token else {}
@@ -4235,6 +4259,10 @@ func _dm3_prune_shells(now: int) -> void:
 			_dm3_drop_shell(String(key_value))
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("dm4_region_b4_high_window", {
+			"dm5_cache_hits": _dm5_cache_hits,
+			"dm5_decor_regions": _dm5_decor_nodes.size(),
+			"dm5_decor_published": _dm5_decor_published,
+			"dm5_decor_evictions": _dm5_decor_evictions,
 			"focus": [focus.x, focus.y],
 			"shell_regions": _dm3_shell_nodes.size(),
 			"retired_detail_regions": _dm3_retired_region_nodes.size(),
@@ -4368,6 +4396,8 @@ func _dm3_process_shells() -> void:
 				"seed": world_seed,
 				"last_near_usec": now,
 			}
+			# Decorators can now be generated once for this true B4 HIGH
+			# region; never resample rocks/water from E7 low preview.
 			_dm3_drop_retired(id)
 			if previous_lod == 1 and level == 0:
 				_dm3_shell_lod_promoted += 1
@@ -4389,6 +4419,7 @@ func _dm3_process_shells() -> void:
 		_dm3_last_scan_usec = now
 		_dm3_shell_order = DM3Policy.desired_regions(focus_region_key, _dm3_forward())
 		_dm3_prune_shells(now)
+		_dm5_process_decor(now)
 		_dm4_emit_full_high_receipt_if_ready()
 	# Prioritize authoritative SDF/B4 jobs over the derived 121-region halo.
 	# One background job at a time; after the nearest regions finish, the
