@@ -73,25 +73,25 @@ jobs:
         run: |
           & $env:GODOT_BIN --headless --editor --path .\game --import
           if ($LASTEXITCODE -ne 0) { throw 'DM9 import failed' }
-      - name: Six cold deterministic normal-speed trials with normalized process CPU
+      - name: Eight cold deterministic normal-speed trials with normalized process CPU
         shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
         timeout-minutes: 80
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'dm9-abccba'
           New-Item -ItemType Directory -Force -Path $root | Out-Null
-          $sequence = @('A1','B1','C1','C2','B2','A2')
+          $sequence = @('A1','B1','C1','D1','D2','C2','B2','A2')
           $results = @()
           foreach ($variant in $sequence) {
             $mode = $variant.Substring(0,1)
-            $env:SANDBOX_DM9_PREFETCH = if ($mode -eq 'A') { '0' } else { '1' }
-            $env:SANDBOX_DM9_VISUAL_WORKERS = if ($mode -eq 'C') { '4' } else { '1' }
+            $env:SANDBOX_DM9_PREFETCH = if ($mode -in @('B','C')) { '1' } else { '0' }
+            $env:SANDBOX_DM9_VISUAL_WORKERS = if ($mode -in @('C','D')) { '4' } else { '1' }
             $dir = Join-Path $root $variant
             & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 720 -Routes @('outback-18') -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
             if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) { throw "DM9 trial failed: $variant" }
             $file = Join-Path $dir '01-outback-18-adaptive-skip-progressive.metrics.json'
             $m = Get-Content $file -Raw | ConvertFrom-Json
             if ($m.requested_frames -ne 720 -or $m.route -ne 'outback-18' -or $m.seed -ne 424242) { throw "DM9 trial invariant failed: $variant" }
-            if ([bool]$m.dm9_enabled -ne ($mode -ne 'A')) { throw "DM9 opt-in mismatch: $variant" }
+            if ([bool]$m.dm9_enabled -ne ($mode -in @('B','C'))) { throw "DM9 opt-in mismatch: $variant" }
             $results += [ordered]@{
               variant=$variant; revision=$m.commit;
               focus_missing_pct=$m.f10_focus_missing_pct;
@@ -108,6 +108,13 @@ jobs:
               process_cpu_mean_pct_all_cores=$m.process_cpu_mean_pct_total_capacity;
               process_cpu_peak_pct_all_cores=$m.process_cpu_peak_pct_total_capacity;
               rss_peak_mb=$m.process_rss_peak_mb;
+              cpu_process_names=$m.process_cpu_tracked_names;
+              radial_gap_front_p95=$m.dm8_visual_gap_front_p95_regions;
+              radial_gap_p95=$m.dm8_visual_gap_p95_regions;
+              radial_gap_age_p95_ms=$m.dm8_visual_gap_age_p95_ms;
+              radial_gap_final=$m.dm8_visual_gap_final_regions;
+              visual_field_generate_p95_ms=$m.dm9_visual_field_generate_p95_ms;
+              visual_chunk_meshing_p95_ms=$m.dm9_visual_chunk_meshing_p95_ms;
               visual_shell_completed=$m.dm9_visual_shell_complete_count;
               visual_shell_worker_p95_ms=$m.dm9_visual_shell_worker_p95_ms;
               visual_shell_queue_p95_ms=$m.dm9_visual_shell_queue_p95_ms;
@@ -118,7 +125,7 @@ jobs:
           $report = Join-Path $root 'dm9-abccba-summary.json'
           $results | ConvertTo-Json -Depth 9 | Set-Content $report -Encoding UTF8
           Write-Host ('DM9_ABCCBA_RESULT=' + ($results | ConvertTo-Json -Depth 9 -Compress))
-          Write-Host "DM9_ABCCBA_PASS experiments=$($results.Count) report=$report"
+          Write-Host "DM9_ABCDDCBA_PASS experiments=$($results.Count) report=$report"
       - name: Retain trial logs and structured metrics
         if: always()
         uses: actions/upload-artifact@v7
