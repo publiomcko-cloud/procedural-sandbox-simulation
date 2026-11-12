@@ -34,8 +34,11 @@ func run() -> void:
 static func build_data(world_seed: int, key: Vector2i, _level: int = 0) -> Dictionary:
 	var started := Time.get_ticks_usec()
 	var mesher := B4.new()
+	var generation_started_usec := Time.get_ticks_usec()
 	if not mesher.generate(world_seed, key, STEP):
 		return {"valid": false, "reason": "b4_generate_failed"}
+	var generation_usec := Time.get_ticks_usec() - generation_started_usec
+	var meshing_started_usec := Time.get_ticks_usec()
 	var positions := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var total_quads := 0
@@ -68,4 +71,6 @@ static func build_data(world_seed: int, key: Vector2i, _level: int = 0) -> Dicti
 		"sample_sites": mesher.last_generation_sample_count,
 		"surface_quads": total_quads,
 		"worker_usec": Time.get_ticks_usec() - started,
+		"field_generate_usec": generation_usec,
+		"surface_mesh_usec": Time.get_ticks_usec() - meshing_started_usec,
 	}
