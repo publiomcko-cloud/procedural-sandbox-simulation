@@ -128,6 +128,7 @@ foreach ($route in $Routes) {
         $coarseReadyMs = @()
         $effectBlockers = 0
         $dm9ByAction = @{}
+        $dm9ReadyHits = 0
         $workerQueueMs = @()
         $workerRunMs = @()
         $uploadMs = @()
@@ -150,6 +151,7 @@ foreach ($route in $Routes) {
                     $action = [string]$event.action
                     if (-not $dm9ByAction.ContainsKey($action)) { $dm9ByAction[$action] = 0 }
                     $dm9ByAction[$action]++
+                    if ($action -eq 'promote' -and [bool]$event.ready) { $dm9ReadyHits++ }
                 }
                 'terrain_mesh_job_complete' {
                     $workerQueueMs += ([double]$event.worker_queue_usec / 1000.0)
@@ -254,7 +256,7 @@ foreach ($route in $Routes) {
             dm9_visual_shell_worker_p95_ms = Get-Percentile $dm9VisualWorkerMs 0.95
             dm9_visual_shell_queue_p95_ms = Get-Percentile $dm9VisualQueueMs 0.95
             dm9_visual_shell_publish_p95_ms = Get-Percentile $dm9VisualPublishMs 0.95
-            dm9_prefetch_ready_hits = [int]$(if ($dm9ByAction.ContainsKey('promote')) { $dm9ByAction['promote'] } else { 0 })
+            dm9_prefetch_ready_hits = $dm9ReadyHits
             snapshot_p50_ms = Get-Percentile $snapshotMs 0.50
             snapshot_p95_ms = Get-Percentile $snapshotMs 0.95
             worker_queue_p50_ms = Get-Percentile $workerQueueMs 0.50
@@ -264,9 +266,9 @@ foreach ($route in $Routes) {
             upload_p50_ms = Get-Percentile $uploadMs 0.50
             upload_p95_ms = Get-Percentile $uploadMs 0.95
             process_cpu_samples = $cpuSamples.Count
-            process_cpu_mean_pct_total_capacity = $(if ($cpuSamples.Count -gt 0) { [Math]::Round(($cpuSamples | Measure-Object -Property cpu_pct_total_capacity -Average).Average, 2) } else { $null })
-            process_cpu_peak_pct_total_capacity = $(if ($cpuSamples.Count -gt 0) { [Math]::Round(($cpuSamples | Measure-Object -Property cpu_pct_total_capacity -Maximum).Maximum, 2) } else { $null })
-            process_rss_peak_mb = $(if ($cpuSamples.Count -gt 0) { [Math]::Round(($cpuSamples | Measure-Object -Property working_set_mb -Maximum).Maximum, 2) } else { $null })
+            process_cpu_mean_pct_total_capacity = $(if ($cpuSamples.Count -gt 0) { [Math]::Round((@($cpuSamples | ForEach-Object { [double]$_['cpu_pct_total_capacity'] }) | Measure-Object -Average).Average, 2) } else { $null })
+            process_cpu_peak_pct_total_capacity = $(if ($cpuSamples.Count -gt 0) { [Math]::Round((@($cpuSamples | ForEach-Object { [double]$_['cpu_pct_total_capacity'] }) | Measure-Object -Maximum).Maximum, 2) } else { $null })
+            process_rss_peak_mb = $(if ($cpuSamples.Count -gt 0) { [Math]::Round((@($cpuSamples | ForEach-Object { [double]$_['working_set_mb'] }) | Measure-Object -Maximum).Maximum, 2) } else { $null })
             coarse_visible_events = $coarseCount
             coarse_reported_windows = $coarseReported
             coarse_ready_p50_ms = Get-Percentile $coarseReadyMs 0.50
