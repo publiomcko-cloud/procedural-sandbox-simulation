@@ -34,13 +34,20 @@ static func build(recipe: Dictionary, seeds: Dictionary, cached_pair_cross: bool
 ## Shared pure geometry core consumed by both the renderer adapter and terrain
 ## effect descriptor. Keeping the deterministic construction here prevents
 ## visual/authoritative shape drift.
-static func build_geometry_data(recipe: Dictionary, seeds: Dictionary, cached_pair_cross: bool = false) -> Dictionary:
+static func build_geometry_data(
+	recipe: Dictionary, seeds: Dictionary, cached_pair_cross: bool = false,
+	profile: Dictionary = {}
+) -> Dictionary:
+	var measure := bool(profile.get("enabled", false))
+	var t_start := Time.get_ticks_usec() if measure else 0
 	var checked := _validate_input(recipe, seeds)
 	if not checked.get("ok", false):
 		return checked
-	var prepared := _prepare_pre_roughness(recipe, seeds)
+	var t_validated := Time.get_ticks_usec() if measure else 0
+	var prepared := _prepare_pre_roughness(recipe, seeds, profile)
 	if not prepared.get("ok", false):
 		return prepared
+	var t_prepared := Time.get_ticks_usec() if measure else 0
 	var roughened := _apply_coherent_roughness_with_guard(
 		prepared["points"],
 		prepared["triangles"],
@@ -50,6 +57,7 @@ static func build_geometry_data(recipe: Dictionary, seeds: Dictionary, cached_pa
 	)
 	if not roughened.get("ok", false):
 		return roughened
+	var t_roughened := Time.get_ticks_usec() if measure else 0
 	var roughened_points: Array[Vector3] = roughened["points"]
 	var triangles: Array[Vector3i] = prepared["triangles"]
 	if triangles.size() < MIN_TRIANGLES or triangles.size() > MAX_TRIANGLES:
@@ -77,10 +85,12 @@ static func build_geometry_data(recipe: Dictionary, seeds: Dictionary, cached_pa
 	var guard := float(roughened["roughness_guard_m"])
 	if not is_finite(guard) or guard < 0.0:
 		return _failure("shape_roughness_guard_invalid")
+	var t_preintersection := Time.get_ticks_usec() if measure else 0
 	var guarded_vertices := (
 		_intersection_vertices_pair_cached(grounded_planes, guard)
 		if cached_pair_cross else _intersection_vertices(grounded_planes, guard)
 	)
+	var t_intersected := Time.get_ticks_usec() if measure else 0
 	if guarded_vertices.size() < 4:
 		return _failure("shape_guarded_polyhedron_invalid")
 	var bounds := _measure_bounds(guarded_vertices)
@@ -113,6 +123,14 @@ static func build_geometry_data(recipe: Dictionary, seeds: Dictionary, cached_pa
 		"plane_count": grounded_planes.size(),
 		"guarded_vertex_count": guarded_vertices.size(),
 	}
+	if measure:
+		profile["validate_usec"] = t_validated - t_start
+		profile["prepare_usec"] = t_prepared - t_validated
+		profile["roughen_usec"] = t_roughened - t_prepared
+		profile["ground_usec"] = t_preintersection - t_roughened
+		profile["intersect_usec"] = t_intersected - t_preintersection
+		profile["finalize_usec"] = Time.get_ticks_usec() - t_intersected
+		profile["total_usec"] = Time.get_ticks_usec() - t_start
 	return {
 		"ok": true,
 		"points": grounded_points,
@@ -141,7 +159,7 @@ static func contains_local_point(descriptor: Dictionary, point: Vector3, toleran
 	return true
 
 
-static func _prepare_pre_roughness(recipe: Dictionary, seeds: Dictionary) -> Dictionary:
+static func _prepare_pre_roughness(recipe: Dictionary, seeds: Dictionary, profile: Dictionary = {}) -> Dictionary:
 	var half_extents := Vector3(
 		float(recipe["half_extent_x_mm"]),
 		float(recipe["half_extent_y_mm"]),
@@ -163,6 +181,7 @@ static func _prepare_pre_roughness(recipe: Dictionary, seeds: Dictionary) -> Dic
 		{"normal": Vector3.FORWARD, "distance": half_extents.z},
 	]
 
+	var clipping_started_usec := Time.get_ticks_usec() if profile.get("enabled", false) else 0
 	var structure_state := int(seeds["structure"])
 	for _index in range(int(recipe["primary_plane_count"])):
 		var sampled: Dictionary = _random_unit(structure_state)
@@ -219,20 +238,29 @@ static func _prepare_pre_roughness(recipe: Dictionary, seeds: Dictionary) -> Dic
 		polygons = clipped["polygons"]
 		planes.append({"normal": normal, "distance": distance})
 
+	var clipped_usec := Time.get_ticks_usec() if profile.get("enabled", false) else 0
 	var triangulated := _triangulate_polygons(points, polygons, center)
 	if not triangulated.get("ok", false):
 		return triangulated
 	var vertices: Array[Vector3] = triangulated["points"]
 	var triangles: Array[Vector3i] = triangulated["triangles"]
+	var triangulated_usec := Time.get_ticks_usec() if profile.get("enabled", false) else 0
 	var subdivided := _subdivide_once(vertices, triangles)
 	vertices = subdivided["points"]
 	triangles = subdivided["triangles"]
+	var subdivided_usec := Time.get_ticks_usec() if profile.get("enabled", false) else 0
 	vertices = _wear_vertices(
 		vertices,
 		triangles,
 		float(recipe["weathering_milli"]) / 1000.0,
 		int(seeds["wear"])
 	)
+	if profile.get("enabled", false):
+		var t_done := Time.get_ticks_usec()
+		profile["clip_usec"] = clipped_usec - clipping_started_usec
+		profile["triangulate_usec"] = triangulated_usec - clipped_usec
+		profile["subdivide_usec"] = subdivided_usec - triangulated_usec
+		profile["wear_usec"] = t_done - subdivided_usec
 	return {
 		"ok": true,
 		"points": vertices,
