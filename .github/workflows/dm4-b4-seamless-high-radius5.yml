@@ -1,0 +1,227 @@
+name: DM4 B4 seamless all-HIGH radius5 (DO NOT MERGE)
+
+on:
+  push:
+    branches: [exp/dm4-b4-seamless-high-radius5]
+
+concurrency:
+  group: dm4-b4-high-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 25
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import exact 4.7.2 Godot project
+        shell: cmd
+        run: |
+          @echo off
+          git rev-parse HEAD
+          "%GODOT_BIN%" --headless --editor --path .\game --import > "%RUNNER_TEMP%\dm4-import.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm4-import.log"
+            exit /b 1
+          )
+      - name: Parse B4 visual jobs, policy, terrain controller and tests
+        shell: cmd
+        run: |
+          @echo off
+          for %%S in (res://scripts/experiments/b4_region_stream_policy.gd res://scripts/experiments/b4_region_visual_job.gd res://scripts/terrain/terrain_demo.gd res://tests/experiments/dm3_region_stream_policy_tests.gd res://tests/experiments/dm4_b4_region_seam_contract.gd) do (
+            "%GODOT_BIN%" --headless --path .\game --check-only --script %%S >> "%RUNNER_TEMP%\dm4-check.log" 2>&1
+            if errorlevel 1 (
+              type "%RUNNER_TEMP%\dm4-check.log"
+              exit /b 1
+            )
+          )
+      - name: Verify 112-region HIGH queue, strict view priority and retention
+        shell: cmd
+        timeout-minutes: 10
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --path .\game --script res://tests/experiments/dm3_region_stream_policy_tests.gd > "%RUNNER_TEMP%\dm4-policy.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm4-policy.log"
+            exit /b 1
+          )
+          findstr /C:"DM4_REGION_POLICY_PASS" "%RUNNER_TEMP%\dm4-policy.log" >nul
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm4-policy.log"
+            exit /b 1
+          )
+          findstr /C:"DM4_REGION_POLICY_RESULT=" "%RUNNER_TEMP%\dm4-policy.log"
+      - name: Verify exact 0.5m B4 chunk parity and X/Z region seam cells
+        shell: cmd
+        timeout-minutes: 10
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --path .\game --script res://tests/experiments/dm4_b4_region_seam_contract.gd > "%RUNNER_TEMP%\dm4-seam.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm4-seam.log"
+            exit /b 1
+          )
+          findstr /C:"DM4_SEAM_PASS" "%RUNNER_TEMP%\dm4-seam.log" >nul
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm4-seam.log"
+            exit /b 1
+          )
+          findstr /C:"DM4_SEAM_RESULT=" "%RUNNER_TEMP%\dm4-seam.log"
+      - name: Upload contract and seam evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm4-high-b4-contract
+          path: |
+            ${{ runner.temp }}\dm4-*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  f10:
+    needs: contract
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 35
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          persist-credentials: false
+      - name: Import game
+        shell: cmd
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --editor --path .\game --import
+          if errorlevel 1 exit /b 1
+      - name: F10 18/54 m/s all-HIGH B4 streaming
+        shell: powershell
+        timeout-minutes: 30
+        run: |
+          $env:SANDBOX_TERRAIN_BACKEND = 'b4'
+          $evidence = Join-Path $env:RUNNER_TEMP 'dm4-high-f10'
+          & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $evidence -Frames 480 -Routes @('straight-18','straight-54') -Profiles @('adaptive-skip-progressive')
+          if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) { throw "DM4_F10_SCRIPT_EXIT=$LASTEXITCODE" }
+          $logs = @(Get-ChildItem $evidence -Filter '*.stdout.log')
+          if ($logs.Count -ne 2) { throw "DM4_F10_TRIAL_COUNT=$($logs.Count)" }
+          foreach ($log in $logs) {
+            $body = (Get-Content $log.FullName -Raw) -replace '\x00',''
+            if (-not $body.Contains('DM4_REGION_STREAM:') -or -not $body.Contains('"event":"dm4_b4_high_region_visible"')) {
+              throw "DM4_NO_HIGH_REGION_PUBLICATION: $($log.Name)"
+            }
+            if ($body -match '(?m)(SCRIPT ERROR:|Parse Error:|ERROR: Failed to load script)') {
+              throw "DM4_F10_ENGINE_ERROR: $($log.Name)"
+            }
+          }
+          Write-Host 'DM4_HIGH_F10_PASS'
+      - name: Upload F10 telemetry
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm4-high-b4-f10
+          path: |
+            ${{ runner.temp }}\dm4-high-f10\*.log
+            ${{ runner.temp }}\dm4-high-f10\*.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  idle:
+    needs: contract
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          persist-credentials: false
+      - name: Import game
+        shell: cmd
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --editor --path .\game --import
+          if errorlevel 1 exit /b 1
+      - name: Stationary full HIGH queue draining (2400 frames)
+        shell: powershell
+        timeout-minutes: 15
+        run: |
+          $env:SANDBOX_TERRAIN_BACKEND = 'b4'
+          $evidence = Join-Path $env:RUNNER_TEMP 'dm4-high-idle'
+          & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $evidence -Frames 2400 -Routes @('idle') -Profiles @('adaptive-skip-progressive')
+          $log = @(Get-ChildItem $evidence -Filter '*.stdout.log')[0]
+          $body = (Get-Content $log.FullName -Raw) -replace '\x00',''
+          $regions = @{}
+          foreach ($line in ($body -split "`n")) {
+            if (-not $line.Contains('PERF_TRACE ')) { continue }
+            try { $event = ($line.Substring($line.IndexOf('PERF_TRACE ') + 11) | ConvertFrom-Json) } catch { continue }
+            if ($event.event -ne 'dm4_b4_high_region_visible') { continue }
+            if ($event.backend -ne 'b4_surface_nets' -or $event.sample_step_m -ne 0.5 -or $event.lod -ne 0) {
+              throw 'DM4_NONHIGH_SHELL_PUBLISHED'
+            }
+            $regions[("$($event.region[0]),$($event.region[1])")] = 1
+          }
+          Write-Host "DM4_HIGH_IDLE_DISTINCT_REGIONS=$($regions.Count)"
+          if ($regions.Count -lt 112) { throw "DM4_HIGH_QUEUE_NOT_DRAINED: $($regions.Count)/112" }
+          Write-Host 'DM4_HIGH_IDLE_QUEUE_DRAINED_PASS'
+      - name: Upload idle queue evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm4-high-b4-idle
+          path: |
+            ${{ runner.temp }}\dm4-high-idle\*.log
+            ${{ runner.temp }}\dm4-high-idle\*.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  gpu:
+    needs: f10
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 25
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          persist-credentials: false
+      - name: Verify real interactive Windows GPU desktop
+        shell: powershell
+        run: |
+          & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive
+      - name: Render 360 F10 frames with B4 HIGH 0.5m shell
+        shell: powershell
+        timeout-minutes: 20
+        run: |
+          $env:SANDBOX_TERRAIN_BACKEND = 'b4'
+          $evidence = Join-Path $env:RUNNER_TEMP 'dm4-high-gpu'
+          & .\scripts\perf\run-p5-gpu-smoke.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $evidence -Frames 360 -Routes @('straight-18') -StreamProfile 'adaptive-skip-progressive'
+          $log = Get-Content (Join-Path $evidence 'gpu-straight-18.stdout.log') -Raw
+          if (-not $log.Contains('DM4_REGION_STREAM:') -or -not $log.Contains('"event":"dm4_b4_high_region_visible"')) {
+            throw 'DM4_NO_GPU_HIGH_REGION_EVIDENCE'
+          }
+          if ($log.Contains('"event":"terrain_region_coarse_visible"')) {
+            throw 'DM4_MISMATCHED_LOW_HEIGHTFIELD_PREVIEW'
+          }
+          Write-Host 'DM4_HIGH_GPU_PASS'
+      - name: Upload GPU capture and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm4-high-b4-gpu
+          path: |
+            ${{ runner.temp }}\dm4-high-gpu\*.png
+            ${{ runner.temp }}\dm4-high-gpu\*.log
+            ${{ runner.temp }}\dm4-high-gpu\*.json
+          if-no-files-found: warn
+          retention-days: 14
