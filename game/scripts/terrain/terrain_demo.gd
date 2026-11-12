@@ -389,6 +389,7 @@ func _ready() -> void:
 	)
 	if _dm3_enabled():
 		print("DM6_REGION_STREAM: radius=6 high_all=1 b4_sample_step=0.5 retention_radius=10 retention_seconds=20 eviction=ttl_only no_low_downgrade=1")
+		print("DM7_ROCK_STREAM: high_radius=4 terrain_high_radius=6 low_water_unchanged=1 mod_geometry_exact=1 visual_only=1")
 		if _perf_trace_enabled:
 			PerformanceTrace.emit("dm4_region_stream_mode", {
 				"radius_regions": DM3Policy.ACTIVE_RADIUS,
@@ -4701,8 +4702,16 @@ func _dm3_prune_shells(now: int) -> void:
 				"warning_only": true,
 				"forced_high_evictions": 0,
 			})
+	var dm7_rocks_retained_outer := 0
+	for decor_value in _dm5_decor_nodes.values():
+		var decor: Dictionary = decor_value
+		if bool(decor.get("rock_high", false)) \
+				and not active_regions.has(_region_id(decor["region_key"])) \
+				and DM3Policy.distance(focus, decor["region_key"]) > DM7_ROCK_HIGH_RADIUS:
+			dm7_rocks_retained_outer += 1
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("dm4_region_b4_high_window", {
+			"dm7_rocks_high_retained_beyond_radius4": dm7_rocks_retained_outer,
 			"dm5_cache_hits": _dm5_cache_hits,
 			"dm6_retained_high_reused_total": _dm6_retained_high_reused_total,
 			"dm7_rock_high_radius": DM7_ROCK_HIGH_RADIUS,
