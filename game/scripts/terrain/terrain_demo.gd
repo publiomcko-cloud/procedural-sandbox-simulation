@@ -269,6 +269,9 @@ var _dm9_stages_ready := 0
 var _dm9_stages_promoted := 0
 var _dm9_stages_discarded := 0
 var _dm9_ready_hits := 0
+var _dm9_visual_worker_limit := 1
+var _dm9_shell_started_total := 0
+var _dm9_shell_completed_total := 0
 var _lookahead_stage_begin_total := 0
 var _stream_window_lookahead_stages := 0
 var _stream_window_f10_frames := 0
@@ -404,6 +407,10 @@ func _ready() -> void:
 	_dm9_prefetch_enabled = _dm3_enabled() and OS.get_environment("SANDBOX_DM9_PREFETCH") == "1"
 	if _dm9_prefetch_enabled:
 		print("DM9_CANONICAL_PREFETCH: enabled=1 hold_until_core=1 protected_radius=2 revision_gated=1")
+	if _dm3_enabled() and OS.get_environment("SANDBOX_DM9_VISUAL_WORKERS").is_valid_int():
+		_dm9_visual_worker_limit = clampi(int(OS.get_environment("SANDBOX_DM9_VISUAL_WORKERS")), 1, 4)
+	if _dm9_visual_worker_limit > 1:
+		print("DM9_VISUAL_WORKERS: limit=%d old_limit=1 visual_only=1" % _dm9_visual_worker_limit)
 	if _dm3_enabled():
 		print("DM6_REGION_STREAM: radius=6 high_all=1 b4_sample_step=0.5 retention_radius=10 retention_seconds=20 eviction=ttl_only no_low_downgrade=1")
 		print("DM7_ROCK_STREAM: high_radius=4 terrain_high_radius=6 low_water_unchanged=1 mod_geometry_exact=1 visual_only=1")
@@ -437,6 +444,7 @@ func _ready() -> void:
 			"mesh_jobs_in_flight_limit": _mesh_job_limit,
 			"mesh_upload_limit": MAX_MESH_UPLOADS_PER_FRAME,
 			"dm9_prefetch_enabled": _dm9_prefetch_enabled,
+			"dm9_visual_worker_limit": _dm9_visual_worker_limit,
 			"snapshot_budget_usec": MESH_SNAPSHOT_FRAME_BUDGET_USEC,
 			"upload_budget_usec": MESH_UPLOAD_FRAME_BUDGET_USEC,
 		})
@@ -1092,6 +1100,10 @@ func _stream_finish_frame() -> void:
 		"dm9_prefetch_enabled": _dm9_prefetch_enabled,
 		"dm9_speculative_stages": _dm9_count_speculative(false),
 		"dm9_ready_stages": _dm9_count_speculative(true),
+		"dm9_visual_worker_limit": _dm9_visual_worker_limit,
+		"dm9_visual_workers_in_flight": _dm3_shell_jobs.size(),
+		"dm9_visual_started_total": _dm9_shell_started_total,
+		"dm9_visual_completed_total": _dm9_shell_completed_total,
 		"dm9_prefetch_started_total": _dm9_stages_started,
 		"dm9_prefetch_ready_total": _dm9_stages_ready,
 		"dm9_prefetch_promoted_total": _dm9_stages_promoted,
@@ -5078,6 +5090,8 @@ func _dm3_process_shells() -> void:
 			var level := DM3Policy.lod_for_distance(dist)
 			var job: RefCounted = record["job"]
 			var cpu: Dictionary = job.get("result")
+			var dm9_shell_queue_usec := maxi(0, int(job.get("started_usec")) - int(record.get("submitted_usec", now)))
+			var dm9_shell_run_usec := maxi(0, int(job.get("finished_usec")) - int(job.get("started_usec")))
 			if int(record["seed"]) != world_seed \
 			or dist < 2 or not DM3Policy.within_high(key, orbit_target) \
 			or level != int(record["lod"]) \
@@ -5089,6 +5103,7 @@ func _dm3_process_shells() -> void:
 					or not is_equal_approx(float(cpu.get("sample_step", 0.0)), 0.5):
 				_dm3_shell_retry_after_usec[id] = now + 5_000_000
 				break
+			var dm9_shell_publish_started_usec := Time.get_ticks_usec()
 			var mesh: ArrayMesh = CoarsePreviewJob.mesh_from_cpu_data(cpu)
 			if mesh.get_surface_count() == 0:
 				_dm3_shell_retry_after_usec[id] = now + 5_000_000
@@ -5126,6 +5141,16 @@ func _dm3_process_shells() -> void:
 			if previous_lod == 1 and level == 0:
 				_dm3_shell_lod_promoted += 1
 			_dm3_shell_built += 1
+			_dm9_shell_completed_total += 1
+			if _perf_trace_enabled:
+				PerformanceTrace.emit("dm9_visual_shell_complete", {
+					"region": [key.x, key.y],
+					"worker_queue_usec": dm9_shell_queue_usec,
+					"worker_run_usec": dm9_shell_run_usec,
+					"main_thread_publish_usec": Time.get_ticks_usec() - dm9_shell_publish_started_usec,
+					"in_flight": _dm3_shell_jobs.size(),
+					"worker_limit": _dm9_visual_worker_limit,
+				})
 			if _perf_trace_enabled:
 				PerformanceTrace.emit("dm4_region_b4_high_visible", {
 					"region": [key.x, key.y],
@@ -5156,13 +5181,15 @@ func _dm3_process_shells() -> void:
 		_dm8_sample_gap_pressure(now)
 		_dm4_emit_full_high_receipt_if_ready()
 	# Prioritize authoritative SDF/B4 jobs over the derived circular halo.
-	# One background job at a time; after the nearest regions finish, the
-	# stable sorted queue drains even during camera idle.
+	# DM9 optionally keeps up to four independent CPU-only derived jobs in flight.
+	# One main-thread upload/frame remains enforced above; sorted queue remains stable.
 	if _last_frame_ms >= 40.0 or _last_process_work_ms >= 22.0 \
-			or _dm3_shell_jobs.size() >= DM3Policy.MAX_JOBS_IN_FLIGHT \
+			or _dm3_shell_jobs.size() >= _dm9_visual_worker_limit \
 			or global_rebuild_pending or cave_section_enabled:
 		return
 	for key in _dm3_shell_order:
+		if _dm3_shell_jobs.size() >= _dm9_visual_worker_limit:
+			break
 		var id := _region_id(key)
 		if active_regions.has(id) or loading_regions.has(id):
 			continue
@@ -5193,8 +5220,11 @@ func _dm3_process_shells() -> void:
 			"lod": desired_lod,
 			"seed": world_seed,
 			"job": job,
+			"submitted_usec": Time.get_ticks_usec(),
 		}
-		break
+		_dm9_shell_started_total += 1
+		if _dm9_visual_worker_limit <= 1:
+			break
 
 
 func _unload_region(id: String) -> void:
