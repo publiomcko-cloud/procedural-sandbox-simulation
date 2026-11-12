@@ -17,6 +17,27 @@ foreach ($backend in @('sdf', 'b4')) {
     Write-Host "DM2_GUI_START backend=$backend sha=$sha"
     & (Join-Path $PSScriptRoot 'run-p5-gpu-smoke.ps1') `
         -GodotBin $GodotBin -Frames $Frames -EvidenceDir $directory
+    # Idle baseline profile disables the coarse preview and lets definitive
+    # terrain chunks settle before capturing a genuinely comparable surface.
+    $idleDir = Join-Path $directory 'settled-idle'
+    & (Join-Path $PSScriptRoot 'run-p5-gpu-smoke.ps1') `
+        -GodotBin $GodotBin -Frames 900 -EvidenceDir $idleDir `
+        -Routes @('idle') -StreamProfile 'baseline'
+    $idleLogPath = Join-Path $idleDir 'gpu-idle.stdout.log'
+    $idlePngPath = Join-Path $idleDir 'gpu-idle.png'
+    if (-not (Test-Path -LiteralPath $idleLogPath) -or
+        -not (Test-Path -LiteralPath $idlePngPath)) {
+        throw "DM2_GUI_IDLE_OUTPUT_MISSING backend=$backend"
+    }
+    $idleLines = Get-Content -LiteralPath $idleLogPath
+    $completeLine = @($idleLines | Where-Object { $_.Contains('P5_STREAM_BENCH_COMPLETE: ') })
+    if ($completeLine.Count -ne 1) {
+        throw "DM2_GUI_IDLE_COMPLETE_MISSING backend=$backend"
+    }
+    $receipt = ($completeLine[0].Substring($completeLine[0].IndexOf('P5_STREAM_BENCH_COMPLETE: ') + 'P5_STREAM_BENCH_COMPLETE: '.Length) | ConvertFrom-Json)
+    if ([int]$receipt.active_regions -lt 1 -or [int]$receipt.frames -ne 900) {
+        throw "DM2_GUI_IDLE_NOT_PUBLISHED backend=$backend active_regions=$($receipt.active_regions)"
+    }
     $stdoutLogs = @(Get-ChildItem -LiteralPath $directory -Filter '*.stdout.log' -File)
     $pngFiles = @(Get-ChildItem -LiteralPath $directory -Filter '*.png' -File)
     if ($stdoutLogs.Count -ne 2 -or $pngFiles.Count -ne 2) {
@@ -42,9 +63,17 @@ foreach ($backend in @('sdf', 'b4')) {
         frames = $Frames
         screenshots = @($pngFiles | ForEach-Object { $_.Name })
         b4_worker_receipts = $seenB4
+        settled_idle_screenshot = 'settled-idle/gpu-idle.png'
+        settled_active_regions = [int]$receipt.active_regions
+        settled_idle_png_sha256 = (Get-FileHash -LiteralPath $idlePngPath -Algorithm SHA256).Hash
         smoke = 'pass'
     }
-    Write-Host "DM2_GUI_PASS backend=$backend screenshots=$($pngFiles.Count) b4_workers=$seenB4"
+    Write-Host "DM2_GUI_PASS backend=$backend screenshots=$($pngFiles.Count)+1 settled_regions=$($receipt.active_regions) b4_workers=$seenB4"
 }
 $reports | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $EvidenceDir 'dm2-gui-results.json') -Encoding UTF8
+if ($reports[0].settled_idle_png_sha256 -eq $reports[1].settled_idle_png_sha256) {
+    Write-Warning 'DM2_GUI_IDLE_IMAGES_IDENTICAL: manual image review still required'
+} else {
+    Write-Host 'DM2_GUI_IDLE_IMAGES_DIFFER: definitive terrain candidate visible in screenshots'
+}
 Write-Host "DM2_B4_GUI_AB_PASS sha=$sha"
