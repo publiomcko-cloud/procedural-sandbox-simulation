@@ -146,17 +146,24 @@ static func desired_regions(
 		else focus_center_world(focus)
 	)
 	var keys: Array[Vector2i] = []
-	# Search a rectangle enclosing the circular world-distance footprint.
-	var range_x := ceili(radial_radius_m(ACTIVE_RADIUS) / REGION_X_M) + 1
-	var range_z := ceili(radial_radius_m(ACTIVE_RADIUS) / REGION_Z_M) + 1
+	# The radial selection is re-evaluated every 200ms. Precompute each
+	# expensive sqrt/normalization-based rank ONCE, not O(n log n) times
+	# inside sort_custom (initial measured selection averaged ~8ms/scan).
+	var rank_by_region: Dictionary = {}
+	var radius_m := radial_radius_m(ACTIVE_RADIUS)
+	var radius_sq := radius_m * radius_m + COVERAGE_EPSILON_SQ
+	var range_x := ceili(radius_m / REGION_X_M) + 1
+	var range_z := ceili(radius_m / REGION_Z_M) + 1
 	for z in range(focus.y - range_z, focus.y + range_z + 1):
 		for x in range(focus.x - range_x, focus.x + range_x + 1):
 			var r := Vector2i(x, z)
-			if distance(r, focus) >= 2 and within_high(r, player):
+			if distance(r, focus) >= 2 \
+					and world_distance_squared(r, player) <= radius_sq:
 				keys.append(r)
+				rank_by_region[r] = rank(r, focus, forward, player)
 	keys.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-		var pa := rank(a, focus, forward, player)
-		var pb := rank(b, focus, forward, player)
+		var pa: int = rank_by_region[a]
+		var pb: int = rank_by_region[b]
 		return pa < pb if pa != pb else (a.y < b.y if a.y != b.y else a.x < b.x)
 	)
 	return keys
