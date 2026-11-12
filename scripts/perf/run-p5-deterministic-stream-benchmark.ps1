@@ -3,9 +3,9 @@ param(
     [string[]]$Routes = @('straight-18', 'straight-54'),
     [ValidateSet('baseline', 'adaptive', 'adaptive-skip', 'adaptive-skip-lookahead', 'adaptive-skip-coarse', 'adaptive-skip-progressive')]
     [string[]]$Profiles = @('adaptive-skip', 'adaptive-skip-coarse', 'adaptive-skip-coarse', 'adaptive-skip'),
-    [ValidateRange(120, 9000)]
+    [ValidateRange(120, 18000)]
     [int]$Frames = 720,
-    [ValidateRange(0, 6000)]
+    [ValidateRange(0, 12000)]
     [int]$WarmupFrames = 0,
     [string]$GodotBin = 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe',
     [string]$EvidenceDir = $(if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP 'p5-deterministic-evidence' } else { Join-Path $env:TEMP 'p5-deterministic-evidence' })
