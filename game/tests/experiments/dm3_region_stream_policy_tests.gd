@@ -14,12 +14,12 @@ func _run() -> void:
 	var focus := Vector2i(12, -8)
 	var facing := Vector3(1, 0, 0)
 	var regions := Policy.desired_regions(focus, facing)
-	_check(regions.size() == 112, "11x11 window excluding canonical 3x3")
+	_check(regions.size() == Policy.expected_external_region_count(), "13x13 window excluding canonical 3x3")
 	_check(Policy.FINE_RADIUS == Policy.ACTIVE_RADIUS,
-		"uniform full resolution through radius five")
+		"uniform full resolution through radius six")
 	for r in regions:
 		var d := Policy.distance(r, focus)
-		_check(d >= 2 and d <= 5, "every shell region lies within 2..5")
+		_check(d >= 2 and d <= 6, "every shell region lies within 2..6")
 		_check(Policy.lod_for_distance(d) == 0, "every region B4 HIGH")
 	_check(Policy.distance(Vector2i(-5,-5), Vector2i.ZERO) == 5, "negative keys")
 	_check(Policy.rank(focus + Vector2i(2,0), focus, facing)
