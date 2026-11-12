@@ -2838,6 +2838,7 @@ func _process_coarse_previews() -> void:
 						"worker_usec": int(cpu.get("worker_usec", 0)),
 						"publish_usec": publish_usec,
 						"triangle_count": int(cpu.get("triangle_count", 0)),
+						"preview_patch_count": preview_chunk_nodes.size(),
 						"source": "derived_preview_not_authority",
 					})
 	if _coarse_preview_jobs.size() >= MAX_COARSE_PREVIEW_JOBS or _last_frame_ms >= 20.0 	or _last_process_work_ms >= 10.5:
@@ -3057,6 +3058,8 @@ func _process_progressive_chunk_publications() -> void:
 					"effect_revision": int(stage["terrain_effect_authority_revision"]),
 					"elapsed_usec": maxi(0, Time.get_ticks_usec() - int(stage["chunk_enqueued_usec"])),
 					"progressive_visible_in_region": (_progressive_chunk_nodes[id]["nodes"] as Dictionary).size(),
+					"focus_region": [focus_region_key.x, focus_region_key.y],
+					"focused": region_key == focus_region_key,
 					"has_authoritative_region_commit": active_regions.has(id),
 					"coarse_patch_hidden": true,
 				})
