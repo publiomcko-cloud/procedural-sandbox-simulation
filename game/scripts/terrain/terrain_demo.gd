@@ -45,8 +45,8 @@ const MAX_MESH_JOB_DISPATCHES_PER_FRAME := 1
 const MESH_SNAPSHOT_FRAME_BUDGET_USEC := 3500
 const MAX_MESH_UPLOADS_PER_FRAME := 4
 const MAX_COARSE_PREVIEW_JOBS := 1
-const MAX_PROGRESSIVE_CHUNK_PUBLISHES_PER_FRAME := 2
-const PROGRESSIVE_PUBLISH_BUDGET_USEC := 2200
+const MAX_PROGRESSIVE_CHUNK_PUBLISHES_PER_FRAME := 1
+const PROGRESSIVE_PUBLISH_BUDGET_USEC := 1100
 const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
 const STREAM_BUDGET_TRACE_INTERVAL_USEC := 1_000_000
 const MAX_SURFACE_CACHE_JOBS_IN_FLIGHT := 2
@@ -2986,7 +2986,7 @@ func _hide_coarse_patch_for_definitive_chunk(id: String, coordinate: Vector2i) -
 func _process_progressive_chunk_publications() -> void:
 	if _stream_profile != "adaptive-skip-progressive" \
 	or _progressive_ready_chunks.is_empty() \
-	or _last_frame_ms >= 20.0 or _last_process_work_ms >= 10.5:
+	or _last_frame_ms >= 16.0 or _last_process_work_ms >= 8.0 	or _mesh_uploads_this_frame > 0:
 		return
 	var started_usec := Time.get_ticks_usec()
 	var published := 0
@@ -3069,8 +3069,10 @@ func _process_progressive_chunk_publications() -> void:
 
 func _process_one_chunk_job() -> void:
 	_prune_progressive_chunks()
-	_process_progressive_chunk_publications()
 	_process_completed_mesh_jobs()
+	# E7.2: mesh upload and provisional node publication must not share a
+	# frame. Ready chunk records remain queued for a later idle render frame.
+	_process_progressive_chunk_publications()
 	_dispatch_mesh_jobs()
 	if loading_regions.is_empty() and global_rebuild_pending:
 		_try_commit_global_rebuild()
