@@ -33,6 +33,7 @@ const StreamDispatchSelector := preload("res://scripts/terrain/terrain_stream_di
 const StreamLookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
 const CoarsePreviewJob := preload("res://scripts/terrain/terrain_coarse_preview_job.gd")
 const CoarsePreviewPolicy := preload("res://scripts/terrain/terrain_coarse_preview_policy.gd")
+const ProgressiveLoadPolicy := preload("res://scripts/terrain/terrain_stream_progressive_load_policy.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -44,6 +45,8 @@ const MAX_MESH_JOB_DISPATCHES_PER_FRAME := 1
 const MESH_SNAPSHOT_FRAME_BUDGET_USEC := 3500
 const MAX_MESH_UPLOADS_PER_FRAME := 4
 const MAX_COARSE_PREVIEW_JOBS := 1
+const MAX_PROGRESSIVE_CHUNK_PUBLISHES_PER_FRAME := 2
+const PROGRESSIVE_PUBLISH_BUDGET_USEC := 2200
 const MESH_UPLOAD_FRAME_BUDGET_USEC := 3500
 const STREAM_BUDGET_TRACE_INTERVAL_USEC := 1_000_000
 const MAX_SURFACE_CACHE_JOBS_IN_FLIGHT := 2
@@ -212,6 +215,12 @@ var _stream_window_f10_perceived_focus_missing_frames := 0
 var _coarse_preview_jobs: Dictionary = {}
 var _coarse_preview_nodes: Dictionary = {}
 var _coarse_preview_attempts: Dictionary = {}
+# E7: provisional visible nodes ONLY. Region/object/simulation authority remains
+# exclusively at the original 16-chunk _publish_region commit.
+var _progressive_chunk_nodes: Dictionary = {}
+var _progressive_chunk_published_total := 0
+var _progressive_chunk_revoked_total := 0
+var _stream_window_progressive_published := 0
 var _stream_window_coarse_published := 0
 var _stream_window_coarse_replaced := 0
 var _stream_window_coarse_discarded := 0
@@ -316,7 +325,7 @@ func _ready() -> void:
 	for argument in stream_profile_args:
 		if argument.begins_with("--stream-profile="):
 			stream_profile_requested = argument.trim_prefix("--stream-profile=").strip_edges().to_lower()
-	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse"]:
+	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse", "adaptive-skip-progressive"]:
 		push_warning("Unknown stream profile; using baseline")
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("terrain_stream_profile", {
@@ -996,6 +1005,8 @@ func _stream_finish_frame() -> void:
 		"coarse_preview_discarded": _stream_window_coarse_discarded,
 		"coarse_preview_visible": _coarse_preview_nodes.size(),
 		"coarse_preview_jobs_in_flight": _coarse_preview_jobs.size(),
+		"progressive_chunks_visible": _progressive_visible_chunk_count(),
+		"progressive_chunks_published": _stream_window_progressive_published,
 		"coarse_preview_worker_usec": _stream_window_coarse_worker_usec,
 		"coarse_preview_publish_usec": _stream_window_coarse_publish_usec,
 	})
@@ -1026,6 +1037,7 @@ func _stream_finish_frame() -> void:
 	_stream_window_f10_distance_m = 0.0
 	_stream_window_lookahead_stages = 0
 	_stream_window_coarse_published = 0
+	_stream_window_progressive_published = 0
 	_stream_window_coarse_replaced = 0
 	_stream_window_coarse_discarded = 0
 	_stream_window_coarse_worker_usec = 0
@@ -1042,7 +1054,7 @@ func _process(delta: float) -> void:
 	var previous_dispatch_limit := int(_stream_budget_state.get("dispatch_limit", 1))
 	_stream_budget_state = StreamBudgetPolicy.next(
 		_stream_budget_state, _last_frame_ms, _last_process_work_ms,
-		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse"]
+		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse", "adaptive-skip-progressive"]
 	)
 	if _perf_trace_enabled and int(_stream_budget_state["dispatch_limit"]) != previous_dispatch_limit:
 		PerformanceTrace.emit("terrain_stream_budget_transition", {
@@ -1116,7 +1128,7 @@ func _process(delta: float) -> void:
 	_process_one_chunk_job()
 	_stream_stage_measure("mesh_dispatch_and_upload", stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
-	if _stream_profile == "adaptive-skip-coarse":
+	if _stream_profile in ["adaptive-skip-coarse", "adaptive-skip-progressive"]:
 		_process_coarse_previews()
 	_stream_stage_measure("coarse_preview", stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
@@ -2096,6 +2108,7 @@ func _reconcile_region_window(force: bool = false) -> void:
 			var stage: Dictionary = loading_regions[id]
 			var key: Vector2i = stage["region_key"]
 			if not retained_ids.has(id) or (stage["purpose"] == "load" and not _contains_region(desired, key)):
+				_discard_progressive_chunks(id, "left_window")
 				loading_regions.erase(id)
 				if not _edit_transaction.is_empty() and (_edit_transaction["target_ids"] as Array).has(id):
 					_edit_transaction["target_ids"].erase(id)
@@ -2168,6 +2181,7 @@ func _add_edit_transaction_region(region_key: Vector2i) -> void:
 		_start_edit_transaction_attempt()
 		return
 	if not (_edit_transaction["target_ids"] as Array).has(id):
+		_discard_progressive_chunks(id, "edit_transaction_started")
 		loading_regions.erase(id)
 		_begin_region_stage(region_key, "edit_transaction", ChunkGrid.all_coordinates())
 		_edit_transaction["target_ids"].append(id)
@@ -2210,6 +2224,7 @@ func _ensure_full_rebuild_targets(desired: Array[Vector2i], retained_ids: Dictio
 	if target_ids == _full_rebuild_target_ids:
 		return
 	_full_rebuild_target_ids = target_ids
+	_discard_all_progressive_chunks("full_rebuild_targets")
 	loading_regions.clear()
 	for key in target_keys:
 		_begin_region_stage(key, "full", ChunkGrid.all_coordinates())
@@ -2217,6 +2232,7 @@ func _ensure_full_rebuild_targets(desired: Array[Vector2i], retained_ids: Dictio
 
 func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinates: Array[Vector2i]) -> void:
 	var id := _region_id(region_key)
+	_discard_progressive_chunks(id, "stage_replaced")
 	_clear_coarse_preview(id)
 	var state: RefCounted
 	if purpose == "full" and not _pending_world_load.is_empty():
@@ -2226,6 +2242,10 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 	if state == null:
 		state = WorldState.new(world_seed, region_key, edit_ledger)
 	var coordinates: Array[Vector2i] = chunk_coordinates.duplicate()
+	if purpose == "load" and _stream_profile == "adaptive-skip-progressive":
+		coordinates = ProgressiveLoadPolicy.interior_first(
+			coordinates, ChunkGrid.CHUNK_COUNT_X, ChunkGrid.CHUNK_COUNT_Z
+		)
 	var token := _next_stage_token
 	_next_stage_token += 1
 	# Only stages that can replace the region-level terrain publication may
@@ -2695,7 +2715,7 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 
 ## E2 derived coarse-first preview: always separate from terrain authority.
 func _coarse_preview_record_current(id: String, record: Dictionary) -> bool:
-	if _stream_profile != "adaptive-skip-coarse" or not loading_regions.has(id):
+	if _stream_profile not in ["adaptive-skip-coarse", "adaptive-skip-progressive"] or not loading_regions.has(id):
 		return false
 	var stage: Dictionary = loading_regions[id]
 	var state: RefCounted = stage["world_state"]
@@ -2714,9 +2734,15 @@ func _clear_coarse_preview(id: String, reason: String = "stale") -> bool:
 		return false
 	var entry: Dictionary = _coarse_preview_nodes[id]
 	_coarse_preview_nodes.erase(id)
-	var node: MeshInstance3D = entry["node"]
+	var node: MeshInstance3D = entry.get("node", null)
 	if is_instance_valid(node):
+		node.visible = false
 		node.queue_free()
+	for tile_node_value in (entry.get("chunk_nodes", {}) as Dictionary).values():
+		var tile_node: MeshInstance3D = tile_node_value
+		if is_instance_valid(tile_node):
+			tile_node.visible = false
+			tile_node.queue_free()
 	if reason != "definitive":
 		_stream_window_coarse_discarded += 1
 		if _perf_trace_enabled:
@@ -2760,15 +2786,36 @@ func _process_coarse_previews() -> void:
 			var started_usec := Time.get_ticks_usec()
 			var mesh: ArrayMesh = CoarsePreviewJob.mesh_from_cpu_data(cpu)
 			if mesh.get_surface_count() > 0:
-				var node := MeshInstance3D.new()
-				node.name = "E2Coarse_%s" % id.replace(":", "_").replace(",", "_")
-				node.mesh = mesh
-				node.material_override = terrain_mesh_template.material_override
-				node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-				node.position = SpatialGrid.region_origin_world(record["region_key"])
-				terrain_chunks_root.add_child(node)
+				var node: MeshInstance3D = null
+				var preview_chunk_nodes: Dictionary = {}
+				if _stream_profile == "adaptive-skip-progressive":
+					var patches: Dictionary = cpu.get("chunk_patches", {})
+					var already_visible: Dictionary = _progressive_chunk_nodes.get(id, {}).get("nodes", {})
+					for coordinate in ChunkGrid.all_coordinates():
+						var patch: Dictionary = patches.get(coordinate, {})
+						var tile_mesh: ArrayMesh = CoarsePreviewJob.mesh_from_cpu_data(patch)
+						if tile_mesh.get_surface_count() == 0:
+							continue
+						var patch_node := MeshInstance3D.new()
+						patch_node.name = "E7Coarse_%s_%d_%d" % [id, coordinate.x, coordinate.y]
+						patch_node.mesh = tile_mesh
+						patch_node.material_override = terrain_mesh_template.material_override
+						patch_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+						patch_node.position = SpatialGrid.region_origin_world(record["region_key"])
+						patch_node.visible = not already_visible.has(ChunkGrid.stable_id(record["region_key"], coordinate))
+						terrain_chunks_root.add_child(patch_node)
+						preview_chunk_nodes[coordinate] = patch_node
+				else:
+					node = MeshInstance3D.new()
+					node.name = "E2Coarse_%s" % id.replace(":", "_").replace(",", "_")
+					node.mesh = mesh
+					node.material_override = terrain_mesh_template.material_override
+					node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+					node.position = SpatialGrid.region_origin_world(record["region_key"])
+					terrain_chunks_root.add_child(node)
 				_coarse_preview_nodes[id] = {
 					"node": node,
+					"chunk_nodes": preview_chunk_nodes,
 					"region_key": record["region_key"],
 					"stage_token": int(record["stage_token"]),
 					"seed": int(record["seed"]),
@@ -2832,7 +2879,8 @@ func _submit_coarse_preview_job() -> void:
 	var job := CoarsePreviewJob.new(
 		int(state.world_seed), stage["region_key"], int(stage["stage_token"]),
 		int(stage["edit_revision"]), int(stage["terrain_effect_authority_revision"]),
-		int(state.generator_version)
+		int(state.generator_version),
+		_stream_profile == "adaptive-skip-progressive"
 	)
 	var task_id := WorkerThreadPool.add_task(
 		Callable(job, "run"), false, "E2 derived coarse preview"
@@ -2852,7 +2900,171 @@ func _submit_coarse_preview_job() -> void:
 	}
 
 
+## E7 provisional chunk nodes are never registered in active_regions:
+## partial meshes stay visually present but do not activate simulation,
+## placement, object publication, world lifecycle, or authoritative commits.
+func _progressive_stage_current(id: String) -> bool:
+	if _stream_profile != "adaptive-skip-progressive" or not loading_regions.has(id):
+		return false
+	var stage: Dictionary = loading_regions[id]
+	var state: RefCounted = stage["world_state"]
+	return ProgressiveLoadPolicy.eligible(
+		stage, active_regions.has(id), global_rebuild_pending,
+		not _edit_transaction.is_empty(),
+		int(state.brush_edits.get_edit_count()) > 0,
+		cave_section_enabled
+	) and ProgressiveLoadPolicy.current(
+		stage, int(stage["stage_token"]), int(state.brush_edits.revision),
+		int(object_stream.get_command_world_revision())
+	)
+
+
+func _progressive_visible_chunk_count() -> int:
+	var total := 0
+	for entry_value in _progressive_chunk_nodes.values():
+		total += (entry_value.get("nodes", {}) as Dictionary).size()
+	return total
+
+
+func _discard_progressive_chunks(id: String, reason: String = "revoked") -> void:
+	if not _progressive_chunk_nodes.has(id):
+		return
+	var record: Dictionary = _progressive_chunk_nodes[id]
+	_progressive_chunk_nodes.erase(id)
+	var nodes: Dictionary = record.get("nodes", {})
+	for chunk_id_value in nodes.keys():
+		var chunk_id: String = chunk_id_value
+		var node: MeshInstance3D = nodes[chunk_id]
+		if is_instance_valid(node):
+			_release_chunk_node(chunk_id, node)
+	_progressive_chunk_revoked_total += nodes.size()
+	if _perf_trace_enabled:
+		var region: Vector2i = record.get("region_key", Vector2i.ZERO)
+		PerformanceTrace.emit("terrain_progressive_chunks_revoked", {
+			"region": [region.x, region.y],
+			"stage_token": int(record.get("stage_token", -1)),
+			"count": nodes.size(),
+			"reason": reason,
+			"authoritative_region_committed": false,
+		})
+
+
+func _discard_all_progressive_chunks(reason: String) -> void:
+	for id_value in _progressive_chunk_nodes.keys().duplicate():
+		_discard_progressive_chunks(String(id_value), reason)
+
+
+func _prune_progressive_chunks() -> void:
+	for id_value in _progressive_chunk_nodes.keys().duplicate():
+		var id: String = id_value
+		var entry: Dictionary = _progressive_chunk_nodes[id]
+		if not _progressive_stage_current(id) or int(entry["stage_token"]) != int(loading_regions[id]["stage_token"]):
+			_discard_progressive_chunks(id, "stale_revision_or_stage")
+
+
+func _hide_coarse_patch_for_definitive_chunk(id: String, coordinate: Vector2i) -> void:
+	if not _coarse_preview_nodes.has(id):
+		return
+	var patches: Dictionary = _coarse_preview_nodes[id].get("chunk_nodes", {})
+	if patches.has(coordinate):
+		var node: MeshInstance3D = patches[coordinate]
+		if is_instance_valid(node):
+			node.visible = false
+
+
+func _process_progressive_chunk_publications() -> void:
+	if _stream_profile != "adaptive-skip-progressive" \
+	or _last_frame_ms >= 20.0 or _last_process_work_ms >= 10.5:
+		return
+	var started_usec := Time.get_ticks_usec()
+	var staged_ids: Array[String] = []
+	for id_value in loading_regions.keys():
+		var id: String = id_value
+		if _progressive_stage_current(id):
+			staged_ids.append(id)
+	staged_ids.sort_custom(func(a: String, b: String) -> bool:
+		var ka: Vector2i = loading_regions[a]["region_key"]
+		var kb: Vector2i = loading_regions[b]["region_key"]
+		var da := maxi(absi(ka.x - focus_region_key.x), absi(ka.y - focus_region_key.y))
+		var db := maxi(absi(kb.x - focus_region_key.x), absi(kb.y - focus_region_key.y))
+		if da != db:
+			return da < db
+		return ka.y < kb.y if ka.y != kb.y else ka.x < kb.x
+	)
+	var published := 0
+	for id in staged_ids:
+		if published >= MAX_PROGRESSIVE_CHUNK_PUBLISHES_PER_FRAME:
+			break
+		if Time.get_ticks_usec() - started_usec >= PROGRESSIVE_PUBLISH_BUDGET_USEC:
+			break
+		var stage: Dictionary = loading_regions[id]
+		if not _stage_lod_selection_is_current(stage):
+			_supersede_region_stage(id)
+			continue
+		var region_key: Vector2i = stage["region_key"]
+		for coordinate in stage["chunk_coordinates"]:
+			if published >= MAX_PROGRESSIVE_CHUNK_PUBLISHES_PER_FRAME \
+			or Time.get_ticks_usec() - started_usec >= PROGRESSIVE_PUBLISH_BUDGET_USEC:
+				break
+			if not ProgressiveLoadPolicy.valid_chunk_publication(
+				stage, coordinate, active_regions.has(id), global_rebuild_pending,
+				not _edit_transaction.is_empty(),
+				int((stage["world_state"] as RefCounted).brush_edits.get_edit_count()) > 0,
+				cave_section_enabled,
+				int((stage["world_state"] as RefCounted).brush_edits.revision),
+				int(object_stream.get_command_world_revision())
+			):
+				continue
+			var chunk_id := ChunkGrid.stable_id(region_key, coordinate)
+			var existing: Dictionary = _progressive_chunk_nodes.get(id, {}).get("nodes", {})
+			if existing.has(chunk_id):
+				continue
+			var mesh: Mesh = stage["meshes"][coordinate]
+			var node := _create_chunk_node(region_key, coordinate, chunk_id)
+			node.position = SpatialGrid.region_origin_world(region_key) + ChunkGrid.origin_for(coordinate)
+			_replace_node_mesh(
+				node, mesh,
+				int(stage.get("vertex_count_by_coordinate", {}).get(coordinate, -1)),
+				int(stage.get("triangle_count_by_coordinate", {}).get(coordinate, -1))
+			)
+			node.visible = true
+			node.set_meta("stable_chunk_id", chunk_id)
+			node.set_meta("region_key", region_key)
+			node.set_meta("chunk_coordinate", coordinate)
+			_set_chunk_lod_state(
+				chunk_id, node,
+				int(stage.get("actual_lod_by_coordinate", {}).get(coordinate, 0)),
+				bool(stage.get("fallback_by_coordinate", {}).get(coordinate, false))
+			)
+			chunk_nodes[chunk_id] = node
+			if not _progressive_chunk_nodes.has(id):
+				_progressive_chunk_nodes[id] = {
+					"region_key": region_key,
+					"stage_token": int(stage["stage_token"]),
+					"nodes": {},
+				}
+			(_progressive_chunk_nodes[id]["nodes"] as Dictionary)[chunk_id] = node
+			_hide_coarse_patch_for_definitive_chunk(id, coordinate)
+			_progressive_chunk_published_total += 1
+			_stream_window_progressive_published += 1
+			published += 1
+			if _perf_trace_enabled:
+				PerformanceTrace.emit("terrain_chunk_progressive_visible", {
+					"region": [region_key.x, region_key.y],
+					"chunk": [coordinate.x, coordinate.y],
+					"stage_token": int(stage["stage_token"]),
+					"edit_revision": int(stage["edit_revision"]),
+					"effect_revision": int(stage["terrain_effect_authority_revision"]),
+					"elapsed_usec": maxi(0, Time.get_ticks_usec() - int(stage["chunk_enqueued_usec"])),
+					"progressive_visible_in_region": (_progressive_chunk_nodes[id]["nodes"] as Dictionary).size(),
+					"has_authoritative_region_commit": active_regions.has(id),
+					"coarse_patch_hidden": true,
+				})
+
+
 func _process_one_chunk_job() -> void:
+	_prune_progressive_chunks()
+	_process_progressive_chunk_publications()
 	_process_completed_mesh_jobs()
 	_dispatch_mesh_jobs()
 	if loading_regions.is_empty() and global_rebuild_pending:
@@ -3509,6 +3721,8 @@ func _publish_region(
 	var publish_started_usec := Time.get_ticks_usec()
 	var id := _region_id(region_key)
 	var region_nodes: Dictionary = {}
+	var early_record: Dictionary = _progressive_chunk_nodes.get(id, {})
+	var early_nodes: Dictionary = early_record.get("nodes", {}) if int(early_record.get("stage_token", -1)) == publication_token else {}
 	var region_origin: Vector3 = SpatialGrid.region_origin_world(region_key)
 	var created_node_count := 0
 	var reused_node_count := 0
@@ -3531,6 +3745,9 @@ func _publish_region(
 		if active_regions.has(id) and active_regions[id]["chunk_nodes"].has(chunk_id):
 			node = active_regions[id]["chunk_nodes"][chunk_id]
 			reused_node_count += 1
+		elif early_nodes.has(chunk_id):
+			node = early_nodes[chunk_id]
+			reused_node_count += 1
 		else:
 			node = _create_chunk_node(region_key, coordinate, chunk_id)
 			created_node_count += 1
@@ -3543,12 +3760,15 @@ func _publish_region(
 		transform_usec += Time.get_ticks_usec() - transform_started_usec
 
 		var mesh_replace_started_usec := Time.get_ticks_usec()
-		_replace_node_mesh(
-			node,
-			meshes[coordinate],
-			int(vertex_counts.get(coordinate, -1)),
-			int(triangle_counts.get(coordinate, -1))
-		)
+		# A mesh already visible with the exact stage token needs no second
+		# GPU replacement; final commit only adopts the provisional node.
+		if not early_nodes.has(chunk_id) or node.mesh != meshes[coordinate]:
+			_replace_node_mesh(
+				node,
+				meshes[coordinate],
+				int(vertex_counts.get(coordinate, -1)),
+				int(triangle_counts.get(coordinate, -1))
+			)
 		var mesh_replace_elapsed_usec := Time.get_ticks_usec() - mesh_replace_started_usec
 		mesh_replace_usec += mesh_replace_elapsed_usec
 		slowest_mesh_replace_usec = maxi(slowest_mesh_replace_usec, mesh_replace_elapsed_usec)
@@ -3594,6 +3814,9 @@ func _publish_region(
 
 	var registry_started_usec := Time.get_ticks_usec()
 	active_regions[id] = {"region_key": region_key, "world_state": state, "chunk_nodes": region_nodes}
+	# Visibility was non-authoritative; remove the provisional bookkeeping
+	# only after all 16 nodes have been adopted by the committed region.
+	_progressive_chunk_nodes.erase(id)
 	if is_instance_valid(_environment_visual):
 		_environment_visual.register_region(region_key)
 	world_states[id] = state
@@ -3792,6 +4015,7 @@ func _mesh_vertex_count(mesh: Mesh) -> int:
 
 
 func _unload_region(id: String) -> void:
+	_discard_progressive_chunks(id, "unload")
 	if not active_regions.has(id):
 		return
 	var entry: Dictionary = active_regions[id]
@@ -3821,6 +4045,7 @@ func _unload_region(id: String) -> void:
 
 
 func _supersede_region_stage(id: String) -> void:
+	_discard_progressive_chunks(id, "superseded")
 	_clear_coarse_preview(id, "superseded")
 	if not loading_regions.has(id):
 		return
@@ -3872,6 +4097,7 @@ func _clear_stream_error(id: String) -> void:
 
 
 func _fail_region_stage(id: String, message: String) -> void:
+	_discard_progressive_chunks(id, "stage_failed")
 	_clear_coarse_preview(id, "stage_failed")
 	_record_stream_error(id, message)
 	var failed_stage: Dictionary = loading_regions.get(id, {})
@@ -3962,6 +4188,7 @@ func _record_completed_operation(stage: Dictionary) -> void:
 
 
 func _start_global_rebuild(operation_name: String) -> void:
+	_discard_all_progressive_chunks("global_rebuild")
 	if operation_name != "load_world":
 		_pending_world_load = {}
 	_begin_operation(operation_name)
@@ -4005,6 +4232,7 @@ func _schedule_edit_transaction(operation: Dictionary) -> void:
 func _schedule_edit_transaction_batch(operations: Array[Dictionary]) -> void:
 	if operations.is_empty():
 		return
+	_discard_all_progressive_chunks("edit_command")
 	var schedule_started_usec := Time.get_ticks_usec()
 	_begin_operation("global_brush_edit")
 	var support_regions_by_id: Dictionary = {}
@@ -4140,6 +4368,7 @@ func _start_edit_transaction_attempt() -> void:
 		var chunks: Array[Vector2i] = target["chunks"]
 		if not active_regions.has(id):
 			chunks = ChunkGrid.all_coordinates()
+		_discard_progressive_chunks(id, "edit_transaction_restart")
 		loading_regions.erase(id)
 		_begin_region_stage(region_key, "edit_transaction", chunks)
 		target_ids.append(id)

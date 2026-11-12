@@ -5,6 +5,7 @@ extends RefCounted
 ## resources are touched on a worker. Canonical terrain remains unchanged.
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
+const ChunkSplitter := preload("res://scripts/terrain/terrain_coarse_preview_chunk_splitter.gd")
 const X_CELLS := 8
 const Z_CELLS := 6
 const VERTICAL_STEP := 0.5
@@ -17,13 +18,15 @@ var edit_revision: int
 var effect_revision: int
 var generator_version: int
 var result: Dictionary = {}
+var split_into_chunks := false
 var worker_started_usec := 0
 var worker_finished_usec := 0
 
 
 func _init(
 	world_seed: int, key: Vector2i, token: int,
-	brush_revision: int, object_revision: int, version: int
+	brush_revision: int, object_revision: int, version: int,
+	per_chunk_preview: bool = false
 ) -> void:
 	seed = world_seed
 	region_key = key
@@ -31,11 +34,14 @@ func _init(
 	edit_revision = brush_revision
 	effect_revision = object_revision
 	generator_version = version
+	split_into_chunks = per_chunk_preview
 
 
 func run() -> void:
 	worker_started_usec = Time.get_ticks_usec()
 	result = build_cpu_data(seed, region_key)
+	if split_into_chunks and result.get("valid", false):
+		result["chunk_patches"] = ChunkSplitter.split(result)
 	worker_finished_usec = Time.get_ticks_usec()
 
 
