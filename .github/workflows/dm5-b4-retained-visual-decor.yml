@@ -126,11 +126,9 @@ jobs:
               throw "DM4_ENGINE_ERROR: $($log.Name)"
             }
           }
-          $warm = @($logs | Where-Object { $_.Name -like '*outback*' } | ForEach-Object {
-            Get-Content $_.FullName | Where-Object { $_ -like '*"event":"dm5_retained_high_revisit"*' }
-          })
-          if ($warm.Count -lt 1) { throw 'DM5_WARM_RETURN_NOT_OBSERVED' }
-          Write-Host "DM5_REGION_HEADLESS_F10_PASS warm_revisits=$($warm.Count)"
+          $lowDecor = @($logs | ForEach-Object { Get-Content $_.FullName | Where-Object { $_ -like '*"event":"dm5_low_decor_visible"*' } })
+          if ($lowDecor.Count -lt 1) { throw 'DM5_LOW_DECOR_NOT_PRESENT_IN_COLD_ROUTE' }
+          Write-Host "DM5_REGION_HEADLESS_F10_PASS cold_route_decor_events=$($lowDecor.Count)"
       - name: Upload route telemetry
         if: always()
         uses: actions/upload-artifact@v7
@@ -235,5 +233,57 @@ jobs:
           path: |
             ${{ runner.temp }}\dm5-full-fill\*.log
             ${{ runner.temp }}\dm5-full-fill\*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  warm-return:
+    needs: full-fill
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 17
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import game
+        shell: cmd
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --editor --path .\game --import
+          if errorlevel 1 exit /b 1
+      - name: Warm HIGH cache before out-and-back F10 routes
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 15
+        run: |
+          $env:SANDBOX_TERRAIN_BACKEND = 'b4'
+          $evidence = Join-Path $env:RUNNER_TEMP 'dm5-warm-return'
+          & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $evidence -Frames 720 -WarmupFrames 3600 -Routes @('outback-18','outback-54') -Profiles @('adaptive-skip-progressive')
+          $logs = @(Get-ChildItem $evidence -Filter '*.stdout.log')
+          if ($logs.Count -ne 2) { throw "DM5_WARM_TRIAL_COUNT_MISMATCH: $($logs.Count)" }
+          $totalWarm = 0
+          foreach ($log in $logs) {
+            $body = Get-Content $log.FullName -Raw
+            $warmup = @($body -split "\r?\n" | Where-Object { $_ -like '*DM5_BENCH_WARMUP_COMPLETE:*' })
+            $revisits = @($body -split "\r?\n" | Where-Object { $_ -like '*"event":"dm5_retained_high_revisit"*' })
+            if ($warmup.Count -ne 1 -or $revisits.Count -lt 1) {
+              throw "DM5_WARM_CACHE_NOT_REUSED: $($log.Name) prewarm=$($warmup.Count) reuse=$($revisits.Count)"
+            }
+            $lowSwitch = @($revisits | Where-Object { $_ -notlike '*"superseded_by_low":false*' })
+            if ($lowSwitch.Count -gt 0) { throw "DM5_REVISIT_DOWNGRADED_TO_LOW: $($log.Name)" }
+            $totalWarm += $revisits.Count
+            Write-Host "DM5_WARM_REVISIT_VERIFIED route=$($log.Name) reused=$($revisits.Count)"
+          }
+          Write-Host "DM5_WARM_RETURN_PASS total_high_cache_hits=$totalWarm"
+      - name: Upload warm-return evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm5-warm-return
+          path: |
+            ${{ runner.temp }}\dm5-warm-return\*.log
+            ${{ runner.temp }}\dm5-warm-return\*.json
           if-no-files-found: warn
           retention-days: 14
