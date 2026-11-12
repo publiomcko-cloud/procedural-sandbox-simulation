@@ -205,6 +205,10 @@ var _dm5_cache_hits := 0
 var _dm5_decor_published := 0
 var _dm5_decor_evictions := 0
 var _dm5_shell_regenerations := 0
+var _dm6_retained_high_reused_total := 0
+var _dm6_low_preview_prevented_total := 0
+var _dm6_ttl_evicted_total := 0
+var _dm6_last_memory_warning_usec := 0
 var _stream_budget_state: Dictionary = {"dispatch_limit": 1}
 var _stream_window_started_usec := 0
 var _stream_window_frames := 0
@@ -368,11 +372,11 @@ func _ready() -> void:
 		stream_profile_env, stream_profile_args
 	)
 	if _dm3_enabled():
-		print("DM4_REGION_STREAM: radius=5 high_all=1 b4_sample_step=0.5 priority=distance_then_view retention_radius=10 retention_seconds=20 visual_only_outside_authority=1")
+		print("DM6_REGION_STREAM: radius=6 high_all=1 b4_sample_step=0.5 retention_radius=10 retention_seconds=20 eviction=ttl_only no_low_downgrade=1")
 		if _perf_trace_enabled:
 			PerformanceTrace.emit("dm4_region_stream_mode", {
-				"radius_regions": 5,
-				"high_through_regions": 5,
+				"radius_regions": DM3Policy.ACTIVE_RADIUS,
+				"high_through_regions": DM3Policy.ACTIVE_RADIUS,
 				"low_from_regions": -1,
 				"backend": "b4",
 				"mesh_step_m": 0.5,
@@ -2324,6 +2328,7 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 	var id := _region_id(region_key)
 	if purpose == "load" and _dm3_enabled() and _dm5_has_cached_high(id):
 		_dm5_cache_hits += 1
+		_dm6_retained_high_reused_total += 1
 		if _perf_trace_enabled:
 			PerformanceTrace.emit("dm5_retained_high_revisit", {
 				"region": [region_key.x, region_key.y],
@@ -2958,6 +2963,7 @@ func _submit_coarse_preview_job() -> void:
 		if _dm3_enabled() and _dm5_has_cached_high(id):
 			# Revisit cache is already B4 HIGH; never schedule an E7 LOW
 			# approximation that would replace or overlap it.
+			_dm6_low_preview_prevented_total += 1
 			continue
 		if not CoarsePreviewPolicy.eligible_stage(
 			_stream_profile, stage, active_regions.has(id), global_rebuild_pending,
@@ -4343,7 +4349,7 @@ func _dm3_forward() -> Vector3:
 	return forward.normalized() if forward.length_squared() > 0.00001 else Vector3.FORWARD
 
 
-func _dm3_drop_shell(id: String) -> void:
+func _dm3_drop_shell(id: String, reason: String = "replaced") -> void:
 	if not _dm3_shell_nodes.has(id):
 		return
 	var record: Dictionary = _dm3_shell_nodes[id]
@@ -4353,9 +4359,16 @@ func _dm3_drop_shell(id: String) -> void:
 		node.visible = false
 		node.queue_free()
 	_dm3_shell_evicted += 1
+	if reason == "expired":
+		_dm6_ttl_evicted_total += 1
+	if _perf_trace_enabled and reason == "expired":
+		PerformanceTrace.emit("dm6_high_expired", {
+			"region": [record["region_key"].x, record["region_key"].y],
+			"source": "shell", "reason": reason,
+		})
 
 
-func _dm3_drop_retired(id: String) -> void:
+func _dm3_drop_retired(id: String, reason: String = "replaced") -> void:
 	if not _dm3_retired_region_nodes.has(id):
 		return
 	var record: Dictionary = _dm3_retired_region_nodes[id]
@@ -4365,6 +4378,13 @@ func _dm3_drop_retired(id: String) -> void:
 		if is_instance_valid(node):
 			node.visible = false
 			node.queue_free()
+	if reason == "expired":
+		_dm6_ttl_evicted_total += 1
+	if _perf_trace_enabled and reason == "expired":
+		PerformanceTrace.emit("dm6_high_expired", {
+			"region": [record["region_key"].x, record["region_key"].y],
+			"source": "retired", "reason": reason,
+		})
 
 
 func _dm3_retire_region_nodes(id: String, entry: Dictionary) -> void:
@@ -4417,9 +4437,11 @@ func _dm3_prune_shells(now: int) -> void:
 		var id: String = id_value
 		var record: Dictionary = _dm3_shell_nodes[id]
 		var dist := DM3Policy.distance(focus, record["region_key"])
-		if active_regions.has(id) or int(record["seed"]) != world_seed \
-				or not DM3Policy.keep(int(record["last_near_usec"]), now, dist):
-			_dm3_drop_shell(id)
+		if active_regions.has(id) or int(record["seed"]) != world_seed:
+			_dm3_drop_shell(id, "authoritative_or_seed_change")
+			continue
+		if not DM3Policy.keep(int(record["last_near_usec"]), now, dist):
+			_dm3_drop_shell(id, "expired")
 			continue
 		if dist <= DM3Policy.RETAIN_RADIUS:
 			record["last_near_usec"] = now
@@ -4430,43 +4452,36 @@ func _dm3_prune_shells(now: int) -> void:
 		var dist := DM3Policy.distance(focus, record["region_key"])
 		# Uniform B4 HIGH throughout the view. Keep retired meshes while
 		# a new HIGH shell is generated, preventing motion-created holes.
-		if active_regions.has(id) or int(record["seed"]) != world_seed \
-				or not DM3Policy.keep(int(record["last_near_usec"]), now, dist):
-			_dm3_drop_retired(id)
+		if active_regions.has(id) or int(record["seed"]) != world_seed:
+			_dm3_drop_retired(id, "authoritative_or_seed_change")
+			continue
+		if not DM3Policy.keep(int(record["last_near_usec"]), now, dist):
+			_dm3_drop_retired(id, "expired")
 			continue
 		if dist <= DM3Policy.RETAIN_RADIUS:
 			record["last_near_usec"] = now
 			_dm3_retired_region_nodes[id] = record
-	while _dm3_retired_region_nodes.size() > DM3Policy.MAX_DETAILED_VISUAL_REGIONS:
-		var oldest := ""
-		var oldest_stamp := 9223372036854775807
-		for id_value in _dm3_retired_region_nodes.keys():
-			var id: String = id_value
-			var stamp := int(_dm3_retired_region_nodes[id]["last_near_usec"])
-			if stamp < oldest_stamp:
-				oldest = id
-				oldest_stamp = stamp
-		if oldest.is_empty():
-			break
-		_dm3_drop_retired(oldest)
-	if _dm3_shell_nodes.size() > DM3Policy.MAX_SHELL_REGIONS:
-		var ids: Array = _dm3_shell_nodes.keys()
-		ids.sort_custom(func(a: Variant, b: Variant) -> bool:
-			var ra: Dictionary = _dm3_shell_nodes[a]
-			var rb: Dictionary = _dm3_shell_nodes[b]
-			var da := DM3Policy.distance(focus, ra["region_key"])
-			var db := DM3Policy.distance(focus, rb["region_key"])
-			if da != db:
-				return da > db
-			return int(ra["last_near_usec"]) < int(rb["last_near_usec"])
-		)
-		for key_value in ids:
-			if _dm3_shell_nodes.size() <= DM3Policy.MAX_SHELL_REGIONS:
-				break
-			_dm3_drop_shell(String(key_value))
+	# DM6: strict retention means hard-cap-based eviction is forbidden. The
+	# old 48/512 caps caused reloading and visible HIGH->LOW flashes when
+	# returning through the radius-10 history. Retain GPU meshes through
+	# the full TTL. Budget excess is observable, not an eviction reason.
+	if (_dm3_retired_region_nodes.size() > DM3Policy.MAX_DETAILED_VISUAL_REGIONS
+			or _dm3_shell_nodes.size() > DM3Policy.MAX_SHELL_REGIONS) \
+			and now - _dm6_last_memory_warning_usec > 5_000_000:
+		_dm6_last_memory_warning_usec = now
+		if _perf_trace_enabled:
+			PerformanceTrace.emit("dm6_retention_capacity_warning", {
+				"high_shell_count": _dm3_shell_nodes.size(),
+				"retired_high_count": _dm3_retired_region_nodes.size(),
+				"warning_only": true,
+				"forced_high_evictions": 0,
+			})
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("dm4_region_b4_high_window", {
 			"dm5_cache_hits": _dm5_cache_hits,
+			"dm6_retained_high_reused_total": _dm6_retained_high_reused_total,
+			"dm6_low_preview_prevented_total": _dm6_low_preview_prevented_total,
+			"dm6_ttl_evicted_total": _dm6_ttl_evicted_total,
 			"dm5_decor_regions": _dm5_decor_nodes.size(),
 			"dm5_decor_published": _dm5_decor_published,
 			"dm5_decor_evictions": _dm5_decor_evictions,
@@ -4521,7 +4536,7 @@ func _dm4_emit_full_high_receipt_if_ready() -> void:
 	_dm4_high_complete_receipts += 1
 	var receipt := {
 		"focus": [focus_region_key.x, focus_region_key.y],
-		"requested_region_count": 121,
+		"requested_region_count": DM3Policy.expected_region_count(),
 		"high_shell_regions": high_shell_count,
 		"retired_detail_regions": canonical_count,
 		"canonical_core_regions": 9,
@@ -4594,6 +4609,9 @@ func _dm3_process_shells() -> void:
 				terrain_chunks_root.add_child(node)
 			node.mesh = mesh
 			node.visible = true
+			# There must never be a concurrent E7 LOW preview on the same
+			# screen position after the true B4 HIGH resource is published.
+			_clear_coarse_preview(id, "dm6_high_replaces_low")
 			node.set_meta("dm3_visual_only", true)
 			node.set_meta("dm3_preview_lod", level)
 			_dm3_shell_nodes[id] = {
@@ -6031,7 +6049,7 @@ func _update_status() -> void:
 	]
 	status += "DM2 terrain mesher: %s | experimental B4: visual-only, SDF simulation/save unchanged\n" % _experimental_mesh_backend
 	if _dm3_enabled():
-		status += "DM4: 5-region all B4 HIGH / near+forward priority / retain 10 or 20s | visible %d + retired %d\n" % [
+		status += "DM6: 6-region B4 HIGH / retain 10 and 20s grace | visible %d + retired %d\n" % [
 			_dm3_shell_nodes.size(), _dm3_retired_region_nodes.size()
 		]
 	status += "Runtime timing: last op %s %.1f ms | frame p50/p95/p99 %.1f/%.1f/%.1f ms | process peak %.1f ms\n" % [
