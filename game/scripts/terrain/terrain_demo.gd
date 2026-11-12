@@ -209,6 +209,8 @@ var _dm6_retained_high_reused_total := 0
 var _dm6_low_preview_prevented_total := 0
 var _dm6_ttl_evicted_total := 0
 var _dm6_last_memory_warning_usec := 0
+var _dm6_outer_high_visible_count := 0
+var _dm6_retained_high_visibility_repairs := 0
 var _stream_budget_state: Dictionary = {"dispatch_limit": 1}
 var _stream_window_started_usec := 0
 var _stream_window_frames := 0
@@ -4448,6 +4450,7 @@ func _dm3_retire_region_nodes(id: String, entry: Dictionary) -> void:
 
 func _dm3_prune_shells(now: int) -> void:
 	var focus: Vector2i = focus_region_key
+	_dm6_outer_high_visible_count = 0
 	for id_value in _dm3_shell_nodes.keys().duplicate():
 		var id: String = id_value
 		var record: Dictionary = _dm3_shell_nodes[id]
@@ -4461,6 +4464,13 @@ func _dm3_prune_shells(now: int) -> void:
 		if dist <= DM3Policy.RETAIN_RADIUS:
 			record["last_near_usec"] = now
 			_dm3_shell_nodes[id] = record
+		if dist > DM3Policy.ACTIVE_RADIUS:
+			var retained_node: MeshInstance3D = record.get("node", null)
+			if is_instance_valid(retained_node) and retained_node.mesh != null:
+				if not retained_node.visible:
+					retained_node.visible = true
+					_dm6_retained_high_visibility_repairs += 1
+				_dm6_outer_high_visible_count += 1
 	for id_value in _dm3_retired_region_nodes.keys().duplicate():
 		var id: String = id_value
 		var record: Dictionary = _dm3_retired_region_nodes[id]
@@ -4476,6 +4486,14 @@ func _dm3_prune_shells(now: int) -> void:
 		if dist <= DM3Policy.RETAIN_RADIUS:
 			record["last_near_usec"] = now
 			_dm3_retired_region_nodes[id] = record
+		if dist > DM3Policy.ACTIVE_RADIUS:
+			for node_value in record["nodes"]:
+				var retained_node: MeshInstance3D = node_value
+				if is_instance_valid(retained_node) and retained_node.mesh != null:
+					if not retained_node.visible:
+						retained_node.visible = true
+						_dm6_retained_high_visibility_repairs += 1
+			_dm6_outer_high_visible_count += 1
 	# DM6: strict retention means hard-cap-based eviction is forbidden. The
 	# old 48/512 caps caused reloading and visible HIGH->LOW flashes when
 	# returning through the radius-10 history. Retain GPU meshes through
@@ -4497,6 +4515,8 @@ func _dm3_prune_shells(now: int) -> void:
 			"dm6_retained_high_reused_total": _dm6_retained_high_reused_total,
 			"dm6_low_preview_prevented_total": _dm6_low_preview_prevented_total,
 			"dm6_ttl_evicted_total": _dm6_ttl_evicted_total,
+			"dm6_high_visible_beyond_active_radius": _dm6_outer_high_visible_count,
+			"dm6_visibility_repairs_total": _dm6_retained_high_visibility_repairs,
 			"dm5_decor_regions": _dm5_decor_nodes.size(),
 			"dm5_decor_published": _dm5_decor_published,
 			"dm5_decor_evictions": _dm5_decor_evictions,
@@ -4517,7 +4537,7 @@ func _dm3_prune_shells(now: int) -> void:
 
 
 
-## Completion requires that EVERY region in the radius-5 square has a
+## Completion requires that EVERY region in the radius-6 square has a
 ## HIGH B4 visual (or a fully committed canonical B4 region), not merely
 ## a submitted worker or an approximate coarse preview. Emit once/focus.
 func _dm4_emit_full_high_receipt_if_ready() -> void:
@@ -4560,9 +4580,9 @@ func _dm4_emit_full_high_receipt_if_ready() -> void:
 		"visual_only_outside_authority": true,
 		"receipt_number": _dm4_high_complete_receipts,
 	}
-	print("DM4_HIGH_RADIUS_COMPLETE: " + JSON.stringify(receipt))
+	print("DM6_HIGH_RADIUS_COMPLETE: " + JSON.stringify(receipt))
 	if _perf_trace_enabled:
-		PerformanceTrace.emit("dm4_high_radius_complete", receipt)
+		PerformanceTrace.emit("dm6_high_radius_complete", receipt)
 
 
 func _dm3_process_shells() -> void:
