@@ -44,7 +44,7 @@ static func build_geometry_data(
 	if not checked.get("ok", false):
 		return checked
 	var t_validated := Time.get_ticks_usec() if measure else 0
-	var prepared := _prepare_pre_roughness(recipe, seeds, profile)
+	var prepared := _prepare_pre_roughness(recipe, seeds, profile, cached_pair_cross)
 	if not prepared.get("ok", false):
 		return prepared
 	var t_prepared := Time.get_ticks_usec() if measure else 0
@@ -53,7 +53,8 @@ static func build_geometry_data(
 		prepared["triangles"],
 		recipe,
 		int(seeds["detail"]),
-		int(prepared["preferred_axis"])
+		int(prepared["preferred_axis"]),
+		cached_pair_cross
 	)
 	if not roughened.get("ok", false):
 		return roughened
@@ -159,7 +160,7 @@ static func contains_local_point(descriptor: Dictionary, point: Vector3, toleran
 	return true
 
 
-static func _prepare_pre_roughness(recipe: Dictionary, seeds: Dictionary, profile: Dictionary = {}) -> Dictionary:
+static func _prepare_pre_roughness(recipe: Dictionary, seeds: Dictionary, profile: Dictionary = {}, cached_noise: bool = false) -> Dictionary:
 	var half_extents := Vector3(
 		float(recipe["half_extent_x_mm"]),
 		float(recipe["half_extent_y_mm"]),
@@ -253,7 +254,8 @@ static func _prepare_pre_roughness(recipe: Dictionary, seeds: Dictionary, profil
 		vertices,
 		triangles,
 		float(recipe["weathering_milli"]) / 1000.0,
-		int(seeds["wear"])
+		int(seeds["wear"]),
+		cached_noise
 	)
 	if profile.get("enabled", false):
 		var t_done := Time.get_ticks_usec()
@@ -276,7 +278,8 @@ static func _apply_coherent_roughness_with_guard(
 	triangles: Array[Vector3i],
 	recipe: Dictionary,
 	seed: int,
-	anisotropy_axis: int
+	anisotropy_axis: int,
+	cached_noise: bool = false
 ) -> Dictionary:
 	var normals: Array[Vector3] = []
 	var shortest_edges: Array[float] = []
@@ -308,6 +311,9 @@ static func _apply_coherent_roughness_with_guard(
 	) / 1000.0
 	var output := points.duplicate()
 	var maximum_guard := 0.0
+	var sample_cache: Dictionary = {}
+	var middle_seed := _derive_noise_seed(seed, 31) if cached_noise else 0
+	var fine_seed := _derive_noise_seed(seed, 73) if cached_noise else 0
 	for index in range(points.size()):
 		var normal: Vector3 = (normals[index] as Vector3).normalized()
 		# _triangulate_polygons preserves the source point buffer, including
@@ -317,9 +323,12 @@ static func _apply_coherent_roughness_with_guard(
 			continue
 		var coordinate: Vector3 = points[index]
 		coordinate[anisotropy_axis] *= scale
-		var broad := _value_noise(coordinate * 1.6, seed)
-		var middle := _value_noise(coordinate * 4.7, _derive_noise_seed(seed, 31))
-		var fine := _value_noise(coordinate * 10.2, _derive_noise_seed(seed, 73))
+		var broad := (_value_noise_cached(coordinate * 1.6, seed, sample_cache)
+			if cached_noise else _value_noise(coordinate * 1.6, seed))
+		var middle := (_value_noise_cached(coordinate * 4.7, middle_seed, sample_cache)
+			if cached_noise else _value_noise(coordinate * 4.7, _derive_noise_seed(seed, 31)))
+		var fine := (_value_noise_cached(coordinate * 10.2, fine_seed, sample_cache)
+			if cached_noise else _value_noise(coordinate * 10.2, _derive_noise_seed(seed, 73)))
 		var displacement := broad * float(recipe["macro_roughness_mm"]) / 1000.0
 		displacement += middle * float(recipe["meso_roughness_mm"]) / 1000.0
 		displacement += fine * float(recipe["fine_roughness_mm"]) / 1000.0
@@ -525,7 +534,8 @@ static func _wear_vertices(
 	points: Array[Vector3],
 	triangles: Array[Vector3i],
 	weathering: float,
-	seed: int
+	seed: int,
+	cached_noise: bool = false
 ) -> Array[Vector3]:
 	var neighbors: Array = []
 	var normal_sums: Array[Vector3] = []
@@ -552,18 +562,24 @@ static func _wear_vertices(
 		]:
 			(neighbors[pair[0]] as Dictionary)[pair[1]] = true
 			(neighbors[pair[1]] as Dictionary)[pair[0]] = true
+	var pre_normalized: Array[Vector3] = []
+	if cached_noise:
+		pre_normalized.resize(points.size())
+		for index in range(points.size()):
+			pre_normalized[index] = normal_sums[index].normalized()
 	for triangle_index in range(triangles.size()):
 		var triangle: Vector3i = triangles[triangle_index]
 		var face_normal: Vector3 = face_normals[triangle_index]
 		for vertex_index in [triangle.x, triangle.y, triangle.z]:
-			var average_normal: Vector3 = (normal_sums[vertex_index] as Vector3).normalized()
+			var average_normal: Vector3 = pre_normalized[vertex_index] if cached_noise else (normal_sums[vertex_index] as Vector3).normalized()
 			curvature_values[vertex_index] = maxf(
 				curvature_values[vertex_index],
 				1.0 - average_normal.dot(face_normal)
 			)
 	var output := points.duplicate()
+	var wear_noise_cache: Dictionary = {}
 	for index in range(points.size()):
-		var average_normal: Vector3 = (normal_sums[index] as Vector3).normalized()
+		var average_normal: Vector3 = pre_normalized[index] if cached_noise else (normal_sums[index] as Vector3).normalized()
 		var neighbor_center := Vector3.ZERO
 		for neighbor_index in (neighbors[index] as Dictionary):
 			neighbor_center += points[int(neighbor_index)]
@@ -572,7 +588,8 @@ static func _wear_vertices(
 			continue
 		neighbor_center /= float(neighbor_count)
 		var wear_variation := 0.78 + 0.22 * (
-			_value_noise(points[index] * 2.7, seed) * 0.5 + 0.5
+			(_value_noise_cached(points[index] * 2.7, seed, wear_noise_cache)
+			if cached_noise else _value_noise(points[index] * 2.7, seed)) * 0.5 + 0.5
 		)
 		var selective_blend := weathering * 0.24 * wear_variation * clampf(
 			0.18 + curvature_values[index] * 2.8,
@@ -694,6 +711,32 @@ static func _value_noise(position: Vector3, seed: int) -> float:
 		for y in range(2):
 			for x in range(2):
 				values.append(_lattice_value(cell.x + x, cell.y + y, cell.z + z, seed))
+	var x00 := lerpf(values[0], values[1], fraction.x)
+	var x10 := lerpf(values[2], values[3], fraction.x)
+	var x01 := lerpf(values[4], values[5], fraction.x)
+	var x11 := lerpf(values[6], values[7], fraction.x)
+	return lerpf(lerpf(x00, x10, fraction.y), lerpf(x01, x11, fraction.y), fraction.z)
+
+
+static func _value_noise_cached(position: Vector3, seed: int, lattice_cache: Dictionary) -> float:
+	var cell := Vector3i(floori(position.x), floori(position.y), floori(position.z))
+	var fraction := Vector3(
+		position.x - floor(position.x),
+		position.y - floor(position.y),
+		position.z - floor(position.z)
+	)
+	fraction = Vector3(_smooth(fraction.x), _smooth(fraction.y), _smooth(fraction.z))
+	var values: Array[float] = []
+	for z in range(2):
+		for y in range(2):
+			for x in range(2):
+				var hash_key := Vector4i(cell.x + x, cell.y + y, cell.z + z, seed)
+				if lattice_cache.has(hash_key):
+					values.append(float(lattice_cache[hash_key]))
+				else:
+					var sampled := _lattice_value(cell.x + x, cell.y + y, cell.z + z, seed)
+					lattice_cache[hash_key] = sampled
+					values.append(sampled)
 	var x00 := lerpf(values[0], values[1], fraction.x)
 	var x10 := lerpf(values[2], values[3], fraction.x)
 	var x01 := lerpf(values[4], values[5], fraction.x)
