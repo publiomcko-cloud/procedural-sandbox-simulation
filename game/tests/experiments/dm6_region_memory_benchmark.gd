@@ -84,9 +84,9 @@ func _run() -> void:
 	low_samples.sort()
 	water_samples.sort()
 	field_samples.sort()
-	var high_mid := high_samples[high_samples.size() / 2] if not high_samples.is_empty() else 0
-	var low_mid := low_samples[low_samples.size() / 2] if not low_samples.is_empty() else 0
-	var water_mid := water_samples[water_samples.size() / 2] if not water_samples.is_empty() else 0
+	var high_mid := high_samples[int(high_samples.size() / 2)] if not high_samples.is_empty() else 0
+	var low_mid := low_samples[int(low_samples.size() / 2)] if not low_samples.is_empty() else 0
+	var water_mid := water_samples[int(water_samples.size() / 2)] if not water_samples.is_empty() else 0
 	var receipt := {
 		"sample_regions": report.size(),
 		"failure_count": failed,
