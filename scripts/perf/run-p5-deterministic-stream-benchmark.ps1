@@ -5,6 +5,8 @@ param(
     [string[]]$Profiles = @('adaptive-skip', 'adaptive-skip-coarse', 'adaptive-skip-coarse', 'adaptive-skip'),
     [ValidateRange(120, 9000)]
     [int]$Frames = 720,
+    [ValidateRange(0, 6000)]
+    [int]$WarmupFrames = 0,
     [string]$GodotBin = 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe',
     [string]$EvidenceDir = $(if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP 'p5-deterministic-evidence' } else { Join-Path $env:TEMP 'p5-deterministic-evidence' })
 )
@@ -44,9 +46,12 @@ foreach ($route in $Routes) {
         $env:SANDBOX_PERF_TRACE_MIN_MS = '2.0'
         $arguments = "--headless --path " + ('"{0}"' -f $project) +
             " --max-fps 60 -- --stream-benchmark-route=$route --stream-benchmark-frames=$Frames --start-water=ocean"
-        Write-Host "P5 deterministic trial $runId HEAD=$commit Godot=$version"
+        if ($WarmupFrames -gt 0) {
+            $arguments += " --stream-benchmark-warmup-frames=$WarmupFrames"
+        }
+        Write-Host "P5 deterministic trial $runId HEAD=$commit Godot=$version warmup_frames=$WarmupFrames"
         $process = Start-Process -FilePath $GodotBin -ArgumentList $arguments -NoNewWindow -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-        $timeoutMs = [int]([Math]::Max(120000, $Frames / 60.0 * 9000))
+        $timeoutMs = [int]([Math]::Max(120000, ($Frames + $WarmupFrames) / 60.0 * 9000))
         if (-not $process.WaitForExit($timeoutMs)) {
             $process.Kill()
             $process.WaitForExit()
@@ -144,8 +149,8 @@ foreach ($route in $Routes) {
         if ($route -ne 'idle' -and [int]$numMoving -ne $Frames) {
             throw "Incomplete F10 trace ${runId}: movement=$numMoving expected=$Frames"
         }
-        if ([int]$numFrames -ne ($Frames + 1)) {
-            throw "Incomplete frame trace ${runId}: sampled=$numFrames expected=$($Frames + 1)"
+        if ([int]$numFrames -ne ($Frames + $WarmupFrames + 1)) {
+            throw "Incomplete frame trace ${runId}: sampled=$numFrames expected=$($Frames + $WarmupFrames + 1)"
         }
         $workerSummary = [ordered]@{}
         foreach ($kind in @($workerByKind.Keys | Sort-Object)) {
@@ -163,6 +168,7 @@ foreach ($route in $Routes) {
             route = $route
             profile = $profile
             requested_frames = $Frames
+            warmup_frames = $WarmupFrames
             sampled_frames = [int]$numFrames
             measured_movement_frames = [int]$numMoving
             seed = [int]$receipt.seed
