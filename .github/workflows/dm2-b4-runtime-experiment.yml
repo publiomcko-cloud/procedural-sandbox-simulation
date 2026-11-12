@@ -1,0 +1,118 @@
+name: DM2 B4 experimental runtime A-B (DO NOT MERGE)
+
+on:
+  push:
+    branches:
+      - exp/dm2-b4-runtime-windows
+
+concurrency:
+  group: dm2-b4-experimental-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 20
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify physical runner and import exact Godot 4.7.2 project
+        shell: cmd
+        run: |
+          @echo off
+          if /I not "%RUNNER_NAME%"=="sandbox-gpu-interactive" exit /b 1
+          git rev-parse HEAD
+          "%GODOT_BIN%" --version
+          if errorlevel 1 exit /b 1
+          "%GODOT_BIN%" --headless --editor --path .\game --import > "%RUNNER_TEMP%\dm2-import.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm2-import.log"
+            exit /b 1
+          )
+      - name: Parse-check real terrain runtime, worker and B4
+        shell: cmd
+        run: |
+          @echo off
+          for %%S in (res://scripts/terrain/terrain_demo.gd res://scripts/terrain/terrain_mesh_job.gd res://scripts/experiments/discrete_surface_nets_backend.gd res://tests/experiments/dm2_b4_chunk_contract.gd) do (
+            "%GODOT_BIN%" --headless --path .\game --check-only --script %%S >> "%RUNNER_TEMP%\dm2-check.log" 2>&1
+            if errorlevel 1 (
+              type "%RUNNER_TEMP%\dm2-check.log"
+              exit /b 1
+            )
+          )
+      - name: Qualify chunk-edge and edit geometry against full-region B4
+        shell: cmd
+        timeout-minutes: 14
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --path .\game --script res://tests/experiments/dm2_b4_chunk_contract.gd > "%RUNNER_TEMP%\dm2-contract.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm2-contract.log"
+            exit /b 1
+          )
+          findstr /C:"DM2_B4_CHUNK_PASS" "%RUNNER_TEMP%\dm2-contract.log" >nul
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm2-contract.log"
+            exit /b 1
+          )
+          findstr /C:"DM2_B4_CHUNK_METRICS=" "%RUNNER_TEMP%\dm2-contract.log"
+      - name: Upload contract evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm2-b4-contract
+          path: |
+            ${{ runner.temp }}\dm2-import.log
+            ${{ runner.temp }}\dm2-check.log
+            ${{ runner.temp }}\dm2-contract.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  abba:
+    needs: contract
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 55
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import Godot scripts into isolated benchmark workspace
+        shell: cmd
+        run: |
+          @echo off
+          if /I not "%RUNNER_NAME%"=="sandbox-gpu-interactive" exit /b 1
+          git rev-parse HEAD
+          "%GODOT_BIN%" --headless --editor --path .\game --import
+          if errorlevel 1 exit /b 1
+      - name: Run four isolated SDF-B4-B4-SDF deterministic F10 routes
+        shell: powershell
+        timeout-minutes: 50
+        run: |
+          & .\scripts\perf\run-dm2-b4-abba.ps1 -GodotBin $env:GODOT_BIN -Frames 480
+          if ($LASTEXITCODE -ne 0) { throw 'DM2_ABBA_FAILED' }
+      - name: Upload full scene logs and metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm2-b4-runtime-abba
+          path: |
+            ${{ runner.temp }}\dm2-b4-abba\**\*.stdout.log
+            ${{ runner.temp }}\dm2-b4-abba\**\*.stderr.log
+            ${{ runner.temp }}\dm2-b4-abba\**\*.metrics.json
+            ${{ runner.temp }}\dm2-b4-abba\**\summary.json
+            ${{ runner.temp }}\dm2-b4-abba\dm2-abba-summary.json
+            ${{ runner.temp }}\dm2-b4-abba\dm2-report.json
+          if-no-files-found: warn
+          retention-days: 14
