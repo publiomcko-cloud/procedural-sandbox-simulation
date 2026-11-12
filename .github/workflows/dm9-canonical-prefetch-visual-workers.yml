@@ -131,7 +131,7 @@ jobs:
           if-no-files-found: warn
 
   idle-pressure:
-    needs: contract
+    needs: abccba
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 45
     env:
@@ -169,7 +169,7 @@ jobs:
           if-no-files-found: warn
 
   gpu:
-    needs: contract
+    needs: idle-pressure
     runs-on: [self-hosted, Windows, X64, gpu-interactive]
     timeout-minutes: 30
     env:
