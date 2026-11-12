@@ -182,6 +182,8 @@ var _experimental_mesh_backend := "sdf"
 var _dm3_shell_nodes: Dictionary = {}
 var _dm3_shell_jobs: Dictionary = {}
 var _dm3_shell_pending: Dictionary = {}
+var _dm3_shell_retry_after_usec: Dictionary = {}
+var _dm3_shell_order: Array[Vector2i] = []
 var _dm3_retired_region_nodes: Dictionary = {}
 var _dm3_last_scan_usec := 0
 var _dm3_shell_seed := -1
@@ -4097,6 +4099,274 @@ func _mesh_vertex_count(mesh: Mesh) -> int:
 		return 0
 	var vertices: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 	return vertices.size()
+
+
+
+## DM3 region-space preview only. Do not expand authoritative world states,
+## simulation scopes, mod effects, persistence or the 81-source projection cap.
+func _dm3_enabled() -> bool:
+	return _experimental_mesh_backend == "b4" \
+		and _stream_profile == "adaptive-skip-progressive"
+
+
+func _dm3_forward() -> Vector3:
+	var forward: Vector3 = -camera.global_transform.basis.z
+	forward.y = 0.0
+	return forward.normalized() if forward.length_squared() > 0.00001 else Vector3.FORWARD
+
+
+func _dm3_drop_shell(id: String) -> void:
+	if not _dm3_shell_nodes.has(id):
+		return
+	var record: Dictionary = _dm3_shell_nodes[id]
+	_dm3_shell_nodes.erase(id)
+	var node: MeshInstance3D = record["node"]
+	if is_instance_valid(node):
+		node.visible = false
+		node.queue_free()
+	_dm3_shell_evicted += 1
+
+
+func _dm3_drop_retired(id: String) -> void:
+	if not _dm3_retired_region_nodes.has(id):
+		return
+	var record: Dictionary = _dm3_retired_region_nodes[id]
+	_dm3_retired_region_nodes.erase(id)
+	for node_value in record["nodes"]:
+		var node: MeshInstance3D = node_value
+		if is_instance_valid(node):
+			node.visible = false
+			node.queue_free()
+
+
+func _dm3_retire_region_nodes(id: String, entry: Dictionary) -> void:
+	_dm3_drop_shell(id)
+	_dm3_drop_retired(id)
+	var visuals: Array[MeshInstance3D] = []
+	for chunk_id_value in entry["chunk_nodes"].keys():
+		var chunk_id: String = chunk_id_value
+		var node: MeshInstance3D = entry["chunk_nodes"][chunk_id]
+		if not is_instance_valid(node):
+			continue
+		# The (0,0) chunk uses the permanent scene template. Never transfer
+		# that node out of the canonical renderer's ownership.
+		if node == terrain_mesh_template:
+			_release_chunk_node(chunk_id, node)
+			continue
+		var triangles := int(node.get_meta("mesh_triangle_count", -1))
+		var vertices := int(node.get_meta("mesh_vertex_count", -1))
+		if triangles < 0:
+			triangles = _mesh_triangle_count(node.mesh)
+		if vertices < 0:
+			vertices = _mesh_vertex_count(node.mesh)
+		_active_triangle_count -= triangles
+		_active_vertex_count -= vertices
+		chunk_nodes.erase(chunk_id)
+		_published_lod_by_chunk.erase(chunk_id)
+		_lod_fallback_chunks.erase(chunk_id)
+		node.set_meta("dm3_visual_only", true)
+		visuals.append(node)
+	if not visuals.is_empty():
+		_dm3_retired_region_nodes[id] = {
+			"region_key": entry["region_key"],
+			"nodes": visuals,
+			"last_near_usec": Time.get_ticks_usec(),
+			"seed": world_seed,
+		}
+
+
+func _dm3_prune_shells(now: int) -> void:
+	var focus: Vector2i = focus_region_key
+	for id_value in _dm3_shell_nodes.keys().duplicate():
+		var id: String = id_value
+		var record: Dictionary = _dm3_shell_nodes[id]
+		var dist := DM3Policy.distance(focus, record["region_key"])
+		if active_regions.has(id) or int(record["seed"]) != world_seed \
+				or not DM3Policy.keep(int(record["last_near_usec"]), now, dist):
+			_dm3_drop_shell(id)
+			continue
+		if dist <= DM3Policy.RETAIN_RADIUS:
+			record["last_near_usec"] = now
+			_dm3_shell_nodes[id] = record
+	for id_value in _dm3_retired_region_nodes.keys().duplicate():
+		var id: String = id_value
+		var record: Dictionary = _dm3_retired_region_nodes[id]
+		var dist := DM3Policy.distance(focus, record["region_key"])
+		# Radius 5 must be LOW. A retired high-resolution region is replaced
+		# with an inexpensive shell, while canonical authority stays unloaded.
+		if dist >= DM3Policy.ACTIVE_RADIUS or active_regions.has(id) \
+				or int(record["seed"]) != world_seed \
+				or not DM3Policy.keep(int(record["last_near_usec"]), now, dist):
+			_dm3_drop_retired(id)
+			continue
+		if dist <= DM3Policy.RETAIN_RADIUS:
+			record["last_near_usec"] = now
+			_dm3_retired_region_nodes[id] = record
+	while _dm3_retired_region_nodes.size() > DM3Policy.MAX_DETAILED_VISUAL_REGIONS:
+		var oldest := ""
+		var oldest_stamp := 9223372036854775807
+		for id_value in _dm3_retired_region_nodes.keys():
+			var id: String = id_value
+			var stamp := int(_dm3_retired_region_nodes[id]["last_near_usec"])
+			if stamp < oldest_stamp:
+				oldest = id
+				oldest_stamp = stamp
+		if oldest.is_empty():
+			break
+		_dm3_drop_retired(oldest)
+	if _dm3_shell_nodes.size() > DM3Policy.MAX_SHELL_REGIONS:
+		var ids: Array = _dm3_shell_nodes.keys()
+		ids.sort_custom(func(a: Variant, b: Variant) -> bool:
+			var ra: Dictionary = _dm3_shell_nodes[a]
+			var rb: Dictionary = _dm3_shell_nodes[b]
+			var da := DM3Policy.distance(focus, ra["region_key"])
+			var db := DM3Policy.distance(focus, rb["region_key"])
+			if da != db:
+				return da > db
+			return int(ra["last_near_usec"]) < int(rb["last_near_usec"])
+		)
+		for key_value in ids:
+			if _dm3_shell_nodes.size() <= DM3Policy.MAX_SHELL_REGIONS:
+				break
+			_dm3_drop_shell(String(key_value))
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("dm3_region_shell_window", {
+			"focus": [focus.x, focus.y],
+			"shell_regions": _dm3_shell_nodes.size(),
+			"retired_detail_regions": _dm3_retired_region_nodes.size(),
+			"jobs_in_flight": _dm3_shell_jobs.size(),
+			"built": _dm3_shell_built,
+			"evicted": _dm3_shell_evicted,
+			"lod_promoted": _dm3_shell_lod_promoted,
+			"active_radius": DM3Policy.ACTIVE_RADIUS,
+			"fine_radius": DM3Policy.FINE_RADIUS,
+			"retain_radius": DM3Policy.RETAIN_RADIUS,
+			"retention_seconds": 20,
+		})
+
+
+func _dm3_process_shells() -> void:
+	if not _dm3_enabled():
+		return
+	var now := Time.get_ticks_usec()
+	# Retired meshes must not survive a world seed switch.
+	if _dm3_shell_seed != world_seed:
+		for id_value in _dm3_shell_nodes.keys().duplicate():
+			_dm3_drop_shell(String(id_value))
+		for id_value in _dm3_retired_region_nodes.keys().duplicate():
+			_dm3_drop_retired(String(id_value))
+		_dm3_shell_seed = world_seed
+		_dm3_shell_order.clear()
+		_dm3_last_scan_usec = 0
+	# One mesh upload/frame. All workers are CPU-only, detached and pure.
+	if _last_frame_ms < 20.0:
+		for task_id_value in _dm3_shell_jobs.keys().duplicate():
+			var task_id := int(task_id_value)
+			if not WorkerThreadPool.is_task_completed(task_id):
+				continue
+			WorkerThreadPool.wait_for_task_completion(task_id)
+			var record: Dictionary = _dm3_shell_jobs[task_id]
+			_dm3_shell_jobs.erase(task_id)
+			var id: String = record["id"]
+			_dm3_shell_pending.erase(id)
+			var key: Vector2i = record["region_key"]
+			var dist := DM3Policy.distance(focus_region_key, key)
+			var level := DM3Policy.lod_for_distance(dist)
+			var job: RefCounted = record["job"]
+			var cpu: Dictionary = job.get("result")
+			if int(record["seed"]) != world_seed \
+			or dist < 2 or dist > DM3Policy.ACTIVE_RADIUS \
+			or level != int(record["lod"]) \
+			or active_regions.has(id) or loading_regions.has(id) \
+			or global_rebuild_pending or cave_section_enabled:
+				break
+			if not cpu.get("valid", false) or int(cpu.get("triangle_count", 0)) == 0:
+				_dm3_shell_retry_after_usec[id] = now + 5_000_000
+				break
+			var mesh: ArrayMesh = CoarsePreviewJob.mesh_from_cpu_data(cpu)
+			if mesh.get_surface_count() == 0:
+				_dm3_shell_retry_after_usec[id] = now + 5_000_000
+				break
+			var node: MeshInstance3D
+			var previous_lod := -1
+			if _dm3_shell_nodes.has(id):
+				var current: Dictionary = _dm3_shell_nodes[id]
+				node = current["node"]
+				previous_lod = int(current["lod"])
+			else:
+				node = MeshInstance3D.new()
+				node.name = "DM3VisualRegion_%d_%d" % [key.x, key.y]
+				node.material_override = terrain_mesh_template.material_override
+				node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				node.position = SpatialGrid.region_origin_world(key)
+				terrain_chunks_root.add_child(node)
+			node.mesh = mesh
+			node.visible = true
+			node.set_meta("dm3_visual_only", true)
+			node.set_meta("dm3_preview_lod", level)
+			_dm3_shell_nodes[id] = {
+				"node": node,
+				"region_key": key,
+				"lod": level,
+				"seed": world_seed,
+				"last_near_usec": now,
+			}
+			_dm3_drop_retired(id)
+			if previous_lod == 1 and level == 0:
+				_dm3_shell_lod_promoted += 1
+			_dm3_shell_built += 1
+			if _perf_trace_enabled:
+				PerformanceTrace.emit("dm3_region_shell_visible", {
+					"region": [key.x, key.y],
+					"lod": level,
+					"distance_regions": dist,
+					"triangle_count": int(cpu.get("triangle_count", 0)),
+					"worker_usec": int(cpu.get("worker_usec", 0)),
+					"retained": previous_lod >= 0,
+					"visual_only": true,
+				})
+			break
+	if now - _dm3_last_scan_usec >= DM3Policy.RESCAN_USEC or _dm3_shell_order.is_empty():
+		_dm3_last_scan_usec = now
+		_dm3_shell_order = DM3Policy.desired_regions(focus_region_key, _dm3_forward())
+		_dm3_prune_shells(now)
+	# Prioritize authoritative SDF/B4 jobs over the derived 121-region halo.
+	if _last_frame_ms >= 20.0 or _last_process_work_ms >= 10.5 \
+			or _dm3_shell_jobs.size() >= DM3Policy.MAX_JOBS_IN_FLIGHT \
+			or global_rebuild_pending or cave_section_enabled:
+		return
+	for key in _dm3_shell_order:
+		var id := _region_id(key)
+		if active_regions.has(id) or loading_regions.has(id):
+			continue
+		var dist := DM3Policy.distance(focus_region_key, key)
+		if dist < 2 or dist > DM3Policy.ACTIVE_RADIUS:
+			continue
+		if _dm3_retired_region_nodes.has(id) and dist <= DM3Policy.FINE_RADIUS:
+			continue
+		var desired_lod := DM3Policy.lod_for_distance(dist)
+		if _dm3_shell_nodes.has(id) \
+			and int(_dm3_shell_nodes[id]["lod"]) == desired_lod:
+			continue
+		if _dm3_shell_pending.has(id):
+			continue
+		if now < int(_dm3_shell_retry_after_usec.get(id, 0)):
+			continue
+		var job := DM3VisualJob.new(world_seed, key, desired_lod)
+		var task_id := WorkerThreadPool.add_task(
+			Callable(job, "run"), false, "DM3 derived region halo"
+		)
+		if task_id < 0:
+			return
+		_dm3_shell_pending[id] = desired_lod
+		_dm3_shell_jobs[task_id] = {
+			"id": id,
+			"region_key": key,
+			"lod": desired_lod,
+			"seed": world_seed,
+			"job": job,
+		}
+		break
 
 
 func _unload_region(id: String) -> void:
