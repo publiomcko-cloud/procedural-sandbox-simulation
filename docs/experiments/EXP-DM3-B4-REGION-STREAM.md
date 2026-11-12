@@ -45,3 +45,20 @@ Usar F10 para movimento e observar especialmente o anel 5/4, prioridade à frent
 ## Evidências / testes
 
 `game/tests/experiments/dm3_region_stream_policy_tests.gd` valida o conjunto 112 das regiões extras, LOW apenas no anel 5, prioridade à frente, retenção por raio/tempo e custo de topologia de dois níveis. CI executa import/check-only, esse teste, F10 determinístico em 18 e 54 m/s com perfil B4, e GUI Windows/OpenGL interativa. As evidências ficam em Actions no workflow `DM3 B4 region radius 5`.
+
+## Qualificação Windows do commit `429957d0a2bbde41e1c21fb96e650a25e5c31ec0`
+
+[GitHub Actions #43267366617](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43267366617): `contract`, `f10` e `gpu` passaram. Contrato: **238 asserções, zero falhas**, 112 regiões de visualização externa, 96 triângulos por preview LOW e 384 por HIGH.
+
+F10 determinístico em processo de Godot separado, inicialização isolada:
+
+| rota | shells publicados | HIGH | LOW | regiões distintas | pico de shells retidos | tempo médio de quadro | regiões autoritativas ao final |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 18 m/s, 480 frames | 229 | 142 | 87 | 163 | 154 | 17,679 ms | 2 |
+| 54 m/s, 480 frames | 373 | 196 | 177 | 225 | 222 | 16,932 ms | **0** |
+
+A sessão GPU Windows real, NVIDIA GTX 1050 Ti, renderizou 360 frames e capturou um screenshot. Um sucesso no benchmark **não** implica ausência de lacunas na geometria. A falta de regiões autoritativas ao fim de 54 m/s é uma limitação explícita: o sistema original de SDF/objetos ainda não acompanha essa velocidade; a nova camada torna visível uma aproximação do terreno adiante, mas não habilita edição/simulação distantes.
+
+Evidência: [contrato](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43267366617/artifacts/13967290793), [F10 com logs e métricas](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43267366617/artifacts/13965434945), [GPU e screenshot](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43267366617/artifacts/13965469341).
+
+**Veredito:** `DM3_REGION_VISUAL_SHELL_QUALIFIED_FOR_OWNER_GUI_EXPERIMENT`. Não aprovado para substituição autoritativa, merge à main, nem equivalência topológica entre LOD.
