@@ -54,6 +54,8 @@ var _projection_build_cache_order: Array[String] = []
 var _projection_source_cache: Dictionary = {}
 var _projection_source_cache_order: Array[String] = []
 var _prefetch_error := ""
+# Opt-in E6: source workers stay at 2; projection workers may rise to 4.
+var _projection_job_limit := MAX_PREFETCH_PROJECTION_JOBS_IN_FLIGHT
 var _perf_trace_enabled := false
 var _performance := {
 	"prepare_call_count": 0,
@@ -177,6 +179,20 @@ func set_incremental_prefetch_enabled(enabled: bool) -> void:
 		_prefetch_error = ""
 
 
+## E6 capacity knob changes admission only; projection authority and revision
+## gates are identical to the established default source/projection pipeline.
+func set_projection_pipeline_enabled(enabled: bool) -> void:
+	_projection_job_limit = 4 if enabled else MAX_PREFETCH_PROJECTION_JOBS_IN_FLIGHT
+
+
+func get_projection_pipeline_configuration() -> Dictionary:
+	return {
+		"source_worker_limit": MAX_PREFETCH_GENERATION_JOBS_IN_FLIGHT,
+		"projection_worker_limit": _projection_job_limit,
+		"publish_limit_per_frame": 2 if _projection_job_limit > MAX_PREFETCH_PROJECTION_JOBS_IN_FLIGHT else 1,
+	}
+
+
 func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 	if not initialized:
 		return _failure("terrain_effect_runtime_not_initialized")
@@ -247,7 +263,7 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 	# Stage 2: finalize one completed procedural source on main, then dispatch
 	# pure Effect/LocalFrame construction to a worker.
 	if _prefetch_projection_jobs.size() + _prefetch_projection_ready.size() \
-		< MAX_PREFETCH_PROJECTION_JOBS_IN_FLIGHT:
+		< _projection_job_limit:
 		var completed_generation: Array[int] = []
 		for task_id_value in _prefetch_generation_jobs:
 			var task_id := int(task_id_value)
@@ -382,7 +398,7 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 				exact_source_candidate
 				and _prefetch_projection_jobs.size()
 					+ _prefetch_projection_ready.size()
-					>= MAX_PREFETCH_PROJECTION_JOBS_IN_FLIGHT
+					>= _projection_job_limit
 			):
 				_prefetch_queue.push_front(region)
 				break
