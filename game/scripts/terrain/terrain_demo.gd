@@ -351,12 +351,14 @@ func _ready() -> void:
 		stream_profile_env, stream_profile_args
 	)
 	if _dm3_enabled():
-		print("DM3_REGION_STREAM: radius=5 high_through=4 low_from=5 retention_radius=10 retention_seconds=20 visual_only_outside_authority=1")
+		print("DM4_REGION_STREAM: radius=5 all_high=1 b4_step=0.5 seam_source=pristine_b4_surface_nets first=near_then_forward retention_radius=10 retention_seconds=20 visual_only_outside_authority=1")
 		if _perf_trace_enabled:
-			PerformanceTrace.emit("dm3_region_stream_mode", {
+			PerformanceTrace.emit("dm4_region_stream_mode", {
 				"radius_regions": 5,
-				"high_through_regions": 4,
-				"low_from_regions": 5,
+				"high_through_regions": 5,
+				"low_from_regions": -1,
+				"seam_source": "pristine_b4_surface_nets",
+				"sample_step_m": 0.5,
 				"retention_radius_regions": 10,
 				"retention_seconds": 20,
 				"authority_window_unchanged": true,
@@ -1168,7 +1170,10 @@ func _process(delta: float) -> void:
 	_process_one_chunk_job()
 	_stream_stage_measure("mesh_dispatch_and_upload", stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
-	if _stream_profile in ["adaptive-skip-coarse", "adaptive-skip-progressive"]:
+	# DM4 must never overlay mismatching E7 heightfield LOW previews
+	# on the seamless full-B4 0.5-m region halo.
+	if _stream_profile in ["adaptive-skip-coarse", "adaptive-skip-progressive"] \
+			and not _dm3_enabled():
 		_process_coarse_previews()
 	_stream_stage_measure("coarse_preview", stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
@@ -3066,6 +3071,14 @@ func _process_progressive_chunk_publications() -> void:
 				int(object_stream.get_command_world_revision())
 			):
 				continue
+			# Keep the exact B4 region shell (or recently retired chunks)
+			# visible until the definitive 16-chunk atomic commit. Publishing
+			# just one provisional chunk would otherwise delete the shell
+			# and expose a 15-chunk hole or duplicate overlapping triangles.
+			if _dm3_enabled() and (
+				_dm3_shell_nodes.has(id) or _dm3_retired_region_nodes.has(id)
+			):
+				continue
 			var chunk_id := ChunkGrid.stable_id(region_key, coordinate)
 			var existing: Dictionary = _progressive_chunk_nodes.get(id, {}).get("nodes", {})
 			if existing.has(chunk_id):
@@ -4192,9 +4205,8 @@ func _dm3_prune_shells(now: int) -> void:
 		var id: String = id_value
 		var record: Dictionary = _dm3_retired_region_nodes[id]
 		var dist := DM3Policy.distance(focus, record["region_key"])
-		# At radius 5 request LOW but keep the previous detailed visual
-		# until the coarse replacement is ready. Fast F10 movement must
-		# never create a hole by eagerly discarding already-loaded terrain.
+		# Keep previously built B4 HIGH as visual-only cache without any
+		# fifth-ring downgrade. Revocation follows radius 10 / 20s.
 		if active_regions.has(id) or int(record["seed"]) != world_seed \
 				or not DM3Policy.keep(int(record["last_near_usec"]), now, dist):
 			_dm3_drop_retired(id)
@@ -4238,6 +4250,9 @@ func _dm3_prune_shells(now: int) -> void:
 			"built": _dm3_shell_built,
 			"evicted": _dm3_shell_evicted,
 			"lod_promoted": _dm3_shell_lod_promoted,
+			"all_high_b4": true,
+			"high_step": DM3Policy.HIGH_SAMPLE_STEP,
+			"pending_region_jobs": _dm3_shell_jobs.size(),
 			"active_radius": DM3Policy.ACTIVE_RADIUS,
 			"fine_radius": DM3Policy.FINE_RADIUS,
 			"retain_radius": DM3Policy.RETAIN_RADIUS,
@@ -4316,8 +4331,10 @@ func _dm3_process_shells() -> void:
 				_dm3_shell_lod_promoted += 1
 			_dm3_shell_built += 1
 			if _perf_trace_enabled:
-				PerformanceTrace.emit("dm3_region_shell_visible", {
+				PerformanceTrace.emit("dm4_b4_high_region_visible", {
 					"region": [key.x, key.y],
+					"backend": String(cpu.get("backend", "unverified")),
+					"sample_step_m": float(cpu.get("step", -1.0)),
 					"lod": level,
 					"distance_regions": dist,
 					"triangle_count": int(cpu.get("triangle_count", 0)),
@@ -5731,7 +5748,7 @@ func _update_status() -> void:
 	]
 	status += "DM2 terrain mesher: %s | experimental B4: visual-only, SDF simulation/save unchanged\n" % _experimental_mesh_backend
 	if _dm3_enabled():
-		status += "DM3: 5-region shell / HIGH <=4 / LOW 5 / retain 10 or 20s | visible %d + retired %d\n" % [
+		status += "DM4: HIGH B4 all 5 regions, nearest/forward first, retain 10 or 20s | visible %d + retired %d\n" % [
 			_dm3_shell_nodes.size(), _dm3_retired_region_nodes.size()
 		]
 	status += "Runtime timing: last op %s %.1f ms | frame p50/p95/p99 %.1f/%.1f/%.1f ms | process peak %.1f ms\n" % [
