@@ -4452,8 +4452,8 @@ func _dm7_commit_high_rocks(id: String, key: Vector2i, cpu: Dictionary) -> bool:
 
 
 func _dm7_rock_high_receipt_if_complete() -> void:
-	if _dm7_rock_high_completion_focus == focus_region_key:
-		return
+	# The radial target set changes as the player moves WITHIN one
+	# region; completion must be keyed by the actual target set, not focus.
 	var player_position: Vector3 = camera.global_position
 	var target_ids: Array[String] = []
 	for key in _dm3_shell_order:
@@ -4468,7 +4468,7 @@ func _dm7_rock_high_receipt_if_complete() -> void:
 			return
 	# Canonical regions with zero generated rocks may not emit a geometry
 	# prewarm publication. Their terrain is still authoritative and HIGH;
-	# only exterior 72 regions require a derived HIGH rock receipt.
+	# exterior radial targets require derived HIGH rock geometry.
 	var canonical_rock_publications := 0
 	for z in range(focus_region_key.y - 1, focus_region_key.y + 2):
 		for x in range(focus_region_key.x - 1, focus_region_key.x + 2):
@@ -4754,6 +4754,7 @@ func _dm3_prune_shells(now: int) -> void:
 			"dm8_terrain_high_radius_m": DM3Policy.radial_radius_m(DM3Policy.ACTIVE_RADIUS),
 			"dm8_retain_radius_m": DM3Policy.radial_radius_m(DM3Policy.RETAIN_RADIUS),
 			"dm8_player_xz_m": [camera.global_position.x, camera.global_position.z],
+			"dm8_high_radius_new_vs_old_region_count": _dm3_shell_order.size() + 9 - 169,
 			"dm8_radial_targets": _dm3_shell_order.size(),
 			"dm8_radial_scan_count": _dm8_radial_scan_count,
 			"dm8_radial_scan_avg_usec": int(
@@ -4952,7 +4953,7 @@ func _dm3_process_shells() -> void:
 		_dm5_process_decor(now)
 		_dm7_process_high_rocks(now)
 		_dm4_emit_full_high_receipt_if_ready()
-	# Prioritize authoritative SDF/B4 jobs over the derived 121-region halo.
+	# Prioritize authoritative SDF/B4 jobs over the derived circular halo.
 	# One background job at a time; after the nearest regions finish, the
 	# stable sorted queue drains even during camera idle.
 	if _last_frame_ms >= 40.0 or _last_process_work_ms >= 22.0 \
