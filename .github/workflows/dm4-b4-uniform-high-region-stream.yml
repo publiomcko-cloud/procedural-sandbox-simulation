@@ -163,3 +163,50 @@ jobs:
             ${{ runner.temp }}\p5-gpu-session\*.json
           if-no-files-found: warn
           retention-days: 14
+
+  full-fill:
+    needs: gpu
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import exact project
+        shell: cmd
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --editor --path .\game --import
+          if errorlevel 1 exit /b 1
+      - name: Prove full 121-region HIGH coverage after queue drains at idle
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 12
+        run: |
+          $env:SANDBOX_TERRAIN_BACKEND = 'b4'
+          $evidence = Join-Path $env:RUNNER_TEMP 'dm4-full-fill'
+          & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $evidence -Frames 9000 -Routes @('idle') -Profiles @('adaptive-skip-progressive')
+          if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) { throw "DM4_IDLE_BENCH_FAILED" }
+          $log = Join-Path $evidence '01-idle-adaptive-skip-progressive.stdout.log'
+          $lines = @(Get-Content $log | Where-Object { $_.Contains('DM4_HIGH_RADIUS_COMPLETE: ') })
+          if ($lines.Count -ne 1) { throw "DM4_HIGH_RADIUS_NOT_COMPLETELY_FILLED: receipts=$($lines.Count)" }
+          $receipt = ($lines[0].Substring($lines[0].IndexOf('DM4_HIGH_RADIUS_COMPLETE: ') + 26) | ConvertFrom-Json)
+          if ($receipt.requested_region_count -ne 121 -or $receipt.canonical_core_regions -ne 9 -or
+              $receipt.high_shell_regions + $receipt.retired_detail_regions -ne 112 -or
+              $receipt.backend -ne 'b4' -or $receipt.mesh_step_m -ne 0.5) {
+            throw "DM4_HIGH_RADIUS_INCORRECT_COMPLETION_RECEIPT: $($lines[0])"
+          }
+          Write-Host "DM4_HIGH_RADIUS_FULL_FILL_PASS regions=121 outer=$($receipt.high_shell_regions) core=9"
+      - name: Upload full-fill telemetry
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm4-full-fill
+          path: |
+            ${{ runner.temp }}\dm4-full-fill\*.log
+            ${{ runner.temp }}\dm4-full-fill\*.json
+          if-no-files-found: warn
+          retention-days: 14
