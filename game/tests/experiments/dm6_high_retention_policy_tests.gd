@@ -15,26 +15,27 @@ func _run() -> void:
 	_check(Policy.FINE_RADIUS == 6, "no LOW band at edge of HIGH")
 	_check(Policy.RETAIN_RADIUS == 10, "retention radius is 10 regions")
 	_check(Policy.RETAIN_USEC == 20_000_000, "retention grace is 20 seconds")
-	_check(Policy.expected_region_count() == 169, "13x13 HIGH demand")
-	_check(Policy.expected_external_region_count() == 160,
-		"160 external HIGH plus nine authoritative")
+	_check(Policy.expected_region_count() == 277, "130m disc has 277 HIGH cells centered")
+	_check(Policy.expected_external_region_count() == 268,
+		"268 external HIGH plus nine authoritative at center")
 	var focus := Vector2i(0, 0)
-	var regions := Policy.desired_regions(focus, Vector3(1, 0, 0))
-	_check(regions.size() == 160, "priority queue covers entire ring 2..6")
+	var player := Policy.focus_center_world(focus)
+	var regions := Policy.desired_regions(focus, Vector3(1, 0, 0), player)
+	_check(regions.size() == 268, "priority queue covers 130m circular footprint")
 	var counted: Dictionary = {}
 	for region in regions:
 		_check(Policy.distance(region, focus) >= 2
-			and Policy.distance(region, focus) <= 6,
-			"all queued regions in radius 6")
+			and Policy.within_high(region, player),
+			"all queued regions in 130m radial footprint")
 		_check(Policy.lod_for_distance(Policy.distance(region, focus)) == 0,
 			"no dynamic LOW downgrade")
 		_check(not counted.has(region), "each region at most once")
 		counted[region] = true
-	_check(Policy.rank(Vector2i(2,0), focus, Vector3(1,0,0))
-		< Policy.rank(Vector2i(3,0),focus,Vector3(1,0,0)),
+	_check(Policy.rank(Vector2i(2,0), focus, Vector3(1,0,0), player)
+		< Policy.rank(Vector2i(3,0),focus,Vector3(1,0,0), player),
 		"proximity priority dominates farther regions")
-	_check(Policy.rank(Vector2i(4,0), focus, Vector3(1,0,0))
-		< Policy.rank(Vector2i(-4,0),focus,Vector3(1,0,0)),
+	_check(Policy.rank(Vector2i(4,0), focus, Vector3(1,0,0), player)
+		< Policy.rank(Vector2i(-4,0),focus,Vector3(1,0,0), player),
 		"within same ring camera facing wins")
 	for sec in range(0, 61):
 		var now := sec * 1_000_000
@@ -56,6 +57,9 @@ func _run() -> void:
 	print("DM6_HIGH_RETENTION_POLICY_RESULT=" + JSON.stringify({
 		"assertions": assertions, "failures": failures,
 		"high_regions": Policy.expected_region_count(),
+		"high_radius_m": Policy.radial_radius_m(Policy.ACTIVE_RADIUS),
+		"rock_radius_m": Policy.radial_radius_m(Policy.ROCK_HIGH_RADIUS),
+		"retention_radius_m": Policy.radial_radius_m(Policy.RETAIN_RADIUS),
 		"high_external": Policy.expected_external_region_count(),
 		"retention_radius": Policy.RETAIN_RADIUS,
 		"grace_seconds": float(Policy.RETAIN_USEC) / 1_000_000.0,
