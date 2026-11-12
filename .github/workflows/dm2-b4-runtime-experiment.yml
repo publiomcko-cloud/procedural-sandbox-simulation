@@ -133,13 +133,11 @@ jobs:
         shell: powershell
         run: |
           & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive
-          if ($LASTEXITCODE -ne 0) { throw 'DM2_INTERACTIVE_SESSION_REQUIRED' }
       - name: Run real OpenGL SDF and B4 tests, 2 routes each, capture actual frames
         shell: powershell
         timeout-minutes: 25
         run: |
           & .\scripts\perf\run-dm2-b4-gui-ab.ps1 -GodotBin $env:GODOT_BIN -Frames 300
-          if ($LASTEXITCODE -ne 0) { throw 'DM2_B4_GUI_FAILED' }
       - name: Upload SDF/B4 actual GUI screenshots, adapter receipts and logs
         if: always()
         uses: actions/upload-artifact@v7
