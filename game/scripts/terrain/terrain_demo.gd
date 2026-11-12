@@ -174,6 +174,8 @@ var _perf_trace_enabled := false
 var _last_region_publish_profile: Dictionary = {}
 # The default streaming path remains unchanged; adaptive is opt-in for A/B.
 var _stream_profile := "baseline"
+# DM2 visual-only experimental mesher. The authoritative field and saves stay SDF.
+var _experimental_mesh_backend := "sdf"
 var _stream_budget_state: Dictionary = {"dispatch_limit": 1}
 var _stream_window_started_usec := 0
 var _stream_window_frames := 0
@@ -303,6 +305,19 @@ var _last_edit_rejection := ""
 
 func _ready() -> void:
 	_perf_trace_enabled = PerformanceTrace.is_enabled()
+	var requested_mesh_backend := OS.get_environment("SANDBOX_TERRAIN_BACKEND").strip_edges().to_lower()
+	if requested_mesh_backend == "b4":
+		_experimental_mesh_backend = "b4"
+	elif requested_mesh_backend not in ["", "sdf"]:
+		push_warning("DM2 unknown backend; using canonical SDF")
+	print("DM2_TERRAIN_BACKEND=%s requested=%s" % [_experimental_mesh_backend, requested_mesh_backend])
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("dm2_terrain_backend", {
+			"backend": _experimental_mesh_backend,
+			"requested": requested_mesh_backend,
+			"authority": "sdf_unmodified",
+			"lod_policy": "lod0_only" if _experimental_mesh_backend == "b4" else "canonical",
+		})
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("terrain_trace_session", {
 			"world_id": world_id,
@@ -1995,18 +2010,21 @@ func _is_z_edge(coordinate: Vector2i) -> bool:
 
 func _uses_shared_corner(coordinate: Vector2i) -> bool:
 	return _shared_boundary_runtime_enabled \
+		and _experimental_mesh_backend != "b4" \
 		and not cave_section_enabled \
 		and _is_x_edge(coordinate) and _is_z_edge(coordinate)
 
 
 func _uses_shared_x_boundary(coordinate: Vector2i) -> bool:
 	return _shared_boundary_runtime_enabled \
+		and _experimental_mesh_backend != "b4" \
 		and not cave_section_enabled \
 		and _is_x_edge(coordinate) and not _is_z_edge(coordinate)
 
 
 func _uses_shared_z_boundary(coordinate: Vector2i) -> bool:
 	return _shared_boundary_runtime_enabled \
+		and _experimental_mesh_backend != "b4" \
 		and not cave_section_enabled \
 		and _is_z_edge(coordinate) and not _is_x_edge(coordinate)
 
@@ -2030,6 +2048,9 @@ func _corner_owner_for_coordinate(coordinate: Vector2i) -> String:
 
 
 func _desired_lod_for_chunk(region_key: Vector2i, coordinate: Vector2i, current_lod: int) -> int:
+	# The experimental mesher has no stitched multi-LOD support.
+	if _experimental_mesh_backend == "b4":
+		return 0
 	var chunk_id: String = ChunkGrid.stable_id(region_key, coordinate)
 	# Region-edge chunks are the shared-surface collar. LOD transitions begin one
 	# chunk inward so the independently selected interior LOD never owns the
@@ -3163,6 +3184,7 @@ func _process_completed_mesh_jobs() -> void:
 				"chunk": [(record["coordinate"] as Vector2i).x, (record["coordinate"] as Vector2i).y],
 				"purpose": String(stage["purpose"]),
 				"job_kind": completed_kind,
+				"terrain_backend": String(cpu_result.get("backend", "sdf")),
 				"snapshot_usec": int(record.get("snapshot_usec", 0)),
 				"worker_queue_usec": worker_queue_usec,
 				"worker_run_usec": worker_run_usec,
@@ -3454,7 +3476,8 @@ func _dispatch_mesh_jobs() -> void:
 				stage["cave_section_enabled"],
 				chunk_snapshot,
 				submitted_usec,
-				int(stage.get("lod_by_coordinate", {}).get(coordinate, 0))
+				int(stage.get("lod_by_coordinate", {}).get(coordinate, 0)),
+				_experimental_mesh_backend == "b4"
 			)
 		var snapshot_elapsed_usec := Time.get_ticks_usec() - snapshot_started_usec
 		if _perf_trace_enabled and snapshot_elapsed_usec >= PerformanceTrace.min_usec():
@@ -5374,6 +5397,7 @@ func _update_status() -> void:
 		_peak_mesh_upload_ms,
 		_peak_frame_ms,
 	]
+	status += "DM2 terrain mesher: %s | experimental B4: visual-only, SDF simulation/save unchanged\\n" % _experimental_mesh_backend
 	status += "Runtime timing: last op %s %.1f ms | frame p50/p95/p99 %.1f/%.1f/%.1f ms | process peak %.1f ms\n" % [
 		String(last_mesh_diagnostics.get("operation", _operation_name)),
 		float(last_mesh_diagnostics.get("elapsed_ms", 0.0)),
