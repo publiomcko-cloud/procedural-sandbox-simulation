@@ -65,18 +65,50 @@ foreach ($route in $Routes) {
         } else {
             while (-not $process.WaitForExit(500)) {
                 if ($cpuWatch.ElapsedMilliseconds -gt $timeoutMs) { $timedOut = $true; break }
-                $procInfo = Get-Process -Id $process.Id -ErrorAction SilentlyContinue
-                if ($null -eq $procInfo) { continue }
+                # Godot's _console.exe is a lightweight Windows parent/launcher.
+                # Measure its *engine child process*, not just the ~6 MiB console stub.
+                $trackedPids = @([int]$process.Id)
+                try {
+                    $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($process.Id)" -ErrorAction SilentlyContinue)
+                    foreach ($child in $children) {
+                        if ([string]$child.Name -like 'Godot*') {
+                            $trackedPids += [int]$child.ProcessId
+                        }
+                    }
+                    # Detached engine fallback: bind by the EXACT benchmark route
+                    # and repository path so other local Godot sessions are excluded.
+                    $candidates = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'Godot%'" -ErrorAction SilentlyContinue)
+                    foreach ($candidate in $candidates) {
+                        if ([string]$candidate.CommandLine -like "*stream-benchmark-route=$route*" -and
+                            [string]$candidate.CommandLine -like "*$project*" -and
+                            $trackedPids -notcontains [int]$candidate.ProcessId) {
+                            $trackedPids += [int]$candidate.ProcessId
+                        }
+                    }
+                } catch { Write-Warning "DM9 CPU engine process lookup failed: $_" }
+                $family = @(Get-Process -Id ($trackedPids | Sort-Object -Unique) -ErrorAction SilentlyContinue)
+                if ($family.Count -eq 0) { continue }
+                $cpuSeconds = 0.0
+                $rssBytes = 0.0
+                $privateBytes = 0.0
+                $threadCount = 0
+                foreach ($member in $family) {
+                    $cpuSeconds += [double]$member.CPU
+                    $rssBytes += [double]$member.WorkingSet64
+                    $privateBytes += [double]$member.PrivateMemorySize64
+                    $threadCount += $member.Threads.Count
+                }
                 $wall = [DateTime]::UtcNow
-                $cpuSeconds = [double]$procInfo.CPU
                 $elapsedSeconds = ($wall - $cpuLastWall).TotalSeconds
                 if ($elapsedSeconds -gt 0.1) {
                     $cpuSamples += [ordered]@{
                         relative_wall_ms = [Math]::Round($cpuWatch.Elapsed.TotalMilliseconds, 1)
                         cpu_pct_total_capacity = [Math]::Round(100.0 * [Math]::Max(0.0, $cpuSeconds - $cpuLastSeconds) / ($elapsedSeconds * $logicalCpus), 2)
-                        working_set_mb = [Math]::Round([double]$procInfo.WorkingSet64 / 1048576.0, 2)
-                        private_memory_mb = [Math]::Round([double]$procInfo.PrivateMemorySize64 / 1048576.0, 2)
-                        thread_count = $procInfo.Threads.Count
+                        working_set_mb = [Math]::Round($rssBytes / 1048576.0, 2)
+                        private_memory_mb = [Math]::Round($privateBytes / 1048576.0, 2)
+                        thread_count = $threadCount
+                        tracked_process_ids = @($family | ForEach-Object { $_.Id })
+                        tracked_process_names = @($family | ForEach-Object { $_.ProcessName })
                     }
                     $cpuLastWall = $wall
                     $cpuLastSeconds = $cpuSeconds
@@ -90,6 +122,10 @@ foreach ($route in $Routes) {
         }
         if ($CaptureProcessCpu) {
             $cpuSamples | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $EvidenceDir "$runId.cpu.json") -Encoding UTF8
+            $maxRss = if ($cpuSamples.Count -gt 0) { (@($cpuSamples | ForEach-Object { [double]$_['working_set_mb'] }) | Measure-Object -Maximum).Maximum } else { 0.0 }
+            if ($maxRss -lt 40.0) {
+                throw "DM9_PROCESS_SAMPLING_INVALID: engine not observed; maximum tracked RSS=$maxRss MiB. See $runId.cpu.json"
+            }
         }
         # PowerShell 5.1 on the service runner can expose an empty ExitCode
         # even when WaitForExit returned success. A positive terminal marker,
@@ -124,6 +160,7 @@ foreach ($route in $Routes) {
         $windows = @()
         $regionLoadMs = @()
         $workerByKind = @{}
+        $radialSamples = @()
         $coarseCount = 0
         $coarseReadyMs = @()
         $effectBlockers = 0
@@ -142,6 +179,7 @@ foreach ($route in $Routes) {
             try { $event = $line.Substring($start + 11) | ConvertFrom-Json } catch { continue }
             switch ($event.event) {
                 'terrain_stream_budget_window' { $windows += $event }
+                'dm8_radial_gap_sample' { $radialSamples += $event }
                 'dm9_visual_shell_complete' {
                     $dm9VisualWorkerMs += ([double]$event.worker_run_usec / 1000.0)
                     $dm9VisualQueueMs += ([double]$event.worker_queue_usec / 1000.0)
@@ -257,6 +295,12 @@ foreach ($route in $Routes) {
             dm9_visual_shell_queue_p95_ms = Get-Percentile $dm9VisualQueueMs 0.95
             dm9_visual_shell_publish_p95_ms = Get-Percentile $dm9VisualPublishMs 0.95
             dm9_prefetch_ready_hits = $dm9ReadyHits
+            dm8_radial_sample_count = $radialSamples.Count
+            dm8_visual_gap_front_p95_regions = Get-Percentile @($radialSamples | ForEach-Object { [double]$_.terrain_gap_front_cone }) 0.95
+            dm8_visual_gap_p95_regions = Get-Percentile @($radialSamples | ForEach-Object { [double]$_.terrain_gap_outer }) 0.95
+            dm8_visual_gap_age_p95_ms = Get-Percentile @($radialSamples | ForEach-Object { [double]$_.terrain_gap_age_p95_ms }) 0.95
+            dm8_visual_gap_final_regions = $(if ($radialSamples.Count -gt 0) { [int]$radialSamples[-1].terrain_gap_outer } else { $null })
+            dm8_rock_gap_final_regions = $(if ($radialSamples.Count -gt 0) { [int]$radialSamples[-1].rock_gap_outer } else { $null })
             snapshot_p50_ms = Get-Percentile $snapshotMs 0.50
             snapshot_p95_ms = Get-Percentile $snapshotMs 0.95
             worker_queue_p50_ms = Get-Percentile $workerQueueMs 0.50
