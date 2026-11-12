@@ -171,6 +171,7 @@ func build_chunk(chunk: Vector2i) -> Dictionary:
 					p[axis] = float(plane) * step
 					p[u] = float(i) * step
 					p[v] = float(j) * step
+					p.y += Grid.MIN_BOUND.y
 					var du := Vector3.ZERO
 					var dv := Vector3.ZERO
 					du[u] = float(width) * step
