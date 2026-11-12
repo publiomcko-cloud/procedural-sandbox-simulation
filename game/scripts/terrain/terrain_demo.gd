@@ -4315,7 +4315,22 @@ func _dm5_process_decor(now: int) -> void:
 	var registry: ContentDefinitionRegistry = object_stream.registry
 	if registry == null:
 		return
-	for key in _dm3_shell_order:
+	# A region already HIGH-retained at radius 7..10 must KEEP its
+	# LOW rock/water representation, even after leaving the radius-6
+	# generation queue. On first retirement it must be eligible to acquire
+	# those visuals without forcing a new terrain or mod source scope.
+	var decor_targets: Array[Vector2i] = _dm3_shell_order.duplicate()
+	for record_value in _dm3_retired_region_nodes.values():
+		var record: Dictionary = record_value
+		var key: Vector2i = record["region_key"]
+		if not decor_targets.has(key):
+			decor_targets.append(key)
+	for record_value in _dm3_shell_nodes.values():
+		var record: Dictionary = record_value
+		var key: Vector2i = record["region_key"]
+		if not decor_targets.has(key):
+			decor_targets.append(key)
+	for key in decor_targets:
 		var id := _region_id(key)
 		if active_regions.has(id) or not _dm5_has_cached_high(id) \
 				or _dm5_decor_nodes.has(id) or _dm5_decor_pending.has(id):
