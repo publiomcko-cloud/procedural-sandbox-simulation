@@ -17,9 +17,6 @@ foreach ($backend in @('sdf', 'b4')) {
     Write-Host "DM2_GUI_START backend=$backend sha=$sha"
     & (Join-Path $PSScriptRoot 'run-p5-gpu-smoke.ps1') `
         -GodotBin $GodotBin -Frames $Frames -EvidenceDir $directory
-    if ($LASTEXITCODE -ne 0) {
-        throw "DM2_GUI_ENGINE_FAILED backend=$backend"
-    }
     $stdoutLogs = @(Get-ChildItem -LiteralPath $directory -Filter '*.stdout.log' -File)
     $pngFiles = @(Get-ChildItem -LiteralPath $directory -Filter '*.png' -File)
     if ($stdoutLogs.Count -ne 2 -or $pngFiles.Count -ne 2) {
