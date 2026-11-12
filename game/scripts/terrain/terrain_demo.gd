@@ -30,6 +30,7 @@ const SimulationRuntimeScript := preload("res://scripts/simulation/simulation_ru
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 const StreamBudgetPolicy := preload("res://scripts/terrain/terrain_stream_budget_policy.gd")
 const StreamDispatchSelector := preload("res://scripts/terrain/terrain_stream_dispatch_selector.gd")
+const ConsumerDemandPolicy := preload("res://scripts/terrain/terrain_stream_consumer_demand_policy.gd")
 const StreamLookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
 const CoarsePreviewJob := preload("res://scripts/terrain/terrain_coarse_preview_job.gd")
 const CoarsePreviewPolicy := preload("res://scripts/terrain/terrain_coarse_preview_policy.gd")
@@ -316,7 +317,7 @@ func _ready() -> void:
 	for argument in stream_profile_args:
 		if argument.begins_with("--stream-profile="):
 			stream_profile_requested = argument.trim_prefix("--stream-profile=").strip_edges().to_lower()
-	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse"]:
+	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse", "adaptive-skip-coarse-demand"]:
 		push_warning("Unknown stream profile; using baseline")
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("terrain_stream_profile", {
@@ -1042,7 +1043,7 @@ func _process(delta: float) -> void:
 	var previous_dispatch_limit := int(_stream_budget_state.get("dispatch_limit", 1))
 	_stream_budget_state = StreamBudgetPolicy.next(
 		_stream_budget_state, _last_frame_ms, _last_process_work_ms,
-		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse"]
+		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse", "adaptive-skip-coarse-demand"]
 	)
 	if _perf_trace_enabled and int(_stream_budget_state["dispatch_limit"]) != previous_dispatch_limit:
 		PerformanceTrace.emit("terrain_stream_budget_transition", {
@@ -1089,6 +1090,28 @@ func _process(delta: float) -> void:
 		_lookahead_stage_targets.clear()
 		_lookahead_stage_signature = ""
 	_reconcile_region_window()
+	# E4: only opt-in and only for a real next-chunk LOAD consumer. Higher
+	# priority edit/partial/full stages keep their existing source admission.
+	if _stream_profile == "adaptive-skip-coarse-demand" \
+	and terrain_effect_runtime != null \
+	and bool(terrain_effect_runtime.get("initialized")):
+		var demand_started_usec := Time.get_ticks_usec()
+		var higher_priority_pending := not _edit_transaction.is_empty() or global_rebuild_pending
+		if not higher_priority_pending:
+			for candidate_value in loading_regions.values():
+				var candidate: Dictionary = candidate_value
+				if String(candidate.get("purpose", "load")) != "load" \
+				and int(candidate.get("submit_index", 0)) < (candidate.get("chunk_coordinates", []) as Array).size():
+					higher_priority_pending = true
+					break
+		var visible_stage: Dictionary = loading_regions.get(_region_id(focus_region_key), {})
+		if ConsumerDemandPolicy.can_prioritize(
+			visible_stage, higher_priority_pending, global_rebuild_pending
+		):
+			terrain_effect_runtime.set_consumer_demand(focus_region_key, visible_stage)
+		else:
+			terrain_effect_runtime.clear_consumer_demand()
+		_stream_stage_measure("consumer_demand_scheduler", demand_started_usec)
 	# Effect projection prefetch reuses the same protected 9x9 source halo and
 	# respects urgent prerequisites queued by visible mesh work.
 	if not mapped_ahead.is_empty() and mapped_ahead.get("valid", false) \
@@ -1116,7 +1139,7 @@ func _process(delta: float) -> void:
 	_process_one_chunk_job()
 	_stream_stage_measure("mesh_dispatch_and_upload", stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
-	if _stream_profile == "adaptive-skip-coarse":
+	if _stream_profile in ["adaptive-skip-coarse", "adaptive-skip-coarse-demand"]:
 		_process_coarse_previews()
 	_stream_stage_measure("coarse_preview", stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
@@ -2695,7 +2718,7 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 
 ## E2 derived coarse-first preview: always separate from terrain authority.
 func _coarse_preview_record_current(id: String, record: Dictionary) -> bool:
-	if _stream_profile != "adaptive-skip-coarse" or not loading_regions.has(id):
+	if _stream_profile not in ["adaptive-skip-coarse", "adaptive-skip-coarse-demand"] or not loading_regions.has(id):
 		return false
 	var stage: Dictionary = loading_regions[id]
 	var state: RefCounted = stage["world_state"]

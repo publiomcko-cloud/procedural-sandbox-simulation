@@ -8,7 +8,7 @@ static func eligible_stage(
 	global_rebuild: bool, edit_pending: bool, has_any_brush_edits: bool,
 	cave_section: bool
 ) -> bool:
-	return profile == "adaptive-skip-coarse" \
+	return profile in ["adaptive-skip-coarse", "adaptive-skip-coarse-demand"] \
 		and String(stage.get("purpose", "")) == "load" \
 		and not has_active_region and not global_rebuild \
 		and not edit_pending and not has_any_brush_edits and not cave_section
