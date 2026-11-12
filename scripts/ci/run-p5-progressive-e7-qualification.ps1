@@ -10,7 +10,9 @@ $version = (& $GodotBin --version 2>&1 | Out-String).Trim()
 if ($version -notmatch '^4\.7\.2\.stable(?:\.|$)') { throw "E7 wrong Godot: $version" }
 foreach ($p in @(
     'scripts\ci\run-p5-progressive-e7-qualification.ps1',
-    'scripts\perf\run-p5-deterministic-stream-benchmark.ps1'
+    'scripts\perf\run-p5-deterministic-stream-benchmark.ps1',
+    'scripts\perf\run-p5-progressive-e7-abba.ps1',
+    'scripts\perf\analyze-p5-progressive-e7-abba.ps1'
 )) {
     $tokens = $null
     $errors = $null
