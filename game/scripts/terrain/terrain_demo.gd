@@ -37,6 +37,8 @@ const ProgressiveLoadPolicy := preload("res://scripts/terrain/terrain_stream_pro
 const DM3Policy := preload("res://scripts/experiments/b4_region_stream_policy.gd")
 const DM3VisualJob := preload("res://scripts/experiments/b4_region_visual_job.gd")
 const DM5DecorJob := preload("res://scripts/experiments/b4_low_detail_decor_job.gd")
+const DM7RockJob := preload("res://scripts/experiments/b4_high_detail_rock_job.gd")
+const DM7StaticBatch := preload("res://scripts/objects/procedural_object_static_batch.gd")
 
 const BRUSH_RADIUS := 1.25
 const REQUEST_RADIUS := 1
@@ -211,6 +213,18 @@ var _dm6_ttl_evicted_total := 0
 var _dm6_last_memory_warning_usec := 0
 var _dm6_outer_high_visible_count := 0
 var _dm6_retained_high_visibility_repairs := 0
+# DM7: exact HIGH mod-rock batch at terrain radius minus two (6 - 2 = 4).
+# LOW water and all terrain high/cache behavior are deliberately unchanged.
+const DM7_ROCK_HIGH_RADIUS := 4
+const DM7_MAX_ROCK_JOBS_IN_FLIGHT := 1
+var _dm7_rock_jobs: Dictionary = {}
+var _dm7_rock_pending: Dictionary = {}
+var _dm7_rock_retry_after_usec: Dictionary = {}
+var _dm7_high_rock_publications := 0
+var _dm7_high_rock_mesh_bytes := 0
+var _dm7_rock_visible_count := 0
+var _dm7_rock_high_completion_focus := Vector2i(2147483647, 2147483647)
+var _dm7_rock_high_completion_receipts := 0
 var _stream_budget_state: Dictionary = {"dispatch_limit": 1}
 var _stream_window_started_usec := 0
 var _stream_window_frames := 0
@@ -3874,7 +3888,8 @@ func _publish_region(
 	if _dm3_enabled():
 		_dm3_drop_shell(id)
 		_dm3_drop_retired(id)
-		_dm5_drop_decor(id, "authoritative_commit")
+		# DM7: derived HIGH rocks stay visible until the real object renderer
+		# publishes, which may lag behind this 16-chunk terrain commit.
 	var region_nodes: Dictionary = {}
 	var early_record: Dictionary = _progressive_chunk_nodes.get(id, {})
 	var early_nodes: Dictionary = early_record.get("nodes", {}) if int(early_record.get("stage_token", -1)) == publication_token else {}
@@ -4261,16 +4276,26 @@ func _dm5_build_decor_mesh(cpu: Dictionary, key: Vector2i) -> Dictionary:
 		water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(water)
 	terrain_chunks_root.add_child(root)
-	return {"root": root, "rocks": rock_count, "water_triangles": water_positions.size() / 3}
+	return {
+		"root": root, "rocks": rock_count,
+		"water_triangles": water_positions.size() / 3,
+		"rock_high": false, "rock_high_count": 0,
+		"rock_high_vertices": 0, "rock_high_bytes": 0,
+	}
 
 
 func _dm5_process_decor(now: int) -> void:
-	# Once an authoritative region is published it owns real rocks and water.
-	# Cache exterior decorators only while a true B4 HIGH visual survives.
+	# Keep derived rocks while the canonical terrain is already active but
+	# its separately queued object renderer has not published yet.
 	for id_value in _dm5_decor_nodes.keys().duplicate():
 		var id: String = id_value
-		if active_regions.has(id) or not _dm5_has_cached_high(id):
-			_dm5_drop_decor(id, "canonical_or_cache_evicted")
+		var record: Dictionary = _dm5_decor_nodes[id]
+		var key: Vector2i = record["region_key"]
+		if active_regions.has(id):
+			if is_instance_valid(object_stream) and object_stream.has_published_region(key):
+				_dm5_drop_decor(id, "canonical_objects_ready")
+		elif not _dm5_has_cached_high(id):
+			_dm5_drop_decor(id, "terrain_cache_expired")
 	if _last_frame_ms < 40.0 and _last_process_work_ms < 22.0:
 		for task_id_value in _dm5_decor_jobs.keys().duplicate():
 			var task_id := int(task_id_value)
@@ -4284,7 +4309,8 @@ func _dm5_process_decor(now: int) -> void:
 			var cpu: Dictionary = (record["job"] as RefCounted).result
 			var key: Vector2i = record["region_key"]
 			if int(record["seed"]) != world_seed or String(record["world_id"]) != world_id \
-					or active_regions.has(id) or not _dm5_has_cached_high(id):
+					or (active_regions.has(id) and object_stream.has_published_region(key)) \
+					or (not active_regions.has(id) and not _dm5_has_cached_high(id)):
 				break
 			if not bool(cpu.get("valid", false)):
 				_dm5_decor_retry_after_usec[id] = now + 5_000_000
