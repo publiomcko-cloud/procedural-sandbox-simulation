@@ -31,6 +31,7 @@ const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.g
 const StreamBudgetPolicy := preload("res://scripts/terrain/terrain_stream_budget_policy.gd")
 const StreamDispatchSelector := preload("res://scripts/terrain/terrain_stream_dispatch_selector.gd")
 const StreamLookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
+const DM9PrefetchPolicy := preload("res://scripts/terrain/dm9_canonical_prefetch_policy.gd")
 const CoarsePreviewJob := preload("res://scripts/terrain/terrain_coarse_preview_job.gd")
 const CoarsePreviewPolicy := preload("res://scripts/terrain/terrain_coarse_preview_policy.gd")
 const ProgressiveLoadPolicy := preload("res://scripts/terrain/terrain_stream_progressive_load_policy.gd")
@@ -262,6 +263,12 @@ var _stream_bench_reported := false
 var _lookahead_stage_targets: Array[Vector2i] = []
 var _lookahead_stage_signature := ""
 var _last_reconciled_lookahead_signature := ""
+var _dm9_prefetch_enabled := false
+var _dm9_stages_started := 0
+var _dm9_stages_ready := 0
+var _dm9_stages_promoted := 0
+var _dm9_stages_discarded := 0
+var _dm9_ready_hits := 0
 var _lookahead_stage_begin_total := 0
 var _stream_window_lookahead_stages := 0
 var _stream_window_f10_frames := 0
@@ -394,6 +401,9 @@ func _ready() -> void:
 	_stream_profile = StreamBudgetPolicy.resolve_profile(
 		stream_profile_env, stream_profile_args
 	)
+	_dm9_prefetch_enabled = _dm3_enabled() and OS.get_environment("SANDBOX_DM9_PREFETCH") == "1"
+	if _dm9_prefetch_enabled:
+		print("DM9_CANONICAL_PREFETCH: enabled=1 hold_until_core=1 protected_radius=2 revision_gated=1")
 	if _dm3_enabled():
 		print("DM6_REGION_STREAM: radius=6 high_all=1 b4_sample_step=0.5 retention_radius=10 retention_seconds=20 eviction=ttl_only no_low_downgrade=1")
 		print("DM7_ROCK_STREAM: high_radius=4 terrain_high_radius=6 low_water_unchanged=1 mod_geometry_exact=1 visual_only=1")
@@ -426,6 +436,7 @@ func _ready() -> void:
 			"f10_lookahead_seconds": StreamLookaheadPolicy.LOOKAHEAD_SECONDS if _stream_profile == "adaptive-skip-lookahead" else 0.0,
 			"mesh_jobs_in_flight_limit": _mesh_job_limit,
 			"mesh_upload_limit": MAX_MESH_UPLOADS_PER_FRAME,
+			"dm9_prefetch_enabled": _dm9_prefetch_enabled,
 			"snapshot_budget_usec": MESH_SNAPSHOT_FRAME_BUDGET_USEC,
 			"upload_budget_usec": MESH_UPLOAD_FRAME_BUDGET_USEC,
 		})
@@ -1078,6 +1089,14 @@ func _stream_finish_frame() -> void:
 		"mesh_jobs_in_flight": _mesh_jobs.size(),
 		"loading_regions": loading_regions.size(),
 		"effect_prefetch_pending": effect_pending,
+		"dm9_prefetch_enabled": _dm9_prefetch_enabled,
+		"dm9_speculative_stages": _dm9_count_speculative(false),
+		"dm9_ready_stages": _dm9_count_speculative(true),
+		"dm9_prefetch_started_total": _dm9_stages_started,
+		"dm9_prefetch_ready_total": _dm9_stages_ready,
+		"dm9_prefetch_promoted_total": _dm9_stages_promoted,
+		"dm9_prefetch_hit_total": _dm9_ready_hits,
+		"dm9_prefetch_discarded_total": _dm9_stages_discarded,
 		"surface_jobs_in_flight": _surface_cache_jobs.size(),
 		"mesh_limit": int(_stream_budget_state.get("dispatch_limit", 1)),
 		"reason": String(_stream_budget_state.get("reason", "baseline")),
@@ -1181,18 +1200,20 @@ func _process(delta: float) -> void:
 	# It is never authoritative, never extends beyond the existing retained 5x5
 	# terrain window, and remains lower-priority than the visible 3x3.
 	var mapped_ahead: Dictionary = {}
-	if _stream_profile == "adaptive-skip-lookahead" \
+	if (_stream_profile == "adaptive-skip-lookahead" or _dm9_prefetch_enabled) \
 	and free_explore_enabled and _last_f10_speed_mps > 0.01:
-		var ahead_position := camera.global_position + (
-			f10_motion / maxf(delta, 0.000001)
-		) * StreamLookaheadPolicy.LOOKAHEAD_SECONDS
+		var velocity := f10_motion / maxf(delta, 0.000001)
+		var horizon_seconds := DM9PrefetchPolicy.HORIZON_SECONDS if _dm9_prefetch_enabled else StreamLookaheadPolicy.LOOKAHEAD_SECONDS
+		var ahead_position := camera.global_position + velocity * horizon_seconds
 		mapped_ahead = SpatialGrid.world_to_region_local(ahead_position)
-		if mapped_ahead.get("valid", false):
+		if _dm9_prefetch_enabled:
+			_lookahead_stage_targets = DM9PrefetchPolicy.targets(focus_region_key, camera.global_position, velocity)
+		elif mapped_ahead.get("valid", false):
 			_lookahead_stage_targets = StreamLookaheadPolicy.forward_stage_targets(
 				focus_region_key, mapped_ahead["region_key"]
 			)
-			_lookahead_stage_signature = str(_lookahead_stage_targets)
-	elif not free_explore_enabled or _stream_profile != "adaptive-skip-lookahead":
+		_lookahead_stage_signature = str(_lookahead_stage_targets)
+	elif not free_explore_enabled or _last_f10_speed_mps <= 0.01 or (_stream_profile != "adaptive-skip-lookahead" and not _dm9_prefetch_enabled):
 		_lookahead_stage_targets.clear()
 		_lookahead_stage_signature = ""
 	_reconcile_region_window()
@@ -2179,6 +2200,67 @@ func _update_focus_key() -> void:
 				_simulation_streaming_status = "Simulation focus routing issue: %s" % focus_result.get("reason", "unknown")
 
 
+func _dm9_count_speculative(only_ready: bool) -> int:
+	var count := 0
+	for value in loading_regions.values():
+		var stage: Dictionary = value
+		if bool(stage.get("dm9_speculative", false)) and (not only_ready or bool(stage.get("dm9_ready", false))):
+			count += 1
+	return count
+
+
+func _dm9_revision_valid(stage: Dictionary) -> bool:
+	var state: RefCounted = stage["world_state"]
+	return DM9PrefetchPolicy.valid_revision(
+		int(stage.get("dm9_stage_seed", -1)), world_seed,
+		int(stage["edit_revision"]), int(state.brush_edits.revision),
+		int(stage["terrain_effect_authority_revision"]), int(object_stream.get_command_world_revision()),
+		bool(stage["cave_section_enabled"]), cave_section_enabled
+	)
+
+
+func _dm9_trace_stage(action: String, stage: Dictionary) -> void:
+	if not _perf_trace_enabled:
+		return
+	var key: Vector2i = stage["region_key"]
+	PerformanceTrace.emit("dm9_prefetch_stage", {
+		"action": action,
+		"region": [key.x, key.y],
+		"focus": [focus_region_key.x, focus_region_key.y],
+		"stage_token": int(stage["stage_token"]),
+		"ready": bool(stage.get("dm9_ready", false)),
+		"completed_chunks": int(stage.get("next_index", 0)),
+		"total_chunks": (stage["chunk_coordinates"] as Array).size(),
+		"elapsed_usec": maxi(0, Time.get_ticks_usec() - int(stage["chunk_enqueued_usec"])),
+		"mesh_jobs_in_flight": _mesh_jobs.size(),
+	})
+
+
+func _dm9_promote_stage(id: String) -> void:
+	if not loading_regions.has(id):
+		return
+	var stage: Dictionary = loading_regions[id]
+	if not bool(stage.get("dm9_speculative", false)):
+		return
+	if not _dm9_revision_valid(stage) or not _stage_lod_selection_is_current(stage) \
+	or global_rebuild_pending or not _edit_transaction.is_empty():
+		_dm9_stages_discarded += 1
+		_dm9_trace_stage("stale", stage)
+		_supersede_region_stage(id)
+		return
+	stage["dm9_speculative"] = false
+	stage["dm9_promoted"] = true
+	stage["dm9_promoted_usec"] = Time.get_ticks_usec()
+	loading_regions[id] = stage
+	world_states[id] = stage["world_state"]
+	object_stream.expect_region_publication(stage["region_key"], int(stage["stage_token"]))
+	_dm9_stages_promoted += 1
+	_dm9_trace_stage("promote", stage)
+	if bool(stage.get("dm9_ready", false)):
+		_dm9_ready_hits += 1
+		_complete_region_stage(id)
+
+
 func _reconcile_region_window(force: bool = false) -> void:
 	var reconcile_started_usec := Time.get_ticks_usec()
 	var active_before := active_regions.size()
@@ -2192,7 +2274,8 @@ func _reconcile_region_window(force: bool = false) -> void:
 	_last_reconciled_lookahead_signature = _lookahead_stage_signature
 	var desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
 	var retained := _region_keys_within_radius(focus_region_key, UNLOAD_RADIUS)
-	if _stream_profile == "adaptive-skip-lookahead" and free_explore_enabled:
+	if (_stream_profile == "adaptive-skip-lookahead" or _dm9_prefetch_enabled) and free_explore_enabled \
+	and not global_rebuild_pending and _edit_transaction.is_empty():
 		for ahead_region in _lookahead_stage_targets:
 			if _contains_region(retained, ahead_region) \
 			and not _contains_region(desired, ahead_region):
@@ -2227,21 +2310,31 @@ func _reconcile_region_window(force: bool = false) -> void:
 			var stage: Dictionary = loading_regions[id]
 			var key: Vector2i = stage["region_key"]
 			if not retained_ids.has(id) or (stage["purpose"] == "load" and not _contains_region(desired, key)):
+				if bool(stage.get("dm9_speculative", false)):
+					_dm9_stages_discarded += 1
+					_dm9_trace_stage("discard", stage)
 				_discard_progressive_chunks(id, "left_window")
 				loading_regions.erase(id)
 				if not _edit_transaction.is_empty() and (_edit_transaction["target_ids"] as Array).has(id):
 					_edit_transaction["target_ids"].erase(id)
 		if not _edit_transaction.is_empty() and (_edit_transaction["target_ids"] as Array).is_empty():
 			_finish_edit_transaction("accepted; rebuild dependencies left residency and will apply it on load")
+		var core_desired := _region_keys_within_radius(focus_region_key, REQUEST_RADIUS)
 		for key in desired:
 			var id := _region_id(key)
+			var speculative := _dm9_prefetch_enabled and not _contains_region(core_desired, key)
+			if loading_regions.has(id) and not speculative and bool(loading_regions[id].get("dm9_speculative", false)):
+				_dm9_promote_stage(id)
 			if not active_regions.has(id) and not loading_regions.has(id):
-				if loading_regions.is_empty():
+				if loading_regions.is_empty() and not speculative:
 					_begin_operation("region_stream_load")
 				if _edit_transaction_affects_region(key):
 					_add_edit_transaction_region(key)
 				else:
-					_begin_region_stage(key, "load", ChunkGrid.all_coordinates())
+					_begin_region_stage(key, "load", ChunkGrid.all_coordinates(), speculative)
+					if speculative:
+						_dm9_stages_started += 1
+						_dm9_trace_stage("begin", loading_regions[id])
 					if _stream_profile == "adaptive-skip-lookahead" \
 					and _contains_region(_lookahead_stage_targets, key) \
 					and not _contains_region(
@@ -2270,6 +2363,8 @@ func _reconcile_region_window(force: bool = false) -> void:
 			"effect_prefetch_pending": int(terrain_effect_runtime.get_prefetch_pending_count()) if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")) else 0,
 			"f10_predictive_stage_targets": _lookahead_stage_targets.size() if _stream_profile == "adaptive-skip-lookahead" else 0,
 			"f10_predictive_stage_begins_total": _lookahead_stage_begin_total,
+			"dm9_prefetch_enabled": _dm9_prefetch_enabled,
+			"dm9_speculative_stages": _dm9_count_speculative(false),
 		})
 
 
@@ -2349,7 +2444,7 @@ func _ensure_full_rebuild_targets(desired: Array[Vector2i], retained_ids: Dictio
 		_begin_region_stage(key, "full", ChunkGrid.all_coordinates())
 
 
-func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinates: Array[Vector2i]) -> void:
+func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinates: Array[Vector2i], dm9_speculative: bool = false) -> void:
 	var id := _region_id(region_key)
 	if purpose == "load" and _dm3_enabled() and _dm5_has_cached_high(id):
 		_dm5_cache_hits += 1
@@ -2380,7 +2475,7 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 	# Only stages that can replace the region-level terrain publication may
 	# invalidate an in-flight object publication. LOD partial stages update
 	# existing chunk meshes in place and must not cancel entity visual rebuilds.
-	if purpose == "load" or purpose == "full" or not active_regions.has(id):
+	if not dm9_speculative and (purpose == "load" or purpose == "full" or not active_regions.has(id)):
 		object_stream.expect_region_publication(region_key, token)
 	var queued_times: Array[int] = []
 	var queued_now := Time.get_ticks_usec()
@@ -2412,8 +2507,13 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 		"terrain_effect_authority_revision": object_stream.get_command_world_revision(),
 		"chunk_enqueued_usec": Time.get_ticks_usec(),
 		"retry_count": 0,
+		"dm9_speculative": dm9_speculative,
+		"dm9_ready": false,
+		"dm9_promoted": false,
+		"dm9_stage_seed": int(state.world_seed),
 	}
-	world_states[id] = state
+	if not dm9_speculative:
+		world_states[id] = state
 	if region_key == focus_region_key:
 		world_state = state
 	if _perf_trace_enabled:
@@ -2424,6 +2524,7 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 			"stage_token": token,
 			"loading_regions": loading_regions.size(),
 			"mesh_jobs_in_flight": _mesh_jobs.size(),
+			"dm9_speculative": dm9_speculative,
 		})
 
 
@@ -3117,6 +3218,8 @@ func _process_progressive_chunk_publications() -> void:
 	var staged_ids: Array[String] = []
 	for id_value in loading_regions.keys():
 		var id: String = id_value
+		if bool(loading_regions[id_value].get("dm9_speculative", false)):
+			continue
 		if _progressive_stage_current(id):
 			staged_ids.append(id)
 	staged_ids.sort_custom(func(a: String, b: String) -> bool:
@@ -3314,6 +3417,7 @@ func _process_completed_mesh_jobs() -> void:
 				"job_total_usec": Time.get_ticks_usec() - int(record["submitted_usec"]),
 				"mesh_jobs_remaining": _mesh_jobs.size(),
 				"completed_ready_count": completed_task_ids.size(),
+				"dm9_speculative": bool(stage.get("dm9_speculative", false)),
 			})
 		if String(stage["purpose"]) == "edit_transaction" and not _edit_transaction.is_empty():
 			_edit_transaction["trace_worker_queue_usec_max"] = maxi(int(_edit_transaction.get("trace_worker_queue_usec_max", 0)), worker_queue_usec)
@@ -3616,6 +3720,7 @@ func _dispatch_mesh_jobs() -> void:
 				"mesh_jobs_in_flight": _mesh_jobs.size(),
 				"dispatches_this_frame": _mesh_dispatches_this_frame + 1,
 				"dispatch_budget": int(_stream_budget_state.get("dispatch_limit", 1)),
+				"dm9_speculative": bool(stage.get("dm9_speculative", false)),
 			})
 		if String(stage["purpose"]) == "edit_transaction" and not _edit_transaction.is_empty():
 			_edit_transaction["trace_snapshot_usec_total"] = int(_edit_transaction.get("trace_snapshot_usec_total", 0)) + snapshot_elapsed_usec
@@ -3724,6 +3829,8 @@ func _next_mesh_job_request(excluded: Dictionary = {}) -> Dictionary:
 		var priority := DM3Policy.rank(
 			stage["region_key"], focus_region_key, forward, camera.global_position
 		)
+		if _dm9_prefetch_enabled and bool(stage.get("dm9_speculative", false)):
+			priority += 100000000
 		if priority < best_rank or (priority == best_rank and id < String(best.get("id", "~"))):
 			best_rank = priority
 			best = {
@@ -3749,8 +3856,15 @@ func _complete_region_stage(id: String) -> void:
 	var stage: Dictionary = loading_regions[id]
 	if int(stage["next_index"]) < (stage["chunk_coordinates"] as Array).size():
 		return
-	if not _stage_lod_selection_is_current(stage):
+	if not _stage_lod_selection_is_current(stage) or (bool(stage.get("dm9_promoted", false)) and not _dm9_revision_valid(stage)):
 		_supersede_region_stage(id)
+		return
+	if bool(stage.get("dm9_speculative", false)):
+		if not bool(stage.get("dm9_ready", false)):
+			stage["dm9_ready"] = true
+			loading_regions[id] = stage
+			_dm9_stages_ready += 1
+			_dm9_trace_stage("ready", stage)
 		return
 	if global_rebuild_pending or stage["purpose"] == "full":
 		_try_commit_global_rebuild()
@@ -3781,6 +3895,10 @@ func _complete_region_stage(id: String) -> void:
 				"elapsed_usec": maxi(0, Time.get_ticks_usec() - int(stage.get("chunk_enqueued_usec", 0))),
 				"chunk_count": (stage["chunk_coordinates"] as Array).size(),
 				"profile": _stream_profile,
+				"dm9_promoted": bool(stage.get("dm9_promoted", false)),
+				"dm9_promoted_wait_usec": maxi(0, Time.get_ticks_usec() - int(stage.get("dm9_promoted_usec", Time.get_ticks_usec()))) if bool(stage.get("dm9_promoted", false)) else 0,
+				"dm9_prefetch_age_usec": maxi(0, Time.get_ticks_usec() - int(stage.get("chunk_enqueued_usec", 0))) if bool(stage.get("dm9_promoted", false)) else 0,
+				"publish_usec": int(_last_region_publish_profile.get("duration_usec", 0)),
 			})
 		_streamed_region_loads += 1
 		_stage_retry_counts.erase(id)
@@ -5652,7 +5770,8 @@ func _sync_world_state_index() -> void:
 		world_states[id] = active_regions[id]["world_state"]
 	for id_value in loading_regions:
 		var id: String = id_value
-		world_states[id] = loading_regions[id]["world_state"]
+		if not bool(loading_regions[id].get("dm9_speculative", false)):
+			world_states[id] = loading_regions[id]["world_state"]
 	world_state = _state_for_region(focus_region_key)
 
 
