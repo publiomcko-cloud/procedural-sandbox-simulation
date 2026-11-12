@@ -195,6 +195,11 @@ var _dm3_shell_evicted := 0
 var _dm3_shell_lod_promoted := 0
 var _dm4_high_complete_focus := Vector2i(2147483647, 2147483647)
 var _dm4_high_complete_receipts := 0
+var _dm8_high_receipt_signature := ""
+var _dm8_rock_receipt_signature := ""
+var _dm8_radial_scan_count := 0
+var _dm8_radial_scan_total_usec := 0
+var _dm8_radial_scan_max_usec := 0
 # DM5 derived LOW decorators are independent of authoritative object/hydro scope.
 var _dm5_decor_jobs: Dictionary = {}
 var _dm5_decor_pending: Dictionary = {}
@@ -390,6 +395,7 @@ func _ready() -> void:
 	if _dm3_enabled():
 		print("DM6_REGION_STREAM: radius=6 high_all=1 b4_sample_step=0.5 retention_radius=10 retention_seconds=20 eviction=ttl_only no_low_downgrade=1")
 		print("DM7_ROCK_STREAM: high_radius=4 terrain_high_radius=6 low_water_unchanged=1 mod_geometry_exact=1 visual_only=1")
+		print("DM8_RADIAL_STREAM: terrain_m=130 rock_m=90 retain_m=210 player_world_xz=1 diagonal_coverage_preserved=1 retention_seconds=20")
 		if _perf_trace_enabled:
 			PerformanceTrace.emit("dm4_region_stream_mode", {
 				"radius_regions": DM3Policy.ACTIVE_RADIUS,
@@ -3713,7 +3719,9 @@ func _next_mesh_job_request(excluded: Dictionary = {}) -> Dictionary:
 		var index := int(stage.get("submit_index", 0))
 		if index >= (stage["chunk_coordinates"] as Array).size():
 			continue
-		var priority := DM3Policy.rank(stage["region_key"], focus_region_key, forward)
+		var priority := DM3Policy.rank(
+			stage["region_key"], focus_region_key, forward, camera.global_position
+		)
 		if priority < best_rank or (priority == best_rank and id < String(best.get("id", "~"))):
 			best_rank = priority
 			best = {
@@ -4446,9 +4454,12 @@ func _dm7_commit_high_rocks(id: String, key: Vector2i, cpu: Dictionary) -> bool:
 func _dm7_rock_high_receipt_if_complete() -> void:
 	if _dm7_rock_high_completion_focus == focus_region_key:
 		return
+	var player_position: Vector3 = camera.global_position
+	var target_ids: Array[String] = []
 	for key in _dm3_shell_order:
-		if DM3Policy.distance(key, focus_region_key) > DM7_ROCK_HIGH_RADIUS:
+		if not DM3Policy.within_rock_high(key, player_position):
 			continue
+		target_ids.append(_region_id(key))
 		var id := _region_id(key)
 		if active_regions.has(id) and object_stream.has_published_region(key):
 			continue
@@ -4466,14 +4477,23 @@ func _dm7_rock_high_receipt_if_complete() -> void:
 				return
 			if object_stream.has_published_region(key):
 				canonical_rock_publications += 1
+	target_ids.sort()
+	var signature := "%d:%d:%d" % [
+		focus_region_key.x, focus_region_key.y, hash(target_ids)
+	]
+	if _dm8_rock_receipt_signature == signature:
+		return
+	_dm8_rock_receipt_signature = signature
 	_dm7_rock_high_completion_focus = focus_region_key
 	_dm7_rock_high_completion_receipts += 1
 	var receipt := {
 		"focus": [focus_region_key.x, focus_region_key.y],
 		"radius": DM7_ROCK_HIGH_RADIUS,
 		"terrain_high_radius": DM3Policy.ACTIVE_RADIUS,
-		"region_count": (DM7_ROCK_HIGH_RADIUS * 2 + 1) * (DM7_ROCK_HIGH_RADIUS * 2 + 1),
-		"outer_region_count": (DM7_ROCK_HIGH_RADIUS * 2 + 1) * (DM7_ROCK_HIGH_RADIUS * 2 + 1) - 9,
+		"region_count": target_ids.size() + 9,
+		"outer_region_count": target_ids.size(),
+		"radial_radius_m": DM3Policy.radial_radius_m(DM7_ROCK_HIGH_RADIUS),
+		"player_xz_m": [player_position.x, player_position.z],
 		"canonical_core_count": 9,
 		"canonical_object_published_regions": canonical_rock_publications,
 		"rock_high_resident_regions": _dm7_rock_visible_count,
@@ -4481,9 +4501,9 @@ func _dm7_rock_high_receipt_if_complete() -> void:
 		"visual_only": true,
 		"receipt": _dm7_rock_high_completion_receipts,
 	}
-	print("DM7_ROCK_HIGH_RADIUS_COMPLETE: " + JSON.stringify(receipt))
+	print("DM8_ROCK_HIGH_RADIAL_COMPLETE: " + JSON.stringify(receipt))
 	if _perf_trace_enabled:
-		PerformanceTrace.emit("dm7_rock_high_radius_complete", receipt)
+		PerformanceTrace.emit("dm8_rock_high_radial_complete", receipt)
 
 
 func _dm7_process_high_rocks(now: int) -> void:
@@ -4527,8 +4547,8 @@ func _dm7_process_high_rocks(now: int) -> void:
 	# The terrain's queue is strictly nearest and camera-facing first.
 	# Build each FULL geological rock mesh by radius 4, not only at 1..2.
 	for key in _dm3_shell_order:
-		if DM3Policy.distance(key, focus_region_key) > DM7_ROCK_HIGH_RADIUS:
-			break
+		if not DM3Policy.within_rock_high(key, camera.global_position):
+			continue
 		var id := _region_id(key)
 		if active_regions.has(id) or not _dm5_decor_nodes.has(id) \
 				or _dm7_rock_pending.has(id) \
@@ -4653,17 +4673,21 @@ func _dm3_prune_shells(now: int) -> void:
 	for id_value in _dm3_shell_nodes.keys().duplicate():
 		var id: String = id_value
 		var record: Dictionary = _dm3_shell_nodes[id]
-		var dist := DM3Policy.distance(focus, record["region_key"])
+		var in_retention := DM3Policy.within_retention(
+			record["region_key"], camera.global_position
+		)
 		if active_regions.has(id) or int(record["seed"]) != world_seed:
 			_dm3_drop_shell(id, "authoritative_or_seed_change")
 			continue
-		if not DM3Policy.keep(int(record["last_near_usec"]), now, dist):
+		if not DM3Policy.keep_radial(
+				int(record["last_near_usec"]), now,
+				record["region_key"], camera.global_position):
 			_dm3_drop_shell(id, "expired")
 			continue
-		if dist <= DM3Policy.RETAIN_RADIUS:
+		if in_retention:
 			record["last_near_usec"] = now
 			_dm3_shell_nodes[id] = record
-		if dist > DM3Policy.ACTIVE_RADIUS:
+		if not DM3Policy.within_high(record["region_key"], camera.global_position):
 			var retained_node: MeshInstance3D = record.get("node", null)
 			if is_instance_valid(retained_node) and retained_node.mesh != null:
 				if not retained_node.visible:
@@ -4673,19 +4697,23 @@ func _dm3_prune_shells(now: int) -> void:
 	for id_value in _dm3_retired_region_nodes.keys().duplicate():
 		var id: String = id_value
 		var record: Dictionary = _dm3_retired_region_nodes[id]
-		var dist := DM3Policy.distance(focus, record["region_key"])
+		var in_retention := DM3Policy.within_retention(
+			record["region_key"], camera.global_position
+		)
 		# Uniform B4 HIGH throughout the view. Keep retired meshes while
 		# a new HIGH shell is generated, preventing motion-created holes.
 		if active_regions.has(id) or int(record["seed"]) != world_seed:
 			_dm3_drop_retired(id, "authoritative_or_seed_change")
 			continue
-		if not DM3Policy.keep(int(record["last_near_usec"]), now, dist):
+		if not DM3Policy.keep_radial(
+				int(record["last_near_usec"]), now,
+				record["region_key"], camera.global_position):
 			_dm3_drop_retired(id, "expired")
 			continue
-		if dist <= DM3Policy.RETAIN_RADIUS:
+		if in_retention:
 			record["last_near_usec"] = now
 			_dm3_retired_region_nodes[id] = record
-		if dist > DM3Policy.ACTIVE_RADIUS:
+		if not DM3Policy.within_high(record["region_key"], camera.global_position):
 			for node_value in record["nodes"]:
 				var retained_node: MeshInstance3D = node_value
 				if is_instance_valid(retained_node) and retained_node.mesh != null:
@@ -4713,7 +4741,8 @@ func _dm3_prune_shells(now: int) -> void:
 		var decor: Dictionary = decor_value
 		if bool(decor.get("rock_high", false)) \
 				and not active_regions.has(_region_id(decor["region_key"])) \
-				and DM3Policy.distance(focus, decor["region_key"]) > DM7_ROCK_HIGH_RADIUS:
+				and not DM3Policy.within_rock_high(
+					decor["region_key"], camera.global_position):
 			dm7_rocks_retained_outer += 1
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("dm4_region_b4_high_window", {
@@ -4721,6 +4750,16 @@ func _dm3_prune_shells(now: int) -> void:
 			"dm5_cache_hits": _dm5_cache_hits,
 			"dm6_retained_high_reused_total": _dm6_retained_high_reused_total,
 			"dm7_rock_high_radius": DM7_ROCK_HIGH_RADIUS,
+			"dm8_rock_high_radius_m": DM3Policy.radial_radius_m(DM7_ROCK_HIGH_RADIUS),
+			"dm8_terrain_high_radius_m": DM3Policy.radial_radius_m(DM3Policy.ACTIVE_RADIUS),
+			"dm8_retain_radius_m": DM3Policy.radial_radius_m(DM3Policy.RETAIN_RADIUS),
+			"dm8_player_xz_m": [camera.global_position.x, camera.global_position.z],
+			"dm8_radial_targets": _dm3_shell_order.size(),
+			"dm8_radial_scan_count": _dm8_radial_scan_count,
+			"dm8_radial_scan_avg_usec": int(
+				float(_dm8_radial_scan_total_usec) / float(maxi(1, _dm8_radial_scan_count))
+			),
+			"dm8_radial_scan_max_usec": _dm8_radial_scan_max_usec,
 			"dm7_rock_high_resident_regions": _dm7_rock_visible_count,
 			"dm7_rock_high_mesh_payload_bytes": _dm7_high_rock_mesh_bytes,
 			"dm7_rock_high_published_total": _dm7_high_rock_publications,
@@ -4748,15 +4787,22 @@ func _dm3_prune_shells(now: int) -> void:
 
 
 
-## Completion requires that EVERY region in the radius-6 square has a
+## Completion requires EVERY region in the actual-player radius-130m disc to have a
 ## HIGH B4 visual (or a fully committed canonical B4 region), not merely
 ## a submitted worker or an approximate coarse preview. Emit once/focus.
 func _dm4_emit_full_high_receipt_if_ready() -> void:
-	if not _dm3_enabled() or _dm4_high_complete_focus == focus_region_key:
+	if not _dm3_enabled():
 		return
-	var shell_targets := DM3Policy.desired_regions(
-		focus_region_key, _dm3_forward()
-	)
+	var shell_targets := _dm3_shell_order
+	var target_ids: Array[String] = []
+	for key in shell_targets:
+		target_ids.append(_region_id(key))
+	target_ids.sort()
+	var signature := "%d:%d:%d" % [
+		focus_region_key.x, focus_region_key.y, hash(target_ids)
+	]
+	if _dm8_high_receipt_signature == signature:
+		return
 	var high_shell_count := 0
 	var canonical_count := 0
 	for region in shell_targets:
@@ -4779,10 +4825,14 @@ func _dm4_emit_full_high_receipt_if_ready() -> void:
 			if not active_regions.has(_region_id(Vector2i(x, z))):
 				return
 	_dm4_high_complete_focus = focus_region_key
+	_dm8_high_receipt_signature = signature
 	_dm4_high_complete_receipts += 1
 	var receipt := {
 		"focus": [focus_region_key.x, focus_region_key.y],
-		"requested_region_count": DM3Policy.expected_region_count(),
+		"requested_region_count": shell_targets.size() + 9,
+		"radial_radius_m": DM3Policy.radial_radius_m(DM3Policy.ACTIVE_RADIUS),
+		"player_xz_m": [camera.global_position.x, camera.global_position.z],
+		"reference_center_region_count": DM3Policy.expected_region_count(),
 		"high_shell_regions": high_shell_count,
 		"retired_detail_regions": canonical_count,
 		"canonical_core_regions": 9,
@@ -4791,9 +4841,9 @@ func _dm4_emit_full_high_receipt_if_ready() -> void:
 		"visual_only_outside_authority": true,
 		"receipt_number": _dm4_high_complete_receipts,
 	}
-	print("DM6_HIGH_RADIUS_COMPLETE: " + JSON.stringify(receipt))
+	print("DM8_HIGH_RADIAL_COMPLETE: " + JSON.stringify(receipt))
 	if _perf_trace_enabled:
-		PerformanceTrace.emit("dm6_high_radius_complete", receipt)
+		PerformanceTrace.emit("dm8_high_radial_complete", receipt)
 
 
 func _dm3_process_shells() -> void:
@@ -4822,11 +4872,12 @@ func _dm3_process_shells() -> void:
 			_dm3_shell_pending.erase(id)
 			var key: Vector2i = record["region_key"]
 			var dist := DM3Policy.distance(focus_region_key, key)
+			var dist_m := DM3Policy.world_distance_m(key, camera.global_position)
 			var level := DM3Policy.lod_for_distance(dist)
 			var job: RefCounted = record["job"]
 			var cpu: Dictionary = job.get("result")
 			if int(record["seed"]) != world_seed \
-			or dist < 2 or dist > DM3Policy.ACTIVE_RADIUS \
+			or dist < 2 or not DM3Policy.within_high(key, camera.global_position) \
 			or level != int(record["lod"]) \
 			or active_regions.has(id) or loading_regions.has(id) \
 			or global_rebuild_pending or cave_section_enabled:
@@ -4880,6 +4931,7 @@ func _dm3_process_shells() -> void:
 					"backend": "b4",
 					"sample_step_m": float(cpu.get("sample_step", 0.0)),
 					"distance_regions": dist,
+					"distance_player_m": dist_m,
 					"triangle_count": int(cpu.get("triangle_count", 0)),
 					"worker_usec": int(cpu.get("worker_usec", 0)),
 					"retained": previous_lod >= 0,
@@ -4888,7 +4940,14 @@ func _dm3_process_shells() -> void:
 			break
 	if now - _dm3_last_scan_usec >= DM3Policy.RESCAN_USEC or _dm3_shell_order.is_empty():
 		_dm3_last_scan_usec = now
-		_dm3_shell_order = DM3Policy.desired_regions(focus_region_key, _dm3_forward())
+		var radial_scan_started := Time.get_ticks_usec()
+		_dm3_shell_order = DM3Policy.desired_regions(
+			focus_region_key, _dm3_forward(), camera.global_position
+		)
+		var scan_usec := Time.get_ticks_usec() - radial_scan_started
+		_dm8_radial_scan_count += 1
+		_dm8_radial_scan_total_usec += scan_usec
+		_dm8_radial_scan_max_usec = maxi(_dm8_radial_scan_max_usec, scan_usec)
 		_dm3_prune_shells(now)
 		_dm5_process_decor(now)
 		_dm7_process_high_rocks(now)
@@ -4905,9 +4964,10 @@ func _dm3_process_shells() -> void:
 		if active_regions.has(id) or loading_regions.has(id):
 			continue
 		var dist := DM3Policy.distance(focus_region_key, key)
-		if dist < 2 or dist > DM3Policy.ACTIVE_RADIUS:
+		if dist < 2 or not DM3Policy.within_high(key, camera.global_position):
 			continue
-		if _dm3_retired_region_nodes.has(id) and dist <= DM3Policy.FINE_RADIUS:
+		if _dm3_retired_region_nodes.has(id) and DM3Policy.within_high(
+				key, camera.global_position):
 			continue
 		var desired_lod := DM3Policy.lod_for_distance(dist)
 		if _dm3_shell_nodes.has(id) \
