@@ -18,12 +18,12 @@ const RIVER_COLOR := Color(0.08, 0.41, 0.73, 0.78)
 var world_seed := 0
 var world_id := ""
 var region_key := Vector2i.ZERO
-var registry: RefCounted
+var registry: ContentDefinitionRegistry
 var result: Dictionary = {}
 var worker_started_usec := 0
 var worker_finished_usec := 0
 
-func _init(seed: int, id: String, key: Vector2i, content_registry: RefCounted) -> void:
+func _init(seed: int, id: String, key: Vector2i, content_registry: ContentDefinitionRegistry) -> void:
 	world_seed = seed
 	world_id = id
 	region_key = key
@@ -38,7 +38,7 @@ func run() -> void:
 
 
 static func build_data(
-	seed: int, id: String, key: Vector2i, content_registry: RefCounted
+	seed: int, id: String, key: Vector2i, content_registry: ContentDefinitionRegistry
 ) -> Dictionary:
 	var rocks: Array[Dictionary] = []
 	var rock_status := "population_registry_not_available"
