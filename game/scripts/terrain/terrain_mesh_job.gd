@@ -83,7 +83,8 @@ func _run_experimental_b4(snapshot: Dictionary) -> void:
 	var backend := ExperimentalB4.new()
 	var generate_started_usec := Time.get_ticks_usec()
 	var generated := backend.generate_chunk(
-		seed, region_key, coordinate, snapshot, cave_section_enabled
+		seed, region_key, coordinate, snapshot, cave_section_enabled,
+		1.0 if lod_level == 1 else 0.5
 	)
 	var generate_usec := Time.get_ticks_usec() - generate_started_usec
 	if not generated:
@@ -102,7 +103,7 @@ func _run_experimental_b4(snapshot: Dictionary) -> void:
 		result["reason"] = "dm2_b4_topology_or_mesh_failure"
 		return
 	result["backend"] = "b4"
-	result["lod_level"] = 0
+	result["lod_level"] = lod_level
 	result["lod_fallback"] = false
 	result["timings_usec"] = {
 		"sdf_and_ledger": generate_usec,
