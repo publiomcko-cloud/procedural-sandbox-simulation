@@ -68,13 +68,13 @@ func _run() -> void:
 	_check(b.generate(SEED, right, Grid.SAMPLE_STEP), "full right region")
 	_check(d.generate(SEED, below, Grid.SAMPLE_STEP), "full down region")
 	for global_x in [Grid.CELL_COUNT_X-1, Grid.CELL_COUNT_X]:
-		var local_b := global_x-Grid.CELL_COUNT_X
+		var local_b: int = int(global_x) - Grid.CELL_COUNT_X
 		for y in range(-1, Grid.CELL_COUNT_Y+1):
 			for z in range(-1, Grid.CELL_COUNT_Z+1):
 				_compare_halo(a,Vector3.ZERO,Vector3i(global_x,y,z),
 					b,Vector3(16.0,0.0,0.0),Vector3i(local_b,y,z))
 	for global_z in [Grid.CELL_COUNT_Z-1, Grid.CELL_COUNT_Z]:
-		var local_d := global_z-Grid.CELL_COUNT_Z
+		var local_d: int = int(global_z) - Grid.CELL_COUNT_Z
 		for y in range(-1, Grid.CELL_COUNT_Y+1):
 			for x in range(-1, Grid.CELL_COUNT_X+1):
 				_compare_halo(a,Vector3.ZERO,Vector3i(x,y,global_z),
@@ -94,8 +94,8 @@ func _compare_halo(
 	left: RefCounted,left_offset:Vector3,left_cell:Vector3i,
 	right:RefCounted,right_offset:Vector3,right_cell:Vector3i
 ) -> void:
-	var ia := left._cell_index(left_cell.x,left_cell.y,left_cell.z)
-	var ib := right._cell_index(right_cell.x,right_cell.y,right_cell.z)
+	var ia: int = int(left._cell_index(left_cell.x,left_cell.y,left_cell.z))
+	var ib: int = int(right._cell_index(right_cell.x,right_cell.y,right_cell.z))
 	var active_a := int(left.cell_active[ia])
 	var active_b := int(right.cell_active[ib])
 	_check(active_a == active_b, "adjacent overlapping cell occupancy matches")
