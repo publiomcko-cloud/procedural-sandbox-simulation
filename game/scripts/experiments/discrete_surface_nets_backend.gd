@@ -5,6 +5,7 @@ extends RefCounted
 ## quads. Alternative experimental backend; no production code changes.
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
+const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const SCALE := 256.0
 const CORNERS := [
 	Vector3i(0, 0, 0), Vector3i(1, 0, 0),
@@ -27,6 +28,10 @@ var nodes := PackedInt32Array()
 var cell_active := PackedByteArray()
 var cell_vertices := PackedVector3Array()
 var last_changed := 0
+var _chunk_mode := false
+var _chunk_coordinate := Vector2i.ZERO
+var _chunk_offset := Vector3i.ZERO
+var last_generation_sample_count := 0
 
 
 func generate(seed_value: int, region_value: Vector2i, step_value: float) -> bool:
@@ -35,6 +40,9 @@ func generate(seed_value: int, region_value: Vector2i, step_value: float) -> boo
 	step = step_value
 	seed = seed_value
 	region_key = region_value
+	_chunk_mode = false
+	_chunk_offset = Vector3i.ZERO
+	last_generation_sample_count = 0
 	dims = Vector3i(
 		roundi((Grid.MAX_BOUND.x - Grid.MIN_BOUND.x) / step),
 		roundi((Grid.MAX_BOUND.y - Grid.MIN_BOUND.y) / step),
@@ -51,6 +59,57 @@ func generate(seed_value: int, region_value: Vector2i, step_value: float) -> boo
 				nodes[_node_index(x, y, z)] = roundi(
 					Field.sample_density(seed, region_key, _point(x, y, z)) * SCALE
 				)
+				last_generation_sample_count += 1
+	for y in range(-1, dims.y + 1):
+		for z in range(-1, dims.z + 1):
+			for x in range(-1, dims.x + 1):
+				_rebuild_cell(x, y, z)
+	return true
+
+
+
+## DM2: independent per-chunk volume, including a 1-cell halo. All field
+## samples come from the immutable, revision-tagged worker snapshot. No shared
+## mutable cache, scene-tree reads or procedural fallback after snapshot build.
+func generate_chunk(
+	seed_value: int,
+	region_value: Vector2i,
+	coordinate_value: Vector2i,
+	snapshot: Dictionary,
+	cave_section_enabled: bool = false
+) -> bool:
+	if not Grid.is_valid_coordinate(coordinate_value) \
+			or not bool(snapshot.get("valid", true)):
+		return false
+	step = Grid.SAMPLE_STEP
+	seed = seed_value
+	region_key = region_value
+	_chunk_mode = true
+	_chunk_coordinate = coordinate_value
+	_chunk_offset = Vector3i(
+		coordinate_value.x * Grid.CELLS_PER_CHUNK_X, 0,
+		coordinate_value.y * Grid.CELLS_PER_CHUNK_Z
+	)
+	dims = Vector3i(
+		Grid.CELLS_PER_CHUNK_X, Grid.CELL_COUNT_Y, Grid.CELLS_PER_CHUNK_Z
+	)
+	node_dims = dims + Vector3i(3, 3, 3)
+	cell_dims = dims + Vector3i(2, 2, 2)
+	nodes.resize(node_dims.x * node_dims.y * node_dims.z)
+	cell_active.resize(cell_dims.x * cell_dims.y * cell_dims.z)
+	cell_vertices.resize(cell_active.size())
+	last_generation_sample_count = 0
+	for y in range(-1, dims.y + 2):
+		for z in range(-1, dims.z + 2):
+			for x in range(-1, dims.x + 2):
+				var density := BrushState.sample_density_snapshot(
+					seed, region_key, _point(x, y, z),
+					cave_section_enabled, snapshot
+				)
+				if not is_finite(density):
+					return false
+				nodes[_node_index(x, y, z)] = roundi(density * SCALE)
+				last_generation_sample_count += 1
 	for y in range(-1, dims.y + 1):
 		for z in range(-1, dims.z + 1):
 			for x in range(-1, dims.x + 1):
@@ -121,10 +180,12 @@ func edit_sphere(mode: int, center_world: Vector3, radius: float) -> int:
 func build_chunk(chunk: Vector2i) -> Dictionary:
 	if not Grid.is_valid_coordinate(chunk) or nodes.is_empty():
 		return {"valid": false, "reason": "invalid_chunk_or_missing_lattice"}
-	var chunk_x := roundi(4.0 / step)
-	var chunk_z := roundi(3.0 / step)
-	var x0 := chunk.x * chunk_x
-	var z0 := chunk.y * chunk_z
+	if _chunk_mode and chunk != _chunk_coordinate:
+		return {"valid": false, "reason": "b4_wrong_chunk"}
+	var chunk_x := dims.x if _chunk_mode else roundi(4.0 / step)
+	var chunk_z := dims.z if _chunk_mode else roundi(3.0 / step)
+	var x0 := 0 if _chunk_mode else chunk.x * chunk_x
+	var z0 := 0 if _chunk_mode else chunk.y * chunk_z
 	var mesh_origin := Grid.origin_for(chunk)
 	var positions := PackedVector3Array()
 	var normals := PackedVector3Array()
@@ -173,6 +234,7 @@ func build_chunk(chunk: Vector2i) -> Dictionary:
 		"triangle_count": quads * 2,
 		"vertex_count": positions.size(),
 		"quad_count": quads,
+		"sample_count": last_generation_sample_count,
 		"memory_bytes": byte_count(),
 	}
 
@@ -246,8 +308,9 @@ static func _append_quad(
 
 
 func _point(x: int, y: int, z: int) -> Vector3:
-	return Vector3(float(x) * step,
-		Grid.MIN_BOUND.y + float(y) * step, float(z) * step)
+	return Vector3(float(x + _chunk_offset.x) * step,
+		Grid.MIN_BOUND.y + float(y) * step,
+		float(z + _chunk_offset.z) * step)
 
 
 func _node(x: int, y: int, z: int) -> float:
