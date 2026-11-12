@@ -17,7 +17,7 @@ if ($LASTEXITCODE -ne 0) { throw 'ABBA trial harness failed' }
 $results = @()
 foreach ($p in @(Get-ChildItem -LiteralPath $EvidenceDir -Filter '*.metrics.json' -File | Sort-Object Name)) {
     $obj = Get-Content -LiteralPath $p.FullName -Raw | ConvertFrom-Json
-    $log = $p.FullName -replace '\.metrics\.json
+    $log = $p.FullName.Substring(0, $p.FullName.Length - '.metrics.json'.Length)
     if (-not (Test-Path -LiteralPath $log)) { throw "Missing stream trace for $($p.Name)" }
     $cacheHits = 0
     $cacheProbes = 0
