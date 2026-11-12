@@ -2,7 +2,7 @@
 
 **Escopo:** registro consolidado da linhagem experimental B4, streaming de regiões, retenção HIGH, rochas e água visuais. A branch atual é `exp/dm7-b4-high-rock-radius4`, descendente das experiências DM1→DM6. **A `main` não foi modificada.** As conclusões de uma fase anterior permanecem históricas; regras atuais são as especificadas aqui.
 
-**Estado documental:** resultados DM1–DM6 confirmados por Actions e inspeção local do autor (DM6 aprovado visualmente com ressalva sobre rochas LOW); DM7 requer seu próprio resultado de qualificação no Actions e validação visual local. Nenhuma equivalência de conteúdo mutável fora da janela autoritativa foi demonstrada.
+**Estado documental:** resultados DM1–DM7 confirmados por GitHub Actions. A DM6 foi aprovada visualmente pelo autor, com ressalva sobre rochas LOW; a DM7 obteve **5/5 jobs Windows PASS** e **ainda precisa de validação visual local do autor**. Nenhuma equivalência de conteúdo mutável fora da janela autoritativa foi demonstrada.
 
 ## 1. Problema e premissas
 
@@ -46,7 +46,7 @@ Os raios são Chebyshev de regiões no plano X/Z, **não chunks nem metros**. Ca
 | **DM4** | Eliminar terreno LOW no halo: todas as **121** posições do raio 5 em B4 verdadeiro de 0,5 m, 112 externas; fila de distância→direção | Paridade pristine de vértices/normais; **121/121 HIGH** preenchidas em idle, aproximadamente 41,72 s até a confirmação do raio; custo de geração ainda relevante |
 | **DM5** | Retorno a HIGH piscava após publicar primeiro chunk provisional; manter HIGH durante staging e suprimir preview E7 LOW; incluir rochas e água LOW externas | **65 reutilizações HIGH** com cache aquecido; rochas posicionadas via registro de mods, água LOW de oceano/rios; objetos ainda eram simplificados fora do núcleo |
 | **DM6** | Ampliar terreno HIGH de 5 para **6 regiões**; corrigir cache e calcular RAM | Removidas evicções precoces por limites rígidos de 48/512; retenção agora requer fora do raio 10 **e** pelo menos 20 s; **169/169 HIGH**; **74 reutilizações HIGH** em percursos aquecidos; medidos bytes das malhas |
-| **DM7** | Resolver `LowRocks`→`HIGH` somente quando próximo do núcleo (raios 1–2), mantendo terreno HIGH a 6. Adotar HIGH de rochas **raio 4** com mesma geometria do mod, job separado, promoção atômica e retenção | Implementação em branch isolada, sem alterações nos raios de terreno/autoridade/água, a qualificar em Windows e visualmente pelo autor |
+| **DM7** | Corrigir LOW de rochas próximo ao núcleo (raios 1–2) com terreno HIGH a 6. Adotar rochas HIGH até **raio 4**, usando geometria original, worker separado, promoção atômica e retenção | **81/81 posições cobertas, 72 HIGH exteriores**, geometria pristine exata em 18 rochas/6 regiões, **73 cache hits em retorno** e **5/5 jobs Windows PASS**; falta inspeção visual local da DM7 |
 
 ### Causas raiz documentadas
 
@@ -62,7 +62,7 @@ Os raios são Chebyshev de regiões no plano X/Z, **não chunks nem metros**. Ca
 
 **Testes de regressão:** `game/tests/experiments/discrete_terrain_matrix_benchmark.gd`, `dm2_b4_chunk_contract.gd`, `dm3_region_stream_policy_tests.gd` (agora DM6), `dm5_low_decor_contract.gd`, `dm6_high_retention_policy_tests.gd`, `dm6_region_memory_benchmark.gd`, `dm7_high_rock_parity_tests.gd`. Workflows nas pastas `.github/workflows/dm2-...yml` até `dm7-b4-high-rock-radius4.yml`. `scripts/perf/run-p5-deterministic-stream-benchmark.ps1` suporta `-WarmupFrames` e rotas determinísticas `straight-18`, `outback-18`, `outback-54`, `idle`.
 
-**Prova esperada DM7:** paridade exata dos vértices/normais/identidades do batch HIGH com os dados do mesmo algoritmo canônico, incluindo coordenadas negativas; `LowRocks` escondido **depois** do HIGH estar pronto, `LowWater` preservado; 81 regiões cobertas com HIGH de rochas após idle (72 externas + 9 centrais), 169 regiões HIGH de terreno; GPU real; retorno aquecido com rochas HIGH residentes além do raio 4, mesmo após sua saída.
+**Prova DM7 aprovada:** 82 asserções com paridade exata dos vértices/normais/identidades (seis regiões/18 rochas, coordenadas negativas); `LowRocks` escondido após commit e `LowWater` preservado; 81 posições cobertas com HIGH de rochas (72 externas e nove centrais), 169 regiões de terreno HIGH; GPU real; retorno aquecido com rochas HIGH residentes além do raio 4. Uma região central do benchmark tinha zero rochas e não emitiu publicação de objetos; por isso o receipt usa geometria autoritativa central e registra separadamente as oito publicações centrais com objetos. [Relatório DM7](./EXP-DM7-HIGH-ROCKS-RADIUS4.md).
 
 **Eventos:** `DM6_REGION_STREAM`, `dm4_region_b4_high_visible`, `dm4_region_b4_high_window` (métricas DM6 e DM7), `DM6_HIGH_RADIUS_COMPLETE`, `dm5_low_decor_visible`, `dm5_retained_high_revisit`, `DM7_ROCK_STREAM`, `dm7_rock_high_visible`, `dm7_rock_high_failed`, `DM7_ROCK_HIGH_RADIUS_COMPLETE`. As nomenclaturas DM3/DM4 preservadas são marcas históricas; não devem ser interpretadas como o raio ativo.
 
@@ -76,9 +76,10 @@ Na DM6 (Godot 4.7.2, seed 424242, oito regiões):
 - Campo Q8.8 B4 durante trabalho: **339.764 B** temporários. Não é um cache de campo residente por região.
 - Apenas arrays de terreno HIGH em 169 regiões: **43.731.792 B (41,7 MiB)**; 441 (raio 10): **114.116.688 B (108,8 MiB)**; histórico de 20 s fora do raio pode superar isso.
 - **DM7 adiciona** arrays de vértices/normais das rochas HIGH (24 B por vértice, quantidade dependente do número de instâncias e da receita, **100–500 triângulos por rocha**), uma `ArrayMesh` por região HIGH externa e memória temporária para preparar os batches. Não somar o payload do worker à RAM persistente sem medição de pico.
+- **DM7 medido:** 194 rochas em 72 regiões externas (mediana 3/estado), **72.792 triângulos**, payload total **5.241.024 B (5,00 MiB)** e mediana **79.488 B (77,6 KiB) por região**. CPU do worker HIGH mediana **56,36 ms/região**, p95 113,4 ms e soma **4,13 s** ao longo do benchmark idle. [Evidência](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43300134756/artifacts/13982015911).
 - Esses valores não incluem buffers/cópias internas da `ArrayMesh`, indexação de nós, geometria da GPU, overhead do Godot, estado autoritativo ou recursos temporários concorrentes. Monitorar RSS **e** VRAM efetivos antes de dimensionar agressivamente a distância de prefetch.
 
-O user report da DM6 (**RSS sub-300 MB e VRAM pouco alterada**) sugere margem para experimentação, mas é insuficiente para concluir que o gargalo restante não é CPU/latência de publicação.
+O relato do autor da DM6 (**RSS sub-300 MB e VRAM pouco alterada**) sugere margem para experimentação, mas é insuficiente para concluir que o gargalo restante não é CPU/latência de publicação.
 
 ## 6. Evidências já confirmadas e status
 
@@ -86,7 +87,7 @@ O user report da DM6 (**RSS sub-300 MB e VRAM pouco alterada**) sugere margem pa
 - [DM4 — uniform HIGH](./EXP-DM4-B4-UNIFORM-HIGH-REGIONS.md): [Actions 43280360919](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43280360919) **4/4 jobs PASS**; 121/121 HIGH e paridade pristine.
 - [DM5 — retenção e decoração LOW](./EXP-DM5-B4-VISUAL-CACHE-LOW-DECOR.md): [Actions 43285992853](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43285992853) **5/5 jobs PASS**; 65 HIGH reutilizados em retornos.
 - [DM6 — raio 6 e memória](./EXP-DM6-B4-HIGH-RETENTION-MEMORY.md): [Actions 43291315495](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43291315495) **5/5 jobs PASS**; 169/169 HIGH, 74 HIGH reutilizados. **Inspeção visual local do autor aprovada**, com ressalva sobre LOW das rochas próximo à câmera.
-- **DM7:** documentação de resultado em `EXP-DM7-HIGH-ROCKS-RADIUS4.md` e evidências Actions devem ser consultadas antes de considerar a mudança qualificada. Não houve merge na main.
+- [DM7 — HIGH de rochas raio 4](./EXP-DM7-HIGH-ROCKS-RADIUS4.md): [Actions 43300134756](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43300134756) **5/5 jobs PASS**, contrato de 82 asserções/18 rochas, 72/72 batches HIGH exteriores, 169/169 terreno HIGH, 73 reutilizações de terreno HIGH e 126 eventos de rochas HIGH retidas fora do raio 4. **Sem merge na main; faltando inspeção visual da DM7 no PC do autor.**
 
 Os documentos DM3–DM5 preservam **parâmetros históricos** (raio 5, anel LOW, limite 48/512), que foram sucessivamente superados por DM6/DM7. Não devem ser usados como configuração atual.
 
