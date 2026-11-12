@@ -1,15 +1,11 @@
 extends RefCounted
 
-## DM3 derived visualization. No snapshots, edits, entity state, scene nodes,
-## meshes, physics or save access on the worker thread. Never authoritative.
-const Field := preload("res://scripts/terrain/sdf_world.gd")
+## DM4: real B4 Q8.8 Surface Nets mesh, exactly 0.5m across every
+## visual region. Uses the same pristine sample field and grid as canonical
+## DM2 B4. No scene nodes, effects, edits or mutable authority on workers.
+const B4 := preload("res://scripts/experiments/discrete_surface_nets_backend.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
-const FINE_X_CELLS := 16
-const FINE_Z_CELLS := 12
-const LOW_X_CELLS := 8
-const LOW_Z_CELLS := 6
-const VERTICAL_STEP := 0.5
-const BISECT_STEPS := 6
+const STEP := 0.5
 
 var seed: int
 var region: Vector2i
@@ -19,10 +15,11 @@ var started_usec := 0
 var finished_usec := 0
 
 
-func _init(world_seed: int, region_key: Vector2i, level: int) -> void:
+func _init(world_seed: int, region_key: Vector2i, level: int = 0) -> void:
 	seed = world_seed
 	region = region_key
-	lod = clampi(level, 0, 1)
+	# Compatibility metadata only. All jobs have uniform B4 HIGH density.
+	lod = 0
 
 
 func run() -> void:
@@ -31,79 +28,44 @@ func run() -> void:
 	finished_usec = Time.get_ticks_usec()
 
 
-static func build_data(world_seed: int, key: Vector2i, level: int) -> Dictionary:
+## Combine 16 B4 chunk meshes into one region-relative mesh. The sample
+## halo and edge ownership remain exactly those of the existing B4 oracle.
+## A high region never changes grid resolution on distance transitions.
+static func build_data(world_seed: int, key: Vector2i, _level: int = 0) -> Dictionary:
 	var started := Time.get_ticks_usec()
-	var x_cells := LOW_X_CELLS if level == 1 else FINE_X_CELLS
-	var z_cells := LOW_Z_CELLS if level == 1 else FINE_Z_CELLS
-	var heights := PackedFloat32Array()
-	heights.resize((x_cells + 1) * (z_cells + 1))
-	var samples := 0
-	for z in range(z_cells + 1):
-		for x in range(x_cells + 1):
-			var px := float(x) * Field.REGION_SIZE_X / float(x_cells)
-			var pz := float(z) * Field.REGION_SIZE_Z / float(z_cells)
-			var h := _top_height(world_seed, key, px, pz)
-			# Ocean-floor and sky-only cells may lack a top crossing in the
-			# bounded Y extent; those triangles are omitted, not fabricated.
-			heights[z * (x_cells + 1) + x] = h
-			samples += 1
+	var mesher := B4.new()
+	if not mesher.generate(world_seed, key, STEP):
+		return {"valid": false, "reason": "b4_generate_failed"}
 	var positions := PackedVector3Array()
 	var normals := PackedVector3Array()
-	for z in range(z_cells):
-		for x in range(x_cells):
-			var i := z * (x_cells + 1) + x
-			var h00: float = heights[i]
-			var h10: float = heights[i + 1]
-			var h01: float = heights[i + x_cells + 1]
-			var h11: float = heights[i + x_cells + 2]
-			if not (is_finite(h00) and is_finite(h10)
-					and is_finite(h01) and is_finite(h11)):
-				continue
-			var ax := float(x) * Field.REGION_SIZE_X / float(x_cells)
-			var bx := float(x + 1) * Field.REGION_SIZE_X / float(x_cells)
-			var az := float(z) * Field.REGION_SIZE_Z / float(z_cells)
-			var bz := float(z + 1) * Field.REGION_SIZE_Z / float(z_cells)
-			var a := Vector3(ax, h00, az)
-			var b := Vector3(bx, h10, az)
-			var c := Vector3(ax, h01, bz)
-			var d := Vector3(bx, h11, bz)
-			for triangle in [[a,c,b], [b,c,d]]:
-				var face: Vector3 = (triangle[1] - triangle[0]).cross(
-					triangle[2] - triangle[0]
-				)
-				if face.length_squared() <= 0.0000000001:
-					continue
-				var normal := face.normalized()
-				for vertex in triangle:
-					positions.append(vertex)
-					normals.append(normal)
+	var total_quads := 0
+	for coordinate in Grid.all_coordinates():
+		var part: Dictionary = mesher.build_chunk(coordinate)
+		if not bool(part.get("valid", false)):
+			return {
+				"valid": false,
+				"reason": "b4_chunk_incomplete",
+				"coordinate": coordinate,
+				"skipped_faces": part.get("skipped_faces", -1),
+			}
+		var origin: Vector3 = Grid.origin_for(coordinate)
+		var source_positions: PackedVector3Array = part["positions"]
+		var source_normals: PackedVector3Array = part["normals"]
+		if source_positions.size() != source_normals.size():
+			return {"valid": false, "reason": "b4_chunk_array_mismatch"}
+		for index in range(source_positions.size()):
+			positions.append(source_positions[index] + origin)
+		normals.append_array(source_normals)
+		total_quads += int(part["quad_count"])
 	return {
 		"valid": true,
-		"lod": level,
+		"lod": 0,
+		"backend": "b4",
+		"sample_step": STEP,
 		"positions": positions,
 		"normals": normals,
 		"triangle_count": positions.size() / 3,
-		"sample_sites": samples,
+		"sample_sites": mesher.last_generation_sample_count,
+		"surface_quads": total_quads,
 		"worker_usec": Time.get_ticks_usec() - started,
 	}
-
-
-static func _top_height(world_seed: int, region_key: Vector2i, x: float, z: float) -> float:
-	var above := Grid.MAX_BOUND.y
-	for n in range(1, int((Grid.MAX_BOUND.y - Grid.MIN_BOUND.y) / VERTICAL_STEP) + 1):
-		var below := Grid.MAX_BOUND.y - float(n) * VERTICAL_STEP
-		var density := Field.sample_density(
-			world_seed, region_key, Vector3(x, below, z), false
-		)
-		if density >= 0.0:
-			for _i in range(BISECT_STEPS):
-				var midpoint := (above + below) * 0.5
-				if Field.sample_density(
-					world_seed, region_key, Vector3(x, midpoint, z), false
-				) >= 0.0:
-					below = midpoint
-				else:
-					above = midpoint
-			return (above + below) * 0.5
-		above = below
-	return NAN
