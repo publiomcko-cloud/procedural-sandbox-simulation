@@ -342,6 +342,16 @@ func _ready() -> void:
 	_stream_profile = StreamBudgetPolicy.resolve_profile(
 		stream_profile_env, stream_profile_args
 	)
+	if _b4_radius_mode():
+		print("DM3_B4_STREAM_POLICY: active_radius=5 fine_radius=4 keep_radius=10 keep_seconds=20 max_visual_cache_chunks=320")
+		if _perf_trace_enabled:
+			PerformanceTrace.emit("dm3_b4_stream_policy", {
+				"active_chunk_radius": B4RadiusPolicy.LOAD_RADIUS,
+				"fine_chunk_radius": B4RadiusPolicy.FINE_RADIUS,
+				"keep_chunk_radius": B4RadiusPolicy.KEEP_RADIUS,
+				"keep_seconds": 20,
+				"max_visual_cache_chunks": B4RadiusPolicy.MAX_VISUAL_CACHE_CHUNKS,
+			})
 	var stream_profile_requested := stream_profile_env.strip_edges().to_lower()
 	for argument in stream_profile_args:
 		if argument.begins_with("--stream-profile="):
@@ -3126,6 +3136,8 @@ func _process_progressive_chunk_publications() -> void:
 			if existing.has(chunk_id):
 				continue
 			var mesh: Mesh = stage["meshes"][coordinate]
+			if _b4_radius_mode():
+				_b4_drop_cached_visual_chunk(chunk_id)
 			var node := _create_chunk_node(region_key, coordinate, chunk_id)
 			node.position = SpatialGrid.region_origin_world(region_key) + ChunkGrid.origin_for(coordinate)
 			_replace_node_mesh(
@@ -3555,12 +3567,18 @@ func _dispatch_mesh_jobs() -> void:
 				continue
 			chunk_snapshot = prepared_chunk["snapshot"]
 			snapshot_meta = chunk_snapshot
+			var required_lod := int(stage.get("lod_by_coordinate", {}).get(coordinate, 0))
+			if _b4_radius_mode() and String(stage["purpose"]) == "load":
+				required_lod = B4RadiusPolicy.mesh_lod(
+					B4RadiusPolicy.from_world(orbit_target), stage["region_key"], coordinate
+				)
+				(stage["lod_by_coordinate"] as Dictionary)[coordinate] = required_lod
 			job = TerrainMeshJob.new(
 				state.world_seed, stage["region_key"], coordinate,
 				stage["cave_section_enabled"],
 				chunk_snapshot,
 				submitted_usec,
-				int(stage.get("lod_by_coordinate", {}).get(coordinate, 0)),
+				required_lod,
 				_experimental_mesh_backend == "b4"
 			)
 		var snapshot_elapsed_usec := Time.get_ticks_usec() - snapshot_started_usec
@@ -3882,6 +3900,8 @@ func _publish_region(
 		if not meshes.has(coordinate):
 			continue
 		var chunk_id: String = state.chunk_id(coordinate)
+		if _b4_radius_mode():
+			_b4_drop_cached_visual_chunk(chunk_id)
 		var node_resolve_started_usec := Time.get_ticks_usec()
 		var node: MeshInstance3D
 		if active_regions.has(id) and active_regions[id]["chunk_nodes"].has(chunk_id):
@@ -4160,6 +4180,89 @@ func _mesh_vertex_count(mesh: Mesh) -> int:
 	return vertices.size()
 
 
+
+## A retired region's world state, object effects, collision authority and
+## simulation are unloaded normally. Only already-published MeshInstance3D
+## visuals may outlive that region, for at most radius 10 / 20s with hard cap.
+func _b4_cache_unloaded_visuals(entry: Dictionary) -> void:
+	var region: Vector2i = entry["region_key"]
+	var now := Time.get_ticks_usec()
+	for coordinate in ChunkGrid.all_coordinates():
+		var chunk_id := ChunkGrid.stable_id(region, coordinate)
+		var nodes: Dictionary = entry["chunk_nodes"]
+		if not nodes.has(chunk_id):
+			continue
+		var node: MeshInstance3D = nodes[chunk_id]
+		if not is_instance_valid(node) or node == terrain_mesh_template:
+			if is_instance_valid(node):
+				_release_chunk_node(chunk_id, node)
+			continue
+		_b4_drop_cached_visual_chunk(chunk_id)
+		chunk_nodes.erase(chunk_id)
+		_published_lod_by_chunk.erase(chunk_id)
+		_lod_fallback_chunks.erase(chunk_id)
+		node.set_meta("dm3_visual_only_cache", true)
+		_b4_visual_cache[chunk_id] = {
+			"node": node,
+			"global": B4RadiusPolicy.global_for(region, coordinate),
+			"last_near_usec": now,
+			"region": region,
+		}
+
+
+func _b4_drop_cached_visual_chunk(chunk_id: String) -> void:
+	if not _b4_visual_cache.has(chunk_id):
+		return
+	var record: Dictionary = _b4_visual_cache[chunk_id]
+	_b4_visual_cache.erase(chunk_id)
+	var node: MeshInstance3D = record["node"]
+	if is_instance_valid(node):
+		_release_chunk_node(chunk_id, node)
+	_b4_cache_evicted_total += 1
+
+
+func _b4_prune_cached_visuals() -> void:
+	var now := Time.get_ticks_usec()
+	if now - _b4_visual_cache_last_prune_usec < 1_000_000:
+		return
+	_b4_visual_cache_last_prune_usec = now
+	var focus_chunk := B4RadiusPolicy.from_world(orbit_target)
+	for id_value in _b4_visual_cache.keys().duplicate():
+		var id: String = id_value
+		var record: Dictionary = _b4_visual_cache[id]
+		var dist := B4RadiusPolicy.chunk_distance(focus_chunk, record["global"])
+		if dist <= B4RadiusPolicy.KEEP_RADIUS:
+			record["last_near_usec"] = now
+			_b4_visual_cache[id] = record
+		elif not B4RadiusPolicy.should_keep_visual(
+			dist, int(record["last_near_usec"]), now
+		):
+			_b4_drop_cached_visual_chunk(id)
+	if _b4_visual_cache.size() > B4RadiusPolicy.MAX_VISUAL_CACHE_CHUNKS:
+		var ordered: Array = _b4_visual_cache.keys()
+		ordered.sort_custom(func(a: Variant, b: Variant) -> bool:
+			var ra: Dictionary = _b4_visual_cache[a]
+			var rb: Dictionary = _b4_visual_cache[b]
+			var da := B4RadiusPolicy.chunk_distance(focus_chunk, ra["global"])
+			var db := B4RadiusPolicy.chunk_distance(focus_chunk, rb["global"])
+			if da != db:
+				return da > db
+			return int(ra["last_near_usec"]) < int(rb["last_near_usec"])
+		)
+		for id_value in ordered:
+			if _b4_visual_cache.size() <= B4RadiusPolicy.MAX_VISUAL_CACHE_CHUNKS:
+				break
+			_b4_drop_cached_visual_chunk(String(id_value))
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("dm3_b4_visual_cache_window", {
+			"cached_chunks": _b4_visual_cache.size(),
+			"evicted_total": _b4_cache_evicted_total,
+			"focus_chunk": [focus_chunk.x, focus_chunk.y],
+			"keep_radius": B4RadiusPolicy.KEEP_RADIUS,
+			"keep_usec": B4RadiusPolicy.KEEP_MICROSECONDS,
+		})
+
+
 func _unload_region(id: String) -> void:
 	_discard_progressive_chunks(id, "unload")
 	if not active_regions.has(id):
@@ -4183,8 +4286,11 @@ func _unload_region(id: String) -> void:
 	if _edit_transaction.has("target_ids") and (_edit_transaction["target_ids"] as Array).has(id):
 		_edit_transaction["target_ids"].erase(id)
 		loading_regions.erase(id)
-	for chunk_id in entry["chunk_nodes"]:
-		_release_chunk_node(chunk_id, entry["chunk_nodes"][chunk_id])
+	if _b4_radius_mode():
+		_b4_cache_unloaded_visuals(entry)
+	else:
+		for chunk_id in entry["chunk_nodes"]:
+			_release_chunk_node(chunk_id, entry["chunk_nodes"][chunk_id])
 	active_regions.erase(id)
 	world_states.erase(id)
 	_streamed_region_unloads += 1
@@ -5522,6 +5628,8 @@ func _update_status() -> void:
 		_peak_frame_ms,
 	]
 	status += "DM2 terrain mesher: %s | experimental B4: visual-only, SDF simulation/save unchanged\n" % _experimental_mesh_backend
+	if _b4_radius_mode():
+		status += "DM3 radius: near 4 / coarse 5 / visual cache 10 chunks or 20s | cached %d chunks\n" % _b4_visual_cache.size()
 	status += "Runtime timing: last op %s %.1f ms | frame p50/p95/p99 %.1f/%.1f/%.1f ms | process peak %.1f ms\n" % [
 		String(last_mesh_diagnostics.get("operation", _operation_name)),
 		float(last_mesh_diagnostics.get("elapsed_ms", 0.0)),
