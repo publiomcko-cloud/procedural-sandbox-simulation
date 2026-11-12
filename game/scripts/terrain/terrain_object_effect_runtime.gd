@@ -11,6 +11,7 @@ const LocalFrameIndex := preload("res://scripts/terrain/terrain_object_effect_lo
 const ProjectionBuildJob := preload("res://scripts/terrain/terrain_object_effect_projection_build_job.gd")
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 const LookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
+const DemandPolicy := preload("res://scripts/terrain/terrain_stream_consumer_demand_policy.gd")
 
 # Public v1 contracts bound horizontal reach:
 # translation <= 8 m, half extent <= 1.8 m, scale <= 5x, roughness <= 0.1 m.
@@ -38,6 +39,10 @@ var incremental_prefetch_enabled := false
 var _prefetch_queue: Array[Vector2i] = []
 var _prefetch_scope_ids: Dictionary = {}
 var _prefetch_urgent_scope_ids: Dictionary = {}
+var _consumer_demand_signature := ""
+var _consumer_source_ranks: Dictionary = {}
+var _consumer_priority_dispatch_total := 0
+var _consumer_demand_updates := 0
 var _lookahead_last_motion_pair := ""
 var _lookahead_reorders := 0
 var _prefetch_generation_jobs: Dictionary = {}
@@ -126,6 +131,10 @@ func initialize(
 	_prefetch_queue.clear()
 	_prefetch_scope_ids.clear()
 	_prefetch_urgent_scope_ids.clear()
+	_consumer_demand_signature = ""
+	_consumer_source_ranks.clear()
+	_consumer_priority_dispatch_total = 0
+	_consumer_demand_updates = 0
 	_lookahead_last_motion_pair = ""
 	_lookahead_reorders = 0
 	_prefetch_generation_jobs.clear()
@@ -168,6 +177,7 @@ func set_incremental_prefetch_enabled(enabled: bool) -> void:
 		_prefetch_queue.clear()
 		_prefetch_scope_ids.clear()
 		_prefetch_urgent_scope_ids.clear()
+		clear_consumer_demand()
 		_lookahead_last_motion_pair = ""
 		_prefetch_generation_jobs.clear()
 		_prefetch_task_by_scope.clear()
@@ -175,6 +185,64 @@ func set_incremental_prefetch_enabled(enabled: bool) -> void:
 		_prefetch_projection_task_by_scope.clear()
 		_prefetch_projection_ready.clear()
 		_prefetch_error = ""
+
+
+## E4 opt-in demand: inspect the next visible LOAD chunk only. Never
+## cache readiness or modify world authority. This ranking affects only
+## already-requested source and projection jobs.
+func set_consumer_demand(focus: Vector2i, stage: Dictionary) -> Dictionary:
+	if not initialized or not incremental_prefetch_enabled:
+		clear_consumer_demand()
+		return {"ok": false, "reason": "prefetch_unavailable"}
+	if not DemandPolicy.can_prioritize(stage, false, false):
+		clear_consumer_demand()
+		return {"ok": true, "changed": false, "reason": "not_a_load"}
+	var index: int = int(stage["submit_index"])
+	var coords: Array = stage["chunk_coordinates"]
+	var region: Vector2i = stage["region_key"]
+	var coordinate: Vector2i = coords[index]
+	var signature := "%d:%d:%d:%d:%d:%d:%d:%d" % [
+		focus.x, focus.y, region.x, region.y,
+		int(stage["stage_token"]), index, int(stage["edit_revision"]),
+		int(stage["terrain_effect_authority_revision"])
+	]
+	if signature == _consumer_demand_signature:
+		return {"ok": true, "changed": false}
+	_consumer_demand_signature = signature
+	_consumer_source_ranks = DemandPolicy.source_ranks(
+		DemandPolicy.chunk_targets(
+			region, coordinate, Grid.CHUNK_COUNT_X, Grid.CHUNK_COUNT_Z
+		), focus
+	)
+	_consumer_demand_updates += 1
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("effect_consumer_demand_update", {
+			"focus": [focus.x, focus.y],
+			"region": [region.x, region.y],
+			"chunk": [coordinate.x, coordinate.y],
+			"stage_token": int(stage["stage_token"]),
+			"edit_revision": int(stage["edit_revision"]),
+			"effect_revision": int(stage["terrain_effect_authority_revision"]),
+			"source_count": _consumer_source_ranks.size(),
+			"queue": _prefetch_queue.size(),
+			"generation_in_flight": _prefetch_generation_jobs.size(),
+			"projection_in_flight": _prefetch_projection_jobs.size(),
+		})
+	return {"ok": true, "changed": true, "source_count": _consumer_source_ranks.size()}
+
+
+func clear_consumer_demand() -> void:
+	_consumer_demand_signature = ""
+	_consumer_source_ranks.clear()
+
+
+func get_consumer_demand_stats() -> Dictionary:
+	return {
+		"active": not _consumer_source_ranks.is_empty(),
+		"source_count": _consumer_source_ranks.size(),
+		"updates": _consumer_demand_updates,
+		"priority_source_dispatches": _consumer_priority_dispatch_total,
+	}
 
 
 func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
@@ -192,7 +260,11 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 	# is the only stage that mutates projection residency/routes and remains
 	# bounded by max_scopes per frame.
 	while processed < maxi(max_scopes, 0) and not _prefetch_projection_ready.is_empty():
-		var ready_record: Dictionary = _prefetch_projection_ready.pop_front()
+		var ready_index := DemandPolicy.best_ready_index(
+			_prefetch_projection_ready, _consumer_source_ranks
+		)
+		var ready_record: Dictionary = _prefetch_projection_ready[ready_index]
+		_prefetch_projection_ready.remove_at(ready_index)
 		var ready_prebuilt: Dictionary = ready_record.get("prebuilt", {})
 		var ready_published := _publish_prebuilt_projection_record(
 			ready_record, ready_prebuilt, 0, true
@@ -208,6 +280,14 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 			if WorkerThreadPool.is_task_completed(task_id):
 				completed_projection.append(task_id)
 		completed_projection.sort()
+		if not _consumer_source_ranks.is_empty():
+			completed_projection.sort_custom(func(a: int, b: int) -> bool:
+				var ar: Vector2i = _prefetch_projection_jobs[a]["region"]
+				var br: Vector2i = _prefetch_projection_jobs[b]["region"]
+				var ra := DemandPolicy.rank_of(ar, _consumer_source_ranks)
+				var rb := DemandPolicy.rank_of(br, _consumer_source_ranks)
+				return ra < rb if ra != rb else a < b
+			)
 		for task_id in completed_projection:
 			if processed >= maxi(max_scopes, 0):
 				break
@@ -254,6 +334,14 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 			if WorkerThreadPool.is_task_completed(task_id):
 				completed_generation.append(task_id)
 		completed_generation.sort()
+		if not _consumer_source_ranks.is_empty():
+			completed_generation.sort_custom(func(a: int, b: int) -> bool:
+				var ar: Vector2i = _prefetch_generation_jobs[a]["region"]
+				var br: Vector2i = _prefetch_generation_jobs[b]["region"]
+				var ra := DemandPolicy.rank_of(ar, _consumer_source_ranks)
+				var rb := DemandPolicy.rank_of(br, _consumer_source_ranks)
+				return ra < rb if ra != rb else a < b
+			)
 		if not completed_generation.is_empty():
 			var task_id := completed_generation[0]
 			WorkerThreadPool.wait_for_task_completion(task_id)
@@ -339,8 +427,21 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 
 	# Stage 1: keep two deterministic source-generation jobs in flight.
 	while _prefetch_generation_jobs.size() 		< MAX_PREFETCH_GENERATION_JOBS_IN_FLIGHT 		and not _prefetch_queue.is_empty():
-		var region: Vector2i = _prefetch_queue.pop_front()
+		var consumer_index := DemandPolicy.best_queue_index(
+			_prefetch_queue, _consumer_source_ranks
+		)
+		var region: Vector2i = _prefetch_queue[consumer_index]
+		_prefetch_queue.remove_at(consumer_index)
 		var scope_id := Contract.scope_id_for_region(region)
+		if DemandPolicy.rank_of(region, _consumer_source_ranks) < DemandPolicy.MISSING_RANK:
+			_consumer_priority_dispatch_total += 1
+			if _perf_trace_enabled:
+				PerformanceTrace.emit("effect_consumer_priority_source", {
+					"region": [region.x, region.y],
+					"priority_rank": DemandPolicy.rank_of(region, _consumer_source_ranks),
+					"original_queue_index": consumer_index,
+					"pending_queue_after": _prefetch_queue.size(),
+				})
 		_prefetch_urgent_scope_ids.erase(scope_id)
 		if not _protected_scope_ids.is_empty() 			and not _protected_scope_ids.has(scope_id):
 			_prefetch_scope_ids.erase(scope_id)
@@ -1541,6 +1642,7 @@ func _reset_performance_metrics() -> void:
 
 
 func release_all_scopes() -> void:
+	clear_consumer_demand()
 	wait_for_prefetch_jobs()
 	_prefetch_queue.clear()
 	_prefetch_scope_ids.clear()
