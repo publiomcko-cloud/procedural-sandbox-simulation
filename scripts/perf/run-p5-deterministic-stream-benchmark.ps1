@@ -172,6 +172,8 @@ foreach ($route in $Routes) {
         $snapshotMs = @()
         $dm9VisualWorkerMs = @()
         $dm9VisualQueueMs = @()
+        $dm9VisualFieldMs = @()
+        $dm9VisualMeshMs = @()
         $dm9VisualPublishMs = @()
         foreach ($line in $lines) {
             $start = $line.IndexOf('PERF_TRACE ')
@@ -183,6 +185,8 @@ foreach ($route in $Routes) {
                 'dm9_visual_shell_complete' {
                     $dm9VisualWorkerMs += ([double]$event.worker_run_usec / 1000.0)
                     $dm9VisualQueueMs += ([double]$event.worker_queue_usec / 1000.0)
+                    $dm9VisualFieldMs += ([double]$event.field_generate_usec / 1000.0)
+                    $dm9VisualMeshMs += ([double]$event.surface_mesh_usec / 1000.0)
                     $dm9VisualPublishMs += ([double]$event.main_thread_publish_usec / 1000.0)
                 }
                 'dm9_prefetch_stage' {
@@ -292,6 +296,10 @@ foreach ($route in $Routes) {
             dm9_visual_shell_complete_count = $dm9VisualWorkerMs.Count
             dm9_visual_shell_worker_p50_ms = Get-Percentile $dm9VisualWorkerMs 0.50
             dm9_visual_shell_worker_p95_ms = Get-Percentile $dm9VisualWorkerMs 0.95
+            dm9_visual_field_generate_p50_ms = Get-Percentile $dm9VisualFieldMs 0.50
+            dm9_visual_field_generate_p95_ms = Get-Percentile $dm9VisualFieldMs 0.95
+            dm9_visual_chunk_meshing_p50_ms = Get-Percentile $dm9VisualMeshMs 0.50
+            dm9_visual_chunk_meshing_p95_ms = Get-Percentile $dm9VisualMeshMs 0.95
             dm9_visual_shell_queue_p95_ms = Get-Percentile $dm9VisualQueueMs 0.95
             dm9_visual_shell_publish_p95_ms = Get-Percentile $dm9VisualPublishMs 0.95
             dm9_prefetch_ready_hits = $dm9ReadyHits
@@ -310,6 +318,7 @@ foreach ($route in $Routes) {
             upload_p50_ms = Get-Percentile $uploadMs 0.50
             upload_p95_ms = Get-Percentile $uploadMs 0.95
             process_cpu_samples = $cpuSamples.Count
+            process_cpu_tracked_names = $(if ($cpuSamples.Count -gt 0) { @($cpuSamples[-1]['tracked_process_names']) } else { @() })
             process_cpu_mean_pct_total_capacity = $(if ($cpuSamples.Count -gt 0) { [Math]::Round((@($cpuSamples | ForEach-Object { [double]$_['cpu_pct_total_capacity'] }) | Measure-Object -Average).Average, 2) } else { $null })
             process_cpu_peak_pct_total_capacity = $(if ($cpuSamples.Count -gt 0) { [Math]::Round((@($cpuSamples | ForEach-Object { [double]$_['cpu_pct_total_capacity'] }) | Measure-Object -Maximum).Maximum, 2) } else { $null })
             process_rss_peak_mb = $(if ($cpuSamples.Count -gt 0) { [Math]::Round((@($cpuSamples | ForEach-Object { [double]$_['working_set_mb'] }) | Measure-Object -Maximum).Maximum, 2) } else { $null })
