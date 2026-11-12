@@ -228,6 +228,7 @@ var _stream_window_f10_distance_m := 0.0
 var _stream_window_f10_perceived_region_gaps := 0
 var _stream_window_f10_coarse_covered_regions := 0
 var _stream_window_f10_perceived_focus_missing_frames := 0
+var _stream_window_f10_high_covered_region_samples := 0
 var _coarse_preview_jobs: Dictionary = {}
 var _coarse_preview_nodes: Dictionary = {}
 var _coarse_preview_attempts: Dictionary = {}
@@ -351,7 +352,7 @@ func _ready() -> void:
 		stream_profile_env, stream_profile_args
 	)
 	if _dm3_enabled():
-		print("DM4_REGION_STREAM: radius=5 all_high=1 b4_step=0.5 seam_source=pristine_b4_surface_nets first=near_then_forward retention_radius=10 retention_seconds=20 visual_only_outside_authority=1")
+		print("DM4_REGION_STREAM: radius=5 all_high=1 b4_step=0.5 seam_source=pristine_b4_surface_nets first=focus_then_near_then_forward retention_radius=10 retention_seconds=20 visual_only_outside_authority=1")
 		if _perf_trace_enabled:
 			PerformanceTrace.emit("dm4_region_stream_mode", {
 				"radius_regions": 5,
@@ -991,14 +992,25 @@ func _stream_finish_frame() -> void:
 			_stream_window_f10_speed_peak_mps, _last_f10_speed_mps
 		)
 		_stream_window_f10_distance_m += _last_f10_speed_mps * maxf(0.0, _last_frame_ms) / 1000.0
-		if not active_regions.has(_region_id(focus_region_key)):
+		var focused_id := _region_id(focus_region_key)
+		if not active_regions.has(focused_id):
 			_stream_window_f10_focus_missing_frames += 1
-			if not _coarse_preview_nodes.has(_region_id(focus_region_key)):
+			var focused_high := _dm3_enabled() and (
+				_dm3_shell_nodes.has(focused_id) or
+				_dm3_retired_region_nodes.has(focused_id)
+			)
+			if not focused_high and not _coarse_preview_nodes.has(focused_id):
 				_stream_window_f10_perceived_focus_missing_frames += 1
 		for region in _region_keys_within_radius(focus_region_key, REQUEST_RADIUS):
-			if not active_regions.has(_region_id(region)):
+			var region_id := _region_id(region)
+			if not active_regions.has(region_id):
 				_stream_window_f10_region_gaps += 1
-				if _coarse_preview_nodes.has(_region_id(region)):
+				if _dm3_enabled() and (
+					_dm3_shell_nodes.has(region_id) or
+					_dm3_retired_region_nodes.has(region_id)
+				):
+					_stream_window_f10_high_covered_region_samples += 1
+				elif _coarse_preview_nodes.has(region_id):
 					_stream_window_f10_coarse_covered_regions += 1
 				else:
 					_stream_window_f10_perceived_region_gaps += 1
@@ -1038,6 +1050,7 @@ func _stream_finish_frame() -> void:
 		"f10_missing_regions_in_window_total": _stream_window_f10_region_gaps,
 		"f10_perceived_missing_regions_total": _stream_window_f10_perceived_region_gaps,
 		"f10_coarse_covered_region_samples": _stream_window_f10_coarse_covered_regions,
+		"f10_high_covered_region_samples": _stream_window_f10_high_covered_region_samples,
 		"f10_perceived_focus_missing_frames": _stream_window_f10_perceived_focus_missing_frames,
 		"f10_peak_speed_mps": _stream_window_f10_speed_peak_mps,
 		"f10_distance_m": _stream_window_f10_distance_m,
@@ -1075,6 +1088,7 @@ func _stream_finish_frame() -> void:
 	_stream_window_f10_perceived_region_gaps = 0
 	_stream_window_f10_coarse_covered_regions = 0
 	_stream_window_f10_perceived_focus_missing_frames = 0
+	_stream_window_f10_high_covered_region_samples = 0
 	_stream_window_f10_speed_peak_mps = 0.0
 	_stream_window_f10_distance_m = 0.0
 	_stream_window_lookahead_stages = 0
@@ -4122,6 +4136,21 @@ func _dm3_enabled() -> bool:
 		and _stream_profile == "adaptive-skip-progressive"
 
 
+func _dm4_provisional_shell_allowed(id: String) -> bool:
+	if not loading_regions.has(id):
+		return true
+	if global_rebuild_pending or not _edit_transaction.is_empty():
+		return false
+	var stage: Dictionary = loading_regions[id]
+	if String(stage.get("purpose", "")) != "load":
+		return false
+	var state: RefCounted = stage["world_state"]
+	# Only use the pristine B4 renderer while the authoritative
+	# materialization is incomplete. Edited regions wait for their
+	# revision-tagged definitive mesh instead.
+	return int(state.brush_edits.get_edit_count()) == 0
+
+
 func _dm3_forward() -> Vector3:
 	var forward: Vector3 = -camera.global_transform.basis.z
 	forward.y = 0.0
@@ -4290,9 +4319,10 @@ func _dm3_process_shells() -> void:
 			var job: RefCounted = record["job"]
 			var cpu: Dictionary = job.get("result")
 			if int(record["seed"]) != world_seed \
-			or dist < 2 or dist > DM3Policy.ACTIVE_RADIUS \
+			or dist > DM3Policy.ACTIVE_RADIUS \
 			or level != int(record["lod"]) \
-			or active_regions.has(id) or loading_regions.has(id) \
+			or active_regions.has(id) \
+			or not _dm4_provisional_shell_allowed(id) \
 			or global_rebuild_pending or cave_section_enabled:
 				break
 			if not cpu.get("valid", false) or int(cpu.get("triangle_count", 0)) == 0:
@@ -4315,6 +4345,10 @@ func _dm3_process_shells() -> void:
 				node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 				node.position = SpatialGrid.region_origin_world(key)
 				terrain_chunks_root.add_child(node)
+			# One seamless full-region HIGH mesh supersedes partial E7
+			# chunks. They must not be drawn simultaneously.
+			_discard_progressive_chunks(id, "dm4_high_shell_complete")
+			_clear_coarse_preview(id, "dm4_high_shell_complete")
 			node.mesh = mesh
 			node.visible = true
 			node.set_meta("dm3_visual_only", true)
@@ -4354,10 +4388,10 @@ func _dm3_process_shells() -> void:
 		return
 	for key in _dm3_shell_order:
 		var id := _region_id(key)
-		if active_regions.has(id) or loading_regions.has(id):
+		if active_regions.has(id) or not _dm4_provisional_shell_allowed(id):
 			continue
 		var dist := DM3Policy.distance(focus_region_key, key)
-		if dist < 2 or dist > DM3Policy.ACTIVE_RADIUS:
+		if dist > DM3Policy.ACTIVE_RADIUS:
 			continue
 		if _dm3_retired_region_nodes.has(id) and dist <= DM3Policy.FINE_RADIUS:
 			continue
