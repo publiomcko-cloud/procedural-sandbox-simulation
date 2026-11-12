@@ -39,7 +39,7 @@ function Run-Test([string]$Name, [string[]]$Arguments, [string]$Expected) {
 [void](Run-Test 'scene-parser' @('--headless', '--path', $project, '--check-only', '--script', 'res://scripts/terrain/terrain_demo.gd') '')
 [void](Run-Test 'exact-pair-parity' @('--headless', '--path', $project, '--script', 'res://tests/p5_projection_pair_cross_parity_tests.gd') 'P5_PROJECTION_PAIR_PARITY_PASS:')
 [void](Run-Test 'inherited-effect-contracts' @('--headless', '--path', $project, '--script', 'res://tests/issue108_phase_b_pure_effect_tests.gd') 'ISSUE108_PHASE_B_PASS:')
-[void](Run-Test 'inherited-worker-projection' @('--headless', '--path', $project, '--script', 'res://tests/issue108_d6_1_worker_prevalidated_effect_tests.gd') 'ISSUE108_D6_1_PASS:')
+[void](Run-Test 'inherited-worker-projection' @('--headless', '--path', $project, '--script', 'res://tests/issue108_d6_1_worker_prevalidated_effect_tests.gd') 'ISSUE108_D6_1_WORKER_PREVALIDATED_PASS:')
 [void](Run-Test 'stream-profile-contracts' @('--headless', '--path', $project, '--script', 'res://tests/p5_0f_stream_budget_tests.gd') 'P5_0F_STREAM_BUDGET_PASS:')
 [void](Run-Test 'coarse-preview-contracts' @('--headless', '--path', $project, '--script', 'res://tests/p5_stream_coarse_preview_tests.gd') 'P5_STREAM_COARSE_PREVIEW_PASS:')
 $env:SANDBOX_STREAM_PROFILE = 'adaptive-skip-coarse-projection'
