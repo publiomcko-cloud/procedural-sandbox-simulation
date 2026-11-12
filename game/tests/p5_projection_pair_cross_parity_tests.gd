@@ -108,7 +108,7 @@ func _run() -> void:
 
 func _finish() -> void:
 	if failures == 0:
-		print("P5_PROJECTION_PAIR_PARITY_PASS: assertions=%d failures=0 descriptor_baseline_ms=%.3f descriptor_fast_ms=%.3f" % [
+		print("P5_PROJECTION_PAIR_PARITY_PASS: assertions=%d failures=%d descriptor_baseline_ms=%.3f descriptor_fast_ms=%.3f" % [
 			assertions, failures, float(legacy_usec) / 1000.0, float(fast_usec) / 1000.0,
 		])
 		quit(0)

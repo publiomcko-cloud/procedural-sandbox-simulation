@@ -1,9 +1,7 @@
 name: P5 E5 exact projection-pair optimization (DO NOT MERGE)
 
 on:
-  push:
-    branches:
-      - exp/p5-stream-projection-core-e5
+  workflow_dispatch:
 
 concurrency:
   group: p5-projection-e5-${{ github.ref }}

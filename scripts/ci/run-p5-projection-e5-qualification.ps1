@@ -30,7 +30,7 @@ function Run-Test([string]$Name, [string[]]$Arguments, [string]$Expected) {
     $p.Refresh()
     $out = (Get-Content -LiteralPath $stdout -Raw -ErrorAction SilentlyContinue) -replace '\x00', ''
     $err = (Get-Content -LiteralPath $stderr -Raw -ErrorAction SilentlyContinue) -replace '\x00', ''
-    if (($null -ne $p.ExitCode -and [int]$p.ExitCode -ne 0) -or ($out + $err) -match '(?m)(SCRIPT ERROR:|Parse Error:|ERROR: FAIL:|ERROR: Failed to load script)') {
+    if (($null -ne $p.ExitCode -and [int]$p.ExitCode -ne 0) -or ($out + $err) -match '(?m)(SCRIPT ERROR:|Parse Error:|ERROR:)') {
         throw "Godot test failed: $Name, inspect $stdout and $stderr"
     }
     if ($Expected -and -not $out.Contains($Expected)) { throw "Missing PASS marker $Expected in $Name" }
@@ -39,7 +39,10 @@ function Run-Test([string]$Name, [string[]]$Arguments, [string]$Expected) {
 }
 [void](Run-Test 'editor-import' @('--headless', '--editor', '--path', $project, '--import') '')
 [void](Run-Test 'scene-parser' @('--headless', '--path', $project, '--check-only', '--script', 'res://scripts/terrain/terrain_demo.gd') '')
-[void](Run-Test 'exact-pair-parity' @('--headless', '--path', $project, '--script', 'res://tests/p5_projection_pair_cross_parity_tests.gd') 'P5_PROJECTION_PAIR_PARITY_PASS:')
+$parityOutput = Run-Test 'exact-pair-parity' @('--headless', '--path', $project, '--script', 'res://tests/p5_projection_pair_cross_parity_tests.gd') 'P5_PROJECTION_PAIR_PARITY_PASS:'
+if ($parityOutput -notmatch 'P5_PROJECTION_PAIR_PARITY_PASS: assertions=[1-9][0-9]* failures=0 descriptor_baseline_ms=[0-9]+[.][0-9]+ descriptor_fast_ms=[0-9]+[.][0-9]+') {
+    throw 'E5_PARITY_NUMERIC_RECEIPT_INVALID'
+}
 [void](Run-Test 'inherited-effect-contracts' @('--headless', '--path', $project, '--script', 'res://tests/issue108_phase_b_pure_effect_tests.gd') 'ISSUE108_PHASE_B_PASS:')
 [void](Run-Test 'inherited-worker-projection' @('--headless', '--path', $project, '--script', 'res://tests/issue108_d6_1_worker_prevalidated_effect_tests.gd') 'ISSUE108_D6_1_WORKER_PREVALIDATED_PASS:')
 [void](Run-Test 'stream-profile-contracts' @('--headless', '--path', $project, '--script', 'res://tests/p5_0f_stream_budget_tests.gd') 'P5_0F_STREAM_BUDGET_PASS:')
