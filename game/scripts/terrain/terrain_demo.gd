@@ -5147,6 +5147,8 @@ func _dm3_process_shells() -> void:
 					"region": [key.x, key.y],
 					"worker_queue_usec": dm9_shell_queue_usec,
 					"worker_run_usec": dm9_shell_run_usec,
+					"field_generate_usec": int(cpu.get("field_generate_usec", 0)),
+					"surface_mesh_usec": int(cpu.get("surface_mesh_usec", 0)),
 					"main_thread_publish_usec": Time.get_ticks_usec() - dm9_shell_publish_started_usec,
 					"in_flight": _dm3_shell_jobs.size(),
 					"worker_limit": _dm9_visual_worker_limit,
