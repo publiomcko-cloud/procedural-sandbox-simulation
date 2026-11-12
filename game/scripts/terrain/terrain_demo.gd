@@ -2300,6 +2300,15 @@ func _ensure_full_rebuild_targets(desired: Array[Vector2i], retained_ids: Dictio
 
 func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinates: Array[Vector2i]) -> void:
 	var id := _region_id(region_key)
+	if purpose == "load" and _dm3_enabled() and _dm5_has_cached_high(id):
+		_dm5_cache_hits += 1
+		if _perf_trace_enabled:
+			PerformanceTrace.emit("dm5_retained_high_revisit", {
+				"region": [region_key.x, region_key.y],
+				"cached": "shell" if _dm3_shell_nodes.has(id) else "retired_full",
+				"cache_hits": _dm5_cache_hits,
+				"superseded_by_low": false,
+			})
 	_discard_progressive_chunks(id, "stage_replaced")
 	_clear_coarse_preview(id)
 	var state: RefCounted
@@ -4131,6 +4140,174 @@ func _mesh_vertex_count(mesh: Mesh) -> int:
 
 
 
+## DM5 cache is actual resident HIGH GPU mesh, never a fresh LOW proxy.
+func _dm5_has_cached_high(id: String) -> bool:
+	if _dm3_shell_nodes.has(id):
+		var node: MeshInstance3D = _dm3_shell_nodes[id].get("node", null)
+		return is_instance_valid(node) and node.mesh != null and node.visible
+	if _dm3_retired_region_nodes.has(id):
+		for value in _dm3_retired_region_nodes[id].get("nodes", []):
+			var node: MeshInstance3D = value
+			if is_instance_valid(node) and node.visible and node.mesh != null:
+				return true
+	return false
+
+
+func _dm5_drop_decor(id: String, reason: String = "pruned") -> void:
+	if not _dm5_decor_nodes.has(id):
+		return
+	var record: Dictionary = _dm5_decor_nodes[id]
+	_dm5_decor_nodes.erase(id)
+	var root: Node3D = record.get("root", null)
+	if is_instance_valid(root):
+		root.visible = false
+		root.queue_free()
+	_dm5_decor_evictions += 1
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("dm5_low_decor_evicted", {
+			"region": String(id),
+			"reason": reason,
+			"cache_regions_remaining": _dm5_decor_nodes.size(),
+		})
+
+
+func _dm5_build_decor_mesh(cpu: Dictionary, key: Vector2i) -> Dictionary:
+	var root := Node3D.new()
+	root.name = "DM5LowDetail_%d_%d" % [key.x, key.y]
+	root.position = SpatialGrid.region_origin_world(key)
+	root.set_meta("dm5_visual_only", true)
+	var rock_count := 0
+	var rock_data: Array = cpu.get("rocks", [])
+	if not rock_data.is_empty():
+		if _dm5_rock_mesh == null:
+			_dm5_rock_mesh = SphereMesh.new()
+			_dm5_rock_mesh.radius = 1.0
+			_dm5_rock_mesh.height = 2.0
+			_dm5_rock_mesh.radial_segments = 6
+			_dm5_rock_mesh.rings = 3
+			_dm5_rock_material = StandardMaterial3D.new()
+			_dm5_rock_material.albedo_color = Color(0.38, 0.39, 0.37)
+			_dm5_rock_material.roughness = 0.94
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = _dm5_rock_mesh
+		mm.instance_count = rock_data.size()
+		for i in range(rock_data.size()):
+			var rock: Dictionary = rock_data[i]
+			var basis := Basis(Vector3.UP, float(rock["yaw"]))
+			basis = basis.scaled_local(rock["scale"])
+			mm.set_instance_transform(i, Transform3D(basis, rock["position"]))
+		var rocks := MultiMeshInstance3D.new()
+		rocks.name = "LowRocks"
+		rocks.multimesh = mm
+		rocks.material_override = _dm5_rock_material
+		root.add_child(rocks)
+		rock_count = rock_data.size()
+	var water_positions: PackedVector3Array = cpu.get(
+		"water_positions", PackedVector3Array()
+	)
+	var water_colors: PackedColorArray = cpu.get(
+		"water_colors", PackedColorArray()
+	)
+	if not water_positions.is_empty() and water_positions.size() == water_colors.size():
+		if _dm5_water_material == null:
+			_dm5_water_material = StandardMaterial3D.new()
+			_dm5_water_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			_dm5_water_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			_dm5_water_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+			_dm5_water_material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+			_dm5_water_material.vertex_color_use_as_albedo = true
+			_dm5_water_material.albedo_color = Color.WHITE
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = water_positions
+		arrays[Mesh.ARRAY_COLOR] = water_colors
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		var water := MeshInstance3D.new()
+		water.name = "LowWater"
+		water.mesh = mesh
+		water.material_override = _dm5_water_material
+		water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(water)
+	terrain_chunks_root.add_child(root)
+	return {"root": root, "rocks": rock_count, "water_triangles": water_positions.size() / 3}
+
+
+func _dm5_process_decor(now: int) -> void:
+	# Once an authoritative region is published it owns real rocks and water.
+	# Cache exterior decorators only while a true B4 HIGH visual survives.
+	for id_value in _dm5_decor_nodes.keys().duplicate():
+		var id: String = id_value
+		if active_regions.has(id) or not _dm5_has_cached_high(id):
+			_dm5_drop_decor(id, "canonical_or_cache_evicted")
+	if _last_frame_ms < 40.0 and _last_process_work_ms < 22.0:
+		for task_id_value in _dm5_decor_jobs.keys().duplicate():
+			var task_id := int(task_id_value)
+			if not WorkerThreadPool.is_task_completed(task_id):
+				continue
+			WorkerThreadPool.wait_for_task_completion(task_id)
+			var record: Dictionary = _dm5_decor_jobs[task_id]
+			_dm5_decor_jobs.erase(task_id)
+			var id: String = record["id"]
+			_dm5_decor_pending.erase(id)
+			var cpu: Dictionary = (record["job"] as RefCounted).result
+			var key: Vector2i = record["region_key"]
+			if int(record["seed"]) != world_seed or String(record["world_id"]) != world_id \
+					or active_regions.has(id) or not _dm5_has_cached_high(id):
+				break
+			if not bool(cpu.get("valid", false)):
+				_dm5_decor_retry_after_usec[id] = now + 5_000_000
+				break
+			_dm5_drop_decor(id, "replacement")
+			var visuals := _dm5_build_decor_mesh(cpu, key)
+			visuals["region_key"] = key
+			visuals["seed"] = world_seed
+			visuals["world_id"] = world_id
+			visuals["rock_status"] = cpu.get("rock_status", "")
+			_dm5_decor_nodes[id] = visuals
+			_dm5_decor_published += 1
+			if _perf_trace_enabled:
+				PerformanceTrace.emit("dm5_low_decor_visible", {
+					"region": [key.x, key.y],
+					"rocks": int(cpu.get("rock_count", 0)),
+					"rock_status": String(cpu.get("rock_status", "")),
+					"ocean_triangles": int(cpu.get("ocean_triangles", 0)),
+					"river_triangles": int(cpu.get("river_triangles", 0)),
+					"source": "mod_registry_and_hydrology_v1_preview",
+					"visual_only": true,
+				})
+			break
+	if _dm5_decor_jobs.size() >= 1 or _last_frame_ms >= 40.0 \
+			or _last_process_work_ms >= 22.0 or global_rebuild_pending \
+			or not is_instance_valid(object_stream):
+		return
+	if not bool(object_stream.get("initialized")):
+		return
+	var registry: RefCounted = object_stream.get("registry")
+	if registry == null:
+		return
+	for key in _dm3_shell_order:
+		var id := _region_id(key)
+		if active_regions.has(id) or not _dm5_has_cached_high(id) \
+				or _dm5_decor_nodes.has(id) or _dm5_decor_pending.has(id):
+			continue
+		if now < int(_dm5_decor_retry_after_usec.get(id, 0)):
+			continue
+		var job := DM5DecorJob.new(world_seed, world_id, key, registry)
+		var task_id := WorkerThreadPool.add_task(
+			Callable(job, "run"), false, "DM5 LOW rock and water visuals"
+		)
+		if task_id < 0:
+			return
+		_dm5_decor_pending[id] = true
+		_dm5_decor_jobs[task_id] = {
+			"id": id, "region_key": key, "seed": world_seed,
+			"world_id": world_id, "job": job,
+		}
+		break
+
+
 ## DM3 region-space preview only. Do not expand authoritative world states,
 ## simulation scopes, mod effects, persistence or the 81-source projection cap.
 func _dm3_enabled() -> bool:
@@ -4177,9 +4354,17 @@ func _dm3_retire_region_nodes(id: String, entry: Dictionary) -> void:
 		var node: MeshInstance3D = entry["chunk_nodes"][chunk_id]
 		if not is_instance_valid(node):
 			continue
-		# The (0,0) chunk uses the permanent scene template. Never transfer
-		# that node out of the canonical renderer's ownership.
+		# The (0,0) scene template is permanent, so clone only its
+		# already-built mesh resource into a transient cached visual before
+		# releasing the template. Otherwise the return path has a chunk hole.
 		if node == terrain_mesh_template:
+			var clone := MeshInstance3D.new()
+			clone.name = "DM5RetainedTemplate_%s" % id.replace(",", "_")
+			clone.mesh = node.mesh
+			clone.position = node.position
+			clone.material_override = node.material_override
+			terrain_chunks_root.add_child(clone)
+			visuals.append(clone)
 			_release_chunk_node(chunk_id, node)
 			continue
 		var triangles := int(node.get_meta("mesh_triangle_count", -1))
