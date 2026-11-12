@@ -32,6 +32,7 @@ const StreamBudgetPolicy := preload("res://scripts/terrain/terrain_stream_budget
 const StreamDispatchSelector := preload("res://scripts/terrain/terrain_stream_dispatch_selector.gd")
 const StreamLookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
 const DM9PrefetchPolicy := preload("res://scripts/terrain/dm9_canonical_prefetch_policy.gd")
+const DM9VisualBudget := preload("res://scripts/terrain/dm9_visual_worker_budget_policy.gd")
 const CoarsePreviewJob := preload("res://scripts/terrain/terrain_coarse_preview_job.gd")
 const CoarsePreviewPolicy := preload("res://scripts/terrain/terrain_coarse_preview_policy.gd")
 const ProgressiveLoadPolicy := preload("res://scripts/terrain/terrain_stream_progressive_load_policy.gd")
@@ -270,6 +271,8 @@ var _dm9_stages_promoted := 0
 var _dm9_stages_discarded := 0
 var _dm9_ready_hits := 0
 var _dm9_visual_worker_limit := 1
+var _dm9_visual_worker_effective_limit := 1
+var _dm9_visual_adaptive := false
 var _dm9_shell_started_total := 0
 var _dm9_shell_completed_total := 0
 var _lookahead_stage_begin_total := 0
@@ -408,7 +411,10 @@ func _ready() -> void:
 	if _dm9_prefetch_enabled:
 		print("DM9_CANONICAL_PREFETCH: enabled=1 hold_until_core=1 protected_radius=2 revision_gated=1")
 	if _dm3_enabled() and OS.get_environment("SANDBOX_DM9_VISUAL_WORKERS").is_valid_int():
-		_dm9_visual_worker_limit = clampi(int(OS.get_environment("SANDBOX_DM9_VISUAL_WORKERS")), 1, 4)
+		_dm9_visual_worker_limit = clampi(int(OS.get_environment("SANDBOX_DM9_VISUAL_WORKERS")), 1, DM9VisualBudget.MAX_WORKERS)
+	_dm9_visual_adaptive = _dm3_enabled() and OS.get_environment("SANDBOX_DM9_VISUAL_ADAPTIVE") == "1"
+	if _dm9_visual_adaptive:
+		print("DM9_VISUAL_ADAPTIVE: enabled=1 max_workers=%d core_missing_or_loading=1 moving_limit=2 idle_max=1" % _dm9_visual_worker_limit)
 	if _dm9_visual_worker_limit > 1:
 		print("DM9_VISUAL_WORKERS: limit=%d old_limit=1 visual_only=1" % _dm9_visual_worker_limit)
 	if _dm3_enabled():
@@ -445,6 +451,7 @@ func _ready() -> void:
 			"mesh_upload_limit": MAX_MESH_UPLOADS_PER_FRAME,
 			"dm9_prefetch_enabled": _dm9_prefetch_enabled,
 			"dm9_visual_worker_limit": _dm9_visual_worker_limit,
+			"dm9_visual_adaptive": _dm9_visual_adaptive,
 			"snapshot_budget_usec": MESH_SNAPSHOT_FRAME_BUDGET_USEC,
 			"upload_budget_usec": MESH_UPLOAD_FRAME_BUDGET_USEC,
 		})
@@ -1101,6 +1108,8 @@ func _stream_finish_frame() -> void:
 		"dm9_speculative_stages": _dm9_count_speculative(false),
 		"dm9_ready_stages": _dm9_count_speculative(true),
 		"dm9_visual_worker_limit": _dm9_visual_worker_limit,
+		"dm9_visual_worker_effective_limit": _dm9_visual_worker_effective_limit,
+		"dm9_visual_adaptive": _dm9_visual_adaptive,
 		"dm9_visual_workers_in_flight": _dm3_shell_jobs.size(),
 		"dm9_visual_started_total": _dm9_shell_started_total,
 		"dm9_visual_completed_total": _dm9_shell_completed_total,
@@ -3737,7 +3746,9 @@ func _dispatch_mesh_jobs() -> void:
 		if String(stage["purpose"]) == "edit_transaction" and not _edit_transaction.is_empty():
 			_edit_transaction["trace_snapshot_usec_total"] = int(_edit_transaction.get("trace_snapshot_usec_total", 0)) + snapshot_elapsed_usec
 			_edit_transaction["trace_snapshot_usec_max"] = maxi(int(_edit_transaction.get("trace_snapshot_usec_max", 0)), snapshot_elapsed_usec)
-		var high_priority: bool = String(stage["purpose"]) in ["edit_transaction", "partial"]
+		var high_priority: bool = String(stage["purpose"]) in ["edit_transaction", "partial"] \
+			or (_dm9_visual_adaptive and String(stage["purpose"]) == "load" \
+			and DM9PrefetchPolicy.is_inside_core(stage["region_key"], focus_region_key))
 		var task_label := "P1.0C terrain chunk"
 		if job_kind == "shared_boundary_x":
 			task_label = "shared boundary X"
@@ -5060,10 +5071,30 @@ func _dm4_emit_full_high_receipt_if_ready() -> void:
 		PerformanceTrace.emit("dm8_high_radial_complete", receipt)
 
 
+func _dm9_visual_limit_for_frame() -> int:
+	if not _dm9_visual_adaptive:
+		return _dm9_visual_worker_limit
+	var core_ready := true
+	for key in _region_keys_within_radius(focus_region_key, REQUEST_RADIUS):
+		if not active_regions.has(_region_id(key)):
+			core_ready = false
+			break
+	return DM9VisualBudget.effective_limit(
+		_dm9_visual_worker_limit,
+		core_ready,
+		loading_regions.size(),
+		_mesh_jobs.size(),
+		_last_f10_speed_mps,
+		_last_frame_ms,
+		_last_process_work_ms
+	)
+
+
 func _dm3_process_shells() -> void:
 	if not _dm3_enabled():
 		return
 	var now := Time.get_ticks_usec()
+	_dm9_visual_worker_effective_limit = _dm9_visual_limit_for_frame()
 	# Retired meshes must not survive a world seed switch.
 	if _dm3_shell_seed != world_seed:
 		for id_value in _dm3_shell_nodes.keys().duplicate():
@@ -5152,6 +5183,8 @@ func _dm3_process_shells() -> void:
 					"main_thread_publish_usec": Time.get_ticks_usec() - dm9_shell_publish_started_usec,
 					"in_flight": _dm3_shell_jobs.size(),
 					"worker_limit": _dm9_visual_worker_limit,
+					"worker_effective_limit": _dm9_visual_worker_effective_limit,
+					"adaptive": _dm9_visual_adaptive,
 				})
 			if _perf_trace_enabled:
 				PerformanceTrace.emit("dm4_region_b4_high_visible", {
@@ -5183,14 +5216,14 @@ func _dm3_process_shells() -> void:
 		_dm8_sample_gap_pressure(now)
 		_dm4_emit_full_high_receipt_if_ready()
 	# Prioritize authoritative SDF/B4 jobs over the derived circular halo.
-	# DM9 optionally keeps up to four independent CPU-only derived jobs in flight.
+	# DM9 optionally keeps up to eight independent CPU-only derived jobs in flight.
 	# One main-thread upload/frame remains enforced above; sorted queue remains stable.
 	if _last_frame_ms >= 40.0 or _last_process_work_ms >= 22.0 \
-			or _dm3_shell_jobs.size() >= _dm9_visual_worker_limit \
+			or _dm3_shell_jobs.size() >= _dm9_visual_worker_effective_limit \
 			or global_rebuild_pending or cave_section_enabled:
 		return
 	for key in _dm3_shell_order:
-		if _dm3_shell_jobs.size() >= _dm9_visual_worker_limit:
+		if _dm3_shell_jobs.size() >= _dm9_visual_worker_effective_limit:
 			break
 		var id := _region_id(key)
 		if active_regions.has(id) or loading_regions.has(id):
