@@ -3,12 +3,12 @@ extends RefCounted
 
 ## DM4: uniform full-resolution B4 visual halo. Derived rendering only. The canonical 3x3 load / 5x5 retention
 ## and the 9x9 object-effect source footprint are not changed.
-const ACTIVE_RADIUS := 5
-const FINE_RADIUS := 5
+const ACTIVE_RADIUS := 6
+const FINE_RADIUS := 6
 const RETAIN_RADIUS := 10
 const RETAIN_USEC := 20_000_000
-const MAX_SHELL_REGIONS := 512
-const MAX_DETAILED_VISUAL_REGIONS := 48
+const MAX_SHELL_REGIONS := 512 # DM6 warning threshold only; NEVER evict retained HIGH
+const MAX_DETAILED_VISUAL_REGIONS := 48 # Warning threshold only; NEVER evict retained HIGH
 const MAX_JOBS_IN_FLIGHT := 1
 const RESCAN_USEC := 200_000
 
@@ -20,9 +20,19 @@ static func lod_for_distance(distance_regions: int) -> int:
 	return 0 # Uniform B4 HIGH in every region; no mismatched LOW band.
 
 
+## Retained HIGH can be evicted ONLY when BOTH outside radius 10
+## AND absent from that radius for at least 20s; no independent hard cap.
 static func keep(last_near_usec: int, now_usec: int, distance_regions: int) -> bool:
 	return distance_regions <= RETAIN_RADIUS \
 		or now_usec - last_near_usec < RETAIN_USEC
+
+
+static func expected_region_count() -> int:
+	return (ACTIVE_RADIUS * 2 + 1) * (ACTIVE_RADIUS * 2 + 1)
+
+
+static func expected_external_region_count() -> int:
+	return expected_region_count() - 9
 
 
 static func rank(region: Vector2i, focus: Vector2i, forward: Vector3) -> int:
