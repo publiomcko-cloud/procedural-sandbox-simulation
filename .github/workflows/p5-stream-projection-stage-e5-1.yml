@@ -1,0 +1,48 @@
+name: P5 E5.1 projection critical-path stage profiler (DO NOT MERGE)
+
+on:
+  push:
+    branches:
+      - exp/p5-stream-projection-stage-e5-1
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 15
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Exact parity and measured shape generation decomposition
+        shell: cmd
+        timeout-minutes: 12
+        run: |
+          @echo off
+          if /I not "%RUNNER_NAME%"=="sandbox-gpu-interactive" exit /b 1
+          "%GODOT_BIN%" --headless --editor --path .\game --import
+          if errorlevel 1 exit /b 1
+          "%GODOT_BIN%" --headless --path .\game --script res://tests/p5_projection_pair_cross_parity_tests.gd > "%RUNNER_TEMP%\p5-e5-1-parity.log" 2> "%RUNNER_TEMP%\p5-e5-1-parity.stderr.log"
+          if errorlevel 1 exit /b 1
+          findstr /C:"P5_PROJECTION_PAIR_PARITY_PASS:" "%RUNNER_TEMP%\p5-e5-1-parity.log" || exit /b 1
+          findstr /C:"ERROR:" "%RUNNER_TEMP%\p5-e5-1-parity.stderr.log" && exit /b 1
+          "%GODOT_BIN%" --headless --path .\game --script res://tests/p5_projection_geometry_stage_profile_tests.gd > "%RUNNER_TEMP%\p5-e5-1-stage.log" 2> "%RUNNER_TEMP%\p5-e5-1-stage.stderr.log"
+          if errorlevel 1 exit /b 1
+          findstr /C:"P5_E5_STAGE_PROFILE_PASS:" "%RUNNER_TEMP%\p5-e5-1-stage.log" || exit /b 1
+          findstr /C:"ERROR:" "%RUNNER_TEMP%\p5-e5-1-stage.stderr.log" && exit /b 1
+          type "%RUNNER_TEMP%\p5-e5-1-stage.log"
+      - name: Upload source-timed stages and exact test outputs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p5-e5-1-critical-path-stages
+          path: |
+            ${{ runner.temp }}\p5-e5-1-*.log
+          if-no-files-found: warn
+          retention-days: 14
