@@ -15,6 +15,7 @@ const MAX_SHELL_REGIONS := 512
 const MAX_DETAILED_VISUAL_REGIONS := 48
 const MAX_JOBS_IN_FLIGHT := 2
 const RESCAN_USEC := 200_000
+const MOTION_LEAD_SECONDS := 0.85
 
 static func distance(a: Vector2i, b: Vector2i) -> int:
 	return maxi(absi(a.x - b.x), absi(a.y - b.y))
@@ -40,28 +41,47 @@ static func view_alignment(region: Vector2i, focus: Vector2i, forward: Vector3) 
 	return direction.normalized().dot(facing.normalized())
 
 
-static func rank(region: Vector2i, focus: Vector2i, forward: Vector3) -> int:
+static func rank(
+	region: Vector2i, focus: Vector2i, forward: Vector3,
+	motion_target: Vector2i = Vector2i(2147483647, 2147483647)
+) -> int:
 	var dist := distance(region, focus)
-	if dist <= 1:
-		# Authoritative centre/near work has absolute priority.
-		return dist * 1000
-	# Strict nearest-first ring. Within EACH ring, prefer the view cone
-	# decisively over lateral / behind. Deterministic y/x tiebreak follows
-	# in desired_regions() to eliminate queue-order oscillation.
+	if dist == 0:
+		# Focus is always submitted first.
+		return 0
 	var alignment := view_alignment(region, focus, forward)
 	var direction_score := roundi((1.0 - alignment) * 10000.0)
+	var moving := motion_target != Vector2i(2147483647, 2147483647) \
+		and motion_target != focus \
+		and distance(focus, motion_target) <= ACTIVE_RADIUS
+	if moving:
+		var future_dist := distance(region, motion_target)
+		# A 0.5-0.9s B4 worker otherwise always finishes BEHIND F10.
+		# Reserve the next two slots for the motion corridor; camera view
+		# remains the tiebreak within each predicted ring.
+		if future_dist == 0:
+			return 100
+		if future_dist == 1:
+			return 200 + direction_score / 100
+	if dist == 1:
+		return 1000 + direction_score / 20
+	# Strict nearest-first in the remaining ring. Within each ring the
+	# viewing vector gives a strong preference over the rear sector.
 	return 1_000_000 + (dist - 2) * 100_000 + direction_score
 
 
-static func desired_regions(focus: Vector2i, forward: Vector3) -> Array[Vector2i]:
+static func desired_regions(
+	focus: Vector2i, forward: Vector3,
+	motion_target: Vector2i = Vector2i(2147483647, 2147483647)
+) -> Array[Vector2i]:
 	var keys: Array[Vector2i] = []
 	for z in range(focus.y - ACTIVE_RADIUS, focus.y + ACTIVE_RADIUS + 1):
 		for x in range(focus.x - ACTIVE_RADIUS, focus.x + ACTIVE_RADIUS + 1):
 			var r := Vector2i(x, z)
 			keys.append(r)
 	keys.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-		var pa := rank(a, focus, forward)
-		var pb := rank(b, focus, forward)
+		var pa := rank(a, focus, forward, motion_target)
+		var pb := rank(b, focus, forward, motion_target)
 		return pa < pb if pa != pb else (
 			a.y < b.y if a.y != b.y else a.x < b.x
 		)
