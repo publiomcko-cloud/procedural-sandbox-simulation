@@ -443,8 +443,8 @@ func _ready() -> void:
 				_stream_bench_warmup_remaining = _stream_bench_warmup_frames
 		if not _stream_bench_route.is_empty():
 			if _stream_bench_route not in ["idle", "straight-18", "straight-54", "outback-18", "outback-54"] \
-			or _stream_bench_frames_goal < 120 or _stream_bench_frames_goal > 9000 \
-			or _stream_bench_warmup_frames < 0 or _stream_bench_warmup_frames > 6000:
+			or _stream_bench_frames_goal < 120 or _stream_bench_frames_goal > 18000 \
+			or _stream_bench_warmup_frames < 0 or _stream_bench_warmup_frames > 12000:
 				push_error("P5_STREAM_BENCH_INVALID_ROUTE_OR_FRAMES")
 				get_tree().quit(2)
 				return
