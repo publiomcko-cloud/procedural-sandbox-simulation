@@ -35,7 +35,7 @@ var last_generation_sample_count := 0
 
 
 func generate(seed_value: int, region_value: Vector2i, step_value: float) -> bool:
-	if step_value != 0.5 and step_value != 0.25:
+	if step_value not in [0.25, 0.5, 1.0]:
 		return false
 	step = step_value
 	seed = seed_value
@@ -76,22 +76,27 @@ func generate_chunk(
 	region_value: Vector2i,
 	coordinate_value: Vector2i,
 	snapshot: Dictionary,
-	cave_section_enabled: bool = false
+	cave_section_enabled: bool = false,
+	step_value: float = Grid.SAMPLE_STEP
 ) -> bool:
 	if not Grid.is_valid_coordinate(coordinate_value) \
-			or not bool(snapshot.get("valid", true)):
+			or not bool(snapshot.get("valid", true)) \
+			or step_value not in [0.5, 1.0]:
 		return false
-	step = Grid.SAMPLE_STEP
+	step = step_value
+	var scale := roundi(step / Grid.SAMPLE_STEP)
 	seed = seed_value
 	region_key = region_value
 	_chunk_mode = true
 	_chunk_coordinate = coordinate_value
 	_chunk_offset = Vector3i(
-		coordinate_value.x * Grid.CELLS_PER_CHUNK_X, 0,
-		coordinate_value.y * Grid.CELLS_PER_CHUNK_Z
+		coordinate_value.x * (Grid.CELLS_PER_CHUNK_X / scale), 0,
+		coordinate_value.y * (Grid.CELLS_PER_CHUNK_Z / scale)
 	)
 	dims = Vector3i(
-		Grid.CELLS_PER_CHUNK_X, Grid.CELL_COUNT_Y, Grid.CELLS_PER_CHUNK_Z
+		Grid.CELLS_PER_CHUNK_X / scale,
+		Grid.CELL_COUNT_Y / scale,
+		Grid.CELLS_PER_CHUNK_Z / scale
 	)
 	node_dims = dims + Vector3i(3, 3, 3)
 	cell_dims = dims + Vector3i(2, 2, 2)
