@@ -226,6 +226,8 @@ var _stream_window_skip_budget_exhausted := 0
 var _last_f10_speed_mps := 0.0
 var _stream_bench_route := ""
 var _stream_bench_frames_goal := STREAM_BENCH_DEFAULT_FRAMES
+var _stream_bench_warmup_remaining := 0
+var _stream_bench_warmup_frames := 0
 var _stream_bench_frames_done := 0
 var _stream_bench_started_usec := 0
 var _stream_bench_distance_m := 0.0
@@ -405,9 +407,15 @@ func _ready() -> void:
 				_stream_bench_route = argument.trim_prefix("--stream-benchmark-route=").strip_edges().to_lower()
 			elif argument.begins_with("--stream-benchmark-frames="):
 				_stream_bench_frames_goal = int(argument.trim_prefix("--stream-benchmark-frames="))
+			elif argument.begins_with("--stream-benchmark-warmup-frames="):
+				_stream_bench_warmup_frames = int(
+					argument.trim_prefix("--stream-benchmark-warmup-frames=")
+				)
+				_stream_bench_warmup_remaining = _stream_bench_warmup_frames
 		if not _stream_bench_route.is_empty():
 			if _stream_bench_route not in ["idle", "straight-18", "straight-54", "outback-18", "outback-54"] \
-			or _stream_bench_frames_goal < 120 or _stream_bench_frames_goal > 9000:
+			or _stream_bench_frames_goal < 120 or _stream_bench_frames_goal > 9000 \
+			or _stream_bench_warmup_frames < 0 or _stream_bench_warmup_frames > 6000:
 				push_error("P5_STREAM_BENCH_INVALID_ROUTE_OR_FRAMES")
 				get_tree().quit(2)
 				return
@@ -1878,6 +1886,19 @@ func _process_free_exploration(delta: float) -> void:
 	if not free_explore_enabled or not is_instance_valid(camera):
 		return
 	if not _stream_bench_route.is_empty():
+		# The optional prewarm is a separate stationary interval preceding
+		# the deterministic route. It primes IN-PROCESS B4 HIGH residency
+		# rather than incorrectly testing an empty cold cache.
+		if _stream_bench_warmup_remaining > 0:
+			_stream_bench_warmup_remaining -= 1
+			if _stream_bench_warmup_remaining == 0:
+				print("DM5_BENCH_WARMUP_COMPLETE: " + JSON.stringify({
+					"frames": _stream_bench_warmup_frames,
+					"focus": [focus_region_key.x, focus_region_key.y],
+					"high_shells": _dm3_shell_nodes.size(),
+					"retired_full_regions": _dm3_retired_region_nodes.size(),
+				}))
+			return
 		if _stream_bench_frames_done >= _stream_bench_frames_goal:
 			if not _stream_bench_reported:
 				_stream_bench_reported = true
@@ -1922,6 +1943,7 @@ func _process_free_exploration(delta: float) -> void:
 					"profile": _stream_profile,
 					"seed": world_seed,
 					"frames": _stream_bench_frames_done,
+					"warmup_frames": _stream_bench_warmup_frames,
 					"distance_m": snappedf(_stream_bench_distance_m, 0.001),
 					"final_x_mm": roundi(camera.global_position.x * 1000.0),
 					"final_z_mm": roundi(camera.global_position.z * 1000.0),
