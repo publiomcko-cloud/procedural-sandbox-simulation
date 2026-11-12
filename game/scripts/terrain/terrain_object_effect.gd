@@ -31,7 +31,7 @@ const EFFECT_KEYS := [
 ]
 
 
-static func build_from_instance(instance: Dictionary, source_revision: int = 0) -> Dictionary:
+static func build_from_instance(instance: Dictionary, source_revision: int = 0, cached_pair_cross: bool = false) -> Dictionary:
 	var input_check := _validate_instance_input(instance, source_revision)
 	if not input_check.get("ok", false):
 		return input_check
@@ -46,7 +46,7 @@ static func build_from_instance(instance: Dictionary, source_revision: int = 0) 
 		return _failure("terrain_effect_content_pin_invalid")
 	var interaction: Dictionary = instance["terrain_interaction"]
 	var interaction_pin: Dictionary = instance["terrain_interaction_pin"]
-	var descriptor := ShapeDescriptor.build(instance["geometry"], instance["geometry_seeds"])
+	var descriptor := ShapeDescriptor.build(instance["geometry"], instance["geometry_seeds"], cached_pair_cross)
 	if not descriptor.get("ok", false):
 		return _failure("terrain_effect_shape_descriptor_failed:%s" % descriptor.get("reason", "unknown"))
 

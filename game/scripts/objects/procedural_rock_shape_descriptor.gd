@@ -24,8 +24,8 @@ const RECIPE_KEYS := [
 const SEED_KEYS := ["structure", "fracture", "wear", "detail"]
 
 
-static func build(recipe: Dictionary, seeds: Dictionary) -> Dictionary:
-	var geometry := build_geometry_data(recipe, seeds)
+static func build(recipe: Dictionary, seeds: Dictionary, cached_pair_cross: bool = false) -> Dictionary:
+	var geometry := build_geometry_data(recipe, seeds, cached_pair_cross)
 	if not geometry.get("ok", false):
 		return geometry
 	return geometry["descriptor"].duplicate(true)
@@ -34,7 +34,7 @@ static func build(recipe: Dictionary, seeds: Dictionary) -> Dictionary:
 ## Shared pure geometry core consumed by both the renderer adapter and terrain
 ## effect descriptor. Keeping the deterministic construction here prevents
 ## visual/authoritative shape drift.
-static func build_geometry_data(recipe: Dictionary, seeds: Dictionary) -> Dictionary:
+static func build_geometry_data(recipe: Dictionary, seeds: Dictionary, cached_pair_cross: bool = false) -> Dictionary:
 	var checked := _validate_input(recipe, seeds)
 	if not checked.get("ok", false):
 		return checked
@@ -77,7 +77,10 @@ static func build_geometry_data(recipe: Dictionary, seeds: Dictionary) -> Dictio
 	var guard := float(roughened["roughness_guard_m"])
 	if not is_finite(guard) or guard < 0.0:
 		return _failure("shape_roughness_guard_invalid")
-	var guarded_vertices := _intersection_vertices(grounded_planes, guard)
+	var guarded_vertices := (
+		_intersection_vertices_pair_cached(grounded_planes, guard)
+		if cached_pair_cross else _intersection_vertices(grounded_planes, guard)
+	)
 	if guarded_vertices.size() < 4:
 		return _failure("shape_guarded_polyhedron_invalid")
 	var bounds := _measure_bounds(guarded_vertices)
@@ -550,6 +553,54 @@ static func _wear_vertices(
 		)
 		output[index] = points[index].lerp(neighbor_center, selective_blend)
 	return output
+
+
+## E5 opt-in: cache oriented plane-pair crosses once, not once per triple.
+## Ordered triples, arithmetic, containment and duplicate checks are unchanged.
+static func _intersection_vertices_pair_cached(
+	planes: Array[Dictionary], margin: float
+) -> Array[Vector3]:
+	var n := planes.size()
+	var normals: Array[Vector3] = []
+	var distances: Array[float] = []
+	normals.resize(n)
+	distances.resize(n)
+	for i in range(n):
+		normals[i] = planes[i]["normal"]
+		distances[i] = float(planes[i]["distance"]) + margin
+	var forward: Array[Vector3] = []
+	var backward: Array[Vector3] = []
+	forward.resize(n * n)
+	backward.resize(n * n)
+	for i in range(n - 1):
+		var a: Vector3 = normals[i]
+		for j in range(i + 1, n):
+			var b: Vector3 = normals[j]
+			forward[i * n + j] = a.cross(b)
+			backward[i * n + j] = b.cross(a)
+	var vertices: Array[Vector3] = []
+	for first in range(n - 2):
+		var a: Vector3 = normals[first]
+		var da := distances[first]
+		for second in range(first + 1, n - 1):
+			var db := distances[second]
+			var ab: Vector3 = forward[first * n + second]
+			for third in range(second + 1, n):
+				var dc := distances[third]
+				var bc: Vector3 = forward[second * n + third]
+				var ca: Vector3 = backward[first * n + third]
+				var determinant := a.dot(bc)
+				if absf(determinant) <= 0.00000001:
+					continue
+				var point := (
+					bc * da
+					+ ca * db
+					+ ab * dc
+				) / determinant
+				if not point.is_finite() or not _inside_planes(point, planes, margin + 0.00001):
+					continue
+				_append_unique_point(vertices, point)
+	return vertices
 
 
 static func _intersection_vertices(

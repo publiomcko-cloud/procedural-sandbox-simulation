@@ -316,7 +316,7 @@ func _ready() -> void:
 	for argument in stream_profile_args:
 		if argument.begins_with("--stream-profile="):
 			stream_profile_requested = argument.trim_prefix("--stream-profile=").strip_edges().to_lower()
-	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse"]:
+	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse", "adaptive-skip-coarse-projection"]:
 		push_warning("Unknown stream profile; using baseline")
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("terrain_stream_profile", {
@@ -433,6 +433,7 @@ func _ready() -> void:
 			terrain_effect_directory_override
 		)
 		if effect_initialization.get("ok", false):
+			terrain_effect_runtime.set_projection_pair_cross_enabled(_stream_profile == "adaptive-skip-coarse-projection")
 			terrain_effect_runtime.set_incremental_prefetch_enabled(true)
 			_terrain_effect_status = "Terrain-object effects ready"
 		else:
@@ -1042,7 +1043,7 @@ func _process(delta: float) -> void:
 	var previous_dispatch_limit := int(_stream_budget_state.get("dispatch_limit", 1))
 	_stream_budget_state = StreamBudgetPolicy.next(
 		_stream_budget_state, _last_frame_ms, _last_process_work_ms,
-		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse"]
+		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse", "adaptive-skip-coarse-projection"]
 	)
 	if _perf_trace_enabled and int(_stream_budget_state["dispatch_limit"]) != previous_dispatch_limit:
 		PerformanceTrace.emit("terrain_stream_budget_transition", {
@@ -1116,7 +1117,7 @@ func _process(delta: float) -> void:
 	_process_one_chunk_job()
 	_stream_stage_measure("mesh_dispatch_and_upload", stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
-	if _stream_profile == "adaptive-skip-coarse":
+	if _stream_profile in ["adaptive-skip-coarse", "adaptive-skip-coarse-projection"]:
 		_process_coarse_previews()
 	_stream_stage_measure("coarse_preview", stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
@@ -2695,7 +2696,7 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 
 ## E2 derived coarse-first preview: always separate from terrain authority.
 func _coarse_preview_record_current(id: String, record: Dictionary) -> bool:
-	if _stream_profile != "adaptive-skip-coarse" or not loading_regions.has(id):
+	if _stream_profile not in ["adaptive-skip-coarse", "adaptive-skip-coarse-projection"] or not loading_regions.has(id):
 		return false
 	var stage: Dictionary = loading_regions[id]
 	var state: RefCounted = stage["world_state"]

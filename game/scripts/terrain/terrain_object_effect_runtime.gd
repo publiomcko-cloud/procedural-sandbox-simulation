@@ -54,6 +54,7 @@ var _projection_build_cache_order: Array[String] = []
 var _projection_source_cache: Dictionary = {}
 var _projection_source_cache_order: Array[String] = []
 var _prefetch_error := ""
+var _projection_pair_cross_enabled := false
 var _perf_trace_enabled := false
 var _performance := {
 	"prepare_call_count": 0,
@@ -175,6 +176,11 @@ func set_incremental_prefetch_enabled(enabled: bool) -> void:
 		_prefetch_projection_task_by_scope.clear()
 		_prefetch_projection_ready.clear()
 		_prefetch_error = ""
+
+
+## E5 is opt-in; no changes to authority or worker quotas.
+func set_projection_pair_cross_enabled(enabled: bool) -> void:
+	_projection_pair_cross_enabled = enabled
 
 
 func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
@@ -693,7 +699,8 @@ func _queue_projection_build(
 		world_seed,
 		generator_version,
 		region,
-		source
+		source,
+		_projection_pair_cross_enabled
 	)
 	var build_task_id := WorkerThreadPool.add_task(
 		Callable(build_job, "run"),

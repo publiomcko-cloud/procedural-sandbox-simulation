@@ -12,6 +12,7 @@ var world_seed := -1
 var generator_version := -1
 var region_key := Vector2i.ZERO
 var source: Dictionary = {}
+var use_cached_plane_cross := false
 var result: Dictionary = {}
 var worker_started_usec := 0
 var worker_finished_usec := 0
@@ -23,13 +24,15 @@ func _init(
 	seed_value: int,
 	generator: int,
 	key: Vector2i,
-	source_value: Dictionary
+	source_value: Dictionary,
+	cached_pair_cross: bool = false
 ) -> void:
 	world_id = world_identifier
 	world_seed = seed_value
 	generator_version = generator
 	region_key = key
 	source = source_value.duplicate(true)
+	use_cached_plane_cross = cached_pair_cross
 
 
 func run() -> void:
@@ -98,7 +101,7 @@ func _build() -> Dictionary:
 			continue
 
 		interaction_instance_count += 1
-		var built := Effect.build_from_instance(instance, source_revision)
+		var built := Effect.build_from_instance(instance, source_revision, use_cached_plane_cross)
 		if not built.get("ok", false):
 			return _failure(
 				"effect_projection_effect_build_failed:%s" 					% built.get("reason", "unknown")
@@ -186,6 +189,7 @@ func _build() -> Dictionary:
 		"worker_prevalidated": true,
 		"prevalidated_snapshot": normalized_snapshot,
 		"timings_usec": {
+			"cached_plane_cross": use_cached_plane_cross,
 			"prepare_sort": prepare_usec,
 			"effect_frame_build": effect_frame_usec,
 			"digest": digest_usec,
