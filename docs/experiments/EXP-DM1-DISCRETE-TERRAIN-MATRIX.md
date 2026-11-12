@@ -58,3 +58,25 @@ Marcadores: `DISCRETE_TERRAIN_TRIAL=`, `DISCRETE_TERRAIN_SUMMARY=` e `DISCRETE_T
 3. Se a métrica de qualidade reprovar, testar estados discretos de **densidade quantizada** (e não só sólido/vazio), com tabelas de casos e interpolação de arestas.
 4. Se meshing for irrelevante para o tempo total, priorizar o pipeline de projeção de fontes de objetos já medido pela série P5.
 5. Nunca comparar ganhos entre runner Linux e runner Windows ou entre commits diferentes sem um A/B pareado na mesma máquina.
+
+## Rodada B4: Surface Nets com densidade discreta Q8.8
+
+A primeira rodada qualificou o algoritmo binário, mas apenas B1 (0,5 m)
+acelerou cold/warm/edit; B1 registrou p95 de superfície ~0,348 m,
+enquanto B2/B3 ficaram mais lentas do que A.
+
+B4 adiciona um caminho **diferente**, sem alterar A/B1/B2/B3:
+
+- grade SDF fixa com quantização de 1/256 m na densidade (Q8.8 armazenado
+  experimentalmente em `PackedInt32Array`, sem compressão real);
+- um vértice por célula cruzada, obtido pela média das interseções nas
+  12 arestas de seu cubo; cache de vértices por região;
+- emissão de quads por arestas da grade, usando quatro células adjacentes;
+- edits CSG sobre amostras quantizadas e refazimento do cache de vértices
+  afetado, sem reexecutar a função procedural no meshing;
+- inicialização em 0,5 m, visando qualidade melhor do que a ocupação binária.
+
+**Limitações:** a quantização pode alterar resultados perto do zero;
+a topologia de Surface Nets não foi qualificada para ambiguidades, colisão,
+seams multi-LOD, materiais e modding; o teste aceita até 4/384 divergências
+de sinal em centros, mas exige que o mesher não pule faces sinalizadas.
