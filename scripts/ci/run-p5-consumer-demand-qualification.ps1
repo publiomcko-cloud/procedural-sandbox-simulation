@@ -12,6 +12,7 @@ if ($version -notmatch '^4\.7\.2\.stable(?:\.|$)') { throw "Unexpected Godot: $v
 foreach ($p in @(
     'scripts\ci\run-p5-consumer-demand-qualification.ps1',
     'scripts\perf\run-p5-consumer-demand-abba.ps1',
+    'scripts\perf\analyze-p5-consumer-demand-abba.ps1',
     'scripts\perf\run-p5-deterministic-stream-benchmark.ps1'
 )) {
     $tokens = $null
