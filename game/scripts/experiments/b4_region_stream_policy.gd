@@ -1,7 +1,8 @@
 class_name ExperimentalB4RegionStreamPolicy
 extends RefCounted
 
-## DM4: all 112 external regions within radius 5 ultimately use the same
+## DM4: all 121 positions within radius 5, including the 3x3 center
+## while awaiting definitive publication, use the same
 ## 0.5 m Surface Nets topology as the canonical B4 render chunks. No
 ## heightfield/LOW mesh is generated. Authority stays in the original 3x3
 ## load / 5x5 retention, with the 9x9 object-effect source footprint.
@@ -57,8 +58,7 @@ static func desired_regions(focus: Vector2i, forward: Vector3) -> Array[Vector2i
 	for z in range(focus.y - ACTIVE_RADIUS, focus.y + ACTIVE_RADIUS + 1):
 		for x in range(focus.x - ACTIVE_RADIUS, focus.x + ACTIVE_RADIUS + 1):
 			var r := Vector2i(x, z)
-			if distance(r, focus) >= 2:
-				keys.append(r)
+			keys.append(r)
 	keys.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
 		var pa := rank(a, focus, forward)
 		var pb := rank(b, focus, forward)
