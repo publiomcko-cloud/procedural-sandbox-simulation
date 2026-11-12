@@ -4455,12 +4455,17 @@ func _dm7_rock_high_receipt_if_complete() -> void:
 		if not _dm5_decor_nodes.has(id) \
 				or not bool(_dm5_decor_nodes[id].get("rock_high", false)):
 			return
+	# Canonical regions with zero generated rocks may not emit a geometry
+	# prewarm publication. Their terrain is still authoritative and HIGH;
+	# only exterior 72 regions require a derived HIGH rock receipt.
+	var canonical_rock_publications := 0
 	for z in range(focus_region_key.y - 1, focus_region_key.y + 2):
 		for x in range(focus_region_key.x - 1, focus_region_key.x + 2):
 			var key := Vector2i(x, z)
-			if not active_regions.has(_region_id(key)) \
-					or not object_stream.has_published_region(key):
+			if not active_regions.has(_region_id(key)):
 				return
+			if object_stream.has_published_region(key):
+				canonical_rock_publications += 1
 	_dm7_rock_high_completion_focus = focus_region_key
 	_dm7_rock_high_completion_receipts += 1
 	var receipt := {
@@ -4470,6 +4475,7 @@ func _dm7_rock_high_receipt_if_complete() -> void:
 		"region_count": (DM7_ROCK_HIGH_RADIUS * 2 + 1) * (DM7_ROCK_HIGH_RADIUS * 2 + 1),
 		"outer_region_count": (DM7_ROCK_HIGH_RADIUS * 2 + 1) * (DM7_ROCK_HIGH_RADIUS * 2 + 1) - 9,
 		"canonical_core_count": 9,
+		"canonical_object_published_regions": canonical_rock_publications,
 		"rock_high_resident_regions": _dm7_rock_visible_count,
 		"geometry": "procedural_rock_shape_descriptor",
 		"visual_only": true,
