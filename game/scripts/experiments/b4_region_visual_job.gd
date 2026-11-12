@@ -39,6 +39,8 @@ static func build_data(world_seed: int, key: Vector2i, level: int = 0) -> Dictio
 	var backend := B4.new()
 	if not backend.generate(world_seed, key, SAMPLE_STEP):
 		return {"valid": false, "reason": "dm4_b4_lattice_failed"}
+	var generation_usec := Time.get_ticks_usec() - started
+	var assemble_started := Time.get_ticks_usec()
 	var positions := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var chunk_triangle_counts: Dictionary = {}
@@ -72,6 +74,9 @@ static func build_data(world_seed: int, key: Vector2i, level: int = 0) -> Dictio
 		"normals": normals,
 		"triangle_count": positions.size() / 3,
 		"sample_sites": backend.last_generation_sample_count,
+		"fast_skipped_cells": backend.fast_skipped_inactive_cells,
+		"generation_usec": generation_usec,
+		"assembly_usec": Time.get_ticks_usec() - assemble_started,
 		"chunk_triangle_counts": chunk_triangle_counts,
 		"skipped_faces": skipped_total,
 		"worker_usec": Time.get_ticks_usec() - started,
