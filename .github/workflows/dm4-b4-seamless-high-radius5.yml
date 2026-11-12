@@ -122,6 +122,12 @@ jobs:
               throw "DM4_F10_ENGINE_ERROR: $($log.Name)"
             }
           }
+          $near = Get-Content (Join-Path $evidence '01-straight-18-adaptive-skip-progressive.metrics.json') -Raw | ConvertFrom-Json
+          Write-Host "DM4_F10_18_FOCUS_AUTHORITY_MISSING_PCT=$($near.f10_focus_missing_pct)"
+          Write-Host "DM4_F10_18_FOCUS_VISUAL_MISSING_PCT=$($near.f10_perceived_focus_missing_pct)"
+          if ([double]$near.f10_perceived_focus_missing_pct -ge 100.0) {
+            throw 'DM4_FOCUS_HIGH_COVERAGE_NOT_OBSERVED'
+          }
           Write-Host 'DM4_HIGH_F10_PASS'
       - name: Upload F10 telemetry
         if: always()
@@ -151,13 +157,13 @@ jobs:
           @echo off
           "%GODOT_BIN%" --headless --editor --path .\game --import
           if errorlevel 1 exit /b 1
-      - name: Stationary full HIGH queue draining (2400 frames)
+      - name: Stationary full HIGH queue draining (3000 frames)
         shell: powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -command ". '{0}'"
         timeout-minutes: 15
         run: |
           $env:SANDBOX_TERRAIN_BACKEND = 'b4'
           $evidence = Join-Path $env:RUNNER_TEMP 'dm4-high-idle'
-          & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $evidence -Frames 2400 -Routes @('idle') -Profiles @('adaptive-skip-progressive')
+          & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $evidence -Frames 3000 -Routes @('idle') -Profiles @('adaptive-skip-progressive')
           $log = @(Get-ChildItem $evidence -Filter '*.stdout.log')[0]
           $body = (Get-Content $log.FullName -Raw) -replace '\x00',''
           $regions = @{}
@@ -168,9 +174,11 @@ jobs:
             if ($event.backend -ne 'b4_surface_nets' -or $event.sample_step_m -ne 0.5 -or $event.lod -ne 0) {
               throw 'DM4_NONHIGH_SHELL_PUBLISHED'
             }
-            $regions[("$($event.region[0]),$($event.region[1])")] = 1
+            if ([int]$event.distance_regions -ge 2) {
+              $regions[("$($event.region[0]),$($event.region[1])")] = 1
+            }
           }
-          Write-Host "DM4_HIGH_IDLE_DISTINCT_REGIONS=$($regions.Count)"
+          Write-Host "DM4_HIGH_IDLE_DISTINCT_EXTERNAL_REGIONS=$($regions.Count)"
           if ($regions.Count -lt 112) { throw "DM4_HIGH_QUEUE_NOT_DRAINED: $($regions.Count)/112" }
           Write-Host 'DM4_HIGH_IDLE_QUEUE_DRAINED_PASS'
       - name: Upload idle queue evidence
