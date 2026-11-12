@@ -1,0 +1,85 @@
+name: P5 E4.1 immutable demand ranking benchmark (DO NOT MERGE)
+
+on:
+  push:
+    branches:
+      - exp/p5-stream-consumer-demand-e4-1
+
+concurrency:
+  group: p5-e4-1-consumer-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Qualify exact Godot 4.7.2 E4 runtime, halo and revision gates
+        shell: cmd
+        timeout-minutes: 12
+        run: |
+          @echo off
+          git rev-parse HEAD
+          powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\ci\run-p5-consumer-demand-qualification.ps1" -GodotBin "%GODOT_BIN%"
+          if errorlevel 1 exit /b 1
+      - name: Preserve focused qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p5-e4-1-qualification-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}\p5-demand-qualification\*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  benchmark:
+    needs: qualify
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 46
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Pin runner identity and import its separate Godot script registry
+        shell: cmd
+        timeout-minutes: 8
+        run: |
+          @echo off
+          echo E4_RUNNER=%RUNNER_NAME%
+          if /I not "%RUNNER_NAME%"=="sandbox-gpu-interactive" exit /b 1
+          "%GODOT_BIN%" --headless --editor --path .\game --import
+          if errorlevel 1 exit /b 1
+          "%GODOT_BIN%" --headless --path .\game --check-only --script res://scripts/terrain/terrain_demo.gd
+          if errorlevel 1 exit /b 1
+      - name: Collect sixteen isolated deterministic A/B/B/A comparisons
+        shell: cmd
+        timeout-minutes: 42
+        run: |
+          @echo off
+          git rev-parse HEAD
+          powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\perf\run-p5-consumer-demand-abba.ps1" -GodotBin "%GODOT_BIN%" -Frames 720
+          if errorlevel 1 exit /b 1
+      - name: Preserve raw benchmark logs, metrics and causal verdict
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p5-e4-1-consumer-abba-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}\p5-consumer-demand-abba\*.log
+            ${{ runner.temp }}\p5-consumer-demand-abba\*.json
+          if-no-files-found: warn
+          retention-days: 14
