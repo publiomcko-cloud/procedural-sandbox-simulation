@@ -32,7 +32,7 @@ jobs:
           echo E7_RUNNER=%RUNNER_NAME%
           if /I not "%RUNNER_NAME%"=="sandbox-gpu-interactive" exit /b 1
           git rev-parse HEAD
-          powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\ci\run-p5-progressive-e7-1-qualification.ps1" -GodotBin "%GODOT_BIN%"
+          powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\ci\run-p5-progressive-e7-qualification.ps1" -GodotBin "%GODOT_BIN%"
           if errorlevel 1 exit /b 1
       - name: Preserve Godot import, parity, preview and lifecycle smoke evidence
         if: always()
