@@ -38,3 +38,17 @@ Verificar no console `DM4_REGION_STREAM`, `dm4_region_b4_high_visible` e `dm4_re
 ## Validação
 
 Workflow `DM4 B4 uniform HIGH region radius 5 (EXPERIMENT)` executa check-only Godot 4.7.2, política da fila, paridade exata (vertices e normais) da malha externa com o oracle B4 DM1 em regiões de sinal positivo e negativo, F10 determinístico com movimentos a 18 e 54 m/s e idle, e captura GPU interativa em Windows.
+
+## Resultado qualificado — Windows / GTX 1050 Ti
+
+**Veredito:** `DM4_UNIFORM_B4_HIGH_RADIUS5_QUALIFIED_FOR_OWNER_VISUAL_TEST`. Workflow [#43280360919](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43280360919): `contract`, `f10`, `gpu`, `full-fill` **PASS** (código `4285ace8a2ad71998d1c0ff6723e9561dc5fedd5`).
+
+- **396 asserções** de política, prioridade, retenção e comparação exata de posições/normais do Surface Nets com o oracle DM1: zero falhas.
+- **F10 18 m/s, 54 m/s e idle**, cada um com 480 frames determinísticos: passam e contêm recepções reais do evento `dm4_region_b4_high_visible`.
+- **GPU Windows interativa**: renderização e screenshot aprovados na GTX 1050 Ti.
+- **Teste prolongado parado:** 9.000 frames em 150,34 s de tempo real; o recebimento `DM4_HIGH_RADIUS_COMPLETE` foi emitido **uma única vez** aproximadamente **41,72 s após início de trace**. Regiões centrais autoritativas = **9**; regiões externas HIGH B4 publicadas = **112**; total visual HIGH = **121/121**; amostragem 0,5 m; nenhuma região externa LOW.
+- Desempenho ao longo dos 9.000 frames: **16,718 ms** de frame médio; **2,208 ms** de processamento médio; **0,444%** dos frames acima de 20 ms; **0,133%** acima de 33 ms. Esses valores são do benchmark headless, não FPS gráfico real, e não devem ser usados como aprovação de GPU em 121 regiões.
+
+Evidências: [contrato e import](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43280360919/artifacts/13972461886), [F10](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43280360919/artifacts/13972397290), [GPU/screenshot](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43280360919/artifacts/13972033622), [9.000 frames e confirmação 121/121](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43280360919/artifacts/13972168412).
+
+**Limite de aceitação:** a continuidade visual B4-base está comprovada por paridade geométrica, mas não há veredito para costuras após edição, efeitos de objetos, reflexos e carga gráfica do conjunto 121 regiões. O F10 a 54 m/s ainda pode ficar sem regiões autoritativas publicadas. Sem merge na `main`.
