@@ -5397,7 +5397,7 @@ func _update_status() -> void:
 		_peak_mesh_upload_ms,
 		_peak_frame_ms,
 	]
-	status += "DM2 terrain mesher: %s | experimental B4: visual-only, SDF simulation/save unchanged\\n" % _experimental_mesh_backend
+	status += "DM2 terrain mesher: %s | experimental B4: visual-only, SDF simulation/save unchanged\n" % _experimental_mesh_backend
 	status += "Runtime timing: last op %s %.1f ms | frame p50/p95/p99 %.1f/%.1f/%.1f ms | process peak %.1f ms\n" % [
 		String(last_mesh_diagnostics.get("operation", _operation_name)),
 		float(last_mesh_diagnostics.get("elapsed_ms", 0.0)),
