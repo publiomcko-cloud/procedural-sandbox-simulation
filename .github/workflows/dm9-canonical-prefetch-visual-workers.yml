@@ -1,0 +1,209 @@
+name: DM9 canonical prefetch and B4 visual worker throughput (EXPERIMENT)
+
+on:
+  push:
+    branches:
+      - exp/dm9-canonical-prefetch-gaps
+  workflow_dispatch:
+
+concurrency:
+  group: dm9-canonical-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import Godot project
+        shell: powershell
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM9 import failed' }
+      - name: Parse and assert DM8/DM9 contracts
+        shell: powershell
+        run: |
+          $scripts = @(
+            'res://scripts/terrain/terrain_demo.gd',
+            'res://scripts/terrain/dm9_canonical_prefetch_policy.gd',
+            'res://tests/experiments/dm9_prefetch_policy_tests.gd',
+            'res://tests/experiments/dm8_radial_world_distance_tests.gd',
+            'res://tests/experiments/dm7_high_rock_parity_tests.gd'
+          )
+          foreach ($script in $scripts) {
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $script
+            if ($LASTEXITCODE -ne 0) { throw "DM9 GDScript parse failure: $script" }
+          }
+          foreach ($test in @(
+            @{path='res://tests/experiments/dm9_prefetch_policy_tests.gd'; receipt='DM9_PREFETCH_POLICY_PASS'},
+            @{path='res://tests/experiments/dm8_radial_world_distance_tests.gd'; receipt='DM8_RADIAL_POLICY_PASS'},
+            @{path='res://tests/experiments/dm7_high_rock_parity_tests.gd'; receipt='DM7_ROCK_HIGH_PARITY_PASS'}
+          )) {
+            $output = & $env:GODOT_BIN --headless --path .\game --script $test.path 2>&1 | Out-String
+            Write-Host $output
+            if ($LASTEXITCODE -ne 0 -or -not $output.Contains($test.receipt)) { throw "DM9 contract failure: $($test.path)" }
+          }
+          Write-Host 'DM9_CONTRACT_PASS'
+
+  abccba:
+    needs: contract
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 90
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Exact import
+        shell: powershell
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM9 import failed' }
+      - name: Six cold deterministic normal-speed trials with normalized process CPU
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 80
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'dm9-abccba'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          $sequence = @('A1','B1','C1','C2','B2','A2')
+          $results = @()
+          foreach ($variant in $sequence) {
+            $mode = $variant.Substring(0,1)
+            $env:SANDBOX_DM9_PREFETCH = if ($mode -eq 'A') { '0' } else { '1' }
+            $env:SANDBOX_DM9_VISUAL_WORKERS = if ($mode -eq 'C') { '4' } else { '1' }
+            $dir = Join-Path $root $variant
+            & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 720 -Routes @('outback-18') -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
+            if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) { throw "DM9 trial failed: $variant" }
+            $file = Join-Path $dir '01-outback-18-adaptive-skip-progressive.metrics.json'
+            $m = Get-Content $file -Raw | ConvertFrom-Json
+            if ($m.requested_frames -ne 720 -or $m.route -ne 'outback-18' -or $m.seed -ne 424242) { throw "DM9 trial invariant failed: $variant" }
+            if ([bool]$m.dm9_enabled -ne ($mode -ne 'A')) { throw "DM9 opt-in mismatch: $variant" }
+            $results += [ordered]@{
+              variant=$variant; revision=$m.commit;
+              focus_missing_pct=$m.f10_focus_missing_pct;
+              perceived_missing_pct=$m.f10_perceived_focus_missing_pct;
+              region_load_p50_ms=$m.region_load_p50_ms;
+              region_load_p95_ms=$m.region_load_p95_ms;
+              frame_ms=$m.avg_frame_ms;
+              frames_over_20_ms_pct=$m.frames_over_20_ms_pct;
+              frames_over_33_ms_pct=$m.frames_over_33_ms_pct;
+              snapshot_p95_ms=$m.snapshot_p95_ms;
+              worker_queue_p95_ms=$m.worker_queue_p95_ms;
+              worker_run_p95_ms=$m.worker_run_p95_ms;
+              upload_p95_ms=$m.upload_p95_ms;
+              process_cpu_mean_pct_all_cores=$m.process_cpu_mean_pct_total_capacity;
+              process_cpu_peak_pct_all_cores=$m.process_cpu_peak_pct_total_capacity;
+              rss_peak_mb=$m.process_rss_peak_mb;
+              visual_shell_completed=$m.dm9_visual_shell_complete_count;
+              visual_shell_worker_p95_ms=$m.dm9_visual_shell_worker_p95_ms;
+              visual_shell_queue_p95_ms=$m.dm9_visual_shell_queue_p95_ms;
+              visual_shell_publish_p95_ms=$m.dm9_visual_shell_publish_p95_ms;
+              prefetch=$m.dm9_lifecycle; blockers=$m.blockers
+            }
+          }
+          $report = Join-Path $root 'dm9-abccba-summary.json'
+          $results | ConvertTo-Json -Depth 9 | Set-Content $report -Encoding UTF8
+          Write-Host ('DM9_ABCCBA_RESULT=' + ($results | ConvertTo-Json -Depth 9 -Compress))
+          Write-Host "DM9_ABCCBA_PASS experiments=$($results.Count) report=$report"
+      - name: Retain trial logs and structured metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm9-abccba
+          path: |
+            ${{ runner.temp }}\dm9-abccba\**\*.log
+            ${{ runner.temp }}\dm9-abccba\**\*.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  idle-pressure:
+    needs: contract
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 45
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_PREFETCH: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import and record extended stationary fill/visual queue pressure
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 40
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'DM9 idle import failed' }
+          $dir = Join-Path $env:RUNNER_TEMP 'dm9-idle'
+          & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 3600 -Routes @('idle') -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
+          $m = Get-Content (Join-Path $dir '01-idle-adaptive-skip-progressive.metrics.json') -Raw | ConvertFrom-Json
+          Write-Host ('DM9_IDLE_PRESSURE_RESULT=' + ($m | ConvertTo-Json -Depth 8 -Compress))
+          if ($m.requested_frames -ne 3600 -or $m.seed -ne 424242) { throw 'DM9 idle benchmark mismatch' }
+          Write-Host 'DM9_IDLE_PRESSURE_PASS'
+      - name: Upload extended idle evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm9-idle-pressure
+          path: |
+            ${{ runner.temp }}\dm9-idle\*.log
+            ${{ runner.temp }}\dm9-idle\*.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  gpu:
+    needs: contract
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 30
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_PREFETCH: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Windows GPU interactive preflight
+        shell: powershell
+        run: |
+          & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive
+      - name: Smoke test normal 18 m/s with four visual workers
+        shell: powershell
+        timeout-minutes: 20
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dm9-gpu'
+          & .\scripts\perf\run-p5-gpu-smoke.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 360 -Routes @('straight-18') -StreamProfile 'adaptive-skip-progressive'
+          $log = Get-Content (Join-Path $dir 'gpu-straight-18.stdout.log') -Raw
+          if (-not $log.Contains('DM9_CANONICAL_PREFETCH:') -or -not $log.Contains('DM9_VISUAL_WORKERS:') -or -not $log.Contains('"event":"dm4_region_b4_high_visible"')) { throw 'DM9 interactive smoke missing active flags or HIGH publication' }
+          Write-Host 'DM9_GPU_PASS'
+      - name: Retain image and trace
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm9-gpu
+          path: |
+            ${{ runner.temp }}\dm9-gpu\*.png
+            ${{ runner.temp }}\dm9-gpu\*.log
+            ${{ runner.temp }}\dm9-gpu\*.json
+          retention-days: 14
+          if-no-files-found: warn
