@@ -1,9 +1,7 @@
 name: P5 E7 progressive authoritative chunks (DO NOT MERGE)
 
 on:
-  push:
-    branches:
-      - exp/p5-stream-progressive-chunks-e7
+  workflow_dispatch:
 
 concurrency:
   group: p5-progressive-e7-${{ github.ref }}
