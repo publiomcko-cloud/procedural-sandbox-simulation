@@ -1,9 +1,7 @@
 name: P5 E4 consumer-demand source scheduling experiment (DO NOT MERGE)
 
 on:
-  push:
-    branches:
-      - exp/p5-stream-consumer-demand-e4
+  workflow_dispatch:
 
 concurrency:
   group: p5-e4-consumer-${{ github.ref }}
