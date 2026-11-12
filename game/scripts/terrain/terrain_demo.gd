@@ -4203,6 +4203,11 @@ func _dm5_drop_decor(id: String, reason: String = "pruned") -> void:
 		return
 	var record: Dictionary = _dm5_decor_nodes[id]
 	_dm5_decor_nodes.erase(id)
+	if bool(record.get("rock_high", false)):
+		_dm7_rock_visible_count = maxi(0, _dm7_rock_visible_count - 1)
+		_dm7_high_rock_mesh_bytes = maxi(
+			0, _dm7_high_rock_mesh_bytes - int(record.get("rock_high_bytes", 0))
+		)
 	var root: Node3D = record.get("root", null)
 	if is_instance_valid(root):
 		root.visible = false
@@ -4379,6 +4384,167 @@ func _dm5_process_decor(now: int) -> void:
 		break
 
 
+## DM7: one fully batched HIGH rock mesh per region. The native mod
+## generation and geological mesh algorithms run on a worker; only GPU
+## resource publication and LOW->HIGH atomic visibility change run here.
+## Water is unchanged LOW, and this visual is never interactive/authoritative.
+func _dm7_commit_high_rocks(id: String, key: Vector2i, cpu: Dictionary) -> bool:
+	if not _dm5_decor_nodes.has(id):
+		return false
+	var record: Dictionary = _dm5_decor_nodes[id]
+	if bool(record.get("rock_high", false)):
+		return true
+	var root: Node3D = record.get("root", null)
+	if not is_instance_valid(root) or not bool(cpu.get("ok", false)):
+		return false
+	var vertices: PackedVector3Array = cpu.get("positions", PackedVector3Array())
+	var normals: PackedVector3Array = cpu.get("normals", PackedVector3Array())
+	if vertices.size() != normals.size() or vertices.size() % 3 != 0:
+		return false
+	var new_node: MeshInstance3D = null
+	if not vertices.is_empty():
+		var result: Dictionary = DM7StaticBatch.commit(cpu)
+		if not result.get("ok", false) or not result.get("mesh", null) is ArrayMesh:
+			return false
+		new_node = MeshInstance3D.new()
+		new_node.name = "HIGH_ModRocks"
+		new_node.mesh = result["mesh"]
+		new_node.material_override = _dm5_rock_material
+		new_node.set_meta("dm7_visual_only", true)
+		root.add_child(new_node)
+	# Install HIGH before hiding LOW; never display an empty-frame gap.
+	var low_node: Node3D = root.get_node_or_null("LowRocks")
+	if is_instance_valid(low_node):
+		low_node.visible = false
+	record["rock_high"] = true
+	record["rock_high_count"] = int(cpu.get("rock_count", 0))
+	record["rock_high_vertices"] = vertices.size()
+	record["rock_high_bytes"] = vertices.size() * 24
+	record["rock_high_node"] = new_node
+	_dm5_decor_nodes[id] = record
+	_dm7_high_rock_publications += 1
+	_dm7_rock_visible_count += 1
+	_dm7_high_rock_mesh_bytes += int(record["rock_high_bytes"])
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("dm7_rock_high_visible", {
+			"region": [key.x, key.y],
+			"rocks": int(cpu.get("rock_count", 0)),
+			"vertices": vertices.size(),
+			"triangles": int(cpu.get("triangle_count", 0)),
+			"mesh_cpu_payload_bytes": int(record["rock_high_bytes"]),
+			"worker_usec": int(cpu.get("worker_usec", 0)),
+			"geometry_usec": int(cpu.get("geometry_usec", 0)),
+			"rock_high_radius": DM7_ROCK_HIGH_RADIUS,
+			"terrain_high_radius": DM3Policy.ACTIVE_RADIUS,
+			"visual_only": true,
+			"matches_canonical_pristine_geometry": true,
+		})
+	return true
+
+
+func _dm7_rock_high_receipt_if_complete() -> void:
+	if _dm7_rock_high_completion_focus == focus_region_key:
+		return
+	for key in _dm3_shell_order:
+		if DM3Policy.distance(key, focus_region_key) > DM7_ROCK_HIGH_RADIUS:
+			continue
+		var id := _region_id(key)
+		if active_regions.has(id) and object_stream.has_published_region(key):
+			continue
+		if not _dm5_decor_nodes.has(id) \
+				or not bool(_dm5_decor_nodes[id].get("rock_high", false)):
+			return
+	for z in range(focus_region_key.y - 1, focus_region_key.y + 2):
+		for x in range(focus_region_key.x - 1, focus_region_key.x + 2):
+			var key := Vector2i(x, z)
+			if not active_regions.has(_region_id(key)) \
+					or not object_stream.has_published_region(key):
+				return
+	_dm7_rock_high_completion_focus = focus_region_key
+	_dm7_rock_high_completion_receipts += 1
+	var receipt := {
+		"focus": [focus_region_key.x, focus_region_key.y],
+		"radius": DM7_ROCK_HIGH_RADIUS,
+		"terrain_high_radius": DM3Policy.ACTIVE_RADIUS,
+		"region_count": (DM7_ROCK_HIGH_RADIUS * 2 + 1) * (DM7_ROCK_HIGH_RADIUS * 2 + 1),
+		"outer_region_count": (DM7_ROCK_HIGH_RADIUS * 2 + 1) * (DM7_ROCK_HIGH_RADIUS * 2 + 1) - 9,
+		"canonical_core_count": 9,
+		"rock_high_resident_regions": _dm7_rock_visible_count,
+		"geometry": "procedural_rock_shape_descriptor",
+		"visual_only": true,
+		"receipt": _dm7_rock_high_completion_receipts,
+	}
+	print("DM7_ROCK_HIGH_RADIUS_COMPLETE: " + JSON.stringify(receipt))
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("dm7_rock_high_radius_complete", receipt)
+
+
+func _dm7_process_high_rocks(now: int) -> void:
+	# Completed jobs are accepted only while their same-seed/world visual
+	# exists; stale work never promotes an evicted or canonical region.
+	if _last_frame_ms < 40.0 and _last_process_work_ms < 22.0:
+		for task_id_value in _dm7_rock_jobs.keys().duplicate():
+			var task_id := int(task_id_value)
+			if not WorkerThreadPool.is_task_completed(task_id):
+				continue
+			WorkerThreadPool.wait_for_task_completion(task_id)
+			var record: Dictionary = _dm7_rock_jobs[task_id]
+			_dm7_rock_jobs.erase(task_id)
+			var id: String = record["id"]
+			_dm7_rock_pending.erase(id)
+			var key: Vector2i = record["region_key"]
+			if int(record["seed"]) != world_seed \
+					or String(record["world_id"]) != world_id \
+					or not _dm5_decor_nodes.has(id) \
+					or (active_regions.has(id) and object_stream.has_published_region(key)):
+				break
+			var cpu: Dictionary = (record["job"] as RefCounted).result
+			if not _dm7_commit_high_rocks(id, key, cpu):
+				_dm7_rock_retry_after_usec[id] = now + 5_000_000
+				if _perf_trace_enabled:
+					PerformanceTrace.emit("dm7_rock_high_failed", {
+						"region": [key.x, key.y],
+						"reason": String(cpu.get("reason", "commit_failed")),
+					})
+			break
+	_dm7_rock_high_receipt_if_complete()
+	if _dm7_rock_jobs.size() >= DM7_MAX_ROCK_JOBS_IN_FLIGHT \
+			or _last_frame_ms >= 40.0 or _last_process_work_ms >= 22.0 \
+			or global_rebuild_pending or cave_section_enabled \
+			or not is_instance_valid(object_stream) \
+			or not bool(object_stream.get("initialized")):
+		return
+	var registry: ContentDefinitionRegistry = object_stream.registry
+	if registry == null:
+		return
+	# The terrain's queue is strictly nearest and camera-facing first.
+	# Build each FULL geological rock mesh by radius 4, not only at 1..2.
+	for key in _dm3_shell_order:
+		if DM3Policy.distance(key, focus_region_key) > DM7_ROCK_HIGH_RADIUS:
+			break
+		var id := _region_id(key)
+		if active_regions.has(id) or not _dm5_decor_nodes.has(id) \
+				or _dm7_rock_pending.has(id) \
+				or bool(_dm5_decor_nodes[id].get("rock_high", false)):
+			continue
+		if not _dm5_has_cached_high(id):
+			continue
+		if now < int(_dm7_rock_retry_after_usec.get(id, 0)):
+			continue
+		var job := DM7RockJob.new(world_seed, world_id, key, registry)
+		var task_id := WorkerThreadPool.add_task(
+			Callable(job, "run"), false, "DM7 exact HIGH rock preview"
+		)
+		if task_id < 0:
+			return
+		_dm7_rock_pending[id] = true
+		_dm7_rock_jobs[task_id] = {
+			"id": id, "region_key": key, "seed": world_seed,
+			"world_id": world_id, "job": job,
+		}
+		break
+
+
 ## DM3 region-space preview only. Do not expand authoritative world states,
 ## simulation scopes, mod effects, persistence or the 81-source projection cap.
 func _dm3_enabled() -> bool:
@@ -4539,6 +4705,10 @@ func _dm3_prune_shells(now: int) -> void:
 		PerformanceTrace.emit("dm4_region_b4_high_window", {
 			"dm5_cache_hits": _dm5_cache_hits,
 			"dm6_retained_high_reused_total": _dm6_retained_high_reused_total,
+			"dm7_rock_high_radius": DM7_ROCK_HIGH_RADIUS,
+			"dm7_rock_high_resident_regions": _dm7_rock_visible_count,
+			"dm7_rock_high_mesh_payload_bytes": _dm7_high_rock_mesh_bytes,
+			"dm7_rock_high_published_total": _dm7_high_rock_publications,
 			"dm6_low_preview_prevented_total": _dm6_low_preview_prevented_total,
 			"dm6_ttl_evicted_total": _dm6_ttl_evicted_total,
 			"dm6_high_visible_beyond_active_radius": _dm6_outer_high_visible_count,
@@ -4706,6 +4876,7 @@ func _dm3_process_shells() -> void:
 		_dm3_shell_order = DM3Policy.desired_regions(focus_region_key, _dm3_forward())
 		_dm3_prune_shells(now)
 		_dm5_process_decor(now)
+		_dm7_process_high_rocks(now)
 		_dm4_emit_full_high_receipt_if_ready()
 	# Prioritize authoritative SDF/B4 jobs over the derived 121-region halo.
 	# One background job at a time; after the nearest regions finish, the
