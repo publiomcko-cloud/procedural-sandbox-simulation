@@ -13,27 +13,29 @@ func _initialize() -> void:
 func _run() -> void:
 	var focus := Vector2i(12, -8)
 	var facing := Vector3(1, 0, 0)
-	var regions := Policy.desired_regions(focus, facing)
-	_check(regions.size() == Policy.expected_external_region_count(), "13x13 window excluding canonical 3x3")
+	var player := Policy.focus_center_world(focus)
+	var regions := Policy.desired_regions(focus, facing, player)
+	_check(regions.size() == Policy.expected_external_region_count(), "radial world-distance window excluding canonical 3x3")
 	_check(Policy.FINE_RADIUS == Policy.ACTIVE_RADIUS,
-		"uniform full resolution through radius six")
+		"uniform full resolution through radial coverage of former radius six")
 	for r in regions:
 		var d := Policy.distance(r, focus)
-		_check(d >= 2 and d <= 6, "every shell region lies within 2..6")
+		_check(d >= 2 and Policy.within_high(r, player),
+			"every shell region lies within 130m of real player")
 		_check(Policy.lod_for_distance(d) == 0, "every region B4 HIGH")
 	_check(Policy.distance(Vector2i(-5,-5), Vector2i.ZERO) == 5, "negative keys")
-	_check(Policy.rank(focus + Vector2i(2,0), focus, facing)
-		< Policy.rank(focus + Vector2i(3,0), focus, facing),
+	_check(Policy.rank(focus + Vector2i(2,0), focus, facing, player)
+		< Policy.rank(focus + Vector2i(3,0), focus, facing, player),
 		"nearest region takes priority over distant forward")
-	_check(Policy.rank(focus + Vector2i(3,0), focus, facing)
-		< Policy.rank(focus + Vector2i(-3,0), focus, facing),
+	_check(Policy.rank(focus + Vector2i(3,0), focus, facing, player)
+		< Policy.rank(focus + Vector2i(-3,0), focus, facing, player),
 		"at same range forward wins over rear")
-	_check(Policy.rank(focus, focus, facing)
-		< Policy.rank(focus + Vector2i(2,0), focus, facing),
+	_check(Policy.rank(focus, focus, facing, player)
+		< Policy.rank(focus + Vector2i(2,0), focus, facing, player),
 		"focus stays highest priority")
 	for i in range(1, regions.size()):
-		_check(Policy.rank(regions[i-1], focus, facing)
-			<= Policy.rank(regions[i], focus, facing),
+		_check(Policy.rank(regions[i-1], focus, facing, player)
+			<= Policy.rank(regions[i], focus, facing, player),
 			"prioritized queue is monotone")
 	var now := 30_000_000
 	_check(Policy.keep(0,now,10), "radius 10 retains")
