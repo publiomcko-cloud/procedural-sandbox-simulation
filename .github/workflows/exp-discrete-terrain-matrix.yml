@@ -1,0 +1,100 @@
+name: EXP DM1 discrete terrain matrix (DO NOT MERGE)
+
+on:
+  push:
+    branches:
+      - exp/discrete-terrain-matrix-benchmark
+
+concurrency:
+  group: exp-discrete-matrix-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 40
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify exact runner and import GDScript classes
+        shell: cmd
+        timeout-minutes: 8
+        run: |
+          @echo off
+          echo EXP_DM1_RUNNER=%RUNNER_NAME%
+          if /I not "%RUNNER_NAME%"=="sandbox-gpu-interactive" exit /b 1
+          git rev-parse HEAD
+          if not exist "%GODOT_BIN%" exit /b 1
+          "%GODOT_BIN%" --version
+          if errorlevel 1 exit /b 1
+          "%GODOT_BIN%" --headless --editor --path .\game --import > "%RUNNER_TEMP%\discrete-import.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\discrete-import.log"
+            exit /b 1
+          )
+          "%GODOT_BIN%" --headless --path .\game --check-only --script res://tests/experiments/discrete_terrain_matrix_benchmark.gd > "%RUNNER_TEMP%\discrete-check.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\discrete-check.log"
+            exit /b 1
+          )
+      - name: Perform ABBA measurements process 1
+        shell: cmd
+        timeout-minutes: 14
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --path .\game --script res://tests/experiments/discrete_terrain_matrix_benchmark.gd > "%RUNNER_TEMP%\discrete-benchmark-1.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\discrete-benchmark-1.log"
+            exit /b 1
+          )
+          findstr /C:"DISCRETE_TERRAIN_BENCH_PASS" "%RUNNER_TEMP%\discrete-benchmark-1.log" >nul
+          if errorlevel 1 exit /b 1
+          findstr /C:"DISCRETE_TERRAIN_SUMMARY=" "%RUNNER_TEMP%\discrete-benchmark-1.log"
+      - name: Perform ABBA measurements process 2
+        shell: cmd
+        timeout-minutes: 14
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --path .\game --script res://tests/experiments/discrete_terrain_matrix_benchmark.gd > "%RUNNER_TEMP%\discrete-benchmark-2.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\discrete-benchmark-2.log"
+            exit /b 1
+          )
+          findstr /C:"DISCRETE_TERRAIN_BENCH_PASS" "%RUNNER_TEMP%\discrete-benchmark-2.log" >nul
+          if errorlevel 1 exit /b 1
+          findstr /C:"DISCRETE_TERRAIN_SUMMARY=" "%RUNNER_TEMP%\discrete-benchmark-2.log"
+      - name: Extract machine-readable summaries
+        if: always()
+        shell: powershell
+        run: |
+          foreach ($i in 1..2) {
+            $src = Join-Path $env:RUNNER_TEMP "discrete-benchmark-$i.log"
+            if (Test-Path $src) {
+              $line = Get-Content $src | Where-Object { $_.StartsWith('DISCRETE_TERRAIN_SUMMARY=') } | Select-Object -Last 1
+              if ($line) {
+                $json = $line.Substring('DISCRETE_TERRAIN_SUMMARY='.Length)
+                $dst = Join-Path $env:RUNNER_TEMP "discrete-summary-$i.json"
+                [System.IO.File]::WriteAllText($dst, $json)
+              }
+            }
+          }
+      - name: Upload experiment evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: discrete-terrain-matrix-evidence
+          path: |
+            ${{ runner.temp }}\discrete-import.log
+            ${{ runner.temp }}\discrete-check.log
+            ${{ runner.temp }}\discrete-benchmark-*.log
+            ${{ runner.temp }}\discrete-summary-*.json
+          if-no-files-found: warn
+          retention-days: 14
