@@ -95,3 +95,42 @@ try {
 ```
 
 **Critério visual:** deslocar nas direções X, Z e diagonais. A cobertura HIGH deve terminar a aproximadamente 130 m horizontais, não no antigo quadrado de 13×13; rochas HIGH até ~90 m. Os cantos antigos continuam cobertos, os eixos retos ganham cobertura. A origem do raio acompanha o jogador dentro da região, e os HIGH já obtidos continuam visíveis na retenção de 210m + 20s (mesmo após sair do raio de geração). Água/objetos canônicos sem alteração.
+
+
+## Resultado final e baseline para redução de gaps — 12/11/2026
+
+**Veredito técnico: DM8_WORLD_DISTANCE_RADIAL_STREAM_WINDOWS_QUALIFIED; ainda não houve teste visual local do autor nem merge na main.**
+
+**GitHub Actions:** [#43321366141](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43321366141), SHA de código testado `391d46229eb127e9a632883b0a1a068df4674a7b`, **5/5 jobs PASS** (`contract`, `f10`, `gpu`, `full-fill`, `warm-return`). As atualizações posteriores de documentação utilizam `[skip ci]`, sem modificar o código qualificado.
+
+- **Contrato:** todas as suítes legadas (paridade B4 por chunk, TTL, memória, água LOW, rocks mod-first) passaram; novo contrato radial prova que os antigos cantos de 4/6/10 regiões permanecem cobertos mesmo quando o jogador se desloca para as quinas da região central.
+- **F10 normal 18 m/s:** outback-18 e idle headless determinísticos passam, com amostras de lacunas e jobs reais. Modo rápido F10 a 54 m/s excluído dos gates de produto por decisão do autor.
+- **GPU Windows GTX1050Ti:** sessão real e screenshot, `DM8_RADIAL_STREAM`, `dm4_region_b4_high_visible`, `dm7_rock_high_visible` e `dm5_low_decor_visible` confirmados. É teste de fumaça; não substitui inspeção visual local.
+- **Preenchimento estacionário de 15.000 frames:** **277/277** regiões HIGH de terreno, com **268** exteriores B4 0,5 m, **137/137** posições de rochas HIGH (128 externas + 9 centrais), 268 eventos LOW de rochas e 185 de oceano. Recibos únicos `DM8_HIGH_RADIAL_COMPLETE` e `DM8_ROCK_HIGH_RADIAL_COMPLETE`. Tempo aproximado do trace até a conclusão: **49,31 s rochas HIGH e 97,21 s terreno HIGH**. Foram emitidas 1.195 amostras `dm8_radial_gap_sample`; no fim, **0 gaps exteriores HIGH de terreno e rochas**, nenhuma evicção antecipada. Frame médio **16,741 ms**, processo médio **3,482 ms**, **0,413%** dos quadros acima de 20 ms e **0,120%** acima de 33 ms; medição **headless**, não FPS real de GPU.
+- **Retorno aquecido:** após 9.000 frames de pré-carregamento, 720 frames em outback-18 normal, **41** eventos `dm5_retained_high_revisit` com `superseded_by_low=false`, e **65** registros observados de rochas HIGH residentes visualmente fora dos 90 m; nenhuma evicção HIGH antecipada. Marcador `DM8_RADIAL_WARM_RETURN_PASS`.
+
+Artefatos: [contrato](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43321366141/artifacts/13989624713) · [normal F10 e idle](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43321366141/artifacts/13991395818) · [GPU](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43321366141/artifacts/13990337518) · [full-fill](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43321366141/artifacts/13991635884) · [warm-return](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43321366141/artifacts/13992220386).
+
+### Gargalo identificado e otimização aplicada
+
+A implementação inicial calculava `rank()` (distância física + alinhamento) em **cada comparação** de `sort_custom`; em ~268 candidatas por varredura de 200 ms, o tempo médio observado em movimento chegava a **23,776 ms/scan**, máximo **37,486 ms**. A melhoria implementada computa a prioridade **uma vez por região**, cacheia em `Dictionary`, calcula o raio ao quadrado apenas uma vez, e realiza a ordenação com comparações inteiras. Resultado A/B de uma execução por variante, mesma máquina e rota a 18 m/s:
+
+| Indicador | DM8 inicial | DM8 otimizada |
+|---|---:|---:|
+| Varredura radial média em movimento | 23,776 ms | **4,353 ms** |
+| Varredura radial máxima em movimento | 37,486 ms | **7,112 ms** |
+| Frame médio em movimento | 19,112 ms | **17,504 ms** |
+| Trabalho de processo médio | 10,572 ms | **8,620 ms** |
+| Frames acima de 20 ms | 12,205% | **8,183%** |
+| Gaps percebidos no foco (%) | 19,306% | **8,056%** |
+| Regiões canônicas com foco ausente (%) | 73,472% | **73,333%** |
+
+A medição estacionária final apresentou varredura média **2,535 ms** (pico **9,358 ms**). As reduções observadas em frame/gaps são promissoras, mas não constituem significância estatística, pois são corridas isoladas. O custo de varredura caiu por uma mudança causal específica na ordenação.
+
+### Gargalo remanescente: região canônica não acompanha 18 m/s
+
+A cobertura visual completa NÃO significa que o fluxo canônico de `16 chunks`, objetos/efeitos e superfície editável esteja pronto quando o jogador chega. No percurso frio de 18 m/s, `terrain_region_load_complete` apresentou p95 de **~3,07 s** na DM8 otimizada, contra **~2,02 s** no único controle DM7; piora potencial, ainda não estabelecida estatisticamente. O benchmark registra bloqueios recorrentes por capacidade de workers e dependências de efeitos. Na primeira campanha DM8 não otimizada, após ~13 s de movimento, ~247 das ~268 malhas exteriores de terreno ainda estavam pendentes, com idade P95 de gap de ~13,5 s; a fila continua a trabalhar progressivamente e é limitada pelo orçamento CPU.
+
+**Próxima direção recomendada:** campanha DM9 com prefetch antecipado, **somente no movimento normal 18 m/s**, de materialização/snapshots regionais canônicos, usando a velocidade do jogador × p95 da latência de publicação (ordem de 36–55 m) mais margem de uma a duas regiões; prioridade invariável para colisão/edição e estágios próximos. Preservar revisão/seed e fail-closed antes de qualquer publicação. Testar efeito sobre as métricas p50/p95 de região, `dm8_radial_gap_sample` (idade/posição frontal de gaps), p95/p99 de frame, fila de efeitos, RSS e VRAM, em A/B determinístico sobre o mesmo runner. Não ampliar a projeção de 81 source scopes sem solução explícita de cache/autoridade.
+
+**Escopo fechado da DM8:** apenas raio radial, instrumentação e correção da ordenação da fila. Não implementamos ainda prefetch canônico, paralelização GPU ou alteração da semântica de edição/salvamento. Prosseguir após inspeção gráfica do proprietário.
