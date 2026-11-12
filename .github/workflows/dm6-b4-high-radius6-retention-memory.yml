@@ -1,0 +1,325 @@
+name: DM6 B4 HIGH radius 6 strict retention and memory (EXPERIMENT)
+
+on:
+  push:
+    branches:
+      - exp/dm6-b4-high-radius6-retention-memory
+
+concurrency:
+  group: dm6-b4-memory-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import exact 4.7.2 Godot project on the local runner
+        shell: cmd
+        run: |
+          @echo off
+          git rev-parse HEAD
+          "%GODOT_BIN%" --headless --editor --path .\game --import > "%RUNNER_TEMP%\dm6-import.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm6-import.log"
+            exit /b 1
+          )
+      - name: Check policy, worker, scene and regression scripts
+        shell: cmd
+        run: |
+          @echo off
+          for %%S in (res://scripts/experiments/b4_region_stream_policy.gd res://scripts/experiments/b4_region_visual_job.gd res://scripts/terrain/terrain_demo.gd res://tests/experiments/dm3_region_stream_policy_tests.gd res://scripts/experiments/b4_low_detail_decor_job.gd res://tests/experiments/dm5_low_decor_contract.gd res://tests/experiments/dm6_high_retention_policy_tests.gd res://tests/experiments/dm6_region_memory_benchmark.gd) do (
+            "%GODOT_BIN%" --headless --path .\game --check-only --script %%S >> "%RUNNER_TEMP%\dm6-check.log" 2>&1
+            if errorlevel 1 (
+              type "%RUNNER_TEMP%\dm6-check.log"
+              exit /b 1
+            )
+          )
+      - name: Verify all HIGH, strict distance/view priority, B4 mesh parity and TTL
+        shell: cmd
+        timeout-minutes: 10
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --path .\game --script res://tests/experiments/dm3_region_stream_policy_tests.gd > "%RUNNER_TEMP%\dm6-contract.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm6-contract.log"
+            exit /b 1
+          )
+          findstr /C:"DM4_REGION_HIGH_POLICY_PASS" "%RUNNER_TEMP%\dm6-contract.log" >nul
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm6-contract.log"
+            exit /b 1
+          )
+          findstr /C:"DM4_REGION_HIGH_POLICY_RESULT=" "%RUNNER_TEMP%\dm6-contract.log"
+      - name: Assert water, deterministic river, cache TTL and mod safety
+        shell: cmd
+        timeout-minutes: 10
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --path .\game --script res://tests/experiments/dm5_low_decor_contract.gd > "%RUNNER_TEMP%\dm6-decor-contract.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm6-decor-contract.log"
+            exit /b 1
+          )
+          findstr /C:"DM5_LOW_DECOR_PASS" "%RUNNER_TEMP%\dm6-decor-contract.log" >nul
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm6-decor-contract.log"
+            exit /b 1
+          )
+          findstr /C:"DM5_LOW_DECOR_RESULT=" "%RUNNER_TEMP%\dm6-decor-contract.log"
+      - name: Verify HIGH radius 6 and eviction strictly after radius 10 plus 20s
+        shell: cmd
+        timeout-minutes: 10
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --path .\game --script res://tests/experiments/dm6_high_retention_policy_tests.gd > "%RUNNER_TEMP%\dm6-retention.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm6-retention.log"
+            exit /b 1
+          )
+          findstr /C:"DM6_HIGH_RETENTION_POLICY_PASS" "%RUNNER_TEMP%\dm6-retention.log" >nul
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm6-retention.log"
+            exit /b 1
+          )
+          findstr /C:"DM6_HIGH_RETENTION_POLICY_RESULT=" "%RUNNER_TEMP%\dm6-retention.log"
+      - name: Measure actual terrain and water packed-array bytes in eight regions
+        shell: cmd
+        timeout-minutes: 10
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --path .\game --script res://tests/experiments/dm6_region_memory_benchmark.gd > "%RUNNER_TEMP%\dm6-memory.log" 2>&1
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm6-memory.log"
+            exit /b 1
+          )
+          findstr /C:"DM6_REGION_MEMORY_PASS" "%RUNNER_TEMP%\dm6-memory.log" >nul
+          if errorlevel 1 (
+            type "%RUNNER_TEMP%\dm6-memory.log"
+            exit /b 1
+          )
+          findstr /C:"DM6_REGION_MEMORY_RESULT=" "%RUNNER_TEMP%\dm6-memory.log"
+      - name: Upload static contract evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm6-region-contract
+          path: |
+            ${{ runner.temp }}\dm6-import.log
+            ${{ runner.temp }}\dm6-check.log
+            ${{ runner.temp }}\dm6-contract.log
+            ${{ runner.temp }}\dm6-decor-contract.log
+            ${{ runner.temp }}\dm6-retention.log
+            ${{ runner.temp }}\dm6-memory.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  f10:
+    needs: contract
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 35
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import game
+        shell: cmd
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --editor --path .\game --import
+          if errorlevel 1 exit /b 1
+      - name: F10 18/54 and idle queue drain with uniform B4 HIGH radius 5
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 30
+        run: |
+          $env:SANDBOX_TERRAIN_BACKEND = 'b4'
+          $evidence = Join-Path $env:RUNNER_TEMP 'dm6-region-f10'
+          & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $evidence -Frames 720 -Routes @('outback-18','outback-54','idle') -Profiles @('adaptive-skip-progressive')
+          $logs = @(Get-ChildItem $evidence -Filter '*.stdout.log')
+          if ($logs.Count -ne 3) { throw "DM4_HEADLESS_TRIAL_COUNT_MISMATCH: $($logs.Count)" }
+          foreach ($log in $logs) {
+            $body = (Get-Content $log.FullName -Raw) -replace '\x00',''
+            if (-not $body.Contains('DM6_REGION_STREAM:') -or -not $body.Contains('"event":"dm4_region_b4_high_visible"')) {
+              throw "DM4_NO_REAL_REGION_HALO_PUBLICATION: $($log.Name)"
+            }
+            if ($body -match '(?m)(SCRIPT ERROR:|Parse Error:|ERROR: Failed to load script)') {
+              throw "DM4_ENGINE_ERROR: $($log.Name)"
+            }
+          }
+          $lowDecor = @($logs | ForEach-Object { Get-Content $_.FullName | Where-Object { $_ -like '*"event":"dm5_low_decor_visible"*' } })
+          if ($lowDecor.Count -lt 1) { throw 'DM5_LOW_DECOR_NOT_PRESENT_IN_COLD_ROUTE' }
+          Write-Host "DM5_REGION_HEADLESS_F10_PASS cold_route_decor_events=$($lowDecor.Count)"
+      - name: Upload route telemetry
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm6-region-f10
+          path: |
+            ${{ runner.temp }}\dm6-region-f10\*.log
+            ${{ runner.temp }}\dm6-region-f10\*.json
+            ${{ runner.temp }}\dm6-region-f10\**\*.log
+            ${{ runner.temp }}\dm6-region-f10\**\*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  gpu:
+    needs: f10
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 25
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Require real interactive Windows GPU session
+        shell: powershell
+        run: |
+          & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive
+      - name: Render B4 progressive with six-region HIGH shell
+        shell: powershell
+        timeout-minutes: 20
+        run: |
+          $env:SANDBOX_TERRAIN_BACKEND = 'b4'
+          $evidence = Join-Path $env:RUNNER_TEMP 'dm6-region-gpu'
+          & .\scripts\perf\run-p5-gpu-smoke.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $evidence -Frames 360 -Routes @('straight-18') -StreamProfile 'adaptive-skip-progressive'
+          $log = Get-Content (Join-Path $evidence 'gpu-straight-18.stdout.log') -Raw
+          if (-not $log.Contains('DM6_REGION_STREAM:') -or -not $log.Contains('"event":"dm4_region_b4_high_visible"') -or -not $log.Contains('"event":"dm5_low_decor_visible"')) {
+            throw 'DM4_NO_GPU_REGION_SHELL_EVIDENCE'
+          }
+          Write-Host 'DM6_REGION_GPU_PASS'
+      - name: Upload GPU screenshots and console
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm6-region-gpu
+          path: |
+            ${{ runner.temp }}\dm6-region-gpu\*.png
+            ${{ runner.temp }}\dm6-region-gpu\*.log
+            ${{ runner.temp }}\dm6-region-gpu\*.json
+            ${{ runner.temp }}\p5-gpu-session\*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  full-fill:
+    needs: gpu
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import exact project
+        shell: cmd
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --editor --path .\game --import
+          if errorlevel 1 exit /b 1
+      - name: Prove full 169-region HIGH coverage after queue drains at idle
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 12
+        run: |
+          $env:SANDBOX_TERRAIN_BACKEND = 'b4'
+          $evidence = Join-Path $env:RUNNER_TEMP 'dm6-full-fill'
+          & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $evidence -Frames 9000 -Routes @('idle') -Profiles @('adaptive-skip-progressive')
+          if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) { throw "DM5_IDLE_BENCH_FAILED" }
+          $log = Join-Path $evidence '01-idle-adaptive-skip-progressive.stdout.log'
+          $lines = @(Get-Content $log | Where-Object { $_.Contains('DM6_HIGH_RADIUS_COMPLETE: ') })
+          if ($lines.Count -ne 1) { throw "DM4_HIGH_RADIUS_NOT_COMPLETELY_FILLED: receipts=$($lines.Count)" }
+          $receipt = ($lines[0].Substring($lines[0].IndexOf('DM6_HIGH_RADIUS_COMPLETE: ') + 26) | ConvertFrom-Json)
+          if ($receipt.requested_region_count -ne 169 -or $receipt.canonical_core_regions -ne 9 -or
+              $receipt.high_shell_regions + $receipt.retired_detail_regions -ne 160 -or
+              $receipt.backend -ne 'b4' -or $receipt.mesh_step_m -ne 0.5) {
+            throw "DM4_HIGH_RADIUS_INCORRECT_COMPLETION_RECEIPT: $($lines[0])"
+          }
+          $logContents = @(Get-Content $log)
+          $rockPublishes = @($logContents | Where-Object { $_ -match '"event":"dm5_low_decor_visible"' -and $_ -match '"rocks":[1-9]' })
+          $waterPublishes = @($logContents | Where-Object { $_ -match '"event":"dm5_low_decor_visible"' -and $_ -match '"ocean_triangles":[1-9]' })
+          if ($rockPublishes.Count -lt 1 -or $waterPublishes.Count -lt 1) {
+            throw "DM5_LOW_DECOR_MISSING_FOR_FULL_FILL: rocks=$($rockPublishes.Count) ocean=$($waterPublishes.Count)"
+          }
+          Write-Host "DM6_HIGH_WITH_LOW_DECOR_FULL_FILL_PASS regions=169 outer=$($receipt.high_shell_regions) core=9 rock_events=$($rockPublishes.Count) ocean_events=$($waterPublishes.Count)"
+      - name: Upload full-fill telemetry
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm6-full-fill
+          path: |
+            ${{ runner.temp }}\dm6-full-fill\*.log
+            ${{ runner.temp }}\dm6-full-fill\*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  warm-return:
+    needs: full-fill
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 17
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Import game
+        shell: cmd
+        run: |
+          @echo off
+          "%GODOT_BIN%" --headless --editor --path .\game --import
+          if errorlevel 1 exit /b 1
+      - name: Warm HIGH cache before out-and-back F10 routes
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 15
+        run: |
+          $env:SANDBOX_TERRAIN_BACKEND = 'b4'
+          $evidence = Join-Path $env:RUNNER_TEMP 'dm6-warm-return'
+          & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $evidence -Frames 720 -WarmupFrames 4800 -Routes @('outback-18','outback-54') -Profiles @('adaptive-skip-progressive')
+          $logs = @(Get-ChildItem $evidence -Filter '*.stdout.log')
+          if ($logs.Count -ne 2) { throw "DM5_WARM_TRIAL_COUNT_MISMATCH: $($logs.Count)" }
+          $totalWarm = 0
+          foreach ($log in $logs) {
+            $body = Get-Content $log.FullName -Raw
+            $warmup = @($body -split "\r?\n" | Where-Object { $_ -like '*DM5_BENCH_WARMUP_COMPLETE:*' })
+            $revisits = @($body -split "\r?\n" | Where-Object { $_ -like '*"event":"dm5_retained_high_revisit"*' })
+            $outerRetained = @($body -split "\r?\n" | Where-Object { $_ -match '"dm6_high_visible_beyond_active_radius":[1-9]' })
+            $badExpire = @($body -split "\r?\n" | Where-Object { $_ -like '*"event":"dm6_high_expired"*' })
+            if ($warmup.Count -ne 1 -or $revisits.Count -lt 1 -or $outerRetained.Count -lt 1 -or $badExpire.Count -gt 0) {
+              throw "DM5_WARM_CACHE_NOT_REUSED: $($log.Name) prewarm=$($warmup.Count) reuse=$($revisits.Count) outer=$($outerRetained.Count) early_evictions=$($badExpire.Count)"
+            }
+            $lowSwitch = @($revisits | Where-Object { $_ -notlike '*"superseded_by_low":false*' })
+            if ($lowSwitch.Count -gt 0) { throw "DM5_REVISIT_DOWNGRADED_TO_LOW: $($log.Name)" }
+            $totalWarm += $revisits.Count
+            Write-Host "DM5_WARM_REVISIT_VERIFIED route=$($log.Name) reused=$($revisits.Count)"
+          }
+          Write-Host "DM6_WARM_RETURN_PASS total_high_cache_hits=$totalWarm"
+      - name: Upload warm-return evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm6-warm-return
+          path: |
+            ${{ runner.temp }}\dm6-warm-return\*.log
+            ${{ runner.temp }}\dm6-warm-return\*.json
+          if-no-files-found: warn
+          retention-days: 14
