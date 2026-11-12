@@ -39,6 +39,17 @@ func _run() -> void:
 	_check(Policy.rank(focus, focus, facing) \
 		< Policy.rank(focus + Vector2i(2, 0), focus, facing),
 		"canonical region priority")
+	var forecast := focus + Vector2i(2, 0)
+	var forecast_order := Policy.desired_regions(focus, facing, forecast)
+	_check(forecast_order.size() == 121, "predictive order still covers 121 regions")
+	_check(forecast_order[0] == focus, "focus is absolute priority")
+	_check(forecast_order[1] == forecast, "motion lead is second priority")
+	_check(Policy.rank(forecast, focus, facing, forecast) \
+		< Policy.rank(focus + Vector2i(-1, 0), focus, facing, forecast),
+		"motion corridor prioritized over rear ring")
+	_check(Policy.rank(focus + Vector2i(2, 0), focus, facing, focus) \
+		> Policy.rank(focus + Vector2i(-1, 0), focus, facing, focus),
+		"without motion, nearest ring still first")
 	var now := 30_000_000
 	_check(Policy.keep(0, now, 10), "radius ten retains")
 	_check(Policy.keep(now - 19_000_000, now, 11), "retains 19s outside ten")
@@ -50,7 +61,10 @@ func _run() -> void:
 	_check(String(high.get("backend", "")) == "b4_surface_nets", "full B4 topology")
 	_check(is_equal_approx(float(high.get("step", -1.0)), 0.5), "0.5m resolution")
 	_check(int(high.get("chunk_triangle_counts", {}).size()) == 16, "full 16 chunks")
-	_check(int(high.get("triangle_count", 0)) > 1000, "full 3D geometry not 384-triangle heightfield")
+	_check(int(high.get("triangle_count", 0)) == 3570,
+		"unchanged golden B4 topology for pinned seed and region")
+	_check(int(high.get("fast_skipped_cells",0)) > 10000,
+		"inactive fast-path leaves active mesh untouched")
 	_check(Field.GENERATOR_VERSION > 0, "pinned generator available")
 	print("DM4_REGION_POLICY_RESULT=" + JSON.stringify({
 		"tests": tests, "failures": fails,
