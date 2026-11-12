@@ -44,32 +44,41 @@ static func source_ranks(targets: Array[Vector2i], focus: Vector2i) -> Dictionar
 		ranks[source] = (targets.size() - count) * 100 + distance
 	return ranks
 
-static func rank_of(region: Vector2i, ranks: Dictionary) -> int:
-	return int(ranks.get(region, MISSING_RANK))
+## Nine possible chunk edge topologies, independent of world seed, focus,
+## revisions, mods, or consumer position. Precompute once per topology.
+static func relative_pattern(chunk: Vector2i, count_x: int, count_z: int) -> Dictionary:
+	return source_ranks(
+		chunk_targets(Vector2i.ZERO, chunk, count_x, count_z),
+		Vector2i.ZERO
+	)
 
-static func best_queue_index(queue: Array[Vector2i], ranks: Dictionary) -> int:
+
+static func rank_of(region: Vector2i, ranks: Dictionary, origin: Vector2i = Vector2i.ZERO) -> int:
+	return int(ranks.get(region - origin, MISSING_RANK))
+
+static func best_queue_index(queue: Array[Vector2i], ranks: Dictionary, origin: Vector2i = Vector2i.ZERO) -> int:
 	if queue.is_empty():
 		return -1
 	if ranks.is_empty():
 		return 0
 	var best := 0
-	var best_rank := rank_of(queue[0], ranks)
+	var best_rank := rank_of(queue[0], ranks, origin)
 	for i in range(1, queue.size()):
-		var rank := rank_of(queue[i], ranks)
+		var rank := rank_of(queue[i], ranks, origin)
 		if rank < best_rank:
 			best = i
 			best_rank = rank
 	return best
 
-static func best_ready_index(records: Array[Dictionary], ranks: Dictionary) -> int:
+static func best_ready_index(records: Array[Dictionary], ranks: Dictionary, origin: Vector2i = Vector2i.ZERO) -> int:
 	if records.is_empty():
 		return -1
 	if ranks.is_empty():
 		return 0
 	var best := 0
-	var best_rank := rank_of(records[0]["region"], ranks)
+	var best_rank := rank_of(records[0]["region"], ranks, origin)
 	for i in range(1, records.size()):
-		var rank := rank_of(records[i]["region"], ranks)
+		var rank := rank_of(records[i]["region"], ranks, origin)
 		if rank < best_rank:
 			best = i
 			best_rank = rank

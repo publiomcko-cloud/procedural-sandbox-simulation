@@ -41,6 +41,8 @@ var _prefetch_scope_ids: Dictionary = {}
 var _prefetch_urgent_scope_ids: Dictionary = {}
 var _consumer_demand_signature := ""
 var _consumer_source_ranks: Dictionary = {}
+var _consumer_relative_patterns: Dictionary = {}
+var _consumer_rank_origin := Vector2i.ZERO
 var _consumer_priority_dispatch_total := 0
 var _consumer_demand_updates := 0
 var _lookahead_last_motion_pair := ""
@@ -132,7 +134,9 @@ func initialize(
 	_prefetch_scope_ids.clear()
 	_prefetch_urgent_scope_ids.clear()
 	_consumer_demand_signature = ""
-	_consumer_source_ranks.clear()
+	_consumer_source_ranks = {}
+	_consumer_relative_patterns.clear()
+	_consumer_rank_origin = Vector2i.ZERO
 	_consumer_priority_dispatch_total = 0
 	_consumer_demand_updates = 0
 	_lookahead_last_motion_pair = ""
@@ -200,6 +204,9 @@ func set_consumer_demand(focus: Vector2i, stage: Dictionary) -> Dictionary:
 	var index: int = int(stage["submit_index"])
 	var coords: Array = stage["chunk_coordinates"]
 	var region: Vector2i = stage["region_key"]
+	if region != focus:
+		clear_consumer_demand()
+		return {"ok": true, "changed": false, "reason": "not_focused"}
 	var coordinate: Vector2i = coords[index]
 	var signature := "%d:%d:%d:%d:%d:%d:%d:%d" % [
 		focus.x, focus.y, region.x, region.y,
@@ -209,11 +216,22 @@ func set_consumer_demand(focus: Vector2i, stage: Dictionary) -> Dictionary:
 	if signature == _consumer_demand_signature:
 		return {"ok": true, "changed": false}
 	_consumer_demand_signature = signature
-	_consumer_source_ranks = DemandPolicy.source_ranks(
-		DemandPolicy.chunk_targets(
-			region, coordinate, Grid.CHUNK_COUNT_X, Grid.CHUNK_COUNT_Z
-		), focus
-	)
+	# Rank templates depend on only the nine edge/interior topologies, not
+	# the absolute world region. Avoid rebuilding 25–36 dictionary entries
+	# on every chunk advance or focus crossing (E4's measured CPU regression).
+	var x_edge := -1 if coordinate.x == 0 else (1 if coordinate.x == Grid.CHUNK_COUNT_X - 1 else 0)
+	var z_edge := -1 if coordinate.y == 0 else (1 if coordinate.y == Grid.CHUNK_COUNT_Z - 1 else 0)
+	var topology := Vector2i(x_edge, z_edge)
+	if not _consumer_relative_patterns.has(topology):
+		var canonical_chunk := Vector2i(
+			0 if x_edge == -1 else (Grid.CHUNK_COUNT_X - 1 if x_edge == 1 else 1),
+			0 if z_edge == -1 else (Grid.CHUNK_COUNT_Z - 1 if z_edge == 1 else 1)
+		)
+		_consumer_relative_patterns[topology] = DemandPolicy.relative_pattern(
+			canonical_chunk, Grid.CHUNK_COUNT_X, Grid.CHUNK_COUNT_Z
+		)
+	_consumer_rank_origin = region
+	_consumer_source_ranks = _consumer_relative_patterns[topology]
 	_consumer_demand_updates += 1
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("effect_consumer_demand_update", {
@@ -233,7 +251,9 @@ func set_consumer_demand(focus: Vector2i, stage: Dictionary) -> Dictionary:
 
 func clear_consumer_demand() -> void:
 	_consumer_demand_signature = ""
-	_consumer_source_ranks.clear()
+	# Do not clear the referenced topology template, which is immutable.
+	_consumer_source_ranks = {}
+	_consumer_rank_origin = Vector2i.ZERO
 
 
 func get_consumer_demand_stats() -> Dictionary:
@@ -261,7 +281,7 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 	# bounded by max_scopes per frame.
 	while processed < maxi(max_scopes, 0) and not _prefetch_projection_ready.is_empty():
 		var ready_index := DemandPolicy.best_ready_index(
-			_prefetch_projection_ready, _consumer_source_ranks
+			_prefetch_projection_ready, _consumer_source_ranks, _consumer_rank_origin
 		)
 		var ready_record: Dictionary = _prefetch_projection_ready[ready_index]
 		_prefetch_projection_ready.remove_at(ready_index)
@@ -284,8 +304,8 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 			completed_projection.sort_custom(func(a: int, b: int) -> bool:
 				var ar: Vector2i = _prefetch_projection_jobs[a]["region"]
 				var br: Vector2i = _prefetch_projection_jobs[b]["region"]
-				var ra := DemandPolicy.rank_of(ar, _consumer_source_ranks)
-				var rb := DemandPolicy.rank_of(br, _consumer_source_ranks)
+				var ra := DemandPolicy.rank_of(ar, _consumer_source_ranks, _consumer_rank_origin)
+				var rb := DemandPolicy.rank_of(br, _consumer_source_ranks, _consumer_rank_origin)
 				return ra < rb if ra != rb else a < b
 			)
 		for task_id in completed_projection:
@@ -338,8 +358,8 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 			completed_generation.sort_custom(func(a: int, b: int) -> bool:
 				var ar: Vector2i = _prefetch_generation_jobs[a]["region"]
 				var br: Vector2i = _prefetch_generation_jobs[b]["region"]
-				var ra := DemandPolicy.rank_of(ar, _consumer_source_ranks)
-				var rb := DemandPolicy.rank_of(br, _consumer_source_ranks)
+				var ra := DemandPolicy.rank_of(ar, _consumer_source_ranks, _consumer_rank_origin)
+				var rb := DemandPolicy.rank_of(br, _consumer_source_ranks, _consumer_rank_origin)
 				return ra < rb if ra != rb else a < b
 			)
 		if not completed_generation.is_empty():
@@ -428,17 +448,17 @@ func process_prefetch_step(max_scopes: int = 1) -> Dictionary:
 	# Stage 1: keep two deterministic source-generation jobs in flight.
 	while _prefetch_generation_jobs.size() 		< MAX_PREFETCH_GENERATION_JOBS_IN_FLIGHT 		and not _prefetch_queue.is_empty():
 		var consumer_index := DemandPolicy.best_queue_index(
-			_prefetch_queue, _consumer_source_ranks
+			_prefetch_queue, _consumer_source_ranks, _consumer_rank_origin
 		)
 		var region: Vector2i = _prefetch_queue[consumer_index]
 		_prefetch_queue.remove_at(consumer_index)
 		var scope_id := Contract.scope_id_for_region(region)
-		if DemandPolicy.rank_of(region, _consumer_source_ranks) < DemandPolicy.MISSING_RANK:
+		if DemandPolicy.rank_of(region, _consumer_source_ranks, _consumer_rank_origin) < DemandPolicy.MISSING_RANK:
 			_consumer_priority_dispatch_total += 1
 			if _perf_trace_enabled:
 				PerformanceTrace.emit("effect_consumer_priority_source", {
 					"region": [region.x, region.y],
-					"priority_rank": DemandPolicy.rank_of(region, _consumer_source_ranks),
+					"priority_rank": DemandPolicy.rank_of(region, _consumer_source_ranks, _consumer_rank_origin),
 					"original_queue_index": consumer_index,
 					"pending_queue_after": _prefetch_queue.size(),
 				})

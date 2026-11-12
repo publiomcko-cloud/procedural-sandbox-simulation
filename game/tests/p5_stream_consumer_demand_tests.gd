@@ -53,6 +53,29 @@ func _run() -> void:
 	var x_edge := Policy.chunk_targets(focus, Vector2i(Grid.CHUNK_COUNT_X - 1, 1), Grid.CHUNK_COUNT_X, Grid.CHUNK_COUNT_Z)
 	_check(x_edge.size() == 2, "shared X edge has two target regions")
 	_check(Policy.source_ranks(x_edge, focus).size() == 30, "shared X edge halo has 30 sources")
+	# Absolute E4 ranks and precomputed E4.1 relative templates must match
+	# for all nine edge topologies, preserving exact halo/priority semantics.
+	for x in [0, 1, Grid.CHUNK_COUNT_X - 1]:
+		for z in [0, 1, Grid.CHUNK_COUNT_Z - 1]:
+			var pos := Vector2i(x, z)
+			var abs_targets := Policy.chunk_targets(
+				focus, pos, Grid.CHUNK_COUNT_X, Grid.CHUNK_COUNT_Z
+			)
+			var absolute := Policy.source_ranks(abs_targets, focus)
+			var relative := Policy.relative_pattern(
+				pos, Grid.CHUNK_COUNT_X, Grid.CHUNK_COUNT_Z
+			)
+			_check(relative.size() == absolute.size(), "template halo cardinality")
+			for scope in absolute:
+				_check(Policy.rank_of(scope, relative, focus) == int(absolute[scope]),
+					"template reproduces absolute source rank")
+	var relative_corner := Policy.relative_pattern(
+		Vector2i.ZERO, Grid.CHUNK_COUNT_X, Grid.CHUNK_COUNT_Z
+	)
+	_check(Policy.best_queue_index(queue, relative_corner, focus) == Policy.best_queue_index(queue, ranks),
+		"precomputed queue selection is identical to original E4")
+	_check(Policy.best_ready_index(ready, relative_corner, focus) == Policy.best_ready_index(ready, ranks),
+		"precomputed projection publication preserves E4 selection")
 	if failures == 0:
 		print("P5_STREAM_CONSUMER_DEMAND_PASS: assertions=%d failures=0" % assertions)
 		quit(0)
