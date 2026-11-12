@@ -179,6 +179,7 @@ var _stream_profile := "baseline"
 # DM2 visual-only experimental mesher. The authoritative field and saves stay SDF.
 var _experimental_mesh_backend := "sdf"
 # DM3-only derived 11x11 region visual shell; never added to active_regions.
+var _dm4_motion_velocity := Vector3.ZERO
 var _dm3_shell_nodes: Dictionary = {}
 var _dm3_shell_jobs: Dictionary = {}
 var _dm3_shell_pending: Dictionary = {}
@@ -1135,6 +1136,10 @@ func _process(delta: float) -> void:
 	_last_f10_speed_mps = (
 		f10_motion.length() / maxf(delta, 0.000001)
 		if free_explore_enabled else 0.0
+	)
+	_dm4_motion_velocity = (
+		f10_motion / maxf(delta, 0.000001)
+		if free_explore_enabled else Vector3.ZERO
 	)
 	var stream_preflight_started_usec := Time.get_ticks_usec()
 	_update_focus_key()
@@ -2905,6 +2910,9 @@ func _process_coarse_previews() -> void:
 						"effect_revision": int(record["effect_revision"]),
 						"queue_to_coarse_usec": Time.get_ticks_usec() - int(stage["chunk_enqueued_usec"]),
 						"worker_usec": int(cpu.get("worker_usec", 0)),
+					"fast_skipped_cells": int(cpu.get("fast_skipped_cells", -1)),
+					"lattice_generation_usec": int(cpu.get("generation_usec", -1)),
+					"chunk_assembly_usec": int(cpu.get("assembly_usec", -1)),
 						"publish_usec": publish_usec,
 						"triangle_count": int(cpu.get("triangle_count", 0)),
 						"preview_patch_count": preview_chunk_nodes.size(),
@@ -4151,6 +4159,15 @@ func _dm4_provisional_shell_allowed(id: String) -> bool:
 	return int(state.brush_edits.get_edit_count()) == 0
 
 
+func _dm4_motion_focus() -> Vector2i:
+	if not free_explore_enabled or _dm4_motion_velocity.length_squared() <= 0.0001:
+		return focus_region_key
+	var predicted_world := orbit_target + (
+		_dm4_motion_velocity * DM3Policy.MOTION_LEAD_SECONDS
+	)
+	return SpatialGrid.region_key_for_world_position(predicted_world)
+
+
 func _dm3_forward() -> Vector3:
 	var forward: Vector3 = -camera.global_transform.basis.z
 	forward.y = 0.0
@@ -4273,6 +4290,8 @@ func _dm3_prune_shells(now: int) -> void:
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("dm3_region_shell_window", {
 			"focus": [focus.x, focus.y],
+			"predictive_focus": [_dm4_motion_focus().x, _dm4_motion_focus().y],
+			"motion_lookahead_seconds": DM3Policy.MOTION_LEAD_SECONDS,
 			"shell_regions": _dm3_shell_nodes.size(),
 			"retired_detail_regions": _dm3_retired_region_nodes.size(),
 			"jobs_in_flight": _dm3_shell_jobs.size(),
@@ -4379,7 +4398,9 @@ func _dm3_process_shells() -> void:
 			break
 	if now - _dm3_last_scan_usec >= DM3Policy.RESCAN_USEC or _dm3_shell_order.is_empty():
 		_dm3_last_scan_usec = now
-		_dm3_shell_order = DM3Policy.desired_regions(focus_region_key, _dm3_forward())
+		_dm3_shell_order = DM3Policy.desired_regions(
+			focus_region_key, _dm3_forward(), _dm4_motion_focus()
+		)
 		_dm3_prune_shells(now)
 	# Prioritize authoritative SDF/B4 jobs over the derived 121-region halo.
 	if _last_frame_ms >= 20.0 or _last_process_work_ms >= 10.5 \
