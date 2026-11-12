@@ -116,3 +116,40 @@ jobs:
             ${{ runner.temp }}\dm2-b4-abba\dm2-report.json
           if-no-files-found: warn
           retention-days: 14
+
+  gui:
+    needs: abba
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 30
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Assert interactive Windows session with real desktop and GPU
+        shell: powershell
+        run: |
+          & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive
+          if ($LASTEXITCODE -ne 0) { throw 'DM2_INTERACTIVE_SESSION_REQUIRED' }
+      - name: Run real OpenGL SDF and B4 tests, 2 routes each, capture actual frames
+        shell: powershell
+        timeout-minutes: 25
+        run: |
+          & .\scripts\perf\run-dm2-b4-gui-ab.ps1 -GodotBin $env:GODOT_BIN -Frames 300
+          if ($LASTEXITCODE -ne 0) { throw 'DM2_B4_GUI_FAILED' }
+      - name: Upload SDF/B4 actual GUI screenshots, adapter receipts and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm2-b4-windows-gui
+          path: |
+            ${{ runner.temp }}\dm2-b4-gui\**\*.png
+            ${{ runner.temp }}\dm2-b4-gui\**\*.log
+            ${{ runner.temp }}\dm2-b4-gui\**\*.json
+            ${{ runner.temp }}\dm2-b4-gui\dm2-gui-results.json
+            ${{ runner.temp }}\p5-gpu-session\*.json
+          if-no-files-found: warn
+          retention-days: 14
