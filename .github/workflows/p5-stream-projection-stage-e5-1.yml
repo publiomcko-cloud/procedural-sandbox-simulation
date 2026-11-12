@@ -1,9 +1,7 @@
 name: P5 E5.1 projection critical-path stage profiler (DO NOT MERGE)
 
 on:
-  push:
-    branches:
-      - exp/p5-stream-projection-stage-e5-1
+  workflow_dispatch:
 
 permissions:
   contents: read
