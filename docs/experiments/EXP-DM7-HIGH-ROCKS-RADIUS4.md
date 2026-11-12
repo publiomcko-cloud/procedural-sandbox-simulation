@@ -28,7 +28,7 @@ No seed determinístico do benchmark com mods first-party e 72 regiões externas
 - **72.792 triângulos** HIGH de rocha; mediana **1.104 triângulos/região**, p95 1.920, máximo 2.304.
 - **5.241.024 bytes = 5,00 MiB de payload geométrico bruto** em todas as 72 regiões; mediana **79.488 B = 77,6 KiB/região**, p95 138.240 B e máximo 165.888 B. Isso corresponde a `PackedVector3Array` + normais, sem `ArrayMesh`/driver/cópias internas.
 - Worker CPU das rochas HIGH: mediana **56,36 ms por região** (p95 **113,4 ms**); soma dos 72 workers **4,13 s** de CPU em toda a sessão, distribuídos na fila, não uma pausa única.
-- Benchmark headless completo nessa tentativa: frame médio **16,747 ms**, processamento médio **2,684 ms**, **0,50%** dos quadros acima de 20 ms, **0,189%** acima de 33 ms. Sem inferência de FPS GPU a partir dos valores headless.
+- Benchmark headless completo na execução qualificada: frame médio **16,733 ms**, processamento médio **2,661 ms**, **0,50%** dos quadros acima de 20 ms, **0,178%** acima de 33 ms. Sem inferência de FPS GPU a partir dos valores headless.
 - DM6 (sem HIGH de rochas): benchmark idle comparável reportou frame médio **16,711 ms**, process médio **2,387 ms**. A diferença é observacional de corridas não pareadas; não é prova estatística de regressão ou equivalência.
 - O autor observou no DM6 **RAM inferior a 300 MB e VRAM pouco alterada**; DM7 não mediu RSS/VRAM total da sessão. O custo adicional das malhas é pequeno no payload, mas o pico de processamento/recursos continua a depender dos mods instalados.
 
@@ -42,7 +42,17 @@ Workflow: [DM7 B4 HIGH rochas no raio 4](https://github.com/publiomcko-cloud/pro
 
 A execução inicial [#43298696013](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43298696013) passou contract, F10 e GPU, mas o `full-fill` rejeitou a ausência do receipt por exigir nove eventos de publicação de objetos canônicos; logs de geometria mostraram os **72/72** batches HIGH exteriores. Critério corrigido no commit `0bbe3d27ef601e3d1f9baa9391f1cee5670f1d8f`.
 
-**Validação final:** atualizar aqui com o veredito da repetição [#43300134756](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43300134756), incluindo `contract`, `f10`, `gpu`, `full-fill` e `warm-return`.
+**Qualificação final: WINDOWS_QUALIFIED, NOT_MAINLINE_MERGED.** [GitHub Actions #43300134756](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43300134756), commit de código `0bbe3d27ef601e3d1f9baa9391f1cee5670f1d8f`, **5/5 jobs PASS**.
+
+- `contract`: scripts import/check-only e paridade exata em seis regiões com 18 rochas, **82 asserções / 0 falhas**; suites DM6/DM5 de memória, TTL e prioridade permanecem passando.
+- `f10`: rotas determinísticas outback-18, outback-54 e idle, todas PASS; **57 publicações de HIGH de rochas** registradas em conjunto na primeira campanha e publicação confirmada na repetição. É smoke de integridade, não garantia de ausência perceptível em alta velocidade.
+- `gpu`: GTX 1050 Ti em sessão Windows real, 360 frames no percurso normal 18 m/s, `dm7_rock_high_visible`, `dm4_region_b4_high_visible` e `dm5_low_decor_visible` presentes; imagem anexada.
+- `full-fill`: **169/169 regiões de terreno HIGH** (160 exteriores); **81/81 posições cobertas por HIGH de rochas** (72 externas + 9 canônicas), comprovante `DM7_ROCK_HIGH_RADIUS_COMPLETE` emitido uma vez; 160 eventos LOW de rochas e 121 eventos LOW de oceano. A recepção declarou **8 das 9 regiões canônicas com publicação de objetos**, pois uma delas tinha zero instâncias no benchmark. Frame médio **16,733 ms** e process médio **2,661 ms** headless, 0,50% de frames acima de 20 ms, 0,178% acima de 33 ms.
+- `warm-return`: 4.800 frames de aquecimento em cada processo, mais trajetos ida e volta de 720 frames a 18/54 m/s; **34 + 39 = 73 reutilizações de terreno HIGH**, todas `superseded_by_low=false`. **126 registros telemétricos** confirmaram rochas HIGH retidas visualmente *fora do raio 4*, sem expiração prematura no intervalo do teste. Marcador `DM7_WARM_RETURN_PASS` emitido.
+
+Artefatos oficiais do run: [contratos e memórias](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43300134756/artifacts/13979969669), [F10](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43300134756/artifacts/13980124563), [GPU](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43300134756/artifacts/13980493749), [full-fill](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43300134756/artifacts/13982015911), [retorno aquecido](https://github.com/publiomcko-cloud/procedural-sandbox-simulation/actions/runs/43300134756/artifacts/13981089379).
+
+**Limite da aprovação:** os testes garantem geometria exata pristine no conteúdo testado e comportamento automatizado de streaming; não representam inspeção humana da DM7 na máquina do autor nem paridade com objetos editados/mods desconhecidos. Exigem validação visual local antes de integração.
 
 ## Próxima direção técnica sugerida — NÃO executada
 
