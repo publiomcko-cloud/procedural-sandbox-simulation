@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   contract:
-    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 20
     env:
       GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
@@ -75,7 +75,7 @@ jobs:
 
   f10:
     needs: contract
-    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 35
     env:
       GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
