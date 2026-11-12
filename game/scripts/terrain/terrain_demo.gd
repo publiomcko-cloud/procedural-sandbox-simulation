@@ -351,12 +351,15 @@ func _ready() -> void:
 		stream_profile_env, stream_profile_args
 	)
 	if _dm3_enabled():
-		print("DM3_REGION_STREAM: radius=5 high_through=4 low_from=5 retention_radius=10 retention_seconds=20 visual_only_outside_authority=1")
+		print("DM4_REGION_STREAM: radius=5 high_all=1 b4_sample_step=0.5 priority=distance_then_view retention_radius=10 retention_seconds=20 visual_only_outside_authority=1")
 		if _perf_trace_enabled:
-			PerformanceTrace.emit("dm3_region_stream_mode", {
+			PerformanceTrace.emit("dm4_region_stream_mode", {
 				"radius_regions": 5,
-				"high_through_regions": 4,
-				"low_from_regions": 5,
+				"high_through_regions": 5,
+				"low_from_regions": -1,
+				"backend": "b4",
+				"mesh_step_m": 0.5,
+				"priority": "strict_distance_then_forward",
 				"retention_radius_regions": 10,
 				"retention_seconds": 20,
 				"authority_window_unchanged": true,
@@ -4192,9 +4195,8 @@ func _dm3_prune_shells(now: int) -> void:
 		var id: String = id_value
 		var record: Dictionary = _dm3_retired_region_nodes[id]
 		var dist := DM3Policy.distance(focus, record["region_key"])
-		# At radius 5 request LOW but keep the previous detailed visual
-		# until the coarse replacement is ready. Fast F10 movement must
-		# never create a hole by eagerly discarding already-loaded terrain.
+		# Uniform B4 HIGH throughout the view. Keep retired meshes while
+		# a new HIGH shell is generated, preventing motion-created holes.
 		if active_regions.has(id) or int(record["seed"]) != world_seed \
 				or not DM3Policy.keep(int(record["last_near_usec"]), now, dist):
 			_dm3_drop_retired(id)
@@ -4230,7 +4232,7 @@ func _dm3_prune_shells(now: int) -> void:
 				break
 			_dm3_drop_shell(String(key_value))
 	if _perf_trace_enabled:
-		PerformanceTrace.emit("dm3_region_shell_window", {
+		PerformanceTrace.emit("dm4_region_b4_high_window", {
 			"focus": [focus.x, focus.y],
 			"shell_regions": _dm3_shell_nodes.size(),
 			"retired_detail_regions": _dm3_retired_region_nodes.size(),
@@ -4238,6 +4240,8 @@ func _dm3_prune_shells(now: int) -> void:
 			"built": _dm3_shell_built,
 			"evicted": _dm3_shell_evicted,
 			"lod_promoted": _dm3_shell_lod_promoted,
+			"high_resolution_regions": _dm3_shell_nodes.size(),
+			"pending_or_active_jobs": _dm3_shell_pending.size(),
 			"active_radius": DM3Policy.ACTIVE_RADIUS,
 			"fine_radius": DM3Policy.FINE_RADIUS,
 			"retain_radius": DM3Policy.RETAIN_RADIUS,
@@ -4259,7 +4263,7 @@ func _dm3_process_shells() -> void:
 		_dm3_shell_order.clear()
 		_dm3_last_scan_usec = 0
 	# One mesh upload/frame. All workers are CPU-only, detached and pure.
-	if _last_frame_ms < 20.0:
+	if _last_frame_ms < 40.0:
 		for task_id_value in _dm3_shell_jobs.keys().duplicate():
 			var task_id := int(task_id_value)
 			if not WorkerThreadPool.is_task_completed(task_id):
@@ -4280,7 +4284,9 @@ func _dm3_process_shells() -> void:
 			or active_regions.has(id) or loading_regions.has(id) \
 			or global_rebuild_pending or cave_section_enabled:
 				break
-			if not cpu.get("valid", false) or int(cpu.get("triangle_count", 0)) == 0:
+			if not cpu.get("valid", false) or int(cpu.get("triangle_count", 0)) == 0 \
+					or String(cpu.get("backend", "")) != "b4" \
+					or not is_equal_approx(float(cpu.get("sample_step", 0.0)), 0.5):
 				_dm3_shell_retry_after_usec[id] = now + 5_000_000
 				break
 			var mesh: ArrayMesh = CoarsePreviewJob.mesh_from_cpu_data(cpu)
@@ -4316,9 +4322,11 @@ func _dm3_process_shells() -> void:
 				_dm3_shell_lod_promoted += 1
 			_dm3_shell_built += 1
 			if _perf_trace_enabled:
-				PerformanceTrace.emit("dm3_region_shell_visible", {
+				PerformanceTrace.emit("dm4_region_b4_high_visible", {
 					"region": [key.x, key.y],
 					"lod": level,
+					"backend": "b4",
+					"sample_step_m": float(cpu.get("sample_step", 0.0)),
 					"distance_regions": dist,
 					"triangle_count": int(cpu.get("triangle_count", 0)),
 					"worker_usec": int(cpu.get("worker_usec", 0)),
@@ -4331,7 +4339,9 @@ func _dm3_process_shells() -> void:
 		_dm3_shell_order = DM3Policy.desired_regions(focus_region_key, _dm3_forward())
 		_dm3_prune_shells(now)
 	# Prioritize authoritative SDF/B4 jobs over the derived 121-region halo.
-	if _last_frame_ms >= 20.0 or _last_process_work_ms >= 10.5 \
+	# One background job at a time; after the nearest regions finish, the
+	# stable sorted queue drains even during camera idle.
+	if _last_frame_ms >= 40.0 or _last_process_work_ms >= 22.0 \
 			or _dm3_shell_jobs.size() >= DM3Policy.MAX_JOBS_IN_FLIGHT \
 			or global_rebuild_pending or cave_section_enabled:
 		return
@@ -5731,7 +5741,7 @@ func _update_status() -> void:
 	]
 	status += "DM2 terrain mesher: %s | experimental B4: visual-only, SDF simulation/save unchanged\n" % _experimental_mesh_backend
 	if _dm3_enabled():
-		status += "DM3: 5-region shell / HIGH <=4 / LOW 5 / retain 10 or 20s | visible %d + retired %d\n" % [
+		status += "DM4: 5-region all B4 HIGH / near+forward priority / retain 10 or 20s | visible %d + retired %d\n" % [
 			_dm3_shell_nodes.size(), _dm3_retired_region_nodes.size()
 		]
 	status += "Runtime timing: last op %s %.1f ms | frame p50/p95/p99 %.1f/%.1f/%.1f ms | process peak %.1f ms\n" % [
