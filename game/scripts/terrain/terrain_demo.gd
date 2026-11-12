@@ -200,6 +200,8 @@ var _dm8_rock_receipt_signature := ""
 var _dm8_radial_scan_count := 0
 var _dm8_radial_scan_total_usec := 0
 var _dm8_radial_scan_max_usec := 0
+var _dm8_gap_first_requested_usec: Dictionary = {}
+var _dm8_gap_sample_count := 0
 # DM5 derived LOW decorators are independent of authoritative object/hydro scope.
 var _dm5_decor_jobs: Dictionary = {}
 var _dm5_decor_pending: Dictionary = {}
@@ -4788,6 +4790,87 @@ func _dm3_prune_shells(now: int) -> void:
 
 
 
+## DM8 instrumentation: outstanding visual region gaps and their ages.
+## Sample at the existing 200ms region reconciliation cadence. It never
+## issues extra jobs or changes priority; the next phase can use the
+## evidence to target the actual worker/snapshot/commit bottleneck.
+func _dm8_sample_gap_pressure(now: int) -> void:
+	if not _perf_trace_enabled:
+		return
+	var terrain_ready := 0
+	var rock_targets := 0
+	var rock_ready := 0
+	var forward := _dm3_forward()
+	var first_gap_distance_m := INF
+	var front_gap_count := 0
+	var new_requests := 0
+	var gap_ages_ms: Array[int] = []
+	var currently_requested: Dictionary = {}
+	for key in _dm3_shell_order:
+		var id := _region_id(key)
+		currently_requested[id] = true
+		var ready := active_regions.has(id) or _dm5_has_cached_high(id)
+		var distance_m := DM3Policy.world_distance_m(key, camera.global_position)
+		if ready:
+			terrain_ready += 1
+			_dm8_gap_first_requested_usec.erase(id)
+		else:
+			first_gap_distance_m = minf(first_gap_distance_m, distance_m)
+			if not _dm8_gap_first_requested_usec.has(id):
+				_dm8_gap_first_requested_usec[id] = now
+				new_requests += 1
+			gap_ages_ms.append(int(
+				maxi(0, now - int(_dm8_gap_first_requested_usec[id])) / 1000
+			))
+			var direction := DM3Policy.center_world(key) - Vector2(
+				camera.global_position.x, camera.global_position.z
+			)
+			var facing := Vector2(forward.x, forward.z)
+			if direction.length_squared() > 0.000001 and facing.length_squared() > 0.000001:
+				if direction.normalized().dot(facing.normalized()) > 0.5:
+					front_gap_count += 1
+		if DM3Policy.within_rock_high(key, camera.global_position):
+			rock_targets += 1
+			if active_regions.has(id) and object_stream.has_published_region(key):
+				rock_ready += 1
+			elif _dm5_decor_nodes.has(id) and bool(
+					_dm5_decor_nodes[id].get("rock_high", false)):
+				rock_ready += 1
+	for id_value in _dm8_gap_first_requested_usec.keys().duplicate():
+		if not currently_requested.has(id_value):
+			_dm8_gap_first_requested_usec.erase(id_value)
+	gap_ages_ms.sort()
+	_dm8_gap_sample_count += 1
+	var gap_p95_ms := 0
+	if not gap_ages_ms.is_empty():
+		var index := mini(
+			gap_ages_ms.size() - 1, ceili(0.95 * float(gap_ages_ms.size())) - 1
+		)
+		gap_p95_ms = gap_ages_ms[index]
+	PerformanceTrace.emit("dm8_radial_gap_sample", {
+		"focus": [focus_region_key.x, focus_region_key.y],
+		"player_xz_m": [camera.global_position.x, camera.global_position.z],
+		"terrain_required_outer": _dm3_shell_order.size(),
+		"terrain_ready_outer": terrain_ready,
+		"terrain_gap_outer": _dm3_shell_order.size() - terrain_ready,
+		"terrain_gap_nearest_m": first_gap_distance_m if is_finite(first_gap_distance_m) else -1.0,
+		"terrain_gap_front_cone": front_gap_count,
+		"terrain_gap_age_p95_ms": gap_p95_ms,
+		"terrain_gap_new_since_last_scan": new_requests,
+		"rock_required_outer": rock_targets,
+		"rock_ready_outer": rock_ready,
+		"rock_gap_outer": rock_targets - rock_ready,
+		"terrain_high_worker_jobs": _dm3_shell_jobs.size(),
+		"terrain_high_pending_regions": _dm3_shell_pending.size(),
+		"rock_high_worker_jobs": _dm7_rock_jobs.size(),
+		"rock_high_pending_regions": _dm7_rock_pending.size(),
+		"low_decor_worker_jobs": _dm5_decor_jobs.size(),
+		"canonical_loading_regions": loading_regions.size(),
+		"canonical_mesh_jobs": _mesh_jobs.size(),
+		"sample": _dm8_gap_sample_count,
+	})
+
+
 ## Completion requires EVERY region in the actual-player radius-130m disc to have a
 ## HIGH B4 visual (or a fully committed canonical B4 region), not merely
 ## a submitted worker or an approximate coarse preview. Emit once/focus.
@@ -4952,6 +5035,7 @@ func _dm3_process_shells() -> void:
 		_dm3_prune_shells(now)
 		_dm5_process_decor(now)
 		_dm7_process_high_rocks(now)
+		_dm8_sample_gap_pressure(now)
 		_dm4_emit_full_high_receipt_if_ready()
 	# Prioritize authoritative SDF/B4 jobs over the derived circular halo.
 	# One background job at a time; after the nearest regions finish, the
