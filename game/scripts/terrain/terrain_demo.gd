@@ -4284,7 +4284,7 @@ func _dm5_process_decor(now: int) -> void:
 		return
 	if not bool(object_stream.get("initialized")):
 		return
-	var registry: RefCounted = object_stream.get("registry")
+	var registry: ContentDefinitionRegistry = object_stream.registry
 	if registry == null:
 		return
 	for key in _dm3_shell_order:
