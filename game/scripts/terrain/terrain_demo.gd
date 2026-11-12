@@ -190,6 +190,8 @@ var _dm3_shell_seed := -1
 var _dm3_shell_built := 0
 var _dm3_shell_evicted := 0
 var _dm3_shell_lod_promoted := 0
+var _dm4_high_complete_focus := Vector2i(2147483647, 2147483647)
+var _dm4_high_complete_receipts := 0
 var _stream_budget_state: Dictionary = {"dispatch_limit": 1}
 var _stream_window_started_usec := 0
 var _stream_window_frames := 0
@@ -4249,6 +4251,55 @@ func _dm3_prune_shells(now: int) -> void:
 		})
 
 
+
+## Completion requires that EVERY region in the radius-5 square has a
+## HIGH B4 visual (or a fully committed canonical B4 region), not merely
+## a submitted worker or an approximate coarse preview. Emit once/focus.
+func _dm4_emit_full_high_receipt_if_ready() -> void:
+	if not _dm3_enabled() or _dm4_high_complete_focus == focus_region_key:
+		return
+	var shell_targets := DM3Policy.desired_regions(
+		focus_region_key, _dm3_forward()
+	)
+	var high_shell_count := 0
+	var canonical_count := 0
+	for region in shell_targets:
+		var id := _region_id(region)
+		if active_regions.has(id):
+			canonical_count += 1
+			continue
+		if _dm3_retired_region_nodes.has(id):
+			canonical_count += 1
+			continue
+		if not _dm3_shell_nodes.has(id):
+			return
+		var shell: Dictionary = _dm3_shell_nodes[id]
+		if int(shell.get("lod", 1)) != 0 or not is_instance_valid(shell.get("node", null)):
+			return
+		high_shell_count += 1
+	# The central 3x3 must have its definitive region mesh published.
+	for z in range(focus_region_key.y - 1, focus_region_key.y + 2):
+		for x in range(focus_region_key.x - 1, focus_region_key.x + 2):
+			if not active_regions.has(_region_id(Vector2i(x, z))):
+				return
+	_dm4_high_complete_focus = focus_region_key
+	_dm4_high_complete_receipts += 1
+	var receipt := {
+		"focus": [focus_region_key.x, focus_region_key.y],
+		"requested_region_count": 121,
+		"high_shell_regions": high_shell_count,
+		"retired_detail_regions": canonical_count,
+		"canonical_core_regions": 9,
+		"mesh_step_m": 0.5,
+		"backend": "b4",
+		"visual_only_outside_authority": true,
+		"receipt_number": _dm4_high_complete_receipts,
+	}
+	print("DM4_HIGH_RADIUS_COMPLETE: " + JSON.stringify(receipt))
+	if _perf_trace_enabled:
+		PerformanceTrace.emit("dm4_high_radius_complete", receipt)
+
+
 func _dm3_process_shells() -> void:
 	if not _dm3_enabled():
 		return
@@ -4338,6 +4389,7 @@ func _dm3_process_shells() -> void:
 		_dm3_last_scan_usec = now
 		_dm3_shell_order = DM3Policy.desired_regions(focus_region_key, _dm3_forward())
 		_dm3_prune_shells(now)
+		_dm4_emit_full_high_receipt_if_ready()
 	# Prioritize authoritative SDF/B4 jobs over the derived 121-region halo.
 	# One background job at a time; after the nearest regions finish, the
 	# stable sorted queue drains even during camera idle.
