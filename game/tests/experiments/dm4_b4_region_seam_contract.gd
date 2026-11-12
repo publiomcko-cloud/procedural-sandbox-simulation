@@ -53,7 +53,7 @@ func _run() -> void:
 					"exact canonical triangle vertex")
 				_check(normals[offset+i].distance_to(reference_norm[i]) <= EPSILON,
 					"same canonical normal/winding")
-				compared_chunk_vertices += count
+				compared_chunk_vertices += 1
 		offset += maxi(count,0)
 		total += int(reference.get("triangle_count",0))
 	_check(offset == positions.size(), "aggregate contains all canonical triangles")
