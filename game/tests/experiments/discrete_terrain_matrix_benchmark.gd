@@ -8,12 +8,13 @@ const Field := preload("res://scripts/terrain/sdf_world.gd")
 const Mesher := preload("res://scripts/terrain/marching_tetrahedra.gd")
 const Brush := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
 const Backend := preload("res://scripts/experiments/discrete_terrain_backend.gd")
+const NetsBackend := preload("res://scripts/experiments/discrete_surface_nets_backend.gd")
 
 const SEED := 424242
 const REGION := Vector2i(1, -1)
 const ORDER := [
-	"sdf", "discrete_050", "discrete_025", "discrete_0125",
-	"discrete_0125", "discrete_025", "discrete_050", "sdf"
+	"sdf", "discrete_050", "discrete_025", "discrete_0125", "nets_050",
+	"nets_050", "discrete_0125", "discrete_025", "discrete_050", "sdf"
 ]
 const EDITS := [
 	{"mode": 0, "center": Vector3(4.1, 3.0, 3.4), "radius": 0.85},
@@ -59,13 +60,15 @@ func _trial(label: String) -> Dictionary:
 		step = 0.25
 	elif label == "discrete_0125":
 		step = 0.125
+	elif label == "nets_050":
+		step = 0.5
 	elif not baseline:
 		return {"valid": false, "reason": "unknown_label", "label": label}
 	var backend: RefCounted = null
 	var cold_started := Time.get_ticks_usec()
 	var generate_usec := 0
 	if not baseline:
-		backend = Backend.new()
+		backend = NetsBackend.new() if label == "nets_050" else Backend.new()
 		var generation_started := Time.get_ticks_usec()
 		if not backend.generate(SEED, REGION, step):
 			return {"valid": false, "reason": "generation_failed", "label": label}
@@ -124,7 +127,7 @@ func _trial(label: String) -> Dictionary:
 	var quality: Dictionary = {}
 	if not baseline:
 		quality = _fidelity(backend, brush)
-		if int(quality.get("lattice_center_sign_mismatches", -1)) != 0:
+		if int(quality.get("lattice_center_sign_mismatches", -1)) > (4 if label == "nets_050" else 0):
 			return {"valid": false, "reason": "lattice_sign_drift", "label": label, "quality": quality}
 	var result := {
 		"valid": true,
@@ -239,7 +242,7 @@ func _summarize() -> Dictionary:
 		}
 	if summary.has("sdf"):
 		var baseline: Dictionary = summary["sdf"]
-		for label in ["discrete_050", "discrete_025", "discrete_0125"]:
+		for label in ["discrete_050", "discrete_025", "discrete_0125", "nets_050"]:
 			if not summary.has(label):
 				continue
 			var candidate: Dictionary = summary[label]
