@@ -87,7 +87,7 @@ func _run() -> void:
 	var high_cpu: Dictionary = HighJob.build_data(
 		SEED, WORLD_ID, Vector2i(2,0), registry
 	)
-	var demo: Node3D = Demo.new()
+	var demo: Node = Demo.new()
 	var root := Node3D.new()
 	var low := MultiMeshInstance3D.new()
 	low.name = "LowRocks"
@@ -100,7 +100,7 @@ func _run() -> void:
 		"root": root, "region_key": Vector2i(2,0), "rocks": 2,
 		"rock_high": false, "rock_high_bytes": 0,
 	}})
-	_check(demo._dm7_commit_high_rocks(id, Vector2i(2,0), high_cpu),
+	_check(demo.call("_dm7_commit_high_rocks", id, Vector2i(2,0), high_cpu),
 		"commit successful")
 	_check(not low.visible, "LOW rock hidden after HIGH is available")
 	_check(water.visible, "LOW water remains visible")
@@ -108,7 +108,7 @@ func _run() -> void:
 		"high detailed regional mesh installed")
 	_check(bool(demo.get("_dm5_decor_nodes")[id]["rock_high"]),
 		"resident HIGH marked for retention")
-	_check(demo._dm7_commit_high_rocks(id, Vector2i(2,0), high_cpu),
+	_check(demo.call("_dm7_commit_high_rocks", id, Vector2i(2,0), high_cpu),
 		"idempotent HIGH commit")
 	_check(root.get_child_count() == 3, "no duplicate or flickering rock mesh")
 	root.free()
