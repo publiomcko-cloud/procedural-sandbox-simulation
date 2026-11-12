@@ -43,3 +43,44 @@ jobs:
             ${{ runner.temp }}\p5-e7-qualification\*.log
           if-no-files-found: warn
           retention-days: 14
+
+  benchmark:
+    needs: qualify
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 46
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify Windows runner and import separate Godot workspace
+        shell: cmd
+        timeout-minutes: 8
+        run: |
+          @echo off
+          if /I not "%RUNNER_NAME%"=="sandbox-gpu-interactive" exit /b 1
+          git rev-parse HEAD
+          "%GODOT_BIN%" --headless --editor --path .\game --import
+          if errorlevel 1 exit /b 1
+          "%GODOT_BIN%" --headless --path .\game --check-only --script res://scripts/terrain/terrain_demo.gd
+          if errorlevel 1 exit /b 1
+      - name: 16 cold-world deterministic A/B/B/A E2 versus E7.1 routes
+        shell: cmd
+        timeout-minutes: 40
+        run: |
+          @echo off
+          powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".\scripts\perf\run-p5-progressive-e7-abba.ps1" -GodotBin "%GODOT_BIN%" -Frames 720
+          if errorlevel 1 exit /b 1
+      - name: Preserve all per-trial timestamps and frame metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p5-e7-1-abba-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}\p5-e7-abba\*.log
+            ${{ runner.temp }}\p5-e7-abba\*.json
+          if-no-files-found: warn
+          retention-days: 14
