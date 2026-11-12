@@ -15,12 +15,13 @@ func _run() -> void:
 	var focus := Vector2i(12, -8)
 	var facing := Vector3(1, 0, 0)
 	var regions := Policy.desired_regions(focus, facing)
-	_check(regions.size() == 112, "11x11 shell excluding canonical 3x3")
+	_check(regions.size() == 121, "11x11 HIGH set including provisional 3x3 center")
+	_check(regions[0] == focus, "focus region enqueued first")
 	var seen: Dictionary = {}
 	var last_rank := -1
 	for r in regions:
 		var d := Policy.distance(r, focus)
-		_check(d >= 2 and d <= 5, "all regions within 2..5")
+		_check(d >= 0 and d <= 5, "all regions within 0..5")
 		_check(Policy.lod_for_distance(d) == 0, "ALL five rings HIGH")
 		_check(not seen.has(r), "no duplicate region jobs")
 		seen[r] = true
