@@ -30,6 +30,7 @@ const SimulationRuntimeScript := preload("res://scripts/simulation/simulation_ru
 const PerformanceTrace := preload("res://scripts/diagnostics/performance_trace.gd")
 const StreamBudgetPolicy := preload("res://scripts/terrain/terrain_stream_budget_policy.gd")
 const StreamDispatchSelector := preload("res://scripts/terrain/terrain_stream_dispatch_selector.gd")
+const ReadyCachePolicy := preload("res://scripts/terrain/terrain_stream_ready_cache_policy.gd")
 const StreamLookaheadPolicy := preload("res://scripts/terrain/terrain_stream_lookahead_policy.gd")
 const CoarsePreviewJob := preload("res://scripts/terrain/terrain_coarse_preview_job.gd")
 const CoarsePreviewPolicy := preload("res://scripts/terrain/terrain_coarse_preview_policy.gd")
@@ -189,6 +190,13 @@ var _stream_window_dispatch_blockers: Dictionary = {}
 var _stream_window_skipped_load_stages := 0
 var _stream_window_skipped_then_dispatched := 0
 var _stream_window_skip_budget_exhausted := 0
+# Opt-in, bounded negative readiness cache: LOAD only; edits stay canonical.
+var _ready_blocked_loads: Dictionary = {}
+var _ready_scope_epoch_seen := -1
+var _ready_cache_frame := 0
+var _stream_window_ready_cache_hits := 0
+var _stream_window_ready_cache_pending_probes := 0
+var _stream_window_ready_cache_epoch_invalidations := 0
 var _last_f10_speed_mps := 0.0
 var _stream_bench_route := ""
 var _stream_bench_frames_goal := STREAM_BENCH_DEFAULT_FRAMES
@@ -316,7 +324,7 @@ func _ready() -> void:
 	for argument in stream_profile_args:
 		if argument.begins_with("--stream-profile="):
 			stream_profile_requested = argument.trim_prefix("--stream-profile=").strip_edges().to_lower()
-	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse"]:
+	if stream_profile_requested not in ["", "baseline", "adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse", "adaptive-skip-coarse-ready"]:
 		push_warning("Unknown stream profile; using baseline")
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("terrain_stream_profile", {
@@ -991,6 +999,10 @@ func _stream_finish_frame() -> void:
 		"f10_peak_speed_mps": _stream_window_f10_speed_peak_mps,
 		"f10_distance_m": _stream_window_f10_distance_m,
 		"f10_predictive_stages_started": _stream_window_lookahead_stages,
+		"ready_cache_hits": _stream_window_ready_cache_hits,
+		"ready_cache_pending_probes": _stream_window_ready_cache_pending_probes,
+		"ready_cache_epoch_invalidations": _stream_window_ready_cache_epoch_invalidations,
+		"ready_cache_entries": _ready_blocked_loads.size(),
 		"coarse_preview_published": _stream_window_coarse_published,
 		"coarse_preview_replaced": _stream_window_coarse_replaced,
 		"coarse_preview_discarded": _stream_window_coarse_discarded,
@@ -1025,6 +1037,9 @@ func _stream_finish_frame() -> void:
 	_stream_window_f10_speed_peak_mps = 0.0
 	_stream_window_f10_distance_m = 0.0
 	_stream_window_lookahead_stages = 0
+	_stream_window_ready_cache_hits = 0
+	_stream_window_ready_cache_pending_probes = 0
+	_stream_window_ready_cache_epoch_invalidations = 0
 	_stream_window_coarse_published = 0
 	_stream_window_coarse_replaced = 0
 	_stream_window_coarse_discarded = 0
@@ -1042,7 +1057,7 @@ func _process(delta: float) -> void:
 	var previous_dispatch_limit := int(_stream_budget_state.get("dispatch_limit", 1))
 	_stream_budget_state = StreamBudgetPolicy.next(
 		_stream_budget_state, _last_frame_ms, _last_process_work_ms,
-		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse"]
+		_stream_profile in ["adaptive", "adaptive-skip", "adaptive-skip-lookahead", "adaptive-skip-coarse", "adaptive-skip-coarse-ready"]
 	)
 	if _perf_trace_enabled and int(_stream_budget_state["dispatch_limit"]) != previous_dispatch_limit:
 		PerformanceTrace.emit("terrain_stream_budget_transition", {
@@ -1116,7 +1131,7 @@ func _process(delta: float) -> void:
 	_process_one_chunk_job()
 	_stream_stage_measure("mesh_dispatch_and_upload", stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
-	if _stream_profile == "adaptive-skip-coarse":
+	if _stream_profile in ["adaptive-skip-coarse", "adaptive-skip-coarse-ready"]:
 		_process_coarse_previews()
 	_stream_stage_measure("coarse_preview", stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
@@ -2695,7 +2710,7 @@ func _dispatch_surface_cache_job(id: String) -> Dictionary:
 
 ## E2 derived coarse-first preview: always separate from terrain authority.
 func _coarse_preview_record_current(id: String, record: Dictionary) -> bool:
-	if _stream_profile != "adaptive-skip-coarse" or not loading_regions.has(id):
+	if _stream_profile not in ["adaptive-skip-coarse", "adaptive-skip-coarse-ready"] or not loading_regions.has(id):
 		return false
 	var stage: Dictionary = loading_regions[id]
 	var state: RefCounted = stage["world_state"]
@@ -3046,7 +3061,29 @@ func _dispatch_mesh_jobs() -> void:
 	# selector never advances its chunk index, so exact order within each
 	# region and all revision/transaction checks remain unchanged.
 	var skipped_ids: Dictionary = {}
+	var ready_profile := _stream_profile == "adaptive-skip-coarse-ready"
+	if ready_profile and terrain_effect_runtime != null \
+	and bool(terrain_effect_runtime.get("initialized")):
+		_ready_cache_frame += 1
+		var source_epoch: int = int(terrain_effect_runtime.get_ready_scope_epoch())
+		if source_epoch != _ready_scope_epoch_seen:
+			_ready_scope_epoch_seen = source_epoch
+			_ready_blocked_loads.clear()
+			_stream_window_ready_cache_epoch_invalidations += 1
+		skipped_ids = ReadyCachePolicy.excluded(
+			loading_regions, _ready_blocked_loads, source_epoch, _ready_cache_frame
+		)
+		# A cached exclusion cannot bypass the canonical revision supersession.
+		for cached_id in skipped_ids.keys():
+			var cached_stage: Dictionary = loading_regions[cached_id]
+			var cached_state: RefCounted = cached_stage["world_state"]
+			if cached_state.brush_edits.revision != int(cached_stage["edit_revision"]) \
+			or object_stream.get_command_world_revision() \
+			!= int(cached_stage.get("terrain_effect_authority_revision", -1)):
+				skipped_ids.erase(cached_id)
+		_stream_window_ready_cache_hits += skipped_ids.size()
 	var successful_after_skip := false
+	var fresh_skips := 0
 	while _mesh_jobs.size() < _mesh_job_limit:
 		if _mesh_dispatches_this_frame >= int(_stream_budget_state.get("dispatch_limit", 1)):
 			_stream_dispatch_blocked("dispatch_cap")
@@ -3104,16 +3141,20 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_corner.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_corner):
+					if ready_profile and String(stage["purpose"]) == "load":
+						_ready_cache_record_pending(id, stage)
 					_stream_dispatch_blocked("effect_pending_corner")
 					if StreamDispatchSelector.can_skip_pending(
 						_stream_profile, String(stage["purpose"]),
-						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
+						(fresh_skips if ready_profile else skipped_ids.size()), Time.get_ticks_usec() - dispatch_started_usec,
 						MESH_SNAPSHOT_FRAME_BUDGET_USEC,
 						_last_frame_ms < StreamBudgetPolicy.SPIKE_FRAME_MS
 						and _last_process_work_ms < StreamBudgetPolicy.SPIKE_PROCESS_MS
 						and String(_stream_budget_state.get("reason", "baseline")) not in ["frame_spike", "cooldown"]
 					):
 						skipped_ids[id] = true
+						if ready_profile:
+							fresh_skips += 1
 						_stream_window_skipped_load_stages += 1
 						continue
 					_stream_dispatch_blocked("effect_skip_not_allowed_or_budget")
@@ -3143,16 +3184,20 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_pair.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_pair):
+					if ready_profile and String(stage["purpose"]) == "load":
+						_ready_cache_record_pending(id, stage)
 					_stream_dispatch_blocked("effect_pending_x_boundary")
 					if StreamDispatchSelector.can_skip_pending(
 						_stream_profile, String(stage["purpose"]),
-						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
+						(fresh_skips if ready_profile else skipped_ids.size()), Time.get_ticks_usec() - dispatch_started_usec,
 						MESH_SNAPSHOT_FRAME_BUDGET_USEC,
 						_last_frame_ms < StreamBudgetPolicy.SPIKE_FRAME_MS
 						and _last_process_work_ms < StreamBudgetPolicy.SPIKE_PROCESS_MS
 						and String(_stream_budget_state.get("reason", "baseline")) not in ["frame_spike", "cooldown"]
 					):
 						skipped_ids[id] = true
+						if ready_profile:
+							fresh_skips += 1
 						_stream_window_skipped_load_stages += 1
 						continue
 					_stream_dispatch_blocked("effect_skip_not_allowed_or_budget")
@@ -3182,16 +3227,20 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_z.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_z):
+					if ready_profile and String(stage["purpose"]) == "load":
+						_ready_cache_record_pending(id, stage)
 					_stream_dispatch_blocked("effect_pending_z_boundary")
 					if StreamDispatchSelector.can_skip_pending(
 						_stream_profile, String(stage["purpose"]),
-						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
+						(fresh_skips if ready_profile else skipped_ids.size()), Time.get_ticks_usec() - dispatch_started_usec,
 						MESH_SNAPSHOT_FRAME_BUDGET_USEC,
 						_last_frame_ms < StreamBudgetPolicy.SPIKE_FRAME_MS
 						and _last_process_work_ms < StreamBudgetPolicy.SPIKE_PROCESS_MS
 						and String(_stream_budget_state.get("reason", "baseline")) not in ["frame_spike", "cooldown"]
 					):
 						skipped_ids[id] = true
+						if ready_profile:
+							fresh_skips += 1
 						_stream_window_skipped_load_stages += 1
 						continue
 					_stream_dispatch_blocked("effect_skip_not_allowed_or_budget")
@@ -3216,16 +3265,20 @@ func _dispatch_mesh_jobs() -> void:
 			)
 			if not prepared_chunk.get("ok", false):
 				if _terrain_effect_snapshot_pending(prepared_chunk):
+					if ready_profile and String(stage["purpose"]) == "load":
+						_ready_cache_record_pending(id, stage)
 					_stream_dispatch_blocked("effect_pending_chunk")
 					if StreamDispatchSelector.can_skip_pending(
 						_stream_profile, String(stage["purpose"]),
-						skipped_ids.size(), Time.get_ticks_usec() - dispatch_started_usec,
+						(fresh_skips if ready_profile else skipped_ids.size()), Time.get_ticks_usec() - dispatch_started_usec,
 						MESH_SNAPSHOT_FRAME_BUDGET_USEC,
 						_last_frame_ms < StreamBudgetPolicy.SPIKE_FRAME_MS
 						and _last_process_work_ms < StreamBudgetPolicy.SPIKE_PROCESS_MS
 						and String(_stream_budget_state.get("reason", "baseline")) not in ["frame_spike", "cooldown"]
 					):
 						skipped_ids[id] = true
+						if ready_profile:
+							fresh_skips += 1
 						_stream_window_skipped_load_stages += 1
 						continue
 					_stream_dispatch_blocked("effect_skip_not_allowed_or_budget")
@@ -3274,6 +3327,8 @@ func _dispatch_mesh_jobs() -> void:
 		if task_id < 0:
 			_fail_region_stage(id, "Worker pool rejected a mesh job; previous visible meshes retained")
 			continue
+		if ready_profile:
+			_ready_blocked_loads.erase(id)
 		stage["submit_index"] = int(stage["submit_index"]) + 1
 		stage["pending_count"] = int(stage["pending_count"]) + 1
 		loading_regions[id] = stage
@@ -3312,6 +3367,15 @@ func _dispatch_mesh_jobs() -> void:
 			})
 	if _mesh_jobs.size() >= _mesh_job_limit:
 		_stream_dispatch_blocked("worker_capacity")
+
+
+func _ready_cache_record_pending(id: String, stage: Dictionary) -> void:
+	_stream_window_ready_cache_pending_probes += 1
+	if _ready_blocked_loads.size() >= ReadyCachePolicy.MAX_TRACKED_STAGES:
+		_ready_blocked_loads.clear()
+	_ready_blocked_loads[id] = ReadyCachePolicy.pending_ticket(
+		stage, _ready_scope_epoch_seen, _ready_cache_frame
+	)
 
 
 func _prepare_terrain_effect_snapshot(

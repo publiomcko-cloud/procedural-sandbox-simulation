@@ -1,7 +1,7 @@
 param(
     [ValidateSet('idle', 'straight-18', 'straight-54', 'outback-18', 'outback-54')]
     [string[]]$Routes = @('straight-18', 'straight-54'),
-    [ValidateSet('baseline', 'adaptive', 'adaptive-skip', 'adaptive-skip-lookahead', 'adaptive-skip-coarse')]
+    [ValidateSet('baseline', 'adaptive', 'adaptive-skip', 'adaptive-skip-lookahead', 'adaptive-skip-coarse', 'adaptive-skip-coarse-ready')]
     [string[]]$Profiles = @('adaptive-skip', 'adaptive-skip-coarse', 'adaptive-skip-coarse', 'adaptive-skip'),
     [ValidateRange(120, 5400)]
     [int]$Frames = 720,

@@ -54,6 +54,8 @@ var _projection_build_cache_order: Array[String] = []
 var _projection_source_cache: Dictionary = {}
 var _projection_source_cache_order: Array[String] = []
 var _prefetch_error := ""
+# Monotonic scope-readiness revision. Not an authority revision.
+var _ready_scope_epoch := 0
 var _perf_trace_enabled := false
 var _performance := {
 	"prepare_call_count": 0,
@@ -138,6 +140,7 @@ func initialize(
 	_projection_source_cache.clear()
 	_projection_source_cache_order.clear()
 	_prefetch_error = ""
+	_ready_scope_epoch += 1
 	incremental_prefetch_enabled = false
 	_reset_performance_metrics()
 	projection = ProjectionService.new()
@@ -560,6 +563,7 @@ func _publish_prebuilt_projection_record(
 	) + 1
 	_invalidated_scope_ids.erase(scope_id)
 	_pre_invalidation_frames.erase(scope_id)
+	_ready_scope_epoch += 1
 	_performance["prefetch_scope_count"] = int(
 		_performance["prefetch_scope_count"]
 	) + 1
@@ -902,6 +906,11 @@ func _rebase_cached_projection(
 	return rebased
 
 
+## Changes only when projection scope readiness may have changed.
+func get_ready_scope_epoch() -> int:
+	return _ready_scope_epoch
+
+
 func get_prefetch_pending_count() -> int:
 	return _prefetch_queue.size() \
 		+ _prefetch_generation_jobs.size() \
@@ -985,6 +994,7 @@ func _reconcile_prebuilt_source_region(
 	) + 1
 	_invalidated_scope_ids.erase(scope_id)
 	_pre_invalidation_frames.erase(scope_id)
+	_ready_scope_epoch += 1
 	return reconciled
 
 
@@ -1256,6 +1266,7 @@ func invalidate_source_region(source_region: Vector2i) -> void:
 			scope.get("local_frames", {}) as Dictionary
 		).duplicate(true) if not scope.is_empty() else {}
 	_invalidated_scope_ids[scope_id] = true
+	_ready_scope_epoch += 1
 
 
 func refresh_invalidated_source_region(
@@ -1293,6 +1304,7 @@ func refresh_invalidated_source_region(
 	var targets := _changed_frame_targets(old_frames, new_frames)
 	_invalidated_scope_ids.erase(scope_id)
 	_pre_invalidation_frames.erase(scope_id)
+	_ready_scope_epoch += 1
 	return {
 		"ok": true,
 		"targets": targets,
@@ -1433,6 +1445,7 @@ func update_resident_target_regions(
 		var parsed := _region_from_scope_id(scope_id)
 		if parsed.get("ok", false):
 			projection.release_scope(parsed["region_key"], true)
+			_ready_scope_epoch += 1
 			_performance["scope_eviction_count"] = int(
 				_performance["scope_eviction_count"]
 			) + 1
@@ -1547,6 +1560,7 @@ func release_all_scopes() -> void:
 	_projection_source_cache.clear()
 	_projection_source_cache_order.clear()
 	_prefetch_error = ""
+	_ready_scope_epoch += 1
 	if projection == null:
 		return
 	for scope_id in projection.get_loaded_scope_ids():
@@ -1586,6 +1600,7 @@ func _make_projection_capacity(
 		if not parsed.get("ok", false):
 			continue
 		projection.release_scope(parsed["region_key"], true)
+		_ready_scope_epoch += 1
 		released += 1
 		_performance["scope_eviction_count"] = int(
 			_performance["scope_eviction_count"]

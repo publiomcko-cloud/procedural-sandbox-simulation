@@ -154,6 +154,8 @@ func _test_runtime_profile_resolution() -> void:
 		"adaptive environment is preserved")
 	_check(Policy.resolve_profile("adaptive-skip", empty) == "adaptive-skip",
 		"adaptive-skip environment reaches actual runtime without being reset")
+	_check(Policy.resolve_profile("adaptive-skip-coarse-ready", empty) == "adaptive-skip-coarse-ready",
+		"new opt-in cache profile is supported without coercion")
 	_check(Policy.resolve_profile("adaptive-skip-lookahead", empty) == "adaptive-skip-lookahead",
 		"lookahead profile uses same runtime resolver without coercion")
 	_check(Policy.resolve_profile("adaptive-skip",

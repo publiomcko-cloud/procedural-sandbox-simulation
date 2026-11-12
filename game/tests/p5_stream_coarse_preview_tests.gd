@@ -30,6 +30,8 @@ func _run() -> void:
 		"edit_revision": 0, "effect_revision": 6,
 		"generator_version": Field.GENERATOR_VERSION,
 	}
+	_check(Policy.eligible_stage("adaptive-skip-coarse-ready", stage, false, false, false, false, false),
+		"ready-cache keeps the same coarse preview eligibility and visual authority")
 	_check(Policy.eligible_stage("adaptive-skip-coarse", stage, false, false, false, false, false),
 		"opt-in pristine LOAD stage is eligible")
 	for legacy in ["baseline", "adaptive", "adaptive-skip", "adaptive-skip-lookahead"]:
