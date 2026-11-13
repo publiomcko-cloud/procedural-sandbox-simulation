@@ -1112,8 +1112,12 @@ func _dm12_emit_frame_if_spike(started_usec: int) -> void:
 	if (delta_spike or work_spike) and _dm12_spike_trace_count < _dm12_spike_trace_limit:
 		_dm12_spike_trace_count += 1
 		var accounted_usec := 0
-		for duration_value in _dm12_frame_stage_usec.values():
-			accounted_usec += int(duration_value)
+		for stage_name_value in _dm12_frame_stage_usec.keys():
+			var stage_name := String(stage_name_value)
+			# mesh_* stages are nested inside mesh_dispatch_and_upload.
+			if stage_name.begins_with("mesh_") and stage_name != "mesh_dispatch_and_upload":
+				continue
+			accounted_usec += int(_dm12_frame_stage_usec[stage_name])
 		PerformanceTrace.emit("dm12_frame_attribution", {
 			"frame_id": _dm12_frame_id,
 			"delta_previous_frame_ms": _last_frame_ms,
@@ -1416,7 +1420,9 @@ func _process(delta: float) -> void:
 	)
 	_last_process_work_ms = float(Time.get_ticks_usec() - process_started_usec) / 1000.0
 	_peak_process_work_ms = maxf(_peak_process_work_ms, _last_process_work_ms)
+	var dm12_finalize_started_usec := Time.get_ticks_usec()
 	_stream_finish_frame()
+	_dm12_stage("frame_accounting", dm12_finalize_started_usec)
 	if _perf_trace_enabled and _last_process_work_ms >= 16.0:
 		var effect_pending := 0
 		if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
