@@ -37,6 +37,11 @@ var last_pristine_precompute_usec := 0
 var last_pristine_lattice_usec := 0
 var last_pristine_rebuild_usec := 0
 var last_pristine_uniform_cells := 0
+var last_canonical_sample_usec := 0
+var last_canonical_cell_usec := 0
+var last_canonical_uniform_cells := 0
+var last_canonical_fast_sdf := false
+
 
 
 
@@ -191,7 +196,8 @@ func generate_chunk(
 	region_value: Vector2i,
 	coordinate_value: Vector2i,
 	snapshot: Dictionary,
-	cave_section_enabled: bool = false
+	cave_section_enabled: bool = false,
+	canonical_fast: bool = false
 ) -> bool:
 	if not Grid.is_valid_coordinate(coordinate_value) \
 			or not bool(snapshot.get("valid", true)):
@@ -214,21 +220,87 @@ func generate_chunk(
 	cell_active.resize(cell_dims.x * cell_dims.y * cell_dims.z)
 	cell_vertices.resize(cell_active.size())
 	last_generation_sample_count = 0
-	for y in range(-1, dims.y + 2):
+	last_canonical_sample_usec = 0
+	last_canonical_cell_usec = 0
+	last_canonical_uniform_cells = 0
+	last_canonical_fast_sdf = false
+	last_pristine_uniform_cells = 0
+	var sample_started := Time.get_ticks_usec()
+	# Only cache the pristine base field when all overlay sources are provably
+	# absent. Edited/materialized/effect/cave snapshots use the exact original
+	# evaluator; no speculative replacement of authoritative semantics.
+	var centers: PackedVector3Array = snapshot.get("centers", PackedVector3Array())
+	var materialized: Variant = snapshot.get("materialized_tiles", [])
+	var effects: Variant = snapshot.get("terrain_object_effect_frames", [])
+	var pristine := canonical_fast and not cave_section_enabled \
+		and centers.is_empty() \
+		and materialized is Array and (materialized as Array).is_empty() \
+		and effects is Array and (effects as Array).is_empty()
+	if pristine:
+		last_canonical_fast_sdf = true
+		# Preserve exact SdfWorld expression ordering and Q8.8 roundi.
+		var x_count := node_dims.x
+		var surface_terms := PackedFloat64Array()
+		var cave_y_terms := PackedFloat64Array()
+		var cave_dz_terms := PackedFloat64Array()
+		surface_terms.resize(x_count * node_dims.z)
+		cave_y_terms.resize(x_count * node_dims.z)
+		cave_dz_terms.resize(x_count * node_dims.z)
+		var phase := float(posmod(seed, 100003)) * 0.000173
 		for z in range(-1, dims.z + 2):
+			var world_z := float(region_key.y) * Field.REGION_SIZE_Z \
+				+ float(z + _chunk_offset.z) * step
+			var z_term := 0.70 * cos(world_z * 0.31 - phase * 0.7)
 			for x in range(-1, dims.x + 2):
-				var density := BrushState.sample_density_snapshot(
-					seed, region_key, _point(x, y, z),
-					cave_section_enabled, snapshot
-				)
-				if not is_finite(density):
-					return false
-				nodes[_node_index(x, y, z)] = roundi(density * SCALE)
-				last_generation_sample_count += 1
+				var world_x := float(region_key.x) * Field.REGION_SIZE_X \
+					+ float(x + _chunk_offset.x) * step
+				var index := (z + 1) * x_count + x + 1
+				surface_terms[index] = 3.8 \
+					+ 1.25 * sin(world_x * 0.22 + phase) \
+					+ z_term \
+					+ 0.28 * sin((world_x + world_z) * 0.11 + phase * 0.3)
+				cave_y_terms[index] = 1.15 + 0.24 * sin(world_x * 0.25 + phase)
+				var cave_z := 6.0 + 1.05 * sin(world_x * 0.17 + phase * 0.6)
+				cave_dz_terms[index] = world_z - cave_z
+		for y in range(-1, dims.y + 2):
+			var local_y := Grid.MIN_BOUND.y + float(y) * step
+			var y_start := (y + 1) * node_dims.z * x_count
+			for z in range(-1, dims.z + 2):
+				var row := y_start + (z + 1) * x_count
+				for x in range(-1, dims.x + 2):
+					var i := (z + 1) * x_count + x + 1
+					var bounded_surface: float = minf(
+						surface_terms[i] - local_y, local_y - Field.MIN_Y
+					)
+					var cave_distance := Vector2(
+						local_y - cave_y_terms[i], cave_dz_terms[i]
+					).length() - 0.92
+					var density: float = minf(bounded_surface, cave_distance)
+					nodes[row + x + 1] = roundi(density * SCALE)
+					last_generation_sample_count += 1
+	else:
+		for y in range(-1, dims.y + 2):
+			for z in range(-1, dims.z + 2):
+				for x in range(-1, dims.x + 2):
+					var density := BrushState.sample_density_snapshot(
+						seed, region_key, _point(x, y, z),
+						cave_section_enabled, snapshot
+					)
+					if not is_finite(density):
+						return false
+					nodes[_node_index(x, y, z)] = roundi(density * SCALE)
+					last_generation_sample_count += 1
+	last_canonical_sample_usec = Time.get_ticks_usec() - sample_started
+	var cell_started := Time.get_ticks_usec()
 	for y in range(-1, dims.y + 1):
 		for z in range(-1, dims.z + 1):
 			for x in range(-1, dims.x + 1):
-				_rebuild_cell(x, y, z)
+				if canonical_fast:
+					_rebuild_cell_fast_uniform_gate(x, y, z)
+				else:
+					_rebuild_cell(x, y, z)
+	last_canonical_cell_usec = Time.get_ticks_usec() - cell_started
+	last_canonical_uniform_cells = last_pristine_uniform_cells if canonical_fast else 0
 	return true
 
 
@@ -430,6 +502,79 @@ func build_chunk_pristine_fast(chunk: Vector2i) -> Dictionary:
 		"memory_bytes": byte_count(),
 	}
 
+
+
+## Canonical equivalent to the pristine fast edge traversal, but
+## uses the local per-chunk halo/ownership offsets. Still returns the
+## original chunk-relative vertex positions, normals and winding.
+func build_chunk_canonical_fast(chunk: Vector2i) -> Dictionary:
+	if not _chunk_mode or chunk != _chunk_coordinate:
+		return {"valid": false, "reason": "canonical_chunk_mode_required"}
+	if not Grid.is_valid_coordinate(chunk) or nodes.is_empty():
+		return {"valid": false, "reason": "invalid_chunk_or_missing_lattice"}
+	var positions := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var mesh_origin := Grid.origin_for(chunk)
+	var node_y_stride := node_dims.x * node_dims.z
+	var node_z_stride := node_dims.x
+	var cell_y_stride := cell_dims.x * cell_dims.z
+	var cell_z_stride := cell_dims.x
+	var quads := 0
+	var skipped := 0
+	for z in range(dims.z):
+		for y in range(dims.y + 1):
+			for x in range(dims.x):
+				var n := _node_index(x, y, z)
+				var positive := nodes[n] >= 0
+				for axis in range(3):
+					if axis == 1 and y == dims.y:
+						continue
+					var offset := 1 if axis == 0 else (node_y_stride if axis == 1 else node_z_stride)
+					if positive == (nodes[n + offset] >= 0):
+						continue
+					var c0 := 0
+					var c1 := 0
+					var c2 := 0
+					var c3 := 0
+					match axis:
+						0:
+							c0 = _cell_index(x, y - 1, z - 1)
+							c1 = c0 + cell_z_stride
+							c2 = c1 + cell_y_stride
+							c3 = c0 + cell_y_stride
+						1:
+							c0 = _cell_index(x - 1, y, z - 1)
+							c1 = c0 + 1
+							c2 = c1 + cell_z_stride
+							c3 = c0 + cell_z_stride
+						_:
+							c0 = _cell_index(x - 1, y - 1, z)
+							c1 = c0 + 1
+							c2 = c1 + cell_y_stride
+							c3 = c0 + cell_y_stride
+					if cell_active[c0] == 0 or cell_active[c1] == 0 \
+						or cell_active[c2] == 0 or cell_active[c3] == 0:
+						skipped += 1
+						continue
+					var p0: Vector3 = cell_vertices[c0] - mesh_origin
+					var p1: Vector3 = cell_vertices[c1] - mesh_origin
+					var p2: Vector3 = cell_vertices[c2] - mesh_origin
+					var p3: Vector3 = cell_vertices[c3] - mesh_origin
+					var target := Vector3.ZERO
+					target[axis] = 1.0 if positive else -1.0
+					_append_quad(positions, normals, p0, p1, p2, p3, target)
+					quads += 1
+	return {
+		"valid": skipped == 0,
+		"skipped_faces": skipped,
+		"positions": positions,
+		"normals": normals,
+		"triangle_count": quads * 2,
+		"vertex_count": positions.size(),
+		"quad_count": quads,
+		"sample_count": last_generation_sample_count,
+		"memory_bytes": byte_count(),
+	}
 
 
 
