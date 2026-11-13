@@ -414,7 +414,7 @@ func _ready() -> void:
 		_dm9_visual_worker_limit = clampi(int(OS.get_environment("SANDBOX_DM9_VISUAL_WORKERS")), 1, DM9VisualBudget.MAX_WORKERS)
 	_dm9_visual_adaptive = _dm3_enabled() and OS.get_environment("SANDBOX_DM9_VISUAL_ADAPTIVE") == "1"
 	if _dm9_visual_adaptive:
-		print("DM9_VISUAL_ADAPTIVE: enabled=1 max_workers=%d core_missing_or_loading=1 moving_limit=2 idle_max=1" % _dm9_visual_worker_limit)
+		print("DM9_VISUAL_ADAPTIVE: enabled=1 max_workers=%d core_missing_or_loading=1 moving_limit=1 idle_max=4" % _dm9_visual_worker_limit)
 	if _dm9_visual_worker_limit > 1:
 		print("DM9_VISUAL_WORKERS: limit=%d old_limit=1 visual_only=1" % _dm9_visual_worker_limit)
 	if _dm3_enabled():
@@ -3746,9 +3746,7 @@ func _dispatch_mesh_jobs() -> void:
 		if String(stage["purpose"]) == "edit_transaction" and not _edit_transaction.is_empty():
 			_edit_transaction["trace_snapshot_usec_total"] = int(_edit_transaction.get("trace_snapshot_usec_total", 0)) + snapshot_elapsed_usec
 			_edit_transaction["trace_snapshot_usec_max"] = maxi(int(_edit_transaction.get("trace_snapshot_usec_max", 0)), snapshot_elapsed_usec)
-		var high_priority: bool = String(stage["purpose"]) in ["edit_transaction", "partial"] \
-			or (_dm9_visual_adaptive and String(stage["purpose"]) == "load" \
-			and DM9PrefetchPolicy.is_inside_core(stage["region_key"], focus_region_key))
+		var high_priority: bool = String(stage["purpose"]) in ["edit_transaction", "partial"]
 		var task_label := "P1.0C terrain chunk"
 		if job_kind == "shared_boundary_x":
 			task_label = "shared boundary X"
@@ -5216,7 +5214,7 @@ func _dm3_process_shells() -> void:
 		_dm8_sample_gap_pressure(now)
 		_dm4_emit_full_high_receipt_if_ready()
 	# Prioritize authoritative SDF/B4 jobs over the derived circular halo.
-	# DM9 optionally keeps up to eight independent CPU-only derived jobs in flight.
+	# DM9 can submit up to four CPU-only derived HIGH jobs, but only while idle and canonical-ready.
 	# One main-thread upload/frame remains enforced above; sorted queue remains stable.
 	if _last_frame_ms >= 40.0 or _last_process_work_ms >= 22.0 \
 			or _dm3_shell_jobs.size() >= _dm9_visual_worker_effective_limit \
