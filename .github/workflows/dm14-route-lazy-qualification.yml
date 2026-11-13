@@ -43,9 +43,9 @@ jobs:
           & $env:GODOT_BIN --headless --editor --path .\game --import
           if ($LASTEXITCODE -ne 0) { throw 'DM14 import failed' }
           foreach ($file in @(
+            'res://scripts/terrain/terrain_object_effect_projection_service.gd',
             'res://scripts/terrain/terrain_object_effect_runtime.gd',
             'res://scripts/terrain/dm14_effect_dense_window.gd',
-            'res://scripts/terrain/terrain_object_effect_projection_service.gd',
             'res://scripts/terrain/terrain_object_effect_local_frame_index.gd',
             'res://tests/experiments/dm14_lazy_route_cleanup_contract.gd',
             'res://tests/experiments/dm14_effect_dense_window_contract.gd'
