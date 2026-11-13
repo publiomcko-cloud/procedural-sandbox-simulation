@@ -344,6 +344,13 @@ foreach ($route in $Routes) {
             dm8_radial_sample_count = $radialSamples.Count
             dm8_visual_gap_front_p95_regions = Get-Percentile @($radialSamples | ForEach-Object { [double]$_.terrain_gap_front_cone }) 0.95
             dm10_velocity_gap_front_p95_regions = Get-Percentile @($radialSamples | ForEach-Object { [double]$_.dm10_velocity_front_gap }) 0.95
+            dm10_corridor_coverage_mean_pct = $(if (@($radialSamples | Where-Object { [double]$_.dm10_corridor_coverage_pct -ge 0 }).Count -gt 0) {
+                [Math]::Round((@($radialSamples | Where-Object { [double]$_.dm10_corridor_coverage_pct -ge 0 } | ForEach-Object { [double]$_.dm10_corridor_coverage_pct }) | Measure-Object -Average).Average, 3)
+            } else { $null })
+            dm10_corridor_coverage_last_pct = $(if (@($radialSamples | Where-Object { [double]$_.dm10_corridor_coverage_pct -ge 0 }).Count -gt 0) {
+                [double]@($radialSamples | Where-Object { [double]$_.dm10_corridor_coverage_pct -ge 0 })[-1].dm10_corridor_coverage_pct
+            } else { $null })
+
             dm8_visual_gap_p95_regions = Get-Percentile @($radialSamples | ForEach-Object { [double]$_.terrain_gap_outer }) 0.95
             dm8_visual_gap_age_p95_ms = Get-Percentile @($radialSamples | ForEach-Object { [double]$_.terrain_gap_age_p95_ms }) 0.95
             dm8_visual_gap_final_regions = $(if ($radialSamples.Count -gt 0) { [int]$radialSamples[-1].terrain_gap_outer } else { $null })
