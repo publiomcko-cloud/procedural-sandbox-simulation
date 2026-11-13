@@ -230,10 +230,12 @@ func generate_chunk(
 	# absent. Edited/materialized/effect/cave snapshots use the exact original
 	# evaluator; no speculative replacement of authoritative semantics.
 	var centers: PackedVector3Array = snapshot.get("centers", PackedVector3Array())
+	var radii: PackedFloat64Array = snapshot.get("radii", PackedFloat64Array())
+	var modes: PackedByteArray = snapshot.get("modes", PackedByteArray())
 	var materialized: Variant = snapshot.get("materialized_tiles", [])
 	var effects: Variant = snapshot.get("terrain_object_effect_frames", [])
 	var pristine := canonical_fast and not cave_section_enabled \
-		and centers.is_empty() \
+		and centers.is_empty() and radii.is_empty() and modes.is_empty() \
 		and materialized is Array and (materialized as Array).is_empty() \
 		and effects is Array and (effects as Array).is_empty()
 	if pristine:
