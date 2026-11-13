@@ -4396,8 +4396,6 @@ func _complete_region_stage(id: String) -> void:
 		_try_commit_edit_transaction()
 		return
 	loading_regions.erase(id)
-	if _dm19_cold_profile != null and String(stage["purpose"]) == "load":
-		_dm19_cold_profile.published(id, Time.get_ticks_usec())
 	if _dm18_diagnostic_enabled and String(stage["purpose"]) == "load":
 		var wall_usec := maxi(0, Time.get_ticks_usec() - int(stage.get("chunk_enqueued_usec", 0)))
 		if bool(stage.get("dm18_cache_ready", false)):
@@ -4420,6 +4418,8 @@ func _complete_region_stage(id: String) -> void:
 			stage.get("vertex_count_by_coordinate", {}),
 			stage.get("triangle_count_by_coordinate", {})
 		)
+		if _dm19_cold_profile != null and String(stage["purpose"]) == "load":
+			_dm19_cold_profile.published(id, Time.get_ticks_usec())
 		if _perf_trace_enabled:
 			PerformanceTrace.emit("terrain_region_load_complete", {
 				"region": [(stage["region_key"] as Vector2i).x, (stage["region_key"] as Vector2i).y],
