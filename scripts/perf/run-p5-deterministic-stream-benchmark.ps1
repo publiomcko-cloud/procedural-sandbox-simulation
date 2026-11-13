@@ -343,6 +343,7 @@ foreach ($route in $Routes) {
             dm9_prefetch_ready_hits = $dm9ReadyHits
             dm8_radial_sample_count = $radialSamples.Count
             dm8_visual_gap_front_p95_regions = Get-Percentile @($radialSamples | ForEach-Object { [double]$_.terrain_gap_front_cone }) 0.95
+            dm10_velocity_gap_front_p95_regions = Get-Percentile @($radialSamples | ForEach-Object { [double]$_.dm10_velocity_front_gap }) 0.95
             dm8_visual_gap_p95_regions = Get-Percentile @($radialSamples | ForEach-Object { [double]$_.terrain_gap_outer }) 0.95
             dm8_visual_gap_age_p95_ms = Get-Percentile @($radialSamples | ForEach-Object { [double]$_.terrain_gap_age_p95_ms }) 0.95
             dm8_visual_gap_final_regions = $(if ($radialSamples.Count -gt 0) { [int]$radialSamples[-1].terrain_gap_outer } else { $null })
