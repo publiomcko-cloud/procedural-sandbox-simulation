@@ -1437,6 +1437,8 @@ func _process(delta: float) -> void:
 			focus_region_key, mapped_ahead["region_key"]
 		)
 	_stream_stage_measure("focus_window_lookahead", stream_preflight_started_usec)
+	if _dm19_cold_profile != null:
+		_dm19_cold_profile.frame_phase("focus_window_lookahead", Time.get_ticks_usec() - stream_preflight_started_usec)
 	stream_preflight_started_usec = Time.get_ticks_usec()
 	_update_lod_selection()
 	_stream_stage_measure("lod_selection", stream_preflight_started_usec)
@@ -1459,9 +1461,13 @@ func _process(delta: float) -> void:
 			_terrain_effect_status = "Terrain-object effects unavailable (%s)" % prefetch_result.get("reason", "unknown")
 			_record_stream_error("_terrain_effect_prefetch", _terrain_effect_status)
 	_stream_stage_measure("effect_prefetch", stream_stage_started_usec)
+	if _dm19_cold_profile != null:
+		_dm19_cold_profile.frame_phase("effect_prefetch", Time.get_ticks_usec() - stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
 	_process_one_chunk_job()
 	_stream_stage_measure("mesh_dispatch_and_upload", stream_stage_started_usec)
+	if _dm19_cold_profile != null:
+		_dm19_cold_profile.frame_phase("mesh_dispatch_and_upload", Time.get_ticks_usec() - stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
 	if _stream_profile in ["adaptive-skip-coarse", "adaptive-skip-progressive"]:
 		_process_coarse_previews()
@@ -1470,12 +1476,18 @@ func _process(delta: float) -> void:
 	if _dm3_enabled():
 		_dm3_process_shells()
 	_stream_stage_measure("dm3_visual_shell", stream_stage_started_usec)
+	if _dm19_cold_profile != null:
+		_dm19_cold_profile.frame_phase("dm3_visual_shell", Time.get_ticks_usec() - stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
 	object_stream.process_queued_publications()
 	_stream_stage_measure("object_publication", stream_stage_started_usec)
+	if _dm19_cold_profile != null:
+		_dm19_cold_profile.frame_phase("object_publication", Time.get_ticks_usec() - stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
 	_process_surface_cache_jobs()
 	_stream_stage_measure("sdf_cache", stream_stage_started_usec)
+	if _dm19_cold_profile != null:
+		_dm19_cold_profile.frame_phase("sdf_cache", Time.get_ticks_usec() - stream_stage_started_usec)
 	stream_stage_started_usec = Time.get_ticks_usec()
 	if is_instance_valid(_environment_visual):
 		_environment_visual.process_visual_frame(delta, camera.global_position, focus_region_key)
@@ -2581,9 +2593,14 @@ func _reconcile_region_window(force: bool = false) -> void:
 	if source_window_changed \
 	and terrain_effect_runtime != null \
 	and bool(terrain_effect_runtime.get("initialized")):
+		var dm19_effect_window_started := Time.get_ticks_usec() if _dm19_cold_profile != null else 0
 		var effect_window: Dictionary = terrain_effect_runtime.update_resident_target_regions(
 			retained
 		)
+		if _dm19_cold_profile != null:
+			_dm19_cold_profile.frame_phase(
+				"effect_window_reconcile", Time.get_ticks_usec() - dm19_effect_window_started
+			)
 		if not effect_window.get("ok", false):
 			_terrain_effect_status = "Terrain-object effects unavailable (%s)" % effect_window.get("reason", "unknown")
 			last_stream_error = _terrain_effect_status
