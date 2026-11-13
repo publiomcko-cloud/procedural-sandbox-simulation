@@ -135,7 +135,9 @@ foreach ($case in $cases) {
         trace_bytes=$traceBytes
     }
     $receipt | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $dir 'metrics.json') -Encoding UTF8
-    $summary += $receipt
+    # PowerShell 5.1 Measure-Object -Property needs object properties,
+    # not an OrderedDictionary/hashtable key lookup.
+    $summary += [pscustomobject]$receipt
     Write-Host ('DM16_TRACE_CASE=' + ($receipt | ConvertTo-Json -Compress -Depth 7))
 }
 $env:APPDATA = $previousAppData
