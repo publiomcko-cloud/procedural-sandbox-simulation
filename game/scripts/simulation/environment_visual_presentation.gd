@@ -53,11 +53,13 @@ var _peak_retained_usec := 0
 var _unchanged_visual_skips_total := 0
 var _peak_rebuild_usec := 0
 var _trace_enabled := false
+var _dm12_water_trace := false
 var _water_debug_mode := "normal"
 
 
 func _ready() -> void:
 	_trace_enabled = PerformanceTrace.is_enabled()
+	_dm12_water_trace = _trace_enabled and OS.get_environment("SANDBOX_DM12_FRAME_TRACE") == "1"
 	var water_material := StandardMaterial3D.new()
 	water_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	water_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -176,9 +178,20 @@ func unregister_region(region_key: Vector2i) -> void:
 func process_visual_frame(delta: float, camera_position: Vector3, focus_region: Vector2i) -> void:
 	if _runtime == null or not is_instance_valid(_runtime):
 		return
+	var started := Time.get_ticks_usec()
 	if _water_debug_mode != "off":
 		_poll_resident_regions()
+	var poll_usec := Time.get_ticks_usec() - started
 	_update_rain(delta, camera_position, focus_region)
+	var frame_usec := Time.get_ticks_usec() - started
+	if _dm12_water_trace and frame_usec >= 8_000:
+		PerformanceTrace.emit("dm12_water_frame", {
+			"poll_usec": poll_usec,
+			"rain_usec": frame_usec - poll_usec,
+			"total_usec": frame_usec,
+			"resident_regions": _regions.size(),
+			"cursor": _cursor,
+		})
 
 
 func get_visual_metrics() -> Dictionary:
@@ -903,6 +916,7 @@ func _poll_resident_regions() -> void:
 			row["token"] = ""
 			_water_wait(id, row, "mesh_plan:" + String(plan.get("reason", "unknown")))
 			continue
+		var dm12_plan_usec := Time.get_ticks_usec() - started
 		var vertices: PackedVector3Array = plan["vertices"]
 		# Fully prepare the replacement before touching the visible mesh.
 		# The one main-thread pointer assignment has no blank frame.
@@ -915,6 +929,7 @@ func _poll_resident_regions() -> void:
 			replacement = ArrayMesh.new()
 			replacement.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 			replacement.surface_set_material(0, _water_material)
+		var dm12_mesh_creation_usec := Time.get_ticks_usec() - started - dm12_plan_usec
 		var old_retained := bool(row.get("retained_visible", false))
 		var old_vertices := int(row.get("last_vertex_count", 0))
 		var wait_usec := 0
@@ -969,6 +984,15 @@ func _poll_resident_regions() -> void:
 		_rebuilds_total += 1
 		var elapsed := Time.get_ticks_usec() - started
 		_peak_rebuild_usec = maxi(_peak_rebuild_usec, elapsed)
+		if _dm12_water_trace and elapsed >= 8_000:
+			PerformanceTrace.emit("dm12_water_rebuild_breakdown", {
+				"scope": id,
+				"total_usec": elapsed,
+				"derive_shoreline_usec": dm12_plan_usec,
+				"arraymesh_creation_usec": dm12_mesh_creation_usec,
+				"post_swap_bookkeeping_usec": maxi(0, elapsed - dm12_plan_usec - dm12_mesh_creation_usec),
+				"triangles": int(vertices.size() / 3),
+			})
 		if _trace_enabled:
 			PerformanceTrace.emit("p5_environment_visual_rebuild", {
 				"scope": id,
