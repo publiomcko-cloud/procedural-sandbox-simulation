@@ -6,6 +6,7 @@ extends RefCounted
 const Field := preload("res://scripts/terrain/sdf_world.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 const BrushState := preload("res://scripts/terrain/sdf_brush_edit_state.gd")
+const DM17Lattice := preload("res://scripts/experiments/dm17_shared_region_lattice.gd")
 const SCALE := 256.0
 const CORNERS := [
 	Vector3i(0, 0, 0), Vector3i(1, 0, 0),
@@ -41,6 +42,10 @@ var last_canonical_sample_usec := 0
 var last_canonical_cell_usec := 0
 var last_canonical_uniform_cells := 0
 var last_canonical_fast_sdf := false
+var last_dm17_sparse_blocks := 0
+var last_dm17_sparse_cells := 0
+var last_dm17_shared_used := false
+var last_dm17_shared_hit := false
 
 
 
@@ -188,6 +193,43 @@ func _rebuild_cell_fast_uniform_gate(x: int, y: int, z: int) -> void:
 
 
 
+## DM17-A: exact uniform-block gate on complete Q8.8 lattice, with a
+## one-node halo. Uniform blocks skip per-cell reconstruction but never change
+## lattice values or overlook an internal cave/brush sign crossing.
+func _dm17_uniform_block(x0: int, x1: int, y0: int, y1: int, z0: int, z1: int) -> bool:
+	var expected := nodes[_node_index(x0, y0, z0)] >= 0
+	for y in range(y0, y1 + 1):
+		for z in range(z0, z1 + 1):
+			var row := _node_index(x0, y, z)
+			for x in range(x0, x1 + 1):
+				if (nodes[row + x - x0] >= 0) != expected:
+					return false
+	return true
+
+
+func _dm17_rebuild_sparse_blocks() -> void:
+	const BLOCK := 3
+	for y0 in range(-1, dims.y + 1, BLOCK):
+		var y1 := mini(y0 + BLOCK, dims.y + 1)
+		for z0 in range(-1, dims.z + 1, BLOCK):
+			var z1 := mini(z0 + BLOCK, dims.z + 1)
+			for x0 in range(-1, dims.x + 1, BLOCK):
+				var x1 := mini(x0 + BLOCK, dims.x + 1)
+				if _dm17_uniform_block(x0, x1, y0, y1, z0, z1):
+					last_dm17_sparse_blocks += 1
+					for y in range(y0, y1):
+						for z in range(z0, z1):
+							for x in range(x0, x1):
+								cell_active[_cell_index(x, y, z)] = 0
+								last_pristine_uniform_cells += 1
+								last_dm17_sparse_cells += 1
+				else:
+					for y in range(y0, y1):
+						for z in range(z0, z1):
+							for x in range(x0, x1):
+								_rebuild_cell_fast_uniform_gate(x, y, z)
+
+
 ## DM2: independent per-chunk volume, including a 1-cell halo. All field
 ## samples come from the immutable, revision-tagged worker snapshot. No shared
 ## mutable cache, scene-tree reads or procedural fallback after snapshot build.
@@ -225,6 +267,10 @@ func generate_chunk(
 	last_canonical_uniform_cells = 0
 	last_canonical_fast_sdf = false
 	last_pristine_uniform_cells = 0
+	last_dm17_sparse_blocks = 0
+	last_dm17_sparse_cells = 0
+	last_dm17_shared_used = false
+	last_dm17_shared_hit = false
 	var sample_started := Time.get_ticks_usec()
 	# Prepare immutable arrays and the XZ base SDF once per chunk. The
 	# final per-node composition remains identical to the original snapshot
@@ -241,7 +287,28 @@ func generate_chunk(
 		and centers.is_empty() and radii.is_empty() and modes.is_empty() \
 		and materialized is Array and (materialized as Array).is_empty() \
 		and effects is Array and (effects as Array).is_empty()
-	if prepared:
+	# DM17-B shares ONLY the immutable pristine base lattice. Ordered edits,
+	# materialized tiles, effects and cave cutaways still use DM11 evaluation.
+	var shared_source := PackedInt32Array()
+	if pristine and OS.get_environment("SANDBOX_DM17_SHARED_LATTICE") == "1":
+		var shared: Dictionary = DM17Lattice.acquire(seed, region_key)
+		if bool(shared.get("valid", false)):
+			shared_source = shared.get("nodes", PackedInt32Array())
+			last_dm17_shared_used = true
+			last_dm17_shared_hit = bool(shared.get("cache_hit", false))
+	if not shared_source.is_empty():
+		last_canonical_fast_sdf = true
+		var sx := Grid.CELL_COUNT_X + 3
+		var sz := Grid.CELL_COUNT_Z + 3
+		for y in range(-1, dims.y + 2):
+			for z in range(-1, dims.z + 2):
+				var destination := ((y + 1) * node_dims.z + z + 1) * node_dims.x
+				var source := ((y + 1) * sz + z + _chunk_offset.z + 1) * sx \
+					+ _chunk_offset.x
+				for x in range(node_dims.x):
+					nodes[destination + x] = shared_source[source + x]
+					last_generation_sample_count += 1
+	elif prepared:
 		last_canonical_fast_sdf = true
 		# Preserve exact SdfWorld expression ordering and Q8.8 roundi.
 		var x_count := node_dims.x
@@ -305,13 +372,16 @@ func generate_chunk(
 					last_generation_sample_count += 1
 	last_canonical_sample_usec = Time.get_ticks_usec() - sample_started
 	var cell_started := Time.get_ticks_usec()
-	for y in range(-1, dims.y + 1):
-		for z in range(-1, dims.z + 1):
-			for x in range(-1, dims.x + 1):
-				if canonical_fast:
-					_rebuild_cell_fast_uniform_gate(x, y, z)
-				else:
-					_rebuild_cell(x, y, z)
+	if canonical_fast and OS.get_environment("SANDBOX_DM17_SPARSE_BLOCK") == "1":
+		_dm17_rebuild_sparse_blocks()
+	else:
+		for y in range(-1, dims.y + 1):
+			for z in range(-1, dims.z + 1):
+				for x in range(-1, dims.x + 1):
+					if canonical_fast:
+						_rebuild_cell_fast_uniform_gate(x, y, z)
+					else:
+						_rebuild_cell(x, y, z)
 	last_canonical_cell_usec = Time.get_ticks_usec() - cell_started
 	last_canonical_uniform_cells = last_pristine_uniform_cells if canonical_fast else 0
 	return true
