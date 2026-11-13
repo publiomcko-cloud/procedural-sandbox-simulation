@@ -1,11 +1,12 @@
 extends RefCounted
 class_name DM9VisualWorkerBudgetPolicy
 
-## DM9 adaptive visual CPU throughput: spend spare cores only after canonical
+## DM9 adaptive visual CPU throughput: conservative stationary-only boost
+## validated against 1, 4 and 8 worker experiments; spend spare cores only after canonical
 ## terrain in the 3x3 gameplay core is ready. Never occupy worker capacity
 ## when seed/edit/effects/mesh jobs or missing player-adjacent regions demand it.
-const MAX_WORKERS := 8
-const MOVING_VISUAL_WORKERS := 2
+const MAX_WORKERS := 4
+const MOVING_VISUAL_WORKERS := 1
 const SPIKE_FRAME_MS := 20.0
 const SPIKE_PROCESS_MS := 14.0
 
