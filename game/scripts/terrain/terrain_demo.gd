@@ -3045,9 +3045,13 @@ func _dispatch_surface_cache_job(id: String, sliced_inputs: Dictionary = {}) -> 
 		return {"ok": false, "pending": true, "reason": "surface_cache_token_changed"}
 
 	var snapshot_started_usec := Time.get_ticks_usec()
-	var base_snapshots: Dictionary = sliced_inputs.get("base_snapshots", {})
-	var effect_targets: Array[Dictionary] = sliced_inputs.get("effect_targets", [])
-	var anchor_snapshot: Dictionary = sliced_inputs.get("anchor_snapshot", {})
+	var base_snapshots: Dictionary = {}
+	var effect_targets: Array[Dictionary] = []
+	var anchor_snapshot: Dictionary = {}
+	if not sliced_inputs.is_empty():
+		base_snapshots = sliced_inputs["base_snapshots"]
+		effect_targets = sliced_inputs["effect_targets"]
+		anchor_snapshot = sliced_inputs["anchor_snapshot"]
 	if sliced_inputs.is_empty():
 		for coordinate in ChunkGrid.all_coordinates():
 			var base_snapshot: Dictionary = state.brush_edits.get_meshing_snapshot_for_chunk(
