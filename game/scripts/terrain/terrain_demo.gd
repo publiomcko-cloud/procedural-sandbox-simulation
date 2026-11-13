@@ -253,6 +253,7 @@ var _stream_window_stage_usec: Dictionary = {}
 # computed/printed during ordinary gameplay unless explicitly enabled.
 var _dm12_trace_enabled := false
 var _dm12_surface_slice := false
+var _dm14_lazy_route_enabled := false
 var _dm12_surface_prepare: Dictionary = {}
 var _dm12_frame_id := 0
 var _dm12_frame_stage_usec: Dictionary = {}
@@ -443,6 +444,7 @@ func _ready() -> void:
 	if _dm12_trace_enabled:
 		print("DM12_FRAME_TRACE: enabled=1 per_frame_stage=1 previous_frame_delta=1 publication_correlation=1")
 	_dm12_surface_slice = _dm3_enabled() and OS.get_environment("SANDBOX_DM12_SURFACE_SLICE") == "1"
+	_dm14_lazy_route_enabled = OS.get_environment("SANDBOX_DM14_LAZY_ROUTES") == "1"
 	if _dm12_surface_slice:
 		print("DM12_SURFACE_SLICE: enabled=1 immutable_snapshot_chunk_batch=3 revision_gated=1")
 	_dm11_visual_dedicated = _dm3_enabled() and OS.get_environment("SANDBOX_DM11_VISUAL_LANE") == "1"
@@ -1393,6 +1395,14 @@ func _process(delta: float) -> void:
 	_process_async_checkpoint()
 	_maybe_schedule_async_checkpoint()
 	var stream_stage_started_usec := Time.get_ticks_usec()
+	if _dm14_lazy_route_enabled and terrain_effect_runtime != null \
+	and bool(terrain_effect_runtime.get("initialized")):
+		var cleanup_result: Dictionary = terrain_effect_runtime.process_route_cleanup_step(24, 1200)
+		if not cleanup_result.get("ok", false):
+			_record_stream_error("_dm14_effect_route_cleanup",
+				String(cleanup_result.get("reason", "unknown")))
+	_stream_stage_measure("effect_route_cleanup", stream_stage_started_usec)
+	stream_stage_started_usec = Time.get_ticks_usec()
 	if terrain_effect_runtime != null and bool(terrain_effect_runtime.get("initialized")):
 		var prefetch_result: Dictionary = terrain_effect_runtime.process_prefetch_step(1)
 		if not prefetch_result.get("ok", false):
