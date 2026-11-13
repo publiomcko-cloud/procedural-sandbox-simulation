@@ -2227,6 +2227,14 @@ func _process_free_exploration(delta: float) -> void:
 		if _stream_bench_warmup_remaining > 0:
 			_stream_bench_warmup_remaining -= 1
 			if _stream_bench_warmup_remaining == 0:
+				# Benchmark-only diagnostics reset; retain all world, DM18 cache,
+				# in-flight work and effect projection source residency.
+				if _dm19_cold_profile != null \
+				and OS.get_environment("SANDBOX_DM19_RESET_ON_WARMUP") == "1":
+					_dm19_cold_profile = DM19ColdAttribution.new()
+					if terrain_effect_runtime != null \
+					and bool(terrain_effect_runtime.get("initialized")):
+						terrain_effect_runtime.reset_performance_metrics()
 				print("DM5_BENCH_WARMUP_COMPLETE: " + JSON.stringify({
 					"frames": _stream_bench_warmup_frames,
 					"focus": [focus_region_key.x, focus_region_key.y],
@@ -2296,6 +2304,7 @@ func _process_free_exploration(delta: float) -> void:
 					"dm18_cache_enabled": _dm18_cache_enabled,
 					"dm18_diagnostic_enabled": _dm18_diagnostic_enabled,
 					"dm19_cold_diagnostic_enabled": _dm19_cold_profile != null,
+					"dm19_reset_on_warmup": OS.get_environment("SANDBOX_DM19_RESET_ON_WARMUP") == "1",
 					"dm19_effect_motion_priority": _dm19_effect_motion_priority,
 					"dm19_effect_motion_calls": _dm19_effect_motion_calls,
 					"dm19_effect_motion_reordered": _dm19_effect_motion_reordered,
