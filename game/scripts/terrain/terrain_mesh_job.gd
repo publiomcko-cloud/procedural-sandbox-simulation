@@ -113,6 +113,10 @@ func _run_experimental_b4(snapshot: Dictionary) -> void:
 	result["dm11_canonical_sample_usec"] = backend.last_canonical_sample_usec
 	result["dm11_canonical_cell_usec"] = backend.last_canonical_cell_usec
 	result["dm11_canonical_uniform_cells"] = backend.last_canonical_uniform_cells
+	result["dm17_sparse_blocks"] = backend.last_dm17_sparse_blocks
+	result["dm17_sparse_cells"] = backend.last_dm17_sparse_cells
+	result["dm17_shared_lattice_used"] = backend.last_dm17_shared_used
+	result["dm17_shared_lattice_hit"] = backend.last_dm17_shared_hit
 	result["timings_usec"] = {
 		"sdf_and_ledger": generate_usec,
 		"triangulation_and_face_normals": mesh_usec,
