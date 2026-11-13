@@ -40,6 +40,12 @@ var _dm15_last_route_breakdown: Dictionary = {}
 var _dm15_release_count := 0
 var _dm15_release_total_usec := 0
 var _dm15_release_peak_usec := 0
+var _dm15_dormant_rollup_enabled := false
+var _dm15_dormant_unsent_count := 0
+var _dm15_dormant_unsent_effects := 0
+var _dm15_dormant_event_count := 0
+var _dm15_dormant_rollup_count := 0
+var _dm15_last_dormant_breakdown: Dictionary = {}
 
 var _scopes: Dictionary = {}
 var _scope_indexes: Dictionary = {}
@@ -96,6 +102,12 @@ func initialize(
 	_dm15_release_count = 0
 	_dm15_release_total_usec = 0
 	_dm15_release_peak_usec = 0
+	_dm15_dormant_rollup_enabled = OS.get_environment("SANDBOX_DM15_DORMANT_ROLLUP") == "1"
+	_dm15_dormant_unsent_count = 0
+	_dm15_dormant_unsent_effects = 0
+	_dm15_dormant_event_count = 0
+	_dm15_dormant_rollup_count = 0
+	_dm15_last_dormant_breakdown.clear()
 	_dm14_lazy_cleanup_enabled = OS.get_environment("SANDBOX_DM14_LAZY_ROUTES") == "1"
 	_dm14_route_cleanup.clear()
 	_dm14_cleanup_keys_total = 0
@@ -262,6 +274,7 @@ func release_scope(
 	var dm15_pending_before := _dm14_route_cleanup.size() if _dm15_release_trace else 0
 	if _dm15_release_trace:
 		_dm15_last_route_breakdown.clear()
+		_dm15_last_dormant_breakdown.clear()
 	if _dm14_lazy_cleanup_enabled \
 	and _dm14_route_cleanup.size() < DM14_MAX_PENDING_CLEANUPS:
 		# The visible source scope and index are still immediately erased
@@ -320,6 +333,8 @@ func release_scope(
 			"route_memberships": int(_dm15_last_route_breakdown.get("route_memberships", 0)),
 			"scope_map_erase_usec": dm15_map_erase_usec,
 			"dormant_usec": dm15_dormant_usec,
+			"dormant_cache_mutation_usec": int(_dm15_last_dormant_breakdown.get("mutation_usec", 0)),
+			"dormant_event_emit_usec": int(_dm15_last_dormant_breakdown.get("emit_usec", 0)),
 			"counter_usec": dm15_counter_usec,
 			"effect_count": dm15_effect_count,
 			"retain_dormant": retain_dormant,
@@ -1081,6 +1096,10 @@ func get_performance_snapshot() -> Dictionary:
 	result["dm15_release_count"] = _dm15_release_count
 	result["dm15_release_total_usec"] = _dm15_release_total_usec
 	result["dm15_release_peak_usec"] = _dm15_release_peak_usec
+	result["dm15_dormant_rollup_enabled"] = _dm15_dormant_rollup_enabled
+	result["dm15_dormant_per_scope_trace_count"] = _dm15_dormant_event_count
+	result["dm15_dormant_rollup_count"] = _dm15_dormant_rollup_count
+	result["dm15_dormant_unsent_count"] = _dm15_dormant_unsent_count
 	result["dm14_cleanup_pending"] = _dm14_route_cleanup.size()
 	result["dm14_cleanup_peak_pending"] = _dm14_pending_peak
 	result["dm14_cleanup_keys_total"] = _dm14_cleanup_keys_total
@@ -1136,6 +1155,7 @@ func _remember_dormant_scope(
 ) -> void:
 	if scope_id.is_empty() or snapshot.is_empty() or index == null:
 		return
+	var dm15_cache_start := Time.get_ticks_usec() if _dm15_release_trace else 0
 	_dormant_scopes[scope_id] = {
 		"snapshot": snapshot,
 		"index": index,
@@ -1157,13 +1177,51 @@ func _remember_dormant_scope(
 		int(_performance["peak_dormant_scope_count"]),
 		_dormant_scopes.size()
 	)
+	var dm15_cache_mutation_usec := Time.get_ticks_usec() - dm15_cache_start if _dm15_release_trace else 0
+	var dm15_trace_started := Time.get_ticks_usec() if _dm15_release_trace else 0
 	if _perf_trace_enabled:
-		PerformanceTrace.emit("effect_scope_dormant_store", {
-			"scope_id": scope_id,
-			"generation": generation,
-			"effect_count": (snapshot["effects"] as Dictionary).size(),
-			"dormant_scope_count": _dormant_scopes.size(),
-		})
+		if _dm15_dormant_rollup_enabled:
+			# Keep the same stored projection, LRU order, limits and statistics.
+			# Console emission (JSON stringify, stdout flush) is aggregated
+			# once per window instead of happening for each removed scope.
+			_dm15_dormant_unsent_count += 1
+			_dm15_dormant_unsent_effects += (snapshot["effects"] as Dictionary).size()
+		else:
+			_dm15_dormant_event_count += 1
+			PerformanceTrace.emit("effect_scope_dormant_store", {
+				"scope_id": scope_id,
+				"generation": generation,
+				"effect_count": (snapshot["effects"] as Dictionary).size(),
+				"dormant_scope_count": _dormant_scopes.size(),
+			})
+	if _dm15_release_trace:
+		_dm15_last_dormant_breakdown = {
+			"mutation_usec": dm15_cache_mutation_usec,
+			"emit_usec": Time.get_ticks_usec() - dm15_trace_started,
+		}
+
+
+## DM15: capture and reset only diagnostic counters. The authoritative
+## projection/dormant cache remains untouched. The owner emits the rollup
+## once after its window update, avoiding N JSON prints in one frame.
+func take_dormant_store_rollup() -> Dictionary:
+	if not _dm15_dormant_rollup_enabled:
+		return {}
+	var count := _dm15_dormant_unsent_count
+	if count == 0:
+		return {}
+	var result := {
+		"store_count": count,
+		"effect_count": _dm15_dormant_unsent_effects,
+		"dormant_scope_count": _dormant_scopes.size(),
+		"max_dormant_scope_count": MAX_DORMANT_SCOPES,
+		"eviction_total": int(_performance["dormant_scope_eviction_count"]),
+		"stored_total": int(_performance["dormant_scope_store_count"]),
+	}
+	_dm15_dormant_unsent_count = 0
+	_dm15_dormant_unsent_effects = 0
+	_dm15_dormant_rollup_count += 1
+	return result
 
 
 func _install_scope_index(scope_id: String, index: RefCounted) -> void:
