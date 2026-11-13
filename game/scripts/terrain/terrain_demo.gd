@@ -24,6 +24,7 @@ const EnvironmentClimateDomainScript := preload("res://scripts/simulation/enviro
 const EnvironmentHydrologyDomainScript := preload("res://scripts/simulation/environment_hydrology_domain.gd")
 const EnvironmentSurfaceCacheJobScript := preload("res://scripts/simulation/environment_surface_cache_job.gd")
 const DM16BenchmarkProbe := preload("res://scripts/diagnostics/dm16_benchmark_probe.gd")
+const DM19ColdAttribution := preload("res://scripts/diagnostics/dm19_cold_attribution.gd")
 const DM18CanonicalCache := preload("res://scripts/terrain/dm18_canonical_region_cache.gd")
 const DM12SnapshotBatch := preload("res://scripts/terrain/dm12_surface_snapshot_batch.gd")
 const EnvironmentVisualScript := preload("res://scripts/simulation/environment_visual_presentation.gd")
@@ -276,6 +277,8 @@ var _dm18_job_times: Dictionary = {
 	"jobs": 0, "snapshot_usec": 0, "worker_queue_usec": 0,
 	"worker_run_usec": 0, "upload_usec": 0, "stale_jobs": 0
 }
+# DM19: profiling only, allocated exclusively for benchmark when explicitly enabled.
+var _dm19_cold_profile: RefCounted
 
 var _dm12_surface_slice := false
 var _dm14_lazy_route_enabled := false
@@ -431,6 +434,9 @@ var _last_edit_rejection := ""
 
 func _ready() -> void:
 	_perf_trace_enabled = PerformanceTrace.is_enabled()
+	if OS.get_environment("SANDBOX_DM19_COLD_DIAGNOSTIC") == "1" \
+	and OS.get_environment("SANDBOX_STREAM_BENCHMARK") == "1":
+		_dm19_cold_profile = DM19ColdAttribution.new()
 	_dm18_cache_enabled = OS.get_environment("SANDBOX_DM18_CANONICAL_CACHE") == "1" \
 		and OS.get_environment("SANDBOX_TERRAIN_BACKEND").strip_edges().to_lower() == "b4"
 	_dm18_diagnostic_enabled = OS.get_environment("SANDBOX_DM18_DIAGNOSTIC") == "1" \
@@ -1128,6 +1134,8 @@ func _exit_tree() -> void:
 ## Once/second aggregation avoids introducing a per-frame logging bottleneck.
 ## Stage timing is passive in baseline and adaptive runs.
 func _stream_dispatch_blocked(reason: String) -> void:
+	if _dm19_cold_profile != null:
+		_dm19_cold_profile.blocked(reason)
 	if not _perf_trace_enabled:
 		return
 	_stream_window_dispatch_blockers[reason] = int(_stream_window_dispatch_blockers.get(reason, 0)) + 1
@@ -1523,6 +1531,15 @@ func _process(delta: float) -> void:
 		_update_status()
 		_dm12_stage("diagnostics", dm12_diagnostics_started_usec)
 	_dm12_emit_frame_if_spike(process_started_usec)
+	if _dm19_cold_profile != null and _stream_bench_frames_done >= 1 \
+	and _stream_bench_warmup_remaining == 0 and not _stream_bench_reported:
+		var dm19_focus_id := _region_id(focus_region_key)
+		_dm19_cold_profile.sample_frame(
+			dm19_focus_id, active_regions.has(dm19_focus_id),
+			loading_regions.get(dm19_focus_id, {}),
+			int(_stream_budget_state.get("dispatch_limit", 1)),
+			_mesh_jobs.size(), _mesh_job_limit
+		)
 	if _dm18_diagnostic_enabled and _stream_bench_frames_done >= 1 \
 	and _stream_bench_warmup_remaining == 0 and not _stream_bench_reported:
 		var focus_id := _region_id(focus_region_key)
@@ -2245,6 +2262,8 @@ func _process_free_exploration(delta: float) -> void:
 					"dm17_shared_lattice": OS.get_environment("SANDBOX_DM17_SHARED_LATTICE") == "1",
 					"dm18_cache_enabled": _dm18_cache_enabled,
 					"dm18_diagnostic_enabled": _dm18_diagnostic_enabled,
+					"dm19_cold_diagnostic_enabled": _dm19_cold_profile != null,
+					"dm19_cold": _dm19_cold_profile.summary() if _dm19_cold_profile != null else {},
 					"dm18_cache": _dm18_cache.stats() if _dm18_cache_enabled else {},
 					"dm18": {
 						"focus_missing_total": _dm18_focus_missing_total,
@@ -2588,6 +2607,8 @@ func _reconcile_region_window(force: bool = false) -> void:
 					_dm9_stages_discarded += 1
 					_dm9_trace_stage("discard", stage)
 				_discard_progressive_chunks(id, "left_window")
+				if _dm19_cold_profile != null:
+					_dm19_cold_profile.cancel(id, "left_window")
 				loading_regions.erase(id)
 				if not _edit_transaction.is_empty() and (_edit_transaction["target_ids"] as Array).has(id):
 					_edit_transaction["target_ids"].erase(id)
@@ -2889,6 +2910,13 @@ func _begin_region_stage(region_key: Vector2i, purpose: String, chunk_coordinate
 			cached_stage["pending_count"] = 0
 			cached_stage["dm18_cache_ready"] = true
 			loading_regions[id] = cached_stage
+	if _dm19_cold_profile != null:
+		_dm19_cold_profile.begin(
+			id, purpose, Time.get_ticks_usec(),
+			bool(loading_regions[id].get("dm18_cache_ready", false)),
+			maxi(absi(region_key.x - focus_region_key.x),
+				absi(region_key.y - focus_region_key.y))
+		)
 	if region_key == focus_region_key:
 		world_state = state
 	if _perf_trace_enabled:
@@ -3818,11 +3846,15 @@ func _process_completed_mesh_jobs() -> void:
 		if not loading_regions.has(id):
 			if _dm18_diagnostic_enabled:
 				_dm18_job_times["stale_jobs"] += 1
+			if _dm19_cold_profile != null:
+				_dm19_cold_profile.stale_job()
 			continue
 		var stage: Dictionary = loading_regions[id]
 		if int(stage["stage_token"]) != int(record["stage_token"]):
 			if _dm18_diagnostic_enabled:
 				_dm18_job_times["stale_jobs"] += 1
+			if _dm19_cold_profile != null:
+				_dm19_cold_profile.stale_job()
 			continue
 		var contributes_to_operation := _stage_contributes_to_active_operation(stage)
 		if contributes_to_operation:
@@ -3975,6 +4007,11 @@ func _process_completed_mesh_jobs() -> void:
 		if stage["purpose"] == "edit_transaction" and not _edit_transaction.is_empty():
 			_edit_transaction["mesh_job_count"] = int(_edit_transaction.get("mesh_job_count", 0)) + 1
 		loading_regions[id] = stage
+		if _dm19_cold_profile != null:
+			_dm19_cold_profile.completed_job(
+				id, Time.get_ticks_usec(),
+				worker_queue_usec, worker_run_usec, upload_elapsed_usec
+			)
 		uploads_this_frame += 1
 		if int(stage["next_index"]) >= (stage["chunk_coordinates"] as Array).size() \
 			and int(stage["submit_index"]) >= (stage["chunk_coordinates"] as Array).size() \
@@ -4238,6 +4275,8 @@ func _dispatch_mesh_jobs() -> void:
 			"snapshot_raw_candidate_count": int(snapshot_meta.get("raw_candidate_operation_count", snapshot_meta.get("candidate_operation_count", -1))),
 			"snapshot_tile_count": (snapshot_meta.get("materialized_tiles", []) as Array).size(),
 		}
+		if _dm19_cold_profile != null:
+			_dm19_cold_profile.submit(id, Time.get_ticks_usec(), snapshot_elapsed_usec)
 		_peak_mesh_jobs_in_flight = maxi(_peak_mesh_jobs_in_flight, _mesh_jobs.size())
 		if String(stage["purpose"]) == "edit_transaction":
 			_edit_trace("job_dispatch", {
@@ -4264,9 +4303,14 @@ func _prepare_terrain_effect_snapshot(
 ) -> Dictionary:
 	if terrain_effect_runtime == null or not bool(terrain_effect_runtime.get("initialized")):
 		return {"ok": false, "reason": "terrain_effect_runtime_unavailable"}
+	var dm19_effect_started := Time.get_ticks_usec() if _dm19_cold_profile != null else 0
 	var prepared: Dictionary = terrain_effect_runtime.prepare_targets_snapshot(
 		base_snapshot, targets
 	)
+	if _dm19_cold_profile != null:
+		_dm19_cold_profile.effect_result(
+			prepared, Time.get_ticks_usec() - dm19_effect_started, targets.size()
+		)
 	if prepared.get("ok", false):
 		_terrain_effect_status = "Terrain-object effects active (%d frame(s), %d resident scope(s))" % [
 			int(prepared.get("effect_count", 0)),
@@ -4352,6 +4396,8 @@ func _complete_region_stage(id: String) -> void:
 		_try_commit_edit_transaction()
 		return
 	loading_regions.erase(id)
+	if _dm19_cold_profile != null and String(stage["purpose"]) == "load":
+		_dm19_cold_profile.published(id, Time.get_ticks_usec())
 	if _dm18_diagnostic_enabled and String(stage["purpose"]) == "load":
 		var wall_usec := maxi(0, Time.get_ticks_usec() - int(stage.get("chunk_enqueued_usec", 0)))
 		if bool(stage.get("dm18_cache_ready", false)):
@@ -5808,6 +5854,8 @@ func _supersede_region_stage(id: String) -> void:
 	if not loading_regions.has(id):
 		return
 	var stale_stage: Dictionary = loading_regions[id]
+	if _dm19_cold_profile != null:
+		_dm19_cold_profile.cancel(id, "superseded")
 	loading_regions.erase(id)
 	_superseded_stage_total += 1
 	var region_key: Vector2i = stale_stage["region_key"]
@@ -5859,6 +5907,8 @@ func _fail_region_stage(id: String, message: String) -> void:
 	_clear_coarse_preview(id, "stage_failed")
 	_record_stream_error(id, message)
 	var failed_stage: Dictionary = loading_regions.get(id, {})
+	if _dm19_cold_profile != null:
+		_dm19_cold_profile.cancel(id, "failed")
 	loading_regions.erase(id)
 	if not _edit_transaction.is_empty() and (_edit_transaction["target_ids"] as Array).has(id):
 		_retry_edit_transaction(message)
