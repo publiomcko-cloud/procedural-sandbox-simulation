@@ -1,6 +1,6 @@
 extends SceneTree
 
-const Projection := preload("res://scripts/terrain/terrain_object_effect_projection_service.gd")
+const ProjectionService := preload("res://scripts/terrain/terrain_object_effect_projection_service.gd")
 const Contract := preload("res://scripts/terrain/terrain_object_effect_projection_contract.gd")
 const Grid := preload("res://scripts/terrain/terrain_chunk_grid.gd")
 
@@ -33,7 +33,7 @@ func _initialize() -> void:
 func _run() -> void:
 	var previous := OS.get_environment("SANDBOX_DM14_LAZY_ROUTES")
 	OS.set_environment("SANDBOX_DM14_LAZY_ROUTES", "1")
-	var service := Projection.new()
+	var service := ProjectionService.new()
 	var init: Dictionary = service.initialize(
 		"dm14-lazy-route-contract", 424242, 1, "user://dm14-lazy-routes"
 	)
@@ -85,7 +85,7 @@ func _run() -> void:
 	_check(service.get_performance_snapshot()["dm14_cleanup_revisit_flushes"] >= 1,
 		"revisit safety instrumented")
 	OS.set_environment("SANDBOX_DM14_LAZY_ROUTES", "0")
-	var control := Projection.new()
+	var control := ProjectionService.new()
 	_check(control.initialize("dm14-control", 424242, 1,
 		"user://dm14-control-routes").get("ok", false), "synchronous control initialized")
 	_install_fake(control, id, snapshot, FakeIndex.new([first_chunk]))
