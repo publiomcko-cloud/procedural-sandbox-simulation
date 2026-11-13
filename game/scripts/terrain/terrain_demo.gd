@@ -1116,7 +1116,8 @@ func _dm12_emit_frame_if_spike(started_usec: int) -> void:
 		for stage_name_value in _dm12_frame_stage_usec.keys():
 			var stage_name := String(stage_name_value)
 			# mesh_* stages are nested inside mesh_dispatch_and_upload.
-			if stage_name.begins_with("mesh_") and stage_name != "mesh_dispatch_and_upload":
+			if (stage_name.begins_with("mesh_") and stage_name != "mesh_dispatch_and_upload") \
+			or stage_name.begins_with("reconcile_"):
 				continue
 			accounted_usec += int(_dm12_frame_stage_usec[stage_name])
 		PerformanceTrace.emit("dm12_frame_attribution", {
@@ -2421,7 +2422,9 @@ func _reconcile_region_window(force: bool = false) -> void:
 	var reconcile_started_usec := Time.get_ticks_usec()
 	var active_before := active_regions.size()
 	var loading_before := loading_regions.size()
+	var dm12_substep := Time.get_ticks_usec()
 	_update_focus_key()
+	_dm12_stage("reconcile_focus_update", dm12_substep)
 	var source_window_changed := force or focus_region_key != _last_reconciled_focus
 	if not source_window_changed \
 	and _last_reconciled_lookahead_signature == _lookahead_stage_signature:
@@ -2450,6 +2453,8 @@ func _reconcile_region_window(force: bool = false) -> void:
 			_terrain_effect_status = "Terrain-object effects unavailable (%s)" % effect_window.get("reason", "unknown")
 			last_stream_error = _terrain_effect_status
 			return
+	_dm12_stage("reconcile_effect_targets", dm12_substep)
+	dm12_substep = Time.get_ticks_usec()
 	var retained_ids: Dictionary = {}
 	for key in retained:
 		retained_ids[_region_id(key)] = true
@@ -2458,6 +2463,8 @@ func _reconcile_region_window(force: bool = false) -> void:
 		if not retained_ids.has(id):
 			_unload_region(id)
 
+	_dm12_stage("reconcile_active_unload", dm12_substep)
+	dm12_substep = Time.get_ticks_usec()
 	if global_rebuild_pending:
 		_ensure_full_rebuild_targets(desired, retained_ids)
 	else:
@@ -2504,8 +2511,13 @@ func _reconcile_region_window(force: bool = false) -> void:
 			var key: Vector2i = stage["region_key"]
 			if stage["purpose"] == "load" and _edit_transaction_affects_region(key):
 				_add_edit_transaction_region(key)
+	_dm12_stage("reconcile_stage_transactions", dm12_substep)
+	dm12_substep = Time.get_ticks_usec()
 	_sync_world_state_index()
+	_dm12_stage("reconcile_state_index", dm12_substep)
+	dm12_substep = Time.get_ticks_usec()
 	_update_runtime_diagnostics()
+	_dm12_stage("reconcile_runtime_diagnostics", dm12_substep)
 	if _perf_trace_enabled:
 		PerformanceTrace.emit("terrain_window_reconcile", {
 			"duration_usec": Time.get_ticks_usec() - reconcile_started_usec,
