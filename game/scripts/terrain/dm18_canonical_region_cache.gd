@@ -60,7 +60,7 @@ func remember(region_id: String, region_key: Vector2i,
 	for coord_value in meshes.keys():
 		var coordinate: Vector2i = coord_value
 		var mesh: Mesh = meshes[coordinate]
-		if mesh == null or mesh.get_surface_count() < 1 		or not lods.has(coordinate) or int(lods[coordinate]) != 0 		or not vertex_counts.has(coordinate) or not triangle_counts.has(coordinate):
+		if mesh == null or not is_instance_valid(mesh) 		or not lods.has(coordinate) or int(lods[coordinate]) != 0 		or not vertex_counts.has(coordinate) or not triangle_counts.has(coordinate):
 			return false
 		# At least position+normal+GPU overhead, deliberately conservative.
 		byte_estimate += maxi(1, int(vertex_counts[coordinate])) * 48 + 2048
