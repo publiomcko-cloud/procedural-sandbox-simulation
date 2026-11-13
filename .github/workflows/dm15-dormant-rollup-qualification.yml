@@ -138,8 +138,10 @@ jobs:
             if ($case.rollup -eq '0' -and $rollups -ne 0) {
               throw "DM15 baseline generated rollup unexpectedly: $($case.label)"
             }
-            if ($rollups + $perScope -lt 1) {
-              throw "DM15 no dormant source telemetry receipt: $($case.label)"
+            # An idle world has no outgoing resident scopes and must not
+            # invent a dormant-store event just to satisfy provenance.
+            if ($case.route -ne 'idle' -and $rollups + $perScope -lt 1) {
+              throw "DM15 moving source telemetry absent: $($case.label)"
             }
             $receipt = [ordered]@{
               name=$case.label; rollup=$case.rollup; frames=$case.frames;
