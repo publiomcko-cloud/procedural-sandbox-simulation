@@ -274,6 +274,8 @@ var _dm9_visual_worker_limit := 1
 var _dm9_visual_worker_effective_limit := 1
 var _dm9_visual_adaptive := false
 var _dm9_fast_b4 := false
+var _dm11_visual_dedicated := false
+var _dm11_next_visual_task_id := -1
 var _dm9_shell_started_total := 0
 var _dm9_shell_completed_total := 0
 var _lookahead_stage_begin_total := 0
@@ -415,6 +417,9 @@ func _ready() -> void:
 		_dm9_visual_worker_limit = clampi(int(OS.get_environment("SANDBOX_DM9_VISUAL_WORKERS")), 1, DM9VisualBudget.MAX_WORKERS)
 	_dm9_visual_adaptive = _dm3_enabled() and OS.get_environment("SANDBOX_DM9_VISUAL_ADAPTIVE") == "1"
 	_dm9_fast_b4 = _dm3_enabled() and OS.get_environment("SANDBOX_DM9_FAST_B4") == "1"
+	_dm11_visual_dedicated = _dm3_enabled() and OS.get_environment("SANDBOX_DM11_VISUAL_LANE") == "1"
+	if _dm11_visual_dedicated:
+		print("DM11_VISUAL_LANE: isolated_native_threads=1 priority=low canonical_worker_pool_unchanged=1")
 	if _dm9_fast_b4:
 		print("DM9_FAST_B4: enabled=1 pristine_visual_only=1 authoritative_backend_unchanged=1")
 	if _dm9_visual_adaptive:
@@ -457,6 +462,8 @@ func _ready() -> void:
 			"dm9_visual_worker_limit": _dm9_visual_worker_limit,
 			"dm9_visual_adaptive": _dm9_visual_adaptive,
 			"dm9_fast_b4": _dm9_fast_b4,
+			"dm11_visual_dedicated": _dm11_visual_dedicated,
+			"dm11_canonical_fast_b4": OS.get_environment("SANDBOX_DM11_CANONICAL_FAST_B4") == "1",
 			"snapshot_budget_usec": MESH_SNAPSHOT_FRAME_BUDGET_USEC,
 			"upload_budget_usec": MESH_UPLOAD_FRAME_BUDGET_USEC,
 		})
@@ -1026,6 +1033,19 @@ func _exit_tree() -> void:
 	for task_id_value in _mesh_jobs.keys().duplicate():
 		WorkerThreadPool.wait_for_task_completion(int(task_id_value))
 	_mesh_jobs.clear()
+	# Dedicated visual threads are reference-counted and must be joined before
+	# releasing their job objects. Legacy WorkerThreadPool visual jobs also
+	# finish before scene teardown; no callbacks access a freed world.
+	for id_value in _dm3_shell_jobs.keys().duplicate():
+		var id := int(id_value)
+		var record: Dictionary = _dm3_shell_jobs[id]
+		var native_thread: Thread = record.get("thread", null)
+		if native_thread != null:
+			native_thread.wait_to_finish()
+		else:
+			WorkerThreadPool.wait_for_task_completion(id)
+	_dm3_shell_jobs.clear()
+	_dm3_shell_pending.clear()
 	for task_id_value in _coarse_preview_jobs.keys().duplicate():
 		WorkerThreadPool.wait_for_task_completion(int(task_id_value))
 	_coarse_preview_jobs.clear()
@@ -1116,6 +1136,8 @@ func _stream_finish_frame() -> void:
 		"dm9_visual_worker_effective_limit": _dm9_visual_worker_effective_limit,
 		"dm9_visual_adaptive": _dm9_visual_adaptive,
 		"dm9_fast_b4": _dm9_fast_b4,
+		"dm11_visual_dedicated": _dm11_visual_dedicated,
+		"dm11_canonical_fast_b4": OS.get_environment("SANDBOX_DM11_CANONICAL_FAST_B4") == "1",
 		"dm9_visual_workers_in_flight": _dm3_shell_jobs.size(),
 		"dm9_visual_started_total": _dm9_shell_started_total,
 		"dm9_visual_completed_total": _dm9_shell_completed_total,
@@ -5112,10 +5134,16 @@ func _dm3_process_shells() -> void:
 	if _last_frame_ms < 40.0:
 		for task_id_value in _dm3_shell_jobs.keys().duplicate():
 			var task_id := int(task_id_value)
-			if not WorkerThreadPool.is_task_completed(task_id):
-				continue
-			WorkerThreadPool.wait_for_task_completion(task_id)
 			var record: Dictionary = _dm3_shell_jobs[task_id]
+			var native_thread: Thread = record.get("thread", null)
+			if native_thread != null:
+				if native_thread.is_alive():
+					continue
+				native_thread.wait_to_finish()
+			else:
+				if not WorkerThreadPool.is_task_completed(task_id):
+					continue
+				WorkerThreadPool.wait_for_task_completion(task_id)
 			_dm3_shell_jobs.erase(task_id)
 			var id: String = record["id"]
 			_dm3_shell_pending.erase(id)
@@ -5196,6 +5224,8 @@ func _dm3_process_shells() -> void:
 					"worker_limit": _dm9_visual_worker_limit,
 					"worker_effective_limit": _dm9_visual_worker_effective_limit,
 					"adaptive": _dm9_visual_adaptive,
+					"dm11_visual_lane": "native_low" if native_thread != null else "worker_pool",
+					"dm11_thread_id": int(job.get("worker_thread_id")),
 				})
 			if _perf_trace_enabled:
 				PerformanceTrace.emit("dm4_region_b4_high_visible", {
@@ -5254,11 +5284,22 @@ func _dm3_process_shells() -> void:
 		if now < int(_dm3_shell_retry_after_usec.get(id, 0)):
 			continue
 		var job := DM3VisualJob.new(world_seed, key, desired_lod, _dm9_fast_b4)
-		var task_id := WorkerThreadPool.add_task(
-			Callable(job, "run"), false, "DM3 derived region halo"
-		)
-		if task_id < 0:
-			return
+		var task_id := -1
+		var native_thread: Thread = null
+		if _dm11_visual_dedicated:
+			native_thread = Thread.new()
+			var started := native_thread.start(Callable(job, "run"), Thread.PRIORITY_LOW)
+			if started != OK:
+				push_warning("DM11_VISUAL_LANE: Thread.start failed; no job was submitted (%d)" % started)
+				return
+			task_id = _dm11_next_visual_task_id
+			_dm11_next_visual_task_id -= 1
+		else:
+			task_id = WorkerThreadPool.add_task(
+				Callable(job, "run"), false, "DM3 derived region halo"
+			)
+			if task_id < 0:
+				return
 		_dm3_shell_pending[id] = desired_lod
 		_dm3_shell_jobs[task_id] = {
 			"id": id,
@@ -5266,6 +5307,7 @@ func _dm3_process_shells() -> void:
 			"lod": desired_lod,
 			"seed": world_seed,
 			"job": job,
+			"thread": native_thread,
 			"submitted_usec": Time.get_ticks_usec(),
 		}
 		_dm9_shell_started_total += 1
