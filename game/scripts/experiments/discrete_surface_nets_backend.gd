@@ -354,6 +354,85 @@ func build_chunk(chunk: Vector2i) -> Dictionary:
 	}
 
 
+## Only for immutable full-region B4 visual meshes. No chunks with edits.
+## Removes the per-edge Vector3i allocation and four-element corner Array;
+## the same _append_quad function determines vertex order/face normals.
+func build_chunk_pristine_fast(chunk: Vector2i) -> Dictionary:
+	if _chunk_mode:
+		return {"valid": false, "reason": "fast_pristine_does_not_accept_edited_chunks"}
+	if not Grid.is_valid_coordinate(chunk) or nodes.is_empty():
+		return {"valid": false, "reason": "invalid_chunk_or_missing_lattice"}
+	var chunk_x := roundi(4.0 / step)
+	var chunk_z := roundi(3.0 / step)
+	var x0 := chunk.x * chunk_x
+	var z0 := chunk.y * chunk_z
+	var mesh_origin := Grid.origin_for(chunk)
+	var positions := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var quads := 0
+	var skipped := 0
+	var node_y_stride := node_dims.x * node_dims.z
+	var node_z_stride := node_dims.x
+	var cell_y_stride := cell_dims.x * cell_dims.z
+	var cell_z_stride := cell_dims.x
+	for z in range(z0, z0 + chunk_z):
+		for y in range(dims.y + 1):
+			for x in range(x0, x0 + chunk_x):
+				var n := _node_index(x, y, z)
+				var positive := nodes[n] >= 0
+				for axis in range(3):
+					if axis == 1 and y == dims.y:
+						continue
+					var offset := 1 if axis == 0 else (node_y_stride if axis == 1 else node_z_stride)
+					if positive == (nodes[n + offset] >= 0):
+						continue
+					var c0 := 0
+					var c1 := 0
+					var c2 := 0
+					var c3 := 0
+					match axis:
+						0:
+							c0 = _cell_index(x, y - 1, z - 1)
+							c1 = c0 + cell_z_stride
+							c2 = c1 + cell_y_stride
+							c3 = c0 + cell_y_stride
+						1:
+							c0 = _cell_index(x - 1, y, z - 1)
+							c1 = c0 + 1
+							c2 = c1 + cell_z_stride
+							c3 = c0 + cell_z_stride
+						_:
+							c0 = _cell_index(x - 1, y - 1, z)
+							c1 = c0 + 1
+							c2 = c1 + cell_y_stride
+							c3 = c0 + cell_y_stride
+					if cell_active[c0] == 0 or cell_active[c1] == 0 \
+						or cell_active[c2] == 0 or cell_active[c3] == 0:
+						skipped += 1
+						continue
+					var p0: Vector3 = cell_vertices[c0] - mesh_origin
+					var p1: Vector3 = cell_vertices[c1] - mesh_origin
+					var p2: Vector3 = cell_vertices[c2] - mesh_origin
+					var p3: Vector3 = cell_vertices[c3] - mesh_origin
+					var target := Vector3.ZERO
+					target[axis] = 1.0 if positive else -1.0
+					_append_quad(positions, normals, p0, p1, p2, p3, target)
+					quads += 1
+	return {
+		"valid": skipped == 0,
+		"skipped_faces": skipped,
+		"positions": positions,
+		"normals": normals,
+		"triangle_count": quads * 2,
+		"vertex_count": positions.size(),
+		"quad_count": quads,
+		"sample_count": last_generation_sample_count,
+		"memory_bytes": byte_count(),
+	}
+
+
+
+
 func _rebuild_cell(x: int, y: int, z: int) -> void:
 	var at := _cell_index(x, y, z)
 	var density := PackedFloat32Array()
