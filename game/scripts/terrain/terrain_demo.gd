@@ -1523,6 +1523,15 @@ func _process(delta: float) -> void:
 		_update_status()
 		_dm12_stage("diagnostics", dm12_diagnostics_started_usec)
 	_dm12_emit_frame_if_spike(process_started_usec)
+	if _dm18_diagnostic_enabled and _stream_bench_frames_done >= 1 \
+	and _stream_bench_warmup_remaining == 0 and not _stream_bench_reported:
+		var focus_id := _region_id(focus_region_key)
+		if not active_regions.has(focus_id):
+			_dm18_focus_missing_total += 1
+			if _dm5_has_cached_high(focus_id):
+				_dm18_focus_missing_visual_high += 1
+			if _dm18_cache.has_region(focus_id):
+				_dm18_focus_missing_cached += 1
 	if _dm16_probe != null and _stream_bench_frames_done >= 1 \
 	and _stream_bench_frames_done <= _stream_bench_frames_goal \
 	and _stream_bench_warmup_remaining == 0 \
@@ -2234,6 +2243,22 @@ func _process_free_exploration(delta: float) -> void:
 					"wallclock_route": _dm17_wallclock_route,
 					"dm17_sparse_block": OS.get_environment("SANDBOX_DM17_SPARSE_BLOCK") == "1",
 					"dm17_shared_lattice": OS.get_environment("SANDBOX_DM17_SHARED_LATTICE") == "1",
+					"dm18_cache_enabled": _dm18_cache_enabled,
+					"dm18_diagnostic_enabled": _dm18_diagnostic_enabled,
+					"dm18_cache": _dm18_cache.stats() if _dm18_cache_enabled else {},
+					"dm18": {
+						"focus_missing_total": _dm18_focus_missing_total,
+						"focus_missing_visual_high": _dm18_focus_missing_visual_high,
+						"focus_missing_cached_mesh": _dm18_focus_missing_cached,
+						"cache_restores": _dm18_cache_restores,
+						"restore_total_ms": float(_dm18_restore_total_usec) / 1000.0,
+						"restore_max_ms": float(_dm18_restore_max_usec) / 1000.0,
+						"new_loads": _dm18_cold_loads,
+						"new_loads_total_ms": float(_dm18_cold_load_total_usec) / 1000.0,
+						"cached_loads": _dm18_hot_loads,
+						"cached_loads_total_ms": float(_dm18_hot_load_total_usec) / 1000.0,
+						"canonical_jobs": _dm18_job_times.duplicate()
+					},
 					"wallclock_motion_seconds": snappedf(_dm17_motion_elapsed_sec, 0.000001),
 					"final_x_mm": roundi(camera.global_position.x * 1000.0),
 					"final_z_mm": roundi(camera.global_position.z * 1000.0),
@@ -3789,9 +3814,13 @@ func _process_completed_mesh_jobs() -> void:
 		var job = record["job"]
 		var id: String = record["stage_id"]
 		if not loading_regions.has(id):
+			if _dm18_diagnostic_enabled:
+				_dm18_job_times["stale_jobs"] += 1
 			continue
 		var stage: Dictionary = loading_regions[id]
 		if int(stage["stage_token"]) != int(record["stage_token"]):
+			if _dm18_diagnostic_enabled:
+				_dm18_job_times["stale_jobs"] += 1
 			continue
 		var contributes_to_operation := _stage_contributes_to_active_operation(stage)
 		if contributes_to_operation:
@@ -3833,6 +3862,12 @@ func _process_completed_mesh_jobs() -> void:
 		var upload_elapsed_usec := Time.get_ticks_usec() - upload_started_usec
 		var worker_queue_usec := maxi(0, int(job.worker_started_usec) - int(record["submitted_usec"]))
 		var worker_run_usec := maxi(0, int(job.worker_finished_usec) - int(job.worker_started_usec))
+		if _dm18_diagnostic_enabled:
+			_dm18_job_times["jobs"] += 1
+			_dm18_job_times["snapshot_usec"] += int(record.get("snapshot_usec", 0))
+			_dm18_job_times["worker_queue_usec"] += worker_queue_usec
+			_dm18_job_times["worker_run_usec"] += worker_run_usec
+			_dm18_job_times["upload_usec"] += upload_elapsed_usec
 		if _perf_trace_enabled and (
 			worker_run_usec >= PerformanceTrace.min_usec()
 			or upload_elapsed_usec >= PerformanceTrace.min_usec()
@@ -4315,6 +4350,14 @@ func _complete_region_stage(id: String) -> void:
 		_try_commit_edit_transaction()
 		return
 	loading_regions.erase(id)
+	if _dm18_diagnostic_enabled and String(stage["purpose"]) == "load":
+		var wall_usec := maxi(0, Time.get_ticks_usec() - int(stage.get("chunk_enqueued_usec", 0)))
+		if bool(stage.get("dm18_cache_ready", false)):
+			_dm18_hot_loads += 1
+			_dm18_hot_load_total_usec += wall_usec
+		else:
+			_dm18_cold_loads += 1
+			_dm18_cold_load_total_usec += wall_usec
 	if stage["purpose"] == "partial":
 		if _publish_partial_stage(id, stage):
 			_clear_stream_error(id)
