@@ -1,0 +1,185 @@
+name: DM10 directional corridor QoS benchmark (EXPERIMENT)
+
+on:
+  push:
+    branches:
+      - exp/dm10-directional-corridor-qos
+  workflow_dispatch:
+
+concurrency:
+  group: dm10-directional-corridor-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Parse motion scheduler, benchmark and existing visual B4
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'Godot import failed' }
+          foreach ($file in @(
+            'res://scripts/terrain/dm10_motion_aware_visual_policy.gd',
+            'res://scripts/terrain/terrain_demo.gd',
+            'res://tests/experiments/dm10_motion_aware_visual_policy_tests.gd',
+            'res://scripts/experiments/discrete_surface_nets_backend.gd'
+          )) {
+            & $env:GODOT_BIN --headless --path .\game --check-only --script $file
+            if ($LASTEXITCODE -ne 0) { throw "Godot parse failed: $file" }
+          }
+      - name: Motion-aware scheduler invariant tests
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $out = & $env:GODOT_BIN --headless --path .\game --script res://tests/experiments/dm10_motion_aware_visual_policy_tests.gd 2>&1 | Out-String
+          Write-Host $out
+          if ($LASTEXITCODE -ne 0 -or -not $out.Contains('DM10_MOTION_QOS_PASS') -or $out.Contains('DM10_MOTION_QOS_FAIL')) {
+            throw 'DM10 policy contract failed'
+          }
+          Write-Host 'DM10_CONTRACT_PASS'
+
+  ab:
+    needs: contract
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 95
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM9_FAST_B4: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Same-seed 18m/s baseline versus balanced versus corridor; paired repeats
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 85
+        run: |
+          & $env:GODOT_BIN --headless --editor --path .\game --import
+          if ($LASTEXITCODE -ne 0) { throw 'Godot import failed' }
+          $root = Join-Path $env:RUNNER_TEMP 'dm10-motion-qos-ab'
+          $cases = @(
+            @{ label = 'A-motion'; qos = 'off'; route = 'outback-18'; frames = 720 },
+            @{ label = 'B-motion'; qos = 'balanced'; route = 'outback-18'; frames = 720 },
+            @{ label = 'D-motion'; qos = 'corridor'; route = 'outback-18'; frames = 720 },
+            @{ label = 'D-motion2'; qos = 'corridor'; route = 'outback-18'; frames = 720 },
+            @{ label = 'B-motion2'; qos = 'balanced'; route = 'outback-18'; frames = 720 },
+            @{ label = 'A-motion2'; qos = 'off'; route = 'outback-18'; frames = 720 }
+          )
+          $summary = @()
+          foreach ($case in $cases) {
+            $name = $case.label
+            $env:SANDBOX_DM10_VISUAL_QOS = $case.qos
+            $route = $case.route
+            $frames = [int]$case.frames
+            $dir = Join-Path $root $name
+            & .\scripts\perf\run-p5-deterministic-stream-benchmark.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames $frames -Routes @($route) -Profiles @('adaptive-skip-progressive') -CaptureProcessCpu
+            $path = Join-Path $dir "01-$route-adaptive-skip-progressive.metrics.json"
+            $m = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+            if ($m.requested_frames -ne $frames -or [string]$m.route -ne $route -or
+                [string]$m.dm10_mode -ne $case.qos -or -not [bool]$m.dm9_fast_b4 -or
+                [int]$m.seed -ne 424242 -or [int]$m.process_cpu_samples -le 0) {
+              throw "DM10 invariants mismatch: $name"
+            }
+            if ($case.qos -ne 'off' -and [int]$m.dm10_scheduler_samples -lt 1) {
+              throw "Missing DM10 QoS trace: $name"
+            }
+            $summary += [ordered]@{
+              trial = $name; qos = $case.qos; route = $route;
+              frames = $frames;
+              canonical_missing_focus_pct = $m.f10_focus_missing_pct;
+              canonical_region_p95_ms = $m.region_load_p95_ms;
+              visual_high_completed = $m.dm9_visual_shell_complete_count;
+              visual_gap_final = $m.dm8_visual_gap_final_regions;
+              true_velocity_front_gap_p95 = $m.dm10_velocity_gap_front_p95_regions;
+              near_forward_corridor_coverage_pct = $m.dm10_corridor_coverage_mean_pct;
+              full_high_elapsed_ms = $m.dm9_full_high_elapsed_ms;
+              frames_over_20_pct = $m.frames_over_20_ms_pct;
+              frames_over_33_pct = $m.frames_over_33_ms_pct;
+              frame_mean_ms = $m.avg_frame_ms;
+              cpu_mean_pct = $m.process_cpu_mean_pct_total_capacity;
+              cpu_peak_pct = $m.process_cpu_peak_pct_total_capacity;
+              rss_peak_mb = $m.process_rss_peak_mb;
+              qos_samples = $m.dm10_scheduler_samples;
+              blocked_samples = $m.dm10_scheduler_blocked_samples;
+              canonical_pressure_samples = $m.dm10_scheduler_moving_canonical_pressure_samples;
+              visual_worker_p95_ms = $m.dm9_visual_shell_worker_p95_ms;
+            }
+            Write-Host ('DM10_TRIAL_RESULT=' + ($summary[-1] | ConvertTo-Json -Compress -Depth 6))
+          }
+          $summary | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $root 'dm10-motion-qos-ab-summary.json') -Encoding UTF8
+          Write-Host ('DM10_MOTION_AB_RESULT=' + ($summary | ConvertTo-Json -Compress -Depth 8))
+          Write-Host 'DM10_CORRIDOR_AB_COMPLETE'
+      - name: Upload isolated benchmark raw traces and metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm10-motion-qos-ab
+          path: |
+            ${{ runner.temp }}\dm10-motion-qos-ab\**\*.log
+            ${{ runner.temp }}\dm10-motion-qos-ab\**\*.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  gpu:
+    needs: ab
+    runs-on: [self-hosted, Windows, X64, gpu-interactive]
+    timeout-minutes: 30
+    env:
+      GODOT_BIN: 'C:\Tools\Godot\Godot_v4.7.2-stable_win64_console.exe'
+      SANDBOX_TERRAIN_BACKEND: b4
+      SANDBOX_DM9_PREFETCH: '0'
+      SANDBOX_DM9_VISUAL_ADAPTIVE: '1'
+      SANDBOX_DM9_VISUAL_WORKERS: '4'
+      SANDBOX_DM9_FAST_B4: '1'
+      SANDBOX_DM10_VISUAL_QOS: corridor
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Interactive GPU session preflight
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          & .\scripts\ci\p5-gpu-session-preflight.ps1 -Role Interactive
+      - name: DM10 directional visual HIGH GPU smoke
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        timeout-minutes: 20
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dm10-motion-qos-gpu'
+          & .\scripts\perf\run-p5-gpu-smoke.ps1 -GodotBin $env:GODOT_BIN -EvidenceDir $dir -Frames 360 -Routes @('straight-18') -StreamProfile 'adaptive-skip-progressive'
+          if ($LASTEXITCODE -ne 0) { throw 'DM10 GPU smoke failed' }
+          $s = Get-Content (Join-Path $dir 'gpu-straight-18.stdout.log') -Raw
+          if (-not $s.Contains('DM10_VISUAL_QOS: mode=corridor') -or
+              -not $s.Contains('"event":"dm10_visual_qos_sample"') -or
+              -not $s.Contains('"event":"dm4_region_b4_high_visible"')) {
+            throw 'DM10 GPU actual rendered visual HIGH telemetry missing'
+          }
+          Write-Host 'DM10_GPU_PASS'
+      - name: Upload GPU diagnostics and images
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dm10-motion-qos-gpu
+          path: |
+            ${{ runner.temp }}\dm10-motion-qos-gpu\*.png
+            ${{ runner.temp }}\dm10-motion-qos-gpu\*.log
+            ${{ runner.temp }}\dm10-motion-qos-gpu\*.json
+          retention-days: 14
+          if-no-files-found: warn
