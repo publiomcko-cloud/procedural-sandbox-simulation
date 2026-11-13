@@ -14,6 +14,7 @@ var cave_section_enabled: bool
 var brush_snapshot: Variant
 var lod_level := 0
 var experimental_b4 := false
+var dm11_fast_canonical_b4 := false
 var result: Dictionary = {}
 var queued_usec: int
 var worker_started_usec := 0
@@ -39,6 +40,7 @@ func _init(
 	queued_usec = queued_value
 	lod_level = clampi(lod_value, 0, 1)
 	experimental_b4 = b4_value
+	dm11_fast_canonical_b4 = b4_value and OS.get_environment("SANDBOX_DM11_CANONICAL_FAST_B4") == "1"
 
 
 func run() -> void:
@@ -83,7 +85,8 @@ func _run_experimental_b4(snapshot: Dictionary) -> void:
 	var backend := ExperimentalB4.new()
 	var generate_started_usec := Time.get_ticks_usec()
 	var generated := backend.generate_chunk(
-		seed, region_key, coordinate, snapshot, cave_section_enabled
+		seed, region_key, coordinate, snapshot, cave_section_enabled,
+		dm11_fast_canonical_b4
 	)
 	var generate_usec := Time.get_ticks_usec() - generate_started_usec
 	if not generated:
@@ -96,7 +99,8 @@ func _run_experimental_b4(snapshot: Dictionary) -> void:
 		}
 		return
 	var mesh_started_usec := Time.get_ticks_usec()
-	result = backend.build_chunk(coordinate)
+	result = backend.build_chunk_canonical_fast(coordinate) if dm11_fast_canonical_b4 \
+		else backend.build_chunk(coordinate)
 	var mesh_usec := Time.get_ticks_usec() - mesh_started_usec
 	if not bool(result.get("valid", false)):
 		result["reason"] = "dm2_b4_topology_or_mesh_failure"
@@ -104,6 +108,11 @@ func _run_experimental_b4(snapshot: Dictionary) -> void:
 	result["backend"] = "b4"
 	result["lod_level"] = 0
 	result["lod_fallback"] = false
+	result["dm11_canonical_fast_b4"] = dm11_fast_canonical_b4
+	result["dm11_fast_sdf_cache"] = backend.last_canonical_fast_sdf
+	result["dm11_canonical_sample_usec"] = backend.last_canonical_sample_usec
+	result["dm11_canonical_cell_usec"] = backend.last_canonical_cell_usec
+	result["dm11_canonical_uniform_cells"] = backend.last_canonical_uniform_cells
 	result["timings_usec"] = {
 		"sdf_and_ledger": generate_usec,
 		"triangulation_and_face_normals": mesh_usec,
