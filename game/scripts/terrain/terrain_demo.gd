@@ -254,6 +254,7 @@ var _dm12_trace_enabled := false
 var _dm12_frame_id := 0
 var _dm12_frame_stage_usec: Dictionary = {}
 var _dm12_previous_stage_usec: Dictionary = {}
+var _dm12_previous_receipt: Dictionary = {}
 var _dm12_previous_process_usec := 0
 var _dm12_publish_region_count := 0
 var _dm12_publish_region_usec := 0
@@ -1125,6 +1126,7 @@ func _dm12_emit_frame_if_spike(started_usec: int) -> void:
 			"prior_process_usec": _dm12_previous_process_usec,
 			"stages_usec": _dm12_frame_stage_usec.duplicate(),
 			"prior_stages_usec": _dm12_previous_stage_usec.duplicate(),
+			"prior_publication_counts": _dm12_previous_receipt.duplicate(),
 			"stage_sum_usec": accounted_usec,
 			"unaccounted_current_usec": maxi(0, process_usec - accounted_usec),
 			"canonical_regions_committed": _dm12_publish_region_count,
@@ -1147,6 +1149,15 @@ func _dm12_emit_frame_if_spike(started_usec: int) -> void:
 		})
 	_dm12_previous_stage_usec = _dm12_frame_stage_usec.duplicate()
 	_dm12_previous_process_usec = process_usec
+	_dm12_previous_receipt = {
+		"canonical_regions_committed": _dm12_publish_region_count,
+		"canonical_publish_total_usec": _dm12_publish_region_usec,
+		"canonical_chunk_uploads": _dm12_canonical_mesh_uploaded,
+		"progressive_chunks_published": _dm12_progressive_publish_count,
+		"visual_high_regions_published": _dm12_visual_publish_count,
+		"visual_high_publish_total_usec": _dm12_visual_publish_usec,
+		"coarse_previews_published": _dm12_coarse_publish_count,
+	}
 
 
 func _stream_finish_frame() -> void:
