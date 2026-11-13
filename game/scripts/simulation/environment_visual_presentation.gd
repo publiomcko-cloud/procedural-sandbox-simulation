@@ -1038,6 +1038,139 @@ func _dm13_commit_plan(
 
 
 
+## Immutable CPU geometry worker. The result is never published unless its
+## terrain, shoreline, environment signature, neighbor anchors, display mode
+## and scene instance are still current.
+func _dm13_queue_plan(
+	id: String, row: Dictionary, environment: Dictionary, surface: Dictionary,
+	token: String, signature: PackedInt64Array, anchors: Dictionary,
+	neighbor_signature: PackedByteArray, hydrology_enabled: bool
+) -> void:
+	var snapshot_started := Time.get_ticks_usec()
+	var job := DM13WaterJob.new(
+		row["region_key"], environment, surface, row.get("shoreline", {}),
+		_water_debug_mode, hydrology_enabled, anchors
+	)
+	var snapshot_usec := Time.get_ticks_usec() - snapshot_started
+	var task_id := WorkerThreadPool.add_task(
+		Callable(job, "run"), false, "DM13 immutable shoreline geometry"
+	)
+	if task_id < 0:
+		return
+	_dm13_water_jobs[task_id] = {
+		"id": id,
+		"job": job,
+		"epoch": _dm13_epoch,
+		"token": token,
+		"signature": signature.duplicate(),
+		"neighbor_signature": neighbor_signature.duplicate(),
+		"shoreline_token": String(row.get("shoreline_token", "")),
+		"node": row["node"],
+		"snapshot_usec": snapshot_usec,
+	}
+	_dm13_water_pending_by_region[id] = task_id
+	_dm13_submitted_this_frame += 1
+	_dm13_submitted_total += 1
+	if _trace_enabled:
+		PerformanceTrace.emit("dm13_water_job_submitted", {
+			"scope": id, "snapshot_usec": snapshot_usec,
+			"jobs_in_flight": _dm13_water_jobs.size()
+		})
+
+
+func _dm13_publish_ready() -> void:
+	var published := 0
+	var ready: Array[int] = []
+	for key_value in _dm13_water_jobs.keys():
+		var task_id := int(key_value)
+		if WorkerThreadPool.is_task_completed(task_id):
+			ready.append(task_id)
+	ready.sort()
+	for task_id in ready:
+		if published >= DM13_MAX_PUBLICATIONS_PER_FRAME:
+			break
+		WorkerThreadPool.wait_for_task_completion(task_id)
+		var record: Dictionary = _dm13_water_jobs[task_id]
+		_dm13_water_jobs.erase(task_id)
+		var id: String = record["id"]
+		if int(_dm13_water_pending_by_region.get(id, -1)) == task_id:
+			_dm13_water_pending_by_region.erase(id)
+		var job: RefCounted = record["job"]
+		_dm13_peak_worker_usec = maxi(
+			_dm13_peak_worker_usec, int(job.finished_usec) - int(job.started_usec)
+		)
+		if not _dm13_water_current(id, record):
+			_dm13_stale_total += 1
+			continue
+		var row: Dictionary = _regions[id]
+		var node: MeshInstance3D = row["node"]
+		var surface: Dictionary = _runtime.get_environment_surface_cache(id)
+		var environment: Dictionary = _runtime.get_environment_scope(id)
+		var plan: Dictionary = job.result
+		if not bool(plan.get("ok", false)):
+			_begin_pending_visual_refresh(id, row, "worker_mesh_plan_invalid")
+			row["token"] = ""
+			_water_wait(id, row, "worker_mesh_plan:" + String(plan.get("reason", "unknown")))
+			continue
+		var started := Time.get_ticks_usec()
+		_dm13_commit_plan(id, row, node, environment, surface,
+			String(record["token"]), record["neighbor_signature"], plan, started)
+		var publish_usec := Time.get_ticks_usec() - started
+		_dm13_peak_publish_usec = maxi(_dm13_peak_publish_usec, publish_usec)
+		_dm13_completed_total += 1
+		published += 1
+		if _trace_enabled:
+			PerformanceTrace.emit("dm13_water_job_completed", {
+				"scope": id,
+				"snapshot_usec": int(record["snapshot_usec"]),
+				"worker_queue_usec": int(job.started_usec) - int(job.queued_usec),
+				"worker_run_usec": int(job.finished_usec) - int(job.started_usec),
+				"publish_usec": publish_usec,
+				"total_usec": Time.get_ticks_usec() - int(job.queued_usec),
+				"vertices": (plan.get("vertices", PackedVector3Array()) as PackedVector3Array).size(),
+				"worker_thread_id": int(job.worker_thread_id),
+			})
+
+
+func _dm13_water_current(id: String, record: Dictionary) -> bool:
+	if int(record.get("epoch", -1)) != _dm13_epoch or not _regions.has(id):
+		return false
+	var row: Dictionary = _regions[id]
+	var node: MeshInstance3D = row.get("node", null)
+	if not is_instance_valid(node) or node != record.get("node", null):
+		return false
+	var surface: Dictionary = _runtime.get_environment_surface_cache(id)
+	var environment: Dictionary = _runtime.get_environment_scope(id)
+	if surface.is_empty() or environment.is_empty():
+		return false
+	var token := _surface_identity(surface)
+	if token != String(record.get("token", "")) \
+	or String(row.get("shoreline_token", "")) != String(record.get("shoreline_token", "")) \
+	or String(row.get("shoreline_token", "")) != token:
+		return false
+	var hydrology_enabled := true
+	if _runtime.has_method("has_environment_hydrology"):
+		hydrology_enabled = bool(_runtime.call("has_environment_hydrology"))
+	var signature := _water_visual_signature(
+		row["region_key"], environment, surface, _water_debug_mode,
+		hydrology_enabled, int(row.get("last_ocean_sdf_tiles", 0))
+	)
+	if signature != record.get("signature", PackedInt64Array()):
+		return false
+	var anchors := _neighbor_ocean_anchors(row["region_key"])
+	return _neighbor_ocean_signature(anchors) == record.get(
+		"neighbor_signature", PackedByteArray()
+	)
+
+
+func _exit_tree() -> void:
+	# Drain all captured jobs before releasing their immutable data.
+	for task_id_value in _dm13_water_jobs.keys():
+		WorkerThreadPool.wait_for_task_completion(int(task_id_value))
+	_dm13_water_jobs.clear()
+	_dm13_water_pending_by_region.clear()
+
+
 func _update_rain(delta: float, camera_position: Vector3, focus_region: Vector2i) -> void:
 	if _rain_node == null:
 		return
